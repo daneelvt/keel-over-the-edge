@@ -1,2 +1,35 @@
-# keel-over-the-edge
+# Keel Over the Edge
+
 A multiplayer sailing game on a small disk-shaped world you can sail off the edge of. Realistic sailing, played in the browser.
+
+## Status
+
+Early design. There is no playable game yet.
+
+## What it is
+
+- One small, curved disk of ocean shared by every player, with a waterfall at the rim.
+- Realistic wind and boat physics, with modern boats, so what you learn applies to real sailing.
+- A pirate-era world, with Port Royal as the main port at the centre.
+- Played in a phone or desktop browser, with nothing to install.
+
+## Licence
+
+The source code in this repository is licensed under the GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
+
+If you run a modified version of this code as a public service, the AGPL requires you to make your modified source available to its users.
+
+## Name, art and other content
+
+The open licence covers the source code only. The following are not covered by it, and all rights in them are reserved by the repository owner:
+
+- The name "Keel Over the Edge" and any logo.
+- Art, sound, music and writing.
+
+A fork is welcome to use the code under the AGPL, but must use a different name and its own art.
+
+## Contributions
+
+Development is public, and bug reports, ideas and discussion are welcome through issues.
+
+Code contributions are not being accepted at this time, so pull requests will not be merged.
