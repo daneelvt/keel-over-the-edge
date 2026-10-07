@@ -296,7 +296,7 @@ func runLint(ctx context.Context, out io.Writer) error {
 	}{
 		{".", []string{"go", "vet", "./..."}},
 		{".", []string{"go", "tool", "staticcheck", "./..."}},
-		{clientDir, []string{"npx", "--no-install", "biome", "ci", "."}},
+		{clientDir, []string{"npx", "--no-install", "biome", "ci", ".", "../art"}},
 		{clientDir, []string{"npx", "--no-install", "tsc", "--noEmit"}},
 	}
 	var failed []string

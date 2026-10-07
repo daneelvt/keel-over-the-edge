@@ -1,0 +1,10 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the tile hash > does not change: these values are drawn on every phone 1`] = `
+[
+  2525990,
+  4325049,
+  7596057,
+  10569188,
+]
+`;

@@ -1,0 +1,57 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+.dev-panel {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  z-index: 10;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgb(20 30 38 / 82%);
+  color: #e8eef0;
+  font:
+    12px / 1.4 system-ui,
+    sans-serif;
+}
+
+.dev-panel > button {
+  width: 100%;
+}
+
+.dev-panel label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.dev-panel input,
+.dev-panel select {
+  width: 9em;
+  font: inherit;
+}
+
+.dev-panel .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.dev-panel a {
+  display: block;
+  margin: 6px 0;
+  color: #f0c46a;
+}
+
+.dev-panel pre {
+  margin: 6px 0 0;
+  font:
+    11px / 1.35 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+}

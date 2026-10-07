@@ -2,6 +2,10 @@
 node_modules/
 client/dist/
 
+# Browser test results (the reference pictures in client/e2e/pictures are kept)
+client/test-results/
+client/playwright-report/
+
 # The physics module, built by go run ./tools/physics
 client/src/predict/physics.wasm
 

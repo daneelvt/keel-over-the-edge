@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The scene in a real browser: Playwright on Chromium, on the WebGL 2 back end
+# and, where the runner's Chromium offers an adapter through SwiftShader, on
+# WebGPU. Also checks that the test sea's fixtures are current.
+name: pr.render
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-render:
+    name: pr-render
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: The test sea's fixtures are current
+        run: go run ./tools/testsea -check
+      - name: Chromium for Playwright
+        working-directory: client
+        run: npx --no-install playwright install --with-deps chromium
+      - name: The scene on WebGL 2 and WebGPU
+        working-directory: client
+        run: npx --no-install playwright test
+      - name: The pictures and traces of a failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright
+          path: |
+            client/test-results
+            client/playwright-report
+          retention-days: 14

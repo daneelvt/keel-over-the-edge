@@ -20,6 +20,9 @@ boats:
     description: Single-handed dinghy
     capacity: 1
     lengthOverall: 4.2
+    beam: 1.39 # ILCA class
+    art:
+      model: boats/jolly-boat.glb
     physics:
       hull:
         displacement: 160 # boat with sail 80 kg, sailor 80 kg (Day)

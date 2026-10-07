@@ -20,8 +20,9 @@ const server: ServerOptions = {
     '/api': { target: `http://${playAddr}`, changeOrigin: false },
   },
   // The developer page reads the physics golden files, which live beside
-  // the Go tests; nothing else outside client/ is served.
-  fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../internal/physics/testdata'] },
+  // the Go tests, and the game loads its models from art/; nothing else
+  // outside client/ is served.
+  fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../internal/physics/testdata', '../art'] },
 };
 if (cert && key) {
   server.https = { cert: readFileSync(cert), key: readFileSync(key) };
@@ -29,6 +30,15 @@ if (cert && key) {
 
 export default defineConfig({
   server,
+  build: {
+    // three.js with its WebGPU renderer is most of the game's first chunk;
+    // its size is reported by build/size.ts against the 4 MB critical set.
+    chunkSizeWarningLimit: 1500,
+    rolldownOptions: {
+      // The game, and the developer page with its physics check.
+      input: { main: 'index.html', dev: 'dev.html' },
+    },
+  },
   plugins: [
     licences({
       allowedFile: '../tools/licences/allowed.txt',
@@ -42,6 +52,12 @@ export default defineConfig({
           file: 'build/notices/tinygo.txt',
         },
         { name: 'Go (in physics.wasm)', licence: 'BSD-3-Clause', file: 'build/notices/go.txt' },
+        // three.js ships meshoptimizer's decoder, which loads the boats' models.
+        {
+          name: 'meshoptimizer (decoder, in three.js)',
+          licence: 'MIT',
+          file: 'build/notices/meshoptimizer.txt',
+        },
       ],
     }),
   ],

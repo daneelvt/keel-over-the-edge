@@ -297,7 +297,8 @@ func checkArt(root string, doc map[string]any) (warnings []string, err error) {
 			}
 			return err
 		}
-		if d.IsDir() || d.Name() == "README.md" {
+		// The scripts that build the art are its source, not art a kind uses.
+		if d.IsDir() || d.Name() == "README.md" || strings.HasSuffix(d.Name(), ".ts") {
 			return nil
 		}
 		r := filepath.ToSlash(rel(artRoot, p))

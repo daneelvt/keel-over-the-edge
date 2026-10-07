@@ -8,6 +8,13 @@
  * via the `definition` "Id".
  */
 export type Id = string;
+/**
+ * Path of an art file, relative to the repository's art/ folder.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ArtPath".
+ */
+export type ArtPath = string;
 
 /**
  * Every list of kinds in the game. Kinds are data: code reads their properties, never their names.
@@ -42,8 +49,12 @@ export interface Boat {
    * Length overall, in metres.
    */
   lengthOverall: number;
+  /**
+   * Greatest width of the hull, in metres.
+   */
+  beam: number;
   physics: BoatPhysics;
-  art?: Art;
+  art: BoatArt;
 }
 /**
  * The boat's physics, in SI units with angles in degrees. Every value is required.
@@ -518,14 +529,17 @@ export interface PhysicsRates {
   sheetEaseTime: number;
 }
 /**
- * Paths of a kind's art files, relative to the repository's art/ folder.
+ * A boat's art. Every art object's values are paths under art/, checked to exist.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "Art".
+ * via the `definition` "BoatArt".
  */
-export interface Art {
-  [k: string]: string;
+export interface BoatArt {
+  /**
+   * The boat's model: a glTF binary with the nodes hull, mast, boom, sail, rudder, tiller, daggerboard and sailor.
+   */
+  model: string;
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'ff4cabb079595b69';
+export const CATALOG_VERSION = 'd6b3016ed56e9091';

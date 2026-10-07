@@ -1,7 +1,13 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["**", "!dist", "!src/catalog/*.gen.*", "!src/predict/*.gen.*"]
+    "includes": [
+      "**",
+      "!dist",
+      "!src/catalog/*.gen.*",
+      "!src/predict/*.gen.*",
+      "!src/ocean/testsea"
+    ]
   },
   "formatter": {
     "indentStyle": "space",

@@ -21,23 +21,34 @@
       "pattern": "^[a-z][a-z0-9-]*$",
       "maxLength": 40
     },
-    "Art": {
-      "description": "Paths of a kind's art files, relative to the repository's art/ folder.",
+    "ArtPath": {
+      "description": "Path of an art file, relative to the repository's art/ folder.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9/._-]*$"
+    },
+    "BoatArt": {
+      "title": "BoatArt",
+      "description": "A boat's art. Every art object's values are paths under art/, checked to exist.",
       "type": "object",
-      "additionalProperties": { "type": "string", "pattern": "^[a-z0-9][a-z0-9/._-]*$" }
+      "additionalProperties": false,
+      "required": ["model"],
+      "properties": {
+        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, rudder, tiller, daggerboard and sailor.", "$ref": "#/$defs/ArtPath" }
+      }
     },
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "lengthOverall", "physics"],
+      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
         "description": { "description": "What the boat is, in a few words.", "type": "string", "minLength": 1 },
         "capacity": { "description": "Most people aboard, the skipper included.", "type": "integer", "minimum": 1 },
         "lengthOverall": { "description": "Length overall, in metres.", "type": "number", "exclusiveMinimum": 0 },
+        "beam": { "description": "Greatest width of the hull, in metres.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
         "physics": { "$ref": "#/$defs/BoatPhysics" },
-        "art": { "$ref": "#/$defs/Art" }
+        "art": { "$ref": "#/$defs/BoatArt" }
       }
     },
     "BoatPhysics": {
