@@ -84,8 +84,9 @@ files. Code reads a kind's properties, never its id.
 
 ## Commits
 
-Changes reach `main` only through pull requests, merged by squashing. Every
-commit must be signed. To sign with an SSH key:
+Changes reach `main` only through pull requests, merged by squashing.
+Commits are to be signed; the `main` ruleset will require it once signing is
+set up. To sign with an SSH key:
 
 ```sh
 git config gpg.format ssh
