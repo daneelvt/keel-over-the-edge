@@ -199,10 +199,13 @@ func uniform(lo, hi float64) sampler {
 	return func(r *rand.Rand) float64 { return lo + (hi-lo)*r.Float64() }
 }
 
-// spread draws |x| evenly over orders of magnitude, with either sign.
+// spread draws |x| evenly over orders of magnitude, with either sign. The
+// clamp matters at the ends: math.Exp(math.Log(hi)) can round past hi, and
+// on amd64 math.Exp(math.Log(math.MaxFloat64)) is +Inf.
 func spread(lo, hi float64, signed bool) sampler {
 	return func(r *rand.Rand) float64 {
 		x := math.Exp(math.Log(lo) + (math.Log(hi)-math.Log(lo))*r.Float64())
+		x = min(max(x, lo), hi)
 		if signed && r.IntN(2) == 0 {
 			return -x
 		}

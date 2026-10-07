@@ -255,6 +255,7 @@ func functionTable() []goldenFunction {
 	inf, nan := math.Inf(1), math.NaN()
 	spreadOver := func(lo, hi float64, signed bool) float64 {
 		x := math.Exp(math.Log(lo) + (math.Log(hi)-math.Log(lo))*rng.Float64())
+		x = min(max(x, lo), hi) // see spread in fmath_test.go
 		if signed && rng.IntN(2) == 0 {
 			x = -x
 		}
