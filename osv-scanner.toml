@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Vulnerabilities that do not affect this project, with the reason. Read by
+# osv-scanner and by OpenSSF Scorecard.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "golang.org/x/crypto/openpgp is unmaintained and has no fixed version. No package in this module's build imports it (go mod why: not needed); x/crypto is required for other packages."
