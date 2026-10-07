@@ -84,14 +84,15 @@ files. Code reads a kind's properties, never its id.
 
 ## Commits
 
-Changes reach `main` only through pull requests, merged by squashing.
-Commits are to be signed; the `main` ruleset will require it once signing is
-set up. To sign with an SSH key:
+Changes reach `main` only through pull requests, merged by squashing. Every
+commit must be signed; the `main` ruleset refuses unsigned ones. To sign with
+an SSH key:
 
 ```sh
 git config gpg.format ssh
 git config user.signingkey ~/.ssh/id_ed25519.pub
 git config commit.gpgsign true
+git config tag.gpgsign true
 ```
 
 and add the same key on GitHub as a **signing** key (Settings → SSH and GPG
