@@ -23,8 +23,8 @@ go run ./tools/dev
 
 It checks Node and npm, installs the client's packages when the lock file
 has changed, regenerates the catalog, makes a local HTTPS certificate,
-builds and starts `keel serve`, starts Vite, and prints the game's address
-with a QR code. Changing a Go file rebuilds and restarts the server; changing
+builds and starts `keel serve`, starts Vite, and prints QR codes for setting
+up a phone and for the game. Changing a Go file rebuilds and restarts the server; changing
 a client file reloads the page. Ctrl-C stops everything.
 
 The first run asks for your computer's password once, to trust the local
@@ -37,22 +37,50 @@ computer and phones share one origin.
 
 ## On a phone
 
-The phone must be on the same network, and must trust the local certificate
-authority once. `tools/dev` serves its certificate (never its key) at the
-`http://…:5174/` address it prints.
+The game is served over HTTPS with a certificate your computer makes itself,
+so a phone shows "not secure" until it trusts your computer. You do that once
+per phone. Keep `go run ./tools/dev` running throughout, and have the phone on
+the same Wi-Fi as the computer.
 
-- **iPhone**: open that address in Safari and allow the download. Install the
-  profile in Settings → General → VPN & Device Management. Then turn on full
-  trust for it in Settings → General → About → Certificate Trust Settings.
-  The last step is easy to miss.
-- **Android**: download the file, then install it in Settings → Security →
-  Encryption & credentials → Install a certificate → CA certificate. The menu
-  names vary by maker. Chrome trusts user-installed authorities for web
-  pages.
+`tools/dev` prints two QR codes:
 
-Then scan the QR code. The page shows "Secure context: HTTPS" when it worked,
-and lists what the phone offers: WebGPU, the wake lock, passkeys and module
-workers.
+1. **Once per phone, trust this computer**: a page served by your computer
+   over plain HTTP (port 5174), with the steps below and a button to download
+   the certificate.
+2. **The game**: the HTTPS address (port 5173).
+
+Scan the first, follow the steps for your phone, then scan the second.
+
+### iPhone
+
+1. Open the first QR code in **Safari**: other browsers cannot install
+   profiles. If Safari is not your default browser, type the address shown
+   above the QR code into Safari. Tap **Download the certificate**, then **Allow** and **Close**.
+2. Open **Settings**. Near the top, tap **Profile Downloaded**, then
+   **Install**, and enter your passcode. If it is not there: Settings →
+   General → VPN & Device Management → the mkcert profile → Install.
+3. Settings → General → About → **Certificate Trust Settings**, at the very
+   bottom. Turn on the switch for **mkcert**, then tap Continue. Without
+   this step the phone still does not trust the certificate.
+
+### Android
+
+1. Open the first QR code in **Chrome**. Tap **Download the certificate**.
+2. Open **Settings** and search for **CA certificate**. It is usually under
+   Security → More security settings → Encryption & credentials → Install a
+   certificate → CA certificate; the names vary by maker.
+3. Tap **Install anyway** and choose `keel-dev-root.crt` from Downloads.
+
+### Check it worked
+
+Scan the game's QR code. The page loads with no warning and the first line
+reads **Secure context: HTTPS**. The rest of the list shows what the phone
+offers: WebGPU, the screen wake lock, passkeys and module workers.
+
+The certificate stays trusted until you remove it, so next time just scan the
+game's QR code. To remove it later: on iPhone, Settings → General → VPN &
+Device Management; on Android, Settings → Encryption & credentials → User
+credentials.
 
 ## Checks
 
@@ -115,9 +143,14 @@ Both use your own `gh` login. Settings GitHub has no API for are listed in
 - **The phone cannot load the page.** Guest and office Wi-Fi often stop
   devices on the network reaching each other. Use the phone's hotspot with
   the computer joined to it, or `tailscale serve`.
-- **The page loads but is not a secure context.** The certificate authority
-  is not trusted on the phone; on an iPhone, check Certificate Trust
-  Settings.
+- **The phone says "not secure".** The certificate is not trusted yet, or
+  only half-way: on an iPhone, check that the switch in Certificate Trust
+  Settings is on. Do not tap through the warning; the game needs a real
+  secure context.
+- **The setup page does not load.** The phone cannot reach the computer.
+  Check both are on the same Wi-Fi, and that macOS allowed incoming
+  connections when `tools/dev` first started (System Settings → Network →
+  Firewall → Options).
 - **"node is …; this repository needs …".** Run `nvm install && nvm use`.
 - **Port 5173, 5174 or 8080 is in use.** Another copy of `tools/dev`, or
   another Vite, is running.
