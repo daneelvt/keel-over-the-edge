@@ -7,20 +7,16 @@
 import { expect, test } from '@playwright/test';
 import { openScene, picture, pictureDifference } from './helpers';
 
-/** Float32 tolerances for the GPU's planes against the float64 reference. */
-const HEIGHT = 5e-5;
-const SLOPE = 1e-5;
-
 test.describe('the tiles', () => {
   for (const pass of [true, false]) {
     test(`are rigid flat slabs under the gale, ${pass ? 'with the tile pass' : 'planes per vertex'}`, async ({
       page,
     }) => {
       await openScene(page, 'sea=gale');
-      const r = await page.evaluate(async (on) => {
+      const [r, tol] = await page.evaluate(async (on) => {
         globalThis.keel.setPass(on);
         globalThis.keel.render();
-        return globalThis.keel.rigidity();
+        return [await globalThis.keel.rigidity(), globalThis.keel.tolerance()] as const;
       }, pass);
       expect(r.tiles).toBeGreaterThan(100);
       // From straight above every pixel is a tile's top: no gap, no skirt.
@@ -30,14 +26,16 @@ test.describe('the tiles', () => {
       expect(r.outside).toBe(0);
       // Every tile's top lies on one plane, and it is the reference's.
       expect(r.worstResidual).toBeLessThan(1e-4);
-      expect(r.worstHeight).toBeLessThan(HEIGHT);
-      expect(r.worstSlope).toBeLessThan(SLOPE);
+      expect(r.worstHeight).toBeLessThan(tol.height);
+      expect(r.worstSlope).toBeLessThan(tol.slope);
     });
   }
 
   test('the tile pass computes the reference planes', async ({ page }) => {
     await openScene(page, 'sea=gale');
-    const p = await page.evaluate(() => globalThis.keel.planes());
+    const [p, tol] = await page.evaluate(
+      async () => [await globalThis.keel.planes(), globalThis.keel.tolerance()] as const,
+    );
     let height = 0;
     let slope = 0;
     for (let i = 0; i < p.count; i++) {
@@ -48,8 +46,8 @@ test.describe('the tiles', () => {
       }
     }
     expect(p.count).toBe(5101);
-    expect(height).toBeLessThan(HEIGHT);
-    expect(slope).toBeLessThan(SLOPE);
+    expect(height).toBeLessThan(tol.height);
+    expect(slope).toBeLessThan(tol.slope);
   });
 
   test('step at their edges with the sea, inside their skirts', async ({ page }) => {
@@ -205,7 +203,10 @@ test.describe('pictures', () => {
 });
 
 test('the frame allocates nothing that stays', async ({ page }) => {
-  test.setTimeout(120_000);
+  // What the heap keeps does not depend on the picture's size, and a small
+  // one keeps SwiftShader's CPU rendering inside the time.
+  test.setTimeout(300_000);
+  await page.setViewportSize({ width: 320, height: 200 });
   await openScene(page, 'sea=gale');
   const cdp = await page.context().newCDPSession(page);
   const used = async (): Promise<number> => {

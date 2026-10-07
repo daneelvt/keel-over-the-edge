@@ -534,6 +534,22 @@ function makeHooks(world: SeaScene) {
       await frame();
     },
 
+    /**
+     * How far the GPU's planes may stand from the float64 reference: WGSL
+     * promises sin and cos only to 2⁻¹¹ absolute (WebGPU Shading Language,
+     * 15.7.4), so each wave may be off by its amplitude (height) or its
+     * amplitude times k (slope) times that, plus float32's rounding.
+     */
+    tolerance(): { height: number; slope: number } {
+      let a = 0;
+      let ak = 0;
+      for (const w of world.ocean.band.waves) {
+        a += Math.abs(w.w);
+        ak += Math.abs(w.w * w.z);
+      }
+      return { height: a * 2 ** -11 + 2e-5, slope: ak * 2 ** -11 + 2e-6 };
+    },
+
     /** Resolves when the boat's model has loaded. */
     async ready(): Promise<void> {
       while (world.boat === null) {
