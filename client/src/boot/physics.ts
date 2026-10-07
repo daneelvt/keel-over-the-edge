@@ -7,8 +7,10 @@
 
 import golden from '../../../internal/physics/testdata/golden.json';
 import scenarios from '../../../internal/physics/testdata/scenarios.json';
+import { catalog } from '../catalog';
 import { checkGolden, type GoldenFile, type ScenarioFile } from '../predict/golden';
-import { LAYOUT_VERSION } from '../predict/layout.gen';
+import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
+import { writeParams } from '../predict/params.gen';
 import { loadPhysics, type Physics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 
@@ -55,14 +57,20 @@ export async function checkPhysics(): Promise<PhysicsRow[]> {
   return rows;
 }
 
-// stepMicroseconds times the step over at least 200 ms, since a page that is
-// not cross-origin isolated gets a coarse clock.
+// stepMicroseconds times the step of the catalog's first boat on a beam
+// reach, over at least 200 ms, since a page that is not cross-origin
+// isolated gets a coarse clock.
 function stepMicroseconds(physics: Physics): number {
   const r = physics.records;
-  r.params.set([150, 300, 7, 3, 60, 900, 120, 1.5]);
-  r.state.set([0, 0, 0.5, 1, 0, 0]);
-  r.control.set([0.3, 0.9]);
-  r.env.set([8, 0.3]);
+  for (const v of Object.values(r)) {
+    v.fill(0);
+  }
+  writeParams(r.params, catalog.boats[0].physics);
+  physics.prepare();
+  r.state[RECORDS.state.surge] = 3;
+  r.control[RECORDS.control.sheet] = 0.35;
+  r.env[RECORDS.env.windSpeed] = 7;
+  r.env[RECORDS.env.windFrom] = Math.PI / 2;
   let steps = 0;
   const start = performance.now();
   let elapsed = 0;

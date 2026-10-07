@@ -1,412 +1,1901 @@
 {
  "comment": "Written by go test ./internal/physics -run Golden -update. Floats are their IEEE 754 bits in hexadecimal.",
- "layout": "0x51dae061",
+ "layout": "0x2457976f",
  "scenarios": [
   {
-   "name": "beam-reach",
-   "digest": "68e543af0f3cfa06e5cb6b42d85c10745f04dee17f66a8d8cfd4bd5ebf6f5eaf",
+   "name": "beat",
+   "digest": "328d61eb81b8431b16a98aebf32ca9b25784be32f1c88d1f4caf2ba2cf5305c4",
    "checkpoints": [
     {
      "step": 600,
      "state": {
-      "heading": "0x0000000000000000",
-      "surge": "0x3ff3afb5171c1d7a",
-      "sway": "0xbfcf930f8bc9821e",
-      "x": "0xc0134c45eb91be6a",
-      "y": "0x4036e95c1dc71658",
-      "yawRate": "0x0000000000000000"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe7635bf4cae573",
+      "heel": "0xbecf6dc130f47a5f",
+      "rollRate": "0x3e98a2eeb875bc69",
+      "rudder": "0x3f684368082d8162",
+      "sailor": "0xbfea6cd55ad67104",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x4002ebba54fc96c3",
+      "sway": "0x3fbf568e6ec02155",
+      "x": "0x40408b4a302df987",
+      "y": "0x4040a708746f19dd",
+      "yawRate": "0xbe89a6c50fac1e06"
      }
     },
     {
      "step": 1200,
      "state": {
-      "heading": "0x0000000000000000",
-      "surge": "0x3ff3afb5193abcdf",
-      "sway": "0xbfcf930f8beacfef",
-      "x": "0xc0238417d181b9ca",
-      "y": "0x4047c27f3e972cab",
-      "yawRate": "0x0000000000000000"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe7635af53016e4",
+      "heel": "0x3daf592f050a68c0",
+      "rollRate": "0xbdc873d963c12c27",
+      "rudder": "0x3f68449d9d927137",
+      "sailor": "0xbfea6cd43bfffd40",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x4002ebb73b16b60e",
+      "sway": "0x3fbf568e9d9f3a6d",
+      "x": "0x40509f2007853016",
+      "y": "0x4050b907e587d1a1",
+      "yawRate": "0x3d930484df5f4801"
      }
     },
     {
      "step": 1800,
      "state": {
-      "heading": "0x0000000000000000",
-      "surge": "0x3ff3afb5193abcdf",
-      "sway": "0xbfcf930f8beacfef",
-      "x": "0xc02d620cad3b1a52",
-      "y": "0x40520828372df0c6",
-      "yawRate": "0x0000000000000000"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe7635af5301fee",
+      "heel": "0xbce42cb7250ea5f5",
+      "rollRate": "0xbc93f595c31a101b",
+      "rudder": "0x3f68449d9dd65b41",
+      "sailor": "0xbfea6cd43bfb548c",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x4002ebb73b167dfd",
+      "sway": "0x3fbf568e9dbd644e",
+      "x": "0x4058f89ae616bf35",
+      "y": "0x40591e8b91981d88",
+      "yawRate": "0xbcd5cd12a5824ddf"
      }
     },
     {
      "step": 2400,
      "state": {
-      "heading": "0x0000000000000000",
-      "surge": "0x3ff3afb5193abcdf",
-      "sway": "0xbfcf930f8beacfef",
-      "x": "0xc033a000c47a3e49",
-      "y": "0x40582f10cf104b36",
-      "yawRate": "0x0000000000000000"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe7635af5301fee",
+      "heel": "0xbce01013d5344c76",
+      "rollRate": "0x3c60f28311d0de06",
+      "rudder": "0x3f68449d9dd65b77",
+      "sailor": "0xbfea6cd43bfb548a",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x4002ebb73b167dfd",
+      "sway": "0x3fbf568e9dbd6452",
+      "x": "0x4060a90ae254229b",
+      "y": "0x4060c2079ed4302d",
+      "yawRate": "0xbcd68d4fd03e727c"
      }
     },
     {
      "step": 3000,
      "state": {
-      "heading": "0x0000000000000000",
-      "surge": "0x3ff3afb5193abcdf",
-      "sway": "0xbfcf930f8beacfef",
-      "x": "0xc0388efb3256efb9",
-      "y": "0x405e55f966f2a5a6",
-      "yawRate": "0x0000000000000000"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe7635af5301fee",
+      "heel": "0xbcdd7a432f9ff9db",
+      "rollRate": "0x3c60f28311d0de06",
+      "rudder": "0x3f68449d9dd65b7e",
+      "sailor": "0xbfea6cd43bfb548a",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x4002ebb73b167dfd",
+      "sway": "0x3fbf568e9dbd6452",
+      "x": "0x4064d5c8519ce59b",
+      "y": "0x4064f4c974dc556d",
+      "yawRate": "0xbcd6a786b3298ebf"
      }
     },
     {
      "step": 3600,
      "state": {
-      "heading": "0x0000000000000000",
-      "surge": "0x3ff3afb5193abcdf",
-      "sway": "0xbfcf930f8beacfef",
-      "x": "0xc03d7df5a033a129",
-      "y": "0x40623e70ff6a800b",
-      "yawRate": "0x0000000000000000"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe7635af5301fee",
+      "heel": "0xbce00d38a4ed9526",
+      "rollRate": "0xbc643c79cebce51e",
+      "rudder": "0x3f68449d9dd65b7c",
+      "sailor": "0xbfea6cd43bfb548a",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x4002ebb73b167dfd",
+      "sway": "0x3fbf568e9dbd6452",
+      "x": "0x40690285c0e5a89b",
+      "y": "0x4069278b4ae47aad",
+      "yawRate": "0xbcd69ec9bcdb2ffe"
      }
     }
    ]
   },
   {
-   "name": "circles",
-   "digest": "891ef36224cedd562ef009384863963ce86bf2048128da5b91c4485530375249",
+   "name": "reach",
+   "digest": "f871c4ac74ffd5d9309c8c682f01df83ad799518c66d9c39b89292bb80b668a2",
    "checkpoints": [
     {
      "step": 600,
      "state": {
-      "heading": "0x3fd1acee2358ceaa",
-      "surge": "0x3fe137078dbfa222",
-      "sway": "0x3fc3dfc37bc3b8f6",
-      "x": "0xc0a3992685ce0130",
-      "y": "0x4092cbec33026a01",
-      "yawRate": "0x3fa4e87ffb979f25"
+      "boom": "0x3fe17b3116c59b62",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ff901762241ca00",
+      "heel": "0xbed3888c628de510",
+      "rollRate": "0x3ed41e57349cd74a",
+      "rudder": "0x3f86b6e1e98f1e14",
+      "sailor": "0xbfe80b615b9ae589",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe17b3116c59b62",
+      "surge": "0x40104216f9e6c564",
+      "sway": "0x3fad0df9f2580356",
+      "x": "0x4053cc46fa609354",
+      "y": "0xbfd884dd68118431",
+      "yawRate": "0xbe9dc73b208c7206"
      }
     },
     {
      "step": 1200,
      "state": {
-      "heading": "0xc003c883c1c46af7",
-      "surge": "0x3ff004506e209134",
-      "sway": "0xbfd148a9fde31662",
-      "x": "0xc0a384e2461bbe74",
-      "y": "0x4092b7e56d534170",
-      "yawRate": "0x3fc266d685552f53"
+      "boom": "0x3fe17b3116c59b62",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ff90175c673523a",
+      "heel": "0xbdc796135f902257",
+      "rollRate": "0x3db6268a50314ade",
+      "rudder": "0x3f86b705a863fe2e",
+      "sailor": "0xbfe80b68c0a7e445",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe17b3116c59b62",
+      "surge": "0x40104216117d7211",
+      "sway": "0x3fad0d8f55fdcee2",
+      "x": "0x40640fa615c363ab",
+      "y": "0xbfebebbf76d4d14c",
+      "yawRate": "0xbd850f3ed8cd6e3b"
      }
     },
     {
      "step": 1800,
      "state": {
-      "heading": "0x3fd32df37ee4f1cc",
-      "surge": "0x3fe27a31392aa45f",
-      "sway": "0x3fc49cc8a682da7a",
-      "x": "0xc0a394fedc2d6d98",
-      "y": "0x4092c6f25cc63191",
-      "yawRate": "0x3fa7d87d2a7d4b4b"
+      "boom": "0x3fe17b3116c59b62",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ff90175c67315a0",
+      "heel": "0x3ce28086da3161f5",
+      "rollRate": "0xbcd1625d90169fb0",
+      "rudder": "0x3f86b705a8853266",
+      "sailor": "0xbfe80b68c0acbc88",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe17b3116c59b62",
+      "surge": "0x40104216117c9b9f",
+      "sway": "0x3fad0d8f55e53fed",
+      "x": "0x406e3928b3ee6976",
+      "y": "0xbff5ca846c5cdb93",
+      "yawRate": "0xbcd99b06513ae7e2"
      }
     },
     {
      "step": 2400,
      "state": {
-      "heading": "0xc00320c4b2724bba",
-      "surge": "0x3ff0e6ef9159257b",
-      "sway": "0xbfd2620d66f8a4db",
-      "x": "0xc0a3818ed2911964",
-      "y": "0x4092afcd430d0040",
-      "yawRate": "0x3fc48f4a4b3121f2"
+      "boom": "0x3fe17b3116c59b62",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ff90175c67315a0",
+      "heel": "0x3cd3687379b61585",
+      "rollRate": "0xbc90b376f6853680",
+      "rudder": "0x3f86b705a885326c",
+      "sailor": "0xbfe80b68c0acbc88",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe17b3116c59b62",
+      "surge": "0x40104216117c9b9f",
+      "sway": "0x3fad0d8f55e54047",
+      "x": "0x40743155a90cb3ed",
+      "y": "0xbffd9f291d4cf1d3",
+      "yawRate": "0xbcd9fb24e698fa2d"
      }
     },
     {
      "step": 3000,
      "state": {
-      "heading": "0x3fd4e74433538c63",
-      "surge": "0x3fe3e9d027c7abf1",
-      "sway": "0x3fc561e10f251a21",
-      "x": "0xc0a390ceadb56757",
-      "y": "0x4092c209475500ef",
-      "yawRate": "0x3fab704d2cf5df3e"
+      "boom": "0x3fe17b3116c59b62",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ff90175c67315a0",
+      "heel": "0x3cd18afb499edaed",
+      "rollRate": "0x3c686bfb0630c94f",
+      "rudder": "0x3f86b705a885326a",
+      "sailor": "0xbfe80b68c0acbc88",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe17b3116c59b62",
+      "surge": "0x40104216117c9b9f",
+      "sway": "0x3fad0d8f55e5404b",
+      "x": "0x40794616f822324d",
+      "y": "0xc002b9e6e71e8409",
+      "yawRate": "0xbcd9f267f04a9b6c"
      }
     },
     {
      "step": 3600,
      "state": {
-      "heading": "0xc00265a4cf35cfbb",
-      "surge": "0x3ff1cd99069175f7",
-      "sway": "0xbfd386a761fef179",
-      "x": "0xc0a37e597c45b1f9",
-      "y": "0x4092a7b0c79bb0e2",
-      "yawRate": "0x3fc6e5fb078167b6"
+      "boom": "0x3fe17b3116c59b62",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ff90175c67315a0",
+      "heel": "0x3cd2c96519e35839",
+      "rollRate": "0xbc660ec112806a9e",
+      "rudder": "0x3f86b705a885326c",
+      "sailor": "0xbfe80b68c0acbc88",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe17b3116c59b62",
+      "surge": "0x40104216117c9b9f",
+      "sway": "0x3fad0d8f55e5404b",
+      "x": "0x407e5ad84737b0ad",
+      "y": "0xc006a4393f968f29",
+      "yawRate": "0xbcda03e1dce758ee"
      }
     }
    ]
   },
   {
-   "name": "calm-then-wind",
-   "digest": "b77c4f9fb341fc151add17d85200abd65be214f3b016fe7d50e3b301f83bb877",
+   "name": "run",
+   "digest": "ee9fafa744018eaff509d2f8a2c7cfac18e36b5ca72491dc521f0aefb4fae4ff",
    "checkpoints": [
     {
      "step": 600,
      "state": {
-      "heading": "0x4008000000000000",
-      "surge": "0x0000000000000000",
-      "sway": "0x0000000000000000",
-      "x": "0x40bf400000000000",
-      "y": "0xc0a7700000000000",
-      "yawRate": "0x0000000000000000"
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4007d896ec42f6e9",
+      "heel": "0x3ee974eebc08a028",
+      "rollRate": "0xbf1efa152d372411",
+      "rudder": "0x3f9e5dd96ff9700f",
+      "sailor": "0x3faaa6c1c3267955",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x4002c482263ff8e2",
+      "sway": "0xbf9d497ce656d9ee",
+      "x": "0x401ed1e337459f88",
+      "y": "0xc0466b368b3691b4",
+      "yawRate": "0x3eea1f55dbf6d306"
      }
     },
     {
      "step": 1200,
      "state": {
-      "heading": "0x40060e2f2c8c7d59",
-      "surge": "0x3fe91d4af85f2c89",
-      "sway": "0x3fc6a4fd0d15bbd7",
-      "x": "0x40bf3ffa44b63245",
-      "y": "0xc0a77da0e4a93037",
-      "yawRate": "0xbfa19ff8ccb92436"
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4007d89752ddcc4c",
+      "heel": "0x3e55cce54e36fcbc",
+      "rollRate": "0x3e510000b864abde",
+      "rudder": "0x3f9e5f44e29c6ca3",
+      "sailor": "0x3faaa53a6cf7818e",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x4002c4839e088fb8",
+      "sway": "0xbf9d335e65692eed",
+      "x": "0x402f903ae729cf59",
+      "y": "0xc056c3d3eaa115e1",
+      "yawRate": "0xbe11a4332f51313c"
      }
     },
     {
      "step": 1800,
      "state": {
-      "heading": "0x40028a0bf957613d",
-      "surge": "0x3fdd4c036a776fbe",
-      "sway": "0x3fbcbfac0e561a3e",
-      "x": "0x40bf44cfc7ad23b3",
-      "y": "0xc0a794c2ddd995f8",
-      "yawRate": "0xbf886b9c92d5a7af"
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4007d897532c1201",
+      "heel": "0xbd9dd1d45ca64009",
+      "rollRate": "0x3db2e268095a5d76",
+      "rudder": "0x3f9e5f449f847491",
+      "sailor": "0x3faaa53b677aa5f6",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x4002c4839e84da4d",
+      "sway": "0xbf9d335fb5d5db34",
+      "x": "0x4037dbc1238e3ce2",
+      "y": "0xc061290644a0cca6",
+      "yawRate": "0xbd80efe9c3042e9e"
      }
     },
     {
      "step": 2400,
      "state": {
-      "heading": "0x40015f580c6796d4",
-      "surge": "0x3fd19e3bcbf7edd1",
-      "sway": "0x3fb4129bef80cd37",
-      "x": "0x40bf493afd444547",
-      "y": "0xc0a7a076ebe608de",
-      "yawRate": "0xbf7181505fa88e3e"
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4007d897532c0cd7",
+      "heel": "0xbcd95cdee4b39071",
+      "rollRate": "0xbd010b86fcb6518e",
+      "rudder": "0x3f9e5f449f83dbb4",
+      "sailor": "0x3faaa53b677062d8",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x4002c4839e84cf1a",
+      "sway": "0xbf9d335fb60292cd",
+      "x": "0x403fef64d34a0b05",
+      "y": "0xc066f02293f2eb95",
+      "yawRate": "0xbcfc4a94a4490391"
      }
     },
     {
      "step": 3000,
      "state": {
-      "heading": "0x400159a74f6b3145",
-      "surge": "0x3fcf6d59bc5f0fd5",
-      "sway": "0x3fb33daa1ab1983c",
-      "x": "0x40bf4c8cfd97669b",
-      "y": "0xc0a7a8a3f797f8a0",
-      "yawRate": "0xbcbcd12f92d5f486"
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4007d897532c0cd7",
+      "heel": "0xbc95e5b713941c10",
+      "rollRate": "0x3ca0ffc046fb6935",
+      "rudder": "0x3f9e5f449f83dc41",
+      "sailor": "0x3faaa53b677060f0",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x4002c4839e84cf1a",
+      "sway": "0xbf9d335fb6028ba2",
+      "x": "0x404401844182f002",
+      "y": "0xc06cb73ee3450875",
+      "yawRate": "0xbd0011a127f42cab"
      }
     },
     {
      "step": 3600,
      "state": {
-      "heading": "0x400159a74f6b3145",
-      "surge": "0x3fcf5b312e9ac227",
-      "sway": "0x3fb33d3f618ccd11",
-      "x": "0x40bf4fc1840071b0",
-      "y": "0xc0a7b0a4f9d4d271",
-      "yawRate": "0xba07b8333ec50146"
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4007d897532c0cd7",
+      "heel": "0x3c8b1875a33280b6",
+      "rollRate": "0x3c4c34eabf121626",
+      "rudder": "0x3f9e5f449f83dc41",
+      "sailor": "0x3faaa53b677060f0",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x4002c4839e84cf1a",
+      "sway": "0xbf9d335fb6028bb2",
+      "x": "0x40480b561960da82",
+      "y": "0xc0713f2d994b94b0",
+      "yawRate": "0xbd000f71ea6094fb"
      }
     }
    ]
   },
   {
-   "name": "tacks-and-gusts",
-   "digest": "7ef4ca42122633fb62535be5a62c312e178f7654c49deab646353e7c34f35382",
+   "name": "tacks",
+   "digest": "63977289c5493f7f537ea6060fb37e863d06c7f62b6c5a320a4fecf53e55b92a",
    "checkpoints": [
     {
      "step": 600,
      "state": {
-      "heading": "0xc00891e5d9c7937e",
-      "surge": "0x3fe4de245c0a6719",
-      "sway": "0x3fbce3436ede037e",
-      "x": "0x402dd741adee2d72",
-      "y": "0x4000d66ca7f39d35",
-      "yawRate": "0x3f7ab2aaa2b138a5"
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbfe1516ba8a5c3b0",
+      "heel": "0xbfb507293fe3f6f6",
+      "rollRate": "0xbf8a2ec1a7e6c199",
+      "rudder": "0xbfca5542685b6bca",
+      "sailor": "0x3fd0eaa89a5c2f28",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x3ff617211175bbb1",
+      "sway": "0xbf897b7c6f09f077",
+      "x": "0x4039122abea67be1",
+      "y": "0x403d594b48308a92",
+      "yawRate": "0xbfbe4b815de00141"
      }
     },
     {
      "step": 1200,
      "state": {
-      "heading": "0x4006bbec5421e772",
-      "surge": "0x3ff16c0fd2bfc5c7",
-      "sway": "0x3fcd24000098e329",
-      "x": "0x4029ff987494ce0d",
-      "y": "0xc0273215b338542b",
-      "yawRate": "0xbf90356e0603db01"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe6c9fe89d056a6",
+      "heel": "0x3f685eae9bcb556a",
+      "rollRate": "0xbf7b956159322db8",
+      "rudder": "0x3f95f15e8e1b56a7",
+      "sailor": "0xbfe1990fcc600851",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x3ffb8a54cbed0db6",
+      "sway": "0x3fb863f90e770091",
+      "x": "0x4024de8d8073f27b",
+      "y": "0x404be3d7e200f2c4",
+      "yawRate": "0x3f8dd3c69e1f4c9a"
      }
     },
     {
      "step": 1800,
      "state": {
-      "heading": "0xbff61b584d13de99",
-      "surge": "0x4002c5742dfb98dc",
-      "sway": "0xbfe02cbc4357cced",
-      "x": "0x3ffd29934ee506e2",
-      "y": "0xc03fb8d2ebe97b78",
-      "yawRate": "0x3fb2f6f26b7e1e62"
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbfe757bac11ea3e3",
+      "heel": "0xbf6761677e973127",
+      "rollRate": "0x3f5bc6e80fd50309",
+      "rudder": "0xbf713df3b8702f66",
+      "sailor": "0x3fe2a61ba4142468",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x3fff0da5df6dd5c8",
+      "sway": "0xbfb9cce1fe537abc",
+      "x": "0x40317677ee8c2bc1",
+      "y": "0x4054ac6224864f9a",
+      "yawRate": "0xbf56fbbbd035df40"
      }
     },
     {
      "step": 2400,
      "state": {
-      "heading": "0xc0038a3a0bc1be52",
-      "surge": "0x3fe4d314a09aed14",
-      "sway": "0xbfbf606c3c0d6b9a",
-      "x": "0xc0312ac74d40b29e",
-      "y": "0xc040ed07e0a967bc",
-      "yawRate": "0xbf78aafa1c05c765"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe765d55fd1ef19",
+      "heel": "0x3f33f5dd438bbd24",
+      "rollRate": "0xbeda8f363216cddb",
+      "rudder": "0x3f6460768aa5dd67",
+      "sailor": "0xbfe2dcff253fa5fd",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x40002b1dd8b2b43c",
+      "sway": "0x3fb9814a70bee1df",
+      "x": "0x403370e11a7d4cfa",
+      "y": "0x405b7bff8ed9cd5d",
+      "yawRate": "0x3f1a4fcde55ed039"
      }
     },
     {
      "step": 3000,
      "state": {
-      "heading": "0xc00047ec94835bef",
-      "surge": "0x3feb0addd0829027",
-      "sway": "0xbfc661fd4fa1336b",
-      "x": "0xc0391610e5f554a0",
-      "y": "0xc04667a4092dbef9",
-      "yawRate": "0x3f83c2cb707c7b46"
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbfe7672d4cec6036",
+      "heel": "0xbf1aafa2de082dc8",
+      "rollRate": "0x3f0f619dc0955b49",
+      "rudder": "0xbf62d8e415562724",
+      "sailor": "0x3fe2ebb815763bb5",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x400059da60025f44",
+      "sway": "0xbfb94e9b352796b1",
+      "x": "0x402006e2d4dbf652",
+      "y": "0x40612964b7caac29",
+      "yawRate": "0xbef4bfb402528e55"
      }
     },
     {
      "step": 3600,
      "state": {
-      "heading": "0xc005dd8f0a74b608",
-      "surge": "0x3fd987d7b1522369",
-      "sway": "0xbfae7633535641fc",
-      "x": "0xc04205e5e5f647ab",
-      "y": "0xc04b7f0c43caad7f",
-      "yawRate": "0xbf638396ff6ad0ab"
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbfe310056f5c0a1b",
+      "heel": "0xbfc44a1f58ebb22a",
+      "rollRate": "0x3f735df2e42bcdfc",
+      "rudder": "0xbfc2caf1c5246d32",
+      "sailor": "0x3fe4c38f48555a04",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x3ffa10a099d016fe",
+      "sway": "0xbfbc5a5d87801469",
+      "x": "0x403cc6e241903d36",
+      "y": "0x40652818bcde1fa5",
+      "yawRate": "0xbfb5f061984bea20"
      }
     },
     {
      "step": 4200,
      "state": {
-      "heading": "0xbffdb831d6493283",
-      "surge": "0x400818fd4b06772a",
-      "sway": "0xbfe524f1358ec1fb",
-      "x": "0xc0482a00530e44af",
-      "y": "0xc0522753495ca536",
-      "yawRate": "0x3fbf2ebaf7ccbeea"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe717e4900627bb",
+      "heel": "0x3f89ff62bd004909",
+      "rollRate": "0xbf517921da2e2085",
+      "rudder": "0x3f88a5011994776b",
+      "sailor": "0xbfee971d5b9b33a9",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x4003122cab91d682",
+      "sway": "0x3fc20e523505b915",
+      "x": "0x4025bcb33f671d42",
+      "y": "0x406953ab896c76cb",
+      "yawRate": "0x3f7d380314b9bc5b"
      }
     },
     {
      "step": 4800,
      "state": {
-      "heading": "0xc007f12363e1ffa2",
-      "surge": "0x3fec7a5690d57bb6",
-      "sway": "0xbfc5b313890f7a31",
-      "x": "0xc0523442d6415624",
-      "y": "0xc0547abb3f205b3f",
-      "yawRate": "0xbf86e26c667f56a0"
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbfe751f4a8ce3d4e",
+      "heel": "0xbf939175a08d0962",
+      "rollRate": "0xbf22effdb11afbf2",
+      "rudder": "0xbf775f2d9f2a7d5e",
+      "sailor": "0x3fee978d4e015242",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x40040ce56e022ed7",
+      "sway": "0xbfc1edc29589dece",
+      "x": "0x403256c488722455",
+      "y": "0x406d97bbc8663ef9",
+      "yawRate": "0xbf3bba8080ad7f91"
      }
     },
     {
      "step": 5400,
      "state": {
-      "heading": "0xc0019791685e877d",
-      "surge": "0x3ff3ce7877afd724",
-      "sway": "0xbfd0885b5625c6bc",
-      "x": "0xc05325ecfa216267",
-      "y": "0xc058eae9340c532c",
-      "yawRate": "0x3f9542fa9a4462d0"
+      "boom": "0x3fc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3fe75652bfc2b6b4",
+      "heel": "0x3f92e9844e424bfb",
+      "rollRate": "0xbf24b15d1e854a10",
+      "rudder": "0x3f7528569b4e6221",
+      "sailor": "0xbfee978d4fdf336c",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x400429e093a5dd39",
+      "sway": "0x3fc1d41e4bd7eb97",
+      "x": "0x40369dfc02440750",
+      "y": "0x4070efcb69a73cea",
+      "yawRate": "0x3f02182aa10e9ca4"
      }
     },
     {
      "step": 6000,
      "state": {
-      "heading": "0x4005c67b4f44bdb7",
-      "surge": "0x3fd3842f206b03fa",
-      "sway": "0x3fa2317e1374b5a3",
-      "x": "0xc056049301e643b7",
-      "y": "0xc05cbda1c697a66d",
-      "yawRate": "0xbf591ab8519115e1"
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbfe7569f392cd778",
+      "heel": "0xbf92ad96e2ddd843",
+      "rollRate": "0x3ef282f393129632",
+      "rudder": "0xbf75054a097324c0",
+      "sailor": "0x3fee978d4fdf3b50",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x40042be393529a50",
+      "sway": "0xbfc1d5abe26c8d1c",
+      "x": "0x4019d5bda43cdaa9",
+      "y": "0x407313ea2e0673ab",
+      "yawRate": "0xbeb6401afeb13d3a"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gybes",
+   "digest": "1a0b7cc4561b5eceb380d59c85cbc574485d9552a56eedcd43e4adf276d5bc6c",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x3ff42d0ebd3f437e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4004d1327e4395e6",
+      "heel": "0xbf11c0228f6942f4",
+      "rollRate": "0x3f5639552acf11cc",
+      "rudder": "0x3f96ba8028e4d359",
+      "sailor": "0x3f9ce433e2260273",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff42d0ebd3f437e",
+      "surge": "0x3fff8dbfc6f5e607",
+      "sway": "0xbf8d0daeafda9910",
+      "x": "0x4034dd7e77c24eb5",
+      "y": "0xc04148647dc619df",
+      "yawRate": "0xbf1f32d4d59d3b66"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0xbff42d0ebd3f437e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xc004d15dfd18c984",
+      "heel": "0x3f70f83263fd5600",
+      "rollRate": "0xbf812d629ece982e",
+      "rudder": "0xbf96d6225b4a28b1",
+      "sailor": "0xbfa06a5aad1e020d",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff42d0ebd3f437e",
+      "surge": "0x3fff7d784db3f041",
+      "sway": "0x3f8758873b8df810",
+      "x": "0x402ee7c849aa3f47",
+      "y": "0xc050d7654c03070f",
+      "yawRate": "0x3f43f4a3bc61fd45"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0x3ff42d0ebd3f437e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4004ce62b7c6085c",
+      "heel": "0x3f78ed865ff6691b",
+      "rollRate": "0x3f9d607fe8ec8984",
+      "rudder": "0x3f9a16e4a376aa5b",
+      "sailor": "0x3f7c87a7c97c96c1",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff42d0ebd3f437e",
+      "surge": "0x3ffed3311f117957",
+      "sway": "0x3f84114f08c6a920",
+      "x": "0x40254ebd97e128f6",
+      "y": "0xc0590f5550d46530",
+      "yawRate": "0xbf65a64449521f38"
+     }
+    },
+    {
+     "step": 2400,
+     "state": {
+      "boom": "0xbff42d0ebd3f437e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xc00521412fc30cb1",
+      "heel": "0xbf9f7050516aa75e",
+      "rollRate": "0x3f99d58419f1602b",
+      "rudder": "0x3f82ba1c45cf6d71",
+      "sailor": "0x3fb0f8766d9744e8",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff42d0ebd3f437e",
+      "surge": "0x3ffb30a17ea36752",
+      "sway": "0xbf87656b3c4e7913",
+      "x": "0x40394d39eb25ccfb",
+      "y": "0xc060afa2e05995d4",
+      "yawRate": "0x3fa49b0c6388e22a"
+     }
+    },
+    {
+     "step": 3000,
+     "state": {
+      "boom": "0xbff42d0ebd3f437e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xc004d11976f68ea5",
+      "heel": "0xbf339ca893cf8846",
+      "rollRate": "0x3f56bd729b36aebf",
+      "rudder": "0xbf96ac507331472c",
+      "sailor": "0xbf9d1b7d3d6fbc90",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff42d0ebd3f437e",
+      "surge": "0x3fff8bb1aa1da494",
+      "sway": "0x3f906564555d3309",
+      "x": "0x4014d0c0c47fffd3",
+      "y": "0xc064d3727eb92c32",
+      "yawRate": "0xbf1f8a78202cd663"
+     }
+    },
+    {
+     "step": 3600,
+     "state": {
+      "boom": "0x3ff42d0ebd3f437e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4004e1314cd3ed07",
+      "heel": "0xbfcc3ff600c6fda6",
+      "rollRate": "0xbfc2d1540e519544",
+      "rudder": "0x3f71e98f915788bc",
+      "sailor": "0x3fd2155dd16917b7",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff42d0ebd3f437e",
+      "surge": "0x400d712844070154",
+      "sway": "0xbfc5dcb8ec799a95",
+      "x": "0x4040c33858b197dc",
+      "y": "0xc06be71d8a3d58e9",
+      "yawRate": "0x3f87728c46689729"
+     }
+    },
+    {
+     "step": 4200,
+     "state": {
+      "boom": "0xbff42d0ebd3f437e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xc004afbe96bef1e5",
+      "heel": "0xbfbc91ffd2f70ecd",
+      "rollRate": "0x3fc604d82ca04b81",
+      "rudder": "0xbfa48744e3e92418",
+      "sailor": "0x3fb56cf594a8aade",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff42d0ebd3f437e",
+      "surge": "0x400b14589d6cb13f",
+      "sway": "0x3fbff8b24becb637",
+      "x": "0x4034a0b650b217f2",
+      "y": "0xc0719e7df63ff5ab",
+      "yawRate": "0xbf863c9196aed6a1"
+     }
+    },
+    {
+     "step": 4800,
+     "state": {
+      "boom": "0x3ff42d0ebd3f437e",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4004d91ae11dca8d",
+      "heel": "0xbfc52609d3b43e43",
+      "rollRate": "0xbfbce84192375e5d",
+      "rudder": "0x3f86fc4973b52c69",
+      "sailor": "0x3fd1ee07fbcfdbc0",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff42d0ebd3f437e",
+      "surge": "0x400cfe92dbbf7373",
+      "sway": "0xbfc2bc84253bb196",
+      "x": "0x402f6c4b09af2ec2",
+      "y": "0xc07553c83d2552bf",
+      "yawRate": "0x3f829c4e223865be"
+     }
+    },
+    {
+     "step": 5400,
+     "state": {
+      "boom": "0xbffa876cd8f2a161",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xc004edddd550eeea",
+      "heel": "0x3fc9f7c51f391a52",
+      "rollRate": "0xbf9c57d6188f11ba",
+      "rudder": "0xbf8d214478eaf92e",
+      "sailor": "0xbfd27cc19065d6b4",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0x40096d42af038b46",
+      "sway": "0x3fa9405f279af973",
+      "x": "0x4043a22d087dee78",
+      "y": "0xc0790a0d7abd4a34",
+      "yawRate": "0x3f97490c92868603"
+     }
+    },
+    {
+     "step": 6000,
+     "state": {
+      "boom": "0xbffa876cd8f2a161",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xc004b959cccf3a4c",
+      "heel": "0x3f965da8d27c1dd7",
+      "rollRate": "0xbf4851a99765ad09",
+      "rudder": "0xbfa3ac08029cd8ab",
+      "sailor": "0xbfd333333333331e",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0x40096c838c6fe193",
+      "sway": "0x3fb1ab7cce00c8b6",
+      "x": "0x4013ec69487d035a",
+      "y": "0xc07c613b298300e8",
+      "yawRate": "0x3f0cb8a05110ba42"
+     }
+    }
+   ]
+  },
+  {
+   "name": "by-the-lee",
+   "digest": "fe5b2ec0a4a60adb228f7ab786d0b0e5fc140505e92944a89564f1940f284422",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xc008c071182d8bde",
+      "heel": "0xbf3cfba2e8aee59f",
+      "rollRate": "0x3f6876ff2a9a667e",
+      "rudder": "0x3f9f7a2f5271d26c",
+      "sailor": "0x3fadc84ee7ec81e4",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x40028a427feb6794",
+      "sway": "0xbf9d122066c93ba9",
+      "x": "0x400d15d46488f596",
+      "y": "0xc046fa365912a4d1",
+      "yawRate": "0x3f3946c2f7d48b86"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xc006622902b3737f",
+      "heel": "0xbf4a305430cf6319",
+      "rollRate": "0x3f63142a3fc7aa95",
+      "rudder": "0x3f7bef5991fc7600",
+      "sailor": "0x3fb1494ed2a9c35a",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x40027bee31ff152b",
+      "sway": "0xbf88d3052c034a2b",
+      "x": "0xc015218616a86019",
+      "y": "0xc056cc8312ff5830",
+      "yawRate": "0x3f579e450d4acbd9"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0xbff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xc003f48928b74170",
+      "heel": "0xbf5343242eb99f9b",
+      "rollRate": "0x3f6969cadf36a1d6",
+      "rudder": "0xbf9b29c35720919c",
+      "sailor": "0xbfb988f354164fb0",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x400387578a145d83",
+      "sway": "0x3fa1cf170f7389aa",
+      "x": "0xc03d9b2858501aee",
+      "y": "0xc0608364334737e3",
+      "yawRate": "0x3f3017bc43cab547"
+     }
+    }
+   ]
+  },
+  {
+   "name": "capsize",
+   "digest": "a5b3763e74b3da7d95976ae6705026f4414d973bdca2ad3ecaa87166224cabec",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x3fe7b93e83cf17c6",
+      "boomRate": "0x3fc33786721dab6a",
+      "heading": "0x3fe9156cde15e279",
+      "heel": "0x3f81480789efbc08",
+      "rollRate": "0xbfdba31f41af055a",
+      "rudder": "0x0000000000000000",
+      "sailor": "0xbfc3cc5e14ed1253",
+      "sailorMode": "0x4008000000000000",
+      "sailorTimer": "0x4009bbbbbbbbbbc2",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0xbff0dd036f6cb3f2",
+      "sway": "0x3fb763a931b32c0b",
+      "x": "0x4041e3d3a28d176a",
+      "y": "0xc000ac58263fa869",
+      "yawRate": "0x3fd01db52d68b7cb"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0x3f5860bf2cf1a47c",
+      "boomRate": "0x3fba7b88b4ea3e5c",
+      "heading": "0xbfbd24514217bcd6",
+      "heel": "0x3fcd51fbbffc609b",
+      "rollRate": "0xbfd0fd60259f9082",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0x3f86c90540a58f89",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fb1df46a2529d39",
+      "surge": "0xbfac762d213c3d0f",
+      "sway": "0xbfd7bbd5810978aa",
+      "x": "0x403b7586115ec031",
+      "y": "0xc02f12b2f35c0fd7",
+      "yawRate": "0x3fba73b7315b51d3"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0xbf856811631f7579",
+      "boomRate": "0xbf860d40bf7221a2",
+      "heading": "0xbfa0d9292415199c",
+      "heel": "0x3f91d6ca7f14b931",
+      "rollRate": "0x3f7f94a2bd4649c6",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0x3f929f6233879289",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fb1df46a2529d39",
+      "surge": "0xbfe5543c86bae7bd",
+      "sway": "0xbfa243f366e836dc",
+      "x": "0x4035b9fbc4faf572",
+      "y": "0xc038a57b778cf79e",
+      "yawRate": "0xbfa85804beabc98b"
+     }
+    },
+    {
+     "step": 2400,
+     "state": {
+      "boom": "0xbfb1df46a2529d39",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbfda6b0a7a7155d3",
+      "heel": "0xbfbdaa4094c03fad",
+      "rollRate": "0xbfce5483263be8e7",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0x3fdd71081e7ceb84",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fb1df46a2529d39",
+      "surge": "0xbfeaf6f7b2e2f636",
+      "sway": "0xbfd11e5fd3171d15",
+      "x": "0x4030bb75fae8a7f9",
+      "y": "0xc041517df23b55d6",
+      "yawRate": "0xbfd059fea3d8c205"
+     }
+    },
+    {
+     "step": 3000,
+     "state": {
+      "boom": "0xbfb1df46a2529d39",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbfdc558eae3198c9",
+      "heel": "0xbfca22edcce1a7f5",
+      "rollRate": "0x3fd121095666c192",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0x3fedda703345993c",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fb1df46a2529d39",
+      "surge": "0x3fcab7ca2e899394",
+      "sway": "0xbfeaddb5ab03c76f",
+      "x": "0x4024a7250dc3f028",
+      "y": "0xc04615bc72e85896",
+      "yawRate": "0x3fcde13d5bccac7e"
+     }
+    },
+    {
+     "step": 3600,
+     "state": {
+      "boom": "0x3f95ab42dbe53516",
+      "boomRate": "0x3fb9602c251c4a11",
+      "heading": "0xbfb8b0c0607e492c",
+      "heel": "0x3fc53c19cc9fdf47",
+      "rollRate": "0xbfd6760213b3bb05",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0x3fb4a09c763942e2",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fb1df46a2529d39",
+      "surge": "0xbfc030ea1b6164e7",
+      "sway": "0xbfd6f02a3925b57c",
+      "x": "0x400dd17dc389eb06",
+      "y": "0xc04a2aba6f3bb744",
+      "yawRate": "0x3fb9390cf16ec588"
+     }
+    }
+   ]
+  },
+  {
+   "name": "death-roll",
+   "digest": "23c1ec14998742374167010b6edf45534372d9f1e12a772109d3c290a88befb4",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0xbffa876a235661f9",
+      "boomRate": "0x3f345213db8b3688",
+      "heading": "0x400441b72de87496",
+      "heel": "0x3ffd50daab8dfa2e",
+      "rollRate": "0x3feb3746fc12465f",
+      "rudder": "0x0000000000000000",
+      "sailor": "0x0000000000000000",
+      "sailorMode": "0x3ff0000000000000",
+      "sailorTimer": "0x4022c00000000014",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0x3ffec41acbd58d90",
+      "sway": "0x3ff66635807a243e",
+      "x": "0xc0028f6fab52bac2",
+      "y": "0xc0383c77155283ef",
+      "yawRate": "0xbff467aed23135ea"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0x3f9461a2dec37b91",
+      "boomRate": "0x3fc0c88992c9a222",
+      "heading": "0x3fb205c429933188",
+      "heel": "0x3f9b7e2240a03aab",
+      "rollRate": "0x3fa3ecbabd211f76",
+      "rudder": "0x3fdacee9f37bebd6",
+      "sailor": "0xbfa0e9f12fec3f8a",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0xbff60f25bc337c3a",
+      "sway": "0x3fa4c47001fb051e",
+      "x": "0xc0250d62413409ef",
+      "y": "0xc04af4a94611de4c",
+      "yawRate": "0x3fbd4f708af390f4"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0x3f9c8ae3d4692cc0",
+      "boomRate": "0xbfae3de01c2bab4e",
+      "heading": "0x3fa63e36171321ee",
+      "heel": "0xbf834a46e6624e6b",
+      "rollRate": "0xbfb5ee3039fde26c",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0x3fbb3769245cbd82",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0xbff46813d4d63f06",
+      "sway": "0x3f982ab402ad6694",
+      "x": "0xc026cfa25c444364",
+      "y": "0xc053f9e93885fbba",
+      "yawRate": "0xbfc4e54f1aa31b3d"
+     }
+    },
+    {
+     "step": 2400,
+     "state": {
+      "boom": "0xbf82b87879904104",
+      "boomRate": "0xbfb564ce2c84f5be",
+      "heading": "0xbf7d9d0e2ff7c1d8",
+      "heel": "0xbf978d91f9637f8d",
+      "rollRate": "0x3fa4a21a847b6294",
+      "rudder": "0xbfe657184ae74487",
+      "sailor": "0x3fa63ea47088a1c1",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0xbff4c3a88f448d49",
+      "sway": "0xbfa1ffe6b2c87d4e",
+      "x": "0xc028870881543340",
+      "y": "0xc05a724e16c7b408",
+      "yawRate": "0xbf94fc96dba6caac"
+     }
+    },
+    {
+     "step": 3000,
+     "state": {
+      "boom": "0x3f47a543daff55d9",
+      "boomRate": "0x3fb2e32ddd2c04d7",
+      "heading": "0x3fa3a62fa42c3cf8",
+      "heel": "0x3f90f586988d09e7",
+      "rollRate": "0x3fb374d1160b2872",
+      "rudder": "0xbfe657184ae74487",
+      "sailor": "0xbfa7c58fcfebef0e",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0xbff4bbfd3429a669",
+      "sway": "0xbf944682328c8585",
+      "x": "0xc02a415f3d573dd3",
+      "y": "0xc060750ca584afba",
+      "yawRate": "0x3fc88d25e1f69780"
+     }
+    },
+    {
+     "step": 3600,
+     "state": {
+      "boom": "0x3fa3b749d0f38a14",
+      "boomRate": "0xbf8d871c12bd6bca",
+      "heading": "0x3fb330f76bb125c6",
+      "heel": "0x3f76770c28c95c79",
+      "rollRate": "0xbfb7e7f149b48867",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0x3fb5343ee9df8793",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0xbff48e9762ff210f",
+      "sway": "0x3f9bb76dda2e58b3",
+      "x": "0xc02c0610f3e2a8c3",
+      "y": "0xc063b15732cc2f8c",
+      "yawRate": "0xbfb6242aa1365ec0"
+     }
+    }
+   ]
+  },
+  {
+   "name": "irons",
+   "digest": "2759e06fc5c4d24fb90bc2a35a1b59679adcf1f217164cdce206d20fd9c5db34",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x0000000000000000",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x0000000000000000",
+      "heel": "0x0000000000000000",
+      "rollRate": "0x0000000000000000",
+      "rudder": "0x0000000000000000",
+      "sailor": "0x0000000000000000",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fb1df46a2529d39",
+      "surge": "0xbfecc04671ec3b05",
+      "sway": "0x0000000000000000",
+      "x": "0x0000000000000000",
+      "y": "0xc0271f9021196eef",
+      "yawRate": "0x0000000000000000"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0xbfe2f25a67881861",
+      "boomRate": "0x3f9f406abb2a5543",
+      "heading": "0xbfe8701755f4ce25",
+      "heel": "0xbf5600f18ace8dc1",
+      "rollRate": "0x3f1fd4f106f0e5b0",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0xbf8b4a97d460284c",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe690492ceeb34b",
+      "surge": "0x3fc7e3819091f0f6",
+      "sway": "0xbfc99d9ddfb204c4",
+      "x": "0x3fcf285dc4b834ac",
+      "y": "0xc038cf91e6445e3d",
+      "yawRate": "0x3fb019c66a5cfeb7"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0xbfe3d313df17c178",
+      "boomRate": "0xbfa3fe71cf888167",
+      "heading": "0xbfe769b947a2dc80",
+      "heel": "0xbf452804d9875d3d",
+      "rollRate": "0xbf3dd2aa151905b0",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0xbf90dd5c0138058a",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe690492ceeb34b",
+      "surge": "0xbfd083f63a993956",
+      "sway": "0xbfc2878af62e9777",
+      "x": "0xbff478a236d57053",
+      "y": "0xc03cd9594bdb8c4f",
+      "yawRate": "0xbfa257161b3e9af5"
+     }
+    }
+   ]
+  },
+  {
+   "name": "gusts",
+   "digest": "4b7d6567c023892e7fd17274f703845439400d9407b8596e3fb59227e4b22fe1",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3febc9c770513366",
+      "heel": "0xbebd3e66210838ef",
+      "rollRate": "0x3ec7f528bab4966f",
+      "rudder": "0x3f78b353fcd463d3",
+      "sailor": "0xbfd80b16b762aafc",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x3fff8e43bc30d337",
+      "sway": "0x3fb4123df46c6f8e",
+      "x": "0x403f63b01c731d80",
+      "y": "0x4038893fcab4fbfc",
+      "yawRate": "0xbea0dd4fd3446f1d"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3febd6a92a3da1b5",
+      "heel": "0x3f1c871bd36c1427",
+      "rollRate": "0xbef5f5a724c48c63",
+      "rudder": "0x3f6fe60cd3bcd9a5",
+      "sailor": "0xbfa7cc8c9da2f904",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x3fe8efa47142af9b",
+      "sway": "0x3f98d1bebae575f4",
+      "x": "0x4047f7c0e682d8e4",
+      "y": "0x4042ffe77345b474",
+      "yawRate": "0xbf1e40421e26d9c9"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3febcc28a73b48a5",
+      "heel": "0xbee63d53fbe30a51",
+      "rollRate": "0xbec7f110f5674e18",
+      "rudder": "0x3f77062cd0939f39",
+      "sailor": "0xbfca5198b565400c",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x3ff55e7d90e682a9",
+      "sway": "0x3fb12210e9f5b447",
+      "x": "0x4050f9e63b4c945d",
+      "y": "0x404a84513ed2cf83",
+      "yawRate": "0x3edb864dbe9e3583"
+     }
+    },
+    {
+     "step": 2400,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3febc8847afdec44",
+      "heel": "0xbeaa2e7d4f13f1e4",
+      "rollRate": "0xbe6ec7f9757d1f5b",
+      "rudder": "0x3f79945d5df1da6c",
+      "sailor": "0xbfd79cc2f64d77d9",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x3ff87a138619504e",
+      "sway": "0x3fc049931f6f2253",
+      "x": "0x405723e8c336ad5c",
+      "y": "0x4051a1b61ce58df3",
+      "yawRate": "0x3e93a2d2a66a7e59"
+     }
+    },
+    {
+     "step": 3000,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3feb9ae9c1becb4b",
+      "heel": "0x3fb82db16e1572cc",
+      "rollRate": "0x3e62721a0b0749ae",
+      "rudder": "0x3f8cb5818a383e68",
+      "sailor": "0xbfee978d4fdf3b50",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x400670d90cfe7549",
+      "sway": "0x3fc6fc0ce0ff3f11",
+      "x": "0x406103f62c7f8678",
+      "y": "0x4059c0b93d4c02b6",
+      "yawRate": "0x3e4a9cfe66e1336c"
+     }
+    },
+    {
+     "step": 3600,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3febccbb8f1fce17",
+      "heel": "0x3e941facaa433485",
+      "rollRate": "0xbec4e522401b9c84",
+      "rudder": "0x3f76a340b614591c",
+      "sailor": "0xbfd40e7c80b73185",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x400039ad7eaab680",
+      "sway": "0x3fac3d4ff3624302",
+      "x": "0x40651e8cba085628",
+      "y": "0x40602c5a068ed5d0",
+      "yawRate": "0xbe82145084357b48"
+     }
+    },
+    {
+     "step": 4200,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3feba5be8c53b322",
+      "heel": "0xbe70bcd377edf886",
+      "rollRate": "0x3eb0c946f2052b5c",
+      "rudder": "0x3f88f102c5b86669",
+      "sailor": "0xbfcaef268d856db7",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x3feb5ddc699c30f5",
+      "sway": "0x3fc975833b0fde32",
+      "x": "0x4067413f814f929d",
+      "y": "0x406164dbaa5e6a1a",
+      "yawRate": "0xbeea10bbabe81dca"
+     }
+    },
+    {
+     "step": 4800,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3febc738504a9baf",
+      "heel": "0xbef08171ad5a8196",
+      "rollRate": "0x3ee15f6221409ea9",
+      "rudder": "0x3f7a7cdb32ac0b62",
+      "sailor": "0xbfdad543f565bfe3",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x40007e32589b17d1",
+      "sway": "0x3fb6bc7165f7185c",
+      "x": "0x406b1f858abfa8c6",
+      "y": "0x40645c3f46c44013",
+      "yawRate": "0xbead284142406109"
+     }
+    },
+    {
+     "step": 5400,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3feb8a76fd06151a",
+      "heel": "0x3fb92a012a68d11f",
+      "rollRate": "0x3e13645aea280303",
+      "rudder": "0x3f9139ac16c09155",
+      "sailor": "0xbfee978d4fdf3b50",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x40088e66ba4754b6",
+      "sway": "0x3fc35480afbcf842",
+      "x": "0x407086b6b96254c5",
+      "y": "0x4068f4387df19eee",
+      "yawRate": "0x3e1bf96455edd24b"
+     }
+    },
+    {
+     "step": 6000,
+     "state": {
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3febd13a3a0cc89f",
+      "heel": "0x3f1a3ed428cc84db",
+      "rollRate": "0xbef6cb0a1f1eaf0f",
+      "rudder": "0x3f73a895ea72bdd3",
+      "sailor": "0xbfb72ece233e1331",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x3fef8912cd7493a5",
+      "sway": "0x3fa38c7e2ea5fc2e",
+      "x": "0x4071d6f01e992896",
+      "y": "0x406b1411bae4fb09",
+      "yawRate": "0xbf13bbb3fb57e7e3"
+     }
+    }
+   ]
+  },
+  {
+   "name": "calm",
+   "digest": "bf250807766a00af4e23d03047340bd17605d038832ed6618be642fad62cb910",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x0000000000000000",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ff0000000000000",
+      "heel": "0x0000000000000000",
+      "rollRate": "0x0000000000000000",
+      "rudder": "0x0000000000000000",
+      "sailor": "0x0000000000000000",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3feba5614317cb34",
+      "surge": "0x3fe59b07d479a9ab",
+      "sway": "0x0000000000000000",
+      "x": "0x4034f7b04f4efc02",
+      "y": "0x402aed1b483a184c",
+      "yawRate": "0x0000000000000000"
+     }
+    },
+    {
+     "step": 900,
+     "state": {
+      "boom": "0x0000000000000000",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ff0000000000000",
+      "heel": "0x0000000000000000",
+      "rollRate": "0x0000000000000000",
+      "rudder": "0x0000000000000000",
+      "sailor": "0x0000000000000000",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3feba5614317cb34",
+      "surge": "0x3fdf70ae68517cc5",
+      "sway": "0x0000000000000000",
+      "x": "0x4039cb4062acbb3c",
+      "y": "0x40308fe62705d167",
+      "yawRate": "0x0000000000000000"
+     }
+    }
+   ]
+  },
+  {
+   "name": "storm",
+   "digest": "532e4c03a573bdf52ffb6b5c12336001aeeacc058322ca23d59e94917e2587ff",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x3ffa876cd8f2a161",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x4001932994ec3917",
+      "heel": "0x3f324f1e0a72c009",
+      "rollRate": "0xbf404835a50773d5",
+      "rudder": "0x0000000000000000",
+      "sailor": "0xbfed5bae389e094e",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0x400aae62f5749748",
+      "sway": "0x3fb4ec00bf7ae7ba",
+      "x": "0x404456c159741bbc",
+      "y": "0xc040a27f01126987",
+      "yawRate": "0x3f39b0dcd0f4345f"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0x3ffa876cd8f2a161",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x400194ffb6f4aabd",
+      "heel": "0xbed77af76b568a71",
+      "rollRate": "0xbe890e393e355021",
+      "rudder": "0x0000000000000000",
+      "sailor": "0xbfed4375461377bf",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0x400ac1426f40e7f2",
+      "sway": "0x3fb4d7e69ae78f68",
+      "x": "0x40577749f4fc9a1b",
+      "y": "0xc052732cc9ddcd1a",
+      "yawRate": "0x3ec12054adabfe0d"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0x3ffa876cd8f2a161",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x40019505aec367c3",
+      "heel": "0xbe60c64ab65f96a6",
+      "rollRate": "0x3e6220e034696ca0",
+      "rudder": "0x0000000000000000",
+      "sailor": "0xbfed433a7283d903",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0x400ac18994297062",
+      "sway": "0x3fb4d78320463a73",
+      "x": "0x40626271b842c42b",
+      "y": "0xc05c972442a24597",
+      "yawRate": "0x3e648bc57c774281"
+     }
+    },
+    {
+     "step": 2400,
+     "state": {
+      "boom": "0x3ff2e7c8b7b4fd83",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ffe8bfa0d2789c3",
+      "heel": "0xbef6bdabc0c0b4ca",
+      "rollRate": "0x3f115e4dfcb9fb2f",
+      "rudder": "0x3f8ead3e35d0f309",
+      "sailor": "0xbfdead5da0dff29e",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff2e7c8b7b4fd83",
+      "surge": "0x4015dab6fb1cf64b",
+      "sway": "0x3f9ce7b5268815b7",
+      "x": "0x406f09c1ec1cba95",
+      "y": "0xc062f8428b534bec",
+      "yawRate": "0xbed4a7fc91e98f76"
+     }
+    },
+    {
+     "step": 3000,
+     "state": {
+      "boom": "0x3ff2e7c8b7b4fd83",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ffe8bf9b7dc68fb",
+      "heel": "0x3e08c3cf2e31194d",
+      "rollRate": "0xbe443971543ed0f5",
+      "rudder": "0x3f8eac209c31d943",
+      "sailor": "0xbfdead8db05e9972",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff2e7c8b7b4fd83",
+      "surge": "0x4015dab1fa76d13d",
+      "sway": "0x3f9cdbfd737a9fa5",
+      "x": "0x4075f3162acbe9f0",
+      "y": "0xc0679205ec9fb928",
+      "yawRate": "0x3e01c222c20d8147"
+     }
+    },
+    {
+     "step": 3600,
+     "state": {
+      "boom": "0x3ff2e7c8b7b4fd83",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ffe8bf9b7d4bb2d",
+      "heel": "0x3d4aec5656a62cba",
+      "rollRate": "0x3d721258b3a4ec50",
+      "rudder": "0x3f8eac20ab3b0183",
+      "sailor": "0xbfdead8db195ccf0",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff2e7c8b7b4fd83",
+      "surge": "0x4015dab1fa8bf76e",
+      "sway": "0x3f9cdbfde515dbf2",
+      "x": "0x407c614b67792781",
+      "y": "0xc06c2bc938d54330",
+      "yawRate": "0xbd23f1b03bbd375f"
+     }
+    }
+   ]
+  },
+  {
+   "name": "random",
+   "digest": "f193d20777fa3b068fad3dfa107b860aae824fe9c9d5a6a305df1f621f5370ec",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0xbfe690492ceeb34b",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3feb1b4eb0e74c92",
+      "heel": "0xbf58b1bfa27f14ce",
+      "rollRate": "0xbf4a19282492fb41",
+      "rudder": "0x0000000000000000",
+      "sailor": "0x3f858f4a0389094a",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe690492ceeb34b",
+      "surge": "0x3ff204740b26dcde",
+      "sway": "0xbf72e2f18ee448f9",
+      "x": "0x40250c865e81b22b",
+      "y": "0x402b19b48d3d9d40",
+      "yawRate": "0x3f637dd379b43239"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0x3ff1d56a79b9a2a5",
+      "boomRate": "0x3fd6d189307b225f",
+      "heading": "0x3fe2843f8398f3e6",
+      "heel": "0x3fa890e5e7fa4959",
+      "rollRate": "0x3f98151df72302e5",
+      "rudder": "0xbfdf246b147283e0",
+      "sailor": "0xbfc50087ca4f7473",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff8a6053725fc60",
+      "surge": "0xbffc194e6566d817",
+      "sway": "0x3f980eb579cb55f8",
+      "x": "0x4030c14333d21465",
+      "y": "0x402e91f686eb1bd5",
+      "yawRate": "0x3fd87ba016d9407e"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0x3ff1633c08df82b4",
+      "boomRate": "0x3f8a31fa0b136674",
+      "heading": "0x3fe1e9263f536fde",
+      "heel": "0xbfa58875c145708a",
+      "rollRate": "0x3fc3cb762af7f56e",
+      "rudder": "0x0000000000000000",
+      "sailor": "0xbfd2de7852dd4949",
+      "sailorMode": "0x4008000000000000",
+      "sailorTimer": "0x4000222222222232",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0xbffea24840b73889",
+      "sway": "0x3fd5b52c8ed21306",
+      "x": "0x403b19532d9f850f",
+      "y": "0x4035594c42ce0a75",
+      "yawRate": "0x3f75a37e2de685a8"
+     }
+    },
+    {
+     "step": 2400,
+     "state": {
+      "boom": "0x3fef682a59c8656a",
+      "boomRate": "0xbf271dd1b9b0da4c",
+      "heading": "0x3fdf2698b786efd3",
+      "heel": "0xbf71b41e35c52843",
+      "rollRate": "0x3f7025b494673a7b",
+      "rudder": "0x3fddcd45c845eb4a",
+      "sailor": "0xbf6d5d25391f5330",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fef683086b11537",
+      "surge": "0x3fb19b9be84ef01d",
+      "sway": "0x3fc037a4c7ba10ab",
+      "x": "0x40370f35a3cd5eae",
+      "y": "0x402054003b409777",
+      "yawRate": "0xbfa41852ba664329"
+     }
+    },
+    {
+     "step": 3000,
+     "state": {
+      "boom": "0xbfd7b14c424d89a1",
+      "boomRate": "0x3f904edecde0611f",
+      "heading": "0x3ff9532b75f430ac",
+      "heel": "0x3f80f8e8b69a8881",
+      "rollRate": "0xbf6d2eafac89bba2",
+      "rudder": "0xbfe380c51455ac35",
+      "sailor": "0xbf982042d4ed30d3",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff6d1a0625edf49",
+      "surge": "0x3fd42d5d11b01c04",
+      "sway": "0xbfa460a54122b6f4",
+      "x": "0x40361fc1791d9e72",
+      "y": "0x401362a6af26ccf2",
+      "yawRate": "0x3f8935e7162b02ee"
+     }
+    },
+    {
+     "step": 3600,
+     "state": {
+      "boom": "0xbfc2159b790ce00c",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x3ff9e2345b782a0f",
+      "heel": "0x3f9d2d9e0786f002",
+      "rollRate": "0xbf7fad8b2941518f",
+      "rudder": "0x3fc476b0e0426ee6",
+      "sailor": "0x3fcfab98e1d1affe",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc2159b790ce00c",
+      "surge": "0x3fe9b497daf5fa75",
+      "sway": "0xbfd372551cfb91c9",
+      "x": "0x4036b38ad37c89d3",
+      "y": "0x4020f283ed65a290",
+      "yawRate": "0x3f90b40be9565153"
+     }
+    },
+    {
+     "step": 4200,
+     "state": {
+      "boom": "0x3febc100f82fe71d",
+      "boomRate": "0xbfccbebad8c6c045",
+      "heading": "0xbfc5d06361969a9c",
+      "heel": "0xbfa31045aff8568d",
+      "rollRate": "0xbfa54cdcd6dd021c",
+      "rudder": "0xbfe026e7d5e62ebb",
+      "sailor": "0xbfa272731e617752",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff705ab9674fef6",
+      "surge": "0x3ff5f3965dbcc932",
+      "sway": "0x3fc81b236a7c6f1d",
+      "x": "0x4046146c6abc139f",
+      "y": "0x40300092c021c572",
+      "yawRate": "0xbfd37ce3fbdf9afe"
+     }
+    },
+    {
+     "step": 4800,
+     "state": {
+      "boom": "0x3ff17b7a4b1a1fc8",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbffbd172f50e0b45",
+      "heel": "0xbfc79ab63f2a09ec",
+      "rollRate": "0xbfb6310bbea8628d",
+      "rudder": "0x3f9c987103b761f5",
+      "sailor": "0xbfc1b3904eaf5217",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff17b7a4b1a1fc8",
+      "surge": "0x400f97f7f162ad8c",
+      "sway": "0xbfb766f6517143ce",
+      "x": "0x4032862e4424aa28",
+      "y": "0x4031d332dbbdfd46",
+      "yawRate": "0x3fa4dd6ac0793e0e"
+     }
+    },
+    {
+     "step": 5400,
+     "state": {
+      "boom": "0x3ffa876cd8f2a161",
+      "boomRate": "0x0000000000000000",
+      "heading": "0xbfe18ff4a2cae3a7",
+      "heel": "0x3fc51d293f84a203",
+      "rollRate": "0xbfd72bb7d8de156e",
+      "rudder": "0x0000000000000000",
+      "sailor": "0xbfdf54053bdb5f8d",
+      "sailorMode": "0x4008000000000000",
+      "sailorTimer": "0x4008888888888890",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0x3ff155b450b70499",
+      "sway": "0x3fba1fcf0d6959c0",
+      "x": "0xc01fa9e2b0c11a86",
+      "y": "0x402fb672566957f8",
+      "yawRate": "0x3fbb593a976d7bfc"
+     }
+    },
+    {
+     "step": 6000,
+     "state": {
+      "boom": "0xbff9594b443c724c",
+      "boomRate": "0xbfd91687d8f6609a",
+      "heading": "0x3ff8a8e47b20b50b",
+      "heel": "0xbfdad09f95838f0f",
+      "rollRate": "0x3fe12c0fe7004996",
+      "rudder": "0x0000000000000000",
+      "sailor": "0x3fcca2db649f06b0",
+      "sailorMode": "0x4008000000000000",
+      "sailorTimer": "0x400ebbbbbbbbbbbd",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0x3fdff2308436ba32",
+      "sway": "0x3fb11957ac7634e0",
+      "x": "0xbfe7c4e239be22de",
+      "y": "0x40436b5b0b2b0a26",
+      "yawRate": "0xbfdcbb8fbec4b126"
      }
     },
     {
      "step": 6600,
      "state": {
-      "heading": "0x40060bc78805e8cc",
-      "surge": "0x3fc4861faf8244aa",
-      "sway": "0xbf8e24fefe26934e",
-      "x": "0xc055b689022b22f3",
-      "y": "0xc05dbb9ca4c6b749",
-      "yawRate": "0x3f37896c91375c83"
+      "boom": "0xbfdb20529b218467",
+      "boomRate": "0xbfd05cbb3b752f28",
+      "heading": "0xc00914f9f8396510",
+      "heel": "0xbf95deaf5adc46cc",
+      "rollRate": "0xbf6d6b23c7f802cf",
+      "rudder": "0x3fdb2a6b5d2169db",
+      "sailor": "0xbfc736123aaaa5c9",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fdcc30c78e870a2",
+      "surge": "0xbff1babe84c27159",
+      "sway": "0xbfd165f65af4673c",
+      "x": "0x402f0c627b2a8576",
+      "y": "0x404209477eee3800",
+      "yawRate": "0xbfd03ef4ae693d21"
      }
     },
     {
      "step": 7200,
      "state": {
-      "heading": "0x4005cadf10ec8db7",
-      "surge": "0x3fdfe5d4f6dba25f",
-      "sway": "0xbfc1b4707c228f7f",
-      "x": "0xc05504314629a4fa",
-      "y": "0xc05ea6064e66b84a",
-      "yawRate": "0xbf6a257e30b5b34a"
+      "boom": "0xbfcc16dca7c3ccd2",
+      "boomRate": "0x3f8fbc61ac5c03ff",
+      "heading": "0xc0079c7078377450",
+      "heel": "0x3f98b562205482e9",
+      "rollRate": "0xbfbcffcac1aff438",
+      "rudder": "0x3fde0676aa4d5a0e",
+      "sailor": "0x3f9eb661e2d091b8",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fef753353b69d22",
+      "surge": "0x3f82b1322c4cdb50",
+      "sway": "0xbfcf3f802d0c8229",
+      "x": "0x4035a171ea563c51",
+      "y": "0x40425e83ff6f2453",
+      "yawRate": "0x3f944f0558d5bcde"
      }
     },
     {
      "step": 7800,
      "state": {
-      "heading": "0x4007df0494618854",
-      "surge": "0x3fc9c81f23e4d19b",
-      "sway": "0xbfa142bf80beba4a",
-      "x": "0xc053a6d47fc19afe",
-      "y": "0xc0604a0f9382d429",
-      "yawRate": "0x3f44c31263bd417c"
+      "boom": "0xbfe0bff8f7b76f89",
+      "boomRate": "0x3fb8c8f2b46075d5",
+      "heading": "0xbfe9c68d8d695f85",
+      "heel": "0x3fcc48e94741b5ec",
+      "rollRate": "0x3f9a77e2fe49ed62",
+      "rudder": "0x3fc7f2dea64ffba4",
+      "sailor": "0x3fa9d056685adfe0",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe0f915148e4c31",
+      "surge": "0x40052c34f0c09a13",
+      "sway": "0xbfc1a87589f25f0b",
+      "x": "0x4028b8369eeb8b0c",
+      "y": "0x404110a9d5731911",
+      "yawRate": "0x3fcba5517cb59ed2"
      }
     },
     {
      "step": 8400,
      "state": {
-      "heading": "0x4007cc887f391d0e",
-      "surge": "0x3fb56398e1dfb24d",
-      "sway": "0xbfa290980eba62bd",
-      "x": "0xc05368b5ef78e8d8",
-      "y": "0xc060941e3d2d09e9",
-      "yawRate": "0xbf19e6b52b92d6d3"
+      "boom": "0xbff5cb53216a825c",
+      "boomRate": "0xbfb51ceaf41713dd",
+      "heading": "0xbffd4de6fbc0db93",
+      "heel": "0xbff3fbbb5c3bd06b",
+      "rollRate": "0x3fc44fa1e5672beb",
+      "rudder": "0x0000000000000000",
+      "sailor": "0x0000000000000000",
+      "sailorMode": "0x3ff0000000000000",
+      "sailorTimer": "0x401a11111111113e",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0x3feed505b2a9c61b",
+      "sway": "0xbfdf737bbbf7f926",
+      "x": "0x4026b216fe718ed5",
+      "y": "0x4037d1caa37c09ab",
+      "yawRate": "0x3ff06e1d69c17f96"
      }
     },
     {
      "step": 9000,
      "state": {
-      "heading": "0x4007d4cbbbbba1a5",
-      "surge": "0x3facbd26a4ae49ec",
-      "sway": "0xbf9866baa9a47c1f",
-      "x": "0xc05336075c8cd140",
-      "y": "0xc060bc2e4065e6b6",
-      "yawRate": "0x3f072bc9f760b15f"
+      "boom": "0x3fd8cc32013906f2",
+      "boomRate": "0x0000000000000000",
+      "heading": "0x400636f89a62d547",
+      "heel": "0x3f857b85b556a0b9",
+      "rollRate": "0xbf810cfe79568d3a",
+      "rudder": "0x3fe50b632bef5bb0",
+      "sailor": "0xbfac59088b8fbf0b",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fd8cc32013906f2",
+      "surge": "0x3ff8a012e12640d2",
+      "sway": "0xbfd164f2b693083c",
+      "x": "0xbfd96c5bfaf03db9",
+      "y": "0x40429b9cdb0e503e",
+      "yawRate": "0x3fde9268e1448d5b"
      }
     },
     {
      "step": 9600,
      "state": {
-      "heading": "0x4007d03dc34546bd",
-      "surge": "0x3fa6a8fb731146e7",
-      "sway": "0xbf992348d9b9c3d3",
-      "x": "0xc0530de77c35e36f",
-      "y": "0xc060d8c650c0dd00",
-      "yawRate": "0xbefc750f8707ee62"
+      "boom": "0xbfd32008d4141bd7",
+      "boomRate": "0x3f941e99bca0b7cb",
+      "heading": "0xbfef520e4febce19",
+      "heel": "0xbf843994b0942c44",
+      "rollRate": "0xbf8884b3277b9768",
+      "rudder": "0xbfd61de768dfd5c3",
+      "sailor": "0xbfc67865735ea2e3",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff705ab9674fef6",
+      "surge": "0xbfeaf4dc08f3a9b4",
+      "sway": "0xbfc813b49c6ec77f",
+      "x": "0xc0234842f1bf72f1",
+      "y": "0x4041ec05ddfa90b6",
+      "yawRate": "0x3faf3c420c51bd56"
      }
     },
     {
      "step": 10000,
      "state": {
-      "heading": "0x4007d23a7a46cd91",
-      "surge": "0x3fa4c1369428175a",
-      "sway": "0xbf993dab8adc01a4",
-      "x": "0xc052f326cc830497",
-      "y": "0xc060e8d6f574204e",
-      "yawRate": "0x3f3d7d078fe91dc1"
+      "boom": "0x3fc42f636eb69ec2",
+      "boomRate": "0x3fc91ad61ce2feb8",
+      "heading": "0xbfea01d09a6a1aef",
+      "heel": "0x3ff9b467eef528b3",
+      "rollRate": "0xbfa4a3f512dd8a82",
+      "rudder": "0x0000000000000000",
+      "sailor": "0x0000000000000000",
+      "sailorMode": "0x3ff0000000000000",
+      "sailorTimer": "0x40186eeeeeeeef05",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0xbfd35e520dbc8cda",
+      "sway": "0x3fe4fb6760e16fee",
+      "x": "0xc01eeb657005f8dd",
+      "y": "0x4042630192782e5a",
+      "yawRate": "0x3feae4a33da75ac2"
      }
     }
    ]

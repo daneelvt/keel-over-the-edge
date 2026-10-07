@@ -5,13 +5,13 @@
 // golden.json, compared bit for bit with what the server's Go computed. The
 // tests run it under Node; the developer page runs it on a phone.
 
-import { RECORDS } from './layout.gen';
+import { ARRAYS, RECORDS } from './layout.gen';
 import type { FnName, Physics, RecordName } from './physics';
 
 type Values = Record<string, number>;
 
 export interface ScenarioFile {
-  params: Values;
+  params: Record<string, number | number[]>;
   scenarios: Scenario[];
 }
 
@@ -21,7 +21,7 @@ export interface Scenario {
   state?: Values;
   control?: Values;
   env?: Values;
-  changes?: { at: number; control?: Values; env?: Values }[];
+  changes?: { at: number; control?: Values; env?: Values; steer?: number }[];
 }
 
 export interface GoldenFile {
@@ -43,34 +43,54 @@ export interface ScenarioResult {
   checkpoints: Checkpoint[];
 }
 
-/** Steps a scenario as the Go test does, hashing the state after every step. */
+/**
+ * Steps a scenario as the Go test does, hashing the state and Out after
+ * every step.
+ */
 export async function runScenario(
   physics: Physics,
-  params: Values,
+  params: ScenarioFile['params'],
   scenario: Scenario,
 ): Promise<ScenarioResult> {
   const r = physics.records;
   for (const v of Object.values(r)) {
     v.fill(0);
   }
-  setFields(physics, 'params', params);
+  setParams(physics, params);
+  physics.prepare();
   setFields(physics, 'state', scenario.state);
   setFields(physics, 'control', scenario.control);
   setFields(physics, 'env', scenario.env);
 
   const stateBytes = r.state.byteLength;
-  const all = new Uint8Array(scenario.steps * stateBytes);
+  const stepBytes = stateBytes + r.out.byteLength;
+  const all = new Uint8Array(scenario.steps * stepBytes);
   const checkpoints: Checkpoint[] = [];
   const changes = scenario.changes ?? [];
   let next = 0;
+  let steering = false;
+  let target = 0;
   for (let i = 0; i < scenario.steps; i++) {
     for (; next < changes.length && changes[next]?.at === i; next++) {
-      setFields(physics, 'control', changes[next]?.control);
-      setFields(physics, 'env', changes[next]?.env);
+      const change = changes[next];
+      setFields(physics, 'control', change?.control);
+      setFields(physics, 'env', change?.env);
+      if (change?.control?.helm !== undefined) {
+        steering = false;
+      }
+      if (change?.steer !== undefined) {
+        steering = true;
+        target = change.steer;
+      }
+    }
+    if (steering) {
+      const rec = physics.records;
+      rec.control[RECORDS.control.helm] = steer(target, rec.state);
     }
     physics.step();
-    const s = physics.records.state;
-    all.set(new Uint8Array(s.buffer, s.byteOffset, s.byteLength), i * stateBytes);
+    const { state: s, out: o } = physics.records;
+    all.set(new Uint8Array(s.buffer, s.byteOffset, s.byteLength), i * stepBytes);
+    all.set(new Uint8Array(o.buffer, o.byteOffset, o.byteLength), i * stepBytes + stateBytes);
     const n = i + 1;
     if (n % checkpointEvery === 0 || n === scenario.steps) {
       const state: Record<string, string> = {};
@@ -88,6 +108,41 @@ export async function runScenario(
     digest: Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join(''),
     checkpoints,
   };
+}
+
+/**
+ * The scenarios' heading-hold, the twin of steer in golden_test.go. It uses
+ * only operations IEEE 754 rounds exactly, so it gives the same bits as Go.
+ */
+function steer(target: number, state: Float64Array): number {
+  let off = target - (state[RECORDS.state.heading] ?? 0);
+  if (off > Math.PI) {
+    off -= 2 * Math.PI;
+  } else if (off < -Math.PI) {
+    off += 2 * Math.PI;
+  }
+  const helm = 2 * off - 0.8 * (state[RECORDS.state.yawRate] ?? 0);
+  return Math.max(-1, Math.min(1, helm));
+}
+
+function setParams(physics: Physics, values: ScenarioFile['params']): void {
+  const fields: Record<string, number> = RECORDS.params;
+  const lengths: Record<string, number> = ARRAYS.params;
+  const view = physics.records.params;
+  for (const [name, value] of Object.entries(values)) {
+    const index = fields[name];
+    if (index === undefined) {
+      throw new Error(`params has no field ${name}`);
+    }
+    if (Array.isArray(value)) {
+      if (value.length !== lengths[name]) {
+        throw new Error(`params.${name} has ${value.length} values, not ${lengths[name]}`);
+      }
+      view.set(value, index);
+    } else {
+      view[index] = value;
+    }
+  }
 }
 
 function setFields(physics: Physics, record: RecordName, values: Values | undefined): void {

@@ -9,7 +9,8 @@
 //
 // The records live at fixed addresses in the module's memory. The client
 // reads and writes them through typed arrays, at the addresses the exports
-// below return, and calls step. The client calls _initialize once first.
+// below return. It calls _initialize once first, then writes params and calls
+// prepare, then steps. The prepared constants stay inside the module.
 package main
 
 import (
@@ -20,10 +21,12 @@ import (
 )
 
 var (
-	state   physics.State
-	control physics.Control
-	env     physics.Env
-	params  physics.Params
+	state    physics.State
+	control  physics.Control
+	env      physics.Env
+	params   physics.Params
+	out      physics.Out
+	prepared physics.Prepared
 )
 
 // fnCapacity is how many values one call of fn evaluates.
@@ -56,10 +59,19 @@ func envAddr() uint32 { return addr(unsafe.Pointer(&env)) }
 //go:wasmexport params
 func paramsAddr() uint32 { return addr(unsafe.Pointer(&params)) }
 
-// step advances the state by one step.
+//go:wasmexport out
+func outAddr() uint32 { return addr(unsafe.Pointer(&out)) }
+
+// prepare derives the boat's constants from params. Call it after writing
+// params and before stepping.
+//
+//go:wasmexport prepare
+func prepare() { physics.Prepare(&params, &prepared) }
+
+// step advances the state by one step and writes out.
 //
 //go:wasmexport step
-func step() { physics.Step(&state, &control, &env, &params) }
+func step() { physics.Step(&state, &control, &env, &prepared, &out) }
 
 //go:wasmexport fnArgs
 func fnArgsAddr() uint32 { return addr(unsafe.Pointer(&fnArgs)) }

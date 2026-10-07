@@ -1,78 +1,563 @@
 {
-  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state with golden.json. A change applies before the step it names, counting from 0, and keeps its values until the next change.",
-  "params": {"mass": 150, "yawInertia": 300, "sailArea": 7, "sailHeight": 3, "dragAhead": 60, "dragSide": 900, "rudderPower": 120, "yawDamping": 1.5},
+  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state and Out with golden.json. params are the Jolly boat's, as the catalog gives them (catalog_test.go checks they match). Winds are 10 m up, in m/s. A change applies before the step it names, counting from 0, and keeps its values until the next change. steer starts a heading-hold to that heading, in radians, which sets the helm before every step to clamp(2 × (heading off course, wrapped to ±π) − 0.8 × yaw rate, −1, 1); a change that sets the helm stops it. The random scenario's changes were drawn once, with seed 3, and are kept as data.",
+  "params": {
+    "displacement": 160,
+    "waterlineLength": 3.791,
+    "hullDraught": 0.094,
+    "centreOfGravity": 0.3,
+    "dragAreaStep": 0.2572222222222222,
+    "dragArea": [0.0135, 0.01325, 0.013, 0.01275, 0.0125, 0.0126, 0.0132, 0.0144, 0.0157, 0.0177, 0.0207, 0.0229, 0.0241, 0.0246, 0.0243, 0.0232, 0.022, 0.0212, 0.0206, 0.02025, 0.0199, 0.01955, 0.0192, 0.01885, 0.0185],
+    "crossFlowDrag": 1,
+    "addedMassSurge": 8,
+    "addedMassSway": 90,
+    "munk": 55,
+    "yawInertia": 250,
+    "rollInertia": 235,
+    "rollDamping": 60,
+    "rightingLever": [0, 0.074, 0.117, 0.115, 0.062, -0.014, -0.1, -0.19, -0.27, -0.346, -0.41, -0.465, -0.505, -0.47, -0.4, -0.3, -0.2, -0.1, 0],
+    "sailArea": 7.06,
+    "luff": 5.13,
+    "foot": 2.74,
+    "boomHeight": 1,
+    "mastPosition": 0.95,
+    "footStrip": 0.15,
+    "headStrip": 0.578,
+    "pressureAttached": 0.33,
+    "pressureSeparated": 0.5,
+    "effectiveHeight": 6.13,
+    "quadraticDrag": 0.01379,
+    "maxLift": 1.48,
+    "stallAngle": 28,
+    "stallWidth": 20,
+    "sailDrag": 0.026,
+    "luffAngle": 3,
+    "flogDrag": 0.05,
+    "normalForce": [0, 0.5, 0.9, 1.07, 1.21, 1.31, 1.37, 1.39, 1.38, 1.35, 1.28, 1.19, 1.07, 0.93, 0.77, 0.59, 0.4, 0.2, 0],
+    "twistPowered": 5,
+    "twistDepowered": 15,
+    "twistEased": 20,
+    "twistTurn": 3,
+    "headBacked": 90,
+    "headBackedWidth": 20,
+    "boomIn": 4,
+    "boomOut": 95,
+    "boomInertia": 12,
+    "boomMoment": 6.6,
+    "boomDamping": 5,
+    "windageFront": 0.86,
+    "windageSide": 1.24,
+    "windageHeight": 0.7,
+    "sailFloat": 1500,
+    "sailWaterDamping": 300,
+    "boardSpan": 0.69,
+    "boardChord": 0.34,
+    "boardPosition": 0.45,
+    "rudderSpan": 0.6,
+    "rudderChord": 0.25,
+    "rudderPosition": 2.05,
+    "rudderAngle": 40,
+    "foilStall": 13,
+    "foilStallWidth": 6,
+    "foilDrag": 0.01,
+    "plateNormal": 1.2,
+    "pressureDepth": 0.43,
+    "carryOver": 1.8,
+    "heelLoss": 0.382,
+    "rudderInflow": 0.9,
+    "downwash": 0.5,
+    "foilWetHeel": 60,
+    "foilDryHeel": 90,
+    "sailorMass": 80,
+    "sailorSeatHeight": 0.25,
+    "hikeReach": 0.956,
+    "leeReach": 0.3,
+    "hikeSpeed": 1.5,
+    "hikeLag": 0.35,
+    "heelGain": 1,
+    "rollRateGain": 0.6,
+    "flattenFrom": 6,
+    "flattenTo": 11,
+    "flattenMin": 0.62,
+    "fallOutHeel": 70,
+    "climbInHeel": 30,
+    "boardReach": 0.99,
+    "sailorDrag": 600,
+    "swimTime": 10,
+    "climbTime": 4,
+    "rudderTime": 0.25,
+    "sheetHaulTime": 2.5,
+    "sheetEaseTime": 1
+  },
   "scenarios": [
     {
-      "name": "beam-reach",
+      "name": "beat",
       "steps": 3600,
-      "state": {"heading": 0},
-      "control": {"helm": 0, "trim": 0.8},
-      "env": {"windSpeed": 6, "windFrom": 1.5707963267948966}
-    },
-    {
-      "name": "circles",
-      "steps": 3600,
-      "state": {"x": -2500, "y": 1200, "heading": -2.5, "surge": 1},
-      "control": {"helm": 0.6, "trim": 1},
-      "env": {"windSpeed": 7, "windFrom": 0}
-    },
-    {
-      "name": "calm-then-wind",
-      "steps": 3600,
-      "state": {"x": 8000, "y": -3000, "heading": 3},
-      "control": {"helm": -0.2, "trim": 1},
-      "env": {"windSpeed": 0, "windFrom": 2},
+      "state": {"heading": 0.733, "surge": 2.2, "sheetLimit": 0.07},
+      "control": {"sheet": 0.05},
+      "env": {"windSpeed": 6.1733, "windFrom": 0},
       "changes": [
-        {"at": 900, "env": {"windSpeed": 4}},
-        {"at": 2400, "control": {"helm": 0}}
+        {"at": 0, "steer": 0.733}
       ]
     },
     {
-      "name": "tacks-and-gusts",
-      "steps": 10000,
-      "state": {"heading": 0.7, "surge": 1.2},
-      "control": {"helm": 0, "trim": 0.9},
-      "env": {"windSpeed": 8, "windFrom": 0.2},
+      "name": "reach",
+      "steps": 3600,
+      "state": {"heading": 1.5708, "surge": 3, "sheetLimit": 0.5},
+      "control": {"sheet": 0.3},
+      "env": {"windSpeed": 8.2311, "windFrom": 0},
       "changes": [
-        {"at": 300, "control": {"helm": 1}},
-        {"at": 420, "control": {"helm": 0.05}},
-        {"at": 900, "control": {"helm": -1}},
-        {"at": 1020, "control": {"helm": -0.05}},
-        {"at": 1500, "control": {"helm": 1}},
-        {"at": 1500, "env": {"windSpeed": 11}},
-        {"at": 1620, "control": {"helm": 0.05}},
-        {"at": 1800, "env": {"windSpeed": 5, "windFrom": 0.3}},
-        {"at": 2100, "control": {"helm": -1}},
-        {"at": 2220, "control": {"helm": -0.05}},
-        {"at": 2700, "control": {"helm": 1}},
-        {"at": 2820, "control": {"helm": 0.05}},
-        {"at": 3300, "control": {"helm": -1}},
-        {"at": 3420, "control": {"helm": -0.05}},
-        {"at": 3900, "control": {"helm": 1}},
-        {"at": 4000, "env": {"windSpeed": 14, "windFrom": -0.4}},
-        {"at": 4020, "control": {"helm": 0.05}},
-        {"at": 4300, "env": {"windSpeed": 6}},
-        {"at": 4500, "control": {"helm": -1}},
-        {"at": 4620, "control": {"helm": -0.05}},
-        {"at": 5100, "control": {"helm": 1}},
-        {"at": 5220, "control": {"helm": 0.05}},
-        {"at": 5700, "control": {"helm": -1}},
-        {"at": 5820, "control": {"helm": -0.05}},
-        {"at": 6300, "control": {"helm": 1}},
-        {"at": 6420, "control": {"helm": 0.05}},
-        {"at": 6900, "control": {"helm": -1}},
-        {"at": 7000, "env": {"windFrom": 3.0}},
-        {"at": 7020, "control": {"helm": -0.05}},
-        {"at": 7500, "control": {"helm": 1}},
-        {"at": 7620, "control": {"helm": 0.05}},
-        {"at": 8100, "control": {"helm": -1}},
-        {"at": 8220, "control": {"helm": -0.05}},
-        {"at": 8500, "control": {"trim": 0.4}},
-        {"at": 8700, "control": {"helm": 1}},
-        {"at": 8820, "control": {"helm": 0.05}},
-        {"at": 9300, "control": {"helm": -1}},
-        {"at": 9420, "control": {"helm": -0.05}},
-        {"at": 9900, "control": {"helm": 1}}
+        {"at": 0, "steer": 1.5708}
+      ]
+    },
+    {
+      "name": "run",
+      "steps": 3600,
+      "state": {"heading": 3.002, "surge": 2, "sheetLimit": 1.4},
+      "control": {"sheet": 0.9},
+      "env": {"windSpeed": 6.1733, "windFrom": 0},
+      "changes": [
+        {"at": 0, "steer": 3.002}
+      ]
+    },
+    {
+      "name": "tacks",
+      "steps": 6000,
+      "state": {"heading": 0.733, "surge": 2.2, "sheetLimit": 0.07},
+      "control": {"sheet": 0.05},
+      "env": {"windSpeed": 4.63, "windFrom": 0},
+      "changes": [
+        {"at": 0, "steer": 0.733},
+        {"at": 500, "steer": -0.733},
+        {"at": 1000, "steer": 0.733},
+        {"at": 1500, "steer": -0.733},
+        {"at": 2000, "steer": 0.733},
+        {"at": 2500, "steer": -0.733},
+        {"at": 3000, "env": {
+  "windSpeed": 7.7167
+}},
+        {"at": 3000, "steer": 0.733},
+        {"at": 3500, "steer": -0.733},
+        {"at": 4000, "steer": 0.733},
+        {"at": 4500, "steer": -0.733},
+        {"at": 5000, "steer": 0.733},
+        {"at": 5500, "steer": -0.733}
+      ]
+    },
+    {
+      "name": "gybes",
+      "steps": 6000,
+      "state": {"heading": 2.618, "surge": 2.5, "sheetLimit": 1.2},
+      "control": {"sheet": 0.75},
+      "env": {"windSpeed": 4.63, "windFrom": 0},
+      "changes": [
+        {"at": 0, "steer": 2.618},
+        {"at": 750, "steer": -2.618},
+        {"at": 1500, "steer": 2.618},
+        {"at": 2250, "steer": -2.618},
+        {"at": 3000, "steer": 2.618},
+        {"at": 3000, "env": {
+  "windSpeed": 9.26
+}},
+        {"at": 3750, "steer": -2.618},
+        {"at": 4500, "steer": 2.618},
+        {"at": 5250, "steer": -2.618},
+        {"at": 5250, "control": {
+  "sheet": 1
+}}
+      ]
+    },
+    {
+      "name": "by-the-lee",
+      "steps": 1800,
+      "state": {"heading": 3.002, "surge": 2.5, "sheetLimit": 1.4},
+      "control": {"sheet": 0.9},
+      "env": {"windSpeed": 6.1733, "windFrom": 0},
+      "changes": [
+        {"at": 0, "steer": 3.002},
+        {"at": 150, "steer": 3.0718},
+        {"at": 300, "steer": 3.1416},
+        {"at": 450, "steer": -3.0718},
+        {"at": 600, "steer": -3.002},
+        {"at": 750, "steer": -2.9322},
+        {"at": 900, "steer": -2.8623},
+        {"at": 1050, "steer": -2.7925},
+        {"at": 1200, "steer": -2.7227},
+        {"at": 1350, "steer": -2.6529},
+        {"at": 1500, "steer": -2.5831},
+        {"at": 1650, "steer": -2.5133}
+      ]
+    },
+    {
+      "name": "capsize",
+      "steps": 3600,
+      "state": {"heading": 1.5708, "surge": 3, "sheetLimit": 0.6},
+      "control": {"sheet": 0.4},
+      "env": {"windSpeed": 10.2889, "windFrom": 0},
+      "changes": [
+        {"at": 0, "steer": 1.5708},
+        {"at": 150, "control": {
+  "sheet": 0
+}}
+      ]
+    },
+    {
+      "name": "death-roll",
+      "steps": 3600,
+      "state": {"heading": 3.1067, "surge": 3.5, "sheetLimit": 1.6, "heel": -0.35, "rollRate": -0.9, "boom": 1.5},
+      "control": {"sheet": 1},
+      "env": {"windSpeed": 11.3178, "windFrom": 0},
+      "changes": [
+        {"at": 0, "steer": -3.1067}
+      ]
+    },
+    {
+      "name": "irons",
+      "steps": 1800,
+      "state": {"heading": 0, "sheetLimit": 0.07},
+      "control": {"sheet": 0, "helm": 0},
+      "env": {"windSpeed": 5.1444, "windFrom": 0},
+      "changes": [
+        {"at": 900, "control": {
+  "helm": 1,
+  "sheet": 0.4
+}},
+        {"at": 1350, "steer": 1.7453}
+      ]
+    },
+    {
+      "name": "gusts",
+      "steps": 6000,
+      "state": {"heading": 0.8727, "surge": 2.2, "sheetLimit": 0.25},
+      "control": {"sheet": 0.2},
+      "env": {"windSpeed": 6.1733, "windFrom": 0},
+      "changes": [
+        {"at": 0, "steer": 0.8727},
+        {"at": 600, "env": {
+  "windSpeed": 2.0578,
+  "windFrom": 0
+}},
+        {"at": 1200, "env": {
+  "windSpeed": 5.1444,
+  "windFrom": 0.1
+}},
+        {"at": 1800, "env": {
+  "windSpeed": 9.26,
+  "windFrom": 0.1
+}},
+        {"at": 2400, "env": {
+  "windSpeed": 14.4044,
+  "windFrom": -0.05
+}},
+        {"at": 3000, "env": {
+  "windSpeed": 4.1156,
+  "windFrom": -0.2
+}},
+        {"at": 3600, "env": {
+  "windSpeed": 11.3178,
+  "windFrom": 0.15
+}},
+        {"at": 4200, "env": {
+  "windSpeed": 7.2022,
+  "windFrom": 0
+}},
+        {"at": 4800, "env": {
+  "windSpeed": 13.3756,
+  "windFrom": -0.1
+}},
+        {"at": 5400, "env": {
+  "windSpeed": 3.0867,
+  "windFrom": 0.05
+}}
+      ]
+    },
+    {"name": "calm", "steps": 900, "state": {
+  "heading": 1,
+  "surge": 3,
+  "sheetLimit": 0.6
+}, "control": {
+  "sheet": 0.5
+}, "env": {
+  "windSpeed": 0,
+  "windFrom": 0
+}},
+    {
+      "name": "storm",
+      "steps": 3600,
+      "state": {"heading": 1.0472, "surge": 1, "sheetLimit": 1.6},
+      "control": {"sheet": 1, "helm": 0},
+      "env": {"windSpeed": 20.5778, "windFrom": 0},
+      "changes": [
+        {"at": 1800, "steer": 1.9199},
+        {"at": 1800, "control": {
+  "sheet": 0.7
+}}
+      ]
+    },
+    {
+      "name": "random",
+      "steps": 10000,
+      "state": {"heading": 0.3, "surge": 1, "sheetLimit": 0.5},
+      "control": {"sheet": 0.4, "helm": 0},
+      "env": {"windSpeed": 6.1733, "windFrom": 0.5},
+      "changes": [
+        {"at": 151, "env": {
+  "windSpeed": 3.019,
+  "windFrom": 2.613
+}},
+        {"at": 423, "env": {
+  "windSpeed": 1.517,
+  "windFrom": -3.059
+}},
+        {"at": 693, "control": {
+  "helm": -0.531,
+  "sheet": 0.996
+}},
+        {"at": 963, "env": {
+  "windSpeed": 12.724,
+  "windFrom": -0.646
+}},
+        {"at": 1070, "control": {
+  "helm": -0.697,
+  "sheet": 0.926
+}},
+        {"at": 1299, "env": {
+  "windSpeed": 15.543,
+  "windFrom": -2.739
+}},
+        {"at": 1350, "control": {
+  "helm": -0.938,
+  "sheet": 0.866
+}},
+        {"at": 1622, "env": {
+  "windSpeed": 21.302,
+  "windFrom": -0.706
+}},
+        {"at": 1870, "control": {
+  "helm": 0.602,
+  "sheet": 0.445
+}},
+        {"at": 1968, "control": {
+  "helm": -0.805
+}, "env": {
+  "windSpeed": 3.148
+}},
+        {"at": 2109, "control": {
+  "helm": 0.344,
+  "sheet": 0.779
+}},
+        {"at": 2293, "control": {
+  "helm": 0.667,
+  "sheet": 0.574
+}},
+        {"at": 2531, "env": {
+  "windSpeed": 20.932,
+  "windFrom": 1.143
+}},
+        {"at": 2575, "control": {
+  "helm": 0.982
+}, "env": {
+  "windSpeed": 15.54
+}},
+        {"at": 2688, "env": {
+  "windSpeed": 7.556,
+  "windFrom": 0.262
+}},
+        {"at": 2771, "env": {
+  "windSpeed": 4.888,
+  "windFrom": 2.084
+}},
+        {"at": 2937, "control": {
+  "helm": -0.873,
+  "sheet": 0.854
+}},
+        {"at": 3214, "control": {
+  "helm": 0.601,
+  "sheet": 0.41
+}},
+        {"at": 3321, "control": {
+  "helm": -0.146,
+  "sheet": 0.415
+}},
+        {"at": 3411, "control": {
+  "helm": 0.229,
+  "sheet": 0.045
+}},
+        {"at": 3610, "env": {
+  "windSpeed": 21.342,
+  "windFrom": -1.388
+}},
+        {"at": 3760, "control": {
+  "helm": -0.381
+}, "env": {
+  "windSpeed": 1.782
+}},
+        {"at": 3806, "control": {
+  "helm": 0.943
+}, "env": {
+  "windSpeed": 6.751
+}},
+        {"at": 3970, "control": {
+  "helm": -0.915,
+  "sheet": 0.868
+}},
+        {"at": 4160, "control": {
+  "helm": -0.723,
+  "sheet": 0.862
+}},
+        {"at": 4382, "control": {
+  "helm": 0.04,
+  "sheet": 0.644
+}},
+        {"at": 4464, "env": {
+  "windSpeed": 21.775,
+  "windFrom": 0.044
+}},
+        {"at": 4714, "env": {
+  "windSpeed": 16.567,
+  "windFrom": 2.742
+}},
+        {"at": 4967, "control": {
+  "helm": 0.042
+}, "env": {
+  "windSpeed": 12.696
+}},
+        {"at": 5002, "env": {
+  "windSpeed": 22.86,
+  "windFrom": -1.163
+}},
+        {"at": 5224, "env": {
+  "windSpeed": 14.635,
+  "windFrom": -2.764
+}},
+        {"at": 5424, "control": {
+  "helm": 0.359,
+  "sheet": 0.353
+}},
+        {"at": 5596, "env": {
+  "windSpeed": 0.514,
+  "windFrom": -2.761
+}},
+        {"at": 5636, "control": {
+  "helm": -0.498
+}, "env": {
+  "windSpeed": 10.564
+}},
+        {"at": 5829, "control": {
+  "helm": -0.63,
+  "sheet": 0.758
+}},
+        {"at": 5994, "control": {
+  "helm": -0.246,
+  "sheet": 0.772
+}},
+        {"at": 6037, "control": {
+  "helm": 0.367
+}, "env": {
+  "windSpeed": 3.042
+}},
+        {"at": 6323, "control": {
+  "helm": 0.608,
+  "sheet": 0.239
+}},
+        {"at": 6448, "env": {
+  "windSpeed": 15.037,
+  "windFrom": -2.532
+}},
+        {"at": 6642, "control": {
+  "helm": 0.35
+}, "env": {
+  "windSpeed": 5.196
+}},
+        {"at": 6758, "control": {
+  "helm": 0.484,
+  "sheet": 0.218
+}},
+        {"at": 7018, "control": {
+  "helm": 0.574,
+  "sheet": 0.034
+}},
+        {"at": 7145, "control": {
+  "helm": 0.672,
+  "sheet": 0.575
+}},
+        {"at": 7317, "control": {
+  "helm": 0.656,
+  "sheet": 0.086
+}},
+        {"at": 7523, "env": {
+  "windSpeed": 9.752,
+  "windFrom": 0.116
+}},
+        {"at": 7691, "control": {
+  "helm": 0.268,
+  "sheet": 0.29
+}},
+        {"at": 7930, "control": {
+  "helm": -0.173,
+  "sheet": 0.2
+}},
+        {"at": 8204, "control": {
+  "helm": 0.76
+}, "env": {
+  "windSpeed": 22.847
+}},
+        {"at": 8456, "env": {
+  "windSpeed": 22.82,
+  "windFrom": 1.365
+}},
+        {"at": 8502, "env": {
+  "windSpeed": 19.37,
+  "windFrom": 1.024
+}},
+        {"at": 8797, "control": {
+  "helm": 0.088
+}, "env": {
+  "windSpeed": 20.597
+}},
+        {"at": 8861, "control": {
+  "helm": 0.942
+}, "env": {
+  "windSpeed": 2.778
+}},
+        {"at": 9016, "control": {
+  "helm": 0.807,
+  "sheet": 0.694
+}},
+        {"at": 9147, "control": {
+  "helm": 0.799
+}, "env": {
+  "windSpeed": 13.356
+}},
+        {"at": 9183, "control": {
+  "helm": -0.758,
+  "sheet": 0.503
+}},
+        {"at": 9335, "env": {
+  "windSpeed": 12.153,
+  "windFrom": -0.542
+}},
+        {"at": 9423, "control": {
+  "helm": -0.495,
+  "sheet": 0.862
+}},
+        {"at": 9697, "control": {
+  "helm": -0.877
+}, "env": {
+  "windSpeed": 5.112
+}},
+        {"at": 9789, "env": {
+  "windSpeed": 18.909,
+  "windFrom": -2.065
+}},
+        {"at": 9959, "control": {
+  "helm": 0.612
+}, "env": {
+  "windSpeed": 19.064
+}},
+        {"at": 9992, "control": {
+  "helm": 0.142,
+  "sheet": 0.4
+}}
       ]
     }
   ]

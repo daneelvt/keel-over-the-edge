@@ -2,7 +2,9 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
-import { RECORDS } from './layout.gen';
+import { catalog } from '../catalog';
+import { RECORDS, SIZES } from './layout.gen';
+import { writeParams } from './params.gen';
 import { loadPhysics, Physics } from './physics';
 
 const wasm = new URL('./physics.wasm', import.meta.url);
@@ -19,7 +21,8 @@ describe('loadPhysics', () => {
   test('streams a module served as application/wasm', async () => {
     const res = new Response(bytes, { headers: { 'Content-Type': 'application/wasm' } });
     const physics = await loadPhysics(res);
-    expect(physics.records.state.length).toBe(Object.keys(RECORDS.state).length);
+    expect(physics.records.state.length).toBe(SIZES.state);
+    expect(physics.records.params.length).toBe(SIZES.params);
   });
 
   test('compiles a module served with another type', async () => {
@@ -64,17 +67,25 @@ describe('Physics', () => {
     expect(physics.records).toBe(physics.records);
   });
 
-  test('steps the state through its records', async () => {
+  test('sails the Jolly boat through its records, and fills out', async () => {
     const physics = await loadPhysics(bytes);
     const r = physics.records;
-    r.params.set([150, 300, 7, 3, 60, 900, 120, 1.5]);
+    writeParams(r.params, catalog.boats[0].physics);
+    physics.prepare();
+    // A beam reach: the wind from the east, the boat heading north.
     r.env[RECORDS.env.windSpeed] = 6;
     r.env[RECORDS.env.windFrom] = Math.PI / 2;
-    r.control[RECORDS.control.trim] = 1;
-    for (let i = 0; i < 90; i++) {
+    r.control[RECORDS.control.sheet] = 0.35;
+    for (let i = 0; i < 300; i++) {
       physics.step();
     }
-    expect(physics.records.state[RECORDS.state.surge]).toBeGreaterThan(0.5);
+    const { state, out } = physics.records;
+    expect(state[RECORDS.state.surge]).toBeGreaterThan(1);
+    expect(out[RECORDS.out.speedOverGround]).toBeGreaterThan(1);
+    // The wind comes over the starboard side, so the boom is out to port.
+    expect(state[RECORDS.state.boom]).toBeLessThan(0);
+    expect(out[RECORDS.out.apparentWindAngle]).toBeGreaterThan(0);
+    expect(out[RECORDS.out.drive]).toBeGreaterThan(0);
   });
 
   test('evaluates more values than one batch holds', async () => {

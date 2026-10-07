@@ -114,17 +114,46 @@ func TestLayout(t *testing.T) {
 		t.Errorf("the records describe layout %#08x but layout.gen.go says %#08x: run go run ./tools/physics",
 			l.version, physics.LayoutVersion)
 	}
-	if l.records[0].name != "state" || l.records[0].fields[5] != "yawRate" {
+	if l.records[0].name != "state" || l.records[0].fields[5].name != "yawRate" {
 		t.Errorf("unexpected layout %+v", l.records)
 	}
 	changed := l
 	changed.records = slices.Clone(l.records)
-	changed.records[1] = recordLayout{name: "control", fields: []string{"trim", "helm"}}
+	changed.records[1] = recordLayout{name: "control", fields: []field{{name: "sheet"}, {name: "helm", index: 1}}}
 	if versionOf(changed) == l.version {
 		t.Error("reordering fields left the version unchanged")
 	}
+
+	// Arrays: each value has its index, and the length is in the version.
+	params := l.records[3]
+	var drag field
+	for _, f := range params.fields {
+		if f.name == "dragArea" {
+			drag = f
+		}
+	}
+	if drag.length != 25 {
+		t.Fatalf("params.dragArea = %+v, want an array of 25", drag)
+	}
+	next := params.fields[slices.IndexFunc(params.fields, func(f field) bool { return f.name == "dragArea" })+1]
+	if next.index != drag.index+drag.length {
+		t.Errorf("the field after dragArea is at %d, want %d", next.index, drag.index+drag.length)
+	}
+	longer := l
+	longer.records = slices.Clone(l.records)
+	longer.records[3].fields = slices.Clone(params.fields)
+	for i := range longer.records[3].fields {
+		if longer.records[3].fields[i].name == "dragArea" {
+			longer.records[3].fields[i].length++
+		}
+	}
+	if versionOf(longer) == l.version {
+		t.Error("changing an array's length left the version unchanged")
+	}
+
 	ts := string(l.tsFile())
-	for _, want := range []string{"export const LAYOUT_VERSION = 0x", "state: { x: 0, y: 1,", "export const FN = { sin: 0,"} {
+	for _, want := range []string{"export const LAYOUT_VERSION = 0x", "state: { x: 0, y: 1,", "export const FN = { sin: 0,",
+		"export const ARRAYS = {", "params: { dragArea: 25, rightingLever: 19, normalForce: 19 }", "export const SIZES = { state: 15,"} {
 		if !strings.Contains(ts, want) {
 			t.Errorf("layout.gen.ts lacks %q:\n%s", want, ts)
 		}

@@ -42,7 +42,480 @@ export interface Boat {
    * Length overall, in metres.
    */
   lengthOverall: number;
+  physics: BoatPhysics;
   art?: Art;
+}
+/**
+ * The boat's physics, in SI units with angles in degrees. Every value is required.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatPhysics".
+ */
+export interface BoatPhysics {
+  hull: PhysicsHull;
+  rig: PhysicsRig;
+  foils: PhysicsFoils;
+  sailor: PhysicsSailor;
+  rates: PhysicsRates;
+}
+/**
+ * The hull: its mass, resistance, inertia and stability.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsHull".
+ */
+export interface PhysicsHull {
+  /**
+   * Boat, rig and sailor, in kg.
+   */
+  displacement: number;
+  /**
+   * Length on the waterline, in m.
+   */
+  waterlineLength: number;
+  /**
+   * The hull's own draught, foils aside, in m.
+   */
+  hullDraught: number;
+  /**
+   * Height of the centre of gravity above the waterline, in m.
+   */
+  centreOfGravity: number;
+  /**
+   * Speed between entries of dragArea, in m/s.
+   */
+  dragAreaStep: number;
+  /**
+   * Upright resistance as a drag area (C_D A), at speeds 0, 1, 2 … times dragAreaStep, in m². Beyond the last, the last.
+   *
+   * @minItems 25
+   * @maxItems 25
+   */
+  dragArea: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * Drag coefficient of the hull moving sideways, on waterline length times draught.
+   */
+  crossFlowDrag: number;
+  /**
+   * Added mass moving ahead, in kg.
+   */
+  addedMassSurge: number;
+  /**
+   * Added mass moving sideways, hull and foils, in kg.
+   */
+  addedMassSway: number;
+  /**
+   * The hull's added mass sideways less its added mass ahead, for the Munk moment, in kg.
+   */
+  munk: number;
+  /**
+   * Moment of inertia in yaw, added inertia included, in kg·m².
+   */
+  yawInertia: number;
+  /**
+   * Moment of inertia in roll, added inertia included, in kg·m².
+   */
+  rollInertia: number;
+  /**
+   * The hull's own roll damping, in N·m·s/rad. The foils and sails damp through their flow.
+   */
+  rollDamping: number;
+  /**
+   * Righting lever (GZ) with the sailor on the centreline, every 10° of heel from 0° to 180°, in m.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  rightingLever: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+}
+/**
+ * The sail, boom and windage.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsRig".
+ */
+export interface PhysicsRig {
+  /**
+   * Sail area, in m².
+   */
+  sailArea: number;
+  /**
+   * Length of the luff, in m.
+   */
+  luff: number;
+  /**
+   * Length of the foot, in m.
+   */
+  foot: number;
+  /**
+   * Height of the boom above the waterline, in m.
+   */
+  boomHeight: number;
+  /**
+   * Distance of the mast ahead of the centre of gravity, in m.
+   */
+  mastPosition: number;
+  /**
+   * Height of the lower sail strip's centre of effort above the boom, as a fraction of the luff.
+   */
+  footStrip: number;
+  /**
+   * Height of the upper sail strip's centre of effort above the boom, as a fraction of the luff.
+   */
+  headStrip: number;
+  /**
+   * Centre of pressure aft of the mast with the flow attached, as a fraction of the foot.
+   */
+  pressureAttached: number;
+  /**
+   * Centre of pressure aft of the mast with the flow separated, as a fraction of the foot.
+   */
+  pressureSeparated: number;
+  /**
+   * Effective rig height for induced drag, in m.
+   */
+  effectiveHeight: number;
+  /**
+   * Drag growing with the square of the lift coefficient (k_pm).
+   */
+  quadraticDrag: number;
+  /**
+   * Greatest lift coefficient of the sail.
+   */
+  maxLift: number;
+  /**
+   * Angle of attack of the greatest lift, in degrees.
+   */
+  stallAngle: number;
+  /**
+   * Angle past the stall over which the flow separates, in degrees.
+   */
+  stallWidth: number;
+  /**
+   * Viscous drag coefficient of the sail.
+   */
+  sailDrag: number;
+  /**
+   * Below this angle of attack the cloth flogs, in degrees.
+   */
+  luffAngle: number;
+  /**
+   * Extra drag coefficient of flogging cloth.
+   */
+  flogDrag: number;
+  /**
+   * Normal force coefficient of separated flow over the sail, every 10° of angle of attack from 0° to 180°.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  normalForce: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * The upper strip's twist beyond the boom at full power, in degrees.
+   */
+  twistPowered: number;
+  /**
+   * The upper strip's twist at the flattest, in degrees.
+   */
+  twistDepowered: number;
+  /**
+   * Extra twist with the boom let fly, growing in proportion to the boom's angle, in degrees. On a dinghy whose sheet also holds the boom down, easing it lets the leech open.
+   */
+  twistEased: number;
+  /**
+   * Boom angle over which the twist turns from one side to the other, in degrees.
+   */
+  twistTurn: number;
+  /**
+   * The upper sail strip's angle of attack at which the wind starts to get behind its leech, in degrees. A backed head swings across and its leech drags the boom over: an accidental gybe.
+   */
+  headBacked: number;
+  /**
+   * Angle of attack over which a backed head comes to drag the boom across, in degrees.
+   */
+  headBackedWidth: number;
+  /**
+   * The boom's angle off the centreline with the sheet hauled in hard, in degrees.
+   */
+  boomIn: number;
+  /**
+   * The boom's angle with the sheet let fly, in degrees.
+   */
+  boomOut: number;
+  /**
+   * Moment of inertia of boom and sail about the mast, in kg·m².
+   */
+  boomInertia: number;
+  /**
+   * Mass of boom and sail times the distance of their centre of gravity aft of the mast, in kg·m.
+   */
+  boomMoment: number;
+  /**
+   * Friction of the boom about the mast, in N·m·s/rad.
+   */
+  boomDamping: number;
+  /**
+   * Drag area of hull, crew and spars from ahead, in m².
+   */
+  windageFront: number;
+  /**
+   * Drag area of hull, crew and spars from abeam, in m².
+   */
+  windageSide: number;
+  /**
+   * Height of the windage's centre above the waterline, in m.
+   */
+  windageHeight: number;
+  /**
+   * Upward force per metre a sail strip is pushed under the water, in N/m.
+   */
+  sailFloat: number;
+  /**
+   * Vertical damping of a sail strip in the water, in N·s/m.
+   */
+  sailWaterDamping: number;
+}
+/**
+ * The daggerboard or keel, and the rudder.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsFoils".
+ */
+export interface PhysicsFoils {
+  /**
+   * Span of the daggerboard below the hull, in m.
+   */
+  boardSpan: number;
+  /**
+   * Chord of the daggerboard, in m.
+   */
+  boardChord: number;
+  /**
+   * Distance of the daggerboard ahead of the centre of gravity, in m.
+   */
+  boardPosition: number;
+  /**
+   * Span of the rudder below the hull, in m.
+   */
+  rudderSpan: number;
+  /**
+   * Chord of the rudder, in m.
+   */
+  rudderChord: number;
+  /**
+   * Distance of the rudder aft of the centre of gravity, in m.
+   */
+  rudderPosition: number;
+  /**
+   * Greatest rudder angle, in degrees.
+   */
+  rudderAngle: number;
+  /**
+   * Angle of attack at which the foils stall, in degrees.
+   */
+  foilStall: number;
+  /**
+   * Angle past the stall over which their flow separates, in degrees.
+   */
+  foilStallWidth: number;
+  /**
+   * Viscous drag coefficient of the foils, on plan area.
+   */
+  foilDrag: number;
+  /**
+   * Normal force coefficient of a stalled foil.
+   */
+  plateNormal: number;
+  /**
+   * Depth of each foil's centre of pressure below the hull, as a fraction of its span.
+   */
+  pressureDepth: number;
+  /**
+   * The hull's carry-over of the board's lift: k in 1 + k × hull draught / board span.
+   */
+  carryOver: number;
+  /**
+   * The board's lift lost per radian of heel.
+   */
+  heelLoss: number;
+  /**
+   * The rudder's share of the boat's speed through the water.
+   */
+  rudderInflow: number;
+  /**
+   * Share of the sideways flow from leeway that the daggerboard's downwash cancels at the rudder.
+   */
+  downwash: number;
+  /**
+   * Heel up to which the foils are fully in the water, in degrees.
+   */
+  foilWetHeel: number;
+  /**
+   * Heel from which the foils are out of the water, in degrees.
+   */
+  foilDryHeel: number;
+}
+/**
+ * What the sailor does by themselves: hiking, flattening the sail, righting the boat. The same for every player.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsSailor".
+ */
+export interface PhysicsSailor {
+  /**
+   * Mass of the sailor, in kg.
+   */
+  sailorMass: number;
+  /**
+   * Height of the seated sailor's centre of gravity above the boat's, in m.
+   */
+  sailorSeatHeight: number;
+  /**
+   * Furthest the sailor's centre of gravity goes out to windward, in m.
+   */
+  hikeReach: number;
+  /**
+   * Furthest it goes to leeward, in m.
+   */
+  leeReach: number;
+  /**
+   * Fastest the sailor moves across, in m/s.
+   */
+  hikeSpeed: number;
+  /**
+   * The sailor's lag in moving, in s.
+   */
+  hikeLag: number;
+  /**
+   * Extra hiking per radian of heel, in m/rad.
+   */
+  heelGain: number;
+  /**
+   * Extra hiking per rad/s of roll rate, in m·s/rad.
+   */
+  rollRateGain: number;
+  /**
+   * Apparent wind at which the sailor starts flattening the sail, in m/s.
+   */
+  flattenFrom: number;
+  /**
+   * Apparent wind at which the sail is at its flattest, in m/s.
+   */
+  flattenTo: number;
+  /**
+   * Flattest sail, as a fraction of full lift.
+   */
+  flattenMin: number;
+  /**
+   * Heel past which the sailor falls in, in degrees.
+   */
+  fallOutHeel: number;
+  /**
+   * Heel below which the sailor climbs back in, in degrees.
+   */
+  climbInHeel: number;
+  /**
+   * Distance of the sailor's weight on the daggerboard from the centre of gravity, in m.
+   */
+  boardReach: number;
+  /**
+   * Roll damping of the sailor in the water, holding on to the boat, in N·m·s/rad.
+   */
+  sailorDrag: number;
+  /**
+   * Time to swim to the daggerboard after falling in, in s.
+   */
+  swimTime: number;
+  /**
+   * Time to climb back in, in s.
+   */
+  climbTime: number;
+}
+/**
+ * How fast the sailor's hands move the rudder and the sheet.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsRates".
+ */
+export interface PhysicsRates {
+  /**
+   * Time for the rudder's full travel, one side to the other, in s.
+   */
+  rudderTime: number;
+  /**
+   * Time to haul the sheet in over its full range, in s.
+   */
+  sheetHaulTime: number;
+  /**
+   * Time to ease the sheet out over its full range, in s.
+   */
+  sheetEaseTime: number;
 }
 /**
  * Paths of a kind's art files, relative to the repository's art/ folder.
@@ -55,4 +528,4 @@ export interface Art {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '1062915e6cb9a2d8';
+export const CATALOG_VERSION = 'ff4cabb079595b69';

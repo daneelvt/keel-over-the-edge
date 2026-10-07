@@ -25,3 +25,7 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Rules of the physics package, no fused multiply-add, layout files current, no allocations, size budget
         run: go run ./tools/physics -check
+      - name: The polar against the boats' measured data
+        run: go run ./tools/polar -check
+      - name: The trimmed sail against ORC's mainsail
+        run: go run ./tools/polar -sail

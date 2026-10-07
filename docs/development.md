@@ -97,7 +97,7 @@ credentials.
 | `pr.lint.yaml` | Pull requests, not drafts | gofmt, go vet, staticcheck, Biome, tsc | `go run ./tools/dev -lint` |
 | `pr.licences.yaml` | Pull requests, not drafts | The licence header in every source file; licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
-| `pr.physics.yaml` | Pull requests, not drafts | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64), its layout files current, and the module built with no heap allocation and within its size budget | `go run ./tools/physics -check` |
+| `pr.physics.yaml` | Pull requests, not drafts | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
@@ -118,6 +118,14 @@ Kinds of things in the game, such as boat types, are data in
 types for both. Edit the YAML and run the tool; never edit the generated
 files. Code reads a kind's properties, never its id.
 
+A boat's `physics` object holds every number its physics needs, in groups
+(`hull`, `rig`, `foils`, `sailor`, `rates`), in SI units with angles in
+degrees. Every value is required, with its unit and range in the schema. The
+schema's fields must match the physics package's `Params` field for field;
+the tool checks that and generates `catalog.PhysicsParams` for the server and
+`writeParams` (`client/src/predict/params.gen.ts`) for the client, so the
+three cannot drift.
+
 ## The physics package
 
 `internal/physics` steps boats. The server runs it natively, and the client
@@ -127,9 +135,11 @@ rules, at the top of `physics.go`, make that hold:
 
 - It calls only the `math` functions that IEEE 754 rounds exactly, and has
   its own sine, cosine, exponential, logarithm and arctangent (`fmath.go`).
-- Any product that is added to or subtracted from is written `float64(x*y)`,
-  so Go cannot fuse it into a multiply-add on arm64. The check disassembles
-  the package to make sure.
+- Every product of floats is written `float64(x*y)`, unless it only feeds
+  another product or a division, so Go cannot fuse it into a multiply-add on
+  arm64 or amd64 v3. Go fuses across statements and through inlined calls,
+  so a product kept in a variable and added later counts too. The check
+  disassembles the package and names each line it finds fused.
 - Floats become integers only through `toInt32`; a step never allocates.
 
 ```sh
@@ -137,16 +147,30 @@ go run ./tools/physics          # write the layout files, build client/src/predi
 go run ./tools/physics -check   # the rules, the layout files, the module's allocations and size
 ```
 
-The records a step reads and writes (`records.go`) are all `float64`, and
-the client reads them through typed arrays at indices generated into
-`client/src/predict/layout.gen.ts`. Changing a record changes the layout
-version; the client refuses a module whose version differs.
+The records a step reads and writes (`records.go`) are all `float64` or
+fixed arrays of them, and the client reads them through typed arrays at
+indices generated into `client/src/predict/layout.gen.ts` (an array's index
+is its first value's; `ARRAYS` gives its length). Changing a record changes
+the layout version; the client refuses a module whose version differs.
+
+- `State`, `Control` and `Env`: what a step reads and writes.
+- `Params`: a kind of boat, the catalog's raw values. The client writes them
+  with `writeParams` and calls the module's `prepare`; the server calls
+  `physics.Prepare`. Everything derived from them is computed there, in the
+  package, never in JavaScript.
+- `Out`: what a step derives for drawing and instruments (the apparent wind
+  at the masthead and the sail, each sail strip's angle of attack and flow,
+  the sail's and foils' forces, leeway, speed and course over ground, the
+  heeling and righting moments). A step writes it and never reads it, and it
+  is never sent.
 
 The golden tests run the scenarios in `internal/physics/testdata/scenarios.json`
 natively (`go test ./internal/physics`) and in the module (`npm test` in
-`client/`), and compare every step's state, and a table of function values,
-with `testdata/golden.json`. CI runs them on amd64 and arm64. After a
-deliberate change to the physics, rewrite the file and review the diff:
+`client/`), and compare every step's state and `Out`, and a table of
+function values, with `testdata/golden.json`. A scenario can steer with a
+simple heading-hold (`steer`), which both runners compute with exactly
+rounded operations only. CI runs them on amd64 and arm64. After a deliberate
+change to the physics, rewrite the file and review the diff:
 
 ```sh
 go test ./internal/physics -run Golden -update
@@ -155,6 +179,111 @@ go test ./internal/physics -run Golden -update
 `go test ./internal/physics -run Accuracy -samples 100000` measures the
 functions against values computed with `math/big` on a hundred thousand
 inputs each; CI draws four thousand.
+
+## The boat's physics
+
+### The model
+
+A boat is a rigid body in surge, sway, yaw and roll on flat water, with the
+boom as a body of its own and the sailor's position as state. There is no
+pitch or heave yet: waves bring them. Each part of the boat computes its
+force from the flow it meets, including the flow from the boat's own turning
+and rolling, so tacks, gybes, luffing, weather helm and capsizes follow from
+the forces, with no special cases. Each step is four substeps of
+semi-implicit Euler (`Substeps`).
+
+| File | What |
+|------|------|
+| `wind.go` | The frames; the wind at each height by the open sea's log profile (z₀ = 0.0002 m; the game's wind is 10 m up); the apparent flow at any point of the boat, turned into the heeled body's plane |
+| `sail.go` | The sail as two strips, foot and head, the head twisted further out (more as the sailor flattens the sail and as the boom goes out); lift and drag from each strip's angle of attack; the boom on its sheet; the backed head that drags the boom across in an accidental gybe; a capsized sail floating on the water |
+| `foils.go` | Daggerboard and rudder: Helmbold's lift slope, the stall to a flat plate, reversed flow, the hull's carry-over, the board's downwash at the rudder |
+| `hull.go` | Upright resistance from the towed hull's drag area, cross-flow drag, the Munk moment, the righting lever |
+| `sailor.go` | The automatic sailor: hiking to the position that balances the boat, flattening the sail by the apparent wind, falling in past 70° of heel, swimming to the board, righting the boat, climbing back in |
+| `boat.go` | The step: the rudder and sheet following the controls at the hands' rates, the substeps, the boom's stop, `Out` |
+| `prepare.go` | `Prepare`: every derived constant |
+
+The player has two controls, `Helm` and `Sheet`. The sheet sets how far the
+boom may swing out; it never pulls the boom in, so an eased sail luffs, a
+trimmed one presses on the sheet, and a sail with the wind behind its leech
+swings across.
+
+### The Jolly boat's numbers
+
+The Jolly boat is an ILCA 7 (formerly the Laser, full rig) with an 80 kg,
+1.83 m sailor. Each value in `shared/catalog/boats.yaml` says where it comes
+from:
+
+- **Measured or published:** hull form and the upright resistance of a towed
+  Laser (Day and Nixon 2014); masses, centre of gravity, windage, the
+  sailor's reach (Day 2017); rig dimensions (ILCA class); the board's carry-over
+  and loss of lift with heel (Keuning and Verwerft 2009); induced and
+  quadratic drag (ORC VPP 2023).
+- **Fitted:** the sail's greatest lift, stall, drag and separated-flow table,
+  and its eased twist, to ORC's low-lift mainsail (`tools/polar -sail`).
+- **Estimates, tuned against the reference data:** the board's position and
+  the rudder's downwash (weather helm), the flattening (VMG above 9 knots),
+  the backed head (where an accidental gybe comes), the sailor's roll-rate
+  gain (no death roll running in 22 knots with the boat sailed well), the
+  swim and climb times (righting in 15 to 45 s).
+- **Estimates, left as argued:** the righting lever beyond the data, added
+  masses and inertias, the rudder's size, the sail on the water.
+
+### `tools/polar`
+
+```sh
+go run ./tools/polar               # the polar at 6 to 20 knots: a table, and .dev/polar/<boat>.json and .svg
+go run ./tools/polar -check        # against internal/physics/testdata/reference.json; fails outside its tolerances
+go run ./tools/polar -sail         # the trimmed sail against ORC's mainsail
+go run ./tools/polar -manoeuvres   # tacks and gybes at 6, 12 and 18 knots, and where an accidental gybe comes
+```
+
+The tool steers with a heading-hold of its own, tries the sheet from hauled
+in to let fly at every true wind angle, and measures each point after 60 s
+of sailing. Winds are given at sail height, 3 m, where the reference data's
+wind was measured; the table shows the 10 m wind beside them. Its columns:
+speed and VMG in knots; heel, positive to leeward; rudder, positive for
+weather helm; leeway; boom; the foot's angle of attack; how far out the
+sailor is; the flattening; the best sheet. In the chart, filled points are
+measurements and hollow ones upper bounds (speeds measured with surfing,
+which flat water cannot reach).
+
+The reference data (`reference.json`) holds each point with its source:
+Day's VPP for upwind and downwind VMG (±5% and ±10%), Binns, Bethwaite and
+Saunders's measured close-hauled and beam-reach speeds (±10%), and their
+broad-reach and run speeds as upper bounds.
+
+### Recalibrating
+
+When a parameter changes, or better data arrive:
+
+1. Fit the sail first: `go run ./tools/polar -sail` must hold drive within 5%
+   of ORC's from 28° to 180°, and side force at 28° and 60°. Change only
+   `maxLift`, `stallAngle`, `stallWidth`, `sailDrag`, `normalForce` and
+   `twistEased`.
+2. The board's position and the downwash, for weather helm upwind
+   (`go run ./tools/polar`, the rudder column).
+3. `headBacked`, for accidental gybes 10° to 25° by the lee
+   (`-manoeuvres`).
+4. The flattening, against the upwind VMG above 9 knots (`-check`).
+5. The drag area above 9 knots, only if the reaches miss by more than 10%.
+
+Then run the behaviour tests (`go test ./internal/physics`), rewrite the
+golden file, and copy the catalog's new values into `scenarios.json`'s
+`params` (a test fails until they match). Note each change and its reason in
+`reference.json`'s notes.
+
+### Where the model and the data differ
+
+- **Weather helm is light.** Upwind the boat needs 0.1° of weather helm at
+  9 knots, 0.7° at 12 and 1.7° at 15: it grows with heel, as it should, but a
+  real dinghy carries 2° to 4°. The rudder, working at the leeway angle at the
+  stern, balances the boat close to neutral when it is flat.
+- **It heels more than Day's boat at 12 knots**: about 6° to 10° upwind,
+  where Day holds 2° to 3°. The towed hull's resistance is upright only, so
+  heel costs this model less than it costs a real hull.
+- **The sail's side force from a beam reach aft** is not ORC's: there, an
+  attached trim and a stalled one give nearly the same drive, and which is
+  best decides the side force. Drive matches.
 
 ## Commits
 
@@ -203,6 +332,10 @@ Both use your own `gh` login. Settings GitHub has no API for are listed in
 - **TinyGo will not download or unpack.** Delete `.dev/tinygo` and run again.
   A digest mismatch means the archive is not the one pinned: do not work
   around it.
+- **`tools/polar -check` fails after a change to the physics.** Run
+  `go run ./tools/polar` and read the table: a capsizing row or a sudden
+  change in the best sheet points at the part that moved. Recalibrate in the
+  order above.
 - **The developer page says the physics differs from the server.** Note the
   phone, browser and first difference shown, and open an issue: the golden
   tests should have caught it.
