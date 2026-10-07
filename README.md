@@ -1,5 +1,9 @@
 # Keel Over the Edge
 
+[![ci](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/ci.yaml?query=branch%3Amain)
+[![CodeQL](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/codeql.yaml/badge.svg?branch=main)](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/codeql.yaml?query=branch%3Amain)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/daneelvt/keel-over-the-edge/badge)](https://scorecard.dev/viewer/?uri=github.com/daneelvt/keel-over-the-edge)
+
 A multiplayer sailing game on a small disk-shaped world you can sail off the edge of. Realistic sailing, played in the browser.
 
 ## Status
