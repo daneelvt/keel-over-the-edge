@@ -14,9 +14,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The Go tests on both machines the server is built for, so the physics
+  # golden tests show amd64 and arm64 agree bit for bit.
   go:
-    name: go
-    runs-on: ubuntu-24.04
+    name: go (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     steps:
@@ -27,7 +33,13 @@ jobs:
         with:
           node: "false"
       - run: go test -race ./...
+      - name: The physics tests again, built for amd64 with fused multiply-add available
+        if: runner.arch == 'X64'
+        env:
+          GOAMD64: v3
+        run: go test -count=1 ./internal/physics
       - name: Fuzz the catalog decoder
+        if: runner.arch == 'X64'
         run: go test -run '^$' -fuzz FuzzParse -fuzztime 30s ./internal/catalog
 
   client:
@@ -40,8 +52,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          go: "false"
+      - name: Build the physics module (the WebAssembly golden tests run it)
+        run: go run ./tools/physics
       - working-directory: client
         run: npx --no-install vitest run
       - name: Build (checks the licences of bundled packages)

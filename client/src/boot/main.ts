@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The developer page: the game's name, the server and client versions, and
-// what this browser offers. Everything is built as nodes and text.
+// The developer page: the game's name, the server and client versions, what
+// this browser offers, and whether the physics module agrees with the server
+// here. Everything is built as nodes and text.
 
 import './styles.css';
 import { CATALOG_VERSION } from '../catalog';
@@ -52,18 +53,38 @@ function capabilityRows(all: Capability[]): HTMLLIElement[] {
   return all.map((c) => row(c.name, c.detail, c.ok));
 }
 
+async function physicsRows(): Promise<HTMLLIElement[]> {
+  try {
+    const { checkPhysics } = await import('./physics');
+    return (await checkPhysics()).map((r) => row(r.name, r.detail, r.ok));
+  } catch (err) {
+    return [row('Physics module', err instanceof Error ? err.message : 'failed to load', false)];
+  }
+}
+
 async function start(): Promise<void> {
   const main = el('main');
   main.append(el('h1', 'Keel Over the Edge'));
 
   const versions = el('ul', undefined, 'rows');
   const browser = el('ul', undefined, 'rows');
-  main.append(el('h2', 'Versions'), versions, el('h2', 'This browser'), browser);
+  const physics = el('ul', undefined, 'rows');
+  physics.append(row('Physics module', 'checking…', null));
+  main.append(
+    el('h2', 'Versions'),
+    versions,
+    el('h2', 'This browser'),
+    browser,
+    el('h2', 'Physics'),
+    physics,
+  );
   document.body.replaceChildren(main);
 
   const [v, c] = await Promise.all([versionRows(), readCapabilities(browserEnv())]);
   versions.replaceChildren(...v);
   browser.replaceChildren(...capabilityRows(c));
+  // After the rest, since it runs twenty thousand steps.
+  physics.replaceChildren(...(await physicsRows()));
 }
 
 void start();

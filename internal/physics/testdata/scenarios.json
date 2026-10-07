@@ -1,0 +1,79 @@
+{
+  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state with golden.json. A change applies before the step it names, counting from 0, and keeps its values until the next change.",
+  "params": {"mass": 150, "yawInertia": 300, "sailArea": 7, "sailHeight": 3, "dragAhead": 60, "dragSide": 900, "rudderPower": 120, "yawDamping": 1.5},
+  "scenarios": [
+    {
+      "name": "beam-reach",
+      "steps": 3600,
+      "state": {"heading": 0},
+      "control": {"helm": 0, "trim": 0.8},
+      "env": {"windSpeed": 6, "windFrom": 1.5707963267948966}
+    },
+    {
+      "name": "circles",
+      "steps": 3600,
+      "state": {"x": -2500, "y": 1200, "heading": -2.5, "surge": 1},
+      "control": {"helm": 0.6, "trim": 1},
+      "env": {"windSpeed": 7, "windFrom": 0}
+    },
+    {
+      "name": "calm-then-wind",
+      "steps": 3600,
+      "state": {"x": 8000, "y": -3000, "heading": 3},
+      "control": {"helm": -0.2, "trim": 1},
+      "env": {"windSpeed": 0, "windFrom": 2},
+      "changes": [
+        {"at": 900, "env": {"windSpeed": 4}},
+        {"at": 2400, "control": {"helm": 0}}
+      ]
+    },
+    {
+      "name": "tacks-and-gusts",
+      "steps": 10000,
+      "state": {"heading": 0.7, "surge": 1.2},
+      "control": {"helm": 0, "trim": 0.9},
+      "env": {"windSpeed": 8, "windFrom": 0.2},
+      "changes": [
+        {"at": 300, "control": {"helm": 1}},
+        {"at": 420, "control": {"helm": 0.05}},
+        {"at": 900, "control": {"helm": -1}},
+        {"at": 1020, "control": {"helm": -0.05}},
+        {"at": 1500, "control": {"helm": 1}},
+        {"at": 1500, "env": {"windSpeed": 11}},
+        {"at": 1620, "control": {"helm": 0.05}},
+        {"at": 1800, "env": {"windSpeed": 5, "windFrom": 0.3}},
+        {"at": 2100, "control": {"helm": -1}},
+        {"at": 2220, "control": {"helm": -0.05}},
+        {"at": 2700, "control": {"helm": 1}},
+        {"at": 2820, "control": {"helm": 0.05}},
+        {"at": 3300, "control": {"helm": -1}},
+        {"at": 3420, "control": {"helm": -0.05}},
+        {"at": 3900, "control": {"helm": 1}},
+        {"at": 4000, "env": {"windSpeed": 14, "windFrom": -0.4}},
+        {"at": 4020, "control": {"helm": 0.05}},
+        {"at": 4300, "env": {"windSpeed": 6}},
+        {"at": 4500, "control": {"helm": -1}},
+        {"at": 4620, "control": {"helm": -0.05}},
+        {"at": 5100, "control": {"helm": 1}},
+        {"at": 5220, "control": {"helm": 0.05}},
+        {"at": 5700, "control": {"helm": -1}},
+        {"at": 5820, "control": {"helm": -0.05}},
+        {"at": 6300, "control": {"helm": 1}},
+        {"at": 6420, "control": {"helm": 0.05}},
+        {"at": 6900, "control": {"helm": -1}},
+        {"at": 7000, "env": {"windFrom": 3.0}},
+        {"at": 7020, "control": {"helm": -0.05}},
+        {"at": 7500, "control": {"helm": 1}},
+        {"at": 7620, "control": {"helm": 0.05}},
+        {"at": 8100, "control": {"helm": -1}},
+        {"at": 8220, "control": {"helm": -0.05}},
+        {"at": 8500, "control": {"trim": 0.4}},
+        {"at": 8700, "control": {"helm": 1}},
+        {"at": 8820, "control": {"helm": 0.05}},
+        {"at": 9300, "control": {"helm": -1}},
+        {"at": 9420, "control": {"helm": -0.05}},
+        {"at": 9900, "control": {"helm": 1}}
+      ]
+    }
+  ]
+}

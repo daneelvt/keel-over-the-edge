@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { readFileSync } from 'node:fs';
-import type { ServerOptions } from 'vite';
+import { type ServerOptions, searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { licences } from './build/licences.ts';
 
@@ -19,6 +19,9 @@ const server: ServerOptions = {
     // players use.
     '/api': { target: `http://${playAddr}`, changeOrigin: false },
   },
+  // The developer page reads the physics golden files, which live beside
+  // the Go tests; nothing else outside client/ is served.
+  fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../internal/physics/testdata'] },
 };
 if (cert && key) {
   server.https = { cert: readFileSync(cert), key: readFileSync(key) };
@@ -29,7 +32,17 @@ export default defineConfig({
   plugins: [
     licences({
       allowedFile: '../tools/licences/allowed.txt',
-      extra: [{ name: 'IM Fell English SC (font)', licence: 'OFL-1.1', file: 'src/fonts/OFL.txt' }],
+      extra: [
+        { name: 'IM Fell English SC (font)', licence: 'OFL-1.1', file: 'src/fonts/OFL.txt' },
+        // physics.wasm holds TinyGo's runtime, which includes parts of Go's
+        // standard library.
+        {
+          name: 'TinyGo (in physics.wasm)',
+          licence: 'BSD-3-Clause',
+          file: 'build/notices/tinygo.txt',
+        },
+        { name: 'Go (in physics.wasm)', licence: 'BSD-3-Clause', file: 'build/notices/go.txt' },
+      ],
     }),
   ],
   test: {

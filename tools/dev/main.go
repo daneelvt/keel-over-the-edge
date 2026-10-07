@@ -5,8 +5,8 @@
 // Command dev runs the game locally with one command, over HTTPS so a phone
 // on the same network gets a secure context:
 //
-//	go run ./tools/dev          start keel serve and Vite; restart keel on Go changes
-//	go run ./tools/dev -smoke   start everything, check the page and /api/version, stop
+//	go run ./tools/dev          start keel serve and Vite; restart keel on Go changes, rebuild the physics module
+//	go run ./tools/dev -smoke   start everything, check the page, /api/version and the physics module, stop
 //	go run ./tools/dev -lint    run every linter the pull-request checks run
 //
 // It runs from the repository root.
@@ -22,11 +22,12 @@ import (
 )
 
 const (
-	vitePort  = 5173 // the address players use
-	caPort    = 5174 // plain HTTP: the local root certificate, for phones
-	playAddr  = "127.0.0.1:8080"
-	stateDir  = ".dev"
-	clientDir = "client"
+	vitePort   = 5173 // the address players use
+	caPort     = 5174 // plain HTTP: the local root certificate, for phones
+	playAddr   = "127.0.0.1:8080"
+	stateDir   = ".dev"
+	clientDir  = "client"
+	physicsDir = "internal/physics"
 )
 
 func main() {
