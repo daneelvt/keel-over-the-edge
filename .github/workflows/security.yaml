@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# A new advisory against code already merged is caught weekly, without waiting
+# for a pull request.
+name: security
+
+on:
+  schedule:
+    - cron: "41 3 * * 2"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  security:
+    name: security
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: govulncheck
+        run: go tool govulncheck ./...
+      - name: Registry signatures of client packages
+        working-directory: client
+        run: npm audit signatures

@@ -4,7 +4,10 @@ A multiplayer sailing game on a small disk-shaped world you can sail off the edg
 
 ## Status
 
-Early design. There is no playable game yet.
+Early development. There is no playable game yet.
+
+To run it locally, see [docs/development.md](docs/development.md). To report a
+security problem, see [SECURITY.md](SECURITY.md).
 
 ## What it is
 
@@ -15,7 +18,7 @@ Early design. There is no playable game yet.
 
 ## Licence
 
-The source code in this repository is licensed under the GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
+The source code in this repository is licensed under the GNU Affero General Public License, version 3 only (`AGPL-3.0-only`), not any later version. See [LICENSE](LICENSE).
 
 If you run a modified version of this code as a public service, the AGPL requires you to make your modified source available to its users.
 

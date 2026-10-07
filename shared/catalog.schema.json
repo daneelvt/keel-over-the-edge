@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keelovertheedge.com/schema/catalog.json",
+  "title": "Catalog",
+  "description": "Every list of kinds in the game. Kinds are data: code reads their properties, never their names.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["boats"],
+  "properties": {
+    "boats": {
+      "description": "Boat types.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Boat" }
+    }
+  },
+  "$defs": {
+    "Id": {
+      "description": "Stable identifier of a kind, stored in the database: never renamed or reused.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "maxLength": 40
+    },
+    "Art": {
+      "description": "Paths of a kind's art files, relative to the repository's art/ folder.",
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^[a-z0-9][a-z0-9/._-]*$" }
+    },
+    "Boat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description", "capacity", "lengthOverall"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Display name.", "type": "string", "minLength": 1 },
+        "description": { "description": "What the boat is, in a few words.", "type": "string", "minLength": 1 },
+        "capacity": { "description": "Most people aboard, the skipper included.", "type": "integer", "minimum": 1 },
+        "lengthOverall": { "description": "Length overall, in metres.", "type": "number", "exclusiveMinimum": 0 },
+        "art": { "$ref": "#/$defs/Art" }
+      }
+    }
+  }
+}

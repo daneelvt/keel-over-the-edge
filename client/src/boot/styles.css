@@ -1,0 +1,80 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+@font-face {
+  font-family: "IM Fell English SC";
+  src: url("../fonts/IMFellEnglishSC-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  --paper: #efe4c8;
+  --ink: #2b2118;
+  --faded: #6f5e48;
+  --ok: #2f6b3a;
+  --bad: #9c2f24;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    16px / 1.5 system-ui,
+    sans-serif;
+}
+
+main {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+h1 {
+  margin: 0 0 1.5rem;
+  font:
+    2.2rem / 1.1 "IM Fell English SC",
+    Georgia,
+    serif;
+}
+
+h2 {
+  margin: 1.5rem 0 0.5rem;
+  font:
+    1.2rem / 1.2 "IM Fell English SC",
+    Georgia,
+    serif;
+  color: var(--faded);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgb(43 33 24 / 15%);
+}
+
+.value {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.ok .value {
+  color: var(--ok);
+}
+
+.bad .value {
+  color: var(--bad);
+}

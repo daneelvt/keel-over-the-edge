@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: pr.dependencies
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-dependencies:
+    name: pr-dependencies
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: No new dependency with a known vulnerability
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: low
+          fail-on-scopes: runtime, development
+          show-openssf-scorecard: true
+          retry-on-snapshot-warnings: true
+          comment-summary-in-pr: never
+      - uses: ./.github/actions/setup
+      - name: govulncheck (vulnerabilities in code the build calls)
+        run: go tool govulncheck ./...
+      - name: Registry signatures of client packages
+        working-directory: client
+        run: npm audit signatures

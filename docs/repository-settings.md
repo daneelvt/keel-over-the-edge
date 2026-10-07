@@ -1,0 +1,51 @@
+# Repository settings checked by hand
+
+Most of this repository's GitHub settings are kept in `.github/settings/`
+and checked with `go run ./tools/github -check`. GitHub has no API for the
+ones below, so they are checked by hand, against this list, from time to
+time.
+
+## Repository: Settings → Advanced Security
+
+- [ ] Malware alerts: **on**
+- [ ] Dependabot auto-triage rules: GitHub's presets **off** (including the
+      one that dismisses low-impact alerts in npm development dependencies)
+- [ ] Grouped security updates: **off**, one pull request per fix
+- [ ] Automatic dependency submission: **off** (GitHub builds the Go
+      dependency graph itself)
+- [ ] Copilot Autofix: **on**
+
+## The owner's account
+
+- [ ] At least two passkeys or security keys; no SMS or authenticator-app
+      codes; recovery codes kept offline
+- [ ] An SSH signing key registered; vigilant mode on
+- [ ] Push protection for yourself on
+- [ ] No classic personal access tokens; any token fine-grained, for this
+      repository only, short-lived
+- [ ] Installed apps: Renovate only, on this repository only; no deploy keys,
+      no webhooks
+- [ ] The security log and authorised apps reviewed monthly
+
+## Not available to this repository
+
+A public repository on a personal account cannot have these at any price:
+generic and AI-detected secret patterns, validity checks, custom secret
+patterns and delegated bypass; AI Scan for pull requests and Code Quality;
+merge queues, push rulesets, commit-message rules and required workflows.
+Generic secrets are covered by gitleaks in `pr.secrets.yaml` instead.
+
+## OpenSSF Scorecard
+
+With one maintainer some checks cannot reach 10. These are expected:
+
+| Check | Expected | Why |
+|-------|----------|-----|
+| Code-Review | about 0 | No second reviewer; reviews by bots and AI do not count |
+| Contributors | low | Needs contributors from three or more organisations |
+| Branch-Protection | 3 | A higher score needs a required reviewer |
+| CII-Best-Practices | 5 | The passing badge; higher levels need more than one maintainer |
+| Maintained | 0 for the first 90 days | Scorecard needs 90 days of history |
+| Packaging, Signed-Releases | inconclusive | Until releases are published |
+
+Every other check should score 10.
