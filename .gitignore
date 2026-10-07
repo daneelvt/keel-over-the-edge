@@ -2,7 +2,10 @@
 node_modules/
 client/dist/
 
-# Local development state: certificates, built binaries (tools/dev)
+# The physics module, built by go run ./tools/physics
+client/src/predict/physics.wasm
+
+# Local development state: certificates, built binaries, TinyGo (tools/dev, tools/physics)
 .dev/
 
 # Editors and systems

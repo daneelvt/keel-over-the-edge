@@ -6,6 +6,16 @@
   "platformCommit": "enabled",
   "postUpdateOptions": ["gomodTidy"],
   "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "TinyGo, pinned by release and archive digest for each platform in tools/internal/tinygo",
+      "managerFilePatterns": ["/^tools/internal/tinygo/tinygo\\.go$/"],
+      "matchStrings": ["\\{\"[a-z0-9]+-[a-z0-9]+\", \"(?<currentValue>v[0-9.]+)\", \"(?<currentDigest>[0-9a-f]{64})\"\\}"],
+      "datasourceTemplate": "github-release-attachments",
+      "depNameTemplate": "tinygo-org/tinygo"
+    }
+  ],
   "packageRules": [
     {
       "description": "Node follows the LTS line in .nvmrc; a new major is a deliberate change.",

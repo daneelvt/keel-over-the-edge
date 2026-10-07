@@ -32,7 +32,10 @@ func prepare(ctx context.Context, out io.Writer) error {
 	if err := installClient(ctx, out); err != nil {
 		return err
 	}
-	return generateCatalog(ctx, out)
+	if err := generateCatalog(ctx, out); err != nil {
+		return err
+	}
+	return buildPhysics(ctx, out)
 }
 
 // stack is keel serve and Vite, running.
@@ -129,6 +132,10 @@ func runDev(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	physicsSnap, err := goSnapshot(physicsDir)
+	if err != nil {
+		return err
+	}
 	tick := time.NewTicker(500 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -145,6 +152,13 @@ func runDev(ctx context.Context, out io.Writer) error {
 				continue
 			}
 			snap = next
+			if p, err := goSnapshot(physicsDir); err == nil && p != physicsSnap {
+				physicsSnap = p
+				fmt.Fprintln(newPrefixed(&s.mu, out, "dev"), "physics changed: rebuilding the module")
+				if err := buildPhysics(ctx, newPrefixed(&s.mu, out, "physics")); err != nil {
+					fmt.Fprintln(newPrefixed(&s.mu, out, "dev"), "physics build failed; the page keeps the old module")
+				}
+			}
 			fmt.Fprintln(newPrefixed(&s.mu, out, "dev"), "Go source changed: rebuilding keel")
 			if err := s.buildKeel(ctx); err != nil {
 				fmt.Fprintln(newPrefixed(&s.mu, out, "dev"), "build failed; the running keel is kept")
@@ -200,7 +214,32 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	if v.Catalog != catalog.Version {
 		return fmt.Errorf("smoke: server catalog %s, want %s", v.Catalog, catalog.Version)
 	}
-	fmt.Fprintf(out, "smoke: ok: page and /api/version over HTTPS (build %s, catalog %s)\n", v.Build, v.Catalog)
+	if err := checkModuleServed(ctx, client, base+"/src/predict/physics.wasm"); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS (build %s, catalog %s)\n", v.Build, v.Catalog)
+	return nil
+}
+
+// checkModuleServed fetches the physics module as the page does. Browsers
+// compile it while it downloads only when it comes as application/wasm.
+func checkModuleServed(ctx context.Context, client *http.Client, url string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("smoke: %w", err)
+	}
+	defer res.Body.Close()
+	magic := make([]byte, 4)
+	if _, err := io.ReadFull(res.Body, magic); err != nil || res.StatusCode != http.StatusOK || string(magic) != "\x00asm" {
+		return fmt.Errorf("smoke: %s is not a WebAssembly module (%s)", url, res.Status)
+	}
+	if ct := res.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/wasm") {
+		return fmt.Errorf("smoke: %s is served as %q, not application/wasm", url, ct)
+	}
 	return nil
 }
 

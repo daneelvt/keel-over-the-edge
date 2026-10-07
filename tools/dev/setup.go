@@ -63,6 +63,12 @@ func generateCatalog(ctx context.Context, out io.Writer) error {
 	return runIn(ctx, ".", out, "go", "run", "./tools/catalog")
 }
 
+// buildPhysics builds the client's physics module. The first time, it
+// downloads the pinned TinyGo into .dev.
+func buildPhysics(ctx context.Context, out io.Writer) error {
+	return runIn(ctx, ".", out, "go", "run", "./tools/physics")
+}
+
 // certs are the paths of the local TLS certificate and the root it chains to.
 type certs struct {
 	cert, key, root string
