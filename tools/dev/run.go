@@ -12,16 +12,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/mdp/qrterminal/v3"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 )
@@ -122,7 +118,7 @@ func runDev(ctx context.Context, out io.Writer) error {
 	}
 	defer s.stop()
 
-	caSrv, err := serveRoot(c.root)
+	caSrv, err := servePhoneSetup(c.root, s.origin)
 	if err != nil {
 		return err
 	}
@@ -160,46 +156,6 @@ func runDev(ctx context.Context, out io.Writer) error {
 			}
 		}
 	}
-}
-
-// serveRoot serves the local root certificate (never its key) over plain
-// HTTP, so a phone can download and trust it.
-func serveRoot(rootPath string) (*http.Server, error) {
-	pem, err := os.ReadFile(rootPath)
-	if err != nil {
-		return nil, err
-	}
-	ln, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(caPort)))
-	if err != nil {
-		return nil, err
-	}
-	srv := &http.Server{
-		ReadHeaderTimeout: 5 * time.Second,
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				http.Error(w, "GET only", http.StatusMethodNotAllowed)
-				return
-			}
-			w.Header().Set("Content-Type", "application/x-x509-ca-cert")
-			w.Header().Set("Content-Disposition", `attachment; filename="keel-dev-root.pem"`)
-			_, _ = w.Write(pem)
-		}),
-	}
-	go func() { _ = srv.Serve(ln) }()
-	return srv, nil
-}
-
-func printAddresses(mu *sync.Mutex, out io.Writer, origin string, lan []net.IP) {
-	mu.Lock()
-	defer mu.Unlock()
-	fmt.Fprintf(out, "\n  The game:  %s\n", origin)
-	if len(lan) > 0 {
-		root := fmt.Sprintf("http://%s/", net.JoinHostPort(lan[0].String(), strconv.Itoa(caPort)))
-		fmt.Fprintf(out, "  Phones trust the local root once, from %s\n", root)
-		fmt.Fprintf(out, "  (steps in docs/development.md)\n\n")
-	}
-	qrterminal.GenerateHalfBlock(origin, qrterminal.L, out)
-	fmt.Fprintln(out)
 }
 
 // runSmoke starts everything, checks the page and /api/version over HTTPS
