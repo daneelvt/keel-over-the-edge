@@ -21,6 +21,7 @@ import (
 
 // The golden tests: the scenarios of testdata/scenarios.json, and a table of
 // function values, run here and compared bit for bit with testdata/golden.json.
+// A scenario's digest covers the state and Out after every step.
 // CI runs them on amd64 and arm64, and the client runs the same files through
 // the WebAssembly module (client/src/predict/golden.test.ts), so all three
 // agree with each other by agreeing with the file. After a deliberate change
@@ -38,9 +39,9 @@ const (
 )
 
 type scenarioFile struct {
-	Description string             `json:"description"`
-	Params      map[string]float64 `json:"params"`
-	Scenarios   []scenario         `json:"scenarios"`
+	Description string         `json:"description"`
+	Params      map[string]any `json:"params"`
+	Scenarios   []scenario     `json:"scenarios"`
 }
 
 type scenario struct {
@@ -56,6 +57,9 @@ type change struct {
 	At      int                `json:"at"`
 	Control map[string]float64 `json:"control"`
 	Env     map[string]float64 `json:"env"`
+	// Steer starts the scenarios' heading-hold toward this heading; a
+	// change that sets the helm stops it.
+	Steer *float64 `json:"steer"`
 }
 
 type golden struct {
@@ -67,8 +71,8 @@ type golden struct {
 
 type goldenScenario struct {
 	Name string `json:"name"`
-	// Digest is the SHA-256 of the state after every step, each record's
-	// float64s in little-endian order, one record after another.
+	// Digest is the SHA-256 of the state and Out after every step, each
+	// record's float64s in little-endian order, one record after another.
 	Digest      string       `json:"digest"`
 	Checkpoints []checkpoint `json:"checkpoints"`
 }
@@ -166,18 +170,24 @@ func compareFunction(t *testing.T, f goldenFunction) {
 	}
 }
 
-// runScenario steps a scenario, hashing the state after every step.
-func runScenario(params map[string]float64, sc scenario) (goldenScenario, error) {
+// runScenario steps a scenario, hashing the state and Out after every step.
+func runScenario(params map[string]any, sc scenario) (goldenScenario, error) {
 	var (
 		s State
 		c Control
 		e Env
 		p Params
+		b Prepared
+		o Out
 	)
+	if err := setParams(&p, params); err != nil {
+		return goldenScenario{}, err
+	}
+	Prepare(&p, &b)
 	for _, set := range []struct {
 		record any
 		values map[string]float64
-	}{{&p, params}, {&s, sc.State}, {&c, sc.Control}, {&e, sc.Env}} {
+	}{{&s, sc.State}, {&c, sc.Control}, {&e, sc.Env}} {
 		if err := setFields(set.record, set.values); err != nil {
 			return goldenScenario{}, err
 		}
@@ -185,20 +195,31 @@ func runScenario(params map[string]float64, sc scenario) (goldenScenario, error)
 	g := goldenScenario{Name: sc.Name}
 	h := sha256.New()
 	next := 0
+	steering, target := false, 0.0
 	for i := range sc.Steps {
 		for ; next < len(sc.Changes) && sc.Changes[next].At == i; next++ {
-			if err := setFields(&c, sc.Changes[next].Control); err != nil {
+			ch := sc.Changes[next]
+			if err := setFields(&c, ch.Control); err != nil {
 				return g, err
 			}
-			if err := setFields(&e, sc.Changes[next].Env); err != nil {
+			if err := setFields(&e, ch.Env); err != nil {
 				return g, err
+			}
+			if _, ok := ch.Control["helm"]; ok {
+				steering = false
+			}
+			if ch.Steer != nil {
+				steering, target = true, *ch.Steer
 			}
 		}
-		Step(&s, &c, &e, &p)
+		if steering {
+			c.Helm = steer(target, &s)
+		}
+		Step(&s, &c, &e, &b, &o)
 		values := fields(&s)
-		for _, v := range values {
+		for _, v := range append(values, fields(&o)...) {
 			if math.IsNaN(v) || math.IsInf(v, 0) {
-				return g, fmt.Errorf("step %d: the state is not finite: %v", i, s)
+				return g, fmt.Errorf("step %d: the state or Out is not finite: %+v %+v", i, s, o)
 			}
 			h.Write(binary.LittleEndian.AppendUint64(nil, math.Float64bits(v)))
 		}
@@ -216,6 +237,60 @@ func runScenario(params map[string]float64, sc scenario) (goldenScenario, error)
 	}
 	g.Digest = hex.EncodeToString(h.Sum(nil))
 	return g, nil
+}
+
+// steer is the scenarios' heading-hold. It uses only operations JavaScript
+// computes the same way, and writes its products float64(…) so that Go cannot
+// fuse them; client/src/predict/golden.ts has its twin.
+func steer(target float64, s *State) float64 {
+	off := target - s.Heading
+	if off > math.Pi {
+		off -= 2 * math.Pi
+	} else if off < -math.Pi {
+		off += 2 * math.Pi
+	}
+	helm := float64(2*off) - float64(0.8*s.YawRate)
+	return max(-1, min(1, helm))
+}
+
+// setParams sets Params from values named as the client names them, numbers
+// or arrays of numbers; a missing or unknown name, or an array of another
+// length, is an error.
+func setParams(p *Params, values map[string]any) error {
+	v := reflect.ValueOf(p).Elem()
+	t := v.Type()
+	if len(values) != t.NumField() {
+		return fmt.Errorf("params has %d values, Params %d fields", len(values), t.NumField())
+	}
+	for i := range t.NumField() {
+		name := lowerFirst(t.Field(i).Name)
+		x, ok := values[name]
+		if !ok {
+			return fmt.Errorf("params has no %s", name)
+		}
+		f := v.Field(i)
+		switch x := x.(type) {
+		case float64:
+			if f.Kind() != reflect.Float64 {
+				return fmt.Errorf("params.%s must be an array", name)
+			}
+			f.SetFloat(x)
+		case []any:
+			if f.Kind() != reflect.Array || f.Len() != len(x) {
+				return fmt.Errorf("params.%s has %d values, Params.%s is %s", name, len(x), t.Field(i).Name, f.Type())
+			}
+			for j, e := range x {
+				n, ok := e.(float64)
+				if !ok {
+					return fmt.Errorf("params.%s[%d] is not a number", name, j)
+				}
+				f.Index(j).SetFloat(n)
+			}
+		default:
+			return fmt.Errorf("params.%s is neither a number nor an array", name)
+		}
+	}
+	return nil
 }
 
 // setFields sets a record's fields from values named as the client names
@@ -344,7 +419,7 @@ func fromHex(t *testing.T, s string) float64 {
 	return math.Float64frombits(b)
 }
 
-func readJSON(t *testing.T, path string, v any) {
+func readJSON(t testing.TB, path string, v any) {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -355,23 +430,40 @@ func readJSON(t *testing.T, path string, v any) {
 	}
 }
 
+// jolly returns the Jolly boat, prepared, from the scenarios file.
+func jolly(t testing.TB) *Prepared {
+	t.Helper()
+	var sf scenarioFile
+	readJSON(t, scenariosFile, &sf)
+	var p Params
+	if err := setParams(&p, sf.Params); err != nil {
+		t.Fatal(err)
+	}
+	var b Prepared
+	Prepare(&p, &b)
+	return &b
+}
+
 func TestStepAllocatesNothing(t *testing.T) {
-	s := State{Heading: 1, Surge: 1}
-	c := Control{Helm: 0.3, Trim: 1}
+	b := jolly(t)
+	s := State{Heading: 1, Surge: 2, SheetLimit: 0.5}
+	c := Control{Helm: 0.3, Sheet: 0.4}
 	e := Env{WindSpeed: 7, WindFrom: 2}
-	p := Params{Mass: 150, YawInertia: 300, SailArea: 7, SailHeight: 3, DragAhead: 60, DragSide: 900, RudderPower: 120, YawDamping: 1.5}
-	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, &p) }); n != 0 {
+	var o Out
+	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, b, &o) }); n != 0 {
 		t.Errorf("a step allocates %v times", n)
 	}
 }
 
-func BenchmarkStep(b *testing.B) {
-	s := State{Heading: 1, Surge: 1}
-	c := Control{Helm: 0.3, Trim: 1}
-	e := Env{WindSpeed: 7, WindFrom: 2}
-	p := Params{Mass: 150, YawInertia: 300, SailArea: 7, SailHeight: 3, DragAhead: 60, DragSide: 900, RudderPower: 120, YawDamping: 1.5}
-	for b.Loop() {
-		Step(&s, &c, &e, &p)
+// BenchmarkStep times one step of Substeps substeps, on a beam reach.
+func BenchmarkStep(bm *testing.B) {
+	b := jolly(bm)
+	s := State{Heading: math.Pi / 2, Surge: 3, SheetLimit: 0.6}
+	c := Control{Sheet: 0.35}
+	e := Env{WindSpeed: 7, WindFrom: 0}
+	var o Out
+	for bm.Loop() {
+		Step(&s, &c, &e, b, &o)
 	}
 }
 

@@ -10,13 +10,32 @@ import (
 	"testing"
 )
 
-const validBoats = `boats:
+// validBoats is one boat, with the real Jolly boat's physics values.
+var validBoats = `boats:
   - id: test-boat
     name: Test boat
     description: A boat for tests
     capacity: 2
     lengthOverall: 3.5
-`
+` + realPhysics()
+
+// realPhysics returns the physics block of the real catalog's first boat.
+func realPhysics() string {
+	data, err := os.ReadFile(filepath.Join("..", "..", catalogDir, "boats.yaml"))
+	if err != nil {
+		panic(err)
+	}
+	s := string(data)
+	start := strings.Index(s, "    physics:\n")
+	if start < 0 {
+		panic("shared/catalog/boats.yaml has no physics block")
+	}
+	s = s[start:]
+	if end := strings.Index(s, "\n  - "); end >= 0 {
+		s = s[:end+1]
+	}
+	return s
+}
 
 // fixture makes a repository root holding the real schema and the given
 // files, relative to that root.
@@ -80,6 +99,21 @@ func TestRejects(t *testing.T) {
 			name:  "unknown field",
 			files: map[string]string{"shared/catalog/boats.yaml": validBoats + "    colour: red\n"},
 			want:  "colour",
+		},
+		{
+			name:  "physics value missing",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        rudderTime:", "        rudderTimes:", 1)},
+			want:  "/boats/0/physics/rates",
+		},
+		{
+			name:  "physics value out of range",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        flattenMin: ", "        flattenMin: 2 #", 1)},
+			want:  "/boats/0/physics/sailor/flattenMin",
+		},
+		{
+			name:  "physics table of the wrong length",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        dragArea: [", "        dragArea: [0.1, ", 1)},
+			want:  "/boats/0/physics/hull/dragArea",
 		},
 		{
 			name:  "bad id",
@@ -178,7 +212,7 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
     description: A boat for tests
     name: Test boat
     id: test-boat
-`
+` + realPhysics()
 	b := fixture(t, map[string]string{"shared/catalog/boats.yaml": reordered})
 	encode := func(root string) string {
 		doc, err := readCatalog(root)
@@ -207,5 +241,54 @@ func TestWriteOrCheck(t *testing.T) {
 	}
 	if err := writeOrCheck(root, files, true); err != nil {
 		t.Fatalf("check failed after writing: %v", err)
+	}
+}
+
+func TestParamsMatchTheSchema(t *testing.T) {
+	fields, err := physicsFields(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkParams(fields); err != nil {
+		t.Fatal(err)
+	}
+	swapped := append([]physicsField{fields[1], fields[0]}, fields[2:]...)
+	if err := checkParams(swapped); err == nil || !strings.Contains(err.Error(), "field 0") {
+		t.Errorf("two fields swapped: %v", err)
+	}
+	if err := checkParams(fields[1:]); err == nil {
+		t.Error("a field missing from the schema was accepted")
+	}
+	longer := append([]physicsField{}, fields...)
+	for i := range longer {
+		if longer[i].length > 0 {
+			longer[i].length++
+			break
+		}
+	}
+	if err := checkParams(longer); err == nil || !strings.Contains(err.Error(), "values)") {
+		t.Errorf("an array of another length: %v", err)
+	}
+}
+
+func TestPhysicsGenerated(t *testing.T) {
+	fields, err := physicsFields(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := goPhysics(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"p.Displacement = b.Physics.Hull.Displacement", "copy(p.DragArea[:], b.Physics.Hull.DragArea)"} {
+		if !strings.Contains(string(g), want) {
+			t.Errorf("physics.gen.go lacks %q", want)
+		}
+	}
+	ts := string(tsParams(fields))
+	for _, want := range []string{"params[f.displacement] = p.hull.displacement;", "params.set(p.hull.dragArea, f.dragArea);"} {
+		if !strings.Contains(ts, want) {
+			t.Errorf("params.gen.ts lacks %q", want)
+		}
 	}
 }

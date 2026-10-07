@@ -5,7 +5,7 @@
 // anything that must agree with the server is computed in the module, never
 // with JavaScript's Math, whose last bits differ between browsers.
 
-import { FN, LAYOUT_VERSION, RECORDS } from './layout.gen';
+import { FN, LAYOUT_VERSION, RECORDS, SIZES } from './layout.gen';
 
 export type RecordName = keyof typeof RECORDS;
 export type FnName = keyof typeof FN;
@@ -19,6 +19,8 @@ interface Exports {
   control(): number;
   env(): number;
   params(): number;
+  out(): number;
+  prepare(): void;
   step(): void;
   fnArgs(): number;
   fnResults(): number;
@@ -34,6 +36,8 @@ const functionExports = [
   'control',
   'env',
   'params',
+  'out',
+  'prepare',
   'step',
   'fnArgs',
   'fnResults',
@@ -117,11 +121,7 @@ export class Physics {
     if (this.#views === undefined || buffer !== this.#buffer) {
       const views = {} as Record<RecordName, Float64Array>;
       for (const name of recordNames) {
-        views[name] = new Float64Array(
-          buffer,
-          this.#addresses[name],
-          Object.keys(RECORDS[name]).length,
-        );
+        views[name] = new Float64Array(buffer, this.#addresses[name], SIZES[name]);
       }
       this.#views = views;
       this.#buffer = buffer;
@@ -129,7 +129,15 @@ export class Physics {
     return this.#views;
   }
 
-  /** Advances the state by one step, 1/30 of a second. */
+  /**
+   * Derives the boat's constants from the params record. Call it after
+   * writing params (writeParams) and before stepping.
+   */
+  prepare(): void {
+    this.#x.prepare();
+  }
+
+  /** Advances the state by one step, 1/30 of a second, and writes out. */
   step(): void {
     this.#x.step();
   }

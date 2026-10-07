@@ -1,0 +1,33 @@
+{
+  "description": "Measured and published performance of each boat's modern original, which go run ./tools/polar -check compares the physics with. Winds are in knots at sail height, about 3 m: wind measured from a dinghy is usually measured near there, and the game's wind, 10 m up, is scaled to it by the open sea's logarithmic profile. Speeds are in knots. A point's tolerance is a fraction of its value; an 'atMost' point fails only when the boat is faster than tolerance allows above it.",
+  "boats": [
+    {
+      "boat": "jolly-boat",
+      "original": "ILCA 7 (Laser, full rig), 80 kg sailor, flat water",
+      "points": [
+        {"measure": "upwindVMG", "wind": 9, "value": 3.5, "tolerance": 0.05, "source": "Day (2017), Performance prediction for sailing dinghies, Ocean Engineering, Figure 8: VPP, 80 kg sailor, flat water. Matches measured upwind speeds."},
+        {"measure": "upwindVMG", "wind": 12, "value": 3.73, "tolerance": 0.05, "source": "Day (2017), Figure 8"},
+        {"measure": "speed", "twa": 45, "wind": 9, "value": 4.8, "tolerance": 0.10, "source": "Binns, Bethwaite and Saunders (2002), measured on the water, close-hauled; as reproduced in Day (2017), Figure 3"},
+        {"measure": "speed", "twa": 45, "wind": 12, "value": 5.0, "tolerance": 0.10, "source": "Binns and others (2002), close-hauled"},
+        {"measure": "speed", "twa": 90, "wind": 9, "value": 6.3, "tolerance": 0.10, "source": "Binns and others (2002), beam reach"},
+        {"measure": "speed", "twa": 90, "wind": 12, "value": 7.3, "tolerance": 0.10, "source": "Binns and others (2002), beam reach"},
+        {"measure": "downwindVMG", "wind": 9, "value": 4.2, "tolerance": 0.10, "source": "Day (2017), Figure 8"},
+        {"measure": "downwindVMG", "wind": 12, "value": 5.2, "tolerance": 0.10, "source": "Day (2017), Figure 8"},
+        {"measure": "speed", "atMost": true, "twa": 135, "wind": 9, "value": 6.1, "tolerance": 0, "source": "Binns and others (2002), broad reach, where some surfing could be expected: flat water is slower"},
+        {"measure": "speed", "atMost": true, "twa": 135, "wind": 12, "value": 8.0, "tolerance": 0, "source": "Binns and others (2002), broad reach, with surfing"},
+        {"measure": "speed", "atMost": true, "twa": 180, "wind": 9, "value": 5.5, "tolerance": 0, "source": "Binns and others (2002), dead downwind, with surfing"},
+        {"measure": "speed", "atMost": true, "twa": 180, "wind": 12, "value": 6.7, "tolerance": 0, "source": "Binns and others (2002), dead downwind, with surfing"}
+      ],
+      "notes": [
+        "7 October 2026, first calibration, in this order.",
+        "Sail (tools/polar -sail): maxLift 1.40 to 1.48, stallAngle 22 to 28, stallWidth 10 to 20, sailDrag 0.022 to 0.026, the normalForce table fitted, and twistEased (new) 20. ORC's mainsail gains drag fast as the boom eases (viscous drag 0.11 at 60°, 0.38 at 90°); on a Laser the mainsheet also holds the boom down, so easing it opens the leech. Drive is now within 4% of ORC's from 28° to 180°, side force within 4% at 28° and 60°. Beyond 60° an attached and a stalled trim give nearly the same drive, so the side force is not fitted there.",
+        "pressureAttached 0.30 to 0.33: ORC's centre of effort, 33% of the foot aft of the mast.",
+        "Weather helm: downwash (new) 0.5, the middle of the range for a rudder behind a keel or board; boardPosition 0.25 to 0.45. Weather helm is 0.1° at 9 knots, 0.7° at 12 and 1.7° at 15, growing with heel, but below the 2° to 4° of a real dinghy: further forward the board would no longer be where a Laser's is.",
+        "Accidental gybes: headBacked (new) 90 and headBackedWidth (new) 20. A sail as rigid strips, pressed on its sheet, never gybes before about 90° by the lee; a real one's backed head swings across and its leech drags the boom over. Accidental gybes now come 16° to 25° by the lee from 6 to 18 knots.",
+        "Flattening: from 6 to 11 m/s (was 12), down to 0.62 (was 0.65), against Day's upwind VMG at 12 knots: 3.71 knots against 3.73. The boat still heels 6° to 10° there, where Day's is held at 2° to 3°: the towed resistance is upright only.",
+        "The drag area above 9 knots is unchanged: the beam reaches are within 10% of Binns.",
+        "Sailor: rollRateGain 0.3 to 0.6, since at 0.3 the automatic sailor let the boat death-roll running in 22 knots. sailorDrag (new) 600, the sailor in the water holding on, and hiking while climbing back in: without them a righted boat rolled straight over the other way. swimTime 5 to 10 and climbTime 2 to 4: righting now takes about 15 s from falling in, within the 15 to 45 s of a real capsize."
+      ]
+    }
+  ]
+}

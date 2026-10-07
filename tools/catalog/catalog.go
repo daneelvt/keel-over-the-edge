@@ -76,11 +76,24 @@ func run(root string, check bool, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	fields, err := physicsFields(root)
+	if err != nil {
+		return err
+	}
+	if err := checkParams(fields); err != nil {
+		return err
+	}
+	goPhysics, err := goPhysics(fields)
+	if err != nil {
+		return err
+	}
 	files := map[string][]byte{
-		goJSONPath:  canonical,
-		goTypesPath: goTypes,
-		tsJSONPath:  canonical,
-		tsTypesPath: tsTypes,
+		goJSONPath:    canonical,
+		goTypesPath:   goTypes,
+		goPhysicsPath: goPhysics,
+		tsJSONPath:    canonical,
+		tsTypesPath:   tsTypes,
+		tsParamsPath:  tsParams(fields),
 	}
 	return writeOrCheck(root, files, check)
 }

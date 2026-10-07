@@ -25,6 +25,27 @@ type Boat struct {
 
 	// Display name.
 	Name string `json:"name"`
+
+	// Physics corresponds to the JSON schema field "physics".
+	Physics BoatPhysics `json:"physics"`
+}
+
+// The boat's physics, in SI units with angles in degrees. Every value is required.
+type BoatPhysics struct {
+	// Foils corresponds to the JSON schema field "foils".
+	Foils PhysicsFoils `json:"foils"`
+
+	// Hull corresponds to the JSON schema field "hull".
+	Hull PhysicsHull `json:"hull"`
+
+	// Rates corresponds to the JSON schema field "rates".
+	Rates PhysicsRates `json:"rates"`
+
+	// Rig corresponds to the JSON schema field "rig".
+	Rig PhysicsRig `json:"rig"`
+
+	// Sailor corresponds to the JSON schema field "sailor".
+	Sailor PhysicsSailor `json:"sailor"`
 }
 
 // Every list of kinds in the game. Kinds are data: code reads their properties,
@@ -37,5 +58,299 @@ type Catalog struct {
 // Stable identifier of a kind, stored in the database: never renamed or reused.
 type ID string
 
+// The daggerboard or keel, and the rudder.
+type PhysicsFoils struct {
+	// Chord of the daggerboard, in m.
+	BoardChord float64 `json:"boardChord"`
+
+	// Distance of the daggerboard ahead of the centre of gravity, in m.
+	BoardPosition float64 `json:"boardPosition"`
+
+	// Span of the daggerboard below the hull, in m.
+	BoardSpan float64 `json:"boardSpan"`
+
+	// The hull's carry-over of the board's lift: k in 1 + k × hull draught / board
+	// span.
+	CarryOver float64 `json:"carryOver"`
+
+	// Share of the sideways flow from leeway that the daggerboard's downwash cancels
+	// at the rudder.
+	Downwash float64 `json:"downwash"`
+
+	// Viscous drag coefficient of the foils, on plan area.
+	FoilDrag float64 `json:"foilDrag"`
+
+	// Heel from which the foils are out of the water, in degrees.
+	FoilDryHeel float64 `json:"foilDryHeel"`
+
+	// Angle of attack at which the foils stall, in degrees.
+	FoilStall float64 `json:"foilStall"`
+
+	// Angle past the stall over which their flow separates, in degrees.
+	FoilStallWidth float64 `json:"foilStallWidth"`
+
+	// Heel up to which the foils are fully in the water, in degrees.
+	FoilWetHeel float64 `json:"foilWetHeel"`
+
+	// The board's lift lost per radian of heel.
+	HeelLoss float64 `json:"heelLoss"`
+
+	// Normal force coefficient of a stalled foil.
+	PlateNormal float64 `json:"plateNormal"`
+
+	// Depth of each foil's centre of pressure below the hull, as a fraction of its
+	// span.
+	PressureDepth float64 `json:"pressureDepth"`
+
+	// Greatest rudder angle, in degrees.
+	RudderAngle float64 `json:"rudderAngle"`
+
+	// Chord of the rudder, in m.
+	RudderChord float64 `json:"rudderChord"`
+
+	// The rudder's share of the boat's speed through the water.
+	RudderInflow float64 `json:"rudderInflow"`
+
+	// Distance of the rudder aft of the centre of gravity, in m.
+	RudderPosition float64 `json:"rudderPosition"`
+
+	// Span of the rudder below the hull, in m.
+	RudderSpan float64 `json:"rudderSpan"`
+}
+
+// The hull: its mass, resistance, inertia and stability.
+type PhysicsHull struct {
+	// Added mass moving ahead, in kg.
+	AddedMassSurge float64 `json:"addedMassSurge"`
+
+	// Added mass moving sideways, hull and foils, in kg.
+	AddedMassSway float64 `json:"addedMassSway"`
+
+	// Height of the centre of gravity above the waterline, in m.
+	CentreOfGravity float64 `json:"centreOfGravity"`
+
+	// Drag coefficient of the hull moving sideways, on waterline length times
+	// draught.
+	CrossFlowDrag float64 `json:"crossFlowDrag"`
+
+	// Boat, rig and sailor, in kg.
+	Displacement float64 `json:"displacement"`
+
+	// Upright resistance as a drag area (C_D A), at speeds 0, 1, 2 … times
+	// dragAreaStep, in m². Beyond the last, the last.
+	DragArea []float64 `json:"dragArea"`
+
+	// Speed between entries of dragArea, in m/s.
+	DragAreaStep float64 `json:"dragAreaStep"`
+
+	// The hull's own draught, foils aside, in m.
+	HullDraught float64 `json:"hullDraught"`
+
+	// The hull's added mass sideways less its added mass ahead, for the Munk moment,
+	// in kg.
+	Munk float64 `json:"munk"`
+
+	// Righting lever (GZ) with the sailor on the centreline, every 10° of heel from
+	// 0° to 180°, in m.
+	RightingLever []float64 `json:"rightingLever"`
+
+	// The hull's own roll damping, in N·m·s/rad. The foils and sails damp through
+	// their flow.
+	RollDamping float64 `json:"rollDamping"`
+
+	// Moment of inertia in roll, added inertia included, in kg·m².
+	RollInertia float64 `json:"rollInertia"`
+
+	// Length on the waterline, in m.
+	WaterlineLength float64 `json:"waterlineLength"`
+
+	// Moment of inertia in yaw, added inertia included, in kg·m².
+	YawInertia float64 `json:"yawInertia"`
+}
+
+// How fast the sailor's hands move the rudder and the sheet.
+type PhysicsRates struct {
+	// Time for the rudder's full travel, one side to the other, in s.
+	RudderTime float64 `json:"rudderTime"`
+
+	// Time to ease the sheet out over its full range, in s.
+	SheetEaseTime float64 `json:"sheetEaseTime"`
+
+	// Time to haul the sheet in over its full range, in s.
+	SheetHaulTime float64 `json:"sheetHaulTime"`
+}
+
+// The sail, boom and windage.
+type PhysicsRig struct {
+	// Friction of the boom about the mast, in N·m·s/rad.
+	BoomDamping float64 `json:"boomDamping"`
+
+	// Height of the boom above the waterline, in m.
+	BoomHeight float64 `json:"boomHeight"`
+
+	// The boom's angle off the centreline with the sheet hauled in hard, in degrees.
+	BoomIn float64 `json:"boomIn"`
+
+	// Moment of inertia of boom and sail about the mast, in kg·m².
+	BoomInertia float64 `json:"boomInertia"`
+
+	// Mass of boom and sail times the distance of their centre of gravity aft of the
+	// mast, in kg·m.
+	BoomMoment float64 `json:"boomMoment"`
+
+	// The boom's angle with the sheet let fly, in degrees.
+	BoomOut float64 `json:"boomOut"`
+
+	// Effective rig height for induced drag, in m.
+	EffectiveHeight float64 `json:"effectiveHeight"`
+
+	// Extra drag coefficient of flogging cloth.
+	FlogDrag float64 `json:"flogDrag"`
+
+	// Length of the foot, in m.
+	Foot float64 `json:"foot"`
+
+	// Height of the lower sail strip's centre of effort above the boom, as a fraction
+	// of the luff.
+	FootStrip float64 `json:"footStrip"`
+
+	// The upper sail strip's angle of attack at which the wind starts to get behind
+	// its leech, in degrees. A backed head swings across and its leech drags the boom
+	// over: an accidental gybe.
+	HeadBacked float64 `json:"headBacked"`
+
+	// Angle of attack over which a backed head comes to drag the boom across, in
+	// degrees.
+	HeadBackedWidth float64 `json:"headBackedWidth"`
+
+	// Height of the upper sail strip's centre of effort above the boom, as a fraction
+	// of the luff.
+	HeadStrip float64 `json:"headStrip"`
+
+	// Length of the luff, in m.
+	Luff float64 `json:"luff"`
+
+	// Below this angle of attack the cloth flogs, in degrees.
+	LuffAngle float64 `json:"luffAngle"`
+
+	// Distance of the mast ahead of the centre of gravity, in m.
+	MastPosition float64 `json:"mastPosition"`
+
+	// Greatest lift coefficient of the sail.
+	MaxLift float64 `json:"maxLift"`
+
+	// Normal force coefficient of separated flow over the sail, every 10° of angle of
+	// attack from 0° to 180°.
+	NormalForce []float64 `json:"normalForce"`
+
+	// Centre of pressure aft of the mast with the flow attached, as a fraction of the
+	// foot.
+	PressureAttached float64 `json:"pressureAttached"`
+
+	// Centre of pressure aft of the mast with the flow separated, as a fraction of
+	// the foot.
+	PressureSeparated float64 `json:"pressureSeparated"`
+
+	// Drag growing with the square of the lift coefficient (k_pm).
+	QuadraticDrag float64 `json:"quadraticDrag"`
+
+	// Sail area, in m².
+	SailArea float64 `json:"sailArea"`
+
+	// Viscous drag coefficient of the sail.
+	SailDrag float64 `json:"sailDrag"`
+
+	// Upward force per metre a sail strip is pushed under the water, in N/m.
+	SailFloat float64 `json:"sailFloat"`
+
+	// Vertical damping of a sail strip in the water, in N·s/m.
+	SailWaterDamping float64 `json:"sailWaterDamping"`
+
+	// Angle of attack of the greatest lift, in degrees.
+	StallAngle float64 `json:"stallAngle"`
+
+	// Angle past the stall over which the flow separates, in degrees.
+	StallWidth float64 `json:"stallWidth"`
+
+	// The upper strip's twist at the flattest, in degrees.
+	TwistDepowered float64 `json:"twistDepowered"`
+
+	// Extra twist with the boom let fly, growing in proportion to the boom's angle,
+	// in degrees. On a dinghy whose sheet also holds the boom down, easing it lets
+	// the leech open.
+	TwistEased float64 `json:"twistEased"`
+
+	// The upper strip's twist beyond the boom at full power, in degrees.
+	TwistPowered float64 `json:"twistPowered"`
+
+	// Boom angle over which the twist turns from one side to the other, in degrees.
+	TwistTurn float64 `json:"twistTurn"`
+
+	// Drag area of hull, crew and spars from ahead, in m².
+	WindageFront float64 `json:"windageFront"`
+
+	// Height of the windage's centre above the waterline, in m.
+	WindageHeight float64 `json:"windageHeight"`
+
+	// Drag area of hull, crew and spars from abeam, in m².
+	WindageSide float64 `json:"windageSide"`
+}
+
+// What the sailor does by themselves: hiking, flattening the sail, righting the
+// boat. The same for every player.
+type PhysicsSailor struct {
+	// Distance of the sailor's weight on the daggerboard from the centre of gravity,
+	// in m.
+	BoardReach float64 `json:"boardReach"`
+
+	// Heel below which the sailor climbs back in, in degrees.
+	ClimbInHeel float64 `json:"climbInHeel"`
+
+	// Time to climb back in, in s.
+	ClimbTime float64 `json:"climbTime"`
+
+	// Heel past which the sailor falls in, in degrees.
+	FallOutHeel float64 `json:"fallOutHeel"`
+
+	// Apparent wind at which the sailor starts flattening the sail, in m/s.
+	FlattenFrom float64 `json:"flattenFrom"`
+
+	// Flattest sail, as a fraction of full lift.
+	FlattenMin float64 `json:"flattenMin"`
+
+	// Apparent wind at which the sail is at its flattest, in m/s.
+	FlattenTo float64 `json:"flattenTo"`
+
+	// Extra hiking per radian of heel, in m/rad.
+	HeelGain float64 `json:"heelGain"`
+
+	// The sailor's lag in moving, in s.
+	HikeLag float64 `json:"hikeLag"`
+
+	// Furthest the sailor's centre of gravity goes out to windward, in m.
+	HikeReach float64 `json:"hikeReach"`
+
+	// Fastest the sailor moves across, in m/s.
+	HikeSpeed float64 `json:"hikeSpeed"`
+
+	// Furthest it goes to leeward, in m.
+	LeeReach float64 `json:"leeReach"`
+
+	// Extra hiking per rad/s of roll rate, in m·s/rad.
+	RollRateGain float64 `json:"rollRateGain"`
+
+	// Roll damping of the sailor in the water, holding on to the boat, in N·m·s/rad.
+	SailorDrag float64 `json:"sailorDrag"`
+
+	// Mass of the sailor, in kg.
+	SailorMass float64 `json:"sailorMass"`
+
+	// Height of the seated sailor's centre of gravity above the boat's, in m.
+	SailorSeatHeight float64 `json:"sailorSeatHeight"`
+
+	// Time to swim to the daggerboard after falling in, in s.
+	SwimTime float64 `json:"swimTime"`
+}
+
 // Version is the catalog version (tools/catalog).
-const Version = "1062915e6cb9a2d8"
+const Version = "ff4cabb079595b69"

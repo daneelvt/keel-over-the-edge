@@ -26,11 +26,20 @@ var records = []struct {
 	{"control", reflect.TypeFor[physics.Control]()},
 	{"env", reflect.TypeFor[physics.Env]()},
 	{"params", reflect.TypeFor[physics.Params]()},
+	{"out", reflect.TypeFor[physics.Out]()},
 }
 
 type recordLayout struct {
 	name   string
-	fields []string
+	fields []field
+	size   int // float64s
+}
+
+// field is a float64, or a fixed array of them, at index of its record.
+type field struct {
+	name   string
+	index  int
+	length int // 0 for a float64
 }
 
 // layout is what the client must agree on with the module.
@@ -47,13 +56,20 @@ func describe() (layout, error) {
 		rl := recordLayout{name: r.name}
 		for i := range r.typ.NumField() {
 			f := r.typ.Field(i)
-			if f.Type.Kind() != reflect.Float64 {
-				return layout{}, fmt.Errorf("%s.%s is %s; every field of a record must be a float64", r.typ.Name(), f.Name, f.Type)
+			fl := field{name: jsName(f.Name), index: rl.size}
+			switch {
+			case f.Type.Kind() == reflect.Float64:
+				rl.size++
+			case f.Type.Kind() == reflect.Array && f.Type.Elem().Kind() == reflect.Float64:
+				fl.length = f.Type.Len()
+				rl.size += fl.length
+			default:
+				return layout{}, fmt.Errorf("%s.%s is %s; every field of a record must be a float64 or a fixed array of them", r.typ.Name(), f.Name, f.Type)
 			}
-			if f.Offset != uintptr(8*i) {
-				return layout{}, fmt.Errorf("%s.%s is at offset %d, not %d", r.typ.Name(), f.Name, f.Offset, 8*i)
+			if f.Offset != uintptr(8*fl.index) {
+				return layout{}, fmt.Errorf("%s.%s is at offset %d, not %d", r.typ.Name(), f.Name, f.Offset, 8*fl.index)
 			}
-			rl.fields = append(rl.fields, jsName(f.Name))
+			rl.fields = append(rl.fields, fl)
 		}
 		l.records = append(l.records, rl)
 	}
@@ -72,7 +88,14 @@ func jsName(goName string) string {
 func versionOf(l layout) uint32 {
 	var b strings.Builder
 	for _, r := range l.records {
-		fmt.Fprintf(&b, "%s:%s\n", r.name, strings.Join(r.fields, ","))
+		names := make([]string, len(r.fields))
+		for i, f := range r.fields {
+			names[i] = f.name
+			if f.length > 0 {
+				names[i] += fmt.Sprintf("[%d]", f.length)
+			}
+		}
+		fmt.Fprintf(&b, "%s:%s\n", r.name, strings.Join(names, ","))
 	}
 	fmt.Fprintf(&b, "fn:%s\n", strings.Join(l.fns, ","))
 	sum := sha256.Sum256([]byte(b.String()))
@@ -112,7 +135,8 @@ func (l layout) tsFile() []byte {
 	fmt.Fprintf(&b, "export const LAYOUT_VERSION = %#08x;\n\n", l.version)
 	b.WriteString(`/**
  * The physics module's records, each named by the export that returns its
- * address, with the index of each field in a Float64Array laid over it.
+ * address, with the index of each field in a Float64Array laid over it. For
+ * an array, the index of its first value.
  */
 export const RECORDS = {
 `)
@@ -123,11 +147,33 @@ export const RECORDS = {
 			if i == len(r.fields)-1 {
 				sep = ""
 			}
-			fmt.Fprintf(&b, " %s: %d%s", f, i, sep)
+			fmt.Fprintf(&b, " %s: %d%s", f.name, f.index, sep)
 		}
 		b.WriteString(" },\n")
 	}
-	b.WriteString("} as const;\n\n/** Codes of the functions the module's fn export evaluates. */\nexport const FN = {")
+	b.WriteString("} as const;\n\n/** The length of each array field, which RECORDS gives the first index of. */\nexport const ARRAYS = {\n")
+	for _, r := range l.records {
+		var arrays []string
+		for _, f := range r.fields {
+			if f.length > 0 {
+				arrays = append(arrays, fmt.Sprintf("%s: %d", f.name, f.length))
+			}
+		}
+		if len(arrays) == 0 {
+			fmt.Fprintf(&b, "  %s: {},\n", r.name)
+		} else {
+			fmt.Fprintf(&b, "  %s: { %s },\n", r.name, strings.Join(arrays, ", "))
+		}
+	}
+	b.WriteString("} as const;\n\n/** Each record's length in float64s. */\nexport const SIZES = {")
+	for i, r := range l.records {
+		sep := ","
+		if i == len(l.records)-1 {
+			sep = ""
+		}
+		fmt.Fprintf(&b, " %s: %d%s", r.name, r.size, sep)
+	}
+	b.WriteString(" } as const;\n\n/** Codes of the functions the module's fn export evaluates. */\nexport const FN = {")
 	for i, f := range l.fns {
 		sep := ","
 		if i == len(l.fns)-1 {

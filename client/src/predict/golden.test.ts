@@ -6,8 +6,10 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
+import { catalog } from '../catalog';
 import { checkGolden, fromHex, type GoldenFile, type ScenarioFile, toHex } from './golden';
-import { LAYOUT_VERSION } from './layout.gen';
+import { LAYOUT_VERSION, RECORDS } from './layout.gen';
+import { writeParams } from './params.gen';
 import { loadPhysics, type Physics } from './physics';
 
 const wasm = new URL('./physics.wasm', import.meta.url);
@@ -39,7 +41,7 @@ describe('golden', () => {
       readJSON<GoldenFile>('golden.json'),
     );
     expect(report.problems).toEqual([]);
-    expect(report.scenarios).toBeGreaterThanOrEqual(4);
+    expect(report.scenarios).toBeGreaterThanOrEqual(13);
     expect(report.values).toBeGreaterThanOrEqual(6 * 256);
   });
 });
@@ -47,18 +49,45 @@ describe('golden', () => {
 describe('memory', () => {
   test('ten thousand steps neither allocate nor grow the memory', () => {
     const r = physics.records;
-    r.params.set([150, 300, 7, 3, 60, 900, 120, 1.5]);
-    r.state.set([0, 0, 0.5, 1, 0, 0]);
+    for (const v of Object.values(r)) {
+      v.fill(0);
+    }
+    writeParams(r.params, catalog.boats[0].physics);
+    physics.prepare();
+    r.state[RECORDS.state.surge] = 2;
     r.env.set([8, 0.3]);
     const bytes = physics.memoryBytes;
     const allocations = physics.allocations;
     for (let i = 0; i < 10_000; i++) {
-      physics.records.control.set([Math.sign(Math.sin(i / 300)), 0.9]);
+      physics.records.control.set([Math.sign(Math.sin(i / 300)), (i % 900) / 900]);
       physics.step();
     }
     expect(physics.memoryBytes).toBe(bytes);
     expect(physics.allocations).toBe(allocations);
-    expect(Number.isFinite(physics.records.state[0])).toBe(true);
+    for (const v of physics.records.state) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+});
+
+describe('params', () => {
+  test("writeParams writes the catalog's values exactly as the Go golden tests read them", () => {
+    const want = new Float64Array(physics.records.params.length);
+    const scenarios = readJSON<ScenarioFile>('scenarios.json');
+    const lengths: Record<string, number> = {};
+    for (const [name, value] of Object.entries(scenarios.params)) {
+      const index = (RECORDS.params as Record<string, number>)[name];
+      expect(index, name).toBeDefined();
+      if (Array.isArray(value)) {
+        want.set(value, index);
+        lengths[name] = value.length;
+      } else {
+        want[index ?? 0] = value;
+      }
+    }
+    const got = new Float64Array(want.length);
+    writeParams(got, catalog.boats[0].physics);
+    expect(new Uint8Array(got.buffer)).toEqual(new Uint8Array(want.buffer));
   });
 });
 
