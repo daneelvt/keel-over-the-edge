@@ -22,6 +22,9 @@ func TestMissingHeaders(t *testing.T) {
 		"internal/x/testdata/fix.go":  "package x\n",
 		"README.md":                   "no header needed\n",
 		"client/dist/assets/index.js": "no header needed\n",
+		"art/boats/ok/build.ts":       "// " + artHeader + "\n",
+		"art/boats/agpl/build.ts":     "// " + header + "\n",
+		"art/README.md":               "no header needed\n",
 	}
 	for p, s := range files {
 		full := filepath.Join(root, p)
@@ -36,7 +39,7 @@ func TestMissingHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"client/src/late.css", "client/src/missing.ts", "cmd/missing.go"}
+	want := []string{"art/boats/agpl/build.ts", "client/src/late.css", "client/src/missing.ts", "cmd/missing.go"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}

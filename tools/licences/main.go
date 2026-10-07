@@ -4,6 +4,9 @@
 // and that every Go package linked into keel has a licence in allowed.txt.
 // The client's bundled packages are checked by the client build itself.
 //
+// Files under art/ are art, not code: all rights reserved, outside the AGPL
+// (art/README.md). They carry the art header instead.
+//
 //	go run ./tools/licences
 //
 // It runs from the repository root.
@@ -23,6 +26,8 @@ import (
 
 const (
 	header      = "SPDX-License-Identifier: AGPL-3.0-only"
+	artHeader   = "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved"
+	artDir      = "art"
 	headerLines = 5 // the header must be within the first lines of a file
 	allowedFile = "tools/licences/allowed.txt"
 )
@@ -38,8 +43,8 @@ func main() {
 		fail(err)
 	}
 	if len(missing) > 0 {
-		fail(fmt.Errorf("files without %q in their first %d lines:\n  %s",
-			header, headerLines, strings.Join(missing, "\n  ")))
+		fail(fmt.Errorf("files without %q (under %s/: %q) in their first %d lines:\n  %s",
+			header, artDir, artHeader, headerLines, strings.Join(missing, "\n  ")))
 	}
 	fmt.Println("licences: every source file has the header")
 
@@ -64,7 +69,8 @@ func fail(err error) {
 	os.Exit(1)
 }
 
-// missingHeaders lists the source files under root without the header.
+// missingHeaders lists the source files under root without their header:
+// the AGPL's, or under art/ the art's.
 func missingHeaders(root string) ([]string, error) {
 	var missing []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
@@ -83,13 +89,18 @@ func missingHeaders(root string) ([]string, error) {
 		if !sourceExts[filepath.Ext(p)] {
 			return nil
 		}
-		ok, err := hasHeader(p)
+		rel, _ := filepath.Rel(root, p)
+		rel = filepath.ToSlash(rel)
+		want := header
+		if strings.HasPrefix(rel, artDir+"/") {
+			want = artHeader
+		}
+		ok, err := hasHeader(p, want)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			rel, _ := filepath.Rel(root, p)
-			missing = append(missing, filepath.ToSlash(rel))
+			missing = append(missing, rel)
 		}
 		return nil
 	})
@@ -97,7 +108,7 @@ func missingHeaders(root string) ([]string, error) {
 	return missing, err
 }
 
-func hasHeader(path string) (bool, error) {
+func hasHeader(path, header string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return false, err

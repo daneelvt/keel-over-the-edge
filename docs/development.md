@@ -78,9 +78,11 @@ Scan the first, follow the steps for your phone, then scan the second.
 
 ### Check it worked
 
-Scan the game's QR code. The page loads with no warning and the first line
+Scan the game's QR code: the sea and the Jolly boat load with no warning.
+Then open `/dev.html` at the same address, the developer page. Its first line
 reads **Secure context: HTTPS**. The rest of the list shows what the phone
-offers: WebGPU, the screen wake lock, passkeys and module workers. Under
+offers: WebGPU (and whether its adapter has WebGPU's core features or only
+compatibility mode), the screen wake lock, passkeys and module workers. Under
 **Physics**, the phone runs every golden scenario in the physics module and
 shows whether it got the same bits as the server, and how long a step takes.
 
@@ -93,8 +95,9 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request, every push to `main` | Go tests with the race detector on amd64 and arm64 (the physics tests also built with `GOAMD64=v3`), a short fuzz of the catalog decoder, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`), and the one command started and checked over HTTPS | `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
-| `pr.lint.yaml` | Pull requests, not drafts | gofmt, go vet, staticcheck, Biome, tsc | `go run ./tools/dev -lint` |
+| `ci.yaml` | Every pull request, every push to `main` | Go tests with the race detector on amd64 and arm64 (the physics tests also built with `GOAMD64=v3`), a short fuzz of the catalog decoder, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started and checked over HTTPS | `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
+| `pr.lint.yaml` | Pull requests, not drafts | gofmt, go vet, staticcheck, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
+| `pr.render.yaml` | Pull requests, not drafts | The test sea's fixtures current; the browser tests on Chromium, on WebGL 2 and, where the runner offers an adapter, WebGPU | `go run ./tools/testsea -check`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts | The licence header in every source file; licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
@@ -284,6 +287,92 @@ golden file, and copy the catalog's new values into `scenarios.json`'s
 - **The sail's side force from a beam reach aft** is not ORC's: there, an
   attached trim and a stalled one give nearly the same drive, and which is
   best decides the side force. Drive matches.
+
+## The scene
+
+The game's page, `/`, draws the sea and the Jolly boat, with an orbit camera
+for looking (drag, pinch, wheel). Nothing is sailed yet. The developer page
+is `/dev.html`. Query strings:
+
+| Query | What |
+|-------|------|
+| `?dev` | The developer panel (a lazy import, outside the first download): the test sea; the boat's position, speed and heading, along a straight line; a jump to the rim; camera presets; the back end; the render scale; the tile pass on or off; FXAA or SMAA; and the frame statistics (median and 90th-percentile frame time over 2 s, GPU time where the device has timestamps, draw calls, triangles) |
+| `?backend=webgl2` | The WebGL 2 back end, even where WebGPU is offered |
+| `?sea=gale` | The test sea: `calm`, `breeze`, `fresh` or `gale`; flat water without it |
+| `?view=bands` | A camera preset: `sea` and `bands` match the waves rendering's "Sea states" and "Two bands" views; `aboard`, `high` |
+| `?test` | The hooks the browser tests drive, on `window.keel` |
+
+### How it is drawn
+
+| File | What |
+|------|------|
+| `client/src/render/renderer.ts` | `WebGPURenderer` on WebGPU, on WebGL 2 otherwise; the render scale and output buffer by back end; a lost device or context makes a new renderer on a new canvas |
+| `client/src/render/stage.ts` | The camera, the frame, the post-processing (the output transform, then FXAA or SMAA) |
+| `client/src/render/coords.ts` | World (x east, y north, float64) to scene (x east, y up, z south); the floating origin, always on a tile centre, moved when the boat is 500 m from it |
+| `client/src/render/materials.ts` | **The material factory. Every material is made here**, so every one carries the dome's bend: the world drops by d²/2R from the boat, R = 2,500 m. The sky is the one kind without it. A browser test walks the scene and fails on any other material |
+| `client/src/ocean/hex.ts` | The lattice: hexagons 4 m across the flats, corners east and west, one centred on the disk's centre, named by axial (q, r); the field of 5,101 tiles within 150 m; the tile hash, the same on the GPU |
+| `client/src/ocean/phases.ts`, `wave.ts` | The boat band: 64 waves, their phases at the floating origin reduced in float64 on the CPU each frame, the sum on the GPU |
+| `client/src/ocean/tilepass.ts`, `tiles.ts` | Each tile's plane (height and slope at its centre, with the dome's drop and slope) computed once a frame into a float target, one texel per tile; every vertex of a tile reads the same texel, so the tile is a rigid flat slab. Without float render targets the vertex stage computes the same plane |
+| `client/src/ocean/seamaterial.ts`, `far.ts`, `client/src/render/sky.ts` | The sea's look (seams, bevels, tint, shimmer, Fresnel, sun, haze), the far sea out past the horizon, the sky |
+| `client/src/render/boat.ts` | Loads a boat's model from the catalog's art, replaces its materials with the factory's, shapes the sail on the GPU |
+
+### The test sea
+
+Until the physics package has its own boat band, the tiles move under a
+developer test sea: 64 waves for each of four sea states (6 knots over
+1.5 NM, 12 over 4, 20 over 6.5, 34 over 9), drawn from a JONSWAP spectrum.
+
+```sh
+go run ./tools/testsea          # write client/src/ocean/testsea/*.json
+go run ./tools/testsea -check   # fail if they are out of date
+```
+
+The draws are seeded and written to nine figures, so the files are the same
+on every machine. Never edit them by hand.
+
+## Art
+
+`art/` holds the game's models and the scripts that build them. It is art,
+all rights reserved and not covered by the AGPL (`art/README.md`); its source
+files carry `SPDX-License-Identifier: LicenseRef-All-Rights-Reserved`, and
+`tools/licences` checks that they do.
+
+A boat is a script that reads its dimensions from the catalog, so the model
+is the boat the physics sails:
+
+```sh
+go run ./tools/catalog   # after changing a boat's numbers
+cd client && npm run art # rebuild every boat's .glb (gltfpack, meshopt)
+```
+
+Commit the rebuilt `.glb`. `npm test` checks each model against the catalog:
+its named parts sit where the physics puts them, within 1 cm, and it is under
+15,000 triangles. A kind's `art.model` must name a file that exists
+(`go run ./tools/catalog -check`).
+
+## Browser tests
+
+`client/e2e` holds Playwright tests that run the scene in Chromium, on the
+WebGL 2 back end and on WebGPU where the browser offers an adapter (on Linux
+through SwiftShader; without an adapter the WebGPU tests are skipped). They
+read back what the GPU computed and check it against the same sums in
+float64: every tile a rigid plane with the exact hexagon's outline, the
+lattice fixed as the boat moves and the origin jumps, the tile hash, the
+scene walk, recovery from a lost device, the heap over 1,000 frames, and
+pictures against references.
+
+```sh
+cd client
+npx playwright install chromium   # once
+npx playwright test               # or PW_CHANNEL=chrome to use your installed Chrome
+```
+
+The reference pictures are kept per back end and platform in
+`client/e2e/pictures/<back end>-<platform>/`, and are changed only by hand,
+after looking at the new ones: `npx playwright test --update-snapshots`
+writes this machine's. CI runs on Linux; a failing picture test uploads the
+pictures it took (the `playwright` artifact of `pr.render`), and those are
+what to commit for `linux` once judged right.
 
 ## Commits
 

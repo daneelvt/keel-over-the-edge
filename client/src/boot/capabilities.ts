@@ -50,17 +50,26 @@ async function gpu(env: CapabilityEnv): Promise<Capability> {
     return { name, ok: false, detail: 'missing: WebGL 2 will be used' };
   }
   try {
-    const adapter = await env.requestGPUAdapter();
-    return adapter
-      ? { name, ok: true, detail: 'adapter found' }
-      : { name, ok: false, detail: 'no adapter: WebGL 2 will be used' };
+    const adapter = (await env.requestGPUAdapter()) as {
+      features?: { has(name: string): boolean };
+    } | null;
+    if (!adapter) {
+      return { name, ok: false, detail: 'no adapter: WebGL 2 will be used' };
+    }
+    // An adapter asked for at the compatibility level may offer only that.
+    const core = adapter.features?.has('core-features-and-limits') === true;
+    return {
+      name,
+      ok: true,
+      detail: core ? 'adapter found, core features' : 'adapter found, compatibility mode',
+    };
   } catch {
     return { name, ok: false, detail: 'adapter request failed: WebGL 2 will be used' };
   }
 }
 
 interface GPULike {
-  requestAdapter(): Promise<unknown>;
+  requestAdapter(options?: { featureLevel?: string }): Promise<unknown>;
 }
 
 /** The checks' inputs, read from this browser. */
@@ -68,7 +77,11 @@ export function browserEnv(): CapabilityEnv {
   const gpu = (navigator as Navigator & { gpu?: GPULike }).gpu;
   return {
     isSecureContext: globalThis.isSecureContext,
-    requestGPUAdapter: gpu ? () => gpu.requestAdapter() : undefined,
+    // As the renderer asks for it: the compatibility level, which phones
+    // without WebGPU's core features still offer.
+    requestGPUAdapter: gpu
+      ? () => gpu.requestAdapter({ featureLevel: 'compatibility' })
+      : undefined,
     hasWakeLock: 'wakeLock' in navigator,
     hasPublicKeyCredential: 'PublicKeyCredential' in globalThis,
     supportsModuleWorkers,

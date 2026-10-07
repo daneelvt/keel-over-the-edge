@@ -34,6 +34,7 @@
           { "context": "pr-licences", "integration_id": 15368 },
           { "context": "pr-lint", "integration_id": 15368 },
           { "context": "pr-physics", "integration_id": 15368 },
+          { "context": "pr-render", "integration_id": 15368 },
           { "context": "pr-secrets", "integration_id": 15368 }
         ]
       }

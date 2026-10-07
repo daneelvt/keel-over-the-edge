@@ -10,14 +10,20 @@ import (
 	"testing"
 )
 
-// validBoats is one boat, with the real Jolly boat's physics values.
+// validBoats is one boat, with the real Jolly boat's physics values. Its
+// model, testArt, is written by every fixture.
 var validBoats = `boats:
   - id: test-boat
     name: Test boat
     description: A boat for tests
     capacity: 2
     lengthOverall: 3.5
+    beam: 1.2
+    art:
+      model: boats/test-boat/model.glb
 ` + realPhysics()
+
+const testArt = "art/boats/test-boat/model.glb"
 
 // realPhysics returns the physics block of the real catalog's first boat.
 func realPhysics() string {
@@ -37,8 +43,8 @@ func realPhysics() string {
 	return s
 }
 
-// fixture makes a repository root holding the real schema and the given
-// files, relative to that root.
+// fixture makes a repository root holding the real schema, the test boat's
+// model and the given files, relative to that root.
 func fixture(t *testing.T, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -47,6 +53,9 @@ func fixture(t *testing.T, files map[string]string) string {
 		t.Fatal(err)
 	}
 	files[schemaPath] = string(schema)
+	if _, ok := files[testArt]; !ok {
+		files[testArt] = "glTF"
+	}
 	for p, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -136,9 +145,15 @@ func TestRejects(t *testing.T) {
 		},
 		{
 			name: "missing art",
-			files: map[string]string{"shared/catalog/boats.yaml": validBoats +
-				"    art:\n      model: boats/test-boat/model.glb\n"},
-			want: "art/boats/test-boat/model.glb does not exist",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"model: boats/test-boat/model.glb", "model: boats/missing.glb", 1)},
+			want: "art/boats/missing.glb does not exist",
+		},
+		{
+			name: "no art",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"    art:\n      model: boats/test-boat/model.glb\n", "", 1)},
+			want: "/boats/0: &{[art]}",
 		},
 		{
 			name: "id in code",
@@ -186,10 +201,10 @@ func TestIDsAllowedInTestsAndGeneratedFiles(t *testing.T) {
 
 func TestArtPresentAndUnreferenced(t *testing.T) {
 	root := fixture(t, map[string]string{
-		"shared/catalog/boats.yaml":     validBoats + "    art:\n      model: boats/test-boat/model.glb\n",
-		"art/boats/test-boat/model.glb": "glTF",
-		"art/boats/orphan.png":          "png",
-		"art/README.md":                 "readme",
+		"shared/catalog/boats.yaml": validBoats,
+		"art/boats/orphan.png":      "png",
+		"art/README.md":             "readme",
+		"art/boats/test/build.ts":   "// the model's script",
 	})
 	doc, err := readCatalog(root)
 	if err != nil {
@@ -208,6 +223,8 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
 	a := fixture(t, map[string]string{"shared/catalog/boats.yaml": validBoats})
 	reordered := `boats:
   - lengthOverall: 3.50
+    art: {model: boats/test-boat/model.glb}
+    beam: 1.20
     capacity: 2
     description: A boat for tests
     name: Test boat

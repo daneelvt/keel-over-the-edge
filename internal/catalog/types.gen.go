@@ -4,12 +4,15 @@
 
 package catalog
 
-// Paths of a kind's art files, relative to the repository's art/ folder.
-type Art map[string]string
+// Path of an art file, relative to the repository's art/ folder.
+type ArtPath string
 
 type Boat struct {
 	// Art corresponds to the JSON schema field "art".
-	Art Art `json:"art,omitempty,omitzero"`
+	Art BoatArt `json:"art"`
+
+	// Greatest width of the hull, in metres.
+	Beam float64 `json:"beam"`
 
 	// Most people aboard, the skipper included.
 	Capacity int `json:"capacity"`
@@ -28,6 +31,13 @@ type Boat struct {
 
 	// Physics corresponds to the JSON schema field "physics".
 	Physics BoatPhysics `json:"physics"`
+}
+
+// A boat's art. Every art object's values are paths under art/, checked to exist.
+type BoatArt struct {
+	// The boat's model: a glTF binary with the nodes hull, mast, boom, sail, rudder,
+	// tiller, daggerboard and sailor.
+	Model ArtPath `json:"model"`
 }
 
 // The boat's physics, in SI units with angles in degrees. Every value is required.
@@ -353,4 +363,4 @@ type PhysicsSailor struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "ff4cabb079595b69"
+const Version = "d6b3016ed56e9091"

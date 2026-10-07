@@ -33,6 +33,20 @@ describe('readCapabilities', () => {
     expect(all.every((c) => c.ok)).toBe(true);
   });
 
+  it('tells core features from compatibility mode', async () => {
+    const core = await check(
+      { requestGPUAdapter: async () => ({ features: new Set(['core-features-and-limits']) }) },
+      'WebGPU',
+    );
+    expect(core.detail).toBe('adapter found, core features');
+    const compat = await check(
+      { requestGPUAdapter: async () => ({ features: new Set() }) },
+      'WebGPU',
+    );
+    expect(compat.ok).toBe(true);
+    expect(compat.detail).toBe('adapter found, compatibility mode');
+  });
+
   it('flags a page not served over HTTPS', async () => {
     expect((await check({ isSecureContext: false }, 'Secure context')).ok).toBe(false);
   });
