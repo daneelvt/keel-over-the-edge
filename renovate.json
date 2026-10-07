@@ -1,0 +1,17 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", ":dependencyDashboard"],
+  "minimumReleaseAge": "3 days",
+  "vulnerabilityAlerts": { "enabled": false },
+  "platformCommit": "enabled",
+  "postUpdateOptions": ["gomodTidy"],
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
+  "packageRules": [
+    {
+      "description": "Node follows the LTS line in .nvmrc; a new major is a deliberate change.",
+      "matchDepNames": ["node"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}

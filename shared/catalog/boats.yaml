@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Boat types.
+boats:
+  - id: jolly-boat
+    name: Jolly boat
+    description: Single-handed dinghy
+    capacity: 1
+    lengthOverall: 4.2

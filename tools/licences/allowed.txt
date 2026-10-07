@@ -1,0 +1,10 @@
+# Licences allowed for code that ships in the game: the Go packages linked
+# into keel and the npm packages bundled into the client. Build, test and
+# development tools are not covered. One SPDX identifier per line.
+0BSD
+Apache-2.0
+BSD-2-Clause
+BSD-3-Clause
+ISC
+MIT
+Zlib

@@ -1,0 +1,6 @@
+[
+  { "method": "PUT", "path": "vulnerability-alerts", "expect_status": 204 },
+  { "method": "PUT", "path": "automated-security-fixes", "expect": { "enabled": true } },
+  { "method": "PUT", "path": "private-vulnerability-reporting", "expect": { "enabled": true } },
+  { "method": "PUT", "path": "immutable-releases", "expect": { "enabled": true } }
+]

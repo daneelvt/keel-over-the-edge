@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Player text is only ever inserted as text, so the DOM's HTML sinks are not
+// used anywhere in the client.
+or {
+  `$el.innerHTML = $v`,
+  `$el.outerHTML = $v`,
+  `$el.insertAdjacentHTML($p, $v)`,
+  `document.write($v)`,
+  `document.writeln($v)`
+} as $sink where {
+  register_diagnostic(span=$sink, message="HTML sinks are not used: insert text with textContent or build nodes.")
+}

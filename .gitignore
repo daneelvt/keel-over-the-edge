@@ -1,0 +1,11 @@
+# Client packages and build output
+node_modules/
+client/dist/
+
+# Local development state: certificates, built binaries (tools/dev)
+.dev/
+
+# Editors and systems
+.DS_Store
+.idea/
+.vscode/
