@@ -10,24 +10,45 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"runtime"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
+	"github.com/daneelvt/keel-over-the-edge/internal/obs"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/replay"
+	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 )
 
 // shutdownTimeout bounds how long a stopping server waits for requests in
 // flight.
 const shutdownTimeout = 10 * time.Second
 
+const serveUsage = `usage: keel serve
+
+Configured from the environment:
+  KEEL_PLAY_ORIGIN     the players' HTTPS origin (required)
+  KEEL_PLAY_ADDR       the game's listener (default 127.0.0.1:8080)
+  KEEL_AGENTS_ADDR     the AI agents' listener (default 127.0.0.1:8081)
+  KEEL_INTERNAL_ADDR   probes, metrics, profiles (default 127.0.0.1:9090)
+  KEEL_LOG_LEVEL       debug, info, warn or error (default info)
+  KEEL_TRACE_DIR       where traces of overrunning ticks go (default none)
+  KEEL_REPLAY_DIR      where the input log goes (default memory only)
+  KEEL_DEV_SAILORS     scripted sailors to sail (default 0)
+`
+
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fs.Usage = func() {
-		io.WriteString(stderr, "usage: keel serve\n\nConfigured from the environment: KEEL_PLAY_ADDR, KEEL_PLAY_ORIGIN.\n")
-	}
+	fs.Usage = func() { io.WriteString(stderr, serveUsage) }
 	if err := fs.Parse(args); err != nil {
 		return errUsage
 	}
@@ -35,59 +56,235 @@ func serve(ctx context.Context, args []string, getenv func(string) string, stdou
 		fs.Usage()
 		return errUsage
 	}
+	return runServer(ctx, getenv, stdout, serveOptions{
+		listen:  net.Listen,
+		flight:  true,
+		epoch:   loop.Epoch,
+		workers: runtime.GOMAXPROCS(0),
+	})
+}
 
-	log := slog.New(slog.NewJSONHandler(stdout, nil))
+// serveOptions are what tests change about a server.
+type serveOptions struct {
+	listen  func(network, addr string) (net.Listener, error)
+	flight  bool // start the runtime's flight recorder: one per process
+	epoch   time.Time
+	workers int
+	// afterTick runs after each tick, within it.
+	afterTick func(tick int64)
+	// stopping runs as the server begins to stop, once it is no longer
+	// ready.
+	stopping func()
+}
+
+// runServer runs the game until ctx ends, then stops it in order.
+//
+// It starts the internal listener first and stops it last, so the process
+// can be observed throughout; then the world and its tick loop; then the
+// public listeners; and only then is it ready. It stops in reverse: not
+// ready, the public listeners shut down, the loop finishes its tick, the
+// input log is flushed, the flight recorder stops, and the internal listener
+// goes last. The loop, its workers and the input log's writer do not recover
+// from panics: a bug there stops the process.
+func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer, opt serveOptions) error {
 	cfg, err := config.Load(getenv)
 	if err != nil {
 		return err
 	}
+	build := buildID()
+	log := obs.NewLogger(stdout, cfg.LogLevel, build)
+	health := obs.NewHealth()
+	metrics := obs.NewMetrics(build, catalog.Version)
+	log.Info("starting", "catalog", catalog.Version)
+
+	// The internal listener, at once: /livez answers while the rest starts.
+	internalLn, err := opt.listen("tcp", cfg.InternalAddr)
+	if err != nil {
+		return err
+	}
+	var flight *obs.Flight
+	var flightHandler http.Handler
+	if opt.flight {
+		flight = obs.NewFlight(cfg.TraceDir, log, metrics)
+		if err := flight.Start(); err != nil {
+			log.Warn("the flight recorder did not start", "err", err)
+			flight = nil
+		} else {
+			flightHandler = flight
+		}
+	}
+	replayHandler := &lateHandler{}
+	internal := newServer(obs.Internal(health, metrics, flightHandler, replayHandler), log)
+	internalDone := make(chan error, 1)
+	go func() { internalDone <- serveUntilClosed(internal, internalLn) }()
+	log.Info("listening", "listener", "internal", "addr", internalLn.Addr().String())
+	health.Beat()
+
+	// The catalog and the world.
 	cat, err := catalog.Load()
 	if err != nil {
-		return err
+		return stopEarly(internal, internalDone, flight, err)
 	}
-	version := api.Version{Build: buildID(), Catalog: catalog.Version}
-	log.Info("starting", "build", version.Build, "catalog", version.Catalog, "boats", len(cat.Boats))
-
-	ln, err := net.Listen("tcp", cfg.PlayAddr)
+	kinds := make([]physics.Prepared, len(cat.Boats))
+	for i := range cat.Boats {
+		p := catalog.PhysicsParams(&cat.Boats[i])
+		physics.Prepare(&p, &kinds[i])
+	}
+	world, err := sim.New(sim.Config{Kinds: kinds, Workers: opt.workers, Tick: loop.TickAt(time.Now(), opt.epoch)})
 	if err != nil {
-		return err
+		return stopEarly(internal, internalDone, flight, err)
 	}
-	return servePlay(ctx, ln, api.Handler(version), log)
+	defer world.Close()
+	b := world.Bus()
+	inputs := replay.New(replay.Config{
+		Frames: b.Frames,
+		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: opt.epoch},
+		Dir:    cfg.ReplayDir,
+		Log:    log,
+	})
+	world.Record(inputs)
+	replayHandler.set(inputs)
+	metrics.CounterFunc("keel_sim_commands_refused_total", "Commands refused because the queue was full.", b.Commands.Refused)
+	metrics.CounterFunc("keel_sim_frames_allocated_total", "Frames made because every frame in the pool was in use.", b.Frames.Allocated)
+	metrics.CounterFunc("keel_replay_bytes_total", "Bytes recorded in the input log.", inputs.Bytes)
+	metrics.CounterFunc("keel_replay_segments_total", "Segments started in the input log.", inputs.Segments)
+	metrics.CounterFunc("keel_replay_records_dropped_total", "Input log records lost because its writer was behind.", inputs.Dropped)
+	lcfg := loop.Config{World: world, Epoch: opt.epoch, Log: log, Metrics: metrics, Health: health, AfterTick: opt.afterTick}
+	if flight != nil {
+		lcfg.Overrun = flight.Overrun
+	}
+	tickLoop := loop.New(lcfg)
+	log.Info("world ready", "kinds", len(kinds), "capacity", world.Capacity(), "workers", opt.workers, "tick", world.Now())
+	health.Beat()
+
+	play := newServer(obs.AccessLog(log, api.Handler(api.Version{Build: build, Catalog: catalog.Version})), log)
+	agents := newServer(obs.AccessLog(log, api.Agents()), log)
+
+	g, gctx := errgroup.WithContext(ctx)
+	loopCtx, stopLoop := context.WithCancel(context.Background())
+	sailorsCtx, stopSailors := context.WithCancel(context.Background())
+	flightCtx, stopFlight := context.WithCancel(context.Background())
+	defer stopLoop()
+	defer stopSailors()
+	defer stopFlight()
+	loopDone := make(chan struct{})
+	inputsDone := make(chan struct{})
+	sailorsDone := make(chan struct{})
+
+	g.Go(func() error {
+		defer close(inputsDone)
+		return inputs.Run()
+	})
+	g.Go(func() error {
+		defer close(loopDone)
+		return tickLoop.Run(loopCtx)
+	})
+	if flight != nil {
+		g.Go(func() error {
+			flight.Run(flightCtx)
+			return nil
+		})
+	}
+	g.Go(func() error {
+		defer close(sailorsDone)
+		if cfg.DevSailors == 0 {
+			return nil
+		}
+		return scripted.Run(sailorsCtx, scripted.Config{N: cfg.DevSailors, Bus: b, Seed: uint64(time.Now().UnixNano()), Log: log})
+	})
+	// The public listeners, once the world is ticking.
+	g.Go(func() error {
+		for _, l := range []struct {
+			name, addr string
+			srv        *http.Server
+		}{{"play", cfg.PlayAddr, play}, {"agents", cfg.AgentsAddr, agents}} {
+			ln, err := opt.listen("tcp", l.addr)
+			if err != nil {
+				return err
+			}
+			g.Go(func() error { return serveUntilClosed(l.srv, ln) })
+			log.Info("listening", "listener", l.name, "addr", ln.Addr().String())
+		}
+		health.Listening(true)
+		health.Beat()
+		log.Info("ready")
+		return nil
+	})
+	// Stopping, on a signal or the first failure.
+	g.Go(func() error {
+		<-gctx.Done()
+		health.Stopping()
+		log.Info("stopping")
+		if opt.stopping != nil {
+			opt.stopping()
+		}
+		sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		errs := []error{play.Shutdown(sctx), agents.Shutdown(sctx)}
+		health.Listening(false)
+		stopSailors()
+		<-sailorsDone
+		stopLoop()
+		<-loopDone
+		inputs.Close()
+		<-inputsDone
+		stopFlight()
+		if flight != nil {
+			flight.Stop()
+		}
+		errs = append(errs, internal.Shutdown(sctx), <-internalDone)
+		return errors.Join(errs...)
+	})
+	err = g.Wait()
+	log.Info("stopped", "tick", world.Now())
+	return err
 }
 
-// servePlay serves the game's routes on ln until ctx ends, then shuts down,
-// letting requests in flight finish.
-//
-// Only ReadHeaderTimeout and IdleTimeout are set: ReadTimeout and
-// WriteTimeout would also cut off long-lived connections such as WebSockets.
-// Routes that need deadlines set their own.
-func servePlay(ctx context.Context, ln net.Listener, h http.Handler, log *slog.Logger) error {
-	srv := &http.Server{
+// stopEarly stops what has started when starting fails.
+func stopEarly(internal *http.Server, done <-chan error, flight *obs.Flight, err error) error {
+	if flight != nil {
+		flight.Stop()
+	}
+	internal.Close()
+	<-done
+	return err
+}
+
+// newServer makes an HTTP server. Only ReadHeaderTimeout and IdleTimeout
+// are set: ReadTimeout and WriteTimeout would also cut off long-lived
+// connections such as WebSockets. Routes that need deadlines set their own.
+func newServer(h http.Handler, log *slog.Logger) *http.Server {
+	return &http.Server{
 		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    16 << 10,
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
-	errc := make(chan error, 1)
-	go func() { errc <- srv.Serve(ln) }()
-	log.Info("listening", "addr", ln.Addr().String())
+}
 
-	select {
-	case err := <-errc:
-		return err
-	case <-ctx.Done():
-	}
-	log.Info("stopping")
-	sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-	if err := srv.Shutdown(sctx); err != nil {
+// serveUntilClosed serves ln until the server is shut down.
+func serveUntilClosed(srv *http.Server, ln net.Listener) error {
+	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
-	if err := <-errc; !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	log.Info("stopped")
 	return nil
+}
+
+// lateHandler answers 503 until it is given its handler.
+type lateHandler struct {
+	h atomic.Pointer[http.Handler]
+}
+
+func (l *lateHandler) set(h http.Handler) { l.h.Store(&h) }
+
+func (l *lateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h := l.h.Load()
+	if h == nil {
+		http.Error(w, "starting", http.StatusServiceUnavailable)
+		return
+	}
+	(*h).ServeHTTP(w, r)
 }
 
 // buildID is the VCS revision the binary was built from, with "-dirty" when

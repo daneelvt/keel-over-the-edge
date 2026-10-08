@@ -55,7 +55,8 @@ jobs:
               - 'tools/licences/allowed.txt'
 
   # The Go tests on both machines the server is built for, so the physics
-  # golden tests show amd64 and arm64 agree bit for bit.
+  # golden tests and the simulation's committed replay show amd64 and arm64
+  # agree bit for bit.
   go:
     name: go (${{ matrix.runner }})
     strategy:
@@ -75,14 +76,19 @@ jobs:
         with:
           node: "false"
       - run: go test -race ./...
-      - name: The physics tests again, built for amd64 with fused multiply-add available
+      - name: The physics and simulation tests again, built for amd64 with fused multiply-add available
         if: runner.arch == 'X64'
         env:
           GOAMD64: v3
-        run: go test -count=1 ./internal/physics
+        run: go test -count=1 ./internal/physics ./internal/sim
+      - name: The tick and the physics workers, timed (a smoke test; the numbers are in the log)
+        run: go test -run '^$' -bench 'Tick|Workers' -benchtime 100x ./internal/sim
       - name: Fuzz the catalog decoder
         if: runner.arch == 'X64'
         run: go test -run '^$' -fuzz FuzzParse -fuzztime 30s ./internal/catalog
+      - name: Fuzz the input log's reader
+        if: runner.arch == 'X64'
+        run: go test -run '^$' -fuzz FuzzRead -fuzztime 30s ./internal/replay
 
   client:
     name: client

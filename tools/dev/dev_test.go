@@ -140,3 +140,27 @@ func TestProcExitIsReported(t *testing.T) {
 		t.Fatalf("output %q", out.String())
 	}
 }
+
+func TestPruneOlder(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	for name, age := range map[string]time.Duration{"old.log": 2 * time.Hour, "new.log": time.Minute} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, now.Add(-age), now.Add(-age)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pruneOlder(dir, time.Hour, now); err != nil {
+		t.Fatal(err)
+	}
+	names, _ := filepath.Glob(filepath.Join(dir, "*"))
+	if len(names) != 1 || filepath.Base(names[0]) != "new.log" {
+		t.Fatalf("left %v", names)
+	}
+	if err := pruneOlder(filepath.Join(dir, "none"), time.Hour, now); err != nil {
+		t.Fatalf("a missing folder: %v", err)
+	}
+}
