@@ -41,19 +41,31 @@ type session struct {
 	log  *Log
 	done chan error
 	rng  *rand.Rand
-	next uint64 // the next account to join
+	next uint64 // the next account to join, and its connection
 }
+
+// account is a test's account n.
+func account(n uint64) bus.Account {
+	var a bus.Account
+	for k := range 8 {
+		a[15-k] = byte(n >> (8 * k))
+	}
+	return a
+}
+
+// testGrace is the sessions' grace: short, so boats' graces end in a test.
+const testGrace = 120
 
 func newSession(t testing.TB, dir string, run bool) *session {
 	t.Helper()
-	w, err := sim.New(sim.Config{Capacity: testCapacity, Kinds: kinds(t), Workers: 2, Tick: 1000})
+	w, err := sim.New(sim.Config{Capacity: testCapacity, Kinds: kinds(t), Workers: 2, Tick: 1000, Grace: testGrace})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(w.Close)
 	l := New(Config{
 		Frames: w.Bus().Frames,
-		Header: Header{Build: "test", Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: testCapacity, Epoch: time.Unix(1767225600, 0)},
+		Header: Header{Build: "test", Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: testCapacity, Epoch: time.Unix(1767225600, 0), Grace: testGrace},
 		Dir:    dir,
 		Log:    slog.New(slog.DiscardHandler),
 		Now:    func() time.Time { return time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC) },
@@ -68,15 +80,24 @@ func newSession(t testing.TB, dir string, run bool) *session {
 
 func (s *session) start() { go func() { s.done <- s.log.Run() }() }
 
-// sail runs ticks with sailors joining, leaving, steering and trimming, the
-// wind changing and a boat placed now and then.
+// sail runs ticks with sailors joining, leaving, disconnecting (their boats
+// leaving when their grace ends, unless they join again), steering and
+// trimming, the wind changing and a boat placed now and then.
 func (s *session) sail(ticks int) {
 	q := s.w.Bus().Commands.Developer()
 	for range ticks {
 		f := s.w.Latest()
 		switch r := s.rng.IntN(100); {
 		case r < 4 && len(f.Live) < testCapacity-4:
-			q.TrySend(bus.Command{Op: bus.Join, Account: s.next})
+			q.TrySend(bus.Command{Op: bus.Join, Account: account(s.next), Conn: s.next})
+			s.next++
+		case r < 5 && len(f.Live) > 0 && s.rng.IntN(2) == 0:
+			sl := f.Live[s.rng.IntN(len(f.Live))]
+			q.TrySend(bus.Command{Op: bus.Disconnect, Boat: f.Boat[sl], Conn: f.Conn[sl]})
+		case r < 5 && len(f.Live) > 0 && s.rng.IntN(2) == 0:
+			// A sailor back on a new connection.
+			sl := f.Live[s.rng.IntN(len(f.Live))]
+			q.TrySend(bus.Command{Op: bus.Join, Account: f.Owner[sl], Conn: s.next})
 			s.next++
 		case r < 5 && len(f.Live) > 0:
 			q.TrySend(bus.Command{Op: bus.Leave, Boat: f.Boat[f.Live[s.rng.IntN(len(f.Live))]]})
@@ -125,19 +146,26 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if f.Header.Build != "test" || f.Header.Catalog != catalog.Version || f.Header.Layout != physics.LayoutVersion ||
-		f.Header.Capacity != testCapacity || !f.Header.Epoch.Equal(time.Unix(1767225600, 0)) {
+		f.Header.Capacity != testCapacity || !f.Header.Epoch.Equal(time.Unix(1767225600, 0)) || f.Header.Grace != testGrace {
 		t.Fatalf("header %+v", f.Header)
 	}
 	if len(f.Segments) != 3 || f.Segments[0].Tick != 1001 || f.Segments[1].Tick != 1800 || f.Segments[2].Tick != 2700 {
 		t.Fatalf("%d segments", len(f.Segments))
 	}
 	var ticks, digests, events int
+	results := map[bus.Result]int{}
 	for _, seg := range f.Segments {
 		for _, r := range seg.Records {
 			switch r.Kind {
 			case kindTick:
 				ticks++
 				events += len(r.Events)
+				for _, e := range r.Events {
+					results[e.Reply.Result]++
+					if e.Reply.Tick != r.Tick {
+						t.Fatalf("an event of tick %d read as of tick %d", r.Tick, e.Reply.Tick)
+					}
+				}
 			case kindDigest:
 				digests++
 			}
@@ -145,6 +173,10 @@ func TestRoundTrip(t *testing.T) {
 	}
 	if ticks == 0 || digests < 60 || events == 0 {
 		t.Fatalf("%d tick records, %d events, %d digests", ticks, events, digests)
+	}
+	// Graces began, ended, and were cut short by a sailor's return.
+	if results[bus.Expired] == 0 || results[bus.Rejoined] == 0 || results[bus.Done] == 0 {
+		t.Fatalf("results %v", results)
 	}
 	res := replayed(t, data, 1)
 	if res.Diverged != nil {

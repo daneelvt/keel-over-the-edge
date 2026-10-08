@@ -23,13 +23,15 @@ type Frame struct {
 	Wind     Wind   // the one wind every boat sails in
 	NextBoat uint64 // the next boat's ID: IDs are never reused within a run
 
-	Live     []int32  // occupied slots, ascending
-	Occupied []bool   // per slot
-	Gen      []uint16 // per slot: how many times it has been freed, modulo GenMask + 1
-	Boat     []uint64 // per slot: the boat's ID
-	Owner    []uint64 // per slot: the account sailing it
-	Kind     []uint16 // per slot: the boat's kind, an index into the world's kinds
-	Control  []Word   // per slot: the controls in force
+	Live     []int32   // occupied slots, ascending
+	Occupied []bool    // per slot
+	Gen      []uint16  // per slot: how many times it has been freed, modulo GenMask + 1
+	Boat     []uint64  // per slot: the boat's ID
+	Owner    []Account // per slot: the account sailing it
+	Conn     []uint64  // per slot: the connection sailing it, 0 for none
+	Grace    []int64   // per slot: the tick at which a disconnected boat leaves, 0 while connected
+	Kind     []uint16  // per slot: the boat's kind, an index into the world's kinds
+	Control  []Word    // per slot: the controls in force
 	State    []physics.State
 
 	// What the tick applied, in the order it applied it: the input log
@@ -58,7 +60,9 @@ func NewFrame(capacity int) *Frame {
 		Occupied: make([]bool, capacity),
 		Gen:      make([]uint16, capacity),
 		Boat:     make([]uint64, capacity),
-		Owner:    make([]uint64, capacity),
+		Owner:    make([]Account, capacity),
+		Conn:     make([]uint64, capacity),
+		Grace:    make([]int64, capacity),
 		Kind:     make([]uint16, capacity),
 		Control:  make([]Word, capacity),
 		State:    make([]physics.State, capacity),

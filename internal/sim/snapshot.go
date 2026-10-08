@@ -23,9 +23,11 @@ import (
 //	generations             uvarint n, then n × (slot, generation) uvarints, slots ascending, none zero
 //	boats                   uvarint n, then n × the boat below, slots ascending
 //
-// and each boat is its slot, ID, owner and kind as uvarints, its control
-// word in 8 bytes, and its state's fields in 8 bytes each.
-const snapshotVersion = 1
+// and each boat is its slot and ID as uvarints, its owner's 16 bytes, its
+// connection as a uvarint, the tick its grace ends as a varint, its kind as a
+// uvarint, its control word in 8 bytes, and its state's fields in 8 bytes
+// each.
+const snapshotVersion = 2
 
 // AppendSnapshot appends f's snapshot to dst.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
@@ -52,7 +54,9 @@ func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 	for _, s := range f.Live {
 		dst = binary.AppendUvarint(dst, uint64(s))
 		dst = binary.AppendUvarint(dst, f.Boat[s])
-		dst = binary.AppendUvarint(dst, f.Owner[s])
+		dst = append(dst, f.Owner[s][:]...)
+		dst = binary.AppendUvarint(dst, f.Conn[s])
+		dst = binary.AppendVarint(dst, f.Grace[s])
 		dst = binary.AppendUvarint(dst, uint64(f.Kind[s]))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Control[s]))
 		for _, v := range StateFields(&f.State[s]) {
@@ -110,18 +114,22 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 	last = -1
 	for range n {
 		s := r.uvarint()
-		boat, owner, kind := r.uvarint(), r.uvarint(), r.uvarint()
+		boat := r.uvarint()
+		var owner bus.Account
+		r.bytes(owner[:])
+		conn, grace, kind := r.uvarint(), r.varint(), r.uvarint()
 		word := bus.Word(r.u64())
 		if r.err != nil {
 			return r.err
 		}
-		if int64(s) <= last || s >= capacity || kind > math.MaxUint16 || boat >= nextBoat {
+		if int64(s) <= last || s >= capacity || kind > math.MaxUint16 || boat >= nextBoat || grace < 0 {
 			return fmt.Errorf("sim: snapshot: boat %d in slot %d", boat, s)
 		}
 		last = int64(s)
 		f.Live = append(f.Live, int32(s))
 		f.Occupied[s] = true
 		f.Boat[s], f.Owner[s], f.Kind[s], f.Control[s] = boat, owner, uint16(kind), word
+		f.Conn[s], f.Grace[s] = conn, grace
 		for _, v := range StateFields(&f.State[s]) {
 			*v = r.f64()
 		}
@@ -183,6 +191,19 @@ func (r *reader) u64() uint64 {
 }
 
 func (r *reader) f64() float64 { return math.Float64frombits(r.u64()) }
+
+// bytes fills b from the snapshot.
+func (r *reader) bytes(b []byte) {
+	if r.err != nil {
+		return
+	}
+	if len(r.b) < len(b) {
+		r.err = errShort
+		return
+	}
+	copy(b, r.b)
+	r.b = r.b[len(b):]
+}
 
 // count reads a count of at most limit.
 func (r *reader) count(limit uint64) uint64 {

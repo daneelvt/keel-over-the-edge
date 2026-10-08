@@ -132,7 +132,9 @@ type dumpedBoat struct {
 	Slot       int32            `json:"slot"`
 	Boat       uint64           `json:"boat"`
 	Generation uint16           `json:"generation"`
-	Owner      uint64           `json:"owner"`
+	Owner      string           `json:"owner"`
+	Connection uint64           `json:"connection"`
+	Grace      int64            `json:"grace"`
 	Kind       uint16           `json:"kind"`
 	Control    dumpedControl    `json:"control"`
 	State      map[string]exact `json:"state"`
@@ -156,7 +158,8 @@ func writeDump(w io.Writer, f *bus.Frame) error {
 	for _, s := range f.Live {
 		c := f.Control[s]
 		b := dumpedBoat{
-			Slot: s, Boat: f.Boat[s], Generation: f.Gen[s], Owner: f.Owner[s], Kind: f.Kind[s],
+			Slot: s, Boat: f.Boat[s], Generation: f.Gen[s], Owner: f.Owner[s].String(),
+			Connection: f.Conn[s], Grace: f.Grace[s], Kind: f.Kind[s],
 			Control: dumpedControl{Word: fmt.Sprintf("%#016x", uint64(c)), Seq: c.Seq(), Helm: exact(c.Helm()), Sheet: exact(c.Sheet())},
 			State:   map[string]exact{},
 		}

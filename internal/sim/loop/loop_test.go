@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"math/rand/v2"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -122,6 +123,60 @@ func TestTenMinutes(t *testing.T) {
 			t.Errorf("not live: %s", why)
 		}
 		h.stop(t)
+	})
+}
+
+// TestWorldTime: world time is each tick's time at its deadline and grows
+// with the monotonic clock between, and a step of the wall clock after the
+// loop has started moves neither it nor the ticks.
+func TestWorldTime(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		w, err := sim.New(sim.Config{Capacity: 8, Kinds: kinds(t), Workers: 1, Tick: TickAt(time.Now(), bubbleEpoch)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer w.Close()
+		var step atomic.Int64 // how far the wall clock has been stepped, ns
+		var l *Loop
+		var mismatched []int64
+		l = New(Config{
+			World: w, Epoch: bubbleEpoch, Log: slog.New(slog.DiscardHandler),
+			Wall: func() time.Time { return time.Now().Add(time.Duration(step.Load())) },
+			AfterTick: func(tick int64) {
+				if wt, ok := l.WorldTime(); !ok || wt != TimeOf(tick, bubbleEpoch).Sub(bubbleEpoch) {
+					mismatched = append(mismatched, tick)
+				}
+			},
+		})
+		if _, ok := l.WorldTime(); ok {
+			t.Fatal("world time before the loop started")
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error, 1)
+		go func() { done <- l.Run(ctx) }()
+		check := func(when string) {
+			t.Helper()
+			synctest.Wait()
+			wt, ok := l.WorldTime()
+			if want := time.Since(bubbleEpoch); !ok || wt != want {
+				t.Errorf("%s: world time %v, want %v", when, wt, want)
+			}
+		}
+		time.Sleep(2 * time.Second)
+		check("on a tick")
+		time.Sleep(10 * time.Millisecond)
+		check("between ticks")
+		step.Store(int64(time.Hour))
+		time.Sleep(3*time.Second + 7*time.Millisecond)
+		check("after the wall clock stepped")
+		if got := w.Now(); got != TickAt(time.Now(), bubbleEpoch) {
+			t.Errorf("the world is at tick %d, want %d", got, TickAt(time.Now(), bubbleEpoch))
+		}
+		cancel()
+		<-done
+		if len(mismatched) > 0 {
+			t.Fatalf("world time differs from the tick's time at ticks %v", mismatched)
+		}
 	})
 }
 

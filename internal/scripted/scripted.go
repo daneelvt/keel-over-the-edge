@@ -25,9 +25,16 @@ const (
 	sheetStep   = 96
 )
 
-// FirstAccount is the first scripted sailor's account; the rest follow. It
-// is far from any account a player could have.
-const FirstAccount = 1 << 62
+// Account is scripted sailor i's account: ffffffff-ffff-7fff-bfff- and i in
+// the last 48 bits. Players' accounts are UUIDs of version 7, whose first 48
+// bits are the time they were made: these would be made in the year 10889.
+func Account(i int) bus.Account {
+	a := bus.Account{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0xff, 0xbf, 0xff}
+	for k := range 6 {
+		a[15-k] = byte(uint64(i) >> (8 * k))
+	}
+	return a
+}
 
 // Config sets up scripted sailors.
 type Config struct {
@@ -42,14 +49,13 @@ type sailor struct {
 	slot        int32
 	gen         uint16
 	helm, sheet int
-	seq         uint32
 	next        time.Time
 	rng         *rand.Rand
 }
 
 // Run joins cfg.N sailors and sails them until ctx ends. It returns once
 // every sailor has joined or been refused and ctx has ended; it never
-// leaves their boats.
+// leaves their boats, and they have no connection to lose.
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.Min == 0 {
 		cfg.Min = MinInterval
@@ -84,10 +90,14 @@ func Run(ctx context.Context, cfg Config) error {
 		case <-timer.C:
 		}
 		now := time.Now()
+		// Each word is stamped for the next tick, so it is applied then.
+		f := cfg.Bus.Frames.Acquire()
+		seq := uint32(f.Tick + 1)
+		f.Release()
 		for !q[0].next.After(now) {
 			s := q[0]
 			s.move()
-			controls.Store(s.slot, bus.Pack(s.seq, uint16(s.helm), uint16(s.sheet), s.gen))
+			controls.Store(s.slot, bus.Pack(seq, uint16(s.helm), uint16(s.sheet), s.gen))
 			s.next = s.next.Add(cfg.Min + time.Duration(s.rng.Int64N(int64(cfg.Max-cfg.Min))))
 			heap.Fix(&q, 0)
 		}
@@ -97,7 +107,6 @@ func Run(ctx context.Context, cfg Config) error {
 
 // move takes a step of the sailor's random walk.
 func (s *sailor) move() {
-	s.seq++
 	s.helm = clamp(s.helm+s.rng.IntN(2*helmStep+1)-helmStep, 0, bus.Steps)
 	s.sheet = clamp(s.sheet+s.rng.IntN(2*sheetStep+1)-sheetStep, 0, bus.Steps)
 }
@@ -112,7 +121,7 @@ func join(ctx context.Context, cfg Config) ([]sailor, error) {
 	for i := range replies {
 		replies[i] = make(chan bus.Reply, 1)
 		for {
-			err := sender.TrySend(bus.Command{Op: bus.Join, Account: FirstAccount + uint64(i), Reply: replies[i]})
+			err := sender.TrySend(bus.Command{Op: bus.Join, Account: Account(i), Reply: replies[i]})
 			if err == nil {
 				break
 			}

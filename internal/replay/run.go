@@ -50,7 +50,7 @@ func Run(f *File, opt Options) (Result, error) {
 	if len(f.Segments) == 0 {
 		return res, errors.New("replay: the log has no segment")
 	}
-	w, err := sim.New(sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, Workers: opt.Workers})
+	w, err := sim.New(sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, Workers: opt.Workers, Grace: f.Header.Grace})
 	if err != nil {
 		return res, err
 	}

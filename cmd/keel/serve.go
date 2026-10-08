@@ -202,7 +202,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	b := world.Bus()
 	inputs := replay.New(replay.Config{
 		Frames: b.Frames,
-		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch},
+		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch, Grace: world.Grace()},
 		Dir:    cfg.ReplayDir,
 		Log:    log,
 	})

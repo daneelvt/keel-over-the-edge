@@ -89,7 +89,7 @@ func TestTrySendBusy(t *testing.T) {
 	q := NewQueue()
 	s := q.Players()
 	for i := range QueueSize {
-		if err := s.TrySend(Command{Op: Join, Account: uint64(i)}); err != nil {
+		if err := s.TrySend(Command{Op: Join, Conn: uint64(i)}); err != nil {
 			t.Fatalf("command %d: %v", i, err)
 		}
 	}
@@ -106,7 +106,7 @@ func TestTrySendBusy(t *testing.T) {
 	if q.Refused() != 1 {
 		t.Fatalf("refused %d", q.Refused())
 	}
-	if c, ok := q.Receive(); !ok || c.Account != 0 {
+	if c, ok := q.Receive(); !ok || c.Conn != 0 {
 		t.Fatalf("Receive gave %+v, %v", c, ok)
 	}
 }
@@ -121,7 +121,7 @@ func TestDeveloperCommands(t *testing.T) {
 			t.Errorf("a developer's %s: %v", op, err)
 		}
 	}
-	for _, op := range []Op{Join, Leave} {
+	for _, op := range []Op{Join, Leave, Disconnect} {
 		if err := q.Players().TrySend(Command{Op: op}); err != nil {
 			t.Errorf("a player's %s: %v", op, err)
 		}
@@ -131,6 +131,37 @@ func TestDeveloperCommands(t *testing.T) {
 	}
 	if _, ok := q.Receive(); !ok {
 		t.Fatal("nothing queued")
+	}
+}
+
+// TestDue holds a word for its tick, but not when it is late or too far
+// ahead, and across the wrap of the low 32 bits.
+func TestDue(t *testing.T) {
+	for _, tc := range []struct {
+		seq  uint32
+		tick int64
+		want bool
+	}{
+		{100, 100, true},             // its tick
+		{100, 101, true},             // late
+		{100, 99, false},             // a tick ahead
+		{100, 100 - MaxAhead, false}, // as far ahead as held
+		{100, 99 - MaxAhead, true},   // further: at once
+		{0, 1 << 40, true},           // a word of tick 2⁴⁰, its tick
+		{5, 1<<32 - 3, false},        // 8 ticks ahead, across the wrap
+		{1<<32 - 3, 1<<32 + 5, true}, // 8 ticks late, across the wrap
+		{2, 1<<33 + 1, false},        // the high bits are ignored
+	} {
+		if got := Due(tc.seq, tc.tick); got != tc.want {
+			t.Errorf("Due(%d, %d) = %v", tc.seq, tc.tick, got)
+		}
+	}
+}
+
+func TestAccountString(t *testing.T) {
+	a := Account{0x01, 0x99, 0xc2, 0xa4, 0x5f, 0x7e, 0x7c, 0x3a, 0x9d, 0x0e, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}
+	if got := a.String(); got != "0199c2a4-5f7e-7c3a-9d0e-123456789abc" {
+		t.Fatal(got)
 	}
 }
 
