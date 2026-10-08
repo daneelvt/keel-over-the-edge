@@ -275,8 +275,9 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
   page,
 }) => {
   // What the heap keeps does not depend on the picture's size, and a small
-  // one keeps SwiftShader's CPU rendering inside the time.
-  test.setTimeout(300_000);
+  // one keeps SwiftShader's CPU rendering inside the time; on CI's WebGPU
+  // adapter, through SwiftShader, 1,800 frames still take minutes.
+  test.setTimeout(540_000);
   await page.setViewportSize({ width: 320, height: 200 });
   await openScene(page, 'sea=gale');
   const cdp = await page.context().newCDPSession(page);
@@ -290,14 +291,14 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
     k.settings({ windOverlay: true, forcesOverlay: true });
     k.script('wiggle');
     k.thaw();
-    // The first thousand frames fill caches once (shaders' uniforms, the
-    // interface's first renders); after them the heap stays put.
-    await k.frames(1000);
+    // The first 800 frames grow the heap once, by about 1 MB, as the hot
+    // paths are compiled and caches fill; after them it stays put.
+    await k.frames(800);
   });
   const before = await used();
   await page.evaluate(() => globalThis.keel.frames(1000));
   const after = await used();
   const steps = await page.evaluate(() => globalThis.keel.boat().steps);
-  expect(steps).toBeGreaterThan(3000 + 600);
+  expect(steps).toBeGreaterThan(3000 + 500);
   expect(after - before).toBeLessThan(256 * 1024);
 });
