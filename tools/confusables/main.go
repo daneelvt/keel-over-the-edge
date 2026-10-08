@@ -26,6 +26,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -148,6 +149,9 @@ func codePoints(s string) ([]rune, error) {
 		v, err := strconv.ParseUint(f, 16, 32)
 		if err != nil {
 			return nil, err
+		}
+		if v > unicode.MaxRune {
+			return nil, fmt.Errorf("%s is not a code point", f)
 		}
 		rs = append(rs, rune(v))
 	}

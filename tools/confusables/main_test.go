@@ -47,7 +47,7 @@ func TestParse(t *testing.T) {
 	if len(entries) != 2 || entries[0] != (entry{'0', "O"}) || entries[1] != (entry{'m', "rn"}) {
 		t.Fatalf("%+v", entries)
 	}
-	for _, bad := range []string{"0030 ; 004F\n", "0030 0031 ; 004F ; MA\n", "XYZ ; 004F ; MA\n", "0030 ; 004F ; MA\n0030 ; 006F ; MA\n"} {
+	for _, bad := range []string{"0030 ; 004F\n", "0030 0031 ; 004F ; MA\n", "XYZ ; 004F ; MA\n", "110000 ; 004F ; MA\n", "0030 ; 004F ; MA\n0030 ; 006F ; MA\n"} {
 		if _, err := parse([]byte(bad)); err == nil {
 			t.Errorf("accepted %q", bad)
 		}
