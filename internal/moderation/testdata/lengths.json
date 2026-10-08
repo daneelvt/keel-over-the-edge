@@ -1,0 +1,112 @@
+[
+  {
+    "name": "Ann",
+    "length": 3
+  },
+  {
+    "name": "Ab",
+    "length": 2,
+    "reason": "short"
+  },
+  {
+    "name": "A",
+    "length": 1,
+    "reason": "short"
+  },
+  {
+    "name": "  Sea    Wolf  ",
+    "length": 8
+  },
+  {
+    "name": "Ｓｅａ Ｗｏｌｆ",
+    "length": 8
+  },
+  {
+    "name": "Zoë",
+    "length": 3
+  },
+  {
+    "name": "Zoë",
+    "length": 3
+  },
+  {
+    "name": "Á̂",
+    "length": 1,
+    "reason": "short"
+  },
+  {
+    "name": "é̂̃áb",
+    "length": 3
+  },
+  {
+    "name": "Abcdefghijklmnopqrst",
+    "length": 20
+  },
+  {
+    "name": "Abcdefghijklmnopqrstu",
+    "length": 21,
+    "reason": "long"
+  },
+  {
+    "name": "Àbcdefghijklmnopqrst",
+    "length": 20
+  },
+  {
+    "name": "山田花子",
+    "length": 4
+  },
+  {
+    "name": "やまだ はなこ",
+    "length": 7
+  },
+  {
+    "name": "민준",
+    "length": 2,
+    "reason": "short"
+  },
+  {
+    "name": "Владимир",
+    "length": 8
+  },
+  {
+    "name": "محمد",
+    "length": 4
+  },
+  {
+    "name": "Ken 山田",
+    "length": 6
+  },
+  {
+    "name": "O’Brien",
+    "length": 7
+  },
+  {
+    "name": "St. Ives",
+    "length": 8
+  },
+  {
+    "name": "Sea Wolf",
+    "length": 8
+  },
+  {
+    "name": "Sea Wolf",
+    "length": 8
+  },
+  {
+    "name": "ẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽ",
+    "length": 20
+  },
+  {
+    "name": "ẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽẽ",
+    "length": 21,
+    "reason": "long"
+  },
+  {
+    "name": "ﬀ Ship",
+    "length": 7
+  },
+  {
+    "name": "Ⅻ Sailor",
+    "length": 10
+  }
+]

@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Names that must pass the word filter, as written: places, people and words
+# that contain a listed word without being one. The tests check each.
+Arsenal
+Assam
+Assisi
+Bassett
+Clitheroe
+Cockburn
+Cockermouth
+Cumberland
+Cumbria
+Dick Whittington
+Dickens
+Dykes
+Essex
+Grapes
+Hancock
+Hitchcock
+Keeley
+Keelson
+Matsushita
+Middlesex
+Mississippi
+Moderna
+Nazir
+Niger
+Nigeria
+Pakistan
+Penistone
+Prickett
+Rapeseed
+Scunthorpe
+Sexton
+Shiitake
+Shitake
+Sniggers
+Spice
+Staffordshire
+Sussex
+Swanky
+Therapist
+Titicaca
+Titus
+Twatt
+Uranus

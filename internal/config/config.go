@@ -22,7 +22,8 @@ type Config struct {
 	// PlayAddr is the address the game's HTTP server listens on.
 	PlayAddr string
 	// PlayOrigin is the HTTPS origin players use, such as
-	// https://play.keelovertheedge.com.
+	// https://play.keelovertheedge.com, or an http:// origin on a loopback
+	// address, which browsers treat as secure, for tests.
 	PlayOrigin string
 	// AgentsAddr is the address the AI agents' HTTP server listens on.
 	AgentsAddr string
@@ -39,6 +40,16 @@ type Config struct {
 	ReplayDir string
 	// DevSailors is how many scripted sailors sail in the world.
 	DevSailors int
+	// DatabaseURL is the database's: a postgres:// URL or key=value pairs,
+	// as pgx reads them. It holds a password: it is never logged.
+	DatabaseURL string
+}
+
+// String leaves the database's URL out, so a Config can be logged.
+func (c Config) String() string {
+	c.DatabaseURL = "(not shown)"
+	type plain Config
+	return fmt.Sprintf("%+v", plain(c))
 }
 
 // The defaults: loopback addresses, so a developer's ports stay private.
@@ -59,6 +70,7 @@ func Load(getenv func(string) string) (Config, error) {
 		InternalAddr: or(getenv("KEEL_INTERNAL_ADDR"), DefaultInternalAddr),
 		TraceDir:     getenv("KEEL_TRACE_DIR"),
 		ReplayDir:    getenv("KEEL_REPLAY_DIR"),
+		DatabaseURL:  getenv("KEEL_DATABASE_URL"),
 	}
 	addrs := []struct{ name, addr string }{
 		{"KEEL_PLAY_ADDR", c.PlayAddr},
@@ -78,6 +90,9 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	if err := checkOrigin(c.PlayOrigin); err != nil {
 		errs = append(errs, fmt.Errorf("KEEL_PLAY_ORIGIN: %w", err))
+	}
+	if err := CheckDatabaseURL(c.DatabaseURL); err != nil {
+		errs = append(errs, fmt.Errorf("KEEL_DATABASE_URL: %w", err))
 	}
 	if v := getenv("KEEL_LOG_LEVEL"); v != "" {
 		level, err := ParseLevel(v)
@@ -130,6 +145,38 @@ func overlap(a, b string) bool {
 	return ha == hb || wild(ha) || wild(hb)
 }
 
+func loopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// CheckDatabaseURL checks a database URL is there and, when it is a URL
+// rather than key=value pairs, that it is a postgres one. Its errors never
+// repeat it: it holds a password.
+func CheckDatabaseURL(s string) error {
+	switch {
+	case s == "":
+		return errors.New("required")
+	case strings.Contains(s, "://"):
+		u, err := url.Parse(s)
+		if err != nil {
+			return errors.New("not a URL that can be read")
+		}
+		if u.Scheme != "postgres" && u.Scheme != "postgresql" {
+			return fmt.Errorf("a %s:// URL, not postgres://", u.Scheme)
+		}
+		if u.Host == "" && !strings.Contains(u.RawQuery, "host=") {
+			return errors.New("the URL has no host")
+		}
+	case !strings.Contains(s, "="):
+		return errors.New("neither a postgres:// URL nor key=value pairs")
+	}
+	return nil
+}
+
 func checkAddr(addr string) error {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -143,7 +190,9 @@ func checkAddr(addr string) error {
 }
 
 // checkOrigin accepts an origin as browsers send it: https, a host, an
-// optional port, and nothing else.
+// optional port, and nothing else. http is accepted on a loopback address
+// alone, which browsers treat as a secure context, so tests can run without
+// a certificate; nothing a real deployment serves is reached that way.
 func checkOrigin(origin string) error {
 	if origin == "" {
 		return errors.New("required")
@@ -153,8 +202,9 @@ func checkOrigin(origin string) error {
 		return err
 	}
 	switch {
+	case u.Scheme == "http" && loopback(u.Hostname()):
 	case u.Scheme != "https":
-		return fmt.Errorf("%q is not https", origin)
+		return fmt.Errorf("%q is not https (http is allowed on localhost, 127.0.0.1 or [::1] alone)", origin)
 	case u.Host == "" || u.User != nil:
 		return fmt.Errorf("%q has no host, or has user information", origin)
 	case u.Path != "" || u.RawQuery != "" || u.Fragment != "" || strings.HasSuffix(origin, "/"):

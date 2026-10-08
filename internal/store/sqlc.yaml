@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The store's queries, compiled against the migrations by sqlc:
+#   go tool sqlc generate -f internal/store/sqlc.yaml
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: queries
+    gen:
+      go:
+        package: db
+        out: db
+        sql_package: pgx/v5
+        overrides:
+          - db_type: timestamptz
+            go_type: time.Time

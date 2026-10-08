@@ -268,7 +268,7 @@ func TestHeartbeat(t *testing.T) {
 }
 
 func TestTickAtAndTimeOf(t *testing.T) {
-	epoch := Epoch
+	epoch := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
 	cases := []struct {
 		t    time.Time
 		tick int64

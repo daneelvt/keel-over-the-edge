@@ -11,6 +11,10 @@ same checks a pull request runs.
   repository, then `nvm use`.
 - **npm 12**. Either `npm install -g npm@12`, or `corepack enable npm`, which
   uses the exact version pinned in `client/package.json` and checks its hash.
+- **Docker or Podman**, for the database: `tools/dev` runs PostgreSQL 18 in a
+  container. Docker Desktop on macOS and Windows; Docker or Podman on Linux.
+  Or, instead, **a PostgreSQL 18 of your own**: set `KEEL_DEV_DATABASE_URL`
+  to it and no container is started (see [The database](#the-database)).
 
 Nothing else: the certificate tool, linters and scanners are Go tools listed
 in `go.mod` and run with `go tool`. TinyGo, which builds the physics package
@@ -25,12 +29,14 @@ go run ./tools/dev
 ```
 
 It checks Node and npm, installs the client's packages when the lock file
-has changed, regenerates the catalog, builds the physics module, makes a
-local HTTPS certificate, builds and starts `keel serve`, starts Vite, and
-prints QR codes for setting up a phone and for the game. Changing a Go file
-rebuilds and restarts the server, and rebuilds the physics module when the
-file is in `internal/physics`; changing a client file reloads the page.
-Ctrl-C stops everything.
+has changed, regenerates the catalog, builds the physics module, starts the
+database (or finds it running), makes a local HTTPS certificate, builds
+`keel`, runs `keel migrate` and starts `keel serve`, starts Vite, and prints
+QR codes for setting up a phone and for the game. Changing a Go file
+rebuilds the server, migrates and restarts it, and rebuilds the physics
+module when the file is in `internal/physics`; changing a client file
+reloads the page. Ctrl-C stops everything but the database, which is left
+running for next time and for `go test`.
 
 The first run asks for your computer's password once, to trust the local
 certificate authority that signs the certificate (mkcert). On macOS it also
@@ -96,9 +102,9 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64 (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder and the input log's reader, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started and checked over HTTPS | `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
-| `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts, that change its files | The test sea's fixtures current; the physics module built; the browser tests on Chromium, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
+| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64, each with a PostgreSQL service (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader and the sailor name check, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back | `go run ./tools/dev -db` once, then `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
+| `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
+| `pr.render.yaml` | Pull requests, not drafts, that change its files | The test sea's fixtures current; the physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
@@ -316,10 +322,14 @@ world; everything reaches it through the **bus** (`internal/bus`).
 |---------|------|
 | `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, and for developers only `SetWind` and `Place`); `TrySend` never blocks. The frames: the whole world after each tick, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
 | `internal/sim` | The world (4,096 slots) and `Tick`: read the control slots, apply the commands, step every boat, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
-| `internal/sim/loop` | The clock: tick k after the world's epoch (1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
+| `internal/sim/loop` | The clock: tick k after the world's epoch (the database's world row; world 1's is 1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
 | `internal/replay` | The input log, `keel replay` and `/debug/replay` (below). |
 | `internal/scripted` | Scripted sailors: they join through the bus like players and steer and trim at random, each every 0.2–3 s. |
 | `internal/obs` | Logs, metrics, the probes, pprof and the flight recorder. |
+| `internal/store` | The database: migrations, queries, the pool. The only package that talks to PostgreSQL (a test checks no other imports pgx or goose); see [The database](#the-database). |
+| `internal/auth` | Session tokens, the cookie, the session cache and the session middleware. |
+| `internal/moderation` | Sailor names: their display form, rules and key, and the word filter. |
+| `internal/api` | The `play.` listener's routes and the middleware in front of them. |
 
 ### Listeners and configuration
 
@@ -328,7 +338,7 @@ Three HTTP servers, each with a 10 s header timeout, a 120 s idle timeout and
 
 | Listener | Variable, default | Serves |
 |----------|-------------------|--------|
-| `play.` | `KEEL_PLAY_ADDR`, `127.0.0.1:8080` | The game's routes, with an access log |
+| `play.` | `KEEL_PLAY_ADDR`, `127.0.0.1:8080` | The game's routes (below), with an access log |
 | `agents.` | `KEEL_AGENTS_ADDR`, `127.0.0.1:8081` | Nothing yet: 404 to everything |
 | internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay` |
 
@@ -337,14 +347,15 @@ addresses must differ. The other variables:
 
 | Variable | Default | What |
 |----------|---------|------|
-| `KEEL_PLAY_ORIGIN` | required | The players' HTTPS origin |
+| `KEEL_PLAY_ORIGIN` | required | The players' HTTPS origin; `http://` only on `localhost`, `127.0.0.1` or `[::1]`, which browsers treat as secure (the browser tests) |
+| `KEEL_DATABASE_URL` | required | The database: a `postgres://` URL or `key=value` pairs, as pgx reads them. It holds the password and is never logged |
 | `KEEL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096 |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
-sets the internal address, `KEEL_TRACE_DIR=.dev/traces` and
+sets the database's URL, the internal address, `KEEL_TRACE_DIR=.dev/traces` and
 `KEEL_REPLAY_DIR=.dev/replays` (keeping the last hour), passes
 `KEEL_DEV_SAILORS` through, and prints the internal URLs:
 
@@ -352,23 +363,36 @@ sets the internal address, `KEEL_TRACE_DIR=.dev/traces` and
 KEEL_DEV_SAILORS=1000 go run ./tools/dev
 ```
 
-The server starts its internal listener first, then the world and the tick
-loop, then the public listeners, and only then reports ready. On `SIGTERM` or
-Ctrl-C it is no longer ready at once, shuts down the public listeners, lets
-the tick under way finish, flushes the input log, stops the flight recorder
-and shuts the internal listener down last. A second signal kills it. A panic
-in the tick, its workers or the input log's writer ends the process.
+The server starts its internal listener first. Then it waits for the
+database, trying again with a wait that doubles from 0.5 s to 30 s, beating
+its heartbeat and logging at most once a minute: it stays live and not ready
+(`/readyz` says "waiting for the database") rather than exiting, which would
+earn a restart's back-off. It refuses to start when the database lacks a
+migration it was built with ("run keel migrate"), and starts when the
+database has newer ones. It loads the active world, making world 1 (epoch
+1 January 2026) when there is none, and the world's epoch sets the tick
+clock. Then come the world and the tick loop, then the public listeners,
+and only then is it ready. On `SIGTERM` or Ctrl-C it is no longer ready at
+once, shuts down the public listeners, lets the tick under way finish,
+flushes the input log, stops the flight recorder, closes the database's
+pool and shuts the internal listener down last. A second signal kills it.
+A panic in the tick, its workers or the input log's writer ends the
+process. Once open, the database is not part of readiness: if it goes away,
+the requests that need it answer 503 and the world sails on.
 
 ### Probes, logs and metrics
 
-`/livez` fails once the heartbeat, beaten after every tick, is 10 s old; it
-looks at nothing else. `/readyz` passes once the world has ticked and the
-public listeners are open, and fails as soon as the server starts stopping.
+`/livez` fails once the heartbeat, beaten after every tick (and every second
+while waiting for the database), is 10 s old; it looks at nothing else.
+`/readyz` passes once the database has answered, the world has ticked and
+the public listeners are open, and fails as soon as the server starts
+stopping.
 
 Logs are JSON lines on stdout, each with the build. The public listeners log
 each request after it is served: a random request ID (also returned as
 `X-Request-Id`), the method, the **route pattern** (never the path or query),
-the status, bytes and duration. The tick never logs.
+the account that made it if any, the status, bytes and duration. No body,
+cookie or name is logged. The tick never logs.
 
 The metrics are on their own registry; everything the tick updates is
 resolved at start, so updating it allocates nothing:
@@ -386,6 +410,13 @@ resolved at start, so updating it allocates nothing:
 | `keel_sim_frames_allocated_total` | Frames made because every pooled frame was held: flat once running |
 | `keel_replay_bytes_total`, `_segments_total`, `_records_dropped_total` | The input log |
 | `keel_flightrecorder_snapshots_total{reason}` | Traces written, `overrun` or `request` |
+| `keel_db_pool_connections{state}`, `keel_db_pool_max_connections` | The pool's connections, `acquired`, `idle` or `constructing`, and its limit (17) |
+| `keel_db_pool_acquire_wait_seconds_total`, `keel_db_pool_empty_acquire_total` | Time requests waited for a connection; requests that found none idle |
+| `keel_db_query_duration_seconds{query}`, `keel_db_query_errors_total{query}` | Each query's time and failures, by its sqlc name (`other` for the rest) |
+| `keel_db_schema_version` | The newest migration the database has had |
+| `keel_guests_created_total`, `keel_guests_refused_total{reason}` | Guests made, and names refused by reason (`short`, `long`, `characters`, `scripts`, `words`, `taken`) |
+| `keel_session_cache_lookups_total{result}` | Sessions found in the cache (`hit`), fetched (`miss`) or unknown |
+| `keel_http_cross_origin_refused_total` | Requests refused as cross-origin |
 | `go_*`, `process_*` | The runtime and the process |
 
 ```sh
@@ -470,11 +501,184 @@ detector. Benchmarks:
 go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 ```
 
+### Routes and middleware
+
+| Route | What |
+|-------|------|
+| `GET /api/version` | The build and the catalog's version |
+| `POST /guest` | `{"name", "look"}` makes a guest: 201 with the sailor (`{"name", "look"}`, the name in its display form) and the session cookie; 422 `{"error": reason}` for a refused name; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
+| `GET /api/me` | The session's account, `{"name", "look", "kind", "saved"}`, or 401 |
+
+Errors are `{"error": "<code>"}`; the client puts codes into words. Nothing
+the API answers is cached. Every request passes, in order: the request ID
+and the access log; the client's address (a place kept: players reach the
+server directly for now); read and write deadlines of 10 s and 30 s,
+except on routes marked long-lived (none yet); a 16 KB limit on the body;
+Go's `http.CrossOriginProtection`, which refuses a browser's unsafe request
+from another origin (`Sec-Fetch-Site`, or else `Origin` against `Host`);
+the session; and limits on how often a client may ask (a place kept).
+
+### Guests and sessions
+
+A guest is an account made from a sailor's name and a look, with no
+password: its browser's cookie is all that keeps it. The cookie,
+`__Host-keel-session`, carries 32 random bytes in base64url; the database
+keeps only their SHA-256. It is `Secure`, `HttpOnly`, `SameSite=Lax`, for
+`/`, with no `Domain` (the `__Host-` prefix makes browsers insist), and lives
+400 days, the most browsers allow; it is set again on a request a day or
+more after it was last set, so a player who comes back never loses it.
+`localhost` counts as secure, so the browser tests use the same cookie over
+`http://localhost`.
+
+Sessions are looked up through a cache (`internal/auth`): an account found
+is kept 30 s, at most 100,000 of them, oldest dropped first; tokens nobody
+holds are never kept. A session's last-seen time, and its account's, are
+written at most once an hour.
+
+A sailor's name (`internal/moderation`) is shown in its display form, RFC
+8266's Nickname profile: spaces trimmed and collapsed, characters
+normalised (NFKC), so fullwidth letters fold to ordinary ones. It must be:
+
+- 3 to 20 characters (a letter with its accents counts once), at most 80
+  bytes;
+- letters and decimal digits, with single spaces, hyphens, full stops or
+  apostrophes between them (a full stop may be followed by a space, as in
+  "St. Ives"), starting with a letter and ending with a letter or digit: no
+  symbols, emoji, controls, zero-width or direction characters;
+- of one script, or Latin with Japanese, Chinese or Korean (UTS #39's
+  "highly restrictive" level), so Cyrillic letters cannot pass for Latin;
+- free of the word lists' words (below).
+
+Two sailors cannot share a name's **key**: the Nickname comparison form
+(lowercased), separators removed, then UTS #39's skeleton, which maps each
+character to the one it looks like, from Unicode's `confusables.txt`. So
+"Sea Wolf", "seawolf", "SEA-WOLF" and "Sea W0lf" are one sailor. The
+skeleton also maps "rn" and "m" together, so "Fern" and "Fem" are one too.
+Case is folded before the skeleton, so a capital I is not matched with a
+lowercase l.
+
+The word lists are in `internal/moderation/lists/`, each entry in key form
+(the tests print the right form of one that is not): `anywhere.txt`,
+refused even inside a word, only for strings no innocent word contains;
+`words.txt`, refused as whole words or words run together ("s h i t");
+`reserved.txt`, names that would pass for the game (harbourmaster, Port
+Royal, moderator…). Digits and symbols written for letters are read as the
+letters (`sh1t`). `innocent.txt` lists names that must pass (Scunthorpe,
+Sussex, Arsenal, Dickens…); a test checks each. A refusal never says which
+word.
+
+The look-alike table, `internal/moderation/confusables.gen.go`, is
+generated from `tools/confusables/confusables-17.0.0.txt`, pinned by its
+SHA-256, with Unicode's licence beside it. Its version follows the Unicode
+version of `golang.org/x/text`'s tables:
+
+```sh
+go run ./tools/confusables          # write the table
+go run ./tools/confusables -check   # pr.lint: the table is current
+```
+
+The client checks a name's length only, counting as the server does
+(`client/src/account/reasons.ts`); `internal/moderation/testdata/lengths.json`
+is the server's count of a table of names, written by
+`go test ./internal/moderation -run LengthTable -args -update`, and the
+client's tests read it.
+
+## The database
+
+The game keeps its players, and later its worlds' data, in PostgreSQL 18.
+`go run ./tools/dev` runs it in a container, `keel-dev-db`, from the
+official `postgres` image pinned by digest, on `127.0.0.1:5433` (not 5432,
+which a PostgreSQL of your own may hold), its data in the volume
+`keel-dev-db` and its password, made at random, in `.dev/db.env`. The
+container is left running.
+
+```sh
+go run ./tools/dev -db         # start the database alone; print its URLs for psql and go test
+go run ./tools/dev -db-reset   # remove the container, its data and its password
+psql "$(grep ^KEEL_DATABASE_URL .dev/db.env | cut -d= -f2-)"
+```
+
+`KEEL_DEV_DATABASE_URL=postgres://…` instead points `tools/dev` at a
+PostgreSQL 18 of your own, and no container is started; set
+`KEEL_TEST_DATABASE_URL` too, to a database from which the tests can make
+databases.
+
+### Migrations
+
+`internal/store/migrations/` holds the schema as numbered SQL files
+(`00001_players.sql`), applied in order by goose, each in a transaction,
+under a session-level advisory lock so two runs take turns. `keel migrate`
+applies them; `keel migrate -status` lists them; `keel serve` refuses a
+database that lacks one. A deployment migrates before it starts the new
+build, and `tools/dev` does the same before every start.
+
+The rules, since a running build may meet a database a newer build has
+migrated:
+
+- **Migrations only go up, and only add.** A table, column or constraint an
+  older build reads is removed or renamed only in a later release, once no
+  running build reads it (expand, then contract).
+- **An applied migration is never edited.** `migrations/SUMS` holds each
+  file's SHA-256, and a test fails on a changed or removed file. A new
+  migration is added to it with
+  `go test ./internal/store -run AppendOnly -args -update`.
+- Keys are `uuid DEFAULT uuidv7()`. An account's `kind` and `owner_id` never
+  change, which a trigger enforces; an AI account's owner is a saved human
+  account.
+- **Every table of a world's data has a `world_id` and is
+  `PARTITION BY LIST (world_id)`**, one partition per world named
+  `<table>_w<number>`. `create_world_partitions(world)` makes a world's
+  partition of every such table, found in the catalog; making a world calls
+  it, and a migration that adds such a table calls it for the worlds there
+  are: `SELECT create_world_partitions(id) FROM world;`. A test checks every
+  table with a `world_id` is partitioned on it.
+
+### Queries
+
+Queries are SQL in `internal/store/queries/`, compiled by sqlc against the
+migrations into `internal/store/db/` (generated; never edited), and wrapped
+by `internal/store` in methods that speak the game's types. No other package
+imports pgx or goose: a test checks. After changing a query or adding a
+migration:
+
+```sh
+CGO_ENABLED=0 go tool sqlc generate -f internal/store/sqlc.yaml
+```
+
+(Without cgo, sqlc parses with PostgreSQL's parser compiled to WebAssembly,
+so no C compiler is needed.) `pr.lint` runs `sqlc compile` and `sqlc diff`.
+One pool, at most 17 connections, serves the API and starting up; each query
+is timed by its sqlc name.
+
+### Tests with a database
+
+`internal/store/storetest` gives a test a database of its own:
+`storetest.URL(t)` a migrated one, `storetest.Empty(t)` an empty one,
+`storetest.Store(t, …)` a store on a migrated one, each dropped when the
+test ends. A migrated database is a copy of a template migrated once
+(`CREATE DATABASE … TEMPLATE`), named by a hash of the migrations, so a
+copy takes milliseconds. The server is `KEEL_TEST_DATABASE_URL`, or the one
+in `.dev/db.env`. With neither, these tests are **skipped** locally (`go
+test -v` says why) and **fail** in CI. Tests that use a database run in
+real time, never in a `synctest` bubble; the server's other tests use an
+in-memory stand-in.
+
 ## The game's page
 
 The game's page, `/`, is the player's boat at sea, sailed with two thumbs or
-the keyboard. Until the game connects to a server it is the **offline
-sandbox**: one Jolly boat, stepped by the physics module in the page, in a
+the keyboard. While the scene and the physics module load, the page asks
+`GET /api/me`: a returning player goes straight to sea; a new one gets the
+**start screen** over the loading sea, with a name to give, a sailor drawn
+at random from the catalog (drawn again with ⟳) and **Set sail**; when the
+server cannot answer, the page says "Back soon" and asks again, waiting
+longer each time. A refused name is explained in words beside the field;
+the page itself checks only its length. The menu shows "Sailing as" and
+the name. The controls listen only once at sea, so typing a name steers
+nothing. Every name a player wrote is shown as text in a `<bdi>`, so a
+right-to-left name cannot reorder what is around it
+(`client/src/ui/player.tsx`).
+
+At sea it is still the **offline sandbox**: one Jolly boat, stepped by the physics module in the page, in a
 steady wind that is the same everywhere, with nothing to correct it. It
 starts at the disk's centre, at rest, heading 090°, the helm centred and the
 sheet half out, in 10 knots from the north. The developer page is
@@ -482,7 +686,7 @@ sheet half out, in 10 knots from the north. The developer page is
 
 | Query | What |
 |-------|------|
-| `?sandbox` | The offline sandbox. For now the page is nothing else; links made with it keep working once `/` connects to a server |
+| `?sandbox` | The offline sandbox alone: no server, no session, no start screen. The browser tests of the scene use it |
 | `?wind=12,45` | The sandbox's wind: knots 10 m up, and the degrees it comes from |
 | `?dev` | The developer panel (a lazy import, outside the first download); see below |
 | `?backend=webgl2` | The WebGL 2 back end, even where WebGPU is offered |
@@ -629,6 +833,16 @@ on, the page plays no sound.
 WebGL 2 back end and on WebGPU where the browser offers an adapter (on Linux
 through SwiftShader; without an adapter the WebGPU tests are skipped). The
 page loads the physics module, so build it first (`go run ./tools/physics`).
+Playwright starts two servers: `keel`, which `go run ./tools/e2e` builds from
+the tree and serves on a database of its own on the test database's server
+(so start it first: `go run ./tools/dev -db`), on ports 18080, 18081 and
+19090, dropping the database when it stops; and Vite on
+`http://localhost:5181` in front of it. The scene's tests open `?sandbox`.
+`start.spec.ts`, on WebGL 2 alone, starts as a guest: the start screen,
+names refused in words (too short, a symbol, a reserved name, mixed
+scripts, a name taken through the API and look-alikes of it), a name
+accepted, the cookie's attributes, the sailor kept across a reload without
+the start screen, and a second browser refused the same name.
 `sea.spec.ts` reads back what the GPU computed and checks it against the
 same sums in float64: every tile a rigid plane with the exact hexagon's
 outline, the lattice fixed as the boat moves and the origin jumps, the tile
@@ -715,3 +929,17 @@ Both use your own `gh` login. Settings GitHub has no API for are listed in
   tests should have caught it.
 - **Port 5173, 5174 or 8080 is in use.** Another copy of `tools/dev`, or
   another Vite, is running.
+- **"neither docker nor podman is installed" or "… is not running".**
+  Install or start Docker Desktop (or Podman: `podman machine start`), or set
+  `KEEL_DEV_DATABASE_URL` to a PostgreSQL 18 of your own.
+- **"the database's container or volume exists but .dev/db.env is
+  missing".** The password is lost with the file: `go run ./tools/dev
+  -db-reset` removes the container and its data, and the next start makes
+  them again.
+- **Port 5433 is in use.** Another PostgreSQL holds it; stop it, or use it
+  through `KEEL_DEV_DATABASE_URL`.
+- **"the database is behind this build: run keel migrate".** `tools/dev`
+  migrates before every start; a `keel serve` started by hand needs
+  `keel migrate` first.
+- **Tests say "no test database".** Run `go run ./tools/dev -db` once; the
+  tests read `.dev/db.env`.

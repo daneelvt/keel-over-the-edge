@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The game in a real browser: Playwright on Chromium, on the WebGL 2 back end
 # and, where the runner's Chromium offers an adapter through SwiftShader, on
-# WebGPU. The game's page steps the physics module, so it is built first.
+# WebGPU. The game's page steps the physics module, so it is built first;
+# keel serves the page's API (tools/e2e builds it) from a PostgreSQL service.
 # Also checks that the test sea's fixtures are current. Runs only when a file
 # the browser tests depend on changed.
 #
@@ -41,7 +42,10 @@ jobs:
               - 'go.sum'
               - 'client/**'
               - 'art/**'
-              - 'internal/physics/**'
+              - 'cmd/**'
+              - 'internal/**'
+              - 'shared/**'
+              - 'tools/e2e/**'
               - 'tools/internal/**'
               - 'tools/physics/**'
               - 'tools/testsea/**'
@@ -76,6 +80,25 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    # PostgreSQL for the tests that need a database, on the image and
+    # version tools/dev runs locally; the password is the throwaway
+    # service's own.
+    services:
+      postgres:
+        image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        env:
+          POSTGRES_USER: keel
+          POSTGRES_PASSWORD: keel
+          POSTGRES_DB: keel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username keel --dbname keel"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      KEEL_TEST_DATABASE_URL: postgres://keel:keel@127.0.0.1:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

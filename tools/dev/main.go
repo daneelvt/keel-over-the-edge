@@ -8,9 +8,14 @@
 //	go run ./tools/dev          start keel serve and Vite; restart keel on Go changes, rebuild the physics module
 //	go run ./tools/dev -smoke   start everything, check the page, /api/version, the physics module and keel's probes and metrics, stop
 //	go run ./tools/dev -lint    run every linter the pull-request checks run
+//	go run ./tools/dev -db      start the database alone, print its URLs
+//	go run ./tools/dev -db-reset  remove the database's container and data
 //
-// KEEL_DEV_SAILORS, if set, is passed to keel serve: scripted sailors to load
-// the tick. It runs from the repository root.
+// The database is PostgreSQL in a container (docker, or else podman), left
+// running between runs; KEEL_DEV_DATABASE_URL instead names a PostgreSQL 18
+// of your own, and no container is started. KEEL_DEV_SAILORS, if set, is
+// passed to keel serve: scripted sailors to load the tick. It runs from the
+// repository root.
 package main
 
 import (
@@ -43,6 +48,8 @@ const (
 func main() {
 	smoke := flag.Bool("smoke", false, "start everything, check the page and /api/version over HTTPS, then stop")
 	lint := flag.Bool("lint", false, "run the linters and exit")
+	dbOnly := flag.Bool("db", false, "start the database alone, print its URLs and exit")
+	dbReset := flag.Bool("db-reset", false, "remove the database's container, its data and its password")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -52,6 +59,10 @@ func main() {
 	switch {
 	case *lint:
 		err = runLint(ctx, os.Stdout)
+	case *dbOnly:
+		err = runDB(ctx, os.Stdout)
+	case *dbReset:
+		err = runDBReset(ctx, os.Stdout)
 	case *smoke:
 		err = runSmoke(ctx, os.Stdout)
 	default:

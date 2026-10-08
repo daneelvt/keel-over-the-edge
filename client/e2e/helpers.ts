@@ -10,16 +10,16 @@ declare global {
 }
 
 /**
- * Opens the scene on the project's back end with the test hooks, waits for
- * the boat, freezes time and puts the boat back at the start, at rest. A
- * WebGPU project with no adapter is skipped. The screen's panels and
+ * Opens the offline sandbox on the project's back end with the test hooks,
+ * waits for the boat, freezes time and puts the boat back at the start, at
+ * rest. A WebGPU project with no adapter is skipped. The screen's panels and
  * controls are hidden unless hud is true, so pictures show the scene alone.
  */
 export async function openScene(page: Page, query = '', hud = false): Promise<void> {
   const backend = test.info().project.name === 'webgl2' ? '&backend=webgl2' : '';
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`/?test${backend}${query === '' ? '' : `&${query}`}`);
+  await page.goto(`/?sandbox&test${backend}${query === '' ? '' : `&${query}`}`);
   await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 30_000 });
   await page.evaluate(() => globalThis.keel.ready());
   const info = await page.evaluate(() => globalThis.keel.info());

@@ -8,8 +8,19 @@ import (
 	"testing"
 )
 
+const dbURL = "postgres://keel:secret@127.0.0.1:5432/keel"
+
+// env serves vars, with a database URL unless vars sets one, even "".
 func env(vars map[string]string) func(string) string {
-	return func(k string) string { return vars[k] }
+	return func(k string) string {
+		if v, ok := vars[k]; ok {
+			return v
+		}
+		if k == "KEEL_DATABASE_URL" {
+			return dbURL
+		}
+		return ""
+	}
 }
 
 func TestLoadValid(t *testing.T) {
@@ -27,7 +38,7 @@ func TestLoadValid(t *testing.T) {
 	}
 	want := Config{
 		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://192.168.1.20:5173",
-		AgentsAddr: "127.0.0.1:8081", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo,
+		AgentsAddr: "127.0.0.1:8081", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
 	}
 	if c != want {
 		t.Errorf("defaults %+v, want %+v", c, want)
@@ -59,10 +70,23 @@ func TestLoadValid(t *testing.T) {
 	}
 	want = Config{
 		PlayAddr: ":8080", PlayOrigin: "https://play.keelovertheedge.com", AgentsAddr: ":8081", InternalAddr: "0.0.0.0:9090",
-		LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", DevSailors: 1000,
+		LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", DevSailors: 1000, DatabaseURL: dbURL,
 	}
 	if c != want {
 		t.Errorf("got %+v, want %+v", c, want)
+	}
+	for _, origin := range []string{"http://localhost:5181", "http://127.0.0.1:8080", "http://[::1]:5181", "http://127.0.0.2"} {
+		if _, err := Load(env(map[string]string{"KEEL_PLAY_ORIGIN": origin})); err != nil {
+			t.Errorf("%s: %v", origin, err)
+		}
+	}
+	for _, u := range []string{"postgresql://h/db", "host=db user=keel dbname=keel", "postgres:///keel?host=/tmp"} {
+		if _, err := Load(env(map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DATABASE_URL": u})); err != nil {
+			t.Errorf("%s: %v", u, err)
+		}
+	}
+	if s := c.String(); strings.Contains(s, "secret") || !strings.Contains(s, "not shown") {
+		t.Errorf("String() = %s", s)
 	}
 	for in, level := range map[string]slog.Level{"DEBUG": slog.LevelDebug, "info": slog.LevelInfo, "Warn": slog.LevelWarn, "error": slog.LevelError} {
 		if got, err := ParseLevel(in); err != nil || got != level {
@@ -78,6 +102,11 @@ func TestLoadRejects(t *testing.T) {
 	}{
 		"origin missing":   {map[string]string{}, []string{"KEEL_PLAY_ORIGIN: required"}},
 		"origin http":      {map[string]string{"KEEL_PLAY_ORIGIN": "http://example.com"}, []string{"not https"}},
+		"origin http lan":  {map[string]string{"KEEL_PLAY_ORIGIN": "http://192.168.1.20:5173"}, []string{"not https"}},
+		"origin http host": {map[string]string{"KEEL_PLAY_ORIGIN": "http://localhost.example.com"}, []string{"not https"}},
+		"database missing": {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DATABASE_URL": ""}, []string{"KEEL_DATABASE_URL: required"}},
+		"database mysql":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DATABASE_URL": "mysql://u:secret@h/db"}, []string{"not postgres"}},
+		"database word":    {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DATABASE_URL": "keel"}, []string{"KEEL_DATABASE_URL"}},
 		"origin with path": {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com/play"}, []string{"not an origin"}},
 		"origin slash":     {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com/"}, []string{"not an origin"}},
 		"origin user":      {map[string]string{"KEEL_PLAY_ORIGIN": "https://a@example.com"}, []string{"user information"}},
@@ -113,6 +142,9 @@ func TestLoadRejects(t *testing.T) {
 				if !strings.Contains(err.Error(), w) {
 					t.Errorf("error %q does not mention %q", err, w)
 				}
+			}
+			if strings.Contains(err.Error(), "secret") {
+				t.Errorf("error %q shows the password", err)
 			}
 		})
 	}

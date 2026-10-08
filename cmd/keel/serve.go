@@ -12,12 +12,15 @@ import (
 	"net/http"
 	"runtime"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
+	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -26,16 +29,22 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
 // shutdownTimeout bounds how long a stopping server waits for requests in
 // flight.
 const shutdownTimeout = 10 * time.Second
 
+// firstEpoch is the epoch of the first world, made when the database has
+// none: tick 0 at midnight UTC on 1 January 2026.
+var firstEpoch = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+
 const serveUsage = `usage: keel serve
 
 Configured from the environment:
   KEEL_PLAY_ORIGIN     the players' HTTPS origin (required)
+  KEEL_DATABASE_URL    the database, a postgres:// URL (required)
   KEEL_PLAY_ADDR       the game's listener (default 127.0.0.1:8080)
   KEEL_AGENTS_ADDR     the AI agents' listener (default 127.0.0.1:8081)
   KEEL_INTERNAL_ADDR   probes, metrics, profiles (default 127.0.0.1:9090)
@@ -59,17 +68,34 @@ func serve(ctx context.Context, args []string, getenv func(string) string, stdou
 	return runServer(ctx, getenv, stdout, serveOptions{
 		listen:  net.Listen,
 		flight:  true,
-		epoch:   loop.Epoch,
 		workers: runtime.GOMAXPROCS(0),
 	})
+}
+
+// database is what the server asks of the store.
+type database interface {
+	api.Guests
+	auth.Sessions
+	CheckSchema(ctx context.Context) (int64, error)
+	ActiveOrFirstWorld(ctx context.Context, epoch time.Time) (store.World, error)
+	Stats() store.PoolStats
+	Close()
+}
+
+func openStore(ctx context.Context, url string, opt store.Options) (database, error) {
+	return store.Open(ctx, url, opt)
 }
 
 // serveOptions are what tests change about a server.
 type serveOptions struct {
 	listen  func(network, addr string) (net.Listener, error)
 	flight  bool // start the runtime's flight recorder: one per process
-	epoch   time.Time
 	workers int
+	// openDB opens the database; store.Open unless set.
+	openDB func(ctx context.Context, url string, opt store.Options) (database, error)
+	// dbRetry, if not zero, is the first wait between attempts to reach
+	// the database.
+	dbRetry time.Duration
 	// afterTick runs after each tick, within it.
 	afterTick func(tick int64)
 	// stopping runs as the server begins to stop, once it is no longer
@@ -80,12 +106,16 @@ type serveOptions struct {
 // runServer runs the game until ctx ends, then stops it in order.
 //
 // It starts the internal listener first and stops it last, so the process
-// can be observed throughout; then the world and its tick loop; then the
-// public listeners; and only then is it ready. It stops in reverse: not
-// ready, the public listeners shut down, the loop finishes its tick, the
-// input log is flushed, the flight recorder stops, and the internal listener
-// goes last. The loop, its workers and the input log's writer do not recover
-// from panics: a bug there stops the process.
+// can be observed throughout; then it waits for the database, not ready
+// meanwhile, checks its schema and loads the world being sailed; then the
+// world and its tick loop; then the public listeners; and only then is it
+// ready. It stops in reverse: not ready, the public listeners shut down, the
+// loop finishes its tick, the input log is flushed, the flight recorder
+// stops, the database's pool closes, and the internal listener goes last.
+// Once open, the database is not part of readiness: the simulation does not
+// need it, and if it goes away only the requests that need it fail. The
+// loop, its workers and the input log's writer do not recover from panics:
+// a bug there stops the process.
 func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer, opt serveOptions) error {
 	cfg, err := config.Load(getenv)
 	if err != nil {
@@ -120,6 +150,40 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	log.Info("listening", "listener", "internal", "addr", internalLn.Addr().String())
 	health.Beat()
 
+	// The database: waited for, its schema checked, the world it holds.
+	health.Waiting("the database")
+	openDB := opt.openDB
+	if openDB == nil {
+		openDB = openStore
+	}
+	db, err := openDB(ctx, cfg.DatabaseURL, store.Options{
+		Log: log, Beat: health.Beat, FirstRetry: opt.dbRetry,
+		QueryDuration: metrics.DBQueryDuration, QueryErrors: metrics.DBQueryErrors,
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			// Stopped while waiting: nothing failed.
+			return stopEarly(internal, internalDone, flight, nil)
+		}
+		return stopEarly(internal, internalDone, flight, err)
+	}
+	var closeDB sync.Once
+	defer closeDB.Do(db.Close)
+	schema, err := db.CheckSchema(ctx)
+	if err != nil {
+		return stopEarly(internal, internalDone, flight, err)
+	}
+	metrics.SchemaVersion.Set(float64(schema))
+	sailed, err := db.ActiveOrFirstWorld(ctx, firstEpoch)
+	if err != nil {
+		return stopEarly(internal, internalDone, flight, err)
+	}
+	epoch := sailed.Epoch
+	registerPoolMetrics(metrics, db)
+	health.Waiting("")
+	log.Info("database ready", "schema", schema, "world", sailed.Number, "epoch", epoch)
+	health.Beat()
+
 	// The catalog and the world.
 	cat, err := catalog.Load()
 	if err != nil {
@@ -130,7 +194,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		p := catalog.PhysicsParams(&cat.Boats[i])
 		physics.Prepare(&p, &kinds[i])
 	}
-	world, err := sim.New(sim.Config{Kinds: kinds, Workers: opt.workers, Tick: loop.TickAt(time.Now(), opt.epoch)})
+	world, err := sim.New(sim.Config{Kinds: kinds, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch)})
 	if err != nil {
 		return stopEarly(internal, internalDone, flight, err)
 	}
@@ -138,7 +202,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	b := world.Bus()
 	inputs := replay.New(replay.Config{
 		Frames: b.Frames,
-		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: opt.epoch},
+		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch},
 		Dir:    cfg.ReplayDir,
 		Log:    log,
 	})
@@ -149,7 +213,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	metrics.CounterFunc("keel_replay_bytes_total", "Bytes recorded in the input log.", inputs.Bytes)
 	metrics.CounterFunc("keel_replay_segments_total", "Segments started in the input log.", inputs.Segments)
 	metrics.CounterFunc("keel_replay_records_dropped_total", "Input log records lost because its writer was behind.", inputs.Dropped)
-	lcfg := loop.Config{World: world, Epoch: opt.epoch, Log: log, Metrics: metrics, Health: health, AfterTick: opt.afterTick}
+	lcfg := loop.Config{World: world, Epoch: epoch, Log: log, Metrics: metrics, Health: health, AfterTick: opt.afterTick}
 	if flight != nil {
 		lcfg.Overrun = flight.Overrun
 	}
@@ -157,7 +221,18 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	log.Info("world ready", "kinds", len(kinds), "capacity", world.Capacity(), "workers", opt.workers, "tick", world.Now())
 	health.Beat()
 
-	play := newServer(obs.AccessLog(log, api.Handler(api.Version{Build: build, Catalog: catalog.Version})), log)
+	looks := make([]string, len(cat.Sailors))
+	for i, s := range cat.Sailors {
+		looks[i] = string(s.ID)
+	}
+	play := newServer(api.Handler(api.Config{
+		Version:  api.Version{Build: build, Catalog: catalog.Version},
+		Log:      log,
+		Metrics:  metrics,
+		Guests:   db,
+		Sessions: auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log}),
+		Looks:    looks,
+	}), log)
 	agents := newServer(obs.AccessLog(log, api.Agents()), log)
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -232,12 +307,31 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		if flight != nil {
 			flight.Stop()
 		}
+		closeDB.Do(db.Close)
 		errs = append(errs, internal.Shutdown(sctx), <-internalDone)
 		return errors.Join(errs...)
 	})
 	err = g.Wait()
 	log.Info("stopped", "tick", world.Now())
 	return err
+}
+
+// registerPoolMetrics reports the database pool's use, read when scraped.
+func registerPoolMetrics(m *obs.Metrics, db database) {
+	for state, read := range map[string]func(store.PoolStats) int32{
+		"acquired":     func(s store.PoolStats) int32 { return s.Acquired },
+		"idle":         func(s store.PoolStats) int32 { return s.Idle },
+		"constructing": func(s store.PoolStats) int32 { return s.Constructing },
+	} {
+		m.GaugeFunc("keel_db_pool_connections", "The database pool's connections, by state.",
+			prometheus.Labels{"state": state}, func() float64 { return float64(read(db.Stats())) })
+	}
+	m.GaugeFunc("keel_db_pool_max_connections", "The most connections the database pool opens.", nil,
+		func() float64 { return float64(db.Stats().Max) })
+	m.SecondsFunc("keel_db_pool_acquire_wait_seconds_total", "Time requests have waited for a database connection.",
+		func() time.Duration { return db.Stats().AcquireWait })
+	m.CounterFunc("keel_db_pool_empty_acquire_total", "Requests for a database connection that found none idle.",
+		func() uint64 { return uint64(db.Stats().EmptyAcquires) })
 }
 
 // stopEarly stops what has started when starting fails.

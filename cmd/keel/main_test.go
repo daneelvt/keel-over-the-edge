@@ -29,7 +29,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
-	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
 func TestUsage(t *testing.T) {
@@ -61,8 +61,10 @@ func TestUsage(t *testing.T) {
 func TestServeRefusesBadConfig(t *testing.T) {
 	var out, errOut bytes.Buffer
 	status := run(context.Background(), []string{"serve"}, env(map[string]string{"KEEL_DEV_SAILORS": "lots"}), &out, &errOut)
-	if status != 1 || !strings.Contains(errOut.String(), "KEEL_PLAY_ORIGIN") || !strings.Contains(errOut.String(), "KEEL_DEV_SAILORS") {
-		t.Fatalf("status %d, stderr %q", status, errOut.String())
+	for _, want := range []string{"KEEL_PLAY_ORIGIN", "KEEL_DEV_SAILORS", "KEEL_DATABASE_URL"} {
+		if status != 1 || !strings.Contains(errOut.String(), want) {
+			t.Fatalf("status %d, stderr %q", status, errOut.String())
+		}
 	}
 }
 
@@ -190,6 +192,48 @@ const (
 // bubbleEpoch is when a synctest bubble's clock starts.
 var bubbleEpoch = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 
+// memDB is a database in memory, for servers in synctest bubbles, which
+// cannot wait on a real one: one world, no guests.
+type memDB struct {
+	epoch   time.Time
+	onClose func()
+	mu      sync.Mutex
+	closed  bool
+}
+
+func (d *memDB) CreateGuest(context.Context, store.Guest) (store.AccountID, error) {
+	return store.AccountID{}, errors.New("memDB makes no guests")
+}
+
+func (d *memDB) Session(context.Context, [32]byte) (store.Session, error) {
+	return store.Session{}, store.ErrNotFound
+}
+
+func (d *memDB) Touch(context.Context, [32]byte) error      { return nil }
+func (d *memDB) CheckSchema(context.Context) (int64, error) { return store.Latest, nil }
+func (d *memDB) Stats() store.PoolStats                     { return store.PoolStats{Max: store.MaxConns} }
+
+func (d *memDB) ActiveOrFirstWorld(context.Context, time.Time) (store.World, error) {
+	return store.World{Number: 1, Epoch: d.epoch}, nil
+}
+
+func (d *memDB) Close() {
+	d.mu.Lock()
+	d.closed = true
+	d.mu.Unlock()
+	if d.onClose != nil {
+		d.onClose()
+	}
+}
+
+func (d *memDB) isClosed() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.closed
+}
+
+func (d *memDB) open(context.Context, string, store.Options) (database, error) { return d, nil }
+
 // server is keel serve running in a test.
 type server struct {
 	net    *memNet
@@ -219,9 +263,10 @@ func (b *syncBuffer) String() string {
 func startServer(t *testing.T, vars map[string]string, n *memNet, opt serveOptions) *server {
 	t.Helper()
 	vars["KEEL_PLAY_ORIGIN"] = "https://play.example.com"
+	vars["KEEL_DATABASE_URL"] = "postgres://keel@db.example.com/keel"
 	opt.listen = n.listen
-	if opt.epoch.IsZero() {
-		opt.epoch = bubbleEpoch
+	if opt.openDB == nil {
+		opt.openDB = (&memDB{epoch: bubbleEpoch}).open
 	}
 	if opt.workers == 0 {
 		opt.workers = 2
@@ -414,8 +459,9 @@ func TestPanicInTheTick(t *testing.T) {
 	if os.Getenv("KEEL_TEST_PANIC") == "1" {
 		n := newMemNet()
 		ticks := 0
-		err := runServer(context.Background(), env(map[string]string{"KEEL_PLAY_ORIGIN": "https://play.example.com"}), io.Discard, serveOptions{
-			listen: n.listen, epoch: loop.Epoch, workers: 2,
+		vars := map[string]string{"KEEL_PLAY_ORIGIN": "https://play.example.com", "KEEL_DATABASE_URL": "postgres://keel@db.example.com/keel"}
+		err := runServer(context.Background(), env(vars), io.Discard, serveOptions{
+			listen: n.listen, workers: 2, openDB: (&memDB{epoch: firstEpoch}).open,
 			afterTick: func(int64) {
 				if ticks++; ticks == 4 {
 					panic("a planted panic in the tick")

@@ -24,6 +24,7 @@ type Health struct {
 	ticked    atomic.Bool
 	listening atomic.Bool
 	stopping  atomic.Bool
+	waiting   atomic.Pointer[string] // what starting waits for, if anything
 }
 
 // NewHealth returns a health beaten now.
@@ -38,6 +39,10 @@ func (h *Health) Ticked() { h.ticked.Store(true) }
 
 // Listening records whether the public listeners are open.
 func (h *Health) Listening(open bool) { h.listening.Store(open) }
+
+// Waiting records what starting is waiting for, such as the database, or
+// "" once it waits for nothing: the process is not ready meanwhile.
+func (h *Health) Waiting(what string) { h.waiting.Store(&what) }
 
 // Stopping records that the process has begun to stop: it is no longer
 // ready, at once.
@@ -56,12 +61,21 @@ func (h *Health) Ready() (bool, string) {
 	switch {
 	case h.stopping.Load():
 		return false, "stopping"
+	case h.waitingFor() != "":
+		return false, "waiting for " + h.waitingFor()
 	case !h.ticked.Load():
 		return false, "the world has not ticked yet"
 	case !h.listening.Load():
 		return false, "the listeners are not open"
 	}
 	return true, "ok"
+}
+
+func (h *Health) waitingFor() string {
+	if w := h.waiting.Load(); w != nil {
+		return *w
+	}
+	return ""
 }
 
 // LiveHandler serves the liveness probe.

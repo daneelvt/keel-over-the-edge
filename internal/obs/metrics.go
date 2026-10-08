@@ -4,6 +4,7 @@ package obs
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -16,6 +17,9 @@ import (
 var TickBuckets = []float64{
 	0.0005, 0.001, 0.002, 0.003, 0.005, 0.0075, 0.010, 0.015, 0.020, 0.025, 0.033, 0.050, 0.100,
 }
+
+// DBBuckets are the database queries' histogram buckets, in seconds.
+var DBBuckets = []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5}
 
 // Metrics are the server's metrics, on a registry of their own rather than
 // the global one. Names follow Prometheus's practice: base units, _seconds,
@@ -35,6 +39,14 @@ type Metrics struct {
 	Workers       prometheus.Gauge
 	Commands      *prometheus.CounterVec // by kind and result
 	Snapshots     *prometheus.CounterVec // flight recorder snapshots, by reason
+
+	DBQueryDuration    *prometheus.HistogramVec // by query
+	DBQueryErrors      *prometheus.CounterVec   // by query
+	SchemaVersion      prometheus.Gauge
+	GuestsCreated      prometheus.Counter
+	GuestsRefused      *prometheus.CounterVec // by reason
+	SessionLookups     *prometheus.CounterVec // by result: hit, miss or unknown
+	CrossOriginRefused prometheus.Counter
 }
 
 // NewMetrics makes the metrics, with the Go runtime's and the process's.
@@ -86,8 +98,30 @@ func NewMetrics(build, catalog string) *Metrics {
 			Name: "keel_flightrecorder_snapshots_total", Help: "Execution traces written by the flight recorder, by reason.",
 		}, []string{"reason"}),
 	}
+	m.DBQueryDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "keel_db_query_duration_seconds", Help: "How long each database query took, by the query's name.", Buckets: DBBuckets,
+	}, []string{"query"})
+	m.DBQueryErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_db_query_errors_total", Help: "Database queries that failed, by the query's name.",
+	}, []string{"query"})
+	m.SchemaVersion = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_db_schema_version", Help: "The newest migration the database has had.",
+	})
+	m.GuestsCreated = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_guests_created_total", Help: "Guests created.",
+	})
+	m.GuestsRefused = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_guests_refused_total", Help: "Guests refused for their name, by reason.",
+	}, []string{"reason"})
+	m.SessionLookups = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_session_cache_lookups_total", Help: "Sessions looked up: found in the cache, fetched from the database, or unknown.",
+	}, []string{"result"})
+	m.CrossOriginRefused = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_http_cross_origin_refused_total", Help: "Requests refused as cross-origin.",
+	})
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
-		m.ClockDrift, m.Boats, m.Workers, m.Commands, m.Snapshots)
+		m.ClockDrift, m.Boats, m.Workers, m.Commands, m.Snapshots,
+		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused)
 	return m
 }
 
@@ -96,6 +130,19 @@ func NewMetrics(build, catalog string) *Metrics {
 func (m *Metrics) CounterFunc(name, help string, fn func() uint64) {
 	m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{Name: name, Help: help},
 		func() float64 { return float64(fn()) }))
+}
+
+// SecondsFunc registers a counter of seconds whose value fn reads when
+// scraped.
+func (m *Metrics) SecondsFunc(name, help string, fn func() time.Duration) {
+	m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{Name: name, Help: help},
+		func() float64 { return fn().Seconds() }))
+}
+
+// GaugeFunc registers a gauge whose value fn reads when scraped, with
+// labels fixed when it is registered.
+func (m *Metrics) GaugeFunc(name, help string, labels prometheus.Labels, fn func() float64) {
+	m.Registry.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: name, Help: help, ConstLabels: labels}, fn))
 }
 
 // Handler serves the metrics in Prometheus's text format.

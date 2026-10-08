@@ -14,9 +14,22 @@
       "matchStrings": ["\\{\"[a-z0-9]+-[a-z0-9]+\", \"(?<currentValue>v[0-9.]+)\", \"(?<currentDigest>[0-9a-f]{64})\"\\}"],
       "datasourceTemplate": "github-release-attachments",
       "depNameTemplate": "tinygo-org/tinygo"
+    },
+    {
+      "customType": "regex",
+      "description": "PostgreSQL's image for the development database, pinned by version and digest in tools/dev",
+      "managerFilePatterns": ["/^tools/dev/db\\.go$/"],
+      "matchStrings": ["\"(?<depName>postgres):(?<currentValue>[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})\""],
+      "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [
+    {
+      "description": "PostgreSQL moves a major version with the production operator's image; locally and in CI it follows production.",
+      "matchDepNames": ["postgres"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
     {
       "description": "Node follows the LTS line in .nvmrc; a new major is a deliberate change.",
       "matchDepNames": ["node"],

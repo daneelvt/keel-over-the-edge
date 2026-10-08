@@ -50,7 +50,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - name: gofmt, go vet, staticcheck, Biome, tsc
+      - name: gofmt, go vet, staticcheck, sqlc, the look-alike table, Biome, tsc
         run: go run ./tools/dev -lint
 
   pr-lint:

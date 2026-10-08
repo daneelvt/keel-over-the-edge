@@ -3,6 +3,7 @@
 // Command keel is the game server. It is one binary with subcommands:
 //
 //	keel serve    run the game
+//	keel migrate  bring the database's schema up to this build's
 //	keel replay   replay an input log and check it
 package main
 
@@ -20,6 +21,7 @@ const usage = `usage: keel <command> [flags]
 
 commands:
   serve    run the game
+  migrate  bring the database's schema up to this build's
   replay   replay an input log and check it
 `
 
@@ -42,6 +44,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	switch args[0] {
 	case "serve":
 		err = serve(ctx, args[1:], getenv, stdout, stderr)
+	case "migrate":
+		err = migrate(ctx, args[1:], getenv, stdout, stderr)
 	case "replay":
 		err = replayCmd(args[1:], stdout, stderr)
 	case "help", "-h", "-help", "--help":

@@ -18,6 +18,7 @@ const server: ServerOptions = {
     // The browser's Host header is kept, so the server sees the origin
     // players use.
     '/api': { target: `http://${playAddr}`, changeOrigin: false },
+    '/guest': { target: `http://${playAddr}`, changeOrigin: false },
   },
   // The developer page reads the physics golden files, which live beside
   // the Go tests, and the game loads its models from art/; nothing else

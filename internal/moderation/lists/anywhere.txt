@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Refused wherever they occur, even inside another word. Only strings no
+# innocent word contains belong here; anything else goes in words.txt.
+#
+# Written in key form (moderation.Key): lowercase, no separators, and each
+# look-alike letter replaced by Unicode's prototype, so an m is written rn.
+# The tests print the right form of an entry that is not.
+cocksucker
+fuck
+hitler
+paedophile
+pedophile
