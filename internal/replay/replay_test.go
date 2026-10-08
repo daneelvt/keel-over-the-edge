@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -198,6 +199,10 @@ func TestDroppedRecordsBreakTheSegment(t *testing.T) {
 		t.Fatal("nothing was dropped")
 	}
 	s.start()
+	// Once the writer has caught up, the very next tick starts a segment.
+	for len(s.log.items) > 0 {
+		runtime.Gosched()
+	}
 	s.sail(1200)
 	s.close(t)
 	data := s.log.Snapshot()
@@ -205,11 +210,12 @@ func TestDroppedRecordsBreakTheSegment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Segments[0].BrokenAt < 0 {
+	broken := f.Segments[0].BrokenAt
+	if broken < 0 {
 		t.Fatal("the first segment is not marked broken")
 	}
-	if f.Segments[1].Tick > 1801 {
-		t.Fatalf("the next segment starts at %d", f.Segments[1].Tick)
+	if f.Segments[1].Tick != 1801 || broken > 1801 {
+		t.Fatalf("broken at %d; the next segment starts at %d, not 1801", broken, f.Segments[1].Tick)
 	}
 	res := replayed(t, data, 2)
 	if res.Diverged != nil {
