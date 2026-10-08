@@ -28,6 +28,7 @@ const (
 	schemaPath  = "shared/catalog.schema.json"
 	catalogDir  = "shared/catalog"
 	artDir      = "art"
+	soundDir    = "sound" // under artDir
 	goJSONPath  = "internal/catalog/catalog.gen.json"
 	goTypesPath = "internal/catalog/types.gen.go"
 	tsJSONPath  = "client/src/catalog/catalog.gen.json"
@@ -297,8 +298,13 @@ func checkArt(root string, doc map[string]any) (warnings []string, err error) {
 			}
 			return err
 		}
-		// The scripts that build the art are its source, not art a kind uses.
+		// The scripts that build the art are its source, not art a kind uses;
+		// the sound recipes are read by the client's sound engine, not named
+		// by a kind.
 		if d.IsDir() || d.Name() == "README.md" || strings.HasSuffix(d.Name(), ".ts") {
+			return nil
+		}
+		if r := filepath.ToSlash(rel(artRoot, p)); strings.HasPrefix(r, soundDir+"/") {
 			return nil
 		}
 		r := filepath.ToSlash(rel(artRoot, p))

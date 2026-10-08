@@ -25,6 +25,13 @@ var validBoats = `boats:
 
 const testArt = "art/boats/test-boat/model.glb"
 
+// The sailors every fixture has unless it gives its own, and their art.
+const (
+	validSailors = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n"
+	sailorArt    = "art/sailors/test.glb"
+	sailorsPath  = "shared/catalog/sailors.yaml"
+)
+
 // realPhysics returns the physics block of the real catalog's first boat.
 func realPhysics() string {
 	data, err := os.ReadFile(filepath.Join("..", "..", catalogDir, "boats.yaml"))
@@ -55,6 +62,10 @@ func fixture(t *testing.T, files map[string]string) string {
 	files[schemaPath] = string(schema)
 	if _, ok := files[testArt]; !ok {
 		files[testArt] = "glTF"
+	}
+	if _, ok := files[sailorsPath]; !ok {
+		files[sailorsPath] = validSailors
+		files[sailorArt] = "glTF"
 	}
 	for p, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
@@ -156,6 +167,14 @@ func TestRejects(t *testing.T) {
 			want: "/boats/0: &{[art]}",
 		},
 		{
+			name: "no sailors",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": validBoats,
+				sailorsPath:                 "sailors: []\n",
+			},
+			want: "/sailors: ",
+		},
+		{
 			name: "id in code",
 			files: map[string]string{
 				"shared/catalog/boats.yaml": validBoats,
@@ -205,6 +224,7 @@ func TestArtPresentAndUnreferenced(t *testing.T) {
 		"art/boats/orphan.png":      "png",
 		"art/README.md":             "readme",
 		"art/boats/test/build.ts":   "// the model's script",
+		"art/sound/wind.json":       "{}",
 	})
 	doc, err := readCatalog(root)
 	if err != nil {

@@ -26,6 +26,12 @@ export interface Catalog {
    * @minItems 1
    */
   boats: [Boat, ...Boat[]];
+  /**
+   * The figures that sail the boats. The first is the one drawn until players choose their own.
+   *
+   * @minItems 1
+   */
+  sailors: [Sailor, ...Sailor[]];
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -536,10 +542,34 @@ export interface PhysicsRates {
  */
 export interface BoatArt {
   /**
-   * The boat's model: a glTF binary with the nodes hull, mast, boom, sail, rudder, tiller, daggerboard and sailor.
+   * The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor.
+   */
+  model: string;
+}
+/**
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Sailor".
+ */
+export interface Sailor {
+  id: Id;
+  /**
+   * Display name.
+   */
+  name: string;
+  art: SailorArt;
+}
+/**
+ * A sailor's art.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SailorArt".
+ */
+export interface SailorArt {
+  /**
+   * The sailor's model: a glTF binary with the nodes body, head, arm-left and arm-right, its origin at the hips, facing +x.
    */
   model: string;
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'd6b3016ed56e9091';
+export const CATALOG_VERSION = '659e822bc1f46ee2';

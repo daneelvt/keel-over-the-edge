@@ -114,7 +114,7 @@ export async function runScenario(
  * The scenarios' heading-hold, the twin of steer in golden_test.go. It uses
  * only operations IEEE 754 rounds exactly, so it gives the same bits as Go.
  */
-function steer(target: number, state: Float64Array): number {
+export function steer(target: number, state: Float64Array): number {
   let off = target - (state[RECORDS.state.heading] ?? 0);
   if (off > Math.PI) {
     off -= 2 * Math.PI;

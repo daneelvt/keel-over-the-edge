@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Sailors: the figures that sail the boats.
+#
+# For now one plain stand-in, which shows where the sailor is and what they
+# are doing without a look of its own.
+sailors:
+  - id: stand-in
+    name: Stand-in
+    art:
+      model: sailors/stand-in.glb

@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The scene in a real browser: Playwright on Chromium, on the WebGL 2 back end
+# The game in a real browser: Playwright on Chromium, on the WebGL 2 back end
 # and, where the runner's Chromium offers an adapter through SwiftShader, on
-# WebGPU. Also checks that the test sea's fixtures are current.
+# WebGPU. The game's page steps the physics module, so it is built first.
+# Also checks that the test sea's fixtures are current.
 name: pr.render
 
 on:
@@ -28,10 +29,12 @@ jobs:
       - uses: ./.github/actions/setup
       - name: The test sea's fixtures are current
         run: go run ./tools/testsea -check
+      - name: Build the physics module (the game's page steps it)
+        run: go run ./tools/physics
       - name: Chromium for Playwright
         working-directory: client
         run: npx --no-install playwright install --with-deps chromium
-      - name: The scene on WebGL 2 and WebGPU
+      - name: The game on WebGL 2 and WebGPU
         working-directory: client
         run: npx --no-install playwright test
       - name: The pictures and traces of a failure

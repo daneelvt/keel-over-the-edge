@@ -2,6 +2,7 @@
 
 // Every boat's model against the catalog: its named parts sit where the
 // physics puts them, within 1 cm, and it is within its triangle budget.
+// Every sailor's model has its parts and is within its own budget.
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
@@ -9,6 +10,8 @@ import { catalog } from '../catalog';
 
 /** Most triangles in a boat's model (starting value). */
 const BUDGET = 15000;
+/** Most triangles in a sailor's model (starting value). */
+const SAILOR_BUDGET = 2000;
 const CM = 0.01;
 
 interface Gltf {
@@ -26,6 +29,27 @@ function readGltf(path: string): Gltf {
   const length = glb.readUInt32LE(12);
   return JSON.parse(glb.subarray(20, 20 + length).toString('utf8')) as Gltf;
 }
+
+describe.each(catalog.sailors.map((s) => [s.name, s] as const))('sailor %s', (_, sailor) => {
+  const g = readGltf(sailor.art.model);
+
+  test('has its named parts', () => {
+    for (const name of ['body', 'head', 'arm-left', 'arm-right']) {
+      expect(g.nodes.some((n) => n.name === name)).toBe(true);
+    }
+  });
+
+  test(`is under ${SAILOR_BUDGET.toLocaleString('en')} triangles`, () => {
+    let triangles = 0;
+    for (const m of g.meshes) {
+      for (const p of m.primitives) {
+        triangles += (g.accessors[p.indices]?.count ?? 0) / 3;
+      }
+    }
+    expect(triangles).toBeGreaterThan(100);
+    expect(triangles).toBeLessThan(SAILOR_BUDGET);
+  });
+});
 
 describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) => {
   const g = readGltf(boat.art.model);
@@ -62,6 +86,8 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       'mast',
       'boom',
       'sail',
+      'telltales',
+      'pennant',
       'rudder',
       'tiller',
       'daggerboard',
@@ -77,6 +103,12 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     expect(at('boom')[1]).toBeCloseTo(rig.boomHeight, 2);
     expect(at('boom')[2]).toBeCloseTo(-rig.mastPosition, 2);
     expect(at('sail')).toEqual(at('boom'));
+    expect(at('telltales')).toEqual(at('boom'));
+    // The pennant flies from a staff at the masthead.
+    expect(at('pennant')[2]).toBeCloseTo(-rig.mastPosition, 2);
+    const masthead = rig.boomHeight + rig.luff;
+    expect(at('pennant')[1] ?? 0).toBeGreaterThanOrEqual(masthead - CM);
+    expect(at('pennant')[1] ?? 0).toBeLessThan(masthead + 0.15);
     expect(at('rudder')[2]).toBeCloseTo(foils.rudderPosition, 2);
     expect(at('daggerboard')[2]).toBeCloseTo(-foils.boardPosition, 2);
     expect(at('sailor')[1]).toBeCloseTo(hull.centreOfGravity + sailor.sailorSeatHeight, 2);
@@ -101,6 +133,19 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     expect(Math.abs((board.max[2] ?? 0) - (board.min[2] ?? 0) - foils.boardChord)).toBeLessThan(CM);
     const rudder = bounds('rudder');
     expect(Math.abs((rudder.min[1] ?? 0) + hull.hullDraught + foils.rudderSpan)).toBeLessThan(CM);
+  });
+
+  test('its telltales sit at the height of each sail strip’s centre of effort', () => {
+    const t = bounds('telltales');
+    const width = 0.012;
+    expect(Math.abs((t.min[1] ?? 0) + width / 2 - rig.footStrip * rig.luff)).toBeLessThan(CM);
+    expect(Math.abs((t.max[1] ?? 0) - width / 2 - rig.headStrip * rig.luff)).toBeLessThan(CM);
+    // On both faces of the cloth, close aft of the luff.
+    expect(t.min[0]).toBeLessThan(0);
+    expect(t.max[0]).toBeGreaterThan(0);
+    expect(t.min[2] ?? 1).toBeLessThan(0.5);
+    const p = g.meshes[node('telltales').mesh ?? -1]?.primitives[0];
+    expect(p?.attributes.TEXCOORD_1).toBeDefined();
   });
 
   test(`is under ${BUDGET.toLocaleString('en')} triangles`, () => {

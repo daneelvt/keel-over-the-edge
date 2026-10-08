@@ -1,0 +1,8 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The wind: noise through a band-pass filter whose centre and level rise with the apparent wind at the masthead, breathing slowly. Speeds in m/s, frequencies in Hz, levels as gains.",
+  "q": 0.7,
+  "centre": { "atRest": 220, "perSpeed": 55, "most": 2600 },
+  "level": { "from": 0.3, "full": 15, "most": 0.32 },
+  "breath": { "rate": 0.11, "depth": 0.3 }
+}

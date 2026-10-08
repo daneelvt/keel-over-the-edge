@@ -1,0 +1,8 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The rigging's song: a narrow band of noise at the Aeolian tone of the sheet, f = St × V ÷ d (Strouhal number St, apparent wind V, rope diameter d), heard once the wind is up.",
+  "strouhal": 0.2,
+  "diameter": 0.01,
+  "q": 24,
+  "level": { "from": 3, "full": 14, "most": 0.05 }
+}

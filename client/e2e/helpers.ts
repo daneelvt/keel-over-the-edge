@@ -11,9 +11,11 @@ declare global {
 
 /**
  * Opens the scene on the project's back end with the test hooks, waits for
- * the boat, and freezes time. A WebGPU project with no adapter is skipped.
+ * the boat, freezes time and puts the boat back at the start, at rest. A
+ * WebGPU project with no adapter is skipped. The screen's panels and
+ * controls are hidden unless hud is true, so pictures show the scene alone.
  */
-export async function openScene(page: Page, query = ''): Promise<void> {
+export async function openScene(page: Page, query = '', hud = false): Promise<void> {
   const backend = test.info().project.name === 'webgl2' ? '&backend=webgl2' : '';
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -28,8 +30,14 @@ export async function openScene(page: Page, query = ''): Promise<void> {
   if (errors.length > 0) {
     throw new Error(`the page failed: ${errors.join('; ')}`);
   }
+  if (!hud) {
+    await page.addStyleTag({ content: '.hud { visibility: hidden; }' });
+  }
   await page.evaluate(() => {
     globalThis.keel.freeze(100);
+    globalThis.keel.reset();
+    globalThis.keel.render();
+    globalThis.keel.camera('chase');
     globalThis.keel.render();
   });
 }

@@ -5,13 +5,19 @@
   "description": "Every list of kinds in the game. Kinds are data: code reads their properties, never their names.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["boats"],
+  "required": ["boats", "sailors"],
   "properties": {
     "boats": {
       "description": "Boat types.",
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/Boat" }
+    },
+    "sailors": {
+      "description": "The figures that sail the boats. The first is the one drawn until players choose their own.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Sailor" }
     }
   },
   "$defs": {
@@ -33,7 +39,27 @@
       "additionalProperties": false,
       "required": ["model"],
       "properties": {
-        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, rudder, tiller, daggerboard and sailor.", "$ref": "#/$defs/ArtPath" }
+        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor.", "$ref": "#/$defs/ArtPath" }
+      }
+    },
+    "SailorArt": {
+      "title": "SailorArt",
+      "description": "A sailor's art.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model"],
+      "properties": {
+        "model": { "description": "The sailor's model: a glTF binary with the nodes body, head, arm-left and arm-right, its origin at the hips, facing +x.", "$ref": "#/$defs/ArtPath" }
+      }
+    },
+    "Sailor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "art"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Display name.", "type": "string", "minLength": 1 },
+        "art": { "$ref": "#/$defs/SailorArt" }
       }
     },
     "Boat": {

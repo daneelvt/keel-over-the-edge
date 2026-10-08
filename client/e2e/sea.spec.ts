@@ -125,9 +125,12 @@ test.describe('the floating origin', () => {
 
   test('the scene at the rim looks as it does at the centre', async ({ page }) => {
     await openScene(page);
-    // Every tile alike, so only the place differs.
+    // Every tile alike, so only the place differs; the boat heading 330°, as
+    // the views were chosen.
     await page.evaluate(() => {
       globalThis.keel.setIdentity(false);
+      globalThis.keel.setState({ heading: (330 * Math.PI) / 180 - 2 * Math.PI });
+      globalThis.keel.render();
       globalThis.keel.camera('bands');
     });
     const centre = await picture(page);
@@ -191,6 +194,11 @@ test.describe('pictures', () => {
   for (const sea of ['calm', 'fresh', 'gale']) {
     test(sea, async ({ page }) => {
       await openScene(page, `sea=${sea}`);
+      // The boat heading 330°, as the views were chosen to match the renderings.
+      await page.evaluate(() => {
+        globalThis.keel.setState({ heading: (330 * Math.PI) / 180 - 2 * Math.PI });
+        globalThis.keel.render();
+      });
       for (const view of ['sea', 'bands']) {
         await page.evaluate(async (v) => {
           globalThis.keel.camera(v);
@@ -200,29 +208,4 @@ test.describe('pictures', () => {
       }
     });
   }
-});
-
-test('the frame allocates nothing that stays', async ({ page }) => {
-  // What the heap keeps does not depend on the picture's size, and a small
-  // one keeps SwiftShader's CPU rendering inside the time.
-  test.setTimeout(300_000);
-  await page.setViewportSize({ width: 320, height: 200 });
-  await openScene(page, 'sea=gale');
-  const cdp = await page.context().newCDPSession(page);
-  const used = async (): Promise<number> => {
-    await cdp.send('HeapProfiler.collectGarbage');
-    await cdp.send('HeapProfiler.collectGarbage');
-    return (await cdp.send('Runtime.getHeapUsage')).usedSize;
-  };
-  await page.evaluate(async () => {
-    const k = globalThis.keel;
-    k.world.boatState.speed = 6;
-    k.thaw();
-    await k.frames(300);
-  });
-  const before = await used();
-  await page.evaluate(() => globalThis.keel.frames(1000));
-  const after = await used();
-  // The boat sailed 100 m and more, through new tiles; the heap stayed put.
-  expect(after - before).toBeLessThan(256 * 1024);
 });

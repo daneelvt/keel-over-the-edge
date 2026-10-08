@@ -1,0 +1,8 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "Flogging cloth: noise in the cloth's band, beaten at a flap rate that rises with the apparent wind, only while a sail strip is luffing; louder as the wind rises.",
+  "centre": 950,
+  "q": 0.9,
+  "rate": { "atRest": 2.5, "perSpeed": 0.85 },
+  "level": { "from": 0.5, "full": 9, "most": 0.3 }
+}

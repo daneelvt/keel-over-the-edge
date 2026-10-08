@@ -11,6 +11,7 @@ import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { pass, renderOutput } from 'three/tsl';
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu';
+import { FrameCap } from '../game/cap';
 import { type Backend, createGfx, defaultRenderScale, type Gfx } from './renderer';
 
 export type Antialias = 'fxaa' | 'smaa' | 'none';
@@ -20,7 +21,7 @@ export const NEAR = 0.2;
 export const FAR = 4000;
 
 export interface FrameInfo {
-  /** Seconds since the previous frame. */
+  /** Seconds since the previous drawn frame. */
   dt: number;
   /** The time of the frame, in milliseconds (requestAnimationFrame's clock). */
   now: number;
@@ -29,8 +30,8 @@ export interface FrameInfo {
 export interface StageHooks {
   /** Before each frame's scene render: update uniforms, run the tile pass. */
   frame(gfx: Gfx, info: FrameInfo): void;
-  /** After each frame is drawn. */
-  drawn?(gfx: Gfx): void;
+  /** After each frame is drawn, with the main thread's work on it in milliseconds. */
+  drawn?(gfx: Gfx, work: number): void;
   /** After a new renderer is made (at start and after a loss). */
   attached?(gfx: Gfx): void;
 }
@@ -44,6 +45,8 @@ export class Stage {
   scale: number | null = null;
   /** Whether to measure GPU time (the developer panel's statistics). */
   timestamps = false;
+  /** Which animation frames are drawn: at most 60 a second, or 30 to save battery. */
+  readonly cap = new FrameCap();
   /** How many times the renderer was rebuilt after a loss. */
   recoveries = 0;
   lastLoss = '';
@@ -87,6 +90,14 @@ export class Stage {
   /** Stops the frame loop (tests drive frames with renderOnce). */
   freeze(frozen: boolean): void {
     this.#frozen = frozen;
+    if (!frozen) {
+      this.#last = performance.now();
+    }
+  }
+
+  /** After the page was hidden: animation frames stopped, so their timing starts again. */
+  resumed(): void {
+    this.cap.restart();
   }
 
   /** Draws one frame now, at time now. */
@@ -144,8 +155,13 @@ export class Stage {
     this.#pipeline = p;
   }
 
+  /**
+   * Every animation frame. three.js calls this on each one and draws only
+   * what it renders, so a frame the cap skips returns at once and the last
+   * picture stays on screen.
+   */
   #frame(now: number): void {
-    if (this.#frozen) {
+    if (!this.cap.tick(now) || this.#frozen) {
       return;
     }
     const dt = Math.min((now - this.#last) / 1000, 0.25);
@@ -158,10 +174,11 @@ export class Stage {
     if (g === null || this.#pipeline === null) {
       return;
     }
+    const start = performance.now();
     g.renderer.info.reset();
     this.#hooks.frame(g, { dt, now });
     this.#pipeline.render();
-    this.#hooks.drawn?.(g);
+    this.#hooks.drawn?.(g, performance.now() - start);
   }
 
   async #recover(reason: string): Promise<void> {

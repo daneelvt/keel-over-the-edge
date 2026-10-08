@@ -1,0 +1,393 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+@font-face {
+  font-family: "Alegreya Sans";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/AlegreyaSans-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Alegreya Sans";
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/AlegreyaSans-Medium.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IM Fell English SC";
+  font-display: swap;
+  src: url("../fonts/IMFellEnglishSC-Regular.ttf") format("truetype");
+}
+
+.hud {
+  --panel: rgb(26 36 44 / 72%);
+  --ink: #f2efe7;
+  --faint: rgb(242 239 231 / 62%);
+  --gold: #e8b450;
+  --edge-top: max(12px, env(safe-area-inset-top));
+  --edge-right: max(12px, env(safe-area-inset-right));
+  --edge-bottom: max(12px, env(safe-area-inset-bottom));
+  --edge-left: max(12px, env(safe-area-inset-left));
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  pointer-events: none;
+  color: var(--ink);
+  font:
+    15px / 1.3 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.hud .panel,
+.hud button {
+  pointer-events: auto;
+}
+
+.hud .panel {
+  border-radius: 12px;
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 18%);
+}
+
+.hud p {
+  margin: 0;
+}
+
+.hud-top {
+  position: absolute;
+  top: var(--edge-top);
+  left: var(--edge-left);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: calc(100vw - var(--edge-left) - var(--edge-right) - 56px);
+}
+
+.instruments {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 10px;
+}
+
+.compass {
+  width: 76px;
+  height: 76px;
+  overflow: visible;
+}
+
+.compass-face {
+  fill: rgb(12 22 30 / 55%);
+  stroke: var(--gold);
+  stroke-width: 2.5;
+}
+
+.compass-tick {
+  stroke: var(--faint);
+  stroke-width: 1.2;
+}
+
+.compass-point {
+  fill: var(--ink);
+  font:
+    500 11px "Alegreya Sans",
+    sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.compass-point.north {
+  fill: var(--gold);
+}
+
+.compass-wind {
+  fill: #9fd0f0;
+  stroke: rgb(12 22 30 / 60%);
+  stroke-width: 0.8;
+}
+
+.compass-boat {
+  fill: var(--ink);
+}
+
+.readouts {
+  color: var(--faint);
+}
+
+.readouts b {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.speed {
+  color: var(--ink);
+  font:
+    34px / 1 "IM Fell English SC",
+    Georgia,
+    serif;
+}
+
+.speed .unit {
+  margin-left: 4px;
+  font:
+    15px "Alegreya Sans",
+    sans-serif;
+  color: var(--faint);
+}
+
+.sailor-line {
+  padding: 6px 12px;
+  color: var(--gold);
+  font-weight: 500;
+}
+
+.clinometer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 10px 4px;
+}
+
+.clinometer svg {
+  width: 96px;
+  height: 52px;
+}
+
+.clino-scale,
+.clino-tick {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 1.5;
+}
+
+.clino-needle {
+  stroke: var(--gold);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.round {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.menu-button {
+  position: absolute;
+  right: var(--edge-right);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.menu {
+  position: absolute;
+  right: calc(var(--edge-right) + 56px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(300px, calc(100vw - var(--edge-right) - var(--edge-left) - 56px));
+  padding: 12px 16px;
+}
+
+.menu h2 {
+  margin: 0 0 6px;
+  font:
+    20px "IM Fell English SC",
+    Georgia,
+    serif;
+  color: var(--gold);
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.menu-row input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--gold);
+}
+
+.menu-close {
+  margin-top: 6px;
+  min-height: 44px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* The controls. touch-action: none keeps the browser from scrolling or
+   zooming under a thumb. */
+.control {
+  position: absolute;
+  bottom: var(--edge-bottom);
+  pointer-events: auto;
+  touch-action: none;
+  border-radius: 12px;
+  background: var(--panel);
+  cursor: grab;
+  transition: opacity 0.3s;
+}
+
+.control.dimmed {
+  opacity: 0.45;
+}
+
+.control-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  text-align: center;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.helm {
+  left: var(--edge-left);
+  width: 190px;
+  height: 88px;
+}
+
+.helm-arc {
+  position: absolute;
+  left: 15px;
+  top: 14px;
+  width: 160px;
+  height: 27px;
+  overflow: visible;
+}
+
+.helm-arc path,
+.helm-arc line {
+  fill: none;
+  stroke: rgb(255 255 255 / 55%);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.helm-arc line {
+  stroke-width: 2;
+}
+
+/* A swing turns about the arc's centre (the arc's radius is 66.7 px), its knob's centre on the arc. */
+.helm-swing {
+  position: absolute;
+  left: 95px;
+  top: 18px;
+  width: 0;
+  height: 70.7px;
+  transform-origin: 0 70.7px;
+}
+
+.knob {
+  position: absolute;
+  left: -13px;
+  top: -9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
+}
+
+.actual .knob {
+  background: transparent;
+  border: 2px solid rgb(255 255 255 / 55%);
+  box-shadow: none;
+}
+
+.sheet {
+  right: var(--edge-right);
+  width: 64px;
+  height: 196px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 6px;
+  box-sizing: border-box;
+}
+
+.sheet-end {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.sheet-track {
+  position: relative;
+  flex: 0 0 112px;
+  width: 6px;
+  margin: 6px 0;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 40%);
+}
+
+/* The knob travels the track's height less its own. */
+.sheet-travel {
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 0;
+  height: calc(100% - 22px);
+}
+
+.sheet-travel .knob {
+  left: -17px;
+  top: 0;
+  width: 34px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.sheet .control-label {
+  bottom: 4px;
+}
+
+.overlay-labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.overlay-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -130%;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgb(26 36 44 / 70%);
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-height: 420px) {
+  .sheet {
+    height: 160px;
+  }
+
+  .sheet-track {
+    flex-basis: 78px;
+  }
+}

@@ -35,8 +35,8 @@ type Boat struct {
 
 // A boat's art. Every art object's values are paths under art/, checked to exist.
 type BoatArt struct {
-	// The boat's model: a glTF binary with the nodes hull, mast, boom, sail, rudder,
-	// tiller, daggerboard and sailor.
+	// The boat's model: a glTF binary with the nodes hull, mast, boom, sail,
+	// telltales, pennant, rudder, tiller, daggerboard and sailor.
 	Model ArtPath `json:"model"`
 }
 
@@ -63,6 +63,10 @@ type BoatPhysics struct {
 type Catalog struct {
 	// Boat types.
 	Boats []Boat `json:"boats"`
+
+	// The figures that sail the boats. The first is the one drawn until players
+	// choose their own.
+	Sailors []Sailor `json:"sailors"`
 }
 
 // Stable identifier of a kind, stored in the database: never renamed or reused.
@@ -362,5 +366,23 @@ type PhysicsSailor struct {
 	SwimTime float64 `json:"swimTime"`
 }
 
+type Sailor struct {
+	// Art corresponds to the JSON schema field "art".
+	Art SailorArt `json:"art"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Display name.
+	Name string `json:"name"`
+}
+
+// A sailor's art.
+type SailorArt struct {
+	// The sailor's model: a glTF binary with the nodes body, head, arm-left and
+	// arm-right, its origin at the hips, facing +x.
+	Model ArtPath `json:"model"`
+}
+
 // Version is the catalog version (tools/catalog).
-const Version = "d6b3016ed56e9091"
+const Version = "659e822bc1f46ee2"

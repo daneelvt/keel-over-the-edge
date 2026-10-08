@@ -3,12 +3,15 @@
 // A boat on the sea: its model, loaded from the catalog's art with three.js's
 // GLTFLoader and the meshopt decoder, with every material replaced by one
 // from the factory. The parts are found by their node names (hull, mast,
-// boom, sail, rudder, tiller, daggerboard, sailor).
+// boom, sail, telltales, pennant, rudder, tiller, daggerboard, sailor).
 //
-// The sail is shaped on the GPU: the model holds it flat, each vertex with
-// its fraction of the chord and of the luff, and a vertex node swings it
-// round the mast with the boom, twists it open toward the head and gives it
-// camber, from uniforms. Phase 5 drives them from the physics.
+// Everything that moves is drawn from the physics: the boat is placed by its
+// position and heading, then heeled about the fore-and-aft axis through its
+// centre of gravity, as the physics rolls it; the boom swings to its angle;
+// the rudder and tiller turn; the sail is shaped on the GPU for the boom's
+// angle, the twist and the sailor's flattening, and ripples where it
+// luffs; the telltales read each sail strip's flow; the pennant streams in
+// the apparent wind at the masthead. A stand-in figure shows the sailor.
 
 import {
   CanvasTexture,
@@ -24,22 +27,18 @@ import {
 } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import {
-  cos,
-  Fn,
-  float,
-  normalize,
-  normalLocal,
-  positionGeometry,
-  sin,
-  uniform,
-  uv,
-  vec3,
-} from 'three/tsl';
+import { Fn, normalLocal, positionGeometry, uv } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import type { ScenePoint } from './coords';
+import type { Boat as BoatKind } from '../catalog';
+import type { BoatPose } from '../predict/blend';
+import { RECORDS } from '../predict/layout.gen';
+import { headingToRotationY, type ScenePoint } from './coords';
 import { litMaterial } from './materials';
+import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
+import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
+import { LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
+import { FLOW_LUFFING, Telltales } from './telltales';
 
 /** Every model under art/, by its path there, as Vite serves it. */
 const MODELS = import.meta.glob<string>('../../../art/**/*.glb', {
@@ -57,86 +56,197 @@ export function artUrl(path: string): string {
   return url;
 }
 
-/** The sail's trim, in radians: the boom's angle (to starboard positive), the twist at the head, the camber's depth. */
-export interface SailTrim {
-  boom: number;
-  twist: number;
-  camber: number;
+/** The sail's camber at full power, as a fraction of the chord; flattening scales it. */
+export const FULL_CAMBER = 0.09;
+/** Seconds over which the sail's ripple grows and dies away. */
+const RIPPLE_EASE = 0.25;
+const DEG = Math.PI / 180;
+
+/**
+ * Places a boat's nodes: root at the scene point turned to the heading, and
+ * heel rolled about its own origin, which is at the centre of gravity's
+ * height (the model below it is lowered by the same height).
+ */
+export function placeBoatNodes(
+  root: Object3D,
+  heel: Object3D,
+  at: ScenePoint,
+  heading: number,
+  heelAngle: number,
+): void {
+  root.position.set(at.x, at.y, at.z);
+  root.rotation.set(0, headingToRotationY(heading), 0);
+  // Positive heel puts the starboard side (+x) down: a turn of −heel about
+  // the axis pointing aft (+z).
+  heel.rotation.set(0, 0, -heelAngle);
 }
 
-/** A beam reach on port tack: the boom well out to starboard. */
-export const BEAM_REACH: SailTrim = { boom: 0.96, twist: 0.2, camber: 0.09 };
-
-/** The sail's distance aft of the mast's centre, as the model has it, in metres. */
-const LUFF_OFFSET = 0.04;
+/**
+ * How hard a luffing strip ripples, 0.4 to 1: harder the further its angle
+ * of attack is below the luffing angle.
+ */
+export function luffing(attack: number, luffAngle: number): number {
+  return 0.4 + 0.6 * Math.max(0, Math.min(1, 1 - Math.abs(attack) / luffAngle));
+}
 
 export class Boat {
   readonly root = new Group();
+  /** Rolled by the heel about the centre of gravity's height. */
+  readonly heel = new Group();
+  /** The model, lowered so that the heel's pivot is at its centre of gravity. */
+  readonly model = new Group();
   readonly parts = new Map<string, Object3D>();
-  readonly trim = {
-    boom: uniform(BEAM_REACH.boom),
-    twist: uniform(BEAM_REACH.twist),
-    camber: uniform(BEAM_REACH.camber),
-  };
+  readonly sail = sailUniforms();
+  readonly telltales = new Telltales();
+  readonly pennant = new Pennant();
+  /** The stand-in sailor, once loaded. */
+  figure: Object3D | null = null;
 
-  constructor() {
+  readonly #kind: BoatKind;
+  readonly #frame: SailorFrame;
+  readonly #place: SailorPlace = { x: 0, y: 0, z: 0, facing: 0, tilt: 0 };
+  readonly #ripple = new Float64Array(2);
+  #side = -1;
+
+  constructor(kind: BoatKind) {
+    this.#kind = kind;
+    const { hull, rig, foils } = kind.physics;
     this.root.name = 'boat';
+    this.heel.position.y = hull.centreOfGravity;
+    this.model.position.y = -hull.centreOfGravity;
+    this.root.add(this.heel);
+    this.heel.add(this.model);
+    this.sail.footV.value = rig.footStrip;
+    this.sail.headV.value = rig.headStrip;
+    this.#frame = {
+      seatZ: 0,
+      centreOfGravity: hull.centreOfGravity,
+      boardZ: -foils.boardPosition,
+      boardDepth: hull.hullDraught + 0.45 * foils.boardSpan,
+    };
   }
 
-  /** Loads a model from the catalog's art path. */
-  async load(path: string, sailNumber: string, insignia: string): Promise<void> {
+  /** Loads the boat's model from the catalog's art path. */
+  async load(sailNumber: string, insignia: string): Promise<void> {
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
-    const gltf = await loader.loadAsync(artUrl(path));
+    const gltf = await loader.loadAsync(artUrl(this.#kind.art.model));
     const model = gltf.scene;
     model.traverse((o) => {
       if (o.name !== '') {
         this.parts.set(o.name, o);
       }
     });
-    const sail = this.parts.get('sail');
     const cloth = sailCloth(sailNumber, insignia);
     model.traverse((o) => {
-      if (!(o instanceof Mesh)) {
-        return;
+      if (o instanceof Mesh) {
+        o.material = this.#replace(o, o.material as Material, cloth);
+        // The shaped sail, the ribbons and the pennant leave their rest bounds.
+        o.frustumCulled = false;
       }
-      o.material = this.#replace(
-        o,
-        o.material as Material,
-        sail !== undefined && isWithin(o, sail),
-        cloth,
-      );
     });
-    this.root.add(model);
-    this.setTrim(BEAM_REACH);
-  }
-
-  setTrim(t: SailTrim): void {
-    this.trim.boom.value = t.boom;
-    this.trim.twist.value = t.twist;
-    this.trim.camber.value = t.camber;
-    const boom = this.parts.get('boom');
-    if (boom !== undefined) {
-      boom.rotation.y = t.boom;
+    this.model.add(model);
+    const seat = this.parts.get('sailor');
+    if (seat !== undefined) {
+      this.#frame.seatZ = seat.position.z;
     }
   }
 
-  /** Puts the boat at a scene position with a rotation about y. */
-  place(p: ScenePoint, rotationY: number): void {
-    this.root.position.set(p.x, p.y, p.z);
-    this.root.rotation.y = rotationY;
+  /** Loads the sailor's figure from an art path and seats it in the boat. */
+  async loadSailor(path: string): Promise<void> {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    const gltf = await loader.loadAsync(artUrl(path));
+    const figure = gltf.scene;
+    figure.name = 'sailor figure';
+    figure.rotation.order = 'ZYX';
+    figure.traverse((o) => {
+      if (o instanceof Mesh) {
+        const src = o.material as MeshStandardMaterial;
+        const m = litMaterial({
+          color: (src.color as Color).clone(),
+          roughness: src.roughness,
+          metalness: 0,
+        });
+        m.name = src.name;
+        src.dispose();
+        o.material = m;
+      }
+    });
+    this.figure = figure;
+    this.model.add(figure);
+  }
+
+  /**
+   * Draws the boat in a pose at a scene point, from the latest step's Out.
+   * time is world time; dt the world time since the last frame, for what
+   * eases, in seconds.
+   */
+  draw(at: ScenePoint, pose: BoatPose, out: Float64Array, time: number, dt: number): void {
+    placeBoatNodes(this.root, this.heel, at, pose.heading, pose.heel);
+    const { rig } = this.#kind.physics;
+    const boom = this.parts.get('boom');
+    if (boom !== undefined) {
+      boom.rotation.y = pose.boom;
+    }
+    // A positive rudder turns the bow to starboard: its blade swings to
+    // starboard behind the stock, and the tiller ahead of it to port.
+    const rudder = this.parts.get('rudder');
+    if (rudder !== undefined) {
+      rudder.rotation.y = pose.rudder;
+    }
+
+    // The twist and the camber fall to the side the boom is on, turning over
+    // as it crosses the centreline, as the physics turns them.
+    const turn = Math.max(-1, Math.min(1, pose.boom / (rig.twistTurn * DEG)));
+    const flat = out[RECORDS.out.flattening] ?? 0;
+    this.sail.boom.value = pose.boom;
+    this.sail.side.value = turn;
+    this.sail.twist.value = (out[RECORDS.out.twist] ?? 0) * turn;
+    this.sail.camber.value = FULL_CAMBER * (flat > 0 ? flat : 1);
+    this.sail.time.value = time;
+    const ease = dt > 0 ? 1 - Math.exp(-dt / RIPPLE_EASE) : 0;
+    for (let i = 0; i < 2; i++) {
+      const flow = out[i === 0 ? RECORDS.out.footFlow : RECORDS.out.headFlow] ?? 1;
+      const attack = out[i === 0 ? RECORDS.out.footAttack : RECORDS.out.headAttack] ?? 0;
+      const want = flow === FLOW_LUFFING ? luffing(attack, rig.luffAngle * DEG) : 0;
+      const r = this.#ripple[i] ?? 0;
+      this.#ripple[i] = r + (want - r) * ease;
+    }
+    this.sail.rippleFoot.value = this.#ripple[0] ?? 0;
+    this.sail.rippleHead.value = this.#ripple[1] ?? 0;
+    this.telltales.update(out, pose.boom, dt);
+    this.pennant.update(out, dt);
+
+    const figure = this.figure;
+    if (figure !== null) {
+      if (pose.sailorMode === SAILING && Math.abs(pose.sailor) > 0.05) {
+        this.#side = Math.sign(pose.sailor);
+      }
+      const p = placeSailor(
+        pose.sailor,
+        pose.sailorMode,
+        pose.heel,
+        this.#frame,
+        this.#side,
+        this.#place,
+      );
+      figure.position.set(p.x, p.y, p.z);
+      figure.rotation.set(0, p.facing, p.tilt);
+    }
   }
 
   /** After a new renderer: everything is kept on the CPU side and uploaded again by itself. */
   attached(_gfx: Gfx): void {}
 
-  #replace(mesh: Mesh, m: Material, isSail: boolean, cloth: CanvasTexture): Material {
+  #replace(mesh: Mesh, m: Material, cloth: CanvasTexture): Material {
     const src = m as MeshStandardMaterial;
     const vertexColors = mesh.geometry.hasAttribute('color');
-    if (isSail) {
+    let made: Material;
+    if (this.#within(mesh, 'sail')) {
       // Daylight comes through flax: its shaded side glows a little, with the
       // insignia and number showing through.
-      const sail = litMaterial(
+      made = litMaterial(
         {
           map: cloth,
           emissiveMap: cloth,
@@ -147,58 +257,54 @@ export class Boat {
         },
         this.#sailNode(),
       );
-      sail.name = src.name;
-      return sail;
+    } else if (this.#within(mesh, 'telltales')) {
+      made = litMaterial(
+        { vertexColors: true, roughness: 0.9, metalness: 0, side: DoubleSide },
+        this.telltales.node(this.sail),
+      );
+    } else if (this.#within(mesh, 'pennant')) {
+      made = litMaterial(
+        { color: (src.color as Color).clone(), roughness: 0.8, metalness: 0, side: DoubleSide },
+        this.pennant.node(),
+      );
+    } else {
+      made = litMaterial({
+        color: (src.color as Color).clone(),
+        roughness: src.roughness,
+        metalness: src.metalness,
+        vertexColors,
+        side: src.side === DoubleSide ? DoubleSide : FrontSide,
+      });
     }
-    const lit = litMaterial({
-      color: (src.color as Color).clone(),
-      roughness: src.roughness,
-      metalness: src.metalness,
-      vertexColors,
-      side: src.side === DoubleSide ? DoubleSide : FrontSide,
-    });
-    lit.name = src.name;
+    made.name = src.name;
     src.dispose();
-    return lit;
+    return made;
   }
 
-  /**
-   * The sail's vertex node. At height v up the luff the sail's chord turns
-   * about the mast by the boom's angle plus the twist times v, and stands
-   * off its straight line by the camber, 4·depth·u(1 − u) of the chord at
-   * fraction u along it, to the side the boom is out on.
-   */
+  #within(o: Object3D, name: string): boolean {
+    const part = this.parts.get(name);
+    for (let p: Object3D | null = o; p !== null; p = p.parent) {
+      if (p === part) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** The sail's vertex node: each vertex at its place on the shaped sail. */
   #sailNode(): Node<'vec3'> {
-    const { boom, twist, camber } = this.trim;
     return Fn(() => {
-      const fu = uv(1).x;
-      const fv = uv(1).y;
-      const along = positionGeometry.z.sub(LUFF_OFFSET);
-      const side = boom.sign();
-      const theta = boom.add(twist.mul(fv).mul(side));
-      // u(1 − u)·chord is along·(1 − u).
-      const d = camber.mul(4).mul(along).mul(float(1).sub(fu)).mul(side);
-      const z = along.add(LUFF_OFFSET);
-      const c = cos(theta);
-      const s = sin(theta);
-      const slope = camber
-        .mul(4)
-        .mul(float(1).sub(fu.mul(2)))
-        .mul(side);
-      const n = normalize(vec3(1, 0, slope.negate()));
-      normalLocal.assign(vec3(n.x.mul(c).add(n.z.mul(s)), 0, n.z.mul(c).sub(n.x.mul(s))));
-      return vec3(d.mul(c).add(z.mul(s)), positionGeometry.y, z.mul(c).sub(d.mul(s)));
+      const at = sailPoint(
+        this.sail,
+        positionGeometry.z.sub(LUFF_OFFSET),
+        uv(1).x,
+        uv(1).y,
+        positionGeometry.y,
+      );
+      normalLocal.assign(at.normal);
+      return at.position;
     })() as unknown as Node<'vec3'>;
   }
-}
-
-function isWithin(o: Object3D, ancestor: Object3D): boolean {
-  for (let p: Object3D | null = o; p !== null; p = p.parent) {
-    if (p === ancestor) {
-      return true;
-    }
-  }
-  return false;
 }
 
 /**
