@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
+# Runs only when the catalog, its art, its generated files, or code that could
+# name a kind, changed.
 name: pr.catalog
 
 on:
@@ -12,9 +14,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pr-catalog:
-    name: pr-catalog
+  changes:
+    name: changes
     if: github.event.pull_request.draft == false
+    runs-on: ubuntu-slim
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      catalog: ${{ steps.filter.outputs.catalog }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            catalog:
+              - '.github/workflows/pr.catalog.yaml'
+              - '.github/actions/setup/**'
+              - '.nvmrc'
+              - 'go.mod'
+              - 'go.sum'
+              - 'client/package.json'
+              - 'client/package-lock.json'
+              - 'shared/**'
+              - 'client/src/catalog/**'
+              - 'art/**'
+              - 'internal/catalog/**'
+              - 'internal/physics/**'
+              - 'tools/catalog/**'
+              - '**/*.go'
+              - '**/*.ts'
+
+  catalog:
+    name: catalog
+    needs: [changes]
+    if: needs.changes.outputs.catalog == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -25,3 +58,18 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Schema, ids, art, generated files current, no ids in code
         run: go run ./tools/catalog -check
+
+  pr-catalog:
+    name: pr-catalog
+    if: always()
+    needs: [changes, catalog]
+    runs-on: ubuntu-slim
+    permissions: {}
+    steps:
+      - name: Every job passed, or was skipped as nothing it checks changed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
+          done

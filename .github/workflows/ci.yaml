@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Builds and tests the game. The other checks are the pr.*.yaml workflows.
+# On a pull request the Go tests run only when Go code or what it reads
+# changed, the client's only when the client or what it loads changed, and
+# the smoke test when either did; a push to main runs everything.
 name: ci
 
 on:
@@ -14,6 +17,43 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-slim
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      go: ${{ github.event_name != 'pull_request' || steps.filter.outputs.go == 'true' }}
+      client: ${{ github.event_name != 'pull_request' || steps.filter.outputs.client == 'true' }}
+    steps:
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            go:
+              - '.github/workflows/ci.yaml'
+              - '.github/actions/setup/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'cmd/**'
+              - 'internal/**'
+              - 'tools/**'
+              - 'shared/**'
+            client:
+              - '.github/workflows/ci.yaml'
+              - '.github/actions/setup/**'
+              - '.nvmrc'
+              - 'go.mod'
+              - 'go.sum'
+              - 'client/**'
+              - 'art/**'
+              - 'internal/catalog/**'
+              - 'internal/physics/**'
+              - 'tools/internal/**'
+              - 'tools/physics/**'
+              - 'tools/licences/allowed.txt'
+
   # The Go tests on both machines the server is built for, so the physics
   # golden tests show amd64 and arm64 agree bit for bit.
   go:
@@ -22,6 +62,8 @@ jobs:
       fail-fast: false
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    needs: [changes]
+    if: needs.changes.outputs.go == 'true'
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -44,6 +86,8 @@ jobs:
 
   client:
     name: client
+    needs: [changes]
+    if: needs.changes.outputs.client == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -63,9 +107,14 @@ jobs:
         working-directory: client
         run: node build/size.ts
 
+  # Starts the server and the client together: after either changed, once
+  # whichever ran has passed.
   smoke:
     name: smoke
-    needs: [go, client]
+    needs: [changes, go, client]
+    if: >-
+      always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
+      (needs.changes.outputs.go == 'true' || needs.changes.outputs.client == 'true')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -80,11 +129,11 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [go, client, smoke]
-    runs-on: ubuntu-24.04
+    needs: [changes, go, client, smoke]
+    runs-on: ubuntu-slim
     permissions: {}
     steps:
-      - name: Every job passed
+      - name: Every job passed, or was skipped as nothing it checks changed
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |

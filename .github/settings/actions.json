@@ -10,7 +10,7 @@
     "body": {
       "github_owned_allowed": true,
       "verified_allowed": false,
-      "patterns_allowed": ["ossf/scorecard-action@*", "zizmorcore/zizmor-action@*"]
+      "patterns_allowed": ["ossf/scorecard-action@*", "zizmorcore/zizmor-action@*", "dorny/paths-filter@*"]
     }
   },
   {

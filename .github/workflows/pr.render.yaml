@@ -2,7 +2,11 @@
 # The game in a real browser: Playwright on Chromium, on the WebGL 2 back end
 # and, where the runner's Chromium offers an adapter through SwiftShader, on
 # WebGPU. The game's page steps the physics module, so it is built first.
-# Also checks that the test sea's fixtures are current.
+# Also checks that the test sea's fixtures are current. Runs only when a file
+# the browser tests depend on changed.
+#
+# Each back end runs in jobs of its own, and the tests tagged @long (minutes
+# each on SwiftShader) apart from the rest, so the four run side by side.
 name: pr.render
 
 on:
@@ -16,9 +20,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pr-render:
-    name: pr-render
+  changes:
+    name: changes
     if: github.event.pull_request.draft == false
+    runs-on: ubuntu-slim
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      render: ${{ steps.filter.outputs.render }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            render:
+              - '.github/workflows/pr.render.yaml'
+              - '.github/actions/setup/**'
+              - '.nvmrc'
+              - 'go.mod'
+              - 'go.sum'
+              - 'client/**'
+              - 'art/**'
+              - 'internal/physics/**'
+              - 'tools/internal/**'
+              - 'tools/physics/**'
+              - 'tools/testsea/**'
+              - 'tools/licences/allowed.txt'
+
+  fixtures:
+    name: fixtures
+    needs: [changes]
+    if: needs.changes.outputs.render == 'true'
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+      - name: The test sea's fixtures are current
+        run: go run ./tools/testsea -check
+
+  browser:
+    name: browser (${{ matrix.project }}, ${{ matrix.tests }})
+    needs: [changes]
+    if: needs.changes.outputs.render == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [webgl2, webgpu]
+        tests: [long, short]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -27,22 +81,38 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - name: The test sea's fixtures are current
-        run: go run ./tools/testsea -check
       - name: Build the physics module (the game's page steps it)
         run: go run ./tools/physics
-      - name: Chromium for Playwright
+      - name: Chromium's headless shell for Playwright
         working-directory: client
-        run: npx --no-install playwright install --with-deps chromium
-      - name: The game on WebGL 2 and WebGPU
+        run: npx --no-install playwright install --with-deps --only-shell chromium
+      - name: The game on ${{ matrix.project }}, the ${{ matrix.tests }} tests
         working-directory: client
-        run: npx --no-install playwright test
+        env:
+          PROJECT: ${{ matrix.project }}
+          GREP: ${{ matrix.tests == 'long' && '--grep' || '--grep-invert' }}
+        run: npx --no-install playwright test --project "$PROJECT" "$GREP" @long
       - name: The pictures and traces of a failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright
+          name: playwright-${{ matrix.project }}-${{ matrix.tests }}
           path: |
             client/test-results
             client/playwright-report
           retention-days: 14
+
+  pr-render:
+    name: pr-render
+    if: always()
+    needs: [changes, fixtures, browser]
+    runs-on: ubuntu-slim
+    permissions: {}
+    steps:
+      - name: Every job passed, or was skipped as nothing it checks changed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
+          done
