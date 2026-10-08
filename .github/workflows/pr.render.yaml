@@ -23,7 +23,7 @@ jobs:
   changes:
     name: changes
     if: github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-slim
     permissions:
       pull-requests: read # list the pull request's changed files
     outputs:
@@ -51,7 +51,7 @@ jobs:
     name: fixtures
     needs: [changes]
     if: needs.changes.outputs.render == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-slim
     permissions:
       contents: read
     steps:
@@ -106,7 +106,7 @@ jobs:
     name: pr-render
     if: always()
     needs: [changes, fixtures, browser]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-slim
     permissions: {}
     steps:
       - name: Every job passed, or was skipped as nothing it checks changed

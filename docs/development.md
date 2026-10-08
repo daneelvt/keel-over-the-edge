@@ -118,7 +118,10 @@ asks `dorny/paths-filter` whether the pull request touches any file the check
 reads (the filter is in the workflow, and always includes the workflow itself
 and `.github/actions/setup`). The checks run only if it does; the last job
 always runs, and passes when every job before it passed or was skipped, so
-the required check is reported either way. A new file a check reads, outside
+the required check is reported either way. Those two jobs, which only ask
+GitHub's API or read results, run on `ubuntu-slim` (one CPU, a 15-minute
+limit), as does the test sea's fixtures check, which runs beside the browser
+tests; the rest run on `ubuntu-24.04`. A new file a check reads, outside
 the paths its filter lists, must be added to the filter. `pr.actions`,
 `pr.secrets` and `codeql` are not filtered: the first and last upload to code
 scanning, which the `main` ruleset waits for, and gitleaks must see every
