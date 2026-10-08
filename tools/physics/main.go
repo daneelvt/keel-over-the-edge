@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Command physics builds the physics package into the client's WebAssembly
-// module and checks the package's rules.
+// module and checks the package's rules, and that the simulation that runs it
+// on the server compiles to no fused multiply-add either.
 //
 //	go run ./tools/physics          write the layout files and build client/src/predict/physics.wasm
 //	go run ./tools/physics -check   check the rules, the layout files and the module, writing nothing
@@ -21,11 +22,15 @@ import (
 
 const (
 	physicsDir = "internal/physics"
-	wasmPkg    = "./internal/physics/wasm"
-	moduleOut  = "client/src/predict/physics.wasm"
-	goLayout   = "internal/physics/layout.gen.go"
-	tsLayout   = "client/src/predict/layout.gen.ts"
-	stateDir   = ".dev"
+	// simPkg is the simulation, which runs the physics on the server: it
+	// does no float arithmetic of its own, and the disassembly checks it
+	// fuses none either.
+	simPkg    = "./internal/sim"
+	wasmPkg   = "./internal/physics/wasm"
+	moduleOut = "client/src/predict/physics.wasm"
+	goLayout  = "internal/physics/layout.gen.go"
+	tsLayout  = "client/src/predict/layout.gen.ts"
+	stateDir  = ".dev"
 	// budget is the most the module may weigh, gzipped. Browsers get it
 	// with Brotli, which is smaller still.
 	budget = 300 << 10
@@ -90,11 +95,13 @@ func runCheck(ctx context.Context) error {
 		return err
 	}
 	problems = append(problems, found...)
-	found, err = checkFused(ctx, "./"+physicsDir)
-	if err != nil {
-		return err
+	for _, pkg := range []string{"./" + physicsDir, simPkg} {
+		found, err = checkFused(ctx, pkg)
+		if err != nil {
+			return err
+		}
+		problems = append(problems, found...)
 	}
-	problems = append(problems, found...)
 	if err := vetModule(ctx); err != nil {
 		problems = append(problems, err.Error())
 	}

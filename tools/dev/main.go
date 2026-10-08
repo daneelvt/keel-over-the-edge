@@ -6,10 +6,11 @@
 // on the same network gets a secure context:
 //
 //	go run ./tools/dev          start keel serve and Vite; restart keel on Go changes, rebuild the physics module
-//	go run ./tools/dev -smoke   start everything, check the page, /api/version and the physics module, stop
+//	go run ./tools/dev -smoke   start everything, check the page, /api/version, the physics module and keel's probes and metrics, stop
 //	go run ./tools/dev -lint    run every linter the pull-request checks run
 //
-// It runs from the repository root.
+// KEEL_DEV_SAILORS, if set, is passed to keel serve: scripted sailors to load
+// the tick. It runs from the repository root.
 package main
 
 import (
@@ -19,12 +20,21 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 const (
 	vitePort   = 5173 // the address players use
 	caPort     = 5174 // plain HTTP: the local root certificate, for phones
 	playAddr   = "127.0.0.1:8080"
+	agentsAddr = "127.0.0.1:8081"
+	// internalAddr is keel's probes, metrics, profiles and input log, on
+	// loopback only.
+	internalAddr = "127.0.0.1:9090"
+	traceDir     = ".dev/traces"
+	replayDir    = ".dev/replays"
+	// replayKeep is how long input logs are kept in replayDir.
+	replayKeep = time.Hour
 	stateDir   = ".dev"
 	clientDir  = "client"
 	physicsDir = "internal/physics"

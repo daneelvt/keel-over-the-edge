@@ -96,12 +96,12 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64 (the physics tests also built with `GOAMD64=v3`), a short fuzz of the catalog decoder, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started and checked over HTTPS | `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
+| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64 (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder and the input log's reader, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started and checked over HTTPS | `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
 | `pr.render.yaml` | Pull requests, not drafts, that change its files | The test sea's fixtures current; the physics module built; the browser tests on Chromium, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
-| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
+| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
@@ -302,6 +302,173 @@ golden file, and copy the catalog's new values into `scenarios.json`'s
 - **The sail's side force from a beam reach aft** is not ORC's: there, an
   attached trim and a stalled one give nearly the same drive, and which is
   best decides the side force. Drive matches.
+
+## The server
+
+`keel serve` runs the game. Its heart is the **simulation** (`internal/sim`),
+the only writer of the world's state: it steps every boat 30 times a second,
+with the same physics package the phone runs. Nothing outside it changes the
+world; everything reaches it through the **bus** (`internal/bus`).
+
+### The parts
+
+| Package | What |
+|---------|------|
+| `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, and for developers only `SetWind` and `Place`); `TrySend` never blocks. The frames: the whole world after each tick, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
+| `internal/sim` | The world (4,096 slots) and `Tick`: read the control slots, apply the commands, step every boat, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
+| `internal/sim/loop` | The clock: tick k after the world's epoch (1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
+| `internal/replay` | The input log, `keel replay` and `/debug/replay` (below). |
+| `internal/scripted` | Scripted sailors: they join through the bus like players and steer and trim at random, each every 0.2–3 s. |
+| `internal/obs` | Logs, metrics, the probes, pprof and the flight recorder. |
+
+### Listeners and configuration
+
+Three HTTP servers, each with a 10 s header timeout, a 120 s idle timeout and
+16 KB of headers, and no read or write timeout (they would cut WebSockets):
+
+| Listener | Variable, default | Serves |
+|----------|-------------------|--------|
+| `play.` | `KEEL_PLAY_ADDR`, `127.0.0.1:8080` | The game's routes, with an access log |
+| `agents.` | `KEEL_AGENTS_ADDR`, `127.0.0.1:8081` | Nothing yet: 404 to everything |
+| internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay` |
+
+The internal listener must never be reachable from outside. The three
+addresses must differ. The other variables:
+
+| Variable | Default | What |
+|----------|---------|------|
+| `KEEL_PLAY_ORIGIN` | required | The players' HTTPS origin |
+| `KEEL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
+| `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
+| `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096 |
+
+Every problem in the configuration is reported at once. `go run ./tools/dev`
+sets the internal address, `KEEL_TRACE_DIR=.dev/traces` and
+`KEEL_REPLAY_DIR=.dev/replays` (keeping the last hour), passes
+`KEEL_DEV_SAILORS` through, and prints the internal URLs:
+
+```sh
+KEEL_DEV_SAILORS=1000 go run ./tools/dev
+```
+
+The server starts its internal listener first, then the world and the tick
+loop, then the public listeners, and only then reports ready. On `SIGTERM` or
+Ctrl-C it is no longer ready at once, shuts down the public listeners, lets
+the tick under way finish, flushes the input log, stops the flight recorder
+and shuts the internal listener down last. A second signal kills it. A panic
+in the tick, its workers or the input log's writer ends the process.
+
+### Probes, logs and metrics
+
+`/livez` fails once the heartbeat, beaten after every tick, is 10 s old; it
+looks at nothing else. `/readyz` passes once the world has ticked and the
+public listeners are open, and fails as soon as the server starts stopping.
+
+Logs are JSON lines on stdout, each with the build. The public listeners log
+each request after it is served: a random request ID (also returned as
+`X-Request-Id`), the method, the **route pattern** (never the path or query),
+the status, bytes and duration. The tick never logs.
+
+The metrics are on their own registry; everything the tick updates is
+resolved at start, so updating it allocates nothing:
+
+| Metric | What |
+|--------|------|
+| `keel_build_info{build,catalog}` | Which version runs |
+| `keel_sim_tick` | The latest tick |
+| `keel_sim_tick_duration_seconds` | Each tick, in buckets from 0.5 ms to 100 ms with edges at 10, 25 and 33 ms |
+| `keel_sim_phase_duration_seconds{phase}` | `inputs`, `physics`, `publish` |
+| `keel_sim_ticks_total`, `_late_total`, `_skipped_total` | All ticks; those run back to back to catch up; those skipped |
+| `keel_sim_clock_drift_seconds` | World time minus UTC as a tick starts |
+| `keel_sim_boats`, `keel_sim_physics_workers` | Boats; goroutines that stepped them |
+| `keel_sim_commands_total{kind,result}`, `keel_sim_commands_refused_total` | Commands applied; refused because the queue was full |
+| `keel_sim_frames_allocated_total` | Frames made because every pooled frame was held: flat once running |
+| `keel_replay_bytes_total`, `_segments_total`, `_records_dropped_total` | The input log |
+| `keel_flightrecorder_snapshots_total{reason}` | Traces written, `overrun` or `request` |
+| `go_*`, `process_*` | The runtime and the process |
+
+```sh
+curl -s 127.0.0.1:9090/metrics | grep keel_sim_tick_duration
+go tool pprof http://127.0.0.1:9090/debug/pprof/profile    # 30 s of CPU
+```
+
+### The flight recorder
+
+The server keeps the last 10 s or more of its execution trace in memory
+(`runtime/trace`'s flight recorder, at most 32 MB). When a tick takes more
+than 25 ms it writes the trace to `KEEL_TRACE_DIR` as
+`trace-<UTC time>-tick<N>.out`, at most once a minute. Each phase of a tick is
+a trace region (`inputs`, `physics`, `publish`), so a slow tick's trace says
+which phase was slow. To take one now:
+
+```sh
+curl -o trace.out 127.0.0.1:9090/debug/flightrecorder
+go tool trace trace.out
+```
+
+A second request while one is being written gets 409.
+
+### The input log and `keel replay`
+
+The tick is deterministic, so what it was given reproduces what it did. The
+input log records, tick by tick, what each tick **applied**: the control words
+that changed and the commands with their results, and any ticks skipped. It
+is binary, in segments of 30 s, each opening with a snapshot of the whole
+world, with a digest of the world every second. The tick hands its records to
+a writer goroutine and never waits for it: if the writer falls 10 s behind,
+records are lost, the segment is marked broken and a new one starts. The last
+four segments (1.5 to 2 minutes) are kept in memory; with `KEEL_REPLAY_DIR`
+the log is written to files there too, a new file every 10 minutes.
+
+```sh
+curl -o keel.log 127.0.0.1:9090/debug/replay       # the last two minutes
+go run ./cmd/keel replay keel.log                   # replayed N ticks: identical
+go run ./cmd/keel replay -dump 726794600 keel.log   # the boats at a tick, as JSON
+go run ./cmd/keel replay -workers 1 keel.log
+```
+
+`keel replay` runs the same `Tick` without a clock, starting from the first
+snapshot, and compares every digest, every later snapshot and every
+command's result with the log's. It stops at the first difference, which a
+digest places within a second, and exits 1; `-dump` at that tick from a good
+and a bad run shows which field differs. A log replays faithfully only under
+the build, catalog and physics layout that made it, which its header names
+(`keel replay` warns when they differ): check out that build to replay a
+log from a bug report.
+
+`internal/sim/testdata/replays/fixture.log` is a log recorded once and
+committed; CI replays it on amd64 and arm64, with one worker and with eight.
+After a deliberate change to the physics or the tick, record it again and
+commit it:
+
+```sh
+go test ./internal/sim -run Fixture -args -update
+```
+
+The tests also sail 200 scripted sailors through the clocked loop for five
+minutes and replay the log to the same world, byte for byte, and sail the
+sandbox's recordings (`internal/physics/testdata/recordings`) through the
+tick to the state the browser reached.
+
+### Testing in fake time
+
+The loop, the probes, catch-up and skipping, and `keel serve` from start to
+stop are tested inside `testing/synctest` bubbles, where the clock moves only
+when every goroutine is waiting: ten minutes of ticks run in a fraction of a
+second. A bubble's clock starts at midnight UTC on 1 January 2000, so those
+tests give the world that epoch. Code that runs in a bubble waits on channels
+or `WaitGroup`s made in it, never on a mutex or a socket: `cmd/keel`'s tests
+serve over an in-memory network for that reason.
+
+`TestFullTickAllocatesNothing` (`internal/sim/loop`) requires a whole tick
+with 1,000 boats, a third of them changing controls, a join, a leave, the
+metrics and the input log to allocate nothing, with and without the race
+detector. Benchmarks:
+
+```sh
+go test -run '^$' -bench 'Tick|Workers' ./internal/sim
+```
 
 ## The game's page
 

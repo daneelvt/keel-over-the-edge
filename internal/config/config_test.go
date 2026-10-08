@@ -3,6 +3,7 @@
 package config
 
 import (
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -24,6 +25,13 @@ func TestLoadValid(t *testing.T) {
 	if c.PlayOrigin != "https://192.168.1.20:5173" {
 		t.Errorf("PlayOrigin = %q", c.PlayOrigin)
 	}
+	want := Config{
+		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://192.168.1.20:5173",
+		AgentsAddr: "127.0.0.1:8081", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo,
+	}
+	if c != want {
+		t.Errorf("defaults %+v, want %+v", c, want)
+	}
 
 	c, err = Load(env(map[string]string{
 		"KEEL_PLAY_ADDR":   ":9000",
@@ -34,6 +42,32 @@ func TestLoadValid(t *testing.T) {
 	}
 	if c.PlayAddr != ":9000" {
 		t.Errorf("PlayAddr = %q", c.PlayAddr)
+	}
+
+	c, err = Load(env(map[string]string{
+		"KEEL_PLAY_ORIGIN":   "https://play.keelovertheedge.com",
+		"KEEL_PLAY_ADDR":     ":8080",
+		"KEEL_AGENTS_ADDR":   ":8081",
+		"KEEL_INTERNAL_ADDR": "0.0.0.0:9090",
+		"KEEL_LOG_LEVEL":     "debug",
+		"KEEL_TRACE_DIR":     "/tmp/traces",
+		"KEEL_REPLAY_DIR":    "/tmp/replays",
+		"KEEL_DEV_SAILORS":   "1000",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = Config{
+		PlayAddr: ":8080", PlayOrigin: "https://play.keelovertheedge.com", AgentsAddr: ":8081", InternalAddr: "0.0.0.0:9090",
+		LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", DevSailors: 1000,
+	}
+	if c != want {
+		t.Errorf("got %+v, want %+v", c, want)
+	}
+	for in, level := range map[string]slog.Level{"DEBUG": slog.LevelDebug, "info": slog.LevelInfo, "Warn": slog.LevelWarn, "error": slog.LevelError} {
+		if got, err := ParseLevel(in); err != nil || got != level {
+			t.Errorf("%s: %v, %v", in, got, err)
+		}
 	}
 }
 
@@ -52,6 +86,21 @@ func TestLoadRejects(t *testing.T) {
 		"both wrong": {
 			map[string]string{"KEEL_PLAY_ADDR": "x", "KEEL_PLAY_ORIGIN": "ftp://x"},
 			[]string{"KEEL_PLAY_ADDR", "KEEL_PLAY_ORIGIN"},
+		},
+		"agents addr bad":    {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_ADDR": "8081"}, []string{"KEEL_AGENTS_ADDR"}},
+		"internal addr bad":  {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_INTERNAL_ADDR": "x:y"}, []string{"KEEL_INTERNAL_ADDR"}},
+		"same as play":       {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_ADDR": "127.0.0.1:8080"}, []string{"KEEL_AGENTS_ADDR: \"127.0.0.1:8080\" is KEEL_PLAY_ADDR's"}},
+		"wildcard overlaps":  {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_INTERNAL_ADDR": "0.0.0.0:8081"}, []string{"KEEL_INTERNAL_ADDR", "KEEL_AGENTS_ADDR's address"}},
+		"log level":          {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_LOG_LEVEL": "loud"}, []string{"KEEL_LOG_LEVEL"}},
+		"sailors not number": {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "many"}, []string{"KEEL_DEV_SAILORS"}},
+		"sailors negative":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "-1"}, []string{"KEEL_DEV_SAILORS"}},
+		"too many sailors":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "4097"}, []string{"from 0 to 4096"}},
+		"everything wrong": {
+			map[string]string{
+				"KEEL_PLAY_ADDR": "x", "KEEL_AGENTS_ADDR": "y", "KEEL_INTERNAL_ADDR": "z",
+				"KEEL_LOG_LEVEL": "loud", "KEEL_DEV_SAILORS": "lots",
+			},
+			[]string{"KEEL_PLAY_ADDR", "KEEL_AGENTS_ADDR", "KEEL_INTERNAL_ADDR", "KEEL_PLAY_ORIGIN", "KEEL_LOG_LEVEL", "KEEL_DEV_SAILORS"},
 		},
 	}
 	for name, tc := range cases {

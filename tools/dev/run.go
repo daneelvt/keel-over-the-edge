@@ -54,12 +54,58 @@ func (s *stack) buildKeel(ctx context.Context) error {
 }
 
 func (s *stack) startKeel() error {
-	p, err := startProc("keel", ".", []string{
+	if err := pruneOlder(replayDir, replayKeep, time.Now()); err != nil {
+		return err
+	}
+	env := []string{
 		"KEEL_PLAY_ADDR=" + playAddr,
 		"KEEL_PLAY_ORIGIN=" + s.origin,
-	}, newPrefixed(&s.mu, s.out, "keel"), filepath.Join(stateDir, "keel"), "serve")
+		"KEEL_AGENTS_ADDR=" + agentsAddr,
+		"KEEL_INTERNAL_ADDR=" + internalAddr,
+		"KEEL_TRACE_DIR=" + traceDir,
+		"KEEL_REPLAY_DIR=" + replayDir,
+	}
+	if n := os.Getenv("KEEL_DEV_SAILORS"); n != "" {
+		env = append(env, "KEEL_DEV_SAILORS="+n)
+	}
+	p, err := startProc("keel", ".", env, newPrefixed(&s.mu, s.out, "keel"), filepath.Join(stateDir, "keel"), "serve")
 	s.keel = p
 	return err
+}
+
+// pruneOlder removes the files in dir last changed before keep ago.
+func pruneOlder(dir string, keep time.Duration, now time.Time) error {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil || !info.Mode().IsRegular() || now.Sub(info.ModTime()) < keep {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// printInternal prints keel's internal addresses.
+func printInternal(mu *sync.Mutex, out io.Writer) {
+	mu.Lock()
+	defer mu.Unlock()
+	base := "http://" + internalAddr
+	fmt.Fprintf(out, "  keel, on this computer only:\n")
+	fmt.Fprintf(out, "    probes    %s/livez  %s/readyz\n", base, base)
+	fmt.Fprintf(out, "    metrics   %s/metrics\n", base)
+	fmt.Fprintf(out, "    profiles  go tool pprof %s/debug/pprof/profile\n", base)
+	fmt.Fprintf(out, "    trace     curl -o trace.out %s/debug/flightrecorder; go tool trace trace.out\n", base)
+	fmt.Fprintf(out, "    replay    curl -o keel.log %s/debug/replay; go run ./cmd/keel replay keel.log\n", base)
+	fmt.Fprintf(out, "    input logs in %s, traces of slow ticks in %s\n\n", replayDir, traceDir)
 }
 
 func (s *stack) startVite() error {
@@ -127,6 +173,7 @@ func runDev(ctx context.Context, out io.Writer) error {
 	}
 	defer caSrv.Close()
 	printAddresses(&s.mu, out, s.origin, lan)
+	printInternal(&s.mu, out)
 
 	snap, err := goSnapshot(".")
 	if err != nil {
@@ -217,7 +264,33 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	if err := checkModuleServed(ctx, client, base+"/src/predict/physics.wasm"); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS (build %s, catalog %s)\n", v.Build, v.Catalog)
+	if err := checkInternal(ctx, s); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics (build %s, catalog %s)\n", v.Build, v.Catalog)
+	return nil
+}
+
+// checkInternal checks keel's internal listener: live, ready once it has
+// ticked, and its metrics showing ticks.
+func checkInternal(ctx context.Context, s *stack) error {
+	plain := &http.Client{Timeout: 5 * time.Second}
+	base := "http://" + internalAddr
+	if _, err := getWhenUp(ctx, plain, base+"/livez", s); err != nil {
+		return err
+	}
+	if _, err := getWhenUp(ctx, plain, base+"/readyz", s); err != nil {
+		return err
+	}
+	metrics, err := getWhenUp(ctx, plain, base+"/metrics", s)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"keel_sim_ticks_total", "keel_sim_tick_duration_seconds_bucket", "keel_build_info"} {
+		if !strings.Contains(metrics, name) {
+			return fmt.Errorf("smoke: /metrics has no %s", name)
+		}
+	}
 	return nil
 }
 

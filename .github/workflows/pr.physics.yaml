@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Runs only when the physics, its tools or what they build changed.
+# Runs only when the physics, the simulation, their tools or what they build
+# changed.
 name: pr.physics
 
 on:
@@ -37,6 +38,8 @@ jobs:
               - 'client/src/predict/**'
               - 'internal/physics/**'
               - 'internal/catalog/**'
+              - 'internal/sim/**'
+              - 'internal/bus/**'
               - 'tools/internal/**'
               - 'tools/physics/**'
               - 'tools/polar/**'
@@ -53,7 +56,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - name: Rules of the physics package, no fused multiply-add, layout files current, no allocations, size budget
+      - name: Rules of the physics package, no fused multiply-add in it or the simulation, layout files current, no allocations, size budget
         run: go run ./tools/physics -check
       - name: The polar against the boats' measured data
         run: go run ./tools/polar -check
