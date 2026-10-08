@@ -19,10 +19,6 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
 
-// Epoch is when tick 0 happened, for every world until worlds carry their
-// own.
-var Epoch = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
-
 const (
 	// TicksPerSecond is the world's rate: one tick is one physics step.
 	TicksPerSecond = physics.StepsPerSecond

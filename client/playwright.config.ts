@@ -4,10 +4,18 @@
 // the browser offers an adapter, on WebGPU. On Linux runners WebGPU goes
 // through SwiftShader, the CPU's Vulkan. Locally, PW_CHANNEL=chrome uses the
 // installed Chrome instead of downloading Chromium.
+//
+// Two servers: keel, built from this tree and serving a database of its own
+// on the test database's server (tools/e2e), and Vite in front of it, as in
+// development. The page's origin is http://localhost, where browsers allow
+// the session's Secure cookie without a certificate.
 
 import { defineConfig, devices } from '@playwright/test';
 
 const port = 5181;
+// tools/e2e's addresses for keel.
+const keelPlay = '127.0.0.1:18080';
+const keelReady = 'http://127.0.0.1:19090/readyz';
 const linux = process.platform === 'linux';
 const args = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist'];
 if (linux) {
@@ -48,10 +56,21 @@ export default defineConfig({
       launchOptions: { args },
     },
   })),
-  webServer: {
-    command: `npx --no-install vite --port ${port} --strictPort`,
-    url: `http://localhost:${port}/`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: 'go run ../tools/e2e',
+      url: keelReady,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 15_000 },
+      stdout: 'pipe',
+    },
+    {
+      command: `npx --no-install vite --port ${port} --strictPort`,
+      url: `http://localhost:${port}/`,
+      env: { KEEL_PLAY_ADDR: keelPlay },
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+  ],
 });

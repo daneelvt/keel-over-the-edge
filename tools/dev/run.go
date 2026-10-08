@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -13,7 +14,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -38,12 +41,13 @@ func prepare(ctx context.Context, out io.Writer) error {
 	return buildPhysics(ctx, out)
 }
 
-// stack is keel serve and Vite, running.
+// stack is keel serve and Vite, running, and the database keel uses.
 type stack struct {
 	mu     sync.Mutex
 	out    io.Writer
 	origin string
 	certs  certs
+	dbURL  string
 	keel   *proc
 	vite   *proc
 }
@@ -53,11 +57,28 @@ func (s *stack) buildKeel(ctx context.Context) error {
 	return runIn(ctx, ".", w, "go", "build", "-o", filepath.Join(stateDir, "keel"), "./cmd/keel")
 }
 
-func (s *stack) startKeel() error {
+// migrate brings the database's schema up to the keel just built, as a
+// deployment does before starting it.
+func (s *stack) migrate(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, filepath.Join(stateDir, "keel"), "migrate")
+	cmd.Env = append(os.Environ(), "KEEL_DATABASE_URL="+s.dbURL)
+	w := newPrefixed(&s.mu, s.out, "keel")
+	cmd.Stdout, cmd.Stderr = w, w
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("keel migrate: %w", err)
+	}
+	return nil
+}
+
+func (s *stack) startKeel(ctx context.Context) error {
 	if err := pruneOlder(replayDir, replayKeep, time.Now()); err != nil {
 		return err
 	}
+	if err := s.migrate(ctx); err != nil {
+		return err
+	}
 	env := []string{
+		"KEEL_DATABASE_URL=" + s.dbURL,
 		"KEEL_PLAY_ADDR=" + playAddr,
 		"KEEL_PLAY_ORIGIN=" + s.origin,
 		"KEEL_AGENTS_ADDR=" + agentsAddr,
@@ -131,7 +152,7 @@ func (s *stack) start(ctx context.Context) error {
 	if err := s.buildKeel(ctx); err != nil {
 		return err
 	}
-	if err := s.startKeel(); err != nil {
+	if err := s.startKeel(ctx); err != nil {
 		return err
 	}
 	if err := s.startVite(); err != nil {
@@ -156,12 +177,16 @@ func runDev(ctx context.Context, out io.Writer) error {
 	if err := prepare(ctx, out); err != nil {
 		return err
 	}
+	db, err := devDatabase(ctx, out)
+	if err != nil {
+		return err
+	}
 	lan := lanAddresses()
 	c, err := makeCerts(ctx, out, certHosts(lan), true)
 	if err != nil {
 		return err
 	}
-	s := &stack{out: out, origin: playOrigin(lan), certs: c}
+	s := &stack{out: out, origin: playOrigin(lan), certs: c, dbURL: db.App}
 	if err := s.start(ctx); err != nil {
 		return err
 	}
@@ -212,7 +237,7 @@ func runDev(ctx context.Context, out io.Writer) error {
 				continue
 			}
 			s.keel.stop(stopTimeout)
-			if err := s.startKeel(); err != nil {
+			if err := s.startKeel(ctx); err != nil {
 				return err
 			}
 		}
@@ -220,9 +245,14 @@ func runDev(ctx context.Context, out io.Writer) error {
 }
 
 // runSmoke starts everything, checks the page and /api/version over HTTPS
-// trusting only the local root, and stops. CI runs it on every push.
+// trusting only the local root, makes a guest and reads it back, and stops.
+// CI runs it on every push.
 func runSmoke(ctx context.Context, out io.Writer) error {
 	if err := prepare(ctx, out); err != nil {
+		return err
+	}
+	db, err := devDatabase(ctx, out)
+	if err != nil {
 		return err
 	}
 	c, err := makeCerts(ctx, out, certHosts(lanAddresses()), false)
@@ -230,7 +260,7 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 		return err
 	}
 	base := fmt.Sprintf("https://127.0.0.1:%d", vitePort)
-	s := &stack{out: out, origin: base, certs: c}
+	s := &stack{out: out, origin: base, certs: c, dbURL: db.App}
 	if err := s.start(ctx); err != nil {
 		return err
 	}
@@ -267,8 +297,60 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	if err := checkInternal(ctx, s); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics (build %s, catalog %s)\n", v.Build, v.Catalog)
+	name, err := checkGuest(ctx, client, base)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics, a guest made and read back (%s; build %s, catalog %s)\n", name, v.Build, v.Catalog)
 	return nil
+}
+
+// checkGuest makes a guest through Vite, as the page does, keeping its
+// cookie in a jar, and reads it back from /api/me.
+func checkGuest(ctx context.Context, client *http.Client, base string) (string, error) {
+	cat, err := catalog.Load()
+	if err != nil {
+		return "", err
+	}
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return "", err
+	}
+	c := *client
+	c.Jar = jar
+	name := fmt.Sprintf("Smoke Test %d", time.Now().UnixNano()%1_000_000)
+	body, err := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/guest", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := c.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("smoke: POST /guest: %w", err)
+	}
+	reply, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("smoke: POST /guest answered %s: %s", res.Status, reply)
+	}
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/me", nil)
+	if err != nil {
+		return "", err
+	}
+	res, err = c.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("smoke: /api/me: %w", err)
+	}
+	defer res.Body.Close()
+	var me struct{ Name string }
+	if err := json.NewDecoder(res.Body).Decode(&me); err != nil || res.StatusCode != http.StatusOK || me.Name != name {
+		return "", fmt.Errorf("smoke: /api/me answered %s, %q (%v); want the guest %q", res.Status, me.Name, err, name)
+	}
+	return name, nil
 }
 
 // checkInternal checks keel's internal listener: live, ready once it has
@@ -286,7 +368,7 @@ func checkInternal(ctx context.Context, s *stack) error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"keel_sim_ticks_total", "keel_sim_tick_duration_seconds_bucket", "keel_build_info"} {
+	for _, name := range []string{"keel_sim_ticks_total", "keel_sim_tick_duration_seconds_bucket", "keel_build_info", "keel_db_pool_max_connections", "keel_db_schema_version"} {
 		if !strings.Contains(metrics, name) {
 			return fmt.Errorf("smoke: /metrics has no %s", name)
 		}
@@ -369,6 +451,12 @@ func runLint(ctx context.Context, out io.Writer) error {
 	}{
 		{".", []string{"go", "vet", "./..."}},
 		{".", []string{"go", "tool", "staticcheck", "./..."}},
+		// The store's queries: valid against the migrations, and the
+		// generated code current. Without cgo, sqlc parses SQL with
+		// PostgreSQL's parser compiled to WebAssembly: no C compiler needed.
+		{".", []string{"env", "CGO_ENABLED=0", "go", "tool", "sqlc", "compile", "-f", "internal/store/sqlc.yaml"}},
+		{".", []string{"env", "CGO_ENABLED=0", "go", "tool", "sqlc", "diff", "-f", "internal/store/sqlc.yaml"}},
+		{".", []string{"go", "run", "./tools/confusables", "-check"}},
 		{clientDir, []string{"npx", "--no-install", "biome", "ci", ".", "../art"}},
 		{clientDir, []string{"npx", "--no-install", "tsc", "--noEmit"}},
 	}

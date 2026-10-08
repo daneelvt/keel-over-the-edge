@@ -125,6 +125,8 @@ export interface ScreenProps {
   sheet: SheetInput;
   /** The layer the overlays' labels go in. */
   labels: (el: HTMLElement | null) => void;
+  /** The sailor's name, or null in the offline sandbox. */
+  sailor: string | null;
 }
 
 function Screen(props: ScreenProps) {
@@ -148,7 +150,9 @@ function Screen(props: ScreenProps) {
       >
         ☰
       </button>
-      {menu ? <Menu settings={settings} close={() => setMenu(false)} /> : null}
+      {menu ? (
+        <Menu settings={settings} sailor={props.sailor} close={() => setMenu(false)} />
+      ) : null}
       <Helm input={props.helm} model={model} />
       <Sheet input={props.sheet} model={model} />
     </>

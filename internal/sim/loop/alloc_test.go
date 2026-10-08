@@ -30,14 +30,14 @@ func TestFullTickAllocatesNothing(t *testing.T) {
 	defer w.Close()
 	log := replay.New(replay.Config{
 		Frames: w.Bus().Frames,
-		Header: replay.Header{Build: "test", Capacity: w.Capacity(), Epoch: Epoch},
+		Header: replay.Header{Build: "test", Capacity: w.Capacity(), Epoch: bubbleEpoch},
 		Log:    slog.New(slog.DiscardHandler),
 	})
 	w.Record(log)
 	done := make(chan error, 1)
 	go func() { done <- log.Run() }()
 	l := New(Config{
-		World: w, Epoch: Epoch, Log: slog.New(slog.DiscardHandler),
+		World: w, Epoch: bubbleEpoch, Log: slog.New(slog.DiscardHandler),
 		Metrics: obs.NewMetrics("b", "c"), Health: obs.NewHealth(), Overrun: func(int64) {},
 	})
 	l.startMono = time.Now()

@@ -19,10 +19,13 @@ import (
 // a replay of the same inputs must reach the same world.
 
 // bannedImports read the clock, do I/O or draw from a generator nobody
-// seeded. A prefix ending in "/" bans the packages under it.
+// seeded; the database's driver and the store are I/O too, and a tick never
+// waits on the database. A prefix ending in "/" bans the packages under it.
 var bannedImports = []string{
 	"time", "os", "os/", "net", "net/", "syscall", "io/fs", "io/ioutil",
 	"log", "log/", "math/rand", "crypto/rand", "runtime/pprof", "unsafe",
+	"database/sql", "database/sql/", "github.com/jackc/pgx/",
+	"github.com/daneelvt/keel-over-the-edge/internal/store", "github.com/daneelvt/keel-over-the-edge/internal/store/",
 }
 
 // iterMaps are the functions of package maps that iterate over a map, in its
@@ -44,6 +47,7 @@ func TestRules(t *testing.T) {
 func TestRulesFindViolations(t *testing.T) {
 	cases := map[string]string{
 		"clock":    "imports time",
+		"database": "imports github.com/daneelvt/keel-over-the-edge/internal/store",
 		"maprange": "ranges over a map",
 		"pool":     "sync.Pool",
 		"random":   "rand.Float64",

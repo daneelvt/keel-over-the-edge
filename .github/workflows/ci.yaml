@@ -50,13 +50,15 @@ jobs:
               - 'art/**'
               - 'internal/catalog/**'
               - 'internal/physics/**'
+              - 'internal/moderation/testdata/**'
               - 'tools/internal/**'
               - 'tools/physics/**'
               - 'tools/licences/allowed.txt'
 
   # The Go tests on both machines the server is built for, so the physics
   # golden tests and the simulation's committed replay show amd64 and arm64
-  # agree bit for bit.
+  # agree bit for bit, and the schema's rules hold in the database on both.
+  # A test that needs a database fails here rather than skip (CI is set).
   go:
     name: go (${{ matrix.runner }})
     strategy:
@@ -68,6 +70,25 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
+    # PostgreSQL for the tests that need a database, on the image and
+    # version tools/dev runs locally; the password is the throwaway
+    # service's own.
+    services:
+      postgres:
+        image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        env:
+          POSTGRES_USER: keel
+          POSTGRES_PASSWORD: keel
+          POSTGRES_DB: keel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username keel --dbname keel"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      KEEL_TEST_DATABASE_URL: postgres://keel:keel@127.0.0.1:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,6 +110,9 @@ jobs:
       - name: Fuzz the input log's reader
         if: runner.arch == 'X64'
         run: go test -run '^$' -fuzz FuzzRead -fuzztime 30s ./internal/replay
+      - name: Fuzz the sailor name check
+        if: runner.arch == 'X64'
+        run: go test -run '^$' -fuzz FuzzCheckName -fuzztime 30s ./internal/moderation
 
   client:
     name: client
@@ -113,8 +137,9 @@ jobs:
         working-directory: client
         run: node build/size.ts
 
-  # Starts the server and the client together: after either changed, once
-  # whichever ran has passed.
+  # Starts the server and the client together, and the database in a
+  # container as on a new computer: after either changed, once whichever ran
+  # has passed.
   smoke:
     name: smoke
     needs: [changes, go, client]

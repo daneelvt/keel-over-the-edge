@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Names that would pass for the game speaking, or for the people who run it.
+# Refused as whole words, or as words run together ("Harbour Master").
+#
+# Written in key form (moderation.Key): lowercase, no separators, and each
+# look-alike letter replaced by Unicode's prototype, so an m is written rn.
+# The tests print the right form of an entry that is not.
+adrnin
+adrninistrator
+adrnins
+anonyrnous
+developer
+everyone
+garnernaster
+guest
+harborrnaster
+harbourrnaster
+keel
+keelovertheedge
+nobody
+null
+official
+operator
+portroyal
+rnod
+rnoderator
+rnods
+server
+staff
+support
+sysop
+systern
+undefined

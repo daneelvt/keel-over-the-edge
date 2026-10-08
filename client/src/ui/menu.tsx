@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The menu: this device's settings. The frame rate (60, or 30 to save
-// battery), sound, the beginners' overlays, and whether the helm returns to
-// the centre when let go.
+// The menu: who is sailing, and this device's settings. The frame rate (60,
+// or 30 to save battery), sound, the beginners' overlays, and whether the
+// helm returns to the centre when let go.
 
+import { PlayerText } from './player';
 import type { SettingsSignal } from './settings';
 
 function Toggle({
@@ -30,10 +31,28 @@ function Toggle({
   );
 }
 
-export function Menu({ settings, close }: { settings: SettingsSignal; close: () => void }) {
+/** "Sailing as" and the sailor's name; nothing in the offline sandbox. */
+export function SailingAs({ sailor }: { sailor: string | null }) {
+  return sailor === null ? null : (
+    <p class="menu-sailor">
+      Sailing as <PlayerText text={sailor} />
+    </p>
+  );
+}
+
+export function Menu({
+  settings,
+  sailor,
+  close,
+}: {
+  settings: SettingsSignal;
+  sailor: string | null;
+  close: () => void;
+}) {
   const s = settings.value.value;
   return (
     <section class="panel menu" aria-label="Settings">
+      <SailingAs sailor={sailor} />
       <h2>Settings</h2>
       <Toggle
         name="battery"
