@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The game connection's schema, as one buf module: go run ./tools/protocol
+# generates from it, and buf lint checks it against buf's STANDARD rules.
+version: v2
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

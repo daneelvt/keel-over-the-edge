@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The generators, run by go run ./tools/protocol from the repository root.
+# Each plugin is a command: protoc-gen-go pinned by go.mod as a go tool, and
+# protoc-gen-es from the client's packages.
+version: v2
+clean: true
+plugins:
+  - local: ["go", "tool", "protoc-gen-go"]
+    out: internal/protocol/pb
+    opt:
+      - module=github.com/daneelvt/keel-over-the-edge/internal/protocol/pb
+  - local: client/node_modules/.bin/protoc-gen-es
+    out: client/src/net/gen
+    opt:
+      - target=ts
+inputs:
+  - directory: shared/protocol
