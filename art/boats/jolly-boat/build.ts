@@ -28,7 +28,14 @@ interface CatalogBoat {
   art: { model: string };
   physics: {
     hull: { hullDraught: number; centreOfGravity: number };
-    rig: { luff: number; foot: number; boomHeight: number; mastPosition: number };
+    rig: {
+      luff: number;
+      foot: number;
+      boomHeight: number;
+      mastPosition: number;
+      footStrip: number;
+      headStrip: number;
+    };
     foils: {
       boardSpan: number;
       boardChord: number;
@@ -123,6 +130,14 @@ const materials: MaterialDef[] = [
   { name: 'bronze', color: srgb(0.74, 0.5, 0.24), roughness: 0.35, metalness: 0.9 },
   { name: 'rope', color: srgb(0.3, 0.22, 0.14), roughness: 0.9, metalness: 0 },
   { name: 'foil', color: srgb(0.5, 0.3, 0.14), roughness: 0.35, metalness: 0 },
+  {
+    name: 'bunting',
+    color: srgb(0.72, 0.12, 0.1),
+    roughness: 0.8,
+    metalness: 0,
+    doubleSided: true,
+  },
+  { name: 'wool', color: [1, 1, 1], roughness: 0.9, metalness: 0, doubleSided: true },
 ];
 
 /** A fixed pseudo-random number in [0, 1) for an integer. */
@@ -405,7 +420,7 @@ function sail(): MeshBuilder {
   const rows: number[][] = [];
   for (let i = 0; i <= SAIL_ROWS; i++) {
     const v = i / SAIL_ROWS;
-    const chord = rig.foot * (1 - v) + ROACH * Math.sin(Math.PI * v) * (1 - v) ** 0.3;
+    const chord = chordAt(v);
     const row: number[] = [];
     for (let j = 0; j <= SAIL_COLS; j++) {
       const u = j / SAIL_COLS;
@@ -424,6 +439,92 @@ function sail(): MeshBuilder {
   for (let i = 0; i < SAIL_ROWS; i++) {
     m.strip(rows[i] as number[], rows[i + 1] as number[], true);
   }
+  return m;
+}
+
+/** The sail's chord at fraction v up the luff, as sail() draws it. */
+const chordAt = (v: number): number =>
+  rig.foot * (1 - v) + ROACH * Math.sin(Math.PI * v) * (1 - v) ** 0.3;
+
+/** The pennant's length and its width at the staff, in metres. */
+const PENNANT_LENGTH = 0.45;
+const PENNANT_WIDTH = 0.07;
+const PENNANT_SEGMENTS = 16;
+
+/**
+ * The pennant at the masthead: a narrow tapered strip, at rest streaming
+ * aft, level, from its staff. TEXCOORD_1.x is the fraction along it, from
+ * which the client streams it downwind of the apparent wind and flutters it.
+ */
+function pennant(): MeshBuilder {
+  const m = new MeshBuilder('bunting');
+  const top: number[] = [];
+  const bottom: number[] = [];
+  for (let i = 0; i <= PENNANT_SEGMENTS; i++) {
+    const f = i / PENNANT_SEGMENTS;
+    const half = (PENNANT_WIDTH / 2) * (1 - 0.92 * f);
+    for (const [row, y] of [
+      [top, half],
+      [bottom, -half],
+    ] as [number[], number][]) {
+      const k = m.vertex([0, y, f * PENNANT_LENGTH], [1, 1, 1], [f, y > 0 ? 1 : 0], [f, 0]);
+      m.normal(k, [1, 0, 0]);
+      row.push(k);
+    }
+  }
+  m.strip(bottom, top, true);
+  return m;
+}
+
+/** A telltale's length and width, in metres, and how far it stands off the cloth. */
+const TELLTALE_LENGTH = 0.17;
+const TELLTALE_WIDTH = 0.012;
+const TELLTALE_OFFSET = 0.004;
+const TELLTALE_SEGMENTS = 8;
+/** Telltales on the port face are red, on the starboard face green, as sailmakers sew them. */
+const PORT = srgb(0.72, 0.1, 0.1);
+const STARBOARD = srgb(0.1, 0.5, 0.2);
+
+/**
+ * The telltales: a pair at the height of each strip's centre of effort, a
+ * short way aft of the luff, one on each face. At rest each streams aft
+ * along its face. TEXCOORD_0 is (fraction along the ribbon, ribbon index:
+ * the strip × 2, plus 1 on the starboard face); TEXCOORD_1 is the root's
+ * (fraction of the chord, fraction of the luff), from which the client
+ * finds it on the shaped sail.
+ */
+function telltales(): MeshBuilder {
+  const m = new MeshBuilder('wool');
+  [rig.footStrip, rig.headStrip].forEach((height, strip) => {
+    const fv = (height * rig.luff - 0.03) / rig.luff;
+    const chord = chordAt(fv);
+    const along = Math.min(0.35, 0.2 * chord);
+    const fu = along / chord;
+    for (const face of [-1, 1]) {
+      const index = strip * 2 + (face > 0 ? 1 : 0);
+      const colour = face > 0 ? STARBOARD : PORT;
+      const upper: number[] = [];
+      const lower: number[] = [];
+      for (let i = 0; i <= TELLTALE_SEGMENTS; i++) {
+        const f = i / TELLTALE_SEGMENTS;
+        const z = 0.04 + along + f * TELLTALE_LENGTH;
+        for (const [row, dy] of [
+          [upper, TELLTALE_WIDTH / 2],
+          [lower, -TELLTALE_WIDTH / 2],
+        ] as [number[], number][]) {
+          const k = m.vertex(
+            [face * TELLTALE_OFFSET, height * rig.luff + dy, z],
+            colour,
+            [f, index],
+            [fu, fv],
+          );
+          m.normal(k, [face, 0, 0]);
+          row.push(k);
+        }
+      }
+      m.strip(lower, upper, face < 0);
+    }
+  });
   return m;
 }
 
@@ -584,6 +685,16 @@ const nodes: NodeDef[] = [
     name: 'sail',
     translation: [0, rig.boomHeight, MAST_Z],
     primitives: [sail().primitive({ uvs2: true })],
+  },
+  {
+    name: 'telltales',
+    translation: [0, rig.boomHeight, MAST_Z],
+    primitives: [telltales().primitive({ uvs2: true, colors: true })],
+  },
+  {
+    name: 'pennant',
+    translation: [0, MAST_TOP, MAST_Z],
+    primitives: [pennant().primitive({ uvs2: true })],
   },
   {
     name: 'rudder',

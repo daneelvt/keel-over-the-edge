@@ -1,0 +1,2418 @@
+{
+ "description": "A sail recorded in the sandbox. Each change applies before the step it names, counting from 0; end is the state the sandbox reached after the last step. The params are the boat the sandbox sailed.",
+ "params": {
+  "displacement": 160,
+  "waterlineLength": 3.791,
+  "hullDraught": 0.094,
+  "centreOfGravity": 0.3,
+  "dragAreaStep": 0.2572222222222222,
+  "dragArea": [
+   0.0135,
+   0.01325,
+   0.013,
+   0.01275,
+   0.0125,
+   0.0126,
+   0.0132,
+   0.0144,
+   0.0157,
+   0.0177,
+   0.0207,
+   0.0229,
+   0.0241,
+   0.0246,
+   0.0243,
+   0.0232,
+   0.022,
+   0.0212,
+   0.0206,
+   0.02025,
+   0.0199,
+   0.01955,
+   0.0192,
+   0.01885,
+   0.0185
+  ],
+  "crossFlowDrag": 1,
+  "addedMassSurge": 8,
+  "addedMassSway": 90,
+  "munk": 55,
+  "yawInertia": 250,
+  "rollInertia": 235,
+  "rollDamping": 60,
+  "rightingLever": [
+   0,
+   0.074,
+   0.117,
+   0.115,
+   0.062,
+   -0.014,
+   -0.1,
+   -0.19,
+   -0.27,
+   -0.346,
+   -0.41,
+   -0.465,
+   -0.505,
+   -0.47,
+   -0.4,
+   -0.3,
+   -0.2,
+   -0.1,
+   0
+  ],
+  "sailArea": 7.06,
+  "luff": 5.13,
+  "foot": 2.74,
+  "boomHeight": 1,
+  "mastPosition": 0.95,
+  "footStrip": 0.15,
+  "headStrip": 0.578,
+  "pressureAttached": 0.33,
+  "pressureSeparated": 0.5,
+  "effectiveHeight": 6.13,
+  "quadraticDrag": 0.01379,
+  "maxLift": 1.48,
+  "stallAngle": 28,
+  "stallWidth": 20,
+  "sailDrag": 0.026,
+  "luffAngle": 3,
+  "flogDrag": 0.05,
+  "normalForce": [
+   0,
+   0.5,
+   0.9,
+   1.07,
+   1.21,
+   1.31,
+   1.37,
+   1.39,
+   1.38,
+   1.35,
+   1.28,
+   1.19,
+   1.07,
+   0.93,
+   0.77,
+   0.59,
+   0.4,
+   0.2,
+   0
+  ],
+  "twistPowered": 5,
+  "twistDepowered": 15,
+  "twistEased": 20,
+  "twistTurn": 3,
+  "headBacked": 90,
+  "headBackedWidth": 20,
+  "boomIn": 4,
+  "boomOut": 95,
+  "boomInertia": 12,
+  "boomMoment": 6.6,
+  "boomDamping": 5,
+  "windageFront": 0.86,
+  "windageSide": 1.24,
+  "windageHeight": 0.7,
+  "sailFloat": 1500,
+  "sailWaterDamping": 300,
+  "boardSpan": 0.69,
+  "boardChord": 0.34,
+  "boardPosition": 0.45,
+  "rudderSpan": 0.6,
+  "rudderChord": 0.25,
+  "rudderPosition": 2.05,
+  "rudderAngle": 40,
+  "foilStall": 13,
+  "foilStallWidth": 6,
+  "foilDrag": 0.01,
+  "plateNormal": 1.2,
+  "pressureDepth": 0.43,
+  "carryOver": 1.8,
+  "heelLoss": 0.382,
+  "rudderInflow": 0.9,
+  "downwash": 0.5,
+  "foilWetHeel": 60,
+  "foilDryHeel": 90,
+  "sailorMass": 80,
+  "sailorSeatHeight": 0.25,
+  "hikeReach": 0.956,
+  "leeReach": 0.3,
+  "hikeSpeed": 1.5,
+  "hikeLag": 0.35,
+  "heelGain": 1,
+  "rollRateGain": 0.6,
+  "flattenFrom": 6,
+  "flattenTo": 11,
+  "flattenMin": 0.62,
+  "fallOutHeel": 70,
+  "climbInHeel": 30,
+  "boardReach": 0.99,
+  "sailorDrag": 600,
+  "swimTime": 10,
+  "climbTime": 4,
+  "rudderTime": 0.25,
+  "sheetHaulTime": 2.5,
+  "sheetEaseTime": 1
+ },
+ "scenarios": [
+  {
+   "name": "sandbox-sail",
+   "steps": 1800,
+   "state": {
+    "x": 0,
+    "y": 0,
+    "heading": 1.5707963267948966,
+    "surge": 0,
+    "sway": 0,
+    "yawRate": 0,
+    "heel": 0,
+    "rollRate": 0,
+    "boom": 0,
+    "boomRate": 0,
+    "sailor": 0,
+    "rudder": 0,
+    "sheetLimit": 0,
+    "sailorMode": 0,
+    "sailorTimer": 0
+   },
+   "control": {
+    "helm": 0,
+    "sheet": 0.5
+   },
+   "env": {
+    "windSpeed": 5.144444444444445,
+    "windFrom": 0
+   },
+   "changes": [
+    {
+     "at": 30,
+     "control": {
+      "sheet": 0.2998046875
+     }
+    },
+    {
+     "at": 301,
+     "control": {
+      "helm": 0.01953125
+     }
+    },
+    {
+     "at": 302,
+     "control": {
+      "helm": 0.0390625
+     }
+    },
+    {
+     "at": 303,
+     "control": {
+      "helm": 0.05859375
+     }
+    },
+    {
+     "at": 304,
+     "control": {
+      "helm": 0.076171875
+     }
+    },
+    {
+     "at": 305,
+     "control": {
+      "helm": 0.095703125
+     }
+    },
+    {
+     "at": 306,
+     "control": {
+      "helm": 0.115234375
+     }
+    },
+    {
+     "at": 307,
+     "control": {
+      "helm": 0.1328125
+     }
+    },
+    {
+     "at": 308,
+     "control": {
+      "helm": 0.150390625
+     }
+    },
+    {
+     "at": 309,
+     "control": {
+      "helm": 0.16796875
+     }
+    },
+    {
+     "at": 310,
+     "control": {
+      "helm": 0.185546875
+     }
+    },
+    {
+     "at": 311,
+     "control": {
+      "helm": 0.201171875
+     }
+    },
+    {
+     "at": 312,
+     "control": {
+      "helm": 0.216796875
+     }
+    },
+    {
+     "at": 313,
+     "control": {
+      "helm": 0.232421875
+     }
+    },
+    {
+     "at": 314,
+     "control": {
+      "helm": 0.248046875
+     }
+    },
+    {
+     "at": 315,
+     "control": {
+      "helm": 0.26171875
+     }
+    },
+    {
+     "at": 316,
+     "control": {
+      "helm": 0.275390625
+     }
+    },
+    {
+     "at": 317,
+     "control": {
+      "helm": 0.287109375
+     }
+    },
+    {
+     "at": 318,
+     "control": {
+      "helm": 0.298828125
+     }
+    },
+    {
+     "at": 319,
+     "control": {
+      "helm": 0.310546875
+     }
+    },
+    {
+     "at": 320,
+     "control": {
+      "helm": 0.3203125
+     }
+    },
+    {
+     "at": 321,
+     "control": {
+      "helm": 0.330078125
+     }
+    },
+    {
+     "at": 322,
+     "control": {
+      "helm": 0.337890625
+     }
+    },
+    {
+     "at": 323,
+     "control": {
+      "helm": 0.345703125
+     }
+    },
+    {
+     "at": 324,
+     "control": {
+      "helm": 0.3515625
+     }
+    },
+    {
+     "at": 325,
+     "control": {
+      "helm": 0.357421875
+     }
+    },
+    {
+     "at": 326,
+     "control": {
+      "helm": 0.361328125
+     }
+    },
+    {
+     "at": 327,
+     "control": {
+      "helm": 0.365234375
+     }
+    },
+    {
+     "at": 328,
+     "control": {
+      "helm": 0.3671875
+     }
+    },
+    {
+     "at": 329,
+     "control": {
+      "helm": 0.369140625
+     }
+    },
+    {
+     "at": 332,
+     "control": {
+      "helm": 0.3671875
+     }
+    },
+    {
+     "at": 333,
+     "control": {
+      "helm": 0.365234375
+     }
+    },
+    {
+     "at": 334,
+     "control": {
+      "helm": 0.361328125
+     }
+    },
+    {
+     "at": 335,
+     "control": {
+      "helm": 0.357421875
+     }
+    },
+    {
+     "at": 336,
+     "control": {
+      "helm": 0.3515625
+     }
+    },
+    {
+     "at": 337,
+     "control": {
+      "helm": 0.345703125
+     }
+    },
+    {
+     "at": 338,
+     "control": {
+      "helm": 0.337890625
+     }
+    },
+    {
+     "at": 339,
+     "control": {
+      "helm": 0.330078125
+     }
+    },
+    {
+     "at": 340,
+     "control": {
+      "helm": 0.3203125
+     }
+    },
+    {
+     "at": 341,
+     "control": {
+      "helm": 0.310546875
+     }
+    },
+    {
+     "at": 342,
+     "control": {
+      "helm": 0.298828125
+     }
+    },
+    {
+     "at": 343,
+     "control": {
+      "helm": 0.287109375
+     }
+    },
+    {
+     "at": 344,
+     "control": {
+      "helm": 0.275390625
+     }
+    },
+    {
+     "at": 345,
+     "control": {
+      "helm": 0.26171875
+     }
+    },
+    {
+     "at": 346,
+     "control": {
+      "helm": 0.248046875
+     }
+    },
+    {
+     "at": 347,
+     "control": {
+      "helm": 0.232421875
+     }
+    },
+    {
+     "at": 348,
+     "control": {
+      "helm": 0.216796875
+     }
+    },
+    {
+     "at": 349,
+     "control": {
+      "helm": 0.201171875
+     }
+    },
+    {
+     "at": 350,
+     "control": {
+      "helm": 0.185546875
+     }
+    },
+    {
+     "at": 351,
+     "control": {
+      "helm": 0.16796875
+     }
+    },
+    {
+     "at": 352,
+     "control": {
+      "helm": 0.150390625
+     }
+    },
+    {
+     "at": 353,
+     "control": {
+      "helm": 0.1328125
+     }
+    },
+    {
+     "at": 354,
+     "control": {
+      "helm": 0.115234375
+     }
+    },
+    {
+     "at": 355,
+     "control": {
+      "helm": 0.095703125
+     }
+    },
+    {
+     "at": 356,
+     "control": {
+      "helm": 0.076171875
+     }
+    },
+    {
+     "at": 357,
+     "control": {
+      "helm": 0.05859375
+     }
+    },
+    {
+     "at": 358,
+     "control": {
+      "helm": 0.0390625
+     }
+    },
+    {
+     "at": 359,
+     "control": {
+      "helm": 0.01953125
+     }
+    },
+    {
+     "at": 360,
+     "control": {
+      "helm": 0
+     }
+    },
+    {
+     "at": 700,
+     "control": {
+      "helm": -1,
+      "sheet": 0.099609375
+     }
+    },
+    {
+     "at": 790,
+     "control": {
+      "helm": 0,
+      "sheet": 0.2001953125
+     }
+    },
+    {
+     "at": 1000,
+     "env": {
+      "windSpeed": 6.173333333333334,
+      "windFrom": 0.3490658503988659
+     }
+    },
+    {
+     "at": 1202,
+     "control": {
+      "sheet": 0.201171875
+     }
+    },
+    {
+     "at": 1204,
+     "control": {
+      "sheet": 0.2021484375
+     }
+    },
+    {
+     "at": 1206,
+     "control": {
+      "sheet": 0.203125
+     }
+    },
+    {
+     "at": 1208,
+     "control": {
+      "sheet": 0.2041015625
+     }
+    },
+    {
+     "at": 1210,
+     "control": {
+      "sheet": 0.205078125
+     }
+    },
+    {
+     "at": 1212,
+     "control": {
+      "sheet": 0.2060546875
+     }
+    },
+    {
+     "at": 1214,
+     "control": {
+      "sheet": 0.20703125
+     }
+    },
+    {
+     "at": 1216,
+     "control": {
+      "sheet": 0.2080078125
+     }
+    },
+    {
+     "at": 1217,
+     "control": {
+      "sheet": 0.208984375
+     }
+    },
+    {
+     "at": 1219,
+     "control": {
+      "sheet": 0.2099609375
+     }
+    },
+    {
+     "at": 1221,
+     "control": {
+      "sheet": 0.2109375
+     }
+    },
+    {
+     "at": 1223,
+     "control": {
+      "sheet": 0.2119140625
+     }
+    },
+    {
+     "at": 1225,
+     "control": {
+      "sheet": 0.212890625
+     }
+    },
+    {
+     "at": 1227,
+     "control": {
+      "sheet": 0.2138671875
+     }
+    },
+    {
+     "at": 1229,
+     "control": {
+      "sheet": 0.21484375
+     }
+    },
+    {
+     "at": 1231,
+     "control": {
+      "sheet": 0.2158203125
+     }
+    },
+    {
+     "at": 1233,
+     "control": {
+      "sheet": 0.216796875
+     }
+    },
+    {
+     "at": 1235,
+     "control": {
+      "sheet": 0.2177734375
+     }
+    },
+    {
+     "at": 1237,
+     "control": {
+      "sheet": 0.21875
+     }
+    },
+    {
+     "at": 1239,
+     "control": {
+      "sheet": 0.2197265625
+     }
+    },
+    {
+     "at": 1241,
+     "control": {
+      "sheet": 0.220703125
+     }
+    },
+    {
+     "at": 1243,
+     "control": {
+      "sheet": 0.2216796875
+     }
+    },
+    {
+     "at": 1245,
+     "control": {
+      "sheet": 0.22265625
+     }
+    },
+    {
+     "at": 1247,
+     "control": {
+      "sheet": 0.2236328125
+     }
+    },
+    {
+     "at": 1249,
+     "control": {
+      "sheet": 0.224609375
+     }
+    },
+    {
+     "at": 1251,
+     "control": {
+      "sheet": 0.2255859375
+     }
+    },
+    {
+     "at": 1253,
+     "control": {
+      "sheet": 0.2265625
+     }
+    },
+    {
+     "at": 1255,
+     "control": {
+      "sheet": 0.2275390625
+     }
+    },
+    {
+     "at": 1257,
+     "control": {
+      "sheet": 0.228515625
+     }
+    },
+    {
+     "at": 1259,
+     "control": {
+      "sheet": 0.2294921875
+     }
+    },
+    {
+     "at": 1260,
+     "control": {
+      "sheet": 0.23046875
+     }
+    },
+    {
+     "at": 1262,
+     "control": {
+      "sheet": 0.2314453125
+     }
+    },
+    {
+     "at": 1264,
+     "control": {
+      "sheet": 0.232421875
+     }
+    },
+    {
+     "at": 1266,
+     "control": {
+      "sheet": 0.2333984375
+     }
+    },
+    {
+     "at": 1268,
+     "control": {
+      "sheet": 0.234375
+     }
+    },
+    {
+     "at": 1270,
+     "control": {
+      "sheet": 0.2353515625
+     }
+    },
+    {
+     "at": 1272,
+     "control": {
+      "sheet": 0.236328125
+     }
+    },
+    {
+     "at": 1274,
+     "control": {
+      "sheet": 0.2373046875
+     }
+    },
+    {
+     "at": 1276,
+     "control": {
+      "sheet": 0.23828125
+     }
+    },
+    {
+     "at": 1278,
+     "control": {
+      "sheet": 0.2392578125
+     }
+    },
+    {
+     "at": 1280,
+     "control": {
+      "sheet": 0.240234375
+     }
+    },
+    {
+     "at": 1282,
+     "control": {
+      "sheet": 0.2412109375
+     }
+    },
+    {
+     "at": 1284,
+     "control": {
+      "sheet": 0.2421875
+     }
+    },
+    {
+     "at": 1286,
+     "control": {
+      "sheet": 0.2431640625
+     }
+    },
+    {
+     "at": 1288,
+     "control": {
+      "sheet": 0.244140625
+     }
+    },
+    {
+     "at": 1290,
+     "control": {
+      "sheet": 0.2451171875
+     }
+    },
+    {
+     "at": 1292,
+     "control": {
+      "sheet": 0.24609375
+     }
+    },
+    {
+     "at": 1294,
+     "control": {
+      "sheet": 0.2470703125
+     }
+    },
+    {
+     "at": 1296,
+     "control": {
+      "sheet": 0.248046875
+     }
+    },
+    {
+     "at": 1298,
+     "control": {
+      "sheet": 0.2490234375
+     }
+    },
+    {
+     "at": 1300,
+     "control": {
+      "sheet": 0.25
+     }
+    },
+    {
+     "at": 1301,
+     "control": {
+      "sheet": 0.2509765625
+     }
+    },
+    {
+     "at": 1303,
+     "control": {
+      "sheet": 0.251953125
+     }
+    },
+    {
+     "at": 1305,
+     "control": {
+      "sheet": 0.2529296875
+     }
+    },
+    {
+     "at": 1307,
+     "control": {
+      "sheet": 0.25390625
+     }
+    },
+    {
+     "at": 1309,
+     "control": {
+      "sheet": 0.2548828125
+     }
+    },
+    {
+     "at": 1311,
+     "control": {
+      "sheet": 0.255859375
+     }
+    },
+    {
+     "at": 1313,
+     "control": {
+      "sheet": 0.2568359375
+     }
+    },
+    {
+     "at": 1315,
+     "control": {
+      "sheet": 0.2578125
+     }
+    },
+    {
+     "at": 1317,
+     "control": {
+      "sheet": 0.2587890625
+     }
+    },
+    {
+     "at": 1319,
+     "control": {
+      "sheet": 0.259765625
+     }
+    },
+    {
+     "at": 1321,
+     "control": {
+      "sheet": 0.2607421875
+     }
+    },
+    {
+     "at": 1323,
+     "control": {
+      "sheet": 0.26171875
+     }
+    },
+    {
+     "at": 1325,
+     "control": {
+      "sheet": 0.2626953125
+     }
+    },
+    {
+     "at": 1327,
+     "control": {
+      "sheet": 0.263671875
+     }
+    },
+    {
+     "at": 1329,
+     "control": {
+      "sheet": 0.2646484375
+     }
+    },
+    {
+     "at": 1331,
+     "control": {
+      "sheet": 0.265625
+     }
+    },
+    {
+     "at": 1333,
+     "control": {
+      "sheet": 0.2666015625
+     }
+    },
+    {
+     "at": 1335,
+     "control": {
+      "sheet": 0.267578125
+     }
+    },
+    {
+     "at": 1337,
+     "control": {
+      "sheet": 0.2685546875
+     }
+    },
+    {
+     "at": 1339,
+     "control": {
+      "sheet": 0.26953125
+     }
+    },
+    {
+     "at": 1341,
+     "control": {
+      "sheet": 0.2705078125
+     }
+    },
+    {
+     "at": 1342,
+     "control": {
+      "sheet": 0.271484375
+     }
+    },
+    {
+     "at": 1344,
+     "control": {
+      "sheet": 0.2724609375
+     }
+    },
+    {
+     "at": 1346,
+     "control": {
+      "sheet": 0.2734375
+     }
+    },
+    {
+     "at": 1348,
+     "control": {
+      "sheet": 0.2744140625
+     }
+    },
+    {
+     "at": 1350,
+     "control": {
+      "sheet": 0.275390625
+     }
+    },
+    {
+     "at": 1352,
+     "control": {
+      "sheet": 0.2763671875
+     }
+    },
+    {
+     "at": 1354,
+     "control": {
+      "sheet": 0.27734375
+     }
+    },
+    {
+     "at": 1356,
+     "control": {
+      "sheet": 0.2783203125
+     }
+    },
+    {
+     "at": 1358,
+     "control": {
+      "sheet": 0.279296875
+     }
+    },
+    {
+     "at": 1360,
+     "control": {
+      "sheet": 0.2802734375
+     }
+    },
+    {
+     "at": 1362,
+     "control": {
+      "sheet": 0.28125
+     }
+    },
+    {
+     "at": 1364,
+     "control": {
+      "sheet": 0.2822265625
+     }
+    },
+    {
+     "at": 1366,
+     "control": {
+      "sheet": 0.283203125
+     }
+    },
+    {
+     "at": 1368,
+     "control": {
+      "sheet": 0.2841796875
+     }
+    },
+    {
+     "at": 1370,
+     "control": {
+      "sheet": 0.28515625
+     }
+    },
+    {
+     "at": 1372,
+     "control": {
+      "sheet": 0.2861328125
+     }
+    },
+    {
+     "at": 1374,
+     "control": {
+      "sheet": 0.287109375
+     }
+    },
+    {
+     "at": 1376,
+     "control": {
+      "sheet": 0.2880859375
+     }
+    },
+    {
+     "at": 1378,
+     "control": {
+      "sheet": 0.2890625
+     }
+    },
+    {
+     "at": 1380,
+     "control": {
+      "sheet": 0.2900390625
+     }
+    },
+    {
+     "at": 1382,
+     "control": {
+      "sheet": 0.291015625
+     }
+    },
+    {
+     "at": 1384,
+     "control": {
+      "sheet": 0.2919921875
+     }
+    },
+    {
+     "at": 1385,
+     "control": {
+      "sheet": 0.29296875
+     }
+    },
+    {
+     "at": 1387,
+     "control": {
+      "sheet": 0.2939453125
+     }
+    },
+    {
+     "at": 1389,
+     "control": {
+      "sheet": 0.294921875
+     }
+    },
+    {
+     "at": 1391,
+     "control": {
+      "sheet": 0.2958984375
+     }
+    },
+    {
+     "at": 1393,
+     "control": {
+      "sheet": 0.296875
+     }
+    },
+    {
+     "at": 1395,
+     "control": {
+      "sheet": 0.2978515625
+     }
+    },
+    {
+     "at": 1397,
+     "control": {
+      "sheet": 0.298828125
+     }
+    },
+    {
+     "at": 1399,
+     "control": {
+      "sheet": 0.2998046875
+     }
+    },
+    {
+     "at": 1401,
+     "control": {
+      "sheet": 0.30078125
+     }
+    },
+    {
+     "at": 1403,
+     "control": {
+      "sheet": 0.3017578125
+     }
+    },
+    {
+     "at": 1405,
+     "control": {
+      "sheet": 0.302734375
+     }
+    },
+    {
+     "at": 1407,
+     "control": {
+      "sheet": 0.3037109375
+     }
+    },
+    {
+     "at": 1409,
+     "control": {
+      "sheet": 0.3046875
+     }
+    },
+    {
+     "at": 1411,
+     "control": {
+      "sheet": 0.3056640625
+     }
+    },
+    {
+     "at": 1413,
+     "control": {
+      "sheet": 0.306640625
+     }
+    },
+    {
+     "at": 1415,
+     "control": {
+      "sheet": 0.3076171875
+     }
+    },
+    {
+     "at": 1417,
+     "control": {
+      "sheet": 0.30859375
+     }
+    },
+    {
+     "at": 1419,
+     "control": {
+      "sheet": 0.3095703125
+     }
+    },
+    {
+     "at": 1421,
+     "control": {
+      "sheet": 0.310546875
+     }
+    },
+    {
+     "at": 1423,
+     "control": {
+      "sheet": 0.3115234375
+     }
+    },
+    {
+     "at": 1425,
+     "control": {
+      "sheet": 0.3125
+     }
+    },
+    {
+     "at": 1426,
+     "control": {
+      "sheet": 0.3134765625
+     }
+    },
+    {
+     "at": 1428,
+     "control": {
+      "sheet": 0.314453125
+     }
+    },
+    {
+     "at": 1430,
+     "control": {
+      "sheet": 0.3154296875
+     }
+    },
+    {
+     "at": 1432,
+     "control": {
+      "sheet": 0.31640625
+     }
+    },
+    {
+     "at": 1434,
+     "control": {
+      "sheet": 0.3173828125
+     }
+    },
+    {
+     "at": 1436,
+     "control": {
+      "sheet": 0.318359375
+     }
+    },
+    {
+     "at": 1438,
+     "control": {
+      "sheet": 0.3193359375
+     }
+    },
+    {
+     "at": 1440,
+     "control": {
+      "sheet": 0.3203125
+     }
+    },
+    {
+     "at": 1442,
+     "control": {
+      "sheet": 0.3212890625
+     }
+    },
+    {
+     "at": 1444,
+     "control": {
+      "sheet": 0.322265625
+     }
+    },
+    {
+     "at": 1446,
+     "control": {
+      "sheet": 0.3232421875
+     }
+    },
+    {
+     "at": 1448,
+     "control": {
+      "sheet": 0.32421875
+     }
+    },
+    {
+     "at": 1450,
+     "control": {
+      "sheet": 0.3251953125
+     }
+    },
+    {
+     "at": 1452,
+     "control": {
+      "sheet": 0.326171875
+     }
+    },
+    {
+     "at": 1454,
+     "control": {
+      "sheet": 0.3271484375
+     }
+    },
+    {
+     "at": 1456,
+     "control": {
+      "sheet": 0.328125
+     }
+    },
+    {
+     "at": 1458,
+     "control": {
+      "sheet": 0.3291015625
+     }
+    },
+    {
+     "at": 1460,
+     "control": {
+      "sheet": 0.330078125
+     }
+    },
+    {
+     "at": 1462,
+     "control": {
+      "sheet": 0.3310546875
+     }
+    },
+    {
+     "at": 1464,
+     "control": {
+      "sheet": 0.33203125
+     }
+    },
+    {
+     "at": 1466,
+     "control": {
+      "sheet": 0.3330078125
+     }
+    },
+    {
+     "at": 1467,
+     "control": {
+      "sheet": 0.333984375
+     }
+    },
+    {
+     "at": 1469,
+     "control": {
+      "sheet": 0.3349609375
+     }
+    },
+    {
+     "at": 1471,
+     "control": {
+      "sheet": 0.3359375
+     }
+    },
+    {
+     "at": 1473,
+     "control": {
+      "sheet": 0.3369140625
+     }
+    },
+    {
+     "at": 1475,
+     "control": {
+      "sheet": 0.337890625
+     }
+    },
+    {
+     "at": 1477,
+     "control": {
+      "sheet": 0.3388671875
+     }
+    },
+    {
+     "at": 1479,
+     "control": {
+      "sheet": 0.33984375
+     }
+    },
+    {
+     "at": 1481,
+     "control": {
+      "sheet": 0.3408203125
+     }
+    },
+    {
+     "at": 1483,
+     "control": {
+      "sheet": 0.341796875
+     }
+    },
+    {
+     "at": 1485,
+     "control": {
+      "sheet": 0.3427734375
+     }
+    },
+    {
+     "at": 1487,
+     "control": {
+      "sheet": 0.34375
+     }
+    },
+    {
+     "at": 1489,
+     "control": {
+      "sheet": 0.3447265625
+     }
+    },
+    {
+     "at": 1491,
+     "control": {
+      "sheet": 0.345703125
+     }
+    },
+    {
+     "at": 1493,
+     "control": {
+      "sheet": 0.3466796875
+     }
+    },
+    {
+     "at": 1495,
+     "control": {
+      "sheet": 0.34765625
+     }
+    },
+    {
+     "at": 1497,
+     "control": {
+      "sheet": 0.3486328125
+     }
+    },
+    {
+     "at": 1499,
+     "control": {
+      "sheet": 0.349609375
+     }
+    },
+    {
+     "at": 1501,
+     "control": {
+      "sheet": 0.3505859375
+     }
+    },
+    {
+     "at": 1503,
+     "control": {
+      "sheet": 0.3515625
+     }
+    },
+    {
+     "at": 1505,
+     "control": {
+      "sheet": 0.3525390625
+     }
+    },
+    {
+     "at": 1507,
+     "control": {
+      "sheet": 0.353515625
+     }
+    },
+    {
+     "at": 1509,
+     "control": {
+      "sheet": 0.3544921875
+     }
+    },
+    {
+     "at": 1510,
+     "control": {
+      "sheet": 0.35546875
+     }
+    },
+    {
+     "at": 1512,
+     "control": {
+      "sheet": 0.3564453125
+     }
+    },
+    {
+     "at": 1514,
+     "control": {
+      "sheet": 0.357421875
+     }
+    },
+    {
+     "at": 1516,
+     "control": {
+      "sheet": 0.3583984375
+     }
+    },
+    {
+     "at": 1518,
+     "control": {
+      "sheet": 0.359375
+     }
+    },
+    {
+     "at": 1520,
+     "control": {
+      "sheet": 0.3603515625
+     }
+    },
+    {
+     "at": 1522,
+     "control": {
+      "sheet": 0.361328125
+     }
+    },
+    {
+     "at": 1524,
+     "control": {
+      "sheet": 0.3623046875
+     }
+    },
+    {
+     "at": 1526,
+     "control": {
+      "sheet": 0.36328125
+     }
+    },
+    {
+     "at": 1528,
+     "control": {
+      "sheet": 0.3642578125
+     }
+    },
+    {
+     "at": 1530,
+     "control": {
+      "sheet": 0.365234375
+     }
+    },
+    {
+     "at": 1532,
+     "control": {
+      "sheet": 0.3662109375
+     }
+    },
+    {
+     "at": 1534,
+     "control": {
+      "sheet": 0.3671875
+     }
+    },
+    {
+     "at": 1536,
+     "control": {
+      "sheet": 0.3681640625
+     }
+    },
+    {
+     "at": 1538,
+     "control": {
+      "sheet": 0.369140625
+     }
+    },
+    {
+     "at": 1540,
+     "control": {
+      "sheet": 0.3701171875
+     }
+    },
+    {
+     "at": 1542,
+     "control": {
+      "sheet": 0.37109375
+     }
+    },
+    {
+     "at": 1544,
+     "control": {
+      "sheet": 0.3720703125
+     }
+    },
+    {
+     "at": 1546,
+     "control": {
+      "sheet": 0.373046875
+     }
+    },
+    {
+     "at": 1548,
+     "control": {
+      "sheet": 0.3740234375
+     }
+    },
+    {
+     "at": 1550,
+     "control": {
+      "sheet": 0.375
+     }
+    },
+    {
+     "at": 1551,
+     "control": {
+      "sheet": 0.3759765625
+     }
+    },
+    {
+     "at": 1553,
+     "control": {
+      "sheet": 0.376953125
+     }
+    },
+    {
+     "at": 1555,
+     "control": {
+      "sheet": 0.3779296875
+     }
+    },
+    {
+     "at": 1557,
+     "control": {
+      "sheet": 0.37890625
+     }
+    },
+    {
+     "at": 1559,
+     "control": {
+      "sheet": 0.3798828125
+     }
+    },
+    {
+     "at": 1561,
+     "control": {
+      "sheet": 0.380859375
+     }
+    },
+    {
+     "at": 1563,
+     "control": {
+      "sheet": 0.3818359375
+     }
+    },
+    {
+     "at": 1565,
+     "control": {
+      "sheet": 0.3828125
+     }
+    },
+    {
+     "at": 1567,
+     "control": {
+      "sheet": 0.3837890625
+     }
+    },
+    {
+     "at": 1569,
+     "control": {
+      "sheet": 0.384765625
+     }
+    },
+    {
+     "at": 1571,
+     "control": {
+      "sheet": 0.3857421875
+     }
+    },
+    {
+     "at": 1573,
+     "control": {
+      "sheet": 0.38671875
+     }
+    },
+    {
+     "at": 1575,
+     "control": {
+      "sheet": 0.3876953125
+     }
+    },
+    {
+     "at": 1577,
+     "control": {
+      "sheet": 0.388671875
+     }
+    },
+    {
+     "at": 1579,
+     "control": {
+      "sheet": 0.3896484375
+     }
+    },
+    {
+     "at": 1581,
+     "control": {
+      "sheet": 0.390625
+     }
+    },
+    {
+     "at": 1583,
+     "control": {
+      "sheet": 0.3916015625
+     }
+    },
+    {
+     "at": 1585,
+     "control": {
+      "sheet": 0.392578125
+     }
+    },
+    {
+     "at": 1587,
+     "control": {
+      "sheet": 0.3935546875
+     }
+    },
+    {
+     "at": 1589,
+     "control": {
+      "sheet": 0.39453125
+     }
+    },
+    {
+     "at": 1591,
+     "control": {
+      "sheet": 0.3955078125
+     }
+    },
+    {
+     "at": 1592,
+     "control": {
+      "sheet": 0.396484375
+     }
+    },
+    {
+     "at": 1594,
+     "control": {
+      "sheet": 0.3974609375
+     }
+    },
+    {
+     "at": 1596,
+     "control": {
+      "sheet": 0.3984375
+     }
+    },
+    {
+     "at": 1598,
+     "control": {
+      "sheet": 0.3994140625
+     }
+    },
+    {
+     "at": 1600,
+     "control": {
+      "sheet": 0.400390625
+     }
+    },
+    {
+     "at": 1602,
+     "control": {
+      "sheet": 0.4013671875
+     }
+    },
+    {
+     "at": 1604,
+     "control": {
+      "sheet": 0.40234375
+     }
+    },
+    {
+     "at": 1606,
+     "control": {
+      "sheet": 0.4033203125
+     }
+    },
+    {
+     "at": 1608,
+     "control": {
+      "sheet": 0.404296875
+     }
+    },
+    {
+     "at": 1610,
+     "control": {
+      "sheet": 0.4052734375
+     }
+    },
+    {
+     "at": 1612,
+     "control": {
+      "sheet": 0.40625
+     }
+    },
+    {
+     "at": 1614,
+     "control": {
+      "sheet": 0.4072265625
+     }
+    },
+    {
+     "at": 1616,
+     "control": {
+      "sheet": 0.408203125
+     }
+    },
+    {
+     "at": 1618,
+     "control": {
+      "sheet": 0.4091796875
+     }
+    },
+    {
+     "at": 1620,
+     "control": {
+      "sheet": 0.41015625
+     }
+    },
+    {
+     "at": 1622,
+     "control": {
+      "sheet": 0.4111328125
+     }
+    },
+    {
+     "at": 1624,
+     "control": {
+      "sheet": 0.412109375
+     }
+    },
+    {
+     "at": 1626,
+     "control": {
+      "sheet": 0.4130859375
+     }
+    },
+    {
+     "at": 1628,
+     "control": {
+      "sheet": 0.4140625
+     }
+    },
+    {
+     "at": 1630,
+     "control": {
+      "sheet": 0.4150390625
+     }
+    },
+    {
+     "at": 1632,
+     "control": {
+      "sheet": 0.416015625
+     }
+    },
+    {
+     "at": 1634,
+     "control": {
+      "sheet": 0.4169921875
+     }
+    },
+    {
+     "at": 1635,
+     "control": {
+      "sheet": 0.41796875
+     }
+    },
+    {
+     "at": 1637,
+     "control": {
+      "sheet": 0.4189453125
+     }
+    },
+    {
+     "at": 1639,
+     "control": {
+      "sheet": 0.419921875
+     }
+    },
+    {
+     "at": 1641,
+     "control": {
+      "sheet": 0.4208984375
+     }
+    },
+    {
+     "at": 1643,
+     "control": {
+      "sheet": 0.421875
+     }
+    },
+    {
+     "at": 1645,
+     "control": {
+      "sheet": 0.4228515625
+     }
+    },
+    {
+     "at": 1647,
+     "control": {
+      "sheet": 0.423828125
+     }
+    },
+    {
+     "at": 1649,
+     "control": {
+      "sheet": 0.4248046875
+     }
+    },
+    {
+     "at": 1651,
+     "control": {
+      "sheet": 0.42578125
+     }
+    },
+    {
+     "at": 1653,
+     "control": {
+      "sheet": 0.4267578125
+     }
+    },
+    {
+     "at": 1655,
+     "control": {
+      "sheet": 0.427734375
+     }
+    },
+    {
+     "at": 1657,
+     "control": {
+      "sheet": 0.4287109375
+     }
+    },
+    {
+     "at": 1659,
+     "control": {
+      "sheet": 0.4296875
+     }
+    },
+    {
+     "at": 1661,
+     "control": {
+      "sheet": 0.4306640625
+     }
+    },
+    {
+     "at": 1663,
+     "control": {
+      "sheet": 0.431640625
+     }
+    },
+    {
+     "at": 1665,
+     "control": {
+      "sheet": 0.4326171875
+     }
+    },
+    {
+     "at": 1667,
+     "control": {
+      "sheet": 0.43359375
+     }
+    },
+    {
+     "at": 1669,
+     "control": {
+      "sheet": 0.4345703125
+     }
+    },
+    {
+     "at": 1671,
+     "control": {
+      "sheet": 0.435546875
+     }
+    },
+    {
+     "at": 1673,
+     "control": {
+      "sheet": 0.4365234375
+     }
+    },
+    {
+     "at": 1675,
+     "control": {
+      "sheet": 0.4375
+     }
+    },
+    {
+     "at": 1676,
+     "control": {
+      "sheet": 0.4384765625
+     }
+    },
+    {
+     "at": 1678,
+     "control": {
+      "sheet": 0.439453125
+     }
+    },
+    {
+     "at": 1680,
+     "control": {
+      "sheet": 0.4404296875
+     }
+    },
+    {
+     "at": 1682,
+     "control": {
+      "sheet": 0.44140625
+     }
+    },
+    {
+     "at": 1684,
+     "control": {
+      "sheet": 0.4423828125
+     }
+    },
+    {
+     "at": 1686,
+     "control": {
+      "sheet": 0.443359375
+     }
+    },
+    {
+     "at": 1688,
+     "control": {
+      "sheet": 0.4443359375
+     }
+    },
+    {
+     "at": 1690,
+     "control": {
+      "sheet": 0.4453125
+     }
+    },
+    {
+     "at": 1692,
+     "control": {
+      "sheet": 0.4462890625
+     }
+    },
+    {
+     "at": 1694,
+     "control": {
+      "sheet": 0.447265625
+     }
+    },
+    {
+     "at": 1696,
+     "control": {
+      "sheet": 0.4482421875
+     }
+    },
+    {
+     "at": 1698,
+     "control": {
+      "sheet": 0.44921875
+     }
+    },
+    {
+     "at": 1700,
+     "control": {
+      "sheet": 0.4501953125
+     }
+    },
+    {
+     "at": 1702,
+     "control": {
+      "sheet": 0.451171875
+     }
+    },
+    {
+     "at": 1704,
+     "control": {
+      "sheet": 0.4521484375
+     }
+    },
+    {
+     "at": 1706,
+     "control": {
+      "sheet": 0.453125
+     }
+    },
+    {
+     "at": 1708,
+     "control": {
+      "sheet": 0.4541015625
+     }
+    },
+    {
+     "at": 1710,
+     "control": {
+      "sheet": 0.455078125
+     }
+    },
+    {
+     "at": 1712,
+     "control": {
+      "sheet": 0.4560546875
+     }
+    },
+    {
+     "at": 1714,
+     "control": {
+      "sheet": 0.45703125
+     }
+    },
+    {
+     "at": 1716,
+     "control": {
+      "sheet": 0.4580078125
+     }
+    },
+    {
+     "at": 1717,
+     "control": {
+      "sheet": 0.458984375
+     }
+    },
+    {
+     "at": 1719,
+     "control": {
+      "sheet": 0.4599609375
+     }
+    },
+    {
+     "at": 1721,
+     "control": {
+      "sheet": 0.4609375
+     }
+    },
+    {
+     "at": 1723,
+     "control": {
+      "sheet": 0.4619140625
+     }
+    },
+    {
+     "at": 1725,
+     "control": {
+      "sheet": 0.462890625
+     }
+    },
+    {
+     "at": 1727,
+     "control": {
+      "sheet": 0.4638671875
+     }
+    },
+    {
+     "at": 1729,
+     "control": {
+      "sheet": 0.46484375
+     }
+    },
+    {
+     "at": 1731,
+     "control": {
+      "sheet": 0.4658203125
+     }
+    },
+    {
+     "at": 1733,
+     "control": {
+      "sheet": 0.466796875
+     }
+    },
+    {
+     "at": 1735,
+     "control": {
+      "sheet": 0.4677734375
+     }
+    },
+    {
+     "at": 1737,
+     "control": {
+      "sheet": 0.46875
+     }
+    },
+    {
+     "at": 1739,
+     "control": {
+      "sheet": 0.4697265625
+     }
+    },
+    {
+     "at": 1741,
+     "control": {
+      "sheet": 0.470703125
+     }
+    },
+    {
+     "at": 1743,
+     "control": {
+      "sheet": 0.4716796875
+     }
+    },
+    {
+     "at": 1745,
+     "control": {
+      "sheet": 0.47265625
+     }
+    },
+    {
+     "at": 1747,
+     "control": {
+      "sheet": 0.4736328125
+     }
+    },
+    {
+     "at": 1749,
+     "control": {
+      "sheet": 0.474609375
+     }
+    },
+    {
+     "at": 1751,
+     "control": {
+      "sheet": 0.4755859375
+     }
+    },
+    {
+     "at": 1753,
+     "control": {
+      "sheet": 0.4765625
+     }
+    },
+    {
+     "at": 1755,
+     "control": {
+      "sheet": 0.4775390625
+     }
+    },
+    {
+     "at": 1757,
+     "control": {
+      "sheet": 0.478515625
+     }
+    },
+    {
+     "at": 1759,
+     "control": {
+      "sheet": 0.4794921875
+     }
+    },
+    {
+     "at": 1760,
+     "control": {
+      "sheet": 0.48046875
+     }
+    },
+    {
+     "at": 1762,
+     "control": {
+      "sheet": 0.4814453125
+     }
+    },
+    {
+     "at": 1764,
+     "control": {
+      "sheet": 0.482421875
+     }
+    },
+    {
+     "at": 1766,
+     "control": {
+      "sheet": 0.4833984375
+     }
+    },
+    {
+     "at": 1768,
+     "control": {
+      "sheet": 0.484375
+     }
+    },
+    {
+     "at": 1770,
+     "control": {
+      "sheet": 0.4853515625
+     }
+    },
+    {
+     "at": 1772,
+     "control": {
+      "sheet": 0.486328125
+     }
+    },
+    {
+     "at": 1774,
+     "control": {
+      "sheet": 0.4873046875
+     }
+    },
+    {
+     "at": 1776,
+     "control": {
+      "sheet": 0.48828125
+     }
+    },
+    {
+     "at": 1778,
+     "control": {
+      "sheet": 0.4892578125
+     }
+    },
+    {
+     "at": 1780,
+     "control": {
+      "sheet": 0.490234375
+     }
+    },
+    {
+     "at": 1782,
+     "control": {
+      "sheet": 0.4912109375
+     }
+    },
+    {
+     "at": 1784,
+     "control": {
+      "sheet": 0.4921875
+     }
+    },
+    {
+     "at": 1786,
+     "control": {
+      "sheet": 0.4931640625
+     }
+    },
+    {
+     "at": 1788,
+     "control": {
+      "sheet": 0.494140625
+     }
+    },
+    {
+     "at": 1790,
+     "control": {
+      "sheet": 0.4951171875
+     }
+    },
+    {
+     "at": 1792,
+     "control": {
+      "sheet": 0.49609375
+     }
+    },
+    {
+     "at": 1794,
+     "control": {
+      "sheet": 0.4970703125
+     }
+    },
+    {
+     "at": 1796,
+     "control": {
+      "sheet": 0.498046875
+     }
+    },
+    {
+     "at": 1798,
+     "control": {
+      "sheet": 0.4990234375
+     }
+    }
+   ],
+   "end": {
+    "x": "0x4030f852c2ce582d",
+    "y": "0x404a1e3bc0fd53fb",
+    "heading": "0xbfe692793500340b",
+    "surge": "0x3f9b1c43ef35026d",
+    "sway": "0xbfcd571bebc1bb8a",
+    "yawRate": "0xbfa2f8e373ecc53c",
+    "heel": "0xbf7b1151808a6d4a",
+    "rollRate": "0xbf7cd388533d7c4e",
+    "boom": "0xbfeb98ac86e06478",
+    "boomRate": "0x0000000000000000",
+    "sailor": "0xbf59450941d5514d",
+    "rudder": "0x0000000000000000",
+    "sheetLimit": "0x3feb98ac86e06478",
+    "sailorMode": "0x0000000000000000",
+    "sailorTimer": "0x0000000000000000"
+   }
+  }
+ ]
+}

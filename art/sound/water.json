@@ -1,0 +1,7 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "Water on the hull: low-passed noise whose level and brightness rise with the boat's speed, and a bow wave's hiss that grows past the hull speed, about 2.4 m/s for a dinghy this long.",
+  "cutoff": { "atRest": 260, "perSpeed": 420, "most": 3200 },
+  "level": { "from": 0.05, "full": 4, "most": 0.3 },
+  "hiss": { "hullSpeed": 2.4, "full": 4.6, "centre": 4200, "q": 0.6, "most": 0.16 }
+}

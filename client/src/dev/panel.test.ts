@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
-import { advance, type BoatState } from '../render/scene';
+import { RECORDS, SIZES } from '../predict/layout.gen';
 import { applyState, type PanelWorld, RIM, readState, toRim } from './panel';
 
 function stub(): PanelWorld & { calls: string[] } {
   const calls: string[] = [];
+  const state = new Float64Array(SIZES.state);
+  const wind = { speed: 0, from: 0 };
   const w: PanelWorld & { calls: string[] } = {
     calls,
     testSea: 'flat',
     usePass: true,
-    boatState: { east: 0, north: 0, heading: 0, speed: 0 },
     stage: {
       antialias: 'fxaa',
       scale: null,
@@ -31,23 +32,35 @@ function stub(): PanelWorld & { calls: string[] } {
       calls.push(`pass ${on}`);
       w.usePass = on;
     },
-    placeBoat(east, north) {
-      calls.push(`boat ${east} ${north}`);
-      w.boatState.east = east;
-      w.boatState.north = north;
+    sandbox: {
+      wind,
+      states: { current: state },
+      setWind(speed, from) {
+        calls.push(`wind ${speed.toFixed(4)} ${from.toFixed(4)}`);
+        wind.speed = speed;
+        wind.from = from;
+      },
+      place(east, north, heading) {
+        calls.push(`place ${east} ${north} ${heading.toFixed(4)}`);
+        state[RECORDS.state.x] = east;
+        state[RECORDS.state.y] = north;
+        state[RECORDS.state.heading] = heading;
+      },
     },
+    loop: { paused: false, speed: 1 },
   };
   return w;
 }
 
 describe('the panel', () => {
-  test('reads headings in degrees and speeds in knots', () => {
+  test('reads headings and winds in degrees and knots', () => {
     const w = stub();
-    w.boatState.heading = -Math.PI / 2;
-    w.boatState.speed = 1852 / 3600;
+    w.sandbox.states.current[RECORDS.state.heading] = -Math.PI / 2;
+    w.sandbox.setWind(10 * (1852 / 3600), Math.PI);
     const s = readState(w);
     expect(s.heading).toBeCloseTo(270, 9);
-    expect(s.speed).toBeCloseTo(1, 9);
+    expect(s.windSpeed).toBeCloseTo(10, 9);
+    expect(s.windFrom).toBeCloseTo(180, 9);
   });
 
   test('applies only what changed', () => {
@@ -62,10 +75,37 @@ describe('the panel', () => {
       pass: false,
       east: 5,
     });
-    expect(w.calls).toEqual(['sea gale', 'boat 5 0', 'aa smaa', 'scale 1', 'pass false']);
-    applyState(w, { ...readState(w), heading: 90, speed: 2 });
-    expect(w.boatState.heading).toBeCloseTo(Math.PI / 2, 12);
-    expect(w.boatState.speed).toBeCloseTo((2 * 1852) / 3600, 12);
+    expect(w.calls).toEqual(['sea gale', 'place 5 0 0.0000', 'aa smaa', 'scale 1', 'pass false']);
+  });
+
+  test('its wind and boat fields round-trip', () => {
+    const w = stub();
+    applyState(w, {
+      ...readState(w),
+      windSpeed: 12,
+      windFrom: 45,
+      east: 30,
+      north: -40,
+      heading: 90,
+    });
+    const s = readState(w);
+    expect(s.windSpeed).toBeCloseTo(12, 9);
+    expect(s.windFrom).toBeCloseTo(45, 9);
+    expect(s.east).toBe(30);
+    expect(s.north).toBe(-40);
+    expect(s.heading).toBeCloseTo(90, 9);
+    // A wind from −90° is from 270°.
+    applyState(w, { ...readState(w), windFrom: -90 });
+    expect(readState(w).windFrom).toBeCloseTo(270, 9);
+    w.calls.length = 0;
+    applyState(w, readState(w));
+    expect(w.calls).toEqual([]);
+  });
+
+  test('pauses and slows time', () => {
+    const w = stub();
+    applyState(w, { ...readState(w), paused: true, speed: 0.25 });
+    expect(w.loop).toEqual({ paused: true, speed: 0.25 });
   });
 
   test('jumps to the rim along the boat’s bearing from the centre', () => {
@@ -75,19 +115,5 @@ describe('the panel', () => {
     expect(s.east / s.north).toBeCloseTo(0.75, 12);
     const fromCentre = toRim(readState(w));
     expect([fromCentre.east, fromCentre.north]).toEqual([RIM, 0]);
-  });
-});
-
-describe('the boat on a straight line', () => {
-  test('moves along its heading at its speed', () => {
-    const b: BoatState = { east: 10, north: 20, heading: Math.PI / 2, speed: 3 };
-    for (let i = 0; i < 60; i++) {
-      advance(b, 1 / 60);
-    }
-    expect(b.east).toBeCloseTo(13, 9);
-    expect(b.north).toBeCloseTo(20, 9);
-    b.heading = Math.PI;
-    advance(b, 2);
-    expect(b.north).toBeCloseTo(14, 9);
   });
 });

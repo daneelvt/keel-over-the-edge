@@ -44,6 +44,11 @@ export default defineConfig({
       allowedFile: '../tools/licences/allowed.txt',
       extra: [
         { name: 'IM Fell English SC (font)', licence: 'OFL-1.1', file: 'src/fonts/OFL.txt' },
+        {
+          name: 'Alegreya Sans (font)',
+          licence: 'OFL-1.1',
+          file: 'src/fonts/AlegreyaSans-OFL.txt',
+        },
         // physics.wasm holds TinyGo's runtime, which includes parts of Go's
         // standard library.
         {

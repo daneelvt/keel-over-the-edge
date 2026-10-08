@@ -34,8 +34,12 @@ const (
 
 // sourceExts are the files that carry the header.
 var sourceExts = map[string]bool{
-	".go": true, ".ts": true, ".css": true, ".html": true, ".grit": true,
+	".go": true, ".ts": true, ".tsx": true, ".css": true, ".html": true, ".grit": true,
 }
+
+// artDataExts are data files that carry the art header too, under art/ only:
+// a JSON recipe names it in its first field.
+var artDataExts = map[string]bool{".json": true}
 
 func main() {
 	missing, err := missingHeaders(".")
@@ -86,13 +90,14 @@ func missingHeaders(root string) ([]string, error) {
 			}
 			return nil
 		}
-		if !sourceExts[filepath.Ext(p)] {
-			return nil
-		}
 		rel, _ := filepath.Rel(root, p)
 		rel = filepath.ToSlash(rel)
+		inArt := strings.HasPrefix(rel, artDir+"/")
+		if !sourceExts[filepath.Ext(p)] && !(inArt && artDataExts[filepath.Ext(p)]) {
+			return nil
+		}
 		want := header
-		if strings.HasPrefix(rel, artDir+"/") {
+		if inArt {
 			want = artHeader
 		}
 		ok, err := hasHeader(p, want)

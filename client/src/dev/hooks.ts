@@ -3,7 +3,9 @@
 // The hooks the browser tests drive, on window.keel with ?test. Loaded only
 // when asked for. They read back what the GPU computed (each tile's plane,
 // and, through a probe material, each fragment's tile and scene position)
-// and compare it with the same sums done in float64 here.
+// and compare it with the same sums done in float64 here; and they sail the
+// boat: set its state, wind and controls, step it, script its controls,
+// and read back what the screen shows.
 
 import {
   DataTexture,
@@ -28,12 +30,17 @@ import {
   vec4,
 } from 'three/tsl';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
+import type { Game } from '../game/game';
 import { hexAt, hexCentre, NEIGHBOURS, TILE_APOTHEM, TILE_RADIUS, tileHash } from '../ocean/hex';
 import { tileHashNode, tileIdentity } from '../ocean/seamaterial';
 import { PASS_HEIGHT, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
+import { steer, toHex } from '../predict/golden';
+import { RECORDS } from '../predict/layout.gen';
 import { checkScene, DOME_RADIUS, domeDrop, seaMaterial } from '../render/materials';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
+import { KNOT, type Sandbox } from '../sandbox/sandbox';
+import type { Settings } from '../ui/settings';
 
 export interface Info {
   backend: string;
@@ -128,13 +135,13 @@ function solve3(a: number[], b: number[]): [number, number, number] {
 }
 
 /** Puts the hooks on globalThis.keel. */
-export function exposeHooks(world: SeaScene): void {
-  (globalThis as unknown as { keel: KeelHooks }).keel = makeHooks(world);
+export function exposeHooks(world: SeaScene, game: Game, sandbox: Sandbox): void {
+  (globalThis as unknown as { keel: KeelHooks }).keel = makeHooks(world, game, sandbox);
 }
 
 export type KeelHooks = ReturnType<typeof makeHooks>;
 
-function makeHooks(world: SeaScene) {
+function makeHooks(world: SeaScene, game: Game, sandbox: Sandbox) {
   const stage = world.stage;
   const gfx = () => {
     if (stage.gfx === null) {
@@ -335,20 +342,23 @@ function makeHooks(world: SeaScene) {
       };
     },
 
+    game,
+    sandbox,
+
     /** Holds world time at t and stops the frame loop; frames are then drawn by render(). */
     freeze(t: number): void {
-      world.time = t;
-      world.frozen = true;
+      game.freeze(t);
       stage.freeze(true);
     },
 
     thaw(): void {
-      world.frozen = false;
+      game.thaw();
       stage.freeze(false);
     },
 
-    /** Draws one frame now. */
+    /** Draws one frame now, with the screen's words up to date. */
     render(): void {
+      game.hud.flush();
       stage.renderOnce(performance.now());
     },
 
@@ -365,8 +375,9 @@ function makeHooks(world: SeaScene) {
     setIdentity(on: boolean): void {
       tileIdentity.value = on ? 1 : 0;
     },
+    /** Puts the boat at a world position, keeping its heading. */
     placeBoat(east: number, north: number): void {
-      world.placeBoat(east, north);
+      sandbox.place(east, north, sandbox.states.current[RECORDS.state.heading] ?? 0);
     },
     /** Puts the origin on tile (q, r), as if the boat had come from there. */
     setOrigin(q: number, r: number): void {
@@ -598,6 +609,85 @@ function makeHooks(world: SeaScene) {
         }
       }
       return { checked: n * n, differ: differ.slice(0, 10) };
+    },
+
+    /** The boat's state and Out by name, the controls, and what the screen shows. */
+    boat() {
+      const named = <R extends Record<string, number>>(record: R, v: Float64Array) =>
+        Object.fromEntries(Object.entries(record).map(([k, i]) => [k, v[i] ?? 0])) as {
+          [K in keyof R]: number;
+        };
+      return {
+        state: named(RECORDS.state, sandbox.states.current),
+        out: named(RECORDS.out, sandbox.out),
+        helm: game.helm.target,
+        sheet: game.sheet.target,
+        steps: game.clock.steps,
+        wind: { ...sandbox.wind },
+      };
+    },
+
+    /** The state's fields in hexadecimal, as the golden tests write them. */
+    stateBits(): Record<string, string> {
+      return Object.fromEntries(
+        Object.entries(RECORDS.state).map(([k, i]) => [k, toHex(sandbox.states.current[i] ?? 0)]),
+      );
+    },
+
+    /** Back to the start, at rest. */
+    reset(): void {
+      sandbox.reset();
+    },
+    setState(values: Record<string, number>): void {
+      sandbox.setState(values);
+    },
+    /** The sandbox's wind, in knots and the degrees it comes from. */
+    setWind(knots: number, from: number): void {
+      sandbox.setWind(knots * KNOT, (from * Math.PI) / 180);
+    },
+    /** Sets the helm's and the sheet's targets, as the player's thumbs would. */
+    setControls(helm: number, sheet: number): void {
+      game.helm.target = helm;
+      game.sheet.target = sheet;
+    },
+    /** Steps the boat n times through the game's own step, with its controls (and script). */
+    advance(n: number): void {
+      for (let i = 0; i < n; i++) {
+        game.stepOnce();
+      }
+      game.settle();
+    },
+    /**
+     * Scripts the controls before every step: 'steer' holds a heading in
+     * radians as the golden scenarios do; 'wiggle' moves both controls to
+     * and fro; null stops.
+     */
+    script(kind: 'steer' | 'wiggle' | null, heading = 0): void {
+      if (kind === 'steer') {
+        game.beforeStep = () => {
+          game.helm.target = steer(heading, sandbox.states.current);
+        };
+      } else if (kind === 'wiggle') {
+        let n = 0;
+        game.beforeStep = () => {
+          n++;
+          game.helm.target = 0.6 * Math.sin(n / 40);
+          game.sheet.target = 0.4 + 0.3 * Math.sin(n / 90);
+        };
+      } else {
+        game.beforeStep = null;
+      }
+    },
+    /** Draws only every n-th animation frame; null for the measured cap. */
+    capFrames(n: number | null): void {
+      stage.cap.forced = n;
+    },
+    settings(change: Partial<Settings>): void {
+      game.settings.set(change);
+    },
+    /** The audio context's state: 'none' before the first gesture. */
+    soundState(): string {
+      return game.sound.state;
     },
 
     /** Resolves after n frames of the frame loop. */

@@ -1,22 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The developer panel, with ?dev: the test sea; the boat's position, speed
-// and heading (it moves along a straight line); a jump to the rim; camera
-// presets matching the waves rendering's views; the back end, the render
-// scale, the tile pass and the antialiasing; and the frame statistics. It
-// is a lazy import, outside the game's first download. Built as nodes and
-// text, never markup.
+// The developer panel, with ?dev: the sandbox's wind; the boat, reset to
+// the start or placed at a position and heading, and a jump to the rim;
+// time, paused, stepped once or slowed; the live State and Out; the sail
+// since the panel opened or the last reset, recorded as a golden scenario
+// to download; the test
+// sea; camera presets; the back end, the render scale, the tile pass and the
+// antialiasing; and the frame statistics. It is a lazy import, outside the
+// game's first download. Built as nodes and text, never markup.
 
 import './panel.css';
+import type { Game } from '../game/game';
+import { RECORDS } from '../predict/layout.gen';
 import { DISK_RADIUS } from '../render/coords';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import type { Antialias } from '../render/stage';
+import type { Sandbox } from '../sandbox/sandbox';
 
 const KNOT = 1852 / 3600;
+const DEG = Math.PI / 180;
 /** "Jump to the rim" puts the boat this far from the centre, in metres. */
 export const RIM = 8300;
 export const SEAS = ['flat', 'calm', 'breeze', 'fresh', 'gale'];
 export const SCALES: (number | null)[] = [null, 0.5, 0.75, 1, 1.5, 2];
+/** Slow motion: the rates real time counts at. */
+export const SPEEDS = [1, 0.5, 0.25];
 
 /** What the panel shows and sets, in the units it shows them in. */
 export interface PanelState {
@@ -25,19 +33,22 @@ export interface PanelState {
   north: number;
   /** Clockwise from north, in degrees. */
   heading: number;
-  /** In knots. */
-  speed: number;
+  /** The wind 10 m up, in knots, and where it comes from, in degrees. */
+  windSpeed: number;
+  windFrom: number;
   antialias: Antialias;
   /** The render scale; null for the back end's default. */
   scale: number | null;
   pass: boolean;
+  paused: boolean;
+  /** Slow motion: 1, ½ or ¼. */
+  speed: number;
 }
 
-/** The part of the scene the panel drives, so tests can stand in for it. */
+/** The parts of the scene, the sandbox and the loop the panel drives, so tests can stand in for them. */
 export interface PanelWorld {
   testSea: string;
   usePass: boolean;
-  boatState: { east: number; north: number; heading: number; speed: number };
   stage: {
     antialias: Antialias;
     scale: number | null;
@@ -46,33 +57,49 @@ export interface PanelWorld {
   };
   setTestSea(name: string): void;
   setUsePass(on: boolean): void;
-  placeBoat(east: number, north: number): void;
+  sandbox: {
+    readonly wind: { speed: number; from: number };
+    readonly states: { readonly current: Float64Array };
+    setWind(speed: number, from: number): void;
+    place(east: number, north: number, heading: number): void;
+  };
+  loop: { paused: boolean; speed: number };
+}
+
+function degrees(rad: number): number {
+  const d = rad / DEG;
+  return ((d % 360) + 360) % 360;
 }
 
 export function readState(w: PanelWorld): PanelState {
-  const degrees = (w.boatState.heading * 180) / Math.PI;
+  const s = w.sandbox.states.current;
   return {
     sea: w.testSea,
-    east: w.boatState.east,
-    north: w.boatState.north,
-    heading: ((degrees % 360) + 360) % 360,
-    speed: w.boatState.speed / KNOT,
+    east: s[RECORDS.state.x] ?? 0,
+    north: s[RECORDS.state.y] ?? 0,
+    heading: degrees(s[RECORDS.state.heading] ?? 0),
+    windSpeed: w.sandbox.wind.speed / KNOT,
+    windFrom: degrees(w.sandbox.wind.from),
     antialias: w.stage.antialias,
     scale: w.stage.scale,
     pass: w.usePass,
+    paused: w.loop.paused,
+    speed: w.loop.speed,
   };
 }
 
 /** Applies to the world whatever differs from the state. */
 export function applyState(w: PanelWorld, s: PanelState): void {
+  const now = readState(w);
   if (s.sea !== w.testSea) {
     w.setTestSea(s.sea);
   }
-  if (s.east !== w.boatState.east || s.north !== w.boatState.north) {
-    w.placeBoat(s.east, s.north);
+  if (s.windSpeed !== now.windSpeed || s.windFrom !== now.windFrom) {
+    w.sandbox.setWind(Math.max(0, s.windSpeed) * KNOT, degrees(s.windFrom * DEG) * DEG);
   }
-  w.boatState.heading = (s.heading * Math.PI) / 180;
-  w.boatState.speed = s.speed * KNOT;
+  if (s.east !== now.east || s.north !== now.north || s.heading !== now.heading) {
+    w.sandbox.place(s.east, s.north, s.heading * DEG);
+  }
   if (s.antialias !== w.stage.antialias) {
     w.stage.setAntialias(s.antialias);
   }
@@ -82,6 +109,8 @@ export function applyState(w: PanelWorld, s: PanelState): void {
   if (s.pass !== w.usePass) {
     w.setUsePass(s.pass);
   }
+  w.loop.paused = s.paused;
+  w.loop.speed = s.speed;
 }
 
 /** The state with the boat moved out to the rim along its bearing from the centre (east, from the centre itself). */
@@ -147,11 +176,48 @@ function button(text: string, on: () => void): HTMLButtonElement {
   return b;
 }
 
-export function openPanel(world: SeaScene, parent: HTMLElement): void {
+/** Offers a recording as a file to download. */
+function download(name: string, data: unknown): void {
+  const blob = new Blob([`${JSON.stringify(data, null, 1)}\n`], { type: 'application/json' });
+  const a = el('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function fields(record: Record<string, number>, view: Float64Array): string {
+  return Object.entries(record)
+    .map(([name, i]) => `${name.padEnd(18)}${(view[i] ?? 0).toFixed(4)}`)
+    .join('\n');
+}
+
+export function openPanel(
+  world: SeaScene,
+  game: Game,
+  sandbox: Sandbox,
+  parent: HTMLElement,
+): void {
+  const pw: PanelWorld = {
+    get testSea() {
+      return world.testSea;
+    },
+    get usePass() {
+      return world.usePass;
+    },
+    stage: world.stage,
+    setTestSea: (n) => world.setTestSea(n),
+    setUsePass: (on) => world.setUsePass(on),
+    sandbox,
+    loop: game.loop,
+  };
+  // Record the sail from here, so it can be downloaded as a golden scenario.
+  sandbox.record();
   const panel = el('aside');
   panel.className = 'dev-panel';
   const body = el('div');
   const stats = el('pre');
+  const records = el('pre');
   panel.append(
     button('Developer', () => body.toggleAttribute('hidden')),
     body,
@@ -159,12 +225,12 @@ export function openPanel(world: SeaScene, parent: HTMLElement): void {
   parent.append(panel);
 
   const set = (change: Partial<PanelState>): void => {
-    applyState(world, { ...readState(world), ...change });
+    applyState(pw, { ...readState(pw), ...change });
     render();
   };
 
   const render = (): void => {
-    const s = readState(world);
+    const s = readState(pw);
     const gfx = world.stage.gfx;
     const query = new URLSearchParams(location.search);
     const toWebGL = gfx?.backend !== 'webgl2';
@@ -181,16 +247,42 @@ export function openPanel(world: SeaScene, parent: HTMLElement): void {
     for (const [name, preset] of Object.entries(CAMERA_PRESETS)) {
       cameras.append(button(name, () => world.placeCamera(preset)));
     }
+    const time = el('div');
+    time.className = 'buttons';
+    time.append(
+      button(s.paused ? 'Run' : 'Pause', () => set({ paused: !s.paused })),
+      button('Step', () => {
+        game.stepOnce();
+      }),
+      select(
+        SPEEDS,
+        (x) => (x === 1 ? 'full speed' : x === 0.5 ? '½ speed' : '¼ speed'),
+        s.speed,
+        (speed) => set({ speed }),
+      ),
+    );
+    const boat = el('div');
+    boat.className = 'buttons';
+    boat.append(
+      button('Reset to the start', () => {
+        sandbox.reset();
+        render();
+      }),
+      button('Jump to the rim', () => set(toRim(readState(pw)))),
+    );
+    const recording = button('Download the sail', () => {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      download(`sail-${stamp}`, sandbox.recorded(`sail-${stamp}`));
+    });
 
     body.replaceChildren(
       row(
-        'Test sea',
-        select(
-          SEAS,
-          (x) => x,
-          s.sea,
-          (sea) => set({ sea }),
-        ),
+        'Wind, kn',
+        number(s.windSpeed, 1, (windSpeed) => set({ windSpeed })),
+      ),
+      row(
+        'Wind from, °',
+        number(s.windFrom, 10, (windFrom) => set({ windFrom })),
       ),
       row(
         'East, m',
@@ -204,11 +296,18 @@ export function openPanel(world: SeaScene, parent: HTMLElement): void {
         'Heading, °',
         number(s.heading, 5, (heading) => set({ heading })),
       ),
+      boat,
+      row('Time', time),
+      row(`Recording, ${sandbox.recorder.steps} steps`, recording),
       row(
-        'Speed, kn',
-        number(s.speed, 0.5, (speed) => set({ speed })),
+        'Test sea',
+        select(
+          SEAS,
+          (x) => x,
+          s.sea,
+          (sea) => set({ sea }),
+        ),
       ),
-      button('Jump to the rim', () => set(toRim(readState(world)))),
       row('Camera', cameras),
       row(
         'Antialiasing',
@@ -243,27 +342,41 @@ export function openPanel(world: SeaScene, parent: HTMLElement): void {
       ),
       swap,
       stats,
+      records,
     );
   };
 
   let shown = 0;
+  const prev = world.onFrame;
   world.onFrame = () => {
+    prev?.();
     const now = performance.now();
     if (now - shown < 500) {
       return;
     }
     shown = now;
     const st = world.stats.last;
-    const b = world.boatState;
+    const p = world.pose;
     const o = world.origin;
+    const cap = world.stage.cap;
     const gpu = st.gpu === null ? 'no timestamps' : `${st.gpu.toFixed(2)} ms`;
     stats.textContent = [
       `frame   ${st.median.toFixed(1)} ms median, ${st.p90.toFixed(1)} ms 90th (${st.frames} in 2 s)`,
+      `work    ${st.workMedian.toFixed(2)} ms median, ${st.workP90.toFixed(2)} ms 90th`,
+      `display ${cap.rate.toFixed(0)} Hz, drawing every ${cap.divisor} (cap ${cap.limit})`,
       `gpu     ${gpu}`,
       `draws   ${st.drawCalls}, ${st.triangles.toLocaleString('en')} triangles`,
       `scale   ${world.stage.pixelRatio()}${world.stage.gfx?.floatTargets === false ? ', no float targets' : ''}`,
-      `boat    ${b.east.toFixed(0)} E, ${b.north.toFixed(0)} N`,
+      `boat    ${p.east.toFixed(0)} E, ${p.north.toFixed(0)} N`,
       `origin  ${o.world.x.toFixed(0)} E, ${o.world.y.toFixed(0)} N, tile ${o.centre.q},${o.centre.r}`,
+      `time    ${game.clock.time.toFixed(2)} s, step ${game.clock.steps}`,
+    ].join('\n');
+    records.textContent = [
+      'State',
+      fields(RECORDS.state, sandbox.states.current),
+      '',
+      'Out',
+      fields(RECORDS.out, sandbox.out),
     ].join('\n');
   };
   render();

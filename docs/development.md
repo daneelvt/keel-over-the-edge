@@ -78,7 +78,8 @@ Scan the first, follow the steps for your phone, then scan the second.
 
 ### Check it worked
 
-Scan the game's QR code: the sea and the Jolly boat load with no warning.
+Scan the game's QR code: the sea and the Jolly boat load with no warning,
+and the boat can be sailed.
 Then open `/dev.html` at the same address, the developer page. Its first line
 reads **Secure context: HTTPS**. The rest of the list shows what the phone
 offers: WebGPU (and whether its adapter has WebGPU's core features or only
@@ -97,8 +98,8 @@ credentials.
 |----------|------|------|---------|
 | `ci.yaml` | Every pull request, every push to `main` | Go tests with the race detector on amd64 and arm64 (the physics tests also built with `GOAMD64=v3`), a short fuzz of the catalog decoder, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started and checked over HTTPS | `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
 | `pr.lint.yaml` | Pull requests, not drafts | gofmt, go vet, staticcheck, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts | The test sea's fixtures current; the browser tests on Chromium, on WebGL 2 and, where the runner offers an adapter, WebGPU | `go run ./tools/testsea -check`, `npx playwright test` in `client/` |
-| `pr.licences.yaml` | Pull requests, not drafts | The licence header in every source file; licences of Go packages linked into `keel` | `go run ./tools/licences` |
+| `pr.render.yaml` | Pull requests, not drafts | The test sea's fixtures current; the physics module built; the browser tests on Chromium, on WebGL 2 and, where the runner offers an adapter, WebGPU | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
+| `pr.licences.yaml` | Pull requests, not drafts | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
@@ -288,33 +289,106 @@ golden file, and copy the catalog's new values into `scenarios.json`'s
   attached trim and a stalled one give nearly the same drive, and which is
   best decides the side force. Drive matches.
 
-## The scene
+## The game's page
 
-The game's page, `/`, draws the sea and the Jolly boat, with an orbit camera
-for looking (drag, pinch, wheel). Nothing is sailed yet. The developer page
-is `/dev.html`. Query strings:
+The game's page, `/`, is the player's boat at sea, sailed with two thumbs or
+the keyboard. Until the game connects to a server it is the **offline
+sandbox**: one Jolly boat, stepped by the physics module in the page, in a
+steady wind that is the same everywhere, with nothing to correct it. It
+starts at the disk's centre, at rest, heading 090°, the helm centred and the
+sheet half out, in 10 knots from the north. The developer page is
+`/dev.html`. Query strings:
 
 | Query | What |
 |-------|------|
-| `?dev` | The developer panel (a lazy import, outside the first download): the test sea; the boat's position, speed and heading, along a straight line; a jump to the rim; camera presets; the back end; the render scale; the tile pass on or off; FXAA or SMAA; and the frame statistics (median and 90th-percentile frame time over 2 s, GPU time where the device has timestamps, draw calls, triangles) |
+| `?sandbox` | The offline sandbox. For now the page is nothing else; links made with it keep working once `/` connects to a server |
+| `?wind=12,45` | The sandbox's wind: knots 10 m up, and the degrees it comes from |
+| `?dev` | The developer panel (a lazy import, outside the first download); see below |
 | `?backend=webgl2` | The WebGL 2 back end, even where WebGPU is offered |
-| `?sea=gale` | The test sea: `calm`, `breeze`, `fresh` or `gale`; flat water without it |
-| `?view=bands` | A camera preset: `sea` and `bands` match the waves rendering's "Sea states" and "Two bands" views; `aboard`, `high` |
+| `?sea=gale` | The test sea: `calm`, `breeze`, `fresh` or `gale`; flat water without it. The boat sits level on it |
+| `?view=bands` | A camera preset: `chase` (the default), `sea` and `bands` (the waves rendering's "Sea states" and "Two bands" views, for a boat heading 330°), `aboard`, `high` |
 | `?test` | The hooks the browser tests drive, on `window.keel` |
+
+### Sailing
+
+| Control | Touch | Keyboard and mouse |
+|---------|-------|--------------------|
+| Helm | The arc bottom left: drag left to turn the bow to port, right to starboard, relative to where the thumb lands (140 px is the full travel). A double tap centres it | ← and → (or A and D), the full travel in 0.6 s while held; C centres it |
+| Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly) | W trims and S eases, the whole range in 2 s while held |
+| Camera | Drag on the sea to swing it round and up or down; pinch for its distance (5 to 80 m). It eases back behind the boat 5 s after the last touch | Drag with the mouse; the wheel for the distance |
+
+Both controls take a thumb each at once. Each shows its target (the knob)
+and, faintly, where the rudder and the sheet really are, since they follow
+at the rates the catalog gives (the rudder 0.25 s for its full travel, the
+sheet 2.5 s to haul in and 1.0 s to ease). The tiller on the model moves the
+real way: to port when the bow turns to starboard. The helm stays where it is
+let go; the menu's "Centre the helm when let go" returns it to the centre.
+While the sailor is out of the boat after a capsize, the physics ignores the
+controls: they are dimmed, a line under the instruments says what the sailor
+is doing, and the targets set meanwhile apply once the sailor is back.
+
+Each control is rounded to 1/1024 of its range before the physics sees it
+(`src/input/quantise.ts`), the resolution the server will receive.
+
+The menu (☰) holds this device's settings, kept in `localStorage`: the frame
+rate (60, or 30 to save battery), sound, the beginners' overlays (**wind**:
+the true wind's arrow on the water upwind and the apparent wind's above the
+masthead; **sail forces**: drive and side force at the sail's centre of
+effort, and a clinometer), and the helm's release.
+
+### The frame
+
+| File | What |
+|------|------|
+| `client/src/game/cap.ts` | Draws on every n-th animation frame, n the smallest whole number that brings the display's measured rate (the median of the last 30 intervals) within the cap: 120 Hz draws at 60, 90 Hz at 45, 144 Hz at 48. Every drawn frame stays on screen for the same number of refreshes |
+| `client/src/game/loop.ts`, `clock.ts` | Fixed steps of 1/30 s taken out of real time, at most four a frame (the rest of a stall is dropped); world time is steps ÷ 30 plus the fraction drawn |
+| `client/src/predict/blend.ts` | The state before and after the latest step; the boat is drawn between them, the heading the short way round |
+| `client/src/game/driver.ts`, `client/src/sandbox/` | The boat driver: controls in, states and `Out` to draw. The sandbox is the offline driver |
+| `client/src/game/game.ts` | The frame: keys, steps, the pose, the instruments, the sound. Input events only move targets; the frame reads them. The frame allocates nothing |
+| `client/src/render/camera.ts` | The chase camera: its yaw follows the heading through a critically damped spring (ω = 4 s⁻¹, 12 with reduced motion), never below 1.5 m |
+| `client/src/render/boat.ts`, `sailshape.ts`, `telltales.ts`, `pennant.ts`, `sailor.ts` | The boat from the physics: heeled about its centre of gravity; the boom, rudder and tiller; the sail's twist from `Out.Twist`, camber from `Out.Flattening`, rippling where a strip luffs; the telltales from each strip's flow (attached: both stream aft; luffing: the windward one lifts; stalled: the leeward one droops; aback: both stream forward); the pennant downwind of the apparent wind at the masthead; the stand-in sailor by mode |
+| `client/src/render/overlays.ts` | The beginners' arrows, each its own shape with a label |
+| `client/src/ui/` | The screen at sea in Preact: instruments, sailor line, helm, sheet, menu. Words and numbers are signals written at most ten times a second; what moves every frame moves by `style.transform` |
+| `client/src/audio/` | Sound, synthesised with Web Audio from the recipes in `art/sound/` (below) |
+
+### The developer panel
+
+`?dev` adds a panel: the sandbox's wind (knots and the direction it comes
+from); the boat, reset to the start, placed at a position and heading, or
+jumped to the rim; time, paused, stepped once or slowed to ½ or ¼; the live
+`State` and `Out`; the test sea; camera presets; the back end, render scale,
+tile pass and antialiasing; and the frame statistics: the interval between
+drawn frames (median and 90th percentile over 2 s), the main thread's work
+per drawn frame, the display's measured rate and the divisor drawn at, GPU
+time where the device has timestamps, draw calls and triangles.
+
+### Recording a sail
+
+While the panel is open the sandbox records the sail, from the moment the
+panel opened or the last reset or placing: the starting state and each change
+of control or wind with the step it applied to. **Download the sail** saves
+it as a scenario file in the golden tests' format, with `end`, the state the
+sandbox reached. To make it a test, put it in
+`internal/physics/testdata/recordings/`: `go test ./internal/physics -run
+Recordings` replays every file there and must reach `end` bit for bit. Or
+copy its scenario into `scenarios.json` and rewrite the golden file.
+`sandbox-sail.json` there is a scripted sail the client's tests record and
+compare (`UPDATE_RECORDING=1 npx vitest run src/sandbox` rewrites it after a
+deliberate change to the physics).
 
 ### How it is drawn
 
 | File | What |
 |------|------|
 | `client/src/render/renderer.ts` | `WebGPURenderer` on WebGPU, on WebGL 2 otherwise; the render scale and output buffer by back end; a lost device or context makes a new renderer on a new canvas |
-| `client/src/render/stage.ts` | The camera, the frame, the post-processing (the output transform, then FXAA or SMAA) |
+| `client/src/render/stage.ts` | The camera, the frame and its cap, the post-processing (the output transform, then FXAA or SMAA) |
 | `client/src/render/coords.ts` | World (x east, y north, float64) to scene (x east, y up, z south); the floating origin, always on a tile centre, moved when the boat is 500 m from it |
 | `client/src/render/materials.ts` | **The material factory. Every material is made here**, so every one carries the dome's bend: the world drops by d²/2R from the boat, R = 2,500 m. The sky is the one kind without it. A browser test walks the scene and fails on any other material |
 | `client/src/ocean/hex.ts` | The lattice: hexagons 4 m across the flats, corners east and west, one centred on the disk's centre, named by axial (q, r); the field of 5,101 tiles within 150 m; the tile hash, the same on the GPU |
 | `client/src/ocean/phases.ts`, `wave.ts` | The boat band: 64 waves, their phases at the floating origin reduced in float64 on the CPU each frame, the sum on the GPU |
 | `client/src/ocean/tilepass.ts`, `tiles.ts` | Each tile's plane (height and slope at its centre, with the dome's drop and slope) computed once a frame into a float target, one texel per tile; every vertex of a tile reads the same texel, so the tile is a rigid flat slab. Without float render targets the vertex stage computes the same plane |
 | `client/src/ocean/seamaterial.ts`, `far.ts`, `client/src/render/sky.ts` | The sea's look (seams, bevels, tint, shimmer, Fresnel, sun, haze), the far sea out past the horizon, the sky |
-| `client/src/render/boat.ts` | Loads a boat's model from the catalog's art, replaces its materials with the factory's, shapes the sail on the GPU |
+| `client/src/render/boat.ts` | Loads a boat's model and its sailor from the catalog's art, replaces their materials with the factory's |
 
 ### The test sea
 
@@ -338,28 +412,54 @@ files carry `SPDX-License-Identifier: LicenseRef-All-Rights-Reserved`, and
 `tools/licences` checks that they do.
 
 A boat is a script that reads its dimensions from the catalog, so the model
-is the boat the physics sails:
+is the boat the physics sails, pennant and telltales included. The sailor is
+a plain stand-in figure, a script of its own:
 
 ```sh
 go run ./tools/catalog   # after changing a boat's numbers
-cd client && npm run art # rebuild every boat's .glb (gltfpack, meshopt)
+cd client && npm run art # rebuild every model's .glb (gltfpack, meshopt)
 ```
 
-Commit the rebuilt `.glb`. `npm test` checks each model against the catalog:
-its named parts sit where the physics puts them, within 1 cm, and it is under
-15,000 triangles. A kind's `art.model` must name a file that exists
-(`go run ./tools/catalog -check`).
+Commit the rebuilt `.glb`. `npm test` checks each boat's model against the
+catalog: its named parts sit where the physics puts them, within 1 cm, its
+telltales at each sail strip's height, and it is under 15,000 triangles; and
+each sailor's model has its parts and is under 2,000. A kind's `art.model`
+must name a file that exists (`go run ./tools/catalog -check`). The catalog's
+`sailors` list names the figures; the first is drawn.
+
+### Sound
+
+Sound is synthesised in the browser with Web Audio; there are no sound
+files. The recipes are art, in `art/sound/*.json` (each names the art
+licence in its first field): **wind**, noise through a band-pass whose
+centre and level rise with the apparent wind; **rigging**, a narrow band at
+the sheet's Aeolian tone, 0.2 × apparent wind ÷ 10 mm; **flogging**, the
+cloth's band beaten at a flap rate, only while a sail strip luffs;
+**water**, low-passed noise rising with speed and a bow wave's hiss past the
+hull speed. `client/src/audio/voices.ts` maps them onto the physics;
+`engine.ts` plays them, setting parameters at most every 50 ms. Audio starts
+on the first tap (a touch's `pointerup`, a mouse's `pointerdown`, a key) and
+is suspended while the page is hidden. On an iPhone with the silent switch
+on, the page plays no sound.
 
 ## Browser tests
 
-`client/e2e` holds Playwright tests that run the scene in Chromium, on the
+`client/e2e` holds Playwright tests that run the game in Chromium, on the
 WebGL 2 back end and on WebGPU where the browser offers an adapter (on Linux
-through SwiftShader; without an adapter the WebGPU tests are skipped). They
-read back what the GPU computed and check it against the same sums in
-float64: every tile a rigid plane with the exact hexagon's outline, the
-lattice fixed as the boat moves and the origin jumps, the tile hash, the
-scene walk, recovery from a lost device, the heap over 1,000 frames, and
-pictures against references.
+through SwiftShader; without an adapter the WebGPU tests are skipped). The
+page loads the physics module, so build it first (`go run ./tools/physics`).
+`sea.spec.ts` reads back what the GPU computed and checks it against the
+same sums in float64: every tile a rigid plane with the exact hexagon's
+outline, the lattice fixed as the boat moves and the origin jumps, the tile
+hash, the scene walk, recovery from a lost device, and pictures.
+`sail.spec.ts` sails: the page's steps are the module's under Node, bit for
+bit; two touch pointers move the helm and the sheet at once; a held key
+turns the boat; a capsize in 20 knots, the sailor's line and the dimmed
+controls, and sailing again within 45 s; a frame the cap skips leaves the
+picture on screen; every new material is the factory's; sound starts on a
+tap and stops while hidden; pictures of the boat heeled with the overlays,
+and capsized; and the heap over 1,000 frames of sailing with the controls
+moving.
 
 ```sh
 cd client

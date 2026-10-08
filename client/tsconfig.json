@@ -15,7 +15,9 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
   },
   "include": ["src", "build", "e2e", "playwright.config.ts", "vite.config.ts", "../art"]
 }
