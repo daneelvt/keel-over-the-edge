@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
+# Runs only when the physics, its tools or what they build changed.
 name: pr.physics
 
 on:
@@ -12,9 +13,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pr-physics:
-    name: pr-physics
+  changes:
+    name: changes
     if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      physics: ${{ steps.filter.outputs.physics }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            physics:
+              - '.github/workflows/pr.physics.yaml'
+              - '.github/actions/setup/**'
+              - '.nvmrc'
+              - 'go.mod'
+              - 'go.sum'
+              - 'client/package.json'
+              - 'client/package-lock.json'
+              - 'client/src/predict/**'
+              - 'internal/physics/**'
+              - 'internal/catalog/**'
+              - 'tools/internal/**'
+              - 'tools/physics/**'
+              - 'tools/polar/**'
+
+  physics:
+    name: physics
+    needs: [changes]
+    if: needs.changes.outputs.physics == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -29,3 +59,18 @@ jobs:
         run: go run ./tools/polar -check
       - name: The trimmed sail against ORC's mainsail
         run: go run ./tools/polar -sail
+
+  pr-physics:
+    name: pr-physics
+    if: always()
+    needs: [changes, physics]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Every job passed, or was skipped as nothing it checks changed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
+          done

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
+# Runs only when a file the linters read changed.
 name: pr.lint
 
 on:
@@ -12,9 +13,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pr-lint:
-    name: pr-lint
+  changes:
+    name: changes
     if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      lint: ${{ steps.filter.outputs.lint }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            lint:
+              - '.github/workflows/pr.lint.yaml'
+              - '.github/actions/setup/**'
+              - '.nvmrc'
+              - 'go.mod'
+              - 'go.sum'
+              - 'cmd/**'
+              - 'internal/**'
+              - 'tools/**'
+              - 'client/**'
+              - 'art/**'
+
+  lint:
+    name: lint
+    needs: [changes]
+    if: needs.changes.outputs.lint == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -25,3 +52,18 @@ jobs:
       - uses: ./.github/actions/setup
       - name: gofmt, go vet, staticcheck, Biome, tsc
         run: go run ./tools/dev -lint
+
+  pr-lint:
+    name: pr-lint
+    if: always()
+    needs: [changes, lint]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Every job passed, or was skipped as nothing it checks changed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
+          done

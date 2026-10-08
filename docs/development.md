@@ -96,14 +96,14 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request, every push to `main` | Go tests with the race detector on amd64 and arm64 (the physics tests also built with `GOAMD64=v3`), a short fuzz of the catalog decoder, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started and checked over HTTPS | `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
-| `pr.lint.yaml` | Pull requests, not drafts | gofmt, go vet, staticcheck, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts | The test sea's fixtures current; the physics module built; the browser tests on Chromium, on WebGL 2 and, where the runner offers an adapter, WebGPU | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
-| `pr.licences.yaml` | Pull requests, not drafts | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
-| `pr.catalog.yaml` | Pull requests, not drafts | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
-| `pr.physics.yaml` | Pull requests, not drafts | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
+| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64 (the physics tests also built with `GOAMD64=v3`), a short fuzz of the catalog decoder, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started and checked over HTTPS | `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
+| `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
+| `pr.render.yaml` | Pull requests, not drafts, that change its files | The test sea's fixtures current; the physics module built; the browser tests on Chromium, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
+| `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
+| `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
+| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
-| `pr.dependencies.yaml` | Pull requests, not drafts | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
+| `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
 | `scorecard.yaml` | Pushes to `main`, weekly | OpenSSF Scorecard | |
@@ -112,6 +112,17 @@ credentials.
 Every workflow pins its actions to full commit hashes; the repository refuses
 any other. Each multi-job workflow ends in one job named after the workflow,
 and that job is the required check.
+
+A workflow marked "that change its files" starts with a `changes` job, which
+asks `dorny/paths-filter` whether the pull request touches any file the check
+reads (the filter is in the workflow, and always includes the workflow itself
+and `.github/actions/setup`). The checks run only if it does; the last job
+always runs, and passes when every job before it passed or was skipped, so
+the required check is reported either way. A new file a check reads, outside
+the paths its filter lists, must be added to the filter. `pr.actions`,
+`pr.secrets` and `codeql` are not filtered: the first and last upload to code
+scanning, which the `main` ruleset waits for, and gitleaks must see every
+commit.
 
 ## The catalog
 
@@ -471,8 +482,12 @@ The reference pictures are kept per back end and platform in
 `client/e2e/pictures/<back end>-<platform>/`, and are changed only by hand,
 after looking at the new ones: `npx playwright test --update-snapshots`
 writes this machine's. CI runs on Linux; a failing picture test uploads the
-pictures it took (the `playwright` artifact of `pr.render`), and those are
-what to commit for `linux` once judged right.
+pictures it took (the `playwright-<back end>-short` artifact of `pr.render`),
+and those are what to commit for `linux` once judged right.
+
+A test that takes minutes on CI's SwiftShader is tagged `@long`
+(`test(title, { tag: '@long' }, ...)`); `pr.render` runs each back end's
+`@long` tests in a job of their own, beside the rest.
 
 ## Commits
 

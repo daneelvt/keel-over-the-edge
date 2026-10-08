@@ -271,9 +271,11 @@ test.describe('pictures', () => {
   });
 });
 
-test('the frame allocates nothing that stays, sailing with the controls moving', async ({
-  page,
-}) => {
+// Tagged @long: it takes minutes on CI's SwiftShader, so pr.render runs it in
+// a job of its own.
+test('the frame allocates nothing that stays, sailing with the controls moving', {
+  tag: '@long',
+}, async ({ page }) => {
   // What the heap keeps does not depend on the picture's size, and a small
   // one keeps SwiftShader's CPU rendering inside the time; on CI's WebGPU
   // adapter, through SwiftShader, 1,800 frames still take minutes.

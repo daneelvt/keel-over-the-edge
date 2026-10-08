@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
+# Runs only when a dependency, or Go code govulncheck follows into one,
+# changed.
 name: pr.dependencies
 
 on:
@@ -12,9 +14,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pr-dependencies:
-    name: pr-dependencies
+  changes:
+    name: changes
     if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      dependencies: ${{ steps.filter.outputs.dependencies }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            dependencies:
+              - '.github/workflows/pr.dependencies.yaml'
+              - '.github/workflows/**'
+              - '.github/actions/**'
+              - '.nvmrc'
+              - 'go.mod'
+              - 'go.sum'
+              - '**/*.go'
+              - 'client/package.json'
+              - 'client/package-lock.json'
+
+  dependencies:
+    name: dependencies
+    needs: [changes]
+    if: needs.changes.outputs.dependencies == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -36,3 +63,18 @@ jobs:
       - name: Registry signatures of client packages
         working-directory: client
         run: npm audit signatures
+
+  pr-dependencies:
+    name: pr-dependencies
+    if: always()
+    needs: [changes, dependencies]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Every job passed, or was skipped as nothing it checks changed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
+          done
