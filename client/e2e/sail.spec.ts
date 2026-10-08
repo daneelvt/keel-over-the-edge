@@ -107,25 +107,33 @@ test.describe('on a touch screen', () => {
 test('a held key turns the boat, and C centres the helm', async ({ page }) => {
   await openScene(page, '', true);
   // Under way on a beam reach, where the rudder bites.
-  const heading = await page.evaluate(() => {
+  await page.evaluate(() => {
     const k = globalThis.keel;
     k.setState({ surge: 3, sheetLimit: 0.5 });
     k.setControls(0, 0.3);
     k.thaw();
-    return k.boat().state.heading;
   });
   await page.keyboard.down('ArrowRight');
   await page.evaluate(() => globalThis.keel.frames(20));
   await page.keyboard.up('ArrowRight');
+  // How far the boat turns in 1.5 s with the helm the key left, however
+  // long the browser took to draw those frames.
   const held = await page.evaluate(() => {
     const k = globalThis.keel;
     k.freeze(200);
-    const helm = k.boat().helm;
+    const before = k.boat();
     k.advance(45);
-    return { helm, heading: k.boat().state.heading };
+    let turn = (k.boat().state.heading - before.state.heading) % (2 * Math.PI);
+    if (turn > Math.PI) {
+      turn -= 2 * Math.PI;
+    } else if (turn <= -Math.PI) {
+      turn += 2 * Math.PI;
+    }
+    return { helm: before.helm, turn };
   });
   expect(held.helm).toBeGreaterThan(0.1);
-  expect(held.heading).toBeGreaterThan(heading + 0.1);
+  // Turning to starboard: the heading grows.
+  expect(held.turn).toBeGreaterThan(0.05);
   await page.keyboard.press('c');
   expect(await page.evaluate(() => globalThis.keel.boat().helm)).toBe(0);
 });
