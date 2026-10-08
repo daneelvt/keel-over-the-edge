@@ -137,10 +137,19 @@ func Length(display string) int {
 }
 
 // Key is what s is compared by: RFC 8266's Nickname comparison form
-// (lowercased, normalised), separators removed, then UTS #39's skeleton,
-// lowercased again, so case, width, spacing, separators and look-alike
-// letters make no difference.
+// (lowercased, normalised) of its display form, separators removed, then
+// UTS #39's skeleton, lowercased again, so case, width, spacing, separators
+// and look-alike letters make no difference.
+//
+// The comparison form is taken of the display form, not of s itself, so a
+// name and its display form always share a key: the comparison form
+// lowercases before it normalises, and a few characters come out
+// differently in the other order (U+03F9, a lunate capital sigma, becomes a
+// final sigma one way and a plain one the other).
 func Key(s string) string {
+	if d, err := precis.Nickname.String(s); err == nil {
+		s = d
+	}
 	k, err := precis.Nickname.CompareKey(s)
 	if err != nil {
 		// Text that is no name, for the word filter: the same folding,

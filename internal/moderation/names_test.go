@@ -104,6 +104,7 @@ func TestKeysAlike(t *testing.T) {
 		{"Fern", "Fem"},                  // rn for m: look-alikes refuse more than look-alikes
 		{"O'Brien", "O’Brien", "OBrien"}, // apostrophes are separators
 		{"Zoë", "Zoë", "ZOË", "ZOË"},   // composed or not
+		{"\u03f900", "\u03a300"},         // a lunate capital sigma folds as a capital sigma
 	}
 	for _, g := range groups {
 		want := Key(g[0])
@@ -283,7 +284,7 @@ func TestSkeleton(t *testing.T) {
 // an accepted name's display form is accepted again as itself, and the key
 // of the input is the key of its display form.
 func FuzzCheckName(f *testing.F) {
-	for _, s := range append(lengthInputs, "Sea Wolf", "Pаypal", "Ab\u200dcd", "Sh1t", "Ｓｅａ", "\xff\xfe", "Á̂b c") {
+	for _, s := range append(lengthInputs, "Sea Wolf", "Pаypal", "Ab\u200dcd", "Sh1t", "Ｓｅａ", "\xff\xfe", "\u03f900", "Á̂b c") {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
