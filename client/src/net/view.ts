@@ -199,7 +199,12 @@ export function applyEntries(
           if ((m & 1) !== 0) {
             const x = (q[o + Q.x] ?? 0) + r.varint();
             const y = (q[o + Q.y] ?? 0) + r.varint();
-            if (x < -POSITION_LIMIT - 1 || x > POSITION_LIMIT || y < -POSITION_LIMIT - 1 || y > POSITION_LIMIT) {
+            if (
+              x < -POSITION_LIMIT - 1 ||
+              x > POSITION_LIMIT ||
+              y < -POSITION_LIMIT - 1 ||
+              y > POSITION_LIMIT
+            ) {
               return `view slot ${slot} moved beyond 24 bits`;
             }
             q[o + Q.x] = x;
@@ -338,8 +343,8 @@ export class ViewRing {
 // own, then each view slot's record.
 
 /** The snapshot's values at the start of the fleet's Float64Array. */
-export const FLEET_META = { tick: 0, received: 1, flags: 2, boats: 3 } as const;
-const META_FIELDS = 4;
+export const FLEET_META = { tick: 0, received: 1, flags: 2, boats: 3, bytes: 4 } as const;
+const META_FIELDS = 5;
 /** A view slot's record, SLOT_FIELDS apart after the snapshot's values. */
 export const SLOT = {
   /** 1 while the slot holds a boat. */
@@ -386,22 +391,23 @@ export function headingOf(steps: number): number {
 }
 
 /**
- * Writes a record: header the snapshot's header bytes, view the boats
- * after it, with what its entries did and which it samples, received the
- * time it came, µs.
+ * Writes a record: message the snapshot as it came, view the boats after
+ * it, with what its entries did and which it samples, received the time it
+ * came, µs.
  */
 export function writeRecord(
   record: ArrayBuffer,
-  header: Uint8Array,
+  message: Uint8Array,
   view: View,
   changes: Uint8Array,
   sampledSlots: Uint8Array,
   flags: number,
   received: number,
 ): void {
-  new Uint8Array(record, 0, HEADER_SIZE).set(header.subarray(0, HEADER_SIZE));
+  new Uint8Array(record, 0, HEADER_SIZE).set(message.subarray(0, HEADER_SIZE));
   const f = fleetOf(record);
   f[FLEET_META.tick] = view.tick;
+  f[FLEET_META.bytes] = message.byteLength;
   f[FLEET_META.received] = received;
   f[FLEET_META.flags] = flags;
   let boats = 0;

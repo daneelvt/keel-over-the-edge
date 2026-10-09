@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The net worker's work: the game connection's socket, its session, and
-// what to do when it ends. Everything it touches outside itself (the
+// The net worker's work: the game connection's socket, its session, the
+// records it hands the page each snapshot in, and what to do when it ends. Everything it touches outside itself (the
 // socket, timers, the clock, the page, fetch, chance) is given to it, so
 // the tests drive it with fakes; worker.ts gives it the real ones.
 
-import type { FromWorker, HelloVersions, Status, ToWorker } from '../../net/messages';
+import type { FromWorker, HelloVersions, Status, ToWorker, Traffic } from '../../net/messages';
+import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
 import { afterClose } from './policy';
 import { Session } from './session';
 
@@ -32,6 +33,8 @@ export interface NetDeps {
 }
 
 const OPEN = 1;
+/** The most records the worker keeps for reuse. */
+const POOL = 8;
 
 export class NetWorker {
   readonly #d: NetDeps;
@@ -42,7 +45,11 @@ export class NetWorker {
   #attempt = 0;
   #timer = -1;
   #wait = -1;
-  #traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0 };
+  #traffic: Traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
+  /** Records the page has handed back, to fill again. */
+  readonly #pool: ArrayBuffer[] = [];
+  /** Records made: a few at first, then none while the page hands them back. */
+  made = 0;
 
   constructor(deps: NetDeps) {
     this.#d = deps;
@@ -87,6 +94,11 @@ export class NetWorker {
         this.#d.clearTimeout(this.#wait);
         this.#setStatus('stopped');
         this.#socket?.close(1000, 'the page is going');
+        break;
+      case 'return':
+        if (m.data.byteLength === FLEET_RECORD_BYTES && this.#pool.length < POOL) {
+          this.#pool.push(m.data);
+        }
         break;
     }
   }
@@ -140,8 +152,32 @@ export class NetWorker {
           this.#setStatus('sailing');
           break;
         }
-        case 'snapshot':
-          this.#d.post({ type: 'snapshot', data: ev.data }, [ev.data]);
+        case 'snapshot': {
+          const record = this.#pool.pop() ?? this.#record();
+          const views = s.views;
+          writeRecord(
+            record,
+            new Uint8Array(ev.data),
+            r.view,
+            views.changes,
+            views.sampled,
+            r.flags,
+            this.#d.now(),
+          );
+          this.#d.post({ type: 'snapshot', data: record }, [record]);
+          break;
+        }
+        case 'dropped':
+          this.#traffic.resyncs++;
+          for (const b of r.out) {
+            this.#send(b);
+          }
+          break;
+        case 'queued':
+          this.#d.post({ type: 'queued', position: r.position, waiting: r.waiting });
+          if (this.#status !== 'queued') {
+            this.#setStatus('queued');
+          }
           break;
         case 'pong':
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
@@ -198,6 +234,11 @@ export class NetWorker {
     const ms = plan.kind === 'wait' ? plan.ms : 0;
     this.#setStatus('waiting', ms);
     this.#wait = this.#d.setTimeout(() => this.#connect(), ms);
+  }
+
+  #record(): ArrayBuffer {
+    this.made++;
+    return new ArrayBuffer(FLEET_RECORD_BYTES);
   }
 
   #send(b: Uint8Array<ArrayBuffer>): void {

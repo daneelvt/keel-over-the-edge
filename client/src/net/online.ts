@@ -3,12 +3,15 @@
 // The page's side of the game connection. It starts the net worker, takes
 // its records, and each frame reconciles the snapshots that came and steps
 // the player's boat to the tick it should be at: the world time the clock
-// estimates, plus half a round trip, plus m ticks of margin, at most four
-// steps a frame. Running ahead adds no felt delay: the boat answers the
-// helm on the frame it is moved; the server applies each input at the tick
-// it was stepped for, so the boat it sails is the boat drawn.
+// estimates, plus half a round trip, plus m ticks of margin. Running ahead
+// adds no felt delay: the boat answers the helm on the frame it is moved;
+// the server applies each input at the tick it was stepped for, so the
+// boat it sails is the boat drawn. The other boats in each snapshot go to
+// the fleet, which draws them a little in the past; each record goes back
+// to the worker once read.
 
 import { signal } from '@preact/signals';
+import { Fleet } from '../game/fleet';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import {
   helmIndex,
@@ -30,10 +33,11 @@ import {
 } from './clock';
 import type { FromWorker, HelloVersions, Status, ToWorker } from './messages';
 import { NO_MARGIN, newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
+import { FLEET_META, fleetOf } from './view';
 
 /** The page's thread's end of the worker. */
 export interface Port {
-  postMessage(m: ToWorker): void;
+  postMessage(m: ToWorker, transfer?: Transferable[]): void;
   onmessage: ((ev: MessageEvent<FromWorker>) => void) | null;
 }
 
@@ -53,6 +57,12 @@ export interface Notice {
   takeover: boolean;
 }
 
+/** A place in the queue for a boat, and how many wait. */
+export interface Place {
+  position: number;
+  waiting: number;
+}
+
 const EPSILON = 1e-9;
 /** How often the frame time is sent, µs. */
 const FRAME_EVERY = 2_000_000;
@@ -62,12 +72,18 @@ export class Online {
   readonly notice = signal<Notice | null>(null);
   /** The round trip, ms, for the menu; −1 until measured. */
   readonly rtt = signal(-1);
+  /** The place in the queue while the sea is full, or null. */
+  readonly place = signal<Place | null>(null);
+  /** The other boats. */
+  readonly fleet = new Fleet();
+  /** The latest snapshots' sizes, bytes, for the panel. */
+  snapshotBytes = 0;
   readonly ahead = new Ahead();
   clock: ClockState = newClockState();
   boat = 0;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
   lastMargin = NO_MARGIN;
-  traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0 };
+  traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
   /** Resolves with the first snapshot: the sea can be shown. */
   readonly ready: Promise<void>;
 
@@ -120,7 +136,13 @@ export class Online {
     switch (m.type) {
       case 'status':
         this.status.value = m.status;
+        if (m.status !== 'queued') {
+          this.place.value = null;
+        }
         this.#describe(m.status, m.reason);
+        break;
+      case 'queued':
+        this.place.value = { position: m.position, waiting: m.waiting };
         break;
       case 'welcome':
         if (this.#hadBoat && !m.rejoined) {
@@ -130,13 +152,16 @@ export class Online {
         this.#hadBoat = true;
         this.boat = m.boat;
         this.#fresh = true;
+        // A new connection's views start afresh: the boats fade out, and
+        // in again with its first snapshot.
+        this.fleet.clear();
         break;
       case 'snapshot':
         if (this.#predictor.started) {
           this.#queued.push(m.data);
-        } else if (readSnapshot(new DataView(m.data), this.#scratch) === null) {
+        } else {
           // The first: it starts the prediction, and the sea can be shown.
-          this.reconcile(this.#scratch, nowUs());
+          this.#take(m.data, nowUs());
         }
         break;
       case 'clock':
@@ -207,14 +232,23 @@ export class Online {
     return o;
   }
 
+  /** Reads a snapshot's record: its own boat reconciled, its other boats to the fleet; then hands it back. */
+  #take(data: ArrayBuffer, now: number): void {
+    if (readSnapshot(new DataView(data), this.#scratch) === null) {
+      this.reconcile(this.#scratch, now);
+      const f = fleetOf(data);
+      this.snapshotBytes = f[FLEET_META.bytes] ?? 0;
+      this.fleet.add(f, worldUs(this.clock, f[FLEET_META.received] ?? now));
+    }
+    this.#port.postMessage({ type: 'return', data }, [data]);
+  }
+
   /** The page's frame: dt seconds since the last. */
   frame(dt: number): void {
     const now = nowUs();
     this.#frameTime(dt, now);
     for (const data of this.#queued) {
-      if (readSnapshot(new DataView(data), this.#scratch) === null) {
-        this.reconcile(this.#scratch, now);
-      }
+      this.#take(data, now);
     }
     this.#queued.length = 0;
     if (this.#noticeUntil > 0 && now >= this.#noticeUntil && this.status.value === 'sailing') {
@@ -222,6 +256,9 @@ export class Online {
       this.notice.value = null;
     }
     this.pace(now);
+    if (this.clock.have) {
+      this.fleet.update(worldUs(this.clock, now), dt);
+    }
   }
 
   /** Steps the boat to the tick it should be at, at now (µs). */

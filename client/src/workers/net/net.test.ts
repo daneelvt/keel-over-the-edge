@@ -9,7 +9,8 @@ import { describe, expect, test } from 'vitest';
 import { applied, Clock, SET_BEYOND } from '../../net/clock';
 import { decodeClient, encodeServer } from '../../net/frame';
 import type { FromWorker } from '../../net/messages';
-import { newSnapshot, SNAPSHOT_SIZE, writeSnapshot } from '../../net/snapshot';
+import { HEADER_SIZE, newSnapshot, writeSnapshot } from '../../net/snapshot';
+import { FLEET_META, FLEET_RECORD_BYTES, fleetOf } from '../../net/view';
 import { NetWorker, type Socket } from './net';
 import { afterClose, backoff, WAIT_CAP } from './policy';
 import { ACK_AFTER, BURST_EVERY, PING_EVERY, PONG_TIMEOUT, Session } from './session';
@@ -103,10 +104,7 @@ describe('the session', () => {
     for (let i = 0; i < 8; i++) {
       s.time(s.deadline());
     }
-    const sn = newSnapshot();
-    sn.tick = 1234;
-    const b = new Uint8Array(SNAPSHOT_SIZE);
-    writeSnapshot(sn, new DataView(b.buffer));
+    const b = snapshotBytes(1234);
     const t = 800_000;
     s.receive(t, b);
     s.input(t, 1240, 512, 512);
@@ -121,7 +119,48 @@ describe('the session', () => {
     expect(s.time(PONG_TIMEOUT - 1).dead).toBe(false);
     expect(s.time(PONG_TIMEOUT).dead).toBe(true);
   });
+
+  test('a snapshot whose base is gone is dropped, and a Resync asked for', () => {
+    const s = welcomed();
+    expect(s.receive(1, snapshotBytes(100)).kind).toBe('snapshot');
+    expect(s.receive(2, snapshotBytes(102, 2)).kind).toBe('snapshot');
+    const r = s.receive(3, snapshotBytes(110, 4));
+    expect(r.kind).toBe('dropped');
+    if (r.kind === 'dropped') {
+      expect(r.out.map((b) => decodeClient(b).body)).toMatchObject([
+        { case: 'command', value: { body: { case: 'resync' } } },
+      ]);
+    }
+    // A dropped snapshot is not acknowledged.
+    const next = s.time(s.deadline()).out.map(decodeClient)[0];
+    expect(next?.body.value).toMatchObject({ ackTick: 102n });
+  });
+
+  test('while queued: a Ping every 2 s and nothing else, until the Welcome', () => {
+    const s = new Session(versions);
+    s.open(0);
+    expect(s.deadline()).toBe(Number.POSITIVE_INFINITY);
+    const r = s.receive(
+      1_000,
+      encodeServer({ body: { case: 'queued', value: { position: 3, waiting: 7 } } }),
+    );
+    expect(r).toEqual({ kind: 'queued', position: 3, waiting: 7 });
+    expect(s.deadline()).toBe(1_000 + PING_EVERY);
+    const out = s.time(1_000 + PING_EVERY).out.map((b) => decodeClient(b).body.case);
+    expect(out).toEqual(['ping']);
+    expect(s.time(1_000 + PING_EVERY + ACK_AFTER).out).toEqual([]);
+  });
 });
+
+/** A snapshot of tick, with no other boats, against the snapshot base ticks before it. */
+function snapshotBytes(tick: number, base = 0): Uint8Array<ArrayBuffer> {
+  const sn = newSnapshot();
+  sn.tick = tick;
+  sn.base = base;
+  const b = new Uint8Array(HEADER_SIZE);
+  writeSnapshot(sn, new DataView(b.buffer));
+  return b;
+}
 
 describe('after a close', () => {
   const top = () => 0.999999;
@@ -270,9 +309,7 @@ describe('the net worker', () => {
     s.open();
     expect(decodeClient(s.sent[0] as Uint8Array).body.case).toBe('hello');
     h.welcome(s);
-    const b = new Uint8Array(SNAPSHOT_SIZE);
-    writeSnapshot(newSnapshot(), new DataView(b.buffer));
-    s.deliver(b);
+    s.deliver(snapshotBytes(4));
     expect(h.posted.map((m) => m.type)).toEqual([
       'status',
       'welcome',
@@ -281,6 +318,44 @@ describe('the net worker', () => {
       'snapshot',
     ]);
     expect(h.statuses()).toEqual(['connecting', 'sailing']);
+    const record = h.posted.at(-1);
+    if (record?.type !== 'snapshot') {
+      throw new Error('no record');
+    }
+    expect(record.data.byteLength).toBe(FLEET_RECORD_BYTES);
+    expect(fleetOf(record.data)[FLEET_META.tick]).toBe(4);
+  });
+
+  test('the records the page hands back are filled again: none made after the first', () => {
+    const h = harness();
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    h.welcome(s);
+    for (let i = 0; i < 1000; i++) {
+      s.deliver(snapshotBytes(4 + 2 * i, i === 0 ? 0 : 2));
+      const m = h.posted.at(-1);
+      if (m?.type === 'snapshot') {
+        h.net.handle({ type: 'return', data: m.data });
+      }
+    }
+    expect(h.posted.filter((m) => m.type === 'snapshot').length).toBe(1000);
+    expect(h.net.made).toBe(1);
+  });
+
+  test('queued: the place is passed on, and the sea follows the Welcome', () => {
+    const h = harness();
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    s.deliver(encodeServer({ body: { case: 'queued', value: { position: 2, waiting: 5 } } }));
+    s.deliver(encodeServer({ body: { case: 'queued', value: { position: 1, waiting: 4 } } }));
+    expect(h.posted.filter((m) => m.type === 'queued')).toEqual([
+      { type: 'queued', position: 2, waiting: 5 },
+      { type: 'queued', position: 1, waiting: 4 },
+    ]);
+    h.welcome(s);
+    expect(h.statuses()).toEqual(['connecting', 'queued', 'sailing']);
   });
 
   test('no Pong for 6 s: the connection is closed, and made again', async () => {
