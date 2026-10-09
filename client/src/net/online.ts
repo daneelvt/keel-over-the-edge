@@ -21,6 +21,7 @@ import {
   sheetIndex,
   sheetOf,
 } from '../predict/predictor';
+import { queueLines } from '../ui/queue';
 import {
   Ahead,
   aheadTicks,
@@ -143,6 +144,10 @@ export class Online {
         break;
       case 'queued':
         this.place.value = { position: m.position, waiting: m.waiting };
+        if (this.#hadBoat) {
+          // Back after the boat returned to port, and the sea is full.
+          this.notice.value = { text: queueLines(this.place.value).join(' '), takeover: false };
+        }
         break;
       case 'welcome':
         if (this.#hadBoat && !m.rejoined) {

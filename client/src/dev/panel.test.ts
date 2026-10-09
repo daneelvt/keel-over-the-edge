@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
+import { Fleet } from '../game/fleet';
+import { CHANGE, FLEET_META, SLOT, SLOT_FIELDS, slotAt, VIEW_SLOTS } from '../net/view';
 import { RECORDS, SIZES } from '../predict/layout.gen';
-import { applyState, type PanelWorld, RIM, readState, toRim } from './panel';
+import { applyState, netLines, type PanelWorld, RIM, readState, toRim } from './panel';
 
 function stub(): PanelWorld & { calls: string[] } {
   const calls: string[] = [];
@@ -115,5 +117,45 @@ describe('the panel', () => {
     expect(s.east / s.north).toBeCloseTo(0.75, 12);
     const fromCentre = toRim(readState(w));
     expect([fromCentre.east, fromCentre.north]).toEqual([RIM, 0]);
+  });
+});
+
+describe('the connection’s numbers', () => {
+  test('follow the fleet: boats near and far, delays, entries', () => {
+    const fleet = new Fleet();
+    const tickUs = 1e6 / 30;
+    for (let tick = 2; tick <= 120; tick += 2) {
+      const f = new Float64Array(5 + VIEW_SLOTS * SLOT_FIELDS);
+      f[FLEET_META.tick] = tick;
+      for (const [slot, far] of [
+        [0, 0],
+        [1, 0],
+        [2, 1],
+      ] as const) {
+        const o = slotAt(slot);
+        f[o + SLOT.present] = 1;
+        f[o + SLOT.sampled] = 1;
+        f[o + SLOT.far] = far;
+        f[o + SLOT.change] = tick === 2 ? CHANGE.entered : CHANGE.updated;
+      }
+      fleet.add(f, tick * tickUs + 100_000);
+      fleet.update(tick * tickUs + 100_000, 1 / 15);
+    }
+    const lines = netLines({
+      status: 'sailing',
+      offsetMs: 0,
+      rttMs: 200,
+      m: 4,
+      margin: 2,
+      counts: { snapshots: 60, corrections: 0, resets: 1, stale: 0, largest: 0 },
+      p95: 0,
+      traffic: { bytesIn: 1, bytesOut: 2, messagesIn: 3, messagesOut: 4, resyncs: 0 },
+      fleet: fleet.stats,
+      snapshotBytes: 190,
+    });
+    expect(lines).toContain('boats near, far   2, 1 (0 fading)');
+    expect(lines).toContain('delays            133 ms near, 400 ms far');
+    expect(lines).toMatch(/entries {11}45\.0 a second/);
+    expect(lines).toContain('snapshot          190 bytes');
   });
 });

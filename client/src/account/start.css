@@ -129,3 +129,30 @@
     system-ui,
     sans-serif;
 }
+
+.queue {
+  position: fixed;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: calc(100vw - 32px);
+  padding: 18px 24px;
+  border-radius: 12px;
+  background: rgb(26 36 44 / 90%);
+  color: #f2efe7;
+  text-align: center;
+  font:
+    17px / 1.35 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.queue p {
+  margin: 0;
+}
+
+.queue p.queue-waiting {
+  margin-top: 6px;
+  opacity: 0.75;
+  font-size: 15px;
+}

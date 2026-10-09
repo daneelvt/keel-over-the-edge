@@ -13,6 +13,7 @@ import {
   windText,
 } from './format';
 import { HudModel, SIGNAL_INTERVAL } from './model';
+import { ordinal, queueLines } from './queue';
 import { DEFAULTS, loadSettings, type Store, saveSettings } from './settings';
 
 const DEG = Math.PI / 180;
@@ -149,5 +150,39 @@ describe('the instruments', () => {
       model.frame(now, pose, out, w, 0, 0, 0, 0);
       expect(model.sailor.value).toBe(line);
     }
+  });
+});
+
+describe('the queue', () => {
+  test('ordinals', () => {
+    const cases: [number, string][] = [
+      [1, '1st'],
+      [2, '2nd'],
+      [3, '3rd'],
+      [4, '4th'],
+      [11, '11th'],
+      [12, '12th'],
+      [13, '13th'],
+      [21, '21st'],
+      [22, '22nd'],
+      [23, '23rd'],
+      [101, '101st'],
+      [111, '111th'],
+      [112, '112th'],
+    ];
+    for (const [n, want] of cases) {
+      expect(ordinal(n)).toBe(want);
+    }
+  });
+
+  test('the place and how many wait', () => {
+    expect(queueLines({ position: 12, waiting: 40 })).toEqual([
+      'The sea is full. You are 12th in line.',
+      '40 sailors waiting.',
+    ]);
+    expect(queueLines({ position: 1, waiting: 1 })).toEqual([
+      'The sea is full. You are next in line.',
+      '1 sailor waiting.',
+    ]);
   });
 });

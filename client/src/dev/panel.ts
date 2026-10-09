@@ -12,7 +12,9 @@
 // game's first download. Built as nodes and text, never markup.
 
 import './panel.css';
+import type { FleetStats } from '../game/fleet';
 import type { Game } from '../game/game';
+import type { Traffic } from '../net/messages';
 import type { Online } from '../net/online';
 import { RECORDS } from '../predict/layout.gen';
 import type { Predictor } from '../predict/predictor';
@@ -401,13 +403,17 @@ export interface NetNumbers {
     largest: number;
   };
   p95: number;
-  traffic: { bytesIn: number; bytesOut: number; messagesIn: number; messagesOut: number };
+  traffic: Traffic;
+  /** The other boats, and the latest snapshot's size in bytes. */
+  fleet: FleetStats;
+  snapshotBytes: number;
 }
 
 /** The connection's numbers, as lines. */
 export function netLines(n: NetNumbers): string {
   const c = n.counts;
   const t = n.traffic;
+  const f = n.fleet;
   return [
     `status            ${n.status}`,
     `clock offset      ${n.offsetMs.toFixed(1)} ms`,
@@ -419,6 +425,12 @@ export function netLines(n: NetNumbers): string {
     `resets, stale     ${c.resets}, ${c.stale}`,
     `bytes in, out     ${t.bytesIn}, ${t.bytesOut}`,
     `messages in, out  ${t.messagesIn}, ${t.messagesOut}`,
+    `boats near, far   ${f.near}, ${f.far} (${f.fading} fading)`,
+    `carried on, held  ${f.extrapolated}, ${f.held}`,
+    `delays            ${f.nearDelay.toFixed(0)} ms near, ${f.farDelay.toFixed(0)} ms far (lateness spread ${f.spread.toFixed(0)} ms)`,
+    `entries           ${f.entries.toFixed(1)} a second`,
+    `snapshot          ${n.snapshotBytes} bytes`,
+    `resyncs           ${t.resyncs}`,
   ].join('\n');
 }
 
@@ -442,6 +454,8 @@ export function openNetPanel(online: Online, predictor: Predictor, parent: HTMLE
       counts: predictor.counts,
       p95: predictor.p95(),
       traffic: online.traffic,
+      fleet: online.fleet.stats,
+      snapshotBytes: online.snapshotBytes,
     });
   };
   update();

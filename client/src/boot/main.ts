@@ -35,6 +35,7 @@ import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import { START, startSandbox, windFromQuery } from '../sandbox/sandbox';
 import { mountScreen } from '../ui/hud';
+import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
 
 async function start(): Promise<void> {
@@ -112,10 +113,13 @@ async function start(): Promise<void> {
   const online = new Online(worker, predictor, game);
   world.fleetSource = online.fleet;
   connect(online);
-  // "Back soon" while the first connection cannot be made.
+  // "Back soon" while the first connection cannot be made, and the queue
+  // while the sea is full.
   const waiting = online.status.subscribe((status) => notice(status === 'waiting'));
+  const queue = showQueue(document.body, online.place);
   await online.ready;
   waiting();
+  queue();
   notice(false);
 
   game.setDriver(predictor);
