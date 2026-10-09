@@ -1,8 +1,23 @@
 # Keel Over the Edge
 
-[![ci](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/ci.yaml?query=branch%3Amain)
-[![CodeQL](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/codeql.yaml/badge.svg?branch=main)](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/codeql.yaml?query=branch%3Amain)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/daneelvt/keel-over-the-edge/badge)](https://scorecard.dev/viewer/?uri=github.com/daneelvt/keel-over-the-edge)
+<!-- Build and security -->
+[![CI](https://img.shields.io/github/actions/workflow/status/daneelvt/keel-over-the-edge/ci.yaml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/ci.yaml?query=branch%3Amain)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/daneelvt/keel-over-the-edge/codeql.yaml?branch=main&style=for-the-badge&logo=github&logoColor=white&label=CodeQL)](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/codeql.yaml?query=branch%3Amain)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/daneelvt/keel-over-the-edge?style=for-the-badge&label=OpenSSF%20Scorecard)](https://scorecard.dev/viewer/?uri=github.com/daneelvt/keel-over-the-edge)
+[![Renovate](https://img.shields.io/badge/renovate-enabled-1A1F6C?style=for-the-badge&logo=renovate&logoColor=white)](https://github.com/daneelvt/keel-over-the-edge/issues?q=is%3Aissue+%22Dependency+Dashboard%22)
+[![License](https://img.shields.io/github/license/daneelvt/keel-over-the-edge?style=for-the-badge&color=2bbc8a)](LICENSE)
+
+<!-- Stack -->
+[![Go version](https://img.shields.io/github/go-mod/go-version/daneelvt/keel-over-the-edge?style=for-the-badge&logo=go&logoColor=white&color=00ADD8)](go.mod)
+[![Go reference](https://img.shields.io/badge/go.dev-reference-007D9C?style=for-the-badge&logo=go&logoColor=white)](https://pkg.go.dev/github.com/daneelvt/keel-over-the-edge)
+[![TypeScript version](https://img.shields.io/github/package-json/dependency-version/daneelvt/keel-over-the-edge/dev/typescript?filename=client%2Fpackage.json&style=for-the-badge&logo=typescript&logoColor=white&color=3178C6)](client/package.json)
+[![Node version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdaneelvt%2Fkeel-over-the-edge%2Fmain%2Fclient%2Fpackage.json&query=%24.engines.node&label=node&style=for-the-badge&logo=nodedotjs&logoColor=white&color=5FA04E)](client/package.json)
+
+<!-- Activity -->
+[![Last commit](https://img.shields.io/github/last-commit/daneelvt/keel-over-the-edge?style=for-the-badge&color=blueviolet)](https://github.com/daneelvt/keel-over-the-edge/commits/main)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/daneelvt/keel-over-the-edge?style=for-the-badge&color=blueviolet)](https://github.com/daneelvt/keel-over-the-edge/pulse)
+[![Open issues](https://img.shields.io/github/issues/daneelvt/keel-over-the-edge?style=for-the-badge&color=informational)](https://github.com/daneelvt/keel-over-the-edge/issues)
+[![Repo size](https://img.shields.io/github/repo-size/daneelvt/keel-over-the-edge?style=for-the-badge&color=informational)](https://github.com/daneelvt/keel-over-the-edge)
 
 A multiplayer sailing game on a small disk-shaped world you can sail off the edge of. Realistic sailing, played in the browser.
 
