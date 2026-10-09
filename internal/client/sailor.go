@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-package edgetest
+package client
 
 import (
 	"cmp"
@@ -8,7 +8,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
+	"math/bits"
 	"os"
 	"sort"
 	"time"
@@ -34,9 +36,26 @@ type Stats struct {
 	Steps       int
 	MaxAhead    int
 	MaxLate     int // the most ticks an input arrived late
-	BytesIn     int
+	BytesIn     int // payloads
 	BytesOut    int
+	FramesIn    int // WebSocket frames' bytes, as the server counts them
+	FramesOut   int
+	MessagesIn  int
+	MessagesOut int
 	Reconnects  int
+	// The other boats: those in view, summed over the snapshots and at
+	// most; the entries that changed views; snapshots dropped for want of
+	// their base, and the Resyncs asked for.
+	Views     int // snapshots decoded
+	Others    int
+	MaxOthers int
+	Near      int
+	Enters    int
+	Updates   int
+	Leaves    int
+	Dropped   int
+	Resyncs   int
+	Queued    int // Queued messages
 }
 
 // Percentile is the p-th percentile of the corrections' sizes.
@@ -49,13 +68,16 @@ func (s *Stats) Percentile(p float64) float64 {
 	return v[min(len(v)-1, int(math.Ceil(p/100*float64(len(v))))-1)]
 }
 
+// Dialer opens the game connection.
+type Dialer func(ctx context.Context) (*websocket.Conn, error)
+
 // Sailor is the page's game connection in Go: it connects, keeps the clock,
 // steps its boat ahead of the server with physics.Step, reconciles each
-// snapshot and sends its controls, frame by frame, as the page and its net
-// worker do; and it records a trace of all that.
+// snapshot, decodes the other boats' views and sends its controls, frame by
+// frame, as the page and its net worker do; and it records a trace of all
+// that.
 type Sailor struct {
-	srv  *Server
-	opts DialOptions
+	dial Dialer
 	kind *physics.Prepared
 
 	ws    *websocket.Conn
@@ -77,11 +99,19 @@ type Sailor struct {
 	FrameEvery time.Duration
 
 	Welcomes []WelcomeSeen
-	Stats    Stats
-	Trace    *Trace
+	// Places are the places in the queue the server told, in order.
+	Places []Place
+	Stats  Stats
+	Trace  *Trace
 	// Ms is m after each snapshot, with its time, for the tests.
 	Ms []MSeen
+	// OnView, if not nil, is given each snapshot as it is decoded, with the
+	// view after it, what its entries did and the slots it samples.
+	OnView func(ev *Event)
 }
+
+// Place is a place in the queue, and how many waited.
+type Place struct{ Position, Waiting uint32 }
 
 // WelcomeSeen is a Welcome's boat.
 type WelcomeSeen struct {
@@ -95,12 +125,12 @@ type MSeen struct {
 	M  int
 }
 
-// NewSailor makes a sailor that connects as o says and steers with
-// controls.
-func (s *Server) NewSailor(o DialOptions, controls Controls) *Sailor {
+// NewSailor makes a sailor of a boat of kind that connects through dial
+// and steers with controls.
+func NewSailor(dial Dialer, kind *physics.Prepared, controls Controls) *Sailor {
 	return &Sailor{
-		srv: s, opts: o, kind: &s.Kinds[0], controls: controls,
-		start: time.Now(), Ahead: NewAhead(), Predictor: NewPredictor(&s.Kinds[0]),
+		dial: dial, kind: kind, controls: controls,
+		start: time.Now(), Ahead: NewAhead(), Predictor: NewPredictor(kind),
 		Net: Net{FrameMs: 17}, sent: [2]int{-1, -1},
 	}
 }
@@ -109,7 +139,7 @@ func (s *Sailor) now() float64 { return float64(time.Since(s.start).Microseconds
 
 // Connect opens the connection and says Hello.
 func (s *Sailor) Connect(ctx context.Context) error {
-	ws, _, err := s.srv.Dial(ctx, s.opts)
+	ws, err := s.dial(ctx)
 	if err != nil {
 		return err
 	}
@@ -136,7 +166,26 @@ func (s *Sailor) Drop() {
 func (s *Sailor) send(ctx context.Context, b []byte) error {
 	s.Trace.add(s.now(), "out", b)
 	s.Stats.BytesOut += len(b)
+	s.Stats.FramesOut += FrameBytes(len(b), true)
+	s.Stats.MessagesOut++
 	return s.ws.Write(ctx, websocket.MessageBinary, b)
+}
+
+// FrameBytes is the size of a WebSocket frame of n bytes of payload
+// (RFC 6455, 5.2): its header, the masking key a client's frames carry,
+// and the payload.
+func FrameBytes(n int, masked bool) int {
+	h := 2
+	switch {
+	case n > 0xffff:
+		h += 8
+	case n > 125:
+		h += 2
+	}
+	if masked {
+		h += 4
+	}
+	return h + n
 }
 
 // Sail runs the client for d, or until the connection ends.
@@ -156,17 +205,33 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 				return s.inbox.Err()
 			}
 			now := s.now()
-			s.Trace.add(now, "in", r.Bytes)
 			s.Stats.BytesIn += len(r.Bytes)
-			_, ev, err := s.Net.Receive(now, r.Bytes)
+			s.Stats.FramesIn += FrameBytes(len(r.Bytes), false)
+			s.Stats.MessagesIn++
+			out, ev, err := s.Net.Receive(now, r.Bytes)
 			if err != nil {
 				return err
+			}
+			s.Trace.received(now, r.Bytes, &ev)
+			for _, b := range out {
+				s.Stats.Resyncs++
+				if err := s.send(ctx, b); err != nil {
+					return err
+				}
 			}
 			if w := ev.Welcome; w != nil {
 				s.Welcomes = append(s.Welcomes, WelcomeSeen{Boat: w.GetBoat(), Rejoined: w.GetRejoined()})
 				s.fresh = true
 			}
-			if ev.Snapshot != nil {
+			if q := ev.Queued; q != nil {
+				s.Places = append(s.Places, Place{Position: q.GetPosition(), Waiting: q.GetWaiting()})
+				s.Stats.Queued++
+			}
+			if ev.Dropped {
+				s.Stats.Dropped++
+			}
+			if v := ev.View; v != nil {
+				s.view(&ev)
 				s.queued = append(s.queued, ev.Snapshot)
 			}
 		case <-timer.C:
@@ -174,7 +239,7 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			s.Trace.mark(now, "timer")
 			out, dead := s.Net.Time(now)
 			if dead {
-				return errors.New("edgetest: no pong for 6 s")
+				return errors.New("client: no pong for 6 s")
 			}
 			for _, b := range out {
 				if err := s.send(ctx, b); err != nil {
@@ -188,6 +253,26 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 		}
 	}
 	return nil
+}
+
+// view counts what a snapshot did to the view of the other boats.
+func (s *Sailor) view(ev *Event) {
+	v := ev.View
+	n := v.Len()
+	s.Stats.Views++
+	s.Stats.Others += n
+	s.Stats.MaxOthers = max(s.Stats.MaxOthers, n)
+	for slot := range protocol.ViewSlots {
+		if v.Has(slot) && !v.Boats[slot].Far() {
+			s.Stats.Near++
+		}
+	}
+	s.Stats.Enters += bits.OnesCount64(ev.Changes.Entered)
+	s.Stats.Updates += bits.OnesCount64(ev.Changes.Updated)
+	s.Stats.Leaves += bits.OnesCount64(ev.Changes.Left)
+	if s.OnView != nil {
+		s.OnView(ev)
+	}
 }
 
 func (s *Sailor) arm(timer *time.Timer) {
@@ -284,16 +369,19 @@ type Trace struct {
 }
 
 // A TraceEvent is one of: a message in or out (hex), the worker's timer, a
-// step, an input, a snapshot reconciled, a reset.
+// step, an input, a snapshot reconciled, a reset. A snapshot in carries
+// ViewDigest of the view it decoded to, or Dropped.
 type TraceEvent struct {
-	T     float64  `json:"t"`
-	In    string   `json:"in,omitempty"`
-	Out   string   `json:"out,omitempty"`
-	Timer bool     `json:"timer,omitempty"`
-	Reset bool     `json:"reset,omitempty"`
-	Step  []int64  `json:"step,omitempty"`  // tick, helm, sheet
-	Input []int64  `json:"input,omitempty"` // seq, helm, sheet
-	Snap  *SnapOut `json:"snap,omitempty"`
+	T       float64  `json:"t"`
+	In      string   `json:"in,omitempty"`
+	View    string   `json:"view,omitempty"`
+	Dropped bool     `json:"dropped,omitempty"`
+	Out     string   `json:"out,omitempty"`
+	Timer   bool     `json:"timer,omitempty"`
+	Reset   bool     `json:"reset,omitempty"`
+	Step    []int64  `json:"step,omitempty"`  // tick, helm, sheet
+	Input   []int64  `json:"input,omitempty"` // seq, helm, sheet
+	Snap    *SnapOut `json:"snap,omitempty"`
 }
 
 // SnapOut is a snapshot's outcome.
@@ -303,6 +391,18 @@ type SnapOut struct {
 	Reset     bool    `json:"reset,omitempty"`
 	Corrected bool    `json:"corrected,omitempty"`
 	Distance  float64 `json:"distance,omitempty"`
+}
+
+// received records a message that came, and the view it decoded to.
+func (t *Trace) received(now float64, b []byte, ev *Event) {
+	if t == nil {
+		return
+	}
+	e := TraceEvent{T: now, In: hex.EncodeToString(b), Dropped: ev.Dropped}
+	if ev.View != nil {
+		e.View = fmt.Sprintf("%08x", ViewDigest(ev.View))
+	}
+	t.Events = append(t.Events, e)
 }
 
 func (t *Trace) add(now float64, dir string, b []byte) {

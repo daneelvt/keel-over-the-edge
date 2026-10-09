@@ -27,7 +27,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
 
@@ -200,7 +200,7 @@ func runDev(ctx context.Context, out io.Writer, lag string) error {
 	}
 	s := &stack{out: out, origin: playOrigin(lan), certs: c, dbURL: db.App}
 	if lag != "" {
-		l, err := edgetest.ParseLag(lag)
+		l, err := client.ParseLag(lag)
 		if err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func runDev(ctx context.Context, out io.Writer, lag string) error {
 		if err != nil {
 			return err
 		}
-		go edgetest.Proxy(ctx, ln, playAddr, l)
+		go client.Proxy(ctx, ln, playAddr, l)
 		s.viteToKeel = lagAddr
 		fmt.Fprintf(newPrefixed(&s.mu, out, "dev"), "the game's traffic goes through the lag proxy: %s round trip and loss\n", l)
 	}
@@ -337,8 +337,8 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 // checkGame opens the game connection through Vite over HTTPS with the
 // guest's cookie, as the page's net worker does, says Hello, and expects a
 // Welcome, a snapshot, and a Pong to its Ping.
-func checkGame(ctx context.Context, client *http.Client, jar http.CookieJar, base string) error {
-	c := *client
+func checkGame(ctx context.Context, hc *http.Client, jar http.CookieJar, base string) error {
+	c := *hc
 	c.Jar = jar
 	c.Timeout = 0
 	u := "wss" + strings.TrimPrefix(base, "https") + "/ws"
@@ -350,12 +350,12 @@ func checkGame(ctx context.Context, client *http.Client, jar http.CookieJar, bas
 		return fmt.Errorf("smoke: the game connection: %w", err)
 	}
 	defer ws.CloseNow()
-	if err := edgetest.Send(ctx, ws, edgetest.Hello()); err != nil {
+	if err := client.Send(ctx, ws, client.Hello()); err != nil {
 		return err
 	}
 	var welcome, snapshot, pong bool
 	for !welcome || !snapshot || !pong {
-		r, err := edgetest.Receive(ctx, ws)
+		r, err := client.Receive(ctx, ws)
 		if err != nil {
 			return fmt.Errorf("smoke: the game connection (welcome %v, snapshot %v, pong %v): %w", welcome, snapshot, pong, err)
 		}
@@ -363,7 +363,7 @@ func checkGame(ctx context.Context, client *http.Client, jar http.CookieJar, bas
 		case r.Message.GetWelcome() != nil:
 			welcome = true
 			ping := &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: 1}}}
-			if err := edgetest.Send(ctx, ws, ping); err != nil {
+			if err := client.Send(ctx, ws, ping); err != nil {
 				return err
 			}
 		case r.Message.GetPong() != nil:

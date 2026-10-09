@@ -43,7 +43,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
 
@@ -72,7 +72,7 @@ func run() error {
 	if *tlsDir != "" {
 		return writeCert(*tlsDir)
 	}
-	lag, err := edgetest.ParseLag(*lagFlag)
+	lag, err := client.ParseLag(*lagFlag)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	go edgetest.Proxy(ctx, ln, playAddr, lag)
+	go client.Proxy(ctx, ln, playAddr, lag)
 
 	k := &keelProc{path: keel, env: env}
 	if err := k.start(); err != nil {

@@ -21,7 +21,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/client"
 )
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 	lagFlag := flag.String("lag", "200ms,2%", "the round trip, and the share of packets lost each way")
 	seed := flag.Uint64("seed", 1, "the random numbers' seed")
 	flag.Parse()
-	lag, err := edgetest.ParseLag(*lagFlag)
+	lag, err := client.ParseLag(*lagFlag)
 	if err != nil {
 		fail(err)
 	}
@@ -42,7 +42,7 @@ func main() {
 		fail(err)
 	}
 	fmt.Printf("lag: %s → %s at %s, seed %d\n", ln.Addr(), *to, lag, lag.Seed)
-	if err := edgetest.Proxy(ctx, ln, *to, lag); err != nil {
+	if err := client.Proxy(ctx, ln, *to, lag); err != nil {
 		fail(err)
 	}
 }

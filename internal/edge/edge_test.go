@@ -4,6 +4,7 @@ package edge_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
@@ -47,6 +49,10 @@ func count(t *testing.T, s *edgetest.Server, vec string, labels ...string) float
 		return testutil.ToFloat64(m.EdgeCloses.WithLabelValues(labels...))
 	case "dropped":
 		return testutil.ToFloat64(m.EdgeDropped.WithLabelValues(labels...))
+	case "resyncs":
+		return testutil.ToFloat64(m.EdgeResyncs.WithLabelValues(labels...))
+	case "entries":
+		return testutil.ToFloat64(m.EdgeSnapshotEntries.WithLabelValues(labels...))
 	}
 	t.Fatalf("no metric %s", vec)
 	return 0
@@ -142,9 +148,9 @@ func TestHelloVersions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			hello := edgetest.Hello()
+			hello := client.Hello()
 			tc.edit(hello.GetHello())
-			if err := edgetest.Send(t.Context(), ws, hello); err != nil {
+			if err := client.Send(t.Context(), ws, hello); err != nil {
 				t.Fatal(err)
 			}
 			if code := closedWith(t, ws); code != edge.CloseVersion {
@@ -202,7 +208,7 @@ func TestWelcome(t *testing.T) {
 		}
 		last := int64(0)
 		for range 10 {
-			r, err := edgetest.Receive(t.Context(), ws)
+			r, err := client.Receive(t.Context(), ws)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -213,7 +219,7 @@ func TestWelcome(t *testing.T) {
 			if sn.Tick%2 != 0 || sn.Tick < w.GetTick() || last != 0 && sn.Tick != last+2 {
 				t.Fatalf("a snapshot of tick %d after %d (welcome %d)", sn.Tick, last, w.GetTick())
 			}
-			if sn.Helm != bus.Steps/2 || sn.Sheet != bus.Steps/2 || sn.Margin != protocol.NoMargin || len(r.Bytes) != protocol.SnapshotSize {
+			if sn.Helm != bus.Steps/2 || sn.Sheet != bus.Steps/2 || sn.Margin != protocol.NoMargin || len(r.Bytes) != protocol.HeaderSize {
 				t.Fatalf("snapshot %+v", sn)
 			}
 			last = sn.Tick
@@ -243,6 +249,8 @@ func TestWelcome(t *testing.T) {
 	})
 }
 
+// TestFull: with the world at its limit and its queue full, a connection
+// is closed with 1013.
 func TestFull(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{Capacity: 1})
@@ -253,11 +261,20 @@ func TestFull(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer ws.CloseNow()
+		dev := s.World.Bus().Commands.Developer()
+		for i := range bus.QueueLimit {
+			var a bus.Account
+			a[0], a[14], a[15] = 0xee, byte(i>>8), byte(i)
+			for dev.TrySend(bus.Command{Op: bus.Join, Account: a}) != nil {
+				time.Sleep(time.Second / 30)
+			}
+		}
+		time.Sleep(time.Second)
 		ws2, _, err := s.Dial(t.Context(), edgetest.DialOptions{Cookie: bob})
 		if err != nil {
 			t.Fatal(err)
 		}
-		edgetest.Send(t.Context(), ws2, edgetest.Hello())
+		client.Send(t.Context(), ws2, client.Hello())
 		if code := closedWith(t, ws2); code != websocket.StatusTryAgainLater {
 			t.Fatalf("a full world closed with %d", code)
 		}
@@ -278,10 +295,10 @@ func TestHeldTenMinutes(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer ws.CloseNow()
-		in := edgetest.Read(ws)
+		in := client.Read(ws)
 		pongs, snapshots := 0, 0
 		for i := range 300 {
-			edgetest.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: int64(i)}}})
+			client.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: int64(i)}}})
 			timer := time.After(2 * time.Second)
 			for waiting := true; waiting; {
 				select {
@@ -396,7 +413,7 @@ func TestRate(t *testing.T) {
 		ended := make(chan websocket.StatusCode, 1)
 		go func() { ended <- closedWith(t, ws) }()
 		for range 60 * 30 {
-			if err := edgetest.Send(t.Context(), ws, ack); err != nil {
+			if err := client.Send(t.Context(), ws, ack); err != nil {
 				t.Fatalf("at 60 a second: %v", err)
 			}
 			time.Sleep(time.Second / 60)
@@ -416,7 +433,7 @@ func TestRate(t *testing.T) {
 		go func() { ended <- closedWith(t, ws) }()
 		start := time.Now()
 		for time.Since(start) < 10*time.Second {
-			if edgetest.Send(t.Context(), ws, ack) != nil {
+			if client.Send(t.Context(), ws, ack) != nil {
 				break
 			}
 			time.Sleep(time.Second / 200)
@@ -463,7 +480,7 @@ func TestTakeover(t *testing.T) {
 		// few ticks ahead, as a client that runs ahead does.
 		ended := make(chan websocket.StatusCode, 1)
 		go func() {
-			in := edgetest.Read(first)
+			in := client.Read(first)
 			var tick int64
 			for {
 				select {
@@ -478,7 +495,7 @@ func TestTakeover(t *testing.T) {
 				case <-time.After(time.Second / 60):
 				}
 				if tick != 0 {
-					edgetest.Send(t.Context(), first, &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{
+					client.Send(t.Context(), first, &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{
 						Seq: uint32(tick + 5), Helm: 7, Sheet: uint32(tick % 1000),
 					}}})
 				}
@@ -534,7 +551,7 @@ func TestMargin(t *testing.T) {
 		next := func() *protocol.Snapshot {
 			t.Helper()
 			for {
-				r, err := edgetest.Receive(t.Context(), ws)
+				r, err := client.Receive(t.Context(), ws)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -544,7 +561,7 @@ func TestMargin(t *testing.T) {
 			}
 		}
 		input := func(seq int64, helm uint32) {
-			edgetest.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{Seq: uint32(seq), Helm: helm, Sheet: 512}}})
+			client.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{Seq: uint32(seq), Helm: helm, Sheet: 512}}})
 		}
 		sn := next()
 		// In the bubble no time passes between the snapshot and the input:
@@ -581,7 +598,7 @@ func TestStalledReader(t *testing.T) {
 		// Pings keep the connection from being idle, and their pongs queue.
 		start := time.Now()
 		for time.Since(start) < 20*time.Second && testutil.ToFloat64(s.Metrics.EdgeConnections) == 1 {
-			edgetest.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{}}})
+			client.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{}}})
 			time.Sleep(time.Second / 30)
 		}
 		if n := testutil.ToFloat64(s.Metrics.EdgeConnections); n != 0 {
@@ -650,24 +667,41 @@ func TestShutdown(t *testing.T) {
 }
 
 // TestDrag: a word a tick, each stamped a few ticks ahead, as while the
-// tiller is dragged: every one is applied, at the tick it was stamped for.
+// tiller is dragged: every one is applied, at the tick it was stamped for,
+// with one encoder and with eight.
 func TestDrag(t *testing.T) {
+	for _, encoders := range []int{1, 8} {
+		t.Run(fmt.Sprint(encoders), func(t *testing.T) { drag(t, encoders) })
+	}
+}
+
+func drag(t *testing.T, encoders int) {
 	synctest.Test(t, func(t *testing.T) {
 		rec := &changes{words: map[int64][]bus.Word{}}
-		s := edgetest.NewServer(t, edgetest.Config{Record: rec})
+		s := edgetest.NewServer(t, edgetest.Config{Record: rec, Encoders: encoders})
+		// Other players, on the other encoders.
+		for i := range encoders - 1 {
+			token, _ := s.Guest(fmt.Sprint("Crew ", i))
+			ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer ws.CloseNow()
+			client.Read(ws)
+		}
 		token, _ := s.Guest("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer ws.CloseNow()
-		edgetest.Read(ws)
+		client.Read(ws)
 		// Halfway between ticks, as a client's frames fall.
 		time.Sleep(time.Second / 60)
 		sent := 0
 		for range 300 {
 			seq := loop.TickAt(time.Now(), edgetest.Epoch) + 3
-			edgetest.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{
+			client.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{
 				Seq: uint32(seq), Helm: uint32(seq % 1000), Sheet: 512,
 			}}})
 			sent++

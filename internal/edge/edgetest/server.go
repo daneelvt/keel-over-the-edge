@@ -19,6 +19,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -44,11 +45,13 @@ const PlayOrigin = "https://play.keel.test"
 type Config struct {
 	Capacity int // 16
 	Grace    int64
+	Limit    int // the boat limit; the capacity if 0
+	Encoders int // the edge's encoders; GOMAXPROCS if 0
 	Limits   edge.Limits
 	// Kinds are the world's boats, prepared; the catalog's if nil.
 	Kinds []physics.Prepared
 	// Record, if not nil, is told of each frame too, on the ticking
-	// goroutine.
+	// goroutine, before the edge.
 	Record sim.Recorder
 }
 
@@ -94,7 +97,7 @@ func NewServer(t testing.TB, cfg Config) *Server {
 	}
 	log := slog.New(slog.DiscardHandler)
 	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Workers: 1,
-		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace})
+		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,10 +107,12 @@ func NewServer(t testing.TB, cfg Config) *Server {
 	s.Edge = edge.New(edge.Config{
 		Bus: w.Bus(), World: WorldID, Clock: s.Loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
-		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits,
+		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
 	})
 	if cfg.Record != nil {
-		w.Record(s.Edge, cfg.Record)
+		// The test's recorder first, so it has each frame before any
+		// client can be sent it.
+		w.Record(cfg.Record, s.Edge)
 	} else {
 		w.Record(s.Edge)
 	}
@@ -215,6 +220,40 @@ func SmallReadBuffer(n int) func(netConn) netConn {
 			b.SetReadBufferSize(n)
 		}
 		return c
+	}
+}
+
+// Crowd puts n boats with no connection in the world, each at a position
+// at, and returns their IDs.
+func (s *Server) Crowd(t testing.TB, n int, at func(i int) physics.State) []uint64 {
+	t.Helper()
+	dev := s.World.Bus().Commands.Developer()
+	replies := make([]chan bus.Reply, n)
+	for i := range n {
+		replies[i] = make(chan bus.Reply, 1)
+		var a bus.Account
+		a[0], a[1], a[14], a[15] = 0xcc, 0xcc, byte(i>>8), byte(i)
+		for dev.TrySend(bus.Command{Op: bus.Join, Account: a, Reply: replies[i]}) != nil {
+			time.Sleep(time.Second / 30)
+		}
+	}
+	boats := make([]uint64, n)
+	for i, r := range replies {
+		rep := <-r
+		if rep.Result != bus.Joined {
+			t.Fatalf("a crowd's boat: %+v", rep)
+		}
+		boats[i] = rep.Boat
+		s.Place(rep.Boat, at(i))
+	}
+	return boats
+}
+
+// Place puts a boat at a state, at the next tick.
+func (s *Server) Place(boat uint64, st physics.State) {
+	dev := s.World.Bus().Commands.Developer()
+	for dev.TrySend(bus.Command{Op: bus.Place, Boat: boat, State: st}) != nil {
+		time.Sleep(time.Second / 30)
 	}
 }
 

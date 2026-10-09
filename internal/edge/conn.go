@@ -36,6 +36,13 @@ type conn struct {
 	joinTick int64
 	joined   atomic.Bool // the simulation gave the connection a boat
 	ready    atomic.Bool // Welcome is queued: inputs steer the boat from now on
+	// queued: the connection waits in the simulation's queue for a boat,
+	// at position when it joined it. The encoder alone reads the rest.
+	queued                    atomic.Bool
+	position                  int32
+	toldPosition, toldWaiting int32
+	seen                      int64 // the tick the encoder last found it in the queue
+	enc                       *encoder
 
 	// The control slot's writer, stopped once another connection has
 	// taken the boat over: a word is stored only under wmu while not
@@ -53,6 +60,9 @@ type conn struct {
 
 	margin margin
 	ack    atomic.Int64 // the newest snapshot's tick the client has decoded
+	// resync: the client lacks a base and asked for a full snapshot.
+	resync     atomic.Bool
+	lastResync time.Time
 
 	// The writer's side.
 	queue      chan outgoing
@@ -272,9 +282,18 @@ func (c *conn) join() bool {
 	}
 	switch r.Result {
 	case bus.Joined, bus.Rejoined:
+	case bus.Queued:
+		// The sea is full: the connection waits, and its encoder tells it
+		// its place, and welcomes it once the queue gives it a boat.
+		e.m.join[joinQueued].Inc()
+		c.position, c.joinTick = r.Position, r.Tick
+		c.queued.Store(true)
+		c.enc = e.encoderFor()
+		c.enc.add(c)
+		return true
 	case bus.Full:
 		e.m.join[joinFull].Inc()
-		c.close(websocket.StatusTryAgainLater, "the sea is full")
+		c.close(websocket.StatusTryAgainLater, "the sea and its queue are full")
 		return false
 	default:
 		c.close(websocket.StatusInternalError, "no boat")
@@ -287,12 +306,14 @@ func (c *conn) join() bool {
 	}
 	c.slot, c.gen, c.boat, c.rejoined, c.joinTick = r.Slot, r.Gen, r.Boat, r.Result == bus.Rejoined, r.Tick
 	c.joined.Store(true)
-	e.enc.add(c)
+	c.enc = e.encoderFor()
+	c.enc.add(c)
 	return true
 }
 
 // lateJoin waits, apart, for the answer to a Join the connection gave up
-// on: if the simulation gave it a boat after all, the boat's grace begins.
+// on: if the simulation gave it a boat after all, the boat's grace begins;
+// if it put it in the queue, it leaves it.
 func (c *conn) lateJoin(reply <-chan bus.Reply) {
 	e := c.e
 	e.helpers.Add(1)
@@ -300,8 +321,11 @@ func (c *conn) lateJoin(reply <-chan bus.Reply) {
 		defer e.helpers.Done()
 		select {
 		case r := <-reply:
-			if r.Result == bus.Joined || r.Result == bus.Rejoined {
-				e.disconnect(r.Boat, c.id)
+			switch r.Result {
+			case bus.Joined, bus.Rejoined:
+				e.disconnect(bus.Command{Op: bus.Disconnect, Boat: r.Boat, Conn: c.id})
+			case bus.Queued:
+				e.disconnect(bus.Command{Op: bus.Disconnect, Account: c.account, Conn: c.id})
 			}
 		case <-e.ctx.Done():
 		}
@@ -322,8 +346,29 @@ func (c *conn) handle(data []byte) bool {
 		return c.ping(b.Ping)
 	case *pb.ClientMessage_Hello:
 		c.e.m.in[inHello].Inc()
+	case *pb.ClientMessage_Command:
+		c.e.m.in[inCommand].Inc()
+		if b.Command.GetResync() != nil {
+			c.askResync(time.Now())
+		}
 	}
 	return true
+}
+
+// resyncEvery is how often a client's request for a full snapshot is
+// honoured, at most.
+const resyncEvery = time.Second
+
+// askResync has the next snapshot written in full, unless the client asked
+// within the last second.
+func (c *conn) askResync(now time.Time) {
+	if !c.lastResync.IsZero() && now.Sub(c.lastResync) < resyncEvery {
+		c.e.m.resyncIgnored.Inc()
+		return
+	}
+	c.lastResync = now
+	c.resync.Store(true)
+	c.e.m.resyncHonoured.Inc()
 }
 
 // input takes the controls the client stepped its boat with, stamped for
@@ -442,8 +487,13 @@ func (c *conn) writer() {
 				queued = false
 			}
 		}
-		if b := c.box.take(); b != nil && !c.write(b, outSnapshot) {
-			return
+		if b, tick := c.box.take(); b != nil {
+			if !c.write(b, outSnapshot) {
+				return
+			}
+			if ack := c.ack.Load(); ack > 0 {
+				c.e.m.lag.Observe(float64(tick - ack))
+			}
 		}
 	}
 }
@@ -496,7 +546,9 @@ func (c *conn) drop() {
 
 // finish ends the connection once its reader has: the encoder lets it go,
 // the registry forgets it, the close finishes, the writer stops, and if the
-// connection had a boat, the boat's grace begins.
+// connection had a boat, the boat's grace begins; if it was waiting for
+// one, it leaves the queue, or, if the queue gave it one the edge had not
+// yet seen, that boat's grace begins.
 func (c *conn) finish() {
 	e := c.e
 	c.gone.Store(true)
@@ -505,8 +557,11 @@ func (c *conn) finish() {
 	<-c.closed
 	c.writeTimer.Stop()
 	close(c.done)
-	if c.joined.Load() {
-		e.disconnect(c.boat, c.id)
+	switch {
+	case c.joined.Load():
+		e.disconnect(bus.Command{Op: bus.Disconnect, Boat: c.boat, Conn: c.id})
+	case c.queued.Load():
+		e.disconnect(bus.Command{Op: bus.Disconnect, Account: c.account, Conn: c.id})
 	}
 	code := websocket.StatusCode(-1)
 	switch {
@@ -521,10 +576,9 @@ func (c *conn) finish() {
 	e.cfg.Log.Debug("game connection closed", "request_id", c.reqID, "conn", c.id, "code", int(code))
 }
 
-// disconnect tells the simulation a connection that had boat has ended,
-// trying again each tick while its queue is full.
-func (e *Edge) disconnect(boat, conn uint64) {
-	cmd := bus.Command{Op: bus.Disconnect, Boat: boat, Conn: conn}
+// disconnect tells the simulation a connection has ended, with cmd, a
+// Disconnect, trying again each tick while its queue is full.
+func (e *Edge) disconnect(cmd bus.Command) {
 	players := e.cfg.Bus.Commands.Players()
 	if players.TrySend(cmd) == nil {
 		return
@@ -542,50 +596,4 @@ func (e *Edge) disconnect(boat, conn uint64) {
 			}
 		}
 	}()
-}
-
-// mailbox holds a connection's newest snapshot: three buffers, one being
-// sent, one waiting, one being filled, swapped and never copied. A snapshot
-// posted before the waiting one was taken replaces it.
-type mailbox struct {
-	mu                        sync.Mutex
-	bufs                      [3][protocol.SnapshotSize]byte
-	sending, waiting, filling int
-	full                      bool
-	signal                    chan struct{}
-}
-
-func (m *mailbox) init() {
-	m.sending, m.waiting, m.filling = 0, 1, 2
-	m.signal = make(chan struct{}, 1)
-}
-
-// fill is the buffer for the encoder to fill.
-func (m *mailbox) fill() []byte { return m.bufs[m.filling][:] }
-
-// post makes the filled buffer the waiting one, and wakes the writer. It
-// reports whether a snapshot not yet sent was replaced.
-func (m *mailbox) post() (replaced bool) {
-	m.mu.Lock()
-	replaced = m.full
-	m.waiting, m.filling = m.filling, m.waiting
-	m.full = true
-	m.mu.Unlock()
-	select {
-	case m.signal <- struct{}{}:
-	default:
-	}
-	return replaced
-}
-
-// take returns the waiting snapshot for the writer to send, or nil.
-func (m *mailbox) take() []byte {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if !m.full {
-		return nil
-	}
-	m.sending, m.waiting = m.waiting, m.sending
-	m.full = false
-	return m.bufs[m.sending][:]
 }
