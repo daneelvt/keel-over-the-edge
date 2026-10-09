@@ -111,12 +111,13 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64, each with a PostgreSQL service (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat | `go run ./tools/dev -db` once, then `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
+| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64, each with a PostgreSQL service (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
 | `pr.render.yaml` | Pull requests, not drafts, that change its files | The test sea's fixtures current; the physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
+| `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of `infra/cluster` rendered with kustomize and checked against the manifests' rules (each rule also broken on purpose), no Secret under `infra/`, and `tools/cluster`'s steps against fake commands (see [The local cluster](#the-local-cluster)) | `go test ./tools/cluster` |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
@@ -364,6 +365,7 @@ addresses must differ. The other variables:
 | `KEEL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
+| `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. The image sets it; in development Vite serves the page instead |
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (degrees the wind comes from). `tools/dev` and `tools/e2e` set it |
@@ -543,9 +545,11 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | `GET /api/version` | The build and the catalog's version |
 | `POST /guest` | `{"name", "look"}` makes a guest: 201 with the sailor (`{"name", "look"}`, the name in its display form) and the session cookie; 422 `{"error": reason}` for a refused name; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
 | `GET /api/me` | The session's account, `{"name", "look", "kind", "saved"}`, or 401 |
+| `GET /`, `GET /{file}`, `GET /assets/{file}` | With `KEEL_CLIENT_DIR`, the built page, read into memory at start: `index.html` at `/`, the other files of the directory's top level (`dev.html`, the licences notice) by name, and the hashed files in `assets/`. Assets are cached for a year as `immutable`, the rest `no-cache`. No listings, no other folders, no hidden files; types from a table of the build's extensions (`.wasm` as `application/wasm`, `.glb` as `model/gltf-binary`); `HEAD` too. These routes need no session, so the page loads while the database cannot be asked |
 
 Errors are `{"error": "<code>"}`; the client puts codes into words. Nothing
-the API answers is cached. Every request passes, in order: the request ID
+the API answers is cached. A path with dot segments or repeated slashes is
+404, never redirected. Every request passes, in order: the request ID
 and the access log; the client's address (a place kept: players reach the
 server directly for now); read and write deadlines of 10 s and 30 s,
 except on routes marked long-lived (none yet); a 16 KB limit on the body;
@@ -817,6 +821,163 @@ resyncs and closes, and, from keel's metrics, the tick's and the encoders'
 99th percentiles and the frames allocated. Its guests ("Loadbot 1" …) are
 made by `POST /guest` once, their sessions kept in
 `.dev/loadbot/sessions.json` and used again.
+
+## The local cluster
+
+`go run ./tools/dev` is where almost all work happens. Beside it, the game
+also runs **the way it will run for good**: one image holding `keel` and its
+page, in a k3s cluster, behind Traefik, in front of a CloudNativePG
+database, with Flux's controllers installing charts. On a Mac it runs in a
+Lima virtual machine with Ubuntu 26.04, with k3s installed and configured
+as on the machines that will run the game. Phones on the same Wi-Fi play
+it at **`https://<your Mac's name>.local`**, for example
+`https://macbook.local`.
+
+### What to install
+
+- **Lima**: `brew install lima`. It runs the VM on Apple's Virtualization
+  framework.
+- **Docker** with buildx (Docker Desktop has it), to build the image, and
+  **kubectl** (Docker Desktop ships one; or `brew install kubectl`).
+- The **Flux CLI** only to update `infra/cluster/flux-system` (below).
+
+The VM takes 4 CPUs, 8 GiB of memory and up to 60 GiB of disk.
+
+### The commands
+
+```sh
+go run ./tools/cluster -up       # make or start the VM, install k3s, apply everything, deploy the game
+go run ./tools/cluster -deploy   # build the image from this tree and put it in place
+go run ./tools/cluster -smoke    # check the game in the cluster
+go run ./tools/cluster -status   # the VM, the pods, the build running, the addresses
+go run ./tools/cluster -logs     # follow keel's logs
+go run ./tools/cluster -phone    # the phone setup page, and the game's QR code
+go run ./tools/cluster -stop     # stop the VM (-up starts it again)
+go run ./tools/cluster -delete   # delete the VM and .dev/cluster (asks first)
+```
+
+`-up` the first time takes a few minutes: Lima downloads Ubuntu's image
+(pinned by digest), k3s is installed, Flux's controllers, the
+CloudNativePG operator and Traefik's configuration are applied in that
+order, each waited for, and then the game is deployed. Run again, it
+changes only what changed. `KEEL_DEV_SAILORS=100 go run ./tools/cluster
+-deploy` adds scripted sailors.
+
+`-smoke` checks, over HTTPS at the Mac's name and trusting only the local
+root: the page and its scripts with their caching, the physics module as
+WebAssembly, `/api/version` naming the build just deployed, a guest made and
+read back, the game connection, a second player seeing the first's boat,
+`/readyz` and `/metrics` through `kubectl port-forward`, and the database
+refusing a connection without TLS (`keel migrate` with `sslmode=disable`,
+from a pod of its own).
+
+`tools/cluster` keeps its own kubeconfig, `.dev/cluster/kubeconfig`
+(context `keel-local`), and never reads or changes `~/.kube/config`:
+
+```sh
+export KUBECONFIG=$PWD/.dev/cluster/kubeconfig
+kubectl get pods -A
+kubectl -n keel port-forward deployment/keel 9090:internal   # probes, metrics, pprof, replay
+```
+
+`go run ./tools/dev` keeps working beside the cluster: their ports never
+meet, and they share the local root, so a phone that trusts one trusts the
+other.
+
+### On a phone
+
+The cluster's certificate comes from the same local root as `tools/dev`'s
+([On a phone](#on-a-phone)): a phone set up once needs nothing more. To set
+up a new phone, `go run ./tools/cluster -phone` serves the same setup page
+on port 5175. The game is at `https://macbook.local` (your Mac's
+`LocalHostName`, in System Settings → General → Sharing → Local hostname);
+the Mac's Wi-Fi address works too (`https://192.168.…`), with a cookie of
+its own, for a phone that cannot resolve `.local` names.
+
+Lima forwards Traefik's ports 80 and 443 to every address of the Mac
+(IPv6 included), and the Kubernetes API to `127.0.0.1:16443` alone; no other
+port of the VM reaches the Mac. Plain HTTP answers with a redirect to HTTPS.
+When the Mac sleeps, the VM pauses with it, and the game with it.
+
+### How a build reaches the cluster
+
+`-deploy` names the build after the commit, `0123456789ab`, with
+`-dirty-<UTC time>` when the tree has changes, so no two builds share a tag.
+It builds the image for `linux/arm64` (`docker buildx build`, the
+`Dockerfile` at the root), saves it, and imports it into k3s's containerd in
+the VM; no registry is involved, and the Deployment's `imagePullPolicy:
+Never` makes a missing image fail rather than be pulled. The node keeps the
+newest three of the game's images. Then it renders `clusters/local/apps`
+with that tag and the Mac's name, applies it, and waits for the database
+and the new pod. A new build is a restart: every game connection is closed
+with 1012, the page reconnects, and the boats at sea are lost.
+
+The image is built from the repository alone: the page (the physics module
+with the pinned TinyGo, then `vite build`) on the building machine's
+platform, `keel` cross-compiled with `CGO_ENABLED=0` and the build ID set by
+`-ldflags "-X main.buildOverride=…"`, on `gcr.io/distroless/static`, every
+base pinned by digest. It runs as 65532 with no shell, `KEEL_CLIENT_DIR`
+pointing at the page. `.dockerignore` is an allow list: nothing in `.dev/`,
+no `node_modules`, no build output.
+
+### The layout of `infra/`
+
+```
+infra/
+  k3s/
+    config.yaml          k3s's settings on every machine: kubeconfig root's alone,
+                         Secrets encrypted with secretbox, protect-kernel-defaults
+    sysctl.conf          the kernel settings k3s checks, and inotify limits
+  local/
+    lima.yaml            the VM: Ubuntu 26.04 by digest, size, port forwarding
+    k3s-local.yaml       the local drop-in: node name
+  cluster/
+    flux-system/         flux install --export, its images pinned by digest
+    infrastructure/
+      controllers/       the CloudNativePG operator: OCIRepository and HelmRelease
+      configs/           Traefik's HelmChartConfig: the Gateway API, its timeouts
+    apps/keel/           the game: Deployment, Service, ConfigMap, Gateway,
+                         HTTPRoute, the database's Cluster; production's sizes
+    clusters/local/      the local cluster's entry points: controllers, configs,
+                         apps (half the sizes, HTTPS, the redirect, the image)
+```
+
+The bases hold what every cluster shares; `clusters/local` patches what
+differs. k3s installs the Gateway API's standard CRDs itself, with its
+Traefik. `tools/cluster` writes k3s's files into the VM before installing
+k3s (`v1.36.5+k3s1`, by the release's `install.sh`, checked against its
+SHA-256) and again when they change, restarting k3s. Lima reads
+`lima.yaml` only when it makes the VM: after changing it, `-delete` and
+`-up`. To raise k3s's version, change `k3sVersion` and `installerSHA256` in
+`tools/cluster` together. To raise Flux's, run the command at the top of
+`gotk-components.yaml` with the new version and update the digests in its
+`kustomization.yaml`.
+
+Secrets are never in the repository (a test fails on any): `tools/cluster`
+makes `keel-db-app`, the database's password, once, at random, and never
+replaces it; and `keel-tls`, the certificate, again when its names change.
+
+The rules the manifests keep, checked by `go test ./tools/cluster` and by
+`-up` and `-deploy` before applying anything: no Secret; every image pinned
+by digest (only the game's own, locally, is a tag with `imagePullPolicy:
+Never`); the game's Deployment with one replica, `Recreate`, `keel migrate`
+as an init container, probes on the internal listener, the restricted
+security context and no service account token; `GOMEMLIMIT` between 80% and
+95% of the memory limit; no route to the internal listener; every route on
+a listener of the `keel` Gateway, an HTTPS listener with a certificate; and
+the database refusing connections without TLS, with no superuser and the
+builtin `C.UTF-8` locale.
+
+### The game in the cluster
+
+| Part | What |
+|------|------|
+| `keel` | One replica, replaced rather than rolled (`Recreate`), `terminationGracePeriodSeconds: 30` (it stops within about 25 s). `keel migrate` runs first, as an init container. Liveness `/livez` every 10 s, readiness `/readyz` every 2 s, both on the internal listener, `0.0.0.0:9090` in the pod. Non-root, read-only root, no capabilities, `RuntimeDefault` seccomp. Locally 1 CPU requested and 3 the limit (so `GOMAXPROCS` is 3, as in production), 2 GiB with `GOMEMLIMIT=1800MiB` |
+| `keel-db` | CloudNativePG's `Cluster`, one instance, PostgreSQL 18.6 (`minimal` image), the builtin `C.UTF-8` locale. `pg_hba` refuses every connection without TLS; `keel` connects with `sslmode=verify-full` against the operator's CA (`keel-db-ca`, its `ca.crt` alone mounted), the password from `keel-db-app` as `PGPASSWORD`. Locally 1–2 GiB and 10 GiB of `local-path` storage |
+| `keel` Gateway | In the game's namespace, class `traefik`: `http` on Traefik's `web` entry point and, locally, `https` on `websecure` with `keel-tls`, which is also Traefik's default certificate for clients that name no host. The `play` route sends everything to keel's game listener; locally, plain HTTP is redirected |
+| Traefik | k3s's own, with the Gateway API on, Ingress off, and its entry points' timeouts written down: `readTimeout` 60 s (a request must arrive within it; a stalled one is cut), `idleTimeout` 180 s, no `writeTimeout`. A game connection is not cut by them |
+
+The `keel` namespace warns and audits Pod Security's `restricted` profile.
 
 ## The database
 
@@ -1195,5 +1356,19 @@ Both use your own `gh` login. Settings GitHub has no API for are listed in
 - **"the database is behind this build: run keel migrate".** `tools/dev`
   migrates before every start; a `keel serve` started by hand needs
   `keel migrate` first.
+- **`tools/cluster`: "limactl is not installed".** `brew install lima`;
+  the message names whatever else is missing.
+- **`tools/cluster`: the phone cannot open `https://macbook.local`.** Some
+  Android phones cannot resolve `.local` names (on a VPN, or without the
+  updated resolver); use the Mac's Wi-Fi address shown by `-status`. Check
+  the Mac's name with `scutil --get LocalHostName`.
+- **`tools/cluster`: port 80 or 443 is in use on the Mac.** Something else
+  holds it; Lima cannot forward Traefik's ports until it is stopped.
+- **`tools/cluster`: a step waits and then fails.** `go run ./tools/cluster
+  -status` shows the pods; `kubectl describe` and `kubectl logs` (with the
+  kubeconfig above) say why. `limactl shell keel-local sudo journalctl -u
+  k3s` has k3s's own log.
+- **`tools/cluster`: start again from nothing.** `go run ./tools/cluster
+  -delete`, then `-up`. Lima keeps Ubuntu's image in its cache.
 - **Tests say "no test database".** Run `go run ./tools/dev -db` once; the
   tests read `.dev/db.env`.

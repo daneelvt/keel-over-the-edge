@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The game: keel, its database, and the Gateway and routes that reach it.
+# Sizes are production's (a machine of 4 cores and 16 GB); each cluster's
+# entry point under clusters/ patches what differs, and names the players'
+# host.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: keel
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: keel
+resources:
+  - namespace.yaml
+  - database.yaml
+  - deployment.yaml
+  - service.yaml
+  - gateway.yaml
+  - routes.yaml
+# keel's configuration (keel serve's usage lists every variable). A change
+# makes a new name, and so a new pod.
+configMapGenerator:
+  - name: keel
+    literals:
+      - KEEL_PLAY_ADDR=0.0.0.0:8080
+      - KEEL_AGENTS_ADDR=0.0.0.0:8081
+      # Reached by the kubelet's probes, through the Service by nothing
+      # outside the cluster: no route leads to it.
+      - KEEL_INTERNAL_ADDR=0.0.0.0:9090
+      - KEEL_LOG_LEVEL=info
+      - KEEL_TRACE_DIR=/var/lib/keel/traces
+      # The password comes from PGPASSWORD, which pgx reads under any URL;
+      # the server's certificate is checked against the operator's CA.
+      - KEEL_DATABASE_URL=postgres://keel@keel-db-rw.keel.svc:5432/keel?sslmode=verify-full&sslrootcert=/etc/keel/db-ca/ca.crt

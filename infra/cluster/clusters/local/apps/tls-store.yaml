@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The certificate Traefik answers with when a client names no host, as a
+# phone that opens the Mac's address does: keel-tls covers those addresses
+# too. Traefik takes its default store from any namespace, with the
+# certificate beside it.
+apiVersion: traefik.io/v1alpha1
+kind: TLSStore
+metadata:
+  name: default
+  namespace: keel
+spec:
+  defaultCertificate:
+    secretName: keel-tls

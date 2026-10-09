@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Builds and tests the game. The other checks are the pr.*.yaml workflows.
 # On a pull request the Go tests run only when Go code or what it reads
-# changed, the client's only when the client or what it loads changed, and
-# the smoke test when either did; a push to main runs everything.
+# changed, the client's only when the client or what it loads changed, the
+# smoke test when either did, and the image when anything it holds did; a
+# push to main runs everything.
 name: ci
 
 on:
@@ -25,6 +26,7 @@ jobs:
     outputs:
       go: ${{ github.event_name != 'pull_request' || steps.filter.outputs.go == 'true' }}
       client: ${{ github.event_name != 'pull_request' || steps.filter.outputs.client == 'true' }}
+      image: ${{ github.event_name != 'pull_request' || steps.filter.outputs.image == 'true' }}
     steps:
       - id: filter
         if: github.event_name == 'pull_request'
@@ -52,6 +54,21 @@ jobs:
               - 'internal/physics/**'
               - 'internal/moderation/testdata/**'
               - 'shared/protocol/**'
+              - 'tools/internal/**'
+              - 'tools/physics/**'
+              - 'tools/licences/allowed.txt'
+            image:
+              - '.github/workflows/ci.yaml'
+              - 'Dockerfile'
+              - '.dockerignore'
+              - '.nvmrc'
+              - 'go.mod'
+              - 'go.sum'
+              - 'cmd/**'
+              - 'internal/**'
+              - 'shared/**'
+              - 'client/**'
+              - 'art/**'
               - 'tools/internal/**'
               - 'tools/physics/**'
               - 'tools/licences/allowed.txt'
@@ -169,10 +186,45 @@ jobs:
       - name: Start everything with the one command, check it over HTTPS
         run: go run ./tools/dev -smoke
 
+  # The game's image, built from the repository alone on each machine it is
+  # made for, as a release will build it; not pushed. keel is
+  # cross-compiled and the page built on the runner's own platform, so each
+  # build checks the image runs where it was built.
+  image:
+    name: image (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    needs: [changes]
+    if: needs.changes.outputs.image == 'true'
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image
+        run: docker buildx build --provenance=false --sbom=false --build-arg "BUILD=${GITHUB_SHA::12}" --tag keel:ci --load .
+      - name: Not root, no shell, keel runs, the page is there; its size
+        run: |
+          set -euo pipefail
+          user=$(docker image inspect keel:ci --format '{{.Config.User}}')
+          if [ "$user" != "65532:65532" ]; then echo "runs as $user"; exit 1; fi
+          docker run --rm keel:ci help
+          if docker run --rm --entrypoint /bin/sh keel:ci -c true 2>/dev/null; then echo "the image has a shell"; exit 1; fi
+          id=$(docker create keel:ci)
+          docker cp "$id:/srv/keel/client/index.html" - | tar -tv
+          unpacked=$(docker export "$id" | wc -c)
+          docker rm "$id"
+          packed=$(docker save keel:ci | gzip -c | wc -c)
+          echo "keel:ci on $(uname -m): $packed bytes compressed, $unpacked unpacked" | tee -a "$GITHUB_STEP_SUMMARY"
+
   ci:
     name: ci
     if: always()
-    needs: [changes, go, client, smoke]
+    needs: [changes, go, client, smoke, image]
     runs-on: ubuntu-slim
     permissions: {}
     steps:

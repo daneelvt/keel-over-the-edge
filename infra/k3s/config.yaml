@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# k3s's settings for every machine that runs the game, written to
+# /etc/rancher/k3s/config.yaml. What differs per machine (its node name,
+# whether ServiceLB runs) is a drop-in in /etc/rancher/k3s/config.yaml.d/,
+# read after this file (k3s documentation, Configuration).
+
+# The kubeconfig k3s writes is root's alone.
+write-kubeconfig-mode: "0600"
+# Secrets encrypted at rest in the datastore, with XSalsa20-Poly1305:
+# Kubernetes documents secretbox as stronger than the default aescbc.
+secrets-encryption: true
+secrets-encryption-provider: secretbox
+# The kubelet refuses to start unless the kernel settings in sysctl.conf
+# are in place, rather than changing them itself (k3s CIS hardening guide).
+protect-kernel-defaults: true

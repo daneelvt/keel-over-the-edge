@@ -9,8 +9,16 @@ client/playwright-report/
 # The physics module, built by go run ./tools/physics
 client/src/predict/physics.wasm
 
-# Local development state: certificates, built binaries, TinyGo (tools/dev, tools/physics)
+# Local development state: certificates, built binaries, TinyGo, the local
+# cluster's kubeconfig (tools/dev, tools/physics, tools/cluster)
 .dev/
+
+# Binaries go build leaves in the root (go build ./cmd/keel, ./tools/...)
+/cluster
+/dev
+/e2e
+/keel
+/loadbot
 
 # Editors and systems
 .DS_Store

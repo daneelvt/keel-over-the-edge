@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The game on the local cluster, in a VM on a developer's Mac: half
+# production's sizes, HTTPS with a certificate from the developer's own
+# root, and the image built on the Mac and imported, never pulled.
+# go run ./tools/cluster -deploy renders this with the build's tag and the
+# Mac's own name in place of these defaults.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../apps/keel
+  - https-redirect.yaml
+  - tls-store.yaml
+images:
+  - name: ghcr.io/daneelvt/keel
+    newName: keel
+    newTag: dev
+configMapGenerator:
+  - name: keel
+    namespace: keel
+    behavior: merge
+    literals:
+      - KEEL_PLAY_ORIGIN=https://macbook.local
+patches:
+  - path: keel.yaml
+  - path: database.yaml
+  # HTTPS on Traefik's websecure entry point, with the certificate
+  # tools/cluster makes; the players' route moves to it.
+  - target:
+      kind: Gateway
+      name: keel
+    patch: |-
+      - op: add
+        path: /spec/listeners/-
+        value:
+          name: https
+          port: 8443
+          protocol: HTTPS
+          tls:
+            mode: Terminate
+            certificateRefs:
+              - name: keel-tls
+          allowedRoutes:
+            namespaces:
+              from: Same
+  - target:
+      kind: HTTPRoute
+      name: play
+    patch: |-
+      - op: replace
+        path: /spec/parentRefs/0/sectionName
+        value: https

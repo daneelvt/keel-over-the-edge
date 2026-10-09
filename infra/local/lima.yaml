@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The local cluster's virtual machine, keel-local: Ubuntu 26.04 on Apple's
+# Virtualization framework. go run ./tools/cluster -up makes it from this
+# file (limactl create --name=keel-local infra/local/lima.yaml), then
+# installs k3s in it as on the machines that run the game; see Lima's
+# templates/default.yaml for every field.
+
+minimumLimaVersion: 2.2.0
+
+vmType: vz
+cpus: 4
+memory: 8GiB
+disk: 60GiB
+
+# Ubuntu's cloud image, pinned by digest (Lima's templates/_images/ubuntu-26.04.yaml).
+images:
+  - location: https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-arm64.img
+    arch: aarch64
+    digest: sha256:63a93bd5a8d76e33b15ceb5daa3657bd79be804748051ab178e643b0f5da22e7
+  - location: https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img
+    arch: x86_64
+    digest: sha256:8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2
+
+param:
+  # 26.04's first-boot rename of the network interface would hold the boot
+  # for two minutes; Lima waits for the interface itself (as its own
+  # Ubuntu 26.04 template does).
+  internal_netplanOptional: "true"
+
+# Nothing of the Mac is shared with the VM.
+mounts: []
+# k3s brings its own containerd.
+containerd:
+  system: false
+  user: false
+
+# Traefik's ports reach every address of the Mac, so phones on the network
+# reach the game; the Kubernetes API only the Mac itself, on a port of its
+# own; nothing else. Lima also forwards the ports of the cluster's
+# LoadBalancer Services, matched by the same rules.
+portForwards:
+  - guestPort: 80
+    hostIP: "0.0.0.0"
+  - guestPort: 443
+    hostIP: "0.0.0.0"
+  - guestPort: 6443
+    hostPort: 16443
+    hostIP: "127.0.0.1"
+  # Every other port, TCP and UDP, bound to loopback (which also matches
+  # 0.0.0.0, :: and ::1) or to any other address of the VM.
+  - guestIP: "127.0.0.1"
+    guestPortRange: [1, 65535]
+    proto: any
+    ignore: true
+  - guestIP: "0.0.0.0"
+    guestIPMustBeZero: false
+    guestPortRange: [1, 65535]
+    proto: any
+    ignore: true
+
+# No provisioning here: tools/cluster writes k3s's files (infra/k3s/,
+# k3s-local.yaml) into the VM and installs k3s at the version and installer
+# it pins, so a change to them reaches a VM made before it.

@@ -6,6 +6,8 @@
   "platformCommit": "enabled",
   "postUpdateOptions": ["gomodTidy"],
   "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
+  "kubernetes": { "managerFilePatterns": ["/^infra/cluster/.+\\.yaml$/"] },
+  "flux": { "managerFilePatterns": ["/^infra/cluster/.+\\.yaml$/"] },
   "customManagers": [
     {
       "customType": "regex",
@@ -21,12 +23,35 @@
       "managerFilePatterns": ["/^tools/dev/db\\.go$/"],
       "matchStrings": ["\"(?<depName>postgres):(?<currentValue>[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})\""],
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "PostgreSQL's image for the cluster's database, pinned by version and digest in its CloudNativePG Cluster",
+      "managerFilePatterns": ["/^infra/cluster/apps/keel/database\\.yaml$/"],
+      "matchStrings": ["imageName: (?<depName>ghcr\\.io/cloudnative-pg/postgresql):(?<currentValue>[0-9.]+-minimal-trixie)@(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-minimal-trixie$"
+    },
+    {
+      "customType": "regex",
+      "description": "The CloudNativePG operator's image, pinned by version and digest in its HelmRelease's values",
+      "managerFilePatterns": ["/^infra/cluster/infrastructure/controllers/cloudnative-pg/release\\.yaml$/"],
+      "matchStrings": ["tag: (?<currentValue>[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "depNameTemplate": "ghcr.io/cloudnative-pg/cloudnative-pg",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Flux's controllers' images, pinned by version and digest in infra/cluster/flux-system; they move with Flux's own version",
+      "managerFilePatterns": ["/^infra/cluster/flux-system/kustomization\\.yaml$/"],
+      "matchStrings": ["- name: (?<depName>ghcr\\.io/fluxcd/[a-z-]+)\\n\\s+newTag: (?<currentValue>v[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [
     {
       "description": "PostgreSQL moves a major version with the production operator's image; locally and in CI it follows production.",
-      "matchDepNames": ["postgres"],
+      "matchDepNames": ["postgres", "ghcr.io/cloudnative-pg/postgresql"],
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true
     },

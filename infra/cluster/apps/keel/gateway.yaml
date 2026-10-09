@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The game's Gateway, on Traefik's entry points. Its routes, and the
+# certificates a cluster adds, live beside it in this namespace alone.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: keel
+spec:
+  gatewayClassName: traefik
+  listeners:
+    # Traefik's "web" entry point.
+    - name: http
+      port: 8000
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same

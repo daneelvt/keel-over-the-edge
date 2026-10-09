@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The CloudNativePG operator, which runs the game's PostgreSQL.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cnpg-system
+resources:
+  - namespace.yaml
+  - repository.yaml
+  - release.yaml

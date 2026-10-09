@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Traefik as k3s bundles it, routing by the Gateway API, whose standard
+# CRDs k3s installs with it (its traefik-crd chart). k3s merges these values
+# over its own (k3s documentation, Networking Services).
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    providers:
+      kubernetesGateway:
+        enabled: true
+      # Nothing uses Ingress. The CRD provider stays for Traefik's own
+      # middlewares.
+      kubernetesIngress:
+        enabled: false
+    # The GatewayClass "traefik"; the game brings its own Gateway, so not
+    # the chart's default one.
+    gatewayClass:
+      enabled: true
+    gateway:
+      enabled: false
+    # Traefik's defaults, written down. readTimeout bounds how long a
+    # request may take to arrive; a WebSocket is not cut by it, as Go's
+    # server clears a connection's deadlines when the proxy hijacks it for
+    # the upgrade. The game's stream is never idle.
+    ports:
+      web:
+        transport:
+          respondingTimeouts:
+            readTimeout: 60s
+            writeTimeout: 0s
+            idleTimeout: 180s
+      websecure:
+        transport:
+          respondingTimeouts:
+            readTimeout: 60s
+            writeTimeout: 0s
+            idleTimeout: 180s

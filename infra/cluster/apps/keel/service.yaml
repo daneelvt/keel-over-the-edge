@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+apiVersion: v1
+kind: Service
+metadata:
+  name: keel
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: keel
+  ports:
+    - name: play
+      port: 8080
+      targetPort: play
+    - name: agents
+      port: 8081
+      targetPort: agents
+    - name: internal
+      port: 9090
+      targetPort: internal

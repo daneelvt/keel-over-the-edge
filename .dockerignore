@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The image's build context is an allow list: only what builds the page and
+# keel. Never .dev/ (certificates, database passwords, TinyGo), nor built
+# files or binaries.
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
+!shared/
+!tools/
+!art/
+!client/
+client/node_modules/
+client/dist/
+client/test-results/
+client/playwright-report/
+client/src/predict/physics.wasm
+**/.DS_Store

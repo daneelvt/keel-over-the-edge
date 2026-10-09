@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The local cluster's configuration of k3s's Traefik. Its Service stays
+# k3s's LoadBalancer on 80 and 443, which ServiceLB holds on the node and
+# Lima forwards to the Mac.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../infrastructure/configs

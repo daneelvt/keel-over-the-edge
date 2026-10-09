@@ -50,6 +50,10 @@ type Config struct {
 	// Game, if not nil, is the game connection, GET /ws: it checks the
 	// session itself, so it can count those it refuses.
 	Game http.Handler
+	// Page, if not nil, is the game's built page, served at / and
+	// /assets/. Without it, as in development, another server serves the
+	// page and sends the rest here.
+	Page *Page
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -71,6 +75,9 @@ var longLived = map[string]bool{"GET /ws": true}
 //     origin is refused
 //  6. the session: the account the cookie names, if any
 //  7. limits on how often a client may ask (not yet)
+//
+// A path with dot segments or repeated slashes is answered 404 before any of
+// it.
 func Handler(cfg Config) http.Handler {
 	if cfg.ReadTimeout == 0 {
 		cfg.ReadTimeout = ReadTimeout
@@ -93,6 +100,9 @@ func Handler(cfg Config) http.Handler {
 	if cfg.Game != nil {
 		mux.Handle("GET /ws", cfg.Game)
 	}
+	if cfg.Page != nil {
+		cfg.Page.register(mux)
+	}
 
 	cop := http.NewCrossOriginProtection()
 	cop.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -100,13 +110,26 @@ func Handler(cfg Config) http.Handler {
 		writeError(w, http.StatusForbidden, "cross-origin")
 	}))
 
-	var h http.Handler = mux
-	h = auth.Session(cfg.Sessions, cfg.Log, writeError)(h)
+	var h http.Handler = session(mux, auth.Session(cfg.Sessions, cfg.Log, writeError))
 	h = cop.Handler(h)
 	h = bodyLimit(BodyLimit, h)
 	h = deadlines(mux, cfg.ReadTimeout, cfg.WriteTimeout, h)
+	h = cleanPaths(h)
 	h = route(mux, h)
 	return obs.AccessLog(cfg.Log, h)
+}
+
+// session reads the session for every route but the page's: the page is
+// the same for everyone, and loads even when the database cannot be asked.
+func session(mux *http.ServeMux, mw func(http.Handler) http.Handler) http.Handler {
+	withSession := mw(mux)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, pattern := mux.Handler(r); pageRoutes[pattern] {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		withSession.ServeHTTP(w, r)
+	})
 }
 
 // refusals are the reasons a guest's name is refused, as the metrics label

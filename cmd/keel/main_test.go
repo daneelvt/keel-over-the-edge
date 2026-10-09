@@ -416,6 +416,68 @@ func TestPublicListeners(t *testing.T) {
 	})
 }
 
+// TestBuildOverride: an ID given at build time is the build every report
+// names, over the VCS information.
+func TestBuildOverride(t *testing.T) {
+	buildOverride = "0123456789ab-dirty-20261010T120000Z"
+	t.Cleanup(func() { buildOverride = "" })
+	synctest.Test(t, func(t *testing.T) {
+		s := startServer(t, map[string]string{}, newMemNet(), serveOptions{})
+		time.Sleep(time.Second)
+		if code, body, _ := get(t, s.client, playURL+"/api/version"); code != 200 || !strings.Contains(body, `"build":"`+buildOverride+`"`) {
+			t.Errorf("/api/version %d %s", code, body)
+		}
+		if _, metrics, _ := get(t, s.client, internalURL+"/metrics"); !strings.Contains(metrics, `keel_build_info{build="`+buildOverride+`"`) {
+			t.Error("keel_build_info does not name the build")
+		}
+		s.stop(t)
+		if logs := s.logs.String(); !strings.Contains(logs, `"build":"`+buildOverride+`"`) {
+			t.Error("the logs do not name the build")
+		}
+	})
+}
+
+// TestServesThePage: with KEEL_CLIENT_DIR the game's listener serves the
+// page; a directory without index.html stops the server before it listens.
+func TestServesThePage(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{"index.html": "<title>Keel Over the Edge</title>", "assets/main-abc.js": "1"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	synctest.Test(t, func(t *testing.T) {
+		s := startServer(t, map[string]string{"KEEL_CLIENT_DIR": dir}, newMemNet(), serveOptions{})
+		time.Sleep(time.Second)
+		if code, body, h := get(t, s.client, playURL+"/"); code != 200 || !strings.Contains(body, "Keel Over the Edge") || h.Get("Cache-Control") != "no-cache" {
+			t.Errorf("/ %d %q %v", code, body, h)
+		}
+		if code, _, h := get(t, s.client, playURL+"/assets/main-abc.js"); code != 200 || !strings.Contains(h.Get("Cache-Control"), "immutable") {
+			t.Errorf("an asset %d %v", code, h)
+		}
+		if code, _, _ := get(t, s.client, agentsURL+"/"); code != 404 {
+			t.Errorf("the agents' listener serves the page: %d", code)
+		}
+		s.stop(t)
+	})
+	if err := os.Remove(filepath.Join(dir, "index.html")); err != nil {
+		t.Fatal(err)
+	}
+	synctest.Test(t, func(t *testing.T) {
+		n := newMemNet()
+		s := startServer(t, map[string]string{"KEEL_CLIENT_DIR": dir}, n, serveOptions{})
+		if err := <-s.done; err == nil || !strings.Contains(err.Error(), "index.html") {
+			t.Fatalf("keel serve with no index.html: %v", err)
+		}
+		if _, err := n.listen("tcp", "127.0.0.1:9090"); err != nil {
+			t.Errorf("the internal listener was left open: %v", err)
+		}
+	})
+}
+
 // TestStartFails checks that a listener that cannot open stops the server
 // with the error, in order.
 func TestStartFails(t *testing.T) {
