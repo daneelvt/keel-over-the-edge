@@ -32,11 +32,22 @@ func main() {
 }
 
 // signalContext ends at the first SIGTERM or interrupt, which stops the
-// server in order; a second, handled as Go does by default, kills it.
+// server in order; a second, handled as Go does by default, kills it. The
+// signals stop being relayed before the context ends, so by the time the
+// server begins to stop, a second one is sure to kill it.
 func signalContext() (context.Context, context.CancelFunc) {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
-	context.AfterFunc(ctx, stop)
-	return ctx, stop
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGTERM, os.Interrupt)
+	go func() {
+		select {
+		case <-ch:
+		case <-ctx.Done():
+		}
+		signal.Stop(ch)
+		cancel()
+	}()
+	return ctx, cancel
 }
 
 // run is main without the process: it returns the exit status.
