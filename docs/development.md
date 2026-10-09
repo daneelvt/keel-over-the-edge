@@ -333,7 +333,7 @@ world; everything reaches it through the **bus** (`internal/bus`).
 |---------|------|
 | `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`; for developers only `SetWind` and `Place`; and the server's own `Hold`, admission held while the world's writes are behind); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
 | `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, step every boat, sort the boats into the grid, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
-| `internal/persist` | The world's writer: the lasting events and a checkpoint every 5 s, written behind the tick in fenced batches (see [Restarts and deploys](#restarts-and-deploys)). |
+| `internal/persist` | The world's writer: the lasting events and a checkpoint every 10 s, written behind the tick in fenced batches (see [Restarts and deploys](#restarts-and-deploys)). |
 | `internal/sim/loop` | The clock: tick k after the world's epoch (the database's world row; world 1's is 1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
 | `internal/replay` | The input log, `keel replay` and `/debug/replay` (below). |
 | `internal/scripted` | Scripted sailors: they join through the bus like players and steer and trim at random, each every 0.2–3 s. |
@@ -1033,8 +1033,8 @@ psql … -c "SELECT pid, backend_start FROM pg_stat_activity WHERE application_n
 
 **Checkpoints.** The world's writer (`internal/persist`) records, from each
 tick, the boats launched (joined, or given a boat from the queue), returned
-and expired, into the table `event`, within about 200 ms; and every 150
-ticks (5 s) a **checkpoint** of the whole world, the simulation's snapshot
+and expired, into the table `event`, within about 200 ms; and every 300
+ticks (10 s) a **checkpoint** of the whole world, the simulation's snapshot
 (its format, the build, catalog and physics layout beside it), into
 `checkpoint`, one row a world, replaced. Neither makes the tick wait: the
 tick hands copies and held frames to an inbox of 300 items, and the writer
@@ -1077,7 +1077,7 @@ seconds.
 
 **What a restart keeps and loses.** Kept: every boat, its state, controls
 and grace, the queue, the wind, boat IDs. Lost: the connections, which the
-pages make again; a crash (`SIGKILL`, a panic) also loses up to 5 s of the
+pages make again; a crash (`SIGKILL`, a panic) also loses up to 10 s of the
 world (the last checkpoint is restored) and the last ~200 ms of events. A
 change to the snapshot's format, the catalog or the physics layout makes
 the deploy that carries it a reset, as does a rollback across one. The
