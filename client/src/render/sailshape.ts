@@ -32,7 +32,7 @@ export interface SailUniforms {
   /** The strips' heights, as fractions of the luff. */
   footV: UniformNode<'float', number>;
   headV: UniformNode<'float', number>;
-  /** World time, seconds. */
+  /** World time, seconds, modulo 2π: every frequency it drives is whole radians a second. */
   time: UniformNode<'float', number>;
 }
 

@@ -4,24 +4,46 @@
 // built from this tree, migrated and served on a database of its own on the
 // test server (KEEL_TEST_DATABASE_URL, or .dev/db.env from go run ./tools/dev
 // -db), on ports of its own so it can run beside go run ./tools/dev. The
-// database is dropped when it stops.
+// database is dropped when it stops. Developer commands are on (POST
+// /debug/wind on keel's internal listener).
 //
-//	go run ./tools/e2e
+//	go run ./tools/e2e [-lag 200ms,2%]
+//	go run ./tools/e2e -tls dir      write a throwaway certificate for localhost into dir, and exit
+//
+// Beside keel it runs the lag proxy (tools/lag) on 127.0.0.1:18090, in
+// front of keel's play listener, at -lag, for the browser tests of a slow
+// network, which reach it through a Vite of their own; and, on
+// 127.0.0.1:19099, POST /restart, which stops keel as a deployment does and
+// starts it again, for the tests of a restart. WebKit sends a Secure cookie
+// to https only, even on localhost, so its tests reach keel through a Vite
+// serving https with the certificate -tls writes.
 package main
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
+	"flag"
 	"fmt"
+	"math/big"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
 
@@ -32,6 +54,8 @@ const (
 	agentsAddr   = "127.0.0.1:18081"
 	internalAddr = "127.0.0.1:19090"
 	origin       = "http://localhost:5181"
+	lagAddr      = "127.0.0.1:18090"
+	controlAddr  = "127.0.0.1:19099"
 )
 
 func main() {
@@ -42,6 +66,17 @@ func main() {
 }
 
 func run() error {
+	lagFlag := flag.String("lag", "200ms,2%", "the lag proxy's round trip and loss")
+	tlsDir := flag.String("tls", "", "write a self-signed certificate for localhost into this directory, and exit")
+	flag.Parse()
+	if *tlsDir != "" {
+		return writeCert(*tlsDir)
+	}
+	lag, err := edgetest.ParseLag(*lagFlag)
+	if err != nil {
+		return err
+	}
+	lag.Seed = 1
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
 	srv := storetest.ServerURL()
@@ -81,6 +116,7 @@ func run() error {
 		"KEEL_AGENTS_ADDR="+agentsAddr,
 		"KEEL_INTERNAL_ADDR="+internalAddr,
 		"KEEL_LOG_LEVEL=warn",
+		"KEEL_DEV_COMMANDS=1",
 	)
 	migrate := exec.CommandContext(ctx, keel, "migrate")
 	migrate.Env, migrate.Stdout, migrate.Stderr = env, os.Stderr, os.Stderr
@@ -88,29 +124,151 @@ func run() error {
 		return fmt.Errorf("keel migrate: %w", err)
 	}
 
-	serve := exec.Command(keel, "serve")
-	serve.Env, serve.Stdout, serve.Stderr = env, os.Stdout, os.Stderr
-	if err := serve.Start(); err != nil {
+	ln, err := net.Listen("tcp", lagAddr)
+	if err != nil {
+		return err
+	}
+	go edgetest.Proxy(ctx, ln, playAddr, lag)
+
+	k := &keelProc{path: keel, env: env}
+	if err := k.start(); err != nil {
+		return err
+	}
+	control := &http.Server{Addr: controlAddr, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/restart" {
+			http.NotFound(w, r)
+			return
+		}
+		if err := k.restart(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})}
+	go control.ListenAndServe()
+	defer control.Close()
+
+	select {
+	case err := <-k.exited():
+		return fmt.Errorf("keel serve exited: %v", err)
+	case <-ctx.Done():
+		k.stop()
+		return nil
+	}
+}
+
+// keelProc is keel serve, which a test may restart.
+type keelProc struct {
+	path string
+	env  []string
+
+	mu   sync.Mutex
+	cmd  *exec.Cmd
+	done chan error
+	// died is told when keel exits other than by stop or restart.
+	died chan error
+}
+
+func (k *keelProc) start() error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.died == nil {
+		k.died = make(chan error, 1)
+	}
+	cmd := exec.Command(k.path, "serve")
+	cmd.Env, cmd.Stdout, cmd.Stderr = k.env, os.Stdout, os.Stderr
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 	done := make(chan error, 1)
-	go func() { done <- serve.Wait() }()
-	select {
-	case err := <-done:
-		return fmt.Errorf("keel serve exited: %v", err)
-	case <-ctx.Done():
-		// keel stops in order on SIGTERM. Playwright signals the whole
-		// process group, keel too; it is passed on here for a stop asked
-		// any other way.
-		_ = serve.Process.Signal(syscall.SIGTERM)
-		select {
-		case <-done:
-		case <-time.After(15 * time.Second):
-			_ = serve.Process.Kill()
-			<-done
+	k.cmd, k.done = cmd, done
+	go func() {
+		err := cmd.Wait()
+		done <- err
+		k.mu.Lock()
+		current := k.cmd == cmd
+		k.mu.Unlock()
+		if current {
+			k.died <- err
 		}
-		return nil
+	}()
+	return nil
+}
+
+func (k *keelProc) exited() <-chan error { return k.died }
+
+// stop stops keel in order, as SIGTERM does, and waits for it.
+func (k *keelProc) stop() {
+	k.mu.Lock()
+	cmd, done := k.cmd, k.done
+	k.cmd = nil
+	k.mu.Unlock()
+	if cmd == nil {
+		return
 	}
+	// keel stops in order on SIGTERM. Playwright signals the whole process
+	// group, keel too; it is passed on here for a stop asked any other way.
+	_ = cmd.Process.Signal(syscall.SIGTERM)
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		_ = cmd.Process.Kill()
+		<-done
+	}
+}
+
+// restart stops keel and starts it again, and waits until it is ready.
+func (k *keelProc) restart() error {
+	k.stop()
+	if err := k.start(); err != nil {
+		return err
+	}
+	for range 300 {
+		res, err := http.Get("http://" + internalAddr + "/readyz")
+		if err == nil {
+			res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return errors.New("keel was not ready again within 30 s")
+}
+
+// writeCert writes a self-signed certificate for localhost and 127.0.0.1,
+// good for a day, as cert.pem and key.pem.
+func writeCert(dir string) error {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(now.UnixNano()),
+		Subject:      pkix.Name{CommonName: "localhost"},
+		DNSNames:     []string{"localhost"},
+		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1)},
+		NotBefore:    now.Add(-time.Hour),
+		NotAfter:     now.Add(24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return err
+	}
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "cert.pem"), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "key.pem"), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0o600)
 }
 
 func moduleRoot() (string, error) {

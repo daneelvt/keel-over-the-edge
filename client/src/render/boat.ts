@@ -204,7 +204,10 @@ export class Boat {
     this.sail.side.value = turn;
     this.sail.twist.value = (out[RECORDS.out.twist] ?? 0) * turn;
     this.sail.camber.value = FULL_CAMBER * (flat > 0 ? flat : 1);
-    this.sail.time.value = time;
+    // The GPU holds time as a float32, too coarse for a world's time since
+    // its epoch: the flutter's frequencies are whole radians a second, so
+    // time modulo 2π seconds draws the same, without a seam.
+    this.sail.time.value = time % (2 * Math.PI);
     const ease = dt > 0 ? 1 - Math.exp(-dt / RIPPLE_EASE) : 0;
     for (let i = 0; i < 2; i++) {
       const flow = out[i === 0 ? RECORDS.out.footFlow : RECORDS.out.headFlow] ?? 1;

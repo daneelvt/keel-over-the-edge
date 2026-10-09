@@ -19,6 +19,9 @@ const server: ServerOptions = {
     // players use.
     '/api': { target: `http://${playAddr}`, changeOrigin: false },
     '/guest': { target: `http://${playAddr}`, changeOrigin: false },
+    // The game connection. Vite does not check a WebSocket's Origin before
+    // proxying it; keel does.
+    '/ws': { target: `ws://${playAddr}`, ws: true, changeOrigin: false },
   },
   // The developer page reads the physics golden files, which live beside
   // the Go tests, and the game loads its models from art/; nothing else

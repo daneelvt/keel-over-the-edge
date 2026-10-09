@@ -4,6 +4,7 @@
 // or 30 to save battery), sound, the beginners' overlays, and whether the
 // helm returns to the centre when let go.
 
+import { type ConnectionView, RoundTrip } from './connection';
 import { PlayerText } from './player';
 import type { SettingsSignal } from './settings';
 
@@ -43,16 +44,19 @@ export function SailingAs({ sailor }: { sailor: string | null }) {
 export function Menu({
   settings,
   sailor,
+  connection = null,
   close,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
+  connection?: ConnectionView | null;
   close: () => void;
 }) {
   const s = settings.value.value;
   return (
     <section class="panel menu" aria-label="Settings">
       <SailingAs sailor={sailor} />
+      {connection !== null ? <RoundTrip view={connection} /> : null}
       <h2>Settings</h2>
       <Toggle
         name="battery"
