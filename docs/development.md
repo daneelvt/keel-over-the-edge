@@ -744,13 +744,15 @@ third (5 a second), on snapshots that depend on the connection's ID, so a
 third of the connections sample their far band on each.
 
 **The snapshot** (`shared/protocol/snapshot.txt`). Each boat is quantised to
-what can be seen: position to the centimetre, heading in 65,536 steps, heel,
-boom and rudder in 1.4° steps, the sailor's offset in centimetres, its mode,
+what can be seen: position to the centimetre, heading, heel, boom and rudder
+in 65,536 steps a turn (coarser angles, which change only every few
+snapshots, make a boat drawn between them heel and swing its boom in
+jerks), the sailor's offset in centimetres, its mode,
 and the **sail byte**, which the physics workers keep for every boat: the
 sail's flattening and the flow over its two strips (luffing, drawing,
 stalled, aback), which the state cannot tell. The entries change the view of
-a **base**: an `enter` (the boat in full, 16 bytes), an `update` of the
-fields that changed (a moving near boat costs about 5 bytes), or a `leave`.
+a **base**: an `enter` (the boat in full, 19 bytes), an `update` of the
+fields that changed (a moving near boat costs about 10 bytes), or a `leave`.
 A boat that has not changed sends nothing. The game connection is TCP, and
 one writer writes a connection's messages in turn, so the base is the newest
 snapshot the writer has **taken** from the mailbox: the client will hold it

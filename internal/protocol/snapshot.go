@@ -21,7 +21,7 @@ const (
 	HeaderSize = 160
 	// SnapshotLayout is the layout this package writes: the own boat's
 	// state as float64, then the view's entries.
-	SnapshotLayout = 2
+	SnapshotLayout = 3
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an

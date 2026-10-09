@@ -22,12 +22,12 @@ import {
   writeSnapshot,
 } from './snapshot';
 import {
+  ANGLE_STEP,
   applyEntries,
   CHANGE,
   FLEET_META,
   FLEET_RECORD_BYTES,
   fleetOf,
-  HEADING_STEP,
   Q,
   SLOT,
   slotAt,
@@ -237,7 +237,7 @@ describe('the snapshot', () => {
     expect(f[one + SLOT.sailor]).toBeCloseTo(0.95, 10);
     const two = slotAt(2);
     expect([f[two + SLOT.far], f[two + SLOT.mode], f[two + SLOT.kind]]).toEqual([1, 1, 300]);
-    expect(f[two + SLOT.heading]).toBeCloseTo(-HEADING_STEP, 12);
+    expect(f[two + SLOT.heading]).toBeCloseTo(-ANGLE_STEP, 12);
     expect(f[two + SLOT.heel]).toBeCloseTo(-Math.PI, 12);
     expect(f[slotAt(3) + SLOT.present]).toBe(0);
     // The own boat reads from the record as from the snapshot.

@@ -15,7 +15,7 @@ export const KIND_SNAPSHOT = 2;
 /** A snapshot's header's length, its kind byte included: where its entries begin. */
 export const HEADER_SIZE = 160;
 /** The layout this client reads: the own boat's state as float64, then the view's entries. */
-export const SNAPSHOT_LAYOUT = 2;
+export const SNAPSHOT_LAYOUT = 3;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */

@@ -33,9 +33,8 @@ export const VIEW_STRIDE = 10;
 export const FAR_BAND = 1;
 const FLAGS_USED = 7;
 
-/** The steps of the fields. */
-export const HEADING_STEP = (2 * Math.PI) / 65536;
-export const ANGLE_STEP = Math.PI / 128;
+/** The steps of the fields: the heading's, heel's, boom's and rudder's, and the position's. */
+export const ANGLE_STEP = (2 * Math.PI) / 65536;
 export const POSITION_STEP = 0.01;
 const POSITION_LIMIT = 2 ** 23 - 1;
 
@@ -125,6 +124,9 @@ class Reader {
 
 class EntryError extends Error {}
 
+/** An enter's length after its kind. */
+const ENTER_FIELDS = 17;
+
 function int24(v: DataView, at: number): number {
   return ((v.getUint8(at) | (v.getUint8(at + 1) << 8) | (v.getUint8(at + 2) << 16)) << 8) >> 8;
 }
@@ -165,7 +167,7 @@ export function applyEntries(
           if (kind > 65535) {
             return `a boat of kind ${kind}`;
           }
-          if (r.left() < 14) {
+          if (r.left() < ENTER_FIELDS) {
             return 'an entry cut short';
           }
           const b = r.at;
@@ -178,12 +180,12 @@ export function applyEntries(
           q[o + Q.x] = int24(v, b + 1);
           q[o + Q.y] = int24(v, b + 4);
           q[o + Q.heading] = v.getUint16(b + 7, true);
-          q[o + Q.heel] = v.getInt8(b + 9);
-          q[o + Q.boom] = v.getInt8(b + 10);
-          q[o + Q.rudder] = v.getInt8(b + 11);
-          q[o + Q.sailor] = v.getInt8(b + 12);
-          q[o + Q.sail] = v.getUint8(b + 13);
-          r.at += 14;
+          q[o + Q.heel] = v.getInt16(b + 9, true);
+          q[o + Q.boom] = v.getInt16(b + 11, true);
+          q[o + Q.rudder] = v.getInt16(b + 13, true);
+          q[o + Q.sailor] = v.getInt8(b + 15);
+          q[o + Q.sail] = v.getUint8(b + 16);
+          r.at += ENTER_FIELDS;
           view.used[slot] = 1;
           changes[slot] = CHANGE.entered;
           break;
@@ -214,13 +216,13 @@ export function applyEntries(
             q[o + Q.heading] = r.byte() | (r.byte() << 8);
           }
           if ((m & 4) !== 0) {
-            q[o + Q.heel] = (r.byte() << 24) >> 24;
+            q[o + Q.heel] = ((r.byte() | (r.byte() << 8)) << 16) >> 16;
           }
           if ((m & 8) !== 0) {
-            q[o + Q.boom] = (r.byte() << 24) >> 24;
+            q[o + Q.boom] = ((r.byte() | (r.byte() << 8)) << 16) >> 16;
           }
           if ((m & 16) !== 0) {
-            q[o + Q.rudder] = (r.byte() << 24) >> 24;
+            q[o + Q.rudder] = ((r.byte() | (r.byte() << 8)) << 16) >> 16;
           }
           if ((m & 32) !== 0) {
             q[o + Q.sailor] = (r.byte() << 24) >> 24;
@@ -387,7 +389,7 @@ export function slotAt(i: number): number {
 
 /** A heading's step count as radians in [−π, π). */
 export function headingOf(steps: number): number {
-  return (steps >= 32768 ? steps - 65536 : steps) * HEADING_STEP;
+  return (steps >= 32768 ? steps - 65536 : steps) * ANGLE_STEP;
 }
 
 /**
