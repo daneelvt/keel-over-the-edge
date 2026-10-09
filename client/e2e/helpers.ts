@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { inflateSync } from 'node:zlib';
-import { type Page, test } from '@playwright/test';
+import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import type { KeelHooks } from '../src/dev/hooks';
 
 declare global {
@@ -136,4 +137,25 @@ export function pictureDifference(pa: Picture, pb: Picture): number {
     }
   }
   return sum / n;
+}
+
+/** Makes a guest in the context: its cookie is the context's. */
+export async function guest(context: BrowserContext, word = 'Sailor'): Promise<void> {
+  const name = `${word} ${Date.now() % 10_000_000}`;
+  const res = await context.request.post('/guest', {
+    data: { name, look: data.sailors[0]?.id ?? '' },
+  });
+  expect(res.status(), await res.text()).toBe(201);
+}
+
+/** Opens the game with the test hooks, and waits until it sails. */
+export async function sail(page: Page, base = ''): Promise<void> {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(`${base}/?test&backend=webgl2`);
+  await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 60_000 });
+  await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
+    timeout: 30_000,
+  });
+  expect(errors).toEqual([]);
 }

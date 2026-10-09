@@ -20,7 +20,7 @@ import type { SeaScene } from '../render/scene';
 import { HudModel } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
 import { WorldClock } from './clock';
-import type { BoatDriver } from './driver';
+import type { BoatDriver, Pacer } from './driver';
 import { StepLoop } from './loop';
 
 const DEG = Math.PI / 180;
@@ -36,6 +36,8 @@ export class Game {
   readonly world: SeaScene;
   readonly settings: SettingsSignal;
   driver: BoatDriver | null = null;
+  /** Paces the driver by the world clock instead of real time: the game online. */
+  pacer: Pacer | null = null;
   /** Held: no steps are taken and world time stands (the browser tests). */
   frozen = false;
   /** Called before each step, after the controls are read (the browser tests script controls). */
@@ -150,12 +152,15 @@ export class Game {
     const w = this.world;
     if (!this.frozen) {
       this.keys.update(dt);
-      if (d !== null) {
+      if (this.pacer !== null) {
+        this.pacer.frame(dt);
+      } else if (d !== null) {
         this.loop.advance(dt);
       }
     }
     if (d !== null) {
       d.states.blend(this.clock.alpha, w.pose);
+      d.decorate?.(w.pose, dt);
     }
     const time = this.clock.time;
     // At most a second: after a pause or a jump, what eases simply arrives.

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The developer panel, with ?dev: the sandbox's wind; the boat, reset to
+// The developer panel, with ?dev. Online, the connection's numbers: the
+// clock's offset, the round trip, how far ahead the boat is stepped, the
+// arrival margins, corrections and bytes each way. Offline, the sandbox's wind; the boat, reset to
 // the start or placed at a position and heading, and a jump to the rim;
 // time, paused, stepped once or slowed; the live State and Out; the sail
 // since the panel opened or the last reset, recorded as a golden scenario
@@ -11,7 +13,9 @@
 
 import './panel.css';
 import type { Game } from '../game/game';
+import type { Online } from '../net/online';
 import { RECORDS } from '../predict/layout.gen';
+import type { Predictor } from '../predict/predictor';
 import { DISK_RADIUS } from '../render/coords';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import type { Antialias } from '../render/stage';
@@ -380,4 +384,66 @@ export function openPanel(
     ].join('\n');
   };
   render();
+}
+
+/** What the connection's part of the panel shows. */
+export interface NetNumbers {
+  status: string;
+  offsetMs: number;
+  rttMs: number;
+  m: number;
+  margin: number;
+  counts: {
+    snapshots: number;
+    corrections: number;
+    resets: number;
+    stale: number;
+    largest: number;
+  };
+  p95: number;
+  traffic: { bytesIn: number; bytesOut: number; messagesIn: number; messagesOut: number };
+}
+
+/** The connection's numbers, as lines. */
+export function netLines(n: NetNumbers): string {
+  const c = n.counts;
+  const t = n.traffic;
+  return [
+    `status            ${n.status}`,
+    `clock offset      ${n.offsetMs.toFixed(1)} ms`,
+    `round trip        ${n.rttMs.toFixed(0)} ms`,
+    `ahead (m)         ${n.m} ticks`,
+    `last margin       ${n.margin === -32768 ? '—' : `${n.margin} ticks`}`,
+    `snapshots         ${c.snapshots}`,
+    `corrections       ${c.corrections} (largest ${c.largest.toFixed(3)} m, 95th ${n.p95.toFixed(3)} m)`,
+    `resets, stale     ${c.resets}, ${c.stale}`,
+    `bytes in, out     ${t.bytesIn}, ${t.bytesOut}`,
+    `messages in, out  ${t.messagesIn}, ${t.messagesOut}`,
+  ].join('\n');
+}
+
+/** The developer panel online: the connection's numbers, twice a second. */
+export function openNetPanel(online: Online, predictor: Predictor, parent: HTMLElement): void {
+  const panel = el('aside');
+  panel.className = 'dev-panel';
+  const body = el('pre');
+  panel.append(
+    button('Connection', () => body.toggleAttribute('hidden')),
+    body,
+  );
+  parent.append(panel);
+  const update = (): void => {
+    body.textContent = netLines({
+      status: online.status.value,
+      offsetMs: online.clock.offset / 1000,
+      rttMs: online.clock.rtt / 1000,
+      m: online.ahead.m,
+      margin: online.lastMargin,
+      counts: predictor.counts,
+      p95: predictor.p95(),
+      traffic: online.traffic,
+    });
+  };
+  update();
+  setInterval(update, 500);
 }

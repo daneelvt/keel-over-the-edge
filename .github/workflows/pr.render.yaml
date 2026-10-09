@@ -8,6 +8,9 @@
 #
 # Each back end runs in jobs of its own, and the tests tagged @long (minutes
 # each on SwiftShader) apart from the rest, so the four run side by side.
+# The game connection's upgrade from a worker is also tried on WebKit; and,
+# where the runner's kernel has sch_netem, the slow-network test runs once
+# through real TCP loss as well as through tools/lag's model of it.
 name: pr.render
 
 on:
@@ -125,10 +128,118 @@ jobs:
             client/playwright-report
           retention-days: 14
 
+  webkit:
+    name: browser (webkit, the net worker)
+    needs: [changes]
+    if: needs.changes.outputs.render == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        env:
+          POSTGRES_USER: keel
+          POSTGRES_PASSWORD: keel
+          POSTGRES_DB: keel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username keel --dbname keel"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      KEEL_TEST_DATABASE_URL: postgres://keel:keel@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Build the physics module (the game's page steps it)
+        run: go run ./tools/physics
+      - name: WebKit for Playwright
+        working-directory: client
+        run: npx --no-install playwright install --with-deps webkit
+      - name: The net worker's upgrade on WebKit
+        working-directory: client
+        run: npx --no-install playwright test --project webkit
+      - name: The pictures and traces of a failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-webkit
+          path: |
+            client/test-results
+            client/playwright-report
+          retention-days: 14
+
+  netem:
+    name: browser (real TCP loss, where netem is)
+    needs: [changes]
+    if: needs.changes.outputs.render == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        env:
+          POSTGRES_USER: keel
+          POSTGRES_PASSWORD: keel
+          POSTGRES_DB: keel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username keel --dbname keel"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      KEEL_TEST_DATABASE_URL: postgres://keel:keel@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - name: Can the kernel delay and drop packets (sch_netem)?
+        id: netem
+        run: |
+          if sudo modprobe sch_netem; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::sch_netem is not available on this runner: the slow network is tried through tools/lag's model only"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.netem.outputs.ok == 'true'
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        if: steps.netem.outputs.ok == 'true'
+      - name: Build the physics module (the game's page steps it)
+        if: steps.netem.outputs.ok == 'true'
+        run: go run ./tools/physics
+      - name: Chromium's headless shell for Playwright
+        if: steps.netem.outputs.ok == 'true'
+        working-directory: client
+        run: npx --no-install playwright install --with-deps --only-shell chromium
+      - name: 100 ms each way and 2% loss on keel's play port only
+        if: steps.netem.outputs.ok == 'true'
+        # A fourth band, which no traffic uses by default, holds netem; only
+        # packets to or from port 18080 are sent to it.
+        run: |
+          sudo tc qdisc add dev lo root handle 1: prio bands 4
+          sudo tc qdisc add dev lo parent 1:4 handle 40: netem delay 100ms loss 2%
+          sudo tc filter add dev lo protocol ip parent 1:0 prio 1 u32 match ip dport 18080 0xffff flowid 1:4
+          sudo tc filter add dev lo protocol ip parent 1:0 prio 1 u32 match ip sport 18080 0xffff flowid 1:4
+      - name: The slow-network test, through netem
+        if: steps.netem.outputs.ok == 'true'
+        working-directory: client
+        env:
+          KEEL_LAG_BASE: http://localhost:5181
+        run: npx --no-install playwright test e2e/lag.spec.ts --project webgl2
+
   pr-render:
     name: pr-render
     if: always()
-    needs: [changes, fixtures, browser]
+    needs: [changes, fixtures, browser, webkit, netem]
     runs-on: ubuntu-slim
     permissions: {}
     steps:

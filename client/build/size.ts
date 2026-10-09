@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The size of the game's first download: what dist/index.html loads before
-// the game can start (its scripts, the modules they preload, its styles)
-// and the models the scene loads at once, gzipped. Reported against the
+// the game can start (its scripts, the modules they preload, its styles),
+// the models the scene loads at once, and the net worker, which starts on
+// the way to sea, gzipped. Reported against the
 // 4 MB critical set; enforced from the phase that readies the game for
 // phones.
 //
@@ -32,9 +33,10 @@ export function eagerAssets(html: string): string[] {
 function main(): void {
   const dist = 'dist';
   const files = eagerAssets(readFileSync(join(dist, 'index.html'), 'utf8'));
-  // The boats' models load as the scene starts.
+  // The boats' models load as the scene starts, and the net worker as the
+  // game connects.
   for (const f of readdirSync(join(dist, 'assets'))) {
-    if (f.endsWith('.glb')) {
+    if (f.endsWith('.glb') || /^worker-.*\.js$/.test(f)) {
       files.push(`assets/${f}`);
     }
   }

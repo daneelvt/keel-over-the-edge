@@ -22,8 +22,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_, _ = w.Write(append(body, '\n'))
 }
 
-// writeError answers with an error: {"error": code}, a code the client puts
-// into its own words.
+// WriteError answers with an error: {"error": code}, a code the client puts
+// into its own words. The game connection refuses with it too.
+func WriteError(w http.ResponseWriter, status int, code string) { writeError(w, status, code) }
+
 func writeError(w http.ResponseWriter, status int, code string) {
 	writeJSON(w, status, struct {
 		Error string `json:"error"`

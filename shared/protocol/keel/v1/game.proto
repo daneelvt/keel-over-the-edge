@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// The game connection's control messages. Each WebSocket binary message is
+// one game message whose first byte is its kind (snapshot.txt): kind 1 is
+// one of the envelopes below, encoded as Protocol Buffers; kind 2 is the
+// packed own-boat snapshot, which is not described here.
+//
+// go run ./tools/protocol generates the Go and TypeScript from this file,
+// and the protocol version from this file and snapshot.txt.
+syntax = "proto3";
+
+package keel.v1;
+
+option go_package = "github.com/daneelvt/keel-over-the-edge/internal/protocol/pb";
+
+// ClientMessage is everything a client sends, after the kind byte 1.
+message ClientMessage {
+  oneof body {
+    Hello hello = 1;
+    Input input = 2;
+    Ping ping = 3;
+    // 4 is kept for the players' commands.
+  }
+}
+
+// Hello is the first message on a connection. A client whose protocol,
+// catalog or physics layout differs from the server's is closed with 4002.
+message Hello {
+  // The protocol version: a hash of the schema and the snapshot's layout.
+  string protocol = 1;
+  // The catalog version the client was built with.
+  string catalog = 2;
+  // The physics module's layout version.
+  uint32 physics_layout = 3;
+  // The client's build, for the log only.
+  string build = 4;
+}
+
+// Input is the controls the client steps its boat with, stamped with the
+// tick it predicted them for; or, with ack_only, just an acknowledgement.
+message Input {
+  // The low 32 bits of the tick the controls are for.
+  uint32 seq = 1;
+  // The helm, 0 (hard to port) to 1024 (hard to starboard).
+  uint32 helm = 2;
+  // The sheet, 0 (hauled in) to 1024 (let fly).
+  uint32 sheet = 3;
+  // The tick of the newest snapshot the client has decoded; 0 for none.
+  int64 ack_tick = 4;
+  // No control change: the message only acknowledges.
+  bool ack_only = 5;
+}
+
+// Ping asks for the server's world time, for the client's clock.
+message Ping {
+  // The client's own clock, in microseconds; returned in the Pong.
+  int64 client_time_us = 1;
+  // The tick of the newest snapshot the client has decoded; 0 for none.
+  int64 ack_tick = 2;
+  // The client's estimate of the round trip, in milliseconds.
+  uint32 rtt_ms = 3;
+  // The 95th percentile of the client's frame time, in milliseconds.
+  uint32 frame_ms = 4;
+}
+
+// ServerMessage is everything the server sends but snapshots, after the
+// kind byte 1.
+message ServerMessage {
+  oneof body {
+    Welcome welcome = 1;
+    Pong pong = 2;
+  }
+}
+
+// Welcome says the client has its boat; its snapshots follow.
+message Welcome {
+  // The world's ID.
+  string world = 1;
+  // The tick of the first frame the boat was in.
+  int64 tick = 2;
+  // World time when sent: microseconds since the world's epoch.
+  int64 world_time_us = 3;
+  // The boat's ID.
+  uint64 boat = 4;
+  // The boat's kind: an index into the catalog's boats.
+  uint32 kind = 5;
+  // The boat is the one the account already had.
+  bool rejoined = 6;
+}
+
+// Pong answers a Ping.
+message Pong {
+  // The Ping's client_time_us.
+  int64 client_time_us = 1;
+  // World time when sent: microseconds since the world's epoch.
+  int64 world_time_us = 2;
+}

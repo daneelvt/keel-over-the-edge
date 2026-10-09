@@ -6,6 +6,7 @@
 // the helm bottom left, the sheet bottom right, and the menu. Laid out
 // within the safe area, in portrait and landscape.
 
+import { ConnectionLine, type ConnectionView } from './connection';
 import './hud.css';
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
@@ -127,6 +128,8 @@ export interface ScreenProps {
   labels: (el: HTMLElement | null) => void;
   /** The sailor's name, or null in the offline sandbox. */
   sailor: string | null;
+  /** The game connection, or null in the offline sandbox. */
+  connection: ConnectionView | null;
 }
 
 function Screen(props: ScreenProps) {
@@ -139,6 +142,7 @@ function Screen(props: ScreenProps) {
       <div class="hud-top">
         <Instruments model={model} />
         <SailorLine model={model} />
+        {props.connection !== null ? <ConnectionLine view={props.connection} /> : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
       </div>
       <button
@@ -151,7 +155,12 @@ function Screen(props: ScreenProps) {
         ☰
       </button>
       {menu ? (
-        <Menu settings={settings} sailor={props.sailor} close={() => setMenu(false)} />
+        <Menu
+          settings={settings}
+          sailor={props.sailor}
+          connection={props.connection}
+          close={() => setMenu(false)}
+        />
       ) : null}
       <Helm input={props.helm} model={model} />
       <Sheet input={props.sheet} model={model} />

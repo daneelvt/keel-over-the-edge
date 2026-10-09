@@ -10,6 +10,10 @@ const cert = process.env.KEEL_DEV_CERT;
 const key = process.env.KEEL_DEV_KEY;
 const playAddr = process.env.KEEL_PLAY_ADDR ?? '127.0.0.1:8080';
 
+// The net worker is bundled apart; its packages join the page's notice.
+const workerPackages = new Set<string>();
+const allowedFile = '../tools/licences/allowed.txt';
+
 const server: ServerOptions = {
   host: true,
   port: 5173,
@@ -19,6 +23,9 @@ const server: ServerOptions = {
     // players use.
     '/api': { target: `http://${playAddr}`, changeOrigin: false },
     '/guest': { target: `http://${playAddr}`, changeOrigin: false },
+    // The game connection. Vite does not check a WebSocket's Origin before
+    // proxying it; keel does.
+    '/ws': { target: `ws://${playAddr}`, ws: true, changeOrigin: false },
   },
   // The developer page reads the physics golden files, which live beside
   // the Go tests, and the game loads its models from art/; nothing else
@@ -40,9 +47,14 @@ export default defineConfig({
       input: { main: 'index.html', dev: 'dev.html' },
     },
   },
+  worker: {
+    format: 'es',
+    plugins: () => [licences({ allowedFile, shared: workerPackages, emit: false })],
+  },
   plugins: [
     licences({
-      allowedFile: '../tools/licences/allowed.txt',
+      allowedFile,
+      shared: workerPackages,
       extra: [
         { name: 'IM Fell English SC (font)', licence: 'OFL-1.1', file: 'src/fonts/OFL.txt' },
         {

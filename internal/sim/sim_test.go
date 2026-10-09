@@ -55,13 +55,18 @@ func send(t testing.TB, w *World, c bus.Command) chan bus.Reply {
 	return reply
 }
 
-// do sends a command, ticks and returns the reply.
+// do sends a command, ticks and returns the reply, its tick (checked to be
+// the tick just run) left out.
 func do(t testing.TB, w *World, c bus.Command) bus.Reply {
 	t.Helper()
 	reply := send(t, w, c)
 	w.Tick()
 	select {
 	case r := <-reply:
+		if r.Tick != w.Now() {
+			t.Fatalf("%s replied with tick %d, applied at %d", c.Op, r.Tick, w.Now())
+		}
+		r.Tick = 0
 		return r
 	default:
 		t.Fatalf("no reply to %s", c.Op)
@@ -79,6 +84,15 @@ func stepped(t testing.TB, s physics.State, word bus.Word, wind bus.Wind) physic
 	return s
 }
 
+// acct is a test's account n.
+func acct(n uint64) bus.Account {
+	var a bus.Account
+	for k := range 8 {
+		a[15-k] = byte(n >> (8 * k))
+	}
+	return a
+}
+
 func sameState(a, b physics.State) bool {
 	pa, pb := StateFields(&a), StateFields(&b)
 	for i := range pa {
@@ -91,13 +105,13 @@ func sameState(a, b physics.State) bool {
 
 func TestJoin(t *testing.T) {
 	w := newWorld(t, 128, 1)
-	r := do(t, w, bus.Command{Op: bus.Join, Account: 10})
+	r := do(t, w, bus.Command{Op: bus.Join, Account: acct(10)})
 	if r != (bus.Reply{Result: bus.Joined, Slot: 0, Boat: 1, Gen: 0}) {
 		t.Fatalf("first join: %+v", r)
 	}
 	f := w.Latest()
-	if f.Tick != 101 || !slices.Equal(f.Live, []int32{0}) || f.Owner[0] != 10 || f.Control[0] != bus.Centred(0) {
-		t.Fatalf("frame after the join: tick %d, live %v, owner %d, control %#x", f.Tick, f.Live, f.Owner[0], f.Control[0])
+	if f.Tick != 101 || !slices.Equal(f.Live, []int32{0}) || f.Owner[0] != acct(10) || f.Control[0] != bus.Centred(0) {
+		t.Fatalf("frame after the join: tick %d, live %v, owner %s, control %#x", f.Tick, f.Live, f.Owner[0], f.Control[0])
 	}
 	// The boat appeared on the grid and sailed the rest of the tick.
 	start := physics.State{X: -640, Y: -20, Heading: math.Pi / 2}
@@ -108,14 +122,14 @@ func TestJoin(t *testing.T) {
 		t.Fatalf("the control slot holds %#x", got)
 	}
 
-	if r := do(t, w, bus.Command{Op: bus.Join, Account: 11}); r.Slot != 1 || r.Boat != 2 || r.Result != bus.Joined {
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(11)}); r.Slot != 1 || r.Boat != 2 || r.Result != bus.Joined {
 		t.Fatalf("second join: %+v", r)
 	}
-	if r := do(t, w, bus.Command{Op: bus.Join, Account: 10}); r != (bus.Reply{Result: bus.Rejoined, Slot: 0, Boat: 1}) {
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(10)}); r != (bus.Reply{Result: bus.Rejoined, Slot: 0, Boat: 1}) {
 		t.Fatalf("the same account again: %+v", r)
 	}
 	for range 63 {
-		send(t, w, bus.Command{Op: bus.Join, Account: uint64(100 + len(w.Latest().Live))})
+		send(t, w, bus.Command{Op: bus.Join, Account: acct(uint64(100 + len(w.Latest().Live)))})
 		w.Tick()
 	}
 	if s := spawn(64); s.X != -640 || s.Y != -40 {
@@ -129,19 +143,19 @@ func TestJoin(t *testing.T) {
 func TestFull(t *testing.T) {
 	w := newWorld(t, 2, 1)
 	for i := range 2 {
-		if r := do(t, w, bus.Command{Op: bus.Join, Account: uint64(i)}); r.Result != bus.Joined {
+		if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(uint64(i))}); r.Result != bus.Joined {
 			t.Fatalf("join %d: %+v", i, r)
 		}
 	}
-	if r := do(t, w, bus.Command{Op: bus.Join, Account: 9}); r != (bus.Reply{Result: bus.Full, Slot: -1}) {
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(9)}); r != (bus.Reply{Result: bus.Full, Slot: -1}) {
 		t.Fatalf("join at capacity: %+v", r)
 	}
 }
 
 func TestLeave(t *testing.T) {
 	w := newWorld(t, 4, 1)
-	do(t, w, bus.Command{Op: bus.Join, Account: 1})
-	do(t, w, bus.Command{Op: bus.Join, Account: 2})
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(2)})
 	if r := do(t, w, bus.Command{Op: bus.Leave, Boat: 1}); r != (bus.Reply{Result: bus.Left, Slot: 0, Boat: 1, Gen: 0}) {
 		t.Fatalf("leave: %+v", r)
 	}
@@ -152,7 +166,7 @@ func TestLeave(t *testing.T) {
 	if r := do(t, w, bus.Command{Op: bus.Leave, Boat: 1}); r.Result != bus.NoBoat {
 		t.Fatalf("leaving twice: %+v", r)
 	}
-	r := do(t, w, bus.Command{Op: bus.Join, Account: 3})
+	r := do(t, w, bus.Command{Op: bus.Join, Account: acct(3)})
 	if r != (bus.Reply{Result: bus.Joined, Slot: 0, Boat: 3, Gen: 1}) {
 		t.Fatalf("the freed slot: %+v", r)
 	}
@@ -179,7 +193,7 @@ func TestLeave(t *testing.T) {
 
 func TestSetWindAndPlace(t *testing.T) {
 	w := newWorld(t, 4, 1)
-	do(t, w, bus.Command{Op: bus.Join, Account: 1})
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
 	placed := physics.State{X: 5, Y: 7, Heading: 1, Surge: 2, SheetLimit: 0.5}
 	wind := bus.Wind{Speed: 8, From: 1.5}
 	send(t, w, bus.Command{Op: bus.SetWind, Wind: wind})
@@ -203,7 +217,7 @@ func TestSetWindAndPlace(t *testing.T) {
 // with its controls changing as it goes.
 func TestTickMatchesStep(t *testing.T) {
 	w := newWorld(t, 4, 1)
-	do(t, w, bus.Command{Op: bus.Join, Account: 1})
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
 	want := w.Latest().State[0]
 	rng := rand.New(rand.NewPCG(1, 2))
 	word := bus.Centred(0)
@@ -222,7 +236,7 @@ func TestTickMatchesStep(t *testing.T) {
 
 func TestSkip(t *testing.T) {
 	w := newWorld(t, 4, 1)
-	do(t, w, bus.Command{Op: bus.Join, Account: 1})
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
 	before := w.Latest().State[0]
 	w.Skip(5)
 	w.Tick()
@@ -242,7 +256,7 @@ func TestSkip(t *testing.T) {
 
 func TestTickWith(t *testing.T) {
 	w := newWorld(t, 4, 1)
-	w.TickWith(&Input{Commands: []bus.Command{{Op: bus.Join, Account: 4}}})
+	w.TickWith(&Input{Commands: []bus.Command{{Op: bus.Join, Account: acct(4)}}})
 	word := bus.Pack(3, 100, 900, 0)
 	w.TickWith(&Input{Changed: []bus.SlotWord{{Slot: 0, Word: word}, {Slot: 3, Word: word}, {Slot: -1}}})
 	f := w.Latest()
@@ -262,7 +276,7 @@ func fill(t testing.TB, w *World, n int, seed uint64) {
 	t.Helper()
 	q := w.Bus().Commands.Developer()
 	for i := range n {
-		if err := q.TrySend(bus.Command{Op: bus.Join, Account: uint64(i + 1)}); err != nil {
+		if err := q.TrySend(bus.Command{Op: bus.Join, Account: acct(uint64(i + 1)), Conn: uint64(3 * (i + 1))}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -345,6 +359,10 @@ func scatteredWorld(t testing.TB) *World {
 	odd := physics.State{X: math.Inf(-1), Y: math.Copysign(0, -1), Heading: math.NaN(), Surge: 5e-324, SailorMode: 3}
 	q.TrySend(bus.Command{Op: bus.Place, Boat: 10, State: odd})
 	q.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 3, From: -2}})
+	// Some sailors' connections end: their graces run.
+	for b := uint64(5); b < 200; b += 11 {
+		q.TrySend(bus.Command{Op: bus.Disconnect, Boat: b, Conn: 3 * b})
+	}
 	w.Tick()
 	return w
 }
@@ -365,13 +383,22 @@ func TestSnapshotRoundTrips(t *testing.T) {
 		t.Fatal("the frame read differs")
 	}
 	for _, s := range f.Live {
-		if g.Boat[s] != f.Boat[s] || g.Owner[s] != f.Owner[s] || g.Kind[s] != f.Kind[s] ||
-			g.Control[s] != f.Control[s] || !sameState(g.State[s], f.State[s]) {
+		if g.Boat[s] != f.Boat[s] || g.Owner[s] != f.Owner[s] || g.Conn[s] != f.Conn[s] || g.Grace[s] != f.Grace[s] ||
+			g.Kind[s] != f.Kind[s] || g.Control[s] != f.Control[s] || !sameState(g.State[s], f.State[s]) {
 			t.Fatalf("slot %d differs", s)
 		}
 	}
 	if Digest(g) != Digest(f) {
 		t.Fatal("the digests differ")
+	}
+	graces := 0
+	for _, s := range g.Live {
+		if g.Grace[s] != 0 {
+			graces++
+		}
+	}
+	if graces == 0 {
+		t.Fatal("no grace in the snapshot")
 	}
 
 	// Loading it into a new world and ticking both gives the same world.
@@ -426,6 +453,186 @@ func TestDigest(t *testing.T) {
 	if Digest(g) == d {
 		t.Fatal("a changed control word left the digest the same")
 	}
+	g.Control[s] = f.Control[s]
+	for name, change := range map[string]func(){
+		"owner":      func() { g.Owner[s][3] ^= 1 },
+		"connection": func() { g.Conn[s]++ },
+		"grace":      func() { g.Grace[s]++ },
+	} {
+		change()
+		if Digest(g) == d {
+			t.Errorf("a changed %s left the digest the same", name)
+		}
+		if err := ReadSnapshot(AppendSnapshot(nil, f), g); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestGrace(t *testing.T) {
+	w := newWorld(t, 8, 1)
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 7}); r.Result != bus.Joined {
+		t.Fatalf("join: %+v", r)
+	}
+	boat := uint64(1)
+	f := w.Latest()
+	if f.Conn[0] != 7 || f.Grace[0] != 0 {
+		t.Fatalf("connection %d, grace %d", f.Conn[0], f.Grace[0])
+	}
+	// Another connection's end is not this boat's.
+	if r := do(t, w, bus.Command{Op: bus.Disconnect, Boat: boat, Conn: 8}); r.Result != bus.Stale || w.Latest().Grace[0] != 0 {
+		t.Fatalf("a stale disconnection: %+v, grace %d", r, w.Latest().Grace[0])
+	}
+	if r := do(t, w, bus.Command{Op: bus.Disconnect, Boat: 99, Conn: 7}); r.Result != bus.NoBoat {
+		t.Fatalf("no boat: %+v", r)
+	}
+	if r := do(t, w, bus.Command{Op: bus.Disconnect, Boat: boat, Conn: 7}); r.Result != bus.Done {
+		t.Fatalf("disconnect: %+v", r)
+	}
+	if got, want := w.Latest().Grace[0], w.Now()+GraceTicks; got != want {
+		t.Fatalf("grace ends at %d, want %d", got, want)
+	}
+	// Back within the grace: the same boat, the grace over.
+	for range 100 {
+		w.Tick()
+	}
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 9}); r.Result != bus.Rejoined || r.Boat != boat {
+		t.Fatalf("rejoin: %+v", r)
+	}
+	if f := w.Latest(); f.Conn[0] != 9 || f.Grace[0] != 0 {
+		t.Fatalf("after rejoining: connection %d, grace %d", f.Conn[0], f.Grace[0])
+	}
+	// Gone again, for the whole grace: the boat sails on its held controls
+	// until the grace's last tick, then leaves.
+	word := bus.Pack(uint32(w.Now()+1), 300, 700, 0)
+	w.Bus().Controls.Store(0, word)
+	do(t, w, bus.Command{Op: bus.Disconnect, Boat: boat, Conn: 9})
+	end := w.Latest().Grace[0]
+	for w.Now() < end-1 {
+		w.Tick()
+	}
+	if f := w.Latest(); !f.Occupied[0] || f.Control[0] != word {
+		t.Fatalf("the boat left before its grace ended, or dropped its controls: %#x", f.Control[0])
+	}
+	w.Tick()
+	f = w.Latest()
+	if f.Tick != end || f.Occupied[0] || len(f.Live) != 0 {
+		t.Fatalf("at tick %d (grace ends %d): occupied %v", f.Tick, end, f.Occupied[0])
+	}
+	if len(f.Events) != 1 || f.Events[0].Op != bus.Leave || f.Events[0].Boat != boat ||
+		f.Events[0].Reply != (bus.Reply{Result: bus.Expired, Slot: 0, Boat: boat, Gen: 0, Tick: end}) {
+		t.Fatalf("events %+v", f.Events)
+	}
+	// The next join is a new boat at the start.
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 10}); r.Result != bus.Joined || r.Boat == boat || r.Gen != 1 {
+		t.Fatalf("after the grace: %+v", r)
+	}
+}
+
+// TestGraceAcrossSkip: a grace that ends during skipped ticks ends at the
+// first tick run after.
+func TestGraceAcrossSkip(t *testing.T) {
+	w, err := New(Config{Capacity: 4, Kinds: kinds(t), Workers: 1, Tick: 100, Grace: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(w.Close)
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+	do(t, w, bus.Command{Op: bus.Disconnect, Boat: 1, Conn: 1})
+	w.Skip(50)
+	w.Tick()
+	if f := w.Latest(); len(f.Live) != 0 || len(f.Events) != 1 || f.Events[0].Reply.Result != bus.Expired {
+		t.Fatalf("live %v, events %+v", f.Live, f.Events)
+	}
+}
+
+// TestWordWaitsForItsTick: a word is applied at the tick it is stamped for
+// when it arrives before it, at once when it arrives late or stamped more
+// than bus.MaxAhead ahead, and a newer word replaces one still waiting.
+func TestWordWaitsForItsTick(t *testing.T) {
+	for _, start := range []int64{100, 1<<32 - 3} { // the second crosses the wrap of seq
+		w, err := New(Config{Capacity: 4, Kinds: kinds(t), Workers: 1, Tick: start})
+		if err != nil {
+			t.Fatal(err)
+		}
+		do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+		controls := w.Bus().Controls
+		appliedAt := func(word bus.Word, limit int) int64 {
+			t.Helper()
+			for range limit {
+				w.Tick()
+				f := w.Latest()
+				if f.Control[0] == word {
+					if !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word}}) {
+						t.Fatalf("changed %v", f.Changed)
+					}
+					return f.Tick
+				}
+			}
+			return -1
+		}
+
+		at := w.Now() + 5
+		word := bus.Pack(uint32(at), 100, 200, 0)
+		controls.Store(0, word)
+		if got := appliedAt(word, 10); got != at {
+			t.Fatalf("from %d: a word for tick %d applied at %d", start, at, got)
+		}
+		late := bus.Pack(uint32(w.Now()-3), 101, 200, 0)
+		controls.Store(0, late)
+		if want, got := w.Now()+1, appliedAt(late, 3); got != want {
+			t.Fatalf("from %d: a late word applied at %d, want %d", start, got, want)
+		}
+		far := bus.Pack(uint32(w.Now()+1+bus.MaxAhead+1), 102, 200, 0)
+		controls.Store(0, far)
+		if want, got := w.Now()+1, appliedAt(far, 3); got != want {
+			t.Fatalf("from %d: a word too far ahead applied at %d, want %d", start, got, want)
+		}
+		at = w.Now() + 1 + bus.MaxAhead
+		held := bus.Pack(uint32(at), 103, 200, 0)
+		controls.Store(0, held)
+		if got := appliedAt(held, bus.MaxAhead+3); got != at {
+			t.Fatalf("from %d: a word %d ticks ahead applied at %d, want %d", start, bus.MaxAhead, got, at)
+		}
+
+		// A newer word, stamped sooner, replaces one still waiting.
+		waiting := bus.Pack(uint32(w.Now()+8), 104, 200, 0)
+		newer := bus.Pack(uint32(w.Now()+3), 105, 200, 0)
+		controls.Store(0, waiting)
+		w.Tick()
+		controls.Store(0, newer)
+		at = w.Now() + 2
+		if got := appliedAt(newer, 5); got != at {
+			t.Fatalf("from %d: the newer word applied at %d, want %d", start, got, at)
+		}
+		for range 10 {
+			w.Tick()
+			if w.Latest().Control[0] == waiting {
+				t.Fatalf("from %d: the replaced word was applied", start)
+			}
+		}
+		w.Close()
+	}
+}
+
+// TestRejoinDropsWaitingWord: a word the old connection left waiting for
+// its tick is never applied once the account has joined again.
+func TestRejoinDropsWaitingWord(t *testing.T) {
+	w := newWorld(t, 4, 1)
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+	inForce := w.Latest().Control[0]
+	stale := bus.Pack(uint32(w.Now()+10), 0, 0, 0)
+	w.Bus().Controls.Store(0, stale)
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 2})
+	if got := w.Bus().Controls.Load(0); got != inForce {
+		t.Fatalf("the slot holds %#x after the rejoin, not the word in force %#x", got, inForce)
+	}
+	for range 20 {
+		w.Tick()
+		if w.Latest().Control[0] == stale {
+			t.Fatal("the old connection's waiting word was applied")
+		}
+	}
 }
 
 func TestNewRejects(t *testing.T) {
@@ -446,9 +653,15 @@ func TestPhaseNames(t *testing.T) {
 }
 
 // TestTickAllocatesNothing: ticks with a thousand boats, a third of them
-// changing controls, and a join and a leave every tick.
+// changing controls, some of those words held for a later tick, and every
+// tick a join, a leave, a disconnection, a sailor's return and, a few ticks
+// later, a grace that ends.
 func TestTickAllocatesNothing(t *testing.T) {
-	w := newWorld(t, Capacity, 4)
+	w, err := New(Config{Capacity: Capacity, Kinds: kinds(t), Workers: 4, Tick: 100, Grace: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(w.Close)
 	fill(t, w, 1000, 1)
 	rng := rand.New(rand.NewPCG(3, 3))
 	q := w.Bus().Commands.Developer()
@@ -458,11 +671,15 @@ func TestTickAllocatesNothing(t *testing.T) {
 		f := w.Latest()
 		for i, s := range f.Live {
 			if i%3 == 0 {
-				w.Bus().Controls.Store(s, bus.Pack(uint32(f.Tick), uint16(rng.IntN(bus.Steps+1)), 512, f.Gen[s]))
+				w.Bus().Controls.Store(s, bus.Pack(uint32(f.Tick+int64(i%5)), uint16(rng.IntN(bus.Steps+1)), 512, f.Gen[s]))
 			}
 		}
 		q.TrySend(bus.Command{Op: bus.Leave, Boat: f.Boat[f.Live[len(f.Live)/2]]})
-		q.TrySend(bus.Command{Op: bus.Join, Account: account, Reply: reply})
+		q.TrySend(bus.Command{Op: bus.Join, Account: acct(account), Conn: account, Reply: reply})
+		s := f.Live[len(f.Live)/3]
+		q.TrySend(bus.Command{Op: bus.Disconnect, Boat: f.Boat[s], Conn: f.Conn[s]})
+		s = f.Live[len(f.Live)/4]
+		q.TrySend(bus.Command{Op: bus.Join, Account: f.Owner[s], Conn: f.Conn[s] + 1})
 		account++
 		w.Tick()
 		<-reply

@@ -5,14 +5,23 @@
 // through SwiftShader, the CPU's Vulkan. Locally, PW_CHANNEL=chrome uses the
 // installed Chrome instead of downloading Chromium.
 //
-// Two servers: keel, built from this tree and serving a database of its own
-// on the test database's server (tools/e2e), and Vite in front of it, as in
-// development. The page's origin is http://localhost, where browsers allow
+// Three servers: keel, built from this tree and serving a database of its
+// own on the test database's server (tools/e2e), and Vite in front of it, as
+// in development; and a second Vite whose traffic to keel goes through the
+// lag proxy tools/e2e runs, for the tests of a slow network. The WebKit
+// project runs only the test of the net worker's upgrade. The page's origin is http://localhost, where browsers allow
 // the session's Secure cookie without a certificate.
 
 import { defineConfig, devices } from '@playwright/test';
 
 const port = 5181;
+// A second Vite, whose game traffic goes through tools/e2e's lag proxy.
+const laggedPort = 5182;
+const keelLagged = '127.0.0.1:18090';
+// A third, on https with a throwaway certificate: WebKit sends the session's
+// Secure cookie to https only, even on localhost.
+const securePort = 5183;
+const tls = '../.dev/e2e/tls';
 // tools/e2e's addresses for keel.
 const keelPlay = '127.0.0.1:18080';
 const keelReady = 'http://127.0.0.1:19090/readyz';
@@ -46,16 +55,28 @@ export default defineConfig({
     deviceScaleFactor: 1,
     trace: 'retain-on-failure',
   },
-  projects: ['webgl2', 'webgpu'].map((name) => ({
-    name,
-    use: {
-      ...devices['Desktop Chrome'],
-      viewport: { width: 960, height: 600 },
-      deviceScaleFactor: 1,
-      ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
-      launchOptions: { args },
+  projects: [
+    ...['webgl2', 'webgpu'].map((name) => ({
+      name,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 960, height: 600 },
+        deviceScaleFactor: 1,
+        ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
+        launchOptions: { args },
+      },
+    })),
+    // The upgrade from a worker on WebKit, Safari's engine: nothing drawn.
+    {
+      name: 'webkit',
+      testMatch: 'worker.spec.ts',
+      use: {
+        ...devices['Desktop Safari'],
+        baseURL: `https://localhost:${securePort}`,
+        ignoreHTTPSErrors: true,
+      },
     },
-  })),
+  ],
   webServer: [
     {
       command: 'go run ../tools/e2e',
@@ -69,6 +90,25 @@ export default defineConfig({
       command: `npx --no-install vite --port ${port} --strictPort`,
       url: `http://localhost:${port}/`,
       env: { KEEL_PLAY_ADDR: keelPlay },
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      command: `go run ../tools/e2e -tls ${tls} && npx --no-install vite --port ${securePort} --strictPort`,
+      url: `https://localhost:${securePort}/`,
+      ignoreHTTPSErrors: true,
+      env: {
+        KEEL_PLAY_ADDR: keelPlay,
+        KEEL_DEV_CERT: `${tls}/cert.pem`,
+        KEEL_DEV_KEY: `${tls}/key.pem`,
+      },
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      command: `npx --no-install vite --port ${laggedPort} --strictPort`,
+      url: `http://localhost:${laggedPort}/`,
+      env: { KEEL_PLAY_ADDR: keelLagged },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

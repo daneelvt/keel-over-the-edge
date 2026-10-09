@@ -17,10 +17,14 @@
     "art": "cd .. && node art/boats/jolly-boat/build.ts && node art/sailors/stand-in/build.ts"
   },
   "allowScripts": {
+    "@bufbuild/buf": false,
     "fsevents": false
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
+    "@bufbuild/buf": "1.73.0",
+    "@bufbuild/protobuf": "2.16.0",
+    "@bufbuild/protoc-gen-es": "2.16.0",
     "@playwright/test": "1.63.0",
     "@preact/signals": "2.11.3",
     "@types/node": "24.19.1",

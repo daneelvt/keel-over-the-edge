@@ -59,8 +59,10 @@ func TestSailorsSail(t *testing.T) {
 		changes := 0
 		sail(t, w, n, time.Minute, func(f *bus.Frame) {
 			for _, c := range f.Changed {
-				if c.Word.Seq() <= seq[c.Slot] {
-					t.Fatalf("slot %d: sequence %d after %d", c.Slot, c.Word.Seq(), seq[c.Slot])
+				// Each word is stamped for the tick after the latest, so it
+				// is applied in order, and never before its tick.
+				if c.Word.Seq() <= seq[c.Slot] || c.Word.Seq() > uint32(f.Tick) {
+					t.Fatalf("slot %d: a word for tick %d after %d, applied at %d", c.Slot, c.Word.Seq(), seq[c.Slot], f.Tick)
 				}
 				seq[c.Slot] = c.Word.Seq()
 				if h, s := c.Word.Helm(), c.Word.Sheet(); h < -1 || h > 1 || s < 0 || s > 1 {
@@ -77,8 +79,8 @@ func TestSailorsSail(t *testing.T) {
 			t.Fatalf("%d boats", len(f.Live))
 		}
 		for i, s := range f.Live {
-			if f.Owner[s] != FirstAccount+uint64(i) {
-				t.Fatalf("slot %d is account %d's", s, f.Owner[s])
+			if f.Owner[s] != Account(i) || f.Conn[s] != 0 {
+				t.Fatalf("slot %d is account %s's, connection %d", s, f.Owner[s], f.Conn[s])
 			}
 		}
 		// Each sailor moves every 0.2 to 3 s: about 37 moves a minute each.
@@ -86,6 +88,15 @@ func TestSailorsSail(t *testing.T) {
 			t.Fatalf("%d changes by %d sailors in a minute", changes, len(seq))
 		}
 	})
+}
+
+func TestAccounts(t *testing.T) {
+	if got := Account(0x0102030405).String(); got != "ffffffff-ffff-7fff-bfff-000102030405" {
+		t.Fatal(got)
+	}
+	if Account(1) == Account(2) {
+		t.Fatal("two sailors share an account")
+	}
 }
 
 func TestMoreSailorsThanSlots(t *testing.T) {

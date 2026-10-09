@@ -6,7 +6,8 @@
 // on the same network gets a secure context:
 //
 //	go run ./tools/dev          start keel serve and Vite; restart keel on Go changes, rebuild the physics module
-//	go run ./tools/dev -smoke   start everything, check the page, /api/version, the physics module and keel's probes and metrics, stop
+//	go run ./tools/dev -lag 200ms,2%   the same, with the game's traffic slowed and lost as a phone's network would (tools/lag)
+//	go run ./tools/dev -smoke   start everything, check the page, /api/version, the physics module, a guest, the game connection and keel's probes and metrics, stop
 //	go run ./tools/dev -lint    run every linter the pull-request checks run
 //	go run ./tools/dev -db      start the database alone, print its URLs
 //	go run ./tools/dev -db-reset  remove the database's container and data
@@ -14,8 +15,9 @@
 // The database is PostgreSQL in a container (docker, or else podman), left
 // running between runs; KEEL_DEV_DATABASE_URL instead names a PostgreSQL 18
 // of your own, and no container is started. KEEL_DEV_SAILORS, if set, is
-// passed to keel serve: scripted sailors to load the tick. It runs from the
-// repository root.
+// passed to keel serve: scripted sailors to load the tick. keel runs with
+// KEEL_DEV_COMMANDS=1, so POST /debug/wind on its internal listener changes
+// the wind. It runs from the repository root.
 package main
 
 import (
@@ -36,8 +38,10 @@ const (
 	// internalAddr is keel's probes, metrics, profiles and input log, on
 	// loopback only.
 	internalAddr = "127.0.0.1:9090"
-	traceDir     = ".dev/traces"
-	replayDir    = ".dev/replays"
+	// lagAddr is the lag proxy's, between Vite and keel, with -lag.
+	lagAddr   = "127.0.0.1:8070"
+	traceDir  = ".dev/traces"
+	replayDir = ".dev/replays"
 	// replayKeep is how long input logs are kept in replayDir.
 	replayKeep = time.Hour
 	stateDir   = ".dev"
@@ -50,6 +54,7 @@ func main() {
 	lint := flag.Bool("lint", false, "run the linters and exit")
 	dbOnly := flag.Bool("db", false, "start the database alone, print its URLs and exit")
 	dbReset := flag.Bool("db-reset", false, "remove the database's container, its data and its password")
+	lagFlag := flag.String("lag", "", "a round trip and loss such as 200ms,2%: the game's traffic through tools/lag")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -66,7 +71,7 @@ func main() {
 	case *smoke:
 		err = runSmoke(ctx, os.Stdout)
 	default:
-		err = runDev(ctx, os.Stdout)
+		err = runDev(ctx, os.Stdout, *lagFlag)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dev:", err)

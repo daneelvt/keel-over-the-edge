@@ -30,13 +30,16 @@ import {
   vec4,
 } from 'three/tsl';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
+import type { BoatDriver } from '../game/driver';
 import type { Game } from '../game/game';
+import type { Online } from '../net/online';
 import { hexAt, hexCentre, NEIGHBOURS, TILE_APOTHEM, TILE_RADIUS, tileHash } from '../ocean/hex';
 import { tileHashNode, tileIdentity } from '../ocean/seamaterial';
 import { PASS_HEIGHT, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
 import { steer, toHex } from '../predict/golden';
 import { RECORDS } from '../predict/layout.gen';
+import type { Predictor } from '../predict/predictor';
 import { checkScene, DOME_RADIUS, domeDrop, seaMaterial } from '../render/materials';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import { KNOT, type Sandbox } from '../sandbox/sandbox';
@@ -134,15 +137,27 @@ function solve3(a: number[], b: number[]): [number, number, number] {
   ];
 }
 
+/** What the boat is sailed by: the offline sandbox, or the game online. */
+export type Sailing =
+  | { sandbox: Sandbox; online?: undefined; predictor?: undefined }
+  | { sandbox?: undefined; online: Online; predictor: Predictor };
+
 /** Puts the hooks on globalThis.keel. */
-export function exposeHooks(world: SeaScene, game: Game, sandbox: Sandbox): void {
-  (globalThis as unknown as { keel: KeelHooks }).keel = makeHooks(world, game, sandbox);
+export function exposeHooks(world: SeaScene, game: Game, sailing: Sailing): void {
+  (globalThis as unknown as { keel: KeelHooks }).keel = makeHooks(world, game, sailing);
 }
 
 export type KeelHooks = ReturnType<typeof makeHooks>;
 
-function makeHooks(world: SeaScene, game: Game, sandbox: Sandbox) {
+function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   const stage = world.stage;
+  const driver: BoatDriver = sailing.sandbox ?? sailing.predictor;
+  const offline = (): Sandbox => {
+    if (sailing.sandbox === undefined) {
+      throw new Error('the offline sandbox only: the boat is sailed online');
+    }
+    return sailing.sandbox;
+  };
   const gfx = () => {
     if (stage.gfx === null) {
       throw new Error('no renderer');
@@ -343,7 +358,7 @@ function makeHooks(world: SeaScene, game: Game, sandbox: Sandbox) {
     },
 
     game,
-    sandbox,
+    sandbox: sailing.sandbox ?? null,
 
     /** Holds world time at t and stops the frame loop; frames are then drawn by render(). */
     freeze(t: number): void {
@@ -377,7 +392,7 @@ function makeHooks(world: SeaScene, game: Game, sandbox: Sandbox) {
     },
     /** Puts the boat at a world position, keeping its heading. */
     placeBoat(east: number, north: number): void {
-      sandbox.place(east, north, sandbox.states.current[RECORDS.state.heading] ?? 0);
+      offline().place(east, north, driver.states.current[RECORDS.state.heading] ?? 0);
     },
     /** Puts the origin on tile (q, r), as if the boat had come from there. */
     setOrigin(q: number, r: number): void {
@@ -618,32 +633,32 @@ function makeHooks(world: SeaScene, game: Game, sandbox: Sandbox) {
           [K in keyof R]: number;
         };
       return {
-        state: named(RECORDS.state, sandbox.states.current),
-        out: named(RECORDS.out, sandbox.out),
+        state: named(RECORDS.state, driver.states.current),
+        out: named(RECORDS.out, driver.out),
         helm: game.helm.target,
         sheet: game.sheet.target,
         steps: game.clock.steps,
-        wind: { ...sandbox.wind },
+        wind: { ...driver.wind },
       };
     },
 
     /** The state's fields in hexadecimal, as the golden tests write them. */
     stateBits(): Record<string, string> {
       return Object.fromEntries(
-        Object.entries(RECORDS.state).map(([k, i]) => [k, toHex(sandbox.states.current[i] ?? 0)]),
+        Object.entries(RECORDS.state).map(([k, i]) => [k, toHex(driver.states.current[i] ?? 0)]),
       );
     },
 
     /** Back to the start, at rest. */
     reset(): void {
-      sandbox.reset();
+      offline().reset();
     },
     setState(values: Record<string, number>): void {
-      sandbox.setState(values);
+      offline().setState(values);
     },
     /** The sandbox's wind, in knots and the degrees it comes from. */
     setWind(knots: number, from: number): void {
-      sandbox.setWind(knots * KNOT, (from * Math.PI) / 180);
+      offline().setWind(knots * KNOT, (from * Math.PI) / 180);
     },
     /** Sets the helm's and the sheet's targets, as the player's thumbs would. */
     setControls(helm: number, sheet: number): void {
@@ -665,7 +680,7 @@ function makeHooks(world: SeaScene, game: Game, sandbox: Sandbox) {
     script(kind: 'steer' | 'wiggle' | null, heading = 0): void {
       if (kind === 'steer') {
         game.beforeStep = () => {
-          game.helm.target = steer(heading, sandbox.states.current);
+          game.helm.target = steer(heading, driver.states.current);
         };
       } else if (kind === 'wiggle') {
         let n = 0;
@@ -688,6 +703,30 @@ function makeHooks(world: SeaScene, game: Game, sandbox: Sandbox) {
     /** The audio context's state: 'none' before the first gesture. */
     soundState(): string {
       return game.sound.state;
+    },
+
+    /** The game connection: where it stands and what prediction has seen. */
+    net() {
+      const o = sailing.online;
+      const p = sailing.predictor;
+      if (o === undefined || p === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      return {
+        status: o.status.value,
+        notice: o.notice.value?.text ?? null,
+        boat: o.boat,
+        tick: p.tick,
+        m: o.ahead.m,
+        rtt: o.rtt.value,
+        counts: { ...p.counts },
+        p95: p.p95(),
+        traffic: { ...o.traffic },
+      };
+    },
+    /** Takes the boat back from another device. */
+    takeOver(): void {
+      sailing.online?.takeOver();
     },
 
     /** Resolves after n frames of the frame loop. */

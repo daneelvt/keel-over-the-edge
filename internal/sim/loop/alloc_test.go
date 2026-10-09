@@ -22,6 +22,15 @@ import (
 // at random. (With the flight recorder on, the runtime's tracer allocates on
 // its own goroutine, which AllocsPerRun would count; sim's tests check the
 // tick's trace regions allocate nothing while it runs.)
+// acct is a test's account n.
+func acct(n uint64) bus.Account {
+	var a bus.Account
+	for k := range 8 {
+		a[15-k] = byte(n >> (8 * k))
+	}
+	return a
+}
+
 func TestFullTickAllocatesNothing(t *testing.T) {
 	w, err := sim.New(sim.Config{Kinds: kinds(t), Workers: 4})
 	if err != nil {
@@ -40,12 +49,11 @@ func TestFullTickAllocatesNothing(t *testing.T) {
 		World: w, Epoch: bubbleEpoch, Log: slog.New(slog.DiscardHandler),
 		Metrics: obs.NewMetrics("b", "c"), Health: obs.NewHealth(), Overrun: func(int64) {},
 	})
-	l.startMono = time.Now()
-	l.startWall = l.startMono.Round(0)
+	l.start(time.Now())
 
 	q := w.Bus().Commands.Developer()
 	for i := range 1000 {
-		q.TrySend(bus.Command{Op: bus.Join, Account: uint64(i + 1)})
+		q.TrySend(bus.Command{Op: bus.Join, Account: acct(uint64(i + 1)), Conn: uint64(i + 1)})
 	}
 	rng := rand.New(rand.NewPCG(4, 4))
 	account := uint64(1 << 20)
@@ -60,7 +68,11 @@ func TestFullTickAllocatesNothing(t *testing.T) {
 		if len(f.Live) > 0 {
 			q.TrySend(bus.Command{Op: bus.Leave, Boat: f.Boat[f.Live[rng.IntN(len(f.Live))]]})
 		}
-		q.TrySend(bus.Command{Op: bus.Join, Account: account, Reply: reply})
+		q.TrySend(bus.Command{Op: bus.Join, Account: acct(account), Conn: account, Reply: reply})
+		if len(f.Live) > 0 {
+			s := f.Live[rng.IntN(len(f.Live))]
+			q.TrySend(bus.Command{Op: bus.Disconnect, Boat: f.Boat[s], Conn: f.Conn[s]})
+		}
 		account++
 		l.tick(w.Now()+1, false)
 		<-reply

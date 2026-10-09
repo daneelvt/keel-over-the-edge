@@ -15,15 +15,12 @@ func (w *World) apply(c *bus.Command) {
 	var r bus.Reply
 	switch c.Op {
 	case bus.Join:
-		r = w.join(c.Account)
+		r = w.join(c.Account, c.Conn)
 	case bus.Leave:
 		r = bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: c.Boat}
 		if s := slotOf(f, c.Boat); s >= 0 {
 			r = bus.Reply{Result: bus.Left, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
-			f.Occupied[s] = false
-			f.Gen[s] = (f.Gen[s] + 1) & bus.GenMask
-			i, _ := slices.BinarySearch(f.Live, s)
-			f.Live = slices.Delete(f.Live, i, i+1)
+			w.free(s)
 		}
 	case bus.SetWind:
 		f.Wind = c.Wind
@@ -34,9 +31,12 @@ func (w *World) apply(c *bus.Command) {
 			f.State[s] = c.State
 			r = bus.Reply{Result: bus.Done, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
 		}
+	case bus.Disconnect:
+		r = w.disconnect(c.Boat, c.Conn)
 	default:
 		return
 	}
+	r.Tick = f.Tick
 	ev := bus.Event{Command: *c, Reply: r}
 	ev.Command.Reply = nil
 	f.Events = append(f.Events, ev)
@@ -48,13 +48,23 @@ func (w *World) apply(c *bus.Command) {
 	}
 }
 
-// join gives account its boat: the one it already has, or a new one in the
-// lowest free slot. One account sails one boat, so a sailor who reconnects
-// finds theirs.
-func (w *World) join(account uint64) bus.Reply {
+// join gives account its boat, sailed from now on through connection conn:
+// the one it already has, or a new one in the lowest free slot. One account
+// sails one boat, so a sailor who reconnects finds theirs, and its grace,
+// if it had begun, ends.
+func (w *World) join(account bus.Account, conn uint64) bus.Reply {
 	f := w.next
 	for _, s := range f.Live {
 		if f.Owner[s] == account {
+			f.Conn[s] = conn
+			f.Grace[s] = 0
+			if w.given == nil {
+				// Whoever wrote the slot before is no longer the boat's
+				// sailor: a word it left waiting for its tick is put back
+				// to the word in force, so only the new sailor's are applied
+				// from here on.
+				w.bus.Controls.Store(s, f.Control[s])
+			}
 			return bus.Reply{Result: bus.Rejoined, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s]}
 		}
 	}
@@ -67,6 +77,8 @@ func (w *World) join(account uint64) bus.Reply {
 	f.Boat[s] = f.NextBoat
 	f.NextBoat++
 	f.Owner[s] = account
+	f.Conn[s] = conn
+	f.Grace[s] = 0
 	f.Kind[s] = 0
 	f.Control[s] = bus.Centred(gen)
 	f.State[s] = spawn(s)
@@ -79,6 +91,49 @@ func (w *World) join(account uint64) bus.Reply {
 		w.bus.Controls.Store(s, f.Control[s])
 	}
 	return bus.Reply{Result: bus.Joined, Slot: s, Boat: f.Boat[s], Gen: gen}
+}
+
+// disconnect begins a boat's grace when the connection sailing it ends. A
+// connection that no longer sails it, replaced by a newer one, is ignored.
+func (w *World) disconnect(boat, conn uint64) bus.Reply {
+	f := w.next
+	s := slotOf(f, boat)
+	if s < 0 {
+		return bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: boat}
+	}
+	r := bus.Reply{Result: bus.Stale, Slot: s, Boat: boat, Gen: f.Gen[s]}
+	if f.Conn[s] == conn && f.Grace[s] == 0 {
+		f.Grace[s] = f.Tick + w.grace
+		r.Result = bus.Done
+	}
+	return r
+}
+
+// expire takes out the boats whose grace has ended, each recorded as an
+// event of its own: a Leave with the result Expired, which a replay does
+// not apply again, since the tick does it.
+func (w *World) expire() {
+	f := w.next
+	for i := 0; i < len(f.Live); {
+		s := f.Live[i]
+		if g := f.Grace[s]; g == 0 || f.Tick < g {
+			i++
+			continue
+		}
+		boat := f.Boat[s]
+		r := bus.Reply{Result: bus.Expired, Slot: s, Boat: boat, Gen: f.Gen[s], Tick: f.Tick}
+		w.free(s)
+		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Leave, Boat: boat}, Reply: r})
+	}
+}
+
+// free empties slot s of the next frame.
+func (w *World) free(s int32) {
+	f := w.next
+	f.Occupied[s] = false
+	f.Gen[s] = (f.Gen[s] + 1) & bus.GenMask
+	i, _ := slices.BinarySearch(f.Live, s)
+	f.Live = slices.Delete(f.Live, i, i+1)
 }
 
 // slotOf finds a boat's slot, or returns −1.

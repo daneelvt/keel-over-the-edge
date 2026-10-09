@@ -2,7 +2,7 @@ module github.com/daneelvt/keel-over-the-edge
 
 go 1.27
 
-toolchain go1.27.1
+toolchain go1.27.2
 
 tool (
 	filippo.io/mkcert
@@ -12,10 +12,12 @@ tool (
 	github.com/sqlc-dev/sqlc/cmd/sqlc
 	github.com/zricethezav/gitleaks/v8
 	golang.org/x/vuln/cmd/govulncheck
+	google.golang.org/protobuf/cmd/protoc-gen-go
 	honnef.co/go/tools/cmd/staticcheck
 )
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/mdp/qrterminal/v3 v3.2.1
 	github.com/pressly/goose/v3 v3.28.0
@@ -24,6 +26,8 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/sync v0.23.0
 	golang.org/x/text v0.42.0
+	golang.org/x/time v0.16.0
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -159,7 +163,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260831171406-18b4a7587f8a // indirect
 	google.golang.org/grpc v1.83.2 // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

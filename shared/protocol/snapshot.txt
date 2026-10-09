@@ -1,0 +1,38 @@
+SPDX-License-Identifier: AGPL-3.0-only
+
+The game connection's framing, and the own-boat snapshot's layout.
+
+Framing
+-------
+
+One WebSocket binary message is one game message. Its first byte is its
+kind:
+
+  1  a Protocol Buffers message: ClientMessage from the client,
+     ServerMessage from the server (keel/v1/game.proto)
+  2  the own-boat snapshot below, from the server
+
+Any other kind, and any text message, closes the connection with 1003.
+
+The own-boat snapshot
+---------------------
+
+After the kind byte, little-endian, 155 bytes (156 with the kind byte):
+
+  offset  bytes  field
+       0      1  layout: 1 = the boat's state as float64
+       1      8  tick (int64)
+       9      4  seq of the control word in force (uint32)
+      13      2  arrival margin in ticks (int16): the lowest since the
+                 previous snapshot, how many ticks before its tick an input
+                 arrived (negative: after); -32768 for none
+      15      2  helm index in force (uint16), 0 … 1024
+      17      2  sheet index in force (uint16), 0 … 1024
+      19      8  wind speed, m/s (float64)
+      27      8  wind direction it comes from, rad clockwise from north (float64)
+      35    120  the boat's state, 15 float64s in this order:
+                 x, y, heading, surge, sway, yawRate, heel, rollRate,
+                 boom, boomRate, sailor, rudder, sheetLimit, sailorMode,
+                 sailorTimer
+
+A layout byte other than 1 is refused.

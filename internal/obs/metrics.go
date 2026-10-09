@@ -18,6 +18,17 @@ var TickBuckets = []float64{
 	0.0005, 0.001, 0.002, 0.003, 0.005, 0.0075, 0.010, 0.015, 0.020, 0.025, 0.033, 0.050, 0.100,
 }
 
+// EdgeBuckets are the game connection's histogram buckets, in seconds:
+// encoding a frame for every connection, and writing one message.
+var EdgeBuckets = []float64{0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 1, 5, 10}
+
+// MarginBuckets are the input arrival margin's buckets, in ticks: how long
+// before the tick it was stamped for an input arrived, negative when late.
+var MarginBuckets = []float64{-10, -5, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30}
+
+// ClientBuckets are the phones' round trips and frame times, in seconds.
+var ClientBuckets = []float64{0.005, 0.01, 0.017, 0.025, 0.033, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.5, 1, 2}
+
 // DBBuckets are the database queries' histogram buckets, in seconds.
 var DBBuckets = []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5}
 
@@ -47,6 +58,22 @@ type Metrics struct {
 	GuestsRefused      *prometheus.CounterVec // by reason
 	SessionLookups     *prometheus.CounterVec // by result: hit, miss or unknown
 	CrossOriginRefused prometheus.Counter
+
+	Grace *prometheus.CounterVec // by result: started, rejoined, expired
+
+	EdgeConnections    prometheus.Gauge
+	EdgeUpgrades       *prometheus.CounterVec // by result
+	EdgeHellos         *prometheus.CounterVec // by result
+	EdgeJoins          *prometheus.CounterVec // by result
+	EdgeCloses         *prometheus.CounterVec // by code
+	EdgeMessages       *prometheus.CounterVec // by direction and kind
+	EdgeBytes          *prometheus.CounterVec // by direction
+	EdgeDropped        *prometheus.CounterVec // by reason
+	EdgeEncodeDuration prometheus.Histogram
+	EdgeWriteDuration  prometheus.Histogram
+	EdgeInputMargin    prometheus.Histogram
+	ClientRTT          prometheus.Histogram
+	ClientFrame        prometheus.Histogram
 }
 
 // NewMetrics makes the metrics, with the Go runtime's and the process's.
@@ -119,6 +146,51 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.CrossOriginRefused = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "keel_http_cross_origin_refused_total", Help: "Requests refused as cross-origin.",
 	})
+	m.Grace = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_sim_grace_total",
+		Help: "Boats' graces after their connection ended: started, ended by a join of the same account (rejoined, which counts any join that found the account's boat), or expired.",
+	}, []string{"result"})
+	m.EdgeConnections = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_edge_connections", Help: "Game connections open.",
+	})
+	m.EdgeUpgrades = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_upgrades_total", Help: "Requests for the game connection, by result.",
+	}, []string{"result"})
+	m.EdgeHellos = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_hello_total", Help: "Game connections' first messages, by result: ok, or what differed.",
+	}, []string{"result"})
+	m.EdgeJoins = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_joins_total", Help: "Game connections' joins, by result.",
+	}, []string{"result"})
+	m.EdgeCloses = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_closes_total", Help: "Game connections ended, by the close code sent or received, or none.",
+	}, []string{"code"})
+	m.EdgeMessages = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_messages_total", Help: "Game messages, by direction and kind.",
+	}, []string{"direction", "kind"})
+	m.EdgeBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_bytes_total", Help: "Game connections' WebSocket frames' bytes, by direction.",
+	}, []string{"direction"})
+	m.EdgeDropped = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_messages_dropped_total", Help: "Game messages dropped: over a connection's rate, or a snapshot replaced before it was sent.",
+	}, []string{"reason"})
+	m.EdgeEncodeDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_edge_encode_duration_seconds", Help: "How long encoding a frame for every connection took.", Buckets: EdgeBuckets,
+	})
+	m.EdgeWriteDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_edge_write_duration_seconds", Help: "How long writing a game message took.", Buckets: EdgeBuckets,
+	})
+	m.EdgeInputMargin = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_edge_input_margin_ticks", Help: "How many ticks before the tick it was stamped for each input arrived; negative when late.", Buckets: MarginBuckets,
+	})
+	m.ClientRTT = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_client_rtt_seconds", Help: "Round trips as the clients measure them.", Buckets: ClientBuckets,
+	})
+	m.ClientFrame = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_client_frame_seconds", Help: "The clients' 95th percentile frame times.", Buckets: ClientBuckets,
+	})
+	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
+		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
 		m.ClockDrift, m.Boats, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused)

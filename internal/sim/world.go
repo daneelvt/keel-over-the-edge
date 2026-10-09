@@ -34,6 +34,12 @@ const Capacity = 4096
 // DefaultWind is the wind a world starts with: 10 knots from the north.
 var DefaultWind = bus.Wind{Speed: 10 * 1852.0 / 3600, From: 0}
 
+// GraceTicks is how long a boat sails on, on its held controls, after its
+// connection ends: 60 s, room for a server's restart and a phone's dropout.
+// A Join from the same account within it gets the boat back; after it the
+// boat leaves.
+const GraceTicks = 1800
+
 // Config sets up a world.
 type Config struct {
 	// Capacity is the number of boat slots; 0 means Capacity.
@@ -46,6 +52,9 @@ type Config struct {
 	Workers int
 	// Tick is the tick of the empty world the world starts as.
 	Tick int64
+	// Grace is how many ticks a disconnected boat sails on; 0 means
+	// GraceTicks.
+	Grace int64
 }
 
 // A Phase is a part of a tick.
@@ -79,7 +88,7 @@ type Observer interface {
 
 // A Recorder is given each frame as soon as it is published, on the ticking
 // goroutine. It must not block; to keep the frame beyond the call it must
-// Acquire it, which then returns this frame.
+// Acquire it, which then returns this frame unless a later tick has run.
 type Recorder interface {
 	Record(*bus.Frame)
 }
@@ -93,12 +102,13 @@ type Input struct {
 // World is a world's boats and wind, and the machinery that ticks them.
 // Everything but Bus and Close is for the one goroutine that ticks.
 type World struct {
-	bus      *bus.Bus
-	capacity int
-	kinds    []physics.Prepared
-	observer Observer
-	recorder Recorder
-	ctx      context.Context // for trace regions
+	bus       *bus.Bus
+	capacity  int
+	kinds     []physics.Prepared
+	grace     int64
+	observer  Observer
+	recorders []Recorder
+	ctx       context.Context // for trace regions
 
 	// The tick in progress.
 	cur, next *bus.Frame
@@ -124,10 +134,17 @@ func New(cfg Config) (*World, error) {
 	if len(cfg.Kinds) == 0 || len(cfg.Kinds) > math.MaxUint16+1 {
 		return nil, errors.New("sim: a world needs from 1 to 65536 kinds of boat")
 	}
+	if cfg.Grace == 0 {
+		cfg.Grace = GraceTicks
+	}
+	if cfg.Grace < 1 {
+		return nil, fmt.Errorf("sim: grace of %d ticks", cfg.Grace)
+	}
 	w := &World{
 		bus:      bus.New(cfg.Capacity),
 		capacity: cfg.Capacity,
 		kinds:    cfg.Kinds,
+		grace:    cfg.Grace,
 		ctx:      context.Background(),
 	}
 	w.inputsFn, w.physicsFn, w.publishFn = w.inputs, w.physics, w.publish
@@ -142,14 +159,18 @@ func New(cfg Config) (*World, error) {
 // Observe has o told as each phase of a tick ends; nil stops it.
 func (w *World) Observe(o Observer) { w.observer = o }
 
-// Record has r given each frame as it is published; nil stops it.
-func (w *World) Record(r Recorder) { w.recorder = r }
+// Record has each of rs given each frame as it is published, in order;
+// none stops it.
+func (w *World) Record(rs ...Recorder) { w.recorders = rs }
 
 // Bus is how the world is reached from outside.
 func (w *World) Bus() *bus.Bus { return w.bus }
 
 // Capacity is the number of boat slots.
 func (w *World) Capacity() int { return w.capacity }
+
+// Grace is how many ticks a boat sails on after its connection ends.
+func (w *World) Grace() int64 { return w.grace }
 
 // Now is the tick of the latest frame.
 func (w *World) Now() int64 { return w.bus.Frames.Latest().Tick }

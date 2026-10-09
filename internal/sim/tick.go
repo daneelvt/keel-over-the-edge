@@ -46,8 +46,9 @@ func (w *World) phaseDone(p Phase) {
 }
 
 // inputs copies the world into the next frame, then applies what changed:
-// first the control words of the boats already sailing, then the commands,
-// in the order they came.
+// first the boats whose grace has ended leave, then the control words of the
+// boats sailing are applied, each once its tick has come (bus.Due), then
+// the commands, in the order they came.
 func (w *World) inputs() {
 	cur, next := w.cur, w.next
 	next.Tick = cur.Tick + 1 + w.skip
@@ -61,6 +62,8 @@ func (w *World) inputs() {
 	for _, s := range cur.Live {
 		next.Boat[s] = cur.Boat[s]
 		next.Owner[s] = cur.Owner[s]
+		next.Conn[s] = cur.Conn[s]
+		next.Grace[s] = cur.Grace[s]
 		next.Kind[s] = cur.Kind[s]
 		next.Control[s] = cur.Control[s]
 		next.State[s] = cur.State[s]
@@ -68,6 +71,7 @@ func (w *World) inputs() {
 	next.Changed = next.Changed[:0]
 	clear(next.Events) // drop the old events' references
 	next.Events = next.Events[:0]
+	w.expire()
 
 	if in := w.given; in != nil {
 		for _, sw := range in.Changed {
@@ -85,7 +89,7 @@ func (w *World) inputs() {
 	controls := w.bus.Controls
 	for _, s := range next.Live {
 		word := controls.Load(s)
-		if word != next.Control[s] && word.Gen() == next.Gen[s] {
+		if word != next.Control[s] && word.Gen() == next.Gen[s] && bus.Due(word.Seq(), next.Tick) {
 			next.Control[s] = word
 			next.Changed = append(next.Changed, bus.SlotWord{Slot: s, Word: word})
 		}
@@ -117,11 +121,11 @@ func (w *World) stepSlots(slots []int32, o *physics.Out) {
 	}
 }
 
-// publish makes the next frame current and hands it to the recorder.
+// publish makes the next frame current and hands it to the recorders.
 func (w *World) publish() {
 	w.bus.Frames.Publish(w.next)
-	if w.recorder != nil {
-		w.recorder.Record(w.next)
+	for _, r := range w.recorders {
+		r.Record(w.next)
 	}
 	w.cur, w.next = nil, nil
 }

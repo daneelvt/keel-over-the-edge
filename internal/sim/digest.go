@@ -10,8 +10,8 @@ import (
 )
 
 // Digest is a 64-bit FNV-1a hash of a frame's state: the tick, the wind, and
-// each occupied slot's number, boat, generation, control word and state, as
-// little-endian bits. Two worlds with the same digest at a tick are, all but
+// each occupied slot's number, boat, generation, owner, connection, grace,
+// control word and state, as little-endian bits. Two worlds with the same digest at a tick are, all but
 // certainly, the same world; a replay compares them to find the first tick at
 // which it went wrong.
 func Digest(f *bus.Frame) uint64 {
@@ -23,6 +23,11 @@ func Digest(f *bus.Frame) uint64 {
 		h.u64(uint64(s))
 		h.u64(f.Boat[s])
 		h.u64(uint64(f.Gen[s]))
+		for _, b := range f.Owner[s] {
+			h.byte(b)
+		}
+		h.u64(f.Conn[s])
+		h.u64(uint64(f.Grace[s]))
 		h.u64(uint64(f.Control[s]))
 		for _, v := range StateFields(&f.State[s]) {
 			h.f64(*v)
@@ -48,6 +53,11 @@ func (h *fnv) u64(v uint64) {
 }
 
 func (h *fnv) f64(v float64) { h.u64(math.Float64bits(v)) }
+
+func (h *fnv) byte(b byte) {
+	*h ^= fnv(b)
+	*h *= fnvPrime
+}
 
 // StateFields lists a state's fields, in their order. The snapshot, the
 // digest and the input log all read the state through it; a test checks it

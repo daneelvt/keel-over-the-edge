@@ -15,7 +15,7 @@ const Steps = 1024
 // A Word is a boat's controls packed into 64 bits, so that a slot is written
 // and read with one atomic operation, without a lock and without tearing:
 //
-//	bits 63–32  input sequence, set by the writer
+//	bits 63–32  input sequence: the low 32 bits of the tick the controls are for
 //	bits 31–21  helm, 0 (hard to port) … 1024 (hard to starboard)
 //	bits 20–10  sheet, 0 (hauled in) … 1024 (let fly)
 //	bits  9–0   generation of the slot the word is meant for
@@ -44,8 +44,22 @@ func Pack(seq uint32, helm, sheet, gen uint16) Word {
 		Word(gen&genMask)
 }
 
-// Seq is the writer's input sequence.
+// Seq is the low 32 bits of the tick the word is for.
 func (w Word) Seq() uint32 { return uint32(w >> 32) }
+
+// MaxAhead is the most ticks ahead of the tick being run a word may be
+// stamped for and still be held for its tick; a word further ahead is
+// applied at once, so a client whose clock has gone wrong is never frozen.
+const MaxAhead = 60
+
+// Due reports whether a word stamped seq may be applied by tick: its tick
+// has come (or passed), or it is more than MaxAhead ticks ahead. Ticks are
+// compared modulo 2³², as a signed difference, so the rule holds across the
+// wrap of the low 32 bits.
+func Due(seq uint32, tick int64) bool {
+	d := int32(seq - uint32(tick))
+	return d <= 0 || d > MaxAhead
+}
 
 // HelmIndex is the helm in steps, 0 … Steps.
 func (w Word) HelmIndex() uint16 { return min(uint16(w>>(indexBits+genBits))&indexMask, Steps) }
@@ -81,7 +95,8 @@ func NewControls(n int) *Controls {
 }
 
 // Store sets a slot's word. The latest word stored before a tick reads it is
-// the one applied.
+// the one applied, at the first tick by which it is Due; until then the
+// boat keeps the word in force.
 func (c *Controls) Store(slot int32, w Word) { c.slots[slot].Store(uint64(w)) }
 
 // Load reads a slot's word.

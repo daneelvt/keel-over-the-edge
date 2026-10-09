@@ -9,6 +9,7 @@ package loop
 import (
 	"context"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -70,6 +71,9 @@ type Config struct {
 	// AfterTick, if not nil, runs after each tick, on the loop's goroutine,
 	// and counts as part of the tick: for tests.
 	AfterTick func(tick int64)
+	// Wall, if not nil, replaces time.Now as the wall clock, which the loop
+	// reads once, as it starts: for tests.
+	Wall func() time.Time
 }
 
 // Loop runs a world's ticks on the clock.
@@ -77,8 +81,10 @@ type Loop struct {
 	cfg   Config
 	world *sim.World
 
-	// When Run started, on the monotonic clock and on the wall clock.
+	// When Run started, on the monotonic clock and on the wall clock; and
+	// both again, published for WorldTime once Run has started.
 	startMono, startWall time.Time
+	anchor               atomic.Pointer[anchor]
 
 	mark   time.Time // when the last phase ended
 	phases [sim.Phases]time.Duration
@@ -86,6 +92,8 @@ type Loop struct {
 	m        *obs.Metrics
 	phaseObs [sim.Phases]prometheus.Observer
 	commands [][]prometheus.Counter // by op, then result
+	// graces started, ended by a join, and expired
+	graceStarted, graceRejoined, graceExpired prometheus.Counter
 }
 
 // New makes a loop for cfg.World, which it observes from now on.
@@ -102,9 +110,33 @@ func New(cfg Config) *Loop {
 				l.commands[op][r] = l.m.Commands.WithLabelValues(op.String(), r.String())
 			}
 		}
+		l.graceStarted = l.m.Grace.WithLabelValues("started")
+		l.graceRejoined = l.m.Grace.WithLabelValues("rejoined")
+		l.graceExpired = l.m.Grace.WithLabelValues("expired")
 	}
 	cfg.World.Observe(l)
 	return l
+}
+
+// anchor ties the monotonic clock to world time: at mono, the wall clock read
+// wall.
+type anchor struct{ mono, wall time.Time }
+
+// WorldTime is the world's time now, since its epoch, on the loop's own
+// schedule: the wall clock as it read when the loop started, plus the time
+// since on the monotonic clock. A step of the wall clock after the start
+// cannot move it away from the ticks, which follow the same schedule: at
+// each tick's deadline it is that tick's time. ok is false until Run has
+// started.
+func (l *Loop) WorldTime() (t time.Duration, ok bool) { return l.WorldTimeAt(time.Now()) }
+
+// WorldTimeAt is WorldTime at now, a reading of the monotonic clock.
+func (l *Loop) WorldTimeAt(now time.Time) (time.Duration, bool) {
+	a := l.anchor.Load()
+	if a == nil {
+		return 0, false
+	}
+	return a.wall.Sub(l.cfg.Epoch) + now.Sub(a.mono), true
 }
 
 // PhaseDone times the phase of the tick that has just ended.
@@ -127,8 +159,7 @@ func (l *Loop) due(tick int64) time.Time {
 // drift. A time.Ticker is not used: it drops ticks for a slow receiver,
 // which would hide them.
 func (l *Loop) Run(ctx context.Context) error {
-	l.startMono = time.Now()
-	l.startWall = l.startMono.Round(0)
+	l.start(time.Now())
 	w := l.world
 	next := w.Now() + 1
 	timer := time.NewTimer(time.Until(l.due(next)))
@@ -157,6 +188,17 @@ func (l *Loop) Run(ctx context.Context) error {
 		}
 		timer.Reset(time.Until(l.due(next)))
 	}
+}
+
+// start sets when the loop started: now on the monotonic clock, and the wall
+// clock's reading then.
+func (l *Loop) start(now time.Time) {
+	l.startMono = now
+	l.startWall = now.Round(0)
+	if l.cfg.Wall != nil {
+		l.startWall = l.cfg.Wall().Round(0)
+	}
+	l.anchor.Store(&anchor{mono: l.startMono, wall: l.startWall})
 }
 
 // latest is the latest tick whose deadline has passed at now.
@@ -220,6 +262,14 @@ func (l *Loop) tick(tick int64, late bool) {
 		ev := &f.Events[i]
 		if int(ev.Op) < len(l.commands) && int(ev.Reply.Result) < len(l.commands[ev.Op]) {
 			l.commands[ev.Op][ev.Reply.Result].Inc()
+		}
+		switch {
+		case ev.Op == bus.Disconnect && ev.Reply.Result == bus.Done:
+			l.graceStarted.Inc()
+		case ev.Op == bus.Join && ev.Reply.Result == bus.Rejoined:
+			l.graceRejoined.Inc()
+		case ev.Reply.Result == bus.Expired:
+			l.graceExpired.Inc()
 		}
 	}
 }
