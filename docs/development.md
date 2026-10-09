@@ -46,6 +46,13 @@ The game is served at your computer's local network address, for example
 `https://192.168.1.20:5173`. Use that address on the computer too, so the
 computer and phones share one origin.
 
+`go run ./tools/dev -lag 200ms,2%` does the same with the game's traffic
+between Vite and `keel` slowed and lost as a phone's network would: half the
+round trip each way, and that share of packets lost each way (see [The game
+connection](#the-game-connection)). `keel` runs with `KEEL_DEV_COMMANDS=1`,
+so `curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=15&from=270'`
+changes the wind.
+
 ## On a phone
 
 The game is served over HTTPS with a certificate your computer makes itself,
@@ -330,6 +337,8 @@ world; everything reaches it through the **bus** (`internal/bus`).
 | `internal/auth` | Session tokens, the cookie, the session cache and the session middleware. |
 | `internal/moderation` | Sailor names: their display form, rules and key, and the word filter. |
 | `internal/api` | The `play.` listener's routes and the middleware in front of them. |
+| `internal/protocol` | The game connection's wire format: the kind byte, the generated messages (`pb`), the own boat's snapshot. |
+| `internal/edge` | The game connection, `GET /ws`: the door, one connection per account, the reader and writer, the snapshots' encoder; `edgetest` runs it in a test. |
 
 ### Listeners and configuration
 
@@ -340,7 +349,7 @@ Three HTTP servers, each with a 10 s header timeout, a 120 s idle timeout and
 |----------|-------------------|--------|
 | `play.` | `KEEL_PLAY_ADDR`, `127.0.0.1:8080` | The game's routes (below), with an access log |
 | `agents.` | `KEEL_AGENTS_ADDR`, `127.0.0.1:8081` | Nothing yet: 404 to everything |
-| internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay` |
+| internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay`, and with `KEEL_DEV_COMMANDS=1` `POST /debug/wind` |
 
 The internal listener must never be reachable from outside. The three
 addresses must differ. The other variables:
@@ -353,6 +362,7 @@ addresses must differ. The other variables:
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096 |
+| `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (degrees the wind comes from). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
 sets the database's URL, the internal address, `KEEL_TRACE_DIR=.dev/traces` and
@@ -416,6 +426,17 @@ resolved at start, so updating it allocates nothing:
 | `keel_db_schema_version` | The newest migration the database has had |
 | `keel_guests_created_total`, `keel_guests_refused_total{reason}` | Guests made, and names refused by reason (`short`, `long`, `characters`, `scripts`, `words`, `taken`) |
 | `keel_session_cache_lookups_total{result}` | Sessions found in the cache (`hit`), fetched (`miss`) or unknown |
+| `keel_sim_grace_total{result}` | Boats' graces `started`, ended by a join of the account (`rejoined`), or `expired` |
+| `keel_edge_connections` | Game connections open |
+| `keel_edge_upgrades_total{result}` | `ok`, `no_session`, `ai_account`, `origin`, `bad_request` |
+| `keel_edge_hello_total{result}` | `ok`, or what differed: `protocol`, `catalog`, `layout`; or `timeout` |
+| `keel_edge_joins_total{result}` | `joined`, `rejoined`, `full`, `busy`, `timeout` |
+| `keel_edge_closes_total{code}` | Connections ended, by the close code sent or received, `other` or `none` |
+| `keel_edge_messages_total{direction,kind}`, `keel_edge_bytes_total{direction}` | Messages and WebSocket frames' bytes each way |
+| `keel_edge_messages_dropped_total{reason}` | Over a connection's rate (`rate`); a snapshot replaced before it was sent (`snapshot_replaced`) |
+| `keel_edge_encode_duration_seconds`, `keel_edge_write_duration_seconds` | Encoding a frame for every connection; writing one message |
+| `keel_edge_input_margin_ticks` | How many ticks before their tick inputs arrived; negative when late |
+| `keel_client_rtt_seconds`, `keel_client_frame_seconds` | The phones' round trips and 95th percentile frame times, from their pings |
 | `keel_http_cross_origin_refused_total` | Requests refused as cross-origin |
 | `go_*`, `process_*` | The runtime and the process |
 
@@ -527,8 +548,8 @@ keeps only their SHA-256. It is `Secure`, `HttpOnly`, `SameSite=Lax`, for
 `/`, with no `Domain` (the `__Host-` prefix makes browsers insist), and lives
 400 days, the most browsers allow; it is set again on a request a day or
 more after it was last set, so a player who comes back never loses it.
-`localhost` counts as secure, so the browser tests use the same cookie over
-`http://localhost`.
+Chromium counts `localhost` as secure, so the browser tests use the same
+cookie over `http://localhost`; WebKit does not, so its tests use https.
 
 Sessions are looked up through a cache (`internal/auth`): an account found
 is kept 30 s, at most 100,000 of them, oldest dropped first; tokens nobody
@@ -582,6 +603,114 @@ The client checks a name's length only, counting as the server does
 is the server's count of a table of names, written by
 `go test ./internal/moderation -run LengthTable -args -update`, and the
 client's tests read it.
+
+### The game connection
+
+The page sails its boat through one WebSocket, `GET /ws` on `play.`
+(`internal/edge`), opened by a dedicated worker, the net worker
+(`client/src/workers/net`), so the times messages arrive are not blurred by
+long frames.
+
+**The door.** The session comes first: no session, 401 before any upgrade;
+an AI account, 403 (agents sail through their own interface). The
+connection's deadlines are cleared, then `github.com/coder/websocket`
+accepts it if its `Origin` is the request's own host or `KEEL_PLAY_ORIGIN`'s
+(a request with no `Origin` is not a browser's, and passes; Vite does not
+check WebSockets' origins, keel does). A message may be 1 KB at most.
+
+**The protocol** (`shared/protocol`). One binary message is one game
+message; its first byte is its kind: `1`, a Protocol Buffers envelope
+(`keel/v1/game.proto`: `Hello`, `Input`, `Ping` from the client; `Welcome`,
+`Pong` from the server), or `2`, the own boat's packed snapshot
+(`snapshot.txt`: 156 bytes, the boat's state as float64). `go run
+./tools/protocol` generates the Go (`internal/protocol/pb`) and TypeScript
+(`client/src/net/gen`) with buf and its two generators, and the protocol
+version: a hash of the schema and the snapshot's layout. Run it after
+changing either; `-check` (in `go run ./tools/dev -lint`) fails on stale
+code, and `buf lint` checks the schema. The golden vectors in
+`shared/protocol/testdata` pin both sides' codecs.
+
+**A connection's life.** The client's `Hello` carries the protocol version,
+the catalog's and the physics layout's; any that differs closes with 4002,
+and the page reloads (once a minute at most). No `Hello` in 10 s closes with
+1008. Then the edge sends `Join(account, connection)` to the simulation: a
+new boat at the start, or the account's own (`Rejoined`). One account sails
+through one connection: a newer one stops the older writing the boat's
+control slot, closes it with 4001 ("playing on another device", with **Take
+over**), then joins. `Welcome` comes with the first frame that holds the
+boat; a snapshot follows on every even tick (15 a second). The client sends
+an `Input` when its quantised controls change, stamped with the tick it
+stepped them for; the edge holds it until the tick before that is
+published, and the simulation never applies a word before its tick, so the
+server steps the boat with the controls the page stepped it with. Each
+snapshot carries the lowest **arrival margin** since the last: how many
+ticks early inputs came. Every message carries the newest snapshot's tick;
+after 100 ms with nothing to send, an empty `Input` does. A client may send
+60 messages a second (120 at once); more than 120 over that in 10 s closes
+with 1008. 60 s of silence drops the connection, and a write that takes
+10 s does too (no close frame: the peer has gone). When a connection ends
+its boat sails on on its held controls for 60 s, the **grace**; the same
+account joining within it gets the boat back, after it the boat leaves.
+`keel serve` closes every connection with 1012 as it stops, before the
+simulation, so the graces are in the input log; the boats are lost (until
+checkpoints), and clients get new ones at the start: "Your boat has
+returned to port."
+
+| Code | Sent when | The page |
+|------|-----------|----------|
+| 1000 | The page leaves | nothing |
+| 1003 | A text message, an unknown kind, an unreadable message | waits from 1 s |
+| 1008 | Over the rate, too many messages waiting, no `Hello` | waits from 1 s |
+| 1009 | A message over 1 KB | waits from 1 s |
+| 1012 | `keel` stops | waits 0.5 to 5 s |
+| 1013 | The world is full, or the simulation's queue | waits from 2 s |
+| 4001 | Another connection for the account | "playing on another device", **Take over** |
+| 4002 | Protocol, catalog or physics differ | reloads |
+| 4003 | Removed (not sent yet) | the reason |
+| none | 60 s of silence, a 10 s write | waits from 0.5 s |
+
+Waits are drawn uniformly under a ceiling that doubles with each failure, to
+10 s. A failure before the `Welcome` asks `GET /api/me`, since a browser
+cannot see why an upgrade failed: 401 goes to the start screen. The network
+coming back, or the page shown again, ends a wait; no `Pong` for 6 s closes
+and reconnects.
+
+**The clock, and running ahead.** After the `Welcome` the worker sends 8
+`Ping`s 100 ms apart, then one every 2 s. The clock's offset is the median
+of those of the 8 lowest round trips of the last 32 samples; it moves by at
+most 1 ms per 100 ms, unless more than 250 ms off. The page steps its boat to
+the tick due at the estimated world time plus half the round trip plus *m*
+ticks, at most four steps a frame: the boat answers the helm on the frame it
+is moved. *m* starts at 2; a late input (a negative margin) raises it at
+once, once a round trip; 5 s of margins of 3 or more lower it by one. Steps
+for ticks an input could no longer reach in time (catching up, or before the
+first `Pong`) keep the controls the server holds.
+
+**Prediction** (`client/src/predict/predictor.ts`). The page keeps 64 ticks
+of its steps' controls and states. A snapshot equal to the state predicted
+for its tick, bit for bit, changes nothing, as it is whenever the inputs
+arrived in time; one that differs puts the boat back to the server's state
+and steps it again to the present, and the drawn boat eases the difference
+away over 100 ms (at once past 3 m or 20°). A snapshot older than the 64
+ticks kept is let go. Behind its target by more than 30 ticks (a stall, a
+hidden page), the boat is put back to the latest snapshot. `?dev` shows the
+clock's offset, the round trip, *m*, margins, corrections and bytes.
+
+**Testing it.** `internal/edge/edgetest` runs a world, the edge and the
+routes on `net/http/httptest`'s in-memory network, in `testing/synctest`
+bubbles: minutes of connection in milliseconds. Its `Sailor` is the page in
+Go (its clock, *m*, prediction with `physics.Step`, the net worker's
+schedule) and records traces into `shared/protocol/testdata`, which the
+Vitest tests replay through the page's own code: the same messages out, the
+same corrections. `go test ./internal/edge/edgetest -run Traces -update`
+records them again. Its `Lag` models a slow network under TCP: each chunk
+written arrives after half the round trip; a "lost" one is held for TCP's
+probe timeout (twice the round trip) and, lost again, a second more, and
+nothing behind it overtakes it. `go run ./tools/lag` is the same model as a
+TCP proxy. On a Mac or an iPhone, Apple's Network Link Conditioner slows and
+drops real packets instead (on the Mac from Additional Tools for Xcode; on an
+iPhone under Settings › Developer › Network Link Conditioner, with a custom
+profile of 100 ms delay and 2% packets dropped each way).
 
 ## The database
 
@@ -833,11 +962,22 @@ on, the page plays no sound.
 WebGL 2 back end and on WebGPU where the browser offers an adapter (on Linux
 through SwiftShader; without an adapter the WebGPU tests are skipped). The
 page loads the physics module, so build it first (`go run ./tools/physics`).
-Playwright starts two servers: `keel`, which `go run ./tools/e2e` builds from
+Playwright starts four servers: `keel`, which `go run ./tools/e2e` builds from
 the tree and serves on a database of its own on the test database's server
 (so start it first: `go run ./tools/dev -db`), on ports 18080, 18081 and
-19090, dropping the database when it stops; and Vite on
-`http://localhost:5181` in front of it. The scene's tests open `?sandbox`.
+19090, dropping the database when it stops, with developer commands on, the
+lag proxy on 18090 (200 ms, 2%) and, on 19099, `POST /restart`, which
+restarts `keel`; Vite on `http://localhost:5181` in front of it; a second
+Vite on `http://localhost:5182` whose traffic goes through the lag proxy;
+and a third on `https://localhost:5183` with a throwaway certificate, for
+WebKit. `connect.spec.ts` sails online: the sea with the server's boat, a
+sail with no correction, the server's wind reaching the boat, the same boat
+after a reload, "returned to port" after a restart, and a second device
+taking the boat and being taken back from. `lag.spec.ts` sails through the
+lag proxy (or, in CI where the runner has it, through netem): no correction
+over the snap thresholds, and the helm answering at once. `worker.spec.ts`,
+on Chromium and WebKit (`--project webkit`, `npx playwright install
+webkit`), opens `e2e/net.html`, which runs the net worker alone. The scene's tests open `?sandbox`.
 `start.spec.ts`, on WebGL 2 alone, starts as a guest: the start screen,
 names refused in words (too short, a symbol, a reserved name, mixed
 scripts, a name taken through the API and look-alikes of it), a name
