@@ -37,9 +37,10 @@
       "description": "A boat's art. Every art object's values are paths under art/, checked to exist.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["model"],
+      "required": ["model", "far"],
       "properties": {
-        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor.", "$ref": "#/$defs/ArtPath" }
+        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor.", "$ref": "#/$defs/ArtPath" },
+        "far": { "description": "The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales and pennant, with few segments.", "$ref": "#/$defs/ArtPath" }
       }
     },
     "SailorArt": {
@@ -47,9 +48,10 @@
       "description": "A sailor's art.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["model"],
+      "required": ["model", "far"],
       "properties": {
-        "model": { "description": "The sailor's model: a glTF binary with the nodes body, head, arm-left and arm-right, its origin at the hips, facing +x.", "$ref": "#/$defs/ArtPath" }
+        "model": { "description": "The sailor's model: a glTF binary with the nodes body, head, arm-left and arm-right, its origin at the hips, facing +x.", "$ref": "#/$defs/ArtPath" },
+        "far": { "description": "The sailor's far model, drawn in boats seen from afar: the model's nodes, with few segments.", "$ref": "#/$defs/ArtPath" }
       }
     },
     "Sailor": {

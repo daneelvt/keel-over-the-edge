@@ -86,7 +86,8 @@ export interface DrawnBoat {
   tick: number;
 }
 
-function newDrawn(): DrawnBoat {
+/** A drawn boat at the origin, faded out. */
+export function newDrawnBoat(): DrawnBoat {
   return {
     slot: -1,
     kind: 0,
@@ -126,7 +127,7 @@ class Boat {
   ease = 0;
   motion: number = MOTION.interpolated;
   /** The pose drawn last frame. */
-  readonly drawn = newDrawn();
+  readonly drawn = newDrawnBoat();
 
   reset(kind: number): void {
     this.present = true;
@@ -287,7 +288,7 @@ export interface FleetStats {
 export class Fleet {
   readonly #boats = Array.from({ length: VIEW_SLOTS }, () => new Boat());
   /** Boats fading out of the view, drawn where they were last. */
-  readonly #ghosts = Array.from({ length: VIEW_SLOTS }, newDrawn);
+  readonly #ghosts = Array.from({ length: VIEW_SLOTS }, newDrawnBoat);
   #ghostCount = 0;
   readonly near = new Band(NEAR_DELAY);
   readonly far = new Band(FAR_DELAY);
@@ -305,7 +306,7 @@ export class Fleet {
   #entriesRate = 0;
 
   /** The boats drawn this frame: drawn[0 … count). */
-  readonly drawn: DrawnBoat[] = Array.from({ length: 2 * VIEW_SLOTS }, newDrawn);
+  readonly drawn: DrawnBoat[] = Array.from({ length: 2 * VIEW_SLOTS }, newDrawnBoat);
   count = 0;
   readonly stats: FleetStats = {
     near: 0,

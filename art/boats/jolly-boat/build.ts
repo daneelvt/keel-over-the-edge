@@ -12,6 +12,11 @@
 // spans. The rest (sheer, rocker, section shape, planking) are this
 // script's own.
 //
+// It builds the boat twice from the same lines: in full, and the far model,
+// the boat as seen from afar among many others, with few segments, no laps,
+// telltales, pennant or fittings, and a plain deck. The catalog's art.model
+// and art.far name them.
+//
 //   node art/boats/jolly-boat/build.ts   (from the repository root; npm run art in client/)
 
 import { execFileSync } from 'node:child_process';
@@ -19,13 +24,65 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { type MaterialDef, type NodeDef, writeGlb } from '../../lib/gltf.ts';
 import { MeshBuilder, srgb, type Vec3 } from '../../lib/mesh.ts';
 
-/** The model this script writes, as the catalog's art.model names it. */
+/** The models this script writes, as the catalog's art.model and art.far name them. */
 const MODEL = 'boats/jolly-boat.glb';
+const FAR_MODEL = 'boats/jolly-boat.far.glb';
+
+/** How finely a model is built. */
+interface Detail {
+  /** Stations along the hull. */
+  stations: number;
+  /** The strakes' edges as girth fractions, keel to sheer. */
+  strakes: number[];
+  /** Rows a strake: its girth fractions. */
+  strakeRows: number[];
+  /** Whether each plank laps the one below, with its land. */
+  laps: boolean;
+  /** The deck in planks with the cockpit, or plain. */
+  plankedDeck: boolean;
+  /** Around tubes and blades, and along the mast. */
+  round: number;
+  mastStations: number;
+  /** The sail's rows and columns. */
+  sailRows: number;
+  sailCols: number;
+  /** Telltales, pennant and the bronze fittings. */
+  small: boolean;
+}
+
+const NEAR: Detail = {
+  stations: 56,
+  strakes: [0, 0.16, 0.32, 0.47, 0.61, 0.74, 0.87, 1],
+  strakeRows: [0, 0.5, 1],
+  laps: true,
+  plankedDeck: true,
+  round: 12,
+  mastStations: 8,
+  sailRows: 24,
+  sailCols: 10,
+  small: true,
+};
+
+const FAR: Detail = {
+  stations: 14,
+  strakes: [0, 0.32, 0.61, 0.87, 1],
+  strakeRows: [0, 1],
+  laps: false,
+  plankedDeck: false,
+  round: 5,
+  mastStations: 1,
+  sailRows: 8,
+  sailCols: 3,
+  small: false,
+};
+
+/** The detail being built. */
+let D = NEAR;
 
 interface CatalogBoat {
   lengthOverall: number;
   beam: number;
-  art: { model: string };
+  art: { model: string; far: string };
   physics: {
     hull: { hullDraught: number; centreOfGravity: number };
     rig: {
@@ -52,8 +109,8 @@ const catalog = JSON.parse(readFileSync('internal/catalog/catalog.gen.json', 'ut
   boats: CatalogBoat[];
 };
 const boat = catalog.boats.find((b) => b.art.model === MODEL);
-if (boat === undefined) {
-  throw new Error(`no boat in the catalog has the model ${MODEL}`);
+if (boat === undefined || boat.art.far !== FAR_MODEL) {
+  throw new Error(`no boat in the catalog has the models ${MODEL} and ${FAR_MODEL}`);
 }
 const { hull, rig, foils, sailor } = boat.physics;
 
@@ -117,8 +174,8 @@ function sectionNormal(u: number, g: number): Vec3 {
   return [dy / l, -dx / l, 0];
 }
 
-const STATIONS = 56;
-const stations = Array.from({ length: STATIONS + 1 }, (_, i) => i / STATIONS);
+/** Stations along the hull, from the transom (0) to the stem (1). */
+const stations = (): number[] => Array.from({ length: D.stations + 1 }, (_, i) => i / D.stations);
 
 // --- Materials ---------------------------------------------------------------
 
@@ -148,34 +205,34 @@ const jitter = (i: number): number => {
 
 // --- The planking ------------------------------------------------------------
 
-/** The strakes' edges as girth fractions, keel to sheer. */
-const STRAKES = [0, 0.16, 0.32, 0.47, 0.61, 0.74, 0.87, 1];
 /** How far each plank's lower edge stands out over the plank below, in metres. */
 const LAP = 0.014;
 const TIMBER = srgb(0.68, 0.42, 0.2);
 
 function planking(): MeshBuilder {
   const side = new MeshBuilder('timber');
-  for (let k = 0; k + 1 < STRAKES.length; k++) {
-    const g0 = STRAKES[k] as number;
-    const g1 = STRAKES[k + 1] as number;
+  const strakes = D.strakes;
+  const laps = D.laps;
+  for (let k = 0; k + 1 < strakes.length; k++) {
+    const g0 = strakes[k] as number;
+    const g1 = strakes[k + 1] as number;
     const tone = 0.9 + 0.2 * jitter(k);
-    const rows: number[][] = [[], [], []];
+    const rows: number[][] = D.strakeRows.map(() => []);
     const land: number[][] = [[], []];
-    stations.forEach((u, i) => {
+    stations().forEach((u, i) => {
       // A little grain along the plank.
       const grain = tone * (0.96 + 0.08 * jitter(k * 100 + i));
       const c: Vec3 = [TIMBER[0] * grain, TIMBER[1] * grain, TIMBER[2] * grain];
-      [0, 0.5, 1].forEach((s, r) => {
+      D.strakeRows.forEach((s, r) => {
         const g = g0 + (g1 - g0) * s;
         const p = section(u, g);
         const n = sectionNormal(u, g);
         // The garboard meets the keel flush; every other plank laps the one below.
-        const lap = k === 0 ? 0 : LAP * (1 - s) ** 0.8;
+        const lap = k === 0 || !laps ? 0 : LAP * (1 - s) ** 0.8;
         const v = side.vertex([p[0] + n[0] * lap, p[1] + n[1] * lap, p[2]], c, [s, u]);
         (rows[r] as number[]).push(v);
       });
-      if (k > 0) {
+      if (k > 0 && laps) {
         // The land: the plank's lower edge, a narrow face looking down toward the keel.
         const p = section(u, g0);
         const n = sectionNormal(u, g0);
@@ -191,9 +248,10 @@ function planking(): MeshBuilder {
     });
     // Rows run from the transom forward (-z), girth upward: seen from
     // outside that is counter-clockwise.
-    side.strip(rows[0] as number[], rows[1] as number[]);
-    side.strip(rows[1] as number[], rows[2] as number[]);
-    if (k > 0) {
+    for (let r = 0; r + 1 < rows.length; r++) {
+      side.strip(rows[r] as number[], rows[r + 1] as number[]);
+    }
+    if (k > 0 && laps) {
       side.strip(land[0] as number[], land[1] as number[]);
     }
   }
@@ -207,10 +265,11 @@ function transom(): MeshBuilder {
   const m = new MeshBuilder('timber');
   const c: Vec3 = [TIMBER[0] * 0.8, TIMBER[1] * 0.8, TIMBER[2] * 0.8];
   const ring: number[] = [];
-  const n = 24;
+  const n = 2 * D.round;
+  const lap = D.laps ? LAP : 0;
   for (let i = 0; i <= n; i++) {
     const p = section(0, i / n);
-    ring.push(m.vertex([p[0] + LAP, p[1], p[2]], c));
+    ring.push(m.vertex([p[0] + lap, p[1], p[2]], c));
   }
   for (let i = n; i >= 0; i--) {
     const p = section(0, i / n);
@@ -246,7 +305,7 @@ const DECK = srgb(0.8, 0.62, 0.4);
 
 function deck(): MeshBuilder {
   const m = new MeshBuilder('deck');
-  const us = [...stations, uAt(COCKPIT_FORE), uAt(COCKPIT_AFT)].sort((a, b) => a - b);
+  const us = [...stations(), uAt(COCKPIT_FORE), uAt(COCKPIT_AFT)].sort((a, b) => a - b);
   const planks = Math.ceil(HALF_BEAM / PLANK - 0.5);
   for (let j = -planks; j <= planks; j++) {
     const x0 = (j - 0.5) * PLANK;
@@ -350,10 +409,10 @@ function cockpit(m: MeshBuilder): void {
 function rubrails(m: MeshBuilder): void {
   const c: Vec3 = [TIMBER[0] * 0.6, TIMBER[1] * 0.6, TIMBER[2] * 0.6];
   for (const s of [1, -1]) {
-    const path: Vec3[] = stations
+    const path: Vec3[] = stations()
       .filter((u) => u < 0.985)
       .map((u) => [s * (halfBeam(u) + 0.006), sheer(u) - 0.012, zAt(u)]);
-    m.tube(path, [0.017], 6, c);
+    m.tube(path, [0.017], D.small ? 6 : 3, c);
   }
 }
 
@@ -365,7 +424,7 @@ const MAST_TOP = rig.boomHeight + rig.luff + 0.1;
 
 function mast(): MeshBuilder {
   const m = new MeshBuilder('spar');
-  const n = 8;
+  const n = D.mastStations;
   const path: Vec3[] = [];
   const radii: number[] = [];
   for (let i = 0; i <= n; i++) {
@@ -373,7 +432,7 @@ function mast(): MeshBuilder {
     path.push([0, mastFootY - 0.02 + t * (MAST_TOP - mastFootY + 0.02), 0]);
     radii.push(0.04 - 0.015 * t * t);
   }
-  m.tube(path, radii, 12);
+  m.tube(path, radii, D.round);
   return m;
 }
 
@@ -385,7 +444,7 @@ function boom(): MeshBuilder {
       [0, 0, rig.foot + 0.08],
     ],
     [0.026],
-    10,
+    D.small ? 10 : 4,
   );
   return m;
 }
@@ -399,14 +458,12 @@ function vang(): MeshBuilder {
       [0, mastFootY + 0.08 - rig.boomHeight, 0.05],
     ],
     [0.008],
-    5,
+    D.small ? 5 : 3,
   );
   return m;
 }
 
 const ROACH = 0.2;
-const SAIL_ROWS = 24;
-const SAIL_COLS = 10;
 
 /**
  * The sail, flat in the centreline plane at rest: the luff up the mast's
@@ -418,12 +475,12 @@ const SAIL_COLS = 10;
 function sail(): MeshBuilder {
   const m = new MeshBuilder('flax');
   const rows: number[][] = [];
-  for (let i = 0; i <= SAIL_ROWS; i++) {
-    const v = i / SAIL_ROWS;
+  for (let i = 0; i <= D.sailRows; i++) {
+    const v = i / D.sailRows;
     const chord = chordAt(v);
     const row: number[] = [];
-    for (let j = 0; j <= SAIL_COLS; j++) {
-      const u = j / SAIL_COLS;
+    for (let j = 0; j <= D.sailCols; j++) {
+      const u = j / D.sailCols;
       const along = u * Math.max(chord, 0.01);
       const k = m.vertex(
         [0, 0.03 + v * rig.luff, 0.04 + along],
@@ -436,7 +493,7 @@ function sail(): MeshBuilder {
     }
     rows.push(row);
   }
-  for (let i = 0; i < SAIL_ROWS; i++) {
+  for (let i = 0; i < D.sailRows; i++) {
     m.strip(rows[i] as number[], rows[i + 1] as number[], true);
   }
   return m;
@@ -537,7 +594,7 @@ function blade(
   z1: number,
   thick: number,
 ): void {
-  const n = 10;
+  const n = D.small ? 10 : 3;
   const ring = (y: number): number[] => {
     const out: number[] = [];
     for (let i = 0; i <= n * 2; i++) {
@@ -600,7 +657,7 @@ function tiller(): MeshBuilder {
       [0, 0.08, -1.05],
     ],
     [0.022, 0.019, 0.015],
-    8,
+    D.small ? 8 : 3,
   );
   return m;
 }
@@ -657,77 +714,116 @@ function gooseneck(): MeshBuilder {
 
 // --- The model ---------------------------------------------------------------
 
-const hullMesh = planking();
-hullMesh.append(transom());
-const rails = new MeshBuilder('timber');
-rails.append(hullMesh);
-rubrails(rails);
-const deckMesh = deck();
-cockpit(deckMesh);
+/** The far model's deck: plain, a few strips across, no cockpit. */
+function plainDeck(): MeshBuilder {
+  const m = new MeshBuilder('deck');
+  const across = [-1, -0.5, 0, 0.5, 1];
+  let prev: number[] | null = null;
+  for (const u of stations()) {
+    const b = halfBeam(u);
+    if (b < 1e-4) {
+      continue;
+    }
+    const row = across.map((f) => m.vertex([f * b, deckY(f * b, u), zAt(u)], DECK, [f * b, u]));
+    if (prev !== null) {
+      m.strip(prev, row);
+    }
+    prev = row;
+  }
+  return m;
+}
 
-const nodes: NodeDef[] = [
-  {
-    name: 'hull',
-    primitives: [
-      rails.primitive({ colors: true }),
-      deckMesh.primitive({ colors: true }),
-      fittings().primitive(),
-    ],
-  },
-  { name: 'mast', translation: [0, 0, MAST_Z], primitives: [mast().primitive()] },
-  {
-    name: 'boom',
-    translation: [0, rig.boomHeight, MAST_Z],
-    primitives: [boom().primitive(), gooseneck().primitive()],
-    children: [{ name: 'vang', primitives: [vang().primitive()] }],
-  },
-  {
-    name: 'sail',
-    translation: [0, rig.boomHeight, MAST_Z],
-    primitives: [sail().primitive({ uvs2: true })],
-  },
-  {
-    name: 'telltales',
-    translation: [0, rig.boomHeight, MAST_Z],
-    primitives: [telltales().primitive({ uvs2: true, colors: true })],
-  },
-  {
-    name: 'pennant',
-    translation: [0, MAST_TOP, MAST_Z],
-    primitives: [pennant().primitive({ uvs2: true })],
-  },
-  {
-    name: 'rudder',
-    translation: [0, 0, foils.rudderPosition],
-    primitives: [rudder().primitive()],
-    children: [
+/** The boat's nodes at the detail in force. */
+function model(): NodeDef[] {
+  const hullMesh = planking();
+  hullMesh.append(transom());
+  const rails = new MeshBuilder('timber');
+  rails.append(hullMesh);
+  rubrails(rails);
+  let deckMesh: MeshBuilder;
+  if (D.plankedDeck) {
+    deckMesh = deck();
+    cockpit(deckMesh);
+  } else {
+    deckMesh = plainDeck();
+  }
+  const hullParts = [rails.primitive({ colors: true }), deckMesh.primitive({ colors: true })];
+  const boomParts = [boom().primitive()];
+  if (D.small) {
+    hullParts.push(fittings().primitive());
+    boomParts.push(gooseneck().primitive());
+  }
+  const nodes: NodeDef[] = [
+    { name: 'hull', primitives: hullParts },
+    { name: 'mast', translation: [0, 0, MAST_Z], primitives: [mast().primitive()] },
+    {
+      name: 'boom',
+      translation: [0, rig.boomHeight, MAST_Z],
+      primitives: boomParts,
+      children: [{ name: 'vang', primitives: [vang().primitive()] }],
+    },
+    {
+      name: 'sail',
+      translation: [0, rig.boomHeight, MAST_Z],
+      primitives: [sail().primitive({ uvs2: true })],
+    },
+  ];
+  if (D.small) {
+    nodes.push(
       {
-        name: 'tiller',
-        translation: [0, RUDDER_HEAD - 0.02, 0],
-        primitives: [tiller().primitive()],
+        name: 'telltales',
+        translation: [0, rig.boomHeight, MAST_Z],
+        primitives: [telltales().primitive({ uvs2: true, colors: true })],
       },
-    ],
-  },
-  {
-    name: 'daggerboard',
-    translation: [0, 0, -foils.boardPosition],
-    primitives: [daggerboard().primitive()],
-  },
-  // Where the sailor sits: on the side deck by the cockpit, at the seated height.
-  {
-    name: 'sailor',
-    translation: [0, hull.centreOfGravity + sailor.sailorSeatHeight, COCKPIT_FORE + 0.6],
-  },
-];
+      {
+        name: 'pennant',
+        translation: [0, MAST_TOP, MAST_Z],
+        primitives: [pennant().primitive({ uvs2: true })],
+      },
+    );
+  }
+  nodes.push(
+    {
+      name: 'rudder',
+      translation: [0, 0, foils.rudderPosition],
+      primitives: [rudder().primitive()],
+      children: [
+        {
+          name: 'tiller',
+          translation: [0, RUDDER_HEAD - 0.02, 0],
+          primitives: [tiller().primitive()],
+        },
+      ],
+    },
+    {
+      name: 'daggerboard',
+      translation: [0, 0, -foils.boardPosition],
+      primitives: [daggerboard().primitive()],
+    },
+    // Where the sailor sits: on the side deck by the cockpit, at the seated height.
+    {
+      name: 'sailor',
+      translation: [0, hull.centreOfGravity + sailor.sailorSeatHeight, COCKPIT_FORE + 0.6],
+    },
+  );
+  return nodes;
+}
 
-const raw = writeGlb([{ name: 'boat', children: nodes }], materials);
 mkdirSync('.dev/art', { recursive: true });
-writeFileSync('.dev/art/jolly-boat.raw.glb', raw);
-execFileSync(
-  'client/node_modules/.bin/gltfpack',
-  ['-i', '.dev/art/jolly-boat.raw.glb', '-o', `art/${MODEL}`, '-c', '-kn', '-km', '-kv', '-noq'],
-  { stdio: 'inherit' },
-);
+for (const [detail, path] of [
+  [NEAR, MODEL],
+  [FAR, FAR_MODEL],
+] as const) {
+  D = detail;
+  const raw = writeGlb([{ name: 'boat', children: model() }], materials);
+  const name = path.replace(/^boats\//, '').replace(/\.glb$/, '');
+  writeFileSync(`.dev/art/${name}.raw.glb`, raw);
+  execFileSync(
+    'client/node_modules/.bin/gltfpack',
+    ['-i', `.dev/art/${name}.raw.glb`, '-o', `art/${path}`, '-c', '-kn', '-km', '-kv', '-noq'],
+    { stdio: 'inherit' },
+  );
+}
 process.stdout.write(
-  `wrote art/${MODEL}: bow ${BOW_Z.toFixed(2)} m, transom ${TRANSOM_Z.toFixed(2)} m\n`,
+  `wrote art/${MODEL} and art/${FAR_MODEL}: bow ${BOW_Z.toFixed(2)} m, transom ${TRANSOM_Z.toFixed(2)} m\n`,
 );

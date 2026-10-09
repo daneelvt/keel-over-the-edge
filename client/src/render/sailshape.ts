@@ -36,6 +36,9 @@ export interface SailUniforms {
   time: UniformNode<'float', number>;
 }
 
+/** The sail's shape's inputs as nodes: the own boat's uniforms, or another boat's per-instance values. */
+export type SailInputs = { [K in keyof SailUniforms]: Node<'float'> };
+
 export function sailUniforms(): SailUniforms {
   return {
     boom: uniform(0),
@@ -74,7 +77,7 @@ function turn(
  * Builds nodes for use inside a vertex function.
  */
 export function sailPoint(
-  t: SailUniforms,
+  t: SailInputs,
   along: Node<'float'>,
   fu: Node<'float'>,
   fv: Node<'float'>,

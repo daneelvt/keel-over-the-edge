@@ -8,3 +8,4 @@ sailors:
     name: Stand-in
     art:
       model: sailors/stand-in.glb
+      far: sailors/stand-in.far.glb

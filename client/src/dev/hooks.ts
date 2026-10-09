@@ -31,6 +31,7 @@ import {
 } from 'three/tsl';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
 import type { BoatDriver } from '../game/driver';
+import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
 import type { Online } from '../net/online';
 import { hexAt, hexCentre, NEIGHBOURS, TILE_APOTHEM, TILE_RADIUS, tileHash } from '../ocean/hex';
@@ -727,6 +728,83 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Takes the boat back from another device. */
     takeOver(): void {
       sailing.online?.takeOver();
+    },
+
+    /**
+     * Draws boats in the fleet as given, from now on; null stops. Fields
+     * left out are 0, but opacity 1 (the sandbox's pictures).
+     */
+    setFleet(boats: Partial<DrawnBoat>[] | null): void {
+      if (boats === null) {
+        world.fleetSource = null;
+        return;
+      }
+      const drawn = boats.map((b, i) => ({ ...newDrawnBoat(), slot: i, opacity: 1, ...b }));
+      world.fleetSource = { drawn, count: drawn.length };
+    },
+    /** Hides or shows the own boat's telltales and pennant, which the fleet does not draw. */
+    hideSmallParts(on: boolean): void {
+      for (const name of ['telltales', 'pennant']) {
+        const part = world.boat?.parts.get(name);
+        if (part !== undefined) {
+          part.visible = !on;
+        }
+      }
+    },
+    /** Fleet materials that would sort or fade otherwise than dithered: none, if all is well. */
+    fleetMaterials(): string[] {
+      const problems: string[] = [];
+      for (const level of [world.fleet.near, world.fleet.far]) {
+        for (const m of level.meshes) {
+          const material = m.material as { name: string; alphaHash: boolean; transparent: boolean };
+          if (!material.alphaHash || material.transparent) {
+            problems.push(`${material.name}: not dithered, or transparent`);
+          }
+        }
+      }
+      return problems;
+    },
+    /** Shows or hides the player's own boat. */
+    showOwnBoat(on: boolean): void {
+      if (world.boat !== null) {
+        world.boat.root.visible = on;
+      }
+    },
+    /** The fleet's draw calls and triangles as last drawn, and its boats by level. */
+    fleetBudget() {
+      return {
+        ...world.fleet.budget(),
+        near: world.fleet.near.count,
+        far: world.fleet.far.count,
+        nearMeshes: world.fleet.near.meshes.length,
+        farMeshes: world.fleet.far.meshes.length,
+      };
+    },
+    /** The other boats as the page draws them online, with the fleet's numbers. */
+    fleet() {
+      const o = sailing.online;
+      if (o === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      const f = o.fleet;
+      return {
+        stats: { ...f.stats },
+        nearTick: f.near.tick,
+        farTick: f.far.tick,
+        boats: f.drawn.slice(0, f.count).map((b) => ({ ...b })),
+      };
+    },
+    /** The player's own boat as predicted for tick, if still kept: its position and heading. */
+    ownAt(tick: number): { east: number; north: number; heading: number } | null {
+      const st = sailing.predictor?.stateAt(tick) ?? null;
+      if (st === null) {
+        return null;
+      }
+      return {
+        east: st[RECORDS.state.x] ?? 0,
+        north: st[RECORDS.state.y] ?? 0,
+        heading: st[RECORDS.state.heading] ?? 0,
+      };
     },
 
     /** Resolves after n frames of the frame loop. */
