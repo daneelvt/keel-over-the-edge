@@ -138,7 +138,7 @@ func (p *Page) serve(w http.ResponseWriter, r *http.Request, name, cache string)
 	h := w.Header()
 	h.Set("X-Content-Type-Options", "nosniff")
 	f, ok := p.files[name]
-	if !ok || !servable(path.Base(name)) {
+	if !ok {
 		writeError(w, http.StatusNotFound, "not-found")
 		return
 	}

@@ -121,6 +121,14 @@ func (c *cluster) deployGame(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// The rules before the build, which takes longer; apply checks them too.
+	objs, err := objects(rm)
+	if err != nil {
+		return err
+	}
+	if err := checkRules(objs, true); err != nil {
+		return fmt.Errorf("clusters/local/apps: %w", err)
+	}
 	if err := c.buildImage(ctx, build); err != nil {
 		return err
 	}

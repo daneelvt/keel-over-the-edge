@@ -25,19 +25,16 @@ import (
 // install, the configuration of those and of k3s's own, and the game.
 var entryPoints = []string{"flux-system", "clusters/local/controllers", "clusters/local/configs", "clusters/local/apps"}
 
-// The names the manifests give the game's parts.
+// The names the manifests give the game's parts; localImage is the game's
+// image as the local cluster names it, imported rather than pulled.
 const (
-	gameImage   = "ghcr.io/daneelvt/keel"
 	localImage  = "keel"
 	namespace   = "keel"
 	deployment  = "keel"
 	gatewayName = "keel"
-	// defaultHost is the players' host clusters/local names; a deploy
-	// replaces it with the Mac's own.
-	defaultHost = "macbook.local"
 )
 
-// deployment is what a deploy puts into the local entry point: the image's
+// deploy is what a deploy puts into the local entry point: the image's
 // tag, the players' host, and keel's scripted sailors, if any.
 type deploy struct {
 	build, host, sailors string

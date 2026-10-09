@@ -167,6 +167,10 @@ func TestNoSecretInInfra(t *testing.T) {
 	}
 }
 
+// defaultHost is the players' host clusters/local names; a deploy replaces
+// it with the Mac's own.
+const defaultHost = "macbook.local"
+
 // TestAppsNameNoHost: only clusters/ names the players' host.
 func TestAppsNameNoHost(t *testing.T) {
 	err := filepath.WalkDir(filepath.Join(repoCluster, "apps"), func(p string, d fs.DirEntry, err error) error {
