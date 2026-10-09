@@ -28,4 +28,13 @@ const net = new NetWorker({
   random: Math.random,
 });
 
-scope.onmessage = (ev: MessageEvent<ToWorker>) => net.handle(ev.data);
+scope.onmessage = (ev: MessageEvent<ToWorker>) => {
+  // Only the page that started a dedicated worker can post to it, through
+  // the worker's own port, whose messages carry an empty origin (HTML
+  // Standard, "message port post message steps"). Anything else is not the
+  // page's, and is ignored.
+  if (ev.origin !== '' && ev.origin !== scope.location.origin) {
+    return;
+  }
+  net.handle(ev.data);
+};
