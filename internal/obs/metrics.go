@@ -80,14 +80,15 @@ type Metrics struct {
 
 	Grace *prometheus.CounterVec // by result: started, rejoined, expired
 
-	LeaseEpoch    prometheus.Gauge
-	LeaseWait     prometheus.Gauge
-	LeaseLost     *prometheus.CounterVec // by outcome: retaken, lost, fenced
-	Restores      *prometheus.CounterVec // by result
-	RestoredBoats prometheus.Gauge
-	RestoreGap    prometheus.Gauge
-	PersistBatch  prometheus.Histogram
-	PersistWrites *prometheus.CounterVec // by result: ok, failed, fenced
+	LeaseEpoch        prometheus.Gauge
+	LeaseWait         prometheus.Gauge
+	LeaseLost         *prometheus.CounterVec // by outcome: retaken, lost, fenced
+	Restores          *prometheus.CounterVec // by result
+	RestoredBoats     prometheus.Gauge
+	RestoreGap        prometheus.Gauge
+	PersistBatch      prometheus.Histogram
+	PersistCheckpoint prometheus.Histogram
+	PersistWrites     *prometheus.CounterVec // by result: ok, failed, fenced
 
 	EdgeConnections     prometheus.Gauge
 	EdgeUpgrades        *prometheus.CounterVec // by result
@@ -283,6 +284,9 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.PersistBatch = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "keel_persist_batch_duration_seconds", Help: "How long writing each batch of the world's events and checkpoint took.", Buckets: DBBuckets,
 	})
+	m.PersistCheckpoint = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_persist_checkpoint_duration_seconds", Help: "How long writing each batch that held a checkpoint took.", Buckets: DBBuckets,
+	})
 	m.PersistWrites = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_persist_batches_total", Help: "Batches of the world's events and checkpoint, by result: ok, failed (tried again) or fenced.",
 	}, []string{"result"})
@@ -295,7 +299,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	for _, r := range []string{"ok", "failed", "fenced"} {
 		m.PersistWrites.WithLabelValues(r)
 	}
-	reg.MustRegister(m.LeaseEpoch, m.LeaseWait, m.LeaseLost, m.Restores, m.RestoredBoats, m.RestoreGap, m.PersistBatch, m.PersistWrites)
+	reg.MustRegister(m.LeaseEpoch, m.LeaseWait, m.LeaseLost, m.Restores, m.RestoredBoats, m.RestoreGap, m.PersistBatch, m.PersistCheckpoint, m.PersistWrites)
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame,
 		m.EdgeEncoders, m.EdgeQueued, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)

@@ -132,7 +132,7 @@ type Persist struct {
 
 // metrics are the writer's, resolved once; nil without obs.Metrics.
 type metrics struct {
-	batch                           prometheus.Observer
+	batch, checkpoint               prometheus.Observer
 	ok, failed, fenced, leaseFenced prometheus.Counter
 }
 
@@ -166,7 +166,7 @@ func New(cfg Config) *Persist {
 	}
 	if m := cfg.Metrics; m != nil {
 		p.m = metrics{
-			batch: m.PersistBatch, ok: m.PersistWrites.WithLabelValues("ok"), failed: m.PersistWrites.WithLabelValues("failed"),
+			batch: m.PersistBatch, checkpoint: m.PersistCheckpoint, ok: m.PersistWrites.WithLabelValues("ok"), failed: m.PersistWrites.WithLabelValues("failed"),
 			fenced: m.PersistWrites.WithLabelValues("fenced"), leaseFenced: m.LeaseLost.WithLabelValues("fenced"),
 		}
 	}
@@ -399,7 +399,11 @@ func (p *Persist) write(ctx context.Context) error {
 	err := p.cfg.Store.Write(ctx, b)
 	m := p.m
 	if m.batch != nil {
-		m.batch.Observe(time.Since(start).Seconds())
+		d := time.Since(start).Seconds()
+		m.batch.Observe(d)
+		if b.Checkpoint != nil {
+			m.checkpoint.Observe(d)
+		}
 	}
 	switch {
 	case err == nil:
