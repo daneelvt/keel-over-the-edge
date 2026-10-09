@@ -33,6 +33,7 @@ import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webg
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
+import { nowUs, worldUs } from '../net/clock';
 import type { Online } from '../net/online';
 import { hexAt, hexCentre, NEIGHBOURS, TILE_APOTHEM, TILE_RADIUS, tileHash } from '../ocean/hex';
 import { tileHashNode, tileIdentity } from '../ocean/seamaterial';
@@ -793,6 +794,115 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         farTick: f.far.tick,
         boats: f.drawn.slice(0, f.count).map((b) => ({ ...b })),
       };
+    },
+    /**
+     * Watches the other boats for n frames online: how many frames drew a
+     * near boat held or carried on past its data, the largest step a boat
+     * took between two frames, and the steps over half a metre (a
+     * correction drawn at once rather than eased). Held frames come in
+     * spells; a spell in which no snapshot came for over 900 ms is a
+     * retransmission timeout's (the probe lost too: RFC 6298), longer than
+     * any delay covers, and counted apart.
+     */
+    fleetWatch(n: number): Promise<{
+      frames: number;
+      nearFrames: number;
+      held: number;
+      extrapolated: number;
+      largestStep: number;
+      jumps: number;
+      nearDelay: number;
+      farDelay: number;
+      holds: { past: number; since: number; delay: number }[];
+      timeoutHeld: number;
+      spells: number[];
+    }> {
+      const o = sailing.online;
+      if (o === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      const f = o.fleet;
+      const last = new Map<number, { east: number; north: number }>();
+      const r = {
+        frames: 0,
+        nearFrames: 0,
+        held: 0,
+        extrapolated: 0,
+        largestStep: 0,
+        jumps: 0,
+        nearDelay: 0,
+        farDelay: 0,
+        holds: [] as { past: number; since: number; delay: number }[],
+        timeoutHeld: 0,
+        spells: [] as number[],
+      };
+      // The spell of held frames running, and the longest wait for a
+      // snapshot in it, ms.
+      let spell = 0;
+      let longest = 0;
+      return new Promise((resolve) => {
+        const prev = world.onFrame;
+        world.onFrame = () => {
+          prev?.();
+          r.frames++;
+          let near = false;
+          let held = false;
+          let carried = false;
+          const seen = new Set<number>();
+          for (let i = 0; i < f.count; i++) {
+            const b = f.drawn[i] as DrawnBoat;
+            if (b.slot < 0 || b.far > 0.5) {
+              continue;
+            }
+            near = true;
+            if (b.motion === 2 && r.holds.length < 40) {
+              r.holds.push({
+                past: b.tick - b.newest,
+                since: (worldUs(o.clock, nowUs()) - f.arrived) / 1000,
+                delay: f.stats.nearDelay,
+              });
+            }
+            held ||= b.motion === 2;
+            carried ||= b.motion === 1;
+            seen.add(b.slot);
+            const l = last.get(b.slot);
+            if (l !== undefined) {
+              const step = Math.hypot(b.east - l.east, b.north - l.north);
+              r.largestStep = Math.max(r.largestStep, step);
+              if (step > 0.5) {
+                r.jumps++;
+              }
+            }
+            last.set(b.slot, { east: b.east, north: b.north });
+          }
+          for (const slot of last.keys()) {
+            if (!seen.has(slot)) {
+              last.delete(slot);
+            }
+          }
+          r.nearFrames += near ? 1 : 0;
+          r.held += held ? 1 : 0;
+          if (held) {
+            spell++;
+            longest = Math.max(longest, (worldUs(o.clock, nowUs()) - f.arrived) / 1000);
+          }
+          if (spell > 0 && (!held || r.frames >= n)) {
+            if (longest > 900) {
+              r.timeoutHeld += spell;
+            }
+            r.spells.push(spell);
+            spell = 0;
+            longest = 0;
+          }
+          r.extrapolated += carried ? 1 : 0;
+          r.nearDelay = Math.max(r.nearDelay, f.stats.nearDelay);
+          r.farDelay = Math.max(r.farDelay, f.stats.farDelay);
+          if (r.frames >= n) {
+            world.onFrame = prev;
+            resolve(r);
+          }
+        };
+      });
     },
     /** The player's own boat as predicted for tick, if still kept: its position and heading. */
     ownAt(tick: number): { east: number; north: number; heading: number } | null {

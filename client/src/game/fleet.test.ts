@@ -212,9 +212,9 @@ describe('the fleet', () => {
     for (let i = 1; i < ticks.length; i++) {
       expect((ticks[i] ?? 0) - (ticks[i - 1] ?? 0)).toBeGreaterThanOrEqual(0);
     }
-    // Then 20 s of steady arrivals.
+    // Then 40 s of steady arrivals, longer than the lateness's window.
     const last = arrivals.at(-1)?.[0] ?? 0;
-    for (let k = 1; k <= 300; k++) {
+    for (let k = 1; k <= 600; k++) {
       const tick = last + 2 * k;
       world = tick * TICK_US + 100_000;
       fleet.add(record(tick, [{ slot: 0 }]), world);

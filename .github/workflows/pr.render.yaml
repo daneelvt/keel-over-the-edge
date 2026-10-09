@@ -9,7 +9,7 @@
 # Each back end runs in jobs of its own, and the tests tagged @long (minutes
 # each on SwiftShader) apart from the rest, so the four run side by side.
 # The game connection's upgrade from a worker is also tried on WebKit; and,
-# where the runner's kernel has sch_netem, the slow-network test runs once
+# where the runner's kernel has sch_netem, the slow-network tests run once
 # through real TCP loss as well as through tools/lag's model of it.
 name: pr.render
 
@@ -229,12 +229,12 @@ jobs:
           sudo tc qdisc add dev lo parent 1:4 handle 40: netem delay 100ms loss 2%
           sudo tc filter add dev lo protocol ip parent 1:0 prio 1 u32 match ip dport 18080 0xffff flowid 1:4
           sudo tc filter add dev lo protocol ip parent 1:0 prio 1 u32 match ip sport 18080 0xffff flowid 1:4
-      - name: The slow-network test, through netem
+      - name: The slow-network tests, through netem
         if: steps.netem.outputs.ok == 'true'
         working-directory: client
         env:
           KEEL_LAG_BASE: http://localhost:5181
-        run: npx --no-install playwright test e2e/lag.spec.ts --project webgl2
+        run: npx --no-install playwright test e2e/lag.spec.ts e2e/together.spec.ts --project webgl2
 
   pr-render:
     name: pr-render

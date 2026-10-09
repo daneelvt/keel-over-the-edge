@@ -117,6 +117,9 @@ jobs:
       - name: Fuzz the decoding of what a game client sends
         if: runner.arch == 'X64'
         run: go test -run '^$' -fuzz FuzzDecodeClient -fuzztime 30s ./internal/protocol
+      - name: Fuzz the decoding of the other boats' views
+        if: runner.arch == 'X64'
+        run: go test -run '^$' -fuzz FuzzApplyEntries -fuzztime 30s ./internal/protocol
 
   client:
     name: client
@@ -134,6 +137,11 @@ jobs:
         run: go run ./tools/physics
       - working-directory: client
         run: npx --no-install vitest run
+      - name: Fuzz the page's decoding of the other boats' views
+        working-directory: client
+        env:
+          KEEL_FUZZ_SECONDS: "30"
+        run: npx --no-install vitest run src/net/view.fuzz.test.ts
       - name: Build (checks the licences of bundled packages)
         working-directory: client
         run: npx --no-install vite build

@@ -35,8 +35,26 @@ export const FADE = 15;
 export const BAND_CHANGE = 30;
 /** The render tick runs at most this much faster or slower than real time. */
 export const SLEW = 0.1;
-/** The lateness of the snapshots of the last this many ticks sets the delays: 10 s. */
-export const LATENESS_WINDOW = 300;
+/**
+ * The lateness of the snapshots of the last this many ticks sets the
+ * delays: 30 s. At 2% loss a stall comes every 3 s or so, but now and
+ * then not for 10 s, after which a shorter window would have shrunk the
+ * delay just before the next.
+ */
+export const LATENESS_WINDOW = 900;
+/**
+ * The most a band's delay grows with the lateness's spread, as a multiple
+ * of its base. At 200 ms and 2% loss, TCP holds a snapshot behind a lost
+ * segment for about 400 ms (RFC 8985's probe timeout): double the near
+ * band's delay and the extrapolation cover it.
+ */
+export const DELAY_CAP = 2;
+/**
+ * The lateness's spread is its SPREAD-quantile less its least: the 99th
+ * percentile, since a stall holds only the few snapshots behind a lost
+ * segment, some 6 of the 450 a 30 s window holds.
+ */
+export const SPREAD = 0.99;
 /** A render tick further than this from where it should be is set at once, ticks. */
 const JUMP = 30;
 
@@ -82,8 +100,9 @@ export interface DrawnBoat {
   /** 0 near … 1 far: where its delay is between the bands'. */
   far: number;
   motion: number;
-  /** The render tick it was drawn at. */
+  /** The render tick it was drawn at, and its newest sample's. */
   tick: number;
+  newest: number;
 }
 
 /** A drawn boat at the origin, faded out. */
@@ -104,6 +123,7 @@ export function newDrawnBoat(): DrawnBoat {
     far: 0,
     motion: 0,
     tick: 0,
+    newest: 0,
   };
 }
 
@@ -178,6 +198,7 @@ class Boat {
     out.kind = this.kind;
     out.tick = rt;
     const newest = this.at(0, F.tick);
+    out.newest = newest;
     if (this.count === 1 || rt <= this.at(this.count - 1, F.tick)) {
       // Before the oldest sample, or only one: that sample.
       const i = this.count === 1 || rt > newest ? 0 : this.count - 1;
@@ -254,7 +275,7 @@ class Band {
 
   /** Moves the render tick dt ticks on, toward data − delay, never back. */
   advance(data: number, spread: number, dt: number): void {
-    this.delay = this.base + Math.min(Math.max(spread, 0), this.base);
+    this.delay = this.base + Math.min(Math.max(spread, 0), (DELAY_CAP - 1) * this.base);
     const target = data - this.delay;
     if (Number.isNaN(this.tick) || target - this.tick > JUMP || this.tick - target > 3 * JUMP) {
       this.tick = target;
@@ -293,9 +314,9 @@ export class Fleet {
   readonly near = new Band(NEAR_DELAY);
   readonly far = new Band(FAR_DELAY);
   /** The snapshots' lateness, µs, and the world ticks they came at: the last LATENESS_WINDOW's. */
-  readonly #late = new Float64Array(512);
-  readonly #lateAt = new Float64Array(512);
-  readonly #sorted = new Float64Array(512);
+  readonly #late = new Float64Array(1024);
+  readonly #lateAt = new Float64Array(1024);
+  readonly #sorted = new Float64Array(1024);
   #lateN = 0;
   #lateNext = 0;
   /** The least and the spread of the lateness, µs. */
@@ -304,6 +325,8 @@ export class Fleet {
   #entries = 0;
   #entriesAt = 0;
   #entriesRate = 0;
+  /** World time the latest snapshot came at, µs. */
+  arrived = 0;
 
   /** The boats drawn this frame: drawn[0 … count). */
   readonly drawn: DrawnBoat[] = Array.from({ length: 2 * VIEW_SLOTS }, newDrawnBoat);
@@ -326,6 +349,7 @@ export class Fleet {
    */
   add(f: Float64Array, arrived: number): void {
     const tick = f[FLEET_META.tick] ?? 0;
+    this.arrived = arrived;
     this.#lateness(arrived - tick * TICK_US, arrived / TICK_US);
     for (let i = 0; i < VIEW_SLOTS; i++) {
       const o = slotAt(i);
@@ -469,7 +493,7 @@ export class Fleet {
     }
     const v = this.#sorted.subarray(0, n).sort();
     this.#least = v[0] ?? late;
-    this.#spread = (v[Math.min(n - 1, Math.ceil(0.95 * n) - 1)] ?? late) - this.#least;
+    this.#spread = (v[Math.min(n - 1, Math.ceil(SPREAD * n) - 1)] ?? late) - this.#least;
   }
 }
 
@@ -489,4 +513,5 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.far = a.far;
   b.motion = a.motion;
   b.tick = a.tick;
+  b.newest = a.newest;
 }
