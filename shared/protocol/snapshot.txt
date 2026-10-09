@@ -23,7 +23,7 @@ the client must still hold. After the kind byte, little-endian, a header of
 159 bytes (160 with the kind byte), then the entries:
 
   offset  bytes  field
-       0      1  layout: 2
+       0      1  layout: 3
        1      8  tick (int64)
        9      2  base: how many ticks before this one the base snapshot is
                  (uint16); 0 for none: the view starts empty
@@ -44,7 +44,7 @@ the client must still hold. After the kind byte, little-endian, a header of
      158      1  entries that follow, 0 … 128
      159      …  the entries
 
-A layout byte other than 2 is refused.
+A layout byte other than 3 is refused.
 
 The view
 --------
@@ -58,9 +58,10 @@ connection's own numbering. A view slot's boat is:
   x, y       position, cm east and north of the world's centre, each
              within a signed 24-bit integer
   heading    uint16, 2π/65536 rad a step, clockwise from north
-  heel       int8, π/128 rad a step, positive starboard down
-  boom       int8, π/128 rad a step, positive to starboard
-  rudder     int8, π/128 rad a step, positive turning the bow to starboard
+  heel       int16, 2π/65536 rad a step, positive starboard down
+  boom       int16, 2π/65536 rad a step, positive to starboard
+  rudder     int16, 2π/65536 rad a step, positive turning the bow to
+             starboard
   sailor     int8, the sailor's offset in cm, positive to starboard
   sail       the sail byte: the sailor's flattening in bits 0–3 (0 … 15
              for 0 … 1), the foot strip's flow in bits 4–5 and the head
@@ -82,7 +83,7 @@ bits 6–7. Applied in order to the base's view:
                  the others as an enter has them. The slot must hold a
                  boat, and the mask must not be 0.
   op 1  enter    a boat in full: kind (uvarint), flags (1), x and y (int24
-                 each), heading (2), heel, boom, rudder, sailor (1 each),
+                 each), heading, heel, boom, rudder (2 each), sailor (1),
                  sail (1). An enter on a slot that holds a boat replaces it.
   op 2  leave    nothing more: the slot's boat leaves the view. The slot
                  must hold a boat.
