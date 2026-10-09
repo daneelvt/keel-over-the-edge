@@ -245,15 +245,6 @@ export class Predictor implements BoatDriver {
     o.heading *= k;
   }
 
-  /** The state predicted for tick, or null if it is not among the ticks kept (the tests). */
-  stateAt(tick: number): Float64Array | null {
-    const i = tick % RING;
-    if (this.#ticks[i] !== tick) {
-      return null;
-    }
-    return this.#ring.slice(i * N, i * N + N);
-  }
-
   /** The 95th percentile of the recent corrections' distances. */
   p95(): number {
     if (this.sizes.length === 0) {

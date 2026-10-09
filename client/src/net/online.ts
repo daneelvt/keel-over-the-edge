@@ -13,6 +13,7 @@
 import { signal } from '@preact/signals';
 import { Fleet } from '../game/fleet';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
+import { RECORDS } from '../predict/layout.gen';
 import {
   helmIndex,
   helmOf,
@@ -65,6 +66,8 @@ export interface Place {
 }
 
 const EPSILON = 1e-9;
+/** How many snapshots' own boat are kept for ownAt (the tests). */
+const OWN_KEPT = 64;
 /** How often the frame time is sent, µs. */
 const FRAME_EVERY = 2_000_000;
 
@@ -79,6 +82,9 @@ export class Online {
   readonly fleet = new Fleet();
   /** The latest snapshots' sizes, bytes, for the panel. */
   snapshotBytes = 0;
+  /** The last OWN_KEPT snapshots' own boat, as the server had it: tick, east, north, heading. */
+  readonly #own = new Float64Array(OWN_KEPT * 4).fill(Number.NaN);
+  #ownNext = 0;
   readonly ahead = new Ahead();
   clock: ClockState = newClockState();
   boat = 0;
@@ -231,6 +237,12 @@ export class Online {
     this.#latest.windFrom = sn.windFrom;
     this.#latest.state.set(sn.state);
     this.#haveLatest = true;
+    const k = this.#ownNext * 4;
+    this.#own[k] = sn.tick;
+    this.#own[k + 1] = sn.state[RECORDS.state.x] ?? 0;
+    this.#own[k + 2] = sn.state[RECORDS.state.y] ?? 0;
+    this.#own[k + 3] = sn.state[RECORDS.state.heading] ?? 0;
+    this.#ownNext = (this.#ownNext + 1) % OWN_KEPT;
     if (this.#predictor.started) {
       this.#ready();
     }
@@ -246,6 +258,39 @@ export class Online {
       this.fleet.add(f, worldUs(this.clock, f[FLEET_META.received] ?? now));
     }
     this.#port.postMessage({ type: 'return', data }, [data]);
+  }
+
+  /**
+   * The own boat as the server had it at tick, between the snapshots
+   * either side of it among the last few, or null (the tests).
+   */
+  ownAt(tick: number): { east: number; north: number; heading: number } | null {
+    let lo = -1;
+    let hi = -1;
+    for (let i = 0; i < OWN_KEPT; i++) {
+      const t = this.#own[i * 4] ?? Number.NaN;
+      if (t <= tick && (lo < 0 || t > (this.#own[lo * 4] ?? 0))) {
+        lo = i;
+      }
+      if (t >= tick && (hi < 0 || t < (this.#own[hi * 4] ?? 0))) {
+        hi = i;
+      }
+    }
+    if (lo < 0 || hi < 0) {
+      return null;
+    }
+    const o = this.#own;
+    const t0 = o[lo * 4] ?? 0;
+    const t1 = o[hi * 4] ?? 0;
+    const f = t1 > t0 ? (tick - t0) / (t1 - t0) : 0;
+    const h0 = o[lo * 4 + 3] ?? 0;
+    const h1 = o[hi * 4 + 3] ?? 0;
+    const turn = Math.atan2(Math.sin(h1 - h0), Math.cos(h1 - h0));
+    return {
+      east: (o[lo * 4 + 1] ?? 0) + ((o[hi * 4 + 1] ?? 0) - (o[lo * 4 + 1] ?? 0)) * f,
+      north: (o[lo * 4 + 2] ?? 0) + ((o[hi * 4 + 2] ?? 0) - (o[lo * 4 + 2] ?? 0)) * f,
+      heading: h0 + turn * f,
+    };
   }
 
   /** The page's frame: dt seconds since the last. */

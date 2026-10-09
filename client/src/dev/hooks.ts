@@ -796,7 +796,7 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       };
     },
     /**
-     * Watches the other boats for n frames online: how many frames drew a
+     * Watches the other boats for ms of real time online: how many frames drew a
      * near boat held or carried on past its data, the largest step a boat
      * took between two frames, and the steps over half a metre (a
      * correction drawn at once rather than eased). Held frames come in
@@ -804,7 +804,7 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * retransmission timeout's (the probe lost too: RFC 6298), longer than
      * any delay covers, and counted apart.
      */
-    fleetWatch(n: number): Promise<{
+    fleetWatch(ms: number): Promise<{
       frames: number;
       nearFrames: number;
       held: number;
@@ -840,11 +840,13 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       // snapshot in it, ms.
       let spell = 0;
       let longest = 0;
+      const end = performance.now() + ms;
       return new Promise((resolve) => {
         const prev = world.onFrame;
         world.onFrame = () => {
           prev?.();
           r.frames++;
+          const done = performance.now() >= end;
           let near = false;
           let held = false;
           let carried = false;
@@ -886,7 +888,7 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             spell++;
             longest = Math.max(longest, (worldUs(o.clock, nowUs()) - f.arrived) / 1000);
           }
-          if (spell > 0 && (!held || r.frames >= n)) {
+          if (spell > 0 && (!held || done)) {
             if (longest > 900) {
               r.timeoutHeld += spell;
             }
@@ -897,24 +899,16 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           r.extrapolated += carried ? 1 : 0;
           r.nearDelay = Math.max(r.nearDelay, f.stats.nearDelay);
           r.farDelay = Math.max(r.farDelay, f.stats.farDelay);
-          if (r.frames >= n) {
+          if (done) {
             world.onFrame = prev;
             resolve(r);
           }
         };
       });
     },
-    /** The player's own boat as predicted for tick, if still kept: its position and heading. */
+    /** The player's own boat as the server had it at tick, from the last snapshots, or null. */
     ownAt(tick: number): { east: number; north: number; heading: number } | null {
-      const st = sailing.predictor?.stateAt(tick) ?? null;
-      if (st === null) {
-        return null;
-      }
-      return {
-        east: st[RECORDS.state.x] ?? 0,
-        north: st[RECORDS.state.y] ?? 0,
-        heading: st[RECORDS.state.heading] ?? 0,
-      };
+      return sailing.online?.ownAt(tick) ?? null;
     },
 
     /** Resolves after n frames of the frame loop. */

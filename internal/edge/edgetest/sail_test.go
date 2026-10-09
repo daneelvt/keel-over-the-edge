@@ -325,7 +325,11 @@ func replayTrace(t *testing.T, trace *client.Trace, kinds []physics.Prepared) (c
 		case e.Snap != nil:
 			sn := snapshots[e.Snap.Tick]
 			o := p.Snapshot(sn)
-			if o.Stale != e.Snap.Stale || o.Reset != e.Snap.Reset || o.Corrected != e.Snap.Corrected || o.Distance != e.Snap.Distance {
+			// The distance is the test client's own math.Hypot, outside the
+			// physics, which Go computes differently on amd64 and arm64: it
+			// may differ in its last bit from the machine's that recorded it.
+			if o.Stale != e.Snap.Stale || o.Reset != e.Snap.Reset || o.Corrected != e.Snap.Corrected ||
+				math.Abs(o.Distance-e.Snap.Distance) > 1e-12 {
 				t.Fatalf("event %d: snapshot %d: %+v, the trace %+v", i, e.Snap.Tick, o, e.Snap)
 			}
 			if o.Corrected {

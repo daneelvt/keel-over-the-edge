@@ -2,7 +2,8 @@
 
 // Two players sailing together, each in a browser context of its own,
 // against keel (tools/e2e): each sees the other's boat fade in where the
-// server has it at the tick it is drawn at; one steers and the other sees
+// server has it at the tick it is drawn at (the other page's snapshots of
+// its own boat); one steers and the other sees
 // it turn; one closes its page and the other still sees its boat, sailing
 // on through its grace. Through tools/lag at 200 ms and 2% loss (or netem,
 // KEEL_LAG_BASE): for a minute no near boat is held in more than 1% of
@@ -53,25 +54,8 @@ async function seen(a: Page, b: Page) {
   if (best === null) {
     return null;
   }
-  const tick = best.tick;
-  const truth = await b.evaluate(
-    (t) => [globalThis.keel.ownAt(t.lo), globalThis.keel.ownAt(t.hi)],
-    { lo: Math.floor(tick), hi: Math.ceil(tick) },
-  );
-  const [t0, t1] = truth;
-  if (t0 === null || t1 === null || t0 === undefined || t1 === undefined) {
-    return { boat: best, truth: null };
-  }
-  const f = tick - Math.floor(tick);
-  const turn = Math.atan2(Math.sin(t1.heading - t0.heading), Math.cos(t1.heading - t0.heading));
-  return {
-    boat: best,
-    truth: {
-      east: t0.east + (t1.east - t0.east) * f,
-      north: t0.north + (t1.north - t0.north) * f,
-      heading: t0.heading + turn * f,
-    },
-  };
+  const truth = await b.evaluate((t) => globalThis.keel.ownAt(t), best.tick);
+  return { boat: best, truth };
 }
 
 function headingOff(a: number, b: number): number {
@@ -137,7 +121,7 @@ test('at 200 ms and 2% loss: no near boat held in more than 1% of frames', {
   await a.waitForTimeout(10_000);
   const w = await a.evaluate(async () => {
     const started = performance.now();
-    const r = await globalThis.keel.fleetWatch(3600);
+    const r = await globalThis.keel.fleetWatch(60_000);
     return { ...r, seconds: (performance.now() - started) / 1000 };
   });
   const n = await a.evaluate(() => globalThis.keel.net());
