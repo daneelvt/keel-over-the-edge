@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The Go test client's sails, recorded by internal/edge/edgetest, replayed
+// The Go client's sails, recorded by internal/edge/edgetest, replayed
 // through this client's own code: every message it sent the net worker's
 // session sends, at the same times; every snapshot's other boats decode to
 // the view the Go client decoded; and every snapshot the predictor

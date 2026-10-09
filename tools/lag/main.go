@@ -3,7 +3,7 @@
 // Command lag is a TCP proxy that slows and loses traffic as a phone's
 // network would, under TCP: each chunk arrives after half the round trip,
 // and a lost one is held for TCP's probe timeout, with everything behind
-// it, rather than lost (internal/edge/edgetest's Lag). Seeded, so a run
+// it, rather than lost (internal/client's Lag). Seeded, so a run
 // repeats.
 //
 //	go run ./tools/lag -listen 127.0.0.1:18090 -to 127.0.0.1:8080 -lag 200ms,2%

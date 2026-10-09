@@ -1,0 +1,321 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math/rand/v2"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/coder/websocket"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/client"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+)
+
+// Guests makes guests and checks sessions.
+type Guests interface {
+	// Create makes a guest of name and returns its session's cookie.
+	Create(ctx context.Context, name string) (string, error)
+	// Valid says whether a session's cookie is still good.
+	Valid(ctx context.Context, cookie string) (bool, error)
+}
+
+// Dialer opens the game connection with a session's cookie, through wrap if
+// it is not nil.
+type Dialer func(ctx context.Context, cookie string, wrap func(net.Conn) net.Conn) (*websocket.Conn, error)
+
+// Config is a run's.
+type Config struct {
+	N          int
+	Sail       time.Duration // once all have joined
+	Ramp       time.Duration // the joining spread over
+	FrameEvery time.Duration
+	Lag        *client.Lag // each connection through it, seeded apart, if not nil
+	Guests     Guests
+	Sessions   string // the sessions file
+	Dial       Dialer
+	// Metrics, if not nil, reads the server's metrics in Prometheus's text
+	// format, before and after the sail.
+	Metrics func(ctx context.Context) (string, error)
+	Out     io.Writer
+}
+
+// Report is what a run saw.
+type Report struct {
+	Players []Player
+	Made    int // guests made this run
+	Seconds float64
+	Server  ServerReport
+}
+
+// Player is one player's sail.
+type Player struct {
+	Name   string
+	Stats  client.Stats
+	Closes map[int]int // close codes, -1 for none, and how often
+	Errors int
+	RTT    time.Duration // the round trip the clock measured last
+}
+
+// Run makes or finds the guests, sails them, and reports.
+func Run(ctx context.Context, cfg Config) (*Report, error) {
+	cookies, made, err := sessions(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	kind, err := jollyBoat()
+	if err != nil {
+		return nil, err
+	}
+	var before string
+	if cfg.Metrics != nil {
+		before, _ = cfg.Metrics(ctx)
+	}
+	rep := &Report{Players: make([]Player, cfg.N), Made: made}
+	start := time.Now()
+	end := start.Add(cfg.Ramp + cfg.Sail)
+	var wg sync.WaitGroup
+	for i := range cfg.N {
+		p := &rep.Players[i]
+		p.Name = guestName(i)
+		p.Closes = map[int]int{}
+		delay := time.Duration(0)
+		if cfg.N > 1 {
+			delay = cfg.Ramp * time.Duration(i) / time.Duration(cfg.N-1)
+		}
+		wg.Go(func() {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return
+			}
+			sailOne(ctx, cfg, kind, cookies[i], uint64(i), end, p)
+		})
+	}
+	wg.Wait()
+	rep.Seconds = time.Since(start).Seconds()
+	if cfg.Metrics != nil {
+		if after, err := cfg.Metrics(ctx); err == nil {
+			rep.Server = serverReport(before, after, rep.Seconds)
+		}
+	}
+	if cfg.Out != nil {
+		rep.print(cfg.Out, cfg)
+	}
+	return rep, ctx.Err()
+}
+
+// sailOne sails one player until end, connecting again a second after the
+// connection ends.
+func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, cookie string, i uint64, end time.Time, p *Player) {
+	rng := rand.New(rand.NewPCG(i, 7))
+	helm, sheet := 512, 512
+	controls := func(n int) (uint16, uint16) {
+		// The scripted sailors' random walk, a move every half second or so.
+		if n%15 == 0 {
+			helm = max(0, min(bus.Steps, helm+rng.IntN(257)-128))
+			sheet = max(0, min(bus.Steps, sheet+rng.IntN(193)-96))
+		}
+		return uint16(helm), uint16(sheet)
+	}
+	connection := uint64(0)
+	dial := func(ctx context.Context) (*websocket.Conn, error) {
+		var wrap func(net.Conn) net.Conn
+		if cfg.Lag != nil {
+			l := *cfg.Lag
+			l.Seed = i*1_000_003 + connection
+			connection++
+			wrap = l.Wrap
+		}
+		return cfg.Dial(ctx, cookie, wrap)
+	}
+	s := client.NewSailor(dial, kind, controls)
+	s.FrameEvery = cfg.FrameEvery
+	for ctx.Err() == nil && time.Until(end) > 0 {
+		err := s.Connect(ctx)
+		if err == nil {
+			err = s.Sail(ctx, time.Until(end))
+		}
+		s.Drop()
+		if err != nil && ctx.Err() == nil {
+			p.Errors++
+			p.Closes[int(websocket.CloseStatus(err))]++
+			select {
+			case <-time.After(time.Second):
+			case <-ctx.Done():
+			}
+		}
+	}
+	p.Stats = s.Stats
+	p.RTT = time.Duration(s.Net.Clock.RTT) * time.Microsecond
+}
+
+// jollyBoat is the catalog's first boat, prepared: the players' boat.
+func jollyBoat() (*physics.Prepared, error) {
+	cat, err := catalog.Load()
+	if err != nil {
+		return nil, err
+	}
+	params := catalog.PhysicsParams(&cat.Boats[0])
+	var k physics.Prepared
+	physics.Prepare(&params, &k)
+	return &k, nil
+}
+
+func guestName(i int) string { return fmt.Sprintf("Loadbot %d", i+1) }
+
+// savedSessions is the sessions file: the guests' cookies by origin, the
+// i-th the i-th player's.
+type savedSessions map[string][]string
+
+// sessions finds the cookies of the guests saved for the origin, makes the
+// guests missing or whose sessions are gone, and saves them all.
+func sessions(ctx context.Context, cfg Config) (cookies []string, made int, err error) {
+	saved := savedSessions{}
+	if data, err := os.ReadFile(cfg.Sessions); err == nil {
+		if err := json.Unmarshal(data, &saved); err != nil {
+			return nil, 0, fmt.Errorf("%s: %w", cfg.Sessions, err)
+		}
+	}
+	key := originKey(cfg.Guests)
+	cookies = slices.Clone(saved[key])
+	for i := range cfg.N {
+		if i < len(cookies) {
+			ok, err := cfg.Guests.Valid(ctx, cookies[i])
+			if err != nil {
+				return nil, made, err
+			}
+			if ok {
+				continue
+			}
+		}
+		c, err := cfg.Guests.Create(ctx, guestName(i))
+		if err != nil {
+			return nil, made, fmt.Errorf("guest %d: %w", i+1, err)
+		}
+		made++
+		if i < len(cookies) {
+			cookies[i] = c
+		} else {
+			cookies = append(cookies, c)
+		}
+	}
+	saved[key] = cookies
+	data, err := json.MarshalIndent(saved, "", "  ")
+	if err != nil {
+		return nil, made, err
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.Sessions), 0o700); err != nil {
+		return nil, made, err
+	}
+	return cookies, made, os.WriteFile(cfg.Sessions, append(data, '\n'), 0o600)
+}
+
+// originKey is what a sessions file keeps a server's guests under.
+func originKey(g Guests) string {
+	if h, ok := g.(*httpGuests); ok {
+		return h.base
+	}
+	return fmt.Sprintf("%T", g)
+}
+
+// httpGuests makes guests as the start screen does: POST /guest.
+type httpGuests struct {
+	base   string
+	client *http.Client
+}
+
+func (g *httpGuests) Create(ctx context.Context, name string) (string, error) {
+	cat, err := catalog.Load()
+	if err != nil {
+		return "", err
+	}
+	body, err := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.base+"/guest", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", g.base)
+	res, err := g.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		reply, _ := io.ReadAll(res.Body)
+		return "", fmt.Errorf("POST /guest answered %s: %s", res.Status, reply)
+	}
+	for _, c := range res.Cookies() {
+		if c.Name == auth.CookieName {
+			return c.Value, nil
+		}
+	}
+	return "", errors.New("POST /guest set no session")
+}
+
+func (g *httpGuests) Valid(ctx context.Context, cookie string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.base+"/api/me", nil)
+	if err != nil {
+		return false, err
+	}
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	res, err := g.client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	res.Body.Close()
+	return res.StatusCode == http.StatusOK, nil
+}
+
+// wsDialer opens /ws of the origin base, as a page of it does.
+func wsDialer(hc *http.Client, base string) Dialer {
+	u := strings.Replace(strings.TrimSuffix(base, "/"), "http", "ws", 1) + "/ws"
+	return func(ctx context.Context, cookie string, wrap func(net.Conn) net.Conn) (*websocket.Conn, error) {
+		c := *hc
+		c.Timeout = 0
+		if wrap != nil {
+			under, ok := hc.Transport.(*http.Transport)
+			if !ok {
+				under = http.DefaultTransport.(*http.Transport)
+			}
+			tr := under.Clone()
+			var d net.Dialer
+			tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				nc, err := d.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+				return wrap(nc), nil
+			}
+			c.Transport = tr
+		}
+		ws, _, err := websocket.Dial(ctx, u, &websocket.DialOptions{
+			HTTPClient: &c,
+			HTTPHeader: http.Header{
+				"Cookie": []string{auth.CookieName + "=" + cookie},
+				"Origin": []string{strings.TrimSuffix(base, "/")},
+			},
+		})
+		return ws, err
+	}
+}

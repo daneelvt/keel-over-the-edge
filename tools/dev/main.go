@@ -7,7 +7,8 @@
 //
 //	go run ./tools/dev          start keel serve and Vite; restart keel on Go changes, rebuild the physics module
 //	go run ./tools/dev -lag 200ms,2%   the same, with the game's traffic slowed and lost as a phone's network would (tools/lag)
-//	go run ./tools/dev -smoke   start everything, check the page, /api/version, the physics module, a guest, the game connection and keel's probes and metrics, stop
+//	go run ./tools/dev -limit 2        the same, with at most 2 boats at sea: a third player waits in the queue
+//	go run ./tools/dev -smoke   start everything, check the page, /api/version, the physics module, a guest, the game connection, a second player seeing the first's boat, and keel's probes and metrics, stop
 //	go run ./tools/dev -lint    run every linter the pull-request checks run
 //	go run ./tools/dev -db      start the database alone, print its URLs
 //	go run ./tools/dev -db-reset  remove the database's container and data
@@ -55,6 +56,7 @@ func main() {
 	dbOnly := flag.Bool("db", false, "start the database alone, print its URLs and exit")
 	dbReset := flag.Bool("db-reset", false, "remove the database's container, its data and its password")
 	lagFlag := flag.String("lag", "", "a round trip and loss such as 200ms,2%: the game's traffic through tools/lag")
+	limit := flag.Int("limit", 0, "the most boats at sea (KEEL_BOAT_LIMIT), from 1 to 4096; keel's default if 0")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -71,7 +73,7 @@ func main() {
 	case *smoke:
 		err = runSmoke(ctx, os.Stdout)
 	default:
-		err = runDev(ctx, os.Stdout, *lagFlag)
+		err = runDev(ctx, os.Stdout, *lagFlag, *limit)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dev:", err)

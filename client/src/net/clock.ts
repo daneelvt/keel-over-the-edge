@@ -3,7 +3,7 @@
 // The world clock as the client estimates it, and how far ahead of the
 // server the client steps its boat. Times are microseconds held in numbers
 // as whole values, so the arithmetic is the same, bit for bit, as the Go
-// test client's (internal/edge/edgetest/clock.go), whose traces the tests
+// test client's (internal/client/clock.go), whose traces the tests
 // replay through this code.
 //
 // The clock takes Pongs: each gives an offset, the server's world time plus

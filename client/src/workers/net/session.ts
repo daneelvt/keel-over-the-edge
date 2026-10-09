@@ -4,7 +4,7 @@
 // given what arrived and when. It does no I/O and reads no clock; the
 // worker gives it each event with its time (µs) and calls time() at
 // deadline(). The Go test client keeps the same state the same way
-// (internal/edge/edgetest/net.go), and the tests replay its traces here.
+// (internal/client/net.go), and the tests replay its traces here.
 //
 // After a Welcome it sends 8 Pings 100 ms apart, so the clock is good
 // within a second, then one every 2 s; every message carries the newest
