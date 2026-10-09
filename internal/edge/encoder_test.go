@@ -412,3 +412,62 @@ func BenchmarkEncode(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkEncodeSteady is the encoders' time for a frame in steady state:
+// the boats sail, each snapshot a delta against the one before, which the
+// writer took; 100, 500 and 1,000 connections, each with 64 boats in view,
+// on one encoder and on eight.
+func BenchmarkEncodeSteady(b *testing.B) {
+	for _, n := range []int{100, 500, 1000} {
+		for _, encoders := range []int{1, 8} {
+			b.Run(fmt.Sprintf("%d/%d", n, encoders), func(b *testing.B) {
+				w, e := world(b, n, encoders)
+				conns := sailing(w, e)
+				done := make(chan struct{}, len(e.encs))
+				var size, snapshots int
+				round := func() {
+					for _, enc := range e.encs {
+						go func() {
+							f := e.cfg.Bus.Frames.Acquire()
+							for _, c := range enc.active {
+								enc.encode(c, f)
+							}
+							f.Release()
+							done <- struct{}{}
+						}()
+					}
+					for range e.encs {
+						<-done
+					}
+				}
+				// The boats sail between rounds, the controls moving.
+				step := func() {
+					b.StopTimer()
+					f := w.Latest()
+					for i, s := range f.Live {
+						w.Bus().Controls.Store(s, bus.Pack(uint32(f.Tick+1), uint16((i*37+int(f.Tick))%1025), 600, f.Gen[s]))
+					}
+					w.Tick()
+					w.Tick()
+					for _, c := range conns {
+						buf, _ := c.box.take()
+						size += len(buf)
+						snapshots++
+					}
+					b.StartTimer()
+				}
+				for range 20 {
+					step()
+					round()
+				}
+				size, snapshots = 0, 0
+				b.ReportAllocs()
+				for b.Loop() {
+					step()
+					round()
+				}
+				b.ReportMetric(float64(size)/float64(max(snapshots, 1)), "bytes/snapshot")
+			})
+		}
+	}
+}

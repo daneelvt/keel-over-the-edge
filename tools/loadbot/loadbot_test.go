@@ -21,16 +21,22 @@ import (
 
 // testGuests makes guests in the test server's own store, counting them.
 type testGuests struct {
-	srv   *edgetest.Server
-	mu    sync.Mutex
-	made  int
-	valid map[string]bool
+	srv     *edgetest.Server
+	mu      sync.Mutex
+	made    int
+	valid   map[string]bool
+	refused bool
 }
 
 func (g *testGuests) Create(_ context.Context, name string) (string, error) {
-	token, _ := g.srv.Sessions.Add(name, store.Human)
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	// The name of guest 3 is refused once, as the server's filter might.
+	if name == "Loadbot 3" && !g.refused {
+		g.refused = true
+		return "", errNameRefused
+	}
+	token, _ := g.srv.Sessions.Add(name, store.Human)
 	g.made++
 	g.valid[token] = true
 	return token, nil

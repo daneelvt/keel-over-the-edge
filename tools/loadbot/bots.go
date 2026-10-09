@@ -185,7 +185,8 @@ func guestName(i int) string { return fmt.Sprintf("Loadbot %d", i+1) }
 type savedSessions map[string][]string
 
 // sessions finds the cookies of the guests saved for the origin, makes the
-// guests missing or whose sessions are gone, and saves them all.
+// guests missing or whose sessions are gone, and saves them, after each
+// guest made, so that a run cut short keeps the guests it made.
 func sessions(ctx context.Context, cfg Config) (cookies []string, made int, err error) {
 	saved := savedSessions{}
 	if data, err := os.ReadFile(cfg.Sessions); err == nil {
@@ -195,6 +196,17 @@ func sessions(ctx context.Context, cfg Config) (cookies []string, made int, err 
 	}
 	key := originKey(cfg.Guests)
 	cookies = slices.Clone(saved[key])
+	save := func() error {
+		saved[key] = cookies
+		data, err := json.MarshalIndent(saved, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(cfg.Sessions), 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(cfg.Sessions, append(data, '\n'), 0o600)
+	}
 	for i := range cfg.N {
 		if i < len(cookies) {
 			ok, err := cfg.Guests.Valid(ctx, cookies[i])
@@ -205,9 +217,9 @@ func sessions(ctx context.Context, cfg Config) (cookies []string, made int, err 
 				continue
 			}
 		}
-		c, err := cfg.Guests.Create(ctx, guestName(i))
+		c, err := createGuest(ctx, cfg.Guests, i)
 		if err != nil {
-			return nil, made, fmt.Errorf("guest %d: %w", i+1, err)
+			return nil, made, err
 		}
 		made++
 		if i < len(cookies) {
@@ -215,16 +227,31 @@ func sessions(ctx context.Context, cfg Config) (cookies []string, made int, err 
 		} else {
 			cookies = append(cookies, c)
 		}
+		if err := save(); err != nil {
+			return nil, made, err
+		}
 	}
-	saved[key] = cookies
-	data, err := json.MarshalIndent(saved, "", "  ")
-	if err != nil {
-		return nil, made, err
+	return cookies, made, save()
+}
+
+// errNameRefused is a guest's name the server would not take: taken, or
+// caught by its filter (which reads digits as the letters they look like).
+var errNameRefused = errors.New("the name was refused")
+
+// createGuest makes player i's guest, trying other names when one is
+// refused.
+func createGuest(ctx context.Context, g Guests, i int) (string, error) {
+	name := guestName(i)
+	for try := 1; ; try++ {
+		c, err := g.Create(ctx, name)
+		if !errors.Is(err, errNameRefused) || try == 8 {
+			if err != nil {
+				return "", fmt.Errorf("guest %d (%s): %w", i+1, name, err)
+			}
+			return c, nil
+		}
+		name = fmt.Sprintf("Loadbot %d", rand.IntN(90000)+10000)
 	}
-	if err := os.MkdirAll(filepath.Dir(cfg.Sessions), 0o700); err != nil {
-		return nil, made, err
-	}
-	return cookies, made, os.WriteFile(cfg.Sessions, append(data, '\n'), 0o600)
 }
 
 // originKey is what a sessions file keeps a server's guests under.
@@ -263,6 +290,9 @@ func (g *httpGuests) Create(ctx context.Context, name string) (string, error) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusCreated {
 		reply, _ := io.ReadAll(res.Body)
+		if res.StatusCode == http.StatusUnprocessableEntity {
+			return "", fmt.Errorf("%w: %s", errNameRefused, reply)
+		}
 		return "", fmt.Errorf("POST /guest answered %s: %s", res.Status, reply)
 	}
 	for _, c := range res.Cookies() {
