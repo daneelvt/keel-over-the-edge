@@ -3,6 +3,7 @@
 package edgetest
 
 import (
+	"cmp"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -71,6 +72,10 @@ type Sailor struct {
 	latest    *protocol.Snapshot
 	queued    []*protocol.Snapshot
 
+	// FrameEvery is the time between the page's frames: 60 a second
+	// unless set.
+	FrameEvery time.Duration
+
 	Welcomes []WelcomeSeen
 	Stats    Stats
 	Trace    *Trace
@@ -137,7 +142,7 @@ func (s *Sailor) send(ctx context.Context, b []byte) error {
 // Sail runs the client for d, or until the connection ends.
 func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 	end := time.Now().Add(d)
-	frame := time.NewTicker(time.Second / 60)
+	frame := time.NewTicker(cmp.Or(s.FrameEvery, time.Second/60))
 	defer frame.Stop()
 	timer := time.NewTimer(time.Hour)
 	defer timer.Stop()
@@ -240,10 +245,10 @@ func (s *Sailor) frame(ctx context.Context) error {
 		s.Stats.Resets++
 		s.Trace.mark(now, "reset")
 	}
-	// A step for a tick an input sent now would reach too late, as when
-	// catching up, keeps the controls the server holds; so do all until the
-	// clock knows the round trip.
-	reach := Target(world, s.Net.Clock.RTT, 0)
+	// A step for a tick an input sent now would not reach with a tick to
+	// spare, as when catching up after a slow frame, keeps the controls the
+	// server holds; so do all until the clock knows the round trip.
+	reach := Target(world, s.Net.Clock.RTT, 0) + 1
 	if s.Net.Clock.Rough {
 		reach = math.MaxInt64
 	}

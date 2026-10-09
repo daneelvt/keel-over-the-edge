@@ -237,10 +237,10 @@ export class Online {
     if (target - p.tick > BEHIND && this.#haveLatest && this.#latest.tick > p.tick) {
       p.reset(this.#latest);
     }
-    // A step for a tick an input sent now would reach too late keeps the
-    // controls the server holds; so do all until the clock knows the round
-    // trip.
-    const reach = c.rough ? Number.POSITIVE_INFINITY : Math.ceil(aheadTicks(world, c.rtt, 0));
+    // A step for a tick an input sent now would not reach with a tick to
+    // spare, as when catching up after a slow frame, keeps the controls the
+    // server holds; so do all until the clock knows the round trip.
+    const reach = c.rough ? Number.POSITIVE_INFINITY : Math.ceil(aheadTicks(world, c.rtt, 0)) + 1;
     const h = this.#helmsman;
     for (let n = Math.min(MAX_STEPS, target - p.tick); n > 0; n--) {
       if (p.tick + 1 < reach) {

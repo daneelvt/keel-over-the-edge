@@ -680,8 +680,8 @@ and reconnects.
 of those of the 8 lowest round trips of the last 32 samples; it moves by at
 most 1 ms per 100 ms, unless more than 250 ms off. The page steps its boat to
 the tick due at the estimated world time plus half the round trip plus *m*
-ticks, at most four steps a frame: the boat answers the helm on the frame it
-is moved. *m* starts at 2; a late input (a negative margin) raises it at
+ticks, every step due taken in the frame (up to 30: a slow phone keeps up):
+the boat answers the helm on the frame it is moved. *m* starts at 2; a late input (a negative margin) raises it at
 once, once a round trip; 5 s of margins of 3 or more lower it by one. Steps
 for ticks an input could no longer reach in time (catching up, or before the
 first `Pong`) keep the controls the server holds.

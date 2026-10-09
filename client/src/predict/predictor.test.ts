@@ -5,14 +5,14 @@
 // the boat back and steps exactly the ticks since, with the controls kept;
 // the drawn boat eases the difference away over 100 ms, unless it is over
 // 3 m or 20°; a snapshot older than the ticks kept is let go. And Online's
-// pacing: at most 4 steps a frame, a reset when far behind, the controls
+// pacing: every step due in one frame, up to 30, the controls
 // starting at the indices in force, inputs only when they change, and none
 // for a tick an input could no longer reach.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
-import { newClockState } from '../net/clock';
+import { BEHIND, newClockState } from '../net/clock';
 import type { FromWorker, ToWorker } from '../net/messages';
 import { Online, type Port } from '../net/online';
 import { RELOAD_EVERY, reloadForVersion } from '../net/reload';
@@ -189,15 +189,12 @@ describe('pacing online', () => {
     expect(helmsman.sheet.target).toBe(700 / 1024);
   });
 
-  test('at most 4 steps a frame, inputs only when the controls change', async () => {
+  test('a frame takes the steps due; inputs only when the controls change', async () => {
     const { o, p, port, helmsman } = await online();
     // m is 2: at world tick 100 the boat should be at 102.
     o.pace(worldAt(100));
     expect(p.tick).toBe(102);
-    o.pace(worldAt(110));
-    expect(p.tick).toBe(106);
-    o.pace(worldAt(110));
-    expect(p.tick).toBe(110);
+    // A slow frame: ten ticks later, all ten steps at once.
     o.pace(worldAt(110));
     expect(p.tick).toBe(112);
     // The controls held are the server's: nothing sent.
@@ -210,7 +207,7 @@ describe('pacing online', () => {
     expect(helmsman.clock.steps).toBe(112);
   });
 
-  test('far behind, the boat is put back to the latest snapshot', async () => {
+  test('a snapshot ahead of the prediction starts it again; a frame takes 30 steps at most', async () => {
     const { o, p } = await online();
     o.pace(worldAt(100));
     const later = start(200);
@@ -218,21 +215,21 @@ describe('pacing online', () => {
     o.reconcile(later, worldAt(201));
     expect(p.tick).toBe(200);
     o.pace(worldAt(300));
-    // Reset to tick 200 (the latest), then four steps on.
-    expect(p.tick).toBe(204);
+    expect(p.tick).toBe(200 + BEHIND);
   });
 
-  test('a step for a tick an input could not reach in time keeps the server’s controls', async () => {
+  test('a step for a tick an input could not reach with a tick to spare keeps the server’s controls', async () => {
     const { o, p, port, helmsman } = await online();
     o.clock = { ...o.clock, rtt: 200_000 };
     helmsman.helm.target = 1;
     // Half the round trip is three ticks: an input sent at world tick 100
-    // reaches tick 103; the boat, at 100, steps 101 and 102 with what the
-    // server holds, then 103 and 104 with the player's helm.
+    // reaches tick 103, and one stamped 104 has a tick to spare. The boat,
+    // at 100, steps 101 to 103 with what the server holds, then 104 and 105
+    // (m is 2) with the player's helm.
     o.pace(worldAt(100));
-    expect(p.tick).toBe(104);
+    expect(p.tick).toBe(105);
     expect(port.sent.filter((m) => m.type === 'input')).toEqual([
-      { type: 'input', seq: 103, helm: 1024, sheet: 700 },
+      { type: 'input', seq: 104, helm: 1024, sheet: 700 },
     ]);
   });
 

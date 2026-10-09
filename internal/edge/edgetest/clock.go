@@ -110,8 +110,10 @@ const (
 	// Behind is how far behind its target the boat may fall before it is
 	// put back to the server's latest state.
 	Behind = 30
-	// MaxSteps is the most steps a frame takes.
-	MaxSteps = 4
+	// MaxSteps is the most steps a frame takes: as many as Behind. Online a
+	// boat that fell behind could never catch up, so a slow frame takes all
+	// the steps due; a step costs microseconds.
+	MaxSteps = Behind
 )
 
 // AheadHold is how long after a raise, beyond a round trip, further late

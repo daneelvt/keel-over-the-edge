@@ -129,8 +129,14 @@ export const AHEAD_HOLD = 100_000;
 export const TICKS_PER_SECOND = 30;
 /** Behind its target by more than this, the boat is put back to the server's latest state. */
 export const BEHIND = 30;
-/** The most steps a frame takes. */
-export const MAX_STEPS = 4;
+/**
+ * The most steps a frame takes online: as many as BEHIND, a second of
+ * ticks. The sandbox takes four at most and lets the rest go, which only
+ * slows its boat; online, a boat that fell behind could never catch up, and
+ * a phone drawing fewer than 7.5 frames a second could not sail. A step
+ * costs microseconds.
+ */
+export const MAX_STEPS = BEHIND;
 /** A snapshot's margin when none came. */
 const NO_MARGIN = -32768;
 

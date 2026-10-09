@@ -127,6 +127,31 @@ func TestSailDelay(t *testing.T) {
 	}
 }
 
+// TestSailSlowFrames: a page drawing 5 frames a second, as CI's software
+// renderer does, keeps up, steers, and sees no correction. Between such
+// frames the server passes the prediction, whose next snapshot starts it
+// again from the server's state: that is counted as a reset.
+func TestSailSlowFrames(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		srv := NewServer(t, Config{})
+		token, _ := srv.Guest("Ann")
+		lag := Lag{Delay: 100 * time.Millisecond}
+		s := srv.NewSailor(DialOptions{Cookie: token, Wrap: lag.Wrap}, recorded(t))
+		s.FrameEvery = 200 * time.Millisecond
+		if err := s.Connect(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Sail(t.Context(), time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		s.Drop()
+		report(t, "5 frames a second", s.Stats, time.Minute)
+		if s.Stats.Corrections != 0 || s.Stats.Steps < 1700 {
+			t.Fatalf("%d corrections, %d resets, %d steps", s.Stats.Corrections, s.Stats.Resets, s.Stats.Steps)
+		}
+	})
+}
+
 // TestSailLoss: 100 ms each way and 2% of packets lost each way, over ten
 // seeds: corrections come, but none over the snap thresholds.
 func TestSailLoss(t *testing.T) {
