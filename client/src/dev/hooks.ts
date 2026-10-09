@@ -798,8 +798,9 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * Watches the other boats for ms of real time online: how many frames drew a
      * near boat held or carried on past its data, the largest step a boat
-     * took between two frames, and the steps over half a metre (a
-     * correction drawn at once rather than eased). Held frames come in
+     * took between two frames, and the jumps: steps longer than half a
+     * metre beyond what 6 m/s, more than a dinghy sails, covers in the
+     * frame's time (a correction drawn at once rather than eased). Held frames come in
      * spells; a spell in which no snapshot came for over 900 ms is a
      * retransmission timeout's (the probe lost too: RFC 6298), longer than
      * any delay covers, and counted apart.
@@ -841,12 +842,16 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       let spell = 0;
       let longest = 0;
       const end = performance.now() + ms;
+      let prevAt = performance.now();
       return new Promise((resolve) => {
         const prev = world.onFrame;
         world.onFrame = () => {
           prev?.();
           r.frames++;
-          const done = performance.now() >= end;
+          const at = performance.now();
+          const allowed = 0.5 + (6 * (at - prevAt)) / 1000;
+          prevAt = at;
+          const done = at >= end;
           let near = false;
           let held = false;
           let carried = false;
@@ -871,7 +876,7 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             if (l !== undefined) {
               const step = Math.hypot(b.east - l.east, b.north - l.north);
               r.largestStep = Math.max(r.largestStep, step);
-              if (step > 0.5) {
+              if (step > allowed) {
                 r.jumps++;
               }
             }
