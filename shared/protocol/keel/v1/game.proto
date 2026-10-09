@@ -81,7 +81,17 @@ message ServerMessage {
     Welcome welcome = 1;
     Pong pong = 2;
     Queued queued = 3;
+    Restart restart = 4;
   }
+}
+
+// Restart says the server is about to restart, as a new version is
+// deployed: the world sails on until then, and the connection is closed
+// with 1012. Every boat waits, in its grace, for its sailor to come back
+// to the restarted server.
+message Restart {
+  // About how long until the connection closes, in milliseconds.
+  uint32 in_ms = 1;
 }
 
 // Queued says the sea is full: the client waits for a boat. It comes after

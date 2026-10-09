@@ -144,11 +144,13 @@ type dumpedWaiting struct {
 	Account    string `json:"account"`
 	Connection uint64 `json:"connection"`
 	Since      int64  `json:"since"`
+	Grace      int64  `json:"grace"`
 }
 
 type dumpedWorld struct {
 	Tick  int64            `json:"tick"`
 	Wind  map[string]exact `json:"wind"`
+	Held  bool             `json:"held"`
 	Boats []dumpedBoat     `json:"boats"`
 	Queue []dumpedWaiting  `json:"queue"`
 }
@@ -160,11 +162,12 @@ func writeDump(w io.Writer, f *bus.Frame) error {
 	d := dumpedWorld{
 		Tick:  f.Tick,
 		Wind:  map[string]exact{"speed": exact(f.Wind.Speed), "from": exact(f.Wind.From)},
+		Held:  f.Held,
 		Boats: []dumpedBoat{},
 		Queue: []dumpedWaiting{},
 	}
 	for _, q := range f.Queue {
-		d.Queue = append(d.Queue, dumpedWaiting{Account: q.Account.String(), Connection: q.Conn, Since: q.Since})
+		d.Queue = append(d.Queue, dumpedWaiting{Account: q.Account.String(), Connection: q.Conn, Since: q.Since, Grace: q.Grace})
 	}
 	for _, s := range f.Live {
 		c := f.Control[s]

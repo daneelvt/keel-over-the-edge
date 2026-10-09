@@ -33,9 +33,10 @@ has changed, regenerates the catalog, builds the physics module, starts the
 database (or finds it running), makes a local HTTPS certificate, builds
 `keel`, runs `keel migrate` and starts `keel serve`, starts Vite, and prints
 QR codes for setting up a phone and for the game. Changing a Go file
-rebuilds the server, migrates and restarts it, and rebuilds the physics
-module when the file is in `internal/physics`; changing a client file
-reloads the page. Ctrl-C stops everything but the database, which is left
+rebuilds the server, migrates and restarts it (with no bell, `KEEL_BELL=0s`;
+the boats are kept, see [Restarts and deploys](#restarts-and-deploys)), and
+rebuilds the physics module when the file is in `internal/physics`;
+changing a client file reloads the page. Ctrl-C stops everything but the database, which is left
 running for next time and for `go test`.
 
 The first run asks for your computer's password once, to trust the local
@@ -330,13 +331,14 @@ world; everything reaches it through the **bus** (`internal/bus`).
 
 | Package | What |
 |---------|------|
-| `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`, and for developers only `SetWind` and `Place`); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
+| `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`; for developers only `SetWind` and `Place`; and the server's own `Hold`, admission held while the world's writes are behind); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
 | `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, step every boat, sort the boats into the grid, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
+| `internal/persist` | The world's writer: the lasting events and a checkpoint every 5 s, written behind the tick in fenced batches (see [Restarts and deploys](#restarts-and-deploys)). |
 | `internal/sim/loop` | The clock: tick k after the world's epoch (the database's world row; world 1's is 1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
 | `internal/replay` | The input log, `keel replay` and `/debug/replay` (below). |
 | `internal/scripted` | Scripted sailors: they join through the bus like players and steer and trim at random, each every 0.2–3 s. |
 | `internal/obs` | Logs, metrics, the probes, pprof and the flight recorder. |
-| `internal/store` | The database: migrations, queries, the pool. The only package that talks to PostgreSQL (a test checks no other imports pgx or goose); see [The database](#the-database). |
+| `internal/store` | The database: migrations, queries, the pools, the simulation's lease. The only package that talks to PostgreSQL (a test checks no other imports pgx or goose); see [The database](#the-database). |
 | `internal/auth` | Session tokens, the cookie, the session cache and the session middleware. |
 | `internal/moderation` | Sailor names: their display form, rules and key, and the word filter. |
 | `internal/api` | The `play.` listener's routes and the middleware in front of them. |
@@ -367,6 +369,7 @@ addresses must differ. The other variables:
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
 | `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. The image sets it; in development Vite serves the page instead |
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it |
+| `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (degrees the wind comes from). `tools/dev` and `tools/e2e` set it |
 
@@ -385,16 +388,19 @@ its heartbeat and logging at most once a minute: it stays live and not ready
 (`/readyz` says "waiting for the database") rather than exiting, which would
 earn a restart's back-off. It refuses to start when the database lacks a
 migration it was built with ("run keel migrate"), and starts when the
-database has newer ones. It loads the active world, making world 1 (epoch
-1 January 2026) when there is none, and the world's epoch sets the tick
-clock. Then come the world and the tick loop, then the public listeners,
+database has newer ones. Then it waits for the **simulation's lease**, so
+that only one process ever runs the world (`/readyz` says "waiting for the
+simulation lease (held by …)"). It loads the active world, making world 1
+(epoch 1 January 2026) when there is none, and the world's epoch sets the
+tick clock; restores the world from its checkpoint when it can; then come
+the world, the tick loop and the world's writer, then the public listeners,
 and only then is it ready. On `SIGTERM` or Ctrl-C it is no longer ready at
-once, shuts down the public listeners, lets the tick under way finish,
-flushes the input log, stops the flight recorder, closes the database's
-pool and shuts the internal listener down last. A second signal kills it.
-A panic in the tick, its workers or the input log's writer ends the
-process. Once open, the database is not part of readiness: if it goes away,
-the requests that need it answer 503 and the world sails on.
+once, rings the bell and stops in the order [Restarts and
+deploys](#restarts-and-deploys) gives. A second signal kills it. A panic in
+the tick, its workers or the writers ends the process, and the next
+restores the last checkpoint. Once open, the database is not part of
+readiness: if it goes away, the requests that need it answer 503, the
+world's writes wait, and the world sails on.
 
 ### Probes, logs and metrics
 
@@ -430,7 +436,14 @@ resolved at start, so updating it allocates nothing:
 | `keel_sim_frames_allocated_total` | Frames made because every pooled frame was held: flat once running |
 | `keel_replay_bytes_total`, `_segments_total`, `_records_dropped_total` | The input log |
 | `keel_flightrecorder_snapshots_total{reason}` | Traces written, `overrun` or `request` |
-| `keel_db_pool_connections{state}`, `keel_db_pool_max_connections` | The pool's connections, `acquired`, `idle` or `constructing`, and its limit (17) |
+| `keel_db_pool_connections{state}`, `keel_db_pool_max_connections` | The main pool's connections, `acquired`, `idle` or `constructing`, and its limit (17) |
+| `keel_sim_lease_epoch`, `keel_sim_lease_wait_seconds` | The simulation lease's epoch this process took it at; how long it waited for it |
+| `keel_sim_lease_lost_total{outcome}` | The lease's connection lost and taken back (`retaken`) or not (`lost`); a write refused, another process holding the lease (`fenced`) |
+| `keel_sim_restores_total{result}`, `keel_sim_restored_boats`, `keel_sim_restore_gap_seconds` | The checkpoint at start: `restored`, `none`, `too_old`, `incompatible`; the boats restored; the world time between the checkpoint and the first tick |
+| `keel_persist_inbox_fill_ratio`, `keel_persist_oldest_seconds` | The share of the world's writes' inbox (300 items) not yet written; the world time since the oldest of them |
+| `keel_persist_batch_duration_seconds`, `keel_persist_checkpoint_duration_seconds`, `keel_persist_batches_total{result}` | Each batch's transaction, and those that held a checkpoint; batches `ok`, `failed` (tried again) or `fenced` |
+| `keel_persist_events_total`, `keel_persist_checkpoints_total`, `keel_persist_checkpoint_bytes` | Lasting events and checkpoints written; the latest checkpoint's size |
+| `keel_persist_overflow_total` | Writes lost to a full inbox: the process stops |
 | `keel_db_pool_acquire_wait_seconds_total`, `keel_db_pool_empty_acquire_total` | Time requests waited for a connection; requests that found none idle |
 | `keel_db_query_duration_seconds{query}`, `keel_db_query_errors_total{query}` | Each query's time and failures, by its sqlc name (`other` for the rest) |
 | `keel_db_schema_version` | The newest migration the database has had |
@@ -670,10 +683,12 @@ with 1008. 60 s of silence drops the connection, and a write that takes
 10 s does too (no close frame: the peer has gone). When a connection ends
 its boat sails on on its held controls for 60 s, the **grace**; the same
 account joining within it gets the boat back, after it the boat leaves.
-`keel serve` closes every connection with 1012 as it stops, before the
-simulation, so the graces are in the input log; the boats are lost (until
-checkpoints), and clients get new ones at the start: "Your boat has
-returned to port."
+As `keel serve` stops it sends every connection a `Restart` (the bell),
+then, after the world's final checkpoint, closes it with 1012; the next
+`keel serve` restores the boats, and a client coming back within the grace
+is welcomed back to its own (`rejoined`). One that finds its boat gone (the
+checkpoint too old, or of another build) gets a new one at the start: "Your
+boat has returned to port."
 
 | Code | Sent when | The page |
 |------|-----------|----------|
@@ -681,7 +696,7 @@ returned to port."
 | 1003 | A text message, an unknown kind, an unreadable message | waits from 1 s |
 | 1008 | Over the rate, too many messages waiting, no `Hello` | waits from 1 s |
 | 1009 | A message over 1 KB | waits from 1 s |
-| 1012 | `keel` stops | waits 0.5 to 5 s |
+| 1012 | `keel` stops, after its bell | waits 0.5 to 5 s, keeping the bell's line |
 | 1013 | The queue for boats is full (4,096), or the simulation's command queue | waits from 2 s |
 | 4001 | Another connection for the account | "playing on another device", **Take over** |
 | 4002 | Protocol, catalog or physics differ | reloads |
@@ -820,7 +835,11 @@ go run ./tools/loadbot -n 200 -lag 200ms,2% -ramp 30s
 sails N guests with `internal/client` against a server, steering at random,
 and reports bytes and messages each way, others in view, corrections,
 resyncs and closes, and, from keel's metrics, the tick's and the encoders'
-99th percentiles and the frames allocated. Its guests ("Loadbot 1" …) are
+99th percentiles and the frames allocated. After a close with 1012 a bot
+waits 0.5 to 5 s, as the page does (a second after any other); each time
+one comes back it reports the pause (its last snapshot before to its first
+after), whether it got its own boat back, and how far the boat had sailed
+meanwhile. Its guests ("Loadbot 1" …) are
 made by `POST /guest` once, their sessions kept in
 `.dev/loadbot/sessions.json` and used again.
 
@@ -911,8 +930,8 @@ the VM; no registry is involved, and the Deployment's `imagePullPolicy:
 Never` makes a missing image fail rather than be pulled. The node keeps the
 newest three of the game's images. Then it renders `clusters/local/apps`
 with that tag and the Mac's name, applies it, and waits for the database
-and the new pod. A new build is a restart: every game connection is closed
-with 1012, the page reconnects, and the boats at sea are lost.
+and the new pod. A new build is a restart, and a restart is a pause: see
+[Restarts and deploys](#restarts-and-deploys).
 
 The image is built from the repository alone: the page (the physics module
 with the pinned TinyGo, then `vite build`) on the building machine's
@@ -966,20 +985,115 @@ Never`); the game's Deployment with one replica, `Recreate`, `keel migrate`
 as an init container, probes on the internal listener, the restricted
 security context and no service account token; `GOMEMLIMIT` between 80% and
 95% of the memory limit; no route to the internal listener; every route on
-a listener of the `keel` Gateway, an HTTPS listener with a certificate; and
-the database refusing connections without TLS, with no superuser and the
-builtin `C.UTF-8` locale.
+a listener of the `keel` Gateway, an HTTPS listener with a certificate; the
+database refusing connections without TLS, with no superuser and the
+builtin `C.UTF-8` locale; the database's `smartShutdownTimeout` at most
+30 s and its clients' TCP keepalives set; and keel's
+`terminationGracePeriodSeconds` at least its bell, the final checkpoint's
+and the closes' bounds and 10 s more.
 
 ### The game in the cluster
 
 | Part | What |
 |------|------|
-| `keel` | One replica, replaced rather than rolled (`Recreate`), `terminationGracePeriodSeconds: 30` (it stops within about 25 s). `keel migrate` runs first, as an init container. Liveness `/livez` every 10 s, readiness `/readyz` every 2 s, both on the internal listener, `0.0.0.0:9090` in the pod. Non-root, read-only root, no capabilities, `RuntimeDefault` seccomp. Locally 1 CPU requested and 3 the limit (so `GOMAXPROCS` is 3, as in production), 2 GiB with `GOMEMLIMIT=1800MiB` |
-| `keel-db` | CloudNativePG's `Cluster`, one instance, PostgreSQL 18.6 (`minimal` image), the builtin `C.UTF-8` locale. `pg_hba` refuses every connection without TLS; `keel` connects with `sslmode=verify-full` against the operator's CA (`keel-db-ca`, its `ca.crt` alone mounted), the password from `keel-db-app` as `PGPASSWORD`. Locally 1–2 GiB and 10 GiB of `local-path` storage |
+| `keel` | One replica, replaced rather than rolled (`Recreate`), `terminationGracePeriodSeconds: 30` (it stops within about 11 s: the bell, the final checkpoint, the closes). `keel migrate` runs first, as an init container. Liveness `/livez` every 10 s, readiness `/readyz` every 2 s, both on the internal listener, `0.0.0.0:9090` in the pod. Non-root, read-only root, no capabilities, `RuntimeDefault` seccomp. Locally 1 CPU requested and 3 the limit (so `GOMAXPROCS` is 3, as in production), 2 GiB with `GOMEMLIMIT=1800MiB` |
+| `keel-db` | CloudNativePG's `Cluster`, one instance, PostgreSQL 18.6 (`minimal` image), the builtin `C.UTF-8` locale. `pg_hba` refuses every connection without TLS; `keel` connects with `sslmode=verify-full` against the operator's CA (`keel-db-ca`, its `ca.crt` alone mounted), the password from `keel-db-app` as `PGPASSWORD`. `smartShutdownTimeout: 10` (not 180 s: keel never disconnects of itself) and server-side TCP keepalives of 10 s, 5 s, 3 probes. Locally 1–2 GiB and 10 GiB of `local-path` storage |
 | `keel` Gateway | In the game's namespace, class `traefik`: `http` on Traefik's `web` entry point and, locally, `https` on `websecure` with `keel-tls`, which is also Traefik's default certificate for clients that name no host. The `play` route sends everything to keel's game listener; locally, plain HTTP is redirected |
 | Traefik | k3s's own, with the Gateway API on, Ingress off, and its entry points' timeouts written down: `readTimeout` 60 s (a request must arrive within it; a stalled one is cut), `idleTimeout` 180 s, no `writeTimeout`. A game connection is not cut by them |
 
 The `keel` namespace warns and audits Pod Security's `restricted` profile.
+
+## Restarts and deploys
+
+A restart of `keel serve` (a new build, a restart by hand, a pod deleted, a
+crash) is a pause, not a reset: the players come back to their own boats,
+where they were.
+
+**One simulation.** Before it reads the world, `keel serve` takes the
+**simulation's lease**: a session-level advisory lock (key 1866618722),
+held on a connection of its own for the process's life, and the row
+`sim_lease`, whose `epoch` each new holder raises by one. While another
+process holds it, a new one waits, asking every 500 ms, live and not
+ready. Every transaction that writes the world first reads the epoch `FOR
+SHARE` and gives up if it is not its own (a *fencing token*), so a process
+that lost the lease without knowing, paused or cut off, changes nothing
+lasting; and the next holder's raise waits for any such transaction still
+open. The holder checks its connection every second: lost, the world sails
+on while it takes the lock back, for up to 10 s. Taken back with the epoch
+unchanged, it carries on; if the epoch moved, or the time ran out, it stops
+at once, with no bell and no final checkpoint, and exits 1. A process that
+dies frees the lock as its socket closes; one that vanished without closing
+it (a frozen machine) frees it when the database's keepalives give up,
+about 25 s. To see who holds it:
+
+```sh
+psql … -c 'SELECT * FROM sim_lease'
+psql … -c "SELECT pid, backend_start FROM pg_stat_activity WHERE application_name = 'keel sim lease'"
+```
+
+**Checkpoints.** The world's writer (`internal/persist`) records, from each
+tick, the boats launched (joined, or given a boat from the queue), returned
+and expired, into the table `event`, within about 200 ms; and every 150
+ticks (5 s) a **checkpoint** of the whole world, the simulation's snapshot
+(its format, the build, catalog and physics layout beside it), into
+`checkpoint`, one row a world, replaced. Neither makes the tick wait: the
+tick hands copies and held frames to an inbox of 300 items, and the writer
+encodes, batches and writes them in one fenced transaction every 200 ms,
+trying again from 0.5 s to 5 s when the database fails, dropping nothing.
+Half full, it holds admission (the `Hold` command, in the input log like
+any other, so replays agree): newcomers wait in the queue. Below a
+quarter, it lets go. Full, the process stops, after a final checkpoint, and
+exits 1.
+
+A new process restores the checkpoint if its format, catalog and physics
+layout are this build's and it is younger than the grace (60 s of world
+time). World time resumes at the present: the boats are where they were,
+none connected; each boat still sailed when the checkpoint was taken
+begins its grace, and a grace already running keeps its end. A player who
+comes back within it gets their boat (`rejoined`); the queue is kept too,
+each place for the grace. Otherwise the world starts empty, and
+`keel_sim_restores_total` and the log say why.
+
+**The bell.** On `SIGTERM`, `keel serve`:
+
+1. is no longer ready; the public listeners stop taking requests, beside
+   the rest (at most 10 s);
+2. sends every game connection `Restart` (the page shows "The harbourmaster
+   rings the bell: the harbour closes for a moment. Your boat will wait for
+   you.", and keeps it until the boat is back);
+3. lets the world sail on for `KEEL_BELL` (3 s), so phones see it;
+4. stops the scripted sailors, then the loop, after its tick;
+5. writes the final checkpoint, of that last frame, and every event left
+   (at most 5 s);
+6. closes every game connection with 1012 (at most 3 s; a peer that has not
+   answered is dropped);
+7. stops the encoder, the input log and the flight recorder, closes the
+   writer's pool, releases the lease, closes the main pool, and shuts the
+   internal listener down.
+
+The page waits 0.5 to 5 s and connects again. With `Recreate` the new pod
+starts once the old has gone, restores the checkpoint and is ready within
+seconds.
+
+**What a restart keeps and loses.** Kept: every boat, its state, controls
+and grace, the queue, the wind, boat IDs. Lost: the connections, which the
+pages make again; a crash (`SIGKILL`, a panic) also loses up to 5 s of the
+world (the last checkpoint is restored) and the last ~200 ms of events. A
+change to the snapshot's format, the catalog or the physics layout makes
+the deploy that carries it a reset, as does a rollback across one. The
+input log stays in memory; the new process's begins with the restored
+world.
+
+On the local cluster, each way a pod can end is one command, and the load
+bot reports what it did:
+
+```sh
+go run ./tools/cluster -deploy    # a new build: the bell, then the new pod
+go run ./tools/cluster -restart   # the same build again (kubectl rollout restart)
+go run ./tools/cluster -kill      # the pod deleted by force: its replacement waits for the lease
+go run ./tools/cluster -crash     # SIGKILL to keel in its container: no bell, the last periodic checkpoint
+go run ./tools/loadbot -n 200 -url https://macbook.local -ca "$(go tool mkcert -CAROOT)/rootCA.pem" -metrics "" -for 3m
+```
 
 ## The database
 
@@ -1045,8 +1159,10 @@ CGO_ENABLED=0 go tool sqlc generate -f internal/store/sqlc.yaml
 
 (Without cgo, sqlc parses with PostgreSQL's parser compiled to WebAssembly,
 so no C compiler is needed.) `pr.lint` runs `sqlc compile` and `sqlc diff`.
-One pool, at most 17 connections, serves the API and starting up; each query
-is timed by its sqlc name.
+One pool, at most 17 connections, serves the API and starting up; the
+world's writer has a pool of its own of 2, and the simulation's lease a
+connection of its own (`application_name` `keel sim lease`): 20 in all.
+Each query is timed by its sqlc name.
 
 ### Tests with a database
 
@@ -1241,7 +1357,7 @@ Vite on `http://localhost:5182` whose traffic goes through the lag proxy;
 and a third on `https://localhost:5183` with a throwaway certificate, for
 WebKit. `connect.spec.ts` sails online: the sea with the server's boat, a
 sail with no correction, the server's wind reaching the boat, the same boat
-after a reload, "returned to port" after a restart, and a second device
+after a reload, the bell and the same boat after a restart, and a second device
 taking the boat and being taken back from. `lag.spec.ts` sails through the
 lag proxy (or, in CI where the runner has it, through netem): no correction
 over the snap thresholds, and the helm answering at once. `together.spec.ts`

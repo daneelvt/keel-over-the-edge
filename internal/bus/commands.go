@@ -19,20 +19,22 @@ type Op uint8
 
 // The commands. Join, Leave and Disconnect come from players' connections;
 // SetWind and Place are for developers only: tests, scripted sailors and
-// replays.
+// replays; Hold is the server's own, from what writes the world to the
+// database.
 const (
 	Join       Op = iota + 1 // a boat for Account, sailed through connection Conn: its existing one, a new one, or a place in the queue
 	Leave                    // Boat leaves the world
 	SetWind                  // the wind becomes Wind
 	Place                    // Boat's state becomes State
 	Disconnect               // connection Conn, Boat's, has ended: its grace begins; with Boat 0, Account's connection Conn, waiting or sailing
+	Hold                     // admission is held while Held: a Join without a boat waits in the queue, and the queue gives none
 	opEnd
 )
 
 // Ops lists every op, in order, for tables keyed by op.
-var Ops = []Op{Join, Leave, SetWind, Place, Disconnect}
+var Ops = []Op{Join, Leave, SetWind, Place, Disconnect, Hold}
 
-var opNames = [...]string{"", "join", "leave", "set_wind", "place", "disconnect"}
+var opNames = [...]string{"", "join", "leave", "set_wind", "place", "disconnect", "hold"}
 
 func (o Op) String() string {
 	if o == 0 || o >= opEnd {
@@ -43,6 +45,10 @@ func (o Op) String() string {
 
 // Developer reports whether only developer sources may send o.
 func (o Op) Developer() bool { return o == SetWind || o == Place }
+
+// Server reports whether only the server's own parts may send o: a
+// developer's sender may too, a player's never.
+func (o Op) Server() bool { return o == Hold }
 
 // An Account is who sails a boat: the account's UUID, its 16 bytes.
 type Account [16]byte
@@ -72,11 +78,12 @@ type Wind struct {
 // channel is its only pointer.
 type Command struct {
 	Op      Op
-	Account Account       // Join, Disconnect with no boat: the account
+	Account Account       // Join, Disconnect with no boat: the account; in a Leave's event, the tick's record of who sailed the boat
 	Conn    uint64        // Join, Disconnect: the connection; 0 for none
 	Boat    uint64        // Leave, Place, Disconnect: the boat; Disconnect: 0 for whatever Account has
 	Wind    Wind          // SetWind
 	State   physics.State // Place
+	Held    bool          // Hold: held, or let go
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply
@@ -91,7 +98,7 @@ const (
 	Rejoined                   // the account's existing boat
 	Full                       // no free slot, and no room in the queue
 	Left                       // the boat has gone
-	Done                       // SetWind or Place applied; Disconnect's grace begun
+	Done                       // SetWind, Place or Hold applied; Disconnect's grace begun
 	NoBoat                     // no such boat
 	Expired                    // the boat left at the end of its grace: the tick's own doing, not a command's
 	Stale                      // Disconnect from a connection that no longer sails the boat, or waits: ignored
@@ -133,7 +140,8 @@ var (
 	// ErrBusy means the queue is full: try again later.
 	ErrBusy = errors.New("bus: the command queue is full")
 	// ErrNotAllowed means the sender may not send that command: a developer
-	// command from a player's sender, or no command at all.
+	// or server command from a player's sender, a command other than the
+	// server's from the server's, or no command at all.
 	ErrNotAllowed = errors.New("bus: command not allowed from this sender")
 )
 
@@ -150,11 +158,15 @@ func NewQueue() *Queue {
 
 // Players returns a sender for players' commands: Join, Leave and
 // Disconnect.
-func (q *Queue) Players() Sender { return Sender{q: q} }
+func (q *Queue) Players() Sender { return Sender{q: q, from: fromPlayers} }
 
 // Developer returns a sender for every command. Only code in the server's own
 // process (tests, scripted sailors, replays) is given one.
-func (q *Queue) Developer() Sender { return Sender{q: q, developer: true} }
+func (q *Queue) Developer() Sender { return Sender{q: q, from: fromDeveloper} }
+
+// Server returns a sender for the server's own commands, Hold alone: what
+// writes the world to the database holds admission while it is behind.
+func (q *Queue) Server() Sender { return Sender{q: q, from: fromServer} }
 
 // Refused counts the commands refused because the queue was full.
 func (q *Queue) Refused() uint64 { return q.refused.Load() }
@@ -172,14 +184,36 @@ func (q *Queue) Receive() (c Command, ok bool) {
 
 // A Sender puts commands on a queue.
 type Sender struct {
-	q         *Queue
-	developer bool
+	q    *Queue
+	from source
+}
+
+// source is who a sender sends for.
+type source uint8
+
+const (
+	fromPlayers source = iota
+	fromDeveloper
+	fromServer
+)
+
+// allowed reports whether a sender for from may send o.
+func (from source) allowed(o Op) bool {
+	switch {
+	case o == 0 || o >= opEnd:
+		return false
+	case from == fromDeveloper:
+		return true
+	case from == fromServer:
+		return o.Server()
+	}
+	return !o.Developer() && !o.Server()
 }
 
 // TrySend queues c without waiting: ErrBusy if the queue is full,
-// ErrNotAllowed if c is a developer command and s is not a developer's.
+// ErrNotAllowed if s may not send c's op.
 func (s Sender) TrySend(c Command) error {
-	if c.Op == 0 || c.Op >= opEnd || c.Op.Developer() && !s.developer {
+	if !s.from.allowed(c.Op) {
 		return ErrNotAllowed
 	}
 	select {

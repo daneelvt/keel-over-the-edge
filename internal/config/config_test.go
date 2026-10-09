@@ -39,7 +39,7 @@ func TestLoadValid(t *testing.T) {
 	want := Config{
 		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://192.168.1.20:5173",
 		AgentsAddr: "127.0.0.1:8081", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
-		BoatLimit: DefaultBoatLimit,
+		BoatLimit: DefaultBoatLimit, Bell: DefaultBell,
 	}
 	if c != want {
 		t.Errorf("defaults %+v, want %+v", c, want)
@@ -67,6 +67,7 @@ func TestLoadValid(t *testing.T) {
 		"KEEL_CLIENT_DIR":    "/srv/keel/client",
 		"KEEL_DEV_SAILORS":   "1000",
 		"KEEL_BOAT_LIMIT":    "2",
+		"KEEL_BELL":          "0",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +75,7 @@ func TestLoadValid(t *testing.T) {
 	want = Config{
 		PlayAddr: ":8080", PlayOrigin: "https://play.keelovertheedge.com", AgentsAddr: ":8081", InternalAddr: "0.0.0.0:9090",
 		LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
-		BoatLimit: 2,
+		BoatLimit: 2, Bell: 0,
 	}
 	if c != want {
 		t.Errorf("got %+v, want %+v", c, want)
@@ -120,17 +121,20 @@ func TestLoadRejects(t *testing.T) {
 			map[string]string{"KEEL_PLAY_ADDR": "x", "KEEL_PLAY_ORIGIN": "ftp://x"},
 			[]string{"KEEL_PLAY_ADDR", "KEEL_PLAY_ORIGIN"},
 		},
-		"agents addr bad":    {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_ADDR": "8081"}, []string{"KEEL_AGENTS_ADDR"}},
-		"internal addr bad":  {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_INTERNAL_ADDR": "x:y"}, []string{"KEEL_INTERNAL_ADDR"}},
-		"same as play":       {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_ADDR": "127.0.0.1:8080"}, []string{"KEEL_AGENTS_ADDR: \"127.0.0.1:8080\" is KEEL_PLAY_ADDR's"}},
-		"wildcard overlaps":  {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_INTERNAL_ADDR": "0.0.0.0:8081"}, []string{"KEEL_INTERNAL_ADDR", "KEEL_AGENTS_ADDR's address"}},
-		"log level":          {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_LOG_LEVEL": "loud"}, []string{"KEEL_LOG_LEVEL"}},
-		"sailors not number": {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "many"}, []string{"KEEL_DEV_SAILORS"}},
-		"sailors negative":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "-1"}, []string{"KEEL_DEV_SAILORS"}},
-		"too many sailors":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "4097"}, []string{"from 0 to 4096"}},
-		"no boats":           {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "0"}, []string{"KEEL_BOAT_LIMIT", "from 1 to 4096"}},
-		"too many boats":     {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "4097"}, []string{"KEEL_BOAT_LIMIT"}},
-		"boats not number":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "lots"}, []string{"KEEL_BOAT_LIMIT"}},
+		"agents addr bad":     {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_ADDR": "8081"}, []string{"KEEL_AGENTS_ADDR"}},
+		"internal addr bad":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_INTERNAL_ADDR": "x:y"}, []string{"KEEL_INTERNAL_ADDR"}},
+		"same as play":        {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_ADDR": "127.0.0.1:8080"}, []string{"KEEL_AGENTS_ADDR: \"127.0.0.1:8080\" is KEEL_PLAY_ADDR's"}},
+		"wildcard overlaps":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_INTERNAL_ADDR": "0.0.0.0:8081"}, []string{"KEEL_INTERNAL_ADDR", "KEEL_AGENTS_ADDR's address"}},
+		"log level":           {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_LOG_LEVEL": "loud"}, []string{"KEEL_LOG_LEVEL"}},
+		"bell not a duration": {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BELL": "3"}, []string{"KEEL_BELL"}},
+		"bell too long":       {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BELL": "11s"}, []string{"from 0s to 10s"}},
+		"bell negative":       {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BELL": "-1s"}, []string{"KEEL_BELL"}},
+		"sailors not number":  {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "many"}, []string{"KEEL_DEV_SAILORS"}},
+		"sailors negative":    {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "-1"}, []string{"KEEL_DEV_SAILORS"}},
+		"too many sailors":    {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "4097"}, []string{"from 0 to 4096"}},
+		"no boats":            {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "0"}, []string{"KEEL_BOAT_LIMIT", "from 1 to 4096"}},
+		"too many boats":      {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "4097"}, []string{"KEEL_BOAT_LIMIT"}},
+		"boats not number":    {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "lots"}, []string{"KEEL_BOAT_LIMIT"}},
 		"everything wrong": {
 			map[string]string{
 				"KEEL_PLAY_ADDR": "x", "KEEL_AGENTS_ADDR": "y", "KEEL_INTERNAL_ADDR": "z",

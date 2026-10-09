@@ -139,6 +139,17 @@ func Pool(t testing.TB) *pgxpool.Pool {
 	return pool
 }
 
+// PoolOn opens a pool on the database at u for the test.
+func PoolOn(t testing.TB, u string) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+
 // Store opens a store on a migrated database for the test.
 func Store(t testing.TB, opt store.Options) (*store.Store, string) {
 	t.Helper()

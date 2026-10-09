@@ -14,7 +14,7 @@
 // front of keel's play listener, at -lag, for the browser tests of a slow
 // network, which reach it through a Vite of their own; and, on
 // 127.0.0.1:19099, POST /restart, which stops keel as a deployment does and
-// starts it again, for the tests of a restart. WebKit sends a Secure cookie
+// starts it again, for the tests of a restart (with no bell: KEEL_BELL=0s). WebKit sends a Secure cookie
 // to https only, even on localhost, so its tests reach keel through a Vite
 // serving https with the certificate -tls writes.
 package main
@@ -119,6 +119,8 @@ func run() error {
 		"KEEL_INTERNAL_ADDR="+internalAddr,
 		"KEEL_LOG_LEVEL=warn",
 		"KEEL_DEV_COMMANDS=1",
+		// A restart in a test needs no time for the bell to be seen.
+		"KEEL_BELL=0s",
 		fmt.Sprintf("KEEL_DEV_SAILORS=%d", *sailors),
 	)
 	if *limit > 0 {

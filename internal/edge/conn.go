@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,6 +24,7 @@ import (
 type conn struct {
 	e       *Edge
 	ws      *websocket.Conn
+	raw     net.Conn // the socket under ws
 	id      uint64
 	account bus.Account
 	reqID   string
@@ -96,10 +98,11 @@ type outgoing struct {
 	kind int
 }
 
-func newConn(e *Edge, ws *websocket.Conn, account bus.Account, reqID string) *conn {
+func newConn(e *Edge, ws *websocket.Conn, raw net.Conn, account bus.Account, reqID string) *conn {
 	c := &conn{
 		e:       e,
 		ws:      ws,
+		raw:     raw,
 		id:      e.nextConn.Add(1),
 		account: account,
 		reqID:   reqID,
@@ -534,6 +537,16 @@ func (c *conn) close(code websocket.StatusCode, reason string) {
 			_ = c.ws.Close(code, reason)
 		}()
 	})
+}
+
+// force closes the connection's socket at once, whatever close is under
+// way: a close's handshake waiting on a peer that does not answer ends.
+// (The library's CloseNow, after a Close, waits for that Close.)
+func (c *conn) force() {
+	c.drop()
+	if c.raw != nil {
+		_ = c.raw.Close()
+	}
 }
 
 // drop closes the connection without a close frame.

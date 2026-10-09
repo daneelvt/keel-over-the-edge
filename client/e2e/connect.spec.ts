@@ -3,9 +3,9 @@
 // The game connection in the browser, against keel (tools/e2e): a guest
 // connects and the sea appears with the server's boat; a sail predicted
 // with no correction; a wind changed on the server reaches the boat; a
-// reload within the grace finds the same boat; a restart of keel brings the
-// boat back to port; and a second device takes the boat, and is taken back
-// from. One back end is enough: the drawing is not under test.
+// reload within the grace finds the same boat; a restart of keel rings the
+// harbourmaster's bell and the same boat is there after; and a second
+// device takes the boat, and is taken back from. One back end is enough: the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
 import { guest, sail } from './helpers';
@@ -79,20 +79,24 @@ test('a reload within the grace finds the same boat', async ({ page, context }) 
   expect(Math.hypot(now.x - at.x, now.y - at.y)).toBeLessThan(40);
 });
 
-test('a restart of keel brings the boat back to port', async ({ page, context, request }) => {
+test('a restart of keel rings the bell, and the boat waits for its sailor', async ({
+  page,
+  context,
+  request,
+}) => {
   await guest(context);
   await sail(page);
   const before = await net(page);
+  const line = page.locator('[data-readout="connection"]');
+  const bell = expect(line).toHaveText(/harbourmaster rings the bell/, { timeout: 30_000 });
   expect((await request.post(`${control}/restart`, { timeout: 60_000 })).status()).toBe(204);
-  await page.waitForFunction(
-    (boat) => {
-      const n = globalThis.keel.net();
-      return n.status === 'sailing' && n.boat !== boat;
-    },
-    before.boat,
-    { timeout: 30_000 },
-  );
-  await expect(page.locator('[data-readout="connection"]')).toHaveText(/returned to port/);
+  await bell;
+  await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
+    timeout: 30_000,
+  });
+  expect((await net(page)).boat).toBe(before.boat);
+  // Back aboard: the line goes.
+  await expect(line).toHaveCount(0);
 });
 
 test('another device takes the boat, and Take over takes it back', async ({ page, browser }) => {

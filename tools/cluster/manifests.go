@@ -13,11 +13,14 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/config"
 )
 
 // The entry points of the local cluster, applied in this order, each once
@@ -184,6 +187,8 @@ var rules = []rule{
 	{"no route to the internal listener", noInternalRoute},
 	{"routes on the Gateway's listeners", routesOnListeners},
 	{"the database's access and locale", databaseCluster},
+	{"the database's restarts", databaseRestarts},
+	{"keel's time to stop", stopTime},
 }
 
 // checkRules checks objs against every rule. local is whether they are the
@@ -515,4 +520,54 @@ func databaseCluster(objs []object, _ bool) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// databaseRestarts: a restart of the database takes seconds, not the
+// smart shutdown's default of 180 s that keel, always connected, can never
+// end; and clients' keepalives free the lease of a keel that vanished.
+func databaseRestarts(objs []object, _ bool) error {
+	var errs []error
+	for _, o := range objs {
+		if o.kind() != "Cluster" {
+			continue
+		}
+		if t, ok := get(o, "spec", "smartShutdownTimeout").(int); !ok || t > 30 {
+			errs = append(errs, fmt.Errorf("%s: smartShutdownTimeout %v, want 30 s at most", o.id(), get(o, "spec", "smartShutdownTimeout")))
+		}
+		for _, p := range []string{"tcp_keepalives_idle", "tcp_keepalives_interval", "tcp_keepalives_count"} {
+			if str(o, "spec", "postgresql", "parameters", p) == "" {
+				errs = append(errs, fmt.Errorf("%s: %s is not set", o.id(), p))
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// stopTime: the time Kubernetes gives keel's pod to stop leaves room for the
+// bell, the final checkpoint, the game connections' closes, and 10 s more.
+func stopTime(objs []object, _ bool) error {
+	o := find(objs, "Deployment", deployment)
+	if o == nil {
+		return nil
+	}
+	bell := config.DefaultBell
+	for _, c := range objs {
+		if c.kind() != "ConfigMap" || !strings.HasPrefix(c.name(), "keel") {
+			continue
+		}
+		if v := str(c, "data", "KEEL_BELL"); v != "" {
+			d, err := time.ParseDuration(v)
+			if err != nil {
+				return fmt.Errorf("KEEL_BELL %q: %w", v, err)
+			}
+			bell = d
+		}
+	}
+	need := bell + config.FinalCheckpointTimeout + config.CloseTimeout + 10*time.Second
+	grace, ok := get(podSpec(o), "terminationGracePeriodSeconds").(int)
+	if !ok || time.Duration(grace)*time.Second < need {
+		return fmt.Errorf("terminationGracePeriodSeconds %v, want at least %v: the bell, the final checkpoint, the closes and 10 s",
+			get(podSpec(o), "terminationGracePeriodSeconds"), need)
+	}
+	return nil
 }

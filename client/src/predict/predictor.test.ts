@@ -14,7 +14,7 @@ import { beforeAll, describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { BEHIND, newClockState } from '../net/clock';
 import type { FromWorker, ToWorker } from '../net/messages';
-import { Online, type Port } from '../net/online';
+import { BELL_TEXT, Online, type Port } from '../net/online';
 import { RELOAD_EVERY, reloadForVersion } from '../net/reload';
 import { NO_MARGIN, newSnapshot, type OwnSnapshot, writeSnapshot } from '../net/snapshot';
 import { FLEET_RECORD_BYTES } from '../net/view';
@@ -284,6 +284,50 @@ describe('the queue and the fleet online', () => {
     o.fleet.update(0, 0);
     expect(o.fleet.count).toBe(0);
     expect(port.sent.filter((m) => m.type === 'return').map((m) => m.type)).toEqual(['return']);
+  });
+});
+
+describe('the bell online', () => {
+  async function sailing() {
+    const p = await predictor();
+    const port = new FakePort();
+    const o = new Online(port, p, {
+      helm: { target: 0 },
+      sheet: { target: 0.5 },
+      beforeStep: null,
+      clock: { steps: 0, alpha: 0 },
+    });
+    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100 });
+    port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
+    return { o, port };
+  }
+  const status = (s: 'sailing' | 'waiting' | 'connecting') =>
+    ({ type: 'status', status: s, waitMs: 0, reason: '' }) as const;
+
+  test('its line stays through the close and the reconnecting, until the boat is back', async () => {
+    const { o, port } = await sailing();
+    expect(o.notice.value).toBeNull();
+    port.deliver({ type: 'restart', inMs: 3000 });
+    expect(o.notice.value).toEqual({ text: BELL_TEXT, takeover: false });
+    for (const s of ['waiting', 'connecting', 'waiting', 'connecting'] as const) {
+      port.deliver(status(s));
+      expect(o.notice.value?.text).toBe(BELL_TEXT);
+    }
+    port.deliver({ type: 'welcome', boat: 1, rejoined: true, kind: 0, tick: 400 });
+    port.deliver(status('sailing'));
+    expect(o.notice.value).toBeNull();
+    // A later drop is an ordinary one again.
+    port.deliver(status('waiting'));
+    expect(o.notice.value?.text).toBe('Reconnecting…');
+  });
+
+  test('a Welcome to a new boat after it says the boat returned to port', async () => {
+    const { o, port } = await sailing();
+    port.deliver({ type: 'restart', inMs: 0 });
+    port.deliver(status('waiting'));
+    port.deliver({ type: 'welcome', boat: 2, rejoined: false, kind: 0, tick: 400 });
+    port.deliver(status('sailing'));
+    expect(o.notice.value?.text).toBe('Your boat has returned to port.');
   });
 });
 

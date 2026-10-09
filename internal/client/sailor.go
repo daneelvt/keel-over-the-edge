@@ -56,6 +56,7 @@ type Stats struct {
 	Dropped   int
 	Resyncs   int
 	Queued    int // Queued messages
+	Bells     int // Restart messages: the server about to restart
 }
 
 // Percentile is the p-th percentile of the corrections' sizes.
@@ -229,6 +230,9 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			}
 			if ev.Dropped {
 				s.Stats.Dropped++
+			}
+			if ev.Restart != nil {
+				s.Stats.Bells++
 			}
 			if v := ev.View; v != nil {
 				s.view(&ev)

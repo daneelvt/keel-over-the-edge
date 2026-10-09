@@ -409,7 +409,7 @@ func TestSnapshotRoundTrips(t *testing.T) {
 	if again := AppendSnapshot(nil, g); !bytes.Equal(again, snap) {
 		t.Fatal("a snapshot read and written again differs")
 	}
-	if g.Tick != f.Tick || g.Wind != f.Wind || g.NextBoat != f.NextBoat || !slices.Equal(g.Live, f.Live) ||
+	if g.Tick != f.Tick || g.Wind != f.Wind || g.NextBoat != f.NextBoat || g.Held != f.Held || !slices.Equal(g.Live, f.Live) ||
 		!slices.Equal(g.Gen, f.Gen) || !slices.Equal(g.Occupied, f.Occupied) || !slices.Equal(g.Queue, f.Queue) {
 		t.Fatal("the frame read differs")
 	}
@@ -493,6 +493,8 @@ func TestDigest(t *testing.T) {
 		"waiting account":  func() { g.Queue[1].Account[0] ^= 1 },
 		"waiting conn":     func() { g.Queue[1].Conn++ },
 		"waiting since":    func() { g.Queue[1].Since++ },
+		"waiting grace":    func() { g.Queue[1].Grace++ },
+		"hold":             func() { g.Held = !g.Held },
 		"queue's order":    func() { g.Queue[0], g.Queue[1] = g.Queue[1], g.Queue[0] },
 		"one waiting less": func() { g.Queue = g.Queue[1:] },
 	} {

@@ -172,10 +172,46 @@ func (r *Report) print(w io.Writer, cfg Config) {
 		}
 		fmt.Fprintf(w, "  connections ended early: %s\n", strings.Join(parts, ", "))
 	}
+	r.printReturns(w)
 	if s := r.Server; s.Read {
 		fmt.Fprintf(w, "server: %.0f boats, %.0f connections, %.0f encoders; tick p99 ≤ %.1f ms (mean %.2f ms); encoding a frame p99 ≤ %.2f ms (mean %.3f ms) an encoder; %.0f frames allocated; %.0f B/s out in all\n",
 			s.Boats, s.Connections, s.Encoders, s.TickP99*1000, s.TickMean*1000, s.EncodeP99*1000, s.EncodeMean*1000, s.FramesAllocated, s.BytesOut)
 	}
+}
+
+// printReturns writes how the players came back after their connections
+// ended, as at a server's restart: how many, to their own boats or to new
+// ones, after how long a pause and how far from where their boats had been.
+func (r *Report) printReturns(w io.Writer) {
+	var pauses, distances []float64
+	var rejoined, fresh, bells int
+	for _, p := range r.Players {
+		bells += p.Stats.Bells
+		for _, b := range p.Returns {
+			pauses = append(pauses, b.Pause.Seconds())
+			distances = append(distances, b.Distance)
+			if b.Rejoined {
+				rejoined++
+			} else {
+				fresh++
+			}
+		}
+	}
+	if len(pauses) == 0 && bells == 0 {
+		return
+	}
+	fmt.Fprintf(w, "  came back %d times (%d bells heard): %d to their own boat, %d to a new one\n", len(pauses), bells, rejoined, fresh)
+	if len(pauses) > 0 {
+		fmt.Fprintf(w, "  the pause, s: %s\n", percentiles(pauses))
+		fmt.Fprintf(w, "  the boat from where it was, m: %s\n", percentiles(distances))
+	}
+}
+
+// percentiles is a list of numbers' median, 95th percentile and most.
+func percentiles(v []float64) string {
+	s := slices.Sorted(slices.Values(v))
+	at := func(q float64) float64 { return s[min(len(s)-1, int(math.Ceil(q*float64(len(s))))-1)] }
+	return fmt.Sprintf("median %.2f, p95 %.2f, most %.2f", at(0.5), at(0.95), s[len(s)-1])
 }
 
 func ratio(a, b int) float64 {

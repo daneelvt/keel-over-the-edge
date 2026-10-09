@@ -42,6 +42,8 @@ export type Received =
   /** Its base was gone: out asks for a full snapshot. */
   | { kind: 'dropped'; tick: number; out: Uint8Array<ArrayBuffer>[] }
   | { kind: 'queued'; position: number; waiting: number }
+  /** The server is about to restart, in about inMs. */
+  | { kind: 'restart'; inMs: number }
   | { kind: 'pong' }
   | { kind: 'other' };
 
@@ -143,6 +145,9 @@ export class Session {
         this.clock.sample(Number(m.body.value.clientTimeUs), Number(m.body.value.worldTimeUs), now);
         this.#lastHeard = now;
         return { kind: 'pong' };
+      case 'restart':
+        this.#lastHeard = now;
+        return { kind: 'restart', inMs: m.body.value.inMs };
     }
     return { kind: 'other' };
   }

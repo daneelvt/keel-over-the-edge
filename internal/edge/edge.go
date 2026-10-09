@@ -22,8 +22,10 @@
 package edge
 
 import (
+	"bufio"
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -264,7 +266,8 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rc := http.NewResponseController(w)
 	_ = rc.SetReadDeadline(time.Time{})
 	_ = rc.SetWriteDeadline(time.Time{})
-	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+	hj := &hijacked{ResponseWriter: w}
+	ws, err := websocket.Accept(hj, r, &websocket.AcceptOptions{
 		OriginPatterns:  e.origins,
 		CompressionMode: websocket.CompressionDisabled,
 	})
@@ -278,13 +281,26 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e.m.upgrade[upgradeOK].Inc()
-	c := newConn(e, ws, bus.Account(acc.ID), obs.RequestID(r.Context()))
+	c := newConn(e, ws, hj.conn, bus.Account(acc.ID), obs.RequestID(r.Context()))
 	if !e.track(c) {
 		_ = ws.Close(websocket.StatusServiceRestart, "the server is restarting")
 		return
 	}
 	defer e.untrack(c)
 	c.run()
+}
+
+// hijacked keeps the socket the library hijacks, so a connection can be
+// closed under a close handshake its peer never answers.
+type hijacked struct {
+	http.ResponseWriter
+	conn net.Conn
+}
+
+func (h *hijacked) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	c, brw, err := http.NewResponseController(h.ResponseWriter).Hijack()
+	h.conn = c
+	return c, brw, err
 }
 
 // track counts c as open, unless the edge is closing.

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -194,13 +195,138 @@ const (
 var bubbleEpoch = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // memDB is a database in memory, for servers in synctest bubbles, which
-// cannot wait on a real one: one world, no guests.
+// cannot wait on a real one: one world, no guests; the simulation's lease,
+// the world's checkpoint and its events. Two servers given one share them,
+// as two processes share a database.
 type memDB struct {
 	epoch    time.Time
 	onClose  func()
 	sessions *edgetest.Sessions // nil for none
 	mu       sync.Mutex
 	closed   bool
+
+	once       sync.Once
+	free       chan struct{} // holds a token while the lease is free
+	leaseEpoch int64
+	holder     string
+	lose       chan struct{} // closed: the holder's lease is lost for good
+	checkpoint *store.Checkpoint
+	events     []store.Event
+	down       bool // the world's writes fail
+}
+
+func (d *memDB) init() {
+	d.once.Do(func() {
+		d.free = make(chan struct{}, 1)
+		d.free <- struct{}{}
+		d.lose = make(chan struct{})
+	})
+}
+
+func (d *memDB) LatestCheckpoint(context.Context, [16]byte) (store.Checkpoint, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.checkpoint == nil {
+		return store.Checkpoint{}, store.ErrNotFound
+	}
+	return *d.checkpoint, nil
+}
+
+// state is the world's checkpoint, its events and the lease's epoch.
+func (d *memDB) state() (*store.Checkpoint, []store.Event, int64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.checkpoint, slices.Clone(d.events), d.leaseEpoch
+}
+
+func (d *memDB) openLease(_ string, opt store.LeaseOptions) (lease, error) {
+	d.init()
+	return &memLease{d: d, opt: opt}, nil
+}
+
+// memLease is the lease in a memDB: a token, taken or put back.
+type memLease struct {
+	d    *memDB
+	opt  store.LeaseOptions
+	held bool
+}
+
+func (l *memLease) Take(ctx context.Context) (int64, error) {
+	d := l.d
+	t := time.NewTicker(store.LeasePoll)
+	defer t.Stop()
+	for {
+		select {
+		case <-d.free:
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			d.leaseEpoch++
+			d.holder = l.opt.Holder
+			l.held = true
+			return d.leaseEpoch, nil
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-t.C:
+			d.mu.Lock()
+			holder := d.holder
+			d.mu.Unlock()
+			l.opt.Beat()
+			l.opt.Waiting(holder)
+		}
+	}
+}
+
+func (l *memLease) Watch(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-l.d.lose:
+		l.opt.Lost("lost")
+		return store.ErrLeaseLost
+	}
+}
+
+func (l *memLease) Release(context.Context) {
+	if l.held {
+		l.held = false
+		l.d.free <- struct{}{}
+	}
+}
+
+func (d *memDB) openWriter(context.Context, string, store.Options) (worldWriter, error) {
+	return memWriter{d}, nil
+}
+
+// memWriter is the world's writer on a memDB, with a pool of its own to
+// close.
+type memWriter struct{ *memDB }
+
+func (memWriter) Close() {}
+
+// with has a server use d for its database, its lease and its writer.
+func (d *memDB) with(opt serveOptions) serveOptions {
+	opt.openDB, opt.openLease, opt.openWriter = d.open, d.openLease, d.openWriter
+	return opt
+}
+
+// Write is the world's writer's: fenced by the lease's epoch.
+func (d *memDB) Write(_ context.Context, b store.Batch) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	switch {
+	case b.Epoch != d.leaseEpoch:
+		return fmt.Errorf("%w: the epoch is %d, the writer's %d", store.ErrFenced, d.leaseEpoch, b.Epoch)
+	case d.down:
+		return errors.New("the database is down")
+	}
+	d.events = append(d.events, b.Events...)
+	if b.Checkpoint != nil {
+		c := *b.Checkpoint
+		c.Data = slices.Clone(c.Data)
+		c.Epoch, c.WrittenAt = b.Epoch, time.Now()
+		d.checkpoint = &c
+	}
+	return nil
 }
 
 func (d *memDB) CreateGuest(context.Context, store.Guest) (store.AccountID, error) {
@@ -271,7 +397,7 @@ func startServer(t *testing.T, vars map[string]string, n *memNet, opt serveOptio
 	vars["KEEL_DATABASE_URL"] = "postgres://keel@db.example.com/keel"
 	opt.listen = n.listen
 	if opt.openDB == nil {
-		opt.openDB = (&memDB{epoch: bubbleEpoch}).open
+		opt = (&memDB{epoch: bubbleEpoch}).with(opt)
 	}
 	if opt.workers == 0 {
 		opt.workers = 2
@@ -527,14 +653,14 @@ func TestPanicInTheTick(t *testing.T) {
 		n := newMemNet()
 		ticks := 0
 		vars := map[string]string{"KEEL_PLAY_ORIGIN": "https://play.example.com", "KEEL_DATABASE_URL": "postgres://keel@db.example.com/keel"}
-		err := runServer(context.Background(), env(vars), io.Discard, serveOptions{
-			listen: n.listen, workers: 2, openDB: (&memDB{epoch: firstEpoch}).open,
+		err := runServer(context.Background(), env(vars), io.Discard, (&memDB{epoch: firstEpoch}).with(serveOptions{
+			listen: n.listen, workers: 2,
 			afterTick: func(int64) {
 				if ticks++; ticks == 4 {
 					panic("a planted panic in the tick")
 				}
 			},
-		})
+		}))
 		fmt.Println("runServer returned:", err)
 		os.Exit(0)
 	}

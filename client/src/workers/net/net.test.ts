@@ -403,6 +403,18 @@ describe('the net worker', () => {
     expect(h.sockets.length).toBe(2);
   });
 
+  test('the bell is passed on, and the close after it is a restart’s', async () => {
+    const h = harness();
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    h.welcome(s);
+    s.deliver(encodeServer({ body: { case: 'restart', value: { inMs: 3000 } } }));
+    expect(h.posted.at(-1)).toEqual({ type: 'restart', inMs: 3000 });
+    s.end(1012);
+    expect(h.posted.at(-1)).toMatchObject({ type: 'status', status: 'waiting', waitMs: 2750 });
+  });
+
   test('4001: no reconnecting until the player takes over', async () => {
     const h = harness();
     h.start();

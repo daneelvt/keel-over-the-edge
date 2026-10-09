@@ -80,6 +80,16 @@ type Metrics struct {
 
 	Grace *prometheus.CounterVec // by result: started, rejoined, expired
 
+	LeaseEpoch        prometheus.Gauge
+	LeaseWait         prometheus.Gauge
+	LeaseLost         *prometheus.CounterVec // by outcome: retaken, lost, fenced
+	Restores          *prometheus.CounterVec // by result
+	RestoredBoats     prometheus.Gauge
+	RestoreGap        prometheus.Gauge
+	PersistBatch      prometheus.Histogram
+	PersistCheckpoint prometheus.Histogram
+	PersistWrites     *prometheus.CounterVec // by result: ok, failed, fenced
+
 	EdgeConnections     prometheus.Gauge
 	EdgeUpgrades        *prometheus.CounterVec // by result
 	EdgeHellos          *prometheus.CounterVec // by result
@@ -251,6 +261,45 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.ClientFrame = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "keel_client_frame_seconds", Help: "The clients' 95th percentile frame times.", Buckets: ClientBuckets,
 	})
+	m.LeaseEpoch = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_sim_lease_epoch", Help: "The simulation lease's epoch this process took it at: one more for each process that has run the world.",
+	})
+	m.LeaseWait = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_sim_lease_wait_seconds", Help: "How long this process waited for the simulation lease as it started.",
+	})
+	m.LeaseLost = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_sim_lease_lost_total",
+		Help: "The simulation lease's connection lost and taken back with its epoch unchanged (retaken), or not (lost); or a write refused because another took the lease (fenced).",
+	}, []string{"outcome"})
+	m.Restores = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_sim_restores_total",
+		Help: "The world's checkpoint as the process started: restored, none, too_old (older than the grace) or incompatible (another format, catalog or physics layout).",
+	}, []string{"result"})
+	m.RestoredBoats = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_sim_restored_boats", Help: "Boats restored from the checkpoint as the process started.",
+	})
+	m.RestoreGap = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_sim_restore_gap_seconds", Help: "World time between the checkpoint restored and the process's first tick.",
+	})
+	m.PersistBatch = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_persist_batch_duration_seconds", Help: "How long writing each batch of the world's events and checkpoint took.", Buckets: DBBuckets,
+	})
+	m.PersistCheckpoint = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_persist_checkpoint_duration_seconds", Help: "How long writing each batch that held a checkpoint took.", Buckets: DBBuckets,
+	})
+	m.PersistWrites = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_persist_batches_total", Help: "Batches of the world's events and checkpoint, by result: ok, failed (tried again) or fenced.",
+	}, []string{"result"})
+	for _, o := range []string{"retaken", "lost", "fenced"} {
+		m.LeaseLost.WithLabelValues(o)
+	}
+	for _, r := range []string{"restored", "none", "too_old", "incompatible"} {
+		m.Restores.WithLabelValues(r)
+	}
+	for _, r := range []string{"ok", "failed", "fenced"} {
+		m.PersistWrites.WithLabelValues(r)
+	}
+	reg.MustRegister(m.LeaseEpoch, m.LeaseWait, m.LeaseLost, m.Restores, m.RestoredBoats, m.RestoreGap, m.PersistBatch, m.PersistCheckpoint, m.PersistWrites)
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame,
 		m.EdgeEncoders, m.EdgeQueued, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)

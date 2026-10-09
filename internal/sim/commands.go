@@ -13,6 +13,7 @@ import (
 func (w *World) apply(c *bus.Command) {
 	f := w.next
 	var r bus.Reply
+	var sailor bus.Account // a Leave's: the boat's
 	switch c.Op {
 	case bus.Join:
 		r = w.join(c.Account, c.Conn)
@@ -20,6 +21,7 @@ func (w *World) apply(c *bus.Command) {
 		r = bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: c.Boat}
 		if s := slotOf(f, c.Boat); s >= 0 {
 			r = bus.Reply{Result: bus.Left, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
+			sailor = f.Owner[s]
 			w.free(s)
 		}
 	case bus.SetWind:
@@ -37,12 +39,18 @@ func (w *World) apply(c *bus.Command) {
 		} else {
 			r = w.disconnect(c.Boat, c.Conn)
 		}
+	case bus.Hold:
+		f.Held = c.Held
+		r = bus.Reply{Result: bus.Done, Slot: -1}
 	default:
 		return
 	}
 	r.Tick = f.Tick
 	ev := bus.Event{Command: *c, Reply: r}
 	ev.Command.Reply = nil
+	if c.Op == bus.Leave {
+		ev.Account = sailor
+	}
 	f.Events = append(f.Events, ev)
 	if c.Reply != nil {
 		select {
@@ -54,9 +62,18 @@ func (w *World) apply(c *bus.Command) {
 
 // expire takes out the boats whose grace has ended, each recorded as an
 // event of its own: a Leave with the result Expired, which a replay does
-// not apply again, since the tick does it.
+// not apply again, since the tick does it; and gives up the places in the
+// queue kept for accounts that have not come back, which the tick does
+// too.
 func (w *World) expire() {
 	f := w.next
+	kept := f.Queue[:0]
+	for _, q := range f.Queue {
+		if q.Grace == 0 || f.Tick < q.Grace {
+			kept = append(kept, q)
+		}
+	}
+	f.Queue = kept
 	for i := 0; i < len(f.Live); {
 		s := f.Live[i]
 		if g := f.Grace[s]; g == 0 || f.Tick < g {
@@ -65,8 +82,9 @@ func (w *World) expire() {
 		}
 		boat := f.Boat[s]
 		r := bus.Reply{Result: bus.Expired, Slot: s, Boat: boat, Gen: f.Gen[s], Tick: f.Tick}
+		sailor := f.Owner[s]
 		w.free(s)
-		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Leave, Boat: boat}, Reply: r})
+		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Leave, Boat: boat, Account: sailor}, Reply: r})
 	}
 }
 

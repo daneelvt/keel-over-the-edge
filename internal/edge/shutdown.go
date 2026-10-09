@@ -7,22 +7,41 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
 
-// Shutdown closes every game connection with 1012 (Service Restart) and
-// refuses new ones, then waits for them to finish. http.Server's Shutdown
-// leaves hijacked connections alone, so the server stops its listeners,
-// then calls this, before the simulation stops. Live clients answer the
-// close at once; a dead one holds its close for the library's timeouts, up
-// to 10 s. It returns early, with ctx's error, if ctx ends first.
-func (e *Edge) Shutdown(ctx context.Context) error {
+// Bell tells every game connection the server is about to restart, in
+// about in, and refuses new connections from now on; the connections stay
+// open, their boats sailing, until Shutdown.
+func (e *Edge) Bell(in time.Duration) {
+	msg := &pb.ServerMessage{Body: &pb.ServerMessage_Restart{Restart: &pb.Restart{InMs: uint32(in.Milliseconds())}}}
+	for _, c := range e.closeDoor() {
+		c.send(msg, outRestart)
+	}
+}
+
+// closeDoor refuses new connections, and returns those open.
+func (e *Edge) closeDoor() []*conn {
 	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.closing = true
 	open := make([]*conn, 0, len(e.conns))
 	for c := range e.conns {
 		open = append(open, c)
 	}
-	e.mu.Unlock()
+	return open
+}
+
+// Shutdown closes every game connection with 1012 (Service Restart) and
+// refuses new ones, then waits for them to finish. http.Server's Shutdown
+// leaves hijacked connections alone, so the server stops its listeners,
+// then calls this. Live clients answer the close at once; a connection
+// still open when ctx ends, whose peer is not answering, is dropped
+// without its handshake, as its client's own check of the connection would
+// drop it soon anyway. It returns ctx's error if any had to be dropped.
+func (e *Edge) Shutdown(ctx context.Context) error {
+	open := e.closeDoor()
 	for _, c := range open {
 		c.close(websocket.StatusServiceRestart, "the server is restarting")
 	}
@@ -34,17 +53,12 @@ func (e *Edge) Shutdown(ctx context.Context) error {
 	var err error
 	select {
 	case <-done:
-		// Each connection's Disconnect is queued; the tick after next has
-		// surely applied it, so its boat's grace is in the input log.
-		applied := e.latest.Load() + 2
-		for len(open) > 0 && e.latest.Load() < applied && ctx.Err() == nil {
-			select {
-			case <-ctx.Done():
-			case <-time.After(10 * time.Millisecond):
-			}
-		}
 	case <-ctx.Done():
 		err = ctx.Err()
+		for _, c := range open {
+			c.force()
+		}
+		<-done
 	}
 	// What waits on the simulation for a connection that has gone (a late
 	// Join's answer, a Disconnect the queue had no room for) stops now.

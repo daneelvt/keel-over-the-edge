@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The connection, as the player sees it: nothing while it is well; a quiet
-// line while it reconnects, with the boat sailing on under prediction; that
-// the boat returned to port, if it had to; and that another device has the
-// boat, with a button to take it back.
+// line while it reconnects, with the boat sailing on under prediction; the
+// harbourmaster's bell, when the server is about to restart, kept until the
+// boat is back; that the boat returned to port, if it had to; and that
+// another device has the boat, with a button to take it back.
 
 import type { ReadonlySignal } from '@preact/signals';
 import type { Notice } from '../net/online';

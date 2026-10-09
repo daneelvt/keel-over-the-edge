@@ -48,7 +48,8 @@ func (w *World) phaseDone(p Phase) {
 }
 
 // inputs copies the world into the next frame, then applies what changed:
-// first the boats whose grace has ended leave, then the control words of the
+// first the boats whose grace has ended leave, and the places in the queue
+// whose grace has ended are given up; then the control words of the
 // boats sailing are applied, each once its tick has come (bus.Due), then
 // the commands, in the order they came; last, while there is room, those
 // waiting in the queue get their boats, the longest waiting first.
@@ -59,6 +60,7 @@ func (w *World) inputs() {
 	w.skip = 0
 	next.Wind = cur.Wind
 	next.NextBoat = cur.NextBoat
+	next.Held = cur.Held
 	next.Live = append(next.Live[:0], cur.Live...)
 	copy(next.Occupied, cur.Occupied)
 	copy(next.Gen, cur.Gen)

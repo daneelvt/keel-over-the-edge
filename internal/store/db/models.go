@@ -19,6 +19,29 @@ type Account struct {
 	LastSeenAt time.Time
 }
 
+type Checkpoint struct {
+	WorldID   pgtype.UUID
+	Tick      int64
+	Format    int16
+	Build     string
+	Catalog   string
+	Layout    int32
+	Epoch     int64
+	Boats     int32
+	Data      []byte
+	WrittenAt time.Time
+}
+
+type Event struct {
+	WorldID   pgtype.UUID
+	ID        pgtype.UUID
+	Tick      int64
+	Kind      string
+	AccountID pgtype.UUID
+	Boat      int64
+	WrittenAt time.Time
+}
+
 type Sailor struct {
 	AccountID pgtype.UUID
 	Name      string
@@ -33,6 +56,13 @@ type Session struct {
 	TokenHash  []byte
 	CreatedAt  time.Time
 	LastSeenAt time.Time
+}
+
+type SimLease struct {
+	Singleton bool
+	Epoch     int64
+	Holder    string
+	Since     pgtype.Timestamptz
 }
 
 type World struct {

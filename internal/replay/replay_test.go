@@ -86,8 +86,8 @@ func (s *session) start() { go func() { s.done <- s.log.Run() }() }
 
 // sail runs ticks with sailors joining, waiting and giving up waiting,
 // leaving, disconnecting (their boats leaving when their grace ends, unless
-// they join again), steering and trimming, the wind changing and a boat
-// placed now and then.
+// they join again), steering and trimming, the wind changing, a boat placed
+// and admission held and let go now and then.
 func (s *session) sail(ticks int) {
 	q := s.w.Bus().Commands.Developer()
 	for range ticks {
@@ -113,6 +113,9 @@ func (s *session) sail(ticks int) {
 			q.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 2 + 8*s.rng.Float64(), From: s.rng.Float64()}})
 		case r < 7 && len(f.Live) > 0:
 			q.TrySend(bus.Command{Op: bus.Place, Boat: f.Boat[f.Live[0]], State: physics.State{X: 3, Heading: 1}})
+		case r < 8:
+			// Admission held now and then, as while the database is behind.
+			q.TrySend(bus.Command{Op: bus.Hold, Held: !f.Held})
 		}
 		for _, sl := range f.Live {
 			if s.rng.IntN(20) == 0 {
