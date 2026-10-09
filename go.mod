@@ -2,7 +2,7 @@ module github.com/daneelvt/keel-over-the-edge
 
 go 1.27
 
-toolchain go1.27.1
+toolchain go1.27.2
 
 tool (
 	filippo.io/mkcert

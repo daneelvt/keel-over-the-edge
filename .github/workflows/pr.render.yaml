@@ -234,7 +234,7 @@ jobs:
         working-directory: client
         env:
           KEEL_LAG_BASE: http://localhost:5181
-        run: npx --no-install playwright test --project webgl2 e2e/lag.spec.ts
+        run: npx --no-install playwright test e2e/lag.spec.ts --project webgl2
 
   pr-render:
     name: pr-render
