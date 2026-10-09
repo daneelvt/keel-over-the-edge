@@ -37,6 +37,7 @@ jobs:
               - 'tools/**'
               - 'client/**'
               - 'art/**'
+              - 'shared/**'
 
   lint:
     name: lint
@@ -50,7 +51,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - name: gofmt, go vet, staticcheck, sqlc, the look-alike table, Biome, tsc
+      - name: gofmt, go vet, staticcheck, sqlc, the look-alike table, buf lint, the protocol's generated code, Biome, tsc
         run: go run ./tools/dev -lint
 
   pr-lint:

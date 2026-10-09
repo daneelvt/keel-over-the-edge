@@ -2,14 +2,16 @@
 
 // The game through tools/lag at 200 ms round trip and 2% of packets lost
 // each way (tools/e2e runs the proxy; a Vite of its own on port 5182 sends
-// the game's traffic through it): a sail with the tiller dragged to and fro
+// the game's traffic through it), or through netem (KEEL_LAG_BASE): a sail with the tiller dragged to and fro
 // draws no correction over the snap thresholds, and the boat still answers
 // the helm on the frame it is moved.
 
 import { expect, test } from '@playwright/test';
 import { guest, sail } from './helpers';
 
-const lagged = 'http://localhost:5182';
+// CI's netem job sends the page's traffic through the kernel's own delay
+// and loss instead, by the direct Vite.
+const lagged = process.env.KEEL_LAG_BASE ?? 'http://localhost:5182';
 
 test.beforeEach(() => {
   test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
