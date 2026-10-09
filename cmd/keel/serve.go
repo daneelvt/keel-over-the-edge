@@ -573,7 +573,7 @@ func restore(ctx context.Context, db database, world *sim.World, sailed store.Wo
 	}
 	if cp.Format != sim.SnapshotVersion || cp.Catalog != catalog.Version || cp.Layout != physics.LayoutVersion {
 		result("incompatible")
-		log.Warn("the checkpoint is of another build: the world starts empty", "tick", cp.Tick, "build", cp.Build,
+		log.Warn("the checkpoint is of another build: the world starts empty", "tick", cp.Tick, "written_by", cp.Build,
 			"format", cp.Format, "catalog", cp.Catalog, "layout", cp.Layout,
 			"want_format", sim.SnapshotVersion, "want_catalog", catalog.Version, "want_layout", physics.LayoutVersion)
 		return nil
@@ -588,14 +588,14 @@ func restore(ctx context.Context, db database, world *sim.World, sailed store.Wo
 	r, err := world.Restore(cp.Data, now)
 	if err != nil {
 		result("incompatible")
-		log.Warn("the checkpoint could not be read: the world starts empty", "tick", cp.Tick, "build", cp.Build, "err", err)
+		log.Warn("the checkpoint could not be read: the world starts empty", "tick", cp.Tick, "written_by", cp.Build, "err", err)
 		return nil
 	}
 	result("restored")
 	m.RestoredBoats.Set(float64(r.Boats))
 	m.RestoreGap.Set(age.Seconds())
 	log.Info("the world is restored from its checkpoint", "tick", r.From, "now", now, "gap", age.Round(time.Millisecond).String(),
-		"boats", r.Boats, "waiting", r.Waiting, "build", cp.Build, "written_at", cp.WrittenAt)
+		"boats", r.Boats, "waiting", r.Waiting, "written_by", cp.Build, "written_at", cp.WrittenAt)
 	return nil
 }
 

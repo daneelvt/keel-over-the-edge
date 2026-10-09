@@ -26,6 +26,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
+	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
@@ -137,7 +138,8 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 
 // sailOne sails one player until end, connecting again after the
 // connection ends: after 1012, a server's restart, in 0.5 to 5 s at
-// random, as the page does; after anything else, in a second.
+// random, as the page does; after 4002, versions that differ, never;
+// after anything else, in a second.
 func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, cookie string, i uint64, end time.Time, p *Player) {
 	rng := rand.New(rand.NewPCG(i, 7))
 	helm, sheet := 512, 512
@@ -199,6 +201,11 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, cookie str
 			p.Closes[code]++
 			if back == nil && !last.at.IsZero() {
 				back, welcomes = &Return{Code: code}, len(s.Welcomes)
+			}
+			if code == int(edge.CloseVersion) {
+				// The server is of another version: the page reloads, and a
+				// bot of this build can do nothing more.
+				break
 			}
 			wait := time.Second
 			if code == int(websocket.StatusServiceRestart) {
