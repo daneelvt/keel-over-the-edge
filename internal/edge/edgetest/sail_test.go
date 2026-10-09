@@ -3,6 +3,7 @@
 package edgetest
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,6 +14,9 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 )
 
 var update = flag.Bool("update", false, "record the traces in shared/protocol/testdata again")
@@ -150,8 +154,10 @@ func TestSailLoss(t *testing.T) {
 	report(t, "ten seeds", all, 10*d)
 }
 
-// TestTraces records the traces the TypeScript tests replay: with no lag,
-// and at 200 ms and 2% loss.
+// TestTraces records, with -update, the traces the TypeScript tests replay:
+// with no lag, and at 200 ms and 2% loss; and replays the committed ones
+// through this package's own client, as the TypeScript tests replay them
+// through the page's.
 func TestTraces(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -160,24 +166,88 @@ func TestTraces(t *testing.T) {
 		{"none", Lag{}},
 		{"lossy", Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 3}},
 	} {
-		trace := &Trace{Lag: tc.lag.String()}
-		sail(t, tc.lag, 20*time.Second, trace)
 		path := "../../../shared/protocol/testdata/trace-" + tc.name + ".json"
 		if *update {
+			trace := &Trace{Lag: tc.lag.String()}
+			sail(t, tc.lag, 20*time.Second, trace)
 			if err := trace.Write(path); err != nil {
 				t.Fatal(err)
 			}
-			continue
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, _ := json.Marshal(trace)
-		if string(append(got, '\n')) != string(data) {
-			t.Fatalf("%s: the sail no longer matches its trace; record it again with -update", tc.name)
+		var trace Trace
+		if err := json.Unmarshal(data, &trace); err != nil {
+			t.Fatal(err)
+		}
+		corrections := replayTrace(t, &trace, CatalogKinds(t))
+		if (tc.name == "lossy") != (corrections > 0) {
+			t.Errorf("%s: %d corrections", tc.name, corrections)
 		}
 	}
+}
+
+// replayTrace gives a trace's events, at their times, to a Net and a
+// Predictor of its own, and checks they send the same messages and
+// reconcile each snapshot alike. It returns the corrections.
+func replayTrace(t *testing.T, trace *Trace, kinds []physics.Prepared) (corrections int) {
+	t.Helper()
+	n := Net{FrameMs: 17}
+	p := NewPredictor(&kinds[0])
+	snapshots := map[int64]*protocol.Snapshot{}
+	var latest *protocol.Snapshot
+	var expect [][]byte
+	sent := func(out ...[]byte) { expect = append(expect, out...) }
+	for i, e := range trace.Events {
+		switch {
+		case e.Out != "":
+			if i == 0 {
+				sent(n.Open(e.T)...)
+			}
+			if len(expect) == 0 || hex.EncodeToString(expect[0]) != e.Out {
+				t.Fatalf("event %d at %v: sent %s, the replay %x", i, e.T, e.Out, expect)
+			}
+			expect = expect[1:]
+		case e.In != "":
+			b, _ := hex.DecodeString(e.In)
+			out, ev, err := n.Receive(e.T, b)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sent(out...)
+			if ev.Snapshot != nil {
+				snapshots[ev.Snapshot.Tick] = ev.Snapshot
+			}
+		case e.Timer:
+			out, dead := n.Time(e.T)
+			if dead {
+				t.Fatalf("event %d: dead", i)
+			}
+			sent(out...)
+		case e.Input != nil:
+			sent(n.Input(e.T, uint32(e.Input[0]), uint16(e.Input[1]), uint16(e.Input[2])))
+		case e.Step != nil:
+			p.Step(uint16(e.Step[1]), uint16(e.Step[2]))
+			if p.Tick != e.Step[0] {
+				t.Fatalf("event %d: stepped tick %d, the trace %d", i, p.Tick, e.Step[0])
+			}
+		case e.Snap != nil:
+			sn := snapshots[e.Snap.Tick]
+			o := p.Snapshot(sn)
+			if o.Stale != e.Snap.Stale || o.Reset != e.Snap.Reset || o.Corrected != e.Snap.Corrected || o.Distance != e.Snap.Distance {
+				t.Fatalf("event %d: snapshot %d: %+v, the trace %+v", i, e.Snap.Tick, o, e.Snap)
+			}
+			if o.Corrected {
+				corrections++
+			}
+			latest = sn
+		case e.Reset:
+			p.Reset(latest)
+		}
+	}
+	return corrections
 }
 
 // TestAheadSettlesAndRises: at 100 ms each way, m settles within 5 s and
