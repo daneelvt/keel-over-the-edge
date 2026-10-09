@@ -12,6 +12,13 @@ spec:
   # Barman Cloud plugin expects (CloudNativePG's postgres-containers).
   imageName: ghcr.io/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:37ade18dbdddba430858c72725aceeec66f33fa5333e82ea1df4942f6c1c83a3
   enableSuperuserAccess: false
+  # A stopping instance first shuts down smartly, refusing new connections
+  # and waiting this long for clients to leave, then fast, ending theirs
+  # (CloudNativePG's instance manager; 180 s by default). keel never leaves
+  # of itself, its pools and the simulation's lease staying connected, so
+  # every restart of the database would wait the whole time; with this, it
+  # takes seconds, and keel takes its lease back or restarts cleanly.
+  smartShutdownTimeout: 10
   storage:
     storageClass: local-path
     size: 40Gi
@@ -28,6 +35,13 @@ spec:
       max_connections: "100"
       # PostgreSQL 18's asynchronous I/O, by worker processes.
       io_method: worker
+      # Keepalives on clients' connections, rather than the kernel's
+      # (two hours idle on Linux): a keel that vanished without closing its
+      # socket, as when its machine froze or its network went, frees the
+      # simulation's lease in about 25 s.
+      tcp_keepalives_idle: "10"
+      tcp_keepalives_interval: "5"
+      tcp_keepalives_count: "3"
     # Before the operator's own rules, the last of which would also accept
     # a password over a plain connection.
     pg_hba:

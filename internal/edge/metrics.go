@@ -62,10 +62,11 @@ const (
 	outPong
 	outSnapshot
 	outQueued
+	outRestart
 	outs
 )
 
-var outNames = [outs]string{"welcome", "pong", "snapshot", "queued"}
+var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart"}
 
 // The entries of a snapshot, by op.
 const (

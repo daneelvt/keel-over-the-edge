@@ -59,6 +59,8 @@ export type FromWorker =
   | { type: 'snapshot'; data: ArrayBuffer }
   /** The place in the queue, 1 for the next, and how many wait. */
   | { type: 'queued'; position: number; waiting: number }
+  /** The server is about to restart, in about inMs: the bell. */
+  | { type: 'restart'; inMs: number }
   | { type: 'clock'; clock: ClockState }
   | ({ type: 'traffic' } & Traffic);
 

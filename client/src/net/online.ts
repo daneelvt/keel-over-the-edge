@@ -65,6 +65,10 @@ export interface Place {
   waiting: number;
 }
 
+/** What the connection line says from the bell until the boat is back. */
+export const BELL_TEXT =
+  'The harbourmaster rings the bell: the harbour closes for a moment. Your boat will wait for you.';
+
 const EPSILON = 1e-9;
 /** How many snapshots' own boat are kept for ownAt (the tests). */
 const OWN_KEPT = 64;
@@ -105,6 +109,8 @@ export class Online {
   #sent = [-1, -1];
   #fresh = false;
   #hadBoat = false;
+  /** The bell rang: the server is restarting, and the boat waits. */
+  #bell = false;
   #ready: () => void = () => {};
   readonly #frames = new Float64Array(120);
   #frameN = 0;
@@ -155,11 +161,18 @@ export class Online {
           this.notice.value = { text: queueLines(this.place.value).join(' '), takeover: false };
         }
         break;
+      case 'restart':
+        this.#bell = true;
+        this.notice.value = { text: BELL_TEXT, takeover: false };
+        break;
       case 'welcome':
         if (this.#hadBoat && !m.rejoined) {
           this.notice.value = { text: 'Your boat has returned to port.', takeover: false };
           this.#noticeUntil = nowUs() + 6_000_000;
+        } else if (this.#bell) {
+          this.notice.value = null;
         }
+        this.#bell = false;
         this.#hadBoat = true;
         this.boat = m.boat;
         this.#fresh = true;
@@ -190,13 +203,15 @@ export class Online {
   #describe(status: Status, reason: string): void {
     switch (status) {
       case 'sailing':
-        if (nowUs() >= this.#noticeUntil) {
+        if (nowUs() >= this.#noticeUntil && !this.#bell) {
           this.notice.value = null;
         }
         return;
       case 'waiting':
       case 'connecting':
-        if (this.#hadBoat) {
+        // After the bell its line stays, through the close and the
+        // reconnecting, until the boat is back.
+        if (this.#hadBoat && !this.#bell) {
           this.notice.value = { text: 'Reconnecting…', takeover: false };
         }
         return;

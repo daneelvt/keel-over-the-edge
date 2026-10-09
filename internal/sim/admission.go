@@ -9,18 +9,21 @@ import (
 )
 
 // Admission: a world holds at most its limit of boats, those in their grace
-// included. A Join beyond it, or while others wait, joins the queue's tail;
-// at the end of each tick's inputs, while there is room, the queue's head
-// gets a boat. The queue is world state, in the snapshot and the digest,
+// included. A Join beyond it, or while others wait, or while admission is
+// held, joins the queue's tail; at the end of each tick's inputs, while
+// there is room and admission is not held, the queue's head gets a boat.
+// The queue and the hold are world state, in the snapshot and the digest,
 // since who gets a boat when depends on when boats leave, and a replay must
-// admit the same connections at the same ticks.
+// admit the same connections at the same ticks. A place may be kept for an
+// account with no connection, as across a restart, until its grace ends.
 
 // join gives account its boat, sailed from now on through connection conn:
 // the one it already has, or a new one in the lowest free slot, or, when the
-// world is at its limit or others wait, a place in the queue. One account
-// sails one boat, so a sailor who reconnects finds theirs, and its grace,
-// if it had begun, ends; and one account waits once, so a sailor who
-// reconnects while waiting keeps their place, with the new connection.
+// world is at its limit, others wait or admission is held, a place in the
+// queue. One account sails one boat, so a sailor who reconnects finds
+// theirs, and its grace, if it had begun, ends; and one account waits once,
+// so a sailor who reconnects while waiting keeps their place, with the new
+// connection, and a place kept for them is theirs again.
 func (w *World) join(account bus.Account, conn uint64) bus.Reply {
 	f := w.next
 	for _, s := range f.Live {
@@ -39,9 +42,10 @@ func (w *World) join(account bus.Account, conn uint64) bus.Reply {
 	}
 	if i := queued(f, account); i >= 0 {
 		f.Queue[i].Conn = conn
+		f.Queue[i].Grace = 0
 		return bus.Reply{Result: bus.Queued, Slot: -1, Position: int32(i + 1)}
 	}
-	if len(f.Live) < w.limit && len(f.Queue) == 0 {
+	if len(f.Live) < w.limit && len(f.Queue) == 0 && !f.Held {
 		s := w.newBoat(account, conn)
 		return bus.Reply{Result: bus.Joined, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s]}
 	}
@@ -52,15 +56,21 @@ func (w *World) join(account bus.Account, conn uint64) bus.Reply {
 	return bus.Reply{Result: bus.Queued, Slot: -1, Position: int32(len(f.Queue))}
 }
 
-// admit gives the queue's head a boat while the world has room, each
-// recorded as an event of its own: a Join with the result Admitted, which a
-// replay does not apply again, since the tick does it.
+// admit gives the queue's head a boat while the world has room and
+// admission is not held, each recorded as an event of its own: a Join with
+// the result Admitted, which a replay does not apply again, since the tick
+// does it. A place kept with no connection gets its boat with the place's
+// grace running, so its sailor finds it on coming back.
 func (w *World) admit() {
 	f := w.next
+	if f.Held {
+		return
+	}
 	n := 0
 	for n < len(f.Queue) && len(f.Live) < w.limit {
 		q := f.Queue[n]
 		s := w.newBoat(q.Account, q.Conn)
+		f.Grace[s] = q.Grace
 		r := bus.Reply{Result: bus.Admitted, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s], Tick: f.Tick, Since: q.Since}
 		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Join, Account: q.Account, Conn: q.Conn}, Reply: r})
 		n++

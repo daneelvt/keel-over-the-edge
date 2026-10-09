@@ -64,9 +64,19 @@ type realServer struct {
 	done   chan error
 }
 
+// startReal starts keel serve on the database at dbURL, with no bell.
 func startReal(t *testing.T, dbURL string) *realServer {
 	t.Helper()
-	vars := map[string]string{"KEEL_PLAY_ORIGIN": "http://localhost:5181", "KEEL_DATABASE_URL": dbURL}
+	return startRealWith(t, dbURL, nil)
+}
+
+// startRealWith is startReal with more of the environment.
+func startRealWith(t *testing.T, dbURL string, extra map[string]string) *realServer {
+	t.Helper()
+	vars := map[string]string{"KEEL_PLAY_ORIGIN": "http://localhost:5181", "KEEL_DATABASE_URL": dbURL, "KEEL_BELL": "0s"}
+	for k, v := range extra {
+		vars[k] = v
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &realServer{net: &realNet{addrs: map[string]string{}}, logs: &syncBuffer{}, cancel: cancel, done: make(chan error, 1)}
 	go func() {
@@ -272,14 +282,13 @@ func TestStopClosesTheDatabaseAfterTheLoop(t *testing.T) {
 			res.Body.Close()
 			livezAtClose <- res.StatusCode
 		}
-		s := startServer(t, map[string]string{}, n, serveOptions{
-			openDB: db.open,
+		s := startServer(t, map[string]string{}, n, db.with(serveOptions{
 			afterTick: func(int64) {
 				if db.isClosed() {
 					ticksAfterClose.Add(1)
 				}
 			},
-		})
+		}))
 		time.Sleep(2 * time.Second)
 		if db.isClosed() {
 			t.Fatal("closed while running")

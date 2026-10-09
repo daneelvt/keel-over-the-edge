@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -71,6 +72,19 @@ type Player struct {
 	Closes map[int]int // close codes, -1 for none, and how often
 	Errors int
 	RTT    time.Duration // the round trip the clock measured last
+	// Each time the connection ended and the player came back: the pause,
+	// from the last snapshot before to the first after; whether the
+	// Welcome was to the same boat; and how far the boat was from where
+	// it had been, m.
+	Returns []Return
+}
+
+// Return is a player's coming back after the connection ended.
+type Return struct {
+	Code     int // the close code, -1 for none
+	Pause    time.Duration
+	Rejoined bool // the Welcome was to the boat the player had
+	Distance float64
 }
 
 // Run makes or finds the guests, sails them, and reports.
@@ -121,8 +135,9 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 	return rep, ctx.Err()
 }
 
-// sailOne sails one player until end, connecting again a second after the
-// connection ends.
+// sailOne sails one player until end, connecting again after the
+// connection ends: after 1012, a server's restart, in 0.5 to 5 s at
+// random, as the page does; after anything else, in a second.
 func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, cookie string, i uint64, end time.Time, p *Player) {
 	rng := rand.New(rand.NewPCG(i, 7))
 	helm, sheet := 512, 512
@@ -147,6 +162,31 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, cookie str
 	}
 	s := client.NewSailor(dial, kind, controls)
 	s.FrameEvery = cfg.FrameEvery
+	// The last snapshot, and a return under way: the connection ended,
+	// and no snapshot has come since.
+	var last struct {
+		at   time.Time
+		x, y float64
+		boat uint64
+	}
+	var back *Return
+	welcomes := 0
+	s.OnView = func(ev *client.Event) {
+		now := time.Now()
+		st := ev.Snapshot.State
+		if back != nil && len(s.Welcomes) > welcomes {
+			w := s.Welcomes[len(s.Welcomes)-1]
+			back.Pause = now.Sub(last.at)
+			back.Rejoined = w.Rejoined && w.Boat == last.boat
+			back.Distance = math.Hypot(st.X-last.x, st.Y-last.y)
+			p.Returns = append(p.Returns, *back)
+			back = nil
+		}
+		last.at, last.x, last.y = now, st.X, st.Y
+		if n := len(s.Welcomes); n > 0 {
+			last.boat = s.Welcomes[n-1].Boat
+		}
+	}
 	for ctx.Err() == nil && time.Until(end) > 0 {
 		err := s.Connect(ctx)
 		if err == nil {
@@ -154,10 +194,18 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, cookie str
 		}
 		s.Drop()
 		if err != nil && ctx.Err() == nil {
+			code := int(websocket.CloseStatus(err))
 			p.Errors++
-			p.Closes[int(websocket.CloseStatus(err))]++
+			p.Closes[code]++
+			if back == nil && !last.at.IsZero() {
+				back, welcomes = &Return{Code: code}, len(s.Welcomes)
+			}
+			wait := time.Second
+			if code == int(websocket.StatusServiceRestart) {
+				wait = 500*time.Millisecond + time.Duration(rng.Float64()*float64(4500*time.Millisecond))
+			}
 			select {
-			case <-time.After(time.Second):
+			case <-time.After(wait):
 			case <-ctx.Done():
 			}
 		}

@@ -503,3 +503,41 @@ func TestDeleteAsksFirst(t *testing.T) {
 		t.Fatal("the state was left")
 	}
 }
+
+// TestRestarts: each way of ending keel's pod runs what it should, and
+// waits for keel to be ready again.
+func TestRestarts(t *testing.T) {
+	restarted := 0
+	f := &fakeCommands{answer: func(argv []string, _ string) (string, error) {
+		joined := strings.Join(argv, " ")
+		switch {
+		case strings.Contains(joined, "metadata.name"):
+			return "keel-7d9f-abcde", nil
+		case strings.Contains(joined, "restartCount"):
+			restarted++
+			return fmt.Sprint(restarted / 3), nil
+		}
+		return "", nil
+	}}
+	c := testCluster(t, f)
+	if err := c.restartGame(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if f.ran("rollout", "restart", "deployment/keel") == nil || f.ran("rollout", "status", "deployment/keel") == nil {
+		t.Fatalf("-restart ran %v", f.calls)
+	}
+	f.calls = nil
+	if err := c.killPod(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if f.ran("delete", "pod", "keel-7d9f-abcde", "--grace-period=0", "--force") == nil || f.ran("rollout", "status") == nil {
+		t.Fatalf("-kill ran %v", f.calls)
+	}
+	f.calls = nil
+	if err := c.crash(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if f.ran("limactl", "shell", "sudo", "pkill", "-KILL", "-x", "keel") == nil || f.ran("wait", "--for=condition=Ready", "pod") == nil || restarted < 3 {
+		t.Fatalf("-crash ran %v", f.calls)
+	}
+}

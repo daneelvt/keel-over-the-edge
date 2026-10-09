@@ -129,6 +129,21 @@ func TestDeveloperCommands(t *testing.T) {
 	if err := q.Developer().TrySend(Command{}); !errors.Is(err, ErrNotAllowed) {
 		t.Errorf("a command with no op: %v", err)
 	}
+	// Hold is the server's own: a developer may send it too, a player never;
+	// the server's sender sends nothing else.
+	if err := q.Players().TrySend(Command{Op: Hold, Held: true}); !errors.Is(err, ErrNotAllowed) {
+		t.Errorf("a player's hold: %v", err)
+	}
+	for _, s := range []Sender{q.Server(), q.Developer()} {
+		if err := s.TrySend(Command{Op: Hold, Held: true}); err != nil {
+			t.Errorf("a hold: %v", err)
+		}
+	}
+	for _, op := range []Op{Join, Leave, Disconnect, SetWind, Place} {
+		if err := q.Server().TrySend(Command{Op: op}); !errors.Is(err, ErrNotAllowed) {
+			t.Errorf("the server's %s: %v", op, err)
+		}
+	}
 	if _, ok := q.Receive(); !ok {
 		t.Fatal("nothing queued")
 	}

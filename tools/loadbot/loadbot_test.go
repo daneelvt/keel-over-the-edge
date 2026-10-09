@@ -105,6 +105,48 @@ func TestBots(t *testing.T) {
 	})
 }
 
+// TestBotsAcrossARestart: the server restarts while the bots sail: each
+// hears the bell, is closed with 1012, waits as the page does and comes
+// back to its own boat, which sailed on in its grace from where it was;
+// the report says so.
+func TestBotsAcrossARestart(t *testing.T) {
+	sessions := filepath.Join(t.TempDir(), "sessions.json")
+	synctest.Test(t, func(t *testing.T) {
+		srv := edgetest.NewServer(t, edgetest.Config{Capacity: 64})
+		guests := &testGuests{srv: srv, valid: map[string]bool{}}
+		dial := func(ctx context.Context, cookie string, wrap func(net.Conn) net.Conn) (*websocket.Conn, error) {
+			ws, _, err := srv.Dial(ctx, edgetest.DialOptions{Cookie: cookie, Wrap: wrap})
+			return ws, err
+		}
+		go func() {
+			time.Sleep(8 * time.Second)
+			srv.Restart(t, 2*time.Second)
+		}()
+		var out strings.Builder
+		rep, err := Run(t.Context(), Config{N: 10, Sail: 20 * time.Second, FrameEvery: time.Second / 30,
+			Guests: guests, Sessions: sessions, Dial: dial, Out: &out})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Log(out.String())
+		for _, p := range rep.Players {
+			if len(p.Returns) != 1 || p.Stats.Bells != 1 || p.Closes[1012] != 1 {
+				t.Fatalf("%s: returns %+v, %d bells, closes %v", p.Name, p.Returns, p.Stats.Bells, p.Closes)
+			}
+			b := p.Returns[0]
+			// The pause: the server's 2 s, and the page's wait of 0.5 to 5 s
+			// or, if it came first, another second's.
+			if !b.Rejoined || b.Code != 1012 || b.Pause < 2*time.Second || b.Pause > 7*time.Second || b.Distance > 3*b.Pause.Seconds() {
+				t.Fatalf("%s came back %+v", p.Name, b)
+			}
+		}
+		if !strings.Contains(out.String(), "came back 10 times (10 bells heard): 10 to their own boat, 0 to a new one") ||
+			!strings.Contains(out.String(), "the pause, s: median") {
+			t.Fatalf("the report: %s", out.String())
+		}
+	})
+}
+
 func TestQuantile(t *testing.T) {
 	before := parse(`
 keel_x_bucket{le="0.001"} 10

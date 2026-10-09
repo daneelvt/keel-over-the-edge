@@ -23,8 +23,12 @@ spec:
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
-      # keel stops within about 25 s: 10 for requests in flight, 15 for the
-      # game connections' closes.
+      # keel stops within about 11 s: the bell (KEEL_BELL, 3 s), the world's
+      # final checkpoint (at most 5 s), and the game connections' closes (at
+      # most 3 s); requests in flight are waited for beside them (at most
+      # 10 s). Only one process ever runs the world (the simulation's lease
+      # in the database): a pod deleted by hand, whose replacement starts at
+      # once, waits for it, not ready.
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true

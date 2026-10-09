@@ -7,7 +7,9 @@
 //
 // Queries are SQL in queries/, compiled by sqlc against the migrations into
 // the db package, so each one is checked against the schema when it is
-// built. They run through one pgx pool.
+// built. They run through one pgx pool, but for the world's writes, which
+// have a pool of their own (Persister), and the simulation's lease, which
+// has a connection of its own (Lease).
 package store
 
 import (
@@ -27,8 +29,9 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store/db"
 )
 
-// The pool's size. The server keeps 20 connections in all; this pool is the
-// share of the API and of starting up.
+// The pool's size. The server keeps 20 connections in all: this pool is the
+// share of the API and of starting up; the world's writer has PersistConns
+// and the simulation's lease one of its own.
 const (
 	MaxConns = 17
 	MinConns = 2

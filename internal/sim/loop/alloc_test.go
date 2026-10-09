@@ -3,6 +3,7 @@
 package loop
 
 import (
+	"context"
 	"log/slog"
 	"math/rand/v2"
 	"testing"
@@ -10,14 +11,16 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
+	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
 // TestFullTickAllocatesNothing runs whole ticks as the server does, with a
 // thousand boats, a third of them changing controls, a join and a leave
-// every tick, the metrics updated and the input log recording, and requires
-// that none allocates. CI runs it with the race detector too, which is why
+// every tick, the metrics updated, the input log recording and the world's
+// writer recording and writing, and requires that none allocates. CI runs it with the race detector too, which is why
 // nothing in the tick uses sync.Pool: the detector makes a pool drop entries
 // at random. (With the flight recorder on, the runtime's tracer allocates on
 // its own goroutine, which AllocsPerRun would count; sim's tests check the
@@ -42,9 +45,16 @@ func TestFullTickAllocatesNothing(t *testing.T) {
 		Header: replay.Header{Build: "test", Capacity: w.Capacity(), Epoch: bubbleEpoch},
 		Log:    slog.New(slog.DiscardHandler),
 	})
-	w.Record(log)
-	done := make(chan error, 1)
+	// The world's writer, against a database that takes every batch at once,
+	// writing as often as it can: the ticks here run back to back.
+	p := persist.New(persist.Config{
+		Frames: w.Bus().Frames, Store: nowhere{}, Hold: w.Bus().Commands.Server(),
+		Log: slog.New(slog.DiscardHandler), BatchEvery: time.Millisecond,
+	})
+	w.Record(log, p)
+	done := make(chan error, 2)
 	go func() { done <- log.Run() }()
+	go func() { done <- p.Run() }()
 	l := New(Config{
 		World: w, Epoch: bubbleEpoch, Log: slog.New(slog.DiscardHandler),
 		Metrics: obs.NewMetrics("b", "c"), Health: obs.NewHealth(), Overrun: func(int64) {},
@@ -90,8 +100,21 @@ func TestFullTickAllocatesNothing(t *testing.T) {
 	if log.Dropped() != 0 {
 		t.Logf("%d input log records dropped", log.Dropped())
 	}
+	if p.Checkpoints() == 0 || p.Events() == 0 || p.Overflows() != 0 {
+		t.Fatalf("the writer wrote %d checkpoints and %d events, and overflowed %d times", p.Checkpoints(), p.Events(), p.Overflows())
+	}
 	log.Close()
-	if err := <-done; err != nil {
+	if err := p.Close(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
 }
+
+// nowhere takes every batch at once.
+type nowhere struct{}
+
+func (nowhere) Write(context.Context, store.Batch) error { return nil }

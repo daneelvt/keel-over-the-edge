@@ -21,7 +21,10 @@ type Frame struct {
 	Tick     int64  // the tick that made this frame
 	Skipped  int64  // ticks skipped, by the clock falling behind, just before Tick
 	Wind     Wind   // the one wind every boat sails in
-	NextBoat uint64 // the next boat's ID: IDs are never reused within a run
+	NextBoat uint64 // the next boat's ID: IDs are never reused within a world
+	// Held: admission is held (Hold): a Join without a boat waits in the
+	// queue, and the queue gives no boats.
+	Held bool
 
 	Live     []int32   // occupied slots, ascending
 	Occupied []bool    // per slot
@@ -67,8 +70,11 @@ func (g *Grid) Boats(c int32) []int32 { return g.Slots[g.Start[c]:g.Start[c+1]] 
 // Waiting is a connection waiting for a boat.
 type Waiting struct {
 	Account Account
-	Conn    uint64
-	Since   int64 // the tick it was queued at
+	Conn    uint64 // 0 for none: a place kept for its account, as across a restart
+	Since   int64  // the tick it was queued at
+	// Grace, for a place with no connection, is the tick it is given up
+	// at, unless its account joins first; 0 while connected.
+	Grace int64
 }
 
 // QueueLimit is the most connections that may wait for a boat.

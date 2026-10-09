@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -65,9 +66,12 @@ type Server struct {
 	Sessions *Sessions
 	Kinds    []physics.Prepared
 
-	cancel  context.CancelFunc
-	done    sync.WaitGroup
-	stopped bool
+	cfg      Config
+	sessions *auth.Cache
+	handler  atomic.Pointer[http.Handler] // the game's routes, replaced by a restart
+	cancel   context.CancelFunc
+	done     sync.WaitGroup
+	stopped  bool
 }
 
 // CatalogKinds is the catalog's boats, prepared.
@@ -95,14 +99,34 @@ func NewServer(t testing.TB, cfg Config) *Server {
 	if cfg.Kinds == nil {
 		cfg.Kinds = CatalogKinds(t)
 	}
-	log := slog.New(slog.DiscardHandler)
+	m := obs.NewMetrics("test", catalog.Version)
+	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, cfg: cfg}
+	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
+	s.start(t, s.newWorld(t))
+	s.HTTP = httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		(*s.handler.Load()).ServeHTTP(w, r)
+	}))
+	t.Cleanup(s.Stop)
+	return s
+}
+
+func (s *Server) newWorld(t testing.TB) *sim.World {
+	t.Helper()
+	cfg := s.cfg
 	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Workers: 1,
 		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit})
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{World: w, Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds}
+	return w
+}
+
+// start runs w: its loop, an edge, and the game's routes.
+func (s *Server) start(t testing.TB, w *sim.World) {
+	t.Helper()
+	cfg, m := s.cfg, s.Metrics
+	log := slog.New(slog.DiscardHandler)
+	s.World = w
 	s.Loop = loop.New(loop.Config{World: w, Epoch: Epoch, Log: log, Metrics: m})
 	s.Edge = edge.New(edge.Config{
 		Bus: w.Bus(), World: WorldID, Clock: s.Loop,
@@ -116,20 +140,44 @@ func NewServer(t testing.TB, cfg Config) *Server {
 	} else {
 		w.Record(s.Edge)
 	}
-	s.HTTP = httptest.NewTestServer(t, api.Handler(api.Config{
+	h := api.Handler(api.Config{
 		Version:  api.Version{Build: "test", Catalog: catalog.Version},
 		Log:      log,
 		Metrics:  m,
-		Sessions: auth.NewCache(s.Sessions, auth.CacheConfig{Log: log}),
+		Sessions: s.sessions,
 		Game:     s.Edge,
-	}))
+	})
+	s.handler.Store(&h)
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 	s.done.Add(2)
 	go func() { defer s.done.Done(); s.Loop.Run(ctx) }()
 	go func() { defer s.done.Done(); s.Edge.Run(ctx) }()
-	t.Cleanup(s.Stop)
-	return s
+}
+
+// Restart restarts the server as a deploy restarts keel serve: every
+// connection is told, the world stops and is checkpointed, and the
+// connections are closed with 1012; for pause the game connection is
+// refused, as while no server is ready; then a new world is restored from
+// the checkpoint, and served by a new loop and edge.
+func (s *Server) Restart(t testing.TB, pause time.Duration) {
+	t.Helper()
+	s.Edge.Bell(0)
+	s.cancel()
+	s.done.Wait()
+	f := s.World.Bus().Frames.Acquire()
+	checkpoint := sim.AppendSnapshot(nil, f)
+	f.Release()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = s.Edge.Shutdown(ctx)
+	s.World.Close()
+	time.Sleep(pause)
+	w := s.newWorld(t)
+	if _, err := w.Restore(checkpoint, loop.TickAt(time.Now(), Epoch)); err != nil {
+		t.Fatal(err)
+	}
+	s.start(t, w)
 }
 
 // Stop stops the server as keel serve does: every connection closed with

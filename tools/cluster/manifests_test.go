@@ -276,6 +276,26 @@ func TestEachRuleFails(t *testing.T) {
 			get(find(objs, "Cluster", "keel-db"), "spec", "bootstrap", "initdb").(map[string]any)["localeProvider"] = "libc"
 			return objs
 		}},
+		{"the database's restarts", func(objs []object) []object {
+			delete(find(objs, "Cluster", "keel-db")["spec"].(map[string]any), "smartShutdownTimeout")
+			return objs
+		}},
+		{"the database's restarts", func(objs []object) []object {
+			delete(get(find(objs, "Cluster", "keel-db"), "spec", "postgresql", "parameters").(map[string]any), "tcp_keepalives_count")
+			return objs
+		}},
+		{"keel's time to stop", func(objs []object) []object {
+			podSpec(find(objs, "Deployment", deployment))["terminationGracePeriodSeconds"] = 20
+			return objs
+		}},
+		{"keel's time to stop", func(objs []object) []object {
+			for _, o := range objs {
+				if o.kind() == "ConfigMap" && strings.HasPrefix(o.name(), "keel") {
+					o["data"].(map[string]any)["KEEL_BELL"] = "15s"
+				}
+			}
+			return objs
+		}},
 	}
 	for _, c := range cases {
 		err := checkRules(c.mutate(renderedApps(t)), true)

@@ -204,7 +204,11 @@ func (w *World) Skip(n int64) {
 }
 
 // Load replaces the world with a snapshot, before the first tick.
-func (w *World) Load(snapshot []byte) error {
+func (w *World) Load(snapshot []byte) error { return w.load(snapshot, nil) }
+
+// load replaces the world with a snapshot, changed by adjust, if not nil,
+// before it is published.
+func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 	f := w.bus.Frames.Next()
 	if err := ReadSnapshot(snapshot, f); err != nil {
 		return err
@@ -213,6 +217,9 @@ func (w *World) Load(snapshot []byte) error {
 		if int(f.Kind[s]) >= len(w.kinds) {
 			return fmt.Errorf("sim: slot %d is a boat of kind %d; the world has %d kinds", s, f.Kind[s], len(w.kinds))
 		}
+	}
+	if adjust != nil {
+		adjust(f)
 	}
 	// Each slot holds the controls in force until its sailor writes again.
 	for _, s := range f.Live {

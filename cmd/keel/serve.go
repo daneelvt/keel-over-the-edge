@@ -11,6 +11,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
+	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
@@ -41,10 +43,15 @@ import (
 // flight.
 const shutdownTimeout = 10 * time.Second
 
-// gameShutdownTimeout bounds how long it waits for the game connections to
-// close: a dead peer's close takes the library's 5 s to write it and 5 s to
-// wait for the answer.
-const gameShutdownTimeout = 15 * time.Second
+// finalTimeout bounds how long a stopping server waits for the world's
+// final checkpoint and every event left to be written; closeTimeout, how
+// long it waits for the game connections to close, a peer that has not
+// answered by then dropped without its handshake (the library's own bounds
+// on a close are 5 s to write it and 5 s to wait for the answer).
+const (
+	finalTimeout = config.FinalCheckpointTimeout
+	closeTimeout = config.CloseTimeout
+)
 
 // firstEpoch is the epoch of the first world, made when the database has
 // none: tick 0 at midnight UTC on 1 January 2026.
@@ -65,6 +72,8 @@ Configured from the environment:
                        (default none: another server serves it)
   KEEL_BOAT_LIMIT      the most boats at sea at once, from 1 to 4096; beyond it
                        players wait in a queue (default 1000)
+  KEEL_BELL            how long the world sails on once players are told the
+                       server is restarting, from 0s to 10s (default 3s)
   KEEL_DEV_SAILORS     scripted sailors to sail (default 0)
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
                        POST /debug/wind?knots=…&from=… (default 0)
@@ -94,6 +103,7 @@ type database interface {
 	auth.Sessions
 	CheckSchema(ctx context.Context) (int64, error)
 	ActiveOrFirstWorld(ctx context.Context, epoch time.Time) (store.World, error)
+	LatestCheckpoint(ctx context.Context, world [16]byte) (store.Checkpoint, error)
 	Stats() store.PoolStats
 	Close()
 }
@@ -102,13 +112,36 @@ func openStore(ctx context.Context, url string, opt store.Options) (database, er
 	return store.Open(ctx, url, opt)
 }
 
+// lease is the simulation's lease: store.Lease.
+type lease interface {
+	Take(ctx context.Context) (int64, error)
+	Watch(ctx context.Context) error
+	Release(ctx context.Context)
+}
+
+func openLease(url string, opt store.LeaseOptions) (lease, error) { return store.NewLease(url, opt) }
+
+// worldWriter writes the world's events and checkpoints: store.Persister.
+type worldWriter interface {
+	persist.Writer
+	Close()
+}
+
+func openWriter(ctx context.Context, url string, opt store.Options) (worldWriter, error) {
+	return store.OpenPersister(ctx, url, opt)
+}
+
 // serveOptions are what tests change about a server.
 type serveOptions struct {
 	listen  func(network, addr string) (net.Listener, error)
 	flight  bool // start the runtime's flight recorder: one per process
 	workers int
-	// openDB opens the database; store.Open unless set.
-	openDB func(ctx context.Context, url string, opt store.Options) (database, error)
+	// openDB opens the database; store.Open unless set. openLease and
+	// openWriter open the simulation's lease and the world's writer;
+	// store.NewLease and store.OpenPersister unless set.
+	openDB     func(ctx context.Context, url string, opt store.Options) (database, error)
+	openLease  func(url string, opt store.LeaseOptions) (lease, error)
+	openWriter func(ctx context.Context, url string, opt store.Options) (worldWriter, error)
 	// dbRetry, if not zero, is the first wait between attempts to reach
 	// the database.
 	dbRetry time.Duration
@@ -123,17 +156,32 @@ type serveOptions struct {
 //
 // It starts the internal listener first and stops it last, so the process
 // can be observed throughout; then it waits for the database, not ready
-// meanwhile, checks its schema and loads the world being sailed; then the
-// world, its tick loop and the game connection's encoder; then the public
-// listeners; and only then is it ready. It stops in reverse: not ready, the
-// public listeners shut down, every game connection is closed with 1012,
-// the loop finishes its tick, the encoder stops, the input log is flushed,
-// the flight recorder stops, the database's pool closes, and the internal
-// listener goes last.
+// meanwhile, and checks its schema; then it waits for the simulation's
+// lease, so only one process ever runs the world, and raises its epoch;
+// then it loads the world being sailed and restores it from its checkpoint,
+// if the checkpoint is recent and of this build's formats; then the world,
+// its tick loop, the world's writer and the game connection's encoder;
+// then the public listeners; and only then is it ready.
+//
+// It stops so that a restart is a pause, not a reset: not ready at once,
+// the public listeners shut down beside the rest; every game connection is
+// told the server is restarting (the bell), and the world sails on for
+// KEEL_BELL so players see it; the scripted sailors and the loop stop; the
+// world's final checkpoint and every event left are written (at most
+// finalTimeout); only then is every game connection closed with 1012 (at
+// most closeTimeout), so a slow phone can never cost the checkpoint; then
+// the encoder, the input log, the flight recorder, the world's writer, the
+// lease, released, the database's pool, and the internal listener last.
+//
 // Once open, the database is not part of readiness: the simulation does not
-// need it, and if it goes away only the requests that need it fail. The
-// loop, its workers and the input log's writer do not recover from panics:
-// a bug there stops the process.
+// need it, and if it goes away only the requests that need it fail, and the
+// world's writes wait. A lease lost for good, or a write refused because
+// another process holds it, stops the server as a signal would but with no
+// bell and no final checkpoint, and it exits 1; so does an inbox of the
+// world's writes too full to record what it promised, after a final
+// checkpoint. The loop, its workers and the writers do not recover from
+// panics: a bug there stops the process, and the next restores the last
+// checkpoint.
 func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer, opt serveOptions) error {
 	cfg, err := config.Load(getenv)
 	if err != nil {
@@ -205,14 +253,66 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		return stopEarly(internal, internalDone, flight, err)
 	}
 	metrics.SchemaVersion.Set(float64(schema))
+	registerPoolMetrics(metrics, db)
+	log.Info("database ready", "schema", schema)
+	health.Beat()
+
+	// The simulation's lease, before anything reads the world.
+	if opt.openLease == nil {
+		opt.openLease = openLease
+	}
+	host, _ := os.Hostname()
+	holder := host + " " + build
+	health.Waiting("the simulation lease")
+	sl, err := opt.openLease(cfg.DatabaseURL, store.LeaseOptions{
+		Holder: holder, Log: log, Beat: health.Beat,
+		Waiting: func(h string) { health.Waiting("the simulation lease (held by " + h + ")") },
+		Lost:    func(outcome string) { metrics.LeaseLost.WithLabelValues(outcome).Inc() },
+	})
+	if err != nil {
+		return stopEarly(internal, internalDone, flight, err)
+	}
+	waited := time.Now()
+	leaseEpoch, err := sl.Take(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			// Stopped while waiting: nothing failed.
+			return stopEarly(internal, internalDone, flight, nil)
+		}
+		return stopEarly(internal, internalDone, flight, err)
+	}
+	var release sync.Once
+	releaseLease := func() { release.Do(func() { sl.Release(context.Background()) }) }
+	defer releaseLease()
+	metrics.LeaseEpoch.Set(float64(leaseEpoch))
+	metrics.LeaseWait.Set(time.Since(waited).Seconds())
+	log.Info("the simulation lease is this process's", "epoch", leaseEpoch, "holder", holder, "waited", time.Since(waited).Round(time.Millisecond).String())
+	health.Beat()
+
+	// The world's writer, with a pool of its own.
+	if opt.openWriter == nil {
+		opt.openWriter = openWriter
+	}
+	health.Waiting("the database")
+	writer, err := opt.openWriter(ctx, cfg.DatabaseURL, store.Options{
+		Log: log, Beat: health.Beat, FirstRetry: opt.dbRetry,
+		QueryDuration: metrics.DBQueryDuration, QueryErrors: metrics.DBQueryErrors,
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(internal, internalDone, flight, nil)
+		}
+		return stopEarly(internal, internalDone, flight, err)
+	}
+	var closeWriter sync.Once
+	defer closeWriter.Do(writer.Close)
 	sailed, err := db.ActiveOrFirstWorld(ctx, firstEpoch)
 	if err != nil {
 		return stopEarly(internal, internalDone, flight, err)
 	}
 	epoch := sailed.Epoch
-	registerPoolMetrics(metrics, db)
 	health.Waiting("")
-	log.Info("database ready", "schema", schema, "world", sailed.Number, "epoch", epoch)
+	log.Info("world found", "world", sailed.Number, "epoch", epoch)
 	health.Beat()
 
 	// The catalog and the world.
@@ -230,6 +330,9 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		return stopEarly(internal, internalDone, flight, err)
 	}
 	defer world.Close()
+	if err := restore(ctx, db, world, sailed, log, metrics); err != nil {
+		return stopEarly(internal, internalDone, flight, err)
+	}
 	b := world.Bus()
 	inputs := replay.New(replay.Config{
 		Frames: b.Frames,
@@ -257,7 +360,20 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
 	})
-	world.Record(inputs, game)
+	lasting := persist.New(persist.Config{
+		Frames: b.Frames, Store: writer, World: sailed.ID, Epoch: leaseEpoch,
+		Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion,
+		Hold: b.Commands.Server(), Log: log, Metrics: metrics,
+	})
+	metrics.GaugeFunc("keel_persist_inbox_fill_ratio", "The share of the world's writes' inbox holding what is not yet written.", nil, lasting.Fill)
+	metrics.GaugeFunc("keel_persist_oldest_seconds", "World time since the oldest of the world's writes not yet written; 0 when none waits.", nil,
+		func() float64 { return lasting.Oldest().Seconds() })
+	metrics.GaugeFunc("keel_persist_checkpoint_bytes", "The latest checkpoint's size, as encoded.", nil,
+		func() float64 { return float64(lasting.CheckpointBytes()) })
+	metrics.CounterFunc("keel_persist_overflow_total", "The world's writes lost because their inbox was full: the process stops.", lasting.Overflows)
+	metrics.CounterFunc("keel_persist_events_total", "The world's lasting events written.", lasting.Events)
+	metrics.CounterFunc("keel_persist_checkpoints_total", "The world's checkpoints written.", lasting.Checkpoints)
+	world.Record(inputs, game, lasting)
 	log.Info("world ready", "kinds", len(kinds), "capacity", world.Capacity(), "limit", world.Limit(), "workers", opt.workers, "tick", world.Now())
 	health.Beat()
 
@@ -290,10 +406,40 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	inputsDone := make(chan struct{})
 	sailorsDone := make(chan struct{})
 	encoderDone := make(chan struct{})
+	// lost: another process may hold the world: no bell, no final
+	// checkpoint.
+	var lost atomic.Bool
 
 	g.Go(func() error {
 		defer close(inputsDone)
 		return inputs.Run()
+	})
+	g.Go(func() error {
+		// What it returns, the stop logs: a fence, or what the final flush
+		// could not write.
+		_ = lasting.Run()
+		return nil
+	})
+	g.Go(func() error {
+		if err := sl.Watch(gctx); err != nil {
+			lost.Store(true)
+			log.Error("the simulation lease is lost: stopping", "err", err)
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		select {
+		case <-lasting.Failed():
+			err := lasting.Err()
+			if errors.Is(err, store.ErrFenced) {
+				lost.Store(true)
+			}
+			log.Error("the world's writes cannot go on: stopping", "err", err)
+			return err
+		case <-gctx.Done():
+			return nil
+		}
 	})
 	g.Go(func() error {
 		defer close(loopDone)
@@ -339,26 +485,55 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	g.Go(func() error {
 		<-gctx.Done()
 		health.Stopping()
-		log.Info("stopping")
+		bell := cfg.Bell
+		if lost.Load() {
+			bell = 0
+		}
+		log.Info("stopping", "bell", bell.String())
 		if opt.stopping != nil {
 			opt.stopping()
 		}
-		sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-		errs := []error{play.Shutdown(sctx), agents.Shutdown(sctx)}
-		health.Listening(false)
-		// Shutdown leaves hijacked connections alone: the game's are closed
-		// here, with 1012, while the world still ticks, so their boats'
-		// graces are recorded.
-		gctx, gcancel := context.WithTimeout(context.Background(), gameShutdownTimeout)
-		if err := game.Shutdown(gctx); err != nil {
-			log.Warn("game connections still open after the shutdown's wait", "err", err)
-		}
-		gcancel()
+		// The public listeners stop taking requests, beside the rest.
+		listeners := make(chan error, 1)
+		go func() {
+			sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+			defer cancel()
+			err := errors.Join(play.Shutdown(sctx), agents.Shutdown(sctx))
+			health.Listening(false)
+			listeners <- err
+		}()
+		// The bell: every phone is told, and the world sails on a moment
+		// so they see it.
+		game.Bell(bell)
+		time.Sleep(bell)
 		stopSailors()
 		<-sailorsDone
 		stopLoop()
 		<-loopDone
+		// The final checkpoint, of the last frame, and every event left,
+		// before any connection is closed.
+		start := time.Now()
+		var final *bus.Frame
+		if !lost.Load() {
+			final = b.Frames.Acquire()
+		}
+		fctx, fcancel := context.WithTimeout(context.Background(), finalTimeout)
+		err := lasting.Close(fctx, final)
+		fcancel()
+		switch {
+		case lost.Load():
+		case err != nil:
+			log.Error("the final checkpoint was not written", "err", err)
+		default:
+			log.Info("the final checkpoint is written", "tick", world.Now(), "took", time.Since(start).Round(time.Millisecond).String())
+		}
+		// Shutdown leaves hijacked connections alone: the game's are closed
+		// here, with 1012.
+		cctx, ccancel := context.WithTimeout(context.Background(), closeTimeout)
+		if err := game.Shutdown(cctx); err != nil {
+			log.Warn("game connections dropped: they did not answer their close in time", "err", err)
+		}
+		ccancel()
 		stopEncoder()
 		<-encoderDone
 		inputs.Close()
@@ -367,13 +542,61 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		if flight != nil {
 			flight.Stop()
 		}
+		closeWriter.Do(writer.Close)
+		releaseLease()
 		closeDB.Do(db.Close)
-		errs = append(errs, internal.Shutdown(sctx), <-internalDone)
+		errs := []error{<-listeners}
+		ictx, icancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer icancel()
+		errs = append(errs, internal.Shutdown(ictx), <-internalDone)
 		return errors.Join(errs...)
 	})
 	err = g.Wait()
 	log.Info("stopped", "tick", world.Now())
 	return err
+}
+
+// restore restores the world from its checkpoint, if there is one this
+// build can read, younger than the grace: world time resumes at the
+// present, and every boat waits in its grace for its sailor. Otherwise the
+// world starts empty, and the log says why.
+func restore(ctx context.Context, db database, world *sim.World, sailed store.World, log *slog.Logger, m *obs.Metrics) error {
+	result := func(r string) { m.Restores.WithLabelValues(r).Inc() }
+	cp, err := db.LatestCheckpoint(ctx, sailed.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		result("none")
+		log.Info("no checkpoint: the world starts empty")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if cp.Format != sim.SnapshotVersion || cp.Catalog != catalog.Version || cp.Layout != physics.LayoutVersion {
+		result("incompatible")
+		log.Warn("the checkpoint is of another build: the world starts empty", "tick", cp.Tick, "build", cp.Build,
+			"format", cp.Format, "catalog", cp.Catalog, "layout", cp.Layout,
+			"want_format", sim.SnapshotVersion, "want_catalog", catalog.Version, "want_layout", physics.LayoutVersion)
+		return nil
+	}
+	now := loop.TickAt(time.Now(), sailed.Epoch)
+	age := loop.TimeOf(now, sailed.Epoch).Sub(loop.TimeOf(cp.Tick, sailed.Epoch))
+	if now-cp.Tick >= world.Grace() {
+		result("too_old")
+		log.Info("the checkpoint is older than the grace: the world starts empty", "tick", cp.Tick, "age", age.Round(time.Millisecond).String())
+		return nil
+	}
+	r, err := world.Restore(cp.Data, now)
+	if err != nil {
+		result("incompatible")
+		log.Warn("the checkpoint could not be read: the world starts empty", "tick", cp.Tick, "build", cp.Build, "err", err)
+		return nil
+	}
+	result("restored")
+	m.RestoredBoats.Set(float64(r.Boats))
+	m.RestoreGap.Set(age.Seconds())
+	log.Info("the world is restored from its checkpoint", "tick", r.From, "now", now, "gap", age.Round(time.Millisecond).String(),
+		"boats", r.Boats, "waiting", r.Waiting, "build", cp.Build, "written_at", cp.WrittenAt)
+	return nil
 }
 
 // windRoute is POST /debug/wind?knots=…&from=…: the wind becomes knots 10 m

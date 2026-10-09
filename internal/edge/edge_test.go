@@ -666,6 +666,96 @@ func TestShutdown(t *testing.T) {
 	})
 }
 
+// TestBell: every connection, waiting in the queue or sailing, is told the
+// server is about to restart, and sails on until it is closed; new ones are
+// refused from the bell on.
+func TestBell(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := edgetest.NewServer(t, edgetest.Config{Limit: 1})
+		var inboxes []*client.Inbox
+		token, _ := s.Guest("Ann")
+		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws.CloseNow()
+		inboxes = append(inboxes, client.Read(ws))
+		// Bob waits in the queue.
+		token, _ = s.Guest("Bob")
+		ws, _, err = s.Dial(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws.CloseNow()
+		client.Send(t.Context(), ws, client.Hello())
+		inboxes = append(inboxes, client.Read(ws))
+		time.Sleep(time.Second)
+		s.Edge.Bell(3 * time.Second)
+		token, _ = s.Guest("Cy")
+		if _, resp, err := s.Dial(t.Context(), edgetest.DialOptions{Cookie: token}); err == nil || resp == nil || resp.StatusCode != http.StatusServiceUnavailable {
+			t.Fatalf("a connection after the bell: %v, %v", resp, err)
+		}
+		time.Sleep(2 * time.Second)
+		ended := make(chan error, 1)
+		go func() { ended <- s.Edge.Shutdown(t.Context()) }()
+		for i, in := range inboxes {
+			bell, after := false, 0
+			for r := range in.C {
+				if m := r.Message; m != nil && m.GetRestart() != nil {
+					if m.GetRestart().GetInMs() != 3000 {
+						t.Fatalf("restart in %d ms", m.GetRestart().GetInMs())
+					}
+					bell = true
+				}
+				if bell && r.Snapshot != nil {
+					after++
+				}
+			}
+			if code := websocket.CloseStatus(in.Err()); !bell || code != websocket.StatusServiceRestart {
+				t.Fatalf("connection %d: bell %v, closed with %d", i, bell, code)
+			}
+			if i == 0 && after < 25 { // 2 s of snapshots, 15 a second
+				t.Fatalf("%d snapshots after the bell", after)
+			}
+		}
+		if err := <-ended; err != nil {
+			t.Fatal(err)
+		}
+		if n := count(t, s, "closes", "1012"); n != 2 {
+			t.Fatalf("closes: 1012 %v", n)
+		}
+	})
+}
+
+// TestShutdownDropsDeadPeers: a connection whose peer has stopped
+// answering is dropped when the shutdown's time is up, without its close's
+// handshake.
+func TestShutdownDropsDeadPeers(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := edgetest.NewServer(t, edgetest.Config{Limits: edge.Limits{Idle: time.Hour}})
+		token, _ := s.Guest("Ann")
+		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token, Wrap: edgetest.SmallReadBuffer(4096)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws.CloseNow()
+		// It reads no more: the server's writes wait.
+		time.Sleep(3 * time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+		defer cancel()
+		start := time.Now()
+		if err := s.Edge.Shutdown(ctx); err == nil {
+			t.Fatal("a dead peer closed in time")
+		}
+		if d := time.Since(start); d < 3*time.Second || d > 3*time.Second+100*time.Millisecond {
+			t.Fatalf("shut down after %v", d)
+		}
+		if n := testutil.ToFloat64(s.Metrics.EdgeConnections); n != 0 {
+			t.Fatalf("%v connections open", n)
+		}
+	})
+}
+
 // TestDrag: a word a tick, each stamped a few ticks ahead, as while the
 // tiller is dragged: every one is applied, at the tick it was stamped for,
 // with one encoder and with eight.

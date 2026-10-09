@@ -15,11 +15,12 @@ import (
 // each segment from, and what a checkpoint stores. Integers are varints
 // (encoding/binary), floats and control words their little-endian bits:
 //
-//	version                 uvarint, snapshotVersion
+//	version                 uvarint, SnapshotVersion
 //	tick                    varint
 //	wind speed, from        2 × 8 bytes
 //	next boat ID            uvarint
 //	capacity                uvarint
+//	admission held          uvarint, 1 if held, else 0
 //	generations             uvarint n, then n × (slot, generation) uvarints, slots ascending, none zero
 //	boats                   uvarint n, then n × the boat below, slots ascending
 //	queue                   uvarint n, then n × the connection waiting below, the head first
@@ -28,17 +29,26 @@ import (
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
 // uvarint, its control word in 8 bytes, and its state's fields in 8 bytes
 // each; each connection waiting is its account's 16 bytes, the connection as
-// a uvarint and the tick it was queued at as a varint.
-const snapshotVersion = 3
+// a uvarint, the tick it was queued at and the tick its place is given up
+// at (0 while connected) as varints.
+//
+// A checkpoint stores this snapshot, so a world is restored only by a build
+// that reads its version.
+const SnapshotVersion = 4
 
 // AppendSnapshot appends f's snapshot to dst.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
-	dst = binary.AppendUvarint(dst, snapshotVersion)
+	dst = binary.AppendUvarint(dst, SnapshotVersion)
 	dst = binary.AppendVarint(dst, f.Tick)
 	dst = appendF64(dst, f.Wind.Speed)
 	dst = appendF64(dst, f.Wind.From)
 	dst = binary.AppendUvarint(dst, f.NextBoat)
 	dst = binary.AppendUvarint(dst, uint64(f.Capacity()))
+	held := uint64(0)
+	if f.Held {
+		held = 1
+	}
+	dst = binary.AppendUvarint(dst, held)
 	n := 0
 	for _, g := range f.Gen {
 		if g != 0 {
@@ -70,6 +80,7 @@ func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 		dst = append(dst, q.Account[:]...)
 		dst = binary.AppendUvarint(dst, q.Conn)
 		dst = binary.AppendVarint(dst, q.Since)
+		dst = binary.AppendVarint(dst, q.Grace)
 	}
 	return dst
 }
@@ -82,22 +93,27 @@ func appendF64(dst []byte, v float64) []byte {
 // state. f's tick inputs are left empty.
 func ReadSnapshot(data []byte, f *bus.Frame) error {
 	r := reader{b: data}
-	if v := r.uvarint(); r.err == nil && v != snapshotVersion {
-		return fmt.Errorf("sim: snapshot version %d, not %d", v, snapshotVersion)
+	if v := r.uvarint(); r.err == nil && v != SnapshotVersion {
+		return fmt.Errorf("sim: snapshot version %d, not %d", v, SnapshotVersion)
 	}
 	tick := r.varint()
 	speed, from := r.f64(), r.f64()
 	nextBoat := r.uvarint()
 	capacity := r.uvarint()
+	held := r.uvarint()
 	if r.err != nil {
 		return r.err
 	}
 	if capacity != uint64(f.Capacity()) {
 		return fmt.Errorf("sim: a snapshot of %d slots, a frame of %d", capacity, f.Capacity())
 	}
+	if held > 1 {
+		return fmt.Errorf("sim: snapshot: admission held is %d", held)
+	}
 	f.Tick, f.Skipped = tick, 0
 	f.Wind = bus.Wind{Speed: speed, From: from}
 	f.NextBoat = nextBoat
+	f.Held = held == 1
 	f.Live = f.Live[:0]
 	clear(f.Occupied)
 	clear(f.Gen)
@@ -147,7 +163,10 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 	for range n {
 		var q bus.Waiting
 		r.bytes(q.Account[:])
-		q.Conn, q.Since = r.uvarint(), r.varint()
+		q.Conn, q.Since, q.Grace = r.uvarint(), r.varint(), r.varint()
+		if r.err == nil && (q.Grace < 0 || q.Conn != 0 && q.Grace != 0) {
+			return fmt.Errorf("sim: snapshot: a place in the queue with connection %d and grace %d", q.Conn, q.Grace)
+		}
 		f.Queue = append(f.Queue, q)
 	}
 	if r.err != nil {

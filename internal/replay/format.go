@@ -50,7 +50,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 3
+	formatVersion = 4
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -160,6 +160,12 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		for _, v := range sim.StateFields(&e.State) {
 			dst = appendF64(dst, *v)
 		}
+	case bus.Hold:
+		held := byte(0)
+		if e.Held {
+			held = 1
+		}
+		dst = append(dst, held)
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -454,6 +460,16 @@ func (p *payload) event(e *bus.Event) {
 		e.Boat = p.uvarint()
 		for _, v := range sim.StateFields(&e.State) {
 			*v = p.f64()
+		}
+	case bus.Hold:
+		switch p.byte() {
+		case 0:
+		case 1:
+			e.Held = true
+		default:
+			if p.err == nil {
+				p.err = errors.New("a hold neither on nor off")
+			}
 		}
 	default:
 		if p.err == nil {

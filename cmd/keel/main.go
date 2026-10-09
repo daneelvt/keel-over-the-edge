@@ -26,12 +26,17 @@ commands:
 `
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
-	// The first signal stops the server in order; a second one, handled
-	// as Go does by default, kills it.
-	context.AfterFunc(ctx, stop)
+	ctx, stop := signalContext()
 	defer stop()
 	os.Exit(run(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
+}
+
+// signalContext ends at the first SIGTERM or interrupt, which stops the
+// server in order; a second, handled as Go does by default, kills it.
+func signalContext() (context.Context, context.CancelFunc) {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	context.AfterFunc(ctx, stop)
+	return ctx, stop
 }
 
 // run is main without the process: it returns the exit status.

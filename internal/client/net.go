@@ -42,6 +42,8 @@ type Net struct {
 type Event struct {
 	Welcome *pb.Welcome
 	Queued  *pb.Queued
+	// Restart: the server is about to restart.
+	Restart *pb.Restart
 	// Snapshot is a snapshot's header; View the other boats after it,
 	// valid until ViewsKept more snapshots are decoded; Changes what its
 	// entries did, and Sampled the view slots it samples.
@@ -101,6 +103,9 @@ func (n *Net) Receive(now float64, b []byte) ([][]byte, Event, error) {
 			n.waiting, n.nextPing = true, now+PingEvery
 		}
 		return nil, Event{Queued: b.Queued}, nil
+	case *pb.ServerMessage_Restart:
+		n.lastHeard = now
+		return nil, Event{Restart: b.Restart}, nil
 	}
 	return nil, Event{}, nil
 }

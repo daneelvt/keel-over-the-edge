@@ -245,3 +245,63 @@ func checkPartitioned(t *testing.T, pool *pgxpool.Pool) {
 		}
 	}
 }
+
+// TestPersistenceTables: the checkpoint and event tables are partitioned by
+// world, and every world has their partitions: one made before the
+// migration that adds them gets them from it, one made after from
+// CreateWorld. The lease is one row, always; an event is of a known kind.
+func TestPersistenceTables(t *testing.T) {
+	ctx := context.Background()
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 2); err != nil {
+		t.Fatal(err)
+	}
+	s, err := store.Open(ctx, u, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	before, err := s.ActiveOrFirstWorld(ctx, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	checkPartitioned(t, pool)
+	must(t, pool, "UPDATE world SET state = 'ended'")
+	after, err := s.CreateWorld(ctx, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := pool.Query(ctx, `SELECT c.relname FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
+		WHERE i.inhparent IN ('checkpoint'::regclass, 'event'::regclass) ORDER BY 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(parts, " ") != "checkpoint_w1 checkpoint_w2 event_w1 event_w2" {
+		t.Fatalf("partitions %v", parts)
+	}
+	for _, w := range [][16]byte{before.ID, after.ID} {
+		must(t, pool, "INSERT INTO event (world_id, tick, kind, account_id, boat) VALUES ($1, 1, 'launched', $2, 1)", w, [16]byte{1})
+		must(t, pool, `INSERT INTO checkpoint (world_id, tick, format, build, catalog, layout, epoch, boats, data)
+			VALUES ($1, 1, 4, 'dev', 'c', 1, 1, 0, '\x00')`, w)
+	}
+	// One checkpoint a world.
+	refused(t, exec(t, pool, `INSERT INTO checkpoint (world_id, tick, format, build, catalog, layout, epoch, boats, data)
+		VALUES ($1, 2, 4, 'dev', 'c', 1, 1, 0, '\x00')`, after.ID), "23505")
+	refused(t, exec(t, pool, "INSERT INTO event (world_id, tick, kind, account_id, boat) VALUES ($1, 1, 'sank', $2, 1)", after.ID, [16]byte{1}), "23514")
+
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM sim_lease").Scan(&n); err != nil || n != 1 {
+		t.Fatalf("sim_lease has %d rows (%v)", n, err)
+	}
+	refused(t, exec(t, pool, "INSERT INTO sim_lease (epoch, holder) VALUES (0, 'another')"), "23505")
+	refused(t, exec(t, pool, "INSERT INTO sim_lease (singleton, epoch, holder) VALUES (false, 0, 'another')"), "23514")
+	refused(t, exec(t, pool, "UPDATE sim_lease SET epoch = -1"), "23514")
+}

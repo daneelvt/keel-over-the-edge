@@ -93,6 +93,9 @@ func (s *stack) startKeel(ctx context.Context) error {
 		"KEEL_TRACE_DIR=" + traceDir,
 		"KEEL_REPLAY_DIR=" + replayDir,
 		"KEEL_DEV_COMMANDS=1",
+		// A restart on a change to the code needs no time for the bell to
+		// be seen; the boats are kept all the same.
+		"KEEL_BELL=0s",
 	}
 	if n := os.Getenv("KEEL_DEV_SAILORS"); n != "" {
 		env = append(env, "KEEL_DEV_SAILORS="+n)

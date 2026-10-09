@@ -183,6 +183,9 @@ export class NetWorker {
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#d.post({ type: 'traffic', ...this.#traffic });
           break;
+        case 'restart':
+          this.#d.post({ type: 'restart', inMs: r.inMs });
+          break;
       }
       this.#arm();
     };

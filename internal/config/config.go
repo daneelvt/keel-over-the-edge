@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
@@ -50,6 +51,9 @@ type Config struct {
 	// DevCommands turns on the developer's commands on the internal
 	// listener: POST /debug/wind. Only tools/dev and tools/e2e set it.
 	DevCommands bool
+	// Bell is how long the world sails on once players have been told the
+	// server is about to restart, before it stops.
+	Bell time.Duration
 	// DatabaseURL is the database's: a postgres:// URL or key=value pairs,
 	// as pgx reads them. It holds a password: it is never logged.
 	DatabaseURL string
@@ -73,6 +77,23 @@ const (
 // starting value, until load tests on the server's machine set it.
 const DefaultBoatLimit = 1000
 
+// DefaultBell is the bell unless KEEL_BELL sets one, and MaxBell the
+// longest it may be: the stop's other steps and its bell must fit in the
+// time Kubernetes gives a pod to stop.
+const (
+	DefaultBell = 3 * time.Second
+	MaxBell     = 10 * time.Second
+)
+
+// The bounds of a stop's steps after the bell: the world's final checkpoint
+// and every event left written, then the game connections closed, a peer
+// that has not answered by then dropped. With a Recreate deployment every
+// second the old process lingers is a second of pause.
+const (
+	FinalCheckpointTimeout = 5 * time.Second
+	CloseTimeout           = 3 * time.Second
+)
+
 // Load reads the configuration through getenv (os.Getenv in the server).
 // Every problem is reported, not only the first.
 func Load(getenv func(string) string) (Config, error) {
@@ -87,6 +108,7 @@ func Load(getenv func(string) string) (Config, error) {
 		ClientDir:    getenv("KEEL_CLIENT_DIR"),
 		DatabaseURL:  getenv("KEEL_DATABASE_URL"),
 		BoatLimit:    DefaultBoatLimit,
+		Bell:         DefaultBell,
 	}
 	addrs := []struct{ name, addr string }{
 		{"KEEL_PLAY_ADDR", c.PlayAddr},
@@ -130,6 +152,13 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("KEEL_DEV_SAILORS: %q is not a number from 0 to %d", v, sim.Capacity))
 		}
 		c.DevSailors = n
+	}
+	if v := getenv("KEEL_BELL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 0 || d > MaxBell {
+			errs = append(errs, fmt.Errorf("KEEL_BELL: %q is not a duration from 0s to %v", v, MaxBell))
+		}
+		c.Bell = d
 	}
 	switch v := getenv("KEEL_DEV_COMMANDS"); v {
 	case "", "0":

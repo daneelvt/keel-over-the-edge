@@ -490,6 +490,7 @@ type ServerMessage struct {
 	//	*ServerMessage_Welcome
 	//	*ServerMessage_Pong
 	//	*ServerMessage_Queued
+	//	*ServerMessage_Restart
 	Body          isServerMessage_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -559,6 +560,15 @@ func (x *ServerMessage) GetQueued() *Queued {
 	return nil
 }
 
+func (x *ServerMessage) GetRestart() *Restart {
+	if x != nil {
+		if x, ok := x.Body.(*ServerMessage_Restart); ok {
+			return x.Restart
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Body interface {
 	isServerMessage_Body()
 }
@@ -575,11 +585,66 @@ type ServerMessage_Queued struct {
 	Queued *Queued `protobuf:"bytes,3,opt,name=queued,proto3,oneof"`
 }
 
+type ServerMessage_Restart struct {
+	Restart *Restart `protobuf:"bytes,4,opt,name=restart,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Body() {}
 
 func (*ServerMessage_Pong) isServerMessage_Body() {}
 
 func (*ServerMessage_Queued) isServerMessage_Body() {}
+
+func (*ServerMessage_Restart) isServerMessage_Body() {}
+
+// Restart says the server is about to restart, as a new version is
+// deployed: the world sails on until then, and the connection is closed
+// with 1012. Every boat waits, in its grace, for its sailor to come back
+// to the restarted server.
+type Restart struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// About how long until the connection closes, in milliseconds.
+	InMs          uint32 `protobuf:"varint,1,opt,name=in_ms,json=inMs,proto3" json:"in_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Restart) Reset() {
+	*x = Restart{}
+	mi := &file_keel_v1_game_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Restart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Restart) ProtoMessage() {}
+
+func (x *Restart) ProtoReflect() protoreflect.Message {
+	mi := &file_keel_v1_game_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Restart.ProtoReflect.Descriptor instead.
+func (*Restart) Descriptor() ([]byte, []int) {
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *Restart) GetInMs() uint32 {
+	if x != nil {
+		return x.InMs
+	}
+	return 0
+}
 
 // Queued says the sea is full: the client waits for a boat. It comes after
 // the Hello, and again whenever the place changes, at most once a second;
@@ -596,7 +661,7 @@ type Queued struct {
 
 func (x *Queued) Reset() {
 	*x = Queued{}
-	mi := &file_keel_v1_game_proto_msgTypes[7]
+	mi := &file_keel_v1_game_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -608,7 +673,7 @@ func (x *Queued) String() string {
 func (*Queued) ProtoMessage() {}
 
 func (x *Queued) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[7]
+	mi := &file_keel_v1_game_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -621,7 +686,7 @@ func (x *Queued) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Queued.ProtoReflect.Descriptor instead.
 func (*Queued) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{7}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Queued) GetPosition() uint32 {
@@ -659,7 +724,7 @@ type Welcome struct {
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_keel_v1_game_proto_msgTypes[8]
+	mi := &file_keel_v1_game_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -671,7 +736,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[8]
+	mi := &file_keel_v1_game_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -684,7 +749,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{8}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Welcome) GetWorld() string {
@@ -742,7 +807,7 @@ type Pong struct {
 
 func (x *Pong) Reset() {
 	*x = Pong{}
-	mi := &file_keel_v1_game_proto_msgTypes[9]
+	mi := &file_keel_v1_game_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -754,7 +819,7 @@ func (x *Pong) String() string {
 func (*Pong) ProtoMessage() {}
 
 func (x *Pong) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[9]
+	mi := &file_keel_v1_game_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -767,7 +832,7 @@ func (x *Pong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pong.ProtoReflect.Descriptor instead.
 func (*Pong) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{9}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Pong) GetClientTimeUs() int64 {
@@ -814,12 +879,15 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\aCommand\x12)\n" +
 	"\x06resync\x18\x01 \x01(\v2\x0f.keel.v1.ResyncH\x00R\x06resyncB\x06\n" +
 	"\x04body\"\b\n" +
-	"\x06Resync\"\x95\x01\n" +
+	"\x06Resync\"\xc3\x01\n" +
 	"\rServerMessage\x12,\n" +
 	"\awelcome\x18\x01 \x01(\v2\x10.keel.v1.WelcomeH\x00R\awelcome\x12#\n" +
 	"\x04pong\x18\x02 \x01(\v2\r.keel.v1.PongH\x00R\x04pong\x12)\n" +
-	"\x06queued\x18\x03 \x01(\v2\x0f.keel.v1.QueuedH\x00R\x06queuedB\x06\n" +
-	"\x04body\">\n" +
+	"\x06queued\x18\x03 \x01(\v2\x0f.keel.v1.QueuedH\x00R\x06queued\x12,\n" +
+	"\arestart\x18\x04 \x01(\v2\x10.keel.v1.RestartH\x00R\arestartB\x06\n" +
+	"\x04body\"\x1e\n" +
+	"\aRestart\x12\x13\n" +
+	"\x05in_ms\x18\x01 \x01(\rR\x04inMs\">\n" +
 	"\x06Queued\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\rR\bposition\x12\x18\n" +
 	"\awaiting\x18\x02 \x01(\rR\awaiting\"\x9b\x01\n" +
@@ -846,7 +914,7 @@ func file_keel_v1_game_proto_rawDescGZIP() []byte {
 	return file_keel_v1_game_proto_rawDescData
 }
 
-var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_keel_v1_game_proto_goTypes = []any{
 	(*ClientMessage)(nil), // 0: keel.v1.ClientMessage
 	(*Hello)(nil),         // 1: keel.v1.Hello
@@ -855,24 +923,26 @@ var file_keel_v1_game_proto_goTypes = []any{
 	(*Command)(nil),       // 4: keel.v1.Command
 	(*Resync)(nil),        // 5: keel.v1.Resync
 	(*ServerMessage)(nil), // 6: keel.v1.ServerMessage
-	(*Queued)(nil),        // 7: keel.v1.Queued
-	(*Welcome)(nil),       // 8: keel.v1.Welcome
-	(*Pong)(nil),          // 9: keel.v1.Pong
+	(*Restart)(nil),       // 7: keel.v1.Restart
+	(*Queued)(nil),        // 8: keel.v1.Queued
+	(*Welcome)(nil),       // 9: keel.v1.Welcome
+	(*Pong)(nil),          // 10: keel.v1.Pong
 }
 var file_keel_v1_game_proto_depIdxs = []int32{
-	1, // 0: keel.v1.ClientMessage.hello:type_name -> keel.v1.Hello
-	2, // 1: keel.v1.ClientMessage.input:type_name -> keel.v1.Input
-	3, // 2: keel.v1.ClientMessage.ping:type_name -> keel.v1.Ping
-	4, // 3: keel.v1.ClientMessage.command:type_name -> keel.v1.Command
-	5, // 4: keel.v1.Command.resync:type_name -> keel.v1.Resync
-	8, // 5: keel.v1.ServerMessage.welcome:type_name -> keel.v1.Welcome
-	9, // 6: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
-	7, // 7: keel.v1.ServerMessage.queued:type_name -> keel.v1.Queued
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	1,  // 0: keel.v1.ClientMessage.hello:type_name -> keel.v1.Hello
+	2,  // 1: keel.v1.ClientMessage.input:type_name -> keel.v1.Input
+	3,  // 2: keel.v1.ClientMessage.ping:type_name -> keel.v1.Ping
+	4,  // 3: keel.v1.ClientMessage.command:type_name -> keel.v1.Command
+	5,  // 4: keel.v1.Command.resync:type_name -> keel.v1.Resync
+	9,  // 5: keel.v1.ServerMessage.welcome:type_name -> keel.v1.Welcome
+	10, // 6: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
+	8,  // 7: keel.v1.ServerMessage.queued:type_name -> keel.v1.Queued
+	7,  // 8: keel.v1.ServerMessage.restart:type_name -> keel.v1.Restart
+	9,  // [9:9] is the sub-list for method output_type
+	9,  // [9:9] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_keel_v1_game_proto_init() }
@@ -893,6 +963,7 @@ func file_keel_v1_game_proto_init() {
 		(*ServerMessage_Welcome)(nil),
 		(*ServerMessage_Pong)(nil),
 		(*ServerMessage_Queued)(nil),
+		(*ServerMessage_Restart)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -900,7 +971,7 @@ func file_keel_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_keel_v1_game_proto_rawDesc), len(file_keel_v1_game_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

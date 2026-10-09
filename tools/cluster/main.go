@@ -9,6 +9,9 @@
 //
 //	go run ./tools/cluster -up       make or start the VM, install k3s, apply the cluster's manifests, deploy the game
 //	go run ./tools/cluster -deploy   build the image, import it into the cluster, apply the game's manifests
+//	go run ./tools/cluster -restart  restart keel on the build it runs, as a deploy does
+//	go run ./tools/cluster -kill     delete keel's pod by force, as when its node is lost
+//	go run ./tools/cluster -crash    kill keel with SIGKILL in its container, as a crash does
 //	go run ./tools/cluster -smoke    check the game in the cluster over HTTPS: the page, a guest, the game connection, probes, the database's TLS
 //	go run ./tools/cluster -status   the VM, the node, the pods, the build running, the addresses
 //	go run ./tools/cluster -logs     follow keel's logs
@@ -38,6 +41,9 @@ import (
 func main() {
 	up := flag.Bool("up", false, "make or start the VM and the cluster, and deploy the game")
 	deployFlag := flag.Bool("deploy", false, "build the game's image and deploy it to the cluster")
+	restart := flag.Bool("restart", false, "restart keel on the build it runs")
+	kill := flag.Bool("kill", false, "delete keel's pod by force")
+	crashFlag := flag.Bool("crash", false, "kill keel with SIGKILL")
 	smokeFlag := flag.Bool("smoke", false, "check the game in the cluster")
 	status := flag.Bool("status", false, "show the VM, the cluster and the build running")
 	logs := flag.Bool("logs", false, "follow keel's logs")
@@ -56,6 +62,12 @@ func main() {
 		err = c.up(ctx)
 	case *deployFlag:
 		err = c.deployGame(ctx)
+	case *restart:
+		err = c.restartGame(ctx)
+	case *kill:
+		err = c.killPod(ctx)
+	case *crashFlag:
+		err = c.crash(ctx)
 	case *smokeFlag:
 		err = c.smoke(ctx)
 	case *status:
