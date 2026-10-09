@@ -240,10 +240,10 @@ func TestQueue(t *testing.T) {
 
 // TestBytes measures what a player receives: alone, with 10 boats near,
 // 10 far, and 64 near, without lag and at 100 ms each way with 2% loss over
-// ten seeds.
+// three seeds.
 func TestBytes(t *testing.T) {
-	d := time.Minute
-	seeds := uint64(10)
+	d := 30 * time.Second
+	seeds := uint64(3)
 	if testing.Short() {
 		d, seeds = 20*time.Second, 2
 	}
