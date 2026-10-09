@@ -99,7 +99,7 @@ func NewServer(t testing.TB, cfg Config) *Server {
 		t.Fatal(err)
 	}
 	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{World: w, Metrics: m, Sessions: newSessions(), Kinds: cfg.Kinds}
+	s := &Server{World: w, Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds}
 	s.Loop = loop.New(loop.Config{World: w, Epoch: Epoch, Log: log, Metrics: m})
 	s.Edge = edge.New(edge.Config{
 		Bus: w.Bus(), World: WorldID, Clock: s.Loop,
@@ -172,7 +172,8 @@ type Sessions struct {
 	next byte
 }
 
-func newSessions() *Sessions { return &Sessions{by: map[[32]byte]store.Session{}} }
+// NewSessions makes an empty store of sessions.
+func NewSessions() *Sessions { return &Sessions{by: map[[32]byte]store.Session{}} }
 
 // Session finds a session by its token's hash.
 func (s *Sessions) Session(_ context.Context, hash [32]byte) (store.Session, error) {

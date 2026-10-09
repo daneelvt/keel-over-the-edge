@@ -4,6 +4,7 @@ package edge
 
 import (
 	"context"
+	"time"
 
 	"github.com/coder/websocket"
 )
@@ -33,6 +34,15 @@ func (e *Edge) Shutdown(ctx context.Context) error {
 	var err error
 	select {
 	case <-done:
+		// Each connection's Disconnect is queued; the tick after next has
+		// surely applied it, so its boat's grace is in the input log.
+		applied := e.latest.Load() + 2
+		for len(open) > 0 && e.latest.Load() < applied && ctx.Err() == nil {
+			select {
+			case <-ctx.Done():
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
 	case <-ctx.Done():
 		err = ctx.Err()
 	}

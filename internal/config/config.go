@@ -40,6 +40,9 @@ type Config struct {
 	ReplayDir string
 	// DevSailors is how many scripted sailors sail in the world.
 	DevSailors int
+	// DevCommands turns on the developer's commands on the internal
+	// listener: POST /debug/wind. Only tools/dev and tools/e2e set it.
+	DevCommands bool
 	// DatabaseURL is the database's: a postgres:// URL or key=value pairs,
 	// as pgx reads them. It holds a password: it is never logged.
 	DatabaseURL string
@@ -107,6 +110,13 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("KEEL_DEV_SAILORS: %q is not a number from 0 to %d", v, sim.Capacity))
 		}
 		c.DevSailors = n
+	}
+	switch v := getenv("KEEL_DEV_COMMANDS"); v {
+	case "", "0":
+	case "1":
+		c.DevCommands = true
+	default:
+		errs = append(errs, fmt.Errorf("KEEL_DEV_COMMANDS: %q is not 0 or 1", v))
 	}
 	return c, errors.Join(errs...)
 }

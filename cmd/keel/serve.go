@@ -8,10 +8,12 @@ import (
 	"flag"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,10 +23,13 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
+	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -35,6 +40,11 @@ import (
 // shutdownTimeout bounds how long a stopping server waits for requests in
 // flight.
 const shutdownTimeout = 10 * time.Second
+
+// gameShutdownTimeout bounds how long it waits for the game connections to
+// close: a dead peer's close takes the library's 5 s to write it and 5 s to
+// wait for the answer.
+const gameShutdownTimeout = 15 * time.Second
 
 // firstEpoch is the epoch of the first world, made when the database has
 // none: tick 0 at midnight UTC on 1 January 2026.
@@ -52,6 +62,8 @@ Configured from the environment:
   KEEL_TRACE_DIR       where traces of overrunning ticks go (default none)
   KEEL_REPLAY_DIR      where the input log goes (default memory only)
   KEEL_DEV_SAILORS     scripted sailors to sail (default 0)
+  KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
+                       POST /debug/wind?knots=…&from=… (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -108,10 +120,12 @@ type serveOptions struct {
 // It starts the internal listener first and stops it last, so the process
 // can be observed throughout; then it waits for the database, not ready
 // meanwhile, checks its schema and loads the world being sailed; then the
-// world and its tick loop; then the public listeners; and only then is it
-// ready. It stops in reverse: not ready, the public listeners shut down, the
-// loop finishes its tick, the input log is flushed, the flight recorder
-// stops, the database's pool closes, and the internal listener goes last.
+// world, its tick loop and the game connection's encoder; then the public
+// listeners; and only then is it ready. It stops in reverse: not ready, the
+// public listeners shut down, every game connection is closed with 1012,
+// the loop finishes its tick, the encoder stops, the input log is flushed,
+// the flight recorder stops, the database's pool closes, and the internal
+// listener goes last.
 // Once open, the database is not part of readiness: the simulation does not
 // need it, and if it goes away only the requests that need it fail. The
 // loop, its workers and the input log's writer do not recover from panics:
@@ -144,7 +158,13 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		}
 	}
 	replayHandler := &lateHandler{}
-	internal := newServer(obs.Internal(health, metrics, flightHandler, replayHandler), log)
+	var windHandler *lateHandler
+	var wind http.Handler
+	if cfg.DevCommands {
+		windHandler = &lateHandler{}
+		wind = windHandler
+	}
+	internal := newServer(obs.Internal(health, metrics, flightHandler, replayHandler, wind), log)
 	internalDone := make(chan error, 1)
 	go func() { internalDone <- serveUntilClosed(internal, internalLn) }()
 	log.Info("listening", "listener", "internal", "addr", internalLn.Addr().String())
@@ -206,8 +226,11 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Dir:    cfg.ReplayDir,
 		Log:    log,
 	})
-	world.Record(inputs)
 	replayHandler.set(inputs)
+	if windHandler != nil {
+		windHandler.set(windRoute(b.Commands.Developer()))
+		log.Warn("developer commands are on: POST /debug/wind on the internal listener")
+	}
 	metrics.CounterFunc("keel_sim_commands_refused_total", "Commands refused because the queue was full.", b.Commands.Refused)
 	metrics.CounterFunc("keel_sim_frames_allocated_total", "Frames made because every frame in the pool was in use.", b.Frames.Allocated)
 	metrics.CounterFunc("keel_replay_bytes_total", "Bytes recorded in the input log.", inputs.Bytes)
@@ -218,6 +241,12 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		lcfg.Overrun = flight.Overrun
 	}
 	tickLoop := loop.New(lcfg)
+	game := edge.New(edge.Config{
+		Bus: b, World: store.AccountID(sailed.ID).String(), Clock: tickLoop,
+		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
+		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
+	})
+	world.Record(inputs, game)
 	log.Info("world ready", "kinds", len(kinds), "capacity", world.Capacity(), "workers", opt.workers, "tick", world.Now())
 	health.Beat()
 
@@ -232,6 +261,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Guests:   db,
 		Sessions: auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log}),
 		Looks:    looks,
+		Game:     game,
 	}), log)
 	agents := newServer(obs.AccessLog(log, api.Agents()), log)
 
@@ -239,12 +269,15 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	loopCtx, stopLoop := context.WithCancel(context.Background())
 	sailorsCtx, stopSailors := context.WithCancel(context.Background())
 	flightCtx, stopFlight := context.WithCancel(context.Background())
+	encoderCtx, stopEncoder := context.WithCancel(context.Background())
+	defer stopEncoder()
 	defer stopLoop()
 	defer stopSailors()
 	defer stopFlight()
 	loopDone := make(chan struct{})
 	inputsDone := make(chan struct{})
 	sailorsDone := make(chan struct{})
+	encoderDone := make(chan struct{})
 
 	g.Go(func() error {
 		defer close(inputsDone)
@@ -253,6 +286,11 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	g.Go(func() error {
 		defer close(loopDone)
 		return tickLoop.Run(loopCtx)
+	})
+	g.Go(func() error {
+		defer close(encoderDone)
+		game.Run(encoderCtx)
+		return nil
 	})
 	if flight != nil {
 		g.Go(func() error {
@@ -297,10 +335,20 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		defer cancel()
 		errs := []error{play.Shutdown(sctx), agents.Shutdown(sctx)}
 		health.Listening(false)
+		// Shutdown leaves hijacked connections alone: the game's are closed
+		// here, with 1012, while the world still ticks, so their boats'
+		// graces are recorded.
+		gctx, gcancel := context.WithTimeout(context.Background(), gameShutdownTimeout)
+		if err := game.Shutdown(gctx); err != nil {
+			log.Warn("game connections still open after the shutdown's wait", "err", err)
+		}
+		gcancel()
 		stopSailors()
 		<-sailorsDone
 		stopLoop()
 		<-loopDone
+		stopEncoder()
+		<-encoderDone
 		inputs.Close()
 		<-inputsDone
 		stopFlight()
@@ -314,6 +362,27 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	err = g.Wait()
 	log.Info("stopped", "tick", world.Now())
 	return err
+}
+
+// windRoute is POST /debug/wind?knots=…&from=…: the wind becomes knots 10 m
+// up, from the given degrees, at the next tick. A developer's command, on
+// the internal listener only, with KEEL_DEV_COMMANDS=1.
+func windRoute(dev bus.Sender) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		knots, err1 := strconv.ParseFloat(q.Get("knots"), 64)
+		from, err2 := strconv.ParseFloat(q.Get("from"), 64)
+		if err1 != nil || err2 != nil || knots < 0 || knots > 100 || math.IsNaN(from) || math.IsInf(from, 0) {
+			http.Error(w, "knots, from 0 to 100, and from, in degrees, are required", http.StatusBadRequest)
+			return
+		}
+		rad := math.Mod(math.Mod(from, 360)+360, 360) * math.Pi / 180
+		if err := dev.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: knots * 1852 / 3600, From: rad}}); err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 }
 
 // registerPoolMetrics reports the database pool's use, read when scraped.

@@ -25,6 +25,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
@@ -195,17 +196,21 @@ var bubbleEpoch = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 // memDB is a database in memory, for servers in synctest bubbles, which
 // cannot wait on a real one: one world, no guests.
 type memDB struct {
-	epoch   time.Time
-	onClose func()
-	mu      sync.Mutex
-	closed  bool
+	epoch    time.Time
+	onClose  func()
+	sessions *edgetest.Sessions // nil for none
+	mu       sync.Mutex
+	closed   bool
 }
 
 func (d *memDB) CreateGuest(context.Context, store.Guest) (store.AccountID, error) {
 	return store.AccountID{}, errors.New("memDB makes no guests")
 }
 
-func (d *memDB) Session(context.Context, [32]byte) (store.Session, error) {
+func (d *memDB) Session(ctx context.Context, hash [32]byte) (store.Session, error) {
+	if d.sessions != nil {
+		return d.sessions.Session(ctx, hash)
+	}
 	return store.Session{}, store.ErrNotFound
 }
 

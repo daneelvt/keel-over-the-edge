@@ -13,15 +13,16 @@ var InternalPaths = []string{
 	"/livez", "/readyz", "/metrics",
 	"/debug/pprof/", "/debug/pprof/cmdline", "/debug/pprof/profile", "/debug/pprof/symbol",
 	"/debug/pprof/trace", "/debug/pprof/goroutine", "/debug/pprof/goroutineleak",
-	"/debug/flightrecorder", "/debug/replay",
+	"/debug/flightrecorder", "/debug/replay", "/debug/wind",
 }
 
 // Internal returns the internal listener's routes: the probes, the metrics,
 // the profiles, the flight recorder's trace and the input log. pprof's
 // handlers are registered here by hand; importing net/http/pprof also
 // registers them on http.DefaultServeMux, which the server never serves.
-// flight and replay may be nil, and their routes then answer 404.
-func Internal(h *Health, m *Metrics, flight, replay http.Handler) http.Handler {
+// flight, replay and wind may be nil, and their routes then answer 404;
+// wind, a developer's command, is POST /debug/wind.
+func Internal(h *Health, m *Metrics, flight, replay, wind http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /livez", h.LiveHandler())
 	mux.Handle("GET /readyz", h.ReadyHandler())
@@ -39,6 +40,9 @@ func Internal(h *Health, m *Metrics, flight, replay http.Handler) http.Handler {
 	}
 	if replay != nil {
 		mux.Handle("GET /debug/replay", replay)
+	}
+	if wind != nil {
+		mux.Handle("POST /debug/wind", wind)
 	}
 	return mux
 }
