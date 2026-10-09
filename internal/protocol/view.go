@@ -30,10 +30,12 @@ const (
 
 // The steps of a Boat's fields.
 const (
-	// HeadingStep is the heading's step, in radians.
-	HeadingStep = 2 * math.Pi / 65536
-	// AngleStep is the heel's, the boom's and the rudder's, in radians.
-	AngleStep = math.Pi / 128
+	// AngleStep is the heading's, the heel's, the boom's and the
+	// rudder's, in radians: 0.0055°, too fine for a boat drawn between
+	// two samples to move in steps. (At π/128, a heel or a boom swinging
+	// at 10° a second changed every other sample, and was drawn stopping
+	// and starting.)
+	AngleStep = 2 * math.Pi / 65536
 	// PositionStep and SailorStep are the position's and the sailor
 	// offset's, in metres.
 	PositionStep = 0.01
@@ -49,9 +51,9 @@ type Boat struct {
 	Flags   uint8 // FarBand, and the sailor's mode
 	X, Y    int32 // cm, east and north
 	Heading uint16
-	Heel    int8
-	Boom    int8
-	Rudder  int8
+	Heel    int16
+	Boom    int16
+	Rudder  int16
 	Sailor  int8 // cm
 	Sail    uint8
 }
@@ -72,10 +74,10 @@ func Quantise(st *physics.State, kind uint16, sail uint8, far bool, q *Boat) {
 	}
 	q.X = int32(steps(st.X/PositionStep, -PositionLimit-1, PositionLimit))
 	q.Y = int32(steps(st.Y/PositionStep, -PositionLimit-1, PositionLimit))
-	q.Heading = uint16(angleSteps(st.Heading, HeadingStep))
-	q.Heel = int8(angleSteps(st.Heel, AngleStep))
-	q.Boom = int8(angleSteps(st.Boom, AngleStep))
-	q.Rudder = int8(angleSteps(st.Rudder, AngleStep))
+	q.Heading = uint16(angleSteps(st.Heading))
+	q.Heel = int16(angleSteps(st.Heel))
+	q.Boom = int16(angleSteps(st.Boom))
+	q.Rudder = int16(angleSteps(st.Rudder))
 	q.Sailor = int8(steps(st.Sailor/SailorStep, math.MinInt8, math.MaxInt8))
 	q.Sail = sail
 }
@@ -88,14 +90,14 @@ func steps(v float64, lo, hi int64) int64 {
 	return int64(math.Max(float64(lo), math.Min(float64(hi), math.Round(v))))
 }
 
-// angleSteps is angle a, wrapped into [−π, π), in whole steps of step,
-// whose integer type the caller's conversion wraps: π, a whole turn of
-// steps half way, is −π.
-func angleSteps(a, step float64) int32 {
+// angleSteps is angle a, wrapped into [−π, π), in whole AngleSteps,
+// which the caller's conversion to 16 bits wraps: π, half a turn of
+// steps, is −π.
+func angleSteps(a float64) int32 {
 	if a != a || math.IsInf(a, 0) {
 		return 0
 	}
-	return int32(math.Round(math.Remainder(a, 2*math.Pi) / step))
+	return int32(math.Round(math.Remainder(a, 2*math.Pi) / AngleStep))
 }
 
 func clampInt(v, lo, hi int64) int64 { return max(lo, min(hi, v)) }
@@ -147,7 +149,7 @@ const (
 // maxEntrySize is the longest entry this package writes: an update of
 // every field, its position changes 4 bytes each; or an enter of a kind of
 // 3 bytes.
-const maxEntrySize = 18
+const maxEntrySize = 21
 
 // Entry is one entry of a snapshot.
 type Entry struct {
@@ -239,8 +241,10 @@ func AppendEntry(b []byte, e *Entry) []byte {
 		b = append(b, q.Flags)
 		b = appendInt24(b, q.X)
 		b = appendInt24(b, q.Y)
-		b = binary.LittleEndian.AppendUint16(b, q.Heading)
-		b = append(b, byte(q.Heel), byte(q.Boom), byte(q.Rudder), byte(q.Sailor), q.Sail)
+		for _, v := range [...]uint16{q.Heading, uint16(q.Heel), uint16(q.Boom), uint16(q.Rudder)} {
+			b = binary.LittleEndian.AppendUint16(b, v)
+		}
+		b = append(b, byte(q.Sailor), q.Sail)
 	case OpUpdate:
 		m := e.Mask
 		b = append(b, m)
@@ -248,11 +252,13 @@ func AppendEntry(b []byte, e *Entry) []byte {
 			b = binary.AppendVarint(b, e.DX)
 			b = binary.AppendVarint(b, e.DY)
 		}
-		if m&ChangeHeading != 0 {
-			b = binary.LittleEndian.AppendUint16(b, q.Heading)
+		for i, v := range [...]uint16{q.Heading, uint16(q.Heel), uint16(q.Boom), uint16(q.Rudder)} {
+			if m&(ChangeHeading<<i) != 0 {
+				b = binary.LittleEndian.AppendUint16(b, v)
+			}
 		}
-		for i, v := range [...]uint8{uint8(q.Heel), uint8(q.Boom), uint8(q.Rudder), uint8(q.Sailor), q.Sail, q.Flags} {
-			if m&(ChangeHeel<<i) != 0 {
+		for i, v := range [...]uint8{uint8(q.Sailor), q.Sail, q.Flags} {
+			if m&(ChangeSailor<<i) != 0 {
 				b = append(b, v)
 			}
 		}
@@ -296,8 +302,10 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 		q.Flags = b[0]
 		q.X, q.Y = int24(b[1:]), int24(b[4:])
 		q.Heading = binary.LittleEndian.Uint16(b[7:])
-		q.Heel, q.Boom, q.Rudder, q.Sailor = int8(b[9]), int8(b[10]), int8(b[11]), int8(b[12])
-		q.Sail = b[13]
+		q.Heel = int16(binary.LittleEndian.Uint16(b[9:]))
+		q.Boom = int16(binary.LittleEndian.Uint16(b[11:]))
+		q.Rudder = int16(binary.LittleEndian.Uint16(b[13:]))
+		q.Sailor, q.Sail = int8(b[15]), b[16]
 		b = b[enterFields:]
 	case OpUpdate:
 		if len(b) == 0 {
@@ -319,15 +327,27 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 				b = b[n:]
 			}
 		}
-		if m&ChangeHeading != 0 {
+		for i := range 4 {
+			if m&(ChangeHeading<<i) == 0 {
+				continue
+			}
 			if len(b) < 2 {
 				return b, ErrEntryShort
 			}
-			q.Heading = binary.LittleEndian.Uint16(b)
+			switch v := binary.LittleEndian.Uint16(b); i {
+			case 0:
+				q.Heading = v
+			case 1:
+				q.Heel = int16(v)
+			case 2:
+				q.Boom = int16(v)
+			case 3:
+				q.Rudder = int16(v)
+			}
 			b = b[2:]
 		}
-		for i := range 6 {
-			if m&(ChangeHeel<<i) == 0 {
+		for i := range 3 {
+			if m&(ChangeSailor<<i) == 0 {
 				continue
 			}
 			if len(b) == 0 {
@@ -335,16 +355,10 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			}
 			switch v := b[0]; i {
 			case 0:
-				q.Heel = int8(v)
-			case 1:
-				q.Boom = int8(v)
-			case 2:
-				q.Rudder = int8(v)
-			case 3:
 				q.Sailor = int8(v)
-			case 4:
+			case 1:
 				q.Sail = v
-			case 5:
+			case 2:
 				q.Flags = v
 			}
 			b = b[1:]
@@ -359,7 +373,7 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 }
 
 // enterFields is the length of an enter's fields after its kind.
-const enterFields = 14
+const enterFields = 17
 
 // uvarint reads a uvarint written in as few bytes as it needs, as
 // binary.AppendUvarint writes it, and returns it and its length.

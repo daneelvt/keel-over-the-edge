@@ -66,9 +66,9 @@ type goldenBoat struct {
 	X       int32  `json:"x"`
 	Y       int32  `json:"y"`
 	Heading uint16 `json:"heading"`
-	Heel    int8   `json:"heel"`
-	Boom    int8   `json:"boom"`
-	Rudder  int8   `json:"rudder"`
+	Heel    int16  `json:"heel"`
+	Boom    int16  `json:"boom"`
+	Rudder  int16  `json:"rudder"`
 	Sailor  int8   `json:"sailor"`
 	Sail    uint8  `json:"sail"`
 }
@@ -104,7 +104,7 @@ type golden struct {
 	sample uint64
 }
 
-func boat(kind uint16, far bool, mode uint8, x, y int32, heading uint16, heel, boom, rudder, sailor int8, sail uint8) Boat {
+func boat(kind uint16, far bool, mode uint8, x, y int32, heading uint16, heel, boom, rudder int16, sailor int8, sail uint8) Boat {
 	q := Boat{Kind: kind, Flags: mode << modeShift, X: x, Y: y, Heading: heading, Heel: heel, Boom: boom, Rudder: rudder, Sailor: sailor, Sail: sail}
 	if far {
 		q.Flags |= FarBand
@@ -143,14 +143,14 @@ func goldens() []golden {
 
 	var v1 View
 	v1.Put(0, &Boat{})
-	v1.Put(1, ptr(boat(0, false, physics.Sailing, 1234, -5678, 16384, 12, -60, 30, 95, 0x5f)))
-	v1.Put(2, ptr(boat(300, true, physics.InWater, PositionLimit, -PositionLimit-1, 65535, -128, 127, -128, -128, 0xff)))
-	v1.Put(5, ptr(boat(1, true, physics.OnBoard, -700_00, 400_00, 32768, 127, 0, 1, -1, 0x31)))
+	v1.Put(1, ptr(boat(0, false, physics.Sailing, 1234, -5678, 16384, 1200, -6000, 3000, 95, 0x5f)))
+	v1.Put(2, ptr(boat(300, true, physics.InWater, PositionLimit, -PositionLimit-1, 65535, math.MinInt16, math.MaxInt16, math.MinInt16, -128, 0xff)))
+	v1.Put(5, ptr(boat(1, true, physics.OnBoard, -700_00, 400_00, 32768, math.MaxInt16, 0, 1, -1, 0x31)))
 	v1.Put(63, ptr(boat(65535, false, physics.Climbing, 1, -1, 1, -1, 1, -1, 1, 0x80)))
 
 	v2 := v1
-	v2.Boats[0] = boat(0, false, 0, 13, -7, 0, 0, 0, 0, 0, 0)                                               // position only
-	v2.Boats[1] = boat(0, true, physics.Sailing, 1234+8000000, -5678-8000000, 16000, 13, -61, 31, 94, 0x6f) // every field, positions far
+	v2.Boats[0] = boat(0, false, 0, 13, -7, 0, 0, 0, 0, 0, 0)                                                     // position only
+	v2.Boats[1] = boat(0, true, physics.Sailing, 1234+8000000, -5678-8000000, 16000, 1300, -6100, 3100, 94, 0x6f) // every field, positions far
 	v2.Remove(63)
 	v2.Put(2, ptr(boat(2, false, physics.Sailing, 5, 6, 7, 8, 9, 10, 11, 12)))  // replaces
 	v2.Put(40, ptr(boat(0, false, physics.Sailing, -9, -9, 9, 9, -9, 9, 9, 9))) // enters
@@ -324,7 +324,7 @@ func TestDeltaAgainstEveryBase(t *testing.T) {
 				q := &next.Boats[slot]
 				q.X += int32(rng.IntN(201) - 100)
 				q.Heading += uint16(rng.IntN(50))
-				q.Heel = int8(rng.IntN(256))
+				q.Heel = int16(rng.IntN(65536))
 			}
 		}
 		full := make([]byte, HeaderSize, MaxSnapshotSize)
@@ -360,7 +360,7 @@ func TestDeltaAgainstEveryBase(t *testing.T) {
 
 func randomBoat(rng *rand.Rand) Boat {
 	return Boat{Kind: uint16(rng.IntN(3)), Flags: uint8(rng.IntN(8)), X: int32(rng.IntN(1<<24) - 1<<23), Y: int32(rng.IntN(1<<24) - 1<<23),
-		Heading: uint16(rng.Uint32()), Heel: int8(rng.Uint32()), Boom: int8(rng.Uint32()), Rudder: int8(rng.Uint32()),
+		Heading: uint16(rng.Uint32()), Heel: int16(rng.Uint32()), Boom: int16(rng.Uint32()), Rudder: int16(rng.Uint32()),
 		Sailor: int8(rng.Uint32()), Sail: uint8(rng.Uint32())}
 }
 
@@ -369,8 +369,8 @@ func TestQuantise(t *testing.T) {
 	var q Boat
 	st := physics.State{X: 12.345, Y: -0.004, Heading: math.Pi, Heel: -math.Pi / 2, Boom: 1.3, Rudder: -0.6, Sailor: 0.955, SailorMode: physics.OnBoard}
 	Quantise(&st, 3, 0x5a, true, &q)
-	want := Boat{Kind: 3, Flags: FarBand | physics.OnBoard<<modeShift, X: 1235, Y: 0, Heading: 32768, Heel: -64,
-		Boom: int8(math.Round(1.3 / AngleStep)), Rudder: int8(math.Round(-0.6 / AngleStep)), Sailor: 96, Sail: 0x5a}
+	want := Boat{Kind: 3, Flags: FarBand | physics.OnBoard<<modeShift, X: 1235, Y: 0, Heading: 32768, Heel: -16384,
+		Boom: int16(math.Round(1.3 / AngleStep)), Rudder: int16(math.Round(-0.6 / AngleStep)), Sailor: 96, Sail: 0x5a}
 	if q != want {
 		t.Fatalf("quantised %+v, want %+v", q, want)
 	}
@@ -380,15 +380,36 @@ func TestQuantise(t *testing.T) {
 	}{
 		{physics.State{X: 1e9, Y: -1e9}, Boat{X: PositionLimit, Y: -PositionLimit - 1}},
 		{physics.State{X: math.NaN(), Heading: math.NaN(), Sailor: 9}, Boat{Sailor: math.MaxInt8}},
-		{physics.State{Heading: -math.Pi, Heel: math.Pi, Boom: 3 * math.Pi, Sailor: -9}, Boat{Heading: 32768, Heel: -128, Boom: -128, Sailor: math.MinInt8}},
-		{physics.State{Heading: 2*math.Pi - 1e-9, Heel: math.Pi - AngleStep/4, Rudder: -math.Pi + AngleStep/4}, Boat{Heading: 0, Heel: -128, Rudder: -128}},
-		{physics.State{Heading: -HeadingStep * 0.6, SailorMode: 7}, Boat{Heading: 65535, Flags: 3 << modeShift}},
+		{physics.State{Heading: -math.Pi, Heel: math.Pi, Boom: 3 * math.Pi, Sailor: -9}, Boat{Heading: 32768, Heel: math.MinInt16, Boom: math.MinInt16, Sailor: math.MinInt8}},
+		{physics.State{Heading: 2*math.Pi - 1e-9, Heel: math.Pi - AngleStep/4, Rudder: -math.Pi + AngleStep/4}, Boat{Heading: 0, Heel: math.MinInt16, Rudder: math.MinInt16}},
+		{physics.State{Heading: -AngleStep * 0.6, SailorMode: 7}, Boat{Heading: 65535, Flags: 3 << modeShift}},
 	} {
 		var q Boat
 		Quantise(&tc.st, 0, 0, false, &q)
 		if q != tc.want {
 			t.Errorf("%+v quantised to %+v, want %+v", tc.st, q, tc.want)
 		}
+	}
+}
+
+// TestAnglesMoveEverySnapshot: a heel or boom turning as slowly as a
+// degree a second, and a rudder at a third of that, change in every
+// snapshot, 15 a second, so a boat drawn between two snapshots moves
+// smoothly. Coarser steps hold an angle still for a few snapshots and then
+// move it all at once, and the boat is drawn stopping and starting.
+func TestAnglesMoveEverySnapshot(t *testing.T) {
+	const rate, interval = math.Pi / 180, 1.0 / 15
+	var prev Boat
+	for i := range 200 {
+		a := -1.5 + rate*interval*float64(i)
+		st := physics.State{Heel: a, Boom: -a, Rudder: a / 3}
+		var q Boat
+		Quantise(&st, 0, 0, false, &q)
+		if i > 0 && (q.Heel == prev.Heel || q.Boom == prev.Boom || q.Rudder == prev.Rudder) {
+			t.Fatalf("snapshot %d: heel %d, boom %d, rudder %d; before it %d, %d, %d",
+				i, q.Heel, q.Boom, q.Rudder, prev.Heel, prev.Boom, prev.Rudder)
+		}
+		prev = q
 	}
 }
 
@@ -405,11 +426,11 @@ func TestSnapshotRefusals(t *testing.T) {
 		"kind 1":          append([]byte{KindMessage}, good[1:]...),
 		"kind only":       good[:1],
 		"header cut":      good[:HeaderSize-1],
-		"layout 1":        withByte(good, offLayout, 1),
+		"layout 2":        withByte(good, offLayout, 2),
 		"helm over 1024":  withUint16(good, offHelm, 1025),
 		"spare flags":     withByte(good, offFlags, 2),
 		"129 entries":     withByte(good, offEntries, 129),
-		"layout 3":        withByte(good, offLayout, 3),
+		"layout 4":        withByte(good, offLayout, 4),
 		"sheet over 1024": withUint16(good, offSheet, 2000),
 	} {
 		if err := ReadSnapshot(b, &sn); err == nil {
@@ -423,7 +444,7 @@ func TestSnapshotRefusals(t *testing.T) {
 		"truncated enter":       {OpEnter<<6 | 1, 0, 0, 1, 2},
 		"truncated update":      {OpUpdate<<6 | 1, ChangeHeading, 1},
 		"update of nothing":     {OpUpdate<<6 | 1, 0},
-		"update of empty slot":  {OpUpdate<<6 | 3, ChangeHeel, 1},
+		"update of empty slot":  {OpUpdate<<6 | 3, ChangeHeel, 1, 0},
 		"leave of empty slot":   {OpLeave<<6 | 3},
 		"spare boat flags":      {OpUpdate<<6 | 1, ChangeFlags, 8},
 		"overlong varint":       {OpUpdate<<6 | 1, ChangePosition, 0x80, 0x00, 0},
