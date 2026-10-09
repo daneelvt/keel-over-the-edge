@@ -61,6 +61,8 @@ Configured from the environment:
   KEEL_LOG_LEVEL       debug, info, warn or error (default info)
   KEEL_TRACE_DIR       where traces of overrunning ticks go (default none)
   KEEL_REPLAY_DIR      where the input log goes (default memory only)
+  KEEL_CLIENT_DIR      the game's built page, served by the game's listener
+                       (default none: another server serves it)
   KEEL_BOAT_LIMIT      the most boats at sea at once, from 1 to 4096; beyond it
                        players wait in a queue (default 1000)
   KEEL_DEV_SAILORS     scripted sailors to sail (default 0)
@@ -142,6 +144,13 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	health := obs.NewHealth()
 	metrics := obs.NewMetrics(build, catalog.Version)
 	log.Info("starting", "catalog", catalog.Version)
+	var page *api.Page
+	if cfg.ClientDir != "" {
+		if page, err = api.OpenPage(cfg.ClientDir); err != nil {
+			return err
+		}
+		log.Info("serving the page", "dir", cfg.ClientDir, "bytes", page.Size())
+	}
 
 	// The internal listener, at once: /livez answers while the rest starts.
 	internalLn, err := opt.listen("tcp", cfg.InternalAddr)
@@ -264,6 +273,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Sessions: auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log}),
 		Looks:    looks,
 		Game:     game,
+		Page:     page,
 	}), log)
 	agents := newServer(obs.AccessLog(log, api.Agents()), log)
 
@@ -452,10 +462,18 @@ func (l *lateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	(*h).ServeHTTP(w, r)
 }
 
-// buildID is the VCS revision the binary was built from, with "-dirty" when
-// the tree had uncommitted changes, or "dev" when the build has no VCS
-// information (go run, go test).
+// buildOverride, when set at build time with
+// -ldflags "-X main.buildOverride=…", is the build ID: an image is built
+// without the repository's history, so it has no VCS information of its own.
+var buildOverride string
+
+// buildID is buildOverride when set; or else the VCS revision the binary
+// was built from, with "-dirty" when the tree had uncommitted changes; or
+// "dev" when the build has no VCS information (go run, go test).
 func buildID() string {
+	if buildOverride != "" {
+		return buildOverride
+	}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "dev"

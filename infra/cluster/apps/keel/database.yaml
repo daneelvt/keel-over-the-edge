@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The game's PostgreSQL, run by CloudNativePG. Its password is the Secret
+# keel-db-app's (made outside the repository); the operator makes the
+# server's certificate and its CA, keel-db-ca.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: keel-db
+spec:
+  instances: 1
+  # The minimal image: PostgreSQL from PGDG's packages on Debian, as the
+  # Barman Cloud plugin expects (CloudNativePG's postgres-containers).
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:37ade18dbdddba430858c72725aceeec66f33fa5333e82ea1df4942f6c1c83a3
+  enableSuperuserAccess: false
+  storage:
+    storageClass: local-path
+    size: 40Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 3Gi
+    limits:
+      memory: 4Gi
+  postgresql:
+    parameters:
+      shared_buffers: 2GB
+      effective_cache_size: 6GB
+      max_connections: "100"
+      # PostgreSQL 18's asynchronous I/O, by worker processes.
+      io_method: worker
+    # Before the operator's own rules, the last of which would also accept
+    # a password over a plain connection.
+    pg_hba:
+      - hostnossl all all all reject
+  bootstrap:
+    initdb:
+      database: keel
+      owner: keel
+      secret:
+        name: keel-db-app
+      encoding: UTF8
+      # PostgreSQL's own C.UTF-8: sorts by code point and never changes with
+      # the C library of the image, so an update cannot reorder an index.
+      localeProvider: builtin
+      builtinLocale: C.UTF-8

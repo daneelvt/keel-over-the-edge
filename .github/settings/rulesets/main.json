@@ -31,6 +31,7 @@
           { "context": "pr-actions", "integration_id": 15368 },
           { "context": "pr-catalog", "integration_id": 15368 },
           { "context": "pr-dependencies", "integration_id": 15368 },
+          { "context": "pr-infra", "integration_id": 15368 },
           { "context": "pr-licences", "integration_id": 15368 },
           { "context": "pr-lint", "integration_id": 15368 },
           { "context": "pr-physics", "integration_id": 15368 },

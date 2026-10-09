@@ -5,18 +5,14 @@
 package main
 
 import (
-	"bytes"
 	"cmp"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,12 +20,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coder/websocket"
-
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
-	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/devcert"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/smoke"
 )
 
 const stopTimeout = 5 * time.Second
@@ -53,7 +48,7 @@ type stack struct {
 	mu     sync.Mutex
 	out    io.Writer
 	origin string
-	certs  certs
+	certs  devcert.Certs
 	dbURL  string
 	keel   *proc
 	vite   *proc
@@ -147,11 +142,11 @@ func printInternal(mu *sync.Mutex, out io.Writer) {
 }
 
 func (s *stack) startVite() error {
-	cert, err := filepath.Abs(s.certs.cert)
+	cert, err := filepath.Abs(s.certs.Cert)
 	if err != nil {
 		return err
 	}
-	key, err := filepath.Abs(s.certs.key)
+	key, err := filepath.Abs(s.certs.Key)
 	if err != nil {
 		return err
 	}
@@ -203,7 +198,7 @@ func runDev(ctx context.Context, out io.Writer, lag string, limit int) error {
 	if err != nil {
 		return err
 	}
-	lan := lanAddresses()
+	lan := devcert.LANAddresses()
 	c, err := makeCerts(ctx, out, certHosts(lan), true)
 	if err != nil {
 		return err
@@ -231,7 +226,7 @@ func runDev(ctx context.Context, out io.Writer, lag string, limit int) error {
 	}
 	defer s.stop()
 
-	caSrv, err := servePhoneSetup(c.root, s.origin)
+	caSrv, err := servePhoneSetup(c.Root, s.origin)
 	if err != nil {
 		return err
 	}
@@ -294,7 +289,7 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	c, err := makeCerts(ctx, out, certHosts(lanAddresses()), false)
+	c, err := makeCerts(ctx, out, certHosts(devcert.LANAddresses()), false)
 	if err != nil {
 		return err
 	}
@@ -305,7 +300,7 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	}
 	defer s.stop()
 
-	client, err := clientTrusting(c.root)
+	client, err := devcert.ClientTrusting(c.Root)
 	if err != nil {
 		return err
 	}
@@ -330,161 +325,25 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	if v.Catalog != catalog.Version {
 		return fmt.Errorf("smoke: server catalog %s, want %s", v.Catalog, catalog.Version)
 	}
-	if err := checkModuleServed(ctx, client, base+"/src/predict/physics.wasm"); err != nil {
+	if err := smoke.ModuleServed(ctx, client, base+"/src/predict/physics.wasm"); err != nil {
 		return err
 	}
 	if err := checkInternal(ctx, s); err != nil {
 		return err
 	}
-	name, jar, err := checkGuest(ctx, client, base)
+	name, jar, err := smoke.Guest(ctx, client, base)
 	if err != nil {
 		return err
 	}
-	_, jar2, err := checkGuest(ctx, client, base)
+	_, jar2, err := smoke.Guest(ctx, client, base)
 	if err != nil {
 		return err
 	}
-	if err := checkGame(ctx, client, jar, jar2, base); err != nil {
+	if err := smoke.Game(ctx, client, jar, jar2, base); err != nil {
 		return err
 	}
 	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics, a guest made and read back (%s), the game connection's Welcome, snapshot and Pong, and a second player seeing the first's boat (build %s, catalog %s)\n", name, v.Build, v.Catalog)
 	return nil
-}
-
-// checkGame opens the game connection through Vite over HTTPS with the
-// guest's cookie, as the page's net worker does, says Hello, and expects a
-// Welcome, a snapshot, and a Pong to its Ping; then a second guest's
-// connection, whose snapshots must show the first guest's boat.
-func checkGame(ctx context.Context, hc *http.Client, jar, jar2 http.CookieJar, base string) error {
-	ws, err := dialGame(ctx, hc, jar, base)
-	if err != nil {
-		return err
-	}
-	defer ws.CloseNow()
-	if err := client.Send(ctx, ws, client.Hello()); err != nil {
-		return err
-	}
-	var welcome, snapshot, pong bool
-	for !welcome || !snapshot || !pong {
-		r, err := client.Receive(ctx, ws)
-		if err != nil {
-			return fmt.Errorf("smoke: the game connection (welcome %v, snapshot %v, pong %v): %w", welcome, snapshot, pong, err)
-		}
-		switch {
-		case r.Message.GetWelcome() != nil:
-			welcome = true
-			ping := &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: 1}}}
-			if err := client.Send(ctx, ws, ping); err != nil {
-				return err
-			}
-		case r.Message.GetPong() != nil:
-			pong = true
-		case r.Snapshot != nil:
-			snapshot = true
-		}
-	}
-	// The first guest's connection reads on, so the server can write to it.
-	client.Read(ws)
-	if err := checkSecond(ctx, hc, jar2, base); err != nil {
-		return err
-	}
-	return ws.Close(websocket.StatusNormalClosure, "")
-}
-
-// checkSecond connects a second guest and decodes its snapshots until one
-// shows another boat: the first guest's, who joined just before, 20 m off
-// on the start grid.
-func checkSecond(ctx context.Context, hc *http.Client, jar http.CookieJar, base string) error {
-	ws, err := dialGame(ctx, hc, jar, base)
-	if err != nil {
-		return err
-	}
-	defer ws.CloseNow()
-	if err := client.Send(ctx, ws, client.Hello()); err != nil {
-		return err
-	}
-	var views client.Views
-	for n := 0; ; n++ {
-		r, err := client.Receive(ctx, ws)
-		if err != nil {
-			return fmt.Errorf("smoke: the second player's connection, after %d messages: %w", n, err)
-		}
-		if r.Snapshot == nil {
-			continue
-		}
-		v, _, err := views.Decode(r.Bytes, r.Snapshot)
-		if err != nil {
-			return fmt.Errorf("smoke: the second player's snapshot: %w", err)
-		}
-		if v.Len() > 0 {
-			return ws.Close(websocket.StatusNormalClosure, "")
-		}
-	}
-}
-
-// dialGame opens the game connection with a cookie jar, as a page of the
-// players' origin does.
-func dialGame(ctx context.Context, hc *http.Client, jar http.CookieJar, base string) (*websocket.Conn, error) {
-	c := *hc
-	c.Jar = jar
-	c.Timeout = 0
-	u := "wss" + strings.TrimPrefix(base, "https") + "/ws"
-	ws, _, err := websocket.Dial(ctx, u, &websocket.DialOptions{
-		HTTPClient: &c,
-		HTTPHeader: http.Header{"Origin": []string{base}},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("smoke: the game connection: %w", err)
-	}
-	return ws, nil
-}
-
-// checkGuest makes a guest through Vite, as the page does, keeping its
-// cookie in a jar, and reads it back from /api/me.
-func checkGuest(ctx context.Context, client *http.Client, base string) (string, http.CookieJar, error) {
-	cat, err := catalog.Load()
-	if err != nil {
-		return "", nil, err
-	}
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return "", nil, err
-	}
-	c := *client
-	c.Jar = jar
-	name := fmt.Sprintf("Smoke Test %d", time.Now().UnixNano()%1_000_000)
-	body, err := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
-	if err != nil {
-		return "", nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/guest", bytes.NewReader(body))
-	if err != nil {
-		return "", nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	res, err := c.Do(req)
-	if err != nil {
-		return "", nil, fmt.Errorf("smoke: POST /guest: %w", err)
-	}
-	reply, _ := io.ReadAll(res.Body)
-	res.Body.Close()
-	if res.StatusCode != http.StatusCreated {
-		return "", nil, fmt.Errorf("smoke: POST /guest answered %s: %s", res.Status, reply)
-	}
-	req, err = http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/me", nil)
-	if err != nil {
-		return "", nil, err
-	}
-	res, err = c.Do(req)
-	if err != nil {
-		return "", nil, fmt.Errorf("smoke: /api/me: %w", err)
-	}
-	defer res.Body.Close()
-	var me struct{ Name string }
-	if err := json.NewDecoder(res.Body).Decode(&me); err != nil || res.StatusCode != http.StatusOK || me.Name != name {
-		return "", nil, fmt.Errorf("smoke: /api/me answered %s, %q (%v); want the guest %q", res.Status, me.Name, err, name)
-	}
-	return name, jar, nil
 }
 
 // checkInternal checks keel's internal listener: live, ready once it has
@@ -502,50 +361,7 @@ func checkInternal(ctx context.Context, s *stack) error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"keel_sim_ticks_total", "keel_sim_tick_duration_seconds_bucket", "keel_build_info", "keel_db_pool_max_connections", "keel_db_schema_version", "keel_edge_connections", "keel_edge_upgrades_total",
-		"keel_sim_boat_limit", "keel_sim_queue_length", "keel_edge_encoders"} {
-		if !strings.Contains(metrics, name) {
-			return fmt.Errorf("smoke: /metrics has no %s", name)
-		}
-	}
-	return nil
-}
-
-// checkModuleServed fetches the physics module as the page does. Browsers
-// compile it while it downloads only when it comes as application/wasm.
-func checkModuleServed(ctx context.Context, client *http.Client, url string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("smoke: %w", err)
-	}
-	defer res.Body.Close()
-	magic := make([]byte, 4)
-	if _, err := io.ReadFull(res.Body, magic); err != nil || res.StatusCode != http.StatusOK || string(magic) != "\x00asm" {
-		return fmt.Errorf("smoke: %s is not a WebAssembly module (%s)", url, res.Status)
-	}
-	if ct := res.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/wasm") {
-		return fmt.Errorf("smoke: %s is served as %q, not application/wasm", url, ct)
-	}
-	return nil
-}
-
-func clientTrusting(rootPath string) (*http.Client, error) {
-	pem, err := os.ReadFile(rootPath)
-	if err != nil {
-		return nil, err
-	}
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(pem) {
-		return nil, errors.New("the local root is not a PEM certificate")
-	}
-	return &http.Client{
-		Timeout:   5 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}},
-	}, nil
+	return smoke.Metrics(metrics)
 }
 
 // getWhenUp retries url until it answers 200, a process dies or ctx ends.

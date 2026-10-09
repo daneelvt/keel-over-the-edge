@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Runs only when the cluster's manifests, k3s's settings, or the tool that
+# applies them changed.
+name: pr.infra
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: changes
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-slim
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            infra:
+              - '.github/workflows/pr.infra.yaml'
+              - '.github/actions/setup/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'infra/**'
+              - 'tools/cluster/**'
+              - 'tools/internal/**'
+
+  infra:
+    name: infra
+    needs: [changes]
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+      - name: Every entry point renders and keeps the rules; no Secret under infra/; tools/cluster's steps against fakes
+        run: go test -count=1 ./tools/cluster
+
+  pr-infra:
+    name: pr-infra
+    if: always()
+    needs: [changes, infra]
+    runs-on: ubuntu-slim
+    permissions: {}
+    steps:
+      - name: Every job passed, or was skipped as nothing it checks changed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
+          done

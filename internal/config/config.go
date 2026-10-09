@@ -38,6 +38,10 @@ type Config struct {
 	// ReplayDir, if not "", is where the input log is written as well as
 	// kept in memory.
 	ReplayDir string
+	// ClientDir, if not "", is the game's built page, which the game's
+	// listener then serves; it must hold index.html. Unset, another server
+	// serves the page, as Vite does in development.
+	ClientDir string
 	// BoatLimit is the most boats the world holds at once; beyond it,
 	// players wait in a queue.
 	BoatLimit int
@@ -80,6 +84,7 @@ func Load(getenv func(string) string) (Config, error) {
 		InternalAddr: or(getenv("KEEL_INTERNAL_ADDR"), DefaultInternalAddr),
 		TraceDir:     getenv("KEEL_TRACE_DIR"),
 		ReplayDir:    getenv("KEEL_REPLAY_DIR"),
+		ClientDir:    getenv("KEEL_CLIENT_DIR"),
 		DatabaseURL:  getenv("KEEL_DATABASE_URL"),
 		BoatLimit:    DefaultBoatLimit,
 	}

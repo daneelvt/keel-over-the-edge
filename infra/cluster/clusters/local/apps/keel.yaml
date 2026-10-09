@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# keel in 8 GiB: half production's memory, but the same CPU limit, which
+# sets GOMAXPROCS and so the encoders and physics workers. The image is
+# imported into the node by tools/cluster.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keel
+  namespace: keel
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: migrate
+          imagePullPolicy: Never
+      containers:
+        - name: keel
+          imagePullPolicy: Never
+          env:
+            - name: GOMEMLIMIT
+              value: 1800MiB
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "3"
+              memory: 2Gi

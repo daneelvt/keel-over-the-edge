@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The local cluster's drop-in, written to
+# /etc/rancher/k3s/config.yaml.d/50-local.yaml, after infra/k3s/config.yaml.
+# ServiceLB stays on: it gives Traefik's LoadBalancer Service its ports on
+# the node, which Lima forwards to the Mac.
+node-name: keel-local-1

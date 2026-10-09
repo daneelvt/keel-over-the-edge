@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The players' routes: the page, the API and the game connection, all
+# served by keel's game listener. Never the internal listener.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: play
+spec:
+  parentRefs:
+    - name: keel
+      sectionName: http
+  rules:
+    - backendRefs:
+        - name: keel
+          port: 8080

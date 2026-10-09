@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# PostgreSQL in 8 GiB: about half production's sizes.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: keel-db
+  namespace: keel
+spec:
+  storage:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+  postgresql:
+    parameters:
+      shared_buffers: 512MB
+      effective_cache_size: 1536MB

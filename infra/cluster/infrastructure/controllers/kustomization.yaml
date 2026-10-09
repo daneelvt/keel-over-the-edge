@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The cluster's controllers, as Helm charts Flux's helm-controller installs.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cloudnative-pg

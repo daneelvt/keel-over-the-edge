@@ -64,6 +64,7 @@ func TestLoadValid(t *testing.T) {
 		"KEEL_LOG_LEVEL":     "debug",
 		"KEEL_TRACE_DIR":     "/tmp/traces",
 		"KEEL_REPLAY_DIR":    "/tmp/replays",
+		"KEEL_CLIENT_DIR":    "/srv/keel/client",
 		"KEEL_DEV_SAILORS":   "1000",
 		"KEEL_BOAT_LIMIT":    "2",
 	}))
@@ -72,7 +73,7 @@ func TestLoadValid(t *testing.T) {
 	}
 	want = Config{
 		PlayAddr: ":8080", PlayOrigin: "https://play.keelovertheedge.com", AgentsAddr: ":8081", InternalAddr: "0.0.0.0:9090",
-		LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", DevSailors: 1000, DatabaseURL: dbURL,
+		LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
 		BoatLimit: 2,
 	}
 	if c != want {
