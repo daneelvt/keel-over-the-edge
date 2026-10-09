@@ -156,7 +156,7 @@ func (r *rig) close(t *testing.T) error {
 }
 
 // TestEventsAndCheckpoints: each lasting event reaches the database in
-// order within 250 ms of its tick, with its sailor; a checkpoint every 5 s,
+// order within 250 ms of its tick, with its sailor; a checkpoint every 10 s,
 // and the last frame's as the writer closes.
 func TestEventsAndCheckpoints(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -166,7 +166,7 @@ func TestEventsAndCheckpoints(t *testing.T) {
 		}
 		r.tick(bus.Command{Op: bus.Leave, Boat: 2}, bus.Command{Op: bus.Leave, Boat: 5})
 		r.tick(bus.Command{Op: bus.Disconnect, Boat: 7, Conn: 7})
-		for range 12 * 30 {
+		for range 25 * 30 {
 			r.tick()
 		}
 		last := r.w.Now()
@@ -263,7 +263,7 @@ func TestDatabaseStopped(t *testing.T) {
 		r.db.set(true, false)
 		stopped := r.w.Now()
 		heldAt := int64(0)
-		for range 12 * 30 {
+		for range 21 * 30 {
 			churn()
 			if heldAt == 0 && r.w.Latest().Held {
 				heldAt = r.w.Now()

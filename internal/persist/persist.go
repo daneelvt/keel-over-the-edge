@@ -42,8 +42,12 @@ import (
 )
 
 const (
-	// CheckpointEvery is how often the world is checkpointed: 5 s of ticks.
-	CheckpointEvery = 150
+	// CheckpointEvery is how often the world is checkpointed: 10 s of ticks.
+	// A checkpoint's WAL is almost all its own bytes (151 KB at 1,000
+	// boats), so the interval sets the WAL's volume, about 67 MB an hour
+	// at 1,000 boats; and how much of the world a crash loses. A stop in
+	// order writes a final checkpoint whatever the interval.
+	CheckpointEvery = 300
 	// Inbox is how many items may wait to be written: 10 s of ticks.
 	Inbox = 300
 	// HoldAt and LetGoBelow are the inbox's fill at which admission is held,

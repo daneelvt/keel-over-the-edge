@@ -312,10 +312,10 @@ func TestLeaseLostStops(t *testing.T) {
 		db := &memDB{epoch: bubbleEpoch}
 		s, token := gameServer(t, map[string]string{}, db)
 		_, in, _ := connect(t, s, token)
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 		cp, _, _ := db.state()
 		if cp == nil {
-			t.Fatal("no checkpoint after 6 s")
+			t.Fatal("no checkpoint after 11 s")
 		}
 		heardCh := make(chan heard, 1)
 		go func() { heardCh <- listen(in) }()
