@@ -514,10 +514,16 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		// before any connection is closed.
 		start := time.Now()
 		var final *bus.Frame
-		if !lost.Load() {
+		bound := finalTimeout
+		if lost.Load() {
+			// The events left are tried once more, briefly: fenced at once if
+			// another process holds the world, and if the database is away,
+			// waiting for it only lengthens the pause.
+			bound = time.Second
+		} else {
 			final = b.Frames.Acquire()
 		}
-		fctx, fcancel := context.WithTimeout(context.Background(), finalTimeout)
+		fctx, fcancel := context.WithTimeout(context.Background(), bound)
 		err := lasting.Close(fctx, final)
 		fcancel()
 		switch {
