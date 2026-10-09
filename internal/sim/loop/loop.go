@@ -92,6 +92,8 @@ type Loop struct {
 	m        *obs.Metrics
 	phaseObs [sim.Phases]prometheus.Observer
 	commands [][]prometheus.Counter // by op, then result
+	// graces started, ended by a join, and expired
+	graceStarted, graceRejoined, graceExpired prometheus.Counter
 }
 
 // New makes a loop for cfg.World, which it observes from now on.
@@ -108,6 +110,9 @@ func New(cfg Config) *Loop {
 				l.commands[op][r] = l.m.Commands.WithLabelValues(op.String(), r.String())
 			}
 		}
+		l.graceStarted = l.m.Grace.WithLabelValues("started")
+		l.graceRejoined = l.m.Grace.WithLabelValues("rejoined")
+		l.graceExpired = l.m.Grace.WithLabelValues("expired")
 	}
 	cfg.World.Observe(l)
 	return l
@@ -257,6 +262,14 @@ func (l *Loop) tick(tick int64, late bool) {
 		ev := &f.Events[i]
 		if int(ev.Op) < len(l.commands) && int(ev.Reply.Result) < len(l.commands[ev.Op]) {
 			l.commands[ev.Op][ev.Reply.Result].Inc()
+		}
+		switch {
+		case ev.Op == bus.Disconnect && ev.Reply.Result == bus.Done:
+			l.graceStarted.Inc()
+		case ev.Op == bus.Join && ev.Reply.Result == bus.Rejoined:
+			l.graceRejoined.Inc()
+		case ev.Reply.Result == bus.Expired:
+			l.graceExpired.Inc()
 		}
 	}
 }

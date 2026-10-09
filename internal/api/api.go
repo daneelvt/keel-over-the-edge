@@ -47,14 +47,17 @@ type Config struct {
 	Sessions *auth.Cache
 	// Looks are the catalog's sailors a guest may choose, by id.
 	Looks []string
+	// Game, if not nil, is the game connection, GET /ws: it checks the
+	// session itself, so it can count those it refuses.
+	Game http.Handler
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
 }
 
 // longLived are the routes whose connections stay open, which set deadlines
-// of their own: none yet.
-var longLived = map[string]bool{}
+// of their own: the game connection.
+var longLived = map[string]bool{"GET /ws": true}
 
 // Handler returns the game's HTTP server: its routes behind the middleware
 // every request passes, in order:
@@ -87,6 +90,9 @@ func Handler(cfg Config) http.Handler {
 	mux.Handle("GET /api/version", versionHandler(cfg.Version))
 	mux.HandleFunc("POST /guest", a.guest)
 	mux.Handle("GET /api/me", auth.Required(writeError, http.HandlerFunc(a.me)))
+	if cfg.Game != nil {
+		mux.Handle("GET /ws", cfg.Game)
+	}
 
 	cop := http.NewCrossOriginProtection()
 	cop.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
