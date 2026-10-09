@@ -12,6 +12,7 @@
 [![Go reference](https://img.shields.io/badge/go.dev-reference-007D9C?style=for-the-badge&logo=go&logoColor=white)](https://pkg.go.dev/github.com/daneelvt/keel-over-the-edge)
 [![TypeScript version](https://img.shields.io/github/package-json/dependency-version/daneelvt/keel-over-the-edge/dev/typescript?filename=client%2Fpackage.json&style=for-the-badge&logo=typescript&logoColor=white&color=3178C6)](client/package.json)
 [![Node version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdaneelvt%2Fkeel-over-the-edge%2Fmain%2Fclient%2Fpackage.json&query=%24.engines.node&label=node&style=for-the-badge&logo=nodedotjs&logoColor=white&color=5FA04E)](client/package.json)
+[![PostgreSQL version](https://img.shields.io/badge/PostgreSQL-18-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/docs/18/)
 
 <!-- Activity -->
 [![Last commit](https://img.shields.io/github/last-commit/daneelvt/keel-over-the-edge?style=for-the-badge&color=blueviolet)](https://github.com/daneelvt/keel-over-the-edge/commits/main)
