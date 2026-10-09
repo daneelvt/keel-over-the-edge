@@ -145,9 +145,25 @@ export class Predictor implements BoatDriver {
     this.stepIndices(helmIndex(helm), sheetIndex(sheet));
   }
 
-  /** Reconciles the prediction with a snapshot. */
+  readonly #outcome: Outcome = {
+    stale: false,
+    reset: false,
+    corrected: false,
+    distance: 0,
+    heading: 0,
+  };
+
+  /**
+   * Reconciles the prediction with a snapshot. The outcome is a record the
+   * predictor reuses: read it before the next snapshot.
+   */
   snapshot(sn: OwnSnapshot): Outcome {
-    const o: Outcome = { stale: false, reset: false, corrected: false, distance: 0, heading: 0 };
+    const o = this.#outcome;
+    o.stale = false;
+    o.reset = false;
+    o.corrected = false;
+    o.distance = 0;
+    o.heading = 0;
     this.counts.snapshots++;
     if (this.started && sn.tick <= this.tick - RING) {
       o.stale = true;

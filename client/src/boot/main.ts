@@ -26,6 +26,7 @@ import { backSoon, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Game } from '../game/game';
 import { Online } from '../net/online';
+import { reloadForVersion } from '../net/reload';
 import { LAYOUT_VERSION } from '../predict/layout.gen';
 import { loadPhysics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
@@ -146,9 +147,6 @@ function gameURL(): string {
   return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 }
 
-/** Key in sessionStorage of the last reload for a version mismatch. */
-const RELOADED = 'keel-reloaded-for-version';
-
 /**
  * Starts the connection, and follows the page's life: a page shown again,
  * or a network back, stops the wait; a page that goes closes it; a session
@@ -174,14 +172,13 @@ function connect(online: Online): void {
     if (status === 'signed-out') {
       location.reload();
     } else if (status === 'version') {
-      let last = 0;
+      let marks: Storage | null = null;
       try {
-        last = Number(sessionStorage.getItem(RELOADED) ?? 0);
-        sessionStorage.setItem(RELOADED, String(Date.now()));
+        marks = sessionStorage;
       } catch {
-        // Storage refused: reload regardless; the server's 4002 stops a loop.
+        // Storage refused.
       }
-      if (Date.now() - last > 60_000) {
+      if (reloadForVersion(marks, Date.now())) {
         location.reload();
       } else {
         online.notice.value = {
