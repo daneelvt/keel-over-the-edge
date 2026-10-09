@@ -28,6 +28,14 @@ export interface LicencesOptions {
   allowedFile: string;
   /** Notices for files that are not npm packages, such as fonts. */
   extra?: ExtraNotice[];
+  /**
+   * Package roots shared between builds: a worker's build, which Vite runs
+   * apart, adds its packages here and writes no notice (emit false); the
+   * page's build checks and lists them with its own.
+   */
+  shared?: Set<string>;
+  /** Write the notice; true unless set. */
+  emit?: boolean;
 }
 
 export function readAllowed(text: string): Set<string> {
@@ -116,7 +124,7 @@ export function licences(options: LicencesOptions): Plugin {
     },
     generateBundle(_, bundle) {
       const allowed = readAllowed(readFileSync(options.allowedFile, 'utf8'));
-      const roots = new Set<string>();
+      const roots = options.shared ?? new Set<string>();
       for (const item of Object.values(bundle)) {
         if (item.type !== 'chunk') {
           continue;
@@ -134,6 +142,9 @@ export function licences(options: LicencesOptions): Plugin {
         this.error(
           `bundled packages with licences outside ${options.allowedFile}:\n${problems.join('\n')}`,
         );
+      }
+      if (options.emit === false) {
+        return;
       }
       const extra = (options.extra ?? []).map((x) => ({
         name: x.name,

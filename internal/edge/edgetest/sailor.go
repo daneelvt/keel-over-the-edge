@@ -191,7 +191,7 @@ func (s *Sailor) arm(timer *time.Timer) {
 	if math.IsInf(d, 1) {
 		return
 	}
-	timer.Reset(max(0, s.start.Add(time.Duration(d)*time.Microsecond).Sub(time.Now())))
+	timer.Reset(max(0, time.Until(s.start.Add(time.Duration(d)*time.Microsecond))))
 }
 
 // frame is the page's animation frame: the snapshots that came are

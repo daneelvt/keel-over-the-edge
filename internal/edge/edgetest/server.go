@@ -196,7 +196,7 @@ func (s *Sessions) Add(name string, kind store.Kind) (token string, id store.Acc
 	s.next++
 	id = store.AccountID{0x01, 0x99, 0xc2, 0xa4, 0x5f, 0x7e, 0x7c, 0x3a, 0x9d, 0x0e, 0, 0, 0, 0, 0, s.next}
 	token, hash := auth.NewToken()
-	s.by[hash] = store.Session{Account: store.Account{ID: id, Kind: kind, Name: name, Look: "stand-in"}}
+	s.by[hash] = store.Session{Account: store.Account{ID: id, Kind: kind, Name: name}}
 	return token, id
 }
 

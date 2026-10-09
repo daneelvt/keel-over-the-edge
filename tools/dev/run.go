@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -13,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
@@ -22,7 +24,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
 
 const stopTimeout = 5 * time.Second
@@ -50,6 +56,9 @@ type stack struct {
 	dbURL  string
 	keel   *proc
 	vite   *proc
+	// viteToKeel is where Vite sends the game's requests: keel, or the lag
+	// proxy in front of it.
+	viteToKeel string
 }
 
 func (s *stack) buildKeel(ctx context.Context) error {
@@ -85,6 +94,7 @@ func (s *stack) startKeel(ctx context.Context) error {
 		"KEEL_INTERNAL_ADDR=" + internalAddr,
 		"KEEL_TRACE_DIR=" + traceDir,
 		"KEEL_REPLAY_DIR=" + replayDir,
+		"KEEL_DEV_COMMANDS=1",
 	}
 	if n := os.Getenv("KEEL_DEV_SAILORS"); n != "" {
 		env = append(env, "KEEL_DEV_SAILORS="+n)
@@ -126,6 +136,7 @@ func printInternal(mu *sync.Mutex, out io.Writer) {
 	fmt.Fprintf(out, "    profiles  go tool pprof %s/debug/pprof/profile\n", base)
 	fmt.Fprintf(out, "    trace     curl -o trace.out %s/debug/flightrecorder; go tool trace trace.out\n", base)
 	fmt.Fprintf(out, "    replay    curl -o keel.log %s/debug/replay; go run ./cmd/keel replay keel.log\n", base)
+	fmt.Fprintf(out, "    wind      curl -X POST '%s/debug/wind?knots=15&from=270'\n", base)
 	fmt.Fprintf(out, "    input logs in %s, traces of slow ticks in %s\n\n", replayDir, traceDir)
 }
 
@@ -141,7 +152,7 @@ func (s *stack) startVite() error {
 	p, err := startProc("vite", clientDir, []string{
 		"KEEL_DEV_CERT=" + cert,
 		"KEEL_DEV_KEY=" + key,
-		"KEEL_PLAY_ADDR=" + playAddr,
+		"KEEL_PLAY_ADDR=" + cmp.Or(s.viteToKeel, playAddr),
 		"FORCE_COLOR=1",
 	}, newPrefixed(&s.mu, s.out, "vite"), filepath.Join("node_modules", ".bin", "vite"))
 	s.vite = p
@@ -172,8 +183,9 @@ func (s *stack) stop() {
 }
 
 // runDev runs the game until interrupted, restarting keel serve when Go
-// source changes. Vite reloads the client by itself.
-func runDev(ctx context.Context, out io.Writer) error {
+// source changes. Vite reloads the client by itself. With lag, the game's
+// traffic between Vite and keel goes through the lag proxy.
+func runDev(ctx context.Context, out io.Writer, lag string) error {
 	if err := prepare(ctx, out); err != nil {
 		return err
 	}
@@ -187,6 +199,20 @@ func runDev(ctx context.Context, out io.Writer) error {
 		return err
 	}
 	s := &stack{out: out, origin: playOrigin(lan), certs: c, dbURL: db.App}
+	if lag != "" {
+		l, err := edgetest.ParseLag(lag)
+		if err != nil {
+			return err
+		}
+		l.Seed = uint64(time.Now().UnixNano())
+		ln, err := net.Listen("tcp", lagAddr)
+		if err != nil {
+			return err
+		}
+		go edgetest.Proxy(ctx, ln, playAddr, l)
+		s.viteToKeel = lagAddr
+		fmt.Fprintf(newPrefixed(&s.mu, out, "dev"), "the game's traffic goes through the lag proxy: %s round trip and loss\n", l)
+	}
 	if err := s.start(ctx); err != nil {
 		return err
 	}
@@ -297,60 +323,104 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	if err := checkInternal(ctx, s); err != nil {
 		return err
 	}
-	name, err := checkGuest(ctx, client, base)
+	name, jar, err := checkGuest(ctx, client, base)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics, a guest made and read back (%s; build %s, catalog %s)\n", name, v.Build, v.Catalog)
+	if err := checkGame(ctx, client, jar, base); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics, a guest made and read back (%s), the game connection's Welcome, snapshot and Pong (build %s, catalog %s)\n", name, v.Build, v.Catalog)
 	return nil
+}
+
+// checkGame opens the game connection through Vite over HTTPS with the
+// guest's cookie, as the page's net worker does, says Hello, and expects a
+// Welcome, a snapshot, and a Pong to its Ping.
+func checkGame(ctx context.Context, client *http.Client, jar http.CookieJar, base string) error {
+	c := *client
+	c.Jar = jar
+	c.Timeout = 0
+	u := "wss" + strings.TrimPrefix(base, "https") + "/ws"
+	ws, _, err := websocket.Dial(ctx, u, &websocket.DialOptions{
+		HTTPClient: &c,
+		HTTPHeader: http.Header{"Origin": []string{base}},
+	})
+	if err != nil {
+		return fmt.Errorf("smoke: the game connection: %w", err)
+	}
+	defer ws.CloseNow()
+	if err := edgetest.Send(ctx, ws, edgetest.Hello()); err != nil {
+		return err
+	}
+	var welcome, snapshot, pong bool
+	for !welcome || !snapshot || !pong {
+		r, err := edgetest.Receive(ctx, ws)
+		if err != nil {
+			return fmt.Errorf("smoke: the game connection (welcome %v, snapshot %v, pong %v): %w", welcome, snapshot, pong, err)
+		}
+		switch {
+		case r.Message.GetWelcome() != nil:
+			welcome = true
+			ping := &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: 1}}}
+			if err := edgetest.Send(ctx, ws, ping); err != nil {
+				return err
+			}
+		case r.Message.GetPong() != nil:
+			pong = true
+		case r.Snapshot != nil:
+			snapshot = true
+		}
+	}
+	return ws.Close(websocket.StatusNormalClosure, "")
 }
 
 // checkGuest makes a guest through Vite, as the page does, keeping its
 // cookie in a jar, and reads it back from /api/me.
-func checkGuest(ctx context.Context, client *http.Client, base string) (string, error) {
+func checkGuest(ctx context.Context, client *http.Client, base string) (string, http.CookieJar, error) {
 	cat, err := catalog.Load()
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	c := *client
 	c.Jar = jar
 	name := fmt.Sprintf("Smoke Test %d", time.Now().UnixNano()%1_000_000)
 	body, err := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/guest", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	res, err := c.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("smoke: POST /guest: %w", err)
+		return "", nil, fmt.Errorf("smoke: POST /guest: %w", err)
 	}
 	reply, _ := io.ReadAll(res.Body)
 	res.Body.Close()
 	if res.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("smoke: POST /guest answered %s: %s", res.Status, reply)
+		return "", nil, fmt.Errorf("smoke: POST /guest answered %s: %s", res.Status, reply)
 	}
 	req, err = http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/me", nil)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	res, err = c.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("smoke: /api/me: %w", err)
+		return "", nil, fmt.Errorf("smoke: /api/me: %w", err)
 	}
 	defer res.Body.Close()
 	var me struct{ Name string }
 	if err := json.NewDecoder(res.Body).Decode(&me); err != nil || res.StatusCode != http.StatusOK || me.Name != name {
-		return "", fmt.Errorf("smoke: /api/me answered %s, %q (%v); want the guest %q", res.Status, me.Name, err, name)
+		return "", nil, fmt.Errorf("smoke: /api/me answered %s, %q (%v); want the guest %q", res.Status, me.Name, err, name)
 	}
-	return name, nil
+	return name, jar, nil
 }
 
 // checkInternal checks keel's internal listener: live, ready once it has
@@ -368,7 +438,7 @@ func checkInternal(ctx context.Context, s *stack) error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"keel_sim_ticks_total", "keel_sim_tick_duration_seconds_bucket", "keel_build_info", "keel_db_pool_max_connections", "keel_db_schema_version"} {
+	for _, name := range []string{"keel_sim_ticks_total", "keel_sim_tick_duration_seconds_bucket", "keel_build_info", "keel_db_pool_max_connections", "keel_db_schema_version", "keel_edge_connections", "keel_edge_upgrades_total"} {
 		if !strings.Contains(metrics, name) {
 			return fmt.Errorf("smoke: /metrics has no %s", name)
 		}
@@ -457,6 +527,10 @@ func runLint(ctx context.Context, out io.Writer) error {
 		{".", []string{"env", "CGO_ENABLED=0", "go", "tool", "sqlc", "compile", "-f", "internal/store/sqlc.yaml"}},
 		{".", []string{"env", "CGO_ENABLED=0", "go", "tool", "sqlc", "diff", "-f", "internal/store/sqlc.yaml"}},
 		{".", []string{"go", "run", "./tools/confusables", "-check"}},
+		// The game connection's schema: buf's own rules, and the code
+		// generated from it current.
+		{"shared/protocol", []string{"../../client/node_modules/.bin/buf", "lint"}},
+		{".", []string{"go", "run", "./tools/protocol", "-check"}},
 		{clientDir, []string{"npx", "--no-install", "biome", "ci", ".", "../art"}},
 		{clientDir, []string{"npx", "--no-install", "tsc", "--noEmit"}},
 	}

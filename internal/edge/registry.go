@@ -36,10 +36,3 @@ func (r *registry) release(c *conn) {
 		delete(r.by, c.account)
 	}
 }
-
-// count is the number of accounts connected.
-func (r *registry) count() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return len(r.by)
-}

@@ -10,6 +10,10 @@ const cert = process.env.KEEL_DEV_CERT;
 const key = process.env.KEEL_DEV_KEY;
 const playAddr = process.env.KEEL_PLAY_ADDR ?? '127.0.0.1:8080';
 
+// The net worker is bundled apart; its packages join the page's notice.
+const workerPackages = new Set<string>();
+const allowedFile = '../tools/licences/allowed.txt';
+
 const server: ServerOptions = {
   host: true,
   port: 5173,
@@ -43,9 +47,14 @@ export default defineConfig({
       input: { main: 'index.html', dev: 'dev.html' },
     },
   },
+  worker: {
+    format: 'es',
+    plugins: () => [licences({ allowedFile, shared: workerPackages, emit: false })],
+  },
   plugins: [
     licences({
-      allowedFile: '../tools/licences/allowed.txt',
+      allowedFile,
+      shared: workerPackages,
       extra: [
         { name: 'IM Fell English SC (font)', licence: 'OFL-1.1', file: 'src/fonts/OFL.txt' },
         {
