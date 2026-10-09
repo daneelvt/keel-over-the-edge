@@ -35,6 +35,10 @@ type Boat struct {
 
 // A boat's art. Every art object's values are paths under art/, checked to exist.
 type BoatArt struct {
+	// The boat's far model, drawn for boats seen from afar among many: the model's
+	// nodes but telltales and pennant, with few segments.
+	Far ArtPath `json:"far"`
+
 	// The boat's model: a glTF binary with the nodes hull, mast, boom, sail,
 	// telltales, pennant, rudder, tiller, daggerboard and sailor.
 	Model ArtPath `json:"model"`
@@ -379,10 +383,14 @@ type Sailor struct {
 
 // A sailor's art.
 type SailorArt struct {
+	// The sailor's far model, drawn in boats seen from afar: the model's nodes, with
+	// few segments.
+	Far ArtPath `json:"far"`
+
 	// The sailor's model: a glTF binary with the nodes body, head, arm-left and
 	// arm-right, its origin at the hips, facing +x.
 	Model ArtPath `json:"model"`
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "659e822bc1f46ee2"
+const Version = "83feda7e1d8c1cd7"

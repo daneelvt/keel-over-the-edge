@@ -21,14 +21,19 @@ var validBoats = `boats:
     beam: 1.2
     art:
       model: boats/test-boat/model.glb
+      far: boats/test-boat/far.glb
 ` + realPhysics()
 
-const testArt = "art/boats/test-boat/model.glb"
+const (
+	testArt    = "art/boats/test-boat/model.glb"
+	testFarArt = "art/boats/test-boat/far.glb"
+)
 
 // The sailors every fixture has unless it gives its own, and their art.
 const (
-	validSailors = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n"
+	validSailors = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n      far: sailors/test.far.glb\n"
 	sailorArt    = "art/sailors/test.glb"
+	sailorFarArt = "art/sailors/test.far.glb"
 	sailorsPath  = "shared/catalog/sailors.yaml"
 )
 
@@ -63,9 +68,13 @@ func fixture(t *testing.T, files map[string]string) string {
 	if _, ok := files[testArt]; !ok {
 		files[testArt] = "glTF"
 	}
+	if _, ok := files[testFarArt]; !ok {
+		files[testFarArt] = "glTF"
+	}
 	if _, ok := files[sailorsPath]; !ok {
 		files[sailorsPath] = validSailors
 		files[sailorArt] = "glTF"
+		files[sailorFarArt] = "glTF"
 	}
 	for p, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
@@ -161,9 +170,21 @@ func TestRejects(t *testing.T) {
 			want: "art/boats/missing.glb does not exist",
 		},
 		{
+			name: "missing far model",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"far: boats/test-boat/far.glb", "far: boats/missing.far.glb", 1)},
+			want: "art/boats/missing.far.glb does not exist",
+		},
+		{
+			name: "no far model",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"      far: boats/test-boat/far.glb\n", "", 1)},
+			want: "/boats/0/art: &{[far]}",
+		},
+		{
 			name: "no art",
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
-				"    art:\n      model: boats/test-boat/model.glb\n", "", 1)},
+				"    art:\n      model: boats/test-boat/model.glb\n      far: boats/test-boat/far.glb\n", "", 1)},
 			want: "/boats/0: &{[art]}",
 		},
 		{
@@ -243,7 +264,7 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
 	a := fixture(t, map[string]string{"shared/catalog/boats.yaml": validBoats})
 	reordered := `boats:
   - lengthOverall: 3.50
-    art: {model: boats/test-boat/model.glb}
+    art: {model: boats/test-boat/model.glb, far: boats/test-boat/far.glb}
     beam: 1.20
     capacity: 2
     description: A boat for tests

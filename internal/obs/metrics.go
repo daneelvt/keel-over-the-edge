@@ -22,9 +22,23 @@ var TickBuckets = []float64{
 // encoding a frame for every connection, and writing one message.
 var EdgeBuckets = []float64{0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 1, 5, 10}
 
+// ViewBuckets are the boats in a connection's view, by band: 0 to 64.
+var ViewBuckets = []float64{0, 1, 2, 4, 8, 12, 16, 24, 32, 48, 64}
+
+// SnapshotBuckets are snapshots' sizes, in bytes: 160 is the header alone,
+// the own boat with nobody near.
+var SnapshotBuckets = []float64{160, 192, 256, 320, 384, 512, 640, 768, 1024, 1312}
+
+// LagBuckets are how many ticks the newest snapshot sent is ahead of the
+// newest the client has acknowledged.
+var LagBuckets = []float64{0, 2, 4, 6, 8, 10, 15, 20, 30, 45, 60, 90, 150}
+
 // MarginBuckets are the input arrival margin's buckets, in ticks: how long
 // before the tick it was stamped for an input arrived, negative when late.
 var MarginBuckets = []float64{-10, -5, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30}
+
+// WaitBuckets are how long players wait in the queue for a boat, in seconds.
+var WaitBuckets = []float64{1, 5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600}
 
 // ClientBuckets are the phones' round trips and frame times, in seconds.
 var ClientBuckets = []float64{0.005, 0.01, 0.017, 0.025, 0.033, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.5, 1, 2}
@@ -47,6 +61,11 @@ type Metrics struct {
 	TicksSkipped  prometheus.Counter
 	ClockDrift    prometheus.Gauge
 	Boats         prometheus.Gauge
+	BoatLimit     prometheus.Gauge
+	QueueLength   prometheus.Gauge
+	Admissions    *prometheus.CounterVec // by result
+	QueueWait     prometheus.Histogram
+	GridDuration  prometheus.Histogram
 	Workers       prometheus.Gauge
 	Commands      *prometheus.CounterVec // by kind and result
 	Snapshots     *prometheus.CounterVec // flight recorder snapshots, by reason
@@ -61,19 +80,26 @@ type Metrics struct {
 
 	Grace *prometheus.CounterVec // by result: started, rejoined, expired
 
-	EdgeConnections    prometheus.Gauge
-	EdgeUpgrades       *prometheus.CounterVec // by result
-	EdgeHellos         *prometheus.CounterVec // by result
-	EdgeJoins          *prometheus.CounterVec // by result
-	EdgeCloses         *prometheus.CounterVec // by code
-	EdgeMessages       *prometheus.CounterVec // by direction and kind
-	EdgeBytes          *prometheus.CounterVec // by direction
-	EdgeDropped        *prometheus.CounterVec // by reason
-	EdgeEncodeDuration prometheus.Histogram
-	EdgeWriteDuration  prometheus.Histogram
-	EdgeInputMargin    prometheus.Histogram
-	ClientRTT          prometheus.Histogram
-	ClientFrame        prometheus.Histogram
+	EdgeConnections     prometheus.Gauge
+	EdgeUpgrades        *prometheus.CounterVec // by result
+	EdgeHellos          *prometheus.CounterVec // by result
+	EdgeJoins           *prometheus.CounterVec // by result
+	EdgeCloses          *prometheus.CounterVec // by code
+	EdgeMessages        *prometheus.CounterVec // by direction and kind
+	EdgeBytes           *prometheus.CounterVec // by direction
+	EdgeDropped         *prometheus.CounterVec // by reason
+	EdgeEncodeDuration  prometheus.Histogram
+	EdgeWriteDuration   prometheus.Histogram
+	EdgeEncoders        prometheus.Gauge
+	EdgeQueued          prometheus.Gauge
+	EdgeViewBoats       *prometheus.HistogramVec // by band
+	EdgeSnapshotBytes   prometheus.Histogram
+	EdgeSnapshotEntries *prometheus.CounterVec // by op
+	EdgeSnapshotLag     prometheus.Histogram
+	EdgeResyncs         *prometheus.CounterVec // by result
+	EdgeInputMargin     prometheus.Histogram
+	ClientRTT           prometheus.Histogram
+	ClientFrame         prometheus.Histogram
 }
 
 // NewMetrics makes the metrics, with the Go runtime's and the process's.
@@ -114,6 +140,21 @@ func NewMetrics(build, catalog string) *Metrics {
 		}),
 		Boats: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "keel_sim_boats", Help: "Boats in the world.",
+		}),
+		BoatLimit: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "keel_sim_boat_limit", Help: "The most boats the world holds at once.",
+		}),
+		QueueLength: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "keel_sim_queue_length", Help: "Players waiting for a boat.",
+		}),
+		Admissions: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "keel_sim_admissions_total", Help: "Joins and the queue, by result: joined, rejoined, queued, admitted, dequeued or full.",
+		}, []string{"result"}),
+		QueueWait: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "keel_sim_queue_wait_seconds", Help: "How long each player given a boat from the queue waited.", Buckets: WaitBuckets,
+		}),
+		GridDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "keel_sim_grid_duration_seconds", Help: "How long sorting the boats into the grid took, each tick.", Buckets: TickBuckets,
 		}),
 		Workers: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "keel_sim_physics_workers", Help: "Goroutines that stepped boats in the latest tick.",
@@ -175,8 +216,29 @@ func NewMetrics(build, catalog string) *Metrics {
 		Name: "keel_edge_messages_dropped_total", Help: "Game messages dropped: over a connection's rate, or a snapshot replaced before it was sent.",
 	}, []string{"reason"})
 	m.EdgeEncodeDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name: "keel_edge_encode_duration_seconds", Help: "How long encoding a frame for every connection took.", Buckets: EdgeBuckets,
+		Name: "keel_edge_encode_duration_seconds", Help: "How long each encoder took over a frame for its connections.", Buckets: EdgeBuckets,
 	})
+	m.EdgeEncoders = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_edge_encoders", Help: "Encoders: goroutines writing connections' snapshots, each its own connections.",
+	})
+	m.EdgeQueued = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_edge_queued_connections", Help: "Game connections waiting in the queue for a boat.",
+	})
+	m.EdgeViewBoats = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "keel_edge_view_boats", Help: "Other boats in a snapshot's view, by band.", Buckets: ViewBuckets,
+	}, []string{"band"})
+	m.EdgeSnapshotBytes = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_edge_snapshot_bytes", Help: "Snapshots' sizes, their kind byte included.", Buckets: SnapshotBuckets,
+	})
+	m.EdgeSnapshotEntries = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_snapshot_entries_total", Help: "Entries written in snapshots' views, by op.",
+	}, []string{"op"})
+	m.EdgeSnapshotLag = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_edge_snapshot_lag_ticks", Help: "The tick of each snapshot sent less the newest the client had acknowledged.", Buckets: LagBuckets,
+	})
+	m.EdgeResyncs = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_resyncs_total", Help: "Clients' requests for a full snapshot: honoured, or ignored as more than one a second.",
+	}, []string{"result"})
 	m.EdgeWriteDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "keel_edge_write_duration_seconds", Help: "How long writing a game message took.", Buckets: EdgeBuckets,
 	})
@@ -190,9 +252,10 @@ func NewMetrics(build, catalog string) *Metrics {
 		Name: "keel_client_frame_seconds", Help: "The clients' 95th percentile frame times.", Buckets: ClientBuckets,
 	})
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
-		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame)
+		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame,
+		m.EdgeEncoders, m.EdgeQueued, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
-		m.ClockDrift, m.Boats, m.Workers, m.Commands, m.Snapshots,
+		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused)
 	return m
 }

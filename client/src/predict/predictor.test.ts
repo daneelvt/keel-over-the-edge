@@ -16,7 +16,8 @@ import { BEHIND, newClockState } from '../net/clock';
 import type { FromWorker, ToWorker } from '../net/messages';
 import { Online, type Port } from '../net/online';
 import { RELOAD_EVERY, reloadForVersion } from '../net/reload';
-import { NO_MARGIN, newSnapshot, type OwnSnapshot } from '../net/snapshot';
+import { NO_MARGIN, newSnapshot, type OwnSnapshot, writeSnapshot } from '../net/snapshot';
+import { FLEET_RECORD_BYTES } from '../net/view';
 import { newPose } from './blend';
 import { RECORDS } from './layout.gen';
 import { loadPhysics } from './physics';
@@ -242,6 +243,47 @@ describe('pacing online', () => {
     sn.margin = -5;
     o.reconcile(sn, 2_000);
     expect(o.ahead.m).toBe(6);
+  });
+});
+
+describe('the queue and the fleet online', () => {
+  test('the place in the queue is shown until the sea is', async () => {
+    const p = await predictor();
+    const port = new FakePort();
+    const o = new Online(port, p, {
+      helm: { target: 0 },
+      sheet: { target: 0.5 },
+      beforeStep: null,
+      clock: { steps: 0, alpha: 0 },
+    });
+    port.deliver({ type: 'status', status: 'queued', waitMs: 0, reason: '' });
+    port.deliver({ type: 'queued', position: 3, waiting: 9 });
+    expect(o.place.value).toEqual({ position: 3, waiting: 9 });
+    port.deliver({ type: 'queued', position: 1, waiting: 4 });
+    expect(o.place.value).toEqual({ position: 1, waiting: 4 });
+    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100 });
+    port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
+    expect(o.place.value).toBeNull();
+  });
+
+  test('each snapshot record is read, its boats given to the fleet, and handed back', async () => {
+    const p = await predictor();
+    const port = new FakePort();
+    const o = new Online(port, p, {
+      helm: { target: 0 },
+      sheet: { target: 0.5 },
+      beforeStep: null,
+      clock: { steps: 0, alpha: 0 },
+    });
+    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100 });
+    const record = new ArrayBuffer(FLEET_RECORD_BYTES);
+    writeSnapshot(start(100), new DataView(record));
+    port.deliver({ type: 'snapshot', data: record });
+    expect(p.started).toBe(true);
+    // The record held no other boat.
+    o.fleet.update(0, 0);
+    expect(o.fleet.count).toBe(0);
+    expect(port.sent.filter((m) => m.type === 'return').map((m) => m.type)).toEqual(['return']);
   });
 });
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
@@ -32,7 +33,7 @@ func gameServer(t *testing.T, vars map[string]string) (*server, string) {
 
 // connect opens the game connection through the play listener and waits
 // for the Welcome; the connection is then read on a goroutine of its own.
-func connect(t *testing.T, s *server, token string) (*websocket.Conn, *edgetest.Inbox) {
+func connect(t *testing.T, s *server, token string) (*websocket.Conn, *client.Inbox) {
 	t.Helper()
 	h := http.Header{}
 	h.Set("Cookie", auth.CookieName+"="+token)
@@ -40,10 +41,10 @@ func connect(t *testing.T, s *server, token string) (*websocket.Conn, *edgetest.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := edgetest.Send(t.Context(), ws, edgetest.Hello()); err != nil {
+	if err := client.Send(t.Context(), ws, client.Hello()); err != nil {
 		t.Fatal(err)
 	}
-	in := edgetest.Read(ws)
+	in := client.Read(ws)
 	for r := range in.C {
 		if r.Message.GetWelcome() != nil {
 			return ws, in
@@ -103,7 +104,7 @@ func TestStopWithDeadPeer(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer ws.CloseNow()
-		edgetest.Send(t.Context(), ws, edgetest.Hello())
+		client.Send(t.Context(), ws, client.Hello())
 		// It never reads again: the in-memory pipe holds nothing, so the
 		// server's writes wait.
 		time.Sleep(time.Second)

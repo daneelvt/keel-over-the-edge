@@ -21,11 +21,11 @@ type Op uint8
 // SetWind and Place are for developers only: tests, scripted sailors and
 // replays.
 const (
-	Join       Op = iota + 1 // a boat for Account, sailed through connection Conn: its existing one, or a new one
+	Join       Op = iota + 1 // a boat for Account, sailed through connection Conn: its existing one, a new one, or a place in the queue
 	Leave                    // Boat leaves the world
 	SetWind                  // the wind becomes Wind
 	Place                    // Boat's state becomes State
-	Disconnect               // connection Conn, Boat's, has ended: its grace begins
+	Disconnect               // connection Conn, Boat's, has ended: its grace begins; with Boat 0, Account's connection Conn, waiting or sailing
 	opEnd
 )
 
@@ -72,9 +72,9 @@ type Wind struct {
 // channel is its only pointer.
 type Command struct {
 	Op      Op
-	Account Account       // Join: the account the boat is for
+	Account Account       // Join, Disconnect with no boat: the account
 	Conn    uint64        // Join, Disconnect: the connection; 0 for none
-	Boat    uint64        // Leave, Place, Disconnect: the boat
+	Boat    uint64        // Leave, Place, Disconnect: the boat; Disconnect: 0 for whatever Account has
 	Wind    Wind          // SetWind
 	State   physics.State // Place
 	// Reply, if not nil, receives the result. The simulation never waits on
@@ -89,19 +89,22 @@ type Result uint8
 const (
 	Joined   Result = iota + 1 // a new boat
 	Rejoined                   // the account's existing boat
-	Full                       // no free slot
+	Full                       // no free slot, and no room in the queue
 	Left                       // the boat has gone
 	Done                       // SetWind or Place applied; Disconnect's grace begun
 	NoBoat                     // no such boat
 	Expired                    // the boat left at the end of its grace: the tick's own doing, not a command's
-	Stale                      // Disconnect from a connection that no longer sails the boat: ignored
+	Stale                      // Disconnect from a connection that no longer sails the boat, or waits: ignored
+	Queued                     // the world is at its limit: the connection waits, at Position
+	Admitted                   // a waiting connection got its boat: the tick's own doing, recorded as a Join
+	Dequeued                   // Disconnect from a waiting connection: it waits no more
 	resultEnd
 )
 
 // Results lists every result, in order, for tables keyed by result.
-var Results = []Result{Joined, Rejoined, Full, Left, Done, NoBoat, Expired, Stale}
+var Results = []Result{Joined, Rejoined, Full, Left, Done, NoBoat, Expired, Stale, Queued, Admitted, Dequeued}
 
-var resultNames = [...]string{"", "joined", "rejoined", "full", "left", "done", "no_boat", "expired", "stale"}
+var resultNames = [...]string{"", "joined", "rejoined", "full", "left", "done", "no_boat", "expired", "stale", "queued", "admitted", "dequeued"}
 
 func (r Result) String() string {
 	if r == 0 || r >= resultEnd {
@@ -119,6 +122,10 @@ type Reply struct {
 	Boat   uint64
 	Gen    uint16
 	Tick   int64
+	// Position is a queued connection's place in the queue, 1 for the
+	// head; Since, an admitted one's tick of joining it.
+	Position int32
+	Since    int64
 }
 
 // Errors from TrySend.

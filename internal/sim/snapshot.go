@@ -22,12 +22,14 @@ import (
 //	capacity                uvarint
 //	generations             uvarint n, then n × (slot, generation) uvarints, slots ascending, none zero
 //	boats                   uvarint n, then n × the boat below, slots ascending
+//	queue                   uvarint n, then n × the connection waiting below, the head first
 //
 // and each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
 // uvarint, its control word in 8 bytes, and its state's fields in 8 bytes
-// each.
-const snapshotVersion = 2
+// each; each connection waiting is its account's 16 bytes, the connection as
+// a uvarint and the tick it was queued at as a varint.
+const snapshotVersion = 3
 
 // AppendSnapshot appends f's snapshot to dst.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
@@ -62,6 +64,12 @@ func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 		for _, v := range StateFields(&f.State[s]) {
 			dst = appendF64(dst, *v)
 		}
+	}
+	dst = binary.AppendUvarint(dst, uint64(len(f.Queue)))
+	for _, q := range f.Queue {
+		dst = append(dst, q.Account[:]...)
+		dst = binary.AppendUvarint(dst, q.Conn)
+		dst = binary.AppendVarint(dst, q.Since)
 	}
 	return dst
 }
@@ -134,11 +142,19 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 			*v = r.f64()
 		}
 	}
+	f.Queue = f.Queue[:0]
+	n = r.count(bus.QueueLimit)
+	for range n {
+		var q bus.Waiting
+		r.bytes(q.Account[:])
+		q.Conn, q.Since = r.uvarint(), r.varint()
+		f.Queue = append(f.Queue, q)
+	}
 	if r.err != nil {
 		return r.err
 	}
 	if len(r.b) > 0 {
-		return errors.New("sim: snapshot: data after the last boat")
+		return errors.New("sim: snapshot: data after the queue")
 	}
 	return nil
 }
@@ -209,7 +225,7 @@ func (r *reader) bytes(b []byte) {
 func (r *reader) count(limit uint64) uint64 {
 	n := r.uvarint()
 	if r.err == nil && n > limit {
-		r.err = fmt.Errorf("sim: snapshot: %d entries, more than its %d slots", n, limit)
+		r.err = fmt.Errorf("sim: snapshot: %d entries, more than its room for %d", n, limit)
 	}
 	if r.err != nil {
 		return 0

@@ -312,10 +312,11 @@ export class Boat {
 
 /**
  * The sail's cloth, drawn into a canvas: cream flax in crosscut panels,
- * the class insignia near the head and the sail number below it. The
- * canvas's width is the foot and its height the luff, at the same scale.
+ * the class insignia near the head and the sail number, if any, below it.
+ * The canvas's width is the foot and its height the luff, at the same
+ * scale.
  */
-function sailCloth(number: string, insignia: string): CanvasTexture {
+export function sailCloth(number: string, insignia: string): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 960;

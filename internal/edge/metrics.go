@@ -37,32 +37,45 @@ var helloNames = [hellos]string{"ok", "protocol", "catalog", "layout", "timeout"
 const (
 	joinJoined = iota
 	joinRejoined
+	joinQueued
 	joinFull
 	joinBusy
 	joinTimeout
 	joins
 )
 
-var joinNames = [joins]string{"joined", "rejoined", "full", "busy", "timeout"}
+var joinNames = [joins]string{"joined", "rejoined", "queued", "full", "busy", "timeout"}
 
 // The kinds of message counted, each way.
 const (
 	inHello = iota
 	inInput
 	inPing
+	inCommand
 	ins
 )
 
-var inNames = [ins]string{"hello", "input", "ping"}
+var inNames = [ins]string{"hello", "input", "ping", "command"}
 
 const (
 	outWelcome = iota
 	outPong
 	outSnapshot
+	outQueued
 	outs
 )
 
-var outNames = [outs]string{"welcome", "pong", "snapshot"}
+var outNames = [outs]string{"welcome", "pong", "snapshot", "queued"}
+
+// The entries of a snapshot, by op.
+const (
+	entryUpdate = iota
+	entryEnter
+	entryLeave
+	entryOps
+)
+
+var entryNames = [entryOps]string{"update", "enter", "leave"}
 
 // closeCodes are the codes counted by name; any other is "other", and a
 // connection that ended without one "none".
@@ -74,24 +87,32 @@ var closeCodes = []websocket.StatusCode{
 }
 
 type metrics struct {
-	connections prometheus.Gauge
-	upgrade     [upgrades]prometheus.Counter
-	hello       [hellos]prometheus.Counter
-	join        [joins]prometheus.Counter
-	closes      map[websocket.StatusCode]prometheus.Counter
-	closeNone   prometheus.Counter
-	closeOther  prometheus.Counter
-	in          [ins]prometheus.Counter
-	out         [outs]prometheus.Counter
-	bytesIn     prometheus.Counter
-	bytesOut    prometheus.Counter
-	droppedRate prometheus.Counter
-	replaced    prometheus.Counter
-	encode      prometheus.Observer
-	write       prometheus.Observer
-	margin      prometheus.Observer
-	rtt         prometheus.Observer
-	frame       prometheus.Observer
+	connections                   prometheus.Gauge
+	upgrade                       [upgrades]prometheus.Counter
+	hello                         [hellos]prometheus.Counter
+	join                          [joins]prometheus.Counter
+	closes                        map[websocket.StatusCode]prometheus.Counter
+	closeNone                     prometheus.Counter
+	closeOther                    prometheus.Counter
+	in                            [ins]prometheus.Counter
+	out                           [outs]prometheus.Counter
+	bytesIn                       prometheus.Counter
+	bytesOut                      prometheus.Counter
+	droppedRate                   prometheus.Counter
+	replaced                      prometheus.Counter
+	encode                        prometheus.Observer
+	write                         prometheus.Observer
+	encoders                      prometheus.Gauge
+	queuedConns                   prometheus.Gauge
+	viewNear                      prometheus.Observer
+	viewFar                       prometheus.Observer
+	snapshotBytes                 prometheus.Observer
+	entries                       [entryOps]prometheus.Counter
+	lag                           prometheus.Observer
+	resyncHonoured, resyncIgnored prometheus.Counter
+	margin                        prometheus.Observer
+	rtt                           prometheus.Observer
+	frame                         prometheus.Observer
 }
 
 func newMetrics(m *obs.Metrics) metrics {
@@ -124,6 +145,17 @@ func newMetrics(m *obs.Metrics) metrics {
 	x.replaced = m.EdgeDropped.WithLabelValues("snapshot_replaced")
 	x.encode = m.EdgeEncodeDuration
 	x.write = m.EdgeWriteDuration
+	x.encoders = m.EdgeEncoders
+	x.queuedConns = m.EdgeQueued
+	x.viewNear = m.EdgeViewBoats.WithLabelValues("near")
+	x.viewFar = m.EdgeViewBoats.WithLabelValues("far")
+	x.snapshotBytes = m.EdgeSnapshotBytes
+	for i, n := range entryNames {
+		x.entries[i] = m.EdgeSnapshotEntries.WithLabelValues(n)
+	}
+	x.lag = m.EdgeSnapshotLag
+	x.resyncHonoured = m.EdgeResyncs.WithLabelValues("honoured")
+	x.resyncIgnored = m.EdgeResyncs.WithLabelValues("ignored")
 	x.margin = m.EdgeInputMargin
 	x.rtt = m.ClientRTT
 	x.frame = m.ClientFrame

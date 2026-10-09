@@ -114,7 +114,9 @@ func (s *sailor) move() {
 func clamp(v, lo, hi int) int { return max(lo, min(hi, v)) }
 
 // join asks for a boat for each sailor and waits for the answers. A full
-// queue is tried again a tick later; a full world leaves the rest ashore.
+// queue is tried again a tick later; a world at its limit leaves the rest
+// ashore: a sailor put in the world's queue leaves it, since it has no
+// connection to be given a boat through.
 func join(ctx context.Context, cfg Config) ([]sailor, error) {
 	sender := cfg.Bus.Commands.Players()
 	replies := make([]chan bus.Reply, cfg.N)
@@ -144,6 +146,17 @@ func join(ctx context.Context, cfg Config) ([]sailor, error) {
 		case r = <-reply:
 		}
 		if r.Result != bus.Joined && r.Result != bus.Rejoined {
+			if r.Result == bus.Queued {
+				// Its place in the queue is given up: a full command
+				// queue is tried again a tick later.
+				for sender.TrySend(bus.Command{Op: bus.Disconnect, Account: Account(i)}) != nil {
+					select {
+					case <-ctx.Done():
+						return nil, nil
+					case <-time.After(time.Second / 30):
+					}
+				}
+			}
 			cfg.Log.Warn("a scripted sailor found no boat", "sailor", i, "result", r.Result.String())
 			continue
 		}

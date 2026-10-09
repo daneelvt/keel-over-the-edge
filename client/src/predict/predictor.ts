@@ -10,7 +10,7 @@
 // state and stepped again to the present with the controls kept, and the
 // difference that makes to the drawn boat is eased away over 100 ms (drawn
 // at once past 3 m or 20°). The Go test client predicts the same way
-// (internal/edge/edgetest/predict.go), and the tests replay its traces here.
+// (internal/client/predict.go), and the tests replay its traces here.
 
 import type { BoatPhysics } from '../catalog/types.gen';
 import type { BoatDriver, Wind } from '../game/driver';

@@ -7,7 +7,7 @@
 // database is dropped when it stops. Developer commands are on (POST
 // /debug/wind on keel's internal listener).
 //
-//	go run ./tools/e2e [-lag 200ms,2%]
+//	go run ./tools/e2e [-lag 200ms,2%] [-limit N] [-sailors N]
 //	go run ./tools/e2e -tls dir      write a throwaway certificate for localhost into dir, and exit
 //
 // Beside keel it runs the lag proxy (tools/lag) on 127.0.0.1:18090, in
@@ -43,7 +43,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
 
@@ -68,11 +68,13 @@ func main() {
 func run() error {
 	lagFlag := flag.String("lag", "200ms,2%", "the lag proxy's round trip and loss")
 	tlsDir := flag.String("tls", "", "write a self-signed certificate for localhost into this directory, and exit")
+	limit := flag.Int("limit", 0, "keel's boat limit (KEEL_BOAT_LIMIT); its default if 0")
+	sailors := flag.Int("sailors", 0, "scripted sailors for keel to sail (KEEL_DEV_SAILORS)")
 	flag.Parse()
 	if *tlsDir != "" {
 		return writeCert(*tlsDir)
 	}
-	lag, err := edgetest.ParseLag(*lagFlag)
+	lag, err := client.ParseLag(*lagFlag)
 	if err != nil {
 		return err
 	}
@@ -117,7 +119,11 @@ func run() error {
 		"KEEL_INTERNAL_ADDR="+internalAddr,
 		"KEEL_LOG_LEVEL=warn",
 		"KEEL_DEV_COMMANDS=1",
+		fmt.Sprintf("KEEL_DEV_SAILORS=%d", *sailors),
 	)
+	if *limit > 0 {
+		env = append(env, fmt.Sprintf("KEEL_BOAT_LIMIT=%d", *limit))
+	}
 	migrate := exec.CommandContext(ctx, keel, "migrate")
 	migrate.Env, migrate.Stdout, migrate.Stderr = env, os.Stderr, os.Stderr
 	if err := migrate.Run(); err != nil {
@@ -128,7 +134,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	go edgetest.Proxy(ctx, ln, playAddr, lag)
+	go client.Proxy(ctx, ln, playAddr, lag)
 
 	k := &keelProc{path: keel, env: env}
 	if err := k.start(); err != nil {

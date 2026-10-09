@@ -1,6 +1,6 @@
 SPDX-License-Identifier: AGPL-3.0-only
 
-The game connection's framing, and the own-boat snapshot's layout.
+The game connection's framing, and the snapshot's layout.
 
 Framing
 -------
@@ -10,29 +10,92 @@ kind:
 
   1  a Protocol Buffers message: ClientMessage from the client,
      ServerMessage from the server (keel/v1/game.proto)
-  2  the own-boat snapshot below, from the server
+  2  the snapshot below, from the server
 
 Any other kind, and any text message, closes the connection with 1003.
 
-The own-boat snapshot
----------------------
+The snapshot
+------------
 
-After the kind byte, little-endian, 155 bytes (156 with the kind byte):
+The player's own boat in full, then the other boats in the player's view
+as changes against a base: a snapshot the connection sent before, which
+the client must still hold. After the kind byte, little-endian, a header of
+159 bytes (160 with the kind byte), then the entries:
 
   offset  bytes  field
-       0      1  layout: 1 = the boat's state as float64
+       0      1  layout: 2
        1      8  tick (int64)
-       9      4  seq of the control word in force (uint32)
-      13      2  arrival margin in ticks (int16): the lowest since the
+       9      2  base: how many ticks before this one the base snapshot is
+                 (uint16); 0 for none: the view starts empty
+      11      1  flags: bit 0, the far band is sampled by this snapshot;
+                 the rest 0
+      12      4  seq of the own boat's control word in force (uint32)
+      16      2  arrival margin in ticks (int16): the lowest since the
                  previous snapshot, how many ticks before its tick an input
                  arrived (negative: after); -32768 for none
-      15      2  helm index in force (uint16), 0 … 1024
-      17      2  sheet index in force (uint16), 0 … 1024
-      19      8  wind speed, m/s (float64)
-      27      8  wind direction it comes from, rad clockwise from north (float64)
-      35    120  the boat's state, 15 float64s in this order:
+      18      2  helm index in force (uint16), 0 … 1024
+      20      2  sheet index in force (uint16), 0 … 1024
+      22      8  wind speed, m/s (float64)
+      30      8  wind direction it comes from, rad clockwise from north (float64)
+      38    120  the own boat's state, 15 float64s in this order:
                  x, y, heading, surge, sway, yawRate, heel, rollRate,
                  boom, boomRate, sailor, rudder, sheetLimit, sailorMode,
                  sailorTimer
+     158      1  entries that follow, 0 … 128
+     159      …  the entries
 
-A layout byte other than 1 is refused.
+A layout byte other than 2 is refused.
+
+The view
+--------
+
+The view is up to 64 other boats, each in a view slot, 0 … 63, of the
+connection's own numbering. A view slot's boat is:
+
+  kind       an index into the catalog's boats
+  flags      bit 0: in the far band; bits 1–2: the sailor's mode
+             (sailing, in the water, on the board, climbing); the rest 0
+  x, y       position, cm east and north of the world's centre, each
+             within a signed 24-bit integer
+  heading    uint16, 2π/65536 rad a step, clockwise from north
+  heel       int8, π/128 rad a step, positive starboard down
+  boom       int8, π/128 rad a step, positive to starboard
+  rudder     int8, π/128 rad a step, positive turning the bow to starboard
+  sailor     int8, the sailor's offset in cm, positive to starboard
+  sail       the sail byte: the sailor's flattening in bits 0–3 (0 … 15
+             for 0 … 1), the foot strip's flow in bits 4–5 and the head
+             strip's in bits 6–7 (0 luffing, 1 attached, 2 stalled,
+             3 aback)
+
+Angles are wrapped into [-π, π) before they are stepped.
+
+The entries
+-----------
+
+Each entry begins with one byte: the view slot in bits 0–5 and the op in
+bits 6–7. Applied in order to the base's view:
+
+  op 0  update   a change mask, one byte: bit 0 position, 1 heading,
+                 2 heel, 3 boom, 4 rudder, 5 sailor, 6 sail, 7 flags; then
+                 the fields set, in that order: the position as two zigzag
+                 varints, the change in cm of x and of y since the base;
+                 the others as an enter has them. The slot must hold a
+                 boat, and the mask must not be 0.
+  op 1  enter    a boat in full: kind (uvarint), flags (1), x and y (int24
+                 each), heading (2), heel, boom, rudder, sailor (1 each),
+                 sail (1). An enter on a slot that holds a boat replaces it.
+  op 2  leave    nothing more: the slot's boat leaves the view. The slot
+                 must hold a boat.
+
+Op 3 is refused, as are varints written longer than they need be, a
+position outside 24 bits, flags with their spare bits set, a kind above
+65535, and bytes after the last entry.
+
+Samples
+-------
+
+Every boat in the view after a snapshot that is in the near band, or has
+an entry in it, is sampled by it: its values are the boat's at the
+snapshot's tick. A boat in the far band without an entry is sampled only
+when the header's bit 0 is set. A sampled boat without an entry has not
+changed since the base.

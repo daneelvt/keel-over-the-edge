@@ -23,6 +23,7 @@ boats:
     beam: 1.39 # ILCA class
     art:
       model: boats/jolly-boat.glb
+      far: boats/jolly-boat.far.glb
     physics:
       hull:
         displacement: 160 # boat with sail 80 kg, sailor 80 kg (Day)

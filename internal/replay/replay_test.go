@@ -35,6 +35,10 @@ func kinds(t testing.TB) []physics.Prepared {
 
 const testCapacity = 64
 
+// testLimit is the sessions' boat limit: lower than the capacity, so that
+// sailors wait in the queue.
+const testLimit = 16
+
 // session is a world being recorded.
 type session struct {
 	w    *sim.World
@@ -58,14 +62,14 @@ const testGrace = 120
 
 func newSession(t testing.TB, dir string, run bool) *session {
 	t.Helper()
-	w, err := sim.New(sim.Config{Capacity: testCapacity, Kinds: kinds(t), Workers: 2, Tick: 1000, Grace: testGrace})
+	w, err := sim.New(sim.Config{Capacity: testCapacity, Kinds: kinds(t), Workers: 2, Tick: 1000, Grace: testGrace, Limit: testLimit})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(w.Close)
 	l := New(Config{
 		Frames: w.Bus().Frames,
-		Header: Header{Build: "test", Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: testCapacity, Epoch: time.Unix(1767225600, 0), Grace: testGrace},
+		Header: Header{Build: "test", Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: testCapacity, Epoch: time.Unix(1767225600, 0), Grace: testGrace, Limit: testLimit},
 		Dir:    dir,
 		Log:    slog.New(slog.DiscardHandler),
 		Now:    func() time.Time { return time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC) },
@@ -80,17 +84,21 @@ func newSession(t testing.TB, dir string, run bool) *session {
 
 func (s *session) start() { go func() { s.done <- s.log.Run() }() }
 
-// sail runs ticks with sailors joining, leaving, disconnecting (their boats
-// leaving when their grace ends, unless they join again), steering and
-// trimming, the wind changing and a boat placed now and then.
+// sail runs ticks with sailors joining, waiting and giving up waiting,
+// leaving, disconnecting (their boats leaving when their grace ends, unless
+// they join again), steering and trimming, the wind changing and a boat
+// placed now and then.
 func (s *session) sail(ticks int) {
 	q := s.w.Bus().Commands.Developer()
 	for range ticks {
 		f := s.w.Latest()
 		switch r := s.rng.IntN(100); {
-		case r < 4 && len(f.Live) < testCapacity-4:
+		case r < 4 && len(f.Queue) < 8:
 			q.TrySend(bus.Command{Op: bus.Join, Account: account(s.next), Conn: s.next})
 			s.next++
+		case r < 5 && len(f.Queue) > 0 && s.rng.IntN(4) == 0:
+			w := f.Queue[s.rng.IntN(len(f.Queue))]
+			q.TrySend(bus.Command{Op: bus.Disconnect, Account: w.Account, Conn: w.Conn})
 		case r < 5 && len(f.Live) > 0 && s.rng.IntN(2) == 0:
 			sl := f.Live[s.rng.IntN(len(f.Live))]
 			q.TrySend(bus.Command{Op: bus.Disconnect, Boat: f.Boat[sl], Conn: f.Conn[sl]})
@@ -146,7 +154,8 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if f.Header.Build != "test" || f.Header.Catalog != catalog.Version || f.Header.Layout != physics.LayoutVersion ||
-		f.Header.Capacity != testCapacity || !f.Header.Epoch.Equal(time.Unix(1767225600, 0)) || f.Header.Grace != testGrace {
+		f.Header.Capacity != testCapacity || !f.Header.Epoch.Equal(time.Unix(1767225600, 0)) || f.Header.Grace != testGrace ||
+		f.Header.Limit != testLimit {
 		t.Fatalf("header %+v", f.Header)
 	}
 	if len(f.Segments) != 3 || f.Segments[0].Tick != 1001 || f.Segments[1].Tick != 1800 || f.Segments[2].Tick != 2700 {
@@ -174,8 +183,10 @@ func TestRoundTrip(t *testing.T) {
 	if ticks == 0 || digests < 60 || events == 0 {
 		t.Fatalf("%d tick records, %d events, %d digests", ticks, events, digests)
 	}
-	// Graces began, ended, and were cut short by a sailor's return.
-	if results[bus.Expired] == 0 || results[bus.Rejoined] == 0 || results[bus.Done] == 0 {
+	// Graces began, ended, and were cut short by a sailor's return; sailors
+	// waited, were given boats, and gave up waiting.
+	if results[bus.Expired] == 0 || results[bus.Rejoined] == 0 || results[bus.Done] == 0 ||
+		results[bus.Queued] == 0 || results[bus.Admitted] == 0 || results[bus.Dequeued] == 0 {
 		t.Fatalf("results %v", results)
 	}
 	res := replayed(t, data, 1)

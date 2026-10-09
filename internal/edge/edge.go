@@ -7,13 +7,18 @@
 // out.
 //
 // Each connection has a reader (the request's own goroutine) and a writer.
-// One encoder goroutine, woken as each frame is published, writes every
-// connection's snapshot into that connection's mailbox; the writer sends
+// Encoders, one a core, each with its own connections and each woken as each
+// frame is published, write their connections' snapshots into the
+// connections' mailboxes: the own boat, and the other boats in its area of
+// interest as changes from a snapshot the client holds; the writer sends
 // the newest. The client stamps each input for the tick it predicted it
 // for, and the edge holds it until the tick before that is published, so
-// the tick applies it then. A connection's account sails one boat, through one connection
-// at a time: a newer connection takes the boat over and the older is closed.
-// When a connection ends its boat's grace begins (bus.Disconnect).
+// the tick applies it then. A connection's account sails one boat, through
+// one connection at a time: a newer connection takes the boat over and the
+// older is closed. When the world is at its limit, a connection waits in
+// the simulation's queue, told its place, until it is given a boat. When a
+// connection ends its boat's grace begins, or its place in the queue is
+// given up (bus.Disconnect).
 package edge
 
 import (
@@ -22,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -142,6 +148,9 @@ type Config struct {
 	// code, as the game's other routes answer.
 	Fail   auth.ErrorWriter
 	Limits Limits
+	// Encoders is how many goroutines encode snapshots; 0 means
+	// GOMAXPROCS.
+	Encoders int
 }
 
 // Edge serves the game connection.
@@ -158,7 +167,7 @@ type Edge struct {
 	nextConn atomic.Uint64
 	registry registry
 	latest   atomic.Int64 // the latest published tick
-	enc      encoder
+	encs     []*encoder
 
 	mu      sync.Mutex
 	closing bool
@@ -182,20 +191,48 @@ func New(cfg Config) *Edge {
 		e.origins = []string{u.Host}
 	}
 	e.registry.init()
-	e.enc.init(e)
+	n := cfg.Encoders
+	if n < 1 {
+		n = runtime.GOMAXPROCS(0)
+	}
+	capacity := cfg.Bus.Frames.Latest().Capacity()
+	for range n {
+		enc := &encoder{}
+		enc.init(e, capacity)
+		e.encs = append(e.encs, enc)
+	}
+	e.m.encoders.Set(float64(n))
 	return e
 }
 
 // Record is told of each frame as the simulation publishes it: a
-// sim.Recorder. It wakes the encoder and never blocks.
+// sim.Recorder. It wakes the encoders and never blocks.
 func (e *Edge) Record(f *bus.Frame) {
 	e.latest.Store(f.Tick)
-	e.enc.wake()
+	for _, enc := range e.encs {
+		enc.wake()
+	}
 }
 
 // Run encodes snapshots until ctx ends.
 func (e *Edge) Run(ctx context.Context) {
-	e.enc.run(ctx)
+	var wg sync.WaitGroup
+	for _, enc := range e.encs {
+		wg.Go(func() { enc.run(ctx) })
+	}
+	wg.Wait()
+}
+
+// encoderFor is the encoder with the fewest connections, which c joins.
+func (e *Edge) encoderFor() *encoder {
+	best := e.encs[0]
+	for _, enc := range e.encs[1:] {
+		if enc.load.Load() < best.load.Load() {
+			best = enc
+		}
+	}
+	best.load.Add(1)
+	return best
 }
 
 // ServeHTTP is GET /ws: the session first, then the account's kind, then the

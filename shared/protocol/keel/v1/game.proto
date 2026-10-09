@@ -3,7 +3,7 @@
 // The game connection's control messages. Each WebSocket binary message is
 // one game message whose first byte is its kind (snapshot.txt): kind 1 is
 // one of the envelopes below, encoded as Protocol Buffers; kind 2 is the
-// packed own-boat snapshot, which is not described here.
+// packed snapshot, which is not described here.
 //
 // go run ./tools/protocol generates the Go and TypeScript from this file,
 // and the protocol version from this file and snapshot.txt.
@@ -19,7 +19,7 @@ message ClientMessage {
     Hello hello = 1;
     Input input = 2;
     Ping ping = 3;
-    // 4 is kept for the players' commands.
+    Command command = 4;
   }
 }
 
@@ -63,13 +63,35 @@ message Ping {
   uint32 frame_ms = 4;
 }
 
+// Command is something the player asks of the game.
+message Command {
+  oneof body {
+    Resync resync = 1;
+  }
+}
+
+// Resync asks for the next snapshot in full: the client lacks the base of
+// one it received. At most one a second is honoured.
+message Resync {}
+
 // ServerMessage is everything the server sends but snapshots, after the
 // kind byte 1.
 message ServerMessage {
   oneof body {
     Welcome welcome = 1;
     Pong pong = 2;
+    Queued queued = 3;
   }
+}
+
+// Queued says the sea is full: the client waits for a boat. It comes after
+// the Hello, and again whenever the place changes, at most once a second;
+// a Welcome follows when the boat is given.
+message Queued {
+  // The place in the queue, 1 for the next to be given a boat.
+  uint32 position = 1;
+  // How many wait in all.
+  uint32 waiting = 2;
 }
 
 // Welcome says the client has its boat; its snapshots follow.

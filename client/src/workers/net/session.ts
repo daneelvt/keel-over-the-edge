@@ -4,18 +4,22 @@
 // given what arrived and when. It does no I/O and reads no clock; the
 // worker gives it each event with its time (µs) and calls time() at
 // deadline(). The Go test client keeps the same state the same way
-// (internal/edge/edgetest/net.go), and the tests replay its traces here.
+// (internal/client/net.go), and the tests replay its traces here.
 //
 // After a Welcome it sends 8 Pings 100 ms apart, so the clock is good
 // within a second, then one every 2 s; every message carries the newest
 // snapshot's tick, and after 100 ms with nothing sent an empty Input does;
-// with no Pong for 6 s the connection is taken for dead.
+// with no Pong for 6 s the connection is taken for dead. While it waits in
+// the queue for a boat it pings every 2 s, and sends nothing else. Each
+// snapshot's other boats are decoded against its base among the last few
+// views; one whose base is gone is dropped, and a Resync asked for.
 
 import { Clock } from '../../net/clock';
 import { decodeServer, encodeClient } from '../../net/frame';
 import type { Welcome } from '../../net/gen/keel/v1/game_pb';
-import { KIND_SNAPSHOT, SNAPSHOT_SIZE } from '../../net/snapshot';
+import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
+import { type View, ViewRing } from '../../net/view';
 
 export const BURST_PINGS = 8;
 export const BURST_EVERY = 100_000;
@@ -33,19 +37,26 @@ export interface Versions {
 /** What a message from the server was. */
 export type Received =
   | { kind: 'welcome'; welcome: Welcome }
-  | { kind: 'snapshot'; tick: number }
+  /** The view stays valid until a few more snapshots are decoded; the ring's changes and sampled are its. */
+  | { kind: 'snapshot'; tick: number; flags: number; view: View }
+  /** Its base was gone: out asks for a full snapshot. */
+  | { kind: 'dropped'; tick: number; out: Uint8Array<ArrayBuffer>[] }
+  | { kind: 'queued'; position: number; waiting: number }
   | { kind: 'pong' }
   | { kind: 'other' };
 
-const TWO_32 = 2 ** 32;
-
 export class Session {
   readonly clock = new Clock();
+  /** The other boats' views, the last few. */
+  readonly views = new ViewRing();
   /** The frame time Pings report, ms. */
   frameMs = 0;
 
   #versions: Versions;
+  readonly #header = newSnapshot();
   #welcomed = false;
+  /** Queued for a boat: Pings keep the connection alive. */
+  #waiting = false;
   #ackTick = 0;
   #lastSent = 0;
   #lastHeard = 0;
@@ -68,9 +79,11 @@ export class Session {
   /** Starts a connection: the Hello to send. */
   open(now: number): Uint8Array<ArrayBuffer>[] {
     this.#welcomed = false;
+    this.#waiting = false;
     this.#ackTick = 0;
     this.#pingsLeft = 0;
     this.#nextPing = -1;
+    this.views.reset();
     const v = this.#versions;
     return [
       this.#encode(now, {
@@ -90,19 +103,38 @@ export class Session {
   /** Takes a server's message. Throws on one it cannot read. */
   receive(now: number, b: Uint8Array): Received {
     if (b.length > 0 && b[0] === KIND_SNAPSHOT) {
-      if (b.length !== SNAPSHOT_SIZE) {
-        throw new Error('a snapshot of the wrong size');
-      }
       const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
-      const tick = v.getInt32(6, true) * TWO_32 + v.getUint32(2, true);
-      this.#ackTick = Math.max(this.#ackTick, tick);
-      return { kind: 'snapshot', tick };
+      const sn = this.#header;
+      const err = readSnapshot(v, sn);
+      if (err !== null) {
+        throw new Error(err);
+      }
+      const view = this.views.decode(v, sn);
+      if (view === 'missing') {
+        const resync = this.#encode(now, {
+          body: { case: 'command', value: { body: { case: 'resync', value: {} } } },
+        });
+        return { kind: 'dropped', tick: sn.tick, out: [resync] };
+      }
+      if (typeof view === 'string') {
+        throw new Error(view);
+      }
+      this.#ackTick = Math.max(this.#ackTick, sn.tick);
+      return { kind: 'snapshot', tick: sn.tick, flags: sn.flags, view };
     }
     const m = decodeServer(b);
     switch (m.body.case) {
+      case 'queued':
+        this.#lastHeard = now;
+        if (!this.#waiting && !this.#welcomed) {
+          this.#waiting = true;
+          this.#nextPing = now + PING_EVERY;
+        }
+        return { kind: 'queued', position: m.body.value.position, waiting: m.body.value.waiting };
       case 'welcome':
         this.clock.welcome(Number(m.body.value.worldTimeUs), now);
         this.#welcomed = true;
+        this.#waiting = false;
         this.#lastHeard = now;
         this.#pingsLeft = BURST_PINGS;
         this.#nextPing = now;
@@ -125,8 +157,11 @@ export class Session {
     });
   }
 
-  /** When time() must next be called; Infinity before the Welcome. */
+  /** When time() must next be called; Infinity before the Welcome, unless queued. */
   deadline(): number {
+    if (this.#waiting) {
+      return Math.min(this.#nextPing, this.#lastHeard + PONG_TIMEOUT);
+    }
     if (!this.#welcomed) {
       return Number.POSITIVE_INFINITY;
     }
@@ -140,11 +175,30 @@ export class Session {
   /** What is due at now; dead when the connection has gone quiet. */
   time(now: number): { out: Uint8Array<ArrayBuffer>[]; dead: boolean } {
     const out: Uint8Array<ArrayBuffer>[] = [];
-    if (!this.#welcomed) {
+    if (!this.#welcomed && !this.#waiting) {
       return { out, dead: false };
     }
     if (now - this.#lastHeard >= PONG_TIMEOUT) {
       return { out, dead: true };
+    }
+    if (this.#waiting) {
+      if (now >= this.#nextPing) {
+        this.#nextPing = now + PING_EVERY;
+        out.push(
+          this.#encode(now, {
+            body: {
+              case: 'ping',
+              value: {
+                clientTimeUs: BigInt(Math.round(now)),
+                ackTick: 0n,
+                rttMs: Math.round(this.clock.state.rtt / 1000),
+                frameMs: this.frameMs,
+              },
+            },
+          }),
+        );
+      }
+      return { out, dead: false };
     }
     if (this.#nextPing >= 0 && now >= this.#nextPing) {
       if (this.#pingsLeft > 0) {

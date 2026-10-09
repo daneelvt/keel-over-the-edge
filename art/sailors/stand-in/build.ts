@@ -8,7 +8,8 @@
 //
 // The figure's frame: its origin at the hips, where it sits; y up; it faces
 // +x, its thighs reaching forward along +x and its shins down; z runs along
-// its shoulders. Its scale is a 1.83 m sailor's.
+// its shoulders. Its scale is a 1.83 m sailor's. It is built twice: in full,
+// and with few segments for the far model of boats seen from afar.
 //
 //   node art/sailors/stand-in/build.ts   (from the repository root; npm run art in client/)
 
@@ -17,25 +18,29 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { type MaterialDef, type NodeDef, writeGlb } from '../../lib/gltf.ts';
 import { MeshBuilder, srgb, type Vec3 } from '../../lib/mesh.ts';
 
-/** The model this script writes, as the catalog's art.model names it. */
+/** The models this script writes, as the catalog's art.model and art.far name them. */
 const MODEL = 'sailors/stand-in.glb';
+const FAR_MODEL = 'sailors/stand-in.far.glb';
 
 const catalog = JSON.parse(readFileSync('internal/catalog/catalog.gen.json', 'utf8')) as {
-  sailors: { art: { model: string } }[];
+  sailors: { art: { model: string; far: string } }[];
 };
-if (!catalog.sailors.some((s) => s.art.model === MODEL)) {
-  throw new Error(`no sailor in the catalog has the model ${MODEL}`);
+if (!catalog.sailors.some((s) => s.art.model === MODEL && s.art.far === FAR_MODEL)) {
+  throw new Error(`no sailor in the catalog has the models ${MODEL} and ${FAR_MODEL}`);
 }
 
 const materials: MaterialDef[] = [
   { name: 'figure', color: srgb(0.56, 0.6, 0.64), roughness: 0.7, metalness: 0 },
 ];
 
-const SEGMENTS = 12;
+/** Around the figure's tubes and balls, and the balls' rings: the full model's, then the far one's. */
+let SEGMENTS = 12;
+let LIMB = 8;
+let RINGS = 8;
 
 /** A ball of radius r centred on c, as a tube along a vertical path. */
 function ball(m: MeshBuilder, c: Vec3, r: number): void {
-  const rings = 8;
+  const rings = RINGS;
   const path: Vec3[] = [];
   const radii: number[] = [];
   for (let i = 0; i <= rings; i++) {
@@ -69,7 +74,7 @@ function body(): MeshBuilder {
         [0.58, -0.47, z],
       ],
       [0.075, 0.06, 0.05, 0.045],
-      8,
+      LIMB,
     );
   }
   // The neck.
@@ -79,7 +84,7 @@ function body(): MeshBuilder {
       [-0.01, 0.65, 0],
     ],
     [0.05],
-    8,
+    LIMB,
   );
   return m;
 }
@@ -100,26 +105,37 @@ function arm(side: number): MeshBuilder {
       [0.38, -0.25, -0.06 * side],
     ],
     [0.045, 0.04, 0.035],
-    8,
+    LIMB,
   );
   ball(m, [0.4, -0.25, -0.06 * side], 0.045);
   return m;
 }
 
-const nodes: NodeDef[] = [
-  { name: 'body', primitives: [body().primitive()] },
-  { name: 'head', translation: [-0.01, 0.76, 0], primitives: [head().primitive()] },
-  { name: 'arm-left', translation: [0, 0.52, -0.2], primitives: [arm(-1).primitive()] },
-  { name: 'arm-right', translation: [0, 0.52, 0.2], primitives: [arm(1).primitive()] },
-];
+function figure(): NodeDef[] {
+  return [
+    { name: 'body', primitives: [body().primitive()] },
+    { name: 'head', translation: [-0.01, 0.76, 0], primitives: [head().primitive()] },
+    { name: 'arm-left', translation: [0, 0.52, -0.2], primitives: [arm(-1).primitive()] },
+    { name: 'arm-right', translation: [0, 0.52, 0.2], primitives: [arm(1).primitive()] },
+  ];
+}
 
-const raw = writeGlb([{ name: 'sailor', children: nodes }], materials);
 mkdirSync('.dev/art', { recursive: true });
-writeFileSync('.dev/art/stand-in.raw.glb', raw);
 mkdirSync('art/sailors', { recursive: true });
-execFileSync(
-  'client/node_modules/.bin/gltfpack',
-  ['-i', '.dev/art/stand-in.raw.glb', '-o', `art/${MODEL}`, '-c', '-kn', '-km', '-noq'],
-  { stdio: 'inherit' },
-);
-process.stdout.write(`wrote art/${MODEL}\n`);
+for (const [segments, limb, rings, path] of [
+  [12, 8, 8, MODEL],
+  [4, 3, 3, FAR_MODEL],
+] as const) {
+  SEGMENTS = segments;
+  LIMB = limb;
+  RINGS = rings;
+  const raw = writeGlb([{ name: 'sailor', children: figure() }], materials);
+  const name = path.replace(/^sailors\//, '').replace(/\.glb$/, '');
+  writeFileSync(`.dev/art/${name}.raw.glb`, raw);
+  execFileSync(
+    'client/node_modules/.bin/gltfpack',
+    ['-i', `.dev/art/${name}.raw.glb`, '-o', `art/${path}`, '-c', '-kn', '-km', '-noq'],
+    { stdio: 'inherit' },
+  );
+}
+process.stdout.write(`wrote art/${MODEL} and art/${FAR_MODEL}\n`);

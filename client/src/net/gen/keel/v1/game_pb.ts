@@ -3,7 +3,7 @@
 // The game connection's control messages. Each WebSocket binary message is
 // one game message whose first byte is its kind (snapshot.txt): kind 1 is
 // one of the envelopes below, encoded as Protocol Buffers; kind 2 is the
-// packed own-boat snapshot, which is not described here.
+// packed snapshot, which is not described here.
 //
 // go run ./tools/protocol generates the Go and TypeScript from this file,
 // and the protocol version from this file and snapshot.txt.
@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEieAoNQ2xpZW50TWVzc2FnZRIfCgVoZWxsbxgBIAEoCzIOLmtlZWwudjEuSGVsbG9IABIfCgVpbnB1dBgCIAEoCzIOLmtlZWwudjEuSW5wdXRIABIdCgRwaW5nGAMgASgLMg0ua2VlbC52MS5QaW5nSABCBgoEYm9keSJRCgVIZWxsbxIQCghwcm90b2NvbBgBIAEoCRIPCgdjYXRhbG9nGAIgASgJEhYKDnBoeXNpY3NfbGF5b3V0GAMgASgNEg0KBWJ1aWxkGAQgASgJIlUKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIIlIKBFBpbmcSFgoOY2xpZW50X3RpbWVfdXMYASABKAMSEAoIYWNrX3RpY2sYAiABKAMSDgoGcnR0X21zGAMgASgNEhAKCGZyYW1lX21zGAQgASgNIlsKDVNlcnZlck1lc3NhZ2USIwoHd2VsY29tZRgBIAEoCzIQLmtlZWwudjEuV2VsY29tZUgAEh0KBHBvbmcYAiABKAsyDS5rZWVsLnYxLlBvbmdIAEIGCgRib2R5ImsKB1dlbGNvbWUSDQoFd29ybGQYASABKAkSDAoEdGljaxgCIAEoAxIVCg13b3JsZF90aW1lX3VzGAMgASgDEgwKBGJvYXQYBCABKAQSDAoEa2luZBgFIAEoDRIQCghyZWpvaW5lZBgGIAEoCCI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKANCPVo7Z2l0aHViLmNvbS9kYW5lZWx2dC9rZWVsLW92ZXItdGhlLWVkZ2UvaW50ZXJuYWwvcHJvdG9jb2wvcGJiBnByb3RvMw");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkiVQoFSW5wdXQSCwoDc2VxGAEgASgNEgwKBGhlbG0YAiABKA0SDQoFc2hlZXQYAyABKA0SEAoIYWNrX3RpY2sYBCABKAMSEAoIYWNrX29ubHkYBSABKAgiUgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIn4KDVNlcnZlck1lc3NhZ2USIwoHd2VsY29tZRgBIAEoCzIQLmtlZWwudjEuV2VsY29tZUgAEh0KBHBvbmcYAiABKAsyDS5rZWVsLnYxLlBvbmdIABIhCgZxdWV1ZWQYAyABKAsyDy5rZWVsLnYxLlF1ZXVlZEgAQgYKBGJvZHkiKwoGUXVldWVkEhAKCHBvc2l0aW9uGAEgASgNEg8KB3dhaXRpbmcYAiABKA0iawoHV2VsY29tZRINCgV3b3JsZBgBIAEoCRIMCgR0aWNrGAIgASgDEhUKDXdvcmxkX3RpbWVfdXMYAyABKAMSDAoEYm9hdBgEIAEoBBIMCgRraW5kGAUgASgNEhAKCHJlam9pbmVkGAYgASgIIjUKBFBvbmcSFgoOY2xpZW50X3RpbWVfdXMYASABKAMSFQoNd29ybGRfdGltZV91cxgCIAEoA0I9WjtnaXRodWIuY29tL2RhbmVlbHZ0L2tlZWwtb3Zlci10aGUtZWRnZS9pbnRlcm5hbC9wcm90b2NvbC9wYmIGcHJvdG8z");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -45,12 +45,16 @@ export type ClientMessage = Message<"keel.v1.ClientMessage"> & {
     case: "input";
   } | {
     /**
-     * 4 is kept for the players' commands.
-     *
      * @generated from field: keel.v1.Ping ping = 3;
      */
     value: Ping;
     case: "ping";
+  } | {
+    /**
+     * @generated from field: keel.v1.Command command = 4;
+     */
+    value: Command;
+    case: "command";
   } | { case: undefined; value?: undefined };
 };
 
@@ -197,6 +201,47 @@ export const PingSchema: GenMessage<Ping> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 3);
 
 /**
+ * Command is something the player asks of the game.
+ *
+ * @generated from message keel.v1.Command
+ */
+export type Command = Message<"keel.v1.Command"> & {
+  /**
+   * @generated from oneof keel.v1.Command.body
+   */
+  body: {
+    /**
+     * @generated from field: keel.v1.Resync resync = 1;
+     */
+    value: Resync;
+    case: "resync";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message keel.v1.Command.
+ * Use `create(CommandSchema)` to create a new message.
+ */
+export const CommandSchema: GenMessage<Command> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 4);
+
+/**
+ * Resync asks for the next snapshot in full: the client lacks the base of
+ * one it received. At most one a second is honoured.
+ *
+ * @generated from message keel.v1.Resync
+ */
+export type Resync = Message<"keel.v1.Resync"> & {
+};
+
+/**
+ * Describes the message keel.v1.Resync.
+ * Use `create(ResyncSchema)` to create a new message.
+ */
+export const ResyncSchema: GenMessage<Resync> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 5);
+
+/**
  * ServerMessage is everything the server sends but snapshots, after the
  * kind byte 1.
  *
@@ -218,6 +263,12 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
      */
     value: Pong;
     case: "pong";
+  } | {
+    /**
+     * @generated from field: keel.v1.Queued queued = 3;
+     */
+    value: Queued;
+    case: "queued";
   } | { case: undefined; value?: undefined };
 };
 
@@ -226,7 +277,37 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
  * Use `create(ServerMessageSchema)` to create a new message.
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 4);
+  messageDesc(file_keel_v1_game, 6);
+
+/**
+ * Queued says the sea is full: the client waits for a boat. It comes after
+ * the Hello, and again whenever the place changes, at most once a second;
+ * a Welcome follows when the boat is given.
+ *
+ * @generated from message keel.v1.Queued
+ */
+export type Queued = Message<"keel.v1.Queued"> & {
+  /**
+   * The place in the queue, 1 for the next to be given a boat.
+   *
+   * @generated from field: uint32 position = 1;
+   */
+  position: number;
+
+  /**
+   * How many wait in all.
+   *
+   * @generated from field: uint32 waiting = 2;
+   */
+  waiting: number;
+};
+
+/**
+ * Describes the message keel.v1.Queued.
+ * Use `create(QueuedSchema)` to create a new message.
+ */
+export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 7);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -282,7 +363,7 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 5);
+  messageDesc(file_keel_v1_game, 8);
 
 /**
  * Pong answers a Ping.
@@ -310,5 +391,5 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 6);
+  messageDesc(file_keel_v1_game, 9);
 

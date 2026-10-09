@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The Go test client's sails, recorded by internal/edge/edgetest, replayed
+// The Go client's sails, recorded by internal/edge/edgetest, replayed
 // through this client's own code: every message it sent the net worker's
-// session sends, at the same times, and every snapshot the predictor
+// session sends, at the same times; every snapshot's other boats decode to
+// the view the Go client decoded; and every snapshot the predictor
 // reconciles as the Go client did, tick for tick: none corrected without
-// loss, the same ones at 200 ms and 2% loss.
+// loss, the same ones at 200 ms and 2% loss. The fleet's traces are three
+// sailors sailing together among other boats.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
+import fleet from '../../../shared/protocol/testdata/trace-fleet.json';
 import lossy from '../../../shared/protocol/testdata/trace-lossy.json';
 import none from '../../../shared/protocol/testdata/trace-none.json';
 import { catalog } from '../catalog';
@@ -15,10 +18,13 @@ import { loadPhysics } from '../predict/physics';
 import { Predictor } from '../predict/predictor';
 import { Session } from '../workers/net/session';
 import { newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
+import { Q, VIEW_SLOTS, VIEW_STRIDE, type View } from './view';
 
 interface TraceEvent {
   t: number;
   in?: string;
+  view?: string;
+  dropped?: boolean;
   out?: string;
   timer?: boolean;
   reset?: boolean;
@@ -56,7 +62,43 @@ function hexOf(b: Uint8Array): string {
 
 const versions = { catalog: '', physicsLayout: 0, build: 'edgetest' };
 
-async function replay(trace: Trace): Promise<{ corrections: number; snapshots: number }> {
+/**
+ * internal/client's ViewDigest: a 32-bit FNV-1a hash of each held slot's
+ * number and fields, as little-endian int32s.
+ */
+function viewDigest(v: View): string {
+  let h = 0x811c9dc5;
+  const put = (x: number) => {
+    for (let k = 0; k < 4; k++) {
+      h = Math.imul(h ^ ((x >>> (8 * k)) & 0xff), 0x01000193) >>> 0;
+    }
+  };
+  for (let slot = 0; slot < VIEW_SLOTS; slot++) {
+    if (v.used[slot] !== 1) {
+      continue;
+    }
+    put(slot);
+    for (const f of [
+      Q.kind,
+      Q.flags,
+      Q.x,
+      Q.y,
+      Q.heading,
+      Q.heel,
+      Q.boom,
+      Q.rudder,
+      Q.sailor,
+      Q.sail,
+    ]) {
+      put(v.q[slot * VIEW_STRIDE + f] ?? 0);
+    }
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+async function replay(
+  trace: Trace,
+): Promise<{ corrections: number; snapshots: number; others: number }> {
   const predictor = new Predictor(await loadPhysics(bytes), catalog.boats[0].physics);
   const session = new Session(versions);
   session.frameMs = 17;
@@ -65,6 +107,7 @@ async function replay(trace: Trace): Promise<{ corrections: number; snapshots: n
   const expected: string[] = [];
   let corrections = 0;
   let reconciled = 0;
+  let others = 0;
   trace.events.forEach((e, i) => {
     const where = `event ${i} at ${e.t}`;
     if (e.out !== undefined) {
@@ -78,10 +121,16 @@ async function replay(trace: Trace): Promise<{ corrections: number; snapshots: n
     } else if (e.in !== undefined) {
       const b = bytesOf(e.in);
       const r = session.receive(e.t, b);
+      expect(r.kind === 'dropped', where).toBe(e.dropped ?? false);
+      if (r.kind === 'dropped') {
+        expected.push(...r.out.map(hexOf));
+      }
       if (r.kind === 'snapshot') {
         const sn = newSnapshot();
         expect(readSnapshot(new DataView(b.buffer), sn), where).toBeNull();
         snapshots.set(sn.tick, sn);
+        expect(viewDigest(r.view), `${where}: the view of snapshot ${sn.tick}`).toBe(e.view);
+        others += r.view.length;
       }
     } else if (e.timer) {
       const { out, dead } = session.time(e.t);
@@ -119,7 +168,7 @@ async function replay(trace: Trace): Promise<{ corrections: number; snapshots: n
     }
   });
   expect(expected).toEqual([]);
-  return { corrections, snapshots: reconciled };
+  return { corrections, snapshots: reconciled, others };
 }
 
 describe('the Go client’s traces', () => {
@@ -132,5 +181,14 @@ describe('the Go client’s traces', () => {
   test('at 200 ms and 2% loss: the same messages, the same corrections', async () => {
     const r = await replay(lossy as Trace);
     expect(r.corrections).toBeGreaterThan(0);
+  });
+
+  test('three sailing together at 200 ms and 2% loss: each view as Go decoded it', async () => {
+    expect(fleet.length).toBe(3);
+    for (const trace of fleet as Trace[]) {
+      const r = await replay(trace);
+      expect(r.snapshots).toBeGreaterThan(100);
+      expect(r.others / r.snapshots).toBeGreaterThan(2);
+    }
   });
 });

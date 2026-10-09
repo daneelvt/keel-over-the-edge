@@ -49,7 +49,9 @@ computer and phones share one origin.
 `go run ./tools/dev -lag 200ms,2%` does the same with the game's traffic
 between Vite and `keel` slowed and lost as a phone's network would: half the
 round trip each way, and that share of packets lost each way (see [The game
-connection](#the-game-connection)). `keel` runs with `KEEL_DEV_COMMANDS=1`,
+connection](#the-game-connection)). `go run ./tools/dev -limit 2` lets at
+most two boats sail: a third tab waits in the queue (see [Other
+boats](#other-boats)). `keel` runs with `KEEL_DEV_COMMANDS=1`,
 so `curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=15&from=270'`
 changes the wind.
 
@@ -109,7 +111,7 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64, each with a PostgreSQL service (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader and the sailor name check, the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back | `go run ./tools/dev -db` once, then `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
+| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64, each with a PostgreSQL service (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, and the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat | `go run ./tools/dev -db` once, then `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
 | `pr.render.yaml` | Pull requests, not drafts, that change its files | The test sea's fixtures current; the physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
@@ -327,8 +329,8 @@ world; everything reaches it through the **bus** (`internal/bus`).
 
 | Package | What |
 |---------|------|
-| `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, and for developers only `SetWind` and `Place`); `TrySend` never blocks. The frames: the whole world after each tick, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
-| `internal/sim` | The world (4,096 slots) and `Tick`: read the control slots, apply the commands, step every boat, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
+| `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`, and for developers only `SetWind` and `Place`); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
+| `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, step every boat, sort the boats into the grid, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
 | `internal/sim/loop` | The clock: tick k after the world's epoch (the database's world row; world 1's is 1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
 | `internal/replay` | The input log, `keel replay` and `/debug/replay` (below). |
 | `internal/scripted` | Scripted sailors: they join through the bus like players and steer and trim at random, each every 0.2–3 s. |
@@ -337,8 +339,9 @@ world; everything reaches it through the **bus** (`internal/bus`).
 | `internal/auth` | Session tokens, the cookie, the session cache and the session middleware. |
 | `internal/moderation` | Sailor names: their display form, rules and key, and the word filter. |
 | `internal/api` | The `play.` listener's routes and the middleware in front of them. |
-| `internal/protocol` | The game connection's wire format: the kind byte, the generated messages (`pb`), the own boat's snapshot. |
-| `internal/edge` | The game connection, `GET /ws`: the door, one connection per account, the reader and writer, the snapshots' encoder; `edgetest` runs it in a test. |
+| `internal/protocol` | The game connection's wire format: the kind byte, the generated messages (`pb`), the snapshot: the own boat and the other boats' view. |
+| `internal/edge` | The game connection, `GET /ws`: the door, one connection per account, the reader and writer, the queue's waiting connections, the encoders and each connection's area of interest; `edgetest` runs it in a test. |
+| `internal/client` | The game's client in Go: what the page and its net worker do, for tests, traces and the load bot; and `Lag`, a slow network under TCP. |
 
 ### Listeners and configuration
 
@@ -361,7 +364,8 @@ addresses must differ. The other variables:
 | `KEEL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
-| `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096 |
+| `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it |
+| `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (degrees the wind comes from). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
@@ -412,10 +416,14 @@ resolved at start, so updating it allocates nothing:
 | `keel_build_info{build,catalog}` | Which version runs |
 | `keel_sim_tick` | The latest tick |
 | `keel_sim_tick_duration_seconds` | Each tick, in buckets from 0.5 ms to 100 ms with edges at 10, 25 and 33 ms |
-| `keel_sim_phase_duration_seconds{phase}` | `inputs`, `physics`, `publish` |
+| `keel_sim_phase_duration_seconds{phase}` | `inputs`, `physics`, `grid`, `publish` |
+| `keel_sim_grid_duration_seconds` | Sorting the boats into the grid, each tick |
 | `keel_sim_ticks_total`, `_late_total`, `_skipped_total` | All ticks; those run back to back to catch up; those skipped |
 | `keel_sim_clock_drift_seconds` | World time minus UTC as a tick starts |
 | `keel_sim_boats`, `keel_sim_physics_workers` | Boats; goroutines that stepped them |
+| `keel_sim_boat_limit`, `keel_sim_queue_length` | The boat limit; players waiting for a boat |
+| `keel_sim_admissions_total{result}` | `joined`, `rejoined`, `queued`, `admitted` from the queue, `dequeued` (gave up waiting), `full` (the queue too) |
+| `keel_sim_queue_wait_seconds` | How long each player given a boat from the queue waited |
 | `keel_sim_commands_total{kind,result}`, `keel_sim_commands_refused_total` | Commands applied; refused because the queue was full |
 | `keel_sim_frames_allocated_total` | Frames made because every pooled frame was held: flat once running |
 | `keel_replay_bytes_total`, `_segments_total`, `_records_dropped_total` | The input log |
@@ -430,11 +438,17 @@ resolved at start, so updating it allocates nothing:
 | `keel_edge_connections` | Game connections open |
 | `keel_edge_upgrades_total{result}` | `ok`, `no_session`, `ai_account`, `origin`, `bad_request` |
 | `keel_edge_hello_total{result}` | `ok`, or what differed: `protocol`, `catalog`, `layout`; or `timeout` |
-| `keel_edge_joins_total{result}` | `joined`, `rejoined`, `full`, `busy`, `timeout` |
+| `keel_edge_joins_total{result}` | `joined`, `rejoined`, `queued`, `full`, `busy`, `timeout` |
+| `keel_edge_queued_connections` | Connections waiting in the queue |
 | `keel_edge_closes_total{code}` | Connections ended, by the close code sent or received, `other` or `none` |
 | `keel_edge_messages_total{direction,kind}`, `keel_edge_bytes_total{direction}` | Messages and WebSocket frames' bytes each way |
 | `keel_edge_messages_dropped_total{reason}` | Over a connection's rate (`rate`); a snapshot replaced before it was sent (`snapshot_replaced`) |
-| `keel_edge_encode_duration_seconds`, `keel_edge_write_duration_seconds` | Encoding a frame for every connection; writing one message |
+| `keel_edge_encoders` | The encoders: one a core |
+| `keel_edge_encode_duration_seconds`, `keel_edge_write_duration_seconds` | An encoder's frame, for its connections; writing one message |
+| `keel_edge_view_boats{band}` | Other boats in each snapshot's view, `near` and `far` |
+| `keel_edge_snapshot_bytes`, `keel_edge_snapshot_entries_total{op}` | Snapshots' sizes; their entries, `update`, `enter`, `leave` |
+| `keel_edge_snapshot_lag_ticks` | Each snapshot's tick less the newest the client had acknowledged |
+| `keel_edge_resyncs_total{result}` | Clients' requests for a full snapshot, `honoured` or `ignored` (more than one a second): should stay at 0 |
 | `keel_edge_input_margin_ticks` | How many ticks before their tick inputs arrived; negative when late |
 | `keel_client_rtt_seconds`, `keel_client_frame_seconds` | The phones' round trips and 95th percentile frame times, from their pings |
 | `keel_http_cross_origin_refused_total` | Requests refused as cross-origin |
@@ -451,7 +465,7 @@ The server keeps the last 10 s or more of its execution trace in memory
 (`runtime/trace`'s flight recorder, at most 32 MB). When a tick takes more
 than 25 ms it writes the trace to `KEEL_TRACE_DIR` as
 `trace-<UTC time>-tick<N>.out`, at most once a minute. Each phase of a tick is
-a trace region (`inputs`, `physics`, `publish`), so a slow tick's trace says
+a trace region (`inputs`, `physics`, `grid`, `publish`), so a slow tick's trace says
 which phase was slow. To take one now:
 
 ```sh
@@ -620,9 +634,10 @@ check WebSockets' origins, keel does). A message may be 1 KB at most.
 
 **The protocol** (`shared/protocol`). One binary message is one game
 message; its first byte is its kind: `1`, a Protocol Buffers envelope
-(`keel/v1/game.proto`: `Hello`, `Input`, `Ping` from the client; `Welcome`,
-`Pong` from the server), or `2`, the own boat's packed snapshot
-(`snapshot.txt`: 156 bytes, the boat's state as float64). `go run
+(`keel/v1/game.proto`: `Hello`, `Input`, `Ping`, `Command` from the client;
+`Welcome`, `Pong`, `Queued` from the server), or `2`, the packed snapshot
+(`snapshot.txt`: a 160-byte header with the own boat's state as float64,
+then the other boats' entries; see [Other boats](#other-boats)). `go run
 ./tools/protocol` generates the Go (`internal/protocol/pb`) and TypeScript
 (`client/src/net/gen`) with buf and its two generators, and the protocol
 version: a hash of the schema and the snapshot's layout. Run it after
@@ -663,7 +678,7 @@ returned to port."
 | 1008 | Over the rate, too many messages waiting, no `Hello` | waits from 1 s |
 | 1009 | A message over 1 KB | waits from 1 s |
 | 1012 | `keel` stops | waits 0.5 to 5 s |
-| 1013 | The world is full, or the simulation's queue | waits from 2 s |
+| 1013 | The queue for boats is full (4,096), or the simulation's command queue | waits from 2 s |
 | 4001 | Another connection for the account | "playing on another device", **Take over** |
 | 4002 | Protocol, catalog or physics differ | reloads |
 | 4003 | Removed (not sent yet) | the reason |
@@ -698,12 +713,13 @@ clock's offset, the round trip, *m*, margins, corrections and bytes.
 
 **Testing it.** `internal/edge/edgetest` runs a world, the edge and the
 routes on `net/http/httptest`'s in-memory network, in `testing/synctest`
-bubbles: minutes of connection in milliseconds. Its `Sailor` is the page in
-Go (its clock, *m*, prediction with `physics.Step`, the net worker's
-schedule) and records traces into `shared/protocol/testdata`, which the
-Vitest tests replay through the page's own code: the same messages out, the
-same corrections. `go test ./internal/edge/edgetest -run Traces -update`
-records them again. Its `Lag` models a slow network under TCP: each chunk
+bubbles: minutes of connection in milliseconds. `internal/client`'s `Sailor`
+is the page in Go (its clock, *m*, prediction with `physics.Step`, the view
+decoder, the net worker's schedule) and records traces into
+`shared/protocol/testdata`, which the Vitest tests replay through the page's
+own code: the same messages out, the same corrections, the same views.
+`go test ./internal/edge/edgetest -run Traces -update` records them again.
+`internal/client`'s `Lag` models a slow network under TCP: each chunk
 written arrives after half the round trip; a "lost" one is held for TCP's
 probe timeout (twice the round trip) and, lost again, a second more, and
 nothing behind it overtakes it. `go run ./tools/lag` is the same model as a
@@ -711,6 +727,96 @@ TCP proxy. On a Mac or an iPhone, Apple's Network Link Conditioner slows and
 drops real packets instead (on the Mac from Additional Tools for Xcode; on an
 iPhone under Settings › Developer › Network Link Conditioner, with a custom
 profile of 100 ms delay and 2% packets dropped each way).
+
+### Other boats
+
+Each snapshot carries, after the own boat, the other boats the player can
+see: up to 64, in **view slots** of the connection's own numbering.
+
+**The area of interest** (`internal/edge/aoi.go`). After the physics the
+simulation sorts the boats into a grid of 64 m cells (`physics.Cell`, exact
+on every machine, so the grid is part of the deterministic tick). For each
+connection the encoder looks in the cells around its boat: a boat comes into
+view within 700 m and stays until beyond 750 m; of those, the 64 nearest.
+Within 300 m a boat is in the **near band**, kept near to 330 m, and sampled
+by every snapshot (15 a second); beyond, the **far band**, sampled by every
+third (5 a second), on snapshots that depend on the connection's ID, so a
+third of the connections sample their far band on each.
+
+**The snapshot** (`shared/protocol/snapshot.txt`). Each boat is quantised to
+what can be seen: position to the centimetre, heading in 65,536 steps, heel,
+boom and rudder in 1.4° steps, the sailor's offset in centimetres, its mode,
+and the **sail byte**, which the physics workers keep for every boat: the
+sail's flattening and the flow over its two strips (luffing, drawing,
+stalled, aback), which the state cannot tell. The entries change the view of
+a **base**: an `enter` (the boat in full, 16 bytes), an `update` of the
+fields that changed (a moving near boat costs about 5 bytes), or a `leave`.
+A boat that has not changed sends nothing. The game connection is TCP, and
+one writer writes a connection's messages in turn, so the base is the newest
+snapshot the writer has **taken** from the mailbox: the client will hold it
+when the new one arrives. The client keeps its last 4 views; one whose base
+it lacks (a bug) it drops, asking for a full snapshot with
+`Command(resync)`, at most once a second. A new connection's first snapshot
+is full. Golden vectors, a shared corpus of entry streams (Go writes it,
+Vitest must agree refusal for refusal) and fuzzing (`FuzzApplyEntries`, and
+`client/src/net/view.fuzz.test.ts`) pin both decoders.
+
+**Encoders** (`internal/edge/encoder.go`). One goroutine a core, each with
+its own connections; a connection joins the encoder with fewest. Each frame,
+each encoder first stores its connections' held inputs due next tick, then,
+on even ticks, encodes. Nothing is allocated per frame:
+`TestEncoderAllocatesNothing` encodes 1,000 connections of 64 boats each.
+
+**The page.** The net worker decodes each snapshot's entries into a view
+and hands the page one record a snapshot: the header as it came (the own
+boat), then the 64 view slots in metres and radians. The page hands each
+record back once read, and the worker fills it again. `client/src/game/fleet.ts`
+keeps 8 samples a view slot and draws each boat at a **render tick** behind
+the newest data: 133 ms for the near band, 400 ms for the far, each growing
+up to double with the spread of the snapshots' lateness (the 99th percentile
+less the least, over 30 s), since TCP holds everything behind a lost segment
+for about two round trips. The render tick runs at most 10% faster or slower
+than real time, and never back. Past its newest sample a boat is carried on
+its last velocity and turn for 250 ms, then held; when data comes the
+difference is eased away over 100 ms. Boats fade in and out over half a
+second, dithered (`alphaHash`), so they stay in the opaque pass.
+
+**Drawing** (`client/src/render/fleet.ts`, `fleetparts.ts`). Each model is
+merged by material, each vertex tagged with the joint it turns on (the
+hull's frame, the boom, the rudder), and drawn as one `InstancedMesh` a
+material; the parts' vertex nodes place each boat themselves from
+per-instance attributes, since the sail's own node discards the instance
+matrix. The full model is drawn for the 12 boats nearest the camera within
+60 m, the **far model** (the catalog's `art.far`, built by the same script
+with few segments) for the rest: 64 boats in 15 draw calls and about
+163,000 triangles. Other boats carry the class insignia and no number, and
+no telltales or pennant. `e2e/fleet.spec.ts` checks a boat of the fleet
+looks as the own boat does at the same pose.
+
+**The queue.** At most `KEEL_BOAT_LIMIT` boats sail, those in their grace
+included. A `Join` beyond it, or while others wait, waits in the
+simulation's queue (world state, in snapshots and the input log); each tick,
+while there is room, the head gets a boat. The edge tells a waiting
+connection its place (`Queued`) when it changes, at most once a second, and
+welcomes it when its boat appears. The page shows "The sea is full. You are
+12th in line." over the "Back soon" screen; while waiting the net worker
+pings every 2 s. A player who reconnects keeps their place; one who closes
+the page gives it up. Try it with `go run ./tools/dev -limit 2` and three
+tabs.
+
+**The load bot.**
+
+```sh
+go run ./tools/loadbot -n 200 -url https://127.0.0.1:5173 -for 2m
+go run ./tools/loadbot -n 200 -lag 200ms,2% -ramp 30s
+```
+
+sails N guests with `internal/client` against a server, steering at random,
+and reports bytes and messages each way, others in view, corrections,
+resyncs and closes, and, from keel's metrics, the tick's and the encoders'
+99th percentiles and the frames allocated. Its guests ("Loadbot 1" …) are
+made by `POST /guest` once, their sessions kept in
+`.dev/loadbot/sessions.json` and used again.
 
 ## The database
 
@@ -975,7 +1081,15 @@ sail with no correction, the server's wind reaching the boat, the same boat
 after a reload, "returned to port" after a restart, and a second device
 taking the boat and being taken back from. `lag.spec.ts` sails through the
 lag proxy (or, in CI where the runner has it, through netem): no correction
-over the snap thresholds, and the helm answering at once. `worker.spec.ts`,
+over the snap thresholds, and the helm answering at once. `together.spec.ts`
+sails two players in contexts of their own: each sees the other's boat
+where the server has it at the tick it is drawn at, sees it turn, and still
+sees it through its grace after its page closes; and, through the lag proxy
+(or netem), for a minute no near boat held in more than 1% of frames but in
+retransmission timeouts, which it reports, and no correction drawn at once.
+`fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
+the own boat at seven poses, 64 boats within 22 draw calls and 200,000
+triangles, the materials dithered, and a picture. `worker.spec.ts`,
 on Chromium and WebKit (`--project webkit`, `npx playwright install
 webkit`), opens `e2e/net.html`, which runs the net worker alone. The scene's tests open `?sandbox`.
 `start.spec.ts`, on WebGL 2 alone, starts as a guest: the start screen,

@@ -31,7 +31,9 @@ import {
 } from 'three/tsl';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
 import type { BoatDriver } from '../game/driver';
+import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
+import { nowUs, worldUs } from '../net/clock';
 import type { Online } from '../net/online';
 import { hexAt, hexCentre, NEIGHBOURS, TILE_APOTHEM, TILE_RADIUS, tileHash } from '../ocean/hex';
 import { tileHashNode, tileIdentity } from '../ocean/seamaterial';
@@ -727,6 +729,188 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Takes the boat back from another device. */
     takeOver(): void {
       sailing.online?.takeOver();
+    },
+
+    /**
+     * Draws boats in the fleet as given, from now on; null stops. Fields
+     * left out are 0, but opacity 1 (the sandbox's pictures).
+     */
+    setFleet(boats: Partial<DrawnBoat>[] | null): void {
+      if (boats === null) {
+        world.fleetSource = null;
+        return;
+      }
+      const drawn = boats.map((b, i) => ({ ...newDrawnBoat(), slot: i, opacity: 1, ...b }));
+      world.fleetSource = { drawn, count: drawn.length };
+    },
+    /** Hides or shows the own boat's telltales and pennant, which the fleet does not draw. */
+    hideSmallParts(on: boolean): void {
+      for (const name of ['telltales', 'pennant']) {
+        const part = world.boat?.parts.get(name);
+        if (part !== undefined) {
+          part.visible = !on;
+        }
+      }
+    },
+    /** Fleet materials that would sort or fade otherwise than dithered: none, if all is well. */
+    fleetMaterials(): string[] {
+      const problems: string[] = [];
+      for (const level of [world.fleet.near, world.fleet.far]) {
+        for (const m of level.meshes) {
+          const material = m.material as { name: string; alphaHash: boolean; transparent: boolean };
+          if (!material.alphaHash || material.transparent) {
+            problems.push(`${material.name}: not dithered, or transparent`);
+          }
+        }
+      }
+      return problems;
+    },
+    /** Shows or hides the player's own boat. */
+    showOwnBoat(on: boolean): void {
+      if (world.boat !== null) {
+        world.boat.root.visible = on;
+      }
+    },
+    /** The fleet's draw calls and triangles as last drawn, and its boats by level. */
+    fleetBudget() {
+      return {
+        ...world.fleet.budget(),
+        near: world.fleet.near.count,
+        far: world.fleet.far.count,
+        nearMeshes: world.fleet.near.meshes.length,
+        farMeshes: world.fleet.far.meshes.length,
+      };
+    },
+    /** The other boats as the page draws them online, with the fleet's numbers. */
+    fleet() {
+      const o = sailing.online;
+      if (o === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      const f = o.fleet;
+      return {
+        stats: { ...f.stats },
+        nearTick: f.near.tick,
+        farTick: f.far.tick,
+        boats: f.drawn.slice(0, f.count).map((b) => ({ ...b })),
+      };
+    },
+    /**
+     * Watches the other boats for ms of real time online: how many frames drew a
+     * near boat held or carried on past its data, the largest step a boat
+     * took between two frames, and the jumps: steps longer than half a
+     * metre beyond what 6 m/s, more than a dinghy sails, covers in the
+     * time the boat's render tick moved (a correction drawn at once rather
+     * than eased; on a slow page the render tick itself may leap). Held frames come in
+     * spells; a spell in which no snapshot came for over 900 ms is a
+     * retransmission timeout's (the probe lost too: RFC 6298), longer than
+     * any delay covers, and counted apart.
+     */
+    fleetWatch(ms: number): Promise<{
+      frames: number;
+      nearFrames: number;
+      held: number;
+      extrapolated: number;
+      largestStep: number;
+      jumps: number;
+      nearDelay: number;
+      farDelay: number;
+      holds: { past: number; since: number; delay: number }[];
+      timeoutHeld: number;
+      spells: number[];
+    }> {
+      const o = sailing.online;
+      if (o === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      const f = o.fleet;
+      const last = new Map<number, { east: number; north: number; tick: number }>();
+      const r = {
+        frames: 0,
+        nearFrames: 0,
+        held: 0,
+        extrapolated: 0,
+        largestStep: 0,
+        jumps: 0,
+        nearDelay: 0,
+        farDelay: 0,
+        holds: [] as { past: number; since: number; delay: number }[],
+        timeoutHeld: 0,
+        spells: [] as number[],
+      };
+      // The spell of held frames running, and the longest wait for a
+      // snapshot in it, ms.
+      let spell = 0;
+      let longest = 0;
+      const end = performance.now() + ms;
+      return new Promise((resolve) => {
+        const prev = world.onFrame;
+        world.onFrame = () => {
+          prev?.();
+          r.frames++;
+          const done = performance.now() >= end;
+          let near = false;
+          let held = false;
+          let carried = false;
+          const seen = new Set<number>();
+          for (let i = 0; i < f.count; i++) {
+            const b = f.drawn[i] as DrawnBoat;
+            if (b.slot < 0 || b.far > 0.5) {
+              continue;
+            }
+            near = true;
+            if (b.motion === 2 && r.holds.length < 40) {
+              r.holds.push({
+                past: b.tick - b.newest,
+                since: (worldUs(o.clock, nowUs()) - f.arrived) / 1000,
+                delay: f.stats.nearDelay,
+              });
+            }
+            held ||= b.motion === 2;
+            carried ||= b.motion === 1;
+            seen.add(b.slot);
+            const l = last.get(b.slot);
+            if (l !== undefined) {
+              const step = Math.hypot(b.east - l.east, b.north - l.north);
+              r.largestStep = Math.max(r.largestStep, step);
+              if (step > 0.5 + (6 * Math.abs(b.tick - l.tick)) / 30) {
+                r.jumps++;
+              }
+            }
+            last.set(b.slot, { east: b.east, north: b.north, tick: b.tick });
+          }
+          for (const slot of last.keys()) {
+            if (!seen.has(slot)) {
+              last.delete(slot);
+            }
+          }
+          r.nearFrames += near ? 1 : 0;
+          r.held += held ? 1 : 0;
+          if (held) {
+            spell++;
+            longest = Math.max(longest, (worldUs(o.clock, nowUs()) - f.arrived) / 1000);
+          }
+          if (spell > 0 && (!held || done)) {
+            if (longest > 900) {
+              r.timeoutHeld += spell;
+            }
+            r.spells.push(spell);
+            spell = 0;
+            longest = 0;
+          }
+          r.extrapolated += carried ? 1 : 0;
+          r.nearDelay = Math.max(r.nearDelay, f.stats.nearDelay);
+          r.farDelay = Math.max(r.farDelay, f.stats.farDelay);
+          if (done) {
+            world.onFrame = prev;
+            resolve(r);
+          }
+        };
+      });
+    },
+    /** The player's own boat as the server had it at tick, from the last snapshots, or null. */
+    ownAt(tick: number): { east: number; north: number; heading: number } | null {
+      return sailing.online?.ownAt(tick) ?? null;
     },
 
     /** Resolves after n frames of the frame loop. */

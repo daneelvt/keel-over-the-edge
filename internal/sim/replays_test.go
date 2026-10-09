@@ -75,21 +75,22 @@ func account(n uint64) bus.Account {
 }
 
 // sailLive runs sailors through the clocked loop for d in a synctest
-// bubble, with players joining, leaving, losing their connections and
-// coming back besides, developer commands now and then, and a tick stalled
-// at stall (if not zero) to force a skip.
-func sailLive(t *testing.T, sailors, capacity int, d time.Duration, stall int64) live {
+// bubble, in a world of at most limit boats, with players joining, waiting
+// in the queue, leaving, losing their connections and coming back besides,
+// developer commands now and then, and a tick stalled at stall (if not
+// zero) to force a skip.
+func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall int64) live {
 	var out live
 	dir := t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
-		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace})
+		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit})
 		if err != nil {
 			t.Fatal(err)
 		}
 		discard := slog.New(slog.DiscardHandler)
 		log := replay.New(replay.Config{
 			Frames: w.Bus().Frames,
-			Header: replay.Header{Build: "test", Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: capacity, Epoch: bubbleEpoch, Grace: liveGrace},
+			Header: replay.Header{Build: "test", Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: capacity, Epoch: bubbleEpoch, Grace: liveGrace, Limit: limit},
 			Dir:    dir,
 			Log:    discard,
 		})
@@ -108,7 +109,9 @@ func sailLive(t *testing.T, sailors, capacity int, d time.Duration, stall int64)
 			done <- struct{}{}
 		}()
 		// Players come and go, and lose their connections, some coming back
-		// within their grace; a developer changes the wind and moves a boat.
+		// within their grace; some wait for a boat, and of those some come
+		// back from another connection and some give up; a developer changes
+		// the wind and moves a boat.
 		go func() {
 			defer func() { done <- struct{}{} }()
 			rng := rand.New(rand.NewPCG(2, 2))
@@ -119,7 +122,7 @@ func sailLive(t *testing.T, sailors, capacity int, d time.Duration, stall int64)
 				slot       int32
 				gen        uint16
 			}
-			var boats []player
+			var boats, waiting []player
 			reply := make(chan bus.Reply, 1)
 			conn := uint64(1)
 			join := func(a bus.Account) (bus.Reply, bool) {
@@ -138,22 +141,41 @@ func sailLive(t *testing.T, sailors, capacity int, d time.Duration, stall int64)
 					return
 				case <-time.After(time.Duration(200+rng.IntN(800)) * time.Millisecond):
 				}
-				// A player's helm, stamped for a tick a little ahead.
+				// A player's helm, stamped for a tick a little ahead; and
+				// those the queue has given boats to find them.
+				f := w.Bus().Frames.Acquire()
 				if len(boats) > 0 {
 					p := boats[rng.IntN(len(boats))]
-					f := w.Bus().Frames.Acquire()
 					seq := uint32(f.Tick + 1 + int64(rng.IntN(4)))
-					f.Release()
 					w.Bus().Controls.Store(p.slot, bus.Pack(seq, uint16(rng.IntN(bus.Steps+1)), 600, p.gen))
 				}
-				switch r := rng.IntN(12); {
+				for i := 0; i < len(waiting); {
+					p := waiting[i]
+					admitted := false
+					for _, s := range f.Live {
+						if f.Owner[s] == p.account && f.Conn[s] == p.conn {
+							boats = append(boats, player{p.account, f.Boat[s], p.conn, s, f.Gen[s]})
+							admitted = true
+						}
+					}
+					if admitted {
+						waiting = append(waiting[:i], waiting[i+1:]...)
+					} else {
+						i++
+					}
+				}
+				f.Release()
+				switch r := rng.IntN(14); {
 				case r < 5:
 					rep, ok := join(account(n))
 					if !ok {
 						return
 					}
-					if rep.Result == bus.Joined {
+					switch rep.Result {
+					case bus.Joined:
 						boats = append(boats, player{account(n), rep.Boat, conn, rep.Slot, rep.Gen})
+					case bus.Queued:
+						waiting = append(waiting, player{account: account(n), conn: conn})
 					}
 				case r < 7 && len(boats) > 0:
 					i := rng.IntN(len(boats))
@@ -177,7 +199,20 @@ func sailLive(t *testing.T, sailors, capacity int, d time.Duration, stall int64)
 					if rep.Result == bus.Joined {
 						boats[i].boat, boats[i].slot, boats[i].gen = rep.Boat, rep.Slot, rep.Gen
 					}
-				case r < 9:
+				case r < 10 && len(waiting) > 0:
+					i := rng.IntN(len(waiting))
+					if rng.IntN(2) == 0 {
+						// Gives up waiting.
+						players.TrySend(bus.Command{Op: bus.Disconnect, Account: waiting[i].account, Conn: waiting[i].conn})
+						waiting = append(waiting[:i], waiting[i+1:]...)
+						break
+					}
+					// Comes back from another connection, keeping the place.
+					if _, ok := join(waiting[i].account); !ok {
+						return
+					}
+					waiting[i].conn = conn
+				case r < 11:
 					dev.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 3 + 6*rng.Float64(), From: 2 * math.Pi * rng.Float64()}})
 				case len(boats) > 0:
 					dev.TrySend(bus.Command{Op: bus.Place, Boat: boats[0].boat, State: physics.State{X: 100, Y: 100, Heading: 3}})
@@ -230,7 +265,7 @@ func TestLiveToReplay(t *testing.T) {
 	if testing.Short() {
 		d = time.Minute
 	}
-	session := sailLive(t, 200, 512, d, 0)
+	session := sailLive(t, 200, 512, 220, d, 0)
 	res, end := replayLog(t, session.log, 4)
 	if want := int64(d / (time.Second / 30)); res.To != want {
 		t.Errorf("replayed to tick %d, the session ran to %d", res.To, want)
@@ -254,7 +289,7 @@ func TestLiveToReplay(t *testing.T) {
 //	go test ./internal/sim -run Fixture -update
 func TestFixture(t *testing.T) {
 	if *update {
-		session := sailLive(t, 16, 64, 70*time.Second, 600)
+		session := sailLive(t, 16, 64, 24, 70*time.Second, 600)
 		if err := os.MkdirAll(filepath.Dir(fixture), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -287,8 +322,9 @@ func TestFixture(t *testing.T) {
 			}
 		}
 	}
-	if !skipped || len(ops) != len(bus.Ops) || len(f.Segments) < 3 || !results[bus.Expired] || !results[bus.Rejoined] || !held {
-		t.Fatalf("the fixture lacks a skip (%v), an op (%v), a grace that ended or was cut short (%v), a held word (%v) or segments (%d)",
+	if !skipped || len(ops) != len(bus.Ops) || len(f.Segments) < 3 || !results[bus.Expired] || !results[bus.Rejoined] || !held ||
+		!results[bus.Queued] || !results[bus.Admitted] || !results[bus.Dequeued] || f.Header.Limit != 24 {
+		t.Fatalf("the fixture lacks a skip (%v), an op (%v), a grace that ended or was cut short, a wait, an admission or one who gave up waiting (%v), a held word (%v), segments (%d) or its limit",
 			skipped, ops, results, held, len(f.Segments))
 	}
 	_, one := replayLog(t, data, 1)

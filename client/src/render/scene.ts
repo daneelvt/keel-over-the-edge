@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The scene at sea: an open sea under a fair sky, the player's boat on it as
-// the physics sails it, the chase camera, and the beginners' overlays. Each
+// the physics sails it, the other boats in view, the chase camera, and the
+// beginners' overlays. Each
 // drawn frame, whatever drives the boat (the game's tick) first sets the
 // pose to draw, the latest step's Out and world time; the scene then
 // follows the boat with the floating origin, the tile field and the camera,
@@ -11,12 +12,14 @@ import { Vector3 } from 'three';
 import { fog, rangeFogFactor } from 'three/tsl';
 import { catalog } from '../catalog';
 import type { Wind } from '../game/driver';
+import type { DrawnBoat } from '../game/fleet';
 import { Ocean, TEST_SEAS } from '../ocean/ocean';
 import { type BoatPose, newPose } from '../predict/blend';
 import { SIZES } from '../predict/layout.gen';
 import { Boat } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
+import { FleetView } from './fleet';
 import { domeCentre } from './materials';
 import { Overlays } from './overlays';
 import type { Backend, Gfx } from './renderer';
@@ -25,6 +28,12 @@ import { Stage } from './stage';
 import { Stats } from './stats';
 
 export { CAMERA_PRESETS, type CameraView };
+
+/** What draws the other boats: their poses this frame, drawn[0 … count). */
+export interface FleetSource {
+  readonly drawn: readonly DrawnBoat[];
+  readonly count: number;
+}
 
 export class SeaScene {
   readonly stage: Stage;
@@ -38,6 +47,10 @@ export class SeaScene {
   readonly overlays: Overlays;
   readonly boatScene: ScenePoint = { x: 0, y: 0, z: 0 };
   boat: Boat | null = null;
+  /** The other boats, drawn many at once. */
+  readonly fleet = new FleetView(this.kind);
+  /** Where the other boats' poses come from: the game's fleet online, or a test's. */
+  fleetSource: FleetSource | null = null;
 
   /** What to draw: the boat between its last two steps, the latest step's Out, the wind. */
   readonly pose: BoatPose = newPose();
@@ -69,6 +82,7 @@ export class SeaScene {
     this.ocean = new Ocean(scene);
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
+    scene.add(this.fleet.root);
     // Lit materials blend toward the horizon's colour with distance, as the sea does.
     scene.fogNode = fog(toLinear(look.skyHorizon), rangeFogFactor(look.hazeNear, look.hazeFar));
     this.setTestSea(this.testSea);
@@ -89,7 +103,7 @@ export class SeaScene {
     await boat.load('17', this.kind.name.slice(0, 1));
     const sailor = catalog.sailors[0];
     if (sailor !== undefined) {
-      await boat.loadSailor(sailor.art.model);
+      await Promise.all([boat.loadSailor(sailor.art.model), this.fleet.load(sailor.art)]);
     }
     boat.model.add(this.overlays.onBoat);
     this.boat = boat;
@@ -148,6 +162,17 @@ export class SeaScene {
     this.ocean.update(gfx.renderer, this.origin, this.time, camera.position.y);
     this.sky.follow(camera.position, this.#v.set(bs.x, bs.y, bs.z));
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
+    const fs = this.fleetSource;
+    if (this.fleet.loaded) {
+      this.fleet.draw(
+        fs?.drawn ?? [],
+        fs?.count ?? 0,
+        this.origin,
+        camera.position,
+        this.time,
+        this.timeStep,
+      );
+    }
     const o = this.overlays;
     if (o.wind || o.forces) {
       o.update(bs.x, bs.z, this.pose, this.wind, this.out);

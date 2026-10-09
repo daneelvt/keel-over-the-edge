@@ -27,8 +27,9 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
 
 const stopTimeout = 5 * time.Second
@@ -59,6 +60,8 @@ type stack struct {
 	// viteToKeel is where Vite sends the game's requests: keel, or the lag
 	// proxy in front of it.
 	viteToKeel string
+	// limit is keel's boat limit; its default if 0.
+	limit int
 }
 
 func (s *stack) buildKeel(ctx context.Context) error {
@@ -98,6 +101,9 @@ func (s *stack) startKeel(ctx context.Context) error {
 	}
 	if n := os.Getenv("KEEL_DEV_SAILORS"); n != "" {
 		env = append(env, "KEEL_DEV_SAILORS="+n)
+	}
+	if s.limit > 0 {
+		env = append(env, fmt.Sprintf("KEEL_BOAT_LIMIT=%d", s.limit))
 	}
 	p, err := startProc("keel", ".", env, newPrefixed(&s.mu, s.out, "keel"), filepath.Join(stateDir, "keel"), "serve")
 	s.keel = p
@@ -184,8 +190,12 @@ func (s *stack) stop() {
 
 // runDev runs the game until interrupted, restarting keel serve when Go
 // source changes. Vite reloads the client by itself. With lag, the game's
-// traffic between Vite and keel goes through the lag proxy.
-func runDev(ctx context.Context, out io.Writer, lag string) error {
+// traffic between Vite and keel goes through the lag proxy; with a limit,
+// keel holds at most that many boats at sea.
+func runDev(ctx context.Context, out io.Writer, lag string, limit int) error {
+	if limit < 0 || limit > sim.Capacity {
+		return fmt.Errorf("-limit %d: from 1 to %d, or 0 for keel's default", limit, sim.Capacity)
+	}
 	if err := prepare(ctx, out); err != nil {
 		return err
 	}
@@ -198,9 +208,12 @@ func runDev(ctx context.Context, out io.Writer, lag string) error {
 	if err != nil {
 		return err
 	}
-	s := &stack{out: out, origin: playOrigin(lan), certs: c, dbURL: db.App}
+	s := &stack{out: out, origin: playOrigin(lan), certs: c, dbURL: db.App, limit: limit}
+	if limit > 0 {
+		fmt.Fprintf(newPrefixed(&s.mu, out, "dev"), "at most %d boats at sea: more players wait in the queue\n", limit)
+	}
 	if lag != "" {
-		l, err := edgetest.ParseLag(lag)
+		l, err := client.ParseLag(lag)
 		if err != nil {
 			return err
 		}
@@ -209,7 +222,7 @@ func runDev(ctx context.Context, out io.Writer, lag string) error {
 		if err != nil {
 			return err
 		}
-		go edgetest.Proxy(ctx, ln, playAddr, l)
+		go client.Proxy(ctx, ln, playAddr, l)
 		s.viteToKeel = lagAddr
 		fmt.Fprintf(newPrefixed(&s.mu, out, "dev"), "the game's traffic goes through the lag proxy: %s round trip and loss\n", l)
 	}
@@ -327,35 +340,33 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := checkGame(ctx, client, jar, base); err != nil {
+	_, jar2, err := checkGuest(ctx, client, base)
+	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics, a guest made and read back (%s), the game connection's Welcome, snapshot and Pong (build %s, catalog %s)\n", name, v.Build, v.Catalog)
+	if err := checkGame(ctx, client, jar, jar2, base); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics, a guest made and read back (%s), the game connection's Welcome, snapshot and Pong, and a second player seeing the first's boat (build %s, catalog %s)\n", name, v.Build, v.Catalog)
 	return nil
 }
 
 // checkGame opens the game connection through Vite over HTTPS with the
 // guest's cookie, as the page's net worker does, says Hello, and expects a
-// Welcome, a snapshot, and a Pong to its Ping.
-func checkGame(ctx context.Context, client *http.Client, jar http.CookieJar, base string) error {
-	c := *client
-	c.Jar = jar
-	c.Timeout = 0
-	u := "wss" + strings.TrimPrefix(base, "https") + "/ws"
-	ws, _, err := websocket.Dial(ctx, u, &websocket.DialOptions{
-		HTTPClient: &c,
-		HTTPHeader: http.Header{"Origin": []string{base}},
-	})
+// Welcome, a snapshot, and a Pong to its Ping; then a second guest's
+// connection, whose snapshots must show the first guest's boat.
+func checkGame(ctx context.Context, hc *http.Client, jar, jar2 http.CookieJar, base string) error {
+	ws, err := dialGame(ctx, hc, jar, base)
 	if err != nil {
-		return fmt.Errorf("smoke: the game connection: %w", err)
+		return err
 	}
 	defer ws.CloseNow()
-	if err := edgetest.Send(ctx, ws, edgetest.Hello()); err != nil {
+	if err := client.Send(ctx, ws, client.Hello()); err != nil {
 		return err
 	}
 	var welcome, snapshot, pong bool
 	for !welcome || !snapshot || !pong {
-		r, err := edgetest.Receive(ctx, ws)
+		r, err := client.Receive(ctx, ws)
 		if err != nil {
 			return fmt.Errorf("smoke: the game connection (welcome %v, snapshot %v, pong %v): %w", welcome, snapshot, pong, err)
 		}
@@ -363,7 +374,7 @@ func checkGame(ctx context.Context, client *http.Client, jar http.CookieJar, bas
 		case r.Message.GetWelcome() != nil:
 			welcome = true
 			ping := &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: 1}}}
-			if err := edgetest.Send(ctx, ws, ping); err != nil {
+			if err := client.Send(ctx, ws, ping); err != nil {
 				return err
 			}
 		case r.Message.GetPong() != nil:
@@ -372,7 +383,60 @@ func checkGame(ctx context.Context, client *http.Client, jar http.CookieJar, bas
 			snapshot = true
 		}
 	}
+	// The first guest's connection reads on, so the server can write to it.
+	client.Read(ws)
+	if err := checkSecond(ctx, hc, jar2, base); err != nil {
+		return err
+	}
 	return ws.Close(websocket.StatusNormalClosure, "")
+}
+
+// checkSecond connects a second guest and decodes its snapshots until one
+// shows another boat: the first guest's, who joined just before, 20 m off
+// on the start grid.
+func checkSecond(ctx context.Context, hc *http.Client, jar http.CookieJar, base string) error {
+	ws, err := dialGame(ctx, hc, jar, base)
+	if err != nil {
+		return err
+	}
+	defer ws.CloseNow()
+	if err := client.Send(ctx, ws, client.Hello()); err != nil {
+		return err
+	}
+	var views client.Views
+	for n := 0; ; n++ {
+		r, err := client.Receive(ctx, ws)
+		if err != nil {
+			return fmt.Errorf("smoke: the second player's connection, after %d messages: %w", n, err)
+		}
+		if r.Snapshot == nil {
+			continue
+		}
+		v, _, err := views.Decode(r.Bytes, r.Snapshot)
+		if err != nil {
+			return fmt.Errorf("smoke: the second player's snapshot: %w", err)
+		}
+		if v.Len() > 0 {
+			return ws.Close(websocket.StatusNormalClosure, "")
+		}
+	}
+}
+
+// dialGame opens the game connection with a cookie jar, as a page of the
+// players' origin does.
+func dialGame(ctx context.Context, hc *http.Client, jar http.CookieJar, base string) (*websocket.Conn, error) {
+	c := *hc
+	c.Jar = jar
+	c.Timeout = 0
+	u := "wss" + strings.TrimPrefix(base, "https") + "/ws"
+	ws, _, err := websocket.Dial(ctx, u, &websocket.DialOptions{
+		HTTPClient: &c,
+		HTTPHeader: http.Header{"Origin": []string{base}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("smoke: the game connection: %w", err)
+	}
+	return ws, nil
 }
 
 // checkGuest makes a guest through Vite, as the page does, keeping its
@@ -438,7 +502,8 @@ func checkInternal(ctx context.Context, s *stack) error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"keel_sim_ticks_total", "keel_sim_tick_duration_seconds_bucket", "keel_build_info", "keel_db_pool_max_connections", "keel_db_schema_version", "keel_edge_connections", "keel_edge_upgrades_total"} {
+	for _, name := range []string{"keel_sim_ticks_total", "keel_sim_tick_duration_seconds_bucket", "keel_build_info", "keel_db_pool_max_connections", "keel_db_schema_version", "keel_edge_connections", "keel_edge_upgrades_total",
+		"keel_sim_boat_limit", "keel_sim_queue_length", "keel_edge_encoders"} {
 		if !strings.Contains(metrics, name) {
 			return fmt.Errorf("smoke: /metrics has no %s", name)
 		}

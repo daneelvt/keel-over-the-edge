@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"math"
 	"net"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 )
@@ -23,7 +23,7 @@ var update = flag.Bool("update", false, "record the traces in shared/protocol/te
 
 // recorded is the controls of the sandbox's recorded sail, a minute long,
 // as indices for each step, played again and again.
-func recorded(t *testing.T) Controls {
+func recorded(t *testing.T) client.Controls {
 	t.Helper()
 	data, err := os.ReadFile("../../physics/testdata/recordings/sandbox-sail.json")
 	if err != nil {
@@ -69,14 +69,14 @@ func recorded(t *testing.T) Controls {
 }
 
 // sail sails the recording for d through lag, in a bubble of its own.
-func sail(t *testing.T, lag Lag, d time.Duration, trace *Trace) Stats {
+func sail(t *testing.T, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
 	t.Helper()
-	var stats Stats
+	var stats client.Stats
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
 		token, _ := srv.Guest("Ann")
 		o := DialOptions{Cookie: token}
-		if lag != (Lag{}) {
+		if lag != (client.Lag{}) {
 			o.Wrap = lag.Wrap
 		}
 		s := srv.NewSailor(o, recorded(t))
@@ -93,7 +93,7 @@ func sail(t *testing.T, lag Lag, d time.Duration, trace *Trace) Stats {
 	return stats
 }
 
-func report(t *testing.T, name string, s Stats, d time.Duration) {
+func report(t *testing.T, name string, s client.Stats, d time.Duration) {
 	t.Logf("%s: %d snapshots, %d corrections (%d over the snap thresholds; largest %.3f m, 95th percentile %.3f m), %d resets, %d stale, m up to %d, latest input %d ticks late, %.0f B/s in, %.0f B/s out (payloads)",
 		name, s.Snapshots, s.Corrections, s.Over, s.Percentile(100), s.Percentile(95), s.Resets, s.Stale, s.MaxAhead, s.MaxLate,
 		float64(s.BytesIn)/d.Seconds(), float64(s.BytesOut)/d.Seconds())
@@ -110,7 +110,7 @@ func sailLength() time.Duration {
 // snapshot ever differs from what the sailor predicted for its tick.
 func TestSailNoLag(t *testing.T) {
 	d := sailLength()
-	s := sail(t, Lag{}, d, nil)
+	s := sail(t, client.Lag{}, d, nil)
 	report(t, "no lag", s, d)
 	if s.Corrections != 0 || s.Snapshots < int(d.Seconds())*15-30 {
 		t.Fatalf("%d corrections in %d snapshots", s.Corrections, s.Snapshots)
@@ -120,7 +120,7 @@ func TestSailNoLag(t *testing.T) {
 // TestSailDelay: 100 ms each way and no loss: still not one correction.
 func TestSailDelay(t *testing.T) {
 	d := sailLength()
-	s := sail(t, Lag{Delay: 100 * time.Millisecond}, d, nil)
+	s := sail(t, client.Lag{Delay: 100 * time.Millisecond}, d, nil)
 	report(t, "100 ms each way", s, d)
 	if s.Corrections != 0 || s.Snapshots < int(d.Seconds())*15-30 {
 		t.Fatalf("%d corrections in %d snapshots", s.Corrections, s.Snapshots)
@@ -135,7 +135,7 @@ func TestSailSlowFrames(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
 		token, _ := srv.Guest("Ann")
-		lag := Lag{Delay: 100 * time.Millisecond}
+		lag := client.Lag{Delay: 100 * time.Millisecond}
 		s := srv.NewSailor(DialOptions{Cookie: token, Wrap: lag.Wrap}, recorded(t))
 		s.FrameEvery = 200 * time.Millisecond
 		if err := s.Connect(t.Context()); err != nil {
@@ -159,9 +159,9 @@ func TestSailLoss(t *testing.T) {
 	if testing.Short() {
 		d = 30 * time.Second
 	}
-	var all Stats
+	var all client.Stats
 	for seed := range uint64(10) {
-		s := sail(t, Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: seed + 1}, d, nil)
+		s := sail(t, client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: seed + 1}, d, nil)
 		report(t, fmt.Sprintf("seed %d", seed+1), s, d)
 		if s.Over > 0 {
 			t.Errorf("seed %d: %d corrections over the snap thresholds", seed+1, s.Over)
@@ -186,14 +186,14 @@ func TestSailLoss(t *testing.T) {
 func TestTraces(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		lag  Lag
+		lag  client.Lag
 	}{
-		{"none", Lag{}},
-		{"lossy", Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 3}},
+		{"none", client.Lag{}},
+		{"lossy", client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 3}},
 	} {
 		path := "../../../shared/protocol/testdata/trace-" + tc.name + ".json"
 		if *update {
-			trace := &Trace{Lag: tc.lag.String()}
+			trace := &client.Trace{Lag: tc.lag.String()}
 			sail(t, tc.lag, 20*time.Second, trace)
 			if err := trace.Write(path); err != nil {
 				t.Fatal(err)
@@ -203,7 +203,7 @@ func TestTraces(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var trace Trace
+		var trace client.Trace
 		if err := json.Unmarshal(data, &trace); err != nil {
 			t.Fatal(err)
 		}
@@ -214,13 +214,71 @@ func TestTraces(t *testing.T) {
 	}
 }
 
-// replayTrace gives a trace's events, at their times, to a Net and a
+// TestFleetTraces records, with -update, the traces of three sailors
+// sailing together among a few other boats, at 200 ms and 2% loss, and
+// replays them: every snapshot decodes to the view the sailor decoded.
+func TestFleetTraces(t *testing.T) {
+	const path = "../../../shared/protocol/testdata/trace-fleet.json"
+	lag := client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 5}
+	if *update {
+		traces := make([]*client.Trace, 3)
+		synctest.Test(t, func(t *testing.T) {
+			srv := NewServer(t, Config{})
+			srv.Crowd(t, 4, func(i int) physics.State {
+				return physics.State{X: -640 + float64(i)*90 - 135, Y: 60 + float64(i%2)*400, Heading: math.Pi / 2, Surge: 2, SheetLimit: 0.6}
+			})
+			var sailors []*client.Sailor
+			for i := range traces {
+				token, _ := srv.Guest(fmt.Sprint("Crew ", i))
+				l := lag
+				l.Seed += uint64(i)
+				s := srv.NewSailor(DialOptions{Cookie: token, Wrap: l.Wrap}, recorded(t))
+				traces[i] = &client.Trace{Lag: l.String()}
+				s.Trace = traces[i]
+				sailors = append(sailors, s)
+			}
+			sailAll(t, sailors, 10*time.Second)
+		})
+		data, err := json.Marshal(traces)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var traces []client.Trace
+	if err := json.Unmarshal(data, &traces); err != nil {
+		t.Fatal(err)
+	}
+	if len(traces) != 3 {
+		t.Fatalf("%d traces", len(traces))
+	}
+	for i := range traces {
+		views := 0
+		for _, e := range traces[i].Events {
+			if e.View != "" && e.View != fmt.Sprintf("%08x", client.ViewDigest(&protocol.View{})) {
+				views++
+			}
+		}
+		if views < 100 {
+			t.Fatalf("sailor %d saw others in %d snapshots", i, views)
+		}
+		replayTrace(t, &traces[i], CatalogKinds(t))
+	}
+}
+
+// replayTrace gives a trace's events, at their times, to a client.Net and a
 // Predictor of its own, and checks they send the same messages and
 // reconcile each snapshot alike. It returns the corrections.
-func replayTrace(t *testing.T, trace *Trace, kinds []physics.Prepared) (corrections int) {
+func replayTrace(t *testing.T, trace *client.Trace, kinds []physics.Prepared) (corrections int) {
 	t.Helper()
-	n := Net{FrameMs: 17}
-	p := NewPredictor(&kinds[0])
+	n := client.Net{FrameMs: 17}
+	p := client.NewPredictor(&kinds[0])
 	snapshots := map[int64]*protocol.Snapshot{}
 	var latest *protocol.Snapshot
 	var expect [][]byte
@@ -242,8 +300,14 @@ func replayTrace(t *testing.T, trace *Trace, kinds []physics.Prepared) (correcti
 				t.Fatal(err)
 			}
 			sent(out...)
-			if ev.Snapshot != nil {
+			if ev.Dropped != e.Dropped {
+				t.Fatalf("event %d: dropped %v, the trace %v", i, ev.Dropped, e.Dropped)
+			}
+			if ev.View != nil {
 				snapshots[ev.Snapshot.Tick] = ev.Snapshot
+				if got := fmt.Sprintf("%08x", client.ViewDigest(ev.View)); got != e.View {
+					t.Fatalf("event %d: the view decoded to %s, the trace's to %s", i, got, e.View)
+				}
 			}
 		case e.Timer:
 			out, dead := n.Time(e.T)
@@ -261,7 +325,11 @@ func replayTrace(t *testing.T, trace *Trace, kinds []physics.Prepared) (correcti
 		case e.Snap != nil:
 			sn := snapshots[e.Snap.Tick]
 			o := p.Snapshot(sn)
-			if o.Stale != e.Snap.Stale || o.Reset != e.Snap.Reset || o.Corrected != e.Snap.Corrected || o.Distance != e.Snap.Distance {
+			// The distance is the test client's own math.Hypot, outside the
+			// physics, which Go computes differently on amd64 and arm64: it
+			// may differ in its last bit from the machine's that recorded it.
+			if o.Stale != e.Snap.Stale || o.Reset != e.Snap.Reset || o.Corrected != e.Snap.Corrected ||
+				math.Abs(o.Distance-e.Snap.Distance) > 1e-12 {
 				t.Fatalf("event %d: snapshot %d: %+v, the trace %+v", i, e.Snap.Tick, o, e.Snap)
 			}
 			if o.Corrected {
@@ -282,13 +350,13 @@ func TestAheadSettlesAndRises(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
 		token, _ := srv.Guest("Ann")
-		lag := Lag{Delay: 100 * time.Millisecond}
+		lag := client.Lag{Delay: 100 * time.Millisecond}
 		// The tiller dragged to and fro: a word every step.
 		wiggle := func(n int) (uint16, uint16) { return uint16(256 + n%512), 512 }
-		var conn Staller
+		var conn client.Staller
 		s := srv.NewSailor(DialOptions{Cookie: token, Wrap: func(c net.Conn) net.Conn {
 			w := lag.Wrap(c)
-			conn = w.(Staller)
+			conn = w.(client.Staller)
 			return w
 		}}, wiggle)
 		if err := s.Connect(t.Context()); err != nil {
@@ -350,118 +418,4 @@ func TestDropout(t *testing.T) {
 			t.Fatalf("%d corrections", s.Stats.Corrections)
 		}
 	})
-}
-
-func TestParseLag(t *testing.T) {
-	l, err := ParseLag("200ms,2%")
-	if err != nil || l.Delay != 100*time.Millisecond || l.Loss != 0.02 || l.String() != "200ms,2%" {
-		t.Fatalf("%+v, %v", l, err)
-	}
-	for _, bad := range []string{"", "fast", "200ms,x", "200ms,100%", "-1s"} {
-		if _, err := ParseLag(bad); err == nil {
-			t.Errorf("%q read", bad)
-		}
-	}
-}
-
-// TestLagLine: chunks keep their order, a lost chunk holds up those behind
-// it, a seed repeats a run, and the delays are as the model says.
-func TestLagLine(t *testing.T) {
-	lag := Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 9}
-	a, b := lag.NewLine(1), lag.NewLine(1)
-	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	const n = 200_000
-	var held, retransmitted, blocked int
-	var last time.Time
-	for i := range n {
-		// A chunk every 10 ms: a lost one holds up those for 400 ms after.
-		now := start.Add(time.Duration(i) * 10 * time.Millisecond)
-		at := a.Hold(now)
-		if at != b.Hold(now) {
-			t.Fatal("one seed, two runs")
-		}
-		if at.Before(last) {
-			t.Fatal("a chunk overtook the one before it")
-		}
-		switch d := at.Sub(now); {
-		case d < lag.Delay:
-			t.Fatalf("a chunk took %v", d)
-		case d >= lag.Delay+4*lag.Delay+Retransmission && at != last:
-			retransmitted++
-		case d >= lag.Delay+4*lag.Delay && at != last:
-			held++
-		case at == last:
-			blocked++
-		}
-		last = at
-	}
-	if p := float64(held+retransmitted) / n; math.Abs(p-0.02) > 0.002 {
-		t.Errorf("%.4f of chunks lost, want 0.02", p)
-	}
-	if p := float64(retransmitted) / n; p < 0.0002 || p > 0.0007 {
-		t.Errorf("%.5f of chunks lost twice, want 0.0004", p)
-	}
-	if blocked == 0 {
-		t.Error("no chunk was held up behind a lost one")
-	}
-}
-
-// TestLagConn: bytes written through the model arrive after its delay, in
-// order, and closing sends what was written first.
-func TestLagConn(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		client, server := net.Pipe()
-		c := Lag{Delay: 50 * time.Millisecond}.Wrap(client)
-		go func() {
-			for i := range 10 {
-				c.Write([]byte{byte(i)})
-			}
-			c.Close()
-		}()
-		start := time.Now()
-		got, err := io.ReadAll(server)
-		if err != nil || string(got) != "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09" {
-			t.Fatalf("%v, %v", got, err)
-		}
-		if d := time.Since(start); d != 50*time.Millisecond {
-			t.Fatalf("arrived after %v", d)
-		}
-	})
-}
-
-// TestProxy: bytes through the proxy, on real loopback sockets, arrive in
-// order after the delay.
-func TestProxy(t *testing.T) {
-	back, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer back.Close()
-	go func() {
-		c, err := back.Accept()
-		if err != nil {
-			return
-		}
-		defer c.Close()
-		io.Copy(c, c) // an echo
-	}()
-	front, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go Proxy(t.Context(), front, back.Addr().String(), Lag{Delay: 20 * time.Millisecond, Seed: 1})
-	c, err := net.Dial("tcp", front.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-	start := time.Now()
-	c.Write([]byte("keel"))
-	buf := make([]byte, 4)
-	if _, err := io.ReadFull(c, buf); err != nil || string(buf) != "keel" {
-		t.Fatalf("%q, %v", buf, err)
-	}
-	if d := time.Since(start); d < 40*time.Millisecond {
-		t.Fatalf("an echo through 20 ms each way took %v", d)
-	}
 }
