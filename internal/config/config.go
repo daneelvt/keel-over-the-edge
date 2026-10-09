@@ -38,6 +38,9 @@ type Config struct {
 	// ReplayDir, if not "", is where the input log is written as well as
 	// kept in memory.
 	ReplayDir string
+	// BoatLimit is the most boats the world holds at once; beyond it,
+	// players wait in a queue.
+	BoatLimit int
 	// DevSailors is how many scripted sailors sail in the world.
 	DevSailors int
 	// DevCommands turns on the developer's commands on the internal
@@ -62,6 +65,10 @@ const (
 	DefaultInternalAddr = "127.0.0.1:9090"
 )
 
+// DefaultBoatLimit is the boat limit unless KEEL_BOAT_LIMIT sets one: a
+// starting value, until load tests on the server's machine set it.
+const DefaultBoatLimit = 1000
+
 // Load reads the configuration through getenv (os.Getenv in the server).
 // Every problem is reported, not only the first.
 func Load(getenv func(string) string) (Config, error) {
@@ -74,6 +81,7 @@ func Load(getenv func(string) string) (Config, error) {
 		TraceDir:     getenv("KEEL_TRACE_DIR"),
 		ReplayDir:    getenv("KEEL_REPLAY_DIR"),
 		DatabaseURL:  getenv("KEEL_DATABASE_URL"),
+		BoatLimit:    DefaultBoatLimit,
 	}
 	addrs := []struct{ name, addr string }{
 		{"KEEL_PLAY_ADDR", c.PlayAddr},
@@ -103,6 +111,13 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("KEEL_LOG_LEVEL: %w", err))
 		}
 		c.LogLevel = level
+	}
+	if v := getenv("KEEL_BOAT_LIMIT"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > sim.Capacity {
+			errs = append(errs, fmt.Errorf("KEEL_BOAT_LIMIT: %q is not a number from 1 to %d", v, sim.Capacity))
+		}
+		c.BoatLimit = n
 	}
 	if v := getenv("KEEL_DEV_SAILORS"); v != "" {
 		n, err := strconv.Atoi(v)

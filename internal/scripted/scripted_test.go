@@ -15,7 +15,9 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
 
-func world(t *testing.T, capacity int) *sim.World {
+func world(t *testing.T, capacity int) *sim.World { return limited(t, capacity, 0) }
+
+func limited(t *testing.T, capacity, limit int) *sim.World {
 	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
@@ -24,7 +26,7 @@ func world(t *testing.T, capacity int) *sim.World {
 	p := catalog.PhysicsParams(&cat.Boats[0])
 	var k physics.Prepared
 	physics.Prepare(&p, &k)
-	w, err := sim.New(sim.Config{Capacity: capacity, Kinds: []physics.Prepared{k}, Workers: 2})
+	w, err := sim.New(sim.Config{Capacity: capacity, Kinds: []physics.Prepared{k}, Workers: 2, Limit: limit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,12 +101,14 @@ func TestAccounts(t *testing.T) {
 	}
 }
 
+// TestMoreSailorsThanSlots: sailors beyond the world's limit are left
+// ashore, and none waits in its queue, where nothing could give it a boat.
 func TestMoreSailorsThanSlots(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		w := world(t, 8)
+		w := limited(t, 16, 8)
 		sail(t, w, 12, 5*time.Second, func(*bus.Frame) {})
-		if n := len(w.Latest().Live); n != 8 {
-			t.Fatalf("%d boats in 8 slots", n)
+		if f := w.Latest(); len(f.Live) != 8 || len(f.Queue) != 0 {
+			t.Fatalf("%d boats under a limit of 8, %d waiting", len(f.Live), len(f.Queue))
 		}
 	})
 }

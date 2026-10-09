@@ -29,7 +29,7 @@ Replays an input log through the simulation and checks every digest and
 snapshot in it. Prints "replayed N ticks: identical", or the first tick at
 which the replay differs from the log and exits 1.
 
-  -dump TICK   write the world's boats at TICK to stdout as JSON
+  -dump TICK   write the world's boats and queue at TICK to stdout as JSON
   -workers N   goroutines stepping boats (default GOMAXPROCS); the result
                never depends on it
 `
@@ -140,20 +140,31 @@ type dumpedBoat struct {
 	State      map[string]exact `json:"state"`
 }
 
+type dumpedWaiting struct {
+	Account    string `json:"account"`
+	Connection uint64 `json:"connection"`
+	Since      int64  `json:"since"`
+}
+
 type dumpedWorld struct {
 	Tick  int64            `json:"tick"`
 	Wind  map[string]exact `json:"wind"`
 	Boats []dumpedBoat     `json:"boats"`
+	Queue []dumpedWaiting  `json:"queue"`
 }
 
-// writeDump writes a frame's boats as JSON, for comparing two runs field by
-// field.
+// writeDump writes a frame's boats and queue as JSON, for comparing two
+// runs field by field.
 func writeDump(w io.Writer, f *bus.Frame) error {
 	names := stateNames()
 	d := dumpedWorld{
 		Tick:  f.Tick,
 		Wind:  map[string]exact{"speed": exact(f.Wind.Speed), "from": exact(f.Wind.From)},
 		Boats: []dumpedBoat{},
+		Queue: []dumpedWaiting{},
+	}
+	for _, q := range f.Queue {
+		d.Queue = append(d.Queue, dumpedWaiting{Account: q.Account.String(), Connection: q.Conn, Since: q.Since})
 	}
 	for _, s := range f.Live {
 		c := f.Control[s]

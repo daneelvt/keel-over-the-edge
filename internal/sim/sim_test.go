@@ -36,7 +36,13 @@ func kinds(t testing.TB) []physics.Prepared {
 
 func newWorld(t testing.TB, capacity, workers int) *World {
 	t.Helper()
-	w, err := New(Config{Capacity: capacity, Kinds: kinds(t), Workers: workers, Tick: 100})
+	return limitedWorld(t, capacity, workers, 0)
+}
+
+// limitedWorld is a world that holds at most limit boats.
+func limitedWorld(t testing.TB, capacity, workers, limit int) *World {
+	t.Helper()
+	w, err := New(Config{Capacity: capacity, Kinds: kinds(t), Workers: workers, Tick: 100, Limit: limit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,6 +146,8 @@ func TestJoin(t *testing.T) {
 	}
 }
 
+// TestFull: a world at its capacity queues; once the queue too is full,
+// a join is refused.
 func TestFull(t *testing.T) {
 	w := newWorld(t, 2, 1)
 	for i := range 2 {
@@ -147,8 +155,23 @@ func TestFull(t *testing.T) {
 			t.Fatalf("join %d: %+v", i, r)
 		}
 	}
-	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(9)}); r != (bus.Reply{Result: bus.Full, Slot: -1}) {
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(9)}); r != (bus.Reply{Result: bus.Queued, Slot: -1, Position: 1}) {
 		t.Fatalf("join at capacity: %+v", r)
+	}
+	q := w.Bus().Commands.Developer()
+	for i := range bus.QueueLimit - 1 {
+		q.TrySend(bus.Command{Op: bus.Join, Account: acct(uint64(100 + i))})
+	}
+	w.Tick()
+	if n := len(w.Latest().Queue); n != bus.QueueLimit {
+		t.Fatalf("%d waiting", n)
+	}
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(99)}); r != (bus.Reply{Result: bus.Full, Slot: -1}) {
+		t.Fatalf("join with the queue full: %+v", r)
+	}
+	// One already waiting keeps its place.
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(100), Conn: 5}); r != (bus.Reply{Result: bus.Queued, Slot: -1, Position: 2}) {
+		t.Fatalf("join again while waiting in a full queue: %+v", r)
 	}
 }
 
@@ -350,7 +373,7 @@ func TestStateFields(t *testing.T) {
 // world for snapshot tests: boats in scattered slots, freed slots with
 // generations, states with every kind of float.
 func scatteredWorld(t testing.TB) *World {
-	w := newWorld(t, 300, 1)
+	w := limitedWorld(t, 300, 1, 210)
 	fill(t, w, 200, 5)
 	q := w.Bus().Commands.Developer()
 	for b := uint64(3); b < 200; b += 7 {
@@ -364,6 +387,14 @@ func scatteredWorld(t testing.TB) *World {
 		q.TrySend(bus.Command{Op: bus.Disconnect, Boat: b, Conn: 3 * b})
 	}
 	w.Tick()
+	// More join than the limit has room for: some wait.
+	for i := range 45 {
+		q.TrySend(bus.Command{Op: bus.Join, Account: acct(uint64(1000 + i)), Conn: uint64(5000 + i)})
+	}
+	w.Tick()
+	if len(w.Latest().Queue) == 0 {
+		t.Fatal("nobody waits")
+	}
 	return w
 }
 
@@ -379,7 +410,7 @@ func TestSnapshotRoundTrips(t *testing.T) {
 		t.Fatal("a snapshot read and written again differs")
 	}
 	if g.Tick != f.Tick || g.Wind != f.Wind || g.NextBoat != f.NextBoat || !slices.Equal(g.Live, f.Live) ||
-		!slices.Equal(g.Gen, f.Gen) || !slices.Equal(g.Occupied, f.Occupied) {
+		!slices.Equal(g.Gen, f.Gen) || !slices.Equal(g.Occupied, f.Occupied) || !slices.Equal(g.Queue, f.Queue) {
 		t.Fatal("the frame read differs")
 	}
 	for _, s := range f.Live {
@@ -401,8 +432,9 @@ func TestSnapshotRoundTrips(t *testing.T) {
 		t.Fatal("no grace in the snapshot")
 	}
 
-	// Loading it into a new world and ticking both gives the same world.
-	w2 := newWorld(t, 300, 2)
+	// Loading it into a new world of the same limit and ticking both gives
+	// the same world.
+	w2 := limitedWorld(t, 300, 2, 210)
 	if err := w2.Load(snap); err != nil {
 		t.Fatal(err)
 	}
@@ -455,9 +487,14 @@ func TestDigest(t *testing.T) {
 	}
 	g.Control[s] = f.Control[s]
 	for name, change := range map[string]func(){
-		"owner":      func() { g.Owner[s][3] ^= 1 },
-		"connection": func() { g.Conn[s]++ },
-		"grace":      func() { g.Grace[s]++ },
+		"owner":            func() { g.Owner[s][3] ^= 1 },
+		"connection":       func() { g.Conn[s]++ },
+		"grace":            func() { g.Grace[s]++ },
+		"waiting account":  func() { g.Queue[1].Account[0] ^= 1 },
+		"waiting conn":     func() { g.Queue[1].Conn++ },
+		"waiting since":    func() { g.Queue[1].Since++ },
+		"queue's order":    func() { g.Queue[0], g.Queue[1] = g.Queue[1], g.Queue[0] },
+		"one waiting less": func() { g.Queue = g.Queue[1:] },
 	} {
 		change()
 		if Digest(g) == d {
@@ -652,12 +689,13 @@ func TestPhaseNames(t *testing.T) {
 	}
 }
 
-// TestTickAllocatesNothing: ticks with a thousand boats, a third of them
-// changing controls, some of those words held for a later tick, and every
-// tick a join, a leave, a disconnection, a sailor's return and, a few ticks
-// later, a grace that ends.
+// TestTickAllocatesNothing: ticks with a thousand boats at the world's
+// limit, a third of them changing controls, some of those words held for a
+// later tick, and every tick a join that waits, a leave that makes room for
+// it, another join that waits and gives up, a disconnection, a sailor's
+// return and, a few ticks later, a grace that ends.
 func TestTickAllocatesNothing(t *testing.T) {
-	w, err := New(Config{Capacity: Capacity, Kinds: kinds(t), Workers: 4, Tick: 100, Grace: 5})
+	w, err := New(Config{Capacity: Capacity, Kinds: kinds(t), Workers: 4, Tick: 100, Grace: 5, Limit: 1000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -667,6 +705,7 @@ func TestTickAllocatesNothing(t *testing.T) {
 	q := w.Bus().Commands.Developer()
 	account := uint64(5000)
 	reply := make(chan bus.Reply, 1)
+	var queued, left int // joins that waited; and those still waiting after a tick
 	tick := func() {
 		f := w.Latest()
 		for i, s := range f.Live {
@@ -674,21 +713,29 @@ func TestTickAllocatesNothing(t *testing.T) {
 				w.Bus().Controls.Store(s, bus.Pack(uint32(f.Tick+int64(i%5)), uint16(rng.IntN(bus.Steps+1)), 512, f.Gen[s]))
 			}
 		}
-		q.TrySend(bus.Command{Op: bus.Leave, Boat: f.Boat[f.Live[len(f.Live)/2]]})
 		q.TrySend(bus.Command{Op: bus.Join, Account: acct(account), Conn: account, Reply: reply})
+		q.TrySend(bus.Command{Op: bus.Leave, Boat: f.Boat[f.Live[len(f.Live)/2]]})
+		q.TrySend(bus.Command{Op: bus.Join, Account: acct(account + 1<<32), Conn: account})
+		q.TrySend(bus.Command{Op: bus.Disconnect, Account: acct(account + 1<<32), Conn: account})
 		s := f.Live[len(f.Live)/3]
 		q.TrySend(bus.Command{Op: bus.Disconnect, Boat: f.Boat[s], Conn: f.Conn[s]})
 		s = f.Live[len(f.Live)/4]
 		q.TrySend(bus.Command{Op: bus.Join, Account: f.Owner[s], Conn: f.Conn[s] + 1})
 		account++
 		w.Tick()
-		<-reply
+		if r := <-reply; r.Result == bus.Queued {
+			queued++
+		}
+		left += len(w.Latest().Queue)
 	}
 	for range 10 {
 		tick()
 	}
 	if n := testing.AllocsPerRun(100, tick); n != 0 {
 		t.Fatalf("a tick allocates %v times", n)
+	}
+	if queued < 50 || left != 0 {
+		t.Fatalf("%d of 111 joins waited; %d were left waiting", queued, left)
 	}
 }
 

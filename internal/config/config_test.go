@@ -39,6 +39,7 @@ func TestLoadValid(t *testing.T) {
 	want := Config{
 		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://192.168.1.20:5173",
 		AgentsAddr: "127.0.0.1:8081", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
+		BoatLimit: DefaultBoatLimit,
 	}
 	if c != want {
 		t.Errorf("defaults %+v, want %+v", c, want)
@@ -64,6 +65,7 @@ func TestLoadValid(t *testing.T) {
 		"KEEL_TRACE_DIR":     "/tmp/traces",
 		"KEEL_REPLAY_DIR":    "/tmp/replays",
 		"KEEL_DEV_SAILORS":   "1000",
+		"KEEL_BOAT_LIMIT":    "2",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -71,6 +73,7 @@ func TestLoadValid(t *testing.T) {
 	want = Config{
 		PlayAddr: ":8080", PlayOrigin: "https://play.keelovertheedge.com", AgentsAddr: ":8081", InternalAddr: "0.0.0.0:9090",
 		LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", DevSailors: 1000, DatabaseURL: dbURL,
+		BoatLimit: 2,
 	}
 	if c != want {
 		t.Errorf("got %+v, want %+v", c, want)
@@ -124,6 +127,9 @@ func TestLoadRejects(t *testing.T) {
 		"sailors not number": {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "many"}, []string{"KEEL_DEV_SAILORS"}},
 		"sailors negative":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "-1"}, []string{"KEEL_DEV_SAILORS"}},
 		"too many sailors":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DEV_SAILORS": "4097"}, []string{"from 0 to 4096"}},
+		"no boats":           {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "0"}, []string{"KEEL_BOAT_LIMIT", "from 1 to 4096"}},
+		"too many boats":     {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "4097"}, []string{"KEEL_BOAT_LIMIT"}},
+		"boats not number":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BOAT_LIMIT": "lots"}, []string{"KEEL_BOAT_LIMIT"}},
 		"everything wrong": {
 			map[string]string{
 				"KEEL_PLAY_ADDR": "x", "KEEL_AGENTS_ADDR": "y", "KEEL_INTERNAL_ADDR": "z",

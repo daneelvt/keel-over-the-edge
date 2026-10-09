@@ -36,20 +36,21 @@ import (
 // floats and control words their little-endian bits:
 //
 //	H header    format version, build, catalog, physics layout, capacity,
-//	            epoch (Unix seconds, nanoseconds), grace in ticks; strings as a uvarint
-//	            length and bytes
+//	            epoch (Unix seconds, nanoseconds), grace in ticks, boat limit;
+//	            strings as a uvarint length and bytes
 //	S snapshot  tick, then sim's snapshot of the world after it: a segment starts
 //	T tick      tick, ticks skipped before it, the control words applied
 //	            (count, then slot and word for each), the commands applied in order with
-//	            their results (count, then each: op, its fields, result, slot, boat, generation);
-//	            an account is its 16 bytes, and a boat whose grace ended is a Leave
-//	            with the result Expired, which the tick makes itself
+//	            their results (count, then each: op, its fields, result, slot, boat, generation,
+//	            place in the queue, tick queued at); an account is its 16 bytes; a boat whose
+//	            grace ended is a Leave with the result Expired, and a connection given a boat
+//	            from the queue a Join with the result Admitted, which the tick makes itself
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
 //	X broken    the first tick whose records were lost: the segment holds
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 2
+	formatVersion = 3
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -69,6 +70,8 @@ type Header struct {
 	// Grace is how many ticks a disconnected boat sailed on; 0 for the
 	// simulation's default.
 	Grace int64
+	// Limit is the most boats the world held at once; 0 for its capacity.
+	Limit int
 }
 
 // AppendHeader appends the magic and the header record to dst.
@@ -82,6 +85,7 @@ func AppendHeader(dst []byte, h Header) []byte {
 	p = binary.AppendVarint(p, h.Epoch.Unix())
 	p = binary.AppendUvarint(p, uint64(h.Epoch.Nanosecond()))
 	p = binary.AppendUvarint(p, uint64(h.Grace))
+	p = binary.AppendUvarint(p, uint64(h.Limit))
 	dst = append(dst, magic...)
 	return appendRecord(dst, kindHeader, p)
 }
@@ -147,6 +151,7 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 	case bus.Disconnect:
 		dst = binary.AppendUvarint(dst, e.Boat)
 		dst = binary.AppendUvarint(dst, e.Conn)
+		dst = append(dst, e.Account[:]...)
 	case bus.SetWind:
 		dst = appendF64(dst, e.Wind.Speed)
 		dst = appendF64(dst, e.Wind.From)
@@ -159,7 +164,9 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
 	dst = binary.AppendUvarint(dst, e.Reply.Boat)
-	return binary.AppendUvarint(dst, uint64(e.Reply.Gen))
+	dst = binary.AppendUvarint(dst, uint64(e.Reply.Gen))
+	dst = binary.AppendUvarint(dst, uint64(e.Reply.Position))
+	return binary.AppendVarint(dst, e.Reply.Since)
 }
 
 func appendF64(dst []byte, v float64) []byte {
@@ -277,6 +284,7 @@ func (f *File) add(kind byte, p *payload) error {
 		}
 		f.Header.Epoch = time.Unix(sec, int64(nsec)).UTC()
 		f.Header.Grace = int64(p.count(math.MaxInt64))
+		f.Header.Limit = int(p.count(uint64(f.Header.Capacity)))
 		if p.err == nil && f.Header.Capacity < 1 {
 			p.err = errors.New("no capacity")
 		}
@@ -439,6 +447,7 @@ func (p *payload) event(e *bus.Event) {
 	case bus.Disconnect:
 		e.Boat = p.uvarint()
 		e.Conn = p.uvarint()
+		p.bytes(e.Account[:])
 	case bus.SetWind:
 		e.Wind = bus.Wind{Speed: p.f64(), From: p.f64()}
 	case bus.Place:
@@ -460,14 +469,17 @@ func (p *payload) event(e *bus.Event) {
 	e.Reply.Slot = int32(slot)
 	e.Reply.Boat = p.uvarint()
 	e.Reply.Gen = uint16(p.count(bus.GenMask))
+	e.Reply.Position = int32(p.count(bus.QueueLimit))
+	e.Reply.Since = p.varint()
 }
 
 // Commands are the commands of a tick record's events, to apply again:
-// all but the boats whose grace ended, which the tick takes out itself.
+// all but the boats whose grace ended, which the tick takes out itself, and
+// the connections the queue gave boats, which it admits itself.
 func (r *Record) Commands() []bus.Command {
 	cs := make([]bus.Command, 0, len(r.Events))
 	for i := range r.Events {
-		if r.Events[i].Reply.Result != bus.Expired {
+		if res := r.Events[i].Reply.Result; res != bus.Expired && res != bus.Admitted {
 			cs = append(cs, r.Events[i].Command)
 		}
 	}

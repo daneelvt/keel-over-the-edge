@@ -32,7 +32,11 @@ func (w *World) apply(c *bus.Command) {
 			r = bus.Reply{Result: bus.Done, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
 		}
 	case bus.Disconnect:
-		r = w.disconnect(c.Boat, c.Conn)
+		if c.Boat == 0 {
+			r = w.disconnectAccount(c.Account, c.Conn)
+		} else {
+			r = w.disconnect(c.Boat, c.Conn)
+		}
 	default:
 		return
 	}
@@ -46,67 +50,6 @@ func (w *World) apply(c *bus.Command) {
 		default:
 		}
 	}
-}
-
-// join gives account its boat, sailed from now on through connection conn:
-// the one it already has, or a new one in the lowest free slot. One account
-// sails one boat, so a sailor who reconnects finds theirs, and its grace,
-// if it had begun, ends.
-func (w *World) join(account bus.Account, conn uint64) bus.Reply {
-	f := w.next
-	for _, s := range f.Live {
-		if f.Owner[s] == account {
-			f.Conn[s] = conn
-			f.Grace[s] = 0
-			if w.given == nil {
-				// Whoever wrote the slot before is no longer the boat's
-				// sailor: a word it left waiting for its tick is put back
-				// to the word in force, so only the new sailor's are applied
-				// from here on.
-				w.bus.Controls.Store(s, f.Control[s])
-			}
-			return bus.Reply{Result: bus.Rejoined, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s]}
-		}
-	}
-	if len(f.Live) == w.capacity {
-		return bus.Reply{Result: bus.Full, Slot: -1}
-	}
-	s := int32(slices.Index(f.Occupied, false))
-	gen := f.Gen[s]
-	f.Occupied[s] = true
-	f.Boat[s] = f.NextBoat
-	f.NextBoat++
-	f.Owner[s] = account
-	f.Conn[s] = conn
-	f.Grace[s] = 0
-	f.Kind[s] = 0
-	f.Control[s] = bus.Centred(gen)
-	f.State[s] = spawn(s)
-	i, _ := slices.BinarySearch(f.Live, s)
-	f.Live = slices.Insert(f.Live, i, s)
-	if w.given == nil {
-		// The slot may hold a word for the boat that had it before, which
-		// its generation already disowns; this one the new sailor's writer
-		// overwrites.
-		w.bus.Controls.Store(s, f.Control[s])
-	}
-	return bus.Reply{Result: bus.Joined, Slot: s, Boat: f.Boat[s], Gen: gen}
-}
-
-// disconnect begins a boat's grace when the connection sailing it ends. A
-// connection that no longer sails it, replaced by a newer one, is ignored.
-func (w *World) disconnect(boat, conn uint64) bus.Reply {
-	f := w.next
-	s := slotOf(f, boat)
-	if s < 0 {
-		return bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: boat}
-	}
-	r := bus.Reply{Result: bus.Stale, Slot: s, Boat: boat, Gen: f.Gen[s]}
-	if f.Conn[s] == conn && f.Grace[s] == 0 {
-		f.Grace[s] = f.Tick + w.grace
-		r.Result = bus.Done
-	}
-	return r
 }
 
 // expire takes out the boats whose grace has ended, each recorded as an

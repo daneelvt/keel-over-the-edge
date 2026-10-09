@@ -61,6 +61,8 @@ Configured from the environment:
   KEEL_LOG_LEVEL       debug, info, warn or error (default info)
   KEEL_TRACE_DIR       where traces of overrunning ticks go (default none)
   KEEL_REPLAY_DIR      where the input log goes (default memory only)
+  KEEL_BOAT_LIMIT      the most boats at sea at once, from 1 to 4096; beyond it
+                       players wait in a queue (default 1000)
   KEEL_DEV_SAILORS     scripted sailors to sail (default 0)
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
                        POST /debug/wind?knots=…&from=… (default 0)
@@ -214,7 +216,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		p := catalog.PhysicsParams(&cat.Boats[i])
 		physics.Prepare(&p, &kinds[i])
 	}
-	world, err := sim.New(sim.Config{Kinds: kinds, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch)})
+	world, err := sim.New(sim.Config{Kinds: kinds, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
 	if err != nil {
 		return stopEarly(internal, internalDone, flight, err)
 	}
@@ -222,7 +224,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	b := world.Bus()
 	inputs := replay.New(replay.Config{
 		Frames: b.Frames,
-		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch, Grace: world.Grace()},
+		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch, Grace: world.Grace(), Limit: world.Limit()},
 		Dir:    cfg.ReplayDir,
 		Log:    log,
 	})
@@ -247,7 +249,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
 	})
 	world.Record(inputs, game)
-	log.Info("world ready", "kinds", len(kinds), "capacity", world.Capacity(), "workers", opt.workers, "tick", world.Now())
+	log.Info("world ready", "kinds", len(kinds), "capacity", world.Capacity(), "limit", world.Limit(), "workers", opt.workers, "tick", world.Now())
 	health.Beat()
 
 	looks := make([]string, len(cat.Sailors))

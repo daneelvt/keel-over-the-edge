@@ -33,12 +33,46 @@ type Frame struct {
 	Kind     []uint16  // per slot: the boat's kind, an index into the world's kinds
 	Control  []Word    // per slot: the controls in force
 	State    []physics.State
+	Sail     []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
+
+	// Grid is the live boats by the grid cell they are in, built after
+	// the physics.
+	Grid Grid
+
+	// Queue is who waits for a boat while the world is at its limit, the
+	// head first.
+	Queue []Waiting
 
 	// What the tick applied, in the order it applied it: the input log
 	// records these.
 	Changed []SlotWord // control words that changed, by slot, ascending
 	Events  []Event    // commands, with their results
 }
+
+// Grid lists the live boats by their cell, physics.Cell of their position:
+// the boats of cell c are Slots[Start[c]:Start[c+1]], in ascending slot
+// order. It is derived from the state, so it is in no snapshot or digest.
+type Grid struct {
+	Start []int32 // per cell, and one more: Slots's index of the cell's first boat
+	Slots []int32 // the live slots, by cell
+	Cell  []int32 // per slot: the cell of an occupied slot's boat
+}
+
+// Cells is the number of the grid's cells.
+const Cells = physics.GridCells * physics.GridCells
+
+// Boats lists the slots of the boats in cell c.
+func (g *Grid) Boats(c int32) []int32 { return g.Slots[g.Start[c]:g.Start[c+1]] }
+
+// Waiting is a connection waiting for a boat.
+type Waiting struct {
+	Account Account
+	Conn    uint64
+	Since   int64 // the tick it was queued at
+}
+
+// QueueLimit is the most connections that may wait for a boat.
+const QueueLimit = 4096
 
 // SlotWord is a control word applied to a slot.
 type SlotWord struct {
@@ -66,8 +100,15 @@ func NewFrame(capacity int) *Frame {
 		Kind:     make([]uint16, capacity),
 		Control:  make([]Word, capacity),
 		State:    make([]physics.State, capacity),
-		Changed:  make([]SlotWord, 0, capacity),
-		Events:   make([]Event, 0, 64),
+		Sail:     make([]uint8, capacity),
+		Grid: Grid{
+			Start: make([]int32, Cells+1),
+			Slots: make([]int32, 0, capacity),
+			Cell:  make([]int32, capacity),
+		},
+		Queue:   make([]Waiting, 0, QueueLimit),
+		Changed: make([]SlotWord, 0, capacity),
+		Events:  make([]Event, 0, 64),
 	}
 }
 

@@ -94,7 +94,11 @@ type Loop struct {
 	commands [][]prometheus.Counter // by op, then result
 	// graces started, ended by a join, and expired
 	graceStarted, graceRejoined, graceExpired prometheus.Counter
+	admissions                                [len(admissionResults)]prometheus.Counter
 }
+
+// admissionResults are the results keel_sim_admissions_total counts.
+var admissionResults = [...]bus.Result{bus.Joined, bus.Rejoined, bus.Queued, bus.Admitted, bus.Dequeued, bus.Full}
 
 // New makes a loop for cfg.World, which it observes from now on.
 func New(cfg Config) *Loop {
@@ -113,6 +117,10 @@ func New(cfg Config) *Loop {
 		l.graceStarted = l.m.Grace.WithLabelValues("started")
 		l.graceRejoined = l.m.Grace.WithLabelValues("rejoined")
 		l.graceExpired = l.m.Grace.WithLabelValues("expired")
+		for i, r := range admissionResults {
+			l.admissions[i] = l.m.Admissions.WithLabelValues(r.String())
+		}
+		l.m.BoatLimit.Set(float64(cfg.World.Limit()))
 	}
 	cfg.World.Observe(l)
 	return l
@@ -257,11 +265,23 @@ func (l *Loop) tick(tick int64, late bool) {
 		l.m.TicksLate.Inc()
 	}
 	l.m.Boats.Set(float64(len(f.Live)))
+	l.m.QueueLength.Set(float64(len(f.Queue)))
+	l.m.GridDuration.Observe(l.phases[sim.PhaseGrid].Seconds())
 	l.m.Workers.Set(float64(l.world.Workers()))
 	for i := range f.Events {
 		ev := &f.Events[i]
 		if int(ev.Op) < len(l.commands) && int(ev.Reply.Result) < len(l.commands[ev.Op]) {
 			l.commands[ev.Op][ev.Reply.Result].Inc()
+		}
+		if ev.Op == bus.Join || ev.Op == bus.Disconnect {
+			for i, r := range admissionResults {
+				if ev.Reply.Result == r {
+					l.admissions[i].Inc()
+				}
+			}
+			if ev.Reply.Result == bus.Admitted {
+				l.m.QueueWait.Observe(float64(ev.Reply.Tick-ev.Reply.Since) / TicksPerSecond)
+			}
 		}
 		switch {
 		case ev.Op == bus.Disconnect && ev.Reply.Result == bus.Done:

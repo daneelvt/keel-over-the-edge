@@ -55,6 +55,10 @@ type Config struct {
 	// Grace is how many ticks a disconnected boat sails on; 0 means
 	// GraceTicks.
 	Grace int64
+	// Limit is the most boats the world holds at once, from 1 to the
+	// capacity; 0 means the capacity. Beyond it, connections wait their
+	// turn in a queue.
+	Limit int
 }
 
 // A Phase is a part of a tick.
@@ -64,13 +68,14 @@ type Phase uint8
 // will come between them; the events of a tick are gathered as its commands
 // are applied.
 const (
-	PhaseInputs  Phase = iota // read the control slots, apply the commands
+	PhaseInputs  Phase = iota // read the control slots, apply the commands, admit from the queue
 	PhasePhysics              // step every boat
+	PhaseGrid                 // sort the boats into the grid's cells
 	PhasePublish              // publish the frame, hand it to the recorder
 	Phases                    // the number of phases
 )
 
-var phaseNames = [Phases]string{"inputs", "physics", "publish"}
+var phaseNames = [Phases]string{"inputs", "physics", "grid", "publish"}
 
 func (p Phase) String() string {
 	if p >= Phases {
@@ -104,6 +109,7 @@ type Input struct {
 type World struct {
 	bus       *bus.Bus
 	capacity  int
+	limit     int
 	kinds     []physics.Prepared
 	grace     int64
 	observer  Observer
@@ -120,7 +126,7 @@ type World struct {
 
 	// The phases as function values made once, so that running one inside
 	// a trace region allocates nothing.
-	inputsFn, physicsFn, publishFn func()
+	inputsFn, physicsFn, gridFn, publishFn func()
 }
 
 // New makes a world of empty slots and starts its workers. Close stops them.
@@ -140,14 +146,21 @@ func New(cfg Config) (*World, error) {
 	if cfg.Grace < 1 {
 		return nil, fmt.Errorf("sim: grace of %d ticks", cfg.Grace)
 	}
+	if cfg.Limit == 0 {
+		cfg.Limit = cfg.Capacity
+	}
+	if cfg.Limit < 1 || cfg.Limit > cfg.Capacity {
+		return nil, fmt.Errorf("sim: a limit of %d boats in a world of %d slots", cfg.Limit, cfg.Capacity)
+	}
 	w := &World{
 		bus:      bus.New(cfg.Capacity),
 		capacity: cfg.Capacity,
+		limit:    cfg.Limit,
 		kinds:    cfg.Kinds,
 		grace:    cfg.Grace,
 		ctx:      context.Background(),
 	}
-	w.inputsFn, w.physicsFn, w.publishFn = w.inputs, w.physics, w.publish
+	w.inputsFn, w.physicsFn, w.gridFn, w.publishFn = w.inputs, w.physics, w.grid, w.publish
 	f := w.bus.Frames.Latest()
 	f.Tick = cfg.Tick
 	f.Wind = DefaultWind
@@ -171,6 +184,9 @@ func (w *World) Capacity() int { return w.capacity }
 
 // Grace is how many ticks a boat sails on after its connection ends.
 func (w *World) Grace() int64 { return w.grace }
+
+// Limit is the most boats the world holds at once.
+func (w *World) Limit() int { return w.limit }
 
 // Now is the tick of the latest frame.
 func (w *World) Now() int64 { return w.bus.Frames.Latest().Tick }
@@ -202,6 +218,7 @@ func (w *World) Load(snapshot []byte) error {
 	for _, s := range f.Live {
 		w.bus.Controls.Store(s, f.Control[s])
 	}
+	buildGrid(f)
 	w.bus.Frames.Publish(f)
 	return nil
 }

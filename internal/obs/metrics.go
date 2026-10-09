@@ -26,6 +26,9 @@ var EdgeBuckets = []float64{0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.0
 // before the tick it was stamped for an input arrived, negative when late.
 var MarginBuckets = []float64{-10, -5, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30}
 
+// WaitBuckets are how long players wait in the queue for a boat, in seconds.
+var WaitBuckets = []float64{1, 5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600}
+
 // ClientBuckets are the phones' round trips and frame times, in seconds.
 var ClientBuckets = []float64{0.005, 0.01, 0.017, 0.025, 0.033, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.5, 1, 2}
 
@@ -47,6 +50,11 @@ type Metrics struct {
 	TicksSkipped  prometheus.Counter
 	ClockDrift    prometheus.Gauge
 	Boats         prometheus.Gauge
+	BoatLimit     prometheus.Gauge
+	QueueLength   prometheus.Gauge
+	Admissions    *prometheus.CounterVec // by result
+	QueueWait     prometheus.Histogram
+	GridDuration  prometheus.Histogram
 	Workers       prometheus.Gauge
 	Commands      *prometheus.CounterVec // by kind and result
 	Snapshots     *prometheus.CounterVec // flight recorder snapshots, by reason
@@ -114,6 +122,21 @@ func NewMetrics(build, catalog string) *Metrics {
 		}),
 		Boats: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "keel_sim_boats", Help: "Boats in the world.",
+		}),
+		BoatLimit: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "keel_sim_boat_limit", Help: "The most boats the world holds at once.",
+		}),
+		QueueLength: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "keel_sim_queue_length", Help: "Players waiting for a boat.",
+		}),
+		Admissions: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "keel_sim_admissions_total", Help: "Joins and the queue, by result: joined, rejoined, queued, admitted, dequeued or full.",
+		}, []string{"result"}),
+		QueueWait: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "keel_sim_queue_wait_seconds", Help: "How long each player given a boat from the queue waited.", Buckets: WaitBuckets,
+		}),
+		GridDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "keel_sim_grid_duration_seconds", Help: "How long sorting the boats into the grid took, each tick.", Buckets: TickBuckets,
 		}),
 		Workers: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "keel_sim_physics_workers", Help: "Goroutines that stepped boats in the latest tick.",
@@ -192,7 +215,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
-		m.ClockDrift, m.Boats, m.Workers, m.Commands, m.Snapshots,
+		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused)
 	return m
 }

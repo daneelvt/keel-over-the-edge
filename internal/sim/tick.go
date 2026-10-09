@@ -35,6 +35,8 @@ func (w *World) tick() {
 	w.phaseDone(PhaseInputs)
 	trace.WithRegion(w.ctx, "physics", w.physicsFn)
 	w.phaseDone(PhasePhysics)
+	trace.WithRegion(w.ctx, "grid", w.gridFn)
+	w.phaseDone(PhaseGrid)
 	trace.WithRegion(w.ctx, "publish", w.publishFn)
 	w.phaseDone(PhasePublish)
 }
@@ -48,7 +50,8 @@ func (w *World) phaseDone(p Phase) {
 // inputs copies the world into the next frame, then applies what changed:
 // first the boats whose grace has ended leave, then the control words of the
 // boats sailing are applied, each once its tick has come (bus.Due), then
-// the commands, in the order they came.
+// the commands, in the order they came; last, while there is room, those
+// waiting in the queue get their boats, the longest waiting first.
 func (w *World) inputs() {
 	cur, next := w.cur, w.next
 	next.Tick = cur.Tick + 1 + w.skip
@@ -68,6 +71,7 @@ func (w *World) inputs() {
 		next.Control[s] = cur.Control[s]
 		next.State[s] = cur.State[s]
 	}
+	next.Queue = append(next.Queue[:0], cur.Queue...)
 	next.Changed = next.Changed[:0]
 	clear(next.Events) // drop the old events' references
 	next.Events = next.Events[:0]
@@ -83,6 +87,7 @@ func (w *World) inputs() {
 		for i := range in.Commands {
 			w.apply(&in.Commands[i])
 		}
+		w.admit()
 		return
 	}
 
@@ -102,6 +107,7 @@ func (w *World) inputs() {
 		}
 		w.apply(&c)
 	}
+	w.admit()
 }
 
 // physics steps every boat in the wind.
@@ -110,16 +116,20 @@ func (w *World) physics() {
 	w.workers.step(w.next.Live)
 }
 
-// stepSlots steps the boats in slots of the next frame. Workers call it on
-// disjoint ranges.
+// stepSlots steps the boats in slots of the next frame, and keeps what each
+// step says of its sail, for drawing. Workers call it on disjoint ranges.
 func (w *World) stepSlots(slots []int32, o *physics.Out) {
 	f := w.next
 	for _, s := range slots {
 		word := f.Control[s]
 		c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
 		physics.Step(&f.State[s], &c, &w.env, &w.kinds[f.Kind[s]], o)
+		f.Sail[s] = physics.SailByte(o)
 	}
 }
+
+// grid sorts the next frame's boats into the grid's cells.
+func (w *World) grid() { buildGrid(w.next) }
 
 // publish makes the next frame current and hands it to the recorders.
 func (w *World) publish() {
