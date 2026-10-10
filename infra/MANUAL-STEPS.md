@@ -60,49 +60,141 @@ Check:
 
 Infisical keeps the credentials the workflows and the cluster read. The
 free plan has no custom roles, so each project is a fence: what may read
-one project can read nothing in the other.
+one project can read nothing in the other. You make two projects and two
+machine identities, and put one credential in place.
 
-1. Sign up at infisical.com, in the region of your choice: US
-   (`https://us.infisical.com`) or EU (`https://eu.infisical.com`). Note
-   it as `infisical.host`.
-2. Make two projects, each of the kind Secrets Management, and in each
-   delete the environments `dev` and `staging`, leaving `prod`:
-   - **`keel-ops`**: the workflows' credentials. Note its project ID as
-     `infisical.project`. In `prod`, make the folder `/machine`.
-   - **`keel-cluster`**: what the cluster reads. It stays empty for now.
-3. **Organisation → Access Control → Identities → create** `gha-prod`, the
-   machine workflow's identity:
-   - Authentication: **OIDC Auth** (and no other method).
-   - OIDC Discovery URL and Issuer: `https://token.actions.githubusercontent.com`
-   - Subject, exactly:
-     `repo:daneelvt@1800070/keel-over-the-edge@1402603021:environment:production`
-   - Audiences: `https://github.com/daneelvt`
-   - Claims: `job_workflow_ref` =
-     `daneelvt/keel-over-the-edge/.github/workflows/machine.yaml@refs/heads/main`
-   - Access token TTL and max TTL: **600** seconds.
-   - Add it to `keel-ops` with the role **Viewer**, and to no other project.
-   - Note its identity ID as `infisical.identityID`.
-4. Create `eso-prod`, the cluster's identity:
-   - Authentication: **Universal Auth**; its client secret with no expiry.
-   - Add it to `keel-cluster` with the role **Viewer**, and to no other
-     project.
-   - Create a client secret. Put its client ID and the secret into
-     `keel-ops`, `prod`, `/machine`, as `ESO_CLIENT_ID` and
-     `ESO_CLIENT_SECRET`, and nowhere else: not the password manager, not a
-     file. The machine workflow reads them from there and places them in
-     the cluster.
+The button names below are Infisical's, from its documentation; where it
+names none, the step says what to look for.
+
+### 2.1 The account
+
+1. Sign up at infisical.com. Unless you chose the EU from Infisical's
+   region picker, the account is in the **US**: the address bar shows
+   `app.infisical.com` or `us.infisical.com`. Write the API's address as
+   `infisical.host` in `infra/production.yaml`:
+   - US: `https://us.infisical.com`
+   - EU (the address bar shows `eu.infisical.com`): `https://eu.infisical.com`
+
+### 2.2 The two projects
+
+Do this twice, once for each project below.
+
+1. On the organisation's overview, open **Secrets Management** and create a
+   project with the name below.
+2. In the project, open its settings (**Project Settings**) and, under
+   **Environments**, delete **Development** and **Staging**. Keep
+   **Production**: its slug must be `prod`, as `infra/production.yaml`
+   says (`environment: prod`).
+
+The projects:
+
+- **`keel-ops`**: the workflows' credentials. In its settings, copy the
+  **Project ID** and write it as `infisical.project` in
+  `infra/production.yaml`.
+- **`keel-cluster`**: what the cluster reads. It stays empty for now.
+
+Then the folder the machine workflow reads:
+
+3. In `keel-ops`, open the secrets of the **Production** environment.
+4. Select the chevron next to **Add Secret**, then **Add Folder**, and name
+   it `machine` (letters, numbers and dashes only). The folder's path is
+   `/machine`: the secrets in 2.4 go inside it.
+
+### 2.3 `gha-prod`: the machine workflow's identity
+
+It signs in with the job's own GitHub token, so no secret of its own
+exists anywhere.
+
+1. In the organisation (not a project): **Access Control → Machine
+   Identities → Create**.
+   - **Name**: `gha-prod`
+   - **Role** (the **Organization Roles** tab): **No Access**. An identity's
+     organisation role gives it nothing in any project; the project role in
+     step 4 is what it may do.
+2. Infisical opens the identity's page. Note its **ID** there, and write it
+   as `infisical.identityID` in `infra/production.yaml`.
+3. In its **Authentication** section, remove **Universal Auth**, which a
+   new identity starts with, and add **OIDC Auth** in its place, with:
+
+   | Field | Value |
+   |---|---|
+   | OIDC Discovery URL | `https://token.actions.githubusercontent.com` |
+   | Issuer | `https://token.actions.githubusercontent.com` |
+   | CA Certificate | empty |
+   | Subject | `repo:daneelvt@1800070/keel-over-the-edge@1402603021:environment:production` |
+   | Audiences | `https://github.com/daneelvt` |
+   | Claims | one claim: name `job_workflow_ref`, value `daneelvt/keel-over-the-edge/.github/workflows/machine.yaml@refs/heads/main` |
+   | Access Token TTL | `600` |
+   | Access Token Max TTL | `600` |
+   | Access Token Max Number of Uses | `0` (no limit: a run uses its token many times) |
+   | Access Token Trusted IPs | as it is (limiting them is a paid feature) |
+
+   Type the subject and the claim exactly, with no `*`: Infisical matches
+   them by pattern, and an exact value is the narrowest.
+4. Open **`keel-ops`**: **Access Control → Machine Identities → Add Machine
+   Identity to Project → Assign Existing**, choose `gha-prod`, role
+   **Viewer**. Add it to no other project.
+
+### 2.4 `eso-prod`: the cluster's identity
+
+It signs in with a client ID and a client secret, which the machine
+workflow places in the cluster.
+
+1. In the organisation: **Access Control → Machine Identities → Create**.
+   - **Name**: `eso-prod`
+   - **Role** (the **Organization Roles** tab): **No Access**.
+2. On the identity's page, **Universal Auth** is already set up. Edit it
+   (the edit control on the **Authentication** section); on its
+   **Configuration** tab:
+
+   | Field | Value |
+   |---|---|
+   | Access Token TTL | `3600` (an hour: External Secrets signs in again whenever it needs a token) |
+   | Access Token Max TTL | `3600` |
+   | Access Token Max Number of Uses | `0` (no limit) |
+
+   Leave the **Lockout** tab on as it is (3 failures, 5 minutes) and the
+   **Advanced** tab's trusted IPs as they are (a paid feature).
+3. Still on the identity's page, **Add Client Secret** (in the Universal
+   Auth part of the page):
+   - **Description**: `cluster`
+   - **TTL**: `0` (it never expires; it is replaced by hand, below)
+   - **Max Number of Uses**: `0` (no limit)
+
+   Infisical shows the secret **once**. Leave that window open for step 5.
+4. Open **`keel-cluster`**: **Access Control → Machine Identities → Add
+   Machine Identity to Project → Assign Existing**, choose `eso-prod`, role
+   **Viewer**. Add it to no other project: in particular not `keel-ops`.
+5. In another tab, open **`keel-ops`**, **Production**, the folder
+   **`machine`**, and **Add Secret** twice:
+   - `ESO_CLIENT_ID`: the identity's **Client ID**, shown with its
+     Universal Auth settings. It is not a secret, but it belongs with the
+     secret.
+   - `ESO_CLIENT_SECRET`: the client secret from step 3.
+
+   Then close the window that showed the secret. It is kept nowhere else:
+   not in the password manager, not in a file. The machine workflow reads
+   both from here and places them in the cluster.
 
 Check:
 
-- [ ] The organisation's identities, human and machine together: the owner,
-      `gha-prod`, `eso-prod`. **3 of the free plan's 5.**
-- [ ] `gha-prod` is in `keel-ops` alone, `eso-prod` in `keel-cluster` alone.
-- [ ] Each project has `prod` only.
+- [ ] **Access Control → Machine Identities** lists `gha-prod` and
+      `eso-prod`, and no other. With you, that is **3 of the free plan's 5
+      identities**.
+- [ ] `gha-prod` has OIDC Auth alone, and is a member of `keel-ops` alone;
+      `eso-prod` has Universal Auth, one client secret, and is a member of
+      `keel-cluster` alone.
+- [ ] Each project has the **Production** environment alone.
+- [ ] `keel-ops`, Production, `/machine` holds `ESO_CLIENT_ID` and
+      `ESO_CLIENT_SECRET`, and nothing else.
+- [ ] `infra/production.yaml` has `infisical.host`, `infisical.identityID`
+      and `infisical.project` filled in.
 
-**Rotating the cluster's credential**: create a new client secret for
-`eso-prod`, put it into `/machine/ESO_CLIENT_SECRET`, run `machine` with
-`apply`, and only then revoke the old one. The free plan keeps no earlier
-versions of a secret: an overwritten value is gone.
+**Rotating the cluster's credential**: on `eso-prod`'s page, **Add Client
+Secret** again (TTL `0`). Paste it over `ESO_CLIENT_SECRET` in
+`keel-ops`/Production/`machine`, run `machine` with `apply`, and only then
+revoke the old client secret on the identity's page. The free plan keeps no
+earlier versions of a secret: an overwritten value is gone.
 
 ## 3. Cloudflare
 
