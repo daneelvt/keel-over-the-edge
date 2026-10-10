@@ -17,11 +17,14 @@
     group: root
     mode: "0644"
 
+# On a workflow's runner, only the package lists: upgrading the runner's
+# own image, which holds far more than the machine, would test GitHub's
+# packages, not this machine's, and take minutes.
 - name: Bring every package up to date
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
-    upgrade: full
+    upgrade: "{{ 'no' if machine_runner | default(false) else 'full' }}"
 
 - name: Install the packages the machine needs
   ansible.builtin.apt:

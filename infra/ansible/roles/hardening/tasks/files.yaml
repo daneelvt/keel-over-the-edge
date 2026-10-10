@@ -17,11 +17,20 @@
   loop_control:
     label: "{{ item.path }}"
 
+# The first 20, and how many in all: the containers' files are left out,
+# and on a runner its toolchains, of which there are hundreds of thousands.
 - name: Find world-writable files, and files without an owner
-  ansible.builtin.command:
+  vars:
+    hardening_skip: >-
+      {{ ['/var/lib/rancher', '/var/lib/kubelet', '/var/lib/docker', '/var/lib/containerd']
+         + (hardening_scan_skip_runner if machine_runner | default(false) else []) }}
+  ansible.builtin.shell:
     cmd: >-
-      find / -xdev ( -path /var/lib/rancher -o -path /var/lib/kubelet -o -path /var/lib/docker -o -path /var/lib/containerd ) -prune
-      -o ( -type f -perm -0002 -o -nouser -o -nogroup ) -print
+      set -o pipefail;
+      find / -xdev \( {{ hardening_skip | map('regex_replace', '^', '-path ') | join(' -o ') }} \) -prune
+      -o \( -type f -perm -0002 -o -nouser -o -nogroup \) -print
+      | awk 'NR <= 20; END { print NR " in all" }'
+    executable: /bin/bash
   register: hardening_loose
   changed_when: false
   check_mode: false
@@ -29,10 +38,10 @@
 - name: Report them
   ansible.builtin.debug:
     msg: "{{ hardening_loose.stdout_lines }}"
-  when: hardening_loose.stdout_lines | length > 0
+  when: hardening_loose.stdout_lines[-1] != '0 in all'
 
 - name: Check root's PATH holds no empty or relative folder
   ansible.builtin.assert:
-    that: ansible_env.PATH.split(':') | reject('match', '^/') | list | length == 0
-    fail_msg: "root's PATH is {{ ansible_env.PATH }}"
+    that: ansible_facts.env.PATH.split(':') | reject('match', '^/') | list | length == 0
+    fail_msg: "root's PATH is {{ ansible_facts.env.PATH }}"
     quiet: true
