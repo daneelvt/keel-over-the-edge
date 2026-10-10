@@ -247,6 +247,11 @@ func TestRunGivesTheCredentialOnlyToThePlaybook(t *testing.T) {
 			t.Errorf("the playbook's arguments have no %q: %s", want, args)
 		}
 	}
+	// A Unix socket's path is under 108 bytes: SSH's shared connection is
+	// left in Ansible's own short folder, never in the repository's.
+	if strings.Contains(args, "ControlPath") {
+		t.Errorf("the playbook's SSH arguments set a ControlPath: %s", args)
+	}
 	if strings.Contains(args, "--check") || p.argv[0] == "sudo" || p.dir != m.path(ansibleDir) {
 		t.Errorf("apply ran as %s in %s", args, p.dir)
 	}
