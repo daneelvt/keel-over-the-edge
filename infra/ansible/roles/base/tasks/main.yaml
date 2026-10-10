@@ -17,6 +17,29 @@
     group: root
     mode: "0644"
 
+- name: Make needrestart's folder of settings
+  ansible.builtin.file:
+    path: /etc/needrestart/conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# After every apt run, needrestart restarts the services it finds on
+# replaced libraries, and it counts tailscaled among them, static as it is.
+# tailscaled carries Tailscale SSH, the playbook's own connection, which
+# the restart would cut in the middle of the run. Tailscale's own package
+# restarts it when Tailscale is upgraded. Written before the first upgrade.
+- name: Keep needrestart from restarting tailscaled
+  ansible.builtin.copy:
+    dest: /etc/needrestart/conf.d/50-keel.conf
+    content: |
+      # Written by the base role.
+      $nrconf{override_rc}{qr(^tailscaled\.service$)} = 0;
+    owner: root
+    group: root
+    mode: "0644"
+
 # On a workflow's runner, only the package lists: upgrading the runner's
 # own image, which holds far more than the machine, would test GitHub's
 # packages, not this machine's, and take minutes.
