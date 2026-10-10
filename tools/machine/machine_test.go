@@ -482,3 +482,17 @@ func TestKubeBenchReport(t *testing.T) {
 		t.Errorf("%+v %v", r, err)
 	}
 }
+
+// TestPingPathHidesTheAddress: the machine's public address, which tailscale
+// ping names for a direct path, reaches neither the log nor the summary.
+func TestPingPathHidesTheAddress(t *testing.T) {
+	for out, want := range map[string]string{
+		"pong from keel-prod-1 (100.96.147.105) via 203.0.113.7:41641 in 57ms\n": "direct, in 57ms",
+		"pong from keel-prod-1 (100.96.147.105) via DERP(nyc) in 81ms\n":         "relayed through DERP (nyc) in 81ms",
+		"no reply\n": "by a path tailscale ping did not name",
+	} {
+		if got := pingPath(out); got != want || strings.Contains(got, "203.0.113.7") {
+			t.Errorf("%q: %q, want %q", out, got, want)
+		}
+	}
+}

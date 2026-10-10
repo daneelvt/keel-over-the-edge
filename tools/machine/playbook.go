@@ -151,7 +151,7 @@ func (m *machine) verify(ctx context.Context, local bool) error {
 // listeningReport is what verify.yaml reported listening, one socket a
 // line.
 func listeningReport(out string) string {
-	i := strings.Index(out, "TASK [Report it]")
+	i := strings.Index(out, "TASK [Report it, without the public address]")
 	if i < 0 {
 		return ""
 	}
