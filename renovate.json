@@ -93,6 +93,12 @@
       "groupName": "Flux"
     },
     {
+      "description": "Flux's manifests are written by flux install and never edited: the images they name are pinned by digest beside them, in kustomization.yaml, and move with Flux.",
+      "matchManagers": ["kubernetes"],
+      "matchFileNames": ["infra/cluster/flux-system/gotk-components.yaml"],
+      "enabled": false
+    },
+    {
       "description": "The game's own image and manifests are what a release publishes: the manifests name the image with no version, and Flux follows a tag the promote workflow moves.",
       "matchDepNames": ["ghcr.io/daneelvt/keel", "ghcr.io/daneelvt/keel-manifests"],
       "enabled": false
