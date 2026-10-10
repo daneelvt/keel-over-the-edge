@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# /tmp in memory, and neither it nor /dev/shm holding devices, set-user-ID
+# programs, or anything to run.
+- name: Mount /tmp in memory, without devices, set-user-ID programs or anything to run
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tmp.mount
+    content: |
+      # Written by the hardening role, from systemd's tmp.mount.
+      [Unit]
+      Description=Temporary Directory /tmp
+      Documentation=man:file-hierarchy(7)
+      ConditionPathIsSymbolicLink=!/tmp
+      DefaultDependencies=no
+      Conflicts=umount.target
+      Before=local-fs.target umount.target
+
+      [Mount]
+      What=tmpfs
+      Where=/tmp
+      Type=tmpfs
+      Options=mode=1777,strictatime,nosuid,nodev,noexec,size=25%%,nr_inodes=1m
+
+      [Install]
+      WantedBy=local-fs.target
+    owner: root
+    group: root
+    mode: "0644"
+  register: hardening_tmp_mount
+
+- name: Mount /tmp now, and at every boot
+  ansible.builtin.systemd_service:
+    name: tmp.mount
+    enabled: true
+    state: started
+    daemon_reload: "{{ hardening_tmp_mount is changed }}"
+
+- name: Mount /dev/shm without devices, set-user-ID programs or anything to run
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\S+\s+/dev/shm\s'
+    line: "tmpfs /dev/shm tmpfs defaults,nodev,nosuid,noexec 0 0"
+
+# Ubuntu mounts /tmp in memory from boot already, with other options: the
+# unit above sets them from the next boot, and a remount sets them now.
+- name: Read /tmp's and /dev/shm's options
+  ansible.builtin.command:
+    cmd: findmnt --noheadings --output OPTIONS {{ item }}
+  loop: [/tmp, /dev/shm]
+  register: hardening_mounts
+  changed_when: false
+  check_mode: false
+
+- name: Remount them with those options  # noqa: command-instead-of-module (the mount module is not in ansible.builtin)
+  ansible.builtin.command:
+    cmd: mount -o remount,nodev,nosuid,noexec {{ item.item }}
+  loop: "{{ hardening_mounts.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not (item.stdout.split(',') is superset(['nodev', 'nosuid', 'noexec']))
+  changed_when: true

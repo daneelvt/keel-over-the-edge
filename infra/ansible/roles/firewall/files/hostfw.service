@@ -1,0 +1,20 @@
+# Written by the firewall role: the host's table, loaded before the network
+# comes up, so no packet ever arrives unfiltered, even at boot. Stopping it
+# removes its table alone; Ubuntu's nftables.service, which flushes every
+# table (k3s's and Tailscale's too), stays off.
+[Unit]
+Description=The host's firewall (table inet hostfw)
+DefaultDependencies=no
+Before=network-pre.target shutdown.target
+Wants=network-pre.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/hostfw/hostfw.nft
+ExecReload=/usr/sbin/nft -f /etc/hostfw/hostfw.nft
+ExecStop=/usr/sbin/nft delete table inet hostfw
+
+[Install]
+WantedBy=sysinit.target

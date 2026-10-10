@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The one way in is Tailscale SSH: tailscaled from Tailscale's own
+# repository, OpenSSH gone.
+
+- name: Install the key that signs Tailscale's packages
+  ansible.builtin.get_url:
+    url: "{{ access_tailscale_keyring_url }}"
+    dest: "{{ access_tailscale_keyring }}"
+    checksum: "sha256:{{ access_tailscale_keyring_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Tailscale's repository
+  ansible.builtin.copy:
+    src: tailscale.sources
+    dest: /etc/apt/sources.list.d/tailscale.sources
+    owner: root
+    group: root
+    mode: "0644"
+  register: access_source
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+    install_recommends: false
+    update_cache: "{{ access_source is changed }}"
+
+- name: Keep tailscaled running
+  ansible.builtin.systemd_service:
+    name: tailscaled
+    enabled: true
+    state: started
+
+# The machine keeps its own resolvers (k3s's CoreDNS forwards to them) and
+# serves Tailscale SSH: what infra/bootstrap/join.sh set, kept.
+- name: Read Tailscale's settings
+  ansible.builtin.command:
+    cmd: tailscale debug prefs
+  register: access_prefs
+  changed_when: false
+  check_mode: false
+  when: not (machine_runner | default(false))
+
+- name: Serve Tailscale SSH, and keep the machine's own DNS
+  ansible.builtin.command:
+    cmd: tailscale set --ssh --accept-dns=false
+  when:
+    - not (machine_runner | default(false))
+    - not ((access_prefs.stdout | from_json).RunSSH and not (access_prefs.stdout | from_json).CorpDNS)
+  changed_when: true
+
+- name: Make OpenSSH's folder of settings
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not (machine_runner | default(false))
+
+- name: Should OpenSSH ever start, it takes no passwords
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/60-keel.conf
+    content: |
+      # Written by the access role.
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+    owner: root
+    group: root
+    mode: "0644"
+  when: not (machine_runner | default(false))
+
+- name: Stop OpenSSH, and keep it from starting
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: [ssh.socket, ssh.service]
+  when: not (machine_runner | default(false))
+
+- name: Remove OpenSSH's server
+  ansible.builtin.apt:
+    name: openssh-server
+    state: absent
+    purge: true
+  when: not (machine_runner | default(false))

@@ -17,6 +17,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/pinned"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/registry"
 )
 
 // revisionAnnotation is where a release's artifact says what it was made
@@ -35,7 +36,7 @@ const approvalEnvironment = "production"
 // production follows.
 type promoter struct {
 	out io.Writer
-	reg *registry
+	reg *registry.Registry
 	// repo is the manifests' repository in the registry, without its host.
 	repo string
 	// api is GitHub's API, as https://api.github.com; code, the game's
@@ -55,7 +56,7 @@ func newPromoter(out io.Writer) (*promoter, error) {
 	hc := &http.Client{Timeout: time.Minute}
 	p := &promoter{
 		out: out, repo: repo, hc: hc,
-		reg:   &registry{base: "https://" + host, user: os.Getenv("GITHUB_ACTOR"), password: os.Getenv("GITHUB_TOKEN"), hc: hc},
+		reg:   &registry.Registry{Base: "https://" + host, User: os.Getenv("GITHUB_ACTOR"), Password: os.Getenv("GITHUB_TOKEN"), HC: hc},
 		api:   "https://api.github.com",
 		code:  "daneelvt/keel-over-the-edge",
 		token: os.Getenv("GITHUB_TOKEN"),
@@ -97,16 +98,16 @@ func (r release) String() string {
 // find reads the release a tag names: a build, or the tag production
 // follows. found is false when the registry has none.
 func (p *promoter) find(ctx context.Context, tag string) (r release, found bool, err error) {
-	a, found, err := p.reg.resolve(ctx, p.repo, tag)
+	a, found, err := p.reg.Resolve(ctx, p.repo, tag)
 	if err != nil || !found {
 		return r, false, err
 	}
-	revision := a.annotations[revisionAnnotation]
+	revision := a.Annotations[revisionAnnotation]
 	branch, commit, ok := strings.Cut(revision, "@sha1:")
 	if !ok || branch != mainBranch || len(commit) != 40 || !manifests.BuildID.MatchString(commit[:12]) {
 		return r, false, fmt.Errorf("%s:%s does not say it was made from a commit on %s (%s is %q)", manifests.ManifestsRepo, tag, mainBranch, revisionAnnotation, revision)
 	}
-	return release{build: commit[:12], commit: commit, digest: a.digest}, true, nil
+	return release{build: commit[:12], commit: commit, digest: a.Digest}, true, nil
 }
 
 // verify checks a release's signature as Flux will: cosign, keyless,

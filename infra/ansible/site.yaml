@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Production's machine, from the system the provider installed to a
+# hardened k3s node that Flux keeps in step with the release production
+# follows. go run ./tools/machine -run check|apply runs it; every role can
+# run again and changes nothing the second time.
+- name: Production's machine
+  hosts: all
+  gather_facts: true
+  vars:
+    # Whether apply may reboot the machine when a change needs it; off
+    # unless the machine workflow's box is ticked.
+    machine_reboot: false
+  roles:
+    - base
+    - hardening
+    - access
+    - firewall
+    - updates
+    - k3s
+    - flux
+    - bootstrap_secret
+  post_tasks:
+    - name: Record the system as the playbook leaves it
+      ansible.builtin.include_role:
+        name: hardening
+        tasks_from: integrity.yaml
+
+    - name: Reboot, if asked and a change needs it
+      ansible.builtin.import_tasks: tasks/reboot.yaml

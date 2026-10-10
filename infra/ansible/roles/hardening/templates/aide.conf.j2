@@ -1,0 +1,5 @@
+# Written by the hardening role: what AIDE leaves out, as it changes by
+# design.
+{% for path in hardening_aide_exclude + (hardening_aide_exclude_runner if (machine_runner | default(false)) else []) %}
+!{{ path }}(/|$)
+{% endfor %}

@@ -1,0 +1,6 @@
+# Written by the hardening role: modules this machine never uses cannot be
+# loaded, by name or by alias.
+{% for m in hardening_modules %}
+install {{ m }} /bin/false
+blacklist {{ m }}
+{% endfor %}

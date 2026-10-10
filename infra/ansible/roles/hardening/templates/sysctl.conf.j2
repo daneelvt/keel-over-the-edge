@@ -1,0 +1,5 @@
+# Written by the hardening role, after systemd's and Ubuntu's own settings
+# (which it overrides) and before k3s's (90-k3s.conf).
+{% for key, value in hardening_sysctl.items() %}
+{{ key }} = {{ value }}
+{% endfor %}

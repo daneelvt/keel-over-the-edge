@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The Lynis warnings accepted on production's machine, each with its
+# reason: an ID, then why, one a line. go run ./tools/machine -audit fails
+# on any other warning.

@@ -316,6 +316,7 @@ var rules = []rule{
 	{"keel's Deployment", gameDeployment},
 	{"GOMEMLIMIT within the memory limit", memoryLimit},
 	{"no route to the internal listener", noInternalRoute},
+	{"nothing exposed on production's node", noNodePorts},
 	{"routes on the Gateway's listeners", routesOnListeners},
 	{"the database's access and locale", databaseCluster},
 	{"the database's restarts", databaseRestarts},
@@ -766,6 +767,48 @@ func memoryLimit(objs []Object, _ Target) error {
 		return nil
 	}
 	return errors.New("no GOMEMLIMIT")
+}
+
+// TraefikValues are the values of k3s's Traefik chart a HelmChartConfig
+// sets, if o is Traefik's.
+func TraefikValues(o Object) (map[string]any, error) {
+	if o.Kind() != "HelmChartConfig" || o.Name() != "traefik" || Str(o, "metadata", "namespace") != "kube-system" {
+		return nil, nil
+	}
+	var v map[string]any
+	if err := yaml.Unmarshal([]byte(Str(o, "spec", "valuesContent")), &v); err != nil {
+		return nil, fmt.Errorf("%s: its valuesContent: %w", o.ID(), err)
+	}
+	return v, nil
+}
+
+// noNodePorts: production's node is on the internet, so no Service there
+// is a LoadBalancer or a NodePort, which Kubernetes opens on every address
+// of the node, Traefik's included (the chart's service.spec.type defaults
+// to LoadBalancer, and k3s's ServiceLB is off there). The local cluster's
+// Traefik is a LoadBalancer on purpose: ServiceLB holds its ports and Lima
+// forwards them.
+func noNodePorts(objs []Object, t Target) error {
+	if t.Cluster != "prod" {
+		return nil
+	}
+	var errs []error
+	for _, o := range objs {
+		switch o.Kind() {
+		case "Service":
+			if typ := Str(o, "spec", "type"); typ == "LoadBalancer" || typ == "NodePort" {
+				errs = append(errs, fmt.Errorf("%s is a %s Service", o.ID(), typ))
+			}
+		case "HelmChartConfig":
+			v, err := TraefikValues(o)
+			if err != nil {
+				errs = append(errs, err)
+			} else if v != nil && Str(v, "service", "spec", "type") != "ClusterIP" {
+				errs = append(errs, fmt.Errorf("%s: Traefik's service.spec.type is %q, want ClusterIP", o.ID(), Str(v, "service", "spec", "type")))
+			}
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // noInternalRoute: no route reaches keel's internal listener, through any

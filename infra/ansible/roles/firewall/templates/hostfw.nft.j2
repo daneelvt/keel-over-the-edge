@@ -1,0 +1,42 @@
+#!/usr/sbin/nft -f
+# Written by the firewall role. The host's own table, which no other
+# program writes: k3s's and Tailscale's rules are in their own tables, and
+# a packet must pass every table's chain. Declared, deleted and written in
+# one transaction, so loading it again never leaves a moment unfiltered
+# and never touches another table.
+table inet hostfw
+delete table inet hostfw
+
+table inet hostfw {
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		iif "lo" accept
+		ct state established,related accept
+		ct state invalid drop
+
+		# The tailnet: what may come in is the tailnet policy's to say.
+		iifname "tailscale0" accept
+
+		# The cluster's own traffic: pods and services reaching the node.
+		ip saddr { {{ firewall_pods }}, {{ firewall_services }} } accept
+		iifname { {% for i in firewall_cluster_interfaces %}"{{ i }}"{{ ", " if not loop.last }}{% endfor %} } accept
+
+		# The machine's address comes by DHCP: the server's answers.
+		iifname "{{ firewall_public_interface }}" udp sport 67 udp dport 68 accept
+
+		# ICMP that keeps the network working; pings, slowly.
+		icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+		icmp type echo-request limit rate 5/second accept
+		icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept
+		icmpv6 type echo-request limit rate 5/second accept
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+
+		# Nothing from outside starts a connection through the node: no
+		# NodePort or host port is reachable, whatever a Service says.
+		iifname "{{ firewall_public_interface }}" ct state new drop
+	}
+}

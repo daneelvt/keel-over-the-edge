@@ -1,0 +1,227 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Checks the machine is as the playbook leaves it, from outside the roles,
+# changing nothing: the firewall, the way in, the hardening, k3s, Flux and
+# the bootstrap secret. go run ./tools/machine -verify runs it.
+- name: Verify production's machine
+  hosts: all
+  gather_facts: false
+  vars:
+    verify_kubectl: /usr/local/bin/k3s kubectl
+    verify_modules: [cramfs, freevxfs, hfs, hfsplus, jffs2, usb-storage, dccp, rds, sctp, tipc]
+    verify_sysctl:
+      kernel.randomize_va_space: "2"
+      fs.suid_dumpable: "0"
+      kernel.kptr_restrict: "2"
+      net.ipv4.conf.all.rp_filter: "1"
+      net.ipv4.conf.all.accept_redirects: "0"
+      net.ipv4.conf.all.send_redirects: "0"
+      net.ipv4.tcp_syncookies: "1"
+      net.ipv6.conf.all.accept_ra: "0"
+      vm.overcommit_memory: "1"
+      kernel.panic: "10"
+  tasks:
+    - name: Read the firewall
+      ansible.builtin.command:
+        cmd: nft list table inet hostfw
+      register: verify_nft
+      changed_when: false
+
+    - name: Check the firewall drops what is not let in, and lets the tailnet in
+      ansible.builtin.assert:
+        that:
+          - verify_nft.stdout is search('hook input priority filter; policy drop;')
+          - verify_nft.stdout is search('iifname "tailscale0" accept')
+          - verify_nft.stdout is search('hook forward priority filter; policy accept;')
+          - verify_nft.stdout is search('ct state new drop')
+        quiet: true
+
+    - name: Read the services that must stay off  # noqa: command-instead-of-module (a check, which must not change them)
+      ansible.builtin.command:
+        cmd: systemctl is-enabled {{ item }}
+      loop: "{{ ['nftables.service', 'swap.target'] + ([] if machine_runner | default(false) else ['ssh.socket', 'ssh.service']) }}"
+      register: verify_off
+      changed_when: false
+      failed_when: verify_off.stdout not in ['disabled', 'masked']
+
+    - name: Read the swap in use, the time zone and the mounts
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          echo "swap=$(swapon --show=NAME --noheadings | wc -l)"
+          echo "timezone=$(timedatectl show --property=Timezone --value)"
+          echo "tmp=$(findmnt --noheadings --output FSTYPE,OPTIONS /tmp)"
+          echo "shm=$(findmnt --noheadings --output OPTIONS /dev/shm)"
+        executable: /bin/bash
+      register: verify_state
+      changed_when: false
+
+    - name: Check there is no swap, the clock is UTC, and /tmp and /dev/shm hold nothing to run
+      vars:
+        verify: "{{ dict(verify_state.stdout_lines | map('split', '=', 1)) }}"
+      ansible.builtin.assert:
+        that:
+          - verify.swap == '0'
+          - verify.timezone == 'UTC'
+          - verify.tmp is search('^tmpfs\s')
+          - verify.tmp.split()[1].split(',') is superset(['nodev', 'nosuid', 'noexec'])
+          - verify.shm.split(',') is superset(['nodev', 'nosuid', 'noexec'])
+        quiet: true
+
+    - name: Read how each unused module would load
+      ansible.builtin.command:
+        cmd: modprobe --dry-run --verbose {{ item }}
+      loop: "{{ verify_modules }}"
+      register: verify_modprobe
+      changed_when: false
+      failed_when: verify_modprobe.stdout is not search('install /bin/false')
+
+    - name: Read the kernel settings in effect
+      ansible.builtin.command:
+        cmd: sysctl --values {{ verify_sysctl.keys() | join(' ') }}
+      register: verify_live
+      changed_when: false
+
+    - name: Check them
+      ansible.builtin.assert:
+        that: verify_live.stdout_lines | map('trim') | list == verify_sysctl.values() | list
+        fail_msg: "{{ dict(verify_sysctl.keys() | zip(verify_live.stdout_lines)) | to_json }}"
+        quiet: true
+
+    - name: Read auditd's state, AIDE's record, PAM and the login settings
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          auditctl -s | grep '^enabled'
+          test -s /var/lib/aide/aide.db && echo aide=yes
+          grep -h '^\s*deny\s*=\|^\s*unlock_time\s*=' /etc/security/faillock.conf
+          grep -h 'minlen\|minclass' /etc/security/pwquality.conf.d/*.conf
+          grep -c pam_faillock.so /etc/pam.d/common-auth
+          grep -c pam_wheel.so /etc/pam.d/su
+          cat /etc/cron.allow
+          aa-enabled
+        executable: /bin/bash
+      register: verify_hardening
+      changed_when: false
+
+    - name: Check the audit rules are locked, AIDE has its record, and logins are guarded
+      ansible.builtin.assert:
+        that:
+          - verify_hardening.stdout is search('^enabled 2$', multiline=True)
+          - verify_hardening.stdout is search('^aide=yes$', multiline=True)
+          - verify_hardening.stdout is search('^deny = 5$', multiline=True)
+          - verify_hardening.stdout is search('^unlock_time = 900$', multiline=True)
+          - verify_hardening.stdout is search('^minlen = 14$', multiline=True)
+          - verify_hardening.stdout is search('^minclass = 4$', multiline=True)
+          - verify_hardening.stdout is search('^root$', multiline=True)
+          - verify_hardening.stdout is search('^Yes$', multiline=True)
+        fail_msg: "{{ verify_hardening.stdout }}"
+        quiet: true
+
+    - name: Read k3s's node, its encryption, and its audit log
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          {{ verify_kubectl }} get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'; echo
+          k3s secrets-encrypt status | grep 'Encryption Status'
+          test -s /var/lib/rancher/k3s/server/logs/audit.log && echo audit-log=yes
+          stat -c '%a' /var/lib/rancher/k3s/server/logs
+        executable: /bin/bash
+      register: verify_k3s
+      changed_when: false
+
+    - name: Check k3s is ready, encrypts secrets, and keeps its audit log
+      ansible.builtin.assert:
+        that:
+          - verify_k3s.stdout_lines[0] == 'True'
+          - verify_k3s.stdout is search('Encryption Status:\s+Enabled')
+          - verify_k3s.stdout is search('^audit-log=yes$', multiline=True)
+          - verify_k3s.stdout_lines[-1] == '700'
+        fail_msg: "{{ verify_k3s.stdout }}"
+        quiet: true
+
+    - name: Wait for Flux's source, and its first three layers
+      ansible.builtin.command:
+        cmd: >-
+          {{ verify_kubectl }} --namespace=flux-system wait --timeout=10m
+          {{ 'ocirepository/keel --for=condition=SourceVerified' if item == 'source' else 'kustomization/' ~ item ~ ' --for=condition=Ready' }}
+      loop: [source, flux-system, controllers, configs]
+      changed_when: false
+
+    - name: Read whether the game's database password is there yet
+      ansible.builtin.command:
+        cmd: "{{ verify_kubectl }} --namespace=keel get secret keel-db-app --ignore-not-found --output=name"
+      register: verify_password
+      changed_when: false
+
+    # Until External Secrets brings it, the database is not made and the
+    # game's pod waits for it: on purpose, so the database is only ever
+    # made with the password kept in Infisical.
+    - name: Wait for the game's pod to be waiting for it
+      ansible.builtin.command:
+        cmd: >-
+          {{ verify_kubectl }} --namespace=keel get pods --selector=app.kubernetes.io/name=keel
+          --output=jsonpath={.items[*].status.containerStatuses[*].state.waiting.reason}{.items[*].status.initContainerStatuses[*].state.waiting.reason}
+      register: verify_waiting
+      until: verify_waiting.stdout is search('CreateContainerConfigError')
+      retries: 60
+      delay: 10
+      changed_when: false
+      when: verify_password.stdout == ''
+
+    # CloudNativePG makes the job that would make the database, whose pod
+    # cannot start without the password either; no instance is made.
+    - name: Read the database's instances
+      ansible.builtin.command:
+        cmd: "{{ verify_kubectl }} --namespace=keel get pods --selector=cnpg.io/cluster=keel-db,cnpg.io/podRole=instance --output=name"
+      register: verify_database
+      changed_when: false
+      when: verify_password.stdout == ''
+
+    - name: Check no database was made without it
+      ansible.builtin.assert:
+        that: verify_database.stdout == ''
+        quiet: true
+      when: verify_password.stdout == ''
+
+    - name: Wait for the game, once the password is there
+      ansible.builtin.command:
+        cmd: "{{ verify_kubectl }} --namespace=flux-system wait kustomization/apps --for=condition=Ready --timeout=10m"
+      changed_when: false
+      when: verify_password.stdout != ''
+
+    - name: Read the bootstrap secret's keys, and nothing of their values
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          {{ verify_kubectl }} --namespace=external-secrets get secret infisical-universal-auth --output=json
+          | jq --raw-output '.data | keys | join(" ")'
+        executable: /bin/bash
+      register: verify_secret
+      changed_when: false
+
+    - name: Check it holds External Secrets' two keys
+      ansible.builtin.assert:
+        that: verify_secret.stdout.split() | sort == ['clientId', 'clientSecret']
+        quiet: true
+
+    - name: Read the pods Pod Security refused
+      ansible.builtin.command:
+        cmd: "{{ verify_kubectl }} get events --all-namespaces --field-selector=reason=FailedCreate --output=jsonpath={.items[*].message}"
+      register: verify_refused
+      changed_when: false
+
+    - name: Check it refused none
+      ansible.builtin.assert:
+        that: verify_refused.stdout is not search('PodSecurity')
+        fail_msg: "{{ verify_refused.stdout }}"
+        quiet: true
+
+    - name: Read what listens
+      ansible.builtin.command:
+        cmd: ss --listening --tcp --udp --numeric --processes --no-header
+      register: verify_listening
+      changed_when: false
+
+    - name: Report it
+      ansible.builtin.debug:
+        msg: "{{ verify_listening.stdout_lines }}"

@@ -183,6 +183,44 @@ func TestProductionSizes(t *testing.T) {
 	}
 }
 
+// TestProductionTraefik: production's Traefik is reached only from inside
+// the cluster, and is otherwise configured exactly as the local cluster's,
+// whose values production's restate.
+func TestProductionTraefik(t *testing.T) {
+	values := func(c Cluster) map[string]any {
+		t.Helper()
+		o := Find(release(t, c, "configs"), "HelmChartConfig", "traefik")
+		if o == nil {
+			t.Fatalf("%s configures no Traefik", c.Entry("configs"))
+		}
+		v, err := TraefikValues(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	want, got := values(local), values(prod)
+	if typ := Str(want, "service", "spec", "type"); typ != "" {
+		t.Errorf("the local cluster's Traefik sets its Service's type, %q: ServiceLB needs the chart's LoadBalancer", typ)
+	}
+	if typ := Str(got, "service", "spec", "type"); typ != "ClusterIP" {
+		t.Errorf("production's Traefik Service is %q, want ClusterIP", typ)
+	}
+	delete(got, "service")
+	if a, b := mustYAML(t, want), mustYAML(t, got); a != b {
+		t.Errorf("production's Traefik values differ from infrastructure/configs/traefik.yaml's by more than the Service:\n%s\nwant\n%s", b, a)
+	}
+}
+
+func mustYAML(t *testing.T, v any) string {
+	t.Helper()
+	b, err := yaml.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
 func TestDeployPutsTheBuildAndHost(t *testing.T) {
 	rm, err := readRepoTree(t).RenderDeploy(Deploy{Build: "0123456789ab-dirty-20261010T120000Z", Host: "harbour.local", Sailors: "40"})
 	objs := objectsOf(t, rm, err)
@@ -361,18 +399,18 @@ func yamlFiles(t *testing.T, dir string, f func(p string, data []byte)) {
 }
 
 // TestNoSecretInInfra reads every YAML document under infra/, rendered or
-// not.
+// not; a playbook's, a list, is no Kubernetes object.
 func TestNoSecretInInfra(t *testing.T) {
 	yamlFiles(t, "../../../infra", func(p string, data []byte) {
 		dec := yaml.NewDecoder(bytes.NewReader(data))
 		for {
-			var doc struct{ Kind string }
+			var doc any
 			if err := dec.Decode(&doc); errors.Is(err, io.EOF) {
 				return
 			} else if err != nil {
 				t.Fatalf("%s: %v", p, err)
 			}
-			if doc.Kind == "Secret" {
+			if Str(doc, "kind") == "Secret" {
 				t.Errorf("%s holds a Secret", p)
 			}
 		}
@@ -630,6 +668,20 @@ func TestEachRuleFails(t *testing.T) {
 		{"no route to the internal listener", inRelease(prod, "apps"), func(objs []Object) []Object {
 			route := Find(objs, "HTTPRoute", "play")
 			Get(route, "spec", "rules", 0, "backendRefs", 0).(map[string]any)["port"] = 9090
+			return objs
+		}},
+		{"nothing exposed on production's node", inRelease(prod, "configs"), func(objs []Object) []Object {
+			o := Find(objs, "HelmChartConfig", "traefik")
+			spec(o)["valuesContent"] = strings.Replace(Str(o, "spec", "valuesContent"), "type: ClusterIP", "type: LoadBalancer", 1)
+			return objs
+		}},
+		{"nothing exposed on production's node", inRelease(prod, "configs"), func(objs []Object) []Object {
+			o := Find(objs, "HelmChartConfig", "traefik")
+			spec(o)["valuesContent"] = strings.Replace(Str(o, "spec", "valuesContent"), "type: ClusterIP", "loadBalancerClass: none", 1)
+			return objs
+		}},
+		{"nothing exposed on production's node", inRelease(prod, "apps"), func(objs []Object) []Object {
+			spec(Find(objs, "Service", "keel"))["type"] = "NodePort"
 			return objs
 		}},
 		{"routes on the Gateway's listeners", inDeploy, func(objs []Object) []Object {

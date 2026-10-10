@@ -8,10 +8,12 @@
   "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
   "kubernetes": { "managerFilePatterns": ["/^infra/cluster/.+\\.yaml$/"] },
   "flux": { "managerFilePatterns": ["/^infra/cluster/.+\\.yaml$/"] },
+  "pip-compile": { "managerFilePatterns": ["/^infra/ansible/(lint-)?requirements\\.txt$/"] },
+  "pip_requirements": { "enabled": false },
   "customManagers": [
     {
       "customType": "regex",
-      "description": "TinyGo, cosign and the Flux CLI, each pinned by release and by its file's digest for each platform in tools/internal/pinned",
+      "description": "TinyGo, cosign, the Flux CLI and kube-bench, each pinned by release and by its file's digest for each platform in tools/internal/pinned",
       "managerFilePatterns": ["/^tools/internal/pinned/pinned\\.go$/"],
       "matchStrings": ["\\{\"(?<depName>[a-z0-9-]+/[a-z0-9-]+)\", \"[a-z0-9]+-[a-z0-9]+\", \"(?<currentValue>v[0-9.]+)\", \"(?<currentDigest>[0-9a-f]{64})\"\\}"],
       "datasourceTemplate": "github-release-attachments"

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# k3s's files in the repository, and where each goes on the machine.
+k3s_repo: "{{ playbook_dir }}/../k3s"
+k3s_files:
+  - {src: config.yaml, dest: /etc/rancher/k3s/config.yaml}
+  - {src: prod.yaml, dest: /etc/rancher/k3s/config.yaml.d/50-prod.yaml}
+  - {src: psa.yaml, dest: /var/lib/rancher/k3s/server/psa.yaml}
+  - {src: audit.yaml, dest: /var/lib/rancher/k3s/server/audit.yaml}
+# The release every machine installs, and the commit its installer is
+# fetched at.
+k3s_release: "{{ lookup('ansible.builtin.file', k3s_repo ~ '/release.yaml') | from_yaml }}"
+k3s_node: "{{ inventory_hostname }}"

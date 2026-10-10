@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# One firewall: the table hostfw, closing every port of the public
+# interface. Nothing reaches the machine from the internet; the owner and
+# the workflows come in over the tailnet.
+
+- name: Name the public interface
+  ansible.builtin.set_fact:
+    firewall_public_interface: "{{ ansible_facts.default_ipv4.interface }}"
+
+- name: Make the firewall's folder
+  ansible.builtin.file:
+    path: /etc/hostfw
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write the table
+  ansible.builtin.template:
+    src: hostfw.nft.j2
+    dest: /etc/hostfw/hostfw.nft
+    owner: root
+    group: root
+    mode: "0600"
+    validate: nft --check --file %s
+  notify: Load the firewall
+
+- name: Write its unit
+  ansible.builtin.copy:
+    src: hostfw.service
+    dest: /etc/systemd/system/hostfw.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: firewall_unit
+  notify: Load the firewall
+
+- name: Load it now, and at every boot
+  ansible.builtin.systemd_service:
+    name: hostfw
+    enabled: true
+    state: started
+    daemon_reload: "{{ firewall_unit is changed }}"
+
+- name: Keep Ubuntu's nftables service off, which would flush every table
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: false
+    state: stopped
+
+- name: Apply the table now
+  ansible.builtin.meta: flush_handlers

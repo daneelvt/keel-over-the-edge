@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Tailscale's apt repository and the key that signs it, pinned by its
+# SHA-256: the same that infra/bootstrap/join.sh installs.
+access_tailscale_keyring_url: https://pkgs.tailscale.com/stable/ubuntu/resolute.noarmor.gpg
+access_tailscale_keyring_sha256: 3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39
+access_tailscale_keyring: /usr/share/keyrings/tailscale-archive-keyring.gpg

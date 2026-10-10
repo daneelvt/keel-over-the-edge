@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The machine hardened to the CIS Ubuntu Linux 26.04 LTS Benchmark, Level 1
+# Server profile, with a few settings beyond it that cost nothing; the
+# repository's docs/development.md lists what is taken and what is not, and
+# why. Values are starting values.
+
+# File systems and network protocols the machine never uses: not loadable.
+hardening_modules:
+  - cramfs
+  - freevxfs
+  - hfs
+  - hfsplus
+  - jffs2
+  - usb-storage
+  - dccp
+  - rds
+  - sctp
+  - tipc
+
+# On the kernel's command line: audit from the first process, with room for
+# the events before auditd starts, and AppArmor.
+hardening_boot_args:
+  - audit=1
+  - audit_backlog_limit=8192
+  - apparmor=1
+
+hardening_sysctl:
+  # Memory and processes.
+  kernel.randomize_va_space: 2
+  kernel.yama.ptrace_scope: 1
+  fs.suid_dumpable: 0
+  # Beyond CIS: kernel addresses and the kernel's log for root alone; eBPF
+  # for root alone, its JIT hardened; links and files in sticky folders.
+  kernel.kptr_restrict: 2
+  kernel.dmesg_restrict: 1
+  kernel.unprivileged_bpf_disabled: 1
+  net.core.bpf_jit_harden: 2
+  fs.protected_fifos: 2
+  fs.protected_regular: 2
+  # IPv4. Forwarding stays on: k3s routes every pod's traffic through the
+  # host.
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv4.conf.all.secure_redirects: 0
+  net.ipv4.conf.default.secure_redirects: 0
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.default.accept_source_route: 0
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+  net.ipv4.conf.all.log_martians: 1
+  net.ipv4.conf.default.log_martians: 1
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  net.ipv4.icmp_ignore_bogus_error_responses: 1
+  net.ipv4.tcp_syncookies: 1
+  # IPv6: the machine has no IPv6 address; nothing is accepted that would
+  # give it one or route it elsewhere.
+  net.ipv6.conf.all.accept_redirects: 0
+  net.ipv6.conf.default.accept_redirects: 0
+  net.ipv6.conf.all.accept_source_route: 0
+  net.ipv6.conf.default.accept_source_route: 0
+  net.ipv6.conf.all.accept_ra: 0
+  net.ipv6.conf.default.accept_ra: 0
+
+# What AIDE does not watch: what changes by design. Container images and
+# volumes, the kubelet's pods, logs, and what lives in memory.
+hardening_aide_exclude:
+  - /var/lib/rancher
+  - /var/lib/kubelet
+  - /var/log
+  - /var/lib/aide
+  - /var/cache
+  - /var/lib/apt
+  - /var/lib/dpkg
+  - /var/lib/systemd
+  - /var/lib/chrony
+  - /var/lib/tailscale
+  - /run
+  - /tmp
+
+# On a workflow's runner only: the runner image's toolchains, tens of
+# gigabytes that AIDE would take long to read, and which the machine does
+# not have.
+hardening_aide_exclude_runner:
+  - /opt
+  - /usr/local
+  - /usr/share
+  - /usr/lib
+  - /home
+  - /var/lib/docker
+  - /snap
+
+# Accounts that keep a shell, as Debian ships them: root, and sync, which
+# only runs sync.
+hardening_shell_accounts:
+  - root
+  - sync
+
+# The audit rules on system calls (templates/audit.rules.j2): the calls,
+# what else must match, and the key the events are found by. The calls
+# this machine's kernel lacks (open and chmod, where only openat and
+# fchmodat exist) are left out.
+hardening_audit_who: -F auid>=1000 -F auid!=unset
+hardening_audit_syscalls:
+  - {key: user_emulation, match: -C euid!=uid -F auid!=unset, calls: [execve]}
+  - {key: time-change, match: "", calls: [adjtimex, settimeofday, clock_settime]}
+  - {key: system-locale, match: "", calls: [sethostname, setdomainname]}
+  - key: access
+    match: -F exit=-EACCES {{ hardening_audit_who }}
+    calls: [creat, open, openat, openat2, truncate, ftruncate]
+  - key: access
+    match: -F exit=-EPERM {{ hardening_audit_who }}
+    calls: [creat, open, openat, openat2, truncate, ftruncate]
+  - key: perm_mod
+    match: "{{ hardening_audit_who }}"
+    calls: [chmod, fchmod, fchmodat, fchmodat2]
+  - key: perm_mod
+    match: "{{ hardening_audit_who }}"
+    calls: [chown, fchown, lchown, fchownat]
+  - key: perm_mod
+    match: "{{ hardening_audit_who }}"
+    calls: [setxattr, lsetxattr, fsetxattr, removexattr, lremovexattr, fremovexattr]
+  - {key: mounts, match: "{{ hardening_audit_who }}", calls: [mount]}
+  - {key: delete, match: "{{ hardening_audit_who }}", calls: [rename, unlink, unlinkat, renameat, renameat2]}
+  - {key: kernel_modules, match: "{{ hardening_audit_who }}", calls: [init_module, finit_module, delete_module], b64_only: true}

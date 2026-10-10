@@ -109,21 +109,21 @@ func TestCopyChecked(t *testing.T) {
 func TestReleasesPinned(t *testing.T) {
 	digest := regexp.MustCompile(`^[0-9a-f]{64}$`)
 	tag := regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
-	for _, tool := range []Tool{TinyGo, Cosign, Flux} {
+	for _, tool := range []Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench} {
 		var platforms []string
-		for _, r := range releases {
+		for _, r := range pins() {
 			if r.repo != tool.repo {
 				continue
 			}
 			platforms = append(platforms, r.platform)
-			if r.tag != "v"+tool.Version() || !tag.MatchString(r.tag) {
+			if r.tag != "v"+tool.Version() && r.tag != tool.Version() || !tag.MatchString(r.tag) && tool.repo != tailscaleSite {
 				t.Errorf("%s for %s is pinned to %s, the others to v%s", tool.Name, r.platform, r.tag, tool.Version())
 			}
 			if !digest.MatchString(r.sha256) {
 				t.Errorf("%s for %s: %q is not a SHA-256", tool.Name, r.platform, r.sha256)
 			}
 		}
-		for _, want := range []string{"linux-amd64", "linux-arm64", "darwin-arm64"} {
+		for _, want := range tool.Platforms() {
 			if !slices.Contains(platforms, want) {
 				t.Errorf("%s is not pinned for %s", tool.Name, want)
 			}
@@ -132,14 +132,15 @@ func TestReleasesPinned(t *testing.T) {
 			t.Errorf("%s on a platform without a pin: %v", tool.Name, err)
 		}
 	}
-	for _, r := range releases {
-		if !slices.ContainsFunc([]Tool{TinyGo, Cosign, Flux}, func(tool Tool) bool { return tool.repo == r.repo }) {
+	for _, r := range pins() {
+		if !slices.ContainsFunc([]Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench}, func(tool Tool) bool { return tool.repo == r.repo }) {
 			t.Errorf("%s is pinned, but is no tool", r.repo)
 		}
 	}
 	// The files' names, as the releases publish them.
-	for tool, want := range map[*Tool]string{&TinyGo: "tinygo0.42.0.linux-arm64.tar.gz", &Cosign: "cosign-linux-arm64", &Flux: "flux_2.9.6_linux_arm64.tar.gz"} {
-		version := map[*Tool]string{&TinyGo: "0.42.0", &Cosign: "3.1.3", &Flux: "2.9.6"}[tool]
+	for tool, want := range map[*Tool]string{&TinyGo: "tinygo0.42.0.linux-arm64.tar.gz", &Cosign: "cosign-linux-arm64", &Flux: "flux_2.9.6_linux_arm64.tar.gz",
+		&Tailscale: "tailscale_1.104.1_arm64.tgz", &KubeBench: "kube-bench_0.16.0_linux_arm64.tar.gz"} {
+		version := map[*Tool]string{&TinyGo: "0.42.0", &Cosign: "3.1.3", &Flux: "2.9.6", &Tailscale: "1.104.1", &KubeBench: "0.16.0"}[tool]
 		if got := tool.asset(version, "linux", "arm64"); got != want {
 			t.Errorf("%s's file is named %s, want %s", tool.Name, got, want)
 		}
@@ -270,5 +271,75 @@ func TestInstallLinksByName(t *testing.T) {
 	}
 	if target, _ := os.Readlink(filepath.Join(binDir, "cosign")); target != filepath.Join("..", "cosign", "1.2.4", "cosign") {
 		t.Errorf("bin/cosign links to %s", target)
+	}
+}
+
+// TestTailscaleFromItsSite: Tailscale's client comes from its own site,
+// checked as the others are, and unpacks to a folder named by its version.
+func TestTailscaleFromItsSite(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Tailscale's static client is pinned for Linux, where workflows run")
+	}
+	body := archive(t,
+		entry{name: "tailscale_1.2.3_" + runtime.GOARCH + "/tailscale", body: "#!ts", flag: tar.TypeReg},
+		entry{name: "tailscale_1.2.3_" + runtime.GOARCH + "/tailscaled", body: "#!tsd", flag: tar.TypeReg},
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/"+tailscaleSite+"/tailscale_1.2.3_"+runtime.GOARCH+".tgz" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write(body)
+	}))
+	oldSite, oldPins := site, byHand
+	site, byHand = srv.URL+"/", []release{{tailscaleSite, "linux-" + runtime.GOARCH, "1.2.3", sum(body)}}
+	t.Cleanup(func() { srv.Close(); site, byHand = oldSite, oldPins })
+	dir := t.TempDir()
+	bin, err := Tailscale.Ensure(context.Background(), dir, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(filepath.Dir(bin), "tailscaled")); string(got) != "#!tsd" {
+		t.Errorf("no tailscaled beside %s", bin)
+	}
+}
+
+func TestRepinTailscale(t *testing.T) {
+	sums := map[string]string{"amd64": strings.Repeat("a", 64), "arm64": strings.Repeat("b", 64)}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for arch, s := range sums {
+			if r.URL.Path == "/"+tailscaleSite+"/tailscale_1.106.0_"+arch+".tgz.sha256" {
+				io.WriteString(w, s+"\n")
+				return
+			}
+		}
+		http.NotFound(w, r)
+	}))
+	oldSite := site
+	site = srv.URL + "/"
+	t.Cleanup(func() { srv.Close(); site = oldSite })
+
+	src, err := os.ReadFile("pinned.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(t.TempDir(), "pinned.go")
+	if err := os.WriteFile(file, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RepinTailscale(context.Background(), file, "1.106.0", io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(file)
+	for arch, s := range sums {
+		if want := `{tailscaleSite, "linux-` + arch + `", "1.106.0", "` + s + `"}`; !strings.Contains(string(got), want) {
+			t.Errorf("no %s in the new pins", want)
+		}
+	}
+	if err := RepinTailscale(context.Background(), file, "1.107.0", io.Discard); err == nil {
+		t.Error("a version with no digests was pinned")
+	}
+	if err := RepinTailscale(context.Background(), file, "latest", io.Discard); err == nil {
+		t.Error("latest was pinned")
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/registry"
 )
 
 const image = manifests.GameImage + "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -227,30 +228,30 @@ func TestRegistryResolves(t *testing.T) {
 	f := newRegistry(t)
 	const repo = "daneelvt/keel-manifests"
 	digest := f.put(repo, "0123456789ab", commitA, "")
-	r := &registry{base: f.URL, user: "someone", password: "a-password", hc: f.Client()}
+	r := &registry.Registry{Base: f.URL, User: "someone", Password: "a-password", HC: f.Client()}
 	ctx := context.Background()
 
-	a, found, err := r.resolve(ctx, repo, "0123456789ab")
-	if err != nil || !found || a.digest != digest || a.annotations[revisionAnnotation] != "main@sha1:"+commitA {
+	a, found, err := r.Resolve(ctx, repo, "0123456789ab")
+	if err != nil || !found || a.Digest != digest || a.Annotations[revisionAnnotation] != "main@sha1:"+commitA {
 		t.Fatalf("a tag: %+v, %v, %v", a, found, err)
 	}
 	if f.auth == "" || !strings.HasPrefix(f.auth, "Basic ") {
 		t.Errorf("the token service saw the credentials %q", f.auth)
 	}
-	if a, found, err := r.resolve(ctx, repo, digest); err != nil || !found || a.digest != digest {
+	if a, found, err := r.Resolve(ctx, repo, digest); err != nil || !found || a.Digest != digest {
 		t.Errorf("a digest: %+v, %v, %v", a, found, err)
 	}
-	if _, found, err := r.resolve(ctx, repo, "fedcba987654"); err != nil || found {
+	if _, found, err := r.Resolve(ctx, repo, "fedcba987654"); err != nil || found {
 		t.Errorf("a tag that is not there: %v, %v", found, err)
 	}
 	// With no credentials, none are sent.
-	anyone := &registry{base: f.URL, hc: f.Client()}
-	if _, found, err := anyone.resolve(ctx, repo, "0123456789ab"); err != nil || !found || f.auth != "" {
+	anyone := &registry.Registry{Base: f.URL, HC: f.Client()}
+	if _, found, err := anyone.Resolve(ctx, repo, "0123456789ab"); err != nil || !found || f.auth != "" {
 		t.Errorf("as anyone: %v, %v, credentials %q", found, err, f.auth)
 	}
 	// A package that is not there: the token service refuses.
 	f.refuse = true
-	if _, found, err := r.resolve(ctx, "daneelvt/nothing", "0123456789ab"); err != nil || found {
+	if _, found, err := r.Resolve(ctx, "daneelvt/nothing", "0123456789ab"); err != nil || found {
 		t.Errorf("a package that is not there: %v, %v", found, err)
 	}
 }
@@ -276,8 +277,8 @@ func TestRegistryRefuses(t *testing.T) {
 		},
 	} {
 		srv := httptest.NewServer(handler)
-		r := &registry{base: srv.URL, user: "someone", password: "a-password", hc: srv.Client()}
-		if _, found, err := r.resolve(ctx, "daneelvt/keel-manifests", "0123456789ab"); err == nil || found {
+		r := &registry.Registry{Base: srv.URL, User: "someone", Password: "a-password", HC: srv.Client()}
+		if _, found, err := r.Resolve(ctx, "daneelvt/keel-manifests", "0123456789ab"); err == nil || found {
 			t.Errorf("%s: found %v, %v", name, found, err)
 		}
 		srv.Close()
@@ -350,7 +351,7 @@ func newWorld(t *testing.T) *world {
 	_, repo, _ := strings.Cut(manifests.ManifestsRepo, "/")
 	w.p = &promoter{
 		out: io.Discard, repo: repo, hc: http.DefaultClient,
-		reg: &registry{base: w.reg.URL, hc: http.DefaultClient},
+		reg: &registry.Registry{Base: w.reg.URL, HC: http.DefaultClient},
 		api: github.URL, code: "daneelvt/keel-over-the-edge", summary: &w.summary,
 		run: func(_ context.Context, name string, args ...string) ([]byte, error) {
 			w.ran = append(w.ran, name+" "+strings.Join(args, " "))

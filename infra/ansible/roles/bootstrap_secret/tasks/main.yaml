@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Piped to kubectl, never written to the machine's disk or the log.
+
+- name: Check the credential was given
+  ansible.builtin.assert:
+    that:
+      - bootstrap_secret_client_id | length > 0
+      - bootstrap_secret_client_secret | length > 0
+    fail_msg: "no ESO_CLIENT_ID or ESO_CLIENT_SECRET: run the playbook with go run ./tools/machine -run, which reads them from Infisical"
+    quiet: true
+  no_log: true
+
+- name: Read whether k3s is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: bootstrap_secret_k3s
+
+# kubectl diff exits 1 when the cluster differs, and more when it cannot
+# compare, as before the namespace exists: applying makes it.
+- name: Compare the cluster with the secret
+  ansible.builtin.command:
+    cmd: "{{ bootstrap_secret_kubectl }} diff --server-side --field-manager=kubectl -f -"
+    stdin: "{{ lookup('ansible.builtin.template', 'secret.yaml.j2') }}"
+  register: bootstrap_secret_diff
+  changed_when: bootstrap_secret_diff.rc != 0
+  failed_when: false
+  check_mode: false
+  no_log: true
+  when: bootstrap_secret_k3s.stat.exists
+
+- name: Apply it
+  ansible.builtin.command:
+    cmd: "{{ bootstrap_secret_kubectl }} apply --server-side --field-manager=kubectl -f -"
+    stdin: "{{ lookup('ansible.builtin.template', 'secret.yaml.j2') }}"
+  changed_when: true
+  no_log: true
+  when: bootstrap_secret_diff.rc | default(0) != 0

@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+- name: Keep unneeded file systems and protocols from loading
+  ansible.builtin.template:
+    src: modprobe.conf.j2
+    dest: /etc/modprobe.d/60-keel-cis.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read the modules loaded
+  ansible.builtin.command:
+    cmd: cut -d " " -f 1 /proc/modules
+  register: hardening_loaded
+  changed_when: false
+  check_mode: false
+
+- name: Unload them
+  ansible.builtin.command:
+    cmd: modprobe --remove {{ item }}
+  loop: "{{ hardening_modules | select('in', hardening_loaded.stdout_lines | map('replace', '_', '-')) }}"
+  register: hardening_unloaded
+  changed_when: hardening_unloaded.rc == 0
+  failed_when: false
+
+- name: A module in use goes at the next reboot
+  ansible.builtin.set_fact:
+    hardening_reboot_reasons: "{{ hardening_reboot_reasons + ['the module ' ~ item.item ~ ' is in use'] }}"
+  loop: "{{ hardening_unloaded.results | default([]) | rejectattr('skipped', 'defined') | rejectattr('rc', 'eq', 0) }}"
+  loop_control:
+    label: "{{ item.item }}"

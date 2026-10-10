@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Production's drop-in, written to
+# /etc/rancher/k3s/config.yaml.d/50-prod.yaml, after
+# infra/k3s/config.yaml. ServiceLB is off: no Service opens a port on the
+# machine's addresses, and Traefik is reached from inside the cluster
+# alone.
+node-name: keel-prod-1
+disable:
+  - servicelb

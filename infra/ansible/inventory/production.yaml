@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Production's machine, by its name on the tailnet. The machine workflow
+# reaches it over Tailscale SSH as root, at the address the tailnet gives
+# it (tools/machine passes it as ansible_host).
+all:
+  hosts:
+    keel-prod-1:
+      ansible_user: root

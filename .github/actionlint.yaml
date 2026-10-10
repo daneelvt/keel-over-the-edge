@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# actionlint's settings. ubuntu-26.04 is one of GitHub's own runners
+# (generally available since 17 September 2026), which actionlint's list
+# of runner labels does not know yet: it is named here, where actionlint
+# takes labels it does not know.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

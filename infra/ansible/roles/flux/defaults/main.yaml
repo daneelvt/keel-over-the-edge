@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Flux's controllers and what they follow, from the release production
+# follows: tools/machine pulls the release, checks its signature, and
+# passes the path of its prod/flux-system/manifests.yaml as
+# machine_flux_manifests.
+flux_file: /var/lib/keel/flux-system.yaml
+flux_kubectl: /usr/local/bin/k3s kubectl

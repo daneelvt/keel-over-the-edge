@@ -2,7 +2,8 @@
 # k3s's settings for every machine that runs the game, written to
 # /etc/rancher/k3s/config.yaml. What differs per machine (its node name,
 # whether ServiceLB runs) is a drop-in in /etc/rancher/k3s/config.yaml.d/,
-# read after this file (k3s documentation, Configuration).
+# read after this file (k3s documentation, Configuration). psa.yaml and
+# audit.yaml are written to /var/lib/rancher/k3s/server/ before k3s starts.
 
 # The kubeconfig k3s writes is root's alone.
 write-kubeconfig-mode: "0600"
@@ -13,3 +14,28 @@ secrets-encryption-provider: secretbox
 # The kubelet refuses to start unless the kernel settings in sysctl.conf
 # are in place, rather than changing them itself (k3s CIS hardening guide).
 protect-kernel-defaults: true
+
+# The rest is the k3s CIS hardening guide's (docs.k3s.io, "CIS Hardening
+# Guide"). The API server: the EventRateLimit admission plugin beside
+# NodeRestriction, both configured with Pod Security in psa.yaml; every
+# request recorded, by audit.yaml's policy, in a log kept 30 days, 10 files
+# of 100 MB; service account tokens not extended past their expiry.
+kube-apiserver-arg:
+  - enable-admission-plugins=NodeRestriction,EventRateLimit
+  - admission-control-config-file=/var/lib/rancher/k3s/server/psa.yaml
+  - audit-log-path=/var/lib/rancher/k3s/server/logs/audit.log
+  - audit-policy-file=/var/lib/rancher/k3s/server/audit.yaml
+  - audit-log-maxage=30
+  - audit-log-maxbackup=10
+  - audit-log-maxsize=100
+  - service-account-extend-token-expiration=false
+# Finished pods are removed past 100.
+kube-controller-manager-arg:
+  - terminated-pod-gc-threshold=100
+# The kubelet: idle exec and port-forward streams closed after 5 minutes;
+# only the guide's TLS cipher suites; a pod's processes bounded (a starting
+# value).
+kubelet-arg:
+  - streaming-connection-idle-timeout=5m
+  - tls-cipher-suites=TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+  - pod-max-pids=4096

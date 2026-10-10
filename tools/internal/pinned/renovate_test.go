@@ -120,7 +120,7 @@ func TestRenovateFindsEveryPin(t *testing.T) {
 	var tools, k3s, buildkit []found
 	for description, f := range finds {
 		switch {
-		case strings.HasPrefix(description, "TinyGo, cosign and the Flux CLI"):
+		case strings.HasPrefix(description, "TinyGo, cosign, the Flux CLI and kube-bench"):
 			tools = f
 		case strings.HasPrefix(description, "k3s"):
 			k3s = f

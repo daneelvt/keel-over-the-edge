@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+- name: Write the hardened kernel settings
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: /etc/sysctl.d/60-keel-cis.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read the settings in effect
+  ansible.builtin.command:
+    cmd: sysctl --values {{ hardening_sysctl.keys() | join(' ') }}
+  register: hardening_live
+  changed_when: false
+  check_mode: false
+
+# What is in effect is read, not remembered: a run that stopped after the
+# file changed still loads it the next time.
+- name: Load them, where they differ
+  ansible.builtin.command:
+    cmd: sysctl --quiet --system
+  when: hardening_live.stdout_lines | map('trim') | list != hardening_sysctl.values() | map('string') | list
+  changed_when: true
+
+- name: No core dumps, for any process
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/60-keel-core.conf
+    content: |
+      # Written by the hardening role: no process may dump its memory.
+      * hard core 0
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Make systemd-coredump's folder of settings
+  ansible.builtin.file:
+    path: /etc/systemd/coredump.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Nor from systemd-coredump, should it be installed
+  ansible.builtin.copy:
+    dest: /etc/systemd/coredump.conf.d/60-keel.conf
+    content: |
+      # Written by the hardening role.
+      [Coredump]
+      Storage=none
+      ProcessSizeMax=0
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install AppArmor and its tools
+  ansible.builtin.apt:
+    name: [apparmor, apparmor-utils]
+    state: present
+    install_recommends: false
+
+- name: Keep AppArmor running
+  ansible.builtin.systemd_service:
+    name: apparmor
+    enabled: true
+    state: started
+
+- name: Check AppArmor is on
+  ansible.builtin.command:
+    cmd: aa-enabled
+  changed_when: false
+  check_mode: false

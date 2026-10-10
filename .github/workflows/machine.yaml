@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Configures production's machine with the playbook in infra/ansible, once
+# the owner has approved the run (the production environment, which only
+# main may use). The job joins the tailnet as a short-lived node, tagged
+# tag:ci-prod, with the job's own OIDC token: the tailnet policy lets that
+# tag log in to the machine as root over Tailscale SSH, and reach nothing
+# else. It reads the cluster's credential from Infisical the same way. No
+# secret is stored in GitHub.
+#
+#   check   what apply would change; changes nothing
+#   apply   change it; reboot only when the box is ticked and a change needs it
+#   audit   Lynis on the machine; changes nothing
+#
+# There is no schedule: every run logs in as root, so every run waits for
+# the owner's approval. go run ./tools/machine does the work.
+name: machine
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: check reports what apply would change; apply changes it; audit runs Lynis
+        type: choice
+        options: [check, apply, audit]
+        default: check
+      reboot:
+        description: With apply, reboot the machine if a change needs it
+        type: boolean
+        default: false
+
+permissions: {}
+
+# One change to production at a time, here and in every workflow that
+# changes it: a second run waits for the first, which is never cancelled.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  machine:
+    name: machine
+    runs-on: ubuntu-26.04
+    environment: production
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # sign in to Tailscale and Infisical as this workflow
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+          cache: "false"
+      - name: Build the tool
+        run: go build -o .dev/bin/machine ./tools/machine
+      - name: Ansible, from hashed requirements
+        run: .dev/bin/machine -ansible
+      - name: Join the tailnet as tag:ci-prod; the machine's host keys from it
+        run: .dev/bin/machine -join
+      - name: Check or apply the playbook
+        if: inputs.mode == 'check' || inputs.mode == 'apply'
+        env:
+          MODE: ${{ inputs.mode }}
+          REBOOT: ${{ inputs.reboot }}
+        run: |
+          if [ "$REBOOT" = "true" ]; then set -- -reboot; fi
+          .dev/bin/machine -run "$MODE" "$@"
+      - name: Verify the machine
+        if: inputs.mode == 'apply'
+        run: .dev/bin/machine -verify
+      - name: Audit with Lynis
+        if: inputs.mode == 'audit'
+        run: .dev/bin/machine -audit
+      - name: Leave the tailnet
+        if: always()
+        run: .dev/bin/machine -leave

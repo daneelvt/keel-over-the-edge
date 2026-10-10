@@ -48,7 +48,13 @@ var guestFiles = []struct {
 	{"infra/k3s/sysctl.conf", "/etc/sysctl.d/90-k3s.conf", "644", false},
 	{"infra/k3s/config.yaml", "/etc/rancher/k3s/config.yaml", "600", true},
 	{"infra/local/k3s-local.yaml", "/etc/rancher/k3s/config.yaml.d/50-local.yaml", "600", true},
+	{"infra/k3s/psa.yaml", "/var/lib/rancher/k3s/server/psa.yaml", "600", true},
+	{"infra/k3s/audit.yaml", "/var/lib/rancher/k3s/server/audit.yaml", "600", true},
 }
+
+// guestDirs are k3s's folders that hold its settings and its API
+// server's audit log, made root's alone before k3s first starts.
+var guestDirs = []string{"/var/lib/rancher/k3s/server", "/var/lib/rancher/k3s/server/logs"}
 
 // cluster is the local cluster, driven through c.
 type cluster struct {
@@ -164,6 +170,11 @@ func (c *cluster) installK3s(ctx context.Context) error {
 	k3s, err := pinned.ReadK3s(pinned.K3sFile)
 	if err != nil {
 		return err
+	}
+	for _, d := range guestDirs {
+		if _, err := c.guest(ctx, nil, "sudo", "install", "-d", "-m", "700", d); err != nil {
+			return err
+		}
 	}
 	restart := false
 	for _, f := range guestFiles {

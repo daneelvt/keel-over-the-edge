@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What takes effect only at boot: a new kernel or library (Ubuntu's
+# reboot-required), the kernel's command line, a module in use, locked
+# audit rules. The machine reboots only when the run was asked to;
+# otherwise the run says a reboot is due.
+
+- name: Read whether a package asks for a reboot
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: machine_reboot_required
+
+- name: List why a reboot is due
+  ansible.builtin.set_fact:
+    machine_reboot_reasons: >-
+      {{ (hardening_reboot_reasons | default([]))
+         + (['an updated package asks for it'] if machine_reboot_required.stat.exists else []) }}
+
+- name: Say a reboot is due
+  ansible.builtin.debug:
+    msg: "A reboot is due: {{ machine_reboot_reasons | join('; ') }}. Run apply again with reboot ticked."
+  when: machine_reboot_reasons | length > 0 and not (machine_reboot | bool)
+
+- name: Reboot
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+    msg: "Rebooting: {{ machine_reboot_reasons | join('; ') }}"
+  when: machine_reboot_reasons | length > 0 and (machine_reboot | bool) and not (machine_runner | default(false))
+
+- name: Wait for the node after the reboot
+  ansible.builtin.command:
+    cmd: /usr/local/bin/k3s kubectl wait --for=condition=Ready node/{{ inventory_hostname }} --timeout=30s
+  register: machine_ready
+  until: machine_ready.rc == 0
+  retries: 20
+  delay: 5
+  changed_when: false
+  when: machine_reboot_reasons | length > 0 and (machine_reboot | bool) and not (machine_runner | default(false))

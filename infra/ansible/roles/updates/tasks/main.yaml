@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Security updates install themselves every day, Ubuntu's and Tailscale's.
+# The machine never reboots by itself: the machine workflow reboots it
+# when asked, and the cluster's own upgrades are k3s's.
+
+- name: Fetch the package lists and install updates every day
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      // Written by the updates role.
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+
+# Lists in apt's configuration add up across its files: this adds
+# Tailscale's packages to the origins Ubuntu's 50unattended-upgrades names.
+- name: Include Tailscale's packages, and never reboot
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52keel-unattended-upgrades
+    content: |
+      // Written by the updates role.
+      Unattended-Upgrade::Origins-Pattern {
+              "origin=Tailscale,codename=${distro_codename}";
+      };
+      Unattended-Upgrade::Automatic-Reboot "false";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Keep apt's timers and unattended-upgrades running
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: [apt-daily.timer, apt-daily-upgrade.timer, unattended-upgrades.service]
+
+- name: Read the origins unattended-upgrades will take updates from
+  ansible.builtin.command:
+    cmd: apt-config dump Unattended-Upgrade::Origins-Pattern
+  register: updates_origins
+  changed_when: false
+  check_mode: false
+
+- name: Check Tailscale's are among them
+  ansible.builtin.assert:
+    that: updates_origins.stdout is search('origin=Tailscale,codename=')
+    quiet: true
+  when: not ansible_check_mode

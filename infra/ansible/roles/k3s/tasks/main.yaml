@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# k3s at the version infra/k3s/release.yaml pins, with infra/k3s/'s
+# settings: installed when missing, upgraded when older, never downgraded
+# (an upgrade made by the cluster itself may move ahead of the pin).
+
+- name: Make k3s's folders, root's alone
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - /etc/rancher/k3s/config.yaml.d
+    - /var/lib/rancher/k3s/server
+    - /var/lib/rancher/k3s/server/logs
+
+- name: Read whether k3s is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_installed
+
+- name: Write k3s's settings
+  ansible.builtin.copy:
+    src: "{{ k3s_repo }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ k3s_files }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  notify: Restart k3s
+
+- name: Read the version installed
+  ansible.builtin.command:
+    cmd: /usr/local/bin/k3s --version
+  register: k3s_version
+  changed_when: false
+  check_mode: false
+  when: k3s_installed.stat.exists
+
+# v1.36.5+k3s1 as [1, 36, 5, 1], which compare in order.
+- name: Compare it with the pin
+  vars:
+    k3s_number: '^v?(\d+)\.(\d+)\.(\d+)\+k3s(\d+)$'
+    k3s_found: "{{ k3s_version.stdout | default('') | regex_search('v\\d+\\.\\d+\\.\\d+\\+k3s\\d+') or 'v0.0.0+k3s0' }}"
+    k3s_have: "{{ k3s_found | regex_replace(k3s_number, '\\1 \\2 \\3 \\4') }}"
+    k3s_want: "{{ k3s_release.version | regex_replace(k3s_number, '\\1 \\2 \\3 \\4') }}"
+  ansible.builtin.set_fact:
+    k3s_install: "{{ (k3s_have.split() | map('int') | list) < (k3s_want.split() | map('int') | list) }}"
+
+- name: Fetch the installer at the pinned commit
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/k3s-io/k3s/{{ k3s_release.commit }}/install.sh"
+    dest: /usr/local/lib/k3s-install.sh
+    owner: root
+    group: root
+    mode: "0700"
+  when: k3s_install
+
+# The installer checks what it downloads against the release's own
+# checksums, writes k3s's units, and starts k3s.
+- name: Install k3s {{ k3s_release.version }}
+  ansible.builtin.command:
+    cmd: /usr/local/lib/k3s-install.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_release.version }}"
+  when: k3s_install
+  changed_when: true
+
+- name: Apply changed settings now
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the node
+  ansible.builtin.command:
+    cmd: /usr/local/bin/k3s kubectl wait --for=condition=Ready node/{{ k3s_node }} --timeout=30s
+  register: k3s_ready
+  until: k3s_ready.rc == 0
+  retries: 20
+  delay: 5
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or k3s_installed.stat.exists
+
+# k3s writes new certificates when it renews them, so this is kept on
+# every run (k3s CIS hardening guide).
+- name: Find the server's certificates not root's alone
+  ansible.builtin.find:
+    paths: /var/lib/rancher/k3s/server/tls
+    patterns: "*.crt"
+    file_type: file
+  register: k3s_certificates
+
+- name: Make them root's alone
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "0600"
+  loop: "{{ k3s_certificates.files | rejectattr('mode', 'eq', '0600') }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Check secrets are encrypted at rest
+  ansible.builtin.command:
+    cmd: /usr/local/bin/k3s secrets-encrypt status
+  register: k3s_encryption
+  changed_when: false
+  check_mode: false
+  failed_when: k3s_encryption.rc != 0 or k3s_encryption.stdout is not search('Encryption Status:\s+Enabled')
+  when: not ansible_check_mode or k3s_installed.stat.exists

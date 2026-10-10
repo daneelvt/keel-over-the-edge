@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Writes the tailnet policy, infra/tailnet/policy.hujson, to Tailscale,
+# once the owner has approved the run (the production environment): the
+# policy decides who reaches production's machine. Tailscale validates it
+# and runs its tests first, and refuses a policy that fails them; the
+# run's summary shows what was replaced, so a change made in Tailscale's
+# admin page shows when the repository's replaces it. The job signs in
+# with its own OIDC token, as the one identity that may write the policy,
+# which no other workflow can use. go run ./tools/tailnet does the work.
+name: tailnet
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - infra/tailnet/**
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  tailnet:
+    name: tailnet
+    runs-on: ubuntu-26.04
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # sign in to Tailscale as this workflow
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+          cache: "false"
+      - name: Validate the policy with Tailscale, then write it
+        run: go run ./tools/tailnet -apply
