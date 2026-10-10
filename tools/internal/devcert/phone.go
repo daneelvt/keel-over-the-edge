@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mdp/qrterminal/v3"
+	"github.com/mdp/qrterminal/v4"
 )
 
 // CertFile is the name a phone saves the local root under. Android's
