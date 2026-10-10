@@ -55,6 +55,24 @@
       register: verify_state
       changed_when: false
 
+    - name: Read how names are resolved
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          resolvectl status | grep 'resolv.conf mode'
+          getent ahostsv4 ghcr.io | head -1
+        executable: /bin/bash
+      register: verify_dns
+      changed_when: false
+
+    - name: Check names go through systemd-resolved, and resolve
+      ansible.builtin.assert:
+        that:
+          - verify_dns.stdout is search('resolv.conf mode:\s+stub')
+          - verify_dns.stdout_lines | length == 2
+        fail_msg: "{{ verify_dns.stdout }}"
+        quiet: true
+
     - name: Check there is no swap, the clock is UTC, and /tmp and /dev/shm hold nothing to run
       vars:
         verify: "{{ dict(verify_state.stdout_lines | map('split', '=', 1)) }}"

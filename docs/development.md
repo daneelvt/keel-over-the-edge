@@ -1328,7 +1328,8 @@ infra/ansible/
   lynis-accepted.txt            the Lynis warnings accepted, each with its reason
   roles/
     base/                       host name; packages up to date; the image's extras
-                                purged; UTC; the journal; k3s's kernel settings; no swap
+                                purged; UTC; the journal; names resolved through
+                                systemd-resolved; k3s's kernel settings; no swap
     hardening/                  the CIS benchmark, below
     access/                     Tailscale from its own repository; OpenSSH gone
     firewall/                   the table hostfw, and its unit
