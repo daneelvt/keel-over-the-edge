@@ -2,19 +2,22 @@
 # Builds and tests the game. The other checks are the pr.*.yaml workflows.
 # On a pull request the Go tests run only when Go code or what it reads
 # changed, the client's only when the client or what it loads changed, the
-# smoke test when either did, and the image when anything it holds did; a
-# push to main runs everything.
+# smoke test when either did, and the image when anything it holds did. On
+# a push to main, release.yaml calls this workflow first, and it runs
+# everything: a release is built only from a commit that passed.
 name: ci
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_call:
 
 permissions: {}
 
+# A pull request's newer run replaces its older one. Called by a release,
+# each run stands alone: the group would otherwise be the caller's, and one
+# release's tests would cancel the tests of the release before it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -59,6 +62,7 @@ jobs:
               - 'tools/licences/allowed.txt'
             image:
               - '.github/workflows/ci.yaml'
+              - '.github/actions/check-image/**'
               - 'Dockerfile'
               - '.dockerignore'
               - '.nvmrc'
@@ -187,9 +191,9 @@ jobs:
         run: go run ./tools/dev -smoke
 
   # The game's image, built from the repository alone on each machine it is
-  # made for, as a release will build it; not pushed. keel is
-  # cross-compiled and the page built on the runner's own platform, so each
-  # build checks the image runs where it was built.
+  # made for; not pushed. keel is cross-compiled and the page built on the
+  # runner's own platform, so each build checks the image runs where it was
+  # built. A release builds both in one run, and checks them the same way.
   image:
     name: image (${{ matrix.runner }})
     strategy:
@@ -207,19 +211,9 @@ jobs:
           persist-credentials: false
       - name: Build the image
         run: docker buildx build --provenance=false --sbom=false --build-arg "BUILD=${GITHUB_SHA::12}" --tag keel:ci --load .
-      - name: Not root, no shell, keel runs, the page is there; its size
-        run: |
-          set -euo pipefail
-          user=$(docker image inspect keel:ci --format '{{.Config.User}}')
-          if [ "$user" != "65532:65532" ]; then echo "runs as $user"; exit 1; fi
-          docker run --rm keel:ci help
-          if docker run --rm --entrypoint /bin/sh keel:ci -c true 2>/dev/null; then echo "the image has a shell"; exit 1; fi
-          id=$(docker create keel:ci)
-          docker cp "$id:/srv/keel/client/index.html" - | tar -tv
-          unpacked=$(docker export "$id" | wc -c)
-          docker rm "$id"
-          packed=$(docker save keel:ci | gzip -c | wc -c)
-          echo "keel:ci on $(uname -m): $packed bytes compressed, $unpacked unpacked" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: ./.github/actions/check-image
+        with:
+          image: keel:ci
 
   ci:
     name: ci

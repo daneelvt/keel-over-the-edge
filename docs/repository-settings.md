@@ -15,6 +15,19 @@ time.
       dependency graph itself)
 - [ ] Copilot Autofix: **on**
 
+## Packages: the owner's profile → Packages
+
+GitHub makes a new package private, and has no API a workflow's token may
+change that with. Flux and the cluster's node read these with no
+credential.
+
+- [ ] `keel` (the game's image): **public**; Manage Actions access lists
+      this repository, with the role Write
+- [ ] `keel-manifests` (the releases): **public**; Manage Actions access
+      lists this repository, with the role Write
+- [ ] `keel-manifests-check` (one artifact nobody signed, which Flux must
+      refuse; see docs/development.md, "Releases"): **public**
+
 ## The owner's account
 
 - [ ] At least two passkeys or security keys; no SMS or authenticator-app
@@ -46,6 +59,6 @@ With one maintainer some checks cannot reach 10. These are expected:
 | Branch-Protection | 3 | A higher score needs a required reviewer |
 | CII-Best-Practices | 5 | The passing badge; higher levels need more than one maintainer |
 | Maintained | 0 for the first 90 days | Scorecard needs 90 days of history |
-| Packaging, Signed-Releases | inconclusive | Until releases are published |
+| Signed-Releases | inconclusive | Releases are signed OCI artifacts in the registry; Scorecard looks at GitHub Releases, and there are none |
 
 Every other check should score 10.

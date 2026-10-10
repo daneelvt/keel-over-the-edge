@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# A source Flux must refuse: an artifact with a good signature, but another
+# signer's. It is the CloudNativePG chart, which that project's release
+# workflow signed, checked as production checks a release of the game.
+# Applied by hand, to see the refusal, and never by a command
+# (docs/development.md, "Releases"):
+#
+#   kubectl apply -f tools/cluster/testdata/refused-other-signer.yaml
+#   kubectl -n flux-system get ocirepository refused-other-signer
+#   kubectl delete -f tools/cluster/testdata/refused-other-signer.yaml
+#
+# It must show SourceVerified False, VerificationError, and no artifact.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: refused-other-signer
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://ghcr.io/cloudnative-pg/charts/cloudnative-pg
+  ref:
+    tag: 0.29.1
+    digest: sha256:3245fa051bb21d0dd9246272f57a2760b4234817a164a3167d2a1e7fb9f63fd9
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: ^https://token\.actions\.githubusercontent\.com$
+        subject: ^https://github\.com/daneelvt/keel-over-the-edge/\.github/workflows/release\.yaml@refs/heads/main$

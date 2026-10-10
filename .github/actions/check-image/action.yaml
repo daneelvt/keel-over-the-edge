@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Check the game's image
+description: The image is built for this runner's machine, runs as 65532 with no shell, runs keel, and holds the page; its size goes to the job's summary.
+inputs:
+  image:
+    description: The image, as Docker on the runner names it.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: For this machine, not root, no shell, keel runs, the page is there; its size
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: |
+        set -euo pipefail
+        case "$(uname -m)" in x86_64) want=amd64 ;; aarch64) want=arm64 ;; *) want=$(uname -m) ;; esac
+        arch=$(docker image inspect "$IMAGE" --format '{{.Architecture}}')
+        if [ "$arch" != "$want" ]; then echo "the image is for $arch, this runner is $want"; exit 1; fi
+        user=$(docker image inspect "$IMAGE" --format '{{.Config.User}}')
+        if [ "$user" != "65532:65532" ]; then echo "runs as $user"; exit 1; fi
+        docker run --rm "$IMAGE" help
+        if docker run --rm --entrypoint /bin/sh "$IMAGE" -c true 2>/dev/null; then echo "the image has a shell"; exit 1; fi
+        id=$(docker create "$IMAGE")
+        docker cp "$id:/srv/keel/client/index.html" - | tar -tv
+        unpacked=$(docker export "$id" | wc -c)
+        docker rm "$id"
+        packed=$(docker save "$IMAGE" | gzip -c | wc -c)
+        echo "$IMAGE on $(uname -m): $packed bytes compressed, $unpacked unpacked" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The operator's chart, from the project's own OCI registry, pinned by the
 # digest of the chart's manifest: the tag is for reading, the digest is
-# what Flux fetches.
+# what Flux fetches. The digest says which chart; its signature says who
+# built it: Flux fetches it only if the project's release workflow, on its
+# main branch, signed it (cosign, keyless: the signer is the workflow's
+# identity in the certificate Sigstore issued it, matched by these
+# patterns).
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
 metadata:
@@ -15,3 +19,8 @@ spec:
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: ^https://token\.actions\.githubusercontent\.com$
+        subject: ^https://github\.com/cloudnative-pg/charts/\.github/workflows/release-publish\.yml@refs/heads/main$

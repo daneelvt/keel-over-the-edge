@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The game in production: the base's sizes, which are production's, and
+# the players' address.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../apps/keel
+configMapGenerator:
+  - name: keel
+    namespace: keel
+    behavior: merge
+    literals:
+      - KEEL_PLAY_ORIGIN=https://play.keelovertheedge.com

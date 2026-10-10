@@ -8,6 +8,9 @@ inputs:
   node:
     description: Set up Node and install the client packages.
     default: "true"
+  cache:
+    description: Restore and save Go's module and build caches. Off in the jobs that publish a release, which build from the commit alone.
+    default: "true"
 runs:
   using: composite
   steps:
@@ -15,6 +18,7 @@ runs:
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
+        cache: ${{ inputs.cache }}
         cache-dependency-path: go.sum
 
     - if: inputs.node == 'true'

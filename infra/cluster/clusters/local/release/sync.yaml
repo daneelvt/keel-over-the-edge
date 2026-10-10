@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The release the local cluster follows, and its layers. The source is
+# production's (clusters/prod/flux-system/sync.yaml), signature check and
+# all; the layers are the artifact's local ones.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: keel
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: oci://ghcr.io/daneelvt/keel-manifests
+  ref:
+    tag: prod
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: ^https://token\.actions\.githubusercontent\.com$
+        subject: ^https://github\.com/daneelvt/keel-over-the-edge/\.github/workflows/release\.yaml@refs/heads/main$
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: controllers
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 1m
+  timeout: 10m
+  sourceRef:
+    kind: OCIRepository
+    name: keel
+  path: ./local/controllers
+  prune: true
+  wait: true
+  deletionPolicy: Orphan
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: configs
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: controllers
+  interval: 10m
+  retryInterval: 1m
+  timeout: 10m
+  sourceRef:
+    kind: OCIRepository
+    name: keel
+  path: ./local/configs
+  prune: true
+  wait: true
+  deletionPolicy: Orphan
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: configs
+  interval: 10m
+  retryInterval: 1m
+  timeout: 10m
+  sourceRef:
+    kind: OCIRepository
+    name: keel
+  path: ./local/apps
+  prune: true
+  wait: true
+  deletionPolicy: Orphan

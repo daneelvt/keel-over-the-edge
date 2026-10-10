@@ -6,6 +6,10 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: keel-db
+  annotations:
+    # The world's state is here. Flux never deletes it, were it dropped
+    # from the manifests or renamed in them: removing it takes a person.
+    kustomize.toolkit.fluxcd.io/prune: disabled
 spec:
   instances: 1
   # The minimal image: PostgreSQL from PGDG's packages on Debian, as the

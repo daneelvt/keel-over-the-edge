@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/daneelvt/keel-over-the-edge/tools/internal/tinygo"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/pinned"
 )
 
 // tinygoArgs builds the module: TinyGo's target for a bare WebAssembly
@@ -58,7 +58,7 @@ func (m module) String() string {
 // buildModule builds the module into out and checks it: no heap allocation
 // in the package or the module's exports, and within the size budget.
 func buildModule(ctx context.Context, out string) (module, error) {
-	bin, err := tinygo.Ensure(ctx, stateDir, os.Stdout)
+	bin, err := pinned.TinyGo.Ensure(ctx, stateDir, os.Stdout)
 	if err != nil {
 		return module{}, err
 	}

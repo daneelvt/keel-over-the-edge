@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/devcert"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
 )
 
 // phonePort is where -phone serves the phone setup page: beside tools/dev's
@@ -45,12 +46,24 @@ func (c *cluster) status(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	build, err := c.runningBuild(ctx)
+	game, err := c.running(ctx)
 	if err != nil {
 		fmt.Fprintf(c.out, "\nThe game is not deployed: go run ./tools/cluster -deploy\n")
 		return nil
 	}
-	fmt.Fprintf(c.out, "\nkeel %s\n  the game        https://%s\n", build, host)
+	fmt.Fprintf(c.out, "\nkeel %s\n", game.build)
+	// Who put it there, and so who puts the next one.
+	src, err := c.followed(ctx)
+	switch {
+	case err != nil:
+		return err
+	case src != nil:
+		fmt.Fprintf(c.out, "  in charge       Flux, following the release %s:%s (%s); go run ./tools/cluster -deploy brings the working tree back\n",
+			manifests.ManifestsRepo, src.Spec.Ref.Tag, src.summary())
+	default:
+		fmt.Fprintf(c.out, "  in charge       the working tree: go run ./tools/cluster -deploy\n")
+	}
+	fmt.Fprintf(c.out, "  the game        https://%s\n", host)
 	for _, ip := range devcert.LANAddresses() {
 		fmt.Fprintf(c.out, "                  https://%s\n", ip)
 	}

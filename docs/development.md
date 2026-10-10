@@ -19,8 +19,10 @@ same checks a pull request runs.
 Nothing else: the certificate tool, linters and scanners are Go tools listed
 in `go.mod` and run with `go tool`. TinyGo, which builds the physics package
 for the browser, is downloaded into `.dev/` on first use (about 180 MB, once)
-and checked against the digest pinned in `tools/internal/tinygo`; its
-`wasm-opt` comes with the client's packages.
+and checked against the digest pinned in `tools/internal/pinned`; its
+`wasm-opt` comes with the client's packages. cosign and the Flux CLI, which
+only a release needs, are pinned and fetched the same way (see
+[Releases](#releases)).
 
 ## The one command
 
@@ -112,23 +114,25 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed), every push to `main` | Go tests with the race detector on amd64 and arm64, each with a PostgreSQL service (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests with the race detector on amd64 and arm64, each with a PostgreSQL service (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
 | `pr.render.yaml` | Pull requests, not drafts, that change its files | The test sea's fixtures current; the physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
-| `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of `infra/cluster` rendered with kustomize and checked against the manifests' rules (each rule also broken on purpose), no Secret under `infra/`, and `tools/cluster`'s steps against fake commands (see [The local cluster](#the-local-cluster)) | `go test ./tools/cluster` |
+| `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin (see [The local cluster](#the-local-cluster) and [Releases](#releases)) | `go test ./tools/cluster ./tools/release ./tools/internal/...` |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
+| `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
+| `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature and its place on `main` are checked | |
 | `scorecard.yaml` | Pushes to `main`, weekly | OpenSSF Scorecard | |
 | `security.yaml` | Weekly | govulncheck and npm signatures on `main` | |
 
 Every workflow pins its actions to full commit hashes; the repository refuses
-any other. Each multi-job workflow ends in one job named after the workflow,
-and that job is the required check.
+any other. Each multi-job workflow a pull request runs ends in one job named
+after the workflow, and that job is the required check.
 
 A workflow marked "that change its files" starts with a `changes` job, which
 asks `dorny/paths-filter` whether the pull request touches any file the check
@@ -860,7 +864,8 @@ it at **`https://<your Mac's name>.local`**, for example
   framework.
 - **Docker** with buildx (Docker Desktop has it), to build the image, and
   **kubectl** (Docker Desktop ships one; or `brew install kubectl`).
-- The **Flux CLI** only to update `infra/cluster/flux-system` (below).
+- Nothing for Flux or cosign: `go run ./tools/release -tools` puts the
+  pinned `flux` and `cosign` in `.dev/bin`.
 
 The VM takes 4 CPUs, 8 GiB of memory and up to 60 GiB of disk.
 
@@ -869,18 +874,21 @@ The VM takes 4 CPUs, 8 GiB of memory and up to 60 GiB of disk.
 ```sh
 go run ./tools/cluster -up       # make or start the VM, install k3s, apply everything, deploy the game
 go run ./tools/cluster -deploy   # build the image from this tree and put it in place
+go run ./tools/cluster -release 0123456789ab   # take a published release through Flux; prod for production's
 go run ./tools/cluster -smoke    # check the game in the cluster
 go run ./tools/cluster -status   # the VM, the pods, the build running, the addresses
 go run ./tools/cluster -logs     # follow keel's logs
 go run ./tools/cluster -phone    # the phone setup page, and the game's QR code
+go run ./tools/cluster -schemas  # write infra/schemas from the cluster's own definitions
 go run ./tools/cluster -stop     # stop the VM (-up starts it again)
 go run ./tools/cluster -delete   # delete the VM and .dev/cluster (asks first)
 ```
 
 `-up` the first time takes a few minutes: Lima downloads Ubuntu's image
 (pinned by digest), k3s is installed, Flux's controllers, the
-CloudNativePG operator and Traefik's configuration are applied in that
-order, each waited for, and then the game is deployed. Run again, it
+CloudNativePG operator (its chart fetched only if its signature is the
+CloudNativePG project's own) and Traefik's configuration are applied in
+that order, each waited for, and then the game is deployed. Run again, it
 changes only what changed. `KEEL_DEV_SAILORS=100 go run ./tools/cluster
 -deploy` adds scripted sailors.
 
@@ -929,8 +937,10 @@ It builds the image for `linux/arm64` (`docker buildx build`, the
 the VM; no registry is involved, and the Deployment's `imagePullPolicy:
 Never` makes a missing image fail rather than be pulled. The node keeps the
 newest three of the game's images. Then it renders `clusters/local/apps`
-with that tag and the Mac's name, applies it, and waits for the database
-and the new pod. A new build is a restart, and a restart is a pause: see
+with that image in place of the registry's, never pulled, and the Mac's
+name, applies it, and waits for the database and the new pod. If the
+cluster was following a release (`-release`, see [Releases](#releases)),
+`-deploy` lets go of it first: the working tree is in charge again. A new build is a restart, and a restart is a pause: see
 [Restarts and deploys](#restarts-and-deploys).
 
 The image is built from the repository alone: the page (the physics module
@@ -946,9 +956,12 @@ no `node_modules`, no build output.
 ```
 infra/
   k3s/
+    release.yaml         the k3s release every machine installs, and its commit
     config.yaml          k3s's settings on every machine: kubeconfig root's alone,
                          Secrets encrypted with secretbox, protect-kernel-defaults
     sysctl.conf          the kernel settings k3s checks, and inotify limits
+  schemas/               the JSON schemas of the custom resources the manifests
+                         use, written by tools/cluster -schemas
   local/
     lima.yaml            the VM: Ubuntu 26.04 by digest, size, port forwarding
     k3s-local.yaml       the local drop-in: node name
@@ -960,28 +973,47 @@ infra/
     apps/keel/           the game: Deployment, Service, ConfigMap, Gateway,
                          HTTPRoute, the database's Cluster; production's sizes
     clusters/local/      the local cluster's entry points: controllers, configs,
-                         apps (half the sizes, HTTPS, the redirect, the image)
+                         apps (half the sizes, HTTPS, the redirect); and
+                         release, what -release applies to follow a release
+    clusters/prod/       production's entry points: flux-system (Flux's
+                         controllers, and sync.yaml, what they follow),
+                         controllers, configs, apps (the players' address)
 ```
 
-The bases hold what every cluster shares; `clusters/local` patches what
-differs. k3s installs the Gateway API's standard CRDs itself, with its
+The bases hold what every cluster shares; each cluster's folder patches
+what differs. k3s installs the Gateway API's standard CRDs itself, with its
 Traefik. `tools/cluster` writes k3s's files into the VM before installing
-k3s (`v1.36.5+k3s1`, by the release's `install.sh`, checked against its
-SHA-256) and again when they change, restarting k3s. Lima reads
-`lima.yaml` only when it makes the VM: after changing it, `-delete` and
-`-up`. To raise k3s's version, change `k3sVersion` and `installerSHA256` in
-`tools/cluster` together. To raise Flux's, run the command at the top of
-`gotk-components.yaml` with the new version and update the digests in its
-`kustomization.yaml`.
+k3s and again when they change, restarting k3s. The k3s release is pinned
+in `infra/k3s/release.yaml`, by version and by the commit its tag names:
+the release's `install.sh` is fetched at that commit and no other, as a
+workflow's actions are pinned, and it checks the binaries it downloads
+against the release's checksums. To raise k3s's version, change both
+lines together (Renovate does). Lima reads `lima.yaml` only when it makes
+the VM: after changing it, `-delete` and `-up`. To raise Flux's, run the
+command at the top of `gotk-components.yaml` with the new version
+(`.dev/bin/flux`, after its pin in `tools/internal/pinned` is raised),
+update the digests in its `kustomization.yaml`, and run `-schemas` on a
+cluster that has it.
 
 Secrets are never in the repository (a test fails on any): `tools/cluster`
 makes `keel-db-app`, the database's password, once, at random, and never
 replaces it; and `keel-tls`, the certificate, again when its names change.
 
-The rules the manifests keep, checked by `go test ./tools/cluster` and by
-`-up` and `-deploy` before applying anything: no Secret; every image pinned
-by digest (only the game's own, locally, is a tag with `imagePullPolicy:
-Never`); the game's Deployment with one replica, `Recreate`, `keel migrate`
+The rules the manifests keep, checked by `go test ./tools/internal/manifests`
+on every entry point of both clusters, by a release before it publishes
+anything, and by `-up`, `-deploy` and `-release` before applying anything:
+no Secret; every image pinned by digest, the game's own included (only a
+deploy from the working tree names it by a tag, with `imagePullPolicy:
+Never`); every `OCIRepository` fetched only if cosign verifies its
+signature, keyless, against identities whose issuer and subject patterns
+are anchored at both ends, and the release's own only from the release
+workflow on `main`; Flux's `Kustomization`s each applying its layer's
+folder of the release for its cluster, with `prune` on, `deletionPolicy:
+Orphan`, `wait` on and a `dependsOn` naming the layer before it (the first
+of production's, which holds the others, waits for Flux's controllers by
+name instead); the database, and the namespace it is in, annotated never
+to be pruned; each cluster naming its own players' host alone; the game's
+Deployment with one replica, `Recreate`, `keel migrate`
 as an init container, probes on the internal listener, the restricted
 security context and no service account token; `GOMEMLIMIT` between 80% and
 95% of the memory limit; no route to the internal listener; every route on
@@ -991,6 +1023,20 @@ builtin `C.UTF-8` locale; the database's `smartShutdownTimeout` at most
 30 s and its clients' TCP keepalives set; and keel's
 `terminationGracePeriodSeconds` at least its bell, the final checkpoint's
 and the closes' bounds and 10 s more.
+
+Beside the rules, every rendered object is checked against the schema of
+its kind with [kubeconform](https://github.com/yannh/kubeconform)
+(`go tool kubeconform`, `-strict`): a field the schema does not know, a key
+written twice, or a kind with no schema fails. The schemas of Kubernetes'
+own kinds come from `yannh/kubernetes-json-schema`, at one commit, for the
+version of Kubernetes the k3s pin holds; they are downloaded once into
+`.dev/schemas`. Those of custom resources (Flux's, CloudNativePG's, the
+Gateway API's, Traefik's, k3s's) are in `infra/schemas/`, written by
+`go run ./tools/cluster -schemas` from the definitions in the local
+cluster, which runs exactly the versions the manifests are written for;
+so is `CustomResourceDefinition`'s own, which the published set lacks.
+After raising a chart, Flux or k3s, run `-up` and then `-schemas`, and
+commit what changed.
 
 ### The game in the cluster
 
@@ -1002,6 +1048,184 @@ and the closes' bounds and 10 s more.
 | Traefik | k3s's own, with the Gateway API on, Ingress off, and its entry points' timeouts written down: `readTimeout` 60 s (a request must arrive within it; a stalled one is cut), `idleTimeout` 180 s, no `writeTimeout`. A game connection is not cut by them |
 
 The `keel` namespace warns and audits Pod Security's `restricted` profile.
+
+## Releases
+
+Every push to `main` makes a release, by itself. Nothing in it deploys.
+`release.yaml` runs the tests (`ci.yaml`, whole), and only if they pass:
+
+1. **The image.** One `docker buildx build` for `linux/amd64` and
+   `linux/arm64`, on a BuildKit pinned by digest, pushed as
+   `ghcr.io/daneelvt/keel:<build>`. The `Dockerfile` builds the page and
+   compiles `keel` on the runner's own platform, so neither needs
+   emulation, and the page is the same in both. cosign signs the image's
+   digest, and GitHub attests how it was built (`actions/attest`; the
+   attestation is kept beside the image).
+2. **A check on each machine.** A runner of each architecture pulls the
+   image by that digest and checks it as `ci.yaml` checks its own build:
+   for its machine, 65532, no shell, `keel help`, the page.
+3. **The manifests.** `go run ./tools/release -render` builds every entry
+   point of every cluster with the game's image **by its digest**, checks
+   the rules and the schemas ([The layout of
+   `infra/`](#the-layout-of-infra)), and writes plain YAML. `flux push
+   artifact` pushes the folder as
+   `ghcr.io/daneelvt/keel-manifests:<build>`, and cosign signs its digest.
+
+The **build** is the first 12 characters of the commit, as `/api/version`
+reports it. The run's summary names the build and both digests.
+
+```
+keel-manifests:<build>            signed; made from main@sha1:<commit>
+  local/
+    controllers/manifests.yaml    CloudNativePG (its chart's signature checked)
+    configs/manifests.yaml        Traefik's HelmChartConfig
+    apps/manifests.yaml           keel by digest, the database, the Gateway (macbook.local)
+  prod/
+    flux-system/manifests.yaml    Flux's controllers, and what they follow
+    controllers/manifests.yaml
+    configs/manifests.yaml
+    apps/manifests.yaml           keel by digest, the database, play.keelovertheedge.com
+```
+
+Flux applies exactly what was rendered and checked: a folder with no
+kustomization of its own is applied as it is.
+
+**A build is released once.** A second run of the same commit stops at
+"already released": the `build` job finds the manifests published and
+signed, and nothing is built or pushed. The push is reproducible (the same
+commit and image give the same artifact), so if a run fails after pushing
+the manifests and before signing them, **Re-run failed jobs** pushes the
+same artifact and signs it. *Re-run all jobs* would instead fail at
+`build`, which says the manifests are published and not signed: nothing
+may deploy them until they are.
+
+The first release makes the packages `keel` and `keel-manifests`, and
+GitHub makes a new package private. Each is made public once, by hand
+([repository-settings.md](repository-settings.md)): Flux, and
+`tools/cluster -release`, read them with no credential.
+
+### Who signed it
+
+The signatures are Sigstore's, keyless: no key is kept anywhere. The
+release workflow's run proves who it is to Sigstore with GitHub's OIDC
+token; Sigstore issues a short-lived certificate naming the workflow's file
+and ref, and records the signature in its public log. Whoever verifies
+says which signer they accept. Flux accepts one
+(`infra/cluster/clusters/prod/flux-system/sync.yaml`): this repository's
+`release.yaml` on `main`, matched whole. Not a pull request's run, another
+branch, another workflow, or a fork. Each signing job checks its own
+signature against that very identity before it ends, and a test holds the
+workflow's copy of the patterns to the manifests'.
+
+To check a release by hand, with the pinned cosign and Flux CLI
+(`go run ./tools/release -tools` puts them in `.dev/bin`):
+
+```sh
+signer=(--certificate-oidc-issuer-regexp '^https://token\.actions\.githubusercontent\.com$'
+        --certificate-identity-regexp '^https://github\.com/daneelvt/keel-over-the-edge/\.github/workflows/release\.yaml@refs/heads/main$')
+.dev/bin/cosign verify "${signer[@]}" ghcr.io/daneelvt/keel-manifests:0123456789ab
+.dev/bin/cosign verify "${signer[@]}" ghcr.io/daneelvt/keel:0123456789ab
+gh attestation verify oci://ghcr.io/daneelvt/keel:0123456789ab --repo daneelvt/keel-over-the-edge
+mkdir release && .dev/bin/flux pull artifact oci://ghcr.io/daneelvt/keel-manifests:0123456789ab --output release
+```
+
+The same checking applies to what the cluster fetches from others: the
+CloudNativePG chart is fetched only if that project's release workflow
+signed it, and a rule fails any `OCIRepository` that does not verify.
+
+### Promoting, and rolling back
+
+Deploying is tagging. Production's Flux follows the tag **`prod`** of
+`keel-manifests`, and looks every minute. `promote.yaml` moves it: Actions
+→ promote → Run workflow, with the build. The run waits in the
+`production` environment for the owner's approval, and then, before it
+moves anything (`go run ./tools/release -promote`):
+
+- the `production` environment must require a reviewer: GitHub makes an
+  environment a workflow names and the repository lacks, with no
+  protection, and a promotion nobody approved is refused;
+- the build must be released, and its signature verify as Flux will
+  verify it, so `prod` never names what Flux would refuse;
+- the commit it was made from must be on `main`;
+- it must not be **older** than the build production follows now.
+
+**Rolling back** is promoting an older build with the *rollback* box
+ticked, which lifts only the last check. Promotions never run two at once:
+a second waits for the first. The run's summary shows the build, commit
+and digest before and after. Flux's own controllers, and what they
+follow, are the release's first layer, `prod/flux-system`: once a
+machine's Flux has been given it, Flux applies it itself from then on, and
+so upgrades itself.
+
+Flux applies a release's layers in order, each once the one before is
+ready: Flux itself, the controllers, their configuration, the game. It
+removes what a release no longer holds, with two exceptions it never
+removes: the database and the namespace it is in (an annotation on each).
+Deleting one of Flux's `Kustomization` objects deletes nothing it applied
+(`deletionPolicy: Orphan`). Removing the database takes a person.
+
+### A release on the local cluster
+
+The local cluster stays your own, deployed from the working tree. But a
+published release can be taken through Flux on it exactly as production
+will take one:
+
+```sh
+go run ./tools/cluster -release 0123456789ab   # a build
+go run ./tools/cluster -release prod           # what production follows
+```
+
+It applies `clusters/local/release`: the release's source at that tag,
+with production's signature check, and Flux's layers `controllers` →
+`configs` → `apps` on the artifact's `local/` folders. It waits for Flux
+to verify and fetch the source, then for each layer to be ready, then runs
+`-smoke`, which checks `/api/version` names that build. A source Flux
+refuses stops it at once, with what Flux said. The times it prints are
+from the moment the release was applied.
+
+The artifact is rendered for a Mac named `macbook` (`clusters/local/apps`
+names `https://macbook.local`); on another Mac `-release` stops and says
+so, since nothing puts the Mac's own name in, as `-deploy` does. When the
+working tree is another commit than the release, `-smoke` checks only what
+every build shares (the page, the build, the database's TLS): the guest
+and the game connection are this tree's protocol.
+
+`go run ./tools/cluster -deploy` goes back: it deletes Flux's layers and
+their source (which deletes nothing they applied), and applies the working
+tree with the image it builds. `-status` says which is in charge.
+
+Two sources Flux must refuse are kept as fixtures, applied by hand and
+never by a command: `tools/cluster/testdata/refused-other-signer.yaml`
+(the CloudNativePG chart, well signed, but not by the release workflow)
+and `refused-unsigned.yaml` (an artifact nobody signed, in a package of its
+own, `keel-manifests-check`). Each file says how to apply it and what it
+must show: `SourceVerified` False, `VerificationError`, no artifact. The
+unsigned artifact is pushed once, by hand, with a token that may write
+packages, and its package then made public:
+
+```sh
+gh auth refresh --scopes write:packages
+gh auth token | docker login ghcr.io --username daneelvt --password-stdin
+mkdir unsigned && echo 'apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unsigned
+  namespace: default' > unsigned/configmap.yaml
+.dev/bin/flux push artifact oci://ghcr.io/daneelvt/keel-manifests-check:unsigned \
+  --path unsigned --source https://github.com/daneelvt/keel-over-the-edge --revision "main@sha1:$(git rev-parse HEAD)"
+```
+
+### What keeps the pins current
+
+Renovate (`renovate.json`) updates, each with its digest or commit: the
+actions in the workflows; the `Dockerfile`'s images and the CI service's
+PostgreSQL; the CloudNativePG chart (tag and digest) together with the
+operator's image; Flux's manifests, its controllers' images and its CLI,
+as one update; k3s's version and commit (a new minor version waits for a
+tick on the dashboard); cosign and TinyGo; BuildKit; kubeconform and every
+Go module. A test fails if one of its patterns stops finding its pin.
+Raised by hand: the commit of the Kubernetes schemas
+(`tools/internal/manifests`), and Lima's Ubuntu image.
 
 ## Restarts and deploys
 
@@ -1424,7 +1648,10 @@ keys). Every source file starts with `SPDX-License-Identifier: AGPL-3.0-only`.
 
 ## Repository settings
 
-GitHub's settings for this repository are kept in `.github/settings/`.
+GitHub's settings for this repository are kept in `.github/settings/`: the
+repository's own, Actions', the rulesets, and the `production` environment
+(`environments.json`: who must approve a job that runs in it, and that
+only `main`'s workflows may).
 
 ```sh
 go run ./tools/github -check   # print every difference
@@ -1488,5 +1715,20 @@ Both use your own `gh` login. Settings GitHub has no API for are listed in
   k3s` has k3s's own log.
 - **`tools/cluster`: start again from nothing.** `go run ./tools/cluster
   -delete`, then `-up`. Lima keeps Ubuntu's image in its cache.
+- **`tools/cluster -release`: "the release could not be fetched by Flux".** The
+  build has no release (look for its `release` run on `main`), or the
+  package `keel-manifests` is still private: Flux reads it with no
+  credential ([repository-settings.md](repository-settings.md)).
+- **`tools/cluster -release`: "the release was refused by Flux".** Its signature
+  is not the release workflow's on `main`. Nothing of it was applied; the
+  message is Flux's, and names the signer it found.
+- **`tools/cluster -release`: the game's pod cannot pull its image.** The
+  package `keel` is still private: the node pulls it with no credential.
+- **kubeconform: "could not find schema for …".** A kind the manifests did
+  not use before: `go run ./tools/cluster -up`, then `-schemas`, and commit
+  the new file in `infra/schemas/`.
+- **`promote`: "requires nobody's approval".** The `production`
+  environment is missing or has lost its reviewer: `go run ./tools/github
+  -apply`.
 - **Tests say "no test database".** Run `go run ./tools/dev -db` once; the
   tests read `.dev/db.env`.

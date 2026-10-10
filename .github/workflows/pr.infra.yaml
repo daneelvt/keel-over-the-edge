@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Runs only when the cluster's manifests, k3s's settings, or the tool that
-# applies them changed.
+# Runs only when the cluster's manifests, their schemas, k3s's settings, or
+# the tools that render, release and apply them changed.
 name: pr.infra
 
 on:
@@ -32,8 +32,11 @@ jobs:
               - '.github/actions/setup/**'
               - 'go.mod'
               - 'go.sum'
+              - '.github/workflows/release.yaml'
+              - 'renovate.json'
               - 'infra/**'
               - 'tools/cluster/**'
+              - 'tools/release/**'
               - 'tools/internal/**'
 
   infra:
@@ -50,8 +53,8 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node: "false"
-      - name: Every entry point renders and keeps the rules; no Secret under infra/; tools/cluster's steps against fakes
-        run: go test -count=1 ./tools/cluster
+      - name: Every entry point of both clusters renders, keeps the rules and passes kubeconform; no Secret under infra/; a release's and the local cluster's steps against fakes
+        run: go test -count=1 ./tools/cluster ./tools/release ./tools/internal/manifests ./tools/internal/pinned
 
   pr-infra:
     name: pr-infra

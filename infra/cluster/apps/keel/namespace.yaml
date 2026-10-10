@@ -4,6 +4,10 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: keel
+  annotations:
+    # Deleting the namespace would delete the database in it: Flux never
+    # does, as it never deletes the database itself.
+    kustomize.toolkit.fluxcd.io/prune: disabled
   labels:
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/warn-version: latest

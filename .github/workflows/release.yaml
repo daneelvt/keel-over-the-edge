@@ -1,0 +1,272 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# A push to main makes a release, by itself. The tests first (ci.yaml,
+# called), and only if they pass: the game's image for amd64 and arm64,
+# signed, with how it was built attested; each architecture's image checked
+# on a runner of its own; and every cluster's manifests, rendered with that
+# image by its digest and checked, pushed as an OCI artifact tagged with the
+# build, and signed. Nothing here deploys: promote.yaml moves the tag
+# production follows.
+#
+# The build is the first 12 characters of the commit. A build is released
+# once: a second run of the same commit stops at "already released". The
+# signatures are Sigstore's, keyless: the signer is this workflow on main,
+# the one identity Flux accepts for the manifests
+# (infra/cluster/clusters/prod/flux-system/sync.yaml).
+#
+# The jobs that publish restore no cache: what they build comes from the
+# commit alone.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+# Each commit's release is a group of its own: no release waits for
+# another, and none is ever cancelled, so every commit on main gets its
+# build. A run writes only its own build's tags.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/daneelvt/keel
+  MANIFESTS: ghcr.io/daneelvt/keel-manifests
+  # The signer Flux accepts, as cosign matches it against the certificate
+  # of a signature: each signature made here is checked against these at
+  # once. A test holds them to the manifests' own.
+  SIGNER_ISSUER: ^https://token\.actions\.githubusercontent\.com$
+  SIGNER_IDENTITY: ^https://github\.com/daneelvt/keel-over-the-edge/\.github/workflows/release\.yaml@refs/heads/main$
+
+jobs:
+  ci:
+    name: ci
+    uses: ./.github/workflows/ci.yaml
+    permissions:
+      contents: read
+      pull-requests: read # ci.yaml's changes job asks for it on a pull request
+
+  # The build's ID, and whether it is released already. Beside the tests:
+  # it holds nothing up.
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read # look for the build's manifests in the registry
+    outputs:
+      id: ${{ steps.id.outputs.id }}
+      released: ${{ steps.released.outputs.released }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+          cache: "false"
+      - id: id
+        name: The build, the first 12 characters of the commit
+        run: echo "id=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - name: Sign in to the registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - id: released
+        name: Released already? Its manifests published and signed
+        env:
+          BUILD: ${{ steps.id.outputs.id }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: go run ./tools/release -released "$BUILD" >> "$GITHUB_OUTPUT"
+      - name: Already released
+        if: steps.released.outputs.released == 'true'
+        env:
+          BUILD: ${{ steps.id.outputs.id }}
+        run: |
+          echo "::notice title=Already released::Build $BUILD is released already. A release is never replaced: nothing is built or published."
+          echo "### Build \`$BUILD\` is released already" >> "$GITHUB_STEP_SUMMARY"
+          echo "A release is never replaced: nothing was built or published." >> "$GITHUB_STEP_SUMMARY"
+
+  # One image for both architectures, from one build: the Dockerfile builds
+  # the page and compiles keel on the runner's own platform, so neither
+  # needs emulation, and the page is the same in both.
+  image:
+    name: image
+    needs: [ci, build]
+    if: needs.build.outputs.released != 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write # push the image, its signature and its attestation
+      id-token: write # this run's identity, which Sigstore certifies as the signer
+      attestations: write # record how the image was built
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+          cache: "false"
+      - name: cosign, pinned by digest
+        run: |
+          go run ./tools/release -tools
+          echo "$PWD/.dev/bin" >> "$GITHUB_PATH"
+      - name: Sign in to the registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      # Docker's own builder cannot push an image for two platforms; a
+      # BuildKit container can. Its image is pinned as every image is.
+      - name: A builder for both architectures
+        run: docker buildx create --name release --driver docker-container --driver-opt image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c --use
+      - id: build
+        name: Build for amd64 and arm64, and push
+        env:
+          BUILD: ${{ needs.build.outputs.id }}
+        run: |
+          set -euo pipefail
+          docker buildx build --platform linux/amd64,linux/arm64 --provenance=false --sbom=false \
+            --build-arg "BUILD=$BUILD" --tag "$IMAGE:$BUILD" --push --metadata-file "$RUNNER_TEMP/image.json" .
+          digest=$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/image.json")
+          case "$digest" in sha256:*) ;; *) echo "the build reported no digest: $digest"; exit 1 ;; esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      # The digest, never the tag: a tag can be moved, and would carry the
+      # signature's meaning with it.
+      - name: Sign the image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "$IMAGE@$DIGEST"
+      - name: The signature is this workflow's on main, as Flux will ask of the manifests
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign verify --certificate-oidc-issuer-regexp "$SIGNER_ISSUER" --certificate-identity-regexp "$SIGNER_IDENTITY" "$IMAGE@$DIGEST"
+      # The record of what linked artifacts to their storage is an
+      # organisation's; this repository is a person's.
+      - name: Attest how the image was built
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+      - name: Summary
+        env:
+          BUILD: ${{ needs.build.outputs.id }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "### Image \`$IMAGE:$BUILD\`"
+            echo "\`$IMAGE@$DIGEST\`, for linux/amd64 and linux/arm64, signed and attested."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Each architecture's image, pulled by the digest just pushed, runs where
+  # it will run.
+  check:
+    name: check (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    needs: [image]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: read # pull the image
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Sign in to the registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Pull the image by its digest
+        env:
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: docker pull "$IMAGE@$DIGEST"
+      - uses: ./.github/actions/check-image
+        with:
+          image: ${{ env.IMAGE }}@${{ needs.image.outputs.digest }}
+      - name: Its size in the registry
+        env:
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in x86_64) arch=amd64 ;; *) arch=arm64 ;; esac
+          platform=$(docker buildx imagetools inspect --raw "$IMAGE@$DIGEST" | jq -r --arg arch "$arch" '.manifests[] | select(.platform.architecture == $arch) | .digest')
+          size=$(docker buildx imagetools inspect --raw "$IMAGE@$platform" | jq '[.config.size, .layers[].size] | add')
+          echo "linux/$arch in the registry: $size bytes compressed" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # Every cluster's manifests, as plain YAML: Flux applies exactly what was
+  # rendered and checked here.
+  manifests:
+    name: manifests
+    needs: [build, image, check]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write # push the manifests and their signature
+      id-token: write # this run's identity, which Sigstore certifies as the signer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+          cache: "false"
+      - name: cosign and the Flux CLI, pinned by digest
+        run: |
+          go run ./tools/release -tools
+          echo "$PWD/.dev/bin" >> "$GITHUB_PATH"
+      - name: Render every cluster's manifests with the image by its digest; the rules and kubeconform
+        env:
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: go run ./tools/release -render "$RUNNER_TEMP/manifests" -image "$IMAGE@$DIGEST"
+      - name: Sign in to the registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      # Reproducible: the same commit and image give the same artifact, so
+      # this job run again after a failure pushes what it pushed before.
+      - id: push
+        name: Push the manifests, tagged with the build
+        env:
+          BUILD: ${{ needs.build.outputs.id }}
+        run: |
+          set -euo pipefail
+          flux push artifact "oci://$MANIFESTS:$BUILD" --path "$RUNNER_TEMP/manifests" \
+            --source "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --revision "main@sha1:$GITHUB_SHA" \
+            --reproducible --output json | tee "$RUNNER_TEMP/artifact.json"
+          digest=$(jq -r .digest "$RUNNER_TEMP/artifact.json")
+          case "$digest" in sha256:*) ;; *) echo "the push reported no digest: $digest"; exit 1 ;; esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Sign the manifests
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "$MANIFESTS@$DIGEST"
+      - name: The signature is the one Flux accepts
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign verify --certificate-oidc-issuer-regexp "$SIGNER_ISSUER" --certificate-identity-regexp "$SIGNER_IDENTITY" "$MANIFESTS@$DIGEST"
+      - name: Summary
+        env:
+          BUILD: ${{ needs.build.outputs.id }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          size=$(docker buildx imagetools inspect --raw "$MANIFESTS@$DIGEST" | jq '[.config.size, .layers[].size] | add')
+          {
+            echo "### Release \`$BUILD\`"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | $GITHUB_SHA |"
+            echo "| Image | \`$IMAGE@$IMAGE_DIGEST\` |"
+            echo "| Manifests | \`$MANIFESTS@$DIGEST\`, $size bytes |"
+            echo
+            echo "On the local cluster: \`go run ./tools/cluster -release $BUILD\`. To production: the promote workflow, with build \`$BUILD\`."
+          } >> "$GITHUB_STEP_SUMMARY"

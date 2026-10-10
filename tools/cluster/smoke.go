@@ -20,6 +20,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/devcert"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/smoke"
 )
 
@@ -37,9 +38,21 @@ func (c *cluster) smoke(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	build, err := c.runningBuild(ctx)
+	game, err := c.running(ctx)
 	if err != nil {
 		return err
+	}
+	build := game.build
+	// A release of another commit than the working tree's may speak
+	// another protocol and hold another catalog than this tool was built
+	// with: only what every build shares is checked of it.
+	whole := true
+	if game.released {
+		head, err := c.run(ctx, "git", "rev-parse", "--short=12", "HEAD")
+		if err != nil {
+			return err
+		}
+		whole = strings.TrimSpace(string(head)) == build
 	}
 	root, err := devcert.Root(ctx)
 	if err != nil {
@@ -56,8 +69,15 @@ func (c *cluster) smoke(ctx context.Context) error {
 	if err := checkPage(ctx, hc, base); err != nil {
 		return err
 	}
-	if err := checkVersion(ctx, hc, base, build); err != nil {
+	if err := checkVersion(ctx, hc, base, build, whole); err != nil {
 		return err
+	}
+	if !whole {
+		if err := c.plainRefused(ctx, game.image); err != nil {
+			return err
+		}
+		c.logf("smoke: ok: at %s, the page and its assets with their caching, the physics module, /api/version naming build %s, and the database refusing a connection without TLS. The working tree is another commit than the release: check out %s for the guest, the game connection and keel's metrics", base, build, build)
+		return nil
 	}
 	name, jar, err := smoke.Guest(ctx, hc, base)
 	if err != nil {
@@ -73,25 +93,49 @@ func (c *cluster) smoke(ctx context.Context) error {
 	if err := c.withForward(ctx, func(internal string) error { return checkInternal(ctx, internal) }); err != nil {
 		return err
 	}
-	if err := c.plainRefused(ctx, build); err != nil {
+	if err := c.plainRefused(ctx, game.image); err != nil {
 		return err
 	}
 	c.logf("smoke: ok: at %s, the page and its assets with their caching, the physics module, /api/version naming build %s, a guest made and read back (%s), the game connection, a second player seeing the first's boat, keel's probes and metrics, and the database refusing a connection without TLS", base, build, name)
 	return nil
 }
 
-// runningBuild is the build the game's Deployment runs: its image's tag.
-func (c *cluster) runningBuild(ctx context.Context) (string, error) {
+// running is the game the cluster runs.
+type running struct {
+	// image is what the game's Deployment names; build, the build it holds.
+	image, build string
+	// released is whether a release put it there, through Flux, and not a
+	// deploy from the working tree.
+	released bool
+}
+
+// running reads the game's Deployment. A deploy's image is tagged with its
+// build; a release names the image by digest, and its build is the commit
+// the release Flux follows was made from.
+func (c *cluster) running(ctx context.Context) (running, error) {
 	out, err := c.kubectl(ctx, nil, "-n", namespace, "get", "deployment", deployment, "-o", `jsonpath={.spec.template.spec.containers[?(@.name=="keel")].image}`)
 	if err != nil {
-		return "", err
+		return running{}, err
 	}
 	image := strings.TrimSpace(string(out))
-	_, tag, ok := strings.Cut(image, ":")
-	if !ok {
-		return "", fmt.Errorf("the game runs %q, not a build of keel", image)
+	if tag, ok := strings.CutPrefix(image, localImage+":"); ok {
+		return running{image: image, build: tag}, nil
 	}
-	return tag, nil
+	if !strings.HasPrefix(image, manifests.GameImage+"@sha256:") {
+		return running{}, fmt.Errorf("the game runs %q, not a build of keel", image)
+	}
+	src, err := c.followed(ctx)
+	if err != nil {
+		return running{}, err
+	}
+	if src == nil {
+		return running{}, fmt.Errorf("the game runs %s, a release's image, but the cluster follows no release: go run ./tools/cluster -deploy, or -release", image)
+	}
+	build, err := src.build()
+	if err != nil {
+		return running{}, err
+	}
+	return running{image: image, build: build, released: true}, nil
 }
 
 func fetch(ctx context.Context, hc *http.Client, url string) (*http.Response, string, error) {
@@ -162,9 +206,9 @@ func checkPage(ctx context.Context, hc *http.Client, base string) error {
 	return smoke.ModuleServed(ctx, hc, base+"/assets/"+module)
 }
 
-// checkVersion checks the server runs the build deployed, with this tree's
-// catalog.
-func checkVersion(ctx context.Context, hc *http.Client, base, build string) error {
+// checkVersion checks the server runs the build deployed and, with
+// catalog, this tree's catalog.
+func checkVersion(ctx context.Context, hc *http.Client, base, build string, catalogToo bool) error {
 	_, body, err := fetch(ctx, hc, base+"/api/version")
 	if err != nil {
 		return err
@@ -176,7 +220,7 @@ func checkVersion(ctx context.Context, hc *http.Client, base, build string) erro
 	if v.Build != build {
 		return fmt.Errorf("smoke: the server runs build %q, not %q", v.Build, build)
 	}
-	if v.Catalog != catalog.Version {
+	if catalogToo && v.Catalog != catalog.Version {
 		return fmt.Errorf("smoke: server catalog %s, want %s", v.Catalog, catalog.Version)
 	}
 	return nil
@@ -223,11 +267,12 @@ func (c *cluster) withForward(ctx context.Context, f func(base string) error) er
 	return f("http://" + addr)
 }
 
-// plainRefused runs keel migrate in a pod of its own, as keel with its
-// password, but without TLS: the database must refuse it.
-func (c *cluster) plainRefused(ctx context.Context, build string) error {
+// plainRefused runs keel migrate in a pod of its own, from the image the
+// game runs, as keel with its password, but without TLS: the database must
+// refuse it.
+func (c *cluster) plainRefused(ctx context.Context, image string) error {
 	out, err := c.kubectl(ctx, nil, "-n", namespace, "run", "keel-plain-check", "--rm", "-i", "--quiet",
-		"--restart=Never", "--image="+localImage+":"+build, "--overrides="+plainPod(build))
+		"--restart=Never", "--image="+image, "--overrides="+plainPod(image))
 	if err == nil {
 		return errors.New("smoke: the database accepted a connection without TLS")
 	}
@@ -238,8 +283,13 @@ func (c *cluster) plainRefused(ctx context.Context, build string) error {
 }
 
 // plainPod is the pod plainRefused runs: keel's image, its database
-// password, sslmode=disable.
-func plainPod(build string) string {
+// password, sslmode=disable. An image a deploy imported is never pulled; a
+// release's is in the node already, or pulled by its digest.
+func plainPod(image string) string {
+	policy := "IfNotPresent"
+	if strings.HasPrefix(image, localImage+":") {
+		policy = "Never"
+	}
 	pod := map[string]any{
 		"apiVersion": "v1",
 		"spec": map[string]any{
@@ -249,8 +299,8 @@ func plainPod(build string) string {
 			},
 			"containers": []any{map[string]any{
 				"name":            "keel-plain-check",
-				"image":           localImage + ":" + build,
-				"imagePullPolicy": "Never",
+				"image":           image,
+				"imagePullPolicy": policy,
 				"args":            []string{"migrate"},
 				"env": []any{
 					map[string]any{"name": "KEEL_DATABASE_URL", "value": "postgres://keel@keel-db-rw." + namespace + ".svc:5432/keel?sslmode=disable"},

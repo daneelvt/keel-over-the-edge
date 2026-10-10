@@ -9,6 +9,7 @@
 //
 //	go run ./tools/cluster -up       make or start the VM, install k3s, apply the cluster's manifests, deploy the game
 //	go run ./tools/cluster -deploy   build the image, import it into the cluster, apply the game's manifests
+//	go run ./tools/cluster -release <build>  take a published release through Flux, as production does; prod for the one production follows
 //	go run ./tools/cluster -restart  restart keel on the build it runs, as a deploy does
 //	go run ./tools/cluster -kill     delete keel's pod by force, as when its node is lost
 //	go run ./tools/cluster -crash    kill keel with SIGKILL in its container, as a crash does
@@ -16,6 +17,7 @@
 //	go run ./tools/cluster -status   the VM, the node, the pods, the build running, the addresses
 //	go run ./tools/cluster -logs     follow keel's logs
 //	go run ./tools/cluster -phone    serve the page that sets up a phone, and print the game's address
+//	go run ./tools/cluster -schemas  write infra/schemas, the schemas of the custom resources the manifests use, from the cluster's own
 //	go run ./tools/cluster -stop     stop the VM; -up starts it again
 //	go run ./tools/cluster -delete   delete the VM and the cluster's local state (asks first)
 //
@@ -41,6 +43,8 @@ import (
 func main() {
 	up := flag.Bool("up", false, "make or start the VM and the cluster, and deploy the game")
 	deployFlag := flag.Bool("deploy", false, "build the game's image and deploy it to the cluster")
+	releaseFlag := flag.String("release", "", "the `build` of a published release to take through Flux, or prod")
+	schemasFlag := flag.Bool("schemas", false, "write infra/schemas from the cluster's custom resource definitions")
 	restart := flag.Bool("restart", false, "restart keel on the build it runs")
 	kill := flag.Bool("kill", false, "delete keel's pod by force")
 	crashFlag := flag.Bool("crash", false, "kill keel with SIGKILL")
@@ -62,6 +66,10 @@ func main() {
 		err = c.up(ctx)
 	case *deployFlag:
 		err = c.deployGame(ctx)
+	case *releaseFlag != "":
+		err = c.release(ctx, *releaseFlag)
+	case *schemasFlag:
+		err = c.schemas(ctx)
 	case *restart:
 		err = c.restartGame(ctx)
 	case *kill:

@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # keel in 8 GiB: half production's memory, but the same CPU limit, which
-# sets GOMAXPROCS and so the encoders and physics workers. The image is
-# imported into the node by tools/cluster.
+# sets GOMAXPROCS and so the encoders and physics workers. The pull policy
+# is Kubernetes' own for an image named by digest, said outright: a deploy
+# from the working tree sets Never, for the image it imports, and a release
+# applied after it must take the field back.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,10 +14,10 @@ spec:
     spec:
       initContainers:
         - name: migrate
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
       containers:
         - name: keel
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           env:
             - name: GOMEMLIMIT
               value: 1800MiB
