@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# A published release on the local cluster, through Flux, as production
+# takes one: go run ./tools/cluster -release <build> applies this, with the
+# build as the tag to follow. go run ./tools/cluster -deploy removes it and
+# brings the working tree back. Flux's controllers are tools/cluster's own
+# here, so there is no flux-system layer.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - sync.yaml

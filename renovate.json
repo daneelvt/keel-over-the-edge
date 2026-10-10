@@ -11,11 +11,10 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "TinyGo, pinned by release and archive digest for each platform in tools/internal/tinygo",
-      "managerFilePatterns": ["/^tools/internal/tinygo/tinygo\\.go$/"],
-      "matchStrings": ["\\{\"[a-z0-9]+-[a-z0-9]+\", \"(?<currentValue>v[0-9.]+)\", \"(?<currentDigest>[0-9a-f]{64})\"\\}"],
-      "datasourceTemplate": "github-release-attachments",
-      "depNameTemplate": "tinygo-org/tinygo"
+      "description": "TinyGo, cosign and the Flux CLI, each pinned by release and by its file's digest for each platform in tools/internal/pinned",
+      "managerFilePatterns": ["/^tools/internal/pinned/pinned\\.go$/"],
+      "matchStrings": ["\\{\"(?<depName>[a-z0-9-]+/[a-z0-9-]+)\", \"[a-z0-9]+-[a-z0-9]+\", \"(?<currentValue>v[0-9.]+)\", \"(?<currentDigest>[0-9a-f]{64})\"\\}"],
+      "datasourceTemplate": "github-release-attachments"
     },
     {
       "customType": "regex",
@@ -46,6 +45,22 @@
       "managerFilePatterns": ["/^infra/cluster/flux-system/kustomization\\.yaml$/"],
       "matchStrings": ["- name: (?<depName>ghcr\\.io/fluxcd/[a-z-]+)\\n\\s+newTag: (?<currentValue>v[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "k3s, pinned by release and by the commit its tag names in infra/k3s/release.yaml: the installer is fetched at the commit",
+      "managerFilePatterns": ["/^infra/k3s/release\\.yaml$/"],
+      "matchStrings": ["version: (?<currentValue>v[0-9.]+\\+k3s[0-9]+)\\ncommit: (?<currentDigest>[0-9a-f]{40})"],
+      "depNameTemplate": "k3s-io/k3s",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "BuildKit's image for the release's builder, pinned by version and digest in the release workflow",
+      "managerFilePatterns": ["/^\\.github/workflows/release\\.yaml$/"],
+      "matchStrings": ["image=(?<depName>moby/buildkit):(?<currentValue>v[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [
@@ -60,6 +75,33 @@
       "matchDepNames": ["node"],
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true
+    },
+    {
+      "description": "k3s follows its stable channel, which takes up a new minor version of Kubernetes some time after it is out; a new minor is a deliberate change.",
+      "matchDepNames": ["k3s-io/k3s"],
+      "matchUpdateTypes": ["major", "minor"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "The CloudNativePG chart, by tag and digest, moves with the operator's image its values pin.",
+      "matchDepNames": ["ghcr.io/cloudnative-pg/charts/cloudnative-pg", "ghcr.io/cloudnative-pg/cloudnative-pg"],
+      "groupName": "CloudNativePG operator"
+    },
+    {
+      "description": "Flux moves as one: its manifests, its controllers' images by digest, and its command line.",
+      "matchDepNames": ["fluxcd/flux2", "/^ghcr\\.io/fluxcd//"],
+      "groupName": "Flux"
+    },
+    {
+      "description": "Flux's manifests are written by flux install and never edited: the images they name are pinned by digest beside them, in kustomization.yaml, and move with Flux.",
+      "matchManagers": ["kubernetes"],
+      "matchFileNames": ["infra/cluster/flux-system/gotk-components.yaml"],
+      "enabled": false
+    },
+    {
+      "description": "The game's own image and manifests are what a release publishes: the manifests name the image with no version, and Flux follows a tag the promote workflow moves.",
+      "matchDepNames": ["ghcr.io/daneelvt/keel", "ghcr.io/daneelvt/keel-manifests"],
+      "enabled": false
     }
   ]
 }

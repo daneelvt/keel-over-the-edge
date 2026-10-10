@@ -1,19 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The game on the local cluster, in a VM on a developer's Mac: half
-# production's sizes, HTTPS with a certificate from the developer's own
-# root, and the image built on the Mac and imported, never pulled.
-# go run ./tools/cluster -deploy renders this with the build's tag and the
-# Mac's own name in place of these defaults.
+# production's sizes, and HTTPS with a certificate from the developer's own
+# root. A release renders this with the game's image by digest, for a Mac
+# named macbook. go run ./tools/cluster -deploy renders it with the image
+# it built and imported, never pulled, and the Mac's own name.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../apps/keel
   - https-redirect.yaml
   - tls-store.yaml
-images:
-  - name: ghcr.io/daneelvt/keel
-    newName: keel
-    newTag: dev
 configMapGenerator:
   - name: keel
     namespace: keel

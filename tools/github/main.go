@@ -8,6 +8,10 @@
 //	go run ./tools/github -check   print every difference; fail if there is one
 //	go run ./tools/github -apply   make the repository match
 //
+// The settings are the repository's own, its Actions settings, its
+// deployment environments (who approves a job that uses one, and from
+// which branches), and its rulesets.
+//
 // It runs from the repository root. Settings GitHub offers no API for are
 // listed in docs/repository-settings.md and checked by hand.
 package main

@@ -1,0 +1,9 @@
+[
+  {
+    "name": "production",
+    "wait_timer": 0,
+    "prevent_self_review": false,
+    "reviewers": [{ "type": "User", "id": 1800070 }],
+    "deployment_branches": ["main"]
+  }
+]

@@ -28,6 +28,8 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/devcert"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/pinned"
 )
 
 // fakeCommands answers commands as the programs would, and records them.
@@ -84,6 +86,18 @@ func testCluster(t *testing.T, f *fakeCommands) *cluster {
 	state := t.TempDir()
 	c := newCluster(f, io.Discard)
 	c.state, c.kubeconfig = state, filepath.Join(state, "kubeconfig")
+	c.poll = time.Millisecond
+	// A certificate made here, not by mkcert with the developer's root.
+	c.certificate = func(_ context.Context, dir string, _ []string) (devcert.Certs, error) {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return devcert.Certs{}, err
+		}
+		certs := devcert.Certs{Cert: filepath.Join(dir, "cert.pem"), Key: filepath.Join(dir, "key.pem")}
+		if err := os.WriteFile(certs.Cert, []byte("CERT"), 0o600); err != nil {
+			return certs, err
+		}
+		return certs, os.WriteFile(certs.Key, []byte("KEY"), 0o600)
+	}
 	return c
 }
 
@@ -107,30 +121,61 @@ func TestToolsMissing(t *testing.T) {
 	}
 }
 
-func TestInstallerChecked(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		io.WriteString(w, "#!/bin/sh\necho not k3s's installer\n")
-	}))
-	defer srv.Close()
-	if _, err := fetchInstaller(context.Background(), srv.URL); err == nil || !strings.Contains(err.Error(), "not running it") {
-		t.Fatalf("a changed installer: %v", err)
+// TestInstallerPinnedByCommit: k3s's installer is fetched at the commit
+// the repository pins, never at a tag or a branch, and run as root only if
+// it came.
+func TestInstallerPinnedByCommit(t *testing.T) {
+	chdirRoot(t)
+	k3s, err := pinned.ReadK3s(pinned.K3sFile)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	// A mismatch stops -up before anything runs in the VM as root.
-	f := &fakeCommands{answer: func(argv []string, _ string) (string, error) {
+	notInstalled := func(argv []string, _ string) (string, error) {
 		if slices.Contains(argv, "cat") {
 			return "", errors.New("no such file")
 		}
 		return "", nil
-	}}
-	c := testCluster(t, f)
-	c.installer = func(ctx context.Context) ([]byte, error) { return fetchInstaller(ctx, srv.URL) }
-	chdirRoot(t)
-	if err := c.installK3s(context.Background()); err == nil || !strings.Contains(err.Error(), "SHA-256") {
-		t.Fatalf("installK3s with a changed installer: %v", err)
 	}
-	if f.ran("sh", "-s", "-") != nil {
-		t.Fatal("the installer ran")
+	f := &fakeCommands{answer: notInstalled}
+	c := testCluster(t, f)
+	var fetched string
+	c.installer = func(_ context.Context, url string) ([]byte, error) {
+		fetched = url
+		return []byte("#!/bin/sh\necho k3s\n"), nil
+	}
+	if err := c.installK3s(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if want := "https://raw.githubusercontent.com/k3s-io/k3s/" + k3s.Commit + "/install.sh"; fetched != want {
+		t.Errorf("the installer was fetched from %s, want %s", fetched, want)
+	}
+	ran := f.ran("limactl", "shell", "sudo", "env", "INSTALL_K3S_VERSION="+k3s.Version, "sh", "-s", "-")
+	if ran == nil || ran.stdin != "#!/bin/sh\necho k3s\n" {
+		t.Fatalf("the installer did not run with the pinned version: %+v", f.calls)
+	}
+
+	// What is not a shell script, or did not come, is never run as root.
+	for name, handler := range map[string]http.HandlerFunc{
+		"a page":   func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "<html>Not the installer</html>") },
+		"no file":  func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) },
+		"an empty": func(http.ResponseWriter, *http.Request) {},
+	} {
+		srv := httptest.NewServer(handler)
+		f := &fakeCommands{answer: notInstalled}
+		c := testCluster(t, f)
+		c.installer = func(ctx context.Context, _ string) ([]byte, error) { return fetchInstaller(ctx, srv.URL) }
+		if err := c.installK3s(context.Background()); err == nil || !strings.Contains(err.Error(), "installer") {
+			t.Errorf("%s for an installer: %v", name, err)
+		}
+		if f.ran("sh", "-s", "-") != nil {
+			t.Errorf("%s ran as the installer", name)
+		}
+		srv.Close()
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "#!/bin/sh\nset -e\n") }))
+	defer srv.Close()
+	if script, err := fetchInstaller(context.Background(), srv.URL); err != nil || string(script) != "#!/bin/sh\nset -e\n" {
+		t.Errorf("a shell script: %q, %v", script, err)
 	}
 }
 
@@ -142,6 +187,10 @@ func chdirRoot(t *testing.T) {
 
 func TestInstallWritesFilesAndRestarts(t *testing.T) {
 	chdirRoot(t)
+	k3s, err := pinned.ReadK3s(pinned.K3sFile)
+	if err != nil {
+		t.Fatal(err)
+	}
 	config, _ := os.ReadFile("infra/k3s/config.yaml")
 	guest := map[string]string{"/etc/rancher/k3s/config.yaml": "old settings"}
 	for _, f := range guestFiles[:1] {
@@ -155,12 +204,12 @@ func TestInstallWritesFilesAndRestarts(t *testing.T) {
 		case slices.Contains(argv, "cat"):
 			return guest[argv[len(argv)-1]], nil
 		case slices.Contains(argv, "--version"):
-			return "k3s version " + k3sVersion + " (abc)\n", nil
+			return "k3s version " + k3s.Version + " (abc)\n", nil
 		}
 		return "", nil
 	}}
 	c := testCluster(t, f)
-	c.installer = func(context.Context) ([]byte, error) { t.Fatal("installed again"); return nil, nil }
+	c.installer = func(context.Context, string) ([]byte, error) { t.Fatal("installed again"); return nil, nil }
 	if err := c.installK3s(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -412,11 +461,13 @@ func TestSmokeChecksThePage(t *testing.T) {
 	if err := checkPage(ctx, srv.Client(), srv.URL); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkVersion(ctx, srv.Client(), srv.URL, "0123456789ab"); err != nil {
-		t.Fatal(err)
-	}
-	if err := checkVersion(ctx, srv.Client(), srv.URL, "fedcba987654"); err == nil || !strings.Contains(err.Error(), "not \"fedcba987654\"") {
-		t.Fatalf("another build passed: %v", err)
+	for _, catalogToo := range []bool{true, false} {
+		if err := checkVersion(ctx, srv.Client(), srv.URL, "0123456789ab", catalogToo); err != nil {
+			t.Fatal(err)
+		}
+		if err := checkVersion(ctx, srv.Client(), srv.URL, "fedcba987654", catalogToo); err == nil || !strings.Contains(err.Error(), "not \"fedcba987654\"") {
+			t.Fatalf("another build passed: %v", err)
+		}
 	}
 
 	// A page served without its caching, or as another type, fails.
@@ -461,20 +512,17 @@ func TestSmokeChecksTheInternalListener(t *testing.T) {
 	}
 }
 
-func TestRunningBuild(t *testing.T) {
-	f := &fakeCommands{answer: func([]string, string) (string, error) { return "keel:0123456789ab-dirty-20261010T120000Z", nil }}
-	got, err := testCluster(t, f).runningBuild(context.Background())
-	if err != nil || got != "0123456789ab-dirty-20261010T120000Z" {
-		t.Fatalf("%q, %v", got, err)
-	}
-}
-
 func TestPlainPod(t *testing.T) {
-	p := plainPod("abc")
+	p := plainPod("keel:abc")
 	for _, want := range []string{`"image":"keel:abc"`, `"imagePullPolicy":"Never"`, "sslmode=disable", `"secretKeyRef":{"key":"password","name":"keel-db-app"}`, `"runAsNonRoot":true`} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the pod lacks %s: %s", want, p)
 		}
+	}
+	// A release's image is pulled by its digest, if the node lacks it.
+	image := manifests.GameImage + "@sha256:" + strings.Repeat("ab", 32)
+	if p := plainPod(image); !strings.Contains(p, `"image":"`+image+`"`) || !strings.Contains(p, `"imagePullPolicy":"IfNotPresent"`) {
+		t.Errorf("the pod for a release's image: %s", p)
 	}
 }
 

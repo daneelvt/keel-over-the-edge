@@ -1,0 +1,77 @@
+{
+  "$comment": "The schema of TLSStore traefik.io/v1alpha1, from the definition tlsstores.traefik.io in the local cluster, written by go run ./tools/cluster -schemas. Not edited by hand.",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "certificates": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "secretName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "secretName"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "defaultCertificate": {
+          "additionalProperties": false,
+          "properties": {
+            "secretName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "secretName"
+          ],
+          "type": "object"
+        },
+        "defaultGeneratedCert": {
+          "additionalProperties": false,
+          "properties": {
+            "domain": {
+              "additionalProperties": false,
+              "properties": {
+                "main": {
+                  "type": "string"
+                },
+                "sans": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "resolver": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "metadata",
+    "spec"
+  ],
+  "type": "object"
+}

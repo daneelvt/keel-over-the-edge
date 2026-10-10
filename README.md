@@ -1,7 +1,7 @@
 # Keel Over the Edge
 
 <!-- Build and security -->
-[![CI](https://img.shields.io/github/actions/workflow/status/daneelvt/keel-over-the-edge/ci.yaml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/ci.yaml?query=branch%3Amain)
+[![CI](https://img.shields.io/github/actions/workflow/status/daneelvt/keel-over-the-edge/release.yaml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/release.yaml?query=branch%3Amain)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/daneelvt/keel-over-the-edge/codeql.yaml?branch=main&style=for-the-badge&logo=github&logoColor=white&label=CodeQL)](https://github.com/daneelvt/keel-over-the-edge/actions/workflows/codeql.yaml?query=branch%3Amain)
 [![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/daneelvt/keel-over-the-edge?style=for-the-badge&label=OpenSSF%20Scorecard)](https://scorecard.dev/viewer/?uri=github.com/daneelvt/keel-over-the-edge)
 [![Renovate](https://img.shields.io/badge/renovate-enabled-1A1F6C?style=for-the-badge&logo=renovate&logoColor=white)](https://github.com/daneelvt/keel-over-the-edge/issues?q=is%3Aissue+%22Dependency+Dashboard%22)

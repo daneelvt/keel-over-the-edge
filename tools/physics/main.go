@@ -7,7 +7,7 @@
 //	go run ./tools/physics          write the layout files and build client/src/predict/physics.wasm
 //	go run ./tools/physics -check   check the rules, the layout files and the module, writing nothing
 //
-// The first run downloads the pinned TinyGo into .dev (tools/internal/tinygo).
+// The first run downloads the pinned TinyGo into .dev (tools/internal/pinned).
 // wasm-opt comes from the client's packages, so npm ci must have run. It runs
 // from the repository root.
 package main

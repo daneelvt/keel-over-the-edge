@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# A source Flux must refuse: manifests in the registry that nobody signed,
+# checked as production checks a release. Applied by hand, to see the
+# refusal, and never by a command (docs/development.md, "Releases"):
+#
+#   kubectl apply -f tools/cluster/testdata/refused-unsigned.yaml
+#   kubectl -n flux-system get ocirepository refused-unsigned
+#   kubectl delete -f tools/cluster/testdata/refused-unsigned.yaml
+#
+# It must show SourceVerified False, VerificationError, and no artifact.
+# The artifact is in a package of its own, away from the releases, pushed
+# there once, unsigned.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: refused-unsigned
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://ghcr.io/daneelvt/keel-manifests-check
+  ref:
+    tag: unsigned
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: ^https://token\.actions\.githubusercontent\.com$
+        subject: ^https://github\.com/daneelvt/keel-over-the-edge/\.github/workflows/release\.yaml@refs/heads/main$

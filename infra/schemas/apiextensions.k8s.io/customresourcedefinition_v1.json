@@ -1,0 +1,935 @@
+{
+  "$comment": "The schema of CustomResourceDefinition apiextensions.k8s.io/v1, from the local cluster's description of its API, written by go run ./tools/cluster -schemas. Not edited by hand.",
+  "$defs": {
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceColumnDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "jsonPath": {
+          "default": "",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "type": "string"
+        },
+        "priority": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "type": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "jsonPath"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceConversion": {
+      "additionalProperties": false,
+      "properties": {
+        "strategy": {
+          "default": "",
+          "type": "string"
+        },
+        "webhook": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.WebhookConversion"
+            }
+          ]
+        }
+      },
+      "required": [
+        "strategy"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "metadata": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+            }
+          ],
+          "default": {}
+        },
+        "spec": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionSpec"
+            }
+          ],
+          "default": {}
+        },
+        "status": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionStatus"
+            }
+          ],
+          "default": {}
+        }
+      },
+      "required": [
+        "spec"
+      ],
+      "type": "object",
+      "x-kubernetes-group-version-kind": [
+        {
+          "group": "apiextensions.k8s.io",
+          "kind": "CustomResourceDefinition",
+          "version": "v1"
+        }
+      ]
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "lastTransitionTime": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "status": {
+          "default": "",
+          "type": "string"
+        },
+        "type": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "status"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionNames": {
+      "additionalProperties": false,
+      "properties": {
+        "categories": {
+          "items": {
+            "default": "",
+            "type": "string"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "kind": {
+          "default": "",
+          "type": "string"
+        },
+        "listKind": {
+          "type": "string"
+        },
+        "plural": {
+          "default": "",
+          "type": "string"
+        },
+        "shortNames": {
+          "items": {
+            "default": "",
+            "type": "string"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "singular": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plural",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "conversion": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceConversion"
+            }
+          ]
+        },
+        "group": {
+          "default": "",
+          "type": "string"
+        },
+        "names": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionNames"
+            }
+          ],
+          "default": {}
+        },
+        "preserveUnknownFields": {
+          "type": "boolean"
+        },
+        "scope": {
+          "default": "",
+          "type": "string"
+        },
+        "versions": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionVersion"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        }
+      },
+      "required": [
+        "group",
+        "names",
+        "scope",
+        "versions"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptedNames": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionNames"
+            }
+          ],
+          "default": {}
+        },
+        "conditions": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionCondition"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-map-keys": [
+            "type"
+          ],
+          "x-kubernetes-list-type": "map"
+        },
+        "observedGeneration": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "storedVersions": {
+          "items": {
+            "default": "",
+            "type": "string"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinitionVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "additionalPrinterColumns": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceColumnDefinition"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "deprecated": {
+          "type": "boolean"
+        },
+        "deprecationWarning": {
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "type": "string"
+        },
+        "schema": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceValidation"
+            }
+          ]
+        },
+        "selectableFields": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.SelectableField"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "served": {
+          "default": false,
+          "type": "boolean"
+        },
+        "storage": {
+          "default": false,
+          "type": "boolean"
+        },
+        "subresources": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceSubresources"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "served",
+        "storage"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceSubresourceScale": {
+      "additionalProperties": false,
+      "properties": {
+        "labelSelectorPath": {
+          "type": "string"
+        },
+        "specReplicasPath": {
+          "default": "",
+          "type": "string"
+        },
+        "statusReplicasPath": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "specReplicasPath",
+        "statusReplicasPath"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceSubresourceStatus": {
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceSubresources": {
+      "additionalProperties": false,
+      "properties": {
+        "scale": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceSubresourceScale"
+            }
+          ]
+        },
+        "status": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceSubresourceStatus"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceValidation": {
+      "additionalProperties": false,
+      "properties": {
+        "openAPIV3Schema": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.ExternalDocumentation": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSON": {},
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps": {
+      "additionalProperties": false,
+      "properties": {
+        "$ref": {
+          "type": "string"
+        },
+        "$schema": {
+          "type": "string"
+        },
+        "additionalItems": {
+          "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaPropsOrBool"
+        },
+        "additionalProperties": {
+          "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaPropsOrBool"
+        },
+        "allOf": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "anyOf": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "default": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSON"
+            }
+          ]
+        },
+        "definitions": {
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+              }
+            ],
+            "default": {}
+          },
+          "type": "object"
+        },
+        "dependencies": {
+          "additionalProperties": {
+            "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaPropsOrStringArray"
+          },
+          "type": "object"
+        },
+        "description": {
+          "type": "string"
+        },
+        "enum": {
+          "items": {
+            "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSON"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "example": {
+          "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSON"
+        },
+        "exclusiveMaximum": {
+          "type": "boolean"
+        },
+        "exclusiveMinimum": {
+          "type": "boolean"
+        },
+        "externalDocs": {
+          "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.ExternalDocumentation"
+        },
+        "format": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "items": {
+          "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaPropsOrArray"
+        },
+        "maxItems": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "maxLength": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "maxProperties": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "maximum": {
+          "format": "double",
+          "type": "number"
+        },
+        "minItems": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "minLength": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "minProperties": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "minimum": {
+          "format": "double",
+          "type": "number"
+        },
+        "multipleOf": {
+          "format": "double",
+          "type": "number"
+        },
+        "not": {
+          "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+        },
+        "nullable": {
+          "type": "boolean"
+        },
+        "oneOf": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "patternProperties": {
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+              }
+            ],
+            "default": {}
+          },
+          "type": "object"
+        },
+        "properties": {
+          "additionalProperties": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+              }
+            ],
+            "default": {}
+          },
+          "type": "object"
+        },
+        "required": {
+          "items": {
+            "default": "",
+            "type": "string"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "uniqueItems": {
+          "type": "boolean"
+        },
+        "x-kubernetes-embedded-resource": {
+          "type": "boolean"
+        },
+        "x-kubernetes-int-or-string": {
+          "type": "boolean"
+        },
+        "x-kubernetes-list-map-keys": {
+          "items": {
+            "default": "",
+            "type": "string"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "x-kubernetes-list-type": {
+          "type": "string"
+        },
+        "x-kubernetes-map-type": {
+          "type": "string"
+        },
+        "x-kubernetes-preserve-unknown-fields": {
+          "type": "boolean"
+        },
+        "x-kubernetes-validations": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.ValidationRule"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-map-keys": [
+            "rule"
+          ],
+          "x-kubernetes-list-type": "map",
+          "x-kubernetes-patch-merge-key": "rule",
+          "x-kubernetes-patch-strategy": "merge"
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaPropsOrArray": {},
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaPropsOrBool": {},
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaPropsOrStringArray": {},
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.SelectableField": {
+      "additionalProperties": false,
+      "properties": {
+        "jsonPath": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "jsonPath"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.ServiceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "default": "",
+          "type": "string"
+        },
+        "namespace": {
+          "default": "",
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "port": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "namespace",
+        "name"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.ValidationRule": {
+      "additionalProperties": false,
+      "properties": {
+        "fieldPath": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "messageExpression": {
+          "type": "string"
+        },
+        "optionalOldSelf": {
+          "type": "boolean"
+        },
+        "reason": {
+          "enum": [
+            "FieldValueDuplicate",
+            "FieldValueForbidden",
+            "FieldValueInvalid",
+            "FieldValueRequired"
+          ],
+          "type": "string"
+        },
+        "rule": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.WebhookClientConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "caBundle": {
+          "format": "byte",
+          "type": "string"
+        },
+        "service": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.ServiceReference"
+            }
+          ]
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.WebhookConversion": {
+      "additionalProperties": false,
+      "properties": {
+        "clientConfig": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.WebhookClientConfig"
+            }
+          ]
+        },
+        "conversionReviewVersions": {
+          "items": {
+            "default": "",
+            "type": "string"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        }
+      },
+      "required": [
+        "conversionReviewVersions"
+      ],
+      "type": "object"
+    },
+    "io.k8s.apimachinery.pkg.apis.meta.v1.FieldsV1": {
+      "type": "object"
+    },
+    "io.k8s.apimachinery.pkg.apis.meta.v1.ManagedFieldsEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "apiVersion": {
+          "type": "string"
+        },
+        "fieldsType": {
+          "type": "string"
+        },
+        "fieldsV1": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apimachinery.pkg.apis.meta.v1.FieldsV1"
+            }
+          ]
+        },
+        "manager": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "subresource": {
+          "type": "string"
+        },
+        "time": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "annotations": {
+          "additionalProperties": {
+            "default": "",
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "creationTimestamp": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+            }
+          ]
+        },
+        "deletionGracePeriodSeconds": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "deletionTimestamp": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+            }
+          ]
+        },
+        "finalizers": {
+          "items": {
+            "default": "",
+            "type": "string"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "set",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "generateName": {
+          "type": "string"
+        },
+        "generation": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "labels": {
+          "additionalProperties": {
+            "default": "",
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "managedFields": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apimachinery.pkg.apis.meta.v1.ManagedFieldsEntry"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "ownerReferences": {
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/io.k8s.apimachinery.pkg.apis.meta.v1.OwnerReference"
+              }
+            ],
+            "default": {}
+          },
+          "type": "array",
+          "x-kubernetes-list-map-keys": [
+            "uid"
+          ],
+          "x-kubernetes-list-type": "map",
+          "x-kubernetes-patch-merge-key": "uid",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "resourceVersion": {
+          "type": "string"
+        },
+        "selfLink": {
+          "type": "string"
+        },
+        "uid": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.apimachinery.pkg.apis.meta.v1.OwnerReference": {
+      "additionalProperties": false,
+      "properties": {
+        "apiVersion": {
+          "default": "",
+          "type": "string"
+        },
+        "blockOwnerDeletion": {
+          "type": "boolean"
+        },
+        "controller": {
+          "type": "boolean"
+        },
+        "kind": {
+          "default": "",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "type": "string"
+        },
+        "uid": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "uid"
+      ],
+      "type": "object",
+      "x-kubernetes-map-type": "atomic"
+    },
+    "io.k8s.apimachinery.pkg.apis.meta.v1.Time": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "$ref": "#/$defs/io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.CustomResourceDefinition"
+}

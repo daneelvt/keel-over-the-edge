@@ -29,17 +29,46 @@ type endpoint struct {
 	ExpectStatus int `json:"expect_status,omitempty"`
 }
 
+// environment is a deployment environment: who must approve a job that
+// uses it, and which branches' workflows may.
+type environment struct {
+	Name string `json:"name"`
+	// WaitTimer is the minutes a job waits after it is approved.
+	WaitTimer int `json:"wait_timer"`
+	// PreventSelfReview is whether who started a run may not approve it.
+	PreventSelfReview bool       `json:"prevent_self_review"`
+	Reviewers         []reviewer `json:"reviewers"`
+	// DeploymentBranches are the only branches whose jobs may use the
+	// environment, by name.
+	DeploymentBranches []string `json:"deployment_branches"`
+}
+
+// reviewer is a user or a team, by GitHub's numeric ID.
+type reviewer struct {
+	Type string `json:"type"`
+	ID   int64  `json:"id"`
+}
+
 type settings struct {
 	// endpoints in the order they are applied: some depend on earlier ones
 	// (the action allowlist exists only once "selected actions" is on).
-	endpoints []endpoint
-	rulesets  []map[string]any
+	endpoints    []endpoint
+	environments []environment
+	rulesets     []map[string]any
 }
 
 // loadSettings reads repository.json, security.json and actions.json, in
-// that order, and every file in rulesets/.
+// that order, environments.json, and every file in rulesets/.
 func loadSettings(dir string) (settings, error) {
 	var s settings
+	if err := readJSON(filepath.Join(dir, "environments.json"), &s.environments); err != nil {
+		return s, err
+	}
+	for _, env := range s.environments {
+		if env.Name == "" || len(env.Reviewers) == 0 || len(env.DeploymentBranches) == 0 {
+			return s, fmt.Errorf("environments.json: the environment %q needs a name, a reviewer and a branch: one with neither protects nothing", env.Name)
+		}
+	}
 	for _, name := range []string{"repository.json", "security.json", "actions.json"} {
 		var eps []endpoint
 		if err := readJSON(filepath.Join(dir, name), &eps); err != nil {
@@ -164,6 +193,13 @@ func (t *tool) check(s settings) ([]string, error) {
 		}
 		drift = append(drift, d...)
 	}
+	for _, env := range s.environments {
+		d, _, err := t.checkEnvironment(env)
+		if err != nil {
+			return nil, err
+		}
+		drift = append(drift, d...)
+	}
 	existing, err := t.rulesets()
 	if err != nil {
 		return nil, err
@@ -230,6 +266,182 @@ func (t *tool) getJSON(path string) (map[string]any, error) {
 	return v, json.Unmarshal(resp, &v)
 }
 
+// branchPolicy is a branch, or a pattern of branches, an environment's
+// jobs may come from.
+type branchPolicy struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// environmentState is what the repository holds of an environment that
+// differs from the settings.
+type environmentState struct {
+	// rules is whether its reviewers, timer or kind of branch rule differ,
+	// or it does not exist.
+	rules bool
+	// missing are the branches to allow; extra, the policies to remove.
+	missing []string
+	extra   []branchPolicy
+}
+
+// checkEnvironment compares an environment with the repository's (GitHub's
+// REST API, "Deployment environments" and "Deployment branch policies").
+func (t *tool) checkEnvironment(env environment) ([]string, environmentState, error) {
+	var state environmentState
+	label := "environment " + env.Name
+	path := "environments/" + env.Name
+	status, resp, err := t.api.call("GET", t.url(path), nil)
+	if err != nil {
+		return nil, state, err
+	}
+	if status == 404 {
+		state.rules, state.missing = true, env.DeploymentBranches
+		return []string{label + ": does not exist"}, state, nil
+	}
+	if status != 200 {
+		return nil, state, fmt.Errorf("GET %s answered %d: %s", t.url(path), status, resp)
+	}
+	var got struct {
+		ProtectionRules []struct {
+			Type              string `json:"type"`
+			WaitTimer         int    `json:"wait_timer"`
+			PreventSelfReview bool   `json:"prevent_self_review"`
+			Reviewers         []struct {
+				Type     string `json:"type"`
+				Reviewer struct {
+					ID int64 `json:"id"`
+				} `json:"reviewer"`
+			} `json:"reviewers"`
+		} `json:"protection_rules"`
+		DeploymentBranchPolicy *struct {
+			ProtectedBranches    bool `json:"protected_branches"`
+			CustomBranchPolicies bool `json:"custom_branch_policies"`
+		} `json:"deployment_branch_policy"`
+	}
+	if err := json.Unmarshal(resp, &got); err != nil {
+		return nil, state, fmt.Errorf("GET %s: %w", t.url(path), err)
+	}
+	var drift []string
+	timer, selfReview := 0, false
+	have := []reviewer{}
+	for _, rule := range got.ProtectionRules {
+		switch rule.Type {
+		case "wait_timer":
+			timer = rule.WaitTimer
+		case "required_reviewers":
+			selfReview = rule.PreventSelfReview
+			for _, r := range rule.Reviewers {
+				have = append(have, reviewer{r.Type, r.Reviewer.ID})
+			}
+		}
+	}
+	byID := func(rs []reviewer) []reviewer {
+		rs = append([]reviewer{}, rs...)
+		sort.Slice(rs, func(i, j int) bool { return rs[i].Type+fmt.Sprint(rs[i].ID) < rs[j].Type+fmt.Sprint(rs[j].ID) })
+		return rs
+	}
+	if want := byID(env.Reviewers); !reflect.DeepEqual(want, byID(have)) {
+		drift = append(drift, fmt.Sprintf("%s.reviewers: want %s, have %s", label, show(want), show(byID(have))))
+	}
+	if timer != env.WaitTimer {
+		drift = append(drift, fmt.Sprintf("%s.wait_timer: want %d, have %d", label, env.WaitTimer, timer))
+	}
+	if selfReview != env.PreventSelfReview {
+		drift = append(drift, fmt.Sprintf("%s.prevent_self_review: want %t, have %t", label, env.PreventSelfReview, selfReview))
+	}
+	custom := got.DeploymentBranchPolicy != nil && got.DeploymentBranchPolicy.CustomBranchPolicies && !got.DeploymentBranchPolicy.ProtectedBranches
+	if !custom {
+		// Any branch, or every protected one: not the branches named.
+		drift = append(drift, fmt.Sprintf("%s.deployment_branch_policy: want the branches %s alone, have %s", label, show(env.DeploymentBranches), show(got.DeploymentBranchPolicy)))
+	}
+	state.rules = len(drift) > 0
+	if !custom {
+		state.missing = env.DeploymentBranches
+		return drift, state, nil
+	}
+
+	path += "/deployment-branch-policies"
+	status, resp, err = t.api.call("GET", t.url(path), nil)
+	if err != nil {
+		return nil, state, err
+	}
+	if status != 200 {
+		return nil, state, fmt.Errorf("GET %s answered %d: %s", t.url(path), status, resp)
+	}
+	var policies struct {
+		BranchPolicies []branchPolicy `json:"branch_policies"`
+	}
+	if err := json.Unmarshal(resp, &policies); err != nil {
+		return nil, state, fmt.Errorf("GET %s: %w", t.url(path), err)
+	}
+	allowed := map[string]bool{}
+	for _, p := range policies.BranchPolicies {
+		wanted := false
+		for _, b := range env.DeploymentBranches {
+			wanted = wanted || (p.Name == b && p.Type == "branch")
+		}
+		if !wanted {
+			state.extra = append(state.extra, p)
+			drift = append(drift, fmt.Sprintf("%s.deployment_branches: %s %q may deploy, and should not", label, p.Type, p.Name))
+			continue
+		}
+		allowed[p.Name] = true
+	}
+	for _, b := range env.DeploymentBranches {
+		if !allowed[b] {
+			state.missing = append(state.missing, b)
+			drift = append(drift, fmt.Sprintf("%s.deployment_branches: the branch %q may not deploy, and should", label, b))
+		}
+	}
+	return drift, state, nil
+}
+
+// applyEnvironment writes what differs of an environment: its rules, then
+// each branch to allow, then each policy to remove.
+func (t *tool) applyEnvironment(env environment) error {
+	drift, state, err := t.checkEnvironment(env)
+	if err != nil || len(drift) == 0 {
+		return err
+	}
+	write := func(method, path string, body any) error {
+		status, resp, err := t.api.call(method, t.url(path), body)
+		if err != nil {
+			return err
+		}
+		if status >= 300 {
+			return fmt.Errorf("%s %s answered %d: %s", method, t.url(path), status, resp)
+		}
+		fmt.Fprintf(t.out, "applied: %s %s\n", method, t.url(path))
+		return nil
+	}
+	path := "environments/" + env.Name
+	if state.rules {
+		reviewers := []any{}
+		for _, r := range env.Reviewers {
+			reviewers = append(reviewers, map[string]any{"type": r.Type, "id": r.ID})
+		}
+		body := map[string]any{
+			"wait_timer": env.WaitTimer, "prevent_self_review": env.PreventSelfReview, "reviewers": reviewers,
+			"deployment_branch_policy": map[string]any{"protected_branches": false, "custom_branch_policies": true},
+		}
+		if err := write("PUT", path, body); err != nil {
+			return err
+		}
+	}
+	for _, b := range state.missing {
+		if err := write("POST", path+"/deployment-branch-policies", map[string]any{"name": b, "type": "branch"}); err != nil {
+			return err
+		}
+	}
+	for _, p := range state.extra {
+		if err := write("DELETE", fmt.Sprintf("%s/deployment-branch-policies/%d", path, p.ID), nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // rulesets returns the repository's own rulesets by name.
 func (t *tool) rulesets() (map[string]int64, error) {
 	status, resp, err := t.api.call("GET", t.url("rulesets?includes_parents=false"), nil)
@@ -275,6 +487,11 @@ func (t *tool) apply(s settings) error {
 			return fmt.Errorf("%s %s answered %d: %s", ep.Method, t.url(ep.Path), status, resp)
 		}
 		fmt.Fprintf(t.out, "applied: %s %s\n", ep.Method, t.url(ep.Path))
+	}
+	for _, env := range s.environments {
+		if err := t.applyEnvironment(env); err != nil {
+			return err
+		}
 	}
 	existing, err := t.rulesets()
 	if err != nil {

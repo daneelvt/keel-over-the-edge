@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The k3s release every machine that runs the game installs, and the commit
+# its tag names. k3s's installer, install.sh, is fetched at that commit and
+# no other, as a workflow's actions are pinned; it checks the binaries it
+# downloads against the release's own checksums. Renovate moves the two
+# together (renovate.json).
+version: v1.36.5+k3s1
+commit: 3dd98cc58ec34991e7e59b93663eee2e26fc1f65

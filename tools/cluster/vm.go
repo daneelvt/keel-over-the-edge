@@ -7,41 +7,37 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/devcert"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/pinned"
 )
 
 const (
 	// vmName is the Lima VM's, and the kubeconfig context's.
 	vmName   = "keel-local"
 	limaFile = "infra/local/lima.yaml"
-	// k3sVersion is the k3s release the cluster runs, and installerSHA256
-	// the digest of that release's install.sh, which checks the binaries it
-	// downloads against the release's own checksums.
-	k3sVersion      = "v1.36.5+k3s1"
-	installerSHA256 = "46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad"
 	// apiAddr is where Lima forwards the Kubernetes API, on the Mac's
 	// loopback alone; not 6443, which another cluster may hold.
 	apiAddr = "127.0.0.1:16443"
 	// stateDir holds the kubeconfig, the certificate and what was deployed.
 	stateDir   = ".dev/cluster"
 	clusterDir = "infra/cluster"
+	// schemasDir holds the schemas of the custom resources the manifests
+	// use, and schemaCache those of Kubernetes' own kinds once downloaded.
+	schemasDir  = "infra/schemas"
+	schemaCache = ".dev/schemas"
 )
-
-// installerURL is install.sh at the release's tag.
-var installerURL = "https://raw.githubusercontent.com/k3s-io/k3s/" + url.PathEscape(k3sVersion) + "/install.sh"
 
 // guestFiles are k3s's files in the VM, from the repository: written
 // before k3s is installed, and again whenever they change.
@@ -60,14 +56,22 @@ type cluster struct {
 	out io.Writer
 	// state is stateDir; kubeconfig is its kubeconfig.
 	state, kubeconfig string
-	// installer fetches install.sh.
-	installer func(ctx context.Context) ([]byte, error)
+	// installer fetches k3s's install.sh from its address.
+	installer func(ctx context.Context, url string) ([]byte, error)
+	// certificate makes, or reuses, the certificate for the players' hosts
+	// in a folder.
+	certificate func(ctx context.Context, dir string, hosts []string) (devcert.Certs, error)
+	// poll is how long a wait for the cluster rests between two looks.
+	poll time.Duration
 }
 
 func newCluster(c commands, out io.Writer) *cluster {
 	return &cluster{
 		cmd: c, out: out, state: stateDir, kubeconfig: filepath.Join(stateDir, "kubeconfig"),
-		installer: func(ctx context.Context) ([]byte, error) { return fetchInstaller(ctx, installerURL) },
+		installer: fetchInstaller, poll: 2 * time.Second,
+		certificate: func(ctx context.Context, dir string, hosts []string) (devcert.Certs, error) {
+			return devcert.Make(ctx, out, dir, hosts, true)
+		},
 	}
 }
 
@@ -157,6 +161,10 @@ func (c *cluster) startVM(ctx context.Context) error {
 // version, unless it is there; when a setting changed under a running k3s,
 // k3s is restarted.
 func (c *cluster) installK3s(ctx context.Context) error {
+	k3s, err := pinned.ReadK3s(pinned.K3sFile)
+	if err != nil {
+		return err
+	}
 	restart := false
 	for _, f := range guestFiles {
 		want, err := os.ReadFile(f.src)
@@ -179,7 +187,7 @@ func (c *cluster) installK3s(ctx context.Context) error {
 		restart = restart || f.restartsK3s
 	}
 	version, _ := c.guest(ctx, nil, "k3s", "--version")
-	if strings.Contains(string(version), k3sVersion) {
+	if strings.Contains(string(version), k3s.Version) {
 		if restart {
 			c.logf("k3s's settings changed: restarting k3s")
 			_, err := c.guest(ctx, nil, "sudo", "systemctl", "restart", "k3s")
@@ -187,20 +195,22 @@ func (c *cluster) installK3s(ctx context.Context) error {
 		}
 		return nil
 	}
-	script, err := c.installer(ctx)
+	script, err := c.installer(ctx, k3s.InstallerURL())
 	if err != nil {
 		return err
 	}
-	c.logf("installing k3s %s", k3sVersion)
+	c.logf("installing k3s %s", k3s.Version)
 	_, err = c.cmd.run(ctx, cmd{
-		argv:  []string{"limactl", "shell", "--workdir", "/", vmName, "sudo", "env", "INSTALL_K3S_VERSION=" + k3sVersion, "sh", "-s", "-"},
+		argv:  []string{"limactl", "shell", "--workdir", "/", vmName, "sudo", "env", "INSTALL_K3S_VERSION=" + k3s.Version, "sh", "-s", "-"},
 		stdin: bytes.NewReader(script),
 		out:   c.out,
 	})
 	return err
 }
 
-// fetchInstaller downloads install.sh and checks it is the one pinned.
+// fetchInstaller downloads k3s's install.sh from u, which names it by the
+// pinned commit: the address is the check, as the commit is what the file
+// was when it was pinned. Only a shell script is handed on to run as root.
 func fetchInstaller(ctx context.Context, u string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -216,11 +226,10 @@ func fetchInstaller(ctx context.Context, u string) ([]byte, error) {
 	}
 	script, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("downloading k3s's installer: %w", err)
 	}
-	sum := sha256.Sum256(script)
-	if got := hex.EncodeToString(sum[:]); got != installerSHA256 {
-		return nil, fmt.Errorf("k3s's installer at %s has SHA-256 %s, not the %s pinned for %s: not running it", u, got, installerSHA256, k3sVersion)
+	if !bytes.HasPrefix(script, []byte("#!/bin/sh")) {
+		return nil, fmt.Errorf("what %s holds is not k3s's installer, a shell script: not running it", u)
 	}
 	return script, nil
 }

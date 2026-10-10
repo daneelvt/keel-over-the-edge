@@ -22,6 +22,24 @@ import (
 	"sigs.k8s.io/kustomize/api/resmap"
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/devcert"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
+)
+
+// The names the manifests give the game's parts, and the local cluster
+// among a release's.
+const (
+	namespace  = manifests.Namespace
+	deployment = manifests.Deployment
+	localImage = manifests.LocalImage
+)
+
+var localCluster = manifests.Clusters[0]
+
+// localTarget is what the local cluster's manifests are rendered for;
+// deployTarget, for a deploy from the working tree, whose image is imported.
+var (
+	localTarget  = manifests.Target{Cluster: localCluster.Name}
+	deployTarget = manifests.Target{Cluster: localCluster.Name, Deploy: true}
 )
 
 // keepImages is how many of the game's images the node keeps: the one
@@ -45,23 +63,28 @@ func (c *cluster) up(ctx context.Context) error {
 	if err := c.waitKubectl(ctx, "the node", 5*time.Minute, "wait", "--for=condition=Ready", "node", "--all"); err != nil {
 		return err
 	}
-	t, err := readTree(clusterDir)
+	t, err := manifests.ReadTree(clusterDir)
 	if err != nil {
 		return err
 	}
-	if err := c.applyEntry(ctx, t, "flux-system"); err != nil {
+	// The working tree takes the cluster back from a release it followed,
+	// before Flux could put the release's manifests over the tree's.
+	if err := c.endRelease(ctx); err != nil {
 		return err
 	}
-	if err := c.waitKubectl(ctx, "Flux's controllers", 5*time.Minute, "-n", "flux-system", "wait", "--for=condition=Available", "deployment", "--all"); err != nil {
+	if err := c.applyEntry(ctx, t, manifests.FluxEntry); err != nil {
 		return err
 	}
-	if err := c.applyEntry(ctx, t, "clusters/local/controllers"); err != nil {
+	if err := c.waitKubectl(ctx, "Flux's controllers", 5*time.Minute, "-n", manifests.FluxNamespace, "wait", "--for=condition=Available", "deployment", "--all"); err != nil {
+		return err
+	}
+	if err := c.applyEntry(ctx, t, localCluster.Entry("controllers")); err != nil {
 		return err
 	}
 	if err := c.waitKubectl(ctx, "the CloudNativePG operator", 10*time.Minute, "-n", "cnpg-system", "wait", "--for=condition=Ready", "helmrelease/cloudnative-pg"); err != nil {
 		return err
 	}
-	if err := c.applyEntry(ctx, t, "clusters/local/configs"); err != nil {
+	if err := c.applyEntry(ctx, t, localCluster.Entry("configs")); err != nil {
 		return err
 	}
 	if err := c.waitKubectl(ctx, "Traefik's Gateway API", 5*time.Minute, "wait", "--for=condition=Accepted", "gatewayclass/traefik"); err != nil {
@@ -71,22 +94,22 @@ func (c *cluster) up(ctx context.Context) error {
 }
 
 // applyEntry renders an entry point, checks its rules, and applies it.
-func (c *cluster) applyEntry(ctx context.Context, t *tree, entry string) error {
-	rm, err := t.render(entry)
+func (c *cluster) applyEntry(ctx context.Context, t *manifests.Tree, entry string) error {
+	rm, err := t.Render(entry)
 	if err != nil {
 		return err
 	}
-	return c.apply(ctx, entry, rm)
+	return c.apply(ctx, entry, rm, localTarget)
 }
 
 // apply applies rendered manifests on the server's side, as Flux does,
 // once they keep the rules.
-func (c *cluster) apply(ctx context.Context, entry string, rm resmap.ResMap) error {
-	objs, err := objects(rm)
+func (c *cluster) apply(ctx context.Context, entry string, rm resmap.ResMap, target manifests.Target) error {
+	objs, err := manifests.Objects(rm)
 	if err != nil {
 		return err
 	}
-	if err := checkRules(objs, true); err != nil {
+	if err := manifests.CheckRules(objs, target); err != nil {
 		return fmt.Errorf("%s: %w", entry, err)
 	}
 	manifests, err := rm.AsYaml()
@@ -99,12 +122,13 @@ func (c *cluster) apply(ctx context.Context, entry string, rm resmap.ResMap) err
 }
 
 // deployGame builds the game's image, imports it into the node, and
-// applies the game's manifests with it.
+// applies the game's manifests with it. A release the cluster followed is
+// let go of first: the working tree is in charge again.
 func (c *cluster) deployGame(ctx context.Context) error {
 	if err := c.checkTools(); err != nil {
 		return err
 	}
-	t, err := readTree(clusterDir)
+	t, err := manifests.ReadTree(clusterDir)
 	if err != nil {
 		return err
 	}
@@ -116,18 +140,19 @@ func (c *cluster) deployGame(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	d := deploy{build: build, host: host, sailors: os.Getenv("KEEL_DEV_SAILORS")}
-	rm, err := t.renderApps(d)
+	d := manifests.Deploy{Build: build, Host: host, Sailors: os.Getenv("KEEL_DEV_SAILORS")}
+	rm, err := t.RenderDeploy(d)
 	if err != nil {
 		return err
 	}
 	// The rules before the build, which takes longer; apply checks them too.
-	objs, err := objects(rm)
+	objs, err := manifests.Objects(rm)
 	if err != nil {
 		return err
 	}
-	if err := checkRules(objs, true); err != nil {
-		return fmt.Errorf("clusters/local/apps: %w", err)
+	apps := localCluster.Entry("apps")
+	if err := manifests.CheckRules(objs, deployTarget); err != nil {
+		return fmt.Errorf("%s: %w", apps, err)
 	}
 	if err := c.buildImage(ctx, build); err != nil {
 		return err
@@ -135,11 +160,14 @@ func (c *cluster) deployGame(ctx context.Context) error {
 	if err := c.importImage(ctx, build); err != nil {
 		return err
 	}
+	if err := c.endRelease(ctx); err != nil {
+		return err
+	}
 	if err := c.secrets(ctx, rm, host); err != nil {
 		return err
 	}
 	start := time.Now()
-	if err := c.apply(ctx, "clusters/local/apps", rm); err != nil {
+	if err := c.apply(ctx, apps, rm, deployTarget); err != nil {
 		return err
 	}
 	if err := c.waitKubectl(ctx, "the database", 10*time.Minute, "-n", namespace, "wait", "--for=condition=Ready", "cluster/keel-db"); err != nil {
@@ -260,7 +288,7 @@ func (c *cluster) secrets(ctx context.Context, rm resmap.ResMap, host string) (e
 	if err := c.databaseSecret(ctx); err != nil {
 		return err
 	}
-	certs, err := devcert.Make(ctx, c.out, filepath.Join(c.state, "certs"), certHosts(host, devcert.LANAddresses()), true)
+	certs, err := c.certificate(ctx, filepath.Join(c.state, "certs"), certHosts(host, devcert.LANAddresses()))
 	if err != nil {
 		return err
 	}

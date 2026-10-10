@@ -19,6 +19,7 @@ client/src/predict/physics.wasm
 /e2e
 /keel
 /loadbot
+/release
 
 # Editors and systems
 .DS_Store

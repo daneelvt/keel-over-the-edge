@@ -1,0 +1,69 @@
+{
+  "$comment": "The schema of HelmChartConfig helm.cattle.io/v1, from the definition helmchartconfigs.helm.cattle.io in the local cluster, written by go run ./tools/cluster -schemas. Not edited by hand.",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "failurePolicy": {
+          "default": "reinstall",
+          "enum": [
+            "abort",
+            "reinstall",
+            "retry"
+          ],
+          "type": "string"
+        },
+        "forceConflicts": {
+          "type": "boolean"
+        },
+        "serverSide": {
+          "enum": [
+            "true",
+            "false",
+            "auto"
+          ],
+          "type": "string"
+        },
+        "values": {
+          "x-kubernetes-preserve-unknown-fields": true
+        },
+        "valuesContent": {
+          "type": "string"
+        },
+        "valuesSecrets": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "ignoreUpdates": {
+                "type": "boolean"
+              },
+              "keys": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}
