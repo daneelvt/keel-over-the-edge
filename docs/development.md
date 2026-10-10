@@ -1483,7 +1483,9 @@ first run: after it, the runner's `/tmp` holds nothing to run.
 - **The cluster's credential**: [infra/MANUAL-STEPS.md](../infra/MANUAL-STEPS.md),
   "Rotating the cluster's credential".
 - **A Lynis warning** the machine should keep: a line in
-  `infra/ansible/lynis-accepted.txt`, the warning's ID and why.
+  `infra/ansible/lynis-accepted.txt`, the warning's ID and why. One that
+  comes of the runner's image alone goes in `lynis-accepted-runner.txt`,
+  which only `machine-test` reads.
 
 ## Restarts and deploys
 

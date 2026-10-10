@@ -461,8 +461,10 @@ func TestLynisReport(t *testing.T) {
 	if _, err := readAccepted(file); err == nil {
 		t.Error("a warning accepted with no reason")
 	}
-	if _, err := readAccepted("../../" + acceptedFile); err != nil {
-		t.Error(err)
+	for _, f := range []string{acceptedFile, runnerAcceptedFile} {
+		if _, err := readAccepted("../../" + f); err != nil {
+			t.Error(err)
+		}
 	}
 }
 

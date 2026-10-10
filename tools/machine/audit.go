@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,8 +16,13 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/pinned"
 )
 
-// acceptedFile lists the Lynis warnings accepted, each with its reason.
-const acceptedFile = "infra/ansible/lynis-accepted.txt"
+// acceptedFile lists the Lynis warnings accepted, each with its reason;
+// runnerAcceptedFile, those accepted on a workflow's runner alone, which
+// come of its image being GitHub's rather than the machine's.
+const (
+	acceptedFile       = "infra/ansible/lynis-accepted.txt"
+	runnerAcceptedFile = "infra/ansible/lynis-accepted-runner.txt"
+)
 
 // audit runs Lynis on the machine, or on this runner, and changes nothing
 // there: Lynis is copied to a folder of its own, run, and the folder
@@ -57,6 +63,13 @@ func (m *machine) audit(ctx context.Context, local bool) error {
 	if err != nil {
 		return err
 	}
+	if local {
+		onRunner, err := readAccepted(m.path(runnerAcceptedFile))
+		if err != nil {
+			return err
+		}
+		maps.Copy(accepted, onRunner)
+	}
 	r := parseLynis(string(data))
 	var unaccepted []string
 	var b strings.Builder
@@ -70,6 +83,7 @@ func (m *machine) audit(ctx context.Context, local bool) error {
 			unaccepted = append(unaccepted, w.id)
 			reason = "**not accepted**"
 		}
+		m.logf("Lynis warns: %s %s: %s", w.id, w.text, reason)
 		fmt.Fprintf(&b, "| `%s` | %s | %s |\n", w.id, w.text, reason)
 	}
 	fmt.Fprintf(&b, "\n<details><summary>%d suggestions</summary>\n\n", len(r.suggestions))
