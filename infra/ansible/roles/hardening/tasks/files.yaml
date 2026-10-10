@@ -17,8 +17,9 @@
   loop_control:
     label: "{{ item.path }}"
 
-# The first 20, and how many in all: the containers' files are left out,
-# and on a runner its toolchains, of which there are hundreds of thousands.
+# A report: the first 20, and how many in all. The containers' files are
+# left out, and on a runner its toolchains, of which there are hundreds of
+# thousands; a file that vanishes while find reads its folder is no error.
 - name: Find world-writable files, and files without an owner
   vars:
     hardening_skip: >-
@@ -27,8 +28,9 @@
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
-      find / -xdev \( {{ hardening_skip | map('regex_replace', '^', '-path ') | join(' -o ') }} \) -prune
+      { find / -xdev \( {{ hardening_skip | map('regex_replace', '^', '-path ') | join(' -o ') }} \) -prune
       -o \( -type f -perm -0002 -o -nouser -o -nogroup \) -print
+      2>/dev/null || true; }
       | awk 'NR <= 20; END { print NR " in all" }'
     executable: /bin/bash
   register: hardening_loose

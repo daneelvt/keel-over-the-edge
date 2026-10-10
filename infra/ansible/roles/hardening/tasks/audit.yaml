@@ -70,6 +70,9 @@
   register: hardening_privileged
   changed_when: false
   check_mode: false
+  # A file removed while find reads its folder (a package being built, a
+  # temporary file) is no failure; any other error is.
+  failed_when: hardening_privileged.stderr_lines | reject('search', 'No such file or directory$') | list | length > 0
 
 - name: Write a rule for each
   ansible.builtin.template:
