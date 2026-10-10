@@ -81,6 +81,39 @@
   loop: [ssh.socket, ssh.service]
   when: not (machine_runner | default(false))
 
+# Tailscale SSH serves OpenSSH's host keys while they exist, and otherwise
+# makes its own. Purging OpenSSH deletes its keys, so they are copied to
+# Tailscale's own folder first: the machine keeps one identity, and the
+# run's known hosts, read from the tailnet when it joined, stay right.
+- name: Read OpenSSH's host keys
+  ansible.builtin.stat:
+    path: /etc/ssh/ssh_host_{{ item }}_key
+  loop: [ecdsa, ed25519, rsa]
+  register: access_host_keys
+  when: not (machine_runner | default(false))
+
+- name: Make Tailscale SSH's folder of host keys
+  ansible.builtin.file:
+    path: /var/lib/tailscale/ssh
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: not (machine_runner | default(false))
+
+- name: Keep them as Tailscale SSH's own
+  ansible.builtin.copy:
+    src: /etc/ssh/ssh_host_{{ item.item }}_key
+    dest: /var/lib/tailscale/ssh/ssh_host_{{ item.item }}_key
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ access_host_keys.results | default([]) | selectattr('stat', 'defined') | selectattr('stat.exists') }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not (machine_runner | default(false))
+
 - name: Remove OpenSSH's server
   ansible.builtin.apt:
     name: openssh-server
