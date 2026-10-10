@@ -157,6 +157,21 @@
     mode: "0644"
   notify: Restart resolved
 
+# Every lookup goes through systemd-resolved, as on Ubuntu's own images: it
+# asks the resolvers the network gives (DHCP) and passes over one that does
+# not answer. An image's own /etc/resolv.conf may list more servers than the
+# three glibc reads, dead ones among them, which every program, and k3s's
+# pods, would then wait on. k3s, seeing the stub, gives its pods resolved's
+# upstream servers instead (/run/systemd/resolve/resolv.conf). The link is
+# the one Ubuntu makes, and has no owner set: the module would set it on the
+# stub it points to, which is resolved's and which resolved writes anew.
+- name: Resolve names through systemd-resolved
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    src: ../run/systemd/resolve/stub-resolv.conf
+    state: link
+    force: true
+
 - name: Write k3s's kernel settings
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../k3s/sysctl.conf"

@@ -3,6 +3,7 @@
 # beside lynis-accepted.txt: what comes of the runner being GitHub's image
 # rather than the machine. Lynis on a minimal Ubuntu 26.04, as the machine
 # is, gives none of them.
+KRNL-5830 The runner is never rebooted, though the apply's updates may ask for it; the machine's apply reboots it when ticked, and says when a reboot is due
 FINT-4316 The runner gets no AIDE record, which would take more than ten minutes to make there; the machine's is made by its first apply
 PKGS-7392 The runner's image is not upgraded, as it is GitHub's; the machine is upgraded by every apply and by unattended-upgrades every day
 PKGS-7388 The runner's apt sources are its image's own; the machine's are Ubuntu's, with the security pocket
