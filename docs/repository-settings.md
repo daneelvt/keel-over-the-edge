@@ -38,6 +38,11 @@ credential.
       repository only, short-lived
 - [ ] Installed apps: Renovate only, on this repository only; no deploy keys,
       no webhooks
+- [ ] Renovate's mode for this repository, in Mend's Developer Portal
+      (developer.mend.io, signed in with GitHub): **Interactive**. Installed
+      on all of an account's repositories, the hosted app starts in Silent
+      mode: it runs, and opens no issue and no pull request, so there is no
+      Dependency Dashboard
 - [ ] The security log and authorised apps reviewed monthly
 
 ## Not available to this repository
