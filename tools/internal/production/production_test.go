@@ -19,34 +19,68 @@ func TestRepositoryFile(t *testing.T) {
 	}
 }
 
-func TestReadRefuses(t *testing.T) {
-	base, err := os.ReadFile("../../../" + File)
-	if err != nil {
+// valid is a complete file, filled in as the repository's is once the
+// accounts exist; each case below breaks it one way.
+const valid = `machine: keel-prod-1
+tailnet: tail1234.ts.net
+tailscale:
+  join:
+    clientID: kJoin1CNTRL-abc
+    audience: api.tailscale.com/kJoin1CNTRL-abc
+  policy:
+    clientID: kPolicy1CNTRL-def
+    audience: api.tailscale.com/kPolicy1CNTRL-def
+infisical:
+  host: https://us.infisical.com
+  identityID: 5546676b-0000-4000-8000-000000000000
+  audience: https://github.com/daneelvt
+  project: 09d6ca0c-0000-4000-8000-000000000000
+  environment: prod
+`
+
+func readText(t *testing.T, text string) error {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "production.yaml")
+	if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
+	}
+	_, err := Read(file)
+	return err
+}
+
+func TestReadRefuses(t *testing.T) {
+	if err := readText(t, valid); err != nil {
+		t.Fatalf("the valid file: %v", err)
 	}
 	cases := []struct{ name, old, new, want string }{
 		{"a public name", `machine: keel-prod-1`, `machine: keel-prod-1.example.com`, "not a host name"},
-		{"another suffix", `tailnet: ""`, `tailnet: example.com`, "not a MagicDNS suffix"},
-		{"an audience for another client", "join:\n    clientID: \"\"\n    audience: \"\"",
-			"join:\n    clientID: kAbC\n    audience: api.tailscale.com/kXyZ", "does not name its client ID"},
-		{"one identity for both", "join:\n    clientID: \"\"\n    audience: \"\"\n  # The federated identity the tailnet workflow writes the policy with\n  # (scope policy_file).\n  policy:\n    clientID: \"\"",
-			"join:\n    clientID: kAbC\n    audience: \"\"\n  policy:\n    clientID: kAbC", "the same identity"},
-		{"plain HTTP", `host: ""`, `host: http://us.infisical.com`, "not https://<host>"},
+		{"another suffix", `tailnet: tail1234.ts.net`, `tailnet: example.com`, "not a MagicDNS suffix"},
+		{"an audience for another client", `audience: api.tailscale.com/kJoin1CNTRL-abc`, `audience: api.tailscale.com/kOther`, "does not name its client ID"},
+		{"one identity for both", "clientID: kPolicy1CNTRL-def\n    audience: api.tailscale.com/kPolicy1CNTRL-def",
+			"clientID: kJoin1CNTRL-abc\n    audience: api.tailscale.com/kJoin1CNTRL-abc", "the same identity"},
+		{"plain HTTP", `host: https://us.infisical.com`, `host: http://us.infisical.com`, "not https://<host>"},
+		{"a path on the host", `host: https://us.infisical.com`, `host: https://us.infisical.com/api`, "not https://<host>"},
+		{"no environment", `  environment: prod`, `  environment: ""`, "set from the start"},
 		{"an unknown key", `machine: keel-prod-1`, "machine: keel-prod-1\naddress: 192.0.2.1", "not found"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if !strings.Contains(string(base), c.old) {
+			if !strings.Contains(valid, c.old) {
 				t.Fatalf("no %q to change", c.old)
 			}
-			file := filepath.Join(t.TempDir(), "production.yaml")
-			if err := os.WriteFile(file, []byte(strings.Replace(string(base), c.old, c.new, 1)), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := Read(file); err == nil || !strings.Contains(err.Error(), c.want) {
+			if err := readText(t, strings.Replace(valid, c.old, c.new, 1)); err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Errorf("got %v, want %q", err, c.want)
 			}
 		})
+	}
+}
+
+// TestEmptyValuesAreAccounts: an empty value is an account not made yet,
+// which Read accepts and Need reports.
+func TestEmptyValuesAreAccounts(t *testing.T) {
+	empty := strings.NewReplacer("tail1234.ts.net", `""`, "https://us.infisical.com", `""`).Replace(valid)
+	if err := readText(t, empty); err != nil {
+		t.Errorf("empty values: %v", err)
 	}
 }
 
