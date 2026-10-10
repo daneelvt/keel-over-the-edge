@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -118,8 +119,9 @@ func (m *machine) join(ctx context.Context) error {
 		return err
 	}
 	if out, err := m.tailscale(ctx, bin, "ping", "--c=1", "--timeout=10s", peer.TailscaleIPs[0]); err == nil {
-		m.logf("%s", strings.TrimSpace(string(out)))
-		fmt.Fprintf(m.summary, "The runner reached `%s` over the tailnet: `%s`\n\n", m.prod.Machine, strings.TrimSpace(string(out)))
+		path := pingPath(string(out))
+		m.logf("the runner reaches %s over the tailnet, %s", m.prod.Machine, path)
+		fmt.Fprintf(m.summary, "The runner reached `%s` over the tailnet, %s.\n\n", m.prod.Machine, path)
 	}
 	m.logf("the machine is %s at %s; its host keys are in %s", m.prod.MagicDNS(), peer.TailscaleIPs[0], m.knownHosts())
 	return nil
@@ -142,6 +144,23 @@ func (m *machine) leave(ctx context.Context) error {
 	m.logf("left the tailnet")
 	return nil
 }
+
+// pingPath says how tailscale ping reached the peer, "direct" or "relayed
+// through DERP (<region>)", and its time: never the endpoint it names for
+// a direct path, which is the machine's public address. The log and the
+// summary of a public repository's runs are public.
+func pingPath(out string) string {
+	m := pingLine.FindStringSubmatch(out)
+	if m == nil {
+		return "by a path tailscale ping did not name"
+	}
+	if region, ok := strings.CutPrefix(m[1], "DERP("); ok {
+		return "relayed through DERP (" + strings.TrimSuffix(region, ")") + ") in " + m[2]
+	}
+	return "direct, in " + m[2]
+}
+
+var pingLine = regexp.MustCompile(`pong from \S+ \(\S+\) via (\S+) in (\S+)`)
 
 // peerStatus is what tailscale status --json says of a peer (Tailscale's
 // ipnstate.PeerStatus).
