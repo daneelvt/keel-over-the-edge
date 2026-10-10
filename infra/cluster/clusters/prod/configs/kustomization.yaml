@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Production's configuration of k3s's Traefik.
+# Production's configuration of k3s's Traefik: its Service is ClusterIP,
+# reached only from inside the cluster. ServiceLB is off on production's
+# machine, but a LoadBalancer Service would still be given NodePorts on
+# every address of the node.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../infrastructure/configs
+patches:
+  - path: traefik.yaml

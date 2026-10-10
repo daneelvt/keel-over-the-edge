@@ -1,0 +1,197 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The system as this machine needs it: its name, its packages up to date,
+# the provider's extras gone, UTC, the journal, k3s's kernel settings, no
+# swap.
+
+- name: Name the machine
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+    use: systemd
+
+- name: Resolve the machine's own name locally
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1 {{ inventory_hostname }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+# On a workflow's runner, only the package lists: upgrading the runner's
+# own image, which holds far more than the machine, would test GitHub's
+# packages, not this machine's, and take minutes.
+- name: Bring every package up to date
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: "{{ 'no' if machine_runner | default(false) else 'full' }}"
+
+- name: Install the packages the machine needs
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    install_recommends: false
+
+# Purged unless that would remove one of base_protected: apt's simulation
+# says what a purge would take with it.
+- name: List the installed packages
+  ansible.builtin.package_facts:
+
+- name: Simulate purging each unneeded package  # noqa: command-instead-of-module (the apt module has no simulation that lists what goes)
+  ansible.builtin.command:
+    cmd: apt-get --simulate --quiet purge {{ item.package }}
+  loop: "{{ base_unneeded | selectattr('package', 'in', ansible_facts.packages) }}"
+  loop_control:
+    label: "{{ item.package }}"
+  register: base_simulated
+  changed_when: false
+  check_mode: false
+
+- name: Decide what is purged and what is masked
+  ansible.builtin.set_fact:
+    base_purge: >-
+      {{ base_simulated.results | rejectattr('stdout', 'search', '^(Remv|Purg) (' ~ (base_protected | join('|')) ~ ') ', multiline=True)
+         | map(attribute='item.package') | list }}
+    base_keep: >-
+      {{ base_simulated.results | selectattr('stdout', 'search', '^(Remv|Purg) (' ~ (base_protected | join('|')) ~ ') ', multiline=True)
+         | map(attribute='item') | list }}
+
+- name: Purge what the machine does not need
+  ansible.builtin.apt:
+    name: "{{ base_purge }}"
+    state: absent
+    purge: true
+  when: base_purge | length > 0
+
+- name: List the unit files  # noqa: command-instead-of-module (service_facts lists services alone, not timers or sockets)
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files --no-legend --plain
+  register: base_unit_files
+  changed_when: false
+  check_mode: false
+
+- name: Mask the units of what stays installed only because Ubuntu's metapackages need it
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+    enabled: false
+    state: stopped
+  loop: "{{ base_keep | map(attribute='units') | flatten }}"
+  when: base_unit_files.stdout is search('^' ~ (item | regex_escape) ~ '\s', multiline=True)
+
+- name: Keep cloud-init from running at boot, should it stay installed
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud-init.disabled
+    content: ""
+    owner: root
+    group: root
+    mode: "0644"
+  when: "'cloud-init' in (base_keep | map(attribute='package'))"
+
+- name: Turn off the news in the login message
+  ansible.builtin.copy:
+    dest: /etc/default/motd-news
+    content: |
+      # Written by the base role: no news fetched for the login message.
+      ENABLED=0
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read the time zone
+  ansible.builtin.command:
+    cmd: timedatectl show --property=Timezone --value
+  register: base_timezone
+  changed_when: false
+  check_mode: false
+
+- name: Keep the clock in UTC
+  ansible.builtin.command:
+    cmd: timedatectl set-timezone UTC
+  when: base_timezone.stdout != 'UTC'
+  changed_when: true
+
+- name: Make journald's folder of settings
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Keep the journal on disk, compressed, within 1 GB, and the only log
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/50-keel.conf
+    content: |
+      # Written by the base role.
+      [Journal]
+      Storage=persistent
+      Compress=yes
+      SystemMaxUse=1G
+      ForwardToSyslog=no
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald
+
+- name: Make resolved's folder of settings
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# The machine resolves names through its provider's resolvers alone: it
+# neither answers nor asks its neighbours on the network.
+- name: Turn off multicast DNS and LLMNR
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/50-keel.conf
+    content: |
+      # Written by the base role.
+      [Resolve]
+      MulticastDNS=no
+      LLMNR=no
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart resolved
+
+- name: Write k3s's kernel settings
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../k3s/sysctl.conf"
+    dest: /etc/sysctl.d/90-k3s.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Load the kernel settings
+
+# The kubelet needs swap off. The image swaps on a partition, which is left
+# there, unused: its line goes from /etc/fstab, and swap.target is masked
+# so that nothing, not systemd's GPT generator either, turns it on again.
+- name: Read the swap in use
+  ansible.builtin.command:
+    cmd: swapon --show=NAME --noheadings
+  register: base_swap
+  changed_when: false
+  check_mode: false
+
+- name: Turn swap off
+  ansible.builtin.command:
+    cmd: swapoff --all
+  when: base_swap.stdout | length > 0
+  changed_when: true
+
+- name: Remove swap from /etc/fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^[^#]\S*\s+\S+\s+swap\s'
+    state: absent
+
+- name: Keep swap from coming back at boot
+  ansible.builtin.systemd_service:
+    name: swap.target
+    masked: true
+
+- name: Apply the kernel settings now
+  ansible.builtin.meta: flush_handlers

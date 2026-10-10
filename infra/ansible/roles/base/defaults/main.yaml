@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The packages every run makes sure of. Every package is installed without
+# what it only recommends: AIDE's would bring a mail server.
+base_packages:
+  - nftables
+  - chrony
+  - unattended-upgrades
+  - needrestart
+  - curl
+  - jq
+
+# Packages the provider's image installs that this machine does not need: a
+# general-purpose server's, for hardware and other hypervisors. Each is
+# purged, unless its removal would take one of base_protected with it; then
+# it stays, and its units are masked. Fewer packages: fewer to patch, fewer
+# services to attack.
+base_unneeded:
+  - {package: open-vm-tools, units: [open-vm-tools.service, vgauth.service]}
+  - {package: apport, units: [apport.service, apport-autoreport.path, apport-autoreport.timer, apport-forward.socket]}
+  - {package: kdump-tools, units: [kdump-tools.service]}
+  - {package: snapd, units: [snapd.service, snapd.socket, snapd.seeded.service, snapd.apparmor.service, snapd.autoimport.service,
+                             snapd.core-fixup.service, snapd.recovery-chooser-trigger.service, snapd.system-shutdown.service, snapd.snap-repair.timer]}
+  - {package: lxd-installer, units: [lxd-installer.socket]}
+  - {package: open-iscsi, units: [iscsid.service, iscsid.socket, open-iscsi.service]}
+  - {package: multipath-tools, units: [multipathd.service, multipathd.socket]}
+  - {package: lvm2, units: [lvm2-monitor.service, lvm2-lvmpolld.socket, dm-event.service, dm-event.socket]}
+  - {package: mdadm, units: [mdmonitor.service, mdmonitor-oneshot.timer, mdcheck_start.timer, mdcheck_continue.timer]}
+  - {package: udisks2, units: [udisks2.service]}
+  - {package: thermald, units: [thermald.service]}
+  - {package: ubuntu-drivers-common, units: [gpu-manager.service]}
+  - {package: tpm-udev, units: []}
+  - {package: fwupd, units: [fwupd.service, fwupd-refresh.timer]}
+  - {package: xfsprogs, units: [xfs_scrub_all.timer]}
+  - {package: rsyslog, units: [rsyslog.service, syslog.socket]}
+  - {package: ufw, units: [ufw.service]}
+  - {package: cloud-init, units: [cloud-init-local.service, cloud-init-main.service, cloud-init-network.service, cloud-init.service,
+                                  cloud-config.service, cloud-final.service]}
+  - {package: update-notifier-common, units: [update-notifier-download.timer, update-notifier-motd.timer]}
+  - {package: postfix, units: [postfix.service]}
+  - {package: bsd-mailx, units: []}
+  - {package: ubuntu-pro-client, units: [ua-timer.timer, ua-reboot-cmds.service, ubuntu-advantage.service, apt-news.service, esm-cache.service]}
+
+# The metapackages that make the system one Ubuntu supports: never removed.
+base_protected:
+  - ubuntu-minimal
+  - ubuntu-server-minimal

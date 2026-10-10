@@ -1,0 +1,6 @@
+Name: Lock an account after failed logins (pam_faillock)
+Default: yes
+Priority: 0
+Auth-Type: Primary
+Auth:
+	[default=die] pam_faillock.so authfail

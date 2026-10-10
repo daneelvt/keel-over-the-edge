@@ -1,0 +1,6 @@
+## Written by the hardening role: every program found on the disk that
+## runs as another user than the one who starts it, when someone who
+## logged in runs it.
+{% for path in hardening_privileged.stdout_lines | sort %}
+-a always,exit -F path={{ path }} -F perm=x -F auid>=1000 -F auid!=unset -k privileged
+{% endfor %}

@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Lynis's audit of the machine, which changes nothing there: Lynis, from
+# Ubuntu's package unpacked on the runner (machine_lynis), is copied to a
+# folder of its own, run as root, and its report fetched into
+# machine_report; the folder is removed whatever happened.
+# go run ./tools/machine -audit runs it.
+- name: Audit production's machine
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Run Lynis in a folder of its own
+      block:
+        - name: Make the folder
+          # Not in /tmp, where nothing may run.
+          ansible.builtin.tempfile:
+            state: directory
+            path: /root
+            prefix: lynis-
+          register: machine_lynis_dir
+
+        - name: Copy Lynis, root's alone, as Lynis requires to run as root
+          ansible.builtin.copy:
+            src: "{{ machine_lynis }}/"
+            dest: "{{ machine_lynis_dir.path }}/"
+            owner: root
+            group: root
+            mode: u=rwX,g=rX,o=
+            directory_mode: "0750"
+
+        - name: Run it
+          ansible.builtin.command:
+            cmd: >-
+              sh ./lynis audit system --quick --no-colors --no-log
+              --report-file {{ machine_lynis_dir.path }}/report.dat
+            chdir: "{{ machine_lynis_dir.path }}"
+          register: machine_lynis_run
+          changed_when: false
+
+        - name: Fetch its report
+          ansible.builtin.fetch:
+            src: "{{ machine_lynis_dir.path }}/report.dat"
+            dest: "{{ machine_report }}"
+            flat: true
+
+        - name: Fetch its output
+          ansible.builtin.copy:
+            content: "{{ machine_lynis_run.stdout }}"
+            dest: "{{ machine_report }}.log"
+            mode: "0644"
+          delegate_to: localhost
+      always:
+        - name: Remove the folder
+          ansible.builtin.file:
+            path: "{{ machine_lynis_dir.path }}"
+            state: absent
+          when: machine_lynis_dir.path is defined

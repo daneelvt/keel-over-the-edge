@@ -121,12 +121,16 @@ credentials.
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin (see [The local cluster](#the-local-cluster) and [Releases](#releases)) | `go test ./tools/cluster ./tools/release ./tools/internal/...` |
+| `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
+| `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
 | `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
 | `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature and its place on `main` are checked | |
+| `machine.yaml` | By hand, approved by the owner | The playbook on production's machine, over Tailscale SSH: `check`, `apply` (then `verify.yaml`), or `audit` (see [The machine](#the-machine)) | |
+| `tailnet.yaml` | Pushes to `main` that change `infra/tailnet/`, and by hand; approved by the owner | The tailnet policy validated by Tailscale, its tests run, then written over the live one | `go run ./tools/tailnet -check` |
 | `scorecard.yaml` | Pushes to `main`, weekly | OpenSSF Scorecard | |
 | `security.yaml` | Weekly | govulncheck and npm signatures on `main` | |
 
@@ -955,10 +959,21 @@ no `node_modules`, no build output.
 
 ```
 infra/
+  MANUAL-STEPS.md        what is done by hand, once: the accounts, the machine, the join
+  production.yaml        production's identifiers, none secret: the machine's and
+                         tailnet's names, the workflows' identities, Infisical's IDs
+  bootstrap/join.sh      joins a fresh machine to the tailnet, then closes OpenSSH
+  tailnet/policy.hujson  who may reach production's machine, and how
+  ansible/               the playbook that configures production's machine
+                         (see The machine)
   k3s/
     release.yaml         the k3s release every machine installs, and its commit
     config.yaml          k3s's settings on every machine: kubeconfig root's alone,
-                         Secrets encrypted with secretbox, protect-kernel-defaults
+                         Secrets encrypted with secretbox, protect-kernel-defaults,
+                         and the k3s CIS hardening guide's arguments
+    psa.yaml             Pod Security (restricted, but kube-system) and EventRateLimit
+    audit.yaml           the API server's audit policy
+    prod.yaml            production's drop-in: node name, no ServiceLB
     sysctl.conf          the kernel settings k3s checks, and inotify limits
   schemas/               the JSON schemas of the custom resources the manifests
                          use, written by tools/cluster -schemas
@@ -969,7 +984,8 @@ infra/
     flux-system/         flux install --export, its images pinned by digest
     infrastructure/
       controllers/       the CloudNativePG operator: OCIRepository and HelmRelease
-      configs/           Traefik's HelmChartConfig: the Gateway API, its timeouts
+      configs/           Traefik's HelmChartConfig: the Gateway API, its timeouts;
+                         the default service accounts without tokens
     apps/keel/           the game: Deployment, Service, ConfigMap, Gateway,
                          HTTPRoute, the database's Cluster; production's sizes
     clusters/local/      the local cluster's entry points: controllers, configs,
@@ -977,7 +993,8 @@ infra/
                          release, what -release applies to follow a release
     clusters/prod/       production's entry points: flux-system (Flux's
                          controllers, and sync.yaml, what they follow),
-                         controllers, configs, apps (the players' address)
+                         controllers, configs (Traefik's Service ClusterIP),
+                         apps (the players' address)
 ```
 
 The bases hold what every cluster shares; each cluster's folder patches
@@ -1017,7 +1034,10 @@ Deployment with one replica, `Recreate`, `keel migrate`
 as an init container, probes on the internal listener, the restricted
 security context and no service account token; `GOMEMLIMIT` between 80% and
 95% of the memory limit; no route to the internal listener; every route on
-a listener of the `keel` Gateway, an HTTPS listener with a certificate; the
+a listener of the `keel` Gateway, an HTTPS listener with a certificate; no
+`LoadBalancer` or `NodePort` Service in production, Traefik's included
+(the chart's default is `LoadBalancer`, which opens NodePorts on every
+address of the node even without ServiceLB); the
 database refusing connections without TLS, with no superuser and the
 builtin `C.UTF-8` locale; the database's `smartShutdownTimeout` at most
 30 s and its clients' TCP keepalives set; and keel's
@@ -1047,7 +1067,9 @@ commit what changed.
 | `keel` Gateway | In the game's namespace, class `traefik`: `http` on Traefik's `web` entry point and, locally, `https` on `websecure` with `keel-tls`, which is also Traefik's default certificate for clients that name no host. The `play` route sends everything to keel's game listener; locally, plain HTTP is redirected |
 | Traefik | k3s's own, with the Gateway API on, Ingress off, and its entry points' timeouts written down: `readTimeout` 60 s (a request must arrive within it; a stalled one is cut), `idleTimeout` 180 s, no `writeTimeout`. A game connection is not cut by them |
 
-The `keel` namespace warns and audits Pod Security's `restricted` profile.
+Every namespace but `kube-system` enforces Pod Security's `restricted`
+profile, on both clusters (`infra/k3s/psa.yaml`); a namespace that needs
+more says so with a label of its own.
 
 ## Releases
 
@@ -1222,10 +1244,248 @@ actions in the workflows; the `Dockerfile`'s images and the CI service's
 PostgreSQL; the CloudNativePG chart (tag and digest) together with the
 operator's image; Flux's manifests, its controllers' images and its CLI,
 as one update; k3s's version and commit (a new minor version waits for a
-tick on the dashboard); cosign and TinyGo; BuildKit; kubeconform and every
-Go module. A test fails if one of its patterns stops finding its pin.
-Raised by hand: the commit of the Kubernetes schemas
-(`tools/internal/manifests`), and Lima's Ubuntu image.
+tick on the dashboard); cosign, TinyGo and kube-bench; BuildKit; Ansible
+and ansible-lint, with `pip-compile` and every file's hash
+(`infra/ansible/*requirements.txt`); kubeconform and every Go module. A
+test fails if one of its patterns stops finding its pin. Raised by hand:
+the commit of the Kubernetes schemas (`tools/internal/manifests`), Lima's
+Ubuntu image, and Tailscale's client for the runners (`go run
+./tools/machine -pin <version>`, from Tailscale's own site, which Renovate
+does not read).
+
+## The machine
+
+Production runs on one rented VM, `keel-prod-1`: Ubuntu 26.04, k3s, and
+Flux following the release the `prod` tag names. It has no open port. The
+owner and the workflows reach it over the tailnet, with Tailscale SSH, as
+root; nothing else reaches it at all.
+
+What is made by hand, once (the accounts, the VM, the join), is in
+[infra/MANUAL-STEPS.md](../infra/MANUAL-STEPS.md). Everything after it is a
+commit and a workflow run, which the owner approves.
+
+### The workflows
+
+**`machine`** (Actions → machine → Run workflow) runs the playbook in
+`infra/ansible` on the machine. Its job:
+
+1. Joins the tailnet as a short-lived node tagged `tag:ci-prod`: Tailscale
+   accepts the job's own OIDC token, as the identity
+   `infra/production.yaml` names, from `machine.yaml` on `main` in the
+   `production` environment, and no other job. The node is ephemeral: it
+   leaves the tailnet when the job ends (`-leave`, whatever happened). The
+   tailnet's own record of the machine's SSH host keys becomes the job's
+   `known_hosts`, so SSH checks the machine's key strictly.
+2. Signs in to Infisical the same way, and reads the cluster's credential
+   from `keel-ops`, `prod`, `/machine`. It is masked in the log first, and
+   reaches the playbook in its environment alone.
+3. Reads the release `prod` names, checks its signature as Flux will, and
+   pulls it by digest: the playbook bootstraps Flux from exactly those
+   bytes.
+4. Runs the playbook over Tailscale SSH, and writes its recap, what
+   changed and each role's time to the run's summary.
+
+Its `mode`:
+
+| Mode | What |
+|------|------|
+| `check` | What `apply` would change (`--check --diff`); changes nothing. Read its summary: every task listed under "Would change" is drift, or a change waiting in the repository |
+| `apply` | Changes the machine, then `verify.yaml` checks it from outside the roles. With **reboot** ticked, it reboots when a change needs it (a new kernel, the kernel's command line, a module in use, the audit rules, which are locked until a boot); otherwise the summary says a reboot is due |
+| `audit` | Lynis, copied to a folder of its own on the machine, run, and removed; changes nothing. Its hardening index, warnings and suggestions in the summary. It fails on a warning that `infra/ansible/lynis-accepted.txt` does not list with its reason |
+
+There is no schedule: every run logs in as root, so every run waits for
+the owner's approval. A second `apply` changes nothing, and that is
+checked on every pull request.
+
+**`tailnet`** writes `infra/tailnet/policy.hujson` to Tailscale when it
+changes on `main`, or when run by hand, after approval. It signs in as the
+other identity, which only `tailnet.yaml` may use and which can write the
+policy and nothing else. Tailscale validates the policy and runs its
+`tests` first, and refuses one that fails them; the write names the
+policy's ETag, so two runs never overwrite each other. The summary shows
+what was live and what replaced it: a change made in the admin page shows
+there, and is gone.
+
+The policy: two tags, each owned by `autogroup:admin` (the owner; no
+person's login is in the file). `tag:ci-prod` reaches `tag:keel-prod` on
+TCP 22 alone, and logs in there as root; the owner's devices reach it on
+22 too, and log in as root after a fresh sign-in every 12 hours
+(`check`). Nothing else: no rule for `*`. `go run ./tools/tailnet -check`
+keeps that shape, offline.
+
+### The playbook
+
+```
+infra/ansible/
+  ansible.cfg                   root, pipelining, strict host keys, the junit callback for the times
+  inventory/production.yaml     keel-prod-1, reached at its tailnet address
+  inventory/runner.yaml         the same, on a workflow's own runner (pr.machine)
+  requirements.txt              ansible-core, every file hashed (pip-compile)
+  lint-requirements.txt         ansible-lint, likewise
+  site.yaml                     the roles, in order; AIDE's record; the reboot
+  verify.yaml                   checks the machine is as site.yaml leaves it
+  audit.yaml                    Lynis, run in a folder of its own and removed
+  lynis-accepted.txt            the Lynis warnings accepted, each with its reason
+  roles/
+    base/                       host name; packages up to date; the image's extras
+                                purged; UTC; the journal; k3s's kernel settings; no swap
+    hardening/                  the CIS benchmark, below
+    access/                     Tailscale from its own repository; OpenSSH gone
+    firewall/                   the table hostfw, and its unit
+    updates/                    security updates every day, Tailscale's too; no reboot
+    k3s/                        k3s at the pin, with infra/k3s's settings
+    flux/                       Flux, from the release prod names
+    bootstrap_secret/           the cluster's credential for Infisical
+```
+
+Ansible's own modules only (`ansible.builtin`), no collection. Every role
+runs again and changes nothing; what takes effect only after something
+else (GRUB, the kernel's settings, a mount's options) is read and compared,
+not remembered, so a run that stopped half-way is finished by the next.
+
+**The firewall** is the table `inet hostfw`, in `/etc/hostfw/hostfw.nft`,
+loaded by `hostfw.service` before the network comes up: no packet arrives
+unfiltered, even at boot. Its `input` drops everything but loopback,
+established connections, the tailnet's interface, the cluster's own pod
+and service networks, DHCP's answers, and the ICMP that keeps a network
+working. Its `forward` drops any new connection arriving from the public
+interface, so no NodePort or host port is reachable whatever a Service
+says. It is written in one transaction that never touches another table:
+k3s's and Tailscale's rules are theirs. Ubuntu's `nftables.service` stays
+off, as it flushes every table when it starts and stops.
+
+**k3s** is installed from `infra/k3s/release.yaml`'s installer and version
+when missing, and upgraded when older, never downgraded. A changed
+setting restarts it; running containers survive that.
+
+**Flux** is applied from the release production follows, signed by the
+release workflow, never from the working tree: `kubectl diff
+--server-side`, and when it differs, `apply --server-side` as the field
+manager `kubectl`. Flux takes over those fields when it applies the same
+objects, so the playbook and Flux never fight. Running `apply` again
+repairs a Flux that broke itself.
+
+**The bootstrap secret** is `external-secrets/infisical-universal-auth`,
+with the keys `clientId` and `clientSecret`, piped to `kubectl`: never on
+the machine's disk, never in a log. Its namespace is never pruned by Flux.
+
+### The game waits for its database password
+
+Production's `apps` layer is applied as released, and waits: the database's
+password, `keel-db-app`, is made in the cluster from Infisical by External
+Secrets, which is not there yet. So CloudNativePG makes the job that would
+create the database, whose pod cannot start without the password, and no
+instance; `keel`'s pod waits in `CreateContainerConfigError`; Flux reports
+the layer's health check failing, and tries again every minute. This is
+expected. Once the Secret exists, both go on by themselves, and the
+database is made with the password kept in Infisical and no other.
+
+### Looking at the machine
+
+From one of the owner's devices on the tailnet, from any network:
+
+```sh
+tailscale ssh root@keel-prod-1
+```
+
+Tailscale asks for a fresh sign-in at most every 12 hours. Where UDP is
+blocked, Tailscale relays over HTTPS on 443, slower but enough for a
+shell; `tailscale ping keel-prod-1` says whether the path is direct.
+
+The Kubernetes API listens on the machine alone. To reach it, forward it
+over the same session:
+
+```sh
+tailscale ssh -L 16443:127.0.0.1:6443 root@keel-prod-1
+# on the machine: k3s kubectl …, or copy /etc/rancher/k3s/k3s.yaml to the
+# computer with its server set to https://127.0.0.1:16443
+```
+
+Change nothing by hand: `machine check` reports it as drift, and `apply`
+undoes it. A change is a commit, and a run.
+
+### Hardening
+
+The machine is hardened to the **CIS Ubuntu Linux 26.04 LTS Benchmark,
+Level 1 Server**, and k3s to the **k3s CIS Hardening Guide**. Each control
+is taken, by a role, and checked by `verify.yaml` or Lynis; or not taken,
+with its reason, below. A few settings beyond CIS that cost nothing are
+taken too.
+
+| Area | Taken |
+|------|-------|
+| Kernel modules | Not loadable: `cramfs`, `freevxfs`, `hfs`, `hfsplus`, `jffs2`, `usb-storage`, `dccp`, `rds`, `sctp`, `tipc` |
+| Mounts | `/tmp` in memory, and `/dev/shm`, with `nodev,nosuid,noexec` |
+| Boot | `audit=1 audit_backlog_limit=8192 apparmor=1` on the kernel's command line; no memory kept back for crash dumps (`crashkernel=` removed, 512 MB given back); AppArmor on |
+| Kernel | ASLR (`randomize_va_space=2`), `ptrace_scope=1`, no core dumps (`suid_dumpable=0`, a hard limit of 0, systemd-coredump storing none). Beyond CIS: `kptr_restrict=2`, `dmesg_restrict=1`, eBPF for root alone and its JIT hardened, `protected_fifos=2`, `protected_regular=2` |
+| Network | No redirects sent or taken, no source routing, strict reverse-path filtering, martians logged, SYN cookies, broadcasts and bogus ICMP ignored; IPv6 router advertisements ignored (the machine has no IPv6). Beyond CIS: no multicast DNS or LLMNR |
+| Services | About twenty of the image's packages purged (VMware's tools, apport, kdump, snapd, iSCSI, multipath, LVM, mdadm, udisks, thermald, fwupd, rsyslog, ufw, cloud-init …); what Ubuntu's metapackages need is kept with its units masked. No mail server. chrony the only time service, every source authenticated with NTS. cron and at for root alone |
+| Access | No SSH server (Tailscale SSH serves SSH); root the only account with a shell, every other locked; `su` for nobody; `sudo` in its own terminal; passwords of 14 characters and 4 classes, yescrypt; 5 failed logins lock an account for 15 minutes, root excepted; `umask 027`; a 15-minute idle shell timeout; banners that name no system |
+| Logging | journald on disk, compressed, capped at 1 GB, the only log. auditd with the benchmark's rules (time, identity, network, sudo, logins and sessions, permissions, refused access, mounts, deletions, AppArmor, modules, every set-user-ID program on the disk), locked until the next boot; 10 logs of 50 MB |
+| Integrity | AIDE's record of the system, made once the playbook is done, checked every day (`dailyaidecheck.timer`), leaving out what changes by design (k3s's and the kubelet's folders, logs, caches, `/run`, `/tmp`) |
+| Files | The account files at the benchmark's modes; world-writable and unowned files reported; root alone with UID 0; no empty password; root's `PATH` absolute |
+| k3s | The API server: `NodeRestriction` and `EventRateLimit`, Pod Security's `restricted` enforced for every namespace but `kube-system`, an audit log of every request (metadata, 30 days, 10 files of 100 MB), service account tokens not extended. The controller manager: finished pods removed past 100. The kubelet: idle streams closed after 5 minutes, the guide's six TLS cipher suites, 4096 processes a pod. Its logs folder `0700`, its certificates `0600` on every run. The three default service accounts without a token. Already there: `protect-kernel-defaults`, Secrets encrypted with secretbox |
+
+| Not taken | Why |
+|-----------|-----|
+| IP forwarding off | k3s routes every pod's traffic through the host |
+| `forward` and `output` policies of drop | Pods' traffic crosses `forward`; Flux, images and updates go out through `output`. The firewall drops new connections arriving from outside on `forward`, which is what the policy is for here |
+| Separate partitions for `/var`, `/var/tmp`, `/var/log`, `/var/log/audit`, `/home` | Level 2; the image has one root partition, and repartitioning means installing from Ubuntu's ISO, for little gain on a machine with one purpose |
+| A bootloader password | The console is behind the provider's panel, and it is the way back if Tailscale fails; a password would only stand between the owner and it |
+| Root's password ageing | Root's password is used only at the console, when everything else failed; an expired one would lock the owner out exactly then |
+| auditd stopping the machine on a full log | Availability comes first: the log rotates, and a full one is an alert, not a stop |
+| `overlay`, `squashfs`, `udf` off | containerd needs `overlay`; the other two are Level 2 |
+| SSH server settings | There is no SSH server; who may log in is the tailnet policy's |
+| A remote log server | Nothing to send logs to yet; the journal stays on the machine |
+| k3s: `AlwaysPullImages` | Every image is pinned by digest, and a restart while the registry is down would stop every pod |
+| k3s: NetworkPolicies for `kube-system`, `default`, `kube-public` | They come with the game's own NetworkPolicies |
+| k3s: `request-timeout` | The default, 60 s; nothing holds a request open longer |
+
+The audit rules on system calls list only the calls the machine's kernel
+has (`ausyscall --dump`), so they load on any architecture.
+
+**Measuring it**: `machine` with `audit` runs Lynis (Ubuntu's own package,
+unpacked on the runner and copied over, nothing installed) before and after
+a change. Lynis's index is not CIS's score: the gate is "no warning not
+accepted with its reason", not a number. `pr.machine` runs Lynis on its
+runner, and kube-bench too, as a report: its newest k3s profile is for
+Kubernetes 1.29, so its findings are read against the k3s guide, not
+obeyed.
+
+### Testing the playbook: `pr.machine` and `machine-test`
+
+Two tiers, as most Ansible projects test. **`pr.machine`**, the required
+check, runs on every pull request that touches the playbook, k3s's
+settings or their tools, in a couple of minutes: the tools' tests, the
+policy's rules, shellcheck, the playbooks' syntax and ansible-lint.
+
+**`machine-test`** runs the playbook itself, on a pull request labelled
+`machine` (and on each push while the label stays), or by hand: on a fresh
+`ubuntu-26.04` runner, the machine's own system, as root, twice, and **the
+second run must change nothing**. Then `verify.yaml` checks the runner as
+the machine would be checked: the firewall, the hardening, k3s, and Flux
+following the **real** `prod`, its signature verified; then Lynis and
+kube-bench. Label a pull request `machine` before merging any change to a
+role. What a runner cannot do is left out: the join (no tailnet),
+OpenSSH's removal, and the accounts check (the runner has its own user);
+the cluster's credential is made up. The runner's image holds tens of
+gigabytes of toolchains the machine does not have: they are left out of
+the searches of the disk, and the runner gets no AIDE record, which would
+take more than ten minutes to make there. The tool is built before the
+first run: after it, the runner's `/tmp` holds nothing to run.
+
+### Changing it
+
+- **Tailscale's client for the runners**: `go run ./tools/machine -pin
+  <version>` reads the new digests from Tailscale's site and rewrites
+  `tools/internal/pinned`. Any client from 1.94 on joins with a federated
+  identity. The machine's own client updates itself every day.
+- **The cluster's credential**: [infra/MANUAL-STEPS.md](../infra/MANUAL-STEPS.md),
+  "Rotating the cluster's credential".
+- **A Lynis warning** the machine should keep: a line in
+  `infra/ansible/lynis-accepted.txt`, the warning's ID and why. One that
+  comes of the runner's image alone goes in `lynis-accepted-runner.txt`,
+  which only `machine-test` reads.
 
 ## Restarts and deploys
 

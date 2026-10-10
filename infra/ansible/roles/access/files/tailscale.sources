@@ -1,0 +1,6 @@
+# Tailscale's packages, signed by its key alone.
+Types: deb
+URIs: https://pkgs.tailscale.com/stable/ubuntu
+Suites: resolute
+Components: main
+Signed-By: /usr/share/keyrings/tailscale-archive-keyring.gpg

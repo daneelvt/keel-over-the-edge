@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# ansible-lint's settings: the strictest profile, and no download.
+profile: production
+offline: true

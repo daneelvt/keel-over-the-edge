@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Production's identifiers, read by the machine and tailnet workflows'
+# tools. None is a secret: a client ID or an identity ID only names who a
+# workflow may sign in as, and Tailscale and Infisical let a workflow sign
+# in only with a token GitHub issued to this repository's job in the
+# production environment, running the one workflow each is bound to.
+#
+# The machine's public address is not here, nor anywhere in the
+# repository: nothing needs it once the machine is on the tailnet.
+#
+# Filled in by hand when the accounts are made (infra/MANUAL-STEPS.md); an
+# empty value stops the tools that need it, saying which.
+
+# The machine, by its name on the tailnet, and the tailnet's MagicDNS
+# suffix (Tailscale's admin page, DNS).
+machine: keel-prod-1
+tailnet: ""
+
+tailscale:
+  # The federated identity the machine workflow joins the tailnet with
+  # (scope auth_keys, tag tag:ci-prod).
+  join:
+    clientID: ""
+    audience: ""
+  # The federated identity the tailnet workflow writes the policy with
+  # (scope policy_file).
+  policy:
+    clientID: ""
+    audience: ""
+
+infisical:
+  # The region's host, as chosen when the account was made.
+  host: ""
+  # gha-prod: the machine workflow's identity, signing in with GitHub's
+  # OIDC token, and the audience it expects of that token.
+  identityID: ""
+  audience: https://github.com/daneelvt
+  # keel-ops: the workflows' credentials, in its prod environment.
+  project: ""
+  environment: prod

@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# AIDE keeps a record of the system's files and checks it every day, its
+# findings in the journal. Its record is made at the end of the playbook
+# (integrity.yaml), once the machine is as the playbook leaves it.
+- name: Install AIDE
+  ansible.builtin.apt:
+    name: [aide, aide-common]
+    state: present
+    install_recommends: false
+
+- name: Leave out what changes by design
+  ansible.builtin.template:
+    src: aide.conf.j2
+    dest: /etc/aide/aide.conf.d/99_keel
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check every day
+  ansible.builtin.systemd_service:
+    name: dailyaidecheck.timer
+    enabled: true
+    state: started

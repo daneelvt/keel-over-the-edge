@@ -1,0 +1,53 @@
+## Written by the hardening role: the CIS benchmark's groups of audit rules.
+## auid>=1000 and auid!=unset: what someone who logged in did, not what
+## services and containers do. Each system call rule names only the calls
+## this machine's kernel has (ausyscall --dump): 64-bit, and on x86_64 the
+## 32-bit calls too.
+
+## Changes to sudo's settings.
+-w /etc/sudoers -p wa -k scope
+-w /etc/sudoers.d -p wa -k scope
+
+## The time.
+-w /etc/localtime -p wa -k time-change
+
+## The network's settings and the machine's names.
+-w /etc/issue -p wa -k system-locale
+-w /etc/issue.net -p wa -k system-locale
+-w /etc/hosts -p wa -k system-locale
+-w /etc/hostname -p wa -k system-locale
+-w /etc/netplan -p wa -k system-locale
+-w /etc/systemd/network -p wa -k system-locale
+
+## Users, groups and logins.
+-w /etc/group -p wa -k identity
+-w /etc/passwd -p wa -k identity
+-w /etc/gshadow -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/security/opasswd -p wa -k identity
+-w /etc/nsswitch.conf -p wa -k identity
+-w /etc/pam.conf -p wa -k identity
+-w /etc/pam.d -p wa -k identity
+-w /var/run/utmp -p wa -k session
+-w /var/log/wtmp -p wa -k session
+-w /var/log/btmp -p wa -k session
+-w /var/log/lastlog -p wa -k logins
+-w /var/run/faillock -p wa -k logins
+
+## AppArmor's profiles.
+-w /etc/apparmor -p wa -k MAC-policy
+-w /etc/apparmor.d -p wa -k MAC-policy
+
+## Accounts changed, and kernel modules loaded or removed, by program.
+-a always,exit -F path=/usr/sbin/usermod -F perm=x -F auid>=1000 -F auid!=unset -k usermod
+-a always,exit -F path=/usr/bin/kmod -F perm=x -F auid>=1000 -F auid!=unset -k kernel_modules
+
+## System calls.
+{% for rule in hardening_audit_syscalls %}
+{%   for arch, known in [('b64', hardening_syscalls_b64), ('b32', hardening_syscalls_b32)] %}
+{%     set calls = rule.calls | select('in', known) | list %}
+{%     if calls and (arch == 'b64' or not rule.b64_only | default(false)) %}
+{{ ['-a always,exit -F arch=' ~ arch, rule.match, '-S ' ~ (calls | join(',')), '-k ' ~ rule.key] | select | join(' ') }}
+{%     endif %}
+{%   endfor %}
+{% endfor %}

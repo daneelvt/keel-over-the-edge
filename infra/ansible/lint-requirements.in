@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What checks the playbook; lint-requirements.txt pins it, with every
+# file's hash:
+#   pip-compile --generate-hashes --allow-unsafe lint-requirements.in
+ansible-lint==26.9.0
+ansible-core==2.21.5

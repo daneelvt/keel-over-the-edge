@@ -45,6 +45,34 @@ credential.
       Dependency Dashboard
 - [ ] The security log and authorised apps reviewed monthly
 
+## Tailscale: the admin page
+
+The tailnet policy is written from `infra/tailnet/policy.hujson` by the
+`tailnet` workflow; the rest of the tailnet is checked here.
+
+- [ ] **Access controls**: the policy is the repository's (run `tailnet` by
+      hand: its summary says "unchanged")
+- [ ] **Trust credentials**: `ci-prod-join` (Auth Keys, tag `tag:ci-prod`,
+      claim `machine.yaml` on `main`) and `ci-prod-policy` (Policy File,
+      claim `tailnet.yaml` on `main`), both for the subject of this
+      repository's `production` environment, and **no other credential,
+      OAuth client or API key**
+- [ ] **Keys**: no auth key left
+- [ ] **Machines**: `keel-prod-1`, tagged `tag:keel-prod`, key expiry
+      disabled; the owner's two devices; no `ci-…` node left over from a run
+- [ ] **Users**: the owner alone, as admin
+
+## Infisical: the organisation
+
+- [ ] **Identities**: the owner, `gha-prod` (OIDC Auth alone, for this
+      repository's `production` subject and `machine.yaml` on `main`,
+      tokens of 10 minutes, Viewer on `keel-ops` alone) and `eso-prod`
+      (Universal Auth, Viewer on `keel-cluster` alone): 3 of the free plan's
+      5, and no other
+- [ ] **Projects**: `keel-ops` and `keel-cluster`, each with `prod` alone
+- [ ] `eso-prod`'s client secrets: the one in use alone (an old one is
+      revoked once `machine apply` has placed the new)
+
 ## Not available to this repository
 
 A public repository on a personal account cannot have these at any price:

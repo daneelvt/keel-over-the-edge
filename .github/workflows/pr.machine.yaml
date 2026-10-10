@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Runs only when what configures production's machine changed: the
+# playbook, k3s's settings, the tailnet policy, the join script, and the
+# tools that run them. The fast checks, in a couple of minutes: the tools'
+# tests, the policy's rules, shellcheck, the playbooks' syntax and
+# ansible-lint. The playbook itself runs in machine-test.yaml, on a pull
+# request labelled machine, or by hand.
+name: pr.machine
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: changes
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-slim
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      machine: ${{ steps.filter.outputs.machine }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            machine:
+              - '.github/workflows/pr.machine.yaml'
+              - '.github/actions/setup/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'infra/ansible/**'
+              - 'infra/k3s/**'
+              - 'infra/tailnet/**'
+              - 'infra/bootstrap/**'
+              - 'infra/production.yaml'
+              - 'tools/machine/**'
+              - 'tools/tailnet/**'
+              - 'tools/internal/**'
+
+  lint:
+    name: lint
+    needs: [changes]
+    if: needs.changes.outputs.machine == 'true'
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+      - name: The policy keeps its rules; the tools against fakes; join.sh in bash
+        run: |
+          go run ./tools/tailnet -check
+          go test -count=1 ./tools/machine ./tools/tailnet ./tools/internal/production ./tools/internal/actions ./tools/internal/pinned
+      - name: shellcheck
+        run: shellcheck infra/bootstrap/join.sh
+      - name: Ansible and ansible-lint, from hashed requirements
+        run: go run ./tools/machine -ansible -lint
+      - name: The playbooks parse; ansible-lint, production profile
+        working-directory: infra/ansible
+        run: |
+          ../../.dev/ansible/bin/ansible-playbook --syntax-check site.yaml verify.yaml audit.yaml
+          ../../.dev/ansible/bin/ansible-lint site.yaml verify.yaml audit.yaml roles tasks
+
+  pr-machine:
+    name: pr-machine
+    if: always()
+    needs: [changes, lint]
+    runs-on: ubuntu-slim
+    permissions: {}
+    steps:
+      - name: Every job passed, or was skipped as nothing it checks changed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
+          done

@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What runs the playbook; requirements.txt pins it, with every file's hash:
+#   pip-compile --generate-hashes --allow-unsafe requirements.in
+ansible-core==2.21.5

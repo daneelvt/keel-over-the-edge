@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// The tailnet's access policy: who may reach production's machine, and how.
+// The tailnet workflow writes this file to Tailscale after the owner
+// approves the run (go run ./tools/tailnet -apply); a change made in
+// Tailscale's admin page is replaced by it, and the run shows what was
+// replaced. go run ./tools/tailnet -check keeps the rules below.
+//
+// Nothing is allowed that is not written here: Tailscale denies by default,
+// and there is no rule for "*".
+{
+	// Tags are given to machines, never to people: the production machine,
+	// and the short-lived node a workflow joins as. Only the tailnet's
+	// admins (the owner) may apply them. No person's login is written here.
+	"tagOwners": {
+		"tag:keel-prod": ["autogroup:admin"],
+		"tag:ci-prod":   ["autogroup:admin"],
+	},
+
+	// What may connect to what, at the network layer. SSH is the only way
+	// in: the Kubernetes API and everything else stay on the machine's
+	// loopback, reached over an SSH session when needed.
+	"grants": [
+		{"src": ["tag:ci-prod"], "dst": ["tag:keel-prod"], "ip": ["tcp:22"]},
+		{"src": ["autogroup:admin"], "dst": ["tag:keel-prod"], "ip": ["tcp:22"]},
+	],
+
+	// Tailscale SSH. The machine workflow logs in as root to run Ansible,
+	// once the owner has approved the run. The owner logs in as root too,
+	// from their own devices, after signing in to Tailscale again within
+	// the last 12 hours ("check").
+	"ssh": [
+		{
+			"action": "accept",
+			"src":    ["tag:ci-prod"],
+			"dst":    ["tag:keel-prod"],
+			"users":  ["root"],
+		},
+		{
+			"action":      "check",
+			"src":         ["autogroup:admin"],
+			"dst":         ["tag:keel-prod"],
+			"users":       ["root"],
+			"checkPeriod": "12h",
+		},
+	],
+
+	// Tailscale runs these on every change and refuses a policy that fails
+	// them: a workflow's node reaches SSH on the machine, and nothing else
+	// there.
+	"tests": [
+		{
+			"src":    "tag:ci-prod",
+			"accept": ["tag:keel-prod:22"],
+			"deny":   ["tag:keel-prod:80", "tag:keel-prod:443", "tag:keel-prod:6443", "tag:keel-prod:10250"],
+		},
+	],
+	"sshTests": [
+		{
+			"src":    "tag:ci-prod",
+			"dst":    ["tag:keel-prod"],
+			"accept": ["root"],
+		},
+	],
+}

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The playbook run on a workflow's own runner, Ubuntu 26.04 as on the
+# machine, as root: every role but those that need the tailnet, which a
+# pull request has no access to.
+all:
+  hosts:
+    keel-prod-1:
+      ansible_connection: local
+      # The runner is not the machine: its OpenSSH, its tailnet login and
+      # its own accounts are left alone.
+      machine_runner: true

@@ -1,0 +1,131 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# auditd records changes to what governs the machine: its users, its
+# network, its time, its permissions, its modules, the programs that run
+# as root. Its rules are locked once loaded (-e 2): a change takes effect
+# at the next reboot. A full log rotates rather than stopping the machine.
+
+- name: Install auditd
+  ansible.builtin.apt:
+    name: [auditd, audispd-plugins]
+    state: present
+    install_recommends: false
+
+- name: Keep 10 audit logs of 50 MB, and keep running when the disk fills
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: '^\s*{{ item.key }}\s*='
+    line: "{{ item.key }} = {{ item.value }}"
+  loop: "{{ hardening_auditd | dict2items }}"
+  vars:
+    hardening_auditd:
+      max_log_file: 50
+      num_logs: 10
+      max_log_file_action: ROTATE
+      space_left_action: SYSLOG
+      admin_space_left_action: ROTATE
+      disk_full_action: ROTATE
+      disk_error_action: SYSLOG
+  notify: Restart auditd
+
+- name: Read the kernel's system calls
+  ansible.builtin.command:
+    cmd: ausyscall --dump
+  register: hardening_ausyscall
+  changed_when: false
+  check_mode: false
+
+- name: And its 32-bit ones, on x86_64
+  ansible.builtin.command:
+    cmd: ausyscall i386 --dump
+  register: hardening_ausyscall32
+  changed_when: false
+  check_mode: false
+  when: ansible_facts.architecture == 'x86_64'
+
+- name: Keep their names
+  ansible.builtin.set_fact:
+    hardening_syscalls_b64: "{{ hardening_ausyscall.stdout_lines[1:] | map('split') | map('last') | list }}"
+    hardening_syscalls_b32: "{{ (hardening_ausyscall32.stdout_lines | default(['']))[1:] | map('split') | map('last') | list }}"
+
+- name: Write the audit rules
+  ansible.builtin.template:
+    src: audit.rules.j2
+    dest: /etc/audit/rules.d/60-keel.rules
+    owner: root
+    group: root
+    mode: "0640"
+  register: hardening_rules
+
+# Not in the containers' files, which no one who logs in runs, nor on a
+# runner in its toolchains.
+- name: Find the programs that run as another user
+  vars:
+    hardening_skip: >-
+      {{ ['/var/lib/rancher', '/var/lib/kubelet', '/var/lib/docker', '/var/lib/containerd']
+         + (hardening_scan_skip_runner if machine_runner | default(false) else []) }}
+  ansible.builtin.command:
+    cmd: >-
+      find / -xdev ( {{ hardening_skip | map('regex_replace', '^', '-path ') | join(' -o ') }} ) -prune
+      -o -type f -perm /6000 -print
+  register: hardening_privileged
+  changed_when: false
+  check_mode: false
+  # A file removed while find reads its folder (a package being built, a
+  # temporary file) is no failure; any other error is.
+  failed_when: hardening_privileged.stderr_lines | reject('search', 'No such file or directory$') | list | length > 0
+
+- name: Write a rule for each
+  ansible.builtin.template:
+    src: privileged.rules.j2
+    dest: /etc/audit/rules.d/61-keel-privileged.rules
+    owner: root
+    group: root
+    mode: "0640"
+  register: hardening_privileged_rules
+
+- name: Lock the rules once loaded
+  ansible.builtin.copy:
+    dest: /etc/audit/rules.d/99-finalize.rules
+    content: |
+      # Written by the hardening role: no rule changes until the next boot.
+      -e 2
+    owner: root
+    group: root
+    mode: "0640"
+  register: hardening_lock
+
+- name: Keep auditd running
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+
+- name: Check the rules
+  ansible.builtin.command:
+    cmd: augenrules --check
+  register: hardening_augenrules
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Read whether the rules are locked
+  ansible.builtin.command:
+    cmd: auditctl -s
+  register: hardening_auditctl
+  changed_when: false
+  check_mode: false
+
+- name: Load the rules, unless they are locked
+  ansible.builtin.command:
+    cmd: augenrules --load
+  when:
+    - hardening_augenrules.stdout is search('Rules have changed')
+    - hardening_auditctl.stdout is not search('^enabled 2', multiline=True)
+  changed_when: true
+
+- name: Rules locked in place change at the next reboot
+  ansible.builtin.set_fact:
+    hardening_reboot_reasons: "{{ hardening_reboot_reasons + ['the audit rules changed while locked'] }}"
+  when:
+    - hardening_augenrules.stdout is search('Rules have changed')
+    - hardening_auditctl.stdout is search('^enabled 2', multiline=True)

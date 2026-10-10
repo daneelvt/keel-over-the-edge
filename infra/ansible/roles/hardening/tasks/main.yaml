@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# CIS Ubuntu Linux 26.04 LTS, Level 1 Server, and the few settings beyond
+# it that cost nothing. What needs a reboot to take effect (the kernel's
+# command line, modules in use, the locked audit rules) is listed in
+# hardening_reboot_reasons, and the playbook reboots only when asked.
+
+- name: Nothing is waiting for a reboot yet
+  ansible.builtin.set_fact:
+    hardening_reboot_reasons: []
+
+- name: Kernel modules
+  ansible.builtin.import_tasks: modules.yaml
+
+- name: Mounts
+  ansible.builtin.import_tasks: mounts.yaml
+
+- name: Boot
+  ansible.builtin.import_tasks: boot.yaml
+
+- name: Kernel settings and AppArmor
+  ansible.builtin.import_tasks: kernel.yaml
+
+- name: Services
+  ansible.builtin.import_tasks: services.yaml
+
+- name: Accounts and logins
+  ansible.builtin.import_tasks: accounts.yaml
+
+# AIDE before the audit rules: what it installs is among the programs
+# they list.
+- name: AIDE
+  ansible.builtin.import_tasks: aide.yaml
+
+- name: Auditing
+  ansible.builtin.import_tasks: audit.yaml
+
+- name: Files
+  ansible.builtin.import_tasks: files.yaml
+
+- name: Apply the kernel settings now
+  ansible.builtin.meta: flush_handlers

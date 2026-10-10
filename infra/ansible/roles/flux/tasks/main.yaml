@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Flux, bootstrapped from the bytes it will follow: the release production
+# follows, signed by the release workflow. Applied as the field manager
+# kubectl, whose fields Flux takes over once it applies the same objects
+# itself, so this never fights Flux. Nothing is applied when nothing
+# differs; running it again repairs a Flux that broke itself.
+
+- name: Check the release's manifests were given
+  ansible.builtin.assert:
+    that: machine_flux_manifests is defined and machine_flux_manifests is file
+    fail_msg: "no machine_flux_manifests: run the playbook with go run ./tools/machine -run, which verifies the release"
+    quiet: true
+
+- name: Make the folder for them
+  ansible.builtin.file:
+    path: "{{ flux_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Copy them to the machine
+  ansible.builtin.copy:
+    src: "{{ machine_flux_manifests }}"
+    dest: "{{ flux_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Read whether k3s is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: flux_k3s
+
+# kubectl diff exits 1 when the cluster differs from the file, and more
+# when it cannot compare: before Flux's namespace and resources exist,
+# which applying makes.
+- name: Compare the cluster with them
+  ansible.builtin.command:
+    cmd: "{{ flux_kubectl }} diff --server-side --field-manager=kubectl --force-conflicts -f {{ flux_file }}"
+  register: flux_diff
+  changed_when: flux_diff.rc != 0
+  failed_when: false
+  check_mode: false
+  when: flux_k3s.stat.exists
+
+- name: Apply them, while Flux's resources may not yet be known
+  ansible.builtin.command:
+    cmd: "{{ flux_kubectl }} apply --server-side --field-manager=kubectl --force-conflicts -f {{ flux_file }}"
+  register: flux_first
+  failed_when: false
+  changed_when: true
+  when: flux_diff.rc | default(0) != 0
+
+- name: Wait for Flux's resources to be known
+  ansible.builtin.command:
+    cmd: "{{ flux_kubectl }} wait --for=condition=Established crd --selector=app.kubernetes.io/part-of=flux --timeout=2m"
+  changed_when: false
+  when: flux_first is not skipped
+
+- name: Apply them again, now that they are
+  ansible.builtin.command:
+    cmd: "{{ flux_kubectl }} apply --server-side --field-manager=kubectl --force-conflicts -f {{ flux_file }}"
+  changed_when: true
+  when: flux_first is not skipped
+
+- name: Wait for the release's signature to be verified
+  ansible.builtin.command:
+    cmd: "{{ flux_kubectl }} --namespace=flux-system wait ocirepository/keel --for=condition=SourceVerified --timeout=10m"
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or flux_k3s.stat.exists
+
+- name: Wait for Flux's own layer
+  ansible.builtin.command:
+    cmd: "{{ flux_kubectl }} --namespace=flux-system wait kustomization/flux-system --for=condition=Ready --timeout=10m"
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or flux_k3s.stat.exists

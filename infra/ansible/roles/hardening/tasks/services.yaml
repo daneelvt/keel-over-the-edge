@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+- name: Keep chrony the only time service
+  ansible.builtin.systemd_service:
+    name: chrony
+    enabled: true
+    state: started
+
+- name: List the services
+  ansible.builtin.service_facts:
+
+- name: Mask systemd's own time service, should it be installed
+  ansible.builtin.systemd_service:
+    name: systemd-timesyncd
+    masked: true
+    state: stopped
+  when: "'systemd-timesyncd.service' in ansible_facts.services"
+
+- name: Read chrony's sources' authentication
+  ansible.builtin.command:
+    cmd: chronyc -N -n authdata
+  register: hardening_chrony
+  changed_when: false
+  check_mode: false
+
+# Ubuntu's sources since 25.10 authenticate with Network Time Security.
+# chronyc prints a header and a rule, then a line per source.
+- name: Check every time source is authenticated by NTS
+  ansible.builtin.assert:
+    that: hardening_chrony.stdout_lines[2:] | length > 0 and (hardening_chrony.stdout_lines[2:] | reject('search', '\sNTS\s') | list | length == 0)
+    fail_msg: "chrony has sources without NTS:\n{{ hardening_chrony.stdout }}"
+    quiet: true
+  when: not (machine_runner | default(false))
+
+- name: Let only root use cron
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    content: "root\n"
+    owner: root
+    group: root
+    mode: "0640"
+  loop: [/etc/cron.allow, /etc/at.allow]
+
+- name: With no deny lists beside it
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: [/etc/cron.deny, /etc/at.deny]
+
+- name: Keep cron's table root's alone
+  ansible.builtin.file:
+    path: /etc/crontab
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Keep cron's folders root's alone
+  ansible.builtin.file:
+    path: "/etc/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop: [cron.d, cron.hourly, cron.daily, cron.weekly, cron.monthly]
+
+- name: Read what listens for mail
+  ansible.builtin.command:
+    cmd: ss --listening --tcp --numeric --no-header sport = :25 or sport = :465 or sport = :587
+  register: hardening_mail
+  changed_when: false
+  check_mode: false
+
+- name: Check no mail server listens beyond the machine itself
+  ansible.builtin.assert:
+    that: hardening_mail.stdout_lines | reject('search', '\s(127\.0\.0\.1|\[::1\]):') | list | length == 0
+    fail_msg: "{{ hardening_mail.stdout }}"
+    quiet: true

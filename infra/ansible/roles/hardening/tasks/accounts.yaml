@@ -1,0 +1,199 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Root is the only account anyone logs in as, and only over Tailscale SSH
+# or the provider's console.
+
+- name: Read the accounts
+  ansible.builtin.getent:
+    database: passwd
+
+- name: Read the accounts' passwords' state
+  ansible.builtin.getent:
+    database: shadow
+
+# getent's facts: name -> [password, uid, gid, gecos, home, shell].
+- name: Give every system account other than root no shell
+  ansible.builtin.user:
+    name: "{{ item.key }}"
+    shell: /usr/sbin/nologin
+  loop: "{{ ansible_facts.getent_passwd | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - item.value[1] | int < 1000
+    - item.key not in hardening_shell_accounts
+    - item.value[5] not in ['/usr/sbin/nologin', '/sbin/nologin', '/bin/false', '/usr/bin/false']
+
+- name: And lock its password
+  ansible.builtin.command:
+    cmd: usermod --lock {{ item.key }}
+  loop: "{{ ansible_facts.getent_passwd | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - item.key != 'root'
+    - (item.value[1] | int < 1000) or (item.value[1] | int == 65534)
+    - not (ansible_facts.getent_shadow[item.key][0] | default('!')).startswith('!')
+  changed_when: true
+
+- name: Check root is the only account with UID 0, and no account has an empty password
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.getent_passwd | dict2items | selectattr('value.1', 'eq', '0') | map(attribute='key') | list == ['root']
+      - ansible_facts.getent_shadow | dict2items | selectattr('value.0', 'eq', '') | list | length == 0
+    quiet: true
+
+- name: Check no one else can log in
+  ansible.builtin.assert:
+    that: >-
+      ansible_facts.getent_passwd | dict2items
+      | rejectattr('key', 'in', hardening_shell_accounts)
+      | rejectattr('value.5', 'in', ['/usr/sbin/nologin', '/sbin/nologin', '/bin/false', '/usr/bin/false'])
+      | list | length == 0
+    fail_msg: "accounts other than root have a shell"
+    quiet: true
+  when: not (machine_runner | default(false))
+
+- name: Make an empty group for su
+  ansible.builtin.group:
+    name: sugroup
+    system: true
+
+- name: Let only members of that group use su, which is no one
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/su
+    regexp: '^#?\s*auth\s+required\s+pam_wheel\.so'
+    line: "auth       required   pam_wheel.so use_uid group=sugroup"
+    insertafter: '^auth\s+sufficient\s+pam_rootok\.so'
+
+- name: Find sudo
+  ansible.builtin.stat:
+    path: /etc/sudoers.d
+  register: hardening_sudoers
+
+- name: Run what sudo runs in a terminal of its own
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/60-keel
+    content: |
+      # Written by the hardening role.
+      Defaults use_pty
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+  when: hardening_sudoers.stat.exists
+
+- name: Install password quality checks
+  ansible.builtin.apt:
+    name: libpam-pwquality
+    state: present
+    install_recommends: false
+
+- name: Make pwquality's folder of settings
+  ansible.builtin.file:
+    path: /etc/security/pwquality.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ask for long passwords of every class
+  ansible.builtin.copy:
+    dest: /etc/security/pwquality.conf.d/60-keel.conf
+    content: |
+      # Written by the hardening role.
+      minlen = 14
+      minclass = 4
+      enforce_for_root
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Lock an account for 15 minutes after 5 failed logins, root excepted
+  ansible.builtin.lineinfile:
+    path: /etc/security/faillock.conf
+    regexp: '^#?\s*{{ item.key }}\s*='
+    line: "{{ item.key }} = {{ item.value }}"
+  loop: "{{ {'deny': 5, 'unlock_time': 900, 'fail_interval': 900} | dict2items }}"
+
+- name: Never lock root out of the console
+  ansible.builtin.lineinfile:
+    path: /etc/security/faillock.conf
+    regexp: '^\s*even_deny_root'
+    state: absent
+
+- name: Describe faillock to PAM
+  ansible.builtin.copy:
+    dest: "/usr/share/pam-configs/{{ item }}"
+    src: "pam-{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [faillock, faillock_notify]
+
+- name: Read PAM's authentication
+  ansible.builtin.slurp:
+    src: /etc/pam.d/common-auth
+  register: hardening_common_auth
+
+- name: Turn faillock on
+  ansible.builtin.command:
+    cmd: pam-auth-update --enable faillock faillock_notify
+  when: (hardening_common_auth.content | b64decode) is not search('pam_faillock\.so')
+  changed_when: true
+
+- name: Read PAM's passwords
+  ansible.builtin.slurp:
+    src: /etc/pam.d/common-password
+  register: hardening_common_password
+
+- name: Check passwords are checked for quality and hashed with yescrypt
+  ansible.builtin.assert:
+    that:
+      - (hardening_common_password.content | b64decode) is search('pam_pwquality\.so')
+      - (hardening_common_password.content | b64decode) is search('pam_unix\.so.*\syescrypt')
+    quiet: true
+
+- name: Set the defaults for logins
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^#?\s*{{ item.key }}\s'
+    line: "{{ item.key }}\t{{ item.value }}"
+  loop: "{{ {'ENCRYPT_METHOD': 'YESCRYPT', 'UMASK': '027', 'PASS_MAX_DAYS': 365, 'PASS_MIN_DAYS': 1, 'PASS_WARN_AGE': 7} | dict2items }}"
+
+- name: Give login shells a private umask, and end them after 15 idle minutes
+  ansible.builtin.copy:
+    dest: /etc/profile.d/60-keel.sh
+    content: |
+      # Written by the hardening role.
+      umask 027
+      TMOUT=900
+      readonly TMOUT
+      export TMOUT
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Say nothing of the system before login
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    content: "Private system: authorised use only. Access is monitored and logged, and unauthorised access is prohibited.\n"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [/etc/issue, /etc/issue.net, /etc/motd]
+
+- name: Find the scripts that write the login message
+  ansible.builtin.find:
+    paths: /etc/update-motd.d
+    file_type: file
+    mode: "0111"
+    exact_mode: false
+  register: hardening_motd
+
+- name: Turn them off, as they print the system's version
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "0644"
+  loop: "{{ hardening_motd.files }}"
+  loop_control:
+    label: "{{ item.path }}"

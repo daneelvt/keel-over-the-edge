@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package pinned fetches the programs the repository pins by release:
-// TinyGo, the compiler that builds the physics package to WebAssembly, and
-// cosign and the Flux CLI, which sign and publish a release. Each is
-// downloaded into the repository's .dev folder, the way Go fetches the
-// toolchain go.mod names, and checked against the SHA-256 pinned below
-// before anything is unpacked or run.
+// TinyGo, the compiler that builds the physics package to WebAssembly;
+// cosign and the Flux CLI, which sign and publish a release; Tailscale's
+// client, with which a workflow joins the tailnet; and kube-bench, which
+// audits a k3s node. Each is downloaded into the repository's .dev folder,
+// the way Go fetches the toolchain go.mod names, and checked against the
+// SHA-256 pinned below before anything is unpacked or run.
 package pinned
 
 import (
@@ -21,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -48,7 +50,22 @@ var releases = []release{
 	{"fluxcd/flux2", "darwin-arm64", "v2.9.6", "7008a758da4b8d57c5845aad6552f256d4d23630c2b2de2ca8da362f9a48c126"},
 	{"fluxcd/flux2", "linux-amd64", "v2.9.6", "b4d22673e9246cbd628881f1a9ef3b090085dced291e42d804555cee8e8d42c5"},
 	{"fluxcd/flux2", "linux-arm64", "v2.9.6", "6663c154755b732f43dc993d72321f71c2fc1ff0bcb94b2696e0a8638fa562b4"},
+
+	{"aquasecurity/kube-bench", "linux-amd64", "v0.16.0", "82dbc7e598740dc9344d41f8ad0b8210d57c4c00bdb2c5f1d8a69a2b98baddcf"},
+	{"aquasecurity/kube-bench", "linux-arm64", "v0.16.0", "64500561f5fcaa3f86fe951ed26bbfc28f7bbf3d2eac13843abfd2924955d10b"},
 }
+
+// byHand pins what is not a GitHub release, which Renovate cannot follow:
+// Tailscale's static client, from its own site. go run ./tools/machine
+// -pin <version> moves it, with the digests Tailscale publishes beside
+// each file. Any client from 1.94 on joins with a federated identity.
+var byHand = []release{
+	{tailscaleSite, "linux-amd64", "1.104.1", "108d1d96ecf410d305571e173516f27038f870919a9b89c914a167c6d33a4528"},
+	{tailscaleSite, "linux-arm64", "1.104.1", "f60294374967f3dfd8cf57bbbd474d6cfce32d123e3a8ddeab82a87940daa806"},
+}
+
+// tailscaleSite is where Tailscale publishes its stable static clients.
+const tailscaleSite = "pkgs.tailscale.com/stable"
 
 // Tool is a program pinned by release.
 type Tool struct {
@@ -57,17 +74,31 @@ type Tool struct {
 	repo string
 	// asset names the release's file for a version and platform.
 	asset func(version, goos, goarch string) string
-	// bin is the program's path in the unpacked archive; "" when the
-	// release's file is the program itself.
-	bin string
+	// bin is the program's path in the unpacked archive, for a version and
+	// GOARCH; nil when the release's file is the program itself.
+	bin func(version, goarch string) string
 	// size says how much the first use downloads.
 	size string
+	// platforms are where the tool must be pinned: the machines that build
+	// and release, and the Mac that develops, unless only workflows run it.
+	platforms []string
 }
+
+// Platforms are where the tool is pinned.
+func (t Tool) Platforms() []string {
+	if t.platforms != nil {
+		return t.platforms
+	}
+	return []string{"linux-amd64", "linux-arm64", "darwin-arm64"}
+}
+
+// fixed is a path in an archive that is the same for every version.
+func fixed(p string) func(string, string) string { return func(string, string) string { return p } }
 
 var (
 	// TinyGo builds the physics package to WebAssembly.
 	TinyGo = Tool{
-		Name: "tinygo", repo: "tinygo-org/tinygo", bin: "tinygo/bin/tinygo", size: "about 180 MB",
+		Name: "tinygo", repo: "tinygo-org/tinygo", bin: fixed("tinygo/bin/tinygo"), size: "about 180 MB",
 		asset: func(v, goos, goarch string) string { return "tinygo" + v + "." + goos + "-" + goarch + ".tar.gz" },
 	}
 	// Cosign signs and verifies images and artifacts with Sigstore.
@@ -77,20 +108,49 @@ var (
 	}
 	// Flux is Flux's command line, which pushes and tags OCI artifacts.
 	Flux = Tool{
-		Name: "flux", repo: "fluxcd/flux2", bin: "flux", size: "about 25 MB",
+		Name: "flux", repo: "fluxcd/flux2", bin: fixed("flux"), size: "about 25 MB",
 		asset: func(v, goos, goarch string) string { return "flux_" + v + "_" + goos + "_" + goarch + ".tar.gz" },
+	}
+	// Tailscale is Tailscale's client, tailscale; its daemon, tailscaled,
+	// is beside it.
+	Tailscale = Tool{
+		Name: "tailscale", repo: tailscaleSite, size: "about 30 MB", platforms: []string{"linux-amd64", "linux-arm64"},
+		bin:   func(v, goarch string) string { return "tailscale_" + v + "_" + goarch + "/tailscale" },
+		asset: func(v, _, goarch string) string { return "tailscale_" + v + "_" + goarch + ".tgz" },
+	}
+	// KubeBench checks a node against the CIS Kubernetes Benchmark; its
+	// profiles are in cfg, beside it.
+	KubeBench = Tool{
+		Name: "kube-bench", repo: "aquasecurity/kube-bench", bin: fixed("kube-bench"), size: "about 20 MB", platforms: []string{"linux-amd64", "linux-arm64"},
+		asset: func(v, goos, goarch string) string { return "kube-bench_" + v + "_" + goos + "_" + goarch + ".tar.gz" },
 	}
 )
 
-// base is where releases are downloaded from; tests replace it.
-var base = "https://github.com"
+// base is where GitHub's releases are downloaded from, and site where
+// the others are, by their repo; tests replace them.
+var (
+	base = "https://github.com"
+	site = "https://"
+)
+
+// pins are every pin, GitHub's releases and the others.
+func pins() []release { return slices.Concat(releases, byHand) }
+
+// url is where a pinned file is downloaded from.
+func (t Tool) url(r release, version string) string {
+	asset := t.asset(version, runtime.GOOS, runtime.GOARCH)
+	if r.repo == tailscaleSite {
+		return site + r.repo + "/" + asset
+	}
+	return fmt.Sprintf("%s/%s/releases/download/%s/%s", base, r.repo, r.tag, asset)
+}
 
 // maxUnpacked bounds what an archive may unpack to; TinyGo is about 1.2 GB.
 const maxUnpacked = 4 << 30
 
 // Version is the release of the tool the repository pins, without its "v".
 func (t Tool) Version() string {
-	for _, r := range releases {
+	for _, r := range pins() {
 		if r.repo == t.repo {
 			return strings.TrimPrefix(r.tag, "v")
 		}
@@ -100,7 +160,7 @@ func (t Tool) Version() string {
 
 // releaseFor is the tool's pin for a platform, GOOS-GOARCH.
 func (t Tool) releaseFor(platform string) (release, error) {
-	for _, r := range releases {
+	for _, r := range pins() {
 		if r.repo == t.repo && r.platform == platform {
 			return r, nil
 		}
@@ -117,9 +177,9 @@ func (t Tool) Ensure(ctx context.Context, dir string, log io.Writer) (string, er
 	}
 	version := strings.TrimPrefix(r.tag, "v")
 	root := filepath.Join(dir, t.Name, version)
-	file := t.bin
-	if file == "" {
-		file = t.Name
+	file := t.Name
+	if t.bin != nil {
+		file = t.bin(version, runtime.GOARCH)
 	}
 	bin := filepath.Join(root, filepath.FromSlash(file))
 	done := filepath.Join(root, ".complete")
@@ -127,7 +187,7 @@ func (t Tool) Ensure(ctx context.Context, dir string, log io.Writer) (string, er
 		return bin, nil
 	}
 
-	url := fmt.Sprintf("%s/%s/releases/download/%s/%s", base, t.repo, r.tag, t.asset(version, runtime.GOOS, runtime.GOARCH))
+	url := t.url(r, version)
 	fmt.Fprintf(log, "%s: downloading %s %s for %s (%s, once)\n", t.Name, t.Name, version, r.platform, t.size)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
@@ -152,7 +212,7 @@ func (t Tool) Ensure(ctx context.Context, dir string, log io.Writer) (string, er
 	if _, err := download.Seek(0, io.SeekStart); err != nil {
 		return "", err
 	}
-	if t.bin == "" {
+	if t.bin == nil {
 		err = writeFile(filepath.Join(tmp, t.Name), download, -1, 0o755)
 	} else {
 		err = untar(download, tmp)

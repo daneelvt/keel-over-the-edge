@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The Lynis warnings accepted on a workflow's runner only (machine-test),
+# beside lynis-accepted.txt: what comes of the runner being GitHub's image
+# rather than the machine. Lynis on a minimal Ubuntu 26.04, as the machine
+# is, gives none of them.
+FINT-4316 The runner gets no AIDE record, which would take more than ten minutes to make there; the machine's is made by its first apply
+PKGS-7392 The runner's image is not upgraded, as it is GitHub's; the machine is upgraded by every apply and by unattended-upgrades every day
+PKGS-7388 The runner's apt sources are its image's own; the machine's are Ubuntu's, with the security pocket
+SCHD-7704 The cron files Lynis finds wrong are the runner image's own; the machine has Ubuntu's alone

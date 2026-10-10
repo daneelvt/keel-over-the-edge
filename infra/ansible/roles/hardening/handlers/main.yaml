@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+- name: Restart auditd  # noqa: command-instead-of-module (auditd refuses to be restarted by systemctl; its own script does it)
+  ansible.builtin.command:
+    cmd: service auditd restart
+  changed_when: true

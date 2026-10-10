@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The one secret the cluster needs to fetch the others: External Secrets'
+# credential for Infisical (its Infisical provider's Universal Auth, keys
+# clientId and clientSecret). tools/machine reads it from Infisical and
+# passes it in the environment, never in a file.
+bootstrap_secret_namespace: external-secrets
+bootstrap_secret_name: infisical-universal-auth
+bootstrap_secret_client_id: "{{ lookup('ansible.builtin.env', 'ESO_CLIENT_ID') }}"
+bootstrap_secret_client_secret: "{{ lookup('ansible.builtin.env', 'ESO_CLIENT_SECRET') }}"
+bootstrap_secret_kubectl: /usr/local/bin/k3s kubectl

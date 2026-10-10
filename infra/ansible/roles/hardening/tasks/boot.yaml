@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+- name: Set the kernel's command line
+  ansible.builtin.template:
+    src: grub.cfg.j2
+    dest: /etc/default/grub.d/99-keel.cfg
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read GRUB's configuration
+  ansible.builtin.slurp:
+    src: /boot/grub/grub.cfg
+  register: hardening_grub
+
+# What GRUB boots is read, not remembered: a run that stopped after the
+# drop-in changed still brings GRUB up to date the next time. The first
+# linux line is the default entry's.
+- name: Bring GRUB up to date
+  vars:
+    hardening_lines: "{{ (hardening_grub.content | b64decode).splitlines() | map('trim') | select('match', 'linux\\s') | list }}"
+    hardening_words: "{{ (hardening_lines | first | default('')).split() }}"
+  ansible.builtin.command:
+    cmd: update-grub
+  when: >-
+    hardening_boot_args | reject('in', hardening_words) | list | length > 0
+    or hardening_words | select('match', 'crashkernel=') | list | length > 0
+  changed_when: true
+
+- name: Read the command line the kernel booted with
+  ansible.builtin.slurp:
+    src: /proc/cmdline
+  register: hardening_cmdline
+
+- name: A command line that differs takes effect at the next reboot
+  vars:
+    hardening_booted: "{{ (hardening_cmdline.content | b64decode).split() }}"
+    hardening_missing: "{{ hardening_boot_args | reject('in', hardening_booted) | list }}"
+    hardening_crashkernel: "{{ hardening_booted | select('match', 'crashkernel=') | list }}"
+  ansible.builtin.set_fact:
+    hardening_reboot_reasons: >-
+      {{ hardening_reboot_reasons
+         + (['the kernel booted without ' ~ (hardening_missing | join(' '))] if hardening_missing else [])
+         + (['the kernel keeps memory back for crash dumps'] if hardening_crashkernel else []) }}
