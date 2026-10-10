@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Runs only when what configures production's machine changed: the
 # playbook, k3s's settings, the tailnet policy, the join script, and the
-# tools that run them. The whole playbook runs on a fresh Ubuntu 26.04
-# runner, the machine's own system, twice: the second run must change
-# nothing. A pull request has no access to the tailnet or Infisical, so
-# the join is left out and the cluster's credential is made up.
+# tools that run them. The fast checks, in a couple of minutes: the tools'
+# tests, the policy's rules, shellcheck, the playbooks' syntax and
+# ansible-lint. The playbook itself runs in machine-test.yaml, on a pull
+# request labelled machine, or by hand.
 name: pr.machine
 
 on:
@@ -73,39 +73,10 @@ jobs:
           ../../.dev/ansible/bin/ansible-playbook --syntax-check site.yaml verify.yaml audit.yaml
           ../../.dev/ansible/bin/ansible-lint site.yaml verify.yaml audit.yaml roles tasks
 
-  playbook:
-    name: playbook
-    needs: [changes]
-    if: needs.changes.outputs.machine == 'true'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-        with:
-          node: "false"
-      # Built once, before the playbook mounts /tmp with nothing to run.
-      - name: Build the tool
-        run: go build -o .dev/bin/machine ./tools/machine
-      - name: Ansible, from hashed requirements
-        run: .dev/bin/machine -ansible
-      - name: The playbook on this runner, the first time
-        run: .dev/bin/machine -run apply -local
-      - name: The playbook again, which must change nothing
-        run: .dev/bin/machine -run apply -local -unchanged
-      - name: The runner is as the playbook leaves it; Flux follows the real prod
-        run: .dev/bin/machine -verify -local
-      - name: Lynis, with no warning not accepted; kube-bench, a report
-        run: .dev/bin/machine -audit -local
-
   pr-machine:
     name: pr-machine
     if: always()
-    needs: [changes, lint, playbook]
+    needs: [changes, lint]
     runs-on: ubuntu-slim
     permissions: {}
     steps:

@@ -56,11 +56,16 @@
     mode: "0640"
   register: hardening_rules
 
-# Not in the containers' files, which no one who logs in runs.
+# Not in the containers' files, which no one who logs in runs, nor on a
+# runner in its toolchains.
 - name: Find the programs that run as another user
+  vars:
+    hardening_skip: >-
+      {{ ['/var/lib/rancher', '/var/lib/kubelet', '/var/lib/docker', '/var/lib/containerd']
+         + (hardening_scan_skip_runner if machine_runner | default(false) else []) }}
   ansible.builtin.command:
     cmd: >-
-      find / -xdev ( -path /var/lib/rancher -o -path /var/lib/kubelet -o -path /var/lib/docker -o -path /var/lib/containerd ) -prune
+      find / -xdev ( {{ hardening_skip | map('regex_replace', '^', '-path ') | join(' -o ') }} ) -prune
       -o -type f -perm /6000 -print
   register: hardening_privileged
   changed_when: false

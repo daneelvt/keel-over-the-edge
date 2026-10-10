@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The whole playbook on a fresh Ubuntu 26.04 runner, the machine's own
+# system, as root, twice: the second run must change nothing. Then
+# verify.yaml checks the runner as the machine would be checked, with Flux
+# following the real prod; then Lynis, and kube-bench as a report.
+#
+# It takes minutes, so it is not run on every pull request: on one
+# labelled machine (again on each push while the label stays), and by
+# hand. pr.machine runs the fast checks on every one. A pull request has
+# no access to the tailnet or Infisical, so the join is left out and the
+# cluster's credential is made up; the runner's image, far larger than the
+# machine's, gets no AIDE record.
+name: machine-test
+
+on:
+  pull_request:
+    types: [labeled, opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playbook:
+    name: playbook
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'machine')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+      # Built once, before the playbook mounts /tmp with nothing to run.
+      - name: Build the tool
+        run: go build -o .dev/bin/machine ./tools/machine
+      - name: Ansible, from hashed requirements
+        run: .dev/bin/machine -ansible
+      - name: The playbook on this runner, the first time
+        run: .dev/bin/machine -run apply -local
+      - name: The playbook again, which must change nothing
+        run: .dev/bin/machine -run apply -local -unchanged
+      - name: The runner is as the playbook leaves it; Flux follows the real prod
+        run: .dev/bin/machine -verify -local
+      - name: Lynis, with no warning not accepted; kube-bench, a report
+        run: .dev/bin/machine -audit -local

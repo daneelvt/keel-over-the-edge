@@ -121,7 +121,8 @@ credentials.
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin (see [The local cluster](#the-local-cluster) and [Releases](#releases)) | `go test ./tools/cluster ./tools/release ./tools/internal/...` |
-| `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile; then **the whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**, `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`), Lynis with no warning not accepted, and kube-bench as a report (see [The machine](#the-machine)) | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
+| `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
+| `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
 | `pr.secrets.yaml` | Pull requests, not drafts | gitleaks over the pull request's commits | `go tool gitleaks git --log-opts="main..HEAD" .` |
@@ -1451,18 +1452,27 @@ runner, and kube-bench too, as a report: its newest k3s profile is for
 Kubernetes 1.29, so its findings are read against the k3s guide, not
 obeyed.
 
-### `pr.machine`: the playbook on Ubuntu 26.04
+### Testing the playbook: `pr.machine` and `machine-test`
 
-Every pull request that touches the playbook, k3s's settings or their
-tools runs the whole playbook on a fresh `ubuntu-26.04` runner, the
-machine's own system, as root, twice: **the second run must change
-nothing**. Then `verify.yaml` checks the runner as the machine would be
-checked: the firewall, the hardening, k3s, and Flux following the **real**
-`prod`, its signature verified. What a runner cannot do is left out: the
-join (no tailnet), OpenSSH's removal, and the accounts check (the runner
-has its own user); the cluster's credential is made up. The tool is
-built before the first run: after it, the runner's `/tmp` holds nothing
-to run, Go's builds included.
+Two tiers, as most Ansible projects test. **`pr.machine`**, the required
+check, runs on every pull request that touches the playbook, k3s's
+settings or their tools, in a couple of minutes: the tools' tests, the
+policy's rules, shellcheck, the playbooks' syntax and ansible-lint.
+
+**`machine-test`** runs the playbook itself, on a pull request labelled
+`machine` (and on each push while the label stays), or by hand: on a fresh
+`ubuntu-26.04` runner, the machine's own system, as root, twice, and **the
+second run must change nothing**. Then `verify.yaml` checks the runner as
+the machine would be checked: the firewall, the hardening, k3s, and Flux
+following the **real** `prod`, its signature verified; then Lynis and
+kube-bench. Label a pull request `machine` before merging any change to a
+role. What a runner cannot do is left out: the join (no tailnet),
+OpenSSH's removal, and the accounts check (the runner has its own user);
+the cluster's credential is made up. The runner's image holds tens of
+gigabytes of toolchains the machine does not have: they are left out of
+the searches of the disk, and the runner gets no AIDE record, which would
+take more than ten minutes to make there. The tool is built before the
+first run: after it, the runner's `/tmp` holds nothing to run.
 
 ### Changing it
 

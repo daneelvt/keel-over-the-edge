@@ -107,7 +107,7 @@
       ansible.builtin.assert:
         that:
           - verify_hardening.stdout is search('^enabled 2$', multiline=True)
-          - verify_hardening.stdout is search('^aide=yes$', multiline=True)
+          - verify_hardening.stdout is search('^aide=yes$', multiline=True) or machine_runner | default(false)
           - verify_hardening.stdout is search('^deny = 5$', multiline=True)
           - verify_hardening.stdout is search('^unlock_time = 900$', multiline=True)
           - verify_hardening.stdout is search('^minlen = 14$', multiline=True)

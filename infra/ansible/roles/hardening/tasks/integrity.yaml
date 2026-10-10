@@ -3,7 +3,11 @@
 # from then on the daily check compares against it. After a change the
 # playbook makes on purpose, the next check reports it: aideinit -y -f on
 # the machine makes the record again.
+#
+# Not on a workflow's runner: reading its image takes minutes, and tests
+# GitHub's files, not the machine's.
 - name: Make AIDE's record of the system
   ansible.builtin.command:
     cmd: aideinit --yes --force
     creates: /var/lib/aide/aide.db
+  when: not (machine_runner | default(false))

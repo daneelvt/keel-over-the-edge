@@ -79,31 +79,8 @@ hardening_aide_exclude:
   - /run
   - /tmp
 
-# On a workflow's runner only: everything but the system's settings and
-# programs (/etc, /boot, /usr/bin, /usr/sbin). The runner's image holds
-# tens of gigabytes of toolchains the machine does not have, which AIDE
-# would take more than ten minutes to read.
-hardening_aide_exclude_runner:
-  - /opt
-  - /usr/local
-  - /usr/share
-  - /usr/lib
-  - /usr/lib32
-  - /usr/lib64
-  - /usr/libx32
-  - /usr/libexec
-  - /usr/include
-  - /usr/src
-  - /usr/games
-  - /home
-  - /root
-  - /srv
-  - /mnt
-  - /media
-  - /snap
-  - /var
-
-# The same folders, left out of the searches for loose files on a runner.
+# On a workflow's runner only: its toolchains, hundreds of thousands of
+# files the machine does not have, left out of the searches of the disk.
 hardening_scan_skip_runner: [/opt, /usr/local, /usr/share, /home, /var/lib/docker, /snap, /imagegeneration]
 
 # Accounts that keep a shell, as Debian ships them: root, and sync, which
