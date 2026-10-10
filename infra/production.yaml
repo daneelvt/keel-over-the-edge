@@ -14,27 +14,27 @@
 # The machine, by its name on the tailnet, and the tailnet's MagicDNS
 # suffix (Tailscale's admin page, DNS).
 machine: keel-prod-1
-tailnet: ""
+tailnet: "tail2bec2e.ts.net"
 
 tailscale:
   # The federated identity the machine workflow joins the tailnet with
   # (scope auth_keys, tag tag:ci-prod).
   join:
-    clientID: ""
-    audience: ""
+    clientID: "TK5qqoFybF11CNTRL-krATC3use721CNTRL"
+    audience: "api.tailscale.com/TK5qqoFybF11CNTRL-krATC3use721CNTRL"
   # The federated identity the tailnet workflow writes the policy with
   # (scope policy_file).
   policy:
-    clientID: ""
-    audience: ""
+    clientID: "TK5qqoFybF11CNTRL-k3dD7YeQN121CNTRL"
+    audience: "api.tailscale.com/TK5qqoFybF11CNTRL-k3dD7YeQN121CNTRL"
 
 infisical:
   # The region's host, as chosen when the account was made.
-  host: ""
+  host: "https://us.infisical.com"
   # gha-prod: the machine workflow's identity, signing in with GitHub's
   # OIDC token, and the audience it expects of that token.
-  identityID: ""
+  identityID: "5546676b-ce6a-436c-a971-f894c83b20ac"
   audience: https://github.com/daneelvt
   # keel-ops: the workflows' credentials, in its prod environment.
-  project: ""
+  project: "09d6ca0c-bc20-48e8-981e-e468b5aee626"
   environment: prod
