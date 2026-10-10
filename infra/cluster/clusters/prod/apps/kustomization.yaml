@@ -1,13 +1,33 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The game in production: the base's sizes, which are production's, and
-# the players' address.
+# The game in production: the base's sizes, which are production's, the
+# players' address, the database's password from Infisical, and
+# cloudflared, which carries players' traffic in from Cloudflare.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../apps/keel
+  - ../../../apps/cloudflared
+  - keel-db-app.yaml
 configMapGenerator:
   - name: keel
     namespace: keel
     behavior: merge
     literals:
       - KEEL_PLAY_ORIGIN=https://play.keelovertheedge.com
+# The Gateway and the players' route answer the players' host alone.
+patches:
+  - target:
+      kind: Gateway
+      name: keel
+    patch: |-
+      - op: add
+        path: /spec/listeners/0/hostname
+        value: play.keelovertheedge.com
+  - target:
+      kind: HTTPRoute
+      name: play
+    patch: |-
+      - op: add
+        path: /spec/hostnames
+        value:
+          - play.keelovertheedge.com

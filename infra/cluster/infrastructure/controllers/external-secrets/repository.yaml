@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The controller's chart, from the project's registry, pinned by the
+# digest of the chart's manifest, and fetched only if the project's Helm
+# workflow, on its main branch, signed it (cosign, keyless).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: external-secrets
+spec:
+  interval: 1h
+  url: oci://ghcr.io/external-secrets/charts/external-secrets
+  ref:
+    tag: 2.12.0
+    digest: sha256:4a421e51d49160291b4765a42c6326355ee830cb1082c83ff2f62ebe0818265b
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: ^https://token\.actions\.githubusercontent\.com$
+        subject: ^https://github\.com/external-secrets/external-secrets/\.github/workflows/helm\.yml@refs/heads/main$

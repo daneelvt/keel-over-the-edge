@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Runs OpenTofu on infra/tofu: the zone keelovertheedge.com at Cloudflare,
+# the tunnel to production, and the secrets they make, written into
+# Infisical for the cluster. Every job waits for the owner's approval (the
+# production environment, which only main may use): a plan reads the
+# encrypted state, which holds the tunnel's token, so a plan is as
+# sensitive as an apply.
+#
+#   plan    what apply would change; changes nothing
+#   apply   plan, and once the owner has read the plan job's summary and
+#           approved the apply job, apply that same plan and nothing else
+#
+# The plan job hands its plan, encrypted with the state's key, to the apply
+# job as an artifact kept one day. Each job signs in to Infisical as
+# gha-accounts with its own OIDC token; no secret is stored in GitHub.
+# There is no schedule. go run ./tools/accounts does the work.
+name: accounts
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: plan shows what apply would change; apply applies that plan once approved again
+        type: choice
+        options: [plan, apply]
+        default: plan
+
+permissions: {}
+
+# One change to production at a time, here and in every workflow that
+# changes it: a second run waits for the first, which is never cancelled.
+# It is also what keeps two runs from writing OpenTofu's state at once.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # sign in to Infisical as this workflow
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+          cache: "false"
+      - name: Build the tool
+        run: go build -o .dev/bin/accounts ./tools/accounts
+      - name: Plan; the summary names each resource, its action and the attributes that change
+        run: .dev/bin/accounts -run plan
+      - name: Keep the plan, encrypted, for the apply job
+        if: inputs.mode == 'apply'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: accounts-plan
+          path: .dev/accounts/plan/
+          retention-days: 1
+          if-no-files-found: error
+
+  apply:
+    name: apply
+    if: inputs.mode == 'apply'
+    needs: [plan]
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # sign in to Infisical as this workflow
+      actions: read # download the plan job's artifact
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+          cache: "false"
+      - name: Build the tool
+        run: go build -o .dev/bin/accounts ./tools/accounts
+      - name: The plan job's plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: accounts-plan
+          path: .dev/accounts/plan/
+      - name: Apply that plan, and nothing else
+        run: .dev/bin/accounts -run apply

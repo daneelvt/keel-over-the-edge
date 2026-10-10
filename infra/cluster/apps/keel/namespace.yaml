@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Pod Security's restricted profile is warned and audited, not yet enforced.
+# Pod Security's restricted profile, enforced, warned and audited.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -9,6 +9,8 @@ metadata:
     # does, as it never deletes the database itself.
     kustomize.toolkit.fluxcd.io/prune: disabled
   labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/warn-version: latest
     pod-security.kubernetes.io/audit: restricted

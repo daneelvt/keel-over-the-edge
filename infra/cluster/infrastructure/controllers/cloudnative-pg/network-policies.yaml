@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Nothing reaches the operator: its webhooks are called by the API server,
+# from the node, which kube-router always lets through, as it does the
+# kubelet's probes. It reaches the databases' pods, which let it in.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]

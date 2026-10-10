@@ -25,6 +25,10 @@ Configured from the environment:
   KEEL_DATABASE_URL    the database, a postgres:// URL (required)
 `
 
+// migrateWait is how long keel migrate waits for the database to accept a
+// connection before it gives up.
+const migrateWait = time.Minute
+
 func migrate(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -40,6 +44,14 @@ func migrate(ctx context.Context, args []string, getenv func(string) string, std
 	url := getenv("KEEL_DATABASE_URL")
 	if err := config.CheckDatabaseURL(url); err != nil {
 		return fmt.Errorf("KEEL_DATABASE_URL: %w", err)
+	}
+	// A while for the database to answer: refused at first, it is starting,
+	// or this pod's address is not let in yet.
+	wctx, cancel := context.WithTimeout(ctx, migrateWait)
+	err := store.Reachable(wctx, url)
+	cancel()
+	if err != nil {
+		return err
 	}
 	if *status {
 		st, err := store.Status(ctx, url)

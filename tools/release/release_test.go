@@ -61,7 +61,7 @@ func TestRenderWritesTheRelease(t *testing.T) {
 		docs := documents(t, filepath.Join(dir, cluster, "apps", "manifests.yaml"))
 		images := 0
 		for _, d := range docs {
-			if d.Kind() != "Deployment" {
+			if d.ID() != "Deployment/"+manifests.Deployment {
 				continue
 			}
 			for _, c := range manifests.Containers(manifests.PodSpec(d)) {

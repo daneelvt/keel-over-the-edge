@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package production reads infra/production.yaml: the identifiers of
-// production's machine, tailnet and secrets store that the workflows'
-// tools need, none of them secret.
+// production's machine, tailnet, secrets store, Cloudflare zone and state
+// bucket that the workflows' tools need, none of them secret.
 package production
 
 import (
@@ -36,6 +36,20 @@ type Production struct {
 	} `yaml:"tailscale"`
 
 	Infisical Infisical `yaml:"infisical"`
+
+	// Cloudflare is the account and zone the accounts workflow manages.
+	Cloudflare struct {
+		Account string `yaml:"account"`
+		Zone    string `yaml:"zone"`
+	} `yaml:"cloudflare"`
+
+	// State is where OpenTofu keeps the accounts workflow's state: a B2
+	// bucket, through B2's S3 API at Endpoint, in Region.
+	State struct {
+		Bucket   string `yaml:"bucket"`
+		Endpoint string `yaml:"endpoint"`
+		Region   string `yaml:"region"`
+	} `yaml:"state"`
 }
 
 // Identity is a Tailscale federated identity: a workflow exchanges a token
@@ -56,6 +70,21 @@ type Infisical struct {
 	// Project and Environment hold the workflows' credentials.
 	Project     string `yaml:"project"`
 	Environment string `yaml:"environment"`
+
+	// Accounts is where the accounts workflow reads its credentials: the
+	// identity it signs in as, with the same audience, and its project.
+	Accounts struct {
+		IdentityID string `yaml:"identityID"`
+		Project    string `yaml:"project"`
+	} `yaml:"accounts"`
+
+	// Cluster is the project the cluster's External Secrets reads, and the
+	// accounts workflow writes the secrets it makes into: by ID for
+	// OpenTofu, by slug for External Secrets' store.
+	Cluster struct {
+		Project string `yaml:"project"`
+		Slug    string `yaml:"slug"`
+	} `yaml:"cluster"`
 }
 
 var (
@@ -64,6 +93,14 @@ var (
 	magicDNS = regexp.MustCompile(`^[a-z0-9-]+\.ts\.net$`)
 	// An identifier as the services show them: letters, digits, dashes.
 	identifier = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+	// Cloudflare's account and zone IDs are 32 hexadecimal digits.
+	cloudflareID = regexp.MustCompile(`^[0-9a-f]{32}$`)
+	// B2's bucket names: 6 to 63 letters, digits and dashes (Backblaze's
+	// documentation, "Buckets"); its regions, as us-west-004.
+	bucketName = regexp.MustCompile(`^[A-Za-z0-9-]{6,63}$`)
+	b2Region   = regexp.MustCompile(`^[a-z]+-[a-z]+-[0-9]{3}$`)
+	// A project's slug in Infisical.
+	slug = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 )
 
 // Read reads file, checking what it holds is well formed. An empty value
@@ -113,13 +150,49 @@ func (p Production) check() error {
 			fail("infisical.host %q is not https://<host>", in.Host)
 		}
 	}
-	for name, v := range map[string]string{"identityID": in.IdentityID, "project": in.Project} {
+	for name, v := range map[string]string{"identityID": in.IdentityID, "project": in.Project,
+		"accounts.identityID": in.Accounts.IdentityID, "accounts.project": in.Accounts.Project, "cluster.project": in.Cluster.Project} {
 		if v != "" && !identifier.MatchString(v) {
 			fail("infisical.%s %q is not an ID", name, v)
 		}
 	}
 	if in.Audience == "" || in.Environment == "" {
 		fail("infisical.audience and infisical.environment are set from the start")
+	}
+	// Each workflow and the cluster have their own identity and project:
+	// a project is the only fence Infisical's free plan has.
+	if in.Accounts.IdentityID != "" && in.Accounts.IdentityID == in.IdentityID {
+		fail("infisical.accounts.identityID is the machine workflow's identity: each workflow has its own")
+	}
+	projects := map[string]string{}
+	for name, v := range map[string]string{"infisical.project": in.Project, "infisical.accounts.project": in.Accounts.Project, "infisical.cluster.project": in.Cluster.Project} {
+		if other, ok := projects[v]; ok && v != "" {
+			fail("%s and %s are the same project: each reader has its own", min(name, other), max(name, other))
+		}
+		projects[v] = name
+	}
+	if in.Cluster.Slug != "" && !slug.MatchString(in.Cluster.Slug) {
+		fail("infisical.cluster.slug %q is not a project's slug", in.Cluster.Slug)
+	}
+	for name, v := range map[string]string{"account": p.Cloudflare.Account, "zone": p.Cloudflare.Zone} {
+		if v != "" && !cloudflareID.MatchString(v) {
+			fail("cloudflare.%s %q is not a Cloudflare ID, 32 hexadecimal digits", name, v)
+		}
+	}
+	st := p.State
+	if st.Bucket != "" && !bucketName.MatchString(st.Bucket) {
+		fail("state.bucket %q is not a B2 bucket's name", st.Bucket)
+	}
+	if st.Endpoint != "" {
+		if u, err := url.Parse(st.Endpoint); err != nil || u.Scheme != "https" || u.Host == "" || (u.Path != "" && u.Path != "/") {
+			fail("state.endpoint %q is not https://<host>", st.Endpoint)
+		}
+	}
+	if st.Region != "" && !b2Region.MatchString(st.Region) {
+		fail("state.region %q is not a B2 region, as us-west-004", st.Region)
+	}
+	if st.Region != "" && st.Endpoint != "" && !strings.Contains(st.Endpoint, "."+st.Region+".") {
+		fail("state.endpoint %q is not in state.region %s", st.Endpoint, st.Region)
 	}
 	return errors.Join(errs...)
 }

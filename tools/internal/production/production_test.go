@@ -36,6 +36,19 @@ infisical:
   audience: https://github.com/daneelvt
   project: 09d6ca0c-0000-4000-8000-000000000000
   environment: prod
+  accounts:
+    identityID: 7a1f0000-0000-4000-8000-000000000000
+    project: 3b2e0000-0000-4000-8000-000000000000
+  cluster:
+    project: 4c3d0000-0000-4000-8000-000000000000
+    slug: keel-cluster-ab12
+cloudflare:
+  account: 0123456789abcdef0123456789abcdef
+  zone: fedcba9876543210fedcba9876543210
+state:
+  bucket: keel-state-example
+  endpoint: https://s3.us-west-004.backblazeb2.com
+  region: us-west-004
 `
 
 func readText(t *testing.T, text string) error {
@@ -62,6 +75,14 @@ func TestReadRefuses(t *testing.T) {
 		{"a path on the host", `host: https://us.infisical.com`, `host: https://us.infisical.com/api`, "not https://<host>"},
 		{"no environment", `  environment: prod`, `  environment: ""`, "set from the start"},
 		{"an unknown key", `machine: keel-prod-1`, "machine: keel-prod-1\naddress: 192.0.2.1", "not found"},
+		{"the machine's identity for accounts", `identityID: 7a1f0000-0000-4000-8000-000000000000`, `identityID: 5546676b-0000-4000-8000-000000000000`, "each workflow has its own"},
+		{"one project for two readers", `project: 4c3d0000-0000-4000-8000-000000000000`, `project: 3b2e0000-0000-4000-8000-000000000000`, "infisical.accounts.project and infisical.cluster.project are the same project"},
+		{"a slug with capitals", `slug: keel-cluster-ab12`, `slug: Keel-Cluster`, "not a project's slug"},
+		{"a zone's name for its ID", `zone: fedcba9876543210fedcba9876543210`, `zone: keelovertheedge.com`, "not a Cloudflare ID"},
+		{"a bucket's URL", `bucket: keel-state-example`, `bucket: s3://keel-state-example`, "not a B2 bucket's name"},
+		{"plain HTTP to B2", `endpoint: https://s3.us-west-004.backblazeb2.com`, `endpoint: http://s3.us-west-004.backblazeb2.com`, "not https://<host>"},
+		{"an AWS region", `region: us-west-004`, `region: us-west-2`, "not a B2 region"},
+		{"an endpoint in another region", `endpoint: https://s3.us-west-004.backblazeb2.com`, `endpoint: https://s3.eu-central-003.backblazeb2.com`, "not in state.region"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

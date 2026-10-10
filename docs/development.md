@@ -122,6 +122,7 @@ credentials.
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin (see [The local cluster](#the-local-cluster) and [Releases](#releases)) | `go test ./tools/cluster ./tools/release ./tools/internal/...` |
 | `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
+| `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
 | `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
@@ -130,6 +131,7 @@ credentials.
 | `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
 | `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature and its place on `main` are checked | |
 | `machine.yaml` | By hand, approved by the owner | The playbook on production's machine, over Tailscale SSH: `check`, `apply` (then `verify.yaml`), or `audit` (see [The machine](#the-machine)) | |
+| `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read (see [Online](#online)) | `go run ./tools/accounts -check` |
 | `tailnet.yaml` | Pushes to `main` that change `infra/tailnet/`, and by hand; approved by the owner | The tailnet policy validated by Tailscale, its tests run, then written over the live one | `go run ./tools/tailnet -check` |
 | `scorecard.yaml` | Pushes to `main`, weekly | OpenSSF Scorecard | |
 | `security.yaml` | Weekly | govulncheck and npm signatures on `main` | |
@@ -961,7 +963,10 @@ no `node_modules`, no build output.
 infra/
   MANUAL-STEPS.md        what is done by hand, once: the accounts, the machine, the join
   production.yaml        production's identifiers, none secret: the machine's and
-                         tailnet's names, the workflows' identities, Infisical's IDs
+                         tailnet's names, the workflows' identities, Infisical's IDs,
+                         Cloudflare's account and zone, the state's bucket
+  tofu/                  what the accounts workflow manages with OpenTofu: the zone,
+                         the tunnel, the secrets they make (see Online)
   bootstrap/join.sh      joins a fresh machine to the tailnet, then closes OpenSSH
   tailnet/policy.hujson  who may reach production's machine, and how
   ansible/               the playbook that configures production's machine
@@ -983,18 +988,24 @@ infra/
   cluster/
     flux-system/         flux install --export, its images pinned by digest
     infrastructure/
-      controllers/       the CloudNativePG operator: OCIRepository and HelmRelease
+      controllers/       the CloudNativePG operator and External Secrets'
+                         controller: each an OCIRepository and a HelmRelease
       configs/           Traefik's HelmChartConfig: the Gateway API, its timeouts;
-                         the default service accounts without tokens
+                         the default service accounts without tokens; the
+                         NetworkPolicies of kube-system, default and kube-public
     apps/keel/           the game: Deployment, Service, ConfigMap, Gateway,
-                         HTTPRoute, the database's Cluster; production's sizes
+                         HTTPRoute, the limits per address, the database's
+                         Cluster, the NetworkPolicies; production's sizes
+    apps/cloudflared/    production's tunnel connectors, their token's
+                         ExternalSecret, their NetworkPolicies
     clusters/local/      the local cluster's entry points: controllers, configs,
                          apps (half the sizes, HTTPS, the redirect); and
                          release, what -release applies to follow a release
     clusters/prod/       production's entry points: flux-system (Flux's
                          controllers, and sync.yaml, what they follow),
-                         controllers, configs (Traefik's Service ClusterIP),
-                         apps (the players' address)
+                         controllers, configs (Traefik's Service ClusterIP,
+                         External Secrets' store), apps (the players' host,
+                         the database's password from Infisical, cloudflared)
 ```
 
 The bases hold what every cluster shares; each cluster's folder patches
@@ -1012,9 +1023,11 @@ command at the top of `gotk-components.yaml` with the new version
 update the digests in its `kustomization.yaml`, and run `-schemas` on a
 cluster that has it.
 
-Secrets are never in the repository (a test fails on any): `tools/cluster`
-makes `keel-db-app`, the database's password, once, at random, and never
-replaces it; and `keel-tls`, the certificate, again when its names change.
+Secrets are never in the repository (a test fails on any). On the local
+cluster `tools/cluster` makes `keel-db-app`, the database's password, once,
+at random, and never replaces it; and `keel-tls`, the certificate, again
+when its names change. In production, External Secrets makes them from
+Infisical (see Online).
 
 The rules the manifests keep, checked by `go test ./tools/internal/manifests`
 on every entry point of both clusters, by a release before it publishes
@@ -1042,7 +1055,17 @@ database refusing connections without TLS, with no superuser and the
 builtin `C.UTF-8` locale; the database's `smartShutdownTimeout` at most
 30 s and its clients' TCP keepalives set; and keel's
 `terminationGracePeriodSeconds` at least its bell, the final checkpoint's
-and the closes' bounds and 10 s more.
+and the closes' bounds and 10 s more; every namespace enforcing Pod
+Security's `restricted` profile, and holding a NetworkPolicy that selects
+all its pods for ingress; no `ipBlock` but `0.0.0.0/0` (with exceptions);
+in production, every `ExternalSecret` reading the store `infisical`, in a
+namespace the store's conditions name, which name exactly those, and no
+store or `ExternalSecret` elsewhere; in production, every Secret a
+workload or the database names made by an `ExternalSecret` or by
+CloudNativePG; every rule of a route to the game's players' listener
+passing through one limit per address, `/ws` through the connections one;
+and production's Gateway listener and routes naming
+`play.keelovertheedge.com` alone.
 
 Beside the rules, every rendered object is checked against the schema of
 its kind with [kubeconform](https://github.com/yannh/kubeconform)
@@ -1243,15 +1266,19 @@ Renovate (`renovate.json`) updates, each with its digest or commit: the
 actions in the workflows; the `Dockerfile`'s images and the CI service's
 PostgreSQL; the CloudNativePG chart (tag and digest) together with the
 operator's image; Flux's manifests, its controllers' images and its CLI,
-as one update; k3s's version and commit (a new minor version waits for a
-tick on the dashboard); cosign, TinyGo and kube-bench; BuildKit; Ansible
+as one update; External Secrets' chart (tag and digest) with its image;
+cloudflared's image; OpenTofu's providers, at exact versions from
+OpenTofu's registry, with the lock file's hashes; k3s's version and commit
+(a new minor version waits for a tick on the dashboard); cosign, TinyGo,
+kube-bench and OpenTofu; BuildKit; Ansible
 and ansible-lint, with `pip-compile` and every file's hash
 (`infra/ansible/*requirements.txt`); kubeconform and every Go module. A
 test fails if one of its patterns stops finding its pin. Raised by hand:
 the commit of the Kubernetes schemas (`tools/internal/manifests`), Lima's
-Ubuntu image, and Tailscale's client for the runners (`go run
+Ubuntu image, Tailscale's client for the runners (`go run
 ./tools/machine -pin <version>`, from Tailscale's own site, which Renovate
-does not read).
+does not read), and OpenTofu's `required_version` in `infra/tofu`, raised
+with a new minor version of OpenTofu.
 
 ## The machine
 
@@ -1372,14 +1399,15 @@ the machine's disk, never in a log. Its namespace is never pruned by Flux.
 
 ### The game waits for its database password
 
-Production's `apps` layer is applied as released, and waits: the database's
-password, `keel-db-app`, is made in the cluster from Infisical by External
-Secrets, which is not there yet. So CloudNativePG makes the job that would
-create the database, whose pod cannot start without the password, and no
-instance; `keel`'s pod waits in `CreateContainerConfigError`; Flux reports
-the layer's health check failing, and tries again every minute. This is
-expected. Once the Secret exists, both go on by themselves, and the
-database is made with the password kept in Infisical and no other.
+Until the `accounts` workflow has written the database's password into
+Infisical, production's `apps` layer is applied as released, and waits:
+External Secrets reports `keel-db-app`'s key missing and tries again; so
+CloudNativePG makes the job that would create the database, whose pod
+cannot start without the password, and no instance; `keel`'s pod waits in
+`CreateContainerConfigError`, and cloudflared's for its token; Flux
+reports the layer's health check failing, and tries again every minute.
+Once the Secrets exist, all go on by themselves, and the database is made
+with the password kept in Infisical and no other (see Online).
 
 ### Looking at the machine
 
@@ -1487,6 +1515,207 @@ first run: after it, the runner's `/tmp` holds nothing to run.
   `infra/ansible/lynis-accepted.txt`, the warning's ID and why. One that
   comes of the runner's image alone goes in `lynis-accepted-runner.txt`,
   which only `machine-test` reads.
+
+## Online
+
+Players reach the game at **https://play.keelovertheedge.com**, through
+Cloudflare and a tunnel. The machine still has no open port: cloudflared,
+in the cluster, dials out to Cloudflare, and Cloudflare sends `play.`'s
+requests down that connection.
+
+```
+phone ──HTTPS──▶ Cloudflare's edge ──tunnel (cloudflared dialled out, 7844)──▶ cloudflared ×2
+      (TLS, HSTS, WAF, the rate rule,                                         (namespace cloudflared)
+       the cache for /assets/,                                                      │ HTTP, Host play.…
+       CF-Connecting-IP written)                                                    ▼
+                                         keel :8080 ◀── the limits per address ── Traefik :8000
+                                            │                                    (kube-system)
+                                            ▼
+                                         keel-db :5432
+```
+
+What is made by hand, once (the Cloudflare token, the B2 key for the
+state, the state's passphrase, the `gha-accounts` identity, the DS record),
+is in [infra/MANUAL-STEPS.md](../infra/MANUAL-STEPS.md), sections 8 to 12.
+Everything else outside the cluster is made by the `accounts` workflow.
+
+### `accounts`: OpenTofu, planned and applied as read
+
+`infra/tofu` describes what lives at Cloudflare and what the cluster's
+secrets are made from:
+
+| File | What |
+|------|------|
+| `versions.tf`, `.terraform.lock.hcl` | OpenTofu `~> 1.13.0`; the Cloudflare, Infisical and random providers at exact versions, their hashes for Linux on amd64 and arm64 and the Mac |
+| `backend.tf` | The state, in the B2 bucket, encrypted with a key made from the passphrase; a run without it fails rather than write plain state |
+| `tunnel.tf` | The tunnel `keel-prod`, remotely managed: `play.keelovertheedge.com` → `http://traefik.kube-system.svc.cluster.local:80`, anything else 404. Its token, written into Infisical |
+| `dns.tf` | `play` (proxied, to the tunnel); DNSSEC; CAA for Universal SSL's authorities; a null MX, SPF and DMARC refusing all mail in the domain's name |
+| `zone.tf` | TLS strict, HTTPS always, TLS 1.2 at least, no 0-RTT, WebSockets; HSTS; nothing that rewrites the page or answers in its place; no bot or AI-crawler blocking |
+| `rules.tf` | `/assets/` cached as the game says; methods other than GET, HEAD and POST blocked; `POST /guest` at most 10 in 10 s per address |
+| `secrets.tf` | The database's password: ephemeral, written into Infisical write-only, in no plan or state |
+| `notifications.tf` | An e-mail to the owner when the tunnel's health changes |
+
+**Actions → accounts → Run workflow**, `mode`:
+
+| Mode | What |
+|------|------|
+| `plan` | One job, approved: what `apply` would change. Changes nothing |
+| `apply` | The same plan job, approved; then an `apply` job, **approved again once you have read the plan's summary**, applies that plan and nothing else |
+
+Each job signs in to Infisical as `gha-accounts` with its own OIDC token
+(only `accounts.yaml` on `main`, in `production`, may), reads
+`keel-accounts`/`prod`/`/accounts` (the Cloudflare token, the B2 key, the
+passphrase, the owner's address), masks each, and hands them to OpenTofu in
+its environment alone. Infisical's provider signs in by itself, with a
+second token. The plan travels to the apply job as an artifact of the run,
+kept one day, encrypted with the state's key; the apply job refuses one
+that names another run or commit, or whose digest is not the one recorded.
+OpenTofu itself refuses a plan made against an older state. There is no
+schedule: every run reads the state, which holds the tunnel's token.
+
+**Reading the summary.** It lists each resource that changes, its action
+(create, update, replace, delete, read), and for an update or a replacement
+the names of the attributes that change: never a value. Everything OpenTofu
+prints is kept from the log; when it fails, what it said on its standard
+error is shown with every IP address replaced by `<address>` (the tunnel's
+state holds the machine's address). What a value is, Cloudflare's dashboard
+and Infisical show. A second plan after an apply shows "no changes".
+
+Offline, on any computer, and as `pr.accounts` does on every pull request
+that touches it:
+
+```sh
+go run ./tools/accounts -check   # fmt, init without the backend, validate, the lock file for every platform
+go run ./tools/accounts -lock    # write .terraform.lock.hcl again, after changing a provider
+```
+
+### Where each secret lives
+
+| Secret | Made by | Kept in | Read by | In OpenTofu's state |
+|---|---|---|---|---|
+| Cloudflare's API token | The owner | `keel-accounts` `/accounts` | `accounts` | No |
+| The B2 key for the state | The owner | `keel-accounts` `/accounts` | `accounts` | No |
+| The state's passphrase | The owner | `keel-accounts` `/accounts`, and the password manager | `accounts` | No |
+| External Secrets' credential | The owner | `keel-ops` `/machine` | `machine`, which puts it in `external-secrets/infisical-universal-auth` | No |
+| The tunnel's secret and token | Cloudflare, for OpenTofu | `keel-cluster` `/cloudflared/TUNNEL_TOKEN` | External Secrets → `cloudflared/tunnel-token` | Yes, encrypted |
+| The database's password | OpenTofu, ephemeral | `keel-cluster` `/keel/DB_PASSWORD` | External Secrets → `keel/keel-db-app` | No |
+
+### External Secrets
+
+Its controller alone (no admission webhook, no certificate controller)
+runs on both clusters; on the local one it has no store and reads nothing,
+and is there so its definitions are what the manifests are checked
+against. Production's `configs` layer holds the one store, the
+`ClusterSecretStore` `infisical`: Infisical's API at `infisical.host`,
+signed in to as `eso-prod` with the credential the machine workflow placed,
+reading `keel-cluster`'s `prod` environment (by the slug
+`infisical.cluster.slug`; a test keeps the manifest and
+`infra/production.yaml` the same). Its conditions let only `keel` and
+`cloudflared` use it. The two `ExternalSecret`s refresh hourly.
+
+```sh
+kubectl get clustersecretstore infisical          # Ready, Valid
+kubectl -n keel get externalsecret keel-db-app    # SecretSynced
+kubectl -n cloudflared get externalsecret tunnel-token
+```
+
+### cloudflared
+
+Two replicas of Cloudflare's image, pinned by digest, `restricted`, no
+service account token, a rolling update one at a time. Each holds four
+connections to Cloudflare's edge, in two data centres. `/ready` on port 2000
+answers once a connection is up: not ready, a replica is left out; not
+ready for a minute, it is restarted. It is in the `apps` layer, which
+nothing waits for: a Cloudflare outage shows as `apps` not ready, and
+holds nothing back.
+
+### What may talk to what
+
+k3s's network policy controller enforces the NetworkPolicies. Every
+namespace the manifests hold refuses what is not let in; the kubelet's
+probes and the API server's calls to webhooks come from the node, which is
+always let in.
+
+| To | From |
+|----|------|
+| keel, 8080 | Traefik |
+| keel-db, 5432 | keel; CloudNativePG's operator (and 8000); its own instances |
+| Traefik, 8000 | cloudflared; kube-system itself (ServiceLB, locally) |
+| CoreDNS, 53 | every namespace |
+| cnpg-system, external-secrets | nothing |
+
+Out, only the two pods that face the internet are fenced, as neither calls
+the Kubernetes API (whose address, seen by a policy, is the machine's
+public one): **keel** reaches DNS and its database alone; **cloudflared**
+DNS, Cloudflare on TCP and UDP 7844 (anywhere but the cluster's ranges),
+and Traefik's 8000. A new pod's first connections can be refused for a
+moment while the controller lets its address in; `keel migrate` waits for
+the database for up to a minute rather than fail.
+
+### The limits per address
+
+Two Traefik middlewares in `keel`, keyed on `CF-Connecting-IP`, the
+address Cloudflare saw: **`per-address-rate`**, 50 requests a second with a
+burst of 100, on every route but the game connection; and
+**`per-address-connections`**, 200 requests open at once, on `/ws` (a game
+connection is one for as long as it is open). Over either, Traefik answers
+429. Only cloudflared reaches Traefik, and Cloudflare writes the header
+itself, so a player cannot choose their own. On the local cluster nothing
+writes the header, so every request counts as one address's: the amounts
+there are 2000, 4000 and 4096, for the load bot's hundreds of boats.
+
+### Checking it from outside
+
+```sh
+go run ./tools/online                                   # every check; the game connection held 10 minutes
+go run ./tools/online -hold 0                           # without the long one
+go run ./tools/online -page client/dist/index.html      # and the page's bytes against the build's
+```
+
+It changes nothing but one guest it makes, named `Zz Online …`: HSTS; the
+asset cached at the edge and the page not; nothing injected into the page;
+`/api/version` naming the build `prod` holds; HEAD; a PUT blocked by
+Cloudflare; `/ws` refusing a request without a session, and one from
+another origin; 160 requests at once from one address meeting Traefik's
+429, and again with a different forged `CF-Connecting-IP` on each; another
+host refused; a game connection open for ten minutes, past Cloudflare's
+100-second idle limit and Traefik's 60-second read timeout.
+
+### When something outside is down
+
+- **Cloudflare**: players cannot reach the game; the game and its world
+  run on. Cloudflare's tunnel alert e-mails the owner. Nothing to do but
+  wait; the owner reaches the machine over the tailnet as always.
+- **The tunnel** (cloudflared not connected): `kubectl -n cloudflared
+  logs deploy/cloudflared`. A token refused means the tunnel was replaced
+  without the secret's version being raised (below).
+- **Infisical**: nothing running changes; Secrets once made stay. A new
+  machine, or a deleted Secret, waits until Infisical is back. `accounts`
+  cannot run.
+- **B2**: `accounts` cannot read its state, and stops before changing
+  anything.
+
+### Rotating
+
+- **Cloudflare's token, the B2 key, the passphrase**: infra/MANUAL-STEPS.md,
+  section 12.
+- **The database's password**: raise `value_wo_version` in
+  `infra/tofu/secrets.tf` and run `accounts` with `apply`: a new password
+  is written into Infisical, and External Secrets puts it in `keel-db-app`
+  within the hour. PostgreSQL still has the old one: CloudNativePG uses the
+  Secret to make the database, and for a role it manages; check how the
+  operator's version handles a changed `initdb` Secret before doing this,
+  and if it does not, set the new one in PostgreSQL (`ALTER ROLE keel
+  PASSWORD …`, from `kubectl exec keel-db-1 -c postgres -- psql`) between
+  the apply and the refresh, then restart the game. Not done casually.
+- **The tunnel**: raise `tunnel_generation` in `infra/tofu/tunnel.tf` and
+  run `accounts` with `apply`: the plan replaces the tunnel (a new ID, a new
+  `play` record, a new token) and writes the new token into Infisical.
+  External Secrets brings it to `cloudflared/tunnel-token` within the hour,
+  or at once with `kubectl -n cloudflared annotate externalsecret
+  tunnel-token force-sync=$(date +%s) --overwrite`; then `kubectl -n
+  cloudflared rollout restart deploy/cloudflared`. About a minute without
+  the game.
 
 ## Restarts and deploys
 

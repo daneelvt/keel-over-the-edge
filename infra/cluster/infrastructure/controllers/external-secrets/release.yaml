@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# External Secrets 2.12.0, its controller alone: no admission webhook and
+# no certificate controller to keep the webhook's certificate. The webhook
+# checks what kubeconform and Flux's dry run already check, and every pod
+# is one more to patch and to fit in memory. With no webhook, the
+# definitions' conversion stays off, as it is by default (the chart's
+# values). Its image pinned by digest; its security context is the
+# chart's, which keeps Pod Security's restricted profile.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: external-secrets
+spec:
+  interval: 1h
+  chartRef:
+    kind: OCIRepository
+    name: external-secrets
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    image:
+      tag: v2.12.0@sha256:7a3c4f7e038fa0f86a3172da19b9388f3f4d846e87e9994ee3474c5b72a9330d
+    installCRDs: true
+    crds:
+      conversion:
+        enabled: false
+    webhook:
+      create: false
+    certController:
+      create: false
+    # Starting values: a handful of secrets, read hourly.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        memory: 128Mi

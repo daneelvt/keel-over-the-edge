@@ -109,8 +109,12 @@ func second(ctx context.Context, hc *http.Client, jar http.CookieJar, base strin
 	}
 }
 
-// dialGame opens the game connection with a cookie jar, as a page of the
+// DialGame opens the game connection with a cookie jar, as a page of the
 // players' origin does.
+func DialGame(ctx context.Context, hc *http.Client, jar http.CookieJar, base string) (*websocket.Conn, error) {
+	return dialGame(ctx, hc, jar, base)
+}
+
 func dialGame(ctx context.Context, hc *http.Client, jar http.CookieJar, base string) (*websocket.Conn, error) {
 	c := *hc
 	c.Jar = jar
@@ -129,6 +133,11 @@ func dialGame(ctx context.Context, hc *http.Client, jar http.CookieJar, base str
 // Guest makes a guest, as the page does, keeping its
 // cookie in a jar, and reads it back from /api/me.
 func Guest(ctx context.Context, client *http.Client, base string) (string, http.CookieJar, error) {
+	return GuestNamed(ctx, client, base, fmt.Sprintf("Smoke Test %d", time.Now().UnixNano()%1_000_000))
+}
+
+// GuestNamed is Guest, with the guest's name.
+func GuestNamed(ctx context.Context, client *http.Client, base, name string) (string, http.CookieJar, error) {
 	cat, err := catalog.Load()
 	if err != nil {
 		return "", nil, err
@@ -139,7 +148,6 @@ func Guest(ctx context.Context, client *http.Client, base string) (string, http.
 	}
 	c := *client
 	c.Jar = jar
-	name := fmt.Sprintf("Smoke Test %d", time.Now().UnixNano()%1_000_000)
 	body, err := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
 	if err != nil {
 		return "", nil, err

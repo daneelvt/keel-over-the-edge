@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Runs only when what the accounts workflow runs changed: infra/tofu, and
+# the tools that run it. No credential: OpenTofu formats, initialises
+# without a backend and validates, the lock file is checked for every
+# platform, and the tools are tested against fakes. The real plan runs in
+# accounts.yaml, approved.
+name: pr.accounts
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: changes
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-slim
+    permissions:
+      pull-requests: read # list the pull request's changed files
+    outputs:
+      accounts: ${{ steps.filter.outputs.accounts }}
+    steps:
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            accounts:
+              - '.github/workflows/pr.accounts.yaml'
+              - '.github/workflows/accounts.yaml'
+              - '.github/actions/setup/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'infra/tofu/**'
+              - 'infra/production.yaml'
+              - 'tools/accounts/**'
+              - 'tools/internal/**'
+
+  check:
+    name: check
+    needs: [changes]
+    if: needs.changes.outputs.accounts == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+      - name: infra/tofu formatted, valid and locked for every platform
+        run: go run ./tools/accounts -check
+      - name: The tools against fakes
+        run: go test -count=1 ./tools/accounts ./tools/internal/infisical ./tools/internal/production ./tools/internal/pinned
+
+  pr-accounts:
+    name: pr-accounts
+    if: always()
+    needs: [changes, check]
+    runs-on: ubuntu-slim
+    permissions: {}
+    steps:
+      - name: Every job passed, or was skipped as nothing it checks changed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) echo "a job ended: $r"; exit 1 ;; esac
+          done

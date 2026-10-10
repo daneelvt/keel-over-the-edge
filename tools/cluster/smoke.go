@@ -284,7 +284,10 @@ func (c *cluster) plainRefused(ctx context.Context, image string) error {
 
 // plainPod is the pod plainRefused runs: keel's image, its database
 // password, sslmode=disable. An image a deploy imported is never pulled; a
-// release's is in the node already, or pulled by its digest.
+// release's is in the node already, or pulled by its digest. It carries
+// the game's label, as the database's NetworkPolicy lets in the game alone,
+// and a readiness gate nothing ever sets, so the game's Service never
+// sends it a player.
 func plainPod(image string) string {
 	policy := "IfNotPresent"
 	if strings.HasPrefix(image, localImage+":") {
@@ -292,7 +295,9 @@ func plainPod(image string) string {
 	}
 	pod := map[string]any{
 		"apiVersion": "v1",
+		"metadata":   map[string]any{"labels": map[string]string{"app.kubernetes.io/name": "keel"}},
 		"spec": map[string]any{
+			"readinessGates":               []any{map[string]any{"conditionType": "keel/never-ready"}},
 			"automountServiceAccountToken": false,
 			"securityContext": map[string]any{
 				"runAsNonRoot": true, "runAsUser": 65532, "seccompProfile": map[string]any{"type": "RuntimeDefault"},

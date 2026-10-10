@@ -13,6 +13,10 @@ client/src/predict/physics.wasm
 # cluster's kubeconfig (tools/dev, tools/physics, tools/cluster)
 .dev/
 
+# OpenTofu's working folder, were tofu run by hand in infra/tofu: the tool
+# keeps its own under .dev/accounts
+infra/tofu/.terraform/
+
 # Binaries go build leaves in the root (go build ./cmd/keel, ./tools/...)
 /cluster
 /dev

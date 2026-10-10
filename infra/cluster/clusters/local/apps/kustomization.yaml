@@ -45,3 +45,22 @@ patches:
       - op: replace
         path: /spec/parentRefs/0/sectionName
         value: https
+  # No request here carries CF-Connecting-IP, so all share one count: the
+  # limits are raised for the load bot's hundreds of boats from one Mac.
+  - target:
+      kind: Middleware
+      name: per-address-rate
+    patch: |-
+      - op: replace
+        path: /spec/rateLimit/average
+        value: 2000
+      - op: replace
+        path: /spec/rateLimit/burst
+        value: 4000
+  - target:
+      kind: Middleware
+      name: per-address-connections
+    patch: |-
+      - op: replace
+        path: /spec/inFlightReq/amount
+        value: 4096

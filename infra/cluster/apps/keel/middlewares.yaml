@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Traefik's limits on one player's address: requests a second, and
+# requests open at once, a game connection being one for as long as it is
+# open. The address is the one Cloudflare saw, in CF-Connecting-IP, which
+# Cloudflare writes and only cloudflared's traffic reaches Traefik with.
+# Traefik keys each limit on the header's value as it is: a request with
+# no header counts with every other such request (Traefik's source
+# extractor). Starting values; the local cluster raises them, as nothing
+# there writes the header.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: per-address-rate
+spec:
+  rateLimit:
+    average: 50
+    period: 1s
+    burst: 100
+    sourceCriterion:
+      requestHeaderName: CF-Connecting-IP
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: per-address-connections
+spec:
+  inFlightReq:
+    amount: 200
+    sourceCriterion:
+      requestHeaderName: CF-Connecting-IP

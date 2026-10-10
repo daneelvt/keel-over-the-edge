@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Production's identifiers, read by the machine and tailnet workflows'
-# tools. None is a secret: a client ID or an identity ID only names who a
-# workflow may sign in as, and Tailscale and Infisical let a workflow sign
-# in only with a token GitHub issued to this repository's job in the
-# production environment, running the one workflow each is bound to.
+# Production's identifiers, read by the machine, tailnet and accounts
+# workflows' tools. None is a secret: a client ID or an identity ID only
+# names who a workflow may sign in as, and Tailscale and Infisical let a
+# workflow sign in only with a token GitHub issued to this repository's job
+# in the production environment, running the one workflow each is bound
+# to. Cloudflare's IDs and the bucket's name say which account, zone and
+# bucket; only a credential kept in Infisical opens them.
 #
 # The machine's public address is not here, nor anywhere in the
 # repository: nothing needs it once the machine is on the tailnet.
@@ -38,3 +40,31 @@ infisical:
   # keel-ops: the workflows' credentials, in its prod environment.
   project: "09d6ca0c-bc20-48e8-981e-e468b5aee626"
   environment: prod
+
+  # gha-accounts: the accounts workflow's identity, signing in the same
+  # way, with the same audience, and keel-accounts, its credentials'
+  # project (prod environment, folder /accounts).
+  accounts:
+    identityID: ""
+    project: ""
+  # keel-cluster: what the cluster's External Secrets reads, by project ID
+  # for OpenTofu, which writes the secrets it makes there, and by slug for
+  # External Secrets' store (infra/cluster/clusters/prod/configs/
+  # secret-store.yaml, which a test keeps the same).
+  cluster:
+    project: ""
+    slug: ""
+
+cloudflare:
+  # The account (its Account ID) and the zone keelovertheedge.com (its
+  # Zone ID), both on the zone's Overview page.
+  account: ""
+  zone: ""
+
+# OpenTofu's state: the private B2 bucket made for it, and B2's S3
+# endpoint and region for the account, as the bucket's page shows them
+# (an endpoint as https://s3.us-west-004.backblazeb2.com).
+state:
+  bucket: ""
+  endpoint: ""
+  region: ""

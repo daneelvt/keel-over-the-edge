@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The tunnel's token, which the accounts workflow writes into Infisical.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: tunnel-token
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: infisical
+  target:
+    name: tunnel-token
+    creationPolicy: Owner
+  data:
+    - secretKey: token
+      remoteRef:
+        key: /cloudflared/TUNNEL_TOKEN

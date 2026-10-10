@@ -8,12 +8,13 @@
   "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
   "kubernetes": { "managerFilePatterns": ["/^infra/cluster/.+\\.yaml$/"] },
   "flux": { "managerFilePatterns": ["/^infra/cluster/.+\\.yaml$/"] },
+  "terraform": { "managerFilePatterns": ["/^infra/tofu/.+\\.tf$/"] },
   "pip-compile": { "managerFilePatterns": ["/^infra/ansible/(lint-)?requirements\\.txt$/"] },
   "pip_requirements": { "enabled": false },
   "customManagers": [
     {
       "customType": "regex",
-      "description": "TinyGo, cosign, the Flux CLI and kube-bench, each pinned by release and by its file's digest for each platform in tools/internal/pinned",
+      "description": "TinyGo, cosign, the Flux CLI, kube-bench and OpenTofu, each pinned by release and by its file's digest for each platform in tools/internal/pinned",
       "managerFilePatterns": ["/^tools/internal/pinned/pinned\\.go$/"],
       "matchStrings": ["\\{\"(?<depName>[a-z0-9-]+/[a-z0-9-]+)\", \"[a-z0-9]+-[a-z0-9]+\", \"(?<currentValue>v[0-9.]+)\", \"(?<currentDigest>[0-9a-f]{64})\"\\}"],
       "datasourceTemplate": "github-release-attachments"
@@ -39,6 +40,14 @@
       "managerFilePatterns": ["/^infra/cluster/infrastructure/controllers/cloudnative-pg/release\\.yaml$/"],
       "matchStrings": ["tag: (?<currentValue>[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
       "depNameTemplate": "ghcr.io/cloudnative-pg/cloudnative-pg",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "External Secrets' image, pinned by version and digest in its HelmRelease's values",
+      "managerFilePatterns": ["/^infra/cluster/infrastructure/controllers/external-secrets/release\\.yaml$/"],
+      "matchStrings": ["tag: (?<currentValue>v[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "depNameTemplate": "ghcr.io/external-secrets/external-secrets",
       "datasourceTemplate": "docker"
     },
     {
@@ -88,6 +97,23 @@
       "description": "The CloudNativePG chart, by tag and digest, moves with the operator's image its values pin.",
       "matchDepNames": ["ghcr.io/cloudnative-pg/charts/cloudnative-pg", "ghcr.io/cloudnative-pg/cloudnative-pg"],
       "groupName": "CloudNativePG operator"
+    },
+    {
+      "description": "External Secrets supports only its newest minor version: its chart, by tag and digest, moves with the image its values pin.",
+      "matchDepNames": ["ghcr.io/external-secrets/charts/external-secrets", "ghcr.io/external-secrets/external-secrets"],
+      "groupName": "External Secrets"
+    },
+    {
+      "description": "OpenTofu's providers come from OpenTofu's registry, at exact versions; Renovate keeps the lock file's hashes with them.",
+      "matchManagers": ["terraform"],
+      "matchDepTypes": ["required_provider"],
+      "registryUrls": ["https://registry.opentofu.org"]
+    },
+    {
+      "description": "OpenTofu itself is pinned in tools/internal/pinned; the configuration's required_version is moved by hand with a new minor version, which Renovate would look up as Terraform's.",
+      "matchManagers": ["terraform"],
+      "matchDepTypes": ["required_version"],
+      "enabled": false
     },
     {
       "description": "Flux moves as one: its manifests, its controllers' images by digest, and its command line.",
