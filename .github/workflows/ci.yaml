@@ -118,7 +118,11 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node: "false"
-      - run: go test -race ./...
+      # With the race detector the slowest package takes from five minutes
+      # to just under ten on these runners, by the runner it lands on, and
+      # ten is Go's own limit for a package: twice that, so a slow runner
+      # is not a failed test, nor a release not made.
+      - run: go test -race -timeout 20m ./...
       - name: The physics and simulation tests again, built for amd64 with fused multiply-add available
         if: runner.arch == 'X64'
         env:
