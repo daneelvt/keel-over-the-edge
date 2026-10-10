@@ -222,6 +222,23 @@
       register: verify_listening
       changed_when: false
 
-    - name: Report it
+    # The machine's public address is never in a log or a summary: a
+    # public repository's are public. Its own global addresses outside
+    # the tailnet and the cluster are replaced in the report.
+    - name: Read the machine's own addresses
+      ansible.builtin.command:
+        cmd: ip -o -4 addr show scope global
+      register: verify_addresses
+      changed_when: false
+
+    - name: Report it, without the public address
+      vars:
+        verify_public: >-
+          {{ verify_addresses.stdout_lines
+             | reject('search', '^\d+: (tailscale0|cni0|flannel\.1)\s')
+             | map('regex_search', 'inet (\S+)/', '\1') | map('first') | list }}
       ansible.builtin.debug:
-        msg: "{{ verify_listening.stdout_lines }}"
+        msg: >-
+          {{ verify_listening.stdout_lines
+             | map('regex_replace', '(' ~ (verify_public | map('regex_escape') | join('|') if verify_public else '$^') ~ ')', '<public address>')
+             | list }}

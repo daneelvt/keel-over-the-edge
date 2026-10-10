@@ -247,6 +247,11 @@ func TestRunGivesTheCredentialOnlyToThePlaybook(t *testing.T) {
 			t.Errorf("the playbook's arguments have no %q: %s", want, args)
 		}
 	}
+	// A Unix socket's path is under 108 bytes: SSH's shared connection is
+	// left in Ansible's own short folder, never in the repository's.
+	if strings.Contains(args, "ControlPath") {
+		t.Errorf("the playbook's SSH arguments set a ControlPath: %s", args)
+	}
 	if strings.Contains(args, "--check") || p.argv[0] == "sudo" || p.dir != m.path(ansibleDir) {
 		t.Errorf("apply ran as %s in %s", args, p.dir)
 	}
@@ -475,5 +480,19 @@ func TestKubeBenchReport(t *testing.T) {
 		"Totals":{"total_pass":1,"total_fail":1,"total_warn":0,"total_info":0}}`))
 	if err != nil || r.pass != 1 || r.fail != 1 || len(r.failed) != 1 || r.failed[0].id != "4.2.6" {
 		t.Errorf("%+v %v", r, err)
+	}
+}
+
+// TestPingPathHidesTheAddress: the machine's public address, which tailscale
+// ping names for a direct path, reaches neither the log nor the summary.
+func TestPingPathHidesTheAddress(t *testing.T) {
+	for out, want := range map[string]string{
+		"pong from keel-prod-1 (100.96.147.105) via 203.0.113.7:41641 in 57ms\n": "direct, in 57ms",
+		"pong from keel-prod-1 (100.96.147.105) via DERP(nyc) in 81ms\n":         "relayed through DERP (nyc) in 81ms",
+		"no reply\n": "by a path tailscale ping did not name",
+	} {
+		if got := pingPath(out); got != want || strings.Contains(got, "203.0.113.7") {
+			t.Errorf("%q: %q, want %q", out, got, want)
+		}
 	}
 }

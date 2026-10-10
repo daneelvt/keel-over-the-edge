@@ -113,9 +113,12 @@ func (m *machine) playbook(file string, local bool, env []string, args ...string
 	if err != nil {
 		return cmd{}, fmt.Errorf("no address for the machine: run -join first (%w)", err)
 	}
+	// SSH's shared connection keeps Ansible's own socket, under
+	// ~/.ansible/cp: a socket's path must be shorter than 108 bytes, which
+	// one in the repository's folder on a runner is not.
 	argv = append(argv, "--inventory", "inventory/production.yaml",
 		"--extra-vars", "ansible_host="+strings.TrimSpace(string(host)),
-		"--ssh-common-args", "-o UserKnownHostsFile="+m.knownHosts()+" -o StrictHostKeyChecking=yes -o ControlPath="+m.path(stateDir, "ssh-%C"))
+		"--ssh-common-args", "-o UserKnownHostsFile="+m.knownHosts()+" -o StrictHostKeyChecking=yes")
 	return cmd{argv: argv, env: env, dir: m.path(ansibleDir)}, nil
 }
 
@@ -148,7 +151,7 @@ func (m *machine) verify(ctx context.Context, local bool) error {
 // listeningReport is what verify.yaml reported listening, one socket a
 // line.
 func listeningReport(out string) string {
-	i := strings.Index(out, "TASK [Report it]")
+	i := strings.Index(out, "TASK [Report it, without the public address]")
 	if i < 0 {
 		return ""
 	}
