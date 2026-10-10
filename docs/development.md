@@ -1460,9 +1460,9 @@ nothing**. Then `verify.yaml` checks the runner as the machine would be
 checked: the firewall, the hardening, k3s, and Flux following the **real**
 `prod`, its signature verified. What a runner cannot do is left out: the
 join (no tailnet), OpenSSH's removal, and the accounts check (the runner
-has its own user); the cluster's credential is made up. The runner's
-`/tmp` holds nothing to run after the first run, so Go builds in
-`.dev/go-tmp`.
+has its own user); the cluster's credential is made up. The tool is
+built before the first run: after it, the runner's `/tmp` holds nothing
+to run, Go's builds included.
 
 ### Changing it
 

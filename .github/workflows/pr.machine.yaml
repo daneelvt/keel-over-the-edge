@@ -81,10 +81,6 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
-    env:
-      # The playbook mounts /tmp with nothing to run; Go builds and runs
-      # elsewhere.
-      GOTMPDIR: ${{ github.workspace }}/.dev/go-tmp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,10 +88,9 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node: "false"
+      # Built once, before the playbook mounts /tmp with nothing to run.
       - name: Build the tool
-        run: |
-          mkdir -p "$GOTMPDIR"
-          go build -o .dev/bin/machine ./tools/machine
+        run: go build -o .dev/bin/machine ./tools/machine
       - name: Ansible, from hashed requirements
         run: .dev/bin/machine -ansible
       - name: The playbook on this runner, the first time
