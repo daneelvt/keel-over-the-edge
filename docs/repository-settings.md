@@ -69,7 +69,7 @@ The tailnet policy is written from `infra/tailnet/policy.hujson` by the
       tokens of 10 minutes, Viewer on `keel-ops` alone); `eso-prod`
       (Universal Auth, Viewer on `keel-cluster` alone); and `gha-accounts`
       (OIDC Auth alone, for the same subject and `accounts.yaml` on `main`,
-      tokens of 10 minutes, Viewer on `keel-accounts` and Developer on
+      tokens of 10 minutes, Viewer on `keel-accounts` and Member on
       `keel-cluster`, nothing else): 4 of the free plan's 5, and no other
 - [ ] **Projects**: `keel-ops`, `keel-accounts` and `keel-cluster`, each
       with `prod` alone

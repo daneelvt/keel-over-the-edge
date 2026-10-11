@@ -45,15 +45,15 @@ infisical:
   # way, with the same audience, and keel-accounts, its credentials'
   # project (prod environment, folder /accounts).
   accounts:
-    identityID: ""
-    project: ""
+    identityID: "cea2124c-2c26-4383-8339-c57630908603"
+    project: "87aed9be-8356-46dc-9cc8-f1fdf374b6be"
   # keel-cluster: what the cluster's External Secrets reads, by project ID
   # for OpenTofu, which writes the secrets it makes there, and by slug for
   # External Secrets' store (infra/cluster/clusters/prod/configs/
   # secret-store.yaml, which a test keeps the same).
   cluster:
-    project: ""
-    slug: ""
+    project: "563fce78-2a0d-4772-8f2c-97b2907cf82e"
+    slug: "keel-cluster-x-j5y"
 
 cloudflare:
   # The account (its Account ID) and the zone keelovertheedge.com (its

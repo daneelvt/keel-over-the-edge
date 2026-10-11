@@ -327,7 +327,7 @@ them; and it writes the secrets it makes into `keel-cluster`.
    | Claims | one claim: name `job_workflow_ref`, value `daneelvt/keel-over-the-edge/.github/workflows/accounts.yaml@refs/heads/main` |
 
 5. Add it to **`keel-accounts`** with the role **Viewer**, and to
-   **`keel-cluster`** with the role **Developer** (it writes the tunnel's
+   **`keel-cluster`** with the role **Member** (it writes the tunnel's
    token and the database's password there). No other project.
 
 Check:
@@ -335,7 +335,7 @@ Check:
 - [ ] **Machine Identities** lists `gha-prod`, `eso-prod` and
       `gha-accounts`: with you, **4 of the free plan's 5**.
 - [ ] `gha-accounts` has OIDC Auth alone, for `accounts.yaml` on `main`;
-      it is Viewer on `keel-accounts` and Developer on `keel-cluster`, and in
+      it is Viewer on `keel-accounts` and Member on `keel-cluster`, and in
       no other project. `gha-prod` is still in `keel-ops` alone, `eso-prod`
       in `keel-cluster` alone.
 
