@@ -1551,7 +1551,7 @@ secrets are made from:
 | `tunnel.tf` | The tunnel `keel-prod`, remotely managed: `play.keelovertheedge.com` → `http://traefik.kube-system.svc.cluster.local:80`, anything else 404. Its token, written into Infisical |
 | `dns.tf` | `play` (proxied, to the tunnel); DNSSEC; CAA for Universal SSL's authorities; a null MX, SPF and DMARC refusing all mail in the domain's name |
 | `zone.tf` | TLS strict, HTTPS always, TLS 1.2 at least, no 0-RTT, WebSockets; HSTS; nothing that rewrites the page or answers in its place; no bot or AI-crawler blocking |
-| `rules.tf` | `/assets/` cached as the game says; methods other than GET, HEAD and POST blocked; `POST /guest` at most 10 in 10 s per address |
+| `rules.tf` | `/assets/` cached as the game says; methods other than GET, HEAD and POST blocked; `POST /guest` at most 10 in 10 s per address; no script of Cloudflare's added to the page (its Web Analytics beacon, Zaraz) |
 | `secrets.tf` | The database's password: ephemeral, written into Infisical write-only, in no plan or state |
 | `notifications.tf` | An e-mail to the owner when the tunnel's health changes |
 
@@ -1659,8 +1659,10 @@ address Cloudflare saw: **`per-address-rate`**, 50 requests a second with a
 burst of 100, on every route but the game connection; and
 **`per-address-connections`**, 200 requests open at once, on `/ws` (a game
 connection is one for as long as it is open). Over either, Traefik answers
-429. Only cloudflared reaches Traefik, and Cloudflare writes the header
-itself, so a player cannot choose their own. On the local cluster nothing
+429. Only cloudflared reaches Traefik, and a player cannot choose the
+header: Cloudflare refuses a request that carries its own
+`CF-Connecting-IP` (403, error 1000) before it reaches the tunnel, and
+writes the header itself on every other. On the local cluster nothing
 writes the header, so every request counts as one address's: the amounts
 there are 2000, 4000 and 4096, for the load bot's hundreds of boats.
 
@@ -1673,11 +1675,13 @@ go run ./tools/online -page client/dist/index.html      # and the page's bytes a
 ```
 
 It changes nothing but one guest it makes, named `Zz Online …`: HSTS; the
-asset cached at the edge and the page not; nothing injected into the page;
+asset cached at the edge and the page not; nothing injected into the page,
+asked for as a browser asks;
 `/api/version` naming the build `prod` holds; HEAD; a PUT blocked by
 Cloudflare; `/ws` refusing a request without a session, and one from
 another origin; 160 requests at once from one address meeting Traefik's
-429, and again with a different forged `CF-Connecting-IP` on each; another
+429, and the same with a different forged `CF-Connecting-IP` on each
+refused by Cloudflare or meeting the 429 again; another
 host refused; a game connection open for ten minutes, past Cloudflare's
 100-second idle limit and Traefik's 60-second read timeout.
 
