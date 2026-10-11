@@ -17,13 +17,14 @@ locals {
     websockets = "on"
 
     # Features that change a response or stand in for the game.
+    # (content_converter, Markdown for agents, is not left to a free zone
+    # to set: Cloudflare refuses to edit it.)
     always_online            = "off"
     automatic_https_rewrites = "off"
     email_obfuscation        = "off"
     rocket_loader            = "off"
     server_side_exclude      = "off"
     mirage                   = "off"
-    content_converter        = "off"
     pre_render               = "off"
     replace_insecure_js      = "off"
     webmcp_enabled           = "off"
