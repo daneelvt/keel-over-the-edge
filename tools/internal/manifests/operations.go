@@ -30,6 +30,10 @@ const (
 )
 
 // archiveName is an archive generation's name: keel-db-g1, keel-db-g2 …
+// ApplyOnce is Flux's annotation for how it applies an object (its
+// documentation, "Controlling the apply behavior of resources").
+const ApplyOnce = "kustomize.toolkit.fluxcd.io/ssa"
+
 var archiveName = regexp.MustCompile(`^keel-db-g([1-9][0-9]*)$`)
 
 // Buckets are the buckets the database's object stores write to: the
@@ -136,6 +140,19 @@ func databaseArchive(objs []Object, t Target) error {
 		}
 	} else if rec != nil || len(ext) > 0 {
 		fail("%s: recovers from backups outside the rebuild form", db.ID())
+	}
+	// The rebuild form is followed until the generation is raised, and
+	// from then describes the next rebuild: what it made must be left as
+	// it was made. Everywhere else, Flux applies everything.
+	for _, o := range objs {
+		once := Str(o, "metadata", "annotations", ApplyOnce)
+		made := t.Rebuild && (o.ID() == db.ID() || o.Kind() == "CronJob" && o.Name() == RestoreTest)
+		switch {
+		case made && once != "IfNotPresent":
+			fail("%s: rebuilt, Flux must apply it only while it is not there (%s: IfNotPresent), or raising the generation renames a running database's archive", o.ID(), ApplyOnce)
+		case !made && once != "":
+			fail("%s: Flux is told to apply it its own way (%s: %s); only the rebuilt database and its restore test are", o.ID(), ApplyOnce, once)
+		}
 	}
 	sb := Find(objs, "ScheduledBackup", "keel-db-daily")
 	if sb == nil || Str(sb, "spec", "cluster", "name") != database || Str(sb, "spec", "method") != "plugin" ||

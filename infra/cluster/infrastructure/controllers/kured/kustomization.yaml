@@ -1,8 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Kured, which reboots the machine when an update asks for it
 # (/var/run/reboot-required), in its window alone: Wednesdays, 20:00 to
-# 22:00 UTC, and only while no alert fires but the three that may (vmalert
-# answers Prometheus' alerts API). It drains the node first, which stops
+# 22:00 UTC, and only while no alert fires but the three that may. It asks
+# the metrics store for the series ALERTS, which vmalert writes there, with
+# Prometheus' query API (Kured's pkg/blockers/prometheus.go); vmalert
+# itself does not answer queries. An answer it cannot get counts as an
+# alert: it does not reboot. It drains the node first, which stops
 # keel with its bell and its last checkpoint, and the database as a restart
 # does; a drain not done in 10 minutes leaves the machine up, and
 # RebootPending says so. Production alone.
@@ -41,8 +44,9 @@ patches:
           - --time-zone=UTC
           - --period=10m
           - --drain-timeout=10m
-          - --prometheus-url=http://vmalert-keel.monitoring.svc:8080
+          - --prometheus-url=http://vmsingle-keel.monitoring.svc:8428
           - --alert-filter-regexp=^(Watchdog|RebootPending|UpdatesPending)$
+          - --alert-firing-only=true
       - op: add
         path: /spec/template/spec/automountServiceAccountToken
         value: true

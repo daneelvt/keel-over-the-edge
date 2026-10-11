@@ -1093,6 +1093,24 @@ func TestEachRuleFails(t *testing.T) {
 			spec(Find(objs, "ScheduledBackup", "keel-db-daily"))["immediate"] = false
 			return objs
 		}},
+		// What a rebuild made keeps its archive's name when the generation
+		// is raised: Flux applies it only while it is not there.
+		{"the database's archive", inRelease(rebuild, "apps"), func(objs []Object) []Object {
+			delete(Get(Find(objs, "Cluster", database), "metadata", "annotations").(map[string]any), ApplyOnce)
+			return objs
+		}},
+		{"the database's archive", inRelease(rebuild, "apps"), func(objs []Object) []Object {
+			Get(Find(objs, "CronJob", RestoreTest), "metadata", "annotations").(map[string]any)[ApplyOnce] = "Merge"
+			return objs
+		}},
+		{"the database's archive", inRelease(prod, "apps"), func(objs []Object) []Object {
+			Get(Find(objs, "Cluster", database), "metadata", "annotations").(map[string]any)[ApplyOnce] = "IfNotPresent"
+			return objs
+		}},
+		{"the database's archive", inRelease(prod, "apps"), func(objs []Object) []Object {
+			Find(objs, "Deployment", "keel")["metadata"].(map[string]any)["annotations"] = map[string]any{ApplyOnce: "Ignore"}
+			return objs
+		}},
 		{"the database's archive", inRelease(prod, "apps"), func(objs []Object) []Object {
 			return slices.DeleteFunc(objs, func(o Object) bool { return o.Kind() == "ScheduledBackup" })
 		}},

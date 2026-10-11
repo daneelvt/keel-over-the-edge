@@ -1660,7 +1660,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "_SYSTEMD_UNIT:* level:in(0, 1, 2, 3, 4, emerg, alert, crit, err, warning)",
+          "expr": "_SYSTEMD_UNIT:* level:in(emerg, alert, crit, err, error, warning)",
           "queryType": "range",
           "editorMode": "code",
           "maxLines": 200

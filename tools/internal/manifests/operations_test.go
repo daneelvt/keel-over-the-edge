@@ -5,6 +5,7 @@ package manifests
 import (
 	"bytes"
 	"encoding/pem"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,9 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"go.yaml.in/yaml/v3"
-
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/production"
+	"go.yaml.in/yaml/v3"
 )
 
 // all renders every entry point of a cluster, with Flux's own where the
@@ -110,8 +110,9 @@ func TestClustersKeepTheirRulesTogether(t *testing.T) {
 
 // TestRebuildFormIsProductionButItsDatabase: the rebuild form differs from
 // production in the folders Flux's layers apply, in how the database is
-// made and what it archives as, and in the archive the restore test
-// restores; in nothing else.
+// made and what it archives as, in the archive the restore test restores,
+// and in those two being applied only while they are not there; in
+// nothing else.
 func TestRebuildFormIsProductionButItsDatabase(t *testing.T) {
 	for _, e := range prod.Entries {
 		live, re := release(t, prod, e), release(t, rebuild, e)
@@ -131,6 +132,10 @@ func TestRebuildFormIsProductionButItsDatabase(t *testing.T) {
 				delete(a["spec"].(map[string]any), "path")
 				delete(b["spec"].(map[string]any), "path")
 			case a.ID() == "Cluster/"+database:
+				if Str(b, "metadata", "annotations", ApplyOnce) != "IfNotPresent" {
+					t.Errorf("the rebuild form's %s is applied again once it is there", b.ID())
+				}
+				dropApplyOnce(b)
 				for _, o := range []Object{a, b} {
 					spec := o["spec"].(map[string]any)
 					delete(spec, "bootstrap")
@@ -138,6 +143,10 @@ func TestRebuildFormIsProductionButItsDatabase(t *testing.T) {
 					delete(Get(spec, "plugins", 0, "parameters").(map[string]any), "serverName")
 				}
 			case a.ID() == "CronJob/"+RestoreTest:
+				if Str(b, "metadata", "annotations", ApplyOnce) != "IfNotPresent" {
+					t.Errorf("the rebuild form's %s is applied again once it is there", b.ID())
+				}
+				dropApplyOnce(b)
 				for _, o := range []Object{a, b} {
 					for _, env := range List(Container(PodSpec(o), "containers", "restore-test"), "env") {
 						if Str(env, "name") == "KEEL_RESTORE_SOURCE" {
@@ -158,6 +167,17 @@ func TestRebuildFormIsProductionButItsDatabase(t *testing.T) {
 	}
 	if init := Get(Find(release(t, prod, "apps"), "Cluster", database), "spec", "bootstrap", "initdb"); init == nil {
 		t.Error("production's database is not made with initdb")
+	}
+}
+
+// dropApplyOnce removes the annotation the rebuild form adds, and the
+// annotations with it when it was the only one.
+func dropApplyOnce(o Object) {
+	meta := o["metadata"].(map[string]any)
+	ann, _ := meta["annotations"].(map[string]any)
+	delete(ann, ApplyOnce)
+	if len(ann) == 0 {
+		delete(meta, "annotations")
 	}
 }
 
@@ -420,12 +440,38 @@ func TestQuietWindows(t *testing.T) {
 			t.Errorf("%s runs at %q in %q", name, Str(cj, "spec", "schedule"), Str(cj, "spec", "timeZone"))
 		}
 	}
+	// Kured asks for the series ALERTS with Prometheus' query API, which
+	// the metrics store answers and vmalert does not; an answer it cannot
+	// get stops every reboot. So: the store the monitoring layer makes, at
+	// its own port, which its NetworkPolicy lets Kured in to.
+	monitoring := release(t, prod, "monitoring")
+	// The operator names a VMSingle's Service vmsingle-<its name>, and the
+	// chart names the VMSingle by fullnameOverride.
+	var store string
+	for _, o := range monitoring {
+		if name := Str(o, "spec", "values", "fullnameOverride"); o.Kind() == "HelmRelease" && Get(o, "spec", "values", "vmsingle") != nil && name != "" {
+			store = "http://vmsingle-" + name + "." + Str(o, "metadata", "namespace") + ".svc:8428"
+		}
+	}
 	kured := strings.Join(toStrings(List(Containers(PodSpec(Find(controllers, "DaemonSet", "kured")))[0], "command")), " ")
 	for _, want := range []string{"--reboot-days=we", "--start-time=20:00", "--end-time=22:00", "--time-zone=UTC", "--drain-timeout=10m", "--ds-namespace=kured",
-		"--prometheus-url=http://vmalert-keel.monitoring.svc:8080", "--alert-filter-regexp=^(Watchdog|RebootPending|UpdatesPending)$"} {
-		if !strings.Contains(kured, want) {
+		"--prometheus-url=" + store + " ", "--alert-filter-regexp=^(Watchdog|RebootPending|UpdatesPending)$", "--alert-firing-only=true"} {
+		if store == "" || !strings.Contains(kured+" ", want) {
 			t.Errorf("Kured runs without %s: %s", want, kured)
 		}
+	}
+	admitted := false
+	for _, in := range List(Find(monitoring, "NetworkPolicy", "vmsingle"), "spec", "ingress") {
+		for _, from := range List(in, "from") {
+			if Str(from, "namespaceSelector", "matchLabels", "kubernetes.io/metadata.name") == "kured" && Str(from, "podSelector", "matchLabels", "name") == "kured" {
+				for _, p := range List(in, "ports") {
+					admitted = admitted || fmt.Sprint(Get(p, "port")) == "8428"
+				}
+			}
+		}
+	}
+	if !admitted {
+		t.Error("the metrics store's NetworkPolicy does not let Kured in to 8428")
 	}
 	if strings.Contains(kured, "--force-reboot") {
 		t.Error("Kured forces a reboot a drain did not finish for")

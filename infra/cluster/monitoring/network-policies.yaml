@@ -7,7 +7,8 @@
 # listens on 9100, which the machine's firewall keeps from the internet.
 #
 # The metrics store: written by the scraper and vmalert, read by vmalert
-# and Grafana.
+# and Grafana, and by Kured, which asks it whether anything fires before a
+# reboot.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -29,6 +30,12 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: grafana
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kured
+          podSelector:
+            matchLabels:
+              name: kured
       ports:
         - port: 8428
           protocol: TCP
@@ -62,9 +69,8 @@ spec:
         - port: 9428
           protocol: TCP
 ---
-# vmalert: its rules and alerts through the metrics store's proxy, Kured
-# asking whether anything fires before a reboot, and the scraper, which
-# also reads the configuration reloader beside it (8435).
+# vmalert: its rules and alerts through the metrics store's proxy, and the
+# scraper, which also reads the configuration reloader beside it (8435).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -83,12 +89,6 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: vmagent
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kured
-          podSelector:
-            matchLabels:
-              name: kured
       ports:
         - port: 8080
           protocol: TCP

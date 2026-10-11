@@ -9,11 +9,37 @@
 # by go run ./tools/cluster -deploy -rebuild.
 #
 # A cluster reads bootstrap only when it is made (CloudNativePG's
-# validating webhook checks no change to it): a running one that is given
-# this changes nothing.
+# validating webhook checks no change to it), but the archive's name
+# whenever it changes. So Flux applies the database and its restore test
+# only while they are not there (Flux's documentation, "Controlling the
+# apply behavior of resources": kustomize.toolkit.fluxcd.io/ssa:
+# IfNotPresent): once the generation is raised, the release's rebuild form
+# describes the next rebuild, and a database this one made, which Flux
+# still follows it for until the machine workflow moves it back, must keep
+# the name it archives under.
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 patches:
+  - target:
+      kind: Cluster
+      name: keel-db
+    patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: keel-db
+        annotations:
+          kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
+  - target:
+      kind: CronJob
+      name: keel-restore-test
+    patch: |-
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: keel-restore-test
+        annotations:
+          kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
   - target:
       kind: Cluster
       name: keel-db

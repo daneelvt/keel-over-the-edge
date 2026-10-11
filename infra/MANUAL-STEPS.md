@@ -492,14 +492,172 @@ new one has worked.
   `TOFU_PASSPHRASE_OLD`.
 - **`gha-accounts`**: nothing to rotate; it holds no secret.
 
+## 13. Infisical: the backups' project
+
+The keys that can write, read or delete the database's backups are kept
+apart from everything a workflow can reach. `gha-accounts` may read
+`keel-cluster`'s values, so they cannot go there; and a project is the
+free plan's only fence. **No workflow's identity is ever added to this
+project.**
+
+1. As in 2.2, create the project **`keel-backups`**, and delete its
+   **Development** and **Staging** environments.
+2. **Access Control → Machine Identities → Add Machine Identity to
+   Project → Assign Existing**: `eso-prod`, role **Viewer**. Nobody and
+   nothing else.
+3. In **Production**, add three folders: `keel`, `keel-restore` and
+   `local`. They stay empty until section 14.
+4. In the project's settings, copy its **slug** (as `keel-backups-a1b2`).
+   It goes in two places, which a test keeps the same:
+   `infisical.backups.slug` in `infra/production.yaml`, and
+   `projectSlug` in
+   `infra/cluster/clusters/prod/configs/secret-store-backups.yaml`.
+
+Check:
+
+- [ ] `keel-backups` has the **Production** environment alone, and two
+      members: you, and `eso-prod` as Viewer.
+- [ ] `gha-prod` and `gha-accounts` are members of neither this project
+      nor, for `gha-prod`, of `keel-cluster`.
+
+## 14. Backblaze B2: the backups
+
+Three buckets and four keys, made from your own computer and never by a
+workflow: a key that can make keys has the whole account, and one that
+can change a bucket can set a rule that deletes everything in it. Neither
+is ever stored anywhere.
+
+The keys below need capabilities B2's web page does not offer one by one,
+so use B2's command-line tool (Backblaze's documentation, "B2 Command
+Line Tool"): `brew install b2-tools`, then `b2 account authorize`, which
+asks for a key. Give it the account's **master application key**
+(**Application Keys → Generate New Master Application Key**; it is shown
+once, and generating one revokes the last), for this session alone.
+
+### 14.1 The buckets
+
+Names are global: if one is taken, choose another and use it in what
+follows. All three are private, encrypted by B2 (SSE-B2), and keep only
+the last version of a file: Barman's deletions only hide files, which
+would otherwise be kept and billed for ever.
+
+```sh
+last='{"daysFromHidingToDeleting": 1, "daysFromUploadingToHiding": null, "fileNamePrefix": ""}'
+weeks='{"daysFromHidingToDeleting": 1, "daysFromUploadingToHiding": 56, "fileNamePrefix": ""}'
+
+b2 bucket create --default-server-side-encryption SSE-B2 --file-lock-enabled --lifecycle-rule "$last"  keel-db-backups allPrivate
+b2 bucket create --default-server-side-encryption SSE-B2 --file-lock-enabled --lifecycle-rule "$weeks" keel-db-dumps   allPrivate
+b2 bucket create --default-server-side-encryption SSE-B2 --lifecycle-rule "$last" keel-db-backups-local allPrivate
+
+b2 bucket update --default-retention-mode governance --default-retention-period "14 days" keel-db-backups
+b2 bucket update --default-retention-mode governance --default-retention-period "14 days" keel-db-dumps
+```
+
+| Bucket | Holds | Object Lock | Lifecycle |
+|---|---|---|---|
+| `keel-db-backups` | production's WAL and base backups | governance, 14 days | hidden versions deleted after a day |
+| `keel-db-dumps` | the weekly dumps | governance, 14 days | hidden after 56 days, deleted a day later |
+| `keel-db-backups-local` | the local cluster's WAL and base backups | none | hidden versions deleted after a day |
+
+Object Lock can be turned on only when a bucket is made. In governance
+mode a file cannot be deleted or replaced for its 14 days by any of the
+keys below; your own session still can, with `--bypass-governance`.
+Barman keeps 30 days and removes what is older, so it never meets a
+locked file.
+
+Then, in `infra/production.yaml`, under `backups`: the three names
+(`bucket`, `dumps`, `local`), and `endpoint` and `region` as in section 9
+(the account has one region). If a name differs from the ones above,
+change it too where the tests say: the `ObjectStore`s' `destinationPath`
+and the dump's `DUMP_REMOTE`.
+
+### 14.2 The keys
+
+Each is for one bucket, with exactly these capabilities, and never
+expires (it is replaced by hand, below). `b2 key create` prints the
+**keyID** and the **applicationKey** once: paste both into Infisical,
+`keel-backups`, Production, in the folder and under the names of the
+table, before making the next, and keep them nowhere else.
+
+```sh
+b2 key create --bucket keel-db-backups       keel-barman  listBuckets,listFiles,readFiles,writeFiles,deleteFiles
+b2 key create --bucket keel-db-backups       keel-restore listBuckets,listFiles,readFiles
+b2 key create --bucket keel-db-dumps         keel-dumps   listBuckets,listFiles,writeFiles
+b2 key create --bucket keel-db-backups-local keel-local   listBuckets,listFiles,readFiles,writeFiles,deleteFiles
+```
+
+| Key | Does | In `keel-backups`, as |
+|---|---|---|
+| `keel-barman` | archives production's WAL and base backups, and removes what is older than 30 days | `/keel/B2_BARMAN_KEY_ID`, `/keel/B2_BARMAN_KEY` |
+| `keel-restore` | reads them, for the weekly restore test; can change nothing | `/keel-restore/B2_RESTORE_KEY_ID`, `/keel-restore/B2_RESTORE_KEY` |
+| `keel-dumps` | writes the weekly dump; cannot read or delete one | `/keel/B2_DUMPS_KEY_ID`, `/keel/B2_DUMPS_KEY` |
+| `keel-local` | the local cluster's archive, on your own computer | `/local/B2_KEY_ID`, `/local/B2_KEY` |
+
+No key is given `writeKeys`, `writeBuckets`, `deleteBuckets` or
+`bypassGovernance`. If a backup, a dump or a restore later fails for want
+of a capability, B2's answer names it: add that one, to that key, by
+making the key again, and write here which and why.
+
+Then the local cluster's copy, in the repository's folder on your
+computer (the file is ignored by git, and read by `tools/cluster` alone):
+
+```sh
+umask 077
+printf 'KEEL_B2_KEY_ID=%s\nKEEL_B2_KEY=%s\n' '<keyID of keel-local>' '<applicationKey of keel-local>' > .dev/backups.env
+```
+
+Last, end the session: `b2 account clear`. The master key is in no file
+after that; generate a new one the next time one is needed.
+
+Check:
+
+- [ ] `b2 bucket get keel-db-backups` and `keel-db-dumps`:
+      `"isFileLockEnabled": true`, default retention `governance`, 14
+      days; all three `allPrivate`, with SSE-B2 and their lifecycle rule.
+- [ ] `b2 key list --long` shows `keel-state` and the four keys above,
+      each with its one bucket and exactly its capabilities, and no other
+      key.
+- [ ] `keel-backups`, Production, holds the eight values of the table and
+      nothing else.
+- [ ] `infra/production.yaml` has `backups` and `infisical.backups.slug`
+      filled in, and `go test ./tools/...` passes: from then on a release
+      can be rendered.
+- [ ] After the first release is promoted: `kubectl get
+      clustersecretstore infisical-backups` is `Valid`; `kubectl -n keel
+      get backups.postgresql.cnpg.io` shows a base backup completed; the
+      Backups dashboard shows WAL archived within the last five minutes.
+      Then, by hand, once: the dump and the restore test
+      (docs/development.md, "Backups"), both passing.
+- [ ] With the `keel-barman` key (not your session), deleting a file
+      archived that day is refused: the lock holds.
+
+### Rotating the backups' keys
+
+Each the same way, from a session opened as above: `b2 key create` with
+the same name, bucket and capabilities; paste both values over the old
+ones in `keel-backups`; External Secrets brings them to the cluster
+within the hour, or at once (`kubectl -n keel annotate externalsecret
+keel-b2 force-sync=$(date +%s) --overwrite`; `keel-dumps` in `keel`,
+`keel-b2-read` in `keel-restore`). The archiver reads its key at each
+upload, and the jobs when they start: nothing restarts. Watch one WAL
+segment archived (the Backups dashboard), then `b2 key delete <the old
+keyID>`. For `keel-local`, write `.dev/backups.env` again and run
+`go run ./tools/cluster -deploy`.
+
+A key believed stolen: delete it first, then make the new one. The
+database keeps the WAL it cannot archive and sends it once the new key
+arrives; within the lock's 14 days nothing in the bucket was lost, and
+`b2 ls --versions` shows what the thief hid or added.
+
 ## If something fails
 
 - **Tailscale is down, or the machine is off the tailnet**: InterServer's
   panel, from any browser, has the machine's console (**View Desktop**),
   where root's password works.
-- **The machine is beyond repair**: **Reinstall OS** in the panel, then
-  steps 5.3 and 6 again, and `machine` with `apply`. The machine holds
-  nothing the repository and Infisical cannot rebuild.
+- **The machine is beyond repair**: [REBUILD.md](REBUILD.md), step by
+  step: **Reinstall OS** in the panel, steps 5.3 and 6 again, and
+  `machine` with `apply` and **rebuild**. The machine holds nothing the
+  repository, Infisical and the backups cannot rebuild.
 - **A device is lost**: remove it in Tailscale's admin page, from the other
   device. The `check` rule asks for the owner's GitHub sign-in every 12
   hours, so a stolen, unlocked laptop does not keep root on the machine.

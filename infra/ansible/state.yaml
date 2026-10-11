@@ -10,12 +10,19 @@
   gather_facts: false
   vars:
     state_kubectl: /usr/local/bin/k3s kubectl
+    # The name the Barman Cloud plugin archives under.
+    state_archive: >-
+      {.spec.plugins[?(@.name=="barman-cloud.cloudnative-pg.io")].parameters.serverName}
   tasks:
     - name: Read them
       ansible.builtin.shell:
         cmd: |
-          path=$({{ state_kubectl }} --namespace=flux-system get kustomizations.kustomize.toolkit.fluxcd.io flux-system --ignore-not-found --output=jsonpath='{.spec.path}' 2>/dev/null || true)
-          archive=$({{ state_kubectl }} --namespace=keel get clusters.postgresql.cnpg.io keel-db --ignore-not-found --output=jsonpath='{.spec.plugins[?(@.name=="barman-cloud.cloudnative-pg.io")].parameters.serverName}' 2>/dev/null || true)
+          path=$({{ state_kubectl }} --namespace=flux-system \
+            get kustomizations.kustomize.toolkit.fluxcd.io flux-system --ignore-not-found \
+            --output=jsonpath='{.spec.path}' 2>/dev/null || true)
+          archive=$({{ state_kubectl }} --namespace=keel \
+            get clusters.postgresql.cnpg.io keel-db --ignore-not-found \
+            --output=jsonpath='{{ state_archive }}' 2>/dev/null || true)
           echo "flux follows [$path]; the database archives as [$archive]"
         executable: /bin/bash
       register: state_read
