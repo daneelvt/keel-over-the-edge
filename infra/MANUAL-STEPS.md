@@ -396,12 +396,12 @@ Check:
      |---|---|---|
      | Account | Cloudflare One Connector: cloudflared | Edit |
      | Account | Notifications | Edit |
-     | Zone | Zone | Read |
      | Zone | DNS | Edit |
+     | Zone | Zone | Read |
      | Zone | Zone Settings | Edit |
-     | Zone | Zone WAF | Edit |
-     | Zone | Cache Rules | Edit |
+     | Zone | Zone WAF Rules | Edit |
      | Zone | Bot Management | Edit |
+     | Zone | Cache Rules | Edit |
 
    - **Account Resources**: this account. **Zone Resources**: Specific
      zone, `keelovertheedge.com`.
