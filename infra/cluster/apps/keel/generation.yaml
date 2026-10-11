@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The database's archive generation: the name its WAL and backups are kept
+# under in the object store. CloudNativePG archives a new cluster only into
+# an empty archive, so a database rebuilt from its backups writes the next
+# generation's. The live cluster archives as live; the rebuild form
+# (clusters/prod-rebuild) recovers from live and archives as rebuilt, the
+# one after it. After a rebuild, a commit raises both by one: the live
+# cluster's name becomes the one it already writes (docs/development.md,
+# "Backups").
+#
+# This is the one place the names are written: the components archive/ and
+# rebuild/ put them where they go (the cluster's archive, the rebuild's
+# source, the restore test's).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keel-db-archive
+data:
+  live: keel-db-g1
+  rebuilt: keel-db-g2

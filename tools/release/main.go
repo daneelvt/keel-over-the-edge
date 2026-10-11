@@ -4,6 +4,7 @@
 // renders a release's manifests by hand:
 //
 //	go run ./tools/release -tools                        fetch cosign and the Flux CLI, pinned by digest, into .dev/bin
+//	go run ./tools/release -verify-keyed                 check the signatures Flux cannot: cert-manager's chart and images against its key, Kured's image against its release workflow
 //	go run ./tools/release -render <dir> -image <image>  render every cluster's manifests with the game's image by digest, check them, write them under dir
 //	go run ./tools/release -released <build>             say whether the build is released: its manifests published and signed
 //	go run ./tools/release -promote <build> [-rollback]  make the build the release production follows
@@ -28,6 +29,7 @@ import (
 	"syscall"
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/pinned"
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/production"
 )
 
 // The folders the tool works in, from the repository's root.
@@ -42,6 +44,7 @@ const (
 
 func main() {
 	tools := flag.Bool("tools", false, "fetch cosign and the Flux CLI into .dev/bin")
+	verifyKeyed := flag.Bool("verify-keyed", false, "check the signatures of the sources and images Flux cannot verify")
 	renderDir := flag.String("render", "", "render every cluster's manifests into `dir`, which must be empty or not there")
 	image := flag.String("image", "", "the game's `image` to render with, ghcr.io/daneelvt/keel@sha256:<digest>")
 	releasedBuild := flag.String("released", "", "say whether `build` is released, as released=true or released=false")
@@ -59,8 +62,18 @@ func main() {
 		if dir, err = pinned.Install(ctx, stateDir, os.Stderr, pinned.Cosign, pinned.Flux); err == nil {
 			fmt.Printf("release: cosign %s and flux %s are in %s\n", pinned.Cosign.Version(), pinned.Flux.Version(), dir)
 		}
+	case *verifyKeyed:
+		err = newKeyedVerifier(os.Stdout).verify(ctx)
 	case *renderDir != "":
-		err = render(ctx, os.Stdout, *renderDir, *image)
+		// A release names the backups' buckets and the project that holds
+		// their keys: none is rendered before they are made.
+		var p production.Production
+		if p, err = production.Read(production.File); err == nil {
+			err = p.BackupsMade()
+		}
+		if err == nil {
+			err = render(ctx, os.Stdout, *renderDir, *image)
+		}
 	case *releasedBuild != "":
 		var p *promoter
 		if p, err = newPromoter(os.Stderr); err == nil {

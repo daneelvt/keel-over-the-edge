@@ -262,7 +262,7 @@ func TestRestoreFails(t *testing.T) {
 			return u
 		}, "it has no table session"},
 		"an old checkpoint": {2, func(t *testing.T) string { return played(t, "2 days") }, "its newest checkpoint is 48h0m0s old, more than 24h0m0s"},
-		"no world": {2, func(t *testing.T) string { return storetest.URL(t) }, "its table world is empty; its table checkpoint is empty"},
+		"no world":          {2, func(t *testing.T) string { return storetest.URL(t) }, "its table world is empty; its table checkpoint is empty"},
 		"an old schema": {2, func(t *testing.T) string {
 			u := storetest.Empty(t)
 			if _, err := store.Migrate(context.Background(), u, store.Latest-1); err != nil {

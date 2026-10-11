@@ -62,6 +62,8 @@ type cluster struct {
 	out io.Writer
 	// state is stateDir; kubeconfig is its kubeconfig.
 	state, kubeconfig string
+	// backups is backupsFile, the key to the local bucket of backups.
+	backups string
 	// installer fetches k3s's install.sh from its address.
 	installer func(ctx context.Context, url string) ([]byte, error)
 	// certificate makes, or reuses, the certificate for the players' hosts
@@ -73,7 +75,7 @@ type cluster struct {
 
 func newCluster(c commands, out io.Writer) *cluster {
 	return &cluster{
-		cmd: c, out: out, state: stateDir, kubeconfig: filepath.Join(stateDir, "kubeconfig"),
+		cmd: c, out: out, state: stateDir, kubeconfig: filepath.Join(stateDir, "kubeconfig"), backups: backupsFile,
 		installer: fetchInstaller, poll: 2 * time.Second,
 		certificate: func(ctx context.Context, dir string, hosts []string) (devcert.Certs, error) {
 			return devcert.Make(ctx, out, dir, hosts, true)

@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The machine's alerts, from node-exporter and from the facts the playbook
+# writes for it (keel_machine_*: AIDE's last check, a reboot required,
+# security updates waiting). Starting values.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: machine
+spec:
+  groups:
+    - name: machine
+      rules:
+        # Always firing: that it shows on the Overview says the alerts'
+        # whole path works. Its absence is the alert.
+        - alert: Watchdog
+          expr: vector(1)
+          labels:
+            severity: none
+          annotations:
+            summary: The alerts' path works.
+            description: Always firing. If it is missing from the Overview, vmalert or Alertmanager is not running.
+        - alert: DiskFull
+          expr: |
+            1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} > 0.9
+              or predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 24 * 3600) < 0
+          for: 15m
+          labels:
+            severity: critical
+            component: machine
+          annotations:
+            summary: "The root filesystem is {{ $value | humanizePercentage }} full, or will be full within a day."
+            description: Every volume shares it (local-path enforces no size). The Machine dashboard shows which grows; the database stops when it is full.
+        - alert: DiskHigh
+          expr: 1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} > 0.8
+          for: 30m
+          labels:
+            severity: warning
+            component: machine
+          annotations:
+            summary: "The root filesystem is {{ $value | humanizePercentage }} full."
+            description: Look at what grows on the Machine dashboard before it is full.
+        - alert: CPUSteal
+          expr: avg(rate(node_cpu_seconds_total{mode="steal"}[5m])) > 0.1
+          for: 15m
+          labels:
+            severity: warning
+            component: machine
+          annotations:
+            summary: "The host takes {{ $value | humanizePercentage }} of the machine's CPU time."
+            description: A neighbour on the host is busy; the tick may suffer. If it lasts, ask the provider.
+        - alert: MemoryPressure
+          expr: rate(node_pressure_memory_waiting_seconds_total[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            component: machine
+          annotations:
+            summary: "Some processes wait for memory {{ $value | humanizePercentage }} of the time."
+            description: The machine is short of memory. The Machine dashboard shows who uses it.
+        - alert: TransferOnCourse
+          expr: |
+            sum(rate(node_network_transmit_bytes_total{device!~"lo|veth.+|cni.+|flannel.+|tailscale.+|kube-.+|docker.+"}[1d])) * 86400 * days_in_month()
+              > 0.8 * 16e12
+          for: 1h
+          labels:
+            severity: warning
+            component: machine
+          annotations:
+            summary: "At today's rate the machine sends {{ $value | humanize1024 }}B this month."
+            description: Past 16 TB a month the provider bills or limits it. Look at bytes per player on the Game dashboard.
+        - alert: ClockOffset
+          expr: abs(node_timex_offset_seconds) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+            component: machine
+          annotations:
+            summary: "The clock is {{ $value | humanizeDuration }} off."
+            description: chrony is not keeping it; the world's time follows it. Look at chronyc tracking on the machine.
+        - alert: RebootPending
+          expr: time() - keel_machine_reboot_required_since_timestamp_seconds > 7 * 86400
+          labels:
+            severity: warning
+            component: machine
+          annotations:
+            summary: An update has waited a week for a reboot.
+            description: Kured has not rebooted the machine in its window, as something else fired, or a drain did not finish. Reboot it with the machine workflow, reboot ticked.
+        - alert: UpdatesPending
+          expr: keel_machine_security_updates > 0
+          for: 3d
+          labels:
+            severity: warning
+            component: machine
+          annotations:
+            summary: "{{ $value }} security updates have waited three days."
+            description: unattended-upgrades did not install them. Its log is in the journal, in VictoriaLogs.
+        - alert: IntegrityChanged
+          expr: keel_machine_aide_changed_files + keel_machine_aide_added_files + keel_machine_aide_removed_files > 0
+          labels:
+            severity: warning
+            component: machine
+          annotations:
+            summary: "AIDE found {{ $value }} files changed since the playbook's record."
+            description: Its report is in the journal (aide's unit), in VictoriaLogs. An update explains most; the next apply of the playbook records the system again.

@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# cert-manager, which issues the certificates the Barman Cloud plugin and
+# CloudNativePG's operator speak to each other with: the plugin's only
+# supported way in (its documentation, "Installation"). Nothing else uses
+# it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cert-manager
+resources:
+  - namespace.yaml
+  - repository.yaml
+  - release.yaml
+  - network-policies.yaml

@@ -51,13 +51,28 @@ func TestRenderWritesTheRelease(t *testing.T) {
 		return err
 	})
 	want := []string{
-		"local/apps/manifests.yaml", "local/configs/manifests.yaml", "local/controllers/manifests.yaml",
-		"prod/apps/manifests.yaml", "prod/configs/manifests.yaml", "prod/controllers/manifests.yaml", "prod/flux-system/manifests.yaml",
+		"local/apps/manifests.yaml", "local/configs/manifests.yaml", "local/controllers/manifests.yaml", "local/monitoring/manifests.yaml",
+		"prod/apps/manifests.yaml", "prod/configs/manifests.yaml", "prod/controllers/manifests.yaml", "prod/flux-system/manifests.yaml", "prod/monitoring/manifests.yaml",
+		"prod-rebuild/apps/manifests.yaml", "prod-rebuild/configs/manifests.yaml", "prod-rebuild/controllers/manifests.yaml",
+		"prod-rebuild/flux-system/manifests.yaml", "prod-rebuild/monitoring/manifests.yaml",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("rendered %v, want %v", got, want)
 	}
-	for _, cluster := range []string{"local", "prod"} {
+	// The rebuild form is in every release: production's Flux, applying
+	// prod-rebuild's folders, and its database recovered from the backups.
+	for _, o := range documents(t, filepath.Join(dir, manifests.Rebuild, "flux-system", "manifests.yaml")) {
+		if o.Kind() == "Kustomization" && manifests.Str(o, "spec", "path") != "./"+manifests.Rebuild+"/"+o.Name() {
+			t.Errorf("the rebuild form's %s applies %s", o.ID(), manifests.Str(o, "spec", "path"))
+		}
+	}
+	if db := manifests.Find(documents(t, filepath.Join(dir, manifests.Rebuild, "apps", "manifests.yaml")), "Cluster", "keel-db"); manifests.Str(db, "spec", "bootstrap", "recovery", "source") != "origin" {
+		t.Errorf("the rebuild form's database is not recovered: %v", manifests.Get(db, "spec", "bootstrap"))
+	}
+	if db := manifests.Find(documents(t, filepath.Join(dir, "prod", "apps", "manifests.yaml")), "Cluster", "keel-db"); manifests.Get(db, "spec", "bootstrap", "recovery") != nil {
+		t.Errorf("production's database recovers: %v", manifests.Get(db, "spec", "bootstrap"))
+	}
+	for _, cluster := range []string{"local", "prod", manifests.Rebuild} {
 		docs := documents(t, filepath.Join(dir, cluster, "apps", "manifests.yaml"))
 		images := 0
 		for _, d := range docs {

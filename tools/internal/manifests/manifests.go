@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net"
 	"os"
 	"path"
@@ -62,8 +63,17 @@ const (
 )
 
 // Layers are the names of Flux's Kustomizations and of the entry points
-// they apply, in order: each once the one before it is ready.
-var Layers = []string{"flux-system", "controllers", "configs", "apps"}
+// they apply, in order. Each waits for the layer it follows (After):
+// monitoring follows configs, beside apps, so neither waits for the other.
+var Layers = []string{"flux-system", "controllers", "configs", "apps", "monitoring"}
+
+// After is the layer each layer waits for; flux-system waits for none.
+var After = map[string]string{
+	"controllers": "flux-system",
+	"configs":     "controllers",
+	"apps":        "configs",
+	"monitoring":  "configs",
+}
 
 // Cluster is a cluster a release holds manifests for.
 type Cluster struct {
@@ -74,11 +84,17 @@ type Cluster struct {
 }
 
 // Clusters are the clusters of a release. The local one has no flux-system:
-// tools/cluster installs Flux's controllers there itself.
+// tools/cluster installs Flux's controllers there itself. prod-rebuild is
+// production rebuilt from its backups: production in every way but the
+// database, which it recovers, and the layers' folders.
 var Clusters = []Cluster{
-	{"local", []string{"controllers", "configs", "apps"}},
-	{"prod", []string{"flux-system", "controllers", "configs", "apps"}},
+	{"local", []string{"controllers", "configs", "apps", "monitoring"}},
+	{"prod", []string{"flux-system", "controllers", "configs", "apps", "monitoring"}},
+	{"prod-rebuild", []string{"flux-system", "controllers", "configs", "apps", "monitoring"}},
 }
+
+// Rebuild is the name of production's rebuild form.
+const Rebuild = "prod-rebuild"
 
 // Entry is an entry point's folder under infra/cluster.
 func (c Cluster) Entry(name string) string { return path.Join("clusters", c.Name, name) }
@@ -92,10 +108,16 @@ const (
 )
 
 // Deploy is what a deploy from the working tree puts into the local
-// cluster's game: the image's tag, the players' host, and keel's scripted
-// sailors, if any.
+// cluster's game: the image's tag, the players' host, keel's scripted
+// sailors, if any, and whether the database is the rebuild form's,
+// recovered from its backups.
 type Deploy struct {
 	Build, Host, Sailors string
+	Rebuild              bool
+	// NoBackups leaves the backups out: the database archives nowhere,
+	// and there is no object store, scheduled backup or restore test. For
+	// a Mac that has no key to the local cluster's bucket.
+	NoBackups bool
 }
 
 // Tree is infra/cluster read into memory, beside the entry points a
@@ -143,11 +165,19 @@ func (t *Tree) Render(entry string) (resmap.ResMap, error) {
 }
 
 // over builds an entry point under a kustomization of the rendering's own,
-// written beside the tree.
-func (t *Tree) over(entry string, k map[string]any) (resmap.ResMap, error) {
+// written beside the tree, with the components named, folders under
+// infra/cluster.
+func (t *Tree) over(entry string, k map[string]any, components ...string) (resmap.ResMap, error) {
 	k["apiVersion"] = "kustomize.config.k8s.io/v1beta1"
 	k["kind"] = "Kustomization"
 	k["resources"] = []string{".." + path.Join(treeRoot, entry)}
+	if len(components) > 0 {
+		var cs []string
+		for _, c := range components {
+			cs = append(cs, ".."+path.Join(treeRoot, c))
+		}
+		k["components"] = cs
+	}
 	data, err := yaml.Marshal(k)
 	if err != nil {
 		return nil, err
@@ -180,9 +210,14 @@ func (t *Tree) RenderRelease(entry, image string) (resmap.ResMap, error) {
 	})
 }
 
+// RebuildComponent is the component that makes the database the rebuild
+// form's.
+const RebuildComponent = "apps/rebuild"
+
 // RenderDeploy builds the local game for a deploy from the working tree:
-// clusters/local/apps with the image tools/cluster built and imported, the
-// players' host and keel's scripted sailors.
+// clusters/local/apps with the image tools/cluster built and imported,
+// wherever the game's image runs, the players' host and keel's scripted
+// sailors; and, for a rebuild, the database recovered from its backups.
 func (t *Tree) RenderDeploy(d Deploy) (resmap.ResMap, error) {
 	literals := []string{"KEEL_PLAY_ORIGIN=https://" + d.Host}
 	if d.Sailors != "" {
@@ -201,13 +236,49 @@ func (t *Tree) RenderDeploy(d Deploy) (resmap.ResMap, error) {
 	if err != nil {
 		return nil, err
 	}
+	restore, err := yaml.Marshal(map[string]any{
+		"apiVersion": "batch/v1",
+		"kind":       "CronJob",
+		"metadata":   map[string]any{"name": RestoreTest, "namespace": RestoreNamespace},
+		"spec": map[string]any{"jobTemplate": map[string]any{"spec": map[string]any{"template": map[string]any{"spec": map[string]any{
+			"containers": []map[string]any{{"name": "restore-test", "imagePullPolicy": "Never"}},
+		}}}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var components []string
+	if d.Rebuild {
+		if d.NoBackups {
+			return nil, errors.New("a rebuild recovers the database from its backups, and this deploy has none")
+		}
+		components = append(components, RebuildComponent)
+	}
+	patches := []map[string]any{{"patch": string(patch)}}
+	if d.NoBackups {
+		for _, gone := range [][4]string{
+			{"barmancloud.cnpg.io/v1", "ObjectStore", ObjectStore, Namespace},
+			{"barmancloud.cnpg.io/v1", "ObjectStore", RestoreStore, RestoreNamespace},
+			{"postgresql.cnpg.io/v1", "ScheduledBackup", "keel-db-daily", Namespace},
+			{"batch/v1", "CronJob", RestoreTest, RestoreNamespace},
+		} {
+			patches = append(patches, map[string]any{"patch": fmt.Sprintf(
+				"$patch: delete\napiVersion: %s\nkind: %s\nmetadata:\n  name: %s\n  namespace: %s\n", gone[0], gone[1], gone[2], gone[3])})
+		}
+		patches = append(patches, map[string]any{
+			"target": map[string]string{"kind": "Cluster", "name": database},
+			"patch":  "- op: remove\n  path: /spec/plugins\n",
+		})
+	} else {
+		patches = append(patches, map[string]any{"patch": string(restore)})
+	}
 	return t.over(Clusters[0].Entry("apps"), map[string]any{
 		"images": []map[string]string{{"name": GameImage, "newName": LocalImage, "newTag": d.Build}},
 		"configMapGenerator": []map[string]any{{
 			"name": "keel", "namespace": Namespace, "behavior": "merge", "literals": literals,
 		}},
-		"patches": []map[string]any{{"patch": string(patch)}},
-	})
+		"patches": patches,
+	}, components...)
 }
 
 // RenderSync builds what the local cluster applies to follow a release:
@@ -291,11 +362,30 @@ func List(v any, keys ...any) []any {
 
 // Target is what a rendering is for.
 type Target struct {
-	// Cluster is the cluster's name, "local" or "prod".
+	// Cluster is the cluster's name: "local", "prod" or "prod-rebuild".
 	Cluster string
 	// Deploy is whether tools/cluster rendered it from the working tree,
 	// with the game's image built and imported rather than pulled.
 	Deploy bool
+	// Rebuild is whether the database is the rebuild form's, recovered
+	// from the backups: a deploy's with -rebuild, or prod-rebuild's.
+	Rebuild bool
+	// K3s is the k3s release the machines run, infra/k3s/release.yaml's
+	// version, which the upgrade plan must name.
+	K3s string
+	// NoBackups is whether a deploy left the backups out, for a Mac with
+	// no key to the local cluster's bucket.
+	NoBackups bool
+}
+
+// Production is whether the rendering is production's, as it runs or as
+// it is rebuilt.
+func (t Target) Production() bool { return t.Cluster == "prod" || t.Cluster == Rebuild }
+
+// TargetOf is what a cluster's entry points are rendered for, by a
+// release, with the k3s release the machines run.
+func TargetOf(c Cluster, k3s string) Target {
+	return Target{Cluster: c.Name, Rebuild: c.Name == Rebuild, K3s: k3s}
 }
 
 // rule is one thing every rendered entry point must keep.
@@ -328,6 +418,12 @@ var rules = []rule{
 	{"every Secret a workload needs is made", secretsMade},
 	{"the game's routes limited per address", routesLimited},
 	{"production's host on its Gateway and routes", productionHost},
+	{"the database's archive", databaseArchive},
+	{"the object stores", objectStores},
+	{"nothing fetched at deploy time", nothingFetched},
+	{"no route to monitoring", noMonitoringRoute},
+	{"the k3s upgrade plan", k3sPlan},
+	{"fixed addresses for the forwards alone", fixedAddresses},
 }
 
 // CheckRules checks objs, one rendered entry point, against every rule.
@@ -355,6 +451,9 @@ func PodSpec(o Object) map[string]any {
 	switch o.Kind() {
 	case "Deployment", "StatefulSet", "DaemonSet", "Job", "ReplicaSet":
 		s, _ := Get(o, "spec", "template", "spec").(map[string]any)
+		return s
+	case "CronJob":
+		s, _ := Get(o, "spec", "jobTemplate", "spec", "template", "spec").(map[string]any)
 		return s
 	case "Pod":
 		s, _ := Get(o, "spec").(map[string]any)
@@ -387,16 +486,17 @@ func isRelease(o Object) bool {
 	return o.Kind() == "OCIRepository" && Str(o, "spec", "url") == "oci://"+ManifestsRepo
 }
 
-// pinnedImages: every image a workload, the database or a chart names is
-// pinned by digest, the game's own included; only a deploy from the
-// working tree names it by a tag the node already holds.
+// pinnedImages: every image a workload, the database, a chart, the
+// monitoring operator's objects or the upgrade plan names is pinned by
+// digest, the game's own included; only a deploy from the working tree
+// names it by a tag the node already holds.
 func pinnedImages(objs []Object, t Target) error {
 	var errs []error
 	for _, o := range objs {
 		if spec := PodSpec(o); spec != nil {
 			for _, c := range Containers(spec) {
 				img, _ := c["image"].(string)
-				if t.Deploy && o.ID() == "Deployment/"+Deployment && strings.HasPrefix(img, LocalImage+":") {
+				if t.Deploy && strings.HasPrefix(img, LocalImage+":") {
 					if c["imagePullPolicy"] != "Never" {
 						errs = append(errs, fmt.Errorf("%s: %s is imported, so imagePullPolicy must be Never", o.ID(), img))
 					}
@@ -407,29 +507,177 @@ func pinnedImages(objs []Object, t Target) error {
 				}
 			}
 		}
-		switch o.Kind() {
-		case "Cluster":
+		switch {
+		case o.Kind() == "Cluster":
 			if img := Str(o, "spec", "imageName"); !byDigest(img) {
 				errs = append(errs, fmt.Errorf("%s: %q is not pinned by digest", o.ID(), img))
 			}
-		case "HelmRelease":
-			if tag := Str(o, "spec", "values", "image", "tag"); !byDigest(tag) {
-				errs = append(errs, fmt.Errorf("%s: the chart's image tag %q is not pinned by digest", o.ID(), tag))
+		case o.Kind() == "HelmRelease":
+			values, _ := Get(o, "spec", "values").(map[string]any)
+			if len(values) == 0 {
+				errs = append(errs, fmt.Errorf("%s: no values, so the chart's images are its own tags", o.ID()))
 			}
-		case "OCIRepository":
+			for _, p := range unpinnedValues(values, "values") {
+				errs = append(errs, fmt.Errorf("%s: the chart's %s is not pinned by digest", o.ID(), p))
+			}
+		case o.Kind() == "OCIRepository":
 			if d := Str(o, "spec", "ref", "digest"); !isRelease(o) && (!strings.HasPrefix(d, "sha256:") || len(d) != 71) {
 				errs = append(errs, fmt.Errorf("%s: not pinned by digest", o.ID()))
+			}
+		case o.group() == "operator.victoriametrics.com" && Get(o, "spec", "image") != nil:
+			if tag := Str(o, "spec", "image", "tag"); !strings.Contains(tag, "@sha256:") || len(tag[strings.Index(tag, "@sha256:")+8:]) != 64 {
+				errs = append(errs, fmt.Errorf("%s: the image tag %q is not pinned by digest", o.ID(), tag))
+			}
+		case o.Kind() == "Plan" && o.group() == "upgrade.cattle.io":
+			if img := Str(o, "spec", "upgrade", "image"); !byDigest(img) {
+				errs = append(errs, fmt.Errorf("%s: the upgrade image %q is not pinned by digest", o.ID(), img))
+			}
+		case o.Kind() == "ConfigMap":
+			data, _ := Get(o, "data").(map[string]any)
+			for k, v := range data {
+				if img, _ := v.(string); strings.HasSuffix(k, "_IMAGE") && img != "" && !byDigest(img) {
+					errs = append(errs, fmt.Errorf("%s: %s %q is not pinned by digest", o.ID(), k, img))
+				}
 			}
 		}
 	}
 	return errors.Join(errs...)
 }
 
+// imageKey is a chart value that names an image: image, sidecarImage and
+// the like.
+func imageKey(k string) bool { return strings.HasSuffix(strings.ToLower(k), "image") }
+
+// pinnedImageValue is whether a chart's image value names a digest: as an
+// image's whole reference, a tag holding one (tag@sha256:…), or a digest
+// beside the tag, with or without its sha256: (charts differ).
+func pinnedImageValue(v any) bool {
+	switch v := v.(type) {
+	case string:
+		return byDigest(v)
+	case map[string]any:
+		hex := regexp.MustCompile(`^(sha256:)?[0-9a-f]{64}$`)
+		tag, _ := v["tag"].(string)
+		digest, _ := v["digest"].(string)
+		sha, _ := v["sha"].(string)
+		return byDigest(tag) || (strings.HasPrefix(digest, "sha256:") && hex.MatchString(digest)) || hex.MatchString(sha)
+	}
+	return false
+}
+
+// unpinnedValues are the paths of the image values under v that name no
+// digest, as values.a.b.
+func unpinnedValues(v any, path string) []string {
+	var out []string
+	switch v := v.(type) {
+	case map[string]any:
+		for _, k := range slices.Sorted(maps.Keys(v)) {
+			p := path + "." + k
+			if imageKey(k) {
+				if !pinnedImageValue(v[k]) {
+					out = append(out, p)
+				}
+				continue
+			}
+			out = append(out, unpinnedValues(v[k], p)...)
+		}
+	case []any:
+		for i, e := range v {
+			out = append(out, unpinnedValues(e, fmt.Sprintf("%s[%d]", path, i))...)
+		}
+	}
+	return out
+}
+
+// Keyed is a source Flux cannot verify, whose signature the release and
+// pull request workflows check instead, against its publisher's key kept
+// in the repository (go run ./tools/release -verify-keyed).
+type Keyed struct {
+	// Name and URL are its OCIRepository's.
+	Name, URL string
+	// Key is the publisher's public key, from the repository's root.
+	Key string
+	// Images are the images its chart runs, each checked against the same
+	// key: the image's name, by where its HelmRelease's values pin its
+	// digest (a.b.digest).
+	Images map[string]string
+	// Why Flux cannot verify it.
+	Why string
+}
+
+// KeyedSources are the sources Flux cannot verify, and how they are
+// checked instead. Every other source is verified by Flux.
+var KeyedSources = []Keyed{{
+	Name: "cert-manager",
+	URL:  "oci://quay.io/jetstack/charts/cert-manager",
+	Key:  "infra/keys/cert-manager.pem",
+	Images: map[string]string{
+		"image":            "quay.io/jetstack/cert-manager-controller",
+		"webhook.image":    "quay.io/jetstack/cert-manager-webhook",
+		"cainjector.image": "quay.io/jetstack/cert-manager-cainjector",
+		"acmesolver.image": "quay.io/jetstack/cert-manager-acmesolver",
+	},
+	Why: "cert-manager signs with an RSA key and SHA-512; Flux verifies a key's signature with SHA-256 alone",
+}}
+
+// SignedImage is an image a vendored manifest runs, which no source of
+// Flux's covers: CI checks its keyless signature instead, the signer its
+// project's release workflow at the image's own tag.
+type SignedImage struct {
+	// Image is its name, without tag or digest.
+	Image string
+	// Subject is the signer's pattern, with %s for the tag, quoted.
+	Subject string
+}
+
+// SignedImages are the images checked so.
+var SignedImages = []SignedImage{{
+	Image:   "ghcr.io/kubereboot/kured",
+	Subject: `^https://github\.com/kubereboot/kured/\.github/workflows/on-tag\.yaml@refs/tags/%s$`,
+}}
+
+// ImageValues are the paths of every image value under a chart's values,
+// as a.b, without the leading values.
+func ImageValues(values any) []string {
+	var out []string
+	var walk func(v any, path string)
+	walk = func(v any, path string) {
+		switch v := v.(type) {
+		case map[string]any:
+			for _, k := range slices.Sorted(maps.Keys(v)) {
+				p := strings.TrimPrefix(path+"."+k, ".")
+				if imageKey(k) {
+					out = append(out, p)
+					continue
+				}
+				walk(v[k], p)
+			}
+		case []any:
+			for i, e := range v {
+				walk(e, fmt.Sprintf("%s[%d]", path, i))
+			}
+		}
+	}
+	walk(values, "")
+	return out
+}
+
+// keyed is the listed source o is, if it is one.
+func keyed(o Object) *Keyed {
+	for i, k := range KeyedSources {
+		if o.Kind() == "OCIRepository" && o.Name() == k.Name && Str(o, "spec", "url") == k.URL {
+			return &KeyedSources[i]
+		}
+	}
+	return nil
+}
+
 // verifiedSources: Flux fetches from an OCI repository only what its
 // signature allows: checked with cosign, keyless, against identities whose
 // patterns match the certificate's issuer and subject whole. The release's
 // own source follows a build or the tag production follows, and accepts
-// the release workflow alone.
+// the release workflow alone. A source Flux cannot verify has no verify,
+// and is one of KeyedSources, which CI checks against its key.
 func verifiedSources(objs []Object, _ Target) error {
 	var errs []error
 	for _, o := range objs {
@@ -437,6 +685,12 @@ func verifiedSources(objs []Object, _ Target) error {
 			continue
 		}
 		fail := func(format string, a ...any) { errs = append(errs, fmt.Errorf(o.ID()+": "+format, a...)) }
+		if k := keyed(o); k != nil {
+			if Get(o, "spec", "verify") != nil {
+				fail("listed as checked in CI against %s, yet Flux is asked to verify it too", k.Key)
+			}
+			continue
+		}
 		if p := Str(o, "spec", "verify", "provider"); p != "cosign" {
 			fail("verify's provider is %q, want cosign", p)
 		}
@@ -470,11 +724,12 @@ func verifiedSources(objs []Object, _ Target) error {
 }
 
 // fluxLayers: Flux's Kustomizations apply the release's folders for this
-// cluster, each named after its layer, each once the layer before it is
-// ready, and wait until what they applied is healthy. They remove what a
-// release no longer holds, and nothing at all when one of them is deleted.
-// The first of production's holds the others, so waits for Flux's
-// controllers alone, each by name.
+// cluster, each named after its layer, each once the layer it follows is
+// ready (After; the local cluster has no flux-system layer to follow), and
+// wait until what they applied is healthy. They remove what a release no
+// longer holds, and nothing at all when one of them is deleted. The first
+// of production's holds the others, so waits for Flux's controllers alone,
+// each by name.
 func fluxLayers(objs []Object, t Target) error {
 	var errs []error
 	have := map[string]Object{}
@@ -488,7 +743,6 @@ func fluxLayers(objs []Object, t Target) error {
 		}
 		have[o.Name()] = o
 	}
-	before := ""
 	for _, layer := range Layers {
 		o, ok := have[layer]
 		if !ok {
@@ -511,10 +765,13 @@ func fluxLayers(objs []Object, t Target) error {
 		for _, d := range List(o, "spec", "dependsOn") {
 			deps = append(deps, Str(d, "name"))
 		}
-		if want := strings.Fields(before); !slices.Equal(deps, want) {
-			fail("dependsOn %v, want %v, the layer before it", deps, want)
+		var want []string
+		if _, ok := have[After[layer]]; ok {
+			want = []string{After[layer]}
 		}
-		before = layer
+		if !slices.Equal(deps, want) {
+			fail("dependsOn %v, want %v, the layer it follows", deps, want)
+		}
 		if layer != Layers[0] {
 			if Get(o, "spec", "wait") != true {
 				fail("wait is not on")
@@ -582,9 +839,9 @@ func playersHost(objs []Object, t Target) error {
 	check := func(o Object, host string) {
 		host = strings.TrimPrefix(host, "https://")
 		switch {
-		case t.Cluster == "prod" && strings.HasSuffix(host, localSuffix):
+		case t.Production() && strings.HasSuffix(host, localSuffix):
 			errs = append(errs, fmt.Errorf("%s names %s, a local host, in production", o.ID(), host))
-		case t.Cluster != "prod" && (host == prodDomain || strings.HasSuffix(host, "."+prodDomain)):
+		case !t.Production() && (host == prodDomain || strings.HasSuffix(host, "."+prodDomain)):
 			errs = append(errs, fmt.Errorf("%s names %s, production's, outside production", o.ID(), host))
 		}
 	}
@@ -592,7 +849,7 @@ func playersHost(objs []Object, t Target) error {
 		switch o.Kind() {
 		case "ConfigMap":
 			origin := Str(o, "data", "KEEL_PLAY_ORIGIN")
-			if strings.HasPrefix(o.Name(), "keel") && !strings.HasPrefix(origin, "https://") {
+			if isGameConfig(o) && !strings.HasPrefix(origin, "https://") {
 				errs = append(errs, fmt.Errorf("%s: KEEL_PLAY_ORIGIN is %q, not an https origin", o.ID(), origin))
 			}
 			check(o, origin)
@@ -610,11 +867,18 @@ func playersHost(objs []Object, t Target) error {
 	return errors.Join(errs...)
 }
 
+// gameConfig is the name of keel's ConfigMap, as its generator makes it:
+// keel, and the hash of its contents kustomize adds.
+var gameConfig = regexp.MustCompile(`^keel(-[a-z0-9]{10})?$`)
+
+// isGameConfig is whether o is keel's ConfigMap.
+func isGameConfig(o Object) bool { return o.Kind() == "ConfigMap" && gameConfig.MatchString(o.Name()) }
+
 // PlayOrigin is the origin players reach the game at, from keel's
 // ConfigMap, or "".
 func PlayOrigin(objs []Object) string {
 	for _, o := range objs {
-		if o.Kind() == "ConfigMap" && strings.HasPrefix(o.Name(), "keel") {
+		if o.Kind() == "ConfigMap" && isGameConfig(o) {
 			if origin := Str(o, "data", "KEEL_PLAY_ORIGIN"); origin != "" {
 				return origin
 			}
@@ -648,7 +912,7 @@ func Container(spec map[string]any, key, name string) map[string]any {
 // ConfigMap.
 func internalPort(objs []Object) (int, error) {
 	for _, o := range objs {
-		if o.Kind() != "ConfigMap" || !strings.HasPrefix(o.Name(), "keel") {
+		if o.Kind() != "ConfigMap" || !isGameConfig(o) {
 			continue
 		}
 		if addr := Str(o, "data", "KEEL_INTERNAL_ADDR"); addr != "" {
@@ -796,7 +1060,7 @@ func TraefikValues(o Object) (map[string]any, error) {
 // Traefik is a LoadBalancer on purpose: ServiceLB holds its ports and Lima
 // forwards them.
 func noNodePorts(objs []Object, t Target) error {
-	if t.Cluster != "prod" {
+	if !t.Production() {
 		return nil
 	}
 	var errs []error
@@ -890,7 +1154,8 @@ func routesOnListeners(objs []Object, _ Target) error {
 }
 
 // databaseCluster: only TLS connections, no superuser, a locale that never
-// changes under an index.
+// changes under an index. A database recovered from its backups keeps the
+// locale it was made with.
 func databaseCluster(objs []Object, _ Target) error {
 	var errs []error
 	for _, o := range objs {
@@ -903,8 +1168,13 @@ func databaseCluster(objs []Object, _ Target) error {
 		if Get(o, "spec", "enableSuperuserAccess") != false {
 			errs = append(errs, fmt.Errorf("%s: superuser access is not off", o.ID()))
 		}
-		if p := Str(o, "spec", "bootstrap", "initdb", "localeProvider"); p != "builtin" {
-			errs = append(errs, fmt.Errorf("%s: locale provider %q, want builtin", o.ID(), p))
+		switch {
+		case Get(o, "spec", "bootstrap", "initdb") != nil:
+			if p := Str(o, "spec", "bootstrap", "initdb", "localeProvider"); p != "builtin" {
+				errs = append(errs, fmt.Errorf("%s: locale provider %q, want builtin", o.ID(), p))
+			}
+		case Get(o, "spec", "bootstrap", "recovery") == nil:
+			errs = append(errs, fmt.Errorf("%s: made neither with initdb nor by recovery", o.ID()))
 		}
 	}
 	return errors.Join(errs...)
@@ -912,7 +1182,10 @@ func databaseCluster(objs []Object, _ Target) error {
 
 // databaseRestarts: a restart of the database takes seconds, not the
 // smart shutdown's default of 180 s that keel, always connected, can never
-// end; and clients' keepalives free the lease of a keel that vanished.
+// end; clients' keepalives free the lease of a keel that vanished; and a
+// single instance has no disruption budget, which would forbid draining
+// its node for ever (CloudNativePG's "Kubernetes upgrade and
+// maintenance").
 func databaseRestarts(objs []Object, _ Target) error {
 	var errs []error
 	for _, o := range objs {
@@ -921,6 +1194,9 @@ func databaseRestarts(objs []Object, _ Target) error {
 		}
 		if t, ok := Get(o, "spec", "smartShutdownTimeout").(int); !ok || t > 30 {
 			errs = append(errs, fmt.Errorf("%s: smartShutdownTimeout %v, want 30 s at most", o.ID(), Get(o, "spec", "smartShutdownTimeout")))
+		}
+		if n, _ := Get(o, "spec", "instances").(int); n <= 1 && Get(o, "spec", "enablePDB") != false {
+			errs = append(errs, fmt.Errorf("%s: one instance, and enablePDB is not false: its node could never be drained", o.ID()))
 		}
 		for _, p := range []string{"tcp_keepalives_idle", "tcp_keepalives_interval", "tcp_keepalives_count"} {
 			if Str(o, "spec", "postgresql", "parameters", p) == "" {
@@ -940,7 +1216,7 @@ func stopTime(objs []Object, _ Target) error {
 	}
 	bell := config.DefaultBell
 	for _, c := range objs {
-		if c.Kind() != "ConfigMap" || !strings.HasPrefix(c.Name(), "keel") {
+		if c.Kind() != "ConfigMap" || !isGameConfig(c) {
 			continue
 		}
 		if v := Str(c, "data", "KEEL_BELL"); v != "" {
@@ -960,15 +1236,48 @@ func stopTime(objs []Object, _ Target) error {
 	return nil
 }
 
+// Privileged are the namespaces whose pods need more than Pod Security's
+// restricted profile allows, and the one workload each may hold, of those
+// the manifests render: node-exporter (from the monitoring stack's chart)
+// and vlagent read the host; Kured reboots it; the upgrade controller's
+// jobs replace k3s's binary.
+var Privileged = map[string][]string{
+	"monitoring-node": {"VLAgent/keel"},
+	"kured":           {"DaemonSet/kured"},
+	"system-upgrade":  {"Deployment/system-upgrade-controller"},
+}
+
+// privilegedBecause is the annotation a privileged namespace says why with.
+const privilegedBecause = "keel/privileged-because"
+
 // namespacesRestricted: every namespace the manifests hold enforces Pod
 // Security's restricted profile, as the API server's defaults do already:
-// the intent is written where the namespace is.
+// the intent is written where the namespace is. Only those of Privileged
+// enforce privileged, each saying why, and each holds its own workload
+// alone.
 func namespacesRestricted(objs []Object, _ Target) error {
 	var errs []error
 	for _, o := range objs {
-		if o.Kind() == "Namespace" && Str(o, "metadata", "labels", "pod-security.kubernetes.io/enforce") != "restricted" {
+		if o.Kind() != "Namespace" {
+			continue
+		}
+		level := Str(o, "metadata", "labels", "pod-security.kubernetes.io/enforce")
+		_, may := Privileged[o.Name()]
+		switch {
+		case may && level == "privileged":
+			if Str(o, "metadata", "annotations", privilegedBecause) == "" {
+				errs = append(errs, fmt.Errorf("%s is privileged without saying why (%s)", o.ID(), privilegedBecause))
+			}
+		case level != "restricted":
 			errs = append(errs, fmt.Errorf("%s does not enforce pod-security.kubernetes.io/enforce: restricted", o.ID()))
 		}
+	}
+	for _, o := range objs {
+		allowed, ok := Privileged[Str(o, "metadata", "namespace")]
+		if !ok || (PodSpec(o) == nil && o.Kind() != "VLAgent") || slices.Contains(allowed, o.ID()) {
+			continue
+		}
+		errs = append(errs, fmt.Errorf("%s is in %s, which is privileged for %v alone", o.ID(), Str(o, "metadata", "namespace"), allowed))
 	}
 	return errors.Join(errs...)
 }
@@ -1024,33 +1333,47 @@ func ipBlocks(objs []Object, _ Target) error {
 	return errors.Join(errs...)
 }
 
-// The store production's Secrets come from, and the namespaces that may
-// use it.
-const SecretStore = "infisical"
+// The stores production's Secrets come from, and the namespaces that may
+// use each: infisical reads keel-cluster, what the accounts workflow
+// writes; infisical-backups reads keel-backups, the backups' keys, which
+// no workflow may read.
+const (
+	SecretStore  = "infisical"
+	BackupsStore = "infisical-backups"
+)
 
-var storeNamespaces = []string{"keel", "cloudflared"}
+// StoreNamespaces are the namespaces each store serves.
+var StoreNamespaces = map[string][]string{
+	SecretStore:  {"keel", "cloudflared", "monitoring"},
+	BackupsStore: {"keel", "keel-restore"},
+}
 
-// secretsFromInfisical: in production, every ExternalSecret reads the one
-// store, in a namespace the store allows, and the store allows exactly
-// those namespaces; elsewhere there is no store and no ExternalSecret.
+// secretsFromInfisical: in production, every ExternalSecret reads one of
+// the two stores, in a namespace that store serves, and each store serves
+// exactly its namespaces; elsewhere there is no store and no
+// ExternalSecret.
 func secretsFromInfisical(objs []Object, t Target) error {
 	var errs []error
 	for _, o := range objs {
 		switch o.Kind() {
 		case "ExternalSecret":
-			if t.Cluster != "prod" {
+			if !t.Production() {
 				errs = append(errs, fmt.Errorf("%s outside production, which alone has a store", o.ID()))
 				continue
 			}
-			if Str(o, "spec", "secretStoreRef", "kind") != "ClusterSecretStore" || Str(o, "spec", "secretStoreRef", "name") != SecretStore {
-				errs = append(errs, fmt.Errorf("%s reads %s/%s, not ClusterSecretStore/%s", o.ID(), Str(o, "spec", "secretStoreRef", "kind"), Str(o, "spec", "secretStoreRef", "name"), SecretStore))
+			store := Str(o, "spec", "secretStoreRef", "name")
+			served, ok := StoreNamespaces[store]
+			if Str(o, "spec", "secretStoreRef", "kind") != "ClusterSecretStore" || !ok {
+				errs = append(errs, fmt.Errorf("%s reads %s/%s, not one of the ClusterSecretStores %s and %s", o.ID(), Str(o, "spec", "secretStoreRef", "kind"), store, SecretStore, BackupsStore))
+				continue
 			}
-			if ns := Str(o, "metadata", "namespace"); !slices.Contains(storeNamespaces, ns) {
-				errs = append(errs, fmt.Errorf("%s is in %s, which the store does not serve", o.ID(), ns))
+			if ns := Str(o, "metadata", "namespace"); !slices.Contains(served, ns) {
+				errs = append(errs, fmt.Errorf("%s is in %s, which the store %s does not serve", o.ID(), ns, store))
 			}
 		case "ClusterSecretStore", "SecretStore":
-			if t.Cluster != "prod" || o.Kind() != "ClusterSecretStore" || o.Name() != SecretStore {
-				errs = append(errs, fmt.Errorf("%s: production has one store, ClusterSecretStore/%s, and no other cluster any", o.ID(), SecretStore))
+			want, ok := StoreNamespaces[o.Name()]
+			if !t.Production() || o.Kind() != "ClusterSecretStore" || !ok {
+				errs = append(errs, fmt.Errorf("%s: production has the ClusterSecretStores %s and %s, and no other cluster any", o.ID(), SecretStore, BackupsStore))
 				continue
 			}
 			conds := List(o, "spec", "conditions")
@@ -1060,7 +1383,7 @@ func secretsFromInfisical(objs []Object, t Target) error {
 				names = append(names, name)
 			}
 			slices.Sort(names)
-			want := slices.Sorted(slices.Values(storeNamespaces))
+			want = slices.Sorted(slices.Values(want))
 			if len(conds) != 1 || len(conds[0].(map[string]any)) != 1 || !slices.Equal(names, want) {
 				errs = append(errs, fmt.Errorf("%s: its conditions must name exactly the namespaces %v, by name", o.ID(), want))
 			}
@@ -1093,12 +1416,13 @@ func secretNames(spec map[string]any) []string {
 	return names
 }
 
-// secretsMade: in production, every Secret a workload or the database
-// names is made in the cluster, by an ExternalSecret beside it or by
-// CloudNativePG (a cluster's CA, <cluster>-ca). Nothing waits for a Secret
-// that nothing makes.
+// secretsMade: in production, every Secret a workload, the database (its
+// owner's and its roles' passwords), an object store or Grafana names is
+// made in the cluster, by an ExternalSecret beside it or by CloudNativePG
+// (a cluster's CA, <cluster>-ca). Nothing waits for a Secret that nothing
+// makes.
 func secretsMade(objs []Object, t Target) error {
-	if t.Cluster != "prod" {
+	if !t.Production() {
 		return nil
 	}
 	made := map[string]bool{}
@@ -1122,8 +1446,22 @@ func secretsMade(objs []Object, t Target) error {
 		if spec := PodSpec(o); spec != nil {
 			names = secretNames(spec)
 		}
-		if o.Kind() == "Cluster" {
-			names = append(names, Str(o, "spec", "bootstrap", "initdb", "secret", "name"))
+		switch o.Kind() {
+		case "Cluster":
+			names = append(names, Str(o, "spec", "bootstrap", "initdb", "secret", "name"), Str(o, "spec", "bootstrap", "recovery", "secret", "name"))
+			for _, r := range List(o, "spec", "managed", "roles") {
+				names = append(names, Str(r, "passwordSecret", "name"))
+			}
+		case "ObjectStore":
+			names = append(names, Str(o, "spec", "configuration", "s3Credentials", "accessKeyId", "name"), Str(o, "spec", "configuration", "s3Credentials", "secretAccessKey", "name"))
+		case "HelmRelease":
+			grafana := Get(o, "spec", "values", "grafana")
+			names = append(names, Str(grafana, "admin", "existingSecret"))
+			if env, ok := Get(grafana, "envValueFrom").(map[string]any); ok {
+				for _, k := range slices.Sorted(maps.Keys(env)) {
+					names = append(names, Str(env[k], "secretKeyRef", "name"))
+				}
+			}
 		}
 		for _, n := range names {
 			if n != "" && !made[ns+"/"+n] {
@@ -1215,7 +1553,7 @@ const PlayHost = "play." + prodDomain
 // alone, and its routes answer it alone: a request through the tunnel
 // for any other host is refused.
 func productionHost(objs []Object, t Target) error {
-	if t.Cluster != "prod" {
+	if !t.Production() {
 		return nil
 	}
 	var errs []error

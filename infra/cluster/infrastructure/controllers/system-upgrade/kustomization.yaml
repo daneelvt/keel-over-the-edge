@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The system-upgrade controller, which upgrades k3s in its window by the
+# Plan in configs (clusters/prod/configs/upgrade-plan.yaml). Production
+# alone.
+#
+# system-upgrade-controller.yaml and crd.yaml are the v0.20.2 release's
+# own, as published (infra/vendor.yaml records their SHA-256, checked
+# against the release's sha256sum-amd64.txt; go run ./tools/vendor fetches
+# and checks them). Changed here: the controller's image and the kubectl
+# image its jobs use, pinned by digest (neither is signed upstream), its
+# namespace said to be privileged on purpose, fenced, and its size.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - crd.yaml
+  - system-upgrade-controller.yaml
+  - network-policies.yaml
+images:
+  - name: rancher/system-upgrade-controller
+    newTag: v0.20.2@sha256:61b68d4372baf7ae90fb0f879feea1c082381a8b7547cc5ec85d393c497b11cb
+patches:
+  - target:
+      kind: Namespace
+      name: system-upgrade
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          keel/privileged-because: The upgrade job replaces k3s's binary on the machine.
+      - op: add
+        path: /metadata/labels/pod-security.kubernetes.io~1enforce-version
+        value: latest
+  - target:
+      kind: ConfigMap
+      name: default-controller-env
+    patch: |-
+      - op: replace
+        path: /data/SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE
+        value: rancher/kubectl:v1.36.2@sha256:06c7a7a9772737494ae1e0c3af90f1b5385630c147e47c1c7cea92f4bed55fbe
+  - target:
+      kind: Deployment
+      name: system-upgrade-controller
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 5m
+            memory: 32Mi
+          limits:
+            memory: 96Mi

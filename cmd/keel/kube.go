@@ -79,7 +79,9 @@ type apiError struct {
 	Message string
 }
 
-func (e *apiError) Error() string { return fmt.Sprintf("the Kubernetes API answered %d: %s", e.Code, e.Message) }
+func (e *apiError) Error() string {
+	return fmt.Sprintf("the Kubernetes API answered %d: %s", e.Code, e.Message)
+}
 
 // notFound is whether err is the API server's 404.
 func notFound(err error) bool {

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Nothing reaches the controller. The kubelet's probes come from the node,
-# which kube-router always lets through. It calls the Kubernetes API and
-# Infisical, outward, unfenced: an egress rule for the API would have to
-# name the node's own address.
+# Nothing reaches the controller but the scraper, on its metrics port. The
+# kubelet's probes come from the node, which kube-router always lets
+# through. It calls the Kubernetes API and Infisical, outward, unfenced: an
+# egress rule for the API would have to name the node's own address.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -10,3 +10,25 @@ metadata:
 spec:
   podSelector: {}
   policyTypes: [Ingress]
+---
+# Its metrics, from the scraper.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metrics
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: external-secrets
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: 8080
+          protocol: TCP

@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Production's game, but its database made by recovering the live archive
+# from the backups, and archiving from then on under the next generation's
+# name (the component rebuild/). What a machine reinstalled from nothing
+# bootstraps Flux from: the machine workflow with rebuild ticked
+# (infra/REBUILD.md). Every release carries it, so a rebuild needs no
+# commit or release of its own.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../prod/apps
+components:
+  - ../../../apps/rebuild

@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The live database's archive name, from keel/generation.yaml, written
+# where it goes: the name the cluster archives under, and the archive the
+# weekly restore test restores. The restore test takes the live cluster's
+# image and max_connections too, which a recovering server must match.
+# Every cluster's apps entry point includes it; the rebuild form adds
+# rebuild/ after it.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+replacements:
+  - source:
+      kind: ConfigMap
+      name: keel-db-archive
+      fieldPath: data.live
+    targets:
+      - select:
+          kind: Cluster
+          name: keel-db
+        fieldPaths:
+          - spec.plugins.[name=barman-cloud.cloudnative-pg.io].parameters.serverName
+        options:
+          create: true
+      - select:
+          kind: CronJob
+          name: keel-restore-test
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.containers.[name=restore-test].env.[name=KEEL_RESTORE_SOURCE].value
+        options:
+          create: true
+  - source:
+      kind: Cluster
+      name: keel-db
+      fieldPath: spec.imageName
+    targets:
+      - select:
+          kind: CronJob
+          name: keel-restore-test
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.containers.[name=restore-test].env.[name=KEEL_RESTORE_IMAGE].value
+        options:
+          create: true
+  - source:
+      kind: Cluster
+      name: keel-db
+      fieldPath: spec.postgresql.parameters.max_connections
+    targets:
+      - select:
+          kind: CronJob
+          name: keel-restore-test
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.containers.[name=restore-test].env.[name=KEEL_RESTORE_MAX_CONNECTIONS].value
+        options:
+          create: true

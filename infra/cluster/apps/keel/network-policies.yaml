@@ -10,9 +10,10 @@ spec:
   podSelector: {}
   policyTypes: [Ingress]
 ---
-# keel: players' requests from Traefik, on the game's listener alone. Out,
-# it reaches DNS and its database, and nothing else: it never calls the
-# Kubernetes API (it mounts no token).
+# keel: players' requests from Traefik, on the game's listener alone, and
+# the scraper, on the metrics listener alone. Out, it reaches DNS and its
+# database, and nothing else: it never calls the Kubernetes API (it mounts
+# no token).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -32,6 +33,16 @@ spec:
               app.kubernetes.io/name: traefik
       ports:
         - port: 8080
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: 9091
           protocol: TCP
   egress:
     - to:
@@ -54,10 +65,11 @@ spec:
         - port: 5432
           protocol: TCP
 ---
-# The database: from the game, from CloudNativePG's operator (PostgreSQL,
-# and its instance manager on 8000), and from its own instances
-# (CloudNativePG's documentation, "Networking"). Its pods call the
-# Kubernetes API, so their way out is not fenced.
+# The database: from the game and the weekly dump, from Grafana (its SQL,
+# as grafana), from CloudNativePG's operator (PostgreSQL, and its instance
+# manager on 8000), from its own instances (CloudNativePG's documentation,
+# "Networking"), and from the scraper, on the exporter. Its pods call the
+# Kubernetes API and the object store, so their way out is not fenced.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -72,8 +84,27 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: keel
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keel-db-dump
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: grafana
       ports:
         - port: 5432
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: 9187
           protocol: TCP
     - from:
         - namespaceSelector:
@@ -91,3 +122,47 @@ spec:
         - podSelector:
             matchLabels:
               cnpg.io/cluster: keel-db
+---
+# The weekly dump: DNS, the database, and the object store on the internet
+# (443), nothing else. It never calls the Kubernetes API (it mounts no
+# token).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keel-db-dump
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: keel-db-dump
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: keel-db
+      ports:
+        - port: 5432
+          protocol: TCP
+    # Anywhere on the internet, but not the cluster's pods or Services
+    # (k3s's default ranges).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.42.0.0/16
+              - 10.43.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP

@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The backups' keys, which the owner made by hand, each restricted to one
+# bucket, and keeps in Infisical's keel-backups alone (infra/MANUAL-STEPS.md):
+# the archiver's (read, write, delete the backups), the dump's (add dumps,
+# never delete), and the restore test's (read the backups, nothing else).
+# Read through the store infisical-backups, which serves keel and
+# keel-restore alone.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keel-b2
+  namespace: keel
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: infisical-backups
+  target:
+    name: keel-b2
+    creationPolicy: Owner
+  data:
+    - secretKey: keyID
+      remoteRef:
+        key: /keel/B2_BARMAN_KEY_ID
+    - secretKey: key
+      remoteRef:
+        key: /keel/B2_BARMAN_KEY
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keel-dumps
+  namespace: keel
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: infisical-backups
+  target:
+    name: keel-dumps
+    creationPolicy: Owner
+  data:
+    - secretKey: keyID
+      remoteRef:
+        key: /keel/B2_DUMPS_KEY_ID
+    - secretKey: key
+      remoteRef:
+        key: /keel/B2_DUMPS_KEY
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keel-b2-read
+  namespace: keel-restore
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: infisical-backups
+  target:
+    name: keel-b2-read
+    creationPolicy: Owner
+  data:
+    - secretKey: keyID
+      remoteRef:
+        key: /keel-restore/B2_RESTORE_KEY_ID
+    - secretKey: key
+      remoteRef:
+        key: /keel-restore/B2_RESTORE_KEY

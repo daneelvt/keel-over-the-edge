@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# CloudNativePG's Barman Cloud plugin, which archives the database's WAL
+# and base backups to an object store and restores from them. It must run
+# in the operator's namespace (its documentation, "Installation"), whose
+# namespace and fence the operator's folder makes.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cnpg-system
+resources:
+  - repository.yaml
+  - release.yaml
+  - network-policies.yaml

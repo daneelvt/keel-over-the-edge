@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The weekly restore test, in a namespace of its own: keel restore-test
+# makes a throwaway cluster here from the backups, checks it, and deletes
+# it. It reads the backups with a key that cannot change them, and may
+# touch nothing in keel. The archive it restores, and the live cluster's
+# image and max_connections, are written into its CronJob by the
+# component archive/.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: keel-restore
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: keel
+resources:
+  - namespace.yaml
+  - object-store.yaml
+  - restore-test.yaml
+  - network-policies.yaml

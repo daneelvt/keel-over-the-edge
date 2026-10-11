@@ -2,7 +2,8 @@
 # The NetworkPolicies of the namespaces Kubernetes and k3s make
 # themselves, which the k3s CIS hardening guide gives: each namespace's
 # pods reach each other; CoreDNS answers every namespace; metrics-server is
-# open. Traefik is reached, beyond its own namespace, by cloudflared alone.
+# open. Traefik is reached, beyond its own namespace, by cloudflared alone,
+# and its metrics and CoreDNS's by the scraper.
 # k3s's network policy controller (kube-router's) enforces them.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

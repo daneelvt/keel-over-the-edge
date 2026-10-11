@@ -8,7 +8,8 @@
 // page. Phones on the same network play it at https://<this Mac>.local.
 //
 //	go run ./tools/cluster -up       make or start the VM, install k3s, apply the cluster's manifests, deploy the game
-//	go run ./tools/cluster -deploy   build the image, import it into the cluster, apply the game's manifests
+//	go run ./tools/cluster -deploy [-rebuild]  build the image, import it into the cluster, apply the game's manifests; with -rebuild, a database that is not there is recovered from its backups
+//	go run ./tools/cluster -monitoring  apply the monitoring layer: the metrics and logs stores, Grafana, the dashboards and alerts
 //	go run ./tools/cluster -release <build>  take a published release through Flux, as production does; prod for the one production follows
 //	go run ./tools/cluster -restart  restart keel on the build it runs, as a deploy does
 //	go run ./tools/cluster -kill     delete keel's pod by force, as when its node is lost
@@ -24,7 +25,9 @@
 // It needs Lima (brew install lima), Docker and kubectl, and runs from the
 // repository root. Its kubeconfig is .dev/cluster/kubeconfig, context
 // keel-local: it never reads or changes ~/.kube/config. KEEL_DEV_SAILORS,
-// if set, is passed to keel serve.
+// if set, is passed to keel serve. The database is backed up to the local
+// cluster's own bucket when .dev/backups.env holds its key (KEEL_B2_KEY_ID
+// and KEEL_B2_KEY); without it, a deploy leaves the backups out.
 package main
 
 import (
@@ -43,6 +46,8 @@ import (
 func main() {
 	up := flag.Bool("up", false, "make or start the VM and the cluster, and deploy the game")
 	deployFlag := flag.Bool("deploy", false, "build the game's image and deploy it to the cluster")
+	rebuildFlag := flag.Bool("rebuild", false, "with -deploy: the database as rebuilt from its backups")
+	monitoringFlag := flag.Bool("monitoring", false, "apply the monitoring layer")
 	releaseFlag := flag.String("release", "", "the `build` of a published release to take through Flux, or prod")
 	schemasFlag := flag.Bool("schemas", false, "write infra/schemas from the cluster's custom resource definitions")
 	restart := flag.Bool("restart", false, "restart keel on the build it runs")
@@ -65,7 +70,9 @@ func main() {
 	case *up:
 		err = c.up(ctx)
 	case *deployFlag:
-		err = c.deployGame(ctx)
+		err = c.deployGame(ctx, *rebuildFlag)
+	case *monitoringFlag:
+		err = c.monitoring(ctx)
 	case *releaseFlag != "":
 		err = c.release(ctx, *releaseFlag)
 	case *schemasFlag:

@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Fixed addresses the owner's Mac forwards to over Tailscale SSH (go run
+# ./tools/ops -tunnel): Grafana, and VictoriaMetrics' own UI (vmui, with
+# vmalert's rules through it). VictoriaLogs' is in logs/. Each from the
+# lower part of k3s's Service range, which Kubernetes keeps for addresses
+# chosen by hand (KEP-3070). The forward is dialled from the node, which
+# kube-router always lets through. No route leads to them.
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-forward
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  clusterIP: 10.43.0.51
+  selector:
+    app.kubernetes.io/name: grafana
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmsingle-forward
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  clusterIP: 10.43.0.52
+  selector:
+    app.kubernetes.io/name: vmsingle
+    app.kubernetes.io/instance: keel
+  ports:
+    - name: http
+      port: 8428
+      targetPort: 8428

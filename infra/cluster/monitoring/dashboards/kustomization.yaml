@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Written by go run ./tools/dashboards -pull, from index.yaml: one
+# ConfigMap a dashboard, which Grafana's sidecar finds by its label and
+# puts in the folder its annotation names. Not edited by hand.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+configMapGenerator:
+  - name: dashboard-node-exporter-full
+    files:
+      - vendored/node-exporter-full.json
+    options:
+      annotations:
+        grafana_folder: Machine
+  - name: dashboard-k8s-views-global
+    files:
+      - vendored/k8s-views-global.json
+    options:
+      annotations:
+        grafana_folder: Kubernetes
+  - name: dashboard-k8s-views-namespaces
+    files:
+      - vendored/k8s-views-namespaces.json
+    options:
+      annotations:
+        grafana_folder: Kubernetes
+  - name: dashboard-k8s-views-nodes
+    files:
+      - vendored/k8s-views-nodes.json
+    options:
+      annotations:
+        grafana_folder: Kubernetes
+  - name: dashboard-k8s-views-pods
+    files:
+      - vendored/k8s-views-pods.json
+    options:
+      annotations:
+        grafana_folder: Kubernetes
+  - name: dashboard-cloudnative-pg
+    files:
+      - vendored/cloudnative-pg.json
+    options:
+      annotations:
+        grafana_folder: Database
+  - name: dashboard-victoriametrics
+    files:
+      - vendored/victoriametrics.json
+    options:
+      annotations:
+        grafana_folder: Monitoring
+  - name: dashboard-vmagent
+    files:
+      - vendored/vmagent.json
+    options:
+      annotations:
+        grafana_folder: Monitoring
+  - name: dashboard-vmalert
+    files:
+      - vendored/vmalert.json
+    options:
+      annotations:
+        grafana_folder: Monitoring
+  - name: dashboard-vm-operator
+    files:
+      - vendored/vm-operator.json
+    options:
+      annotations:
+        grafana_folder: Monitoring
+  - name: dashboard-victorialogs
+    files:
+      - vendored/victorialogs.json
+    options:
+      annotations:
+        grafana_folder: Monitoring

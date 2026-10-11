@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# VictoriaLogs v1.53.0: the containers' logs and the machine's journal,
+# kept 14 days or 20 GiB, whichever comes first; the oldest day goes first
+# (its documentation, "Retention"). Its volume shares the root filesystem
+# with everything else, so it is capped by size as well as age.
+apiVersion: operator.victoriametrics.com/v1
+kind: VLSingle
+metadata:
+  name: keel
+  namespace: monitoring
+spec:
+  image:
+    tag: v1.53.0@sha256:251121fa882af99b95ba0c230a4a2f412ea602d2698c64a96c58dc9842bb755d
+  useStrictSecurity: true
+  retentionPeriod: 14d
+  retentionMaxDiskSpaceUsageBytes: 20GiB
+  storage:
+    storageClassName: local-path
+    accessModes: [ReadWriteOnce]
+    resources:
+      requests:
+        storage: 20Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+---
+# Its fixed address, from the lower part of k3s's Service range, which
+# Kubernetes keeps for addresses chosen by hand (KEP-3070): the machine's
+# journal is sent here by systemd-journal-upload, which cannot use the
+# cluster's DNS, and the owner's Mac forwards to it (go run ./tools/ops
+# -tunnel).
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoria-logs
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  clusterIP: 10.43.0.50
+  selector:
+    app.kubernetes.io/name: vlsingle
+    app.kubernetes.io/instance: keel
+  ports:
+    - name: http
+      port: 9428
+      targetPort: 9428
+---
+# vlagent's Kubernetes collector: every container's log, read from the
+# node's /var/log/pods, with its pod's labels, sent to VictoriaLogs. A
+# DaemonSet in monitoring-node, which may mount the host's paths. While
+# VictoriaLogs is down it queues on disk, 1 GiB at most. The game's logs
+# are JSON already: msg and time are read as they are.
+apiVersion: operator.victoriametrics.com/v1
+kind: VLAgent
+metadata:
+  name: keel
+  namespace: monitoring-node
+spec:
+  image:
+    tag: v1.53.0@sha256:a82f93ffecc153fb068606903e512368b070272739d823abe99fad0eff6e1849
+  k8sCollector:
+    enabled: true
+    includePodLabels: true
+    msgFields: [msg, message, log]
+    timeFields: [time, ts, timestamp]
+  remoteWrite:
+    - url: http://victoria-logs.monitoring.svc:9428/internal/insert
+      maxDiskUsage: 1GiB
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 192Mi

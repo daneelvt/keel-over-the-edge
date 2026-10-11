@@ -1,0 +1,424 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# VictoriaMetrics' Kubernetes stack, chart 0.95.2: the metrics store
+# (VMSingle), the scraper (VMAgent), the rule evaluator (VMAlert),
+# Alertmanager, Grafana, node-exporter and kube-state-metrics, and the
+# scrapes of the kubelet, the API server and CoreDNS. The operator is the
+# controllers layer's, not this chart's.
+#
+# Nothing is fetched at deploy time: the chart's job that downloads
+# dashboards and rules from upstream branches is off, and so are its
+# default dashboards and rules. Every dashboard and rule is in this
+# repository. Every image is pinned by digest. The sizes are production's;
+# clusters/local/monitoring halves them.
+#
+# Names are fixed by fullnameOverride: vmsingle-keel, vmagent-keel,
+# vmalert-keel, vmalertmanager-keel; Grafana is grafana.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoria-metrics-k8s-stack
+  namespace: monitoring
+spec:
+  interval: 1h
+  chartRef:
+    kind: OCIRepository
+    name: victoria-metrics-k8s-stack
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    fullnameOverride: keel
+    global:
+      clusterLabel: cluster
+    victoria-metrics-operator:
+      enabled: false
+    syncJob:
+      enabled: false
+    defaultDashboards:
+      enabled: false
+    defaultRules:
+      enabled: false
+
+    # Metrics, kept 90 days. The store stops taking writes before the disk
+    # it shares with everything else is full. vmalert's rules and alerts are
+    # reached through it, so Grafana's VictoriaMetrics data source lists
+    # them too.
+    vmsingle:
+      spec:
+        image:
+          tag: v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
+        useStrictSecurity: true
+        retentionPeriod: 90d
+        extraArgs:
+          storage.minFreeDiskSpaceBytes: 10GiB
+          vmalert.proxyURL: http://vmalert-keel.monitoring.svc:8080
+        storage:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              # local-path enforces no size: every volume shares the root
+              # filesystem, which the disk alerts watch.
+              storage: 20Gi
+        resources:
+          requests:
+            cpu: 100m
+            memory: 384Mi
+          limits:
+            memory: 1Gi
+
+    # Every target every 30 s; keel's own scrape asks for 15 s.
+    vmagent:
+      spec:
+        image:
+          tag: v1.153.0@sha256:474135388ae700b842007d3e186a8ae60ccf7de3dfd776fb6ed27cf8522d8331
+        useStrictSecurity: true
+        scrapeInterval: 30s
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 384Mi
+
+    # Rules every 30 s; the alerts go to Alertmanager. Its state is read
+    # back from the store after a restart, so an alert's "for" carries on.
+    vmalert:
+      spec:
+        image:
+          tag: v1.153.0@sha256:0c1c7718b54b03e8559d0f257f31f1bd79ef7fa32ac6e9ed90d7b92a74a4fe76
+        useStrictSecurity: true
+        evaluationInterval: 30s
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64Mi
+          limits:
+            memory: 192Mi
+
+    # Alertmanager keeps the alerts, the inhibitions and the silences, and
+    # sends nothing: its one receiver has no destination. Sending one later
+    # is a receiver and a route here (docs/development.md, "Monitoring").
+    alertmanager:
+      spec:
+        image:
+          tag: v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
+        useStrictSecurity: true
+        resources:
+          requests:
+            cpu: 5m
+            memory: 32Mi
+          limits:
+            memory: 96Mi
+      monzoTemplate:
+        enabled: false
+      config:
+        route:
+          receiver: nowhere
+          group_by: [alertname, severity]
+        receivers:
+          - name: nowhere
+        # While the game or its database is down, the rest of its
+        # component's alerts are held back: they follow from it.
+        inhibit_rules:
+          - source_matchers: [alertname="GameDown"]
+            target_matchers: [component="game"]
+          - source_matchers: [alertname="DatabaseDown"]
+            target_matchers: [component="database"]
+
+    # Grafana's data sources: the metrics store (its alerts too), the
+    # logs store, Alertmanager, and the game's database as grafana, a
+    # read-only role. The database's CA is in keel, out of Grafana's reach:
+    # the connection is TLS, its certificate not checked.
+    defaultDatasources:
+      victoriametrics:
+        datasources:
+          - name: VictoriaMetrics
+            type: prometheus
+            access: proxy
+            uid: VictoriaMetrics
+            isDefault: true
+            jsonData:
+              manageAlerts: true
+              prometheusType: Prometheus
+      extra:
+        - name: VictoriaLogs
+          type: victoriametrics-logs-datasource
+          access: proxy
+          uid: VictoriaLogs
+          url: http://victoria-logs.monitoring.svc:9428
+        - name: Database
+          type: grafana-postgresql-datasource
+          access: proxy
+          uid: Database
+          url: keel-db-rw.keel.svc:5432
+          user: grafana
+          jsonData:
+            database: keel
+            sslmode: require
+            postgresVersion: 1800
+            maxOpenConns: 2
+          secureJsonData:
+            password: $DB_GRAFANA_PASSWORD
+
+    grafana:
+      fullnameOverride: grafana
+      image:
+        sha: 202e5d5b3f8499e70ccac7991eea6d7da72d2790eb2e0597e7987acf724e7180
+      # No state: every dashboard and data source is in the repository, and
+      # a restart loses nothing.
+      persistence:
+        enabled: false
+      testFramework:
+        enabled: false
+      admin:
+        existingSecret: grafana-admin
+        userKey: username
+        passwordKey: password
+      envValueFrom:
+        DB_GRAFANA_PASSWORD:
+          secretKeyRef:
+            name: grafana-db
+            key: password
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+        seccompProfile:
+          type: RuntimeDefault
+      grafana.ini:
+        analytics:
+          reporting_enabled: false
+          check_for_updates: false
+          check_for_plugin_updates: false
+          feedback_links_enabled: false
+        news:
+          news_feed_enabled: false
+        users:
+          allow_sign_up: false
+        server:
+          root_url: http://localhost:3000
+        plugins:
+          # The plugins are this repository's; never install or update one
+          # from Grafana's catalog.
+          plugin_admin_enabled: false
+          preinstall_disabled: true
+      # VictoriaLogs' data source, from its release on GitHub, checked
+      # against its SHA-256 before it is unpacked: the one file fetched as
+      # Grafana starts, pinned. The chart's own plugin install, unpinned, is
+      # not used.
+      extraInitContainers:
+        - name: victorialogs-plugin
+          image: curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              cd /tmp
+              curl -fsSL --retry 3 -o plugin.zip "$PLUGIN_URL"
+              echo "$PLUGIN_SHA256  plugin.zip" | sha256sum -c -
+              unzip -q -o plugin.zip -d /var/lib/grafana/plugins
+              rm plugin.zip
+          env:
+            - name: PLUGIN_URL
+              value: https://github.com/VictoriaMetrics/victorialogs-datasource/releases/download/v0.32.0/victoriametrics-logs-datasource-v0.32.0.zip
+            - name: PLUGIN_SHA256
+              value: 8204d097b17f53b1c3a71761047734b7980bd983710c6cfcef8d938abe5eeef0
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 472
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/grafana
+            - name: plugin-download
+              mountPath: /tmp
+      extraContainerVolumes:
+        - name: plugin-download
+          emptyDir:
+            sizeLimit: 256Mi
+      sidecar:
+        image:
+          sha: 2912be006f62f9ea080194cf6d3afcd90daead8d101d0ba686a137a849f6a4f6
+        resources:
+          requests:
+            cpu: 5m
+            memory: 48Mi
+          limits:
+            memory: 96Mi
+        dashboards:
+          # One folder a dashboard, from its ConfigMap's grafana_folder.
+          folderAnnotation: grafana_folder
+          provider:
+            foldersFromFilesStructure: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 384Mi
+      # The chart's scrape of Grafana's own metrics is kept.
+
+    # node-exporter in monitoring-node, privileged: it reads the host's
+    # filesystems, processes and network from the host itself. Beside its
+    # own collectors, the machine's facts the playbook writes into its
+    # textfile folder, and the systemd units that keep the machine running.
+    prometheus-node-exporter:
+      namespaceOverride: monitoring-node
+      fullnameOverride: node-exporter
+      image:
+        digest: sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+      extraArgs:
+        - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+|run/k3s/.+|var/lib/rancher/k3s/agent/containerd/.+)($|/)
+        - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|erofs|sysfs|tracefs)$
+        - --collector.textfile.directory=/var/lib/node-exporter/textfile
+        - --collector.systemd
+        - --collector.systemd.unit-include=^(k3s|tailscaled|hostfw|chrony|auditd|systemd-journal-upload|unattended-upgrades)\.service$
+        - --collector.pressure
+      extraHostVolumeMounts:
+        - name: textfile
+          hostPath: /var/lib/node-exporter/textfile
+          mountPath: /var/lib/node-exporter/textfile
+          readOnly: true
+          mountPropagation: HostToContainer
+        - name: dbus
+          hostPath: /var/run/dbus/system_bus_socket
+          mountPath: /var/run/dbus/system_bus_socket
+          readOnly: true
+      # The chart's scrape looks in its own namespace unless told.
+      vmScrape:
+        spec:
+          namespaceSelector:
+            matchNames: [monitoring-node]
+      resources:
+        requests:
+          cpu: 20m
+          memory: 32Mi
+        limits:
+          memory: 96Mi
+
+    # kube-state-metrics: the cluster's objects, and Flux's, whose
+    # readiness it reads from their conditions (Flux's monitoring example,
+    # its custom resource state configuration).
+    kube-state-metrics:
+      fullnameOverride: kube-state-metrics
+      image:
+        sha: sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b
+      securityContext:
+        enabled: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      rbac:
+        extraRules:
+          - apiGroups:
+              - source.toolkit.fluxcd.io
+              - kustomize.toolkit.fluxcd.io
+              - helm.toolkit.fluxcd.io
+            resources:
+              - ocirepositories
+              - kustomizations
+              - helmreleases
+            verbs: [list, watch]
+      customResourceState:
+        enabled: true
+        config:
+          spec:
+            resources:
+              - groupVersionKind:
+                  group: kustomize.toolkit.fluxcd.io
+                  version: v1
+                  kind: Kustomization
+                metricNamePrefix: gotk
+                metrics:
+                  - name: resource_info
+                    help: The current state of a Flux object.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+              - groupVersionKind:
+                  group: helm.toolkit.fluxcd.io
+                  version: v2
+                  kind: HelmRelease
+                metricNamePrefix: gotk
+                metrics:
+                  - name: resource_info
+                    help: The current state of a Flux object.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: OCIRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: resource_info
+                    help: The current state of a Flux object.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 48Mi
+        limits:
+          memory: 128Mi
+
+    # k3s's embedded components share one registry, served by the API
+    # server's /metrics (k3s documentation, "Metrics"): the controller
+    # manager, the scheduler and kube-proxy are not scraped apart, and k3s
+    # has no etcd here. The kubelet's own /metrics is in the same registry;
+    # its cAdvisor, probes and resource endpoints are its own.
+    kubelet:
+      vmScrapes:
+        kubelet:
+          enabled: false
+    kubeApiServer:
+      enabled: true
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+    kubeProxy:
+      enabled: false
+    coreDns:
+      enabled: true

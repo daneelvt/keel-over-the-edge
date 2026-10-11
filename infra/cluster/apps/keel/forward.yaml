@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Fixed addresses the owner's Mac forwards to over Tailscale SSH (go run
+# ./tools/ops -tunnel): the database's primary, for psql as reader, and
+# keel's internal listener, for its profiles and flight recorder. Each is
+# chosen from the lower part of k3s's Service range, which Kubernetes keeps
+# for addresses chosen by hand (KEP-3070). The forward is dialled from the
+# node, which kube-router always lets through; nothing else in the cluster
+# may reach either port (network-policies.yaml). No route leads to them.
+apiVersion: v1
+kind: Service
+metadata:
+  name: keel-db-forward
+spec:
+  type: ClusterIP
+  clusterIP: 10.43.0.53
+  selector:
+    cnpg.io/cluster: keel-db
+    cnpg.io/instanceRole: primary
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keel-internal-forward
+spec:
+  type: ClusterIP
+  clusterIP: 10.43.0.54
+  selector:
+    app.kubernetes.io/name: keel
+  ports:
+    - name: internal
+      port: 9090
+      targetPort: internal

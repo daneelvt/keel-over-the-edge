@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# A base backup every day at 20:00 UTC (the quiet window's start), and one
+# at once when the cluster is made, so a new archive, as after a rebuild,
+# never goes a day without one. The backups belong to this object, not to
+# the cluster: deleting the cluster leaves them.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: keel-db-daily
+spec:
+  # Seconds, minutes, hours, day of month, month, day of week.
+  schedule: "0 0 20 * * *"
+  immediate: true
+  backupOwnerReference: self
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+  cluster:
+    name: keel-db

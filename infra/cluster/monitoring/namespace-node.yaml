@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Privileged: node-exporter reads the host's filesystems, processes and
+# network from the host's own namespaces, and vlagent reads the containers'
+# logs from the host's /var/log/pods. They are kept apart from monitoring,
+# which stays restricted, and nothing else runs here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring-node
+  annotations:
+    keel/privileged-because: node-exporter reads the host's filesystems, processes and network; vlagent reads the containers' logs from the host's paths.
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest

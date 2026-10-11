@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Grafana's dashboards, each with its folder. keel/ holds this repository's
+# own; vendored/ holds what others publish, each pinned by a commit and the
+# SHA-256 of the file as published there, fetched by go run
+# ./tools/dashboards -pull, which also writes kustomization.yaml from this.
+# All vendored ones are Apache 2.0.
+dashboards:
+  - file: vendored/node-exporter-full.json
+    folder: Machine
+    from:
+      repo: rfmoz/grafana-dashboards
+      commit: 99a25cc154c21c4fcbae1aa24352bf1b6764d847
+      path: prometheus/node-exporter-full.json
+      sha256: dfea296a1e210aa668197614d3708b56718a99be7794a1c2c012cd51da7ecb89
+  - file: vendored/k8s-views-global.json
+    folder: Kubernetes
+    from:
+      repo: dotdc/grafana-dashboards-kubernetes
+      commit: e4faf59e017a18e1b06fa64f11623bef15ce7507
+      path: dashboards/k8s-views-global.json
+      sha256: 89b52678c34b978b621feac39eaa9fce73fbe5df3049d4472bd12db91a61958f
+  - file: vendored/k8s-views-namespaces.json
+    folder: Kubernetes
+    from:
+      repo: dotdc/grafana-dashboards-kubernetes
+      commit: e4faf59e017a18e1b06fa64f11623bef15ce7507
+      path: dashboards/k8s-views-namespaces.json
+      sha256: 8b1408e04ee2c2af1b87d779f6e5e9beb62b1f8de1a1812f15cfdd4a81770be5
+  - file: vendored/k8s-views-nodes.json
+    folder: Kubernetes
+    from:
+      repo: dotdc/grafana-dashboards-kubernetes
+      commit: e4faf59e017a18e1b06fa64f11623bef15ce7507
+      path: dashboards/k8s-views-nodes.json
+      sha256: 4a11656116232acc2b1fdf77261e7c814af88c52a5559039db56e84b88772be7
+  - file: vendored/k8s-views-pods.json
+    folder: Kubernetes
+    from:
+      repo: dotdc/grafana-dashboards-kubernetes
+      commit: e4faf59e017a18e1b06fa64f11623bef15ce7507
+      path: dashboards/k8s-views-pods.json
+      sha256: e1282688933864c649c78a91352b434843b4e863c744128adc11d4d2b10b6bfd
+  - file: vendored/cloudnative-pg.json
+    folder: Database
+    from:
+      repo: cloudnative-pg/grafana-dashboards
+      commit: cececeb393fb7c5400b4fa290aca68041293a127
+      path: charts/cluster/grafana-dashboard.json
+      sha256: 676b10ae3a8850108d484e4491739207b2ad1ebca44300472168d81a8788e4fb
+  - file: vendored/victoriametrics.json
+    folder: Monitoring
+    from:
+      repo: VictoriaMetrics/VictoriaMetrics
+      commit: 3acd30be3427c5a63aa75b498af929daf2633480
+      path: dashboards/victoriametrics.json
+      sha256: 7eb59c1e6887fd22aed5959b4dd32598729c420ac90c6dd950888ae27b759d80
+  - file: vendored/vmagent.json
+    folder: Monitoring
+    from:
+      repo: VictoriaMetrics/VictoriaMetrics
+      commit: 3acd30be3427c5a63aa75b498af929daf2633480
+      path: dashboards/vmagent.json
+      sha256: 4b45e8541aeacc8aba399758eab3d49f12416f6877d3d5b6fbd1058b2f6076d9
+  - file: vendored/vmalert.json
+    folder: Monitoring
+    from:
+      repo: VictoriaMetrics/VictoriaMetrics
+      commit: 3acd30be3427c5a63aa75b498af929daf2633480
+      path: dashboards/vmalert.json
+      sha256: 8d0e266073de5be5570a729002db735ec62d7b9088eb4a663283ae171fcb24e4
+  - file: vendored/vm-operator.json
+    folder: Monitoring
+    from:
+      repo: VictoriaMetrics/VictoriaMetrics
+      commit: 3acd30be3427c5a63aa75b498af929daf2633480
+      path: dashboards/operator.json
+      sha256: d0b86088c9a299dcaa5568f543e1017a15b9b1cb0fd8bb3c5cf72aac08972987
+  - file: vendored/victorialogs.json
+    folder: Monitoring
+    from:
+      repo: VictoriaMetrics/VictoriaLogs
+      commit: 915d91904bf7f5be66ab00f88947ae7fc1431acc
+      path: dashboards/victorialogs.json
+      sha256: 9dfc6fc6bbe6aeb71fde80bf3153e74f20db8ea9d5bea59fd69b8c9325f1d7b7

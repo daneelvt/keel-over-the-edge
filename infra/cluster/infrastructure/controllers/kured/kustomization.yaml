@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Kured, which reboots the machine when an update asks for it
+# (/var/run/reboot-required), in its window alone: Wednesdays, 20:00 to
+# 22:00 UTC, and only while no alert fires but the three that may (vmalert
+# answers Prometheus' alerts API). It drains the node first, which stops
+# keel with its bell and its last checkpoint, and the database as a restart
+# does; a drain not done in 10 minutes leaves the machine up, and
+# RebootPending says so. Production alone.
+#
+# kured-1.23.0-combined.yaml is the release's own manifest, as it was
+# published (infra/vendor.yaml records its SHA-256; go run ./tools/vendor
+# fetches and checks it). Changed here, not there: moved from kube-system
+# to a namespace of its own, its image pinned by the digest whose keyless
+# signature the release workflow checks, and its settings.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kured
+resources:
+  - namespace.yaml
+  - kured-1.23.0-combined.yaml
+  - network-policies.yaml
+images:
+  - name: ghcr.io/kubereboot/kured
+    newTag: 1.23.0@sha256:8dfd3c2e889337595731d801afc5c031b545876a29427897b3f711d2983f30c4
+patches:
+  - target:
+      kind: DaemonSet
+      name: kured
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/command
+        value:
+          - /usr/bin/kured
+          - --reboot-sentinel=/sentinel/reboot-required
+          - --ds-namespace=kured
+          - --ds-name=kured
+          - --reboot-days=we
+          - --start-time=20:00
+          - --end-time=22:00
+          - --time-zone=UTC
+          - --period=10m
+          - --drain-timeout=10m
+          - --prometheus-url=http://vmalert-keel.monitoring.svc:8080
+          - --alert-filter-regexp=^(Watchdog|RebootPending|UpdatesPending)$
+      - op: add
+        path: /spec/template/spec/automountServiceAccountToken
+        value: true
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 5m
+            memory: 24Mi
+          limits:
+            memory: 64Mi
