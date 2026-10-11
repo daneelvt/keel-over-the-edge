@@ -27,6 +27,10 @@ type runOptions struct {
 	local bool
 	// unchanged fails the run if anything changed.
 	unchanged bool
+	// rebuild bootstraps Flux on the release's rebuild form, whose
+	// database is recovered from the backups: for a machine reinstalled
+	// from nothing.
+	rebuild bool
 }
 
 // run runs the playbook against the machine, over Tailscale SSH, or on
@@ -38,10 +42,17 @@ func (m *machine) run(ctx context.Context, o runOptions) error {
 	if o.reboot && (o.mode != "apply" || o.local) {
 		return errors.New("only apply on the machine reboots it")
 	}
-	flux, err := m.release(ctx)
+	if o.rebuild && o.local {
+		return errors.New("only the machine is rebuilt: a runner has no backups to recover")
+	}
+	rel, err := m.release(ctx, o.rebuild)
 	if err != nil {
 		return err
 	}
+	if err := m.checkForm(ctx, o, rel); err != nil {
+		return err
+	}
+	flux := rel.flux
 	var creds map[string]string
 	if o.local {
 		creds, err = madeUpCredential()
@@ -93,6 +104,67 @@ func (m *machine) run(ctx context.Context, o runOptions) error {
 	}
 	if o.unchanged && r.recap["changed"] != 0 {
 		return fmt.Errorf("the run changed %d things, and should have changed none: %s", r.recap["changed"], strings.Join(r.changed, "; "))
+	}
+	return nil
+}
+
+// clusterState is what state.yaml says: which form of the release Flux
+// follows, by its first layer's path, and the archive the database writes.
+type clusterState struct{ path, archive string }
+
+var stateLine = regexp.MustCompile(`flux follows \[([^\]]*)\]; the database archives as \[([^\]]*)\]`)
+
+// readState runs state.yaml, which changes nothing.
+func (m *machine) readState(ctx context.Context, local bool) (clusterState, error) {
+	c, err := m.playbook("state.yaml", local, nil)
+	if err != nil {
+		return clusterState{}, err
+	}
+	var log bytes.Buffer
+	c.out = &log
+	if _, err := m.cmd.run(ctx, c); err != nil {
+		return clusterState{}, fmt.Errorf("reading what Flux follows on the machine: %w\n%s", err, oneLine(log.String()))
+	}
+	s := stateLine.FindStringSubmatch(log.String())
+	if s == nil {
+		return clusterState{}, errors.New("state.yaml did not say what Flux follows")
+	}
+	return clusterState{path: s[1], archive: s[2]}, nil
+}
+
+// checkForm refuses a run that would move Flux between the release's two
+// forms when that would point a database at an archive that is not its
+// own. CloudNativePG writes a new cluster's WAL only into an empty archive;
+// a running one, renamed, would write into whatever is there.
+func (m *machine) checkForm(ctx context.Context, o runOptions, rel released) error {
+	if rel.live == "" && !o.rebuild {
+		return nil // a release from before the database was backed up
+	}
+	st, err := m.readState(ctx, o.local)
+	if err != nil {
+		return err
+	}
+	if err := formAllowed(st, o.rebuild, rel); err != nil {
+		return err
+	}
+	if o.rebuild {
+		m.logf("rebuild: Flux will follow %s, and the database recover from %s and archive as %s", rebuildForm, rel.live, rel.rebuilt)
+		fmt.Fprintf(m.summary, "**Rebuild**: Flux follows `./%s`; the database recovers from `%s` and archives as `%s`.\n\n", rebuildForm, rel.live, rel.rebuilt)
+	}
+	return nil
+}
+
+// formAllowed is the rule. With rebuild, the machine has no database, or
+// the one this rebuild already made. Without, Flux leaves the rebuild form
+// only once the release's live archive is the one the rebuilt database
+// writes: the commit that raises the generation, released and promoted.
+func formAllowed(st clusterState, rebuild bool, rel released) error {
+	onRebuild := st.path == "./"+rebuildForm+"/flux-system"
+	switch {
+	case rebuild && st.archive != "" && st.archive != rel.rebuilt:
+		return fmt.Errorf("rebuild is for a machine with no database: this one's archives as %s, and the rebuild form would rename its archive to %s. Run without rebuild", st.archive, rel.rebuilt)
+	case !rebuild && onRebuild && st.archive != rel.live:
+		return fmt.Errorf("Flux follows the rebuild form, and the database archives as %q; the release production follows has the live archive %s. Moving Flux back now would point the database at another's archive. Raise the generation (infra/cluster/apps/keel/generation.yaml), release and promote it, then run again; or run with rebuild to stay on the rebuild form", st.archive, rel.live)
 	}
 	return nil
 }

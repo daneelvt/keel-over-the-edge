@@ -173,6 +173,7 @@ func backupsKey(file string) (id, key string, err error) {
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		k = strings.TrimSpace(k)
 		switch {
 		case !ok || strings.HasPrefix(k, "#"):
 		case k == "KEEL_B2_KEY_ID":

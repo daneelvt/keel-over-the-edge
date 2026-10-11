@@ -597,3 +597,104 @@ func TestRefusalFixtures(t *testing.T) {
 		}
 	}
 }
+
+// TestBackupsKey: the key to the local bucket is read from its file; no
+// file is no key, and half a key is an error.
+func TestBackupsKey(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "backups.env")
+	if id, key, err := backupsKey(file); id != "" || key != "" || err != nil {
+		t.Fatalf("with no file: %q, %q, %v", id, key, err)
+	}
+	os.WriteFile(file, []byte("# The local bucket's key.\nKEEL_B2_KEY_ID = 005abc \nKEEL_B2_KEY=K005secret\nOTHER=x\n"), 0o600)
+	if id, key, err := backupsKey(file); id != "005abc" || key != "K005secret" || err != nil {
+		t.Fatalf("read %q, %q, %v", id, key, err)
+	}
+	os.WriteFile(file, []byte("KEEL_B2_KEY_ID=005abc\n"), 0o600)
+	if _, _, err := backupsKey(file); err == nil || strings.Contains(err.Error(), "005abc") {
+		t.Fatalf("half a key: %v", err)
+	}
+}
+
+// TestDeployWithAndWithoutTheKey: without the key to the local bucket, a
+// deploy says so and applies a database that archives nowhere, with no
+// object store, backup or restore test; with it, the whole of the local
+// game, and the key in the two Secrets the object stores read, never on a
+// command line. Either way the read-only roles get their passwords.
+func TestDeployWithAndWithoutTheKey(t *testing.T) {
+	applied := func(cmds *fakeCommands) string {
+		for _, call := range cmds.calls {
+			if strings.Contains(call.stdin, "kind: Deployment") {
+				return call.stdin
+			}
+		}
+		t.Fatal("the game was not applied")
+		return ""
+	}
+	secrets := func(cmds *fakeCommands) map[string]string {
+		made := map[string]string{}
+		for _, call := range cmds.calls {
+			if !slices.Contains(call.argv, "create") {
+				continue
+			}
+			var s struct {
+				Metadata   struct{ Name, Namespace string }
+				StringData map[string]string `yaml:"stringData"`
+			}
+			if yaml.Unmarshal([]byte(call.stdin), &s) == nil && s.Metadata.Name != "" {
+				made[s.Metadata.Namespace+"/"+s.Metadata.Name] = s.StringData["keyID"] + s.StringData["username"]
+			}
+		}
+		return made
+	}
+
+	c, cmds := fluxCluster(t, newFlux())
+	var log strings.Builder
+	c.out = &log
+	if err := c.deployGame(t.Context(), false); err != nil {
+		t.Fatal(err)
+	}
+	if got := applied(cmds); strings.Contains(got, "kind: ObjectStore") || strings.Contains(got, "kind: ScheduledBackup") || strings.Contains(got, "isWALArchiver") || strings.Contains(got, "KEEL_RESTORE_SOURCE") {
+		t.Error("without a key, the backups were applied")
+	} else if !strings.Contains(got, "name: keel-db-dump") || !strings.Contains(got, "kind: VMPodScrape") {
+		t.Error("without a key, more than the backups was left out")
+	}
+	if !strings.Contains(log.String(), "deploying without backups") {
+		t.Errorf("the deploy did not say it left the backups out:\n%s", log.String())
+	}
+	made := secrets(cmds)
+	if made["keel/keel-db-reader"] != "reader" || made["keel/keel-db-grafana"] != "grafana" || made["keel/keel-b2"] != "" || made["keel-restore/keel-b2-read"] != "" {
+		t.Errorf("the Secrets made without a key: %v", made)
+	}
+	// A rebuild has nothing to recover.
+	if err := c.deployGame(t.Context(), true); err == nil || !strings.Contains(err.Error(), "has none") {
+		t.Errorf("a rebuild without a key: %v", err)
+	}
+
+	c, cmds = fluxCluster(t, newFlux())
+	os.WriteFile(c.backups, []byte("KEEL_B2_KEY_ID=005abc\nKEEL_B2_KEY=K005secret\n"), 0o600)
+	if err := c.deployGame(t.Context(), false); err != nil {
+		t.Fatal(err)
+	}
+	if got := applied(cmds); !strings.Contains(got, "kind: ObjectStore") || !strings.Contains(got, "serverName: keel-db-g") || !strings.Contains(got, "s3://keel-db-backups-local/") ||
+		!strings.Contains(got, "KEEL_RESTORE_SOURCE") || strings.Contains(got, "bootstrap:\n    recovery") {
+		t.Error("with the key, the local game's backups were not applied")
+	}
+	made = secrets(cmds)
+	if made["keel/keel-b2"] != "005abc" || made["keel-restore/keel-b2-read"] != "005abc" {
+		t.Errorf("the key's Secrets: %v", made)
+	}
+	for _, call := range cmds.calls {
+		if strings.Contains(strings.Join(call.argv, " "), "K005secret") {
+			t.Fatal("the key is on a command line")
+		}
+	}
+	// Rebuilt: the same game, its database recovered.
+	c, cmds = fluxCluster(t, newFlux())
+	os.WriteFile(c.backups, []byte("KEEL_B2_KEY_ID=005abc\nKEEL_B2_KEY=K005secret\n"), 0o600)
+	if err := c.deployGame(t.Context(), true); err != nil {
+		t.Fatal(err)
+	}
+	if got := applied(cmds); !strings.Contains(got, "recovery:") || !strings.Contains(got, "externalClusters:") || strings.Contains(got, "initdb:") {
+		t.Error("a rebuild did not apply the recovering database")
+	}
+}

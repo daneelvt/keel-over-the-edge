@@ -17,6 +17,7 @@ resources:
   - network-policies.yaml
 images:
   - name: rancher/system-upgrade-controller
+    # renovate: image=rancher/system-upgrade-controller
     newTag: v0.20.2@sha256:61b68d4372baf7ae90fb0f879feea1c082381a8b7547cc5ec85d393c497b11cb
 patches:
   - target:
@@ -36,6 +37,7 @@ patches:
     patch: |-
       - op: replace
         path: /data/SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE
+        # renovate: image=rancher/kubectl
         value: rancher/kubectl:v1.36.2@sha256:06c7a7a9772737494ae1e0c3af90f1b5385630c147e47c1c7cea92f4bed55fbe
   - target:
       kind: Deployment

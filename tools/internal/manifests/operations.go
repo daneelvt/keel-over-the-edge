@@ -465,9 +465,29 @@ func scrapeTargets(o Object) []map[string]string {
 	return sets
 }
 
+// chartPorts are the metrics ports of the pods the manifests do not hold,
+// which charts and operators make: by namespace and the port's name, as
+// each one's own manifests name it.
+var chartPorts = map[string]int{
+	"keel/metrics":              9187, // CloudNativePG's exporter in each instance
+	"cnpg-system/metrics":       8080,
+	"external-secrets/metrics":  8080,
+	"cert-manager/http-metrics": 9402,
+	"kube-system/metrics":       9100, // Traefik
+	"monitoring/http":           8080, // the VictoriaMetrics operator
+}
+
 // workloadPort is the number of the port name on the containers of a
-// workload in ns whose pods carry labels, if the manifests hold it.
+// workload in ns whose pods carry labels, where the manifests hold it;
+// or else of a chart's pod there, as chartPorts knows it; or else 0.
 func workloadPort(all []Object, ns string, labels map[string]string, name string) int {
+	if n := renderedPort(all, ns, labels, name); n != 0 {
+		return n
+	}
+	return chartPorts[ns+"/"+name]
+}
+
+func renderedPort(all []Object, ns string, labels map[string]string, name string) int {
 	for _, o := range all {
 		spec := PodSpec(o)
 		if spec == nil || Str(o, "metadata", "namespace") != ns {
@@ -498,9 +518,9 @@ func workloadPort(all []Object, ns string, labels map[string]string, name string
 }
 
 // scrapesLetIn: every pod a scrape selects lets the scraper in, by a
-// NetworkPolicy beside it, on the scrape's port (its number, when the
-// manifests hold the pod); and outside the monitoring layer's own
-// namespaces, a policy lets the scraper in only to pods a scrape reads.
+// NetworkPolicy beside it, on the scrape's port, by its number; and
+// outside the monitoring layer's own namespaces, a policy lets the scraper
+// in only on a port a scrape reads.
 func scrapesLetIn(all []Object, _ Target) error {
 	var errs []error
 	type grant struct {
@@ -550,13 +570,16 @@ func scrapesLetIn(all []Object, _ Target) error {
 						if !selects(Get(g.policy, "spec", "podSelector"), labels) {
 							continue
 						}
-						if (number != 0 && slices.Contains(g.ports, number)) || (number == 0 && len(g.ports) == 1) || len(g.ports) == 0 {
+						if slices.Contains(g.ports, number) || len(g.ports) == 0 {
 							ok = true
 							used[g] = true
 						}
 					}
-					if !ok {
-						errs = append(errs, fmt.Errorf("%s reads %s %v on %s, which no NetworkPolicy there lets the scraper in to", o.ID(), ns, labels, port))
+					switch {
+					case number == 0:
+						errs = append(errs, fmt.Errorf("%s reads %s %v on the port %q, whose number neither the manifests nor the list of charts' ports says", o.ID(), ns, labels, port))
+					case !ok:
+						errs = append(errs, fmt.Errorf("%s reads %s %v on %s (%d), which no NetworkPolicy there lets the scraper in to", o.ID(), ns, labels, port, number))
 					}
 				}
 			}

@@ -10,6 +10,7 @@ metadata:
   namespace: monitoring
 spec:
   image:
+    # renovate: image=victoriametrics/victoria-logs
     tag: v1.53.0@sha256:251121fa882af99b95ba0c230a4a2f412ea602d2698c64a96c58dc9842bb755d
   useStrictSecurity: true
   retentionPeriod: 14d
@@ -61,6 +62,7 @@ metadata:
   namespace: monitoring-node
 spec:
   image:
+    # renovate: image=victoriametrics/vlagent
     tag: v1.53.0@sha256:a82f93ffecc153fb068606903e512368b070272739d823abe99fad0eff6e1849
   k8sCollector:
     enabled: true

@@ -49,6 +49,7 @@ spec:
     vmsingle:
       spec:
         image:
+          # renovate: image=victoriametrics/victoria-metrics
           tag: v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
         useStrictSecurity: true
         retentionPeriod: 90d
@@ -74,6 +75,7 @@ spec:
     vmagent:
       spec:
         image:
+          # renovate: image=victoriametrics/vmagent
           tag: v1.153.0@sha256:474135388ae700b842007d3e186a8ae60ccf7de3dfd776fb6ed27cf8522d8331
         useStrictSecurity: true
         scrapeInterval: 30s
@@ -89,6 +91,7 @@ spec:
     vmalert:
       spec:
         image:
+          # renovate: image=victoriametrics/vmalert
           tag: v1.153.0@sha256:0c1c7718b54b03e8559d0f257f31f1bd79ef7fa32ac6e9ed90d7b92a74a4fe76
         useStrictSecurity: true
         evaluationInterval: 30s
@@ -105,6 +108,7 @@ spec:
     alertmanager:
       spec:
         image:
+          # renovate: image=prom/alertmanager
           tag: v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
         useStrictSecurity: true
         resources:
@@ -167,7 +171,8 @@ spec:
     grafana:
       fullnameOverride: grafana
       image:
-        sha: 202e5d5b3f8499e70ccac7991eea6d7da72d2790eb2e0597e7987acf724e7180
+        # renovate: image=grafana/grafana versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-distroless$
+        tag: 13.2.3-distroless@sha256:202e5d5b3f8499e70ccac7991eea6d7da72d2790eb2e0597e7987acf724e7180
       # No state: every dashboard and data source is in the repository, and
       # a restart loses nothing.
       persistence:
@@ -254,7 +259,8 @@ spec:
             sizeLimit: 256Mi
       sidecar:
         image:
-          sha: 2912be006f62f9ea080194cf6d3afcd90daead8d101d0ba686a137a849f6a4f6
+          # renovate: image=quay.io/kiwigrid/k8s-sidecar
+          tag: 2.11.2@sha256:2912be006f62f9ea080194cf6d3afcd90daead8d101d0ba686a137a849f6a4f6
         resources:
           requests:
             cpu: 5m
@@ -284,7 +290,10 @@ spec:
     prometheus-node-exporter:
       namespaceOverride: monitoring-node
       fullnameOverride: node-exporter
+      # Its chart reads the tag as a version, so the digest is beside it.
       image:
+        # renovate: image=quay.io/prometheus/node-exporter
+        tag: v1.12.1
         digest: sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
       extraArgs:
         - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+|run/k3s/.+|var/lib/rancher/k3s/agent/containerd/.+)($|/)
@@ -314,7 +323,8 @@ spec:
     kube-state-metrics:
       fullnameOverride: kube-state-metrics
       image:
-        sha: sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b
+        # renovate: image=registry.k8s.io/kube-state-metrics/kube-state-metrics
+        tag: v2.20.0@sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b
       securityContext:
         enabled: true
         runAsNonRoot: true

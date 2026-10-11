@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What the machine tells the cluster's monitoring about itself: its journal,
+# to VictoriaLogs, and a few facts no exporter knows, for node-exporter.
+
+# VictoriaLogs' journald endpoint, at its Service's fixed address in the
+# cluster (infra/cluster/monitoring/logs): the machine cannot use the
+# cluster's DNS.
+observe_logs_url: http://10.43.0.50:9428/insert/journald
+
+# A journal entry's stream in VictoriaLogs: the unit it came from, and how.
+observe_stream_fields: [_SYSTEMD_UNIT, _TRANSPORT]
+
+# Fields of every entry that say nothing worth keeping.
+observe_ignore_fields:
+  - _BOOT_ID
+  - _MACHINE_ID
+  - _SOURCE_REALTIME_TIMESTAMP
+  - _SOURCE_MONOTONIC_TIMESTAMP
+  - __MONOTONIC_TIMESTAMP
+  - __SEQNUM
+  - __SEQNUM_ID
+  - __CURSOR
+  - _SELINUX_CONTEXT
+  - _AUDIT_SESSION
+  - _AUDIT_LOGINUID
+  - _CAP_EFFECTIVE
+  - _SYSTEMD_CGROUP
+  - _SYSTEMD_SLICE
+  - _SYSTEMD_INVOCATION_ID
+  - _RUNTIME_SCOPE
+  - _STREAM_ID
+  - SYSLOG_FACILITY
+  - _CMDLINE
+  - _EXE
+
+# Where node-exporter reads the facts from (its textfile collector; the
+# monitoring stack mounts this folder into it, read-only).
+observe_textfile_dir: /var/lib/node-exporter/textfile
+
+# The units that keep the machine running, whose state is one of the facts.
+observe_units:
+  - k3s.service
+  - tailscaled.service
+  - hostfw.service
+  - chrony.service
+  - auditd.service
+  - systemd-journal-upload.service
+  - unattended-upgrades.service

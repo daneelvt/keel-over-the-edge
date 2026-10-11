@@ -21,6 +21,7 @@ resources:
   - network-policies.yaml
 images:
   - name: ghcr.io/kubereboot/kured
+    # renovate: image=ghcr.io/kubereboot/kured
     newTag: 1.23.0@sha256:8dfd3c2e889337595731d801afc5c031b545876a29427897b3f711d2983f30c4
 patches:
   - target:

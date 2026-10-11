@@ -2,6 +2,8 @@
 # Flux's controllers and what they follow, from the release production
 # follows: tools/machine pulls the release, checks its signature, and
 # passes the path of its prod/flux-system/manifests.yaml as
-# machine_flux_manifests.
+# machine_flux_manifests; or, to rebuild a reinstalled machine, of its
+# prod-rebuild/flux-system/manifests.yaml, whose layers recover the
+# database from the backups.
 flux_file: /var/lib/keel/flux-system.yaml
 flux_kubectl: /usr/local/bin/k3s kubectl

@@ -72,6 +72,27 @@
       "managerFilePatterns": ["/^\\.github/workflows/release\\.yaml$/"],
       "matchStrings": ["image=(?<depName>moby/buildkit):(?<currentValue>v[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "The images the cluster's charts, operators' objects and vendored manifests run, each pinned by version and digest under a line that names it (# renovate: image=…)",
+      "managerFilePatterns": ["/^infra/cluster/.+\\.yaml$/"],
+      "matchStrings": [
+        "# renovate: image=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\n\\s*(?:new)?[tT]ag: (?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})",
+        "# renovate: image=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\n\\s*tag: (?<currentValue>[^@\\s]+)\\n\\s*digest: (?<currentDigest>sha256:[0-9a-f]{64})",
+        "# renovate: image=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\n\\s*(?:image|value): [^:\\s]+:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}docker{{/if}}"
+    },
+    {
+      "customType": "regex",
+      "description": "The k3s release the upgrade plan names, which moves with infra/k3s/release.yaml",
+      "managerFilePatterns": ["/^infra/cluster/clusters/prod/configs/upgrade-plan\\.yaml$/"],
+      "matchStrings": ["  version: (?<currentValue>v[0-9.]+\\+k3s[0-9]+)\\n"],
+      "depNameTemplate": "k3s-io/k3s",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$"
     }
   ],
   "packageRules": [
@@ -89,14 +110,46 @@
     },
     {
       "description": "k3s follows its stable channel, which takes up a new minor version of Kubernetes some time after it is out; a new minor is a deliberate change.",
-      "matchDepNames": ["k3s-io/k3s"],
+      "matchDepNames": ["k3s-io/k3s", "rancher/k3s-upgrade"],
       "matchUpdateTypes": ["major", "minor"],
       "dependencyDashboardApproval": true
     },
     {
-      "description": "The CloudNativePG chart, by tag and digest, moves with the operator's image its values pin.",
-      "matchDepNames": ["ghcr.io/cloudnative-pg/charts/cloudnative-pg", "ghcr.io/cloudnative-pg/cloudnative-pg"],
+      "description": "k3s moves as one: its release and commit, the version the upgrade plan names, and the upgrade image of that release, which a rule of the manifests holds together.",
+      "matchDepNames": ["k3s-io/k3s", "rancher/k3s-upgrade"],
+      "groupName": "k3s"
+    },
+    {
+      "description": "The CloudNativePG chart, by tag and digest, moves with the operator's image its values pin; the Barman Cloud plugin, its chart and its two images, with them.",
+      "matchDepNames": [
+        "ghcr.io/cloudnative-pg/charts/cloudnative-pg", "ghcr.io/cloudnative-pg/cloudnative-pg",
+        "ghcr.io/cloudnative-pg/charts/plugin-barman-cloud", "ghcr.io/cloudnative-pg/plugin-barman-cloud", "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar"
+      ],
       "groupName": "CloudNativePG operator"
+    },
+    {
+      "description": "cert-manager's chart moves with the images its values pin, all checked against cert-manager's key before a release (tools/release -verify-keyed).",
+      "matchDepNames": ["quay.io/jetstack/charts/cert-manager", "/^quay\\.io/jetstack/cert-manager-/"],
+      "groupName": "cert-manager"
+    },
+    {
+      "description": "The monitoring stack moves as one: VictoriaMetrics' charts, the images their values and the logs' objects pin, and vmalert-tool, which tests the rules with the release that evaluates them.",
+      "matchDepNames": [
+        "/^ghcr\\.io/victoriametrics/helm-charts//", "/^victoriametrics//", "VictoriaMetrics/VictoriaMetrics", "prom/alertmanager", "grafana/grafana",
+        "quay.io/kiwigrid/k8s-sidecar", "quay.io/prometheus/node-exporter", "registry.k8s.io/kube-state-metrics/kube-state-metrics", "curlimages/curl"
+      ],
+      "groupName": "Monitoring stack"
+    },
+    {
+      "description": "Kured and the system-upgrade controller run from their releases' manifests, kept as published (infra/vendor.yaml): a new release is a deliberate change, made with go run ./tools/vendored -pull beside the image.",
+      "matchDepNames": ["ghcr.io/kubereboot/kured", "rancher/system-upgrade-controller", "rancher/kubectl"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "The vendored manifests are their releases' own and never edited: the images they name are pinned by digest beside them, in each kustomization.",
+      "matchManagers": ["kubernetes"],
+      "matchFileNames": ["infra/cluster/infrastructure/controllers/kured/kured-*.yaml", "infra/cluster/infrastructure/controllers/system-upgrade/system-upgrade-controller.yaml"],
+      "enabled": false
     },
     {
       "description": "External Secrets supports only its newest minor version: its chart, by tag and digest, moves with the image its values pin.",

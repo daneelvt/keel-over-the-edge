@@ -92,7 +92,13 @@ func (v *keyedVerifier) verify(ctx context.Context) error {
 			for _, part := range strings.Split(p, ".") {
 				keys = append(keys, part)
 			}
-			ref := image + "@" + manifests.Str(values, append(keys, "digest")...)
+			// Pinned as tag@sha256:…: checked by the digest alone.
+			_, digest, ok := strings.Cut(manifests.Str(values, append(keys, "tag")...), "@")
+			if !ok {
+				errs = append(errs, fmt.Errorf("%s: its image at %s is not pinned as tag@digest", k.Name, p))
+				continue
+			}
+			ref := image + "@" + digest
 			if _, err := v.run(ctx, append(keyed, ref)...); err != nil {
 				errs = append(errs, fmt.Errorf("%s is not signed by %s: %w", ref, k.Key, err))
 				continue

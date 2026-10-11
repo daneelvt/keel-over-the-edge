@@ -114,3 +114,60 @@ func TestNeed(t *testing.T) {
 		t.Errorf("got %v", err)
 	}
 }
+
+// backups is valid's backups, filled in.
+const backups = `backups:
+  endpoint: https://s3.us-west-004.backblazeb2.com
+  region: us-west-004
+  bucket: keel-db-backups-example
+  dumps: keel-db-dumps-example
+  local: keel-db-backups-local-example
+`
+
+// TestBackups: the backups' buckets are three of their own, at an endpoint
+// in their region, and the project that holds their keys is not the
+// cluster's; until all are written down, BackupsMade says which is not.
+func TestBackups(t *testing.T) {
+	whole := strings.Replace(valid, "    slug: keel-cluster-ab12\n", "    slug: keel-cluster-ab12\n  backups:\n    slug: keel-backups-cd34\n", 1) + backups
+	if err := readText(t, whole); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct{ old, new, want string }{
+		"the state's bucket":      {"bucket: keel-db-backups-example", "bucket: keel-state-example", "state.bucket and backups.bucket are the same bucket"},
+		"one bucket for two":      {"dumps: keel-db-dumps-example", "dumps: keel-db-backups-example", "are the same bucket"},
+		"the local as production": {"local: keel-db-backups-local-example", "local: keel-db-backups-example", "are the same bucket"},
+		"a bucket's name":         {"dumps: keel-db-dumps-example", "dumps: keel_db_dumps", "not a B2 bucket's name"},
+		"another region":          {"region: us-west-004\n  bucket: keel-db-backups-example", "region: eu-central-003\n  bucket: keel-db-backups-example", "is not in backups.region"},
+		"plain http":              {"backups:\n  endpoint: https://", "backups:\n  endpoint: http://", "backups.endpoint"},
+		"the cluster's project":   {"slug: keel-backups-cd34", "slug: keel-cluster-ab12", "a project's slug of its own"},
+	} {
+		if !strings.Contains(whole, tc.old) {
+			t.Fatalf("%s: nothing to replace", name)
+		}
+		if err := readText(t, strings.Replace(whole, tc.old, tc.new, 1)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	read := func(text string) Production {
+		t.Helper()
+		file := filepath.Join(t.TempDir(), "production.yaml")
+		if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		p, err := Read(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if err := read(whole).BackupsMade(); err != nil {
+		t.Errorf("with everything written down: %v", err)
+	}
+	// Before the accounts are made, the file is still read; a release is not rendered.
+	if err := read(valid).BackupsMade(); err == nil || !strings.Contains(err.Error(), "backups.bucket") || !strings.Contains(err.Error(), "infisical.backups.slug") {
+		t.Errorf("with nothing written down: %v", err)
+	}
+	if err := read(valid + backups).BackupsMade(); err == nil || strings.Contains(err.Error(), "backups.bucket") || !strings.Contains(err.Error(), "infisical.backups.slug") {
+		t.Errorf("with the project not yet made: %v", err)
+	}
+}

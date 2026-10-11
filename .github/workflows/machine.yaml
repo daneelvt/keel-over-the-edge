@@ -11,6 +11,12 @@
 #   apply   change it; reboot only when the box is ticked and a change needs it
 #   audit   Lynis on the machine; changes nothing
 #
+# rebuild is for a machine reinstalled from nothing (infra/REBUILD.md):
+# Flux is bootstrapped on the release's rebuild form, whose database is
+# recovered from the backups. The tool refuses it on a machine whose
+# database is live, and refuses an ordinary run that would move Flux back
+# before the archive's generation is raised.
+#
 # There is no schedule: every run logs in as root, so every run waits for
 # the owner's approval. go run ./tools/machine does the work.
 name: machine
@@ -25,6 +31,10 @@ on:
         default: check
       reboot:
         description: With apply, reboot the machine if a change needs it
+        type: boolean
+        default: false
+      rebuild:
+        description: Rebuild a reinstalled machine, its database recovered from the backups (infra/REBUILD.md)
         type: boolean
         default: false
 
@@ -64,8 +74,11 @@ jobs:
         env:
           MODE: ${{ inputs.mode }}
           REBOOT: ${{ inputs.reboot }}
+          REBUILD: ${{ inputs.rebuild }}
         run: |
-          if [ "$REBOOT" = "true" ]; then set -- -reboot; fi
+          set --
+          if [ "$REBOOT" = "true" ]; then set -- "$@" -reboot; fi
+          if [ "$REBUILD" = "true" ]; then set -- "$@" -rebuild; fi
           .dev/bin/machine -run "$MODE" "$@"
       - name: Verify the machine
         if: inputs.mode == 'apply'

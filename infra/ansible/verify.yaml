@@ -1,12 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Checks the machine is as the playbook leaves it, from outside the roles,
-# changing nothing: the firewall, the way in, the hardening, k3s, Flux and
-# the bootstrap secret. go run ./tools/machine -verify runs it.
+# changing nothing: the firewall, the way in, the hardening, what the
+# machine reports of itself, k3s, Flux and the bootstrap secret. go run
+# ./tools/machine -verify runs it.
 - name: Verify production's machine
   hosts: all
   gather_facts: false
   vars:
     verify_kubectl: /usr/local/bin/k3s kubectl
+    # The observe role's: where the journal goes, and the facts' file.
+    verify_logs_url: http://10.43.0.50:9428/insert/journald
+    verify_facts: /var/lib/node-exporter/textfile/keel_machine.prom
     verify_modules: [cramfs, freevxfs, hfs, hfsplus, jffs2, usb-storage, dccp, rds, sctp, tipc]
     verify_sysctl:
       kernel.randomize_va_space: "2"
@@ -133,6 +137,45 @@
           - verify_hardening.stdout is search('^root$', multiline=True)
           - verify_hardening.stdout is search('^Yes$', multiline=True)
         fail_msg: "{{ verify_hardening.stdout }}"
+        quiet: true
+
+    - name: Read the journal's upload, the machine's facts, and whether sysstat is gone
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          facts={{ verify_facts }}
+          echo "upload=$(systemctl is-enabled systemd-journal-upload.service)"
+          echo "url=$(systemd-analyze cat-config systemd/journal-upload.conf | grep -c '^URL={{ verify_logs_url }}$')"
+          echo "headers=$(systemd-analyze cat-config systemd/journal-upload.conf | grep -c '^Header=VL-\(Stream\|Ignore\)-Fields: ')"
+          echo "receiver=$(systemctl is-enabled systemd-journal-remote.socket)"
+          echo "timer=$(systemctl is-active keel-machine-facts.timer)"
+          echo "mode=$(stat -c '%a %U' "$facts")"
+          echo "reboot=$(grep -c '^keel_machine_reboot_required [01]$' "$facts")"
+          echo "updates=$(grep -c '^keel_machine_security_updates [0-9]\+$' "$facts")"
+          echo "audit=$(grep -c '^keel_machine_audit_log_bytes [0-9]\+$' "$facts")"
+          echo "units=$(grep -c '^keel_machine_unit_active{unit="[a-z0-9-]\+\.service"} [01]$' "$facts")"
+          echo "sysstat=$(dpkg-query --show --showformat='${db:Status-Status}' sysstat 2>/dev/null || echo not-installed)"
+        executable: /bin/bash
+      register: verify_observe
+      changed_when: false
+
+    - name: Check the journal is sent to VictoriaLogs, the facts are written, and sysstat is gone
+      vars:
+        verify: "{{ dict(verify_observe.stdout_lines | map('split', '=', 1)) }}"
+      ansible.builtin.assert:
+        that:
+          - verify.upload == 'enabled'
+          - verify.url == '1'
+          - verify.headers == '2'
+          - verify.receiver in ['disabled', 'masked', 'static']
+          - verify.timer == 'active'
+          - verify.mode == '644 root'
+          - verify.reboot == '1'
+          - verify.updates == '1'
+          - verify.audit == '1'
+          - verify.units == '7'
+          - verify.sysstat == 'not-installed'
+        fail_msg: "{{ verify_observe.stdout }}"
         quiet: true
 
     - name: Read k3s's node, its encryption, and its audit log

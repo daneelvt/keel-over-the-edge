@@ -526,7 +526,7 @@ func TestEachRuleFails(t *testing.T) {
 			return objs
 		}},
 		{"every image pinned by digest", inRelease(prod, "controllers"), func(objs []Object) []Object {
-			Get(Find(objs, "HelmRelease", "cert-manager"), "spec", "values", "webhook", "image").(map[string]any)["digest"] = ""
+			Get(Find(objs, "HelmRelease", "cert-manager"), "spec", "values", "webhook", "image").(map[string]any)["tag"] = "v1.21.2"
 			return objs
 		}},
 		{"every image pinned by digest", inRelease(local, "controllers"), func(objs []Object) []Object {

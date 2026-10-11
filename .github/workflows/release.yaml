@@ -223,6 +223,10 @@ jobs:
         run: |
           go run ./tools/release -tools
           echo "$PWD/.dev/bin" >> "$GITHUB_PATH"
+      # Before anything is rendered: what the manifests pin by digest and
+      # Flux cannot verify is signed by who it should be.
+      - name: The signatures Flux cannot check, of cert-manager's chart and images and of Kured's image
+        run: go run ./tools/release -verify-keyed
       - name: Render every cluster's manifests with the image by its digest; the rules and kubeconform
         env:
           DIGEST: ${{ needs.image.outputs.digest }}

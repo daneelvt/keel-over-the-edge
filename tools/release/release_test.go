@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -577,5 +578,59 @@ func TestReleased(t *testing.T) {
 	}
 	if w.tagged() {
 		t.Errorf("asking moved a tag: %q", w.ran)
+	}
+}
+
+// TestVerifyKeyed: what Flux cannot verify is checked with cosign by the
+// digest the manifests pin: cert-manager's chart and each of its images
+// against its key, SHA-512 and no transparency log, as cert-manager signs;
+// Kured's image keyless, against its own release workflow at its tag. One
+// that fails stops the release.
+func TestVerifyKeyed(t *testing.T) {
+	chdirRoot(t)
+	var ran [][]string
+	fail := ""
+	var out bytes.Buffer
+	v := &keyedVerifier{out: &out, run: func(_ context.Context, args ...string) ([]byte, error) {
+		ran = append(ran, args)
+		if fail != "" && strings.Contains(args[len(args)-1], fail) {
+			return nil, errors.New("no matching signatures")
+		}
+		return nil, nil
+	}}
+	if err := v.verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var keyed, keyless []string
+	for _, args := range ran {
+		line := strings.Join(args, " ")
+		ref := args[len(args)-1]
+		if !regexp.MustCompile(`@sha256:[0-9a-f]{64}$`).MatchString(ref) || strings.Count(ref, ":") != 1 {
+			t.Errorf("checked by more or less than a digest: %s", ref)
+		}
+		switch {
+		case strings.HasPrefix(line, "verify --key infra/keys/cert-manager.pem --signature-digest-algorithm sha512 --insecure-ignore-tlog=true quay.io/jetstack/"):
+			keyed = append(keyed, ref[:strings.Index(ref, "@")])
+		case strings.HasPrefix(line, "verify --certificate-oidc-issuer-regexp "+manifests.ReleaseIssuer+" --certificate-identity-regexp ^https://github\\.com/kubereboot/kured/\\.github/workflows/on-tag\\.yaml@refs/tags/1\\.") &&
+			strings.HasPrefix(ref, "ghcr.io/kubereboot/kured@"):
+			keyless = append(keyless, ref)
+		default:
+			t.Errorf("cosign ran as %s", line)
+		}
+	}
+	slices.Sort(keyed)
+	want := []string{"quay.io/jetstack/cert-manager-acmesolver", "quay.io/jetstack/cert-manager-cainjector", "quay.io/jetstack/cert-manager-controller",
+		"quay.io/jetstack/cert-manager-webhook", "quay.io/jetstack/charts/cert-manager"}
+	if !slices.Equal(keyed, want) || len(keyless) != 1 {
+		t.Errorf("checked against the key %v, keyless %v", keyed, keyless)
+	}
+	if _, err := os.Stat("infra/keys/cert-manager.pem"); err != nil {
+		t.Error(err)
+	}
+	for _, bad := range []string{"cert-manager-webhook", "charts/cert-manager", "kubereboot/kured"} {
+		fail = bad
+		if err := v.verify(context.Background()); err == nil || !strings.Contains(err.Error(), bad) || !strings.Contains(err.Error(), "is not signed by") {
+			t.Errorf("with %s unsigned: %v", bad, err)
+		}
 	}
 }

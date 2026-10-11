@@ -598,8 +598,8 @@ type Keyed struct {
 	// Key is the publisher's public key, from the repository's root.
 	Key string
 	// Images are the images its chart runs, each checked against the same
-	// key: the image's name, by where its HelmRelease's values pin its
-	// digest (a.b.digest).
+	// key: the image's name, by where its HelmRelease's values pin it
+	// (a.b, whose tag is version@sha256:…).
 	Images map[string]string
 	// Why Flux cannot verify it.
 	Why string

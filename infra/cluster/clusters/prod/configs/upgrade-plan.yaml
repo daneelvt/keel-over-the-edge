@@ -31,4 +31,5 @@ spec:
     endTime: "22:00"
     timeZone: UTC
   upgrade:
+    # renovate: image=rancher/k3s-upgrade versioning=regex:^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-k3s(?<build>\d+)$
     image: rancher/k3s-upgrade:v1.36.5-k3s1@sha256:95f3adc47b8355bc77b0cad60e2cb7f243e6f90480b96cd502081b37b19e0357

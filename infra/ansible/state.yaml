@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Reads, and changes nothing: which form of the release Flux follows on the
+# machine (./prod, or ./prod-rebuild after a rebuild), and the archive the
+# game's database writes its WAL under. go run ./tools/machine -run reads
+# it before the playbook, to refuse moving Flux between the two forms when
+# that would point a database at another's archive. Empty where there is
+# no k3s, no Flux or no database yet.
+- name: Read what Flux follows and what the database archives as
+  hosts: all
+  gather_facts: false
+  vars:
+    state_kubectl: /usr/local/bin/k3s kubectl
+  tasks:
+    - name: Read them
+      ansible.builtin.shell:
+        cmd: |
+          path=$({{ state_kubectl }} --namespace=flux-system get kustomizations.kustomize.toolkit.fluxcd.io flux-system --ignore-not-found --output=jsonpath='{.spec.path}' 2>/dev/null || true)
+          archive=$({{ state_kubectl }} --namespace=keel get clusters.postgresql.cnpg.io keel-db --ignore-not-found --output=jsonpath='{.spec.plugins[?(@.name=="barman-cloud.cloudnative-pg.io")].parameters.serverName}' 2>/dev/null || true)
+          echo "flux follows [$path]; the database archives as [$archive]"
+        executable: /bin/bash
+      register: state_read
+      changed_when: false
+      check_mode: false
+
+    - name: Say them
+      ansible.builtin.debug:
+        msg: "{{ state_read.stdout }}"
