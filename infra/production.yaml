@@ -65,6 +65,6 @@ cloudflare:
 # endpoint and region for the account, as the bucket's page shows them
 # (an endpoint as https://s3.us-west-004.backblazeb2.com).
 state:
-  bucket: ""
-  endpoint: ""
-  region: ""
+  bucket: keel-infra-state
+  endpoint: https://s3.us-east-005.backblazeb2.com
+  region: us-east-005
