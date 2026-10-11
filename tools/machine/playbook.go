@@ -164,7 +164,7 @@ func formAllowed(st clusterState, rebuild bool, rel released) error {
 	case rebuild && st.archive != "" && st.archive != rel.rebuilt:
 		return fmt.Errorf("rebuild is for a machine with no database: this one's archives as %s, and the rebuild form would rename its archive to %s. Run without rebuild", st.archive, rel.rebuilt)
 	case !rebuild && onRebuild && st.archive != rel.live:
-		return fmt.Errorf("Flux follows the rebuild form, and the database archives as %q; the release production follows has the live archive %s. Moving Flux back now would point the database at another's archive. Raise the generation (infra/cluster/apps/keel/generation.yaml), release and promote it, then run again; or run with rebuild to stay on the rebuild form", st.archive, rel.live)
+		return fmt.Errorf("the rebuild form is what Flux follows, and the database archives as %q; the release production follows has the live archive %s. Moving Flux back now would point the database at another's archive. Raise the generation (infra/cluster/apps/keel/generation.yaml), release and promote it, then run again; or run with rebuild to stay on the rebuild form", st.archive, rel.live)
 	}
 	return nil
 }
