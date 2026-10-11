@@ -401,7 +401,7 @@ Check:
      | Zone | Zone Settings | Edit |
      | Zone | Zone WAF Rules | Edit |
      | Zone | Bot Management | Edit |
-     | Zone | Cache Rules | Edit |
+     | Zone | Cache Settings | Edit |
 
    - **Account Resources**: this account. **Zone Resources**: Specific
      zone, `keelovertheedge.com`.
