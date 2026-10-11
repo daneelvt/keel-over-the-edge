@@ -1,7 +1,8 @@
 # What is done by hand
 
 Production rests on a few accounts and one machine that no workflow can
-make: they are what the workflows prove themselves to. This is every step
+make, and the few credentials the accounts workflow starts from: they are
+what the workflows prove themselves to. This is every step
 taken by hand, once, in order, and what to check after each. Everything
 after it is a commit and a workflow run.
 
@@ -299,6 +300,197 @@ Check:
 
 docs/development.md, "The machine", says what each run does and how to read
 it.
+
+## 8. Infisical: the accounts workflow's project and identity
+
+The `accounts` workflow reads the credentials OpenTofu needs from a third
+project, so that neither the machine workflow nor the cluster can read
+them; and it writes the secrets it makes into `keel-cluster`.
+
+1. Make the project **`keel-accounts`** as in 2.2: **Production** alone,
+   slug `prod`. In it, under Production, **Add Folder** `accounts`. Copy its
+   **Project ID** as `infisical.accounts.project` in `infra/production.yaml`.
+2. Open **`keel-cluster`**'s settings: copy its **Project ID** as
+   `infisical.cluster.project`, and its **slug** as
+   `infisical.cluster.slug` in `infra/production.yaml` **and** as
+   `projectSlug` in `infra/cluster/clusters/prod/configs/secret-store.yaml`
+   (a test keeps the two the same). Leave the project empty: OpenTofu makes
+   its folders and secrets.
+3. In the organisation: **Access Control → Machine Identities → Create**,
+   **Name** `gha-accounts`, organisation role **No Access**. Note its **ID**
+   as `infisical.accounts.identityID`.
+4. Replace its **Universal Auth** with **OIDC Auth**, as in 2.3 step 3,
+   with the same values but the claim:
+
+   | Field | Value |
+   |---|---|
+   | Claims | one claim: name `job_workflow_ref`, value `daneelvt/keel-over-the-edge/.github/workflows/accounts.yaml@refs/heads/main` |
+
+5. Add it to **`keel-accounts`** with the role **Viewer**, and to
+   **`keel-cluster`** with the role **Member** (it writes the tunnel's
+   token and the database's password there). No other project.
+
+Check:
+
+- [ ] **Machine Identities** lists `gha-prod`, `eso-prod` and
+      `gha-accounts`: with you, **4 of the free plan's 5**.
+- [ ] `gha-accounts` has OIDC Auth alone, for `accounts.yaml` on `main`;
+      it is Viewer on `keel-accounts` and Member on `keel-cluster`, and in
+      no other project. `gha-prod` is still in `keel-ops` alone, `eso-prod`
+      in `keel-cluster` alone.
+
+## 9. Backblaze B2: the state's key
+
+1. **Application Keys → Add a New Application Key**:
+   - **Name**: `keel-state`
+   - **Allow access to Bucket(s)**: the state bucket from section 4, alone
+   - **Type of Access**: Read and Write
+   - **Allow List All Bucket Names**: unticked
+   - **File name prefix**, **Duration**: empty (it does not expire; it is
+     replaced by hand, below)
+2. B2 shows the **keyID** and the **applicationKey** once. In
+   `keel-accounts`, Production, folder `accounts`, **Add Secret** twice:
+   `B2_KEY_ID` and `B2_KEY`. Keep them nowhere else.
+3. On the bucket's page, note its **Endpoint** (as
+   `s3.us-west-004.backblazeb2.com`). In `infra/production.yaml`:
+   `state.bucket` (its name), `state.endpoint` (`https://` and the
+   endpoint) and `state.region` (the endpoint's middle part, as
+   `us-west-004`).
+
+Check:
+
+- [ ] **Application Keys** lists `keel-state`, for the state bucket alone,
+      and no other key but the account's master key, which is used for
+      nothing.
+
+## 10. The state's passphrase
+
+The state is encrypted with a key made from this passphrase. It is the one
+secret kept in two places: without it, the state cannot be read, and
+OpenTofu loses track of everything it made.
+
+1. In the password manager, generate **48 random characters**, letters and
+   digits, and save it as "keel OpenTofu state passphrase".
+2. In `keel-accounts`, Production, `accounts`, **Add Secret**
+   `TOFU_PASSPHRASE` with the same value.
+3. **Add Secret** `NOTIFY_EMAIL`: the address Cloudflare's tunnel alerts and
+   certificate authorities' reports go to (it is published in the zone's
+   CAA record, as `iodef`; it is not written in the repository).
+
+Check:
+
+- [ ] The password manager and `keel-accounts` hold the same passphrase.
+
+## 11. Cloudflare: Zero Trust and the API token
+
+1. **Zero Trust** (from the account's home): if the account has no team
+   yet, choose a team name and the **Free** plan. Record in the pull
+   request whether Cloudflare asked for a payment method. If it asks and
+   you will not give one, stop: tunnels belong to Zero Trust.
+2. **Manage Account → Account API Tokens → Create Token → Custom token**
+   (a token the account owns, not your profile):
+   - **Name**: `accounts`
+   - **Permissions**:
+
+     | Scope | Permission | Access |
+     |---|---|---|
+     | Account | Cloudflare One Connector: cloudflared | Edit |
+     | Account | Notifications | Edit |
+     | Zone | DNS | Edit |
+     | Zone | Zone | Read |
+     | Zone | Zone Settings | Edit |
+     | Zone | Zone WAF Rules | Edit |
+     | Zone | Bot Management | Edit |
+     | Zone | Cache Settings | Edit |
+
+   - **Account Resources**: this account. **Zone Resources**: Specific
+     zone, `keelovertheedge.com`.
+   - **Client IP Address Filtering**: none. **TTL**: none (replaced by
+     hand, below).
+
+   "Cloudflare One Connector: cloudflared" is what Cloudflare now calls
+   Cloudflare Tunnel's permission, the narrowest the provider accepts for a
+   tunnel and its token; not "Argo Tunnel (Legacy)", nor "Cloudflare One
+   Connectors", which covers WARP's connectors too.
+
+   This is where the list starts: the first `plan` and `apply` show what is
+   missing (an error naming the endpoint refused) or unused, and this table
+   is corrected to the final list.
+3. Cloudflare shows the token once. In `keel-accounts`, Production,
+   `accounts`, **Add Secret** `CLOUDFLARE_API_TOKEN`.
+4. On the zone's **Overview**, copy the **Account ID** and **Zone ID** as
+   `cloudflare.account` and `cloudflare.zone` in `infra/production.yaml`.
+
+Check:
+
+- [ ] **Account API Tokens** lists `accounts` alone; **My Profile → API
+      Tokens** lists none for this account.
+- [ ] `keel-accounts`, Production, `/accounts` holds `B2_KEY_ID`, `B2_KEY`,
+      `TOFU_PASSPHRASE`, `NOTIFY_EMAIL` and `CLOUDFLARE_API_TOKEN`, and
+      nothing else.
+
+## 12. Online: the first runs, and the DS record
+
+1. Before anything of this is released: **`promote`** `main`'s newest
+   build, so production runs the manifests it should, Traefik's Service
+   `ClusterIP` among them. On the machine: `k3s kubectl -n kube-system get
+   svc traefik` says `ClusterIP`; run **`machine`** with `check`.
+2. Commit `infra/production.yaml` and the store's slug, by a pull request.
+3. Once the release with External Secrets and cloudflared is promoted:
+   External Secrets' store is `Valid`, both `ExternalSecret`s report the
+   key missing, cloudflared and the game wait (docs/development.md,
+   "The game waits for its database password").
+4. Run **`accounts`** with `plan`, approve, and read its summary: the
+   resources to make. Then with `apply`: approve the plan job, read its
+   summary, approve the apply job. Within the hour (or at once:
+   `kubectl -n keel annotate externalsecret keel-db-app
+   force-sync=$(date +%s) --overwrite`, and the same for `tunnel-token` in
+   `cloudflared`), the Secrets appear, the database is made, the game
+   starts, cloudflared connects, and `play.keelovertheedge.com` answers.
+5. Run **`accounts`** with `plan` again: no changes.
+6. **The DS record.** In Cloudflare: the zone's **DNS → Settings →
+   DNSSEC** shows the DS record (key tag, algorithm 13, digest type 2,
+   digest). At Name.com, on the domain: **DNSSEC Management → Add DNSSEC
+   Record**, with those four values.
+7. A day later, with nothing gone wrong: in `infra/tofu/zone.tf`, raise
+   `hsts_max_age` from `86400` to `15552000` (six months), by a pull
+   request, and run `accounts` with `apply`.
+
+Check:
+
+- [ ] `dig DS keelovertheedge.com +short` answers the record;
+      `dig +dnssec play.keelovertheedge.com` has the `ad` flag through a
+      validating resolver (`dig @1.1.1.1 …`).
+- [ ] `dig play.keelovertheedge.com +short` answers Cloudflare's addresses
+      alone.
+- [ ] `go run ./tools/online` passes.
+- [ ] A scan of every TCP port of the machine's public address finds none
+      open (recorded without the address).
+
+### Rotating the accounts workflow's credentials
+
+The free plan of Infisical keeps no earlier version of a secret: an
+overwritten value is gone, so the old credential is revoked only once the
+new one has worked.
+
+- **Cloudflare's token**: roll it (the token's **Roll** action) or make a
+  new one with the same permissions; paste it over `CLOUDFLARE_API_TOKEN`;
+  run `accounts` with `plan`; then delete the old token.
+- **The B2 key**: make a new key as in section 9; paste both values over
+  `B2_KEY_ID` and `B2_KEY`; run `accounts` with `plan`; then delete the old
+  key.
+- **The passphrase** (OpenTofu's "State and plan encryption", key
+  rotation): in a branch, add to `infra/tofu/backend.tf` a second
+  `key_provider "pbkdf2" "old"` and `method "aes_gcm" "old"` from a
+  variable `old_state_passphrase`, and a `fallback { method =
+  method.aes_gcm.old }` in the `state` and `plan` blocks; have
+  `tools/accounts` read `TOFU_PASSPHRASE_OLD` into
+  `TF_VAR_old_state_passphrase`. Put the old passphrase in
+  `TOFU_PASSPHRASE_OLD` and the new one in `TOFU_PASSPHRASE` and the
+  password manager; run `accounts` with `apply` (it rewrites the state with
+  the new key); then remove the fallback, the variable and
+  `TOFU_PASSPHRASE_OLD`.
+- **`gha-accounts`**: nothing to rotate; it holds no secret.
 
 ## If something fails
 

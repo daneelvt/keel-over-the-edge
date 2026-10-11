@@ -64,14 +64,42 @@ The tailnet policy is written from `infra/tailnet/policy.hujson` by the
 
 ## Infisical: the organisation
 
-- [ ] **Identities**: the owner, `gha-prod` (OIDC Auth alone, for this
+- [ ] **Identities**: the owner; `gha-prod` (OIDC Auth alone, for this
       repository's `production` subject and `machine.yaml` on `main`,
-      tokens of 10 minutes, Viewer on `keel-ops` alone) and `eso-prod`
-      (Universal Auth, Viewer on `keel-cluster` alone): 3 of the free plan's
-      5, and no other
-- [ ] **Projects**: `keel-ops` and `keel-cluster`, each with `prod` alone
+      tokens of 10 minutes, Viewer on `keel-ops` alone); `eso-prod`
+      (Universal Auth, Viewer on `keel-cluster` alone); and `gha-accounts`
+      (OIDC Auth alone, for the same subject and `accounts.yaml` on `main`,
+      tokens of 10 minutes, Viewer on `keel-accounts` and Member on
+      `keel-cluster`, nothing else): 4 of the free plan's 5, and no other
+- [ ] **Projects**: `keel-ops`, `keel-accounts` and `keel-cluster`, each
+      with `prod` alone
+- [ ] `keel-accounts`, `/accounts`: the five credentials of
+      infra/MANUAL-STEPS.md section 11's check, and nothing else;
+      `keel-cluster`: `/keel/DB_PASSWORD` and `/cloudflared/TUNNEL_TOKEN`,
+      both written by `accounts`, and nothing else
 - [ ] `eso-prod`'s client secrets: the one in use alone (an old one is
       revoked once `machine apply` has placed the new)
+
+## Cloudflare: the account
+
+The zone's records, settings and rules, the tunnel and its alert are
+written by the `accounts` workflow; a second `accounts plan` showing no
+change says they are as the repository says. The rest is checked here.
+
+- [ ] **Account API Tokens**: `accounts` alone, with the permissions
+      infra/MANUAL-STEPS.md section 11 lists, for this account and the zone
+      `keelovertheedge.com`; no token under **My Profile → API Tokens**
+- [ ] **Zero Trust → Networks → Tunnels**: `keel-prod` alone, Healthy,
+      with two connectors
+- [ ] The zone: DNSSEC **Active** (`dig DS keelovertheedge.com +short`
+      answers); no record but those `accounts` made
+- [ ] **Members**: the owner alone
+
+## Backblaze B2
+
+- [ ] The state bucket: private, every version kept, SSE-B2
+- [ ] **Application Keys**: `keel-state`, for the state bucket alone; the
+      master key used for nothing
 
 ## Not available to this repository
 

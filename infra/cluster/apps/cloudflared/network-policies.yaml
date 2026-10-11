@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Nothing reaches cloudflared but the kubelet's probes, from the node. Out,
+# it reaches DNS, Cloudflare's edge on 7844 (QUIC on UDP, HTTP/2 on TCP;
+# Cloudflare's "Tunnel with firewall"), and Traefik's web entry point:
+# nothing else. Its calls to Cloudflare's API on 443 are optional, and
+# refused.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloudflared
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Anywhere on the internet, but not the cluster's pods or Services
+    # (k3s's default ranges).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.42.0.0/16
+              - 10.43.0.0/16
+      ports:
+        - port: 7844
+          protocol: UDP
+        - port: 7844
+          protocol: TCP
+    # The Service traefik.kube-system:80 is the pod's 8000.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 8000
+          protocol: TCP

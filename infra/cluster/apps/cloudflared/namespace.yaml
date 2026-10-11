@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudflared
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

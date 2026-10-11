@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The game's database password, which the accounts workflow made and
+# wrote into Infisical: CloudNativePG makes the database with it, and the
+# game connects with it.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keel-db-app
+  namespace: keel
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: infisical
+  target:
+    name: keel-db-app
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth
+      data:
+        username: keel
+        password: "{{ .password }}"
+  data:
+    - secretKey: password
+      remoteRef:
+        key: /keel/DB_PASSWORD

@@ -321,6 +321,13 @@ var rules = []rule{
 	{"the database's access and locale", databaseCluster},
 	{"the database's restarts", databaseRestarts},
 	{"keel's time to stop", stopTime},
+	{"every namespace enforces restricted", namespacesRestricted},
+	{"every namespace fenced for ingress", namespacesFenced},
+	{"no address range but the internet", ipBlocks},
+	{"production's Secrets from Infisical", secretsFromInfisical},
+	{"every Secret a workload needs is made", secretsMade},
+	{"the game's routes limited per address", routesLimited},
+	{"production's host on its Gateway and routes", productionHost},
 }
 
 // CheckRules checks objs, one rendered entry point, against every rule.
@@ -951,4 +958,280 @@ func stopTime(objs []Object, _ Target) error {
 			Get(PodSpec(o), "terminationGracePeriodSeconds"), need)
 	}
 	return nil
+}
+
+// namespacesRestricted: every namespace the manifests hold enforces Pod
+// Security's restricted profile, as the API server's defaults do already:
+// the intent is written where the namespace is.
+func namespacesRestricted(objs []Object, _ Target) error {
+	var errs []error
+	for _, o := range objs {
+		if o.Kind() == "Namespace" && Str(o, "metadata", "labels", "pod-security.kubernetes.io/enforce") != "restricted" {
+			errs = append(errs, fmt.Errorf("%s does not enforce pod-security.kubernetes.io/enforce: restricted", o.ID()))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// selectsAll is whether a NetworkPolicy selects every pod of its namespace
+// for ingress: what no rule of it, or of another, lets in is refused.
+func selectsAll(o Object) bool {
+	sel, ok := Get(o, "spec", "podSelector").(map[string]any)
+	return ok && len(sel) == 0 && slices.Contains(List(o, "spec", "policyTypes"), any("Ingress"))
+}
+
+// namespacesFenced: every namespace the manifests hold has, beside it, a
+// NetworkPolicy selecting all its pods for ingress.
+func namespacesFenced(objs []Object, _ Target) error {
+	fenced := map[string]bool{}
+	for _, o := range objs {
+		if o.Kind() == "NetworkPolicy" && selectsAll(o) {
+			fenced[Str(o, "metadata", "namespace")] = true
+		}
+	}
+	var errs []error
+	for _, o := range objs {
+		if o.Kind() == "Namespace" && !fenced[o.Name()] {
+			errs = append(errs, fmt.Errorf("%s has no NetworkPolicy selecting all its pods for ingress", o.ID()))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// internet is the one address range a NetworkPolicy may name: the node's
+// own address, the machine's public one, never belongs in the manifests,
+// and the cluster's own ranges are named as exceptions to it.
+const internet = "0.0.0.0/0"
+
+// ipBlocks: no NetworkPolicy names an address range but the whole
+// internet, less exceptions.
+func ipBlocks(objs []Object, _ Target) error {
+	var errs []error
+	for _, o := range objs {
+		if o.Kind() != "NetworkPolicy" {
+			continue
+		}
+		for _, dir := range [][2]string{{"ingress", "from"}, {"egress", "to"}} {
+			for _, r := range List(o, "spec", dir[0]) {
+				for _, peer := range List(r, dir[1]) {
+					if b := Get(peer, "ipBlock"); b != nil && Str(b, "cidr") != internet {
+						errs = append(errs, fmt.Errorf("%s names the range %s: only %s, with exceptions, is allowed", o.ID(), Str(b, "cidr"), internet))
+					}
+				}
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// The store production's Secrets come from, and the namespaces that may
+// use it.
+const SecretStore = "infisical"
+
+var storeNamespaces = []string{"keel", "cloudflared"}
+
+// secretsFromInfisical: in production, every ExternalSecret reads the one
+// store, in a namespace the store allows, and the store allows exactly
+// those namespaces; elsewhere there is no store and no ExternalSecret.
+func secretsFromInfisical(objs []Object, t Target) error {
+	var errs []error
+	for _, o := range objs {
+		switch o.Kind() {
+		case "ExternalSecret":
+			if t.Cluster != "prod" {
+				errs = append(errs, fmt.Errorf("%s outside production, which alone has a store", o.ID()))
+				continue
+			}
+			if Str(o, "spec", "secretStoreRef", "kind") != "ClusterSecretStore" || Str(o, "spec", "secretStoreRef", "name") != SecretStore {
+				errs = append(errs, fmt.Errorf("%s reads %s/%s, not ClusterSecretStore/%s", o.ID(), Str(o, "spec", "secretStoreRef", "kind"), Str(o, "spec", "secretStoreRef", "name"), SecretStore))
+			}
+			if ns := Str(o, "metadata", "namespace"); !slices.Contains(storeNamespaces, ns) {
+				errs = append(errs, fmt.Errorf("%s is in %s, which the store does not serve", o.ID(), ns))
+			}
+		case "ClusterSecretStore", "SecretStore":
+			if t.Cluster != "prod" || o.Kind() != "ClusterSecretStore" || o.Name() != SecretStore {
+				errs = append(errs, fmt.Errorf("%s: production has one store, ClusterSecretStore/%s, and no other cluster any", o.ID(), SecretStore))
+				continue
+			}
+			conds := List(o, "spec", "conditions")
+			var names []string
+			for _, n := range List(conds, 0, "namespaces") {
+				name, _ := n.(string)
+				names = append(names, name)
+			}
+			slices.Sort(names)
+			want := slices.Sorted(slices.Values(storeNamespaces))
+			if len(conds) != 1 || len(conds[0].(map[string]any)) != 1 || !slices.Equal(names, want) {
+				errs = append(errs, fmt.Errorf("%s: its conditions must name exactly the namespaces %v, by name", o.ID(), want))
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// secretNames are the Secrets a pod spec names: in its containers'
+// environment and its volumes.
+func secretNames(spec map[string]any) []string {
+	var names []string
+	for _, c := range Containers(spec) {
+		for _, e := range List(c, "env") {
+			if n := Str(e, "valueFrom", "secretKeyRef", "name"); n != "" {
+				names = append(names, n)
+			}
+		}
+		for _, e := range List(c, "envFrom") {
+			if n := Str(e, "secretRef", "name"); n != "" {
+				names = append(names, n)
+			}
+		}
+	}
+	for _, v := range List(spec, "volumes") {
+		if n := Str(v, "secret", "secretName"); n != "" {
+			names = append(names, n)
+		}
+	}
+	return names
+}
+
+// secretsMade: in production, every Secret a workload or the database
+// names is made in the cluster, by an ExternalSecret beside it or by
+// CloudNativePG (a cluster's CA, <cluster>-ca). Nothing waits for a Secret
+// that nothing makes.
+func secretsMade(objs []Object, t Target) error {
+	if t.Cluster != "prod" {
+		return nil
+	}
+	made := map[string]bool{}
+	for _, o := range objs {
+		ns := Str(o, "metadata", "namespace")
+		switch o.Kind() {
+		case "ExternalSecret":
+			name := Str(o, "spec", "target", "name")
+			if name == "" {
+				name = o.Name()
+			}
+			made[ns+"/"+name] = true
+		case "Cluster":
+			made[ns+"/"+o.Name()+"-ca"] = true
+		}
+	}
+	var errs []error
+	for _, o := range objs {
+		ns := Str(o, "metadata", "namespace")
+		var names []string
+		if spec := PodSpec(o); spec != nil {
+			names = secretNames(spec)
+		}
+		if o.Kind() == "Cluster" {
+			names = append(names, Str(o, "spec", "bootstrap", "initdb", "secret", "name"))
+		}
+		for _, n := range names {
+			if n != "" && !made[ns+"/"+n] {
+				errs = append(errs, fmt.Errorf("%s needs the Secret %s/%s, which no ExternalSecret or operator makes", o.ID(), ns, n))
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// The middlewares that limit each player's address, and the header they
+// read it from: the address Cloudflare saw.
+const (
+	rateMiddleware        = "per-address-rate"
+	connectionsMiddleware = "per-address-connections"
+	addressHeader         = "CF-Connecting-IP"
+	gamePath              = "/ws"
+)
+
+// routesLimited: every rule of a route to the game's players' listener
+// passes through one of the middlewares, keyed on the player's address:
+// the game connection, /ws, through the connections one; the rest through
+// the rate one. The route has a rule for /ws.
+func routesLimited(objs []Object, _ Target) error {
+	game := Container(PodSpec(Find(objs, "Deployment", Deployment)), "containers", "keel")
+	play := containerPort(game, "play")
+	if play == 0 {
+		return nil // no game in this entry point
+	}
+	var errs []error
+	for _, name := range []string{rateMiddleware, connectionsMiddleware} {
+		m := Find(objs, "Middleware", name)
+		crit := Str(m, "spec", "rateLimit", "sourceCriterion", "requestHeaderName") + Str(m, "spec", "inFlightReq", "sourceCriterion", "requestHeaderName")
+		if m == nil || crit != addressHeader {
+			errs = append(errs, fmt.Errorf("no Middleware %s keyed on %s", name, addressHeader))
+		}
+	}
+	for _, o := range objs {
+		if o.Kind() != "HTTPRoute" {
+			continue
+		}
+		hasGame := false
+		for i, rule := range List(o, "spec", "rules") {
+			toGame := false
+			for _, b := range List(rule, "backendRefs") {
+				port, _ := Get(b, "port").(int)
+				svc := Find(objs, "Service", Str(b, "name"))
+				for _, sp := range List(svc, "spec", "ports") {
+					if Get(sp, "port") == port && containerPort(game, Get(sp, "targetPort")) == play {
+						toGame = true
+					}
+				}
+			}
+			if !toGame {
+				continue
+			}
+			isGame := false
+			for _, m := range List(rule, "matches") {
+				if Str(m, "path", "type") == "Exact" && Str(m, "path", "value") == gamePath {
+					isGame = true
+				}
+			}
+			hasGame = hasGame || isGame
+			want := rateMiddleware
+			if isGame {
+				want = connectionsMiddleware
+			}
+			var got []string
+			for _, f := range List(rule, "filters") {
+				if Str(f, "type") == "ExtensionRef" && Str(f, "extensionRef", "group") == "traefik.io" && Str(f, "extensionRef", "kind") == "Middleware" {
+					got = append(got, Str(f, "extensionRef", "name"))
+				}
+			}
+			if !slices.Equal(got, []string{want}) {
+				errs = append(errs, fmt.Errorf("%s: rule %d to the game passes through %v, want %s", o.ID(), i, got, want))
+			}
+		}
+		if o.Name() == "play" && !hasGame {
+			errs = append(errs, fmt.Errorf("%s has no rule for %s, the game connection", o.ID(), gamePath))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// PlayHost is the players' host in production.
+const PlayHost = "play." + prodDomain
+
+// productionHost: production's Gateway listens for the players' host
+// alone, and its routes answer it alone: a request through the tunnel
+// for any other host is refused.
+func productionHost(objs []Object, t Target) error {
+	if t.Cluster != "prod" {
+		return nil
+	}
+	var errs []error
+	for _, o := range objs {
+		switch o.Kind() {
+		case "Gateway":
+			for _, l := range List(o, "spec", "listeners") {
+				if h := Str(l, "hostname"); h != PlayHost {
+					errs = append(errs, fmt.Errorf("%s: listener %s's hostname is %q, want %s", o.ID(), Str(l, "name"), h, PlayHost))
+				}
+			}
+		case "HTTPRoute":
+			if hs := List(o, "spec", "hostnames"); !slices.Equal(hs, []any{PlayHost}) {
+				errs = append(errs, fmt.Errorf("%s answers %v, want %s alone", o.ID(), hs, PlayHost))
+			}
+		}
+	}
+	return errors.Join(errs...)
 }

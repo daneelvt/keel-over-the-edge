@@ -5,3 +5,4 @@ kind: Kustomization
 resources:
   - traefik.yaml
   - service-accounts.yaml
+  - network-policies

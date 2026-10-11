@@ -17,3 +17,16 @@ images:
     newTag: v1.6.5@sha256:0d52fff5c4d476277b8fcb6beb9041e269adb5db943fe69f5a806ea0c92b1511
   - name: ghcr.io/fluxcd/notification-controller
     newTag: v1.9.4@sha256:840f318265ee26f0d2c48a158bf7896b22aa4e998e320a18646309f0e40b15da
+# Pod Security's restricted profile enforced on Flux's namespace too, as on
+# every namespace the manifests hold; flux install only warns.
+patches:
+  - target:
+      kind: Namespace
+      name: flux-system
+    patch: |-
+      - op: add
+        path: /metadata/labels/pod-security.kubernetes.io~1enforce
+        value: restricted
+      - op: add
+        path: /metadata/labels/pod-security.kubernetes.io~1enforce-version
+        value: latest

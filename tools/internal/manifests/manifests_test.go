@@ -16,6 +16,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 	"sigs.k8s.io/kustomize/api/resmap"
+
+	"github.com/daneelvt/keel-over-the-edge/tools/internal/production"
 )
 
 const repoCluster = "../../../infra/cluster"
@@ -667,7 +669,7 @@ func TestEachRuleFails(t *testing.T) {
 		}},
 		{"no route to the internal listener", inRelease(prod, "apps"), func(objs []Object) []Object {
 			route := Find(objs, "HTTPRoute", "play")
-			Get(route, "spec", "rules", 0, "backendRefs", 0).(map[string]any)["port"] = 9090
+			Get(route, "spec", "rules", 1, "backendRefs", 0).(map[string]any)["port"] = 9090
 			return objs
 		}},
 		{"nothing exposed on production's node", inRelease(prod, "configs"), func(objs []Object) []Object {
@@ -729,6 +731,123 @@ func TestEachRuleFails(t *testing.T) {
 			}
 			return objs
 		}},
+		{"every namespace enforces restricted", inRelease(prod, "apps"), func(objs []Object) []Object {
+			delete(Get(Find(objs, "Namespace", "cloudflared"), "metadata", "labels").(map[string]any), "pod-security.kubernetes.io/enforce")
+			return objs
+		}},
+		{"every namespace enforces restricted", inRelease(local, "controllers"), func(objs []Object) []Object {
+			Get(Find(objs, "Namespace", "external-secrets"), "metadata", "labels").(map[string]any)["pod-security.kubernetes.io/enforce"] = "baseline"
+			return objs
+		}},
+		{"every namespace enforces restricted", inRelease(prod, "flux-system"), func(objs []Object) []Object {
+			delete(Get(Find(objs, "Namespace", FluxNamespace), "metadata", "labels").(map[string]any), "pod-security.kubernetes.io/enforce")
+			return objs
+		}},
+		{"every namespace fenced for ingress", inDeploy, func(objs []Object) []Object {
+			return slices.DeleteFunc(objs, func(o Object) bool { return o.ID() == "NetworkPolicy/deny-ingress" })
+		}},
+		{"every namespace fenced for ingress", inRelease(prod, "controllers"), func(objs []Object) []Object {
+			for _, o := range objs {
+				if o.ID() == "NetworkPolicy/deny-ingress" && Str(o, "metadata", "namespace") == "cnpg-system" {
+					spec(o)["policyTypes"] = []any{"Egress"}
+				}
+			}
+			return objs
+		}},
+		{"every namespace fenced for ingress", inRelease(prod, "apps"), func(objs []Object) []Object {
+			for _, o := range objs {
+				if o.ID() == "NetworkPolicy/deny-ingress" && Str(o, "metadata", "namespace") == "cloudflared" {
+					spec(o)["podSelector"] = map[string]any{"matchLabels": map[string]any{"app.kubernetes.io/name": "cloudflared"}}
+				}
+			}
+			return objs
+		}},
+		{"no address range but the internet", inRelease(prod, "apps"), func(objs []Object) []Object {
+			p := Find(objs, "NetworkPolicy", "cloudflared")
+			Get(p, "spec", "egress", 1, "to", 0, "ipBlock").(map[string]any)["cidr"] = "198.51.100.0/24"
+			return objs
+		}},
+		{"no address range but the internet", inDeploy, func(objs []Object) []Object {
+			r := Get(Find(objs, "NetworkPolicy", "keel"), "spec", "ingress", 0).(map[string]any)
+			r["from"] = append(r["from"].([]any), map[string]any{"ipBlock": map[string]any{"cidr": "203.0.113.7/32"}})
+			return objs
+		}},
+		{"production's Secrets from Infisical", inRelease(prod, "apps"), func(objs []Object) []Object {
+			Get(Find(objs, "ExternalSecret", "keel-db-app"), "spec", "secretStoreRef").(map[string]any)["name"] = "another"
+			return objs
+		}},
+		{"production's Secrets from Infisical", inRelease(prod, "apps"), func(objs []Object) []Object {
+			return append(objs, Object{"apiVersion": "external-secrets.io/v1", "kind": "ExternalSecret",
+				"metadata": map[string]any{"name": "keel-db-app", "namespace": "default"},
+				"spec":     map[string]any{"secretStoreRef": map[string]any{"kind": "ClusterSecretStore", "name": SecretStore}}})
+		}},
+		{"production's Secrets from Infisical", inRelease(prod, "configs"), func(objs []Object) []Object {
+			c := Get(Find(objs, "ClusterSecretStore", SecretStore), "spec", "conditions", 0).(map[string]any)
+			c["namespaces"] = append(c["namespaces"].([]any), "default")
+			return objs
+		}},
+		{"production's Secrets from Infisical", inRelease(prod, "configs"), func(objs []Object) []Object {
+			delete(spec(Find(objs, "ClusterSecretStore", SecretStore)), "conditions")
+			return objs
+		}},
+		{"production's Secrets from Infisical", inRelease(prod, "configs"), func(objs []Object) []Object {
+			c := Get(Find(objs, "ClusterSecretStore", SecretStore), "spec", "conditions", 0).(map[string]any)
+			c["namespaceRegexes"] = []any{".*"}
+			return objs
+		}},
+		{"production's Secrets from Infisical", inDeploy, func(objs []Object) []Object {
+			return append(objs, Object{"apiVersion": "external-secrets.io/v1", "kind": "ExternalSecret",
+				"metadata": map[string]any{"name": "keel-db-app", "namespace": Namespace},
+				"spec":     map[string]any{"secretStoreRef": map[string]any{"kind": "ClusterSecretStore", "name": SecretStore}}})
+		}},
+		{"every Secret a workload needs is made", inRelease(prod, "apps"), func(objs []Object) []Object {
+			return slices.DeleteFunc(objs, func(o Object) bool { return o.ID() == "ExternalSecret/tunnel-token" })
+		}},
+		{"every Secret a workload needs is made", inRelease(prod, "apps"), func(objs []Object) []Object {
+			Get(Find(objs, "Cluster", database), "spec", "bootstrap", "initdb", "secret").(map[string]any)["name"] = "keel-db-owner"
+			return objs
+		}},
+		{"every Secret a workload needs is made", inRelease(prod, "apps"), func(objs []Object) []Object {
+			c := Container(PodSpec(Find(objs, "Deployment", Deployment)), "containers", "keel")
+			c["envFrom"] = append(List(c, "envFrom"), map[string]any{"secretRef": map[string]any{"name": "made-by-hand"}})
+			return objs
+		}},
+		{"the game's routes limited per address", inDeploy, func(objs []Object) []Object {
+			delete(Get(Find(objs, "HTTPRoute", "play"), "spec", "rules", 1).(map[string]any), "filters")
+			return objs
+		}},
+		{"the game's routes limited per address", inRelease(prod, "apps"), func(objs []Object) []Object {
+			Get(Find(objs, "HTTPRoute", "play"), "spec", "rules", 0, "filters", 0, "extensionRef").(map[string]any)["name"] = rateMiddleware
+			return objs
+		}},
+		{"the game's routes limited per address", inRelease(prod, "apps"), func(objs []Object) []Object {
+			r := Find(objs, "HTTPRoute", "play")
+			spec(r)["rules"] = List(r, "spec", "rules")[1:]
+			return objs
+		}},
+		{"the game's routes limited per address", inRelease(local, "apps"), func(objs []Object) []Object {
+			Get(Find(objs, "Middleware", rateMiddleware), "spec", "rateLimit", "sourceCriterion").(map[string]any)["requestHeaderName"] = "X-Forwarded-For"
+			return objs
+		}},
+		{"the game's routes limited per address", inRelease(prod, "apps"), func(objs []Object) []Object {
+			return slices.DeleteFunc(objs, func(o Object) bool { return o.ID() == "Middleware/"+connectionsMiddleware })
+		}},
+		{"the game's routes limited per address", inRelease(prod, "apps"), func(objs []Object) []Object {
+			r := Get(Find(objs, "HTTPRoute", "play"), "spec", "rules").([]any)
+			spec(Find(objs, "HTTPRoute", "play"))["rules"] = append(r, map[string]any{
+				"matches":     []any{map[string]any{"path": map[string]any{"type": "PathPrefix", "value": "/api"}}},
+				"backendRefs": []any{map[string]any{"name": "keel", "port": 8080}},
+			})
+			return objs
+		}},
+		{"production's host on its Gateway and routes", inRelease(prod, "apps"), func(objs []Object) []Object {
+			delete(Get(Find(objs, "Gateway", gatewayName), "spec", "listeners", 0).(map[string]any), "hostname")
+			return objs
+		}},
+		{"production's host on its Gateway and routes", inRelease(prod, "apps"), func(objs []Object) []Object {
+			delete(spec(Find(objs, "HTTPRoute", "play")), "hostnames")
+			return objs
+		}},
 	}
 	broken := map[string]bool{}
 	for i, c := range cases {
@@ -750,6 +869,94 @@ func TestEachRuleFails(t *testing.T) {
 	for _, r := range rules {
 		if !broken[r.name] {
 			t.Errorf("no case breaks the rule %q", r.name)
+		}
+	}
+}
+
+// TestProductionOnline: production's Gateway and route answer the players'
+// host, and the local cluster's no host at all; production runs
+// cloudflared and reads its Secrets from Infisical, the local cluster
+// neither.
+func TestProductionOnline(t *testing.T) {
+	prodApps, localApps := release(t, prod, "apps"), release(t, local, "apps")
+	if h := Str(Find(prodApps, "Gateway", gatewayName), "spec", "listeners", 0, "hostname"); h != PlayHost {
+		t.Errorf("production's listener answers %q", h)
+	}
+	if hs := List(Find(prodApps, "HTTPRoute", "play"), "spec", "hostnames"); !slices.Equal(hs, []any{PlayHost}) {
+		t.Errorf("production's route answers %v", hs)
+	}
+	for _, l := range List(Find(localApps, "Gateway", gatewayName), "spec", "listeners") {
+		if h := Str(l, "hostname"); h != "" {
+			t.Errorf("the local listener %s answers %q alone: phones open the Mac by its address too", Str(l, "name"), h)
+		}
+	}
+	if d := Find(prodApps, "Deployment", "cloudflared"); d == nil || Get(d, "spec", "replicas") != 2 {
+		t.Errorf("production's cloudflared: %v", Get(d, "spec", "replicas"))
+	}
+	// Each namespace the store serves has a Secret to read from it.
+	used := map[string]bool{}
+	for _, o := range prodApps {
+		if o.Kind() == "ExternalSecret" {
+			used[Str(o, "metadata", "namespace")] = true
+		}
+	}
+	for _, ns := range storeNamespaces {
+		if !used[ns] {
+			t.Errorf("the store serves %s, where no ExternalSecret reads it", ns)
+		}
+	}
+	for _, e := range local.Entries {
+		for _, o := range release(t, local, e) {
+			if o.Kind() == "ExternalSecret" || o.Kind() == "ClusterSecretStore" || Str(o, "metadata", "namespace") == "cloudflared" {
+				t.Errorf("the local cluster has %s", o.ID())
+			}
+		}
+	}
+}
+
+// TestLimitsPerAddress: production's limits are the starting values; the
+// local cluster's are raised, as every request there counts as one
+// address's.
+func TestLimitsPerAddress(t *testing.T) {
+	for _, tc := range []struct {
+		c    Cluster
+		want [3]int
+	}{{prod, [3]int{50, 100, 200}}, {local, [3]int{2000, 4000, 4096}}} {
+		c, want := tc.c, tc.want
+		objs := release(t, c, "apps")
+		rate, conns := Find(objs, "Middleware", rateMiddleware), Find(objs, "Middleware", connectionsMiddleware)
+		got := [3]int{}
+		got[0], _ = Get(rate, "spec", "rateLimit", "average").(int)
+		got[1], _ = Get(rate, "spec", "rateLimit", "burst").(int)
+		got[2], _ = Get(conns, "spec", "inFlightReq", "amount").(int)
+		if got != want || Str(rate, "spec", "rateLimit", "period") != "1s" {
+			t.Errorf("%s: average, burst and connections %v, want %v", c.Name, got, want)
+		}
+	}
+}
+
+// TestStoreIsProductions: the store reads the host and project
+// infra/production.yaml names.
+func TestStoreIsProductions(t *testing.T) {
+	p, err := production.Read(filepath.Join("..", "..", "..", production.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := Find(release(t, prod, "configs"), "ClusterSecretStore", SecretStore)
+	inf := Get(store, "spec", "provider", "infisical")
+	if h := Str(inf, "hostAPI"); h != strings.TrimSuffix(p.Infisical.Host, "/")+"/api" {
+		t.Errorf("the store's hostAPI %s, production.yaml's host %s", h, p.Infisical.Host)
+	}
+	if s := Str(inf, "secretsScope", "projectSlug"); s != p.Infisical.Cluster.Slug {
+		t.Errorf("the store reads the project %q, production.yaml names %q", s, p.Infisical.Cluster.Slug)
+	}
+	if e := Str(inf, "secretsScope", "environmentSlug"); e != p.Infisical.Environment {
+		t.Errorf("the store reads the environment %q, production.yaml names %q", e, p.Infisical.Environment)
+	}
+	for _, key := range []string{"clientId", "clientSecret"} {
+		ref := Get(inf, "auth", "universalAuthCredentials", key)
+		if Str(ref, "name") != "infisical-universal-auth" || Str(ref, "namespace") != "external-secrets" || Str(ref, "key") != key {
+			t.Errorf("the store's %s comes from %v, not the machine workflow's Secret", key, ref)
 		}
 	}
 }

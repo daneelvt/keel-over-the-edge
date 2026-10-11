@@ -3,8 +3,9 @@
 // Package pinned fetches the programs the repository pins by release:
 // TinyGo, the compiler that builds the physics package to WebAssembly;
 // cosign and the Flux CLI, which sign and publish a release; Tailscale's
-// client, with which a workflow joins the tailnet; and kube-bench, which
-// audits a k3s node. Each is downloaded into the repository's .dev folder,
+// client, with which a workflow joins the tailnet; kube-bench, which
+// audits a k3s node; and OpenTofu, which manages the accounts outside the
+// machine. Each is downloaded into the repository's .dev folder,
 // the way Go fetches the toolchain go.mod names, and checked against the
 // SHA-256 pinned below before anything is unpacked or run.
 package pinned
@@ -53,6 +54,10 @@ var releases = []release{
 
 	{"aquasecurity/kube-bench", "linux-amd64", "v0.16.0", "82dbc7e598740dc9344d41f8ad0b8210d57c4c00bdb2c5f1d8a69a2b98baddcf"},
 	{"aquasecurity/kube-bench", "linux-arm64", "v0.16.0", "64500561f5fcaa3f86fe951ed26bbfc28f7bbf3d2eac13843abfd2924955d10b"},
+
+	{"opentofu/opentofu", "darwin-arm64", "v1.13.1", "be78f659f04ef06a9dbd9b3934d46af95d787a3aa38396d459dea395261816a9"},
+	{"opentofu/opentofu", "linux-amd64", "v1.13.1", "378ada19d4bc70c43732004e8159be771b23b9a5afdf059e5f8a2b3fa2c70a69"},
+	{"opentofu/opentofu", "linux-arm64", "v1.13.1", "9c1ef375aa1852db0b2888aa921b640c71f8140d4682aa4fec99378a64fa7dc3"},
 }
 
 // byHand pins what is not a GitHub release, which Renovate cannot follow:
@@ -123,6 +128,12 @@ var (
 	KubeBench = Tool{
 		Name: "kube-bench", repo: "aquasecurity/kube-bench", bin: fixed("kube-bench"), size: "about 20 MB", platforms: []string{"linux-amd64", "linux-arm64"},
 		asset: func(v, goos, goarch string) string { return "kube-bench_" + v + "_" + goos + "_" + goarch + ".tar.gz" },
+	}
+	// OpenTofu plans and applies what the accounts workflow manages: the
+	// zone at Cloudflare, the tunnel, and the secrets they make.
+	OpenTofu = Tool{
+		Name: "tofu", repo: "opentofu/opentofu", bin: fixed("tofu"), size: "about 30 MB",
+		asset: func(v, goos, goarch string) string { return "tofu_" + v + "_" + goos + "_" + goarch + ".tar.gz" },
 	}
 )
 

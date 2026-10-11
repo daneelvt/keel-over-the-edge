@@ -16,6 +16,8 @@ resources:
   - service.yaml
   - gateway.yaml
   - routes.yaml
+  - middlewares.yaml
+  - network-policies.yaml
 # keel's configuration (keel serve's usage lists every variable). A change
 # makes a new name, and so a new pod.
 configMapGenerator:

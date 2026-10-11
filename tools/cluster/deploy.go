@@ -84,6 +84,9 @@ func (c *cluster) up(ctx context.Context) error {
 	if err := c.waitKubectl(ctx, "the CloudNativePG operator", 10*time.Minute, "-n", "cnpg-system", "wait", "--for=condition=Ready", "helmrelease/cloudnative-pg"); err != nil {
 		return err
 	}
+	if err := c.waitKubectl(ctx, "External Secrets' controller", 10*time.Minute, "-n", "external-secrets", "wait", "--for=condition=Ready", "helmrelease/external-secrets"); err != nil {
+		return err
+	}
 	if err := c.applyEntry(ctx, t, localCluster.Entry("configs")); err != nil {
 		return err
 	}

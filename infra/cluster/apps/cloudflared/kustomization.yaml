@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# cloudflared: two connectors of the tunnel that carries players' traffic
+# from Cloudflare to Traefik. It dials out; nothing listens for it. Only
+# production runs it: its token comes from Infisical, through External
+# Secrets.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cloudflared
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: keel
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - tunnel-token.yaml
+  - network-policies.yaml

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# External Secrets' controller, which makes the cluster's Secrets from
+# Infisical: on the local cluster too, with no store there, so its
+# definitions are the ones the manifests are checked against.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: external-secrets
+resources:
+  - namespace.yaml
+  - repository.yaml
+  - release.yaml
+  - network-policies.yaml

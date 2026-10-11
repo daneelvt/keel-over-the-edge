@@ -1,0 +1,93 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What may talk to what in the game's namespace (k3s's network policy
+# controller enforces them). What is not let in is refused; the kubelet's
+# probes come from the node, which is always let through.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# keel: players' requests from Traefik, on the game's listener alone. Out,
+# it reaches DNS and its database, and nothing else: it never calls the
+# Kubernetes API (it mounts no token).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keel
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: keel
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 8080
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: keel-db
+      ports:
+        - port: 5432
+          protocol: TCP
+---
+# The database: from the game, from CloudNativePG's operator (PostgreSQL,
+# and its instance manager on 8000), and from its own instances
+# (CloudNativePG's documentation, "Networking"). Its pods call the
+# Kubernetes API, so their way out is not fenced.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keel-db
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: keel-db
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keel
+      ports:
+        - port: 5432
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - port: 5432
+          protocol: TCP
+        - port: 8000
+          protocol: TCP
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: keel-db
