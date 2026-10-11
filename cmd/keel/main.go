@@ -5,6 +5,7 @@
 //	keel serve    run the game
 //	keel migrate  bring the database's schema up to this build's
 //	keel replay   replay an input log and check it
+//	keel restore-test  restore the database's backups into a throwaway cluster and check them
 package main
 
 import (
@@ -23,6 +24,8 @@ commands:
   serve    run the game
   migrate  bring the database's schema up to this build's
   replay   replay an input log and check it
+  restore-test  restore the database's backups into a throwaway cluster
+           and check them
 `
 
 func main() {
@@ -64,6 +67,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		err = migrate(ctx, args[1:], getenv, stdout, stderr)
 	case "replay":
 		err = replayCmd(args[1:], stdout, stderr)
+	case "restore-test":
+		err = restoreTest(ctx, args[1:], getenv, stdout, stderr)
 	case "help", "-h", "-help", "--help":
 		fmt.Fprint(stdout, usage)
 		return 0
@@ -74,7 +79,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if errors.Is(err, errUsage) {
 		return 2
 	}
-	if errors.Is(err, errDiverged) {
+	if errors.Is(err, errDiverged) || errors.Is(err, errRestoreFailed) {
 		return 1
 	}
 	if err != nil {
