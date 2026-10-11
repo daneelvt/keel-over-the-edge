@@ -394,7 +394,7 @@ Check:
 
      | Scope | Permission | Access |
      |---|---|---|
-     | Account | Cloudflare Tunnel | Edit |
+     | Account | Cloudflare One Connector: cloudflared | Edit |
      | Account | Notifications | Edit |
      | Zone | Zone | Read |
      | Zone | DNS | Edit |
@@ -407,6 +407,11 @@ Check:
      zone, `keelovertheedge.com`.
    - **Client IP Address Filtering**: none. **TTL**: none (replaced by
      hand, below).
+
+   "Cloudflare One Connector: cloudflared" is what Cloudflare now calls
+   Cloudflare Tunnel's permission, the narrowest the provider accepts for a
+   tunnel and its token; not "Argo Tunnel (Legacy)", nor "Cloudflare One
+   Connectors", which covers WARP's connectors too.
 
    This is where the list starts: the first `plan` and `apply` show what is
    missing (an error naming the endpoint refused) or unused, and this table
