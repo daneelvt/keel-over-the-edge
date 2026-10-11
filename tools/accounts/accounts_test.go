@@ -99,6 +99,24 @@ type call struct {
 func (f *fakeTofu) run(_ context.Context, c cmd) ([]byte, []byte, error) {
 	f.calls = append(f.calls, call{c, f.log.String()})
 	sub := c.argv[1]
+	var data string
+	for _, e := range c.env {
+		if d, ok := strings.CutPrefix(e, "TF_DATA_DIR="); ok {
+			data = d
+		}
+	}
+	// As OpenTofu: init leaves the backend's settings in the working
+	// folder, and every later command of the run needs them there.
+	marker := filepath.Join(data, "terraform.tfstate")
+	switch sub {
+	case "init":
+		os.MkdirAll(data, 0o700)
+		os.WriteFile(marker, []byte("{}"), 0o600)
+	case "plan", "show", "apply":
+		if _, err := os.Stat(marker); err != nil {
+			return nil, []byte("Error: Backend initialization required, please run \"tofu init\""), errors.New("exit status 1")
+		}
+	}
 	if sub == f.fail {
 		return []byte("everything OpenTofu printed, values and all: 198.51.100.9"), []byte(f.says), errors.New("exit status 1")
 	}
@@ -217,7 +235,7 @@ func TestPlanGivesTheCredentialsOnlyToTofu(t *testing.T) {
 				t.Errorf("tofu %s's environment has no %s", c.argv[1], k)
 			}
 		}
-		if c.dir != a.path(tofuDir) || !slices.Contains(c.env, "TF_DATA_DIR="+a.path(workDir, "plan")) {
+		if c.dir != a.path(tofuDir) || !slices.Contains(c.env, "TF_DATA_DIR="+a.path(dataDir, "plan")) {
 			t.Errorf("tofu %s ran in %s with %v", c.argv[1], c.dir, c.env)
 		}
 	}
