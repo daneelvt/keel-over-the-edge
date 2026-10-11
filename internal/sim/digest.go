@@ -10,7 +10,8 @@ import (
 )
 
 // Digest is a 64-bit FNV-1a hash of a frame's state: the tick, the wind,
-// whether admission is held, each occupied slot's number, boat, generation,
+// the sea in effect and next (each run of areas with the same inputs, and
+// its length), whether admission is held, each occupied slot's number, boat, generation,
 // owner, connection, grace, control word and state, and each waiting
 // connection's account, connection, tick of joining the queue and grace, as
 // little-endian bits. Two worlds with the
@@ -21,6 +22,8 @@ func Digest(f *bus.Frame) uint64 {
 	h.u64(uint64(f.Tick))
 	h.f64(f.Wind.Speed)
 	h.f64(f.Wind.From)
+	h.sea(f.Sea.Now)
+	h.sea(f.Sea.Next)
 	if f.Held {
 		h.byte(1)
 	} else {
@@ -69,6 +72,21 @@ func (h *fnv) u64(v uint64) {
 
 func (h *fnv) f64(v float64) { h.u64(math.Float64bits(v)) }
 
+// sea hashes a sea's areas as runs: under one wind the whole sea is one.
+func (h *fnv) sea(areas []physics.SeaInput) {
+	for i := 0; i < len(areas); {
+		j := i + 1
+		for j < len(areas) && areas[j] == areas[i] {
+			j++
+		}
+		h.u64(uint64(j - i))
+		h.u64(uint64(areas[i].Speed))
+		h.u64(uint64(areas[i].From))
+		h.u64(uint64(areas[i].Fetch))
+		i = j
+	}
+}
+
 func (h *fnv) byte(b byte) {
 	*h ^= fnv(b)
 	*h *= fnvPrime
@@ -77,9 +95,13 @@ func (h *fnv) byte(b byte) {
 // StateFields lists a state's fields, in their order. The snapshot, the
 // digest and the input log all read the state through it; a test checks it
 // has every field.
-func StateFields(s *physics.State) [15]*float64 {
-	return [15]*float64{
+func StateFields(s *physics.State) [StateSize]*float64 {
+	return [StateSize]*float64{
 		&s.X, &s.Y, &s.Heading, &s.Surge, &s.Sway, &s.YawRate, &s.Heel, &s.RollRate,
 		&s.Boom, &s.BoomRate, &s.Sailor, &s.Rudder, &s.SheetLimit, &s.SailorMode, &s.SailorTimer,
+		&s.Heave, &s.HeaveRate, &s.Pitch, &s.PitchRate,
 	}
 }
+
+// StateSize is the number of a state's fields.
+const StateSize = 19

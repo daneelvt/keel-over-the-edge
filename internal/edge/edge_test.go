@@ -18,6 +18,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
@@ -51,6 +52,8 @@ func count(t *testing.T, s *edgetest.Server, vec string, labels ...string) float
 		return testutil.ToFloat64(m.EdgeDropped.WithLabelValues(labels...))
 	case "resyncs":
 		return testutil.ToFloat64(m.EdgeResyncs.WithLabelValues(labels...))
+	case "out":
+		return testutil.ToFloat64(m.EdgeMessages.WithLabelValues(append([]string{"out"}, labels...)...))
 	case "entries":
 		return testutil.ToFloat64(m.EdgeSnapshotEntries.WithLabelValues(labels...))
 	}
@@ -206,6 +209,14 @@ func TestWelcome(t *testing.T) {
 		if wt, now := w.GetWorldTimeUs(), time.Since(edgetest.Epoch).Microseconds(); wt != now {
 			t.Fatalf("world time %d µs, now %d", wt, now)
 		}
+		// The sea about the boat comes first: the client steps its boat in it.
+		r, err := client.Receive(t.Context(), ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sea := r.Message.GetSeaAreas(); sea == nil || sea.GetTick() > w.GetTick() || sea.GetSize() != edge.SeaWindow {
+			t.Fatalf("after the welcome of tick %d: %v", w.GetTick(), r.Message)
+		}
 		last := int64(0)
 		for range 10 {
 			r, err := client.Receive(t.Context(), ws)
@@ -245,6 +256,132 @@ func TestWelcome(t *testing.T) {
 		}
 		if j, r := count(t, s, "joins", "joined"), count(t, s, "joins", "rejoined"); j != 1 || r != 1 {
 			t.Fatalf("joined %v, rejoined %v", j, r)
+		}
+	})
+}
+
+// TestSeaAreas: a connection is sent the sea about its boat after its
+// Welcome; again a second before the sea changes; and again when its boat
+// sails into another sea area, well past the edge: and not otherwise.
+func TestSeaAreas(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := edgetest.NewServer(t, edgetest.Config{})
+		token, _ := s.Guest("Ann")
+		ws, w, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws.CloseNow()
+		// seas reads snapshots until tick until, and returns the SeaAreas
+		// that came among them, each with the tick of the snapshot after it.
+		type seen struct {
+			sea  *pb.SeaAreas
+			next int64
+		}
+		seas := func(until int64) []seen {
+			t.Helper()
+			var got []seen
+			for {
+				r, err := client.Receive(t.Context(), ws)
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch {
+				case r.Snapshot != nil:
+					for i := range got {
+						if got[i].next == 0 {
+							got[i].next = r.Snapshot.Tick
+						}
+					}
+					if r.Snapshot.Tick >= until {
+						return got
+					}
+				case r.Message.GetSeaAreas() != nil:
+					got = append(got, seen{sea: r.Message.GetSeaAreas()})
+				}
+			}
+		}
+		all := func(xs []uint32, want uint32) bool {
+			for _, x := range xs {
+				if x != want {
+					return false
+				}
+			}
+			return len(xs) == edge.SeaWindow*edge.SeaWindow
+		}
+		second := func(tick int64) int64 { return bus.SeaSecond(tick) * bus.SeaPeriod }
+
+		// After the Welcome, before the first snapshot: the areas about the
+		// start, under the world's 10 knots from the north over open water.
+		first := seas(w.GetTick() + 150)
+		if len(first) != 1 {
+			t.Fatalf("%d SeaAreas in the first five seconds", len(first))
+		}
+		a := first[0]
+		if a.sea.GetTick() != second(a.next) || a.next-w.GetTick() > 2 || a.sea.GetCol() != 15 || a.sea.GetRow() != 16 || a.sea.GetSize() != edge.SeaWindow ||
+			!all(a.sea.GetSpeed(), 514) || !all(a.sea.GetFrom(), 0) || !all(a.sea.GetFetch(), 11112) {
+			t.Fatalf("the first SeaAreas, before the snapshot of tick %d: %v", a.next, a.sea)
+		}
+
+		// A change of wind: one SeaAreas, a second before the tick it
+		// applies from.
+		dev := s.World.Bus().Commands.Developer()
+		reply := make(chan bus.Reply, 1)
+		if err := dev.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 17, From: 3.14159265358979}, Reply: reply}); err != nil {
+			t.Fatal(err)
+		}
+		changed := (<-reply).Tick
+		after := seas(changed + 240)
+		if len(after) != 1 {
+			t.Fatalf("%d SeaAreas after a change of wind", len(after))
+		}
+		b := after[0]
+		applies := second(changed) + 2*bus.SeaPeriod
+		if b.sea.GetTick() != applies || b.next != applies-bus.SeaPeriod || !all(b.sea.GetSpeed(), 1700) || !all(b.sea.GetFrom(), 32768) || b.sea.GetCol() != 15 {
+			t.Fatalf("the wind changed at tick %d: a SeaAreas for tick %d, before the snapshot of tick %d: %v", changed, b.sea.GetTick(), b.next, b.sea)
+		}
+
+		// Just past an area's edge the window stays; well past it, it
+		// follows the boat. The area of column 20 is centred 926 m east and
+		// ends 1157.5 m east.
+		s.Place(w.GetBoat(), physics.State{X: 926, Y: -20})
+		now := s.World.Now()
+		if got := seas(now + 150); len(got) != 1 || got[0].sea.GetCol() != 18 || got[0].sea.GetTick() != second(got[0].next) {
+			t.Fatalf("the boat put at the centre of another area: %v", got)
+		}
+		s.Place(w.GetBoat(), physics.State{X: 1180, Y: -20})
+		now = s.World.Now()
+		if got := seas(now + 150); len(got) != 0 {
+			t.Fatalf("%d SeaAreas for a boat 22 m past an area's edge", len(got))
+		}
+		s.Place(w.GetBoat(), physics.State{X: 1260, Y: -20})
+		now = s.World.Now()
+		moved := seas(now + 150)
+		if len(moved) != 1 {
+			t.Fatalf("%d SeaAreas for a boat in another area", len(moved))
+		}
+		c := moved[0]
+		if c.sea.GetTick() != second(c.next) || c.sea.GetCol() != 19 || c.sea.GetRow() != 16 || !all(c.sea.GetSpeed(), 1700) {
+			t.Fatalf("the boat moved: before the snapshot of tick %d, %v", c.next, c.sea)
+		}
+		if n := count(t, s, "out", "sea_areas"); n != 4 {
+			t.Fatalf("%v SeaAreas counted", n)
+		}
+
+		// A change while the boat sails into another area: the areas in
+		// effect about the new place, and those to come.
+		reply = make(chan bus.Reply, 1)
+		if err := dev.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 5, From: 0}, Reply: reply}); err != nil {
+			t.Fatal(err)
+		}
+		changed = (<-reply).Tick
+		fixed := second(changed) + bus.SeaPeriod
+		seas(fixed + 4)
+		s.Place(w.GetBoat(), physics.State{X: 0, Y: 0})
+		both := seas(fixed + 4 + 150)
+		if len(both) != 2 || both[0].sea.GetTick() != fixed || !all(both[0].sea.GetSpeed(), 1700) || both[0].sea.GetCol() != 16 ||
+			both[1].sea.GetTick() != fixed+bus.SeaPeriod || !all(both[1].sea.GetSpeed(), 500) || both[1].sea.GetCol() != 16 || both[1].sea.GetRow() != 16 {
+			t.Fatalf("a boat moved while the sea was about to change: %v", both)
 		}
 	})
 }

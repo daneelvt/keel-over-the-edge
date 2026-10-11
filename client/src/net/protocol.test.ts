@@ -211,7 +211,7 @@ describe('the snapshot', () => {
     flags[12] = 2;
     expect(refused(flags)).not.toBeNull();
     const entries = good.slice();
-    entries[159] = 129;
+    entries[HEADER_SIZE - 1] = 129;
     expect(refused(entries)).not.toBeNull();
   });
 
@@ -296,6 +296,20 @@ describe('the envelopes', () => {
     },
     { body: { case: 'pong', value: { clientTimeUs: 123456789n, worldTimeUs: 24256872133333n } } },
     { body: { case: 'queued', value: { position: 12, waiting: 40 } } },
+    {
+      body: {
+        case: 'seaAreas',
+        value: {
+          tick: 727706190n,
+          col: -1,
+          row: 34,
+          size: 2,
+          speed: [514, 0, 1749, 10000] as number[],
+          from: [0, 65535, 32768, 1] as number[],
+          fetch: [11112, 0, 463, 16777216] as number[],
+        },
+      },
+    },
   ] as const;
 
   it('encodes each message to the bytes Go encodes, and decodes them', () => {

@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"math/rand/v2"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -26,16 +27,25 @@ import (
 // the bubble's first instant.
 var bubbleEpoch = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-func kinds(t testing.TB) []physics.Prepared {
-	t.Helper()
+// physicsOnce prepares the catalog's sea and its first boat once for the
+// package's tests.
+var physicsOnce = sync.OnceValues(func() (*physics.Waves, []physics.Prepared) {
 	cat, err := catalog.Load()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-	p := catalog.PhysicsParams(&cat.Boats[0])
-	var b physics.Prepared
-	physics.Prepare(&p, &b)
-	return []physics.Prepared{b}
+	w, ks := cat.Prepare()
+	return w, ks[:1]
+})
+
+func kinds(testing.TB) []physics.Prepared {
+	_, ks := physicsOnce()
+	return ks
+}
+
+func waves(testing.TB) *physics.Waves {
+	w, _ := physicsOnce()
+	return w
 }
 
 type harness struct {
@@ -55,7 +65,7 @@ type harness struct {
 // every tick.
 func start(t *testing.T, slow func(h *harness, tick int64)) *harness {
 	t.Helper()
-	w, err := sim.New(sim.Config{Capacity: 8, Kinds: kinds(t), Workers: 2, Tick: TickAt(time.Now(), bubbleEpoch)})
+	w, err := sim.New(sim.Config{Capacity: 8, Kinds: kinds(t), Waves: waves(t), Workers: 2, Tick: TickAt(time.Now(), bubbleEpoch)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +141,7 @@ func TestTenMinutes(t *testing.T) {
 // loop has started moves neither it nor the ticks.
 func TestWorldTime(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		w, err := sim.New(sim.Config{Capacity: 8, Kinds: kinds(t), Workers: 1, Tick: TickAt(time.Now(), bubbleEpoch)})
+		w, err := sim.New(sim.Config{Capacity: 8, Kinds: kinds(t), Waves: waves(t), Workers: 1, Tick: TickAt(time.Now(), bubbleEpoch)})
 		if err != nil {
 			t.Fatal(err)
 		}

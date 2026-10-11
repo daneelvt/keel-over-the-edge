@@ -625,3 +625,28 @@ func fastTwoSum(a, b float64) (s, e float64) {
 func atanPoly(t float64) float64 {
 	return t - float64(float64(t*(t*t))*atanQ(t*t))
 }
+
+// averages returns the two factors by which a hull of half-length h
+// averages a wave of wavenumber k along it, at x = k h:
+//
+//	S(x) = sin x / x                  the mean of the wave over the length
+//	G(x) = 3 (sin x − x cos x) / x³   the slope of the line that fits it best
+//
+// Both are 1 for a wave much longer than the hull. Near zero the second
+// loses its bits to cancellation, so both come from their series there.
+func averages(x float64) (s, g float64) {
+	x2 := float64(x * x)
+	if x2 < 0.01 {
+		s = float64(x2*(1.0/362880)) - 1.0/5040
+		s = float64(x2*s) + 1.0/120
+		s = float64(x2*s) - 1.0/6
+		s = float64(x2*s) + 1
+		g = float64(x2*(1.0/1330560)) - 1.0/15120
+		g = float64(x2*g) + 1.0/280
+		g = float64(x2*g) - 1.0/10
+		g = float64(x2*g) + 1
+		return s, g
+	}
+	sin, cos := SinCos(x)
+	return sin / x, 3 * (sin - float64(x*cos)) / float64(x*x2)
+}

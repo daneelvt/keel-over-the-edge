@@ -70,15 +70,11 @@ func replayCmd(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	kinds := make([]physics.Prepared, len(cat.Boats))
-	for i := range cat.Boats {
-		p := catalog.PhysicsParams(&cat.Boats[i])
-		physics.Prepare(&p, &kinds[i])
-	}
+	waves, kinds := cat.Prepare()
 
 	var dumped bool
 	var dumpErr error
-	opt := replay.Options{Kinds: kinds, Workers: *workers}
+	opt := replay.Options{Kinds: kinds, Waves: waves, Workers: *workers}
 	if *dump != math.MinInt64 {
 		opt.At = func(fr *bus.Frame) {
 			if fr.Tick == *dump && !dumped {

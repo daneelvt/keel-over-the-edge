@@ -27,6 +27,24 @@ var records = []struct {
 	{"env", reflect.TypeFor[physics.Env]()},
 	{"params", reflect.TypeFor[physics.Params]()},
 	{"out", reflect.TypeFor[physics.Out]()},
+	{"seaParams", reflect.TypeFor[physics.SeaParams]()},
+	{"components", reflect.TypeFor[physics.Components]()},
+	{"wave", reflect.TypeFor[physics.EffectiveWave]()},
+}
+
+// seaConstants are the sea's sizes, which the module's memory and the wire
+// are laid out by.
+var seaConstants = []struct {
+	name  string
+	value int
+}{
+	{"components", physics.SeaComponents},
+	{"areaSize", physics.SeaAreaSize},
+	{"areas", physics.SeaAreas},
+	{"window", physics.SeaClientWindow},
+	{"slots", physics.SeaClientSlots},
+	{"fromSteps", physics.SeaFromSteps},
+	{"sampleCapacity", physics.SeaSampleCapacity},
 }
 
 type recordLayout struct {
@@ -98,6 +116,9 @@ func versionOf(l layout) uint32 {
 		fmt.Fprintf(&b, "%s:%s\n", r.name, strings.Join(names, ","))
 	}
 	fmt.Fprintf(&b, "fn:%s\n", strings.Join(l.fns, ","))
+	for _, c := range seaConstants {
+		fmt.Fprintf(&b, "sea.%s:%d\n", c.name, c.value)
+	}
 	sum := sha256.Sum256([]byte(b.String()))
 	return binary.BigEndian.Uint32(sum[:4])
 }
@@ -181,6 +202,14 @@ export const RECORDS = {
 		}
 		fmt.Fprintf(&b, " %s: %d%s", f, i, sep)
 	}
-	b.WriteString(" } as const;\n")
+	b.WriteString(" } as const;\n\n/**\n * The sea's sizes: its waves, the side of a sea area in metres and how many the\n * world has on a side, the areas a side and the windows the module holds, the\n * steps in a turn of a wind's direction, and the points one seaSample takes.\n * A wind's speed is in steps of SEA_SPEED_STEP m/s.\n */\nexport const SEA = {")
+	for i, c := range seaConstants {
+		sep := ","
+		if i == len(seaConstants)-1 {
+			sep = ""
+		}
+		fmt.Fprintf(&b, " %s: %d%s", c.name, c.value, sep)
+	}
+	fmt.Fprintf(&b, " } as const;\nexport const SEA_SPEED_STEP = %v;\n", physics.SeaSpeedStep)
 	return b.Bytes()
 }

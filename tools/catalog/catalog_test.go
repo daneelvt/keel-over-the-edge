@@ -35,7 +35,18 @@ const (
 	sailorArt    = "art/sailors/test.glb"
 	sailorFarArt = "art/sailors/test.far.glb"
 	sailorsPath  = "shared/catalog/sailors.yaml"
+	weatherPath  = "shared/catalog/weather.yaml"
 )
+
+// realWeather returns the real catalog's weather, which every fixture has
+// unless it gives its own.
+func realWeather() string {
+	data, err := os.ReadFile(filepath.Join("..", "..", weatherPath))
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
+}
 
 // realPhysics returns the physics block of the real catalog's first boat.
 func realPhysics() string {
@@ -75,6 +86,9 @@ func fixture(t *testing.T, files map[string]string) string {
 		files[sailorsPath] = validSailors
 		files[sailorArt] = "glTF"
 		files[sailorFarArt] = "glTF"
+	}
+	if _, ok := files[weatherPath]; !ok {
+		files[weatherPath] = realWeather()
 	}
 	for p, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
@@ -143,6 +157,48 @@ func TestRejects(t *testing.T) {
 			name:  "physics table of the wrong length",
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        dragArea: [", "        dragArea: [0.1, ", 1)},
 			want:  "/boats/0/physics/hull/dragArea",
+		},
+		{
+			name:  "a hull's value in waves missing",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        waterplaneArea:", "        waterplaneAreas:", 1)},
+			want:  "/boats/0/physics/hull",
+		},
+		{
+			name:  "a hull's value in waves out of range",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        heaveDamping: ", "        heaveDamping: 3 #", 1)},
+			want:  "/boats/0/physics/hull/heaveDamping",
+		},
+		{
+			name: "no weather",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": validBoats,
+				weatherPath:                 "# none\n{}\n",
+			},
+			want: "weather",
+		},
+		{
+			name: "sea value missing",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": validBoats,
+				weatherPath:                 strings.Replace(realWeather(), "    gamma:", "    gammas:", 1),
+			},
+			want: "/weather/sea",
+		},
+		{
+			name: "sea value out of range",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": validBoats,
+				weatherPath:                 strings.Replace(realWeather(), "    cull: ", "    cull: 0.9 #", 1),
+			},
+			want: "/weather/sea/cull",
+		},
+		{
+			name: "spreading not a whole number",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": validBoats,
+				weatherPath:                 strings.Replace(realWeather(), "    spreading: 5", "    spreading: 5.5", 1),
+			},
+			want: "/weather/sea/spreading",
 		},
 		{
 			name:  "bad id",
@@ -327,6 +383,17 @@ func TestParamsMatchTheSchema(t *testing.T) {
 	if err := checkParams(longer); err == nil || !strings.Contains(err.Error(), "values)") {
 		t.Errorf("an array of another length: %v", err)
 	}
+
+	sea, err := seaFields(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkSeaParams(sea); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkSeaParams(sea[1:]); err == nil || !strings.Contains(err.Error(), "SeaParams") {
+		t.Errorf("a sea value missing from the schema: %v", err)
+	}
 }
 
 func TestPhysicsGenerated(t *testing.T) {
@@ -334,17 +401,23 @@ func TestPhysicsGenerated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := goPhysics(fields)
+	sea, err := seaFields(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"p.Displacement = b.Physics.Hull.Displacement", "copy(p.DragArea[:], b.Physics.Hull.DragArea)"} {
+	g, err := goPhysics(fields, sea)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"p.Displacement = b.Physics.Hull.Displacement", "copy(p.DragArea[:], b.Physics.Hull.DragArea)",
+		"p.WaveForce = b.Physics.Hull.WaveForce", "p.Shortest = float64(c.Weather.Sea.Shortest)", "p.Spreading = float64(c.Weather.Sea.Spreading)"} {
 		if !strings.Contains(string(g), want) {
 			t.Errorf("physics.gen.go lacks %q", want)
 		}
 	}
-	ts := string(tsParams(fields))
-	for _, want := range []string{"params[f.displacement] = p.hull.displacement;", "params.set(p.hull.dragArea, f.dragArea);"} {
+	ts := string(tsParams(fields, sea))
+	for _, want := range []string{"params[f.displacement] = p.hull.displacement;", "params.set(p.hull.dragArea, f.dragArea);",
+		"export function writeSeaParams(", "params[f.fetchCap] = s.fetchCap;"} {
 		if !strings.Contains(ts, want) {
 			t.Errorf("params.gen.ts lacks %q", want)
 		}

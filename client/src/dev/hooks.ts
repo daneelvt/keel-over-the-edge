@@ -3,7 +3,8 @@
 // The hooks the browser tests drive, on window.keel with ?test. Loaded only
 // when asked for. They read back what the GPU computed (each tile's plane,
 // and, through a probe material, each fragment's tile and scene position)
-// and compare it with the same sums done in float64 here; and they sail the
+// and compare it with the sea the physics module gives, which is the
+// server's own code; and they sail the
 // boat: set its state, wind and controls, step it, script its controls,
 // and read back what the screen shows.
 
@@ -19,6 +20,7 @@ import {
   Scene,
 } from 'three';
 import {
+  Fn,
   float,
   floor,
   instanceIndex,
@@ -29,6 +31,7 @@ import {
   varying,
   vec4,
 } from 'three/tsl';
+import type { Node } from 'three/webgpu';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
@@ -36,15 +39,17 @@ import type { Game } from '../game/game';
 import { nowUs, worldUs } from '../net/clock';
 import type { Online } from '../net/online';
 import { hexAt, hexCentre, NEIGHBOURS, TILE_APOTHEM, TILE_RADIUS, tileHash } from '../ocean/hex';
+import { HULL_FILL, hulls, insideHull, toHullFrame } from '../ocean/hulls';
 import { tileHashNode, tileIdentity } from '../ocean/seamaterial';
 import { PASS_HEIGHT, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
+import { boatBandAt } from '../ocean/wave';
 import { steer, toHex } from '../predict/golden';
-import { RECORDS } from '../predict/layout.gen';
+import { RECORDS, SEA } from '../predict/layout.gen';
 import type { Predictor } from '../predict/predictor';
 import { checkScene, DOME_RADIUS, domeDrop, seaMaterial } from '../render/materials';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
-import { KNOT, type Sandbox } from '../sandbox/sandbox';
+import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import type { Settings } from '../ui/settings';
 
 export interface Info {
@@ -151,7 +156,7 @@ export function exposeHooks(world: SeaScene, game: Game, sailing: Sailing): void
 
 export type KeelHooks = ReturnType<typeof makeHooks>;
 
-function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
+export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   const stage = world.stage;
   const driver: BoatDriver = sailing.sandbox ?? sailing.predictor;
   const offline = (): Sandbox => {
@@ -167,7 +172,45 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     return stage.gfx;
   };
   const webgl = (): boolean => gfx().backend === 'webgl2';
-  const sample = new Float64Array(3);
+
+  /**
+   * The sea the physics module gives at scene points (x and z of each, in
+   * turn) at the time drawn: for each its height, its slope along the
+   * scene's x and z, and the sea's significant height. The module is the
+   * server's code, so these are the server's numbers.
+   */
+  const moduleSea = (points: ArrayLike<number>): Float64Array => {
+    const n = points.length >> 1;
+    const out = new Float64Array(n * 4);
+    const slot = world.ocean.slot;
+    const physics = driver.physics;
+    if (slot < 0 || physics === undefined) {
+      return out;
+    }
+    const o = world.origin.world;
+    const at = new Float64Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      at[i * 2] = o.x + (points[i * 2] ?? 0);
+      at[i * 2 + 1] = o.y - (points[i * 2 + 1] ?? 0);
+    }
+    physics.seaDrawAt(world.ticks);
+    const sea = physics.seaSample(slot, at);
+    for (let i = 0; i < n; i++) {
+      out[i * 4] = sea[i * 4] ?? 0;
+      out[i * 4 + 1] = sea[i * 4 + 1] ?? 0;
+      // The scene's z runs south.
+      out[i * 4 + 2] = -(sea[i * 4 + 2] ?? 0);
+      out[i * 4 + 3] = sea[i * 4 + 3] ?? 0;
+    }
+    return out;
+  };
+
+  /** The boat lies on the sea drawn, when time stands still and no step puts it there. */
+  const floatBoat = (): void => {
+    if (game.frozen && sailing.sandbox !== undefined) {
+      sailing.sandbox.floatAt(game.clock.steps + game.clock.alpha);
+    }
+  };
 
   /** Tile i's centre in the scene, as float32 holds it on the GPU. */
   const tileCentre = (i: number): [number, number] => {
@@ -179,20 +222,24 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     ];
   };
 
-  /** The planes the tile pass should hold, computed in float64 from the same inputs. */
+  /** The planes the tile pass should hold: the module's sea at each tile's centre, on the dome. */
   const referencePlanes = (): Float64Array => {
     const field = world.ocean.field;
     const bs = world.boatScene;
+    const centres = new Float64Array(field.count * 2);
+    for (let i = 0; i < field.count; i++) {
+      centres.set(tileCentre(i), i * 2);
+    }
+    const sea = moduleSea(centres);
     const out = new Float64Array(field.count * 4);
     for (let i = 0; i < field.count; i++) {
-      const [cx, cz] = tileCentre(i);
-      world.ocean.band.sample(cx, cz, sample);
-      const dx = cx - bs.x;
-      const dz = cz - bs.z;
-      out[i * 4] = (sample[0] ?? 0) - domeDrop(Math.hypot(dx, dz));
-      out[i * 4 + 1] = (sample[1] ?? 0) - dx / DOME_RADIUS;
-      out[i * 4 + 2] = (sample[2] ?? 0) - dz / DOME_RADIUS;
-      out[i * 4 + 3] = sample[0] ?? 0;
+      const dx = (centres[i * 2] ?? 0) - bs.x;
+      const dz = (centres[i * 2 + 1] ?? 0) - bs.z;
+      const h = sea[i * 4] ?? 0;
+      out[i * 4] = h - domeDrop(Math.hypot(dx, dz));
+      out[i * 4 + 1] = (sea[i * 4 + 1] ?? 0) - dx / DOME_RADIUS;
+      out[i * 4 + 2] = (sea[i * 4 + 2] ?? 0) - dz / DOME_RADIUS;
+      out[i * 4 + 3] = h;
     }
     return out;
   };
@@ -297,7 +344,13 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
    * scene position and, in alpha, one more than twice its tile's instance
    * index, plus one on a skirt; 0 where no tile is drawn.
    */
-  const probe = async (x: number, z: number, size: number, span: number): Promise<Float32Array> => {
+  const probe = async (
+    x: number,
+    z: number,
+    size: number,
+    span: number,
+    cut = false,
+  ): Promise<Float32Array> => {
     const g = gfx();
     const tiles = world.ocean.tiles;
     const m = seaMaterial('sea-tile');
@@ -307,7 +360,13 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         .mul(2)
         .add(tiles.varyings.side.lessThan(-0.5).select(float(2), float(1))),
     );
-    m.fragmentNode = vec4(positionWorld, id);
+    // With cut, the sea is left out of the hulls as it is on screen.
+    m.fragmentNode = cut
+      ? (Fn(() => {
+          hulls.cut(positionWorld);
+          return vec4(positionWorld, id);
+        })() as unknown as Node<'vec4'>)
+      : vec4(positionWorld, id);
     const scene = new Scene();
     const mesh = new Mesh(tiles.geometry, m);
     mesh.frustumCulled = false;
@@ -366,6 +425,16 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     freeze(t: number): void {
       game.freeze(t);
       stage.freeze(true);
+      floatBoat();
+    },
+
+    /** Holds world time at a tick, however late in the world's life. */
+    freezeTick(tick: number): void {
+      game.freeze(0);
+      game.clock.steps = tick;
+      game.settle();
+      stage.freeze(true);
+      floatBoat();
     },
 
     thaw(): void {
@@ -379,8 +448,83 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       stage.renderOnce(performance.now());
     },
 
+    /**
+     * The sandbox's sea at once: the one the wind of calm, breeze, fresh or
+     * gale raises, from the north; or flat water, whatever the wind.
+     */
     setSea(name: string): void {
-      world.setTestSea(name);
+      const s = offline();
+      const knots = SEA_STATES[name];
+      s.sea.options.flat = knots === undefined;
+      if (knots !== undefined) {
+        s.setWind(knots * KNOT, 0);
+      }
+      s.settleSea();
+      floatBoat();
+    },
+
+    /**
+     * Puts a sea of the developer's own in the sandbox, in place of the
+     * wind's: a window of areas, each with its inputs in whole steps, as a
+     * scenario has them. It stays until the boat is next stepped or placed.
+     */
+    setSeaWindow(col: number, row: number, size: number, areas: number[][]): void {
+      const s = offline();
+      s.seas.reset();
+      s.seas.receive({
+        tick: 0,
+        col,
+        row,
+        size,
+        speed: areas.map((a) => a[0] ?? 0),
+        from: areas.map((a) => a[1] ?? 0),
+        fetch: areas.map((a) => a[2] ?? 0),
+      });
+      floatBoat();
+    },
+
+    /** The sea drawn: the significant height and the waves summed of the window's first area. */
+    sea(): { slot: number; hs: number; waves: number; blended: boolean } {
+      const b = world.ocean.band;
+      return { slot: world.ocean.slot, hs: b.hs[0] ?? 0, waves: b.count, blended: b.blended };
+    },
+
+    /**
+     * The boat band the GPU computes at scene points (x and z of each, in
+     * turn), beside the physics module's: for each point its height, its
+     * slope along x and z, and the sea's significant height.
+     */
+    async band(points: number[]): Promise<{ gpu: number[]; module: number[] }> {
+      const n = points.length >> 1;
+      const width = 64;
+      const height = Math.max(1, Math.ceil(n / width));
+      const at = new Float32Array(width * height * 4);
+      for (let i = 0; i < n; i++) {
+        at[i * 4] = points[i * 2] ?? 0;
+        at[i * 4 + 1] = points[i * 2 + 1] ?? 0;
+      }
+      const input = new DataTexture(at, width, height, RGBAFormat, FloatType);
+      input.needsUpdate = true;
+      const m = new MeshBasicNodeMaterial();
+      const p = textureLoad(input, ivec2(floor(screenCoordinate))).xy as unknown as Node<'vec2'>;
+      m.fragmentNode = boatBandAt(world.ocean.uniforms)(p);
+      const target = new RenderTarget(width, height, {
+        type: FloatType,
+        format: RGBAFormat,
+        depthBuffer: false,
+      });
+      const r = gfx().renderer;
+      const before = r.getRenderTarget();
+      r.setRenderTarget(target);
+      new QuadMesh(m).render(r);
+      r.setRenderTarget(before);
+      const got = await readTarget(r, target, width, height, webgl());
+      target.dispose();
+      input.dispose();
+      m.dispose();
+      // As float32 holds the points on the GPU.
+      const held = points.map(Math.fround);
+      return { gpu: Array.from(got.subarray(0, n * 4)), module: Array.from(moduleSea(held)) };
     },
     setPass(on: boolean): void {
       world.setUsePass(on);
@@ -395,6 +539,7 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Puts the boat at a world position, keeping its heading. */
     placeBoat(east: number, north: number): void {
       offline().place(east, north, driver.states.current[RECORDS.state.heading] ?? 0);
+      floatBoat();
     },
     /** Puts the origin on tile (q, r), as if the boat had come from there. */
     setOrigin(q: number, r: number): void {
@@ -571,9 +716,26 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     tolerance(): { height: number; slope: number } {
       let a = 0;
       let ak = 0;
-      for (const w of world.ocean.band.waves) {
-        a += Math.abs(w.w);
-        ak += Math.abs(w.w * w.z);
+      const physics = driver.physics;
+      const slot = world.ocean.slot;
+      if (physics !== undefined && slot >= 0) {
+        // The highest of the window's areas: a blend is never above it.
+        const amp = physics.seaAmplitudes(slot);
+        const k = physics.records.components.subarray(
+          RECORDS.components.k,
+          RECORDS.components.k + SEA.components,
+        );
+        for (let area = 0; area < SEA.window * SEA.window; area++) {
+          let sum = 0;
+          let steep = 0;
+          for (let i = 0; i < SEA.components; i++) {
+            const v = amp[area * SEA.components + i] ?? 0;
+            sum += v;
+            steep += v * (k[i] ?? 0);
+          }
+          a = Math.max(a, sum);
+          ak = Math.max(ak, steep);
+        }
       }
       return { height: a * 2 ** -11 + 2e-5, slope: ak * 2 ** -11 + 2e-6 };
     },
@@ -654,9 +816,11 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Back to the start, at rest. */
     reset(): void {
       offline().reset();
+      floatBoat();
     },
     setState(values: Record<string, number>): void {
       offline().setState(values);
+      floatBoat();
     },
     /** The sandbox's wind, in knots and the degrees it comes from. */
     setWind(knots: number, from: number): void {
@@ -741,7 +905,129 @@ function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         return;
       }
       const drawn = boats.map((b, i) => ({ ...newDrawnBoat(), slot: i, opacity: 1, ...b }));
+      // Each lies on the sea drawn, unless told how it lies.
+      const physics = driver.physics;
+      const slot = world.ocean.source?.seas.slotAt(Math.floor(world.ticks) + 1) ?? -1;
+      const hull = world.kind.physics.hull;
+      if (physics !== undefined && slot >= 0) {
+        physics.seaDrawAt(game.clock.steps + game.clock.alpha);
+        drawn.forEach((d, i) => {
+          const w = physics.waveUnder(
+            slot,
+            d.east,
+            d.north,
+            d.heading,
+            hull.waterlineLength,
+            hull.waterlineBeam,
+          );
+          d.heave = boats[i]?.heave ?? w[RECORDS.wave.height] ?? 0;
+          d.pitch = boats[i]?.pitch ?? w[RECORDS.wave.ahead] ?? 0;
+        });
+      }
       world.fleetSource = { drawn, count: drawn.length };
+    },
+
+    /**
+     * Looks straight down on a hull, the player's own or the other boat
+     * numbered `other` among those drawn, at the sea as it is drawn about
+     * it, and counts: sea drawn inside the hull; holes in the sea outside
+     * it; the sea drawn within 5 cm outside its waterline; and the pixels
+     * the hull's volume leaves out. The last frame drawn placed the hulls.
+     */
+    async hull(
+      other = -1,
+      size = 256,
+      span = 8,
+    ): Promise<{ inside: number; holes: number; beside: number; left: number; sea: number }> {
+      const shape = world.boat?.hullShape;
+      if (shape === null || shape === undefined) {
+        throw new Error('the hull has no volume');
+      }
+      const cog = world.kind.physics.hull.centreOfGravity;
+      const o = world.origin.world;
+      const b = other >= 0 ? world.fleetSource?.drawn[other] : undefined;
+      const at =
+        b !== undefined
+          ? { x: b.east - o.x, y: b.heave, z: -(b.north - o.y), ...b }
+          : { x: world.boatScene.x, y: world.pose.heave, z: world.boatScene.z, ...world.pose };
+      const px = await probe(at.x, at.z, size, span, true);
+      // Where no sea is drawn, the sea that was left out: its tile's plane.
+      const field = world.ocean.field;
+      const planes = referencePlanes();
+      const tiles = new Map<string, number>();
+      for (let i = 0; i < field.count; i++) {
+        tiles.set(`${field.hex[i * 2]},${field.hex[i * 2 + 1]}`, i);
+      }
+      const hex = { q: 0, r: 0 };
+      const dome = world.boatScene;
+      const level = (x: number, y: number, z: number): number =>
+        y + domeDrop(Math.hypot(x - dome.x, z - dome.z));
+      // Whether a point of the scene, on a flat world, is in the hull widened to fill.
+      const within = (x: number, y: number, z: number, fill: number): boolean => {
+        const m = toHullFrame(
+          { x: x - at.x, y: y - (at.y + cog), z: z - at.z },
+          at.heading,
+          at.pitch,
+          at.heel,
+        );
+        return insideHull(shape, m.x, m.y + cog, m.z, fill);
+      };
+      const widest = Math.max(...shape.stations.map((s) => s[1] ?? 0));
+      const pixel = span / size;
+      const count = { inside: 0, holes: 0, beside: 0, left: 0, sea: 0 };
+      for (let p = 0; p < size * size; p++) {
+        if (Math.round(px[p * 4 + 3] ?? 0) > 0) {
+          count.sea++;
+          const x = px[p * 4] ?? 0;
+          const z = px[p * 4 + 2] ?? 0;
+          const y = level(x, px[p * 4 + 1] ?? 0, z);
+          // A hair inside the volume's edge: float32 puts a fragment on it either way.
+          if (within(x, y, z, HULL_FILL - 0.01)) {
+            count.inside++;
+          }
+          if (within(x, y, z, 1 + 0.05 / widest) && !within(x, y, z, 1)) {
+            count.beside++;
+          }
+          continue;
+        }
+        count.left++;
+        // The pixel's centre in the scene: x east, z south, rows from the north.
+        const x = at.x - span / 2 + ((p % size) + 0.5) * pixel;
+        const z = at.z - span / 2 + (Math.floor(p / size) + 0.5) * pixel;
+        hexAt(x + o.x, -z + o.y, hex);
+        const tile = tiles.get(`${hex.q - world.origin.centre.q},${hex.r - world.origin.centre.r}`);
+        if (tile === undefined) {
+          count.holes++;
+          continue;
+        }
+        const [cx, cz] = tileCentre(tile);
+        // Within a pixel or two of its tile's edge the fragment left out may
+        // have been the next tile's, a step higher or lower: not judged.
+        const ex = Math.abs(x - cx);
+        const ez = Math.abs(z - cz);
+        if (Math.max(ez, ex * (Math.sqrt(3) / 2) + ez / 2) > TILE_APOTHEM - 2 * pixel) {
+          continue;
+        }
+        const bent =
+          (planes[tile * 4] ?? 0) +
+          (planes[tile * 4 + 1] ?? 0) * (x - cx) +
+          (planes[tile * 4 + 2] ?? 0) * (z - cz);
+        // In the hull, give or take a centimetre at its ends and its bottom,
+        // where float32 puts a fragment on the volume's edge either way.
+        const y = level(x, bent, z);
+        const fill = HULL_FILL + 0.03;
+        if (
+          !within(x, y, z, fill) &&
+          !within(x, y + 0.015, z, fill) &&
+          !within(x + 0.015, y, z + 0.015, fill) &&
+          !within(x - 0.015, y, z - 0.015, fill) &&
+          !within(x + 0.015, y, z - 0.015, fill) &&
+          !within(x - 0.015, y, z + 0.015, fill)
+        ) {
+          count.holes++;
+        }
+      }
+      return count;
     },
     /** Hides or shows the own boat's telltales and pennant, which the fleet does not draw. */
     hideSmallParts(on: boolean): void {

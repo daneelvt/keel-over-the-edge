@@ -14,11 +14,17 @@ import "math"
 
 // motion is the boat's motion during a substep, and the true wind.
 type motion struct {
-	u, v, r, p       float64 // surge, sway, yaw rate, roll rate
+	u, v, r, p, q    float64 // surge, sway, yaw rate, roll rate, pitch rate
 	sinHeel, cosHeel float64
 	// windX and windY are the true wind's velocity 10 m up, in the heading
 	// frame: where the air moves, m/s.
 	windX, windY float64
+	// The waves under the hull: how far the centre of gravity has risen
+	// above the surface, the surface's slope toward starboard, and the
+	// water's own velocity at the surface and at the foils' depth.
+	rise, across   float64
+	waterX, waterY float64
+	foilX, foilY   float64
 }
 
 // pointFlow is the flow past a point of the boat.
@@ -44,23 +50,28 @@ func (b *Prepared) windFactor(z float64) float64 {
 }
 
 // flow returns the flow past the point (x, y, z) of the body frame: the
-// air's velocity at the point's height, or still water's if air is false,
-// less the point's own velocity from the boat's surge, sway, yaw and roll.
+// air's velocity at the point's height, or, if air is false, the water's at
+// the foils' depth, less the point's own velocity from the boat's surge,
+// sway, yaw, roll and pitch. Heights are taken from the sea's surface under
+// the hull, tilted across it as the waves tilt it.
 // (ex, ey) is the point's own velocity in the body frame, for a point on the
 // swinging boom.
 func (b *Prepared) flow(m *motion, x, y, z, ex, ey float64, air bool) pointFlow {
 	yh := float64(y*m.cosHeel) - float64(z*m.sinHeel)
 	zh := float64(y*m.sinHeel) + float64(z*m.cosHeel)
-	// The point's velocity in the heading frame: v + ω × r, with ω = (p, 0, r).
-	vx := (m.u - float64(m.r*yh)) + ex
+	// The point's velocity in the heading frame: v + ω × r, with ω = (p, q, r).
+	vx := ((m.u - float64(m.r*yh)) + ex) + float64(m.q*zh)
 	vy := ((m.v + float64(m.r*x)) - float64(m.p*zh)) + float64(ey*m.cosHeel)
-	vz := float64(m.p*yh) + float64(ey*m.sinHeel)
-	f := pointFlow{height: b.centreOfGravity - zh, side: yh, vz: vz}
+	vz := (float64(m.p*yh) + float64(ey*m.sinHeel)) - float64(m.q*x)
+	f := pointFlow{height: ((b.centreOfGravity - zh) + m.rise) - float64(yh*m.across), side: yh, vz: vz}
 	fx, fy := -vx, -vy
 	if air {
 		w := b.windFactor(f.height)
 		fx += float64(w * m.windX)
 		fy += float64(w * m.windY)
+	} else {
+		fx += m.foilX
+		fy += m.foilY
 	}
 	f.x = fx
 	f.y = float64(fy*m.cosHeel) - float64(vz*m.sinHeel)

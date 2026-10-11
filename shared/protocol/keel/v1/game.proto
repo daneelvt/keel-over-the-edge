@@ -82,7 +82,36 @@ message ServerMessage {
     Pong pong = 2;
     Queued queued = 3;
     Restart restart = 4;
+    SeaAreas sea_areas = 5;
   }
+}
+
+// SeaAreas is what raises the waves about the boat: a square of sea areas,
+// each 463 m on a side, with the wind and the fetch that give each its
+// waves. The client derives the waves from them exactly as the server does.
+// It comes after the Welcome; whenever the sea is to change, a second or
+// so before the tick the change applies from; and whenever the boat sails
+// into another area, with the areas about that one. A client keeps the two
+// with the latest ticks, and at each tick uses the later of those whose
+// tick has come.
+message SeaAreas {
+  // The first tick these apply to.
+  int64 tick = 1;
+  // The column, counted from the west, and the row, from the south, of the
+  // first area, in the world's 37 by 37 areas: the middle one, 18 and 18,
+  // is centred on the world's centre. Either may be negative or reach past
+  // the world's edge.
+  sint32 col = 2;
+  sint32 row = 3;
+  // Areas on a side: 5.
+  uint32 size = 4;
+  // For each area, row by row from the south-west: the speed of the wind
+  // that raises its waves, in steps of 0.01 m/s; the direction it comes
+  // from, clockwise from north, in steps of a 65536th of a turn; and the
+  // fetch, in metres.
+  repeated uint32 speed = 5;
+  repeated uint32 from = 6;
+  repeated uint32 fetch = 7;
 }
 
 // Restart says the server is about to restart, as a new version is

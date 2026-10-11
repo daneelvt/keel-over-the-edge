@@ -489,7 +489,7 @@ func TestServe(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Workers: 3})
+		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Workers: 3})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -499,18 +499,26 @@ func TestServe(t *testing.T) {
 	})
 }
 
-func kinds(t *testing.T) []physics.Prepared {
-	t.Helper()
+// physicsOnce prepares the catalog's sea and boats once for the package's
+// tests.
+var physicsOnce = sync.OnceValues(func() (*physics.Waves, []physics.Prepared) {
 	cat, err := catalog.Load()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-	ks := make([]physics.Prepared, len(cat.Boats))
-	for i := range cat.Boats {
-		p := catalog.PhysicsParams(&cat.Boats[i])
-		physics.Prepare(&p, &ks[i])
-	}
+	return cat.Prepare()
+})
+
+// kinds is the catalog's boats, prepared for its sea.
+func kinds(t *testing.T) []physics.Prepared {
+	_, ks := physicsOnce()
 	return ks
+}
+
+// waves is the catalog's sea.
+func waves(t *testing.T) *physics.Waves {
+	w, _ := physicsOnce()
+	return w
 }
 
 // TestPublicListeners checks that neither public listener serves an
@@ -728,7 +736,7 @@ func TestReplayDump(t *testing.T) {
 	}
 	const at = 900
 	want := bus.NewFrame(f.Header.Capacity)
-	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Workers: 1, At: func(fr *bus.Frame) {
+	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Workers: 1, At: func(fr *bus.Frame) {
 		if fr.Tick == at {
 			if err := sim.ReadSnapshot(sim.AppendSnapshot(nil, fr), want); err != nil {
 				t.Fatal(err)

@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"runtime/trace"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,19 +20,26 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
-// kinds is the catalog's boats, prepared.
-func kinds(t testing.TB) []physics.Prepared {
-	t.Helper()
+// physicsOnce prepares the catalog's sea and boats once for the package's
+// tests.
+var physicsOnce = sync.OnceValues(func() (*physics.Waves, []physics.Prepared) {
 	cat, err := catalog.Load()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-	ks := make([]physics.Prepared, len(cat.Boats))
-	for i := range cat.Boats {
-		p := catalog.PhysicsParams(&cat.Boats[i])
-		physics.Prepare(&p, &ks[i])
-	}
+	return cat.Prepare()
+})
+
+// kinds is the catalog's boats, prepared for its sea.
+func kinds(t testing.TB) []physics.Prepared {
+	_, ks := physicsOnce()
 	return ks
+}
+
+// waves is the catalog's sea.
+func waves(t testing.TB) *physics.Waves {
+	w, _ := physicsOnce()
+	return w
 }
 
 func newWorld(t testing.TB, capacity, workers int) *World {
@@ -86,7 +94,7 @@ func stepped(t testing.TB, s physics.State, word bus.Word, wind bus.Wind) physic
 	c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
 	e := physics.Env{WindSpeed: wind.Speed, WindFrom: wind.From}
 	var o physics.Out
-	physics.Step(&s, &c, &e, &kinds(t)[0], &o)
+	physics.Step(&s, &c, &e, nil, &kinds(t)[0], &o)
 	return s
 }
 

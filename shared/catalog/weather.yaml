@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The weather's numbers.
+weather:
+  # The waves long enough to move a boat. The sea is a sum of waves with
+  # fixed lengths and directions; the wind and its fetch give each its height
+  # by the JONSWAP spectrum (Hasselmann and others 1973).
+  sea:
+    shortest: 8 # m: what tiles 4 m across can carry
+    # m: a 7 s wave, longer than the swell the sea will carry and than the
+    # longest wind sea the fetch below raises in a storm.
+    longest: 76
+    gamma: 3.3 # JONSWAP's mean peak enhancement
+    sigmaBelow: 0.07 # JONSWAP
+    sigmaAbove: 0.09 # JONSWAP
+    # cos²ˢ(θ/2) about the wind (Mitsuyasu and others 1975). Goda and Suzuki
+    # give 10 for wind waves, which is narrower.
+    spreading: 5
+    fetchCap: 6 # nautical miles of open water
+    cull: 0.10

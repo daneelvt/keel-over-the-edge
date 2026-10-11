@@ -6,8 +6,8 @@
 // boom, sail, telltales, pennant, rudder, tiller, daggerboard, sailor).
 //
 // Everything that moves is drawn from the physics: the boat is placed by its
-// position and heading, then heeled about the fore-and-aft axis through its
-// centre of gravity, as the physics rolls it; the boom swings to its angle;
+// position and heading, lifted by its heave, then pitched and heeled about
+// its centre of gravity, as the physics moves it on the waves; the boom swings to its angle;
 // the rudder and tiller turn; the sail is shaped on the GPU for the boom's
 // angle, the twist and the sailor's flattening, and ripples where it
 // luffs; the telltales read each sail strip's flow; the pennant streams in
@@ -30,6 +30,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Fn, normalLocal, positionGeometry, uv } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { Boat as BoatKind } from '../catalog';
+import { type HullShape, hullShape } from '../ocean/hulls';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
 import { headingToRotationY, type ScenePoint } from './coords';
@@ -63,9 +64,10 @@ const RIPPLE_EASE = 0.25;
 const DEG = Math.PI / 180;
 
 /**
- * Places a boat's nodes: root at the scene point turned to the heading, and
- * heel rolled about its own origin, which is at the centre of gravity's
- * height (the model below it is lowered by the same height).
+ * Places a boat's nodes: root at the scene point, lifted by the heave and
+ * turned to the heading; and heel pitched, then rolled, about its own
+ * origin, which is at the centre of gravity's height (the model below it is
+ * lowered by the same height).
  */
 export function placeBoatNodes(
   root: Object3D,
@@ -73,12 +75,16 @@ export function placeBoatNodes(
   at: ScenePoint,
   heading: number,
   heelAngle: number,
+  pitch = 0,
+  heave = 0,
 ): void {
-  root.position.set(at.x, at.y, at.z);
+  root.position.set(at.x, at.y + heave, at.z);
   root.rotation.set(0, headingToRotationY(heading), 0);
   // Positive heel puts the starboard side (+x) down: a turn of −heel about
-  // the axis pointing aft (+z).
-  heel.rotation.set(0, 0, -heelAngle);
+  // the axis pointing aft (+z). Positive pitch lifts the bow (−z): a turn
+  // about the axis pointing to starboard. The roll is about the pitched
+  // boat's own fore-and-aft axis, so the pitch is the outer turn.
+  heel.rotation.set(pitch, 0, -heelAngle);
 }
 
 /**
@@ -101,6 +107,8 @@ export class Boat {
   readonly pennant = new Pennant();
   /** The stand-in sailor, once loaded. */
   figure: Object3D | null = null;
+  /** The hull's volume, which the sea is kept out of, from the model; null until loaded. */
+  hullShape: HullShape | null = null;
 
   readonly #kind: BoatKind;
   readonly #frame: SailorFrame;
@@ -150,6 +158,7 @@ export class Boat {
     if (seat !== undefined) {
       this.#frame.seatZ = seat.position.z;
     }
+    this.hullShape = hullShape(this.parts.get('hull')?.userData);
   }
 
   /** Loads the sailor's figure from an art path and seats it in the boat. */
@@ -183,7 +192,7 @@ export class Boat {
    * eases, in seconds.
    */
   draw(at: ScenePoint, pose: BoatPose, out: Float64Array, time: number, dt: number): void {
-    placeBoatNodes(this.root, this.heel, at, pose.heading, pose.heel);
+    placeBoatNodes(this.root, this.heel, at, pose.heading, pose.heel, pose.pitch, pose.heave);
     const { rig } = this.#kind.physics;
     const boom = this.parts.get('boom');
     if (boom !== undefined) {

@@ -49,8 +49,10 @@ type Config struct {
 	Limit    int // the boat limit; the capacity if 0
 	Encoders int // the edge's encoders; GOMAXPROCS if 0
 	Limits   edge.Limits
-	// Kinds are the world's boats, prepared; the catalog's if nil.
+	// Kinds are the world's boats, prepared, and Waves the sea they were
+	// prepared for; the catalog's if Kinds is nil.
 	Kinds []physics.Prepared
+	Waves *physics.Waves
 	// Record, if not nil, is told of each frame too, on the ticking
 	// goroutine, before the edge.
 	Record sim.Recorder
@@ -65,6 +67,7 @@ type Server struct {
 	Metrics  *obs.Metrics
 	Sessions *Sessions
 	Kinds    []physics.Prepared
+	Waves    *physics.Waves
 
 	cfg      Config
 	sessions *auth.Cache
@@ -74,19 +77,14 @@ type Server struct {
 	stopped  bool
 }
 
-// CatalogKinds is the catalog's boats, prepared.
-func CatalogKinds(t testing.TB) []physics.Prepared {
+// CatalogKinds is the catalog's sea and its boats, prepared.
+func CatalogKinds(t testing.TB) (*physics.Waves, []physics.Prepared) {
 	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	ks := make([]physics.Prepared, len(cat.Boats))
-	for i := range cat.Boats {
-		p := catalog.PhysicsParams(&cat.Boats[i])
-		physics.Prepare(&p, &ks[i])
-	}
-	return ks
+	return cat.Prepare()
 }
 
 // NewServer starts a server: in a synctest bubble, it ticks on the
@@ -97,10 +95,10 @@ func NewServer(t testing.TB, cfg Config) *Server {
 		cfg.Capacity = 16
 	}
 	if cfg.Kinds == nil {
-		cfg.Kinds = CatalogKinds(t)
+		cfg.Waves, cfg.Kinds = CatalogKinds(t)
 	}
 	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, cfg: cfg}
+	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, cfg: cfg}
 	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
 	s.start(t, s.newWorld(t))
 	s.HTTP = httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +111,7 @@ func NewServer(t testing.TB, cfg Config) *Server {
 func (s *Server) newWorld(t testing.TB) *sim.World {
 	t.Helper()
 	cfg := s.cfg
-	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Workers: 1,
+	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Waves: cfg.Waves, Workers: 1,
 		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit})
 	if err != nil {
 		t.Fatal(err)

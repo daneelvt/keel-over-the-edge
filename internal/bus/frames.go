@@ -21,6 +21,7 @@ type Frame struct {
 	Tick     int64  // the tick that made this frame
 	Skipped  int64  // ticks skipped, by the clock falling behind, just before Tick
 	Wind     Wind   // the one wind every boat sails in
+	Sea      Sea    // what raises the waves, area by area
 	NextBoat uint64 // the next boat's ID: IDs are never reused within a world
 	// Held: admission is held (Hold): a Join without a boat waits in the
 	// queue, and the queue gives no boats.
@@ -50,6 +51,30 @@ type Frame struct {
 	// records these.
 	Changed []SlotWord // control words that changed, by slot, ascending
 	Events  []Event    // commands, with their results
+}
+
+// Sea is what raises the waves in each of the world's sea areas, row by row
+// from the south-west. The sea changes only on a second's first tick, and
+// what it changes to is fixed a second before: Now is in effect during the
+// frame's second, Next from the first tick of the second after. So a client,
+// which predicts its boat a fraction of a second ahead of the server, is
+// told of every change before it steps a tick the change applies to.
+type Sea struct {
+	Now  []physics.SeaInput
+	Next []physics.SeaInput
+}
+
+// SeaPeriod is how many ticks the sea holds between changes: a second.
+const SeaPeriod = physics.StepsPerSecond
+
+// SeaSecond is the second a tick is in, counted from tick 0: the sea of
+// ticks in one second is the same.
+func SeaSecond(tick int64) int64 {
+	s := tick / SeaPeriod
+	if tick%SeaPeriod < 0 {
+		s--
+	}
+	return s
 }
 
 // Grid lists the live boats by their cell, physics.Cell of their position:
@@ -106,7 +131,11 @@ func NewFrame(capacity int) *Frame {
 		Kind:     make([]uint16, capacity),
 		Control:  make([]Word, capacity),
 		State:    make([]physics.State, capacity),
-		Sail:     make([]uint8, capacity),
+		Sea: Sea{
+			Now:  make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
+			Next: make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
+		},
+		Sail: make([]uint8, capacity),
 		Grid: Grid{
 			Start: make([]int32, Cells+1),
 			Slots: make([]int32, 0, capacity),

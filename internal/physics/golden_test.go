@@ -39,9 +39,10 @@ const (
 )
 
 type scenarioFile struct {
-	Description string         `json:"description"`
-	Params      map[string]any `json:"params"`
-	Scenarios   []scenario     `json:"scenarios"`
+	Description string             `json:"description"`
+	Sea         map[string]float64 `json:"sea"`
+	Params      map[string]any     `json:"params"`
+	Scenarios   []scenario         `json:"scenarios"`
 }
 
 type scenario struct {
@@ -50,13 +51,29 @@ type scenario struct {
 	State   map[string]float64 `json:"state"`
 	Control map[string]float64 `json:"control"`
 	Env     map[string]float64 `json:"env"`
+	Sea     *scenarioSea       `json:"sea"`
 	Changes []change           `json:"changes"`
+}
+
+// scenarioSea is the sea a scenario sails in: a window of areas, each with
+// its inputs in whole steps (wind speed, the direction it comes from, fetch),
+// row by row from the south-west, and the tick of the first step.
+type scenarioSea struct {
+	Tick  float64     `json:"tick"`
+	Col   int32       `json:"col"`
+	Row   int32       `json:"row"`
+	Size  int32       `json:"size"`
+	Areas [][3]uint32 `json:"areas"`
 }
 
 type change struct {
 	At      int                `json:"at"`
 	Control map[string]float64 `json:"control"`
 	Env     map[string]float64 `json:"env"`
+	// Areas replaces the inputs of the sea's areas; Window, with it, moves
+	// the sea's window to another first area, column and row.
+	Areas  [][3]uint32 `json:"areas"`
+	Window *[2]int32   `json:"window"`
 	// Steer starts the scenarios' heading-hold toward this heading; a
 	// change that sets the helm stops it.
 	Steer *float64 `json:"steer"`
@@ -104,7 +121,7 @@ func TestGolden(t *testing.T) {
 		Layout:  fmt.Sprintf("%#08x", LayoutVersion),
 	}
 	for i, sc := range sf.Scenarios {
-		g, err := runScenario(sf.Params, sc)
+		g, err := runScenario(sf.Sea, sf.Params, sc)
 		if err != nil {
 			t.Fatalf("%s: %v", sc.Name, err)
 		}
@@ -170,8 +187,48 @@ func compareFunction(t *testing.T, f goldenFunction) {
 	}
 }
 
+// seaOf prepares the sea's waves from values named as the client names
+// them.
+func seaOf(values map[string]float64) (*Waves, error) {
+	var p SeaParams
+	if len(values) != len(fields(&p)) {
+		return nil, fmt.Errorf("sea has %d values, SeaParams %d fields", len(values), len(fields(&p)))
+	}
+	if err := setFields(&p, values); err != nil {
+		return nil, err
+	}
+	w := new(Waves)
+	PrepareSea(&p, w)
+	return w, nil
+}
+
+// scenarioOcean makes a scenario's sea, or nil for flat water.
+func scenarioOcean(w *Waves, sea *scenarioSea) (*ocean, error) {
+	if sea == nil {
+		return nil, nil
+	}
+	if sea.Size < 1 || sea.Size > SeaClientWindow || len(sea.Areas) != int(sea.Size*sea.Size) {
+		return nil, fmt.Errorf("a sea of %d areas for a window %d a side", len(sea.Areas), sea.Size)
+	}
+	o := &ocean{Sea: Sea{Waves: w, Window: newWindow(sea.Col, sea.Row, sea.Size)}}
+	o.Tick = &o.tick
+	return o, o.set(sea.Areas)
+}
+
+// set gives the sea's areas their inputs.
+func (o *ocean) set(areas [][3]uint32) error {
+	if len(areas) != len(o.Window.Inputs) {
+		return fmt.Errorf("%d areas for a window of %d", len(areas), len(o.Window.Inputs))
+	}
+	for i, a := range areas {
+		SeaArea(o.Waves, o.Window, int32(i), SeaInput{Speed: a[0], From: a[1], Fetch: a[2]})
+	}
+	o.Window.Seal()
+	return nil
+}
+
 // runScenario steps a scenario, hashing the state and Out after every step.
-func runScenario(params map[string]any, sc scenario) (goldenScenario, error) {
+func runScenario(seaParams map[string]float64, params map[string]any, sc scenario) (goldenScenario, error) {
 	var (
 		s State
 		c Control
@@ -183,7 +240,15 @@ func runScenario(params map[string]any, sc scenario) (goldenScenario, error) {
 	if err := setParams(&p, params); err != nil {
 		return goldenScenario{}, err
 	}
-	Prepare(&p, &b)
+	w, err := seaOf(seaParams)
+	if err != nil {
+		return goldenScenario{}, err
+	}
+	Prepare(&p, w, &b)
+	sea, err := scenarioOcean(w, sc.Sea)
+	if err != nil {
+		return goldenScenario{}, err
+	}
 	for _, set := range []struct {
 		record any
 		values map[string]float64
@@ -211,11 +276,26 @@ func runScenario(params map[string]any, sc scenario) (goldenScenario, error) {
 			if ch.Steer != nil {
 				steering, target = true, *ch.Steer
 			}
+			if ch.Areas != nil {
+				if sea == nil {
+					return g, fmt.Errorf("change %d sets the areas of a scenario with no sea", next)
+				}
+				if ch.Window != nil {
+					sea.Window.Col, sea.Window.Row = ch.Window[0], ch.Window[1]
+				}
+				if err := sea.set(ch.Areas); err != nil {
+					return g, err
+				}
+			}
 		}
 		if steering {
 			c.Helm = steer(target, &s)
 		}
-		Step(&s, &c, &e, &b, &o)
+		var at *Sea
+		if sea != nil {
+			at = sea.at(sc.Sea.Tick + float64(i))
+		}
+		Step(&s, &c, &e, at, &b, &o)
 		values := fields(&s)
 		for _, v := range append(values, fields(&o)...) {
 			if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -440,7 +520,7 @@ func jolly(t testing.TB) *Prepared {
 		t.Fatal(err)
 	}
 	var b Prepared
-	Prepare(&p, &b)
+	Prepare(&p, testWaves(t), &b)
 	return &b
 }
 
@@ -450,7 +530,7 @@ func TestStepAllocatesNothing(t *testing.T) {
 	c := Control{Helm: 0.3, Sheet: 0.4}
 	e := Env{WindSpeed: 7, WindFrom: 2}
 	var o Out
-	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, b, &o) }); n != 0 {
+	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, nil, b, &o) }); n != 0 {
 		t.Errorf("a step allocates %v times", n)
 	}
 }
@@ -463,7 +543,7 @@ func BenchmarkStep(bm *testing.B) {
 	e := Env{WindSpeed: 7, WindFrom: 0}
 	var o Out
 	for bm.Loop() {
-		Step(&s, &c, &e, b, &o)
+		Step(&s, &c, &e, nil, b, &o)
 	}
 }
 

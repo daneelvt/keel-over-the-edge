@@ -733,10 +733,114 @@ function plainDeck(): MeshBuilder {
   return m;
 }
 
+// --- The hull's volume -------------------------------------------------------
+//
+// The sea is not drawn inside a hull. The game keeps it out with a volume it
+// can test a point against cheaply: stations along the hull, each with the
+// half-beam at the waterline and the depth of the bottom, the sides between
+// narrowing below the waterline as a superellipse does. They are measured
+// here from the hull's own mesh, so the volume cannot drift from the model.
+
+/** Stations in the hull's volume. */
+const VOLUME_STATIONS = 8;
+
+/** Where the plane z = at cuts a mesh's triangles: the cuts' end points, x and y. */
+function sectionAt(m: MeshBuilder, at: number): [number, number][][] {
+  const p = m.positions;
+  const point = (i: number): Vec3 => [p[i * 3] ?? 0, p[i * 3 + 1] ?? 0, p[i * 3 + 2] ?? 0];
+  const cuts: [number, number][][] = [];
+  for (let t = 0; t < m.indices.length; t += 3) {
+    const tri = [0, 1, 2].map((k) => point(m.indices[t + k] ?? 0));
+    const ends: [number, number][] = [];
+    for (let k = 0; k < 3; k++) {
+      const a = tri[k] as Vec3;
+      const b = tri[(k + 1) % 3] as Vec3;
+      if (a[2] - at < 0 !== b[2] - at < 0) {
+        const f = (at - a[2]) / (b[2] - a[2]);
+        ends.push([a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1])]);
+      }
+    }
+    if (ends.length === 2) {
+      cuts.push(ends);
+    }
+  }
+  return cuts;
+}
+
+/** The widest a section is at height y: the greatest |x| where its cuts cross it. */
+function halfBeamAt(cuts: [number, number][][], y: number): number {
+  let widest = 0;
+  for (const [a, b] of cuts as [[number, number], [number, number]][]) {
+    if (a[1] - y < 0 !== b[1] - y < 0) {
+      const f = (y - a[1]) / (b[1] - a[1]);
+      widest = Math.max(widest, Math.abs(a[0] + f * (b[0] - a[0])));
+    }
+  }
+  return widest;
+}
+
+/** The exponent n of the superellipse whose half-width at half its depth is r of its width: (1 − ½ⁿ)^(1/n) = r. */
+function bilgeExponent(r: number): number {
+  let lo = 0.3;
+  let hi = 12;
+  for (let i = 0; i < 60; i++) {
+    const n = (lo + hi) / 2;
+    if ((1 - 0.5 ** n) ** (1 / n) < r) {
+      lo = n;
+    } else {
+      hi = n;
+    }
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * The hull's volume, measured from its mesh: stations from the transom to
+ * where the stem leaves the water, each [z, half-beam at the waterline,
+ * depth of the bottom], in metres in the boat's frame, and the exponent of
+ * the sections' narrowing below the waterline.
+ */
+function hullVolume(m: MeshBuilder): { stations: number[][]; bilge: number } {
+  // Where the stem leaves the water: the furthest forward the hull is below it.
+  let fore = TRANSOM_Z;
+  for (let i = 0; i < m.count; i++) {
+    if ((m.positions[i * 3 + 1] ?? 0) < 0) {
+      fore = Math.min(fore, m.positions[i * 3 + 2] ?? 0);
+    }
+  }
+  const aft = TRANSOM_Z - 0.002;
+  const round = (v: number): number => Math.round(v * 1e4) / 1e4;
+  const stations: number[][] = [];
+  let bilge = 0;
+  let measured = 0;
+  for (let i = 0; i < VOLUME_STATIONS; i++) {
+    const z = aft + ((fore - aft) * i) / (VOLUME_STATIONS - 1);
+    // The last station is the waterline's end itself: no beam, no depth.
+    const cuts = i === VOLUME_STATIONS - 1 ? [] : sectionAt(m, z);
+    let depth = 0;
+    for (const cut of cuts) {
+      for (const end of cut) {
+        depth = Math.max(depth, -end[1]);
+      }
+    }
+    const beam = halfBeamAt(cuts, 0);
+    stations.push([round(z), round(beam), round(depth)]);
+    if (depth > 0.02 && beam > 0) {
+      bilge += bilgeExponent(halfBeamAt(cuts, -depth / 2) / beam);
+      measured++;
+    }
+  }
+  if (measured === 0) {
+    throw new Error('the hull has no section in the water');
+  }
+  return { stations, bilge: round(bilge / measured) };
+}
+
 /** The boat's nodes at the detail in force. */
 function model(): NodeDef[] {
   const hullMesh = planking();
   hullMesh.append(transom());
+  const waterline = hullVolume(hullMesh);
   const rails = new MeshBuilder('timber');
   rails.append(hullMesh);
   rubrails(rails);
@@ -754,7 +858,7 @@ function model(): NodeDef[] {
     boomParts.push(gooseneck().primitive());
   }
   const nodes: NodeDef[] = [
-    { name: 'hull', primitives: hullParts },
+    { name: 'hull', primitives: hullParts, extras: { waterline } },
     { name: 'mast', translation: [0, 0, MAST_Z], primitives: [mast().primitive()] },
     {
       name: 'boom',
@@ -820,7 +924,18 @@ for (const [detail, path] of [
   writeFileSync(`.dev/art/${name}.raw.glb`, raw);
   execFileSync(
     'client/node_modules/.bin/gltfpack',
-    ['-i', `.dev/art/${name}.raw.glb`, '-o', `art/${path}`, '-c', '-kn', '-km', '-kv', '-noq'],
+    [
+      '-i',
+      `.dev/art/${name}.raw.glb`,
+      '-o',
+      `art/${path}`,
+      '-c',
+      '-kn',
+      '-km',
+      '-kv',
+      '-ke',
+      '-noq',
+    ],
     { stdio: 'inherit' },
   );
 }

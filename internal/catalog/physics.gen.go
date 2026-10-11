@@ -24,6 +24,14 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.RollInertia = b.Physics.Hull.RollInertia
 	p.RollDamping = b.Physics.Hull.RollDamping
 	copy(p.RightingLever[:], b.Physics.Hull.RightingLever)
+	p.WaterlineBeam = b.Physics.Hull.WaterlineBeam
+	p.WaterplaneArea = b.Physics.Hull.WaterplaneArea
+	p.WaterplanePitch = b.Physics.Hull.WaterplanePitch
+	p.AddedMassHeave = b.Physics.Hull.AddedMassHeave
+	p.PitchInertia = b.Physics.Hull.PitchInertia
+	p.HeaveDamping = b.Physics.Hull.HeaveDamping
+	p.PitchDamping = b.Physics.Hull.PitchDamping
+	p.WaveForce = b.Physics.Hull.WaveForce
 	p.SailArea = b.Physics.Rig.SailArea
 	p.Luff = b.Physics.Rig.Luff
 	p.Foot = b.Physics.Rig.Foot
@@ -96,5 +104,20 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.RudderTime = b.Physics.Rates.RudderTime
 	p.SheetHaulTime = b.Physics.Rates.SheetHaulTime
 	p.SheetEaseTime = b.Physics.Rates.SheetEaseTime
+	return p
+}
+
+// SeaParams returns the catalog's sea values as the physics package's
+// SeaParams.
+func SeaParams(c *Catalog) physics.SeaParams {
+	var p physics.SeaParams
+	p.Shortest = float64(c.Weather.Sea.Shortest)
+	p.Longest = float64(c.Weather.Sea.Longest)
+	p.Gamma = float64(c.Weather.Sea.Gamma)
+	p.SigmaBelow = float64(c.Weather.Sea.SigmaBelow)
+	p.SigmaAbove = float64(c.Weather.Sea.SigmaAbove)
+	p.Spreading = float64(c.Weather.Sea.Spreading)
+	p.FetchCap = float64(c.Weather.Sea.FetchCap)
+	p.Cull = float64(c.Weather.Sea.Cull)
 	return p
 }

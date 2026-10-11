@@ -17,6 +17,7 @@
 import { Clock } from '../../net/clock';
 import { decodeServer, encodeClient } from '../../net/frame';
 import type { Welcome } from '../../net/gen/keel/v1/game_pb';
+import type { SeaAreas } from '../../net/messages';
 import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
 import { type View, ViewRing } from '../../net/view';
@@ -44,6 +45,8 @@ export type Received =
   | { kind: 'queued'; position: number; waiting: number }
   /** The server is about to restart, in about inMs. */
   | { kind: 'restart'; inMs: number }
+  /** The sea about the boat. */
+  | { kind: 'sea'; sea: SeaAreas }
   | { kind: 'pong' }
   | { kind: 'other' };
 
@@ -148,6 +151,22 @@ export class Session {
       case 'restart':
         this.#lastHeard = now;
         return { kind: 'restart', inMs: m.body.value.inMs };
+      case 'seaAreas': {
+        this.#lastHeard = now;
+        const a = m.body.value;
+        return {
+          kind: 'sea',
+          sea: {
+            tick: Number(a.tick),
+            col: a.col,
+            row: a.row,
+            size: a.size,
+            speed: a.speed,
+            from: a.from,
+            fetch: a.fetch,
+          },
+        };
+      }
     }
     return { kind: 'other' };
   }

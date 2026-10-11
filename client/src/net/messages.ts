@@ -8,6 +8,23 @@
 
 import type { ClockState } from './clock';
 
+/**
+ * What raises the waves about the boat, as the server sends it: a square of
+ * sea areas, size a side, from the area at column col and row row, each with
+ * the wind that raises its waves (speed in steps of 0.01 m/s, the direction
+ * it comes from in 65536ths of a turn) and its fetch in metres, row by row
+ * from the south-west. It applies from tick on.
+ */
+export interface SeaAreas {
+  tick: number;
+  col: number;
+  row: number;
+  size: number;
+  speed: number[];
+  from: number[];
+  fetch: number[];
+}
+
 /** What the net worker's Hello carries besides the protocol version. */
 export interface HelloVersions {
   catalog: string;
@@ -61,6 +78,8 @@ export type FromWorker =
   | { type: 'queued'; position: number; waiting: number }
   /** The server is about to restart, in about inMs: the bell. */
   | { type: 'restart'; inMs: number }
+  /** The sea about the boat, for the prediction and the drawing. */
+  | { type: 'sea'; sea: SeaAreas }
   | { type: 'clock'; clock: ClockState }
   | ({ type: 'traffic' } & Traffic);
 

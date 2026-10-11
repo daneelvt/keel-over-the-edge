@@ -7,6 +7,7 @@
 //	go run ./tools/polar -check        fail unless the polar is within the reference data's tolerances
 //	go run ./tools/polar -sail         the trimmed sail against ORC's mainsail coefficients
 //	go run ./tools/polar -manoeuvres   tacks and gybes, and where an accidental gybe comes
+//	go run ./tools/polar -sea 12       the polar in 12 knots and the sea it raises, beside flat water
 //
 // It steers with a heading-hold of its own and runs each point to steady
 // state. It runs from the repository root.
@@ -18,7 +19,6 @@ import (
 	"os"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 const referencePath = "internal/physics/testdata/reference.json"
@@ -27,6 +27,7 @@ func main() {
 	check := flag.Bool("check", false, "compare with "+referencePath+" and fail outside its tolerances")
 	sailFlag := flag.Bool("sail", false, "compare the trimmed sail with ORC's mainsail coefficients")
 	manoeuvres := flag.Bool("manoeuvres", false, "tack and gybe, and find where an accidental gybe comes")
+	sea := flag.Float64("sea", 0, "the polar in this wind, in knots at sail height, in the sea it raises, beside flat water")
 	out := flag.String("out", ".dev/polar", "folder for the polar's JSON and SVG")
 	flag.Parse()
 
@@ -34,12 +35,14 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	waves, kinds := cat.Prepare()
 	for i := range cat.Boats {
 		boat := &cat.Boats[i]
 		params := catalog.PhysicsParams(boat)
-		var b physics.Prepared
-		physics.Prepare(&params, &b)
+		b := kinds[i]
 		switch {
+		case *sea != 0:
+			err = runSea(&b, waves, *sea)
 		case *check:
 			err = runCheck(&b, string(boat.ID))
 		case *sailFlag:

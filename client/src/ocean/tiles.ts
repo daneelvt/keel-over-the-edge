@@ -37,7 +37,7 @@ import type { Node, Texture } from 'three/webgpu';
 import type { Field } from './hex';
 import { TILE_RADIUS } from './hex';
 import { PASS_WIDTH } from './tilepass';
-import { type BandUniforms, seaPlaneAt } from './wave';
+import { type BandUniforms, boatBandAt, seaHeightAt, seaPlaneOf } from './wave';
 
 /** Depth of each tile's skirt, in metres: deeper than the steps a gale gives. */
 export const SKIRT_DEPTH = 1.1;
@@ -83,6 +83,8 @@ export interface TileVaryings {
   plane: Node<'vec4'>;
   /** The tile's (q, r). */
   hex: Node<'vec2'>;
+  /** The significant height of the sea at the tile, in metres. */
+  hs: Node<'float'>;
 }
 
 export class Tiles {
@@ -119,10 +121,14 @@ export class Tiles {
     const t = attribute<'vec4'>('tile', 'vec4');
     const index = int(instanceIndex);
     const c = this.centre.add(t.xy);
+    // Without the pass the band is summed here, once for the plane and the
+    // sea's height; with it only the height, which needs no sum.
+    const summed = planes === null ? boatBandAt(band)(c) : null;
     const plane: Node<'vec4'> =
-      planes === null
-        ? seaPlaneAt(band)(c)
-        : textureLoad(planes, ivec2(index.mod(PASS_WIDTH), index.div(PASS_WIDTH)));
+      summed !== null
+        ? seaPlaneOf(summed, c)
+        : textureLoad(planes as Texture, ivec2(index.mod(PASS_WIDTH), index.div(PASS_WIDTH)));
+    const hs = summed !== null ? summed.w : seaHeightAt(band)(c);
     const e = positionGeometry.xz;
     const s = positionGeometry.y;
     const y = plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH));
@@ -132,6 +138,7 @@ export class Tiles {
       side: varying(s),
       plane: varying(plane),
       hex: varying(this.centreHex.add(t.zw)),
+      hs: varying(hs),
     };
 
     this.mesh = new Mesh(geometry);

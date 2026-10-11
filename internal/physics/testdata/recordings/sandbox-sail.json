@@ -1,5 +1,15 @@
 {
- "description": "A sail recorded in the sandbox. Each change applies before the step it names, counting from 0; end is the state the sandbox reached after the last step. The params are the boat the sandbox sailed.",
+ "description": "A sail recorded in the sandbox. Each change applies before the step it names, counting from 0; end is the state the sandbox reached after the last step. The params are the boat the sandbox sailed, and sea the catalog's sea values it sailed in. A scenario's sea is the window of sea areas about the boat at step 0 and that step's tick; a change's areas and window are the sea's from that step on.",
+ "sea": {
+  "shortest": 8,
+  "longest": 76,
+  "gamma": 3.3,
+  "sigmaBelow": 0.07,
+  "sigmaAbove": 0.09,
+  "spreading": 5,
+  "fetchCap": 6,
+  "cull": 0.1
+ },
  "params": {
   "displacement": 160,
   "waterlineLength": 3.791,
@@ -61,6 +71,14 @@
    -0.1,
    0
   ],
+  "waterlineBeam": 1.103,
+  "waterplaneArea": 2.93,
+  "waterplanePitch": 3,
+  "addedMassHeave": 400,
+  "pitchInertia": 450,
+  "heaveDamping": 0.4,
+  "pitchDamping": 0.4,
+  "waveForce": 1,
   "sailArea": 7.06,
   "luff": 5.13,
   "foot": 2.74,
@@ -173,7 +191,11 @@
     "rudder": 0,
     "sheetLimit": 0,
     "sailorMode": 0,
-    "sailorTimer": 0
+    "sailorTimer": 0,
+    "heave": 0,
+    "heaveRate": 0,
+    "pitch": 0,
+    "pitchRate": 0
    },
    "control": {
     "helm": 0,
@@ -182,6 +204,139 @@
    "env": {
     "windSpeed": 5.144444444444445,
     "windFrom": 0
+   },
+   "sea": {
+    "tick": 2,
+    "col": 16,
+    "row": 16,
+    "size": 5,
+    "areas": [
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ],
+     [
+      514,
+      0,
+      11112
+     ]
+    ]
    },
    "changes": [
     {
@@ -558,6 +713,140 @@
       "windSpeed": 6.173333333333334,
       "windFrom": 0.3490658503988659
      }
+    },
+    {
+     "at": 1048,
+     "areas": [
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ],
+      [
+       617,
+       3641,
+       11112
+      ]
+     ],
+     "window": [
+      16,
+      16
+     ]
     },
     {
      "at": 1202,
@@ -2397,21 +2686,25 @@
     }
    ],
    "end": {
-    "x": "0x4030f852c2ce582d",
-    "y": "0x404a1e3bc0fd53fb",
-    "heading": "0xbfe692793500340b",
-    "surge": "0x3f9b1c43ef35026d",
-    "sway": "0xbfcd571bebc1bb8a",
-    "yawRate": "0xbfa2f8e373ecc53c",
-    "heel": "0xbf7b1151808a6d4a",
-    "rollRate": "0xbf7cd388533d7c4e",
+    "x": "0x403194a8213471fe",
+    "y": "0x40475b7a333f7d1c",
+    "heading": "0xbfe7132aa68558cf",
+    "surge": "0xbfc6a621cb596995",
+    "sway": "0xbfd505f7fdb295d1",
+    "yawRate": "0xbfb9075f822e8f99",
+    "heel": "0xbf6935f3f9e6b801",
+    "rollRate": "0x3f9039ab4f4fe9e8",
     "boom": "0xbfeb98ac86e06478",
     "boomRate": "0x0000000000000000",
-    "sailor": "0xbf59450941d5514d",
+    "sailor": "0x3f786e0cefcbfcd6",
     "rudder": "0x0000000000000000",
     "sheetLimit": "0x3feb98ac86e06478",
     "sailorMode": "0x0000000000000000",
-    "sailorTimer": "0x0000000000000000"
+    "sailorTimer": "0x0000000000000000",
+    "heave": "0x3faaccd15468b21c",
+    "heaveRate": "0xbfb78ec227356706",
+    "pitch": "0x3f90355009a68abb",
+    "pitchRate": "0xbfa1f2d2bf3d9640"
    }
   }
  ]

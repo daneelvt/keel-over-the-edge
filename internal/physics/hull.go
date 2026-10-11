@@ -11,20 +11,22 @@ import "math"
 // Hydrodynamics Laboratory, as a drag area against speed: ½ρ (C_D A)(V) V²,
 // along the hull's motion. A cross-flow drag carries the boat when the board
 // is stalled or out of the water. The Munk moment of a slender body,
-// −(m₂₂ − m₁₁) u v, turns the hull across its motion.
+// −(m₂₂ − m₁₁) u v, turns the hull across its motion. All three are of the
+// hull's motion through the water, which the waves move under it.
 func (b *Prepared) hullLoads(m *motion, l *loads) {
-	speed := math.Sqrt(float64(m.u*m.u) + float64(m.v*m.v))
+	u, v := m.u-m.waterX, m.v-m.waterY
+	speed := math.Sqrt(float64(u*u) + float64(v*v))
 	k := float64(float64(b.halfRhoWater*lookup(b.dragArea[:], speed, b.dragAreaInvStep)) * speed)
-	cross := float64(float64(b.crossFlow*m.v) * math.Abs(m.v))
-	l.X -= float64(k * m.u)
-	side := float64(k*m.v) + cross
+	cross := float64(float64(b.crossFlow*v) * math.Abs(v))
+	l.X -= float64(k * u)
+	side := float64(k*v) + cross
 	l.Y -= side
 	l.K += float64(b.hullZ * side)
-	l.N -= float64(float64(b.munk*m.u) * m.v)
+	l.N -= float64(float64(b.munk*u) * v)
 }
 
 // rightingMoment returns the roll moment of the hull's form and weight, with
-// the sailor on the centreline, at heel φ.
+// the sailor on the centreline, at heel φ off the water's surface.
 func (b *Prepared) rightingMoment(heel float64) float64 {
 	lever := lookup(b.rightingLever[:], math.Abs(heel), 18/math.Pi)
 	return float64(-sign(heel) * b.weight * lever)

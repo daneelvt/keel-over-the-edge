@@ -26,6 +26,20 @@ type Prepared struct {
 	rightingLever   [19]float64
 	rollDamping     float64
 	invLogReference float64 // 1 / ln(10 m / z₀)
+
+	// In waves.
+	halfLength, halfBeam float64 // half the waterplane's length and beam, m
+	twistArm             float64 // L²/12: the sway force's lever along the hull per unit of k_x, m²
+	heaveStiffness       float64 // ρ g A_wp, N/m
+	heaveDamping         float64 // N·s/m
+	invHeaveMass         float64
+	pitchStiffness       float64 // ρ g I_L, N·m/rad
+	pitchDamping         float64 // N·m·s/rad
+	invPitchInertia      float64
+	waveSurge, waveSway  float64 // the Froude–Krylov force per unit of slope, with the added mass's share, N
+	// foilDecay is how much of each wave's motion reaches the foils' depth
+	// d: e^(−k d).
+	foilDecay       [SeaComponents]float64
 	floorWindFactor float64 // the wind profile's value at windFloor, as a fraction of the 10 m wind
 	mastheadZ       float64
 
@@ -116,10 +130,11 @@ type foil struct {
 // nothing at the water, rather than following the logarithm, m.
 const windFloor = 0.1
 
-// Prepare derives a boat's constants from its parameters. It is called once
-// for each kind of boat, by the server at start and by the client after
-// writing Params.
-func Prepare(p *Params, b *Prepared) {
+// Prepare derives a boat's constants from its parameters, and from the
+// sea's waves what the boat needs of each. It is called once for each kind of
+// boat, after PrepareSea, by the server at start and by the client after
+// writing Params. With no waves the boat is ready for flat water only.
+func Prepare(p *Params, w *Waves, b *Prepared) {
 	m := p.Displacement
 	b.massX = m + p.AddedMassSurge
 	b.massY = m + p.AddedMassSway
@@ -141,6 +156,21 @@ func Prepare(p *Params, b *Prepared) {
 	b.invLogReference = 1 / Log(10/seaRoughness)
 	b.floorWindFactor = float64(Log(windFloor/seaRoughness) * b.invLogReference)
 	b.mastheadZ = cg - (p.BoomHeight + p.Luff)
+
+	// The hull floats on its waterplane as a mass on a spring; the damping
+	// is a fraction of critical, 2 √(stiffness × mass).
+	b.halfLength = float64(0.5 * p.WaterlineLength)
+	b.halfBeam = float64(0.5 * p.WaterlineBeam)
+	b.twistArm = float64(p.WaterlineLength*p.WaterlineLength) / 12
+	heaveMass := m + p.AddedMassHeave
+	b.heaveStiffness = float64(float64(waterDensity*gravity) * p.WaterplaneArea)
+	b.heaveDamping = float64(float64(2*p.HeaveDamping) * math.Sqrt(float64(b.heaveStiffness*heaveMass)))
+	b.invHeaveMass = 1 / heaveMass
+	b.pitchStiffness = float64(float64(waterDensity*gravity) * p.WaterplanePitch)
+	b.pitchDamping = float64(float64(2*p.PitchDamping) * math.Sqrt(float64(b.pitchStiffness*p.PitchInertia)))
+	b.invPitchInertia = 1 / p.PitchInertia
+	b.waveSurge = float64(float64(p.WaveForce*b.massX) * gravity)
+	b.waveSway = float64(float64(p.WaveForce*b.massY) * gravity)
 
 	// Each strip is half the sail. Induced drag follows the Offshore Racing
 	// Congress's VPP (2023, eq. 5.34): A/(π h_eff²).
@@ -198,6 +228,15 @@ func Prepare(p *Params, b *Prepared) {
 	b.foilDryHeel = float64(p.FoilDryHeel * degree)
 	b.invFoilWetRange = 1 / ((p.FoilDryHeel - p.FoilWetHeel) * degree)
 	b.rudderMax = float64(p.RudderAngle * degree)
+	// A deep-water wave's motion dies away with depth as e^(−k z). The
+	// foils feel it at the board's centre of pressure.
+	depth := b.board.z - cg
+	for i := range b.foilDecay {
+		b.foilDecay[i] = 1
+		if w != nil {
+			b.foilDecay[i] = Exp(float64(-w.K[i] * depth))
+		}
+	}
 
 	b.sailorWeight = float64(p.SailorMass * gravity)
 	b.seatHeight = p.SailorSeatHeight

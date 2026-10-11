@@ -33,7 +33,9 @@ type ringEntry struct {
 // (client-side prediction and server reconciliation). It is
 // client/src/predict/predictor.ts's twin.
 type Predictor struct {
-	kind    *physics.Prepared
+	kind *physics.Prepared
+	// Seas is the sea the boat is stepped in, from the server's SeaAreas.
+	Seas    *Seas
 	Started bool
 	Tick    int64 // the tick State is after
 	State   physics.State
@@ -42,8 +44,11 @@ type Predictor struct {
 	out     physics.Out
 }
 
-// NewPredictor predicts a boat of kind.
-func NewPredictor(kind *physics.Prepared) *Predictor { return &Predictor{kind: kind} }
+// NewPredictor predicts a boat of kind in the sea of waves, with which the
+// kind was prepared; with no waves, in flat water.
+func NewPredictor(kind *physics.Prepared, waves *physics.Waves) *Predictor {
+	return &Predictor{kind: kind, Seas: NewSeas(waves)}
+}
 
 // Reset puts the boat at a snapshot's state, forgetting what was predicted.
 func (p *Predictor) Reset(sn *protocol.Snapshot) {
@@ -53,17 +58,19 @@ func (p *Predictor) Reset(sn *protocol.Snapshot) {
 	}
 }
 
-func (p *Predictor) step(helm, sheet uint16) {
+// step steps the boat into tick, in the sea of that tick, as the server
+// does.
+func (p *Predictor) step(tick int64, helm, sheet uint16) {
 	w := bus.Pack(0, helm, sheet, 0)
 	c := physics.Control{Helm: w.Helm(), Sheet: w.Sheet()}
 	e := physics.Env{WindSpeed: p.Wind.Speed, WindFrom: p.Wind.From}
-	physics.Step(&p.State, &c, &e, p.kind, &p.out)
+	physics.Step(&p.State, &c, &e, p.Seas.At(tick), p.kind, &p.out)
 }
 
 // Step steps the next tick with these controls, at the controls'
 // resolution.
 func (p *Predictor) Step(helm, sheet uint16) {
-	p.step(helm, sheet)
+	p.step(p.Tick+1, helm, sheet)
 	p.Tick++
 	p.ring[p.Tick%Ring] = ringEntry{tick: p.Tick, helm: helm, sheet: sheet, state: p.State}
 }
@@ -105,7 +112,7 @@ func (p *Predictor) Snapshot(sn *protocol.Snapshot) Outcome {
 	e.state = sn.State
 	for t := sn.Tick + 1; t <= p.Tick; t++ {
 		r := &p.ring[t%Ring]
-		p.step(r.helm, r.sheet)
+		p.step(t, r.helm, r.sheet)
 		r.state = p.State
 	}
 	return Outcome{

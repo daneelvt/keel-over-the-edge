@@ -77,18 +77,26 @@ func (d *fakeDB) all() (events []store.Event, cps []store.Checkpoint) {
 	return events, cps
 }
 
-func kinds(t testing.TB) []physics.Prepared {
-	t.Helper()
+// physicsOnce prepares the catalog's sea and boats once for the package's
+// tests.
+var physicsOnce = sync.OnceValues(func() (*physics.Waves, []physics.Prepared) {
 	cat, err := catalog.Load()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-	ks := make([]physics.Prepared, len(cat.Boats))
-	for i := range cat.Boats {
-		p := catalog.PhysicsParams(&cat.Boats[i])
-		physics.Prepare(&p, &ks[i])
-	}
+	return cat.Prepare()
+})
+
+// kinds is the catalog's boats, prepared for its sea.
+func kinds(t testing.TB) []physics.Prepared {
+	_, ks := physicsOnce()
 	return ks
+}
+
+// waves is the catalog's sea.
+func waves(t testing.TB) *physics.Waves {
+	w, _ := physicsOnce()
+	return w
 }
 
 func acct(n uint64) bus.Account {
@@ -112,7 +120,7 @@ type rig struct {
 
 func newRig(t *testing.T, hold bus.Sender, grace int64, limit int) *rig {
 	t.Helper()
-	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds(t), Workers: 1, Tick: 1000, Grace: grace, Limit: limit})
+	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds(t), Waves: waves(t), Workers: 1, Tick: 1000, Grace: grace, Limit: limit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +335,7 @@ func TestDatabaseStopped(t *testing.T) {
 				}
 			}
 		}
-		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Workers: 1})
+		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Workers: 1})
 		if err != nil {
 			t.Fatal(err)
 		}

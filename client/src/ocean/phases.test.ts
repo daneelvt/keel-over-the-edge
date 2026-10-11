@@ -1,8 +1,41 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { describe, expect, test } from 'vitest';
-import { TEST_SEAS } from './ocean';
-import { BoatBand, COMPONENTS, GRAVITY, reducePhase } from './phases';
+import { existsSync, readFileSync } from 'node:fs';
+import { beforeAll, describe, expect, test } from 'vitest';
+import { catalog } from '../catalog';
+import { RECORDS, SEA } from '../predict/layout.gen';
+import { loadPhysics, type Physics } from '../predict/physics';
+import { preparePhysics } from '../predict/predictor';
+import { AREAS, COMPONENTS, reducePhase, SeaBand } from './phases';
+
+const wasm = new URL('../predict/physics.wasm', import.meta.url);
+let physics: Physics;
+
+beforeAll(async () => {
+  if (!existsSync(wasm)) {
+    throw new Error('client/src/predict/physics.wasm is missing: run go run ./tools/physics');
+  }
+  physics = await loadPhysics(readFileSync(wasm));
+  preparePhysics(physics, catalog.boats[0].physics, catalog.weather.sea);
+});
+
+/** Fills the module's first window: one wind everywhere, or a second from column split eastward. */
+function fill(
+  knots: number,
+  col: number,
+  row: number,
+  split: number = SEA.window,
+  other = 0,
+): void {
+  const of = (kn: number): number[] => physics.seaInputOf((kn * 1852) / 3600, 0.4, -1, []);
+  const [west, east] = [of(knots), of(other)];
+  physics.seaWindow(0, col, row, SEA.window);
+  for (let i = 0; i < AREAS; i++) {
+    const a = i % SEA.window >= split ? east : west;
+    physics.seaArea(0, i, a[0] ?? 0, a[1] ?? 0, a[2] ?? 0);
+  }
+  physics.seaSeal(0);
+}
 
 // Double-double arithmetic (Dekker 1971; Knuth's two-sum): a value as an
 // unevaluated sum hi + lo, good to about 32 significant digits.
@@ -42,21 +75,25 @@ const TWO_PI: [number, number, number] = [
   6.283185307179586, 2.4492935982947064e-16, -5.9895396194366793e-33,
 ];
 
-/** φ + k(d·O) − ωt reduced to [0, 2π), in double-double, as a double. */
+/** φ + k(d·O) reduced to [0, 2π) less the fraction of turns·tick, in double-double, as a double. */
 function referencePhase(
   phase: number,
-  k: number,
-  east: number,
-  north: number,
+  kEast: number,
+  kNorth: number,
   e: number,
   n: number,
-  omega: number,
-  t: number,
+  turns: number,
+  tick: number,
 ): number {
   let x: DD = [phase, 0];
-  x = add(x, mulD(mulD([k, 0], east), e));
-  x = add(x, mulD(mulD([k, 0], north), n));
-  x = add(x, mulD([-omega, 0], t));
+  x = add(x, twoProd(kEast, e));
+  x = add(x, twoProd(kNorth, n));
+  // The turns made, exactly, and their fraction.
+  const t = twoProd(turns, tick);
+  const whole = Math.floor(t[0]);
+  const frac = add([t[0] - whole, 0], [t[1], 0]);
+  x = add(x, mulD(mulD(frac, -TWO_PI[0]), 1));
+  x = add(x, mulD(frac, -TWO_PI[1]));
   const m = Math.floor((x[0] + x[1]) / TWO_PI[0]);
   let r = add(x, mulD([TWO_PI[0], 0], -m));
   r = add(r, mulD([TWO_PI[1], 0], -m));
@@ -83,103 +120,124 @@ describe('phases at the floating origin', () => {
     }
   });
 
-  test('match a double-double reference 8,000 m out after 7 days, to 10⁻⁹ rad', () => {
-    const t = 7 * 86400 + 0.123;
+  test('match a double-double reference at the rim, years into a world, to 10⁻⁹ rad', () => {
     const origin: [number, number] = [-5657.2, 5657.9]; // 8,000 m out
-    for (const name of ['breeze', 'gale']) {
-      const sea = TEST_SEAS[name];
-      if (sea === undefined) {
-        throw new Error(name);
-      }
-      const band = new BoatBand();
-      band.set(sea);
-      band.update(origin[0], origin[1], t);
-      sea.components.forEach((c, i) => {
+    fill(34, 3, 28);
+    const band = new SeaBand();
+    band.set(physics, 0, 3, 28, SEA.window);
+    const c = physics.records.components;
+    const R = RECORDS.components;
+    const active = Array.from(physics.seaActive(0));
+    expect(active.length).toBeGreaterThan(80);
+    for (const tick of [740_000_000.25, 2 ** 31 + 1, 2 ** 40 + 0.5]) {
+      band.update(origin[0], origin[1], tick);
+      active.forEach((i, j) => {
+        const k = c[R.k + i] ?? 0;
         const want = referencePhase(
-          c.phase,
-          c.k,
-          c.east,
-          c.north,
+          c[R.phase + i] ?? 0,
+          k * (c[R.east + i] ?? 0),
+          k * (c[R.north + i] ?? 0),
           origin[0],
           origin[1],
-          Math.sqrt(GRAVITY * c.k),
-          t,
+          c[R.turns + i] ?? 0,
+          tick,
         );
-        expect(angleDiff(band.phase64[i] ?? 0, want)).toBeLessThan(1e-9);
+        const got = (band.phases[j >> 2] as { getComponent(k: number): number }).getComponent(
+          j & 3,
+        );
+        expect(angleDiff(got, want), `tick ${tick}, wave ${i}`).toBeLessThan(1e-9);
       });
     }
   });
-
-  test('calm water: every amplitude is zero', () => {
-    const band = new BoatBand();
-    band.set(null);
-    band.update(100, 200, 50);
-    for (const w of band.waves) {
-      expect(w.w).toBe(0);
-    }
-    expect(band.sample(3, 4, new Float64Array(3))).toEqual(Float64Array.from([0, 0, 0]));
-  });
-
-  test('the band’s slope is the gradient of its height', () => {
-    const band = new BoatBand();
-    band.set(TEST_SEAS.gale ?? null);
-    band.update(1200, -300, 3600);
-    const s = new Float64Array(3);
-    const a = new Float64Array(3);
-    const b = new Float64Array(3);
-    const h = 1e-5;
-    band.sample(17, -42, s);
-    band.sample(17 + h, -42, a);
-    band.sample(17 - h, -42, b);
-    expect(((a[0] ?? 0) - (b[0] ?? 0)) / (2 * h)).toBeCloseTo(s[1] ?? 0, 6);
-    band.sample(17, -42 + h, a);
-    band.sample(17, -42 - h, b);
-    expect(((a[0] ?? 0) - (b[0] ?? 0)) / (2 * h)).toBeCloseTo(s[2] ?? 0, 6);
-  });
 });
 
-// The JONSWAP spectrum (Hasselmann and others, 1973) for a wind and fetch,
-// computed here independently of tools/testsea.
-function jonswap(windKnots: number, fetchNM: number): { s: (w: number) => number; peak: number } {
-  const u = (windKnots * 1852) / 3600;
-  const f = fetchNM * 1852;
-  const alpha = 0.076 * ((GRAVITY * f) / (u * u)) ** -0.22;
-  const peak = 22 * Math.cbrt((GRAVITY * GRAVITY) / (u * f));
-  const s = (w: number): number => {
-    const sigma = w <= peak ? 0.07 : 0.09;
-    const r = Math.exp(-(((w - peak) / (sigma * peak)) ** 2) / 2);
-    return alpha * GRAVITY * GRAVITY * w ** -5 * Math.exp(-1.25 * (peak / w) ** 4) * 3.3 ** r;
-  };
-  return { s, peak };
+/** The band's own sum at a point (east, north) from the origin of its last update, in float64. */
+function sumOf(band: SeaBand, east: number, north: number): number {
+  const waves = band.waves.image.data as Float32Array;
+  let h = 0;
+  for (let j = 0; j < band.count; j++) {
+    const [dx = 0, dz = 0, k = 0, a = 0] = waves.subarray(j * 4, j * 4 + 4);
+    const phase = (band.phases[j >> 2] as { getComponent(k: number): number }).getComponent(j & 3);
+    h += a * Math.sin(phase + k * (dx * east - dz * north));
+  }
+  return h;
 }
 
-describe('the test sea fixtures', () => {
-  test.each(Object.keys(TEST_SEAS))('%s carries its band’s JONSWAP height, within 10%%', (name) => {
-    const sea = TEST_SEAS[name];
-    if (sea === undefined) {
-      throw new Error(name);
-    }
-    expect(sea.components).toHaveLength(COMPONENTS);
-    const { s, peak } = jonswap(sea.windKnots, sea.fetchNM);
-    // The band: waves longer than 8 m, from half the peak's frequency.
-    const w1 = Math.sqrt((GRAVITY * 2 * Math.PI) / 8);
-    let w0 = Math.max(0.5 * peak, 0.45);
-    if (w0 > 0.8 * w1) {
-      w0 = 0.5 * w1;
-    }
-    let m0 = 0;
-    const n = 4000;
-    for (let i = 0; i < n; i++) {
-      m0 += s(w0 + ((i + 0.5) * (w1 - w0)) / n) * ((w1 - w0) / n);
-    }
-    const want = 4 * Math.sqrt(m0);
-    const got = 4 * Math.sqrt(sea.components.reduce((sum, c) => sum + (c.a * c.a) / 2, 0));
-    expect(Math.abs(got - want)).toBeLessThan(0.1 * want);
+describe('the band laid out for the GPU', () => {
+  test('with no sea is flat water', () => {
+    const band = new SeaBand();
+    band.clear();
+    band.update(100, 200, 50);
+    expect(band.count).toBe(0);
+    expect(band.groups).toBe(0);
+    expect(band.hs.every((h) => h === 0)).toBe(true);
   });
 
-  test('the gale is the rendering’s: about 1.3 m, peaking near 4 s', () => {
-    const sea = TEST_SEAS.gale as unknown as { hsFull: number; peakPeriod: number };
-    expect(sea.hsFull).toBeCloseTo(1.3, 1);
-    expect(sea.peakPeriod).toBeCloseTo(4.1, 1);
+  test('holds the waves the module sums, in fours, and their amplitudes', () => {
+    fill(34, 16, 16);
+    const band = new SeaBand();
+    band.set(physics, 0, 16, 16, SEA.window);
+    const active = physics.seaActive(0);
+    expect(band.count).toBe(active.length);
+    expect(band.groups).toBe(Math.ceil(active.length / 4));
+    expect(band.blended).toBe(false);
+    const hs = physics.seaHs(0)[0] ?? 0;
+    expect(hs).toBeGreaterThan(0.8);
+    expect(band.hs).toEqual(new Array(AREAS).fill(hs));
+    const waves = band.waves.image.data as Float32Array;
+    const amps = band.amplitudes.image.data as Float32Array;
+    const c = physics.records.components;
+    const amp = physics.seaAmplitudes(0);
+    active.forEach((i, j) => {
+      expect(waves[j * 4]).toBe(Math.fround(c[RECORDS.components.east + i] ?? 0));
+      expect(waves[j * 4 + 1]).toBe(Math.fround(-(c[RECORDS.components.north + i] ?? 0)));
+      expect(waves[j * 4 + 2]).toBe(Math.fround(c[RECORDS.components.k + i] ?? 0));
+      expect(waves[j * 4 + 3]).toBe(Math.fround(amp[i] ?? 0));
+      expect(amps[(7 * COMPONENTS + j) * 4]).toBe(Math.fround(amp[7 * COMPONENTS + i] ?? 0));
+    });
+    // The last four's spare places are waves of no height.
+    for (let j = band.count; j < band.groups * 4; j++) {
+      expect(waves[j * 4 + 3]).toBe(0);
+    }
+  });
+
+  test('its sum is the module’s sea, at the centre and at the rim', () => {
+    for (const [east, north, col, row] of [
+      [0, 0, 16, 16],
+      [5869, 5869, 29, 29],
+    ] as const) {
+      fill(34, col, row);
+      const band = new SeaBand();
+      band.set(physics, 0, col, row, SEA.window);
+      for (const tick of [740_000_000, 2 ** 31 + 1.5]) {
+        band.update(east, north, tick);
+        physics.seaDrawAt(tick);
+        const points = [0, 0, 3.5, -2, -40, 71, 149.5, 0.25];
+        const world = points.map((v, i) => v + (i % 2 === 0 ? east : north));
+        const sea = physics.seaSample(0, world);
+        for (let i = 0; i < points.length / 2; i++) {
+          const got = sumOf(band, points[i * 2] ?? 0, points[i * 2 + 1] ?? 0);
+          // The textures hold float32: a few parts in ten million of each wave.
+          expect(Math.abs(got - (sea[i * 4] ?? 0)), `tick ${tick}, point ${i}`).toBeLessThan(1e-4);
+        }
+      }
+    }
+  });
+
+  test('knows a window of two seas, and where the origin is in it', () => {
+    fill(6, 16, 16, 3, 34);
+    const band = new SeaBand();
+    band.set(physics, 0, 16, 16, SEA.window);
+    expect(band.blended).toBe(true);
+    expect(band.hs[2]).toBeLessThan(0.1);
+    expect(band.hs[3]).toBeGreaterThan(0.8);
+    // 100 m east and 50 m south of the centre, whose area is the window's third.
+    band.update(100, -50, 0);
+    expect(band.areaOrigin.x).toBeCloseTo(2 + 100 / 463, 12);
+    expect(band.areaOrigin.y).toBeCloseTo(2 - 50 / 463, 12);
+    // A window that is one sea again needs no blending.
+    fill(6, 16, 16);
+    band.set(physics, 0, 16, 16, SEA.window);
+    expect(band.blended).toBe(false);
   });
 });

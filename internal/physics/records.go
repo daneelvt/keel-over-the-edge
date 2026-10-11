@@ -35,6 +35,10 @@ type State struct {
 	SheetLimit  float64 // furthest the sheet lets the boom out, rad
 	SailorMode  float64 // Sailing, InWater, OnBoard or Climbing
 	SailorTimer float64 // seconds left to swim to the board or to climb in
+	Heave       float64 // the centre of gravity's rise above where it floats in flat water, m
+	HeaveRate   float64 // m/s, positive rising
+	Pitch       float64 // rad, positive with the bow up
+	PitchRate   float64 // rad/s
 }
 
 // Control holds what the player sets. Both are targets: the rudder and the
@@ -70,6 +74,14 @@ type Params struct {
 	RollInertia     float64     // added inertia included, kg·m²
 	RollDamping     float64     // the hull's own roll damping, N·m·s/rad
 	RightingLever   [19]float64 // with the sailor on the centreline, every 10° of heel from 0° to 180°, m
+	WaterlineBeam   float64     // m
+	WaterplaneArea  float64     // m²
+	WaterplanePitch float64     // the waterplane's second moment of area about its transverse axis, m⁴
+	AddedMassHeave  float64     // kg
+	PitchInertia    float64     // added inertia included, kg·m²
+	HeaveDamping    float64     // fraction of critical
+	PitchDamping    float64     // fraction of critical
+	WaveForce       float64     // share of the Froude–Krylov force of a wave's slope
 
 	// Rig.
 	SailArea          float64     // m²
@@ -152,6 +164,19 @@ type Params struct {
 	SheetEaseTime float64 // s to ease it out over its full range
 }
 
+// SeaParams describe the waves long enough to move a boat: the catalog's sea
+// values, in the order of its schema. PrepareSea derives the waves from them.
+type SeaParams struct {
+	Shortest   float64 // the shortest wavelength, m
+	Longest    float64 // the longest wavelength, m
+	Gamma      float64 // the JONSWAP spectrum's peak enhancement
+	SigmaBelow float64 // the peak's width below the peak frequency
+	SigmaAbove float64 // and above it
+	Spreading  float64 // the exponent s of the spreading cos²ˢ(θ/2), a whole number
+	FetchCap   float64 // the fetch of open water, nautical miles
+	Cull       float64 // waves lower than this fraction of an area's highest are left out
+}
+
 // Out holds values derived during a step for drawing and the player's
 // instruments. A step writes it and never reads it, and it is not part of the
 // state, so it is never sent: a client reads it from its own prediction.
@@ -175,6 +200,10 @@ type Out struct {
 	RightingMoment    float64 // roll moment of the hull's form and the sailor's weight, N·m
 	Flattening        float64 // the sailor's flattening of the sail, fraction of full lift
 	Twist             float64 // the upper strip's twist beyond the boom, rad
+	WaveHeight        float64 // the sea's height under the hull, averaged over its waterplane, m
+	WaveSlopeAhead    float64 // the sea's slope under the hull, rising toward the bow
+	WaveSlopeAcross   float64 // and rising toward starboard
+	SpeedThroughWater float64 // m/s: the boat's speed less the waves' own motion
 }
 
 // The flow over a sail strip, in Out.FootFlow and Out.HeadFlow.

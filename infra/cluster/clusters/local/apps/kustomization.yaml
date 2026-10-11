@@ -16,6 +16,10 @@ configMapGenerator:
     behavior: merge
     literals:
       - KEEL_PLAY_ORIGIN=https://macbook.local
+      # The developer's commands, on the internal listener, which no route
+      # leads to: the wind is set through the API server's proxy or a
+      # port-forward, to sail in a calm, a breeze or a gale here.
+      - KEEL_DEV_COMMANDS=1
 patches:
   - path: keel.yaml
   - path: database.yaml

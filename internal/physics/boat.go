@@ -4,8 +4,9 @@ package physics
 
 import "math"
 
-// The boat is a rigid body in surge, sway, yaw and roll on flat water, with
-// the boom as a body of its own and the sailor's position. Every force comes
+// The boat is a rigid body in surge, sway, yaw and roll, heaving and pitching
+// on the waves (waves.go), with the boom as a body of its own and the
+// sailor's position. Every force comes
 // from the flow a part of the boat meets, including the flow from the boat's
 // own turning and rolling: the sail's two strips, the windage of hull, sailor
 // and spars, the daggerboard and rudder, and the hull. Tacks, gybes, luffing,
@@ -23,14 +24,15 @@ import "math"
 // integrated by semi-implicit Euler, Substeps times a step: velocities
 // first, then positions from the new velocities.
 
-// Step advances a boat by one step of Dt seconds. b is the boat's kind,
-// from Prepare. It writes o and never reads it.
-func Step(s *State, c *Control, e *Env, b *Prepared, o *Out) {
-	step(s, c, e, b, o, Substeps)
+// Step advances a boat by one step of Dt seconds. sea is the sea about the
+// boat at the step's tick, or nil for flat water; b is the boat's kind, from
+// Prepare. It only reads sea, and writes o and never reads it.
+func Step(s *State, c *Control, e *Env, sea *Sea, b *Prepared, o *Out) {
+	step(s, c, e, sea, b, o, Substeps)
 }
 
 // step is Step in n substeps; the tests compare Substeps with more.
-func step(s *State, c *Control, e *Env, b *Prepared, o *Out, n int32) {
+func step(s *State, c *Control, e *Env, sea *Sea, b *Prepared, o *Out, n int32) {
 	helm := control(c.Helm, -1, 1)
 	sheet := control(c.Sheet, 0, 1)
 	if s.SailorMode != Sailing {
@@ -52,18 +54,33 @@ func step(s *State, c *Control, e *Env, b *Prepared, o *Out, n int32) {
 		wind = 0
 	}
 	sinW, cosW := SinCos(e.WindFrom)
+	// The sea is read once, where the boat is as the step begins: the waves
+	// change little in a step, and their rates carry them across it.
+	var v wave
+	if sea != nil {
+		sinH, cosH := SinCos(s.Heading)
+		v.read(sea, s, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
+		v.twist = float64(v.twist * b.twistArm)
+	}
 	dt := Dt / float64(n)
 	for i := range n {
-		b.substep(s, wind, sinW, cosW, dt, o, i == n-1)
+		b.substep(s, wind, sinW, cosW, dt, &v, o, i == n-1)
+		v.advance(dt)
 	}
 	s.Heading = wrapAngle(s.Heading)
 	s.Heel = wrapAngle(s.Heel)
 }
 
-func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, o *Out, last bool) {
+func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, o *Out, last bool) {
 	sinH, cosH := SinCos(s.Heading)
-	m := motion{u: s.Surge, v: s.Sway, r: s.YawRate, p: s.RollRate}
+	m := motion{u: s.Surge, v: s.Sway, r: s.YawRate, p: s.RollRate, q: s.PitchRate}
 	m.sinHeel, m.cosHeel = SinCos(s.Heel)
+	m.rise, m.across = s.Heave-v.height, v.across
+	m.waterX, m.waterY, m.foilX, m.foilY = v.waterX, v.waterY, v.foilX, v.foilY
+	// The hull lies on the water's surface, which the waves tilt: its
+	// stability and how much of its foils are in the water follow the heel
+	// off that surface.
+	wetHeel := s.Heel + v.across
 	// The true wind comes from WindFrom: the air moves the other way.
 	m.windX = float64(-wind * (float64(cosW*cosH) + float64(sinW*sinH)))
 	m.windY = float64(-wind * (float64(sinW*cosH) - float64(cosW*sinH)))
@@ -89,16 +106,17 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, o *Out, last 
 	// heel, 1 − 0.382 |φ| (Keuning and Verwerft 2009); the rudder sees part of
 	// the boat's speed, and works in the board's downwash (Keuning, Vermeulen
 	// and de Ridder 2005).
-	wet := b.foilsWet(s.Heel)
+	wet := b.foilsWet(wetHeel)
 	boardLift := float64(b.board.carry * max2(1-float64(b.heelLoss*math.Abs(s.Heel)), 0))
 	board := b.foilLoads(&b.board, &m, 0, 1, 1, 0, boardLift, wet, &l)
 	sinR, cosR := SinCos(s.Rudder)
 	rudder := b.foilLoads(&b.rudder, &m, sinR, cosR, b.rudderInflow, b.downwash, 1, wet, &l)
 
 	b.hullLoads(&m, &l)
+	b.waveLoads(v, &l)
 	l.K -= float64((b.rollDamping + b.sailorDamping(s)) * m.p)
 	heeling := l.K
-	righting := b.rightingMoment(s.Heel)
+	righting := b.rightingMoment(wetHeel)
 	b.hike(s, heeling+righting, m.cosHeel, dt)
 	righting += b.sailorMoment(s, m.sinHeel, m.cosHeel)
 
@@ -129,6 +147,7 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, o *Out, last 
 	sinH, cosH = SinCos(s.Heading)
 	s.X += float64((float64(s.Surge*sinH) + float64(s.Sway*cosH)) * dt)
 	s.Y += float64((float64(s.Surge*cosH) - float64(s.Sway*sinH)) * dt)
+	b.float(s, v, dt)
 	b.sailorModes(s, dt)
 
 	if last {
@@ -146,6 +165,9 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, o *Out, last 
 		o.CourseOverGround = wrapAngle(s.Heading + o.Leeway)
 		o.HeelingMoment, o.RightingMoment = heeling, righting
 		o.Flattening, o.Twist = flat, twist
+		o.WaveHeight, o.WaveSlopeAhead, o.WaveSlopeAcross = v.height, v.ahead, v.across
+		tu, tv := s.Surge-v.waterX, s.Sway-v.waterY
+		o.SpeedThroughWater = math.Sqrt(float64(tu*tu) + float64(tv*tv))
 	}
 }
 

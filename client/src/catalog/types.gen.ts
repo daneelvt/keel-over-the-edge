@@ -32,6 +32,7 @@ export interface Catalog {
    * @minItems 1
    */
   sailors: [Sailor, ...Sailor[]];
+  weather: Weather;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -190,6 +191,38 @@ export interface PhysicsHull {
     number,
     number
   ];
+  /**
+   * Beam on the waterline, in m.
+   */
+  waterlineBeam: number;
+  /**
+   * Area of the waterplane, in m²: the heave stiffness is the water's weight per metre of it.
+   */
+  waterplaneArea: number;
+  /**
+   * The waterplane's second moment of area about its transverse axis, in m⁴: the pitch stiffness.
+   */
+  waterplanePitch: number;
+  /**
+   * Added mass moving up and down, in kg.
+   */
+  addedMassHeave: number;
+  /**
+   * Moment of inertia in pitch, added inertia included, in kg·m².
+   */
+  pitchInertia: number;
+  /**
+   * Damping of the heave, as a fraction of critical.
+   */
+  heaveDamping: number;
+  /**
+   * Damping of the pitch, as a fraction of critical.
+   */
+  pitchDamping: number;
+  /**
+   * The share of the Froude–Krylov force of a wave's slope that pushes the hull along and across.
+   */
+  waveForce: number;
 }
 /**
  * The sail, boom and windage.
@@ -578,6 +611,55 @@ export interface SailorArt {
    */
   far: string;
 }
+/**
+ * The weather's numbers.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Weather".
+ */
+export interface Weather {
+  sea: WeatherSea;
+}
+/**
+ * The waves long enough to move a boat: the band of wavelengths they span and the spectrum that gives each its height.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherSea".
+ */
+export interface WeatherSea {
+  /**
+   * The shortest wavelength, in m.
+   */
+  shortest: number;
+  /**
+   * The longest wavelength, in m.
+   */
+  longest: number;
+  /**
+   * The JONSWAP spectrum's peak enhancement.
+   */
+  gamma: number;
+  /**
+   * The peak's width below the peak frequency.
+   */
+  sigmaBelow: number;
+  /**
+   * The peak's width above the peak frequency.
+   */
+  sigmaAbove: number;
+  /**
+   * The directional spreading's exponent s in cos²ˢ(θ/2): a whole number.
+   */
+  spreading: number;
+  /**
+   * The fetch of open water, in nautical miles.
+   */
+  fetchCap: number;
+  /**
+   * Waves lower than this fraction of an area's highest are left out.
+   */
+  cull: number;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '83feda7e1d8c1cd7';
+export const CATALOG_VERSION = '3f54cf845c2e9b8f';
