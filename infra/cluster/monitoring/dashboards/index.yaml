@@ -5,6 +5,18 @@
 # ./tools/dashboards -pull, which also writes kustomization.yaml from this.
 # All vendored ones are Apache 2.0.
 dashboards:
+  - file: keel/overview.json
+    folder: Keel
+  - file: keel/game.json
+    folder: Keel
+  - file: keel/machine.json
+    folder: Keel
+  - file: keel/database.json
+    folder: Keel
+  - file: keel/backups.json
+    folder: Keel
+  - file: keel/edge.json
+    folder: Keel
   - file: vendored/node-exporter-full.json
     folder: Machine
     from:

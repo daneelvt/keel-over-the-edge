@@ -45,6 +45,14 @@ spec:
                 - /bin/sh
                 - -ec
                 - |
+                  # A new pod's address is let in to the database a moment
+                  # after it starts: wait for an answer, a minute at most.
+                  tries=0
+                  until pg_isready --quiet --timeout=2; do
+                    tries=$((tries + 1))
+                    [ "$tries" -lt 30 ] || { echo "the database did not answer within a minute" >&2; exit 1; }
+                    sleep 2
+                  done
                   start=$(date +%s)
                   pg_dump --format=custom --file=/dump/keel.dump
                   pg_restore --list /dump/keel.dump > /dev/null

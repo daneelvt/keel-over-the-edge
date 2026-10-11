@@ -5,7 +5,7 @@
 #
 # system-upgrade-controller.yaml and crd.yaml are the v0.20.2 release's
 # own, as published (infra/vendor.yaml records their SHA-256, checked
-# against the release's sha256sum-amd64.txt; go run ./tools/vendor fetches
+# against the release's sha256sum-amd64.txt; go run ./tools/vendored fetches
 # and checks them). Changed here: the controller's image and the kubectl
 # image its jobs use, pinned by digest (neither is signed upstream), its
 # namespace said to be privileged on purpose, fenced, and its size.

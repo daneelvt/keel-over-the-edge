@@ -8,7 +8,7 @@
 # RebootPending says so. Production alone.
 #
 # kured-1.23.0-combined.yaml is the release's own manifest, as it was
-# published (infra/vendor.yaml records its SHA-256; go run ./tools/vendor
+# published (infra/vendor.yaml records its SHA-256; go run ./tools/vendored
 # fetches and checks it). Changed here, not there: moved from kube-system
 # to a namespace of its own, its image pinned by the digest whose keyless
 # signature the release workflow checks, and its settings.

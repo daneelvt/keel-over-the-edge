@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The game's and its database's alerts, which vmalert evaluates against the
 # metrics store and keeps in Alertmanager, shown on Grafana's Overview.
-# Nothing is sent anywhere. Each says what to look at in its description;
-# docs/development.md, "Monitoring", says what to do for each. Starting
-# values: an alert that fires with nothing to do is changed, not silenced
-# for good. Each rule has a test (rules/tests/, run by go test).
+# Nothing is sent anywhere. Starting values: an alert that fires with
+# nothing to do is changed, not silenced for good. Each rule is tested
+# (infra/cluster/monitoring/rules/tests, run by go test).
 #
-# component: game and database tie the alerts to the inhibitions: while
+# Each alert's summary is a label, one plain sentence with no value in it,
+# so the Overview's table can show it beside the alert (the alerts' own
+# series carry labels, not annotations); its description holds the value
+# and where to look. component ties an alert to the inhibitions: while
 # GameDown or DatabaseDown fires, the rest of its component's are held
 # back.
 apiVersion: operator.victoriametrics.com/v1beta1
@@ -23,36 +25,36 @@ spec:
           labels:
             severity: critical
             component: game
+            summary: "No keel is ready: nobody can play."
           annotations:
-            summary: No keel is ready.
-            description: Nobody can play. Look at keel's pod and its logs, and at the database.
+            description: "Look at keel's pod and its logs, and at the database."
         - alert: TickOverrun
           expr: histogram_quantile(0.99, sum(rate(keel_sim_tick_duration_seconds_bucket[1m])) by (le)) > 0.025
           for: 5m
           labels:
             severity: critical
             component: game
+            summary: "The tick is close to its 33 ms budget."
           annotations:
-            summary: "The tick's 99th percentile is {{ $value | humanizeDuration }}, near the 33 ms budget."
-            description: The world is close to falling behind. The Game dashboard shows which phase grew, and the Machine dashboard whether the CPU is stolen or throttled.
+            description: "Its 99th percentile is {{ $value | humanizeDuration }}. The Game dashboard shows which phase grew, and the Machine dashboard whether the CPU is stolen or throttled."
         - alert: PersistenceLag
           expr: keel_persist_oldest_seconds > 10
           for: 1m
           labels:
             severity: critical
             component: game
+            summary: "keel's changes are not reaching the database."
           annotations:
-            summary: "keel's oldest unwritten change is {{ $value | humanizeDuration }} old."
-            description: The database is not keeping up with the world, or not answering. A crash now would lose what is waiting.
+            description: "The oldest unwritten change is {{ $value | humanizeDuration }} old: the database is not keeping up, or not answering. A crash now would lose what is waiting."
         - alert: QueueWaiting
           expr: max(keel_sim_queue_length) > 0
           for: 10m
           labels:
             severity: warning
             component: game
+            summary: "Players have waited for a boat for 10 minutes."
           annotations:
-            summary: "{{ $value }} players have waited for a boat for 10 minutes."
-            description: The sea is at its boat limit. Look at the tick's time before raising KEEL_BOAT_LIMIT.
+            description: "{{ $value }} wait: the sea is at its boat limit. Look at the tick's time before raising KEEL_BOAT_LIMIT."
         - alert: MemoryNearLimit
           expr: |
             max by (pod, container) (container_memory_working_set_bytes{namespace="keel", container=~"keel|postgres"})
@@ -62,9 +64,9 @@ spec:
           labels:
             severity: warning
             component: game
+            summary: "keel or its database is near its memory limit."
           annotations:
-            summary: "{{ $labels.container }} uses {{ $value | humanizePercentage }} of its memory limit."
-            description: Near its limit, it is killed and restarted. Look at its memory over the last days on the Game or Database dashboard.
+            description: "{{ $labels.container }} uses {{ $value | humanizePercentage }} of its limit; at the limit it is killed and restarted. Look at its memory over the last days on the Game or Database dashboard."
         - alert: CPUThrottled
           expr: |
             sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace="keel", container="keel"}[5m]))
@@ -74,9 +76,9 @@ spec:
           labels:
             severity: warning
             component: game
+            summary: "keel's CPU limit is holding it back."
           annotations:
-            summary: "keel is throttled in {{ $value | humanizePercentage }} of its CPU periods."
-            description: Its CPU limit holds the tick back. The Game dashboard shows whether the tick suffers.
+            description: "It is throttled in {{ $value | humanizePercentage }} of its CPU periods. The Game dashboard shows whether the tick suffers."
     - name: database
       rules:
         - alert: DatabaseDown
@@ -85,9 +87,9 @@ spec:
           labels:
             severity: critical
             component: database
+            summary: "The game's database does not answer."
           annotations:
-            summary: The game's database does not answer.
-            description: keel cannot write the world. Look at keel-db-1's pod, its logs and CloudNativePG's.
+            description: "keel cannot write the world. Look at keel-db-1's pod, its logs and CloudNativePG's."
         - alert: WALArchivingFailing
           expr: |
             max(cnpg_pg_stat_archiver_last_failed_time{namespace="keel"}) > max(cnpg_pg_stat_archiver_last_archived_time{namespace="keel"})
@@ -96,9 +98,9 @@ spec:
           labels:
             severity: critical
             component: database
+            summary: "WAL is not reaching the backups."
           annotations:
-            summary: WAL is not reaching the backups.
-            description: The world's changes since the last archived segment are on this machine alone, and pg_wal grows. Look at the plugin's sidecar's logs in keel-db-1 (container plugin-barman-cloud).
+            description: "The world's changes since the last archived segment are on this machine alone, and pg_wal grows. Look at the plugin's sidecar's logs in keel-db-1 (container plugin-barman-cloud)."
         - alert: BackupStale
           expr: |
             time() - max(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="keel"}) > 26 * 3600
@@ -107,35 +109,35 @@ spec:
           labels:
             severity: warning
             component: database
+            summary: "No base backup for more than 26 hours."
           annotations:
-            summary: No base backup for more than 26 hours.
-            description: A restore would replay more WAL than it should. Look at the Backup objects in keel, and the sidecar's logs.
+            description: "A restore would replay more WAL than it should. Look at the Backup objects in keel, and the sidecar's logs."
         - alert: DatabaseConnections
           expr: sum(cnpg_backends_total{namespace="keel"}) / max(cnpg_pg_settings_setting{namespace="keel", name="max_connections"}) > 0.8
           for: 5m
           labels:
             severity: warning
             component: database
+            summary: "The database is near its connection limit."
           annotations:
-            summary: "The database holds {{ $value | humanizePercentage }} of its connections."
-            description: Look at who holds them on the Database dashboard.
+            description: "It holds {{ $value | humanizePercentage }} of max_connections. The Database dashboard shows who holds them."
         - alert: LongTransaction
           expr: max(cnpg_backends_max_tx_duration_seconds{namespace="keel"}) > 300
           for: 1m
           labels:
             severity: warning
             component: database
+            summary: "A transaction has been open for more than 5 minutes."
           annotations:
-            summary: "A transaction has been open for {{ $value | humanizeDuration }}."
-            description: It holds back vacuum and may hold locks. pg_stat_activity names it.
+            description: "Open for {{ $value | humanizeDuration }}: it holds back vacuum and may hold locks. pg_stat_activity names it."
         - alert: TransactionIDAge
           expr: max(cnpg_pg_database_xid_age{namespace="keel"}) > 1e9
           labels:
             severity: warning
             component: database
+            summary: "Transaction IDs are a billion old."
           annotations:
-            summary: "The oldest transaction ID is {{ $value }} old."
-            description: At two billion PostgreSQL stops accepting writes. Something keeps vacuum from freezing old rows.
+            description: "The oldest is {{ $value }} old; at two billion PostgreSQL stops accepting writes. Something keeps vacuum from freezing old rows."
     # A CronJob's last success, or when it was made if it has none yet; and
     # whether its newest Job failed (two failed and two passed are kept).
     - name: jobs
@@ -150,9 +152,9 @@ spec:
           labels:
             severity: warning
             component: database
+            summary: "The weekly dump has not succeeded for 8 days."
           annotations:
-            summary: The weekly dump has not succeeded for 8 days.
-            description: Look at keel-db-dump's Jobs in keel, and their logs in VictoriaLogs.
+            description: "Look at keel-db-dump's Jobs in keel, and their logs in VictoriaLogs."
         - alert: DumpFailed
           expr: |
             sum by (job_name) (kube_job_status_failed{namespace="keel", job_name=~"keel-db-dump-.+"}) > 0
@@ -164,9 +166,9 @@ spec:
           labels:
             severity: warning
             component: database
+            summary: "The weekly dump's last run failed."
           annotations:
-            summary: "The weekly dump's last run, {{ $labels.job_name }}, failed."
-            description: Its log says which step failed. Run it again once fixed, kubectl -n keel create job --from=cronjob/keel-db-dump keel-db-dump-by-hand.
+            description: "{{ $labels.job_name }} failed; its log says which step. Run it again once fixed, kubectl -n keel create job --from=cronjob/keel-db-dump keel-db-dump-by-hand."
         - alert: RestoreTestStale
           expr: |
             time() - (
@@ -177,9 +179,9 @@ spec:
           labels:
             severity: warning
             component: database
+            summary: "The weekly restore test has not passed for 8 days."
           annotations:
-            summary: The weekly restore test has not passed for 8 days.
-            description: Look at keel-restore-test's Jobs in keel-restore, and their logs in VictoriaLogs.
+            description: "Look at keel-restore-test's Jobs in keel-restore, and their logs in VictoriaLogs."
         - alert: RestoreTestFailed
           expr: |
             sum by (job_name) (kube_job_status_failed{namespace="keel-restore", job_name=~"keel-restore-test-.+"}) > 0
@@ -191,6 +193,6 @@ spec:
           labels:
             severity: warning
             component: database
+            summary: "The weekly restore test's last run failed."
           annotations:
-            summary: "The weekly restore test's last run, {{ $labels.job_name }}, failed."
-            description: Its line "restore test" in VictoriaLogs says which check failed. Run it again once fixed, kubectl -n keel-restore create job --from=cronjob/keel-restore-test keel-restore-test-by-hand.
+            description: "{{ $labels.job_name }} failed; its line \"restore test\" in VictoriaLogs says which check. Run it again once fixed, kubectl -n keel-restore create job --from=cronjob/keel-restore-test keel-restore-test-by-hand."

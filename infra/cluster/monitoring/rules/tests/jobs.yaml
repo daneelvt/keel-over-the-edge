@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The weekly dump's and restore test's alerts (apps/keel/rules.yaml, group
+# jobs): each stale when its CronJob has not succeeded for 8 days, or never
+# since it was made; each failed when its newest Job failed.
+# vmalert-tool's clock starts at 2000-01-01 UTC, 946684800: a time a
+# series holds, where a rule compares it with now, counts from there.
+evaluation_interval: 5m
+tests:
+  - name: neither has succeeded for nine days
+    interval: 5m
+    input_series:
+      - series: kube_cronjob_status_last_successful_time{namespace="keel", cronjob="keel-db-dump"}
+        values: 946684800x2400
+      - series: kube_cronjob_created{namespace="keel", cronjob="keel-db-dump"}
+        values: 946598400x2400
+      - series: kube_cronjob_created{namespace="keel-restore", cronjob="keel-restore-test"}
+        values: 946684800x2400
+    alert_rule_test:
+      - eval_time: 7d
+        groupname: jobs
+        alertname: DumpStale
+        exp_alerts: []
+      - eval_time: 8d2h
+        groupname: jobs
+        alertname: DumpStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: database
+              summary: "The weekly dump has not succeeded for 8 days."
+            exp_annotations:
+              description: "Look at keel-db-dump's Jobs in keel, and their logs in VictoriaLogs."
+      # The restore test has never passed since its CronJob was made.
+      - eval_time: 7d
+        groupname: jobs
+        alertname: RestoreTestStale
+        exp_alerts: []
+      - eval_time: 8d2h
+        groupname: jobs
+        alertname: RestoreTestStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: database
+              summary: "The weekly restore test has not passed for 8 days."
+            exp_annotations:
+              description: "Look at keel-restore-test's Jobs in keel-restore, and their logs in VictoriaLogs."
+
+  - name: the newest run of each failed
+    interval: 1m
+    input_series:
+      - series: kube_job_status_start_time{namespace="keel", job_name="keel-db-dump-100"}
+        values: 500x10
+      - series: kube_job_status_succeeded{namespace="keel", job_name="keel-db-dump-100"}
+        values: 1x10
+      - series: kube_job_status_start_time{namespace="keel", job_name="keel-db-dump-200"}
+        values: 1000x10
+      - series: kube_job_status_failed{namespace="keel", job_name="keel-db-dump-200", reason="BackoffLimitExceeded"}
+        values: 1x10
+      - series: kube_job_status_start_time{namespace="keel-restore", job_name="keel-restore-test-200"}
+        values: 1000x10
+      - series: kube_job_status_failed{namespace="keel-restore", job_name="keel-restore-test-200", reason="BackoffLimitExceeded"}
+        values: 1x10
+    alert_rule_test:
+      - eval_time: 2m
+        groupname: jobs
+        alertname: DumpFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: database
+              summary: "The weekly dump's last run failed."
+              job_name: keel-db-dump-200
+            exp_annotations:
+              description: "keel-db-dump-200 failed; its log says which step. Run it again once fixed, kubectl -n keel create job --from=cronjob/keel-db-dump keel-db-dump-by-hand."
+      - eval_time: 2m
+        groupname: jobs
+        alertname: RestoreTestFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: database
+              summary: "The weekly restore test's last run failed."
+              job_name: keel-restore-test-200
+            exp_annotations:
+              description: "keel-restore-test-200 failed; its line \"restore test\" in VictoriaLogs says which check. Run it again once fixed, kubectl -n keel-restore create job --from=cronjob/keel-restore-test keel-restore-test-by-hand."
+
+  - name: a run failed, and the one after it passed
+    interval: 1m
+    input_series:
+      - series: kube_job_status_start_time{namespace="keel", job_name="keel-db-dump-100"}
+        values: 500x10
+      - series: kube_job_status_failed{namespace="keel", job_name="keel-db-dump-100", reason="BackoffLimitExceeded"}
+        values: 1x10
+      - series: kube_job_status_start_time{namespace="keel", job_name="keel-db-dump-200"}
+        values: 1000x10
+      - series: kube_job_status_succeeded{namespace="keel", job_name="keel-db-dump-200"}
+        values: 1x10
+      - series: kube_job_status_failed{namespace="keel", job_name="keel-db-dump-200"}
+        values: 0+0x10
+    alert_rule_test:
+      - eval_time: 2m
+        groupname: jobs
+        alertname: DumpFailed
+        exp_alerts: []

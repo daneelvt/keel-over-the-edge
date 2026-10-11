@@ -52,7 +52,8 @@ spec:
 # node's /var/log/pods, with its pod's labels, sent to VictoriaLogs. A
 # DaemonSet in monitoring-node, which may mount the host's paths. While
 # VictoriaLogs is down it queues on disk, 1 GiB at most. The game's logs
-# are JSON already: msg and time are read as they are.
+# are JSON already: msg and time are read as they are. PostgreSQL's come
+# wrapped by CloudNativePG, the line itself in record.message.
 apiVersion: operator.victoriametrics.com/v1
 kind: VLAgent
 metadata:
@@ -64,7 +65,7 @@ spec:
   k8sCollector:
     enabled: true
     includePodLabels: true
-    msgFields: [msg, message, log]
+    msgFields: [record.message, msg, message, log]
     timeFields: [time, ts, timestamp]
   remoteWrite:
     - url: http://victoria-logs.monitoring.svc:9428/internal/insert

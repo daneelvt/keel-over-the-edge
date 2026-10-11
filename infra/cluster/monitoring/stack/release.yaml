@@ -258,9 +258,9 @@ spec:
         resources:
           requests:
             cpu: 5m
-            memory: 48Mi
+            memory: 64Mi
           limits:
-            memory: 96Mi
+            memory: 128Mi
         dashboards:
           # One folder a dashboard, from its ConfigMap's grafana_folder.
           folderAnnotation: grafana_folder
@@ -269,15 +269,18 @@ spec:
       resources:
         requests:
           cpu: 50m
-          memory: 128Mi
+          memory: 256Mi
         limits:
-          memory: 384Mi
+          memory: 512Mi
       # The chart's scrape of Grafana's own metrics is kept.
 
     # node-exporter in monitoring-node, privileged: it reads the host's
     # filesystems, processes and network from the host itself. Beside its
     # own collectors, the machine's facts the playbook writes into its
-    # textfile folder, and the systemd units that keep the machine running.
+    # textfile folder: AIDE's last check, a reboot required, updates
+    # waiting, and whether the units that keep the machine running are
+    # active (its systemd collector would need the host's D-Bus, which
+    # AppArmor keeps a container from).
     prometheus-node-exporter:
       namespaceOverride: monitoring-node
       fullnameOverride: node-exporter
@@ -287,19 +290,12 @@ spec:
         - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+|run/k3s/.+|var/lib/rancher/k3s/agent/containerd/.+)($|/)
         - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|erofs|sysfs|tracefs)$
         - --collector.textfile.directory=/var/lib/node-exporter/textfile
-        - --collector.systemd
-        - --collector.systemd.unit-include=^(k3s|tailscaled|hostfw|chrony|auditd|systemd-journal-upload|unattended-upgrades)\.service$
-        - --collector.pressure
       extraHostVolumeMounts:
         - name: textfile
           hostPath: /var/lib/node-exporter/textfile
           mountPath: /var/lib/node-exporter/textfile
           readOnly: true
           mountPropagation: HostToContainer
-        - name: dbus
-          hostPath: /var/run/dbus/system_bus_socket
-          mountPath: /var/run/dbus/system_bus_socket
-          readOnly: true
       # The chart's scrape looks in its own namespace unless told.
       vmScrape:
         spec:
@@ -410,8 +406,24 @@ spec:
       vmScrapes:
         kubelet:
           enabled: false
+    # The API server's registry is most of what would be kept: its
+    # histograms' buckets, by verb, resource and scope, are dropped. Their
+    # sums and counts stay, and so does every counter and gauge.
     kubeApiServer:
       enabled: true
+      vmScrape:
+        spec:
+          endpoints:
+            - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+              port: https
+              scheme: https
+              tlsConfig:
+                caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                serverName: kubernetes
+              metricRelabelConfigs:
+                - action: drop
+                  source_labels: [__name__]
+                  regex: (apiserver|etcd|workqueue|scheduler|rest_client|kubelet|storage|authentication|authorization|apiextensions|aggregator|field_validation|node_collector|kubeproxy|csi)_.+_bucket
     kubeControllerManager:
       enabled: false
     kubeScheduler:

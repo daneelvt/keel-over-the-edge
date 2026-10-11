@@ -109,7 +109,7 @@ func TestCopyChecked(t *testing.T) {
 func TestReleasesPinned(t *testing.T) {
 	digest := regexp.MustCompile(`^[0-9a-f]{64}$`)
 	tag := regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
-	for _, tool := range []Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench, OpenTofu} {
+	for _, tool := range []Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench, OpenTofu, VMAlertTool} {
 		var platforms []string
 		for _, r := range pins() {
 			if r.repo != tool.repo {
@@ -133,15 +133,15 @@ func TestReleasesPinned(t *testing.T) {
 		}
 	}
 	for _, r := range pins() {
-		if !slices.ContainsFunc([]Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench, OpenTofu}, func(tool Tool) bool { return tool.repo == r.repo }) {
+		if !slices.ContainsFunc([]Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench, OpenTofu, VMAlertTool}, func(tool Tool) bool { return tool.repo == r.repo }) {
 			t.Errorf("%s is pinned, but is no tool", r.repo)
 		}
 	}
 	// The files' names, as the releases publish them.
 	for tool, want := range map[*Tool]string{&TinyGo: "tinygo0.42.0.linux-arm64.tar.gz", &Cosign: "cosign-linux-arm64", &Flux: "flux_2.9.6_linux_arm64.tar.gz",
 		&Tailscale: "tailscale_1.104.1_arm64.tgz", &KubeBench: "kube-bench_0.16.0_linux_arm64.tar.gz",
-		&OpenTofu: "tofu_1.13.1_linux_arm64.tar.gz"} {
-		version := map[*Tool]string{&TinyGo: "0.42.0", &Cosign: "3.1.3", &Flux: "2.9.6", &Tailscale: "1.104.1", &KubeBench: "0.16.0", &OpenTofu: "1.13.1"}[tool]
+		&OpenTofu: "tofu_1.13.1_linux_arm64.tar.gz", &VMAlertTool: "vmutils-linux-arm64-v1.153.0.tar.gz"} {
+		version := map[*Tool]string{&TinyGo: "0.42.0", &Cosign: "3.1.3", &Flux: "2.9.6", &Tailscale: "1.104.1", &KubeBench: "0.16.0", &OpenTofu: "1.13.1", &VMAlertTool: "1.153.0"}[tool]
 		if got := tool.asset(version, "linux", "arm64"); got != want {
 			t.Errorf("%s's file is named %s, want %s", tool.Name, got, want)
 		}

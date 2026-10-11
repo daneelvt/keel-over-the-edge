@@ -10,6 +10,42 @@ generatorOptions:
   labels:
     grafana_dashboard: "1"
 configMapGenerator:
+  - name: dashboard-overview
+    files:
+      - keel/overview.json
+    options:
+      annotations:
+        grafana_folder: Keel
+  - name: dashboard-game
+    files:
+      - keel/game.json
+    options:
+      annotations:
+        grafana_folder: Keel
+  - name: dashboard-machine
+    files:
+      - keel/machine.json
+    options:
+      annotations:
+        grafana_folder: Keel
+  - name: dashboard-database
+    files:
+      - keel/database.json
+    options:
+      annotations:
+        grafana_folder: Keel
+  - name: dashboard-backups
+    files:
+      - keel/backups.json
+    options:
+      annotations:
+        grafana_folder: Keel
+  - name: dashboard-edge
+    files:
+      - keel/edge.json
+    options:
+      annotations:
+        grafana_folder: Keel
   - name: dashboard-node-exporter-full
     files:
       - vendored/node-exporter-full.json

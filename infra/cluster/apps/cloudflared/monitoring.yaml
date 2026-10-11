@@ -27,6 +27,6 @@ spec:
           labels:
             severity: critical
             component: edge
+            summary: "No cloudflared holds a connection to Cloudflare."
           annotations:
-            summary: No cloudflared holds a connection to Cloudflare.
-            description: Players cannot reach the game. Look at cloudflared's pods and logs, and the tunnel's state in Cloudflare's dashboard.
+            description: "Players cannot reach the game. Look at cloudflared's pods and logs, and the tunnel's state in Cloudflare's dashboard."

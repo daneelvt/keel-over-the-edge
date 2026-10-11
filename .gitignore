@@ -24,6 +24,9 @@ infra/tofu/.terraform/
 /keel
 /loadbot
 /release
+/vendored
+/dashboards
+/ops
 
 # Editors and systems
 .DS_Store

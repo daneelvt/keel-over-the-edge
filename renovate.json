@@ -14,9 +14,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "TinyGo, cosign, the Flux CLI, kube-bench and OpenTofu, each pinned by release and by its file's digest for each platform in tools/internal/pinned",
+      "description": "TinyGo, cosign, the Flux CLI, kube-bench and OpenTofu, and VictoriaMetrics' utilities, each pinned by release and by its file's digest for each platform in tools/internal/pinned",
       "managerFilePatterns": ["/^tools/internal/pinned/pinned\\.go$/"],
-      "matchStrings": ["\\{\"(?<depName>[a-z0-9-]+/[a-z0-9-]+)\", \"[a-z0-9]+-[a-z0-9]+\", \"(?<currentValue>v[0-9.]+)\", \"(?<currentDigest>[0-9a-f]{64})\"\\}"],
+      "matchStrings": ["\\{\"(?<depName>[A-Za-z0-9-]+/[A-Za-z0-9-]+)\", \"[a-z0-9]+-[a-z0-9]+\", \"(?<currentValue>v[0-9.]+)\", \"(?<currentDigest>[0-9a-f]{64})\"\\}"],
       "datasourceTemplate": "github-release-attachments"
     },
     {

@@ -1,0 +1,165 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The database's alerts (apps/keel/rules.yaml, group database).
+# vmalert-tool's clock starts at 2000-01-01 UTC, 946684800: a time a
+# series holds, where a rule compares it with now, counts from there.
+evaluation_interval: 1m
+tests:
+  - name: PostgreSQL stops answering
+    interval: 1m
+    input_series:
+      - series: cnpg_collector_up{namespace="keel", pod="keel-db-1"}
+        values: 1x2 0+0x10
+    alert_rule_test:
+      - eval_time: 2m
+        groupname: database
+        alertname: DatabaseDown
+        exp_alerts: []
+      - eval_time: 6m
+        groupname: database
+        alertname: DatabaseDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: database
+              summary: "The game's database does not answer."
+            exp_annotations:
+              description: "keel cannot write the world. Look at keel-db-1's pod, its logs and CloudNativePG's."
+
+  - name: the last WAL segment failed to archive
+    interval: 1m
+    input_series:
+      - series: cnpg_pg_stat_archiver_last_failed_time{namespace="keel"}
+        values: 2000x20
+      - series: cnpg_pg_stat_archiver_last_archived_time{namespace="keel"}
+        values: 1000x20
+      - series: cnpg_pg_stat_archiver_seconds_since_last_archival{namespace="keel"}
+        values: 60x20
+    alert_rule_test:
+      - eval_time: 11m
+        groupname: database
+        alertname: WALArchivingFailing
+        exp_alerts:
+          - exp_labels: &wal
+              severity: critical
+              component: database
+              summary: "WAL is not reaching the backups."
+            exp_annotations: &wal-says
+              description: "The world's changes since the last archived segment are on this machine alone, and pg_wal grows. Look at the plugin's sidecar's logs in keel-db-1 (container plugin-barman-cloud)."
+
+  - name: nothing archived for 20 minutes
+    interval: 1m
+    input_series:
+      - series: cnpg_pg_stat_archiver_last_failed_time{namespace="keel"}
+        values: 0+0x40
+      - series: cnpg_pg_stat_archiver_last_archived_time{namespace="keel"}
+        values: 1000x40
+      - series: cnpg_pg_stat_archiver_seconds_since_last_archival{namespace="keel"}
+        values: 0+60x40
+    alert_rule_test:
+      - eval_time: 20m
+        groupname: database
+        alertname: WALArchivingFailing
+        exp_alerts: []
+      - eval_time: 27m
+        groupname: database
+        alertname: WALArchivingFailing
+        exp_alerts:
+          - exp_labels: *wal
+            exp_annotations: *wal-says
+
+  - name: the last base backup is 27 hours old
+    interval: 5m
+    input_series:
+      - series: barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="keel"}
+        values: 946684800x400
+    alert_rule_test:
+      - eval_time: 25h
+        groupname: database
+        alertname: BackupStale
+        exp_alerts: []
+      - eval_time: 27h
+        groupname: database
+        alertname: BackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: database
+              summary: "No base backup for more than 26 hours."
+            exp_annotations: &stale-says
+              description: "A restore would replay more WAL than it should. Look at the Backup objects in keel, and the sidecar's logs."
+
+  - name: no base backup was ever taken
+    interval: 1m
+    input_series:
+      - series: cnpg_collector_up{namespace="keel"}
+        values: 1x60
+    alert_rule_test:
+      - eval_time: 31m
+        groupname: database
+        alertname: BackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: database
+              summary: "No base backup for more than 26 hours."
+              namespace: keel
+            exp_annotations: *stale-says
+
+  - name: 85 of 100 connections are held
+    interval: 1m
+    input_series:
+      - series: cnpg_backends_total{namespace="keel", state="active"}
+        values: 5x10
+      - series: cnpg_backends_total{namespace="keel", state="idle"}
+        values: 80x10
+      - series: cnpg_pg_settings_setting{namespace="keel", name="max_connections"}
+        values: 100x10
+    alert_rule_test:
+      - eval_time: 6m
+        groupname: database
+        alertname: DatabaseConnections
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: database
+              summary: "The database is near its connection limit."
+            exp_annotations:
+              description: "It holds 85% of max_connections. The Database dashboard shows who holds them."
+
+  - name: a transaction open for 400 s
+    interval: 1m
+    input_series:
+      - series: cnpg_backends_max_tx_duration_seconds{namespace="keel", state="idle in transaction"}
+        values: 400x10
+      - series: cnpg_backends_max_tx_duration_seconds{namespace="keel", state="active"}
+        values: 1x10
+    alert_rule_test:
+      - eval_time: 2m
+        groupname: database
+        alertname: LongTransaction
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: database
+              summary: "A transaction has been open for more than 5 minutes."
+            exp_annotations:
+              description: "Open for 6m 40s: it holds back vacuum and may hold locks. pg_stat_activity names it."
+
+  - name: transaction IDs 1.5 billion old
+    interval: 1m
+    input_series:
+      - series: cnpg_pg_database_xid_age{namespace="keel", datname="keel"}
+        values: 1500000000x5
+      - series: cnpg_pg_database_xid_age{namespace="keel", datname="postgres"}
+        values: 1000x5
+    alert_rule_test:
+      - eval_time: 1m
+        groupname: database
+        alertname: TransactionIDAge
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: database
+              summary: "Transaction IDs are a billion old."
+            exp_annotations:
+              description: "The oldest is 1.5e+09 old; at two billion PostgreSQL stops accepting writes. Something keeps vacuum from freezing old rows."
