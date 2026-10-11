@@ -31,6 +31,9 @@ const (
 	tofuDir  = "infra/tofu"
 	workDir  = ".dev/accounts"
 	lockFile = ".terraform.lock.hcl"
+	// dataDir holds OpenTofu's working folders, one for each kind of run:
+	// never the folder the plan is handed over in, which a plan empties.
+	dataDir = ".dev/accounts/tofu"
 	// planDir is what the plan job hands the apply job, as an artifact of
 	// the run: the plan, encrypted, and what says where it came from.
 	planDir  = ".dev/accounts/plan"
@@ -134,7 +137,7 @@ func (a *accounts) tofuRun(ctx context.Context, data string, env []string, args 
 		return nil, err
 	}
 	env = append([]string{
-		"TF_DATA_DIR=" + a.path(workDir, data),
+		"TF_DATA_DIR=" + a.path(dataDir, data),
 		"TF_IN_AUTOMATION=1",
 		"TF_INPUT=0",
 		"CHECKPOINT_DISABLE=1",
@@ -430,7 +433,7 @@ func (a *accounts) lockFor(ctx context.Context, data string) ([]byte, error) {
 		args = append(args, "-platform="+p)
 	}
 	_, stderr, err := a.cmd.run(ctx, cmd{argv: args, dir: dir, env: []string{
-		"TF_DATA_DIR=" + a.path(workDir, data), "TF_IN_AUTOMATION=1", "TF_INPUT=0", "CHECKPOINT_DISABLE=1",
+		"TF_DATA_DIR=" + a.path(dataDir, data), "TF_IN_AUTOMATION=1", "TF_INPUT=0", "CHECKPOINT_DISABLE=1",
 	}})
 	if err != nil {
 		return nil, fmt.Errorf("tofu providers lock: %w:\n%s", err, scrubAddresses(strings.TrimSpace(string(stderr))))
