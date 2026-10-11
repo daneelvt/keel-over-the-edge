@@ -68,3 +68,26 @@ resource "cloudflare_ruleset" "rate" {
     },
   ]
 }
+
+# Nothing added to the game's page: Cloudflare puts its Web Analytics
+# beacon (Real User Monitoring, a script from static.cloudflareinsights.com)
+# into every HTML answer of a proxied zone unless told not to, and Zaraz
+# would add its own. The page loads its own scripts alone.
+resource "cloudflare_ruleset" "config" {
+  zone_id = var.cloudflare_zone_id
+  name    = "config"
+  kind    = "zone"
+  phase   = "http_config_settings"
+  rules = [
+    {
+      ref         = "nothing-injected"
+      description = "No script of Cloudflare's in the game's page"
+      expression  = "(http.host eq \"${local.play}\")"
+      action      = "set_config"
+      action_parameters = {
+        disable_rum   = true
+        disable_zaraz = true
+      }
+    },
+  ]
+}

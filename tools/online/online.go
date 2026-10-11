@@ -56,7 +56,7 @@ func (c *checker) run(ctx context.Context) int {
 		{"a PUT is blocked at the edge", c.putBlocked},
 		{"/ws refuses a request without a session", c.wsWithoutSession},
 		{"another host is not served", c.otherHost},
-		{"one address is limited, its forged CF-Connecting-IP overwritten", c.limited},
+		{"one address is limited, and cannot forge CF-Connecting-IP", c.limited},
 		{"a game connection from another origin is refused, and one from the game's stays open", c.gameConnection},
 	}
 	failed := 0
@@ -98,8 +98,12 @@ const hstsDay = 86400
 
 var maxAge = regexp.MustCompile(`(?i)max-age=(\d+)`)
 
+// asBrowser asks for the page as a browser does: Cloudflare adds what it
+// adds to a page only for a client that accepts HTML.
+var asBrowser = http.Header{"Accept": {"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}}
+
 func (c *checker) pageServed(ctx context.Context) error {
-	res, body, err := c.do(ctx, http.MethodGet, "/", nil)
+	res, body, err := c.do(ctx, http.MethodGet, "/", asBrowser)
 	if err != nil {
 		return err
 	}
@@ -263,13 +267,20 @@ func (c *checker) otherHost(ctx context.Context) error {
 // bucket holds 100, filling at 50 a second.
 const burst = 160
 
+// edgeRefusal is how Cloudflare answers a request that carries its own
+// CF-Connecting-IP: 403, error 1000, before it reaches the tunnel.
+const edgeRefusal = "error code: 1000"
+
 // limited: a burst from one address meets Traefik's 429; and the same
-// burst, each request forging a different CF-Connecting-IP, meets it too,
-// as Cloudflare writes the header with the address it saw.
+// burst, each request forging a different CF-Connecting-IP, never escapes
+// it: Cloudflare refuses each, or writes the header itself and the burst
+// meets the 429 again. Only a forged burst answered with no refusal and no
+// 429 fails: the header would have chosen the address counted.
 func (c *checker) limited(ctx context.Context) error {
 	for _, forge := range []bool{false, true} {
 		c.pause(3 * time.Second) // the bucket full again
 		codes := make([]int, burst)
+		refused := make([]bool, burst)
 		var wg sync.WaitGroup
 		for i := range burst {
 			wg.Go(func() {
@@ -277,23 +288,28 @@ func (c *checker) limited(ctx context.Context) error {
 				if forge {
 					h.Set("CF-Connecting-IP", fmt.Sprintf("198.51.100.%d", i%250+1))
 				}
-				res, _, err := c.do(ctx, http.MethodGet, "/api/version", h)
+				res, body, err := c.do(ctx, http.MethodGet, "/api/version", h)
 				if err == nil {
 					codes[i] = res.StatusCode
+					refused[i] = res.StatusCode == http.StatusForbidden && strings.Contains(string(body), edgeRefusal)
 				}
 			})
 		}
 		wg.Wait()
-		n := map[int]int{}
-		for _, code := range codes {
+		n, edge := map[int]int{}, 0
+		for i, code := range codes {
 			n[code]++
-		}
-		if n[http.StatusTooManyRequests] == 0 {
-			what := "from one address"
-			if forge {
-				what = "each forging another CF-Connecting-IP: Cloudflare passed the forged header through"
+			if refused[i] {
+				edge++
 			}
-			return fmt.Errorf("%d requests at once %s met no 429: %v", burst, what, n)
+		}
+		switch {
+		case !forge && n[http.StatusTooManyRequests] == 0:
+			return fmt.Errorf("%d requests at once from one address met no 429: %v", burst, n)
+		case forge && edge == burst:
+			// Every forged header refused at the edge.
+		case forge && n[http.StatusTooManyRequests] == 0:
+			return fmt.Errorf("%d requests at once, each forging another CF-Connecting-IP, met neither Cloudflare's refusal nor a 429: %v", burst, n)
 		}
 	}
 	c.pause(3 * time.Second)

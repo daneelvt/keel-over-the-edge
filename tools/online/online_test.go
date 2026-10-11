@@ -36,6 +36,11 @@ type edge struct {
 	passForged bool
 	// hsts is the header, unless empty.
 	hsts string
+	// refuseForged answers a client's own CF-Connecting-IP with Cloudflare's
+	// 403, error 1000, as Cloudflare does.
+	refuseForged bool
+	// beacon is added to the page for a client that accepts HTML.
+	beacon string
 
 	mu     sync.Mutex
 	cached bool
@@ -52,6 +57,11 @@ func (e *edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodPut {
 		http.Error(w, "blocked", http.StatusForbidden)
+		return
+	}
+	if e.refuseForged && r.Header.Get("CF-Connecting-IP") != "" {
+		w.WriteHeader(http.StatusForbidden)
+		io.WriteString(w, "error code: 1000")
 		return
 	}
 	key := "the client's address"
@@ -93,7 +103,11 @@ func (e *edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/":
 		e.mu.Unlock()
 		w.Header().Set("Cf-Cache-Status", "DYNAMIC")
-		io.WriteString(w, e.page)
+		page := e.page
+		if e.beacon != "" && strings.Contains(r.Header.Get("Accept"), "text/html") {
+			page = strings.Replace(page, "</body>", e.beacon+"</body>", 1)
+		}
+		io.WriteString(w, page)
 		return
 	}
 	e.mu.Unlock()
@@ -115,6 +129,15 @@ func testChecker(t *testing.T, e *edge) (*checker, *bytes.Buffer) {
 			e.mu.Unlock()
 		},
 	}, &out
+}
+
+// TestForgedHeaderRefused: Cloudflare refusing a forged CF-Connecting-IP
+// outright is as good as overwriting it.
+func TestForgedHeaderRefused(t *testing.T) {
+	c, out := testChecker(t, &edge{page: thePage, hsts: "max-age=86400; includeSubDomains", refuseForged: true})
+	if failed := c.run(context.Background()); failed != 0 {
+		t.Fatalf("%d failed:\n%s", failed, out)
+	}
 }
 
 func TestEveryCheckPasses(t *testing.T) {
@@ -139,7 +162,8 @@ func TestChecksFail(t *testing.T) {
 		"a script injected":      {&edge{page: strings.Replace(thePage, "</body>", `<script src="/cdn-cgi/scripts/email-decode.min.js"></script></body>`, 1), hsts: "max-age=86400; includeSubDomains"}, "", `holds "/cdn-cgi/"`},
 		"another origin":         {&edge{page: strings.Replace(thePage, "/assets/index-def456.css", "https://example.org/x.css", 1), hsts: "max-age=86400; includeSubDomains"}, "", "from another origin"},
 		"not the build's page":   {&edge{page: thePage, hsts: "max-age=86400; includeSubDomains"}, "<!doctype html><html></html>", "is not"},
-		"a forged header passed": {&edge{page: thePage, hsts: "max-age=86400; includeSubDomains", passForged: true}, "", "Cloudflare passed the forged header through"},
+		"a beacon for browsers":  {&edge{page: thePage, hsts: "max-age=86400; includeSubDomains", beacon: `<script defer src="https://static.cloudflareinsights.com/beacon.min.js"></script>`}, "", `holds "cloudflare"`},
+		"a forged header passed": {&edge{page: thePage, hsts: "max-age=86400; includeSubDomains", passForged: true}, "", "met neither Cloudflare's refusal nor a 429"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c, out := testChecker(t, tc.e)
