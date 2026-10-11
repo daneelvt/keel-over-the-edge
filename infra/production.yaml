@@ -58,8 +58,8 @@ infisical:
 cloudflare:
   # The account (its Account ID) and the zone keelovertheedge.com (its
   # Zone ID), both on the zone's Overview page.
-  account: ""
-  zone: ""
+  account: "c641cbb58a2e7878eebca2f2e620b640"
+  zone: "831bb1d494d9600fcb8c075583bca1c8"
 
 # OpenTofu's state: the private B2 bucket made for it, and B2's S3
 # endpoint and region for the account, as the bucket's page shows them
