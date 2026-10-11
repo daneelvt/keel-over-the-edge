@@ -65,6 +65,8 @@ Configured from the environment:
   KEEL_PLAY_ADDR       the game's listener (default 127.0.0.1:8080)
   KEEL_AGENTS_ADDR     the AI agents' listener (default 127.0.0.1:8081)
   KEEL_INTERNAL_ADDR   probes, metrics, profiles (default 127.0.0.1:9090)
+  KEEL_METRICS_ADDR    the metrics alone, GET /metrics, for a scraper that may
+                       reach nothing else (default none)
   KEEL_LOG_LEVEL       debug, info, warn or error (default info)
   KEEL_TRACE_DIR       where traces of overrunning ticks go (default none)
   KEEL_REPLAY_DIR      where the input log goes (default memory only)
@@ -223,10 +225,18 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		windHandler = &lateHandler{}
 		wind = windHandler
 	}
-	internal := newServer(obs.Internal(health, metrics, flightHandler, replayHandler, wind), log)
-	internalDone := make(chan error, 1)
-	go func() { internalDone <- serveUntilClosed(internal, internalLn) }()
+	side := &sideServers{}
+	side.serve(newServer(obs.Internal(health, metrics, flightHandler, replayHandler, wind), log), internalLn)
 	log.Info("listening", "listener", "internal", "addr", internalLn.Addr().String())
+	// The metrics alone, on a port of their own, for the scraper.
+	if cfg.MetricsAddr != "" {
+		metricsLn, err := opt.listen("tcp", cfg.MetricsAddr)
+		if err != nil {
+			return stopEarly(side, flight, err)
+		}
+		side.serve(newServer(obs.MetricsOnly(metrics), log), metricsLn)
+		log.Info("listening", "listener", "metrics", "addr", metricsLn.Addr().String())
+	}
 	health.Beat()
 
 	// The database: waited for, its schema checked, the world it holds.
@@ -242,15 +252,15 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	if err != nil {
 		if ctx.Err() != nil {
 			// Stopped while waiting: nothing failed.
-			return stopEarly(internal, internalDone, flight, nil)
+			return stopEarly(side, flight, nil)
 		}
-		return stopEarly(internal, internalDone, flight, err)
+		return stopEarly(side, flight, err)
 	}
 	var closeDB sync.Once
 	defer closeDB.Do(db.Close)
 	schema, err := db.CheckSchema(ctx)
 	if err != nil {
-		return stopEarly(internal, internalDone, flight, err)
+		return stopEarly(side, flight, err)
 	}
 	metrics.SchemaVersion.Set(float64(schema))
 	registerPoolMetrics(metrics, db)
@@ -270,16 +280,16 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Lost:    func(outcome string) { metrics.LeaseLost.WithLabelValues(outcome).Inc() },
 	})
 	if err != nil {
-		return stopEarly(internal, internalDone, flight, err)
+		return stopEarly(side, flight, err)
 	}
 	waited := time.Now()
 	leaseEpoch, err := sl.Take(ctx)
 	if err != nil {
 		if ctx.Err() != nil {
 			// Stopped while waiting: nothing failed.
-			return stopEarly(internal, internalDone, flight, nil)
+			return stopEarly(side, flight, nil)
 		}
-		return stopEarly(internal, internalDone, flight, err)
+		return stopEarly(side, flight, err)
 	}
 	var release sync.Once
 	releaseLease := func() { release.Do(func() { sl.Release(context.Background()) }) }
@@ -300,15 +310,15 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	})
 	if err != nil {
 		if ctx.Err() != nil {
-			return stopEarly(internal, internalDone, flight, nil)
+			return stopEarly(side, flight, nil)
 		}
-		return stopEarly(internal, internalDone, flight, err)
+		return stopEarly(side, flight, err)
 	}
 	var closeWriter sync.Once
 	defer closeWriter.Do(writer.Close)
 	sailed, err := db.ActiveOrFirstWorld(ctx, firstEpoch)
 	if err != nil {
-		return stopEarly(internal, internalDone, flight, err)
+		return stopEarly(side, flight, err)
 	}
 	epoch := sailed.Epoch
 	health.Waiting("")
@@ -318,7 +328,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	// The catalog and the world.
 	cat, err := catalog.Load()
 	if err != nil {
-		return stopEarly(internal, internalDone, flight, err)
+		return stopEarly(side, flight, err)
 	}
 	kinds := make([]physics.Prepared, len(cat.Boats))
 	for i := range cat.Boats {
@@ -327,11 +337,11 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	world, err := sim.New(sim.Config{Kinds: kinds, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
 	if err != nil {
-		return stopEarly(internal, internalDone, flight, err)
+		return stopEarly(side, flight, err)
 	}
 	defer world.Close()
 	if err := restore(ctx, db, world, sailed, log, metrics); err != nil {
-		return stopEarly(internal, internalDone, flight, err)
+		return stopEarly(side, flight, err)
 	}
 	b := world.Bus()
 	inputs := replay.New(replay.Config{
@@ -554,7 +564,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		errs := []error{<-listeners}
 		ictx, icancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer icancel()
-		errs = append(errs, internal.Shutdown(ictx), <-internalDone)
+		errs = append(errs, side.shutdown(ictx))
 		return errors.Join(errs...)
 	})
 	err = g.Wait()
@@ -645,13 +655,44 @@ func registerPoolMetrics(m *obs.Metrics, db database) {
 }
 
 // stopEarly stops what has started when starting fails.
-func stopEarly(internal *http.Server, done <-chan error, flight *obs.Flight, err error) error {
+func stopEarly(side *sideServers, flight *obs.Flight, err error) error {
 	if flight != nil {
 		flight.Stop()
 	}
-	internal.Close()
-	<-done
+	side.close()
 	return err
+}
+
+// sideServers are the servers that open first and close last: the
+// internal listener's, and the metrics listener's if it has one.
+type sideServers struct {
+	servers []*http.Server
+	done    []chan error
+}
+
+// serve serves ln with srv until it is closed or shut down.
+func (s *sideServers) serve(srv *http.Server, ln net.Listener) {
+	done := make(chan error, 1)
+	go func() { done <- serveUntilClosed(srv, ln) }()
+	s.servers = append(s.servers, srv)
+	s.done = append(s.done, done)
+}
+
+// close closes them at once, and waits for them.
+func (s *sideServers) close() {
+	for i, srv := range s.servers {
+		srv.Close()
+		<-s.done[i]
+	}
+}
+
+// shutdown lets their requests finish, within ctx.
+func (s *sideServers) shutdown(ctx context.Context) error {
+	var errs []error
+	for i, srv := range s.servers {
+		errs = append(errs, srv.Shutdown(ctx), <-s.done[i])
+	}
+	return errors.Join(errs...)
 }
 
 // newServer makes an HTTP server. Only ReadHeaderTimeout and IdleTimeout

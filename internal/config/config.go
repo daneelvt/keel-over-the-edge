@@ -31,6 +31,10 @@ type Config struct {
 	// InternalAddr is the address of the internal HTTP server: probes,
 	// metrics, profiles. It must not be reachable from outside.
 	InternalAddr string
+	// MetricsAddr, if not "", is the address of a listener that serves the
+	// metrics and nothing else, for a scraper that must not reach the
+	// internal listener's profiles and input log.
+	MetricsAddr string
 	// LogLevel is the least level logged.
 	LogLevel slog.Level
 	// TraceDir, if not "", is where the flight recorder writes the traces
@@ -103,6 +107,7 @@ func Load(getenv func(string) string) (Config, error) {
 		PlayOrigin:   getenv("KEEL_PLAY_ORIGIN"),
 		AgentsAddr:   or(getenv("KEEL_AGENTS_ADDR"), DefaultAgentsAddr),
 		InternalAddr: or(getenv("KEEL_INTERNAL_ADDR"), DefaultInternalAddr),
+		MetricsAddr:  getenv("KEEL_METRICS_ADDR"),
 		TraceDir:     getenv("KEEL_TRACE_DIR"),
 		ReplayDir:    getenv("KEEL_REPLAY_DIR"),
 		ClientDir:    getenv("KEEL_CLIENT_DIR"),
@@ -114,6 +119,9 @@ func Load(getenv func(string) string) (Config, error) {
 		{"KEEL_PLAY_ADDR", c.PlayAddr},
 		{"KEEL_AGENTS_ADDR", c.AgentsAddr},
 		{"KEEL_INTERNAL_ADDR", c.InternalAddr},
+	}
+	if c.MetricsAddr != "" {
+		addrs = append(addrs, struct{ name, addr string }{"KEEL_METRICS_ADDR", c.MetricsAddr})
 	}
 	for i, a := range addrs {
 		if err := checkAddr(a.addr); err != nil {
