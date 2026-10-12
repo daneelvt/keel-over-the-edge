@@ -33,6 +33,7 @@
     "heaveDamping": 0.4,
     "pitchDamping": 0.4,
     "waveForce": 1,
+    "waveYaw": 0,
     "sailArea": 7.06,
     "luff": 5.13,
     "foot": 2.74,

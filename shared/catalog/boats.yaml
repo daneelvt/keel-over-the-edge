@@ -63,6 +63,13 @@ boats:
         # Pure Froude–Krylov. Captive tests find it overestimates the surge
         # force (Maki, Sakai and Ueta 2024): lower it if the boat surfs too easily.
         waveForce: 1.0
+        # The share of that force's moment along the hull, which yaws the
+        # boat with the water of an oblique wave. None: tuned so that a boat
+        # left to stop in a sea gets under way as readily as in flat water.
+        # With all of it, in the sea 10 knots raise, the moment is several
+        # times what the rudder gives under a knot and a half: it shakes the
+        # sail's last drive off a slow boat, and seven getaways in ten fail.
+        waveYaw: 0
       rig:
         sailArea: 7.06 # ILCA 7
         luff: 5.13

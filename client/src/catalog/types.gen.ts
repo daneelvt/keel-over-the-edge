@@ -223,6 +223,10 @@ export interface PhysicsHull {
    * The share of the Froude–Krylov force of a wave's slope that pushes the hull along and across.
    */
   waveForce: number;
+  /**
+   * The share of that force's moment along the hull, which yaws the boat with the water of an oblique wave.
+   */
+  waveYaw: number;
 }
 /**
  * The sail, boom and windage.
@@ -662,4 +666,4 @@ export interface WeatherSea {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '3f54cf845c2e9b8f';
+export const CATALOG_VERSION = '735ee7ff0e556ed0';

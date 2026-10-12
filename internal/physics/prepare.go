@@ -37,6 +37,7 @@ type Prepared struct {
 	pitchDamping         float64 // N·m·s/rad
 	invPitchInertia      float64
 	waveSurge, waveSway  float64 // the Froude–Krylov force per unit of slope, with the added mass's share, N
+	waveYaw              float64 // the share of the sway force that turns the hull, N
 	// foilDecay is how much of each wave's motion reaches the foils' depth
 	// d: e^(−k d).
 	foilDecay       [SeaComponents]float64
@@ -171,6 +172,7 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.invPitchInertia = 1 / p.PitchInertia
 	b.waveSurge = float64(float64(p.WaveForce*b.massX) * gravity)
 	b.waveSway = float64(float64(p.WaveForce*b.massY) * gravity)
+	b.waveYaw = float64(p.WaveYaw * b.waveSway)
 
 	// Each strip is half the sail. Induced drag follows the Offshore Racing
 	// Congress's VPP (2023, eq. 5.34): A/(π h_eff²).

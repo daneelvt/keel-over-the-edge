@@ -305,6 +305,126 @@ func TestNoDriftAtRest(t *testing.T) {
 	}
 }
 
+// person steers as someone at the tiller does, for a heading in degrees:
+// the helm follows how far off course the boat was seen to be a third of a
+// second ago, and moves no faster than a hand does. The tests' heading-hold
+// (steer) sees the rate of turn and answers at once; nobody sails like that.
+func person(heading float64) func(s *State) float64 {
+	const late = 10 // steps
+	var seen [late]float64
+	n, helm := 0, 0.0
+	return func(s *State) float64 {
+		seen[n%late] = s.Heading
+		n++
+		was := seen[0]
+		if n >= late {
+			was = seen[n%late]
+		}
+		want := max(-1, min(1, math.Remainder(heading*deg-was, 2*math.Pi)))
+		helm += max(-2*Dt, min(2*Dt, want-helm))
+		return helm
+	}
+}
+
+// A boat left alone with its sheet eased rounds up until the sail is on the
+// edge of luffing and all but stops. Steered for a beam reach from there it
+// must get under way in a sea as readily as in flat water: the waves must
+// not shake the last drive off a slow boat and leave it lying stopped, with
+// no flow over its rudder to steer it out by. Winds from 6 to 20 knots,
+// three sheets, three waits and several of the sea's times; a getaway fails
+// when after half a minute at the helm the boat still makes less than a
+// fifth of the wind's speed.
+func TestGettingUnderWayInWaves(t *testing.T) {
+	ticks := []float64{7.4e8, 7.4e8 + 1234567, 7.4e8 + 7654321, 2.2e9}
+	waits := []float64{20, 60, 180}
+	if testing.Short() {
+		ticks, waits = ticks[:1], waits[:2]
+	}
+	fails := func(knots, sheet, wait float64, sea *ocean, tick float64) bool {
+		m := &sim{t: t, b: jolly(t)}
+		// As a boat appears: heading east, at rest, in a wind from the north.
+		m.e.WindSpeed, m.s.Heading, m.c.Sheet = knots*knot, 90*deg, sheet
+		if sea != nil {
+			m.in(sea)
+			m.tick = tick
+		}
+		m.run(wait, nil)
+		helm := person(90)
+		sum, n := 0.0, 0
+		for i := range 60 * StepsPerSecond {
+			m.c.Helm = helm(&m.s)
+			m.step()
+			if i >= 30*StepsPerSecond {
+				sum += m.speed()
+				n++
+			}
+		}
+		return sum/float64(n) < 0.2*knots*knot
+	}
+	var flat, waves, flatRuns, wavesRuns int
+	for _, knots := range []float64{6, 8, 10, 12, 15, 20} {
+		sea := openSea(t, knots, 0, 6)
+		var f, w int
+		for _, sheet := range []float64{0.4, 0.5, 0.6} {
+			for _, wait := range waits {
+				flatRuns++
+				if fails(knots, sheet, wait, nil, 0) {
+					f++
+				}
+				for _, tick := range ticks {
+					wavesRuns++
+					if fails(knots, sheet, wait, sea, tick) {
+						w++
+					}
+				}
+			}
+		}
+		t.Logf("%2.0f knots: %d of %d getaways fail in flat water, %d of %d in its sea", knots, f, 3*len(waits), w, 3*len(waits)*len(ticks))
+		flat, waves = flat+f, waves+w
+	}
+	inFlat, inWaves := float64(flat)/float64(flatRuns), float64(waves)/float64(wavesRuns)
+	t.Logf("%.0f%% of getaways fail in flat water, %.0f%% in waves", 100*inFlat, 100*inWaves)
+	if inWaves > inFlat+0.1 {
+		t.Errorf("%.0f%% of getaways fail in waves, %.0f%% in flat water: the sea holds a stopped boat", 100*inWaves, 100*inFlat)
+	}
+}
+
+// The moment along the hull, for a kind that takes all of it, is that of
+// the sway push spread evenly along the waterline: summed here from the
+// sea's own slope at points along the centreline.
+func TestWaveYawMoment(t *testing.T) {
+	b := *jolly(t)
+	b.waveYaw = b.waveSway
+	sea := openSea(t, 10, 0, 6).at(7.4e8)
+	length := 2 * b.halfLength
+	for _, c := range []struct{ x, y, heading float64 }{{0, 0, 60}, {13, -7, 60}, {40, 5, 20}, {-9, 31, 135}} {
+		s := State{X: c.x, Y: c.y, Heading: c.heading * deg}
+		sinH, cosH := math.Sincos(s.Heading)
+		var v wave
+		v.read(sea, &s, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
+		v.twist *= b.twistArm
+		var l loads
+		b.waveLoads(&v, &l)
+		const n = 400
+		want := 0.0
+		for i := range n {
+			along := (float64(i)+0.5)/n*length - b.halfLength
+			p := SeaSample(sea, c.x+along*sinH, c.y+along*cosH)
+			// The slope rising toward starboard pushes the hull to port.
+			push := -b.waveSway / length * (p.East*cosH - p.North*sinH)
+			want += along * push * length / n
+		}
+		t.Logf("at (%.0f, %.0f) heading %.0f°: %.2f N·m, %.2f N·m summed along the hull", c.x, c.y, c.heading, l.N, want)
+		if math.Abs(l.N-want) > 0.1*math.Abs(want)+0.5 {
+			t.Errorf("at (%.0f, %.0f) heading %.0f°: a moment of %.2f N·m, %.2f N·m summed along the hull", c.x, c.y, c.heading, l.N, want)
+		}
+	}
+	// The Jolly boat takes none of it.
+	if got := jolly(t).waveYaw; got != 0 {
+		t.Errorf("the Jolly boat's share of the moment is %v N, not none", got)
+	}
+}
+
 // Seeded random controls, winds and seas from calm to 60 knots, at a tick
 // anywhere in a world's life: the state stays finite and the boat below
 // 20 m/s.

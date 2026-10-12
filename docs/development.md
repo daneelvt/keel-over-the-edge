@@ -406,9 +406,12 @@ by itself. From it:
   moves against them.
 - **Roll**: the righting lever is read at the heel off the surface, so a beam
   sea rolls the boat.
-- **Surge, sway and yaw**: the water under a slope accelerates down it and
-  carries the hull and its added mass along: the boat surfs, and is turned
-  across a wave's face.
+- **Surge and sway**: the water under a slope accelerates down it and
+  carries the hull and its added mass along: the boat surfs.
+- **Yaw**: that push, spread along the hull, has a moment which turns the
+  hull with the water of an oblique wave, a few degrees each way in a chop.
+  A kind takes a share of it, `waveYaw`, and the Jolly boat takes none: see
+  below.
 - **The water moves**: the hull's resistance and the foils feel the flow
   through the water, and the pitching mast rocks the apparent wind.
 
@@ -416,15 +419,29 @@ The sea is read once a step, where the boat is, and carried across the
 substeps by its rates as the moving hull meets them. The new values are in
 the boat's `physics.hull`: `waterlineBeam`, `waterplaneArea`,
 `waterplanePitch`, `addedMassHeave`, `pitchInertia`, `heaveDamping`,
-`pitchDamping`, `waveForce`. All but the beam are estimates, each with its
-range beside it in `boats.yaml`. `waveForce` is the share of the
+`pitchDamping`, `waveForce`, `waveYaw`. All but the beam are estimates, each
+with its range beside it in `boats.yaml`. `waveForce` is the share of the
 Froude–Krylov force; lower it toward 0.6 if the boat surfs too easily.
-`go test ./internal/physics -run 'Waves|Surfing|Heave|BeamSea|Drift'` checks
-what physics is sure of (a long wave is followed, a wave as long as the hull
-is not felt, a released heave settles, a beam sea rolls the boat at the
-wave's period, the boat surfs off the wind and does not gain to windward, it
-does not drift away at rest), and `go run ./tools/polar -sea 20` shows the
-rest. After changing a value: those tests, then the golden file and
+
+`waveYaw` is the share of that force's moment along the hull, and it is 0.
+A boat left alone with its sheet eased rounds up until its sail is on the
+edge of luffing, and all but stops; that is so in flat water too. In a sea,
+with all of the moment, the hull is yawed by several times what the rudder
+gives under a knot and a half. The sail loses its last drive, the boat stops
+and slides to leeward, and with no flow over the rudder the helm does
+nothing: steered for a beam reach from there, 70% of getaways failed, where
+13% fail in flat water. With a quarter of the moment 29% fail, with none
+11%. A boat that is sailing hardly notices: with or without the moment the
+polar in waves differs by a hundredth of a knot in 12 knots, and by a tenth
+running dead before 20. Raise the share only with the getaway test passing.
+
+`go test ./internal/physics -run 'Waves|Surfing|Heave|BeamSea|Drift|UnderWay|YawMoment'`
+checks what physics is sure of (a long wave is followed, a wave as long as
+the hull is not felt, a released heave settles, a beam sea rolls the boat at
+the wave's period, the boat surfs off the wind and does not gain to windward,
+it does not drift away at rest, the moment along the hull is the push's own)
+and what the game needs (a stopped boat gets under way in a sea as readily
+as in flat water), and `go run ./tools/polar -sea 20` shows the rest. After changing a value: those tests, then the golden file and
 `sea.json` (`go test ./internal/physics -run 'Golden|SeaFile' -update`), then
 `scenarios.json`'s copy of the catalog's values, as for any parameter.
 

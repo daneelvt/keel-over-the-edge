@@ -212,6 +212,10 @@ type PhysicsHull struct {
 	// along and across.
 	WaveForce float64 `json:"waveForce"`
 
+	// The share of that force's moment along the hull, which yaws the boat with the
+	// water of an oblique wave.
+	WaveYaw float64 `json:"waveYaw"`
+
 	// Moment of inertia in yaw, added inertia included, in kg·m².
 	YawInertia float64 `json:"yawInertia"`
 }
@@ -457,4 +461,4 @@ type WeatherSea struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "3f54cf845c2e9b8f"
+const Version = "735ee7ff0e556ed0"

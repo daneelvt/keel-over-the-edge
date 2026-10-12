@@ -32,6 +32,7 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.HeaveDamping = b.Physics.Hull.HeaveDamping
 	p.PitchDamping = b.Physics.Hull.PitchDamping
 	p.WaveForce = b.Physics.Hull.WaveForce
+	p.WaveYaw = b.Physics.Hull.WaveYaw
 	p.SailArea = b.Physics.Rig.SailArea
 	p.Luff = b.Physics.Rig.Luff
 	p.Foot = b.Physics.Rig.Foot

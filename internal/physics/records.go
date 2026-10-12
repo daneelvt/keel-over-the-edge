@@ -82,6 +82,7 @@ type Params struct {
 	HeaveDamping    float64     // fraction of critical
 	PitchDamping    float64     // fraction of critical
 	WaveForce       float64     // share of the Froude–Krylov force of a wave's slope
+	WaveYaw         float64     // share of that force's moment along the hull
 
 	// Rig.
 	SailArea          float64     // m²

@@ -32,6 +32,7 @@ export function writeParams(params: Float64Array, p: BoatPhysics): void {
   params[f.heaveDamping] = p.hull.heaveDamping;
   params[f.pitchDamping] = p.hull.pitchDamping;
   params[f.waveForce] = p.hull.waveForce;
+  params[f.waveYaw] = p.hull.waveYaw;
   params[f.sailArea] = p.rig.sailArea;
   params[f.luff] = p.rig.luff;
   params[f.foot] = p.rig.foot;
