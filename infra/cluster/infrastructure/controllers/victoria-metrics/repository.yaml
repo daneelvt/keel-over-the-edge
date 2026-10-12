@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The operator's chart, from VictoriaMetrics' registry, pinned by the digest
+# of its manifest, and fetched only if VictoriaMetrics' chart workflow, on
+# its master branch, signed it (cosign, keyless).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: victoria-metrics-operator
+spec:
+  interval: 1h
+  url: oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-operator
+  ref:
+    tag: 0.68.1
+    digest: sha256:1817be5446c975a306e404d6b605eafc45dbe6512a64d25b80d72f458fa4664a
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: ^https://token\.actions\.githubusercontent\.com$
+        subject: ^https://github\.com/VictoriaMetrics/helm-charts/\.github/workflows/release\.yaml@refs/heads/master$

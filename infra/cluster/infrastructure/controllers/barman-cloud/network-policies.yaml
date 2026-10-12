@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The plugin, reached by the operator alone, on its gRPC port. The operator's
+# namespace already denies everything else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: plugin-barman-cloud
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: plugin-barman-cloud
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - port: 9090
+          protocol: TCP

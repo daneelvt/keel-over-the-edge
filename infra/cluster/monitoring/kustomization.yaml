@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What watches the game, as Flux's fifth layer, beside the game's own: a
+# dashboard that fails to apply, or a Grafana that does not start, never
+# holds back a deploy of the game. The monitoring namespace and the
+# operator are the controllers layer's; the game's own scrapes and alerts
+# are the apps layer's. Each cluster's entry point sets the sizes.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: keel
+resources:
+  - namespace-node.yaml
+  - stack
+  - logs
+  - scrapes.yaml
+  - forward.yaml
+  - network-policies.yaml
+  - dashboards
+  - rules

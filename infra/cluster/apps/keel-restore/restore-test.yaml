@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# keel restore-test, Tuesdays at 21:00 UTC, from the game's own image: it
+# makes the Cluster keel-restore-check, recovered from the live archive,
+# waits for it, checks it and deletes it, in an hour at most. Its service
+# account may make, read and delete Clusters here, and read the two Secrets
+# the operator makes for that one; nothing else, and nothing in keel. Its
+# result is its Job's, and one log line, "restore test".
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keel-restore-test
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: keel-restore-test
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [create, get, delete]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [keel-restore-check-app, keel-restore-check-ca]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keel-restore-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: keel-restore-test
+subjects:
+  - kind: ServiceAccount
+    name: keel-restore-test
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: keel-restore-test
+spec:
+  schedule: "0 21 * * 2"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: keel-restore-test
+        spec:
+          serviceAccountName: keel-restore-test
+          # The one pod of the game's that calls the Kubernetes API.
+          automountServiceAccountToken: true
+          enableServiceLinks: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: restore-test
+              image: ghcr.io/daneelvt/keel
+              args: [restore-test]
+              env:
+                # The live archive, the live cluster's image and its
+                # max_connections: written here by the component archive/.
+                - name: KEEL_RESTORE_SOURCE
+                  value: "set by archive/"
+                - name: KEEL_RESTORE_IMAGE
+                  value: "set by archive/"
+                - name: KEEL_RESTORE_MAX_CONNECTIONS
+                  value: "set by archive/"
+                - name: KEEL_RESTORE_OBJECT_STORE
+                  value: keel-b2-read
+                - name: KEEL_RESTORE_WAIT
+                  value: 45m
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]

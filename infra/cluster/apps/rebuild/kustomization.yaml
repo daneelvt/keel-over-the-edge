@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The database rebuilt from its backups: made by recovering the live
+# archive, through the Barman Cloud plugin, rather than empty, and
+# archiving from then on under the next generation's name, as
+# CloudNativePG requires of a new cluster (its documentation, "Recovery":
+# a cluster refuses an archive that is not empty). The owner's password is
+# set from keel-db-app once it is recovered. The restore test tests the
+# new archive. Included after archive/, by clusters/prod-rebuild alone, and
+# by go run ./tools/cluster -deploy -rebuild.
+#
+# A cluster reads bootstrap only when it is made (CloudNativePG's
+# validating webhook checks no change to it), but the archive's name
+# whenever it changes. So Flux applies the database and its restore test
+# only while they are not there (Flux's documentation, "Controlling the
+# apply behavior of resources": kustomize.toolkit.fluxcd.io/ssa:
+# IfNotPresent): once the generation is raised, the release's rebuild form
+# describes the next rebuild, and a database this one made, which Flux
+# still follows it for until the machine workflow moves it back, must keep
+# the name it archives under.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: Cluster
+      name: keel-db
+    patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: keel-db
+        annotations:
+          kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
+  - target:
+      kind: CronJob
+      name: keel-restore-test
+    patch: |-
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: keel-restore-test
+        annotations:
+          kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
+  - target:
+      kind: Cluster
+      name: keel-db
+    patch: |-
+      - op: remove
+        path: /spec/bootstrap/initdb
+      - op: add
+        path: /spec/bootstrap/recovery
+        value:
+          source: origin
+          database: keel
+          owner: keel
+          secret:
+            name: keel-db-app
+      - op: add
+        path: /spec/externalClusters
+        value:
+          - name: origin
+            plugin:
+              name: barman-cloud.cloudnative-pg.io
+              parameters:
+                barmanObjectName: keel-b2
+replacements:
+  - source:
+      kind: ConfigMap
+      name: keel-db-archive
+      fieldPath: data.rebuilt
+    targets:
+      - select:
+          kind: Cluster
+          name: keel-db
+        fieldPaths:
+          - spec.plugins.[name=barman-cloud.cloudnative-pg.io].parameters.serverName
+      - select:
+          kind: CronJob
+          name: keel-restore-test
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.containers.[name=restore-test].env.[name=KEEL_RESTORE_SOURCE].value
+  - source:
+      kind: ConfigMap
+      name: keel-db-archive
+      fieldPath: data.live
+    targets:
+      - select:
+          kind: Cluster
+          name: keel-db
+        fieldPaths:
+          - spec.externalClusters.[name=origin].plugin.parameters.serverName
+        options:
+          create: true

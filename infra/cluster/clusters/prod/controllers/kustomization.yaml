@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Production's controllers: applied once Flux's own run.
+# Production's controllers: applied once Flux's own run. Beside every
+# cluster's, Kured and the system-upgrade controller, which reboot and
+# upgrade the machine in their windows.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../infrastructure/controllers
+  - ../../../infrastructure/controllers/kured
+  - ../../../infrastructure/controllers/system-upgrade

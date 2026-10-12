@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# VictoriaMetrics' Kubernetes stack, from VictoriaMetrics' registry, pinned
+# by the digest of its manifest, and fetched only if VictoriaMetrics' chart
+# workflow, on its master branch, signed it (cosign, keyless). Grafana's,
+# node-exporter's and kube-state-metrics' charts are inside it, covered by
+# the same signature; Grafana's own chart is not signed.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: victoria-metrics-k8s-stack
+  namespace: monitoring
+spec:
+  interval: 1h
+  url: oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-k8s-stack
+  ref:
+    tag: 0.95.2
+    digest: sha256:e4901e7ffbecc89db34cffc785d646b02b8b2d7d2cab546aeabf3e9bd821b0f8
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: ^https://token\.actions\.githubusercontent\.com$
+        subject: ^https://github\.com/VictoriaMetrics/helm-charts/\.github/workflows/release\.yaml@refs/heads/master$

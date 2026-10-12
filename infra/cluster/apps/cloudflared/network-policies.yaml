@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Nothing reaches cloudflared but the kubelet's probes, from the node. Out,
+# Nothing reaches cloudflared but the kubelet's probes, from the node, and
+# the scraper, on its metrics port. Out,
 # it reaches DNS, Cloudflare's edge on 7844 (QUIC on UDP, HTTP/2 on TCP;
 # Cloudflare's "Tunnel with firewall"), and Traefik's web entry point:
 # nothing else. Its calls to Cloudflare's API on 443 are optional, and
@@ -20,7 +21,18 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: cloudflared
-  policyTypes: [Egress]
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: 2000
+          protocol: TCP
   egress:
     - to:
         - namespaceSelector:

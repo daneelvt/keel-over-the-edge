@@ -16,6 +16,7 @@
     - access
     - firewall
     - updates
+    - observe
     - k3s
     - flux
     - bootstrap_secret

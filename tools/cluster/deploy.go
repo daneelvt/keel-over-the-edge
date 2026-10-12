@@ -81,11 +81,16 @@ func (c *cluster) up(ctx context.Context) error {
 	if err := c.applyEntry(ctx, t, localCluster.Entry("controllers")); err != nil {
 		return err
 	}
-	if err := c.waitKubectl(ctx, "the CloudNativePG operator", 10*time.Minute, "-n", "cnpg-system", "wait", "--for=condition=Ready", "helmrelease/cloudnative-pg"); err != nil {
-		return err
-	}
-	if err := c.waitKubectl(ctx, "External Secrets' controller", 10*time.Minute, "-n", "external-secrets", "wait", "--for=condition=Ready", "helmrelease/external-secrets"); err != nil {
-		return err
+	for _, chart := range [][3]string{
+		{"the CloudNativePG operator", "cnpg-system", "cloudnative-pg"},
+		{"External Secrets' controller", "external-secrets", "external-secrets"},
+		{"cert-manager", "cert-manager", "cert-manager"},
+		{"the Barman Cloud plugin", "cnpg-system", "plugin-barman-cloud"},
+		{"the VictoriaMetrics operator", "monitoring", "victoria-metrics-operator"},
+	} {
+		if err := c.waitKubectl(ctx, chart[0], 10*time.Minute, "-n", chart[1], "wait", "--for=condition=Ready", "helmrelease/"+chart[2]); err != nil {
+			return err
+		}
 	}
 	if err := c.applyEntry(ctx, t, localCluster.Entry("configs")); err != nil {
 		return err
@@ -93,7 +98,34 @@ func (c *cluster) up(ctx context.Context) error {
 	if err := c.waitKubectl(ctx, "Traefik's Gateway API", 5*time.Minute, "wait", "--for=condition=Accepted", "gatewayclass/traefik"); err != nil {
 		return err
 	}
-	return c.deployGame(ctx)
+	if err := c.deployGame(ctx, false); err != nil {
+		return err
+	}
+	return c.monitoring(ctx)
+}
+
+// monitoring applies the monitoring layer, beside the game: Grafana's
+// passwords first, which the repository never holds, then the layer, and
+// waits for the stack's chart.
+func (c *cluster) monitoring(ctx context.Context) error {
+	if err := c.checkTools(); err != nil {
+		return err
+	}
+	t, err := manifests.ReadTree(clusterDir)
+	if err != nil {
+		return err
+	}
+	if err := c.monitoringSecrets(ctx); err != nil {
+		return err
+	}
+	if err := c.applyEntry(ctx, t, localCluster.Entry("monitoring")); err != nil {
+		return err
+	}
+	if err := c.waitKubectl(ctx, "the monitoring stack", 15*time.Minute, "-n", "monitoring", "wait", "--for=condition=Ready", "helmrelease/victoria-metrics-k8s-stack"); err != nil {
+		return err
+	}
+	c.logf("Grafana: kubectl -n monitoring port-forward svc/grafana-forward 3000:80, then http://localhost:3000 as admin, with the password in the Secret monitoring/grafana-admin")
+	return nil
 }
 
 // applyEntry renders an entry point, checks its rules, and applies it.
@@ -124,10 +156,44 @@ func (c *cluster) apply(ctx context.Context, entry string, rm resmap.ResMap, tar
 	return err
 }
 
+// backupsFile holds the key to the local cluster's own bucket of backups,
+// as KEEL_B2_KEY_ID and KEEL_B2_KEY: the owner copies it there once
+// (infra/MANUAL-STEPS.md). Never in the repository.
+const backupsFile = ".dev/backups.env"
+
+// backupsKey reads the key from file; none, with no error, when the file
+// is not there.
+func backupsKey(file string) (id, key string, err error) {
+	data, err := os.ReadFile(file)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		k = strings.TrimSpace(k)
+		switch {
+		case !ok || strings.HasPrefix(k, "#"):
+		case k == "KEEL_B2_KEY_ID":
+			id = strings.TrimSpace(v)
+		case k == "KEEL_B2_KEY":
+			key = strings.TrimSpace(v)
+		}
+	}
+	if id == "" || key == "" {
+		return "", "", fmt.Errorf("%s must set KEEL_B2_KEY_ID and KEEL_B2_KEY", file)
+	}
+	return id, key, nil
+}
+
 // deployGame builds the game's image, imports it into the node, and
 // applies the game's manifests with it. A release the cluster followed is
-// let go of first: the working tree is in charge again.
-func (c *cluster) deployGame(ctx context.Context) error {
+// let go of first: the working tree is in charge again. With rebuild, the
+// database is the rebuild form's: made, if it is not there, by recovering
+// the live archive from the backups.
+func (c *cluster) deployGame(ctx context.Context, rebuild bool) error {
 	if err := c.checkTools(); err != nil {
 		return err
 	}
@@ -143,7 +209,16 @@ func (c *cluster) deployGame(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	d := manifests.Deploy{Build: build, Host: host, Sailors: os.Getenv("KEEL_DEV_SAILORS")}
+	keyID, _, err := backupsKey(c.backups)
+	if err != nil {
+		return err
+	}
+	d := manifests.Deploy{Build: build, Host: host, Sailors: os.Getenv("KEEL_DEV_SAILORS"), Rebuild: rebuild, NoBackups: keyID == ""}
+	target := deployTarget
+	target.Rebuild, target.NoBackups = d.Rebuild, d.NoBackups
+	if d.NoBackups {
+		c.logf("no %s: deploying without backups. The database archives nowhere, and there is no restore test", c.backups)
+	}
 	rm, err := t.RenderDeploy(d)
 	if err != nil {
 		return err
@@ -154,7 +229,7 @@ func (c *cluster) deployGame(ctx context.Context) error {
 		return err
 	}
 	apps := localCluster.Entry("apps")
-	if err := manifests.CheckRules(objs, deployTarget); err != nil {
+	if err := manifests.CheckRules(objs, target); err != nil {
 		return fmt.Errorf("%s: %w", apps, err)
 	}
 	if err := c.buildImage(ctx, build); err != nil {
@@ -170,7 +245,7 @@ func (c *cluster) deployGame(ctx context.Context) error {
 		return err
 	}
 	start := time.Now()
-	if err := c.apply(ctx, apps, rm, deployTarget); err != nil {
+	if err := c.apply(ctx, apps, rm, target); err != nil {
 		return err
 	}
 	if err := c.waitKubectl(ctx, "the database", 10*time.Minute, "-n", namespace, "wait", "--for=condition=Ready", "cluster/keel-db"); err != nil {
@@ -270,25 +345,37 @@ func pruneImages(history []string, build string, keep int) (kept, removed []stri
 }
 
 // secrets makes what the game needs that the repository never holds: the
-// game's namespace first, then the database's password, made once and
-// never replaced, and the TLS certificate for the players' host, replaced
-// when its names change.
+// manifests' namespaces first, then the database's passwords (its owner's
+// and its read-only roles'), made once and never replaced, the backups'
+// key, if this Mac has one, and the TLS certificate for the players' host,
+// replaced when its names change.
 func (c *cluster) secrets(ctx context.Context, rm resmap.ResMap, host string) (err error) {
-	var nsYAML []byte
+	var namespaces []byte
 	for _, r := range rm.Resources() {
-		if r.GetKind() == "Namespace" && r.GetName() == namespace {
-			if nsYAML, err = r.AsYAML(); err != nil {
+		if r.GetKind() == "Namespace" {
+			y, err := r.AsYAML()
+			if err != nil {
 				return err
 			}
+			namespaces = append(append(namespaces, "---\n"...), y...)
 		}
 	}
-	if nsYAML == nil {
+	if !bytes.Contains(namespaces, []byte("name: "+namespace+"\n")) {
 		return fmt.Errorf("the game's manifests have no Namespace %s", namespace)
 	}
-	if _, err := c.kubectl(ctx, bytes.NewReader(nsYAML), "apply", "--server-side", "--field-manager=tools-cluster", "-f", "-"); err != nil {
+	if _, err := c.kubectl(ctx, bytes.NewReader(namespaces), "apply", "--server-side", "--field-manager=tools-cluster", "-f", "-"); err != nil {
 		return err
 	}
-	if err := c.databaseSecret(ctx); err != nil {
+	for _, role := range []string{"keel", "reader", "grafana"} {
+		name := "keel-db-" + role
+		if role == "keel" {
+			name = "keel-db-app"
+		}
+		if err := c.passwordSecret(ctx, namespace, name, role); err != nil {
+			return err
+		}
+	}
+	if err := c.backupsSecrets(ctx); err != nil {
 		return err
 	}
 	certs, err := c.certificate(ctx, filepath.Join(c.state, "certs"), certHosts(host, devcert.LANAddresses()))
@@ -296,6 +383,48 @@ func (c *cluster) secrets(ctx context.Context, rm resmap.ResMap, host string) (e
 		return err
 	}
 	return c.tlsSecret(ctx, certs)
+}
+
+// backupsSecrets puts the key of .dev/backups.env where the object stores
+// read it: the database's, and the restore test's, which production reads
+// with a key of its own. The local key is one, for the local bucket alone.
+// The dump's key is made up: the local dump uploads nowhere. A key that
+// changed replaces the Secret's.
+func (c *cluster) backupsSecrets(ctx context.Context) error {
+	keyID, key, err := backupsKey(c.backups)
+	if err != nil {
+		return err
+	}
+	if err := c.replaceSecret(ctx, namespace, "keel-dumps", map[string]string{"keyID": "none", "key": "the-local-dump-uploads-nowhere"}); err != nil {
+		return err
+	}
+	if keyID == "" {
+		return nil
+	}
+	for _, s := range [][2]string{{namespace, manifests.ObjectStore}, {manifests.RestoreNamespace, manifests.RestoreStore}} {
+		if err := c.replaceSecret(ctx, s[0], s[1], map[string]string{"keyID": keyID, "key": key}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// monitoringSecrets makes Grafana's: its admin password, made once, and
+// the password of the database's role grafana, the one keel-db-grafana
+// holds for the role itself.
+func (c *cluster) monitoringSecrets(ctx context.Context) error {
+	if err := c.passwordSecret(ctx, "monitoring", "grafana-admin", "admin"); err != nil {
+		return err
+	}
+	out, err := c.kubectl(ctx, nil, "-n", namespace, "get", "secret", "keel-db-grafana", "--ignore-not-found", "-o", "jsonpath={.data.password}")
+	if err != nil {
+		return err
+	}
+	password, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(out)))
+	if err != nil || len(password) == 0 {
+		return errors.New("the Secret keel/keel-db-grafana has no password: go run ./tools/cluster -deploy makes it")
+	}
+	return c.replaceSecret(ctx, "monitoring", "grafana-db", map[string]string{"password": string(password)})
 }
 
 // certHosts are the names the cluster's certificate covers: the Mac's
@@ -308,20 +437,20 @@ func certHosts(host string, lan []net.IP) []string {
 	return append(hosts, "localhost", "127.0.0.1")
 }
 
-// secretExists asks the cluster for a Secret in the game's namespace.
-func (c *cluster) secretExists(ctx context.Context, name string) (bool, error) {
-	out, err := c.kubectl(ctx, nil, "-n", namespace, "get", "secret", name, "--ignore-not-found", "-o", "name")
+// secretExists asks the cluster for a Secret.
+func (c *cluster) secretExists(ctx context.Context, ns, name string) (bool, error) {
+	out, err := c.kubectl(ctx, nil, "-n", ns, "get", "secret", name, "--ignore-not-found", "-o", "name")
 	if err != nil {
 		return false, err
 	}
 	return strings.TrimSpace(string(out)) != "", nil
 }
 
-// databaseSecret makes keel-db-app, the database's owner and password, if
-// it is missing. The password exists only in the cluster; a new one for a
-// database made with the old would lock the game out.
-func (c *cluster) databaseSecret(ctx context.Context) error {
-	ok, err := c.secretExists(ctx, "keel-db-app")
+// passwordSecret makes a Secret of a user and a password of its own, if it
+// is missing. The password exists only in the cluster; a new one for a
+// database made with the old would lock its user out.
+func (c *cluster) passwordSecret(ctx context.Context, ns, name, user string) error {
+	ok, err := c.secretExists(ctx, ns, name)
 	if err != nil || ok {
 		return err
 	}
@@ -329,11 +458,37 @@ func (c *cluster) databaseSecret(ctx context.Context) error {
 	if _, err := rand.Read(key); err != nil {
 		return err
 	}
-	c.logf("making the database's password, keel-db-app")
-	return c.createSecret(ctx, "keel-db-app", "kubernetes.io/basic-auth", map[string]string{
-		"username": "keel",
+	c.logf("making the password of %s, %s/%s", user, ns, name)
+	return c.createSecret(ctx, ns, name, "kubernetes.io/basic-auth", map[string]string{
+		"username": user,
 		"password": base64.RawURLEncoding.EncodeToString(key),
 	})
+}
+
+// replaceSecret makes an opaque Secret hold data, replacing one that holds
+// something else.
+func (c *cluster) replaceSecret(ctx context.Context, ns, name string, data map[string]string) error {
+	out, err := c.kubectl(ctx, nil, "-n", ns, "get", "secret", name, "--ignore-not-found", "-o", "json")
+	if err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(out)) > 0 {
+		var have struct{ Data map[string][]byte }
+		if err := json.Unmarshal(out, &have); err != nil {
+			return errors.New("reading the Secret " + ns + "/" + name + " failed")
+		}
+		same := len(have.Data) == len(data)
+		for k, v := range data {
+			same = same && string(have.Data[k]) == v
+		}
+		if same {
+			return nil
+		}
+		if _, err := c.kubectl(ctx, nil, "-n", ns, "delete", "secret", name); err != nil {
+			return err
+		}
+	}
+	return c.createSecret(ctx, ns, name, "Opaque", data)
 }
 
 // tlsSecret puts the certificate into keel-tls, when it is missing or holds
@@ -360,16 +515,16 @@ func (c *cluster) tlsSecret(ctx context.Context, certs devcert.Certs) error {
 			return err
 		}
 	}
-	return c.createSecret(ctx, "keel-tls", "kubernetes.io/tls", map[string]string{"tls.crt": string(cert), "tls.key": string(key)})
+	return c.createSecret(ctx, namespace, "keel-tls", "kubernetes.io/tls", map[string]string{"tls.crt": string(cert), "tls.key": string(key)})
 }
 
 // createSecret creates a Secret from stdin, so its values never appear in a
 // command line; it fails if the Secret exists.
-func (c *cluster) createSecret(ctx context.Context, name, kind string, data map[string]string) error {
+func (c *cluster) createSecret(ctx context.Context, ns, name, kind string, data map[string]string) error {
 	s := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Secret",
-		"metadata":   map[string]any{"name": name, "namespace": namespace},
+		"metadata":   map[string]any{"name": name, "namespace": ns},
 		"type":       kind,
 		"stringData": data,
 	}

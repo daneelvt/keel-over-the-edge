@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Where the database's backups go: WAL as each segment fills, or every five
+# minutes at the latest (CloudNativePG's archive_timeout), and the base
+# backups, through the Barman Cloud plugin, to a Backblaze B2 bucket by its
+# S3 API. B2 is S3-compatible, not S3: the AWS SDK's newer checksums are
+# asked for only where B2 needs them (the plugin's documentation, "Object
+# stores"), and the region is the bucket's. The bucket, the endpoint and the
+# region are infra/production.yaml's backups (a test keeps them the same).
+#
+# A backup is kept for 30 days, as far back as a restore can go; Barman
+# removes what is older. The key it uses may read, write and delete in this
+# bucket alone, made by hand (infra/MANUAL-STEPS.md). serverName is left
+# out, as the plugin requires: each cluster names its own archive.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: keel-b2
+spec:
+  retentionPolicy: 30d
+  configuration:
+    destinationPath: s3://keel-db-backups/
+    endpointURL: https://s3.us-east-005.backblazeb2.com
+    s3Credentials:
+      accessKeyId:
+        name: keel-b2
+        key: keyID
+      secretAccessKey:
+        name: keel-b2
+        key: key
+    wal:
+      compression: gzip
+      # Segments fetched four at once in a restore.
+      maxParallel: 4
+    data:
+      compression: gzip
+  instanceSidecarConfiguration:
+    env:
+      - name: AWS_DEFAULT_REGION
+        value: us-east-005
+      - name: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required
+      - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+        value: when_required
+    # Starting values: the sidecar compresses and uploads a 16 MB segment at
+    # a time, and a base backup now and then.
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 256Mi

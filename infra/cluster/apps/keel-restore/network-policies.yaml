@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The throwaway cluster: from the restore test, which checks it, from
+# CloudNativePG's operator (PostgreSQL, and its instance manager on 8000),
+# and from its own pods (CloudNativePG's documentation, "Networking").
+# Nothing else here listens. The test calls the Kubernetes API and the
+# cluster, and the cluster calls the API and the object store: their ways
+# out are not fenced.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keel-restore-check
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: keel-restore-check
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keel-restore-test
+      ports:
+        - port: 5432
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - port: 5432
+          protocol: TCP
+        - port: 8000
+          protocol: TCP
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: keel-restore-check

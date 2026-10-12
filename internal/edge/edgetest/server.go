@@ -153,14 +153,21 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 	go func() { defer s.done.Done(); s.Edge.Run(ctx) }()
 }
 
+// restartBell is how long the world sails on once Restart has rung the
+// bell, as keel serve's does for KEEL_BELL: long enough for every
+// connection's writer to send it before the close goes after it.
+const restartBell = 100 * time.Millisecond
+
 // Restart restarts the server as a deploy restarts keel serve: every
-// connection is told, the world stops and is checkpointed, and the
-// connections are closed with 1012; for pause the game connection is
-// refused, as while no server is ready; then a new world is restored from
-// the checkpoint, and served by a new loop and edge.
+// connection is told, the world sails on for the bell, stops and is
+// checkpointed, and the connections are closed with 1012; for pause the
+// game connection is refused, as while no server is ready; then a new
+// world is restored from the checkpoint, and served by a new loop and
+// edge.
 func (s *Server) Restart(t testing.TB, pause time.Duration) {
 	t.Helper()
-	s.Edge.Bell(0)
+	s.Edge.Bell(restartBell)
+	time.Sleep(restartBell)
 	s.cancel()
 	s.done.Wait()
 	f := s.World.Bus().Frames.Acquire()

@@ -1,0 +1,62 @@
+#!/bin/bash
+# Written by the observe role. Writes the machine's facts that no exporter
+# knows, as metrics node-exporter's textfile collector reads: whether a
+# reboot is required and since when, the security updates waiting, when
+# unattended-upgrades last ran, what AIDE's last check found, the size of
+# auditd's log, and whether the units that keep the machine running are
+# active. Run every five minutes by keel-machine-facts.timer.
+#
+#   keel-machine-facts <folder> <unit>...
+set -euo pipefail
+
+dir=$1
+shift
+tmp=$(mktemp "$dir/.keel_machine.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+
+metric() { # name, help, value, labels
+  printf '# HELP %s %s\n# TYPE %s gauge\n%s%s %s\n' "$1" "$2" "$1" "$1" "${4:-}" "$3"
+}
+
+{
+  # Ubuntu's packages leave this file when an update needs a reboot.
+  if [ -e /var/run/reboot-required ]; then
+    metric keel_machine_reboot_required "Whether an installed update needs a reboot." 1
+    metric keel_machine_reboot_required_since_timestamp_seconds "When a reboot was first required, in Unix seconds." "$(stat -c %Y /var/run/reboot-required)"
+  else
+    metric keel_machine_reboot_required "Whether an installed update needs a reboot." 0
+  fi
+
+  # What a simulated upgrade would install from a security pocket.
+  updates=$(apt-get --simulate --quiet upgrade 2>/dev/null | grep -c '^Inst .*-security' || true)
+  metric keel_machine_security_updates "Security updates waiting to be installed." "${updates:-0}"
+
+  if [ -e /var/lib/apt/periodic/unattended-upgrades-stamp ]; then
+    metric keel_machine_unattended_upgrades_last_run_timestamp_seconds "When unattended-upgrades last ran, in Unix seconds." "$(stat -c %Y /var/lib/apt/periodic/unattended-upgrades-stamp)"
+  fi
+
+  # The daily check's own log: its summary, or that nothing differs.
+  log=/var/log/aide/aide.log
+  if [ -s "$log" ]; then
+    count() { awk -v what="$1" '$0 ~ "^ *" what " entries:" { n = $NF } END { print n + 0 }' "$log"; }
+    metric keel_machine_aide_added_files "Files AIDE's last check found added." "$(count Added)"
+    metric keel_machine_aide_removed_files "Files AIDE's last check found removed." "$(count Removed)"
+    metric keel_machine_aide_changed_files "Files AIDE's last check found changed." "$(count Changed)"
+    metric keel_machine_aide_last_check_timestamp_seconds "When AIDE last checked, in Unix seconds." "$(stat -c %Y "$log")"
+  fi
+
+  if [ -d /var/log/audit ]; then
+    metric keel_machine_audit_log_bytes "The size of auditd's log." "$(du --summarize --bytes /var/log/audit | cut -f1)"
+  fi
+
+  printf '# HELP keel_machine_unit_active Whether a unit the machine needs is active.\n# TYPE keel_machine_unit_active gauge\n'
+  for unit in "$@"; do
+    if systemctl is-active --quiet "$unit"; then active=1; else active=0; fi
+    printf 'keel_machine_unit_active{unit="%s"} %s\n' "$unit" "$active"
+  done
+} > "$tmp"
+
+# Whole or not at all: node-exporter never reads half a file.
+chmod 0644 "$tmp"
+mv "$tmp" "$dir/keel_machine.prom"
+trap - EXIT

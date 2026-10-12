@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -51,13 +52,28 @@ func TestRenderWritesTheRelease(t *testing.T) {
 		return err
 	})
 	want := []string{
-		"local/apps/manifests.yaml", "local/configs/manifests.yaml", "local/controllers/manifests.yaml",
-		"prod/apps/manifests.yaml", "prod/configs/manifests.yaml", "prod/controllers/manifests.yaml", "prod/flux-system/manifests.yaml",
+		"local/apps/manifests.yaml", "local/configs/manifests.yaml", "local/controllers/manifests.yaml", "local/monitoring/manifests.yaml",
+		"prod/apps/manifests.yaml", "prod/configs/manifests.yaml", "prod/controllers/manifests.yaml", "prod/flux-system/manifests.yaml", "prod/monitoring/manifests.yaml",
+		"prod-rebuild/apps/manifests.yaml", "prod-rebuild/configs/manifests.yaml", "prod-rebuild/controllers/manifests.yaml",
+		"prod-rebuild/flux-system/manifests.yaml", "prod-rebuild/monitoring/manifests.yaml",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("rendered %v, want %v", got, want)
 	}
-	for _, cluster := range []string{"local", "prod"} {
+	// The rebuild form is in every release: production's Flux, applying
+	// prod-rebuild's folders, and its database recovered from the backups.
+	for _, o := range documents(t, filepath.Join(dir, manifests.Rebuild, "flux-system", "manifests.yaml")) {
+		if o.Kind() == "Kustomization" && manifests.Str(o, "spec", "path") != "./"+manifests.Rebuild+"/"+o.Name() {
+			t.Errorf("the rebuild form's %s applies %s", o.ID(), manifests.Str(o, "spec", "path"))
+		}
+	}
+	if db := manifests.Find(documents(t, filepath.Join(dir, manifests.Rebuild, "apps", "manifests.yaml")), "Cluster", "keel-db"); manifests.Str(db, "spec", "bootstrap", "recovery", "source") != "origin" {
+		t.Errorf("the rebuild form's database is not recovered: %v", manifests.Get(db, "spec", "bootstrap"))
+	}
+	if db := manifests.Find(documents(t, filepath.Join(dir, "prod", "apps", "manifests.yaml")), "Cluster", "keel-db"); manifests.Get(db, "spec", "bootstrap", "recovery") != nil {
+		t.Errorf("production's database recovers: %v", manifests.Get(db, "spec", "bootstrap"))
+	}
+	for _, cluster := range []string{"local", "prod", manifests.Rebuild} {
 		docs := documents(t, filepath.Join(dir, cluster, "apps", "manifests.yaml"))
 		images := 0
 		for _, d := range docs {
@@ -562,5 +578,59 @@ func TestReleased(t *testing.T) {
 	}
 	if w.tagged() {
 		t.Errorf("asking moved a tag: %q", w.ran)
+	}
+}
+
+// TestVerifyKeyed: what Flux cannot verify is checked with cosign by the
+// digest the manifests pin: cert-manager's chart and each of its images
+// against its key, SHA-512 and no transparency log, as cert-manager signs;
+// Kured's image keyless, against its own release workflow at its tag. One
+// that fails stops the release.
+func TestVerifyKeyed(t *testing.T) {
+	chdirRoot(t)
+	var ran [][]string
+	fail := ""
+	var out bytes.Buffer
+	v := &keyedVerifier{out: &out, run: func(_ context.Context, args ...string) ([]byte, error) {
+		ran = append(ran, args)
+		if fail != "" && strings.Contains(args[len(args)-1], fail) {
+			return nil, errors.New("no matching signatures")
+		}
+		return nil, nil
+	}}
+	if err := v.verify(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var keyed, keyless []string
+	for _, args := range ran {
+		line := strings.Join(args, " ")
+		ref := args[len(args)-1]
+		if !regexp.MustCompile(`@sha256:[0-9a-f]{64}$`).MatchString(ref) || strings.Count(ref, ":") != 1 {
+			t.Errorf("checked by more or less than a digest: %s", ref)
+		}
+		switch {
+		case strings.HasPrefix(line, "verify --key infra/keys/cert-manager.pem --signature-digest-algorithm sha512 --insecure-ignore-tlog=true quay.io/jetstack/"):
+			keyed = append(keyed, ref[:strings.Index(ref, "@")])
+		case strings.HasPrefix(line, "verify --certificate-oidc-issuer-regexp "+manifests.ReleaseIssuer+" --certificate-identity-regexp ^https://github\\.com/kubereboot/kured/\\.github/workflows/on-tag\\.yaml@refs/tags/1\\.") &&
+			strings.HasPrefix(ref, "ghcr.io/kubereboot/kured@"):
+			keyless = append(keyless, ref)
+		default:
+			t.Errorf("cosign ran as %s", line)
+		}
+	}
+	slices.Sort(keyed)
+	want := []string{"quay.io/jetstack/cert-manager-acmesolver", "quay.io/jetstack/cert-manager-cainjector", "quay.io/jetstack/cert-manager-controller",
+		"quay.io/jetstack/cert-manager-webhook", "quay.io/jetstack/charts/cert-manager"}
+	if !slices.Equal(keyed, want) || len(keyless) != 1 {
+		t.Errorf("checked against the key %v, keyless %v", keyed, keyless)
+	}
+	if _, err := os.Stat("infra/keys/cert-manager.pem"); err != nil {
+		t.Error(err)
+	}
+	for _, bad := range []string{"cert-manager-webhook", "charts/cert-manager", "kubereboot/kured"} {
+		fail = bad
+		if err := v.verify(context.Background()); err == nil || !strings.Contains(err.Error(), bad) || !strings.Contains(err.Error(), "is not signed by") {
+			t.Errorf("with %s unsigned: %v", bad, err)
+		}
 	}
 }

@@ -1,15 +1,20 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The game on the local cluster, in a VM on a developer's Mac: half
-# production's sizes, and HTTPS with a certificate from the developer's own
-# root. A release renders this with the game's image by digest, for a Mac
+# production's sizes, HTTPS with a certificate from the developer's own
+# root, and backups to a bucket of its own, with a key tools/cluster puts
+# in the Secrets keel-b2 and keel-b2-read from .dev/backups.env. The
+# weekly dump runs, but uploads to nowhere (rclone's memory backend). A release renders this with the game's image by digest, for a Mac
 # named macbook. go run ./tools/cluster -deploy renders it with the image
 # it built and imported, never pulled, and the Mac's own name.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../apps/keel
+  - ../../../apps/keel-restore
   - https-redirect.yaml
   - tls-store.yaml
+components:
+  - ../../../apps/archive
 configMapGenerator:
   - name: keel
     namespace: keel
@@ -23,6 +28,20 @@ configMapGenerator:
 patches:
   - path: keel.yaml
   - path: database.yaml
+  # The local cluster's bucket, never production's.
+  - target:
+      kind: ObjectStore
+    patch: |-
+      - op: replace
+        path: /spec/configuration/destinationPath
+        value: s3://keel-db-backups-local/
+  - target:
+      kind: CronJob
+      name: keel-db-dump
+    patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
+        value: ":memory:keel-db-dumps/local"
   # HTTPS on Traefik's websecure entry point, with the certificate
   # tools/cluster makes; the players' route moves to it.
   - target:

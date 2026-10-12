@@ -1,0 +1,9 @@
+# Written by the observe role: the machine's journal sent to VictoriaLogs
+# in the cluster, which reads journald's own upload protocol. The headers
+# say which fields make an entry's stream, and which are dropped
+# (VictoriaLogs' documentation, "journald"). A header is written as
+# Name: value, unquoted.
+[Upload]
+URL={{ observe_logs_url }}
+Header=VL-Stream-Fields: {{ observe_stream_fields | join(',') }}
+Header=VL-Ignore-Fields: {{ observe_ignore_fields | join(',') }}

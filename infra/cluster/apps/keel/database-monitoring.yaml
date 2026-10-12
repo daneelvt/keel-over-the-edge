@@ -1,0 +1,137 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The database's own metrics, beside CloudNativePG's (connections and the
+# longest transaction by state, database sizes and transaction ID age, the
+# archiver, the checkpointer, commits, rollbacks, cache hits and rows): the
+# game's tables, one series each, with their sizes, live and dead rows and
+# when each was last vacuumed and analyzed; PostgreSQL's I/O by kind of
+# process; and the locks held and waited for. CloudNativePG runs each query
+# on the instance and serves the result on 9187 (its documentation,
+# "Monitoring"). Per-statement figures stay in pg_stat_statements, read
+# live, never one series per statement.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keel-db-monitoring
+  labels:
+    cnpg.io/reload: ""
+data:
+  queries.yaml: |
+    keel_table:
+      query: |
+        SELECT s.relname AS table
+          , pg_catalog.pg_total_relation_size(s.relid) AS total_bytes
+          , pg_catalog.pg_indexes_size(s.relid) AS index_bytes
+          , s.n_live_tup AS live_rows
+          , s.n_dead_tup AS dead_rows
+          , s.seq_scan AS seq_scans
+          , COALESCE(s.idx_scan, 0) AS index_scans
+          , s.n_tup_ins AS inserted
+          , s.n_tup_upd AS updated
+          , s.n_tup_del AS deleted
+          , COALESCE(EXTRACT(EPOCH FROM GREATEST(s.last_vacuum, s.last_autovacuum)), 0) AS last_vacuum
+          , COALESCE(EXTRACT(EPOCH FROM GREATEST(s.last_analyze, s.last_autoanalyze)), 0) AS last_analyze
+          , s.autovacuum_count + s.vacuum_count AS vacuums
+        FROM pg_catalog.pg_stat_user_tables s
+      target_databases: [keel]
+      metrics:
+        - table:
+            usage: LABEL
+            description: The table, or one of its partitions
+        - total_bytes:
+            usage: GAUGE
+            description: Its size on disk, indexes and TOAST included
+        - index_bytes:
+            usage: GAUGE
+            description: Its indexes' size
+        - live_rows:
+            usage: GAUGE
+            description: Rows live, as last counted
+        - dead_rows:
+            usage: GAUGE
+            description: Rows dead, waiting for a vacuum
+        - seq_scans:
+            usage: COUNTER
+            description: Sequential scans begun on it
+        - index_scans:
+            usage: COUNTER
+            description: Index scans begun on it
+        - inserted:
+            usage: COUNTER
+            description: Rows inserted
+        - updated:
+            usage: COUNTER
+            description: Rows updated
+        - deleted:
+            usage: COUNTER
+            description: Rows deleted
+        - last_vacuum:
+            usage: GAUGE
+            description: When it was last vacuumed, by hand or by autovacuum, in Unix seconds; 0 never
+        - last_analyze:
+            usage: GAUGE
+            description: When it was last analyzed, in Unix seconds; 0 never
+        - vacuums:
+            usage: COUNTER
+            description: Vacuums of it, by hand and by autovacuum
+    keel_io:
+      query: |
+        SELECT backend_type, object, context
+          , COALESCE(SUM(reads), 0) AS reads
+          , COALESCE(SUM(read_bytes), 0) AS read_bytes
+          , COALESCE(SUM(writes), 0) AS writes
+          , COALESCE(SUM(write_bytes), 0) AS write_bytes
+          , COALESCE(SUM(extends), 0) AS extends
+          , COALESCE(SUM(hits), 0) AS hits
+          , COALESCE(SUM(evictions), 0) AS evictions
+          , COALESCE(SUM(fsyncs), 0) AS fsyncs
+        FROM pg_catalog.pg_stat_io
+        GROUP BY backend_type, object, context
+      metrics:
+        - backend_type:
+            usage: LABEL
+            description: The kind of process
+        - object:
+            usage: LABEL
+            description: What was read or written
+        - context:
+            usage: LABEL
+            description: Why
+        - reads:
+            usage: COUNTER
+            description: Read operations
+        - read_bytes:
+            usage: COUNTER
+            description: Bytes read
+        - writes:
+            usage: COUNTER
+            description: Write operations
+        - write_bytes:
+            usage: COUNTER
+            description: Bytes written
+        - extends:
+            usage: COUNTER
+            description: Relation extend operations
+        - hits:
+            usage: COUNTER
+            description: Reads found in shared buffers
+        - evictions:
+            usage: COUNTER
+            description: Buffers evicted to make room
+        - fsyncs:
+            usage: COUNTER
+            description: fsync calls
+    keel_locks:
+      query: |
+        SELECT mode, granted, pg_catalog.count(*) AS locks
+        FROM pg_catalog.pg_locks
+        GROUP BY mode, granted
+      metrics:
+        - mode:
+            usage: LABEL
+            description: The lock's mode
+        - granted:
+            usage: LABEL
+            description: Whether it is held (true) or waited for (false)
+        - locks:
+            usage: GAUGE
+            description: Locks of this mode

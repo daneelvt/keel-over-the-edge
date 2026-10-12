@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Monitoring on the local cluster, in a VM of 8 GiB: about half
+# production's sizes, metrics kept 7 days and logs 3 days or 2 GiB, so
+# every change is seen on the Mac first. Grafana's passwords are made by
+# tools/cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../monitoring
+patches:
+  - target:
+      kind: HelmRelease
+      name: victoria-metrics-k8s-stack
+    patch: |-
+      - op: replace
+        path: /spec/values/vmsingle/spec/retentionPeriod
+        value: 7d
+      - op: replace
+        path: /spec/values/vmsingle/spec/extraArgs/storage.minFreeDiskSpaceBytes
+        value: 2GiB
+      - op: replace
+        path: /spec/values/vmsingle/spec/storage/resources/requests/storage
+        value: 5Gi
+      - op: replace
+        path: /spec/values/vmsingle/spec/resources/limits/memory
+        value: 512Mi
+      - op: replace
+        path: /spec/values/vmagent/spec/resources/limits/memory
+        value: 256Mi
+  - target:
+      kind: VLSingle
+      name: keel
+    patch: |-
+      - op: replace
+        path: /spec/retentionPeriod
+        value: 3d
+      - op: replace
+        path: /spec/retentionMaxDiskSpaceUsageBytes
+        value: 2GiB
+      - op: replace
+        path: /spec/storage/resources/requests/storage
+        value: 2Gi
+      - op: replace
+        path: /spec/resources/limits/memory
+        value: 256Mi

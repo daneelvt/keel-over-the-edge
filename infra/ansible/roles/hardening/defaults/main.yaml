@@ -76,6 +76,7 @@ hardening_aide_exclude:
   - /var/lib/systemd
   - /var/lib/chrony
   - /var/lib/tailscale
+  - /var/lib/node-exporter
   - /run
   - /tmp
 

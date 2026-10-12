@@ -61,6 +61,7 @@ func TestLoadValid(t *testing.T) {
 		"KEEL_PLAY_ADDR":     ":8080",
 		"KEEL_AGENTS_ADDR":   ":8081",
 		"KEEL_INTERNAL_ADDR": "0.0.0.0:9090",
+		"KEEL_METRICS_ADDR":  "0.0.0.0:9091",
 		"KEEL_LOG_LEVEL":     "debug",
 		"KEEL_TRACE_DIR":     "/tmp/traces",
 		"KEEL_REPLAY_DIR":    "/tmp/replays",
@@ -74,7 +75,7 @@ func TestLoadValid(t *testing.T) {
 	}
 	want = Config{
 		PlayAddr: ":8080", PlayOrigin: "https://play.keelovertheedge.com", AgentsAddr: ":8081", InternalAddr: "0.0.0.0:9090",
-		LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
+		MetricsAddr: "0.0.0.0:9091", LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
 		BoatLimit: 2, Bell: 0,
 	}
 	if c != want {
@@ -125,6 +126,8 @@ func TestLoadRejects(t *testing.T) {
 		"internal addr bad":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_INTERNAL_ADDR": "x:y"}, []string{"KEEL_INTERNAL_ADDR"}},
 		"same as play":        {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_ADDR": "127.0.0.1:8080"}, []string{"KEEL_AGENTS_ADDR: \"127.0.0.1:8080\" is KEEL_PLAY_ADDR's"}},
 		"wildcard overlaps":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_INTERNAL_ADDR": "0.0.0.0:8081"}, []string{"KEEL_INTERNAL_ADDR", "KEEL_AGENTS_ADDR's address"}},
+		"metrics addr bad":    {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_METRICS_ADDR": "9091"}, []string{"KEEL_METRICS_ADDR"}},
+		"metrics as internal": {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_METRICS_ADDR": "0.0.0.0:9090"}, []string{"KEEL_METRICS_ADDR", "KEEL_INTERNAL_ADDR's address"}},
 		"log level":           {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_LOG_LEVEL": "loud"}, []string{"KEEL_LOG_LEVEL"}},
 		"bell not a duration": {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BELL": "3"}, []string{"KEEL_BELL"}},
 		"bell too long":       {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_BELL": "11s"}, []string{"from 0s to 10s"}},

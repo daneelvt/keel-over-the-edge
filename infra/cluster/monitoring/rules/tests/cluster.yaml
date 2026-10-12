@@ -1,0 +1,122 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The cluster's alerts (monitoring/rules/cluster.yaml), and the tunnel's
+# (apps/cloudflared/monitoring.yaml).
+# vmalert-tool's clock starts at 2000-01-01 UTC, 946684800: a time a
+# series holds, where a rule compares it with now, counts from there.
+evaluation_interval: 1m
+tests:
+  - name: a container restarts every minute
+    interval: 1m
+    input_series:
+      - series: kube_pod_container_status_restarts_total{namespace="keel", pod="keel-1", container="keel"}
+        values: 0+1x20
+      - series: kube_pod_container_status_restarts_total{namespace="keel", pod="keel-db-1", container="postgres"}
+        values: 2x20
+    alert_rule_test:
+      - eval_time: 16m
+        groupname: cluster
+        alertname: PodRestarting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: cluster
+              summary: "A container keeps restarting."
+              namespace: keel
+              pod: keel-1
+              container: keel
+            exp_annotations:
+              description: "keel/keel-1's keel restarted 15 times in 15 minutes. Its logs in VictoriaLogs, and kubectl describe, say why."
+
+  - name: a Flux layer is not ready, and a suspended one is left alone
+    interval: 1m
+    input_series:
+      - series: gotk_resource_info{ready="False", customresource_kind="Kustomization", exported_namespace="flux-system", name="apps"}
+        values: 1x20
+      - series: gotk_resource_info{ready="False", suspended="true", customresource_kind="Kustomization", exported_namespace="flux-system", name="monitoring"}
+        values: 1x20
+      - series: gotk_resource_info{ready="True", customresource_kind="Kustomization", exported_namespace="flux-system", name="configs"}
+        values: 1x20
+    alert_rule_test:
+      - eval_time: 16m
+        groupname: cluster
+        alertname: FluxNotReady
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: cluster
+              summary: "A Flux object is not ready: a release is not fully applied."
+              ready: "False"
+              customresource_kind: Kustomization
+              exported_namespace: flux-system
+              name: apps
+            exp_annotations:
+              description: "Kustomization flux-system/apps. flux get all -A, or its object's conditions, say why."
+
+  - name: an ExternalSecret cannot be read
+    interval: 1m
+    input_series:
+      - series: externalsecret_status_condition{condition="Ready", status="False", namespace="keel", name="keel-b2"}
+        values: 1x20
+      - series: externalsecret_status_condition{condition="Ready", status="True", namespace="keel", name="keel-b2"}
+        values: 0+0x20
+      - series: externalsecret_status_condition{condition="Ready", status="False", namespace="keel", name="keel-db-app"}
+        values: 0+0x20
+    alert_rule_test:
+      - eval_time: 16m
+        groupname: cluster
+        alertname: SecretNotSynced
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: cluster
+              summary: "An ExternalSecret cannot read Infisical."
+              condition: Ready
+              status: "False"
+              namespace: keel
+              name: keel-b2
+            exp_annotations:
+              description: "keel/keel-b2: its Secret keeps its last value. Its conditions say why; Infisical's status page may."
+
+  - name: a certificate expires in ten days
+    interval: 1m
+    input_series:
+      - series: certmanager_certificate_expiration_timestamp_seconds{namespace="cnpg-system", name="barman-cloud-server"}
+        values: 947548860x5
+      - series: certmanager_certificate_expiration_timestamp_seconds{namespace="cnpg-system", name="barman-cloud-client"}
+        values: 954460800x5
+    alert_rule_test:
+      - eval_time: 1m
+        groupname: cluster
+        alertname: CertificateExpiring
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: cluster
+              summary: "A certificate expires within 14 days."
+              namespace: cnpg-system
+              name: barman-cloud-server
+            exp_annotations:
+              description: "cnpg-system/barman-cloud-server expires in 10d 0h 0m 0s; cert-manager renews it 15 days before, and has not. Its CertificateRequest's conditions say why."
+
+  - name: cloudflared loses every connection
+    interval: 1m
+    input_series:
+      - series: cloudflared_tunnel_ha_connections{pod="cloudflared-a"}
+        values: 4x2 0+0x10
+      - series: cloudflared_tunnel_ha_connections{pod="cloudflared-b"}
+        values: 4x2 0+0x10
+    alert_rule_test:
+      - eval_time: 2m
+        groupname: edge
+        alertname: TunnelDown
+        exp_alerts: []
+      - eval_time: 6m
+        groupname: edge
+        alertname: TunnelDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: edge
+              summary: "No cloudflared holds a connection to Cloudflare."
+            exp_annotations:
+              description: "Players cannot reach the game. Look at cloudflared's pods and logs, and the tunnel's state in Cloudflare's dashboard."

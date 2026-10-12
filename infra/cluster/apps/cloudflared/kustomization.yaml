@@ -14,3 +14,4 @@ resources:
   - deployment.yaml
   - tunnel-token.yaml
   - network-policies.yaml
+  - monitoring.yaml

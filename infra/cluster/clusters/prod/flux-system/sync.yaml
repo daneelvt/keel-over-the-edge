@@ -23,11 +23,12 @@ spec:
         subject: ^https://github\.com/daneelvt/keel-over-the-edge/\.github/workflows/release\.yaml@refs/heads/main$
 ---
 # The artifact's layers, each applied once the one before it is ready:
-# Flux itself, the controllers, their configuration, the game. What a
+# Flux itself, the controllers, their configuration, the game; and what
+# watches the game, beside it. What a
 # release no longer holds is removed (prune), but deleting one of these
 # objects deletes nothing it applied (Orphan).
 #
-# This first layer holds the three after it, which wait for it: so it
+# This first layer holds the four after it, which wait for it: so it
 # waits for Flux's controllers alone, by name, and not for everything it
 # applied, which would be waiting for them.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -116,6 +117,27 @@ spec:
     kind: OCIRepository
     name: keel
   path: ./prod/apps
+  prune: true
+  wait: true
+  deletionPolicy: Orphan
+---
+# What watches the game, beside it: it waits for the configuration, as the
+# game does, and nothing waits for it.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: monitoring
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: configs
+  interval: 10m
+  retryInterval: 1m
+  timeout: 10m
+  sourceRef:
+    kind: OCIRepository
+    name: keel
+  path: ./prod/monitoring
   prune: true
   wait: true
   deletionPolicy: Orphan

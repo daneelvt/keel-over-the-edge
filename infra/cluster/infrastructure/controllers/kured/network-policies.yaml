@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Nothing reaches Kured but the scraper, on its metrics port. It calls the
+# Kubernetes API and vmalert, unfenced.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metrics
+spec:
+  podSelector:
+    matchLabels:
+      name: kured
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: 8080
+          protocol: TCP

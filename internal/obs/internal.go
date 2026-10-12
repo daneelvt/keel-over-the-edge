@@ -46,3 +46,13 @@ func Internal(h *Health, m *Metrics, flight, replay, wind http.Handler) http.Han
 	}
 	return mux
 }
+
+// MetricsOnly returns the metrics listener's routes: GET /metrics, and
+// nothing else. A scraper let in to it reaches no profile, trace or input
+// log, which a NetworkPolicy, filtering ports and not paths, could not
+// keep from it on the internal listener.
+func MetricsOnly(m *Metrics) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", m.Handler())
+	return mux
+}

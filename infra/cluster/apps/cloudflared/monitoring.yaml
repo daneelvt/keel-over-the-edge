@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# cloudflared's metrics: its connections to Cloudflare's edge and the
+# requests it carries, read by the scraper; and the alert when no
+# connector holds a connection, so players cannot reach the game.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: cloudflared
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  podMetricsEndpoints:
+    - port: metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: cloudflared
+spec:
+  groups:
+    - name: edge
+      rules:
+        - alert: TunnelDown
+          expr: (sum(cloudflared_tunnel_ha_connections) or vector(0)) < 1
+          for: 2m
+          labels:
+            severity: critical
+            component: edge
+            summary: "No cloudflared holds a connection to Cloudflare."
+          annotations:
+            description: "Players cannot reach the game. Look at cloudflared's pods and logs, and the tunnel's state in Cloudflare's dashboard."

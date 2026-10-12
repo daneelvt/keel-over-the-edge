@@ -88,6 +88,8 @@ type fakeTofu struct {
 	// fail makes the named subcommand fail, saying this on its standard
 	// error.
 	fail, says string
+	// plan, if set, is what show -json prints, not thePlan.
+	plan string
 }
 
 type call struct {
@@ -129,6 +131,9 @@ func (f *fakeTofu) run(_ context.Context, c cmd) ([]byte, []byte, error) {
 		}
 		return []byte("  # cloudflare_zone_setting.zone[\"ssl\"] will be updated\n  ~ value = \"full\" -> \"strict\"\n"), nil, nil
 	case "show":
+		if f.plan != "" {
+			return []byte(f.plan), nil, nil
+		}
 		return []byte(thePlan), nil, nil
 	case "apply":
 		return []byte("cloudflare_zero_trust_tunnel_cloudflared.prod: Modifying... [connections: 198.51.100.9]\n"), nil, nil
@@ -313,6 +318,50 @@ func TestPlanShowsNoValue(t *testing.T) {
 	for _, v := range values {
 		if strings.Contains(log.String(), v) || strings.Contains(summary.String(), v) {
 			t.Errorf("%q, a value of the plan, was shown", v)
+		}
+	}
+}
+
+// passwordsPlan is the plan that first makes the read-only roles' and
+// Grafana's passwords: a folder, and four secrets written write-only, whose
+// values OpenTofu never puts in a plan.
+const passwordsPlan = `{
+  "format_version": "1.2",
+  "resource_changes": [
+    {"address": "infisical_secret_folder.monitoring", "change": {"actions": ["create"], "before": null, "after": {"name": "monitoring", "folder_path": "/"}, "after_unknown": {"id": true, "path": true}}},
+    {"address": "infisical_secret.reader_password", "change": {"actions": ["create"], "before": null, "after": {"name": "DB_READER_PASSWORD", "value_wo": null, "value_wo_version": 1}, "after_unknown": {"id": true}}},
+    {"address": "infisical_secret.grafana_role_password", "change": {"actions": ["create"], "before": null, "after": {"name": "DB_GRAFANA_PASSWORD", "value_wo": null, "value_wo_version": 1}, "after_unknown": {"id": true}}},
+    {"address": "infisical_secret.grafana_role_password_for_grafana", "change": {"actions": ["create"], "before": null, "after": {"name": "DB_GRAFANA_PASSWORD", "value_wo": null, "value_wo_version": 1}, "after_unknown": {"id": true, "folder_path": true}}},
+    {"address": "infisical_secret.grafana_admin_password", "change": {"actions": ["create"], "before": null, "after": {"name": "GRAFANA_ADMIN_PASSWORD", "value_wo": null, "value_wo_version": 1}, "after_unknown": {"id": true, "folder_path": true}}},
+    {"address": "infisical_secret.database_password", "change": {"actions": ["no-op"], "before": {"name": "DB_PASSWORD"}, "after": {"name": "DB_PASSWORD"}}}
+  ]
+}`
+
+// TestPlanOfNewPasswords: the plan that makes the new passwords lists the
+// folder and the four secrets, and nothing of a value: a write-only
+// attribute is null in a plan, and the summary names no attribute of a
+// resource it creates.
+func TestPlanOfNewPasswords(t *testing.T) {
+	a, f, log, summary := testAccounts(t)
+	f.plan = passwordsPlan
+	if err := a.run(context.Background(), "plan"); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"## Planned: 5 to create",
+		"| `infisical_secret_folder.monitoring` | create |  |",
+		"| `infisical_secret.reader_password` | create |  |",
+		"| `infisical_secret.grafana_role_password` | create |  |",
+		"| `infisical_secret.grafana_role_password_for_grafana` | create |  |",
+		"| `infisical_secret.grafana_admin_password` | create |  |",
+	} {
+		if !strings.Contains(summary.String(), want) {
+			t.Errorf("the summary has no %q:\n%s", want, summary)
+		}
+	}
+	for _, shown := range []string{"database_password", "value_wo", "DB_READER_PASSWORD", "GRAFANA_ADMIN_PASSWORD"} {
+		if strings.Contains(summary.String(), shown) || strings.Contains(log.String(), shown) {
+			t.Errorf("%q was shown:\n%s", shown, summary)
 		}
 	}
 }

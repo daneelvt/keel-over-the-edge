@@ -70,8 +70,8 @@ jobs:
       - name: The playbooks parse; ansible-lint, production profile
         working-directory: infra/ansible
         run: |
-          ../../.dev/ansible/bin/ansible-playbook --syntax-check site.yaml verify.yaml audit.yaml
-          ../../.dev/ansible/bin/ansible-lint site.yaml verify.yaml audit.yaml roles tasks
+          ../../.dev/ansible/bin/ansible-playbook --syntax-check site.yaml verify.yaml audit.yaml state.yaml
+          ../../.dev/ansible/bin/ansible-lint site.yaml verify.yaml audit.yaml state.yaml roles tasks
 
   pr-machine:
     name: pr-machine

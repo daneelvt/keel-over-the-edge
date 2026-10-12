@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/pinned"
@@ -50,6 +51,11 @@ func render(ctx context.Context, out io.Writer, dir, image string) (err error) {
 		return err
 	}
 	for _, c := range manifests.Clusters {
+		target := manifests.TargetOf(c, k3s.Version)
+		all, err := fluxOf(t, c)
+		if err != nil {
+			return err
+		}
 		for _, e := range c.Entries {
 			entry := c.Entry(e)
 			rm, err := t.RenderRelease(entry, image)
@@ -60,9 +66,10 @@ func render(ctx context.Context, out io.Writer, dir, image string) (err error) {
 			if err != nil {
 				return err
 			}
-			if err := manifests.CheckRules(objs, manifests.Target{Cluster: c.Name}); err != nil {
+			if err := manifests.CheckRules(objs, target); err != nil {
 				return fmt.Errorf("%s: %w", entry, err)
 			}
+			all = append(all, objs...)
 			data, err := rm.AsYaml()
 			if err != nil {
 				return err
@@ -76,6 +83,10 @@ func render(ctx context.Context, out io.Writer, dir, image string) (err error) {
 			}
 			fmt.Fprintf(out, "release: rendered %s: %d objects, %d bytes\n", filepath.Join(c.Name, e, manifestsFile), len(objs), len(data))
 		}
+		// What one layer names and another provides.
+		if err := manifests.CheckCluster(all, target); err != nil {
+			return fmt.Errorf("%s: %w", c.Name, err)
+		}
 	}
 	schemas := manifests.Schemas{CRDs: schemasDir, Cache: schemaCache, Kubernetes: k3s.Kubernetes()}
 	if err := schemas.Validate(ctx, dir); err != nil {
@@ -83,4 +94,18 @@ func render(ctx context.Context, out io.Writer, dir, image string) (err error) {
 	}
 	fmt.Fprintf(out, "release: every object keeps the rules and its schema, for Kubernetes %s, with %s\n", k3s.Kubernetes(), image)
 	return nil
+}
+
+// fluxOf is Flux's own objects where no entry point of the cluster holds
+// them: the local cluster's, which tools/cluster applies itself. The rules
+// a cluster's layers keep together read Flux's NetworkPolicies too.
+func fluxOf(t *manifests.Tree, c manifests.Cluster) ([]manifests.Object, error) {
+	if slices.Contains(c.Entries, manifests.FluxEntry) {
+		return nil, nil
+	}
+	rm, err := t.Render(manifests.FluxEntry)
+	if err != nil {
+		return nil, err
+	}
+	return manifests.Objects(rm)
 }

@@ -1,0 +1,153 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The weekly dump, Mondays at 21:00 UTC: the game's database as pg_dump's
+# custom format, a copy that reads with any later PostgreSQL, beside the
+# backups, which need this one's. pg_dump runs from the database's own
+# image, as the owner, over TLS checked against the cluster's CA; then
+# pg_restore lists the file, which proves it reads; then rclone (rclone's
+# own image, by digest) uploads it, with a key that may add to the dumps'
+# bucket and never delete from it: the bucket's lifecycle removes what is
+# old. DUMP_REMOTE is where: the bucket, named in infra/production.yaml's
+# backups (a test keeps them the same). Each step logs a line; the Job's
+# success or failure is what the alerts read.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: keel-db-dump
+spec:
+  schedule: "0 21 * * 1"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: keel-db-dump
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            # The database image's postgres user; rclone runs as it too.
+            runAsUser: 26
+            runAsGroup: 26
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: dump
+              image: ghcr.io/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:37ade18dbdddba430858c72725aceeec66f33fa5333e82ea1df4942f6c1c83a3
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  # A new pod's address is let in to the database a moment
+                  # after it starts: wait for an answer, a minute at most.
+                  tries=0
+                  until pg_isready --quiet --timeout=2; do
+                    tries=$((tries + 1))
+                    [ "$tries" -lt 30 ] || { echo "the database did not answer within a minute" >&2; exit 1; }
+                    sleep 2
+                  done
+                  start=$(date +%s)
+                  pg_dump --format=custom --file=/dump/keel.dump
+                  pg_restore --list /dump/keel.dump > /dev/null
+                  echo "{\"msg\":\"dumped\",\"bytes\":$(stat -c %s /dump/keel.dump),\"seconds\":$(( $(date +%s) - start ))}"
+              env:
+                - name: PGHOST
+                  value: keel-db-rw.keel.svc
+                - name: PGDATABASE
+                  value: keel
+                - name: PGUSER
+                  value: keel
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: keel-db-app
+                      key: password
+                - name: PGSSLMODE
+                  value: verify-full
+                - name: PGSSLROOTCERT
+                  value: /etc/keel/db-ca/ca.crt
+                - name: PGAPPNAME
+                  value: keel-db-dump
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+                - name: db-ca
+                  mountPath: /etc/keel/db-ca
+                  readOnly: true
+          containers:
+            - name: upload
+              image: rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  exec rclone copyto /dump/keel.dump "$DUMP_REMOTE/$(date -u +%Y-%m-%dT%H%MZ).dump" \
+                    --use-json-log --stats-one-line --stats=0 -v \
+                    --b2-chunk-size=16M --b2-upload-concurrency=2
+              env:
+                - name: DUMP_REMOTE
+                  value: b2:keel-db-dumps/prod
+                # rclone's B2 backend, configured from the environment
+                # alone (rclone's documentation, "Environment variables").
+                - name: RCLONE_CONFIG_B2_TYPE
+                  value: b2
+                - name: RCLONE_CONFIG_B2_ACCOUNT
+                  valueFrom:
+                    secretKeyRef:
+                      name: keel-dumps
+                      key: keyID
+                - name: RCLONE_CONFIG_B2_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: keel-dumps
+                      key: key
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 192Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: dump
+              emptyDir:
+                sizeLimit: 20Gi
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi
+            - name: db-ca
+              secret:
+                secretName: keel-db-ca
+                items:
+                  - key: ca.crt
+                    path: ca.crt

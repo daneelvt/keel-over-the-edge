@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The game's PostgreSQL, run by CloudNativePG. Its password is the Secret
 # keel-db-app's (made outside the repository); the operator makes the
-# server's certificate and its CA, keel-db-ca.
+# server's certificate and its CA, keel-db-ca. It archives its WAL and base
+# backups to the object store keel-b2, under the archive name
+# generation.yaml gives it.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -23,6 +25,44 @@ spec:
   # every restart of the database would wait the whole time; with this, it
   # takes seconds, and keel takes its lease back or restarts cleanly.
   smartShutdownTimeout: 10
+  # One instance has no other to switch over to, so CloudNativePG's
+  # disruption budget would forbid draining its node at all, and a reboot's
+  # drain would wait for ever (CloudNativePG's documentation, "Kubernetes
+  # upgrade and maintenance"). Without it, a drain stops the database as a
+  # restart does.
+  enablePDB: false
+  # The Barman Cloud plugin archives each WAL segment, and takes the base
+  # backups, under the archive name the component archive/ writes here as
+  # serverName, from generation.yaml.
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: keel-b2
+  # Beside CloudNativePG's own queries, the game's tables, I/O and locks
+  # (database-monitoring.yaml).
+  monitoring:
+    customQueriesConfigMap:
+      - name: keel-db-monitoring
+        key: queries.yaml
+  # Two read-only roles, over TLS like the game: reader for the owner,
+  # grafana for Grafana's SQL. Neither may write; there is no role that
+  # may, but the owner's, keel. Their passwords are their Secrets'.
+  managed:
+    roles:
+      - name: reader
+        ensure: present
+        login: true
+        inRoles: [pg_read_all_data, pg_monitor]
+        passwordSecret:
+          name: keel-db-reader
+      - name: grafana
+        ensure: present
+        login: true
+        connectionLimit: 5
+        inRoles: [pg_read_all_data, pg_monitor]
+        passwordSecret:
+          name: keel-db-grafana
   storage:
     storageClass: local-path
     size: 40Gi
@@ -46,6 +86,21 @@ spec:
       tcp_keepalives_idle: "10"
       tcp_keepalives_interval: "5"
       tcp_keepalives_count: "3"
+      # What each statement costs, by its normalized text, read live from
+      # Grafana. Setting it makes CloudNativePG preload the library and
+      # create the extension in every database (its documentation,
+      # "PostgreSQL configuration").
+      pg_stat_statements.max: "5000"
+      pg_stat_statements.track: top
+      # A statement slower than 250 ms is logged, and one slower than
+      # 500 ms with its plan, into the logs VictoriaLogs keeps; never the
+      # values bound to it, which may be a player's (PostgreSQL logs them
+      # whole by default).
+      log_min_duration_statement: 250ms
+      log_parameter_max_length: "0"
+      auto_explain.log_min_duration: 500ms
+      auto_explain.log_analyze: "off"
+      auto_explain.log_parameter_max_length: "0"
     # Before the operator's own rules, the last of which would also accept
     # a password over a plain connection.
     pg_hba:

@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Kured's metrics (whether a reboot is required, and when it last did one),
+# which production alone runs.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: kured
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [kured]
+  selector:
+    matchLabels:
+      name: kured
+  podMetricsEndpoints:
+    - port: metrics

@@ -22,6 +22,11 @@ spec:
       enabled: true
     gateway:
       enabled: false
+    # Requests counted by route too, beside the entry point and the
+    # service, for the scraper: which route answered 429.
+    metrics:
+      prometheus:
+        addRoutersLabels: true
     # Traefik's defaults, written down. readTimeout bounds how long a
     # request may take to arrive; a WebSocket is not cut by it, as Go's
     # server clears a connection's deadlines when the proxy hijacks it for

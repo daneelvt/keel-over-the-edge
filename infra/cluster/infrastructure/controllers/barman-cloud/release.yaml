@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The plugin v0.15.1 (chart 0.8.1), once cert-manager runs: the chart makes
+# a self-signed issuer and the two certificates the operator and the plugin
+# check each other with. Its images unsigned upstream, so pinned by digest:
+# the plugin, and the sidecar it adds to each PostgreSQL pod, which does
+# the archiving. Its security context is the chart's, which keeps Pod
+# Security's restricted profile.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: plugin-barman-cloud
+spec:
+  interval: 1h
+  dependsOn:
+    - name: cert-manager
+      namespace: cert-manager
+  chartRef:
+    kind: OCIRepository
+    name: plugin-barman-cloud
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    image:
+      # renovate: image=ghcr.io/cloudnative-pg/plugin-barman-cloud
+      tag: v0.15.1@sha256:c75acad19a36e8176cfe2885761ff1b836c6ef977d7257e298c99a28b5c302ef
+    sidecarImage:
+      # renovate: image=ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar
+      tag: v0.15.1@sha256:2287a793a804db751edd0d07d44cd549e357677e98a800eb12e2cf7c0d53f9b0
+    # Starting values: it answers the operator's calls; the sidecars do the
+    # work.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 128Mi

@@ -4,8 +4,8 @@
 // TinyGo, the compiler that builds the physics package to WebAssembly;
 // cosign and the Flux CLI, which sign and publish a release; Tailscale's
 // client, with which a workflow joins the tailnet; kube-bench, which
-// audits a k3s node; and OpenTofu, which manages the accounts outside the
-// machine. Each is downloaded into the repository's .dev folder,
+// audits a k3s node; OpenTofu, which manages the accounts outside the
+// machine; and vmalert-tool, which tests the cluster's alert rules. Each is downloaded into the repository's .dev folder,
 // the way Go fetches the toolchain go.mod names, and checked against the
 // SHA-256 pinned below before anything is unpacked or run.
 package pinned
@@ -58,6 +58,10 @@ var releases = []release{
 	{"opentofu/opentofu", "darwin-arm64", "v1.13.1", "be78f659f04ef06a9dbd9b3934d46af95d787a3aa38396d459dea395261816a9"},
 	{"opentofu/opentofu", "linux-amd64", "v1.13.1", "378ada19d4bc70c43732004e8159be771b23b9a5afdf059e5f8a2b3fa2c70a69"},
 	{"opentofu/opentofu", "linux-arm64", "v1.13.1", "9c1ef375aa1852db0b2888aa921b640c71f8140d4682aa4fec99378a64fa7dc3"},
+
+	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.153.0", "f6fb958d30666da21bcd190b908cc6714d1f2cb0e1938a6338ece0d45cb9f049"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.153.0", "85aea24a4829cf26033d810aceb7888070bd4eaff321357168ff6db24bf7c00c"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.153.0", "8153c4feb73564215950a299c803d5c1e974772cd34b8c162d43ea2c5b516df5"},
 }
 
 // byHand pins what is not a GitHub release, which Renovate cannot follow:
@@ -134,6 +138,13 @@ var (
 	OpenTofu = Tool{
 		Name: "tofu", repo: "opentofu/opentofu", bin: fixed("tofu"), size: "about 30 MB",
 		asset: func(v, goos, goarch string) string { return "tofu_" + v + "_" + goos + "_" + goarch + ".tar.gz" },
+	}
+	// VMAlertTool runs the unit tests of the cluster's alert rules
+	// (vmalert-tool unittest), from VictoriaMetrics' archive of its
+	// utilities: the release the cluster's vmalert runs.
+	VMAlertTool = Tool{
+		Name: "vmalert-tool", repo: "VictoriaMetrics/VictoriaMetrics", bin: fixed("vmalert-tool-prod"), size: "about 140 MB",
+		asset: func(v, goos, goarch string) string { return "vmutils-" + goos + "-" + goarch + "-v" + v + ".tar.gz" },
 	}
 )
 

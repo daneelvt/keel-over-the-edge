@@ -550,6 +550,45 @@ func TestPublicListeners(t *testing.T) {
 	})
 }
 
+// TestMetricsListener: with KEEL_METRICS_ADDR, the metrics are served on a
+// listener of their own, which serves nothing else; the internal listener
+// still serves them. A metrics address that cannot open stops the server,
+// its internal listener closed.
+func TestMetricsListener(t *testing.T) {
+	const metricsURL = "http://127.0.0.1:9091"
+	synctest.Test(t, func(t *testing.T) {
+		s := startServer(t, map[string]string{"KEEL_METRICS_ADDR": "127.0.0.1:9091"}, newMemNet(), serveOptions{})
+		time.Sleep(time.Second)
+		for _, base := range []string{metricsURL, internalURL} {
+			if code, body, _ := get(t, s.client, base+"/metrics"); code != 200 || !strings.Contains(body, "keel_build_info") {
+				t.Errorf("%s/metrics answered %d", base, code)
+			}
+		}
+		for _, path := range append(slices.Clone(obs.InternalPaths), "/", "/api/version") {
+			if path == "/metrics" {
+				continue
+			}
+			if code, _, _ := get(t, s.client, metricsURL+path); code != 404 {
+				t.Errorf("the metrics listener answered %s with %d", path, code)
+			}
+		}
+		s.stop(t)
+	})
+	synctest.Test(t, func(t *testing.T) {
+		n := newMemNet()
+		if _, err := n.listen("tcp", "127.0.0.1:9091"); err != nil {
+			t.Fatal(err)
+		}
+		s := startServer(t, map[string]string{"KEEL_METRICS_ADDR": "127.0.0.1:9091"}, n, serveOptions{})
+		if err := <-s.done; err == nil || !strings.Contains(err.Error(), "address in use") {
+			t.Fatalf("keel serve with its metrics address taken: %v", err)
+		}
+		if _, err := n.listen("tcp", "127.0.0.1:9090"); err != nil {
+			t.Errorf("the internal listener was left open: %v", err)
+		}
+	})
+}
+
 // TestBuildOverride: an ID given at build time is the build every report
 // names, over the VCS information.
 func TestBuildOverride(t *testing.T) {

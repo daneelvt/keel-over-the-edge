@@ -1,0 +1,177 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The machine's alerts (monitoring/rules/machine.yaml).
+evaluation_interval: 1m
+tests:
+  - name: the Watchdog always fires
+    interval: 1m
+    input_series:
+      - series: up{job="node-exporter"}
+        values: 1x5
+    alert_rule_test:
+      - eval_time: 1m
+        groupname: machine
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels:
+              severity: none
+              summary: "The alerts' path works."
+            exp_annotations:
+              description: "Always firing. If it is missing from the Overview, vmalert or Alertmanager is not running."
+
+  - name: the root filesystem is 95% full
+    interval: 1m
+    input_series:
+      - series: node_filesystem_avail_bytes{mountpoint="/", device="/dev/vda1"}
+        values: 5000000000x40
+      - series: node_filesystem_size_bytes{mountpoint="/", device="/dev/vda1"}
+        values: 100000000000x40
+    alert_rule_test:
+      - eval_time: 16m
+        groupname: machine
+        alertname: DiskFull
+        exp_alerts:
+          - exp_labels: &disk-full
+              severity: critical
+              component: machine
+              summary: "The root filesystem is over 90% full, or will be full within a day."
+              mountpoint: /
+              device: /dev/vda1
+            exp_annotations: &disk-full-says
+              description: "Every volume shares it (local-path enforces no size). The Machine dashboard shows how full it is and which volume grows; the database stops when it is full."
+      - eval_time: 31m
+        groupname: machine
+        alertname: DiskHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: machine
+              summary: "The root filesystem is over 80% full."
+              mountpoint: /
+              device: /dev/vda1
+            exp_annotations:
+              description: "It is 95% full. Look at what grows on the Machine dashboard before it is full."
+
+  - name: half full, and filling within the day
+    interval: 5m
+    input_series:
+      - series: node_filesystem_avail_bytes{mountpoint="/", device="/dev/vda1"}
+        values: 50000000000-500000000x90
+      - series: node_filesystem_size_bytes{mountpoint="/", device="/dev/vda1"}
+        values: 100000000000x90
+    alert_rule_test:
+      - eval_time: 7h
+        groupname: machine
+        alertname: DiskFull
+        exp_alerts:
+          - exp_labels: *disk-full
+            exp_annotations: *disk-full-says
+
+  - name: half full, and steady
+    interval: 5m
+    input_series:
+      - series: node_filesystem_avail_bytes{mountpoint="/", device="/dev/vda1"}
+        values: 50000000000x90
+      - series: node_filesystem_size_bytes{mountpoint="/", device="/dev/vda1"}
+        values: 100000000000x90
+    alert_rule_test:
+      - eval_time: 7h
+        groupname: machine
+        alertname: DiskFull
+        exp_alerts: []
+      - eval_time: 7h
+        groupname: machine
+        alertname: DiskHigh
+        exp_alerts: []
+
+  - name: the host steals a fifth of the CPU
+    interval: 1m
+    input_series:
+      - series: node_cpu_seconds_total{mode="steal", cpu="0"}
+        values: 0+12x40
+      - series: node_cpu_seconds_total{mode="steal", cpu="1"}
+        values: 0+12x40
+    alert_rule_test:
+      - eval_time: 22m
+        groupname: machine
+        alertname: CPUSteal
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: machine
+              summary: "The host is taking the machine's CPU time."
+            exp_annotations:
+              description: "20% of it: a neighbour on the host is busy, and the tick may suffer. If it lasts, ask the provider."
+
+  - name: processes wait for memory a fifth of the time
+    interval: 1m
+    input_series:
+      - series: node_pressure_memory_waiting_seconds_total
+        values: 0+12x30
+    alert_rule_test:
+      - eval_time: 17m
+        groupname: machine
+        alertname: MemoryPressure
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: machine
+              summary: "Processes are waiting for memory."
+            exp_annotations:
+              description: "Some wait 20% of the time: the machine is short of memory. The Machine dashboard shows who uses it."
+
+  - name: 10 MB a second, all month
+    interval: 5m
+    input_series:
+      - series: node_network_transmit_bytes_total{device="eth0"}
+        values: 0+3000000000x400
+      - series: node_network_transmit_bytes_total{device="cni0"}
+        values: 0+3000000000x400
+    alert_rule_test:
+      - eval_time: 27h
+        groupname: machine
+        alertname: TransferOnCourse
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: machine
+              summary: "This month's transfer is on course to pass 80% of 16 TB."
+            exp_annotations:
+              description: "At today's rate the machine sends 24.36TiB this month; past 16 TB the provider bills or limits it. Look at bytes per player on the Game dashboard."
+
+  - name: the clock is 200 ms off
+    interval: 1m
+    input_series:
+      - series: node_timex_offset_seconds
+        values: -0.2x20
+    alert_rule_test:
+      - eval_time: 11m
+        groupname: machine
+        alertname: ClockOffset
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: machine
+              summary: "The machine's clock is more than 50 ms off."
+            exp_annotations:
+              description: "It is 200ms off: chrony is not keeping it, and the world's time follows it. Look at chronyc tracking on the machine."
+
+  - name: AIDE found three files changed
+    interval: 1m
+    input_series:
+      - series: keel_machine_aide_changed_files
+        values: 2x5
+      - series: keel_machine_aide_added_files
+        values: 1x5
+      - series: keel_machine_aide_removed_files
+        values: 0+0x5
+    alert_rule_test:
+      - eval_time: 1m
+        groupname: machine
+        alertname: IntegrityChanged
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: machine
+              summary: "AIDE found files changed since the playbook's record."
+            exp_annotations:
+              description: "3 files. Its report is in the journal (aide's unit), in VictoriaLogs. An update explains most; the next apply of the playbook records the system again."
