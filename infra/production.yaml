@@ -60,7 +60,7 @@ infisical:
   # identity is a member of it. Empty until the project is made: until
   # then no release is rendered.
   backups:
-    slug: ""
+    slug: "keel-backups-4zr-p"
 
 cloudflare:
   # The account (its Account ID) and the zone keelovertheedge.com (its
