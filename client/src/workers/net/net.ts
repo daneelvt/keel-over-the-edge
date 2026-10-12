@@ -147,6 +147,7 @@ export class NetWorker {
             rejoined: w.rejoined,
             kind: w.kind,
             tick: Number(w.tick),
+            epochUs: Number(w.epochUs),
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#setStatus('sailing');

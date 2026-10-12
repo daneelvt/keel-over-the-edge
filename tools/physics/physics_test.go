@@ -12,7 +12,7 @@ import (
 )
 
 func TestRulesFindEachBreak(t *testing.T) {
-	problems, err := checkRules("testdata/impure", allowedImports)
+	problems, err := checkRules("testdata/impure", allowedImports, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestRulesFindEachBreak(t *testing.T) {
 }
 
 func TestRulesPassCleanCode(t *testing.T) {
-	problems, err := checkRules("testdata/pure", allowedImports)
+	problems, err := checkRules("testdata/pure", allowedImports, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,8 +50,8 @@ func TestRulesPassCleanCode(t *testing.T) {
 }
 
 func TestRulesHoldForPhysics(t *testing.T) {
-	for dir, imports := range map[string][]string{"../../" + physicsDir: allowedImports, "../../" + wasmPkg: wasmImports} {
-		problems, err := checkRules(dir, imports)
+	for dir, imports := range map[string][]string{"../../" + physicsDir: allowedImports, "../../" + skyDir: skyImports, "../../" + wasmPkg: wasmImports} {
+		problems, err := checkRules(dir, imports, dir != "../../"+wasmPkg)
 		if err != nil {
 			t.Fatal(err)
 		}

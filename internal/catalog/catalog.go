@@ -14,6 +14,7 @@ import (
 	"io"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 )
 
 //go:embed catalog.gen.json
@@ -54,4 +55,13 @@ func (c *Catalog) Prepare() (*physics.Waves, []physics.Prepared) {
 		physics.Prepare(&p, waves, &kinds[i])
 	}
 	return waves, kinds
+}
+
+// PrepareSky readies the catalog's sky for the rule that says where the
+// sun, the moon and the stars stand.
+func (c *Catalog) PrepareSky() *sky.Prepared {
+	p := SkyParams(c)
+	s := new(sky.Prepared)
+	sky.Prepare(&p, s)
+	return s
 }

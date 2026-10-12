@@ -250,6 +250,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
 		Boat: c.boat, Kind: uint32(f.Kind[s]), Rejoined: c.rejoined,
+		EpochUs: e.cfg.Epoch.UnixMicro(),
 	}}}, outWelcome)
 	c.ready.Store(ok)
 	return ok

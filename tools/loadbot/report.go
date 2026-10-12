@@ -14,6 +14,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 )
 
 // ServerReport is what the server's metrics say of a run: their changes
@@ -127,6 +130,7 @@ func (r *Report) print(w io.Writer, cfg Config) {
 		lag = cfg.Lag.String()
 	}
 	fmt.Fprintf(w, "loadbot: %d players (%d guests made), %s, %.0f s each on average\n", len(r.Players), r.Made, lag, secs)
+	r.printSky(w, time.Now())
 	var in, out, inMsgs, outMsgs, others []float64
 	var snaps, corr, over, resyncs, dropped, errs int
 	closes := map[int]int{}
@@ -232,4 +236,34 @@ func spread(v []float64) string {
 		sum += x
 	}
 	return fmt.Sprintf("mean %.1f, median %.1f, least %.1f, most %.1f", sum/float64(len(s)), s[len(s)/2], s[0], s[len(s)-1])
+}
+
+// printSky tells the world's epoch as the Welcomes gave it, and the sky it
+// puts over the centre of the disk now: the sky is counted from that epoch
+// and the world's time, so a wrong epoch shows as a wrong hour.
+func (r *Report) printSky(w io.Writer, now time.Time) {
+	epochs := map[int64]int{}
+	for _, p := range r.Players {
+		if p.EpochUs != 0 {
+			epochs[p.EpochUs]++
+		}
+	}
+	switch len(epochs) {
+	case 0:
+		return
+	case 1:
+	default:
+		fmt.Fprintf(w, "  WARNING: the Welcomes told %d different epochs for one world\n", len(epochs))
+		return
+	}
+	c, err := catalog.Load()
+	if err != nil {
+		return
+	}
+	s := c.PrepareSky()
+	for epoch := range epochs {
+		at := sky.Time(s, float64(epoch), float64(now.UnixMicro()-epoch))
+		fmt.Fprintf(w, "  the world's epoch: %s; the sun over the centre of the disk now: %.1f° up\n",
+			time.UnixMicro(epoch).UTC().Format(time.RFC3339), sky.SunAltitude(s, at, 0, 0)*180/math.Pi)
+	}
 }

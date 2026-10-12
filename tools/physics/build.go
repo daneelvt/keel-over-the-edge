@@ -44,7 +44,7 @@ var allocArgs = []string{
 	"-panic=trap",
 	"-no-debug",
 	"-opt=2",
-	`-print-allocs=^(main|github\.com/daneelvt/keel-over-the-edge/internal/physics)\.`,
+	`-print-allocs=^(main|github\.com/daneelvt/keel-over-the-edge/internal/(physics|sky))\.`,
 }
 
 type module struct {
@@ -56,7 +56,7 @@ func (m module) String() string {
 }
 
 // buildModule builds the module into out and checks it: no heap allocation
-// in the package or the module's exports, and within the size budget.
+// in the packages or the module's exports, and within the size budget.
 func buildModule(ctx context.Context, out string) (module, error) {
 	bin, err := pinned.TinyGo.Ensure(ctx, stateDir, os.Stdout)
 	if err != nil {

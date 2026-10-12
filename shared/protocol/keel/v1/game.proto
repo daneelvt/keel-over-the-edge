@@ -147,6 +147,10 @@ message Welcome {
   uint32 kind = 5;
   // The boat is the one the account already had.
   bool rejoined = 6;
+  // The world's epoch, from which world time counts: microseconds of UTC
+  // since 1970. The sky is counted from a moment of its own, the same in
+  // every world, so the client needs the world's to tell sky time.
+  int64 epoch_us = 7;
 }
 
 // Pong answers a Ping.

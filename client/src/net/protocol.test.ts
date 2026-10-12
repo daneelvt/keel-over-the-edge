@@ -291,6 +291,7 @@ describe('the envelopes', () => {
           boat: 7n,
           kind: 0,
           rejoined: true,
+          epochUs: 1767225600000000n,
         },
       },
     },

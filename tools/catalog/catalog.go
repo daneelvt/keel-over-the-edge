@@ -58,6 +58,9 @@ func run(root string, check bool, out io.Writer) error {
 	for _, w := range warnings {
 		fmt.Fprintln(out, "warning:", w)
 	}
+	if err := checkLights(root, doc); err != nil {
+		return err
+	}
 	if err := checkIDsNotInCode(root, ids(doc)); err != nil {
 		return err
 	}
@@ -91,7 +94,14 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkSeaParams(sea); err != nil {
 		return err
 	}
-	goPhysics, err := goPhysics(fields, sea)
+	skyNumbers, err := skyFields(root)
+	if err != nil {
+		return err
+	}
+	if err := checkSkyParams(skyNumbers); err != nil {
+		return err
+	}
+	goPhysics, err := goPhysics(fields, sea, skyNumbers)
 	if err != nil {
 		return err
 	}
@@ -101,7 +111,7 @@ func run(root string, check bool, out io.Writer) error {
 		goPhysicsPath: goPhysics,
 		tsJSONPath:    canonical,
 		tsTypesPath:   tsTypes,
-		tsParamsPath:  tsParams(fields, sea),
+		tsParamsPath:  tsParams(fields, sea, skyNumbers),
 	}
 	return writeOrCheck(root, files, check)
 }

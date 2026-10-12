@@ -127,7 +127,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 	s.World = w
 	s.Loop = loop.New(loop.Config{World: w, Epoch: Epoch, Log: log, Metrics: m})
 	s.Edge = edge.New(edge.Config{
-		Bus: w.Bus(), World: WorldID, Clock: s.Loop,
+		Bus: w.Bus(), World: WorldID, Epoch: Epoch, Clock: s.Loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
 	})

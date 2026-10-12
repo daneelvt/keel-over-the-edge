@@ -6,6 +6,7 @@
 // with JavaScript's Math, whose last bits differ between browsers.
 
 import { FN, LAYOUT_VERSION, RECORDS, SEA, SIZES } from './layout.gen';
+import { SKY_PARAMS } from './params.gen';
 
 export type RecordName = keyof typeof RECORDS;
 export type FnName = keyof typeof FN;
@@ -50,6 +51,15 @@ interface Exports {
   samplePoints(): number;
   sampleValues(): number;
   seaSample(slot: number, n: number): void;
+  skyParams(): number;
+  skyPrepare(): void;
+  sky(): number;
+  skyBody(): number;
+  skySize(): number;
+  skyTime(worldEpoch: number, worldTime: number): number;
+  skyAt(t: number, east: number, north: number): void;
+  skyStar(t: number, east: number, north: number, ra: number, dec: number): void;
+  skyVector(ra: number, dec: number): void;
   fnArgs(): number;
   fnResults(): number;
   fnCapacity(): number;
@@ -88,6 +98,15 @@ const functionExports = [
   'samplePoints',
   'sampleValues',
   'seaSample',
+  'skyParams',
+  'skyPrepare',
+  'sky',
+  'skyBody',
+  'skySize',
+  'skyTime',
+  'skyAt',
+  'skyStar',
+  'skyVector',
   'fnArgs',
   'fnResults',
   'fnCapacity',
@@ -96,6 +115,21 @@ const functionExports = [
 ] as const satisfies readonly (keyof Exports)[];
 
 const recordNames = Object.keys(RECORDS) as RecordName[];
+
+/**
+ * The sky record, as the module's skyAt writes it: the sun's body, the
+ * moon's, the moon's lit share (0 new, 1 full) and the stars' matrix,
+ * three rows of three, which turns a star's catalogue vector into its
+ * direction in the place's east, north and up.
+ */
+export const SKY = { sun: 0, moon: 5, lit: 10, stars: 11, size: 20 } as const;
+
+/**
+ * A body in the sky record, and the record skyStar writes: its direction
+ * in the place's east, north and up, its height above the true horizon and
+ * its bearing clockwise from north, in radians.
+ */
+export const BODY = { east: 0, north: 1, up: 2, altitude: 3, bearing: 4, size: 5 } as const;
 
 /** Compiles and starts the physics module. */
 export async function loadPhysics(source: PhysicsSource): Promise<Physics> {
@@ -154,6 +188,10 @@ export class Physics {
       if (addresses[name] % Float64Array.BYTES_PER_ELEMENT !== 0) {
         throw new Error(`physics module: ${name} is not aligned for a Float64Array`);
       }
+    }
+    const skySize = x.skySize() >>> 0;
+    if (skySize !== SKY.size) {
+      throw new Error(`physics module: a sky of ${skySize} values, but this client expects ${SKY.size}`);
     }
     this.#x = x;
     this.#addresses = addresses;
@@ -317,6 +355,53 @@ export class Physics {
       out.set(new Float64Array(x.memory.buffer, x.sampleValues() >>> 0, 4 * m), 4 * start);
     }
     return out;
+  }
+
+  /** The sky's numbers, to write with writeSkyParams before prepareSky. A view. */
+  get skyParams(): Float64Array {
+    return new Float64Array(this.#x.memory.buffer, this.#x.skyParams() >>> 0, SKY_PARAMS);
+  }
+
+  /** Readies the sky from skyParams. Call it before asking about the sky. */
+  prepareSky(): void {
+    this.#x.skyPrepare();
+  }
+
+  /**
+   * Sky time, in whole microseconds, at a world's time: the world's epoch
+   * in microseconds of UTC since 1970, and the microseconds the world has
+   * run since.
+   */
+  skyTime(worldEpoch: number, worldTime: number): number {
+    return this.#x.skyTime(worldEpoch, worldTime);
+  }
+
+  /**
+   * The sky at sky time t, in microseconds, from the place east and north
+   * of the disk's centre, in metres: the sky record, indexed by SKY and
+   * BODY. A view: read it before the next call.
+   */
+  skyAt(t: number, east: number, north: number): Float64Array {
+    this.#x.skyAt(t, east, north);
+    return new Float64Array(this.#x.memory.buffer, this.#x.sky() >>> 0, SKY.size);
+  }
+
+  /**
+   * Where the star of a right ascension and declination, in degrees,
+   * stands at sky time t from a place: a body, indexed by BODY. A view.
+   */
+  skyStar(t: number, east: number, north: number, ra: number, dec: number): Float64Array {
+    this.#x.skyStar(t, east, north, ra, dec);
+    return new Float64Array(this.#x.memory.buffer, this.#x.skyBody() >>> 0, BODY.size);
+  }
+
+  /**
+   * The catalogue vector of a right ascension and declination, in degrees:
+   * the vector the stars' matrix turns. Three values. A view.
+   */
+  skyVector(ra: number, dec: number): Float64Array {
+    this.#x.skyVector(ra, dec);
+    return new Float64Array(this.#x.memory.buffer, this.#x.skyBody() >>> 0, 3);
   }
 
   /**

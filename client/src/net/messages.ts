@@ -71,7 +71,15 @@ export type Status =
 
 export type FromWorker =
   | { type: 'status'; status: Status; waitMs: number; reason: string }
-  | { type: 'welcome'; boat: number; rejoined: boolean; kind: number; tick: number }
+  | {
+      type: 'welcome';
+      boat: number;
+      rejoined: boolean;
+      kind: number;
+      tick: number;
+      /** The world's epoch, in microseconds of UTC since 1970: sky time counts from it and the world's time. */
+      epochUs: number;
+    }
   /** A snapshot record: view.ts's FLEET_RECORD_BYTES. */
   | { type: 'snapshot'; data: ArrayBuffer }
   /** The place in the queue, 1 for the next, and how many wait. */
