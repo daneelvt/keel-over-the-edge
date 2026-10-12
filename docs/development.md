@@ -1769,7 +1769,8 @@ The Kubernetes API listens on the machine alone. To reach it, forward it
 over the same session:
 
 ```sh
-tailscale ssh -L 16443:127.0.0.1:6443 root@keel-prod-1
+tailscale ssh root@keel-prod-1 -L 16443:127.0.0.1:6443
+# (the machine first: tailscale refuses a flag before it)
 # on the machine: k3s kubectl …, or copy /etc/rancher/k3s/k3s.yaml to the
 # computer with its server set to https://127.0.0.1:16443
 ```

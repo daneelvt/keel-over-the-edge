@@ -83,13 +83,15 @@ func run(ctx context.Context, out io.Writer, printOnly bool) error {
 
 // tunnelArgs is tailscale's command line for the forwards: an SSH session
 // to the machine as root that runs nothing (-N), and for each forward a
-// port on this Mac's loopback carried to its Service's fixed address.
+// port on this Mac's loopback carried to its Service's fixed address. The
+// machine comes first: tailscale takes it as its own argument, refuses any
+// flag before it, and hands what follows it to ssh.
 func tunnelArgs(machine string, forwards []manifests.Forward) []string {
-	argv := []string{"ssh", "-N"}
+	argv := []string{"ssh", "root@" + machine, "-N"}
 	for _, f := range forwards {
 		argv = append(argv, "-L", "127.0.0.1:"+strconv.Itoa(f.Local)+":"+f.IP+":"+strconv.Itoa(f.Port))
 	}
-	return append(argv, "root@"+machine)
+	return argv
 }
 
 // links says where each forward is, and how to use the two that are not

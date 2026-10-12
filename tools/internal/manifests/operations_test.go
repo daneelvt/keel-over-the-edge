@@ -231,12 +231,15 @@ func TestBackupsAreProductions(t *testing.T) {
 			if r := envValue(env, "AWS_DEFAULT_REGION"); r != b.Region {
 				t.Errorf("%s: %s signs for the region %q, production.yaml's is %s", c.Name, o.ID(), r, b.Region)
 			}
-			// B2 is S3-compatible, not S3: the SDK's newer checksums only
-			// where they are required.
-			for _, name := range []string{"AWS_REQUEST_CHECKSUM_CALCULATION", "AWS_RESPONSE_CHECKSUM_VALIDATION"} {
-				if envValue(env, name) != "when_required" {
-					t.Errorf("%s: %s does not set %s", c.Name, o.ID(), name)
-				}
+			// B2 is S3-compatible, not S3: a download's checksum is checked
+			// only where one is required.
+			if envValue(env, "AWS_RESPONSE_CHECKSUM_VALIDATION") != "when_required" {
+				t.Errorf("%s: %s does not set AWS_RESPONSE_CHECKSUM_VALIDATION", c.Name, o.ID())
+			}
+			// An upload keeps the SDK's default, a checksum with each: the
+			// bucket's Object Lock refuses an upload that has none.
+			if v := envValue(env, "AWS_REQUEST_CHECKSUM_CALCULATION"); v != "" {
+				t.Errorf("%s: %s sets AWS_REQUEST_CHECKSUM_CALCULATION to %q, and a locked bucket refuses an upload without a checksum", c.Name, o.ID(), v)
 			}
 		}
 		if stores != 2 {
