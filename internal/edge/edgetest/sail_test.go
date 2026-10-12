@@ -90,8 +90,11 @@ func sailIn(t *testing.T, wind bus.Wind, lag client.Lag, d time.Duration, trace 
 				t.Fatal(err)
 			}
 			time.Sleep(3 * time.Second)
-			if f := srv.World.Latest(); f.Wind != wind || f.Sea.Now[0] != srv.Waves.OpenSea(wind.Speed, wind.From) {
-				t.Fatalf("after three seconds the wind is %+v and its sea %+v", f.Wind, f.Sea.Now[0])
+			f := srv.World.Bus().Frames.Acquire()
+			blows, raised := f.Wind, f.Sea.Now[0]
+			f.Release()
+			if blows != wind || raised != srv.Waves.OpenSea(wind.Speed, wind.From) {
+				t.Fatalf("after three seconds the wind is %+v and its sea %+v", blows, raised)
 			}
 		}
 		token, _ := srv.Guest("Ann")

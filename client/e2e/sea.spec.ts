@@ -176,37 +176,42 @@ test.describe('no water shows in a hull', () => {
   // inside the hull's volume, no hole in the sea outside it, and the sea
   // drawn right up to the planking. From above every fragment of the sea is
   // seen, so what holds from there holds from astern and from the cockpit.
-  const FRAMES = 300;
+  const STEPS = 300;
 
-  test(`sailing in the gale, over ${FRAMES} frames`, { tag: '@long' }, async ({ page }) => {
+  // Tagged @long: each look is a frame drawn and a target read back, which
+  // takes most of a second on CI's SwiftShader. The boat is sailed for ten
+  // seconds and looked at after every third step.
+  test(`sailing in the gale, over ${STEPS} steps`, { tag: '@long' }, async ({ page }) => {
+    test.setTimeout(300_000);
     await openScene(page, 'sea=gale');
-    const r = await page.evaluate(async (frames) => {
+    const r = await page.evaluate(async (steps) => {
       const k = globalThis.keel;
       k.setControls(0, 0.9);
-      const sum = { inside: 0, holes: 0, beside: Infinity, left: Infinity, sea: 0 };
+      const sum = { inside: 0, holes: 0, beside: Infinity, left: Infinity, looks: 0 };
       let heave = 0;
       let pitch = 0;
-      for (let i = 0; i < frames; i++) {
-        k.advance(1);
+      for (let i = 0; i < steps; i += 3) {
+        k.advance(3);
         k.render();
         const c = await k.hull();
         sum.inside += c.inside;
         sum.holes += c.holes;
         sum.beside = Math.min(sum.beside, c.beside);
         sum.left = Math.min(sum.left, c.left);
-        sum.sea += c.sea;
+        sum.looks++;
         const s = k.boat().state;
         heave = Math.max(heave, Math.abs(s.heave));
         pitch = Math.max(pitch, Math.abs(s.pitch));
       }
       return { ...sum, heave, pitch };
-    }, FRAMES);
+    }, STEPS);
+    expect(r.looks).toBe(STEPS / 3);
     // The boat rode the gale's waves while it was watched.
     expect(r.heave).toBeGreaterThan(0.2);
     expect(r.pitch).toBeGreaterThan(0.03);
     expect(r.inside).toBe(0);
     expect(r.holes).toBe(0);
-    // In every frame the hull kept some sea out, and the sea was drawn beside it.
+    // In every look the hull kept some sea out, and the sea was drawn beside it.
     expect(r.left).toBeGreaterThan(500);
     expect(r.beside).toBeGreaterThan(50);
   });

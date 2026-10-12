@@ -2288,7 +2288,7 @@ server's sea: the boat band at the points of `sea.json`, which Go wrote,
 within what the GPU's sine is good for, in six seas, places and ticks; every
 tile a rigid plane with the exact hexagon's outline, at the height and slope
 the physics module gives; no sea inside a hull and no hole outside it,
-sailing in a gale for 300 frames, heeled 30°, and in seven other boats; the
+sailing in a gale for ten seconds, heeled 30°, and in seven other boats; the
 lattice fixed as the boat moves and the origin jumps, the tile hash, the
 scene walk, recovery from a lost device, and pictures.
 `sail.spec.ts` sails: the page's steps are the module's under Node, bit for

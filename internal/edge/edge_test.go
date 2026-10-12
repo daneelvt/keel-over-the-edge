@@ -310,6 +310,12 @@ func TestSeaAreas(t *testing.T) {
 			return len(xs) == edge.SeaWindow*edge.SeaWindow
 		}
 		second := func(tick int64) int64 { return bus.SeaSecond(tick) * bus.SeaPeriod }
+		// The world's tick, read as anyone but the ticking goroutine must.
+		tick := func() int64 {
+			f := s.World.Bus().Frames.Acquire()
+			defer f.Release()
+			return f.Tick
+		}
 
 		// After the Welcome, before the first snapshot: the areas about the
 		// start, under the world's 10 knots from the north over open water.
@@ -345,17 +351,17 @@ func TestSeaAreas(t *testing.T) {
 		// follows the boat. The area of column 20 is centred 926 m east and
 		// ends 1157.5 m east.
 		s.Place(w.GetBoat(), physics.State{X: 926, Y: -20})
-		now := s.World.Now()
+		now := tick()
 		if got := seas(now + 150); len(got) != 1 || got[0].sea.GetCol() != 18 || got[0].sea.GetTick() != second(got[0].next) {
 			t.Fatalf("the boat put at the centre of another area: %v", got)
 		}
 		s.Place(w.GetBoat(), physics.State{X: 1180, Y: -20})
-		now = s.World.Now()
+		now = tick()
 		if got := seas(now + 150); len(got) != 0 {
 			t.Fatalf("%d SeaAreas for a boat 22 m past an area's edge", len(got))
 		}
 		s.Place(w.GetBoat(), physics.State{X: 1260, Y: -20})
-		now = s.World.Now()
+		now = tick()
 		moved := seas(now + 150)
 		if len(moved) != 1 {
 			t.Fatalf("%d SeaAreas for a boat in another area", len(moved))
