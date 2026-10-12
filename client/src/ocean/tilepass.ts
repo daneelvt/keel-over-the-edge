@@ -66,6 +66,9 @@ export class TilePass {
   readonly #quad: QuadMesh;
 
   constructor(field: Field, band: BandUniforms) {
+    // Only the rows that hold tiles are drawn: the field fills the first
+    // 40 of the target's 64.
+    this.target.scissor.set(0, 0, PASS_WIDTH, Math.ceil(field.count / PASS_WIDTH));
     const offsets = fieldTexture(field);
     const plane = seaPlaneAt(band);
     const material = new MeshBasicNodeMaterial();
@@ -80,9 +83,13 @@ export class TilePass {
 
   /** Draws every tile's plane into the target. */
   render(renderer: WebGPURenderer): void {
+    // The renderer's own switch turns on a target's scissor.
     const before = renderer.getRenderTarget();
+    const scissored = renderer.getScissorTest();
     renderer.setRenderTarget(this.target);
+    renderer.setScissorTest(true);
     this.#quad.render(renderer);
+    renderer.setScissorTest(scissored);
     renderer.setRenderTarget(before);
   }
 }

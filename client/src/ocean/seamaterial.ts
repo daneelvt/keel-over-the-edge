@@ -141,7 +141,7 @@ const finish = (col: Node<'vec3'>, dist: Node<'float'>): Node<'vec4'> =>
 export function tileLook(v: TileVaryings): Node<'vec4'> {
   return Fn(() => {
     // No water inside a hull.
-    hulls.cut(positionWorld);
+    hulls.cut(positionWorld, v.nearHull);
     const toEye = cameraPosition.sub(positionWorld);
     const dist = length(toEye);
     const V = normalize(toEye);
@@ -216,9 +216,13 @@ export function tileLook(v: TileVaryings): Node<'vec4'> {
 }
 
 /** The far sea's fragment colour: the same water, without the tile style. */
-export function farLook(plane: Node<'vec4'>, hs: Node<'float'>): Node<'vec4'> {
+export function farLook(
+  plane: Node<'vec4'>,
+  hs: Node<'float'>,
+  nearHull: Node<'float'>,
+): Node<'vec4'> {
   return Fn(() => {
-    hulls.cut(positionWorld);
+    hulls.cut(positionWorld, nearHull);
     const toEye = cameraPosition.sub(positionWorld);
     const dist = length(toEye);
     const N = normalize(vec3(plane.y.negate(), 1, plane.z.negate()));

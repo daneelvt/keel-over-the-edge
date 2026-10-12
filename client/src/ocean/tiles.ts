@@ -36,6 +36,7 @@ import {
 import type { Node, Texture } from 'three/webgpu';
 import type { Field } from './hex';
 import { TILE_RADIUS } from './hex';
+import { hulls } from './hulls';
 import { PASS_WIDTH } from './tilepass';
 import { type BandUniforms, boatBandAt, seaHeightAt, seaPlaneOf } from './wave';
 
@@ -85,6 +86,8 @@ export interface TileVaryings {
   hex: Node<'vec2'>;
   /** The significant height of the sea at the tile, in metres. */
   hs: Node<'float'>;
+  /** Above 0 where a hull may reach the tile. */
+  nearHull: Node<'float'>;
 }
 
 export class Tiles {
@@ -139,6 +142,7 @@ export class Tiles {
       plane: varying(plane),
       hex: varying(this.centreHex.add(t.zw)),
       hs: varying(hs),
+      nearHull: varying(hulls.near(c, TILE_RADIUS)),
     };
 
     this.mesh = new Mesh(geometry);

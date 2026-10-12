@@ -178,10 +178,42 @@ export class HullVolumes {
   }
 
   /**
-   * Leaves the fragment at the scene point p out if it lies in a hull. Call
-   * it inside a fragment's function.
+   * Whether a hull is near the scene point p (x and z): 1 within margin
+   * metres of a hull's reach, else 0. For the vertex stage, so that the
+   * fragments of a tile or a triangle with no hull near skip the test.
    */
-  cut(p: Node<'vec3'>): void {
+  near(p: Node<'vec2'>, margin: number): Node<'float'> {
+    const shape = this.#shape as unknown as Node<'vec4'>;
+    return Fn(() => {
+      const found = float(0).toVar();
+      const reach = shape.z.add(margin);
+      Loop(int(this.count), ({ i }: { i: Node<'int'> }) => {
+        const place = this.#placesNode.element(i) as unknown as Node<'vec4'>;
+        const d = p.sub(place.xz);
+        If(dot(d, d).lessThan(reach.mul(reach)), () => {
+          found.assign(1);
+        });
+      });
+      return found;
+    })() as unknown as Node<'float'>;
+  }
+
+  /**
+   * Leaves the fragment at the scene point p out if it lies in a hull. Call
+   * it inside a fragment's function. near is what near() gave the
+   * fragment's vertices: where it is 0 nothing is tested.
+   */
+  cut(p: Node<'vec3'>, near?: Node<'float'>): void {
+    if (near !== undefined) {
+      If(near.greaterThan(0), () => {
+        this.#cut(p);
+      });
+      return;
+    }
+    this.#cut(p);
+  }
+
+  #cut(p: Node<'vec3'>): void {
     const shape = this.#shape as unknown as Node<'vec4'>;
     const inside = float(0).toVar();
     // The hulls and the sea drop away from the boat alike: the test is

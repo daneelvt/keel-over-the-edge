@@ -82,7 +82,7 @@ export class Ocean {
     this.far = new FarSea(this.uniforms, this.passTiles.centre);
     const fm = seaMaterial('sea-far');
     fm.positionNode = this.far.position;
-    fm.fragmentNode = farLook(this.far.plane, this.far.hs);
+    fm.fragmentNode = farLook(this.far.plane, this.far.hs, this.far.nearHull);
     this.far.mesh.material = fm;
     scene.add(this.far.mesh);
   }

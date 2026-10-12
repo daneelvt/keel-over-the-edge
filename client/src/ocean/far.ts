@@ -12,6 +12,7 @@ import { cos, positionGeometry, sin, uniform, varying, vec2, vec3 } from 'three/
 import type { Node, UniformNode } from 'three/webgpu';
 import { horizonDistance } from '../render/materials';
 import { FIELD_RADIUS } from './hex';
+import { hulls } from './hulls';
 import { type BandUniforms, boatBandAt, seaPlaneOf } from './wave';
 
 export const FAR_RINGS = 60;
@@ -65,6 +66,8 @@ export class FarSea {
   readonly plane: Node<'vec4'>;
   /** The significant height of the sea at each vertex, in metres. */
   readonly hs: Node<'float'>;
+  /** Above 0 where a hull may be near: the grid's triangles there are a few metres across. */
+  readonly nearHull: Node<'float'>;
 
   /** centre is the centre tile's scene position, shared with the tiles. */
   constructor(band: BandUniforms, centre: Node<'vec2'>) {
@@ -80,6 +83,7 @@ export class FarSea {
     this.position = vec3(p.x, plane.x.sub(FAR_DROP), p.y);
     this.plane = varying(plane);
     this.hs = varying(summed.w);
+    this.nearHull = varying(hulls.near(p, 30));
     this.mesh = new Mesh(farGeometry());
     this.mesh.name = 'far sea';
     this.mesh.frustumCulled = false;

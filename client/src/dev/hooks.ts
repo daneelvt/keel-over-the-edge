@@ -363,7 +363,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     // With cut, the sea is left out of the hulls as it is on screen.
     m.fragmentNode = cut
       ? (Fn(() => {
-          hulls.cut(positionWorld);
+          hulls.cut(positionWorld, tiles.varyings.nearHull);
           return vec4(positionWorld, id);
         })() as unknown as Node<'vec4'>)
       : vec4(positionWorld, id);
