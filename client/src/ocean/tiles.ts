@@ -36,9 +36,9 @@ import {
 import type { Node, Texture } from 'three/webgpu';
 import type { Field } from './hex';
 import { TILE_RADIUS } from './hex';
-import { hulls } from './hulls';
+import { HULL_MARGIN, hulls } from './hulls';
 import { PASS_WIDTH } from './tilepass';
-import { type BandUniforms, boatBandAt, seaHeightAt, seaPlaneOf } from './wave';
+import { type BandUniforms, boatBandAt, seaAreaAt, seaPlaneOf } from './wave';
 
 /** Depth of each tile's skirt, in metres: deeper than the steps a gale gives. */
 export const SKIRT_DEPTH = 1.1;
@@ -84,10 +84,12 @@ export interface TileVaryings {
   plane: Node<'vec4'>;
   /** The tile's (q, r). */
   hex: Node<'vec2'>;
-  /** The significant height of the sea at the tile, in metres. */
-  hs: Node<'float'>;
-  /** Above 0 where a hull may reach the tile. */
+  /** The sea area's foam at the tile (whitecaps, streaks, folding) and the significant height of its waves, in metres. */
+  area: Node<'vec4'>;
+  /** Above 0 where a hull or its foam may reach the tile. */
   nearHull: Node<'float'>;
+  /** The tile's centre in the scene (x, z): a vertex-stage value, the same for every vertex of the tile. */
+  centre: Node<'vec2'>;
 }
 
 export class Tiles {
@@ -124,14 +126,14 @@ export class Tiles {
     const t = attribute<'vec4'>('tile', 'vec4');
     const index = int(instanceIndex);
     const c = this.centre.add(t.xy);
-    // Without the pass the band is summed here, once for the plane and the
-    // sea's height; with it only the height, which needs no sum.
+    // Without the pass the band is summed here for the plane; with it the
+    // plane is read, and only the sea area's values, which need no sum, are
+    // computed here.
     const summed = planes === null ? boatBandAt(band)(c) : null;
     const plane: Node<'vec4'> =
       summed !== null
         ? seaPlaneOf(summed, c)
         : textureLoad(planes as Texture, ivec2(index.mod(PASS_WIDTH), index.div(PASS_WIDTH)));
-    const hs = summed !== null ? summed.w : seaHeightAt(band)(c);
     const e = positionGeometry.xz;
     const s = positionGeometry.y;
     const y = plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH));
@@ -141,8 +143,9 @@ export class Tiles {
       side: varying(s),
       plane: varying(plane),
       hex: varying(this.centreHex.add(t.zw)),
-      hs: varying(hs),
-      nearHull: varying(hulls.near(c, TILE_RADIUS)),
+      area: varying(seaAreaAt(band)(c)),
+      nearHull: varying(hulls.near(c, TILE_RADIUS + HULL_MARGIN)),
+      centre: c,
     };
 
     this.mesh = new Mesh(geometry);

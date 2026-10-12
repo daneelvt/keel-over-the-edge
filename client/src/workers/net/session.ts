@@ -56,6 +56,9 @@ export class Session {
   readonly views = new ViewRing();
   /** The frame time Pings report, ms. */
   frameMs = 0;
+  /** The tier and the pixel ratio, in hundredths, Pings report; 0 unknown. */
+  tier = 0;
+  renderScale = 0;
 
   #versions: Versions;
   readonly #header = newSnapshot();
@@ -217,6 +220,8 @@ export class Session {
                 ackTick: 0n,
                 rttMs: Math.round(this.clock.state.rtt / 1000),
                 frameMs: this.frameMs,
+                tier: this.tier,
+                renderScale: this.renderScale,
               },
             },
           }),
@@ -238,6 +243,8 @@ export class Session {
               ackTick: BigInt(this.#ackTick),
               rttMs: Math.round(this.clock.state.rtt / 1000),
               frameMs: this.frameMs,
+              tier: this.tier,
+              renderScale: this.renderScale,
             },
           },
         }),

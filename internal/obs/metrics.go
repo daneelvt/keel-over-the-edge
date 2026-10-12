@@ -110,6 +110,8 @@ type Metrics struct {
 	EdgeInputMargin     prometheus.Histogram
 	ClientRTT           prometheus.Histogram
 	ClientFrame         prometheus.Histogram
+	ClientTier          *prometheus.GaugeVec // by tier
+	ClientRenderScale   prometheus.Histogram
 }
 
 // NewMetrics makes the metrics, with the Go runtime's and the process's.
@@ -261,6 +263,13 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.ClientFrame = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "keel_client_frame_seconds", Help: "The clients' 95th percentile frame times.", Buckets: ClientBuckets,
 	})
+	m.ClientTier = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "keel_client_tier", Help: "Clients connected, by the tier they draw at: low, medium, high, or unknown.",
+	}, []string{"tier"})
+	m.ClientRenderScale = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_client_render_scale", Help: "The pixel ratios the clients draw at.",
+		Buckets: []float64{0.5, 0.7, 0.8, 0.9, 1, 1.25, 1.5, 1.75, 2},
+	})
 	m.LeaseEpoch = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "keel_sim_lease_epoch", Help: "The simulation lease's epoch this process took it at: one more for each process that has run the world.",
 	})
@@ -301,7 +310,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	}
 	reg.MustRegister(m.LeaseEpoch, m.LeaseWait, m.LeaseLost, m.Restores, m.RestoredBoats, m.RestoreGap, m.PersistBatch, m.PersistCheckpoint, m.PersistWrites)
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
-		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame,
+		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame, m.ClientTier, m.ClientRenderScale,
 		m.EdgeEncoders, m.EdgeQueued, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,

@@ -9,17 +9,23 @@
 // and a jump to the rim; time, paused, stepped once or slowed; the live State
 // and Out; the sail since the panel opened or the last reset, recorded as a
 // golden scenario to download; camera presets; the back end, the render
-// scale, the tile pass and the antialiasing; and the frame statistics. It is a lazy import, outside the
-// game's first download. Built as nodes and text, never markup.
+// scale, the tile pass and the antialiasing; the quality: the rung of the
+// ladder in use, adaptive quality on or off and the steps it took, and the
+// detail band, the foam and the wakes each on or off; and the frame
+// statistics. It is a lazy import, outside the game's first download.
+// Built as nodes and text, never markup.
 
 import './panel.css';
 import type { FleetStats } from '../game/fleet';
 import type { Game } from '../game/game';
 import type { Traffic } from '../net/messages';
 import type { Online } from '../net/online';
+import { foamOn } from '../ocean/foam';
+import { detailOn } from '../ocean/seamaterial';
 import { RECORDS } from '../predict/layout.gen';
 import type { Predictor } from '../predict/predictor';
 import { DISK_RADIUS } from '../render/coords';
+import { rungName } from '../render/quality';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import type { Antialias } from '../render/stage';
 import { type SeaOptions, seaAreaOf } from '../sandbox/localsea';
@@ -264,6 +270,7 @@ export function openPanel(
   panel.className = 'dev-panel';
   const body = el('div');
   const stats = el('pre');
+  const log = el('pre');
   const records = el('pre');
   const seaCheck = el('pre');
   panel.append(
@@ -430,9 +437,71 @@ export function openPanel(
         el('span', gfx === null ? '…' : `${gfx.backend}${gfx.compat ? ' (compatibility)' : ''}`),
       ),
       swap,
+      row(
+        'Quality',
+        select(
+          (world.quality?.ladder ?? []).map((_, i) => i),
+          (i) => rungName(world.quality?.ladder[i] ?? world.rung),
+          world.quality?.index ?? 0,
+          (i) => {
+            void world.setRung(i, 'panel').then(render);
+          },
+        ),
+      ),
+      row(
+        'Adaptive',
+        select(
+          [true, false],
+          (x) => (x ? 'on' : 'off'),
+          world.quality?.enabled ?? false,
+          (on) => {
+            if (world.quality !== null) {
+              world.quality.enabled = on;
+            }
+            render();
+          },
+        ),
+      ),
+      row(
+        'Detail band',
+        select(
+          [1, 0],
+          (x) => (x === 1 ? 'on' : 'off'),
+          detailOn.value,
+          (v) => {
+            detailOn.value = v;
+          },
+        ),
+      ),
+      row(
+        'Foam',
+        select(
+          [1, 0],
+          (x) => (x === 1 ? 'on' : 'off'),
+          foamOn.value,
+          (v) => {
+            foamOn.value = v;
+          },
+        ),
+      ),
+      row(
+        'Wakes',
+        select(
+          [true, false],
+          (x) => (x ? 'on' : 'off'),
+          world.ocean.drawWakes,
+          (on) => {
+            world.ocean.drawWakes = on;
+            if (!on) {
+              world.ocean.wakes.clear();
+            }
+          },
+        ),
+      ),
       row('The GPU’s sea', checkSea),
       seaCheck,
       stats,
+      log,
       records,
     );
   };
@@ -468,13 +537,16 @@ export function openPanel(
       `work    ${st.workMedian.toFixed(2)} ms median, ${st.workP90.toFixed(2)} ms 90th`,
       `display ${cap.rate.toFixed(0)} Hz, drawing every ${cap.divisor} (cap ${cap.limit})`,
       `gpu     ${gpu}`,
-      `draws   ${st.drawCalls}, ${st.triangles.toLocaleString('en')} triangles`,
-      `scale   ${world.stage.pixelRatio()}${world.stage.gfx?.floatTargets === false ? ', no float targets' : ''}`,
+      `draws   ${st.drawCalls}, ${st.dispatches} dispatches, ${st.triangles.toLocaleString('en')} triangles`,
+      `scale   ${world.stage.pixelRatio().toFixed(2)}${world.stage.gfx?.floatTargets === false ? ', no float targets' : ''}`,
+      `tier    ${rungName(world.rung)}${world.quality?.enabled ? ', adaptive' : ', held'} (wait ${((world.quality?.wait ?? 0) / 1000).toFixed(0)} s)`,
+      `detail  ${detailLine(world)}`,
       `boat    ${p.east.toFixed(0)} E, ${p.north.toFixed(0)} N`,
       `origin  ${o.world.x.toFixed(0)} E, ${o.world.y.toFixed(0)} N, tile ${o.centre.q},${o.centre.r}`,
       `time    ${game.clock.time.toFixed(2)} s, step ${game.clock.steps}`,
       seaLines(band.hs[here] ?? 0, peak, band.count, band.blended),
     ].join('\n');
+    log.textContent = ['Steps', ...world.qualityLog().slice(-8)].join('\n');
     records.textContent = [
       'State',
       fields(RECORDS.state, sandbox.states.current),
@@ -484,6 +556,18 @@ export function openPanel(
     ].join('\n');
   };
   render();
+}
+
+/** The detail band, as a line: how it is made, and how long the low tier's loops took to make. */
+function detailLine(world: SeaScene): string {
+  const d = world.ocean.detail.state;
+  const under = world.ocean.under;
+  const wind = `${(under.speed / KNOT).toFixed(1)} kn, fetch ${(under.fetch / NAUTICAL_MILE).toFixed(1)} NM`;
+  const bake =
+    d.kind === 'baked'
+      ? `, ${d.baked ? 'made' : 'making'} in ${d.bakeSpent.toFixed(0)} ms (longest slice ${d.bakeLongest.toFixed(1)} ms)`
+      : '';
+  return `${d.kind}${bake}; ${wind}`;
 }
 
 /** What the connection's part of the panel shows. */

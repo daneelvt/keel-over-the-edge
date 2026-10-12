@@ -6,13 +6,13 @@
 // and pixel ratio, and when the GPU device or WebGL context is lost builds a
 // new renderer and carries on with the same scene.
 
-import { NoToneMapping, PerspectiveCamera, Scene } from 'three';
+import { NoToneMapping, type Object3D, PerspectiveCamera, Scene } from 'three';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { pass, renderOutput } from 'three/tsl';
-import { RenderPipeline, type WebGPURenderer } from 'three/webgpu';
+import { type PassNode, RenderPipeline, type WebGPURenderer } from 'three/webgpu';
 import { FrameCap } from '../game/cap';
-import { type Backend, createGfx, defaultRenderScale, type Gfx } from './renderer';
+import { type Backend, createGfx, type Gfx } from './renderer';
 
 export type Antialias = 'fxaa' | 'smaa' | 'none';
 
@@ -34,6 +34,8 @@ export interface StageHooks {
   drawn?(gfx: Gfx, work: number): void;
   /** After a new renderer is made (at start and after a loss). */
   attached?(gfx: Gfx): void;
+  /** After the page was hidden and is shown again. */
+  resumed?(): void;
 }
 
 export class Stage {
@@ -41,10 +43,14 @@ export class Stage {
   readonly camera = new PerspectiveCamera(50, 1, NEAR, FAR);
   gfx: Gfx | null = null;
   antialias: Antialias = 'fxaa';
-  /** The pixel ratio drawn at; null for the back end's default. */
+  /** The pixel ratio drawn at, set by hand; null for the one the quality in use gives. */
   scale: number | null = null;
-  /** Whether to measure GPU time (the developer panel's statistics). */
-  timestamps = false;
+  /** The pixel ratio the quality in use draws at, for a display of a device pixel ratio. */
+  ratio: (dpr: number) => number = (dpr) => Math.max(dpr, 1);
+  /** Whether to measure GPU time, where the device can. */
+  timestamps = true;
+  /** Whether to hold a WebGPU device to compatibility mode's limits. */
+  compat = false;
   /** Which animation frames are drawn: at most 60 a second, or 30 to save battery. */
   readonly cap = new FrameCap();
   /** How many times the renderer was rebuilt after a loss. */
@@ -55,6 +61,7 @@ export class Stage {
   readonly #wanted: Backend;
   readonly #hooks: StageHooks;
   #pipeline: RenderPipeline | null = null;
+  #scenePass: PassNode | null = null;
   #last = 0;
   #frozen = false;
 
@@ -74,6 +81,7 @@ export class Stage {
         void this.#recover(reason);
       },
       this.timestamps,
+      this.compat,
     );
     this.gfx = gfx;
     gfx.renderer.toneMapping = NoToneMapping;
@@ -81,9 +89,11 @@ export class Stage {
     // post-processing); its counts are reset once, at its start.
     gfx.renderer.info.autoReset = false;
     this.#buildPipeline();
-    this.resize();
     this.#hooks.attached?.(gfx);
+    this.resize();
     this.#last = performance.now();
+    // The display's own rate, before anything is drawn.
+    this.cap.probe();
     await gfx.renderer.setAnimationLoop((now: number) => this.#frame(now));
   }
 
@@ -98,6 +108,7 @@ export class Stage {
   /** After the page was hidden: animation frames stopped, so their timing starts again. */
   resumed(): void {
     this.cap.restart();
+    this.#hooks.resumed?.();
   }
 
   /** Draws one frame now, at time now. */
@@ -115,13 +126,35 @@ export class Stage {
     this.resize();
   }
 
+  /**
+   * Compiles what an object needs to be drawn in the scene, before its first
+   * frame there: its shaders and pipelines are made off the frame, and the
+   * frame that first draws it does not wait for them.
+   */
+  compile(object: Object3D): Promise<void> {
+    const g = this.gfx;
+    const p = this.#scenePass;
+    if (g === null || p === null) {
+      return Promise.resolve();
+    }
+    // The scene is drawn into the pass's own target, and a pipeline is made
+    // for the target it draws to. compileAsync reads the target at once, so
+    // it is set for the call alone.
+    const r = g.renderer;
+    const before = r.getRenderTarget();
+    r.setRenderTarget(p.renderTarget);
+    const done = r.compileAsync(object, this.camera, this.scene);
+    r.setRenderTarget(before);
+    return done.then(() => undefined);
+  }
+
   /** The pixel ratio in use. */
   pixelRatio(): number {
     const g = this.gfx;
     if (g === null) {
       return 1;
     }
-    return this.scale ?? defaultRenderScale(g.backend, g.compat, window.devicePixelRatio || 1);
+    return this.scale ?? this.ratio(window.devicePixelRatio || 1);
   }
 
   resize(): void {
@@ -144,6 +177,7 @@ export class Stage {
     this.#pipeline?.dispose();
     const p = new RenderPipeline(g.renderer);
     const scenePass = pass(this.scene, this.camera);
+    this.#scenePass = scenePass;
     if (this.antialias === 'none') {
       p.outputNode = scenePass;
     } else {

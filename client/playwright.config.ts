@@ -9,8 +9,11 @@
 // own on the test database's server (tools/e2e), and Vite in front of it, as
 // in development; and a second Vite whose traffic to keel goes through the
 // lag proxy tools/e2e runs, for the tests of a slow network. The WebKit
-// project runs only the test of the net worker's upgrade. The page's origin is http://localhost, where browsers allow
-// the session's Secure cookie without a certificate.
+// project runs only the test of the net worker's upgrade. The compat project
+// runs the sea's tests on WebGPU with a device held to compatibility mode's
+// limits (?compat), as the phones that offer only that have. The page's
+// origin is http://localhost, where browsers allow the session's Secure
+// cookie without a certificate.
 
 import { defineConfig, devices } from '@playwright/test';
 
@@ -66,6 +69,17 @@ export default defineConfig({
         launchOptions: { args },
       },
     })),
+    {
+      name: 'compat',
+      testMatch: ['sea.spec.ts', 'look.spec.ts'],
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 960, height: 600 },
+        deviceScaleFactor: 1,
+        ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
+        launchOptions: { args },
+      },
+    },
     // The upgrade from a worker on WebKit, Safari's engine: nothing drawn.
     {
       name: 'webkit',

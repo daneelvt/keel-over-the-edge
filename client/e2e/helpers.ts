@@ -17,7 +17,8 @@ declare global {
  * controls are hidden unless hud is true, so pictures show the scene alone.
  */
 export async function openScene(page: Page, query = '', hud = false): Promise<void> {
-  const backend = test.info().project.name === 'webgl2' ? '&backend=webgl2' : '';
+  const project = test.info().project.name;
+  const backend = project === 'webgl2' ? '&backend=webgl2' : project === 'compat' ? '&compat' : '';
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`/?sandbox&test${backend}${query === '' ? '' : `&${query}`}`);
@@ -25,8 +26,12 @@ export async function openScene(page: Page, query = '', hud = false): Promise<vo
   await page.evaluate(() => globalThis.keel.ready());
   const info = await page.evaluate(() => globalThis.keel.info());
   test.skip(
-    test.info().project.name === 'webgpu' && info.backend !== 'webgpu',
+    (project === 'webgpu' || project === 'compat') && info.backend !== 'webgpu',
     'this browser offers no WebGPU adapter',
+  );
+  test.skip(
+    project === 'compat' && !info.compat,
+    'this browser offers no device held to compatibility mode',
   );
   if (errors.length > 0) {
     throw new Error(`the page failed: ${errors.join('; ')}`);
@@ -34,6 +39,8 @@ export async function openScene(page: Page, query = '', hud = false): Promise<vo
   if (!hud) {
     await page.addStyleTag({ content: '.hud { visibility: hidden; }' });
   }
+  // The best rung of the ladder, whatever the page's first seconds did.
+  await page.evaluate(() => globalThis.keel.setRung(0));
   await page.evaluate(() => {
     globalThis.keel.freeze(100);
     globalThis.keel.reset();

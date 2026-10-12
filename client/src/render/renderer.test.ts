@@ -2,7 +2,7 @@
 
 import { HalfFloatType, UnsignedByteType } from 'three';
 import { describe, expect, test } from 'vitest';
-import { chooseBackend, defaultRenderScale, outputBufferType } from './renderer';
+import { chooseBackend, outputBufferType, wantsCompat } from './renderer';
 import { percentile } from './stats';
 
 describe('the back end', () => {
@@ -13,12 +13,10 @@ describe('the back end', () => {
     expect(chooseBackend(new URLSearchParams('backend=webgpu'), false)).toBe('webgl2');
   });
 
-  test('draws at up to 2 on WebGPU, 1.5 in compatibility mode, 1 on WebGL 2', () => {
-    expect(defaultRenderScale('webgpu', false, 3)).toBe(2);
-    expect(defaultRenderScale('webgpu', false, 1.25)).toBe(1.25);
-    expect(defaultRenderScale('webgpu', true, 3)).toBe(1.5);
-    expect(defaultRenderScale('webgl2', false, 3)).toBe(1);
-    expect(defaultRenderScale('webgl2', false, 0.5)).toBe(1);
+  test('is held to compatibility mode with ?compat', () => {
+    expect(wantsCompat(new URLSearchParams('compat'))).toBe(true);
+    expect(wantsCompat(new URLSearchParams('compat=1&dev'))).toBe(true);
+    expect(wantsCompat(new URLSearchParams('dev'))).toBe(false);
   });
 
   test('outputs half float on WebGPU, 8-bit on WebGL 2', () => {

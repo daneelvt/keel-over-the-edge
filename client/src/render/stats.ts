@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Frame statistics for the developer panel: the interval between drawn
-// frames over 2-second windows (median and 90th percentile), the main
-// thread's work on each drawn frame, GPU time from timestamp queries where
-// the device offers them, and the draw calls and triangles of the last
-// frame. The interval shows the frame cap as much as the phone; the work
-// shows what the phone has to spare. Recording a frame allocates nothing.
+// Frame statistics, for adaptive quality and the developer panel: the
+// interval between drawn frames over windows of 2 seconds (median and 90th
+// percentile), the main thread's work on each drawn frame, GPU time from
+// timestamp queries where the device offers them (the render passes' and
+// the compute passes'), and the draw calls, compute dispatches and triangles
+// of the last frame. The interval shows the frame cap as much as the phone;
+// the work and the GPU time show what the phone has to spare. Recording a
+// frame allocates nothing.
 
 import type { Gfx } from './renderer';
 
@@ -25,6 +27,8 @@ export interface FrameStats {
   /** Mean GPU time per frame over the window, in milliseconds, or null. */
   gpu: number | null;
   drawCalls: number;
+  /** Compute dispatches of the last frame. */
+  dispatches: number;
   triangles: number;
 }
 
@@ -46,10 +50,15 @@ export class Stats {
     workP90: 0,
     gpu: null,
     drawCalls: 0,
+    dispatches: 0,
     triangles: 0,
   };
-  /** Whether to read GPU timestamps (the panel asks for them). */
+  /** Whether to read GPU timestamps. */
   gpuTiming = false;
+  /** How long a window lasts, in milliseconds. */
+  window = WINDOW;
+  /** Called as each window closes, at its end's time in milliseconds. */
+  onWindow: ((now: number, stats: FrameStats) => void) | null = null;
 
   readonly #times = new Float64Array(MAX_FRAMES);
   readonly #sorted = new Float64Array(MAX_FRAMES);
@@ -67,6 +76,7 @@ export class Stats {
   drawn(gfx: Gfx, work = 0): void {
     const info = gfx.renderer.info.render;
     this.last.drawCalls = info.drawCalls;
+    this.last.dispatches = gfx.renderer.info.compute.frameCalls;
     this.last.triangles = info.triangles;
     if (this.#w < MAX_FRAMES) {
       this.#work[this.#w++] = work;
@@ -88,17 +98,48 @@ export class Stats {
       this.#resolving = true;
       const frames = this.#unresolved;
       this.#unresolved = 0;
-      void gfx.renderer.resolveTimestampsAsync('render').then((ms) => {
-        this.#resolving = false;
-        if (typeof ms === 'number' && ms > 0) {
-          this.#gpuSum += ms;
-          this.#gpuFrames += frames;
-        }
-      });
+      const r = gfx.renderer;
+      // Both pools are read, or the one left unread fills.
+      void Promise.all([
+        r.resolveTimestampsAsync('render'),
+        gfx.compute ? r.resolveTimestampsAsync('compute') : 0,
+      ])
+        .then(([render, compute]) => {
+          const ms = (typeof render === 'number' ? render : 0) + (compute ?? 0);
+          if (ms > 0) {
+            this.#gpuSum += ms;
+            this.#gpuFrames += frames;
+          }
+        })
+        .catch(() => {
+          // A device lost while its queries were read: the next one starts afresh.
+        })
+        .finally(() => {
+          this.#resolving = false;
+        });
     }
-    if (now - this.#windowStart >= WINDOW) {
+    if (now - this.#windowStart >= this.window) {
       this.#close(now);
     }
+  }
+
+  /**
+   * Forgets when the last frame was drawn: the next interval would span a
+   * time in which nothing was drawn on purpose (the page hidden, the display
+   * probed, a new renderer made).
+   */
+  gap(): void {
+    this.#prev = -1;
+  }
+
+  /** Starts a new window now, letting the frames of the one under way go. */
+  restart(now: number): void {
+    this.#n = 0;
+    this.#w = 0;
+    this.#gpuSum = 0;
+    this.#gpuFrames = 0;
+    this.#prev = -1;
+    this.#windowStart = now;
   }
 
   #close(now: number): void {
@@ -119,5 +160,6 @@ export class Stats {
     this.#gpuSum = 0;
     this.#gpuFrames = 0;
     this.#windowStart = now;
+    this.onWindow?.(now, this.last);
   }
 }

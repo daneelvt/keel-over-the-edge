@@ -40,6 +40,9 @@ export class NetWorker {
   readonly #d: NetDeps;
   #session: Session | null = null;
   #url = '';
+  /** What the page last said it draws with, for every session's Pings. */
+  #tier = 0;
+  #scale = 0;
   #socket: Socket | null = null;
   #status: Status = 'stopped';
   #attempt = 0;
@@ -65,6 +68,8 @@ export class NetWorker {
       case 'start':
         this.#url = m.url;
         this.#session = new Session(m.versions as HelloVersions);
+        this.#session.tier = this.#tier;
+        this.#session.renderScale = this.#scale;
         this.#connect();
         break;
       case 'input':
@@ -76,6 +81,14 @@ export class NetWorker {
       case 'frame':
         if (this.#session !== null) {
           this.#session.frameMs = Math.round(m.ms);
+        }
+        break;
+      case 'quality':
+        this.#tier = Math.max(0, Math.round(m.tier));
+        this.#scale = Math.max(0, Math.round(m.scale * 100));
+        if (this.#session !== null) {
+          this.#session.tier = this.#tier;
+          this.#session.renderScale = this.#scale;
         }
         break;
       case 'wake':

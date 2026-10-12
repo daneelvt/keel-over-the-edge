@@ -60,6 +60,12 @@ type conn struct {
 	nheld   int
 	waiting atomic.Int32 // nheld, for the encoder to skip connections with none
 
+	// counted is the tier the client last said it draws at, as an index of
+	// tierNames, or -1 before it has said: it is counted under that tier
+	// until it says another or goes.
+	tierMu  sync.Mutex
+	counted int32
+
 	// sea is what the client has been told of the sea; the encoder's.
 	sea    connSea
 	margin margin
@@ -108,6 +114,7 @@ func newConn(e *Edge, ws *websocket.Conn, raw net.Conn, account bus.Account, req
 		id:      e.nextConn.Add(1),
 		account: account,
 		reqID:   reqID,
+		counted: -1,
 		queue:   make(chan outgoing, e.lim.Queue),
 		done:    make(chan struct{}),
 		closed:  make(chan struct{}),
@@ -443,10 +450,31 @@ func (c *conn) ping(p *pb.Ping) bool {
 	if ms := p.GetFrameMs(); ms > 0 {
 		e.m.frame.Observe(float64(ms) / 1000)
 	}
+	c.countTier(tierOf(p.GetTier()))
+	if s := p.GetRenderScale(); s > 0 {
+		e.m.scale.Observe(float64(s) / 100)
+	}
 	wt, _ := e.cfg.Clock.WorldTime()
 	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Pong{Pong: &pb.Pong{
 		ClientTimeUs: p.GetClientTimeUs(), WorldTimeUs: wt.Microseconds(),
 	}}}, outPong)
+}
+
+// countTier counts the client under tier t, and no longer under the one it
+// was counted under: −1 for none.
+func (c *conn) countTier(t int32) {
+	c.tierMu.Lock()
+	defer c.tierMu.Unlock()
+	if t == c.counted {
+		return
+	}
+	if c.counted >= 0 {
+		c.e.m.tiers[c.counted].Dec()
+	}
+	if t >= 0 {
+		c.e.m.tiers[t].Inc()
+	}
+	c.counted = t
 }
 
 // send queues a message for the writer; a full queue closes the

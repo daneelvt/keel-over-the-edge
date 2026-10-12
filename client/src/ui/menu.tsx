@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The menu: who is sailing, and this device's settings. The frame rate (60,
-// or 30 to save battery), sound, the beginners' overlays, and whether the
-// helm returns to the centre when let go.
+// or 30 to save battery), how much the sea is drawn with (as much as the
+// device runs well, or the least), sound, the beginners' overlays, and
+// whether the helm returns to the centre when let go.
 
 import { type ConnectionView, RoundTrip } from './connection';
 import { PlayerText } from './player';
@@ -64,6 +65,19 @@ export function Menu({
         on={s.frameRate === 30}
         set={(on) => settings.set({ frameRate: on ? 30 : 60 })}
       />
+      <label class="menu-row">
+        <span>Detail</span>
+        <select
+          name="detail"
+          value={s.detail}
+          onChange={(e) =>
+            settings.set({ detail: e.currentTarget.value === 'low' ? 'low' : 'auto' })
+          }
+        >
+          <option value="auto">Automatic</option>
+          <option value="low">Low</option>
+        </select>
+      </label>
       <Toggle name="sound" label="Sound" on={s.sound} set={(sound) => settings.set({ sound })} />
       <Toggle
         name="wind-overlay"

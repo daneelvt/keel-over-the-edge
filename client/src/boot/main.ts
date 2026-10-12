@@ -16,6 +16,8 @@
 //   ?sea=gale         the sandbox's wind by the sea it raises: calm, breeze, fresh or gale
 //   ?dev              the developer panel (loaded only when asked for)
 //   ?backend=webgl2   the WebGL 2 back end even where WebGPU is offered
+//   ?tier=low         a tier, high, medium or low, held: adaptive quality is off
+//   ?compat           a WebGPU device held to compatibility mode's limits
 //   ?view=bands       a camera preset: chase, sea, bands, aboard or high
 //   ?test             the hooks the browser tests drive
 
@@ -45,12 +47,21 @@ async function start(): Promise<void> {
   container.className = 'stage';
   document.body.replaceChildren(container);
 
-  const world = new SeaScene(container, backend);
+  const settings = settingsSignal();
+  let store: Storage | null = null;
+  try {
+    store = localStorage;
+  } catch {
+    // Storage refused: nothing is remembered.
+  }
+  const world = new SeaScene(container, backend, {
+    query,
+    store,
+    detail: settings.value.value.detail,
+  });
   const dev = query.has('dev');
-  world.stage.timestamps = dev;
-  world.stats.gpuTiming = dev;
 
-  const game = new Game(world, settingsSignal());
+  const game = new Game(world, settings);
 
   const view = CAMERA_PRESETS[query.get('view') ?? ''];
   if (query.has('sandbox')) {
@@ -108,6 +119,8 @@ async function start(): Promise<void> {
   });
   const online = new Online(worker, predictor, game);
   world.fleetSource = online.fleet;
+  world.onQuality = (tier, scale) => online.quality(tier, scale);
+  online.quality(world.tier.number, world.stage.pixelRatio());
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
   // while the sea is full.

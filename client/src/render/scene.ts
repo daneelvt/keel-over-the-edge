@@ -13,7 +13,8 @@ import { fog, rangeFogFactor } from 'three/tsl';
 import { catalog } from '../catalog';
 import type { Wind } from '../game/driver';
 import type { DrawnBoat } from '../game/fleet';
-import { HULL_REACH, HULLS, hulls } from '../ocean/hulls';
+import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
+import { beaufort, KNOT, SPRAY } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
 import { type BoatPose, newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
@@ -23,10 +24,42 @@ import { FloatingOrigin, type ScenePoint } from './coords';
 import { FleetView } from './fleet';
 import { domeCentre } from './materials';
 import { Overlays } from './overlays';
-import type { Backend, Gfx } from './renderer';
+import {
+  Adaptive,
+  type FrameWindow,
+  pixelRatioOf,
+  type Rung,
+  remember,
+  rungName,
+  SLOW,
+  type Store,
+  startQuality,
+  TIERS,
+  type Tier,
+  type TierName,
+} from './quality';
+import { type Backend, type Gfx, wantsCompat } from './renderer';
+import { Shadows } from './shadows';
 import { look, Sky, toLinear } from './sky';
+import { type CrestSample, SprayDrops, type SpraySource, SprayView } from './spray';
 import { Stage } from './stage';
-import { Stats } from './stats';
+import { type FrameStats, Stats, WINDOW } from './stats';
+
+/** For this long after the scene starts, the windows adaptive quality judges are short: the first seconds are the benchmark. */
+const BENCHMARK = 6000;
+const BENCHMARK_WINDOW = 500;
+/** A slow window probes the display again if the last probe is older than this, in milliseconds. */
+const PROBE_AFTER = 10_000;
+
+/** What the scene is told when it is made. */
+export interface SceneOptions {
+  /** The page's query: ?tier and ?compat. */
+  query: URLSearchParams;
+  /** Where the quality a device settled on is remembered, or null. */
+  store: Store | null;
+  /** The player's choice of detail: automatic, or low to save battery. */
+  detail: 'auto' | 'low';
+}
 
 export { CAMERA_PRESETS, type CameraView };
 
@@ -45,6 +78,8 @@ export class SeaScene {
   readonly camera = new ChaseCamera();
   /** The catalog's first boat, the one a new sailor starts in. */
   readonly kind = catalog.boats[0];
+  /** The catalog's sea: the spectrum both bands of waves are drawn from. */
+  readonly catalogSea = catalog.weather.sea;
   readonly overlays: Overlays;
   readonly boatScene: ScenePoint = { x: 0, y: 0, z: 0 };
   boat: Boat | null = null;
@@ -52,6 +87,11 @@ export class SeaScene {
   readonly fleet = new FleetView(this.kind);
   /** Where the other boats' poses come from: the game's fleet online, or a test's. */
   fleetSource: FleetSource | null = null;
+  readonly shadows: Shadows;
+  readonly spray = new SprayDrops(0);
+  readonly sprayView = new SprayView();
+  /** Whether the spray is hidden (the tests). */
+  sprayHidden = false;
 
   /** What to draw: the boat between its last two steps, the latest step's Out, the wind. */
   readonly pose: BoatPose = newPose();
@@ -63,6 +103,18 @@ export class SeaScene {
   ticks = 0;
 
   usePass = true;
+  /** Adaptive quality and its ladder, once the renderer is known. */
+  quality: Adaptive | null = null;
+  /** The tier the ladder starts from. */
+  top: TierName = 'low';
+  /** The player's choice of detail. */
+  detail: 'auto' | 'low';
+  /** The last window of frames adaptive quality judged (the panel, the tests). */
+  lastWindow: FrameWindow | null = null;
+  /** A window's length for adaptive quality that overrides the scene's own, ms (the tests). */
+  windowMs: number | null = null;
+  /** Called when the tier or the render scale in use changes: what the server is told. */
+  onQuality: ((tier: number, scale: number) => void) | null = null;
   /** Called at the start of each drawn frame, with the real time since the last one (s) and now (ms). */
   tick: ((dt: number, now: number) => void) | null = null;
   /** Called after each frame is placed (the panel's statistics, the tests). */
@@ -73,16 +125,43 @@ export class SeaScene {
   /** The other boats nearest the player's, by their place among those drawn, and how far each is. */
   readonly #near = new Int32Array(HULLS);
   readonly #nearDist = new Float64Array(HULLS);
+  readonly #query: URLSearchParams;
+  readonly #store: Store | null;
+  /** The hull every boat has, for now: where its stern is and how wide it is, for the wakes. */
+  #aft = 0;
+  #halfBeam = 0.5;
+  #started = -1;
+  #probed = Number.NEGATIVE_INFINITY;
+  /** Counts the changes of quality asked for: one that takes long may be overtaken. */
+  #applying = 0;
 
-  constructor(container: HTMLElement, backend: Backend) {
+  constructor(
+    container: HTMLElement,
+    backend: Backend,
+    options: SceneOptions = { query: new URLSearchParams(), store: null, detail: 'auto' },
+  ) {
+    this.#query = options.query;
+    this.#store = options.store;
+    this.detail = options.detail;
     this.stage = new Stage(container, backend, {
       frame: (gfx, info) => this.#frame(gfx, info.dt, info.now),
       drawn: (gfx, work) => this.stats.drawn(gfx, work),
       attached: (gfx) => this.#attached(gfx),
+      resumed: () => {
+        // Hidden, nothing was drawn: the frames either side say nothing.
+        const now = performance.now();
+        this.stats.restart(now);
+        this.quality?.quiet(now);
+      },
     });
+    this.stage.compat = wantsCompat(options.query);
+    this.stats.gpuTiming = true;
+    this.stats.onWindow = (now, st) => this.#window(now, st);
     const scene = this.stage.scene;
     this.sky = new Sky(scene);
+    this.shadows = new Shadows(this.sky.sunLight);
     this.ocean = new Ocean(scene);
+    scene.add(this.sprayView.mesh);
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
     scene.add(this.fleet.root);
@@ -108,9 +187,11 @@ export class SeaScene {
       await Promise.all([boat.loadSailor(sailor.art.model), this.fleet.load(sailor.art)]);
     }
     boat.model.add(this.overlays.onBoat);
+    Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
     if (boat.hullShape !== null) {
       // Every boat is of this kind, for now: one hull's volume serves them all.
       hulls.setShape(boat.hullShape, this.kind.physics.hull.centreOfGravity);
+      this.#hull(boat.hullShape);
     }
     this.boat = boat;
     this.stage.scene.add(boat.root);
@@ -128,9 +209,167 @@ export class SeaScene {
     this.#placeCamera();
   }
 
+  #hull(shape: HullShape): void {
+    this.#aft = shape.stations[0]?.[0] ?? 0;
+    this.#halfBeam = Math.max(...shape.stations.map((s) => s[1] ?? 0));
+  }
+
   #attached(gfx: Gfx): void {
+    this.shadows.attached(gfx.renderer);
     this.ocean.choose(this.usePass, gfx.floatTargets);
     this.boat?.attached(gfx);
+    const now = performance.now();
+    if (this.quality === null) {
+      this.#start(gfx);
+    } else {
+      // A new renderer after a loss: its first frames compile everything again.
+      this.quality.quiet(now);
+      this.stats.restart(now);
+    }
+    this.#started = -1;
+    void this.#apply(false);
+  }
+
+  /** Makes the ladder for this renderer and the player's choice, and starts where the device settled. */
+  #start(gfx: Gfx): void {
+    const start = startQuality(gfx.backend, gfx.compat, this.#query, this.detail, this.#store);
+    this.top = start.top;
+    this.quality = new Adaptive(start.ladder, start.index);
+    this.quality.enabled = start.adaptive;
+    this.stage.ratio = (dpr) => pixelRatioOf(this.rung, dpr);
+  }
+
+  /** The rung in use. */
+  get rung(): Rung {
+    const q = this.quality;
+    return q === null
+      ? { tier: 'low', scale: 1, shadows: false, detail: { kind: 'none' } }
+      : q.rung;
+  }
+
+  /** The tier in use. */
+  get tier(): Tier {
+    return TIERS[this.rung.tier];
+  }
+
+  /** The player's choice of detail, from the menu: the ladder starts over from it. */
+  setDetail(detail: 'auto' | 'low'): void {
+    if (detail === this.detail) {
+      return;
+    }
+    this.detail = detail;
+    const g = this.stage.gfx;
+    if (g !== null && this.quality !== null) {
+      const was = this.quality;
+      this.#start(g);
+      this.quality.log.push(...was.log);
+      void this.#apply(true);
+    }
+  }
+
+  /** Moves to a rung of the ladder by hand (the developer panel, the tests). */
+  setRung(index: number, why = 'set'): Promise<void> {
+    this.quality?.set(performance.now(), index, why);
+    return this.#apply(true);
+  }
+
+  /**
+   * Brings the scene to the rung in use: the render scale, the sea's look,
+   * the foam map. A change of the sea's shaders is compiled before it is
+   * drawn when ahead is set, and adaptive quality judges nothing until it
+   * is in and a second has passed.
+   */
+  async #apply(ahead: boolean): Promise<void> {
+    const q = this.quality;
+    if (q === null) {
+      return;
+    }
+    const change = ++this.#applying;
+    const rung = q.rung;
+    const tier = TIERS[rung.tier];
+    q.quiet(performance.now(), Number.POSITIVE_INFINITY);
+    this.stage.resize();
+    const sh = this.shadows;
+    sh.set(tier, rung.shadows);
+    if (this.boat !== null) {
+      Shadows.cast(this.boat.model, sh.on, sh.lit);
+    }
+    Shadows.cast(this.fleet.near.group, sh.on && sh.fleet, sh.fleet);
+    // The light's casting changes every lit material's shader: compiled off
+    // the frame first, and swapped in once ready. The compiler reads the
+    // light as it is when called, so the light is changed for that call and
+    // put back until the shaders are in.
+    let lit: Promise<void> = Promise.resolve();
+    const was = sh.light.castShadow;
+    if (sh.lit !== was) {
+      sh.light.castShadow = sh.lit;
+      if (ahead) {
+        const casters = [this.boat?.root, this.fleet.root].filter((o) => o !== undefined);
+        lit = Promise.all(casters.map((o) => this.stage.compile(o))).then(() => undefined);
+        sh.light.castShadow = was;
+      }
+    }
+    this.spray.capacity = tier.spray;
+    this.onQuality?.(tier.number, this.stage.pixelRatio());
+    await Promise.all([
+      lit,
+      this.ocean.setQuality(
+        { detail: rung.detail, anisotropy: tier.anisotropy, foamMap: tier.foamMap },
+        ahead ? (o) => this.stage.compile(o) : null,
+        this.stage.gfx?.renderer ?? null,
+      ),
+    ]);
+    if (change === this.#applying) {
+      sh.light.castShadow = sh.lit;
+    }
+    if (change === this.#applying) {
+      const now = performance.now();
+      q.unquiet(now);
+      this.stats.restart(now);
+    }
+  }
+
+  /** A window of frames closed: adaptive quality judges it, and the scene takes the step it asks for. */
+  #window(now: number, st: FrameStats): void {
+    const q = this.quality;
+    const cap = this.stage.cap;
+    if (q === null || !q.enabled) {
+      return;
+    }
+    const w: FrameWindow = {
+      frames: st.frames,
+      p90: st.p90,
+      interval: cap.interval,
+      gpu: st.gpu,
+      work: st.workMedian,
+    };
+    this.lastWindow = w;
+    // A page called for a frame every 33 ms is slow, or its display is: the
+    // display is measured again before the window is believed.
+    if (
+      w.interval > 0 &&
+      w.p90 > SLOW * w.interval &&
+      q.index < q.ladder.length - 1 &&
+      now - cap.probed > PROBE_AFTER
+    ) {
+      cap.probe();
+      return;
+    }
+    if (q.window(now, w) !== null) {
+      remember(this.#store, this.top, q.index);
+      void this.#apply(true);
+    }
+  }
+
+  /** The steps adaptive quality took, in words, the latest last. */
+  qualityLog(): string[] {
+    const q = this.quality;
+    if (q === null) {
+      return [];
+    }
+    return q.log.map(
+      (s) => `${(s.at / 1000).toFixed(1)} s  ${s.why}: ${rungName(q.ladder[s.to] as Rung)}`,
+    );
   }
 
   /**
@@ -140,11 +379,22 @@ export class SeaScene {
   #placeHulls(): void {
     const p = this.pose;
     const bs = this.boatScene;
+    const speed = this.out[RECORDS.out.speedThroughWater] ?? 0;
     hulls.begin();
-    hulls.add(bs.x, bs.y + p.heave, bs.z, p.heading, p.heel, p.pitch);
+    hulls.add(bs.x, bs.y + p.heave, bs.z, p.heading, p.heel, p.pitch, speed);
+    const wakes = this.ocean.wakes;
+    wakes.begin();
+    wakes.add(p.east, p.north, p.heading, speed, this.#aft, this.#halfBeam);
     const fs = this.fleetSource;
     if (fs === null) {
       return;
+    }
+    // Every boat drawn lays a wake; the map keeps those within its square.
+    for (let i = 0; i < fs.count; i++) {
+      const b = fs.drawn[i] as DrawnBoat;
+      if (b.opacity >= 0.5) {
+        wakes.add(b.east, b.north, b.heading, b.speed, this.#aft, this.#halfBeam);
+      }
     }
     // The nearest, kept in order of distance as they are found.
     const near = this.#near;
@@ -171,7 +421,7 @@ export class SeaScene {
     const o = this.origin.world;
     for (let k = 0; k < n; k++) {
       const b = fs.drawn[near[k] ?? 0] as DrawnBoat;
-      hulls.add(b.east - o.x, b.heave, -(b.north - o.y), b.heading, b.heel, b.pitch);
+      hulls.add(b.east - o.x, b.heave, -(b.north - o.y), b.heading, b.heel, b.pitch, b.speed);
     }
   }
 
@@ -197,6 +447,17 @@ export class SeaScene {
   }
 
   #frame(gfx: Gfx, dt: number, now: number): void {
+    const cap = this.stage.cap;
+    if (cap.probed !== this.#probed) {
+      // The display was probed: nothing was drawn meanwhile, on purpose.
+      this.#probed = cap.probed;
+      this.stats.gap();
+    }
+    if (this.#started < 0) {
+      this.#started = now;
+    }
+    this.stats.window =
+      this.windowMs ?? (now - this.#started < BENCHMARK ? BENCHMARK_WINDOW : WINDOW);
     this.stats.frame(now, gfx);
     this.tick?.(dt, now);
     this.#updateBoatScene();
@@ -208,7 +469,13 @@ export class SeaScene {
     const camera = this.stage.camera;
 
     this.#placeHulls();
-    this.ocean.update(gfx.renderer, this.origin, this.ticks, camera.position.y);
+    this.ocean.update(gfx.renderer, this.origin, {
+      tick: this.ticks,
+      dt: this.timeStep,
+      boatEast: this.pose.east,
+      boatNorth: this.pose.north,
+      cameraHeight: camera.position.y,
+    });
     this.sky.follow(camera.position, this.#v.set(bs.x, bs.y, bs.z));
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
     const fs = this.fleetSource;
@@ -231,6 +498,109 @@ export class SeaScene {
       const size = gfx.canvas;
       o.placeLabels(camera, size.clientWidth, size.clientHeight);
     }
+    this.#spray();
     this.onFrame?.();
+  }
+
+  /** The spray's sources this frame: the player's bow, and the nearest others' on the tiers that have them. */
+  readonly #sources: SpraySource[] = Array.from({ length: 4 }, () => ({
+    east: 0,
+    north: 0,
+    height: 0,
+    sea: 0,
+    heading: 0,
+    speed: 0,
+  }));
+  readonly #crests: CrestSample[] = Array.from({ length: 16 }, () => ({
+    east: 0,
+    north: 0,
+    height: 0,
+    crest: 0,
+  }));
+  readonly #points = new Float64Array(2 * (4 + 16));
+  readonly #weather = { speed: 0, east: 0, north: -1, whitecaps: 0 };
+  #crestSeed = 1;
+
+  /** Steps the spray: the bows and, in a gale, the crests about the camera. */
+  #spray(): void {
+    const src = this.ocean.source;
+    const slot = this.ocean.slot;
+    const dt = this.timeStep;
+    const tier = this.tier;
+    const sources = this.#sources;
+    const pts = this.#points;
+    const p = this.pose;
+    const half = this.kind.physics.hull.waterlineLength / 2;
+    // The player's bow, and the nearest others' within reach.
+    let n = 0;
+    const bow = (
+      east: number,
+      north: number,
+      heading: number,
+      heave: number,
+      pitch: number,
+      speed: number,
+    ) => {
+      const s = sources[n] as SpraySource;
+      s.east = east + Math.sin(heading) * half;
+      s.north = north + Math.cos(heading) * half;
+      s.height = heave + Math.sin(pitch) * half;
+      s.heading = heading;
+      s.speed = speed;
+      pts[n * 2] = s.east;
+      pts[n * 2 + 1] = s.north;
+      n++;
+    };
+    bow(p.east, p.north, p.heading, p.heave, p.pitch, this.out[RECORDS.out.speedThroughWater] ?? 0);
+    const fs = this.fleetSource;
+    if (fs !== null) {
+      for (let k = 0; k < tier.sprayBoats && k < HULLS - 1; k++) {
+        const i = this.#near[k] ?? -1;
+        const b = i >= 0 && i < fs.count ? fs.drawn[i] : undefined;
+        if (b === undefined || (this.#nearDist[k] ?? Infinity) > HULL_REACH) {
+          break;
+        }
+        bow(b.east, b.north, b.heading, b.heave, b.pitch, b.speed);
+      }
+    }
+    const wind = this.wind;
+    const knots = wind.speed / KNOT;
+    const crests =
+      tier.sprayCrests && beaufort(knots) >= SPRAY.crestForce ? this.#crests.length : 0;
+    // Places about the camera, scattered afresh each frame.
+    const cam = this.stage.camera.position;
+    const o = this.origin.world;
+    for (let c = 0; c < crests; c++) {
+      this.#crestSeed = (Math.imul(this.#crestSeed, 1103515245) + 12345) >>> 0;
+      const a = (this.#crestSeed / 4294967296) * 2 * Math.PI;
+      const r = SPRAY.crestReach * Math.sqrt(((this.#crestSeed >>> 8) & 0xffff) / 65536);
+      pts[(n + c) * 2] = cam.x + o.x + Math.cos(a) * r;
+      pts[(n + c) * 2 + 1] = -cam.z + o.y + Math.sin(a) * r;
+    }
+    if (src !== null && slot >= 0 && dt > 0) {
+      src.physics.seaDrawAt(this.ticks);
+      const sea = src.physics.seaSample(slot, pts.subarray(0, 2 * (n + crests)));
+      for (let k = 0; k < n; k++) {
+        (sources[k] as SpraySource).sea = sea[k * 4] ?? 0;
+      }
+      for (let c = 0; c < crests; c++) {
+        const at = (n + c) * 4;
+        const cr = this.#crests[c] as CrestSample;
+        cr.east = pts[(n + c) * 2] ?? 0;
+        cr.north = pts[(n + c) * 2 + 1] ?? 0;
+        cr.height = sea[at] ?? 0;
+        cr.crest = (sea[at] ?? 0) / Math.max((sea[at + 3] ?? 0) / 2, 0.03);
+      }
+      const w = this.#weather;
+      w.speed = wind.speed;
+      w.east = -Math.sin(wind.from);
+      w.north = -Math.cos(wind.from);
+      w.whitecaps = this.ocean.under.foam.whitecaps;
+      this.spray.step(dt, sources, w, this.#crests, n, crests);
+    }
+    this.sprayView.draw(this.spray, this.origin);
+    if (this.sprayHidden) {
+      this.sprayView.mesh.visible = false;
+    }
   }
 }
