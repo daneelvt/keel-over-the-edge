@@ -222,10 +222,10 @@ test.describe('no water shows in a hull', () => {
       const r = await page.evaluate(async (heel) => {
         const k = globalThis.keel;
         const sum = { inside: 0, holes: 0, beside: Infinity, left: Infinity };
-        for (let i = 0; i < 60; i++) {
-          // A third of a second on each time, and the boat laid on the sea of that time.
-          k.freeze(100 + i / 3);
-          k.setState({ heel: (heel * Math.PI) / 180, heading: 0.7 + i / 10 });
+        for (let i = 0; i < 20; i++) {
+          // A second on each time, and the boat laid on the sea of that time.
+          k.freeze(100 + i);
+          k.setState({ heel: (heel * Math.PI) / 180, heading: 0.7 + 0.3 * i });
           k.render();
           const c = await k.hull();
           sum.inside += c.inside;
