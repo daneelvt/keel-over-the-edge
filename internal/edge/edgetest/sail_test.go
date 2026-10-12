@@ -500,11 +500,17 @@ func TestDropout(t *testing.T) {
 				t.Fatal(err)
 			}
 			s.Drop()
+			// What each sail came to, for a failure's message.
+			t.Logf("after %v more: %d snapshots, %d corrections (largest %.3f m), %d resets, %d stale, %d SeaAreas, m up to %d, latest input %d ticks late",
+				d, s.Stats.Snapshots, s.Stats.Corrections, s.Stats.Percentile(100), s.Stats.Resets, s.Stats.Stale, s.Stats.Seas, s.Stats.MaxAhead, s.Stats.MaxLate)
 		}
 		sailFor(10 * time.Second)
 		time.Sleep(20 * time.Second)
 		sailFor(5 * time.Second)
-		time.Sleep(70 * time.Second)
+		// Back a moment before a tick, so that the Welcome is there before
+		// the sailor's first frame: the snapshot the last connection left
+		// waiting for a frame is not taken for the new boat's first.
+		time.Sleep(70*time.Second - 5*time.Millisecond)
 		sailFor(5 * time.Second)
 		w := s.Welcomes
 		if len(w) != 3 || w[0].Rejoined || !w[1].Rejoined || w[1].Boat != w[0].Boat || w[2].Rejoined || w[2].Boat == w[0].Boat {

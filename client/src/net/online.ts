@@ -185,6 +185,9 @@ export class Online {
         this.#hadBoat = true;
         this.boat = m.boat;
         this.#fresh = true;
+        // A snapshot still waiting for a frame is the last connection's:
+        // its controls are not this boat's.
+        this.#queued.length = 0;
         // A new connection's views start afresh: the boats fade out, and
         // in again with its first snapshot.
         this.fleet.clear();
