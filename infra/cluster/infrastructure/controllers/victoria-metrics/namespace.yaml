@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What watches the game: the operator, the stores, the scraper, the rules,
+# Alertmanager and Grafana. Restricted: what needs the host is in
+# monitoring-node.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

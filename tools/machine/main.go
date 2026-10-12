@@ -7,7 +7,7 @@
 //	go run ./tools/machine -ansible [-lint]      make Ansible's venv in .dev/ansible, from hashed requirements
 //	go run ./tools/machine -join                 join the tailnet as a short-lived tag:ci-prod node; write the machine's host keys
 //	go run ./tools/machine -leave                log that node out, and stop it
-//	go run ./tools/machine -run check|apply [-reboot] [-local] [-unchanged]
+//	go run ./tools/machine -run check|apply [-reboot] [-rebuild] [-local] [-unchanged]
 //	                                             run the playbook: check reports what apply would change; apply changes it
 //	go run ./tools/machine -verify [-local]      check the machine is as the playbook leaves it, changing nothing
 //	go run ./tools/machine -audit [-local]       audit the machine with Lynis, changing nothing; on the runner, kube-bench too
@@ -20,6 +20,11 @@
 // bootstraps Flux from it. -local runs on the runner itself, as root,
 // with a made-up credential: what a pull request checks. -unchanged fails
 // the run if anything changed: the second run of the same playbook.
+// -rebuild is for a machine reinstalled from nothing: Flux is bootstrapped
+// on the release's rebuild form, whose database is recovered from the
+// backups (infra/REBUILD.md). Before the playbook, -run reads which form
+// Flux follows and the archive the database writes, and refuses a run that
+// would point a database at an archive that is not its own.
 //
 // It runs from the repository root, on Linux, with sudo.
 package main
@@ -42,6 +47,7 @@ func main() {
 	leave := flag.Bool("leave", false, "log the CI node out and stop it")
 	run := flag.String("run", "", "run the playbook, in `mode` check or apply")
 	reboot := flag.Bool("reboot", false, "with -run apply: reboot the machine if a change needs it")
+	rebuild := flag.Bool("rebuild", false, "with -run: bootstrap Flux on the release's rebuild form, for a machine reinstalled from nothing")
 	local := flag.Bool("local", false, "with -run, -verify or -audit: on this runner itself, as root")
 	unchanged := flag.Bool("unchanged", false, "with -run: fail if anything changed")
 	verify := flag.Bool("verify", false, "check the machine is as the playbook leaves it")
@@ -70,7 +76,7 @@ func main() {
 		case *leave:
 			err = m.leave(ctx)
 		case *run != "":
-			err = m.run(ctx, runOptions{mode: *run, reboot: *reboot, local: *local, unchanged: *unchanged})
+			err = m.run(ctx, runOptions{mode: *run, reboot: *reboot, rebuild: *rebuild, local: *local, unchanged: *unchanged})
 		case *verify:
 			err = m.verify(ctx, *local)
 		case *audit:

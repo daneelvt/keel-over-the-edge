@@ -5,3 +5,6 @@ kind: Kustomization
 resources:
   - cloudnative-pg
   - external-secrets
+  - cert-manager
+  - barman-cloud
+  - victoria-metrics

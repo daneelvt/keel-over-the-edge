@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The controllers' and the edge's metrics, which the stack does not scrape:
+# the monitoring operator itself, CloudNativePG's operator, External
+# Secrets, cert-manager, Flux and Traefik. Each port is let in to the scraper by a policy beside its pods.
+# The stores, the scraper, vmalert and Alertmanager are scraped by the
+# operator's own scrapes; node-exporter, kube-state-metrics, Grafana, the
+# kubelet, the API server and CoreDNS by the stack's.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: victoria-metrics-operator
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: victoria-metrics-operator
+  podMetricsEndpoints:
+    - port: http
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: cloudnative-pg
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [cnpg-system]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudnative-pg
+  podMetricsEndpoints:
+    - port: metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: external-secrets
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [external-secrets]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: external-secrets
+  podMetricsEndpoints:
+    - port: metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: cert-manager
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [cert-manager]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cert-manager
+      app.kubernetes.io/component: controller
+  podMetricsEndpoints:
+    - port: http-metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: flux
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [flux-system]
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [source-controller, kustomize-controller, helm-controller, notification-controller]
+  podMetricsEndpoints:
+    - port: http-prom
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: traefik
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [kube-system]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+  podMetricsEndpoints:
+    - port: metrics

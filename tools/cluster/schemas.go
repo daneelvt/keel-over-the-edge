@@ -26,9 +26,13 @@ const anyImage = manifests.GameImage + "@sha256:00000000000000000000000000000000
 type used struct{ group, kind, version string }
 
 // usedKinds are the kinds of every object the manifests render to, in
-// every entry point of every cluster.
-func usedKinds(t *manifests.Tree) ([]used, error) {
+// every entry point of every cluster; and the custom resource definitions
+// the manifests hold themselves, as production's upgrade controller's,
+// which the local cluster does not run.
+func usedKinds(t *manifests.Tree) ([]used, []crd, error) {
 	seen := map[used]bool{}
+	var carried []crd
+	var carryErr error
 	add := func(objs []manifests.Object) {
 		for _, o := range objs {
 			group, version, ok := strings.Cut(manifests.Str(o, "apiVersion"), "/")
@@ -36,30 +40,48 @@ func usedKinds(t *manifests.Tree) ([]used, error) {
 				group, version = "", group
 			}
 			seen[used{group, o.Kind(), version}] = true
+			if o.Kind() != "CustomResourceDefinition" {
+				continue
+			}
+			data, err := json.Marshal(o)
+			var d crd
+			if err == nil {
+				err = json.Unmarshal(data, &d)
+			}
+			if err != nil {
+				carryErr = fmt.Errorf("%s: %w", o.ID(), err)
+			}
+			d.carried = true
+			if !slices.ContainsFunc(carried, func(c crd) bool { return c.Metadata.Name == d.Metadata.Name }) {
+				carried = append(carried, d)
+			}
 		}
 	}
 	for _, c := range manifests.Clusters {
 		for _, e := range c.Entries {
 			rm, err := t.RenderRelease(c.Entry(e), anyImage)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			objs, err := manifests.Objects(rm)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			add(objs)
 		}
 	}
 	sync, err := t.RenderSync(manifests.ProdTag)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	objs, err := manifests.Objects(sync)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	add(objs)
+	if carryErr != nil {
+		return nil, nil, carryErr
+	}
 	var kinds []used
 	for k := range seen {
 		kinds = append(kinds, k)
@@ -67,7 +89,7 @@ func usedKinds(t *manifests.Tree) ([]used, error) {
 	slices.SortFunc(kinds, func(a, b used) int {
 		return strings.Compare(a.group+"/"+a.kind+"/"+a.version, b.group+"/"+b.kind+"/"+b.version)
 	})
-	return kinds, nil
+	return kinds, carried, nil
 }
 
 // crd is the parts of a CustomResourceDefinition a schema is made from.
@@ -87,6 +109,8 @@ type crd struct {
 			} `json:"schema"`
 		} `json:"versions"`
 	} `json:"spec"`
+	// carried is whether the manifests hold the definition themselves.
+	carried bool
 }
 
 // selfDescribed are the kinds of Kubernetes' own whose schema comes from
@@ -112,7 +136,7 @@ func (c *cluster) schemas(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	kinds, err := usedKinds(t)
+	kinds, carried, err := usedKinds(t)
 	if err != nil {
 		return err
 	}
@@ -126,7 +150,9 @@ func (c *cluster) schemas(ctx context.Context) error {
 	if err := json.Unmarshal(out, &list); err != nil {
 		return fmt.Errorf("reading the cluster's custom resource definitions: %w", err)
 	}
-	files, err := crdSchemas(kinds, list.Items)
+	// The cluster's definition of a kind where it has one, as it runs it;
+	// the manifests' own where it has none.
+	files, err := crdSchemas(kinds, append(list.Items, carried...))
 	if err != nil {
 		return err
 	}
@@ -169,6 +195,9 @@ func crdSchemas(kinds []used, crds []crd) (map[string][]byte, error) {
 			if d.Spec.Group != k.group || d.Spec.Names.Kind != k.kind {
 				continue
 			}
+			if _, done := files[manifests.SchemaFile(k.group, k.kind, k.version)]; done {
+				continue
+			}
 			var schema map[string]any
 			for _, v := range d.Spec.Versions {
 				if v.Name == k.version {
@@ -179,7 +208,11 @@ func crdSchemas(kinds []used, crds []crd) (map[string][]byte, error) {
 				return nil, fmt.Errorf("the manifests use %s %s at %s, a version the cluster's %s does not define", k.group, k.kind, k.version, d.Metadata.Name)
 			}
 			schema = strictSchema(schema).(map[string]any)
-			schema["$comment"] = fmt.Sprintf("The schema of %s %s/%s, from the definition %s in the local cluster, written by go run ./tools/cluster -schemas. Not edited by hand.", k.kind, k.group, k.version, d.Metadata.Name)
+			from := "in the local cluster"
+			if d.carried {
+				from = "the manifests hold"
+			}
+			schema["$comment"] = fmt.Sprintf("The schema of %s %s/%s, from the definition %s %s, written by go run ./tools/cluster -schemas. Not edited by hand.", k.kind, k.group, k.version, d.Metadata.Name, from)
 			data, err := json.MarshalIndent(schema, "", "  ")
 			if err != nil {
 				return nil, err

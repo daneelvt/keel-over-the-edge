@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What others publish that the cluster's manifests hold exactly as
+# published: release manifests with no signature of their own, which Flux
+# cannot verify as a source. Each is fetched from its release by go run
+# ./tools/vendored -pull, never as the cluster deploys, checked against the
+# release's own checksums where it lists the file, and pinned here by its
+# SHA-256, which a test holds the file in the repository to. The images
+# they run are pinned by digest in the kustomization beside each.
+#
+# To move one to a new release: its url (and checksums) here, an empty
+# sha256, then -pull, and the pull request shows what changed.
+files:
+  - file: infra/cluster/infrastructure/controllers/kured/kured-1.23.0-combined.yaml
+    url: https://github.com/kubereboot/kured/releases/download/1.23.0/kured-1.23.0-combined.yaml
+    sha256: 8572f7f2118ae7c943e9a3624f2385162ff9ec4e49283b65fd0c091714a2c662
+  - file: infra/cluster/infrastructure/controllers/system-upgrade/system-upgrade-controller.yaml
+    url: https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/system-upgrade-controller.yaml
+    checksums: https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/sha256sum-amd64.txt
+    sha256: fd474b662d1f2b74ab150d95b6482869e1fd1f27ceee54b13e94b92292097969
+  - file: infra/cluster/infrastructure/controllers/system-upgrade/crd.yaml
+    url: https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/crd.yaml
+    checksums: https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/sha256sum-amd64.txt
+    sha256: 1fb061e0d8bf9534da0145e614a9e03ca376cd5d1adcca17d13cfa12e211c48c

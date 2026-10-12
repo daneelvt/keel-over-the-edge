@@ -309,7 +309,7 @@ func (c *cluster) waitLayer(ctx context.Context, layer, revision string, timeout
 // endRelease lets go of a release the cluster follows: it deletes the
 // layers, the last first, and then the source, and nothing else. Each
 // layer leaves what it applied in place (its deletionPolicy, Orphan), the
-// database with its world among it; a layer that would not is left alone,
+// database with its world among it; if one would not, none is touched,
 // and the deploy stops.
 func (c *cluster) endRelease(ctx context.Context) error {
 	if ok, err := c.fluxInstalled(ctx); err != nil || !ok {
@@ -317,7 +317,8 @@ func (c *cluster) endRelease(ctx context.Context) error {
 	}
 	layers := slices.Clone(localCluster.Entries)
 	slices.Reverse(layers)
-	said := false
+	// Every layer is looked at before any is deleted.
+	var there []string
 	for _, layer := range layers {
 		o, err := c.fluxGet(ctx, layerKind, layer)
 		if err != nil {
@@ -329,10 +330,12 @@ func (c *cluster) endRelease(ctx context.Context) error {
 		if o.Spec.DeletionPolicy != "Orphan" {
 			return fmt.Errorf("the layer %s of Flux's has the deletionPolicy %q, not Orphan: deleting it could delete what it applied, the database among it. Not touching it", layer, o.Spec.DeletionPolicy)
 		}
-		if !said {
-			c.logf("letting go of the release the cluster followed: the working tree is in charge again")
-			said = true
-		}
+		there = append(there, layer)
+	}
+	if len(there) > 0 {
+		c.logf("letting go of the release the cluster followed: the working tree is in charge again")
+	}
+	for _, layer := range there {
 		if _, err := c.kubectl(ctx, nil, "-n", manifests.FluxNamespace, "delete", layerKind, layer, "--wait", "--timeout=2m"); err != nil {
 			return err
 		}

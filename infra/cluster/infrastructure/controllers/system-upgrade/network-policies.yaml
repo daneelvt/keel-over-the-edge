@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Nothing reaches the upgrade controller or its jobs: they call the
+# Kubernetes API, outward.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress
+  namespace: system-upgrade
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]

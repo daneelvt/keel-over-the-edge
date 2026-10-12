@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# k3s upgraded by the system-upgrade controller, in its window alone:
+# Thursdays, 20:00 to 22:00 UTC. The version is infra/k3s/release.yaml's,
+# and the upgrade image, which copies k3s's binary onto the machine, is
+# pinned by its digest (an image named with a tag or digest is used as
+# written: the controller's pkg/upgrade/container). A test keeps the three
+# the same; Renovate moves them together. The node is cordoned, not
+# drained: on one node, k3s restarting leaves the containers running.
+# Ansible's k3s role upgrades too, never downgrades, so whichever comes
+# first wins and the other finds nothing to do.
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: k3s-server
+  namespace: system-upgrade
+spec:
+  version: v1.36.5+k3s1
+  concurrency: 1
+  cordon: true
+  serviceAccountName: system-upgrade
+  nodeSelector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Exists
+  window:
+    days: [thursday]
+    startTime: "20:00"
+    endTime: "22:00"
+    timeZone: UTC
+  upgrade:
+    # renovate: image=rancher/k3s-upgrade versioning=regex:^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-k3s(?<build>\d+)$
+    image: rancher/k3s-upgrade:v1.36.5-k3s1@sha256:95f3adc47b8355bc77b0cad60e2cb7f243e6f90480b96cd502081b37b19e0357

@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The operator v0.75.0 (chart 0.68.1), with its definitions. No admission
+# webhook: it checks what kubeconform and Flux's dry run already check, and
+# would need a certificate kept. Nothing here uses the Prometheus
+# operator's kinds, so it does not watch for them. The configuration
+# reloader it adds beside each store is pinned by digest here; each store's
+# own image, by its object's spec.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoria-metrics-operator
+spec:
+  interval: 1h
+  chartRef:
+    kind: OCIRepository
+    name: victoria-metrics-operator
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    image:
+      # renovate: image=victoriametrics/operator
+      tag: v0.75.0@sha256:78da26b41a819093707be2ab6a65a5dc19f43d58ec52f30b49a545c2c6b7bd55
+    configReloader:
+      image:
+        repository: victoriametrics/operator
+        # renovate: image=victoriametrics/operator versioning=regex:^config-reloader-v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
+        tag: config-reloader-v0.75.0@sha256:11c5d33b2112571e72cdc020b63c8045f2cd523fec4768b67a91f96e36b05c59
+    admissionWebhooks:
+      enabled: false
+    operator:
+      disable_prometheus_converter: true
+    podSecurityContext:
+      enabled: true
+      runAsNonRoot: true
+      runAsUser: 1000
+      fsGroup: 2000
+      seccompProfile:
+        type: RuntimeDefault
+    # Starting values.
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      limits:
+        memory: 192Mi

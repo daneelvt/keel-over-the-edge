@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The cluster's alerts: its pods, Flux, External Secrets and cert-manager.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: cluster
+spec:
+  groups:
+    - name: cluster
+      rules:
+        - alert: PodRestarting
+          expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+          labels:
+            severity: warning
+            component: cluster
+            summary: "A container keeps restarting."
+          annotations:
+            description: "{{ $labels.namespace }}/{{ $labels.pod }}'s {{ $labels.container }} restarted {{ $value }} times in 15 minutes. Its logs in VictoriaLogs, and kubectl describe, say why."
+        - alert: FluxNotReady
+          expr: gotk_resource_info{ready="False", suspended!="true"} > 0
+          for: 15m
+          labels:
+            severity: warning
+            component: cluster
+            summary: "A Flux object is not ready: a release is not fully applied."
+          annotations:
+            description: "{{ $labels.customresource_kind }} {{ $labels.exported_namespace }}/{{ $labels.name }}. flux get all -A, or its object's conditions, say why."
+        - alert: SecretNotSynced
+          expr: externalsecret_status_condition{condition="Ready", status="False"} == 1
+          for: 15m
+          labels:
+            severity: warning
+            component: cluster
+            summary: "An ExternalSecret cannot read Infisical."
+          annotations:
+            description: "{{ $labels.namespace }}/{{ $labels.name }}: its Secret keeps its last value. Its conditions say why; Infisical's status page may."
+        - alert: CertificateExpiring
+          expr: certmanager_certificate_expiration_timestamp_seconds - time() < 14 * 86400
+          labels:
+            severity: warning
+            component: cluster
+            summary: "A certificate expires within 14 days."
+          annotations:
+            description: "{{ $labels.namespace }}/{{ $labels.name }} expires in {{ $value | humanizeDuration }}; cert-manager renews it 15 days before, and has not. Its CertificateRequest's conditions say why."

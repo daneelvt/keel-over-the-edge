@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package production reads infra/production.yaml: the identifiers of
-// production's machine, tailnet, secrets store, Cloudflare zone and state
-// bucket that the workflows' tools need, none of them secret.
+// production's machine, tailnet, secrets store, Cloudflare zone, state
+// bucket and backups' buckets that the workflows' tools need, none of them
+// secret.
 package production
 
 import (
@@ -50,6 +51,22 @@ type Production struct {
 		Endpoint string `yaml:"endpoint"`
 		Region   string `yaml:"region"`
 	} `yaml:"state"`
+
+	// Backups is where the database's backups go: B2's S3 API at Endpoint,
+	// in Region, and the buckets made by hand for them.
+	Backups Backups `yaml:"backups"`
+}
+
+// Backups are the database's backups' buckets, each with a key of its own
+// that no workflow holds.
+type Backups struct {
+	Endpoint string `yaml:"endpoint"`
+	Region   string `yaml:"region"`
+	// Bucket holds production's WAL and base backups; Dumps, its weekly
+	// dumps; Local, the local cluster's WAL and base backups.
+	Bucket string `yaml:"bucket"`
+	Dumps  string `yaml:"dumps"`
+	Local  string `yaml:"local"`
 }
 
 // Identity is a Tailscale federated identity: a workflow exchanges a token
@@ -85,6 +102,12 @@ type Infisical struct {
 		Project string `yaml:"project"`
 		Slug    string `yaml:"slug"`
 	} `yaml:"cluster"`
+
+	// Backups is the project that holds the backups' keys, which the
+	// cluster's External Secrets alone reads: by its slug, for its store.
+	Backups struct {
+		Slug string `yaml:"slug"`
+	} `yaml:"backups"`
 }
 
 var (
@@ -194,7 +217,46 @@ func (p Production) check() error {
 	if st.Region != "" && st.Endpoint != "" && !strings.Contains(st.Endpoint, "."+st.Region+".") {
 		fail("state.endpoint %q is not in state.region %s", st.Endpoint, st.Region)
 	}
+	if in.Backups.Slug != "" && (!slug.MatchString(in.Backups.Slug) || in.Backups.Slug == in.Cluster.Slug) {
+		fail("infisical.backups.slug %q is not a project's slug of its own: the backups' keys are in a project no workflow reads", in.Backups.Slug)
+	}
+	b := p.Backups
+	if b.Endpoint != "" {
+		if u, err := url.Parse(b.Endpoint); err != nil || u.Scheme != "https" || u.Host == "" || (u.Path != "" && u.Path != "/") {
+			fail("backups.endpoint %q is not https://<host>", b.Endpoint)
+		}
+	}
+	if b.Region != "" && !b2Region.MatchString(b.Region) {
+		fail("backups.region %q is not a B2 region, as us-west-004", b.Region)
+	}
+	if b.Region != "" && b.Endpoint != "" && !strings.Contains(b.Endpoint, "."+b.Region+".") {
+		fail("backups.endpoint %q is not in backups.region %s", b.Endpoint, b.Region)
+	}
+	buckets := map[string]string{st.Bucket: "state.bucket"}
+	for _, bk := range []struct{ name, v string }{{"backups.bucket", b.Bucket}, {"backups.dumps", b.Dumps}, {"backups.local", b.Local}} {
+		if bk.v == "" {
+			continue
+		}
+		if !bucketName.MatchString(bk.v) {
+			fail("%s %q is not a B2 bucket's name", bk.name, bk.v)
+		}
+		if other, ok := buckets[bk.v]; ok {
+			fail("%s and %s are the same bucket: each has a key of its own", other, bk.name)
+		}
+		buckets[bk.v] = bk.name
+	}
 	return errors.Join(errs...)
+}
+
+// BackupsMade fails, naming what is missing, until the backups' buckets
+// and the project that holds their keys are made by hand and written
+// down: a release's manifests name them, and would archive nowhere.
+func (p Production) BackupsMade() error {
+	return Need(map[string]string{
+		"backups.endpoint": p.Backups.Endpoint, "backups.region": p.Backups.Region,
+		"backups.bucket": p.Backups.Bucket, "backups.dumps": p.Backups.Dumps, "backups.local": p.Backups.Local,
+		"infisical.backups.slug": p.Infisical.Backups.Slug,
+	})
 }
 
 // Need fails, naming each, unless every value is set: what a tool cannot

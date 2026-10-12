@@ -54,6 +54,13 @@ infisical:
   cluster:
     project: "563fce78-2a0d-4772-8f2c-97b2907cf82e"
     slug: "keel-cluster-x-j5y"
+  # keel-backups: the backups' keys, which only the cluster's External
+  # Secrets reads, by its slug (infra/cluster/clusters/prod/configs/
+  # secret-store-backups.yaml, which a test keeps the same). No workflow's
+  # identity is a member of it. Empty until the project is made: until
+  # then no release is rendered.
+  backups:
+    slug: ""
 
 cloudflare:
   # The account (its Account ID) and the zone keelovertheedge.com (its
@@ -68,3 +75,16 @@ state:
   bucket: keel-infra-state
   endpoint: https://s3.us-east-005.backblazeb2.com
   region: us-east-005
+
+# The database's backups: B2's S3 endpoint and region for the account, and
+# the three private buckets made by hand for them (infra/MANUAL-STEPS.md),
+# as B2 accepted their names: production's WAL and base backups, its
+# weekly dumps, and the local cluster's own. The manifests name them too
+# (infra/cluster/apps/keel/object-store.yaml and dump.yaml, and the local
+# cluster's patch); a test keeps them the same.
+backups:
+  endpoint: https://s3.us-east-005.backblazeb2.com
+  region: us-east-005
+  bucket: keel-db-backups
+  dumps: keel-db-dumps
+  local: keel-db-backups-local

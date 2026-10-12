@@ -1,0 +1,111 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What the machine tells the cluster's monitoring about itself. Its journal
+# (k3s, Tailscale, the firewall, the updates, AIDE, the kernel) goes to
+# VictoriaLogs by systemd's own uploader. Its facts no exporter knows go to
+# node-exporter as a file of metrics, written every five minutes. sysstat,
+# which kept the machine's history until there was monitoring, goes.
+
+- name: Install systemd's journal uploader
+  ansible.builtin.apt:
+    name: systemd-journal-remote
+    state: present
+    install_recommends: false
+
+- name: Make the folder of the uploader's settings
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/systemd/journal-upload.conf.d
+    - /etc/systemd/system/systemd-journal-upload.service.d
+
+- name: Send the journal to VictoriaLogs
+  ansible.builtin.template:
+    src: journal-upload.conf.j2
+    dest: /etc/systemd/journal-upload.conf.d/50-keel.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the journal's upload
+
+- name: Keep the upload trying while the cluster is away
+  ansible.builtin.copy:
+    src: journal-upload-override.conf
+    dest: /etc/systemd/system/systemd-journal-upload.service.d/50-keel.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: observe_upload_override
+  notify: Restart the journal's upload
+
+# Only its receiving side listens, and nothing here receives.
+- name: Keep the journal's receiver off
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop: [systemd-journal-remote.socket, systemd-journal-remote.service]
+
+- name: Upload the journal, now and at every boot
+  ansible.builtin.systemd_service:
+    name: systemd-journal-upload
+    enabled: true
+    state: started
+    daemon_reload: "{{ observe_upload_override is changed }}"
+
+- name: Make the folder node-exporter reads the facts from
+  ansible.builtin.file:
+    path: "{{ observe_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the program that gathers the facts
+  ansible.builtin.copy:
+    src: keel-machine-facts
+    dest: /usr/local/sbin/keel-machine-facts
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write its unit
+  ansible.builtin.template:
+    src: keel-machine-facts.service.j2
+    dest: /etc/systemd/system/keel-machine-facts.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: observe_facts_unit
+
+- name: Write its timer
+  ansible.builtin.copy:
+    src: keel-machine-facts.timer
+    dest: /etc/systemd/system/keel-machine-facts.timer
+    owner: root
+    group: root
+    mode: "0644"
+  register: observe_facts_timer
+
+- name: Gather the facts every five minutes
+  ansible.builtin.systemd_service:
+    name: keel-machine-facts.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ observe_facts_unit is changed or observe_facts_timer is changed }}"
+
+# The first file, so node-exporter has the facts before the timer's first
+# turn; the timer's runs change nothing the playbook looks at.
+- name: Gather them once now  # noqa: command-instead-of-module (a oneshot: started by the module, it would change on every run)
+  ansible.builtin.command:
+    cmd: systemctl start keel-machine-facts.service
+    creates: "{{ observe_textfile_dir }}/keel_machine.prom"
+
+- name: Remove sysstat, whose history the monitoring now keeps
+  ansible.builtin.apt:
+    name: sysstat
+    state: absent
+    purge: true

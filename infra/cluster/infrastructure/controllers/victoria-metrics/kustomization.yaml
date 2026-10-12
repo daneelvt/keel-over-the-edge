@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The VictoriaMetrics operator, which runs the metrics and logs stores, the
+# scraper, the rule evaluator and Alertmanager from the objects the
+# monitoring layer and the game's own scrapes and rules describe. Here, a
+# layer before them, so their definitions are known when they are applied.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - namespace.yaml
+  - repository.yaml
+  - release.yaml
+  - network-policies.yaml

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The game: keel, its database, and the Gateway and routes that reach it.
+# The game: keel, its database and its backups, the Gateway and routes
+# that reach it, and what watches them.
 # Sizes are production's (a machine of 4 cores and 16 GB); each cluster's
 # entry point under clusters/ patches what differs, and names the players'
 # host.
@@ -12,12 +13,20 @@ labels:
 resources:
   - namespace.yaml
   - database.yaml
+  - database-monitoring.yaml
+  - generation.yaml
+  - object-store.yaml
+  - backup.yaml
+  - dump.yaml
   - deployment.yaml
   - service.yaml
+  - forward.yaml
   - gateway.yaml
   - routes.yaml
   - middlewares.yaml
   - network-policies.yaml
+  - scrapes.yaml
+  - rules.yaml
 # keel's configuration (keel serve's usage lists every variable). A change
 # makes a new name, and so a new pod.
 configMapGenerator:
@@ -28,6 +37,8 @@ configMapGenerator:
       # Reached by the kubelet's probes, through the Service by nothing
       # outside the cluster: no route leads to it.
       - KEEL_INTERNAL_ADDR=0.0.0.0:9090
+      # The metrics alone, for the scraper, which may reach nothing else.
+      - KEEL_METRICS_ADDR=0.0.0.0:9091
       - KEEL_LOG_LEVEL=info
       - KEEL_TRACE_DIR=/var/lib/keel/traces
       # The password comes from PGPASSWORD, which pgx reads under any URL;

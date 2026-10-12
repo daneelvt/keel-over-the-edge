@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# cert-manager's chart, pinned by the digest of its manifest. No verify:
+# cert-manager signs with an RSA key and SHA-512, and Flux checks a key's
+# signature with SHA-256 alone (source-controller's cosign verifier), so it
+# would refuse a good signature. The release workflow and pr.infra check it
+# instead, against cert-manager's public key in infra/keys/cert-manager.pem,
+# before anything is rendered (go run ./tools/release -verify-keyed): what
+# Flux fetches by this digest is what they checked.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: cert-manager
+spec:
+  interval: 1h
+  url: oci://quay.io/jetstack/charts/cert-manager
+  ref:
+    tag: v1.21.2
+    digest: sha256:634dce9c13b56677a2c05e2ab76c312d0be2664022d5dd05815da67e1fd5f610
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

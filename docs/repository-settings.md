@@ -67,16 +67,23 @@ The tailnet policy is written from `infra/tailnet/policy.hujson` by the
 - [ ] **Identities**: the owner; `gha-prod` (OIDC Auth alone, for this
       repository's `production` subject and `machine.yaml` on `main`,
       tokens of 10 minutes, Viewer on `keel-ops` alone); `eso-prod`
-      (Universal Auth, Viewer on `keel-cluster` alone); and `gha-accounts`
+      (Universal Auth, Viewer on `keel-cluster` and `keel-backups`, nothing
+      else); and `gha-accounts`
       (OIDC Auth alone, for the same subject and `accounts.yaml` on `main`,
       tokens of 10 minutes, Viewer on `keel-accounts` and Member on
       `keel-cluster`, nothing else): 4 of the free plan's 5, and no other
-- [ ] **Projects**: `keel-ops`, `keel-accounts` and `keel-cluster`, each
-      with `prod` alone
+- [ ] **Projects**: `keel-ops`, `keel-accounts`, `keel-cluster` and
+      `keel-backups`, each with `prod` alone
+- [ ] `keel-backups`: two members, the owner and `eso-prod` (Viewer); no
+      workflow's identity. `/keel`, `/keel-restore` and `/local` hold the
+      eight values of infra/MANUAL-STEPS.md section 14's table, and
+      nothing else
 - [ ] `keel-accounts`, `/accounts`: the five credentials of
       infra/MANUAL-STEPS.md section 11's check, and nothing else;
-      `keel-cluster`: `/keel/DB_PASSWORD` and `/cloudflared/TUNNEL_TOKEN`,
-      both written by `accounts`, and nothing else
+      `keel-cluster`: `/keel/DB_PASSWORD`, `/keel/DB_READER_PASSWORD`,
+      `/keel/DB_GRAFANA_PASSWORD`, `/monitoring/DB_GRAFANA_PASSWORD`,
+      `/monitoring/GRAFANA_ADMIN_PASSWORD` and `/cloudflared/TUNNEL_TOKEN`,
+      all written by `accounts`, and nothing else
 - [ ] `eso-prod`'s client secrets: the one in use alone (an old one is
       revoked once `machine apply` has placed the new)
 
@@ -98,8 +105,21 @@ change says they are as the repository says. The rest is checked here.
 ## Backblaze B2
 
 - [ ] The state bucket: private, every version kept, SSE-B2
-- [ ] **Application Keys**: `keel-state`, for the state bucket alone; the
-      master key used for nothing
+- [ ] The backups' buckets (`b2 bucket get`): `keel-db-backups` and
+      `keel-db-dumps` private, SSE-B2, Object Lock on with a default
+      retention of 14 days in governance mode, and their lifecycle rule;
+      `keel-db-backups-local` the same without the lock
+- [ ] **Application Keys** (`b2 key list --long`, from a session opened
+      and closed as infra/MANUAL-STEPS.md section 14 says): `keel-state`,
+      for the state bucket alone; `keel-barman` (`keel-db-backups`:
+      `listBuckets`, `listFiles`, `readFiles`, `writeFiles`,
+      `deleteFiles`), `keel-restore` (`keel-db-backups`: `listBuckets`,
+      `listFiles`, `readFiles`), `keel-dumps` (`keel-db-dumps`:
+      `listBuckets`, `listFiles`, `writeFiles`) and `keel-local`
+      (`keel-db-backups-local`: as `keel-barman`); no other key, and none
+      with `writeKeys`, `writeBuckets`, `deleteBuckets` or
+      `bypassGovernance`; the master key used for nothing between
+      sessions
 
 ## Not available to this repository
 

@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The backups, as the restore test reads them: keel/object-store.yaml's
+# bucket, through a key that may list and read it and nothing more (a test
+# keeps the two stores the same but for their key). No retention policy:
+# nothing here removes a backup.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: keel-b2-read
+spec:
+  configuration:
+    destinationPath: s3://keel-db-backups/
+    endpointURL: https://s3.us-east-005.backblazeb2.com
+    s3Credentials:
+      accessKeyId:
+        name: keel-b2-read
+        key: keyID
+      secretAccessKey:
+        name: keel-b2-read
+        key: key
+    wal:
+      compression: gzip
+      maxParallel: 4
+    data:
+      compression: gzip
+  instanceSidecarConfiguration:
+    env:
+      - name: AWS_DEFAULT_REGION
+        value: us-east-005
+      - name: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required
+      - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+        value: when_required
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 256Mi

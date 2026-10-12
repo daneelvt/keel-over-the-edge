@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Monitoring in production: the base's sizes, which are production's,
+# Grafana's passwords from Infisical, and Kured's metrics.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../monitoring
+  - grafana-secrets.yaml
+  - kured.yaml

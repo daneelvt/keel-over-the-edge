@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Production's Flux, following the same release, but applying its rebuild
+# form: each layer's folder is prod-rebuild's. The machine workflow with
+# rebuild ticked bootstraps a reinstalled machine's Flux from this; once a
+# release whose live archive is the rebuilt cluster's is promoted, an
+# ordinary apply puts it back on prod's (infra/REBUILD.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../prod/flux-system
+patches:
+  - target:
+      group: kustomize.toolkit.fluxcd.io
+      kind: Kustomization
+      name: flux-system
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./prod-rebuild/flux-system
+  - target:
+      group: kustomize.toolkit.fluxcd.io
+      kind: Kustomization
+      name: controllers
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./prod-rebuild/controllers
+  - target:
+      group: kustomize.toolkit.fluxcd.io
+      kind: Kustomization
+      name: configs
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./prod-rebuild/configs
+  - target:
+      group: kustomize.toolkit.fluxcd.io
+      kind: Kustomization
+      name: apps
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./prod-rebuild/apps
+  - target:
+      group: kustomize.toolkit.fluxcd.io
+      kind: Kustomization
+      name: monitoring
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./prod-rebuild/monitoring

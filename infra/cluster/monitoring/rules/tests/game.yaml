@@ -1,0 +1,163 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The game's alerts (apps/keel/rules.yaml, group game), each made to fire
+# and, where it matters, shown quiet first. go test runs them with
+# vmalert-tool unittest, against the rules as production renders them.
+evaluation_interval: 1m
+tests:
+  - name: keel stops being ready
+    interval: 1m
+    input_series:
+      - series: kube_deployment_status_replicas_ready{namespace="keel", deployment="keel"}
+        values: 1x3 0+0x10
+    alert_rule_test:
+      - eval_time: 3m
+        groupname: game
+        alertname: GameDown
+        exp_alerts: []
+      - eval_time: 8m
+        groupname: game
+        alertname: GameDown
+        exp_alerts:
+          - exp_labels: &game-down
+              severity: critical
+              component: game
+              summary: "No keel is ready: nobody can play."
+            exp_annotations:
+              description: "Look at keel's pod and its logs, and at the database."
+
+  - name: keel's Deployment is gone, and its metric with it
+    interval: 1m
+    input_series:
+      - series: up{job="kube-state-metrics"}
+        values: 1x10
+    alert_rule_test:
+      - eval_time: 3m
+        groupname: game
+        alertname: GameDown
+        exp_alerts:
+          - exp_labels: *game-down
+            exp_annotations:
+              description: "Look at keel's pod and its logs, and at the database."
+
+  - name: the tick takes 25 to 50 ms
+    interval: 1m
+    input_series:
+      - series: keel_sim_tick_duration_seconds_bucket{le="0.025"}
+        values: 0+0x20
+      - series: keel_sim_tick_duration_seconds_bucket{le="0.05"}
+        values: 0+1800x20
+      - series: keel_sim_tick_duration_seconds_bucket{le="+Inf"}
+        values: 0+1800x20
+      - series: kube_deployment_status_replicas_ready{namespace="keel", deployment="keel"}
+        values: 1x20
+    alert_rule_test:
+      - eval_time: 4m
+        groupname: game
+        alertname: TickOverrun
+        exp_alerts: []
+      - eval_time: 8m
+        groupname: game
+        alertname: TickOverrun
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: game
+              summary: "The tick is close to its 33 ms budget."
+            exp_annotations:
+              description: "Its 99th percentile is 49.75ms. The Game dashboard shows which phase grew, and the Machine dashboard whether the CPU is stolen or throttled."
+
+  - name: the tick takes under 25 ms
+    interval: 1m
+    input_series:
+      - series: keel_sim_tick_duration_seconds_bucket{le="0.025"}
+        values: 0+1800x20
+      - series: keel_sim_tick_duration_seconds_bucket{le="+Inf"}
+        values: 0+1800x20
+    alert_rule_test:
+      - eval_time: 15m
+        groupname: game
+        alertname: TickOverrun
+        exp_alerts: []
+
+  - name: changes wait 30 s to be written
+    interval: 1m
+    input_series:
+      - series: keel_persist_oldest_seconds
+        values: 0+0x2 30x10
+    alert_rule_test:
+      - eval_time: 5m
+        groupname: game
+        alertname: PersistenceLag
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: game
+              summary: "keel's changes are not reaching the database."
+            exp_annotations:
+              description: "The oldest unwritten change is 30s old: the database is not keeping up, or not answering. A crash now would lose what is waiting."
+
+  - name: three players queue for a boat
+    interval: 1m
+    input_series:
+      - series: keel_sim_queue_length
+        values: 3x20
+    alert_rule_test:
+      - eval_time: 9m
+        groupname: game
+        alertname: QueueWaiting
+        exp_alerts: []
+      - eval_time: 11m
+        groupname: game
+        alertname: QueueWaiting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: game
+              summary: "Players have waited for a boat for 10 minutes."
+            exp_annotations:
+              description: "3 wait: the sea is at its boat limit. Look at the tick's time before raising KEEL_BOAT_LIMIT."
+
+  - name: keel uses 3.9 of its 4 GiB
+    interval: 1m
+    input_series:
+      - series: container_memory_working_set_bytes{namespace="keel", pod="keel-1", container="keel"}
+        values: 3900000000x20
+      - series: kube_pod_container_resource_limits{namespace="keel", pod="keel-1", container="keel", resource="memory"}
+        values: 4294967296x20
+      - series: container_memory_working_set_bytes{namespace="keel", pod="keel-db-1", container="postgres"}
+        values: 1000000000x20
+      - series: kube_pod_container_resource_limits{namespace="keel", pod="keel-db-1", container="postgres", resource="memory"}
+        values: 4294967296x20
+    alert_rule_test:
+      - eval_time: 11m
+        groupname: game
+        alertname: MemoryNearLimit
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: game
+              summary: "keel or its database is near its memory limit."
+              pod: keel-1
+              container: keel
+            exp_annotations:
+              description: "keel uses 90.8% of its limit; at the limit it is killed and restarted. Look at its memory over the last days on the Game or Database dashboard."
+
+  - name: keel is throttled in a fifth of its periods
+    interval: 1m
+    input_series:
+      - series: container_cpu_cfs_throttled_periods_total{namespace="keel", pod="keel-1", container="keel"}
+        values: 0+120x20
+      - series: container_cpu_cfs_periods_total{namespace="keel", pod="keel-1", container="keel"}
+        values: 0+600x20
+    alert_rule_test:
+      - eval_time: 12m
+        groupname: game
+        alertname: CPUThrottled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: game
+              summary: "keel's CPU limit is holding it back."
+              pod: keel-1
+            exp_annotations:
+              description: "It is throttled in 20% of its CPU periods. The Game dashboard shows whether the tick suffers."

@@ -18,12 +18,28 @@ client/src/predict/physics.wasm
 infra/tofu/.terraform/
 
 # Binaries go build leaves in the root (go build ./cmd/keel, ./tools/...)
+/accounts
+/catalog
 /cluster
+/confusables
+/dashboards
 /dev
 /e2e
+/github
 /keel
+/lag
+/licences
 /loadbot
+/machine
+/online
+/ops
+/physics
+/polar
+/protocol
 /release
+/tailnet
+/testsea
+/vendored
 
 # Editors and systems
 .DS_Store

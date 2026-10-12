@@ -120,7 +120,7 @@ credentials.
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
-| `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin (see [The local cluster](#the-local-cluster) and [Releases](#releases)) | `go test ./tools/cluster ./tools/release ./tools/internal/...` |
+| `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin; every alert rule made to fire and to stay quiet, with VictoriaMetrics' `vmalert-tool`; the dashboards and the vendored manifests against their records; and the signatures Flux cannot check, of cert-manager's chart and images and Kured's image, with cosign (see [The local cluster](#the-local-cluster), [Releases](#releases) and [Monitoring](#monitoring)) | `go test ./tools/cluster ./tools/release ./tools/dashboards ./tools/vendored ./tools/ops ./tools/internal/...`, `go run ./tools/release -verify-keyed` |
 | `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
 | `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
 | `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
@@ -130,7 +130,7 @@ credentials.
 | `codeql.yaml` | Pull requests (not drafts), pushes to `main`, weekly | CodeQL for Go, TypeScript and the workflows | |
 | `release.yaml` | Every push to `main` | `ci.yaml`, whole; then the image for amd64 and arm64, signed and attested, each checked on a runner of its own machine; then every cluster's manifests rendered, checked and pushed as a signed artifact (see [Releases](#releases)) | `go run ./tools/release -render <dir> -image <image>` |
 | `promote.yaml` | By hand, approved by the owner | The tag production follows moved to a release, once its signature and its place on `main` are checked | |
-| `machine.yaml` | By hand, approved by the owner | The playbook on production's machine, over Tailscale SSH: `check`, `apply` (then `verify.yaml`), or `audit` (see [The machine](#the-machine)) | |
+| `machine.yaml` | By hand, approved by the owner | The playbook on production's machine, over Tailscale SSH: `check`, `apply` (then `verify.yaml`; with **rebuild**, on a machine reinstalled from nothing), or `audit` (see [The machine](#the-machine)) | |
 | `accounts.yaml` | By hand, approved by the owner (twice to apply) | OpenTofu on `infra/tofu`: `plan`, or `apply` of the plan the owner read (see [Online](#online)) | `go run ./tools/accounts -check` |
 | `tailnet.yaml` | Pushes to `main` that change `infra/tailnet/`, and by hand; approved by the owner | The tailnet policy validated by Tailscale, its tests run, then written over the live one | `go run ./tools/tailnet -check` |
 | `scorecard.yaml` | Pushes to `main`, weekly | OpenSSF Scorecard | |
@@ -366,9 +366,13 @@ Three HTTP servers, each with a 10 s header timeout, a 120 s idle timeout and
 | `play.` | `KEEL_PLAY_ADDR`, `127.0.0.1:8080` | The game's routes (below), with an access log |
 | `agents.` | `KEEL_AGENTS_ADDR`, `127.0.0.1:8081` | Nothing yet: 404 to everything |
 | internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay`, and with `KEEL_DEV_COMMANDS=1` `POST /debug/wind` |
+| metrics | `KEEL_METRICS_ADDR`, none | `GET /metrics` and nothing else; not opened unless set |
 
-The internal listener must never be reachable from outside. The three
-addresses must differ. The other variables:
+The internal listener must never be reachable from outside. The addresses
+must differ. The metrics listener is for the cluster's scraper: a
+NetworkPolicy lets it in to a port, not to a path, so on the internal
+listener it could read the profiles and the input log too; on a port of its
+own (9091 in the cluster) it reads the metrics alone. The other variables:
 
 | Variable | Default | What |
 |----------|---------|------|
@@ -880,6 +884,8 @@ The VM takes 4 CPUs, 8 GiB of memory and up to 60 GiB of disk.
 ```sh
 go run ./tools/cluster -up       # make or start the VM, install k3s, apply everything, deploy the game
 go run ./tools/cluster -deploy   # build the image from this tree and put it in place
+go run ./tools/cluster -deploy -rebuild   # the same, its database recovered from its backups if it is not there
+go run ./tools/cluster -monitoring   # apply the monitoring layer alone
 go run ./tools/cluster -release 0123456789ab   # take a published release through Flux; prod for production's
 go run ./tools/cluster -smoke    # check the game in the cluster
 go run ./tools/cluster -status   # the VM, the pods, the build running, the addresses
@@ -890,12 +896,24 @@ go run ./tools/cluster -stop     # stop the VM (-up starts it again)
 go run ./tools/cluster -delete   # delete the VM and .dev/cluster (asks first)
 ```
 
-`-up` the first time takes a few minutes: Lima downloads Ubuntu's image
-(pinned by digest), k3s is installed, Flux's controllers, the
-CloudNativePG operator (its chart fetched only if its signature is the
-CloudNativePG project's own) and Traefik's configuration are applied in
-that order, each waited for, and then the game is deployed. Run again, it
-changes only what changed. `KEEL_DEV_SAILORS=100 go run ./tools/cluster
+`-up` the first time takes several minutes: Lima downloads Ubuntu's image
+(pinned by digest), k3s is installed, Flux's controllers, the cluster's
+controllers (CloudNativePG, External Secrets, cert-manager, the Barman
+Cloud plugin, the VictoriaMetrics operator; each chart fetched only if its
+signature is its project's own, or checked in CI where Flux cannot) and
+Traefik's configuration are applied in that order, each waited for; then
+the game is deployed, and the monitoring layer after it. Run again, it
+changes only what changed.
+
+The local cluster watches itself as production does, in about half the
+sizes: `kubectl -n monitoring port-forward svc/grafana-forward 3000:80`,
+then `http://localhost:3000` as `admin`, with the password in the Secret
+`monitoring/grafana-admin` ([Monitoring](#monitoring)). Its database is
+backed up to a bucket of its own when `.dev/backups.env` holds that
+bucket's key, as `KEEL_B2_KEY_ID` and `KEEL_B2_KEY` (the owner copies it
+there once, from Infisical's `keel-backups`, `/local`); without the file a
+deploy says so and leaves the backups out: the database archives nowhere,
+and there is no restore test ([Backups](#backups)). `KEEL_DEV_SAILORS=100 go run ./tools/cluster
 -deploy` adds scripted sailors.
 
 `-smoke` checks, over HTTPS at the Mac's name and trusting only the local
@@ -962,9 +980,15 @@ no `node_modules`, no build output.
 ```
 infra/
   MANUAL-STEPS.md        what is done by hand, once: the accounts, the machine, the join
+  REBUILD.md             the machine rebuilt from nothing, step by step
   production.yaml        production's identifiers, none secret: the machine's and
                          tailnet's names, the workflows' identities, Infisical's IDs,
-                         Cloudflare's account and zone, the state's bucket
+                         Cloudflare's account and zone, the state's bucket, the
+                         backups' buckets
+  vendor.yaml            the release manifests kept as published, each pinned by
+                         its SHA-256 (tools/vendored)
+  keys/cert-manager.pem  cert-manager's public key, which its chart and images
+                         are checked against before a release
   tofu/                  what the accounts workflow manages with OpenTofu: the zone,
                          the tunnel, the secrets they make (see Online)
   bootstrap/join.sh      joins a fresh machine to the tailnet, then closes OpenSSH
@@ -988,24 +1012,44 @@ infra/
   cluster/
     flux-system/         flux install --export, its images pinned by digest
     infrastructure/
-      controllers/       the CloudNativePG operator and External Secrets'
-                         controller: each an OCIRepository and a HelmRelease
+      controllers/       the CloudNativePG operator, External Secrets'
+                         controller, cert-manager, the Barman Cloud plugin and
+                         the VictoriaMetrics operator: each an OCIRepository and
+                         a HelmRelease; and, for production alone, Kured and the
+                         system-upgrade controller, from their releases' manifests
       configs/           Traefik's HelmChartConfig: the Gateway API, its timeouts;
                          the default service accounts without tokens; the
                          NetworkPolicies of kube-system, default and kube-public
     apps/keel/           the game: Deployment, Service, ConfigMap, Gateway,
                          HTTPRoute, the limits per address, the database's
-                         Cluster, the NetworkPolicies; production's sizes
+                         Cluster, the NetworkPolicies; production's sizes. Its
+                         backups: the object store, the daily base backup, the
+                         archive's generation, the weekly dump. Its scrapes,
+                         alerts and fixed addresses
+    apps/keel-restore/   the weekly restore test, in a namespace of its own
+    apps/archive/        a component: writes the archive's name where it goes
+    apps/rebuild/        a component: the database recovered from its backups
     apps/cloudflared/    production's tunnel connectors, their token's
-                         ExternalSecret, their NetworkPolicies
+                         ExternalSecret, their NetworkPolicies, scrape and alert
+    monitoring/          what watches the game: VictoriaMetrics' stack (the
+                         stores, the scraper, vmalert, Alertmanager, Grafana,
+                         node-exporter, kube-state-metrics), VictoriaLogs and
+                         vlagent, the dashboards, the machine's and cluster's
+                         alerts and their tests, the NetworkPolicies
     clusters/local/      the local cluster's entry points: controllers, configs,
-                         apps (half the sizes, HTTPS, the redirect); and
-                         release, what -release applies to follow a release
+                         apps (half the sizes, HTTPS, the redirect, its own
+                         bucket), monitoring (half the sizes); and release,
+                         what -release applies to follow a release
     clusters/prod/       production's entry points: flux-system (Flux's
                          controllers, and sync.yaml, what they follow),
-                         controllers, configs (Traefik's Service ClusterIP,
-                         External Secrets' store), apps (the players' host,
-                         the database's password from Infisical, cloudflared)
+                         controllers (Kured and the upgrade controller too),
+                         configs (Traefik's Service ClusterIP, External
+                         Secrets' two stores, the k3s upgrade plan), apps (the
+                         players' host, the passwords and the backups' keys
+                         from Infisical, cloudflared), monitoring (Grafana's
+                         passwords, Kured's scrape)
+    clusters/prod-rebuild/   production rebuilt: the same, its database
+                         recovered from the backups (infra/REBUILD.md)
 ```
 
 The bases hold what every cluster shares; each cluster's folder patches
@@ -1024,10 +1068,13 @@ update the digests in its `kustomization.yaml`, and run `-schemas` on a
 cluster that has it.
 
 Secrets are never in the repository (a test fails on any). On the local
-cluster `tools/cluster` makes `keel-db-app`, the database's password, once,
-at random, and never replaces it; and `keel-tls`, the certificate, again
-when its names change. In production, External Secrets makes them from
-Infisical (see Online).
+cluster `tools/cluster` makes the database's passwords (`keel-db-app`, and
+the read-only roles' `keel-db-reader` and `keel-db-grafana`) and Grafana's
+admin password (`monitoring/grafana-admin`) once, at random, and never
+replaces them; `keel-tls`, the certificate, again when its names change;
+and, from `.dev/backups.env`, the local bucket's key (`keel/keel-b2`,
+`keel-restore/keel-b2-read`). In production, External Secrets makes them
+from Infisical (see Online).
 
 The rules the manifests keep, checked by `go test ./tools/internal/manifests`
 on every entry point of both clusters, by a release before it publishes
@@ -1067,6 +1114,29 @@ passing through one limit per address, `/ws` through the connections one;
 and production's Gateway listener and routes naming
 `play.keelovertheedge.com` alone.
 
+And, for what watches and keeps the game: only `monitoring-node`, `kured`
+and `system-upgrade` enforce `privileged`, each saying why in an
+annotation and holding its own workload alone; the database with one
+plugin, Barman Cloud's, archiving to `keel-b2` under the live generation's
+name (or, in the rebuild form, recovering from it and archiving under the
+next), a base backup daily and at once when it is made, and nothing else
+archiving; the restore test restoring the archive the database writes,
+with its image and `max_connections`; no object store naming a server,
+each writing to its cluster's bucket, the restore test's reading what the
+live one writes with a key of its own; one instance having no disruption
+budget; nothing fetched at deploy time (the stack's download job and its
+own dashboards and rules off, no plugin from Grafana's catalog, the one
+fetched from its release checked against its SHA-256, no chart value
+naming `raw.githubusercontent.com`); a source with no `verify` being one
+of the listed ones CI checks against a key; no route, Ingress or grant
+into the monitoring namespaces; the k3s upgrade plan naming the pinned
+k3s release and its upgrade image, cordoning and never draining, in a
+window; and a Service with an address chosen by hand being one of the
+five forwards, at its address. Two more hold across a cluster's layers
+together: every scrape's port is let in to the scraper by a NetworkPolicy
+beside its pods, by number, and outside the monitoring namespaces nothing
+else is; and each forward's Service is there once.
+
 Beside the rules, every rendered object is checked against the schema of
 its kind with [kubeconform](https://github.com/yannh/kubeconform)
 (`go tool kubeconform`, `-strict`): a field the schema does not know, a key
@@ -1074,10 +1144,13 @@ written twice, or a kind with no schema fails. The schemas of Kubernetes'
 own kinds come from `yannh/kubernetes-json-schema`, at one commit, for the
 version of Kubernetes the k3s pin holds; they are downloaded once into
 `.dev/schemas`. Those of custom resources (Flux's, CloudNativePG's, the
-Gateway API's, Traefik's, k3s's) are in `infra/schemas/`, written by
+Barman Cloud plugin's, VictoriaMetrics', the Gateway API's, Traefik's,
+k3s's) are in `infra/schemas/`, written by
 `go run ./tools/cluster -schemas` from the definitions in the local
-cluster, which runs exactly the versions the manifests are written for;
-so is `CustomResourceDefinition`'s own, which the published set lacks.
+cluster, which runs exactly the versions the manifests are written for
+(the upgrade controller's `Plan`, which only production runs, from the
+definition the manifests hold); so is `CustomResourceDefinition`'s own,
+which the published set lacks.
 After raising a chart, Flux or k3s, run `-up` and then `-schemas`, and
 commit what changed.
 
@@ -1085,14 +1158,16 @@ commit what changed.
 
 | Part | What |
 |------|------|
-| `keel` | One replica, replaced rather than rolled (`Recreate`), `terminationGracePeriodSeconds: 30` (it stops within about 11 s: the bell, the final checkpoint, the closes). `keel migrate` runs first, as an init container. Liveness `/livez` every 10 s, readiness `/readyz` every 2 s, both on the internal listener, `0.0.0.0:9090` in the pod. Non-root, read-only root, no capabilities, `RuntimeDefault` seccomp. Locally 1 CPU requested and 3 the limit (so `GOMAXPROCS` is 3, as in production), 2 GiB with `GOMEMLIMIT=1800MiB` |
+| `keel` | One replica, replaced rather than rolled (`Recreate`), `terminationGracePeriodSeconds: 30` (it stops within about 11 s: the bell, the final checkpoint, the closes). `keel migrate` runs first, as an init container. Liveness `/livez` every 10 s, readiness `/readyz` every 2 s, both on the internal listener, `0.0.0.0:9090` in the pod; the metrics alone on `0.0.0.0:9091`, for the scraper. Non-root, read-only root, no capabilities, `RuntimeDefault` seccomp. Locally 1 CPU requested and 3 the limit (so `GOMAXPROCS` is 3, as in production), 2 GiB with `GOMEMLIMIT=1800MiB` |
 | `keel-db` | CloudNativePG's `Cluster`, one instance, PostgreSQL 18.6 (`minimal` image), the builtin `C.UTF-8` locale. `pg_hba` refuses every connection without TLS; `keel` connects with `sslmode=verify-full` against the operator's CA (`keel-db-ca`, its `ca.crt` alone mounted), the password from `keel-db-app` as `PGPASSWORD`. `smartShutdownTimeout: 10` (not 180 s: keel never disconnects of itself) and server-side TCP keepalives of 10 s, 5 s, 3 probes. Locally 1–2 GiB and 10 GiB of `local-path` storage |
 | `keel` Gateway | In the game's namespace, class `traefik`: `http` on Traefik's `web` entry point and, locally, `https` on `websecure` with `keel-tls`, which is also Traefik's default certificate for clients that name no host. The `play` route sends everything to keel's game listener; locally, plain HTTP is redirected |
 | Traefik | k3s's own, with the Gateway API on, Ingress off, and its entry points' timeouts written down: `readTimeout` 60 s (a request must arrive within it; a stalled one is cut), `idleTimeout` 180 s, no `writeTimeout`. A game connection is not cut by them |
 
 Every namespace but `kube-system` enforces Pod Security's `restricted`
 profile, on both clusters (`infra/k3s/psa.yaml`); a namespace that needs
-more says so with a label of its own.
+more says so with a label of its own, and three do: `monitoring-node`
+(node-exporter and vlagent read the host), `kured` (it reboots it) and
+`system-upgrade` (its jobs replace k3s's binary).
 
 ## Releases
 
@@ -1109,7 +1184,9 @@ Every push to `main` makes a release, by itself. Nothing in it deploys.
 2. **A check on each machine.** A runner of each architecture pulls the
    image by that digest and checks it as `ci.yaml` checks its own build:
    for its machine, 65532, no shell, `keel help`, the page.
-3. **The manifests.** `go run ./tools/release -render` builds every entry
+3. **The manifests.** First `go run ./tools/release -verify-keyed` checks
+   the signatures Flux cannot ([Who signed it](#who-signed-it)). Then
+   `go run ./tools/release -render` builds every entry
    point of every cluster with the game's image **by its digest**, checks
    the rules and the schemas ([The layout of
    `infra/`](#the-layout-of-infra)), and writes plain YAML. `flux push
@@ -1122,15 +1199,26 @@ reports it. The run's summary names the build and both digests.
 ```
 keel-manifests:<build>            signed; made from main@sha1:<commit>
   local/
-    controllers/manifests.yaml    CloudNativePG (its chart's signature checked)
+    controllers/manifests.yaml    the charts (each one's signature checked)
     configs/manifests.yaml        Traefik's HelmChartConfig
     apps/manifests.yaml           keel by digest, the database, the Gateway (macbook.local)
+    monitoring/manifests.yaml     the stack, the logs, the dashboards, the alerts
   prod/
     flux-system/manifests.yaml    Flux's controllers, and what they follow
     controllers/manifests.yaml
     configs/manifests.yaml
     apps/manifests.yaml           keel by digest, the database, play.keelovertheedge.com
+    monitoring/manifests.yaml
+  prod-rebuild/                   production rebuilt: the same five, the database
+                                  recovered from its backups (infra/REBUILD.md)
 ```
+
+The layers are applied in order, each once the one it follows is ready:
+Flux itself, the controllers, their configuration, then the game (`apps`)
+and what watches it (`monitoring`) side by side, neither waiting for the
+other: a dashboard that fails to apply never holds back a deploy of the
+game. No release is rendered until `infra/production.yaml` names the
+backups' buckets and the project that holds their keys.
 
 Flux applies exactly what was rendered and checked: a folder with no
 kustomization of its own is applied as it is.
@@ -1174,9 +1262,34 @@ gh attestation verify oci://ghcr.io/daneelvt/keel:0123456789ab --repo daneelvt/k
 mkdir release && .dev/bin/flux pull artifact oci://ghcr.io/daneelvt/keel-manifests:0123456789ab --output release
 ```
 
-The same checking applies to what the cluster fetches from others: the
-CloudNativePG chart is fetched only if that project's release workflow
-signed it, and a rule fails any `OCIRepository` that does not verify.
+The same checking applies to what the cluster fetches from others. Each
+chart is fetched only if its project's release workflow signed it:
+CloudNativePG's and the Barman Cloud plugin's, External Secrets',
+VictoriaMetrics' three. Flux checks those itself, and a rule fails any
+`OCIRepository` that does not verify.
+
+One cannot be checked by Flux: cert-manager signs its chart and images
+with a key of its own, in a form Flux's verification does not read. Its
+source is pinned by tag and digest with no `verify`, and
+`go run ./tools/release -verify-keyed` checks instead, with cosign: the
+chart's digest and each image's digest in its values against
+cert-manager's public key, kept in `infra/keys/cert-manager.pem`
+(cert-manager's documentation, "Verifying signatures"). The cluster
+fetches by those digests, so it runs the bytes that were checked. The same
+command checks Kured's image, which comes from a release manifest and not
+a chart, against its own release workflow, keyless. It runs on every pull
+request that touches `infra/` and in the release workflow before anything
+is rendered. The rule allows a source without `verify` only when it is in
+that list.
+
+Two things come as files, as their projects publish them, and not as
+charts: Kured's manifest and the system-upgrade controller's.
+`infra/vendor.yaml` records each one's release, address and SHA-256;
+`go run ./tools/vendored -check` (in the tests) fails when a file differs
+from its record, and `-pull` fetches them again. Grafana's dashboards from
+other projects are kept the same way, each pinned to a commit and a
+SHA-256 in `infra/cluster/monitoring/dashboards/index.yaml`
+(`go run ./tools/dashboards -pull`, `-check`).
 
 ### Promoting, and rolling back
 
@@ -1267,13 +1380,29 @@ actions in the workflows; the `Dockerfile`'s images and the CI service's
 PostgreSQL; the CloudNativePG chart (tag and digest) together with the
 operator's image; Flux's manifests, its controllers' images and its CLI,
 as one update; External Secrets' chart (tag and digest) with its image;
-cloudflared's image; OpenTofu's providers, at exact versions from
+cert-manager's chart with its images; the Barman Cloud plugin's chart and
+images, with CloudNativePG's; VictoriaMetrics' operator, stack and every
+image they run (the stores, the scraper, vmalert, Alertmanager, Grafana
+and its sidecar, node-exporter, kube-state-metrics, VictoriaLogs and
+vlagent), as one update; rclone's and the upgrade controller's `kubectl`
+image; Kured, the system-upgrade controller and `vmalert-tool`, each
+waiting for a tick on the dashboard; cloudflared's image; OpenTofu's
+providers, at exact versions from
 OpenTofu's registry, with the lock file's hashes; k3s's version and commit
-(a new minor version waits for a tick on the dashboard); cosign, TinyGo,
+(a new minor version waits for a tick on the dashboard), together with
+the upgrade plan's version and its image, which a test keeps the same;
+cosign, TinyGo,
 kube-bench and OpenTofu; BuildKit; Ansible
 and ansible-lint, with `pip-compile` and every file's hash
-(`infra/ansible/*requirements.txt`); kubeconform and every Go module. A
+(`infra/ansible/*requirements.txt`); kubeconform and every Go module. An
+image in a chart's values, a custom resource or a ConfigMap is found by
+the comment above it (`# renovate: image=<name>`), and a test fails when a
+pinned image has none. A
 test fails if one of its patterns stops finding its pin. Raised by hand:
+the vendored manifests' files and the dashboards from other projects
+(`tools/vendored`, `tools/dashboards`, after Renovate raises the image
+beside them); Grafana's logs plugin (its address and SHA-256 in the
+stack's values); cert-manager's key, if the project ever replaces it;
 the commit of the Kubernetes schemas (`tools/internal/manifests`), Lima's
 Ubuntu image, Tailscale's client for the runners (`go run
 ./tools/machine -pin <version>`, from Tailscale's own site, which Renovate
@@ -1318,11 +1447,22 @@ Its `mode`:
 |------|------|
 | `check` | What `apply` would change (`--check --diff`); changes nothing. Read its summary: every task listed under "Would change" is drift, or a change waiting in the repository |
 | `apply` | Changes the machine, then `verify.yaml` checks it from outside the roles. With **reboot** ticked, it reboots when a change needs it (a new kernel, the kernel's command line, a module in use, the audit rules, which are locked until a boot); otherwise the summary says a reboot is due |
+| `apply` with **rebuild** | For a machine reinstalled from nothing: the same, with Flux bootstrapped on the release's rebuild form, whose database is recovered from the backups ([infra/REBUILD.md](../infra/REBUILD.md)) |
 | `audit` | Lynis, copied to a folder of its own on the machine, run, and removed; changes nothing. Its hardening index, warnings and suggestions in the summary. It fails on a warning that `infra/ansible/lynis-accepted.txt` does not list with its reason |
 
 There is no schedule: every run logs in as root, so every run waits for
 the owner's approval. A second `apply` changes nothing, and that is
 checked on every pull request.
+
+Before the playbook, a run reads what Flux follows on the machine and the
+name the database archives its WAL under (`infra/ansible/state.yaml`,
+which changes nothing), and refuses to move Flux between the release's two
+forms when that would point a database at another's archive: **rebuild**
+on a machine whose database is not the one a rebuild made; and, after a
+rebuild, a run without it until the release production follows has the
+rebuilt database's archive as its live one. Its log says what it read
+(`flux follows […]; the database archives as […]`), and with **rebuild**
+the summary says what is recovered and what it will archive as.
 
 **`tailnet`** writes `infra/tailnet/policy.hujson` to Tailscale when it
 changes on `main`, or when run by hand, after approval. It signs in as the
@@ -1351,6 +1491,7 @@ infra/ansible/
   lint-requirements.txt         ansible-lint, likewise
   site.yaml                     the roles, in order; AIDE's record; the reboot
   verify.yaml                   checks the machine is as site.yaml leaves it
+  state.yaml                    reads what Flux follows and what the database archives as
   audit.yaml                    Lynis, run in a folder of its own and removed
   lynis-accepted.txt            the Lynis warnings accepted, each with its reason
   roles/
@@ -1361,6 +1502,8 @@ infra/ansible/
     access/                     Tailscale from its own repository; OpenSSH gone
     firewall/                   the table hostfw, and its unit
     updates/                    security updates every day, Tailscale's too; no reboot
+    observe/                    the journal uploaded to the cluster's logs; the
+                                machine's facts written for node-exporter
     k3s/                        k3s at the pin, with infra/k3s's settings
     flux/                       Flux, from the release prod names
     bootstrap_secret/           the cluster's credential for Infisical
@@ -1384,7 +1527,23 @@ off, as it flushes every table when it starts and stops.
 
 **k3s** is installed from `infra/k3s/release.yaml`'s installer and version
 when missing, and upgraded when older, never downgraded. A changed
-setting restarts it; running containers survive that.
+setting restarts it; running containers survive that. The cluster's
+upgrade plan raises it too, in its window ([Reboots and
+upgrades](#reboots-and-upgrades)): whichever comes first, the other finds
+nothing to do.
+
+**What the machine tells the cluster** (`observe`). `systemd-journal-upload`
+sends the journal to VictoriaLogs at its fixed address in the cluster
+(`10.43.0.50:9428`), from the machine itself, so the kernel's, k3s's,
+Tailscale's, the firewall's and auditd's lines are beside the pods'; it
+keeps its place across a restart, and retries while the cluster is down.
+And `keel-machine-facts`, every five minutes, writes what no exporter
+knows to `/var/lib/node-exporter/textfile/keel_machine.prom`, whole or not
+at all, which node-exporter reads: whether a reboot is required and since
+when, the security updates waiting, unattended-upgrades' last run, what
+AIDE's last check found, the size of auditd's log, and whether each unit
+the machine needs is active (k3s, tailscaled, hostfw, chrony, auditd, the
+upload). `sysstat` is purged: node-exporter records what it did.
 
 **Flux** is applied from the release production follows, signed by the
 release workflow, never from the working tree: `kubectl diff
@@ -1536,8 +1695,10 @@ phone ──HTTPS──▶ Cloudflare's edge ──tunnel (cloudflared dialled o
 
 What is made by hand, once (the Cloudflare token, the B2 key for the
 state, the state's passphrase, the `gha-accounts` identity, the DS record),
-is in [infra/MANUAL-STEPS.md](../infra/MANUAL-STEPS.md), sections 8 to 12.
-Everything else outside the cluster is made by the `accounts` workflow.
+is in [infra/MANUAL-STEPS.md](../infra/MANUAL-STEPS.md), sections 8 to 12;
+and the backups' buckets and keys, in sections 13 and 14, which no
+workflow ever makes or reads. Everything else outside the cluster is made
+by the `accounts` workflow.
 
 ### `accounts`: OpenTofu, planned and applied as read
 
@@ -1599,24 +1760,39 @@ go run ./tools/accounts -lock    # write .terraform.lock.hcl again, after changi
 | External Secrets' credential | The owner | `keel-ops` `/machine` | `machine`, which puts it in `external-secrets/infisical-universal-auth` | No |
 | The tunnel's secret and token | Cloudflare, for OpenTofu | `keel-cluster` `/cloudflared/TUNNEL_TOKEN` | External Secrets → `cloudflared/tunnel-token` | Yes, encrypted |
 | The database's password | OpenTofu, ephemeral | `keel-cluster` `/keel/DB_PASSWORD` | External Secrets → `keel/keel-db-app` | No |
+| The password of `reader` | OpenTofu, ephemeral | `keel-cluster` `/keel/DB_READER_PASSWORD` | External Secrets → `keel/keel-db-reader`; the owner, for `psql` | No |
+| The password of `grafana`, the database's role | OpenTofu, ephemeral | `keel-cluster` `/keel/DB_GRAFANA_PASSWORD` and `/monitoring/DB_GRAFANA_PASSWORD`, the same value | External Secrets → `keel/keel-db-grafana` and `monitoring/grafana-db` | No |
+| Grafana's admin password | OpenTofu, ephemeral | `keel-cluster` `/monitoring/GRAFANA_ADMIN_PASSWORD` | External Secrets → `monitoring/grafana-admin`; the owner, to sign in | No |
+| The B2 key that writes the backups | The owner | `keel-backups` `/keel/B2_BARMAN_KEY_ID`, `…_KEY` | External Secrets → `keel/keel-b2` | No |
+| The B2 key that writes the dumps | The owner | `keel-backups` `/keel/B2_DUMPS_KEY_ID`, `…_KEY` | External Secrets → `keel/keel-dumps` | No |
+| The B2 key that reads the backups | The owner | `keel-backups` `/keel-restore/B2_RESTORE_KEY_ID`, `…_KEY` | External Secrets → `keel-restore/keel-b2-read` | No |
+| The local bucket's B2 key | The owner | `keel-backups` `/local/B2_KEY_ID`, `…_KEY`; copied to `.dev/backups.env` | `tools/cluster`, on the owner's Mac | No |
+
+The backups' keys are in a project of their own because the `accounts`
+workflow's identity may read `keel-cluster`'s values, and a project is the
+only fence Infisical's free plan has: no workflow's identity is a member
+of `keel-backups`, so no workflow can read, replace or delete a backup.
 
 ### External Secrets
 
 Its controller alone (no admission webhook, no certificate controller)
 runs on both clusters; on the local one it has no store and reads nothing,
 and is there so its definitions are what the manifests are checked
-against. Production's `configs` layer holds the one store, the
-`ClusterSecretStore` `infisical`: Infisical's API at `infisical.host`,
-signed in to as `eso-prod` with the credential the machine workflow placed,
-reading `keel-cluster`'s `prod` environment (by the slug
-`infisical.cluster.slug`; a test keeps the manifest and
-`infra/production.yaml` the same). Its conditions let only `keel` and
-`cloudflared` use it. The two `ExternalSecret`s refresh hourly.
+against. Production's `configs` layer holds two stores, both signed in to
+Infisical's API at `infisical.host` as `eso-prod`, with the credential the
+machine workflow placed. The `ClusterSecretStore` **`infisical`** reads
+`keel-cluster`'s `prod` environment (by the slug `infisical.cluster.slug`);
+its conditions let only `keel`, `cloudflared` and `monitoring` use it.
+**`infisical-backups`** reads `keel-backups` (`infisical.backups.slug`),
+and only `keel` and `keel-restore` may use it. A test keeps each manifest
+and `infra/production.yaml` the same, and a rule holds every
+`ExternalSecret` to a store whose conditions name its namespace, and each
+store's conditions to exactly the namespaces that use it. Every
+`ExternalSecret` refreshes hourly.
 
 ```sh
-kubectl get clustersecretstore infisical          # Ready, Valid
-kubectl -n keel get externalsecret keel-db-app    # SecretSynced
-kubectl -n cloudflared get externalsecret tunnel-token
+kubectl get clustersecretstore                    # both Ready, Valid
+kubectl get externalsecret -A                     # each SecretSynced
 ```
 
 ### cloudflared
@@ -1639,16 +1815,34 @@ always let in.
 | To | From |
 |----|------|
 | keel, 8080 | Traefik |
-| keel-db, 5432 | keel; CloudNativePG's operator (and 8000); its own instances |
+| keel, 9091 (the metrics alone) | the scraper |
+| keel-db, 5432 | keel; CloudNativePG's operator (and 8000); its own instances; the dump's job; Grafana |
+| keel-db, 9187 (its metrics) | the scraper |
+| the restore test's database, 5432 | the restore test's job; CloudNativePG's operator (and 8000) |
 | Traefik, 8000 | cloudflared; kube-system itself (ServiceLB, locally) |
 | CoreDNS, 53 | every namespace |
-| cnpg-system, external-secrets | nothing |
+| the Barman Cloud plugin, 9090 | CloudNativePG's operator |
+| the metrics store, 8428 | the scraper, vmalert, Grafana, Kured (whether an alert fires) |
+| the logs store, 9428 | vlagent, Grafana, the scraper |
+| vmalert, 8080 | the metrics store (its rules, shown by its UI and Grafana), the scraper |
+| Alertmanager, 9093 | vmalert, Grafana, the scraper |
+| every metrics port a scrape names | the scraper, and nothing else outside the monitoring namespaces |
+| cnpg-system, external-secrets, cert-manager, monitoring: anything else | nothing |
 
-Out, only the two pods that face the internet are fenced, as neither calls
-the Kubernetes API (whose address, seen by a policy, is the machine's
-public one): **keel** reaches DNS and its database alone; **cloudflared**
-DNS, Cloudflare on TCP and UDP 7844 (anywhere but the cluster's ranges),
-and Traefik's 8000. A new pod's first connections can be refused for a
+The owner's forwards ([Monitoring](#monitoring)) arrive from the node, as
+the kubelet's probes do, so no policy names them; and node-exporter is on
+the host's network, where no policy applies and the machine's firewall
+does. A rule fails a scrape whose port no policy lets the scraper in to,
+and a policy that lets anything else in to a metrics port.
+
+Out, the pods that face the internet or hold a key are fenced, as none
+calls the Kubernetes API (whose address, seen by a policy, is the
+machine's public one): **keel** reaches DNS and its database alone;
+**cloudflared** DNS, Cloudflare on TCP and UDP 7844 (anywhere but the
+cluster's ranges), and Traefik's 8000; **the dump's job** DNS, the
+database, and HTTPS outside the cluster's ranges, for B2. The monitoring
+pods are not: the operator's configuration reloaders beside vmalert, the
+scraper and Alertmanager watch their Secrets through the API. A new pod's first connections can be refused for a
 moment while the controller lets its address in; `keel migrate` waits for
 the database for up to a minute rather than fail.
 
@@ -1697,7 +1891,10 @@ host refused; a game connection open for ten minutes, past Cloudflare's
   machine, or a deleted Secret, waits until Infisical is back. `accounts`
   cannot run.
 - **B2**: `accounts` cannot read its state, and stops before changing
-  anything.
+  anything. The database keeps the WAL it cannot archive on its own disk
+  and sends it when B2 is back; `WALArchivingFailing` fires after ten
+  minutes, and `DiskHigh` if it lasts long enough to matter. The dump and
+  the restore test fail that week, and say so.
 
 ### Rotating
 
@@ -1712,6 +1909,13 @@ host refused; a game connection open for ten minutes, past Cloudflare's
   and if it does not, set the new one in PostgreSQL (`ALTER ROLE keel
   PASSWORD …`, from `kubectl exec keel-db-1 -c postgres -- psql`) between
   the apply and the refresh, then restart the game. Not done casually.
+- **The read-only roles' passwords, and Grafana's admin password**: raise
+  that secret's `value_wo_version` in `infra/tofu/secrets.tf` and run
+  `accounts` with `apply`. External Secrets brings the new value within
+  the hour; CloudNativePG sets a managed role's password from its Secret
+  by itself. Grafana reads its passwords when it starts: `kubectl -n
+  monitoring rollout restart deploy/grafana`.
+- **The backups' keys**: infra/MANUAL-STEPS.md, section 14.
 - **The tunnel**: raise `tunnel_generation` in `infra/tofu/tunnel.tf` and
   run `accounts` with `apply`: the plan replaces the tunnel (a new ID, a new
   `play` record, a new token) and writes the new token into Infisical.
@@ -1894,6 +2098,439 @@ in `.dev/db.env`. With neither, these tests are **skipped** locally (`go
 test -v` says why) and **fail** in CI. Tests that use a database run in
 real time, never in a `synctest` bubble; the server's other tests use an
 in-memory stand-in.
+
+### Production's database: roles, access and what it records
+
+Three roles log in. **`keel`** owns the database; the game and its
+migrations use it, and its password never leaves the namespace `keel`.
+**`reader`** is for the owner and **`grafana`** for Grafana (at most five
+connections): each is a member of `pg_read_all_data` and `pg_monitor`,
+PostgreSQL's own roles that read every table and every statistic and
+write nothing. CloudNativePG makes and keeps both, with the passwords
+OpenTofu wrote into Infisical. The superuser, `postgres`, has no password
+and no way in over the network.
+
+**To look**, open the forwards ([Monitoring](#monitoring)); the database
+is on `localhost:15432`. It accepts TLS alone, and its certificate is the
+cluster's own, so fetch its CA once (it changes only when the database is
+rebuilt), and take `reader`'s password from Infisical (`keel-cluster`,
+`/keel/DB_READER_PASSWORD`):
+
+```sh
+tailscale ssh root@keel-prod-1 k3s kubectl -n keel get secret keel-db-ca -o 'jsonpath={.data.ca\.crt}' | base64 -d > keel-db-ca.crt
+psql "host=localhost port=15432 dbname=keel user=reader sslmode=verify-ca sslrootcert=keel-db-ca.crt"
+```
+
+`verify-ca`, not `verify-full`: through a forward the name is `localhost`,
+which the certificate does not carry; the CA is still checked. In Grafana,
+**Explore** with the data source **Database** runs SQL as `grafana`.
+
+**What it records.** `pg_stat_statements` counts every statement by its
+shape, with its time, rows and blocks: `SELECT … FROM pg_stat_statements
+ORDER BY total_exec_time DESC`, or the Database dashboard's table. A
+statement slower than 250 ms is logged, and `auto_explain` logs its plan
+beside it; both reach VictoriaLogs, and the Database dashboard lists them.
+Bound values are never logged (`log_parameter_max_length = 0`,
+`auto_explain.log_parameter_max_length = 0`): a player's name or token
+never reaches a log. CloudNativePG's exporter (port 9187) gives the
+metrics, with three queries of the game's own
+(`infra/cluster/apps/keel/database-monitoring.yaml`): each table's size,
+rows and vacuum; the blocks read and written; and the locks waited for.
+
+**To change something by hand** (break-glass: a stuck migration, a role's
+password, a query to cancel), there is one way in, as `postgres` over the
+pod's own socket, from the machine:
+
+```sh
+tailscale ssh root@keel-prod-1
+k3s kubectl -n keel exec -it keel-db-1 -c postgres -- psql keel
+```
+
+Whoever can do that is root on the machine already. Say in the next
+commit, or the pull request that follows, what was changed and why: the
+journal records the session, not the statements.
+
+## Backups
+
+Production's database is copied off the machine three ways, and one of
+them is restored every week to prove it works.
+
+```
+keel-db ──WAL, each segment or every 5 min──▶ the plugin's sidecar ──▶ B2 keel-db-backups/keel-db-g1
+        ──a base backup, daily 20:00 UTC────▶        (key keel-barman)      (locked 14 days, kept 30)
+        ──pg_dump, Mondays 21:00 UTC──▶ the dump's job ──(key keel-dumps, no delete)──▶ B2 keel-db-dumps/prod/
+keel restore-test, Tuesdays 21:00 UTC ──(key keel-restore, read-only)──▶ a database of its own, checked, deleted
+```
+
+**The archive.** CloudNativePG's Barman Cloud plugin runs beside
+PostgreSQL in `keel-db-1` and sends every WAL segment as it fills, or
+after five minutes (`archive_timeout`, CloudNativePG's default): what a
+lost machine loses is at most the last five minutes. A base backup is
+taken daily, and at once when the database is first made. Both are
+gzipped. Barman keeps what a restore to any moment of the last 30 days
+needs, and removes the rest. The `ObjectStore` `keel-b2`
+(`infra/cluster/apps/keel/object-store.yaml`) says where; the bucket, its
+endpoint and region are `infra/production.yaml`'s, and a test keeps the
+two the same.
+
+```sh
+kubectl -n keel get backups.postgresql.cnpg.io         # each base backup, and whether it completed
+kubectl -n keel get cluster keel-db -o jsonpath='{.status.conditions}'   # ContinuousArchiving
+kubectl -n keel logs keel-db-1 -c plugin-barman-cloud  # the archiver
+```
+
+A base backup by hand, before anything risky:
+
+```sh
+kubectl apply -f - <<'EOF'
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: keel-db-by-hand
+  namespace: keel
+spec:
+  cluster:
+    name: keel-db
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+EOF
+```
+
+**Generations.** CloudNativePG refuses to archive into a folder that
+already holds another database's WAL, so each database ever made writes
+under a name of its own in the bucket: `keel-db-g1`, then `keel-db-g2`
+for the database a rebuild recovers from `g1`, and so on.
+`infra/cluster/apps/keel/generation.yaml` holds the two names, `live` and
+`rebuilt`, and is the only place they are written: a component copies
+`live` into the database's plugin and the restore test, and the rebuild
+form recovers from `live` and archives as `rebuilt`. After a rebuild, a
+commit moves both on by one ([infra/REBUILD.md](../infra/REBUILD.md)).
+From that commit's release on, the rebuild form describes the next
+rebuild, not the database the last one made, which Flux follows it for
+until the machine workflow moves it back: so in the rebuild form Flux
+applies the database and its restore test only while they are not there
+(`kustomize.toolkit.fluxcd.io/ssa: IfNotPresent`), and a running
+database's archive is never renamed under it. A rule holds each form to
+its names, the restore test to the archive its database writes, and that
+annotation to those two objects in that form alone.
+
+**The keys.** Three B2 keys, each for one bucket: one writes and deletes
+the backups (`keel/keel-b2`), one only reads them
+(`keel-restore/keel-b2-read`), one writes dumps and cannot delete
+(`keel/keel-dumps`). The backups' bucket and the dumps' hold every file
+for 14 days whatever a key asks (Object Lock, governance mode): a stolen
+key cannot destroy the last fortnight. The buckets and keys are made by
+hand and kept in an Infisical project no workflow can read
+([infra/MANUAL-STEPS.md](../infra/MANUAL-STEPS.md), sections 13 and 14).
+
+**The dump.** `keel-db-dump`, a CronJob in `keel`: `pg_dump` in its custom
+format, from the database's own image, so of its own version; `pg_restore
+--list` to prove the file reads; then rclone copies it to
+`keel-db-dumps/prod/<date>.dump`. B2's lifecycle hides a dump after 56
+days. It depends on no WAL and no Barman: it restores into any
+PostgreSQL 18 with `pg_restore --dbname=…`. Its last line says its size
+and time.
+
+```sh
+kubectl -n keel create job --from=cronjob/keel-db-dump keel-db-dump-by-hand
+kubectl -n keel logs job/keel-db-dump-by-hand --all-containers
+```
+
+**The restore test.** `keel-restore-test`, a CronJob in a namespace of its
+own, runs `keel restore-test`: through the Kubernetes API, as a service
+account that may make, read and delete databases there, read the one
+password, and nothing else,
+it makes `keel-restore-check`, one instance recovered from the live
+archive with the read-only key and with no archiver of its own, so it can
+never write into what it reads; waits for it, up to 45 minutes; and
+checks, as the role CloudNativePG made for it, that the schema is at
+least this build's, every table of the migrations exists, the world, its
+lease and its checkpoint are there, and the newest checkpoint is younger
+than 24 hours. Then it deletes the database, and exits 0, or 1 with the
+reason. Its one line, `restore test`, has the result and the times:
+
+```
+{"level":"INFO","msg":"restore test","result":"passed","source":"keel-db-g1","made_s":2,"recovered_s":212,"checked_s":1,"total_s":221,"schema":3,"rows":{…},"checkpoint_age_s":340,"event_age_s":5200}
+```
+
+The Backups dashboard shows the last of them, and `RestoreTestFailed` and
+`RestoreTestStale` fire on its Job. To run it now:
+
+```sh
+kubectl -n keel-restore create job --from=cronjob/keel-restore-test keel-restore-test-by-hand
+kubectl -n keel-restore logs -f job/keel-restore-test-by-hand
+```
+
+**Restoring to a moment.** To read the data as it was (a player's boat
+before a bug, a table before a bad migration), recover a second database
+beside the live one, to that time, with the read-only key: the live
+database is never touched, and what is needed is copied across by hand.
+On the machine, or through the API's forward:
+
+```sh
+kubectl apply -f - <<'EOF'
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: keel-restore-check
+  namespace: keel-restore
+spec:
+  instances: 1
+  imageName: <keel-db's own: kubectl -n keel get cluster keel-db -o jsonpath='{.spec.imageName}'>
+  enablePDB: false
+  storage:
+    storageClass: local-path
+    size: 40Gi
+  postgresql:
+    parameters:
+      max_connections: "<keel-db's own>"
+  bootstrap:
+    recovery:
+      source: origin
+      database: keel
+      owner: keel
+      recoveryTarget:
+        targetTime: "2026-11-03 14:25:00+00"
+  externalClusters:
+    - name: origin
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: keel-b2-read
+          serverName: keel-db-g1
+EOF
+kubectl -n keel-restore exec -it keel-restore-check-1 -c postgres -- psql keel
+kubectl -n keel-restore delete cluster keel-restore-check     # when done
+```
+
+It has no `plugins` entry, so it archives nowhere. Its name is the
+restore test's own: the namespace's NetworkPolicy lets CloudNativePG's
+operator reach a database of that name alone, and the weekly test removes
+whatever has it when it starts, so not on a Tuesday evening. Its disk is
+the machine's: look at the Machine dashboard's free space first, and
+delete it when done. To put the whole game back to a moment is a rebuild
+with that `recoveryTarget` added to the rebuild form: a decision, and a
+pull request, not a command.
+
+**The local cluster** archives to a bucket of its own,
+`keel-db-backups-local`, with a key of its own, when `.dev/backups.env`
+holds it; its dump goes to rclone's memory and is thrown away.
+`go run ./tools/cluster -deploy -rebuild` makes a deleted database again
+from that archive, as production's rebuild does.
+
+## Monitoring
+
+The cluster watches itself, and the owner looks in over the tailnet.
+Nothing here has a route, a login page on the internet, or a notification
+going anywhere yet: the alerts are on the Overview dashboard, for whoever
+opens it.
+
+```
+keel :9091 ─┐                                    ┌─▶ vmalert ──▶ Alertmanager
+keel-db ────┤                                    │        (the rules)   (alerts, silences)
+node-exporter (the machine, its facts) ──▶ vmagent ──▶ VictoriaMetrics, 90 days
+kubelet, API server, Traefik, cloudflared,  │                    ▲
+the operators, Flux ────────────────────────┘                    │
+pods' logs ──▶ vlagent ──▶ VictoriaLogs, 14 days or 20 GiB ◀── Grafana (keeps nothing itself)
+the machine's journal ──systemd-journal-upload──▶ ┘              │ SQL as grafana ──▶ keel-db
+                                                   the owner's Mac ──tailscale ssh -L──▶ ┘
+```
+
+Everything is VictoriaMetrics' operator's custom resources, from two
+charts (the operator in `controllers`; the stack in the `monitoring`
+layer), in the namespace `monitoring`, `restricted`. node-exporter and
+vlagent, which read the host, are in `monitoring-node`, `privileged`, and
+hold nothing else. Grafana has no disk and no database: its data sources,
+dashboards and plugin come from the manifests, so anything changed in its
+pages is gone at its next restart, and a change that should stay is a
+commit.
+
+### Opening it
+
+```sh
+go run ./tools/ops -tunnel
+```
+
+One Tailscale SSH session to the machine, as root, forwarding these to
+the Mac's loopback until interrupted. Each is a Service with an address
+chosen by hand in the cluster, so the command never has to ask for it;
+nothing listens for them on the machine itself, and a rule keeps the
+manifests and the list the same.
+
+| On the Mac | What |
+|---|---|
+| http://localhost:3000 | Grafana: `admin`, with the password in Infisical (`keel-cluster`, `/monitoring/GRAFANA_ADMIN_PASSWORD`) |
+| http://localhost:8428 | VictoriaMetrics' own page (vmui), with vmalert's rules and alerts under `/vmalert` |
+| http://localhost:9428 | VictoriaLogs' own page |
+| localhost:15432 | the database, for `psql` as `reader` ([The database](#the-database)) |
+| localhost:9090 | keel's internal listener: `go tool pprof http://localhost:9090/debug/pprof/profile`, the flight recorder, the input log |
+
+`-tunnel -print` prints the command and runs nothing.
+
+### The dashboards
+
+In the folder **Keel**, written for this game (`infra/cluster/monitoring/dashboards/keel/`):
+
+| Dashboard | What it answers |
+|---|---|
+| Overview | Is anything wrong? What fires, how severe, and when each alert fired in the last day; boats, connections and the tick; the database, and the last WAL, base backup, dump and restore test; the machine's CPU, steal, memory and disk, a pending reboot or update; Flux; scrape targets down |
+| Game | How the simulation does: the tick and its phases, ticks late and skipped, boats, connections, joins and closes, the queue's wait, bytes a player a second, phones' round trip and frame time, persistence's oldest unwritten change and inbox, checkpoints, the lease, keel's CPU, throttling and memory, restarts and restores, its warnings and errors |
+| Machine | The VM: CPU by mode, pressure, memory, the clock; the root filesystem, what grows on it and when it would be full; disk latency; the network and the month's transfer at today's rate; its upkeep (a reboot required, updates waiting, AIDE, the units, auditd's log); the journal's warnings; each pod against what it asked for |
+| Database | PostgreSQL: connections, transactions, locks, the oldest transaction; tables, dead rows and vacuums; WAL, checkpoints and I/O; keel's pool and its queries' times; the statements that cost the most, and the slow ones with their plans |
+| Backups | How far back a restore can go: the last WAL archived, segments archived and failed, WAL waiting on the machine, WAL written a day, the base backups, the dump's and the restore test's runs and results, the archiver's log |
+| Edge | What players meet: the tunnel's connections, Traefik's requests by route and responses by code, the limits' 429s, open connections, request times, cloudflared's log, keel's refusals |
+
+And other projects' own, kept as published and pinned
+(`dashboards/index.yaml` names each one's repository, commit and
+SHA-256): **Machine** (Node Exporter Full), **Kubernetes** (four views),
+**Database** (CloudNativePG's), **Monitoring** (VictoriaMetrics, vmagent,
+vmalert, the operator, VictoriaLogs). `go run ./tools/dashboards -check`,
+in the tests, holds each of the others' files to its record, and every
+dashboard to a title, an identifier of its own, and data sources that
+exist.
+
+To change one of the game's: edit it in Grafana, **Export → Export as
+JSON**, and replace the file; the local cluster shows it after `go run
+./tools/cluster -monitoring`.
+
+### The logs
+
+Every container's output and the machine's journal are in VictoriaLogs,
+for 14 days or 20 GiB, whichever comes first. JSON lines are parsed: keel's
+fields (`level`, `msg`, `build`, a request's `status` and `path`) are
+fields there. In Grafana's **Explore**, data source **VictoriaLogs**, or
+on its own page, in LogsQL:
+
+```
+kubernetes.pod_namespace:keel kubernetes.container_name:keel level:in(WARN, ERROR)
+kubernetes.pod_namespace:keel kubernetes.container_name:keel status:>=500
+kubernetes.pod_namespace:keel kubernetes.container_name:postgres "duration:"
+kubernetes.pod_namespace:keel kubernetes.container_name:plugin-barman-cloud
+kubernetes.pod_namespace:keel-restore "restore test"
+kubernetes.pod_namespace:cloudflared
+_SYSTEMD_UNIT:k3s.service
+_SYSTEMD_UNIT:* level:in(emerg, alert, crit, err, error, warning)
+_SYSTEMD_UNIT:tailscaled.service "ssh"
+```
+
+Add `| stats by (kubernetes.container_name) count()` to count, or pick a
+time on the panel.
+
+### The alerts
+
+vmalert evaluates the rules and sends what fires to Alertmanager, which
+sends it nowhere: **Overview** lists what fires, with its severity and
+what it says, and Grafana's **Alerting → Alert rules** shows every rule
+and its state. `Watchdog` always fires; if it is missing, the alerting
+itself is down. The rules are beside what they watch
+(`infra/cluster/apps/keel/rules.yaml`, `apps/cloudflared/monitoring.yaml`,
+`monitoring/rules/`), and each has a test
+(`infra/cluster/monitoring/rules/tests/`, run by `go test
+./tools/internal/manifests -run TestAlertRules` with VictoriaMetrics'
+`vmalert-tool`) that makes it fire and makes it stay quiet.
+
+| Alert | Fires when | What to do |
+|---|---|---|
+| **GameDown** (critical) | keel has no ready pod for 2 minutes | Its pod and logs; then the database |
+| **TickOverrun** (critical) | the tick's 99th percentile is over 25 ms for 5 minutes | Game: which phase grew. Machine: steal, throttling |
+| **PersistenceLag** (critical) | a change has waited over 10 s to be written | The database: is it up, is the disk slow |
+| **DatabaseDown** (critical) | the database's exporter is gone for 2 minutes | `keel-db-1`'s pod and logs, and CloudNativePG's |
+| **WALArchivingFailing** (critical) | a segment failed to archive and none succeeded since, or none was archived for 15 minutes; for 10 minutes | The sidecar's log (`plugin-barman-cloud`); B2's status; the key |
+| **DiskFull** (critical) | the disk is over 90% full, or on course to fill within a day | Machine: which volume grows. The database stops when it is full |
+| **TunnelDown** (critical) | no cloudflared replica holds a connection for 2 minutes | cloudflared's pods and logs; Cloudflare's dashboard |
+| QueueWaiting | players have waited for a boat for 10 minutes | The tick's time, before raising `KEEL_BOAT_LIMIT` |
+| MemoryNearLimit | a container of keel or the database is over 90% of its limit | Its memory over days; raise the limit in a commit |
+| CPUThrottled | keel is throttled in over a tenth of its CPU periods | Game: does the tick suffer |
+| BackupStale | no base backup completed in 26 hours | `kubectl -n keel get backups.postgresql.cnpg.io`; the sidecar's log |
+| DatabaseConnections | over 80% of `max_connections` are held | Database: who holds them |
+| LongTransaction | a transaction is open for over 5 minutes | `pg_stat_activity`; cancel it if it is nobody's |
+| TransactionIDAge | the oldest transaction ID is over a billion old | What keeps vacuum from freezing: a long transaction, a slot |
+| DumpStale, DumpFailed | no dump in 8 days; a dump's Job failed | Its log; run it by hand once fixed |
+| RestoreTestStale, RestoreTestFailed | no test passed in 8 days; a test's Job failed | Its `restore test` line says which check; run it by hand once fixed |
+| DiskHigh | the disk is over 80% full | Machine: what grows |
+| CPUSteal | over 10% of the CPU is stolen for 15 minutes | If it lasts, the provider |
+| MemoryPressure | tasks wait for memory over 10% of the time | Machine: who uses it |
+| TransferOnCourse | the month's transfer is on course past 80% of 16 TB | Game: bytes per player |
+| ClockOffset | the clock is over 50 ms off | `chronyc tracking` on the machine |
+| RebootPending | a reboot has been due for a week | `machine` with `apply` and **reboot** |
+| UpdatesPending | security updates have waited 3 days | unattended-upgrades' log, in the journal |
+| IntegrityChanged | AIDE found files changed | Its report in the journal; an update explains most |
+| PodRestarting | a container restarted more than three times in 15 minutes | Its logs; `kubectl describe` |
+| FluxNotReady | a Flux object is not ready for 15 minutes | `flux get all -A` |
+| SecretNotSynced | an `ExternalSecret` is not synced for 15 minutes | Its conditions; Infisical |
+| CertificateExpiring | a certificate expires within 14 days | cert-manager's `CertificateRequest` |
+
+Each alert's own description, on the Overview and in Grafana, says the
+same with the numbers of the moment.
+
+**To silence one** (a known cause, being worked on): Grafana, **Alerting →
+Silences**, choose the Alertmanager **Alertmanager**, **Add silence**, with
+a matcher on `alertname` and an end. A critical alert that fires hides the
+warnings it explains by itself (the game down hides its queue; the
+database down hides its other alerts). A silence lasts until its end, or
+until Alertmanager's pod is replaced: it has no volume.
+
+**To send them somewhere** later is a receiver and a route in the stack's
+values (`alertmanager.config`), its address or token an `ExternalSecret`
+in `monitoring`, and a NetworkPolicy letting Alertmanager out. Until
+then, `Watchdog` is what an outside check would listen for.
+
+### What it costs
+
+The requests and limits are in the stack's values
+(`infra/cluster/monitoring/stack/release.yaml`), halved for the local
+cluster. To keep the number of series small, the API server's histogram
+buckets are dropped at the scrape, and the scheduler, controller manager,
+etcd and kube-proxy, which k3s runs inside one process, are not scraped
+apart. The **VictoriaMetrics - single-node** dashboard shows the active
+series and what each scrape adds; VictoriaLogs' its disk.
+
+## Reboots and upgrades
+
+The machine installs its security updates every day by itself
+(`unattended-upgrades`) and never reboots by itself. Two things in the
+cluster finish the job, each in a two-hour window on a quiet evening, UTC,
+on different days. Both are in production alone.
+
+**Kured**, Wednesdays 20:00 to 22:00: when an update left
+`/var/run/reboot-required`, and no alert fires but `Watchdog`,
+`RebootPending` and `UpdatesPending`, it drains the node and reboots the
+machine. It asks the metrics store, for the series `ALERTS` that vmalert
+writes there; an answer it cannot get counts as an alert. The drain stops
+keel as a deploy does, with its bell and its last checkpoint, and the
+database after it. The game is away for about two minutes (2 min 9 s on
+the local cluster, from the drain to keel ready), which is longer than a
+checkpoint is good for (60 s, [Restarts and deploys](#restarts-and-deploys)):
+unlike a deploy, a reboot starts the sea empty. Accounts and sailors are
+untouched; players join again. A drain not done in ten minutes leaves the
+machine up. `RebootPending` fires when a reboot has been due
+for a week, so through a whole window; why is in Kured's log
+(`kubernetes.pod_namespace:kured`). To reboot now: `machine`, `apply`,
+**reboot** ticked. To hold reboots for a while (an event), remove the
+day from `--reboot-days` in a commit
+(`infra/cluster/infrastructure/controllers/kured/kustomization.yaml`).
+
+**The system-upgrade controller**, Thursdays 20:00 to 22:00: a `Plan`
+(`infra/cluster/clusters/prod/configs/upgrade-plan.yaml`) names the k3s
+version, the same as `infra/k3s/release.yaml`'s, and the upgrade image by
+digest; a test keeps them equal, and Renovate raises them together, a new
+minor version only after a tick on its dashboard. When the release
+production follows names a newer k3s than the machine runs, the
+controller cordons the node, replaces k3s's binary and restarts it. The
+node is not drained: k3s restarting leaves every container running, so
+the game does not pause. The playbook's k3s role upgrades too, whenever
+`machine apply` runs first.
+
+```sh
+kubectl -n system-upgrade get plans,jobs
+kubectl get nodes -o wide          # the version it runs
+```
+
+Both need more than `restricted` allows (the host's process and mount
+namespaces), so each has a namespace of its own, `privileged`, that holds
+nothing else. Both come from their projects' release manifests, kept as
+published ([Who signed it](#who-signed-it)).
 
 ## The game's page
 

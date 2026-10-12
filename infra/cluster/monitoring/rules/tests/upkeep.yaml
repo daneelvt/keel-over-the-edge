@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The machine's alerts that wait for days (monitoring/rules/machine.yaml),
+# evaluated every five minutes here so a week passes quickly.
+# vmalert-tool's clock starts at 2000-01-01 UTC, 946684800: a time a
+# series holds, where a rule compares it with now, counts from there.
+evaluation_interval: 5m
+tests:
+  - name: a reboot has been required for a week, and updates wait
+    interval: 5m
+    input_series:
+      - series: keel_machine_reboot_required_since_timestamp_seconds
+        values: 946684800x2100
+      - series: keel_machine_security_updates
+        values: 4x2100
+    alert_rule_test:
+      - eval_time: 6d
+        groupname: machine
+        alertname: RebootPending
+        exp_alerts: []
+      - eval_time: 7d1h
+        groupname: machine
+        alertname: RebootPending
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: machine
+              summary: "An update has waited a week for a reboot."
+            exp_annotations:
+              description: "Kured has not rebooted the machine in its window: something else fired, or a drain did not finish. Reboot it with the machine workflow, reboot ticked."
+      - eval_time: 2d
+        groupname: machine
+        alertname: UpdatesPending
+        exp_alerts: []
+      - eval_time: 3d1h
+        groupname: machine
+        alertname: UpdatesPending
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: machine
+              summary: "Security updates have waited three days."
+            exp_annotations:
+              description: "4 wait: unattended-upgrades did not install them. Its log is in the journal, in VictoriaLogs."

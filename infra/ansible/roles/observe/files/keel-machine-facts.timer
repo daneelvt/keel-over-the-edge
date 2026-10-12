@@ -1,0 +1,11 @@
+# Written by the observe role.
+[Unit]
+Description=The machine's facts for node-exporter, every five minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

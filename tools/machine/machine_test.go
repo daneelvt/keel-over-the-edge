@@ -53,6 +53,13 @@ type fakeCommands struct {
 	changed     int
 	// status is tailscale status --json's answer.
 	status string
+	// live and rebuilt are the archives the release's two forms name; ""
+	// for a release from before the database was backed up, which has no
+	// rebuild form. follows and archive are what state.yaml finds on the
+	// machine: the path Flux's first layer applies, and the archive the
+	// database writes.
+	live, rebuilt    string
+	follows, archive string
 }
 
 func (f *fakeCommands) run(_ context.Context, c cmd) ([]byte, error) {
@@ -80,7 +87,27 @@ func (f *fakeCommands) run(_ context.Context, c cmd) ([]byte, error) {
 		file := filepath.Join(out, "prod", "flux-system", "manifests.yaml")
 		os.MkdirAll(filepath.Dir(file), 0o755)
 		os.WriteFile(file, []byte("kind: Namespace\n"), 0o644)
+		for form, archive := range map[string]string{"prod": f.live, "prod-rebuild": f.rebuilt} {
+			if archive == "" {
+				continue
+			}
+			for name, body := range map[string]string{
+				"flux-system": "kind: Namespace\n",
+				"apps":        "kind: Namespace\nmetadata:\n  name: keel\n---\nkind: Cluster\nmetadata:\n  name: keel-db\nspec:\n  plugins:\n    - name: barman-cloud.cloudnative-pg.io\n      parameters:\n        serverName: " + archive + "\n",
+			} {
+				file := filepath.Join(out, form, name, "manifests.yaml")
+				os.MkdirAll(filepath.Dir(file), 0o755)
+				os.WriteFile(file, []byte(body), 0o644)
+			}
+		}
 	case "ansible-playbook":
+		if slices.Contains(args, "state.yaml") {
+			out := "TASK [Say them] ***\nok: [keel-prod-1] => {\n    \"msg\": \"flux follows [" + f.follows + "]; the database archives as [" + f.archive + "]\"\n}\n"
+			if c.out != nil {
+				io.WriteString(c.out, out)
+			}
+			return []byte(out), nil
+		}
 		out := "TASK [base : Name the machine] ***\nok: [keel-prod-1]\n"
 		if f.changed > 0 {
 			out += "TASK [firewall : Write the table] ***\nchanged: [keel-prod-1]\n"
@@ -213,7 +240,7 @@ func TestRunGivesTheCredentialOnlyToThePlaybook(t *testing.T) {
 	if err := m.run(context.Background(), runOptions{mode: "apply"}); err != nil {
 		t.Fatal(err)
 	}
-	plays := f.ran("ansible-playbook")
+	plays := f.plays()
 	if len(plays) != 1 {
 		t.Fatalf("ansible-playbook ran %d times", len(plays))
 	}
@@ -276,6 +303,97 @@ func digestOf(t *testing.T, m *machine) string {
 		t.Fatal(err)
 	}
 	return a.Digest
+}
+
+// plays are the runs of the playbook itself, without those that only read
+// the machine's state.
+func (f *fakeCommands) plays() []call {
+	var cs []call
+	for _, c := range f.ran("ansible-playbook") {
+		if slices.Contains(c.argv, "site.yaml") {
+			cs = append(cs, c)
+		}
+	}
+	return cs
+}
+
+// TestRebuild: with rebuild, Flux is bootstrapped from the release's
+// rebuild form, on a machine with no database or the one this rebuild
+// made; never on one whose database is live, nor on a runner, nor from a
+// release that has no rebuild form.
+func TestRebuild(t *testing.T) {
+	for name, tc := range map[string]struct {
+		live, rebuilt, follows, archive string
+		local                           bool
+		want                            string
+	}{
+		"a reinstalled machine":       {live: "keel-db-g1", rebuilt: "keel-db-g2"},
+		"the rebuild run again":       {live: "keel-db-g1", rebuilt: "keel-db-g2", follows: "./prod-rebuild/flux-system", archive: "keel-db-g2"},
+		"a machine with its database": {live: "keel-db-g1", rebuilt: "keel-db-g2", follows: "./prod/flux-system", archive: "keel-db-g1", want: "rebuild is for a machine with no database"},
+		"a release with no such form": {want: "has no rebuild form"},
+		"a runner":                    {live: "keel-db-g1", rebuilt: "keel-db-g2", local: true, want: "only the machine is rebuilt"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, f, _, summary := testMachine(t, "main@sha1:"+commit)
+			f.live, f.rebuilt, f.follows, f.archive = tc.live, tc.rebuilt, tc.follows, tc.archive
+			err := m.run(context.Background(), runOptions{mode: "apply", rebuild: true, local: tc.local})
+			if tc.want != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.want) || len(f.plays()) != 0 {
+					t.Fatalf("got %v, and the playbook ran %d times", err, len(f.plays()))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := strings.Join(f.plays()[0].argv, " ")
+			if want := "machine_flux_manifests=" + filepath.Join(m.root, stateDir, "release", "prod-rebuild", "flux-system", "manifests.yaml"); !strings.Contains(args, want) {
+				t.Errorf("the playbook's arguments have no %q: %s", want, args)
+			}
+			if !strings.Contains(summary.String(), "recovers from `keel-db-g1` and archives as `keel-db-g2`") {
+				t.Errorf("the summary does not say what is rebuilt:\n%s", summary)
+			}
+		})
+	}
+}
+
+// TestLeavingTheRebuildForm: an ordinary run puts Flux back on the live
+// form only once the release's live archive is the one the rebuilt
+// database writes; until then nothing is applied. A machine that was never
+// rebuilt, and a release from before there were backups, run as ever.
+func TestLeavingTheRebuildForm(t *testing.T) {
+	for name, tc := range map[string]struct {
+		live, rebuilt, follows, archive string
+		want                            string
+	}{
+		"never rebuilt":                 {live: "keel-db-g1", rebuilt: "keel-db-g2", follows: "./prod/flux-system", archive: "keel-db-g1"},
+		"a new machine":                 {live: "keel-db-g1", rebuilt: "keel-db-g2"},
+		"rebuilt, generation raised":    {live: "keel-db-g2", rebuilt: "keel-db-g3", follows: "./prod-rebuild/flux-system", archive: "keel-db-g2"},
+		"rebuilt, generation not yet":   {live: "keel-db-g1", rebuilt: "keel-db-g2", follows: "./prod-rebuild/flux-system", archive: "keel-db-g2", want: "Raise the generation"},
+		"rebuilt, still recovering":     {live: "keel-db-g1", rebuilt: "keel-db-g2", follows: "./prod-rebuild/flux-system", want: "Moving Flux back now"},
+		"a release before the backups":  {follows: "./prod/flux-system"},
+		"raised twice by mistake":       {live: "keel-db-g3", rebuilt: "keel-db-g4", follows: "./prod-rebuild/flux-system", archive: "keel-db-g2", want: "keel-db-g3"},
+		"following prod, archive moved": {live: "keel-db-g2", rebuilt: "keel-db-g3", follows: "./prod/flux-system", archive: "keel-db-g1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, f, _, _ := testMachine(t, "main@sha1:"+commit)
+			f.live, f.rebuilt, f.follows, f.archive = tc.live, tc.rebuilt, tc.follows, tc.archive
+			err := m.run(context.Background(), runOptions{mode: "apply"})
+			if tc.want != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.want) || len(f.plays()) != 0 {
+					t.Fatalf("got %v, and the playbook ran %d times", err, len(f.plays()))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := strings.Join(f.plays()[0].argv, " ")
+			if want := filepath.Join("release", "prod", "flux-system", "manifests.yaml"); !strings.Contains(args, want) {
+				t.Errorf("the playbook's arguments have no %q: %s", want, args)
+			}
+		})
+	}
 }
 
 func TestCheckIsADryRun(t *testing.T) {

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The machine's and the cluster's alerts. The game's, the database's and
+# the tunnel's are beside them, in the apps layer. Each rule is tested in
+# tests/, by go test (vmalert-tool unittest).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - machine.yaml
+  - cluster.yaml

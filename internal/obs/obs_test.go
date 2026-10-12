@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -291,6 +292,23 @@ func TestInternalRoutes(t *testing.T) {
 	for _, path := range []string{"/debug/flightrecorder", "/debug/replay", "/api/version"} {
 		if code, _ := get(t, srv.Client(), srv.URL+path); code != 404 {
 			t.Errorf("%s: %d, want 404 when not given", path, code)
+		}
+	}
+}
+
+// TestMetricsOnly: the metrics listener serves the metrics, and none of
+// the internal listener's other paths.
+func TestMetricsOnly(t *testing.T) {
+	srv := httptest.NewTestServer(t, MetricsOnly(NewMetrics("b", "c")))
+	if code, body := get(t, srv.Client(), srv.URL+"/metrics"); code != 200 || !strings.Contains(body, "keel_build_info") {
+		t.Errorf("/metrics: %d", code)
+	}
+	for _, path := range append(slices.Clone(InternalPaths), "/", "/metrics/", "/api/version") {
+		if path == "/metrics" {
+			continue
+		}
+		if code, _ := get(t, srv.Client(), srv.URL+path); code != 404 {
+			t.Errorf("%s: %d, want 404", path, code)
 		}
 	}
 }

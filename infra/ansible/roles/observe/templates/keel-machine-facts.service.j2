@@ -1,0 +1,8 @@
+# Written by the observe role.
+[Unit]
+Description=The machine's facts for node-exporter
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/keel-machine-facts {{ observe_textfile_dir }} {{ observe_units | join(' ') }}
+Nice=10

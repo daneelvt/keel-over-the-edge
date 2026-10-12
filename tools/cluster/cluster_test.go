@@ -86,6 +86,8 @@ func testCluster(t *testing.T, f *fakeCommands) *cluster {
 	state := t.TempDir()
 	c := newCluster(f, io.Discard)
 	c.state, c.kubeconfig = state, filepath.Join(state, "kubeconfig")
+	// No key to the bucket of backups, unless a test writes one.
+	c.backups = filepath.Join(state, "backups.env")
 	c.poll = time.Millisecond
 	// A certificate made here, not by mkcert with the developer's root.
 	c.certificate = func(_ context.Context, dir string, _ []string) (devcert.Certs, error) {
@@ -109,7 +111,7 @@ func TestToolsMissing(t *testing.T) {
 	}
 	for _, step := range []func() error{
 		func() error { return c.up(context.Background()) },
-		func() error { return c.deployGame(context.Background()) },
+		func() error { return c.deployGame(context.Background(), false) },
 		func() error { return c.smoke(context.Background()) },
 	} {
 		if err := step(); err == nil || !strings.Contains(err.Error(), "brew install lima") {
@@ -304,7 +306,7 @@ func TestDatabaseSecretNeverReplaced(t *testing.T) {
 		return "", nil
 	}}
 	c := testCluster(t, f)
-	if err := c.databaseSecret(context.Background()); err != nil {
+	if err := c.passwordSecret(context.Background(), "keel", "keel-db-app", "keel"); err != nil {
 		t.Fatal(err)
 	}
 	if f.ran("create") != nil || f.ran("apply") != nil || f.ran("delete") != nil {
@@ -312,7 +314,7 @@ func TestDatabaseSecretNeverReplaced(t *testing.T) {
 	}
 
 	exists = false
-	if err := c.databaseSecret(context.Background()); err != nil {
+	if err := c.passwordSecret(context.Background(), "keel", "keel-db-app", "keel"); err != nil {
 		t.Fatal(err)
 	}
 	made := f.ran("kubectl", "create", "-f", "-")
