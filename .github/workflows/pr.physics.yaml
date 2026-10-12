@@ -37,6 +37,7 @@ jobs:
               - 'client/package-lock.json'
               - 'client/src/predict/**'
               - 'internal/physics/**'
+              - 'internal/sky/**'
               - 'internal/catalog/**'
               - 'internal/sim/**'
               - 'internal/bus/**'

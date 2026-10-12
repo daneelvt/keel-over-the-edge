@@ -299,8 +299,10 @@ test.describe('the floating origin', () => {
   test('the scene at the rim looks as it does at the centre', async ({ page }) => {
     await openScene(page);
     // Flat water and every tile alike, so only the place differs; the boat
-    // heading 330°, as the views were chosen.
+    // heading 330°, as the views were chosen. The sky is the rim's own
+    // there, so it is held as the centre has it.
     await page.evaluate(() => {
+      globalThis.keel.holdSky(true);
       globalThis.keel.setSea('flat');
       globalThis.keel.setIdentity(false);
       globalThis.keel.setState({ heading: (330 * Math.PI) / 180 - 2 * Math.PI });

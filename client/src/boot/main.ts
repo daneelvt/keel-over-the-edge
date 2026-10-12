@@ -17,6 +17,8 @@
 //   ?dev              the developer panel (loaded only when asked for)
 //   ?backend=webgl2   the WebGL 2 back end even where WebGPU is offered
 //   ?view=bands       a camera preset: chase, sea, bands, aboard or high
+//   ?sky=dusk,0.5     the sky at an hour (dawn, noon, dusk, midnight, or 0 to 24)
+//                     and the moon's age (0 new, 0.5 full), for the developer
 //   ?test             the hooks the browser tests drive
 
 import './game.css';
@@ -34,6 +36,7 @@ import { Predictor } from '../predict/predictor';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import { START, seaFromQuery, startSandbox, windFromQuery } from '../sandbox/sandbox';
+import { sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { mountScreen } from '../ui/hud';
 import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
@@ -62,6 +65,8 @@ async function start(): Promise<void> {
       startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather.sea, begin),
     ]);
     game.setDriver(sandbox);
+    world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
+    chooseSky(world, query);
     mountScreen(document.body, {
       model: game.hud,
       settings: game.settings,
@@ -108,6 +113,15 @@ async function start(): Promise<void> {
   });
   const online = new Online(worker, predictor, game);
   world.fleetSource = online.fleet;
+  // The sky is counted from the world's epoch, which the Welcome tells.
+  let chosen = false;
+  online.onEpoch = (epochUs) => {
+    world.useSky(predictor.physics, epochUs);
+    if (!chosen) {
+      chosen = true;
+      chooseSky(world, query);
+    }
+  };
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
   // while the sea is full.
@@ -135,11 +149,20 @@ async function start(): Promise<void> {
   }
   if (dev) {
     const { openNetPanel } = await import('../dev/panel');
-    openNetPanel(online, predictor, document.body);
+    openNetPanel(world, online, predictor, document.body);
   }
   if (query.has('test')) {
     const { exposeHooks } = await import('../dev/hooks');
     exposeHooks(world, game, { online, predictor });
+  }
+}
+
+/** With ?sky, draws the sky at the hour and moon asked for, from now on: the developer's sky alone. */
+function chooseSky(world: SeaScene, query: URLSearchParams): void {
+  const choice = skyFromQuery(query);
+  const sky = world.skyTime;
+  if (choice !== null && sky !== null) {
+    sky.set(skyTimeFor(choice, skyPeriods(catalog.sky)), world.ticks);
   }
 }
 

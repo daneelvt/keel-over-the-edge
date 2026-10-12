@@ -163,3 +163,16 @@ export function moonAgeAt(t: number, p: SkyPeriods): number {
  * of the disk, in the first day of sky time: the hour is 8.
  */
 export const SANDBOX_HOUR = 8;
+
+/** The sky's epoch, in microseconds of UTC since 1970. */
+export function skyEpochUs(sky: { epoch: number }): number {
+  return sky.epoch * 1e6;
+}
+
+/**
+ * The epoch the offline sandbox counts its world from: world time 0 is
+ * SANDBOX_HOUR at the centre of the disk.
+ */
+export function sandboxEpochUs(sky: { epoch: number; day: number; month: number }): number {
+  return skyEpochUs(sky) + skyTimeFor({ hour: SANDBOX_HOUR, moon: null }, skyPeriods(sky));
+}

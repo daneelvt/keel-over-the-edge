@@ -95,14 +95,15 @@ func TestEncoding(t *testing.T) {
 		e := table[i*EntrySize:]
 		ra := float64(binary.LittleEndian.Uint16(e)) / 65536 * 360
 		dec := float64(binary.LittleEndian.Uint16(e[2:]))/65535*180 - 90
-		mag := float64(e[4])/32 - 2
-		bv := float64(e[5])/80 - 0.5
+		packed := binary.LittleEndian.Uint16(e[4:])
+		mag := float64(packed&1023)/100 - 2
+		bv := float64(packed>>10)/20 - 0.5
 		// A place to 20 seconds of arc.
 		if d := math.Abs(math.Remainder(ra-s.RA, 360)); d > 0.0056 || math.Abs(dec-s.Dec) > 0.0056 {
 			t.Fatalf("HR %d decodes to %v°, %v°; it is at %v°, %v°", s.Number, ra, dec, s.RA, s.Dec)
 		}
-		// The colour stops at the byte's end.
-		if math.Abs(mag-s.Magnitude) > 0.016 || math.Abs(bv-math.Min(s.Colour, 255.0/80-0.5)) > 0.0063 {
+		// The colour stops at its bits' end.
+		if math.Abs(mag-s.Magnitude) > 1e-9 || math.Abs(bv-math.Min(s.Colour, 63.0/20-0.5)) > 0.0251 {
 			t.Fatalf("HR %d decodes to magnitude %v, B−V %v; it has %v, %v", s.Number, mag, bv, s.Magnitude, s.Colour)
 		}
 		if s.Dec == 90 && dec != 90 {

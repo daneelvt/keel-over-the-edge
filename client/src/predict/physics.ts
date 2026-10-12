@@ -191,7 +191,9 @@ export class Physics {
     }
     const skySize = x.skySize() >>> 0;
     if (skySize !== SKY.size) {
-      throw new Error(`physics module: a sky of ${skySize} values, but this client expects ${SKY.size}`);
+      throw new Error(
+        `physics module: a sky of ${skySize} values, but this client expects ${SKY.size}`,
+      );
     }
     this.#x = x;
     this.#addresses = addresses;

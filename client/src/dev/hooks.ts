@@ -6,7 +6,9 @@
 // and compare it with the sea the physics module gives, which is the
 // server's own code; and they sail the
 // boat: set its state, wind and controls, step it, script its controls,
-// and read back what the screen shows.
+// and read back what the screen shows. They set the sky's hour, and find
+// where the GPU draws each named star beside where the module's rule puts
+// it.
 
 import {
   DataTexture,
@@ -15,9 +17,11 @@ import {
   MeshBasicMaterial,
   NearestFilter,
   OrthographicCamera,
+  PerspectiveCamera,
   RenderTarget,
   RGBAFormat,
   Scene,
+  Vector3,
 } from 'three';
 import {
   Fn,
@@ -33,6 +37,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
+import { catalog } from '../catalog';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
@@ -46,11 +51,14 @@ import { SKIRT_DEPTH } from '../ocean/tiles';
 import { boatBandAt } from '../ocean/wave';
 import { steer, toHex } from '../predict/golden';
 import { RECORDS, SEA } from '../predict/layout.gen';
+import { BODY, SKY } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { checkScene, DOME_RADIUS, domeDrop, seaMaterial } from '../render/materials';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
+import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Settings } from '../ui/settings';
+import { setSky } from './skypanel';
 
 export interface Info {
   backend: string;
@@ -1197,6 +1205,222 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** The player's own boat as the server had it at tick, from the last snapshots, or null. */
     ownAt(tick: number): { east: number; north: number; heading: number } | null {
       return sailing.online?.ownAt(tick) ?? null;
+    },
+
+    /**
+     * Draws the sky at an hour of the day at the centre of the disk (0 to
+     * 24, noon at 12) and, if given, a moon's age (0 new, 0.5 full), from
+     * the world time drawn on; then a frame.
+     */
+    setSky(hour: number, moon: number | null = null): void {
+      if (world.skyTime === null) {
+        throw new Error('the sky does not follow the rule yet');
+      }
+      setSky(world.skyTime, { hour, moon }, world.ticks);
+      hooks.render();
+    },
+
+    /** The sky as last drawn: by the rule at the boat, and as the light's table reads it. */
+    sky() {
+      const r = world.skyRecord;
+      const p = skyPeriods(catalog.sky);
+      const deg = 180 / Math.PI;
+      const v = world.sky.values;
+      return {
+        t: world.skyAt,
+        hour: hourAt(world.skyAt, p),
+        moonAge: moonAgeAt(world.skyAt, p),
+        sun: {
+          height: (r[SKY.sun + BODY.altitude] ?? 0) * deg,
+          bearing: (r[SKY.sun + BODY.bearing] ?? 0) * deg,
+        },
+        moon: {
+          height: (r[SKY.moon + BODY.altitude] ?? 0) * deg,
+          bearing: (r[SKY.moon + BODY.bearing] ?? 0) * deg,
+          lit: r[SKY.lit] ?? 0,
+        },
+        main: world.sky.main.body,
+        mainStrength: world.sky.main.strength,
+        starLimit: v.starLimit,
+        lanterns: v.lanterns,
+        starsDrawn: world.stars.count,
+        lanternsDrawn: world.lanterns.count,
+        starsVisible: world.stars.mesh.visible,
+      };
+    },
+
+    /** The named stars, by the rule: each one's height and bearing from the boat now, degrees. */
+    namedStars() {
+      const physics = world.skyPhysics;
+      if (physics === null) {
+        return [];
+      }
+      const deg = 180 / Math.PI;
+      return catalog.sky.stars.map((s) => {
+        const b = physics.skyStar(
+          world.skyAt,
+          world.pose.east,
+          world.pose.north,
+          s.rightAscension,
+          s.declination,
+        );
+        return {
+          name: s.name,
+          magnitude: s.magnitude,
+          height: (b[BODY.altitude] ?? 0) * deg,
+          bearing: (b[BODY.bearing] ?? 0) * deg,
+        };
+      });
+    },
+
+    /**
+     * Where the GPU draws a named star against where the module's rule and
+     * the camera put it: a camera at the scene camera's place, 8° across,
+     * looks along the rule's direction to the star; the stars alone are
+     * drawn, that one only, and the centre of its light is found. Returns
+     * the angle between the two, in degrees, or null if nothing was drawn.
+     */
+    async starOffset(name: string, size = 160): Promise<number | null> {
+      const physics = world.skyPhysics;
+      const named = world.stars.named.find((n) => n.name === name);
+      const star = catalog.sky.stars.find((s) => s.name === name);
+      if (physics === null || named === undefined || star === undefined) {
+        throw new Error(`no star ${name}, or no sky`);
+      }
+      hooks.render();
+      const b = physics.skyStar(
+        world.skyAt,
+        world.pose.east,
+        world.pose.north,
+        star.rightAscension,
+        star.declination,
+      );
+      const dir = new Vector3(b[BODY.east] ?? 0, b[BODY.up] ?? 0, -(b[BODY.north] ?? 0));
+      const fov = 8;
+      const cam = new PerspectiveCamera(fov, 1, 0.2, 4000);
+      cam.position.copy(stage.camera.position);
+      if (Math.abs(dir.y) > 0.99) {
+        cam.up.set(0, 0, -1);
+      }
+      cam.lookAt(cam.position.clone().add(dir));
+      cam.updateMatrixWorld();
+      const g = gfx();
+      const r = g.renderer;
+      const stars = world.stars;
+      const scene = new Scene();
+      const parent = stars.mesh.parent;
+      const visible = stars.mesh.visible;
+      scene.add(stars.mesh);
+      stars.mesh.visible = true;
+      stars.setSolo(named.index);
+      stars.resize(size, size);
+      const target = new RenderTarget(size, size, {
+        type: FloatType,
+        format: RGBAFormat,
+        depthBuffer: true,
+      });
+      const before = r.getRenderTarget();
+      r.setRenderTarget(target);
+      r.setClearColor(0x000000, 0);
+      r.clear();
+      r.render(scene, cam);
+      r.setRenderTarget(before);
+      stars.setSolo(-1);
+      stars.mesh.visible = visible;
+      parent?.add(stars.mesh);
+      const px = await readTarget(r, target, size, size, webgl());
+      target.dispose();
+      let sum = 0;
+      let sx = 0;
+      let sy = 0;
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const v = px[(y * size + x) * 4] ?? 0;
+          sum += v;
+          sx += v * (x + 0.5);
+          sy += v * (y + 0.5);
+        }
+      }
+      if (sum <= 0) {
+        return null;
+      }
+      const perPixel = (2 * Math.tan(((fov / 2) * Math.PI) / 180)) / size;
+      const off = Math.hypot(sx / sum - size / 2, sy / sum - size / 2) * perPixel;
+      return (Math.atan(off) * 180) / Math.PI;
+    },
+
+    /**
+     * Where a named star is on the screen now, CSS pixels, by the rule and
+     * the camera; whether it is in front of the camera, and shows.
+     */
+    starOnScreen(name: string): { x: number; y: number; front: boolean; shows: boolean } | null {
+      const named = world.stars.named.find((n) => n.name === name);
+      const canvas = stage.gfx?.canvas;
+      if (named === undefined || canvas === undefined) {
+        return null;
+      }
+      const dir = world.stars.direction(named, new Vector3());
+      const at = world.stars.screen(
+        dir,
+        stage.camera,
+        canvas.clientWidth,
+        canvas.clientHeight,
+        new Vector3(),
+      );
+      return {
+        x: at.x,
+        y: at.y,
+        front: at.z < 1,
+        shows: world.stars.shows(named, dir) && at.z < 1,
+      };
+    },
+
+    /** The name a tap at (x, y) on the canvas showed, if any, and the label on screen. */
+    tapSky(x: number, y: number): { name: string | null; label: string | null } {
+      const name = world.tap(x, y, performance.now());
+      hooks.render();
+      const el = document.querySelector<HTMLElement>('.star-label');
+      return { name, label: el !== null && !el.hidden ? el.textContent : null };
+    },
+
+    /** Drags the camera by dx, dy CSS pixels, as a finger on the open sea would; then a frame. */
+    dragCamera(dx: number, dy: number): { elevation: number; tilt: number; looksUp: boolean } {
+      world.camera.drag(dx, dy, performance.now());
+      hooks.render();
+      return {
+        elevation: world.camera.view.elevation,
+        tilt: world.camera.tilt,
+        looksUp: world.camera.looksUp,
+      };
+    },
+
+    /** Holds the sky as it was last drawn, wherever the boat goes, or lets it follow the rule again. */
+    holdSky(on: boolean): void {
+      world.holdSky = on;
+    },
+
+    /** Draws the stars and lanterns, or not. */
+    drawSky(on: boolean): void {
+      world.drawSky = on;
+    },
+
+    /** Where the lantern drawn i-th is on screen, CSS pixels, and the bearing it is seen from. */
+    lanternOnScreen(i: number): { x: number; y: number; bearing: number } | null {
+      const l = world.lanterns;
+      const canvas = stage.gfx?.canvas;
+      if (i >= l.count || canvas === undefined) {
+        return null;
+      }
+      const a = l.place.array as Float32Array;
+      const p = new Vector3(a[i * 4] ?? 0, a[i * 4 + 1] ?? 0, a[i * 4 + 2] ?? 0);
+      const bs = world.boatScene;
+      p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
+      p.project(stage.camera);
+      return {
+        x: ((p.x + 1) / 2) * canvas.clientWidth,
+        y: ((1 - p.y) / 2) * canvas.clientHeight,
+        bearing: a[i * 4 + 3] ?? 0,
+      };
     },
 
     /** Resolves after n frames of the frame loop. */

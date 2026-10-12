@@ -15,7 +15,7 @@
 
 import {
   CanvasTexture,
-  Color,
+  type Color,
   DoubleSide,
   FrontSide,
   Group,
@@ -28,13 +28,13 @@ import {
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Fn, normalLocal, positionGeometry, uv } from 'three/tsl';
-import type { Node } from 'three/webgpu';
+import type { MeshStandardNodeMaterial, Node } from 'three/webgpu';
 import type { Boat as BoatKind } from '../catalog';
 import { type HullShape, hullShape } from '../ocean/hulls';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
 import { headingToRotationY, type ScenePoint } from './coords';
-import { litMaterial } from './materials';
+import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
@@ -257,18 +257,12 @@ export class Boat {
     let made: Material;
     if (this.#within(mesh, 'sail')) {
       // Daylight comes through flax: its shaded side glows a little, with the
-      // insignia and number showing through.
+      // insignia and number showing through, as much as the hour gives.
       made = litMaterial(
-        {
-          map: cloth,
-          emissiveMap: cloth,
-          emissive: new Color(0.42, 0.4, 0.36),
-          roughness: src.roughness,
-          metalness: 0,
-          side: DoubleSide,
-        },
+        { map: cloth, roughness: src.roughness, metalness: 0, side: DoubleSide },
         this.#sailNode(),
       );
+      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(cloth);
     } else if (this.#within(mesh, 'telltales')) {
       made = litMaterial(
         { vertexColors: true, roughness: 0.9, metalness: 0, side: DoubleSide },

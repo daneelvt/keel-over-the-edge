@@ -9,8 +9,10 @@
 // and a jump to the rim; time, paused, stepped once or slowed; the live State
 // and Out; the sail since the panel opened or the last reset, recorded as a
 // golden scenario to download; camera presets; the back end, the render
-// scale, the tile pass and the antialiasing; and the frame statistics. It is a lazy import, outside the
-// game's first download. Built as nodes and text, never markup.
+// scale, the tile pass and the antialiasing; the sky's hour, moon and speed,
+// and where the sun, the moon and the stars stand (skypanel.ts), offline and
+// online; and the frame statistics. It is a lazy import, outside the game's
+// first download. Built as nodes and text, never markup.
 
 import './panel.css';
 import type { FleetStats } from '../game/fleet';
@@ -24,6 +26,7 @@ import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import type { Antialias } from '../render/stage';
 import { type SeaOptions, seaAreaOf } from '../sandbox/localsea';
 import { type Sandbox, SEA_STATES } from '../sandbox/sandbox';
+import { skyPanel } from './skypanel';
 
 const KNOT = 1852 / 3600;
 const DEG = Math.PI / 180;
@@ -266,6 +269,7 @@ export function openPanel(
   const stats = el('pre');
   const records = el('pre');
   const seaCheck = el('pre');
+  const sky = skyPanel(world);
   panel.append(
     button('Developer', () => body.toggleAttribute('hidden')),
     body,
@@ -432,6 +436,7 @@ export function openPanel(
       swap,
       row('The GPU’s sea', checkSea),
       seaCheck,
+      ...sky.elements,
       stats,
       records,
     );
@@ -446,6 +451,7 @@ export function openPanel(
       return;
     }
     shown = now;
+    sky.update();
     const st = world.stats.last;
     const p = world.pose;
     const o = world.origin;
@@ -532,18 +538,30 @@ export function netLines(n: NetNumbers): string {
   ].join('\n');
 }
 
-/** The developer panel online: the connection's numbers, twice a second. */
-export function openNetPanel(online: Online, predictor: Predictor, parent: HTMLElement): void {
+/**
+ * The developer panel online: the connection's numbers, twice a second, and
+ * the sky, which it can move for this page alone.
+ */
+export function openNetPanel(
+  world: SeaScene,
+  online: Online,
+  predictor: Predictor,
+  parent: HTMLElement,
+): void {
   const panel = el('aside');
   panel.className = 'dev-panel';
-  const body = el('pre');
+  const body = el('div');
+  const numbers = el('pre');
+  const sky = skyPanel(world);
+  body.append(numbers, ...sky.elements);
   panel.append(
     button('Connection', () => body.toggleAttribute('hidden')),
     body,
   );
   parent.append(panel);
   const update = (): void => {
-    body.textContent = netLines({
+    sky.update();
+    numbers.textContent = netLines({
       status: online.status.value,
       offsetMs: online.clock.offset / 1000,
       rttMs: online.clock.rtt / 1000,

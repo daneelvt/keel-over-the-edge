@@ -15,7 +15,7 @@
 // allocated.
 
 import {
-  Color,
+  type Color,
   DoubleSide,
   DynamicDrawUsage,
   FrontSide,
@@ -40,7 +40,7 @@ import {
   sailNode,
   solidNode,
 } from './fleetparts';
-import { litMaterial } from './materials';
+import { litMaterial, sailGlow } from './materials';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
 import { FLOW_LUFFING } from './telltales';
 
@@ -106,16 +106,10 @@ class Level {
     }
     if (parts.sail !== null) {
       const m = litMaterial(
-        {
-          map: cloth,
-          emissiveMap: cloth,
-          emissive: new Color(0.42, 0.4, 0.36),
-          roughness: parts.sail.material.roughness,
-          metalness: 0,
-          side: DoubleSide,
-        },
+        { map: cloth, roughness: parts.sail.material.roughness, metalness: 0, side: DoubleSide },
         sailNode(i, parts, cog, rig.footStrip, rig.headStrip, time),
       );
+      m.emissiveNode = sailGlow(cloth);
       this.#add(parts.sail.geometry, m, 'sail');
     }
     const fm = figure.material;

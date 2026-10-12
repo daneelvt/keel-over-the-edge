@@ -182,26 +182,27 @@ func choose(all []Star, named []catalog.NamedStar) (stars []Star, few int) {
 //
 //	uint16  right ascension, in 65536ths of a turn
 //	uint16  declination: 0 at −90°, 65535 at +90°
-//	uint8   magnitude: 32 steps to a magnitude, 0 at −2
-//	uint8   B−V: 80 steps to a magnitude, 0 at −0.5
+//	uint16  the low 10 bits the magnitude, in hundredths, 0 at −2; the
+//	        high 6 bits B−V, in twentieths, 0 at −0.5
 //
-// A place is good to 20 seconds of arc, a magnitude to 0.03. The colour
-// only tints a star, and stops at 2.69: the few redder carbon stars are
-// drawn as red as that.
+// A place is good to 20 seconds of arc, a magnitude as the catalogue gives
+// it. The colour only tints a star, and stops at 2.65: the few redder
+// carbon stars are drawn as red as that.
 func encode(stars []Star) []byte {
 	var b bytes.Buffer
 	for _, s := range stars {
 		ra := uint16(math.Mod(math.Round(s.RA/360*65536), 65536))
 		dec := uint16(math.Round((s.Dec + 90) / 180 * 65535))
 		b.Write(binary.LittleEndian.AppendUint16(binary.LittleEndian.AppendUint16(nil, ra), dec))
-		b.WriteByte(clampByte((s.Magnitude + 2) * 32))
-		b.WriteByte(clampByte((s.Colour + 0.5) * 80))
+		mag := clamped((s.Magnitude+2)*100, 1023)
+		colour := clamped((s.Colour+0.5)*20, 63)
+		b.Write(binary.LittleEndian.AppendUint16(nil, mag|colour<<10))
 	}
 	return b.Bytes()
 }
 
-func clampByte(v float64) byte {
-	return byte(math.Max(0, math.Min(255, math.Round(v))))
+func clamped(v float64, most uint16) uint16 {
+	return uint16(math.Max(0, math.Min(float64(most), math.Round(v))))
 }
 
 // Tolerances of a named star's entry in the game's catalog against the

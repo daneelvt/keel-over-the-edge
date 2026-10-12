@@ -106,6 +106,6 @@ describe('the sky in the module', () => {
     expect(physics.memoryBytes).toBe(bytes);
     // A call a frame: it must cost nothing beside the frame's 16 ms.
     expect(each).toBeLessThan(50);
-    console.info(`sky: a call of skyAt takes ${each.toFixed(2)} µs under Node`);
+    process.stdout.write(`sky: a call of skyAt takes ${each.toFixed(2)} µs under Node\n`);
   });
 });

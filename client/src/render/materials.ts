@@ -20,13 +20,14 @@
 // The sky is drawn at infinity and is the only kind without a bend: it is a
 // direction, not a place.
 
-import { type Material, type Object3D, Vector2 } from 'three';
+import { type Material, type Object3D, type Texture, Vector2, Vector3 } from 'three';
 import {
   dot,
   Fn,
   modelWorldMatrix,
   modelWorldMatrixInverse,
   positionLocal,
+  texture,
   uniform,
   vec3,
   vec4,
@@ -102,6 +103,16 @@ export function litMaterial(
   const m = new MeshStandardNodeMaterial(params);
   m.positionNode = bendLocal(vertex ?? positionLocal);
   return register(m, 'lit', 'vertex');
+}
+
+/**
+ * A sail's glow on its shaded side, daylight through its cloth: the cloth's
+ * colour by this, in linear values, which the hour sets (sky.ts).
+ */
+export const sailGlowColour = uniform(new Vector3(0.42, 0.4, 0.36));
+
+export function sailGlow(cloth: Texture): Node<'vec3'> {
+  return texture(cloth).rgb.mul(sailGlowColour) as unknown as Node<'vec3'>;
 }
 
 /** An unlit material. */
