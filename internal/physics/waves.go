@@ -31,7 +31,8 @@ package physics
 //   - Surge and sway: the water under a slope accelerates down it at g times
 //     the slope, and carries the boat and its added mass with it. This
 //     Froude–Krylov force is what makes a boat surf. Its moment along the
-//     hull turns a boat broadside on a wave's face.
+//     hull turns a boat broadside on a wave's face, as far as the kind
+//     takes it (waveLoads).
 //   - The water itself moves, forward on the crests and back in the troughs:
 //     the hull's resistance and the foils feel the flow through the water,
 //     not over the ground.
@@ -105,11 +106,19 @@ func (v *wave) advance(dt float64) {
 }
 
 // waveLoads adds the push of the surface's slope on the hull and its added
-// mass, down the slope, and its moment along the hull.
+// mass, down the slope, and the kind's share of its moment along the hull.
+//
+// The moment is that of the push spread evenly along the waterline: it yaws
+// the hull as the water of an oblique wave shears, a few degrees each way in
+// a chop. Nothing here opposes it but the foils, which give little under a
+// knot or two, when the moment is several times the rudder's. A slow boat
+// with its sail on the edge of luffing is shaken off its last drive, stops,
+// and with no flow over the rudder cannot be steered away again. A kind sets
+// its share (Params.WaveYaw) with that in mind.
 func (b *Prepared) waveLoads(v *wave, l *loads) {
 	l.X -= float64(b.waveSurge * v.ahead)
 	l.Y -= float64(b.waveSway * v.across)
-	l.N += float64(b.waveSway * v.twist)
+	l.N += float64(b.waveYaw * v.twist)
 }
 
 // float integrates the heave and the pitch over dt: the hull on its

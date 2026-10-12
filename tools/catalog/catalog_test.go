@@ -410,7 +410,7 @@ func TestPhysicsGenerated(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"p.Displacement = b.Physics.Hull.Displacement", "copy(p.DragArea[:], b.Physics.Hull.DragArea)",
-		"p.WaveForce = b.Physics.Hull.WaveForce", "p.Shortest = float64(c.Weather.Sea.Shortest)", "p.Spreading = float64(c.Weather.Sea.Spreading)"} {
+		"p.WaveForce = b.Physics.Hull.WaveForce", "p.WaveYaw = b.Physics.Hull.WaveYaw", "p.Shortest = float64(c.Weather.Sea.Shortest)", "p.Spreading = float64(c.Weather.Sea.Spreading)"} {
 		if !strings.Contains(string(g), want) {
 			t.Errorf("physics.gen.go lacks %q", want)
 		}

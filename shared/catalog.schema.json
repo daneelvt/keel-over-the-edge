@@ -126,7 +126,7 @@
       "description": "The hull: its mass, resistance, inertia and stability.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "rightingLever", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce"],
+      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "rightingLever", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce", "waveYaw"],
       "properties": {
         "displacement": { "description": "Boat, rig and sailor, in kg.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
         "waterlineLength": { "description": "Length on the waterline, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
@@ -149,7 +149,8 @@
         "pitchInertia": { "description": "Moment of inertia in pitch, added inertia included, in kg·m².", "type": "number", "exclusiveMinimum": 0, "maximum": 1000000000 },
         "heaveDamping": { "description": "Damping of the heave, as a fraction of critical.", "type": "number", "minimum": 0, "maximum": 2 },
         "pitchDamping": { "description": "Damping of the pitch, as a fraction of critical.", "type": "number", "minimum": 0, "maximum": 2 },
-        "waveForce": { "description": "The share of the Froude–Krylov force of a wave's slope that pushes the hull along and across.", "type": "number", "minimum": 0, "maximum": 1.5 }
+        "waveForce": { "description": "The share of the Froude–Krylov force of a wave's slope that pushes the hull along and across.", "type": "number", "minimum": 0, "maximum": 1.5 },
+        "waveYaw": { "description": "The share of that force's moment along the hull, which yaws the boat with the water of an oblique wave.", "type": "number", "minimum": 0, "maximum": 1.5 }
       }
     },
     "PhysicsRig": {

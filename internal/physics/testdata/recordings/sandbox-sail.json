@@ -79,6 +79,7 @@
   "heaveDamping": 0.4,
   "pitchDamping": 0.4,
   "waveForce": 1,
+  "waveYaw": 0,
   "sailArea": 7.06,
   "luff": 5.13,
   "foot": 2.74,
@@ -2686,25 +2687,25 @@
     }
    ],
    "end": {
-    "x": "0x403194a8213471fe",
-    "y": "0x40475b7a333f7d1c",
-    "heading": "0xbfe7132aa68558cf",
-    "surge": "0xbfc6a621cb596995",
-    "sway": "0xbfd505f7fdb295d1",
-    "yawRate": "0xbfb9075f822e8f99",
-    "heel": "0xbf6935f3f9e6b801",
-    "rollRate": "0x3f9039ab4f4fe9e8",
-    "boom": "0xbfeb98ac86e06478",
-    "boomRate": "0x0000000000000000",
-    "sailor": "0x3f786e0cefcbfcd6",
+    "x": "0x402d9426727fb5a9",
+    "y": "0x404962af5aa63999",
+    "heading": "0xbfe5b524d4ef1a27",
+    "surge": "0xbfc2c4389a7a9069",
+    "sway": "0xbfd1ce604e3fbfdc",
+    "yawRate": "0xbf9bcbf332808843",
+    "heel": "0x3f9b9f5d6df5353d",
+    "rollRate": "0x3fb9c23e060887d8",
+    "boom": "0xbfeb9727008e71ae",
+    "boomRate": "0xbfa1fcaffa230eaf",
+    "sailor": "0xbfb7c3d57fc9fa8f",
     "rudder": "0x0000000000000000",
     "sheetLimit": "0x3feb98ac86e06478",
     "sailorMode": "0x0000000000000000",
     "sailorTimer": "0x0000000000000000",
-    "heave": "0x3faaccd15468b21c",
-    "heaveRate": "0xbfb78ec227356706",
-    "pitch": "0x3f90355009a68abb",
-    "pitchRate": "0xbfa1f2d2bf3d9640"
+    "heave": "0x3fafab6a15eb9076",
+    "heaveRate": "0xbfd4dc689b9c15e8",
+    "pitch": "0xbf74c3a23314df62",
+    "pitchRate": "0xbfa3a5e0a318c261"
    }
   }
  ]
