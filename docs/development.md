@@ -2400,6 +2400,31 @@ spec:
 EOF
 ```
 
+Make one that way too when the plugin is first added to a database that
+already runs: the backup made "at once" is asked for before the pod has
+its sidecar, fails with `requested plugin is not available`, and is not
+tried again until the daily one.
+
+**A change to the sidecar's environment** (the `ObjectStore`'s
+`instanceSidecarConfiguration.env`) reaches the sidecar only when the
+database's pod is made again. The plugin sets it when the pod is made,
+and a changed `ObjectStore` restarts nothing: after the release, the old
+sidecar runs on as it was. On the machine, once the release is applied:
+
+```sh
+k3s kubectl -n keel delete pod keel-db-1
+```
+
+CloudNativePG makes the pod again on the same volume, with the new
+environment. The database is away for about half a minute (23 s on the
+local cluster) and keel restarts once, as in a deploy. WAL that was
+waiting in `pg_wal` is sent by itself afterwards. Check what the sidecar
+runs with:
+
+```sh
+kubectl -n keel get pod keel-db-1 -o jsonpath='{range .spec.initContainers[?(@.name=="plugin-barman-cloud")].env[*]}{.name}={.value}{"\n"}{end}'
+```
+
 **Generations.** CloudNativePG refuses to archive into a folder that
 already holds another database's WAL, so each database ever made writes
 under a name of its own in the bucket: `keel-db-g1`, then `keel-db-g2`
