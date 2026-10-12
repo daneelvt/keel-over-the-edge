@@ -186,6 +186,9 @@ export class NetWorker {
         case 'restart':
           this.#d.post({ type: 'restart', inMs: r.inMs });
           break;
+        case 'sea':
+          this.#d.post({ type: 'sea', sea: r.sea });
+          break;
       }
       this.#arm();
     };

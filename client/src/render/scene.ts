@@ -13,9 +13,10 @@ import { fog, rangeFogFactor } from 'three/tsl';
 import { catalog } from '../catalog';
 import type { Wind } from '../game/driver';
 import type { DrawnBoat } from '../game/fleet';
-import { Ocean, TEST_SEAS } from '../ocean/ocean';
+import { HULL_REACH, HULLS, hulls } from '../ocean/hulls';
+import { Ocean } from '../ocean/ocean';
 import { type BoatPose, newPose } from '../predict/blend';
-import { SIZES } from '../predict/layout.gen';
+import { RECORDS, SIZES } from '../predict/layout.gen';
 import { Boat } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
@@ -56,12 +57,11 @@ export class SeaScene {
   readonly pose: BoatPose = newPose();
   out: Float64Array = new Float64Array(SIZES.out);
   wind: Readonly<Wind> = { speed: 0, from: 0 };
-  /** World time, seconds, and how much it moved since the last frame. */
+  /** World time, seconds, and how much it moved since the last frame; and in ticks, for the sea. */
   time = 0;
   timeStep = 0;
+  ticks = 0;
 
-  /** The developer test sea: flat (the default), calm, breeze, fresh or gale. */
-  testSea = 'flat';
   usePass = true;
   /** Called at the start of each drawn frame, with the real time since the last one (s) and now (ms). */
   tick: ((dt: number, now: number) => void) | null = null;
@@ -70,6 +70,9 @@ export class SeaScene {
 
   readonly #target = new Vector3();
   readonly #v = new Vector3();
+  /** The other boats nearest the player's, by their place among those drawn, and how far each is. */
+  readonly #near = new Int32Array(HULLS);
+  readonly #nearDist = new Float64Array(HULLS);
 
   constructor(container: HTMLElement, backend: Backend) {
     this.stage = new Stage(container, backend, {
@@ -85,7 +88,6 @@ export class SeaScene {
     scene.add(this.fleet.root);
     // Lit materials blend toward the horizon's colour with distance, as the sea does.
     scene.fogNode = fog(toLinear(look.skyHorizon), rangeFogFactor(look.hazeNear, look.hazeFar));
-    this.setTestSea(this.testSea);
   }
 
   async start(): Promise<void> {
@@ -106,13 +108,12 @@ export class SeaScene {
       await Promise.all([boat.loadSailor(sailor.art.model), this.fleet.load(sailor.art)]);
     }
     boat.model.add(this.overlays.onBoat);
+    if (boat.hullShape !== null) {
+      // Every boat is of this kind, for now: one hull's volume serves them all.
+      hulls.setShape(boat.hullShape, this.kind.physics.hull.centreOfGravity);
+    }
     this.boat = boat;
     this.stage.scene.add(boat.root);
-  }
-
-  setTestSea(name: string): void {
-    this.testSea = name;
-    this.ocean.setTestSea(TEST_SEAS[name] ?? null);
   }
 
   setUsePass(on: boolean): void {
@@ -122,7 +123,7 @@ export class SeaScene {
 
   /** Puts the camera at a view behind the boat as it is now; the view becomes its resting one. */
   placeCamera(v: CameraView): void {
-    this.camera.place(v, this.pose.heading);
+    this.camera.place(v, this.pose.heading, this.pose.heave, this.#seaUnderBoat());
     this.#updateBoatScene();
     this.#placeCamera();
   }
@@ -130,6 +131,53 @@ export class SeaScene {
   #attached(gfx: Gfx): void {
     this.ocean.choose(this.usePass, gfx.floatTargets);
     this.boat?.attached(gfx);
+  }
+
+  /**
+   * Tells the sea which hulls to keep out of: the player's own, and the
+   * nearest others within reach that have faded in.
+   */
+  #placeHulls(): void {
+    const p = this.pose;
+    const bs = this.boatScene;
+    hulls.begin();
+    hulls.add(bs.x, bs.y + p.heave, bs.z, p.heading, p.heel, p.pitch);
+    const fs = this.fleetSource;
+    if (fs === null) {
+      return;
+    }
+    // The nearest, kept in order of distance as they are found.
+    const near = this.#near;
+    const dist = this.#nearDist;
+    let n = 0;
+    for (let i = 0; i < fs.count; i++) {
+      const b = fs.drawn[i] as DrawnBoat;
+      const d = Math.hypot(b.east - p.east, b.north - p.north);
+      if (d > HULL_REACH || b.opacity < 0.5) {
+        continue;
+      }
+      let k = Math.min(n, HULLS - 2);
+      if (n === HULLS - 1 && d >= (dist[k] ?? 0)) {
+        continue;
+      }
+      for (; k > 0 && (dist[k - 1] ?? 0) > d; k--) {
+        near[k] = near[k - 1] ?? 0;
+        dist[k] = dist[k - 1] ?? 0;
+      }
+      near[k] = i;
+      dist[k] = d;
+      n = Math.min(n + 1, HULLS - 1);
+    }
+    const o = this.origin.world;
+    for (let k = 0; k < n; k++) {
+      const b = fs.drawn[near[k] ?? 0] as DrawnBoat;
+      hulls.add(b.east - o.x, b.heave, -(b.north - o.y), b.heading, b.heel, b.pitch);
+    }
+  }
+
+  /** The sea's height under the boat, by the latest step. */
+  #seaUnderBoat(): number {
+    return this.out[RECORDS.out.waveHeight] ?? 0;
   }
 
   #updateBoatScene(): void {
@@ -155,11 +203,12 @@ export class SeaScene {
     const bs = this.boatScene;
     domeCentre.value.set(bs.x, bs.z);
 
-    this.camera.update(dt, this.pose.heading, now);
+    this.camera.update(dt, this.pose.heading, now, this.pose.heave, this.#seaUnderBoat());
     this.#placeCamera();
     const camera = this.stage.camera;
 
-    this.ocean.update(gfx.renderer, this.origin, this.time, camera.position.y);
+    this.#placeHulls();
+    this.ocean.update(gfx.renderer, this.origin, this.ticks, camera.position.y);
     this.sky.follow(camera.position, this.#v.set(bs.x, bs.y, bs.z));
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
     const fs = this.fleetSource;

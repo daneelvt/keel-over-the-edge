@@ -18,6 +18,10 @@ export interface BoatPose {
   heading: number;
   /** Positive with the starboard side down, radians. */
   heel: number;
+  /** The centre of gravity's rise above where it floats in flat water, metres. */
+  heave: number;
+  /** Positive with the bow up, radians. */
+  pitch: number;
   /** Positive to starboard, radians. */
   boom: number;
   rudder: number;
@@ -35,6 +39,8 @@ export function newPose(): BoatPose {
     north: 0,
     heading: 0,
     heel: 0,
+    heave: 0,
+    pitch: 0,
     boom: 0,
     rudder: 0,
     sailor: 0,
@@ -81,6 +87,8 @@ export class StatePair {
     out.north = this.#at(S.y, alpha);
     out.heading = lerpAngle(this.previous[S.heading] ?? 0, this.current[S.heading] ?? 0, alpha);
     out.heel = lerpAngle(this.previous[S.heel] ?? 0, this.current[S.heel] ?? 0, alpha);
+    out.heave = this.#at(S.heave, alpha);
+    out.pitch = this.#at(S.pitch, alpha);
     out.boom = this.#at(S.boom, alpha);
     out.rudder = this.#at(S.rudder, alpha);
     out.sailor = this.#at(S.sailor, alpha);

@@ -99,7 +99,11 @@ function viewDigest(v: View): string {
 async function replay(
   trace: Trace,
 ): Promise<{ corrections: number; snapshots: number; others: number }> {
-  const predictor = new Predictor(await loadPhysics(bytes), catalog.boats[0].physics);
+  const predictor = new Predictor(
+    await loadPhysics(bytes),
+    catalog.boats[0].physics,
+    catalog.weather.sea,
+  );
   const session = new Session(versions);
   session.frameMs = 17;
   const snapshots = new Map<number, OwnSnapshot>();
@@ -124,6 +128,9 @@ async function replay(
       expect(r.kind === 'dropped', where).toBe(e.dropped ?? false);
       if (r.kind === 'dropped') {
         expected.push(...r.out.map(hexOf));
+      }
+      if (r.kind === 'sea') {
+        predictor.seas.receive(r.sea);
       }
       if (r.kind === 'snapshot') {
         const sn = newSnapshot();

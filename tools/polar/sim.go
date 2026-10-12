@@ -51,6 +51,7 @@ type boat struct {
 	e    physics.Env
 	b    *physics.Prepared
 	o    physics.Out
+	sea  *physics.Sea // nil in flat water
 	time float64
 	// capsized is set once the sailor has fallen in.
 	capsized bool
@@ -67,7 +68,7 @@ func newBoat(b *physics.Prepared, wind, heading, sheet float64) *boat {
 }
 
 func (bt *boat) step() {
-	physics.Step(&bt.s, &bt.c, &bt.e, bt.b, &bt.o)
+	physics.Step(&bt.s, &bt.c, &bt.e, bt.sea, bt.b, &bt.o)
 	bt.time += physics.Dt
 	if bt.s.SailorMode != physics.Sailing {
 		bt.capsized = true

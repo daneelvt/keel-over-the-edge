@@ -491,6 +491,7 @@ type ServerMessage struct {
 	//	*ServerMessage_Pong
 	//	*ServerMessage_Queued
 	//	*ServerMessage_Restart
+	//	*ServerMessage_SeaAreas
 	Body          isServerMessage_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -569,6 +570,15 @@ func (x *ServerMessage) GetRestart() *Restart {
 	return nil
 }
 
+func (x *ServerMessage) GetSeaAreas() *SeaAreas {
+	if x != nil {
+		if x, ok := x.Body.(*ServerMessage_SeaAreas); ok {
+			return x.SeaAreas
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Body interface {
 	isServerMessage_Body()
 }
@@ -589,6 +599,10 @@ type ServerMessage_Restart struct {
 	Restart *Restart `protobuf:"bytes,4,opt,name=restart,proto3,oneof"`
 }
 
+type ServerMessage_SeaAreas struct {
+	SeaAreas *SeaAreas `protobuf:"bytes,5,opt,name=sea_areas,json=seaAreas,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Body() {}
 
 func (*ServerMessage_Pong) isServerMessage_Body() {}
@@ -596,6 +610,118 @@ func (*ServerMessage_Pong) isServerMessage_Body() {}
 func (*ServerMessage_Queued) isServerMessage_Body() {}
 
 func (*ServerMessage_Restart) isServerMessage_Body() {}
+
+func (*ServerMessage_SeaAreas) isServerMessage_Body() {}
+
+// SeaAreas is what raises the waves about the boat: a square of sea areas,
+// each 463 m on a side, with the wind and the fetch that give each its
+// waves. The client derives the waves from them exactly as the server does.
+// It comes after the Welcome; whenever the sea is to change, a second or
+// so before the tick the change applies from; and whenever the boat sails
+// into another area, with the areas about that one. A client keeps the two
+// with the latest ticks, and at each tick uses the later of those whose
+// tick has come.
+type SeaAreas struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The first tick these apply to.
+	Tick int64 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
+	// The column, counted from the west, and the row, from the south, of the
+	// first area, in the world's 37 by 37 areas: the middle one, 18 and 18,
+	// is centred on the world's centre. Either may be negative or reach past
+	// the world's edge.
+	Col int32 `protobuf:"zigzag32,2,opt,name=col,proto3" json:"col,omitempty"`
+	Row int32 `protobuf:"zigzag32,3,opt,name=row,proto3" json:"row,omitempty"`
+	// Areas on a side: 5.
+	Size uint32 `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
+	// For each area, row by row from the south-west: the speed of the wind
+	// that raises its waves, in steps of 0.01 m/s; the direction it comes
+	// from, clockwise from north, in steps of a 65536th of a turn; and the
+	// fetch, in metres.
+	Speed         []uint32 `protobuf:"varint,5,rep,packed,name=speed,proto3" json:"speed,omitempty"`
+	From          []uint32 `protobuf:"varint,6,rep,packed,name=from,proto3" json:"from,omitempty"`
+	Fetch         []uint32 `protobuf:"varint,7,rep,packed,name=fetch,proto3" json:"fetch,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SeaAreas) Reset() {
+	*x = SeaAreas{}
+	mi := &file_keel_v1_game_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeaAreas) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeaAreas) ProtoMessage() {}
+
+func (x *SeaAreas) ProtoReflect() protoreflect.Message {
+	mi := &file_keel_v1_game_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeaAreas.ProtoReflect.Descriptor instead.
+func (*SeaAreas) Descriptor() ([]byte, []int) {
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SeaAreas) GetTick() int64 {
+	if x != nil {
+		return x.Tick
+	}
+	return 0
+}
+
+func (x *SeaAreas) GetCol() int32 {
+	if x != nil {
+		return x.Col
+	}
+	return 0
+}
+
+func (x *SeaAreas) GetRow() int32 {
+	if x != nil {
+		return x.Row
+	}
+	return 0
+}
+
+func (x *SeaAreas) GetSize() uint32 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *SeaAreas) GetSpeed() []uint32 {
+	if x != nil {
+		return x.Speed
+	}
+	return nil
+}
+
+func (x *SeaAreas) GetFrom() []uint32 {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *SeaAreas) GetFetch() []uint32 {
+	if x != nil {
+		return x.Fetch
+	}
+	return nil
+}
 
 // Restart says the server is about to restart, as a new version is
 // deployed: the world sails on until then, and the connection is closed
@@ -611,7 +737,7 @@ type Restart struct {
 
 func (x *Restart) Reset() {
 	*x = Restart{}
-	mi := &file_keel_v1_game_proto_msgTypes[7]
+	mi := &file_keel_v1_game_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -623,7 +749,7 @@ func (x *Restart) String() string {
 func (*Restart) ProtoMessage() {}
 
 func (x *Restart) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[7]
+	mi := &file_keel_v1_game_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -636,7 +762,7 @@ func (x *Restart) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Restart.ProtoReflect.Descriptor instead.
 func (*Restart) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{7}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Restart) GetInMs() uint32 {
@@ -661,7 +787,7 @@ type Queued struct {
 
 func (x *Queued) Reset() {
 	*x = Queued{}
-	mi := &file_keel_v1_game_proto_msgTypes[8]
+	mi := &file_keel_v1_game_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -673,7 +799,7 @@ func (x *Queued) String() string {
 func (*Queued) ProtoMessage() {}
 
 func (x *Queued) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[8]
+	mi := &file_keel_v1_game_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -686,7 +812,7 @@ func (x *Queued) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Queued.ProtoReflect.Descriptor instead.
 func (*Queued) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{8}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Queued) GetPosition() uint32 {
@@ -724,7 +850,7 @@ type Welcome struct {
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_keel_v1_game_proto_msgTypes[9]
+	mi := &file_keel_v1_game_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -736,7 +862,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[9]
+	mi := &file_keel_v1_game_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -749,7 +875,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{9}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Welcome) GetWorld() string {
@@ -807,7 +933,7 @@ type Pong struct {
 
 func (x *Pong) Reset() {
 	*x = Pong{}
-	mi := &file_keel_v1_game_proto_msgTypes[10]
+	mi := &file_keel_v1_game_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -819,7 +945,7 @@ func (x *Pong) String() string {
 func (*Pong) ProtoMessage() {}
 
 func (x *Pong) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[10]
+	mi := &file_keel_v1_game_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -832,7 +958,7 @@ func (x *Pong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pong.ProtoReflect.Descriptor instead.
 func (*Pong) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{10}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Pong) GetClientTimeUs() int64 {
@@ -879,13 +1005,22 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\aCommand\x12)\n" +
 	"\x06resync\x18\x01 \x01(\v2\x0f.keel.v1.ResyncH\x00R\x06resyncB\x06\n" +
 	"\x04body\"\b\n" +
-	"\x06Resync\"\xc3\x01\n" +
+	"\x06Resync\"\xf5\x01\n" +
 	"\rServerMessage\x12,\n" +
 	"\awelcome\x18\x01 \x01(\v2\x10.keel.v1.WelcomeH\x00R\awelcome\x12#\n" +
 	"\x04pong\x18\x02 \x01(\v2\r.keel.v1.PongH\x00R\x04pong\x12)\n" +
 	"\x06queued\x18\x03 \x01(\v2\x0f.keel.v1.QueuedH\x00R\x06queued\x12,\n" +
-	"\arestart\x18\x04 \x01(\v2\x10.keel.v1.RestartH\x00R\arestartB\x06\n" +
-	"\x04body\"\x1e\n" +
+	"\arestart\x18\x04 \x01(\v2\x10.keel.v1.RestartH\x00R\arestart\x120\n" +
+	"\tsea_areas\x18\x05 \x01(\v2\x11.keel.v1.SeaAreasH\x00R\bseaAreasB\x06\n" +
+	"\x04body\"\x96\x01\n" +
+	"\bSeaAreas\x12\x12\n" +
+	"\x04tick\x18\x01 \x01(\x03R\x04tick\x12\x10\n" +
+	"\x03col\x18\x02 \x01(\x11R\x03col\x12\x10\n" +
+	"\x03row\x18\x03 \x01(\x11R\x03row\x12\x12\n" +
+	"\x04size\x18\x04 \x01(\rR\x04size\x12\x14\n" +
+	"\x05speed\x18\x05 \x03(\rR\x05speed\x12\x12\n" +
+	"\x04from\x18\x06 \x03(\rR\x04from\x12\x14\n" +
+	"\x05fetch\x18\a \x03(\rR\x05fetch\"\x1e\n" +
 	"\aRestart\x12\x13\n" +
 	"\x05in_ms\x18\x01 \x01(\rR\x04inMs\">\n" +
 	"\x06Queued\x12\x1a\n" +
@@ -914,7 +1049,7 @@ func file_keel_v1_game_proto_rawDescGZIP() []byte {
 	return file_keel_v1_game_proto_rawDescData
 }
 
-var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_keel_v1_game_proto_goTypes = []any{
 	(*ClientMessage)(nil), // 0: keel.v1.ClientMessage
 	(*Hello)(nil),         // 1: keel.v1.Hello
@@ -923,10 +1058,11 @@ var file_keel_v1_game_proto_goTypes = []any{
 	(*Command)(nil),       // 4: keel.v1.Command
 	(*Resync)(nil),        // 5: keel.v1.Resync
 	(*ServerMessage)(nil), // 6: keel.v1.ServerMessage
-	(*Restart)(nil),       // 7: keel.v1.Restart
-	(*Queued)(nil),        // 8: keel.v1.Queued
-	(*Welcome)(nil),       // 9: keel.v1.Welcome
-	(*Pong)(nil),          // 10: keel.v1.Pong
+	(*SeaAreas)(nil),      // 7: keel.v1.SeaAreas
+	(*Restart)(nil),       // 8: keel.v1.Restart
+	(*Queued)(nil),        // 9: keel.v1.Queued
+	(*Welcome)(nil),       // 10: keel.v1.Welcome
+	(*Pong)(nil),          // 11: keel.v1.Pong
 }
 var file_keel_v1_game_proto_depIdxs = []int32{
 	1,  // 0: keel.v1.ClientMessage.hello:type_name -> keel.v1.Hello
@@ -934,15 +1070,16 @@ var file_keel_v1_game_proto_depIdxs = []int32{
 	3,  // 2: keel.v1.ClientMessage.ping:type_name -> keel.v1.Ping
 	4,  // 3: keel.v1.ClientMessage.command:type_name -> keel.v1.Command
 	5,  // 4: keel.v1.Command.resync:type_name -> keel.v1.Resync
-	9,  // 5: keel.v1.ServerMessage.welcome:type_name -> keel.v1.Welcome
-	10, // 6: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
-	8,  // 7: keel.v1.ServerMessage.queued:type_name -> keel.v1.Queued
-	7,  // 8: keel.v1.ServerMessage.restart:type_name -> keel.v1.Restart
-	9,  // [9:9] is the sub-list for method output_type
-	9,  // [9:9] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	10, // 5: keel.v1.ServerMessage.welcome:type_name -> keel.v1.Welcome
+	11, // 6: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
+	9,  // 7: keel.v1.ServerMessage.queued:type_name -> keel.v1.Queued
+	8,  // 8: keel.v1.ServerMessage.restart:type_name -> keel.v1.Restart
+	7,  // 9: keel.v1.ServerMessage.sea_areas:type_name -> keel.v1.SeaAreas
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_keel_v1_game_proto_init() }
@@ -964,6 +1101,7 @@ func file_keel_v1_game_proto_init() {
 		(*ServerMessage_Pong)(nil),
 		(*ServerMessage_Queued)(nil),
 		(*ServerMessage_Restart)(nil),
+		(*ServerMessage_SeaAreas)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -971,7 +1109,7 @@ func file_keel_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_keel_v1_game_proto_rawDesc), len(file_keel_v1_game_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

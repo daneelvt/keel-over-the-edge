@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,18 +20,26 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
 
-func kinds(t testing.TB) []physics.Prepared {
-	t.Helper()
+// physicsOnce prepares the catalog's sea and boats once for the package's
+// tests.
+var physicsOnce = sync.OnceValues(func() (*physics.Waves, []physics.Prepared) {
 	cat, err := catalog.Load()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-	ks := make([]physics.Prepared, len(cat.Boats))
-	for i := range cat.Boats {
-		p := catalog.PhysicsParams(&cat.Boats[i])
-		physics.Prepare(&p, &ks[i])
-	}
+	return cat.Prepare()
+})
+
+// kinds is the catalog's boats, prepared for its sea.
+func kinds(t testing.TB) []physics.Prepared {
+	_, ks := physicsOnce()
 	return ks
+}
+
+// waves is the catalog's sea.
+func waves(t testing.TB) *physics.Waves {
+	w, _ := physicsOnce()
+	return w
 }
 
 const testCapacity = 64
@@ -62,7 +71,7 @@ const testGrace = 120
 
 func newSession(t testing.TB, dir string, run bool) *session {
 	t.Helper()
-	w, err := sim.New(sim.Config{Capacity: testCapacity, Kinds: kinds(t), Workers: 2, Tick: 1000, Grace: testGrace, Limit: testLimit})
+	w, err := sim.New(sim.Config{Capacity: testCapacity, Kinds: kinds(t), Waves: waves(t), Workers: 2, Tick: 1000, Grace: testGrace, Limit: testLimit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +149,7 @@ func replayed(t testing.TB, data []byte, workers int) Result {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := Run(f, Options{Kinds: kinds(t), Workers: workers})
+	res, err := Run(f, Options{Kinds: kinds(t), Waves: waves(t), Workers: workers})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +346,7 @@ func TestPlantedChangeIsFound(t *testing.T) {
 	if at < 0 {
 		t.Fatal("no control word to change")
 	}
-	res, err := Run(f, Options{Kinds: kinds(t), Workers: 1})
+	res, err := Run(f, Options{Kinds: kinds(t), Waves: waves(t), Workers: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +367,7 @@ func TestReplayTwiceIsIdentical(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := Run(f, Options{Kinds: kinds(t), Workers: 1 + 4*i, At: func(fr *bus.Frame) {
+		if _, err := Run(f, Options{Kinds: kinds(t), Waves: waves(t), Workers: 1 + 4*i, At: func(fr *bus.Frame) {
 			ends[i] = sim.AppendSnapshot(ends[i][:0], fr)
 		}}); err != nil {
 			t.Fatal(err)
@@ -406,7 +415,7 @@ func FuzzRead(f *testing.F) {
 					return
 				}
 			}
-			_, _ = Run(lf, Options{Kinds: kinds(t), Workers: 1})
+			_, _ = Run(lf, Options{Kinds: kinds(t), Waves: waves(t), Workers: 1})
 		}
 	})
 }

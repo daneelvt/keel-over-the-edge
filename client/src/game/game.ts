@@ -71,8 +71,13 @@ export class Game {
   /** Puts a driver in charge of the boat, with its controls as the player's. */
   setDriver(d: BoatDriver): void {
     this.driver = d;
+    if ('clock' in d) {
+      d.clock = this.clock;
+    }
     this.world.out = d.out;
     this.world.wind = d.wind;
+    this.world.ocean.source =
+      d.physics !== undefined && d.seas !== undefined ? { physics: d.physics, seas: d.seas } : null;
   }
 
   /** Holds world time at t seconds (the nearest step). */
@@ -166,6 +171,7 @@ export class Game {
     // At most a second: after a pause or a jump, what eases simply arrives.
     w.timeStep = Math.min(1, Math.max(0, time - this.#lastTime));
     w.time = time;
+    w.ticks = this.clock.steps + this.clock.alpha;
     this.#lastTime = time;
     const p = w.pose;
     this.hud.frame(

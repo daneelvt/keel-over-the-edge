@@ -3,8 +3,7 @@
 # and, where the runner's Chromium offers an adapter through SwiftShader, on
 # WebGPU. The game's page steps the physics module, so it is built first;
 # keel serves the page's API (tools/e2e builds it) from a PostgreSQL service.
-# Also checks that the test sea's fixtures are current. Runs only when a file
-# the browser tests depend on changed.
+# Runs only when a file the browser tests depend on changed.
 #
 # Each back end runs in jobs of its own, and the tests tagged @long (minutes
 # each on SwiftShader) apart from the rest, so the four run side by side.
@@ -51,25 +50,7 @@ jobs:
               - 'tools/e2e/**'
               - 'tools/internal/**'
               - 'tools/physics/**'
-              - 'tools/testsea/**'
               - 'tools/licences/allowed.txt'
-
-  fixtures:
-    name: fixtures
-    needs: [changes]
-    if: needs.changes.outputs.render == 'true'
-    runs-on: ubuntu-slim
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-        with:
-          node: "false"
-      - name: The test sea's fixtures are current
-        run: go run ./tools/testsea -check
 
   browser:
     name: browser (${{ matrix.project }}, ${{ matrix.tests }})
@@ -239,7 +220,7 @@ jobs:
   pr-render:
     name: pr-render
     if: always()
-    needs: [changes, fixtures, browser, webkit, netem]
+    needs: [changes, browser, webkit, netem]
     runs-on: ubuntu-slim
     permissions: {}
     steps:

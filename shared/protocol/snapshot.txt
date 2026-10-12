@@ -20,10 +20,10 @@ The snapshot
 The player's own boat in full, then the other boats in the player's view
 as changes against a base: a snapshot the connection sent before, which
 the client must still hold. After the kind byte, little-endian, a header of
-159 bytes (160 with the kind byte), then the entries:
+191 bytes (192 with the kind byte), then the entries:
 
   offset  bytes  field
-       0      1  layout: 3
+       0      1  layout: 4
        1      8  tick (int64)
        9      2  base: how many ticks before this one the base snapshot is
                  (uint16); 0 for none: the view starts empty
@@ -37,20 +37,22 @@ the client must still hold. After the kind byte, little-endian, a header of
       20      2  sheet index in force (uint16), 0 … 1024
       22      8  wind speed, m/s (float64)
       30      8  wind direction it comes from, rad clockwise from north (float64)
-      38    120  the own boat's state, 15 float64s in this order:
+      38    152  the own boat's state, 19 float64s in this order:
                  x, y, heading, surge, sway, yawRate, heel, rollRate,
                  boom, boomRate, sailor, rudder, sheetLimit, sailorMode,
-                 sailorTimer
-     158      1  entries that follow, 0 … 128
-     159      …  the entries
+                 sailorTimer, heave, heaveRate, pitch, pitchRate
+     190      1  entries that follow, 0 … 128
+     191      …  the entries
 
-A layout byte other than 3 is refused.
+A layout byte other than 4 is refused.
 
 The view
 --------
 
 The view is up to 64 other boats, each in a view slot, 0 … 63, of the
-connection's own numbering. A view slot's boat is:
+connection's own numbering. Another boat's heave and pitch are not sent:
+each client floats it on the waves it draws under it, which are the same
+waves for everyone. A view slot's boat is:
 
   kind       an index into the catalog's boats
   flags      bit 0: in the far band; bits 1–2: the sailor's mode

@@ -1,11 +1,79 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The sea in a real browser, on each back end: the tiles are rigid and the
-// lattice fixed, the GPU's planes match the CPU's, every material bends,
+// lattice fixed, the GPU's waves are the server's, every material bends,
 // a lost device comes back, and the pictures match their references.
 
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { fromHex } from '../src/predict/golden';
 import { openScene, picture, pictureDifference } from './helpers';
+
+/** The sea as Go computed it: internal/physics/testdata/sea.json. */
+interface SeaCase {
+  name: string;
+  sea: { tick: number; col: number; row: number; size: number; areas: number[][] };
+  origin: number[];
+  points: number[][];
+  values: string[][];
+}
+const seaFile = JSON.parse(
+  readFileSync(new URL('../../internal/physics/testdata/sea.json', import.meta.url), 'utf8'),
+) as { cases: SeaCase[] };
+
+test.describe('the GPU’s boat band', () => {
+  // Go wrote each case's surface at points about a place; the same sea,
+  // tick and place are given to the page, whose GPU must sum the same waves
+  // to within what its sine is good for, at the world's centre and at its
+  // rim, now and after 2³¹ ticks, in one sea and where two are blended.
+  for (const c of seaFile.cases) {
+    test(`is the server’s: ${c.name}`, async ({ page }) => {
+      await openScene(page);
+      const got = await page.evaluate(async (c) => {
+        const k = globalThis.keel;
+        k.placeBoat(c.origin[0] ?? 0, c.origin[1] ?? 0);
+        k.freezeTick(c.sea.tick);
+        k.setSeaWindow(c.sea.col, c.sea.row, c.sea.size, c.sea.areas);
+        k.render();
+        const o = k.info().origin;
+        const scene = c.points.flatMap((p) => [
+          (c.origin[0] ?? 0) + (p[0] ?? 0) - o.east,
+          -((c.origin[1] ?? 0) + (p[1] ?? 0) - o.north),
+        ]);
+        return { ...(await k.band(scene)), tol: k.tolerance(), sea: k.sea() };
+      }, c);
+      expect(got.sea.waves).toBeGreaterThan(30);
+      expect(got.sea.blended).toBe(c.name.startsWith('border'));
+      let height = 0;
+      let slope = 0;
+      let hs = 0;
+      let module = 0;
+      for (const [i, v] of c.values.entries()) {
+        // Height, slope eastward and northward, significant height; the
+        // scene's z runs south.
+        const want = [
+          fromHex(v[0] ?? ''),
+          fromHex(v[1] ?? ''),
+          -fromHex(v[2] ?? ''),
+          fromHex(v[3] ?? ''),
+        ];
+        const at = (from: number[], k: number): number =>
+          Math.abs((from[i * 4 + k] ?? Number.NaN) - (want[k] ?? 0));
+        height = Math.max(height, at(got.gpu, 0));
+        slope = Math.max(slope, at(got.gpu, 1), at(got.gpu, 2));
+        hs = Math.max(hs, at(got.gpu, 3));
+        // The module in the page, at the points as float32 holds them.
+        module = Math.max(module, at(got.module, 0), at(got.module, 1), at(got.module, 2));
+      }
+      expect(module).toBeLessThan(1e-4);
+      expect(height).toBeLessThan(got.tol.height);
+      expect(slope).toBeLessThan(got.tol.slope);
+      expect(hs).toBeLessThan(1e-4);
+      // The tolerance is a millimetre or two, not a wave.
+      expect(got.tol.height).toBeLessThan(0.004);
+    });
+  }
+});
 
 test.describe('the tiles', () => {
   for (const pass of [true, false]) {
@@ -65,8 +133,9 @@ test.describe('the tiles', () => {
     expect(steps.gale).toBeLessThan(1.1);
     expect(steps.gale).toBeGreaterThan(steps.fresh ?? 0);
     expect(steps.fresh).toBeGreaterThan(0.05);
-    // In calm water the steps vanish.
-    expect(steps.calm).toBeLessThan(1e-3);
+    // In calm water the tiles lie almost flat, and in flat water the steps vanish.
+    expect(steps.calm).toBeLessThan(0.15);
+    expect(steps.calm).toBeLessThan(steps.fresh ?? 0);
     expect(steps.flat).toBeLessThan(1e-3);
   });
 
@@ -102,6 +171,110 @@ test.describe('the tiles', () => {
   });
 });
 
+test.describe('no water shows in a hull', () => {
+  // Looking straight down on the hull at the sea as drawn about it: no sea
+  // inside the hull's volume, no hole in the sea outside it, and the sea
+  // drawn right up to the planking. From above every fragment of the sea is
+  // seen, so what holds from there holds from astern and from the cockpit.
+  const STEPS = 300;
+
+  // Tagged @long: each look is a frame drawn and a target read back, which
+  // takes most of a second on CI's SwiftShader. The boat is sailed for ten
+  // seconds and looked at after every third step.
+  test(`sailing in the gale, over ${STEPS} steps`, { tag: '@long' }, async ({ page }) => {
+    test.setTimeout(300_000);
+    await openScene(page, 'sea=gale');
+    const r = await page.evaluate(async (steps) => {
+      const k = globalThis.keel;
+      k.setControls(0, 0.9);
+      const sum = { inside: 0, holes: 0, beside: Infinity, left: Infinity, looks: 0 };
+      let heave = 0;
+      let pitch = 0;
+      for (let i = 0; i < steps; i += 3) {
+        k.advance(3);
+        k.render();
+        const c = await k.hull();
+        sum.inside += c.inside;
+        sum.holes += c.holes;
+        sum.beside = Math.min(sum.beside, c.beside);
+        sum.left = Math.min(sum.left, c.left);
+        sum.looks++;
+        const s = k.boat().state;
+        heave = Math.max(heave, Math.abs(s.heave));
+        pitch = Math.max(pitch, Math.abs(s.pitch));
+      }
+      return { ...sum, heave, pitch };
+    }, STEPS);
+    expect(r.looks).toBe(STEPS / 3);
+    // The boat rode the gale's waves while it was watched.
+    expect(r.heave).toBeGreaterThan(0.2);
+    expect(r.pitch).toBeGreaterThan(0.03);
+    expect(r.inside).toBe(0);
+    expect(r.holes).toBe(0);
+    // In every look the hull kept some sea out, and the sea was drawn beside it.
+    expect(r.left).toBeGreaterThan(500);
+    expect(r.beside).toBeGreaterThan(50);
+  });
+
+  for (const heel of [0, 30]) {
+    test(`lying in the gale, heeled ${heel}°`, async ({ page }) => {
+      await openScene(page, 'sea=gale');
+      const r = await page.evaluate(async (heel) => {
+        const k = globalThis.keel;
+        const sum = { inside: 0, holes: 0, beside: Infinity, left: Infinity };
+        for (let i = 0; i < 20; i++) {
+          // A second on each time, and the boat laid on the sea of that time.
+          k.freeze(100 + i);
+          k.setState({ heel: (heel * Math.PI) / 180, heading: 0.7 + 0.3 * i });
+          k.render();
+          const c = await k.hull();
+          sum.inside += c.inside;
+          sum.holes += c.holes;
+          sum.beside = Math.min(sum.beside, c.beside);
+          sum.left = Math.min(sum.left, c.left);
+        }
+        return sum;
+      }, heel);
+      expect(r.inside).toBe(0);
+      expect(r.holes).toBe(0);
+      expect(r.left).toBeGreaterThan(300);
+      expect(r.beside).toBeGreaterThan(30);
+    });
+  }
+
+  test('nor in a boat 100 m away, nor in eight at once', async ({ page }) => {
+    await openScene(page, 'sea=gale');
+    const r = await page.evaluate(async () => {
+      const k = globalThis.keel;
+      // Seven other boats about the player's, the furthest 100 m off, and
+      // an eighth, which is left to the sea: only the nearest seven are kept dry.
+      const others = Array.from({ length: 8 }, (_, i) => ({
+        east: (20 + 12 * i) * Math.cos(i * 0.9),
+        north: (20 + 12 * i) * Math.sin(i * 0.9),
+        heading: i * 0.9,
+        heel: i % 2 === 0 ? 0.3 : -0.1,
+      }));
+      others[6] = { east: 80, north: 60, heading: 2, heel: 0.25 };
+      others[7] = { east: -70, north: -110, heading: 1, heel: 0 };
+      k.setFleet(others);
+      k.render();
+      const out = [];
+      for (let i = 0; i < others.length; i++) {
+        out.push(await k.hull(i));
+      }
+      return out;
+    });
+    for (const c of r.slice(0, 7)) {
+      expect(c.inside).toBe(0);
+      expect(c.holes).toBe(0);
+      expect(c.left).toBeGreaterThan(300);
+    }
+    // The eighth, 130 m off, is the furthest: the sea runs through it.
+    expect(r[7]?.left).toBe(0);
+    expect(r[7]?.inside).toBeGreaterThan(300);
+  });
+});
+
 test.describe('the floating origin', () => {
   test('moving it changes nothing on screen', async ({ page }) => {
     await openScene(page, 'sea=fresh');
@@ -125,9 +298,10 @@ test.describe('the floating origin', () => {
 
   test('the scene at the rim looks as it does at the centre', async ({ page }) => {
     await openScene(page);
-    // Every tile alike, so only the place differs; the boat heading 330°, as
-    // the views were chosen.
+    // Flat water and every tile alike, so only the place differs; the boat
+    // heading 330°, as the views were chosen.
     await page.evaluate(() => {
+      globalThis.keel.setSea('flat');
       globalThis.keel.setIdentity(false);
       globalThis.keel.setState({ heading: (330 * Math.PI) / 180 - 2 * Math.PI });
       globalThis.keel.render();

@@ -21,6 +21,8 @@ export interface Primitive {
 export interface NodeDef {
   name: string;
   translation?: [number, number, number];
+  /** Data of the application's own, kept with the node. */
+  extras?: Record<string, unknown>;
   primitives?: Primitive[];
   children?: NodeDef[];
 }
@@ -110,6 +112,9 @@ export function writeGlb(roots: NodeDef[], materials: MaterialDef[]): Uint8Array
     const node: Record<string, unknown> = { name: n.name };
     if (n.translation !== undefined) {
       node.translation = n.translation;
+    }
+    if (n.extras !== undefined) {
+      node.extras = n.extras;
     }
     if (n.primitives !== undefined && n.primitives.length > 0) {
       const prims = n.primitives.map((p) => {

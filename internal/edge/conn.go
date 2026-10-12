@@ -60,6 +60,8 @@ type conn struct {
 	nheld   int
 	waiting atomic.Int32 // nheld, for the encoder to skip connections with none
 
+	// sea is what the client has been told of the sea; the encoder's.
+	sea    connSea
 	margin margin
 	ack    atomic.Int64 // the newest snapshot's tick the client has decoded
 	// resync: the client lacks a base and asked for a full snapshot.

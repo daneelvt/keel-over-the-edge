@@ -6,9 +6,11 @@
 // critically damped spring, so a tack swings it round smoothly and never
 // past. One finger (or the mouse) on the open sea swings it round and up or
 // down; a pinch (or the wheel) sets its distance. Five seconds after the
-// last touch it eases back to its resting view. It ignores the heel, never
-// goes below 1.5 m above the sea, and with reduced motion its spring is
-// stiffer.
+// last touch it eases back to its resting view. It rises and falls with the
+// boat on the waves, smoothly, so the boat stays in the frame in a gale, but
+// ignores the boat's heel and pitch: a camera that pitched with a dinghy in
+// a seaway would be hard to watch. It never goes below 1.6 m above the sea
+// under the boat, and with reduced motion its springs are stiffer.
 
 /** A view of the boat: azimuth from astern (radians, toward the port quarter positive), elevation above the horizon, distance in metres. */
 export interface CameraView {
@@ -19,8 +21,10 @@ export interface CameraView {
 
 /** The camera looks at this point above the boat, in metres. */
 export const LOOK_HEIGHT = 1.8;
-/** The lowest the camera goes, in metres above the sea. */
-export const MIN_HEIGHT = 1.5;
+/** The lowest the camera goes, in metres above the sea under the boat. */
+export const MIN_HEIGHT = 1.6;
+/** The camera follows the boat's heave over this long, in seconds. */
+export const HEAVE_TIME = 0.5;
 /** The distances a pinch or the wheel can set, in metres. */
 export const MIN_DISTANCE = 5;
 export const MAX_DISTANCE = 80;
@@ -85,14 +89,23 @@ export class ChaseCamera {
   reducedMotion = false;
   /** Whether a finger or the mouse holds the camera. */
   holding = false;
+  /** The boat's heave as the camera has followed it, and the sea's height under the boat, metres. */
+  lift = 0;
+  sea = 0;
   #touched = Number.NEGATIVE_INFINITY;
 
-  /** Puts the camera at a view, behind a boat heading this way, at once; it becomes the resting view. */
-  place(v: CameraView, heading: number): void {
+  /**
+   * Puts the camera at a view, behind a boat heading this way and heaved
+   * this far on a sea this high under it, at once; it becomes the resting
+   * view.
+   */
+  place(v: CameraView, heading: number, heave = 0, sea = 0): void {
     Object.assign(this.view, v);
     Object.assign(this.rest, v);
     this.yaw = heading;
     this.yawRate = 0;
+    this.lift = heave;
+    this.sea = sea;
     this.#touched = Number.NEGATIVE_INFINITY;
   }
 
@@ -115,11 +128,17 @@ export class ChaseCamera {
     this.#touched = now;
   }
 
-  /** Follows a boat heading this way for dt seconds; now in milliseconds. */
-  update(dt: number, heading: number, now: number): void {
+  /**
+   * Follows a boat heading this way, heaved this far, on a sea this high
+   * under it, for dt seconds; now in milliseconds.
+   */
+  update(dt: number, heading: number, now: number, heave = 0, sea = 0): void {
+    this.sea = sea;
     if (dt <= 0) {
       return;
     }
+    const follow = this.reducedMotion ? HEAVE_TIME / 3 : HEAVE_TIME;
+    this.lift += (heave - this.lift) * (1 - Math.exp(-dt / follow));
     // The exact step of a critically damped spring, x″ = −ω²x − 2ωx′, on the
     // yaw's error from the heading: it never overshoots from rest.
     const w = this.reducedMotion ? YAW_OMEGA_REDUCED : YAW_OMEGA;
@@ -149,10 +168,10 @@ export class ChaseCamera {
     const a = this.yaw + Math.PI / 2 + v.azimuth;
     const ce = Math.cos(v.elevation);
     const tx = x;
-    const ty = y + LOOK_HEIGHT;
+    const ty = y + this.lift + LOOK_HEIGHT;
     const tz = z;
     target.set(tx, ty, tz);
-    const py = Math.max(ty + Math.sin(v.elevation) * v.distance, y + MIN_HEIGHT);
+    const py = Math.max(ty + Math.sin(v.elevation) * v.distance, y + this.sea + MIN_HEIGHT);
     position.set(tx + Math.cos(a) * ce * v.distance, py, tz + Math.sin(a) * ce * v.distance);
   }
 }

@@ -330,12 +330,8 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
-	kinds := make([]physics.Prepared, len(cat.Boats))
-	for i := range cat.Boats {
-		p := catalog.PhysicsParams(&cat.Boats[i])
-		physics.Prepare(&p, &kinds[i])
-	}
-	world, err := sim.New(sim.Config{Kinds: kinds, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
+	waves, kinds := cat.Prepare()
+	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}

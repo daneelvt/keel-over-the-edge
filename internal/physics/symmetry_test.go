@@ -78,7 +78,7 @@ func runScenarioStates(t *testing.T, b *Prepared, sc scenario, n int32, mirrored
 		if steering {
 			c.Helm = steer(target, &s)
 		}
-		step(&s, &c, &e, b, &o, n)
+		step(&s, &c, &e, nil, b, &o, n)
 		out = append(out, s)
 	}
 	return out
@@ -89,6 +89,10 @@ func TestMirrorSymmetry(t *testing.T) {
 	readJSON(t, scenariosFile, &sf)
 	b := jolly(t)
 	for _, sc := range sf.Scenarios {
+		if sc.Sea != nil {
+			// TestMirrorSymmetryInWaves mirrors a sea.
+			continue
+		}
 		t.Run(sc.Name, func(t *testing.T) {
 			plain := runScenarioStates(t, b, sc, Substeps, false, sc.Steps)
 			mirrored := runScenarioStates(t, b, sc, Substeps, true, sc.Steps)

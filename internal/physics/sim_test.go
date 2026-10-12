@@ -35,6 +35,27 @@ type sim struct {
 	// either side, in degrees.
 	maxMode float64
 	maxHeel float64
+	// sea is the sea the boat sails in, nil for flat water, and tick the
+	// tick of the next step.
+	sea  *ocean
+	tick float64
+}
+
+// in puts the boat in a sea, at a tick late in a world's life.
+func (m *sim) in(sea *ocean) *sim {
+	m.sea, m.tick = sea, 7.4e8
+	return m
+}
+
+// step advances the boat by one step.
+func (m *sim) step() {
+	var sea *Sea
+	if m.sea != nil {
+		sea = m.sea.at(m.tick)
+	}
+	Step(&m.s, &m.c, &m.e, sea, m.b, &m.o)
+	m.tick++
+	m.time += Dt
 }
 
 // newSim puts the Jolly boat at heading (degrees) in a wind 10 m up of wind
@@ -66,8 +87,7 @@ func (m *sim) run(seconds float64, each func()) {
 		if m.steer {
 			m.c.Helm = steer(m.target, &m.s)
 		}
-		Step(&m.s, &m.c, &m.e, m.b, &m.o)
-		m.time += Dt
+		m.step()
 		m.maxMode = max(m.maxMode, m.s.SailorMode)
 		m.maxHeel = max(m.maxHeel, math.Abs(m.s.Heel)/deg)
 		if each != nil {

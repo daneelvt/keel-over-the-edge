@@ -9,16 +9,19 @@
 // in time, nothing happens; otherwise the boat is put back to the server's
 // state and stepped again to the present with the controls kept, and the
 // difference that makes to the drawn boat is eased away over 100 ms (drawn
-// at once past 3 m or 20°). The Go test client predicts the same way
+// at once past 3 m or 20°). Each step sails in the sea of its own tick,
+// which the server says a second ahead (seas.ts), so the waves never cause a
+// correction. The Go test client predicts the same way
 // (internal/client/predict.go), and the tests replay its traces here.
 
-import type { BoatPhysics } from '../catalog/types.gen';
+import type { BoatPhysics, WeatherSea } from '../catalog/types.gen';
 import type { BoatDriver, Wind } from '../game/driver';
 import type { OwnSnapshot } from '../net/snapshot';
 import { type BoatPose, StatePair } from './blend';
 import { RECORDS, SIZES } from './layout.gen';
-import { writeParams } from './params.gen';
+import { writeParams, writeSeaParams } from './params.gen';
 import type { Physics } from './physics';
+import { Seas } from './seas';
 
 /** Ticks of prediction kept. */
 export const RING = 64;
@@ -62,6 +65,21 @@ export function sheetIndex(sheet: number): number {
   return Math.round(sheet * 1024);
 }
 
+/**
+ * Readies a physics module for a kind of boat in the catalog's sea: every
+ * record cleared, the sea's waves derived, then the boat's constants.
+ */
+export function preparePhysics(physics: Physics, boat: BoatPhysics, sea: WeatherSea): void {
+  const r = physics.records;
+  for (const v of Object.values(r)) {
+    v.fill(0);
+  }
+  writeSeaParams(r.seaParams, sea);
+  physics.prepareSea();
+  writeParams(physics.records.params, boat);
+  physics.prepare();
+}
+
 function wrapAngle(a: number): number {
   return a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 }
@@ -78,6 +96,9 @@ export class Predictor implements BoatDriver {
   /** The last 200 corrections' distances, for the 95th percentile. */
   readonly sizes: number[] = [];
 
+  /** The sea the boat is stepped in, from the server's SeaAreas. */
+  readonly seas: Seas;
+
   readonly #physics: Physics;
   readonly #ticks = new Float64Array(RING).fill(Number.NaN);
   readonly #helm = new Uint16Array(RING);
@@ -87,14 +108,15 @@ export class Predictor implements BoatDriver {
   /** The drawn boat's offset from the predicted one, eased away. */
   readonly offset = { east: 0, north: 0, heading: 0 };
 
-  constructor(physics: Physics, boat: BoatPhysics) {
+  constructor(physics: Physics, boat: BoatPhysics, sea: WeatherSea) {
     this.#physics = physics;
-    const r = physics.records;
-    for (const v of Object.values(r)) {
-      v.fill(0);
-    }
-    writeParams(r.params, boat);
-    physics.prepare();
+    this.seas = new Seas(physics);
+    preparePhysics(physics, boat, sea);
+  }
+
+  /** The physics module, for whoever draws its sea. */
+  get physics(): Physics {
+    return this.#physics;
   }
 
   /** The physics module's records (the developer panel). */
@@ -117,18 +139,20 @@ export class Predictor implements BoatDriver {
     this.counts.resets++;
   }
 
-  #stepModule(helm: number, sheet: number): void {
+  /** Steps the boat into tick, in the sea of that tick, as the server does. */
+  #stepModule(tick: number, helm: number, sheet: number): void {
     const r = this.#physics.records;
     r.control[RECORDS.control.helm] = helmOf(helm);
     r.control[RECORDS.control.sheet] = sheetOf(sheet);
     r.env[RECORDS.env.windSpeed] = this.wind.speed;
     r.env[RECORDS.env.windFrom] = this.wind.from;
+    this.seas.use(tick);
     this.#physics.step();
   }
 
   /** Steps the next tick with the controls' indices. */
   stepIndices(helm: number, sheet: number): void {
-    this.#stepModule(helm, sheet);
+    this.#stepModule(this.tick + 1, helm, sheet);
     this.tick++;
     const i = this.tick % RING;
     const r = this.#physics.records;
@@ -187,7 +211,7 @@ export class Predictor implements BoatDriver {
     this.#ring.set(sn.state, i * N);
     for (let t = sn.tick + 1; t <= this.tick; t++) {
       const j = t % RING;
-      this.#stepModule(this.#helm[j] ?? 512, this.#sheet[j] ?? 512);
+      this.#stepModule(t, this.#helm[j] ?? 512, this.#sheet[j] ?? 512);
       this.#ring.set(r.state, j * N);
     }
     const prev = (this.tick - 1) % RING;

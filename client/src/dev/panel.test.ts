@@ -4,7 +4,16 @@ import { describe, expect, test } from 'vitest';
 import { Fleet } from '../game/fleet';
 import { CHANGE, FLEET_META, SLOT, SLOT_FIELDS, slotAt, VIEW_SLOTS } from '../net/view';
 import { RECORDS, SIZES } from '../predict/layout.gen';
-import { applyState, netLines, type PanelWorld, RIM, readState, toRim } from './panel';
+import {
+  applyState,
+  inSeaState,
+  netLines,
+  type PanelWorld,
+  RIM,
+  readState,
+  seaLines,
+  toRim,
+} from './panel';
 
 function stub(): PanelWorld & { calls: string[] } {
   const calls: string[] = [];
@@ -12,7 +21,6 @@ function stub(): PanelWorld & { calls: string[] } {
   const wind = { speed: 0, from: 0 };
   const w: PanelWorld & { calls: string[] } = {
     calls,
-    testSea: 'flat',
     usePass: true,
     stage: {
       antialias: 'fxaa',
@@ -26,10 +34,6 @@ function stub(): PanelWorld & { calls: string[] } {
         this.scale = s;
       },
     },
-    setTestSea(name) {
-      calls.push(`sea ${name}`);
-      w.testSea = name;
-    },
     setUsePass(on) {
       calls.push(`pass ${on}`);
       w.usePass = on;
@@ -37,6 +41,10 @@ function stub(): PanelWorld & { calls: string[] } {
     sandbox: {
       wind,
       states: { current: state },
+      sea: { options: { fetch: null, split: null, flat: false } },
+      settleSea() {
+        calls.push('settle');
+      },
       setWind(speed, from) {
         calls.push(`wind ${speed.toFixed(4)} ${from.toFixed(4)}`);
         wind.speed = speed;
@@ -71,13 +79,55 @@ describe('the panel', () => {
     expect(w.calls).toEqual([]);
     applyState(w, {
       ...readState(w),
-      sea: 'gale',
       antialias: 'smaa',
       scale: 1,
       pass: false,
       east: 5,
     });
-    expect(w.calls).toEqual(['sea gale', 'place 5 0 0.0000', 'aa smaa', 'scale 1', 'pass false']);
+    expect(w.calls).toEqual(['place 5 0 0.0000', 'aa smaa', 'scale 1', 'pass false']);
+  });
+
+  test('sets the sea’s fetch, a second wind to the east and flat water, at once', () => {
+    const w = stub();
+    w.sandbox.setWind(10 * (1852 / 3600), 1);
+    w.sandbox.states.current[RECORDS.state.x] = 500;
+    w.calls.length = 0;
+    applyState(w, { ...readState(w), fetch: 9, split: 34 });
+    expect(w.calls).toEqual(['settle']);
+    const sea = w.sandbox.sea.options;
+    expect(sea.fetch).toBeCloseTo(9 * 1852, 9);
+    // The boat is in the area of column 19; the second wind starts at the next.
+    expect(sea.split?.column).toBe(20);
+    expect(sea.split?.wind.speed).toBeCloseTo(34 * (1852 / 3600), 9);
+    expect(sea.split?.wind.from).toBe(1);
+    const s = readState(w);
+    expect(s.fetch).toBeCloseTo(9, 9);
+    expect(s.split).toBeCloseTo(34, 9);
+    applyState(w, { ...s, flat: true, fetch: null, split: null });
+    expect(w.sandbox.sea.options).toEqual({ fetch: null, split: null, flat: true });
+    w.calls.length = 0;
+    applyState(w, readState(w));
+    expect(w.calls).toEqual([]);
+  });
+
+  test('puts the sandbox in a sea state: its wind, and its sea at once', () => {
+    const w = stub();
+    w.sandbox.setWind(3, 2);
+    w.sandbox.sea.options.flat = true;
+    w.calls.length = 0;
+    inSeaState(w, 'gale');
+    expect(w.calls).toEqual([`wind ${(34 * (1852 / 3600)).toFixed(4)} 2.0000`, 'settle']);
+    expect(w.sandbox.sea.options.flat).toBe(false);
+    inSeaState(w, 'hurricane');
+    expect(w.calls).toHaveLength(2);
+  });
+
+  test('says what sea is under the boat', () => {
+    expect(seaLines(0, 0, 0, false)).toBe('sea     flat');
+    expect(seaLines(0.972, (2 * Math.PI) / 3.6, 106, false)).toBe(
+      'sea     Hs 0.97 m, peak 3.6 s, 106 waves',
+    );
+    expect(seaLines(0.5, 2, 90, true)).toMatch(/90 waves, blended$/);
   });
 
   test('its wind and boat fields round-trip', () => {

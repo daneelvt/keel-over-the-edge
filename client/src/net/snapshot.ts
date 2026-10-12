@@ -13,9 +13,9 @@ export const KIND_MESSAGE = 1;
 /** A message's first byte: the snapshot. */
 export const KIND_SNAPSHOT = 2;
 /** A snapshot's header's length, its kind byte included: where its entries begin. */
-export const HEADER_SIZE = 160;
+export const HEADER_SIZE = 192;
 /** The layout this client reads: the own boat's state as float64, then the view's entries. */
-export const SNAPSHOT_LAYOUT = 3;
+export const SNAPSHOT_LAYOUT = 4;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */
@@ -23,7 +23,7 @@ export const FAR_SAMPLED = 1;
 /** A snapshot's margin when no input arrived since the one before. */
 export const NO_MARGIN = -32768;
 /** The boat's state's fields, as the physics module lays them out. */
-export const STATE_FIELDS = 15;
+export const STATE_FIELDS = 19;
 
 /** A snapshot's header: the player's own boat as the server last stepped it. */
 export interface OwnSnapshot {
@@ -85,7 +85,7 @@ const HELM = 19;
 const SHEET = 21;
 const WIND = 23;
 const STATE = 39;
-const ENTRIES = 159;
+const ENTRIES = STATE + 8 * STATE_FIELDS;
 
 /** A snapshot's tick, read without the rest (the worker's acknowledgement). */
 export function snapshotTick(v: DataView): number {

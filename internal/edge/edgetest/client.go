@@ -66,5 +66,5 @@ func (s *Server) NewSailor(o DialOptions, controls client.Controls) *client.Sail
 	return client.NewSailor(func(ctx context.Context) (*websocket.Conn, error) {
 		ws, _, err := s.Dial(ctx, o)
 		return ws, err
-	}, &s.Kinds[0], controls)
+	}, &s.Kinds[0], s.Waves, controls)
 }

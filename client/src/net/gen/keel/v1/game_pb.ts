@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkiVQoFSW5wdXQSCwoDc2VxGAEgASgNEgwKBGhlbG0YAiABKA0SDQoFc2hlZXQYAyABKA0SEAoIYWNrX3RpY2sYBCABKAMSEAoIYWNrX29ubHkYBSABKAgiUgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIqMBCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SABCBgoEYm9keSIYCgdSZXN0YXJ0Eg0KBWluX21zGAEgASgNIisKBlF1ZXVlZBIQCghwb3NpdGlvbhgBIAEoDRIPCgd3YWl0aW5nGAIgASgNImsKB1dlbGNvbWUSDQoFd29ybGQYASABKAkSDAoEdGljaxgCIAEoAxIVCg13b3JsZF90aW1lX3VzGAMgASgDEgwKBGJvYXQYBCABKAQSDAoEa2luZBgFIAEoDRIQCghyZWpvaW5lZBgGIAEoCCI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKANCPVo7Z2l0aHViLmNvbS9kYW5lZWx2dC9rZWVsLW92ZXItdGhlLWVkZ2UvaW50ZXJuYWwvcHJvdG9jb2wvcGJiBnByb3RvMw");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkiVQoFSW5wdXQSCwoDc2VxGAEgASgNEgwKBGhlbG0YAiABKA0SDQoFc2hlZXQYAyABKA0SEAoIYWNrX3RpY2sYBCABKAMSEAoIYWNrX29ubHkYBSABKAgiUgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIssBCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAQgYKBGJvZHkibAoIU2VhQXJlYXMSDAoEdGljaxgBIAEoAxILCgNjb2wYAiABKBESCwoDcm93GAMgASgREgwKBHNpemUYBCABKA0SDQoFc3BlZWQYBSADKA0SDAoEZnJvbRgGIAMoDRINCgVmZXRjaBgHIAMoDSIYCgdSZXN0YXJ0Eg0KBWluX21zGAEgASgNIisKBlF1ZXVlZBIQCghwb3NpdGlvbhgBIAEoDRIPCgd3YWl0aW5nGAIgASgNImsKB1dlbGNvbWUSDQoFd29ybGQYASABKAkSDAoEdGljaxgCIAEoAxIVCg13b3JsZF90aW1lX3VzGAMgASgDEgwKBGJvYXQYBCABKAQSDAoEa2luZBgFIAEoDRIQCghyZWpvaW5lZBgGIAEoCCI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKANCPVo7Z2l0aHViLmNvbS9kYW5lZWx2dC9rZWVsLW92ZXItdGhlLWVkZ2UvaW50ZXJuYWwvcHJvdG9jb2wvcGJiBnByb3RvMw");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -275,6 +275,12 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
      */
     value: Restart;
     case: "restart";
+  } | {
+    /**
+     * @generated from field: keel.v1.SeaAreas sea_areas = 5;
+     */
+    value: SeaAreas;
+    case: "seaAreas";
   } | { case: undefined; value?: undefined };
 };
 
@@ -284,6 +290,76 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 6);
+
+/**
+ * SeaAreas is what raises the waves about the boat: a square of sea areas,
+ * each 463 m on a side, with the wind and the fetch that give each its
+ * waves. The client derives the waves from them exactly as the server does.
+ * It comes after the Welcome; whenever the sea is to change, a second or
+ * so before the tick the change applies from; and whenever the boat sails
+ * into another area, with the areas about that one. A client keeps the two
+ * with the latest ticks, and at each tick uses the later of those whose
+ * tick has come.
+ *
+ * @generated from message keel.v1.SeaAreas
+ */
+export type SeaAreas = Message<"keel.v1.SeaAreas"> & {
+  /**
+   * The first tick these apply to.
+   *
+   * @generated from field: int64 tick = 1;
+   */
+  tick: bigint;
+
+  /**
+   * The column, counted from the west, and the row, from the south, of the
+   * first area, in the world's 37 by 37 areas: the middle one, 18 and 18,
+   * is centred on the world's centre. Either may be negative or reach past
+   * the world's edge.
+   *
+   * @generated from field: sint32 col = 2;
+   */
+  col: number;
+
+  /**
+   * @generated from field: sint32 row = 3;
+   */
+  row: number;
+
+  /**
+   * Areas on a side: 5.
+   *
+   * @generated from field: uint32 size = 4;
+   */
+  size: number;
+
+  /**
+   * For each area, row by row from the south-west: the speed of the wind
+   * that raises its waves, in steps of 0.01 m/s; the direction it comes
+   * from, clockwise from north, in steps of a 65536th of a turn; and the
+   * fetch, in metres.
+   *
+   * @generated from field: repeated uint32 speed = 5;
+   */
+  speed: number[];
+
+  /**
+   * @generated from field: repeated uint32 from = 6;
+   */
+  from: number[];
+
+  /**
+   * @generated from field: repeated uint32 fetch = 7;
+   */
+  fetch: number[];
+};
+
+/**
+ * Describes the message keel.v1.SeaAreas.
+ * Use `create(SeaAreasSchema)` to create a new message.
+ */
+export const SeaAreasSchema: GenMessage<SeaAreas> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 7);
 
 /**
  * Restart says the server is about to restart, as a new version is
@@ -307,7 +383,7 @@ export type Restart = Message<"keel.v1.Restart"> & {
  * Use `create(RestartSchema)` to create a new message.
  */
 export const RestartSchema: GenMessage<Restart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 7);
+  messageDesc(file_keel_v1_game, 8);
 
 /**
  * Queued says the sea is full: the client waits for a boat. It comes after
@@ -337,7 +413,7 @@ export type Queued = Message<"keel.v1.Queued"> & {
  * Use `create(QueuedSchema)` to create a new message.
  */
 export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 8);
+  messageDesc(file_keel_v1_game, 9);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -393,7 +469,7 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 9);
+  messageDesc(file_keel_v1_game, 10);
 
 /**
  * Pong answers a Ping.
@@ -421,5 +497,5 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 10);
+  messageDesc(file_keel_v1_game, 11);
 

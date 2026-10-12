@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 //go:embed catalog.gen.json
@@ -38,4 +40,18 @@ func Parse(data []byte) (*Catalog, error) {
 		return nil, errors.New("catalog: no boats")
 	}
 	return &c, nil
+}
+
+// Prepare readies the catalog for the physics: the sea's waves, and every
+// kind of boat in the catalog's order, each prepared for those waves.
+func (c *Catalog) Prepare() (*physics.Waves, []physics.Prepared) {
+	sea := SeaParams(c)
+	waves := new(physics.Waves)
+	physics.PrepareSea(&sea, waves)
+	kinds := make([]physics.Prepared, len(c.Boats))
+	for i := range c.Boats {
+		p := PhysicsParams(&c.Boats[i])
+		physics.Prepare(&p, waves, &kinds[i])
+	}
+	return waves, kinds
 }

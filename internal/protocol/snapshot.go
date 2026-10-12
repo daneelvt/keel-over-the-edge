@@ -18,10 +18,10 @@ import (
 const (
 	// HeaderSize is the header's length, its kind byte included: where
 	// the entries begin.
-	HeaderSize = 160
+	HeaderSize = 192
 	// SnapshotLayout is the layout this package writes: the own boat's
 	// state as float64, then the view's entries.
-	SnapshotLayout = 3
+	SnapshotLayout = 4
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an
@@ -49,7 +49,7 @@ const (
 	offSheet   = 21
 	offWind    = 23
 	offState   = 39
-	offEntries = 159
+	offEntries = offState + 8*sim.StateSize
 )
 
 // Snapshot is a snapshot's header: the player's own boat as the server last

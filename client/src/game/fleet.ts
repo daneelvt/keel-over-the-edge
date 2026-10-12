@@ -90,6 +90,13 @@ export interface DrawnBoat {
   north: number;
   heading: number;
   heel: number;
+  /**
+   * How the boat floats on the waves drawn under it: its rise, metres, and
+   * its pitch, radians, bow up. The server does not send them; float.ts
+   * sets them from the sea here.
+   */
+  heave: number;
+  pitch: number;
   boom: number;
   rudder: number;
   sailor: number;
@@ -114,6 +121,8 @@ export function newDrawnBoat(): DrawnBoat {
     north: 0,
     heading: 0,
     heel: 0,
+    heave: 0,
+    pitch: 0,
     boom: 0,
     rudder: 0,
     sailor: 0,
@@ -504,6 +513,8 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.north = a.north;
   b.heading = a.heading;
   b.heel = a.heel;
+  b.heave = a.heave;
+  b.pitch = a.pitch;
   b.boom = a.boom;
   b.rudder = a.rudder;
   b.sailor = a.sailor;

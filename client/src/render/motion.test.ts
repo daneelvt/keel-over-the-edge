@@ -62,13 +62,40 @@ describe('the boat in motion', () => {
     }
   });
 
+  test('pitches about its centre of gravity, bow up, and rises with its heave', () => {
+    const { root, heel, model } = boatNodes();
+    const cog = new Object3D();
+    cog.position.set(0, cg, 0);
+    const bow = new Object3D();
+    bow.position.set(0, cg, -2);
+    const starboard = new Object3D();
+    starboard.position.set(0.6, cg, 0);
+    model.add(cog, bow, starboard);
+    // Heading north, so the bow is toward −z in the scene too.
+    placeBoatNodes(root, heel, { x: 3, y: 0, z: 9 }, 0, 0, 0.1, 0.4);
+    root.updateMatrixWorld(true);
+    const c = cog.getWorldPosition(new Vector3());
+    expect([c.x, c.y, c.z]).toEqual([3, cg + 0.4, 9]);
+    const b = bow.getWorldPosition(new Vector3());
+    expect(b.y - c.y).toBeCloseTo(2 * Math.sin(0.1), 12);
+    expect(b.z - c.z).toBeCloseTo(-2 * Math.cos(0.1), 12);
+    // Heeled as well, the roll is about the pitched boat's own fore-and-aft axis.
+    placeBoatNodes(root, heel, { x: 3, y: 0, z: 9 }, 0, 0.3, 0.1, 0.4);
+    root.updateMatrixWorld(true);
+    const s = starboard.getWorldPosition(new Vector3());
+    expect(s.x - 3).toBeCloseTo(0.6 * Math.cos(0.3), 12);
+    expect(s.y - c.y).toBeCloseTo(-0.6 * Math.sin(0.3) * Math.cos(0.1), 12);
+    const b2 = bow.getWorldPosition(new Vector3());
+    expect(b2.y - c.y).toBeCloseTo(2 * Math.sin(0.1), 12);
+  });
+
   test('its tiller swings opposite to the way the rudder turns the bow', async () => {
     // A positive rudder turns the bow to starboard, in the physics.
     const wasm = new URL('../predict/physics.wasm', import.meta.url);
     if (!existsSync(wasm)) {
       throw new Error('client/src/predict/physics.wasm is missing: run go run ./tools/physics');
     }
-    const s = await startSandbox(readFileSync(wasm), kind.physics);
+    const s = await startSandbox(readFileSync(wasm), kind.physics, catalog.weather.sea);
     s.setState({ surge: 3, sheetLimit: 0.5 });
     for (let i = 0; i < 30; i++) {
       s.step(1, 0.4);

@@ -13,9 +13,9 @@
 // Query strings, for development:
 //   ?sandbox          the offline sandbox alone: no server, no account
 //   ?wind=12,45       the sandbox's wind: knots 10 m up, and the degrees it comes from
+//   ?sea=gale         the sandbox's wind by the sea it raises: calm, breeze, fresh or gale
 //   ?dev              the developer panel (loaded only when asked for)
 //   ?backend=webgl2   the WebGL 2 back end even where WebGPU is offered
-//   ?sea=gale         the test sea: calm, breeze, fresh or gale
 //   ?view=bands       a camera preset: chase, sea, bands, aboard or high
 //   ?test             the hooks the browser tests drive
 
@@ -33,7 +33,7 @@ import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor } from '../predict/predictor';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
-import { START, startSandbox, windFromQuery } from '../sandbox/sandbox';
+import { START, seaFromQuery, startSandbox, windFromQuery } from '../sandbox/sandbox';
 import { mountScreen } from '../ui/hud';
 import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
@@ -46,10 +46,6 @@ async function start(): Promise<void> {
   document.body.replaceChildren(container);
 
   const world = new SeaScene(container, backend);
-  const sea = query.get('sea');
-  if (sea !== null) {
-    world.setTestSea(sea);
-  }
   const dev = query.has('dev');
   world.stage.timestamps = dev;
   world.stats.gpuTiming = dev;
@@ -60,10 +56,10 @@ async function start(): Promise<void> {
   if (query.has('sandbox')) {
     // The physics module compiles while the renderer starts; the boat is
     // sailed once both are ready.
-    const begin = { ...START, wind: windFromQuery(query) ?? START.wind };
+    const begin = { ...START, wind: windFromQuery(query) ?? seaFromQuery(query) ?? START.wind };
     const [, sandbox] = await Promise.all([
       world.start(),
-      startSandbox(fetch(wasmUrl), world.kind.physics, begin),
+      startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather.sea, begin),
     ]);
     game.setDriver(sandbox);
     mountScreen(document.body, {
@@ -106,7 +102,7 @@ async function start(): Promise<void> {
       backSoon: notice,
     }),
   ]);
-  const predictor = new Predictor(physics, world.kind.physics);
+  const predictor = new Predictor(physics, world.kind.physics, catalog.weather.sea);
   const worker = new Worker(new URL('../workers/net/worker.ts', import.meta.url), {
     type: 'module',
   });

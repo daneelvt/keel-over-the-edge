@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -42,18 +43,26 @@ const fixture = "testdata/replays/fixture.log"
 
 var bubbleEpoch = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-func catalogKinds(t testing.TB) []physics.Prepared {
-	t.Helper()
+// physicsOnce prepares the catalog's sea and boats once for the package's
+// tests.
+var physicsOnce = sync.OnceValues(func() (*physics.Waves, []physics.Prepared) {
 	cat, err := catalog.Load()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-	ks := make([]physics.Prepared, len(cat.Boats))
-	for i := range cat.Boats {
-		p := catalog.PhysicsParams(&cat.Boats[i])
-		physics.Prepare(&p, &ks[i])
-	}
+	return cat.Prepare()
+})
+
+// catalogKinds is the catalog's boats, prepared for its sea.
+func catalogKinds(t testing.TB) []physics.Prepared {
+	_, ks := physicsOnce()
 	return ks
+}
+
+// catalogWaves is the catalog's sea.
+func catalogWaves(t testing.TB) *physics.Waves {
+	w, _ := physicsOnce()
+	return w
 }
 
 // live is a recorded session: the log's bytes and the world it ended in.
@@ -83,7 +92,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 	var out live
 	dir := t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
-		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit})
+		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -257,7 +266,7 @@ func replayLog(t *testing.T, data []byte, workers int) (replay.Result, []byte) {
 		t.Fatal(err)
 	}
 	var end []byte
-	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Workers: workers, At: func(fr *bus.Frame) {
+	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Workers: workers, At: func(fr *bus.Frame) {
 		end = sim.AppendSnapshot(end[:0], fr)
 	}})
 	if err != nil {
@@ -345,13 +354,19 @@ func TestFixture(t *testing.T) {
 
 // A recording of the client's sandbox, as internal/physics's tests read it.
 type recording struct {
-	Params    map[string]any `json:"params"`
+	Sea       map[string]float64 `json:"sea"`
+	Params    map[string]any     `json:"params"`
 	Scenarios []struct {
 		Name    string             `json:"name"`
 		Steps   int                `json:"steps"`
 		State   map[string]float64 `json:"state"`
 		Control map[string]float64 `json:"control"`
 		Env     map[string]float64 `json:"env"`
+		// Sea is the sea of step 0: its tick, and its areas' inputs.
+		Sea struct {
+			Tick  int64       `json:"tick"`
+			Areas [][3]uint32 `json:"areas"`
+		} `json:"sea"`
 		Changes []struct {
 			At      int                `json:"at"`
 			Control map[string]float64 `json:"control"`
@@ -362,9 +377,11 @@ type recording struct {
 }
 
 // TestSandboxRecordings sails each recorded sandbox sail through the tick:
-// a Join, then the recording's start placed and its wind set, and its
-// controls given as control words at their steps. The boat sailed in the
-// browser is the boat the server's tick sails.
+// the recording's first wind set long enough before for its sea to rise, a
+// Join, then the recording's start placed and its wind set, and its
+// controls given as control words at their steps, each step at the tick the
+// sandbox sailed it. The boat sailed in the browser, in the sea the sandbox
+// raised by the server's rules, is the boat the server's tick sails.
 func TestSandboxRecordings(t *testing.T) {
 	paths, err := filepath.Glob("../physics/testdata/recordings/*.json")
 	if err != nil || len(paths) == 0 {
@@ -379,25 +396,46 @@ func TestSandboxRecordings(t *testing.T) {
 		if err := json.Unmarshal(data, &rec); err != nil {
 			t.Fatal(err)
 		}
+		var seaParams physics.SeaParams
+		setFloats(t, &seaParams, rec.Sea)
+		waves := new(physics.Waves)
+		physics.PrepareSea(&seaParams, waves)
 		var params physics.Params
 		setFields(t, &params, rec.Params)
 		var kind physics.Prepared
-		physics.Prepare(&params, &kind)
+		physics.Prepare(&params, waves, &kind)
 		for _, sc := range rec.Scenarios {
 			t.Run(filepath.Base(path)+"/"+sc.Name, func(t *testing.T) {
-				w, err := sim.New(sim.Config{Capacity: 4, Kinds: []physics.Prepared{kind}, Workers: 1})
+				wind := bus.Wind{Speed: sc.Env["windSpeed"], From: sc.Env["windFrom"]}
+				// A sea the developer set by hand is not one the tick raises.
+				open := waves.OpenSea(wind.Speed, wind.From)
+				for _, a := range sc.Sea.Areas {
+					if (physics.SeaInput{Speed: a[0], From: a[1], Fetch: a[2]}) != open {
+						t.Skipf("the sail starts in a sea of %v, not its wind's %+v", a, open)
+					}
+				}
+				// Three seconds for the sea to follow the wind, then the
+				// Join, in the tick before step 0's.
+				const rise = 90
+				w, err := sim.New(sim.Config{Capacity: 4, Kinds: []physics.Prepared{kind}, Waves: waves, Workers: 1, Tick: sc.Sea.Tick - 2 - rise})
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer w.Close()
+				w.TickWith(&sim.Input{Commands: []bus.Command{{Op: bus.SetWind, Wind: wind}}})
+				for range rise - 1 {
+					w.TickWith(&sim.Input{})
+				}
 				w.TickWith(&sim.Input{Commands: []bus.Command{{Op: bus.Join, Account: account(1)}}})
 				f := w.Latest()
 				slot, boat, gen := f.Live[0], f.Boat[f.Live[0]], f.Gen[f.Live[0]]
+				if f.Tick != sc.Sea.Tick-1 || f.Sea.Now[0] != open {
+					t.Fatalf("before step 0 the world is at tick %d with a sea of %+v", f.Tick, f.Sea.Now[0])
+				}
 
 				var start physics.State
 				setFloats(t, &start, sc.State)
 				helm, sheet := sc.Control["helm"], sc.Control["sheet"]
-				wind := bus.Wind{Speed: sc.Env["windSpeed"], From: sc.Env["windFrom"]}
 				next := 0
 				for step := range sc.Steps {
 					in := &sim.Input{}

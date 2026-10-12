@@ -83,7 +83,48 @@ describe('the chase camera', () => {
     expect(Math.abs(cam.view.elevation - CHASE.elevation)).toBeLessThan(0.01);
   });
 
-  test('keeps its distance and elevation in their limits, and stays above 1.5 m', () => {
+  test('rises and falls with the boat, over half a second, and not with its heel or pitch', () => {
+    const cam = new ChaseCamera();
+    cam.place(CHASE, 0);
+    const p = new Vector3();
+    const t = new Vector3();
+    cam.place3(0, 0, 0, p, t);
+    const rest = { camera: p.y, target: t.y };
+    // The boat rises 0.6 m on a wave, and stays there.
+    let t0 = 0;
+    for (let i = 0; i < 30; i++) {
+      t0 += 1000 / 60;
+      cam.update(1 / 60, 0, t0, 0.6, 0.6);
+    }
+    cam.place3(0, 0, 0, p, t);
+    // After half a second, 63% of the way.
+    expect(t.y - rest.target).toBeCloseTo(0.6 * (1 - Math.exp(-1)), 3);
+    expect(p.y - rest.camera).toBeCloseTo(t.y - rest.target, 12);
+    for (let i = 0; i < 300; i++) {
+      t0 += 1000 / 60;
+      cam.update(1 / 60, 0, t0, 0.6, 0.6);
+    }
+    cam.place3(0, 0, 0, p, t);
+    expect(t.y - rest.target).toBeCloseTo(0.6, 4);
+    // Placed, it is there at once.
+    cam.place(CHASE, 0, -0.4, -0.4);
+    cam.place3(0, 0, 0, p, t);
+    expect(t.y - rest.target).toBeCloseTo(-0.4, 12);
+  });
+
+  test('stays 1.6 m above the sea under the boat, on a crest too', () => {
+    const cam = new ChaseCamera();
+    cam.place({ azimuth: 0, elevation: 0.03, distance: 6 }, 0);
+    const p = new Vector3();
+    const t = new Vector3();
+    // In a trough the boat is low, and the camera with it, but not below the floor.
+    cam.place({ azimuth: 0, elevation: -0.4, distance: 6 }, 0, 0.9, 0.9);
+    cam.place3(0, 0, 0, p, t);
+    expect(p.y).toBeCloseTo(0.9 + MIN_HEIGHT, 12);
+    expect(MIN_HEIGHT).toBe(1.6);
+  });
+
+  test('keeps its distance and elevation in their limits, and stays above the sea', () => {
     const cam = new ChaseCamera();
     cam.place(CHASE, 0);
     cam.zoom(100, 0);

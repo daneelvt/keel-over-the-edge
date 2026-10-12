@@ -84,7 +84,14 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkParams(fields); err != nil {
 		return err
 	}
-	goPhysics, err := goPhysics(fields)
+	sea, err := seaFields(root)
+	if err != nil {
+		return err
+	}
+	if err := checkSeaParams(sea); err != nil {
+		return err
+	}
+	goPhysics, err := goPhysics(fields, sea)
 	if err != nil {
 		return err
 	}
@@ -94,7 +101,7 @@ func run(root string, check bool, out io.Writer) error {
 		goPhysicsPath: goPhysics,
 		tsJSONPath:    canonical,
 		tsTypesPath:   tsTypes,
-		tsParamsPath:  tsParams(fields),
+		tsParamsPath:  tsParams(fields, sea),
 	}
 	return writeOrCheck(root, files, check)
 }
@@ -108,7 +115,8 @@ func Version(canonical []byte) string {
 }
 
 // readCatalog reads every YAML file of the catalog and merges their top-level
-// lists into one document, decoded as JSON values (json.Number for numbers).
+// lists, and the groups of values that are not lists of kinds, into one
+// document, decoded as JSON values (json.Number for numbers).
 func readCatalog(root string) (map[string]any, error) {
 	paths, err := filepath.Glob(filepath.Join(root, catalogDir, "*.yaml"))
 	if err != nil {
@@ -142,11 +150,11 @@ func readCatalog(root string) (map[string]any, error) {
 		}
 		obj, ok := v.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("%s: the top level must be a mapping of lists", rel(root, p))
+			return nil, fmt.Errorf("%s: the top level must be a mapping", rel(root, p))
 		}
 		for key, list := range obj {
 			if prev, dup := from[key]; dup {
-				return nil, fmt.Errorf("%s: list %q is already defined in %s", rel(root, p), key, prev)
+				return nil, fmt.Errorf("%s: %q is already defined in %s", rel(root, p), key, prev)
 			}
 			from[key] = rel(root, p)
 			merged[key] = list

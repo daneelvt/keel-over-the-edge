@@ -71,6 +71,9 @@ type Catalog struct {
 	// The figures that sail the boats. The first is the one drawn until players
 	// choose their own.
 	Sailors []Sailor `json:"sailors"`
+
+	// Weather corresponds to the JSON schema field "weather".
+	Weather Weather `json:"weather"`
 }
 
 // Stable identifier of a kind, stored in the database: never renamed or reused.
@@ -138,6 +141,9 @@ type PhysicsFoils struct {
 
 // The hull: its mass, resistance, inertia and stability.
 type PhysicsHull struct {
+	// Added mass moving up and down, in kg.
+	AddedMassHeave float64 `json:"addedMassHeave"`
+
 	// Added mass moving ahead, in kg.
 	AddedMassSurge float64 `json:"addedMassSurge"`
 
@@ -161,12 +167,21 @@ type PhysicsHull struct {
 	// Speed between entries of dragArea, in m/s.
 	DragAreaStep float64 `json:"dragAreaStep"`
 
+	// Damping of the heave, as a fraction of critical.
+	HeaveDamping float64 `json:"heaveDamping"`
+
 	// The hull's own draught, foils aside, in m.
 	HullDraught float64 `json:"hullDraught"`
 
 	// The hull's added mass sideways less its added mass ahead, for the Munk moment,
 	// in kg.
 	Munk float64 `json:"munk"`
+
+	// Damping of the pitch, as a fraction of critical.
+	PitchDamping float64 `json:"pitchDamping"`
+
+	// Moment of inertia in pitch, added inertia included, in kg·m².
+	PitchInertia float64 `json:"pitchInertia"`
 
 	// Righting lever (GZ) with the sailor on the centreline, every 10° of heel from
 	// 0° to 180°, in m.
@@ -179,8 +194,23 @@ type PhysicsHull struct {
 	// Moment of inertia in roll, added inertia included, in kg·m².
 	RollInertia float64 `json:"rollInertia"`
 
+	// Beam on the waterline, in m.
+	WaterlineBeam float64 `json:"waterlineBeam"`
+
 	// Length on the waterline, in m.
 	WaterlineLength float64 `json:"waterlineLength"`
+
+	// Area of the waterplane, in m²: the heave stiffness is the water's weight per
+	// metre of it.
+	WaterplaneArea float64 `json:"waterplaneArea"`
+
+	// The waterplane's second moment of area about its transverse axis, in m⁴: the
+	// pitch stiffness.
+	WaterplanePitch float64 `json:"waterplanePitch"`
+
+	// The share of the Froude–Krylov force of a wave's slope that pushes the hull
+	// along and across.
+	WaveForce float64 `json:"waveForce"`
 
 	// Moment of inertia in yaw, added inertia included, in kg·m².
 	YawInertia float64 `json:"yawInertia"`
@@ -392,5 +422,39 @@ type SailorArt struct {
 	Model ArtPath `json:"model"`
 }
 
+// The weather's numbers.
+type Weather struct {
+	// Sea corresponds to the JSON schema field "sea".
+	Sea WeatherSea `json:"sea"`
+}
+
+// The waves long enough to move a boat: the band of wavelengths they span and the
+// spectrum that gives each its height.
+type WeatherSea struct {
+	// Waves lower than this fraction of an area's highest are left out.
+	Cull float64 `json:"cull"`
+
+	// The fetch of open water, in nautical miles.
+	FetchCap float64 `json:"fetchCap"`
+
+	// The JONSWAP spectrum's peak enhancement.
+	Gamma float64 `json:"gamma"`
+
+	// The longest wavelength, in m.
+	Longest float64 `json:"longest"`
+
+	// The shortest wavelength, in m.
+	Shortest float64 `json:"shortest"`
+
+	// The peak's width above the peak frequency.
+	SigmaAbove float64 `json:"sigmaAbove"`
+
+	// The peak's width below the peak frequency.
+	SigmaBelow float64 `json:"sigmaBelow"`
+
+	// The directional spreading's exponent s in cos²ˢ(θ/2): a whole number.
+	Spreading int `json:"spreading"`
+}
+
 // Version is the catalog version (tools/catalog).
-const Version = "83feda7e1d8c1cd7"
+const Version = "3f54cf845c2e9b8f"

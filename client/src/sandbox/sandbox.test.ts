@@ -17,15 +17,16 @@ import {
   steer,
   toHex,
 } from '../predict/golden';
-import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
+import { LAYOUT_VERSION, RECORDS, SIZES } from '../predict/layout.gen';
 import { loadPhysics, Physics } from '../predict/physics';
 import type { Recording } from './record';
-import { KNOT, Sandbox, START, startSandbox, windFromQuery } from './sandbox';
+import { KNOT, Sandbox, START, seaFromQuery, startSandbox, windFromQuery } from './sandbox';
 
 const wasm = new URL('../predict/physics.wasm', import.meta.url);
 const testdata = new URL('../../../internal/physics/testdata/', import.meta.url);
 const fixture = new URL('recordings/sandbox-sail.json', testdata);
 const boat = catalog.boats[0].physics;
+const sea = catalog.weather.sea;
 
 function readJSON<T>(url: URL): T {
   return JSON.parse(readFileSync(url, 'utf8')) as T;
@@ -42,7 +43,7 @@ beforeAll(() => {
 
 describe('the sandbox', () => {
   test('starts at the centre, at rest, heading 090°, in 10 knots from the north', async () => {
-    const s = await startSandbox(bytes, boat);
+    const s = await startSandbox(bytes, boat, sea);
     const c = s.states.current;
     expect(c[RECORDS.state.x]).toBe(0);
     expect(c[RECORDS.state.y]).toBe(0);
@@ -70,17 +71,97 @@ describe('the sandbox', () => {
     expect(windFromQuery(new URLSearchParams(''))).toBeNull();
   });
 
+  test('reads ?sea=calm, breeze, fresh or gale as its wind', () => {
+    expect(seaFromQuery(new URLSearchParams('sea=gale'))?.speed).toBeCloseTo(34 * KNOT, 12);
+    expect(seaFromQuery(new URLSearchParams('sea=calm'))?.speed).toBeCloseTo(6 * KNOT, 12);
+    expect(seaFromQuery(new URLSearchParams('sea=breeze'))?.from).toBe(0);
+    expect(seaFromQuery(new URLSearchParams('sea=flat'))).toBeNull();
+    expect(seaFromQuery(new URLSearchParams(''))).toBeNull();
+  });
+
+  test('raises the sea its wind gives, and sails in it', async () => {
+    const s = await startSandbox(bytes, boat, sea, {
+      ...START,
+      wind: { speed: 34 * KNOT, from: 0 },
+    });
+    const slot = s.seas.slotAt(s.tick + 1);
+    expect(slot).toBeGreaterThanOrEqual(0);
+    const hs = s.physics.seaHs(slot);
+    // A gale over six miles of open water: about a metre.
+    expect(hs[0]).toBeGreaterThan(0.8);
+    expect(hs[0]).toBeLessThan(1.2);
+    expect(Array.from(hs).every((h) => h === hs[0])).toBe(true);
+    expect(s.physics.seaActive(slot).length).toBeGreaterThan(80);
+    for (let i = 0; i < 300; i++) {
+      s.step(0, 0.5);
+    }
+    const c = s.states.current;
+    expect(
+      Math.abs(c[RECORDS.state.heave] ?? 0) + Math.abs(c[RECORDS.state.pitch] ?? 0),
+    ).toBeGreaterThan(0.01);
+    expect(Math.abs(s.out[RECORDS.out.waveHeight] ?? 0)).toBeGreaterThan(0);
+  });
+
+  test('its sea follows a change of wind a second on, as the server’s does', async () => {
+    const s = await startSandbox(bytes, boat, sea);
+    const hs = (): number => s.physics.seaHs(s.seas.slotAt(s.tick))[0] ?? 0;
+    // The state is at tick 1; steps sail into ticks 2, 3 …
+    for (let i = 0; i < 40; i++) {
+      s.step(0, 0.5);
+    }
+    const before = hs();
+    s.setWind(34 * KNOT, 0); // from the step into tick 42
+    const stamp = s.sea.stamp;
+    let changedAt = 0;
+    for (let i = 0; i < 80 && changedAt === 0; i++) {
+      s.step(0, 0.5);
+      if (hs() !== before) {
+        changedAt = s.tick;
+      }
+    }
+    // Tick 42 is in the second from 30; the sea of the second from 90 is the first fixed after it.
+    expect(changedAt).toBe(90);
+    expect(hs()).toBeGreaterThan(3 * before);
+    expect(s.sea.stamp).toBe(stamp + 1);
+  });
+
+  test('its window of the sea follows the boat', async () => {
+    const s = await startSandbox(bytes, boat, sea);
+    expect([s.sea.col, s.sea.row]).toEqual([16, 16]);
+    s.place(1000, -700, 0);
+    expect([s.sea.col, s.sea.row]).toEqual([18, 14]);
+    // Sailing 30 m past an area's edge leaves it; 80 m past moves it.
+    const edge = (20 - 18 + 0.5) * 463;
+    s.setState({ x: edge - 5, surge: 0 });
+    const stamp = s.sea.stamp;
+    s.step(0, 1);
+    expect(s.sea.col).toBe(18);
+    s.setState({ x: edge + 80 });
+    expect(s.sea.col).toBe(19);
+    expect(s.sea.stamp).toBeGreaterThan(stamp);
+  });
+
   test('every golden scenario through the driver gives the server’s bits', async () => {
     const scenarios = readJSON<ScenarioFile>(new URL('scenarios.json', testdata));
     const golden = readJSON<GoldenFile>(new URL('golden.json', testdata));
     const physics = await loadPhysics(bytes);
     for (const [k, sc] of scenarios.scenarios.entries()) {
-      const s = new Sandbox(physics, boat, { ...START, heading: 0, sheet: 0 });
+      if (sc.sea !== undefined) {
+        // The sandbox raises its own sea; a recorded sail, below, has one.
+        continue;
+      }
+      const s = new Sandbox(physics, boat, sea, {
+        ...START,
+        heading: 0,
+        sheet: 0,
+      });
+      // The scenarios without a sea are in flat water.
+      s.sea.options.flat = true;
       s.setState(sc.state ?? {});
       let helm = sc.control?.helm ?? 0;
       let sheet = sc.control?.sheet ?? 0;
       s.setWind(sc.env?.windSpeed ?? 0, sc.env?.windFrom ?? 0);
-      const record = 15 + 19;
+      const record = SIZES.state + SIZES.out;
       const all = new Float64Array(sc.steps * record);
       const changes = sc.changes ?? [];
       let next = 0;
@@ -107,7 +188,7 @@ describe('the sandbox', () => {
         }
         s.step(helm, sheet);
         all.set(s.states.current, i * record);
-        all.set(s.out, i * record + 15);
+        all.set(s.out, i * record + SIZES.state);
       }
       const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', all));
       const hex = Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
@@ -121,7 +202,7 @@ describe('the sandbox', () => {
  * tack, a change of wind, ease out. Returns the sandbox's recording.
  */
 async function scriptedSail(): Promise<Recording> {
-  const s = await startSandbox(bytes, boat);
+  const s = await startSandbox(bytes, boat, sea);
   s.record();
   for (let i = 0; i < 1800; i++) {
     let helm = 0;
@@ -161,10 +242,18 @@ describe('a recorded sail', () => {
     // Changes only where a control or the wind changed.
     expect(sc.changes.length).toBeGreaterThan(5);
     expect(sc.changes.length).toBeLessThan(700);
-    const replay = await runScenario(await loadPhysics(bytes), rec.params, sc);
+    const replay = await runScenario(await loadPhysics(bytes), rec, sc);
     expect(replay.checkpoints.at(-1)?.state).toEqual(sc.end);
+    // It sailed in its wind's sea, which followed the change of wind.
+    expect(sc.sea.tick).toBe(2);
+    expect(sc.sea.areas).toHaveLength(25);
+    const seaChanges = sc.changes.filter((c) => c.areas !== undefined);
+    // The wind changes at step 1000, which sails into tick 1002: the sea
+    // of the second from tick 1050 is the first fixed after it.
+    expect(seaChanges.map((c) => c.at)).toEqual([1048]);
+    expect(seaChanges[0]?.areas?.[0]).toEqual([617, 3641, 11112]);
     // The boat sailed: it is well away from where it started.
-    expect(Math.hypot(fromHex(sc.end.x ?? '0x0'), fromHex(sc.end.y ?? '0x0'))).toBeGreaterThan(50);
+    expect(Math.hypot(fromHex(sc.end.x ?? '0x0'), fromHex(sc.end.y ?? '0x0'))).toBeGreaterThan(40);
   });
 
   test('is the file the Go runner replays', async () => {
@@ -180,6 +269,7 @@ describe('a recorded sail', () => {
     const rec = await scriptedSail();
     const scenarios = readJSON<ScenarioFile>(new URL('scenarios.json', testdata));
     expect(rec.params).toEqual(scenarios.params);
+    expect(rec.sea).toEqual(scenarios.sea);
     expect(rec.scenarios[0]?.end.heading).toBe(toHex(fromHex(rec.scenarios[0]?.end.heading ?? '')));
   });
 });

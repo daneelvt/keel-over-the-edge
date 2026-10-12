@@ -426,11 +426,11 @@ func TestSnapshotRefusals(t *testing.T) {
 		"kind 1":          append([]byte{KindMessage}, good[1:]...),
 		"kind only":       good[:1],
 		"header cut":      good[:HeaderSize-1],
-		"layout 2":        withByte(good, offLayout, 2),
+		"layout 3":        withByte(good, offLayout, 3),
 		"helm over 1024":  withUint16(good, offHelm, 1025),
 		"spare flags":     withByte(good, offFlags, 2),
 		"129 entries":     withByte(good, offEntries, 129),
-		"layout 4":        withByte(good, offLayout, 4),
+		"layout 5":        withByte(good, offLayout, 5),
 		"sheet over 1024": withUint16(good, offSheet, 2000),
 	} {
 		if err := ReadSnapshot(b, &sn); err == nil {
@@ -556,6 +556,8 @@ func messages() (clients []*pb.ClientMessage, servers []*pb.ServerMessage) {
 			WorldTimeUs: 24256872133333, Boat: 7, Kind: 0, Rejoined: true}}},
 		{Body: &pb.ServerMessage_Pong{Pong: &pb.Pong{ClientTimeUs: 123456789, WorldTimeUs: 24256872133333}}},
 		{Body: &pb.ServerMessage_Queued{Queued: &pb.Queued{Position: 12, Waiting: 40}}},
+		{Body: &pb.ServerMessage_SeaAreas{SeaAreas: &pb.SeaAreas{Tick: 727706190, Col: -1, Row: 34, Size: 2,
+			Speed: []uint32{514, 0, 1749, 10000}, From: []uint32{0, 65535, 32768, 1}, Fetch: []uint32{11112, 0, 463, 16777216}}}},
 	}
 	return clients, servers
 }

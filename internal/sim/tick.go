@@ -33,6 +33,8 @@ func (w *World) tick() {
 	w.next = w.bus.Frames.Next()
 	trace.WithRegion(w.ctx, "inputs", w.inputsFn)
 	w.phaseDone(PhaseInputs)
+	trace.WithRegion(w.ctx, "sea", w.seaFn)
+	w.phaseDone(PhaseSea)
 	trace.WithRegion(w.ctx, "physics", w.physicsFn)
 	w.phaseDone(PhasePhysics)
 	trace.WithRegion(w.ctx, "grid", w.gridFn)
@@ -48,7 +50,8 @@ func (w *World) phaseDone(p Phase) {
 }
 
 // inputs copies the world into the next frame, then applies what changed:
-// first the boats whose grace has ended leave, and the places in the queue
+// first the sea moves on if the tick begins a second, by the wind as it
+// stood before this tick's commands; then the boats whose grace has ended leave, and the places in the queue
 // whose grace has ended are given up; then the control words of the
 // boats sailing are applied, each once its tick has come (bus.Due), then
 // the commands, in the order they came; last, while there is room, those
@@ -59,6 +62,7 @@ func (w *World) inputs() {
 	next.Skipped = w.skip
 	w.skip = 0
 	next.Wind = cur.Wind
+	w.sea.roll(&next.Sea, &cur.Sea, cur.Tick, next.Tick, cur.Wind)
 	next.NextBoat = cur.NextBoat
 	next.Held = cur.Held
 	next.Live = append(next.Live[:0], cur.Live...)
@@ -112,7 +116,10 @@ func (w *World) inputs() {
 	w.admit()
 }
 
-// physics steps every boat in the wind.
+// seaPhase brings the waves to this tick.
+func (w *World) seaPhase() { w.sea.tick(w.next) }
+
+// physics steps every boat in the wind and the waves.
 func (w *World) physics() {
 	w.env = physics.Env{WindSpeed: w.next.Wind.Speed, WindFrom: w.next.Wind.From}
 	w.workers.step(w.next.Live)
@@ -125,7 +132,7 @@ func (w *World) stepSlots(slots []int32, o *physics.Out) {
 	for _, s := range slots {
 		word := f.Control[s]
 		c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
-		physics.Step(&f.State[s], &c, &w.env, &w.kinds[f.Kind[s]], o)
+		physics.Step(&f.State[s], &c, &w.env, w.sea.at, &w.kinds[f.Kind[s]], o)
 		f.Sail[s] = physics.SailByte(o)
 	}
 }

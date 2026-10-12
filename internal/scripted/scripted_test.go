@@ -11,7 +11,6 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
 
@@ -23,10 +22,8 @@ func limited(t *testing.T, capacity, limit int) *sim.World {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := catalog.PhysicsParams(&cat.Boats[0])
-	var k physics.Prepared
-	physics.Prepare(&p, &k)
-	w, err := sim.New(sim.Config{Capacity: capacity, Kinds: []physics.Prepared{k}, Workers: 2, Limit: limit})
+	waves, kinds := cat.Prepare()
+	w, err := sim.New(sim.Config{Capacity: capacity, Kinds: kinds[:1], Waves: waves, Workers: 2, Limit: limit})
 	if err != nil {
 		t.Fatal(err)
 	}

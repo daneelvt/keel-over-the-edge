@@ -11,7 +11,9 @@
 // to the worker once read.
 
 import { signal } from '@preact/signals';
+import { catalog } from '../catalog';
 import { Fleet } from '../game/fleet';
+import { Floater } from '../game/float';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { RECORDS } from '../predict/layout.gen';
 import {
@@ -101,6 +103,8 @@ export class Online {
   readonly #port: Port;
   readonly #predictor: Predictor;
   readonly #helmsman: Helmsman;
+  /** Floats the other boats on the sea drawn under them. */
+  readonly #floater: Floater;
   readonly #queued: ArrayBuffer[] = [];
   readonly #scratch = newSnapshot();
   readonly #latest = newSnapshot();
@@ -121,6 +125,7 @@ export class Online {
     this.#port = port;
     this.#predictor = predictor;
     this.#helmsman = helmsman;
+    this.#floater = new Floater(predictor.physics, predictor.seas, catalog.boats);
     this.ready = new Promise((resolve) => {
       this.#ready = resolve;
     });
@@ -165,6 +170,10 @@ export class Online {
         this.#bell = true;
         this.notice.value = { text: BELL_TEXT, takeover: false };
         break;
+      case 'sea':
+        // Ahead of the tick it applies from: the prediction takes it at once.
+        this.#predictor.seas.receive(m.sea);
+        break;
       case 'welcome':
         if (this.#hadBoat && !m.rejoined) {
           this.notice.value = { text: 'Your boat has returned to port.', takeover: false };
@@ -176,6 +185,9 @@ export class Online {
         this.#hadBoat = true;
         this.boat = m.boat;
         this.#fresh = true;
+        // A snapshot still waiting for a frame is the last connection's:
+        // its controls are not this boat's.
+        this.#queued.length = 0;
         // A new connection's views start afresh: the boats fade out, and
         // in again with its first snapshot.
         this.fleet.clear();
@@ -323,6 +335,8 @@ export class Online {
     this.pace(now);
     if (this.clock.have) {
       this.fleet.update(worldUs(this.clock, now), dt);
+      const c = this.#helmsman.clock;
+      this.#floater.apply(this.fleet.drawn, this.fleet.count, c.steps + c.alpha, dt);
     }
   }
 

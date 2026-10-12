@@ -79,10 +79,8 @@ func world(t testing.TB, n, encoders int) (*sim.World, *Edge) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := catalog.PhysicsParams(&cat.Boats[0])
-	var kind physics.Prepared
-	physics.Prepare(&p, &kind)
-	w, err := sim.New(sim.Config{Kinds: []physics.Prepared{kind}, Workers: 4, Tick: 1000})
+	waves, kinds := cat.Prepare()
+	w, err := sim.New(sim.Config{Kinds: kinds[:1], Waves: waves, Workers: 4, Tick: 1000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +104,7 @@ func sailing(w *sim.World, e *Edge) []*conn {
 	f := w.Latest()
 	conns := make([]*conn, len(f.Live))
 	for i, s := range f.Live {
-		c := &conn{e: e, id: uint64(i + 1), slot: s, gen: f.Gen[s], boat: f.Boat[s]}
+		c := &conn{e: e, id: uint64(i + 1), slot: s, gen: f.Gen[s], boat: f.Boat[s], queue: make(chan outgoing, 8)}
 		c.margin.init()
 		c.box.init()
 		conns[i] = c

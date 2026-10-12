@@ -195,7 +195,7 @@ export async function loadFigure(
  * rig: boom, rudder, opacity, the side the sail fills to (−1 … 1);
  * sail: the head's twist (signed), camber, the foot's and head's ripple;
  * seat: the sailor's place, x, y, z in the model's frame, and facing;
- * lean: the sailor's tilt.
+ * lean: the sailor's tilt; then the boat's heave and its pitch.
  */
 export interface Instances {
   pose: Node<'vec4'>;
@@ -219,19 +219,27 @@ function rotZ(v: Node<'vec3'>, a: Node<'float'>): Node<'vec3'> {
   return vec3(v.x.mul(c).sub(v.y.mul(s)), v.x.mul(s).add(v.y.mul(c)), v.z);
 }
 
+/** v turned about the axis to starboard by angle a, as Object3D.rotation.x turns it. */
+function rotX(v: Node<'vec3'>, a: Node<'float'>): Node<'vec3'> {
+  const c = cos(a);
+  const s = sin(a);
+  return vec3(v.x, v.y.mul(c).sub(v.z.mul(s)), v.y.mul(s).add(v.z.mul(c)));
+}
+
 /**
  * The boat's pose on a point of its model: heeled about the centre of
  * gravity's height (positive heel puts the starboard side down: a turn of
- * −heel about the axis pointing aft), turned to the heading, and placed.
+ * −heel about the axis pointing aft), pitched about it (positive lifts the
+ * bow), turned to the heading, and placed, lifted by the heave.
  */
 function placePoint(p: Node<'vec3'>, i: Instances, cog: number): Node<'vec3'> {
   const pivot = vec3(0, cog, 0);
-  const heeled = rotZ(p.sub(pivot), i.pose.w.negate()).add(pivot);
-  return rotY(heeled, i.pose.z.negate()).add(vec3(i.pose.x, 0, i.pose.y));
+  const heeled = rotX(rotZ(p.sub(pivot), i.pose.w.negate()), i.lean.z).add(pivot);
+  return rotY(heeled, i.pose.z.negate()).add(vec3(i.pose.x, i.lean.y, i.pose.y));
 }
 
 function placeNormal(n: Node<'vec3'>, i: Instances): Node<'vec3'> {
-  return rotY(rotZ(n, i.pose.w.negate()), i.pose.z.negate());
+  return rotY(rotX(rotZ(n, i.pose.w.negate()), i.lean.z), i.pose.z.negate());
 }
 
 /** A solid part's vertex node: its joint turned, then the boat placed. */

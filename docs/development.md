@@ -114,12 +114,12 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests with the race detector on amd64 and arm64, each with a PostgreSQL service (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts, that change its files | The test sea's fixtures current; the physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/testsea -check`, `go run ./tools/physics`, `npx playwright test` in `client/` |
+| `pr.render.yaml` | Pull requests, not drafts, that change its files | The physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/physics`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
-| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, and the trimmed sail against ORC's mainsail | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail` |
+| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, the trimmed sail against ORC's mainsail, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin; every alert rule made to fire and to stay quiet, with VictoriaMetrics' `vmalert-tool`; the dashboards and the vendored manifests against their records; and the signatures Flux cannot check, of cert-manager's chart and images and Kured's image, with cosign (see [The local cluster](#the-local-cluster), [Releases](#releases) and [Monitoring](#monitoring)) | `go test ./tools/cluster ./tools/release ./tools/dashboards ./tools/vendored ./tools/ops ./tools/internal/...`, `go run ./tools/release -verify-keyed` |
 | `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
 | `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
@@ -147,8 +147,7 @@ and `.github/actions/setup`). The checks run only if it does; the last job
 always runs, and passes when every job before it passed or was skipped, so
 the required check is reported either way. Those two jobs, which only ask
 GitHub's API or read results, run on `ubuntu-slim` (one CPU, a 15-minute
-limit), as does the test sea's fixtures check, which runs beside the browser
-tests; the rest run on `ubuntu-24.04`. A new file a check reads, outside
+limit); the rest run on `ubuntu-24.04`. A new file a check reads, outside
 the paths its filter lists, must be added to the filter. `pr.actions`,
 `pr.secrets` and `codeql` are not filtered: the first and last upload to code
 scanning, which the `main` ruleset waits for, and gitleaks must see every
@@ -203,11 +202,21 @@ the layout version; the client refuses a module whose version differs.
   with `writeParams` and calls the module's `prepare`; the server calls
   `physics.Prepare`. Everything derived from them is computed there, in the
   package, never in JavaScript.
+- `SeaParams`: the catalog's sea values. The client writes them with
+  `writeSeaParams` and calls `seaPrepare`, before `prepare`; the server
+  calls `physics.PrepareSea` (`catalog.Prepare` does both, in order).
 - `Out`: what a step derives for drawing and instruments (the apparent wind
   at the masthead and the sail, each sail strip's angle of attack and flow,
   the sail's and foils' forces, leeway, speed and course over ground, the
-  heeling and righting moments). A step writes it and never reads it, and it
-  is never sent.
+  heeling and righting moments, the sea under the hull and the speed
+  through the water). A step writes it and never reads it, and it is never
+  sent.
+- `Components` and `EffectiveWave`: the sea's waves, and the sea under a
+  hull, for drawing (see [Waves](#waves)).
+
+A step sails in a sea, `physics.Sea`, or in flat water with none. The sea is
+not a record: the module keeps it, and the client fills it through exports
+(`seaWindow`, `seaArea`, `seaSeal`, `seaUse`, `seaAt`).
 
 The golden tests run the scenarios in `internal/physics/testdata/scenarios.json`
 natively (`go test ./internal/physics`) and in the module (`npm test` in
@@ -229,9 +238,10 @@ inputs each; CI draws four thousand.
 
 ### The model
 
-A boat is a rigid body in surge, sway, yaw and roll on flat water, with the
-boom as a body of its own and the sailor's position as state. There is no
-pitch or heave yet: waves bring them. Each part of the boat computes its
+A boat is a rigid body in surge, sway, yaw and roll, heaving and pitching on
+the waves ([Waves](#waves)), with the boom as a body of its own and the
+sailor's position as state. In flat water it neither heaves nor pitches, and
+sails exactly as it did before it knew of waves. Each part of the boat computes its
 force from the flow it meets, including the flow from the boat's own turning
 and rolling, so tacks, gybes, luffing, weather helm and capsizes follow from
 the forces, with no special cases. Each step is four substeps of
@@ -246,6 +256,7 @@ semi-implicit Euler (`Substeps`).
 | `sailor.go` | The automatic sailor: hiking to the position that balances the boat, flattening the sail by the apparent wind, falling in past 70° of heel, swimming to the board, righting the boat, climbing back in |
 | `boat.go` | The step: the rudder and sheet following the controls at the hands' rates, the substeps, the boom's stop, `Out` |
 | `prepare.go` | `Prepare`: every derived constant |
+| `sea.go`, `waves.go` | The sea and the boat in it: see [Waves](#waves) |
 
 The player has two controls, `Helm` and `Sheet`. The sheet sets how far the
 boom may swing out; it never pulls the boom in, so an eased sail luffs, a
@@ -280,6 +291,7 @@ go run ./tools/polar               # the polar at 6 to 20 knots: a table, and .d
 go run ./tools/polar -check        # against internal/physics/testdata/reference.json; fails outside its tolerances
 go run ./tools/polar -sail         # the trimmed sail against ORC's mainsail
 go run ./tools/polar -manoeuvres   # tacks and gybes at 6, 12 and 18 knots, and where an accidental gybe comes
+go run ./tools/polar -sea 12       # the polar in 12 knots and the sea it raises over open water, beside flat water
 ```
 
 The tool steers with a heading-hold of its own, tries the sheet from hauled
@@ -291,6 +303,14 @@ weather helm; leeway; boom; the foot's angle of attack; how far out the
 sailor is; the flattening; the best sheet. In the chart, filled points are
 measurements and hollow ones upper bounds (speeds measured with surfing,
 which flat water cannot reach).
+
+`-sea` sails each angle for two minutes in the sea the wind raises, with the
+sheet that sails it fastest among those that keep the boat upright, and
+prints the mean speed with its 10th and 90th percentiles, the VMG, and the
+greatest heel, heave and pitch, beside the flat-water speed. Nothing is
+checked: no published polar of a dinghy in known waves exists to check
+against. Off the wind the boat surfs and gains; to windward it loses a
+little.
 
 The reference data (`reference.json`) holds each point with its source:
 Day's VPP for upwind and downwind VMG (±5% and ±10%), Binns, Bethwaite and
@@ -330,6 +350,169 @@ golden file, and copy the catalog's new values into `scenarios.json`'s
   attached trim and a stalled one give nearly the same drive, and which is
   best decides the side force. Drive matches.
 
+## Waves
+
+The sea moves boats. The waves longer than about 8 m, which the 4 m tiles can
+carry, are the **boat band**: a sum of 256 waves that the physics package
+evaluates, so the server, the client's prediction and the tiles on screen
+have the same sea. Shorter waves are not there yet.
+
+### The waves
+
+Each wave is `a sin(φ + k d·x − ω t)`, with `ω² = g k` (deep water). Its
+direction `d`, its frequency and its phase `φ` are **the same over the whole
+world and never change** (`physics.PrepareSea`, from the catalog's
+`weather.sea`): the frequencies and directions sample the plane of (ln ω, θ)
+by the R2 sequence, from the frequency of a 76 m wave to that of an 8 m one
+and all the way round the compass, and the phases come from a hash of the
+wave's number. Only the amplitudes follow the weather. A wave whose frequency
+or direction moved with the wind would sweep its phase through whole cycles:
+by `t dω` after `t` seconds, and world time is tens of millions of seconds.
+
+The world is cut into **sea areas** 463 m (a quarter of a nautical mile) on a
+side, 37 by 37, the middle one centred on the world's centre. Each area has
+the wind that raises its waves and its fetch, in whole steps (`SeaInput`:
+0.01 m/s, a 65536th of a turn, a metre), and from them an amplitude for every
+wave (`SeaArea`): the JONSWAP spectrum with its fetch-limited fits, limited
+to the fully developed sea, spread about the wind as cos²ˢ(θ/2), each wave
+carrying the energy of the patch of (ln ω, θ) it stands for. The amplitudes
+are then scaled together to the spectrum's own variance over the band, so
+the sea is as high whichever way the wind blows, and those under a tenth of
+the highest are left out: from 8 waves in a calm to about 100 in a gale are
+evaluated. At a point between four areas' centres the **amplitudes** are
+blended, not the surfaces, with weights smoothed so that the slope is
+continuous: every place sums the same sines, so the sea is one surface and
+keeps its height where areas meet.
+
+Until the wind varies from place to place, every area has the world's one
+wind and the fetch of open water (`weather.sea.fetchCap`, 6 NM): 10 knots
+raise a boat band of about 0.25 m, 12 knots 0.33 m, 20 knots 0.6 m, 34 knots
+1 m.
+
+Time is the tick. A wave's phase from its frequency is the fraction of
+`turns × tick`, the product taken exactly (`SeaAt`), so it is the same bits
+on every machine and good for ticks to 2⁵³.
+
+### The boat in waves
+
+A hull feels the surface averaged over its waterplane and the slope of the
+plane that fits it best (the effective wave of ship stability; `waves.go`).
+For each wave both have a closed form, so the sea under a hull costs three
+sine-and-cosine pairs a wave evaluated, and a long hull filters short waves
+by itself. From it:
+
+- **Heave and pitch**, in the state: the hull as a mass on the spring of its
+  waterplane, toward the surface's height and slope, damped by how fast it
+  moves against them.
+- **Roll**: the righting lever is read at the heel off the surface, so a beam
+  sea rolls the boat.
+- **Surge, sway and yaw**: the water under a slope accelerates down it and
+  carries the hull and its added mass along: the boat surfs, and is turned
+  across a wave's face.
+- **The water moves**: the hull's resistance and the foils feel the flow
+  through the water, and the pitching mast rocks the apparent wind.
+
+The sea is read once a step, where the boat is, and carried across the
+substeps by its rates as the moving hull meets them. The new values are in
+the boat's `physics.hull`: `waterlineBeam`, `waterplaneArea`,
+`waterplanePitch`, `addedMassHeave`, `pitchInertia`, `heaveDamping`,
+`pitchDamping`, `waveForce`. All but the beam are estimates, each with its
+range beside it in `boats.yaml`. `waveForce` is the share of the
+Froude–Krylov force; lower it toward 0.6 if the boat surfs too easily.
+`go test ./internal/physics -run 'Waves|Surfing|Heave|BeamSea|Drift'` checks
+what physics is sure of (a long wave is followed, a wave as long as the hull
+is not felt, a released heave settles, a beam sea rolls the boat at the
+wave's period, the boat surfs off the wind and does not gain to windward, it
+does not drift away at rest), and `go run ./tools/polar -sea 20` shows the
+rest. After changing a value: those tests, then the golden file and
+`sea.json` (`go test ./internal/physics -run 'Golden|SeaFile' -update`), then
+`scenarios.json`'s copy of the catalog's values, as for any parameter.
+
+### The server
+
+The frame holds each area's inputs twice (`bus.Sea`): **in effect**, and for
+**the next second**. The sea changes only on a second's first tick, to what
+was fixed a second before from the wind as it then stood. So a change of
+wind reaches the waves no sooner than the next second but one, and every
+client hears of it before it predicts a tick it applies to. The amplitudes
+are not in the frame: the simulation keeps two windows of the whole world
+(2.8 MB each), the one in effect and the one being made ready, a share of
+its areas each tick, and only an area whose inputs changed costs anything
+(`internal/sim/sea.go`). The `sea` phase of a tick does this and sets the
+sea's time. Checkpoints and the input log hold both sets of inputs, as runs
+of areas with the same inputs (snapshot version 5).
+
+On the local cluster `keel` runs with `KEEL_DEV_COMMANDS=1`, so the wind can
+be set there, on the internal listener, which no route leads to: forward its
+port and post to it.
+
+```sh
+export KUBECONFIG=$PWD/.dev/cluster/kubeconfig
+kubectl -n keel port-forward deploy/keel 9090:9090 &
+curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=34&from=0'
+```
+
+6, 12, 20 and 34 knots are a calm, a breeze, a fresh breeze and a gale.
+Production has no developer's commands: its wind is the world's first, 10
+knots from the north.
+
+### The wire
+
+`SeaAreas` (`game.proto`) is a window of 5 by 5 areas about the boat's own:
+the tick it applies from, its first area's column and row, and each area's
+inputs. The edge sends it after the `Welcome`; when the next second's sea
+differs from the one in effect, a second before it applies; and when the
+boat sails more than 60 m into another area, with the areas about that one
+(`internal/edge/sea.go`). A client keeps the two with the latest ticks, each
+in one of the module's two windows, and steps each tick in the later of
+those whose tick has come (`client/src/predict/seas.ts`,
+`internal/client/sea.go`). The amplitudes are a pure function of the inputs,
+computed by the same code, so a prediction's sea is the server's to the bit
+and waves cause no correction.
+
+The own boat's heave and pitch travel in the snapshot's header with the
+rest of its state. Other boats' do not travel at all: each client floats
+them on the sea it draws under them (`client/src/game/float.ts`), with each
+kind's own heave and pitch stiffness, mass and damping, since a boat is
+drawn a little in the past and the sea at the present.
+
+### On the GPU
+
+`client/src/ocean/phases.ts` reads the waves and the window's amplitudes
+from the module's memory into two small float textures, numbering only the
+waves with an amplitude somewhere in the window, and computes each wave's
+phase at the floating origin in float64 every frame. `wave.ts` is the sum in
+TSL: it blends each wave's amplitude between the four areas about the point
+(skipped when the window is one sea), and **brings the sine's argument into
+[−π, π] itself**, since a tile 650 m from the origin has an argument of
+hundreds of radians and WGSL promises its sine only on that interval, to
+2⁻¹¹. The tile pass, its per-vertex fallback and the far sea all use it.
+Crests are coloured by their height against the sea's own significant
+height, so a breeze and a gale both show theirs.
+
+The check against the server: `go test ./internal/physics -run SeaFile
+-update` writes `internal/physics/testdata/sea.json`: the waves, and for a
+breeze, a gale and a calm that meets a gale, at the world's centre and near
+its rim, near the present tick and past 2³¹, the surface at 240 points and
+the sea under four hulls. `src/predict/sea.test.ts` loads the same seas into
+the module, which must give the same bits. `e2e/sea.spec.ts` gives them to
+the page and reads back what the GPU summed at the same points, on WebGL 2
+and WebGPU: within the sum of the amplitudes × 2⁻¹¹, a millimetre or two in
+a gale. On a phone, **Check the sea** in the developer panel (`?sandbox&dev`)
+runs the same file and shows the largest differences.
+
+### No water in a hull
+
+The sea's surface passes through a boat, so its shader leaves out the
+fragments inside a hull (`client/src/ocean/hulls.ts`): the fragment is taken
+into the hull's own frame, heave, pitch and heel included, and dropped if it
+lies above the bottom and within 94% of the hull's width at its depth,
+between the stations the model's script measured from the hull's mesh. The
+volume has no top, so a crest above the gunwale is not drawn inside the boat
+either. It is done for the player's boat and the seven nearest others within
+150 m. A tile or a triangle of the far sea with no hull in reach says so from
+its vertices, and its fragments skip the test.
+
 ## The server
 
 `keel serve` runs the game. Its heart is the **simulation** (`internal/sim`),
@@ -342,7 +525,7 @@ world; everything reaches it through the **bus** (`internal/bus`).
 | Package | What |
 |---------|------|
 | `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`; for developers only `SetWind` and `Place`; and the server's own `Hold`, admission held while the world's writes are behind); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
-| `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, step every boat, sort the boats into the grid, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
+| `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, bring the sea to the tick, step every boat, sort the boats into the grid, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
 | `internal/persist` | The world's writer: the lasting events and a checkpoint every 10 s, written behind the tick in fenced batches (see [Restarts and deploys](#restarts-and-deploys)). |
 | `internal/sim/loop` | The clock: tick k after the world's epoch (the database's world row; world 1's is 1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
 | `internal/replay` | The input log, `keel replay` and `/debug/replay` (below). |
@@ -438,7 +621,7 @@ resolved at start, so updating it allocates nothing:
 | `keel_build_info{build,catalog}` | Which version runs |
 | `keel_sim_tick` | The latest tick |
 | `keel_sim_tick_duration_seconds` | Each tick, in buckets from 0.5 ms to 100 ms with edges at 10, 25 and 33 ms |
-| `keel_sim_phase_duration_seconds{phase}` | `inputs`, `physics`, `grid`, `publish` |
+| `keel_sim_phase_duration_seconds{phase}` | `inputs`, `sea`, `physics`, `grid`, `publish` |
 | `keel_sim_grid_duration_seconds` | Sorting the boats into the grid, each tick |
 | `keel_sim_ticks_total`, `_late_total`, `_skipped_total` | All ticks; those run back to back to catch up; those skipped |
 | `keel_sim_clock_drift_seconds` | World time minus UTC as a tick starts |
@@ -494,7 +677,7 @@ The server keeps the last 10 s or more of its execution trace in memory
 (`runtime/trace`'s flight recorder, at most 32 MB). When a tick takes more
 than 25 ms it writes the trace to `KEEL_TRACE_DIR` as
 `trace-<UTC time>-tick<N>.out`, at most once a minute. Each phase of a tick is
-a trace region (`inputs`, `physics`, `grid`, `publish`), so a slow tick's trace says
+a trace region (`inputs`, `sea`, `physics`, `grid`, `publish`), so a slow tick's trace says
 which phase was slow. To take one now:
 
 ```sh
@@ -666,9 +849,11 @@ check WebSockets' origins, keel does). A message may be 1 KB at most.
 **The protocol** (`shared/protocol`). One binary message is one game
 message; its first byte is its kind: `1`, a Protocol Buffers envelope
 (`keel/v1/game.proto`: `Hello`, `Input`, `Ping`, `Command` from the client;
-`Welcome`, `Pong`, `Queued` from the server), or `2`, the packed snapshot
-(`snapshot.txt`: a 160-byte header with the own boat's state as float64,
-then the other boats' entries; see [Other boats](#other-boats)). `go run
+`Welcome`, `Pong`, `Queued`, `Restart`, `SeaAreas` from the server), or `2`,
+the packed snapshot (`snapshot.txt`: a 192-byte header with the own boat's
+state as float64, its heave and pitch included, then the other boats'
+entries; see [Other boats](#other-boats)). `SeaAreas` is the sea about the
+boat ([Waves](#waves)). `go run
 ./tools/protocol` generates the Go (`internal/protocol/pb`) and TypeScript
 (`client/src/net/gen`) with buf and its two generators, and the protocol
 version: a hash of the schema and the snapshot's layout. Run it after
@@ -2559,7 +2744,7 @@ sheet half out, in 10 knots from the north. The developer page is
 | `?wind=12,45` | The sandbox's wind: knots 10 m up, and the degrees it comes from |
 | `?dev` | The developer panel (a lazy import, outside the first download); see below |
 | `?backend=webgl2` | The WebGL 2 back end, even where WebGPU is offered |
-| `?sea=gale` | The test sea: `calm`, `breeze`, `fresh` or `gale`; flat water without it. The boat sits level on it |
+| `?sea=gale` | The sandbox's wind by the sea it raises: `calm` (6 knots), `breeze` (12), `fresh` (20) or `gale` (34), from the north |
 | `?view=bands` | A camera preset: `chase` (the default), `sea` and `bands` (the waves rendering's "Sea states" and "Two bands" views, for a boat heading 330°), `aboard`, `high` |
 | `?test` | The hooks the browser tests drive, on `window.keel` |
 
@@ -2599,8 +2784,8 @@ effort, and a clinometer), and the helm's release.
 | `client/src/predict/blend.ts` | The state before and after the latest step; the boat is drawn between them, the heading the short way round |
 | `client/src/game/driver.ts`, `client/src/sandbox/` | The boat driver: controls in, states and `Out` to draw. The sandbox is the offline driver |
 | `client/src/game/game.ts` | The frame: keys, steps, the pose, the instruments, the sound. Input events only move targets; the frame reads them. The frame allocates nothing |
-| `client/src/render/camera.ts` | The chase camera: its yaw follows the heading through a critically damped spring (ω = 4 s⁻¹, 12 with reduced motion), never below 1.5 m |
-| `client/src/render/boat.ts`, `sailshape.ts`, `telltales.ts`, `pennant.ts`, `sailor.ts` | The boat from the physics: heeled about its centre of gravity; the boom, rudder and tiller; the sail's twist from `Out.Twist`, camber from `Out.Flattening`, rippling where a strip luffs; the telltales from each strip's flow (attached: both stream aft; luffing: the windward one lifts; stalled: the leeward one droops; aback: both stream forward); the pennant downwind of the apparent wind at the masthead; the stand-in sailor by mode |
+| `client/src/render/camera.ts` | The chase camera: its yaw follows the heading through a critically damped spring (ω = 4 s⁻¹, 12 with reduced motion); it rises and falls with the boat's heave, over half a second, but not with its heel or pitch, and stays 1.6 m above the sea under the boat |
+| `client/src/render/boat.ts`, `sailshape.ts`, `telltales.ts`, `pennant.ts`, `sailor.ts` | The boat from the physics: lifted by its heave, pitched and heeled about its centre of gravity; the boom, rudder and tiller; the sail's twist from `Out.Twist`, camber from `Out.Flattening`, rippling where a strip luffs; the telltales from each strip's flow (attached: both stream aft; luffing: the windward one lifts; stalled: the leeward one droops; aback: both stream forward); the pennant downwind of the apparent wind at the masthead; the stand-in sailor by mode |
 | `client/src/render/overlays.ts` | The beginners' arrows, each its own shape with a label |
 | `client/src/ui/` | The screen at sea in Preact: instruments, sailor line, helm, sheet, menu. Words and numbers are signals written at most ten times a second; what moves every frame moves by `style.transform` |
 | `client/src/audio/` | Sound, synthesised with Web Audio from the recipes in `art/sound/` (below) |
@@ -2608,23 +2793,34 @@ effort, and a clinometer), and the helm's release.
 ### The developer panel
 
 `?dev` adds a panel: the sandbox's wind (knots and the direction it comes
-from); the boat, reset to the start, placed at a position and heading, or
+from), which the sea follows a second or two later, as the server's does;
+the sea at once in one of four states (the buttons set the wind to 6, 12, 20
+or 34 knots and raise its sea); another fetch than open water's; a second
+wind to the east of the boat, so that two seas meet and blend; flat water;
+the boat, reset to the start, placed at a position and heading, or
 jumped to the rim; time, paused, stepped once or slowed to ½ or ¼; the live
-`State` and `Out`; the test sea; camera presets; the back end, render scale,
+`State` and `Out`; camera presets; the back end, render scale,
 tile pass and antialiasing; and the frame statistics: the interval between
 drawn frames (median and 90th percentile over 2 s), the main thread's work
 per drawn frame, the display's measured rate and the divisor drawn at, GPU
-time where the device has timestamps, draw calls and triangles.
+time where the device has timestamps, draw calls and triangles; and the sea
+under the boat: its significant height, its peak period and how many waves
+are summed. **Check the sea** runs the server's sea file through the page's
+module and GPU and says how far each is from it (see [Waves](#waves)).
 
 ### Recording a sail
 
 While the panel is open the sandbox records the sail, from the moment the
 panel opened or the last reset or placing: the starting state and each change
-of control or wind with the step it applied to. **Download the sail** saves
+of control, wind or sea with the step it applied to, in the sea the wind had
+raised when the recording began. **Download the sail** saves
 it as a scenario file in the golden tests' format, with `end`, the state the
 sandbox reached. To make it a test, put it in
 `internal/physics/testdata/recordings/`: `go test ./internal/physics -run
-Recordings` replays every file there and must reach `end` bit for bit. Or
+Recordings` replays every file there and must reach `end` bit for bit, and
+`go test ./internal/sim -run SandboxRecordings` sails it through the server's
+tick (unless its sea was set by hand: another fetch, two winds, or flat
+water, which the server's sea cannot be). Or
 copy its scenario into `scenarios.json` and rewrite the golden file.
 `sandbox-sail.json` there is a scripted sail the client's tests record and
 compare (`UPDATE_RECORDING=1 npx vitest run src/sandbox` rewrites it after a
@@ -2639,24 +2835,12 @@ deliberate change to the physics).
 | `client/src/render/coords.ts` | World (x east, y north, float64) to scene (x east, y up, z south); the floating origin, always on a tile centre, moved when the boat is 500 m from it |
 | `client/src/render/materials.ts` | **The material factory. Every material is made here**, so every one carries the dome's bend: the world drops by d²/2R from the boat, R = 2,500 m. The sky is the one kind without it. A browser test walks the scene and fails on any other material |
 | `client/src/ocean/hex.ts` | The lattice: hexagons 4 m across the flats, corners east and west, one centred on the disk's centre, named by axial (q, r); the field of 5,101 tiles within 150 m; the tile hash, the same on the GPU |
-| `client/src/ocean/phases.ts`, `wave.ts` | The boat band: 64 waves, their phases at the floating origin reduced in float64 on the CPU each frame, the sum on the GPU |
+| `client/src/ocean/phases.ts`, `wave.ts` | The boat band: the physics module's waves and the amplitudes of the sea areas about the boat, laid out for the GPU; their phases at the floating origin reduced in float64 on the CPU each frame; the sum on the GPU, blended between areas (see [Waves](#waves)) |
 | `client/src/ocean/tilepass.ts`, `tiles.ts` | Each tile's plane (height and slope at its centre, with the dome's drop and slope) computed once a frame into a float target, one texel per tile; every vertex of a tile reads the same texel, so the tile is a rigid flat slab. Without float render targets the vertex stage computes the same plane |
-| `client/src/ocean/seamaterial.ts`, `far.ts`, `client/src/render/sky.ts` | The sea's look (seams, bevels, tint, shimmer, Fresnel, sun, haze), the far sea out past the horizon, the sky |
+| `client/src/ocean/seamaterial.ts`, `far.ts`, `client/src/render/sky.ts` | The sea's look (seams, bevels, tint, shimmer, crests lightened by their height against the sea's own, Fresnel, sun, haze), the far sea out past the horizon, the sky |
+| `client/src/ocean/hulls.ts` | No water inside a hull: the sea's fragments within a hull's volume are left out |
+| `client/src/game/float.ts` | The other boats' heave and pitch, from the sea drawn under them |
 | `client/src/render/boat.ts` | Loads a boat's model and its sailor from the catalog's art, replaces their materials with the factory's |
-
-### The test sea
-
-Until the physics package has its own boat band, the tiles move under a
-developer test sea: 64 waves for each of four sea states (6 knots over
-1.5 NM, 12 over 4, 20 over 6.5, 34 over 9), drawn from a JONSWAP spectrum.
-
-```sh
-go run ./tools/testsea          # write client/src/ocean/testsea/*.json
-go run ./tools/testsea -check   # fail if they are out of date
-```
-
-The draws are seeded and written to nine figures, so the files are the same
-on every machine. Never edit them by hand.
 
 ## Art
 
@@ -2674,8 +2858,14 @@ go run ./tools/catalog   # after changing a boat's numbers
 cd client && npm run art # rebuild every model's .glb (gltfpack, meshopt)
 ```
 
+The script also measures the hull's volume from its mesh, eight stations
+from the transom to where the stem leaves the water, each the half-beam at
+the waterline and the depth of the bottom, and writes it into the model as
+the `hull` node's `extras`: the sea is not drawn inside it
+([Waves](#waves)).
+
 Commit the rebuilt `.glb`. `npm test` checks each boat's model against the
-catalog: its named parts sit where the physics puts them, within 1 cm, its
+catalog: its hull's volume against its waterline's length, beam and draught; its named parts sit where the physics puts them, within 1 cm, its
 telltales at each sail strip's height, and it is under 15,000 triangles; and
 each sailor's model has its parts and is under 2,000. A kind's `art.model`
 must name a file that exists (`go run ./tools/catalog -check`). The catalog's
@@ -2732,9 +2922,13 @@ scripts, a name taken through the API and look-alikes of it), a name
 accepted, the cookie's attributes, the sailor kept across a reload without
 the start screen, and a second browser refused the same name.
 `sea.spec.ts` reads back what the GPU computed and checks it against the
-same sums in float64: every tile a rigid plane with the exact hexagon's
-outline, the lattice fixed as the boat moves and the origin jumps, the tile
-hash, the scene walk, recovery from a lost device, and pictures.
+server's sea: the boat band at the points of `sea.json`, which Go wrote,
+within what the GPU's sine is good for, in six seas, places and ticks; every
+tile a rigid plane with the exact hexagon's outline, at the height and slope
+the physics module gives; no sea inside a hull and no hole outside it,
+sailing in a gale for ten seconds, heeled 30°, and in seven other boats; the
+lattice fixed as the boat moves and the origin jumps, the tile hash, the
+scene walk, recovery from a lost device, and pictures.
 `sail.spec.ts` sails: the page's steps are the module's under Node, bit for
 bit; two touch pointers move the helm and the sheet at once; a held key
 turns the boat; a capsize in 20 knots, the sailor's line and the dimmed

@@ -9,6 +9,7 @@ import (
 	"math"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 // A snapshot is a frame's whole state as bytes: what an input log starts
@@ -18,6 +19,7 @@ import (
 //	version                 uvarint, SnapshotVersion
 //	tick                    varint
 //	wind speed, from        2 × 8 bytes
+//	sea in effect, next     2 × the sea below
 //	next boat ID            uvarint
 //	capacity                uvarint
 //	admission held          uvarint, 1 if held, else 0
@@ -25,7 +27,10 @@ import (
 //	boats                   uvarint n, then n × the boat below, slots ascending
 //	queue                   uvarint n, then n × the connection waiting below, the head first
 //
-// and each boat is its slot and ID as uvarints, its owner's 16 bytes, its
+// A sea is its areas, row by row from the south-west, as runs of areas with
+// the same inputs: uvarint n, then n × (the run's length, the wind's speed,
+// the direction it comes from, the fetch) as uvarints, the lengths adding up
+// to the world's areas. Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
 // uvarint, its control word in 8 bytes, and its state's fields in 8 bytes
 // each; each connection waiting is its account's 16 bytes, the connection as
@@ -34,7 +39,7 @@ import (
 //
 // A checkpoint stores this snapshot, so a world is restored only by a build
 // that reads its version.
-const SnapshotVersion = 4
+const SnapshotVersion = 5
 
 // AppendSnapshot appends f's snapshot to dst.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
@@ -42,6 +47,8 @@ func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 	dst = binary.AppendVarint(dst, f.Tick)
 	dst = appendF64(dst, f.Wind.Speed)
 	dst = appendF64(dst, f.Wind.From)
+	dst = appendSea(dst, f.Sea.Now)
+	dst = appendSea(dst, f.Sea.Next)
 	dst = binary.AppendUvarint(dst, f.NextBoat)
 	dst = binary.AppendUvarint(dst, uint64(f.Capacity()))
 	held := uint64(0)
@@ -89,6 +96,28 @@ func appendF64(dst []byte, v float64) []byte {
 	return binary.LittleEndian.AppendUint64(dst, math.Float64bits(v))
 }
 
+func appendSea(dst []byte, areas []physics.SeaInput) []byte {
+	runs := 0
+	for i := range areas {
+		if i == 0 || areas[i] != areas[i-1] {
+			runs++
+		}
+	}
+	dst = binary.AppendUvarint(dst, uint64(runs))
+	for i := 0; i < len(areas); {
+		j := i + 1
+		for j < len(areas) && areas[j] == areas[i] {
+			j++
+		}
+		dst = binary.AppendUvarint(dst, uint64(j-i))
+		dst = binary.AppendUvarint(dst, uint64(areas[i].Speed))
+		dst = binary.AppendUvarint(dst, uint64(areas[i].From))
+		dst = binary.AppendUvarint(dst, uint64(areas[i].Fetch))
+		i = j
+	}
+	return dst
+}
+
 // ReadSnapshot sets f, a frame of the snapshot's capacity, to the snapshot's
 // state. f's tick inputs are left empty.
 func ReadSnapshot(data []byte, f *bus.Frame) error {
@@ -98,6 +127,8 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 	}
 	tick := r.varint()
 	speed, from := r.f64(), r.f64()
+	r.sea(f.Sea.Now)
+	r.sea(f.Sea.Next)
 	nextBoat := r.uvarint()
 	capacity := r.uvarint()
 	held := r.uvarint()
@@ -226,6 +257,30 @@ func (r *reader) u64() uint64 {
 }
 
 func (r *reader) f64() float64 { return math.Float64frombits(r.u64()) }
+
+// sea fills areas from the snapshot's runs.
+func (r *reader) sea(areas []physics.SeaInput) {
+	runs := r.count(uint64(len(areas)))
+	i := uint64(0)
+	for range runs {
+		n, speed, from, fetch := r.uvarint(), r.uvarint(), r.uvarint(), r.uvarint()
+		if r.err != nil {
+			return
+		}
+		if n == 0 || n > uint64(len(areas))-i || speed > math.MaxUint32 || from >= physics.SeaFromSteps || fetch > math.MaxUint32 {
+			r.err = fmt.Errorf("sim: snapshot: a run of %d sea areas with inputs %d, %d, %d", n, speed, from, fetch)
+			return
+		}
+		in := physics.SeaInput{Speed: uint32(speed), From: uint32(from), Fetch: uint32(fetch)}
+		for range n {
+			areas[i] = in
+			i++
+		}
+	}
+	if r.err == nil && i != uint64(len(areas)) {
+		r.err = fmt.Errorf("sim: snapshot: %d sea areas, not %d", i, len(areas))
+	}
+}
 
 // bytes fills b from the snapshot.
 func (r *reader) bytes(b []byte) {

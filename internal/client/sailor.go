@@ -57,6 +57,7 @@ type Stats struct {
 	Resyncs   int
 	Queued    int // Queued messages
 	Bells     int // Restart messages: the server about to restart
+	Seas      int // SeaAreas messages: the sea about the boat
 }
 
 // Percentile is the p-th percentile of the corrections' sizes.
@@ -128,10 +129,10 @@ type MSeen struct {
 
 // NewSailor makes a sailor of a boat of kind that connects through dial
 // and steers with controls.
-func NewSailor(dial Dialer, kind *physics.Prepared, controls Controls) *Sailor {
+func NewSailor(dial Dialer, kind *physics.Prepared, waves *physics.Waves, controls Controls) *Sailor {
 	return &Sailor{
 		dial: dial, kind: kind, controls: controls,
-		start: time.Now(), Ahead: NewAhead(), Predictor: NewPredictor(kind),
+		start: time.Now(), Ahead: NewAhead(), Predictor: NewPredictor(kind, waves),
 		Net: Net{FrameMs: 17}, sent: [2]int{-1, -1},
 	}
 }
@@ -223,6 +224,9 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			if w := ev.Welcome; w != nil {
 				s.Welcomes = append(s.Welcomes, WelcomeSeen{Boat: w.GetBoat(), Rejoined: w.GetRejoined()})
 				s.fresh = true
+				// A snapshot still waiting for a frame is the last
+				// connection's: its controls are not this boat's.
+				s.queued = s.queued[:0]
 			}
 			if q := ev.Queued; q != nil {
 				s.Places = append(s.Places, Place{Position: q.GetPosition(), Waiting: q.GetWaiting()})
@@ -233,6 +237,10 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			}
 			if ev.Restart != nil {
 				s.Stats.Bells++
+			}
+			if ev.SeaAreas != nil {
+				s.Stats.Seas++
+				s.Predictor.Seas.Receive(ev.SeaAreas)
 			}
 			if v := ev.View; v != nil {
 				s.view(&ev)

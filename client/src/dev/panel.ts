@@ -2,13 +2,14 @@
 
 // The developer panel, with ?dev. Online, the connection's numbers: the
 // clock's offset, the round trip, how far ahead the boat is stepped, the
-// arrival margins, corrections and bytes each way. Offline, the sandbox's wind; the boat, reset to
-// the start or placed at a position and heading, and a jump to the rim;
-// time, paused, stepped once or slowed; the live State and Out; the sail
-// since the panel opened or the last reset, recorded as a golden scenario
-// to download; the test
-// sea; camera presets; the back end, the render scale, the tile pass and the
-// antialiasing; and the frame statistics. It is a lazy import, outside the
+// arrival margins, corrections and bytes each way. Offline, the sandbox's
+// wind and the sea it raises: one of four sea states at once, another fetch
+// than open water's, a second wind to the east to see two seas meet, or flat
+// water; the boat, reset to the start or placed at a position and heading,
+// and a jump to the rim; time, paused, stepped once or slowed; the live State
+// and Out; the sail since the panel opened or the last reset, recorded as a
+// golden scenario to download; camera presets; the back end, the render
+// scale, the tile pass and the antialiasing; and the frame statistics. It is a lazy import, outside the
 // game's first download. Built as nodes and text, never markup.
 
 import './panel.css';
@@ -21,20 +22,28 @@ import type { Predictor } from '../predict/predictor';
 import { DISK_RADIUS } from '../render/coords';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import type { Antialias } from '../render/stage';
-import type { Sandbox } from '../sandbox/sandbox';
+import { type SeaOptions, seaAreaOf } from '../sandbox/localsea';
+import { type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 
 const KNOT = 1852 / 3600;
 const DEG = Math.PI / 180;
+const NAUTICAL_MILE = 1852;
 /** "Jump to the rim" puts the boat this far from the centre, in metres. */
 export const RIM = 8300;
-export const SEAS = ['flat', 'calm', 'breeze', 'fresh', 'gale'];
+/** Fetches to try, in nautical miles; null is open water's. The look was chosen at 1.5, 4, 6.5 and 9. */
+export const FETCHES: (number | null)[] = [null, 1.5, 4, 6.5, 9];
 export const SCALES: (number | null)[] = [null, 0.5, 0.75, 1, 1.5, 2];
 /** Slow motion: the rates real time counts at. */
 export const SPEEDS = [1, 0.5, 0.25];
 
 /** What the panel shows and sets, in the units it shows them in. */
 export interface PanelState {
-  sea: string;
+  /** The fetch, in nautical miles, or null for open water's. */
+  fetch: number | null;
+  /** A second wind east of the boat, in knots, or null for one sea. */
+  split: number | null;
+  /** Flat water, whatever the wind. */
+  flat: boolean;
   east: number;
   north: number;
   /** Clockwise from north, in degrees. */
@@ -53,7 +62,6 @@ export interface PanelState {
 
 /** The parts of the scene, the sandbox and the loop the panel drives, so tests can stand in for them. */
 export interface PanelWorld {
-  testSea: string;
   usePass: boolean;
   stage: {
     antialias: Antialias;
@@ -61,12 +69,14 @@ export interface PanelWorld {
     setAntialias(a: Antialias): void;
     setScale(s: number | null): void;
   };
-  setTestSea(name: string): void;
   setUsePass(on: boolean): void;
   sandbox: {
     readonly wind: { speed: number; from: number };
     readonly states: { readonly current: Float64Array };
+    readonly sea: { readonly options: SeaOptions };
     setWind(speed: number, from: number): void;
+    /** Raises the sea the wind and the options give, at once. */
+    settleSea(): void;
     place(east: number, north: number, heading: number): void;
   };
   loop: { paused: boolean; speed: number };
@@ -79,8 +89,11 @@ function degrees(rad: number): number {
 
 export function readState(w: PanelWorld): PanelState {
   const s = w.sandbox.states.current;
+  const sea = w.sandbox.sea.options;
   return {
-    sea: w.testSea,
+    fetch: sea.fetch === null ? null : sea.fetch / NAUTICAL_MILE,
+    split: sea.split === null ? null : sea.split.wind.speed / KNOT,
+    flat: sea.flat,
     east: s[RECORDS.state.x] ?? 0,
     north: s[RECORDS.state.y] ?? 0,
     heading: degrees(s[RECORDS.state.heading] ?? 0),
@@ -97,14 +110,26 @@ export function readState(w: PanelWorld): PanelState {
 /** Applies to the world whatever differs from the state. */
 export function applyState(w: PanelWorld, s: PanelState): void {
   const now = readState(w);
-  if (s.sea !== w.testSea) {
-    w.setTestSea(s.sea);
-  }
   if (s.windSpeed !== now.windSpeed || s.windFrom !== now.windFrom) {
     w.sandbox.setWind(Math.max(0, s.windSpeed) * KNOT, degrees(s.windFrom * DEG) * DEG);
   }
   if (s.east !== now.east || s.north !== now.north || s.heading !== now.heading) {
     w.sandbox.place(s.east, s.north, s.heading * DEG);
+  }
+  if (s.fetch !== now.fetch || s.split !== now.split || s.flat !== now.flat) {
+    const sea = w.sandbox.sea.options;
+    sea.fetch = s.fetch === null ? null : s.fetch * NAUTICAL_MILE;
+    sea.flat = s.flat;
+    // The second wind begins at the line of centres east of the boat, and
+    // blows from where the first does.
+    sea.split =
+      s.split === null
+        ? null
+        : {
+            column: seaAreaOf(w.sandbox.states.current[RECORDS.state.x] ?? 0) + 1,
+            wind: { speed: Math.max(0, s.split) * KNOT, from: w.sandbox.wind.from },
+          };
+    w.sandbox.settleSea();
   }
   if (s.antialias !== w.stage.antialias) {
     w.stage.setAntialias(s.antialias);
@@ -117,6 +142,26 @@ export function applyState(w: PanelWorld, s: PanelState): void {
   }
   w.loop.paused = s.paused;
   w.loop.speed = s.speed;
+}
+
+/** The state in one of the sea states the look was chosen in: its wind, and its sea at once. */
+export function inSeaState(w: PanelWorld, name: string): void {
+  const knots = SEA_STATES[name];
+  if (knots === undefined) {
+    return;
+  }
+  w.sandbox.setWind(knots * KNOT, w.sandbox.wind.from);
+  w.sandbox.sea.options.flat = false;
+  w.sandbox.settleSea();
+}
+
+/** The sea under the boat, as lines: its height, its peak, and the waves summed. */
+export function seaLines(hs: number, peak: number, waves: number, blended: boolean): string {
+  if (waves === 0) {
+    return 'sea     flat';
+  }
+  const period = peak > 0 ? `${((2 * Math.PI) / peak).toFixed(1)} s` : '—';
+  return `sea     Hs ${hs.toFixed(2)} m, peak ${period}, ${waves} waves${blended ? ', blended' : ''}`;
 }
 
 /** The state with the boat moved out to the rim along its bearing from the centre (east, from the centre itself). */
@@ -205,14 +250,10 @@ export function openPanel(
   parent: HTMLElement,
 ): void {
   const pw: PanelWorld = {
-    get testSea() {
-      return world.testSea;
-    },
     get usePass() {
       return world.usePass;
     },
     stage: world.stage,
-    setTestSea: (n) => world.setTestSea(n),
     setUsePass: (on) => world.setUsePass(on),
     sandbox,
     loop: game.loop,
@@ -224,11 +265,24 @@ export function openPanel(
   const body = el('div');
   const stats = el('pre');
   const records = el('pre');
+  const seaCheck = el('pre');
   panel.append(
     button('Developer', () => body.toggleAttribute('hidden')),
     body,
   );
   parent.append(panel);
+  // The GPU's sea against the server's, on this device.
+  const checkSea = button('Check the sea', () => {
+    seaCheck.textContent = 'checking…';
+    import('./seacheck')
+      .then(async (m) => {
+        seaCheck.textContent = m.seaCheckLines(await m.checkSeaOnGPU(world, game, sandbox));
+      })
+      .catch((err: unknown) => {
+        seaCheck.textContent = err instanceof Error ? err.message : String(err);
+      })
+      .finally(() => render());
+  });
 
   const set = (change: Partial<PanelState>): void => {
     applyState(pw, { ...readState(pw), ...change });
@@ -276,6 +330,16 @@ export function openPanel(
       }),
       button('Jump to the rim', () => set(toRim(readState(pw)))),
     );
+    const states = el('div');
+    states.className = 'buttons';
+    for (const name of Object.keys(SEA_STATES)) {
+      states.append(
+        button(name, () => {
+          inSeaState(pw, name);
+          render();
+        }),
+      );
+    }
     const recording = button('Download the sail', () => {
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       download(`sail-${stamp}`, sandbox.recorded(`sail-${stamp}`));
@@ -305,13 +369,32 @@ export function openPanel(
       boat,
       row('Time', time),
       row(`Recording, ${sandbox.recorder.steps} steps`, recording),
+      row('Sea state', states),
       row(
-        'Test sea',
+        'Fetch',
         select(
-          SEAS,
-          (x) => x,
-          s.sea,
-          (sea) => set({ sea }),
+          FETCHES,
+          (x) => (x === null ? 'open water' : `${x} NM`),
+          s.fetch,
+          (fetch) => set({ fetch }),
+        ),
+      ),
+      row(
+        'Wind to the east, kn',
+        select(
+          [null, 6, 12, 20, 34],
+          (x) => (x === null ? 'the same' : String(x)),
+          s.split,
+          (split) => set({ split }),
+        ),
+      ),
+      row(
+        'Water',
+        select(
+          [false, true],
+          (x) => (x ? 'flat' : 'waves'),
+          s.flat,
+          (flat) => set({ flat }),
         ),
       ),
       row('Camera', cameras),
@@ -347,6 +430,8 @@ export function openPanel(
         el('span', gfx === null ? '…' : `${gfx.backend}${gfx.compat ? ' (compatibility)' : ''}`),
       ),
       swap,
+      row('The GPU’s sea', checkSea),
+      seaCheck,
       stats,
       records,
     );
@@ -366,6 +451,18 @@ export function openPanel(
     const o = world.origin;
     const cap = world.stage.cap;
     const gpu = st.gpu === null ? 'no timestamps' : `${st.gpu.toFixed(2)} ms`;
+    // The sea of the area the boat is in, in the window drawn.
+    const band = world.ocean.band;
+    const slot = world.ocean.slot;
+    const held = sandbox.seas.held[slot];
+    let here = 0;
+    let peak = 0;
+    if (held !== undefined) {
+      const col = Math.min(Math.max(seaAreaOf(p.east) - held.col, 0), held.size - 1);
+      const row = Math.min(Math.max(seaAreaOf(p.north) - held.row, 0), held.size - 1);
+      here = row * held.size + col;
+      peak = sandbox.physics.seaPeak(slot)[here] ?? 0;
+    }
     stats.textContent = [
       `frame   ${st.median.toFixed(1)} ms median, ${st.p90.toFixed(1)} ms 90th (${st.frames} in 2 s)`,
       `work    ${st.workMedian.toFixed(2)} ms median, ${st.workP90.toFixed(2)} ms 90th`,
@@ -376,6 +473,7 @@ export function openPanel(
       `boat    ${p.east.toFixed(0)} E, ${p.north.toFixed(0)} N`,
       `origin  ${o.world.x.toFixed(0)} E, ${o.world.y.toFixed(0)} N, tile ${o.centre.q},${o.centre.r}`,
       `time    ${game.clock.time.toFixed(2)} s, step ${game.clock.steps}`,
+      seaLines(band.hs[here] ?? 0, peak, band.count, band.blended),
     ].join('\n');
     records.textContent = [
       'State',

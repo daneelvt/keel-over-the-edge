@@ -7,8 +7,7 @@
       "!src/catalog/*.gen.*",
       "!src/predict/*.gen.*",
       "!src/net/gen",
-      "!src/net/*.gen.*",
-      "!src/ocean/testsea"
+      "!src/net/*.gen.*"
     ]
   },
   "formatter": {

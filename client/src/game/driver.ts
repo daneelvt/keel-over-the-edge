@@ -10,6 +10,8 @@
 // easing away.
 
 import type { BoatPose, StatePair } from '../predict/blend';
+import type { Physics } from '../predict/physics';
+import type { Seas } from '../predict/seas';
 
 export interface Wind {
   /** The true wind 10 m above the sea, m/s. */
@@ -29,6 +31,11 @@ export interface BoatDriver {
   step(helm: number, sheet: number): void;
   /** Moves the drawn pose, dt seconds after the last frame's. */
   decorate?(pose: BoatPose, dt: number): void;
+  /** The physics module that steps the boat, and the sea it holds, for drawing that sea. */
+  readonly physics?: Physics;
+  readonly seas?: Seas;
+  /** The world clock the boat is drawn by, for a driver that keeps its own time: the game sets it. */
+  clock?: { readonly steps: number } | null;
 }
 
 /** Steps a driver to where the world clock says it should be, each frame. */

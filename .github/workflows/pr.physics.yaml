@@ -62,6 +62,10 @@ jobs:
         run: go run ./tools/polar -check
       - name: The trimmed sail against ORC's mainsail
         run: go run ./tools/polar -sail
+      - name: The polar in a breeze's sea and in a gale's, beside flat water
+        run: |
+          go run ./tools/polar -sea 12
+          go run ./tools/polar -sea 34
 
   pr-physics:
     name: pr-physics

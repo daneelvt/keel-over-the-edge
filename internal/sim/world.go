@@ -11,7 +11,8 @@
 // ranges over a map, whose order varies from run to run; it does not use
 // sync.Pool; and it does no floating-point arithmetic on the world's state,
 // which is the physics package's alone: positions are whole metres converted
-// once, and controls are decoded by exact divisions. go run ./tools/physics
+// once, controls are decoded by exact divisions, and the sea's waves are the
+// physics package's from the wind on. go run ./tools/physics
 // -check also disassembles it for fused multiply-adds.
 //
 // The clock, the schedule and the metrics are package loop's, which calls
@@ -47,6 +48,9 @@ type Config struct {
 	// Kinds are the kinds of boat, prepared; a slot's Kind indexes them. A
 	// new boat is of the first kind.
 	Kinds []physics.Prepared
+	// Waves are the sea's waves, prepared, with which the kinds were
+	// prepared too; nil is a world of flat water.
+	Waves *physics.Waves
 	// Workers is how many goroutines step boats, the ticking goroutine
 	// included; fewer than 1 means 1.
 	Workers int
@@ -64,18 +68,19 @@ type Config struct {
 // A Phase is a part of a tick.
 type Phase uint8
 
-// The phases of a tick, in order. Weather and sea, collisions and the rules
-// will come between them; the events of a tick are gathered as its commands
-// are applied.
+// The phases of a tick, in order. Weather, collisions and the rules will
+// come between them; the events of a tick are gathered as its commands are
+// applied.
 const (
 	PhaseInputs  Phase = iota // read the control slots, apply the commands, admit from the queue
+	PhaseSea                  // the waves at this tick, and a share of the next second's amplitudes
 	PhasePhysics              // step every boat
 	PhaseGrid                 // sort the boats into the grid's cells
 	PhasePublish              // publish the frame, hand it to the recorder
 	Phases                    // the number of phases
 )
 
-var phaseNames = [Phases]string{"inputs", "physics", "grid", "publish"}
+var phaseNames = [Phases]string{"inputs", "sea", "physics", "grid", "publish"}
 
 func (p Phase) String() string {
 	if p >= Phases {
@@ -111,6 +116,7 @@ type World struct {
 	capacity  int
 	limit     int
 	kinds     []physics.Prepared
+	sea       sea
 	grace     int64
 	observer  Observer
 	recorders []Recorder
@@ -126,7 +132,7 @@ type World struct {
 
 	// The phases as function values made once, so that running one inside
 	// a trace region allocates nothing.
-	inputsFn, physicsFn, gridFn, publishFn func()
+	inputsFn, seaFn, physicsFn, gridFn, publishFn func()
 }
 
 // New makes a world of empty slots and starts its workers. Close stops them.
@@ -160,10 +166,12 @@ func New(cfg Config) (*World, error) {
 		grace:    cfg.Grace,
 		ctx:      context.Background(),
 	}
-	w.inputsFn, w.physicsFn, w.gridFn, w.publishFn = w.inputs, w.physics, w.grid, w.publish
+	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.publish
+	w.sea.init(cfg.Waves)
 	f := w.bus.Frames.Latest()
 	f.Tick = cfg.Tick
 	f.Wind = DefaultWind
+	w.sea.under(&f.Sea, f.Wind)
 	f.NextBoat = 1
 	w.workers.start(w, max(cfg.Workers, 1))
 	return w, nil
@@ -221,6 +229,7 @@ func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 	if adjust != nil {
 		adjust(f)
 	}
+	w.sea.loaded()
 	// Each slot holds the controls in force until its sailor writes again.
 	for _, s := range f.Live {
 		w.bus.Controls.Store(s, f.Control[s])

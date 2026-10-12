@@ -10,9 +10,33 @@ import type { FnName, Physics, RecordName } from './physics';
 
 type Values = Record<string, number>;
 
+/** An area's inputs in whole steps: the wind's speed, the direction it comes from, the fetch. */
+export type AreaInputs = readonly number[];
+
 export interface ScenarioFile {
+  /** The catalog's sea values. */
+  sea: Values;
   params: Record<string, number | number[]>;
   scenarios: Scenario[];
+}
+
+/** The sea a scenario sails in: a window of areas, and the tick of step 0. */
+export interface ScenarioSea {
+  tick: number;
+  col: number;
+  row: number;
+  size: number;
+  areas: AreaInputs[];
+}
+
+export interface ScenarioChange {
+  at: number;
+  control?: Values;
+  env?: Values;
+  steer?: number;
+  /** Replaces the inputs of the sea's areas; window, with it, moves the sea's window. */
+  areas?: AreaInputs[];
+  window?: readonly number[];
 }
 
 export interface Scenario {
@@ -21,7 +45,8 @@ export interface Scenario {
   state?: Values;
   control?: Values;
   env?: Values;
-  changes?: { at: number; control?: Values; env?: Values; steer?: number }[];
+  sea?: ScenarioSea;
+  changes?: ScenarioChange[];
 }
 
 export interface GoldenFile {
@@ -49,18 +74,38 @@ export interface ScenarioResult {
  */
 export async function runScenario(
   physics: Physics,
-  params: ScenarioFile['params'],
+  file: Pick<ScenarioFile, 'sea' | 'params'>,
   scenario: Scenario,
 ): Promise<ScenarioResult> {
   const r = physics.records;
   for (const v of Object.values(r)) {
     v.fill(0);
   }
-  setParams(physics, params);
+  setFields(physics, 'seaParams', file.sea);
+  physics.prepareSea();
+  setParams(physics, file.params);
   physics.prepare();
   setFields(physics, 'state', scenario.state);
   setFields(physics, 'control', scenario.control);
   setFields(physics, 'env', scenario.env);
+  // The module's first window is the scenario's sea; with none, flat water.
+  const sea = scenario.sea;
+  let col = sea?.col ?? 0;
+  let row = sea?.row ?? 0;
+  const setAreas = (areas: AreaInputs[]): void => {
+    if (sea === undefined || areas.length !== sea.size * sea.size) {
+      throw new Error(`${scenario.name}: ${areas.length} areas for its sea`);
+    }
+    physics.seaWindow(0, col, row, sea.size);
+    for (const [i, a] of areas.entries()) {
+      physics.seaArea(0, i, a[0] ?? 0, a[1] ?? 0, a[2] ?? 0);
+    }
+    physics.seaSeal(0);
+  };
+  physics.seaUse(sea === undefined ? -1 : 0);
+  if (sea !== undefined) {
+    setAreas(sea.areas);
+  }
 
   const stateBytes = r.state.byteLength;
   const stepBytes = stateBytes + r.out.byteLength;
@@ -82,10 +127,18 @@ export async function runScenario(
         steering = true;
         target = change.steer;
       }
+      if (change?.areas !== undefined) {
+        col = change.window?.[0] ?? col;
+        row = change.window?.[1] ?? row;
+        setAreas(change.areas);
+      }
     }
     if (steering) {
       const rec = physics.records;
       rec.control[RECORDS.control.helm] = steer(target, rec.state);
+    }
+    if (sea !== undefined) {
+      physics.seaAt(sea.tick + i);
     }
     physics.step();
     const { state: s, out: o } = physics.records;
@@ -176,7 +229,7 @@ export async function checkGolden(
       report.problems.push(`golden.json has no results for ${scenario.name}`);
       continue;
     }
-    const got = await runScenario(physics, scenarios.params, scenario);
+    const got = await runScenario(physics, scenarios, scenario);
     report.scenarios++;
     if (got.digest !== want.digest) {
       const at = got.checkpoints.findIndex(

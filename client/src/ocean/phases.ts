@@ -1,44 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The boat band's components, and their phases at the floating origin.
+// The boat band as it is drawn: the waves long enough to move a boat, which
+// the physics module holds (the server's own code, so the boat rides exactly
+// the sea the tiles show). The band is a sum of waves with fixed directions
+// and wavenumbers,
+//   h(p) = Σ a sin(φ + k d·p − ωt),
+// whose amplitudes a come from the wind of each sea area and are blended
+// between the four areas about a point. Here the module's waves and the
+// amplitudes of the window of areas about the boat are laid out for the GPU,
+// and each wave's phase at the floating origin is computed.
 //
-// The boat band is a sum of 64 waves, each a direction, a wavenumber k and an
-// amplitude a: its height at a point p of the world is
-//   h(p) = Σ a sin(φ + k d·p − ωt),  ω = √(gk) (deep water).
-// At the rim and after days of world time, k d·p and ωt reach millions of
-// radians, which float32 cannot hold to a useful fraction of a wave. So the
-// phase at the floating origin O, φ + k d·O − ωt, is computed here in float64
-// each frame and reduced modulo 2π, and the GPU adds only k d·(p − O), which
-// stays small. (Tessendorf, "Simulating Ocean Water", 2001, for the sum.)
+// At the rim and after years of world time, k d·p and ωt reach hundreds of
+// millions of radians, which float32 cannot hold to a useful fraction of a
+// wave. So the phase at the floating origin O, φ + k d·O − ωt, is computed
+// here in float64 each frame and reduced modulo 2π, and the GPU adds only
+// k d·(p − O) (wave.ts). (Tessendorf, "Simulating Ocean Water", 2001, for the
+// sum.)
 
-import { Vector4 } from 'three';
+import { DataTexture, FloatType, NearestFilter, RGBAFormat, Vector2, Vector4 } from 'three';
+import { RECORDS, SEA } from '../predict/layout.gen';
+import type { Physics } from '../predict/physics';
 
-/** Components in the boat band. */
-export const COMPONENTS = 64;
-/** Gravity, as the physics package has it, in m/s². */
-export const GRAVITY = 9.81;
-
-/** One wave of the boat band, in world terms. */
-export interface SeaComponent {
-  /** Direction the wave travels toward: east and north parts of a unit vector. */
-  east: number;
-  north: number;
-  /** Wavenumber, in rad/m. */
-  k: number;
-  /** Amplitude, in metres. */
-  a: number;
-  /** Phase at the disk's centre at world time 0, in radians. */
-  phase: number;
-}
-
-export interface TestSea {
-  name: string;
-  windKnots: number;
-  fetchNM: number;
-  /** Direction the wind blows from, clockwise from north, in degrees. */
-  windFrom: number;
-  components: SeaComponent[];
-}
+/** The most waves the band draws: all the sea's. */
+export const COMPONENTS = SEA.components;
+/** The waves are summed four at a time. */
+export const GROUPS = COMPONENTS / 4;
+/** The most sea areas in the window drawn. */
+export const AREAS = SEA.window * SEA.window;
 
 // 2π in three parts (Cody and Waite, "Software Manual for the Elementary
 // Functions", 1980): the first two have 29 significant bits, so n times
@@ -77,84 +65,164 @@ function twoProduct(a: number, b: number, out: Float64Array): void {
 }
 
 /**
- * The boat band as the GPU reads it: for each component, its direction in
- * the scene (x east, z south), k and a; and its phase at the floating
- * origin, four to a vector. Calm sets every amplitude to zero.
+ * The phase of a wave at a world point and a tick: φ + k d·O less the turns
+ * it has made, reduced to [0, 2π). ωt, the largest term (hundreds of
+ * millions of radians), is taken exactly, as turns, and only its fraction
+ * kept, as the physics module takes it.
  */
-export class BoatBand {
-  /** (dx, dz, k, a) of each component, in the scene's axes. */
-  readonly waves: Vector4[] = Array.from({ length: COMPONENTS }, () => new Vector4());
-  /** Phases at the origin, four components to each vector. */
-  readonly phases: Vector4[] = Array.from({ length: COMPONENTS / 4 }, () => new Vector4());
-  /** The phases at the origin, in float64, for the CPU's own sums. */
-  readonly phase64 = new Float64Array(COMPONENTS);
+export function phaseAt(
+  phase0: number,
+  kEast: number,
+  kNorth: number,
+  turns: number,
+  east: number,
+  north: number,
+  tick: number,
+  scratch: Float64Array,
+): number {
+  twoProduct(turns, tick, scratch);
+  const hi = scratch[0] ?? 0;
+  const turned = (hi - Math.floor(hi) + (scratch[1] ?? 0)) * TWO_PI;
+  return reducePhase(reducePhase(phase0 + kEast * east + kNorth * north) - turned);
+}
 
-  #sea: TestSea | null = null;
-  readonly #omega = new Float64Array(COMPONENTS);
-  readonly #wt = new Float64Array(2);
+function floatTexture(width: number, height: number): DataTexture {
+  const t = new DataTexture(
+    new Float32Array(width * height * 4),
+    width,
+    height,
+    RGBAFormat,
+    FloatType,
+  );
+  t.minFilter = NearestFilter;
+  t.magFilter = NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+}
 
-  get sea(): TestSea | null {
-    return this.#sea;
+/**
+ * The boat band as the GPU reads it. Only the waves with an amplitude
+ * somewhere in the window are drawn; they are numbered 0 … count − 1 here,
+ * in the module's order.
+ */
+export class SeaBand {
+  /**
+   * For each wave drawn, at its number along the row: its direction in the
+   * scene (x east, z south), its wavenumber, and its amplitude in the
+   * window's first area, which is every area's when the window is one sea.
+   */
+  readonly waves = floatTexture(COMPONENTS, 1);
+  /** For each area (a row) and wave drawn (along it), the wave's amplitude there, in red. */
+  readonly amplitudes = floatTexture(COMPONENTS, AREAS);
+  /** Phases at the origin, in [0, 2π), four waves to each vector. */
+  readonly phases: Vector4[] = Array.from({ length: GROUPS }, () => new Vector4());
+  /** The significant height of each area's waves, in metres. */
+  readonly hs: number[] = new Array(AREAS).fill(0);
+  /** Waves drawn, and the fours of them the GPU sums. */
+  count = 0;
+  groups = 0;
+  /** Areas a side of the window. */
+  size: number = SEA.window;
+  /** Whether the window's areas differ, so that amplitudes must be blended between them. */
+  blended = false;
+  /** The floating origin in the window's own coordinates: areas east and north of its first area's centre. */
+  readonly areaOrigin = new Vector2();
+
+  /** The sea's waves, from the module, by their number here: turns a tick, phase at the centre at tick 0, and k d east and north. */
+  readonly #turns = new Float64Array(COMPONENTS);
+  readonly #phase0 = new Float64Array(COMPONENTS);
+  readonly #kEast = new Float64Array(COMPONENTS);
+  readonly #kNorth = new Float64Array(COMPONENTS);
+  #col = 0;
+  #row = 0;
+  readonly #scratch = new Float64Array(2);
+
+  /** No waves: flat water. */
+  clear(): void {
+    this.count = 0;
+    this.groups = 0;
+    this.blended = false;
+    this.hs.fill(0);
   }
 
-  /** Sets the components, or calm with null. */
-  set(sea: TestSea | null): void {
-    this.#sea = sea;
-    for (let i = 0; i < COMPONENTS; i++) {
-      const c = sea?.components[i];
-      const w = this.waves[i] as Vector4;
-      if (c === undefined) {
-        w.set(1, 0, 1, 0);
-        this.#omega[i] = 0;
+  /**
+   * Lays out one of the module's windows of the sea: the waves with an
+   * amplitude in it, and their amplitudes in each of its areas. The window's
+   * first area is at column col and row row and it has size areas a side.
+   */
+  set(physics: Physics, slot: number, col: number, row: number, size: number): void {
+    const c = physics.records.components;
+    const R = RECORDS.components;
+    const active = physics.seaActive(slot);
+    const amp = physics.seaAmplitudes(slot);
+    const hs = physics.seaHs(slot);
+    const areas = size * size;
+    this.count = active.length;
+    this.groups = Math.ceil(active.length / 4);
+    this.size = size;
+    this.#col = col;
+    this.#row = row;
+    const waves = this.waves.image.data as Float32Array;
+    const amps = this.amplitudes.image.data as Float32Array;
+    amps.fill(0);
+    let blended = false;
+    for (let j = 0; j < this.groups * 4; j++) {
+      const i = active[j];
+      if (i === undefined) {
+        // The last four's spare places: waves of no height.
+        waves.set([1, 0, 0, 0], j * 4);
         continue;
       }
-      w.set(c.east, -c.north, c.k, c.a);
-      this.#omega[i] = Math.sqrt(GRAVITY * c.k);
-    }
-  }
-
-  /**
-   * Computes every phase at the world point (east, north) at world time t,
-   * in seconds. ωt, the largest term (a million radians after a week), is
-   * taken exactly and reduced apart from the rest.
-   */
-  update(east: number, north: number, t: number): void {
-    const comps = this.#sea?.components;
-    const wt = this.#wt;
-    for (let i = 0; i < COMPONENTS; i++) {
-      const c = comps?.[i];
-      let p = 0;
-      if (c !== undefined) {
-        twoProduct(this.#omega[i] ?? 0, t, wt);
-        const space = reducePhase(c.phase + c.k * (c.east * east + c.north * north));
-        p = reducePhase(space - reducePhase(wt[0] ?? 0) - (wt[1] ?? 0));
+      const k = c[R.k + i] ?? 0;
+      const east = c[R.east + i] ?? 0;
+      const north = c[R.north + i] ?? 0;
+      this.#turns[j] = c[R.turns + i] ?? 0;
+      this.#phase0[j] = c[R.phase + i] ?? 0;
+      this.#kEast[j] = k * east;
+      this.#kNorth[j] = k * north;
+      const first = amp[i] ?? 0;
+      waves.set([east, -north, k, first], j * 4);
+      for (let a = 0; a < areas; a++) {
+        const v = amp[a * COMPONENTS + i] ?? 0;
+        amps[(a * COMPONENTS + j) * 4] = v;
+        blended = blended || v !== first;
       }
-      this.phase64[i] = p;
-      const v = this.phases[i >> 2] as Vector4;
-      v.setComponent(i & 3, p);
     }
+    this.blended = blended;
+    for (let a = 0; a < AREAS; a++) {
+      this.hs[a] = a < areas ? (hs[a] ?? 0) : 0;
+    }
+    this.waves.needsUpdate = true;
+    this.amplitudes.needsUpdate = true;
   }
 
   /**
-   * The band's height and slope at the scene point (x, z) relative to the
-   * origin of the last update, in float64: [h, ∂h/∂x, ∂h/∂z]. The reference
-   * the GPU's pass is tested against.
+   * Computes every phase at the world point (east, north) at world time
+   * tick, in ticks, which need not be whole, and where that point is among
+   * the window's areas.
    */
-  sample(x: number, z: number, out: Float64Array): Float64Array {
-    let h = 0;
-    let gx = 0;
-    let gz = 0;
-    for (let i = 0; i < COMPONENTS; i++) {
-      const w = this.waves[i] as Vector4;
-      const a = (this.phase64[i] ?? 0) + w.z * (w.x * x + w.y * z);
-      const ak = w.w * w.z * Math.cos(a);
-      h += w.w * Math.sin(a);
-      gx += ak * w.x;
-      gz += ak * w.y;
+  update(east: number, north: number, tick: number): void {
+    const half = SEA.areas >> 1;
+    this.areaOrigin.set(
+      east / SEA.areaSize + half - this.#col,
+      north / SEA.areaSize + half - this.#row,
+    );
+    for (let j = 0; j < this.groups * 4; j++) {
+      const phase =
+        j < this.count
+          ? phaseAt(
+              this.#phase0[j] ?? 0,
+              this.#kEast[j] ?? 0,
+              this.#kNorth[j] ?? 0,
+              this.#turns[j] ?? 0,
+              east,
+              north,
+              tick,
+              this.#scratch,
+            )
+          : 0;
+      (this.phases[j >> 2] as Vector4).setComponent(j & 3, phase);
     }
-    out[0] = h;
-    out[1] = gx;
-    out[2] = gz;
-    return out;
   }
 }

@@ -90,7 +90,7 @@ func TestScenarioParamsAreTheCatalogs(t *testing.T) {
 
 	// Prepare must accept them: every derived constant finite.
 	var b physics.Prepared
-	physics.Prepare(&p, &b)
+	physics.Prepare(&p, nil, &b)
 	pv := reflect.ValueOf(b)
 	var check func(v reflect.Value, path string)
 	check = func(v reflect.Value, path string) {

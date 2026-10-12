@@ -94,7 +94,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	kind, err := jollyBoat()
+	kind, waves, err := jollyBoat()
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 			case <-ctx.Done():
 				return
 			}
-			sailOne(ctx, cfg, kind, cookies[i], uint64(i), end, p)
+			sailOne(ctx, cfg, kind, waves, cookies[i], uint64(i), end, p)
 		})
 	}
 	wg.Wait()
@@ -140,7 +140,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 // connection ends: after 1012, a server's restart, in 0.5 to 5 s at
 // random, as the page does; after 4002, versions that differ, never;
 // after anything else, in a second.
-func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, cookie string, i uint64, end time.Time, p *Player) {
+func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *physics.Waves, cookie string, i uint64, end time.Time, p *Player) {
 	rng := rand.New(rand.NewPCG(i, 7))
 	helm, sheet := 512, 512
 	controls := func(n int) (uint16, uint16) {
@@ -162,7 +162,7 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, cookie str
 		}
 		return cfg.Dial(ctx, cookie, wrap)
 	}
-	s := client.NewSailor(dial, kind, controls)
+	s := client.NewSailor(dial, kind, waves, controls)
 	s.FrameEvery = cfg.FrameEvery
 	// The last snapshot, and a return under way: the connection ended,
 	// and no snapshot has come since.
@@ -221,16 +221,15 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, cookie str
 	p.RTT = time.Duration(s.Net.Clock.RTT) * time.Microsecond
 }
 
-// jollyBoat is the catalog's first boat, prepared: the players' boat.
-func jollyBoat() (*physics.Prepared, error) {
+// jollyBoat is the catalog's first boat, prepared: the players' boat, and
+// the sea it sails in.
+func jollyBoat() (*physics.Prepared, *physics.Waves, error) {
 	cat, err := catalog.Load()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	params := catalog.PhysicsParams(&cat.Boats[0])
-	var k physics.Prepared
-	physics.Prepare(&params, &k)
-	return &k, nil
+	waves, kinds := cat.Prepare()
+	return &kinds[0], waves, nil
 }
 
 func guestName(i int) string { return fmt.Sprintf("Loadbot %d", i+1) }

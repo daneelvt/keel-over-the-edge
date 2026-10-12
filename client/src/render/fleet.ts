@@ -339,7 +339,10 @@ export class FleetView {
     seat[o + 1] = p.y;
     seat[o + 2] = p.z;
     seat[o + 3] = p.facing;
-    (level.lean.array as Float32Array)[o] = p.tilt;
+    const lean = level.lean.array as Float32Array;
+    lean[o] = p.tilt;
+    lean[o + 1] = b.heave;
+    lean[o + 2] = b.pitch;
   }
 
   /** The draw calls and triangles the fleet's meshes make this frame. */

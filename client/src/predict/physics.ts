@@ -5,7 +5,7 @@
 // anything that must agree with the server is computed in the module, never
 // with JavaScript's Math, whose last bits differ between browsers.
 
-import { FN, LAYOUT_VERSION, RECORDS, SIZES } from './layout.gen';
+import { FN, LAYOUT_VERSION, RECORDS, SEA, SIZES } from './layout.gen';
 
 export type RecordName = keyof typeof RECORDS;
 export type FnName = keyof typeof FN;
@@ -20,8 +20,36 @@ interface Exports {
   env(): number;
   params(): number;
   out(): number;
+  seaParams(): number;
+  components(): number;
+  wave(): number;
+  seaPrepare(): void;
   prepare(): void;
   step(): void;
+  seaWindow(slot: number, col: number, row: number, size: number): void;
+  seaArea(slot: number, area: number, speed: number, from: number, fetch: number): void;
+  seaSeal(slot: number): void;
+  seaInputOf(speed: number, from: number, fetch: number): void;
+  seaInput(): number;
+  seaAmp(slot: number): number;
+  seaHs(slot: number): number;
+  seaPeak(slot: number): number;
+  seaActive(slot: number): number;
+  seaCount(slot: number): number;
+  seaUse(slot: number): void;
+  seaAt(tick: number): void;
+  seaDrawAt(tick: number): void;
+  waveUnder(
+    slot: number,
+    x: number,
+    y: number,
+    heading: number,
+    length: number,
+    beam: number,
+  ): void;
+  samplePoints(): number;
+  sampleValues(): number;
+  seaSample(slot: number, n: number): void;
   fnArgs(): number;
   fnResults(): number;
   fnCapacity(): number;
@@ -37,8 +65,29 @@ const functionExports = [
   'env',
   'params',
   'out',
+  'seaParams',
+  'components',
+  'wave',
+  'seaPrepare',
   'prepare',
   'step',
+  'seaWindow',
+  'seaArea',
+  'seaSeal',
+  'seaInputOf',
+  'seaInput',
+  'seaAmp',
+  'seaHs',
+  'seaPeak',
+  'seaActive',
+  'seaCount',
+  'seaUse',
+  'seaAt',
+  'seaDrawAt',
+  'waveUnder',
+  'samplePoints',
+  'sampleValues',
+  'seaSample',
   'fnArgs',
   'fnResults',
   'fnCapacity',
@@ -130,16 +179,144 @@ export class Physics {
   }
 
   /**
-   * Derives the boat's constants from the params record. Call it after
-   * writing params (writeParams) and before stepping.
+   * Derives the sea's waves from the seaParams record. Call it after
+   * writing seaParams (writeSeaParams) and before prepare.
+   */
+  prepareSea(): void {
+    this.#x.seaPrepare();
+  }
+
+  /**
+   * Derives the boat's constants from the params record, for the sea's
+   * waves. Call it after writing params (writeParams) and after prepareSea,
+   * and before stepping.
    */
   prepare(): void {
     this.#x.prepare();
   }
 
-  /** Advances the state by one step, 1/30 of a second, and writes out. */
+  /**
+   * Advances the state by one step, 1/30 of a second, and writes out: in
+   * the window seaUse named at the tick seaAt set, or in flat water.
+   */
   step(): void {
     this.#x.step();
+  }
+
+  /**
+   * Places one of the module's windows of sea areas: its first area's column
+   * and row, and its areas a side, at most SEA.window. The areas keep what
+   * they held until seaArea sets them.
+   */
+  seaWindow(slot: number, col: number, row: number, size: number): void {
+    this.#x.seaWindow(slot, col, row, size);
+  }
+
+  /** Sets the inputs of one area of a window, in whole steps, and with them its waves. */
+  seaArea(slot: number, area: number, speed: number, from: number, fetch: number): void {
+    this.#x.seaArea(slot, area, speed, from, fetch);
+  }
+
+  /** Makes a window ready, once its areas are set. */
+  seaSeal(slot: number): void {
+    this.#x.seaSeal(slot);
+  }
+
+  /**
+   * Rounds a wind (m/s, radians it comes from) and a fetch in metres to an
+   * area's inputs, exactly as the server does: its speed, direction and
+   * fetch in whole steps, written to out. A negative fetch is open water's.
+   */
+  seaInputOf(speed: number, from: number, fetch: number, out: number[]): number[] {
+    this.#x.seaInputOf(speed, from, fetch);
+    const v = new Uint32Array(this.#x.memory.buffer, this.#x.seaInput() >>> 0, 3);
+    out[0] = v[0] ?? 0;
+    out[1] = v[1] ?? 0;
+    out[2] = v[2] ?? 0;
+    return out;
+  }
+
+  /** A window's amplitudes: SEA.components for each area, row by row. A view: copy what must last. */
+  seaAmplitudes(slot: number): Float64Array {
+    const n = SEA.window * SEA.window * SEA.components;
+    return new Float64Array(this.#x.memory.buffer, this.#x.seaAmp(slot) >>> 0, n);
+  }
+
+  /** The significant height of each area's waves, in metres. A view. */
+  seaHs(slot: number): Float64Array {
+    return new Float64Array(
+      this.#x.memory.buffer,
+      this.#x.seaHs(slot) >>> 0,
+      SEA.window * SEA.window,
+    );
+  }
+
+  /** The frequency of each area's spectral peak, in rad/s. A view. */
+  seaPeak(slot: number): Float64Array {
+    return new Float64Array(
+      this.#x.memory.buffer,
+      this.#x.seaPeak(slot) >>> 0,
+      SEA.window * SEA.window,
+    );
+  }
+
+  /** The waves with an amplitude anywhere in a window, ascending. A view. */
+  seaActive(slot: number): Int32Array {
+    const n = this.#x.seaCount(slot) >>> 0;
+    return new Int32Array(this.#x.memory.buffer, this.#x.seaActive(slot) >>> 0, n);
+  }
+
+  /** Names the window steps sail in; a negative slot is flat water. */
+  seaUse(slot: number): void {
+    this.#x.seaUse(slot);
+  }
+
+  /** Sets the tick the next steps sail at. */
+  seaAt(tick: number): void {
+    this.#x.seaAt(tick);
+  }
+
+  /** Sets the time waveUnder and seaSample answer for, in ticks, which need not be whole. */
+  seaDrawAt(tick: number): void {
+    this.#x.seaDrawAt(tick);
+  }
+
+  /**
+   * The sea under a hull at (east, north) heading heading, over a waterplane
+   * length long and beam wide, in a window at the time seaDrawAt set: the
+   * wave record, indexed by RECORDS.wave. A view: read it before the next call.
+   */
+  waveUnder(
+    slot: number,
+    east: number,
+    north: number,
+    heading: number,
+    length: number,
+    beam: number,
+  ): Float64Array {
+    this.#x.waveUnder(slot, east, north, heading, length, beam);
+    return this.records.wave;
+  }
+
+  /**
+   * The sea at points (east, north of each, in turn) in a window at the time
+   * seaDrawAt set: for each point its height, its slope eastward and
+   * northward, and the significant height of the waves there.
+   */
+  seaSample(slot: number, points: ArrayLike<number>): Float64Array {
+    const x = this.#x;
+    const n = points.length >> 1;
+    const out = new Float64Array(4 * n);
+    for (let start = 0; start < n; start += SEA.sampleCapacity) {
+      const m = Math.min(SEA.sampleCapacity, n - start);
+      const into = new Float64Array(x.memory.buffer, x.samplePoints() >>> 0, 2 * m);
+      for (let i = 0; i < 2 * m; i++) {
+        into[i] = points[2 * start + i] ?? 0;
+      }
+      x.seaSample(slot, m);
+      out.set(new Float64Array(x.memory.buffer, x.sampleValues() >>> 0, 4 * m), 4 * start);
+    }
+    return out;
   }
 
   /**

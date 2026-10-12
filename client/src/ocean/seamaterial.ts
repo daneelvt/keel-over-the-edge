@@ -7,7 +7,7 @@
 // own that fade to nothing at its rim. So what is drawn on a tile stays
 // inside it. The water's colour is deep water lightened toward thin crests,
 // the sky by Fresnel, the sun's sharp glint and its wide highlight, and the
-// haze toward the horizon.
+// haze toward the horizon. No water is drawn inside a hull (hulls.ts).
 
 import {
   abs,
@@ -37,6 +37,7 @@ import {
 import type { Node } from 'three/webgpu';
 import { look, skyColour, toLinear } from '../render/sky';
 import { TILE_APOTHEM } from './hex';
+import { hulls } from './hulls';
 import type { TileVaryings } from './tiles';
 
 /** Seconds, wrapped, for the shimmer. */
@@ -86,13 +87,18 @@ export const SEA_LOOK = {
   tint: 0.03,
   /** The shimmer's ripple slope. */
   shimmer: 0.09,
+  /** How far a crest half the significant height up lightens the water. */
+  crest: 0.45,
+  /** Half the significant height counts as at least this, in metres: calm water has no crests. */
+  crestFloor: 0.03,
 };
 
 interface WaterInput {
   /** The surface's normal. */
   normal: Node<'vec3'>;
-  /** The boat band's height here, for the crests' colour. */
+  /** The boat band's height here, and the sea's significant height, for the crests' colour. */
   height: Node<'float'>;
+  hs: Node<'float'>;
 }
 
 /** The water's colour (display values), before the tile style and the haze. */
@@ -100,7 +106,16 @@ const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   const N = input.normal;
   const L = look.sun;
   const R = reflect(V.negate(), N);
-  const crest = clamp(input.height.mul(0.45).add(0.3), 0, 1);
+  // A crest is high for its own sea: half the significant height up is a
+  // crest in a breeze and in a gale alike.
+  const crest = clamp(
+    input.height
+      .div(max(input.hs.mul(0.5), SEA_LOOK.crestFloor))
+      .mul(SEA_LOOK.crest)
+      .add(0.3),
+    0,
+    1,
+  );
   const flatSun = normalize(vec3(L.x, 0, L.z));
   const toward = pow(max(dot(V.negate(), flatSun), 0), 3).mul(
     float(1).sub(smoothstep(0.35, 0.9, L.y)),
@@ -125,6 +140,8 @@ const finish = (col: Node<'vec3'>, dist: Node<'float'>): Node<'vec4'> =>
 /** The tiles' fragment colour. */
 export function tileLook(v: TileVaryings): Node<'vec4'> {
   return Fn(() => {
+    // No water inside a hull.
+    hulls.cut(positionWorld, v.nearHull);
     const toEye = cameraPosition.sub(positionWorld);
     const dist = length(toEye);
     const V = normalize(toEye);
@@ -165,7 +182,7 @@ export function tileLook(v: TileVaryings): Node<'vec4'> {
     If(top.not(), () => {
       N.assign(normalize(vec3(e.x, 0, e.y)));
     });
-    const col = water({ normal: N, height: v.plane.w }, V).toVar();
+    const col = water({ normal: N, height: v.plane.w, hs: v.hs }, V).toVar();
     If(top, () => {
       const [s0, s1, sk] = SEA_LOOK.seam as [number, number, number];
       const [b0, b1, b2, bk] = SEA_LOOK.bevel as [number, number, number, number];
@@ -199,11 +216,16 @@ export function tileLook(v: TileVaryings): Node<'vec4'> {
 }
 
 /** The far sea's fragment colour: the same water, without the tile style. */
-export function farLook(plane: Node<'vec4'>): Node<'vec4'> {
+export function farLook(
+  plane: Node<'vec4'>,
+  hs: Node<'float'>,
+  nearHull: Node<'float'>,
+): Node<'vec4'> {
   return Fn(() => {
+    hulls.cut(positionWorld, nearHull);
     const toEye = cameraPosition.sub(positionWorld);
     const dist = length(toEye);
     const N = normalize(vec3(plane.y.negate(), 1, plane.z.negate()));
-    return finish(water({ normal: N, height: plane.w }, normalize(toEye)), dist);
+    return finish(water({ normal: N, height: plane.w, hs }, normalize(toEye)), dist);
   })() as unknown as Node<'vec4'>;
 }
