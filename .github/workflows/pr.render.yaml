@@ -6,9 +6,9 @@
 # Runs only when a file the browser tests depend on changed.
 #
 # Each back end runs in jobs of its own, and the tests tagged @long (minutes
-# each on SwiftShader) apart from the rest, so the four run side by side; and
-# a fifth runs the sea's short tests on a WebGPU device held to compatibility
-# mode's limits.
+# each on SwiftShader) apart from the rest, the short tests split over two
+# runners by spec file, so seven jobs run side by side; one of them runs the sea's short
+# tests on a WebGPU device held to compatibility mode's limits.
 # The game connection's upgrade from a worker is also tried on WebKit; and,
 # where the runner's kernel has sch_netem, the slow-network tests run once
 # through real TCP loss as well as through tools/lag's model of it.
@@ -55,19 +55,29 @@ jobs:
               - 'tools/licences/allowed.txt'
 
   browser:
-    name: browser (${{ matrix.project }}, ${{ matrix.tests }})
+    name: browser (${{ matrix.project }}, ${{ matrix.tests }}${{ matrix.shards > 1 && format(', {0} of {1}', matrix.shard, matrix.shards) || '' }})
     needs: [changes]
     if: needs.changes.outputs.render == 'true'
     strategy:
       fail-fast: false
+      # The short tests of each back end are split over two runners by spec
+      # file, so that no job takes much longer than the long ones: the first
+      # runs the files `specs` names, the second every other file, so a new
+      # file always runs. The halves are chosen by the files' measured times
+      # (Playwright's own --shard splits by the number of tests, and these
+      # files' tests take from a second to a minute and a half each). The long
+      # tests are a few long ones, each job's time mostly one test's. The
+      # sea's tests run once more on a WebGPU device held to compatibility
+      # mode's limits.
       matrix:
-        project: [webgl2, webgpu]
-        tests: [long, short]
-        # The sea's tests once more on a WebGPU device held to compatibility
-        # mode's limits.
         include:
-          - project: compat
-            tests: short
+          - { project: webgl2, tests: short, shard: 1, shards: 2, specs: 'sea,sail,fleet,lag' }
+          - { project: webgl2, tests: short, shard: 2, shards: 2, specs: 'sea,sail,fleet,lag' }
+          - { project: webgpu, tests: short, shard: 1, shards: 2, specs: 'sea,fleet' }
+          - { project: webgpu, tests: short, shard: 2, shards: 2, specs: 'sea,fleet' }
+          - { project: webgl2, tests: long, shard: 1, shards: 1, specs: '' }
+          - { project: webgpu, tests: long, shard: 1, shards: 1, specs: '' }
+          - { project: compat, tests: short, shard: 1, shards: 1, specs: '' }
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -100,17 +110,21 @@ jobs:
       - name: Chromium's headless shell for Playwright
         working-directory: client
         run: npx --no-install playwright install --with-deps --only-shell chromium
-      - name: The game on ${{ matrix.project }}, the ${{ matrix.tests }} tests
+      - name: The game on ${{ matrix.project }}, the ${{ matrix.tests }} tests, part ${{ matrix.shard }} of ${{ matrix.shards }}
         working-directory: client
         env:
           PROJECT: ${{ matrix.project }}
           GREP: ${{ matrix.tests == 'long' && '--grep' || '--grep-invert' }}
+          # playwright.config.ts reads these: with SPECS_HALF 1 only the files
+          # SPECS names run, with 2 every file but those.
+          SPECS: ${{ matrix.specs }}
+          SPECS_HALF: ${{ matrix.shards > 1 && matrix.shard || '' }}
         run: npx --no-install playwright test --project "$PROJECT" "$GREP" @long
       - name: The pictures and traces of a failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-${{ matrix.project }}-${{ matrix.tests }}
+          name: playwright-${{ matrix.project }}-${{ matrix.tests }}-${{ matrix.shard }}
           path: |
             client/test-results
             client/playwright-report
