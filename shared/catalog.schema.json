@@ -28,9 +28,15 @@
       "description": "The weather's numbers.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["sea"],
+      "required": ["sea", "disk", "gusts", "ring", "waveWind", "regimes", "sequence"],
       "properties": {
-        "sea": { "$ref": "#/$defs/WeatherSea" }
+        "sea": { "$ref": "#/$defs/WeatherSea" },
+        "disk": { "$ref": "#/$defs/WeatherDisk" },
+        "gusts": { "$ref": "#/$defs/WeatherGusts" },
+        "ring": { "$ref": "#/$defs/WeatherRing" },
+        "waveWind": { "$ref": "#/$defs/WeatherWaveWind" },
+        "regimes": { "description": "The kinds of spell of weather.", "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/Regime" } },
+        "sequence": { "$ref": "#/$defs/Sequence" }
       }
     },
     "WeatherSea": {
@@ -48,6 +54,124 @@
         "spreading": { "description": "The directional spreading's exponent s in cos²ˢ(θ/2): a whole number.", "type": "integer", "minimum": 1, "maximum": 100 },
         "fetchCap": { "description": "The fetch of open water, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
         "cull": { "description": "Waves lower than this fraction of an area's highest are left out.", "type": "number", "minimum": 0, "maximum": 0.5 }
+      }
+    },
+    "WeatherDisk": {
+      "title": "WeatherDisk",
+      "description": "The wind over the disk: how its speed rises toward the rim, the refuge at the centre, the stronger gusts of the outer waters and the turning of the difference across the disk.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["speedCentre", "speedRim", "rim", "refugeInner", "refugeOuter", "refugeMeanKnee", "refugeMean", "refugeWindKnee", "refugeWind", "rimGusts", "rimGustsFrom", "acrossTurn"],
+      "properties": {
+        "speedCentre": { "description": "The wind's speed at the centre, as a share of a spell's wind at mid-disk.", "type": "number", "minimum": 0, "maximum": 2 },
+        "speedRim": { "description": "The wind's speed at the rim, as a share of a spell's wind at mid-disk.", "type": "number", "minimum": 0, "maximum": 2 },
+        "rim": { "description": "Where the speed reaches its share at the rim: the mist band, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "refugeInner": { "description": "Within this the refuge's limits hold in full, in nautical miles.", "type": "number", "minimum": 0, "maximum": 10 },
+        "refugeOuter": { "description": "Beyond this the refuge's limits do not hold, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "refugeMeanKnee": { "description": "The refuge softens the mean wind above this, in knots.", "type": "number", "minimum": 0, "maximum": 100 },
+        "refugeMean": { "description": "The mean wind the refuge holds to, in knots.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "refugeWindKnee": { "description": "The refuge softens the wind with its gusts above this, in knots.", "type": "number", "minimum": 0, "maximum": 100 },
+        "refugeWind": { "description": "The wind with its gusts the refuge holds to, in knots.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "rimGusts": { "description": "The gust factor's excess over 1 grows by this share toward the rim.", "type": "number", "minimum": 0, "maximum": 2 },
+        "rimGustsFrom": { "description": "From here to the rim, in nautical miles.", "type": "number", "minimum": 0, "maximum": 10 },
+        "acrossTurn": { "description": "The shortest and longest time the axis of the wind's difference across the disk takes to turn once, in hours.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 1000 } }
+      }
+    },
+    "WeatherGusts": {
+      "title": "WeatherGusts",
+      "description": "The gust field: gradient noise in three octaves, each with cells and a life half its predecessor's, carried downwind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gustAlong", "gustAcross", "gustLife", "gustSpeed", "gustVeer", "change"],
+      "properties": {
+        "gustAlong": { "description": "The largest cells along the wind, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "gustAcross": { "description": "The largest cells across the wind, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "gustLife": { "description": "The largest cells' life, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "gustSpeed": { "description": "How fast the field travels, as a share of a spell's wind at mid-disk.", "type": "number", "minimum": 0, "maximum": 2 },
+        "gustVeer": { "description": "How far the strongest gust veers, and the deepest lull backs by half, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "change": { "description": "How long one spell takes to give way to the next, in minutes.", "type": "number", "minimum": 0, "maximum": 600 }
+      }
+    },
+    "WeatherRing": {
+      "title": "WeatherRing",
+      "description": "The beginners' ring round gusts heading for the boat.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threshold", "spacing", "depth", "width", "reach", "horizon", "rings", "rate"],
+      "properties": {
+        "threshold": { "description": "A patch gets a ring when its gust factor is this far from 1 toward the spell's.", "type": "number", "minimum": 0, "maximum": 1 },
+        "spacing": { "description": "The grid the field is sampled on upwind of the boat, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "depth": { "description": "How far upwind the grid reaches, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
+        "width": { "description": "How wide the grid is across the wind, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
+        "reach": { "description": "A patch's track must pass this close to the boat, in m.", "type": "number", "minimum": 0, "maximum": 500 },
+        "horizon": { "description": "Within this time, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 600 },
+        "rings": { "description": "The most rings at once.", "type": "integer", "minimum": 0, "maximum": 16 },
+        "rate": { "description": "Samplings of the field a second.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 }
+      }
+    },
+    "WeatherWaveWind": {
+      "title": "WeatherWaveWind",
+      "description": "The wind that raises the waves: an exponential average of the mean wind at each sea area's centre.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["waveTimeConstant", "waveSample", "waveSamples"],
+      "properties": {
+        "waveTimeConstant": { "description": "The average's time constant, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "waveSample": { "description": "The wind is sampled on a grid of world time this far apart, in s: a whole number of seconds.", "type": "integer", "minimum": 1, "maximum": 3600 },
+        "waveSamples": { "description": "How many samples are kept.", "type": "integer", "minimum": 1, "maximum": 64 }
+      }
+    },
+    "Regime": {
+      "title": "Regime",
+      "description": "A kind of spell of weather.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "share", "frontal", "next", "wind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "share": { "description": "The regime's share of the world's time.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "frontal": { "description": "A spell of it arrives and leaves as a front does: the wind veers.", "type": "boolean" },
+        "next": { "description": "The regimes a spell of it may give way to, by id.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Id" } },
+        "wind": { "$ref": "#/$defs/RegimeWind" }
+      }
+    },
+    "RegimeWind": {
+      "title": "RegimeWind",
+      "description": "A regime's wind, from which each spell's is drawn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["speed", "gustFactor", "shift", "period", "across", "drift"],
+      "properties": {
+        "speed": { "description": "The least and the most of its wind at mid-disk, in knots.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 100 } },
+        "gustFactor": { "description": "Its strongest gusts as a multiple of the mean wind.", "type": "number", "minimum": 1, "maximum": 3 },
+        "shift": { "description": "How far its two oscillating shifts swing together, in degrees each way.", "type": "number", "minimum": 0, "maximum": 90 },
+        "period": { "description": "The shortest and the longest period of a shift, in minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 600 } },
+        "across": { "description": "How far the wind's direction differs from the centre to the rim, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "drift": { "description": "The most its direction moves over a spell, in degrees.", "type": "number", "minimum": 0, "maximum": 180 }
+      }
+    },
+    "Sequence": {
+      "title": "Sequence",
+      "description": "The spells of weather until the world's weather is generated: this sequence, over and over from the world's epoch.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "veer", "swing", "spells"],
+      "properties": {
+        "seed": { "description": "The seed each spell's numbers are drawn with.", "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "veer": { "description": "How far the wind veers as a spell of a frontal regime arrives or leaves, the least and the most, in degrees.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 180 } },
+        "swing": { "description": "How far the wind's direction may move either way from one spell to the next otherwise, in degrees.", "type": "number", "minimum": 0, "maximum": 180 },
+        "spells": { "description": "The spells, in order.", "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/SequenceSpell" } }
+      }
+    },
+    "SequenceSpell": {
+      "title": "SequenceSpell",
+      "description": "A spell of the sequence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["regime", "hours"],
+      "properties": {
+        "regime": { "$ref": "#/$defs/Id" },
+        "hours": { "description": "How long it lasts, in whole hours.", "type": "integer", "minimum": 1, "maximum": 100 }
       }
     },
     "Sky": {

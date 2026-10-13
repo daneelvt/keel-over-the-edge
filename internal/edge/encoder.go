@@ -285,13 +285,13 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	if base != nil {
 		baseView, dist = &base.view, uint16(f.Tick-base.tick)
 	}
-	// The sea first: it is queued, and what is queued goes out before the
-	// snapshot.
-	if !c.seaAreas(f, &f.State[s]) {
+	// The weather and the sea first: they are queued, and what is queued
+	// goes out before the snapshot.
+	if !c.weather(f) || !c.seaAreas(f, &f.State[s]) {
 		return
 	}
 	b = b[:protocol.HeaderSize]
-	protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], c.margin.take(), f.Wind, &f.State[s])
+	protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], c.margin.take(), &f.State[s])
 	b, n := protocol.AppendEntries(b, baseView, &next.view, enter, sample)
 	protocol.SetEntries(b, n)
 

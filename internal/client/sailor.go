@@ -58,6 +58,7 @@ type Stats struct {
 	Queued    int // Queued messages
 	Bells     int // Restart messages: the server about to restart
 	Seas      int // SeaAreas messages: the sea about the boat
+	Weathers  int // WeatherSystems messages: the spells of weather in play
 }
 
 // Percentile is the p-th percentile of the corrections' sizes.
@@ -130,11 +131,11 @@ type MSeen struct {
 }
 
 // NewSailor makes a sailor of a boat of kind that connects through dial
-// and steers with controls.
-func NewSailor(dial Dialer, kind *physics.Prepared, waves *physics.Waves, controls Controls) *Sailor {
+// and steers with controls, in the sea of waves and the wind of weather.
+func NewSailor(dial Dialer, kind *physics.Prepared, waves *physics.Waves, weather *physics.WeatherPrepared, controls Controls) *Sailor {
 	return &Sailor{
 		dial: dial, kind: kind, controls: controls,
-		start: time.Now(), Ahead: NewAhead(), Predictor: NewPredictor(kind, waves),
+		start: time.Now(), Ahead: NewAhead(), Predictor: NewPredictor(kind, waves, weather),
 		Net: Net{FrameMs: 17}, sent: [2]int{-1, -1},
 	}
 }
@@ -243,6 +244,12 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			if ev.SeaAreas != nil {
 				s.Stats.Seas++
 				s.Predictor.Seas.Receive(ev.SeaAreas)
+			}
+			if ev.WeatherSystems != nil {
+				s.Stats.Weathers++
+				if err := s.Predictor.ReceiveWeather(ev.WeatherSystems); err != nil {
+					return err
+				}
 			}
 			if v := ev.View; v != nil {
 				s.view(&ev)

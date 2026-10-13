@@ -50,7 +50,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 4
+	formatVersion = 5
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -152,9 +152,11 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = binary.AppendUvarint(dst, e.Boat)
 		dst = binary.AppendUvarint(dst, e.Conn)
 		dst = append(dst, e.Account[:]...)
-	case bus.SetWind:
-		dst = appendF64(dst, e.Wind.Speed)
-		dst = appendF64(dst, e.Wind.From)
+	case bus.SetWeather:
+		dst = binary.AppendUvarint(dst, uint64(e.Weather.Mode))
+		dst = binary.AppendUvarint(dst, uint64(e.Weather.Regime))
+		dst = binary.AppendUvarint(dst, uint64(e.Weather.Speed))
+		dst = binary.AppendUvarint(dst, uint64(e.Weather.Dir))
 	case bus.Place:
 		dst = binary.AppendUvarint(dst, e.Boat)
 		for _, v := range sim.StateFields(&e.State) {
@@ -454,8 +456,12 @@ func (p *payload) event(e *bus.Event) {
 		e.Boat = p.uvarint()
 		e.Conn = p.uvarint()
 		p.bytes(e.Account[:])
-	case bus.SetWind:
-		e.Wind = bus.Wind{Speed: p.f64(), From: p.f64()}
+	case bus.SetWeather:
+		mode, regime, speed, dir := p.uvarint(), p.uvarint(), p.uvarint(), p.uvarint()
+		if p.err == nil && (mode > math.MaxUint8 || !bus.WeatherMode(mode).Valid() || regime > math.MaxUint16 || speed > math.MaxUint32 || dir > math.MaxUint32) {
+			p.err = fmt.Errorf("a developer's weather of mode %d", mode)
+		}
+		e.Weather = bus.Weather{Mode: bus.WeatherMode(mode), Regime: uint16(regime), Speed: uint32(speed), Dir: uint32(dir)}
 	case bus.Place:
 		e.Boat = p.uvarint()
 		for _, v := range sim.StateFields(&e.State) {

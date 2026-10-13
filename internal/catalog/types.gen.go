@@ -437,6 +437,45 @@ type PhysicsSailor struct {
 	SwimTime float64 `json:"swimTime"`
 }
 
+// A kind of spell of weather.
+type Regime struct {
+	// A spell of it arrives and leaves as a front does: the wind veers.
+	Frontal bool `json:"frontal"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// The regimes a spell of it may give way to, by id.
+	Next []ID `json:"next"`
+
+	// The regime's share of the world's time.
+	Share float64 `json:"share"`
+
+	// Wind corresponds to the JSON schema field "wind".
+	Wind RegimeWind `json:"wind"`
+}
+
+// A regime's wind, from which each spell's is drawn.
+type RegimeWind struct {
+	// How far the wind's direction differs from the centre to the rim, in degrees.
+	Across float64 `json:"across"`
+
+	// The most its direction moves over a spell, in degrees.
+	Drift float64 `json:"drift"`
+
+	// Its strongest gusts as a multiple of the mean wind.
+	GustFactor float64 `json:"gustFactor"`
+
+	// The shortest and the longest period of a shift, in minutes.
+	Period []float64 `json:"period"`
+
+	// How far its two oscillating shifts swing together, in degrees each way.
+	Shift float64 `json:"shift"`
+
+	// The least and the most of its wind at mid-disk, in knots.
+	Speed []float64 `json:"speed"`
+}
+
 type Sailor struct {
 	// Art corresponds to the JSON schema field "art".
 	Art SailorArt `json:"art"`
@@ -457,6 +496,33 @@ type SailorArt struct {
 	// The sailor's model: a glTF binary with the nodes body, head, arm-left and
 	// arm-right, its origin at the hips, facing +x.
 	Model ArtPath `json:"model"`
+}
+
+// The spells of weather until the world's weather is generated: this sequence,
+// over and over from the world's epoch.
+type Sequence struct {
+	// The seed each spell's numbers are drawn with.
+	Seed int `json:"seed"`
+
+	// The spells, in order.
+	Spells []SequenceSpell `json:"spells"`
+
+	// How far the wind's direction may move either way from one spell to the next
+	// otherwise, in degrees.
+	Swing float64 `json:"swing"`
+
+	// How far the wind veers as a spell of a frontal regime arrives or leaves, the
+	// least and the most, in degrees.
+	Veer []float64 `json:"veer"`
+}
+
+// A spell of the sequence.
+type SequenceSpell struct {
+	// How long it lasts, in whole hours.
+	Hours int `json:"hours"`
+
+	// Regime corresponds to the JSON schema field "regime".
+	Regime ID `json:"regime"`
 }
 
 // The sky's numbers: the lengths of its day, year and month, its scale, the moment
@@ -494,8 +560,118 @@ type Sky struct {
 
 // The weather's numbers.
 type Weather struct {
+	// Disk corresponds to the JSON schema field "disk".
+	Disk WeatherDisk `json:"disk"`
+
+	// Gusts corresponds to the JSON schema field "gusts".
+	Gusts WeatherGusts `json:"gusts"`
+
+	// The kinds of spell of weather.
+	Regimes []Regime `json:"regimes"`
+
+	// Ring corresponds to the JSON schema field "ring".
+	Ring WeatherRing `json:"ring"`
+
 	// Sea corresponds to the JSON schema field "sea".
 	Sea WeatherSea `json:"sea"`
+
+	// Sequence corresponds to the JSON schema field "sequence".
+	Sequence Sequence `json:"sequence"`
+
+	// WaveWind corresponds to the JSON schema field "waveWind".
+	WaveWind WeatherWaveWind `json:"waveWind"`
+}
+
+// The wind over the disk: how its speed rises toward the rim, the refuge at the
+// centre, the stronger gusts of the outer waters and the turning of the difference
+// across the disk.
+type WeatherDisk struct {
+	// The shortest and longest time the axis of the wind's difference across the disk
+	// takes to turn once, in hours.
+	AcrossTurn []float64 `json:"acrossTurn"`
+
+	// Within this the refuge's limits hold in full, in nautical miles.
+	RefugeInner float64 `json:"refugeInner"`
+
+	// The mean wind the refuge holds to, in knots.
+	RefugeMean float64 `json:"refugeMean"`
+
+	// The refuge softens the mean wind above this, in knots.
+	RefugeMeanKnee float64 `json:"refugeMeanKnee"`
+
+	// Beyond this the refuge's limits do not hold, in nautical miles.
+	RefugeOuter float64 `json:"refugeOuter"`
+
+	// The wind with its gusts the refuge holds to, in knots.
+	RefugeWind float64 `json:"refugeWind"`
+
+	// The refuge softens the wind with its gusts above this, in knots.
+	RefugeWindKnee float64 `json:"refugeWindKnee"`
+
+	// Where the speed reaches its share at the rim: the mist band, in nautical miles.
+	Rim float64 `json:"rim"`
+
+	// The gust factor's excess over 1 grows by this share toward the rim.
+	RimGusts float64 `json:"rimGusts"`
+
+	// From here to the rim, in nautical miles.
+	RimGustsFrom float64 `json:"rimGustsFrom"`
+
+	// The wind's speed at the centre, as a share of a spell's wind at mid-disk.
+	SpeedCentre float64 `json:"speedCentre"`
+
+	// The wind's speed at the rim, as a share of a spell's wind at mid-disk.
+	SpeedRim float64 `json:"speedRim"`
+}
+
+// The gust field: gradient noise in three octaves, each with cells and a life half
+// its predecessor's, carried downwind.
+type WeatherGusts struct {
+	// How long one spell takes to give way to the next, in minutes.
+	Change float64 `json:"change"`
+
+	// The largest cells across the wind, in m.
+	GustAcross float64 `json:"gustAcross"`
+
+	// The largest cells along the wind, in m.
+	GustAlong float64 `json:"gustAlong"`
+
+	// The largest cells' life, in s.
+	GustLife float64 `json:"gustLife"`
+
+	// How fast the field travels, as a share of a spell's wind at mid-disk.
+	GustSpeed float64 `json:"gustSpeed"`
+
+	// How far the strongest gust veers, and the deepest lull backs by half, in
+	// degrees.
+	GustVeer float64 `json:"gustVeer"`
+}
+
+// The beginners' ring round gusts heading for the boat.
+type WeatherRing struct {
+	// How far upwind the grid reaches, in m.
+	Depth float64 `json:"depth"`
+
+	// Within this time, in s.
+	Horizon float64 `json:"horizon"`
+
+	// Samplings of the field a second.
+	Rate float64 `json:"rate"`
+
+	// A patch's track must pass this close to the boat, in m.
+	Reach float64 `json:"reach"`
+
+	// The most rings at once.
+	Rings int `json:"rings"`
+
+	// The grid the field is sampled on upwind of the boat, in m.
+	Spacing float64 `json:"spacing"`
+
+	// A patch gets a ring when its gust factor is this far from 1 toward the spell's.
+	Threshold float64 `json:"threshold"`
+
+	// How wide the grid is across the wind, in m.
+	Width float64 `json:"width"`
 }
 
 // The waves long enough to move a boat: the band of wavelengths they span and the
@@ -526,5 +702,19 @@ type WeatherSea struct {
 	Spreading int `json:"spreading"`
 }
 
+// The wind that raises the waves: an exponential average of the mean wind at each
+// sea area's centre.
+type WeatherWaveWind struct {
+	// The wind is sampled on a grid of world time this far apart, in s: a whole
+	// number of seconds.
+	WaveSample int `json:"waveSample"`
+
+	// How many samples are kept.
+	WaveSamples int `json:"waveSamples"`
+
+	// The average's time constant, in s.
+	WaveTimeConstant float64 `json:"waveTimeConstant"`
+}
+
 // Version is the catalog version (tools/catalog).
-const Version = "26c5f57fc40b9846"
+const Version = "8499df3900987948"

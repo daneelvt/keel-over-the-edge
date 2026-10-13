@@ -536,21 +536,33 @@ func TestPhysicsGenerated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := goPhysics(fields, sea, sky)
+	wind, err := windFields(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	regime, err := regimeFields(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := goPhysics(fields, sea, sky, wind, regime)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"p.Displacement = b.Physics.Hull.Displacement", "copy(p.DragArea[:], b.Physics.Hull.DragArea)",
 		"p.WaveForce = b.Physics.Hull.WaveForce", "p.WaveYaw = b.Physics.Hull.WaveYaw", "p.Shortest = float64(c.Weather.Sea.Shortest)", "p.Spreading = float64(c.Weather.Sea.Spreading)",
-		"p.Day = float64(c.Sky.Day)", "p.MoonAtEpoch = float64(c.Sky.MoonAtEpoch)"} {
+		"p.Day = float64(c.Sky.Day)", "p.MoonAtEpoch = float64(c.Sky.MoonAtEpoch)",
+		"p.SpeedCentre = float64(c.Weather.Disk.SpeedCentre)", "copy(p.AcrossTurn[:], c.Weather.Disk.AcrossTurn)",
+		"p.WaveSamples = float64(c.Weather.WaveWind.WaveSamples)", "copy(p.Speed[:], r.Speed)", "p.Drift = float64(r.Drift)"} {
 		if !strings.Contains(string(g), want) {
 			t.Errorf("physics.gen.go lacks %q", want)
 		}
 	}
-	ts := string(tsParams(fields, sea, sky))
+	ts := string(tsParams(fields, sea, sky, wind, regime))
 	for _, want := range []string{"params[f.displacement] = p.hull.displacement;", "params.set(p.hull.dragArea, f.dragArea);",
 		"export function writeSeaParams(", "params[f.fetchCap] = s.fetchCap;",
-		"export function writeSkyParams(", "params[0] = s.day;", "params[4] = s.epoch;"} {
+		"export function writeSkyParams(", "params[0] = s.day;", "params[4] = s.epoch;",
+		"export function writeWeatherParams(", "params[f.speedCentre] = w.disk.speedCentre;", "params.set(w.disk.acrossTurn, f.acrossTurn);",
+		"export function writeRegime(", "record.set(r.speed, f.speed);", "record[f.gustFactor] = r.gustFactor;"} {
 		if !strings.Contains(ts, want) {
 			t.Errorf("params.gen.ts lacks %q", want)
 		}

@@ -26,7 +26,8 @@ func BenchmarkWorkers(b *testing.B) {
 			w := newWorld(b, Capacity, n)
 			fill(b, w, boats, 1)
 			w.next = w.Latest()
-			w.env = physics.Env{WindSpeed: DefaultWind.Speed}
+			w.weather.Set(w.next.SpellsInPlay())
+			physics.WeatherAt(&w.weather, &w.wind, float64(w.next.Tick))
 			live := w.next.Live
 			b.Run(fmt.Sprintf("boats=%d/pool=%d", boats, n), func(b *testing.B) {
 				b.ReportAllocs()

@@ -19,6 +19,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 var update = flag.Bool("update", false, "record the traces in shared/protocol/testdata again")
@@ -73,27 +74,29 @@ func recorded(t *testing.T) client.Controls {
 // sail sails the recording for d through lag, in a bubble of its own.
 func sail(t *testing.T, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
 	t.Helper()
-	return sailIn(t, sim.DefaultWind, lag, d, trace)
+	return sailIn(t, nil, lag, d, trace)
 }
 
-// gale is 34 knots from the south-west.
-var gale = bus.Wind{Speed: 34 * 1852.0 / 3600, From: 3.9}
+// gale is 34 knots from the south-west, steady.
+var gale = weather.Steady(34*1852.0/3600, 3.9)
 
-// sailIn is sail in a wind that has blown long enough to raise its sea.
-func sailIn(t *testing.T, wind bus.Wind, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
+// sailIn is sail in a steady wind that has blown long enough to raise its
+// sea, or the world's own if wind is nil.
+func sailIn(t *testing.T, wind *bus.Weather, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
 	t.Helper()
 	var stats client.Stats
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
-		if wind != sim.DefaultWind {
-			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWind, Wind: wind}); err != nil {
+		if wind != nil {
+			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWeather, Weather: *wind}); err != nil {
 				t.Fatal(err)
 			}
 			time.Sleep(3 * time.Second)
 			f := srv.World.Bus().Frames.Acquire()
-			blows, raised := f.Wind, f.Sea.Now[0]
+			blows, raised := f.Spells[f.NSpells-1], f.Sea.Now[0]
 			f.Release()
-			if blows != wind || raised != srv.Waves.OpenSea(wind.Speed, wind.From) {
+			if blows.Steady != 1 || blows.Speed != float64(wind.Speed) || blows.From != float64(wind.Dir) ||
+				raised != (physics.SeaInput{Speed: wind.Speed, From: wind.Dir, Fetch: srv.Waves.OpenSea(0, 0).Fetch}) {
 				t.Fatalf("after three seconds the wind is %+v and its sea %+v", blows, raised)
 			}
 		}
@@ -155,7 +158,7 @@ func TestSailDelay(t *testing.T) {
 func TestSailGale(t *testing.T) {
 	d := sailLength()
 	for name, lag := range map[string]client.Lag{"no lag": {}, "100 ms each way": {Delay: 100 * time.Millisecond}} {
-		s := sailIn(t, gale, lag, d, nil)
+		s := sailIn(t, &gale, lag, d, nil)
 		report(t, "a gale, "+name, s, d)
 		if s.Corrections != 0 || s.Snapshots < int(d.Seconds())*15-30 || s.Seas < 1 {
 			t.Fatalf("%s: %d corrections in %d snapshots, %d SeaAreas", name, s.Corrections, s.Snapshots, s.Seas)
@@ -163,10 +166,10 @@ func TestSailGale(t *testing.T) {
 	}
 }
 
-// TestSailSeaChange: the sea changes a second after the client is told, so
-// a change of wind corrects the prediction only while the wind's own news
-// is on its way, never when the waves follow it.
-func TestSailSeaChange(t *testing.T) {
+// TestSailWeatherChange: a developer's weather blows, and raises its sea,
+// from the second after next, and the client is told a second before: so a
+// change of wind corrects nothing.
+func TestSailWeatherChange(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
 		token, _ := srv.Guest("Ann")
@@ -177,12 +180,12 @@ func TestSailSeaChange(t *testing.T) {
 			t.Fatal(err)
 		}
 		var changes []int64
-		for _, wind := range []bus.Wind{gale, {Speed: 3, From: 1}, {Speed: 12, From: 6}} {
+		for _, wind := range []bus.Weather{gale, weather.Steady(3, 1), weather.Steady(12, 6)} {
 			if err := s.Sail(t.Context(), 7*time.Second); err != nil {
 				t.Fatal(err)
 			}
 			reply := make(chan bus.Reply, 1)
-			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWind, Wind: wind, Reply: reply}); err != nil {
+			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWeather, Weather: wind, Reply: reply}); err != nil {
 				t.Fatal(err)
 			}
 			if err := s.Sail(t.Context(), time.Second); err != nil {
@@ -194,27 +197,11 @@ func TestSailSeaChange(t *testing.T) {
 			t.Fatal(err)
 		}
 		s.Drop()
-		if s.Stats.Seas != 1+len(changes) {
-			t.Fatalf("%d SeaAreas for %d changes of wind", s.Stats.Seas, len(changes))
+		if s.Stats.Seas != 1+len(changes) || s.Stats.Weathers < 1+len(changes) {
+			t.Fatalf("%d SeaAreas and %d WeatherSystems for %d changes of wind", s.Stats.Seas, s.Stats.Weathers, len(changes))
 		}
-		corrected := 0
-		for _, e := range s.Trace.Events {
-			if e.Snap == nil || !e.Snap.Corrected {
-				continue
-			}
-			corrected++
-			// The wind's news takes the way there and back, and a margin:
-			// under a second, which is when the sea first follows.
-			near := false
-			for _, c := range changes {
-				near = near || e.Snap.Tick >= c && e.Snap.Tick < c+bus.SeaPeriod
-			}
-			if !near {
-				t.Errorf("a correction at tick %d, with the wind changed at ticks %v", e.Snap.Tick, changes)
-			}
-		}
-		if corrected == 0 || s.Stats.Resets > 1 {
-			t.Errorf("%d corrections and %d resets through %d changes of wind", corrected, s.Stats.Resets, len(changes))
+		if s.Stats.Corrections != 0 || s.Stats.Resets > 1 {
+			t.Errorf("%d corrections and %d resets through %d changes of wind at ticks %v", s.Stats.Corrections, s.Stats.Resets, len(changes), changes)
 		}
 	})
 }
@@ -371,7 +358,7 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 	t.Helper()
 	waves, kinds := CatalogKinds(t)
 	n := client.Net{FrameMs: 17}
-	p := client.NewPredictor(&kinds[0], waves)
+	p := client.NewPredictor(&kinds[0], waves, weather.Fixed(sim.DefaultSpell).Prepared())
 	snapshots := map[int64]*protocol.Snapshot{}
 	var latest *protocol.Snapshot
 	var expect [][]byte
@@ -395,6 +382,11 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 			sent(out...)
 			if ev.SeaAreas != nil {
 				p.Seas.Receive(ev.SeaAreas)
+			}
+			if ev.WeatherSystems != nil {
+				if err := p.ReceiveWeather(ev.WeatherSystems); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if ev.Dropped != e.Dropped {
 				t.Fatalf("event %d: dropped %v, the trace %v", i, ev.Dropped, e.Dropped)

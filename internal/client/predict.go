@@ -8,6 +8,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
 
@@ -34,37 +35,65 @@ type ringEntry struct {
 // client/src/predict/predictor.ts's twin.
 type Predictor struct {
 	kind *physics.Prepared
-	// Seas is the sea the boat is stepped in, from the server's SeaAreas.
+	// Seas is the sea the boat is stepped in, from the server's SeaAreas;
+	// Weather the spells of weather, from its WeatherSystems.
 	Seas    *Seas
+	Weather physics.Weather
 	Started bool
 	Tick    int64 // the tick State is after
 	State   physics.State
-	Wind    bus.Wind
 	ring    [Ring]ringEntry
 	out     physics.Out
+	wind    physics.WeatherTick
 }
 
 // NewPredictor predicts a boat of kind in the sea of waves, with which the
-// kind was prepared; with no waves, in flat water.
-func NewPredictor(kind *physics.Prepared, waves *physics.Waves) *Predictor {
-	return &Predictor{kind: kind, Seas: NewSeas(waves)}
+// kind was prepared, and in the wind computed with weather; with no waves,
+// in flat water. Until the server sends its spells of weather, there is no
+// wind.
+func NewPredictor(kind *physics.Prepared, waves *physics.Waves, weather *physics.WeatherPrepared) *Predictor {
+	return &Predictor{kind: kind, Seas: NewSeas(waves), Weather: physics.Weather{Prepared: weather}}
+}
+
+// ReceiveWeather takes a WeatherSystems: its spells replace those held.
+func (p *Predictor) ReceiveWeather(m *pb.WeatherSystems) error {
+	var spells [physics.WeatherSpells]physics.Spell
+	n, err := protocol.SpellsOf(m, &spells)
+	if err != nil {
+		return err
+	}
+	p.Weather.Set(spells[:n])
+	p.wind.Tick = math.NaN()
+	return nil
 }
 
 // Reset puts the boat at a snapshot's state, forgetting what was predicted.
 func (p *Predictor) Reset(sn *protocol.Snapshot) {
-	p.Started, p.Tick, p.State, p.Wind = true, sn.Tick, sn.State, sn.Wind
+	p.Started, p.Tick, p.State = true, sn.Tick, sn.State
 	for i := range p.ring {
 		p.ring[i].tick = math.MinInt64
 	}
 }
 
-// step steps the boat into tick, in the sea of that tick, as the server
-// does.
+// step steps the boat into tick, in the wind at its place and the sea of
+// that tick, as the server does.
 func (p *Predictor) step(tick int64, helm, sheet uint16) {
 	w := bus.Pack(0, helm, sheet, 0)
 	c := physics.Control{Helm: w.Helm(), Sheet: w.Sheet()}
-	e := physics.Env{WindSpeed: p.Wind.Speed, WindFrom: p.Wind.From}
+	if p.wind.Tick != float64(tick) {
+		physics.WeatherAt(&p.Weather, &p.wind, float64(tick))
+	}
+	e := physics.WindAt(&p.wind, p.State.X, p.State.Y)
 	physics.Step(&p.State, &c, &e, p.Seas.At(tick), p.kind, &p.out)
+}
+
+// Wind is the wind at the boat at the tick its state is after, in full.
+func (p *Predictor) Wind() physics.WindPoint {
+	var t physics.WeatherTick
+	physics.WeatherAt(&p.Weather, &t, float64(p.Tick))
+	var w physics.WindPoint
+	physics.WindPointAt(&t, p.State.X, p.State.Y, &w)
+	return w
 }
 
 // Step steps the next tick with these controls, at the controls'
@@ -103,7 +132,6 @@ func (p *Predictor) Snapshot(sn *protocol.Snapshot) Outcome {
 		p.Reset(sn)
 		return Outcome{Reset: true}
 	}
-	p.Wind = sn.Wind
 	if sameBits(&e.state, &sn.State) {
 		return Outcome{}
 	}

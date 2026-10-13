@@ -27,13 +27,15 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // Capacity is the number of boat slots in a world.
 const Capacity = 4096
 
-// DefaultWind is the wind a world starts with: 10 knots from the north.
-var DefaultWind = bus.Wind{Speed: 10 * 1852.0 / 3600, From: 0}
+// DefaultSpell is the weather of a world given no timeline: 10 knots from
+// the north, steady, everywhere.
+var DefaultSpell = physics.SteadySpell(10*1852.0/3600, 0, 0)
 
 // GraceTicks is how long a boat sails on, on its held controls, after its
 // connection ends: 60 s, room for a server's restart and a phone's dropout.
@@ -63,6 +65,8 @@ type Config struct {
 	// capacity; 0 means the capacity. Beyond it, connections wait their
 	// turn in a queue.
 	Limit int
+	// Weather is the world's own weather; nil is DefaultSpell for ever.
+	Weather *weather.Timeline
 }
 
 // A Phase is a part of a tick.
@@ -109,7 +113,7 @@ type Input struct {
 	Commands []bus.Command
 }
 
-// World is a world's boats and wind, and the machinery that ticks them.
+// World is a world's boats and weather, and the machinery that ticks them.
 // Everything but Bus and Close is for the one goroutine that ticks.
 type World struct {
 	bus       *bus.Bus
@@ -117,6 +121,9 @@ type World struct {
 	limit     int
 	kinds     []physics.Prepared
 	sea       sea
+	timeline  *weather.Timeline
+	weather   physics.Weather
+	wind      physics.WeatherTick
 	grace     int64
 	observer  Observer
 	recorders []Recorder
@@ -126,7 +133,6 @@ type World struct {
 	cur, next *bus.Frame
 	skip      int64
 	given     *Input
-	env       physics.Env
 
 	workers workers
 
@@ -158,20 +164,26 @@ func New(cfg Config) (*World, error) {
 	if cfg.Limit < 1 || cfg.Limit > cfg.Capacity {
 		return nil, fmt.Errorf("sim: a limit of %d boats in a world of %d slots", cfg.Limit, cfg.Capacity)
 	}
+	if cfg.Weather == nil {
+		cfg.Weather = weather.Fixed(DefaultSpell)
+	}
 	w := &World{
 		bus:      bus.New(cfg.Capacity),
 		capacity: cfg.Capacity,
 		limit:    cfg.Limit,
 		kinds:    cfg.Kinds,
 		grace:    cfg.Grace,
+		timeline: cfg.Weather,
 		ctx:      context.Background(),
 	}
+	w.weather.Prepared = cfg.Weather.Prepared()
 	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.publish
-	w.sea.init(cfg.Waves)
+	w.sea.init(cfg.Waves, cfg.Weather)
 	f := w.bus.Frames.Latest()
 	f.Tick = cfg.Tick
-	f.Wind = DefaultWind
-	w.sea.under(&f.Sea, f.Wind)
+	f.Weathers = f.Weathers[:0]
+	w.spells(f)
+	w.sea.under(&f.Sea, f.Tick, f.Weathers)
 	f.NextBoat = 1
 	w.workers.start(w, max(cfg.Workers, 1))
 	return w, nil
@@ -226,10 +238,12 @@ func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 			return fmt.Errorf("sim: slot %d is a boat of kind %d; the world has %d kinds", s, f.Kind[s], len(w.kinds))
 		}
 	}
+	w.sea.loaded()
 	if adjust != nil {
 		adjust(f)
 	}
-	w.sea.loaded()
+	w.spells(f)
+	w.sea.under(&f.Sea, f.Tick, f.Weathers)
 	// Each slot holds the controls in force until its sailor writes again.
 	for _, s := range f.Live {
 		w.bus.Controls.Store(s, f.Control[s])
@@ -237,6 +251,14 @@ func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 	buildGrid(f)
 	w.bus.Frames.Publish(f)
 	return nil
+}
+
+// Timeline is the world's own weather.
+func (w *World) Timeline() *weather.Timeline { return w.timeline }
+
+// spells sets f's spells in play from its tick and weathers.
+func (w *World) spells(f *bus.Frame) {
+	f.NSpells = w.timeline.Spells(f.Tick, f.Weathers, &f.Spells)
 }
 
 // Workers is the number of goroutines that stepped boats in the last tick.

@@ -24,15 +24,12 @@ type Restored struct {
 // end, so a sailor's own absence before the restart is not lengthened. A
 // Join from the same account within the grace finds its boat, or its
 // place. Admission is no longer held: whatever held it was the earlier
-// process's. The sea is what the wind had made it: the one the snapshot
-// held for the next second if the present is in that second, and the wind's
-// own if it is later.
+// process's. The weather and the sea are what the developer's weathers
+// make them at the present.
 func (w *World) Restore(snapshot []byte, now int64) (Restored, error) {
 	var r Restored
 	err := w.load(snapshot, func(f *bus.Frame) {
 		r = Restored{From: f.Tick, Gap: now - f.Tick, Boats: len(f.Live), Waiting: len(f.Queue)}
-		// The sea moves on over the gap as it does over ticks skipped.
-		w.sea.roll(&f.Sea, &f.Sea, f.Tick, now, f.Wind)
 		f.Tick = now
 		f.Held = false
 		for _, s := range f.Live {

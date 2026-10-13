@@ -48,7 +48,6 @@ type goldenSnapshot struct {
 	Margin  int16             `json:"margin"`
 	Helm    uint16            `json:"helm"`
 	Sheet   uint16            `json:"sheet"`
-	Wind    [2]string         `json:"wind"`
 	State   map[string]string `json:"state"`
 	Bytes   string            `json:"bytes"`
 	View    []goldenBoat      `json:"view"`
@@ -138,7 +137,7 @@ func goldens() []golden {
 	}
 	header := func(tick int64, base uint16, flags uint8, st physics.State) Snapshot {
 		return Snapshot{Tick: tick, Base: base, Flags: flags, Seq: uint32(tick + 3), Margin: int16(tick%7) - 2,
-			Helm: uint16(tick % 1025), Sheet: 1024 - uint16(tick%1025), Wind: bus.Wind{Speed: 7.25, From: 4.1}, State: st}
+			Helm: uint16(tick % 1025), Sheet: 1024 - uint16(tick%1025), State: st}
 	}
 
 	var v1 View
@@ -172,9 +171,9 @@ func goldens() []golden {
 		{"far sampled, nothing changed", header(1006, 2, FarSampled, sailing), v4, 0, v4.Used},
 		{"delta six ticks back", header(1008, 6, 0, sailing), v5, 0, v5.Used},
 		{"awkward header", Snapshot{Tick: 1<<53 + 2, Seq: math.MaxUint32, Margin: NoMargin, Helm: 0, Sheet: 1024,
-			Wind: bus.Wind{Speed: 0, From: 2 * math.Pi}, State: awkward}, View{}, 0, 0},
+			State: awkward}, View{}, 0, 0},
 		{"negative tick", Snapshot{Tick: -30, Seq: 0xffffffe3, Margin: math.MaxInt16, Helm: 1024, Sheet: 1,
-			Wind: bus.Wind{Speed: 25, From: -0.5}, State: sailing}, View{}, 0, 0},
+			State: sailing}, View{}, 0, 0},
 	}
 }
 
@@ -226,7 +225,7 @@ func TestSnapshotGolden(t *testing.T) {
 			views[g.header.Tick] = &g.view
 			h := g.header
 			gs := goldenSnapshot{Name: g.name, Tick: strconv.FormatInt(h.Tick, 10), Base: h.Base, Flags: h.Flags, Seq: h.Seq,
-				Margin: h.Margin, Helm: h.Helm, Sheet: h.Sheet, Wind: [2]string{f64bits(h.Wind.Speed), f64bits(h.Wind.From)},
+				Margin: h.Margin, Helm: h.Helm, Sheet: h.Sheet,
 				State: map[string]string{}, Bytes: hex.EncodeToString(b), View: viewOf(&g.view)}
 			names := stateNames()
 			for i, v := range sim.StateFields(&h.State) {
@@ -273,8 +272,7 @@ func TestSnapshotGolden(t *testing.T) {
 			t.Fatalf("%s: %v", g.Name, err)
 		}
 		if tick, _ := strconv.ParseInt(g.Tick, 10, 64); got.Tick != tick || got.Base != g.Base || got.Flags != g.Flags ||
-			got.Seq != g.Seq || got.Margin != g.Margin || got.Helm != g.Helm || got.Sheet != g.Sheet ||
-			f64bits(got.Wind.Speed) != g.Wind[0] || f64bits(got.Wind.From) != g.Wind[1] {
+			got.Seq != g.Seq || got.Margin != g.Margin || got.Helm != g.Helm || got.Sheet != g.Sheet {
 			t.Errorf("%s: read %+v", g.Name, got)
 		}
 		names := stateNames()
@@ -426,11 +424,11 @@ func TestSnapshotRefusals(t *testing.T) {
 		"kind 1":          append([]byte{KindMessage}, good[1:]...),
 		"kind only":       good[:1],
 		"header cut":      good[:HeaderSize-1],
-		"layout 3":        withByte(good, offLayout, 3),
+		"layout 4":        withByte(good, offLayout, 4),
 		"helm over 1024":  withUint16(good, offHelm, 1025),
 		"spare flags":     withByte(good, offFlags, 2),
 		"129 entries":     withByte(good, offEntries, 129),
-		"layout 5":        withByte(good, offLayout, 5),
+		"layout 6":        withByte(good, offLayout, 6),
 		"sheet over 1024": withUint16(good, offSheet, 2000),
 	} {
 		if err := ReadSnapshot(b, &sn); err == nil {
@@ -493,7 +491,7 @@ func TestEncodingAllocatesNothing(t *testing.T) {
 	word := bus.Pack(s.Seq, s.Helm, s.Sheet, 3)
 	if n := testing.AllocsPerRun(100, func() {
 		b = b[:HeaderSize]
-		PutHeader(b, s.Tick, s.Base, s.Flags, word, s.Margin, s.Wind, &s.State)
+		PutHeader(b, s.Tick, s.Base, s.Flags, word, s.Margin, &s.State)
 		b, _ = AppendEntries(b, &cases[0].view, &cases[1].view, cases[1].enter, cases[1].sample)
 	}); n != 0 {
 		t.Fatalf("%v allocations", n)
@@ -558,6 +556,13 @@ func messages() (clients []*pb.ClientMessage, servers []*pb.ServerMessage) {
 		{Body: &pb.ServerMessage_Queued{Queued: &pb.Queued{Position: 12, Waiting: 40}}},
 		{Body: &pb.ServerMessage_SeaAreas{SeaAreas: &pb.SeaAreas{Tick: 727706190, Col: -1, Row: 34, Size: 2,
 			Speed: []uint32{514, 0, 1749, 10000}, From: []uint32{0, 65535, 32768, 1}, Fetch: []uint32{11112, 0, 463, 16777216}}}},
+		{Body: &pb.ServerMessage_WeatherSystems{WeatherSystems: &pb.WeatherSystems{Spells: []*pb.Spell{
+			{Begin: 727704000, Change: 18000, Start: 727704000, Length: 432000, Regime: 1, Speed: 669, From: 65535,
+				Drift: -3641, Gust: 1300, Shift: []uint32{971, 485}, Period: []uint32{11880, 8940}, Phase: []uint32{0, 40000},
+				Across: 910, Axis: 12345, AxisPeriod: 648000, Seed: 4294967295},
+			{Begin: 727706190, Start: 727706190, Steady: true, Speed: 1000, From: 16384, Gust: 1000,
+				Shift: []uint32{0, 0}, Period: []uint32{0, 0}, Phase: []uint32{0, 0}},
+		}}}},
 	}
 	return clients, servers
 }
@@ -824,5 +829,32 @@ func readCorpusCase(c *corpusCase, bases map[string]*View) {
 			}
 		}
 		c.Changes = string(changes)
+	}
+}
+
+// TestSpellsRoundTrip: a spell's whole numbers go out and come back the
+// same, and a message that does not hold spells as the physics package
+// does is refused.
+func TestSpellsRoundTrip(t *testing.T) {
+	in := []physics.Spell{
+		{Begin: -30, Change: 18000, Start: 1 << 52, Length: 1 << 40, Regime: 3, Speed: 1234, From: 65535, Drift: -3641,
+			Gust: 1500, Shift: [2]float64{2184, 1092}, Period: [2]float64{7200, 12600}, Phase: [2]float64{1, 65535},
+			Across: 910, Axis: 7, AxisPeriod: 864000, Seed: 4294967295},
+		physics.SteadySpell(5.14, 1, 1<<52),
+	}
+	var out [physics.WeatherSpells]physics.Spell
+	n, err := SpellsOf(WeatherSystems(in), &out)
+	if err != nil || n != 2 || out[0] != in[0] || out[1] != in[1] {
+		t.Fatalf("%d spells, %v:\n got  %+v\n want %+v", n, err, out[:n], in)
+	}
+	for name, m := range map[string]*pb.WeatherSystems{
+		"five":         {Spells: make([]*pb.Spell, 5)},
+		"one shift":    {Spells: []*pb.Spell{{Shift: []uint32{1}, Period: []uint32{1, 2}, Phase: []uint32{1, 2}}}},
+		"out of order": WeatherSystems([]physics.Spell{in[1], in[0]}),
+		"beyond 2⁵³":   {Spells: []*pb.Spell{{Begin: 1<<53 + 1, Shift: []uint32{0, 0}, Period: []uint32{0, 0}, Phase: []uint32{0, 0}}}},
+	} {
+		if _, err := SpellsOf(m, &out); err == nil {
+			t.Errorf("%s: read", name)
+		}
 	}
 }

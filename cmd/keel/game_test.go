@@ -18,8 +18,10 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -480,18 +482,21 @@ func TestSecondSignalKills(t *testing.T) {
 	}
 }
 
-// TestWindRoute: POST /debug/wind is on the internal listener only with
-// KEEL_DEV_COMMANDS=1, and the next snapshot carries the new wind.
-func TestWindRoute(t *testing.T) {
+// TestWeatherRoutes: POST /debug/wind and /debug/weather are on the
+// internal listener only with KEEL_DEV_COMMANDS=1, and the client hears of
+// the developer's weather each sets before it blows.
+func TestWeatherRoutes(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s, _ := gameServer(t, map[string]string{}, &memDB{epoch: bubbleEpoch})
-		res, err := s.client.Post(internalURL+"/debug/wind?knots=12&from=90", "", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res.Body.Close()
-		if res.StatusCode != http.StatusNotFound && res.StatusCode != http.StatusMethodNotAllowed {
-			t.Fatalf("without KEEL_DEV_COMMANDS: %d", res.StatusCode)
+		for _, path := range []string{"/debug/wind?knots=12&from=90", "/debug/weather?auto"} {
+			res, err := s.client.Post(internalURL+path, "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			if res.StatusCode != http.StatusNotFound && res.StatusCode != http.StatusMethodNotAllowed {
+				t.Fatalf("%s without KEEL_DEV_COMMANDS: %d", path, res.StatusCode)
+			}
 		}
 		s.stop(t)
 	})
@@ -508,31 +513,64 @@ func TestWindRoute(t *testing.T) {
 				t.Fatalf("%s serves the wind route", base)
 			}
 		}
-		res, err := s.client.Post(internalURL+"/debug/wind?knots=x", "", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res.Body.Close()
-		if res.StatusCode != http.StatusBadRequest {
-			t.Fatalf("a bad wind: %d", res.StatusCode)
-		}
-		res, err = s.client.Post(internalURL+"/debug/wind?knots=12&from=90", "", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res.Body.Close()
-		if res.StatusCode != http.StatusNoContent {
-			t.Fatalf("the wind route answered %d", res.StatusCode)
-		}
-		var sn *protocol.Snapshot
-		for r := range in.C {
-			if r.Snapshot != nil && r.Snapshot.Wind.Speed == 12*1852.0/3600 {
-				sn = r.Snapshot
-				break
+		for _, path := range []string{"/debug/wind?knots=x", "/debug/weather?regime=doldrums", "/debug/weather"} {
+			res, err := s.client.Post(internalURL+path, "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			if res.StatusCode != http.StatusBadRequest {
+				t.Fatalf("%s: %d", path, res.StatusCode)
 			}
 		}
-		if sn == nil || sn.Wind.From != 90*3.141592653589793/180 {
-			t.Fatalf("snapshot %+v", sn)
+		post := func(path string) {
+			t.Helper()
+			res, err := s.client.Post(internalURL+path, "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			if res.StatusCode != http.StatusNoContent {
+				t.Fatalf("%s answered %d", path, res.StatusCode)
+			}
+		}
+		// The latest spell the client is told of, once it is one that pred
+		// accepts.
+		spell := func(pred func(physics.Spell) bool) physics.Spell {
+			t.Helper()
+			for r := range in.C {
+				if m := r.Message.GetWeatherSystems(); m != nil {
+					var spells [physics.WeatherSpells]physics.Spell
+					n, err := protocol.SpellsOf(m, &spells)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if last := spells[n-1]; pred(last) {
+						return last
+					}
+				}
+			}
+			t.Fatal("the connection ended")
+			return physics.Spell{}
+		}
+		post("/debug/wind?knots=12&from=90")
+		if sp := spell(func(s physics.Spell) bool { return s.Steady == 1 }); sp.Speed != 617 || sp.From != 16384 || sp.Gust != 1000 {
+			t.Fatalf("a steady wind of 12 knots from the east: %+v", sp)
+		}
+		cat, err := catalog.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, r := range cat.Weather.Regimes {
+			post("/debug/weather?regime=" + string(r.ID))
+			sp := spell(func(s physics.Spell) bool { return s.Steady == 0 && s.Regime == float64(i) && s.Length == 0 })
+			if sp.Gust != math.Round(r.Wind.GustFactor*1000) {
+				t.Fatalf("the %s regime held: %+v", r.ID, sp)
+			}
+		}
+		post("/debug/weather?auto")
+		if sp := spell(func(s physics.Spell) bool { return s.Length > 0 }); sp.Change != 0 {
+			t.Fatalf("the world's own weather back: %+v", sp)
 		}
 		s.stop(t)
 	})

@@ -37,6 +37,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // shutdownTimeout bounds how long a stopping server waits for requests in
@@ -78,7 +79,9 @@ Configured from the environment:
                        server is restarting, from 0s to 10s (default 3s)
   KEEL_DEV_SAILORS     scripted sailors to sail (default 0)
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
-                       POST /debug/wind?knots=…&from=… (default 0)
+                       POST /debug/wind?knots=…&from=… (a steady wind),
+                       POST /debug/weather?regime=… (a regime held) and
+                       POST /debug/weather?auto (the world's own) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -219,14 +222,14 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		}
 	}
 	replayHandler := &lateHandler{}
-	var windHandler *lateHandler
-	var wind http.Handler
+	var weatherHandler *lateHandler
+	var weatherRoutes http.Handler
 	if cfg.DevCommands {
-		windHandler = &lateHandler{}
-		wind = windHandler
+		weatherHandler = &lateHandler{}
+		weatherRoutes = weatherHandler
 	}
 	side := &sideServers{}
-	side.serve(newServer(obs.Internal(health, metrics, flightHandler, replayHandler, wind), log), internalLn)
+	side.serve(newServer(obs.Internal(health, metrics, flightHandler, replayHandler, weatherRoutes), log), internalLn)
 	log.Info("listening", "listener", "internal", "addr", internalLn.Addr().String())
 	// The metrics alone, on a port of their own, for the scraper.
 	if cfg.MetricsAddr != "" {
@@ -331,7 +334,11 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		return stopEarly(side, flight, err)
 	}
 	waves, kinds := cat.Prepare()
-	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
+	timeline, err := weather.FromCatalog(cat)
+	if err != nil {
+		return stopEarly(side, flight, err)
+	}
+	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
@@ -347,9 +354,9 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Log:    log,
 	})
 	replayHandler.set(inputs)
-	if windHandler != nil {
-		windHandler.set(windRoute(b.Commands.Developer()))
-		log.Warn("developer commands are on: POST /debug/wind on the internal listener")
+	if weatherHandler != nil {
+		weatherHandler.set(weatherRoute(b.Commands.Developer(), cat))
+		log.Warn("developer commands are on: POST /debug/wind and /debug/weather on the internal listener")
 	}
 	metrics.CounterFunc("keel_sim_commands_refused_total", "Commands refused because the queue was full.", b.Commands.Refused)
 	metrics.CounterFunc("keel_sim_frames_allocated_total", "Frames made because every frame in the pool was in use.", b.Frames.Allocated)
@@ -611,20 +618,38 @@ func restore(ctx context.Context, db database, world *sim.World, sailed store.Wo
 	return nil
 }
 
-// windRoute is POST /debug/wind?knots=…&from=…: the wind becomes knots 10 m
-// up, from the given degrees, at the next tick. A developer's command, on
-// the internal listener only, with KEEL_DEV_COMMANDS=1.
-func windRoute(dev bus.Sender) http.Handler {
+// weatherRoute is the developer's weather, on the internal listener only,
+// with KEEL_DEV_COMMANDS=1. Each takes effect from the second after next,
+// so every client hears of it before it predicts a tick it applies to.
+//
+//	POST /debug/wind?knots=…&from=…   a steady wind of knots 10 m up, from the given degrees
+//	POST /debug/weather?regime=…      one endless spell of the catalog's regime of that id
+//	POST /debug/weather?auto          the world's own weather again
+func weatherRoute(dev bus.Sender, cat *catalog.Catalog) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		knots, err1 := strconv.ParseFloat(q.Get("knots"), 64)
-		from, err2 := strconv.ParseFloat(q.Get("from"), 64)
-		if err1 != nil || err2 != nil || knots < 0 || knots > 100 || math.IsNaN(from) || math.IsInf(from, 0) {
-			http.Error(w, "knots, from 0 to 100, and from, in degrees, are required", http.StatusBadRequest)
-			return
+		var wx bus.Weather
+		switch {
+		case r.URL.Path == "/debug/wind":
+			knots, err1 := strconv.ParseFloat(q.Get("knots"), 64)
+			from, err2 := strconv.ParseFloat(q.Get("from"), 64)
+			if err1 != nil || err2 != nil || knots < 0 || knots > 100 || math.IsNaN(from) || math.IsInf(from, 0) {
+				http.Error(w, "knots, from 0 to 100, and from, in degrees, are required", http.StatusBadRequest)
+				return
+			}
+			rad := math.Mod(math.Mod(from, 360)+360, 360) * math.Pi / 180
+			wx = weather.Steady(knots*1852/3600, rad)
+		case q.Has("auto"):
+			wx = bus.Weather{Mode: bus.WeatherAuto}
+		default:
+			i := weather.RegimeIndex(cat, q.Get("regime"))
+			if i < 0 {
+				http.Error(w, "regime, the id of one of the catalog's regimes, or auto, is required", http.StatusBadRequest)
+				return
+			}
+			wx = bus.Weather{Mode: bus.WeatherHeld, Regime: uint16(i)}
 		}
-		rad := math.Mod(math.Mod(from, 360)+360, 360) * math.Pi / 180
-		if err := dev.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: knots * 1852 / 3600, From: rad}}); err != nil {
+		if err := dev.TrySend(bus.Command{Op: bus.SetWeather, Weather: wx}); err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}

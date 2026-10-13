@@ -87,7 +87,59 @@ message ServerMessage {
     Queued queued = 3;
     Restart restart = 4;
     SeaAreas sea_areas = 5;
+    WeatherSystems weather_systems = 6;
   }
+}
+
+// WeatherSystems is the weather in play about the present: the spells the
+// client needs to compute the wind at its boat, at every tick it steps
+// ahead of the server or replays behind it, exactly as the server does. It
+// comes after the Welcome, and whenever the spells in play change: a spell
+// is sent ten seconds before its change from the one before begins, never
+// earlier, and kept until ten seconds after its change to the next has
+// ended. The client holds the latest it was sent.
+message WeatherSystems {
+  // The spells in play, by the tick each begins at, ascending: at most 4.
+  repeated Spell spells = 1;
+}
+
+// Spell is a spell of weather: a stretch of time with one base wind, its
+// shifts and its gust field, in whole numbers.
+message Spell {
+  // The tick its change from the spell before begins, and how many ticks
+  // the change takes: 0 is at once.
+  int64 begin = 1;
+  uint32 change = 2;
+  // The tick its drift, its gust field's travel and its life count from,
+  // and the ticks over which it drifts by drift: 0 for no drift.
+  int64 start = 3;
+  uint64 length = 4;
+  // The catalog's index of its regime.
+  uint32 regime = 5;
+  // The same wind everywhere, with no shifts, gusts, rim or refuge.
+  bool steady = 6;
+  // Its wind at mid-disk, in steps of 0.01 m/s.
+  uint32 speed = 7;
+  // The direction its wind comes from at start, and how far that veers
+  // over length (negative backs), in 65536ths of a turn clockwise from
+  // north.
+  uint32 from = 8;
+  sint32 drift = 9;
+  // Its gust factor, in thousandths.
+  uint32 gust = 10;
+  // Its two oscillating shifts: each one's amplitude and phase at tick 0,
+  // in 65536ths of a turn, and its period in ticks.
+  repeated uint32 shift = 11;
+  repeated uint32 period = 12;
+  repeated uint32 phase = 13;
+  // How far the direction differs at the rim from the centre, in 65536ths
+  // of a turn; the axis it differs along at tick 0, a direction in
+  // 65536ths of a turn; and the ticks the axis takes to turn once.
+  uint32 across = 14;
+  uint32 axis = 15;
+  uint32 axis_period = 16;
+  // The gust field's seed.
+  uint32 seed = 17;
 }
 
 // SeaAreas is what raises the waves about the boat: a square of sea areas,

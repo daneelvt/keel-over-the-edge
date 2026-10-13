@@ -24,8 +24,10 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // closedWith reads until the connection ends and returns the close code the
@@ -217,8 +219,19 @@ func TestWelcome(t *testing.T) {
 		if got := w.GetEpochUs(); got != edgetest.Epoch.UnixMicro() || got+w.GetWorldTimeUs() != time.Now().UnixMicro() {
 			t.Fatalf("epoch %d µs, the world's is %d", got, edgetest.Epoch.UnixMicro())
 		}
-		// The sea about the boat comes first: the client steps its boat in it.
+		// The weather and the sea about the boat come first: the client
+		// steps its boat in them.
 		r, err := client.Receive(t.Context(), ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spells [physics.WeatherSpells]physics.Spell
+		if wx := r.Message.GetWeatherSystems(); wx == nil {
+			t.Fatalf("after the welcome of tick %d: %v", w.GetTick(), r.Message)
+		} else if n, err := protocol.SpellsOf(wx, &spells); err != nil || n != 1 || spells[0] != sim.DefaultSpell {
+			t.Fatalf("after the welcome of tick %d, the spells %+v, %v", w.GetTick(), spells[:n], err)
+		}
+		r, err = client.Receive(t.Context(), ws)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -341,7 +354,7 @@ func TestSeaAreas(t *testing.T) {
 		// applies from.
 		dev := s.World.Bus().Commands.Developer()
 		reply := make(chan bus.Reply, 1)
-		if err := dev.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 17, From: 3.14159265358979}, Reply: reply}); err != nil {
+		if err := dev.TrySend(bus.Command{Op: bus.SetWeather, Weather: weather.Steady(17, 3.14159265358979), Reply: reply}); err != nil {
 			t.Fatal(err)
 		}
 		changed := (<-reply).Tick
@@ -385,7 +398,7 @@ func TestSeaAreas(t *testing.T) {
 		// A change while the boat sails into another area: the areas in
 		// effect about the new place, and those to come.
 		reply = make(chan bus.Reply, 1)
-		if err := dev.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 5, From: 0}, Reply: reply}); err != nil {
+		if err := dev.TrySend(bus.Command{Op: bus.SetWeather, Weather: weather.Steady(5, 0), Reply: reply}); err != nil {
 			t.Fatal(err)
 		}
 		changed = (<-reply).Tick

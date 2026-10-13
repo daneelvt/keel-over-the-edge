@@ -20,10 +20,10 @@ The snapshot
 The player's own boat in full, then the other boats in the player's view
 as changes against a base: a snapshot the connection sent before, which
 the client must still hold. After the kind byte, little-endian, a header of
-191 bytes (192 with the kind byte), then the entries:
+175 bytes (176 with the kind byte), then the entries:
 
   offset  bytes  field
-       0      1  layout: 4
+       0      1  layout: 5
        1      8  tick (int64)
        9      2  base: how many ticks before this one the base snapshot is
                  (uint16); 0 for none: the view starts empty
@@ -35,16 +35,16 @@ the client must still hold. After the kind byte, little-endian, a header of
                  arrived (negative: after); -32768 for none
       18      2  helm index in force (uint16), 0 … 1024
       20      2  sheet index in force (uint16), 0 … 1024
-      22      8  wind speed, m/s (float64)
-      30      8  wind direction it comes from, rad clockwise from north (float64)
-      38    152  the own boat's state, 19 float64s in this order:
+      22    152  the own boat's state, 19 float64s in this order:
                  x, y, heading, surge, sway, yawRate, heel, rollRate,
                  boom, boomRate, sailor, rudder, sheetLimit, sailorMode,
                  sailorTimer, heave, heaveRate, pitch, pitchRate
-     190      1  entries that follow, 0 … 128
-     191      …  the entries
+     174      1  entries that follow, 0 … 128
+     175      …  the entries
 
-A layout byte other than 4 is refused.
+A layout byte other than 5 is refused. The wind is not in the snapshot:
+the client computes the wind at its boat from the spells of weather it is
+sent (WeatherSystems), as the server does.
 
 The view
 --------

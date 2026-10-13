@@ -18,6 +18,7 @@ import (
 type recordingFile struct {
 	Sea       map[string]float64 `json:"sea"`
 	Params    map[string]any     `json:"params"`
+	Wind      map[string]any     `json:"wind"`
 	Scenarios []recordedScenario `json:"scenarios"`
 }
 
@@ -39,7 +40,7 @@ func TestRecordings(t *testing.T) {
 		readJSON(t, p, &f)
 		for _, sc := range f.Scenarios {
 			t.Run(filepath.Base(p)+"/"+sc.Name, func(t *testing.T) {
-				g, err := runScenario(f.Sea, f.Params, sc.scenario)
+				g, err := runScenario(f.Sea, f.Params, f.Wind, sc.scenario)
 				if err != nil {
 					t.Fatal(err)
 				}

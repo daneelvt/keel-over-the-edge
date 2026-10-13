@@ -21,6 +21,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 const replayUsage = `usage: keel replay [-dump TICK] [-workers N] FILE
@@ -71,10 +72,14 @@ func replayCmd(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	waves, kinds := cat.Prepare()
+	timeline, err := weather.FromCatalog(cat)
+	if err != nil {
+		return err
+	}
 
 	var dumped bool
 	var dumpErr error
-	opt := replay.Options{Kinds: kinds, Waves: waves, Workers: *workers}
+	opt := replay.Options{Kinds: kinds, Waves: waves, Weather: timeline, Workers: *workers}
 	if *dump != math.MinInt64 {
 		opt.At = func(fr *bus.Frame) {
 			if fr.Tick == *dump && !dumped {
@@ -143,12 +148,21 @@ type dumpedWaiting struct {
 	Grace      int64  `json:"grace"`
 }
 
+// dumpedWeather is a developer's weather.
+type dumpedWeather struct {
+	From   int64  `json:"from"`
+	Mode   uint8  `json:"mode"`
+	Regime uint16 `json:"regime"`
+	Speed  uint32 `json:"speed"`
+	Dir    uint32 `json:"dir"`
+}
+
 type dumpedWorld struct {
-	Tick  int64            `json:"tick"`
-	Wind  map[string]exact `json:"wind"`
-	Held  bool             `json:"held"`
-	Boats []dumpedBoat     `json:"boats"`
-	Queue []dumpedWaiting  `json:"queue"`
+	Tick     int64           `json:"tick"`
+	Weathers []dumpedWeather `json:"weathers"`
+	Held     bool            `json:"held"`
+	Boats    []dumpedBoat    `json:"boats"`
+	Queue    []dumpedWaiting `json:"queue"`
 }
 
 // writeDump writes a frame's boats and queue as JSON, for comparing two
@@ -156,11 +170,14 @@ type dumpedWorld struct {
 func writeDump(w io.Writer, f *bus.Frame) error {
 	names := stateNames()
 	d := dumpedWorld{
-		Tick:  f.Tick,
-		Wind:  map[string]exact{"speed": exact(f.Wind.Speed), "from": exact(f.Wind.From)},
-		Held:  f.Held,
-		Boats: []dumpedBoat{},
-		Queue: []dumpedWaiting{},
+		Tick:     f.Tick,
+		Weathers: []dumpedWeather{},
+		Held:     f.Held,
+		Boats:    []dumpedBoat{},
+		Queue:    []dumpedWaiting{},
+	}
+	for _, w := range f.Weathers {
+		d.Weathers = append(d.Weathers, dumpedWeather{From: w.From, Mode: uint8(w.Mode), Regime: w.Regime, Speed: w.Speed, Dir: w.Dir})
 	}
 	for _, q := range f.Queue {
 		d.Queue = append(d.Queue, dumpedWaiting{Account: q.Account.String(), Connection: q.Conn, Since: q.Since, Grace: q.Grace})

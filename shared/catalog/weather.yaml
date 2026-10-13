@@ -17,3 +17,144 @@ weather:
     spreading: 5
     fetchCap: 6 # nautical miles of open water
     cull: 0.10
+
+  # The wind over the disk.
+  disk:
+    # The wind's speed rises from the centre to the rim: a spell's wind is
+    # its wind at mid-disk, 2.1 nautical miles out, times
+    # speedCentre + (speedRim − speedCentre) × a smooth step from the centre
+    # to the mist band.
+    speedCentre: 0.65
+    speedRim: 1.35
+    rim: 4.2 # nautical miles: the mist band
+    # The refuge at the centre: within refugeInner its limits hold in full,
+    # beyond refugeOuter not at all, and between them they blend. The mean
+    # wind above its knee is passed through knee + soft × tanh((v − knee) /
+    # soft), soft the limit less the knee, so that it nears the limit and
+    # never passes it; then the wind with its gusts the same way.
+    refugeInner: 1 # nautical miles: the refuge's own radius
+    refugeOuter: 1.4 # nautical miles
+    refugeMeanKnee: 10 # knots
+    refugeMean: 14 # knots: Beaufort 4
+    refugeWindKnee: 14 # knots
+    refugeWind: 18 # knots: rising to 5 in the gusts
+    # Gusts are stronger in the outer waters: the gust factor's excess over
+    # 1 grows by this share from rimGustsFrom to the rim.
+    rimGusts: 0.3
+    rimGustsFrom: 3 # nautical miles
+    # The wind's direction differs from one side of the disk to the other
+    # along an axis that turns once in this many hours, drawn per spell.
+    acrossTurn: [4, 8]
+
+  # Gusts and lulls: gradient noise in three octaves, each with cells and a
+  # life half its predecessor's, carried downwind as one body. Sailors find
+  # gusts 100–200 m across the wind in a breeze, longer along it, lasting two
+  # to four minutes on the water (Bethwaite 2008, chapter 4): these cells
+  # give patches about 150 m along and 100 m across, which keep 0.9 of their
+  # shape over 30 s and 0.7 over a minute, so a gust seen 150 m upwind
+  # arrives.
+  gusts:
+    gustAlong: 300 # m: the largest cells along the wind
+    gustAcross: 200 # m: and across it
+    gustLife: 240 # s: and in time
+    gustSpeed: 0.9 # the field travels at this share of a spell's wind at mid-disk
+    gustVeer: 8 # degrees: the strongest gust veers by this, the deepest lull backs by half
+    change: 10 # minutes: one spell gives way to the next over this
+
+  # The beginners' ring round a gust heading for the boat, drawn by the
+  # client from the gust field: each patch of a gust factor at least
+  # threshold of the way from 1 to the spell's, whose track passes within
+  # reach of the boat within horizon, gets one, and at most rings of them.
+  ring:
+    threshold: 0.5
+    spacing: 8 # m: the grid the field is sampled on upwind of the boat
+    depth: 240 # m upwind
+    width: 160 # m across the wind
+    reach: 30 # m
+    horizon: 60 # s
+    rings: 3
+    rate: 4 # samplings a second
+
+  # The wind that raises the waves, for the sea lags the wind: an
+  # exponential average of the mean wind, its gusts left out, at each sea
+  # area's centre. Over the open water's fetch a real sea takes two to three
+  # hours to build (Coastal Engineering Manual, 2008, II-2); at the world's
+  # pace, twelve times the real one, that is ten to fifteen minutes, and an
+  # average with a time constant of four minutes reaches 95% in twelve.
+  waveWind:
+    waveTimeConstant: 240 # s
+    waveSample: 30 # s between samples
+    waveSamples: 40 # the rest weigh under 0.7% together
+
+  # Regimes: the kinds of spell. Their wind is drawn, spell by spell, from
+  # these ranges; a spell's shifts swing two thirds and one third of shift,
+  # with periods in the range at least a minute and a half apart. share is
+  # the regime's share of the world's time, which the sequence keeps, and
+  # next the regimes a spell of it may give way to. A spell of a frontal
+  # regime arrives and leaves as a front does: the wind veers by 40–90°.
+  # The gust factors are those of the waters dinghies race in; the open
+  # sea's are smaller (WMO/TD-No. 1555, 2010, Table 1.1).
+  regimes:
+    - id: settled
+      share: 0.25
+      frontal: false
+      next: [trade]
+      wind:
+        speed: [3, 9] # knots at mid-disk
+        gustFactor: 1.2
+        shift: 5 # degrees each way
+        period: [6, 10] # minutes
+        across: 5 # degrees
+        drift: 20 # degrees
+    - id: trade
+      share: 0.40
+      frontal: false
+      next: [settled, unsettled]
+      wind:
+        speed: [10, 16]
+        gustFactor: 1.3
+        shift: 8
+        period: [5, 8]
+        across: 5
+        drift: 20
+    - id: unsettled
+      share: 0.25
+      frontal: true
+      next: [trade, stormy]
+      wind:
+        speed: [12, 20]
+        gustFactor: 1.45
+        shift: 12
+        period: [4, 7]
+        across: 5
+        drift: 20
+    - id: stormy
+      share: 0.10
+      frontal: true
+      next: [unsettled, trade]
+      wind:
+        speed: [16, 24]
+        gustFactor: 1.5
+        shift: 12
+        period: [4, 7]
+        across: 5
+        drift: 20
+
+  # Until the world's weather is generated, its spells follow this sequence,
+  # over and over from the world's epoch: twenty hours, which the two-hour
+  # day does not divide, so each regime comes at a different hour each time.
+  # Each spell's numbers are drawn from its regime by its number and the
+  # seed. As a spell of a frontal regime arrives or leaves, the wind veers
+  # as it does when a front passes; between other spells its direction
+  # moves either way by up to swing.
+  sequence:
+    seed: 1852
+    veer: [40, 90] # degrees
+    swing: 30 # degrees
+    spells:
+      - { regime: trade, hours: 4 }
+      - { regime: settled, hours: 5 }
+      - { regime: trade, hours: 4 }
+      - { regime: unsettled, hours: 3 }
+      - { regime: stormy, hours: 2 }
+      - { regime: unsettled, hours: 2 }

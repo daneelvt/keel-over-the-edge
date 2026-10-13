@@ -18,6 +18,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // physicsOnce prepares the catalog's sea and boats once for the package's
@@ -88,14 +89,44 @@ func do(t testing.TB, w *World, c bus.Command) bus.Reply {
 	}
 }
 
-// stepped is s after one step with word's controls in wind.
-func stepped(t testing.TB, s physics.State, word bus.Word, wind bus.Wind) physics.State {
+// stepped is s after one step with word's controls in wind e.
+func stepped(t testing.TB, s physics.State, word bus.Word, e physics.Env) physics.State {
 	t.Helper()
 	c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
-	e := physics.Env{WindSpeed: wind.Speed, WindFrom: wind.From}
 	var o physics.Out
 	physics.Step(&s, &c, &e, nil, &kinds(t)[0], &o)
 	return s
+}
+
+// steady is a developer's steady wind of speed m/s from from, in radians.
+func steady(speed, from float64) bus.Weather { return weather.Steady(speed, from) }
+
+// steadyOf is the developer's steady wind of a steady spell.
+func steadyOf(s physics.Spell) bus.Weather {
+	return bus.Weather{Mode: bus.WeatherSteady, Speed: uint32(s.Speed), Dir: uint32(s.From)}
+}
+
+// steadyEnv is the wind a developer's steady wind blows everywhere.
+func steadyEnv(w bus.Weather) physics.Env {
+	s := physics.Spell{Steady: 1, Speed: float64(w.Speed), From: float64(w.Dir), Gust: 1000}
+	wx := physics.Weather{Prepared: weather.Fixed(s).Prepared()}
+	wx.Set([]physics.Spell{s})
+	var at physics.WeatherTick
+	physics.WeatherAt(&wx, &at, 0)
+	return physics.WindAt(&at, 0, 0)
+}
+
+// defaultEnv is the wind of a world given no timeline.
+var defaultEnv = steadyEnv(steadyOf(DefaultSpell))
+
+// windAt is the wind a boat at (x, y) sails in at f's tick, in w's
+// weather.
+func windAt(w *World, f *bus.Frame, x, y float64) physics.Env {
+	wx := physics.Weather{Prepared: w.timeline.Prepared()}
+	wx.Set(f.SpellsInPlay())
+	var at physics.WeatherTick
+	physics.WeatherAt(&wx, &at, float64(f.Tick))
+	return physics.WindAt(&at, x, y)
 }
 
 // acct is a test's account n.
@@ -129,7 +160,7 @@ func TestJoin(t *testing.T) {
 	}
 	// The boat appeared on the grid and sailed the rest of the tick.
 	start := physics.State{X: -640, Y: -20, Heading: math.Pi / 2}
-	if !sameState(f.State[0], stepped(t, start, bus.Centred(0), DefaultWind)) {
+	if !sameState(f.State[0], stepped(t, start, bus.Centred(0), defaultEnv)) {
 		t.Fatalf("state after the join %+v", f.State[0])
 	}
 	if got := w.Bus().Controls.Load(0); got != bus.Centred(0) {
@@ -222,22 +253,42 @@ func TestLeave(t *testing.T) {
 	}
 }
 
-func TestSetWindAndPlace(t *testing.T) {
+// A developer's weather takes effect from the second after next, so every
+// client hears of it before it steps a tick it applies to; Place at once.
+func TestSetWeatherAndPlace(t *testing.T) {
 	w := newWorld(t, 4, 1)
 	do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
 	placed := physics.State{X: 5, Y: 7, Heading: 1, Surge: 2, SheetLimit: 0.5}
-	wind := bus.Wind{Speed: 8, From: 1.5}
-	send(t, w, bus.Command{Op: bus.SetWind, Wind: wind})
+	wind := steady(8, 1.5)
+	send(t, w, bus.Command{Op: bus.SetWeather, Weather: wind})
 	r := do(t, w, bus.Command{Op: bus.Place, Boat: 1, State: placed})
 	if r != (bus.Reply{Result: bus.Done, Slot: 0, Boat: 1}) {
 		t.Fatalf("place: %+v", r)
 	}
 	f := w.Latest()
-	if f.Wind != wind || !sameState(f.State[0], stepped(t, placed, bus.Centred(0), wind)) {
-		t.Fatalf("wind %+v, state %+v", f.Wind, f.State[0])
+	from := (bus.SeaSecond(f.Tick) + 2) * bus.SeaPeriod
+	want := wind
+	want.From = from
+	if !slices.Equal(f.Weathers, []bus.Weather{want}) || !sameState(f.State[0], stepped(t, placed, bus.Centred(0), defaultEnv)) {
+		t.Fatalf("weathers %+v, state %+v", f.Weathers, f.State[0])
 	}
-	if len(f.Events) != 2 || f.Events[0].Op != bus.SetWind || f.Events[1].Reply.Result != bus.Done || f.Events[1].Command.Reply != nil {
+	if len(f.Events) != 2 || f.Events[0].Op != bus.SetWeather || f.Events[1].Reply.Result != bus.Done || f.Events[1].Command.Reply != nil {
 		t.Fatalf("events %+v", f.Events)
+	}
+	// The new wind is in play from when it is set, and blows from its tick.
+	if f.NSpells != 2 || f.Spells[1].Begin != float64(from) {
+		t.Fatalf("spells in play %+v", f.SpellsInPlay())
+	}
+	for w.Now() < from+1 {
+		before := w.Latest().State[0]
+		w.Tick()
+		e := defaultEnv
+		if w.Now() >= from {
+			e = steadyEnv(wind)
+		}
+		if got := w.Latest().State[0]; !sameState(got, stepped(t, before, bus.Centred(0), e)) {
+			t.Fatalf("tick %d: the boat did not sail in %+v", w.Now(), e)
+		}
 	}
 	if r := do(t, w, bus.Command{Op: bus.Place, Boat: 99}); r.Result != bus.NoBoat {
 		t.Fatalf("placing no boat: %+v", r)
@@ -258,7 +309,7 @@ func TestTickMatchesStep(t *testing.T) {
 			w.Bus().Controls.Store(0, word)
 		}
 		w.Tick()
-		want = stepped(t, want, word, DefaultWind)
+		want = stepped(t, want, word, defaultEnv)
 		if got := w.Latest().State[0]; !sameState(got, want) {
 			t.Fatalf("tick %d: %+v, Step gives %+v", i, got, want)
 		}
@@ -276,7 +327,7 @@ func TestSkip(t *testing.T) {
 		t.Fatalf("tick %d, skipped %d", f.Tick, f.Skipped)
 	}
 	// A skipped tick moves nobody: one step, not six.
-	if !sameState(f.State[0], stepped(t, before, bus.Centred(0), DefaultWind)) {
+	if !sameState(f.State[0], stepped(t, before, bus.Centred(0), defaultEnv)) {
 		t.Fatal("boats moved during the skip")
 	}
 	w.Tick()
@@ -389,7 +440,7 @@ func scatteredWorld(t testing.TB) *World {
 	}
 	odd := physics.State{X: math.Inf(-1), Y: math.Copysign(0, -1), Heading: math.NaN(), Surge: 5e-324, SailorMode: 3}
 	q.TrySend(bus.Command{Op: bus.Place, Boat: 10, State: odd})
-	q.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 3, From: -2}})
+	q.TrySend(bus.Command{Op: bus.SetWeather, Weather: steady(3, -2)})
 	// Some sailors' connections end: their graces run.
 	for b := uint64(5); b < 200; b += 11 {
 		q.TrySend(bus.Command{Op: bus.Disconnect, Boat: b, Conn: 3 * b})
@@ -417,7 +468,7 @@ func TestSnapshotRoundTrips(t *testing.T) {
 	if again := AppendSnapshot(nil, g); !bytes.Equal(again, snap) {
 		t.Fatal("a snapshot read and written again differs")
 	}
-	if g.Tick != f.Tick || g.Wind != f.Wind || g.NextBoat != f.NextBoat || g.Held != f.Held || !slices.Equal(g.Live, f.Live) ||
+	if g.Tick != f.Tick || !slices.Equal(g.Weathers, f.Weathers) || g.NextBoat != f.NextBoat || g.Held != f.Held || !slices.Equal(g.Live, f.Live) ||
 		!slices.Equal(g.Gen, f.Gen) || !slices.Equal(g.Occupied, f.Occupied) || !slices.Equal(g.Queue, f.Queue) {
 		t.Fatal("the frame read differs")
 	}

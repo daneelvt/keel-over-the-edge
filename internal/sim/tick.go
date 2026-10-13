@@ -50,7 +50,7 @@ func (w *World) phaseDone(p Phase) {
 }
 
 // inputs copies the world into the next frame, then applies what changed:
-// first the sea moves on if the tick begins a second, by the wind as it
+// first the sea moves on if the tick begins a second, by the weather as it
 // stood before this tick's commands; then the boats whose grace has ended leave, and the places in the queue
 // whose grace has ended are given up; then the control words of the
 // boats sailing are applied, each once its tick has come (bus.Due), then
@@ -61,8 +61,8 @@ func (w *World) inputs() {
 	next.Tick = cur.Tick + 1 + w.skip
 	next.Skipped = w.skip
 	w.skip = 0
-	next.Wind = cur.Wind
-	w.sea.roll(&next.Sea, &cur.Sea, cur.Tick, next.Tick, cur.Wind)
+	next.Weathers = append(next.Weathers[:0], cur.Weathers...)
+	w.sea.roll(&next.Sea, &cur.Sea, cur.Tick, next.Tick, cur.Weathers)
 	next.NextBoat = cur.NextBoat
 	next.Held = cur.Held
 	next.Live = append(next.Live[:0], cur.Live...)
@@ -94,6 +94,7 @@ func (w *World) inputs() {
 			w.apply(&in.Commands[i])
 		}
 		w.admit()
+		w.spells(next)
 		return
 	}
 
@@ -114,15 +115,26 @@ func (w *World) inputs() {
 		w.apply(&c)
 	}
 	w.admit()
+	w.spells(next)
 }
 
 // seaPhase brings the waves to this tick.
 func (w *World) seaPhase() { w.sea.tick(w.next) }
 
-// physics steps every boat in the wind and the waves.
+// physics steps every boat in the wind and the waves: the weather at the
+// tick, and each boat in the wind at its place as its step begins.
 func (w *World) physics() {
-	w.env = physics.Env{WindSpeed: w.next.Wind.Speed, WindFrom: w.next.Wind.From}
-	w.workers.step(w.next.Live)
+	f := w.next
+	if !sameSpells(&w.weather, f) {
+		w.weather.Set(f.SpellsInPlay())
+	}
+	physics.WeatherAt(&w.weather, &w.wind, float64(f.Tick))
+	w.workers.step(f.Live)
+}
+
+// sameSpells reports whether w holds f's spells in play.
+func sameSpells(w *physics.Weather, f *bus.Frame) bool {
+	return w.Count == f.NSpells && w.Spells == f.Spells
 }
 
 // stepSlots steps the boats in slots of the next frame, and keeps what each
@@ -132,7 +144,9 @@ func (w *World) stepSlots(slots []int32, o *physics.Out) {
 	for _, s := range slots {
 		word := f.Control[s]
 		c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
-		physics.Step(&f.State[s], &c, &w.env, w.sea.at, &w.kinds[f.Kind[s]], o)
+		st := &f.State[s]
+		e := physics.WindAt(&w.wind, st.X, st.Y)
+		physics.Step(st, &c, &e, w.sea.at, &w.kinds[f.Kind[s]], o)
 		f.Sail[s] = physics.SailByte(o)
 	}
 }

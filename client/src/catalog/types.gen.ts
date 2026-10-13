@@ -637,6 +637,67 @@ export interface SailorArt {
  */
 export interface Weather {
   sea: WeatherSea;
+  disk: WeatherDisk;
+  gusts: WeatherGusts;
+  ring: WeatherRing;
+  waveWind: WeatherWaveWind;
+  /**
+   * The kinds of spell of weather.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  regimes:
+    | [Regime]
+    | [Regime, Regime]
+    | [Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime]
+    | [Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime, Regime]
+    | [
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime
+      ]
+    | [
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime,
+        Regime
+      ];
+  sequence: Sequence;
 }
 /**
  * The waves long enough to move a boat: the band of wavelengths they span and the spectrum that gives each its height.
@@ -677,6 +738,262 @@ export interface WeatherSea {
    * Waves lower than this fraction of an area's highest are left out.
    */
   cull: number;
+}
+/**
+ * The wind over the disk: how its speed rises toward the rim, the refuge at the centre, the stronger gusts of the outer waters and the turning of the difference across the disk.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherDisk".
+ */
+export interface WeatherDisk {
+  /**
+   * The wind's speed at the centre, as a share of a spell's wind at mid-disk.
+   */
+  speedCentre: number;
+  /**
+   * The wind's speed at the rim, as a share of a spell's wind at mid-disk.
+   */
+  speedRim: number;
+  /**
+   * Where the speed reaches its share at the rim: the mist band, in nautical miles.
+   */
+  rim: number;
+  /**
+   * Within this the refuge's limits hold in full, in nautical miles.
+   */
+  refugeInner: number;
+  /**
+   * Beyond this the refuge's limits do not hold, in nautical miles.
+   */
+  refugeOuter: number;
+  /**
+   * The refuge softens the mean wind above this, in knots.
+   */
+  refugeMeanKnee: number;
+  /**
+   * The mean wind the refuge holds to, in knots.
+   */
+  refugeMean: number;
+  /**
+   * The refuge softens the wind with its gusts above this, in knots.
+   */
+  refugeWindKnee: number;
+  /**
+   * The wind with its gusts the refuge holds to, in knots.
+   */
+  refugeWind: number;
+  /**
+   * The gust factor's excess over 1 grows by this share toward the rim.
+   */
+  rimGusts: number;
+  /**
+   * From here to the rim, in nautical miles.
+   */
+  rimGustsFrom: number;
+  /**
+   * The shortest and longest time the axis of the wind's difference across the disk takes to turn once, in hours.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  acrossTurn: [number, number];
+}
+/**
+ * The gust field: gradient noise in three octaves, each with cells and a life half its predecessor's, carried downwind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherGusts".
+ */
+export interface WeatherGusts {
+  /**
+   * The largest cells along the wind, in m.
+   */
+  gustAlong: number;
+  /**
+   * The largest cells across the wind, in m.
+   */
+  gustAcross: number;
+  /**
+   * The largest cells' life, in s.
+   */
+  gustLife: number;
+  /**
+   * How fast the field travels, as a share of a spell's wind at mid-disk.
+   */
+  gustSpeed: number;
+  /**
+   * How far the strongest gust veers, and the deepest lull backs by half, in degrees.
+   */
+  gustVeer: number;
+  /**
+   * How long one spell takes to give way to the next, in minutes.
+   */
+  change: number;
+}
+/**
+ * The beginners' ring round gusts heading for the boat.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherRing".
+ */
+export interface WeatherRing {
+  /**
+   * A patch gets a ring when its gust factor is this far from 1 toward the spell's.
+   */
+  threshold: number;
+  /**
+   * The grid the field is sampled on upwind of the boat, in m.
+   */
+  spacing: number;
+  /**
+   * How far upwind the grid reaches, in m.
+   */
+  depth: number;
+  /**
+   * How wide the grid is across the wind, in m.
+   */
+  width: number;
+  /**
+   * A patch's track must pass this close to the boat, in m.
+   */
+  reach: number;
+  /**
+   * Within this time, in s.
+   */
+  horizon: number;
+  /**
+   * The most rings at once.
+   */
+  rings: number;
+  /**
+   * Samplings of the field a second.
+   */
+  rate: number;
+}
+/**
+ * The wind that raises the waves: an exponential average of the mean wind at each sea area's centre.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherWaveWind".
+ */
+export interface WeatherWaveWind {
+  /**
+   * The average's time constant, in s.
+   */
+  waveTimeConstant: number;
+  /**
+   * The wind is sampled on a grid of world time this far apart, in s: a whole number of seconds.
+   */
+  waveSample: number;
+  /**
+   * How many samples are kept.
+   */
+  waveSamples: number;
+}
+/**
+ * A kind of spell of weather.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Regime".
+ */
+export interface Regime {
+  id: Id;
+  /**
+   * The regime's share of the world's time.
+   */
+  share: number;
+  /**
+   * A spell of it arrives and leaves as a front does: the wind veers.
+   */
+  frontal: boolean;
+  /**
+   * The regimes a spell of it may give way to, by id.
+   *
+   * @minItems 1
+   */
+  next: [Id, ...Id[]];
+  wind: RegimeWind;
+}
+/**
+ * A regime's wind, from which each spell's is drawn.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "RegimeWind".
+ */
+export interface RegimeWind {
+  /**
+   * The least and the most of its wind at mid-disk, in knots.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  speed: [number, number];
+  /**
+   * Its strongest gusts as a multiple of the mean wind.
+   */
+  gustFactor: number;
+  /**
+   * How far its two oscillating shifts swing together, in degrees each way.
+   */
+  shift: number;
+  /**
+   * The shortest and the longest period of a shift, in minutes.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  period: [number, number];
+  /**
+   * How far the wind's direction differs from the centre to the rim, in degrees.
+   */
+  across: number;
+  /**
+   * The most its direction moves over a spell, in degrees.
+   */
+  drift: number;
+}
+/**
+ * The spells of weather until the world's weather is generated: this sequence, over and over from the world's epoch.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Sequence".
+ */
+export interface Sequence {
+  /**
+   * The seed each spell's numbers are drawn with.
+   */
+  seed: number;
+  /**
+   * How far the wind veers as a spell of a frontal regime arrives or leaves, the least and the most, in degrees.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  veer: [number, number];
+  /**
+   * How far the wind's direction may move either way from one spell to the next otherwise, in degrees.
+   */
+  swing: number;
+  /**
+   * The spells, in order.
+   *
+   * @minItems 1
+   * @maxItems 64
+   */
+  spells: [SequenceSpell, ...SequenceSpell[]];
+}
+/**
+ * A spell of the sequence.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SequenceSpell".
+ */
+export interface SequenceSpell {
+  regime: Id;
+  /**
+   * How long it lasts, in whole hours.
+   */
+  hours: number;
 }
 /**
  * The sky's numbers: the lengths of its day, year and month, its scale, the moment it is counted from, and the stars with names. Where each body stands follows from these and the time alone.
@@ -755,4 +1072,4 @@ export interface NamedStar {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '26c5f57fc40b9846';
+export const CATALOG_VERSION = '8499df3900987948';

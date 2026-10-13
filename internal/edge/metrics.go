@@ -64,10 +64,11 @@ const (
 	outQueued
 	outRestart
 	outSeaAreas
+	outWeatherSystems
 	outs
 )
 
-var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas"}
+var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems"}
 
 // The entries of a snapshot, by op.
 const (

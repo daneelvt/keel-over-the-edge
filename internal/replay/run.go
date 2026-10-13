@@ -10,12 +10,14 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // Options set up a replay.
 type Options struct {
 	Kinds   []physics.Prepared // the world's kinds of boat
 	Waves   *physics.Waves     // the sea's waves; nil replays a world of flat water
+	Weather *weather.Timeline  // the world's own weather; nil is the simulation's default
 	Workers int                // goroutines stepping boats; the result never depends on it
 	// At, if not nil, is called with the world's frame after each tick
 	// replayed, and after each snapshot loaded.
@@ -51,7 +53,7 @@ func Run(f *File, opt Options) (Result, error) {
 	if len(f.Segments) == 0 {
 		return res, errors.New("replay: the log has no segment")
 	}
-	w, err := sim.New(sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, Waves: opt.Waves, Workers: opt.Workers, Grace: f.Header.Grace, Limit: f.Header.Limit})
+	w, err := sim.New(sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, Waves: opt.Waves, Weather: opt.Weather, Workers: opt.Workers, Grace: f.Header.Grace, Limit: f.Header.Limit})
 	if err != nil {
 		return res, err
 	}

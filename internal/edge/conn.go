@@ -66,8 +66,10 @@ type conn struct {
 	tierMu  sync.Mutex
 	counted int32
 
-	// sea is what the client has been told of the sea; the encoder's.
+	// sea is what the client has been told of the sea, and wx of the
+	// weather; the encoder's.
 	sea    connSea
+	wx     connWeather
 	margin margin
 	ack    atomic.Int64 // the newest snapshot's tick the client has decoded
 	// resync: the client lacks a base and asked for a full snapshot.
