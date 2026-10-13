@@ -1279,6 +1279,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * looks along the rule's direction to the star; the stars alone are
      * drawn, that one only, and the centre of its light is found. Returns
      * the angle between the two, in degrees, or null if nothing was drawn.
+     * It is the sky of the last frame drawn: setSky draws one.
      */
     async starOffset(name: string, size = 160): Promise<number | null> {
       const physics = world.skyPhysics;
@@ -1287,7 +1288,6 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       if (physics === null || named === undefined || star === undefined) {
         throw new Error(`no star ${name}, or no sky`);
       }
-      hooks.render();
       const b = physics.skyStar(
         world.skyAt,
         world.pose.east,

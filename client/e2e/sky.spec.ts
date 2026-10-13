@@ -94,6 +94,9 @@ test.describe('the stars stand where the rule puts them', () => {
   test('each named star above 5°, from three places, at four hours of the night', {
     tag: '@long',
   }, async ({ page }) => {
+    // Nearly two hundred stars, each drawn and read back: minutes on CI's
+    // software WebGPU.
+    test.setTimeout(300_000);
     await openScene(page);
     const counts: Record<string, number> = {};
     for (const [name, place] of Object.entries(PLACES)) {
@@ -112,6 +115,7 @@ test.describe('the stars stand where the rule puts them', () => {
       k.setSky(23);
       const before = await k.starOffset('Vega');
       k.setOrigin(3, -2);
+      k.render();
       const after = await k.starOffset('Vega');
       return { before, after, origin: k.info().origin };
     });
@@ -160,9 +164,8 @@ test('no star by day, the brightest at −4°, all at night; one draw for the st
         const k = globalThis.keel;
         k.setSky(12);
         k.drawSky(on);
-        for (let i = 0; i < 400; i++) {
-          k.dragCamera(0, -1);
-        }
+        // Down and on into looking up: one drag the whole way.
+        k.dragCamera(0, -400);
       }, on);
       return picture(page);
     }),
@@ -463,9 +466,7 @@ test.describe('pictures', () => {
       k.setSky(2, 0);
       // Turn to the south, where the centre and the Hub Star are, and look up.
       k.dragCamera(Math.PI / 2 / 0.006, 0);
-      for (let i = 0; i < 70; i++) {
-        k.dragCamera(0, -5);
-      }
+      k.dragCamera(0, -350);
       await k.show();
     });
     await expect(page.locator('canvas.scene')).toHaveScreenshot('sky-rim.png');
