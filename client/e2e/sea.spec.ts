@@ -382,7 +382,8 @@ test.describe('pictures', () => {
           globalThis.keel.camera(v);
           await globalThis.keel.show();
         }, view);
-        await expect(page.locator('canvas.scene')).toHaveScreenshot(`${sea}-${view}.png`);
+        // Soft: every picture of the test is taken, even after one differs.
+        await expect.soft(page.locator('canvas.scene')).toHaveScreenshot(`${sea}-${view}.png`);
       }
     });
   }
