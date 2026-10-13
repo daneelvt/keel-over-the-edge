@@ -3260,6 +3260,16 @@ page down to the low tier and, on the Mac, back up without a frame over
 rendering's "Sea states" and "Close aboard" views. The `compat` project
 (`--project compat`) runs `sea.spec.ts` and `look.spec.ts` on a WebGPU
 device held to compatibility mode's limits.
+
+On CI's software GPU (SwiftShader, on Linux) every pixel and compute pass
+is the CPU's, and the sea's best tiers take seconds a frame there. So the
+pages there open on the low tier (`?tier=low`), which is what the tests of
+geometry, hulls, sailing and the network need; `look.spec.ts` keeps the best
+tier for the device, the transform, the rungs and the memory, and runs its
+pixel probes and pictures on WebGL 2 alone. On the Mac every page opens on
+its device's best tier and every test runs on every back end: run the
+browser tests on the Mac before merging a change to the sea's look.
+`SOFTWARE_GPU=1` takes CI's paths on any machine.
 `sail.spec.ts` sails: the page's steps are the module's under Node, bit for
 bit; two touch pointers move the helm and the sheet at once; a held key
 turns the boat; a capsize in 20 knots, the sailor's line and the dimmed

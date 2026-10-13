@@ -18,12 +18,13 @@ declare global {
  * depend on the tier, and the best rung takes minutes a test. On the Mac
  * every page opens on the best rung.
  */
-export const softwareGPU = process.platform === 'linux';
+// SOFTWARE_GPU=1 takes the same paths on any machine, to try them.
+export const softwareGPU = process.platform === 'linux' || process.env.SOFTWARE_GPU === '1';
 
 /**
  * Opens the offline sandbox on the project's back end with the test hooks,
  * waits for the boat, freezes time and puts the boat back at the start, at
- * rest, on the best rung of its ladder (on a software GPU the cheapest,
+ * rest, on the best rung of its ladder (on a software GPU the low tier's,
  * unless best is set). A WebGPU project with no adapter is skipped. The
  * screen's panels and controls are hidden unless hud is true, so pictures
  * show the scene alone.
@@ -31,6 +32,11 @@ export const softwareGPU = process.platform === 'linux';
 export async function openScene(page: Page, query = '', hud = false, best = false): Promise<void> {
   const project = test.info().project.name;
   const backend = project === 'webgl2' ? '&backend=webgl2' : project === 'compat' ? '&compat' : '';
+  // On a software GPU the page holds the low tier from the start: it builds
+  // one set of shaders, which takes seconds there, not two.
+  if (softwareGPU && !best && !query.includes('tier=')) {
+    query = query === '' ? 'tier=low' : `${query}&tier=low`;
+  }
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`/?sandbox&test${backend}${query === '' ? '' : `&${query}`}`);
@@ -52,11 +58,8 @@ export async function openScene(page: Page, query = '', hud = false, best = fals
     await page.addStyleTag({ content: '.hud { visibility: hidden; }' });
   }
   // The best rung of the ladder, whatever the page's first seconds did.
-  // The best rung, or on a software GPU the cheapest, whatever the page's first seconds did.
-  await page.evaluate(async (cheap) => {
-    const k = globalThis.keel;
-    await k.setRung(cheap ? k.info().rungs.length - 1 : 0);
-  }, softwareGPU && !best);
+  // The best rung of its ladder, whatever the page's first seconds did.
+  await page.evaluate(() => globalThis.keel.setRung(0));
   await page.evaluate(() => {
     globalThis.keel.freeze(100);
     globalThis.keel.reset();
@@ -175,16 +178,10 @@ export async function guest(context: BrowserContext, word = 'Sailor'): Promise<v
 export async function sail(page: Page, base = ''): Promise<void> {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`${base}/?test&backend=webgl2`);
+  await page.goto(`${base}/?test&backend=webgl2${softwareGPU ? '&tier=low' : ''}`);
   await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 60_000 });
   await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
     timeout: 30_000,
   });
-  if (softwareGPU) {
-    await page.evaluate(async () => {
-      const k = globalThis.keel;
-      await k.setRung(k.info().rungs.length - 1);
-    });
-  }
   expect(errors).toEqual([]);
 }

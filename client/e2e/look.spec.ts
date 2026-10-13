@@ -33,16 +33,17 @@ const test = base.extend<object, { shared: Page }>({
 });
 
 /** Opens the sandbox with a query, or puts the page already open back as it would open with it. */
-async function openLook(page: Page, query = ''): Promise<void> {
+async function openLook(page: Page, query = '', best = true): Promise<void> {
   const sea = query === '' ? null : (/^sea=(\w+)$/.exec(query)?.[1] ?? undefined);
   const url = page.url();
   const open =
     sea !== undefined &&
+    (best || !softwareGPU) &&
     url.includes('?sandbox&test') &&
     !url.includes('tier=') &&
     (await page.evaluate(() => globalThis.keel?.info().backend ?? '').catch(() => '')) !== '';
   if (!open) {
-    await openScene(page, query, false, true);
+    await openScene(page, query, false, best);
     return;
   }
   const info = await page.evaluate(() => globalThis.keel.info());
@@ -70,7 +71,7 @@ async function openLook(page: Page, query = ''): Promise<void> {
  */
 function heavy(): void {
   test.skip(
-    process.platform === 'linux' && test.info().project.name !== 'webgl2',
+    softwareGPU && test.info().project.name !== 'webgl2',
     'on a software GPU this runs on WebGL 2 only; on every back end on the Mac',
   );
 }
@@ -858,9 +859,9 @@ test.describe('adaptive quality', () => {
     test.setTimeout(480_000);
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await openLook(page, 'sea=fresh');
-    // On CI's software GPU a frame of the best rung takes a second or more:
-    // there it is enough that the page steps down a few rungs.
+    // On a software GPU, the low tier's ladder: the same steps on cheap frames.
+    await openLook(page, 'sea=fresh', !softwareGPU);
+    // On CI's software GPU the page is on the low tier's ladder, of four rungs.
     const down = await page.evaluate(async (few) => {
       const k = globalThis.keel;
       const last = few ? 3 : k.info().rungs.length - 1;
