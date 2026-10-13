@@ -43,7 +43,9 @@ export default defineConfig({
   testDir: 'e2e',
   timeout: 90_000,
   expect: {
-    timeout: 10_000,
+    // On Linux the browser draws on SwiftShader, the CPU's: a stable
+    // screenshot of the scene can take longer than 10 s there.
+    timeout: linux ? 30_000 : 10_000,
     toHaveScreenshot: { maxDiffPixelRatio: 0.02, threshold: 0.25 },
   },
   fullyParallel: false,
