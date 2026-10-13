@@ -270,6 +270,8 @@ class Cascade {
   readonly #samplers: { value: StorageTexture }[] = [];
   /** What the inputs were computed from. */
   #from = [Number.NaN, 0, 0, 0];
+  /** What the band last made was made from: its time, its spectrum, and its fold. */
+  #made: number[] = [];
 
   constructor(sea: WeatherSea, patch: Patch, foamy: boolean, anisotropy: number, scratch: Scratch) {
     this.#sea = sea;
@@ -320,8 +322,9 @@ class Cascade {
 
   /** The output at texture coordinates, as a node that follows the output last written. */
   sample(uv: Node<'vec2'>, level: number | null): Node<'vec4'> {
-    const node =
-      level === null ? texture(this.out[0], uv) : texture(this.out[0], uv).level(float(level));
+    // The output last written: frames with time standing still write none.
+    const out = this.out[this.current] as StorageTexture;
+    const node = level === null ? texture(out, uv) : texture(out, uv).level(float(level));
     this.#samplers.push(node as unknown as { value: StorageTexture });
     return node as unknown as Node<'vec4'>;
   }
@@ -497,6 +500,30 @@ class Cascade {
       fract1(f.originEast / p.length) + 0.5 / n,
       fract1(f.originNorth / p.length) + 0.5 / n,
     );
+    // With time standing still the band is the one already made, unless
+    // something it is made from changed: not made again.
+    const key = this.#made;
+    const same =
+      !moving &&
+      key[0] === this.#time.value &&
+      key[1] === this.#level.value &&
+      key[2] === s.peak &&
+      key[3] === s.east &&
+      key[4] === s.north &&
+      key[5] === foam.threshold &&
+      key[6] === foam.chop;
+    if (same) {
+      return;
+    }
+    this.#made = [
+      this.#time.value,
+      this.#level.value,
+      s.peak,
+      s.east,
+      s.north,
+      foam.threshold,
+      foam.chop,
+    ];
     const into = 1 - this.current;
     renderer.compute(this.#spectrum, [n / 8, n / 8, 1]);
     renderer.compute(this.#rows, [1, n, 1]);
@@ -519,8 +546,14 @@ class Cascade {
     return [this.#spectrum, this.#rows, this.#columns, ...this.#assemble];
   }
 
+  /** Forgets what was made: the next frame makes the band again (a new device has none of it). */
+  forget(): void {
+    this.#made = [];
+  }
+
   /** Forgets the foam: the next frames start from clear water. */
   clear(): void {
+    this.#made = [];
     for (const t of this.out) {
       t.dispose();
     }
@@ -912,6 +945,14 @@ export class Detail {
   /** Puts the band asked for in use. */
   commit(): void {
     this.#active = this.#next;
+  }
+
+  /** A new renderer: whatever the transform made is gone with the old device. */
+  attached(): void {
+    for (const t of [this.#active.transformed, this.#next.transformed]) {
+      t?.first.forget();
+      t?.second?.forget();
+    }
   }
 
   /** Compiles the transform's kernels off the frame, where the band asked for has any. */

@@ -870,6 +870,46 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       offline().reset();
       floatBoat();
     },
+    /**
+     * Everything a test may have changed of the look put back as a page
+     * opens with it, the sea that of the named state (or the start's wind),
+     * so that one page serves several tests: the fleet, the parts, the fold,
+     * the spray, the quality and its timing, the wakes and the foam.
+     */
+    async resetLook(sea: string | null): Promise<void> {
+      world.fleetSource = null;
+      world.ocean.detail.fold = null;
+      detailOn.value = 1;
+      foamOn.value = 1;
+      world.ocean.drawWakes = true;
+      world.sprayHidden = false;
+      tileIdentity.value = 1;
+      if (world.boat !== null) {
+        world.boat.root.visible = true;
+      }
+      game.beforeStep = null;
+      game.helm.target = 0;
+      game.sheet.target = 0.5;
+      world.windowMs = null;
+      if (world.quality !== null) {
+        world.quality.enabled = false;
+      }
+      const s = offline();
+      s.sea.options.flat = false;
+      s.sea.options.fetch = null;
+      s.sea.options.split = null;
+      const knots = sea === null ? undefined : SEA_STATES[sea];
+      if (knots !== undefined) {
+        s.setWind(knots * KNOT, 0);
+      } else {
+        s.setWind(s.start.wind.speed, s.start.wind.from);
+      }
+      await world.setRung(0, 'test');
+      world.ocean.detail.finishBake();
+      world.ocean.wakes.clear();
+      world.ocean.detail.clearFoam();
+      world.spray.reset(1);
+    },
     setState(values: Record<string, number>): void {
       offline().setState(values);
       floatBoat();
@@ -889,6 +929,19 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         game.stepOnce();
       }
       game.settle();
+    },
+    /**
+     * Sails on with time held: frames times, steps steps and then draws a
+     * frame, so that what moves with world time (the wakes, the spray) sees
+     * steps / 30 s pass each frame, however slowly the machine draws.
+     */
+    sailFrames(frames: number, steps = 2): void {
+      for (let i = 0; i < frames; i++) {
+        for (let j = 0; j < steps; j++) {
+          game.stepOnce();
+        }
+        stage.renderOnce(performance.now());
+      }
     },
     /**
      * Scripts the controls before every step: 'steer' holds a heading in
@@ -1367,7 +1420,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * drawn, so that its foam is what it would be by then. For pictures of a
      * frozen time: the foam is the one thing the band remembers.
      */
-    settleFoam(seconds = 8, rate = 15): void {
+    settleFoam(seconds = 8, rate = 4): void {
       const ocean = world.ocean;
       const f = ocean.frame;
       const end = f.time;

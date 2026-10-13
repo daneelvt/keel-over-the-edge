@@ -289,6 +289,18 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
   test.setTimeout(540_000);
   await page.setViewportSize({ width: 320, height: 200 });
   await openScene(page, 'sea=gale');
+  if (process.platform === 'linux') {
+    // On CI's software GPU the high tier's two transforms take seconds a
+    // frame whatever the picture's size; the medium tier's one runs the same
+    // code in an eighth of the work. On the Mac the page keeps its best tier.
+    await page.evaluate(async () => {
+      const k = globalThis.keel;
+      const medium = k.info().rungs.findIndex((r) => r.startsWith('medium'));
+      if (medium > 0) {
+        await k.setRung(medium);
+      }
+    });
+  }
   const cdp = await page.context().newCDPSession(page);
   const used = async (): Promise<number> => {
     await cdp.send('HeapProfiler.collectGarbage');

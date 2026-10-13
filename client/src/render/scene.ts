@@ -216,6 +216,7 @@ export class SeaScene {
 
   #attached(gfx: Gfx): void {
     this.shadows.attached(gfx.renderer);
+    this.ocean.detail.attached();
     this.ocean.choose(this.usePass, gfx.floatTargets);
     this.boat?.attached(gfx);
     const now = performance.now();
@@ -290,11 +291,17 @@ export class SeaScene {
     q.quiet(performance.now(), Number.POSITIVE_INFINITY);
     this.stage.resize();
     const sh = this.shadows;
-    sh.set(tier, rung.shadows);
+    sh.set(
+      tier,
+      rung.shadows,
+      q.ladder.some((r) => TIERS[r.tier].shadowMap > 0),
+    );
     if (this.boat !== null) {
       Shadows.cast(this.boat.model, sh.on, sh.lit);
     }
-    Shadows.cast(this.fleet.near.group, sh.on && sh.fleet, sh.fleet);
+    // The other boats receive on every rung the light casts, so that their
+    // shaders never change; they cast only where the tier has them do so.
+    Shadows.cast(this.fleet.near.group, sh.fleet, sh.lit);
     // The light's casting changes every lit material's shader: compiled off
     // the frame first, and swapped in once ready. The compiler reads the
     // light as it is when called, so the light is changed for that call and

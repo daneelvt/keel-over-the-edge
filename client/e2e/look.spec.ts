@@ -5,8 +5,75 @@
 // the foam follows the wind's force, boats leave wakes, and the tiers and
 // adaptive quality move between each other without a stall.
 
-import { expect, type Page, test } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
 import { openScene, picture } from './helpers';
+
+/**
+ * One page for the tests of a worker, put back between them (resetLook):
+ * opening the scene takes ten seconds on CI's software GPU, longer than most
+ * of these tests do.
+ */
+const test = base.extend<object, { shared: Page }>({
+  shared: [
+    async ({ browser }, use, workerInfo) => {
+      const baseURL = workerInfo.project.use.baseURL;
+      const page = await browser.newPage({
+        ...(baseURL === undefined ? {} : { baseURL }),
+        viewport: { width: 960, height: 600 },
+        deviceScaleFactor: 1,
+      });
+      await use(page);
+      await page.close();
+    },
+    { scope: 'worker' },
+  ],
+  page: async ({ shared }, use) => {
+    await use(shared);
+  },
+});
+
+/** Opens the sandbox with a query, or puts the page already open back as it would open with it. */
+async function openLook(page: Page, query = ''): Promise<void> {
+  const sea = query === '' ? null : (/^sea=(\w+)$/.exec(query)?.[1] ?? undefined);
+  const url = page.url();
+  const open =
+    sea !== undefined &&
+    url.includes('?sandbox&test') &&
+    !url.includes('tier=') &&
+    (await page.evaluate(() => globalThis.keel?.info().backend ?? '').catch(() => '')) !== '';
+  if (!open) {
+    await openScene(page, query);
+    return;
+  }
+  const info = await page.evaluate(() => globalThis.keel.info());
+  const name = test.info().project.name;
+  test.skip((name === 'webgpu' || name === 'compat') && info.backend !== 'webgpu', 'no WebGPU');
+  test.skip(name === 'compat' && !info.compat, 'no device held to compatibility mode');
+  // The screen's panels hidden, as openScene hides them: a test may have opened the page itself.
+  await page.addStyleTag({ content: '.hud { visibility: hidden; }' });
+  await page.evaluate(async (sea) => {
+    const k = globalThis.keel;
+    k.slowFrames(0);
+    k.freeze(100);
+    await k.resetLook(sea);
+    k.reset();
+    k.render();
+    k.camera('chase');
+    k.render();
+  }, sea);
+}
+
+/**
+ * On CI's software GPU (Linux) the look's pixel probes and pictures run on
+ * WebGL 2 alone: on WebGPU there they take minutes, and the shaders are the
+ * same. On the Mac they run on every back end.
+ */
+function heavy(): void {
+  test.skip(
+    process.platform === 'linux' && test.info().project.name !== 'webgl2',
+    'on a software GPU this runs on WebGL 2 only; on every back end on the Mac',
+  );
+}
 
 /** The root mean square of every stride-th value of v from offset. */
 function rms(v: number[], offset: number, stride = 4): number {
@@ -27,7 +94,7 @@ async function hasCompute(page: Page): Promise<boolean> {
 test.describe('the detail band’s transform', () => {
   for (const sea of ['breeze', 'gale']) {
     test(`is the CPU’s field, in the ${sea}`, async ({ page }) => {
-      await openScene(page, `sea=${sea}`);
+      await openLook(page, `sea=${sea}`);
       test.skip(!(await hasCompute(page)), 'the transform runs in compute passes');
       const got = await page.evaluate(async () => {
         const k = globalThis.keel;
@@ -76,9 +143,10 @@ const project = (): string => test.info().project.name;
 
 test.describe('the tiers', () => {
   test('start on the best the device runs, held to its limits', async ({ page }) => {
-    await openScene(page);
+    await openLook(page);
+    // A frame at a new time: with time standing still the band is not made again.
     const info = await page.evaluate(() => {
-      globalThis.keel.render();
+      globalThis.keel.freeze(101);
       globalThis.keel.render();
       return globalThis.keel.info();
     });
@@ -106,7 +174,7 @@ test.describe('the tiers', () => {
   test('?tier holds a tier no better than the device’s, with adaptive quality off', async ({
     page,
   }) => {
-    await openScene(page, 'tier=medium');
+    await openLook(page, 'tier=medium');
     const info = await page.evaluate(() => globalThis.keel.info());
     expect(info.tier).toBe(project() === 'webgl2' ? 'low' : 'medium');
     expect(info.adaptive).toBe(false);
@@ -120,7 +188,7 @@ test.describe('the tiers', () => {
         errors.push(m.text());
       }
     });
-    await openScene(page, 'sea=gale');
+    await openLook(page, 'sea=gale');
     const seen = await page.evaluate(async () => {
       const k = globalThis.keel;
       const out: string[] = [];
@@ -140,7 +208,8 @@ test.describe('the tiers', () => {
 
 test.describe('the detail band’s transform, further', () => {
   test('lets foam form where the surface folds, and fade over its time', async ({ page }) => {
-    await openScene(page, 'sea=fresh');
+    heavy();
+    await openLook(page, 'sea=fresh');
     test.skip(!(await hasCompute(page)), 'the transform runs in compute passes');
     const r = await page.evaluate(async () => {
       const k = globalThis.keel;
@@ -170,7 +239,7 @@ test.describe('the detail band’s transform, further', () => {
   });
 
   test('is the CPU’s field again after a lost device', async ({ page }) => {
-    await openScene(page, 'sea=gale');
+    await openLook(page, 'sea=gale');
     test.skip(!(await hasCompute(page)), 'the transform runs in compute passes');
     await page.evaluate(() => globalThis.keel.loseDevice());
     await page.waitForFunction(() => globalThis.keel.info().recoveries === 1, null, {
@@ -223,8 +292,10 @@ test('the low tier’s loop is made behind the scene, a few milliseconds a frame
 type Surface = Awaited<ReturnType<typeof globalThis.keel.surface>>;
 
 test.describe('what is drawn on a tile', () => {
+  test.beforeEach(heavy);
+
   test('tilts the tile as a whole, and its own ripples stop at its rim', async ({ page }) => {
-    await openScene(page, 'sea=fresh');
+    await openLook(page, 'sea=fresh');
     const s: Surface = await page.evaluate(() => globalThis.keel.surface(256, 32));
     // Each tile's whole-tile tilt, and the largest difference within it.
     const tilt = new Map<number, [number, number]>();
@@ -261,7 +332,7 @@ test.describe('what is drawn on a tile', () => {
   });
 
   test('has ripples of the tile’s own, not its neighbour’s', async ({ page }) => {
-    await openScene(page, 'sea=breeze');
+    await openLook(page, 'sea=breeze');
     const s: Surface = await page.evaluate(() => globalThis.keel.surface(256, 32));
     const size = 256;
     // Each tile's centre in pixels, from its pixels.
@@ -308,7 +379,7 @@ test.describe('what is drawn on a tile', () => {
   });
 
   test('the far sea reads the band plainly, without seams', async ({ page }) => {
-    await openScene(page, 'sea=fresh');
+    await openLook(page, 'sea=fresh');
     // Pixels of 1.6 cm, a tenth of the band's texels: a seam would show as a jump.
     const px = await page.evaluate(() => globalThis.keel.farSurface(128, 2, 170));
     let jump = 0;
@@ -346,8 +417,10 @@ async function settled(page: Page): Promise<void> {
 }
 
 test.describe('foam', () => {
+  test.beforeEach(heavy);
+
   test('in a calm, only round the hull', async ({ page }) => {
-    await openScene(page, 'sea=calm');
+    await openLook(page, 'sea=calm');
     await settled(page);
     const s: Surface = await page.evaluate(() => globalThis.keel.surface(256, 24));
     let foam = 0;
@@ -368,7 +441,7 @@ test.describe('foam', () => {
   test('whitecaps only on high crests; streaks only from force 7, long down the wind', async ({
     page,
   }) => {
-    await openScene(page, 'sea=fresh');
+    await openLook(page, 'sea=fresh');
     const fresh: Surface = await page.evaluate(() => globalThis.keel.surface(128, 64));
     let streaks = 0;
     for (let p = 0; p < fresh.tile.length; p++) {
@@ -429,7 +502,7 @@ test.describe('foam', () => {
   });
 
   test('stays inside its tile, with a clear margin at the rim', async ({ page }) => {
-    await openScene(page, 'sea=gale');
+    await openLook(page, 'sea=gale');
     await settled(page);
     const s: Surface = await page.evaluate(() => globalThis.keel.surface(256, 64));
     let inner = 0;
@@ -455,7 +528,7 @@ test.describe('foam', () => {
   });
 
   test('whitens the sea more as the wind rises, and the share is recorded', async ({ page }) => {
-    await openScene(page, 'sea=calm');
+    await openLook(page, 'sea=calm');
     const shares: number[] = [];
     const winds = { calm: 6, breeze: 12, fresh: 20, gale: 34 };
     for (const sea of Object.keys(winds)) {
@@ -496,20 +569,20 @@ test.describe('foam', () => {
 });
 
 test.describe('the wakes and the hulls', () => {
+  test.beforeEach(heavy);
+
   test('a boat lays a track that fades, fixed on the water as the map follows the boat', async ({
     page,
   }) => {
-    await openScene(page, 'sea=breeze');
+    await openLook(page, 'sea=breeze');
     const r = await page.evaluate(async () => {
       const k = globalThis.keel;
       k.setState({ heading: 1.5708, surge: 3, sheetLimit: 0.5 });
       k.setControls(0, 0.3);
       k.script('steer', 1.5708);
-      k.thaw();
-      await k.frames(240);
+      // Eight seconds of sailing, drawn frame by frame however slow the machine.
+      k.sailFrames(120);
       k.script(null);
-      k.freeze(k.game.clock.time);
-      k.render();
       const strong = (w: Awaited<ReturnType<typeof k.wakes>>) => {
         const out = new Map<string, number>();
         let most = 0;
@@ -554,7 +627,7 @@ test.describe('the wakes and the hulls', () => {
   test('a stopped boat has a ring of foam and no arms; a moving one, arms at Kelvin’s angle', async ({
     page,
   }) => {
-    await openScene(page, 'sea=calm');
+    await openLook(page, 'sea=calm');
     const stopped: Surface = await page.evaluate(() => globalThis.keel.surface(256, 16));
     let ring = 0;
     let far = 0;
@@ -613,7 +686,7 @@ test.describe('the wakes and the hulls', () => {
   });
 
   test('eight boats cost the draw calls one does', async ({ page }) => {
-    await openScene(page, 'sea=fresh');
+    await openLook(page, 'sea=fresh');
     const calls = await page.evaluate(async () => {
       const k = globalThis.keel;
       const boats = (n: number) =>
@@ -631,7 +704,8 @@ test.describe('the wakes and the hulls', () => {
 });
 
 test('spray is thrown into a gale, in one draw call', async ({ page }) => {
-  await openScene(page, 'sea=gale');
+  heavy();
+  await openLook(page, 'sea=gale');
   const r = await page.evaluate(async () => {
     const k = globalThis.keel;
     k.setState({ heading: 0.3, surge: 4, sheetLimit: 0.4 });
@@ -664,8 +738,10 @@ test('spray is thrown into a gale, in one draw call', async ({ page }) => {
 });
 
 test.describe('shadows', () => {
+  test.beforeEach(heavy);
+
   test('shade the boat, and nothing else', async ({ page }) => {
-    await openScene(page, 'sea=breeze');
+    await openLook(page, 'sea=breeze');
     test.skip(project() === 'webgl2', 'the low tier has no shadows');
     // The sun abeam to starboard, and two rungs alike but for the shadows.
     const [on, off] = await page.evaluate(() => {
@@ -723,7 +799,7 @@ test.describe('shadows', () => {
 
 test.describe('budgets', () => {
   test('64 boats in a gale, on every tier', async ({ page }) => {
-    await openScene(page, 'sea=gale');
+    await openLook(page, 'sea=gale');
     const r = await page.evaluate(async () => {
       const k = globalThis.keel;
       const boats = Array.from({ length: 64 }, (_, i) => ({
@@ -742,6 +818,8 @@ test.describe('budgets', () => {
           continue;
         }
         await k.setRung(i);
+        // A frame at a new time, so the band is made in it.
+        k.freeze(200 + i);
         await k.show();
         const now = k.info();
         const bytes = k.textureBytes();
@@ -775,20 +853,25 @@ test.describe('adaptive quality', () => {
   test('steps down a slow page to the low tier, and up again when it is fast', {
     tag: '@long',
   }, async ({ page }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(480_000);
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await openScene(page, 'sea=fresh');
+    await openLook(page, 'sea=fresh');
     const down = await page.evaluate(async () => {
       const k = globalThis.keel;
       const last = k.info().rungs.length - 1;
-      k.qualityTiming(250, 1000);
-      k.adapt(true);
       k.slowFrames(45);
       k.thaw();
+      // Windows long enough to hold a dozen frames on this machine, slowed:
+      // a window of fewer frames is not judged.
+      const t0 = performance.now();
+      await k.frames(10);
+      const frame = (performance.now() - t0) / 10;
+      k.qualityTiming(Math.max(250, 12 * frame), 1000);
+      k.adapt(true);
       const start = performance.now();
-      while (k.info().rung < last && performance.now() - start < 90_000) {
-        await k.frames(10);
+      while (k.info().rung < last && performance.now() - start < 240_000) {
+        await k.frames(5);
       }
       return { rung: k.info().rung, last, tier: k.info().tier };
     });
@@ -827,9 +910,11 @@ test.describe('adaptive quality', () => {
 });
 
 test.describe('pictures', () => {
+  test.beforeEach(heavy);
+
   for (const sea of ['calm', 'breeze', 'fresh', 'gale']) {
     test(sea, async ({ page }) => {
-      await openScene(page, `sea=${sea}`);
+      await openLook(page, `sea=${sea}`);
       await page.evaluate(() => {
         globalThis.keel.setState({ heading: (330 * Math.PI) / 180 - 2 * Math.PI });
         globalThis.keel.render();

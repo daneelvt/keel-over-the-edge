@@ -13,8 +13,9 @@
 // beside its depth texture, RGBA at 8 bits by default, which nothing reads.
 // It is made red alone here, so a texel of the map costs 5 bytes, not 8.
 //
-// Whether the light casts at all changes every lit material's shader, so it
-// changes only with the tier. Within a tier, shadows go off by the boats no
+// Whether the light casts at all changes every lit material's shader and
+// the shadow pass's own, so it is fixed for a ladder: on wherever the ladder
+// has shadows on any tier. Down the ladder, shadows go off by the boats no
 // longer casting: the map is drawn once, empty, and then left alone, which
 // saves its pass and changes no shader.
 
@@ -30,7 +31,7 @@ export class Shadows {
   readonly light: DirectionalLight;
   /** Whether the boats cast into the map, its side in texels, its box in metres, and whether other boats are in it. */
   on = false;
-  /** Whether the light casts: whether the tier has a map at all. */
+  /** Whether the light casts: whether the ladder has a map anywhere. */
   lit = false;
   size = 0;
   box = 0;
@@ -66,20 +67,23 @@ export class Shadows {
   }
 
   /**
-   * The tier's map, and whether the rung has the boats cast into it. The
-   * light's own casting is the caller's to change, as lit (it changes
-   * shaders, which want compiling first).
+   * The tier's map, and whether the rung has the boats cast into it. lit is
+   * whether the light casts at all: for the whole of a ladder that has
+   * shadows anywhere, so that no step down or up it changes a lit shader or
+   * the shadow pass's own; below the tiers with a map the boats simply cast
+   * nothing into it. The light's own casting is the caller's to change, as
+   * lit (it changes shaders, which want compiling first).
    */
-  set(tier: Tier, shadows: boolean): void {
-    this.lit = tier.shadowMap > 0;
-    const on = shadows && this.lit;
+  set(tier: Tier, shadows: boolean, lit: boolean): void {
+    this.lit = lit;
+    const on = lit && shadows && tier.shadowMap > 0;
     this.on = on;
-    this.fleet = this.lit && tier.shadowFleet;
+    this.fleet = on && tier.shadowFleet;
     const s = this.light.shadow;
     // Off, the map is drawn once more, with nothing casting, and then kept.
     s.autoUpdate = on;
     s.needsUpdate = true;
-    if (!this.lit) {
+    if (!on) {
       return;
     }
     if (this.size !== tier.shadowMap) {
