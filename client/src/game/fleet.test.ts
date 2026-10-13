@@ -19,6 +19,7 @@ import {
   MOTION,
   NEAR_DELAY,
   SLEW,
+  smoothedSpeed,
 } from './fleet';
 
 const TICK_US = 1e6 / TICKS_PER_SECOND;
@@ -282,5 +283,26 @@ describe('the fleet', () => {
     // Leaves: gone in half a second.
     step(world + 600_000, (t) => fleet.add(record(t, [{ slot: 5, change: CHANGE.left }]), world));
     expect(fleet.count).toBe(0);
+  });
+});
+
+describe('another boat’s speed', () => {
+  test('is how fast its drawn position moves, smoothed over half a second', () => {
+    let v = 0;
+    // 3 m/s for a second, at 60 frames a second.
+    for (let i = 0; i < 60; i++) {
+      v = smoothedSpeed(v, 3 / 60, 1 / 60);
+    }
+    expect(v).toBeGreaterThan(2.5);
+    expect(v).toBeLessThan(3);
+    // Half a second on, the speed is about 1 − 1/e of the way to the new one.
+    let w = 0;
+    for (let i = 0; i < 30; i++) {
+      w = smoothedSpeed(w, 3 / 60, 1 / 60);
+    }
+    expect(w / 3).toBeCloseTo(1 - Math.exp(-1), 2);
+    // A frame with no time keeps it; a correction drawn at once is not a speed.
+    expect(smoothedSpeed(2, 5, 0)).toBe(2);
+    expect(smoothedSpeed(0, 100, 1)).toBeLessThanOrEqual(12);
   });
 });

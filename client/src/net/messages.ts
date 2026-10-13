@@ -39,6 +39,8 @@ export type ToWorker =
   | { type: 'input'; seq: number; helm: number; sheet: number }
   /** The page's frame time's 95th percentile, ms, for the server's metrics. */
   | { type: 'frame'; ms: number }
+  /** How much the page draws: its tier (1 low … 3 high) and its pixel ratio, for the server's metrics. */
+  | { type: 'quality'; tier: number; scale: number }
   /** Stop waiting: the network is back, or the page is shown again. */
   | { type: 'wake' }
   /** The player chose to take the boat back from another device. */

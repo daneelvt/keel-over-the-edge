@@ -61,6 +61,10 @@ message Ping {
   uint32 rtt_ms = 3;
   // The 95th percentile of the client's frame time, in milliseconds.
   uint32 frame_ms = 4;
+  // How much the client draws: 1 the low tier, 2 medium, 3 high; 0 unknown.
+  uint32 tier = 5;
+  // The pixel ratio the client draws at, in hundredths; 0 unknown.
+  uint32 render_scale = 6;
 }
 
 // Command is something the player asks of the game.

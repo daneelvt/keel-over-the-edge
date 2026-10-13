@@ -369,6 +369,8 @@ test('a lost device comes back within 2 s with the same picture', async ({ page 
 test.describe('pictures', () => {
   for (const sea of ['calm', 'fresh', 'gale']) {
     test(sea, async ({ page }) => {
+      // The compatibility device's pictures are the look's (look.spec.ts).
+      test.skip(test.info().project.name === 'compat', 'taken in look.spec.ts');
       await openScene(page, `sea=${sea}`);
       // The boat heading 330°, as the views were chosen to match the renderings.
       await page.evaluate(() => {
@@ -380,7 +382,8 @@ test.describe('pictures', () => {
           globalThis.keel.camera(v);
           await globalThis.keel.show();
         }, view);
-        await expect(page.locator('canvas.scene')).toHaveScreenshot(`${sea}-${view}.png`);
+        // Soft: every picture of the test is taken, even after one differs.
+        await expect.soft(page.locator('canvas.scene')).toHaveScreenshot(`${sea}-${view}.png`);
       }
     });
   }

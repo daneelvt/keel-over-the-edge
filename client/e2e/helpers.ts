@@ -11,13 +11,32 @@ declare global {
 }
 
 /**
+ * Whether the browser draws on CI's software GPU (SwiftShader, on Linux),
+ * where every pixel and every compute pass is the CPU's. There the pages
+ * open on the cheapest rung of their ladder, unless a test asks for the
+ * best: what the tests of geometry, sailing and the network check does not
+ * depend on the tier, and the best rung takes minutes a test. On the Mac
+ * every page opens on the best rung.
+ */
+// SOFTWARE_GPU=1 takes the same paths on any machine, to try them.
+export const softwareGPU = process.platform === 'linux' || process.env.SOFTWARE_GPU === '1';
+
+/**
  * Opens the offline sandbox on the project's back end with the test hooks,
  * waits for the boat, freezes time and puts the boat back at the start, at
- * rest. A WebGPU project with no adapter is skipped. The screen's panels and
- * controls are hidden unless hud is true, so pictures show the scene alone.
+ * rest, on the best rung of its ladder (on a software GPU the low tier's,
+ * unless best is set). A WebGPU project with no adapter is skipped. The
+ * screen's panels and controls are hidden unless hud is true, so pictures
+ * show the scene alone.
  */
-export async function openScene(page: Page, query = '', hud = false): Promise<void> {
-  const backend = test.info().project.name === 'webgl2' ? '&backend=webgl2' : '';
+export async function openScene(page: Page, query = '', hud = false, best = false): Promise<void> {
+  const project = test.info().project.name;
+  const backend = project === 'webgl2' ? '&backend=webgl2' : project === 'compat' ? '&compat' : '';
+  // On a software GPU the page holds the low tier from the start: it builds
+  // one set of shaders, which takes seconds there, not two.
+  if (softwareGPU && !best && !query.includes('tier=')) {
+    query = query === '' ? 'tier=low' : `${query}&tier=low`;
+  }
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`/?sandbox&test${backend}${query === '' ? '' : `&${query}`}`);
@@ -25,8 +44,12 @@ export async function openScene(page: Page, query = '', hud = false): Promise<vo
   await page.evaluate(() => globalThis.keel.ready());
   const info = await page.evaluate(() => globalThis.keel.info());
   test.skip(
-    test.info().project.name === 'webgpu' && info.backend !== 'webgpu',
+    (project === 'webgpu' || project === 'compat') && info.backend !== 'webgpu',
     'this browser offers no WebGPU adapter',
+  );
+  test.skip(
+    project === 'compat' && !info.compat,
+    'this browser offers no device held to compatibility mode',
   );
   if (errors.length > 0) {
     throw new Error(`the page failed: ${errors.join('; ')}`);
@@ -34,6 +57,9 @@ export async function openScene(page: Page, query = '', hud = false): Promise<vo
   if (!hud) {
     await page.addStyleTag({ content: '.hud { visibility: hidden; }' });
   }
+  // The best rung of the ladder, whatever the page's first seconds did.
+  // The best rung of its ladder, whatever the page's first seconds did.
+  await page.evaluate(() => globalThis.keel.setRung(0));
   await page.evaluate(() => {
     globalThis.keel.freeze(100);
     globalThis.keel.reset();
@@ -152,7 +178,7 @@ export async function guest(context: BrowserContext, word = 'Sailor'): Promise<v
 export async function sail(page: Page, base = ''): Promise<void> {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`${base}/?test&backend=webgl2`);
+  await page.goto(`${base}/?test&backend=webgl2${softwareGPU ? '&tier=low' : ''}`);
   await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 60_000 });
   await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
     timeout: 30_000,

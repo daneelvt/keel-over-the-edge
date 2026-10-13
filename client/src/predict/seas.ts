@@ -19,6 +19,14 @@ interface Held {
   col: number;
   row: number;
   size: number;
+  /**
+   * What raises each area's waves, as sent, row by row from the south-west:
+   * the wind 10 m up in steps of SEA_SPEED_STEP, the direction it comes from
+   * in steps of a turn / SEA.fromSteps, and the fetch in metres.
+   */
+  speed: Uint32Array;
+  from: Uint32Array;
+  fetch: Uint32Array;
 }
 
 export class Seas {
@@ -29,6 +37,9 @@ export class Seas {
     col: 0,
     row: 0,
     size: 0,
+    speed: new Uint32Array(SEA.window * SEA.window),
+    from: new Uint32Array(SEA.window * SEA.window),
+    fetch: new Uint32Array(SEA.window * SEA.window),
   }));
   /** Counts the windows taken, so that whoever draws them knows to read them again. */
   version = 0;
@@ -83,7 +94,11 @@ export class Seas {
     const p = this.#physics;
     p.seaWindow(slot, m.col, m.row, m.size);
     for (let i = 0; i < n; i++) {
-      p.seaArea(slot, i, m.speed[i] ?? 0, (m.from[i] ?? 0) % SEA.fromSteps, m.fetch[i] ?? 0);
+      const from = (m.from[i] ?? 0) % SEA.fromSteps;
+      p.seaArea(slot, i, m.speed[i] ?? 0, from, m.fetch[i] ?? 0);
+      h.speed[i] = m.speed[i] ?? 0;
+      h.from[i] = from;
+      h.fetch[i] = m.fetch[i] ?? 0;
     }
     p.seaSeal(slot);
     this.version++;

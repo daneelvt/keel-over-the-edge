@@ -62,6 +62,7 @@ export class Game {
     effect(() => {
       const s = settings.value.value;
       world.stage.cap.limit = s.frameRate;
+      world.setDetail(s.detail);
       this.sound.enabled = s.sound;
       this.helm.centreOnRelease = s.centreHelm;
       world.overlays.set(s.windOverlay, s.forcesOverlay);

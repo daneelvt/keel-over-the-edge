@@ -115,6 +115,20 @@ type metrics struct {
 	margin                        prometheus.Observer
 	rtt                           prometheus.Observer
 	frame                         prometheus.Observer
+	tiers                         [len(tierNames)]prometheus.Gauge
+	scale                         prometheus.Observer
+}
+
+// tierNames are the tiers a client says it draws at, by their number in a
+// Ping; any other number is unknown.
+var tierNames = [...]string{"unknown", "low", "medium", "high"}
+
+// tierOf is a Ping's tier as an index of tierNames.
+func tierOf(t uint32) int32 {
+	if t >= uint32(len(tierNames)) {
+		return 0
+	}
+	return int32(t)
 }
 
 func newMetrics(m *obs.Metrics) metrics {
@@ -161,6 +175,10 @@ func newMetrics(m *obs.Metrics) metrics {
 	x.margin = m.EdgeInputMargin
 	x.rtt = m.ClientRTT
 	x.frame = m.ClientFrame
+	for i, n := range tierNames {
+		x.tiers[i] = m.ClientTier.WithLabelValues(n)
+	}
+	x.scale = m.ClientRenderScale
 	return x
 }
 

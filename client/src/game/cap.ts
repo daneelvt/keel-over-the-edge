@@ -13,11 +13,20 @@
 // The display's rate is the median of the last 30 intervals between
 // animation frames, measured all the time, so a phone that changes its rate
 // is followed within half a second or so.
+//
+// That rate is what the page gets, which is the display's own only while
+// the page keeps up: a phone that takes 25 ms a frame on a 60 Hz display is
+// called for an animation frame every 33 ms, exactly as one whose display
+// runs at 30 Hz is. To tell a slow phone from a slow display, the cap can
+// probe: for a few animation frames nothing is drawn, and the intervals
+// between them are the display's.
 
 /** Animation-frame intervals the display's rate is measured over. */
 const WINDOW = 30;
 /** A rate within this fraction above the cap still counts as the cap. */
 const SLACK = 0.05;
+/** Animation frames a probe leaves undrawn; the first interval still holds the last drawn frame's work. */
+const PROBE = 6;
 
 /** The smallest n for which a display of rate hz drawn every n-th frame is within the cap. */
 export function divisorFor(hz: number, cap: number): number {
@@ -41,10 +50,45 @@ export class FrameCap {
   #since = 0;
   #divisor = 1;
   #hz = 0;
+  readonly #probe = new Float64Array(PROBE - 1);
+  #probing = 0;
+  #display = 0;
+  #probed = Number.NEGATIVE_INFINITY;
 
-  /** The display's measured rate, in Hz; 0 until measured. */
+  /** The rate animation frames come at, in Hz; 0 until measured. */
   get rate(): number {
     return this.#hz;
+  }
+
+  /**
+   * The display's own rate, in Hz: by the last probe, or the rate animation
+   * frames come at when that is faster or nothing was probed yet.
+   */
+  get display(): number {
+    return Math.max(this.#display, this.#hz);
+  }
+
+  /** The interval between drawn frames the cap asks of this display, in milliseconds; 0 until measured. */
+  get interval(): number {
+    const hz = this.display;
+    return hz > 0 ? (1000 * (this.forced ?? divisorFor(hz, this.limit))) / hz : 0;
+  }
+
+  /** When the display was last probed, in milliseconds on the animation frames' clock. */
+  get probed(): number {
+    return this.#probed;
+  }
+
+  /** Whether a probe is under way. */
+  get probing(): boolean {
+    return this.#probing > 0;
+  }
+
+  /** Measures the display itself: the next few animation frames are not drawn. */
+  probe(): void {
+    if (this.#probing === 0) {
+      this.#probing = PROBE;
+    }
   }
 
   /** Every how many animation frames one is drawn. */
@@ -66,6 +110,22 @@ export class FrameCap {
         this.#measure();
       }
     }
+    if (this.#probing > 0) {
+      const dt = now - this.#prev;
+      // The first of them still waited for the last drawn frame.
+      if (this.#prev >= 0 && this.#probing < PROBE) {
+        this.#probe[PROBE - 1 - this.#probing] = dt;
+      }
+      this.#prev = now;
+      this.#probing--;
+      if (this.#probing === 0) {
+        const median = this.#probe.slice().sort()[(PROBE - 1) >> 1] ?? 0;
+        this.#display = median > 0 ? 1000 / median : 0;
+        this.#probed = now;
+        this.#since = this.divisor;
+      }
+      return false;
+    }
     this.#prev = now;
     this.#since++;
     if (this.#since >= this.divisor) {
@@ -79,6 +139,7 @@ export class FrameCap {
   restart(): void {
     this.#prev = -1;
     this.#since = this.divisor;
+    this.#probing = 0;
   }
 
   #measure(): void {

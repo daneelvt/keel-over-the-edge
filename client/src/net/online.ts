@@ -326,6 +326,11 @@ export class Online {
     };
   }
 
+  /** How much the page draws: its tier (1 low … 3 high) and its pixel ratio, for the server. */
+  quality(tier: number, scale: number): void {
+    this.#port.postMessage({ type: 'quality', tier, scale });
+  }
+
   /** The page's frame: dt seconds since the last. */
   frame(dt: number): void {
     const now = nowUs();

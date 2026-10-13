@@ -81,6 +81,24 @@ export const SAMPLES = 8;
 /** How a boat is being drawn. */
 export const MOTION = { interpolated: 0, extrapolated: 1, held: 2 } as const;
 
+/** A boat's speed is its drawn position's change, smoothed over this long, in seconds. */
+export const SPEED_EASE = 0.5;
+/** No boat sails faster than this, m/s: a correction drawn at once is not a speed. */
+const SPEED_MOST = 12;
+
+/**
+ * A boat's speed after a frame in which its drawn position moved `moved`
+ * metres in dt seconds, from its speed before: eased toward the frame's
+ * own, over SPEED_EASE.
+ */
+export function smoothedSpeed(before: number, moved: number, dt: number): number {
+  if (!(dt > 0)) {
+    return before;
+  }
+  const now = Math.min(moved / dt, SPEED_MOST);
+  return before + (now - before) * (1 - Math.exp(-dt / SPEED_EASE));
+}
+
 /** A boat as drawn this frame. */
 export interface DrawnBoat {
   /** The view slot, or −1 for a boat fading out of it. */
@@ -97,6 +115,11 @@ export interface DrawnBoat {
    */
   heave: number;
   pitch: number;
+  /**
+   * Its speed, m/s: how fast its drawn position moves, smoothed. The server
+   * does not send it; the foam at its hull and its wake are drawn by it.
+   */
+  speed: number;
   boom: number;
   rudder: number;
   sailor: number;
@@ -123,6 +146,7 @@ export function newDrawnBoat(): DrawnBoat {
     heel: 0,
     heave: 0,
     pitch: 0,
+    speed: 0,
     boom: 0,
     rudder: 0,
     sailor: 0,
@@ -430,6 +454,15 @@ export class Fleet {
         out.heading = lerpAngle(out.heading, out.heading + b.dh * k, 1);
         b.ease = Math.max(0, b.ease - dtTicks);
       }
+      // New to the view it has no speed yet: nothing was drawn to measure it from.
+      out.speed =
+        b.drawn.opacity > 0
+          ? smoothedSpeed(
+              b.drawn.speed,
+              Math.hypot(out.east - b.drawn.east, out.north - b.drawn.north),
+              dt,
+            )
+          : 0;
       b.opacity = Math.min(1, b.opacity + dtTicks / FADE);
       out.slot = i;
       out.opacity = b.opacity;
@@ -515,6 +548,7 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.heel = a.heel;
   b.heave = a.heave;
   b.pitch = a.pitch;
+  b.speed = a.speed;
   b.boom = a.boom;
   b.rudder = a.rudder;
   b.sailor = a.sailor;

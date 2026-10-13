@@ -13,7 +13,7 @@ import type { Node, UniformNode } from 'three/webgpu';
 import { horizonDistance } from '../render/materials';
 import { FIELD_RADIUS } from './hex';
 import { hulls } from './hulls';
-import { type BandUniforms, boatBandAt, seaPlaneOf } from './wave';
+import { type BandUniforms, boatBandAt, seaAreaAt, seaPlaneOf } from './wave';
 
 export const FAR_RINGS = 60;
 export const FAR_SPOKES = 200;
@@ -64,8 +64,8 @@ export class FarSea {
   readonly outer: UniformNode<'float', number>;
   readonly position: Node<'vec3'>;
   readonly plane: Node<'vec4'>;
-  /** The significant height of the sea at each vertex, in metres. */
-  readonly hs: Node<'float'>;
+  /** The sea area's foam at each vertex (whitecaps, streaks, folding) and the significant height of its waves, in metres. */
+  readonly area: Node<'vec4'>;
   /** Above 0 where a hull may be near: the grid's triangles there are a few metres across. */
   readonly nearHull: Node<'float'>;
 
@@ -82,7 +82,7 @@ export class FarSea {
     const plane = seaPlaneOf(summed, p);
     this.position = vec3(p.x, plane.x.sub(FAR_DROP), p.y);
     this.plane = varying(plane);
-    this.hs = varying(summed.w);
+    this.area = varying(seaAreaAt(band)(p));
     this.nearHull = varying(hulls.near(p, 30));
     this.mesh = new Mesh(farGeometry());
     this.mesh.name = 'far sea';

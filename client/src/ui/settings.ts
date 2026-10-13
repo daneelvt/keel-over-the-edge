@@ -16,6 +16,8 @@ export interface Settings {
   forcesOverlay: boolean;
   /** Return the helm to the centre when the thumb lifts or the key comes up. */
   centreHelm: boolean;
+  /** How much the sea is drawn with: as much as the device runs well, or the least, to save battery. */
+  detail: 'auto' | 'low';
 }
 
 export const DEFAULTS: Settings = {
@@ -24,6 +26,7 @@ export const DEFAULTS: Settings = {
   windOverlay: false,
   forcesOverlay: false,
   centreHelm: false,
+  detail: 'auto',
 };
 
 const KEY = 'keel.settings';
@@ -58,6 +61,9 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
   const r = raw as Record<string, unknown>;
   if (r.frameRate === 60 || r.frameRate === 30) {
     out.frameRate = r.frameRate;
+  }
+  if (r.detail === 'auto' || r.detail === 'low') {
+    out.detail = r.detail;
   }
   for (const k of ['sound', 'windOverlay', 'forcesOverlay', 'centreHelm'] as const) {
     if (typeof r[k] === 'boolean') {

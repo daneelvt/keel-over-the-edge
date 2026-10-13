@@ -6,7 +6,9 @@
 # Runs only when a file the browser tests depend on changed.
 #
 # Each back end runs in jobs of its own, and the tests tagged @long (minutes
-# each on SwiftShader) apart from the rest, so the four run side by side.
+# each on SwiftShader) apart from the rest, so the four run side by side; and
+# a fifth runs the sea's short tests on a WebGPU device held to compatibility
+# mode's limits.
 # The game connection's upgrade from a worker is also tried on WebKit; and,
 # where the runner's kernel has sch_netem, the slow-network tests run once
 # through real TCP loss as well as through tools/lag's model of it.
@@ -61,6 +63,11 @@ jobs:
       matrix:
         project: [webgl2, webgpu]
         tests: [long, short]
+        # The sea's tests once more on a WebGPU device held to compatibility
+        # mode's limits.
+        include:
+          - project: compat
+            tests: short
     runs-on: ubuntu-24.04
     permissions:
       contents: read

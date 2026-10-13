@@ -651,6 +651,135 @@ either. It is done for the player's boat and the seven nearest others within
 150 m. A tile or a triangle of the far sea with no hull in reach says so from
 its vertices, and its fragments skip the test.
 
+### The sea's look
+
+What the sea shows beside the boat band is drawn and never felt: nothing
+here moves a boat, and nothing of it is on the wire, in the catalog or in
+the checkpoint. Its numbers are in `client/src/ocean/look.ts`.
+
+**The detail band** is the sea's own JONSWAP spectrum, with the boat band's
+spreading, for the waves shorter than the boat band's shortest (8 m), at
+the wind and fetch of the sea under the boat (`under.ts`: blended between
+areas as the boat band is, eased over 2 s). It is Tessendorf's sea: a
+square patch, 41 m a side, that repeats over the world; 41 m because tile
+rows are 4 m apart, and a patch of 32 m would repeat every eighth row.
+Every frequency is a whole multiple of 2π/128 s, so the patch is a function
+of world time that repeats every 128 s and the shader needs only the time
+within the loop (the worst frequency is 0.9% off). Each wave's phase comes
+from a hash of its wave vector, so every device draws the same sea.
+`spectrum.ts` has the amplitudes; `field.ts` makes the fields on the CPU in
+float64: the height, the two slopes, and the convergence of the horizontal
+shift, from which the surface's folding comes (1 − chop × convergence, the
+Jacobian to first order).
+
+On WebGPU (`detail.ts`) the band is four compute passes a patch: the
+spectrum at the frame's time, the transform of every row, of every column,
+and the fields put together with the foam's memory (what folds now, or what
+was foam before, spread a little and faded over the force's decay time). A
+row is one workgroup: its invocations share the row and run the radix-2
+stages between two arrays, with a barrier after each. So a patch of 128
+fits compatibility mode's 128 invocations a workgroup, and one of 256 needs
+core's 256. The outputs are `rgba16float` with mipmaps, the intermediates
+`rgba32float`, never filtered. The high tier has a second patch, 7.3 m a
+side, with the ripples of 6 to 32 cm: glitter, almost no height.
+
+On the low tier the band is a loop made on the device as the page starts,
+by `field.ts`: 64 × 64 over the same 41 m, the waves of 2 to 6.8 m, 32 frames
+over 8 s, for 6 and 20 knots, made in slices of at most 4 ms a frame (about
+20 ms in all on the Mac), mixed by the wind, turned to its direction and
+scaled to the band's height. The developer panel shows how long it took.
+
+**On a tile** (`seamaterial.ts`) the band is drawn in two parts, so that what
+is drawn on a tile stays inside it. Read once a tile, at its centre, from
+the mipmap whose texels are about 2.5 m, it tilts and shades the tile as a
+whole: every fragment of the tile has the same. Read at the fragment, at a
+place shifted by the tile's hash and faded to nothing at the rim, it gives
+ripples that are the tile's own. The far sea reads it plainly. Where a tier
+leaves the finest ripples out, a shimmer from the pattern's noise stands in
+for them.
+
+**Foam** (`foam.ts`) has five sources: folding in the detail band; whitecaps
+where the boat band's crest stands above 0.75 of half the significant
+height; streaks down the wind, from force 7; the hulls; and the wakes. Their
+sum sets how much of a pattern of lace shows (`pattern.ts`: one small
+texture made at start, lace and noise, read once a fragment), and the cover
+fades to a fifth over each tile's rim, so a patch of foam reads as white
+tiles. What it does at each wind is `FOAM_BY_FORCE` in `look.ts`, a row a
+Beaufort force, read at the middle of each force and between them; each sea
+area has its own, by its own wind. `npx vitest run src/ocean/look.test.ts`
+checks the table: a row for every force, strengths from 0 to 1, nothing
+falling as the wind rises, no whitecaps under force 3 and no streaks under
+force 7. To tune it, change a row, look at it in the sandbox
+(`?sandbox&dev&sea=…`, or the panel's wind), and take the browser tests'
+pictures again. The browser tests record the white share of the sea at 6,
+12, 20 and 34 knots beside Monahan and O'Muircheartaigh's whitecap coverage:
+the drawn foam is a look, and covers about a sixth of what the fit gives.
+
+**Round a hull** (`hulls.ts`), in the same walk that keeps the water out of
+it: a ring at the waterline, more at the bow, and two arms that trail at
+Kelvin's 19.5°, growing with the hull's speed through the water. Another
+boat's speed is how fast its drawn position moves, smoothed over 0.5 s.
+**The wakes** are a foam map (`foammap.ts`): a square 256 m a side that
+follows the boat in whole texels, 512 × 512 (256 × 256 on the low tier),
+8-bit. Each frame a pass moves it, fades it over 6 s, spreads it a little,
+and stamps every boat in it under its stern; its 8 bits are dithered, so it
+fades at the right rate at any frame rate. **Spray**
+(`client/src/render/spray.ts`) is sprites in one draw: from a bow the sea
+rises against faster than 0.2 m/s, more with speed and whitecaps, blown down
+the wind for about a second; and off the crests near the camera from
+force 8.
+
+**Shadows** (`client/src/render/shadows.ts`): one map of the sun's, round the
+boat. The boat and its sailor cast and receive; on the high tier the other
+boats within 40 m too. The sea receives none.
+
+### Tiers and adaptive quality
+
+A tier is a set of values (`client/src/render/quality.ts`):
+
+| | High | Medium | Low |
+|---|---|---|---|
+| Starts on | WebGPU, core features | WebGPU, compatibility mode | WebGL 2 |
+| Render scale, at most | 2 | 1.5 | 1 |
+| Detail band | Transform 256², two patches | Transform 128², one patch; shimmer | The loop; shimmer |
+| Compute dispatches a frame | 8 | 4 | 0 |
+| Foam map | 512² | 512² | 256² |
+| Shadows | 2,048², 40 m, other boats too | 1,024², 12 m, own boat | None |
+| Spray | 512, own boat and 3 nearest, off the crests | 256, own, off the crests | 96, own |
+
+A page starts on the best tier its back end runs, or where this device
+settled last time (kept in `localStorage` with `QUALITY_VERSION` from
+`look.ts`: change it when the tiers' values change). The menu's **Detail:
+low** starts the ladder at the low tier, to save battery. Adaptive quality
+then moves down and up a ladder: the render scale by tenths to 0.7 of the
+tier's, then the shadows off, then the second patch off, then the tier
+below. A window of frames (2 s; 0.5 s for the first 6 s, which are the
+benchmark, behind the start screen) is slow when the 90th percentile of the
+intervals between drawn frames is over 1.15 times what the frame cap asks
+for. Before a slow window is believed the display is measured again: for
+six animation frames nothing is drawn, so a 30 Hz display is not taken for
+a slow phone. Two slow windows step down. Ten seconds of windows that are
+not slow and have time to spare (GPU time under 70% of the interval where
+the device has timestamps, the main thread's work under 6 ms where not)
+step up; a step up undone within 20 s doubles the wait, to 320 s at most.
+Within a tier no step changes a shader: shadows go off by the boats no
+longer casting, the map drawn once empty. A change that needs new shaders
+(the detail band, the light casting or not) is compiled off the frame first,
+compute kernels too, and swapped in once ready; windows are not counted
+until a second after it, nor while the page is hidden.
+
+The page tells the server its tier and render scale in every `Ping`; the
+server counts clients by tier (`keel_client_tier`) and keeps the scale's
+histogram (`keel_client_render_scale`), beside the frame times on the game
+dashboard. The Go client and the load bot send 0, unknown.
+
+`?tier=high|medium|low` holds a tier, no better than the back end's, with
+adaptive quality off. `?compat` makes the WebGPU device without
+`core-features-and-limits`, so the browser enforces compatibility mode's
+limits on any machine: three.js otherwise asks for every feature, and a
+desktop always gets a core device. The browser tests' `compat` project runs
+the sea's tests that way.
+
 ## The server
 
 `keel serve` runs the game. Its heart is the **simulation** (`internal/sim`),
@@ -2908,6 +3037,8 @@ sheet half out, in 10 knots from the north. The developer page is
 | `?wind=12,45` | The sandbox's wind: knots 10 m up, and the degrees it comes from |
 | `?dev` | The developer panel (a lazy import, outside the first download); see below |
 | `?backend=webgl2` | The WebGL 2 back end, even where WebGPU is offered |
+| `?tier=low` | A tier held, `high`, `medium` or `low`, no better than the back end's; adaptive quality off (see [Tiers and adaptive quality](#tiers-and-adaptive-quality)) |
+| `?compat` | A WebGPU device held to compatibility mode's limits |
 | `?sea=gale` | The sandbox's wind by the sea it raises: `calm` (6 knots), `breeze` (12), `fresh` (20) or `gale` (34), from the north |
 | `?view=bands` | A camera preset: `chase` (the default), `sea` and `bands` (the waves rendering's "Sea states" and "Two bands" views, for a boat heading 330°), `aboard`, `high` |
 | `?test` | The hooks the browser tests drive, on `window.keel` |
@@ -2964,14 +3095,18 @@ wind to the east of the boat, so that two seas meet and blend; flat water;
 the boat, reset to the start, placed at a position and heading, or
 jumped to the rim; time, paused, stepped once or slowed to ½ or ¼; the live
 `State` and `Out`; camera presets; the back end, render scale,
-tile pass and antialiasing; and the frame statistics: the interval between
-drawn frames (median and 90th percentile over 2 s), the main thread's work
-per drawn frame, the display's measured rate and the divisor drawn at, GPU
-time where the device has timestamps, draw calls and triangles; and the sea
-under the boat: its significant height, its peak period and how many waves
-are summed. **Check the sea** runs the server's sea file through the page's
-module and GPU and says how far each is from it (see [Waves](#waves)). Its
-sky part sets the hour, the moon and the sky's speed, offline and online (see
+tile pass and antialiasing; the quality: the rung of the ladder (any can be
+chosen), adaptive quality on or off, the detail band, the foam and the
+wakes each on or off, and the last steps adaptive quality took; and the
+frame statistics: the interval between drawn frames (median and 90th
+percentile over 2 s), the main thread's work per drawn frame, the display's
+measured rate and the divisor drawn at, GPU time where the device has
+timestamps, draw calls, compute dispatches and triangles; the detail band
+and the wind under the boat it follows; and the sea under the boat: its
+significant height, its peak period and how many waves are summed. **Check
+the sea** runs the server's sea file through the page's module and GPU and
+says how far each is from it (see [Waves](#waves)). Its sky part sets the
+hour, the moon and the sky's speed, offline and online (see
 [The sky](#the-sky)).
 
 ### Recording a sail
@@ -3003,7 +3138,10 @@ deliberate change to the physics).
 | `client/src/ocean/hex.ts` | The lattice: hexagons 4 m across the flats, corners east and west, one centred on the disk's centre, named by axial (q, r); the field of 5,101 tiles within 150 m; the tile hash, the same on the GPU |
 | `client/src/ocean/phases.ts`, `wave.ts` | The boat band: the physics module's waves and the amplitudes of the sea areas about the boat, laid out for the GPU; their phases at the floating origin reduced in float64 on the CPU each frame; the sum on the GPU, blended between areas (see [Waves](#waves)) |
 | `client/src/ocean/tilepass.ts`, `tiles.ts` | Each tile's plane (height and slope at its centre, with the dome's drop and slope) computed once a frame into a float target, one texel per tile; every vertex of a tile reads the same texel, so the tile is a rigid flat slab. Without float render targets the vertex stage computes the same plane |
-| `client/src/ocean/seamaterial.ts`, `far.ts`, `client/src/render/sky.ts` | The sea's look (seams, bevels, tint, shimmer, crests lightened by their height against the sea's own, Fresnel, sun, haze), the far sea out past the horizon, the sky |
+| `client/src/ocean/seamaterial.ts`, `far.ts`, `client/src/render/sky.ts` | The sea's look (seams, bevels, tint, the detail band and the foam held in each tile, crests lightened by their height against the sea's own, Fresnel, sun, haze), the far sea out past the horizon, the sky |
+| `client/src/ocean/spectrum.ts`, `field.ts`, `detail.ts`, `under.ts` | The detail band: its spectrum, its fields on the CPU, the transform in compute passes or the low tier's loop, and the sea under the boat it follows (see [The sea's look](#the-seas-look)) |
+| `client/src/ocean/look.ts`, `foam.ts`, `pattern.ts`, `foammap.ts`, `turn.ts` | The look's numbers and the foam by Beaufort force; the foam's sources, cover and margin; the lace and noise texture; the wakes; patterns laid over the world and turned to the wind |
+| `client/src/render/quality.ts`, `shadows.ts`, `spray.ts` | The tiers, the ladder and adaptive quality; the sun's shadow map; spray |
 | `client/src/ocean/hulls.ts` | No water inside a hull: the sea's fragments within a hull's volume are left out |
 | `client/src/game/float.ts` | The other boats' heave and pitch, from the sea drawn under them |
 | `client/src/render/boat.ts` | Loads a boat's model and its sailor from the catalog's art, replaces their materials with the factory's |
@@ -3102,6 +3240,36 @@ the physics module gives; no sea inside a hull and no hole outside it,
 sailing in a gale for ten seconds, heeled 30°, and in seven other boats; the
 lattice fixed as the boat moves and the origin jumps, the tile hash, the
 scene walk, recovery from a lost device, and pictures.
+`look.spec.ts` is the sea's look: the detail band the GPU transforms, read
+back and compared with `field.ts`'s at the same time and sea (within a
+thousandth of each field's size, on a core and a compatibility device, and
+after a lost device); foam forming where the surface folds and fading over
+its time; the low tier's loop made in slices; every fragment of a tile with
+the same whole-tile tilt, the tile's own ripples gone at its rim and unlike
+its neighbour's, the far sea without seams; no foam in a calm but round the
+hull, whitecaps only on high crests, streaks only from force 7 and long down
+the wind, foam's margin at each tile's rim, the white share rising with the
+wind (recorded beside Monahan's); a wake that stays on the water as the map
+follows the boat and fades in 30 s, a stopped hull's ring, the arms at
+19.5°, eight boats in the draw calls of one; spray in one draw; shadows on
+the boat and nowhere else; the starting tier by device, `?tier`, every rung
+drawn without error; 64 boats under 150 draw calls on every tier, with the
+dispatches and texture memory recorded; adaptive quality stepping a slowed
+page down to the low tier and, on the Mac, back up without a frame over
+100 ms (`@long`); and pictures of the four sea states from the waves
+rendering's "Sea states" and "Close aboard" views. The `compat` project
+(`--project compat`) runs `sea.spec.ts` and `look.spec.ts` on a WebGPU
+device held to compatibility mode's limits.
+
+On CI's software GPU (SwiftShader, on Linux) every pixel and compute pass
+is the CPU's, and the sea's best tiers take seconds a frame there. So the
+pages there open on the low tier (`?tier=low`), which is what the tests of
+geometry, hulls, sailing and the network need; `look.spec.ts` keeps the best
+tier for the device, the transform, the rungs and the memory, and runs its
+pixel probes and pictures on WebGL 2 alone. On the Mac every page opens on
+its device's best tier and every test runs on every back end: run the
+browser tests on the Mac before merging a change to the sea's look.
+`SOFTWARE_GPU=1` takes CI's paths on any machine.
 `sail.spec.ts` sails: the page's steps are the module's under Node, bit for
 bit; two touch pointers move the helm and the sheet at once; a held key
 turns the boat; a capsize in 20 knots, the sailor's line and the dimmed

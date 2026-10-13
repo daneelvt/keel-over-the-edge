@@ -14,6 +14,7 @@
 // only on [−π, π] (WebGPU Shading Language, 15.7.4, Numeric built-in
 // functions).
 
+import type { Vector4 } from 'three';
 import {
   clamp,
   cos,
@@ -42,6 +43,8 @@ export interface BandUniforms {
   readonly band: SeaBand;
   readonly phases: ReturnType<typeof uniformArray>;
   readonly hs: ReturnType<typeof uniformArray>;
+  /** Each area's foam: whitecaps, streaks and folding (under.ts). */
+  readonly foam: ReturnType<typeof uniformArray>;
   /** The fours of waves to sum. */
   readonly groups: UniformNode<'float', number>;
   /** Areas a side of the window, and whether its areas differ. */
@@ -52,8 +55,11 @@ export interface BandUniforms {
   sync(): void;
 }
 
-/** Uniforms reading the band: its arrays are updated in place each frame. */
-export function bandUniforms(band: SeaBand): BandUniforms {
+/**
+ * Uniforms reading the band: its arrays are updated in place each frame.
+ * foam is each area's foam, in the areas' order.
+ */
+export function bandUniforms(band: SeaBand, foam: Vector4[]): BandUniforms {
   const groups = uniform(0);
   const size = uniform(SEA.window as number);
   const blended = uniform(0);
@@ -61,6 +67,7 @@ export function bandUniforms(band: SeaBand): BandUniforms {
     band,
     phases: uniformArray(band.phases, 'vec4'),
     hs: uniformArray(band.hs, 'float'),
+    foam: uniformArray(foam, 'vec4'),
     groups,
     size,
     blended,
@@ -149,12 +156,22 @@ export function boatBandAt(u: BandUniforms): (p: Node<'vec2'>) => Node<'vec4'> {
   return (p) => fn(p) as unknown as Node<'vec4'>;
 }
 
-/** The significant height of the sea at the scene point p, without the waves. */
-export function seaHeightAt(u: BandUniforms): (p: Node<'vec2'>) => Node<'float'> {
-  const fn = Fn(([p]: [Node<'vec2'>]) =>
-    blend(cornersAt(u, p), (area) => u.hs.element(area) as unknown as Node<'float'>),
-  );
-  return (p) => fn(p) as unknown as Node<'float'>;
+/**
+ * The sea's areas at the scene point p, without the waves: vec4(whitecaps,
+ * streaks, folding foam, Hs), each area's foam by its own wind and the
+ * significant height of its waves, blended between the four areas about the
+ * point.
+ */
+export function seaAreaAt(u: BandUniforms): (p: Node<'vec2'>) => Node<'vec4'> {
+  const fn = Fn(([p]: [Node<'vec2'>]) => {
+    const c = cornersAt(u, p);
+    const foam = (area: Node<'int'>): Node<'vec4'> =>
+      u.foam.element(area) as unknown as Node<'vec4'>;
+    const hs = blend(c, (area) => u.hs.element(area) as unknown as Node<'float'>);
+    const look = mix(mix(foam(c.sw), foam(c.se), c.w.x), mix(foam(c.nw), foam(c.ne), c.w.x), c.w.y);
+    return vec4(look.xyz, hs);
+  });
+  return (p) => fn(p) as unknown as Node<'vec4'>;
 }
 
 const INV_2R = 1 / (2 * DOME_RADIUS);

@@ -313,7 +313,11 @@ type Ping struct {
 	// The client's estimate of the round trip, in milliseconds.
 	RttMs uint32 `protobuf:"varint,3,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`
 	// The 95th percentile of the client's frame time, in milliseconds.
-	FrameMs       uint32 `protobuf:"varint,4,opt,name=frame_ms,json=frameMs,proto3" json:"frame_ms,omitempty"`
+	FrameMs uint32 `protobuf:"varint,4,opt,name=frame_ms,json=frameMs,proto3" json:"frame_ms,omitempty"`
+	// How much the client draws: 1 the low tier, 2 medium, 3 high; 0 unknown.
+	Tier uint32 `protobuf:"varint,5,opt,name=tier,proto3" json:"tier,omitempty"`
+	// The pixel ratio the client draws at, in hundredths; 0 unknown.
+	RenderScale   uint32 `protobuf:"varint,6,opt,name=render_scale,json=renderScale,proto3" json:"render_scale,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -372,6 +376,20 @@ func (x *Ping) GetRttMs() uint32 {
 func (x *Ping) GetFrameMs() uint32 {
 	if x != nil {
 		return x.FrameMs
+	}
+	return 0
+}
+
+func (x *Ping) GetTier() uint32 {
+	if x != nil {
+		return x.Tier
+	}
+	return 0
+}
+
+func (x *Ping) GetRenderScale() uint32 {
+	if x != nil {
+		return x.RenderScale
 	}
 	return 0
 }
@@ -1007,12 +1025,14 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x04helm\x18\x02 \x01(\rR\x04helm\x12\x14\n" +
 	"\x05sheet\x18\x03 \x01(\rR\x05sheet\x12\x19\n" +
 	"\back_tick\x18\x04 \x01(\x03R\aackTick\x12\x19\n" +
-	"\back_only\x18\x05 \x01(\bR\aackOnly\"y\n" +
+	"\back_only\x18\x05 \x01(\bR\aackOnly\"\xb0\x01\n" +
 	"\x04Ping\x12$\n" +
 	"\x0eclient_time_us\x18\x01 \x01(\x03R\fclientTimeUs\x12\x19\n" +
 	"\back_tick\x18\x02 \x01(\x03R\aackTick\x12\x15\n" +
 	"\x06rtt_ms\x18\x03 \x01(\rR\x05rttMs\x12\x19\n" +
-	"\bframe_ms\x18\x04 \x01(\rR\aframeMs\"<\n" +
+	"\bframe_ms\x18\x04 \x01(\rR\aframeMs\x12\x12\n" +
+	"\x04tier\x18\x05 \x01(\rR\x04tier\x12!\n" +
+	"\frender_scale\x18\x06 \x01(\rR\vrenderScale\"<\n" +
 	"\aCommand\x12)\n" +
 	"\x06resync\x18\x01 \x01(\v2\x0f.keel.v1.ResyncH\x00R\x06resyncB\x06\n" +
 	"\x04body\"\b\n" +

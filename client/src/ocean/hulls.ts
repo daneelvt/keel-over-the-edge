@@ -15,28 +15,40 @@
 // This is clipping the water's surface by a primitive (Crest, "Water
 // Exclusion": clip surface, signed distance primitives): it needs no
 // stencil buffer and no extra pass, and works where volumes overlap.
+//
+// The same walk over the hulls gives the foam a hull makes: a ring at its
+// waterline, more at the bow, and two arms that trail from the bow at the
+// half-angle of a ship's wake, arcsin ⅓ (Thomson, "On ship waves", 1887).
+// Both grow with the hull's speed through the water; a hull at rest has the
+// ring alone.
 
 import { Vector4 } from 'three';
 import {
   abs,
+  clamp,
   Discard,
   dot,
+  exp,
   Fn,
   float,
   floor,
   If,
   int,
   Loop,
+  length,
   max,
   min,
   mix,
   pow,
+  smoothstep,
   uniform,
   uniformArray,
+  vec2,
   vec3,
 } from 'three/tsl';
 import type { Node, UniformNode } from 'three/webgpu';
 import { DOME_RADIUS, domeCentre } from '../render/materials';
+import { WAKE } from './look';
 
 /** The most hulls the sea is kept out of: the player's own and the nearest others. */
 export const HULLS = 8;
@@ -46,6 +58,10 @@ export const STATIONS = 8;
 export const HULL_REACH = 150;
 /** The volume is this fraction of the hull's width, so the sea meets the planking. */
 export const HULL_FILL = 0.94;
+/** A fragment's own place is taken a little off the fragment's, so a tile this much further off than a hull reaches may still need the walk, metres. */
+export const HULL_MARGIN = 0.5;
+/** A hull's foam reaches this many of its half-lengths astern of its middle. */
+export const WAKE_REACH = 3.5;
 
 /** A hull's volume: its stations from the transom forward, each [z, half-beam at the waterline, depth of the bottom], and the exponent of its sections' narrowing. */
 export interface HullShape {
@@ -133,12 +149,14 @@ export class HullVolumes {
   readonly count: UniformNode<'float', number> = uniform(0);
   /** Each hull's centre of gravity in the scene, and its heading. */
   readonly #places: Vector4[] = Array.from({ length: HULLS }, () => new Vector4());
-  /** Each hull's heel and pitch. */
+  /** Each hull's heel and pitch, and its speed through the water, m/s. */
   readonly #tilts: Vector4[] = Array.from({ length: HULLS }, () => new Vector4());
   /** The stations: z, half-beam, depth. */
   readonly #stations: Vector4[] = Array.from({ length: STATIONS }, () => new Vector4());
   /** The bilge's exponent, the centre of gravity's height above the waterline, and the hull's reach from it. */
   readonly #shape = uniform(new Vector4(2, 0, 0, 0));
+  /** The waterline as the foam sees it: its middle's place aft of the origin, its half-length, its half-beam, and how far the foam reaches from the origin. */
+  readonly #plan = uniform(new Vector4(0, 1, 0.5, 0));
   readonly #placesNode = uniformArray(this.#places, 'vec4');
   readonly #tiltsNode = uniformArray(this.#tilts, 'vec4');
   readonly #stationsNode = uniformArray(this.#stations, 'vec4');
@@ -154,6 +172,15 @@ export class HullVolumes {
     });
     // A heeled or pitched hull reaches no further from its centre of gravity than this.
     this.#shape.value.set(shape.bilge, centreOfGravity, reach + centreOfGravity + 0.5, 0);
+    const aft = shape.stations[0]?.[0] ?? 0;
+    const fore = shape.stations[STATIONS - 1]?.[0] ?? 0;
+    const half = (aft - fore) / 2;
+    const beam = Math.max(...shape.stations.map((s) => s[1] ?? 0));
+    const middle = (aft + fore) / 2;
+    // The arms end WAKE_REACH half-lengths astern of the middle, where they are widest.
+    const astern = middle + WAKE_REACH * half;
+    const wide = beam + (1 + WAKE_REACH) * half * Math.tan(WAKE.kelvin) + 1;
+    this.#plan.value.set(middle, half, beam, Math.hypot(astern, wide));
     this.#ready = true;
   }
 
@@ -165,28 +192,39 @@ export class HullVolumes {
 
   /**
    * Adds a hull: where its waterline's origin would be in flat water, in
-   * the scene, lifted by its heave; its heading, heel and pitch.
+   * the scene, lifted by its heave; its heading, heel and pitch; and its
+   * speed through the water, m/s.
    */
-  add(x: number, y: number, z: number, heading: number, heel: number, pitch: number): void {
+  add(
+    x: number,
+    y: number,
+    z: number,
+    heading: number,
+    heel: number,
+    pitch: number,
+    speed = 0,
+  ): void {
     if (!this.#ready || this.#n >= HULLS) {
       return;
     }
     (this.#places[this.#n] as Vector4).set(x, y + this.#shape.value.y, z, heading);
-    (this.#tilts[this.#n] as Vector4).set(heel, pitch, 0, 0);
+    (this.#tilts[this.#n] as Vector4).set(heel, pitch, Math.max(speed, 0), 0);
     this.#n++;
     this.count.value = this.#n;
   }
 
   /**
-   * Whether a hull is near the scene point p (x and z): 1 within margin
-   * metres of a hull's reach, else 0. For the vertex stage, so that the
-   * fragments of a tile or a triangle with no hull near skip the test.
+   * Whether a hull or its foam is near the scene point p (x and z): 1
+   * within margin metres of where either reaches, else 0. For the vertex
+   * stage, so that the fragments of a tile or a triangle with no hull near
+   * skip the walk.
    */
   near(p: Node<'vec2'>, margin: number): Node<'float'> {
     const shape = this.#shape as unknown as Node<'vec4'>;
+    const plan = this.#plan as unknown as Node<'vec4'>;
     return Fn(() => {
       const found = float(0).toVar();
-      const reach = shape.z.add(margin);
+      const reach = max(shape.z, plan.w).add(margin);
       Loop(int(this.count), ({ i }: { i: Node<'int'> }) => {
         const place = this.#placesNode.element(i) as unknown as Node<'vec4'>;
         const d = p.sub(place.xz);
@@ -204,17 +242,55 @@ export class HullVolumes {
    * fragment's vertices: where it is 0 nothing is tested.
    */
   cut(p: Node<'vec3'>, near?: Node<'float'>): void {
-    if (near !== undefined) {
-      If(near.greaterThan(0), () => {
-        this.#cut(p);
-      });
-      return;
-    }
-    this.#cut(p);
+    this.wet(p, near, false);
   }
 
-  #cut(p: Node<'vec3'>): void {
+  /**
+   * Leaves the fragment at p out if it lies in a hull, as cut does, and
+   * returns the foam the hulls make there, 0 and up. Call it inside a
+   * fragment's function.
+   */
+  wet(p: Node<'vec3'>, near?: Node<'float'>, foam = true): Node<'float'> {
+    const amount = float(0).toVar();
+    if (near !== undefined) {
+      If(near.greaterThan(0), () => {
+        this.#walk(p, foam ? amount : null);
+      });
+    } else {
+      this.#walk(p, foam ? amount : null);
+    }
+    return amount as unknown as Node<'float'>;
+  }
+
+  /** The foam a hull makes at a point of its own frame, on the water's plane: x to starboard, z aft. */
+  #foam(m: Node<'vec3'>, speed: Node<'float'>): Node<'float'> {
+    const plan = this.#plan as unknown as Node<'vec4'>;
+    // Forward of the hull's middle, and off its centreline.
+    const along = plan.x.sub(m.z);
+    const off = abs(m.x);
+    const half = plan.y;
+    const beam = plan.z;
+    // The ring: just outside the waterline, taken as an ellipse; more at the bow.
+    const e = length(vec2(along.div(half), off.div(beam)));
+    const ring = smoothstep(1.45, 1.0, e)
+      .mul(smoothstep(0.85, 1.0, e))
+      .mul(speed.mul(0.18).add(0.35))
+      .mul(along.greaterThan(0).select(1.3, 0.8));
+    // The arms: from the bow aft, each tan(arcsin ⅓) further out a metre.
+    const back = max(half.sub(along), 0);
+    const arm = beam.mul(0.9).add(back.mul(Math.tan(WAKE.kelvin)));
+    const width = back.mul(0.04).add(0.25);
+    const d = off.sub(arm).div(width);
+    const arms = exp(d.mul(d).negate())
+      .mul(along.lessThan(half.mul(1.02)).select(1, 0))
+      .mul(smoothstep(half.mul(-WAKE_REACH), half.mul(0.2), along))
+      .mul(clamp(speed.mul(0.22), 0, 1));
+    return ring.add(arms) as unknown as Node<'float'>;
+  }
+
+  #walk(p: Node<'vec3'>, amount: Node<'float'> | null): void {
     const shape = this.#shape as unknown as Node<'vec4'>;
+    const plan = this.#plan as unknown as Node<'vec4'>;
     const inside = float(0).toVar();
     // The hulls and the sea drop away from the boat alike: the test is
     // made with both where they would be on a flat world.
@@ -223,6 +299,14 @@ export class HullVolumes {
     Loop(int(this.count), ({ i }: { i: Node<'int'> }) => {
       const place = this.#placesNode.element(i) as unknown as Node<'vec4'>;
       const d = level.sub(place.xyz).toVar();
+      if (amount !== null) {
+        If(dot(d.xz, d.xz).lessThan(plan.w.mul(plan.w)), () => {
+          const tilt = this.#tiltsNode.element(i) as unknown as Node<'vec4'>;
+          // On the water the hull's heel and pitch are let be: its heading alone.
+          const flat = inHull(vec3(d.x, 0, d.z), place.w, float(0), float(0));
+          (amount as unknown as { addAssign(v: Node): void }).addAssign(this.#foam(flat, tilt.z));
+        });
+      }
       If(dot(d, d).lessThan(shape.z.mul(shape.z)), () => {
         const tilt = this.#tiltsNode.element(i) as unknown as Node<'vec4'>;
         // Into the hull's frame: the heading undone, then the pitch, then the heel.

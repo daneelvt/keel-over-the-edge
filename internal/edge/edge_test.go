@@ -5,6 +5,7 @@ package edge_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"sync"
 	"testing"
@@ -12,7 +13,9 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
@@ -959,6 +962,64 @@ func drag(t *testing.T, encoders int) {
 		}
 		if applied != sent {
 			t.Fatalf("%d words sent, %d applied", sent, applied)
+		}
+	})
+}
+
+// TestClientTier: a client is counted under the tier its Pings say it draws
+// at, under another when it says another, and no longer once it goes; a tier
+// of 0 is unknown. The pixel ratio it says goes into the histogram.
+func TestClientTier(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := edgetest.NewServer(t, edgetest.Config{})
+		token, _ := s.Guest("Ann")
+		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws.CloseNow()
+		tiers := func() map[string]float64 {
+			out := map[string]float64{}
+			for _, n := range []string{"unknown", "low", "medium", "high"} {
+				out[n] = testutil.ToFloat64(s.Metrics.ClientTier.WithLabelValues(n))
+			}
+			return out
+		}
+		ping := func(tier, scale uint32) {
+			client.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{Tier: tier, RenderScale: scale}}})
+			time.Sleep(100 * time.Millisecond)
+		}
+		if n := tiers(); n["unknown"]+n["low"]+n["medium"]+n["high"] != 0 {
+			t.Fatalf("before a ping: %v", n)
+		}
+		ping(3, 200)
+		if n := tiers(); n["high"] != 1 || n["unknown"]+n["low"]+n["medium"] != 0 {
+			t.Fatalf("after a ping at the high tier: %v", n)
+		}
+		ping(3, 180)
+		ping(1, 70)
+		if n := tiers(); n["low"] != 1 || n["high"] != 0 {
+			t.Fatalf("after it stepped down: %v", n)
+		}
+		ping(0, 0)
+		ping(9, 0)
+		if n := tiers(); n["unknown"] != 1 || n["low"] != 0 {
+			t.Fatalf("a tier of 0, then of 9: %v", n)
+		}
+		if c := testutil.CollectAndCount(s.Metrics.ClientRenderScale); c != 1 {
+			t.Fatalf("the scale's histogram: %d series", c)
+		}
+		var m dto.Metric
+		if err := s.Metrics.ClientRenderScale.(prometheus.Metric).Write(&m); err != nil {
+			t.Fatal(err)
+		}
+		if h := m.GetHistogram(); h.GetSampleCount() != 3 || math.Abs(h.GetSampleSum()-4.5) > 1e-9 {
+			t.Fatalf("scales: %d of them, summing to %v", h.GetSampleCount(), h.GetSampleSum())
+		}
+		ws.Close(websocket.StatusNormalClosure, "")
+		time.Sleep(time.Second)
+		if n := tiers(); n["unknown"] != 0 {
+			t.Fatalf("after it went: %v", n)
 		}
 	})
 }

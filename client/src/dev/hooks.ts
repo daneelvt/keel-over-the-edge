@@ -43,9 +43,20 @@ import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
 import { nowUs, worldUs } from '../net/clock';
 import type { Online } from '../net/online';
+import type { Cascade } from '../ocean/detail';
+import { FieldMaker, newFields } from '../ocean/field';
+import { foamOn } from '../ocean/foam';
 import { hexAt, hexCentre, NEIGHBOURS, TILE_APOTHEM, TILE_RADIUS, tileHash } from '../ocean/hex';
 import { HULL_FILL, hulls, insideHull, toHullFrame } from '../ocean/hulls';
-import { tileHashNode, tileIdentity } from '../ocean/seamaterial';
+import { type FoamLook, WAKE } from '../ocean/look';
+import {
+  detailOn,
+  farLook,
+  type Probe,
+  tileHashNode,
+  tileIdentity,
+  tileLook,
+} from '../ocean/seamaterial';
 import { PASS_HEIGHT, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
 import { boatBandAt } from '../ocean/wave';
@@ -54,6 +65,7 @@ import { RECORDS, SEA } from '../predict/layout.gen';
 import { BODY, SKY } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { checkScene, DOME_RADIUS, domeDrop, seaMaterial } from '../render/materials';
+import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
@@ -63,6 +75,19 @@ import { setSky } from './skypanel';
 export interface Info {
   backend: string;
   compat: boolean;
+  /** The device's limits the scene is built to: invocations a workgroup, storage textures in the vertex stage. */
+  workgroup: number;
+  vertexStorageTextures: number;
+  /** The tier in use, the rung of the ladder, and the ladder's rungs in words. */
+  tier: string;
+  rung: number;
+  rungs: string[];
+  adaptive: boolean;
+  /** How the detail band is made. */
+  detail: string;
+  dispatches: number;
+  /** Drops of spray in the air. */
+  spray: number;
   floatTargets: boolean;
   usePass: boolean;
   recoveries: number;
@@ -159,6 +184,11 @@ export type Sailing =
 
 /** Puts the hooks on globalThis.keel. */
 export function exposeHooks(world: SeaScene, game: Game, sailing: Sailing): void {
+  // Pages under test hold their quality, so that a slow test machine draws
+  // what the test asks for; the tests of adaptive quality turn it on.
+  if (world.quality !== null) {
+    world.quality.enabled = false;
+  }
   (globalThis as unknown as { keel: KeelHooks }).keel = makeHooks(world, game, sailing);
 }
 
@@ -358,6 +388,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     size: number,
     span: number,
     cut = false,
+    look: Probe | null = null,
   ): Promise<Float32Array> => {
     const g = gfx();
     const tiles = world.ocean.tiles;
@@ -368,19 +399,25 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         .mul(2)
         .add(tiles.varyings.side.lessThan(-0.5).select(float(2), float(1))),
     );
-    // With cut, the sea is left out of the hulls as it is on screen.
-    m.fragmentNode = cut
-      ? (Fn(() => {
-          hulls.cut(positionWorld, tiles.varyings.nearHull);
-          return vec4(positionWorld, id);
-        })() as unknown as Node<'vec4'>)
-      : vec4(positionWorld, id);
+    if (look !== null) {
+      // The look's own numbers for each fragment, in place of its colour.
+      m.fragmentNode = tileLook(tiles.varyings, world.ocean.parts, look);
+    } else {
+      // With cut, the sea is left out of the hulls as it is on screen.
+      m.fragmentNode = cut
+        ? (Fn(() => {
+            hulls.cut(positionWorld, tiles.varyings.nearHull);
+            return vec4(positionWorld, id);
+          })() as unknown as Node<'vec4'>)
+        : vec4(positionWorld, id);
+    }
     const scene = new Scene();
     const mesh = new Mesh(tiles.geometry, m);
     mesh.frustumCulled = false;
     scene.add(mesh);
-    const cam = new OrthographicCamera(-span / 2, span / 2, span / 2, -span / 2, 1, 400);
-    cam.position.set(x, 200, z);
+    // Low enough that the look draws what it draws near the eye.
+    const cam = new OrthographicCamera(-span / 2, span / 2, span / 2, -span / 2, 1, 60);
+    cam.position.set(x, 30, z);
     cam.up.set(0, 0, -1);
     cam.lookAt(x, 0, z);
     cam.updateMatrixWorld();
@@ -413,6 +450,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return {
         backend: g?.backend ?? '',
         compat: g?.compat ?? false,
+        workgroup: g?.workgroup ?? 0,
+        vertexStorageTextures: g?.vertexStorageTextures ?? 0,
+        tier: world.rung.tier,
+        rung: world.quality?.index ?? -1,
+        rungs: (world.quality?.ladder ?? []).map(rungName),
+        adaptive: world.quality?.enabled ?? false,
+        detail: world.ocean.detail.state.kind,
+        dispatches: world.stats.last.dispatches,
+        spray: world.spray.count,
         floatTargets: g?.floatTargets ?? false,
         usePass: world.ocean.tiles === world.ocean.passTiles,
         recoveries: stage.recoveries,
@@ -748,10 +794,16 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return { height: a * 2 ** -11 + 2e-5, slope: ak * 2 ** -11 + 2e-6 };
     },
 
-    /** Resolves when the boat's model has loaded. */
-    async ready(): Promise<void> {
+    /**
+     * Resolves when the boat's model has loaded. The low tier's loops are
+     * made whole at once, unless told to leave them to the frames.
+     */
+    async ready(finish = true): Promise<void> {
       while (world.boat === null) {
         await new Promise((r) => setTimeout(r, 50));
+      }
+      if (finish) {
+        world.ocean.detail.finishBake();
       }
     },
 
@@ -826,6 +878,46 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       offline().reset();
       floatBoat();
     },
+    /**
+     * Everything a test may have changed of the look put back as a page
+     * opens with it, the sea that of the named state (or the start's wind),
+     * so that one page serves several tests: the fleet, the parts, the fold,
+     * the spray, the quality and its timing, the wakes and the foam.
+     */
+    async resetLook(sea: string | null): Promise<void> {
+      world.fleetSource = null;
+      world.ocean.detail.fold = null;
+      detailOn.value = 1;
+      foamOn.value = 1;
+      world.ocean.drawWakes = true;
+      world.sprayHidden = false;
+      tileIdentity.value = 1;
+      if (world.boat !== null) {
+        world.boat.root.visible = true;
+      }
+      game.beforeStep = null;
+      game.helm.target = 0;
+      game.sheet.target = 0.5;
+      world.windowMs = null;
+      if (world.quality !== null) {
+        world.quality.enabled = false;
+      }
+      const s = offline();
+      s.sea.options.flat = false;
+      s.sea.options.fetch = null;
+      s.sea.options.split = null;
+      const knots = sea === null ? undefined : SEA_STATES[sea];
+      if (knots !== undefined) {
+        s.setWind(knots * KNOT, 0);
+      } else {
+        s.setWind(s.start.wind.speed, s.start.wind.from);
+      }
+      await world.setRung(0, 'test');
+      world.ocean.detail.finishBake();
+      world.ocean.wakes.clear();
+      world.ocean.detail.clearFoam();
+      world.spray.reset(1);
+    },
     setState(values: Record<string, number>): void {
       offline().setState(values);
       floatBoat();
@@ -845,6 +937,19 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         game.stepOnce();
       }
       game.settle();
+    },
+    /**
+     * Sails on with time held: frames times, steps steps and then draws a
+     * frame, so that what moves with world time (the wakes, the spray) sees
+     * steps / 30 s pass each frame, however slowly the machine draws.
+     */
+    sailFrames(frames: number, steps = 2): void {
+      for (let i = 0; i < frames; i++) {
+        for (let j = 0; j < steps; j++) {
+          game.stepOnce();
+        }
+        stage.renderOnce(performance.now());
+      }
     },
     /**
      * Scripts the controls before every step: 'steer' holds a heading in
@@ -1205,6 +1310,305 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** The player's own boat as the server had it at tick, from the last snapshots, or null. */
     ownAt(tick: number): { east: number; north: number; heading: number } | null {
       return sailing.online?.ownAt(tick) ?? null;
+    },
+
+    /** Shows or hides the spray. */
+    showSpray(on: boolean): void {
+      world.sprayView.mesh.visible = on;
+      world.sprayHidden = !on;
+    },
+    /** Moves to a rung of the ladder; resolves once its look is drawn. */
+    async setRung(index: number): Promise<void> {
+      await world.setRung(index, 'test');
+      world.ocean.detail.finishBake();
+    },
+    /** Adaptive quality on or off, and what it has done. */
+    adapt(on: boolean): void {
+      if (world.quality !== null) {
+        world.quality.enabled = on;
+      }
+    },
+    qualityLog(): string[] {
+      return world.qualityLog();
+    },
+    /** The last window of frames adaptive quality judged. */
+    lastWindow() {
+      return world.lastWindow === null ? null : { ...world.lastWindow };
+    },
+    /** Adaptive quality's windows and its wait before a step up, ms; null for the scene's own. */
+    qualityTiming(window: number | null, wait: number | null): void {
+      world.windowMs = window;
+      const q = world.quality;
+      if (q !== null && wait !== null) {
+        q.base = wait;
+        q.wait = wait;
+      }
+    },
+    /** Makes every drawn frame take at least ms of the main thread's time; 0 stops. */
+    slowFrames(ms: number): void {
+      const prev = world.onFrame as ((() => void) & { base?: (() => void) | null }) | null;
+      // The frame's own callback, under any slowing put on it before.
+      const base = prev !== null && 'base' in prev ? (prev.base ?? null) : prev;
+      if (ms <= 0) {
+        world.onFrame = base;
+        return;
+      }
+      world.onFrame = Object.assign(
+        () => {
+          base?.();
+          const until = performance.now() + ms;
+          while (performance.now() < until) {
+            // Busy, as a slow phone is.
+          }
+        },
+        { base },
+      );
+    },
+    /**
+     * The bytes the GPU holds for the look's textures on the rung in use, as
+     * three.js counts them once it has made them: the detail band's, the
+     * foam map's, the shadow map's (its depth and its colour target) and the
+     * pattern's; and every texture's, the whole scene's.
+     */
+    textureBytes(): {
+      detail: number;
+      foamMap: number;
+      shadowMap: number;
+      pattern: number;
+      all: number;
+    } {
+      const info = gfx().renderer.info as unknown as {
+        memoryMap: WeakMap<object, number>;
+        memory: { texturesSize: number };
+      };
+      const size = (t: object | null | undefined): number =>
+        t === null || t === undefined ? 0 : (info.memoryMap.get(t) ?? 0);
+      const sum = (ts: (object | null | undefined)[]): number =>
+        ts.reduce<number>((a, t) => a + size(t), 0);
+      const ocean = world.ocean;
+      const map = world.shadows.light.shadow.map;
+      return {
+        detail: sum(ocean.detail.textures),
+        foamMap: sum(ocean.wakes.targets.map((t) => t.texture)),
+        shadowMap: world.shadows.light.castShadow ? sum([map?.texture, map?.depthTexture]) : 0,
+        pattern: size(ocean.pattern),
+        all: info.memory.texturesSize,
+      };
+    },
+    /** The tier's values in use. */
+    tier() {
+      return { ...TIERS[world.rung.tier], shadows: world.rung.shadows };
+    },
+    /** Draws the detail band, the foam, or neither. */
+    setParts(parts: { detail?: boolean; foam?: boolean; wakes?: boolean }): void {
+      if (parts.detail !== undefined) {
+        detailOn.value = parts.detail ? 1 : 0;
+      }
+      if (parts.foam !== undefined) {
+        foamOn.value = parts.foam ? 1 : 0;
+      }
+      if (parts.wakes !== undefined) {
+        world.ocean.drawWakes = parts.wakes;
+      }
+    },
+    /** How the detail band is made, and how the low tier's loops were. */
+    detail() {
+      return world.ocean.detail.state;
+    },
+    /**
+     * In place of the foam under the boat: where the detail band folds, and
+     * how long its foam lasts. Null for the sea's own.
+     */
+    setFold(fold: Partial<FoamLook> | null): void {
+      const under = world.ocean.under.foam;
+      world.ocean.detail.fold = fold === null ? null : { ...under, ...fold };
+    },
+    /**
+     * Runs the detail band from clear water for a while up to the time
+     * drawn, so that its foam is what it would be by then. For pictures of a
+     * frozen time: the foam is the one thing the band remembers.
+     */
+    settleFoam(seconds = 8, rate = 4): void {
+      const ocean = world.ocean;
+      const f = ocean.frame;
+      const end = f.time;
+      ocean.detail.clearFoam();
+      const steps = Math.round(seconds * rate);
+      for (let i = steps; i >= 0; i--) {
+        ocean.detail.update(gfx().renderer, { ...f, time: end - i / rate, dt: 1 / rate });
+      }
+    },
+    /** Runs the foam map on for seconds of world time, in steps, with no boat stamping it. */
+    runWakes(seconds: number, rate = 15): void {
+      const ocean = world.ocean;
+      const f = ocean.frame;
+      for (let i = 0; i < Math.round(seconds * rate); i++) {
+        ocean.wakes.begin();
+        ocean.wakes.update(gfx().renderer, { ...f, dt: 1 / rate });
+      }
+    },
+    /** Runs the detail band on for seconds of world time, in steps, from the time drawn. */
+    runDetail(seconds: number, rate = 15): void {
+      const ocean = world.ocean;
+      const f = ocean.frame;
+      const steps = Math.round(seconds * rate);
+      for (let i = 1; i <= steps; i++) {
+        ocean.detail.update(gfx().renderer, { ...f, time: f.time + i / rate, dt: 1 / rate });
+      }
+    },
+    /**
+     * A patch of the transform as the GPU last made it, beside the same
+     * fields made on the CPU in float64 for the same sea and time: for each
+     * texel, the slope east and north, the foam and the height (the GPU's),
+     * and the slope east and north, the convergence and the height (the
+     * CPU's).
+     */
+    async detailFields(which = 0): Promise<{
+      size: number;
+      gpu: number[];
+      cpu: number[];
+      /** The band's variance by the spectrum, m². */
+      variance: number;
+    }> {
+      const patches = world.ocean.detail.patches;
+      const c: Cascade | null | undefined = which === 0 ? patches?.first : patches?.second;
+      if (c === null || c === undefined) {
+        throw new Error('no such patch of the transform');
+      }
+      const n = c.patch.size;
+      const m = new MeshBasicNodeMaterial();
+      m.fragmentNode = textureLoad(c.out[c.current] as never, ivec2(floor(screenCoordinate)));
+      const target = new RenderTarget(n, n, {
+        type: FloatType,
+        format: RGBAFormat,
+        depthBuffer: false,
+      });
+      const r = gfx().renderer;
+      const before = r.getRenderTarget();
+      r.setRenderTarget(target);
+      new QuadMesh(m).render(r);
+      r.setRenderTarget(before);
+      const got = await readTarget(r, target, n, n, webgl());
+      target.dispose();
+      m.dispose();
+      const maker = new FieldMaker(c.patch);
+      maker.set(world.catalogSea, c.inputs);
+      const f = maker.at(world.ocean.frame.time, newFields(n));
+      const cpu = new Array<number>(n * n * 4);
+      for (let i = 0; i < n * n; i++) {
+        cpu[i * 4] = f.east[i] ?? 0;
+        cpu[i * 4 + 1] = f.north[i] ?? 0;
+        cpu[i * 4 + 2] = f.convergence[i] ?? 0;
+        cpu[i * 4 + 3] = f.height[i] ?? 0;
+      }
+      return { size: n, gpu: Array.from(got), cpu, variance: c.inputs.variance };
+    },
+    /**
+     * The tiles seen from straight above the boat, each pixel's numbers of
+     * the look: its tile and whether it is a top (as tileMap), and what the
+     * probes of the sea's material give (seamaterial.ts).
+     */
+    async surface(
+      size = 256,
+      span = 32,
+      at: { east: number; north: number } | null = null,
+    ): Promise<{
+      tile: number[];
+      detail: number[];
+      foam: number[];
+      crest: number[];
+    }> {
+      const o = world.origin.world;
+      const bs = at === null ? world.boatScene : { x: at.east - o.x, y: 0, z: -(at.north - o.y) };
+      const ids = await probe(bs.x, bs.z, size, span, true);
+      const tile: number[] = [];
+      for (let p = 0; p < size * size; p++) {
+        const code = Math.round(ids[p * 4 + 3] ?? 0) - 1;
+        tile.push(code < 0 || code % 2 === 1 ? -1 : code / 2);
+      }
+      return {
+        tile,
+        detail: Array.from(await probe(bs.x, bs.z, size, span, false, 'detail')),
+        foam: Array.from(await probe(bs.x, bs.z, size, span, false, 'foam')),
+        crest: Array.from(await probe(bs.x, bs.z, size, span, false, 'crest')),
+      };
+    },
+    /** The far sea's detail at points of a ring beyond the tiles: the slope it adds along x and z, seen from above. */
+    async farSurface(size = 128, span = 60, out = 220): Promise<number[]> {
+      const g = gfx();
+      const far = world.ocean.far;
+      const m = seaMaterial('sea-far');
+      m.positionNode = far.position;
+      m.fragmentNode = farLook(far.plane, far.area, far.nearHull, world.ocean.parts, true);
+      const scene = new Scene();
+      const mesh = new Mesh(far.mesh.geometry, m);
+      mesh.frustumCulled = false;
+      scene.add(mesh);
+      const bs = world.boatScene;
+      const cam = new OrthographicCamera(-span / 2, span / 2, span / 2, -span / 2, 1, 400);
+      cam.position.set(bs.x + out, 200, bs.z);
+      cam.up.set(0, 0, -1);
+      cam.lookAt(bs.x + out, 0, bs.z);
+      cam.updateMatrixWorld();
+      const target = new RenderTarget(size, size, {
+        type: FloatType,
+        format: RGBAFormat,
+        minFilter: NearestFilter,
+        magFilter: NearestFilter,
+        generateMipmaps: false,
+      });
+      const r = g.renderer;
+      const before = r.getRenderTarget();
+      r.setRenderTarget(target);
+      r.setClearColor(0x000000, 0);
+      r.clear();
+      r.render(scene, cam);
+      r.setRenderTarget(before);
+      const px = await readTarget(r, target, size, size, g.backend === 'webgl2');
+      target.dispose();
+      m.dispose();
+      return Array.from(px);
+    },
+    /** The foam map: its side in texels, its centre in the world, the side of a texel in metres, and its texels from the south-west, 0 to 255. */
+    async wakes(): Promise<{
+      size: number;
+      east: number;
+      north: number;
+      texel: number;
+      data: number[];
+    }> {
+      const w = world.ocean.wakes;
+      // Copied into a float target first: WebGL reads an 8-bit red target
+      // back only where the driver says it can.
+      const n = w.size;
+      const m = new MeshBasicNodeMaterial();
+      const texel = textureLoad(w.texture as never, ivec2(floor(screenCoordinate)));
+      m.fragmentNode = vec4(texel.x, 0, 0, 1);
+      const target = new RenderTarget(n, n, {
+        type: FloatType,
+        format: RGBAFormat,
+        depthBuffer: false,
+      });
+      const r = gfx().renderer;
+      const before = r.getRenderTarget();
+      r.setRenderTarget(target);
+      new QuadMesh(m).render(r);
+      r.setRenderTarget(before);
+      const got = await readTarget(r, target, n, n, webgl());
+      target.dispose();
+      m.dispose();
+      // readTarget gives the copy's rows top first, which are the map's from the south.
+      const data: number[] = new Array(n * n);
+      for (let i = 0; i < n * n; i++) {
+        data[i] = Math.round(255 * (got[i * 4] ?? 0));
+      }
+      return {
+        size: w.size,
+        east: w.centre.east,
+        north: w.centre.north,
+        texel: WAKE.span / w.size,
+        data,
+      };
     },
 
     /**

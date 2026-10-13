@@ -323,6 +323,7 @@ func (e *Edge) untrack(c *conn) {
 	delete(e.conns, c)
 	e.mu.Unlock()
 	e.m.connections.Dec()
+	c.countTier(-1)
 	e.running.Done()
 }
 
