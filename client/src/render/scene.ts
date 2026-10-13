@@ -12,7 +12,6 @@
 import { Vector3 } from 'three';
 import { fog, rangeFogFactor } from 'three/tsl';
 import { catalog } from '../catalog';
-import type { Wind } from '../game/driver';
 import type { DrawnBoat } from '../game/fleet';
 import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
 import { beaufort, KNOT, SPRAY } from '../ocean/look';
@@ -21,6 +20,7 @@ import { type BoatPose, newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import { writeSkyParams } from '../predict/params.gen';
 import { BODY, type Physics, SKY } from '../predict/physics';
+import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
 import { Boat } from './boat';
@@ -119,7 +119,7 @@ export class SeaScene {
   /** What to draw: the boat between its last two steps, the latest step's Out, the wind. */
   readonly pose: BoatPose = newPose();
   out: Float64Array = new Float64Array(SIZES.out);
-  wind: Readonly<Wind> = { speed: 0, from: 0 };
+  wind: Readonly<BoatWind> = newBoatWind();
   /** World time, seconds, and how much it moved since the last frame; and in ticks, for the sea. */
   time = 0;
   timeStep = 0;

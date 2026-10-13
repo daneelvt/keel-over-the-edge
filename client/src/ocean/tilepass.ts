@@ -11,6 +11,10 @@
 // It costs one band sum per tile instead of one per vertex. On WebGL 2
 // without EXT_color_buffer_float, the tile mesh computes the same plane at
 // the tile's centre in its vertex stage instead (tiles.ts).
+//
+// A second draw into the same target, GUST_ROW rows further down, writes
+// the gust field at each tile's centre (gusts.ts): once a tile too, so a
+// gust darkens whole tiles and crosses the sea tile by tile.
 
 import {
   DataTexture,
@@ -21,15 +25,18 @@ import {
   RGBAFormat,
   Vector2,
 } from 'three';
-import { floor, ivec2, screenCoordinate, textureLoad, uniform } from 'three/tsl';
+import { floor, ivec2, screenCoordinate, textureLoad, uniform, vec4 } from 'three/tsl';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
+import { type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
 import { type BandUniforms, seaPlaneAt } from './wave';
 
 /** Texels per row of the tile pass's target. */
 export const PASS_WIDTH = 128;
-/** Rows: room for 8,192 tiles. */
+/** Rows of planes: room for 8,192 tiles. */
 export const PASS_HEIGHT = 64;
+/** The row the tiles' gusts begin at: below the planes, in rows as many again. */
+export const GUST_ROW = PASS_HEIGHT;
 
 /**
  * The tile field's offsets as a float texture laid out like the pass's
@@ -53,7 +60,7 @@ export function fieldTexture(field: Field): DataTexture {
 }
 
 export class TilePass {
-  readonly target = new RenderTarget(PASS_WIDTH, PASS_HEIGHT, {
+  readonly target = new RenderTarget(PASS_WIDTH, GUST_ROW + PASS_HEIGHT, {
     type: FloatType,
     format: RGBAFormat,
     depthBuffer: false,
@@ -64,11 +71,12 @@ export class TilePass {
   /** The centre tile's scene position relative to the floating origin. */
   readonly centre = uniform(new Vector2());
   readonly #quad: QuadMesh;
+  readonly #gusts: QuadMesh;
+  /** The rows that hold tiles: the field fills the first 40 of each 64. */
+  readonly #rows: number;
 
-  constructor(field: Field, band: BandUniforms) {
-    // Only the rows that hold tiles are drawn: the field fills the first
-    // 40 of the target's 64.
-    this.target.scissor.set(0, 0, PASS_WIDTH, Math.ceil(field.count / PASS_WIDTH));
+  constructor(field: Field, band: BandUniforms, gusts: GustField) {
+    this.#rows = Math.ceil(field.count / PASS_WIDTH);
     const offsets = fieldTexture(field);
     const plane = seaPlaneAt(band);
     const material = new MeshBasicNodeMaterial();
@@ -79,16 +87,34 @@ export class TilePass {
     const offset = textureLoad(offsets, texel);
     material.fragmentNode = plane(this.centre.add(offset.xy));
     this.#quad = new QuadMesh(material);
+
+    const gust = new MeshBasicNodeMaterial();
+    gust.blending = NoBlending;
+    gust.depthTest = false;
+    gust.depthWrite = false;
+    // The same tile's texel, GUST_ROW rows up the target.
+    const tile = textureLoad(offsets, ivec2(texel.x, texel.y.sub(GUST_ROW)));
+    gust.fragmentNode = vec4(gustAt(gusts)(this.centre.add(tile.xy)), 0, 0, 1);
+    this.#gusts = new QuadMesh(gust);
   }
 
-  /** Draws every tile's plane into the target. */
+  /** Draws every tile's plane into the target, and every tile's gust below them. */
   render(renderer: WebGPURenderer): void {
-    // The renderer's own switch turns on a target's scissor.
+    // The renderer's own switch turns on a target's scissor. Only the rows
+    // that hold tiles are drawn.
     const before = renderer.getRenderTarget();
     const scissored = renderer.getScissorTest();
     renderer.setRenderTarget(this.target);
     renderer.setScissorTest(true);
+    this.target.scissor.set(0, 0, PASS_WIDTH, this.#rows);
     this.#quad.render(renderer);
+    // The second draw keeps what the first wrote: on WebGPU a pass that
+    // clears its target clears all of it, whatever the scissor.
+    const cleared = renderer.autoClear;
+    renderer.autoClear = false;
+    this.target.scissor.set(0, GUST_ROW, PASS_WIDTH, this.#rows);
+    this.#gusts.render(renderer);
+    renderer.autoClear = cleared;
     renderer.setScissorTest(scissored);
     renderer.setRenderTarget(before);
   }

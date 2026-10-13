@@ -17,20 +17,22 @@
 // outside the game's first download. Built as nodes and text, never markup.
 
 import './panel.css';
+import { catalog } from '../catalog';
 import type { FleetStats } from '../game/fleet';
 import type { Game } from '../game/game';
 import type { Traffic } from '../net/messages';
 import type { Online } from '../net/online';
 import { foamOn } from '../ocean/foam';
 import { detailOn } from '../ocean/seamaterial';
-import { RECORDS } from '../predict/layout.gen';
+import { RECORDS, SEA_SPEED_STEP, WEATHER } from '../predict/layout.gen';
 import type { Predictor } from '../predict/predictor';
+import type { BoatWind } from '../predict/weather';
 import { DISK_RADIUS } from '../render/coords';
 import { rungName } from '../render/quality';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import type { Antialias } from '../render/stage';
 import { type SeaOptions, seaAreaOf } from '../sandbox/localsea';
-import { type Sandbox, SEA_STATES } from '../sandbox/sandbox';
+import { type Sandbox, SEA_STATES, STEADY } from '../sandbox/sandbox';
 import { skyPanel } from './skypanel';
 
 const KNOT = 1852 / 3600;
@@ -56,9 +58,14 @@ export interface PanelState {
   north: number;
   /** Clockwise from north, in degrees. */
   heading: number;
-  /** The wind 10 m up, in knots, and where it comes from, in degrees. */
+  /** The weather: steady, or the id of one of the catalog's regimes. */
+  weather: string;
+  /** The latest spell's wind at mid-disk, 10 m up, in knots, and where it comes from, in degrees. */
   windSpeed: number;
   windFrom: number;
+  /** Whether a regime's spell has its gusts, and its shifts. */
+  gusts: boolean;
+  shifts: boolean;
   antialias: Antialias;
   /** The render scale; null for the back end's default. */
   scale: number | null;
@@ -79,11 +86,19 @@ export interface PanelWorld {
   };
   setUsePass(on: boolean): void;
   sandbox: {
-    readonly wind: { speed: number; from: number };
+    /** The latest spell, a spell record's values; its weather; and what of it is on. */
+    readonly spell: ArrayLike<number>;
+    readonly regime: string;
+    readonly tuning: { readonly gusts: boolean; readonly shifts: boolean };
     readonly states: { readonly current: Float64Array };
     readonly sea: { readonly options: SeaOptions };
-    setWind(speed: number, from: number): void;
-    /** Raises the sea the wind and the options give, at once. */
+    /** The weather of an id, as a server's developer sets it. */
+    setWeather(id: string): void;
+    /** Changes the latest spell: its wind (m/s, radians), its gusts, its shifts. */
+    tune(change: { speed?: number; from?: number; gusts?: boolean; shifts?: boolean }): void;
+    /** A steady wind (m/s, radians) at once, as if it had blown for ever. */
+    steadyNow(speed: number, from: number): void;
+    /** Raises the sea the weather and the options give, at once. */
     settleSea(): void;
     place(east: number, north: number, heading: number): void;
   };
@@ -95,9 +110,20 @@ function degrees(rad: number): number {
   return ((d % 360) + 360) % 360;
 }
 
+/** A spell's wind at mid-disk in m/s, and where it comes from at its start in radians. */
+function spellWind(spell: ArrayLike<number>): { speed: number; from: number } {
+  return {
+    speed: (spell[RECORDS.spell.speed] ?? 0) * SEA_SPEED_STEP,
+    from: ((spell[RECORDS.spell.from] ?? 0) / WEATHER.turnSteps) * 2 * Math.PI,
+  };
+}
+
+const tenth = (x: number): number => Math.round(x * 10) / 10;
+
 export function readState(w: PanelWorld): PanelState {
   const s = w.sandbox.states.current;
   const sea = w.sandbox.sea.options;
+  const wind = spellWind(w.sandbox.spell);
   return {
     fetch: sea.fetch === null ? null : sea.fetch / NAUTICAL_MILE,
     split: sea.split === null ? null : sea.split.wind.speed / KNOT,
@@ -105,8 +131,12 @@ export function readState(w: PanelWorld): PanelState {
     east: s[RECORDS.state.x] ?? 0,
     north: s[RECORDS.state.y] ?? 0,
     heading: degrees(s[RECORDS.state.heading] ?? 0),
-    windSpeed: w.sandbox.wind.speed / KNOT,
-    windFrom: degrees(w.sandbox.wind.from),
+    weather: w.sandbox.regime,
+    // To a tenth: a spell's wind is in whole steps, which are not whole knots or degrees.
+    windSpeed: tenth(wind.speed / KNOT),
+    windFrom: tenth(degrees(wind.from)) % 360,
+    gusts: w.sandbox.tuning.gusts,
+    shifts: w.sandbox.tuning.shifts,
     antialias: w.stage.antialias,
     scale: w.stage.scale,
     pass: w.usePass,
@@ -118,8 +148,25 @@ export function readState(w: PanelWorld): PanelState {
 /** Applies to the world whatever differs from the state. */
 export function applyState(w: PanelWorld, s: PanelState): void {
   const now = readState(w);
-  if (s.windSpeed !== now.windSpeed || s.windFrom !== now.windFrom) {
-    w.sandbox.setWind(Math.max(0, s.windSpeed) * KNOT, degrees(s.windFrom * DEG) * DEG);
+  if (s.weather !== now.weather) {
+    w.sandbox.setWeather(s.weather);
+  } else {
+    const change: { speed?: number; from?: number; gusts?: boolean; shifts?: boolean } = {};
+    if (s.windSpeed !== now.windSpeed) {
+      change.speed = Math.max(0, s.windSpeed) * KNOT;
+    }
+    if (tenth(degrees(s.windFrom * DEG)) % 360 !== now.windFrom) {
+      change.from = degrees(s.windFrom * DEG) * DEG;
+    }
+    if (s.gusts !== now.gusts) {
+      change.gusts = s.gusts;
+    }
+    if (s.shifts !== now.shifts) {
+      change.shifts = s.shifts;
+    }
+    if (Object.keys(change).length > 0) {
+      w.sandbox.tune(change);
+    }
   }
   if (s.east !== now.east || s.north !== now.north || s.heading !== now.heading) {
     w.sandbox.place(s.east, s.north, s.heading * DEG);
@@ -135,7 +182,7 @@ export function applyState(w: PanelWorld, s: PanelState): void {
         ? null
         : {
             column: seaAreaOf(w.sandbox.states.current[RECORDS.state.x] ?? 0) + 1,
-            wind: { speed: Math.max(0, s.split) * KNOT, from: w.sandbox.wind.from },
+            wind: { speed: Math.max(0, s.split) * KNOT, from: spellWind(w.sandbox.spell).from },
           };
     w.sandbox.settleSea();
   }
@@ -152,15 +199,29 @@ export function applyState(w: PanelWorld, s: PanelState): void {
   w.loop.speed = s.speed;
 }
 
-/** The state in one of the sea states the look was chosen in: its wind, and its sea at once. */
+/** The state in one of the sea states the look was chosen in: its wind, steady, and its sea at once. */
 export function inSeaState(w: PanelWorld, name: string): void {
   const knots = SEA_STATES[name];
   if (knots === undefined) {
     return;
   }
-  w.sandbox.setWind(knots * KNOT, w.sandbox.wind.from);
+  w.sandbox.steadyNow(knots * KNOT, spellWind(w.sandbox.spell).from);
   w.sandbox.sea.options.flat = false;
   w.sandbox.settleSea();
+}
+
+/**
+ * The wind at the boat, as a line: the mean wind, the wind with its gust,
+ * the gust factor, the gust field and how far the gust veers the wind.
+ */
+export function windLine(w: Readonly<BoatWind>): string {
+  const veer = (((w.from - w.meanFrom) / DEG + 540) % 360) - 180;
+  const sign = (x: number, digits: number): string =>
+    `${x < 0 ? '−' : '+'}${Math.abs(x).toFixed(digits)}`;
+  return (
+    `wind    mean ${(w.meanSpeed / KNOT).toFixed(1)} kn from ${degrees(w.meanFrom).toFixed(0).padStart(3, '0')}°, ` +
+    `now ${(w.speed / KNOT).toFixed(1)} kn (×${w.factor.toFixed(2)}), gust ${sign(w.gust, 2)}, veer ${sign(veer, 1)}°`
+  );
 }
 
 /** The sea under the boat, as lines: its height, its peak, and the waves summed. */
@@ -355,7 +416,25 @@ export function openPanel(
       download(`sail-${stamp}`, sandbox.recorded(`sail-${stamp}`));
     });
 
+    const spell = el('div');
+    spell.className = 'buttons';
+    if (s.weather !== STEADY) {
+      spell.append(
+        button(s.gusts ? 'Gusts on' : 'Gusts off', () => set({ gusts: !s.gusts })),
+        button(s.shifts ? 'Shifts on' : 'Shifts off', () => set({ shifts: !s.shifts })),
+      );
+    }
     body.replaceChildren(
+      row(
+        'Weather',
+        select(
+          [STEADY, ...catalog.weather.regimes.map((r) => r.id)],
+          (x) => x,
+          s.weather,
+          (weather) => set({ weather }),
+        ),
+      ),
+      row('Spell', spell),
       row(
         'Wind, kn',
         number(s.windSpeed, 1, (windSpeed) => set({ windSpeed })),
@@ -550,6 +629,7 @@ export function openPanel(
       `origin  ${o.world.x.toFixed(0)} E, ${o.world.y.toFixed(0)} N, tile ${o.centre.q},${o.centre.r}`,
       `time    ${game.clock.time.toFixed(2)} s, step ${game.clock.steps}`,
       seaLines(band.hs[here] ?? 0, peak, band.count, band.blended),
+      windLine(sandbox.wind),
     ].join('\n');
     log.textContent = ['Steps', ...world.qualityLog().slice(-8)].join('\n');
     records.textContent = [

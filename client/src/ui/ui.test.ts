@@ -3,7 +3,9 @@
 import { describe, expect, test } from 'vitest';
 import { newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
+import { type BoatWind, newBoatWind } from '../predict/weather';
 import {
+  beaufortForce,
   compassPoint,
   headingText,
   KNOT,
@@ -12,7 +14,7 @@ import {
   wholeDegrees,
   windText,
 } from './format';
-import { HudModel, SIGNAL_INTERVAL } from './model';
+import { HudModel, SIGNAL_INTERVAL, WindWindow } from './model';
 import { ordinal, queueLines } from './queue';
 import { DEFAULTS, loadSettings, type Store, saveSettings } from './settings';
 
@@ -69,8 +71,26 @@ describe('format', () => {
   });
 
   test('the wind as knots and where it comes from', () => {
-    expect(windText(10 * KNOT, 0)).toBe('10 kn N');
-    expect(windText(11 * KNOT, 22.5 * DEG)).toBe('11 kn NNE');
+    expect(windText(10 * KNOT, 0, 10 * KNOT)).toBe('N 10 kn · F3');
+    expect(windText(14 * KNOT, 247.5 * DEG, 11 * KNOT)).toBe('WSW 14 kn · F4');
+    // A gust raises the knots and leaves the force, which is the mean wind's.
+    expect(windText(19 * KNOT, 22.5 * DEG, 14 * KNOT)).toBe('NNE 19 kn · F4');
+  });
+
+  test('the Beaufort force at each boundary of the Met Office’s table', () => {
+    // Each force's first whole knot, and the knot before it.
+    const from = [0, 1, 4, 7, 11, 17, 22, 28, 34, 41, 48, 56, 64];
+    for (const [force, knot] of from.entries()) {
+      expect(beaufortForce(knot * KNOT), `${knot} knots`).toBe(force);
+      if (force > 0) {
+        expect(beaufortForce((knot - 1) * KNOT), `${knot - 1} knots`).toBe(force - 1);
+      }
+    }
+    // By the whole knots the readout shows: 10.4 knots reads 10, force 3.
+    expect(beaufortForce(10.4 * KNOT)).toBe(3);
+    expect(beaufortForce(10.6 * KNOT)).toBe(4);
+    expect(beaufortForce(200)).toBe(12);
+    expect(beaufortForce(-3)).toBe(0);
   });
 });
 
@@ -113,7 +133,52 @@ describe('settings', () => {
   });
 });
 
+/** A wind at the boat with no gust in it. */
+function wind(speed: number, from: number): BoatWind {
+  return { ...newBoatWind(), speed, from, meanSpeed: speed, meanFrom: from };
+}
+
 describe('the instruments', () => {
+  test('read the wind over three seconds, and its force from the mean wind', () => {
+    const model = new HudModel();
+    const out = new Float64Array(SIZES.out);
+    const pose = newPose();
+    // Four seconds of 10 knots from the north, at 60 frames a second.
+    let now = 0;
+    const breeze = { ...wind(10 * KNOT, 0) };
+    for (; now < 4000; now += 1000 / 60) {
+      model.frame(now, pose, out, breeze, 0, 0, 0, 0);
+    }
+    expect(model.wind.value).toBe('N 10 kn · F3');
+    // A gust of 16 knots, veered 8°, on a mean still of 10: a second in, a
+    // third of the window is gust.
+    const gust = { ...breeze, speed: 16 * KNOT, from: 8 * DEG, gust: 1, factor: 1.6 };
+    for (const end = now + 1000; now < end; now += 1000 / 60) {
+      model.frame(now, pose, out, gust, 0, 0, 0, 0);
+    }
+    expect(model.anemometer.speed / KNOT).toBeCloseTo(12, 0);
+    expect(model.anemometer.from / DEG).toBeGreaterThan(2);
+    expect(model.anemometer.from / DEG).toBeLessThan(4);
+    expect(model.wind.value).toBe('N 12 kn · F3');
+    // Three seconds in, all of it: the knots are the gust's, the force the mean's.
+    for (const end = now + 2100; now < end; now += 1000 / 60) {
+      model.frame(now, pose, out, gust, 0, 0, 0, 0);
+    }
+    expect(model.anemometer.speed / KNOT).toBeCloseTo(16, 6);
+    expect(model.wind.value).toBe('N 16 kn · F3');
+    // Through north the mean direction goes the short way.
+    const w = new WindWindow();
+    w.add(0, 5, 350 * DEG);
+    w.add(10, 5, 10 * DEG);
+    expect(Math.abs(w.from)).toBeLessThan(1e-9);
+    expect(w.speed).toBe(5);
+    // What is older than the window is let go, and so is what a jump back in time leaves.
+    w.add(5000, 9, 1);
+    expect(w.speed).toBe(9);
+    w.add(100, 2, 2);
+    expect(w.speed).toBe(2);
+  });
+
   test('write their signals at most ten times a second', () => {
     const model = new HudModel();
     const out = new Float64Array(SIZES.out);
@@ -122,7 +187,7 @@ describe('the instruments', () => {
     const stop = model.speed.subscribe(() => changes++);
     for (let i = 0; i <= 120; i++) {
       out[RECORDS.out.speedOverGround] = i * 0.01;
-      model.frame(i * (1000 / 120), pose, out, { speed: 5, from: 0 }, 0, 0.5, 0, 0.5);
+      model.frame(i * (1000 / 120), pose, out, wind(5, 0), 0, 0.5, 0, 0.5);
     }
     stop();
     // One second at 120 frames a second.
@@ -135,7 +200,7 @@ describe('the instruments', () => {
     const model = new HudModel();
     const out = new Float64Array(SIZES.out);
     const pose = newPose();
-    const w = { speed: 5, from: 0 };
+    const w = wind(5, 0);
     model.frame(0, pose, out, w, 0, 0, 0, 0);
     expect(model.sailor.value).toBe('');
     let now = 0;

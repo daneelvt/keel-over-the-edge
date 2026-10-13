@@ -22,22 +22,28 @@ import {
   Vector2,
 } from 'three';
 import {
+  abs,
   attribute,
   dot,
+  float,
   instanceIndex,
   int,
   ivec2,
+  length,
   positionGeometry,
+  sign,
+  smoothstep,
   textureLoad,
   uniform,
   varying,
   vec3,
 } from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
+import { GUST_LOOK, type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
-import { TILE_RADIUS } from './hex';
+import { FIELD_RADIUS, TILE_RADIUS } from './hex';
 import { HULL_MARGIN, hulls } from './hulls';
-import { PASS_WIDTH } from './tilepass';
+import { GUST_ROW, PASS_WIDTH } from './tilepass';
 import { type BandUniforms, boatBandAt, seaAreaAt, seaPlaneOf } from './wave';
 
 /** Depth of each tile's skirt, in metres: deeper than the steps a gale gives. */
@@ -90,6 +96,12 @@ export interface TileVaryings {
   nearHull: Node<'float'>;
   /** The tile's centre in the scene (x, z): a vertex-stage value, the same for every vertex of the tile. */
   centre: Node<'vec2'>;
+  /**
+   * The gust on the tile, as it shows: the gust field at the tile's centre,
+   * above 0 in a gust and below in a lull, times how strongly the spell's
+   * gusts show, fading to nothing at the tile field's rim.
+   */
+  gust: Node<'float'>;
 }
 
 export class Tiles {
@@ -107,7 +119,7 @@ export class Tiles {
    * planes is the tile pass's target, or null to compute each tile's plane
    * in the vertex stage (the fallback without float render targets).
    */
-  constructor(field: Field, band: BandUniforms, planes: Texture | null) {
+  constructor(field: Field, band: BandUniforms, planes: Texture | null, gusts: GustField) {
     const g = tileGeometry();
     const geometry = new InstancedBufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(g.position, 3));
@@ -134,6 +146,17 @@ export class Tiles {
       summed !== null
         ? seaPlaneOf(summed, c)
         : textureLoad(planes as Texture, ivec2(index.mod(PASS_WIDTH), index.div(PASS_WIDTH)));
+    // The gust field at the tile's centre: read from the pass, or summed here.
+    const field0 =
+      planes === null
+        ? gustAt(gusts)(c)
+        : textureLoad(planes, ivec2(index.mod(PASS_WIDTH), index.div(PASS_WIDTH).add(GUST_ROW))).x;
+    const rim = smoothstep(FIELD_RADIUS - GUST_LOOK.rim, FIELD_RADIUS, length(t.xy));
+    // A patch reads as a patch: the field shows from a little off its
+    // middle, and in full well before its strongest.
+    const [from, full] = GUST_LOOK.shows;
+    const shown = smoothstep(from, full, abs(field0)).mul(sign(field0));
+    const gust = shown.mul(gusts.uniforms.strength).mul(float(1).sub(rim));
     const e = positionGeometry.xz;
     const s = positionGeometry.y;
     const y = plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH));
@@ -146,6 +169,7 @@ export class Tiles {
       area: varying(seaAreaAt(band)(c)),
       nearHull: varying(hulls.near(c, TILE_RADIUS + HULL_MARGIN)),
       centre: c,
+      gust: varying(gust),
     };
 
     this.mesh = new Mesh(geometry);

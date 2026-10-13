@@ -62,6 +62,7 @@ import {
   streaksOn,
   whitecaps,
 } from './foam';
+import { GUST_LOOK } from './gusts';
 import { TILE_APOTHEM } from './hex';
 import { hulls } from './hulls';
 import { FOAM } from './look';
@@ -189,7 +190,7 @@ export interface SeaParts {
 }
 
 /** What a probe reads of a tile's fragment instead of its colour (the tests). */
-export type Probe = 'detail' | 'foam' | 'crest';
+export type Probe = 'detail' | 'foam' | 'crest' | 'gust';
 
 /**
  * The tiles' fragment colour. With a probe, the fragment's numbers instead:
@@ -197,7 +198,8 @@ export type Probe = 'detail' | 'foam' | 'crest';
  * ripples' slope along x and z); 'foam' vec4(the foam's cover with its
  * margin, its amount, the whitecaps' part, the streaks' part); 'crest'
  * vec4(the boat band's height in half significant heights, the detail's
- * height, how near the rim, the hulls' and wakes' foam).
+ * height, how near the rim, the hulls' and wakes' foam); 'gust' vec4(the
+ * gust on the tile as it shows, its gust and its lull, 1).
  */
 export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<'vec4'> {
   const detail = parts.detail;
@@ -269,6 +271,16 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     });
     const wakes = (parts.wakes === null ? float(0) : parts.wakes(positionWorld.xz)).toVar();
 
+    // A gust is rougher water: the capillary ripples a gust raises are what
+    // makes its patch dark, tilting the sight down into the water where
+    // smooth water mirrors the sky (American Meteorological Society,
+    // Glossary of Meteorology, "cat's paw"). So under a gust the tile's own
+    // ripples are steeper, and in a lull flatter, and the water's own
+    // shading does the rest, by day and by night.
+    const gust = v.gust.toVar();
+    const gusty = max(gust, 0);
+    const lull = max(gust.negate(), 0);
+    ripple.mulAssign(gusty.mul(GUST_LOOK.rough).sub(lull.mul(GUST_LOOK.smooth)).add(1));
     const slope = v.plane.yz.add(tilt).add(ripple);
     const N = normalize(vec3(slope.x.negate(), 1, slope.y.negate())).toVar();
     const top = v.side.greaterThan(-0.5);
@@ -298,12 +310,17 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     if (probe === 'crest') {
       return vec4(crest, lift, rim, foam.boats);
     }
+    if (probe === 'gust') {
+      return vec4(gust, gusty, lull, 1);
+    }
     // A tile's rim has no ripples of its own to scatter the sun: left to
     // itself it would mirror it, and every tile toward the sun would wear a
     // bright ring.
     const glint = float(1).sub(fade.mul(SEA_LOOK.rimGlint));
     const col = water({ normal: N, crest: lightened, glint }, V).toVar();
     If(top, () => {
+      // And darker, as the whole patch reads from a distance.
+      col.mulAssign(float(1).sub(gusty.mul(GUST_LOOK.dark)));
       col.assign(mix(col, foamColour(N), cover.mul(FOAM.cover)));
       const [s0, s1, sk] = SEA_LOOK.seam as [number, number, number];
       const [b0, b1, b2, bk] = SEA_LOOK.bevel as [number, number, number, number];

@@ -13,12 +13,22 @@ import {
   readState,
   seaLines,
   toRim,
+  windLine,
 } from './panel';
 
 function stub(): PanelWorld & { calls: string[] } {
   const calls: string[] = [];
   const state = new Float64Array(SIZES.state);
-  const wind = { speed: 0, from: 0 };
+  // A steady spell, its wind in whole steps as a spell has it.
+  const spell = new Float64Array(SIZES.spell);
+  const P = RECORDS.spell;
+  spell[P.steady] = 1;
+  const tuning = { gusts: true, shifts: true };
+  const blow = (speed: number, from: number): void => {
+    spell[P.speed] = Math.round(speed / 0.01);
+    spell[P.from] = Math.round((from / (2 * Math.PI)) * 65536) % 65536;
+  };
+  let regime = 'steady';
   const w: PanelWorld & { calls: string[] } = {
     calls,
     usePass: true,
@@ -39,16 +49,35 @@ function stub(): PanelWorld & { calls: string[] } {
       w.usePass = on;
     },
     sandbox: {
-      wind,
+      spell,
+      get regime() {
+        return regime;
+      },
+      tuning,
       states: { current: state },
       sea: { options: { fetch: null, split: null, flat: false } },
       settleSea() {
         calls.push('settle');
       },
-      setWind(speed, from) {
-        calls.push(`wind ${speed.toFixed(4)} ${from.toFixed(4)}`);
-        wind.speed = speed;
-        wind.from = from;
+      setWeather(id) {
+        calls.push(`weather ${id}`);
+        regime = id;
+        spell[P.steady] = id === 'steady' ? 1 : 0;
+      },
+      tune(change) {
+        calls.push(`tune ${JSON.stringify(change)}`);
+        const wind = {
+          speed: (spell[P.speed] ?? 0) * 0.01,
+          from: ((spell[P.from] ?? 0) / 65536) * 2 * Math.PI,
+        };
+        blow(change.speed ?? wind.speed, change.from ?? wind.from);
+        tuning.gusts = change.gusts ?? tuning.gusts;
+        tuning.shifts = change.shifts ?? tuning.shifts;
+      },
+      steadyNow(speed, from) {
+        calls.push(`steady ${speed.toFixed(4)} ${from.toFixed(4)}`);
+        regime = 'steady';
+        blow(speed, from);
       },
       place(east, north, heading) {
         calls.push(`place ${east} ${north} ${heading.toFixed(4)}`);
@@ -66,11 +95,48 @@ describe('the panel', () => {
   test('reads headings and winds in degrees and knots', () => {
     const w = stub();
     w.sandbox.states.current[RECORDS.state.heading] = -Math.PI / 2;
-    w.sandbox.setWind(10 * (1852 / 3600), Math.PI);
+    w.sandbox.steadyNow(10 * (1852 / 3600), Math.PI);
     const s = readState(w);
     expect(s.heading).toBeCloseTo(270, 9);
-    expect(s.windSpeed).toBeCloseTo(10, 9);
-    expect(s.windFrom).toBeCloseTo(180, 9);
+    // The spell's wind, 5.14 m/s in its whole steps, to a tenth of a knot.
+    expect(s.windSpeed).toBe(10);
+    expect(s.windFrom).toBe(180);
+    expect(s.weather).toBe('steady');
+  });
+
+  test('sets the weather, and a spell’s gusts and shifts', () => {
+    const w = stub();
+    applyState(w, { ...readState(w), weather: 'trade' });
+    expect(w.calls).toEqual(['weather trade']);
+    expect(readState(w).weather).toBe('trade');
+    w.calls.length = 0;
+    applyState(w, { ...readState(w), gusts: false });
+    applyState(w, { ...readState(w), shifts: false, windSpeed: 14 });
+    expect(w.calls).toEqual([
+      'tune {"gusts":false}',
+      `tune {"speed":${14 * (1852 / 3600)},"shifts":false}`,
+    ]);
+    expect(readState(w)).toMatchObject({ gusts: false, shifts: false, windSpeed: 14 });
+    w.calls.length = 0;
+    applyState(w, readState(w));
+    expect(w.calls).toEqual([]);
+  });
+
+  test('says what wind is at the boat', () => {
+    const KNOT = 1852 / 3600;
+    expect(
+      windLine({
+        speed: 13.44 * KNOT,
+        from: (15.4 * Math.PI) / 180,
+        meanSpeed: 11.2 * KNOT,
+        meanFrom: (12 * Math.PI) / 180,
+        gust: 0.425,
+        factor: 1.2,
+      }),
+    ).toBe('wind    mean 11.2 kn from 012°, now 13.4 kn (×1.20), gust +0.42, veer +3.4°');
+    expect(
+      windLine({ speed: 5, from: 6.2, meanSpeed: 5.4, meanFrom: 0.02, gust: -0.5, factor: 0.93 }),
+    ).toMatch(/gust −0\.50, veer −5\.9°$/);
   });
 
   test('applies only what changed', () => {
@@ -89,7 +155,7 @@ describe('the panel', () => {
 
   test('sets the sea’s fetch, a second wind to the east and flat water, at once', () => {
     const w = stub();
-    w.sandbox.setWind(10 * (1852 / 3600), 1);
+    w.sandbox.steadyNow(10 * (1852 / 3600), 1);
     w.sandbox.states.current[RECORDS.state.x] = 500;
     w.calls.length = 0;
     applyState(w, { ...readState(w), fetch: 9, split: 34 });
@@ -99,7 +165,7 @@ describe('the panel', () => {
     // The boat is in the area of column 19; the second wind starts at the next.
     expect(sea.split?.column).toBe(20);
     expect(sea.split?.wind.speed).toBeCloseTo(34 * (1852 / 3600), 9);
-    expect(sea.split?.wind.from).toBe(1);
+    expect(sea.split?.wind.from).toBeCloseTo(1, 4);
     const s = readState(w);
     expect(s.fetch).toBeCloseTo(9, 9);
     expect(s.split).toBeCloseTo(34, 9);
@@ -112,11 +178,11 @@ describe('the panel', () => {
 
   test('puts the sandbox in a sea state: its wind, and its sea at once', () => {
     const w = stub();
-    w.sandbox.setWind(3, 2);
+    w.sandbox.steadyNow(3, 2);
     w.sandbox.sea.options.flat = true;
     w.calls.length = 0;
     inSeaState(w, 'gale');
-    expect(w.calls).toEqual([`wind ${(34 * (1852 / 3600)).toFixed(4)} 2.0000`, 'settle']);
+    expect(w.calls).toEqual([`steady ${(34 * (1852 / 3600)).toFixed(4)} 2.0000`, 'settle']);
     expect(w.sandbox.sea.options.flat).toBe(false);
     inSeaState(w, 'hurricane');
     expect(w.calls).toHaveLength(2);
@@ -141,14 +207,14 @@ describe('the panel', () => {
       heading: 90,
     });
     const s = readState(w);
-    expect(s.windSpeed).toBeCloseTo(12, 9);
-    expect(s.windFrom).toBeCloseTo(45, 9);
+    expect(s.windSpeed).toBe(12);
+    expect(s.windFrom).toBe(45);
     expect(s.east).toBe(30);
     expect(s.north).toBe(-40);
     expect(s.heading).toBeCloseTo(90, 9);
     // A wind from −90° is from 270°.
     applyState(w, { ...readState(w), windFrom: -90 });
-    expect(readState(w).windFrom).toBeCloseTo(270, 9);
+    expect(readState(w).windFrom).toBe(270);
     w.calls.length = 0;
     applyState(w, readState(w));
     expect(w.calls).toEqual([]);

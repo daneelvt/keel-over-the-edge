@@ -8,9 +8,9 @@
 // hand over, without a render, and only when it has moved.
 
 import { signal } from '@preact/signals';
-import type { Wind } from '../game/driver';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
+import type { BoatWind } from '../predict/weather';
 import { headingText, knots, windText } from './format';
 
 /** The signals are written at most this often, in milliseconds. */
@@ -50,13 +50,79 @@ const rotate = (el: HTMLElement | SVGElement, deg: number): void => {
   el.style.transform = `rotate(${deg.toFixed(1)}deg)`;
 };
 
+/** The wind readout is the wind over this long, in milliseconds: the gust an anemometer reports. */
+export const WIND_WINDOW = 3000;
+
+/**
+ * The wind over the last few seconds, as an anemometer shows it: the mean
+ * of the speeds, and the direction of the mean of the wind's vectors. The
+ * World Meteorological Organization's gust is the highest three-second
+ * mean (WMO-No. 8), so three seconds is what reads as a gust and not as
+ * flutter. It keeps a sample a frame, and allocates nothing.
+ */
+export class WindWindow {
+  /** The mean over the window: the speed, m/s, and where it comes from, radians. */
+  speed = 0;
+  from = 0;
+
+  readonly #at = new Float64Array(512);
+  readonly #speed = new Float64Array(512);
+  readonly #east = new Float64Array(512);
+  readonly #north = new Float64Array(512);
+  #first = 0;
+  #count = 0;
+  #sumSpeed = 0;
+  #sumEast = 0;
+  #sumNorth = 0;
+
+  /** Takes the wind at now (ms), lets go of what is older than the window, and sets the mean. */
+  add(now: number, speed: number, from: number): void {
+    const n = this.#at.length;
+    if (this.#count > 0 && now < (this.#at[(this.#first + this.#count - 1) % n] ?? 0)) {
+      // Time went back: begin again.
+      this.#count = 0;
+    }
+    while (
+      this.#count > 0 &&
+      (this.#count === n || now - (this.#at[this.#first] ?? 0) > WIND_WINDOW)
+    ) {
+      this.#first = (this.#first + 1) % n;
+      this.#count--;
+    }
+    const i = (this.#first + this.#count) % n;
+    this.#at[i] = now;
+    this.#speed[i] = speed;
+    this.#east[i] = speed * Math.sin(from);
+    this.#north[i] = speed * Math.cos(from);
+    this.#count++;
+    // Summed afresh: a running sum would drift, and the window is short.
+    this.#sumSpeed = 0;
+    this.#sumEast = 0;
+    this.#sumNorth = 0;
+    for (let k = 0; k < this.#count; k++) {
+      const j = (this.#first + k) % n;
+      this.#sumSpeed += this.#speed[j] ?? 0;
+      this.#sumEast += this.#east[j] ?? 0;
+      this.#sumNorth += this.#north[j] ?? 0;
+    }
+    this.speed = this.#sumSpeed / this.#count;
+    if (this.#sumEast !== 0 || this.#sumNorth !== 0) {
+      this.from = Math.atan2(this.#sumEast, this.#sumNorth);
+    } else {
+      this.from = from;
+    }
+  }
+}
+
 /** The helm's knob travels along an arc of this many degrees each side of the top. */
 export const HELM_ARC = 55;
 
 export class HudModel {
   readonly speed = signal('0.0');
   readonly heading = signal('000° N');
-  readonly wind = signal('0 kn N');
+  readonly wind = signal('N 0 kn · F0');
+  /** The wind at the boat over the last three seconds: what the readout and the rim's mark show. */
+  readonly anemometer = new WindWindow();
   /** What the sailor is doing when not sailing; empty while sailing. */
   readonly sailor = signal('');
   /** How many times the signals were written. */
@@ -64,7 +130,7 @@ export class HudModel {
 
   /** The compass rose, turned so the boat's heading is up. */
   readonly rose = new Moved(rotate, 0.1);
-  /** The wind's mark on the rim, at the direction the true wind comes from. */
+  /** The wind's mark on the rim, at the direction the wind of the last three seconds comes from. */
   readonly windMark = new Moved(rotate, 0.1);
   /** The helm's knob (the target) and its shadow (where the rudder is). */
   readonly helmKnob = new Moved(rotate, 0.1);
@@ -98,7 +164,7 @@ export class HudModel {
     now: number,
     pose: BoatPose,
     out: Float64Array,
-    wind: Readonly<Wind>,
+    wind: Readonly<BoatWind>,
     helm: number,
     sheet: number,
     rudder: number,
@@ -106,7 +172,9 @@ export class HudModel {
   ): void {
     const headingDeg = (pose.heading * 180) / Math.PI;
     this.rose.set(-headingDeg);
-    this.windMark.set(((wind.from - pose.heading) * 180) / Math.PI);
+    const a = this.anemometer;
+    a.add(now, wind.speed, wind.from);
+    this.windMark.set(((a.from - pose.heading) * 180) / Math.PI);
     this.helmKnob.set(helm * HELM_ARC);
     this.helmActual.set(rudder * HELM_ARC);
     this.sheetKnob.set(sheet);
@@ -121,7 +189,9 @@ export class HudModel {
     this.writes++;
     this.speed.value = knots(out[RECORDS.out.speedOverGround] ?? 0);
     this.heading.value = headingText(pose.heading);
-    this.wind.value = windText(wind.speed, wind.from);
+    // The force is the mean wind's, as the Beaufort scale is defined, so a
+    // gust shows as the knots rising while the force holds.
+    this.wind.value = windText(a.speed, a.from, wind.meanSpeed);
     this.sailor.value = SAILOR_LINES[pose.sailorMode] ?? '';
   }
 }

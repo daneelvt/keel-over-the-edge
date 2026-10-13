@@ -78,7 +78,9 @@ export class Game {
     this.world.out = d.out;
     this.world.wind = d.wind;
     this.world.ocean.source =
-      d.physics !== undefined && d.seas !== undefined ? { physics: d.physics, seas: d.seas } : null;
+      d.physics !== undefined && d.seas !== undefined
+        ? { physics: d.physics, seas: d.seas, weather: d.weather !== undefined }
+        : null;
   }
 
   /** Holds world time at t seconds (the nearest step). */

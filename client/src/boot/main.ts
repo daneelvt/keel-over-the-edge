@@ -37,7 +37,15 @@ import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor } from '../predict/predictor';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
-import { START, seaFromQuery, startSandbox, windFromQuery } from '../sandbox/sandbox';
+import {
+  commonestWeather,
+  START,
+  STEADY,
+  seaFromQuery,
+  startSandbox,
+  weatherFromQuery,
+  windFromQuery,
+} from '../sandbox/sandbox';
 import { sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { mountScreen } from '../ui/hud';
 import { showQueue } from '../ui/queue';
@@ -70,7 +78,17 @@ async function start(): Promise<void> {
   if (query.has('sandbox')) {
     // The physics module compiles while the renderer starts; the boat is
     // sailed once both are ready.
-    const begin = { ...START, wind: windFromQuery(query) ?? seaFromQuery(query) ?? START.wind };
+    // A steady wind where one is asked for, and for the tests, whose
+    // pictures and recordings are of one wind; otherwise a spell of the
+    // commonest regime, with its shifts and gusts.
+    const wind = windFromQuery(query) ?? seaFromQuery(query);
+    const begin = {
+      ...START,
+      wind: wind ?? START.wind,
+      weather:
+        weatherFromQuery(query, catalog.weather) ??
+        (wind !== null || query.has('test') ? STEADY : commonestWeather(catalog.weather)),
+    };
     const [, sandbox] = await Promise.all([
       world.start(),
       startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather, begin),
