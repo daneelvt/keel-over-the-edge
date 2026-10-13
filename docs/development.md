@@ -3121,8 +3121,9 @@ The reference pictures are kept per back end and platform in
 `client/e2e/pictures/<back end>-<platform>/`, and are changed only by hand,
 after looking at the new ones: `npx playwright test --update-snapshots`
 writes this machine's. CI runs on Linux; a failing picture test uploads the
-pictures it took (the `playwright-<back end>-short` artifact of `pr.render`),
-and those are what to commit for `linux` once judged right.
+pictures it took (the `playwright-<back end>-short` artifact of `pr.render`;
+`-long` for the sky's, which are taken in one `@long` test), and those are
+what to commit for `linux` once judged right.
 
 A test that takes minutes on CI's SwiftShader is tagged `@long`
 (`test(title, { tag: '@long' }, ...)`); `pr.render` runs each back end's

@@ -352,7 +352,9 @@ test.describe('lanterns', () => {
     return { at, colours: at === null ? null : around(p, at.x, at.y, 5) };
   }
 
-  test('by night, red from the port bow and white from astern; by day none', async ({ page }) => {
+  test('by night, red from the port bow and white from astern, none beyond the horizon; by day none', async ({
+    page,
+  }) => {
     await openScene(page);
     // Heading 315°: the camera, to the boat's west, is 45° off its port bow.
     const port = await lantern(page, (315 * Math.PI) / 180, 0);
@@ -368,17 +370,13 @@ test.describe('lanterns', () => {
     expect(Math.abs(astern.at?.bearing ?? 0)).toBeGreaterThan(170);
     expect(astern.colours?.white).toBeGreaterThan(150);
     expect(astern.colours?.red).toBeLessThan(20);
+    // A boat 400 m off: its lantern is drawn, but behind the sea.
+    const far = await lantern(page, (315 * Math.PI) / 180, 0, 400);
+    expect(far.at).not.toBeNull();
+    expect(far.colours?.red).toBeLessThan(20);
     // By day the lantern is brass and glass: no glow is drawn at all.
     const day = await lantern(page, (315 * Math.PI) / 180, 10);
     expect(day.at).toBeNull();
-  });
-
-  test('a boat 400 m off is hidden by the sea, lantern and all', async ({ page }) => {
-    await openScene(page);
-    const far = await lantern(page, (315 * Math.PI) / 180, 0, 400);
-    // Drawn, but behind the sea.
-    expect(far.at).not.toBeNull();
-    expect(far.colours?.red).toBeLessThan(20);
   });
 
   test('64 boats by night: two draws for the stars and every lantern, under 150 in all', async ({
@@ -414,7 +412,15 @@ test.describe('lanterns', () => {
   });
 });
 
-test.describe('pictures', () => {
+// One page for all of them: each picture's own page would cost CI's software
+// renderer several seconds to open. Tagged @long: pr.render takes them in
+// the job of their own.
+test('pictures: the hours, a fleet by night, the sky from the rim', {
+  tag: '@long',
+}, async ({ page }) => {
+  test.setTimeout(180_000);
+  await openScene(page);
+  const canvas = page.locator('canvas.scene');
   for (const [name, hour, moon] of [
     ['noon', 12, null],
     ['sunset', 17.9, null],
@@ -423,52 +429,46 @@ test.describe('pictures', () => {
     ['moonless', 0, 0],
     ['dawn', 5.95, null],
   ] as const) {
-    test(`the hours: ${name}`, async ({ page }) => {
-      await openScene(page);
-      await page.evaluate(
-        async ({ hour, moon }) => {
-          const k = globalThis.keel;
-          k.setSky(hour, moon);
-          await k.show();
-        },
-        { hour, moon },
-      );
-      await expect(page.locator('canvas.scene')).toHaveScreenshot(`sky-${name}.png`);
-    });
+    await page.evaluate(
+      async ({ hour, moon }) => {
+        const k = globalThis.keel;
+        k.setSky(hour, moon);
+        await k.show();
+      },
+      { hour, moon },
+    );
+    await expect.soft(canvas).toHaveScreenshot(`sky-${name}.png`);
   }
 
-  test('a fleet by night', async ({ page }) => {
-    await openScene(page);
-    await page.evaluate(async () => {
-      const k = globalThis.keel;
-      k.setSky(23, 0.25);
-      const b = k.boat().state;
-      const at = (side: number, ahead: number) => ({ east: b.x + ahead, north: b.y - side });
-      const drawing = 15 | (1 << 4) | (1 << 6);
-      k.setFleet([
-        { ...at(-14, 26), heading: 1.5708, heel: 0.35, boom: 0.75, sailor: -0.9, sail: drawing },
-        { ...at(10, 30), heading: -1.2, heel: -0.1, boom: -0.9, sailor: 0.5, sail: drawing },
-        { ...at(-6, 48), heading: 3.0, boom: 0.02, sail: 15 },
-        { ...at(-40, 140), heading: 1.2, heel: 0.2, boom: 0.6, sailor: -0.7, sail: drawing },
-        { ...at(60, 180), heading: -0.6, heel: -0.15, boom: -0.4, sailor: 0.6, sail: drawing },
-      ]);
-      k.camera('sea');
-      await k.show();
-    });
-    await expect(page.locator('canvas.scene')).toHaveScreenshot('sky-fleet-night.png');
+  await page.evaluate(async () => {
+    const k = globalThis.keel;
+    k.setSky(23, 0.25);
+    const b = k.boat().state;
+    const at = (side: number, ahead: number) => ({ east: b.x + ahead, north: b.y - side });
+    const drawing = 15 | (1 << 4) | (1 << 6);
+    k.setFleet([
+      { ...at(-14, 26), heading: 1.5708, heel: 0.35, boom: 0.75, sailor: -0.9, sail: drawing },
+      { ...at(10, 30), heading: -1.2, heel: -0.1, boom: -0.9, sailor: 0.5, sail: drawing },
+      { ...at(-6, 48), heading: 3.0, boom: 0.02, sail: 15 },
+      { ...at(-40, 140), heading: 1.2, heel: 0.2, boom: 0.6, sailor: -0.7, sail: drawing },
+      { ...at(60, 180), heading: -0.6, heel: -0.15, boom: -0.4, sailor: 0.6, sail: drawing },
+    ]);
+    k.camera('sea');
+    await k.show();
   });
+  await expect.soft(canvas).toHaveScreenshot('sky-fleet-night.png');
 
-  test('the sky from the rim: the Plough and the Hub Star', async ({ page }) => {
-    await openScene(page);
-    await page.evaluate(async () => {
-      const k = globalThis.keel;
-      k.placeBoat(0, 8300);
-      k.setSky(2, 0);
-      // Turn to the south, where the centre and the Hub Star are, and look up.
-      k.dragCamera(Math.PI / 2 / 0.006, 0);
-      k.dragCamera(0, -350);
-      await k.show();
-    });
-    await expect(page.locator('canvas.scene')).toHaveScreenshot('sky-rim.png');
+  // The Plough and the Hub Star from the rim.
+  await page.evaluate(async () => {
+    const k = globalThis.keel;
+    k.setFleet(null);
+    k.camera('chase');
+    k.placeBoat(0, 8300);
+    k.setSky(2, 0);
+    // Turn to the south, where the centre and the Hub Star are, and look up.
+    k.dragCamera(Math.PI / 2 / 0.006, 0);
+    k.dragCamera(0, -350);
+    await k.show();
   });
+  await expect.soft(canvas).toHaveScreenshot('sky-rim.png');
 });
