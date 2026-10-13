@@ -275,7 +275,7 @@ type Spell struct {
 	Speed  float64 // its wind at mid-disk, in steps of SeaSpeedStep
 	From   float64 // the direction its wind comes from at Start, in 65536ths of a turn clockwise from north
 	Drift  float64 // how far that direction veers over Length, in 65536ths of a turn; negative backs
-	Gust   float64 // its gust factor, in thousandths
+	Gust   float64 // its gust factor, in thousandths: at 1000 it has no gusts
 	// The two oscillating shifts: each one's amplitude and phase at tick 0,
 	// in 65536ths of a turn, and its period in ticks.
 	Shift  [2]float64

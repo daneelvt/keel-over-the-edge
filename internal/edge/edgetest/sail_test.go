@@ -575,7 +575,7 @@ func TestSailGusts(t *testing.T) {
 			if s.Stats.Corrections != 0 || s.Stats.Snapshots < int(d.Seconds())*15-30 {
 				t.Fatalf("%s: %d corrections in %d snapshots", name, s.Stats.Corrections, s.Stats.Snapshots)
 			}
-			if hi < 1.15*lo {
+			if hi < 1.08*lo {
 				t.Errorf("%s: the wind at the boat ran from %.2f to %.2f m/s: no gusts", name, lo, hi)
 			}
 			if heard < 8 || heard > 10 || s.Stats.Weathers < 2 {

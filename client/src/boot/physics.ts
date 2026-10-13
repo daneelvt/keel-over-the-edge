@@ -57,7 +57,7 @@ export async function checkPhysics(): Promise<PhysicsRow[]> {
   }
 
   try {
-    preparePhysics(physics, catalog.boats[0].physics, catalog.weather.sea);
+    preparePhysics(physics, catalog.boats[0].physics, catalog.weather);
     const report = checkSea(physics, sea as SeaFile);
     const ok = report.problems.length === 0;
     rows.push({
@@ -88,7 +88,7 @@ export async function checkPhysics(): Promise<PhysicsRow[]> {
 // over at least 200 ms, since a page that is not cross-origin isolated gets
 // a coarse clock.
 function stepMicroseconds(physics: Physics, knots: number): { micros: number; waves: string } {
-  preparePhysics(physics, catalog.boats[0].physics, catalog.weather.sea);
+  preparePhysics(physics, catalog.boats[0].physics, catalog.weather);
   let waves = '';
   if (knots > 0) {
     const input = physics.seaInputOf((knots * 1852) / 3600, 0, -1, []);

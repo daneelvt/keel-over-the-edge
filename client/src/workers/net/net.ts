@@ -203,6 +203,9 @@ export class NetWorker {
         case 'sea':
           this.#d.post({ type: 'sea', sea: r.sea });
           break;
+        case 'weather':
+          this.#d.post({ type: 'weather', spells: r.spells });
+          break;
       }
       this.#arm();
     };

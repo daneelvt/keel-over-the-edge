@@ -152,7 +152,7 @@ func GustFrameAt(t *WeatherTick, f *GustFrame) {
 	*f = GustFrame{}
 	field2 := 0.0
 	for i := range t.n {
-		if !t.at[i].s.steady {
+		if t.at[i].s.gusts {
 			field2 += float64(t.weight[i] * t.weight[i])
 		}
 	}
@@ -165,7 +165,7 @@ func GustFrameAt(t *WeatherTick, f *GustFrame) {
 		} else {
 			f.Excess += float64(t.weight[i] * (e - f.Excess))
 		}
-		if st.s.steady {
+		if !st.s.gusts {
 			continue
 		}
 		f.Share[n] = t.weight[i] / math.Sqrt(field2)

@@ -36,7 +36,7 @@ beforeAll(() => {
 });
 
 async function predictor(): Promise<Predictor> {
-  return new Predictor(await loadPhysics(bytes), boat, catalog.weather.sea);
+  return new Predictor(await loadPhysics(bytes), boat, catalog.weather);
 }
 
 /** The server's start: on the grid, heading east, at rest, in 10 knots from the north. */
@@ -45,7 +45,6 @@ function start(tick: number): OwnSnapshot {
   sn.tick = tick;
   sn.helm = 512;
   sn.sheet = 512;
-  sn.windSpeed = (10 * 1852) / 3600;
   sn.state[S.y] = -20;
   sn.state[S.heading] = Math.PI / 2;
   return sn;

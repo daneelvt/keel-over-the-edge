@@ -25,6 +25,13 @@ export interface SeaAreas {
   fetch: number[];
 }
 
+/**
+ * The spells of weather in play, as the server sends them: each a spell
+ * record's values in the physics module's order (RECORDS.spell), whole
+ * numbers all. They replace those held.
+ */
+export type WeatherSpells = number[][];
+
 /** What the net worker's Hello carries besides the protocol version. */
 export interface HelloVersions {
   catalog: string;
@@ -90,6 +97,8 @@ export type FromWorker =
   | { type: 'restart'; inMs: number }
   /** The sea about the boat, for the prediction and the drawing. */
   | { type: 'sea'; sea: SeaAreas }
+  /** The spells of weather in play, for the prediction's wind and the drawing of the gusts. */
+  | { type: 'weather'; spells: WeatherSpells }
   | { type: 'clock'; clock: ClockState }
   | ({ type: 'traffic' } & Traffic);
 

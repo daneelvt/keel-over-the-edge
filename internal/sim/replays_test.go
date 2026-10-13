@@ -435,10 +435,16 @@ func TestSandboxRecordings(t *testing.T) {
 		setFields(t, &params, rec.Params)
 		var kind physics.Prepared
 		physics.Prepare(&params, waves, &kind)
+		// The sandbox sailed in the catalog's wind.
 		var windParams physics.WeatherParams
 		setFields(t, &windParams, rec.Wind)
-		prepared := new(physics.WeatherPrepared)
-		physics.PrepareWeather(&windParams, prepared)
+		cat, err := catalog.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if windParams != catalog.WeatherParams(cat) {
+			t.Fatalf("%s: its wind values are not the catalog's", path)
+		}
 		for _, sc := range rec.Scenarios {
 			t.Run(filepath.Base(path)+"/"+sc.Name, func(t *testing.T) {
 				if len(sc.Weather.Spells) != 1 || sc.Weather.Tick != sc.Sea.Tick {
@@ -448,7 +454,7 @@ func TestSandboxRecordings(t *testing.T) {
 				setFields(t, &first, sc.Weather.Spells[0])
 				// The Join, in the tick before step 0's.
 				w, err := sim.New(sim.Config{Capacity: 4, Kinds: []physics.Prepared{kind}, Waves: waves, Workers: 1,
-					Tick: sc.Sea.Tick - 2, Weather: weather.FixedIn(prepared, first)})
+					Tick: sc.Sea.Tick - 2, Weather: catalogWeather(t).Fixed(first)})
 				if err != nil {
 					t.Fatal(err)
 				}

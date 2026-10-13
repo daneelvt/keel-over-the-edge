@@ -12,6 +12,7 @@
 import type { BoatPose, StatePair } from '../predict/blend';
 import type { Physics } from '../predict/physics';
 import type { Seas } from '../predict/seas';
+import type { BoatWind, Spells } from '../predict/weather';
 
 export interface Wind {
   /** The true wind 10 m above the sea, m/s. */
@@ -25,15 +26,16 @@ export interface BoatDriver {
   readonly states: StatePair;
   /** The latest step's Out record. */
   readonly out: Float64Array;
-  /** The wind at the boat. */
-  readonly wind: Readonly<Wind>;
+  /** The wind at the boat, as its latest step had it. */
+  readonly wind: Readonly<BoatWind>;
   /** Steps the boat once with these controls, already at the controls' resolution. */
   step(helm: number, sheet: number): void;
   /** Moves the drawn pose, dt seconds after the last frame's. */
   decorate?(pose: BoatPose, dt: number): void;
-  /** The physics module that steps the boat, and the sea it holds, for drawing that sea. */
+  /** The physics module that steps the boat, and the sea and the weather it holds, for drawing them. */
   readonly physics?: Physics;
   readonly seas?: Seas;
+  readonly weather?: Spells;
   /** The world clock the boat is drawn by, for a driver that keeps its own time: the game sets it. */
   clock?: { readonly steps: number } | null;
 }

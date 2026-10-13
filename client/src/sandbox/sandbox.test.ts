@@ -14,19 +14,29 @@ import {
   type GoldenFile,
   runScenario,
   type ScenarioFile,
+  spellOf,
   steer,
   toHex,
 } from '../predict/golden';
 import { LAYOUT_VERSION, RECORDS, SIZES } from '../predict/layout.gen';
 import { loadPhysics, Physics } from '../predict/physics';
 import type { Recording } from './record';
-import { KNOT, Sandbox, START, seaFromQuery, startSandbox, windFromQuery } from './sandbox';
+import {
+  KNOT,
+  Sandbox,
+  START,
+  STEADY,
+  seaFromQuery,
+  startSandbox,
+  weatherFromQuery,
+  windFromQuery,
+} from './sandbox';
 
 const wasm = new URL('../predict/physics.wasm', import.meta.url);
 const testdata = new URL('../../../internal/physics/testdata/', import.meta.url);
 const fixture = new URL('recordings/sandbox-sail.json', testdata);
 const boat = catalog.boats[0].physics;
-const sea = catalog.weather.sea;
+const sea = catalog.weather;
 
 function readJSON<T>(url: URL): T {
   return JSON.parse(readFileSync(url, 'utf8')) as T;
@@ -42,15 +52,20 @@ beforeAll(() => {
 });
 
 describe('the sandbox', () => {
-  test('starts at the centre, at rest, heading 090°, in 10 knots from the north', async () => {
+  test('starts at the centre, at rest, heading 090°, in a steady 10 knots from the north', async () => {
     const s = await startSandbox(bytes, boat, sea);
     const c = s.states.current;
     expect(c[RECORDS.state.x]).toBe(0);
     expect(c[RECORDS.state.y]).toBe(0);
     expect(c[RECORDS.state.heading]).toBe(Math.PI / 2);
     expect(c[RECORDS.state.surge]).toBe(0);
-    expect(s.wind.speed).toBeCloseTo(5.1444, 4);
+    // 10 knots in the steps a wind is rounded to: 5.14 m/s.
+    expect(s.wind.speed).toBeCloseTo(5.14, 12);
     expect(s.wind.from).toBe(0);
+    expect(s.wind.meanSpeed).toBe(s.wind.speed);
+    expect(s.wind.gust).toBe(0);
+    expect(s.regime).toBe(STEADY);
+    expect(s.weather.spells).toHaveLength(1);
   });
 
   test('refuses a module with another layout, saying so', async () => {
@@ -102,7 +117,7 @@ describe('the sandbox', () => {
     expect(Math.abs(s.out[RECORDS.out.waveHeight] ?? 0)).toBeGreaterThan(0);
   });
 
-  test('its sea follows a change of wind a second on, as the server’s does', async () => {
+  test('a change of wind blows from the second after next, and the sea follows it over minutes, as the server’s does', async () => {
     const s = await startSandbox(bytes, boat, sea);
     const hs = (): number => s.physics.seaHs(s.seas.slotAt(s.tick))[0] ?? 0;
     // The state is at tick 1; steps sail into ticks 2, 3 …
@@ -110,19 +125,72 @@ describe('the sandbox', () => {
       s.step(0, 0.5);
     }
     const before = hs();
-    s.setWind(34 * KNOT, 0); // from the step into tick 42
+    const breeze = s.wind.speed;
+    s.setWind(34 * KNOT, 0); // given at the step into tick 42
     const stamp = s.sea.stamp;
+    let blewAt = 0;
     let changedAt = 0;
-    for (let i = 0; i < 80 && changedAt === 0; i++) {
+    for (let i = 0; i < 80; i++) {
       s.step(0, 0.5);
-      if (hs() !== before) {
+      if (blewAt === 0 && s.wind.speed !== breeze) {
+        blewAt = s.tick;
+      }
+      if (changedAt === 0 && hs() !== before) {
         changedAt = s.tick;
       }
     }
-    // Tick 42 is in the second from 30; the sea of the second from 90 is the first fixed after it.
+    // Tick 42 is in the second from 30: the wind blows from tick 90, and the
+    // sea of the second from 90, fixed a second before, is the first to
+    // feel it.
+    expect(blewAt).toBe(90);
     expect(changedAt).toBe(90);
+    expect(s.wind.speed).toBeCloseTo(17.49, 12);
+    expect(s.sea.stamp).toBeGreaterThan(stamp);
+    // A little at first: the sea lags the wind.
+    expect(hs()).toBeLessThan(1.2 * before);
+    for (let i = 0; i < 12 * 60 * 30; i++) {
+      s.step(0, 1);
+    }
     expect(hs()).toBeGreaterThan(3 * before);
-    expect(s.sea.stamp).toBe(stamp + 1);
+  });
+
+  test('sails in a spell of a regime, with its gusts, when asked', async () => {
+    const s = await startSandbox(bytes, boat, sea, { ...START, weather: 'trade' });
+    expect(s.regime).toBe('trade');
+    const regime = sea.regimes.find((r) => r.id === 'trade');
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = 0;
+    let gusts = 0;
+    for (let i = 0; i < 1800; i++) {
+      s.step(0, 0.6);
+      lo = Math.min(lo, s.wind.speed);
+      hi = Math.max(hi, s.wind.speed);
+      gusts = Math.max(gusts, Math.abs(s.wind.gust));
+      // The step sailed in the wind read for it.
+      expect(s.records.env[RECORDS.env.windSpeed]).toBe(s.wind.speed);
+    }
+    expect(hi).toBeGreaterThan(1.1 * lo);
+    expect(gusts).toBeGreaterThan(0.3);
+    // At the centre the wind is 0.65 of the spell's, softened by the refuge.
+    const [least, most] = regime?.wind.speed ?? [0, 0];
+    expect(s.wind.meanSpeed / KNOT).toBeGreaterThan(0.6 * (least ?? 0));
+    expect(s.wind.meanSpeed / KNOT).toBeLessThan(0.7 * (most ?? 0));
+    // Back to a steady wind: the mean wind at the boat, held.
+    const mean = s.wind.meanSpeed;
+    s.setWeather(STEADY);
+    for (let i = 0; i < 90; i++) {
+      s.step(0, 0.6);
+    }
+    expect(s.regime).toBe(STEADY);
+    expect(s.wind.gust).toBe(0);
+    expect(Math.abs(s.wind.speed - mean)).toBeLessThan(0.006);
+  });
+
+  test('reads ?weather=steady or a regime’s id', () => {
+    expect(weatherFromQuery(new URLSearchParams('weather=stormy'), sea)).toBe('stormy');
+    expect(weatherFromQuery(new URLSearchParams('weather=steady'), sea)).toBe(STEADY);
+    expect(weatherFromQuery(new URLSearchParams('weather=doldrums'), sea)).toBeNull();
+    expect(weatherFromQuery(new URLSearchParams(''), sea)).toBeNull();
   });
 
   test('its window of the sea follows the boat', async () => {
@@ -141,26 +209,29 @@ describe('the sandbox', () => {
     expect(s.sea.stamp).toBeGreaterThan(stamp);
   });
 
-  test('every golden scenario through the driver gives the server’s bits', async () => {
+  test('every golden scenario in a weather, through the driver, gives the server’s bits', async () => {
     const scenarios = readJSON<ScenarioFile>(new URL('scenarios.json', testdata));
     const golden = readJSON<GoldenFile>(new URL('golden.json', testdata));
     const physics = await loadPhysics(bytes);
+    let ran = 0;
     for (const [k, sc] of scenarios.scenarios.entries()) {
-      if (sc.sea !== undefined) {
-        // The sandbox raises its own sea; a recorded sail, below, has one.
+      const weather = sc.weather;
+      if (weather === undefined || sc.sea !== undefined) {
+        // The sandbox makes its own wind and sea: a scenario with a wind
+        // given step by step, or a sea, is not its to sail. A recorded
+        // sail, below, has both.
         continue;
       }
-      const s = new Sandbox(physics, boat, sea, {
-        ...START,
-        heading: 0,
-        sheet: 0,
-      });
+      ran++;
+      const s = new Sandbox(physics, boat, sea, { ...START, heading: 0, sheet: 0 });
       // The scenarios without a sea are in flat water.
       s.sea.options.flat = true;
+      // Step 0 sails into the weather's tick.
+      s.tick = weather.tick - 1;
+      s.weather.set(weather.spells.map(spellOf));
       s.setState(sc.state ?? {});
       let helm = sc.control?.helm ?? 0;
       let sheet = sc.control?.sheet ?? 0;
-      s.setWind(sc.env?.windSpeed ?? 0, sc.env?.windFrom ?? 0);
       const record = SIZES.state + SIZES.out;
       const all = new Float64Array(sc.steps * record);
       const changes = sc.changes ?? [];
@@ -172,8 +243,8 @@ describe('the sandbox', () => {
           const c = changes[next];
           helm = c?.control?.helm ?? helm;
           sheet = c?.control?.sheet ?? sheet;
-          if (c?.env !== undefined) {
-            s.setWind(c.env.windSpeed ?? s.wind.speed, c.env.windFrom ?? s.wind.from);
+          if (c?.spells !== undefined) {
+            s.weather.set(c.spells.map(spellOf));
           }
           if (c?.control?.helm !== undefined) {
             steering = false;
@@ -194,12 +265,14 @@ describe('the sandbox', () => {
       const hex = Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
       expect(hex, sc.name).toBe(golden.scenarios[k]?.digest);
     }
+    expect(ran).toBeGreaterThanOrEqual(6);
   });
 });
 
 /**
  * A scripted sail through the input layer's resolution: trim in, bear away,
- * tack, a change of wind, ease out. Returns the sandbox's recording.
+ * a trade spell with its gusts, a tack, a steady wind again, ease out.
+ * Returns the sandbox's recording.
  */
 async function scriptedSail(): Promise<Recording> {
   const s = await startSandbox(bytes, boat, sea);
@@ -220,6 +293,9 @@ async function scriptedSail(): Promise<Recording> {
     if (i >= 790 && i < 1200) {
       sheet = 0.2;
     }
+    if (i === 400) {
+      s.setWeather('trade');
+    }
     if (i === 1000) {
       s.setWind(12 * KNOT, (20 * Math.PI) / 180);
     }
@@ -239,19 +315,34 @@ describe('a recorded sail', () => {
       throw new Error('no scenario');
     }
     expect(sc.steps).toBe(1800);
-    // Changes only where a control or the wind changed.
+    // Changes only where a control, the weather or the sea changed.
     expect(sc.changes.length).toBeGreaterThan(5);
     expect(sc.changes.length).toBeLessThan(700);
     const replay = await runScenario(await loadPhysics(bytes), rec, sc);
     expect(replay.checkpoints.at(-1)?.state).toEqual(sc.end);
-    // It sailed in its wind's sea, which followed the change of wind.
+    // It began in a steady 10 knots and its sea.
     expect(sc.sea.tick).toBe(2);
+    expect(sc.weather.tick).toBe(2);
+    expect(sc.weather.spells).toHaveLength(1);
+    expect(sc.weather.spells[0]).toMatchObject({ steady: 1, speed: 514, from: 0, begin: 0 });
     expect(sc.sea.areas).toHaveLength(25);
-    const seaChanges = sc.changes.filter((c) => c.areas !== undefined);
-    // The wind changes at step 1000, which sails into tick 1002: the sea
-    // of the second from tick 1050 is the first fixed after it.
-    expect(seaChanges.map((c) => c.at)).toEqual([1048]);
-    expect(seaChanges[0]?.areas?.[0]).toEqual([617, 3641, 11112]);
+    expect(sc.sea.areas[0]).toEqual([514, 0, 11112]);
+    // The trade spell is asked for at step 400, which sails into tick 402,
+    // and the steady wind at step 1000, into tick 1002: each as a server's
+    // developer would set it, to blow from the second after next.
+    const sets = sc.changes.filter((c) => c.spells !== undefined);
+    expect(sets.map((c) => [c.at, c.set?.mode, c.spells?.at(-1)?.begin])).toEqual([
+      [400, 1, 450],
+      [1000, 2, 1050],
+    ]);
+    expect(sets[0]?.spells?.at(-1)).toMatchObject({ steady: 0, regime: 1, gust: 1300, drift: 0 });
+    expect(sets[1]?.set).toEqual({ mode: 2, regime: 0, speed: 617, dir: 3641 });
+    // The sea follows the wave wind: from the second the trade spell
+    // begins, tick 450, every area's waves change each second.
+    const seaChanges = sc.changes.filter((c) => c.areas !== undefined).map((c) => c.at);
+    expect(seaChanges[0]).toBe(448);
+    expect(seaChanges.every((at, i) => i === 0 || at - (seaChanges[i - 1] ?? 0) === 30)).toBe(true);
+    expect(seaChanges.length).toBe(46);
     // The boat sailed: it is well away from where it started.
     expect(Math.hypot(fromHex(sc.end.x ?? '0x0'), fromHex(sc.end.y ?? '0x0'))).toBeGreaterThan(40);
   });
@@ -270,6 +361,7 @@ describe('a recorded sail', () => {
     const scenarios = readJSON<ScenarioFile>(new URL('scenarios.json', testdata));
     expect(rec.params).toEqual(scenarios.params);
     expect(rec.sea).toEqual(scenarios.sea);
+    expect(rec.wind).toEqual(scenarios.wind);
     expect(rec.scenarios[0]?.end.heading).toBe(toHex(fromHex(rec.scenarios[0]?.end.heading ?? '')));
   });
 });

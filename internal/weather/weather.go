@@ -125,8 +125,7 @@ func Fixed(s physics.Spell) *Timeline {
 }
 
 // FixedIn is the timeline of a world whose own weather is one spell for
-// ever, computed with the wind's constants p: as the sandbox's is, for a
-// test that sails its recordings on the server.
+// ever, computed with the wind's constants p.
 func FixedIn(p *physics.WeatherPrepared, s physics.Spell) *Timeline {
 	return &Timeline{fixed: &s, prepared: p, change: p.ChangeTicks()}
 }
@@ -149,6 +148,15 @@ func (t *Timeline) Prepared() *physics.WeatherPrepared { return t.prepared }
 func (t *Timeline) From(tick int64) *Timeline {
 	c := *t
 	c.origin, c.memo = tick, false
+	return &c
+}
+
+// Fixed is the timeline with its own weather one spell for ever, in place
+// of its sequence: as the sandbox's is, for a test that sails its
+// recordings on the server. Its regimes are still a developer's to hold.
+func (t *Timeline) Fixed(s physics.Spell) *Timeline {
+	c := *t
+	c.fixed, c.memo = &s, false
 	return &c
 }
 
@@ -318,7 +326,7 @@ func (t *Timeline) Effective(tick int64, ws []bus.Weather) physics.Spell {
 	if w.Mode == bus.WeatherSteady {
 		return physics.Spell{Begin: from, Start: from, Steady: 1, Speed: float64(w.Speed), From: float64(w.Dir % turn), Gust: 1000}
 	}
-	if t.fixed != nil {
+	if len(t.regimes) == 0 {
 		// A world with no regimes holds its one spell.
 		s := *t.fixed
 		s.Begin, s.Start = from, from

@@ -199,6 +199,7 @@ type spell struct {
 	begin, change, invChange float64 // ticks
 	start, invLength         float64 // ticks
 	steady                   bool
+	gusts                    bool    // it has a gust field: it is not steady, and its gust factor is over 1
 	speed                    float64 // m/s
 	from, drift              float64 // rad
 	excess                   float64 // the gust factor less 1
@@ -227,6 +228,7 @@ func spellOf(p *WeatherPrepared, s *Spell) spell {
 	if !o.steady {
 		o.excess = max2(float64(s.Gust*0.001)-1, 0)
 	}
+	o.gusts = o.excess > 0
 	for i := range 2 {
 		o.amp[i] = float64(s.Shift[i] * turnStep)
 		if s.Period[i] > 0 {
@@ -399,7 +401,7 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32) {
 	// Each spell's mean wind and gust field, then the two mixed: the
 	// direction along the shorter arc, the speed and the gust factor as they
 	// stand, and the fields so that their spread is kept.
-	var dir, speed, excess, gust, gusty, field2 float64
+	var dir, speed, excess, gust, gusty, limited, field2 float64
 	for i := range t.n {
 		st, share := &t.at[i], t.weight[i]
 		d, v, e, n := st.mean(w, x, y, factor, refuge, what != pointMean)
@@ -411,6 +413,9 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32) {
 			excess += float64(share * (e - excess))
 		}
 		if !st.s.steady {
+			limited += share
+		}
+		if st.s.gusts {
 			gust += float64(share * n)
 			gusty += share
 			field2 += float64(share * share)
@@ -429,7 +434,8 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32) {
 	}
 
 	// Gusts and lulls about the mean, stronger toward the rim; gusts veer
-	// and lulls back.
+	// and lulls back, by as much of the veer as the spells in play have
+	// gusts: a spell with a gust factor of 1 has none.
 	rim := 1 + float64(w.rimGusts*smooth(float64((r-w.rimGustsFrom)*w.invRimGustsSpan)))
 	h := gust
 	if h < 0 {
@@ -439,9 +445,9 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32) {
 	v := float64(speed * p.Factor)
 	p.Speed = v
 	if refuge > 0 {
-		p.Speed += float64(float64(refuge*gusty) * (soften(v, w.windKnee, w.windSoft) - v))
+		p.Speed += float64(float64(refuge*limited) * (soften(v, w.windKnee, w.windSoft) - v))
 	}
-	p.From = wrapAngle(dir + float64(w.veer*gust))
+	p.From = wrapAngle(dir + float64(float64(w.veer*gust)*gusty))
 }
 
 // mean is a spell's mean wind at (x, y): its direction, its speed with the
@@ -458,7 +464,7 @@ func (st *spellTick) mean(w *WeatherPrepared, x, y, factor, refuge float64, gust
 	if refuge > 0 {
 		speed += float64(refuge * (soften(speed, w.meanKnee, w.meanSoft) - speed))
 	}
-	if gusts {
+	if gusts && s.gusts {
 		n = st.field(&w.gustCells, x, y)
 	}
 	return dir, speed, s.excess, n

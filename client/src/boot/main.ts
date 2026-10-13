@@ -73,7 +73,7 @@ async function start(): Promise<void> {
     const begin = { ...START, wind: windFromQuery(query) ?? seaFromQuery(query) ?? START.wind };
     const [, sandbox] = await Promise.all([
       world.start(),
-      startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather.sea, begin),
+      startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather, begin),
     ]);
     game.setDriver(sandbox);
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
@@ -118,7 +118,7 @@ async function start(): Promise<void> {
       backSoon: notice,
     }),
   ]);
-  const predictor = new Predictor(physics, world.kind.physics, catalog.weather.sea);
+  const predictor = new Predictor(physics, world.kind.physics, catalog.weather);
   const worker = new Worker(new URL('../workers/net/worker.ts', import.meta.url), {
     type: 'module',
   });

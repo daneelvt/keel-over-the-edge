@@ -2,11 +2,13 @@
 
 // The sandbox's own sea. With no server to say what raises the waves, the
 // sandbox does what the server does, by the same rules: every sea area has
-// the wind's waves; the sea changes only on a second's first tick, to what
-// was fixed a second before from the wind as it then stood; and the boat
-// holds a window of areas about it, which follows it once it is well into
-// another area. So a sail recorded here is the sail the server's tick
-// gives from the same winds at the same ticks.
+// the waves its wave wind raises, the mean wind at its centre averaged over
+// the last minutes, which the physics module computes from the spells in
+// play as the server does; the sea changes only on a second's first tick, to
+// what was fixed a second before; and the boat holds a window of areas
+// about it, which follows it once it is well into another area. So a sail
+// recorded here is the sail the server's tick gives in the same weather at
+// the same ticks.
 //
 // Two things the server's sea cannot do yet are here for looking at:
 // another fetch than open water's, and a second wind east of a line of area
@@ -44,20 +46,33 @@ export interface SeaOptions {
   flat: boolean;
 }
 
-/** A sea of two winds at most: the inputs of the areas west of the split, and of those east of it. */
+/** A window's sea: each area's inputs, row by row from the south-west. */
 interface Raised {
-  west: number[];
-  east: number[];
+  speed: number[];
+  from: number[];
+  fetch: number[];
+}
+
+function raised(): Raised {
+  return {
+    speed: new Array<number>(AREAS).fill(0),
+    from: new Array<number>(AREAS).fill(0),
+    fetch: new Array<number>(AREAS).fill(0),
+  };
 }
 
 function same(a: Raised, b: Raised): boolean {
-  for (let i = 0; i < 3; i++) {
-    if (a.west[i] !== b.west[i] || a.east[i] !== b.east[i]) {
+  for (let i = 0; i < AREAS; i++) {
+    if (a.speed[i] !== b.speed[i] || a.from[i] !== b.from[i] || a.fetch[i] !== b.fetch[i]) {
       return false;
     }
   }
   return true;
 }
+
+/** The middle of the world's areas, and the last: past the world's edge the sea is the edge's. */
+const MIDDLE = SEA.areas >> 1;
+const LAST = SEA.areas - 1;
 
 export class LocalSea {
   readonly options: SeaOptions = { fetch: null, split: null, flat: false };
@@ -70,11 +85,13 @@ export class LocalSea {
   #col = 0;
   #row = 0;
   /** The sea in effect, and the one fixed for the next second. */
-  #now: Raised = { west: [0, 0, 0], east: [0, 0, 0] };
-  #next: Raised = { west: [0, 0, 0], east: [0, 0, 0] };
+  #now = raised();
+  #next = raised();
   /** The tick the sea was last brought to, and the first tick of its second. */
   #tick = 0;
   #from = 0;
+  readonly #wind = [0, 0];
+  readonly #input = [0, 0, 0];
 
   constructor(physics: Physics, seas: Seas) {
     this.#physics = physics;
@@ -90,35 +107,37 @@ export class LocalSea {
     return this.#row;
   }
 
-  /** Whether the sea is one a server's would be: one wind over open water. */
+  /** Whether the sea is one a server's would be: the weather's, over open water. */
   get plain(): boolean {
     return this.options.fetch === null && this.options.split === null && !this.options.flat;
   }
 
   /**
-   * The sea as the wind has raised it, at once: in effect and next alike,
+   * The sea as the weather has raised it, at once: in effect and next,
    * about the boat at (east, north), from tick on.
    */
-  settle(wind: Wind, east: number, north: number, tick: number): void {
-    this.#raise(wind, this.#now);
-    this.#raise(wind, this.#next);
+  settle(east: number, north: number, tick: number): void {
     this.#col = seaAreaOf(east) - HALF;
     this.#row = seaAreaOf(north) - HALF;
     this.#tick = tick;
     this.#from = second(tick) * SEA_PERIOD;
+    this.#raise(this.#from, this.#now);
+    this.#raise(this.#from + SEA_PERIOD, this.#next);
     this.#seas.reset();
     this.#send(this.#from, this.#now);
+    if (!same(this.#next, this.#now)) {
+      this.#send(this.#from + SEA_PERIOD, this.#next);
+    }
     this.stamp++;
   }
 
   /**
-   * Brings the sea to tick, the tick about to be stepped into, given the
-   * wind as it stood at the tick before and where the boat is. As the
-   * server's tick does: into a new second, what was fixed for it comes into
-   * effect and the wind fixes the second after; over more than a second the
-   * wind has had its time already.
+   * Brings the sea to tick, the tick about to be stepped into, with the
+   * boat at (east, north). As the server's tick does: into a new second,
+   * what was fixed for it comes into effect and the wave wind fixes the
+   * second after; over more than a second both are the wave wind's.
    */
-  advance(tick: number, windBefore: Wind, east: number, north: number): void {
+  advance(tick: number, east: number, north: number): void {
     const seconds = second(tick) - second(this.#tick);
     this.#tick = tick;
     let again = false;
@@ -131,14 +150,8 @@ export class LocalSea {
         // Sent a second ago, and now in effect.
         this.stamp++;
       }
-      this.#raise(windBefore, this.#next);
-      if (!same(this.#next, this.#now)) {
-        this.#send(this.#from + SEA_PERIOD, this.#next);
-      }
     } else if (seconds !== 0) {
       this.#from = second(tick) * SEA_PERIOD;
-      this.#raise(windBefore, this.#now);
-      this.#raise(windBefore, this.#next);
       again = true;
     }
     // The window follows the boat once it is well into another area.
@@ -153,11 +166,18 @@ export class LocalSea {
       again = true;
     }
     if (again) {
+      this.#raise(this.#from, this.#now);
+      this.#raise(this.#from + SEA_PERIOD, this.#next);
       this.#send(this.#from, this.#now);
       if (!same(this.#next, this.#now)) {
         this.#send(this.#from + SEA_PERIOD, this.#next);
       }
       this.stamp++;
+    } else if (seconds === 1) {
+      this.#raise(this.#from + SEA_PERIOD, this.#next);
+      if (!same(this.#next, this.#now)) {
+        this.#send(this.#from + SEA_PERIOD, this.#next);
+      }
     }
   }
 
@@ -165,27 +185,45 @@ export class LocalSea {
   areas(): number[][] {
     const out: number[][] = [];
     for (let i = 0; i < AREAS; i++) {
-      const a = this.#area(this.#now, i);
-      out.push([a[0] ?? 0, a[1] ?? 0, a[2] ?? 0]);
+      out.push([this.#now.speed[i] ?? 0, this.#now.from[i] ?? 0, this.#now.fetch[i] ?? 0]);
     }
     return out;
   }
 
-  #raise(wind: Wind, into: Raised): void {
+  /** Raises into a window's sea what each of its areas' wave winds gives at a tick. */
+  #raise(tick: number, into: Raised): void {
     if (this.options.flat) {
-      into.west.fill(0);
-      into.east.fill(0);
+      into.speed.fill(0);
+      into.from.fill(0);
+      into.fetch.fill(0);
       return;
     }
+    const p = this.#physics;
     const fetch = this.options.fetch ?? -1;
-    this.#physics.seaInputOf(wind.speed, wind.from, fetch, into.west);
-    const other = this.options.split?.wind ?? wind;
-    this.#physics.seaInputOf(other.speed, other.from, fetch, into.east);
-  }
-
-  #area(sea: Raised, i: number): number[] {
     const split = this.options.split;
-    return split !== null && this.#col + (i % SEA.window) >= split.column ? sea.east : sea.west;
+    for (let i = 0; i < AREAS; i++) {
+      const col = Math.min(Math.max(this.#col + (i % SEA.window), 0), LAST);
+      const row = Math.min(Math.max(this.#row + Math.floor(i / SEA.window), 0), LAST);
+      let speed: number;
+      let from: number;
+      if (split !== null && this.#col + (i % SEA.window) >= split.column) {
+        speed = split.wind.speed;
+        from = split.wind.from;
+      } else {
+        const w = p.waveWind(
+          (col - MIDDLE) * SEA.areaSize,
+          (row - MIDDLE) * SEA.areaSize,
+          tick,
+          this.#wind,
+        );
+        speed = w[0] ?? 0;
+        from = w[1] ?? 0;
+      }
+      const a = p.seaInputOf(speed, from, fetch, this.#input);
+      into.speed[i] = a[0] ?? 0;
+      into.from[i] = a[1] ?? 0;
+      into.fetch[i] = a[2] ?? 0;
+    }
   }
 
   #send(tick: number, sea: Raised): void {
@@ -194,16 +232,10 @@ export class LocalSea {
       col: this.#col,
       row: this.#row,
       size: SEA.window,
-      speed: [],
-      from: [],
-      fetch: [],
+      speed: sea.speed.slice(),
+      from: sea.from.slice(),
+      fetch: sea.fetch.slice(),
     };
-    for (let i = 0; i < AREAS; i++) {
-      const a = this.#area(sea, i);
-      m.speed.push(a[0] ?? 0);
-      m.from.push(a[1] ?? 0);
-      m.fetch.push(a[2] ?? 0);
-    }
     this.#seas.receive(m);
   }
 }
