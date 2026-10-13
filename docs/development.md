@@ -3295,7 +3295,12 @@ what to commit for `linux` once judged right.
 
 A test that takes minutes on CI's SwiftShader is tagged `@long`
 (`test(title, { tag: '@long' }, ...)`); `pr.render` runs each back end's
-`@long` tests in a job of their own, beside the rest.
+`@long` tests in a job of their own, beside the rest. The short tests are split over two runners
+by spec file: the job's `SPECS` names the files of one half and
+`SPECS_HALF` says which half it runs (1, those files; 2, every other file,
+so a new file always runs), chosen from the files' measured times. To
+balance them again, change the files named in `pr.render.yaml`'s matrix;
+`SPECS=sea,fleet SPECS_HALF=1 npx playwright test --list` shows a half.
 
 ## Commits
 

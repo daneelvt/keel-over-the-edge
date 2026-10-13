@@ -29,6 +29,21 @@ const tls = '../.dev/e2e/tls';
 const keelPlay = '127.0.0.1:18080';
 const keelReady = 'http://127.0.0.1:19090/readyz';
 const linux = process.platform === 'linux';
+// pr.render splits a back end's short tests over two runners by spec file:
+// SPECS names some files (sea,sail), and SPECS_HALF says which half this
+// run is: 1, those files alone; 2, every file but those. Unset, all of them.
+const halfSpecs = (process.env.SPECS ?? '')
+  .split(',')
+  .filter((n) => n !== '')
+  .map((n) => `${n}.spec.ts`);
+const half =
+  halfSpecs.length === 0
+    ? {}
+    : process.env.SPECS_HALF === '1'
+      ? { testMatch: halfSpecs }
+      : process.env.SPECS_HALF === '2'
+        ? { testIgnore: halfSpecs }
+        : {};
 const args = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist'];
 if (linux) {
   args.push(
@@ -63,6 +78,7 @@ export default defineConfig({
   projects: [
     ...['webgl2', 'webgpu'].map((name) => ({
       name,
+      ...half,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 960, height: 600 },
