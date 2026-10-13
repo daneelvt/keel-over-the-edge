@@ -11,12 +11,24 @@ declare global {
 }
 
 /**
+ * Whether the browser draws on CI's software GPU (SwiftShader, on Linux),
+ * where every pixel and every compute pass is the CPU's. There the pages
+ * open on the cheapest rung of their ladder, unless a test asks for the
+ * best: what the tests of geometry, sailing and the network check does not
+ * depend on the tier, and the best rung takes minutes a test. On the Mac
+ * every page opens on the best rung.
+ */
+export const softwareGPU = process.platform === 'linux';
+
+/**
  * Opens the offline sandbox on the project's back end with the test hooks,
  * waits for the boat, freezes time and puts the boat back at the start, at
- * rest. A WebGPU project with no adapter is skipped. The screen's panels and
- * controls are hidden unless hud is true, so pictures show the scene alone.
+ * rest, on the best rung of its ladder (on a software GPU the cheapest,
+ * unless best is set). A WebGPU project with no adapter is skipped. The
+ * screen's panels and controls are hidden unless hud is true, so pictures
+ * show the scene alone.
  */
-export async function openScene(page: Page, query = '', hud = false): Promise<void> {
+export async function openScene(page: Page, query = '', hud = false, best = false): Promise<void> {
   const project = test.info().project.name;
   const backend = project === 'webgl2' ? '&backend=webgl2' : project === 'compat' ? '&compat' : '';
   const errors: string[] = [];
@@ -40,7 +52,11 @@ export async function openScene(page: Page, query = '', hud = false): Promise<vo
     await page.addStyleTag({ content: '.hud { visibility: hidden; }' });
   }
   // The best rung of the ladder, whatever the page's first seconds did.
-  await page.evaluate(() => globalThis.keel.setRung(0));
+  // The best rung, or on a software GPU the cheapest, whatever the page's first seconds did.
+  await page.evaluate(async (cheap) => {
+    const k = globalThis.keel;
+    await k.setRung(cheap ? k.info().rungs.length - 1 : 0);
+  }, softwareGPU && !best);
   await page.evaluate(() => {
     globalThis.keel.freeze(100);
     globalThis.keel.reset();
@@ -164,5 +180,11 @@ export async function sail(page: Page, base = ''): Promise<void> {
   await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
     timeout: 30_000,
   });
+  if (softwareGPU) {
+    await page.evaluate(async () => {
+      const k = globalThis.keel;
+      await k.setRung(k.info().rungs.length - 1);
+    });
+  }
   expect(errors).toEqual([]);
 }

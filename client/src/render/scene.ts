@@ -55,7 +55,11 @@ import { type FrameStats, Stats, WINDOW } from './stats';
 /** For this long after the scene starts, the windows adaptive quality judges are short: the first seconds are the benchmark. */
 const BENCHMARK = 6000;
 const BENCHMARK_WINDOW = 500;
-/** A slow window probes the display again if the last probe is older than this, in milliseconds. */
+/**
+ * A slow window probes the display again if the last probe is older than
+ * this, in milliseconds, and than two windows more: so the two windows after
+ * a probe are always judged, however long a slow machine's windows are.
+ */
 const PROBE_AFTER = 10_000;
 
 /** What the scene is told when it is made. */
@@ -436,7 +440,7 @@ export class SeaScene {
       w.interval > 0 &&
       w.p90 > SLOW * w.interval &&
       q.index < q.ladder.length - 1 &&
-      now - cap.probed > PROBE_AFTER
+      now - cap.probed > PROBE_AFTER + 2 * this.stats.window
     ) {
       cap.probe();
       return;
