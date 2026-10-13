@@ -29,12 +29,15 @@ const (
 	// simPkg is the simulation, which runs the physics on the server: it
 	// does no float arithmetic of its own, and the disassembly checks it
 	// fuses none either.
-	simPkg    = "./internal/sim"
-	wasmPkg   = "./internal/physics/wasm"
-	moduleOut = "client/src/predict/physics.wasm"
-	goLayout  = "internal/physics/layout.gen.go"
-	tsLayout  = "client/src/predict/layout.gen.ts"
-	stateDir  = ".dev"
+	simPkg = "./internal/sim"
+	// weatherPkg says which spells of weather blow when, in whole numbers:
+	// it is checked as the simulation is.
+	weatherPkg = "./internal/weather"
+	wasmPkg    = "./internal/physics/wasm"
+	moduleOut  = "client/src/predict/physics.wasm"
+	goLayout   = "internal/physics/layout.gen.go"
+	tsLayout   = "client/src/predict/layout.gen.ts"
+	stateDir   = ".dev"
 	// budget is the most the module may weigh, gzipped. Browsers get it
 	// with Brotli, which is smaller still.
 	budget = 300 << 10
@@ -104,7 +107,7 @@ func runCheck(ctx context.Context) error {
 		return err
 	}
 	problems = append(problems, found...)
-	for _, pkg := range []string{"./" + physicsDir, "./" + skyDir, simPkg} {
+	for _, pkg := range []string{"./" + physicsDir, "./" + skyDir, simPkg, weatherPkg} {
 		found, err = checkFused(ctx, pkg)
 		if err != nil {
 			return err

@@ -15,10 +15,12 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
@@ -512,4 +514,73 @@ func TestDropout(t *testing.T) {
 			t.Fatalf("%d corrections", s.Stats.Corrections)
 		}
 	})
+}
+
+// sequenceFrom is the catalog's weather with its sequence first beginning
+// at a tick.
+func sequenceFrom(t *testing.T, tick int64) *weather.Timeline {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tl, err := weather.FromCatalog(cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tl.From(tick)
+}
+
+// TestSailGusts: in a trade spell's gusts and shifts, and through a change
+// of spell, prediction is still the server's to the bit, with no lag and
+// with 100 ms each way: the sailor computes the wind at its boat from the
+// spells it is sent, as the server does. The next spell reaches it ten
+// seconds before the change begins.
+func TestSailGusts(t *testing.T) {
+	d := sailLength()
+	for name, lag := range map[string]client.Lag{"no lag": {}, "100 ms each way": {Delay: 100 * time.Millisecond}} {
+		synctest.Test(t, func(t *testing.T) {
+			now := loop.TickAt(time.Now(), Epoch)
+			// The sequence's second spell begins 40 s into the sail: its
+			// first, a trade spell, has blown for four hours less that.
+			change := now + 40*physics.StepsPerSecond
+			srv := NewServer(t, Config{Weather: sequenceFrom(t, change-4*3600*physics.StepsPerSecond)})
+			token, _ := srv.Guest("Ann")
+			o := DialOptions{Cookie: token}
+			if lag != (client.Lag{}) {
+				o.Wrap = lag.Wrap
+			}
+			s := srv.NewSailor(o, recorded(t))
+			if err := s.Connect(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			lo, hi := math.Inf(1), math.Inf(-1)
+			var heard, spells int
+			for sailed := time.Duration(0); sailed < d; sailed += time.Second {
+				if err := s.Sail(t.Context(), time.Second); err != nil {
+					t.Fatal(err)
+				}
+				w := s.Predictor.Wind()
+				lo, hi = min(lo, w.Speed), max(hi, w.Speed)
+				if n := int(s.Predictor.Weather.Count); n != spells {
+					if spells == 1 && n == 2 && heard == 0 {
+						heard = int((change - s.Predictor.Tick) / physics.StepsPerSecond)
+					}
+					spells = n
+				}
+			}
+			s.Drop()
+			report(t, "gusts, "+name, s.Stats, d)
+			t.Logf("%s: the wind at the boat ran from %.1f to %.1f knots; the next spell was heard of %d s before its change", name, lo*3600/1852, hi*3600/1852, heard)
+			if s.Stats.Corrections != 0 || s.Stats.Snapshots < int(d.Seconds())*15-30 {
+				t.Fatalf("%s: %d corrections in %d snapshots", name, s.Stats.Corrections, s.Stats.Snapshots)
+			}
+			if hi < 1.15*lo {
+				t.Errorf("%s: the wind at the boat ran from %.2f to %.2f m/s: no gusts", name, lo, hi)
+			}
+			if heard < 8 || heard > 10 || s.Stats.Weathers < 2 {
+				t.Errorf("%s: the next spell was heard of %d s before its change, in %d WeatherSystems", name, heard, s.Stats.Weathers)
+			}
+		})
+	}
 }

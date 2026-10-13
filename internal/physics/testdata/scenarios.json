@@ -1,5 +1,5 @@
 {
-  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state and Out with golden.json. params are the Jolly boat's, as the catalog gives them (catalog_test.go checks they match). Winds are 10 m up, in m/s. A change applies before the step it names, counting from 0, and keeps its values until the next change. steer starts a heading-hold to that heading, in radians, which sets the helm before every step to clamp(2 × (heading off course, wrapped to ±π) − 0.8 × yaw rate, −1, 1); a change that sets the helm stops it. The random scenario's changes were drawn once, with seed 3, and are kept as data. A scenario with a sea sails in waves: sea is the catalog's sea values (catalog_test.go checks them too), and the scenario's own sea a window of sea areas, size a side from the area at column col and row row, each area's inputs in whole steps (the wind's speed in 0.01 m/s, the direction it comes from in 65536ths of a turn, the fetch in metres), row by row from the south-west, with the tick of step 0; a change's areas replace them all. The random-sea scenario's changes were drawn once, with seed 5.",
+  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state and Out with golden.json. params are the Jolly boat's, as the catalog gives them (catalog_test.go checks they match). Winds are 10 m up, in m/s. A change applies before the step it names, counting from 0, and keeps its values until the next change. steer starts a heading-hold to that heading, in radians, which sets the helm before every step to clamp(2 × (heading off course, wrapped to ±π) − 0.8 × yaw rate, −1, 1); a change that sets the helm stops it. The random scenario's changes were drawn once, with seed 3, and are kept as data. A scenario with a sea sails in waves: sea is the catalog's sea values (catalog_test.go checks them too), and the scenario's own sea a window of sea areas, size a side from the area at column col and row row, each area's inputs in whole steps (the wind's speed in 0.01 m/s, the direction it comes from in 65536ths of a turn, the fetch in metres), row by row from the south-west, with the tick of step 0; a change's areas replace them all. The random-sea scenario's changes were drawn once, with seed 5. A scenario with a weather sails in spells of weather: wind is the catalog's wind values (catalog_test.go checks them), and the scenario's weather the spells in play, each in the whole numbers the wire carries, with the tick of step 0; before every step the wind is the wind at the boat at the step's tick, and env is not used. A change's spells replace them all. The random-weather scenario's spells and changes were drawn once, with seed 7.",
   "sea": {
     "shortest": 8,
     "longest": 76,
@@ -9,6 +9,29 @@
     "spreading": 5,
     "fetchCap": 6,
     "cull": 0.1
+  },
+  "wind": {
+    "speedCentre": 0.65,
+    "speedRim": 1.35,
+    "rim": 4.2,
+    "refugeInner": 1,
+    "refugeOuter": 1.4,
+    "refugeMeanKnee": 10,
+    "refugeMean": 14,
+    "refugeWindKnee": 14,
+    "refugeWind": 18,
+    "rimGusts": 0.3,
+    "rimGustsFrom": 3,
+    "acrossTurn": [4, 8],
+    "gustAlong": 300,
+    "gustAcross": 200,
+    "gustLife": 240,
+    "gustSpeed": 0.9,
+    "gustVeer": 8,
+    "change": 10,
+    "waveTimeConstant": 240,
+    "waveSample": 30,
+    "waveSamples": 40
   },
   "params": {
     "displacement": 160,
@@ -754,6 +777,240 @@
         {"at": 9401, "control": {"helm": 0.77, "sheet": 0.374}, "env": {"windSpeed": 25.16, "windFrom": -0.101}, "areas": [[509, 34354, 8235], [101, 33072, 12734], [680, 32206, 8630], [2424, 57493, 5797], [2432, 17996, 18534], [212, 46540, 18390], [505, 1264, 14938], [177, 64798, 22086], [2660, 5212, 852]]},
         {"at": 9641, "control": {"helm": 0.442, "sheet": 0.611}, "areas": [[2851, 14552, 2098], [2945, 12164, 1393], [273, 60331, 9956], [2657, 9090, 21073], [2784, 35829, 3949], [1659, 40016, 8475], [1857, 39143, 9799], [6, 42309, 16900], [2693, 65278, 15254]]},
         {"at": 9865, "control": {"helm": -0.567, "sheet": 0.263}, "areas": [[361, 19688, 11558], [324, 55732, 14344], [2546, 51732, 5728], [805, 18193, 16095], [695, 58609, 18784], [1409, 2235, 4753], [1777, 35105, 18454], [2022, 28404, 18196], [982, 22033, 13749]]}
+      ]
+    },
+    {
+      "name": "gusty-beat",
+      "steps": 3600,
+      "state": {"x": 3000, "y": -1500, "heading": -0.7853981633974483, "surge": 2, "sheetLimit": 0.17},
+      "control": {"helm": 0, "sheet": 0.1},
+      "env": {"windSpeed": 0, "windFrom": 0},
+      "weather": {
+        "tick": 740000000,
+        "spells": [
+          {"begin": 739676000, "change": 0, "start": 739676000, "length": 432000, "regime": 1, "steady": 0, "speed": 532, "from": 0, "drift": -373, "gust": 1300, "shift": [971, 485], "period": [9479, 13580], "phase": [18406, 44224], "across": 910, "axis": 3257, "axisPeriod": 441007, "seed": 1603250969}
+        ]
+      },
+      "changes": [
+        {"at": 0, "steer": -0.7853981633974483}
+      ]
+    },
+    {
+      "name": "shifty-reach",
+      "steps": 3600,
+      "state": {"x": -2500, "y": 2500, "heading": 1.5707963267948966, "surge": 2, "boom": 0.7, "sheetLimit": 0.7},
+      "control": {"helm": 0, "sheet": 0.5},
+      "env": {"windSpeed": 0, "windFrom": 0},
+      "weather": {
+        "tick": 740000000,
+        "spells": [
+          {"begin": 739784000, "change": 0, "start": 739784000, "length": 324000, "regime": 2, "steady": 0, "speed": 641, "from": 0, "drift": 1608, "gust": 1450, "shift": [1457, 728], "period": [8126, 11105], "phase": [12942, 35727], "across": 910, "axis": 43652, "axisPeriod": 714200, "seed": 2772232429}
+        ]
+      },
+      "changes": [
+        {"at": 0, "steer": 1.5707963267948966}
+      ]
+    },
+    {
+      "name": "change",
+      "steps": 3600,
+      "state": {"x": 1000, "y": 3500, "heading": 1.5707963267948966, "surge": 2, "boom": 0.7, "sheetLimit": 0.7},
+      "control": {"helm": 0, "sheet": 0.5},
+      "env": {"windSpeed": 0, "windFrom": 0},
+      "weather": {
+        "tick": 740000000,
+        "spells": [
+          {"begin": 739676000, "change": 0, "start": 739676000, "length": 432000, "regime": 1, "steady": 0, "speed": 532, "from": 0, "drift": -373, "gust": 1300, "shift": [971, 485], "period": [9479, 13580], "phase": [18406, 44224], "across": 910, "axis": 3257, "axisPeriod": 441007, "seed": 1603250969},
+          {"begin": 740000300, "change": 3000, "start": 740000300, "length": 324000, "regime": 2, "steady": 0, "speed": 950, "from": 12743, "drift": -793, "gust": 1450, "shift": [1457, 728], "period": [11213, 8498], "phase": [16496, 49290], "across": 910, "axis": 13346, "axisPeriod": 732205, "seed": 4111993609}
+        ]
+      },
+      "changes": [
+        {"at": 0, "steer": 1.5707963267948966},
+        {"at": 2400, "steer": 2.6}
+      ]
+    },
+    {
+      "name": "refuge",
+      "steps": 3600,
+      "state": {"x": 300, "y": -400, "heading": 2.8, "surge": 2, "boom": -0.7, "sheetLimit": 0.7},
+      "control": {"helm": 0, "sheet": 0.45},
+      "env": {"windSpeed": 0, "windFrom": 0},
+      "weather": {
+        "tick": 740000000,
+        "spells": [
+          {"begin": 739892000, "change": 0, "start": 739892000, "length": 216000, "regime": 3, "steady": 0, "speed": 1203, "from": 45511, "drift": -373, "gust": 1500, "shift": [1457, 728], "period": [7679, 11780], "phase": [18406, 44224], "across": 910, "axis": 3257, "axisPeriod": 441007, "seed": 1603250969}
+        ]
+      },
+      "changes": [
+        {"at": 0, "steer": 2.8},
+        {"at": 1800, "steer": -0.3}
+      ]
+    },
+    {
+      "name": "rim-gusts",
+      "steps": 1800,
+      "state": {"x": 5515, "y": 5515, "heading": 1.5707963267948966, "surge": 2, "boom": -0.9, "sheetLimit": 0.9},
+      "control": {"helm": 0, "sheet": 0.7},
+      "env": {"windSpeed": 0, "windFrom": 0},
+      "weather": {
+        "tick": 2147483649,
+        "spells": [
+          {"begin": 2147375649, "change": 0, "start": 2147375649, "length": 216000, "regime": 3, "steady": 0, "speed": 954, "from": 32768, "drift": 2358, "gust": 1500, "shift": [1457, 728], "period": [7892, 10922], "phase": [58360, 12496], "across": 910, "axis": 51411, "axisPeriod": 768821, "seed": 3895618324}
+        ]
+      },
+      "changes": [
+        {"at": 0, "steer": 1.5707963267948966}
+      ]
+    },
+    {
+      "name": "random-weather",
+      "steps": 10000,
+      "state": {"x": -4000, "y": -3000, "heading": 0.5, "surge": 1.5, "sheetLimit": 0.6},
+      "control": {"helm": 0, "sheet": 0.5},
+      "env": {"windSpeed": 0, "windFrom": 0},
+      "weather": {
+        "tick": 740000000,
+        "spells": [
+          {"begin": 739995000, "change": 0, "start": 739200927, "length": 173078, "regime": 0, "steady": 0, "speed": 225, "from": 14396, "drift": 2988, "gust": 1200, "shift": [607, 303], "period": [11075, 15004], "phase": [24583, 43686], "across": 910, "axis": 14051, "axisPeriod": 458892, "seed": 1575655407}
+        ]
+      },
+      "changes": [
+        {"at": 0, "control": {"helm": -0.6900000000000001, "sheet": 0.419}},
+        {"at": 173, "control": {"helm": -0.179, "sheet": 0.281}},
+        {"at": 285, "control": {"helm": 0.648, "sheet": 0.19}},
+        {"at": 420, "control": {"helm": -0.678, "sheet": 0.8180000000000001}},
+        {"at": 566, "control": {"helm": 0.711, "sheet": 0.532}},
+        {"at": 775, "control": {"helm": -0.539, "sheet": 0.482}, "spells": [
+            {"begin": 739995000, "change": 0, "start": 739200927, "length": 173078, "regime": 0, "steady": 0, "speed": 225, "from": 14396, "drift": 2988, "gust": 1200, "shift": [607, 303], "period": [11075, 15004], "phase": [24583, 43686], "across": 910, "axis": 14051, "axisPeriod": 458892, "seed": 1575655407},
+            {"begin": 740000846, "change": 0, "start": 739096173, "length": 110151, "regime": 3, "steady": 0, "speed": 1135, "from": 3655, "drift": -2317, "gust": 1500, "shift": [1457, 728], "period": [9262, 12333], "phase": [49264, 38680], "across": 910, "axis": 5942, "axisPeriod": 667955, "seed": 3060407027}
+          ]},
+        {"at": 895, "control": {"helm": 0.906, "sheet": 0.23700000000000002}, "spells": [
+            {"begin": 739995000, "change": 0, "start": 739200927, "length": 173078, "regime": 0, "steady": 0, "speed": 225, "from": 14396, "drift": 2988, "gust": 1200, "shift": [607, 303], "period": [11075, 15004], "phase": [24583, 43686], "across": 910, "axis": 14051, "axisPeriod": 458892, "seed": 1575655407},
+            {"begin": 740000846, "change": 0, "start": 739096173, "length": 110151, "regime": 3, "steady": 0, "speed": 1135, "from": 3655, "drift": -2317, "gust": 1500, "shift": [1457, 728], "period": [9262, 12333], "phase": [49264, 38680], "across": 910, "axis": 5942, "axisPeriod": 667955, "seed": 3060407027},
+            {"begin": 740000977, "change": 959, "start": 740000977, "length": 0, "regime": 0, "steady": 1, "speed": 392, "from": 43676, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0}
+          ]},
+        {"at": 1086, "control": {"helm": -0.41000000000000003, "sheet": 0.433}},
+        {"at": 1282, "control": {"helm": -0.209, "sheet": 0.185}},
+        {"at": 1398, "control": {"helm": 0.294, "sheet": 0.763}},
+        {"at": 1611, "control": {"helm": -0.057, "sheet": 0.167}},
+        {"at": 1737, "control": {"helm": -0.359, "sheet": 0.4}},
+        {"at": 1877, "control": {"helm": -0.169, "sheet": 0.5700000000000001}},
+        {"at": 2086, "control": {"helm": 0.683, "sheet": 0.926}, "spells": [
+            {"begin": 739995000, "change": 0, "start": 739200927, "length": 173078, "regime": 0, "steady": 0, "speed": 225, "from": 14396, "drift": 2988, "gust": 1200, "shift": [607, 303], "period": [11075, 15004], "phase": [24583, 43686], "across": 910, "axis": 14051, "axisPeriod": 458892, "seed": 1575655407},
+            {"begin": 740000846, "change": 0, "start": 739096173, "length": 110151, "regime": 3, "steady": 0, "speed": 1135, "from": 3655, "drift": -2317, "gust": 1500, "shift": [1457, 728], "period": [9262, 12333], "phase": [49264, 38680], "across": 910, "axis": 5942, "axisPeriod": 667955, "seed": 3060407027},
+            {"begin": 740000977, "change": 959, "start": 740000977, "length": 0, "regime": 0, "steady": 1, "speed": 392, "from": 43676, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0},
+            {"begin": 740002227, "change": 0, "start": 739010451, "length": 118231, "regime": 1, "steady": 0, "speed": 691, "from": 52978, "drift": -2350, "gust": 1300, "shift": [971, 485], "period": [11065, 14258], "phase": [3447, 6377], "across": 910, "axis": 46499, "axisPeriod": 709951, "seed": 3175311292}
+          ]},
+        {"at": 2203, "control": {"helm": 0.05, "sheet": 0.747}},
+        {"at": 2402, "control": {"helm": -0.082, "sheet": 0.47000000000000003}},
+        {"at": 2600, "control": {"helm": 0.871, "sheet": 0.40900000000000003}},
+        {"at": 2706, "control": {"helm": 0.424, "sheet": 0.429}, "spells": [
+            {"begin": 740000846, "change": 0, "start": 739096173, "length": 110151, "regime": 3, "steady": 0, "speed": 1135, "from": 3655, "drift": -2317, "gust": 1500, "shift": [1457, 728], "period": [9262, 12333], "phase": [49264, 38680], "across": 910, "axis": 5942, "axisPeriod": 667955, "seed": 3060407027},
+            {"begin": 740000977, "change": 959, "start": 740000977, "length": 0, "regime": 0, "steady": 1, "speed": 392, "from": 43676, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0},
+            {"begin": 740002227, "change": 0, "start": 739010451, "length": 118231, "regime": 1, "steady": 0, "speed": 691, "from": 52978, "drift": -2350, "gust": 1300, "shift": [971, 485], "period": [11065, 14258], "phase": [3447, 6377], "across": 910, "axis": 46499, "axisPeriod": 709951, "seed": 3175311292},
+            {"begin": 740002896, "change": 0, "start": 739553162, "length": 184990, "regime": 1, "steady": 0, "speed": 679, "from": 44859, "drift": -2716, "gust": 1300, "shift": [971, 485], "period": [11437, 14295], "phase": [39427, 9201], "across": 910, "axis": 44988, "axisPeriod": 542886, "seed": 1610735131}
+          ]},
+        {"at": 2841, "control": {"helm": 0.903, "sheet": 0.001}},
+        {"at": 3051, "control": {"helm": -0.47900000000000004, "sheet": 0.995}},
+        {"at": 3245, "control": {"helm": -0.395, "sheet": 0.19}, "spells": [
+            {"begin": 740000977, "change": 959, "start": 740000977, "length": 0, "regime": 0, "steady": 1, "speed": 392, "from": 43676, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0},
+            {"begin": 740002227, "change": 0, "start": 739010451, "length": 118231, "regime": 1, "steady": 0, "speed": 691, "from": 52978, "drift": -2350, "gust": 1300, "shift": [971, 485], "period": [11065, 14258], "phase": [3447, 6377], "across": 910, "axis": 46499, "axisPeriod": 709951, "seed": 3175311292},
+            {"begin": 740002896, "change": 0, "start": 739553162, "length": 184990, "regime": 1, "steady": 0, "speed": 679, "from": 44859, "drift": -2716, "gust": 1300, "shift": [971, 485], "period": [11437, 14295], "phase": [39427, 9201], "across": 910, "axis": 44988, "axisPeriod": 542886, "seed": 1610735131},
+            {"begin": 740003261, "change": 752, "start": 740003261, "length": 0, "regime": 0, "steady": 1, "speed": 472, "from": 26406, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0}
+          ]},
+        {"at": 3402, "control": {"helm": -0.5710000000000001, "sheet": 0.35000000000000003}},
+        {"at": 3523, "control": {"helm": 0.066, "sheet": 0.503}},
+        {"at": 3685, "control": {"helm": -0.091, "sheet": 0.454}},
+        {"at": 3832, "control": {"helm": -0.7030000000000001, "sheet": 0.547}},
+        {"at": 3988, "control": {"helm": -0.006, "sheet": 0.514}},
+        {"at": 4094, "control": {"helm": 0.42, "sheet": 0.809}},
+        {"at": 4212, "control": {"helm": 0.332, "sheet": 0.05}, "spells": [
+            {"begin": 740002227, "change": 0, "start": 739010451, "length": 118231, "regime": 1, "steady": 0, "speed": 691, "from": 52978, "drift": -2350, "gust": 1300, "shift": [971, 485], "period": [11065, 14258], "phase": [3447, 6377], "across": 910, "axis": 46499, "axisPeriod": 709951, "seed": 3175311292},
+            {"begin": 740002896, "change": 0, "start": 739553162, "length": 184990, "regime": 1, "steady": 0, "speed": 679, "from": 44859, "drift": -2716, "gust": 1300, "shift": [971, 485], "period": [11437, 14295], "phase": [39427, 9201], "across": 910, "axis": 44988, "axisPeriod": 542886, "seed": 1610735131},
+            {"begin": 740003261, "change": 752, "start": 740003261, "length": 0, "regime": 0, "steady": 1, "speed": 472, "from": 26406, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0},
+            {"begin": 740004358, "change": 0, "start": 740004358, "length": 0, "regime": 0, "steady": 1, "speed": 1246, "from": 59035, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0}
+          ]},
+        {"at": 4426, "control": {"helm": 0.843, "sheet": 0.056}},
+        {"at": 4585, "control": {"helm": 0.924, "sheet": 0.23}, "spells": [
+            {"begin": 740002896, "change": 0, "start": 739553162, "length": 184990, "regime": 1, "steady": 0, "speed": 679, "from": 44859, "drift": -2716, "gust": 1300, "shift": [971, 485], "period": [11437, 14295], "phase": [39427, 9201], "across": 910, "axis": 44988, "axisPeriod": 542886, "seed": 1610735131},
+            {"begin": 740003261, "change": 752, "start": 740003261, "length": 0, "regime": 0, "steady": 1, "speed": 472, "from": 26406, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0},
+            {"begin": 740004358, "change": 0, "start": 740004358, "length": 0, "regime": 0, "steady": 1, "speed": 1246, "from": 59035, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0},
+            {"begin": 740004600, "change": 819, "start": 739401225, "length": 50813, "regime": 0, "steady": 0, "speed": 428, "from": 48797, "drift": 764, "gust": 1200, "shift": [607, 303], "period": [15025, 17776], "phase": [23395, 62202], "across": 910, "axis": 43606, "axisPeriod": 471161, "seed": 674286978}
+          ]},
+        {"at": 4802, "control": {"helm": 0.14400000000000002, "sheet": 0.739}},
+        {"at": 4934, "control": {"helm": -0.454, "sheet": 0.248}},
+        {"at": 5096, "control": {"helm": 0.054, "sheet": 0.23600000000000002}},
+        {"at": 5236, "control": {"helm": 0.064, "sheet": 0.8200000000000001}},
+        {"at": 5411, "control": {"helm": 0.366, "sheet": 0.623}},
+        {"at": 5544, "control": {"helm": 0.501, "sheet": 0.107}},
+        {"at": 5745, "control": {"helm": -0.292, "sheet": 0.8240000000000001}},
+        {"at": 5907, "control": {"helm": 0.49, "sheet": 0.243}},
+        {"at": 6009, "control": {"helm": 0.07, "sheet": 0.883}},
+        {"at": 6205, "control": {"helm": 0.679, "sheet": 0.018000000000000002}},
+        {"at": 6391, "control": {"helm": -0.725, "sheet": 0.4}},
+        {"at": 6535, "control": {"helm": -0.497, "sheet": 0.5740000000000001}},
+        {"at": 6751, "control": {"helm": 0.19, "sheet": 0.433}},
+        {"at": 6918, "control": {"helm": 0.153, "sheet": 0.552}},
+        {"at": 7053, "control": {"helm": -0.112, "sheet": 0.056}},
+        {"at": 7162, "control": {"helm": 0.657, "sheet": 0.523}, "spells": [
+            {"begin": 740003261, "change": 752, "start": 740003261, "length": 0, "regime": 0, "steady": 1, "speed": 472, "from": 26406, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0},
+            {"begin": 740004358, "change": 0, "start": 740004358, "length": 0, "regime": 0, "steady": 1, "speed": 1246, "from": 59035, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0},
+            {"begin": 740004600, "change": 819, "start": 739401225, "length": 50813, "regime": 0, "steady": 0, "speed": 428, "from": 48797, "drift": 764, "gust": 1200, "shift": [607, 303], "period": [15025, 17776], "phase": [23395, 62202], "across": 910, "axis": 43606, "axisPeriod": 471161, "seed": 674286978},
+            {"begin": 740007356, "change": 0, "start": 739368843, "length": 177029, "regime": 2, "steady": 0, "speed": 1016, "from": 58101, "drift": 470, "gust": 1450, "shift": [1457, 728], "period": [9118, 11940], "phase": [51958, 25294], "across": 910, "axis": 26426, "axisPeriod": 781812, "seed": 2062569280}
+          ]},
+        {"at": 7369, "control": {"helm": -0.605, "sheet": 0.931}, "spells": [
+            {"begin": 740004358, "change": 0, "start": 740004358, "length": 0, "regime": 0, "steady": 1, "speed": 1246, "from": 59035, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0},
+            {"begin": 740004600, "change": 819, "start": 739401225, "length": 50813, "regime": 0, "steady": 0, "speed": 428, "from": 48797, "drift": 764, "gust": 1200, "shift": [607, 303], "period": [15025, 17776], "phase": [23395, 62202], "across": 910, "axis": 43606, "axisPeriod": 471161, "seed": 674286978},
+            {"begin": 740007356, "change": 0, "start": 739368843, "length": 177029, "regime": 2, "steady": 0, "speed": 1016, "from": 58101, "drift": 470, "gust": 1450, "shift": [1457, 728], "period": [9118, 11940], "phase": [51958, 25294], "across": 910, "axis": 26426, "axisPeriod": 781812, "seed": 2062569280},
+            {"begin": 740007429, "change": 0, "start": 739606591, "length": 167740, "regime": 1, "steady": 0, "speed": 563, "from": 19509, "drift": -801, "gust": 1300, "shift": [971, 485], "period": [13374, 10584], "phase": [5405, 41791], "across": 910, "axis": 62514, "axisPeriod": 728750, "seed": 4199347341}
+          ]},
+        {"at": 7504, "control": {"helm": -0.359, "sheet": 0.794}},
+        {"at": 7718, "control": {"helm": 0.773, "sheet": 0.5740000000000001}},
+        {"at": 7887, "control": {"helm": -0.604, "sheet": 0.456}},
+        {"at": 8020, "control": {"helm": 0.437, "sheet": 0.301}, "spells": [
+            {"begin": 740004600, "change": 819, "start": 739401225, "length": 50813, "regime": 0, "steady": 0, "speed": 428, "from": 48797, "drift": 764, "gust": 1200, "shift": [607, 303], "period": [15025, 17776], "phase": [23395, 62202], "across": 910, "axis": 43606, "axisPeriod": 471161, "seed": 674286978},
+            {"begin": 740007356, "change": 0, "start": 739368843, "length": 177029, "regime": 2, "steady": 0, "speed": 1016, "from": 58101, "drift": 470, "gust": 1450, "shift": [1457, 728], "period": [9118, 11940], "phase": [51958, 25294], "across": 910, "axis": 26426, "axisPeriod": 781812, "seed": 2062569280},
+            {"begin": 740007429, "change": 0, "start": 739606591, "length": 167740, "regime": 1, "steady": 0, "speed": 563, "from": 19509, "drift": -801, "gust": 1300, "shift": [971, 485], "period": [13374, 10584], "phase": [5405, 41791], "across": 910, "axis": 62514, "axisPeriod": 728750, "seed": 4199347341},
+            {"begin": 740008181, "change": 0, "start": 739025038, "length": 60117, "regime": 2, "steady": 0, "speed": 759, "from": 3466, "drift": -2580, "gust": 1450, "shift": [1457, 728], "period": [12530, 8169], "phase": [55315, 58496], "across": 910, "axis": 44965, "axisPeriod": 754000, "seed": 1056235888}
+          ]},
+        {"at": 8165, "control": {"helm": -0.896, "sheet": 0.882}, "spells": [
+            {"begin": 740007356, "change": 0, "start": 739368843, "length": 177029, "regime": 2, "steady": 0, "speed": 1016, "from": 58101, "drift": 470, "gust": 1450, "shift": [1457, 728], "period": [9118, 11940], "phase": [51958, 25294], "across": 910, "axis": 26426, "axisPeriod": 781812, "seed": 2062569280},
+            {"begin": 740007429, "change": 0, "start": 739606591, "length": 167740, "regime": 1, "steady": 0, "speed": 563, "from": 19509, "drift": -801, "gust": 1300, "shift": [971, 485], "period": [13374, 10584], "phase": [5405, 41791], "across": 910, "axis": 62514, "axisPeriod": 728750, "seed": 4199347341},
+            {"begin": 740008181, "change": 0, "start": 739025038, "length": 60117, "regime": 2, "steady": 0, "speed": 759, "from": 3466, "drift": -2580, "gust": 1450, "shift": [1457, 728], "period": [12530, 8169], "phase": [55315, 58496], "across": 910, "axis": 44965, "axisPeriod": 754000, "seed": 1056235888},
+            {"begin": 740008283, "change": 0, "start": 739381741, "length": 171626, "regime": 1, "steady": 0, "speed": 820, "from": 56395, "drift": -3251, "gust": 1300, "shift": [971, 485], "period": [13269, 10385], "phase": [4727, 28959], "across": 910, "axis": 26241, "axisPeriod": 451465, "seed": 53907306}
+          ]},
+        {"at": 8269, "control": {"helm": -0.164, "sheet": 0.618}},
+        {"at": 8464, "control": {"helm": 0.123, "sheet": 0.10200000000000001}},
+        {"at": 8617, "control": {"helm": 0.936, "sheet": 0.299}, "spells": [
+            {"begin": 740007429, "change": 0, "start": 739606591, "length": 167740, "regime": 1, "steady": 0, "speed": 563, "from": 19509, "drift": -801, "gust": 1300, "shift": [971, 485], "period": [13374, 10584], "phase": [5405, 41791], "across": 910, "axis": 62514, "axisPeriod": 728750, "seed": 4199347341},
+            {"begin": 740008181, "change": 0, "start": 739025038, "length": 60117, "regime": 2, "steady": 0, "speed": 759, "from": 3466, "drift": -2580, "gust": 1450, "shift": [1457, 728], "period": [12530, 8169], "phase": [55315, 58496], "across": 910, "axis": 44965, "axisPeriod": 754000, "seed": 1056235888},
+            {"begin": 740008283, "change": 0, "start": 739381741, "length": 171626, "regime": 1, "steady": 0, "speed": 820, "from": 56395, "drift": -3251, "gust": 1300, "shift": [971, 485], "period": [13269, 10385], "phase": [4727, 28959], "across": 910, "axis": 26241, "axisPeriod": 451465, "seed": 53907306},
+            {"begin": 740008865, "change": 0, "start": 739035969, "length": 93437, "regime": 2, "steady": 0, "speed": 970, "from": 50232, "drift": -3436, "gust": 1450, "shift": [1457, 728], "period": [8325, 11453], "phase": [55582, 37763], "across": 910, "axis": 37248, "axisPeriod": 577023, "seed": 1968354218}
+          ]},
+        {"at": 8754, "control": {"helm": -0.212, "sheet": 0.045}},
+        {"at": 8926, "control": {"helm": -0.116, "sheet": 0.779}},
+        {"at": 9061, "control": {"helm": 0.662, "sheet": 0.513}},
+        {"at": 9269, "control": {"helm": 0.487, "sheet": 0.792}, "spells": [
+            {"begin": 740008181, "change": 0, "start": 739025038, "length": 60117, "regime": 2, "steady": 0, "speed": 759, "from": 3466, "drift": -2580, "gust": 1450, "shift": [1457, 728], "period": [12530, 8169], "phase": [55315, 58496], "across": 910, "axis": 44965, "axisPeriod": 754000, "seed": 1056235888},
+            {"begin": 740008283, "change": 0, "start": 739381741, "length": 171626, "regime": 1, "steady": 0, "speed": 820, "from": 56395, "drift": -3251, "gust": 1300, "shift": [971, 485], "period": [13269, 10385], "phase": [4727, 28959], "across": 910, "axis": 26241, "axisPeriod": 451465, "seed": 53907306},
+            {"begin": 740008865, "change": 0, "start": 739035969, "length": 93437, "regime": 2, "steady": 0, "speed": 970, "from": 50232, "drift": -3436, "gust": 1450, "shift": [1457, 728], "period": [8325, 11453], "phase": [55582, 37763], "across": 910, "axis": 37248, "axisPeriod": 577023, "seed": 1968354218},
+            {"begin": 740009560, "change": 0, "start": 739891823, "length": 754, "regime": 1, "steady": 0, "speed": 795, "from": 39825, "drift": 2964, "gust": 1300, "shift": [971, 485], "period": [9177, 12162], "phase": [19950, 21690], "across": 910, "axis": 10887, "axisPeriod": 546802, "seed": 4274660101}
+          ]},
+        {"at": 9397, "control": {"helm": 0.302, "sheet": 0.47300000000000003}},
+        {"at": 9508, "control": {"helm": -0.191, "sheet": 0.72}},
+        {"at": 9638, "control": {"helm": -0.591, "sheet": 0.111}, "spells": [
+            {"begin": 740008283, "change": 0, "start": 739381741, "length": 171626, "regime": 1, "steady": 0, "speed": 820, "from": 56395, "drift": -3251, "gust": 1300, "shift": [971, 485], "period": [13269, 10385], "phase": [4727, 28959], "across": 910, "axis": 26241, "axisPeriod": 451465, "seed": 53907306},
+            {"begin": 740008865, "change": 0, "start": 739035969, "length": 93437, "regime": 2, "steady": 0, "speed": 970, "from": 50232, "drift": -3436, "gust": 1450, "shift": [1457, 728], "period": [8325, 11453], "phase": [55582, 37763], "across": 910, "axis": 37248, "axisPeriod": 577023, "seed": 1968354218},
+            {"begin": 740009560, "change": 0, "start": 739891823, "length": 754, "regime": 1, "steady": 0, "speed": 795, "from": 39825, "drift": 2964, "gust": 1300, "shift": [971, 485], "period": [9177, 12162], "phase": [19950, 21690], "across": 910, "axis": 10887, "axisPeriod": 546802, "seed": 4274660101},
+            {"begin": 740009678, "change": 27, "start": 739834102, "length": 168533, "regime": 1, "steady": 0, "speed": 642, "from": 30901, "drift": -1153, "gust": 1300, "shift": [971, 485], "period": [11505, 14337], "phase": [25679, 62206], "across": 910, "axis": 42320, "axisPeriod": 518395, "seed": 2650607583}
+          ]},
+        {"at": 9807, "control": {"helm": -0.91, "sheet": 0.65}},
+        {"at": 9979, "control": {"helm": 0.054, "sheet": 0.185}, "spells": [
+            {"begin": 740008865, "change": 0, "start": 739035969, "length": 93437, "regime": 2, "steady": 0, "speed": 970, "from": 50232, "drift": -3436, "gust": 1450, "shift": [1457, 728], "period": [8325, 11453], "phase": [55582, 37763], "across": 910, "axis": 37248, "axisPeriod": 577023, "seed": 1968354218},
+            {"begin": 740009560, "change": 0, "start": 739891823, "length": 754, "regime": 1, "steady": 0, "speed": 795, "from": 39825, "drift": 2964, "gust": 1300, "shift": [971, 485], "period": [9177, 12162], "phase": [19950, 21690], "across": 910, "axis": 10887, "axisPeriod": 546802, "seed": 4274660101},
+            {"begin": 740009678, "change": 27, "start": 739834102, "length": 168533, "regime": 1, "steady": 0, "speed": 642, "from": 30901, "drift": -1153, "gust": 1300, "shift": [971, 485], "period": [11505, 14337], "phase": [25679, 62206], "across": 910, "axis": 42320, "axisPeriod": 518395, "seed": 2650607583},
+            {"begin": 740010037, "change": 467, "start": 739533686, "length": 156618, "regime": 0, "steady": 0, "speed": 247, "from": 60828, "drift": -3543, "gust": 1200, "shift": [607, 303], "period": [11905, 15367], "phase": [34704, 56103], "across": 910, "axis": 52824, "axisPeriod": 827910, "seed": 3314462790}
+          ]}
       ]
     }
   ]

@@ -70,6 +70,7 @@ type Timeline struct {
 	spells   []Spell
 	begins   []int64 // each spell's first tick within the sequence
 	cycle    int64   // the sequence's length in ticks
+	origin   int64   // the tick the sequence first begins at
 	seed     uint32
 	veer     [2]int32 // in steps of a turn
 	swing    int32
@@ -142,6 +143,15 @@ var fixedParams = physics.WeatherParams{
 // Prepared is the wind's constants the timeline's spells are computed with.
 func (t *Timeline) Prepared() *physics.WeatherPrepared { return t.prepared }
 
+// From is the timeline with its sequence first beginning at a tick, not at
+// tick 0: a test's way to a world that starts shortly before a change of
+// spell.
+func (t *Timeline) From(tick int64) *Timeline {
+	c := *t
+	c.origin, c.memo = tick, false
+	return &c
+}
+
 // degrees is a whole number of degrees in steps of a turn, rounded.
 func degrees(d int32) int32 { return int32((int64(d)*turn + 180) / 360) }
 
@@ -164,6 +174,7 @@ func floorDiv(a, b int64) int64 {
 // number is the sequence's spell in effect at tick t, counted from the
 // first after the epoch.
 func (t *Timeline) number(tick int64) int64 {
+	tick -= t.origin
 	c := floorDiv(tick, t.cycle)
 	at := tick - c*t.cycle
 	k := len(t.begins) - 1
@@ -185,7 +196,7 @@ func (t *Timeline) index(n int64) int {
 // beginOf is the tick spell n begins at.
 func (t *Timeline) beginOf(n int64) int64 {
 	c := floorDiv(n, int64(len(t.spells)))
-	return c*t.cycle + t.begins[t.index(n)]
+	return t.origin + c*t.cycle + t.begins[t.index(n)]
 }
 
 // draw is spell n of the sequence in full but for its direction.
@@ -347,7 +358,7 @@ func (t *Timeline) after(tick int64, ws []bus.Weather) (int64, bool) {
 // tick each begins at, and returns how many: the one in effect; those
 // before it whose change to the next ended less than Grace ago, or has not
 // ended; and those to come that begin within Announce. If there are more
-// than dst holds, the oldest are left out.
+// than dst holds, the oldest are left out; the rest of dst is cleared.
 func (t *Timeline) Spells(tick int64, ws []bus.Weather, dst *[physics.WeatherSpells]physics.Spell) int32 {
 	var buf [2 * physics.WeatherSpells]physics.Spell
 	n := 0
@@ -386,6 +397,9 @@ func (t *Timeline) Spells(tick int64, ws []bus.Weather, dst *[physics.WeatherSpe
 		at = next
 	}
 	skip := max(n-physics.WeatherSpells, 0)
+	// The rest of dst is cleared, so that two frames with the same spells
+	// in play hold the same array.
+	*dst = [physics.WeatherSpells]physics.Spell{}
 	copy(dst[:], buf[skip:n])
 	return int32(n - skip)
 }

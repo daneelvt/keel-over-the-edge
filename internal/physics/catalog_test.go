@@ -111,3 +111,64 @@ func TestScenarioParamsAreTheCatalogs(t *testing.T) {
 	}
 	check(pv, "Prepared")
 }
+
+// The golden scenarios carry the wind's values as data too: the catalog's,
+// bit for bit.
+func TestScenarioWindIsTheCatalogs(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := catalog.WeatherParams(cat)
+	data, err := os.ReadFile("testdata/scenarios.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sf struct {
+		Wind map[string]json.RawMessage `json:"wind"`
+	}
+	if err := json.Unmarshal(data, &sf); err != nil {
+		t.Fatal(err)
+	}
+	v := reflect.ValueOf(p)
+	if len(sf.Wind) != v.NumField() {
+		t.Errorf("scenarios.json has %d wind values, WeatherParams %d fields", len(sf.Wind), v.NumField())
+	}
+	for i := range v.NumField() {
+		name := v.Type().Field(i).Name
+		r, n := utf8.DecodeRuneInString(name)
+		raw, ok := sf.Wind[string(unicode.ToLower(r))+name[n:]]
+		if !ok {
+			t.Errorf("scenarios.json has no wind value %s", name)
+			continue
+		}
+		var want []float64
+		got := []float64{}
+		if f := v.Field(i); f.Kind() == reflect.Array {
+			if err := json.Unmarshal(raw, &want); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			for j := range f.Len() {
+				got = append(got, f.Index(j).Float())
+			}
+		} else {
+			var x float64
+			if err := json.Unmarshal(raw, &x); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			want, got = []float64{x}, append(got, f.Float())
+		}
+		if len(got) != len(want) {
+			t.Errorf("%s: %d values in the catalog, %d in scenarios.json", name, len(got), len(want))
+			continue
+		}
+		for j := range got {
+			if math.Float64bits(got[j]) != math.Float64bits(want[j]) {
+				t.Errorf("%s: the catalog has %v, scenarios.json %v: copy the catalog's value", name, got, want)
+				break
+			}
+		}
+	}
+	var w physics.WeatherPrepared
+	physics.PrepareWeather(&p, &w)
+}
