@@ -257,6 +257,9 @@ func TestBytes(t *testing.T) {
 		{"alone", 0, 0, false}, {"10 near", 10, 150, false}, {"10 far", 10, 500, false}, {"64 near", 64, 200, false},
 		{"alone, in a trade spell", 0, 0, true}, {"10 near, in a trade spell", 10, 150, true},
 	} {
+		if crowd.gusty && testing.Short() {
+			continue
+		}
 		for _, lag := range []client.Lag{{}, {Delay: 100 * time.Millisecond, Loss: 0.02}} {
 			var all client.Stats
 			n := uint64(1)

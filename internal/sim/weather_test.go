@@ -145,7 +145,12 @@ func TestTheSeaLagsTheWind(t *testing.T) {
 // stopped, in the catalog's weather, with a developer's weather set shortly
 // before: the wave wind's samples, made again, are the ones it had.
 func TestSnapshotResumesTheWeather(t *testing.T) {
-	for _, at := range []int64{40, 95, 1700} {
+	ats, gap := []int64{40, 95, 1700}, int64(4000)
+	if testing.Short() {
+		// One snapshot, restored half a minute later.
+		ats, gap = []int64{95}, 900
+	}
+	for _, at := range ats {
 		start := int64(secondSpell - 300)
 		w := weatherWorld(t, start, 2, true)
 		for i := range 8 {
@@ -171,7 +176,7 @@ func TestSnapshotResumesTheWeather(t *testing.T) {
 			}
 		}
 		// Restored a while later, it is the world that sailed on empty.
-		later := w.Now() + 4000
+		later := w.Now() + gap
 		restored := weatherWorld(t, later, 1, true)
 		if _, err := restored.Restore(snap, later); err != nil {
 			t.Fatal(err)

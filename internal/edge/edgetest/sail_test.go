@@ -254,8 +254,8 @@ func TestSailSlowFrames(t *testing.T) {
 
 // TestSailLoss: 100 ms each way and 2% of packets lost each way, over ten
 // seeds: corrections come, but none over the snap thresholds. And over
-// three more in a trade spell's gusts and shifts: the wind is computed, not
-// sent, so loss costs no more there.
+// three more in a trade spell's gusts and shifts, where a late input's
+// difference is small too.
 func TestSailLoss(t *testing.T) {
 	d := sailLength()
 	if testing.Short() {
@@ -281,7 +281,11 @@ func TestSailLoss(t *testing.T) {
 	report(t, "ten seeds", all, 10*d)
 
 	var gusty client.Stats
-	for seed := range uint64(3) {
+	seeds := uint64(3)
+	if testing.Short() {
+		seeds = 1
+	}
+	for seed := range seeds {
 		s := sailWith(t, inTrade, nil, client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: seed + 1}, d, nil)
 		if s.Over > 0 {
 			t.Errorf("in a trade spell, seed %d: %d corrections over the snap thresholds", seed+1, s.Over)
@@ -296,7 +300,7 @@ func TestSailLoss(t *testing.T) {
 		gusty.BytesIn += s.BytesIn
 		gusty.BytesOut += s.BytesOut
 	}
-	report(t, "three seeds in a trade spell", gusty, 3*d)
+	report(t, fmt.Sprintf("%d seeds in a trade spell", seeds), gusty, time.Duration(seeds)*d)
 }
 
 // TestTraces records, with -update, the traces the TypeScript tests replay:
