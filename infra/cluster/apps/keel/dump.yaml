@@ -99,8 +99,12 @@ spec:
                 - /bin/sh
                 - -ec
                 - |
+                  # --no-check-dest: rclone would first look for the file
+                  # already there, by a HEAD that needs readFiles, which the
+                  # key has not, and stop at B2's 401. The name is new each
+                  # week, so there is nothing to look for.
                   exec rclone copyto /dump/keel.dump "$DUMP_REMOTE/$(date -u +%Y-%m-%dT%H%MZ).dump" \
-                    --use-json-log --stats-one-line --stats=0 -v \
+                    --use-json-log --stats-one-line --stats=0 -v --no-check-dest \
                     --b2-chunk-size=16M --b2-upload-concurrency=2
               env:
                 - name: DUMP_REMOTE
