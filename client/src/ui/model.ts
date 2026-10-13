@@ -156,12 +156,13 @@ export class HudModel {
   }
 
   /**
-   * Updates the screen for a frame at now (ms). helm and sheet are the
-   * targets; rudder and sheetOut where the rudder and the sheet really are,
-   * on the same scales (−1 to 1, 0 to 1).
+   * Updates the screen for a frame at now (ms), at world time time (s).
+   * helm and sheet are the targets; rudder and sheetOut where the rudder and
+   * the sheet really are, on the same scales (−1 to 1, 0 to 1).
    */
   frame(
     now: number,
+    time: number,
     pose: BoatPose,
     out: Float64Array,
     wind: Readonly<BoatWind>,
@@ -173,7 +174,8 @@ export class HudModel {
     const headingDeg = (pose.heading * 180) / Math.PI;
     this.rose.set(-headingDeg);
     const a = this.anemometer;
-    a.add(now, wind.speed, wind.from);
+    // Over three seconds of the world's time, in which the wind blows.
+    a.add(time * 1000, wind.speed, wind.from);
     this.windMark.set(((a.from - pose.heading) * 180) / Math.PI);
     this.helmKnob.set(helm * HELM_ARC);
     this.helmActual.set(rudder * HELM_ARC);

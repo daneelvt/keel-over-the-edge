@@ -9,6 +9,7 @@
 import golden from '../../../internal/physics/testdata/golden.json';
 import scenarios from '../../../internal/physics/testdata/scenarios.json';
 import sea from '../../../internal/physics/testdata/sea.json';
+import wind from '../../../internal/physics/testdata/wind.json';
 import { catalog } from '../catalog';
 import { checkGolden, type GoldenFile, type ScenarioFile } from '../predict/golden';
 import { LAYOUT_VERSION, RECORDS, SEA } from '../predict/layout.gen';
@@ -16,6 +17,7 @@ import { loadPhysics, type Physics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { preparePhysics } from '../predict/predictor';
 import { checkSea, type SeaFile } from '../predict/seacheck';
+import { checkWind, loadWindCase, type WindCase, type WindFile } from '../predict/windcheck';
 
 export interface PhysicsRow {
   name: string;
@@ -71,6 +73,30 @@ export async function checkPhysics(): Promise<PhysicsRow[]> {
     rows.push({ name: 'The sea, same bits as the server', ok: false, detail: message(err) });
   }
 
+  try {
+    preparePhysics(physics, catalog.boats[0].physics, catalog.weather);
+    const report = checkWind(physics, wind as WindFile);
+    const ok = report.problems.length === 0;
+    rows.push({
+      name: 'The wind, same bits as the server',
+      ok,
+      detail: ok
+        ? `${report.values} values`
+        : `${report.problems.length} differ; first: ${report.problems[0]}`,
+    });
+    for (const [name, pick] of [
+      ['Wind at the boat, in a spell', 'trade'],
+      ['Wind at the boat, in a change of spell', 'a change'],
+    ] as const) {
+      const c = (wind as WindFile).cases.find((k) => k.name === pick);
+      if (c !== undefined) {
+        rows.push({ name, ok: null, detail: `${windMicroseconds(physics, c).toFixed(3)} µs` });
+      }
+    }
+  } catch (err) {
+    rows.push({ name: 'The wind, same bits as the server', ok: false, detail: message(err) });
+  }
+
   for (const [name, knots] of [
     ['Step time, flat water', 0],
     ['Step time, a breeze’s sea', 12],
@@ -120,6 +146,28 @@ function stepMicroseconds(physics: Physics, knots: number): { micros: number; wa
     elapsed = performance.now() - start;
   }
   return { micros: (elapsed * 1000) / steps, waves };
+}
+
+// windMicroseconds times the wind at the boat in a weather of the file's: a
+// tick's part and the wind at one place, as a prediction asks before each
+// step, over at least 200 ms.
+export function windMicroseconds(physics: Physics, c: WindCase): number {
+  loadWindCase(physics, c);
+  const s = physics.records.state;
+  let n = 0;
+  const start = performance.now();
+  let elapsed = 0;
+  let tick = c.tick;
+  while (elapsed < 200) {
+    for (let i = 0; i < 1000; i++) {
+      s[RECORDS.state.x] = (c.origin[0] ?? 0) + (i % 97);
+      s[RECORDS.state.y] = (c.origin[1] ?? 0) - (i % 89);
+      physics.windAt(tick++);
+    }
+    n += 1000;
+    elapsed = performance.now() - start;
+  }
+  return (elapsed * 1000) / n;
 }
 
 function message(err: unknown): string {

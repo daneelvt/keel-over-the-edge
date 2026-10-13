@@ -147,14 +147,14 @@ describe('the instruments', () => {
     let now = 0;
     const breeze = { ...wind(10 * KNOT, 0) };
     for (; now < 4000; now += 1000 / 60) {
-      model.frame(now, pose, out, breeze, 0, 0, 0, 0);
+      model.frame(now, now / 1000, pose, out, breeze, 0, 0, 0, 0);
     }
     expect(model.wind.value).toBe('N 10 kn · F3');
     // A gust of 16 knots, veered 8°, on a mean still of 10: a second in, a
     // third of the window is gust.
     const gust = { ...breeze, speed: 16 * KNOT, from: 8 * DEG, gust: 1, factor: 1.6 };
     for (const end = now + 1000; now < end; now += 1000 / 60) {
-      model.frame(now, pose, out, gust, 0, 0, 0, 0);
+      model.frame(now, now / 1000, pose, out, gust, 0, 0, 0, 0);
     }
     expect(model.anemometer.speed / KNOT).toBeCloseTo(12, 0);
     expect(model.anemometer.from / DEG).toBeGreaterThan(2);
@@ -162,7 +162,7 @@ describe('the instruments', () => {
     expect(model.wind.value).toBe('N 12 kn · F3');
     // Three seconds in, all of it: the knots are the gust's, the force the mean's.
     for (const end = now + 2100; now < end; now += 1000 / 60) {
-      model.frame(now, pose, out, gust, 0, 0, 0, 0);
+      model.frame(now, now / 1000, pose, out, gust, 0, 0, 0, 0);
     }
     expect(model.anemometer.speed / KNOT).toBeCloseTo(16, 6);
     expect(model.wind.value).toBe('N 16 kn · F3');
@@ -187,7 +187,7 @@ describe('the instruments', () => {
     const stop = model.speed.subscribe(() => changes++);
     for (let i = 0; i <= 120; i++) {
       out[RECORDS.out.speedOverGround] = i * 0.01;
-      model.frame(i * (1000 / 120), pose, out, wind(5, 0), 0, 0.5, 0, 0.5);
+      model.frame(i * (1000 / 120), i / 120, pose, out, wind(5, 0), 0, 0.5, 0, 0.5);
     }
     stop();
     // One second at 120 frames a second.
@@ -201,7 +201,7 @@ describe('the instruments', () => {
     const out = new Float64Array(SIZES.out);
     const pose = newPose();
     const w = wind(5, 0);
-    model.frame(0, pose, out, w, 0, 0, 0, 0);
+    model.frame(0, 0, pose, out, w, 0, 0, 0, 0);
     expect(model.sailor.value).toBe('');
     let now = 0;
     for (const [mode, line] of [
@@ -212,7 +212,7 @@ describe('the instruments', () => {
     ] as const) {
       pose.sailorMode = mode;
       now += 1000;
-      model.frame(now, pose, out, w, 0, 0, 0, 0);
+      model.frame(now, now / 1000, pose, out, w, 0, 0, 0, 0);
       expect(model.sailor.value).toBe(line);
     }
   });

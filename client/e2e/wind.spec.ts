@@ -150,3 +150,105 @@ test.describe('a gust on the water', () => {
     }
   });
 });
+
+test.describe('the wind overlay’s gust ring', () => {
+  test('is drawn round a gust heading for the boat, and travels with it', async ({ page }) => {
+    await openScene(page, 'weather=trade', true);
+    const got = await page.evaluate(async () => {
+      const k = globalThis.keel;
+      k.settings({ windOverlay: true });
+      k.setControls(0, 0.6);
+      // Sail until a ring shows in full: a strong gust comes within minutes.
+      let first = null;
+      for (let i = 0; i < 1200 && first === null; i++) {
+        k.advance(15);
+        k.render();
+        first = k.gustRings().find((r) => r.shown === 1) ?? null;
+      }
+      if (first === null) {
+        return null;
+      }
+      // Two seconds on, the same ring, nearest where it was.
+      const wind = k.boat().wind;
+      k.advance(60);
+      k.render();
+      const rings = k.gustRings();
+      const near = (r: { east: number; north: number }): number =>
+        Math.hypot(r.east - first.east, r.north - first.north);
+      const later = rings.sort((a, b) => near(a) - near(b))[0] ?? null;
+      const off = await k.settings({ windOverlay: false });
+      k.advance(30);
+      k.render();
+      return { first, later, wind, count: rings.length, after: k.gustRings().length, off };
+    });
+    expect(got, 'no gust headed for the boat in ten minutes').not.toBeNull();
+    if (got === null || got.later === null) {
+      return;
+    }
+    // A ring is round a gust: the gust factor at its middle is well over 1.
+    expect(got.first.factor).toBeGreaterThan(1.1);
+    expect(got.later.factor).toBeGreaterThan(1.05);
+    expect(got.count).toBeLessThanOrEqual(3);
+    // In two seconds it has travelled downwind, at about nine tenths of the
+    // spell's wind: 4 to 16 m in a trade spell.
+    const east = got.later.east - got.first.east;
+    const north = got.later.north - got.first.north;
+    const moved = Math.hypot(east, north);
+    expect(moved).toBeGreaterThan(4);
+    expect(moved).toBeLessThan(30);
+    // Downwind: away from where the mean wind at the boat comes from.
+    const downwind = -(east * Math.sin(got.wind.meanFrom) + north * Math.cos(got.wind.meanFrom));
+    expect(downwind).toBeGreaterThan(0.7 * moved);
+    // With the overlay off the rings fade out.
+    expect(got.after).toBe(0);
+  });
+
+  test('is not drawn in a steady wind, nor without the overlay', async ({ page }) => {
+    await openScene(page, 'weather=trade', true);
+    const got = await page.evaluate(async () => {
+      const k = globalThis.keel;
+      k.setControls(0, 0.6);
+      let most = 0;
+      for (let i = 0; i < 40; i++) {
+        k.advance(30);
+        k.render();
+        most = Math.max(most, k.gustRings().length);
+      }
+      k.settings({ windOverlay: true });
+      k.setWind(12, 0);
+      for (let i = 0; i < 20; i++) {
+        k.advance(30);
+        k.render();
+        most = Math.max(most, k.gustRings().length);
+      }
+      return most;
+    });
+    expect(got).toBe(0);
+  });
+});
+
+test.describe('the wind readout', () => {
+  test('gives the wind at the boat and its Beaufort force', async ({ page }) => {
+    await openScene(page, '', true);
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.setWind(14, 247.5);
+      k.advance(120);
+      k.render();
+    });
+    await expect(page.locator('[data-readout=wind]')).toHaveText('WSW 14 kn · F4');
+    // In a trade spell the knots move with the gusts; the force is the mean wind's.
+    const mean = await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.setWeather('trade');
+      k.advance(300);
+      k.render();
+      return k.boat().wind.meanSpeed;
+    });
+    const knots = Math.round(mean / (1852 / 3600));
+    const force = [0, 1, 4, 7, 11, 17, 22, 28].filter((from) => knots >= from).length - 1;
+    await expect(page.locator('[data-readout=wind]')).toHaveText(
+      new RegExp(`^[NESW]{1,3} \\d+ kn · F${force}$`),
+    );
+  });
+});

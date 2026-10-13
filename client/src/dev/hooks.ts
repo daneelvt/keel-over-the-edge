@@ -689,6 +689,22 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       offline().weather.set(spells.map(spellOf));
     },
 
+    /**
+     * The gust rings as they are drawn: where each is in the world, how
+     * wide and how much of it shows; and the gust factor at its middle now.
+     */
+    gustRings(): { east: number; north: number; radius: number; shown: number; factor: number }[] {
+      const physics = driver.physics;
+      return world.gustRings.rings.map((r) => {
+        let factor = 1;
+        if (physics !== undefined) {
+          physics.windDrawAt(world.ticks);
+          factor = physics.windPoint(r.east, r.north)[RECORDS.wind.factor] ?? 1;
+        }
+        return { ...r, factor };
+      });
+    },
+
     /** Draws the gusts on the tiles, or the water without them. */
     showGusts(on: boolean): void {
       world.ocean.gusts.shown = on ? 1 : 0;
@@ -997,6 +1013,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       detailOn.value = 1;
       foamOn.value = 1;
       world.ocean.drawWakes = true;
+      world.ocean.gusts.shown = 1;
       world.sprayHidden = false;
       tileIdentity.value = 1;
       if (world.boat !== null) {

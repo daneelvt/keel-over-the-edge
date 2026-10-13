@@ -179,6 +179,7 @@ export class Game {
     const p = w.pose;
     this.hud.frame(
       now,
+      time,
       p,
       w.out,
       w.wind,

@@ -27,6 +27,7 @@ import { Boat } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { FleetView } from './fleet';
+import { GustRings } from './gustring';
 import { Lanterns, lanternLit } from './lanterns';
 import { domeCentre } from './materials';
 import { Overlays } from './overlays';
@@ -92,6 +93,8 @@ export class SeaScene {
   /** The catalog's sea: the spectrum both bands of waves are drawn from. */
   readonly catalogSea = catalog.weather.sea;
   readonly overlays: Overlays;
+  /** The rings round the gusts heading for the boat: part of the wind overlay. */
+  readonly gustRings = new GustRings(catalog.weather.ring);
   readonly boatScene: ScenePoint = { x: 0, y: 0, z: 0 };
   boat: Boat | null = null;
   /** The other boats, drawn many at once. */
@@ -187,6 +190,7 @@ export class SeaScene {
     scene.add(this.sprayView.mesh);
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
+    scene.add(this.gustRings.group);
     scene.add(this.fleet.root);
     scene.add(this.stars.mesh, this.lanterns.mesh);
     const label = document.createElement('span');
@@ -624,6 +628,25 @@ export class SeaScene {
     this.stars.mesh.visible = this.drawSky && this.stars.total > 0;
     this.stars.placeLabel(camera, canvas.clientWidth, canvas.clientHeight, now);
     const o = this.overlays;
+    const rings = this.gustRings;
+    rings.on = o.wind;
+    const source = this.ocean.source;
+    const speed = this.out[RECORDS.out.speedOverGround] ?? 0;
+    const course = this.out[RECORDS.out.courseOverGround] ?? 0;
+    const boatAt = this.#ringBoat;
+    boatAt.east = this.pose.east;
+    boatAt.north = this.pose.north;
+    boatAt.velEast = speed * Math.sin(course);
+    boatAt.velNorth = speed * Math.cos(course);
+    boatAt.windFrom = this.wind.meanFrom;
+    rings.update(
+      source?.weather === true ? source.physics : null,
+      this.ticks,
+      this.timeStep,
+      boatAt,
+      this.origin.world.x,
+      this.origin.world.y,
+    );
     if (o.wind || o.forces) {
       o.update(bs.x, bs.z, this.pose, this.wind, this.out);
       // The overlays ride the boat: their world matrices must be current to place their labels.
@@ -635,6 +658,9 @@ export class SeaScene {
     this.#spray();
     this.onFrame?.();
   }
+
+  /** The boat as the gust rings want it: where, how it moves, and where the mean wind comes from. */
+  readonly #ringBoat = { east: 0, north: 0, velEast: 0, velNorth: 0, windFrom: 0 };
 
   /** The spray's sources this frame: the player's bow, and the nearest others' on the tiers that have them. */
   readonly #sources: SpraySource[] = Array.from({ length: 4 }, () => ({
