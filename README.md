@@ -51,6 +51,14 @@ The open licence covers the source code only. The following are not covered by i
 
 A fork is welcome to use the code under the AGPL, but must use a different name and its own art.
 
+## Sources
+
+The stars are those of the Bright Star Catalogue, 5th Revised Edition
+(Preliminary Version), by D. Hoffleit and W. H. Warren Jr. (1991),
+Astronomical Data Center, NSSDC/ADC, distributed as catalogue V/50 by the
+Centre de Données astronomiques de Strasbourg. It is kept as published in
+`tools/stars/bsc5/`; it is not covered by this repository's licence.
+
 ## Contributions
 
 Development is public, and bug reports, ideas and discussion are welcome through issues.

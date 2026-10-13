@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The sky's numbers.
+#
+# Where the sun, the moon and the stars stand follows from these and the
+# time alone (internal/sky). The disk is the polar cap of the sky's sphere,
+# with the centre of the disk at the pole.
+sky:
+  # Minutes, 59 of day and 59 of night. Not two hours, which divide the real
+  # day exactly: a player who sails at the same hour every evening would then
+  # see the same part of the day for ever. At 118 minutes each real evening
+  # starts 24 minutes later in the day than the one before, and the same hour
+  # comes round after 59 days.
+  day: 118
+  # Days. The real ratios (Explanatory Supplement to the Astronomical
+  # Almanac, Urban and Seidelmann 2012): the stars turn 366.2422 times in a
+  # year of 365.2422 days, so a night's stars come round in a year; the
+  # moon's month from new to new is 29.530589 days.
+  year: 365.2422
+  month: 29.530589
+  # Degrees to the nautical mile. A degree of height is a cable on the water;
+  # the rim, 4.5 miles out, has the sky of 45° north; and a star whose point
+  # lies inside the disk never sets for anyone on it.
+  scale: 10
+  # Midnight UTC on 1 January 2026, in seconds since 1970. The sky is
+  # counted from one moment in every world, so it does not start again when
+  # a world does. Then it is noon at the centre, with a new moon.
+  epoch: 1767225600
+  sunAtEpoch: 0
+  starsAtEpoch: 0
+  moonAtEpoch: 0
+  # The stars with names: those of the Nautical Almanac's selected stars
+  # that are bright, north of −30° and spread round the sky, with Kochab and
+  # Schedar for the Little Bear and Cassiopeia. Each at its place and
+  # magnitude in the Bright Star Catalogue, 5th revised edition (Hoffleit and
+  # Warren 1991), J2000, by its number there; tools/stars checks them against
+  # it. The first is the Pole Star, α Ursae Minoris, moved the 0.74° from
+  # its catalogue place (declination +89.264°) to the pole itself, so that
+  # it stands still over the centre of the disk.
+  stars:
+    - { name: The Hub Star, number: 424, rightAscension: 37.95292, declination: 90, magnitude: 2.02 }
+    - { name: Kochab, number: 5563, rightAscension: 222.67625, declination: 74.15556, magnitude: 2.08 }
+    - { name: Dubhe, number: 4301, rightAscension: 165.93208, declination: 61.75083, magnitude: 1.79 }
+    - { name: Alkaid, number: 5191, rightAscension: 206.88500, declination: 49.31333, magnitude: 1.86 }
+    - { name: Schedar, number: 168, rightAscension: 10.12708, declination: 56.53722, magnitude: 2.23 }
+    - { name: Mirfak, number: 1017, rightAscension: 51.08083, declination: 49.86111, magnitude: 1.79 }
+    - { name: Capella, number: 1708, rightAscension: 79.17250, declination: 45.99806, magnitude: 0.08 }
+    - { name: Deneb, number: 7924, rightAscension: 310.35792, declination: 45.28028, magnitude: 1.25 }
+    - { name: Vega, number: 7001, rightAscension: 279.23458, declination: 38.78361, magnitude: 0.03 }
+    - { name: Pollux, number: 2990, rightAscension: 116.32875, declination: 28.02611, magnitude: 1.14 }
+    - { name: Alpheratz, number: 15, rightAscension: 2.09708, declination: 29.09056, magnitude: 2.06 }
+    - { name: Arcturus, number: 5340, rightAscension: 213.91542, declination: 19.18250, magnitude: -0.04 }
+    - { name: Aldebaran, number: 1457, rightAscension: 68.98000, declination: 16.50917, magnitude: 0.85 }
+    - { name: Regulus, number: 3982, rightAscension: 152.09292, declination: 11.96722, magnitude: 1.35 }
+    - { name: Altair, number: 7557, rightAscension: 297.69583, declination: 8.86833, magnitude: 0.77 }
+    - { name: Betelgeuse, number: 2061, rightAscension: 88.79292, declination: 7.40694, magnitude: 0.50 }
+    - { name: Procyon, number: 2943, rightAscension: 114.82542, declination: 5.22500, magnitude: 0.38 }
+    - { name: Rigel, number: 1713, rightAscension: 78.63458, declination: -8.20167, magnitude: 0.12 }
+    - { name: Spica, number: 5056, rightAscension: 201.29833, declination: -11.16139, magnitude: 0.98 }
+    - { name: Sirius, number: 2491, rightAscension: 101.28708, declination: -16.71611, magnitude: -1.46 }
+    - { name: Antares, number: 6134, rightAscension: 247.35167, declination: -26.43194, magnitude: 0.96 }
+    - { name: Fomalhaut, number: 8728, rightAscension: 344.41292, declination: -29.62222, magnitude: 1.16 }

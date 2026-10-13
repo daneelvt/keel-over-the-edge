@@ -6,8 +6,9 @@
 // tint per tile, and the calm water's shimmer, small ripples of the tile's
 // own that fade to nothing at its rim. So what is drawn on a tile stays
 // inside it. The water's colour is deep water lightened toward thin crests,
-// the sky by Fresnel, the sun's sharp glint and its wide highlight, and the
-// haze toward the horizon. No water is drawn inside a hull (hulls.ts).
+// the sky by Fresnel, the main light's sharp glint and its wide highlight
+// (the sun's by day, the moon's path by night), and the haze toward the
+// horizon. No water is drawn inside a hull (hulls.ts).
 
 import {
   abs,
@@ -104,7 +105,7 @@ interface WaterInput {
 /** The water's colour (display values), before the tile style and the haze. */
 const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   const N = input.normal;
-  const L = look.sun;
+  const L = look.light;
   const R = reflect(V.negate(), N);
   // A crest is high for its own sea: half the significant height up is a
   // crest in a breeze and in a gale alike.
@@ -129,7 +130,7 @@ const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   const col = mix(body, skyColour(R), clamp(fresnel.mul(0.9), 0, 1));
   const rl = max(dot(R, L), 0);
   return col.add(
-    look.sunColour.mul(pow(rl, 700).mul(6).add(pow(rl, look.broad.x).mul(look.broad.y))),
+    look.lightColour.mul(pow(rl, 700).mul(6).add(pow(rl, look.broad.x).mul(look.broad.y))),
   );
 };
 
@@ -207,7 +208,7 @@ export function tileLook(v: TileVaryings): Node<'vec4'> {
       // The skirt: the dark wall of a step.
       col.assign(
         mix(look.deep.mul(0.75), look.scatter.mul(0.5), 0.2).mul(
-          max(dot(N, look.sun), 0).mul(0.3).add(0.7),
+          max(dot(N, look.light), 0).mul(0.3).add(0.7),
         ),
       );
     });

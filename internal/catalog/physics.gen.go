@@ -4,7 +4,10 @@
 
 package catalog
 
-import "github.com/daneelvt/keel-over-the-edge/internal/physics"
+import (
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/sky"
+)
 
 // PhysicsParams returns a boat's physics values as the physics package's
 // Params.
@@ -120,5 +123,19 @@ func SeaParams(c *Catalog) physics.SeaParams {
 	p.Spreading = float64(c.Weather.Sea.Spreading)
 	p.FetchCap = float64(c.Weather.Sea.FetchCap)
 	p.Cull = float64(c.Weather.Sea.Cull)
+	return p
+}
+
+// SkyParams returns the catalog's sky values as the sky package's Params.
+func SkyParams(c *Catalog) sky.Params {
+	var p sky.Params
+	p.Day = float64(c.Sky.Day)
+	p.Year = float64(c.Sky.Year)
+	p.Month = float64(c.Sky.Month)
+	p.Scale = float64(c.Sky.Scale)
+	p.Epoch = float64(c.Sky.Epoch)
+	p.SunAtEpoch = float64(c.Sky.SunAtEpoch)
+	p.StarsAtEpoch = float64(c.Sky.StarsAtEpoch)
+	p.MoonAtEpoch = float64(c.Sky.MoonAtEpoch)
 	return p
 }

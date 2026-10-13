@@ -127,11 +127,11 @@ jobs:
       - run: go test -race -short -timeout 20m ./...
       - name: Every test at its full length, and those the short run skips, without the race detector
         run: go test ./...
-      - name: The physics and simulation tests again, built for amd64 with fused multiply-add available
+      - name: The physics, simulation and sky tests again, built for amd64 with fused multiply-add available
         if: runner.arch == 'X64'
         env:
           GOAMD64: v3
-        run: go test -count=1 ./internal/physics ./internal/sim
+        run: go test -count=1 ./internal/physics ./internal/sim ./internal/sky
       - name: The tick and the physics workers, timed (a smoke test; the numbers are in the log)
         run: go test -run '^$' -bench 'Tick|Workers' -benchtime 100x ./internal/sim
       - name: Fuzz the catalog decoder

@@ -4,7 +4,8 @@
 // The Jolly boat: a single-handed dinghy built by a shipwright of the
 // period. A clinker-planked hull of varnished timber with a laid deck and a
 // cockpit, a varnished spruce mast and boom, a cream flax sail, a
-// daggerboard and a rudder with its tiller, and bronze fittings.
+// daggerboard and a rudder with its tiller, bronze fittings, and at the
+// masthead a brass lantern with the pennant's staff above it.
 //
 // Every dimension the physics knows comes from the catalog, so what is
 // drawn is what is sailed: length and beam, the mast's place, the boom's
@@ -14,7 +15,7 @@
 //
 // It builds the boat twice from the same lines: in full, and the far model,
 // the boat as seen from afar among many others, with few segments, no laps,
-// telltales, pennant or fittings, and a plain deck. The catalog's art.model
+// telltales, pennant, lantern or fittings, and a plain deck. The catalog's art.model
 // and art.far name them.
 //
 //   node art/boats/jolly-boat/build.ts   (from the repository root; npm run art in client/)
@@ -46,7 +47,7 @@ interface Detail {
   /** The sail's rows and columns. */
   sailRows: number;
   sailCols: number;
-  /** Telltales, pennant and the bronze fittings. */
+  /** Telltales, pennant, lantern and the bronze fittings. */
   small: boolean;
 }
 
@@ -195,6 +196,8 @@ const materials: MaterialDef[] = [
     doubleSided: true,
   },
   { name: 'wool', color: [1, 1, 1], roughness: 0.9, metalness: 0, doubleSided: true },
+  { name: 'brass', color: srgb(0.8, 0.62, 0.26), roughness: 0.3, metalness: 0.9 },
+  { name: 'glass', color: [1, 1, 1], roughness: 0.15, metalness: 0 },
 ];
 
 /** A fixed pseudo-random number in [0, 1) for an integer. */
@@ -503,14 +506,117 @@ function sail(): MeshBuilder {
 const chordAt = (v: number): number =>
   rig.foot * (1 - v) + ROACH * Math.sin(Math.PI * v) * (1 - v) ** 0.3;
 
+// --- The lantern -------------------------------------------------------------
+
+/**
+ * A sidelight's arc, in degrees: from right ahead to 22.5° abaft the beam
+ * on its own side, green to starboard and red to port. The sternlight is
+ * white over what is left, the 135° astern. (International Regulations for
+ * Preventing Collisions at Sea, Rule 21.) A sailing vessel of less than
+ * 20 m may carry the three in one lantern at the masthead (Rule 25(b)).
+ */
+const SIDELIGHT_ARC = 112.5;
+
+/** The lantern's glass: its radius and height, in metres, and its panes round. */
+const GLASS_RADIUS = 0.036;
+const GLASS_HEIGHT = 0.07;
+const GLASS_PANES = 32;
+/** The glass by day, unlit: each pane the dull colour of its light. */
+const GLASS_RED = srgb(0.5, 0.11, 0.09);
+const GLASS_GREEN = srgb(0.09, 0.38, 0.2);
+const GLASS_CLEAR = srgb(0.78, 0.77, 0.7);
+/** The lantern's base stands this far above the masthead, and its glass's middle this far. */
+const LANTERN_BASE = 0.02;
+const LANTERN_Y = LANTERN_BASE + GLASS_HEIGHT / 2;
+/** The pennant's staff, above the lantern's cap: its top, above the masthead. */
+const STAFF_TOP = LANTERN_Y + GLASS_HEIGHT / 2 + 0.2;
+
+/** The level direction a degrees from right ahead toward starboard. */
+const bearingDir = (a: number): Vec3 => {
+  const r = (a * Math.PI) / 180;
+  return [Math.sin(r), 0, -Math.cos(r)];
+};
+
+/**
+ * The tricolour lantern, about the middle of its glass: a brass base on the
+ * masthead, a ring of glass in three colours, each over its light's arc,
+ * with a brass bar where two meet, a brass cap, and the pennant's staff.
+ */
+function lantern(): { brass: MeshBuilder; glass: MeshBuilder } {
+  const glass = new MeshBuilder('glass');
+  const h = GLASS_HEIGHT / 2;
+  for (let i = 0; i < GLASS_PANES; i++) {
+    const a0 = (i / GLASS_PANES) * 360;
+    const a1 = ((i + 1) / GLASS_PANES) * 360;
+    const mid = (a0 + a1) / 2;
+    const colour =
+      mid < SIDELIGHT_ARC ? GLASS_GREEN : mid > 360 - SIDELIGHT_ARC ? GLASS_RED : GLASS_CLEAR;
+    const out = bearingDir(mid);
+    const corners = [a0, a1].flatMap((a) => {
+      const d = bearingDir(a);
+      return [-h, h].map((y) => {
+        const k = glass.vertex([d[0] * GLASS_RADIUS, y, d[2] * GLASS_RADIUS], colour);
+        glass.normal(k, d);
+        return k;
+      });
+    }) as [number, number, number, number];
+    glass.triFacing(corners[0], corners[1], corners[2], out);
+    glass.triFacing(corners[2], corners[1], corners[3], out);
+  }
+  const brass = new MeshBuilder('brass');
+  // The base, down to the masthead.
+  brass.tube(
+    [
+      [0, -h - LANTERN_BASE - 0.01, 0],
+      [0, -h - 0.012, 0],
+      [0, -h, 0],
+    ],
+    [0.03, 0.046, 0.046],
+    12,
+  );
+  // The cap: a rim over the glass, then a cone.
+  brass.tube(
+    [
+      [0, h, 0],
+      [0, h + 0.01, 0],
+      [0, h + 0.045, 0],
+    ],
+    [0.05, 0.046, 0.012],
+    12,
+  );
+  // A bar where two colours meet.
+  for (const a of [0, SIDELIGHT_ARC, 360 - SIDELIGHT_ARC]) {
+    const d = bearingDir(a);
+    const r = GLASS_RADIUS + 0.003;
+    brass.tube(
+      [
+        [d[0] * r, -h, d[2] * r],
+        [d[0] * r, h, d[2] * r],
+      ],
+      [0.004],
+      4,
+    );
+  }
+  // The pennant's staff.
+  brass.tube(
+    [
+      [0, h + 0.04, 0],
+      [0, STAFF_TOP - LANTERN_Y, 0],
+    ],
+    [0.007, 0.005],
+    6,
+  );
+  return { brass, glass };
+}
+
 /** The pennant's length and its width at the staff, in metres. */
 const PENNANT_LENGTH = 0.45;
 const PENNANT_WIDTH = 0.07;
 const PENNANT_SEGMENTS = 16;
 
 /**
- * The pennant at the masthead: a narrow tapered strip, at rest streaming
- * aft, level, from its staff. TEXCOORD_1.x is the fraction along it, from
+ * The pennant, at the top of its staff above the lantern: a narrow tapered
+ * strip, at rest streaming aft, level, from the staff. TEXCOORD_1.x is the fraction along it, from
  * which the client streams it downwind of the apparent wind and flutters it.
  */
 function pennant(): MeshBuilder {
@@ -881,10 +987,18 @@ function model(): NodeDef[] {
       },
       {
         name: 'pennant',
-        translation: [0, MAST_TOP, MAST_Z],
+        translation: [0, MAST_TOP + STAFF_TOP - PENNANT_WIDTH / 2, MAST_Z],
         primitives: [pennant().primitive({ uvs2: true })],
       },
     );
+    // The lantern's node is named as the light it shows, and is where the
+    // light is seen from.
+    const l = lantern();
+    nodes.push({
+      name: 'tricolour',
+      translation: [0, MAST_TOP + LANTERN_Y, MAST_Z],
+      primitives: [l.brass.primitive(), l.glass.primitive({ colors: true })],
+    });
   }
   nodes.push(
     {

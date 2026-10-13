@@ -9,6 +9,13 @@
  */
 export type Id = string;
 /**
+ * A navigation light a boat shows from sunset to sunrise, by the arc it shows over (International Regulations for Preventing Collisions at Sea, Rule 21): a red sidelight to port and a green to starboard, each from right ahead to 22.5° abaft the beam; a white sternlight over the 135° astern; or the three combined in one lantern at the masthead, which Rule 25(b) allows a sailing vessel of less than 20 m.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Light".
+ */
+export type Light = "tricolour" | "port" | "starboard" | "stern";
+/**
  * Path of an art file, relative to the repository's art/ folder.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -33,6 +40,7 @@ export interface Catalog {
    */
   sailors: [Sailor, ...Sailor[]];
   weather: Weather;
+  sky: Sky;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -60,6 +68,12 @@ export interface Boat {
    * Greatest width of the hull, in metres.
    */
   beam: number;
+  /**
+   * The navigation lights the boat shows by night. Together their arcs make the full circle once.
+   *
+   * @minItems 1
+   */
+  lights: [Light, ...Light[]];
   physics: BoatPhysics;
   art: BoatArt;
 }
@@ -579,11 +593,11 @@ export interface PhysicsRates {
  */
 export interface BoatArt {
   /**
-   * The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor.
+   * The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, and a node for each of the boat's lights, named as the light, where its lantern is.
    */
   model: string;
   /**
-   * The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales and pennant, with few segments.
+   * The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.
    */
   far: string;
 }
@@ -664,6 +678,81 @@ export interface WeatherSea {
    */
   cull: number;
 }
+/**
+ * The sky's numbers: the lengths of its day, year and month, its scale, the moment it is counted from, and the stars with names. Where each body stands follows from these and the time alone.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Sky".
+ */
+export interface Sky {
+  /**
+   * The day, sunrise to sunrise, in minutes.
+   */
+  day: number;
+  /**
+   * The year, in days: the stars gain one turn on the sun in it.
+   */
+  year: number;
+  /**
+   * The moon's month, new moon to new moon, in days.
+   */
+  month: number;
+  /**
+   * Degrees of the sky to a nautical mile on the water: a boat that many miles nearer a star's point sees it one degree higher.
+   */
+  scale: number;
+  /**
+   * Sky time zero, in seconds of UTC since 1970: the same in every world.
+   */
+  epoch: number;
+  /**
+   * The sun's angle past noon at the centre of the disk, at the epoch, in degrees.
+   */
+  sunAtEpoch: number;
+  /**
+   * The stars' turn beyond the sun's at the epoch, in degrees.
+   */
+  starsAtEpoch: number;
+  /**
+   * The moon's age at the epoch, in degrees past new.
+   */
+  moonAtEpoch: number;
+  /**
+   * The stars with names, the brightest of the navigator's.
+   *
+   * @minItems 1
+   * @maxItems 64
+   */
+  stars: [NamedStar, ...NamedStar[]];
+}
+/**
+ * A star with a name, at its place in the Bright Star Catalogue (J2000).
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NamedStar".
+ */
+export interface NamedStar {
+  /**
+   * The name shown to players.
+   */
+  name: string;
+  /**
+   * Its number in the Bright Star Catalogue (HR).
+   */
+  number: number;
+  /**
+   * Right ascension, in degrees.
+   */
+  rightAscension: number;
+  /**
+   * Declination, in degrees. 90 is the pole itself, which the stars turn about.
+   */
+  declination: number;
+  /**
+   * Visual magnitude.
+   */
+  magnitude: number;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '735ee7ff0e556ed0';
+export const CATALOG_VERSION = '26c5f57fc40b9846';

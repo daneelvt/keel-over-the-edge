@@ -6,7 +6,7 @@
 import data from './catalog.gen.json';
 import type { Catalog } from './types.gen';
 
-export type { Boat, Catalog } from './types.gen';
+export type { Boat, Catalog, Light, NamedStar, Sky } from './types.gen';
 export { CATALOG_VERSION } from './types.gen';
 
 export const catalog = data as Catalog;

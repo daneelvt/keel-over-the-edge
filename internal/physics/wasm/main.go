@@ -2,8 +2,8 @@
 
 //go:build tinygo.wasm
 
-// Command wasm is the physics package as a WebAssembly module for the
-// client, built by go run ./tools/physics with TinyGo's wasm-unknown target:
+// Command wasm is the physics package, and the rule of the sky with it, as
+// a WebAssembly module for the client, built by go run ./tools/physics with TinyGo's wasm-unknown target:
 // no imports, no scheduler and an allocator that never frees, which is safe
 // because a step allocates nothing.
 //
@@ -18,6 +18,11 @@
 // A step sails in the window seaUse names, at the tick seaAt set. Drawing
 // has a time of its own, seaDrawAt, so that the sea between two ticks can be
 // asked about without disturbing the steps.
+//
+// The sky is asked about once a frame: the client writes skyParams and
+// calls skyPrepare once, then skyAt with sky time and the boat's place, and
+// reads the sky record; skyStar answers for one star into the skyBody
+// record.
 package main
 
 import (
@@ -25,6 +30,7 @@ import (
 	"unsafe"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 )
 
 var (
@@ -38,6 +44,11 @@ var (
 	seaParams physics.SeaParams
 	waves     physics.Waves
 	wave      physics.EffectiveWave
+
+	skyParams   sky.Params
+	skyPrepared sky.Prepared
+	skyNow      sky.Sky
+	skyBody     sky.Body
 )
 
 const (
@@ -271,6 +282,67 @@ func seaSample(s, n uint32) {
 		p := physics.SeaSample(&sea, samplePoints[2*i], samplePoints[2*i+1])
 		sampleValues[4*i], sampleValues[4*i+1], sampleValues[4*i+2], sampleValues[4*i+3] = p.Height, p.East, p.North, p.Hs
 	}
+}
+
+// skyParams is the sky's numbers: sky.ParamsSize float64s, in the
+// catalog's order.
+//
+//go:wasmexport skyParams
+func skyParamsAddr() uint32 { return addr(unsafe.Pointer(&skyParams)) }
+
+// skyPrepare readies the sky from skyParams. Call it after writing them
+// and before asking about the sky.
+//
+//go:wasmexport skyPrepare
+func skyPrepare() { sky.Prepare(&skyParams, &skyPrepared) }
+
+// sky is the record skyAt writes: sky.SkySize float64s, the sun's Body,
+// the moon's, the moon's lit share and the stars' matrix.
+//
+//go:wasmexport sky
+func skyAddr() uint32 { return addr(unsafe.Pointer(&skyNow)) }
+
+// skyBody is the record skyStar writes: sky.BodySize float64s.
+//
+//go:wasmexport skyBody
+func skyBodyAddr() uint32 { return addr(unsafe.Pointer(&skyBody)) }
+
+// skySize is how many float64s the sky record holds, which the client
+// compares with its own before reading it.
+//
+//go:wasmexport skySize
+func skySize() uint32 { return uint32(unsafe.Sizeof(skyNow) / 8) }
+
+// skyTime is sky time, in whole microseconds, at a world's time: the
+// world's epoch in microseconds of UTC since 1970, and the microseconds
+// the world has run since.
+//
+//go:wasmexport skyTime
+func skyTime(worldEpoch, worldTime float64) float64 {
+	return sky.Time(&skyPrepared, worldEpoch, worldTime)
+}
+
+// skyAt writes to the sky record the sky at sky time t, in microseconds,
+// from the place east and north of the centre, in metres.
+//
+//go:wasmexport skyAt
+func skyAt(t, east, north float64) { sky.At(&skyPrepared, t, east, north, &skyNow) }
+
+// skyStar writes to skyBody where the star of a right ascension and
+// declination, in degrees, stands at sky time t from a place.
+//
+//go:wasmexport skyStar
+func skyStar(t, east, north, ra, dec float64) {
+	sky.Star(&skyPrepared, t, east, north, ra, dec, &skyBody)
+}
+
+// skyVector writes to skyBody's first three floats the catalogue vector of
+// a right ascension and declination, in degrees: the vector the stars'
+// matrix turns.
+//
+//go:wasmexport skyVector
+func skyVector(ra, dec float64) {
+	skyBody.East, skyBody.North, skyBody.Up = sky.Vector(ra, dec)
 }
 
 //go:wasmexport fnArgs

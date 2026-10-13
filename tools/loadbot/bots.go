@@ -78,6 +78,9 @@ type Player struct {
 	// Welcome was to the same boat; and how far the boat was from where
 	// it had been, m.
 	Returns []Return
+	// The world's epoch as the last Welcome told it, in microseconds of UTC
+	// since 1970; 0 if none came.
+	EpochUs int64
 }
 
 // Return is a player's coming back after the connection ended.
@@ -187,6 +190,7 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *phy
 		last.at, last.x, last.y = now, st.X, st.Y
 		if n := len(s.Welcomes); n > 0 {
 			last.boat = s.Welcomes[n-1].Boat
+			p.EpochUs = s.Welcomes[n-1].EpochUs
 		}
 	}
 	for ctx.Err() == nil && time.Until(end) > 0 {

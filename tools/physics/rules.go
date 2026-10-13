@@ -15,12 +15,18 @@ import (
 	"strings"
 )
 
+const physicsPkg = "github.com/daneelvt/keel-over-the-edge/internal/physics"
+
 // allowedImports are all the physics package may import.
 var allowedImports = []string{"math", "math/bits"}
 
+// skyImports are all the sky package may import: it is held to the physics
+// package's rules, and takes its sine, cosine and arctangent from it.
+var skyImports = []string{"math", physicsPkg}
+
 // wasmImports are all the module's entry point may import; it is not held to
-// the package's other rules.
-var wasmImports = []string{"runtime", "unsafe", "github.com/daneelvt/keel-over-the-edge/internal/physics"}
+// the packages' other rules.
+var wasmImports = []string{"runtime", "unsafe", physicsPkg, "github.com/daneelvt/keel-over-the-edge/internal/sky"}
 
 // exactMath are the functions of package math the physics package may call:
 // operations IEEE 754 rounds exactly, and functions that only move bits.
@@ -35,10 +41,10 @@ var bannedBuiltins = []string{"append", "make", "new", "panic", "recover", "prin
 // float64ToInt is the one function allowed to convert floats to integers.
 const float64ToInt = "toInt32"
 
-// checkRules checks the Go files of the package in dir (tests aside). For a
-// package held only to an import list, imports is that list and the other
-// rules apply only when it is allowedImports.
-func checkRules(dir string, imports []string) ([]string, error) {
+// checkRules checks the Go files of the package in dir (tests aside): its
+// imports against the list, and, when strict, every other rule. The
+// module's entry point is held only to its import list.
+func checkRules(dir string, imports []string, strict bool) ([]string, error) {
 	fset := token.NewFileSet()
 	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	if err != nil {
@@ -68,7 +74,7 @@ func checkRules(dir string, imports []string) ([]string, error) {
 			}
 		}
 	}
-	if !slices.Equal(imports, allowedImports) {
+	if !strict {
 		return c.problems, nil
 	}
 

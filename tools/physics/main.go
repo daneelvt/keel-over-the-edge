@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Command physics builds the physics package into the client's WebAssembly
-// module and checks the package's rules, and that the simulation that runs it
-// on the server compiles to no fused multiply-add either.
+// Command physics builds the physics package, and the sky package with it,
+// into the client's WebAssembly module and checks the packages' rules, and
+// that the simulation that runs the physics on the server compiles to no
+// fused multiply-add either.
 //
 //	go run ./tools/physics          write the layout files and build client/src/predict/physics.wasm
 //	go run ./tools/physics -check   check the rules, the layout files and the module, writing nothing
@@ -22,6 +23,9 @@ import (
 
 const (
 	physicsDir = "internal/physics"
+	// skyDir is the rule of the sky, which the server and the module both
+	// run: it is held to the physics package's rules.
+	skyDir = "internal/sky"
 	// simPkg is the simulation, which runs the physics on the server: it
 	// does no float arithmetic of its own, and the disassembly checks it
 	// fuses none either.
@@ -85,17 +89,22 @@ func runCheck(ctx context.Context) error {
 			problems = append(problems, path+" is out of date: run go run ./tools/physics")
 		}
 	}
-	found, err := checkRules(physicsDir, allowedImports)
+	found, err := checkRules(physicsDir, allowedImports, true)
 	if err != nil {
 		return err
 	}
 	problems = append(problems, found...)
-	found, err = checkRules(wasmPkg, wasmImports)
+	found, err = checkRules(skyDir, skyImports, true)
 	if err != nil {
 		return err
 	}
 	problems = append(problems, found...)
-	for _, pkg := range []string{"./" + physicsDir, simPkg} {
+	found, err = checkRules(wasmPkg, wasmImports, false)
+	if err != nil {
+		return err
+	}
+	problems = append(problems, found...)
+	for _, pkg := range []string{"./" + physicsDir, "./" + skyDir, simPkg} {
 		found, err = checkFused(ctx, pkg)
 		if err != nil {
 			return err
