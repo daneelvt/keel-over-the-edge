@@ -240,7 +240,8 @@ func TestQueue(t *testing.T) {
 
 // TestBytes measures what a player receives: alone, with 10 boats near,
 // 10 far, and 64 near, without lag and at 100 ms each way with 2% loss over
-// three seeds.
+// three seeds; and alone and with 10 near in a trade spell, whose sea
+// changes every second.
 func TestBytes(t *testing.T) {
 	d := 30 * time.Second
 	seeds := uint64(3)
@@ -251,7 +252,11 @@ func TestBytes(t *testing.T) {
 		name   string
 		n      int
 		radius float64
-	}{{"alone", 0, 0}, {"10 near", 10, 150}, {"10 far", 10, 500}, {"64 near", 64, 200}} {
+		gusty  bool
+	}{
+		{"alone", 0, 0, false}, {"10 near", 10, 150, false}, {"10 far", 10, 500, false}, {"64 near", 64, 200, false},
+		{"alone, in a trade spell", 0, 0, true}, {"10 near, in a trade spell", 10, 150, true},
+	} {
 		for _, lag := range []client.Lag{{}, {Delay: 100 * time.Millisecond, Loss: 0.02}} {
 			var all client.Stats
 			n := uint64(1)
@@ -260,7 +265,7 @@ func TestBytes(t *testing.T) {
 			}
 			for seed := range n {
 				lag.Seed = seed + 1
-				all = addStats(all, sailCrowd(t, crowd.n, crowd.radius, lag, d))
+				all = addStats(all, sailCrowd(t, crowd.n, crowd.radius, crowd.gusty, lag, d))
 			}
 			secs := d.Seconds() * float64(n)
 			t.Logf("%s, %s: %.0f B/s payload, %.0f B/s with WebSocket framing, %.0f B/s up; %.1f boats in view, %.1f near; %.2f entries a snapshot; %d dropped, %d resyncs, %d corrections over the snap thresholds",
@@ -305,11 +310,16 @@ func addStats(a, b client.Stats) client.Stats {
 }
 
 // sailCrowd sails a player among n scripted-free boats in a ring of radius
-// about where it starts, which sail in circles.
-func sailCrowd(t *testing.T, n int, radius float64, lag client.Lag, d time.Duration) client.Stats {
+// about where it starts, which sail in circles: in the server's steady
+// wind, or, gusty, in a trade spell.
+func sailCrowd(t *testing.T, n int, radius float64, gusty bool, lag client.Lag, d time.Duration) client.Stats {
 	var stats client.Stats
 	synctest.Test(t, func(t *testing.T) {
-		srv := NewServer(t, Config{Capacity: 128})
+		cfg := Config{Capacity: 128}
+		if gusty {
+			cfg.Weather = inTrade(t)
+		}
+		srv := NewServer(t, cfg)
 		token, _ := srv.Guest("Ann")
 		o := DialOptions{Cookie: token}
 		if lag.Delay > 0 {

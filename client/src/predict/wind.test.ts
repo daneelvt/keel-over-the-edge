@@ -91,6 +91,35 @@ describe('the wind in the module', () => {
   });
 });
 
+describe('the wind at the boat', () => {
+  test('a hundred thousand calls neither allocate nor grow the memory', () => {
+    const S = RECORDS.state;
+    for (const name of ['trade', 'a change']) {
+      const c = wind.cases.find((k) => k.name === name);
+      if (c === undefined) {
+        throw new Error(`wind.json has no case ${name}`);
+      }
+      loadWindCase(physics, c);
+      const state = physics.records.state;
+      const bytes = physics.memoryBytes;
+      const allocations = physics.allocations;
+      const calls = 100_000;
+      const start = performance.now();
+      for (let i = 0; i < calls; i++) {
+        state[S.x] = (c.origin[0] ?? 0) + (i % 97);
+        state[S.y] = (c.origin[1] ?? 0) - (i % 89);
+        physics.windAt(c.tick + i);
+      }
+      const each = ((performance.now() - start) / calls) * 1000;
+      expect(physics.allocations).toBe(allocations);
+      expect(physics.memoryBytes).toBe(bytes);
+      // A call a step: it must cost little beside the step itself.
+      expect(each).toBeLessThan(20);
+      process.stdout.write(`wind: windAt in ${name} takes ${each.toFixed(3)} µs under Node\n`);
+    }
+  });
+});
+
 describe('the spells a client holds', () => {
   test('are those it is sent, the latest replacing what it held', () => {
     const spells = new Spells(physics);

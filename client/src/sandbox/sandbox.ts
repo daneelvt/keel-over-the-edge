@@ -183,6 +183,7 @@ export class Sandbox implements BoatDriver {
         return self.#set;
       },
     };
+    this.#startWeather();
     this.reset();
   }
 
@@ -196,9 +197,8 @@ export class Sandbox implements BoatDriver {
     return this.#physics.records;
   }
 
-  /** Back to the start, at rest, in the start's weather, and a new recording. */
+  /** Back to the start, at rest, in the weather as it is, and a new recording. */
   reset(): void {
-    this.#startWeather();
     const r = this.#physics.records;
     r.state.fill(0);
     r.out.fill(0);

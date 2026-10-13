@@ -86,9 +86,28 @@ var gale = weather.Steady(34*1852.0/3600, 3.9)
 // sea, or the world's own if wind is nil.
 func sailIn(t *testing.T, wind *bus.Weather, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
 	t.Helper()
+	return sailWith(t, nil, wind, lag, d, trace)
+}
+
+// inTrade is the catalog's weather two hours into its sequence's first
+// spell, a trade spell: gusts, shifts, and a sea that changes every second.
+// It reads the time, so it is called inside a test's bubble.
+func inTrade(t *testing.T) *weather.Timeline {
+	t.Helper()
+	return sequenceFrom(t, loop.TickAt(time.Now(), Epoch)-2*3600*physics.StepsPerSecond)
+}
+
+// sailWith is sailIn in the weather a timeline gives, or the server's
+// steady one if it is nil.
+func sailWith(t *testing.T, timeline func(*testing.T) *weather.Timeline, wind *bus.Weather, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
+	t.Helper()
 	var stats client.Stats
 	synctest.Test(t, func(t *testing.T) {
-		srv := NewServer(t, Config{})
+		var cfg Config
+		if timeline != nil {
+			cfg.Weather = timeline(t)
+		}
+		srv := NewServer(t, cfg)
 		if wind != nil {
 			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWeather, Weather: *wind}); err != nil {
 				t.Fatal(err)
@@ -234,7 +253,9 @@ func TestSailSlowFrames(t *testing.T) {
 }
 
 // TestSailLoss: 100 ms each way and 2% of packets lost each way, over ten
-// seeds: corrections come, but none over the snap thresholds.
+// seeds: corrections come, but none over the snap thresholds. And over
+// three more in a trade spell's gusts and shifts: the wind is computed, not
+// sent, so loss costs no more there.
 func TestSailLoss(t *testing.T) {
 	d := sailLength()
 	if testing.Short() {
@@ -258,6 +279,24 @@ func TestSailLoss(t *testing.T) {
 		all.BytesOut += s.BytesOut
 	}
 	report(t, "ten seeds", all, 10*d)
+
+	var gusty client.Stats
+	for seed := range uint64(3) {
+		s := sailWith(t, inTrade, nil, client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: seed + 1}, d, nil)
+		if s.Over > 0 {
+			t.Errorf("in a trade spell, seed %d: %d corrections over the snap thresholds", seed+1, s.Over)
+		}
+		gusty.Snapshots += s.Snapshots
+		gusty.Corrections += s.Corrections
+		gusty.Sizes = append(gusty.Sizes, s.Sizes...)
+		gusty.Resets += s.Resets
+		gusty.Stale += s.Stale
+		gusty.MaxAhead = max(gusty.MaxAhead, s.MaxAhead)
+		gusty.MaxLate = max(gusty.MaxLate, s.MaxLate)
+		gusty.BytesIn += s.BytesIn
+		gusty.BytesOut += s.BytesOut
+	}
+	report(t, "three seeds in a trade spell", gusty, 3*d)
 }
 
 // TestTraces records, with -update, the traces the TypeScript tests replay:

@@ -123,6 +123,8 @@ export class SeaScene {
   readonly pose: BoatPose = newPose();
   out: Float64Array = new Float64Array(SIZES.out);
   wind: Readonly<BoatWind> = newBoatWind();
+  /** The sea under the boat: the significant height of its waves, in metres, and its whitecaps, 0 to 1. */
+  readonly sea = { height: 0, whitecaps: 0 };
   /** World time, seconds, and how much it moved since the last frame; and in ticks, for the sea. */
   time = 0;
   timeStep = 0;
@@ -737,9 +739,16 @@ export class SeaScene {
       pts[(n + c) * 2] = cam.x + o.x + Math.cos(a) * r;
       pts[(n + c) * 2 + 1] = -cam.z + o.y + Math.sin(a) * r;
     }
+    if (src === null || slot < 0) {
+      this.sea.height = 0;
+      this.sea.whitecaps = 0;
+    }
     if (src !== null && slot >= 0 && dt > 0) {
       src.physics.seaDrawAt(this.ticks);
       const sea = src.physics.seaSample(slot, pts.subarray(0, 2 * (n + crests)));
+      // The first point is the player's bow.
+      this.sea.height = sea[3] ?? 0;
+      this.sea.whitecaps = this.ocean.under.foam.whitecaps;
       for (let k = 0; k < n; k++) {
         (sources[k] as SpraySource).sea = sea[k * 4] ?? 0;
       }
