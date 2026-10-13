@@ -71,8 +71,8 @@ jobs:
       # mode's limits.
       matrix:
         include:
-          - { project: webgl2, tests: short, shard: 1, shards: 2, specs: 'sea,sail,fleet,lag' }
-          - { project: webgl2, tests: short, shard: 2, shards: 2, specs: 'sea,sail,fleet,lag' }
+          - { project: webgl2, tests: short, shard: 1, shards: 2, specs: 'sea,sail,fleet,lag,start,together' }
+          - { project: webgl2, tests: short, shard: 2, shards: 2, specs: 'sea,sail,fleet,lag,start,together' }
           - { project: webgpu, tests: short, shard: 1, shards: 2, specs: 'sea,fleet' }
           - { project: webgpu, tests: short, shard: 2, shards: 2, specs: 'sea,fleet' }
           - { project: webgl2, tests: long, shard: 1, shards: 1, specs: '' }
