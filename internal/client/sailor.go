@@ -115,10 +115,12 @@ type Sailor struct {
 // Place is a place in the queue, and how many waited.
 type Place struct{ Position, Waiting uint32 }
 
-// WelcomeSeen is a Welcome's boat.
+// WelcomeSeen is a Welcome's boat, and the world's epoch it told: the
+// moment world time counts from, in microseconds of UTC since 1970.
 type WelcomeSeen struct {
 	Boat     uint64
 	Rejoined bool
+	EpochUs  int64
 }
 
 // MSeen is how far ahead the sailor ran, from when.
@@ -222,7 +224,7 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 				}
 			}
 			if w := ev.Welcome; w != nil {
-				s.Welcomes = append(s.Welcomes, WelcomeSeen{Boat: w.GetBoat(), Rejoined: w.GetRejoined()})
+				s.Welcomes = append(s.Welcomes, WelcomeSeen{Boat: w.GetBoat(), Rejoined: w.GetRejoined(), EpochUs: w.GetEpochUs()})
 				s.fresh = true
 				// A snapshot still waiting for a frame is the last
 				// connection's: its controls are not this boat's.

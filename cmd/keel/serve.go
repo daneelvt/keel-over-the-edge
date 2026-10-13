@@ -362,7 +362,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	tickLoop := loop.New(lcfg)
 	game := edge.New(edge.Config{
-		Bus: b, World: store.AccountID(sailed.ID).String(), Clock: tickLoop,
+		Bus: b, World: store.AccountID(sailed.ID).String(), Epoch: epoch, Clock: tickLoop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
 	})

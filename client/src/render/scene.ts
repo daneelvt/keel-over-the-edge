@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The scene at sea: an open sea under a fair sky, the player's boat on it as
-// the physics sails it, the other boats in view, the chase camera, and the
-// beginners' overlays. Each
+// The scene at sea: an open sea under the sky of the hour, the player's
+// boat on it as the physics sails it, the other boats in view with their
+// lanterns, the stars, the chase camera, and the beginners' overlays. Each
 // drawn frame, whatever drives the boat (the game's tick) first sets the
 // pose to draw, the latest step's Out and world time; the scene then
 // follows the boat with the floating origin, the tile field and the camera,
-// and draws it all at that time.
+// asks the physics module where the sun, the moon and the stars stand from
+// the boat at that time, lights everything by the hour, and draws it.
 
 import { Vector3 } from 'three';
 import { fog, rangeFogFactor } from 'three/tsl';
@@ -18,10 +19,15 @@ import { beaufort, KNOT, SPRAY } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
 import { type BoatPose, newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
+import { writeSkyParams } from '../predict/params.gen';
+import { BODY, type Physics, SKY } from '../predict/physics';
+import { SkyTime } from '../sky/skytime';
+import starsUrl from '../sky/stars.bin?url';
 import { Boat } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { FleetView } from './fleet';
+import { Lanterns, lanternLit } from './lanterns';
 import { domeCentre } from './materials';
 import { Overlays } from './overlays';
 import {
@@ -43,6 +49,7 @@ import { Shadows } from './shadows';
 import { look, Sky, toLinear } from './sky';
 import { type CrestSample, SprayDrops, type SpraySource, SprayView } from './spray';
 import { Stage } from './stage';
+import { FEW_STARS, Stars } from './stars';
 import { type FrameStats, Stats, WINDOW } from './stats';
 
 /** For this long after the scene starts, the windows adaptive quality judges are short: the first seconds are the benchmark. */
@@ -92,6 +99,18 @@ export class SeaScene {
   readonly sprayView = new SprayView();
   /** Whether the spray is hidden (the tests). */
   sprayHidden = false;
+  readonly stars = new Stars();
+  readonly lanterns = new Lanterns();
+  /** Sky time, once the scene knows the world's epoch; and the module that says where everything stands. */
+  skyTime: SkyTime | null = null;
+  skyPhysics: Physics | null = null;
+  /** The module's sky record at the boat, as last drawn, and the sky time it is for. */
+  readonly skyRecord = new Float64Array(SKY.size);
+  skyAt = 0;
+  /** Draws the stars and the lanterns; the tests turn them off to see the rest. */
+  drawSky = true;
+  /** Holds the sky as it was last drawn, wherever the boat goes (the tests). */
+  holdSky = false;
 
   /** What to draw: the boat between its last two steps, the latest step's Out, the wind. */
   readonly pose: BoatPose = newPose();
@@ -159,20 +178,71 @@ export class SeaScene {
     this.stats.onWindow = (now, st) => this.#window(now, st);
     const scene = this.stage.scene;
     this.sky = new Sky(scene);
-    this.shadows = new Shadows(this.sky.sunLight);
+    this.shadows = new Shadows(this.sky.light);
     this.ocean = new Ocean(scene);
     scene.add(this.sprayView.mesh);
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
     scene.add(this.fleet.root);
+    scene.add(this.stars.mesh, this.lanterns.mesh);
+    const label = document.createElement('span');
+    label.className = 'star-label';
+    container.append(label);
+    this.stars.attachLabel(label);
     // Lit materials blend toward the horizon's colour with distance, as the sea does.
     scene.fogNode = fog(toLinear(look.skyHorizon), rangeFogFactor(look.hazeNear, look.hazeFar));
   }
 
   async start(): Promise<void> {
+    const table = fetch(starsUrl).then((r) => {
+      if (!r.ok) {
+        throw new Error(`the stars' table: ${r.url} answered ${r.status}`);
+      }
+      return r.arrayBuffer();
+    });
     await this.stage.start();
     this.placeCamera(CAMERA_PRESETS.chase as CameraView);
-    await this.loadBoat();
+    const [, stars] = await Promise.all([this.loadBoat(), table]);
+    this.stars.load(stars, catalog.sky.stars);
+    // A device in WebGPU's compatibility mode draws the brighter stars only.
+    if (this.stage.gfx?.compat === true) {
+      this.stars.setCount(this.stars.brighterThan(FEW_STARS));
+    }
+  }
+
+  /**
+   * Lets the sky follow the rule: the physics module to ask, and the world's
+   * epoch, in microseconds of UTC since 1970, from which with world time it
+   * tells sky time. Called again with another epoch, the sky moves to it.
+   */
+  useSky(physics: Physics, epochUs: number): void {
+    if (this.skyPhysics !== physics) {
+      writeSkyParams(physics.skyParams, catalog.sky);
+      physics.prepareSky();
+      this.skyPhysics = physics;
+    }
+    if (this.skyTime === null) {
+      this.skyTime = new SkyTime((e, w) => physics.skyTime(e, w), epochUs);
+    } else {
+      this.skyTime.epochUs = epochUs;
+    }
+  }
+
+  /** The sky drawn now at a place: a view of the module's record, read at once. */
+  skyFrom(east: number, north: number): Float64Array | null {
+    return this.skyPhysics?.skyAt(this.skyAt, east, north) ?? null;
+  }
+
+  /** A tap on the open sea at (x, y) CSS pixels: a named star there shows its name. */
+  tap(x: number, y: number, now: number): string | null {
+    const canvas = this.stage.gfx?.canvas;
+    if (canvas === undefined || !this.drawSky) {
+      return null;
+    }
+    return (
+      this.stars.tap(x, y, this.stage.camera, canvas.clientWidth, canvas.clientHeight, now)?.name ??
+      null
+    );
   }
 
   /**
@@ -188,6 +258,15 @@ export class SeaScene {
     }
     boat.model.add(this.overlays.onBoat);
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
+    const light = this.kind.lights[0];
+    const lantern = light === undefined ? undefined : boat.parts.get(light);
+    if (lantern !== undefined) {
+      this.lanterns.setLantern(
+        lantern.position,
+        this.kind.physics.hull.centreOfGravity,
+        this.kind.lights,
+      );
+    }
     if (boat.hullShape !== null) {
       // Every boat is of this kind, for now: one hull's volume serves them all.
       hulls.setShape(boat.hullShape, this.kind.physics.hull.centreOfGravity);
@@ -453,6 +532,44 @@ export class SeaScene {
     camera.updateMatrixWorld();
   }
 
+  /** Asks the module for the sky at the boat at the frame's time, and lights the scene by it. */
+  #readSky(): void {
+    const physics = this.skyPhysics;
+    const time = this.skyTime;
+    if (physics === null || time === null || this.holdSky) {
+      return;
+    }
+    this.skyAt = time.frame(this.ticks);
+    this.skyRecord.set(physics.skyAt(this.skyAt, this.pose.east, this.pose.north));
+    this.sky.read(this.skyRecord);
+    this.stars.turn(this.skyRecord, SKY.stars);
+  }
+
+  /** The lanterns of the player's boat and of the others, each lit by the sun at its own boat. */
+  #drawLanterns(gfx: Gfx, camera: Vector3): void {
+    const l = this.lanterns;
+    l.begin();
+    const sun = SKY.sun + BODY.altitude;
+    const p = this.pose;
+    const bs = this.boatScene;
+    const own = this.sky.now.sunHeight;
+    if (this.drawSky && this.boat?.root.visible) {
+      l.add(p, bs.x, bs.z, camera, lanternLit(own));
+    }
+    const fs = this.fleetSource;
+    const o = this.origin.world;
+    for (let i = 0; this.drawSky && fs !== null && i < fs.count; i++) {
+      const b = fs.drawn[i] as DrawnBoat;
+      if (b.opacity <= 0) {
+        continue;
+      }
+      const at = this.skyFrom(b.east, b.north);
+      const height = at === null ? own : (at[sun] ?? 0);
+      l.add(b, b.east - o.x, -(b.north - o.y), camera, lanternLit(height) * b.opacity);
+    }
+    l.commit(this.stage.camera.fov, gfx.canvas.clientHeight);
+  }
+
   #frame(gfx: Gfx, dt: number, now: number): void {
     const cap = this.stage.cap;
     if (cap.probed !== this.#probed) {
@@ -483,6 +600,7 @@ export class SeaScene {
       boatNorth: this.pose.north,
       cameraHeight: camera.position.y,
     });
+    this.#readSky();
     this.sky.follow(camera.position, this.#v.set(bs.x, bs.y, bs.z));
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
     const fs = this.fleetSource;
@@ -496,6 +614,11 @@ export class SeaScene {
         this.timeStep,
       );
     }
+    this.#drawLanterns(gfx, camera.position);
+    const canvas = gfx.canvas;
+    this.stars.resize(canvas.width, canvas.height);
+    this.stars.mesh.visible = this.drawSky && this.stars.total > 0;
+    this.stars.placeLabel(camera, canvas.clientWidth, canvas.clientHeight, now);
     const o = this.overlays;
     if (o.wind || o.forces) {
       o.update(bs.x, bs.z, this.pose, this.wind, this.out);

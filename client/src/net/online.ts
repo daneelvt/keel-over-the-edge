@@ -94,6 +94,10 @@ export class Online {
   readonly ahead = new Ahead();
   clock: ClockState = newClockState();
   boat = 0;
+  /** The world's epoch, in microseconds of UTC since 1970, as the latest Welcome told it. */
+  epochUs = 0;
+  /** Called with the world's epoch at each Welcome: the sky is counted from it. */
+  onEpoch: ((epochUs: number) => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
   lastMargin = NO_MARGIN;
   traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
@@ -184,6 +188,8 @@ export class Online {
         this.#bell = false;
         this.#hadBoat = true;
         this.boat = m.boat;
+        this.epochUs = m.epochUs;
+        this.onEpoch?.(m.epochUs);
         this.#fresh = true;
         // A snapshot still waiting for a frame is the last connection's:
         // its controls are not this boat's.

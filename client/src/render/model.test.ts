@@ -104,11 +104,19 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     expect(at('boom')[2]).toBeCloseTo(-rig.mastPosition, 2);
     expect(at('sail')).toEqual(at('boom'));
     expect(at('telltales')).toEqual(at('boom'));
-    // The pennant flies from a staff at the masthead.
-    expect(at('pennant')[2]).toBeCloseTo(-rig.mastPosition, 2);
+    // The lantern stands on the masthead, and the pennant flies from a
+    // short staff above it.
     const masthead = rig.boomHeight + rig.luff;
-    expect(at('pennant')[1] ?? 0).toBeGreaterThanOrEqual(masthead - CM);
-    expect(at('pennant')[1] ?? 0).toBeLessThan(masthead + 0.15);
+    for (const light of boat.lights) {
+      expect(at(light)[2]).toBeCloseTo(-rig.mastPosition, 2);
+      expect(at(light)[1] ?? 0).toBeGreaterThan(masthead);
+      expect(at(light)[1] ?? 0).toBeLessThan(masthead + 0.3);
+    }
+    expect(at('pennant')[2]).toBeCloseTo(-rig.mastPosition, 2);
+    for (const light of boat.lights) {
+      expect(at('pennant')[1] ?? 0).toBeGreaterThan(at(light)[1] ?? 0);
+    }
+    expect(at('pennant')[1] ?? 0).toBeLessThan(masthead + 0.5);
     expect(at('rudder')[2]).toBeCloseTo(foils.rudderPosition, 2);
     expect(at('daggerboard')[2]).toBeCloseTo(-foils.boardPosition, 2);
     expect(at('sailor')[1]).toBeCloseTo(hull.centreOfGravity + sailor.sailorSeatHeight, 2);

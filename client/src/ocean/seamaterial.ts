@@ -4,9 +4,9 @@
 // offset from its centre, how near the rim it is, and its (q, r). From
 // these come the dark seam and the faint lit bevel at every edge and a
 // slight tint per tile. The water's colour is deep water lightened toward
-// thin crests, the sky by Fresnel, the sun's sharp glint and its wide
-// highlight, and the haze toward the horizon. No water is drawn inside a
-// hull (hulls.ts).
+// thin crests, the sky by Fresnel, the main light's sharp glint and its wide
+// highlight (the sun's by day, the moon's path by night), and the haze
+// toward the horizon. No water is drawn inside a hull (hulls.ts).
 //
 // The detail band (detail.ts) is drawn inside each tile, in two parts, so
 // that what is drawn on a tile stays inside it. The band read once a tile,
@@ -150,7 +150,7 @@ const lightening = (crest: Node<'float'>, detail: Node<'float'>): Node<'float'> 
 /** The water's colour (display values), before the tile style and the haze. */
 const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   const N = input.normal;
-  const L = look.sun;
+  const L = look.light;
   const R = reflect(V.negate(), N);
   const crest = input.crest;
   const flatSun = normalize(vec3(L.x, 0, L.z));
@@ -166,7 +166,7 @@ const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   const col = mix(body, skyColour(R), clamp(fresnel.mul(0.9), 0, 1));
   const rl = max(dot(R, L), 0);
   return col.add(
-    look.sunColour.mul(
+    look.lightColour.mul(
       pow(rl, 700).mul(6).mul(input.glint).add(pow(rl, look.broad.x).mul(look.broad.y)),
     ),
   );
@@ -328,7 +328,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       // The skirt: the dark wall of a step.
       col.assign(
         mix(look.deep.mul(0.75), look.scatter.mul(0.5), 0.2).mul(
-          max(dot(N, look.sun), 0).mul(0.3).add(0.7),
+          max(dot(N, look.light), 0).mul(0.3).add(0.7),
         ),
       );
     });

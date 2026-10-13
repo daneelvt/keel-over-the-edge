@@ -285,7 +285,16 @@ function harness(me = 200) {
   const welcome = (s: FakeSocket) =>
     s.deliver(
       encodeServer({
-        body: { case: 'welcome', value: { tick: 2n, worldTimeUs: 0n, boat: 7n, rejoined: false } },
+        body: {
+          case: 'welcome',
+          value: {
+            tick: 2n,
+            worldTimeUs: 0n,
+            boat: 7n,
+            rejoined: false,
+            epochUs: 1_767_225_600_000_000n,
+          },
+        },
       }),
     );
   return {
@@ -318,6 +327,9 @@ describe('the net worker', () => {
       'snapshot',
     ]);
     expect(h.statuses()).toEqual(['connecting', 'sailing']);
+    // The world's epoch goes to the page with the Welcome, for the sky.
+    const welcome = h.posted.find((m) => m.type === 'welcome');
+    expect(welcome?.type === 'welcome' && welcome.epochUs).toBe(1_767_225_600_000_000);
     const record = h.posted.at(-1);
     if (record?.type !== 'snapshot') {
       throw new Error('no record');

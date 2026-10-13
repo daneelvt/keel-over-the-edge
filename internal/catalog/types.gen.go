@@ -26,6 +26,10 @@ type Boat struct {
 	// Length overall, in metres.
 	LengthOverall float64 `json:"lengthOverall"`
 
+	// The navigation lights the boat shows by night. Together their arcs make the
+	// full circle once.
+	Lights []Light `json:"lights"`
+
 	// Display name.
 	Name string `json:"name"`
 
@@ -36,11 +40,12 @@ type Boat struct {
 // A boat's art. Every art object's values are paths under art/, checked to exist.
 type BoatArt struct {
 	// The boat's far model, drawn for boats seen from afar among many: the model's
-	// nodes but telltales and pennant, with few segments.
+	// nodes but telltales, pennant and lights, with few segments.
 	Far ArtPath `json:"far"`
 
 	// The boat's model: a glTF binary with the nodes hull, mast, boom, sail,
-	// telltales, pennant, rudder, tiller, daggerboard and sailor.
+	// telltales, pennant, rudder, tiller, daggerboard and sailor, and a node for each
+	// of the boat's lights, named as the light, where its lantern is.
 	Model ArtPath `json:"model"`
 }
 
@@ -72,12 +77,40 @@ type Catalog struct {
 	// choose their own.
 	Sailors []Sailor `json:"sailors"`
 
+	// Sky corresponds to the JSON schema field "sky".
+	Sky Sky `json:"sky"`
+
 	// Weather corresponds to the JSON schema field "weather".
 	Weather Weather `json:"weather"`
 }
 
 // Stable identifier of a kind, stored in the database: never renamed or reused.
 type ID string
+
+type Light string
+
+const LightPort Light = "port"
+const LightStarboard Light = "starboard"
+const LightStern Light = "stern"
+const LightTricolour Light = "tricolour"
+
+// A star with a name, at its place in the Bright Star Catalogue (J2000).
+type NamedStar struct {
+	// Declination, in degrees. 90 is the pole itself, which the stars turn about.
+	Declination float64 `json:"declination"`
+
+	// Visual magnitude.
+	Magnitude float64 `json:"magnitude"`
+
+	// The name shown to players.
+	Name string `json:"name"`
+
+	// Its number in the Bright Star Catalogue (HR).
+	Number int `json:"number"`
+
+	// Right ascension, in degrees.
+	RightAscension float64 `json:"rightAscension"`
+}
 
 // The daggerboard or keel, and the rudder.
 type PhysicsFoils struct {
@@ -426,6 +459,39 @@ type SailorArt struct {
 	Model ArtPath `json:"model"`
 }
 
+// The sky's numbers: the lengths of its day, year and month, its scale, the moment
+// it is counted from, and the stars with names. Where each body stands follows
+// from these and the time alone.
+type Sky struct {
+	// The day, sunrise to sunrise, in minutes.
+	Day float64 `json:"day"`
+
+	// Sky time zero, in seconds of UTC since 1970: the same in every world.
+	Epoch int `json:"epoch"`
+
+	// The moon's month, new moon to new moon, in days.
+	Month float64 `json:"month"`
+
+	// The moon's age at the epoch, in degrees past new.
+	MoonAtEpoch float64 `json:"moonAtEpoch"`
+
+	// Degrees of the sky to a nautical mile on the water: a boat that many miles
+	// nearer a star's point sees it one degree higher.
+	Scale float64 `json:"scale"`
+
+	// The stars with names, the brightest of the navigator's.
+	Stars []NamedStar `json:"stars"`
+
+	// The stars' turn beyond the sun's at the epoch, in degrees.
+	StarsAtEpoch float64 `json:"starsAtEpoch"`
+
+	// The sun's angle past noon at the centre of the disk, at the epoch, in degrees.
+	SunAtEpoch float64 `json:"sunAtEpoch"`
+
+	// The year, in days: the stars gain one turn on the sun in it.
+	Year float64 `json:"year"`
+}
+
 // The weather's numbers.
 type Weather struct {
 	// Sea corresponds to the JSON schema field "sea".
@@ -461,4 +527,4 @@ type WeatherSea struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "735ee7ff0e556ed0"
+const Version = "26c5f57fc40b9846"

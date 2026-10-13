@@ -11,6 +11,12 @@
 // ignores the boat's heel and pitch: a camera that pitched with a dinghy in
 // a seaway would be hard to watch. It never goes below 1.6 m above the sea
 // under the boat, and with reduced motion its springs are stiffer.
+//
+// It can look up. A drag that would take it lower than its lowest goes on
+// into a tilt: the camera stays where it is and lifts its gaze from the
+// boat toward the sky, up to the zenith; the opposite drag brings the gaze
+// back down the same way, and only then raises the camera. While it looks
+// above the horizon it does not ease back by itself.
 
 /** A view of the boat: azimuth from astern (radians, toward the port quarter positive), elevation above the horizon, distance in metres. */
 export interface CameraView {
@@ -30,6 +36,10 @@ export const MIN_DISTANCE = 5;
 export const MAX_DISTANCE = 80;
 const MIN_ELEVATION = 0.03;
 const MAX_ELEVATION = 1.45;
+/** The gaze lifts at most to this far above the horizontal: all but the zenith itself, where "up" would be lost. */
+export const MAX_GAZE = Math.PI / 2 - 0.002;
+/** The tilt runs from 0, looking at the boat, to this: enough for the zenith from the lowest view. */
+export const MAX_TILT = Math.PI / 2 + 0.2;
 /**
  * The yaw spring's natural frequency, per second: settled within a degree
  * two seconds after the heading turns through 180°. Reduced motion: stiffer.
@@ -89,6 +99,8 @@ export class ChaseCamera {
   reducedMotion = false;
   /** Whether a finger or the mouse holds the camera. */
   holding = false;
+  /** How far the gaze is lifted from the boat toward the sky, radians: 0 to MAX_TILT. */
+  tilt = 0;
   /** The boat's heave as the camera has followed it, and the sea's height under the boat, metres. */
   lift = 0;
   sea = 0;
@@ -104,20 +116,31 @@ export class ChaseCamera {
     Object.assign(this.rest, v);
     this.yaw = heading;
     this.yawRate = 0;
+    this.tilt = 0;
     this.lift = heave;
     this.sea = sea;
     this.#touched = Number.NEGATIVE_INFINITY;
   }
 
-  /** Swings the camera by a drag of dx, dy CSS pixels at time now (ms). */
+  /**
+   * Swings the camera by a drag of dx, dy CSS pixels at time now (ms). Up
+   * and down run along one path: from the highest view down to the lowest,
+   * then on into the tilt toward the zenith.
+   */
   drag(dx: number, dy: number, now: number): void {
     this.view.azimuth = angleDiff(this.view.azimuth - dx * DRAG_SCALE, 0);
-    this.view.elevation = clamp(
-      this.view.elevation + dy * DRAG_SCALE,
-      MIN_ELEVATION,
-      MAX_ELEVATION,
-    );
+    // Below the lowest view, the path's position is the tilt, counted down.
+    const along = this.view.elevation - this.tilt + dy * DRAG_SCALE;
+    const lowest = MIN_ELEVATION - MAX_TILT;
+    const at = clamp(along, lowest, MAX_ELEVATION);
+    this.view.elevation = Math.max(at, MIN_ELEVATION);
+    this.tilt = Math.max(MIN_ELEVATION - at, 0);
     this.#touched = now;
+  }
+
+  /** Whether the camera looks above the horizon. */
+  get looksUp(): boolean {
+    return this.tilt > this.view.elevation;
   }
 
   /** Scales the distance (a pinch or the wheel) at time now (ms). */
@@ -150,7 +173,9 @@ export class ChaseCamera {
     this.yawRate = (v - w * c) * k;
     this.yaw = angleDiff(heading + e1, 0);
 
-    if (!this.holding && now - this.#touched > EASE_BACK_AFTER) {
+    if (!this.holding && !this.looksUp && now - this.#touched > EASE_BACK_AFTER) {
+      // Looking at the boat again, the tilt goes with the rest.
+      this.tilt = 0;
       const f = 1 - Math.exp(-dt / EASE_BACK_TIME);
       this.view.azimuth += angleDiff(this.rest.azimuth, this.view.azimuth) * f;
       this.view.elevation += (this.rest.elevation - this.view.elevation) * f;
@@ -172,6 +197,19 @@ export class ChaseCamera {
     const tz = z;
     target.set(tx, ty, tz);
     const py = Math.max(ty + Math.sin(v.elevation) * v.distance, y + this.sea + MIN_HEIGHT);
-    position.set(tx + Math.cos(a) * ce * v.distance, py, tz + Math.sin(a) * ce * v.distance);
+    const px = tx + Math.cos(a) * ce * v.distance;
+    const pz = tz + Math.sin(a) * ce * v.distance;
+    position.set(px, py, pz);
+    if (this.tilt <= 0) {
+      return;
+    }
+    // The gaze, lifted by the tilt from the line to the boat, about the
+    // level axis square to it.
+    const hx = tx - px;
+    const hz = tz - pz;
+    const level = Math.hypot(hx, hz);
+    const gaze = Math.min(Math.atan2(ty - py, level) + this.tilt, MAX_GAZE);
+    const k = Math.cos(gaze) / Math.max(level, 1e-9);
+    target.set(px + hx * k, py + Math.sin(gaze), pz + hz * k);
   }
 }

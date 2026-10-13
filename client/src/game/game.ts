@@ -189,14 +189,22 @@ export class Game {
   }
 }
 
+/** A tap moves less than this, CSS pixels, and is over within this, milliseconds. */
+const TAP_TRAVEL = 8;
+const TAP_TIME = 500;
+
 /**
  * The camera under the pointer on the open sea: one finger or the mouse
- * swings it, a pinch or the wheel sets its distance. The controls over the
+ * swings it, a pinch or the wheel sets its distance, and a tap on a named
+ * star shows its name. The controls over the
  * scene take their own pointers, so these are the sea's.
  */
 function bindCamera(surface: HTMLElement, world: SeaScene): void {
   const pointers = new Map<number, { x: number; y: number }>();
   let spread = 0;
+  // A tap: one pointer, down and up within a moment and a few pixels. A
+  // drag is not a tap.
+  let tap: { x: number; y: number; at: number; moved: number } | null = null;
   const distance = (): number => {
     const [a, b] = [...pointers.values()];
     return a === undefined || b === undefined ? 0 : Math.hypot(a.x - b.x, a.y - b.y);
@@ -207,6 +215,7 @@ function bindCamera(surface: HTMLElement, world: SeaScene): void {
     }
     surface.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    tap = pointers.size === 1 ? { x: e.clientX, y: e.clientY, at: e.timeStamp, moved: 0 } : null;
     spread = distance();
     world.camera.holding = true;
   });
@@ -219,6 +228,9 @@ function bindCamera(surface: HTMLElement, world: SeaScene): void {
     const dy = e.clientY - p.y;
     p.x = e.clientX;
     p.y = e.clientY;
+    if (tap !== null) {
+      tap.moved += Math.hypot(dx, dy);
+    }
     if (pointers.size === 1) {
       world.camera.drag(dx, dy, e.timeStamp);
     } else if (pointers.size === 2) {
@@ -230,6 +242,17 @@ function bindCamera(surface: HTMLElement, world: SeaScene): void {
     }
   });
   const end = (e: PointerEvent): void => {
+    if (
+      e.type === 'pointerup' &&
+      tap !== null &&
+      pointers.size === 1 &&
+      tap.moved < TAP_TRAVEL &&
+      e.timeStamp - tap.at < TAP_TIME
+    ) {
+      const r = surface.getBoundingClientRect();
+      world.tap(tap.x - r.left, tap.y - r.top, performance.now());
+    }
+    tap = null;
     pointers.delete(e.pointerId);
     spread = distance();
     world.camera.holding = pointers.size > 0;

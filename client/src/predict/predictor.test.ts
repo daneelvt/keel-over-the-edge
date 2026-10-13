@@ -173,7 +173,7 @@ describe('pacing online', () => {
       clock: { steps: 0, alpha: 0 },
     };
     const o = new Online(port, p, helmsman);
-    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100 });
+    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100, epochUs: 0 });
     const sn = start(100);
     sn.helm = 300;
     sn.sheet = 700;
@@ -261,7 +261,7 @@ describe('the queue and the fleet online', () => {
     expect(o.place.value).toEqual({ position: 3, waiting: 9 });
     port.deliver({ type: 'queued', position: 1, waiting: 4 });
     expect(o.place.value).toEqual({ position: 1, waiting: 4 });
-    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100 });
+    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100, epochUs: 0 });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     expect(o.place.value).toBeNull();
   });
@@ -275,7 +275,7 @@ describe('the queue and the fleet online', () => {
       beforeStep: null,
       clock: { steps: 0, alpha: 0 },
     });
-    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100 });
+    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100, epochUs: 0 });
     const record = new ArrayBuffer(FLEET_RECORD_BYTES);
     writeSnapshot(start(100), new DataView(record));
     port.deliver({ type: 'snapshot', data: record });
@@ -297,7 +297,7 @@ describe('the bell online', () => {
       beforeStep: null,
       clock: { steps: 0, alpha: 0 },
     });
-    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100 });
+    port.deliver({ type: 'welcome', boat: 1, rejoined: false, kind: 0, tick: 100, epochUs: 0 });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     return { o, port };
   }
@@ -313,7 +313,7 @@ describe('the bell online', () => {
       port.deliver(status(s));
       expect(o.notice.value?.text).toBe(BELL_TEXT);
     }
-    port.deliver({ type: 'welcome', boat: 1, rejoined: true, kind: 0, tick: 400 });
+    port.deliver({ type: 'welcome', boat: 1, rejoined: true, kind: 0, tick: 400, epochUs: 0 });
     port.deliver(status('sailing'));
     expect(o.notice.value).toBeNull();
     // A later drop is an ordinary one again.
@@ -325,7 +325,7 @@ describe('the bell online', () => {
     const { o, port } = await sailing();
     port.deliver({ type: 'restart', inMs: 0 });
     port.deliver(status('waiting'));
-    port.deliver({ type: 'welcome', boat: 2, rejoined: false, kind: 0, tick: 400 });
+    port.deliver({ type: 'welcome', boat: 2, rejoined: false, kind: 0, tick: 400, epochUs: 0 });
     port.deliver(status('sailing'));
     expect(o.notice.value?.text).toBe('Your boat has returned to port.');
   });

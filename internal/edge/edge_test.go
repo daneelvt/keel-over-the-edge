@@ -212,6 +212,11 @@ func TestWelcome(t *testing.T) {
 		if wt, now := w.GetWorldTimeUs(), time.Since(edgetest.Epoch).Microseconds(); wt != now {
 			t.Fatalf("world time %d µs, now %d", wt, now)
 		}
+		// The world's epoch comes with it: the two together are the moment,
+		// from which the client tells sky time.
+		if got := w.GetEpochUs(); got != edgetest.Epoch.UnixMicro() || got+w.GetWorldTimeUs() != time.Now().UnixMicro() {
+			t.Fatalf("epoch %d µs, the world's is %d", got, edgetest.Epoch.UnixMicro())
+		}
 		// The sea about the boat comes first: the client steps its boat in it.
 		r, err := client.Receive(t.Context(), ws)
 		if err != nil {

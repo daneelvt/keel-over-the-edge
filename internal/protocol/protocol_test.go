@@ -553,7 +553,7 @@ func messages() (clients []*pb.ClientMessage, servers []*pb.ServerMessage) {
 	}
 	servers = []*pb.ServerMessage{
 		{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{World: "0199c2a4-5f7e-7c3a-9d0e-123456789abc", Tick: 727706164,
-			WorldTimeUs: 24256872133333, Boat: 7, Kind: 0, Rejoined: true}}},
+			WorldTimeUs: 24256872133333, Boat: 7, Kind: 0, Rejoined: true, EpochUs: 1767225600000000}}},
 		{Body: &pb.ServerMessage_Pong{Pong: &pb.Pong{ClientTimeUs: 123456789, WorldTimeUs: 24256872133333}}},
 		{Body: &pb.ServerMessage_Queued{Queued: &pb.Queued{Position: 12, Waiting: 40}}},
 		{Body: &pb.ServerMessage_SeaAreas{SeaAreas: &pb.SeaAreas{Tick: 727706190, Col: -1, Row: 34, Size: 2,

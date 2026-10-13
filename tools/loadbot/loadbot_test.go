@@ -140,6 +140,15 @@ func TestBotsAcrossARestart(t *testing.T) {
 				t.Fatalf("%s came back %+v", p.Name, b)
 			}
 		}
+		// Every Welcome told the world's epoch.
+		for _, p := range rep.Players {
+			if p.EpochUs != edgetest.Epoch.UnixMicro() {
+				t.Fatalf("%s was told the epoch %d", p.Name, p.EpochUs)
+			}
+		}
+		if !strings.Contains(out.String(), "the world's epoch: 2000-01-01T00:00:00Z; the sun over the centre of the disk now:") {
+			t.Fatalf("the report does not tell the world's epoch: %s", out.String())
+		}
 		if !strings.Contains(out.String(), "came back 10 times (10 bells heard): 10 to their own boat, 0 to a new one") ||
 			!strings.Contains(out.String(), "the pause, s: median") {
 			t.Fatalf("the report: %s", out.String())

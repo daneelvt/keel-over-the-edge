@@ -9,6 +9,7 @@ import {
   ChaseCamera,
   EASE_BACK_AFTER,
   MAX_DISTANCE,
+  MAX_GAZE,
   MIN_DISTANCE,
   MIN_HEIGHT,
 } from './camera';
@@ -172,5 +173,75 @@ describe('the chase camera', () => {
       cam.place3(0, 0, 0, p, t);
       expect(angleDiff(Math.atan2(p.z, p.x), a)).toBeCloseTo(0, 3);
     }
+  });
+
+  test('a drag past the lowest view tilts the gaze up, and the opposite drag brings it back the same way', () => {
+    const cam = new ChaseCamera();
+    cam.place(CHASE, 0);
+    const pos = new Vector3();
+    const target = new Vector3();
+    const gaze = (): number => {
+      cam.place3(0, 0, 0, pos, target);
+      const d = target.clone().sub(pos);
+      return Math.atan2(d.y, Math.hypot(d.x, d.z));
+    };
+    const path: number[][] = [];
+    // Down to the lowest view, the camera lowering and still looking at the
+    // boat, then on, the gaze lifting, to the zenith.
+    for (let i = 0; i < 330; i++) {
+      path.push([cam.view.elevation, cam.tilt, gaze()]);
+      cam.drag(0, -1, 0);
+      if (i === 50) {
+        expect(cam.view.elevation).toBeCloseTo(0.03, 9);
+        expect(cam.tilt).toBeGreaterThan(0);
+      }
+    }
+    expect(gaze()).toBeCloseTo(MAX_GAZE, 9);
+    expect(gaze()).toBeGreaterThan(89.8 * DEG);
+    expect(cam.looksUp).toBe(true);
+    // The camera never left its place, 1.6 m above the sea at least.
+    expect(pos.y).toBeGreaterThanOrEqual(MIN_HEIGHT - 1e-9);
+    // Back again: every step of the way retraced.
+    for (let i = 329; i >= 0; i--) {
+      cam.drag(0, 1, 0);
+      const [e, t, g] = path[i] as number[];
+      expect(cam.view.elevation).toBeCloseTo(e as number, 9);
+      expect(cam.tilt).toBeCloseTo(t as number, 9);
+      expect(gaze()).toBeCloseTo(g as number, 9);
+    }
+    expect(cam.tilt).toBe(0);
+  });
+
+  test('looking up, it does not ease back by itself, with reduced motion or without', () => {
+    for (const reduced of [false, true]) {
+      const cam = new ChaseCamera();
+      cam.reducedMotion = reduced;
+      cam.place(CHASE, 0);
+      for (let i = 0; i < 200; i++) {
+        cam.drag(0, -10, 0);
+      }
+      const tilt = cam.tilt;
+      const elevation = cam.view.elevation;
+      for (let i = 1; i <= 60 * 20; i++) {
+        cam.update(1 / 60, 0, (i * 1000) / 60);
+      }
+      expect(cam.tilt).toBe(tilt);
+      expect(cam.view.elevation).toBe(elevation);
+    }
+  });
+
+  test('a small tilt that still looks below the horizon eases back with the rest', () => {
+    const cam = new ChaseCamera();
+    cam.place(CHASE, 0);
+    for (let i = 0; i < 48; i++) {
+      cam.drag(0, -1, 0);
+    }
+    expect(cam.tilt).toBeGreaterThan(0);
+    expect(cam.looksUp).toBe(false);
+    for (let i = 1; i <= 60 * 10; i++) {
+      cam.update(1 / 60, 0, (i * 1000) / 60);
+    }
+    expect(cam.tilt).toBe(0);
+    expect(cam.view.elevation).toBeCloseTo(CHASE.elevation, 2);
   });
 });

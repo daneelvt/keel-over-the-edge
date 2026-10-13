@@ -133,8 +133,10 @@ type Clock interface {
 // Config sets up an edge.
 type Config struct {
 	Bus *bus.Bus
-	// World is the world's ID, as Welcome names it.
+	// World is the world's ID, as Welcome names it, and Epoch the moment
+	// its time counts from, which Welcome carries too.
 	World string
+	Epoch time.Time
 	Clock Clock
 	// Protocol, Catalog and Layout are the versions a client's Hello must
 	// carry.

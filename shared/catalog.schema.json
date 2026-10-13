@@ -5,7 +5,7 @@
   "description": "Every list of kinds in the game. Kinds are data: code reads their properties, never their names.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["boats", "sailors", "weather"],
+  "required": ["boats", "sailors", "weather", "sky"],
   "properties": {
     "boats": {
       "description": "Boat types.",
@@ -19,7 +19,8 @@
       "minItems": 1,
       "items": { "$ref": "#/$defs/Sailor" }
     },
-    "weather": { "$ref": "#/$defs/Weather" }
+    "weather": { "$ref": "#/$defs/Weather" },
+    "sky": { "$ref": "#/$defs/Sky" }
   },
   "$defs": {
     "Weather": {
@@ -49,6 +50,44 @@
         "cull": { "description": "Waves lower than this fraction of an area's highest are left out.", "type": "number", "minimum": 0, "maximum": 0.5 }
       }
     },
+    "Sky": {
+      "title": "Sky",
+      "description": "The sky's numbers: the lengths of its day, year and month, its scale, the moment it is counted from, and the stars with names. Where each body stands follows from these and the time alone.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["day", "year", "month", "scale", "epoch", "sunAtEpoch", "starsAtEpoch", "moonAtEpoch", "stars"],
+      "properties": {
+        "day": { "description": "The day, sunrise to sunrise, in minutes.", "type": "number", "minimum": 1, "maximum": 1440 },
+        "year": { "description": "The year, in days: the stars gain one turn on the sun in it.", "type": "number", "minimum": 2, "maximum": 1000 },
+        "month": { "description": "The moon's month, new moon to new moon, in days.", "type": "number", "minimum": 2, "maximum": 1000 },
+        "scale": { "description": "Degrees of the sky to a nautical mile on the water: a boat that many miles nearer a star's point sees it one degree higher.", "type": "number", "minimum": 1, "maximum": 20 },
+        "epoch": { "description": "Sky time zero, in seconds of UTC since 1970: the same in every world.", "type": "integer", "minimum": 0, "maximum": 4102444800 },
+        "sunAtEpoch": { "description": "The sun's angle past noon at the centre of the disk, at the epoch, in degrees.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "starsAtEpoch": { "description": "The stars' turn beyond the sun's at the epoch, in degrees.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "moonAtEpoch": { "description": "The moon's age at the epoch, in degrees past new.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "stars": { "description": "The stars with names, the brightest of the navigator's.", "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/NamedStar" } }
+      }
+    },
+    "NamedStar": {
+      "title": "NamedStar",
+      "description": "A star with a name, at its place in the Bright Star Catalogue (J2000).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "number", "rightAscension", "declination", "magnitude"],
+      "properties": {
+        "name": { "description": "The name shown to players.", "type": "string", "minLength": 1, "maxLength": 40 },
+        "number": { "description": "Its number in the Bright Star Catalogue (HR).", "type": "integer", "minimum": 1, "maximum": 9110 },
+        "rightAscension": { "description": "Right ascension, in degrees.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "declination": { "description": "Declination, in degrees. 90 is the pole itself, which the stars turn about.", "type": "number", "minimum": -90, "maximum": 90 },
+        "magnitude": { "description": "Visual magnitude.", "type": "number", "minimum": -2, "maximum": 7 }
+      }
+    },
+    "Light": {
+      "title": "Light",
+      "description": "A navigation light a boat shows from sunset to sunrise, by the arc it shows over (International Regulations for Preventing Collisions at Sea, Rule 21): a red sidelight to port and a green to starboard, each from right ahead to 22.5° abaft the beam; a white sternlight over the 135° astern; or the three combined in one lantern at the masthead, which Rule 25(b) allows a sailing vessel of less than 20 m.",
+      "type": "string",
+      "enum": ["tricolour", "port", "starboard", "stern"]
+    },
     "Id": {
       "description": "Stable identifier of a kind, stored in the database: never renamed or reused.",
       "type": "string",
@@ -67,8 +106,8 @@
       "additionalProperties": false,
       "required": ["model", "far"],
       "properties": {
-        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor.", "$ref": "#/$defs/ArtPath" },
-        "far": { "description": "The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales and pennant, with few segments.", "$ref": "#/$defs/ArtPath" }
+        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, and a node for each of the boat's lights, named as the light, where its lantern is.", "$ref": "#/$defs/ArtPath" },
+        "far": { "description": "The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.", "$ref": "#/$defs/ArtPath" }
       }
     },
     "SailorArt": {
@@ -95,7 +134,7 @@
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "physics", "art"],
+      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
@@ -103,6 +142,7 @@
         "capacity": { "description": "Most people aboard, the skipper included.", "type": "integer", "minimum": 1 },
         "lengthOverall": { "description": "Length overall, in metres.", "type": "number", "exclusiveMinimum": 0 },
         "beam": { "description": "Greatest width of the hull, in metres.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
+        "lights": { "description": "The navigation lights the boat shows by night. Together their arcs make the full circle once.", "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Light" } },
         "physics": { "$ref": "#/$defs/BoatPhysics" },
         "art": { "$ref": "#/$defs/BoatArt" }
       }

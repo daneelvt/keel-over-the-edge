@@ -445,7 +445,128 @@ as in flat water), and `go run ./tools/polar -sea 20` shows the rest. After chan
 `sea.json` (`go test ./internal/physics -run 'Golden|SeaFile' -update`), then
 `scenarios.json`'s copy of the catalog's values, as for any parameter.
 
-### The server
+### The sky
+
+The sun, the moon and the stars stand where one rule puts them,
+`internal/sky`, from **sky time** and a place on the disk alone. The server
+has the rule and its tests; the client runs the same Go in the physics
+module (`skyAt`, `skyStar`), once a frame, so every player sees the same sky
+and JavaScript computes nothing of it. Nothing in the game's rules reads the
+sky yet.
+
+### The rule
+
+The disk is the polar cap of the sky's sphere, with the disk's centre at the
+pole. A place r nautical miles from the centre stands `scale × r` degrees
+from the pole, so it sees the real sky of the latitude `90° − scale × r`:
+the Pole's at the centre and, at ten degrees to the mile, that of 45° north
+at the rim. A body's height is 90° less the angle on the sphere between the
+place and the point the body stands over (`At` turns the centre's east,
+north and up into the place's, by that angle about the level axis square to
+the place's bearing from the centre).
+
+- **The stars** keep their J2000 places in the Bright Star Catalogue and turn
+  about the pole once in a sidereal day: `day × year ÷ (year + 1)`, 117 min
+  40.7 s for a day of 118 minutes. The Pole Star is moved the 0.74° to the
+  pole itself, so it stands still: the Hub Star. Constellations keep their
+  shapes from every place, a star whose point lies inside the disk never sets
+  for anyone on it, and the Hub Star's height is `90° − scale × r` exactly.
+- **The sun** rides a great circle over the centre, rising due east and
+  setting due west there, once a day: day and night are equal everywhere,
+  and dawn sweeps the disk from east to west (the east rim sees the sun 14.75
+  minutes before the centre). The noon sun's height is 90° less the scale's
+  degrees for each mile north or south of the line through the centre.
+- **The moon** rides the same circle behind the sun by its age, a month of
+  29.530589 days; its lit share is `(1 − cos age) ÷ 2`.
+
+`At` gives the sun's and the moon's direction (the place's east, north and
+up), height and bearing, the moon's lit share, and the **stars' matrix**,
+which turns any star's catalogue vector (`Vector`) into its direction:
+`Star` is that matrix on one star. `SunAltitude` is the sun's height alone,
+for whatever comes to depend on night and day.
+
+The package is held to the physics package's rules (`tools/physics -check`):
+its own sine, cosine and arctangent, no fused multiply-add, no allocation.
+Every angle is `2π × frac(t ÷ period)` taken on whole microseconds, the
+remainder exact, so none loses precision however old the sky.
+`testdata/sky.json` is the sky at 12 places and 40 times, compared bit for
+bit by Go on both machines and by the module under Node
+(`client/src/sky/golden.test.ts`); after a deliberate change, `go test
+./internal/sky -run Golden -update`.
+
+### Sky time
+
+Sky time is whole microseconds of UTC since the sky's epoch, the catalog's
+`sky.epoch` (midnight UTC, 1 January 2026), **the same in every world**: it
+is the world's epoch plus world time (`sky.Time`). The first world's epoch is
+that same moment, so there sky time is world time. `Welcome` carries the
+world's epoch (`epoch_us`); the page counts sky time from it and the world
+clock it draws the sea by (`client/src/sky/skytime.ts`), so the sky slews with
+the clock and never apart from the sea. Offline the sandbox counts from an
+epoch that puts world time 0 two hours after sunrise at the centre.
+
+### The numbers
+
+`shared/catalog/sky.yaml` holds the day in minutes (118: not two hours, which
+divide the real day and would show a player who sails at the same hour every
+evening the same part of the day for ever), the year and the month in days,
+the scale in degrees to the mile, the epoch, the three angles at it, and the
+**named stars**: name, number in the catalogue, right ascension, declination
+and magnitude. `tools/catalog` checks the numbers against `sky.Params`, field
+for field, and generates `catalog.SkyParams` and `writeSkyParams`, as for a
+boat's physics. A change to any of them changes the catalog's version, and
+the world starts empty at the next deploy.
+
+### The stars' table
+
+`tools/stars/bsc5/` keeps the Bright Star Catalogue, 5th revised edition
+(Hoffleit and Warren 1991, CDS catalogue V/50), as CDS publishes it, with its
+ReadMe; `tools/stars` checks their SHA-256, checks every named star against
+the catalogue by its number (within 0.01° and 0.05 of a magnitude; the Hub
+Star's declination excepted), and writes `client/src/sky/stars.bin`: the
+2,360 stars brighter than magnitude 5.5 and north of −45°, brightest first,
+six bytes each (right ascension and declination as 16-bit fractions, the
+magnitude in hundredths and B−V in twentieths packed in 16 bits), 14 KB,
+loaded with the scene. A device in WebGPU's compatibility mode draws the
+first 1,336, to magnitude 5. `go run ./tools/stars` after changing the named
+stars or the tool; its test fails if the committed table is not what it
+writes.
+
+### Drawing it
+
+| File | What |
+|------|------|
+| `client/src/render/daylight.ts` | **The light of the hour**: one table keyed by the sun's true height at the boat, read between its rows: the sky's colours and the glow toward the sun, the sun's and the hemisphere's light, the sea's colours and wide highlight, the haze, the clouds, the sail's glow, the faintest star that shows, the lanterns. By night the main light is the moon, by its lit share and height; never both. The night rows keep a floor: a moonless night is readable |
+| `client/src/render/sky.ts` | Writes the table into `look` and the two lights each frame; the sky's shader: the gradient, the glow, the sun, the moon's disc (1.5°, lit as a sphere by the true sun, so its phase is right), the clouds |
+| `client/src/render/stars.ts` | The stars: one draw of quads, each turned by the module's matrix (one 3 × 3 uniform a frame, no trigonometry on the GPU), sized and dimmed by magnitude, tinted by B−V, faded low down, behind clouds and the moon; a tap on a named star shows its name for four seconds |
+| `client/src/render/lanterns.ts` | Navigation lights: one instanced draw of glows for every boat in view and the player's, each over its arc in the boat's own frame (Rule 21: red to port and green to starboard to 22.5° abaft the beam, white over the 135° astern, faded across 4°), on the dome so the sea hides them, lit while the sun is below the horizon at the boat |
+| `client/src/render/camera.ts` | The tilt: a drag that would take the camera below its lowest view lifts its gaze toward the sky instead, up to the zenith, and back the same way |
+
+To tune the look, edit the rows of `LIGHT_TABLE`: colours are display
+values, as picked from a picture. Its Vitest test fails if a row is out of
+order, if anything but the stars, the moon and the lanterns grows brighter as
+the sun sinks, or if noon is no longer the day's look.
+
+A boat's lights are the catalog's: `lights`, a list of `tricolour`, `port`,
+`starboard` and `stern`, each with a node of the same name in its model where
+the lantern is. `tools/catalog -check` fails on a light without its node, on
+a tricolour on a boat of 20 m or more, and on lights that do not make the
+full circle once. The Jolly boat carries a brass tricolour lantern at the
+masthead, with the pennant's staff above it.
+
+### Seeing it
+
+`?sky=dusk` (or `dawn`, `noon`, `midnight`, or an hour from 0 to 24, noon at
+12 at the centre) draws the sky at that hour from the page's start, and
+`?sky=midnight,0.5` with the moon that far through its month (0 new, 0.5
+full). The developer panel sets the hour, the moon and the speed the sky runs
+at (×1, ×60, held), and reads out the sun's and the moon's height and
+bearing, the Hub Star's height beside `90° − scale × r`, and every named
+star's height and bearing above the horizon, all by the module. Both move
+only the sky this page draws: online nothing is sent, and the server's sky is
+unchanged.
+
+## The server
 
 The frame holds each area's inputs twice (`bus.Sea`): **in effect**, and for
 **the next second**. The sea changes only on a second's first tick, to what
@@ -2982,8 +3103,11 @@ percentile over 2 s), the main thread's work per drawn frame, the display's
 measured rate and the divisor drawn at, GPU time where the device has
 timestamps, draw calls, compute dispatches and triangles; the detail band
 and the wind under the boat it follows; and the sea under the boat: its
-significant height, its peak period and how many waves are summed. **Check the sea** runs the server's sea file through the page's
-module and GPU and says how far each is from it (see [Waves](#waves)).
+significant height, its peak period and how many waves are summed. **Check
+the sea** runs the server's sea file through the page's module and GPU and
+says how far each is from it (see [Waves](#waves)). Its sky part sets the
+hour, the moon and the sky's speed, offline and online (see
+[The sky](#the-sky)).
 
 ### Recording a sail
 
@@ -3093,7 +3217,14 @@ sees it through its grace after its page closes; and, through the lag proxy
 retransmission timeouts, which it reports, and no correction drawn at once.
 `fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
 the own boat at seven poses, 64 boats within 22 draw calls and 200,000
-triangles, the materials dithered, and a picture. `worker.spec.ts`,
+triangles, the materials dithered, and a picture. `sky.spec.ts` finds each
+named star where the GPU draws it, within 0.1° of where the module's rule
+and the camera put it, from the centre, half way and the rim; no star by day
+and the brightest first at dusk; a moonless night with nothing bright and
+nothing black; a full moon's light on the sea toward it; looking up from the
+rim and tapping the Hub Star; the lanterns' colours from the bow and astern,
+none by day and none beyond the horizon; 64 boats by night within 150 draw
+calls; and pictures of the hours. `worker.spec.ts`,
 on Chromium and WebKit (`--project webkit`, `npx playwright install
 webkit`), opens `e2e/net.html`, which runs the net worker alone. The scene's tests open `?sandbox`.
 `start.spec.ts`, on WebGL 2 alone, starts as a guest: the start screen,
@@ -3148,8 +3279,9 @@ The reference pictures are kept per back end and platform in
 `client/e2e/pictures/<back end>-<platform>/`, and are changed only by hand,
 after looking at the new ones: `npx playwright test --update-snapshots`
 writes this machine's. CI runs on Linux; a failing picture test uploads the
-pictures it took (the `playwright-<back end>-short` artifact of `pr.render`),
-and those are what to commit for `linux` once judged right.
+pictures it took (the `playwright-<back end>-short` artifact of `pr.render`;
+`-long` for the sky's, which are taken in one `@long` test), and those are
+what to commit for `linux` once judged right.
 
 A test that takes minutes on CI's SwiftShader is tagged `@long`
 (`test(title, { tag: '@long' }, ...)`); `pr.render` runs each back end's

@@ -21,6 +21,10 @@ boats:
     capacity: 1
     lengthOverall: 4.2
     beam: 1.39 # ILCA class
+    # A sailing vessel of less than 20 m may combine her sidelights and
+    # sternlight in one lantern at the masthead (Collision Regulations, Rule
+    # 25(b)). Under 7 m she shows them "if practicable" (Rule 25(d)(i)): she does.
+    lights: [tricolour]
     art:
       model: boats/jolly-boat.glb
       far: boats/jolly-boat.far.glb

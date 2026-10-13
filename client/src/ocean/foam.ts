@@ -111,10 +111,19 @@ export function foamMargin(fade: Node<'float'>): Node<'float'> {
   return float(1).sub(smoothstep(from, to, fade).mul(loss)) as unknown as Node<'float'>;
 }
 
-/** The foam's colour under the light on a surface with normal N (display values). */
+/** The clouds' colour by day: the foam is as white as they are, and as dark by night. */
+const DAY_CLOUD = [0.97, 0.96, 0.93] as const;
+
+/**
+ * The foam's colour under the main light on a surface with normal N
+ * (display values): the foam's own white, lit as the clouds are at the
+ * hour, so it dims with them at dusk and is grey under the moon.
+ */
 export function foamColour(normal: Node<'vec3'>): Node<'vec3'> {
   const [r, g, b] = FOAM.colour;
-  return vec3(r, g, b)
-    .mul(max(dot(normal, look.sun), 0).mul(0.32).add(0.72))
-    .add(look.sunColour.mul(0.04)) as unknown as Node<'vec3'>;
+  const tint = vec3(r / DAY_CLOUD[0], g / DAY_CLOUD[1], b / DAY_CLOUD[2]);
+  return (look.cloud as unknown as Node<'vec3'>)
+    .mul(tint)
+    .mul(max(dot(normal, look.light), 0).mul(0.32).add(0.72))
+    .add(look.lightColour.mul(0.04)) as unknown as Node<'vec3'>;
 }

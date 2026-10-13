@@ -861,7 +861,11 @@ type Welcome struct {
 	// The boat's kind: an index into the catalog's boats.
 	Kind uint32 `protobuf:"varint,5,opt,name=kind,proto3" json:"kind,omitempty"`
 	// The boat is the one the account already had.
-	Rejoined      bool `protobuf:"varint,6,opt,name=rejoined,proto3" json:"rejoined,omitempty"`
+	Rejoined bool `protobuf:"varint,6,opt,name=rejoined,proto3" json:"rejoined,omitempty"`
+	// The world's epoch, from which world time counts: microseconds of UTC
+	// since 1970. The sky is counted from a moment of its own, the same in
+	// every world, so the client needs the world's to tell sky time.
+	EpochUs       int64 `protobuf:"varint,7,opt,name=epoch_us,json=epochUs,proto3" json:"epoch_us,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -936,6 +940,13 @@ func (x *Welcome) GetRejoined() bool {
 		return x.Rejoined
 	}
 	return false
+}
+
+func (x *Welcome) GetEpochUs() int64 {
+	if x != nil {
+		return x.EpochUs
+	}
+	return 0
 }
 
 // Pong answers a Ping.
@@ -1045,14 +1056,15 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05in_ms\x18\x01 \x01(\rR\x04inMs\">\n" +
 	"\x06Queued\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\rR\bposition\x12\x18\n" +
-	"\awaiting\x18\x02 \x01(\rR\awaiting\"\x9b\x01\n" +
+	"\awaiting\x18\x02 \x01(\rR\awaiting\"\xb6\x01\n" +
 	"\aWelcome\x12\x14\n" +
 	"\x05world\x18\x01 \x01(\tR\x05world\x12\x12\n" +
 	"\x04tick\x18\x02 \x01(\x03R\x04tick\x12\"\n" +
 	"\rworld_time_us\x18\x03 \x01(\x03R\vworldTimeUs\x12\x12\n" +
 	"\x04boat\x18\x04 \x01(\x04R\x04boat\x12\x12\n" +
 	"\x04kind\x18\x05 \x01(\rR\x04kind\x12\x1a\n" +
-	"\brejoined\x18\x06 \x01(\bR\brejoined\"P\n" +
+	"\brejoined\x18\x06 \x01(\bR\brejoined\x12\x19\n" +
+	"\bepoch_us\x18\a \x01(\x03R\aepochUs\"P\n" +
 	"\x04Pong\x12$\n" +
 	"\x0eclient_time_us\x18\x01 \x01(\x03R\fclientTimeUs\x12\"\n" +
 	"\rworld_time_us\x18\x02 \x01(\x03R\vworldTimeUsB=Z;github.com/daneelvt/keel-over-the-edge/internal/protocol/pbb\x06proto3"

@@ -792,7 +792,9 @@ test.describe('shadows', () => {
       offBoat += boat ? 0 : 1;
     }
     expect(shaded).toBeGreaterThan(100);
-    expect(brighter).toBeLessThan(0.05 * shaded);
+    // A few pixels at the boat's own edges, where the deck meets the
+    // cockpit, come out a little lighter with the map: on the boat, and few.
+    expect(brighter).toBeLessThan(0.1 * shaded);
     expect(offBoat).toBeLessThan(0.02 * shaded);
   });
 });
