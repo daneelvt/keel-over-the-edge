@@ -9,12 +9,16 @@
 // drawn into the map by its own vertex node, so the dome's bend and the
 // sail's shape are in its shadow.
 //
+// three.js draws a shadow map into a render target with a colour texture
+// beside its depth texture, RGBA at 8 bits by default, which nothing reads.
+// It is made red alone here, so a texel of the map costs 5 bytes, not 8.
+//
 // Whether the light casts at all changes every lit material's shader, so it
 // changes only with the tier. Within a tier, shadows go off by the boats no
 // longer casting: the map is drawn once, empty, and then left alone, which
 // saves its pass and changes no shader.
 
-import type { DirectionalLight, Object3D } from 'three';
+import { type DirectionalLight, type Object3D, RedFormat, UnsignedByteType } from 'three';
 import type { WebGPURenderer } from 'three/webgpu';
 import type { Tier } from './quality';
 
@@ -39,6 +43,21 @@ export class Shadows {
     s.normalBias = 0.02;
     s.camera.near = NEAR;
     s.camera.far = FAR;
+    // three.js makes the map's render target and assigns it here before
+    // anything is drawn into it: its colour target is made one byte a texel
+    // then, before a pipeline is made for it.
+    let map: typeof s.map = null;
+    Object.defineProperty(s, 'map', {
+      configurable: true,
+      get: () => map,
+      set: (m: typeof s.map) => {
+        map = m;
+        if (m !== null) {
+          m.texture.format = RedFormat;
+          m.texture.type = UnsignedByteType;
+        }
+      },
+    });
   }
 
   /** A new renderer: shadows are drawn whenever a light casts them. */

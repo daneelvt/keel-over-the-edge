@@ -1304,26 +1304,34 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       );
     },
     /**
-     * The bytes the GPU holds for the look's textures on the rung in use:
-     * the detail band's, the foam map's, the shadow map's and the pattern's.
+     * The bytes the GPU holds for the look's textures on the rung in use, as
+     * three.js counts them once it has made them: the detail band's, the
+     * foam map's, the shadow map's (its depth and its colour target) and the
+     * pattern's; and every texture's, the whole scene's.
      */
-    textureBytes(): { detail: number; foamMap: number; shadowMap: number; pattern: number } {
-      const rung = world.rung;
-      const tier = TIERS[rung.tier];
-      const mips = 4 / 3;
-      let detail = 0;
-      if (rung.detail.kind === 'fft') {
-        const n = rung.detail.size;
-        // Modes and two work textures at 16 bytes a texel, two outputs at 8 with mipmaps.
-        detail = rung.detail.patches * (3 * n * n * 16 + 2 * n * n * 8 * mips);
-      } else if (rung.detail.kind === 'baked') {
-        detail = 2 * 32 * 4 * (64 * 64 + 16 * 16);
-      }
+    textureBytes(): {
+      detail: number;
+      foamMap: number;
+      shadowMap: number;
+      pattern: number;
+      all: number;
+    } {
+      const info = gfx().renderer.info as unknown as {
+        memoryMap: WeakMap<object, number>;
+        memory: { texturesSize: number };
+      };
+      const size = (t: object | null | undefined): number =>
+        t === null || t === undefined ? 0 : (info.memoryMap.get(t) ?? 0);
+      const sum = (ts: (object | null | undefined)[]): number =>
+        ts.reduce<number>((a, t) => a + size(t), 0);
+      const ocean = world.ocean;
+      const map = world.shadows.light.shadow.map;
       return {
-        detail,
-        foamMap: 2 * tier.foamMap * tier.foamMap,
-        shadowMap: rung.shadows ? 4 * tier.shadowMap * tier.shadowMap : 0,
-        pattern: 256 * 256 * 4 * mips,
+        detail: sum(ocean.detail.textures),
+        foamMap: sum(ocean.wakes.targets.map((t) => t.texture)),
+        shadowMap: world.shadows.light.castShadow ? sum([map?.texture, map?.depthTexture]) : 0,
+        pattern: size(ocean.pattern),
+        all: info.memory.texturesSize,
       };
     },
     /** The tier's values in use. */

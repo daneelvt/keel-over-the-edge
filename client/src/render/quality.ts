@@ -59,7 +59,9 @@ export const TIERS: Record<TierName, Tier> = {
     scale: 2,
     detail: { kind: 'fft', size: 256, patches: 2 },
     foamMap: 512,
-    shadowMap: 2048,
+    // A shadow map is a depth texture and a colour target: 5 bytes a texel
+    // here (shadows.ts), so 1,024² is 5 MB and 2,048² would be 20.
+    shadowMap: 1024,
     shadowBox: 40,
     shadowFleet: true,
     spray: 512,

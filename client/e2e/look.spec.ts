@@ -750,9 +750,11 @@ test.describe('budgets', () => {
           drawCalls: now.drawCalls,
           dispatches: now.dispatches,
           triangles: now.triangles,
-          // What the look adds, and the shadow map apart.
-          megabytes: (bytes.detail + bytes.foamMap + bytes.pattern) / 2 ** 20,
+          // What the look adds, the shadow map included, as three.js counts it.
+          megabytes: (bytes.detail + bytes.foamMap + bytes.pattern + bytes.shadowMap) / 2 ** 20,
+          detail: bytes.detail / 2 ** 20,
           shadow: bytes.shadowMap / 2 ** 20,
+          all: bytes.all / 2 ** 20,
         });
       }
       return out;
@@ -762,7 +764,9 @@ test.describe('budgets', () => {
       expect(t.drawCalls as number).toBeLessThan(150);
       const rung = t.rung as string;
       expect(t.dispatches).toBe(rung.includes('× 2') ? 8 : rung.includes('²') ? 4 : 0);
+      // Everything this look adds to a phone's GPU memory.
       expect(t.megabytes as number).toBeLessThan(12);
+      expect(t.megabytes as number).toBeGreaterThan(1);
     }
   });
 });

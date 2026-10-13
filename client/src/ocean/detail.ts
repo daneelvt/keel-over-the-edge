@@ -45,8 +45,10 @@ import {
   LinearFilter,
   LinearMipmapLinearFilter,
   NearestFilter,
+  RedFormat,
   RepeatWrapping,
   RGBAFormat,
+  type Texture,
   Vector2,
   Vector4,
 } from 'three';
@@ -73,6 +75,7 @@ import {
   texture3D,
   textureLoad,
   textureStore,
+  uint,
   uniform,
   vec2,
   vec3,
@@ -176,26 +179,56 @@ export function transformTable(n: number): Float32Array {
 }
 
 /**
- * A patch's waves for the spectrum pass, one texel a wave: its phase at
- * time 0 and its opposite's, in turns; its frequency in steps of the loop;
- * and the part of its energy that the wind does not change, w Δk² g / (2ω k).
+ * A patch's waves for the spectrum pass, one float a wave: its frequency in
+ * whole steps of the loop, or −1 for a wave the patch leaves out. Its phase
+ * and the part of its energy the wind does not change are computed in the
+ * pass itself, as spectrum.ts computes them: so the table is a quarter of
+ * the size it would be with them.
  */
-export function modeTexels(patch: Patch): Float32Array {
+export function stepTexels(patch: Patch): Float32Array {
   const m = modesOf(patch);
-  const dk = stepOf(patch);
-  const data = new Float32Array(patch.size * patch.size * 4);
+  const data = new Float32Array(patch.size * patch.size).fill(-1);
   for (let i = 0; i < m.k.length; i++) {
-    const w = m.weight[i] as number;
-    if (w === 0) {
-      continue;
+    if ((m.weight[i] as number) > 0) {
+      data[i] = m.step[i] as number;
     }
-    const k = m.k[i] as number;
-    data[i * 4] = m.phase[i] as number;
-    data[i * 4 + 1] = m.phase[m.opposite[i] as number] as number;
-    data[i * 4 + 2] = m.step[i] as number;
-    data[i * 4 + 3] = (w * dk * dk * GRAVITY) / (2 * Math.sqrt(GRAVITY * k) * k);
   }
   return data;
+}
+
+/** A patch's frequencies as a texture: one red float a texel. */
+function stepTexture(patch: Patch): DataTexture {
+  const n = patch.size;
+  const t = new DataTexture(stepTexels(patch), n, n, RedFormat, FloatType);
+  t.minFilter = NearestFilter;
+  t.magFilter = NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+}
+
+/**
+ * A wave's phase at time 0, in turns, from its whole numbers: Wellons's
+ * lowbias32 of the pair packed into one word, over 2³², as phaseOf in
+ * spectrum.ts. Integer arithmetic, so every GPU gets the CPU's bits but for
+ * the last float's rounding.
+ */
+const phaseNode = /* @__PURE__ */ Fn(([a, b]: [Node<'int'>, Node<'int'>]) => {
+  const q = uint(a.add(32768)).bitAnd(uint(0xffff));
+  const r = uint(b.add(32768)).bitAnd(uint(0xffff));
+  const x = q.bitOr(r.shiftLeft(uint(16))).toVar();
+  x.assign(x.bitXor(x.shiftRight(uint(16))));
+  x.assign(x.mul(uint(0x7feb352d)));
+  x.assign(x.bitXor(x.shiftRight(uint(15))));
+  x.assign(x.mul(uint(0x846ca68b)));
+  x.assign(x.bitXor(x.shiftRight(uint(16))));
+  return float(x).div(4294967296);
+});
+
+/** The scratch textures a transform runs through: the spectrum, then the rows. Patches that run one after another share them. */
+export interface Scratch {
+  spectrum: StorageTexture;
+  rows: StorageTexture;
 }
 
 /** Memory a workgroup's invocations share: an array of vec4. */
@@ -218,7 +251,7 @@ class Cascade {
   readonly inputs: SpectrumInputs = newSpectrumInputs();
 
   readonly #sea: WeatherSea;
-  readonly #modes: DataTexture;
+  readonly #steps: DataTexture;
   readonly #table: DataTexture;
   readonly #spectrumOut: StorageTexture;
   readonly #rowsOut: StorageTexture;
@@ -238,16 +271,19 @@ class Cascade {
   /** What the inputs were computed from. */
   #from = [Number.NaN, 0, 0, 0];
 
-  constructor(sea: WeatherSea, patch: Patch, foamy: boolean, anisotropy: number) {
+  constructor(sea: WeatherSea, patch: Patch, foamy: boolean, anisotropy: number, scratch: Scratch) {
     this.#sea = sea;
     this.patch = patch;
     this.foamy = foamy;
     const n = patch.size;
-    this.#modes = floatTexture(modeTexels(patch), n, n);
+    this.#steps = stepTexture(patch);
     this.#table = floatTexture(transformTable(n), n, 1);
-    this.#spectrumOut = workTexture(n, 'detail spectrum');
-    this.#rowsOut = workTexture(n, 'detail rows');
-    this.out = [this.#output(anisotropy), this.#output(anisotropy)];
+    this.#spectrumOut = scratch.spectrum;
+    this.#rowsOut = scratch.rows;
+    // Foam is remembered from frame to frame in two outputs that take turns;
+    // without foam, one is enough.
+    const first = this.#output(anisotropy);
+    this.out = [first, foamy ? this.#output(anisotropy) : first];
     this.#spectrum = this.#spectrumKernel();
     this.#rows = this.#lineKernel(this.#spectrumOut, this.#rowsOut, false);
     // The columns' output goes back where the spectrum was: it is not read again.
@@ -295,16 +331,27 @@ class Cascade {
     const n = this.patch.size;
     const dk = stepOf(this.patch);
     const sea = this.#sea;
+    const p = this.patch;
     return Fn(() => {
       const at = ivec2(globalId.xy);
-      const m = textureLoad(this.#modes, at);
+      const step = textureLoad(this.#steps, at).x;
       const out = vec4(0).toVar();
-      If(m.w.greaterThan(0), () => {
+      If(step.greaterThanEqual(0), () => {
         // The wave vector's whole numbers: 0 … n/2 − 1, then −n/2 … −1.
         const index = vec2(at);
-        const kv = index.sub(floor(index.mul(2 / n)).mul(n)).mul(dk);
+        const whole = index.sub(floor(index.mul(2 / n)).mul(n));
+        const kv = whole.mul(dk);
         const k = length(kv);
         const omega = sqrt(k.mul(GRAVITY));
+        // The patch's weight on the energy (patchWeight), and the part of the
+        // energy the wind does not change: w Δk² g / (2ω k).
+        const high = exp(k.div(p.rollOff).pow(2).negate());
+        const weight =
+          p.above > 0 ? high.mul(float(1).sub(exp(k.div(p.above).pow(2).negate()))) : high;
+        const fixed = weight.mul((dk * dk * GRAVITY) / 2).div(omega.mul(k));
+        const a0 = int(whole.x);
+        const b0 = int(whole.y);
+        const m = vec4(phaseNode(a0, b0), phaseNode(a0.negate(), b0.negate()), step, fixed);
         // JONSWAP: level ω⁻⁵ exp(−5/4 (peak/ω)⁴) γ^r, r = exp(−(ω − peak)² / (2 σ² peak²)).
         const sigma = omega.lessThan(this.#peak).select(sea.sigmaBelow, sea.sigmaAbove);
         const d = omega.sub(this.#peak).div(this.#peak.mul(sigma));
@@ -462,6 +509,11 @@ class Cascade {
     }
   }
 
+  /** The textures the patch holds of its own. */
+  get textures(): Texture[] {
+    return [...new Set([this.#steps, this.#table, ...this.out])];
+  }
+
   /** The four kernels, for compiling ahead of their first frame. */
   get kernels(): ComputeNode[] {
     return [this.#spectrum, this.#rows, this.#columns, ...this.#assemble];
@@ -475,7 +527,8 @@ class Cascade {
   }
 
   dispose(): void {
-    for (const t of [this.#modes, this.#table, this.#spectrumOut, this.#rowsOut, ...this.out]) {
+    // The scratch textures are the transform's, which lets them go.
+    for (const t of new Set([this.#steps, this.#table, ...this.out])) {
       t.dispose();
     }
     for (const k of [this.#spectrum, this.#rows, this.#columns, ...this.#assemble]) {
@@ -493,10 +546,17 @@ class Transformed {
   readonly #perHeight = uniform(0);
   readonly #sea: WeatherSea;
 
+  readonly #scratch: Scratch;
+
   constructor(sea: WeatherSea, size: number, patches: number, anisotropy: number) {
     this.#sea = sea;
     const patch = detailPatch(sea, size, DETAIL.patch, DETAIL.period);
-    this.first = new Cascade(sea, patch, true, anisotropy);
+    // The patches run one after the other: they share their scratch.
+    this.#scratch = {
+      spectrum: workTexture(size, 'detail spectrum'),
+      rows: workTexture(size, 'detail rows'),
+    };
+    this.first = new Cascade(sea, patch, true, anisotropy, this.#scratch);
     this.second =
       patches === 2
         ? new Cascade(
@@ -504,6 +564,7 @@ class Transformed {
             finerPatch(patch, DETAIL.finePatch, DETAIL.fineLongest),
             false,
             anisotropy,
+            this.#scratch,
           )
         : null;
     const first = this.first;
@@ -533,6 +594,20 @@ class Transformed {
   dispose(): void {
     this.first.dispose();
     this.second?.dispose();
+    this.#scratch.spectrum.dispose();
+    this.#scratch.rows.dispose();
+  }
+
+  /** Every texture the transform holds, once each. */
+  get textures(): Texture[] {
+    return [
+      ...new Set([
+        ...this.first.textures,
+        ...(this.second?.textures ?? []),
+        this.#scratch.spectrum,
+        this.#scratch.rows,
+      ]),
+    ];
   }
 
   get kernels(): ComputeNode[] {
@@ -661,6 +736,11 @@ class Baked {
       ripple: null,
       filtered: false,
     };
+  }
+
+  /** Every texture the loops hold. */
+  get textures(): Texture[] {
+    return [...this.#fine, ...this.#coarse];
   }
 
   /** Whether the loops are whole. */
@@ -854,6 +934,15 @@ export class Detail {
       // The loops are made while the band before them is still drawn.
       this.#baked?.bake(BAKE_SLICE);
     }
+  }
+
+  /** Every texture the band in use holds, for counting its memory. */
+  get textures(): Texture[] {
+    const a = this.#active;
+    if (a.transformed !== null) {
+      return a.transformed.textures;
+    }
+    return a.kind.kind === 'baked' ? (this.#baked?.textures ?? []) : [];
   }
 
   /** The transform's patches in use, for the tests that read them back. */
