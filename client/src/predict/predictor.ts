@@ -16,7 +16,6 @@
 // cause a correction. The Go test client predicts the same way
 // (internal/client/predict.go), and the tests replay its traces here.
 
-import { catalog } from '../catalog';
 import type { BoatPhysics, Encounters, Weather } from '../catalog/types.gen';
 import type { BoatDriver } from '../game/driver';
 import type { OwnSnapshot } from '../net/snapshot';
@@ -78,14 +77,14 @@ export function sheetIndex(sheet: number): number {
 /**
  * Readies a physics module for a kind of boat in the catalog's weather:
  * every record cleared, the sea's waves derived, then the boat's constants,
- * the wind's and the encounters'. No spell of weather is in play until one
- * is set.
+ * the wind's and, if given, the encounters'. No spell of weather is in play
+ * until one is set.
  */
 export function preparePhysics(
   physics: Physics,
   boat: BoatPhysics,
   weather: Weather,
-  encounters: Encounters = catalog.encounters,
+  encounters?: Encounters,
 ): void {
   const r = physics.records;
   for (const v of Object.values(r)) {
@@ -97,9 +96,16 @@ export function preparePhysics(
   physics.prepare();
   writeWeatherParams(physics.records.weatherParams, weather);
   physics.prepareWeather();
+  if (encounters !== undefined) {
+    prepareEncounters(physics, encounters);
+  }
+  physics.setSpells([]);
+}
+
+/** Readies a physics module's encounters: the shadow, contacts and the Articles. */
+export function prepareEncounters(physics: Physics, encounters: Encounters): void {
   writeEncounterParams(physics.records.encounterParams, encounters);
   physics.prepareEncounters();
-  physics.setSpells([]);
 }
 
 function wrapAngle(a: number): number {
@@ -134,9 +140,9 @@ export class Predictor implements BoatDriver {
   /** The drawn boat's offset from the predicted one, eased away. */
   readonly offset = { east: 0, north: 0, heading: 0 };
 
-  constructor(physics: Physics, boat: BoatPhysics, weather: Weather) {
+  constructor(physics: Physics, boat: BoatPhysics, weather: Weather, encounters?: Encounters) {
     this.#physics = physics;
-    preparePhysics(physics, boat, weather);
+    preparePhysics(physics, boat, weather, encounters);
     this.seas = new Seas(physics);
     this.weather = new Spells(physics);
     this.wakes = new Wakes(physics);

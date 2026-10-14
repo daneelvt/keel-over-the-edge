@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -294,14 +295,33 @@ func BenchmarkTickEncounters(b *testing.B) {
 				send(b, w, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherHeld, Regime: 3}})
 				sail(w, 4*bus.SeaPeriod, 2)
 				bumps := 0
+				var phases phaseClock
+				w.Observe(&phases)
 				b.ReportAllocs()
 				for b.Loop() {
+					phases.start = time.Now()
 					w.Tick()
 					bumps += len(newBumps(w))
 				}
+				w.Observe(nil)
 				b.ReportMetric(float64(len(w.Latest().Pairs)), "pairs")
 				b.ReportMetric(float64(bumps)/float64(b.N)*30, "bumps/s")
+				for _, p := range []Phase{PhasePhysics, PhaseContacts} {
+					b.ReportMetric(float64(phases.total[p].Microseconds())/float64(b.N), p.String()+"-µs")
+				}
 			})
 		}
 	}
+}
+
+// phaseClock times each phase of the ticks it observes.
+type phaseClock struct {
+	start time.Time
+	total [Phases]time.Duration
+}
+
+func (c *phaseClock) PhaseDone(p Phase) {
+	now := time.Now()
+	c.total[p] += now.Sub(c.start)
+	c.start = now
 }

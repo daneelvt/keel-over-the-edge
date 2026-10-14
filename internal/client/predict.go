@@ -49,6 +49,8 @@ type Predictor struct {
 	// boats the snapshots show near, as Wakes approximates it.
 	Encounters *physics.EncounterPrepared
 	Wakes      Wakes
+	// Shadowed counts the steps a wake reached the boat in.
+	Shadowed int
 }
 
 // NewPredictor predicts a boat of kind in the sea of waves, with which the
@@ -89,7 +91,9 @@ func (p *Predictor) step(tick int64, helm, sheet uint16) {
 	}
 	e := physics.WindAt(&p.wind, p.State.X, p.State.Y)
 	if p.Encounters != nil {
-		p.Wakes.Shadow(&e, p.State.X, p.State.Y, tick, &p.Weather, p.kind, p.Encounters)
+		if p.Wakes.Shadow(&e, p.State.X, p.State.Y, tick, &p.Weather, p.kind, p.Encounters) > 0 {
+			p.Shadowed++
+		}
 	}
 	physics.Step(&p.State, &c, &e, p.Seas.At(tick), p.kind, &p.out)
 }

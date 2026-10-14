@@ -85,7 +85,13 @@ interface CatalogBoat {
   beam: number;
   art: { model: string; far: string };
   physics: {
-    hull: { hullDraught: number; centreOfGravity: number };
+    hull: {
+      hullDraught: number;
+      centreOfGravity: number;
+      outline: number[];
+      transom: number;
+      stem: number;
+    };
     rig: {
       luff: number;
       foot: number;
@@ -122,9 +128,9 @@ const { hull, rig, foils, sailor } = boat.physics;
 
 const L = boat.lengthOverall;
 const HALF_BEAM = boat.beam / 2;
-/** The transom, just forward of the rudder's stock, and the stem. */
-const TRANSOM_Z = foils.rudderPosition - 0.1;
-const BOW_Z = TRANSOM_Z - L;
+/** The transom, just forward of the rudder's stock, and the stem: the catalog's, where hulls touch. */
+const TRANSOM_Z = hull.transom;
+const BOW_Z = -hull.stem;
 
 /** Station u runs from the transom (0) to the stem (1). */
 const zAt = (u: number): number => TRANSOM_Z - u * L;
@@ -138,13 +144,36 @@ const smoothstep = (a: number, b: number, x: number): number => {
 /** Height of the sheer above the waterline: low, rising toward the bow. */
 const sheer = (u: number): number => 0.3 + 0.09 * u * u;
 
-/** Half the beam at the sheer: a wide transom, the greatest beam aft of amidships, a full bow. */
+/**
+ * Half the beam at the sheer: the catalog's outline, the plan the physics
+ * bumps hulls with, between its stations: a wide transom, the greatest beam
+ * aft of amidships, a full bow.
+ */
 function halfBeam(u: number): number {
-  if (u <= 0.4) {
-    return HALF_BEAM * (0.76 + 0.24 * Math.sin(((Math.PI / 2) * u) / 0.4));
+  const o = hull.outline;
+  const x = Math.min(1, Math.max(0, u)) * (o.length - 1);
+  const i = Math.min(o.length - 2, Math.floor(x));
+  const f = x - i;
+  return (o[i] ?? 0) * (1 - f) + (o[i + 1] ?? 0) * f;
+}
+
+/**
+ * How far the model's sheer, drawn straight between its stations, lies from
+ * the outline at most, in metres: what is drawn is what bumps.
+ */
+function planDeviation(): number {
+  const s = stations();
+  let most = 0;
+  for (let k = 0; k + 1 < s.length; k++) {
+    const a = s[k] ?? 0;
+    const b = s[k + 1] ?? 0;
+    for (let j = 0; j <= 20; j++) {
+      const u = a + ((b - a) * j) / 20;
+      const drawn = halfBeam(a) + ((halfBeam(b) - halfBeam(a)) * j) / 20;
+      most = Math.max(most, Math.abs(drawn - halfBeam(u)));
+    }
   }
-  const t = (u - 0.4) / 0.6;
-  return HALF_BEAM * Math.max(0, 1 - t ** 2.1) ** 0.62;
+  return most;
 }
 
 /** Depth of the keel line below the waterline: a gentle rocker, rising to the sheer at the stem. */
@@ -964,7 +993,7 @@ function model(): NodeDef[] {
     boomParts.push(gooseneck().primitive());
   }
   const nodes: NodeDef[] = [
-    { name: 'hull', primitives: hullParts, extras: { waterline } },
+    { name: 'hull', primitives: hullParts, extras: { waterline, plan: { deviation: planDeviation() } } },
     { name: 'mast', translation: [0, 0, MAST_Z], primitives: [mast().primitive()] },
     {
       name: 'boom',

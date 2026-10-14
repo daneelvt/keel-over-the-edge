@@ -583,6 +583,165 @@ sailor's heel follows the gusts, tacking on the headers gains on holding a
 tack, a gust can capsize a boat sheeted hard in, and the refuge's limits
 hold.
 
+## Encounters
+
+Boats are solid, take each other's wind, and are judged by the Articles,
+the game's right-of-way rules. The physics package does all of it
+(`outline.go`, `contact.go`, `shadow.go`, `articles.go`), so the server,
+the client's module and the tests are the same code; the simulation calls
+it in the order of the boats' slots. Every number is in
+`shared/catalog/encounters.yaml`, and each boat's plan in `boats.yaml`.
+
+### The outline and contacts
+
+A boat's hull is its plan at the sheer: `outline`, its half-beam at 11
+stations equally spaced from the transom (`transom` m aft of the centre of
+gravity) to the stem (`stem` m forward), a convex polygon of 21 points with
+the stem a point. `art/boats/jolly-boat/build.ts` draws the hull from the
+same numbers, straight between the stations, so what is drawn is what
+bumps; the hull node's `extras.plan.deviation` says how far the drawn sheer
+strays (under a centimetre). `tools/catalog -check` refuses an outline that
+is not convex, not 11 stations, wider than the beam or not the boat's
+length. Heel, the rig, the foils and a swimming sailor are ignored.
+
+After the physics and the grid, the **contacts** phase (`sim/contacts.go`)
+finds the boats near each other, each pair once (a boat's own cell and the
+four after it), in slot order. Two hulls touch when their bounding circles
+overlap and no edge of either separates them (separating axes); the
+contact's normal is the axis they overlap least along, its point the
+centre of their overlap. A tick's contacts are resolved together by
+sequential impulses in surge, sway and yaw, each boat with its added
+masses and yaw inertia: `contact.passes` passes, `contact.restitution`
+(0.3, a padded knock) and `contact.friction`; then what penetration is left
+beyond `contact.slop` is pushed apart, `contact.push` of it, at most
+`contact.cap` a tick. Boats a contact moved have their wind and wake worked
+out again, and the grid is built again. A pair's first contact after
+`contact.apart` ticks apart is a **bump**: one, however long the hulls rub.
+
+### The wake and the shadow
+
+Each boat's step leaves a **wake** (`physics.Wake`): where its sail's
+centre of effort is, the way its wake runs and the height of its rig as it
+stands (none once capsized). The wake lies along the source's **apparent**
+wind, turned `shadow.deflection` (5° close-hauled, 9° on a reach and
+beyond) toward its windward side: wind-tunnel studies of two yachts put it
+there, not along the true wind. In the next tick each boat looks, in the
+current frame's grid, for the `shadow.sources` nearest wakes that reach it,
+and sails in the wind at its place times Π(1 − A fᵢ), turned by Σ H fᵢ:
+`shadow.deficit` A is the share lost one rig height behind on the axis,
+falling as s^(−2/3) and widening as s^(1/3) (`shadow.width`), fading in
+over `shadow.near`, out from `shadow.taper` to `shadow.reach` rig heights.
+`shadow.header` H turns the wind away from the source's windward side: a
+header for a boat behind it on the same tack. Wakes are derived, worked out
+again from the states when a world is loaded.
+
+On the phone the step sails in the same shadow, approximated: the
+predictor (`predict/wakes.ts`, and its twin `internal/client/wakes.go`)
+keeps each near-band boat's two newest samples and, before stepping into
+tick t, offers the module the wakes of the 16 nearest, where their samples
+put them at t − 1, in the wind there. The difference from the server's
+shadow is corrected as any other. The readout shows the wind with the
+shadow, as an anemometer at the masthead would; the force is still the
+mean wind's.
+
+### The Articles
+
+The Articles are the Racing Rules of Sailing 2025–2028, Part 2, Sections A
+and B, and rule 22, numbered as the rulebook numbers them, between every
+two boats, racing or not. For each pair within `articles.pairs` hull lengths,
+every tick, `physics.Relate` says which keeps clear and by which Article:
+
+| Article | Who keeps clear | How the game decides it |
+|---------|-----------------|-------------------------|
+| 22 | the boat that is not capsized | a boat is capsized when its sailor is not aboard and sailing, or its heel is past 90°; both capsized: no one |
+| 13 | a boat tacking; both: the one astern, or on the other's port side | from passing head to wind until her heading is `closeHauled` off the true wind, whatever her speed |
+| 10 | port tack | a boat's tack is the side the true wind at her comes over; aft of the beam with her boom on that side (by the lee), or dead downwind, the side opposite her boom; within `articles.headToWind` of head to wind she keeps the tack she had |
+| 12 | the boat clear astern | her bow and transom, projected on the other's heading, behind the other's transom |
+| 11 | the windward boat | of two overlapped on the same tack, the one on the other's windward side, across their mean heading |
+
+Each boat's **course** (`physics.Course`: tack, tacking, ticks since her
+tack changed, her heading smoothed over `articles.course` seconds) is kept
+in the frame. Each **pair** (`bus.Pair`) remembers who keeps clear, since
+when and by whose action: a tack or gybe within the room window, or a boat
+that was clear astern and is now overlapped with right of way. A pair new
+in range, or one a `Place` command moved a boat of, starts with no one's
+action.
+
+At a bump, `physics.Fault` judges the relation the pair had the tick
+before: the keep-clear boat's fault (a right-of-way boat is exonerated for
+a contact without damage, rule 43.1(c)), unless the right-of-way boat
+acquired right of way by her own action within `articles.room` seconds
+(**15**), or her heading is more than `articles.turn` off her course toward
+the other (**16.1**). The fault counts against the account sailing the boat
+at fault. `internal/physics/testdata/articles.json` holds the recorded
+situations, each naming the Case Book case it follows; Go and the module
+must give every one its verdict.
+
+### Bumps on the wire and in the log
+
+A frame keeps the bumps of the last `bus.BumpTicks` ticks, so an encoder
+that skips a frame misses none. Each connection is sent a `Bump` for each
+bump after the last it was sent (from its Welcome): to the two boats'
+sailors with their part (`yours`, `theirs`, `none`) and the Article; to a
+connection that sees either boat in its near band, without them. The page
+knocks (`art/sound/bump.json`), shakes the camera (a third as much under
+reduced motion) and, for its own, says the verdict under the readout for
+four seconds. The persist queue writes each bump to the `event` table, kind
+`bump`, the sailor and boat at fault first (with no fault, the first boat),
+the other's, the Article, the fault (`account` or `none`) and where.
+
+### The overlays
+
+**Right of way** (the menu's "Show right of way"): four times a second the
+page follows each drawn boat's course in the wind at it, takes the
+`overlay.marks` boats within `overlay.range` whose closest approach in
+`overlay.ahead` seconds, by their present motions, comes within
+`overlay.close` hull lengths, and asks the module's Articles which keeps
+clear: a ring with a bar ("Keep clear") over a boat the player must keep
+clear of, a diamond ("Right of way") over one that must keep clear of the
+player, each with its Article; and the player's tack beside the readout.
+The **wind** overlay lays a faint wedge of dirty air behind each boat
+within `overlay.wedges`, along its wake, out to where the loss falls under
+`overlay.wedgeDeficit`.
+
+### Trying it
+
+With `KEEL_DEV_COMMANDS=1`, on the internal listener:
+
+```sh
+curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=12&from=0'
+curl -X POST 'http://127.0.0.1:9090/debug/encounter?situation=port-starboard'
+```
+
+places a scripted boat to meet the first sailing player's boat, held on its
+course and trim for half a minute: `port-starboard` (10), `windward-leeward`
+(11), `overtaking` (12), `tacking` (13), `luffing` (15) and `capsized` (22).
+It answers with where it put the boat and the Article the bump should be
+judged by; hold your course. The developer panel (`?dev`) shows the wind
+with any shadow, how many wakes reach the boat, its course as the Articles
+follow it, and the last bump.
+
+### Tuning
+
+Everything is in `shared/catalog/encounters.yaml`, and the outline in
+`boats.yaml`. After a change:
+
+```sh
+go run ./tools/catalog
+go run ./tools/physics
+(cd client && npm run art)                               # after a change to the outline
+go test ./internal/physics -run 'Golden|EncounterFile' -update
+go test ./internal/sim -run Fixture -update
+go test ./internal/edge/edgetest -run Traces -update
+```
+
+The behaviour tests say what must stay true
+(`go test ./internal/physics -run 'BoatsBump|DirtyAir|Shadow|Contact|Articles' -v`):
+boats bump at every crossing angle and part, the wake follows the apparent
+wind, and dirty air costs a boat a share of its way to windward (logged in
+three winds). The snapshot is version 7: a change to the courses or the
+pairs is a new version, and a reset at the deploy.
+
 ## Waves
 
 The sea moves boats. The waves longer than about 8 m, which the 4 m tiles can
@@ -1029,7 +1188,7 @@ world; everything reaches it through the **bus** (`internal/bus`).
 | Package | What |
 |---------|------|
 | `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`; for developers only `SetWeather` and `Place`; and the server's own `Hold`, admission held while the world's writes are behind); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
-| `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, bring the sea to the tick, step every boat, sort the boats into the grid, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
+| `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, bring the sea to the tick, step every boat in the shadow of the boats near it, sort the boats into the grid, find the pairs, contacts and bumps, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
 | `internal/persist` | The world's writer: the lasting events and a checkpoint every 10 s, written behind the tick in fenced batches (see [Restarts and deploys](#restarts-and-deploys)). |
 | `internal/sim/loop` | The clock: tick k after the world's epoch (the database's world row; world 1's is 1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
 | `internal/weather` | The weather's timeline: the catalog's sequence of spells, each drawn from its regime, a developer's weathers over it, and the spells in play about a tick (see [Wind](#wind)). |
@@ -1126,7 +1285,7 @@ resolved at start, so updating it allocates nothing:
 | `keel_build_info{build,catalog}` | Which version runs |
 | `keel_sim_tick` | The latest tick |
 | `keel_sim_tick_duration_seconds` | Each tick, in buckets from 0.5 ms to 100 ms with edges at 10, 25 and 33 ms |
-| `keel_sim_phase_duration_seconds{phase}` | `inputs`, `sea`, `physics`, `grid`, `publish` |
+| `keel_sim_phase_duration_seconds{phase}` | `inputs`, `sea`, `physics`, `grid`, `contacts`, `publish` |
 | `keel_sim_grid_duration_seconds` | Sorting the boats into the grid, each tick |
 | `keel_sim_ticks_total`, `_late_total`, `_skipped_total` | All ticks; those run back to back to catch up; those skipped |
 | `keel_sim_clock_drift_seconds` | World time minus UTC as a tick starts |
@@ -1182,7 +1341,7 @@ The server keeps the last 10 s or more of its execution trace in memory
 (`runtime/trace`'s flight recorder, at most 32 MB). When a tick takes more
 than 25 ms it writes the trace to `KEEL_TRACE_DIR` as
 `trace-<UTC time>-tick<N>.out`, at most once a minute. Each phase of a tick is
-a trace region (`inputs`, `sea`, `physics`, `grid`, `publish`), so a slow tick's trace says
+a trace region (`inputs`, `sea`, `physics`, `grid`, `contacts`, `publish`), so a slow tick's trace says
 which phase was slow. To take one now:
 
 ```sh

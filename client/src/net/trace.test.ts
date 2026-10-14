@@ -111,6 +111,7 @@ async function replay(
     await loadPhysics(bytes),
     catalog.boats[0].physics,
     catalog.weather,
+    catalog.encounters,
   );
   const session = new Session(versions);
   const record = new ArrayBuffer(FLEET_RECORD_BYTES);

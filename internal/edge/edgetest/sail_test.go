@@ -639,3 +639,80 @@ func TestSailGusts(t *testing.T) {
 		})
 	}
 }
+
+// TestSailInShadow: two sailors, one starting in the other's dirty air and
+// both steering alike, at 100 ms each way and 2% lost, and without lag: the
+// prediction's shadow, from the other boat's samples, is not the server's,
+// and the difference is corrected as any other, in millimetres.
+func TestSailInShadow(t *testing.T) {
+	d := sailLength()
+	seeds := uint64(3)
+	if testing.Short() {
+		d, seeds = 30*time.Second, 1
+	}
+	for _, lossy := range []bool{false, true} {
+		var all client.Stats
+		shadowed, steps := 0, 0
+		for seed := range seeds {
+			synctest.Test(t, func(t *testing.T) {
+				srv := NewServer(t, Config{})
+				var sailors []*client.Sailor
+				var accounts []bus.Account
+				for i, name := range []string{"Ann", "Bob"} {
+					token, id := srv.Guest(name)
+					o := DialOptions{Cookie: token}
+					if lossy {
+						o.Wrap = client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 10*seed + uint64(i) + 1}.Wrap
+					}
+					s := srv.NewSailor(o, recorded(t))
+					if err := s.Connect(t.Context()); err != nil {
+						t.Fatal(err)
+					}
+					sailors = append(sailors, s)
+					accounts = append(accounts, bus.Account(id))
+				}
+				sailFor(t, sailors, time.Second)
+				// Bob a length behind Ann and two downwind, in the wind from
+				// the north: in her wake.
+				f := srv.World.Bus().Frames.Acquire()
+				var ann physics.State
+				for _, sl := range f.Live {
+					if f.Owner[sl] == accounts[0] {
+						ann = f.State[sl]
+					}
+				}
+				f.Release()
+				bob := ann
+				bob.X -= 4
+				bob.Y -= 9
+				srv.Place(boatOf(srv, accounts[1]), bob)
+				// The place itself is a correction: counted from a second on.
+				b := sailors[1]
+				sailFor(t, sailors, time.Second)
+				before := b.Stats
+				shadowedBefore := b.Predictor.Shadowed
+				sailFor(t, sailors, d)
+				for _, s := range sailors {
+					s.Drop()
+				}
+				all.Snapshots += b.Stats.Snapshots - before.Snapshots
+				all.Corrections += b.Stats.Corrections - before.Corrections
+				all.Over += b.Stats.Over - before.Over
+				all.Sizes = append(all.Sizes, b.Stats.Sizes[len(before.Sizes):]...)
+				shadowed += b.Predictor.Shadowed - shadowedBefore
+				steps += b.Stats.Steps - before.Steps
+			})
+		}
+		name := "without lag"
+		if lossy {
+			name = "100 ms each way, 2% lost"
+		}
+		report(t, fmt.Sprintf("in Ann's shadow, %s, %d seeds (%d steps of %d predicted, and replayed, in a wake)", name, seeds, shadowed, steps), all, time.Duration(seeds)*d)
+		if all.Over > 0 {
+			t.Errorf("%s: %d corrections over the snap thresholds", name, all.Over)
+		}
+		if shadowed == 0 {
+			t.Errorf("%s: no step was predicted in a wake", name)
+		}
+	}
+}

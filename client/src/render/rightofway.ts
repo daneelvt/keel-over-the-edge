@@ -214,12 +214,19 @@ export class RightOfWay {
     originY: number,
     camera: Camera,
   ): void {
-    if (!this.on) {
-      return;
-    }
     if (physics !== null && now >= this.#next) {
       this.#next = now + 1000 / this.#cfg.rate;
-      this.#judge(physics, tick, own, drawn, count);
+      // The player's own course is followed always, for the developer's
+      // panel; the others' only with the overlay on.
+      physics.windDrawAt(tick);
+      const from = physics.windPoint(own.east, own.north)[W.from] ?? 0;
+      physics.courseOf(this.#own, own.heading, own.boom, from);
+      if (this.on) {
+        this.#judge(physics, tick, own, from, drawn, count);
+      }
+    }
+    if (!this.on) {
+      return;
     }
     for (let k = 0; k < this.#marks.length; k++) {
       const m = this.#marks[k] as Mark;
@@ -265,16 +272,19 @@ export class RightOfWay {
     }
   }
 
+  /** The player's own course as the Articles follow it: tack, tacking, ticks settled, course. */
+  get ownCourse(): Readonly<Float64Array> {
+    return this.#own;
+  }
+
   #judge(
     physics: Physics,
-    tick: number,
+    _tick: number,
     own: Seen,
+    ownFrom: number,
     drawn: readonly DrawnBoat[],
     count: number,
   ): void {
-    physics.windDrawAt(tick);
-    const ownFrom = physics.windPoint(own.east, own.north)[W.from] ?? 0;
-    physics.courseOf(this.#own, own.heading, own.boom, ownFrom);
     this.tack = tackText(this.#own[C.tack] ?? 1, (this.#own[C.tacking] ?? 0) !== 0);
 
     // Every drawn boat's course is followed, so that one that tacked before

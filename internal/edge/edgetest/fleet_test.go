@@ -255,6 +255,7 @@ func TestBytes(t *testing.T) {
 		gusty  bool
 	}{
 		{"alone", 0, 0, false}, {"10 near", 10, 150, false}, {"10 far", 10, 500, false}, {"64 near", 64, 200, false},
+		{"10 bumping about the player", 10, 6, false},
 		{"alone, in a trade spell", 0, 0, true}, {"10 near, in a trade spell", 10, 150, true},
 	} {
 		if crowd.gusty && testing.Short() {
@@ -271,10 +272,10 @@ func TestBytes(t *testing.T) {
 				all = addStats(all, sailCrowd(t, crowd.n, crowd.radius, crowd.gusty, lag, d))
 			}
 			secs := d.Seconds() * float64(n)
-			t.Logf("%s, %s: %.0f B/s payload, %.0f B/s with WebSocket framing, %.0f B/s up; %.1f boats in view, %.1f near; %.2f entries a snapshot; %d dropped, %d resyncs, %d corrections over the snap thresholds",
+			t.Logf("%s, %s: %.0f B/s payload, %.0f B/s with WebSocket framing, %.0f B/s up; %.1f boats in view, %.1f near; %.2f entries a snapshot; %d dropped, %d resyncs, %d corrections over the snap thresholds; %d bumps told",
 				crowd.name, lagName(lag), float64(all.BytesIn)/secs, float64(all.FramesIn)/secs, float64(all.FramesOut)/secs,
 				float64(all.Others)/float64(all.Views), float64(all.Near)/float64(all.Views),
-				float64(all.Enters+all.Updates+all.Leaves)/float64(all.Views), all.Dropped, all.Resyncs, all.Over)
+				float64(all.Enters+all.Updates+all.Leaves)/float64(all.Views), all.Dropped, all.Resyncs, all.Over, all.Bumps)
 			if all.Dropped != 0 || all.Over != 0 {
 				t.Errorf("%s, %s: %d snapshots lacked their base; %d corrections over the snap thresholds", crowd.name, lagName(lag), all.Dropped, all.Over)
 			}
@@ -294,6 +295,7 @@ func lagName(l client.Lag) string {
 }
 
 func addStats(a, b client.Stats) client.Stats {
+	a.Bumps += b.Bumps
 	a.Snapshots += b.Snapshots
 	a.Views += b.Views
 	a.BytesIn += b.BytesIn

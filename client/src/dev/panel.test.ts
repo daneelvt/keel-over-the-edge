@@ -297,5 +297,42 @@ describe('the connection’s numbers', () => {
     expect(lines).toContain('delays            133 ms near, 400 ms far');
     expect(lines).toMatch(/entries {11}45\.0 a second/);
     expect(lines).toContain('snapshot          190 bytes');
+    expect(lines).not.toContain('last bump');
+  });
+
+  test('says what the encounters are: the shadow, the course, the last bump', () => {
+    const KNOT = 1852 / 3600;
+    const lines = netLines({
+      status: 'sailing',
+      offsetMs: 0,
+      rttMs: 200,
+      m: 4,
+      margin: 2,
+      counts: { snapshots: 60, corrections: 0, resets: 1, stale: 0, largest: 0 },
+      p95: 0,
+      traffic: { bytesIn: 1, bytesOut: 2, messagesIn: 3, messagesOut: 4, resyncs: 0 },
+      fleet: new Fleet().stats,
+      snapshotBytes: 190,
+      wind: {
+        speed: 10 * KNOT,
+        from: 0,
+        shadowSpeed: 8 * KNOT,
+        shadowFrom: -0.05,
+        meanSpeed: 10 * KNOT,
+        meanFrom: 0,
+        gust: 0,
+        factor: 1,
+      },
+      wakes: 2,
+      course: new Float64Array([-1, 1, 45, Math.PI / 4]),
+      bump: {
+        told: { tick: 9, east: 1.25, north: -3, closing: 1.5, part: 'yours', article: '10' },
+        ago: 3,
+      },
+    });
+    expect(lines).toContain('shadow  8.0 kn, 20% lost');
+    expect(lines).toContain('wakes             2 reaching the boat');
+    expect(lines).toContain('course            tacking, tack settled 1.5 s, course 045°');
+    expect(lines).toContain('last bump         3 s ago, yours, Article 10, 1.50 m/s, at 1.3 E -3.0 N');
   });
 });

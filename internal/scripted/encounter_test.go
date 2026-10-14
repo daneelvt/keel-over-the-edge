@@ -104,3 +104,33 @@ func TestEncounters(t *testing.T) {
 		})
 	}
 }
+
+// TestCrowdBumps counts the bumps a second among a thousand scripted
+// sailors where they joined, 20 m apart: the load bot's start, and the
+// event table's rows a second it brings.
+func TestCrowdBumps(t *testing.T) {
+	if testing.Short() {
+		t.Skip("a minute of a thousand boats")
+	}
+	synctest.Test(t, func(t *testing.T) {
+		cat, err := catalog.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		waves, kinds := cat.Prepare()
+		w, err := sim.New(sim.Config{Kinds: kinds[:1], Waves: waves, Workers: 4, Encounters: cat.PrepareEncounters()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		bumps, ticks := 0, 0
+		sail(t, w, 1000, 2*time.Minute, func(f *bus.Frame) {
+			ticks++
+			for _, b := range f.Bumps {
+				if b.Tick == f.Tick {
+					bumps++
+				}
+			}
+		})
+		t.Logf("a thousand scripted sailors on the spawn grid: %d bumps in %d s, %.1f a second", bumps, ticks/30, float64(bumps)*30/float64(ticks))
+	})
+}

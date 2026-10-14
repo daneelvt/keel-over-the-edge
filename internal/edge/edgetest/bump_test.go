@@ -12,6 +12,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
 
@@ -123,4 +124,76 @@ func TestBumpTold(t *testing.T) {
 			s.Drop()
 		}
 	})
+}
+
+// TestDrawnOverlap measures how far the drawn hulls go into each other
+// before a bump shows, at 40 ms and 200 ms round trips, head on and
+// ramming a boat at rest: collisions are not predicted, so the player's
+// own boat, predicted ahead, sails on into the other, drawn four ticks
+// behind its newest sample, until the server's correction comes. Each
+// sailor's own predicted boat is held against the other as drawn: its
+// sample two snapshots back.
+func TestDrawnOverlap(t *testing.T) {
+	for _, rtt := range []time.Duration{40 * time.Millisecond, 200 * time.Millisecond} {
+		for _, c := range []struct {
+			name string
+			bob  physics.State
+		}{
+			{"head on, 2.5 m/s each", physics.State{X: 512, Y: 500.3, Heading: -math.Pi / 2, Surge: 2.5, SheetLimit: 1.6}},
+			{"ramming a boat at rest", physics.State{X: 508, Y: 500.3, Heading: 0, SheetLimit: 1.6}},
+		} {
+			synctest.Test(t, func(t *testing.T) {
+				srv := NewServer(t, Config{})
+				var sailors []*client.Sailor
+				var accounts []bus.Account
+				deepest := make([]float64, 2)
+				var h physics.Hulls
+				kind := &srv.Kinds[0]
+				for i, name := range []string{"Ann", "Bob"} {
+					token, id := srv.Guest(name)
+					o := DialOptions{Cookie: token, Wrap: client.Lag{Delay: rtt / 2, Seed: uint64(i + 1)}.Wrap}
+					s := srv.NewSailor(o, letGo)
+					var past [3]*protocol.Boat
+					s.OnView = func(ev *client.Event) {
+						for slot := range protocol.ViewSlots {
+							if ev.View.Has(slot) && !ev.View.Boats[slot].Far() {
+								b := ev.View.Boats[slot]
+								past[0], past[1], past[2] = past[1], past[2], &b
+								break
+							}
+						}
+						if past[0] == nil {
+							return
+						}
+						other := physics.State{
+							X: float64(past[0].X) * protocol.PositionStep, Y: float64(past[0].Y) * protocol.PositionStep,
+							Heading: float64(int16(past[0].Heading)) * protocol.AngleStep,
+						}
+						var ct physics.Contact
+						own := s.Predictor.State
+						if h.Touch(&own, &other, kind, kind, &ct) {
+							deepest[i] = max(deepest[i], ct.Depth)
+						}
+					}
+					if err := s.Connect(t.Context()); err != nil {
+						t.Fatal(err)
+					}
+					sailors = append(sailors, s)
+					accounts = append(accounts, bus.Account(id))
+				}
+				sailFor(t, sailors, time.Second)
+				srv.Place(boatOf(srv, accounts[0]), physics.State{X: 500, Y: 500, Heading: math.Pi / 2, Surge: 2.5, SheetLimit: 1.6})
+				srv.Place(boatOf(srv, accounts[1]), c.bob)
+				sailFor(t, sailors, 6*time.Second)
+				for _, s := range sailors {
+					s.Drop()
+				}
+				t.Logf("%v round trip, %s: Ann's boat drawn %.2f m into Bob's at most, Bob's %.2f m into Ann's; %d and %d bumps told",
+					rtt, c.name, deepest[0], deepest[1], len(sailors[0].Bumps), len(sailors[1].Bumps))
+				if len(sailors[0].Bumps) == 0 {
+					t.Errorf("%v, %s: no bump", rtt, c.name)
+				}
+			})
+		}
+	}
 }
