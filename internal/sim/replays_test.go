@@ -29,6 +29,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // The replay tests: a world sailed through the real loop by scripted
@@ -60,6 +61,22 @@ func catalogKinds(t testing.TB) []physics.Prepared {
 }
 
 // catalogWaves is the catalog's sea.
+// catalogWeather is the world's own weather: the catalog's sequence. Each
+// world gets a timeline of its own: a timeline remembers the direction it
+// last walked to, which is not for two goroutines at once.
+func catalogWeather(t testing.TB) *weather.Timeline {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tl, err := weather.FromCatalog(cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tl
+}
+
 func catalogWaves(t testing.TB) *physics.Waves {
 	w, _ := physicsOnce()
 	return w
@@ -92,7 +109,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 	var out live
 	dir := t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
-		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit})
+		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -229,7 +246,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					}
 					waiting[i].conn = conn
 				case r < 11:
-					dev.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 3 + 6*rng.Float64(), From: 2 * math.Pi * rng.Float64()}})
+					dev.TrySend(bus.Command{Op: bus.SetWeather, Weather: randomWeather(rng)})
 				case r < 12:
 					held = w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.Hold, Held: true}) == nil
 				case len(boats) > 0:
@@ -266,7 +283,7 @@ func replayLog(t *testing.T, data []byte, workers int) (replay.Result, []byte) {
 		t.Fatal(err)
 	}
 	var end []byte
-	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Workers: workers, At: func(fr *bus.Frame) {
+	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Workers: workers, At: func(fr *bus.Frame) {
 		end = sim.AppendSnapshot(end[:0], fr)
 	}})
 	if err != nil {
@@ -356,32 +373,46 @@ func TestFixture(t *testing.T) {
 type recording struct {
 	Sea       map[string]float64 `json:"sea"`
 	Params    map[string]any     `json:"params"`
+	Wind      map[string]any     `json:"wind"`
 	Scenarios []struct {
 		Name    string             `json:"name"`
 		Steps   int                `json:"steps"`
 		State   map[string]float64 `json:"state"`
 		Control map[string]float64 `json:"control"`
-		Env     map[string]float64 `json:"env"`
-		// Sea is the sea of step 0: its tick, and its areas' inputs.
+		// Sea is the sea of step 0: its tick, and its areas' inputs;
+		// Weather the spells in play then.
 		Sea struct {
 			Tick  int64       `json:"tick"`
 			Areas [][3]uint32 `json:"areas"`
 		} `json:"sea"`
+		Weather struct {
+			Tick   int64            `json:"tick"`
+			Spells []map[string]any `json:"spells"`
+		} `json:"weather"`
 		Changes []struct {
 			At      int                `json:"at"`
 			Control map[string]float64 `json:"control"`
-			Env     map[string]float64 `json:"env"`
+			// Set is a developer's weather the sandbox set at this step,
+			// and Spells the spells in play from it on.
+			Set *struct {
+				Mode   uint8  `json:"mode"`
+				Regime uint16 `json:"regime"`
+				Speed  uint32 `json:"speed"`
+				Dir    uint32 `json:"dir"`
+			} `json:"set"`
+			Spells []map[string]any `json:"spells"`
 		} `json:"changes"`
 		End map[string]string `json:"end"`
 	} `json:"scenarios"`
 }
 
 // TestSandboxRecordings sails each recorded sandbox sail through the tick:
-// the recording's first wind set long enough before for its sea to rise, a
-// Join, then the recording's start placed and its wind set, and its
-// controls given as control words at their steps, each step at the tick the
-// sandbox sailed it. The boat sailed in the browser, in the sea the sandbox
-// raised by the server's rules, is the boat the server's tick sails.
+// a world whose own weather is the recording's first spell, the Join, then
+// the recording's start placed, its controls given as control words at
+// their steps, and the developer's weathers the sandbox set given at the
+// ticks it set them, each step at the tick the sandbox sailed it. The boat
+// sailed in the browser, in the wind and the sea the sandbox computed by
+// the server's rules, is the boat the server's tick sails.
 func TestSandboxRecordings(t *testing.T) {
 	paths, err := filepath.Glob("../physics/testdata/recordings/*.json")
 	if err != nil || len(paths) == 0 {
@@ -404,33 +435,35 @@ func TestSandboxRecordings(t *testing.T) {
 		setFields(t, &params, rec.Params)
 		var kind physics.Prepared
 		physics.Prepare(&params, waves, &kind)
+		// The sandbox sailed in the catalog's wind.
+		var windParams physics.WeatherParams
+		setFields(t, &windParams, rec.Wind)
+		cat, err := catalog.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if windParams != catalog.WeatherParams(cat) {
+			t.Fatalf("%s: its wind values are not the catalog's", path)
+		}
 		for _, sc := range rec.Scenarios {
 			t.Run(filepath.Base(path)+"/"+sc.Name, func(t *testing.T) {
-				wind := bus.Wind{Speed: sc.Env["windSpeed"], From: sc.Env["windFrom"]}
-				// A sea the developer set by hand is not one the tick raises.
-				open := waves.OpenSea(wind.Speed, wind.From)
-				for _, a := range sc.Sea.Areas {
-					if (physics.SeaInput{Speed: a[0], From: a[1], Fetch: a[2]}) != open {
-						t.Skipf("the sail starts in a sea of %v, not its wind's %+v", a, open)
-					}
+				if len(sc.Weather.Spells) != 1 || sc.Weather.Tick != sc.Sea.Tick {
+					t.Fatalf("the sail starts in %d spells at tick %d, its sea at %d", len(sc.Weather.Spells), sc.Weather.Tick, sc.Sea.Tick)
 				}
-				// Three seconds for the sea to follow the wind, then the
-				// Join, in the tick before step 0's.
-				const rise = 90
-				w, err := sim.New(sim.Config{Capacity: 4, Kinds: []physics.Prepared{kind}, Waves: waves, Workers: 1, Tick: sc.Sea.Tick - 2 - rise})
+				var first physics.Spell
+				setFields(t, &first, sc.Weather.Spells[0])
+				// The Join, in the tick before step 0's.
+				w, err := sim.New(sim.Config{Capacity: 4, Kinds: []physics.Prepared{kind}, Waves: waves, Workers: 1,
+					Tick: sc.Sea.Tick - 2, Weather: catalogWeather(t).Fixed(first)})
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer w.Close()
-				w.TickWith(&sim.Input{Commands: []bus.Command{{Op: bus.SetWind, Wind: wind}}})
-				for range rise - 1 {
-					w.TickWith(&sim.Input{})
-				}
 				w.TickWith(&sim.Input{Commands: []bus.Command{{Op: bus.Join, Account: account(1)}}})
 				f := w.Latest()
 				slot, boat, gen := f.Live[0], f.Boat[f.Live[0]], f.Gen[f.Live[0]]
-				if f.Tick != sc.Sea.Tick-1 || f.Sea.Now[0] != open {
-					t.Fatalf("before step 0 the world is at tick %d with a sea of %+v", f.Tick, f.Sea.Now[0])
+				if f.Tick != sc.Sea.Tick-1 {
+					t.Fatalf("before step 0 the world is at tick %d", f.Tick)
 				}
 
 				var start physics.State
@@ -441,10 +474,9 @@ func TestSandboxRecordings(t *testing.T) {
 					in := &sim.Input{}
 					changed := step == 0
 					if step == 0 {
-						in.Commands = append(in.Commands,
-							bus.Command{Op: bus.Place, Boat: boat, State: start},
-							bus.Command{Op: bus.SetWind, Wind: wind})
+						in.Commands = append(in.Commands, bus.Command{Op: bus.Place, Boat: boat, State: start})
 					}
+					var spells []map[string]any
 					for ; next < len(sc.Changes) && sc.Changes[next].At == step; next++ {
 						ch := sc.Changes[next]
 						if v, ok := ch.Control["helm"]; ok {
@@ -453,20 +485,27 @@ func TestSandboxRecordings(t *testing.T) {
 						if v, ok := ch.Control["sheet"]; ok {
 							sheet, changed = v, true
 						}
-						if ch.Env != nil {
-							if v, ok := ch.Env["windSpeed"]; ok {
-								wind.Speed = v
-							}
-							if v, ok := ch.Env["windFrom"]; ok {
-								wind.From = v
-							}
-							in.Commands = append(in.Commands, bus.Command{Op: bus.SetWind, Wind: wind})
+						if s := ch.Set; s != nil {
+							in.Commands = append(in.Commands, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{
+								Mode: bus.WeatherMode(s.Mode), Regime: s.Regime, Speed: s.Speed, Dir: s.Dir}})
+						}
+						if ch.Spells != nil {
+							spells = ch.Spells
 						}
 					}
 					if changed {
 						in.Changed = []bus.SlotWord{{Slot: slot, Word: bus.Pack(uint32(step), index(t, helm, -1, 1), index(t, sheet, 0, 1), gen)}}
 					}
 					w.TickWith(in)
+					// The spell the sandbox set is the one the server set.
+					if len(spells) > 0 {
+						var want physics.Spell
+						setFields(t, &want, spells[len(spells)-1])
+						f := w.Latest()
+						if got := f.Spells[f.NSpells-1]; got != want {
+							t.Fatalf("step %d: the server's spell is %+v, the sandbox's %+v", step, got, want)
+						}
+					}
 				}
 				got := w.Latest().State[slot]
 				names := stateNames()
@@ -478,6 +517,18 @@ func TestSandboxRecordings(t *testing.T) {
 			})
 		}
 	}
+}
+
+// randomWeather is a developer's weather drawn at random: a steady wind,
+// one of the catalog's regimes held, or the world's own.
+func randomWeather(rng *rand.Rand) bus.Weather {
+	switch rng.IntN(3) {
+	case 0:
+		return weather.Steady(3+6*rng.Float64(), 2*math.Pi*rng.Float64())
+	case 1:
+		return bus.Weather{Mode: bus.WeatherHeld, Regime: uint16(rng.IntN(4))}
+	}
+	return bus.Weather{Mode: bus.WeatherAuto}
 }
 
 // index is a control's value as a step of its range; it must be one exactly.

@@ -178,6 +178,10 @@ export class Online {
         // Ahead of the tick it applies from: the prediction takes it at once.
         this.#predictor.seas.receive(m.sea);
         break;
+      case 'weather':
+        // Ahead of the tick any of it changes the wind from, as the sea is.
+        this.#predictor.weather.receive(m.spells);
+        break;
       case 'welcome':
         if (this.#hadBoat && !m.rejoined) {
           this.notice.value = { text: 'Your boat has returned to port.', takeover: false };
@@ -266,8 +270,6 @@ export class Online {
     this.#latest.helm = sn.helm;
     this.#latest.sheet = sn.sheet;
     this.#latest.margin = sn.margin;
-    this.#latest.windSpeed = sn.windSpeed;
-    this.#latest.windFrom = sn.windFrom;
     this.#latest.state.set(sn.state);
     this.#haveLatest = true;
     const k = this.#ownNext * 4;

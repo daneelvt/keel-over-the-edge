@@ -3,8 +3,8 @@
 package sim
 
 import (
+	"encoding/binary"
 	"fmt"
-	"math"
 	"runtime"
 	"slices"
 	"testing"
@@ -24,10 +24,25 @@ func seaWorld(t testing.TB, tick int64, workers int) *World {
 	return w
 }
 
-// under is the sea a wind raises: every area's inputs.
-func under(t testing.TB, wind bus.Wind) physics.SeaInput {
+// under is the sea a developer's steady wind raises in a world given no
+// timeline: every area's inputs.
+func under(t testing.TB, wind bus.Weather) physics.SeaInput {
 	t.Helper()
-	return waves(t).OpenSea(wind.Speed, wind.From)
+	e := steadyEnv(wind)
+	return waves(t).OpenSea(e.WindSpeed, e.WindFrom)
+}
+
+// defaultWind is the wind of a world given no timeline, as a developer's.
+var defaultWind = steadyOf(DefaultSpell)
+
+// lastWeather is the developer's weather last set in f.
+func lastWeather(f *bus.Frame) bus.Weather {
+	if len(f.Weathers) == 0 {
+		return bus.Weather{}
+	}
+	w := f.Weathers[len(f.Weathers)-1]
+	w.From = 0
+	return w
 }
 
 func uniform(areas []physics.SeaInput, in physics.SeaInput) bool {
@@ -38,7 +53,7 @@ func uniform(areas []physics.SeaInput, in physics.SeaInput) bool {
 func TestSeaAtStart(t *testing.T) {
 	w := seaWorld(t, 100, 1)
 	f := w.Latest()
-	in := under(t, DefaultWind)
+	in := under(t, defaultWind)
 	if in.Speed != 514 || in.From != 0 || in.Fetch != 11112 {
 		t.Fatalf("10 knots from the north over open water is %+v", in)
 	}
@@ -59,21 +74,22 @@ func TestSeaAtStart(t *testing.T) {
 
 // A change of wind reaches the waves no sooner than the next second but
 // one, whatever tick of a second it comes at: the sea of a second is fixed
-// in the second before, so that every client hears of it in time.
-func TestSetWindReachesTheSeaASecondAhead(t *testing.T) {
-	gale := bus.Wind{Speed: 34 * 1852.0 / 3600, From: 2}
+// in the second before, so that every client hears of it in time. In a
+// world given no timeline the sea follows its wind at once.
+func TestSetWeatherReachesTheSeaASecondAhead(t *testing.T) {
+	gale := steady(34*1852.0/3600, 2)
 	for offset := range int64(bus.SeaPeriod) {
 		w := seaWorld(t, 119, 1)
 		do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
 		for w.Now() < 150+offset-1 {
 			w.Tick()
 		}
-		do(t, w, bus.Command{Op: bus.SetWind, Wind: gale})
+		do(t, w, bus.Command{Op: bus.SetWeather, Weather: gale})
 		at := w.Now()
-		if at != 150+offset || w.Latest().Wind != gale {
+		if at != 150+offset || lastWeather(w.Latest()) != gale {
 			t.Fatalf("the wind changed at tick %d", at)
 		}
-		old, raised := under(t, DefaultWind), under(t, gale)
+		old, raised := under(t, defaultWind), under(t, gale)
 		fixed := (bus.SeaSecond(at) + 1) * bus.SeaPeriod // the next second's first tick
 		applies := fixed + bus.SeaPeriod
 		calm := w.sea.view.Window.Hs[0]
@@ -121,12 +137,10 @@ func TestTickMatchesStepInWaves(t *testing.T) {
 	}
 	var tick physics.SeaTick
 	sea := physics.Sea{Waves: wv, Window: &win, Tick: &tick}
-	wind := DefaultWind
 	moved := false
 	for i := range 240 {
 		if i == 50 {
-			wind = bus.Wind{Speed: 16, From: 4}
-			send(t, w, bus.Command{Op: bus.SetWind, Wind: wind})
+			send(t, w, bus.Command{Op: bus.SetWeather, Weather: steady(16, 4)})
 		}
 		before := slices.Clone(w.Latest().State[:40])
 		w.Tick()
@@ -137,7 +151,7 @@ func TestTickMatchesStepInWaves(t *testing.T) {
 		for s := range 40 {
 			want := before[s]
 			c := physics.Control{Helm: f.Control[s].Helm(), Sheet: f.Control[s].Sheet()}
-			e := physics.Env{WindSpeed: wind.Speed, WindFrom: wind.From}
+			e := windAt(w, f, want.X, want.Y)
 			var o physics.Out
 			physics.Step(&want, &c, &e, &sea, kind, &o)
 			if !sameState(f.State[s], want) {
@@ -153,20 +167,20 @@ func TestTickMatchesStepInWaves(t *testing.T) {
 
 // Ticks skipped move the sea on as the seconds they span would have.
 func TestSeaOverASkip(t *testing.T) {
-	gale := bus.Wind{Speed: 17, From: 1}
+	gale := steady(17, 1)
 	for _, c := range []struct {
 		skip      int64
 		now, next bool // whether the sea in effect, and the next, are the gale's after the skip
 	}{{0, false, false}, {27, false, false}, {28, false, true}, {57, false, true}, {58, true, true}, {900, true, true}} {
 		w := seaWorld(t, 119, 1)
 		w.Tick() // 120: a second begins
-		// The wind changes at tick 121; the tick after the skip is 122 + skip,
-		// and the seconds begin at 150 and 180.
-		do(t, w, bus.Command{Op: bus.SetWind, Wind: gale})
+		// The wind is set at tick 121 and changes at 180; the tick after the
+		// skip is 122 + skip, and the seconds begin at 150 and 180.
+		do(t, w, bus.Command{Op: bus.SetWeather, Weather: gale})
 		w.Skip(c.skip)
 		w.Tick()
 		f := w.Latest()
-		old, raised := under(t, DefaultWind), under(t, gale)
+		old, raised := under(t, defaultWind), under(t, gale)
 		wantNow, wantNext := old, old
 		if c.now {
 			wantNow = raised
@@ -194,7 +208,7 @@ func TestSnapshotResumesTheSea(t *testing.T) {
 		for w.Now() < 130 {
 			w.Tick()
 		}
-		do(t, w, bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 15, From: 5}})
+		do(t, w, bus.Command{Op: bus.SetWeather, Weather: steady(15, 5)})
 		for w.Now() < at {
 			w.Tick()
 		}
@@ -220,7 +234,7 @@ func TestSnapshotResumesTheSea(t *testing.T) {
 				t.Fatalf("snapshot at tick %d: at tick %d the loaded world's waves are not its frame's sea", at, b.Tick)
 			}
 		}
-		if f := w.Latest(); !uniform(f.Sea.Now, under(t, f.Wind)) {
+		if f := w.Latest(); !uniform(f.Sea.Now, under(t, lastWeather(f))) {
 			t.Fatalf("snapshot at tick %d: the wind never reached the sea", at)
 		}
 	}
@@ -228,17 +242,18 @@ func TestSnapshotResumesTheSea(t *testing.T) {
 
 // A restored world's sea is what the wind had made it by the present.
 func TestRestoreMovesTheSeaOn(t *testing.T) {
-	gale := bus.Wind{Speed: 17, From: 1}
+	gale := steady(17, 1)
 	w := seaWorld(t, 119, 1)
 	w.Tick()
 	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
-	do(t, w, bus.Command{Op: bus.SetWind, Wind: gale})
+	do(t, w, bus.Command{Op: bus.SetWeather, Weather: gale})
 	for w.Now() < 155 {
 		w.Tick()
 	}
-	// Tick 155: the gale is fixed for the second from 180, not yet in effect.
+	// Tick 155: the gale, set at 122, blows from 180, and the sea is fixed
+	// for the second from 180, not yet in effect.
 	f := w.Latest()
-	old, raised := under(t, DefaultWind), under(t, gale)
+	old, raised := under(t, defaultWind), under(t, gale)
 	if !uniform(f.Sea.Now, old) || !uniform(f.Sea.Next, raised) {
 		t.Fatalf("the sea at tick 155: %+v, next %+v", f.Sea.Now[0], f.Sea.Next[0])
 	}
@@ -262,23 +277,24 @@ func TestRestoreMovesTheSeaOn(t *testing.T) {
 	}
 }
 
-// A sea that differs from area to area survives a snapshot, run by run, and
-// a snapshot whose sea is malformed is refused.
+// A snapshot holds no sea: a world loaded from one makes its sea from its
+// tick and its developer's weathers, which is the sea it had; the digest
+// covers the sea all the same, in effect and next.
 func TestSnapshotSea(t *testing.T) {
 	w := seaWorld(t, 100, 1)
-	w.Tick()
-	f := w.Latest()
-	for i := range f.Sea.Now {
-		f.Sea.Now[i] = physics.SeaInput{Speed: uint32(i / 50), From: uint32(i % 7), Fetch: 9000}
-		f.Sea.Next[i] = physics.SeaInput{Speed: uint32(i), From: 65535, Fetch: uint32(i * 3)}
+	do(t, w, bus.Command{Op: bus.SetWeather, Weather: steady(14, 3)})
+	for w.Now() < 200 {
+		w.Tick()
 	}
+	f := w.Latest()
 	snap := AppendSnapshot(nil, f)
-	g := bus.NewFrame(f.Capacity())
-	if err := ReadSnapshot(snap, g); err != nil {
+	twin := seaWorld(t, 0, 1)
+	if err := twin.Load(snap); err != nil {
 		t.Fatal(err)
 	}
+	g := twin.Latest()
 	if !slices.Equal(g.Sea.Now, f.Sea.Now) || !slices.Equal(g.Sea.Next, f.Sea.Next) || Digest(g) != Digest(f) {
-		t.Fatal("the sea did not survive the snapshot")
+		t.Fatal("the loaded world's sea is not the one it had")
 	}
 	before := Digest(f)
 	f.Sea.Next[700].Fetch++
@@ -290,30 +306,31 @@ func TestSnapshotSea(t *testing.T) {
 	if Digest(f) == before {
 		t.Error("the digest does not cover the sea in effect")
 	}
+	f.Sea.Now[3].From--
 
-	// A uniform sea is one run: a few bytes.
+	// An empty world's snapshot is a few bytes.
 	u := seaWorld(t, 100, 1).Latest()
-	if n := len(AppendSnapshot(nil, u)); n > 64 {
+	if n := len(AppendSnapshot(nil, u)); n > 16 {
 		t.Errorf("an empty world's snapshot is %d bytes", n)
 	}
-	// The sea starts after the version, the tick and the wind.
-	head := 1 + 2 + 16
+	// The developer's weathers come after the version and the tick; one
+	// of a mode that is none, or out of order, is refused.
+	b := AppendSnapshot(nil, f)
+	head := 1 + len(binary.AppendVarint(nil, f.Tick))
 	bad := func(name string, edit func(b []byte) []byte) {
 		t.Helper()
-		b := edit(slices.Clone(AppendSnapshot(nil, u)))
-		if err := ReadSnapshot(b, bus.NewFrame(u.Capacity())); err == nil {
+		if err := ReadSnapshot(edit(slices.Clone(b)), bus.NewFrame(f.Capacity())); err == nil {
 			t.Errorf("%s: read", name)
 		}
 	}
-	bad("no runs", func(b []byte) []byte { b[head] = 0; return b })
-	bad("a run too short", func(b []byte) []byte { b[head+1]--; return b })
-	bad("a direction past a turn", func(b []byte) []byte {
-		// The run is its length (2 bytes), speed (2), direction (1), fetch (2).
-		return slices.Concat(b[:head+5], []byte{0x80, 0x80, 0x04}, b[head+6:])
-	})
-	if math.MaxUint32 < physics.SeaFromSteps {
-		t.Fatal("a direction does not fit the wire")
+	if b[head] != 1 {
+		t.Fatalf("the snapshot holds %d developer's weathers", b[head])
 	}
+	from := len(binary.AppendVarint(nil, f.Weathers[0].From))
+	bad("a mode that is none", func(b []byte) []byte { b[head+1+from] = 9; return b })
+	bad("nine weathers", func(b []byte) []byte { b[head] = 9; return b })
+	two := slices.Concat(b[:head], []byte{2}, b[head+1:head+1+from+5], b[head+1:])
+	bad("two from the same tick", func([]byte) []byte { return two })
 }
 
 // With the wind steady the sea costs a tick nothing but its time; when it
@@ -375,11 +392,11 @@ func BenchmarkTickInSea(b *testing.B) {
 				}
 				b.Cleanup(w.Close)
 				fill(b, w, n, 1)
-				send(b, w, bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: knots * 1852.0 / 3600, From: 0}})
-				for range 3 * bus.SeaPeriod {
+				send(b, w, bus.Command{Op: bus.SetWeather, Weather: steady(knots*1852.0/3600, 0)})
+				for range 4 * bus.SeaPeriod {
 					w.Tick()
 				}
-				if w.sea.view.Window.Inputs[0] != under(b, w.Latest().Wind) {
+				if w.sea.view.Window.Inputs[0] != under(b, lastWeather(w.Latest())) {
 					b.Fatal("the sea did not follow the wind")
 				}
 				b.ReportAllocs()

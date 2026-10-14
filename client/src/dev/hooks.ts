@@ -46,6 +46,7 @@ import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
 import { FieldMaker, newFields } from '../ocean/field';
 import { foamOn } from '../ocean/foam';
+import { gustAt } from '../ocean/gusts';
 import { hexAt, hexCentre, NEIGHBOURS, TILE_APOTHEM, TILE_RADIUS, tileHash } from '../ocean/hex';
 import { HULL_FILL, hulls, insideHull, toHullFrame } from '../ocean/hulls';
 import { type FoamLook, WAKE } from '../ocean/look';
@@ -57,12 +58,12 @@ import {
   tileIdentity,
   tileLook,
 } from '../ocean/seamaterial';
-import { PASS_HEIGHT, PASS_WIDTH } from '../ocean/tilepass';
+import { GUST_ROW, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
 import { boatBandAt } from '../ocean/wave';
-import { steer, toHex } from '../predict/golden';
+import { type RecordValues, spellOf, steer, toHex } from '../predict/golden';
 import { RECORDS, SEA } from '../predict/layout.gen';
-import { BODY, SKY } from '../predict/physics';
+import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { checkScene, DOME_RADIUS, domeDrop, seaMaterial } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
@@ -217,6 +218,28 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
    * scene's x and z, and the sea's significant height. The module is the
    * server's code, so these are the server's numbers.
    */
+  /** The module's gust field at scene points, at the time of the last frame. */
+  const moduleGusts = (points: ArrayLike<number>): number[] => {
+    const n = points.length >> 1;
+    const physics = driver.physics;
+    if (physics === undefined) {
+      return new Array<number>(n).fill(0);
+    }
+    const o = world.origin.world;
+    const at = new Float64Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      at[i * 2] = o.x + (points[i * 2] ?? 0);
+      at[i * 2 + 1] = o.y - (points[i * 2 + 1] ?? 0);
+    }
+    physics.windDrawAt(world.ticks);
+    const values = physics.windSample(at, new Float64Array(n * WIND_VALUES));
+    const out: number[] = [];
+    for (let i = 0; i < n; i++) {
+      out.push(values[i * WIND_VALUES + WIND_VALUE.gust] ?? 0);
+    }
+    return out;
+  };
+
   const moduleSea = (points: ArrayLike<number>): Float64Array => {
     const n = points.length >> 1;
     const out = new Float64Array(n * 4);
@@ -388,7 +411,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     size: number,
     span: number,
     cut = false,
-    look: Probe | null = null,
+    look: Probe | 'colour' | null = null,
   ): Promise<Float32Array> => {
     const g = gfx();
     const tiles = world.ocean.tiles;
@@ -399,7 +422,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         .mul(2)
         .add(tiles.varyings.side.lessThan(-0.5).select(float(2), float(1))),
     );
-    if (look !== null) {
+    if (look === 'colour') {
+      // The sea as it is drawn, in linear light.
+      m.fragmentNode = tileLook(tiles.varyings, world.ocean.parts);
+    } else if (look !== null) {
       // The look's own numbers for each fragment, in place of its colour.
       m.fragmentNode = tileLook(tiles.varyings, world.ocean.parts, look);
     } else {
@@ -511,7 +537,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const knots = SEA_STATES[name];
       s.sea.options.flat = knots === undefined;
       if (knots !== undefined) {
-        s.setWind(knots * KNOT, 0);
+        s.steadyNow(knots * KNOT, 0);
       }
       s.settleSea();
       floatBoat();
@@ -644,7 +670,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         gfx().renderer,
         ocean.pass.target,
         PASS_WIDTH,
-        PASS_HEIGHT,
+        ocean.pass.target.height,
         webgl(),
       );
       return {
@@ -654,6 +680,103 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       };
     },
 
+    /**
+     * Makes spells the sandbox's spells of weather, each by its fields'
+     * names, as a file of Go's has them. They stay until the weather is
+     * next set.
+     */
+    setSpells(spells: RecordValues[]): void {
+      offline().weather.set(spells.map(spellOf));
+    },
+
+    /**
+     * The gust rings as they are drawn: where each is in the world, how
+     * wide and how much of it shows; and the gust factor at its middle now.
+     */
+    gustRings(): { east: number; north: number; radius: number; shown: number; factor: number }[] {
+      const physics = driver.physics;
+      return world.gustRings.rings.map((r) => {
+        let factor = 1;
+        if (physics !== undefined) {
+          physics.windDrawAt(world.ticks);
+          factor = physics.windPoint(r.east, r.north)[RECORDS.wind.factor] ?? 1;
+        }
+        return { ...r, factor };
+      });
+    },
+
+    /** Draws the gusts on the tiles, or the water without them. */
+    showGusts(on: boolean): void {
+      world.ocean.gusts.shown = on ? 1 : 0;
+    },
+
+    /**
+     * The gust field the GPU computes at scene points (x and z of each, in
+     * turn), beside the physics module's, at the time of the last frame.
+     */
+    async gusts(points: number[]): Promise<{ gpu: number[]; module: number[] }> {
+      const n = points.length >> 1;
+      const width = 64;
+      const height = Math.max(1, Math.ceil(n / width));
+      const at = new Float32Array(width * height * 4);
+      for (let i = 0; i < n; i++) {
+        at[i * 4] = points[i * 2] ?? 0;
+        at[i * 4 + 1] = points[i * 2 + 1] ?? 0;
+      }
+      const input = new DataTexture(at, width, height, RGBAFormat, FloatType);
+      input.needsUpdate = true;
+      const m = new MeshBasicNodeMaterial();
+      const p = textureLoad(input, ivec2(floor(screenCoordinate))).xy as unknown as Node<'vec2'>;
+      m.fragmentNode = vec4(gustAt(world.ocean.gusts)(p), 0, 0, 1);
+      const target = new RenderTarget(width, height, {
+        type: FloatType,
+        format: RGBAFormat,
+        depthBuffer: false,
+      });
+      const r = gfx().renderer;
+      const before = r.getRenderTarget();
+      r.setRenderTarget(target);
+      new QuadMesh(m).render(r);
+      r.setRenderTarget(before);
+      const got = await readTarget(r, target, width, height, webgl());
+      target.dispose();
+      input.dispose();
+      m.dispose();
+      const gpu: number[] = [];
+      for (let i = 0; i < n; i++) {
+        gpu.push(got[i * 4] ?? Number.NaN);
+      }
+      // As float32 holds the points on the GPU.
+      return { gpu, module: moduleGusts(points.map(Math.fround)) };
+    },
+
+    /**
+     * The gust field at each tile's centre as the tile pass wrote it for
+     * the last frame, beside the physics module's.
+     */
+    async tileGusts(): Promise<{ gpu: number[]; module: number[]; count: number }> {
+      const ocean = world.ocean;
+      const count = ocean.field.count;
+      const all = await readTarget(
+        gfx().renderer,
+        ocean.pass.target,
+        PASS_WIDTH,
+        ocean.pass.target.height,
+        webgl(),
+      );
+      const centre = ocean.tiles.centre.value;
+      const gpu: number[] = [];
+      const points: number[] = [];
+      for (let i = 0; i < count; i++) {
+        gpu.push(all[(GUST_ROW * PASS_WIDTH + i) * 4] ?? Number.NaN);
+        points.push(
+          centre.x + (ocean.field.offset[i * 2] ?? 0),
+          centre.y - (ocean.field.offset[i * 2 + 1] ?? 0),
+        );
+      }
+      return { gpu, module: moduleGusts(points), count };
+    },
+
     /** The largest step between neighbouring tiles at their shared corners, from the pass's planes. */
     async steps(): Promise<{ largest: number; skirt: number }> {
       const field = world.ocean.field;
@@ -661,7 +784,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         gfx().renderer,
         world.ocean.pass.target,
         PASS_WIDTH,
-        PASS_HEIGHT,
+        world.ocean.pass.target.height,
         webgl(),
       );
       const index = new Map<string, number>();
@@ -890,6 +1013,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       detailOn.value = 1;
       foamOn.value = 1;
       world.ocean.drawWakes = true;
+      world.ocean.gusts.shown = 1;
       world.sprayHidden = false;
       tileIdentity.value = 1;
       if (world.boat !== null) {
@@ -908,9 +1032,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       s.sea.options.split = null;
       const knots = sea === null ? undefined : SEA_STATES[sea];
       if (knots !== undefined) {
-        s.setWind(knots * KNOT, 0);
+        s.steadyNow(knots * KNOT, 0);
       } else {
-        s.setWind(s.start.wind.speed, s.start.wind.from);
+        s.steadyNow(s.start.wind.speed, s.start.wind.from);
       }
       await world.setRung(0, 'test');
       world.ocean.detail.finishBake();
@@ -922,9 +1046,16 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       offline().setState(values);
       floatBoat();
     },
-    /** The sandbox's wind, in knots and the degrees it comes from. */
+    /** The sandbox's wind, steady and at once, in knots and the degrees it comes from. */
     setWind(knots: number, from: number): void {
-      offline().setWind(knots * KNOT, (from * Math.PI) / 180);
+      offline().steadyNow(knots * KNOT, (from * Math.PI) / 180);
+    },
+    /**
+     * The sandbox's weather, as a server's developer sets it, from the
+     * second after the next step's: a regime's id, or steady.
+     */
+    setWeather(id: string): void {
+      offline().setWeather(id);
     },
     /** Sets the helm's and the sheet's targets, as the player's thumbs would. */
     setControls(helm: number, sheet: number): void {
@@ -1532,6 +1663,48 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         foam: Array.from(await probe(bs.x, bs.z, size, span, false, 'foam')),
         crest: Array.from(await probe(bs.x, bs.z, size, span, false, 'crest')),
       };
+    },
+    /**
+     * The tiles about the boat seen from straight above, over a square of
+     * span metres: for each pixel the gust on its tile as it shows, and the
+     * water's brightness there with the gusts drawn and without them (0
+     * where no tile's top is drawn).
+     */
+    async gustSurface(
+      size = 192,
+      span = 160,
+    ): Promise<{ gust: number[]; shown: number[]; hidden: number[] }> {
+      const bs = world.boatScene;
+      const ids = await probe(bs.x, bs.z, size, span);
+      const brightness = async (): Promise<number[]> => {
+        const px = await probe(bs.x, bs.z, size, span, false, 'colour');
+        const out: number[] = [];
+        for (let p = 0; p < size * size; p++) {
+          const code = Math.round(ids[p * 4 + 3] ?? 0) - 1;
+          const top = code >= 0 && code % 2 === 0;
+          out.push(
+            top
+              ? 0.2126 * (px[p * 4] ?? 0) +
+                  0.7152 * (px[p * 4 + 1] ?? 0) +
+                  0.0722 * (px[p * 4 + 2] ?? 0)
+              : 0,
+          );
+        }
+        return out;
+      };
+      const was = world.ocean.gusts.shown;
+      world.ocean.gusts.shown = 1;
+      hooks.render();
+      const gust = Array.from(await probe(bs.x, bs.z, size, span, false, 'gust')).filter(
+        (_, i) => i % 4 === 0,
+      );
+      const shown = await brightness();
+      world.ocean.gusts.shown = 0;
+      hooks.render();
+      const hidden = await brightness();
+      world.ocean.gusts.shown = was;
+      hooks.render();
+      return { gust, shown, hidden };
     },
     /** The far sea's detail at points of a ring beyond the tiles: the slope it adds along x and z, seen from above. */
     async farSurface(size = 128, span = 60, out = 220): Promise<number[]> {

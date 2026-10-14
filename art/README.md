@@ -45,6 +45,6 @@ is at the hips, where it sits, facing +x.
 ## Sound
 
 `sound/*.json` are the recipes the client's sound engine plays: filter
-bands, levels and curves for the wind, the rigging, the flogging sail and the
-water on the hull. They are art like the models. Each names the art licence
+bands, levels and curves for the wind, the rigging, the flogging sail, the
+water on the hull and the sea about the boat. They are art like the models. Each names the art licence
 in its first field, `licence`.

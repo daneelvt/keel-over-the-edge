@@ -214,3 +214,108 @@ const (
 	FlowStalled  = 2 // past the stall
 	FlowAback    = 3 // the wind on the sail's back, from the leech
 )
+
+// WeatherParams describe the wind over the disk, its gusts and how the sea
+// follows it: the catalog's weather values of its groups disk, gusts and
+// waveWind, in the order of its schema. PrepareWeather derives the constants
+// the wind is computed with.
+type WeatherParams struct {
+	// The disk.
+	SpeedCentre    float64    // the wind's speed at the centre, as a share of a spell's
+	SpeedRim       float64    // and at the rim
+	Rim            float64    // where the share reaches SpeedRim: the mist band, nautical miles
+	RefugeInner    float64    // within this the refuge's limits hold in full, nautical miles
+	RefugeOuter    float64    // and beyond this not at all, nautical miles
+	RefugeMeanKnee float64    // the refuge softens the mean wind above this, knots
+	RefugeMean     float64    // toward this, knots
+	RefugeWindKnee float64    // and the wind with its gusts above this, knots
+	RefugeWind     float64    // toward this, knots
+	RimGusts       float64    // the gust factor's excess grows by this share toward the rim
+	RimGustsFrom   float64    // from here to the rim, nautical miles
+	AcrossTurn     [2]float64 // the shortest and longest time the axis of the difference across the disk takes to turn once, hours
+
+	// The gusts.
+	GustAlong  float64 // the largest cells of the gust field along the wind, m
+	GustAcross float64 // and across it, m
+	GustLife   float64 // the largest cells' life, s
+	GustSpeed  float64 // how fast the field travels, as a share of a spell's wind
+	GustVeer   float64 // how far the strongest gust veers and the deepest lull backs, degrees
+	Change     float64 // how long one spell takes to give way to the next, minutes
+
+	// The wave wind.
+	WaveTimeConstant float64 // the time constant of the average the sea follows, s
+	WaveSample       float64 // the wind is sampled on a grid of world time this far apart, s
+	WaveSamples      float64 // and this many samples are kept
+}
+
+// Regime describes the wind of a kind of spell: the catalog's values of a
+// regime's wind, in the order of its schema. DrawSpell draws a spell's
+// numbers from them.
+type Regime struct {
+	Speed      [2]float64 // the least and the most of its wind at mid-disk, knots
+	GustFactor float64    // its strongest gusts as a multiple of the mean
+	Shift      float64    // how far its two oscillating shifts swing together, degrees each way
+	Period     [2]float64 // the shortest and longest period of a shift, minutes
+	Across     float64    // how far the wind's direction differs from the centre to the rim, degrees
+	Drift      float64    // the most its direction moves over a spell, degrees
+}
+
+// Spell is a spell of weather: a stretch of time with one base wind, its
+// shifts and its gust field. Its fields are whole numbers, in the units the
+// wire carries, so that a client computes the server's wind from what it is
+// sent, bit for bit; SpellOf turns them into the values the wind is
+// computed with.
+type Spell struct {
+	Begin  float64 // the tick its change from the spell before begins
+	Change float64 // how many ticks the change takes; 0 is at once
+	Start  float64 // the tick its drift, its gust field's travel and the field's life count from
+	Length float64 // the ticks over which it drifts by Drift; 0 for no drift
+	Regime float64 // the catalog's index of its regime
+	Steady float64 // 1: the same wind everywhere, with no shifts, gusts, rim or refuge
+	Speed  float64 // its wind at mid-disk, in steps of SeaSpeedStep
+	From   float64 // the direction its wind comes from at Start, in 65536ths of a turn clockwise from north
+	Drift  float64 // how far that direction veers over Length, in 65536ths of a turn; negative backs
+	Gust   float64 // its gust factor, in thousandths: at 1000 it has no gusts
+	// The two oscillating shifts: each one's amplitude and phase at tick 0,
+	// in 65536ths of a turn, and its period in ticks.
+	Shift  [2]float64
+	Period [2]float64
+	Phase  [2]float64
+	// The difference across the disk: how far the direction differs at the
+	// rim from the centre, in 65536ths of a turn; the axis it differs along
+	// at tick 0, a direction in 65536ths of a turn; and the ticks the axis
+	// takes to turn once.
+	Across     float64
+	Axis       float64
+	AxisPeriod float64
+	Seed       float64 // the gust field's seed, a uint32
+}
+
+// WindPoint is the wind at a point in full: what the client's instruments
+// and drawing read beside the wind a step sails in.
+type WindPoint struct {
+	Speed      float64 // the wind 10 m up, m/s
+	From       float64 // the direction it comes from, rad clockwise from north
+	MeanSpeed  float64 // the wind without its gusts: what the sea follows and the Beaufort scale reads, m/s
+	MeanFrom   float64 // rad clockwise from north
+	Gust       float64 // the gust field, from −1 in the deepest lull to 1 in the strongest gust
+	Factor     float64 // the gust factor: Speed over MeanSpeed, before the refuge
+	DriftEast  float64 // how fast the gust field travels: east, m/s
+	DriftNorth float64 // and north, m/s
+}
+
+// GustFrame is the gust field's frame at a moment, for drawing it: for each
+// of the spells in play that has gusts, its share of the mix, the
+// direction of its frame, how far the field has travelled and how long it
+// has lived, and its octaves' seeds. A GPU carries on from these and the
+// catalog's cells to the field at each tile.
+type GustFrame struct {
+	Spells  float64    // how many spells in play have gusts: 0, 1 or 2
+	Share   [2]float64 // each one's weight in the mix of their fields
+	Sin     [2]float64 // the sine of the direction its frame turns with
+	Cos     [2]float64 // and the cosine
+	Travel  [2]float64 // how far its field has travelled downwind, m
+	Seconds [2]float64 // how long its field has lived, s
+	Seed    [2 * 3]float64
+	Excess  float64 // the gust factor less 1, as the spells mix it
+}

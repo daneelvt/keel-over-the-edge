@@ -29,6 +29,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // Epoch is the test worlds' epoch: a synctest bubble's clock starts on it,
@@ -53,6 +54,9 @@ type Config struct {
 	// prepared for; the catalog's if Kinds is nil.
 	Kinds []physics.Prepared
 	Waves *physics.Waves
+	// Weather is the world's own weather; nil is a steady wind
+	// (sim.DefaultSpell).
+	Weather *weather.Timeline
 	// Record, if not nil, is told of each frame too, on the ticking
 	// goroutine, before the edge.
 	Record sim.Recorder
@@ -68,6 +72,7 @@ type Server struct {
 	Sessions *Sessions
 	Kinds    []physics.Prepared
 	Waves    *physics.Waves
+	Weather  *weather.Timeline
 
 	cfg      Config
 	sessions *auth.Cache
@@ -97,8 +102,11 @@ func NewServer(t testing.TB, cfg Config) *Server {
 	if cfg.Kinds == nil {
 		cfg.Waves, cfg.Kinds = CatalogKinds(t)
 	}
+	if cfg.Weather == nil {
+		cfg.Weather = weather.Fixed(sim.DefaultSpell)
+	}
 	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, cfg: cfg}
+	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, cfg: cfg}
 	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
 	s.start(t, s.newWorld(t))
 	s.HTTP = httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +120,7 @@ func (s *Server) newWorld(t testing.TB) *sim.World {
 	t.Helper()
 	cfg := s.cfg
 	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Waves: cfg.Waves, Workers: 1,
-		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit})
+		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather})
 	if err != nil {
 		t.Fatal(err)
 	}

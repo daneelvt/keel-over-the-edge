@@ -9,7 +9,6 @@ import (
 	"math"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
-	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 // A snapshot is a frame's whole state as bytes: what an input log starts
@@ -18,8 +17,7 @@ import (
 //
 //	version                 uvarint, SnapshotVersion
 //	tick                    varint
-//	wind speed, from        2 × 8 bytes
-//	sea in effect, next     2 × the sea below
+//	developer's weathers    uvarint n, then n × the weather below, ascending by the tick each takes effect from
 //	next boat ID            uvarint
 //	capacity                uvarint
 //	admission held          uvarint, 1 if held, else 0
@@ -27,10 +25,11 @@ import (
 //	boats                   uvarint n, then n × the boat below, slots ascending
 //	queue                   uvarint n, then n × the connection waiting below, the head first
 //
-// A sea is its areas, row by row from the south-west, as runs of areas with
-// the same inputs: uvarint n, then n × (the run's length, the wind's speed,
-// the direction it comes from, the fetch) as uvarints, the lengths adding up
-// to the world's areas. Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
+// A developer's weather is the tick it takes effect from as a varint, then
+// its mode, regime, wind speed and direction as uvarints. The spells in
+// play and the sea follow from the tick and these, and are not stored.
+//
+// Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
 // uvarint, its control word in 8 bytes, and its state's fields in 8 bytes
 // each; each connection waiting is its account's 16 bytes, the connection as
@@ -39,16 +38,20 @@ import (
 //
 // A checkpoint stores this snapshot, so a world is restored only by a build
 // that reads its version.
-const SnapshotVersion = 5
+const SnapshotVersion = 6
 
 // AppendSnapshot appends f's snapshot to dst.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 	dst = binary.AppendUvarint(dst, SnapshotVersion)
 	dst = binary.AppendVarint(dst, f.Tick)
-	dst = appendF64(dst, f.Wind.Speed)
-	dst = appendF64(dst, f.Wind.From)
-	dst = appendSea(dst, f.Sea.Now)
-	dst = appendSea(dst, f.Sea.Next)
+	dst = binary.AppendUvarint(dst, uint64(len(f.Weathers)))
+	for _, w := range f.Weathers {
+		dst = binary.AppendVarint(dst, w.From)
+		dst = binary.AppendUvarint(dst, uint64(w.Mode))
+		dst = binary.AppendUvarint(dst, uint64(w.Regime))
+		dst = binary.AppendUvarint(dst, uint64(w.Speed))
+		dst = binary.AppendUvarint(dst, uint64(w.Dir))
+	}
 	dst = binary.AppendUvarint(dst, f.NextBoat)
 	dst = binary.AppendUvarint(dst, uint64(f.Capacity()))
 	held := uint64(0)
@@ -96,39 +99,32 @@ func appendF64(dst []byte, v float64) []byte {
 	return binary.LittleEndian.AppendUint64(dst, math.Float64bits(v))
 }
 
-func appendSea(dst []byte, areas []physics.SeaInput) []byte {
-	runs := 0
-	for i := range areas {
-		if i == 0 || areas[i] != areas[i-1] {
-			runs++
-		}
-	}
-	dst = binary.AppendUvarint(dst, uint64(runs))
-	for i := 0; i < len(areas); {
-		j := i + 1
-		for j < len(areas) && areas[j] == areas[i] {
-			j++
-		}
-		dst = binary.AppendUvarint(dst, uint64(j-i))
-		dst = binary.AppendUvarint(dst, uint64(areas[i].Speed))
-		dst = binary.AppendUvarint(dst, uint64(areas[i].From))
-		dst = binary.AppendUvarint(dst, uint64(areas[i].Fetch))
-		i = j
-	}
-	return dst
-}
-
 // ReadSnapshot sets f, a frame of the snapshot's capacity, to the snapshot's
-// state. f's tick inputs are left empty.
+// state. f's tick inputs are left empty, and its spells in play and its sea
+// are the world's to set.
 func ReadSnapshot(data []byte, f *bus.Frame) error {
 	r := reader{b: data}
 	if v := r.uvarint(); r.err == nil && v != SnapshotVersion {
 		return fmt.Errorf("sim: snapshot version %d, not %d", v, SnapshotVersion)
 	}
 	tick := r.varint()
-	speed, from := r.f64(), r.f64()
-	r.sea(f.Sea.Now)
-	r.sea(f.Sea.Next)
+	f.Weathers = f.Weathers[:0]
+	n := r.count(bus.WeatherHistory)
+	for range n {
+		w := bus.Weather{From: r.varint()}
+		mode, regime, speed, dir := r.uvarint(), r.uvarint(), r.uvarint(), r.uvarint()
+		if r.err != nil {
+			return r.err
+		}
+		if mode > math.MaxUint8 || !bus.WeatherMode(mode).Valid() || regime > math.MaxUint16 || speed > math.MaxUint32 || dir > math.MaxUint32 ||
+			len(f.Weathers) > 0 && w.From <= f.Weathers[len(f.Weathers)-1].From {
+			return fmt.Errorf("sim: snapshot: a developer's weather of mode %d from tick %d", mode, w.From)
+		}
+		w.Mode, w.Regime, w.Speed, w.Dir = bus.WeatherMode(mode), uint16(regime), uint32(speed), uint32(dir)
+		f.Weathers = append(f.Weathers, w)
+	}
+	clear(f.Sea.Now)
+	clear(f.Sea.Next)
 	nextBoat := r.uvarint()
 	capacity := r.uvarint()
 	held := r.uvarint()
@@ -142,7 +138,6 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		return fmt.Errorf("sim: snapshot: admission held is %d", held)
 	}
 	f.Tick, f.Skipped = tick, 0
-	f.Wind = bus.Wind{Speed: speed, From: from}
 	f.NextBoat = nextBoat
 	f.Held = held == 1
 	f.Live = f.Live[:0]
@@ -152,7 +147,7 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 	clear(f.Events)
 	f.Events = f.Events[:0]
 
-	n := r.count(capacity)
+	n = r.count(capacity)
 	last := int64(-1)
 	for range n {
 		s, g := r.uvarint(), r.uvarint()
@@ -257,30 +252,6 @@ func (r *reader) u64() uint64 {
 }
 
 func (r *reader) f64() float64 { return math.Float64frombits(r.u64()) }
-
-// sea fills areas from the snapshot's runs.
-func (r *reader) sea(areas []physics.SeaInput) {
-	runs := r.count(uint64(len(areas)))
-	i := uint64(0)
-	for range runs {
-		n, speed, from, fetch := r.uvarint(), r.uvarint(), r.uvarint(), r.uvarint()
-		if r.err != nil {
-			return
-		}
-		if n == 0 || n > uint64(len(areas))-i || speed > math.MaxUint32 || from >= physics.SeaFromSteps || fetch > math.MaxUint32 {
-			r.err = fmt.Errorf("sim: snapshot: a run of %d sea areas with inputs %d, %d, %d", n, speed, from, fetch)
-			return
-		}
-		in := physics.SeaInput{Speed: uint32(speed), From: uint32(from), Fetch: uint32(fetch)}
-		for range n {
-			areas[i] = in
-			i++
-		}
-	}
-	if r.err == nil && i != uint64(len(areas)) {
-		r.err = fmt.Errorf("sim: snapshot: %d sea areas, not %d", i, len(areas))
-	}
-}
 
 // bytes fills b from the snapshot.
 func (r *reader) bytes(b []byte) {

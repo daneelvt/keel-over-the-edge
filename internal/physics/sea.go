@@ -202,6 +202,12 @@ func SeaAreaOf(v float64) int32 {
 	return toInt32(math.Floor(float64(v*(1.0/SeaAreaSize)) + (seaMiddle + 0.5)))
 }
 
+// SeaAreaCentre is the centre of the area in a column and row, metres east
+// and north of the world's centre.
+func SeaAreaCentre(col, row int32) (x, y float64) {
+	return float64((col - seaMiddle) * SeaAreaSize), float64((row - seaMiddle) * SeaAreaSize)
+}
+
 // SeaWindow holds the amplitudes of a square of areas: the whole world's on
 // the server, the few around the boat in a client. Whoever makes one gives
 // it its storage, Size² areas of each, zeroed; a step only reads it, so the

@@ -39,6 +39,16 @@ type sim struct {
 	// tick of the next step.
 	sea  *ocean
 	tick float64
+	// wx, if not nil, is the weather the boat sails in: each step's wind
+	// is the wind at the boat at the step's tick.
+	wx *Weather
+	wt WeatherTick
+}
+
+// under puts the boat in a weather, at a tick late in a world's life.
+func (m *sim) under(w *Weather) *sim {
+	m.wx, m.tick = w, worldTick
+	return m
 }
 
 // in puts the boat in a sea, at a tick late in a world's life.
@@ -52,6 +62,10 @@ func (m *sim) step() {
 	var sea *Sea
 	if m.sea != nil {
 		sea = m.sea.at(m.tick)
+	}
+	if m.wx != nil {
+		WeatherAt(m.wx, &m.wt, m.tick)
+		m.e = WindAt(&m.wt, m.s.X, m.s.Y)
 	}
 	Step(&m.s, &m.c, &m.e, sea, m.b, &m.o)
 	m.tick++

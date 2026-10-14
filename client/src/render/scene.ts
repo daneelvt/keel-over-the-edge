@@ -12,7 +12,6 @@
 import { Vector3 } from 'three';
 import { fog, rangeFogFactor } from 'three/tsl';
 import { catalog } from '../catalog';
-import type { Wind } from '../game/driver';
 import type { DrawnBoat } from '../game/fleet';
 import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
 import { beaufort, KNOT, SPRAY } from '../ocean/look';
@@ -21,12 +20,14 @@ import { type BoatPose, newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import { writeSkyParams } from '../predict/params.gen';
 import { BODY, type Physics, SKY } from '../predict/physics';
+import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
 import { Boat } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { FleetView } from './fleet';
+import { GustRings } from './gustring';
 import { Lanterns, lanternLit } from './lanterns';
 import { domeCentre } from './materials';
 import { Overlays } from './overlays';
@@ -92,6 +93,8 @@ export class SeaScene {
   /** The catalog's sea: the spectrum both bands of waves are drawn from. */
   readonly catalogSea = catalog.weather.sea;
   readonly overlays: Overlays;
+  /** The rings round the gusts heading for the boat: part of the wind overlay. */
+  readonly gustRings = new GustRings(catalog.weather.ring);
   readonly boatScene: ScenePoint = { x: 0, y: 0, z: 0 };
   boat: Boat | null = null;
   /** The other boats, drawn many at once. */
@@ -119,7 +122,9 @@ export class SeaScene {
   /** What to draw: the boat between its last two steps, the latest step's Out, the wind. */
   readonly pose: BoatPose = newPose();
   out: Float64Array = new Float64Array(SIZES.out);
-  wind: Readonly<Wind> = { speed: 0, from: 0 };
+  wind: Readonly<BoatWind> = newBoatWind();
+  /** The sea under the boat: the significant height of its waves, in metres, and its whitecaps, 0 to 1. */
+  readonly sea = { height: 0, whitecaps: 0 };
   /** World time, seconds, and how much it moved since the last frame; and in ticks, for the sea. */
   time = 0;
   timeStep = 0;
@@ -187,6 +192,7 @@ export class SeaScene {
     scene.add(this.sprayView.mesh);
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
+    scene.add(this.gustRings.group);
     scene.add(this.fleet.root);
     scene.add(this.stars.mesh, this.lanterns.mesh);
     const label = document.createElement('span');
@@ -624,6 +630,25 @@ export class SeaScene {
     this.stars.mesh.visible = this.drawSky && this.stars.total > 0;
     this.stars.placeLabel(camera, canvas.clientWidth, canvas.clientHeight, now);
     const o = this.overlays;
+    const rings = this.gustRings;
+    rings.on = o.wind;
+    const source = this.ocean.source;
+    const speed = this.out[RECORDS.out.speedOverGround] ?? 0;
+    const course = this.out[RECORDS.out.courseOverGround] ?? 0;
+    const boatAt = this.#ringBoat;
+    boatAt.east = this.pose.east;
+    boatAt.north = this.pose.north;
+    boatAt.velEast = speed * Math.sin(course);
+    boatAt.velNorth = speed * Math.cos(course);
+    boatAt.windFrom = this.wind.meanFrom;
+    rings.update(
+      source?.weather === true ? source.physics : null,
+      this.ticks,
+      this.timeStep,
+      boatAt,
+      this.origin.world.x,
+      this.origin.world.y,
+    );
     if (o.wind || o.forces) {
       o.update(bs.x, bs.z, this.pose, this.wind, this.out);
       // The overlays ride the boat: their world matrices must be current to place their labels.
@@ -635,6 +660,9 @@ export class SeaScene {
     this.#spray();
     this.onFrame?.();
   }
+
+  /** The boat as the gust rings want it: where, how it moves, and where the mean wind comes from. */
+  readonly #ringBoat = { east: 0, north: 0, velEast: 0, velNorth: 0, windFrom: 0 };
 
   /** The spray's sources this frame: the player's bow, and the nearest others' on the tiers that have them. */
   readonly #sources: SpraySource[] = Array.from({ length: 4 }, () => ({
@@ -711,9 +739,16 @@ export class SeaScene {
       pts[(n + c) * 2] = cam.x + o.x + Math.cos(a) * r;
       pts[(n + c) * 2 + 1] = -cam.z + o.y + Math.sin(a) * r;
     }
+    if (src === null || slot < 0) {
+      this.sea.height = 0;
+      this.sea.whitecaps = 0;
+    }
     if (src !== null && slot >= 0 && dt > 0) {
       src.physics.seaDrawAt(this.ticks);
       const sea = src.physics.seaSample(slot, pts.subarray(0, 2 * (n + crests)));
+      // The first point is the player's bow.
+      this.sea.height = sea[3] ?? 0;
+      this.sea.whitecaps = this.ocean.under.foam.whitecaps;
       for (let k = 0; k < n; k++) {
         (sources[k] as SpraySource).sea = sea[k * 4] ?? 0;
       }

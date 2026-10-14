@@ -43,7 +43,9 @@ func (e *Edge) closeDoor() []*conn {
 func (e *Edge) Shutdown(ctx context.Context) error {
 	open := e.closeDoor()
 	for _, c := range open {
-		c.close(websocket.StatusServiceRestart, "the server is restarting")
+		// After the bell, if it is still queued: closed at once, the
+		// bell could be lost behind the close.
+		c.closeAfterQueued(websocket.StatusServiceRestart, "the server is restarting")
 	}
 	done := make(chan struct{})
 	go func() {

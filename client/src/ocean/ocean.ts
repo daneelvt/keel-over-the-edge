@@ -25,6 +25,7 @@ import {
   streakToward,
 } from './foam';
 import { FoamMap } from './foammap';
+import { GustField } from './gusts';
 import { type Field, hexCentre, makeField, type Point } from './hex';
 import { FOAM } from './look';
 import { patternTexture } from './pattern';
@@ -44,6 +45,8 @@ import { type BandUniforms, bandUniforms } from './wave';
 export interface SeaSource {
   readonly physics: Physics;
   readonly seas: Seas;
+  /** Whether the module holds spells of weather, whose gusts are drawn on the tiles. */
+  readonly weather: boolean;
 }
 
 /** What a frame gives the sea. */
@@ -75,6 +78,8 @@ export class Ocean {
   /** The module's window drawn in the last frame, or −1 for flat water. */
   slot = -1;
   readonly field: Field;
+  /** The gust field, as the tiles draw it. */
+  readonly gusts = new GustField(catalog.weather.gusts);
   readonly pass: TilePass;
   readonly far: FarSea;
   /** The tiles reading the pass, and the fallback computing planes per vertex. */
@@ -119,9 +124,9 @@ export class Ocean {
     this.#scene = scene;
     this.uniforms = bandUniforms(this.band, this.under.areas);
     this.field = makeField();
-    this.pass = new TilePass(this.field, this.uniforms);
-    this.passTiles = new Tiles(this.field, this.uniforms, this.pass.target.texture);
-    this.vertexTiles = new Tiles(this.field, this.uniforms, null);
+    this.pass = new TilePass(this.field, this.uniforms, this.gusts);
+    this.passTiles = new Tiles(this.field, this.uniforms, this.pass.target.texture, this.gusts);
+    this.vertexTiles = new Tiles(this.field, this.uniforms, null, this.gusts);
     // Both sets of tiles follow the same centre tile.
     this.vertexTiles.centre.value = this.passTiles.centre.value;
     this.vertexTiles.centreHex.value = this.passTiles.centreHex.value;
@@ -259,6 +264,13 @@ export class Ocean {
     this.passTiles.centreHex.value.set(origin.centre.q, origin.centre.r);
     this.far.outer.value = farRadius(f.cameraHeight);
     seaTime.value = (f.tick / STEPS_PER_SECOND) % 1000;
+    const src = this.source;
+    this.gusts.update(
+      src?.weather === true ? src.physics : null,
+      f.tick,
+      origin.world.x,
+      origin.world.y,
+    );
 
     const u = this.under;
     u.update(f.boatEast, f.boatNorth, f.dt);

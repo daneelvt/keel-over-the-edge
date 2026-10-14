@@ -52,16 +52,22 @@ test('a wind changed on the server reaches the boat', async ({ page, context, re
   await sail(page);
   const res = await request.post(`${internal}/debug/wind?knots=15&from=90`);
   expect(res.status()).toBe(204);
+  // A steady wind is in the steps a sea area's wind is rounded to: 15 knots
+  // is 7.72 m/s. It takes effect at the second after next.
   await page.waitForFunction(
-    () => Math.abs(globalThis.keel.boat().wind.speed - (15 * 1852) / 3600) < 1e-9,
+    () => Math.abs(globalThis.keel.boat().wind.speed - 7.72) < 1e-9,
     null,
-    { timeout: 5_000 },
+    {
+      timeout: 5_000,
+    },
   );
   const b = await page.evaluate(() => globalThis.keel.boat());
-  expect(b.wind.from).toBeCloseTo(Math.PI / 2, 12);
-  // The ticks predicted in the old wind are corrected once.
-  expect((await net(page)).counts.corrections).toBeLessThanOrEqual(2);
-  await request.post(`${internal}/debug/wind?knots=10&from=0`);
+  expect(b.wind.from).toBeCloseTo(Math.PI / 2, 9);
+  // The boat heard of it before it took effect: nothing is corrected.
+  await page.waitForTimeout(1_000);
+  expect((await net(page)).counts.corrections).toBe(0);
+  // Back to the world's own weather.
+  expect((await request.post(`${internal}/debug/weather?auto`)).status()).toBe(204);
 });
 
 test('a reload within the grace finds the same boat', async ({ page, context }) => {
@@ -100,6 +106,9 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', asyn
 });
 
 test('another device takes the boat, and Take over takes it back', async ({ page, browser }) => {
+  // Two pages load the game, one while the other sails: on CI's software
+  // GPU that alone has taken most of the 90 s a test is given.
+  test.setTimeout(180_000);
   const context = page.context();
   await guest(context);
   await sail(page);

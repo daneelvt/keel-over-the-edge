@@ -56,7 +56,8 @@ connection](#the-game-connection)). `go run ./tools/dev -limit 2` lets at
 most two boats sail: a third tab waits in the queue (see [Other
 boats](#other-boats)). `keel` runs with `KEEL_DEV_COMMANDS=1`,
 so `curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=15&from=270'`
-changes the wind.
+sets a steady wind and `…/debug/weather?regime=stormy` holds a regime (see
+[Setting the weather](#setting-the-weather)).
 
 ## On a phone
 
@@ -213,6 +214,10 @@ the layout version; the client refuses a module whose version differs.
   sent.
 - `Components` and `EffectiveWave`: the sea's waves, and the sea under a
   hull, for drawing (see [Waves](#waves)).
+- `WeatherParams`, `Regime` and `Spell`: the catalog's wind values, a kind
+  of spell, and a spell of weather; `WindPoint`, the wind at a point in
+  full, and `GustFrame`, what the GPU needs of the gust fields (see
+  [Wind](#wind)).
 
 A step sails in a sea, `physics.Sea`, or in flat water with none. The sea is
 not a record: the module keeps it, and the client fills it through exports
@@ -350,6 +355,234 @@ golden file, and copy the catalog's new values into `scenarios.json`'s
   attached trim and a stalled one give nearly the same drive, and which is
   best decides the side force. Drive matches.
 
+## Wind
+
+The wind differs from place to place and from second to second: a base wind
+that is lighter at the centre and stronger at the rim, slow shifts of its
+direction, and a field of gusts and lulls carried downwind. The physics
+package computes it (`weather.go`, `gusts.go`), so the server, the client's
+prediction and the gusts drawn on the water are the same wind. It is a pure
+function of the tick, the place and a few records of whole numbers: nothing
+of it is stored, and no wind is on the wire.
+
+### Spells and the sequence
+
+A **spell** is a stretch of time with one base wind, its shifts and its gust
+field (`physics.Spell`, whole numbers all: speeds in steps of 0.01 m/s,
+directions in 65536ths of a turn, times in ticks). A **regime** is a kind of
+spell, in the catalog's `weather.regimes`: the ranges a spell's numbers are
+drawn from.
+
+| Regime | Wind at mid-disk | Gust factor | Shifts | Share of the time |
+|--------|------------------|-------------|--------|-------------------|
+| `settled` | 3–9 knots | 1.2 | ±5°, 6–10 minutes | 25% |
+| `trade` | 10–16 knots | 1.3 | ±8°, 5–8 minutes | 40% |
+| `unsettled` | 12–20 knots | 1.45 | ±12°, 4–7 minutes | 25% |
+| `stormy` | 16–24 knots | 1.5 | ±12°, 4–7 minutes | 10% |
+
+The world's spells follow `weather.sequence`: six spells over twenty hours,
+again and again from the world's epoch (the two-hour day does not divide
+twenty hours, so each regime comes at a different hour each time).
+`internal/weather` is the timeline: `physics.DrawSpell` draws spell number
+n's speed, shifts, periods, phases, drift and seed from its regime by n and
+the sequence's seed, so every process draws the same spell. Its direction
+follows from the spell before: into or out of a `frontal` regime the wind
+veers by 40–90°, as when a front passes; between others it moves either way
+by up to 30°. A spell gives way to the next over ten minutes
+(`weather.gusts.change`), everywhere at once: the direction along the
+shorter arc, the speed and the gust factor between the two, and the two gust
+fields mixed so that their spread is kept.
+
+A frame holds the **spells in play** (`bus.Frame.Spells`, four at most):
+the one in effect, the one before it until ten seconds after their change
+has ended, and the next from ten seconds before its change begins. They are
+not in the checkpoint: a world that is loaded computes them again.
+
+### The wind at a point
+
+`physics.WeatherAt` computes a tick's part once (each spell's direction, the
+turn of its axis, how far its field has travelled; 22 ns), and
+`physics.WindAt(t, x, y)` the wind one boat sails in (51 ns in a spell, 80 ns
+through a change, on the Mac). From the spell:
+
+- **Speed.** The spell's wind is its wind at mid-disk, 2.1 NM out. It is
+  multiplied by 0.65 at the centre rising to 1.35 at the mist band, 4.2 NM
+  out, by a smooth step (`weather.disk`).
+- **Direction.** Where it comes from at its start, a drift of up to 20° over
+  its length, two shifts that swing two thirds and one third of the regime's
+  `shift` with periods of their own, and a difference of up to 5° from one
+  side of the disk to the other along an axis that turns once in four to
+  eight hours. A shift's phase is the fraction of `turns × tick`, the
+  product taken exactly, as a wave's is.
+- **Gusts.** The gust field, n in [−1, 1], makes the wind `mean × (1 + (G −
+  1) × rim × (h(n) − 0.0821))`: G the gust factor, h(n) = n in a gust and
+  n ÷ 2 in a lull, the constant h's mean over the field so that the mean
+  wind is kept, and `rim` rising from 1 at 3 NM to 1.3 at the rim. The
+  strongest gust veers the wind by 8° and the deepest lull backs it by 4°.
+- **The refuge.** Within 1 NM of the centre the mean wind above 10 knots is
+  passed through `knee + soft × tanh((v − knee) ÷ soft)`, which nears 14
+  knots and never passes it, and the wind with its gusts the same way from
+  14 knots toward 18; the limits fade out by 1.4 NM. So a beginner at the
+  centre never meets more than a force 4 with gusts into 5, whatever blows
+  outside.
+
+A **steady** spell is one wind everywhere with none of this: what a
+developer's `/debug/wind` sets, what the tests of other things sail in, and
+`sim.DefaultSpell` (10 knots from the north) for a world given no timeline.
+
+### The gust field
+
+Gradient noise (Perlin, 2002) in three dimensions, along the wind, across
+it and in time, in three octaves whose cells and weights halve. The largest
+cells are 300 m along the wind, 200 m across and 240 s (`weather.gusts`), so
+a patch of gust is about 150 m by 100 m. Each spell has its own field, by
+its seed, in a frame turned to the spell's direction that travels downwind
+at 0.9 of its wind at mid-disk: where the field has got to is a closed form
+of the tick. The corners of the lattice are hashed with integer arithmetic,
+which wraps alike in Go, in WebAssembly and on every GPU.
+
+`go test ./internal/physics -run GustField -v` measures it: its spread (0.31),
+the 99th percentile the sum is scaled by (`gustScale`), the mean of h
+(`gustMeanH`), how far a patch reaches (its correlation falls to a half
+110 m along the wind and 72 m across) and how long it lasts (0.90 after 30 s,
+0.70 after a minute, moving with it). After changing the cells or the
+octaves, put the two constants it prints into `gusts.go`. `-run SeenGust`
+checks that a gust seen 150 m upwind arrives: the field there, and at the
+boat when the field has travelled that far, correlate at 0.69 in the
+lightest regime and about 0.9 in the others.
+
+### The wave wind
+
+The sea lags the wind. Each sea area's waves are raised by its **wave
+wind**: the mean wind at its centre, without gusts, averaged over the last
+minutes with a time constant of 240 s (`weather.waveWind`). The average is
+of samples on a grid of world time, one every 30 s taken at the middle of
+its interval, forty of them, blended with the present mean so that it moves
+every second. It is a pure function of the tick and the weather
+(`physics.WaveWindAt`), so the simulation keeps only a ring of samples for
+each area (`internal/sim/sea.go`) and a world that is loaded makes them
+again. After a change of spell the sea reaches 95% of its new height in
+about twelve minutes.
+
+Every area now has its own inputs, and most change every second: see
+[Waves](#waves) for what they raise.
+
+### On the wire
+
+`WeatherSystems` (`game.proto`) is the spells in play. The edge sends it
+after the `Welcome` and whenever the frame's spells in play change
+(`internal/edge/weather.go`), so a spell arrives ten seconds before its
+change begins. The client keeps the latest in the physics module
+(`client/src/predict/weather.ts`, `internal/client`), and before each step
+it predicts or replays asks the module for the wind at its boat at that
+step's tick (`windAt`), as the simulation does for every boat. The snapshot
+carries no wind (layout 5). In a gusty spell and through a change the Go
+client sails five minutes with no correction (`go test
+./internal/edge/edgetest -run 'SailGusts|SailWeatherChange' -v`).
+
+### Setting the weather
+
+With `KEEL_DEV_COMMANDS=1`, on the internal listener (`bus.SetWeather`):
+
+```sh
+curl -X POST 'http://127.0.0.1:9090/debug/weather?regime=stormy'   # one endless spell of a regime
+curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=15&from=270'  # a steady wind
+curl -X POST 'http://127.0.0.1:9090/debug/weather?auto'            # the sequence again
+```
+
+Each takes effect at the second after next, at once and without a blend,
+and every client has heard of it by then. A held regime's spell is drawn as
+the sequence draws one, with no drift. The frame keeps the last eight
+weathers a developer set, since the wave wind looks back over twenty
+minutes of them, and so do checkpoints and the input log.
+
+### In the module
+
+`go run ./tools/physics` builds the same code into the client's module. Its
+exports: `weatherPrepare` (the catalog's `weather.disk`, `gusts` and
+`waveWind`, written by `writeWeatherParams`), `spellSet` and `spellCount`
+(the spells in play), `spellDraw` (a spell from a regime, for a client with
+no server), `windAt` (the env the next step sails in), `windPoint` and
+`windSample` (the wind in full at the boat or at many points, for the
+instruments and the ring), `gustFrameAt` (what the GPU needs of the fields)
+and `waveWind`.
+
+`go test ./internal/physics -run WindFile -update` writes
+`internal/physics/testdata/wind.json`: in seven weathers and places (a
+trade spell, a stormy one in the refuge and at the rim, a change of spell
+with and without the next in play, a steady wind alone and after a spell),
+near the present tick and late, the wind in full at 240 points, the gust
+field's frame and the wave wind. `client/src/predict/wind.test.ts` loads the same spells
+into the module, which must give the same bits; `/dev.html` runs the same
+check on a phone and times `windAt`. The golden scenarios sail in spells too
+(`"weather"` in `scenarios.json`).
+
+### Gusts on the water
+
+A gust is drawn where it is: its tiles are darker and their ripples steeper,
+and a lull's ripples flatter. `client/src/ocean/gusts.ts` is the
+field again in TSL, evaluated once a tile in the tile pass (it shares the
+pass's target, in rows of its own). Each frame the page asks the module for
+the **gust frame** (`gustFrameAt`): for each spell in play and each octave,
+the lattice cell the floating origin is in and how far across it, found in
+64 bits, with the direction, the seeds and the two spells' shares. The cells
+and seeds are 32-bit integers and cross as two 16-bit halves in floats. So
+the shader works only with a tile's few metres, and never sees a world
+position or the hours a field has travelled. The hash, the gradient and an
+octave's noise are functions of the shader's own, and the gusts' rows are
+drawn only while a spell in play has gusts (and once more when it has gone,
+to nothing), so a page in a steady wind never builds their shader: on CI's
+software GPU that shader takes seconds to compile, on a real one
+milliseconds. How a gust looks is `GUST_LOOK` in `gusts.ts`; none of it
+moves a boat.
+
+`e2e/wind.spec.ts` gives the page the weathers of `wind.json` and reads back
+what the GPU computed at every tile: within 10⁻⁴ of the server's field, on
+WebGL 2 and WebGPU. It also checks that a gust's tiles are darker and
+rougher than they are with the gusts hidden, at noon and under a full moon,
+that a steady wind draws none, and that the tiles' rows are zero before any
+field and after it has gone.
+
+### The readout and the ring
+
+The wind readout is the wind at the boat, gusts and all, averaged over the
+last three seconds of world time as an anemometer's is, with the Beaufort
+force of the **mean** wind there: "Wind WSW 14 kn · F4" (`ui/format.ts`,
+`ui/model.ts`). The force is by the Met Office's table of knots.
+
+With the menu's wind overlay on, a dashed **ring** lies on the water round
+each gust that is heading for the boat (`client/src/render/gustring.ts`).
+Four times a second the module's field is sampled on a grid 240 m upwind of
+the boat and 160 m across; the patches where the gust is at least half way
+to the spell's gust factor are found; and each whose edge will pass within
+30 m of the boat within a minute, by the field's travel and the boat's own
+way, gets a ring, the three soonest at most (`weather.ring`). The rings come
+from the field the boat feels, not from what is drawn.
+
+### Tuning
+
+Everything is in `shared/catalog/weather.yaml`. After a change:
+
+```sh
+go run ./tools/catalog                                   # the generated catalog
+go run ./tools/physics                                   # the layout files and the module
+go test ./internal/physics -run 'Golden|WindFile' -update
+go test ./internal/sim -run Fixture -args -update
+go test ./internal/edge/edgetest -run Traces -update
+(cd client && UPDATE_RECORDING=1 npx vitest run src/sandbox)
+```
+
+A change to the regimes or the sequence changes the catalog's version, so
+the deploy that carries it is a reset (see [Restarts and
+deploys](#restarts-and-deploys)). To judge a change, hold a regime with
+`/debug/weather`, or open `?sandbox&dev&weather=stormy` and use the panel:
+its wind line gives the mean, the wind with its gust, the gust factor, the
+field and the veer at the boat. The behaviour tests say what must stay true
+(`go test ./internal/physics -run 'HeelFollows|PlayingTheShifts|CapsizeInAGust|Refuge' -v`): a still
+sailor's heel follows the gusts, tacking on the headers gains on holding a
+tack, a gust can capsize a boat sheeted hard in, and the refuge's limits
+hold.
+
 ## Waves
 
 The sea moves boats. The waves longer than about 8 m, which the 4 m tiles can
@@ -384,9 +617,10 @@ blended, not the surfaces, with weights smoothed so that the slope is
 continuous: every place sums the same sines, so the sea is one surface and
 keeps its height where areas meet.
 
-Until the wind varies from place to place, every area has the world's one
-wind and the fetch of open water (`weather.sea.fetchCap`, 6 NM): 10 knots
-raise a boat band of about 0.25 m, 12 knots 0.33 m, 20 knots 0.6 m, 34 knots
+Each area's wind is its **wave wind**, the mean wind at its centre averaged
+over the last minutes (see [The wave wind](#the-wave-wind)), and until land
+shelters the water every area has the fetch of open water
+(`weather.sea.fetchCap`, 6 NM): 10 knots raise a boat band of about 0.25 m, 12 knots 0.33 m, 20 knots 0.6 m, 34 knots
 1 m.
 
 Time is the tick. A wave's phase from its frequency is the fraction of
@@ -570,19 +804,22 @@ unchanged.
 
 The frame holds each area's inputs twice (`bus.Sea`): **in effect**, and for
 **the next second**. The sea changes only on a second's first tick, to what
-was fixed a second before from the wind as it then stood. So a change of
-wind reaches the waves no sooner than the next second but one, and every
-client hears of it before it predicts a tick it applies to. The amplitudes
+was fixed a second before from the wave wind as it then stood. So a change
+of weather reaches the waves no sooner than the next second but one, and
+every client hears of it before it predicts a tick it applies to. The amplitudes
 are not in the frame: the simulation keeps two windows of the whole world
 (2.8 MB each), the one in effect and the one being made ready, a share of
 its areas each tick, and only an area whose inputs changed costs anything
 (`internal/sim/sea.go`). The `sea` phase of a tick does this and sets the
-sea's time. Checkpoints and the input log hold both sets of inputs, as runs
-of areas with the same inputs (snapshot version 5).
+sea's time. In a spell of weather most areas' inputs change every second
+(about 1,140 of the 1,369), so the phase now does that work every tick.
+Checkpoints and the input log do not hold the sea: it is a pure function of
+the tick and the weather, and a world that is loaded makes it again
+(snapshot version 6).
 
-On the local cluster `keel` runs with `KEEL_DEV_COMMANDS=1`, so the wind can
-be set there, on the internal listener, which no route leads to: forward its
-port and post to it.
+On the local cluster `keel` runs with `KEEL_DEV_COMMANDS=1`, so the weather
+can be set there, on the internal listener, which no route leads to: forward
+its port and post to it.
 
 ```sh
 export KUBECONFIG=$PWD/.dev/cluster/kubeconfig
@@ -590,9 +827,9 @@ kubectl -n keel port-forward deploy/keel 9090:9090 &
 curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=34&from=0'
 ```
 
-6, 12, 20 and 34 knots are a calm, a breeze, a fresh breeze and a gale.
-Production has no developer's commands: its wind is the world's first, 10
-knots from the north.
+6, 12, 20 and 34 knots are a calm, a breeze, a fresh breeze and a gale; the
+sea takes some twelve minutes to follow. Production has no developer's
+commands: its weather is the sequence's.
 
 ### The wire
 
@@ -791,10 +1028,11 @@ world; everything reaches it through the **bus** (`internal/bus`).
 
 | Package | What |
 |---------|------|
-| `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`; for developers only `SetWind` and `Place`; and the server's own `Hold`, admission held while the world's writes are behind); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
+| `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`; for developers only `SetWeather` and `Place`; and the server's own `Hold`, admission held while the world's writes are behind); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
 | `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, bring the sea to the tick, step every boat, sort the boats into the grid, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
 | `internal/persist` | The world's writer: the lasting events and a checkpoint every 10 s, written behind the tick in fenced batches (see [Restarts and deploys](#restarts-and-deploys)). |
 | `internal/sim/loop` | The clock: tick k after the world's epoch (the database's world row; world 1's is 1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
+| `internal/weather` | The weather's timeline: the catalog's sequence of spells, each drawn from its regime, a developer's weathers over it, and the spells in play about a tick (see [Wind](#wind)). |
 | `internal/replay` | The input log, `keel replay` and `/debug/replay` (below). |
 | `internal/scripted` | Scripted sailors: they join through the bus like players and steer and trim at random, each every 0.2–3 s. |
 | `internal/obs` | Logs, metrics, the probes, pprof and the flight recorder. |
@@ -815,7 +1053,7 @@ Three HTTP servers, each with a 10 s header timeout, a 120 s idle timeout and
 |----------|-------------------|--------|
 | `play.` | `KEEL_PLAY_ADDR`, `127.0.0.1:8080` | The game's routes (below), with an access log |
 | `agents.` | `KEEL_AGENTS_ADDR`, `127.0.0.1:8081` | Nothing yet: 404 to everything |
-| internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay`, and with `KEEL_DEV_COMMANDS=1` `POST /debug/wind` |
+| internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay`, and with `KEEL_DEV_COMMANDS=1` `POST /debug/wind` and `/debug/weather` |
 | metrics | `KEEL_METRICS_ADDR`, none | `GET /metrics` and nothing else; not opened unless set |
 
 The internal listener must never be reachable from outside. The addresses
@@ -835,7 +1073,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
-| `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (degrees the wind comes from). `tools/dev` and `tools/e2e` set it |
+| `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
 sets the database's URL, the internal address, `KEEL_TRACE_DIR=.dev/traces` and
@@ -1116,11 +1354,12 @@ check WebSockets' origins, keel does). A message may be 1 KB at most.
 **The protocol** (`shared/protocol`). One binary message is one game
 message; its first byte is its kind: `1`, a Protocol Buffers envelope
 (`keel/v1/game.proto`: `Hello`, `Input`, `Ping`, `Command` from the client;
-`Welcome`, `Pong`, `Queued`, `Restart`, `SeaAreas` from the server), or `2`,
-the packed snapshot (`snapshot.txt`: a 192-byte header with the own boat's
-state as float64, its heave and pitch included, then the other boats'
-entries; see [Other boats](#other-boats)). `SeaAreas` is the sea about the
-boat ([Waves](#waves)). `go run
+`Welcome`, `Pong`, `Queued`, `Restart`, `SeaAreas`, `WeatherSystems` from
+the server), or `2`, the packed snapshot (`snapshot.txt`: a 176-byte header
+with the own boat's state as float64, its heave and pitch included, then the
+other boats' entries; see [Other boats](#other-boats)). `SeaAreas` is the
+sea about the boat ([Waves](#waves)) and `WeatherSystems` the spells of
+weather its wind is computed from ([Wind](#wind)). `go run
 ./tools/protocol` generates the Go (`internal/protocol/pb`) and TypeScript
 (`client/src/net/gen`) with buf and its two generators, and the protocol
 version: a hash of the schema and the snapshot's layout. Run it after
@@ -2451,7 +2690,7 @@ starts once the old has gone, restores the checkpoint and is ready within
 seconds.
 
 **What a restart keeps and loses.** Kept: every boat, its state, controls
-and grace, the queue, the wind, boat IDs. Lost: the connections, which the
+and grace, the queue, a developer's weather, boat IDs. Lost: the connections, which the
 pages make again; a crash (`SIGKILL`, a panic) also loses up to 10 s of the
 world (the last checkpoint is restored) and the last ~200 ms of events. A
 change to the snapshot's format, the catalog or the physics layout makes
@@ -3025,16 +3264,20 @@ nothing. Every name a player wrote is shown as text in a `<bdi>`, so a
 right-to-left name cannot reorder what is around it
 (`client/src/ui/player.tsx`).
 
-At sea it is still the **offline sandbox**: one Jolly boat, stepped by the physics module in the page, in a
-steady wind that is the same everywhere, with nothing to correct it. It
-starts at the disk's centre, at rest, heading 090°, the helm centred and the
-sheet half out, in 10 knots from the north. The developer page is
+At sea it is still the **offline sandbox**: one Jolly boat, stepped by the physics module in the page, in
+weather it makes itself by the server's rules, with nothing to correct it.
+It starts at the disk's centre, at rest, heading 090°, the helm centred and
+the sheet half out, in a spell of the commonest regime (`trade`), drawn as
+the server draws one; with `?wind`, `?sea` or `?test` it is in a steady
+wind, 10 knots from the north unless told otherwise, so the tests of other
+things and their pictures stay in one wind. The developer page is
 `/dev.html`. Query strings:
 
 | Query | What |
 |-------|------|
 | `?sandbox` | The offline sandbox alone: no server, no session, no start screen. The browser tests of the scene use it |
-| `?wind=12,45` | The sandbox's wind: knots 10 m up, and the degrees it comes from |
+| `?wind=12,45` | The sandbox's wind, steady: knots 10 m up, and the degrees it comes from |
+| `?weather=stormy` | The sandbox's weather: one of the catalog's regimes (`settled`, `trade`, `unsettled`, `stormy`), or `steady` |
 | `?dev` | The developer panel (a lazy import, outside the first download); see below |
 | `?backend=webgl2` | The WebGL 2 back end, even where WebGPU is offered |
 | `?tier=low` | A tier held, `high`, `medium` or `low`, no better than the back end's; adaptive quality off (see [Tiers and adaptive quality](#tiers-and-adaptive-quality)) |
@@ -3066,8 +3309,8 @@ Each control is rounded to 1/1024 of its range before the physics sees it
 
 The menu (☰) holds this device's settings, kept in `localStorage`: the frame
 rate (60, or 30 to save battery), sound, the beginners' overlays (**wind**:
-the true wind's arrow on the water upwind and the apparent wind's above the
-masthead; **sail forces**: drive and side force at the sail's centre of
+the true wind's arrow on the water upwind, the apparent wind's above the
+masthead, and a dashed ring round each gust heading for the boat; **sail forces**: drive and side force at the sail's centre of
 effort, and a clinometer), and the helm's release.
 
 ### The frame
@@ -3087,8 +3330,12 @@ effort, and a clinometer), and the helm's release.
 
 ### The developer panel
 
-`?dev` adds a panel: the sandbox's wind (knots and the direction it comes
-from), which the sea follows a second or two later, as the server's does;
+`?dev` adds a panel: the sandbox's weather (steady, or one of the catalog's
+regimes, as a server's developer holds one), its wind at mid-disk (knots and
+the direction it comes from), a regime's gusts and its shifts each on or
+off, and the wind at the boat (the mean, the wind with its gust, the gust
+factor, the gust field and the veer); the sea follows over minutes, as the
+server's does;
 the sea at once in one of four states (the buttons set the wind to 6, 12, 20
 or 34 knots and raise its sea); another fetch than open water's; a second
 wind to the east of the boat, so that two seas meet and blend; flat water;
@@ -3112,9 +3359,9 @@ hour, the moon and the sky's speed, offline and online (see
 ### Recording a sail
 
 While the panel is open the sandbox records the sail, from the moment the
-panel opened or the last reset or placing: the starting state and each change
-of control, wind or sea with the step it applied to, in the sea the wind had
-raised when the recording began. **Download the sail** saves
+panel opened or the last reset or placing: the starting state, the spells of
+weather in play, and each change of control, weather or sea with the step it
+applied to, in the sea the wind had raised when the recording began. **Download the sail** saves
 it as a scenario file in the golden tests' format, with `end`, the state the
 sandbox reached. To make it a test, put it in
 `internal/physics/testdata/recordings/`: `go test ./internal/physics -run
@@ -3180,11 +3427,14 @@ must name a file that exists (`go run ./tools/catalog -check`). The catalog's
 Sound is synthesised in the browser with Web Audio; there are no sound
 files. The recipes are art, in `art/sound/*.json` (each names the art
 licence in its first field): **wind**, noise through a band-pass whose
-centre and level rise with the apparent wind; **rigging**, a narrow band at
+centre and level rise with the apparent wind, so it swells with the gusts
+the boat feels and with nothing else; **rigging**, a narrow band at
 the sheet's Aeolian tone, 0.2 × apparent wind ÷ 10 mm; **flogging**, the
 cloth's band beaten at a flap rate, only while a sail strip luffs;
 **water**, low-passed noise rising with speed and a bow wave's hiss past the
-hull speed. `client/src/audio/voices.ts` maps them onto the physics;
+hull speed; **sea**, a wide, low band that rises and brightens with the
+significant height of the waves under the boat, louder with its whitecaps
+and with the boat's speed through the water, and silent on flat water. `client/src/audio/voices.ts` maps them onto the physics;
 `engine.ts` plays them, setting parameters at most every 50 ms. Audio starts
 on the first tap (a touch's `pointerup`, a mouse's `pointerdown`, a key) and
 is suspended while the page is hidden. On an iPhone with the silent switch
@@ -3240,6 +3490,11 @@ the physics module gives; no sea inside a hull and no hole outside it,
 sailing in a gale for ten seconds, heeled 30°, and in seven other boats; the
 lattice fixed as the boat moves and the origin jumps, the tile hash, the
 scene walk, recovery from a lost device, and pictures.
+`wind.spec.ts` is the wind on the water: the gust field the GPU computes at
+every tile against the server's (`wind.json`), a gust's tiles darker and
+rougher at noon and under a full moon and none in a steady wind, the gust
+ring drawn round a gust heading for the boat and travelling with it, and the
+wind readout with its Beaufort force (see [Wind](#wind)).
 `look.spec.ts` is the sea's look: the detail band the GPU transforms, read
 back and compared with `field.ts`'s at the same time and sea (within a
 thousandth of each field's size, on a core and a compatibility device, and

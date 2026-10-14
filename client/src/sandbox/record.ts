@@ -1,24 +1,48 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Recording a sail. From a starting state, the recorder keeps each change of
-// control, wind or sea with the step it applied to, in the format of the physics
+// control, weather or sea with the step it applied to, in the format of the physics
 // golden scenarios (internal/physics/testdata/scenarios.json), so a sail
 // found strange in play can become a test: the Go runner replays it and must
-// reach the state the sandbox reached. It allocates only when a control or
-// the wind changes, never per frame.
+// reach the state the sandbox reached. It allocates only when a control,
+// the weather or the sea changes, never per frame.
 
-import { type ScenarioSea, toHex } from '../predict/golden';
-import { ARRAYS, RECORDS, SEA } from '../predict/layout.gen';
+import {
+  type RecordValues,
+  recordValues,
+  type ScenarioSea,
+  type ScenarioWeather,
+  toHex,
+} from '../predict/golden';
+import { RECORDS, SEA } from '../predict/layout.gen';
 
 type Values = Record<string, number>;
+
+/**
+ * A developer's weather, as the server's command has it: its mode (0 the
+ * world's own, 1 a regime held, 2 a steady wind), the regime's index, and
+ * the wind's speed in steps of 0.01 m/s and direction in 65536ths of a turn.
+ */
+export interface WeatherSet {
+  mode: number;
+  regime: number;
+  speed: number;
+  dir: number;
+}
 
 export interface RecordedChange {
   at: number;
   control?: Values;
-  env?: Values;
   /** The sea's areas from this step on, and its window's first area. */
   areas?: number[][];
   window?: number[];
+  /**
+   * The spells of weather in play from this step on; and, when the sandbox
+   * set them as a server would at a developer's command given at this step,
+   * the command, so that a server can be given it too.
+   */
+  spells?: RecordValues[];
+  set?: WeatherSet;
 }
 
 /** The sea of a step: the window in effect, and a stamp that changes when it does. */
@@ -29,14 +53,23 @@ export interface StepSea {
   areas(): number[][];
 }
 
+/** The weather of a step: the spells in play, a count of their changes, and the command behind the last. */
+export interface StepWeather {
+  readonly version: number;
+  readonly spells: readonly ArrayLike<number>[];
+  readonly set: WeatherSet | null;
+}
+
 export interface RecordedScenario {
   name: string;
   steps: number;
   state: Values;
   control: Values;
+  /** Not used: the wind is the weather's. */
   env: Values;
-  /** The sea of the first step, and its tick. */
+  /** The sea of the first step, and its tick; the spells in play then. */
   sea: ScenarioSea;
+  weather: ScenarioWeather;
   changes: RecordedChange[];
   /** The state after the last step, each field's IEEE 754 bits in hexadecimal. */
   end: Record<string, string>;
@@ -44,9 +77,10 @@ export interface RecordedScenario {
 
 export interface Recording {
   description: string;
-  /** The catalog's sea values the sandbox sailed in. */
+  /** The catalog's sea values the sandbox sailed in, and its wind values. */
   sea: Values;
-  params: Record<string, number | number[]>;
+  params: RecordValues;
+  wind: RecordValues;
   scenarios: RecordedScenario[];
 }
 
@@ -59,46 +93,30 @@ export function fieldsOf(record: keyof typeof RECORDS, view: Float64Array): Valu
   return out;
 }
 
-/** The params record by name, arrays as arrays. */
-export function paramsOf(view: Float64Array): Record<string, number | number[]> {
-  const lengths: Record<string, number> = ARRAYS.params;
-  const out: Record<string, number | number[]> = {};
-  for (const [name, index] of Object.entries(RECORDS.params)) {
-    const n = lengths[name];
-    out[name] = n === undefined ? (view[index] ?? 0) : Array.from(view.subarray(index, index + n));
-  }
-  return out;
-}
-
 export class Recorder {
-  #start: { state: Values; control: Values; env: Values } | null = null;
+  #start: { state: Values; control: Values } | null = null;
   #sea: ScenarioSea | null = null;
+  #weather: ScenarioWeather | null = null;
   #stamp = -1;
+  #version = -1;
   #changes: RecordedChange[] = [];
   #steps = 0;
   #helm = 0;
   #sheet = 0;
-  #speed = 0;
-  #from = 0;
 
-  /** Starts a recording from this state, controls and wind. */
-  start(state: Float64Array, control: Float64Array, env: Float64Array): void {
-    this.#start = {
-      state: fieldsOf('state', state),
-      control: fieldsOf('control', control),
-      env: fieldsOf('env', env),
-    };
+  /** Starts a recording from this state and these controls. */
+  start(state: Float64Array, control: Float64Array): void {
+    this.#start = { state: fieldsOf('state', state), control: fieldsOf('control', control) };
     this.#sea = null;
+    this.#weather = null;
     this.#changes = [];
     this.#steps = 0;
     this.#helm = control[RECORDS.control.helm] ?? 0;
     this.#sheet = control[RECORDS.control.sheet] ?? 0;
-    this.#speed = env[RECORDS.env.windSpeed] ?? 0;
-    this.#from = env[RECORDS.env.windFrom] ?? 0;
   }
 
-  /** Notes the controls, the wind and the sea of the step about to be taken into tick. */
-  step(helm: number, sheet: number, speed: number, from: number, tick: number, sea: StepSea): void {
+  /** Notes the controls, the weather and the sea of the step about to be taken into tick. */
+  step(helm: number, sheet: number, tick: number, sea: StepSea, weather: StepWeather): void {
     if (this.#start === null) {
       return;
     }
@@ -110,6 +128,17 @@ export class Recorder {
       c.window = [sea.col, sea.row];
     }
     this.#stamp = sea.stamp;
+    const spells = (): RecordValues[] => weather.spells.map((s) => recordValues('spell', s));
+    if (this.#weather === null) {
+      this.#weather = { tick, spells: spells() };
+    } else if (weather.version !== this.#version) {
+      const c = this.#change();
+      c.spells = spells();
+      if (weather.set !== null) {
+        c.set = { ...weather.set };
+      }
+    }
+    this.#version = weather.version;
     if (!Object.is(helm, this.#helm) || !Object.is(sheet, this.#sheet)) {
       const control: Values = {};
       if (!Object.is(helm, this.#helm)) {
@@ -121,11 +150,6 @@ export class Recorder {
       this.#change().control = control;
       this.#helm = helm;
       this.#sheet = sheet;
-    }
-    if (!Object.is(speed, this.#speed) || !Object.is(from, this.#from)) {
-      this.#change().env = { windSpeed: speed, windFrom: from };
-      this.#speed = speed;
-      this.#from = from;
     }
     this.#steps++;
   }
@@ -140,26 +164,29 @@ export class Recorder {
     name: string,
     seaParams: Float64Array,
     params: Float64Array,
+    weatherParams: Float64Array,
     state: Float64Array,
   ): Recording {
-    const start = this.#start ?? { state: {}, control: {}, env: {} };
+    const start = this.#start ?? { state: {}, control: {} };
     const end: Record<string, string> = {};
     for (const [field, index] of Object.entries(RECORDS.state)) {
       end[field] = toHex(state[index] ?? Number.NaN);
     }
     return {
       description:
-        "A sail recorded in the sandbox. Each change applies before the step it names, counting from 0; end is the state the sandbox reached after the last step. The params are the boat the sandbox sailed, and sea the catalog's sea values it sailed in. A scenario's sea is the window of sea areas about the boat at step 0 and that step's tick; a change's areas and window are the sea's from that step on.",
+        "A sail recorded in the sandbox. Each change applies before the step it names, counting from 0; end is the state the sandbox reached after the last step. The params are the boat the sandbox sailed, sea the catalog's sea values it sailed in and wind its wind values. A scenario's sea is the window of sea areas about the boat at step 0 and that step's tick, and its weather the spells in play then; a change's areas and window are the sea's from that step on, its spells the spells in play from it on, and its set the developer's weather the sandbox was given at that step, which a server given the same at that step's tick answers with the same spell.",
       sea: fieldsOf('seaParams', seaParams),
-      params: paramsOf(params),
+      params: recordValues('params', params),
+      wind: recordValues('weatherParams', weatherParams),
       scenarios: [
         {
           name,
           steps: this.#steps,
           state: start.state,
           control: start.control,
-          env: start.env,
+          env: { windSpeed: 0, windFrom: 0 },
           sea: this.#sea ?? { tick: 0, col: 0, row: 0, size: SEA.window, areas: [] },
+          weather: this.#weather ?? { tick: 0, spells: [] },
           changes: this.#changes.map((c) => ({ ...c })),
           end,
         },

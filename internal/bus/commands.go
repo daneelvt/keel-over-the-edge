@@ -18,13 +18,13 @@ const QueueSize = 4096
 type Op uint8
 
 // The commands. Join, Leave and Disconnect come from players' connections;
-// SetWind and Place are for developers only: tests, scripted sailors and
-// replays; Hold is the server's own, from what writes the world to the
+// SetWeather and Place are for developers only: tests, scripted sailors
+// and replays; Hold is the server's own, from what writes the world to the
 // database.
 const (
 	Join       Op = iota + 1 // a boat for Account, sailed through connection Conn: its existing one, a new one, or a place in the queue
 	Leave                    // Boat leaves the world
-	SetWind                  // the wind becomes Wind
+	SetWeather               // the developer's weather becomes Weather, from the second after next
 	Place                    // Boat's state becomes State
 	Disconnect               // connection Conn, Boat's, has ended: its grace begins; with Boat 0, Account's connection Conn, waiting or sailing
 	Hold                     // admission is held while Held: a Join without a boat waits in the queue, and the queue gives none
@@ -32,9 +32,9 @@ const (
 )
 
 // Ops lists every op, in order, for tables keyed by op.
-var Ops = []Op{Join, Leave, SetWind, Place, Disconnect, Hold}
+var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold}
 
-var opNames = [...]string{"", "join", "leave", "set_wind", "place", "disconnect", "hold"}
+var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold"}
 
 func (o Op) String() string {
 	if o == 0 || o >= opEnd {
@@ -44,7 +44,7 @@ func (o Op) String() string {
 }
 
 // Developer reports whether only developer sources may send o.
-func (o Op) Developer() bool { return o == SetWind || o == Place }
+func (o Op) Developer() bool { return o == SetWeather || o == Place }
 
 // Server reports whether only the server's own parts may send o: a
 // developer's sender may too, a player's never.
@@ -68,10 +68,28 @@ func (a Account) String() string {
 	return string(b[:])
 }
 
-// Wind is the true wind 10 m above the sea.
-type Wind struct {
-	Speed float64 // m/s
-	From  float64 // direction it comes from, rad clockwise from north
+// WeatherMode is how a developer's weather overrides the world's.
+type WeatherMode uint8
+
+// The developer's weathers.
+const (
+	WeatherAuto   WeatherMode = iota // the world's own weather
+	WeatherHeld                      // one endless spell of a regime
+	WeatherSteady                    // one wind, the same everywhere, with no shifts or gusts
+	weatherModeEnd
+)
+
+// Valid reports whether m is one of the modes.
+func (m WeatherMode) Valid() bool { return m < weatherModeEnd }
+
+// Weather is a developer's weather: what the world's weather is from a tick
+// on, until the next.
+type Weather struct {
+	From   int64 // the tick it takes effect from: the simulation sets it
+	Mode   WeatherMode
+	Regime uint16 // WeatherHeld: the regime's index in the catalog
+	Speed  uint32 // WeatherSteady: the wind 10 m up, in steps of physics.SeaSpeedStep
+	Dir    uint32 // WeatherSteady: the direction it comes from, in steps of a turn / physics.TurnSteps
 }
 
 // A Command asks the simulation to change the world. It is a value; the reply
@@ -81,7 +99,7 @@ type Command struct {
 	Account Account       // Join, Disconnect with no boat: the account; in a Leave's event, the tick's record of who sailed the boat
 	Conn    uint64        // Join, Disconnect: the connection; 0 for none
 	Boat    uint64        // Leave, Place, Disconnect: the boat; Disconnect: 0 for whatever Account has
-	Wind    Wind          // SetWind
+	Weather Weather       // SetWeather
 	State   physics.State // Place
 	Held    bool          // Hold: held, or let go
 	// Reply, if not nil, receives the result. The simulation never waits on
@@ -98,7 +116,7 @@ const (
 	Rejoined                   // the account's existing boat
 	Full                       // no free slot, and no room in the queue
 	Left                       // the boat has gone
-	Done                       // SetWind, Place or Hold applied; Disconnect's grace begun
+	Done                       // SetWeather, Place or Hold applied; Disconnect's grace begun
 	NoBoat                     // no such boat
 	Expired                    // the boat left at the end of its grace: the tick's own doing, not a command's
 	Stale                      // Disconnect from a connection that no longer sails the boat, or waits: ignored

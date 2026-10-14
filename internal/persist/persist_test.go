@@ -3,6 +3,7 @@
 package persist
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -227,7 +228,7 @@ func TestEventsAndCheckpoints(t *testing.T) {
 		if err := sim.ReadSnapshot(cps[len(cps)-1].Data, g); err != nil {
 			t.Fatal(err)
 		}
-		if f := r.w.Latest(); sim.Digest(g) != sim.Digest(f) || cps[len(cps)-1].Boats != len(f.Live) {
+		if f := r.w.Latest(); !bytes.Equal(cps[len(cps)-1].Data, sim.AppendSnapshot(nil, f)) || cps[len(cps)-1].Boats != len(f.Live) {
 			t.Fatal("the last checkpoint is not the last frame")
 		}
 		if r.p.Checkpoints() != uint64(len(cps)) || r.p.Events() != 13 || r.p.Fill() != 0 {

@@ -18,10 +18,10 @@ import (
 const (
 	// HeaderSize is the header's length, its kind byte included: where
 	// the entries begin.
-	HeaderSize = 192
+	HeaderSize = 176
 	// SnapshotLayout is the layout this package writes: the own boat's
 	// state as float64, then the view's entries.
-	SnapshotLayout = 4
+	SnapshotLayout = 5
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an
@@ -47,8 +47,7 @@ const (
 	offMargin  = 17
 	offHelm    = 19
 	offSheet   = 21
-	offWind    = 23
-	offState   = 39
+	offState   = 23
 	offEntries = offState + 8*sim.StateSize
 )
 
@@ -67,7 +66,6 @@ type Snapshot struct {
 	// Margin is the lowest arrival margin since the previous snapshot, in
 	// ticks, or NoMargin.
 	Margin int16
-	Wind   bus.Wind
 	State  physics.State
 	// Entries is how many entries follow the header.
 	Entries int
@@ -75,7 +73,7 @@ type Snapshot struct {
 
 // PutHeader writes a snapshot's header, its kind byte first, into b, which
 // must hold HeaderSize bytes, with no entries. It allocates nothing.
-func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, margin int16, wind bus.Wind, s *physics.State) {
+func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, margin int16, s *physics.State) {
 	_ = b[HeaderSize-1]
 	le := binary.LittleEndian
 	b[0] = KindSnapshot
@@ -87,8 +85,6 @@ func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, ma
 	le.PutUint16(b[offMargin:], uint16(margin))
 	le.PutUint16(b[offHelm:], word.HelmIndex())
 	le.PutUint16(b[offSheet:], word.SheetIndex())
-	le.PutUint64(b[offWind:], math.Float64bits(wind.Speed))
-	le.PutUint64(b[offWind+8:], math.Float64bits(wind.From))
 	for i, v := range sim.StateFields(s) {
 		le.PutUint64(b[offState+8*i:], math.Float64bits(*v))
 	}
@@ -100,7 +96,7 @@ func SetEntries(b []byte, n int) { b[offEntries] = byte(n) }
 
 // Put writes s's header as PutHeader does, with s.Entries as its count.
 func (s *Snapshot) Put(b []byte) {
-	PutHeader(b, s.Tick, s.Base, s.Flags, bus.Pack(s.Seq, s.Helm, s.Sheet, 0), s.Margin, s.Wind, &s.State)
+	PutHeader(b, s.Tick, s.Base, s.Flags, bus.Pack(s.Seq, s.Helm, s.Sheet, 0), s.Margin, &s.State)
 	SetEntries(b, s.Entries)
 }
 
@@ -136,8 +132,6 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 	case s.Entries > MaxEntries:
 		return fmt.Errorf("protocol: a snapshot of %d entries", s.Entries)
 	}
-	s.Wind.Speed = math.Float64frombits(le.Uint64(b[offWind:]))
-	s.Wind.From = math.Float64frombits(le.Uint64(b[offWind+8:]))
 	for i, v := range sim.StateFields(&s.State) {
 		*v = math.Float64frombits(le.Uint64(b[offState+8*i:]))
 	}

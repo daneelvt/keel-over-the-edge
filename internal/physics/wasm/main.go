@@ -45,6 +45,19 @@ var (
 	waves     physics.Waves
 	wave      physics.EffectiveWave
 
+	weatherParams   physics.WeatherParams
+	weatherPrepared physics.WeatherPrepared
+	regime          physics.Regime
+	spell           physics.Spell
+	wind            physics.WindPoint
+	gustFrame       physics.GustFrame
+	weather         = physics.Weather{Prepared: &weatherPrepared}
+	stepWeather     physics.WeatherTick
+	drawWeather     physics.WeatherTick
+	// stepFresh says stepWeather is at the tick it holds in the spells in
+	// play.
+	stepFresh bool
+
 	skyParams   sky.Params
 	skyPrepared sky.Prepared
 	skyNow      sky.Sky
@@ -87,7 +100,19 @@ var (
 	// and significant height of each.
 	samplePoints [2 * sampleCapacity]float64
 	sampleValues [4 * sampleCapacity]float64
+
+	// windValues is what windSample writes: for each point the wind's
+	// speed and direction, the mean wind's speed and direction, the gust
+	// field and the gust factor.
+	windValues [windValuesEach * sampleCapacity]float64
+	// waveValues is what waveWind writes: the wave wind's speed and the
+	// direction it comes from.
+	waveValues  [2]float64
+	waveScratch physics.WeatherTick
+	waveRing    [physics.MaxWaveSamples]physics.WaveSample
 )
+
+const windValuesEach = 6
 
 func init() {
 	for i := range windows {
@@ -282,6 +307,121 @@ func seaSample(s, n uint32) {
 		p := physics.SeaSample(&sea, samplePoints[2*i], samplePoints[2*i+1])
 		sampleValues[4*i], sampleValues[4*i+1], sampleValues[4*i+2], sampleValues[4*i+3] = p.Height, p.East, p.North, p.Hs
 	}
+}
+
+//go:wasmexport weatherParams
+func weatherParamsAddr() uint32 { return addr(unsafe.Pointer(&weatherParams)) }
+
+//go:wasmexport regime
+func regimeAddr() uint32 { return addr(unsafe.Pointer(&regime)) }
+
+//go:wasmexport spell
+func spellAddr() uint32 { return addr(unsafe.Pointer(&spell)) }
+
+// wind is the record windPoint writes.
+//
+//go:wasmexport wind
+func windAddr() uint32 { return addr(unsafe.Pointer(&wind)) }
+
+// gustFrame is the record gustFrameAt writes.
+//
+//go:wasmexport gustFrame
+func gustFrameAddr() uint32 { return addr(unsafe.Pointer(&gustFrame)) }
+
+// weatherPrepare derives the wind's constants from weatherParams. Call it
+// after writing weatherParams and before setting spells.
+//
+//go:wasmexport weatherPrepare
+func weatherPrepare() {
+	physics.PrepareWeather(&weatherParams, &weatherPrepared)
+	stepFresh = false
+}
+
+// spellDraw writes to the spell record a spell of the regime in the regime
+// record, drawn from its number and a seed as the server draws its spells.
+// Its times, direction and regime's index are left as the record had them.
+//
+//go:wasmexport spellDraw
+func spellDraw(number, seed uint32) {
+	physics.DrawSpell(&weatherPrepared, &regime, number, seed, &spell)
+}
+
+// spellSet makes the spell record spell i of those in play.
+//
+//go:wasmexport spellSet
+func spellSet(i uint32) {
+	weather.SetSpell(int32(min(i, physics.WeatherSpells)), &spell)
+	stepFresh = false
+}
+
+// spellGet writes spell i of those in play to the spell record.
+//
+//go:wasmexport spellGet
+func spellGet(i uint32) { spell = weather.Spells[min(i, physics.WeatherSpells-1)] }
+
+// spellCount says how many of the spells set are in play: the first n.
+//
+//go:wasmexport spellCount
+func spellCount(n uint32) {
+	weather.SetCount(int32(min(n, physics.WeatherSpells)))
+	stepFresh = false
+}
+
+// windAt sets env to the wind at the state's place at a tick: what the next
+// step sails in.
+//
+//go:wasmexport windAt
+func windAt(tick float64) {
+	if !stepFresh || stepWeather.Tick != tick {
+		physics.WeatherAt(&weather, &stepWeather, tick)
+		stepFresh = true
+	}
+	env = physics.WindAt(&stepWeather, state.X, state.Y)
+}
+
+// windDrawAt sets the time windPoint, windSample and gustFrameAt answer
+// for, in ticks, which need not be whole.
+//
+//go:wasmexport windDrawAt
+func windDrawAt(tick float64) { physics.WeatherAt(&weather, &drawWeather, tick) }
+
+// windPoint writes to the wind record the wind at (x, y) in full, at the
+// time windDrawAt set.
+//
+//go:wasmexport windPoint
+func windPoint(x, y float64) { physics.WindPointAt(&drawWeather, x, y, &wind) }
+
+//go:wasmexport windValues
+func windValuesAddr() uint32 { return addr(unsafe.Pointer(&windValues)) }
+
+// windSample writes the wind at the first n of samplePoints to windValues,
+// at the time windDrawAt set.
+//
+//go:wasmexport windSample
+func windSample(n uint32) {
+	var p physics.WindPoint
+	for i := uint32(0); i < n && i < sampleCapacity; i++ {
+		physics.WindPointAt(&drawWeather, samplePoints[2*i], samplePoints[2*i+1], &p)
+		v := windValues[windValuesEach*i : windValuesEach*(i+1)]
+		v[0], v[1], v[2], v[3], v[4], v[5] = p.Speed, p.From, p.MeanSpeed, p.MeanFrom, p.Gust, p.Factor
+	}
+}
+
+// gustFrameAt writes to the gustFrame record the gust field's frame at the
+// time windDrawAt set.
+//
+//go:wasmexport gustFrameAt
+func gustFrameAt() { physics.GustFrameAt(&drawWeather, &gustFrame) }
+
+//go:wasmexport waveValues
+func waveValuesAddr() uint32 { return addr(unsafe.Pointer(&waveValues)) }
+
+// waveWind writes to waveValues the wind that raises the waves at (x, y)
+// at a tick, from the spells in play: for a client that makes its own sea.
+//
+//go:wasmexport waveWind
+func waveWind(x, y, tick float64) {
+	waveValues[0], waveValues[1] = physics.WaveWindAt(&weather, x, y, tick, &waveScratch, &waveRing)
 }
 
 // skyParams is the sky's numbers: sky.ParamsSize float64s, in the

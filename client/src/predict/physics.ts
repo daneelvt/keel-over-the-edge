@@ -5,7 +5,7 @@
 // anything that must agree with the server is computed in the module, never
 // with JavaScript's Math, whose last bits differ between browsers.
 
-import { FN, LAYOUT_VERSION, RECORDS, SEA, SIZES } from './layout.gen';
+import { FN, LAYOUT_VERSION, RECORDS, SEA, SIZES, WEATHER } from './layout.gen';
 import { SKY_PARAMS } from './params.gen';
 
 export type RecordName = keyof typeof RECORDS;
@@ -51,6 +51,24 @@ interface Exports {
   samplePoints(): number;
   sampleValues(): number;
   seaSample(slot: number, n: number): void;
+  weatherParams(): number;
+  regime(): number;
+  spell(): number;
+  wind(): number;
+  gustFrame(): number;
+  weatherPrepare(): void;
+  spellDraw(number: number, seed: number): void;
+  spellSet(i: number): void;
+  spellGet(i: number): void;
+  spellCount(n: number): void;
+  windAt(tick: number): void;
+  windDrawAt(tick: number): void;
+  windPoint(x: number, y: number): void;
+  windValues(): number;
+  windSample(n: number): void;
+  gustFrameAt(): void;
+  waveValues(): number;
+  waveWind(x: number, y: number, tick: number): void;
   skyParams(): number;
   skyPrepare(): void;
   sky(): number;
@@ -98,6 +116,24 @@ const functionExports = [
   'samplePoints',
   'sampleValues',
   'seaSample',
+  'weatherParams',
+  'regime',
+  'spell',
+  'wind',
+  'gustFrame',
+  'weatherPrepare',
+  'spellDraw',
+  'spellSet',
+  'spellGet',
+  'spellCount',
+  'windAt',
+  'windDrawAt',
+  'windPoint',
+  'windValues',
+  'windSample',
+  'gustFrameAt',
+  'waveValues',
+  'waveWind',
   'skyParams',
   'skyPrepare',
   'sky',
@@ -130,6 +166,17 @@ export const SKY = { sun: 0, moon: 5, lit: 10, stars: 11, size: 20 } as const;
  * its bearing clockwise from north, in radians.
  */
 export const BODY = { east: 0, north: 1, up: 2, altitude: 3, bearing: 4, size: 5 } as const;
+
+/** How many values windSample writes for each point, and where each is. */
+export const WIND_VALUES = 6;
+export const WIND_VALUE = {
+  speed: 0,
+  from: 1,
+  meanSpeed: 2,
+  meanFrom: 3,
+  gust: 4,
+  factor: 5,
+} as const;
 
 /** Compiles and starts the physics module. */
 export async function loadPhysics(source: PhysicsSource): Promise<Physics> {
@@ -356,6 +403,106 @@ export class Physics {
       x.seaSample(slot, m);
       out.set(new Float64Array(x.memory.buffer, x.sampleValues() >>> 0, 4 * m), 4 * start);
     }
+    return out;
+  }
+
+  /**
+   * Derives the wind's constants from the weatherParams record. Call it
+   * after writing weatherParams (writeWeatherParams) and before setting
+   * spells.
+   */
+  prepareWeather(): void {
+    this.#x.weatherPrepare();
+  }
+
+  /**
+   * Draws into the spell record a spell of the regime in the regime record
+   * (writeRegime), from its number and a seed, exactly as the server draws
+   * its spells. Its times, its direction and its regime's index are left as
+   * the record had them.
+   */
+  spellDraw(number: number, seed: number): void {
+    this.#x.spellDraw(number >>> 0, seed >>> 0);
+  }
+
+  /**
+   * Makes spells the spells of weather in play, ascending by the tick each
+   * begins at: each a spell record's values, at most WEATHER.spells of them.
+   */
+  setSpells(spells: readonly ArrayLike<number>[]): void {
+    const n = Math.min(spells.length, WEATHER.spells);
+    for (let i = 0; i < n; i++) {
+      this.records.spell.set(spells[i] as ArrayLike<number>);
+      this.#x.spellSet(i);
+    }
+    this.#x.spellCount(n);
+  }
+
+  /** Sets the env record to the wind at the state's place at a tick: what the next step sails in. */
+  windAt(tick: number): void {
+    this.#x.windAt(tick);
+  }
+
+  /** Sets the time windPoint, windSample and gustFrame answer for, in ticks, which need not be whole. */
+  windDrawAt(tick: number): void {
+    this.#x.windDrawAt(tick);
+  }
+
+  /**
+   * The wind at (east, north) in full, at the time windDrawAt set: the wind
+   * record, indexed by RECORDS.wind. A view: read it before the next call.
+   */
+  windPoint(east: number, north: number): Float64Array {
+    this.#x.windPoint(east, north);
+    return this.records.wind;
+  }
+
+  /**
+   * The wind at points (east, north of each, in turn) at the time
+   * windDrawAt set: for each its speed and direction, the mean wind's speed
+   * and direction, the gust field and the gust factor, written to out,
+   * WIND_VALUES for each point.
+   */
+  windSample(
+    points: ArrayLike<number>,
+    out: Float64Array,
+    count = points.length >> 1,
+  ): Float64Array {
+    const x = this.#x;
+    for (let start = 0; start < count; start += SEA.sampleCapacity) {
+      const m = Math.min(SEA.sampleCapacity, count - start);
+      const into = new Float64Array(x.memory.buffer, x.samplePoints() >>> 0, 2 * m);
+      for (let i = 0; i < 2 * m; i++) {
+        into[i] = points[2 * start + i] ?? 0;
+      }
+      x.windSample(m);
+      out.set(
+        new Float64Array(x.memory.buffer, x.windValues() >>> 0, WIND_VALUES * m),
+        WIND_VALUES * start,
+      );
+    }
+    return out;
+  }
+
+  /**
+   * The gust field's frame at the time windDrawAt set: the gustFrame
+   * record, indexed by RECORDS.gustFrame. A view.
+   */
+  gustFrame(): Float64Array {
+    this.#x.gustFrameAt();
+    return this.records.gustFrame;
+  }
+
+  /**
+   * The wind that raises the waves at (east, north) at a tick, from the
+   * spells in play, as the server makes its own: its speed in m/s and the
+   * direction it comes from, in radians, written to out.
+   */
+  waveWind(east: number, north: number, tick: number, out: number[]): number[] {
+    this.#x.waveWind(east, north, tick);
+    const v = new Float64Array(this.#x.memory.buffer, this.#x.waveValues() >>> 0, 2);
+    out[0] = v[0] ?? 0;
+    out[1] = v[1] ?? 0;
     return out;
   }
 

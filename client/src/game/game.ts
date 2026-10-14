@@ -43,7 +43,15 @@ export class Game {
   /** Called before each step, after the controls are read (the browser tests script controls). */
   beforeStep: (() => void) | null = null;
 
-  readonly #sound: SoundInput = { apparentWind: 0, speed: 0, luffing: 0, time: 0 };
+  readonly #sound: SoundInput = {
+    apparentWind: 0,
+    speed: 0,
+    throughWater: 0,
+    seaHeight: 0,
+    whitecaps: 0,
+    luffing: 0,
+    time: 0,
+  };
   readonly #rudderMax: number;
   readonly #boomIn: number;
   readonly #boomOut: number;
@@ -78,7 +86,9 @@ export class Game {
     this.world.out = d.out;
     this.world.wind = d.wind;
     this.world.ocean.source =
-      d.physics !== undefined && d.seas !== undefined ? { physics: d.physics, seas: d.seas } : null;
+      d.physics !== undefined && d.seas !== undefined
+        ? { physics: d.physics, seas: d.seas, weather: d.weather !== undefined }
+        : null;
   }
 
   /** Holds world time at t seconds (the nearest step). */
@@ -177,6 +187,7 @@ export class Game {
     const p = w.pose;
     this.hud.frame(
       now,
+      time,
       p,
       w.out,
       w.wind,
@@ -185,7 +196,7 @@ export class Game {
       p.rudder / this.#rudderMax,
       (p.sheetLimit - this.#boomIn) / (this.#boomOut - this.#boomIn),
     );
-    this.sound.update(now, soundInput(w.out, time, this.#sound));
+    this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
   }
 }
 

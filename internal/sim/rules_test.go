@@ -33,12 +33,15 @@ var bannedImports = []string{
 var iterMaps = []string{"All", "Keys", "Values"}
 
 func TestRules(t *testing.T) {
-	problems, err := checkDeterminism(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, p := range problems {
-		t.Error(p)
+	// The simulation, and the weather it asks which spells blow when.
+	for _, dir := range []string{".", filepath.Join("..", "weather")} {
+		problems, err := checkDeterminism(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range problems {
+			t.Error(p)
+		}
 	}
 }
 

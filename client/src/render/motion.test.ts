@@ -95,7 +95,7 @@ describe('the boat in motion', () => {
     if (!existsSync(wasm)) {
       throw new Error('client/src/predict/physics.wasm is missing: run go run ./tools/physics');
     }
-    const s = await startSandbox(readFileSync(wasm), kind.physics, catalog.weather.sea);
+    const s = await startSandbox(readFileSync(wasm), kind.physics, catalog.weather);
     s.setState({ surge: 3, sheetLimit: 0.5 });
     for (let i = 0; i < 30; i++) {
       s.step(1, 0.4);

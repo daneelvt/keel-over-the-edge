@@ -10,18 +10,21 @@
 // state and stepped again to the present with the controls kept, and the
 // difference that makes to the drawn boat is eased away over 100 ms (drawn
 // at once past 3 m or 20°). Each step sails in the sea of its own tick,
-// which the server says a second ahead (seas.ts), so the waves never cause a
-// correction. The Go test client predicts the same way
+// which the server says a second ahead (seas.ts), and in the wind at the
+// boat at that tick, computed from the spells of weather the server sends
+// (weather.ts) as the server computes it, so neither the waves nor the wind
+// cause a correction. The Go test client predicts the same way
 // (internal/client/predict.go), and the tests replay its traces here.
 
-import type { BoatPhysics, WeatherSea } from '../catalog/types.gen';
-import type { BoatDriver, Wind } from '../game/driver';
+import type { BoatPhysics, Weather } from '../catalog/types.gen';
+import type { BoatDriver } from '../game/driver';
 import type { OwnSnapshot } from '../net/snapshot';
 import { type BoatPose, StatePair } from './blend';
 import { RECORDS, SIZES } from './layout.gen';
-import { writeParams, writeSeaParams } from './params.gen';
+import { writeParams, writeSeaParams, writeWeatherParams } from './params.gen';
 import type { Physics } from './physics';
 import { Seas } from './seas';
+import { type BoatWind, newBoatWind, Spells } from './weather';
 
 /** Ticks of prediction kept. */
 export const RING = 64;
@@ -66,18 +69,22 @@ export function sheetIndex(sheet: number): number {
 }
 
 /**
- * Readies a physics module for a kind of boat in the catalog's sea: every
- * record cleared, the sea's waves derived, then the boat's constants.
+ * Readies a physics module for a kind of boat in the catalog's weather:
+ * every record cleared, the sea's waves derived, then the boat's constants
+ * and the wind's. No spell of weather is in play until one is set.
  */
-export function preparePhysics(physics: Physics, boat: BoatPhysics, sea: WeatherSea): void {
+export function preparePhysics(physics: Physics, boat: BoatPhysics, weather: Weather): void {
   const r = physics.records;
   for (const v of Object.values(r)) {
     v.fill(0);
   }
-  writeSeaParams(r.seaParams, sea);
+  writeSeaParams(r.seaParams, weather.sea);
   physics.prepareSea();
   writeParams(physics.records.params, boat);
   physics.prepare();
+  writeWeatherParams(physics.records.weatherParams, weather);
+  physics.prepareWeather();
+  physics.setSpells([]);
 }
 
 function wrapAngle(a: number): number {
@@ -87,7 +94,7 @@ function wrapAngle(a: number): number {
 export class Predictor implements BoatDriver {
   readonly states = new StatePair();
   readonly out = new Float64Array(SIZES.out);
-  readonly wind: Wind = { speed: 0, from: 0 };
+  readonly wind: BoatWind = newBoatWind();
   started = false;
   /** The tick the boat's state is after. */
   tick = 0;
@@ -98,6 +105,8 @@ export class Predictor implements BoatDriver {
 
   /** The sea the boat is stepped in, from the server's SeaAreas. */
   readonly seas: Seas;
+  /** The spells of weather whose wind the boat is stepped in, from the server's WeatherSystems. */
+  readonly weather: Spells;
 
   readonly #physics: Physics;
   readonly #ticks = new Float64Array(RING).fill(Number.NaN);
@@ -108,10 +117,11 @@ export class Predictor implements BoatDriver {
   /** The drawn boat's offset from the predicted one, eased away. */
   readonly offset = { east: 0, north: 0, heading: 0 };
 
-  constructor(physics: Physics, boat: BoatPhysics, sea: WeatherSea) {
+  constructor(physics: Physics, boat: BoatPhysics, weather: Weather) {
     this.#physics = physics;
+    preparePhysics(physics, boat, weather);
     this.seas = new Seas(physics);
-    preparePhysics(physics, boat, sea);
+    this.weather = new Spells(physics);
   }
 
   /** The physics module, for whoever draws its sea. */
@@ -129,8 +139,7 @@ export class Predictor implements BoatDriver {
     this.started = true;
     this.tick = sn.tick;
     this.#physics.records.state.set(sn.state);
-    this.wind.speed = sn.windSpeed;
-    this.wind.from = sn.windFrom;
+    this.weather.read(sn.tick, sn.state[S.x] ?? 0, sn.state[S.y] ?? 0, this.wind);
     this.#ticks.fill(Number.NaN);
     this.states.hold(sn.state);
     this.offset.east = 0;
@@ -139,19 +148,24 @@ export class Predictor implements BoatDriver {
     this.counts.resets++;
   }
 
-  /** Steps the boat into tick, in the sea of that tick, as the server does. */
+  /**
+   * Steps the boat into tick, in the wind at its place and the sea of that
+   * tick, as the server does.
+   */
   #stepModule(tick: number, helm: number, sheet: number): void {
     const r = this.#physics.records;
     r.control[RECORDS.control.helm] = helmOf(helm);
     r.control[RECORDS.control.sheet] = sheetOf(sheet);
-    r.env[RECORDS.env.windSpeed] = this.wind.speed;
-    r.env[RECORDS.env.windFrom] = this.wind.from;
+    this.weather.use(tick);
     this.seas.use(tick);
     this.#physics.step();
   }
 
   /** Steps the next tick with the controls' indices. */
   stepIndices(helm: number, sheet: number): void {
+    const before = this.#physics.records.state;
+    // The wind the step sails in is the wind where the boat is as it begins.
+    this.weather.read(this.tick + 1, before[S.x] ?? 0, before[S.y] ?? 0, this.wind);
     this.#stepModule(this.tick + 1, helm, sheet);
     this.tick++;
     const i = this.tick % RING;
@@ -200,8 +214,6 @@ export class Predictor implements BoatDriver {
       o.reset = true;
       return o;
     }
-    this.wind.speed = sn.windSpeed;
-    this.wind.from = sn.windFrom;
     if (this.#same(i, sn.state)) {
       return o;
     }

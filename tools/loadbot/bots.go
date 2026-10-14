@@ -97,7 +97,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	kind, waves, err := jollyBoat()
+	kind, waves, wx, err := jollyBoat()
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 			case <-ctx.Done():
 				return
 			}
-			sailOne(ctx, cfg, kind, waves, cookies[i], uint64(i), end, p)
+			sailOne(ctx, cfg, kind, waves, wx, cookies[i], uint64(i), end, p)
 		})
 	}
 	wg.Wait()
@@ -143,7 +143,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 // connection ends: after 1012, a server's restart, in 0.5 to 5 s at
 // random, as the page does; after 4002, versions that differ, never;
 // after anything else, in a second.
-func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *physics.Waves, cookie string, i uint64, end time.Time, p *Player) {
+func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *physics.Waves, wx *physics.WeatherPrepared, cookie string, i uint64, end time.Time, p *Player) {
 	rng := rand.New(rand.NewPCG(i, 7))
 	helm, sheet := 512, 512
 	controls := func(n int) (uint16, uint16) {
@@ -165,7 +165,7 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *phy
 		}
 		return cfg.Dial(ctx, cookie, wrap)
 	}
-	s := client.NewSailor(dial, kind, waves, controls)
+	s := client.NewSailor(dial, kind, waves, wx, controls)
 	s.FrameEvery = cfg.FrameEvery
 	// The last snapshot, and a return under way: the connection ended,
 	// and no snapshot has come since.
@@ -226,14 +226,14 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *phy
 }
 
 // jollyBoat is the catalog's first boat, prepared: the players' boat, and
-// the sea it sails in.
-func jollyBoat() (*physics.Prepared, *physics.Waves, error) {
+// the sea and the wind it sails in.
+func jollyBoat() (*physics.Prepared, *physics.Waves, *physics.WeatherPrepared, error) {
 	cat, err := catalog.Load()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	waves, kinds := cat.Prepare()
-	return &kinds[0], waves, nil
+	return &kinds[0], waves, cat.PrepareWeather(), nil
 }
 
 func guestName(i int) string { return fmt.Sprintf("Loadbot %d", i+1) }

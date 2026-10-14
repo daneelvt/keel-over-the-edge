@@ -1,0 +1,9 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The sea: a wide, low band of noise that rises and brightens with the significant height of the waves under the boat. Of its level, a part is the sea's alone, a part comes with its whitecaps, and a part with the boat's speed through the water. Heights in metres, speeds in m/s, frequencies in Hz, levels as gains.",
+  "q": 0.4,
+  "centre": { "atRest": 160, "perHeight": 260, "most": 900, "whitecaps": 0.5 },
+  "level": { "from": 0.08, "full": 2.2, "most": 0.24 },
+  "share": { "sea": 0.45, "whitecaps": 0.25, "speed": 0.3 },
+  "speed": { "from": 0.2, "full": 4.5 }
+}

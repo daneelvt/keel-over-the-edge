@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { type CDPSession, expect, type Page, test } from '@playwright/test';
-import type { BoatPhysics, WeatherSea } from '../src/catalog/types.gen';
+import type { BoatPhysics, Weather } from '../src/catalog/types.gen';
 import { quantiseHelm, quantiseSheet } from '../src/input/quantise';
 import { toHex } from '../src/predict/golden';
 import { RECORDS } from '../src/predict/layout.gen';
@@ -18,7 +18,7 @@ import { decodePng, openScene, picture, pictureDifference } from './helpers';
 
 const catalog = JSON.parse(
   readFileSync(new URL('../src/catalog/catalog.gen.json', import.meta.url), 'utf8'),
-) as { boats: { physics: BoatPhysics }[]; weather: { sea: WeatherSea } };
+) as { boats: { physics: BoatPhysics }[]; weather: Weather };
 const wasm = readFileSync(new URL('../src/predict/physics.wasm', import.meta.url));
 
 test('the boat gains speed on a beam reach, with the module’s own bits', async ({ page }) => {
@@ -42,7 +42,7 @@ test('the boat gains speed on a beam reach, with the module’s own bits', async
   }
   // As the page began: time held at 100 s, the boat back at the start and
   // laid on the sea of that time; then each step at the clock's next.
-  const s = await startSandbox(wasm, boat.physics, catalog.weather.sea);
+  const s = await startSandbox(wasm, boat.physics, catalog.weather);
   const clock = { steps: 100 * 30 };
   s.clock = clock;
   s.reset();
@@ -285,8 +285,9 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
 }, async ({ page }) => {
   // What the heap keeps does not depend on the picture's size, and a small
   // one keeps SwiftShader's CPU rendering inside the time; on CI's WebGPU
-  // adapter, through SwiftShader, 1,800 frames still take minutes.
-  test.setTimeout(540_000);
+  // adapter, through SwiftShader, 1,800 frames still take minutes: 7 to 9
+  // of them, by the runner.
+  test.setTimeout(720_000);
   await page.setViewportSize({ width: 320, height: 200 });
   await openScene(page, 'sea=gale');
   const cdp = await page.context().newCDPSession(page);

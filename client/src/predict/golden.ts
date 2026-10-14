@@ -5,7 +5,7 @@
 // golden.json, compared bit for bit with what the server's Go computed. The
 // tests run it under Node; the developer page runs it on a phone.
 
-import { ARRAYS, RECORDS } from './layout.gen';
+import { ARRAYS, RECORDS, SIZES } from './layout.gen';
 import type { FnName, Physics, RecordName } from './physics';
 
 type Values = Record<string, number>;
@@ -13,11 +13,22 @@ type Values = Record<string, number>;
 /** An area's inputs in whole steps: the wind's speed, the direction it comes from, the fetch. */
 export type AreaInputs = readonly number[];
 
+/** A record's values by name, arrays as arrays. */
+export type RecordValues = Record<string, number | number[]>;
+
 export interface ScenarioFile {
   /** The catalog's sea values. */
   sea: Values;
-  params: Record<string, number | number[]>;
+  params: RecordValues;
+  /** The catalog's wind values, for the scenarios that sail in spells of weather. */
+  wind?: RecordValues;
   scenarios: Scenario[];
+}
+
+/** The spells of weather a scenario sails in, each by its fields' names, and the tick of step 0. */
+export interface ScenarioWeather {
+  tick: number;
+  spells: RecordValues[];
 }
 
 /** The sea a scenario sails in: a window of areas, and the tick of step 0. */
@@ -37,6 +48,8 @@ export interface ScenarioChange {
   /** Replaces the inputs of the sea's areas; window, with it, moves the sea's window. */
   areas?: AreaInputs[];
   window?: readonly number[];
+  /** Replaces the spells of weather in play. */
+  spells?: RecordValues[];
 }
 
 export interface Scenario {
@@ -46,6 +59,8 @@ export interface Scenario {
   control?: Values;
   env?: Values;
   sea?: ScenarioSea;
+  /** If present, each step's wind is the wind at the boat at the step's tick, and env is not used. */
+  weather?: ScenarioWeather;
   changes?: ScenarioChange[];
 }
 
@@ -74,7 +89,7 @@ export interface ScenarioResult {
  */
 export async function runScenario(
   physics: Physics,
-  file: Pick<ScenarioFile, 'sea' | 'params'>,
+  file: Pick<ScenarioFile, 'sea' | 'params' | 'wind'>,
   scenario: Scenario,
 ): Promise<ScenarioResult> {
   const r = physics.records;
@@ -83,8 +98,20 @@ export async function runScenario(
   }
   setFields(physics, 'seaParams', file.sea);
   physics.prepareSea();
-  setParams(physics, file.params);
+  setRecord(physics.records.params, 'params', file.params);
   physics.prepare();
+  const weather = scenario.weather;
+  if (weather !== undefined) {
+    if (file.wind === undefined) {
+      throw new Error(`${scenario.name}: a weather, and no wind values`);
+    }
+    if (scenario.sea !== undefined && scenario.sea.tick !== weather.tick) {
+      throw new Error(`${scenario.name}: the sea's tick is not the weather's`);
+    }
+    setRecord(physics.records.weatherParams, 'weatherParams', file.wind);
+    physics.prepareWeather();
+    physics.setSpells(weather.spells.map(spellOf));
+  }
   setFields(physics, 'state', scenario.state);
   setFields(physics, 'control', scenario.control);
   setFields(physics, 'env', scenario.env);
@@ -132,6 +159,12 @@ export async function runScenario(
         row = change.window?.[1] ?? row;
         setAreas(change.areas);
       }
+      if (change?.spells !== undefined) {
+        if (weather === undefined) {
+          throw new Error(`${scenario.name}: spells for a scenario with no weather`);
+        }
+        physics.setSpells(change.spells.map(spellOf));
+      }
     }
     if (steering) {
       const rec = physics.records;
@@ -139,6 +172,9 @@ export async function runScenario(
     }
     if (sea !== undefined) {
       physics.seaAt(sea.tick + i);
+    }
+    if (weather !== undefined) {
+      physics.windAt(weather.tick + i);
     }
     physics.step();
     const { state: s, out: o } = physics.records;
@@ -178,24 +214,49 @@ export function steer(target: number, state: Float64Array): number {
   return Math.max(-1, Math.min(1, helm));
 }
 
-function setParams(physics: Physics, values: ScenarioFile['params']): void {
-  const fields: Record<string, number> = RECORDS.params;
-  const lengths: Record<string, number> = ARRAYS.params;
-  const view = physics.records.params;
+/**
+ * Sets a record's fields from values by name, numbers or arrays of the
+ * field's length; an unknown name, or an array of another length, is an
+ * error.
+ */
+export function setRecord(view: Float64Array, record: RecordName, values: RecordValues): void {
+  const fields: Record<string, number> = RECORDS[record];
+  const lengths: Record<string, number> = ARRAYS[record];
   for (const [name, value] of Object.entries(values)) {
     const index = fields[name];
     if (index === undefined) {
-      throw new Error(`params has no field ${name}`);
+      throw new Error(`${record} has no field ${name}`);
     }
     if (Array.isArray(value)) {
       if (value.length !== lengths[name]) {
-        throw new Error(`params.${name} has ${value.length} values, not ${lengths[name]}`);
+        throw new Error(`${record}.${name} has ${value.length} values, not ${lengths[name]}`);
       }
       view.set(value, index);
     } else {
       view[index] = value;
     }
   }
+}
+
+/** A spell record's values from a spell by its fields' names. */
+export function spellOf(values: RecordValues): Float64Array {
+  const s = new Float64Array(SIZES.spell);
+  setRecord(s, 'spell', values);
+  return s;
+}
+
+/** A record's values by its fields' names, arrays as arrays. */
+export function recordValues(record: RecordName, view: ArrayLike<number>): RecordValues {
+  const lengths: Record<string, number> = ARRAYS[record];
+  const out: RecordValues = {};
+  for (const [name, index] of Object.entries(RECORDS[record])) {
+    const n = lengths[name];
+    out[name] =
+      n === undefined
+        ? (view[index] ?? 0)
+        : Array.from({ length: n }, (_, i) => view[index + i] ?? 0);
+  }
+  return out;
 }
 
 function setFields(physics: Physics, record: RecordName, values: Values | undefined): void {

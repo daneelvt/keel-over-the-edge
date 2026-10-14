@@ -15,10 +15,13 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 var update = flag.Bool("update", false, "record the traces in shared/protocol/testdata again")
@@ -73,27 +76,48 @@ func recorded(t *testing.T) client.Controls {
 // sail sails the recording for d through lag, in a bubble of its own.
 func sail(t *testing.T, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
 	t.Helper()
-	return sailIn(t, sim.DefaultWind, lag, d, trace)
+	return sailIn(t, nil, lag, d, trace)
 }
 
-// gale is 34 knots from the south-west.
-var gale = bus.Wind{Speed: 34 * 1852.0 / 3600, From: 3.9}
+// gale is 34 knots from the south-west, steady.
+var gale = weather.Steady(34*1852.0/3600, 3.9)
 
-// sailIn is sail in a wind that has blown long enough to raise its sea.
-func sailIn(t *testing.T, wind bus.Wind, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
+// sailIn is sail in a steady wind that has blown long enough to raise its
+// sea, or the world's own if wind is nil.
+func sailIn(t *testing.T, wind *bus.Weather, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
+	t.Helper()
+	return sailWith(t, nil, wind, lag, d, trace)
+}
+
+// inTrade is the catalog's weather two hours into its sequence's first
+// spell, a trade spell: gusts, shifts, and a sea that changes every second.
+// It reads the time, so it is called inside a test's bubble.
+func inTrade(t *testing.T) *weather.Timeline {
+	t.Helper()
+	return sequenceFrom(t, loop.TickAt(time.Now(), Epoch)-2*3600*physics.StepsPerSecond)
+}
+
+// sailWith is sailIn in the weather a timeline gives, or the server's
+// steady one if it is nil.
+func sailWith(t *testing.T, timeline func(*testing.T) *weather.Timeline, wind *bus.Weather, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
 	t.Helper()
 	var stats client.Stats
 	synctest.Test(t, func(t *testing.T) {
-		srv := NewServer(t, Config{})
-		if wind != sim.DefaultWind {
-			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWind, Wind: wind}); err != nil {
+		var cfg Config
+		if timeline != nil {
+			cfg.Weather = timeline(t)
+		}
+		srv := NewServer(t, cfg)
+		if wind != nil {
+			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWeather, Weather: *wind}); err != nil {
 				t.Fatal(err)
 			}
 			time.Sleep(3 * time.Second)
 			f := srv.World.Bus().Frames.Acquire()
-			blows, raised := f.Wind, f.Sea.Now[0]
+			blows, raised := f.Spells[f.NSpells-1], f.Sea.Now[0]
 			f.Release()
-			if blows != wind || raised != srv.Waves.OpenSea(wind.Speed, wind.From) {
+			if blows.Steady != 1 || blows.Speed != float64(wind.Speed) || blows.From != float64(wind.Dir) ||
+				raised != (physics.SeaInput{Speed: wind.Speed, From: wind.Dir, Fetch: srv.Waves.OpenSea(0, 0).Fetch}) {
 				t.Fatalf("after three seconds the wind is %+v and its sea %+v", blows, raised)
 			}
 		}
@@ -155,7 +179,7 @@ func TestSailDelay(t *testing.T) {
 func TestSailGale(t *testing.T) {
 	d := sailLength()
 	for name, lag := range map[string]client.Lag{"no lag": {}, "100 ms each way": {Delay: 100 * time.Millisecond}} {
-		s := sailIn(t, gale, lag, d, nil)
+		s := sailIn(t, &gale, lag, d, nil)
 		report(t, "a gale, "+name, s, d)
 		if s.Corrections != 0 || s.Snapshots < int(d.Seconds())*15-30 || s.Seas < 1 {
 			t.Fatalf("%s: %d corrections in %d snapshots, %d SeaAreas", name, s.Corrections, s.Snapshots, s.Seas)
@@ -163,10 +187,10 @@ func TestSailGale(t *testing.T) {
 	}
 }
 
-// TestSailSeaChange: the sea changes a second after the client is told, so
-// a change of wind corrects the prediction only while the wind's own news
-// is on its way, never when the waves follow it.
-func TestSailSeaChange(t *testing.T) {
+// TestSailWeatherChange: a developer's weather blows, and raises its sea,
+// from the second after next, and the client is told a second before: so a
+// change of wind corrects nothing.
+func TestSailWeatherChange(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
 		token, _ := srv.Guest("Ann")
@@ -177,12 +201,12 @@ func TestSailSeaChange(t *testing.T) {
 			t.Fatal(err)
 		}
 		var changes []int64
-		for _, wind := range []bus.Wind{gale, {Speed: 3, From: 1}, {Speed: 12, From: 6}} {
+		for _, wind := range []bus.Weather{gale, weather.Steady(3, 1), weather.Steady(12, 6)} {
 			if err := s.Sail(t.Context(), 7*time.Second); err != nil {
 				t.Fatal(err)
 			}
 			reply := make(chan bus.Reply, 1)
-			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWind, Wind: wind, Reply: reply}); err != nil {
+			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWeather, Weather: wind, Reply: reply}); err != nil {
 				t.Fatal(err)
 			}
 			if err := s.Sail(t.Context(), time.Second); err != nil {
@@ -194,27 +218,11 @@ func TestSailSeaChange(t *testing.T) {
 			t.Fatal(err)
 		}
 		s.Drop()
-		if s.Stats.Seas != 1+len(changes) {
-			t.Fatalf("%d SeaAreas for %d changes of wind", s.Stats.Seas, len(changes))
+		if s.Stats.Seas != 1+len(changes) || s.Stats.Weathers < 1+len(changes) {
+			t.Fatalf("%d SeaAreas and %d WeatherSystems for %d changes of wind", s.Stats.Seas, s.Stats.Weathers, len(changes))
 		}
-		corrected := 0
-		for _, e := range s.Trace.Events {
-			if e.Snap == nil || !e.Snap.Corrected {
-				continue
-			}
-			corrected++
-			// The wind's news takes the way there and back, and a margin:
-			// under a second, which is when the sea first follows.
-			near := false
-			for _, c := range changes {
-				near = near || e.Snap.Tick >= c && e.Snap.Tick < c+bus.SeaPeriod
-			}
-			if !near {
-				t.Errorf("a correction at tick %d, with the wind changed at ticks %v", e.Snap.Tick, changes)
-			}
-		}
-		if corrected == 0 || s.Stats.Resets > 1 {
-			t.Errorf("%d corrections and %d resets through %d changes of wind", corrected, s.Stats.Resets, len(changes))
+		if s.Stats.Corrections != 0 || s.Stats.Resets > 1 {
+			t.Errorf("%d corrections and %d resets through %d changes of wind at ticks %v", s.Stats.Corrections, s.Stats.Resets, len(changes), changes)
 		}
 	})
 }
@@ -245,7 +253,9 @@ func TestSailSlowFrames(t *testing.T) {
 }
 
 // TestSailLoss: 100 ms each way and 2% of packets lost each way, over ten
-// seeds: corrections come, but none over the snap thresholds.
+// seeds: corrections come, but none over the snap thresholds. And over
+// three more in a trade spell's gusts and shifts, where a late input's
+// difference is small too.
 func TestSailLoss(t *testing.T) {
 	d := sailLength()
 	if testing.Short() {
@@ -269,6 +279,28 @@ func TestSailLoss(t *testing.T) {
 		all.BytesOut += s.BytesOut
 	}
 	report(t, "ten seeds", all, 10*d)
+
+	var gusty client.Stats
+	seeds := uint64(3)
+	if testing.Short() {
+		seeds = 1
+	}
+	for seed := range seeds {
+		s := sailWith(t, inTrade, nil, client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: seed + 1}, d, nil)
+		if s.Over > 0 {
+			t.Errorf("in a trade spell, seed %d: %d corrections over the snap thresholds", seed+1, s.Over)
+		}
+		gusty.Snapshots += s.Snapshots
+		gusty.Corrections += s.Corrections
+		gusty.Sizes = append(gusty.Sizes, s.Sizes...)
+		gusty.Resets += s.Resets
+		gusty.Stale += s.Stale
+		gusty.MaxAhead = max(gusty.MaxAhead, s.MaxAhead)
+		gusty.MaxLate = max(gusty.MaxLate, s.MaxLate)
+		gusty.BytesIn += s.BytesIn
+		gusty.BytesOut += s.BytesOut
+	}
+	report(t, fmt.Sprintf("%d seeds in a trade spell", seeds), gusty, time.Duration(seeds)*d)
 }
 
 // TestTraces records, with -update, the traces the TypeScript tests replay:
@@ -371,7 +403,7 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 	t.Helper()
 	waves, kinds := CatalogKinds(t)
 	n := client.Net{FrameMs: 17}
-	p := client.NewPredictor(&kinds[0], waves)
+	p := client.NewPredictor(&kinds[0], waves, weather.Fixed(sim.DefaultSpell).Prepared())
 	snapshots := map[int64]*protocol.Snapshot{}
 	var latest *protocol.Snapshot
 	var expect [][]byte
@@ -395,6 +427,11 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 			sent(out...)
 			if ev.SeaAreas != nil {
 				p.Seas.Receive(ev.SeaAreas)
+			}
+			if ev.WeatherSystems != nil {
+				if err := p.ReceiveWeather(ev.WeatherSystems); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if ev.Dropped != e.Dropped {
 				t.Fatalf("event %d: dropped %v, the trace %v", i, ev.Dropped, e.Dropped)
@@ -520,4 +557,73 @@ func TestDropout(t *testing.T) {
 			t.Fatalf("%d corrections", s.Stats.Corrections)
 		}
 	})
+}
+
+// sequenceFrom is the catalog's weather with its sequence first beginning
+// at a tick.
+func sequenceFrom(t *testing.T, tick int64) *weather.Timeline {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tl, err := weather.FromCatalog(cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tl.From(tick)
+}
+
+// TestSailGusts: in a trade spell's gusts and shifts, and through a change
+// of spell, prediction is still the server's to the bit, with no lag and
+// with 100 ms each way: the sailor computes the wind at its boat from the
+// spells it is sent, as the server does. The next spell reaches it ten
+// seconds before the change begins.
+func TestSailGusts(t *testing.T) {
+	d := sailLength()
+	for name, lag := range map[string]client.Lag{"no lag": {}, "100 ms each way": {Delay: 100 * time.Millisecond}} {
+		synctest.Test(t, func(t *testing.T) {
+			now := loop.TickAt(time.Now(), Epoch)
+			// The sequence's second spell begins 40 s into the sail: its
+			// first, a trade spell, has blown for four hours less that.
+			change := now + 40*physics.StepsPerSecond
+			srv := NewServer(t, Config{Weather: sequenceFrom(t, change-4*3600*physics.StepsPerSecond)})
+			token, _ := srv.Guest("Ann")
+			o := DialOptions{Cookie: token}
+			if lag != (client.Lag{}) {
+				o.Wrap = lag.Wrap
+			}
+			s := srv.NewSailor(o, recorded(t))
+			if err := s.Connect(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			lo, hi := math.Inf(1), math.Inf(-1)
+			var heard, spells int
+			for sailed := time.Duration(0); sailed < d; sailed += time.Second {
+				if err := s.Sail(t.Context(), time.Second); err != nil {
+					t.Fatal(err)
+				}
+				w := s.Predictor.Wind()
+				lo, hi = min(lo, w.Speed), max(hi, w.Speed)
+				if n := int(s.Predictor.Weather.Count); n != spells {
+					if spells == 1 && n == 2 && heard == 0 {
+						heard = int((change - s.Predictor.Tick) / physics.StepsPerSecond)
+					}
+					spells = n
+				}
+			}
+			s.Drop()
+			report(t, "gusts, "+name, s.Stats, d)
+			t.Logf("%s: the wind at the boat ran from %.1f to %.1f knots; the next spell was heard of %d s before its change", name, lo*3600/1852, hi*3600/1852, heard)
+			if s.Stats.Corrections != 0 || s.Stats.Snapshots < int(d.Seconds())*15-30 {
+				t.Fatalf("%s: %d corrections in %d snapshots", name, s.Stats.Corrections, s.Stats.Snapshots)
+			}
+			if hi < 1.08*lo {
+				t.Errorf("%s: the wind at the boat ran from %.2f to %.2f m/s: no gusts", name, lo, hi)
+			}
+			if heard < 8 || heard > 10 || s.Stats.Weathers < 2 {
+				t.Errorf("%s: the next spell was heard of %d s before its change, in %d WeatherSystems", name, heard, s.Stats.Weathers)
+			}
+		})
+	}
 }

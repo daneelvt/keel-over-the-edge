@@ -13,9 +13,9 @@ export const KIND_MESSAGE = 1;
 /** A message's first byte: the snapshot. */
 export const KIND_SNAPSHOT = 2;
 /** A snapshot's header's length, its kind byte included: where its entries begin. */
-export const HEADER_SIZE = 192;
+export const HEADER_SIZE = 176;
 /** The layout this client reads: the own boat's state as float64, then the view's entries. */
-export const SNAPSHOT_LAYOUT = 4;
+export const SNAPSHOT_LAYOUT = 5;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */
@@ -40,9 +40,6 @@ export interface OwnSnapshot {
   sheet: number;
   /** The lowest arrival margin since the previous snapshot, in ticks, or NO_MARGIN. */
   margin: number;
-  /** The wind 10 m up, m/s, and where it comes from, radians clockwise from north. */
-  windSpeed: number;
-  windFrom: number;
   /** The boat's state, in the physics module's order. */
   readonly state: Float64Array;
 }
@@ -57,8 +54,6 @@ export function newSnapshot(): OwnSnapshot {
     helm: 0,
     sheet: 0,
     margin: NO_MARGIN,
-    windSpeed: 0,
-    windFrom: 0,
     state: new Float64Array(STATE_FIELDS),
   };
 }
@@ -83,8 +78,7 @@ const SEQ = 13;
 const MARGIN = 17;
 const HELM = 19;
 const SHEET = 21;
-const WIND = 23;
-const STATE = 39;
+const STATE = 23;
 const ENTRIES = STATE + 8 * STATE_FIELDS;
 
 /** A snapshot's tick, read without the rest (the worker's acknowledgement). */
@@ -128,8 +122,6 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
   out.margin = v.getInt16(MARGIN, true);
   out.helm = helm;
   out.sheet = sheet;
-  out.windSpeed = v.getFloat64(WIND, true);
-  out.windFrom = v.getFloat64(WIND + 8, true);
   const s = out.state;
   for (let i = 0; i < STATE_FIELDS; i++) {
     s[i] = v.getFloat64(STATE + 8 * i, true);
@@ -148,8 +140,6 @@ export function writeSnapshot(s: OwnSnapshot, v: DataView): void {
   v.setInt16(MARGIN, s.margin, true);
   v.setUint16(HELM, s.helm, true);
   v.setUint16(SHEET, s.sheet, true);
-  v.setFloat64(WIND, s.windSpeed, true);
-  v.setFloat64(WIND + 8, s.windFrom, true);
   for (let i = 0; i < STATE_FIELDS; i++) {
     v.setFloat64(STATE + 8 * i, s.state[i] ?? 0, true);
   }

@@ -101,7 +101,21 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkSkyParams(skyNumbers); err != nil {
 		return err
 	}
-	goPhysics, err := goPhysics(fields, sea, skyNumbers)
+	wind, err := windFields(root)
+	if err != nil {
+		return err
+	}
+	regime, err := regimeFields(root)
+	if err != nil {
+		return err
+	}
+	if err := checkWindParams(wind, regime); err != nil {
+		return err
+	}
+	if err := checkWeather(doc); err != nil {
+		return err
+	}
+	goPhysics, err := goPhysics(fields, sea, skyNumbers, wind, regime)
 	if err != nil {
 		return err
 	}
@@ -111,7 +125,7 @@ func run(root string, check bool, out io.Writer) error {
 		goPhysicsPath: goPhysics,
 		tsJSONPath:    canonical,
 		tsTypesPath:   tsTypes,
-		tsParamsPath:  tsParams(fields, sea, skyNumbers),
+		tsParamsPath:  tsParams(fields, sea, skyNumbers, wind, regime),
 	}
 	return writeOrCheck(root, files, check)
 }

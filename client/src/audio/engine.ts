@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The sound engine: Web Audio, synthesised, with no sound files. One looped
-// buffer of noise feeds four voices: the wind (a band-pass), the rigging's
+// buffer of noise feeds five voices: the wind (a band-pass), the rigging's
 // song (a narrow band-pass at the Aeolian tone), the flogging cloth (a band
-// beaten by a flap), and the water on the hull (a low-pass, with the bow
-// wave's hiss). The frame loop sets their parameters at most every 50 ms,
+// beaten by a flap), the water on the hull (a low-pass, with the bow
+// wave's hiss), and the sea about the boat (a wide, low band). The frame loop sets their parameters at most every 50 ms,
 // each gliding to its target with setTargetAtTime.
 //
 // Browsers start audio only from a user gesture. Under the HTML standard's
@@ -39,6 +39,8 @@ interface Graph {
   waterLow: GainNode;
   waterFilter: BiquadFilterNode;
   hiss: GainNode;
+  seaBand: BiquadFilterNode;
+  sea: GainNode;
 }
 
 /** A white-noise buffer, from a fixed sequence so every page sounds alike. */
@@ -102,9 +104,26 @@ function build(ctx: AudioContext, r: Recipes): Graph {
   const waterLow = voice(waterFilter);
   const hiss = voice(band('bandpass', r.water.hiss.centre, r.water.hiss.q));
 
+  const seaBand = band('bandpass', r.sea.centre.atRest, r.sea.q);
+  const sea = voice(seaBand);
+
   source.start();
   flap.start();
-  return { ctx, master, windBand, wind, rigBand, rig, flap, flog, waterLow, waterFilter, hiss };
+  return {
+    ctx,
+    master,
+    windBand,
+    wind,
+    rigBand,
+    rig,
+    flap,
+    flog,
+    waterLow,
+    waterFilter,
+    hiss,
+    seaBand,
+    sea,
+  };
 }
 
 export class SoundEngine {
@@ -199,6 +218,8 @@ export class SoundEngine {
     g.waterFilter.frequency.setTargetAtTime(t.waterCutoff, at, GLIDE);
     g.waterLow.gain.setTargetAtTime(t.waterLevel, at, GLIDE);
     g.hiss.gain.setTargetAtTime(t.hissLevel, at, GLIDE);
+    g.seaBand.frequency.setTargetAtTime(t.seaCentre, at, GLIDE);
+    g.sea.gain.setTargetAtTime(t.seaLevel, at, GLIDE);
   }
 
   #apply(): void {

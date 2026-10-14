@@ -9,7 +9,8 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
-// Digest is a 64-bit FNV-1a hash of a frame's state: the tick, the wind,
+// Digest is a 64-bit FNV-1a hash of a frame's state: the tick, the
+// developer's weathers (each one's tick, mode, regime, speed and direction),
 // the sea in effect and next (each run of areas with the same inputs, and
 // its length), whether admission is held, each occupied slot's number, boat, generation,
 // owner, connection, grace, control word and state, and each waiting
@@ -20,8 +21,13 @@ import (
 func Digest(f *bus.Frame) uint64 {
 	h := fnv(fnvOffset)
 	h.u64(uint64(f.Tick))
-	h.f64(f.Wind.Speed)
-	h.f64(f.Wind.From)
+	for _, w := range f.Weathers {
+		h.u64(uint64(w.From))
+		h.byte(byte(w.Mode))
+		h.u64(uint64(w.Regime))
+		h.u64(uint64(w.Speed))
+		h.u64(uint64(w.Dir))
+	}
 	h.sea(f.Sea.Now)
 	h.sea(f.Sea.Next)
 	if f.Held {

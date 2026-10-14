@@ -119,7 +119,7 @@ func (s *session) sail(ticks int) {
 		case r < 5 && len(f.Live) > 0:
 			q.TrySend(bus.Command{Op: bus.Leave, Boat: f.Boat[f.Live[s.rng.IntN(len(f.Live))]]})
 		case r < 6:
-			q.TrySend(bus.Command{Op: bus.SetWind, Wind: bus.Wind{Speed: 2 + 8*s.rng.Float64(), From: s.rng.Float64()}})
+			q.TrySend(bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherSteady, Speed: uint32(200 + s.rng.IntN(800)), Dir: uint32(s.rng.IntN(65536))}})
 		case r < 7 && len(f.Live) > 0:
 			q.TrySend(bus.Command{Op: bus.Place, Boat: f.Boat[f.Live[0]], State: physics.State{X: 3, Heading: 1}})
 		case r < 8:

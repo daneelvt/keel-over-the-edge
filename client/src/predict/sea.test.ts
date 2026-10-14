@@ -25,7 +25,7 @@ beforeAll(async () => {
     throw new Error('client/src/predict/physics.wasm is missing: run go run ./tools/physics');
   }
   physics = await loadPhysics(readFileSync(wasm));
-  preparePhysics(physics, catalog.boats[0].physics, catalog.weather.sea);
+  preparePhysics(physics, catalog.boats[0].physics, catalog.weather);
   sea = JSON.parse(readFileSync(file, 'utf8')) as SeaFile;
 });
 

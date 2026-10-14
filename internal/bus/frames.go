@@ -18,9 +18,17 @@ import (
 type Frame struct {
 	readers atomic.Int32
 
-	Tick     int64  // the tick that made this frame
-	Skipped  int64  // ticks skipped, by the clock falling behind, just before Tick
-	Wind     Wind   // the one wind every boat sails in
+	Tick    int64 // the tick that made this frame
+	Skipped int64 // ticks skipped, by the clock falling behind, just before Tick
+	// Weathers are the developer's weathers, by the tick each takes effect
+	// from, ascending: the world's own weather until the first. Those of
+	// the past are kept as long as the sea may still follow them.
+	Weathers []Weather
+	// Spells are the spells of weather in play about the tick: those a
+	// client needs to step its boat ahead of the server and replay it
+	// behind, which follow from the tick and Weathers.
+	Spells   [physics.WeatherSpells]physics.Spell
+	NSpells  int32
 	Sea      Sea    // what raises the waves, area by area
 	NextBoat uint64 // the next boat's ID: IDs are never reused within a world
 	// Held: admission is held (Hold): a Join without a boat waits in the
@@ -102,6 +110,12 @@ type Waiting struct {
 	Grace int64
 }
 
+// WeatherHistory is the most developer's weathers a frame keeps.
+const WeatherHistory = 8
+
+// SpellsInPlay is the frame's spells in play.
+func (f *Frame) SpellsInPlay() []physics.Spell { return f.Spells[:f.NSpells] }
+
 // QueueLimit is the most connections that may wait for a boat.
 const QueueLimit = 4096
 
@@ -141,9 +155,10 @@ func NewFrame(capacity int) *Frame {
 			Slots: make([]int32, 0, capacity),
 			Cell:  make([]int32, capacity),
 		},
-		Queue:   make([]Waiting, 0, QueueLimit),
-		Changed: make([]SlotWord, 0, capacity),
-		Events:  make([]Event, 0, 64),
+		Queue:    make([]Waiting, 0, QueueLimit),
+		Weathers: make([]Weather, 0, WeatherHistory),
+		Changed:  make([]SlotWord, 0, capacity),
+		Events:   make([]Event, 0, 64),
 	}
 }
 

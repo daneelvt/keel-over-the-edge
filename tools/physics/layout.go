@@ -30,6 +30,11 @@ var records = []struct {
 	{"seaParams", reflect.TypeFor[physics.SeaParams]()},
 	{"components", reflect.TypeFor[physics.Components]()},
 	{"wave", reflect.TypeFor[physics.EffectiveWave]()},
+	{"weatherParams", reflect.TypeFor[physics.WeatherParams]()},
+	{"regime", reflect.TypeFor[physics.Regime]()},
+	{"spell", reflect.TypeFor[physics.Spell]()},
+	{"wind", reflect.TypeFor[physics.WindPoint]()},
+	{"gustFrame", reflect.TypeFor[physics.GustFrame]()},
 }
 
 // seaConstants are the sea's sizes, which the module's memory and the wire
@@ -45,6 +50,19 @@ var seaConstants = []struct {
 	{"slots", physics.SeaClientSlots},
 	{"fromSteps", physics.SeaFromSteps},
 	{"sampleCapacity", physics.SeaSampleCapacity},
+}
+
+// weatherConstants are the weather's sizes: the spells a module holds, the
+// steps in a turn of a spell's directions, the most samples of the wave
+// wind, and the octaves of the gust field.
+var weatherConstants = []struct {
+	name  string
+	value int
+}{
+	{"spells", physics.WeatherSpells},
+	{"turnSteps", physics.TurnSteps},
+	{"waveSamples", physics.MaxWaveSamples},
+	{"octaves", physics.GustOctaves},
 }
 
 type recordLayout struct {
@@ -118,6 +136,9 @@ func versionOf(l layout) uint32 {
 	fmt.Fprintf(&b, "fn:%s\n", strings.Join(l.fns, ","))
 	for _, c := range seaConstants {
 		fmt.Fprintf(&b, "sea.%s:%d\n", c.name, c.value)
+	}
+	for _, c := range weatherConstants {
+		fmt.Fprintf(&b, "weather.%s:%d\n", c.name, c.value)
 	}
 	sum := sha256.Sum256([]byte(b.String()))
 	return binary.BigEndian.Uint32(sum[:4])
@@ -211,5 +232,14 @@ export const RECORDS = {
 		fmt.Fprintf(&b, " %s: %d%s", c.name, c.value, sep)
 	}
 	fmt.Fprintf(&b, " } as const;\nexport const SEA_SPEED_STEP = %v;\n", physics.SeaSpeedStep)
+	b.WriteString("\n/**\n * The weather's sizes: the spells the module holds, the steps in a turn of a\n * spell's directions, the most samples of the wave wind, and the octaves of\n * the gust field.\n */\nexport const WEATHER = {")
+	for i, c := range weatherConstants {
+		sep := ","
+		if i == len(weatherConstants)-1 {
+			sep = ""
+		}
+		fmt.Fprintf(&b, " %s: %d%s", c.name, c.value, sep)
+	}
+	b.WriteString(" } as const;\n")
 	return b.Bytes()
 }

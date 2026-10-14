@@ -1,20 +1,36 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The offline sandbox: one boat, stepped by the physics module in the
-// page, in a steady wind that is the same everywhere and the sea it raises
-// (localsea.ts). No server corrects it. It is the game's page until the
-// game connects to a server, and stays reachable with ?sandbox afterwards,
-// as a tool.
+// page, in a weather of its own making, by the server's rules, and the sea
+// it raises (localsea.ts): a steady wind that is the same everywhere, or a
+// spell of one of the catalog's regimes with its shifts and gusts. No
+// server corrects it. It is the game's page until the game connects to a
+// server, and stays reachable with ?sandbox afterwards, as a tool.
+//
+// Its weather changes as a server's does at a developer's command: from the
+// second after next, so a sail recorded here can be sailed on a server
+// given the same commands at the same ticks.
 
-import type { BoatPhysics, WeatherSea } from '../catalog/types.gen';
+import type { BoatPhysics, Weather } from '../catalog/types.gen';
 import type { BoatDriver, Wind } from '../game/driver';
 import { StatePair } from '../predict/blend';
-import { RECORDS, SIZES } from '../predict/layout.gen';
+import { RECORDS, SEA_SPEED_STEP, SIZES, WEATHER } from '../predict/layout.gen';
 import { loadPhysics, type Physics, type PhysicsSource } from '../predict/physics';
 import { preparePhysics } from '../predict/predictor';
 import { Seas } from '../predict/seas';
+import {
+  type BoatWind,
+  heldSpell,
+  newBoatWind,
+  regimeIndex,
+  regimeSpell,
+  type Spell,
+  Spells,
+  steadySpell,
+  takesEffect,
+} from '../predict/weather';
 import { LocalSea } from './localsea';
-import { Recorder, type Recording } from './record';
+import { Recorder, type Recording, type StepWeather, type WeatherSet } from './record';
 
 const S = RECORDS.state;
 /** One knot, in m/s. */
@@ -28,13 +44,28 @@ export interface SandboxStart {
   heading: number;
   helm: number;
   sheet: number;
+  /** The wind of a steady weather; of a regime's spell, only where it comes from. */
   wind: Wind;
+  /** The weather: STEADY, or the id of one of the catalog's regimes. */
+  weather: string;
 }
+
+/** A weather as it is made at a tick: the spell, the spell before any tuning, and the server's command for it, if there is one. */
+interface Made {
+  spell: Spell;
+  made: Spell;
+  set: WeatherSet | null;
+}
+
+/** The weather that is one wind everywhere, with no shifts or gusts. */
+export const STEADY = 'steady';
+/** How long the sandbox's first spell of a regime lasts, and drifts over: four hours of ticks. */
+const SPELL_TICKS = 4 * 3600 * 30;
 
 /**
  * The start: the disk's centre, at rest, heading 090°, the helm centred and
- * the sheet half out, in 10 knots from the north. A beam reach in a breeze
- * the full rig carries without depowering.
+ * the sheet half out, in a steady 10 knots from the north. A beam reach in
+ * a breeze the full rig carries without depowering.
  */
 export const START: SandboxStart = {
   east: 0,
@@ -43,6 +74,7 @@ export const START: SandboxStart = {
   helm: 0,
   sheet: 0.5,
   wind: { speed: 10 * KNOT, from: 0 },
+  weather: STEADY,
 };
 
 /** The winds of the sea states the look was chosen in, in knots: ?sea=calm and so on. */
@@ -68,10 +100,36 @@ export function windFromQuery(query: URLSearchParams): Wind | null {
   return { speed: knots * KNOT, from: (((deg % 360) + 360) % 360) * (Math.PI / 180) };
 }
 
+/**
+ * Reads ?weather=steady or a regime's id: the sandbox's weather, or null
+ * for none or one the catalog does not have.
+ */
+export function weatherFromQuery(query: URLSearchParams, weather: Weather): string | null {
+  const id = query.get('weather');
+  return id !== null && (id === STEADY || regimeIndex(weather, id) >= 0) ? id : null;
+}
+
+/** The weather a sailor meets most: the id of the regime with the greatest share of the time. */
+export function commonestWeather(weather: Weather): string {
+  let best = weather.regimes[0];
+  for (const r of weather.regimes) {
+    if (best === undefined || r.share > best.share) {
+      best = r;
+    }
+  }
+  return best?.id ?? STEADY;
+}
+
+/** A direction in radians as steps of a turn, as a spell has it. */
+function turnSteps(from: number): number {
+  const steps = Math.round((from / (2 * Math.PI)) * WEATHER.turnSteps) % WEATHER.turnSteps;
+  return steps < 0 ? steps + WEATHER.turnSteps : steps;
+}
+
 export class Sandbox implements BoatDriver {
   readonly states = new StatePair();
   readonly out = new Float64Array(SIZES.out);
-  readonly wind: Wind;
+  readonly wind: BoatWind = newBoatWind();
   readonly recorder = new Recorder();
   readonly start: SandboxStart;
   /** Whether the sail is being recorded (the developer panel turns it on). */
@@ -79,6 +137,8 @@ export class Sandbox implements BoatDriver {
   /** The sea about the boat, as the physics module holds it, and what makes it. */
   readonly seas: Seas;
   readonly sea: LocalSea;
+  /** The spells of weather in play, as the physics module holds them. */
+  readonly weather: Spells;
   /**
    * The world clock the boat is drawn by, once the game has it. The state
    * after a step is drawn as the clock passes on to the next one, so a step
@@ -91,18 +151,39 @@ export class Sandbox implements BoatDriver {
 
   readonly #physics: Physics;
   readonly #boat: BoatPhysics;
-  /** The wind as the last step had it: what the sea's next second is fixed from. */
-  readonly #windBefore: Wind;
+  readonly #catalog: Weather;
+  /** What of a regime's spell is on: its gusts, and its shifts and its difference across the disk. */
+  readonly tuning = { gusts: true, shifts: true };
+  /** A weather asked for, to make at the next step's tick. */
+  #pending: ((begin: number) => Made) | null = null;
+  /** The latest spell as its weather made it, before any tuning. */
+  #made: Spell = new Float64Array(SIZES.spell);
+  /** The developer's weather behind the latest change of the spells, if it was one. */
+  #set: WeatherSet | null = null;
+  readonly #stepWeather: StepWeather;
 
-  constructor(physics: Physics, boat: BoatPhysics, sea: WeatherSea, start: SandboxStart = START) {
+  constructor(physics: Physics, boat: BoatPhysics, weather: Weather, start: SandboxStart = START) {
     this.#physics = physics;
     this.#boat = boat;
+    this.#catalog = weather;
     this.start = start;
-    this.wind = { ...start.wind };
-    this.#windBefore = { ...start.wind };
-    preparePhysics(physics, boat, sea);
+    preparePhysics(physics, boat, weather);
     this.seas = new Seas(physics);
     this.sea = new LocalSea(physics, this.seas);
+    this.weather = new Spells(physics);
+    const self = this;
+    this.#stepWeather = {
+      get version() {
+        return self.weather.version;
+      },
+      get spells() {
+        return self.weather.spells;
+      },
+      get set() {
+        return self.#set;
+      },
+    };
+    this.#startWeather();
     this.reset();
   }
 
@@ -116,7 +197,7 @@ export class Sandbox implements BoatDriver {
     return this.#physics.records;
   }
 
-  /** Back to the start, at rest, and a new recording. */
+  /** Back to the start, at rest, in the weather as it is, and a new recording. */
   reset(): void {
     const r = this.#physics.records;
     r.state.fill(0);
@@ -156,21 +237,150 @@ export class Sandbox implements BoatDriver {
     this.#settle();
   }
 
-  setWind(speed: number, from: number): void {
-    this.wind.speed = speed;
-    this.wind.from = from;
+  /** The start's weather, as if it had blown for ever: one spell, from tick 0. */
+  #startWeather(): void {
+    const { wind, weather } = this.start;
+    const regime = regimeIndex(this.#catalog, weather);
+    const spell =
+      regime < 0
+        ? steadySpell(this.#physics, wind.speed, wind.from, 0)
+        : regimeSpell(
+            this.#physics,
+            this.#catalog,
+            regime,
+            1,
+            this.#catalog.sequence.seed,
+            turnSteps(wind.from),
+            0,
+            SPELL_TICKS,
+          );
+    this.#pending = null;
+    this.#set = null;
+    this.#made = spell;
+    this.tuning.gusts = true;
+    this.tuning.shifts = true;
+    this.weather.set([spell]);
   }
 
   /**
-   * Raises the sea the wind and the sea's options give, at once, without the
-   * second the sea otherwise takes to follow.
+   * A steady wind at once, as if it had blown for ever: the weather is that
+   * one spell, from tick 0. Not what a server does, whose weather changes
+   * from the second after next; the sea follows within two seconds, or at
+   * once with settleSea.
+   */
+  steadyNow(speed: number, from: number): void {
+    const spell = steadySpell(this.#physics, speed, from, 0);
+    this.#pending = null;
+    this.#set = null;
+    this.#made = spell;
+    this.weather.set([spell]);
+    const s = this.#physics.records.state;
+    this.weather.read(this.tick, s[S.x] ?? 0, s[S.y] ?? 0, this.wind);
+  }
+
+  /**
+   * A steady wind of speed m/s from a direction in radians, from the second
+   * after the next step's on: a server's steady weather.
+   */
+  setWind(speed: number, from: number): void {
+    this.#pending = (begin) => {
+      const spell = steadySpell(this.#physics, speed, from, begin);
+      const P = RECORDS.spell;
+      return {
+        spell,
+        made: spell,
+        set: { mode: 2, regime: 0, speed: spell[P.speed] ?? 0, dir: spell[P.from] ?? 0 },
+      };
+    };
+  }
+
+  /**
+   * The weather of an id, from the second after the next step's on: one
+   * endless spell of the catalog's regime of that id, as a server holds a
+   * regime, or, for STEADY, the mean wind at the boat held steady.
+   */
+  setWeather(id: string): void {
+    const regime = regimeIndex(this.#catalog, id);
+    if (regime < 0) {
+      this.setWind(this.wind.meanSpeed, this.wind.meanFrom);
+      return;
+    }
+    this.tuning.gusts = true;
+    this.tuning.shifts = true;
+    this.#pending = (begin) => {
+      const spell = heldSpell(this.#physics, this.#catalog, regime, begin);
+      return { spell, made: spell, set: { mode: 1, regime, speed: 0, dir: 0 } };
+    };
+  }
+
+  /**
+   * Changes the latest spell: its wind at mid-disk, in m/s, where that
+   * comes from, in radians, and whether its gusts and its shifts are on. A
+   * steady wind has neither. The spell is the sandbox's own from then on,
+   * which no server's command makes.
+   */
+  tune(change: { speed?: number; from?: number; gusts?: boolean; shifts?: boolean }): void {
+    const P = RECORDS.spell;
+    const made = Float64Array.from(this.#pending?.(0).made ?? this.#made);
+    if (made[P.steady] === 1) {
+      this.setWind(
+        change.speed ?? (made[P.speed] ?? 0) * SEA_SPEED_STEP,
+        change.from ?? ((made[P.from] ?? 0) / WEATHER.turnSteps) * 2 * Math.PI,
+      );
+      return;
+    }
+    if (change.speed !== undefined) {
+      made[P.speed] = Math.round(Math.max(0, change.speed) / SEA_SPEED_STEP);
+    }
+    if (change.from !== undefined) {
+      made[P.from] = turnSteps(change.from);
+    }
+    this.tuning.gusts = change.gusts ?? this.tuning.gusts;
+    this.tuning.shifts = change.shifts ?? this.tuning.shifts;
+    const { gusts, shifts } = this.tuning;
+    this.#pending = (begin) => {
+      const s = Float64Array.from(made);
+      s[P.begin] = begin;
+      s[P.change] = 0;
+      s[P.start] = begin;
+      if (!gusts) {
+        // A gust factor of 1: no gusts, and none of their veer.
+        s[P.gust] = 1000;
+      }
+      if (!shifts) {
+        s[P.shift] = 0;
+        s[P.shift + 1] = 0;
+        s[P.across] = 0;
+        s[P.drift] = 0;
+      }
+      return { spell: s, made, set: null };
+    };
+  }
+
+  /** The latest spell: the one asked for, if it is still to be made. */
+  get spell(): Spell {
+    if (this.#pending !== null) {
+      return this.#pending(takesEffect(this.tick + 1)).spell;
+    }
+    return this.weather.latest ?? new Float64Array(SIZES.spell);
+  }
+
+  /** The id of the latest spell's weather: STEADY, or its regime's. */
+  get regime(): string {
+    const s = this.spell;
+    const P = RECORDS.spell;
+    return s[P.steady] === 1 ? STEADY : (this.#catalog.regimes[s[P.regime] ?? 0]?.id ?? STEADY);
+  }
+
+  /**
+   * Raises the sea the weather and the sea's options give, at once: where a
+   * boat is put, the sea is as the weather there has made it.
    */
   settleSea(): void {
     const s = this.#physics.records.state;
     this.tick = this.clock === null ? this.tick : this.clock.steps + 1;
-    this.sea.settle(this.wind, s[S.x] ?? 0, s[S.y] ?? 0, this.tick);
-    this.#windBefore.speed = this.wind.speed;
-    this.#windBefore.from = this.wind.from;
+    this.sea.settle(s[S.x] ?? 0, s[S.y] ?? 0, this.tick);
+    this.weather.read(this.tick, s[S.x] ?? 0, s[S.y] ?? 0, this.wind);
   }
 
   /**
@@ -210,17 +420,26 @@ export class Sandbox implements BoatDriver {
   step(helm: number, sheet: number): void {
     const r = this.#physics.records;
     const tick = this.clock === null ? this.tick + 1 : this.clock.steps + 2;
-    this.sea.advance(tick, this.#windBefore, r.state[S.x] ?? 0, r.state[S.y] ?? 0);
-    this.recorder.step(helm, sheet, this.wind.speed, this.wind.from, tick, this.sea);
+    if (this.#pending !== null) {
+      // As a server applies a developer's weather given at this tick.
+      const { spell, made, set } = this.#pending(takesEffect(tick));
+      this.#pending = null;
+      this.#set = set;
+      this.#made = made;
+      this.weather.add(spell);
+    }
+    const east = r.state[S.x] ?? 0;
+    const north = r.state[S.y] ?? 0;
+    this.sea.advance(tick, east, north);
+    this.recorder.step(helm, sheet, tick, this.sea, this.#stepWeather);
+    // The wind the step sails in: the wind where the boat is as it begins.
+    this.weather.read(tick, east, north, this.wind);
     r.control[RECORDS.control.helm] = helm;
     r.control[RECORDS.control.sheet] = sheet;
-    r.env[RECORDS.env.windSpeed] = this.wind.speed;
-    r.env[RECORDS.env.windFrom] = this.wind.from;
+    this.weather.use(tick);
     this.seas.use(tick);
     this.#physics.step();
     this.tick = tick;
-    this.#windBefore.speed = this.wind.speed;
-    this.#windBefore.from = this.wind.from;
     // The module's memory never grows while stepping, so the views stay valid.
     const after = this.#physics.records;
     this.states.push(after.state);
@@ -229,30 +448,28 @@ export class Sandbox implements BoatDriver {
 
   /**
    * Starts recording the sail from the boat as it is now, in the sea its
-   * wind has raised; every reset or placing starts again. Off by default,
+   * weather has raised; every reset or placing starts again. Off by default,
    * since a recording keeps every change of control.
    */
   record(): void {
     this.recording = true;
     this.settleSea();
     const r = this.#physics.records;
-    this.recorder.start(r.state, r.control, r.env);
+    this.recorder.start(r.state, r.control);
   }
 
   /** The sail since recording started, or the last reset or placing, as a golden scenario. */
   recorded(name: string): Recording {
     const r = this.#physics.records;
-    return this.recorder.recording(name, r.seaParams, r.params, r.state);
+    return this.recorder.recording(name, r.seaParams, r.params, r.weatherParams, r.state);
   }
 
   #settle(): void {
     const r = this.#physics.records;
-    r.env[RECORDS.env.windSpeed] = this.wind.speed;
-    r.env[RECORDS.env.windFrom] = this.wind.from;
     this.states.hold(r.state);
     this.settleSea();
     if (this.recording) {
-      this.recorder.start(r.state, r.control, r.env);
+      this.recorder.start(r.state, r.control);
     }
   }
 }
@@ -261,10 +478,10 @@ export class Sandbox implements BoatDriver {
 export async function startSandbox(
   source: PhysicsSource,
   boat: BoatPhysics,
-  sea: WeatherSea,
+  weather: Weather,
   start: SandboxStart = START,
 ): Promise<Sandbox> {
-  return new Sandbox(await loadPhysics(source), boat, sea, start);
+  return new Sandbox(await loadPhysics(source), boat, weather, start);
 }
 
 function wrap(a: number): number {

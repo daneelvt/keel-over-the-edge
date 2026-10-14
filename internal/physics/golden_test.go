@@ -42,7 +42,10 @@ type scenarioFile struct {
 	Description string             `json:"description"`
 	Sea         map[string]float64 `json:"sea"`
 	Params      map[string]any     `json:"params"`
-	Scenarios   []scenario         `json:"scenarios"`
+	// Wind is WeatherParams, for the scenarios that sail in spells of
+	// weather.
+	Wind      map[string]any `json:"wind,omitempty"`
+	Scenarios []scenario     `json:"scenarios"`
 }
 
 type scenario struct {
@@ -52,7 +55,17 @@ type scenario struct {
 	Control map[string]float64 `json:"control"`
 	Env     map[string]float64 `json:"env"`
 	Sea     *scenarioSea       `json:"sea"`
-	Changes []change           `json:"changes"`
+	// Weather, if not nil, is the spells the scenario sails in: each
+	// step's Env is the wind at the boat, at the tick the step makes.
+	Weather *scenarioWeather `json:"weather,omitempty"`
+	Changes []change         `json:"changes"`
+}
+
+// scenarioWeather is the spells a scenario sails in, and the tick of its
+// first step, which is its sea's if it has one.
+type scenarioWeather struct {
+	Tick   float64          `json:"tick"`
+	Spells []map[string]any `json:"spells"`
 }
 
 // scenarioSea is the sea a scenario sails in: a window of areas, each with
@@ -77,6 +90,8 @@ type change struct {
 	// Steer starts the scenarios' heading-hold toward this heading; a
 	// change that sets the helm stops it.
 	Steer *float64 `json:"steer"`
+	// Spells replaces the spells of weather the scenario sails in.
+	Spells []map[string]any `json:"spells,omitempty"`
 }
 
 type golden struct {
@@ -121,7 +136,7 @@ func TestGolden(t *testing.T) {
 		Layout:  fmt.Sprintf("%#08x", LayoutVersion),
 	}
 	for i, sc := range sf.Scenarios {
-		g, err := runScenario(sf.Sea, sf.Params, sc)
+		g, err := runScenario(sf.Sea, sf.Params, sf.Wind, sc)
 		if err != nil {
 			t.Fatalf("%s: %v", sc.Name, err)
 		}
@@ -227,8 +242,51 @@ func (o *ocean) set(areas [][3]uint32) error {
 	return nil
 }
 
+// scenarioSky is a scenario's weather, made ready: nil if it has none.
+type scenarioSky struct {
+	w    Weather
+	t    WeatherTick
+	tick float64
+}
+
+func newScenarioSky(wind map[string]any, sw *scenarioWeather) (*scenarioSky, error) {
+	if sw == nil {
+		return nil, nil
+	}
+	var p WeatherParams
+	if err := setRecord(&p, wind); err != nil {
+		return nil, fmt.Errorf("wind: %w", err)
+	}
+	sky := &scenarioSky{tick: sw.Tick}
+	sky.w.Prepared = new(WeatherPrepared)
+	PrepareWeather(&p, sky.w.Prepared)
+	return sky, sky.set(sw.Spells)
+}
+
+// set makes spells the spells in play.
+func (sky *scenarioSky) set(spells []map[string]any) error {
+	if len(spells) > WeatherSpells {
+		return fmt.Errorf("%d spells", len(spells))
+	}
+	for i, m := range spells {
+		var s Spell
+		if err := setRecord(&s, m); err != nil {
+			return fmt.Errorf("spell %d: %w", i, err)
+		}
+		sky.w.SetSpell(int32(i), &s)
+	}
+	sky.w.SetCount(int32(len(spells)))
+	return nil
+}
+
+// env is the wind of step i at the boat.
+func (sky *scenarioSky) env(i int, s *State) Env {
+	WeatherAt(&sky.w, &sky.t, sky.tick+float64(i))
+	return WindAt(&sky.t, s.X, s.Y)
+}
+
 // runScenario steps a scenario, hashing the state and Out after every step.
-func runScenario(seaParams map[string]float64, params map[string]any, sc scenario) (goldenScenario, error) {
+func runScenario(seaParams map[string]float64, params map[string]any, wind map[string]any, sc scenario) (goldenScenario, error) {
 	var (
 		s State
 		c Control
@@ -248,6 +306,13 @@ func runScenario(seaParams map[string]float64, params map[string]any, sc scenari
 	sea, err := scenarioOcean(w, sc.Sea)
 	if err != nil {
 		return goldenScenario{}, err
+	}
+	sky, err := newScenarioSky(wind, sc.Weather)
+	if err != nil {
+		return goldenScenario{}, err
+	}
+	if sky != nil && sc.Sea != nil && sc.Sea.Tick != sc.Weather.Tick {
+		return goldenScenario{}, fmt.Errorf("the sea's tick is %v, the weather's %v", sc.Sea.Tick, sc.Weather.Tick)
 	}
 	for _, set := range []struct {
 		record any
@@ -276,6 +341,14 @@ func runScenario(seaParams map[string]float64, params map[string]any, sc scenari
 			if ch.Steer != nil {
 				steering, target = true, *ch.Steer
 			}
+			if ch.Spells != nil {
+				if sky == nil {
+					return g, fmt.Errorf("change %d sets the spells of a scenario with no weather", next)
+				}
+				if err := sky.set(ch.Spells); err != nil {
+					return g, err
+				}
+			}
 			if ch.Areas != nil {
 				if sea == nil {
 					return g, fmt.Errorf("change %d sets the areas of a scenario with no sea", next)
@@ -294,6 +367,9 @@ func runScenario(seaParams map[string]float64, params map[string]any, sc scenari
 		var at *Sea
 		if sea != nil {
 			at = sea.at(sc.Sea.Tick + float64(i))
+		}
+		if sky != nil {
+			e = sky.env(i, &s)
 		}
 		Step(&s, &c, &e, at, &b, &o)
 		values := fields(&s)
@@ -336,38 +412,42 @@ func steer(target float64, s *State) float64 {
 // setParams sets Params from values named as the client names them, numbers
 // or arrays of numbers; a missing or unknown name, or an array of another
 // length, is an error.
-func setParams(p *Params, values map[string]any) error {
+func setParams(p *Params, values map[string]any) error { return setRecord(p, values) }
+
+// setRecord sets every field of a record from values named as the client
+// names them, as setParams does.
+func setRecord(p any, values map[string]any) error {
 	v := reflect.ValueOf(p).Elem()
 	t := v.Type()
 	if len(values) != t.NumField() {
-		return fmt.Errorf("params has %d values, Params %d fields", len(values), t.NumField())
+		return fmt.Errorf("%d values for the %d fields of %s", len(values), t.NumField(), t.Name())
 	}
 	for i := range t.NumField() {
 		name := lowerFirst(t.Field(i).Name)
 		x, ok := values[name]
 		if !ok {
-			return fmt.Errorf("params has no %s", name)
+			return fmt.Errorf("%s has no %s", t.Name(), name)
 		}
 		f := v.Field(i)
 		switch x := x.(type) {
 		case float64:
 			if f.Kind() != reflect.Float64 {
-				return fmt.Errorf("params.%s must be an array", name)
+				return fmt.Errorf("%s.%s must be an array", t.Name(), name)
 			}
 			f.SetFloat(x)
 		case []any:
 			if f.Kind() != reflect.Array || f.Len() != len(x) {
-				return fmt.Errorf("params.%s has %d values, Params.%s is %s", name, len(x), t.Field(i).Name, f.Type())
+				return fmt.Errorf("%s.%s has %d values, and is %s", t.Name(), name, len(x), f.Type())
 			}
 			for j, e := range x {
 				n, ok := e.(float64)
 				if !ok {
-					return fmt.Errorf("params.%s[%d] is not a number", name, j)
+					return fmt.Errorf("%s.%s[%d] is not a number", t.Name(), name, j)
 				}
 				f.Index(j).SetFloat(n)
 			}
 		default:
-			return fmt.Errorf("params.%s is neither a number nor an array", name)
+			return fmt.Errorf("%s.%s is neither a number nor an array", t.Name(), name)
 		}
 	}
 	return nil

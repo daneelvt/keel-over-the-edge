@@ -32,6 +32,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 func TestUsage(t *testing.T) {
@@ -489,7 +490,7 @@ func TestServe(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Workers: 3})
+		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: timeline(t), Workers: 3})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -519,6 +520,20 @@ func kinds(t *testing.T) []physics.Prepared {
 func waves(t *testing.T) *physics.Waves {
 	w, _ := physicsOnce()
 	return w
+}
+
+// timeline is the catalog's weather, as keel serve sails in it.
+func timeline(t *testing.T) *weather.Timeline {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tl, err := weather.FromCatalog(cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tl
 }
 
 // TestPublicListeners checks that neither public listener serves an
@@ -775,7 +790,7 @@ func TestReplayDump(t *testing.T) {
 	}
 	const at = 900
 	want := bus.NewFrame(f.Header.Capacity)
-	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Workers: 1, At: func(fr *bus.Frame) {
+	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: timeline(t), Workers: 1, At: func(fr *bus.Frame) {
 		if fr.Tick == at {
 			if err := sim.ReadSnapshot(sim.AppendSnapshot(nil, fr), want); err != nil {
 				t.Fatal(err)
@@ -790,8 +805,12 @@ func TestReplayDump(t *testing.T) {
 		t.Fatalf("status %d: %s", status, errOut.String())
 	}
 	var got struct {
-		Tick  int64
-		Wind  map[string]json.RawMessage
+		Tick     int64
+		Weathers []struct {
+			From  int64
+			Mode  uint8
+			Speed uint32
+		}
 		Boats []struct {
 			Slot       int32
 			Boat       uint64
@@ -818,8 +837,13 @@ func TestReplayDump(t *testing.T) {
 			}
 		}
 	}
-	if x := parseExact(t, got.Wind["speed"]); x != want.Wind.Speed {
-		t.Fatalf("wind %v", x)
+	if len(got.Weathers) != len(want.Weathers) {
+		t.Fatalf("the developer's weathers %+v, the world's %+v", got.Weathers, want.Weathers)
+	}
+	for i, w := range got.Weathers {
+		if x := want.Weathers[i]; w.From != x.From || w.Mode != uint8(x.Mode) || w.Speed != x.Speed {
+			t.Fatalf("the developer's weathers %+v, the world's %+v", got.Weathers, want.Weathers)
+		}
 	}
 }
 

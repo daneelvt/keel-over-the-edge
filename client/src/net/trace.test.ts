@@ -102,7 +102,7 @@ async function replay(
   const predictor = new Predictor(
     await loadPhysics(bytes),
     catalog.boats[0].physics,
-    catalog.weather.sea,
+    catalog.weather,
   );
   const session = new Session(versions);
   session.frameMs = 17;
@@ -131,6 +131,9 @@ async function replay(
       }
       if (r.kind === 'sea') {
         predictor.seas.receive(r.sea);
+      }
+      if (r.kind === 'weather') {
+        expect(predictor.weather.receive(r.spells), where).toBe(true);
       }
       if (r.kind === 'snapshot') {
         const sn = newSnapshot();

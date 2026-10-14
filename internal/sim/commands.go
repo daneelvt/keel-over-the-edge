@@ -24,8 +24,12 @@ func (w *World) apply(c *bus.Command) {
 			sailor = f.Owner[s]
 			w.free(s)
 		}
-	case bus.SetWind:
-		f.Wind = c.Wind
+	case bus.SetWeather:
+		wx := c.Weather
+		if !wx.Mode.Valid() {
+			wx = bus.Weather{}
+		}
+		f.Weathers = w.timeline.Set(f.Weathers, wx, f.Tick)
 		r = bus.Reply{Result: bus.Done, Slot: -1}
 	case bus.Place:
 		r = bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: c.Boat}

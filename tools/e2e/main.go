@@ -5,7 +5,7 @@
 // test server (KEEL_TEST_DATABASE_URL, or .dev/db.env from go run ./tools/dev
 // -db), on ports of its own so it can run beside go run ./tools/dev. The
 // database is dropped when it stops. Developer commands are on (POST
-// /debug/wind on keel's internal listener).
+// /debug/wind and /debug/weather on keel's internal listener).
 //
 //	go run ./tools/e2e [-lag 200ms,2%] [-limit N] [-sailors N]
 //	go run ./tools/e2e -tls dir      write a throwaway certificate for localhost into dir, and exit

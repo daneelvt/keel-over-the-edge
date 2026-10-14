@@ -55,8 +55,8 @@ func (ws *workers) stop() {
 
 // step steps the slots listed, split into contiguous ranges of at least
 // minRange between as many workers as there are such ranges. Each boat's
-// step reads only its own state and the world's wind, so the split never
-// changes the result.
+// step reads only its own state, the tick's weather and the waves, so the
+// split never changes the result.
 func (ws *workers) step(slots []int32) {
 	n := min(len(ws.ranges), len(slots)/minRange)
 	if n <= 1 {

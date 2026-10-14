@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkiVQoFSW5wdXQSCwoDc2VxGAEgASgNEgwKBGhlbG0YAiABKA0SDQoFc2hlZXQYAyABKA0SEAoIYWNrX3RpY2sYBCABKAMSEAoIYWNrX29ubHkYBSABKAgidgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIssBCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAQgYKBGJvZHkibAoIU2VhQXJlYXMSDAoEdGljaxgBIAEoAxILCgNjb2wYAiABKBESCwoDcm93GAMgASgREgwKBHNpemUYBCABKA0SDQoFc3BlZWQYBSADKA0SDAoEZnJvbRgGIAMoDRINCgVmZXRjaBgHIAMoDSIYCgdSZXN0YXJ0Eg0KBWluX21zGAEgASgNIisKBlF1ZXVlZBIQCghwb3NpdGlvbhgBIAEoDRIPCgd3YWl0aW5nGAIgASgNIn0KB1dlbGNvbWUSDQoFd29ybGQYASABKAkSDAoEdGljaxgCIAEoAxIVCg13b3JsZF90aW1lX3VzGAMgASgDEgwKBGJvYXQYBCABKAQSDAoEa2luZBgFIAEoDRIQCghyZWpvaW5lZBgGIAEoCBIQCghlcG9jaF91cxgHIAEoAyI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKANCPVo7Z2l0aHViLmNvbS9kYW5lZWx2dC9rZWVsLW92ZXItdGhlLWVkZ2UvaW50ZXJuYWwvcHJvdG9jb2wvcGJiBnByb3RvMw");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkiVQoFSW5wdXQSCwoDc2VxGAEgASgNEgwKBGhlbG0YAiABKA0SDQoFc2hlZXQYAyABKA0SEAoIYWNrX3RpY2sYBCABKAMSEAoIYWNrX29ubHkYBSABKAgidgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIv8BCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIAEIGCgRib2R5IjAKDldlYXRoZXJTeXN0ZW1zEh4KBnNwZWxscxgBIAMoCzIOLmtlZWwudjEuU3BlbGwijgIKBVNwZWxsEg0KBWJlZ2luGAEgASgDEg4KBmNoYW5nZRgCIAEoDRINCgVzdGFydBgDIAEoAxIOCgZsZW5ndGgYBCABKAQSDgoGcmVnaW1lGAUgASgNEg4KBnN0ZWFkeRgGIAEoCBINCgVzcGVlZBgHIAEoDRIMCgRmcm9tGAggASgNEg0KBWRyaWZ0GAkgASgREgwKBGd1c3QYCiABKA0SDQoFc2hpZnQYCyADKA0SDgoGcGVyaW9kGAwgAygNEg0KBXBoYXNlGA0gAygNEg4KBmFjcm9zcxgOIAEoDRIMCgRheGlzGA8gASgNEhMKC2F4aXNfcGVyaW9kGBAgASgNEgwKBHNlZWQYESABKA0ibAoIU2VhQXJlYXMSDAoEdGljaxgBIAEoAxILCgNjb2wYAiABKBESCwoDcm93GAMgASgREgwKBHNpemUYBCABKA0SDQoFc3BlZWQYBSADKA0SDAoEZnJvbRgGIAMoDRINCgVmZXRjaBgHIAMoDSIYCgdSZXN0YXJ0Eg0KBWluX21zGAEgASgNIisKBlF1ZXVlZBIQCghwb3NpdGlvbhgBIAEoDRIPCgd3YWl0aW5nGAIgASgNIn0KB1dlbGNvbWUSDQoFd29ybGQYASABKAkSDAoEdGljaxgCIAEoAxIVCg13b3JsZF90aW1lX3VzGAMgASgDEgwKBGJvYXQYBCABKAQSDAoEa2luZBgFIAEoDRIQCghyZWpvaW5lZBgGIAEoCBIQCghlcG9jaF91cxgHIAEoAyI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKANCPVo7Z2l0aHViLmNvbS9kYW5lZWx2dC9rZWVsLW92ZXItdGhlLWVkZ2UvaW50ZXJuYWwvcHJvdG9jb2wvcGJiBnByb3RvMw");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -295,6 +295,12 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
      */
     value: SeaAreas;
     case: "seaAreas";
+  } | {
+    /**
+     * @generated from field: keel.v1.WeatherSystems weather_systems = 6;
+     */
+    value: WeatherSystems;
+    case: "weatherSystems";
   } | { case: undefined; value?: undefined };
 };
 
@@ -304,6 +310,160 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 6);
+
+/**
+ * WeatherSystems is the weather in play about the present: the spells the
+ * client needs to compute the wind at its boat, at every tick it steps
+ * ahead of the server or replays behind it, exactly as the server does. It
+ * comes after the Welcome, and whenever the spells in play change: a spell
+ * is sent ten seconds before its change from the one before begins, never
+ * earlier, and kept until ten seconds after its change to the next has
+ * ended. The client holds the latest it was sent.
+ *
+ * @generated from message keel.v1.WeatherSystems
+ */
+export type WeatherSystems = Message<"keel.v1.WeatherSystems"> & {
+  /**
+   * The spells in play, by the tick each begins at, ascending: at most 4.
+   *
+   * @generated from field: repeated keel.v1.Spell spells = 1;
+   */
+  spells: Spell[];
+};
+
+/**
+ * Describes the message keel.v1.WeatherSystems.
+ * Use `create(WeatherSystemsSchema)` to create a new message.
+ */
+export const WeatherSystemsSchema: GenMessage<WeatherSystems> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 7);
+
+/**
+ * Spell is a spell of weather: a stretch of time with one base wind, its
+ * shifts and its gust field, in whole numbers.
+ *
+ * @generated from message keel.v1.Spell
+ */
+export type Spell = Message<"keel.v1.Spell"> & {
+  /**
+   * The tick its change from the spell before begins, and how many ticks
+   * the change takes: 0 is at once.
+   *
+   * @generated from field: int64 begin = 1;
+   */
+  begin: bigint;
+
+  /**
+   * @generated from field: uint32 change = 2;
+   */
+  change: number;
+
+  /**
+   * The tick its drift, its gust field's travel and its life count from,
+   * and the ticks over which it drifts by drift: 0 for no drift.
+   *
+   * @generated from field: int64 start = 3;
+   */
+  start: bigint;
+
+  /**
+   * @generated from field: uint64 length = 4;
+   */
+  length: bigint;
+
+  /**
+   * The catalog's index of its regime.
+   *
+   * @generated from field: uint32 regime = 5;
+   */
+  regime: number;
+
+  /**
+   * The same wind everywhere, with no shifts, gusts, rim or refuge.
+   *
+   * @generated from field: bool steady = 6;
+   */
+  steady: boolean;
+
+  /**
+   * Its wind at mid-disk, in steps of 0.01 m/s.
+   *
+   * @generated from field: uint32 speed = 7;
+   */
+  speed: number;
+
+  /**
+   * The direction its wind comes from at start, and how far that veers
+   * over length (negative backs), in 65536ths of a turn clockwise from
+   * north.
+   *
+   * @generated from field: uint32 from = 8;
+   */
+  from: number;
+
+  /**
+   * @generated from field: sint32 drift = 9;
+   */
+  drift: number;
+
+  /**
+   * Its gust factor, in thousandths.
+   *
+   * @generated from field: uint32 gust = 10;
+   */
+  gust: number;
+
+  /**
+   * Its two oscillating shifts: each one's amplitude and phase at tick 0,
+   * in 65536ths of a turn, and its period in ticks.
+   *
+   * @generated from field: repeated uint32 shift = 11;
+   */
+  shift: number[];
+
+  /**
+   * @generated from field: repeated uint32 period = 12;
+   */
+  period: number[];
+
+  /**
+   * @generated from field: repeated uint32 phase = 13;
+   */
+  phase: number[];
+
+  /**
+   * How far the direction differs at the rim from the centre, in 65536ths
+   * of a turn; the axis it differs along at tick 0, a direction in
+   * 65536ths of a turn; and the ticks the axis takes to turn once.
+   *
+   * @generated from field: uint32 across = 14;
+   */
+  across: number;
+
+  /**
+   * @generated from field: uint32 axis = 15;
+   */
+  axis: number;
+
+  /**
+   * @generated from field: uint32 axis_period = 16;
+   */
+  axisPeriod: number;
+
+  /**
+   * The gust field's seed.
+   *
+   * @generated from field: uint32 seed = 17;
+   */
+  seed: number;
+};
+
+/**
+ * Describes the message keel.v1.Spell.
+ * Use `create(SpellSchema)` to create a new message.
+ */
+export const SpellSchema: GenMessage<Spell> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 8);
 
 /**
  * SeaAreas is what raises the waves about the boat: a square of sea areas,
@@ -373,7 +533,7 @@ export type SeaAreas = Message<"keel.v1.SeaAreas"> & {
  * Use `create(SeaAreasSchema)` to create a new message.
  */
 export const SeaAreasSchema: GenMessage<SeaAreas> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 7);
+  messageDesc(file_keel_v1_game, 9);
 
 /**
  * Restart says the server is about to restart, as a new version is
@@ -397,7 +557,7 @@ export type Restart = Message<"keel.v1.Restart"> & {
  * Use `create(RestartSchema)` to create a new message.
  */
 export const RestartSchema: GenMessage<Restart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 8);
+  messageDesc(file_keel_v1_game, 10);
 
 /**
  * Queued says the sea is full: the client waits for a boat. It comes after
@@ -427,7 +587,7 @@ export type Queued = Message<"keel.v1.Queued"> & {
  * Use `create(QueuedSchema)` to create a new message.
  */
 export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 9);
+  messageDesc(file_keel_v1_game, 11);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -492,7 +652,7 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 10);
+  messageDesc(file_keel_v1_game, 12);
 
 /**
  * Pong answers a Ping.
@@ -520,5 +680,5 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 11);
+  messageDesc(file_keel_v1_game, 13);
 

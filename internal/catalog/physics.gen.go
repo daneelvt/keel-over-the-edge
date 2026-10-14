@@ -139,3 +139,47 @@ func SkyParams(c *Catalog) sky.Params {
 	p.MoonAtEpoch = float64(c.Sky.MoonAtEpoch)
 	return p
 }
+
+// WeatherParams returns the catalog's wind values as the physics package's
+// WeatherParams.
+func WeatherParams(c *Catalog) physics.WeatherParams {
+	var p physics.WeatherParams
+	p.SpeedCentre = float64(c.Weather.Disk.SpeedCentre)
+	p.SpeedRim = float64(c.Weather.Disk.SpeedRim)
+	p.Rim = float64(c.Weather.Disk.Rim)
+	p.RefugeInner = float64(c.Weather.Disk.RefugeInner)
+	p.RefugeOuter = float64(c.Weather.Disk.RefugeOuter)
+	p.RefugeMeanKnee = float64(c.Weather.Disk.RefugeMeanKnee)
+	p.RefugeMean = float64(c.Weather.Disk.RefugeMean)
+	p.RefugeWindKnee = float64(c.Weather.Disk.RefugeWindKnee)
+	p.RefugeWind = float64(c.Weather.Disk.RefugeWind)
+	p.RimGusts = float64(c.Weather.Disk.RimGusts)
+	p.RimGustsFrom = float64(c.Weather.Disk.RimGustsFrom)
+	copy(p.AcrossTurn[:], c.Weather.Disk.AcrossTurn)
+	p.GustAlong = float64(c.Weather.Gusts.GustAlong)
+	p.GustAcross = float64(c.Weather.Gusts.GustAcross)
+	p.GustLife = float64(c.Weather.Gusts.GustLife)
+	p.GustSpeed = float64(c.Weather.Gusts.GustSpeed)
+	p.GustVeer = float64(c.Weather.Gusts.GustVeer)
+	p.Change = float64(c.Weather.Gusts.Change)
+	p.WaveTimeConstant = float64(c.Weather.WaveWind.WaveTimeConstant)
+	p.WaveSample = float64(c.Weather.WaveWind.WaveSample)
+	p.WaveSamples = float64(c.Weather.WaveWind.WaveSamples)
+	return p
+}
+
+// Regimes returns the catalog's regimes' winds as the physics package's
+// Regime, in the catalog's order.
+func Regimes(c *Catalog) []physics.Regime {
+	out := make([]physics.Regime, len(c.Weather.Regimes))
+	for i := range c.Weather.Regimes {
+		r, p := &c.Weather.Regimes[i].Wind, &out[i]
+		copy(p.Speed[:], r.Speed)
+		p.GustFactor = float64(r.GustFactor)
+		p.Shift = float64(r.Shift)
+		copy(p.Period[:], r.Period)
+		p.Across = float64(r.Across)
+		p.Drift = float64(r.Drift)
+	}
+	return out
+}

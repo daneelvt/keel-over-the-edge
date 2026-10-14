@@ -6,12 +6,14 @@
 // the corpus is refused or read as Go reads it, and every message Go
 // encoded decodes, and encodes again, to the same bytes.
 
+import type { MessageInitShape } from '@bufbuild/protobuf';
 import { describe, expect, it } from 'vitest';
 import corpus from '../../../shared/protocol/testdata/entries.json';
 import messages from '../../../shared/protocol/testdata/messages.json';
 import snapshots from '../../../shared/protocol/testdata/snapshots.json';
 import { RECORDS } from '../predict/layout.gen';
 import { decodeClient, decodeServer, encodeClient, encodeServer } from './frame';
+import type { SpellSchema } from './gen/keel/v1/game_pb';
 import {
   HEADER_SIZE,
   KIND_MESSAGE,
@@ -122,7 +124,6 @@ describe('the snapshot', () => {
         g.helm,
         g.sheet,
       ]);
-      expect([bits(s.windSpeed), bits(s.windFrom)], g.name).toEqual(g.wind);
       for (const [name, i] of Object.entries(RECORDS.state)) {
         expect(bits(s.state[i] ?? 0), `${g.name}: ${name}`).toBe(
           (g.state as Record<string, string>)[name],
@@ -308,6 +309,44 @@ describe('the envelopes', () => {
           speed: [514, 0, 1749, 10000] as number[],
           from: [0, 65535, 32768, 1] as number[],
           fetch: [11112, 0, 463, 16777216] as number[],
+        },
+      },
+    },
+    {
+      body: {
+        case: 'weatherSystems',
+        value: {
+          spells: [
+            {
+              begin: 727704000n,
+              change: 18000,
+              start: 727704000n,
+              length: 432000n,
+              regime: 1,
+              speed: 669,
+              from: 65535,
+              drift: -3641,
+              gust: 1300,
+              shift: [971, 485] as number[],
+              period: [11880, 8940] as number[],
+              phase: [0, 40000] as number[],
+              across: 910,
+              axis: 12345,
+              axisPeriod: 648000,
+              seed: 4294967295,
+            },
+            {
+              begin: 727706190n,
+              start: 727706190n,
+              steady: true,
+              speed: 1000,
+              from: 16384,
+              gust: 1000,
+              shift: [0, 0] as number[],
+              period: [0, 0] as number[],
+              phase: [0, 0] as number[],
+            },
+          ] as MessageInitShape<typeof SpellSchema>[],
         },
       },
     },

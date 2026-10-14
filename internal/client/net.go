@@ -44,8 +44,10 @@ type Event struct {
 	Queued  *pb.Queued
 	// Restart: the server is about to restart.
 	Restart *pb.Restart
-	// SeaAreas: what raises the waves about the boat, for the prediction.
-	SeaAreas *pb.SeaAreas
+	// SeaAreas: what raises the waves about the boat, for the prediction;
+	// WeatherSystems the spells of weather in play, for its wind.
+	SeaAreas       *pb.SeaAreas
+	WeatherSystems *pb.WeatherSystems
 	// Snapshot is a snapshot's header; View the other boats after it,
 	// valid until ViewsKept more snapshots are decoded; Changes what its
 	// entries did, and Sampled the view slots it samples.
@@ -111,6 +113,9 @@ func (n *Net) Receive(now float64, b []byte) ([][]byte, Event, error) {
 	case *pb.ServerMessage_SeaAreas:
 		n.lastHeard = now
 		return nil, Event{SeaAreas: b.SeaAreas}, nil
+	case *pb.ServerMessage_WeatherSystems:
+		n.lastHeard = now
+		return nil, Event{WeatherSystems: b.WeatherSystems}, nil
 	}
 	return nil, Event{}, nil
 }

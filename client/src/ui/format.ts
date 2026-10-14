@@ -53,8 +53,33 @@ export function headingText(rad: number): string {
   return `${threeDigits(d)}° ${compassPoint(d)}`;
 }
 
-/** "10 kn N" for a wind of speed (m/s) from a direction (radians). */
-export function windText(speed: number, from: number): string {
+/**
+ * The wind, in knots, each Beaufort force begins at, 0 to 12 (Met Office,
+ * Beaufort wind force scale).
+ */
+const FORCE_FROM = [0, 1, 4, 7, 11, 17, 22, 28, 34, 41, 48, 56, 64] as const;
+
+/**
+ * The Beaufort force of a mean wind in m/s, 0 to 12, by its whole knots as
+ * the scale's table has them: 10 knots is force 3, 11 is force 4.
+ */
+export function beaufortForce(speed: number): number {
   const k = Math.round(Math.max(0, speed) / KNOT);
-  return `${k} kn ${compassPoint(wholeDegrees(from))}`;
+  let force = 0;
+  for (let f = 1; f < FORCE_FROM.length; f++) {
+    if (k >= (FORCE_FROM[f] as number)) {
+      force = f;
+    }
+  }
+  return force;
+}
+
+/**
+ * "WSW 14 kn · F4" for a wind of speed (m/s) from a direction (radians)
+ * whose mean, without its gusts, is mean (m/s): the Beaufort scale is of
+ * the mean wind, so a gust raises the knots and leaves the force.
+ */
+export function windText(speed: number, from: number, mean: number): string {
+  const k = Math.round(Math.max(0, speed) / KNOT);
+  return `${compassPoint(wholeDegrees(from))} ${k} kn · F${beaufortForce(mean)}`;
 }

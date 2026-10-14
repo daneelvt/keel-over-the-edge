@@ -113,7 +113,7 @@ func TestTrySendBusy(t *testing.T) {
 
 func TestDeveloperCommands(t *testing.T) {
 	q := NewQueue()
-	for _, op := range []Op{SetWind, Place} {
+	for _, op := range []Op{SetWeather, Place} {
 		if err := q.Players().TrySend(Command{Op: op}); !errors.Is(err, ErrNotAllowed) {
 			t.Errorf("a player's %s: %v", op, err)
 		}
@@ -139,7 +139,7 @@ func TestDeveloperCommands(t *testing.T) {
 			t.Errorf("a hold: %v", err)
 		}
 	}
-	for _, op := range []Op{Join, Leave, Disconnect, SetWind, Place} {
+	for _, op := range []Op{Join, Leave, Disconnect, SetWeather, Place} {
 		if err := q.Server().TrySend(Command{Op: op}); !errors.Is(err, ErrNotAllowed) {
 			t.Errorf("the server's %s: %v", op, err)
 		}

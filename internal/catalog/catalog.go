@@ -65,3 +65,11 @@ func (c *Catalog) PrepareSky() *sky.Prepared {
 	sky.Prepare(&p, s)
 	return s
 }
+
+// PrepareWeather readies the catalog's wind for the physics.
+func (c *Catalog) PrepareWeather() *physics.WeatherPrepared {
+	p := WeatherParams(c)
+	w := new(physics.WeatherPrepared)
+	physics.PrepareWeather(&p, w)
+	return w
+}
