@@ -285,8 +285,9 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
 }, async ({ page }) => {
   // What the heap keeps does not depend on the picture's size, and a small
   // one keeps SwiftShader's CPU rendering inside the time; on CI's WebGPU
-  // adapter, through SwiftShader, 1,800 frames still take minutes.
-  test.setTimeout(540_000);
+  // adapter, through SwiftShader, 1,800 frames still take minutes: 7 to 9
+  // of them, by the runner.
+  test.setTimeout(720_000);
   await page.setViewportSize({ width: 320, height: 200 });
   await openScene(page, 'sea=gale');
   const cdp = await page.context().newCDPSession(page);
