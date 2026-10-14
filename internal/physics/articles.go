@@ -275,8 +275,8 @@ func turnedToward(e *Encounter, who float64, ep *EncounterPrepared) bool {
 // ActionOf says whose action made the keep-clear boat of now the one it
 // is, where before it was keeper by article (Neither for none): the boat
 // whose tack or gybe changed most recently, within the room window; or a
-// boat that was clear astern and now has right of way, having overlapped
-// the other from astern (Case Book, Case 7); else neither's.
+// boat that was clear astern and now has right of way overlapped, having
+// overlapped the other from astern (Case Book, Case 7); else neither's.
 func ActionOf(keeper, article float64, now *Verdict, e *Encounter, ep *EncounterPrepared) float64 {
 	if now.Keeper == Neither {
 		return Neither
@@ -294,7 +294,7 @@ func ActionOf(keeper, article float64, now *Verdict, e *Encounter, ep *Encounter
 	if now.Keeper == First {
 		row = Second
 	}
-	if article == Article12 && keeper == row {
+	if article == Article12 && keeper == row && now.Article == Article11 {
 		return row
 	}
 	return Neither

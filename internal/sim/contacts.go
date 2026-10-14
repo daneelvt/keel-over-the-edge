@@ -73,7 +73,8 @@ func (w *World) contacts() {
 			j++
 		}
 		p := bus.Pair{A: c.a, B: c.b, BoatA: f.Boat[c.a], BoatB: f.Boat[c.b], Touched: f.Tick - apart - 1}
-		known := j < len(prev) && prev[j].A == c.a && prev[j].B == c.b && prev[j].BoatA == p.BoatA && prev[j].BoatB == p.BoatB
+		known := j < len(prev) && prev[j].A == c.a && prev[j].B == c.b && prev[j].BoatA == p.BoatA && prev[j].BoatB == p.BoatB &&
+			!w.placed(c.a) && !w.placed(c.b)
 		if known {
 			p = prev[j]
 		}
@@ -96,14 +97,13 @@ func (w *World) contacts() {
 			w.touching = append(w.touching, t)
 			w.touched = append(w.touched, c)
 		}
-		if !known || uint8(now.Keeper) != p.Keeper {
-			// Who acted is judged against the relation the pair had; a
-			// new pair had none.
-			had, article := float64(p.Keeper), float64(p.Article)
-			if !known {
-				had, article = physics.Neither, 0
-			}
-			p.By = uint8(physics.ActionOf(had, article, &now, &w.meeting, w.enc))
+		switch {
+		case !known:
+			// Boats that have just come near have had no right of way
+			// over each other to acquire: no one's action began it.
+			p.By, p.Since = physics.Neither, f.Tick
+		case uint8(now.Keeper) != p.Keeper:
+			p.By = uint8(physics.ActionOf(float64(p.Keeper), float64(p.Article), &now, &w.meeting, w.enc))
 			p.Since = f.Tick
 		}
 		p.Keeper, p.Article = uint8(now.Keeper), uint8(now.Article)
@@ -118,6 +118,19 @@ func (w *World) contacts() {
 		w.settle(f, c.b)
 	}
 	buildGrid(f)
+}
+
+// placed reports whether a command put boat s where it is this tick: its
+// pairs start afresh, as boats that have just come near, since nothing they
+// did brought them there.
+func (w *World) placed(s int32) bool {
+	f := w.next
+	for i := range f.Events {
+		if e := &f.Events[i]; e.Op == bus.Place && e.Reply.Result == bus.Done && e.Reply.Slot == s {
+			return true
+		}
+	}
+	return false
 }
 
 // near makes slots s and o a candidate if their boats are near enough.
