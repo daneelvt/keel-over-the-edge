@@ -993,7 +993,11 @@ function model(): NodeDef[] {
     boomParts.push(gooseneck().primitive());
   }
   const nodes: NodeDef[] = [
-    { name: 'hull', primitives: hullParts, extras: { waterline, plan: { deviation: planDeviation() } } },
+    {
+      name: 'hull',
+      primitives: hullParts,
+      extras: { waterline, plan: { deviation: planDeviation() } },
+    },
     { name: 'mast', translation: [0, 0, MAST_Z], primitives: [mast().primitive()] },
     {
       name: 'boom',

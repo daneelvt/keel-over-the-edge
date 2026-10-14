@@ -727,7 +727,9 @@ function encounterLines(n: NetNumbers): string[] {
     const settled = (c[2] ?? 0) >= 65536 ? 'long' : `${((c[2] ?? 0) / 30).toFixed(1)} s`;
     lines.push(
       `course            ${tackText(c[0] ?? 1, (c[1] ?? 0) !== 0).toLowerCase()}, tack settled ${settled}, ` +
-        `course ${degrees(c[3] ?? 0).toFixed(0).padStart(3, '0')}°`,
+        `course ${degrees(c[3] ?? 0)
+          .toFixed(0)
+          .padStart(3, '0')}°`,
     );
   }
   const b = n.bump;
@@ -784,7 +786,10 @@ export function openNetPanel(
       wind: predictor.wind,
       wakes: predictor.wakes.reaching,
       course: world.rightOfWay.ownCourse,
-      bump: lastBump === null ? null : { told: lastBump.told, ago: (performance.now() - lastBump.at) / 1000 },
+      bump:
+        lastBump === null
+          ? null
+          : { told: lastBump.told, ago: (performance.now() - lastBump.at) / 1000 },
     });
   };
   update();

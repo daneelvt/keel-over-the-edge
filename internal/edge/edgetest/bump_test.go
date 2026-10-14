@@ -147,9 +147,10 @@ func TestDrawnOverlap(t *testing.T) {
 				var sailors []*client.Sailor
 				var accounts []bus.Account
 				deepest := make([]float64, 2)
-				var h physics.Hulls
 				kind := &srv.Kinds[0]
 				for i, name := range []string{"Ann", "Bob"} {
+					// Each sailor's views come on its own goroutine.
+					var h physics.Hulls
 					token, id := srv.Guest(name)
 					o := DialOptions{Cookie: token, Wrap: client.Lag{Delay: rtt / 2, Seed: uint64(i + 1)}.Wrap}
 					s := srv.NewSailor(o, letGo)

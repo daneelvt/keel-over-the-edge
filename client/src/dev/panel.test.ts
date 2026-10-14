@@ -333,6 +333,8 @@ describe('the connection’s numbers', () => {
     expect(lines).toContain('shadow  8.0 kn, 20% lost');
     expect(lines).toContain('wakes             2 reaching the boat');
     expect(lines).toContain('course            tacking, tack settled 1.5 s, course 045°');
-    expect(lines).toContain('last bump         3 s ago, yours, Article 10, 1.50 m/s, at 1.3 E -3.0 N');
+    expect(lines).toContain(
+      'last bump         3 s ago, yours, Article 10, 1.50 m/s, at 1.3 E -3.0 N',
+    );
   });
 });

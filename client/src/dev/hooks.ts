@@ -42,6 +42,7 @@ import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
 import { nowUs, worldUs } from '../net/clock';
+import type { BumpTold } from '../net/messages';
 import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
 import { FieldMaker, newFields } from '../ocean/field';
@@ -70,7 +71,6 @@ import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
-import type { BumpTold } from '../net/messages';
 import type { Settings } from '../ui/settings';
 import { setSky } from './skypanel';
 

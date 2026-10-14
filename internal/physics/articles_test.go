@@ -90,8 +90,7 @@ func TestArticlesSituations(t *testing.T) {
 				t.Errorf("%s\n got  %+v\n want %+v", sit.Description, v, want)
 			}
 			// The same boats the other way round.
-			var r Encounter
-			r = e
+			r := e
 			for _, p := range []*[2]float64{&r.X, &r.Y, &r.Heading, &r.Heel, &r.Boom, &r.SailorMode, &r.WindFrom, &r.Tack, &r.Tacking, &r.Settled, &r.Course} {
 				p[0], p[1] = p[1], p[0]
 			}

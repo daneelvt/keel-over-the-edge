@@ -133,7 +133,14 @@ test.describe('a bump', () => {
     await expect(page.locator('[data-readout="bump"]')).toHaveText(e.bump);
     // A bump only seen, between two other boats: no verdict.
     await page.evaluate(() =>
-      globalThis.keel.bump({ tick: 400, east: 220, north: 300, closing: 1, part: 'seen', article: '' }),
+      globalThis.keel.bump({
+        tick: 400,
+        east: 220,
+        north: 300,
+        closing: 1,
+        part: 'seen',
+        article: '',
+      }),
     );
     const seen = await page.evaluate(() => globalThis.keel.encounters());
     expect(seen.bumps).toBe(2);
@@ -145,7 +152,14 @@ test.describe('a bump', () => {
     await openScene(page, '', true);
     await reaching(page);
     await page.evaluate(() =>
-      globalThis.keel.bump({ tick: 300, east: 201, north: 300, closing: 2, part: 'theirs', article: '11' }),
+      globalThis.keel.bump({
+        tick: 300,
+        east: 201,
+        north: 300,
+        closing: 2,
+        part: 'theirs',
+        article: '11',
+      }),
     );
     const e = await page.evaluate(() => globalThis.keel.encounters());
     expect(e.shake).toBeCloseTo(0.1 / 3, 6);

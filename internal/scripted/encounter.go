@@ -91,7 +91,7 @@ func Encounter(ctx context.Context, cfg EncounterConfig, situation string) (Stag
 	f := cfg.Bus.Frames.Acquire()
 	player := int32(-1)
 	for _, s := range f.Live {
-		if f.Conn[s] != 0 && f.State[s].SailorMode == physics.Sailing && !scriptedAccount(f.Owner[s]) {
+		if f.Conn[s] != 0 && f.Grace[s] == 0 && f.State[s].SailorMode == physics.Sailing && !scriptedAccount(f.Owner[s]) {
 			player = s
 			break
 		}
