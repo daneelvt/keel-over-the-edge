@@ -85,8 +85,14 @@ jobs:
           BUILD: ${{ steps.id.outputs.id }}
         run: |
           echo "::notice title=Already released::Build $BUILD is released already. A release is never replaced: nothing is built or published."
-          echo "### Build \`$BUILD\` is released already" >> "$GITHUB_STEP_SUMMARY"
-          echo "A release is never replaced: nothing was built or published." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Build \`$BUILD\` is released already"
+            echo "A release is never replaced: nothing was built or published. The build, for the promote workflow:"
+            echo
+            echo '```'
+            echo "$BUILD"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # One image for both architectures, from one build: the Dockerfile builds
   # the page and compiles keel on the runner's own platform, so neither
@@ -266,6 +272,12 @@ jobs:
           size=$(docker buildx imagetools inspect --raw "$MANIFESTS@$DIGEST" | jq '[.config.size, .layers[].size] | add')
           {
             echo "### Release \`$BUILD\`"
+            echo "The build, for the promote workflow:"
+            echo
+            echo '```'
+            echo "$BUILD"
+            echo '```'
+            echo
             echo "| | |"
             echo "|---|---|"
             echo "| Commit | $GITHUB_SHA |"
