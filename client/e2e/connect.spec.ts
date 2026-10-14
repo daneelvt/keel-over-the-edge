@@ -106,6 +106,9 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', asyn
 });
 
 test('another device takes the boat, and Take over takes it back', async ({ page, browser }) => {
+  // Two pages load the game, one while the other sails: on CI's software
+  // GPU that alone has taken most of the 90 s a test is given.
+  test.setTimeout(180_000);
   const context = page.context();
   await guest(context);
   await sail(page);

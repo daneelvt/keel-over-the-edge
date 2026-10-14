@@ -183,6 +183,17 @@ test.describe('a gust on the water', () => {
 });
 
 test.describe('the wind overlay’s gust ring', () => {
+  // The rings are found on the CPU and only read here, never looked at: a
+  // small picture keeps the many frames these tests draw cheap on a
+  // software GPU, which otherwise queues them faster than it draws them.
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 240, height: 150 });
+  });
+  test.afterEach(async ({ page }) => {
+    // What was drawn is finished before the page closes.
+    await page.evaluate(() => globalThis.keel.show());
+  });
+
   test('is drawn round a gust heading for the boat, and travels with it', async ({ page }) => {
     await openScene(page, 'weather=trade', true);
     const got = await page.evaluate(async () => {
