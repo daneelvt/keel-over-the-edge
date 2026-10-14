@@ -102,11 +102,19 @@ type conn struct {
 // bus.MaxAhead ticks.
 const heldWords = 64
 
-// outgoing is a message for the writer, and its kind for the metrics.
+// outgoing is a message for the writer, and its kind for the metrics; or,
+// with a code, the close that follows what was queued before it.
 type outgoing struct {
-	b    []byte
-	kind int
+	b      []byte
+	kind   int
+	code   websocket.StatusCode
+	reason string
 }
+
+// closeWait is how long a close queued behind messages waits for the
+// writer before it is made at once: a writer stuck on a peer that does not
+// read never reaches it.
+const closeWait = 250 * time.Millisecond
 
 func newConn(e *Edge, ws *websocket.Conn, raw net.Conn, account bus.Account, reqID string) *conn {
 	c := &conn{
@@ -488,7 +496,7 @@ func (c *conn) send(m *pb.ServerMessage, kind int) bool {
 		return false
 	}
 	select {
-	case c.queue <- outgoing{b, kind}:
+	case c.queue <- outgoing{b: b, kind: kind}:
 		return true
 	default:
 		c.close(websocket.StatusPolicyViolation, "too many messages waiting")
@@ -505,7 +513,7 @@ func (c *conn) writer() {
 		case <-c.done:
 			return
 		case o := <-c.queue:
-			if !c.write(o.b, o.kind) {
+			if !c.out(o) {
 				return
 			}
 		case <-c.box.signal:
@@ -515,7 +523,7 @@ func (c *conn) writer() {
 		for queued := true; queued; {
 			select {
 			case o := <-c.queue:
-				if !c.write(o.b, o.kind) {
+				if !c.out(o) {
 					return
 				}
 			default:
@@ -530,6 +538,29 @@ func (c *conn) writer() {
 				c.e.m.lag.Observe(float64(tick - ack))
 			}
 		}
+	}
+}
+
+// out writes a queued message, or makes a queued close, after which
+// nothing more is written.
+func (c *conn) out(o outgoing) bool {
+	if o.code != 0 {
+		c.close(o.code, o.reason)
+		return false
+	}
+	return c.write(o.b, o.kind)
+}
+
+// closeAfterQueued closes the connection once what is queued for it has
+// been written, as the restart's bell must reach the client before the
+// close does; or at once if the queue is full, and at the latest after
+// closeWait.
+func (c *conn) closeAfterQueued(code websocket.StatusCode, reason string) {
+	select {
+	case c.queue <- outgoing{code: code, reason: reason}:
+		time.AfterFunc(closeWait, func() { c.close(code, reason) })
+	default:
+		c.close(code, reason)
 	}
 }
 
