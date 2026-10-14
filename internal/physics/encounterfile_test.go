@@ -198,19 +198,79 @@ func TestEncounterFile(t *testing.T) {
 		t.Logf("wrote %s", encounterFile)
 		return
 	}
+	// The check recomputes every case from the inputs the file holds: the
+	// inputs were drawn once, with functions that differ between machines.
 	var want encounterFileData
 	readJSON(t, encounterFile, &want)
 	if want.Layout != got.Layout {
 		t.Fatalf("encounters.json is for layout %s, the records are layout %s: rewrite it with -update", want.Layout, got.Layout)
 	}
+	again := recompute(t, b, e, &want)
+	again.Sails = got.Sails
 	for _, check := range []struct {
 		name      string
 		got, want any
-	}{{"wakes", got.Wakes, want.Wakes}, {"shadows", got.Shadows, want.Shadows}, {"contacts", got.Contacts, want.Contacts}, {"courses", got.Courses, want.Courses}, {"sails", got.Sails, want.Sails}} {
+	}{{"wakes", again.Wakes, want.Wakes}, {"shadows", again.Shadows, want.Shadows}, {"contacts", again.Contacts, want.Contacts}, {"courses", again.Courses, want.Courses}, {"sails", again.Sails, want.Sails}} {
 		if !reflect.DeepEqual(check.got, check.want) {
 			t.Errorf("the %s differ from encounters.json: rewrite it with -update", check.name)
 		}
 	}
+}
+
+// recompute is f with every output computed again from its inputs.
+func recompute(t *testing.T, b *Prepared, e *EncounterPrepared, f *encounterFileData) encounterFileData {
+	t.Helper()
+	x := func(s string) float64 { return fromHex(t, s) }
+	out := encounterFileData{Comment: f.Comment, Layout: f.Layout}
+	for _, c := range f.Wakes {
+		var in [9]float64
+		for i, v := range c.In {
+			in[i] = x(v)
+		}
+		w := WakeAt(in[0], in[1], in[2], in[3], in[4], in[5], in[6], in[7], in[8], b, e)
+		c.Out = wakeHex(&w)
+		out.Wakes = append(out.Wakes, c)
+	}
+	for _, c := range f.Shadows {
+		px, py := x(c.At[0]), x(c.At[1])
+		env := Env{WindSpeed: x(c.Env[0]), WindFrom: x(c.Env[1])}
+		var src Sources
+		for i, v := range c.Wakes {
+			w := Wake{X: x(v[0]), Y: x(v[1]), East: x(v[2]), North: x(v[3]), Height: x(v[4]), Side: x(v[5])}
+			src.Consider(&w, int32(i), px, py, e)
+		}
+		ShadowAt(&env, px, py, &src, e)
+		c.Out = [2]string{toHex(env.WindSpeed), toHex(env.WindFrom)}
+		c.Reach = int(src.Len())
+		out.Shadows = append(out.Shadows, c)
+	}
+	var h Hulls
+	for _, c := range f.Contacts {
+		a, o := stateFromHex(t, c.A), stateFromHex(t, c.B)
+		var ct Contact
+		c.Touched = h.Collide(&a, &o, b, b, e, &ct)
+		copy(c.Contact[:], hexes([]float64{ct.NormalEast, ct.NormalNorth, ct.Depth, ct.X, ct.Y, ct.Closing}))
+		c.A2, c.B2 = stateHex(&a), stateHex(&o)
+		out.Contacts = append(out.Contacts, c)
+	}
+	for _, c := range f.Courses {
+		course := Course{Tack: x(c.Course[0]), Tacking: x(c.Course[1]), Settled: x(c.Course[2]), Course: x(c.Course[3])}
+		s := State{Heading: x(c.In[0]), Boom: x(c.In[1])}
+		TrackCourse(&course, &s, x(c.In[2]), b, e)
+		copy(c.Out[:], hexes([]float64{course.Tack, course.Tacking, course.Settled, course.Course}))
+		out.Courses = append(out.Courses, c)
+	}
+	return out
+}
+
+// stateFromHex is a state from its fields' bits, in order.
+func stateFromHex(t *testing.T, bits [StateFieldCount]string) State {
+	var s State
+	v := reflect.ValueOf(&s).Elem()
+	for i, b := range bits {
+		v.Field(i).SetFloat(fromHex(t, b))
+	}
+	return s
 }
 
 // layoutHex is the layout version as golden.json writes it.
