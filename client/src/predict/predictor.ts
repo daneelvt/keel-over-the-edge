@@ -120,8 +120,12 @@ export class Predictor implements BoatDriver {
   started = false;
   /** The tick the boat's state is after. */
   tick = 0;
-  /** Counts, for the developer panel and the tests. */
-  readonly counts = { snapshots: 0, corrections: 0, resets: 0, stale: 0, largest: 0 };
+  /**
+   * Counts, for the developer panel and the tests; shadowed is the steps
+   * another boat's wake reached, whose shadow the snapshots' samples only
+   * approximate.
+   */
+  readonly counts = { snapshots: 0, corrections: 0, resets: 0, stale: 0, largest: 0, shadowed: 0 };
   /** The last 200 corrections' distances, for the 95th percentile. */
   readonly sizes: number[] = [];
 
@@ -210,6 +214,7 @@ export class Predictor implements BoatDriver {
     this.weather.read(this.tick + 1, before[S.x] ?? 0, before[S.y] ?? 0, this.wind);
     this.#stepModule(this.tick + 1, helm, sheet, pilot.mode, pilot.target, pilot.order, pilot.way);
     if (this.wakes.reaching > 0) {
+      this.counts.shadowed++;
       // The wind the step sailed in, in the shadow of the boats near.
       const env = this.#physics.records.env;
       this.wind.shadowSpeed = env[RECORDS.env.windSpeed] ?? 0;
