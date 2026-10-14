@@ -279,7 +279,9 @@ export class Physics {
       }
     }
     if (x.wakeCapacity() >>> 0 !== ENCOUNTERS.wakes) {
-      throw new Error(`physics module: room for ${x.wakeCapacity()} wakes, not ${ENCOUNTERS.wakes}`);
+      throw new Error(
+        `physics module: room for ${x.wakeCapacity()} wakes, not ${ENCOUNTERS.wakes}`,
+      );
     }
     const skySize = x.skySize() >>> 0;
     if (skySize !== SKY.size) {

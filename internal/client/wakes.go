@@ -18,14 +18,14 @@ import (
 // difference from the server's shadow is corrected as any other.
 // client/src/predict/wakes.ts is its twin, bit for bit.
 type Wakes struct {
-	n      [protocol.ViewSlots]uint8 // samples held: 0, 1 or 2
-	tick   [protocol.ViewSlots][2]int64
-	x, y   [protocol.ViewSlots][2]float64 // [0] the newest, [1] the one before
-	pose   [protocol.ViewSlots][3]float64 // the newest's heading, heel and boom
-	order  [protocol.ViewSlots]int32
-	d2     [protocol.ViewSlots]float64
-	src    physics.Sources
-	wind   physics.WeatherTick
+	n     [protocol.ViewSlots]uint8 // samples held: 0, 1 or 2
+	tick  [protocol.ViewSlots][2]int64
+	x, y  [protocol.ViewSlots][2]float64 // [0] the newest, [1] the one before
+	pose  [protocol.ViewSlots][3]float64 // the newest's heading, heel and boom
+	order [protocol.ViewSlots]int32
+	d2    [protocol.ViewSlots]float64
+	src   physics.Sources
+	wind  physics.WeatherTick
 }
 
 // Reset forgets every boat: a new connection.
