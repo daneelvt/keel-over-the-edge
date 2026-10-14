@@ -43,6 +43,17 @@ func kinds(testing.TB) []physics.Prepared {
 	return ks
 }
 
+// encounters is the catalog's encounters, prepared.
+var encountersOnce = sync.OnceValue(func() *physics.EncounterPrepared {
+	cat, err := catalog.Load()
+	if err != nil {
+		panic(err)
+	}
+	return cat.PrepareEncounters()
+})
+
+func encounters(testing.TB) *physics.EncounterPrepared { return encountersOnce() }
+
 func waves(testing.TB) *physics.Waves {
 	w, _ := physicsOnce()
 	return w

@@ -14,6 +14,8 @@ export interface Settings {
   /** The beginners' overlays. */
   windOverlay: boolean;
   forcesOverlay: boolean;
+  /** Marks the boats to keep clear of, and those that must keep clear, by the Articles. */
+  rightOfWay: boolean;
   /** Return the helm to the centre when the thumb lifts or the key comes up. */
   centreHelm: boolean;
   /** How much the sea is drawn with: as much as the device runs well, or the least, to save battery. */
@@ -25,6 +27,7 @@ export const DEFAULTS: Settings = {
   sound: true,
   windOverlay: false,
   forcesOverlay: false,
+  rightOfWay: false,
   centreHelm: false,
   detail: 'auto',
 };
@@ -65,7 +68,7 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
   if (r.detail === 'auto' || r.detail === 'low') {
     out.detail = r.detail;
   }
-  for (const k of ['sound', 'windOverlay', 'forcesOverlay', 'centreHelm'] as const) {
+  for (const k of ['sound', 'windOverlay', 'forcesOverlay', 'rightOfWay', 'centreHelm'] as const) {
     if (typeof r[k] === 'boolean') {
       out[k] = r[k];
     }

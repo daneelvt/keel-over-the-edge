@@ -35,7 +35,7 @@ import {
   nowUs,
   worldUs,
 } from './clock';
-import type { FromWorker, HelloVersions, Status, ToWorker } from './messages';
+import type { BumpTold, FromWorker, HelloVersions, Status, ToWorker } from './messages';
 import { NO_MARGIN, newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
 import { FLEET_META, fleetOf } from './view';
 
@@ -98,6 +98,8 @@ export class Online {
   epochUs = 0;
   /** Called with the world's epoch at each Welcome: the sky is counted from it. */
   onEpoch: ((epochUs: number) => void) | null = null;
+  /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
+  onBump: ((b: BumpTold) => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
   lastMargin = NO_MARGIN;
   traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
@@ -182,6 +184,9 @@ export class Online {
         // Ahead of the tick any of it changes the wind from, as the sea is.
         this.#predictor.weather.receive(m.spells);
         break;
+      case 'bump':
+        this.onBump?.(m.bump);
+        break;
       case 'welcome':
         if (this.#hadBoat && !m.rejoined) {
           this.notice.value = { text: 'Your boat has returned to port.', takeover: false };
@@ -201,6 +206,7 @@ export class Online {
         // A new connection's views start afresh: the boats fade out, and
         // in again with its first snapshot.
         this.fleet.clear();
+        this.#predictor.wakes.reset();
         break;
       case 'snapshot':
         if (this.#predictor.started) {
@@ -287,8 +293,11 @@ export class Online {
   /** Reads a snapshot's record: its own boat reconciled, its other boats to the fleet; then hands it back. */
   #take(data: ArrayBuffer, now: number): void {
     if (readSnapshot(new DataView(data), this.#scratch) === null) {
-      this.reconcile(this.#scratch, now);
       const f = fleetOf(data);
+      // The other boats' samples first: the steps the reconciliation
+      // replays sail in their shadow.
+      this.#predictor.wakes.observe(f);
+      this.reconcile(this.#scratch, now);
       this.snapshotBytes = f[FLEET_META.bytes] ?? 0;
       this.fleet.add(f, worldUs(this.clock, f[FLEET_META.received] ?? now));
     }

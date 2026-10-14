@@ -57,6 +57,8 @@ type Config struct {
 	// Weather is the world's own weather; nil is a steady wind
 	// (sim.DefaultSpell).
 	Weather *weather.Timeline
+	// Encounters are how the world's boats meet; the catalog's if nil.
+	Encounters *physics.EncounterPrepared
 	// Record, if not nil, is told of each frame too, on the ticking
 	// goroutine, before the edge.
 	Record sim.Recorder
@@ -73,6 +75,8 @@ type Server struct {
 	Kinds    []physics.Prepared
 	Waves    *physics.Waves
 	Weather  *weather.Timeline
+	// Encounters are how the world's boats meet.
+	Encounters *physics.EncounterPrepared
 
 	cfg      Config
 	sessions *auth.Cache
@@ -105,8 +109,15 @@ func NewServer(t testing.TB, cfg Config) *Server {
 	if cfg.Weather == nil {
 		cfg.Weather = weather.Fixed(sim.DefaultSpell)
 	}
+	if cfg.Encounters == nil {
+		cat, err := catalog.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg.Encounters = cat.PrepareEncounters()
+	}
 	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, cfg: cfg}
+	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg}
 	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
 	s.start(t, s.newWorld(t))
 	s.HTTP = httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +130,7 @@ func NewServer(t testing.TB, cfg Config) *Server {
 func (s *Server) newWorld(t testing.TB) *sim.World {
 	t.Helper()
 	cfg := s.cfg
-	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Waves: cfg.Waves, Workers: 1,
+	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Waves: cfg.Waves, Encounters: cfg.Encounters, Workers: 1,
 		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather})
 	if err != nil {
 		t.Fatal(err)

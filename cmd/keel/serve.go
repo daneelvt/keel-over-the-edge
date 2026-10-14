@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,8 +82,10 @@ Configured from the environment:
   KEEL_DEV_SAILORS     scripted sailors to sail (default 0)
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
                        POST /debug/wind?knots=…&from=… (a steady wind),
-                       POST /debug/weather?regime=… (a regime held) and
-                       POST /debug/weather?auto (the world's own) (default 0)
+                       POST /debug/weather?regime=… (a regime held),
+                       POST /debug/weather?auto (the world's own) and
+                       POST /debug/encounter?situation=… (a scripted boat
+                       meeting the first sailing player's) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -338,7 +342,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
-	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
+	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
@@ -355,8 +359,8 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	})
 	replayHandler.set(inputs)
 	if weatherHandler != nil {
-		weatherHandler.set(weatherRoute(b.Commands.Developer(), cat))
-		log.Warn("developer commands are on: POST /debug/wind and /debug/weather on the internal listener")
+		weatherHandler.set(devRoutes(ctx, b, cat, log))
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather and /debug/encounter on the internal listener")
 	}
 	metrics.CounterFunc("keel_sim_commands_refused_total", "Commands refused because the queue was full.", b.Commands.Refused)
 	metrics.CounterFunc("keel_sim_frames_allocated_total", "Frames made because every frame in the pool was in use.", b.Frames.Allocated)
@@ -616,6 +620,48 @@ func restore(ctx context.Context, db database, world *sim.World, sailed store.Wo
 	log.Info("the world is restored from its checkpoint", "tick", r.From, "now", now, "gap", age.Round(time.Millisecond).String(),
 		"boats", r.Boats, "waiting", r.Waiting, "written_by", cp.Build, "written_at", cp.WrittenAt)
 	return nil
+}
+
+// devRoutes are the developer's commands: the weather, and encounters.
+func devRoutes(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler {
+	wx := weatherRoute(b.Commands.Developer(), cat)
+	enc := encounterRoute(ctx, b, cat, log)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/debug/encounter" {
+			enc.ServeHTTP(w, r)
+			return
+		}
+		wx.ServeHTTP(w, r)
+	})
+}
+
+// encounterRoute stages an encounter, on the internal listener only, with
+// KEEL_DEV_COMMANDS=1: a scripted boat placed to meet the first sailing
+// player's boat in one of the situations the Articles are tested with,
+// held on its course and trim for half a minute. It answers with where the
+// boat was put, and the Article the bump should be judged by.
+//
+//	POST /debug/encounter?situation=port-starboard|windward-leeward|overtaking|tacking|luffing|capsized
+func encounterRoute(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler {
+	cfg := scripted.EncounterConfig{Bus: b, Weather: cat.PrepareWeather(), Length: cat.Boats[0].LengthOverall, Log: log}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		situation := r.URL.Query().Get("situation")
+		if _, ok := scripted.Situations[situation]; !ok {
+			http.Error(w, "situation, one of "+strings.Join(scripted.SituationNames(), ", ")+", is required", http.StatusBadRequest)
+			return
+		}
+		staged, err := scripted.Encounter(ctx, cfg, situation)
+		switch {
+		case errors.Is(err, scripted.ErrNoPlayer):
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		case err != nil:
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(staged)
+	})
 }
 
 // weatherRoute is the developer's weather, on the internal listener only,

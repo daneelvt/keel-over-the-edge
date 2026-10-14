@@ -60,6 +60,16 @@ func catalogKinds(t testing.TB) []physics.Prepared {
 	return ks
 }
 
+// catalogEncounters is the catalog's encounters, prepared.
+func catalogEncounters(t testing.TB) *physics.EncounterPrepared {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cat.PrepareEncounters()
+}
+
 // catalogWaves is the catalog's sea.
 // catalogWeather is the world's own weather: the catalog's sequence. Each
 // world gets a timeline of its own: a timeline remembers the direction it
@@ -109,7 +119,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 	var out live
 	dir := t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
-		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit})
+		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -283,7 +293,7 @@ func replayLog(t *testing.T, data []byte, workers int) (replay.Result, []byte) {
 		t.Fatal(err)
 	}
 	var end []byte
-	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Workers: workers, At: func(fr *bus.Frame) {
+	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: workers, At: func(fr *bus.Frame) {
 		end = sim.AppendSnapshot(end[:0], fr)
 	}})
 	if err != nil {

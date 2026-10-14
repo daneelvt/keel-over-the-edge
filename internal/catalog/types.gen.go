@@ -73,6 +73,9 @@ type Catalog struct {
 	// Boat types.
 	Boats []Boat `json:"boats"`
 
+	// Encounters corresponds to the JSON schema field "encounters".
+	Encounters Encounters `json:"encounters"`
+
 	// The figures that sail the boats. The first is the one drawn until players
 	// choose their own.
 	Sailors []Sailor `json:"sailors"`
@@ -82,6 +85,122 @@ type Catalog struct {
 
 	// Weather corresponds to the JSON schema field "weather".
 	Weather Weather `json:"weather"`
+}
+
+// Boats meeting: their hulls touching, the wind one takes from another, and the
+// Articles, the right-of-way rules that judge them.
+type Encounters struct {
+	// Articles corresponds to the JSON schema field "articles".
+	Articles EncountersArticles `json:"articles"`
+
+	// Contact corresponds to the JSON schema field "contact".
+	Contact EncountersContact `json:"contact"`
+
+	// Overlay corresponds to the JSON schema field "overlay".
+	Overlay EncountersOverlay `json:"overlay"`
+
+	// Shadow corresponds to the JSON schema field "shadow".
+	Shadow EncountersShadow `json:"shadow"`
+}
+
+// The numbers the Articles are computed with.
+type EncountersArticles struct {
+	// The time constant of a boat's course: its heading, smoothed, in s.
+	Course float64 `json:"course"`
+
+	// Within this of head to wind a boat keeps the tack she had, in degrees.
+	HeadToWind float64 `json:"headToWind"`
+
+	// Boats closer than this many hull lengths are remembered as a pair.
+	Pairs float64 `json:"pairs"`
+
+	// A boat that acquires right of way, or changes course, must give room for this
+	// long, in s.
+	Room float64 `json:"room"`
+
+	// A change of course is one of more than this, in degrees.
+	Turn float64 `json:"turn"`
+}
+
+// Two hulls touching: an impulse with no damage.
+type EncountersContact struct {
+	// Ticks two boats must be apart before touching again is a new bump.
+	Apart int `json:"apart"`
+
+	// The most a contact pushes boats apart in a tick, in m.
+	Cap float64 `json:"cap"`
+
+	// Coulomb's coefficient of the hulls sliding along each other.
+	Friction float64 `json:"friction"`
+
+	// Passes of the impulses over a tick's contacts.
+	Passes int `json:"passes"`
+
+	// The share of the rest of the penetration pushed apart in a tick.
+	Push float64 `json:"push"`
+
+	// The share of the closing speed the hulls part with.
+	Restitution float64 `json:"restitution"`
+
+	// Penetration left alone, in m.
+	Slop float64 `json:"slop"`
+}
+
+// The beginners' right-of-way overlay, and dirty air drawn in the wind overlay.
+type EncountersOverlay struct {
+	// How far ahead their present motions are followed, in s.
+	Ahead float64 `json:"ahead"`
+
+	// A boat is marked when it comes within this many hull lengths.
+	Close float64 `json:"close"`
+
+	// The most boats marked at once.
+	Marks int `json:"marks"`
+
+	// Boats within this are considered, in m.
+	Range float64 `json:"range"`
+
+	// Judgements a second.
+	Rate float64 `json:"rate"`
+
+	// Out to where the wind's loss falls under this share.
+	WedgeDeficit float64 `json:"wedgeDeficit"`
+
+	// Dirty air is drawn behind boats within this, in m.
+	Wedges float64 `json:"wedges"`
+}
+
+// The wind shadow: the wake a sail leaves along its apparent wind, in units of its
+// rig's height h above the water.
+type EncountersShadow struct {
+	// A: the share of the wind lost on the wake's axis one rig height behind.
+	Deficit float64 `json:"deficit"`
+
+	// How far the wake turns from the apparent wind toward the source's windward
+	// side: close-hauled, and on a reach and beyond, in degrees.
+	Deflection []float64 `json:"deflection"`
+
+	// The apparent wind angles at which each deflection holds, between which it
+	// blends, in degrees.
+	DeflectionAt []float64 `json:"deflectionAt"`
+
+	// H: how far the wake turns the wind one rig height behind, in degrees.
+	Header float64 `json:"header"`
+
+	// s₀: closer than this, in h, the loss is no greater.
+	Near float64 `json:"near"`
+
+	// How far the wake reaches, in h.
+	Reach float64 `json:"reach"`
+
+	// The most wakes a boat feels at once: the nearest.
+	Sources int `json:"sources"`
+
+	// Where it begins to fade to nothing at its reach, in h.
+	Taper float64 `json:"taper"`
+
+	// w: the wake's half-width parameter at one rig height, in h.
+	Width float64 `json:"width"`
 }
 
 // Stable identifier of a kind, stored in the database: never renamed or reused.
@@ -210,6 +329,11 @@ type PhysicsHull struct {
 	// in kg.
 	Munk float64 `json:"munk"`
 
+	// The hull's half-beam at the sheer at 11 stations equally spaced from the
+	// transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a
+	// point.
+	Outline []float64 `json:"outline"`
+
 	// Damping of the pitch, as a fraction of critical.
 	PitchDamping float64 `json:"pitchDamping"`
 
@@ -226,6 +350,12 @@ type PhysicsHull struct {
 
 	// Moment of inertia in roll, added inertia included, in kg·m².
 	RollInertia float64 `json:"rollInertia"`
+
+	// The stem's distance forward of the centre of gravity, in m.
+	Stem float64 `json:"stem"`
+
+	// The transom's distance aft of the centre of gravity, in m.
+	Transom float64 `json:"transom"`
 
 	// Beam on the waterline, in m.
 	WaterlineBeam float64 `json:"waterlineBeam"`
@@ -285,6 +415,10 @@ type PhysicsRig struct {
 
 	// The boom's angle with the sheet let fly, in degrees.
 	BoomOut float64 `json:"boomOut"`
+
+	// The boat's close-hauled course: its heading off the true wind sailing as close
+	// to it as it sails well, in degrees.
+	CloseHauled float64 `json:"closeHauled"`
 
 	// Effective rig height for induced drag, in m.
 	EffectiveHeight float64 `json:"effectiveHeight"`
@@ -717,4 +851,4 @@ type WeatherWaveWind struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "8499df3900987948"
+const Version = "062fe957a9a2278a"

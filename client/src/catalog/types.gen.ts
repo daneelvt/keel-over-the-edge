@@ -41,6 +41,7 @@ export interface Catalog {
   sailors: [Sailor, ...Sailor[]];
   weather: Weather;
   sky: Sky;
+  encounters: Encounters;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -241,6 +242,21 @@ export interface PhysicsHull {
    * The share of that force's moment along the hull, which yaws the boat with the water of an oblique wave.
    */
   waveYaw: number;
+  /**
+   * The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point.
+   *
+   * @minItems 11
+   * @maxItems 11
+   */
+  outline: [number, number, number, number, number, number, number, number, number, number, number];
+  /**
+   * The transom's distance aft of the centre of gravity, in m.
+   */
+  transom: number;
+  /**
+   * The stem's distance forward of the centre of gravity, in m.
+   */
+  stem: number;
 }
 /**
  * The sail, boom and windage.
@@ -408,6 +424,10 @@ export interface PhysicsRig {
    * Vertical damping of a sail strip in the water, in N·s/m.
    */
   sailWaterDamping: number;
+  /**
+   * The boat's close-hauled course: its heading off the true wind sailing as close to it as it sails well, in degrees.
+   */
+  closeHauled: number;
 }
 /**
  * The daggerboard or keel, and the rudder.
@@ -1070,6 +1090,168 @@ export interface NamedStar {
    */
   magnitude: number;
 }
+/**
+ * Boats meeting: their hulls touching, the wind one takes from another, and the Articles, the right-of-way rules that judge them.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Encounters".
+ */
+export interface Encounters {
+  contact: EncountersContact;
+  shadow: EncountersShadow;
+  articles: EncountersArticles;
+  overlay: EncountersOverlay;
+}
+/**
+ * Two hulls touching: an impulse with no damage.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "EncountersContact".
+ */
+export interface EncountersContact {
+  /**
+   * The share of the closing speed the hulls part with.
+   */
+  restitution: number;
+  /**
+   * Coulomb's coefficient of the hulls sliding along each other.
+   */
+  friction: number;
+  /**
+   * Passes of the impulses over a tick's contacts.
+   */
+  passes: number;
+  /**
+   * Penetration left alone, in m.
+   */
+  slop: number;
+  /**
+   * The share of the rest of the penetration pushed apart in a tick.
+   */
+  push: number;
+  /**
+   * The most a contact pushes boats apart in a tick, in m.
+   */
+  cap: number;
+  /**
+   * Ticks two boats must be apart before touching again is a new bump.
+   */
+  apart: number;
+}
+/**
+ * The wind shadow: the wake a sail leaves along its apparent wind, in units of its rig's height h above the water.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "EncountersShadow".
+ */
+export interface EncountersShadow {
+  /**
+   * A: the share of the wind lost on the wake's axis one rig height behind.
+   */
+  deficit: number;
+  /**
+   * s₀: closer than this, in h, the loss is no greater.
+   */
+  near: number;
+  /**
+   * w: the wake's half-width parameter at one rig height, in h.
+   */
+  width: number;
+  /**
+   * H: how far the wake turns the wind one rig height behind, in degrees.
+   */
+  header: number;
+  /**
+   * How far the wake turns from the apparent wind toward the source's windward side: close-hauled, and on a reach and beyond, in degrees.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  deflection: [number, number];
+  /**
+   * The apparent wind angles at which each deflection holds, between which it blends, in degrees.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  deflectionAt: [number, number];
+  /**
+   * How far the wake reaches, in h.
+   */
+  reach: number;
+  /**
+   * Where it begins to fade to nothing at its reach, in h.
+   */
+  taper: number;
+  /**
+   * The most wakes a boat feels at once: the nearest.
+   */
+  sources: number;
+}
+/**
+ * The numbers the Articles are computed with.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "EncountersArticles".
+ */
+export interface EncountersArticles {
+  /**
+   * A boat that acquires right of way, or changes course, must give room for this long, in s.
+   */
+  room: number;
+  /**
+   * A change of course is one of more than this, in degrees.
+   */
+  turn: number;
+  /**
+   * The time constant of a boat's course: its heading, smoothed, in s.
+   */
+  course: number;
+  /**
+   * Boats closer than this many hull lengths are remembered as a pair.
+   */
+  pairs: number;
+  /**
+   * Within this of head to wind a boat keeps the tack she had, in degrees.
+   */
+  headToWind: number;
+}
+/**
+ * The beginners' right-of-way overlay, and dirty air drawn in the wind overlay.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "EncountersOverlay".
+ */
+export interface EncountersOverlay {
+  /**
+   * Boats within this are considered, in m.
+   */
+  range: number;
+  /**
+   * How far ahead their present motions are followed, in s.
+   */
+  ahead: number;
+  /**
+   * A boat is marked when it comes within this many hull lengths.
+   */
+  close: number;
+  /**
+   * The most boats marked at once.
+   */
+  marks: number;
+  /**
+   * Judgements a second.
+   */
+  rate: number;
+  /**
+   * Dirty air is drawn behind boats within this, in m.
+   */
+  wedges: number;
+  /**
+   * Out to where the wind's loss falls under this share.
+   */
+  wedgeDeficit: number;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '8499df3900987948';
+export const CATALOG_VERSION = '062fe957a9a2278a';

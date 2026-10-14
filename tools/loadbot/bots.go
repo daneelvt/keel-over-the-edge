@@ -28,6 +28,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
 
 // Guests makes guests and checks sessions.
@@ -81,6 +82,9 @@ type Player struct {
 	// The world's epoch as the last Welcome told it, in microseconds of UTC
 	// since 1970; 0 if none came.
 	EpochUs int64
+	// Bumps are the bumps the player was told of: its own, with the
+	// Article, and those it saw near, without.
+	Bumps []*pb.Bump
 }
 
 // Return is a player's coming back after the connection ended.
@@ -97,7 +101,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	kind, waves, wx, err := jollyBoat()
+	kind, waves, wx, enc, err := jollyBoat()
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +127,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 			case <-ctx.Done():
 				return
 			}
-			sailOne(ctx, cfg, kind, waves, wx, cookies[i], uint64(i), end, p)
+			sailOne(ctx, cfg, kind, waves, wx, enc, cookies[i], uint64(i), end, p)
 		})
 	}
 	wg.Wait()
@@ -143,7 +147,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 // connection ends: after 1012, a server's restart, in 0.5 to 5 s at
 // random, as the page does; after 4002, versions that differ, never;
 // after anything else, in a second.
-func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *physics.Waves, wx *physics.WeatherPrepared, cookie string, i uint64, end time.Time, p *Player) {
+func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *physics.Waves, wx *physics.WeatherPrepared, enc *physics.EncounterPrepared, cookie string, i uint64, end time.Time, p *Player) {
 	rng := rand.New(rand.NewPCG(i, 7))
 	helm, sheet := 512, 512
 	controls := func(n int) (uint16, uint16) {
@@ -166,6 +170,7 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *phy
 		return cfg.Dial(ctx, cookie, wrap)
 	}
 	s := client.NewSailor(dial, kind, waves, wx, controls)
+	s.Predictor.Encounters = enc
 	s.FrameEvery = cfg.FrameEvery
 	// The last snapshot, and a return under way: the connection ended,
 	// and no snapshot has come since.
@@ -222,18 +227,19 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *phy
 		}
 	}
 	p.Stats = s.Stats
+	p.Bumps = s.Bumps
 	p.RTT = time.Duration(s.Net.Clock.RTT) * time.Microsecond
 }
 
 // jollyBoat is the catalog's first boat, prepared: the players' boat, and
 // the sea and the wind it sails in.
-func jollyBoat() (*physics.Prepared, *physics.Waves, *physics.WeatherPrepared, error) {
+func jollyBoat() (*physics.Prepared, *physics.Waves, *physics.WeatherPrepared, *physics.EncounterPrepared, error) {
 	cat, err := catalog.Load()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	waves, kinds := cat.Prepare()
-	return &kinds[0], waves, cat.PrepareWeather(), nil
+	return &kinds[0], waves, cat.PrepareWeather(), cat.PrepareEncounters(), nil
 }
 
 func guestName(i int) string { return fmt.Sprintf("Loadbot %d", i+1) }

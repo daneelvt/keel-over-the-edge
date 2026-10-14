@@ -1,0 +1,761 @@
+{
+ "description": "Recorded situations for the Articles: two boats meeting, each its place (m east and north), heading, heel and boom (degrees), sailor's mode, the true wind's direction at it (degrees it comes from), and its course as the Articles keep it (tack, −1 port and 1 starboard; tacking; ticks since its tack changed; its smoothed heading, degrees); the ticks since the pair's keep-clear boat last changed and whose action changed it; and the verdict the Articles must give at a contact, the rule's number as the Racing Rules of Sailing give it. case is the World Sailing Case Book 2025–2028 case a situation follows, 0 for a hand-made one; rule is the rule it tests. Go (articles_test.go) and the client (encounters.test.ts) both check every one.",
+ "situations": [
+  {
+   "name": "port-ducks-too-late",
+   "case": 0,
+   "rule": "10",
+   "description": "A port-tack boat ducking a starboard-tack boat too late hits her stern quarter.",
+   "boats": [
+    {
+     "x": -0.212,
+     "y": -2.97,
+     "heading": 45,
+     "heel": 0,
+     "boom": 15,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": -1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": 45
+    },
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -45,
+     "heel": 0,
+     "boom": -15,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "first",
+    "article": "10",
+    "fault": "first",
+    "faultArticle": "10"
+   }
+  },
+  {
+   "name": "port-tacks-onto-starboards-bow",
+   "case": 0,
+   "rule": "13",
+   "description": "A port-tack boat tacks onto a starboard-tack boat's bow and is hit while still tacking, short of close-hauled.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -15,
+     "heel": 0,
+     "boom": -5,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 1,
+     "settled": 25,
+     "course": 20
+    },
+    {
+     "x": 0.925,
+     "y": -1.77,
+     "heading": -45,
+     "heel": 0,
+     "boom": -15,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 25,
+   "by": "first",
+   "expect": {
+    "keeper": "first",
+    "article": "13",
+    "fault": "first",
+    "faultArticle": "13"
+   }
+  },
+  {
+   "name": "starboard-bears-away-onto-port-passing-astern",
+   "case": 0,
+   "rule": "16.1",
+   "description": "A starboard-tack boat bears away onto a port-tack boat passing astern of her.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -80,
+     "heel": 0,
+     "boom": -45,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -50
+    },
+    {
+     "x": -0.218,
+     "y": -2.442,
+     "heading": 45,
+     "heel": 0,
+     "boom": 15,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": -1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": 45
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "second",
+    "article": "10",
+    "fault": "first",
+    "faultArticle": "16.1"
+   }
+  },
+  {
+   "name": "running-dead-downwind",
+   "case": 0,
+   "rule": "10",
+   "description": "Two boats running dead downwind side by side: each is on the tack opposite her boom.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": 180,
+     "heel": 0,
+     "boom": 80,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": -1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": 180
+    },
+    {
+     "x": 1.3,
+     "y": 0.0,
+     "heading": 180,
+     "heel": 0,
+     "boom": -80,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": 180
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "first",
+    "article": "10",
+    "fault": "first",
+    "faultArticle": "10"
+   }
+  },
+  {
+   "name": "by-the-lee",
+   "case": 0,
+   "rule": "10",
+   "description": "A boat sailing by the lee, her boom on her windward side, is on starboard tack beside a boat on port tack broad reaching.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": 160,
+     "heel": 0,
+     "boom": -75,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": 160
+    },
+    {
+     "x": -1.222,
+     "y": -0.445,
+     "heading": 160,
+     "heel": 0,
+     "boom": 75,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": -1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": 160
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "second",
+    "article": "10",
+    "fault": "second",
+    "faultArticle": "10"
+   }
+  },
+  {
+   "name": "opposite-tacks-overlapped-off-the-wind",
+   "case": 0,
+   "rule": "10",
+   "description": "On opposite tacks, both more than ninety degrees from the true wind and overlapped: port still keeps clear.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": 150,
+     "heel": 0,
+     "boom": 70,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": -1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": 150
+    },
+    {
+     "x": 1.4,
+     "y": 0,
+     "heading": -150,
+     "heel": 0,
+     "boom": -70,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -150
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "first",
+    "article": "10",
+    "fault": "first",
+    "faultArticle": "10"
+   }
+  },
+  {
+   "name": "windward-slides-onto-leeward",
+   "case": 0,
+   "rule": "11",
+   "description": "Overlapped on starboard tack, the windward boat slides down onto the leeward boat.",
+   "boats": [
+    {
+     "x": 0.955,
+     "y": 0.955,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    },
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "first",
+    "article": "11",
+    "fault": "first",
+    "faultArticle": "11"
+   }
+  },
+  {
+   "name": "luffing-just-after-overlapping",
+   "case": 93,
+   "rule": "15",
+   "description": "Just after becoming overlapped to leeward from clear astern, the leeward boat luffs into the windward boat, which could not keep clear.",
+   "boats": [
+    {
+     "x": 0.919,
+     "y": 0.919,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    },
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -30,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -44
+    }
+   ],
+   "since": 20,
+   "by": "second",
+   "expect": {
+    "keeper": "first",
+    "article": "11",
+    "fault": "second",
+    "faultArticle": "15"
+   }
+  },
+  {
+   "name": "overlapped-from-astern-given-room",
+   "case": 7,
+   "rule": "11",
+   "description": "Ten seconds after overlapping to leeward from clear astern, the leeward boat has given room: the windward boat hits her.",
+   "boats": [
+    {
+     "x": 0.919,
+     "y": 0.919,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    },
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 300,
+   "by": "second",
+   "expect": {
+    "keeper": "first",
+    "article": "11",
+    "fault": "first",
+    "faultArticle": "11"
+   }
+  },
+  {
+   "name": "overlapped-from-astern-not-given-room",
+   "case": 7,
+   "rule": "15",
+   "description": "A second after overlapping to leeward from clear astern within two lengths, the leeward boat is hit before the windward boat could keep clear.",
+   "boats": [
+    {
+     "x": 0.919,
+     "y": 0.919,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    },
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 30,
+   "by": "second",
+   "expect": {
+    "keeper": "first",
+    "article": "11",
+    "fault": "second",
+    "faultArticle": "15"
+   }
+  },
+  {
+   "name": "clear-astern-into-clear-ahead",
+   "case": 0,
+   "rule": "12",
+   "description": "A boat clear astern sails into the transom of a boat clear ahead.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    },
+    {
+     "x": 2.984,
+     "y": -2.984,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "second",
+    "article": "12",
+    "fault": "second",
+    "faultArticle": "12"
+   }
+  },
+  {
+   "name": "overlapping-to-leeward-and-bumping-at-once",
+   "case": 53,
+   "rule": "15",
+   "description": "A boat clear astern overlaps the boat ahead to leeward and hits her at once: the boat ahead need not have acted before the overlap began.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    },
+    {
+     "x": 1.838,
+     "y": -3.677,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 3,
+   "by": "second",
+   "expect": {
+    "keeper": "first",
+    "article": "11",
+    "fault": "second",
+    "faultArticle": "15"
+   }
+  },
+  {
+   "name": "overtaking-to-windward",
+   "case": 0,
+   "rule": "11",
+   "description": "A boat overtaking from astern to windward hits the boat she overtakes.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    },
+    {
+     "x": 2.333,
+     "y": -0.495,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 60,
+   "by": "neither",
+   "expect": {
+    "keeper": "second",
+    "article": "11",
+    "fault": "second",
+    "faultArticle": "11"
+   }
+  },
+  {
+   "name": "both-tacking",
+   "case": 0,
+   "rule": "13",
+   "description": "Both boats tacking side by side: the one on the other's port side keeps clear.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": 5,
+     "heel": 0,
+     "boom": 2,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": -1,
+     "tacking": 1,
+     "settled": 10,
+     "course": -20
+    },
+    {
+     "x": 1.295,
+     "y": -0.113,
+     "heading": 5,
+     "heel": 0,
+     "boom": 2,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": -1,
+     "tacking": 1,
+     "settled": 12,
+     "course": -20
+    }
+   ],
+   "since": 10,
+   "by": "first",
+   "expect": {
+    "keeper": "first",
+    "article": "13",
+    "fault": "first",
+    "faultArticle": "13"
+   }
+  },
+  {
+   "name": "falling-back-past-head-to-wind",
+   "case": 0,
+   "rule": "13",
+   "description": "A boat passes head to wind, falls back onto her old tack and is hit before she is close-hauled again.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -20,
+     "heel": 0,
+     "boom": -5,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 1,
+     "settled": 40,
+     "course": -5
+    },
+    {
+     "x": 0.943,
+     "y": -1.827,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "first",
+    "article": "13",
+    "fault": "first",
+    "faultArticle": "13"
+   }
+  },
+  {
+   "name": "close-hauled-dead-in-the-water",
+   "case": 17,
+   "rule": "12",
+   "description": "A boat that tacked five seconds ago is close-hauled but dead in the water; a boat clear astern sails into her.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -42,
+     "heel": 0,
+     "boom": -5,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 150,
+     "course": -35
+    },
+    {
+     "x": 2.909,
+     "y": -3.055,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 150,
+   "by": "first",
+   "expect": {
+    "keeper": "second",
+    "article": "12",
+    "fault": "second",
+    "faultArticle": "12"
+   }
+  },
+  {
+   "name": "capsized-boat-struck",
+   "case": 0,
+   "rule": "22",
+   "description": "A sailing boat hits a capsized boat whose sailor is in the water.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -90,
+     "heel": 90,
+     "boom": -60,
+     "sailorMode": 1,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -90
+    },
+    {
+     "x": 1.0,
+     "y": 1.5,
+     "heading": -45,
+     "heel": 0,
+     "boom": -11,
+     "sailorMode": 0,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -45
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "second",
+    "article": "22",
+    "fault": "second",
+    "faultArticle": "22"
+   }
+  },
+  {
+   "name": "two-capsized-boats",
+   "case": 0,
+   "rule": "22",
+   "description": "Two capsized boats drift together.",
+   "boats": [
+    {
+     "x": 0,
+     "y": 0,
+     "heading": -90,
+     "heel": 90,
+     "boom": -60,
+     "sailorMode": 1,
+     "windFrom": 0,
+     "tack": 1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": -90
+    },
+    {
+     "x": 0.3,
+     "y": 1.5,
+     "heading": 100,
+     "heel": -90,
+     "boom": 30,
+     "sailorMode": 2,
+     "windFrom": 0,
+     "tack": -1,
+     "tacking": 0,
+     "settled": 65536,
+     "course": 100
+    }
+   ],
+   "since": 9000,
+   "by": "neither",
+   "expect": {
+    "keeper": "neither",
+    "article": "22",
+    "fault": "neither",
+    "faultArticle": "22"
+   }
+  }
+ ]
+}

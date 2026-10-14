@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Boats meeting: hulls that touch, the wind a sail takes from the boats
+# behind it, and the Articles, the right-of-way rules that judge a bump.
+# Starting values, tuned in play.
+encounters:
+  # Two hulls that touch exchange an impulse in surge, sway and yaw, each
+  # with its added masses, as rigid bodies colliding on a frictionless
+  # surface with the water as constant added masses (Zhang 1999, described
+  # by Ståhlberg, Goerlandt, Montewka and Kujala 2012). A tick's contacts are
+  # resolved by sequential impulses, then what penetration is left is pushed
+  # apart (Catto 2006).
+  contact:
+    restitution: 0.3 # a padded knock, not a bounce
+    friction: 0.2
+    passes: 4
+    slop: 0.02 # m
+    push: 0.8
+    cap: 0.25 # m a tick: boats placed inside each other part, not fly apart
+    apart: 15 # ticks: half a second apart, and touching again is a new bump
+
+  # The wake a sail leaves lies along its apparent wind, turned a few
+  # degrees toward its windward side by the sail's lift (Richards, Le
+  # Pelley, Jowett, Little and Detlefsen 2012): the air shed a time τ ago
+  # left the boat's place then and has moved with the true wind since, so a
+  # boat sailing steadily lays it along U − v. Its loss of wind falls as a
+  # turbulent wake's, s^(−2/3), and it widens as s^(1/3) (Pope 2000, chapter
+  # 5); distances are in the source's rig height h, its masthead's height as
+  # its rig stands.
+  shadow:
+    # On the axis one rig height behind, 37% of the wind is lost: 60% of the
+    # drive (Caponnetto's IACC yachts at one mast height).
+    deficit: 0.37
+    # Closer than half a rig height the loss is no greater: 83% of the drive
+    # (Hooper measured 90 to 100% close behind).
+    near: 0.5
+    # 98% of the wind is back a boat length to the side at one rig height
+    # (Hooper).
+    width: 0.4
+    # 8° at one rig height is 4° at three, as Richards and others measured
+    # behind a close-hauled yacht: a header for a boat behind on the same tack.
+    header: 8
+    deflection: [5, 9] # degrees: close-hauled, and with a spinnaker on a reach (Richards and others)
+    deflectionAt: [20, 60] # degrees of apparent wind
+    reach: 10 # rig heights: Marchaj's ten boat lengths, for a tall rig on a short hull
+    taper: 8
+    sources: 8
+
+  # The Articles are the Racing Rules of Sailing's Part 2, Sections A and B,
+  # and rule 22: "room" and "initially" are the judgement of a protest
+  # committee, computed here as windows of time.
+  articles:
+    room: 3 # s: about a dinghy's tack
+    turn: 10 # degrees: a sailor steadies a few degrees of course in waves all the time
+    course: 2 # s
+    pairs: 5 # hull lengths
+    headToWind: 1 # degree
+
+  overlay:
+    range: 40 # m
+    ahead: 10 # s
+    close: 2 # hull lengths
+    marks: 3
+    rate: 4
+    wedges: 60 # m
+    wedgeDeficit: 0.05

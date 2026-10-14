@@ -13,6 +13,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
@@ -253,6 +254,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 		EpochUs: e.cfg.Epoch.UnixMicro(),
 	}}}, outWelcome)
 	c.ready.Store(ok)
+	c.bumped = f.Tick
 	return ok
 }
 
@@ -285,9 +287,9 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	if base != nil {
 		baseView, dist = &base.view, uint16(f.Tick-base.tick)
 	}
-	// The weather and the sea first: they are queued, and what is queued
-	// goes out before the snapshot.
-	if !c.weather(f) || !c.seaAreas(f, &f.State[s]) {
+	// The weather, the sea and the bumps first: they are queued, and what
+	// is queued goes out before the snapshot.
+	if !c.weather(f) || !c.seaAreas(f, &f.State[s]) || !c.bumps(f, next) {
 		return
 	}
 	b = b[:protocol.HeaderSize]
@@ -313,4 +315,46 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	if c.box.post(len(b)) {
 		m.replaced.Inc()
 	}
+}
+
+// bumps sends c the bumps of f after the last it was sent: with the
+// verdict if its boat is one of the two, without if it sees either in its
+// near band, by v, the view it is about to be sent.
+func (c *conn) bumps(f *bus.Frame, v *connView) bool {
+	newest := c.bumped
+	for i := range f.Bumps {
+		b := &f.Bumps[i]
+		if b.Tick <= c.bumped {
+			continue
+		}
+		newest = max(newest, b.Tick)
+		who := uint8(physics.Neither)
+		switch {
+		case b.A == c.slot && b.BoatA == c.boat:
+			who = physics.First
+		case b.B == c.slot && b.BoatB == c.boat:
+			who = physics.Second
+		case !nearIn(v, b):
+			continue
+		}
+		if !c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Bump{Bump: protocol.Bump(b, who)}}, outBump) {
+			return false
+		}
+	}
+	c.bumped = newest
+	return true
+}
+
+// nearIn says whether either boat of b is in v's near band.
+func nearIn(v *connView, b *bus.Bump) bool {
+	for m := v.view.Used; m != 0; m &= m - 1 {
+		vs := bits.TrailingZeros64(m)
+		if v.view.Boats[vs].Far() {
+			continue
+		}
+		if s, boat := v.slot[vs], v.boat[vs]; s == b.A && boat == b.BoatA || s == b.B && boat == b.BoatB {
+			return true
+		}
+	}
+	return false
 }

@@ -42,6 +42,7 @@ import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
 import { nowUs, worldUs } from '../net/clock';
+import type { BumpTold } from '../net/messages';
 import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
 import { FieldMaker, newFields } from '../ocean/field';
@@ -1103,6 +1104,36 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         game.beforeStep = null;
       }
     },
+    /** Plays a bump as if the server had told of it now: the knock, the shake, the verdict's line. */
+    bump(b: BumpTold): void {
+      game.bump(b, performance.now());
+    },
+
+    /**
+     * What the encounters show: the right-of-way overlay's marks and their
+     * labels on the page, the tack and the bump's line under the readout,
+     * the camera's shake, the knocks played, and the dirty air's wedges,
+     * each with the axis of its wake and its boat's view slot (−1 the
+     * player's).
+     */
+    encounters() {
+      const labels = [...document.querySelectorAll<HTMLElement>('.right-of-way-label')]
+        .filter((el) => !el.hidden)
+        .map((el) => el.textContent ?? '');
+      const dirt = world.dirtyAir;
+      return {
+        marks: world.rightOfWay.shown.map((m) => ({ ...m })),
+        labels,
+        tack: game.hud.tack.value,
+        bump: game.hud.bump.value,
+        shake: world.camera.shakeSize,
+        knocks: game.sound.knocks,
+        bumps: game.bumps,
+        wedges: dirt.drawn,
+        axes: dirt.axes.slice(0, dirt.drawn).map((a) => ({ ...a })),
+      };
+    },
+
     /** Draws only every n-th animation frame; null for the measured cap. */
     capFrames(n: number | null): void {
       stage.cap.forced = n;

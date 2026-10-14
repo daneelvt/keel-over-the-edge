@@ -63,8 +63,10 @@ func (s *Server) Connect(ctx context.Context, o DialOptions) (*websocket.Conn, *
 // NewSailor makes a client sailor that connects to the server as o says
 // and steers with controls.
 func (s *Server) NewSailor(o DialOptions, controls client.Controls) *client.Sailor {
-	return client.NewSailor(func(ctx context.Context) (*websocket.Conn, error) {
+	sailor := client.NewSailor(func(ctx context.Context) (*websocket.Conn, error) {
 		ws, _, err := s.Dial(ctx, o)
 		return ws, err
 	}, &s.Kinds[0], s.Waves, s.Weather.Prepared(), controls)
+	sailor.Predictor.Encounters = s.Encounters
+	return sailor
 }

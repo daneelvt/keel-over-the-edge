@@ -16,6 +16,7 @@ type workers struct {
 	wake   []chan struct{}
 	ranges [][]int32 // per worker, the slots to step this tick
 	outs   []physics.Out
+	srcs   []physics.Sources
 	wg     sync.WaitGroup
 	exited sync.WaitGroup
 	used   int
@@ -29,6 +30,7 @@ func (ws *workers) start(w *World, n int) {
 	ws.w = w
 	ws.ranges = make([][]int32, n)
 	ws.outs = make([]physics.Out, n)
+	ws.srcs = make([]physics.Sources, n)
 	for i := 1; i < n; i++ {
 		ch := make(chan struct{}, 1)
 		ws.wake = append(ws.wake, ch)
@@ -40,7 +42,7 @@ func (ws *workers) start(w *World, n int) {
 func (ws *workers) run(i int, wake <-chan struct{}) {
 	defer ws.exited.Done()
 	for range wake {
-		ws.w.stepSlots(ws.ranges[i], &ws.outs[i])
+		ws.w.stepSlots(ws.ranges[i], &ws.outs[i], &ws.srcs[i])
 		ws.wg.Done()
 	}
 }
@@ -55,13 +57,14 @@ func (ws *workers) stop() {
 
 // step steps the slots listed, split into contiguous ranges of at least
 // minRange between as many workers as there are such ranges. Each boat's
-// step reads only its own state, the tick's weather and the waves, so the
-// split never changes the result.
+// step reads only its own state, the tick's weather, the waves and the
+// current frame, and writes only its own slot, so the split never changes
+// the result.
 func (ws *workers) step(slots []int32) {
 	n := min(len(ws.ranges), len(slots)/minRange)
 	if n <= 1 {
 		ws.used = 1
-		ws.w.stepSlots(slots, &ws.outs[0])
+		ws.w.stepSlots(slots, &ws.outs[0], &ws.srcs[0])
 		return
 	}
 	ws.used = n
@@ -72,7 +75,7 @@ func (ws *workers) step(slots []int32) {
 	for i := 1; i < n; i++ {
 		ws.wake[i-1] <- struct{}{}
 	}
-	ws.w.stepSlots(ws.ranges[0], &ws.outs[0])
+	ws.w.stepSlots(ws.ranges[0], &ws.outs[0], &ws.srcs[0])
 	ws.wg.Wait()
 	for i := range n {
 		ws.ranges[i] = nil

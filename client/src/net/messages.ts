@@ -32,6 +32,22 @@ export interface SeaAreas {
  */
 export type WeatherSpells = number[][];
 
+/**
+ * A bump, as the server tells it: the tick, where (metres east and north),
+ * how fast the hulls closed (m/s), and the connection's part: its boat's
+ * fault ('yours'), the other's ('theirs'), no one's ('none'), or a bump
+ * it only saw ('seen'), with the Article, as the rulebook numbers the rule,
+ * for the first three.
+ */
+export interface BumpTold {
+  tick: number;
+  east: number;
+  north: number;
+  closing: number;
+  part: 'yours' | 'theirs' | 'none' | 'seen';
+  article: string;
+}
+
 /** What the net worker's Hello carries besides the protocol version. */
 export interface HelloVersions {
   catalog: string;
@@ -99,6 +115,8 @@ export type FromWorker =
   | { type: 'sea'; sea: SeaAreas }
   /** The spells of weather in play, for the prediction's wind and the drawing of the gusts. */
   | { type: 'weather'; spells: WeatherSpells }
+  /** The boat, or one near it, touched another. */
+  | { type: 'bump'; bump: BumpTold }
   | { type: 'clock'; clock: ClockState }
   | ({ type: 'traffic' } & Traffic);
 

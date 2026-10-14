@@ -75,7 +75,7 @@ func restorable(t *testing.T) *World {
 		w.Tick()
 	}
 	do(t, w, bus.Command{Op: bus.Disconnect, Boat: 2, Conn: 2})
-	do(t, w, bus.Command{Op: bus.Place, Boat: 1, State: spawn(9)})
+	do(t, w, bus.Command{Op: bus.Place, Boat: 1, State: spawnAt(9)})
 	do(t, w, bus.Command{Op: bus.Hold, Held: true})
 	for range 10 {
 		w.Tick()

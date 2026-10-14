@@ -92,6 +92,12 @@ export function Menu({
         set={(forcesOverlay) => settings.set({ forcesOverlay })}
       />
       <Toggle
+        name="right-of-way"
+        label="Show right of way"
+        on={s.rightOfWay}
+        set={(rightOfWay) => settings.set({ rightOfWay })}
+      />
+      <Toggle
         name="centre-helm"
         label="Centre the helm when let go"
         on={s.centreHelm}

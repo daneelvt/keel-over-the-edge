@@ -1,0 +1,12 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A bump: a knock of timber on timber, played once. A low thump (a sine falling in pitch as it dies) under a short, bright crack of band-passed noise; both louder, and the crack brighter, the harder the hulls closed. Heard from another boat, it falls with the distance and is placed left or right of the listener. Speeds in m/s, frequencies in Hz, times in seconds, levels as gains.",
+  "thump": {
+    "frequency": { "atRest": 70, "perSpeed": 22, "most": 180 },
+    "fall": 0.55,
+    "decay": 0.16
+  },
+  "crack": { "centre": { "atRest": 420, "perSpeed": 520, "most": 2600 }, "q": 2.2, "decay": 0.045 },
+  "level": { "from": 0, "full": 3, "least": 0.12, "most": 0.75 },
+  "distance": 25
+}

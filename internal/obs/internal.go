@@ -45,6 +45,7 @@ func Internal(h *Health, m *Metrics, flight, replay, weather http.Handler) http.
 	if weather != nil {
 		mux.Handle("POST /debug/wind", weather)
 		mux.Handle("POST /debug/weather", weather)
+		mux.Handle("POST /debug/encounter", weather)
 	}
 	return mux
 }

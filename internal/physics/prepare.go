@@ -110,6 +110,13 @@ type Prepared struct {
 	swimTime     float64
 	climbTime    float64
 
+	// Encounters.
+	outline      outline
+	length       float64 // overall, transom to stem, m
+	mastHeight   float64 // the masthead's height above the waterline, m
+	effortHeight float64 // the sail's centre of effort's height above the waterline, m
+	closeHauled  float64 // rad
+
 	// Rates, per second.
 	rudderRate float64 // rad/s
 	haulRate   float64 // rad/s
@@ -257,6 +264,12 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.sailorDrag = p.SailorDrag
 	b.swimTime = p.SwimTime
 	b.climbTime = p.ClimbTime
+
+	b.prepareOutline(p)
+	b.length = p.Transom + p.Stem
+	b.mastHeight = p.BoomHeight + p.Luff
+	b.effortHeight = cg - b.effortZ
+	b.closeHauled = float64(p.CloseHauled * degree)
 
 	b.rudderRate = 2 * b.rudderMax / p.RudderTime
 	b.haulRate = (b.boomOut - b.boomIn) / p.SheetHaulTime

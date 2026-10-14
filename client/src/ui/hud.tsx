@@ -80,8 +80,22 @@ function Instruments({ model }: { model: HudModel }) {
         <p>
           Wind <b data-readout="wind">{model.wind}</b>
         </p>
+        {model.tack.value === '' ? null : (
+          <p>
+            <b data-readout="tack">{model.tack}</b>
+          </p>
+        )}
       </div>
     </section>
+  );
+}
+
+function BumpLine({ model }: { model: HudModel }) {
+  const text = model.bump.value;
+  return text === '' ? null : (
+    <p class="panel bump-line" role="status" data-readout="bump">
+      {text}
+    </p>
   );
 }
 
@@ -142,6 +156,7 @@ function Screen(props: ScreenProps) {
       <div class="hud-top">
         <Instruments model={model} />
         <SailorLine model={model} />
+        <BumpLine model={model} />
         {props.connection !== null ? <ConnectionLine view={props.connection} /> : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
       </div>

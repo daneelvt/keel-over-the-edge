@@ -43,8 +43,11 @@ type conn struct {
 	queued                    atomic.Bool
 	position                  int32
 	toldPosition, toldWaiting int32
-	seen                      int64 // the tick the encoder last found it in the queue
-	enc                       *encoder
+	// bumped is the tick of the newest bump the connection has been sent,
+	// or the tick it was welcomed at: it is sent only those after.
+	bumped int64
+	seen   int64 // the tick the encoder last found it in the queue
+	enc    *encoder
 
 	// The control slot's writer, stopped once another connection has
 	// taken the boat over: a word is stored only under wmu while not

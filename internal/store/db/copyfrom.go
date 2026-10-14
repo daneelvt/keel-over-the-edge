@@ -34,6 +34,12 @@ func (r iteratorForInsertEvents) Values() ([]interface{}, error) {
 		r.rows[0].Kind,
 		r.rows[0].AccountID,
 		r.rows[0].Boat,
+		r.rows[0].OtherAccountID,
+		r.rows[0].OtherBoat,
+		r.rows[0].Article,
+		r.rows[0].Fault,
+		r.rows[0].X,
+		r.rows[0].Y,
 	}, nil
 }
 
@@ -42,5 +48,5 @@ func (r iteratorForInsertEvents) Err() error {
 }
 
 func (q *Queries) InsertEvents(ctx context.Context, arg []InsertEventsParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"event"}, []string{"world_id", "tick", "kind", "account_id", "boat"}, &iteratorForInsertEvents{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"event"}, []string{"world_id", "tick", "kind", "account_id", "boat", "other_account_id", "other_boat", "article", "fault", "x", "y"}, &iteratorForInsertEvents{rows: arg})
 }

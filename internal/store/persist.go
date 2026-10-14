@@ -27,14 +27,30 @@ const (
 	EventLaunched = "launched" // a boat joined the world
 	EventReturned = "returned" // it left
 	EventExpired  = "expired"  // its grace ended
+	EventBump     = "bump"     // it touched another boat, after being apart
 )
 
-// Event is something the simulation decided that lasts.
+// Whose fault a bump was.
+const (
+	FaultAccount = "account" // Account's, sailing Boat
+	FaultNone    = "none"    // no one's: both boats capsized
+)
+
+// Event is something the simulation decided that lasts. A bump's Account
+// and Boat are the boat at fault, or with no fault the first of the two;
+// the rest of it is the other boat, the Article that judged it, whether
+// anyone was at fault, and where they touched.
 type Event struct {
 	Tick    int64
-	Kind    string // EventLaunched, EventReturned or EventExpired
+	Kind    string // EventLaunched, EventReturned, EventExpired or EventBump
 	Account [16]byte
 	Boat    uint64
+
+	Other     [16]byte
+	OtherBoat uint64
+	Article   string // as the Racing Rules of Sailing number the rule: "10", "16.1"
+	Fault     string // FaultAccount or FaultNone
+	X, Y      float64
 }
 
 // Checkpoint is a world's whole state at a tick: the simulation's
@@ -122,6 +138,15 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 				rows[i] = db.InsertEventsParams{
 					WorldID: world, Tick: e.Tick, Kind: e.Kind,
 					AccountID: pgtype.UUID{Bytes: e.Account, Valid: true}, Boat: int64(e.Boat),
+				}
+				if e.Kind == EventBump {
+					r := &rows[i]
+					r.OtherAccountID = pgtype.UUID{Bytes: e.Other, Valid: true}
+					r.OtherBoat = pgtype.Int8{Int64: int64(e.OtherBoat), Valid: true}
+					r.Article = pgtype.Text{String: e.Article, Valid: true}
+					r.Fault = pgtype.Text{String: e.Fault, Valid: true}
+					r.X = pgtype.Float8{Float64: e.X, Valid: true}
+					r.Y = pgtype.Float8{Float64: e.Y, Valid: true}
 				}
 			}
 			if _, err := q.InsertEvents(ctx, rows); err != nil {

@@ -20,7 +20,7 @@ import './panel.css';
 import { catalog } from '../catalog';
 import type { FleetStats } from '../game/fleet';
 import type { Game } from '../game/game';
-import type { Traffic } from '../net/messages';
+import type { BumpTold, Traffic } from '../net/messages';
 import type { Online } from '../net/online';
 import { foamOn } from '../ocean/foam';
 import { detailOn } from '../ocean/seamaterial';
@@ -33,6 +33,7 @@ import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import type { Antialias } from '../render/stage';
 import { type SeaOptions, seaAreaOf } from '../sandbox/localsea';
 import { type Sandbox, SEA_STATES, STEADY } from '../sandbox/sandbox';
+import { tackText } from '../ui/verdict';
 import { skyPanel } from './skypanel';
 
 const KNOT = 1852 / 3600;
@@ -218,10 +219,16 @@ export function windLine(w: Readonly<BoatWind>): string {
   const veer = (((w.from - w.meanFrom) / DEG + 540) % 360) - 180;
   const sign = (x: number, digits: number): string =>
     `${x < 0 ? '−' : '+'}${Math.abs(x).toFixed(digits)}`;
-  return (
+  const line =
     `wind    mean ${(w.meanSpeed / KNOT).toFixed(1)} kn from ${degrees(w.meanFrom).toFixed(0).padStart(3, '0')}°, ` +
-    `now ${(w.speed / KNOT).toFixed(1)} kn (×${w.factor.toFixed(2)}), gust ${sign(w.gust, 2)}, veer ${sign(veer, 1)}°`
-  );
+    `now ${(w.speed / KNOT).toFixed(1)} kn (×${w.factor.toFixed(2)}), gust ${sign(w.gust, 2)}, veer ${sign(veer, 1)}°`;
+  if (w.shadowSpeed === w.speed && w.shadowFrom === w.from) {
+    return line;
+  }
+  // In another boat's wake: what is left of the wind, and how far it turned.
+  const lost = w.speed > 0 ? 1 - w.shadowSpeed / w.speed : 0;
+  const turn = (((w.shadowFrom - w.from) / DEG + 540) % 360) - 180;
+  return `${line}\nshadow  ${(w.shadowSpeed / KNOT).toFixed(1)} kn, ${(100 * lost).toFixed(0)}% lost, turned ${sign(turn, 1)}°`;
 }
 
 /** The sea under the boat, as lines: its height, its peak, and the waves summed. */
@@ -674,6 +681,13 @@ export interface NetNumbers {
   /** The other boats, and the latest snapshot's size in bytes. */
   fleet: FleetStats;
   snapshotBytes: number;
+  /** The wind at the boat, with any shadow; how many wakes reach it. */
+  wind?: Readonly<BoatWind>;
+  wakes?: number;
+  /** The boat's course as the Articles follow it: tack, tacking, ticks settled, course. */
+  course?: Readonly<Float64Array>;
+  /** The last bump told, and how long ago, s. */
+  bump?: { told: BumpTold; ago: number } | null;
 }
 
 /** The connection's numbers, as lines. */
@@ -698,7 +712,35 @@ export function netLines(n: NetNumbers): string {
     `entries           ${f.entries.toFixed(1)} a second`,
     `snapshot          ${n.snapshotBytes} bytes`,
     `resyncs           ${t.resyncs}`,
+    ...encounterLines(n),
   ].join('\n');
+}
+
+/** The encounters' lines: the wind with its shadow, the course, the last bump. */
+function encounterLines(n: NetNumbers): string[] {
+  const lines: string[] = [];
+  if (n.wind !== undefined) {
+    lines.push(windLine(n.wind), `wakes             ${n.wakes ?? 0} reaching the boat`);
+  }
+  const c = n.course;
+  if (c !== undefined && (c[0] ?? 0) !== 0) {
+    const settled = (c[2] ?? 0) >= 65536 ? 'long' : `${((c[2] ?? 0) / 30).toFixed(1)} s`;
+    lines.push(
+      `course            ${tackText(c[0] ?? 1, (c[1] ?? 0) !== 0).toLowerCase()}, tack settled ${settled}, ` +
+        `course ${degrees(c[3] ?? 0)
+          .toFixed(0)
+          .padStart(3, '0')}°`,
+    );
+  }
+  const b = n.bump;
+  if (b !== undefined && b !== null) {
+    const t = b.told;
+    lines.push(
+      `last bump         ${b.ago.toFixed(0)} s ago, ${t.part}${t.article === '' ? '' : `, Article ${t.article}`}, ` +
+        `${t.closing.toFixed(2)} m/s, at ${t.east.toFixed(1)} E ${t.north.toFixed(1)} N`,
+    );
+  }
+  return lines;
 }
 
 /**
@@ -722,6 +764,12 @@ export function openNetPanel(
     body,
   );
   parent.append(panel);
+  let lastBump: { told: BumpTold; at: number } | null = null;
+  const told = online.onBump;
+  online.onBump = (b) => {
+    lastBump = { told: b, at: performance.now() };
+    told?.(b);
+  };
   const update = (): void => {
     sky.update();
     numbers.textContent = netLines({
@@ -735,6 +783,13 @@ export function openNetPanel(
       traffic: online.traffic,
       fleet: online.fleet.stats,
       snapshotBytes: online.snapshotBytes,
+      wind: predictor.wind,
+      wakes: predictor.wakes.reaching,
+      course: world.rightOfWay.ownCourse,
+      bump:
+        lastBump === null
+          ? null
+          : { told: lastBump.told, ago: (performance.now() - lastBump.at) / 1000 },
     });
   };
   update();

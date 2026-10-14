@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"sync"
 	"testing"
@@ -121,7 +122,13 @@ type rig struct {
 
 func newRig(t *testing.T, hold bus.Sender, grace int64, limit int) *rig {
 	t.Helper()
-	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds(t), Waves: waves(t), Workers: 1, Tick: 1000, Grace: grace, Limit: limit})
+	return newRigMeeting(t, hold, grace, limit, nil)
+}
+
+// newRigMeeting is newRig, its boats meeting by enc.
+func newRigMeeting(t *testing.T, hold bus.Sender, grace int64, limit int, enc *physics.EncounterPrepared) *rig {
+	t.Helper()
+	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds(t), Waves: waves(t), Workers: 1, Tick: 1000, Grace: grace, Limit: limit, Encounters: enc})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,6 +432,47 @@ func TestCloseBounded(t *testing.T) {
 		err := r.close(t)
 		if err == nil || time.Since(start) > 5*time.Second+100*time.Millisecond {
 			t.Fatalf("closed after %v: %v", time.Since(start), err)
+		}
+	})
+}
+
+// TestBumpEvents: a bump is a lasting event, written once, with the
+// sailor and boat at fault first, the other's, the Article, the fault and
+// where they touched.
+func TestBumpEvents(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cat, err := catalog.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := newRigMeeting(t, bus.Sender{}, 600, 0, cat.PrepareEncounters())
+		r.tick(bus.Command{Op: bus.Join, Account: acct(1), Conn: 1}, bus.Command{Op: bus.Join, Account: acct(2), Conn: 2})
+		// Boat 1 sails into boat 2's starboard side.
+		r.tick(bus.Command{Op: bus.Place, Boat: 1, State: physics.State{X: 495, Y: 500, Heading: math.Pi / 2, Surge: 3, SheetLimit: 1.6}},
+			bus.Command{Op: bus.Place, Boat: 2, State: physics.State{X: 500, Y: 500, SheetLimit: 1.6}})
+		for range 60 {
+			r.tick()
+		}
+		if err := r.close(t); err != nil {
+			t.Fatal(err)
+		}
+		events, _ := r.db.all()
+		if !slices.Equal(events, r.lasting) {
+			t.Fatalf("written %v, decided %v", events, r.lasting)
+		}
+		var bumps []store.Event
+		for _, e := range events {
+			if e.Kind == store.EventBump {
+				bumps = append(bumps, e)
+			}
+		}
+		if len(bumps) == 0 {
+			t.Fatal("no bump written")
+		}
+		b := bumps[0]
+		if b.Fault != store.FaultAccount || b.Article == "" || !(b.Account == acct(1) && b.Other == acct(2) && b.Boat == 1 && b.OtherBoat == 2 ||
+			b.Account == acct(2) && b.Other == acct(1) && b.Boat == 2 && b.OtherBoat == 1) || math.Abs(b.X-500) > 3 || math.Abs(b.Y-500) > 3 {
+			t.Fatalf("the bump %+v", b)
 		}
 	})
 }

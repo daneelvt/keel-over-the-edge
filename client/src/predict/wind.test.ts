@@ -64,7 +64,16 @@ describe('the wind in the module', () => {
   test('before any spell is in play there is no wind', () => {
     physics.setSpells([]);
     const w = new Spells(physics).read(100, 30, 40, newBoatWind());
-    expect(w).toEqual({ speed: 0, from: 0, meanSpeed: 0, meanFrom: 0, gust: 0, factor: 1 });
+    expect(w).toEqual({
+      speed: 0,
+      from: 0,
+      shadowSpeed: 0,
+      shadowFrom: 0,
+      meanSpeed: 0,
+      meanFrom: 0,
+      gust: 0,
+      factor: 1,
+    });
     physics.records.state[RECORDS.state.x] = 500;
     physics.windAt(100);
     expect(physics.records.env[RECORDS.env.windSpeed]).toBe(0);

@@ -13,11 +13,17 @@ import (
 )
 
 type InsertEventsParams struct {
-	WorldID   pgtype.UUID
-	Tick      int64
-	Kind      string
-	AccountID pgtype.UUID
-	Boat      int64
+	WorldID        pgtype.UUID
+	Tick           int64
+	Kind           string
+	AccountID      pgtype.UUID
+	Boat           int64
+	OtherAccountID pgtype.UUID
+	OtherBoat      pgtype.Int8
+	Article        pgtype.Text
+	Fault          pgtype.Text
+	X              pgtype.Float8
+	Y              pgtype.Float8
 }
 
 const latestCheckpoint = `-- name: LatestCheckpoint :one

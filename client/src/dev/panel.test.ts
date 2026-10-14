@@ -128,6 +128,8 @@ describe('the panel', () => {
       windLine({
         speed: 13.44 * KNOT,
         from: (15.4 * Math.PI) / 180,
+        shadowSpeed: 13.44 * KNOT,
+        shadowFrom: (15.4 * Math.PI) / 180,
         meanSpeed: 11.2 * KNOT,
         meanFrom: (12 * Math.PI) / 180,
         gust: 0.425,
@@ -135,8 +137,30 @@ describe('the panel', () => {
       }),
     ).toBe('wind    mean 11.2 kn from 012°, now 13.4 kn (×1.20), gust +0.42, veer +3.4°');
     expect(
-      windLine({ speed: 5, from: 6.2, meanSpeed: 5.4, meanFrom: 0.02, gust: -0.5, factor: 0.93 }),
+      windLine({
+        speed: 5,
+        from: 6.2,
+        shadowSpeed: 5,
+        shadowFrom: 6.2,
+        meanSpeed: 5.4,
+        meanFrom: 0.02,
+        gust: -0.5,
+        factor: 0.93,
+      }),
     ).toMatch(/gust −0\.50, veer −5\.9°$/);
+    // In another boat's wake.
+    expect(
+      windLine({
+        speed: 10 * KNOT,
+        from: 0.5,
+        shadowSpeed: 7 * KNOT,
+        shadowFrom: 0.5 - (4 * Math.PI) / 180,
+        meanSpeed: 10 * KNOT,
+        meanFrom: 0.5,
+        gust: 0,
+        factor: 1,
+      }),
+    ).toMatch(/\nshadow {2}7\.0 kn, 30% lost, turned −4\.0°$/);
   });
 
   test('applies only what changed', () => {
@@ -273,5 +297,44 @@ describe('the connection’s numbers', () => {
     expect(lines).toContain('delays            133 ms near, 400 ms far');
     expect(lines).toMatch(/entries {11}45\.0 a second/);
     expect(lines).toContain('snapshot          190 bytes');
+    expect(lines).not.toContain('last bump');
+  });
+
+  test('says what the encounters are: the shadow, the course, the last bump', () => {
+    const KNOT = 1852 / 3600;
+    const lines = netLines({
+      status: 'sailing',
+      offsetMs: 0,
+      rttMs: 200,
+      m: 4,
+      margin: 2,
+      counts: { snapshots: 60, corrections: 0, resets: 1, stale: 0, largest: 0 },
+      p95: 0,
+      traffic: { bytesIn: 1, bytesOut: 2, messagesIn: 3, messagesOut: 4, resyncs: 0 },
+      fleet: new Fleet().stats,
+      snapshotBytes: 190,
+      wind: {
+        speed: 10 * KNOT,
+        from: 0,
+        shadowSpeed: 8 * KNOT,
+        shadowFrom: -0.05,
+        meanSpeed: 10 * KNOT,
+        meanFrom: 0,
+        gust: 0,
+        factor: 1,
+      },
+      wakes: 2,
+      course: new Float64Array([-1, 1, 45, Math.PI / 4]),
+      bump: {
+        told: { tick: 9, east: 1.25, north: -3, closing: 1.5, part: 'yours', article: '10' },
+        ago: 3,
+      },
+    });
+    expect(lines).toContain('shadow  8.0 kn, 20% lost');
+    expect(lines).toContain('wakes             2 reaching the boat');
+    expect(lines).toContain('course            tacking, tack settled 1.5 s, course 045°');
+    expect(lines).toContain(
+      'last bump         3 s ago, yours, Article 10, 1.50 m/s, at 1.3 E -3.0 N',
+    );
   });
 });

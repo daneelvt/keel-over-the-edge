@@ -15,7 +15,13 @@ const SAILOR_BUDGET = 2000;
 const CM = 0.01;
 
 interface Gltf {
-  nodes: { name?: string; translation?: number[]; mesh?: number; children?: number[] }[];
+  nodes: {
+    name?: string;
+    translation?: number[];
+    mesh?: number;
+    children?: number[];
+    extras?: { plan?: { deviation: number } };
+  }[];
   meshes: {
     primitives: { attributes: Record<string, number>; indices: number; material: number }[];
   }[];
@@ -123,6 +129,12 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     for (const name of ['mast', 'boom', 'rudder', 'daggerboard', 'sailor']) {
       expect(Math.abs(at(name)[0] ?? 1)).toBeLessThan(CM);
     }
+  });
+
+  test('its sheer is the outline the physics bumps hulls with, within 1 cm', () => {
+    const plan = node('hull').extras?.plan;
+    expect(plan).toBeDefined();
+    expect(plan?.deviation ?? 1).toBeLessThan(CM);
   });
 
   test('its hull, sail and foils have the physics’ dimensions', () => {

@@ -35,6 +35,26 @@ var records = []struct {
 	{"spell", reflect.TypeFor[physics.Spell]()},
 	{"wind", reflect.TypeFor[physics.WindPoint]()},
 	{"gustFrame", reflect.TypeFor[physics.GustFrame]()},
+	{"other", reflect.TypeFor[physics.State]()},
+	{"encounterParams", reflect.TypeFor[physics.EncounterParams]()},
+	{"wake", reflect.TypeFor[physics.Wake]()},
+	{"course", reflect.TypeFor[physics.Course]()},
+	{"encounter", reflect.TypeFor[physics.Encounter]()},
+	{"verdict", reflect.TypeFor[physics.Verdict]()},
+	{"contact", reflect.TypeFor[physics.Contact]()},
+}
+
+// encounterConstants are the encounters' sizes: the wakes a step may be
+// offered and the most it feels, the outline's stations, and the most a
+// course's settled count reaches.
+var encounterConstants = []struct {
+	name  string
+	value int
+}{
+	{"wakes", physics.ClientWakes},
+	{"sources", physics.MaxSources},
+	{"stations", physics.OutlineStations},
+	{"settled", physics.CourseSettled},
 }
 
 // seaConstants are the sea's sizes, which the module's memory and the wire
@@ -140,6 +160,9 @@ func versionOf(l layout) uint32 {
 	for _, c := range weatherConstants {
 		fmt.Fprintf(&b, "weather.%s:%d\n", c.name, c.value)
 	}
+	for _, c := range encounterConstants {
+		fmt.Fprintf(&b, "encounters.%s:%d\n", c.name, c.value)
+	}
 	sum := sha256.Sum256([]byte(b.String()))
 	return binary.BigEndian.Uint32(sum[:4])
 }
@@ -236,6 +259,15 @@ export const RECORDS = {
 	for i, c := range weatherConstants {
 		sep := ","
 		if i == len(weatherConstants)-1 {
+			sep = ""
+		}
+		fmt.Fprintf(&b, " %s: %d%s", c.name, c.value, sep)
+	}
+	b.WriteString(" } as const;\n")
+	b.WriteString("\n/**\n * The encounters' sizes: the wakes a step may be offered and the most it feels,\n * the outline's stations, and the most a course's settled count reaches.\n */\nexport const ENCOUNTERS = {")
+	for i, c := range encounterConstants {
+		sep := ","
+		if i == len(encounterConstants)-1 {
 			sep = ""
 		}
 		fmt.Fprintf(&b, " %s: %d%s", c.name, c.value, sep)

@@ -5,7 +5,7 @@
 // anything that must agree with the server is computed in the module, never
 // with JavaScript's Math, whose last bits differ between browsers.
 
-import { FN, LAYOUT_VERSION, RECORDS, SEA, SIZES, WEATHER } from './layout.gen';
+import { ENCOUNTERS, FN, LAYOUT_VERSION, RECORDS, SEA, SIZES, WEATHER } from './layout.gen';
 import { SKY_PARAMS } from './params.gen';
 
 export type RecordName = keyof typeof RECORDS;
@@ -69,6 +69,33 @@ interface Exports {
   gustFrameAt(): void;
   waveValues(): number;
   waveWind(x: number, y: number, tick: number): void;
+  other(): number;
+  encounterParams(): number;
+  encounterPrepare(): void;
+  wake(): number;
+  wakeOf(
+    x: number,
+    y: number,
+    heading: number,
+    heel: number,
+    boom: number,
+    vx: number,
+    vy: number,
+    speed: number,
+    from: number,
+  ): void;
+  wakeOfState(): void;
+  wakes(): number;
+  wakeCapacity(): number;
+  shadowAt(n: number): number;
+  course(): number;
+  courseTrack(windFrom: number): void;
+  courseOf(heading: number, boom: number, windFrom: number): void;
+  encounter(): number;
+  verdict(): number;
+  articlesJudge(): void;
+  contact(): number;
+  collide(): number;
   skyParams(): number;
   skyPrepare(): void;
   sky(): number;
@@ -134,6 +161,23 @@ const functionExports = [
   'gustFrameAt',
   'waveValues',
   'waveWind',
+  'other',
+  'encounterParams',
+  'encounterPrepare',
+  'wake',
+  'wakeOf',
+  'wakeOfState',
+  'wakes',
+  'wakeCapacity',
+  'shadowAt',
+  'course',
+  'courseTrack',
+  'courseOf',
+  'encounter',
+  'verdict',
+  'articlesJudge',
+  'contact',
+  'collide',
   'skyParams',
   'skyPrepare',
   'sky',
@@ -235,6 +279,11 @@ export class Physics {
       if (addresses[name] % Float64Array.BYTES_PER_ELEMENT !== 0) {
         throw new Error(`physics module: ${name} is not aligned for a Float64Array`);
       }
+    }
+    if (x.wakeCapacity() >>> 0 !== ENCOUNTERS.wakes) {
+      throw new Error(
+        `physics module: room for ${x.wakeCapacity()} wakes, not ${ENCOUNTERS.wakes}`,
+      );
     }
     const skySize = x.skySize() >>> 0;
     if (skySize !== SKY.size) {
@@ -504,6 +553,88 @@ export class Physics {
     out[0] = v[0] ?? 0;
     out[1] = v[1] ?? 0;
     return out;
+  }
+
+  /**
+   * Derives the encounters' constants from the encounterParams record. Call
+   * it after writing them (writeEncounterParams).
+   */
+  prepareEncounters(): void {
+    this.#x.encounterPrepare();
+  }
+
+  /**
+   * The wake of a boat of the prepared kind at (east, north) heading
+   * heading, heeled heel with its boom at boom, moving at (vx, vy) m/s, in
+   * a true wind of speed m/s from from: the wake record, indexed by
+   * RECORDS.wake. A view: read it before the next call.
+   */
+  wakeOf(
+    east: number,
+    north: number,
+    heading: number,
+    heel: number,
+    boom: number,
+    vx: number,
+    vy: number,
+    speed: number,
+    from: number,
+  ): Float64Array {
+    this.#x.wakeOf(east, north, heading, heel, boom, vx, vy, speed, from);
+    return this.records.wake;
+  }
+
+  /** The wake the state record leaves in the wind of the env record, as the server's step leaves it. A view. */
+  wakeOfState(): Float64Array {
+    this.#x.wakeOfState();
+    return this.records.wake;
+  }
+
+  /** The wakes shadowAt considers: ENCOUNTERS.wakes wake records, one after another. A view. */
+  get wakes(): Float64Array {
+    return new Float64Array(
+      this.#x.memory.buffer,
+      this.#x.wakes() >>> 0,
+      ENCOUNTERS.wakes * SIZES.wake,
+    );
+  }
+
+  /**
+   * Changes the env record, the wind at the state's place, by the shadow of
+   * the first n wakes, and returns how many reach it.
+   */
+  shadowAt(n: number): number {
+    return this.#x.shadowAt(n) >>> 0;
+  }
+
+  /** Brings the course record to the state, in the true wind from windFrom. */
+  courseTrack(windFrom: number): void {
+    this.#x.courseTrack(windFrom);
+  }
+
+  /**
+   * Brings a course, four values as the course record holds them, to a boat
+   * heading heading with its boom at boom, in the true wind from windFrom.
+   */
+  courseOf(c: Float64Array, heading: number, boom: number, windFrom: number): void {
+    const r = this.records.course;
+    r.set(c);
+    this.#x.courseOf(heading, boom, windFrom);
+    c.set(this.records.course);
+  }
+
+  /** The Articles' verdict on the encounter record's two boats: the verdict record. A view. */
+  articlesJudge(): Float64Array {
+    this.#x.articlesJudge();
+    return this.records.verdict;
+  }
+
+  /**
+   * Resolves a contact between the state and other records' boats, both
+   * of the prepared kind, writing the contact record; whether they touched.
+   */
+  collide(): boolean {
+    return this.#x.collide() !== 0;
   }
 
   /** The sky's numbers, to write with writeSkyParams before prepareSky. A view. */

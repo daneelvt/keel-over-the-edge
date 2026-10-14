@@ -46,6 +46,21 @@ type Frame struct {
 	Control  []Word    // per slot: the controls in force
 	State    []physics.State
 	Sail     []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
+	// Course is per slot what the Articles keep of a boat between ticks.
+	Course []physics.Course
+	// Wind and Wake are derived from each boat's state: the true wind at
+	// its place at the frame's tick, before any shadow, and the wake its
+	// sail leaves for the next tick. They are in no snapshot or digest.
+	Wind []physics.Env
+	Wake []physics.Wake
+
+	// Pairs are the boats near enough each other that the Articles
+	// remember them, by their slots, ascending.
+	Pairs []Pair
+	// Bumps are the bumps of the last BumpTicks ticks, oldest first: an
+	// encoder that skips a frame still finds every one. They are events,
+	// in no snapshot or digest.
+	Bumps []Bump
 
 	// Grid is the live boats by the grid cell they are in, built after
 	// the physics.
@@ -93,6 +108,36 @@ type Grid struct {
 	Slots []int32 // the live slots, by cell
 	Cell  []int32 // per slot: the cell of an occupied slot's boat
 }
+
+// Pair is two boats near each other, as the Articles remember them: which
+// keeps clear and by which Article, since when and by whose action, and
+// when they last touched. First is the lower slot, Second the higher.
+type Pair struct {
+	A, B         int32  // slots, A < B
+	BoatA, BoatB uint64 // their boats: a slot another boat takes is another pair
+	Keeper       uint8  // physics.Neither, First or Second
+	Article      uint8  // the Article that makes it keep clear
+	By           uint8  // whose action made it the keep-clear boat: physics.Neither, First or Second
+	Since        int64  // the tick the keep-clear boat last changed
+	Touched      int64  // the last tick they touched, or long before the pair began
+}
+
+// Bump is two boats touching after being apart: the boats and their
+// sailors at the tick, where they touched and how hard, and whose fault it
+// was by which Article.
+type Bump struct {
+	Tick           int64
+	A, B           int32 // slots, A < B
+	BoatA, BoatB   uint64
+	OwnerA, OwnerB Account
+	X, Y           float64 // the contact's point, m east and north
+	Closing        float64 // the speed they closed at along the contact's normal, m/s
+	Fault          uint8   // physics.Neither, First (A) or Second (B)
+	Article        uint8   // the Article that puts the fault there
+}
+
+// BumpTicks is how many ticks a frame keeps a bump: a second.
+const BumpTicks = 30
 
 // Cells is the number of the grid's cells.
 const Cells = physics.GridCells * physics.GridCells
@@ -149,7 +194,12 @@ func NewFrame(capacity int) *Frame {
 			Now:  make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
 			Next: make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
 		},
-		Sail: make([]uint8, capacity),
+		Sail:   make([]uint8, capacity),
+		Course: make([]physics.Course, capacity),
+		Wind:   make([]physics.Env, capacity),
+		Wake:   make([]physics.Wake, capacity),
+		Pairs:  make([]Pair, 0, capacity),
+		Bumps:  make([]Bump, 0, 64),
 		Grid: Grid{
 			Start: make([]int32, Cells+1),
 			Slots: make([]int32, 0, capacity),

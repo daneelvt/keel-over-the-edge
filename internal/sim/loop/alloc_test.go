@@ -35,7 +35,7 @@ func acct(n uint64) bus.Account {
 }
 
 func TestFullTickAllocatesNothing(t *testing.T) {
-	w, err := sim.New(sim.Config{Kinds: kinds(t), Waves: waves(t), Workers: 4})
+	w, err := sim.New(sim.Config{Kinds: kinds(t), Waves: waves(t), Encounters: encounters(t), Workers: 4})
 	if err != nil {
 		t.Fatal(err)
 	}

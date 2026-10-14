@@ -19,6 +19,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
 
 // Controls gives the helm and the sheet, as indices, for the n-th step a
@@ -57,6 +58,7 @@ type Stats struct {
 	Resyncs   int
 	Queued    int // Queued messages
 	Bells     int // Restart messages: the server about to restart
+	Bumps     int // Bump messages
 	Seas      int // SeaAreas messages: the sea about the boat
 	Weathers  int // WeatherSystems messages: the spells of weather in play
 }
@@ -102,6 +104,8 @@ type Sailor struct {
 	FrameEvery time.Duration
 
 	Welcomes []WelcomeSeen
+	// Bumps are the Bump messages, in order.
+	Bumps []*pb.Bump
 	// Places are the places in the queue the server told, in order.
 	Places []Place
 	Stats  Stats
@@ -241,6 +245,10 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			if ev.Restart != nil {
 				s.Stats.Bells++
 			}
+			if ev.Bump != nil {
+				s.Stats.Bumps++
+				s.Bumps = append(s.Bumps, ev.Bump)
+			}
 			if ev.SeaAreas != nil {
 				s.Stats.Seas++
 				s.Predictor.Seas.Receive(ev.SeaAreas)
@@ -252,6 +260,7 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 				}
 			}
 			if v := ev.View; v != nil {
+				s.Predictor.Wakes.Observe(ev.Snapshot.Tick, v, ev.Changes, ev.Sampled)
 				s.view(&ev)
 				s.queued = append(s.queued, ev.Snapshot)
 			}

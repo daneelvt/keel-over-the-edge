@@ -73,3 +73,12 @@ func (c *Catalog) PrepareWeather() *physics.WeatherPrepared {
 	physics.PrepareWeather(&p, w)
 	return w
 }
+
+// PrepareEncounters readies the catalog's encounters for the physics: how
+// boats touch, take each other's wind and are judged by the Articles.
+func (c *Catalog) PrepareEncounters() *physics.EncounterPrepared {
+	p := EncounterParams(c)
+	e := new(physics.EncounterPrepared)
+	physics.PrepareEncounters(&p, e)
+	return e
+}

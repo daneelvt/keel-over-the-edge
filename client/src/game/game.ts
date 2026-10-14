@@ -11,14 +11,17 @@
 
 import { effect } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
+import { KNOCK, knockOf } from '../audio/knock';
 import { type SoundInput, soundInput } from '../audio/voices';
 import { HelmInput } from '../input/helm';
 import { KeyInput } from '../input/keys';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { SheetInput } from '../input/sheet';
+import type { BumpTold } from '../net/messages';
 import type { SeaScene } from '../render/scene';
 import { HudModel } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
+import { bumpLine } from '../ui/verdict';
 import { WorldClock } from './clock';
 import type { BoatDriver, Pacer } from './driver';
 import { StepLoop } from './loop';
@@ -42,6 +45,9 @@ export class Game {
   frozen = false;
   /** Called before each step, after the controls are read (the browser tests script controls). */
   beforeStep: (() => void) | null = null;
+  /** The last bump told, and how many (the developer panel, the tests). */
+  lastBump: BumpTold | null = null;
+  bumps = 0;
 
   readonly #sound: SoundInput = {
     apparentWind: 0,
@@ -74,6 +80,7 @@ export class Game {
       this.sound.enabled = s.sound;
       this.helm.centreOnRelease = s.centreHelm;
       world.overlays.set(s.windOverlay, s.forcesOverlay);
+      world.rightOfWay.set(s.rightOfWay);
     });
   }
 
@@ -149,6 +156,25 @@ export class Game {
     }
   }
 
+  /**
+   * A bump the server told of, at now (ms): a knock of timber, placed where
+   * the hulls touched; and, if the boat was one of the two, a shake of the
+   * camera and the Articles' verdict under the readout. Played once.
+   */
+  bump(b: BumpTold, now: number): void {
+    this.lastBump = b;
+    this.bumps++;
+    const p = this.world.pose;
+    const dx = b.east - p.east;
+    const dy = b.north - p.north;
+    this.sound.knock(knockOf(KNOCK, b.closing, Math.hypot(dx, dy), Math.atan2(dx, dy) - p.heading));
+    if (b.part === 'seen') {
+      return;
+    }
+    this.world.camera.shake(b.closing, now);
+    this.hud.showBump(bumpLine(b.article, b.part), now);
+  }
+
   /** Steps once with the controls as they are (the panel's single step, the tests). */
   stepOnce(): void {
     this.loop.stepOnce();
@@ -196,6 +222,7 @@ export class Game {
       p.rudder / this.#rudderMax,
       (p.sheetLimit - this.#boomIn) / (this.#boomOut - this.#boomIn),
     );
+    this.hud.tack.value = w.rightOfWay.tack;
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
   }
 }

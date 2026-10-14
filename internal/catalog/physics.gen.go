@@ -36,6 +36,9 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.PitchDamping = b.Physics.Hull.PitchDamping
 	p.WaveForce = b.Physics.Hull.WaveForce
 	p.WaveYaw = b.Physics.Hull.WaveYaw
+	copy(p.Outline[:], b.Physics.Hull.Outline)
+	p.Transom = b.Physics.Hull.Transom
+	p.Stem = b.Physics.Hull.Stem
 	p.SailArea = b.Physics.Rig.SailArea
 	p.Luff = b.Physics.Rig.Luff
 	p.Foot = b.Physics.Rig.Foot
@@ -70,6 +73,7 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.WindageHeight = b.Physics.Rig.WindageHeight
 	p.SailFloat = b.Physics.Rig.SailFloat
 	p.SailWaterDamping = b.Physics.Rig.SailWaterDamping
+	p.CloseHauled = b.Physics.Rig.CloseHauled
 	p.BoardSpan = b.Physics.Foils.BoardSpan
 	p.BoardChord = b.Physics.Foils.BoardChord
 	p.BoardPosition = b.Physics.Foils.BoardPosition
@@ -182,4 +186,32 @@ func Regimes(c *Catalog) []physics.Regime {
 		p.Drift = float64(r.Drift)
 	}
 	return out
+}
+
+// EncounterParams returns the catalog's encounters values as the physics
+// package's EncounterParams.
+func EncounterParams(c *Catalog) physics.EncounterParams {
+	var p physics.EncounterParams
+	p.Restitution = float64(c.Encounters.Contact.Restitution)
+	p.Friction = float64(c.Encounters.Contact.Friction)
+	p.Passes = float64(c.Encounters.Contact.Passes)
+	p.Slop = float64(c.Encounters.Contact.Slop)
+	p.Push = float64(c.Encounters.Contact.Push)
+	p.Cap = float64(c.Encounters.Contact.Cap)
+	p.Apart = float64(c.Encounters.Contact.Apart)
+	p.Deficit = float64(c.Encounters.Shadow.Deficit)
+	p.Near = float64(c.Encounters.Shadow.Near)
+	p.Width = float64(c.Encounters.Shadow.Width)
+	p.Header = float64(c.Encounters.Shadow.Header)
+	copy(p.Deflection[:], c.Encounters.Shadow.Deflection)
+	copy(p.DeflectionAt[:], c.Encounters.Shadow.DeflectionAt)
+	p.Reach = float64(c.Encounters.Shadow.Reach)
+	p.Taper = float64(c.Encounters.Shadow.Taper)
+	p.Sources = float64(c.Encounters.Shadow.Sources)
+	p.Room = float64(c.Encounters.Articles.Room)
+	p.Turn = float64(c.Encounters.Articles.Turn)
+	p.Course = float64(c.Encounters.Articles.Course)
+	p.Pairs = float64(c.Encounters.Articles.Pairs)
+	p.HeadToWind = float64(c.Encounters.Articles.HeadToWind)
+	return p
 }

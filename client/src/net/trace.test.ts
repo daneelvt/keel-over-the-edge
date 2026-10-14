@@ -18,7 +18,15 @@ import { loadPhysics } from '../predict/physics';
 import { Predictor } from '../predict/predictor';
 import { Session } from '../workers/net/session';
 import { newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
-import { Q, VIEW_SLOTS, VIEW_STRIDE, type View } from './view';
+import {
+  FLEET_RECORD_BYTES,
+  fleetOf,
+  Q,
+  VIEW_SLOTS,
+  VIEW_STRIDE,
+  type View,
+  writeRecord,
+} from './view';
 
 interface TraceEvent {
   t: number;
@@ -98,13 +106,15 @@ function viewDigest(v: View): string {
 
 async function replay(
   trace: Trace,
-): Promise<{ corrections: number; snapshots: number; others: number }> {
+): Promise<{ corrections: number; snapshots: number; others: number; shadowed: number }> {
   const predictor = new Predictor(
     await loadPhysics(bytes),
     catalog.boats[0].physics,
     catalog.weather,
+    catalog.encounters,
   );
   const session = new Session(versions);
+  const record = new ArrayBuffer(FLEET_RECORD_BYTES);
   session.frameMs = 17;
   const snapshots = new Map<number, OwnSnapshot>();
   let latest: OwnSnapshot | null = null;
@@ -112,6 +122,7 @@ async function replay(
   let corrections = 0;
   let reconciled = 0;
   let others = 0;
+  let shadowed = 0;
   trace.events.forEach((e, i) => {
     const where = `event ${i} at ${e.t}`;
     if (e.out !== undefined) {
@@ -140,6 +151,9 @@ async function replay(
         expect(readSnapshot(new DataView(b.buffer), sn), where).toBeNull();
         snapshots.set(sn.tick, sn);
         expect(viewDigest(r.view), `${where}: the view of snapshot ${sn.tick}`).toBe(e.view);
+        // The other boats' samples, for the shadow, as the Go client took them.
+        writeRecord(record, b, r.view, session.views.changes, session.views.sampled, r.flags, e.t);
+        predictor.wakes.observe(fleetOf(record));
         others += r.view.length;
       }
     } else if (e.timer) {
@@ -153,6 +167,9 @@ async function replay(
       const [tick = 0, helm = 0, sheet = 0] = e.step;
       predictor.stepIndices(helm, sheet);
       expect(predictor.tick, where).toBe(tick);
+      if (predictor.wakes.reaching > 0) {
+        shadowed++;
+      }
     } else if (e.snap !== undefined) {
       const sn = snapshots.get(e.snap.tick);
       if (sn === undefined) {
@@ -178,7 +195,7 @@ async function replay(
     }
   });
   expect(expected).toEqual([]);
-  return { corrections, snapshots: reconciled, others };
+  return { corrections, snapshots: reconciled, others, shadowed };
 }
 
 describe('the Go client’s traces', () => {
@@ -195,10 +212,14 @@ describe('the Go client’s traces', () => {
 
   test('three sailing together at 200 ms and 2% loss: each view as Go decoded it', async () => {
     expect(fleet.length).toBe(3);
+    let shadowed = 0;
     for (const trace of fleet as Trace[]) {
       const r = await replay(trace);
       expect(r.snapshots).toBeGreaterThan(100);
       expect(r.others / r.snapshots).toBeGreaterThan(2);
+      shadowed += r.shadowed;
     }
+    // Some of their steps sailed in each other's wakes, as the Go client's did.
+    expect(shadowed).toBeGreaterThan(0);
   });
 });

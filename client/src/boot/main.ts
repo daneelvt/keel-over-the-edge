@@ -34,7 +34,7 @@ import { reloadForVersion } from '../net/reload';
 import { LAYOUT_VERSION } from '../predict/layout.gen';
 import { loadPhysics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
-import { Predictor } from '../predict/predictor';
+import { Predictor, prepareEncounters } from '../predict/predictor';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import {
@@ -93,6 +93,7 @@ async function start(): Promise<void> {
       world.start(),
       startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather, begin),
     ]);
+    prepareEncounters(sandbox.physics, catalog.encounters);
     game.setDriver(sandbox);
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
     chooseSky(world, query);
@@ -101,7 +102,7 @@ async function start(): Promise<void> {
       settings: game.settings,
       helm: game.helm,
       sheet: game.sheet,
-      labels: (el) => world.overlays.attachLabels(el),
+      labels: (el) => world.attachLabels(el),
       sailor: null,
       connection: null,
     });
@@ -136,7 +137,7 @@ async function start(): Promise<void> {
       backSoon: notice,
     }),
   ]);
-  const predictor = new Predictor(physics, world.kind.physics, catalog.weather);
+  const predictor = new Predictor(physics, world.kind.physics, catalog.weather, catalog.encounters);
   const worker = new Worker(new URL('../workers/net/worker.ts', import.meta.url), {
     type: 'module',
   });
@@ -153,6 +154,7 @@ async function start(): Promise<void> {
       chooseSky(world, query);
     }
   };
+  online.onBump = (b) => game.bump(b, performance.now());
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
   // while the sea is full.
@@ -170,7 +172,7 @@ async function start(): Promise<void> {
     settings: game.settings,
     helm: game.helm,
     sheet: game.sheet,
-    labels: (el) => world.overlays.attachLabels(el),
+    labels: (el) => world.attachLabels(el),
     sailor: me.name,
     connection: { notice: online.notice, rtt: online.rtt, takeOver: () => online.takeOver() },
   });

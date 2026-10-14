@@ -33,13 +33,19 @@ type Checkpoint struct {
 }
 
 type Event struct {
-	WorldID   pgtype.UUID
-	ID        pgtype.UUID
-	Tick      int64
-	Kind      string
-	AccountID pgtype.UUID
-	Boat      int64
-	WrittenAt time.Time
+	WorldID        pgtype.UUID
+	ID             pgtype.UUID
+	Tick           int64
+	Kind           string
+	AccountID      pgtype.UUID
+	Boat           int64
+	WrittenAt      time.Time
+	OtherAccountID pgtype.UUID
+	OtherBoat      pgtype.Int8
+	Article        pgtype.Text
+	Fault          pgtype.Text
+	X              pgtype.Float8
+	Y              pgtype.Float8
 }
 
 type Sailor struct {

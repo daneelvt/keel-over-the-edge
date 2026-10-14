@@ -3,8 +3,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"os"
@@ -580,6 +582,55 @@ func TestWeatherRoutes(t *testing.T) {
 		post("/debug/weather?auto")
 		if sp := spell(func(s physics.Spell) bool { return s.Length > 0 }); sp.Change != 0 {
 			t.Fatalf("the world's own weather back: %+v", sp)
+		}
+		s.stop(t)
+	})
+}
+
+// TestEncounterRoute: POST /debug/encounter is on the internal listener
+// only with KEEL_DEV_COMMANDS=1; it refuses an unknown situation, and a
+// world with no player sailing; and stages one against a player, saying
+// where and by which Article it should end.
+func TestEncounterRoute(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s, _ := gameServer(t, map[string]string{}, &memDB{epoch: bubbleEpoch})
+		res, err := s.client.Post(internalURL+"/debug/encounter?situation=capsized", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusNotFound && res.StatusCode != http.StatusMethodNotAllowed {
+			t.Fatalf("without KEEL_DEV_COMMANDS: %d", res.StatusCode)
+		}
+		s.stop(t)
+	})
+	synctest.Test(t, func(t *testing.T) {
+		s, token := gameServer(t, map[string]string{"KEEL_DEV_COMMANDS": "1"}, &memDB{epoch: bubbleEpoch})
+		post := func(query string) (int, []byte) {
+			t.Helper()
+			res, err := s.client.Post(internalURL+"/debug/encounter?"+query, "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+			body, _ := io.ReadAll(res.Body)
+			return res.StatusCode, body
+		}
+		if code, _ := post("situation=port-starboard"); code != http.StatusConflict {
+			t.Fatalf("with no player: %d", code)
+		}
+		if code, _ := post("situation=collision"); code != http.StatusBadRequest {
+			t.Fatalf("an unknown situation: %d", code)
+		}
+		connect(t, s, token)
+		time.Sleep(2 * time.Second)
+		code, body := post("situation=capsized")
+		var staged struct {
+			Situation, Article string
+			Boat, Player       uint64
+		}
+		if err := json.Unmarshal(body, &staged); code != http.StatusOK || err != nil || staged.Article != "22" || staged.Boat == 0 || staged.Player == 0 {
+			t.Fatalf("staged: %d %s (%v)", code, body, err)
 		}
 		s.stop(t)
 	})

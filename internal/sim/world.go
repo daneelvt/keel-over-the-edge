@@ -67,24 +67,28 @@ type Config struct {
 	Limit int
 	// Weather is the world's own weather; nil is DefaultSpell for ever.
 	Weather *weather.Timeline
+	// Encounters are how boats meet, prepared: their contacts, the wind
+	// they take from each other and the Articles. nil is a world of
+	// ghosts, whose boats pass through each other in clean air.
+	Encounters *physics.EncounterPrepared
 }
 
 // A Phase is a part of a tick.
 type Phase uint8
 
-// The phases of a tick, in order. Weather, collisions and the rules will
-// come between them; the events of a tick are gathered as its commands are
-// applied.
+// The phases of a tick, in order. The events of a tick are gathered as its
+// commands are applied, and its bumps as its contacts are found.
 const (
-	PhaseInputs  Phase = iota // read the control slots, apply the commands, admit from the queue
-	PhaseSea                  // the waves at this tick, and a share of the next second's amplitudes
-	PhasePhysics              // step every boat
-	PhaseGrid                 // sort the boats into the grid's cells
-	PhasePublish              // publish the frame, hand it to the recorder
-	Phases                    // the number of phases
+	PhaseInputs   Phase = iota // read the control slots, apply the commands, admit from the queue
+	PhaseSea                   // the waves at this tick, and a share of the next second's amplitudes
+	PhasePhysics               // step every boat, in the shadow of the boats near it
+	PhaseGrid                  // sort the boats into the grid's cells
+	PhaseContacts              // pairs, contacts and bumps, under the Articles
+	PhasePublish               // publish the frame, hand it to the recorder
+	Phases                     // the number of phases
 )
 
-var phaseNames = [Phases]string{"inputs", "sea", "physics", "grid", "publish"}
+var phaseNames = [Phases]string{"inputs", "sea", "physics", "grid", "contacts", "publish"}
 
 func (p Phase) String() string {
 	if p >= Phases {
@@ -136,9 +140,19 @@ type World struct {
 
 	workers workers
 
+	// Encounters: their constants, or nil for none; how many cells about
+	// its own a boat looks for wakes; and the contacts phase's room.
+	enc        *physics.EncounterPrepared
+	reachCells int32
+	candidates []candidate
+	touching   []physics.Touching
+	touched    []candidate
+	meeting    physics.Encounter
+	hulls      physics.Hulls
+
 	// The phases as function values made once, so that running one inside
 	// a trace region allocates nothing.
-	inputsFn, seaFn, physicsFn, gridFn, publishFn func()
+	inputsFn, seaFn, physicsFn, gridFn, contactsFn, publishFn func()
 }
 
 // New makes a world of empty slots and starts its workers. Close stops them.
@@ -175,9 +189,18 @@ func New(cfg Config) (*World, error) {
 		grace:    cfg.Grace,
 		timeline: cfg.Weather,
 		ctx:      context.Background(),
+		enc:      cfg.Encounters,
+	}
+	if w.enc != nil {
+		for i := range w.kinds {
+			w.reachCells = max(w.reachCells, w.enc.ReachCells(&w.kinds[i]))
+		}
+		w.candidates = make([]candidate, 0, cfg.Capacity)
+		w.touching = make([]physics.Touching, 0, 256)
+		w.touched = make([]candidate, 0, 256)
 	}
 	w.weather.Prepared = cfg.Weather.Prepared()
-	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.publish
+	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.contactsFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.contacts, w.publish
 	w.sea.init(cfg.Waves, cfg.Weather)
 	f := w.bus.Frames.Latest()
 	f.Tick = cfg.Tick
@@ -248,6 +271,12 @@ func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 	for _, s := range f.Live {
 		w.bus.Controls.Store(s, f.Control[s])
 	}
+	// The wind and the wakes follow from the state, as the tick that made
+	// it left them.
+	w.weatherAt(f)
+	for _, s := range f.Live {
+		w.settle(f, s)
+	}
 	buildGrid(f)
 	w.bus.Frames.Publish(f)
 	return nil
@@ -273,15 +302,43 @@ const spawnSpacing = 20
 // spawnRow is how many new boats stand side by side in a row.
 const spawnRow = 64
 
-// spawn is where a new boat in slot s appears: on a grid south of the
-// world's centre, spawnSpacing apart, heading east, at rest. The grid is in
-// whole metres, so its positions convert to floats exactly.
-func spawn(s int32) physics.State {
-	col := int64(s%spawnRow) - spawnRow/2
-	row := int64(s/spawnRow) + 1
+// spawnClear is how far a new boat's place must be from every hull, m.
+const spawnClear = 10
+
+// spawnAt is the place p of the spawn grid: south of the world's centre,
+// spawnSpacing apart, spawnRow to a row, heading east, at rest. The grid is
+// in whole metres, so its positions convert to floats exactly.
+func spawnAt(p int64) physics.State {
+	col := p%spawnRow - spawnRow/2
+	row := p/spawnRow + 1
 	return physics.State{
 		X:       float64(col * spawnSpacing),
 		Y:       float64(-row * spawnSpacing),
 		Heading: math.Pi / 2,
 	}
+}
+
+// spawn is where a new boat in slot s of f appears: the first place of the
+// spawn grid from its slot's, along the row then the next, with no hull
+// within spawnClear, so that no boat appears inside another. In a world of
+// ghosts, its slot's place.
+func (w *World) spawn(f *bus.Frame, s int32) physics.State {
+	p := int64(s)
+	if w.enc == nil {
+		return spawnAt(p)
+	}
+	for end := p + int64(w.capacity); p < end; p++ {
+		st := spawnAt(p)
+		free := true
+		for _, o := range f.Live {
+			if o != s && physics.Within(&f.State[o], st.X, st.Y, spawnClear) {
+				free = false
+				break
+			}
+		}
+		if free {
+			return st
+		}
+	}
+	return spawnAt(int64(s))
 }

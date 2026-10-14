@@ -5,7 +5,7 @@
   "description": "Every list of kinds in the game. Kinds are data: code reads their properties, never their names.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["boats", "sailors", "weather", "sky"],
+  "required": ["boats", "sailors", "weather", "sky", "encounters"],
   "properties": {
     "boats": {
       "description": "Boat types.",
@@ -20,7 +20,8 @@
       "items": { "$ref": "#/$defs/Sailor" }
     },
     "weather": { "$ref": "#/$defs/Weather" },
-    "sky": { "$ref": "#/$defs/Sky" }
+    "sky": { "$ref": "#/$defs/Sky" },
+    "encounters": { "$ref": "#/$defs/Encounters" }
   },
   "$defs": {
     "Weather": {
@@ -174,6 +175,83 @@
         "hours": { "description": "How long it lasts, in whole hours.", "type": "integer", "minimum": 1, "maximum": 100 }
       }
     },
+    "Encounters": {
+      "title": "Encounters",
+      "description": "Boats meeting: their hulls touching, the wind one takes from another, and the Articles, the right-of-way rules that judge them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contact", "shadow", "articles", "overlay"],
+      "properties": {
+        "contact": { "$ref": "#/$defs/EncountersContact" },
+        "shadow": { "$ref": "#/$defs/EncountersShadow" },
+        "articles": { "$ref": "#/$defs/EncountersArticles" },
+        "overlay": { "$ref": "#/$defs/EncountersOverlay" }
+      }
+    },
+    "EncountersContact": {
+      "title": "EncountersContact",
+      "description": "Two hulls touching: an impulse with no damage.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["restitution", "friction", "passes", "slop", "push", "cap", "apart"],
+      "properties": {
+        "restitution": { "description": "The share of the closing speed the hulls part with.", "type": "number", "minimum": 0, "maximum": 1 },
+        "friction": { "description": "Coulomb's coefficient of the hulls sliding along each other.", "type": "number", "minimum": 0, "maximum": 2 },
+        "passes": { "description": "Passes of the impulses over a tick's contacts.", "type": "integer", "minimum": 1, "maximum": 16 },
+        "slop": { "description": "Penetration left alone, in m.", "type": "number", "minimum": 0, "maximum": 0.2 },
+        "push": { "description": "The share of the rest of the penetration pushed apart in a tick.", "type": "number", "minimum": 0, "maximum": 1 },
+        "cap": { "description": "The most a contact pushes boats apart in a tick, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 2 },
+        "apart": { "description": "Ticks two boats must be apart before touching again is a new bump.", "type": "integer", "minimum": 1, "maximum": 300 }
+      }
+    },
+    "EncountersShadow": {
+      "title": "EncountersShadow",
+      "description": "The wind shadow: the wake a sail leaves along its apparent wind, in units of its rig's height h above the water.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deficit", "near", "width", "header", "deflection", "deflectionAt", "reach", "taper", "sources"],
+      "properties": {
+        "deficit": { "description": "A: the share of the wind lost on the wake's axis one rig height behind.", "type": "number", "minimum": 0, "maximum": 0.9 },
+        "near": { "description": "s₀: closer than this, in h, the loss is no greater.", "type": "number", "exclusiveMinimum": 0, "maximum": 5 },
+        "width": { "description": "w: the wake's half-width parameter at one rig height, in h.", "type": "number", "exclusiveMinimum": 0, "maximum": 5 },
+        "header": { "description": "H: how far the wake turns the wind one rig height behind, in degrees.", "type": "number", "minimum": 0, "maximum": 30 },
+        "deflection": { "description": "How far the wake turns from the apparent wind toward the source's windward side: close-hauled, and on a reach and beyond, in degrees.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 30 }, "minItems": 2, "maxItems": 2 },
+        "deflectionAt": { "description": "The apparent wind angles at which each deflection holds, between which it blends, in degrees.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 180 }, "minItems": 2, "maxItems": 2 },
+        "reach": { "description": "How far the wake reaches, in h.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
+        "taper": { "description": "Where it begins to fade to nothing at its reach, in h.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
+        "sources": { "description": "The most wakes a boat feels at once: the nearest.", "type": "integer", "minimum": 0, "maximum": 8 }
+      }
+    },
+    "EncountersArticles": {
+      "title": "EncountersArticles",
+      "description": "The numbers the Articles are computed with.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["room", "turn", "course", "pairs", "headToWind"],
+      "properties": {
+        "room": { "description": "A boat that acquires right of way, or changes course, must give room for this long, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
+        "turn": { "description": "A change of course is one of more than this, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 90 },
+        "course": { "description": "The time constant of a boat's course: its heading, smoothed, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
+        "pairs": { "description": "Boats closer than this many hull lengths are remembered as a pair.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
+        "headToWind": { "description": "Within this of head to wind a boat keeps the tack she had, in degrees.", "type": "number", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "EncountersOverlay": {
+      "title": "EncountersOverlay",
+      "description": "The beginners' right-of-way overlay, and dirty air drawn in the wind overlay.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["range", "ahead", "close", "marks", "rate", "wedges", "wedgeDeficit"],
+      "properties": {
+        "range": { "description": "Boats within this are considered, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 500 },
+        "ahead": { "description": "How far ahead their present motions are followed, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 120 },
+        "close": { "description": "A boat is marked when it comes within this many hull lengths.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
+        "marks": { "description": "The most boats marked at once.", "type": "integer", "minimum": 0, "maximum": 16 },
+        "rate": { "description": "Judgements a second.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
+        "wedges": { "description": "Dirty air is drawn behind boats within this, in m.", "type": "number", "minimum": 0, "maximum": 500 },
+        "wedgeDeficit": { "description": "Out to where the wind's loss falls under this share.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      }
+    },
     "Sky": {
       "title": "Sky",
       "description": "The sky's numbers: the lengths of its day, year and month, its scale, the moment it is counted from, and the stars with names. Where each body stands follows from these and the time alone.",
@@ -290,7 +368,7 @@
       "description": "The hull: its mass, resistance, inertia and stability.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "rightingLever", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce", "waveYaw"],
+      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "rightingLever", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce", "waveYaw", "outline", "transom", "stem"],
       "properties": {
         "displacement": { "description": "Boat, rig and sailor, in kg.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
         "waterlineLength": { "description": "Length on the waterline, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
@@ -314,7 +392,10 @@
         "heaveDamping": { "description": "Damping of the heave, as a fraction of critical.", "type": "number", "minimum": 0, "maximum": 2 },
         "pitchDamping": { "description": "Damping of the pitch, as a fraction of critical.", "type": "number", "minimum": 0, "maximum": 2 },
         "waveForce": { "description": "The share of the Froude–Krylov force of a wave's slope that pushes the hull along and across.", "type": "number", "minimum": 0, "maximum": 1.5 },
-        "waveYaw": { "description": "The share of that force's moment along the hull, which yaws the boat with the water of an oblique wave.", "type": "number", "minimum": 0, "maximum": 1.5 }
+        "waveYaw": { "description": "The share of that force's moment along the hull, which yaws the boat with the water of an oblique wave.", "type": "number", "minimum": 0, "maximum": 1.5 },
+        "outline": { "description": "The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 15 }, "minItems": 11, "maxItems": 11 },
+        "transom": { "description": "The transom's distance aft of the centre of gravity, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "stem": { "description": "The stem's distance forward of the centre of gravity, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
       }
     },
     "PhysicsRig": {
@@ -322,7 +403,7 @@
       "description": "The sail, boom and windage.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["sailArea", "luff", "foot", "boomHeight", "mastPosition", "footStrip", "headStrip", "pressureAttached", "pressureSeparated", "effectiveHeight", "quadraticDrag", "maxLift", "stallAngle", "stallWidth", "sailDrag", "luffAngle", "flogDrag", "normalForce", "twistPowered", "twistDepowered", "twistEased", "twistTurn", "headBacked", "headBackedWidth", "boomIn", "boomOut", "boomInertia", "boomMoment", "boomDamping", "windageFront", "windageSide", "windageHeight", "sailFloat", "sailWaterDamping"],
+      "required": ["sailArea", "luff", "foot", "boomHeight", "mastPosition", "footStrip", "headStrip", "pressureAttached", "pressureSeparated", "effectiveHeight", "quadraticDrag", "maxLift", "stallAngle", "stallWidth", "sailDrag", "luffAngle", "flogDrag", "normalForce", "twistPowered", "twistDepowered", "twistEased", "twistTurn", "headBacked", "headBackedWidth", "boomIn", "boomOut", "boomInertia", "boomMoment", "boomDamping", "windageFront", "windageSide", "windageHeight", "sailFloat", "sailWaterDamping", "closeHauled"],
       "properties": {
         "sailArea": { "description": "Sail area, in m².", "type": "number", "exclusiveMinimum": 0, "maximum": 2000 },
         "luff": { "description": "Length of the luff, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
@@ -357,7 +438,8 @@
         "windageSide": { "description": "Drag area of hull, crew and spars from abeam, in m².", "type": "number", "minimum": 0, "maximum": 1000 },
         "windageHeight": { "description": "Height of the windage's centre above the waterline, in m.", "type": "number", "minimum": 0, "maximum": 50 },
         "sailFloat": { "description": "Upward force per metre a sail strip is pushed under the water, in N/m.", "type": "number", "minimum": 0, "maximum": 10000000 },
-        "sailWaterDamping": { "description": "Vertical damping of a sail strip in the water, in N·s/m.", "type": "number", "minimum": 0, "maximum": 10000000 }
+        "sailWaterDamping": { "description": "Vertical damping of a sail strip in the water, in N·s/m.", "type": "number", "minimum": 0, "maximum": 10000000 },
+        "closeHauled": { "description": "The boat's close-hauled course: its heading off the true wind sailing as close to it as it sails well, in degrees.", "type": "number", "minimum": 25, "maximum": 60 }
       }
     },
     "PhysicsFoils": {
