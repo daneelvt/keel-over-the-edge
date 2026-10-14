@@ -19,6 +19,14 @@
 // has a time of its own, seaDrawAt, so that the sea between two ticks can be
 // asked about without disturbing the steps.
 //
+// Encounters: the client writes encounterParams and calls
+// encounterPrepare once. Before a step it may write the wakes of the boats
+// near its own into wakes and call shadowAt after windAt, so the step sails
+// in their shadow; wakeOf gives a drawn boat's wake. courseTrack, with the
+// course record, follows a boat's tack; articlesJudge reads the encounter
+// record and writes the verdict; collide resolves a contact between the
+// state and other records, writing the contact record.
+//
 // The sky is asked about once a frame: the client writes skyParams and
 // calls skyPrepare once, then skyAt with sky time and the boat's place, and
 // reads the sky record; skyStar answers for one star into the skyBody
@@ -57,6 +65,18 @@ var (
 	// stepFresh says stepWeather is at the tick it holds in the spells in
 	// play.
 	stepFresh bool
+
+	other             physics.State
+	encounterParams   physics.EncounterParams
+	encounterPrepared physics.EncounterPrepared
+	wake1             physics.Wake
+	wakes             [wakeCapacity]physics.Wake
+	sources           physics.Sources
+	course            physics.Course
+	encounter         physics.Encounter
+	verdict           physics.Verdict
+	contact           physics.Contact
+	hulls             physics.Hulls
 
 	skyParams   sky.Params
 	skyPrepared sky.Prepared
@@ -113,6 +133,9 @@ var (
 )
 
 const windValuesEach = 6
+
+// wakeCapacity is how many wakes the client may offer a step.
+const wakeCapacity = physics.ClientWakes
 
 func init() {
 	for i := range windows {
@@ -422,6 +445,100 @@ func waveValuesAddr() uint32 { return addr(unsafe.Pointer(&waveValues)) }
 //go:wasmexport waveWind
 func waveWind(x, y, tick float64) {
 	waveValues[0], waveValues[1] = physics.WaveWindAt(&weather, x, y, tick, &waveScratch, &waveRing)
+}
+
+//go:wasmexport other
+func otherAddr() uint32 { return addr(unsafe.Pointer(&other)) }
+
+//go:wasmexport encounterParams
+func encounterParamsAddr() uint32 { return addr(unsafe.Pointer(&encounterParams)) }
+
+// encounterPrepare derives the encounters' constants from encounterParams.
+// Call it after writing them, and after prepare.
+//
+//go:wasmexport encounterPrepare
+func encounterPrepare() { physics.PrepareEncounters(&encounterParams, &encounterPrepared) }
+
+// wake is the record wakeOf writes.
+//
+//go:wasmexport wake
+func wakeAddr() uint32 { return addr(unsafe.Pointer(&wake1)) }
+
+// wakeOf writes to the wake record the wake of a boat of the prepared kind
+// at (x, y) heading heading, heeled heel with its boom at boom, moving at
+// (vx, vy), in a true wind of speed from from.
+//
+//go:wasmexport wakeOf
+func wakeOf(x, y, heading, heel, boom, vx, vy, speed, from float64) {
+	wake1 = physics.WakeAt(x, y, heading, heel, boom, vx, vy, speed, from, &prepared, &encounterPrepared)
+}
+
+// wakeOfState writes to the wake record the wake the state leaves in the
+// wind of env, as the server's step leaves it.
+//
+//go:wasmexport wakeOfState
+func wakeOfState() { wake1 = physics.WakeOf(&state, &env, &prepared, &encounterPrepared) }
+
+// wakes is wakeCapacity wake records, the wakes shadowAt considers.
+//
+//go:wasmexport wakes
+func wakesAddr() uint32 { return addr(unsafe.Pointer(&wakes)) }
+
+//go:wasmexport wakeCapacity
+func wakeCapacityValue() uint32 { return wakeCapacity }
+
+// shadowAt changes env, the wind at the state's place, by the first n of
+// wakes: the nearest that reach it, each numbered by its place in wakes
+// for breaking ties. It returns how many reach.
+//
+//go:wasmexport shadowAt
+func shadowAt(n uint32) uint32 {
+	sources.Reset()
+	for i := uint32(0); i < n && i < wakeCapacity; i++ {
+		sources.Consider(&wakes[i], int32(i), state.X, state.Y, &encounterPrepared)
+	}
+	physics.ShadowAt(&env, state.X, state.Y, &sources, &encounterPrepared)
+	return uint32(sources.Len())
+}
+
+//go:wasmexport course
+func courseAddr() uint32 { return addr(unsafe.Pointer(&course)) }
+
+// courseTrack brings the course record to the state, in the true wind from
+// windFrom.
+//
+//go:wasmexport courseTrack
+func courseTrack(windFrom float64) {
+	physics.TrackCourse(&course, &state, windFrom, &prepared, &encounterPrepared)
+}
+
+//go:wasmexport encounter
+func encounterAddr() uint32 { return addr(unsafe.Pointer(&encounter)) }
+
+//go:wasmexport verdict
+func verdictAddr() uint32 { return addr(unsafe.Pointer(&verdict)) }
+
+// articlesJudge writes to the verdict record the Articles' verdict on the
+// encounter record's two boats, both of the prepared kind.
+//
+//go:wasmexport articlesJudge
+func articlesJudge() {
+	verdict = physics.Judge(&encounter, &prepared, &prepared, &encounterPrepared)
+}
+
+//go:wasmexport contact
+func contactAddr() uint32 { return addr(unsafe.Pointer(&contact)) }
+
+// collide resolves a contact between the state and other records, boats of
+// the prepared kind, writing the contact record; it returns 1 if they
+// touched.
+//
+//go:wasmexport collide
+func collide() uint32 {
+	if hulls.Collide(&state, &other, &prepared, &prepared, &encounterPrepared, &contact) {
+		return 1
+	}
+	return 0
 }
 
 // skyParams is the sky's numbers: sky.ParamsSize float64s, in the

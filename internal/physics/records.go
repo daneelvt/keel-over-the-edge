@@ -60,29 +60,32 @@ type Env struct {
 // them; Prepare turns them into radians and every other derived constant.
 type Params struct {
 	// Hull.
-	Displacement    float64     // boat, rig and sailor, kg
-	WaterlineLength float64     // m
-	HullDraught     float64     // the hull's own draught, foils aside, m
-	CentreOfGravity float64     // height of the centre of gravity above the waterline, m
-	DragAreaStep    float64     // speed between entries of DragArea, m/s
-	DragArea        [25]float64 // upright resistance as a drag area at 0, 1, 2 … steps of speed, m²
-	CrossFlowDrag   float64     // drag coefficient of the hull moving sideways, on length × draught
-	AddedMassSurge  float64     // kg
-	AddedMassSway   float64     // kg, hull and foils
-	Munk            float64     // the hull's added mass in sway less in surge, for the Munk moment, kg
-	YawInertia      float64     // added inertia included, kg·m²
-	RollInertia     float64     // added inertia included, kg·m²
-	RollDamping     float64     // the hull's own roll damping, N·m·s/rad
-	RightingLever   [19]float64 // with the sailor on the centreline, every 10° of heel from 0° to 180°, m
-	WaterlineBeam   float64     // m
-	WaterplaneArea  float64     // m²
-	WaterplanePitch float64     // the waterplane's second moment of area about its transverse axis, m⁴
-	AddedMassHeave  float64     // kg
-	PitchInertia    float64     // added inertia included, kg·m²
-	HeaveDamping    float64     // fraction of critical
-	PitchDamping    float64     // fraction of critical
-	WaveForce       float64     // share of the Froude–Krylov force of a wave's slope
-	WaveYaw         float64     // share of that force's moment along the hull
+	Displacement    float64                  // boat, rig and sailor, kg
+	WaterlineLength float64                  // m
+	HullDraught     float64                  // the hull's own draught, foils aside, m
+	CentreOfGravity float64                  // height of the centre of gravity above the waterline, m
+	DragAreaStep    float64                  // speed between entries of DragArea, m/s
+	DragArea        [25]float64              // upright resistance as a drag area at 0, 1, 2 … steps of speed, m²
+	CrossFlowDrag   float64                  // drag coefficient of the hull moving sideways, on length × draught
+	AddedMassSurge  float64                  // kg
+	AddedMassSway   float64                  // kg, hull and foils
+	Munk            float64                  // the hull's added mass in sway less in surge, for the Munk moment, kg
+	YawInertia      float64                  // added inertia included, kg·m²
+	RollInertia     float64                  // added inertia included, kg·m²
+	RollDamping     float64                  // the hull's own roll damping, N·m·s/rad
+	RightingLever   [19]float64              // with the sailor on the centreline, every 10° of heel from 0° to 180°, m
+	WaterlineBeam   float64                  // m
+	WaterplaneArea  float64                  // m²
+	WaterplanePitch float64                  // the waterplane's second moment of area about its transverse axis, m⁴
+	AddedMassHeave  float64                  // kg
+	PitchInertia    float64                  // added inertia included, kg·m²
+	HeaveDamping    float64                  // fraction of critical
+	PitchDamping    float64                  // fraction of critical
+	WaveForce       float64                  // share of the Froude–Krylov force of a wave's slope
+	WaveYaw         float64                  // share of that force's moment along the hull
+	Outline         [OutlineStations]float64 // half-beam at the sheer at stations equally spaced from transom to stem, m
+	Transom         float64                  // the transom's distance aft of the centre of gravity, m
+	Stem            float64                  // the stem's distance forward of the centre of gravity, m
 
 	// Rig.
 	SailArea          float64     // m²
@@ -119,6 +122,7 @@ type Params struct {
 	WindageHeight     float64     // height of the windage's centre above the waterline, m
 	SailFloat         float64     // upward force per metre a sail strip is pushed under water, N/m
 	SailWaterDamping  float64     // vertical damping of a sail strip in the water, N·s/m
+	CloseHauled       float64     // the close-hauled course's angle off the true wind, degrees
 
 	// Foils.
 	BoardSpan      float64 // daggerboard below the hull, m
@@ -318,4 +322,102 @@ type GustFrame struct {
 	Seconds [2]float64 // how long its field has lived, s
 	Seed    [2 * 3]float64
 	Excess  float64 // the gust factor less 1, as the spells mix it
+}
+
+// EncounterParams describe boats meeting: the catalog's encounters values
+// of its groups contact, shadow and articles, in the order of its schema.
+// PrepareEncounters derives the constants they are computed with.
+type EncounterParams struct {
+	// Contact.
+	Restitution float64 // the share of the closing speed the hulls part with
+	Friction    float64 // Coulomb's coefficient of the hulls sliding along each other
+	Passes      float64 // passes of the impulses over a tick's contacts
+	Slop        float64 // penetration left alone, m
+	Push        float64 // the share of the rest pushed apart in a tick
+	Cap         float64 // the most a contact pushes boats apart in a tick, m
+	Apart       float64 // ticks apart before touching again is a new bump
+
+	// Shadow, in units of the source's rig height.
+	Deficit      float64    // the share of the wind lost on the axis one rig height behind
+	Near         float64    // closer than this the loss is no greater
+	Width        float64    // the wake's half-width parameter at one rig height
+	Header       float64    // how far the wake turns the wind one rig height behind, degrees
+	Deflection   [2]float64 // the wake's turn off the apparent wind toward the windward side, close-hauled and beyond a reach, degrees
+	DeflectionAt [2]float64 // the apparent wind angles each holds at, degrees
+	Reach        float64    // how far the wake reaches
+	Taper        float64    // where it begins to fade
+	Sources      float64    // the most wakes a boat feels at once
+
+	// Articles.
+	Room       float64 // the window for giving room, s
+	Turn       float64 // a change of course is one of more than this, degrees
+	Course     float64 // the time constant of a boat's course, s
+	Pairs      float64 // boats closer than this many hull lengths are a pair
+	HeadToWind float64 // within this of head to wind a boat keeps her tack, degrees
+}
+
+// Wake is the wake a boat's sail leaves for the next tick: where it starts,
+// the way it runs and how tall the rig that casts it stands. A step's
+// boat leaves one in the frame it writes, and the boats near it feel it in
+// the next tick (ShadowAt).
+type Wake struct {
+	X      float64 // where the wake starts: the sail's centre of effort, east, m
+	Y      float64 // and north, m
+	East   float64 // the unit vector the wake runs along: east
+	North  float64 // and north
+	Height float64 // the rig's height above the water as it stands: the length the wake scales with, m; 0 casts none
+	Side   float64 // 1 when the apparent wind came over the source's starboard side, −1 over its port side
+}
+
+// Course is what the Articles keep of a boat between ticks: her tack, whether
+// she is tacking, how long since her tack changed and her course, her
+// heading smoothed.
+type Course struct {
+	Tack    float64 // −1 port, 1 starboard; 0 before the boat's first tick
+	Tacking float64 // 1 from passing head to wind until she is close-hauled, else 0
+	Settled float64 // ticks since her tack last changed, up to CourseSettled
+	Course  float64 // her heading, smoothed over the articles' course time, rad
+}
+
+// Encounter is two boats as the Articles judge them, the first and the
+// second: each one's pose, the true wind at it and its course, and what
+// the pair remembers of who has had right of way since when.
+type Encounter struct {
+	X, Y, Heading [2]float64
+	Heel, Boom    [2]float64
+	SailorMode    [2]float64
+	WindFrom      [2]float64 // the true wind at each, before any shadow
+	Tack, Tacking [2]float64 // each one's Course
+	Settled       [2]float64
+	Course        [2]float64
+	Since         float64 // ticks since the pair's keep-clear boat last changed
+	By            float64 // whose action changed it: Neither, First or Second
+}
+
+// Verdict is what the Articles say of two boats: which keeps clear and by
+// which Article, and, at a contact, whose fault it is and by which Article,
+// which a limit on the right-of-way boat (15, 16.1) may have moved.
+type Verdict struct {
+	Keeper       float64 // Neither, First or Second
+	Article      float64 // the Article that makes it keep clear
+	Fault        float64 // Neither, First or Second
+	FaultArticle float64 // the Article that puts the fault there
+}
+
+// Which boat of an Encounter.
+const (
+	Neither = 0
+	First   = 1
+	Second  = 2
+)
+
+// Contact is two hulls touching: the normal from the first toward the
+// second, how deep they overlap along it, the centre of their overlap and
+// how fast they close along the normal.
+type Contact struct {
+	NormalEast  float64
+	NormalNorth float64
+	Depth       float64 // m
+	X, Y        float64 // m
+	Closing     float64 // m/s, positive closing
 }

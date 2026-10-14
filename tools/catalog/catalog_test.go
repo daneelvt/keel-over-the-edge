@@ -33,12 +33,14 @@ const (
 
 // The sailors every fixture has unless it gives its own, and their art.
 const (
-	validSailors = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n      far: sailors/test.far.glb\n"
-	sailorArt    = "art/sailors/test.glb"
-	sailorFarArt = "art/sailors/test.far.glb"
-	sailorsPath  = "shared/catalog/sailors.yaml"
-	weatherPath  = "shared/catalog/weather.yaml"
-	skyPath      = "shared/catalog/sky.yaml"
+	validSailors  = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n      far: sailors/test.far.glb\n"
+	sailorArt     = "art/sailors/test.glb"
+	sailorFarArt  = "art/sailors/test.far.glb"
+	sailorsPath   = "shared/catalog/sailors.yaml"
+	weatherPath   = "shared/catalog/weather.yaml"
+	skyPath       = "shared/catalog/sky.yaml"
+	boatsPath     = "shared/catalog/boats.yaml"
+	encounterPath = "shared/catalog/encounters.yaml"
 )
 
 // glb is a glTF binary holding only its JSON: nodes of the given names.
@@ -68,6 +70,25 @@ func glb(nodes ...string) string {
 // it gives its own.
 func realSky() string {
 	data, err := os.ReadFile(filepath.Join("..", "..", skyPath))
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
+}
+
+// realEncounters returns the real catalog's encounters, which every
+// fixture has unless it gives its own.
+func realEncounters() string {
+	data, err := os.ReadFile(filepath.Join("..", "..", encounterPath))
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
+}
+
+// realBoats returns the real catalog's boats.
+func realBoats() string {
+	data, err := os.ReadFile(filepath.Join("..", "..", boatsPath))
 	if err != nil {
 		panic(err)
 	}
@@ -128,6 +149,9 @@ func fixture(t *testing.T, files map[string]string) string {
 	}
 	if _, ok := files[skyPath]; !ok {
 		files[skyPath] = realSky()
+	}
+	if _, ok := files[encounterPath]; !ok {
+		files[encounterPath] = realEncounters()
 	}
 	for p, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
@@ -544,7 +568,11 @@ func TestPhysicsGenerated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := goPhysics(fields, sea, sky, wind, regime)
+	encounters, err := encounterFields(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := goPhysics(fields, sea, sky, wind, regime, encounters)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,19 +580,79 @@ func TestPhysicsGenerated(t *testing.T) {
 		"p.WaveForce = b.Physics.Hull.WaveForce", "p.WaveYaw = b.Physics.Hull.WaveYaw", "p.Shortest = float64(c.Weather.Sea.Shortest)", "p.Spreading = float64(c.Weather.Sea.Spreading)",
 		"p.Day = float64(c.Sky.Day)", "p.MoonAtEpoch = float64(c.Sky.MoonAtEpoch)",
 		"p.SpeedCentre = float64(c.Weather.Disk.SpeedCentre)", "copy(p.AcrossTurn[:], c.Weather.Disk.AcrossTurn)",
-		"p.WaveSamples = float64(c.Weather.WaveWind.WaveSamples)", "copy(p.Speed[:], r.Speed)", "p.Drift = float64(r.Drift)"} {
+		"p.WaveSamples = float64(c.Weather.WaveWind.WaveSamples)", "copy(p.Speed[:], r.Speed)", "p.Drift = float64(r.Drift)",
+		"copy(p.Outline[:], b.Physics.Hull.Outline)", "p.CloseHauled = b.Physics.Rig.CloseHauled",
+		"p.Restitution = float64(c.Encounters.Contact.Restitution)", "copy(p.Deflection[:], c.Encounters.Shadow.Deflection)",
+		"p.HeadToWind = float64(c.Encounters.Articles.HeadToWind)"} {
 		if !strings.Contains(string(g), want) {
 			t.Errorf("physics.gen.go lacks %q", want)
 		}
 	}
-	ts := string(tsParams(fields, sea, sky, wind, regime))
+	ts := string(tsParams(fields, sea, sky, wind, regime, encounters))
 	for _, want := range []string{"params[f.displacement] = p.hull.displacement;", "params.set(p.hull.dragArea, f.dragArea);",
 		"export function writeSeaParams(", "params[f.fetchCap] = s.fetchCap;",
 		"export function writeSkyParams(", "params[0] = s.day;", "params[4] = s.epoch;",
 		"export function writeWeatherParams(", "params[f.speedCentre] = w.disk.speedCentre;", "params.set(w.disk.acrossTurn, f.acrossTurn);",
-		"export function writeRegime(", "record.set(r.speed, f.speed);", "record[f.gustFactor] = r.gustFactor;"} {
+		"export function writeRegime(", "record.set(r.speed, f.speed);", "record[f.gustFactor] = r.gustFactor;",
+		"export function writeEncounterParams(", "params[f.restitution] = e.contact.restitution;", "params.set(e.shadow.deflection, f.deflection);"} {
 		if !strings.Contains(ts, want) {
 			t.Errorf("params.gen.ts lacks %q", want)
 		}
+	}
+}
+
+// TestEncounters checks the outline and the encounters' numbers: what the
+// schema rejects, and what checkEncounters does.
+func TestEncounters(t *testing.T) {
+	boats := realBoats()
+	outline := "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.590, 0.492, 0.342, 0]"
+	if !strings.Contains(boats, outline) {
+		t.Fatal("the test's outline is not the catalog's")
+	}
+	cases := []struct {
+		name       string
+		boats, enc string
+		want       string
+	}{
+		{name: "the real catalog"},
+		{name: "not convex", boats: strings.Replace(boats, outline, "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.40, 0.492, 0.342, 0]", 1), want: "not convex"},
+		{name: "a blunt stem", boats: strings.Replace(boats, outline, "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.590, 0.492, 0.342, 0.1]", 1), want: "not convex"},
+		{name: "ten stations", boats: strings.Replace(boats, outline, "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.590, 0.492, 0]", 1), want: "/boats/0/physics/hull/outline"},
+		{name: "wider than the beam", boats: strings.Replace(boats, "beam: 1.39", "beam: 1.2", 1), want: "wider than half the beam"},
+		{name: "longer than the boat", boats: strings.Replace(boats, "stem: 2.25", "stem: 2.5", 1), want: "not the length overall"},
+		{name: "close-hauled at 20°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 20", 1), want: "/boats/0/physics/rig/closeHauled"},
+		{name: "close-hauled at 61°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 61", 1), want: "/boats/0/physics/rig/closeHauled"},
+		{name: "a restitution above 1", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: 1.2", 1), want: "/encounters/contact/restitution"},
+		{name: "a restitution below 0", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: -0.1", 1), want: "/encounters/contact/restitution"},
+		{name: "a taper past the reach", enc: strings.Replace(realEncounters(), "taper: 8", "taper: 12", 1), want: "taper"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			files := map[string]string{boatsPath: boats}
+			if c.boats != "" {
+				files[boatsPath] = c.boats
+			}
+			if c.enc != "" {
+				files[encounterPath] = c.enc
+			}
+			// The real boat's art, so that only the encounters can fail.
+			files["art/boats/jolly-boat.glb"] = glb("hull", "tricolour")
+			files["art/boats/jolly-boat.far.glb"] = "glTF"
+			root := fixture(t, files)
+			err := checkAll(root)
+			if err == nil {
+				doc, rerr := readCatalog(root)
+				if rerr != nil {
+					t.Fatal(rerr)
+				}
+				err = checkEncounters(doc)
+			}
+			switch {
+			case c.want == "" && err != nil:
+				t.Fatal(err)
+			case c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)):
+				t.Fatalf("got %v, want an error with %q", err, c.want)
+			}
+		})
 	}
 }

@@ -74,6 +74,13 @@ boats:
         # times what the rudder gives under a knot and a half: it shakes the
         # sail's last drive off a slow boat, and seven getaways in ten fail.
         waveYaw: 0
+        # The plan at the sheer, where hulls touch: the half-beam every tenth
+        # of the length from the transom to the stem, sampled from the
+        # model's lines (a wide transom, the greatest beam aft of amidships, a
+        # full bow), which art/boats/jolly-boat/build.ts builds from these.
+        outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.590, 0.492, 0.342, 0]
+        transom: 1.95 # just forward of the rudder's stock
+        stem: 2.25 # the length overall forward of the transom
       rig:
         sailArea: 7.06 # ILCA 7
         luff: 5.13
@@ -119,6 +126,9 @@ boats:
         windageHeight: 0.7
         sailFloat: 1500 # estimate
         sailWaterDamping: 300 # estimate
+        # tools/polar's best upwind VMG: 45° to the true wind in 6.8 knots,
+        # 40° from 10 to 22.5 knots.
+        closeHauled: 40
       foils:
         boardSpan: 0.69 # 0.787 m below the waterline, less the hull's draught
         boardChord: 0.34
