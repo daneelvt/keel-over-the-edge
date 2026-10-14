@@ -35,7 +35,7 @@ import {
   nowUs,
   worldUs,
 } from './clock';
-import type { FromWorker, HelloVersions, Status, ToWorker } from './messages';
+import type { BumpTold, FromWorker, HelloVersions, Status, ToWorker } from './messages';
 import { NO_MARGIN, newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
 import { FLEET_META, fleetOf } from './view';
 
@@ -98,6 +98,8 @@ export class Online {
   epochUs = 0;
   /** Called with the world's epoch at each Welcome: the sky is counted from it. */
   onEpoch: ((epochUs: number) => void) | null = null;
+  /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
+  onBump: ((b: BumpTold) => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
   lastMargin = NO_MARGIN;
   traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
@@ -181,6 +183,9 @@ export class Online {
       case 'weather':
         // Ahead of the tick any of it changes the wind from, as the sea is.
         this.#predictor.weather.receive(m.spells);
+        break;
+      case 'bump':
+        this.onBump?.(m.bump);
         break;
       case 'welcome':
         if (this.#hadBoat && !m.rejoined) {

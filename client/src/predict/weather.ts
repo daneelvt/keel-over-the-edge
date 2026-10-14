@@ -28,6 +28,12 @@ export interface BoatWind {
   /** The true wind 10 m above the sea, m/s, and where it comes from, radians clockwise from north. */
   speed: number;
   from: number;
+  /**
+   * The wind with the shadow of the boats near: what an anemometer at the
+   * masthead reads. The speed and direction above, in clean air.
+   */
+  shadowSpeed: number;
+  shadowFrom: number;
   /** The wind without its gusts: what the Beaufort scale reads. */
   meanSpeed: number;
   meanFrom: number;
@@ -37,7 +43,16 @@ export interface BoatWind {
 }
 
 export function newBoatWind(): BoatWind {
-  return { speed: 0, from: 0, meanSpeed: 0, meanFrom: 0, gust: 0, factor: 1 };
+  return {
+    speed: 0,
+    from: 0,
+    shadowSpeed: 0,
+    shadowFrom: 0,
+    meanSpeed: 0,
+    meanFrom: 0,
+    gust: 0,
+    factor: 1,
+  };
 }
 
 /** Ticks in a second, and how many a developer's weather waits before it blows: to the second after next. */
@@ -114,6 +129,8 @@ export class Spells {
     const r = this.#physics.windPoint(east, north);
     wind.speed = r[W.speed] ?? 0;
     wind.from = r[W.from] ?? 0;
+    wind.shadowSpeed = wind.speed;
+    wind.shadowFrom = wind.from;
     wind.meanSpeed = r[W.meanSpeed] ?? 0;
     wind.meanFrom = r[W.meanFrom] ?? 0;
     wind.gust = r[W.gust] ?? 0;

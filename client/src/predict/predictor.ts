@@ -186,6 +186,12 @@ export class Predictor implements BoatDriver {
     // The wind the step sails in is the wind where the boat is as it begins.
     this.weather.read(this.tick + 1, before[S.x] ?? 0, before[S.y] ?? 0, this.wind);
     this.#stepModule(this.tick + 1, helm, sheet);
+    if (this.wakes.reaching > 0) {
+      // The wind the step sailed in, in the shadow of the boats near.
+      const env = this.#physics.records.env;
+      this.wind.shadowSpeed = env[RECORDS.env.windSpeed] ?? 0;
+      this.wind.shadowFrom = env[RECORDS.env.windFrom] ?? 0;
+    }
     this.tick++;
     const i = this.tick % RING;
     const r = this.#physics.records;

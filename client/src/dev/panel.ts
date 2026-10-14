@@ -218,10 +218,16 @@ export function windLine(w: Readonly<BoatWind>): string {
   const veer = (((w.from - w.meanFrom) / DEG + 540) % 360) - 180;
   const sign = (x: number, digits: number): string =>
     `${x < 0 ? '−' : '+'}${Math.abs(x).toFixed(digits)}`;
-  return (
+  const line =
     `wind    mean ${(w.meanSpeed / KNOT).toFixed(1)} kn from ${degrees(w.meanFrom).toFixed(0).padStart(3, '0')}°, ` +
-    `now ${(w.speed / KNOT).toFixed(1)} kn (×${w.factor.toFixed(2)}), gust ${sign(w.gust, 2)}, veer ${sign(veer, 1)}°`
-  );
+    `now ${(w.speed / KNOT).toFixed(1)} kn (×${w.factor.toFixed(2)}), gust ${sign(w.gust, 2)}, veer ${sign(veer, 1)}°`;
+  if (w.shadowSpeed === w.speed && w.shadowFrom === w.from) {
+    return line;
+  }
+  // In another boat's wake: what is left of the wind, and how far it turned.
+  const lost = w.speed > 0 ? 1 - w.shadowSpeed / w.speed : 0;
+  const turn = (((w.shadowFrom - w.from) / DEG + 540) % 360) - 180;
+  return `${line}\nshadow  ${(w.shadowSpeed / KNOT).toFixed(1)} kn, ${(100 * lost).toFixed(0)}% lost, turned ${sign(turn, 1)}°`;
 }
 
 /** The sea under the boat, as lines: its height, its peak, and the waves summed. */

@@ -206,6 +206,9 @@ export class NetWorker {
         case 'weather':
           this.#d.post({ type: 'weather', spells: r.spells });
           break;
+        case 'bump':
+          this.#d.post({ type: 'bump', bump: r.bump });
+          break;
       }
       this.#arm();
     };

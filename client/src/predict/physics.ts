@@ -90,6 +90,7 @@ interface Exports {
   shadowAt(n: number): number;
   course(): number;
   courseTrack(windFrom: number): void;
+  courseOf(heading: number, boom: number, windFrom: number): void;
   encounter(): number;
   verdict(): number;
   articlesJudge(): void;
@@ -171,6 +172,7 @@ const functionExports = [
   'shadowAt',
   'course',
   'courseTrack',
+  'courseOf',
   'encounter',
   'verdict',
   'articlesJudge',
@@ -608,6 +610,17 @@ export class Physics {
   /** Brings the course record to the state, in the true wind from windFrom. */
   courseTrack(windFrom: number): void {
     this.#x.courseTrack(windFrom);
+  }
+
+  /**
+   * Brings a course, four values as the course record holds them, to a boat
+   * heading heading with its boom at boom, in the true wind from windFrom.
+   */
+  courseOf(c: Float64Array, heading: number, boom: number, windFrom: number): void {
+    const r = this.records.course;
+    r.set(c);
+    this.#x.courseOf(heading, boom, windFrom);
+    c.set(this.records.course);
   }
 
   /** The Articles' verdict on the encounter record's two boats: the verdict record. A view. */

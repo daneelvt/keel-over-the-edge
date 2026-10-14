@@ -135,7 +135,15 @@ describe('settings', () => {
 
 /** A wind at the boat with no gust in it. */
 function wind(speed: number, from: number): BoatWind {
-  return { ...newBoatWind(), speed, from, meanSpeed: speed, meanFrom: from };
+  return {
+    ...newBoatWind(),
+    speed,
+    from,
+    shadowSpeed: speed,
+    shadowFrom: from,
+    meanSpeed: speed,
+    meanFrom: from,
+  };
 }
 
 describe('the instruments', () => {

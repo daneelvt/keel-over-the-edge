@@ -45,6 +45,16 @@ export const MAX_TILT = Math.PI / 2 + 0.2;
  * two seconds after the heading turns through 180°. Reduced motion: stiffer.
  */
 export const YAW_OMEGA = 4;
+/**
+ * A bump shakes the camera: metres of shake per m/s of closing speed, at
+ * most SHAKE_MOST, wobbling at SHAKE_RATE and gone after SHAKE_TIME; under
+ * reduced motion, SHAKE_REDUCED of it.
+ */
+export const SHAKE_PER_SPEED = 0.05;
+export const SHAKE_MOST = 0.25;
+export const SHAKE_RATE = 11; // Hz
+export const SHAKE_TIME = 0.4; // s
+export const SHAKE_REDUCED = 1 / 3;
 export const YAW_OMEGA_REDUCED = 12;
 /** Untouched this long, in milliseconds, the camera eases back to its resting view. */
 export const EASE_BACK_AFTER = 5000;
@@ -104,6 +114,10 @@ export class ChaseCamera {
   /** The boat's heave as the camera has followed it, and the sea's height under the boat, metres. */
   lift = 0;
   sea = 0;
+  /** A bump's shake: its size, metres, when it began and the frame's time, ms. */
+  shakeSize = 0;
+  #shakeAt = Number.NEGATIVE_INFINITY;
+  #now = 0;
   #touched = Number.NEGATIVE_INFINITY;
 
   /**
@@ -157,6 +171,7 @@ export class ChaseCamera {
    */
   update(dt: number, heading: number, now: number, heave = 0, sea = 0): void {
     this.sea = sea;
+    this.#now = now;
     if (dt <= 0) {
       return;
     }
@@ -182,6 +197,23 @@ export class ChaseCamera {
     }
   }
 
+  /** Shakes the camera for a bump the hulls closed at closing m/s, at now (ms). */
+  shake(closing: number, now: number): void {
+    const size = Math.min(SHAKE_MOST, SHAKE_PER_SPEED * Math.max(0, closing));
+    this.shakeSize = this.reducedMotion ? size * SHAKE_REDUCED : size;
+    this.#shakeAt = now;
+  }
+
+  /** The shake's displacement at now (ms): a wobble dying away over SHAKE_TIME. */
+  shakeAt(now: number): number {
+    const t = (now - this.#shakeAt) / 1000;
+    if (!(t >= 0 && t < SHAKE_TIME)) {
+      return 0;
+    }
+    const left = 1 - t / SHAKE_TIME;
+    return this.shakeSize * left * left * Math.sin(2 * Math.PI * SHAKE_RATE * t);
+  }
+
   /**
    * Writes the camera's position into position and the point it looks at
    * into target, for a boat at scene (x, y, z).
@@ -199,7 +231,9 @@ export class ChaseCamera {
     const py = Math.max(ty + Math.sin(v.elevation) * v.distance, y + this.sea + MIN_HEIGHT);
     const px = tx + Math.cos(a) * ce * v.distance;
     const pz = tz + Math.sin(a) * ce * v.distance;
-    position.set(px, py, pz);
+    // A bump's shake moves the camera across the line to the boat and up.
+    const s = this.shakeAt(this.#now);
+    position.set(px - Math.sin(a) * s, py + 0.6 * s, pz + Math.cos(a) * s);
     if (this.tilt <= 0) {
       return;
     }

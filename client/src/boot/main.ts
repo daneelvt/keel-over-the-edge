@@ -101,7 +101,7 @@ async function start(): Promise<void> {
       settings: game.settings,
       helm: game.helm,
       sheet: game.sheet,
-      labels: (el) => world.overlays.attachLabels(el),
+      labels: (el) => world.attachLabels(el),
       sailor: null,
       connection: null,
     });
@@ -153,6 +153,7 @@ async function start(): Promise<void> {
       chooseSky(world, query);
     }
   };
+  online.onBump = (b) => game.bump(b, performance.now());
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
   // while the sea is full.
@@ -170,7 +171,7 @@ async function start(): Promise<void> {
     settings: game.settings,
     helm: game.helm,
     sheet: game.sheet,
-    labels: (el) => world.overlays.attachLabels(el),
+    labels: (el) => world.attachLabels(el),
     sailor: me.name,
     connection: { notice: online.notice, rtt: online.rtt, takeOver: () => online.takeOver() },
   });

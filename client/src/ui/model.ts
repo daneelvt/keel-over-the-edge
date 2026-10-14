@@ -117,6 +117,9 @@ export class WindWindow {
 /** The helm's knob travels along an arc of this many degrees each side of the top. */
 export const HELM_ARC = 55;
 
+/** How long a bump's line stays, in milliseconds. */
+export const BUMP_LINE = 4000;
+
 export class HudModel {
   readonly speed = signal('0.0');
   readonly heading = signal('000° N');
@@ -125,6 +128,10 @@ export class HudModel {
   readonly anemometer = new WindWindow();
   /** What the sailor is doing when not sailing; empty while sailing. */
   readonly sailor = signal('');
+  /** A bump's verdict, under the readout for BUMP_LINE ms; and the boat's tack, with the right-of-way overlay. */
+  readonly bump = signal('');
+  readonly tack = signal('');
+  #bumpUntil = 0;
   /** How many times the signals were written. */
   writes = 0;
 
@@ -149,6 +156,12 @@ export class HudModel {
   readonly clinometer = new Moved(rotate, 0.1);
 
   #lastWrite = Number.NEGATIVE_INFINITY;
+
+  /** Shows a bump's line from now (ms) for BUMP_LINE. */
+  showBump(text: string, now: number): void {
+    this.bump.value = text;
+    this.#bumpUntil = now + BUMP_LINE;
+  }
 
   /** Writes the signals on the next frame, however soon. */
   flush(): void {
@@ -175,7 +188,9 @@ export class HudModel {
     this.rose.set(-headingDeg);
     const a = this.anemometer;
     // Over three seconds of the world's time, in which the wind blows.
-    a.add(time * 1000, wind.speed, wind.from);
+    // What an anemometer at the masthead reads: in another boat's wind
+    // shadow, less wind and a header.
+    a.add(time * 1000, wind.shadowSpeed, wind.shadowFrom);
     this.windMark.set(((a.from - pose.heading) * 180) / Math.PI);
     this.helmKnob.set(helm * HELM_ARC);
     this.helmActual.set(rudder * HELM_ARC);
@@ -195,5 +210,8 @@ export class HudModel {
     // gust shows as the knots rising while the force holds.
     this.wind.value = windText(a.speed, a.from, wind.meanSpeed);
     this.sailor.value = SAILOR_LINES[pose.sailorMode] ?? '';
+    if (this.bump.value !== '' && now >= this.#bumpUntil) {
+      this.bump.value = '';
+    }
   }
 }

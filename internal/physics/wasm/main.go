@@ -512,6 +512,16 @@ func courseTrack(windFrom float64) {
 	physics.TrackCourse(&course, &state, windFrom, &prepared, &encounterPrepared)
 }
 
+// courseOf brings the course record to a boat heading heading with its
+// boom at boom, in the true wind from windFrom: another boat's, drawn from
+// its samples.
+//
+//go:wasmexport courseOf
+func courseOf(heading, boom, windFrom float64) {
+	s := physics.State{Heading: heading, Boom: boom}
+	physics.TrackCourse(&course, &s, windFrom, &prepared, &encounterPrepared)
+}
+
 //go:wasmexport encounter
 func encounterAddr() uint32 { return addr(unsafe.Pointer(&encounter)) }
 

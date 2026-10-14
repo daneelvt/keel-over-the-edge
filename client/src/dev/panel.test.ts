@@ -128,6 +128,8 @@ describe('the panel', () => {
       windLine({
         speed: 13.44 * KNOT,
         from: (15.4 * Math.PI) / 180,
+        shadowSpeed: 13.44 * KNOT,
+        shadowFrom: (15.4 * Math.PI) / 180,
         meanSpeed: 11.2 * KNOT,
         meanFrom: (12 * Math.PI) / 180,
         gust: 0.425,
@@ -135,8 +137,30 @@ describe('the panel', () => {
       }),
     ).toBe('wind    mean 11.2 kn from 012°, now 13.4 kn (×1.20), gust +0.42, veer +3.4°');
     expect(
-      windLine({ speed: 5, from: 6.2, meanSpeed: 5.4, meanFrom: 0.02, gust: -0.5, factor: 0.93 }),
+      windLine({
+        speed: 5,
+        from: 6.2,
+        shadowSpeed: 5,
+        shadowFrom: 6.2,
+        meanSpeed: 5.4,
+        meanFrom: 0.02,
+        gust: -0.5,
+        factor: 0.93,
+      }),
     ).toMatch(/gust −0\.50, veer −5\.9°$/);
+    // In another boat's wake.
+    expect(
+      windLine({
+        speed: 10 * KNOT,
+        from: 0.5,
+        shadowSpeed: 7 * KNOT,
+        shadowFrom: 0.5 - (4 * Math.PI) / 180,
+        meanSpeed: 10 * KNOT,
+        meanFrom: 0.5,
+        gust: 0,
+        factor: 1,
+      }),
+    ).toMatch(/\nshadow {2}7\.0 kn, 30% lost, turned −4\.0°$/);
   });
 
   test('applies only what changed', () => {

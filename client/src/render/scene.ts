@@ -26,6 +26,7 @@ import starsUrl from '../sky/stars.bin?url';
 import { Boat } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
+import { DirtyAir } from './dirtyair';
 import { FleetView } from './fleet';
 import { GustRings } from './gustring';
 import { Lanterns, lanternLit } from './lanterns';
@@ -46,6 +47,7 @@ import {
   type TierName,
 } from './quality';
 import { type Backend, type Gfx, wantsCompat } from './renderer';
+import { RightOfWay, type Seen } from './rightofway';
 import { Shadows } from './shadows';
 import { look, Sky, toLinear } from './sky';
 import { type CrestSample, SprayDrops, type SpraySource, SprayView } from './spray';
@@ -81,6 +83,9 @@ export interface FleetSource {
   readonly count: number;
 }
 
+/** No boats: the fleet before the game is online. */
+const NO_BOATS: readonly DrawnBoat[] = [];
+
 export class SeaScene {
   readonly stage: Stage;
   readonly origin = new FloatingOrigin();
@@ -95,6 +100,14 @@ export class SeaScene {
   readonly overlays: Overlays;
   /** The rings round the gusts heading for the boat: part of the wind overlay. */
   readonly gustRings = new GustRings(catalog.weather.ring);
+  /** The wedges of dirty air behind the boats near: part of the wind overlay. */
+  readonly dirtyAir = new DirtyAir(
+    catalog.encounters.shadow,
+    catalog.encounters.overlay.wedgeDeficit,
+    catalog.encounters.overlay.wedges,
+  );
+  /** The beginners' right-of-way overlay. */
+  readonly rightOfWay = new RightOfWay(this.kind, catalog.encounters.overlay);
   readonly boatScene: ScenePoint = { x: 0, y: 0, z: 0 };
   boat: Boat | null = null;
   /** The other boats, drawn many at once. */
@@ -193,6 +206,7 @@ export class SeaScene {
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
     scene.add(this.gustRings.group);
+    scene.add(this.dirtyAir.group, this.rightOfWay.group);
     scene.add(this.fleet.root);
     scene.add(this.stars.mesh, this.lanterns.mesh);
     const label = document.createElement('span');
@@ -649,6 +663,27 @@ export class SeaScene {
       this.origin.world.x,
       this.origin.world.y,
     );
+    const own = this.#own;
+    own.east = this.pose.east;
+    own.north = this.pose.north;
+    own.heading = this.pose.heading;
+    own.heel = this.pose.heel;
+    own.boom = this.pose.boom;
+    own.mode = this.pose.sailorMode;
+    own.vEast = boatAt.velEast;
+    own.vNorth = boatAt.velNorth;
+    const drawn = this.fleetSource?.drawn ?? NO_BOATS;
+    const count = this.fleetSource?.count ?? 0;
+    const physics = source?.physics ?? null;
+    const ow = this.origin.world;
+    this.dirtyAir.set(o.wind);
+    this.dirtyAir.update(physics, this.ticks, own, drawn, count, ow.x, ow.y);
+    const row = this.rightOfWay;
+    row.update(physics, now, this.ticks, own, drawn, count, ow.x, ow.y, camera);
+    if (row.on) {
+      row.group.updateMatrixWorld();
+      row.placeLabels(camera, gfx.canvas.clientWidth, gfx.canvas.clientHeight);
+    }
     if (o.wind || o.forces) {
       o.update(bs.x, bs.z, this.pose, this.wind, this.out);
       // The overlays ride the boat: their world matrices must be current to place their labels.
@@ -659,6 +694,24 @@ export class SeaScene {
     }
     this.#spray();
     this.onFrame?.();
+  }
+
+  /** The player's boat as the dirty air and the right-of-way overlay want it. */
+  readonly #own: Seen = {
+    east: 0,
+    north: 0,
+    heading: 0,
+    heel: 0,
+    boom: 0,
+    mode: 0,
+    vEast: 0,
+    vNorth: 0,
+  };
+
+  /** Puts the overlays' labels in a layer of the page over the scene. */
+  attachLabels(layer: HTMLElement | null): void {
+    this.overlays.attachLabels(layer);
+    this.rightOfWay.attachLabels(layer);
   }
 
   /** The boat as the gust rings want it: where, how it moves, and where the mean wind comes from. */

@@ -16,11 +16,11 @@
 
 import { Clock } from '../../net/clock';
 import { decodeServer, encodeClient } from '../../net/frame';
-import type { Welcome } from '../../net/gen/keel/v1/game_pb';
-import type { SeaAreas, WeatherSpells } from '../../net/messages';
+import { BumpPart, type Welcome } from '../../net/gen/keel/v1/game_pb';
+import type { BumpTold, SeaAreas, WeatherSpells } from '../../net/messages';
 import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
-import { type View, ViewRing } from '../../net/view';
+import { POSITION_STEP, type View, ViewRing } from '../../net/view';
 import { spellRecord } from '../../net/weather';
 
 export const BURST_PINGS = 8;
@@ -37,6 +37,14 @@ export interface Versions {
 }
 
 /** What a message from the server was. */
+/** A bump's part, as the page names it. */
+const PARTS: Record<number, BumpTold['part']> = {
+  [BumpPart.UNSPECIFIED]: 'seen',
+  [BumpPart.YOURS]: 'yours',
+  [BumpPart.THEIRS]: 'theirs',
+  [BumpPart.NONE]: 'none',
+};
+
 export type Received =
   | { kind: 'welcome'; welcome: Welcome }
   /** The view stays valid until a few more snapshots are decoded; the ring's changes and sampled are its. */
@@ -49,6 +57,7 @@ export type Received =
   /** The sea about the boat. */
   | { kind: 'sea'; sea: SeaAreas }
   | { kind: 'weather'; spells: WeatherSpells }
+  | { kind: 'bump'; bump: BumpTold }
   | { kind: 'pong' }
   | { kind: 'other' };
 
@@ -175,6 +184,21 @@ export class Session {
       case 'weatherSystems':
         this.#lastHeard = now;
         return { kind: 'weather', spells: m.body.value.spells.map(spellRecord) };
+      case 'bump': {
+        this.#lastHeard = now;
+        const v = m.body.value;
+        return {
+          kind: 'bump',
+          bump: {
+            tick: Number(v.tick),
+            east: v.x * POSITION_STEP,
+            north: v.y * POSITION_STEP,
+            closing: v.closing / 100,
+            part: PARTS[v.part] ?? 'seen',
+            article: v.article,
+          },
+        };
+      }
     }
     return { kind: 'other' };
   }

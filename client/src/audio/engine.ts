@@ -5,7 +5,8 @@
 // song (a narrow band-pass at the Aeolian tone), the flogging cloth (a band
 // beaten by a flap), the water on the hull (a low-pass, with the bow
 // wave's hiss), and the sea about the boat (a wide, low band). The frame loop sets their parameters at most every 50 ms,
-// each gliding to its target with setTargetAtTime.
+// each gliding to its target with setTargetAtTime. A bump's knock is played
+// once, from the same noise and a tone, and let go when it has died away.
 //
 // Browsers start audio only from a user gesture. Under the HTML standard's
 // user activation, a keydown (not Escape), a mouse's pointerdown, or a
@@ -13,6 +14,7 @@
 // context is made and resumed on the first such event, and tried again on
 // every one until it runs. It is suspended while the page is hidden.
 
+import type { Knock } from './knock';
 import {
   newTargets,
   RECIPES,
@@ -30,6 +32,7 @@ const NOISE_SECONDS = 2;
 interface Graph {
   ctx: AudioContext;
   master: GainNode;
+  noise: AudioBuffer;
   windBand: BiquadFilterNode;
   wind: GainNode;
   rigBand: BiquadFilterNode;
@@ -61,7 +64,8 @@ function build(ctx: AudioContext, r: Recipes): Graph {
   master.gain.value = 0.8;
   master.connect(ctx.destination);
   const source = ctx.createBufferSource();
-  source.buffer = noise(ctx);
+  const buffer = noise(ctx);
+  source.buffer = buffer;
   source.loop = true;
 
   const voice = (filter: BiquadFilterNode): GainNode => {
@@ -112,6 +116,7 @@ function build(ctx: AudioContext, r: Recipes): Graph {
   return {
     ctx,
     master,
+    noise: buffer,
     windBand,
     wind,
     rigBand,
@@ -220,6 +225,63 @@ export class SoundEngine {
     g.hiss.gain.setTargetAtTime(t.hissLevel, at, GLIDE);
     g.seaBand.frequency.setTargetAtTime(t.seaCentre, at, GLIDE);
     g.sea.gain.setTargetAtTime(t.seaLevel, at, GLIDE);
+  }
+
+  /** How many knocks were played (tests). */
+  knocks = 0;
+
+  /**
+   * Plays a bump's knock once: a thump falling in pitch and a crack of
+   * noise, each dying away, placed left or right.
+   */
+  knock(k: Knock): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || !(k.level > 0)) {
+      return;
+    }
+    this.knocks++;
+    const ctx = g.ctx;
+    const at = ctx.currentTime;
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = k.pan;
+    pan.connect(g.master);
+
+    const tone = ctx.createOscillator();
+    tone.type = 'sine';
+    tone.frequency.setValueAtTime(k.thump, at);
+    tone.frequency.exponentialRampToValueAtTime(
+      Math.max(20, k.thump * k.fall),
+      at + 4 * k.thumpDecay,
+    );
+    const thump = ctx.createGain();
+    thump.gain.setValueAtTime(k.level, at);
+    thump.gain.setTargetAtTime(0, at + 0.004, k.thumpDecay);
+    tone.connect(thump);
+    thump.connect(pan);
+
+    const burst = ctx.createBufferSource();
+    burst.buffer = g.noise;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = k.crack;
+    band.Q.value = k.q;
+    const crack = ctx.createGain();
+    crack.gain.setValueAtTime(0.8 * k.level, at);
+    crack.gain.setTargetAtTime(0, at + 0.002, k.crackDecay);
+    burst.connect(band);
+    band.connect(crack);
+    crack.connect(pan);
+
+    const end = at + 8 * Math.max(k.thumpDecay, k.crackDecay);
+    tone.start(at);
+    tone.stop(end);
+    burst.start(at, 0.3);
+    burst.stop(end);
+    tone.onended = () => {
+      for (const n of [tone, thump, burst, band, crack, pan]) {
+        n.disconnect();
+      }
+    };
   }
 
   #apply(): void {
