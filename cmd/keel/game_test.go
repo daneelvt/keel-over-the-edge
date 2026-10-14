@@ -195,6 +195,15 @@ func TestRestartKeepsTheBoats(t *testing.T) {
 		db := &memDB{epoch: bubbleEpoch}
 		vars := map[string]string{"KEEL_DEV_SAILORS": "5", "KEEL_DEV_COMMANDS": "1", "KEEL_BELL": "1s"}
 		s, token := gameServer(t, vars, db)
+		// A steady 12 knots from the north, a beam reach from the start:
+		// the world's own weather may be a light spell. It blows from the
+		// second after next.
+		res, err := s.client.Post(internalURL+"/debug/wind?knots=12&from=0", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		time.Sleep(2500 * time.Millisecond)
 		ws, in, welcome := connect(t, s, token)
 		heardCh := make(chan heard, 1)
 		go func() { heardCh <- listen(in) }()
