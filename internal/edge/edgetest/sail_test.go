@@ -339,8 +339,9 @@ func TestTraces(t *testing.T) {
 }
 
 // TestFleetTraces records, with -update, the traces of three sailors
-// sailing together among a few other boats, at 200 ms and 2% loss, and
-// replays them: every snapshot decodes to the view the sailor decoded.
+// sailing together among a few other boats, in their wakes at first, at
+// 200 ms and 2% loss, and replays them: every snapshot decodes to the view
+// the sailor decoded, and reconciles alike.
 func TestFleetTraces(t *testing.T) {
 	const path = "../../../shared/protocol/testdata/trace-fleet.json"
 	lag := client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 5}
@@ -348,7 +349,12 @@ func TestFleetTraces(t *testing.T) {
 		traces := make([]*client.Trace, 3)
 		synctest.Test(t, func(t *testing.T) {
 			srv := NewServer(t, Config{})
+			// Three of the crowd sail just upwind of where the crew's boats
+			// appear, the crew in their wakes at first; the fourth further off.
 			srv.Crowd(t, 4, func(i int) physics.State {
+				if i < 3 {
+					return physics.State{X: -555 + float64(i)*20, Y: -5, Heading: math.Pi / 2, Surge: 2, SheetLimit: 0.6}
+				}
 				return physics.State{X: -640 + float64(i)*90 - 135, Y: 60 + float64(i%2)*400, Heading: math.Pi / 2, Surge: 2, SheetLimit: 0.6}
 			})
 			var sailors []*client.Sailor
@@ -404,6 +410,11 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 	waves, kinds := CatalogKinds(t)
 	n := client.Net{FrameMs: 17}
 	p := client.NewPredictor(&kinds[0], waves, weather.Fixed(sim.DefaultSpell).Prepared())
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Encounters = cat.PrepareEncounters()
 	snapshots := map[int64]*protocol.Snapshot{}
 	var latest *protocol.Snapshot
 	var expect [][]byte
@@ -437,6 +448,7 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 				t.Fatalf("event %d: dropped %v, the trace %v", i, ev.Dropped, e.Dropped)
 			}
 			if ev.View != nil {
+				p.Wakes.Observe(ev.Snapshot.Tick, ev.View, ev.Changes, ev.Sampled)
 				snapshots[ev.Snapshot.Tick] = ev.Snapshot
 				if got := fmt.Sprintf("%08x", client.ViewDigest(ev.View)); got != e.View {
 					t.Fatalf("event %d: the view decoded to %s, the trace's to %s", i, got, e.View)

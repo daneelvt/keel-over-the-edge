@@ -75,6 +75,8 @@ type Server struct {
 	Kinds    []physics.Prepared
 	Waves    *physics.Waves
 	Weather  *weather.Timeline
+	// Encounters are how the world's boats meet.
+	Encounters *physics.EncounterPrepared
 
 	cfg      Config
 	sessions *auth.Cache
@@ -115,7 +117,7 @@ func NewServer(t testing.TB, cfg Config) *Server {
 		cfg.Encounters = cat.PrepareEncounters()
 	}
 	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, cfg: cfg}
+	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg}
 	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
 	s.start(t, s.newWorld(t))
 	s.HTTP = httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

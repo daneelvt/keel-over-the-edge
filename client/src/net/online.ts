@@ -201,6 +201,7 @@ export class Online {
         // A new connection's views start afresh: the boats fade out, and
         // in again with its first snapshot.
         this.fleet.clear();
+        this.#predictor.wakes.reset();
         break;
       case 'snapshot':
         if (this.#predictor.started) {
@@ -287,8 +288,11 @@ export class Online {
   /** Reads a snapshot's record: its own boat reconciled, its other boats to the fleet; then hands it back. */
   #take(data: ArrayBuffer, now: number): void {
     if (readSnapshot(new DataView(data), this.#scratch) === null) {
-      this.reconcile(this.#scratch, now);
       const f = fleetOf(data);
+      // The other boats' samples first: the steps the reconciliation
+      // replays sail in their shadow.
+      this.#predictor.wakes.observe(f);
+      this.reconcile(this.#scratch, now);
       this.snapshotBytes = f[FLEET_META.bytes] ?? 0;
       this.fleet.add(f, worldUs(this.clock, f[FLEET_META.received] ?? now));
     }

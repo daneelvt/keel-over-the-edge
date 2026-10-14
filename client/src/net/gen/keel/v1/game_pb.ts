@@ -12,15 +12,15 @@
 // @generated from file keel/v1/game.proto (package keel.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkiVQoFSW5wdXQSCwoDc2VxGAEgASgNEgwKBGhlbG0YAiABKA0SDQoFc2hlZXQYAyABKA0SEAoIYWNrX3RpY2sYBCABKAMSEAoIYWNrX29ubHkYBSABKAgidgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIv8BCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIAEIGCgRib2R5IjAKDldlYXRoZXJTeXN0ZW1zEh4KBnNwZWxscxgBIAMoCzIOLmtlZWwudjEuU3BlbGwijgIKBVNwZWxsEg0KBWJlZ2luGAEgASgDEg4KBmNoYW5nZRgCIAEoDRINCgVzdGFydBgDIAEoAxIOCgZsZW5ndGgYBCABKAQSDgoGcmVnaW1lGAUgASgNEg4KBnN0ZWFkeRgGIAEoCBINCgVzcGVlZBgHIAEoDRIMCgRmcm9tGAggASgNEg0KBWRyaWZ0GAkgASgREgwKBGd1c3QYCiABKA0SDQoFc2hpZnQYCyADKA0SDgoGcGVyaW9kGAwgAygNEg0KBXBoYXNlGA0gAygNEg4KBmFjcm9zcxgOIAEoDRIMCgRheGlzGA8gASgNEhMKC2F4aXNfcGVyaW9kGBAgASgNEgwKBHNlZWQYESABKA0ibAoIU2VhQXJlYXMSDAoEdGljaxgBIAEoAxILCgNjb2wYAiABKBESCwoDcm93GAMgASgREgwKBHNpemUYBCABKA0SDQoFc3BlZWQYBSADKA0SDAoEZnJvbRgGIAMoDRINCgVmZXRjaBgHIAMoDSIYCgdSZXN0YXJ0Eg0KBWluX21zGAEgASgNIisKBlF1ZXVlZBIQCghwb3NpdGlvbhgBIAEoDRIPCgd3YWl0aW5nGAIgASgNIn0KB1dlbGNvbWUSDQoFd29ybGQYASABKAkSDAoEdGljaxgCIAEoAxIVCg13b3JsZF90aW1lX3VzGAMgASgDEgwKBGJvYXQYBCABKAQSDAoEa2luZBgFIAEoDRIQCghyZWpvaW5lZBgGIAEoCBIQCghlcG9jaF91cxgHIAEoAyI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKANCPVo7Z2l0aHViLmNvbS9kYW5lZWx2dC9rZWVsLW92ZXItdGhlLWVkZ2UvaW50ZXJuYWwvcHJvdG9jb2wvcGJiBnByb3RvMw");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkiVQoFSW5wdXQSCwoDc2VxGAEgASgNEgwKBGhlbG0YAiABKA0SDQoFc2hlZXQYAyABKA0SEAoIYWNrX3RpY2sYBCABKAMSEAoIYWNrX29ubHkYBSABKAgidgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIp4CCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSABCBgoEYm9keSJtCgRCdW1wEgwKBHRpY2sYASABKAMSCQoBeBgCIAEoERIJCgF5GAMgASgREg8KB2Nsb3NpbmcYBCABKA0SHwoEcGFydBgFIAEoDjIRLmtlZWwudjEuQnVtcFBhcnQSDwoHYXJ0aWNsZRgGIAEoCSIwCg5XZWF0aGVyU3lzdGVtcxIeCgZzcGVsbHMYASADKAsyDi5rZWVsLnYxLlNwZWxsIo4CCgVTcGVsbBINCgViZWdpbhgBIAEoAxIOCgZjaGFuZ2UYAiABKA0SDQoFc3RhcnQYAyABKAMSDgoGbGVuZ3RoGAQgASgEEg4KBnJlZ2ltZRgFIAEoDRIOCgZzdGVhZHkYBiABKAgSDQoFc3BlZWQYByABKA0SDAoEZnJvbRgIIAEoDRINCgVkcmlmdBgJIAEoERIMCgRndXN0GAogASgNEg0KBXNoaWZ0GAsgAygNEg4KBnBlcmlvZBgMIAMoDRINCgVwaGFzZRgNIAMoDRIOCgZhY3Jvc3MYDiABKA0SDAoEYXhpcxgPIAEoDRITCgtheGlzX3BlcmlvZBgQIAEoDRIMCgRzZWVkGBEgASgNImwKCFNlYUFyZWFzEgwKBHRpY2sYASABKAMSCwoDY29sGAIgASgREgsKA3JvdxgDIAEoERIMCgRzaXplGAQgASgNEg0KBXNwZWVkGAUgAygNEgwKBGZyb20YBiADKA0SDQoFZmV0Y2gYByADKA0iGAoHUmVzdGFydBINCgVpbl9tcxgBIAEoDSIrCgZRdWV1ZWQSEAoIcG9zaXRpb24YASABKA0SDwoHd2FpdGluZxgCIAEoDSJ9CgdXZWxjb21lEg0KBXdvcmxkGAEgASgJEgwKBHRpY2sYAiABKAMSFQoNd29ybGRfdGltZV91cxgDIAEoAxIMCgRib2F0GAQgASgEEgwKBGtpbmQYBSABKA0SEAoIcmVqb2luZWQYBiABKAgSEAoIZXBvY2hfdXMYByABKAMiNQoEUG9uZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIVCg13b3JsZF90aW1lX3VzGAIgASgDKmQKCEJ1bXBQYXJ0EhkKFUJVTVBfUEFSVF9VTlNQRUNJRklFRBAAEhMKD0JVTVBfUEFSVF9ZT1VSUxABEhQKEEJVTVBfUEFSVF9USEVJUlMQAhISCg5CVU1QX1BBUlRfTk9ORRADQj1aO2dpdGh1Yi5jb20vZGFuZWVsdnQva2VlbC1vdmVyLXRoZS1lZGdlL2ludGVybmFsL3Byb3RvY29sL3BiYgZwcm90bzM");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -301,6 +301,12 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
      */
     value: WeatherSystems;
     case: "weatherSystems";
+  } | {
+    /**
+     * @generated from field: keel.v1.Bump bump = 7;
+     */
+    value: Bump;
+    case: "bump";
   } | { case: undefined; value?: undefined };
 };
 
@@ -310,6 +316,65 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 6);
+
+/**
+ * Bump is two boats touching after being apart: a correction the
+ * snapshots carry, and this, sent once. Each boat's sailor is told whose
+ * fault it was, by the Articles, the right-of-way rules; a connection that
+ * sees either boat in its near band is told of the knock, without the
+ * verdict. A connection is sent the bumps after it joins, each once.
+ *
+ * @generated from message keel.v1.Bump
+ */
+export type Bump = Message<"keel.v1.Bump"> & {
+  /**
+   * The tick the hulls touched.
+   *
+   * @generated from field: int64 tick = 1;
+   */
+  tick: bigint;
+
+  /**
+   * Where, in centimetres east and north of the world's centre.
+   *
+   * @generated from field: sint32 x = 2;
+   */
+  x: number;
+
+  /**
+   * @generated from field: sint32 y = 3;
+   */
+  y: number;
+
+  /**
+   * How fast they closed along the normal between the hulls, in cm/s.
+   *
+   * @generated from field: uint32 closing = 4;
+   */
+  closing: number;
+
+  /**
+   * Whose fault it was, seen from the connection's boat.
+   *
+   * @generated from field: keel.v1.BumpPart part = 5;
+   */
+  part: BumpPart;
+
+  /**
+   * The Article that puts the fault there, numbered as the Racing Rules
+   * of Sailing number the rule: "10", "16.1", "22". Empty for a viewer.
+   *
+   * @generated from field: string article = 6;
+   */
+  article: string;
+};
+
+/**
+ * Describes the message keel.v1.Bump.
+ * Use `create(BumpSchema)` to create a new message.
+ */
+export const BumpSchema: GenMessage<Bump> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 7);
 
 /**
  * WeatherSystems is the weather in play about the present: the spells the
@@ -336,7 +401,7 @@ export type WeatherSystems = Message<"keel.v1.WeatherSystems"> & {
  * Use `create(WeatherSystemsSchema)` to create a new message.
  */
 export const WeatherSystemsSchema: GenMessage<WeatherSystems> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 7);
+  messageDesc(file_keel_v1_game, 8);
 
 /**
  * Spell is a spell of weather: a stretch of time with one base wind, its
@@ -463,7 +528,7 @@ export type Spell = Message<"keel.v1.Spell"> & {
  * Use `create(SpellSchema)` to create a new message.
  */
 export const SpellSchema: GenMessage<Spell> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 8);
+  messageDesc(file_keel_v1_game, 9);
 
 /**
  * SeaAreas is what raises the waves about the boat: a square of sea areas,
@@ -533,7 +598,7 @@ export type SeaAreas = Message<"keel.v1.SeaAreas"> & {
  * Use `create(SeaAreasSchema)` to create a new message.
  */
 export const SeaAreasSchema: GenMessage<SeaAreas> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 9);
+  messageDesc(file_keel_v1_game, 10);
 
 /**
  * Restart says the server is about to restart, as a new version is
@@ -557,7 +622,7 @@ export type Restart = Message<"keel.v1.Restart"> & {
  * Use `create(RestartSchema)` to create a new message.
  */
 export const RestartSchema: GenMessage<Restart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 10);
+  messageDesc(file_keel_v1_game, 11);
 
 /**
  * Queued says the sea is full: the client waits for a boat. It comes after
@@ -587,7 +652,7 @@ export type Queued = Message<"keel.v1.Queued"> & {
  * Use `create(QueuedSchema)` to create a new message.
  */
 export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 11);
+  messageDesc(file_keel_v1_game, 12);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -652,7 +717,7 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 12);
+  messageDesc(file_keel_v1_game, 13);
 
 /**
  * Pong answers a Ping.
@@ -680,5 +745,46 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 13);
+  messageDesc(file_keel_v1_game, 14);
+
+/**
+ * BumpPart is a connection's part in a bump.
+ *
+ * @generated from enum keel.v1.BumpPart
+ */
+export enum BumpPart {
+  /**
+   * Not one of the boats: a connection that only saw it.
+   *
+   * @generated from enum value: BUMP_PART_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Its boat was at fault.
+   *
+   * @generated from enum value: BUMP_PART_YOURS = 1;
+   */
+  YOURS = 1,
+
+  /**
+   * The other boat was.
+   *
+   * @generated from enum value: BUMP_PART_THEIRS = 2;
+   */
+  THEIRS = 2,
+
+  /**
+   * Neither was: both capsized.
+   *
+   * @generated from enum value: BUMP_PART_NONE = 3;
+   */
+  NONE = 3,
+}
+
+/**
+ * Describes the enum keel.v1.BumpPart.
+ */
+export const BumpPartSchema: GenEnum<BumpPart> = /*@__PURE__*/
+  enumDesc(file_keel_v1_game, 0);
 

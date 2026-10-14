@@ -16,14 +16,21 @@
 // cause a correction. The Go test client predicts the same way
 // (internal/client/predict.go), and the tests replay its traces here.
 
-import type { BoatPhysics, Weather } from '../catalog/types.gen';
+import { catalog } from '../catalog';
+import type { BoatPhysics, Encounters, Weather } from '../catalog/types.gen';
 import type { BoatDriver } from '../game/driver';
 import type { OwnSnapshot } from '../net/snapshot';
 import { type BoatPose, StatePair } from './blend';
 import { RECORDS, SIZES } from './layout.gen';
-import { writeParams, writeSeaParams, writeWeatherParams } from './params.gen';
+import {
+  writeEncounterParams,
+  writeParams,
+  writeSeaParams,
+  writeWeatherParams,
+} from './params.gen';
 import type { Physics } from './physics';
 import { Seas } from './seas';
+import { Wakes } from './wakes';
 import { type BoatWind, newBoatWind, Spells } from './weather';
 
 /** Ticks of prediction kept. */
@@ -70,10 +77,16 @@ export function sheetIndex(sheet: number): number {
 
 /**
  * Readies a physics module for a kind of boat in the catalog's weather:
- * every record cleared, the sea's waves derived, then the boat's constants
- * and the wind's. No spell of weather is in play until one is set.
+ * every record cleared, the sea's waves derived, then the boat's constants,
+ * the wind's and the encounters'. No spell of weather is in play until one
+ * is set.
  */
-export function preparePhysics(physics: Physics, boat: BoatPhysics, weather: Weather): void {
+export function preparePhysics(
+  physics: Physics,
+  boat: BoatPhysics,
+  weather: Weather,
+  encounters: Encounters = catalog.encounters,
+): void {
   const r = physics.records;
   for (const v of Object.values(r)) {
     v.fill(0);
@@ -84,6 +97,8 @@ export function preparePhysics(physics: Physics, boat: BoatPhysics, weather: Wea
   physics.prepare();
   writeWeatherParams(physics.records.weatherParams, weather);
   physics.prepareWeather();
+  writeEncounterParams(physics.records.encounterParams, encounters);
+  physics.prepareEncounters();
   physics.setSpells([]);
 }
 
@@ -107,6 +122,8 @@ export class Predictor implements BoatDriver {
   readonly seas: Seas;
   /** The spells of weather whose wind the boat is stepped in, from the server's WeatherSystems. */
   readonly weather: Spells;
+  /** The other boats' wakes, from the snapshots, whose shadow each step sails in. */
+  readonly wakes: Wakes;
 
   readonly #physics: Physics;
   readonly #ticks = new Float64Array(RING).fill(Number.NaN);
@@ -122,6 +139,7 @@ export class Predictor implements BoatDriver {
     preparePhysics(physics, boat, weather);
     this.seas = new Seas(physics);
     this.weather = new Spells(physics);
+    this.wakes = new Wakes(physics);
   }
 
   /** The physics module, for whoever draws its sea. */
@@ -157,6 +175,7 @@ export class Predictor implements BoatDriver {
     r.control[RECORDS.control.helm] = helmOf(helm);
     r.control[RECORDS.control.sheet] = sheetOf(sheet);
     this.weather.use(tick);
+    this.wakes.use(tick);
     this.seas.use(tick);
     this.#physics.step();
   }

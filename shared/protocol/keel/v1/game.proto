@@ -88,7 +88,40 @@ message ServerMessage {
     Restart restart = 4;
     SeaAreas sea_areas = 5;
     WeatherSystems weather_systems = 6;
+    Bump bump = 7;
   }
+}
+
+// Bump is two boats touching after being apart: a correction the
+// snapshots carry, and this, sent once. Each boat's sailor is told whose
+// fault it was, by the Articles, the right-of-way rules; a connection that
+// sees either boat in its near band is told of the knock, without the
+// verdict. A connection is sent the bumps after it joins, each once.
+message Bump {
+  // The tick the hulls touched.
+  int64 tick = 1;
+  // Where, in centimetres east and north of the world's centre.
+  sint32 x = 2;
+  sint32 y = 3;
+  // How fast they closed along the normal between the hulls, in cm/s.
+  uint32 closing = 4;
+  // Whose fault it was, seen from the connection's boat.
+  BumpPart part = 5;
+  // The Article that puts the fault there, numbered as the Racing Rules
+  // of Sailing number the rule: "10", "16.1", "22". Empty for a viewer.
+  string article = 6;
+}
+
+// BumpPart is a connection's part in a bump.
+enum BumpPart {
+  // Not one of the boats: a connection that only saw it.
+  BUMP_PART_UNSPECIFIED = 0;
+  // Its boat was at fault.
+  BUMP_PART_YOURS = 1;
+  // The other boat was.
+  BUMP_PART_THEIRS = 2;
+  // Neither was: both capsized.
+  BUMP_PART_NONE = 3;
 }
 
 // WeatherSystems is the weather in play about the present: the spells the

@@ -45,6 +45,10 @@ type Predictor struct {
 	ring    [Ring]ringEntry
 	out     physics.Out
 	wind    physics.WeatherTick
+	// Encounters, if not nil, have each step sail in the shadow of the
+	// boats the snapshots show near, as Wakes approximates it.
+	Encounters *physics.EncounterPrepared
+	Wakes      Wakes
 }
 
 // NewPredictor predicts a boat of kind in the sea of waves, with which the
@@ -84,6 +88,9 @@ func (p *Predictor) step(tick int64, helm, sheet uint16) {
 		physics.WeatherAt(&p.Weather, &p.wind, float64(tick))
 	}
 	e := physics.WindAt(&p.wind, p.State.X, p.State.Y)
+	if p.Encounters != nil {
+		p.Wakes.Shadow(&e, p.State.X, p.State.Y, tick, &p.Weather, p.kind, p.Encounters)
+	}
 	physics.Step(&p.State, &c, &e, p.Seas.At(tick), p.kind, &p.out)
 }
 

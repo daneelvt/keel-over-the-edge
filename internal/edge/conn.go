@@ -43,6 +43,9 @@ type conn struct {
 	queued                    atomic.Bool
 	position                  int32
 	toldPosition, toldWaiting int32
+	// bumped is the tick of the newest bump the connection has been sent,
+	// or the tick it was welcomed at: it is sent only those after.
+	bumped int64
 	seen                      int64 // the tick the encoder last found it in the queue
 	enc                       *encoder
 

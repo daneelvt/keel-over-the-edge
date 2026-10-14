@@ -162,6 +162,21 @@ func (r *Report) print(w io.Writer, cfg Config) {
 	fmt.Fprintf(w, "  messages a player a second: in %s; out %s\n", spread(inMsgs), spread(outMsgs))
 	fmt.Fprintf(w, "  others in view: %s\n", spread(others))
 	fmt.Fprintf(w, "  %d snapshots, %d corrections (%d over the snap thresholds), %d dropped for want of their base, %d resyncs\n", snaps, corr, over, dropped, resyncs)
+	var bumps, mine, seen int
+	for _, p := range r.Players {
+		bumps += p.Stats.Bumps
+		for _, b := range p.Bumps {
+			if b.GetArticle() != "" {
+				mine++
+			} else {
+				seen++
+			}
+		}
+	}
+	if bumps > 0 {
+		fmt.Fprintf(w, "  %d bumps told: %d to the boats' own sailors, %d to sailors near them (%.2f a player a second)\n",
+			bumps, mine, seen, float64(bumps)/float64(len(r.Players))/secs)
+	}
 	codes := slices.Sorted(func(yield func(int) bool) {
 		for c := range closes {
 			if !yield(c) {
