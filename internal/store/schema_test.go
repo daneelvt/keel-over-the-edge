@@ -296,6 +296,15 @@ func TestPersistenceTables(t *testing.T) {
 	refused(t, exec(t, pool, `INSERT INTO checkpoint (world_id, tick, format, build, catalog, layout, epoch, boats, data)
 		VALUES ($1, 2, 4, 'dev', 'c', 1, 1, 0, '\x00')`, after.ID), "23505")
 	refused(t, exec(t, pool, "INSERT INTO event (world_id, tick, kind, account_id, boat) VALUES ($1, 1, 'sank', $2, 1)", after.ID, [16]byte{1}), "23514")
+	// A bump carries the other boat, the Article, the fault and its place;
+	// nothing else does.
+	must(t, pool, `INSERT INTO event (world_id, tick, kind, account_id, boat, other_account_id, other_boat, article, fault, x, y)
+		VALUES ($1, 2, 'bump', $2, 1, $3, 2, '16.1', 'account', 1.5, -2)`, after.ID, [16]byte{1}, [16]byte{2})
+	refused(t, exec(t, pool, "INSERT INTO event (world_id, tick, kind, account_id, boat) VALUES ($1, 2, 'bump', $2, 1)", after.ID, [16]byte{1}), "23514")
+	refused(t, exec(t, pool, `INSERT INTO event (world_id, tick, kind, account_id, boat, other_account_id, other_boat, article, fault, x, y)
+		VALUES ($1, 2, 'launched', $2, 1, $3, 2, '10', 'account', 0, 0)`, after.ID, [16]byte{1}, [16]byte{2}), "23514")
+	refused(t, exec(t, pool, `INSERT INTO event (world_id, tick, kind, account_id, boat, other_account_id, other_boat, article, fault, x, y)
+		VALUES ($1, 2, 'bump', $2, 1, $3, 2, '10', 'mine', 0, 0)`, after.ID, [16]byte{1}, [16]byte{2}), "23514")
 
 	var n int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM sim_lease").Scan(&n); err != nil || n != 1 {

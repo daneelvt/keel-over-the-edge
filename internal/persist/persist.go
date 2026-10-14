@@ -37,6 +37,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
@@ -262,10 +263,17 @@ func (p *Persist) Err() error {
 	}
 }
 
-// lasting reports whether a frame's tick decided anything lasting.
+// lasting reports whether a frame's tick decided anything lasting: an
+// event, or a bump of its own tick (a frame keeps the bumps of the last
+// second).
 func lasting(f *bus.Frame) bool {
 	for i := range f.Events {
 		if kindOf(&f.Events[i]) != "" {
+			return true
+		}
+	}
+	for i := range f.Bumps {
+		if f.Bumps[i].Tick == f.Tick {
 			return true
 		}
 	}
@@ -293,7 +301,29 @@ func appendEvents(dst []store.Event, f *bus.Frame) []store.Event {
 			dst = append(dst, store.Event{Tick: f.Tick, Kind: k, Account: e.Account, Boat: e.Reply.Boat})
 		}
 	}
+	for i := range f.Bumps {
+		if b := &f.Bumps[i]; b.Tick == f.Tick {
+			dst = append(dst, bumpEvent(b))
+		}
+	}
 	return dst
+}
+
+// bumpEvent is a bump's row: the boat at fault and its sailor first, or
+// with no fault the first boat's.
+func bumpEvent(b *bus.Bump) store.Event {
+	e := store.Event{
+		Tick: b.Tick, Kind: store.EventBump,
+		Account: b.OwnerA, Boat: b.BoatA, Other: b.OwnerB, OtherBoat: b.BoatB,
+		Article: protocol.ArticleName(b.Article), Fault: store.FaultAccount, X: b.X, Y: b.Y,
+	}
+	switch b.Fault {
+	case physics.Second:
+		e.Account, e.Boat, e.Other, e.OtherBoat = b.OwnerB, b.BoatB, b.OwnerA, b.BoatA
+	case physics.Neither:
+		e.Fault = store.FaultNone
+	}
+	return e
 }
 
 // Fill is the inbox's fill, from 0 to 1.
