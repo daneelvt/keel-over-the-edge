@@ -160,7 +160,15 @@ describe('the instruments', () => {
     expect(model.wind.value).toBe('N 10 kn · F3');
     // A gust of 16 knots, veered 8°, on a mean still of 10: a second in, a
     // third of the window is gust.
-    const gust = { ...breeze, speed: 16 * KNOT, from: 8 * DEG, gust: 1, factor: 1.6 };
+    const gust = {
+      ...breeze,
+      speed: 16 * KNOT,
+      from: 8 * DEG,
+      shadowSpeed: 16 * KNOT,
+      shadowFrom: 8 * DEG,
+      gust: 1,
+      factor: 1.6,
+    };
     for (const end = now + 1000; now < end; now += 1000 / 60) {
       model.frame(now, now / 1000, pose, out, gust, 0, 0, 0, 0);
     }
