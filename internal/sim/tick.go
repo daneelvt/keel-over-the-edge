@@ -39,6 +39,8 @@ func (w *World) tick() {
 	w.phaseDone(PhasePhysics)
 	trace.WithRegion(w.ctx, "grid", w.gridFn)
 	w.phaseDone(PhaseGrid)
+	trace.WithRegion(w.ctx, "contacts", w.contactsFn)
+	w.phaseDone(PhaseContacts)
 	trace.WithRegion(w.ctx, "publish", w.publishFn)
 	w.phaseDone(PhasePublish)
 }
@@ -76,6 +78,14 @@ func (w *World) inputs() {
 		next.Kind[s] = cur.Kind[s]
 		next.Control[s] = cur.Control[s]
 		next.State[s] = cur.State[s]
+		next.Course[s] = cur.Course[s]
+	}
+	// A bump stays a second in the frames, for encoders that skip one.
+	next.Bumps = next.Bumps[:0]
+	for _, b := range cur.Bumps {
+		if b.Tick > next.Tick-bus.BumpTicks {
+			next.Bumps = append(next.Bumps, b)
+		}
 	}
 	next.Queue = append(next.Queue[:0], cur.Queue...)
 	next.Changed = next.Changed[:0]
@@ -124,12 +134,16 @@ func (w *World) seaPhase() { w.sea.tick(w.next) }
 // physics steps every boat in the wind and the waves: the weather at the
 // tick, and each boat in the wind at its place as its step begins.
 func (w *World) physics() {
-	f := w.next
+	w.weatherAt(w.next)
+	w.workers.step(w.next.Live)
+}
+
+// weatherAt brings the world's wind to f's tick and spells.
+func (w *World) weatherAt(f *bus.Frame) {
 	if !sameSpells(&w.weather, f) {
 		w.weather.Set(f.SpellsInPlay())
 	}
 	physics.WeatherAt(&w.weather, &w.wind, float64(f.Tick))
-	w.workers.step(f.Live)
 }
 
 // sameSpells reports whether w holds f's spells in play.
@@ -137,17 +151,29 @@ func sameSpells(w *physics.Weather, f *bus.Frame) bool {
 	return w.Count == f.NSpells && w.Spells == f.Spells
 }
 
-// stepSlots steps the boats in slots of the next frame, and keeps what each
-// step says of its sail, for drawing. Workers call it on disjoint ranges.
-func (w *World) stepSlots(slots []int32, o *physics.Out) {
+// stepSlots steps the boats in slots of the next frame, each in the wind at
+// its place as its step begins less the shadow of the wakes about it in
+// the current frame, and keeps what each step says of its sail, for
+// drawing; then works out its wind and wake after the step, and brings its
+// course along. Workers call it on disjoint ranges: a step reads only its
+// own boat, the weather, the waves and the current frame.
+func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 	f := w.next
 	for _, s := range slots {
 		word := f.Control[s]
 		c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
 		st := &f.State[s]
 		e := physics.WindAt(&w.wind, st.X, st.Y)
-		physics.Step(st, &c, &e, w.sea.at, &w.kinds[f.Kind[s]], o)
+		kind := &w.kinds[f.Kind[s]]
+		if w.enc != nil {
+			w.shadow(src, &e, s, st.X, st.Y)
+		}
+		physics.Step(st, &c, &e, w.sea.at, kind, o)
 		f.Sail[s] = physics.SailByte(o)
+		w.settle(f, s)
+		if w.enc != nil {
+			physics.TrackCourse(&f.Course[s], st, f.Wind[s].WindFrom, kind, w.enc)
+		}
 	}
 }
 

@@ -79,7 +79,7 @@ func replayCmd(args []string, stdout, stderr io.Writer) error {
 
 	var dumped bool
 	var dumpErr error
-	opt := replay.Options{Kinds: kinds, Waves: waves, Weather: timeline, Workers: *workers}
+	opt := replay.Options{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: *workers}
 	if *dump != math.MinInt64 {
 		opt.At = func(fr *bus.Frame) {
 			if fr.Tick == *dump && !dumped {

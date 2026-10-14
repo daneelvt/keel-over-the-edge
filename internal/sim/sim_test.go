@@ -37,6 +37,17 @@ func kinds(t testing.TB) []physics.Prepared {
 	return ks
 }
 
+// encounters is the catalog's encounters, prepared.
+var encountersOnce = sync.OnceValue(func() *physics.EncounterPrepared {
+	cat, err := catalog.Load()
+	if err != nil {
+		panic(err)
+	}
+	return cat.PrepareEncounters()
+})
+
+func encounters(t testing.TB) *physics.EncounterPrepared { return encountersOnce() }
+
 // waves is the catalog's sea.
 func waves(t testing.TB) *physics.Waves {
 	w, _ := physicsOnce()
@@ -177,10 +188,10 @@ func TestJoin(t *testing.T) {
 		send(t, w, bus.Command{Op: bus.Join, Account: acct(uint64(100 + len(w.Latest().Live)))})
 		w.Tick()
 	}
-	if s := spawn(64); s.X != -640 || s.Y != -40 {
+	if s := spawnAt(64); s.X != -640 || s.Y != -40 {
 		t.Fatalf("slot 64 starts at %v, %v", s.X, s.Y)
 	}
-	if s := spawn(63); s.X != 620 || s.Y != -20 {
+	if s := spawnAt(63); s.X != 620 || s.Y != -20 {
 		t.Fatalf("slot 63 starts at %v, %v", s.X, s.Y)
 	}
 }

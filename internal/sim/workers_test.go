@@ -39,6 +39,7 @@ func BenchmarkWorkers(b *testing.B) {
 				continue
 			}
 			outs := make([]physics.Out, n)
+			srcs := make([]physics.Sources, n)
 			b.Run(fmt.Sprintf("boats=%d/spawn=%d", boats, n), func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
@@ -46,9 +47,9 @@ func BenchmarkWorkers(b *testing.B) {
 					var wg sync.WaitGroup
 					for i := 1; i < k; i++ {
 						lo, hi := i*len(live)/k, (i+1)*len(live)/k
-						wg.Go(func() { w.stepSlots(live[lo:hi], &outs[i]) })
+						wg.Go(func() { w.stepSlots(live[lo:hi], &outs[i], &srcs[i]) })
 					}
-					w.stepSlots(live[:len(live)/k], &outs[0])
+					w.stepSlots(live[:len(live)/k], &outs[0], &srcs[0])
 					wg.Wait()
 				}
 			})

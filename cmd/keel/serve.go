@@ -338,7 +338,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
-	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
+	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}

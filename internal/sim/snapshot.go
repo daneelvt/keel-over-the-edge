@@ -24,6 +24,7 @@ import (
 //	generations             uvarint n, then n × (slot, generation) uvarints, slots ascending, none zero
 //	boats                   uvarint n, then n × the boat below, slots ascending
 //	queue                   uvarint n, then n × the connection waiting below, the head first
+//	pairs                   uvarint n, then n × the pair below, by their slots, ascending
 //
 // A developer's weather is the tick it takes effect from as a varint, then
 // its mode, regime, wind speed and direction as uvarints. The spells in
@@ -31,14 +32,18 @@ import (
 //
 // Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
-// uvarint, its control word in 8 bytes, and its state's fields in 8 bytes
-// each; each connection waiting is its account's 16 bytes, the connection as
-// a uvarint, the tick it was queued at and the tick its place is given up
-// at (0 while connected) as varints.
+// uvarint, its control word in 8 bytes, its state's fields in 8 bytes each,
+// then its course's, the same; each connection waiting is its account's 16
+// bytes, the connection as a uvarint, the tick it was queued at and the tick
+// its place is given up at (0 while connected) as varints. Each pair is its
+// two slots and two boats, its keep-clear boat, Article and whose action as
+// uvarints, and the tick its keep-clear boat changed and the tick it last
+// touched as varints. The boats' winds and wakes follow from their states,
+// and the bumps are events: neither is stored.
 //
 // A checkpoint stores this snapshot, so a world is restored only by a build
 // that reads its version.
-const SnapshotVersion = 6
+const SnapshotVersion = 7
 
 // AppendSnapshot appends f's snapshot to dst.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
@@ -84,6 +89,9 @@ func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 		for _, v := range StateFields(&f.State[s]) {
 			dst = appendF64(dst, *v)
 		}
+		for _, v := range CourseFields(&f.Course[s]) {
+			dst = appendF64(dst, *v)
+		}
 	}
 	dst = binary.AppendUvarint(dst, uint64(len(f.Queue)))
 	for _, q := range f.Queue {
@@ -91,6 +99,18 @@ func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendUvarint(dst, q.Conn)
 		dst = binary.AppendVarint(dst, q.Since)
 		dst = binary.AppendVarint(dst, q.Grace)
+	}
+	dst = binary.AppendUvarint(dst, uint64(len(f.Pairs)))
+	for _, p := range f.Pairs {
+		dst = binary.AppendUvarint(dst, uint64(p.A))
+		dst = binary.AppendUvarint(dst, uint64(p.B))
+		dst = binary.AppendUvarint(dst, p.BoatA)
+		dst = binary.AppendUvarint(dst, p.BoatB)
+		dst = binary.AppendUvarint(dst, uint64(p.Keeper))
+		dst = binary.AppendUvarint(dst, uint64(p.Article))
+		dst = binary.AppendUvarint(dst, uint64(p.By))
+		dst = binary.AppendVarint(dst, p.Since)
+		dst = binary.AppendVarint(dst, p.Touched)
 	}
 	return dst
 }
@@ -183,6 +203,9 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		for _, v := range StateFields(&f.State[s]) {
 			*v = r.f64()
 		}
+		for _, v := range CourseFields(&f.Course[s]) {
+			*v = r.f64()
+		}
 	}
 	f.Queue = f.Queue[:0]
 	n = r.count(bus.QueueLimit)
@@ -195,11 +218,33 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		}
 		f.Queue = append(f.Queue, q)
 	}
+	f.Pairs = f.Pairs[:0]
+	f.Bumps = f.Bumps[:0]
+	n = r.count(capacity * capacity)
+	for range n {
+		a, b, boatA, boatB := r.uvarint(), r.uvarint(), r.uvarint(), r.uvarint()
+		keeper, article, by := r.uvarint(), r.uvarint(), r.uvarint()
+		since, touched := r.varint(), r.varint()
+		if r.err != nil {
+			return r.err
+		}
+		ok := a < b && b < capacity && f.Occupied[a] && f.Occupied[b] && f.Boat[a] == boatA && f.Boat[b] == boatB &&
+			keeper <= 2 && by <= 2 && article <= math.MaxUint8
+		if k := len(f.Pairs); ok && k > 0 {
+			last := f.Pairs[k-1]
+			ok = uint64(last.A) < a || uint64(last.A) == a && uint64(last.B) < b
+		}
+		if !ok {
+			return fmt.Errorf("sim: snapshot: a pair of slots %d and %d", a, b)
+		}
+		f.Pairs = append(f.Pairs, bus.Pair{A: int32(a), B: int32(b), BoatA: boatA, BoatB: boatB,
+			Keeper: uint8(keeper), Article: uint8(article), By: uint8(by), Since: since, Touched: touched})
+	}
 	if r.err != nil {
 		return r.err
 	}
 	if len(r.b) > 0 {
-		return errors.New("sim: snapshot: data after the queue")
+		return errors.New("sim: snapshot: data after the pairs")
 	}
 	return nil
 }

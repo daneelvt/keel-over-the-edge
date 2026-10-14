@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 // Admission: a world holds at most its limit of boats, those in their grace
@@ -94,7 +95,8 @@ func (w *World) newBoat(account bus.Account, conn uint64) int32 {
 	f.Grace[s] = 0
 	f.Kind[s] = 0
 	f.Control[s] = bus.Centred(gen)
-	f.State[s] = spawn(s)
+	f.State[s] = w.spawn(f, s)
+	f.Course[s] = physics.Course{}
 	i, _ := slices.BinarySearch(f.Live, s)
 	f.Live = slices.Insert(f.Live, i, s)
 	if w.given == nil {

@@ -192,7 +192,7 @@ func onPortSide(e *Encounter) bool {
 	sb, cb := SinCos(e.Heading[1])
 	// Their mean starboard side; if they head opposite ways, the first's.
 	rx, ry := ca+cb, -(sa + sb)
-	if float64(rx*rx)+float64(ry*ry) < 1e-12 {
+	if float64(rx*rx)+float64(ry*ry) < 0.25 {
 		rx, ry = ca, -sa
 	}
 	dx, dy := e.X[1]-e.X[0], e.Y[1]-e.Y[0]
@@ -209,6 +209,10 @@ func secondToLeeward(e *Encounter) bool {
 	sa, ca := SinCos(e.Heading[0])
 	sb, cb := SinCos(e.Heading[1])
 	rx, ry := ca+cb, -(sa + sb)
+	if float64(rx*rx)+float64(ry*ry) < 0.25 {
+		// Heading more than about 150° apart: the first's side.
+		rx, ry = ca, -sa
+	}
 	dx, dy := e.X[1]-e.X[0], e.Y[1]-e.Y[0]
 	across := float64(dx*rx) + float64(dy*ry)
 	if across != 0 {

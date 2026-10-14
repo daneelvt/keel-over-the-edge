@@ -2,6 +2,8 @@
 
 package physics
 
+import "math"
+
 // EncounterPrepared holds the encounters' constants as contacts, the
 // shadow and the Articles use them, derived from EncounterParams by
 // PrepareEncounters.
@@ -93,4 +95,16 @@ func (e *EncounterPrepared) Apart() int64 { return int64(e.apart) }
 // offset from the boat's centre.
 func (e *EncounterPrepared) Reach(b *Prepared) float64 {
 	return float64(e.reach*b.mastHeight) + b.outline.radius
+}
+
+// ReachCells is how many grid cells about its own a boat must look for the
+// wakes of boats of kind b: enough to hold their reach.
+func (e *EncounterPrepared) ReachCells(b *Prepared) int32 {
+	return toInt32(math.Ceil(e.Reach(b) / CellSize))
+}
+
+// Within reports whether boat s is within r of the point (x, y).
+func Within(s *State, x, y, r float64) bool {
+	dx, dy := s.X-x, s.Y-y
+	return float64(dx*dx)+float64(dy*dy) < float64(r*r)
 }

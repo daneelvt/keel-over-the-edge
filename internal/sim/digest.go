@@ -13,9 +13,10 @@ import (
 // developer's weathers (each one's tick, mode, regime, speed and direction),
 // the sea in effect and next (each run of areas with the same inputs, and
 // its length), whether admission is held, each occupied slot's number, boat, generation,
-// owner, connection, grace, control word and state, and each waiting
-// connection's account, connection, tick of joining the queue and grace, as
-// little-endian bits. Two worlds with the
+// owner, connection, grace, control word, state and course, each waiting
+// connection's account, connection, tick of joining the queue and grace,
+// and each pair's slots, boats, keep-clear boat, Article, whose action and
+// ticks, as little-endian bits. Two worlds with the
 // same digest at a tick are, all but certainly, the same world; a replay
 // compares them to find the first tick at which it went wrong.
 func Digest(f *bus.Frame) uint64 {
@@ -48,6 +49,9 @@ func Digest(f *bus.Frame) uint64 {
 		for _, v := range StateFields(&f.State[s]) {
 			h.f64(*v)
 		}
+		for _, v := range CourseFields(&f.Course[s]) {
+			h.f64(*v)
+		}
 	}
 	for _, q := range f.Queue {
 		for _, b := range q.Account {
@@ -56,6 +60,17 @@ func Digest(f *bus.Frame) uint64 {
 		h.u64(q.Conn)
 		h.u64(uint64(q.Since))
 		h.u64(uint64(q.Grace))
+	}
+	for _, p := range f.Pairs {
+		h.u64(uint64(p.A))
+		h.u64(uint64(p.B))
+		h.u64(p.BoatA)
+		h.u64(p.BoatB)
+		h.byte(p.Keeper)
+		h.byte(p.Article)
+		h.byte(p.By)
+		h.u64(uint64(p.Since))
+		h.u64(uint64(p.Touched))
 	}
 	return uint64(h)
 }
@@ -111,3 +126,12 @@ func StateFields(s *physics.State) [StateSize]*float64 {
 
 // StateSize is the number of a state's fields.
 const StateSize = 19
+
+// CourseFields lists a course's fields, in their order, as StateFields does
+// a state's.
+func CourseFields(c *physics.Course) [CourseSize]*float64 {
+	return [CourseSize]*float64{&c.Tack, &c.Tacking, &c.Settled, &c.Course}
+}
+
+// CourseSize is the number of a course's fields.
+const CourseSize = 4

@@ -490,7 +490,7 @@ func TestServe(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: timeline(t), Workers: 3})
+		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: timeline(t), Encounters: encounters(t), Workers: 3})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -520,6 +520,16 @@ func kinds(t *testing.T) []physics.Prepared {
 func waves(t *testing.T) *physics.Waves {
 	w, _ := physicsOnce()
 	return w
+}
+
+// encounters is the catalog's encounters, as keel serve meets them.
+func encounters(t *testing.T) *physics.EncounterPrepared {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cat.PrepareEncounters()
 }
 
 // timeline is the catalog's weather, as keel serve sails in it.
@@ -790,7 +800,7 @@ func TestReplayDump(t *testing.T) {
 	}
 	const at = 900
 	want := bus.NewFrame(f.Header.Capacity)
-	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: timeline(t), Workers: 1, At: func(fr *bus.Frame) {
+	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: timeline(t), Encounters: encounters(t), Workers: 1, At: func(fr *bus.Frame) {
 		if fr.Tick == at {
 			if err := sim.ReadSnapshot(sim.AppendSnapshot(nil, fr), want); err != nil {
 				t.Fatal(err)
