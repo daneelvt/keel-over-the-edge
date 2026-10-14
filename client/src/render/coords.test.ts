@@ -66,7 +66,10 @@ describe('the floating origin', () => {
     const o = new FloatingOrigin();
     const s = { x: 0, y: 0, z: 0 };
     const c = { x: 0, y: 0 };
-    // A boat sailing a long spiral out to the rim and round it.
+    // A boat sailing a long spiral out to the rim and round it. The
+    // farthest is kept and checked once: 400,000 expects took seconds.
+    let boat = 0;
+    let field = 0;
     for (let i = 0; i <= 200000; i++) {
       const t = i / 200000;
       const d = t * DISK_RADIUS;
@@ -76,10 +79,12 @@ describe('the floating origin', () => {
       o.follow(e, n);
       // The boat, and the centre of the tile field with its farthest tile.
       o.toScene(e, n, 0, s);
-      expect(Math.hypot(s.x, s.z)).toBeLessThan(700);
+      boat = Math.max(boat, Math.hypot(s.x, s.z));
       hexCentre(o.centre.q, o.centre.r, c);
       o.toScene(c.x, c.y, 0, s);
-      expect(Math.hypot(s.x, s.z) + FIELD_RADIUS).toBeLessThan(700);
+      field = Math.max(field, Math.hypot(s.x, s.z) + FIELD_RADIUS);
     }
+    expect(boat).toBeLessThan(700);
+    expect(field).toBeLessThan(700);
   });
 });

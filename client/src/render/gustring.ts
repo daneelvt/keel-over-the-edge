@@ -331,13 +331,21 @@ export class GustRings {
     boat: { east: number; north: number; velEast: number; velNorth: number; windFrom: number },
   ): void {
     const o = this.#options;
-    ringGrid(boat.east, boat.north, boat.windFrom, o, this.#points);
     physics.windDrawAt(tick);
+    const excess = physics.gustFrame()[RECORDS.gustFrame.excess] ?? 0;
+    if (!(excess > 0)) {
+      // A steady wind, or one with no gusts: nothing to sample.
+      this.ringed = [];
+      for (const d of this.#drawn) {
+        d.held = false;
+      }
+      return;
+    }
+    ringGrid(boat.east, boat.north, boat.windFrom, o, this.#points);
     physics.windSample(this.#points, this.#values, this.#factor.length);
     for (let i = 0; i < this.#factor.length; i++) {
       this.#factor[i] = this.#values[i * WIND_VALUES + WIND_VALUE.factor] ?? 1;
     }
-    const excess = physics.gustFrame()[RECORDS.gustFrame.excess] ?? 0;
     const here = physics.windPoint(boat.east, boat.north);
     this.#driftEast = here[RECORDS.wind.driftEast] ?? 0;
     this.#driftNorth = here[RECORDS.wind.driftNorth] ?? 0;
