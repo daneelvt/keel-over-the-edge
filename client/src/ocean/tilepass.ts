@@ -72,6 +72,9 @@ export class TilePass {
   readonly centre = uniform(new Vector2());
   readonly #quad: QuadMesh;
   readonly #gusts: QuadMesh;
+  readonly #field: GustField;
+  /** Whether the gusts' rows hold a field: they are zero until one is drawn. */
+  #gusty = false;
   /** The rows that hold tiles: the field fills the first 40 of each 64. */
   readonly #rows: number;
 
@@ -96,9 +99,10 @@ export class TilePass {
     const tile = textureLoad(offsets, ivec2(texel.x, texel.y.sub(GUST_ROW)));
     gust.fragmentNode = vec4(gustAt(gusts)(this.centre.add(tile.xy)), 0, 0, 1);
     this.#gusts = new QuadMesh(gust);
+    this.#field = gusts;
   }
 
-  /** Draws every tile's plane into the target, and every tile's gust below them. */
+  /** Draws every tile's plane into the target, and, where there are gusts, every tile's gust below them. */
   render(renderer: WebGPURenderer): void {
     // The renderer's own switch turns on a target's scissor. Only the rows
     // that hold tiles are drawn.
@@ -108,13 +112,19 @@ export class TilePass {
     renderer.setScissorTest(true);
     this.target.scissor.set(0, 0, PASS_WIDTH, this.#rows);
     this.#quad.render(renderer);
-    // The second draw keeps what the first wrote: on WebGPU a pass that
-    // clears its target clears all of it, whatever the scissor.
-    const cleared = renderer.autoClear;
-    renderer.autoClear = false;
-    this.target.scissor.set(0, GUST_ROW, PASS_WIDTH, this.#rows);
-    this.#gusts.render(renderer);
-    renderer.autoClear = cleared;
+    // The gusts are drawn only while there is a field, and once more after
+    // it has gone, which writes zeros: in a steady wind their shader is
+    // never compiled. The second draw keeps what the first wrote: on WebGPU
+    // a pass that clears its target clears all of it, whatever the scissor.
+    const gusty = this.#field.uniforms.spells.value > 0;
+    if (gusty || this.#gusty) {
+      const cleared = renderer.autoClear;
+      renderer.autoClear = false;
+      this.target.scissor.set(0, GUST_ROW, PASS_WIDTH, this.#rows);
+      this.#gusts.render(renderer);
+      renderer.autoClear = cleared;
+      this.#gusty = gusty;
+    }
     renderer.setScissorTest(scissored);
     renderer.setRenderTarget(before);
   }

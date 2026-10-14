@@ -19,7 +19,19 @@
 // 16 bits each, in floats, which hold them exactly on every back end.
 
 import { Vector4 } from 'three';
-import { Fn, float, floor, If, int, mix, select, uint, uniform, uniformArray } from 'three/tsl';
+import {
+  Fn,
+  float,
+  floor,
+  If,
+  int,
+  mix,
+  select,
+  uint,
+  uniform,
+  uniformArray,
+  vec2,
+} from 'three/tsl';
 import type { Node, UniformNode } from 'three/webgpu';
 import type { WeatherGusts } from '../catalog/types.gen';
 import { RECORDS, WEATHER } from '../predict/layout.gen';
@@ -165,35 +177,45 @@ export class GustField {
 const low = (n: number): number => (n >>> 0) & 0xffff;
 const high = (n: number): number => (n >>> 0) >>> 16;
 
+// The hash, the gradient and an octave's noise are functions of the shader's
+// own, declared once and called, not written out at each use: a field is 48
+// corners, and written out they made a shader slow to compile.
+
 /** Mixes the bits of x (Wellons's lowbias32), as the module does. */
-const hash = (x: Node<'uint'>): Node<'uint'> => {
-  const h = x.toVar();
-  h.assign(h.bitXor(h.shiftRight(uint(16))));
-  h.assign(h.mul(uint(0x7feb352d)));
-  h.assign(h.bitXor(h.shiftRight(uint(15))));
-  h.assign(h.mul(uint(0x846ca68b)));
-  h.assign(h.bitXor(h.shiftRight(uint(16))));
-  return h as unknown as Node<'uint'>;
-};
+const hash = Fn(
+  ([x]: [Node<'uint'>]) => {
+    const h = x.toVar();
+    h.assign(h.bitXor(h.shiftRight(uint(16))));
+    h.assign(h.mul(uint(0x7feb352d)));
+    h.assign(h.bitXor(h.shiftRight(uint(15))));
+    h.assign(h.mul(uint(0x846ca68b)));
+    h.assign(h.bitXor(h.shiftRight(uint(16))));
+    return h;
+  },
+  { x: 'uint', return: 'uint' },
+) as unknown as (x: Node<'uint'>) => Node<'uint'>;
 
 /**
  * The dot product of (x, y, z) with the gradient a hash's low four bits
  * choose: one of the twelve toward the middles of a cube's edges, as
  * Perlin's improved noise chooses them.
  */
-const grad = (
+const grad = Fn(
+  ([h, x, y, z]: [Node<'uint'>, Node<'float'>, Node<'float'>, Node<'float'>]) => {
+    const b = h.bitAnd(uint(15)).toVar();
+    const u = select(b.lessThan(uint(8)), x, y);
+    const v = select(b.lessThan(uint(4)), y, select(b.equal(uint(12)).or(b.equal(uint(14))), x, z));
+    const su = select(b.bitAnd(uint(1)).equal(uint(0)), u, u.negate());
+    const sv = select(b.bitAnd(uint(2)).equal(uint(0)), v, v.negate());
+    return su.add(sv);
+  },
+  { h: 'uint', x: 'float', y: 'float', z: 'float', return: 'float' },
+) as unknown as (
   h: Node<'uint'>,
   x: Node<'float'>,
   y: Node<'float'>,
   z: Node<'float'>,
-): Node<'float'> => {
-  const b = h.bitAnd(uint(15)).toVar();
-  const u = select(b.lessThan(uint(8)), x, y);
-  const v = select(b.lessThan(uint(4)), y, select(b.equal(uint(12)).or(b.equal(uint(14))), x, z));
-  const su = select(b.bitAnd(uint(1)).equal(uint(0)), u, u.negate());
-  const sv = select(b.bitAnd(uint(2)).equal(uint(0)), v, v.negate());
-  return su.add(sv) as unknown as Node<'float'>;
-};
+) => Node<'float'>;
 
 /** Perlin's quintic, 6t⁵ − 15t⁴ + 10t³. */
 const fade = (t: Node<'float'>): Node<'float'> =>
@@ -205,6 +227,82 @@ const fade = (t: Node<'float'>): Node<'float'> =>
 /** A 32-bit whole number from its halves. */
 const whole = (lo: Node<'float'>, hi: Node<'float'>): Node<'uint'> =>
   uint(hi).shiftLeft(uint(16)).bitOr(uint(lo)) as unknown as Node<'uint'>;
+
+/**
+ * An octave's noise at a point of a spell's frame: lo and hi the halves of
+ * the origin's cells and of the seed, fr how far the origin is across its
+ * cell, the point along and across the frame from the origin in metres,
+ * and the reciprocals of the octave's cells.
+ */
+const octave = Fn(
+  ([lo, hi, fr, along, across, inv]: [
+    Node<'vec4'>,
+    Node<'vec4'>,
+    Node<'vec4'>,
+    Node<'float'>,
+    Node<'float'>,
+    Node<'vec2'>,
+  ]) => {
+    const a = fr.x.add(along.mul(inv.x)).toVar();
+    const c = fr.y.add(across.mul(inv.y)).toVar();
+    const fa = floor(a).toVar();
+    const fc = floor(c).toVar();
+    // A negative step is added as its two's complement, which wraps to
+    // the cell before.
+    const ci = whole(lo.x, hi.x)
+      .add(uint(int(fa)))
+      .toVar();
+    const cj = whole(lo.y, hi.y)
+      .add(uint(int(fc)))
+      .toVar();
+    const ck = whole(lo.z, hi.z).toVar();
+    const seed = whole(lo.w, hi.w).toVar();
+    const x = a.sub(fa).toVar();
+    const y = c.sub(fc).toVar();
+    const z = fr.z.toVar();
+    const i0 = ci.mul(uint(PRIME_I)).toVar();
+    const i1 = ci.add(uint(1)).mul(uint(PRIME_I)).toVar();
+    const j0 = cj.mul(uint(PRIME_J)).toVar();
+    const j1 = cj.add(uint(1)).mul(uint(PRIME_J)).toVar();
+    const k0 = ck.mul(uint(PRIME_K)).bitXor(seed).toVar();
+    const k1 = ck.add(uint(1)).mul(uint(PRIME_K)).bitXor(seed).toVar();
+    const x1 = x.sub(1).toVar();
+    const y1 = y.sub(1).toVar();
+    const z1 = z.sub(1).toVar();
+    const at = (hi_: Node<'uint'>, hj: Node<'uint'>, hk: Node<'uint'>) =>
+      hash(hi_.bitXor(hj).bitXor(hk) as unknown as Node<'uint'>);
+    const n000 = grad(at(i0, j0, k0), x, y, z);
+    const n100 = grad(at(i1, j0, k0), x1, y, z);
+    const n010 = grad(at(i0, j1, k0), x, y1, z);
+    const n110 = grad(at(i1, j1, k0), x1, y1, z);
+    const n001 = grad(at(i0, j0, k1), x, y, z1);
+    const n101 = grad(at(i1, j0, k1), x1, y, z1);
+    const n011 = grad(at(i0, j1, k1), x, y1, z1);
+    const n111 = grad(at(i1, j1, k1), x1, y1, z1);
+    const fx = fade(x).toVar();
+    const fy = fade(y).toVar();
+    const fz = fade(z);
+    const near = mix(mix(n000, n100, fx), mix(n010, n110, fx), fy);
+    const far = mix(mix(n001, n101, fx), mix(n011, n111, fx), fy);
+    return mix(near, far, fz);
+  },
+  {
+    lo: 'vec4',
+    hi: 'vec4',
+    fr: 'vec4',
+    along: 'float',
+    across: 'float',
+    inv: 'vec2',
+    return: 'float',
+  },
+) as unknown as (
+  lo: Node<'vec4'>,
+  hi: Node<'vec4'>,
+  fr: Node<'vec4'>,
+  along: Node<'float'>,
+  across: Node<'float'>,
+  inv: Node<'vec2'>,
+) => Node<'float'>;
 
 /**
  * The gust field at a scene point, x and z from the floating origin: from
@@ -220,52 +318,16 @@ export function gustAt(field: GustField): (p: Node<'vec2'>) => Node<'float'> {
     const sum = float(0).toVar();
     for (let k = 0; k < OCTAVES; k++) {
       const i = s * OCTAVES + k;
-      const lo = u.low.element(i) as unknown as Node<'vec4'>;
-      const hi = u.high.element(i) as unknown as Node<'vec4'>;
-      const fr = u.frac.element(i) as unknown as Node<'vec4'>;
       const { invAlong, invAcross } = field.cell(k);
-      const a = fr.x.add(along.mul(invAlong)).toVar();
-      const c = fr.y.add(across.mul(invAcross)).toVar();
-      const fa = floor(a).toVar();
-      const fc = floor(c).toVar();
-      // A negative step is added as its two's complement, which wraps to
-      // the cell before.
-      const ci = whole(lo.x, hi.x)
-        .add(uint(int(fa)))
-        .toVar();
-      const cj = whole(lo.y, hi.y)
-        .add(uint(int(fc)))
-        .toVar();
-      const ck = whole(lo.z, hi.z).toVar();
-      const seed = whole(lo.w, hi.w).toVar();
-      const x = a.sub(fa).toVar();
-      const y = c.sub(fc).toVar();
-      const z = fr.z;
-      const i0 = ci.mul(uint(PRIME_I)).toVar();
-      const i1 = ci.add(uint(1)).mul(uint(PRIME_I)).toVar();
-      const j0 = cj.mul(uint(PRIME_J)).toVar();
-      const j1 = cj.add(uint(1)).mul(uint(PRIME_J)).toVar();
-      const k0 = ck.mul(uint(PRIME_K)).bitXor(seed).toVar();
-      const k1 = ck.add(uint(1)).mul(uint(PRIME_K)).bitXor(seed).toVar();
-      const x1 = x.sub(1);
-      const y1 = y.sub(1);
-      const z1 = z.sub(1);
-      const at = (hi_: Node<'uint'>, hj: Node<'uint'>, hk: Node<'uint'>) =>
-        hash(hi_.bitXor(hj).bitXor(hk) as unknown as Node<'uint'>);
-      const n000 = grad(at(i0, j0, k0), x, y, z);
-      const n100 = grad(at(i1, j0, k0), x1, y, z);
-      const n010 = grad(at(i0, j1, k0), x, y1, z);
-      const n110 = grad(at(i1, j1, k0), x1, y1, z);
-      const n001 = grad(at(i0, j0, k1), x, y, z1);
-      const n101 = grad(at(i1, j0, k1), x1, y, z1);
-      const n011 = grad(at(i0, j1, k1), x, y1, z1);
-      const n111 = grad(at(i1, j1, k1), x1, y1, z1);
-      const fx = fade(x);
-      const fy = fade(y);
-      const fz = fade(z);
-      const near = mix(mix(n000, n100, fx), mix(n010, n110, fx), fy);
-      const far = mix(mix(n001, n101, fx), mix(n011, n111, fx), fy);
-      sum.addAssign(mix(near, far, fz).mul(WEIGHTS[k] as number));
+      const n = octave(
+        u.low.element(i) as unknown as Node<'vec4'>,
+        u.high.element(i) as unknown as Node<'vec4'>,
+        u.frac.element(i) as unknown as Node<'vec4'>,
+        along,
+        across,
+        vec2(invAlong, invAcross),
+      );
+      sum.addAssign(n.mul(WEIGHTS[k] as number));
     }
     return sum
       .mul(1 / GUST_SCALE)

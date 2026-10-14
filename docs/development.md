@@ -528,14 +528,20 @@ the lattice cell the floating origin is in and how far across it, found in
 64 bits, with the direction, the seeds and the two spells' shares. The cells
 and seeds are 32-bit integers and cross as two 16-bit halves in floats. So
 the shader works only with a tile's few metres, and never sees a world
-position or the hours a field has travelled. How a gust looks is `GUST_LOOK`
-in `gusts.ts`; none of it moves a boat.
+position or the hours a field has travelled. The hash, the gradient and an
+octave's noise are functions of the shader's own, and the gusts' rows are
+drawn only while a spell in play has gusts (and once more when it has gone,
+to nothing), so a page in a steady wind never builds their shader: on CI's
+software GPU that shader takes seconds to compile, on a real one
+milliseconds. How a gust looks is `GUST_LOOK` in `gusts.ts`; none of it
+moves a boat.
 
 `e2e/wind.spec.ts` gives the page the weathers of `wind.json` and reads back
 what the GPU computed at every tile: within 10⁻⁴ of the server's field, on
 WebGL 2 and WebGPU. It also checks that a gust's tiles are darker and
 rougher than they are with the gusts hidden, at noon and under a full moon,
-and that a steady wind draws none.
+that a steady wind draws none, and that the tiles' rows are zero before any
+field and after it has gone.
 
 ### The readout and the ring
 

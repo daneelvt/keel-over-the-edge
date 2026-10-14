@@ -78,6 +78,37 @@ test.describe('the GPU’s gust field', () => {
       }
     });
   }
+
+  // The gusts' rows are drawn only while there is a field, so a steady
+  // wind's page never builds their shader; when the field goes, they are
+  // drawn once more, to nothing.
+  test('leaves nothing on the tiles once the wind is steady again', async ({ page }) => {
+    const c = windFile.cases.find((k) => k.name === 'trade');
+    if (c === undefined) {
+      throw new Error('wind.json has no trade case');
+    }
+    await openScene(page);
+    const got = await page.evaluate(async (c) => {
+      const k = globalThis.keel;
+      const most = (v: number[]) => v.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+      k.placeBoat(c.origin[0] ?? 0, c.origin[1] ?? 0);
+      k.freezeTick(c.tick);
+      k.render();
+      const before = most((await k.tileGusts()).gpu);
+      k.setSpells(c.spells);
+      k.render();
+      const gusty = most((await k.tileGusts()).gpu);
+      k.setWind(12, 0);
+      k.render();
+      const after = most((await k.tileGusts()).gpu);
+      k.render();
+      return { before, gusty, after, later: most((await k.tileGusts()).gpu) };
+    }, c);
+    expect(got.before).toBe(0);
+    expect(got.gusty).toBeGreaterThan(0.5);
+    expect(got.after).toBe(0);
+    expect(got.later).toBe(0);
+  });
 });
 
 test.describe('a gust on the water', () => {
