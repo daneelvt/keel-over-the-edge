@@ -163,6 +163,22 @@ func TestRestartRejoinsTheBoat(t *testing.T) {
 	vars := map[string]string{"KEEL_DEV_COMMANDS": "1"}
 	first := startRealWith(t, u, vars)
 	first.waitReady(t)
+	// A steady 12 knots from the north, a beam reach from the start grid:
+	// the world's own weather depends on the hour, and in a light spell the
+	// boat would hardly move. It blows from the second after next.
+	wind := func(query string) {
+		t.Helper()
+		res, err := http.Post(first.net.url(t, "127.0.0.1:9090")+"/debug/wind?"+query, "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusNoContent {
+			t.Fatalf("/debug/wind?%s: %d", query, res.StatusCode)
+		}
+	}
+	wind("knots=12&from=0")
+	time.Sleep(2500 * time.Millisecond)
 	cookie := realGuest(t, first, "Ann")
 	c := realConnect(t, first, cookie)
 	start := c.last(t)
@@ -172,11 +188,7 @@ func TestRestartRejoinsTheBoat(t *testing.T) {
 	time.Sleep(4 * time.Second)
 	// The wind dies; the boat slows, and how fast it still drifts is
 	// measured.
-	res, err := http.Post(first.net.url(t, "127.0.0.1:9090")+"/debug/wind?knots=0&from=0", "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res.Body.Close()
+	wind("knots=0&from=0")
 	time.Sleep(6 * time.Second)
 	a := c.last(t)
 	time.Sleep(time.Second)
