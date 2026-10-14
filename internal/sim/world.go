@@ -269,7 +269,7 @@ func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 	w.sea.under(&f.Sea, f.Tick, f.Weathers)
 	// Each slot holds the controls in force until its sailor writes again.
 	for _, s := range f.Live {
-		w.bus.Controls.Store(s, f.Control[s])
+		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s])
 	}
 	// The wind and the wakes follow from the state, as the tick that made
 	// it left them.

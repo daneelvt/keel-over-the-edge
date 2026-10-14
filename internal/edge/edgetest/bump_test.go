@@ -29,7 +29,7 @@ func boatOf(s *Server, account bus.Account) uint64 {
 }
 
 // letGo holds the helm amidships and lets the sheet fly.
-func letGo(int) (helm, sheet uint16) { return bus.Steps / 2, bus.Steps }
+func letGo(int) client.Input { return client.Hand(bus.Steps/2, bus.Steps) }
 
 // sailFor sails every sailor for d at once.
 func sailFor(t *testing.T, sailors []*client.Sailor, d time.Duration) {

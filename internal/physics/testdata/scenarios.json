@@ -1,5 +1,5 @@
 {
-  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state and Out with golden.json. params are the Jolly boat's, as the catalog gives them (catalog_test.go checks they match). Winds are 10 m up, in m/s. A change applies before the step it names, counting from 0, and keeps its values until the next change. steer starts a heading-hold to that heading, in radians, which sets the helm before every step to clamp(2 × (heading off course, wrapped to ±π) − 0.8 × yaw rate, −1, 1); a change that sets the helm stops it. The random scenario's changes were drawn once, with seed 3, and are kept as data. A scenario with a sea sails in waves: sea is the catalog's sea values (catalog_test.go checks them too), and the scenario's own sea a window of sea areas, size a side from the area at column col and row row, each area's inputs in whole steps (the wind's speed in 0.01 m/s, the direction it comes from in 65536ths of a turn, the fetch in metres), row by row from the south-west, with the tick of step 0; a change's areas replace them all. The random-sea scenario's changes were drawn once, with seed 5. A scenario with a weather sails in spells of weather: wind is the catalog's wind values (catalog_test.go checks them), and the scenario's weather the spells in play, each in the whole numbers the wire carries, with the tick of step 0; before every step the wind is the wind at the boat at the step's tick, and env is not used. A change's spells replace them all. The random-weather scenario's spells and changes were drawn once, with seed 7.",
+  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state and Out with golden.json. params are the Jolly boat's, as the catalog gives them (catalog_test.go checks they match). Winds are 10 m up, in m/s. A change applies before the step it names, counting from 0, and keeps its values until the next change. steer starts a heading-hold to that heading, in radians, which sets the helm before every step to clamp(2 × (heading off course, wrapped to ±π) − 0.8 × yaw rate, −1, 1); a change that sets the helm stops it. The random scenario's changes were drawn once, with seed 3, and are kept as data. A scenario with a sea sails in waves: sea is the catalog's sea values (catalog_test.go checks them too), and the scenario's own sea a window of sea areas, size a side from the area at column col and row row, each area's inputs in whole steps (the wind's speed in 0.01 m/s, the direction it comes from in 65536ths of a turn, the fetch in metres), row by row from the south-west, with the tick of step 0; a change's areas replace them all. The random-sea scenario's changes were drawn once, with seed 5. A scenario with a weather sails in spells of weather: wind is the catalog's wind values (catalog_test.go checks them), and the scenario's weather the spells in play, each in the whole numbers the wire carries, with the tick of step 0; before every step the wind is the wind at the boat at the step's tick, and env is not used. A change's spells replace them all. The random-weather scenario's spells and changes were drawn once, with seed 7. The pilot scenarios sail on the autopilot: the control's pilot, target, order and way are the whole numbers the wire carries, and env's meanFrom is the mean wind it steers by.",
   "sea": {
     "shortest": 8,
     "longest": 76,
@@ -132,7 +132,16 @@
     "climbTime": 4,
     "rudderTime": 0.25,
     "sheetHaulTime": 2.5,
-    "sheetEaseTime": 1
+    "sheetEaseTime": 1,
+    "gain": 2,
+    "damping": 0.8,
+    "trimTime": 10,
+    "trimLimit": 0.3,
+    "trimBand": 10,
+    "tackHelm": 1,
+    "gybeHelm": 0.35,
+    "byTheLee": 15,
+    "onCourse": 10
   },
   "scenarios": [
     {
@@ -1015,6 +1024,68 @@
             {"begin": 740009678, "change": 27, "start": 739834102, "length": 168533, "regime": 1, "steady": 0, "speed": 642, "from": 30901, "drift": -1153, "gust": 1300, "shift": [971, 485], "period": [11505, 14337], "phase": [25679, 62206], "across": 910, "axis": 42320, "axisPeriod": 518395, "seed": 2650607583},
             {"begin": 740010037, "change": 467, "start": 739533686, "length": 156618, "regime": 0, "steady": 0, "speed": 247, "from": 60828, "drift": -3543, "gust": 1200, "shift": [607, 303], "period": [11905, 15367], "phase": [34704, 56103], "across": 910, "axis": 52824, "axisPeriod": 827910, "seed": 3314462790}
           ]}
+      ]
+    },
+    {
+      "name": "pilot-hold",
+      "steps": 3600,
+      "state": {"heading": -1.5707963267948966, "surge": 2.5, "sheetLimit": 0.6, "boom": -0.6},
+      "control": {"sheet": 0.25, "pilot": 1, "target": 16384},
+      "env": {"windSpeed": 6, "windFrom": 0, "meanFrom": 0},
+      "changes": [
+        {"at": 1200, "control": {"target": 21845}},
+        {"at": 2400, "env": {"windFrom": 0.1, "meanFrom": 0.1}}
+      ]
+    },
+    {
+      "name": "pilot-shifts",
+      "steps": 5400,
+      "state": {"x": 0, "y": 3889, "heading": -0.7854, "surge": 2, "sheetLimit": 0.1, "boom": -0.1},
+      "control": {"helm": 0, "sheet": 0.1, "pilot": 1, "target": 8192},
+      "env": {"windSpeed": 0, "windFrom": 0},
+      "weather": {"tick": 740000000, "spells": [
+          {"begin": 739784000, "change": 0, "start": 739784000, "length": 324000, "regime": 1, "steady": 0, "speed": 532, "from": 0, "drift": -373, "gust": 1300, "shift": [971, 485], "period": [9479, 13580], "phase": [18406, 44224], "across": 910, "axis": 3257, "axisPeriod": 441007, "seed": 1603250969}
+        ]},
+      "changes": [
+        {"at": 1800, "control": {"target": 57344, "order": 1, "way": 1}},
+        {"at": 3600, "control": {"target": 27307, "sheet": 0.75}}
+      ]
+    },
+    {
+      "name": "pilot-tack",
+      "steps": 2400,
+      "state": {"heading": -0.7854, "surge": 2.5, "sheetLimit": 0.1, "boom": -0.1},
+      "control": {"sheet": 0.05, "pilot": 1, "target": 8192},
+      "env": {"windSpeed": 5, "windFrom": 0, "meanFrom": 0},
+      "changes": [
+        {"at": 300, "control": {"target": 57344, "order": 1, "way": 1}},
+        {"at": 1200, "control": {"target": 8192, "order": 2, "way": 1}},
+        {"at": 1800, "env": {"windSpeed": 8}}
+      ]
+    },
+    {
+      "name": "pilot-gybe",
+      "steps": 3000,
+      "state": {"heading": -2.618, "surge": 3, "sheetLimit": 1.2, "boom": -1.2},
+      "control": {"sheet": 0.75, "pilot": 1, "target": 27307},
+      "env": {"windSpeed": 7, "windFrom": 0, "meanFrom": 0},
+      "changes": [
+        {"at": 300, "control": {"target": 38229, "order": 1, "way": 2}},
+        {"at": 1200, "control": {"target": 27307, "order": 2, "way": 2}},
+        {"at": 1800, "control": {"target": 38229, "order": 3, "way": 1}}
+      ]
+    },
+    {
+      "name": "pilot-heading",
+      "steps": 3600,
+      "state": {"heading": -1.5707963267948966, "surge": 2.5, "sheetLimit": 0.6, "boom": -0.6},
+      "control": {"sheet": 0.4, "pilot": 2, "target": 49152},
+      "env": {"windSpeed": 6, "windFrom": 0, "meanFrom": 0},
+      "changes": [
+        {"at": 600, "control": {"target": 27307}},
+        {"at": 1800, "env": {"windFrom": 0.2, "meanFrom": 0.15}},
+        {"at": 2400, "control": {"pilot": 0, "target": 0, "helm": 0.1}},
+        {"at": 3000, "control": {"pilot": 1, "target": 40000}}
       ]
     }
   ]

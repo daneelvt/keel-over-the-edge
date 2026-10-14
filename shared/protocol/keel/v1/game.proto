@@ -49,6 +49,18 @@ message Input {
   int64 ack_tick = 4;
   // No control change: the message only acknowledges.
   bool ack_only = 5;
+  // The autopilot: 0 off, 1 holding an angle off the wind, 2 a compass
+  // heading. While it is on it steers, and helm is not used.
+  uint32 pilot = 6;
+  // What it holds, in 65536ths of a turn: the angle off the wind, positive
+  // with the wind over starboard (from 32768 on, the angle less a whole
+  // turn), or the heading clockwise from north.
+  uint32 target = 7;
+  // The order count, 0 to 3: a count the boat has not taken is a new order,
+  // a tack or a gybe, applied at the input's tick as the helm is.
+  uint32 order = 8;
+  // The way of the latest order: 0 hold, 1 tack, 2 gybe.
+  uint32 way = 9;
 }
 
 // Ping asks for the server's world time, for the client's clock.

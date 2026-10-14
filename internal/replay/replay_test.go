@@ -128,7 +128,7 @@ func (s *session) sail(ticks int) {
 		}
 		for _, sl := range f.Live {
 			if s.rng.IntN(20) == 0 {
-				s.w.Bus().Controls.Store(sl, bus.Pack(uint32(f.Tick), uint16(s.rng.IntN(1025)), uint16(s.rng.IntN(1025)), f.Gen[sl]))
+				s.w.Bus().Controls.StoreHand(sl, bus.Pack(uint32(f.Tick), uint16(s.rng.IntN(1025)), uint16(s.rng.IntN(1025)), f.Gen[sl]))
 			}
 		}
 		s.w.Tick()

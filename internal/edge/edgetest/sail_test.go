@@ -19,7 +19,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
-	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
@@ -70,7 +70,7 @@ func recorded(t *testing.T) client.Controls {
 		}
 		helm[i], sheet[i] = index(h, -1, 1), index(s, 0, 1)
 	}
-	return func(n int) (uint16, uint16) { return helm[n%sc.Steps], sheet[n%sc.Steps] }
+	return func(n int) client.Input { return client.Hand(helm[n%sc.Steps], sheet[n%sc.Steps]) }
 }
 
 // sail sails the recording for d through lag, in a bubble of its own.
@@ -86,7 +86,7 @@ var gale = weather.Steady(34*1852.0/3600, 3.9)
 // sea, or the world's own if wind is nil.
 func sailIn(t *testing.T, wind *bus.Weather, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
 	t.Helper()
-	return sailWith(t, nil, wind, lag, d, trace)
+	return sailWith(t, nil, wind, lag, d, trace, nil)
 }
 
 // inTrade is the catalog's weather two hours into its sequence's first
@@ -97,9 +97,43 @@ func inTrade(t *testing.T) *weather.Timeline {
 	return sequenceFrom(t, loop.TickAt(time.Now(), Epoch)-2*3600*physics.StepsPerSecond)
 }
 
+// piloted sails on the autopilot as a player does: by hand for a second,
+// then switched on at the boat's angle to the mean wind with the sheet set
+// for it, and every turn steps a tack and a gybe in turn, each onto the same
+// angle on the other tack.
+func piloted(turn int) func(s **client.Sailor) client.Controls {
+	return func(s **client.Sailor) client.Controls {
+		var in client.Input
+		engaged, turns := -1, 0
+		return func(n int) client.Input {
+			p := (*s).Predictor
+			if engaged < 0 {
+				if n < 30 || !p.Started {
+					return client.Hand(bus.Steps/2, 400)
+				}
+				w := p.Wind()
+				angle := math.Remainder(w.MeanFrom-p.State.Heading, 2*math.Pi) * 180 / math.Pi
+				in = client.Input{Helm: bus.Steps / 2, Sheet: scripted.SheetIndex(angle, w.Speed), Mode: bus.PilotWind, Target: scripted.Target(angle)}
+				engaged = n
+			}
+			if n > engaged && (n-engaged)%turn == 0 {
+				in.Way = bus.WayTack
+				if turns%2 == 1 {
+					in.Way = bus.WayGybe
+				}
+				turns++
+				in.Order = (in.Order + 1) & 3
+				in.Target = -in.Target
+			}
+			return in
+		}
+	}
+}
+
 // sailWith is sailIn in the weather a timeline gives, or the server's
-// steady one if it is nil.
-func sailWith(t *testing.T, timeline func(*testing.T) *weather.Timeline, wind *bus.Weather, lag client.Lag, d time.Duration, trace *client.Trace) client.Stats {
+// steady one if it is nil, steering with the controls steer makes for the
+// sailor, or the recording's if it is nil.
+func sailWith(t *testing.T, timeline func(*testing.T) *weather.Timeline, wind *bus.Weather, lag client.Lag, d time.Duration, trace *client.Trace, steer func(**client.Sailor) client.Controls) client.Stats {
 	t.Helper()
 	var stats client.Stats
 	synctest.Test(t, func(t *testing.T) {
@@ -126,7 +160,12 @@ func sailWith(t *testing.T, timeline func(*testing.T) *weather.Timeline, wind *b
 		if lag != (client.Lag{}) {
 			o.Wrap = lag.Wrap
 		}
-		s := srv.NewSailor(o, recorded(t))
+		controls := recorded(t)
+		var s *client.Sailor
+		if steer != nil {
+			controls = steer(&s)
+		}
+		s = srv.NewSailor(o, controls)
 		s.Trace = trace
 		if err := s.Connect(t.Context()); err != nil {
 			t.Fatal(err)
@@ -286,7 +325,7 @@ func TestSailLoss(t *testing.T) {
 		seeds = 1
 	}
 	for seed := range seeds {
-		s := sailWith(t, inTrade, nil, client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: seed + 1}, d, nil)
+		s := sailWith(t, inTrade, nil, client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: seed + 1}, d, nil, nil)
 		if s.Over > 0 {
 			t.Errorf("in a trade spell, seed %d: %d corrections over the snap thresholds", seed+1, s.Over)
 		}
@@ -303,22 +342,80 @@ func TestSailLoss(t *testing.T) {
 	report(t, fmt.Sprintf("%d seeds in a trade spell", seeds), gusty, time.Duration(seeds)*d)
 }
 
+// TestSailOnPilot: in a trade spell, a boat on the autopilot, tacking and
+// gybing every minute, is predicted to the bit with no lag; at 100 ms each
+// way and 2% loss, it is corrected no more often and by no more than one
+// sailed by hand on the same seeds.
+func TestSailOnPilot(t *testing.T) {
+	d := sailLength()
+	seeds := uint64(3)
+	if testing.Short() {
+		d, seeds = 30*time.Second, 1
+	}
+	if s := sailWith(t, inTrade, nil, client.Lag{}, d, nil, piloted(60*physics.StepsPerSecond)); s.Corrections != 0 || s.Snapshots < 100 {
+		t.Errorf("with no lag, on the autopilot: %d corrections in %d snapshots", s.Corrections, s.Snapshots)
+	}
+	var hand, pilot client.Stats
+	for seed := range seeds {
+		lag := client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: seed + 1}
+		for _, c := range []struct {
+			stats *client.Stats
+			steer func(**client.Sailor) client.Controls
+		}{{&hand, nil}, {&pilot, piloted(60 * physics.StepsPerSecond)}} {
+			s := sailWith(t, inTrade, nil, lag, d, nil, c.steer)
+			if s.Over > 0 {
+				t.Errorf("seed %d: %d corrections over the snap thresholds", seed+1, s.Over)
+			}
+			c.stats.Snapshots += s.Snapshots
+			c.stats.Corrections += s.Corrections
+			c.stats.Sizes = append(c.stats.Sizes, s.Sizes...)
+			c.stats.Resets += s.Resets
+			c.stats.MaxAhead = max(c.stats.MaxAhead, s.MaxAhead)
+			c.stats.MaxLate = max(c.stats.MaxLate, s.MaxLate)
+			c.stats.BytesIn += s.BytesIn
+			c.stats.BytesOut += s.BytesOut
+			c.stats.MessagesOut += s.MessagesOut
+		}
+	}
+	all := time.Duration(seeds) * d
+	report(t, "by hand", hand, all)
+	report(t, "on the autopilot", pilot, all)
+	t.Logf("messages sent a second: %.1f by hand, %.1f on the autopilot", float64(hand.MessagesOut)/all.Seconds(), float64(pilot.MessagesOut)/all.Seconds())
+	// A correction's size depends on what the late input changed: allow a
+	// tenth more than by hand, and a centimetre.
+	if pilot.Corrections > hand.Corrections || pilot.Percentile(100) > 1.1*hand.Percentile(100)+0.01 {
+		t.Errorf("on the autopilot: %d corrections, the largest %.3f m; by hand %d, %.3f m",
+			pilot.Corrections, pilot.Percentile(100), hand.Corrections, hand.Percentile(100))
+	}
+}
+
 // TestTraces records, with -update, the traces the TypeScript tests replay:
-// with no lag, and at 200 ms and 2% loss; and replays the committed ones
-// through this package's own client, as the TypeScript tests replay them
-// through the page's.
+// with no lag, and at 200 ms and 2% loss, sailed by hand in the server's
+// steady wind and on the autopilot in a trade spell; and replays the
+// committed ones through this package's own client, as the TypeScript tests
+// replay them through the page's.
 func TestTraces(t *testing.T) {
+	lossy := client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 3}
 	for _, tc := range []struct {
 		name string
 		lag  client.Lag
+		// pilot: on the autopilot in a trade spell, a tack after five
+		// seconds and a gybe five seconds later.
+		pilot bool
 	}{
-		{"none", client.Lag{}},
-		{"lossy", client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 3}},
+		{"none", client.Lag{}, false},
+		{"lossy", lossy, false},
+		{"pilot", client.Lag{}, true},
+		{"pilot-lossy", client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 9}, true},
 	} {
 		path := "../../../shared/protocol/testdata/trace-" + tc.name + ".json"
 		if *update {
 			trace := &client.Trace{Lag: tc.lag.String()}
-			sail(t, tc.lag, 20*time.Second, trace)
+			if tc.pilot {
+				sailWith(t, inTrade, nil, tc.lag, 20*time.Second, trace, piloted(5*physics.StepsPerSecond))
+			} else {
+				sail(t, tc.lag, 20*time.Second, trace)
+			}
 			if err := trace.Write(path); err != nil {
 				t.Fatal(err)
 			}
@@ -332,7 +429,7 @@ func TestTraces(t *testing.T) {
 			t.Fatal(err)
 		}
 		corrections := replayTrace(t, &trace)
-		if (tc.name == "lossy") != (corrections > 0) {
+		if (tc.lag != client.Lag{}) != (corrections > 0) {
 			t.Errorf("%s: %d corrections", tc.name, corrections)
 		}
 	}
@@ -409,11 +506,14 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 	t.Helper()
 	waves, kinds := CatalogKinds(t)
 	n := client.Net{FrameMs: 17}
-	p := client.NewPredictor(&kinds[0], waves, weather.Fixed(sim.DefaultSpell).Prepared())
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The page computes the wind with the catalog's constants, as a server
+	// with the catalog's sequence of spells does; a steady spell's wind is
+	// the same with any.
+	p := client.NewPredictor(&kinds[0], waves, cat.PrepareWeather())
 	p.Encounters = cat.PrepareEncounters()
 	snapshots := map[int64]*protocol.Snapshot{}
 	var latest *protocol.Snapshot
@@ -461,9 +561,9 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 			}
 			sent(out...)
 		case e.Input != nil:
-			sent(n.Input(e.T, uint32(e.Input[0]), uint16(e.Input[1]), uint16(e.Input[2])))
+			sent(n.Input(e.T, uint32(e.Input[0]), client.Untraced(e.Input)))
 		case e.Step != nil:
-			p.Step(uint16(e.Step[1]), uint16(e.Step[2]))
+			p.Step(client.Untraced(e.Step))
 			if p.Tick != e.Step[0] {
 				t.Fatalf("event %d: stepped tick %d, the trace %d", i, p.Tick, e.Step[0])
 			}
@@ -497,7 +597,7 @@ func TestAheadSettlesAndRises(t *testing.T) {
 		token, _ := srv.Guest("Ann")
 		lag := client.Lag{Delay: 100 * time.Millisecond}
 		// The tiller dragged to and fro: a word every step.
-		wiggle := func(n int) (uint16, uint16) { return uint16(256 + n%512), 512 }
+		wiggle := func(n int) client.Input { return client.Hand(uint16(256+n%512), 512) }
 		var conn client.Staller
 		s := srv.NewSailor(DialOptions{Cookie: token, Wrap: func(c net.Conn) net.Conn {
 			w := lag.Wrap(c)

@@ -3,10 +3,10 @@
 // The game through tools/lag at 200 ms round trip and 2% of packets lost
 // each way (tools/e2e runs the proxy; a Vite of its own on port 5182 sends
 // the game's traffic through it), or through netem (KEEL_LAG_BASE): a sail with the tiller dragged to and fro
-// draws no correction over the snap thresholds, the boat still answers
-// the helm on the frame it is moved, and a bump with a boat the server
-// stages in its path comes as a correction and one knock, one shake and
-// the verdict.
+// draws no correction over the snap thresholds, nor does a tack or a gybe
+// on the autopilot; the boat still answers the helm on the frame it is
+// moved, and a bump with a boat the server stages in its path comes as a
+// correction and one knock, one shake and the verdict.
 
 import { expect, test } from '@playwright/test';
 import { guest, sail } from './helpers';
@@ -31,6 +31,38 @@ test('at 200 ms and 2% loss: no correction over the snap thresholds', async ({ p
   process.stdout.write(`lag.spec: ${measured}\n`);
   expect(n.rtt).toBeGreaterThan(150);
   expect(n.counts.snapshots).toBeGreaterThan(400);
+  expect(n.counts.largest).toBeLessThan(3);
+});
+
+test('at 200 ms and 2% loss: a tack or a gybe on the autopilot, with no correction over the snap thresholds', async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(120_000);
+  await guest(context, 'Autopilot');
+  await sail(page, lagged);
+  await page.evaluate(() => globalThis.keel.setControls(0, 0.3));
+  await page.waitForTimeout(5_000);
+  // On at the boat's angle to the wind, then the turn that suits it.
+  await page.keyboard.press('p');
+  await page.waitForTimeout(5_000);
+  const before = await page.evaluate(() => globalThis.keel.boat().pilot);
+  expect(before.mode).toBe(1);
+  await page.keyboard.press(Math.abs(before.degrees) < 90 ? 't' : 'g');
+  await page.waitForFunction(
+    () => {
+      const b = globalThis.keel.boat();
+      return b.pilot.order === 1 && b.state.pilotWay === 0;
+    },
+    null,
+    { timeout: 40_000 },
+  );
+  const after = await page.evaluate(() => globalThis.keel.boat());
+  expect(after.pilot.degrees).toBe(-before.degrees);
+  const n = await page.evaluate(() => globalThis.keel.net());
+  process.stdout.write(
+    `lag.spec: on the autopilot, from ${before.degrees}°: ${n.counts.corrections} corrections, largest ${n.counts.largest.toFixed(3)} m\n`,
+  );
   expect(n.counts.largest).toBeLessThan(3);
 });
 

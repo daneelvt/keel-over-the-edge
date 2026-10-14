@@ -7,6 +7,7 @@
 // reach the state the sandbox reached. It allocates only when a control,
 // the weather or the sea changes, never per frame.
 
+import { PILOT_IDLE, type PilotControl } from '../input/pilot';
 import {
   type RecordValues,
   recordValues,
@@ -103,6 +104,7 @@ export class Recorder {
   #steps = 0;
   #helm = 0;
   #sheet = 0;
+  readonly #pilot = { mode: 0, target: 0, order: 0, way: 0 };
 
   /** Starts a recording from this state and these controls. */
   start(state: Float64Array, control: Float64Array): void {
@@ -113,10 +115,21 @@ export class Recorder {
     this.#steps = 0;
     this.#helm = control[RECORDS.control.helm] ?? 0;
     this.#sheet = control[RECORDS.control.sheet] ?? 0;
+    this.#pilot.mode = control[RECORDS.control.pilot] ?? 0;
+    this.#pilot.target = control[RECORDS.control.target] ?? 0;
+    this.#pilot.order = control[RECORDS.control.order] ?? 0;
+    this.#pilot.way = control[RECORDS.control.way] ?? 0;
   }
 
   /** Notes the controls, the weather and the sea of the step about to be taken into tick. */
-  step(helm: number, sheet: number, tick: number, sea: StepSea, weather: StepWeather): void {
+  step(
+    helm: number,
+    sheet: number,
+    tick: number,
+    sea: StepSea,
+    weather: StepWeather,
+    pilot: PilotControl = PILOT_IDLE,
+  ): void {
     if (this.#start === null) {
       return;
     }
@@ -150,6 +163,26 @@ export class Recorder {
       this.#change().control = control;
       this.#helm = helm;
       this.#sheet = sheet;
+    }
+    const was = this.#pilot;
+    if (
+      pilot.mode !== was.mode ||
+      pilot.target !== was.target ||
+      pilot.order !== was.order ||
+      pilot.way !== was.way
+    ) {
+      const c = this.#change();
+      c.control = {
+        ...c.control,
+        pilot: pilot.mode,
+        target: pilot.target,
+        order: pilot.order,
+        way: pilot.way,
+      };
+      was.mode = pilot.mode;
+      was.target = pilot.target;
+      was.order = pilot.order;
+      was.way = pilot.way;
     }
     this.#steps++;
   }

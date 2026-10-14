@@ -49,9 +49,9 @@ func (g *testGuests) Valid(_ context.Context, cookie string) (bool, error) {
 }
 
 // TestBots: 20 bots join the in-memory server, sail, see each other, are
-// reported, and close cleanly; a second run uses the sessions the first
-// saved and makes no guest; with lag, the connections go through the lag
-// model.
+// reported, and close cleanly; a second run, on the autopilot, uses the
+// sessions the first saved and makes no guest; with lag, the connections
+// go through the lag model.
 func TestBots(t *testing.T) {
 	sessions := filepath.Join(t.TempDir(), "sessions.json")
 	synctest.Test(t, func(t *testing.T) {
@@ -86,14 +86,30 @@ func TestBots(t *testing.T) {
 			t.Fatalf("no report: %s", out.String())
 		}
 
+		// Again, every one on the autopilot from its first second. Steering
+		// each to an angle of its own from the spawn grid, they sail through
+		// each other's wind shadow and into each other, which a client
+		// approximates and does not predict: corrections come, small ones.
+		cfg.Pilot, cfg.Out = 1, nil
+		piloted, err := Run(t.Context(), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range piloted.Players {
+			if s := p.Stats; s.Snapshots < 250 || p.Errors != 0 || s.Over != 0 {
+				t.Fatalf("%s on the autopilot: %d snapshots, %d errors, %d corrections over the snap thresholds", p.Name, s.Snapshots, p.Errors, s.Over)
+			}
+		}
+
 		// Again, through the lag model: the same guests, none made.
+		cfg.Pilot = 0
 		cfg.Lag = &client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02}
 		cfg.Sail, cfg.Ramp, cfg.Out = 10*time.Second, 0, nil
 		again, err := Run(t.Context(), cfg)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if again.Made != 0 || guests.made != 20 {
+		if again.Made != 0 || piloted.Made != 0 || guests.made != 20 {
 			t.Fatalf("the second run made %d guests", again.Made)
 		}
 		for _, p := range again.Players {

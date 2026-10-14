@@ -9,7 +9,7 @@
 // view.go is the server's side, and its tests write the vectors these are
 // tested against.
 
-import { FAR_SAMPLED, HEADER_SIZE, type OwnSnapshot } from './snapshot';
+import { FAR_SAMPLED, headerLengthOf, MAX_HEADER_SIZE, type OwnSnapshot } from './snapshot';
 
 /** The most boats a view holds. */
 export const VIEW_SLOTS = 64;
@@ -315,7 +315,7 @@ export class ViewRing {
       }
       out.copyFrom(base);
     }
-    const err = applyEntries(v, HEADER_SIZE, sn.entries, out, this.changes);
+    const err = applyEntries(v, sn.header, sn.entries, out, this.changes);
     if (err !== null) {
       return err;
     }
@@ -340,9 +340,10 @@ export class ViewRing {
 }
 
 // What the worker hands the page for each snapshot: one ArrayBuffer, the
-// snapshot's header as it came (the own boat, read with readSnapshot),
-// then, from HEADER_SIZE, a Float64Array: a few values of the snapshot's
-// own, then each view slot's record.
+// snapshot's header as it came, with its autopilot's block if it has one
+// (the own boat, read with readSnapshot), then, from MAX_HEADER_SIZE, a
+// Float64Array: a few values of the snapshot's own, then each view slot's
+// record.
 
 /** The snapshot's values at the start of the fleet's Float64Array. */
 export const FLEET_META = { tick: 0, received: 1, flags: 2, boats: 3, bytes: 4 } as const;
@@ -375,11 +376,11 @@ export const SLOT = {
 } as const;
 export const SLOT_FIELDS = 14;
 /** A record's length in bytes. */
-export const FLEET_RECORD_BYTES = HEADER_SIZE + 8 * (META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
+export const FLEET_RECORD_BYTES = MAX_HEADER_SIZE + 8 * (META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
 
 /** The fleet's Float64Array of a record. */
 export function fleetOf(record: ArrayBuffer): Float64Array {
-  return new Float64Array(record, HEADER_SIZE, META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
+  return new Float64Array(record, MAX_HEADER_SIZE, META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
 }
 
 /** Where slot i's record starts in a fleet's Float64Array. */
@@ -406,7 +407,8 @@ export function writeRecord(
   flags: number,
   received: number,
 ): void {
-  new Uint8Array(record, 0, HEADER_SIZE).set(message.subarray(0, HEADER_SIZE));
+  const header = Math.min(headerLengthOf(message), message.byteLength);
+  new Uint8Array(record, 0, header).set(message.subarray(0, header));
   const f = fleetOf(record);
   f[FLEET_META.tick] = view.tick;
   f[FLEET_META.bytes] = message.byteLength;

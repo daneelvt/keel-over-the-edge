@@ -45,7 +45,7 @@ func (vs *Views) Decode(b []byte, sn *protocol.Snapshot) (*protocol.View, protoc
 		}
 		*out = *base
 	}
-	if err := out.ApplyEntries(b[protocol.HeaderSize:], sn.Entries, &ch); err != nil {
+	if err := out.ApplyEntries(b[sn.Header:], sn.Entries, &ch); err != nil {
 		return nil, ch, err
 	}
 	vs.ticks[vs.next] = sn.Tick

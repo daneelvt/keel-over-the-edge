@@ -292,8 +292,8 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	if !c.weather(f) || !c.seaAreas(f, &f.State[s]) || !c.bumps(f, next) {
 		return
 	}
-	b = b[:protocol.HeaderSize]
-	protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], c.margin.take(), &f.State[s])
+	b = b[:protocol.MaxHeaderSize]
+	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], c.margin.take(), &f.State[s])]
 	b, n := protocol.AppendEntries(b, baseView, &next.view, enter, sample)
 	protocol.SetEntries(b, n)
 

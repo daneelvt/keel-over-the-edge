@@ -44,6 +44,7 @@ type Frame struct {
 	Grace    []int64   // per slot: the tick at which a disconnected boat leaves, 0 while connected
 	Kind     []uint16  // per slot: the boat's kind, an index into the world's kinds
 	Control  []Word    // per slot: the controls in force
+	Pilot    []PilotWord
 	State    []physics.State
 	Sail     []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
 	// Course is per slot what the Articles keep of a boat between ticks.
@@ -164,10 +165,11 @@ func (f *Frame) SpellsInPlay() []physics.Spell { return f.Spells[:f.NSpells] }
 // QueueLimit is the most connections that may wait for a boat.
 const QueueLimit = 4096
 
-// SlotWord is a control word applied to a slot.
+// SlotWord is a pair of control words applied to a slot.
 type SlotWord struct {
-	Slot int32
-	Word Word
+	Slot  int32
+	Word  Word
+	Pilot PilotWord
 }
 
 // An Event is a command the tick applied and what came of it. Its Reply
@@ -189,6 +191,7 @@ func NewFrame(capacity int) *Frame {
 		Grace:    make([]int64, capacity),
 		Kind:     make([]uint16, capacity),
 		Control:  make([]Word, capacity),
+		Pilot:    make([]PilotWord, capacity),
 		State:    make([]physics.State, capacity),
 		Sea: Sea{
 			Now:  make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),

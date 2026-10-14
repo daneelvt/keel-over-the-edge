@@ -48,6 +48,10 @@ type goldenSnapshot struct {
 	Margin  int16             `json:"margin"`
 	Helm    uint16            `json:"helm"`
 	Sheet   uint16            `json:"sheet"`
+	Mode    uint8             `json:"mode"`
+	Way     uint8             `json:"way"`
+	Order   uint8             `json:"order"`
+	Target  uint16            `json:"target"`
 	State   map[string]string `json:"state"`
 	Bytes   string            `json:"bytes"`
 	View    []goldenBoat      `json:"view"`
@@ -164,9 +168,18 @@ func goldens() []golden {
 	v5 := v2
 	v5.Boats[1].Heading++
 
+	// On the autopilot, tacking: its block follows the header. The
+	// sailing state's autopilot fields are not zero either, so every
+	// snapshot of it has the block.
+	tacking := header(1002, 2, 0, sailing)
+	tacking.Mode, tacking.Way, tacking.Order, tacking.Target = 1, 1, 2, 60000
+	// Its pilot word alone carries the block.
+	engaged := header(1000, 0, 0, physics.State{Y: -20, Heading: math.Pi / 2})
+	engaged.Mode, engaged.Target = 2, 12345
+
 	return []golden{
 		{"full", header(1000, 0, 0, physics.State{Y: -20, Heading: math.Pi / 2}), v1, v1.Used, 0},
-		{"delta of every kind", header(1002, 2, 0, sailing), v2, 1<<2 | 1<<40, v2.Used &^ (1 << 5)},
+		{"delta of every kind", tacking, v2, 1<<2 | 1<<40, v2.Used &^ (1 << 5)},
 		{"delta four ticks back", header(1004, 4, 0, sailing), v3, 0, v3.Used},
 		{"far sampled, nothing changed", header(1006, 2, FarSampled, sailing), v4, 0, v4.Used},
 		{"delta six ticks back", header(1008, 6, 0, sailing), v5, 0, v5.Used},
@@ -174,6 +187,7 @@ func goldens() []golden {
 			State: awkward}, View{}, 0, 0},
 		{"negative tick", Snapshot{Tick: -30, Seq: 0xffffffe3, Margin: math.MaxInt16, Helm: 1024, Sheet: 1,
 			State: sailing}, View{}, 0, 0},
+		{"autopilot engaged", engaged, v1, v1.Used, 0},
 	}
 }
 
@@ -206,7 +220,7 @@ func encodeGolden(g *golden, views map[int64]*View) []byte {
 	if g.header.Base != 0 {
 		base = views[g.header.Tick-int64(g.header.Base)]
 	}
-	b := make([]byte, HeaderSize, MaxSnapshotSize)
+	b := make([]byte, g.header.Len(), MaxSnapshotSize)
 	b, n := AppendEntries(b, base, &g.view, g.enter, g.sample)
 	h := g.header
 	h.Entries = n
@@ -224,8 +238,8 @@ func TestSnapshotGolden(t *testing.T) {
 			b := encodeGolden(g, views)
 			views[g.header.Tick] = &g.view
 			h := g.header
-			gs := goldenSnapshot{Name: g.name, Tick: strconv.FormatInt(h.Tick, 10), Base: h.Base, Flags: h.Flags, Seq: h.Seq,
-				Margin: h.Margin, Helm: h.Helm, Sheet: h.Sheet,
+			gs := goldenSnapshot{Name: g.name, Tick: strconv.FormatInt(h.Tick, 10), Base: h.Base, Flags: b[offFlags], Seq: h.Seq,
+				Margin: h.Margin, Helm: h.Helm, Sheet: h.Sheet, Mode: h.Mode, Way: h.Way, Order: h.Order, Target: h.Target,
 				State: map[string]string{}, Bytes: hex.EncodeToString(b), View: viewOf(&g.view)}
 			names := stateNames()
 			for i, v := range sim.StateFields(&h.State) {
@@ -241,7 +255,7 @@ func TestSnapshotGolden(t *testing.T) {
 			if err := ReadSnapshot(b, &sn); err != nil {
 				t.Fatal(err)
 			}
-			if err := base.ApplyEntries(b[HeaderSize:], sn.Entries, &ch); err != nil {
+			if err := base.ApplyEntries(b[sn.Header:], sn.Entries, &ch); err != nil {
 				t.Fatal(err)
 			}
 			gs.Entered, gs.Updated, gs.Left = slotsOf(ch.Entered), slotsOf(ch.Updated), slotsOf(ch.Left)
@@ -272,7 +286,8 @@ func TestSnapshotGolden(t *testing.T) {
 			t.Fatalf("%s: %v", g.Name, err)
 		}
 		if tick, _ := strconv.ParseInt(g.Tick, 10, 64); got.Tick != tick || got.Base != g.Base || got.Flags != g.Flags ||
-			got.Seq != g.Seq || got.Margin != g.Margin || got.Helm != g.Helm || got.Sheet != g.Sheet {
+			got.Seq != g.Seq || got.Margin != g.Margin || got.Helm != g.Helm || got.Sheet != g.Sheet ||
+			got.Mode != g.Mode || got.Way != g.Way || got.Order != g.Order || got.Target != g.Target || got.Header != c.header.Len() {
 			t.Errorf("%s: read %+v", g.Name, got)
 		}
 		names := stateNames()
@@ -290,7 +305,7 @@ func TestSnapshotGolden(t *testing.T) {
 			v = base
 		}
 		var ch Changes
-		if err := v.ApplyEntries(want[HeaderSize:], got.Entries, &ch); err != nil {
+		if err := v.ApplyEntries(want[got.Header:], got.Entries, &ch); err != nil {
 			t.Fatalf("%s: %v", g.Name, err)
 		}
 		if !reflect.DeepEqual(viewOf(&v), g.View) || v != c.view {
@@ -424,19 +439,28 @@ func TestSnapshotRefusals(t *testing.T) {
 		"kind 1":          append([]byte{KindMessage}, good[1:]...),
 		"kind only":       good[:1],
 		"header cut":      good[:HeaderSize-1],
-		"layout 4":        withByte(good, offLayout, 4),
+		"layout 5":        withByte(good, offLayout, 5),
 		"helm over 1024":  withUint16(good, offHelm, 1025),
-		"spare flags":     withByte(good, offFlags, 2),
+		"spare flags":     withByte(good, offFlags, 4|PilotHeld),
 		"129 entries":     withByte(good, offEntries, 129),
-		"layout 6":        withByte(good, offLayout, 6),
+		"layout 7":        withByte(good, offLayout, 7),
 		"sheet over 1024": withUint16(good, offSheet, 2000),
+		"autopilot cut":   good[:MaxHeaderSize-1],
+		"pilot mode 3":    withByte(good, offPilotMode, 3),
+		"way 3":           withByte(good, offPilotWay, 3),
+		"order 4":         withByte(good, offPilotOrder, 4),
+		"spare byte":      withByte(good, offPilotOrder+1, 1),
+		"spare bytes":     withUint16(good, offPilotTarget+2, 1),
 	} {
 		if err := ReadSnapshot(b, &sn); err == nil {
 			t.Errorf("%s: read", name)
 		}
 	}
+	if err := ReadSnapshot(good, &sn); err != nil || sn.Header != MaxHeaderSize {
+		t.Fatalf("a snapshot on the autopilot has a header of %d bytes: %v", sn.Header, err)
+	}
 	// Entries refused against the base, each alone after a good header.
-	header := good[:HeaderSize]
+	header := good[:sn.Header]
 	for name, entries := range map[string][]byte{
 		"op 3":                  {3<<6 | 1},
 		"truncated enter":       {OpEnter<<6 | 1, 0, 0, 1, 2},
@@ -458,7 +482,7 @@ func TestSnapshotRefusals(t *testing.T) {
 		if err := ReadSnapshot(b, &sn); err != nil {
 			t.Fatalf("%s: the header: %v", name, err)
 		}
-		if err := v.ApplyEntries(b[HeaderSize:], sn.Entries, &ch); err == nil {
+		if err := v.ApplyEntries(b[sn.Header:], sn.Entries, &ch); err == nil {
 			t.Errorf("%s: applied", name)
 		}
 	}
@@ -467,7 +491,7 @@ func TestSnapshotRefusals(t *testing.T) {
 	SetEntries(b, sn.Entries+1)
 	v := base
 	var ch Changes
-	if err := v.ApplyEntries(b[HeaderSize:], sn.Entries+1, &ch); err == nil {
+	if err := v.ApplyEntries(b[sn.Header:], sn.Entries+1, &ch); err == nil {
 		t.Error("an entry past the end was read")
 	}
 }
@@ -490,8 +514,8 @@ func TestEncodingAllocatesNothing(t *testing.T) {
 	s := cases[1].header
 	word := bus.Pack(s.Seq, s.Helm, s.Sheet, 3)
 	if n := testing.AllocsPerRun(100, func() {
-		b = b[:HeaderSize]
-		PutHeader(b, s.Tick, s.Base, s.Flags, word, s.Margin, &s.State)
+		b = b[:MaxHeaderSize]
+		b = b[:PutHeader(b, s.Tick, s.Base, s.Flags, word, bus.PackPilot(s.Seq, bus.PilotWind, bus.WayTack, 1, 9000, 3), s.Margin, &s.State)]
 		b, _ = AppendEntries(b, &cases[0].view, &cases[1].view, cases[1].enter, cases[1].sample)
 	}); n != 0 {
 		t.Fatalf("%v allocations", n)
@@ -507,7 +531,7 @@ func FuzzApplyEntries(f *testing.F) {
 	for i := range cases {
 		b := encodeGolden(&cases[i], views)
 		views[cases[i].header.Tick] = &cases[i].view
-		f.Add(b[HeaderSize:], uint8(b[offEntries]), uint64(cases[0].view.Used), uint64(1))
+		f.Add(b[cases[i].header.Len():], uint8(b[offEntries]), uint64(cases[0].view.Used), uint64(1))
 	}
 	f.Add([]byte{OpEnter<<6 | 7, 0x80}, uint8(1), uint64(0), uint64(2))
 	f.Fuzz(func(t *testing.T, entries []byte, n uint8, used, seed uint64) {
@@ -546,6 +570,7 @@ func messages() (clients []*pb.ClientMessage, servers []*pb.ServerMessage) {
 		{Body: &pb.ClientMessage_Hello{Hello: &pb.Hello{Protocol: "0275db3b9388b186", Catalog: "0123456789abcdef", PhysicsLayout: 0x2457976f, Build: "dev"}}},
 		{Body: &pb.ClientMessage_Input{Input: &pb.Input{Seq: 727706170, Helm: 1024, Sheet: 3, AckTick: 727706164}}},
 		{Body: &pb.ClientMessage_Input{Input: &pb.Input{AckTick: 1 << 40, AckOnly: true}}},
+		{Body: &pb.ClientMessage_Input{Input: &pb.Input{Seq: 727706171, Helm: 512, Sheet: 300, AckTick: 727706165, Pilot: 1, Target: 57344, Order: 3, Way: 2}}},
 		{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: 123456789, AckTick: 42, RttMs: 200, FrameMs: 17}}},
 		{Body: &pb.ClientMessage_Command{Command: &pb.Command{Body: &pb.Command_Resync{Resync: &pb.Resync{}}}}},
 	}
@@ -738,7 +763,7 @@ func TestEntriesCorpus(t *testing.T) {
 				}
 			}
 		}
-		streams = append(streams, stream{base, b[HeaderSize:], int(b[offEntries])})
+		streams = append(streams, stream{base, b[cases[i].header.Len():], int(b[offEntries])})
 		prev = cases[i].name
 	}
 	if *update {

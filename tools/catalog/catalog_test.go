@@ -287,6 +287,31 @@ func TestRejects(t *testing.T) {
 			want:  "/boats/0/physics/hull/dragArea",
 		},
 		{
+			name:  "an autopilot with no gain",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        gain: ", "        gain: 0 #", 1)},
+			want:  "/boats/0/physics/autopilot/gain",
+		},
+		{
+			name:  "an autopilot with no damping",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        damping: ", "        damping: 0 #", 1)},
+			want:  "/boats/0/physics/autopilot/damping",
+		},
+		{
+			name:  "an autopilot let by the lee as far as the boom gybes",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        byTheLee: ", "        byTheLee: 17 #", 1)},
+			want:  "/boats/0/physics/autopilot/byTheLee",
+		},
+		{
+			name:  "a gybe at more than the full helm",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        gybeHelm: ", "        gybeHelm: 1.2 #", 1)},
+			want:  "/boats/0/physics/autopilot/gybeHelm",
+		},
+		{
+			name:  "a tack at no helm",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        tackHelm: ", "        tackHelm: 0 #", 1)},
+			want:  "/boats/0/physics/autopilot/tackHelm",
+		},
+		{
 			name:  "a hull's value in waves missing",
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        waterplaneArea:", "        waterplaneAreas:", 1)},
 			want:  "/boats/0/physics/hull",

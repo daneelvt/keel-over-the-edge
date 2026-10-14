@@ -17,7 +17,8 @@ import (
 
 // Encounters a developer stages: a scripted boat placed to meet the first
 // sailing player's boat in one of the situations the Articles are tested
-// with, held on its course and trim, so that one person on a phone can feel
+// with, held on its course by its autopilot's compass heading and on its
+// trim, so that one person on a phone can feel
 // each Article without a second player. The boat sails as any other, in
 // the world's wind; the player is assumed to hold their course for the
 // seconds it takes. After HoldFor it leaves.
@@ -75,9 +76,9 @@ type Staged struct {
 type plan struct {
 	state physics.State
 	sheet float64
-	// steer gives the helm at t seconds after the start, from the boat's
-	// state; nil holds it amidships.
-	steer func(t float64, s *physics.State) float64
+	// course gives the heading its autopilot holds at t seconds after the
+	// start; nil leaves the autopilot off and the helm amidships.
+	course func(t float64) float64
 }
 
 // Encounter stages situation against the first sailing player's boat, and
@@ -150,7 +151,7 @@ func joinStaged(ctx context.Context, b *bus.Bus) (slot int32, gen uint16, boat u
 }
 
 // sailStaged holds the staged boat's controls, a tick at a time, then
-// takes it out of the world.
+// takes it out of the world. Its autopilot steers.
 func sailStaged(ctx context.Context, b *bus.Bus, slot int32, gen uint16, boat uint64, p plan) {
 	defer b.Commands.Developer().TrySend(bus.Command{Op: bus.Leave, Boat: boat})
 	start := time.Now()
@@ -168,21 +169,19 @@ func sailStaged(ctx context.Context, b *bus.Bus, slot int32, gen uint16, boat ui
 			f.Release()
 			return
 		}
-		s := f.State[slot]
 		seq := uint32(f.Tick + 1)
 		f.Release()
-		helm := 0.0
-		if p.steer != nil {
-			helm = p.steer(time.Since(start).Seconds(), &s)
+		pilot := bus.PackPilot(seq, bus.PilotOff, bus.WayHold, 0, 0, gen)
+		if p.course != nil {
+			pilot = bus.PackPilot(seq, bus.PilotHeading, bus.WayHold, 0, compass(p.course(time.Since(start).Seconds())), gen)
 		}
-		b.Controls.Store(slot, bus.Pack(seq, uint16(math.Round((helm+1)*bus.Steps/2)), sheet, gen))
+		b.Controls.Store(slot, bus.Pack(seq, bus.Steps/2, sheet, gen), pilot)
 	}
 }
 
-// hold is a heading-hold: the helm toward target, damped by the yaw rate.
-func hold(target float64, s *physics.State) float64 {
-	off := math.Remainder(target-s.Heading, 2*math.Pi)
-	return max(-1, min(1, 2*off-0.8*s.YawRate))
+// compass is a heading, rad, as the pilot word holds it.
+func compass(h float64) uint16 {
+	return uint16(int64(math.Round(h*physics.TurnSteps/(2*math.Pi))) & (physics.TurnSteps - 1))
 }
 
 // The directions about a boat heading h: ahead, and to starboard.
@@ -215,9 +214,9 @@ func stage(situation string, h *physics.State, windFrom, length float64) plan {
 		ex, ey := ahead(heading)
 		back := v*t + 1
 		return plan{
-			state: physics.State{X: mx - back*ex, Y: my - back*ey, Heading: heading, Surge: v, SheetLimit: 0.1},
-			sheet: 0.08,
-			steer: func(_ float64, s *physics.State) float64 { return hold(heading, s) },
+			state:  physics.State{X: mx - back*ex, Y: my - back*ey, Heading: heading, Surge: v, SheetLimit: 0.1},
+			sheet:  0.08,
+			course: func(float64) float64 { return heading },
 		}
 	case "windward-leeward":
 		// Overlapped two metres to windward, a metre back, bearing away
@@ -225,18 +224,18 @@ func stage(situation string, h *physics.State, windFrom, length float64) plan {
 		x, y := at(-1, 2.1*tack)
 		heading := h.Heading - tack*10*deg
 		return plan{
-			state: physics.State{X: x, Y: y, Heading: heading, Surge: speed, SheetLimit: h.SheetLimit, Boom: h.Boom},
-			sheet: 0.5,
-			steer: func(_ float64, s *physics.State) float64 { return hold(heading, s) },
+			state:  physics.State{X: x, Y: y, Heading: heading, Surge: speed, SheetLimit: h.SheetLimit, Boom: h.Boom},
+			sheet:  0.5,
+			course: func(float64) float64 { return heading },
 		}
 	case "overtaking":
 		// Clear astern, its bow a foot from the transom and a metre and a
 		// half a second faster: straight into it.
 		x, y := at(-(length + 0.3), 0)
 		return plan{
-			state: physics.State{X: x, Y: y, Heading: h.Heading, Surge: speed + 1.5, SheetLimit: h.SheetLimit, Boom: h.Boom},
-			sheet: 0.5,
-			steer: func(_ float64, s *physics.State) float64 { return hold(h.Heading, s) },
+			state:  physics.State{X: x, Y: y, Heading: h.Heading, Surge: speed + 1.5, SheetLimit: h.SheetLimit, Boom: h.Boom},
+			sheet:  0.5,
+			course: func(float64) float64 { return h.Heading },
 		}
 	case "tacking":
 		// On the other tack in the player's path, turning through head to
@@ -248,13 +247,8 @@ func stage(situation string, h *physics.State, windFrom, length float64) plan {
 		return plan{
 			state: physics.State{X: x, Y: y, Heading: heading, Surge: 0.3, YawRate: -tack * 0.5, SheetLimit: 1.5},
 			sheet: 1,
-			steer: func(t float64, s *physics.State) float64 {
-				if t < 1.2 {
-					// Up through the wind: toward the side it comes over.
-					return -tack
-				}
-				return hold(after, s)
-			},
+			// Up through the wind onto the player's tack.
+			course: func(float64) float64 { return after },
 		}
 	case "luffing":
 		// Clear astern to leeward, faster: it overlaps the player to
@@ -264,11 +258,11 @@ func stage(situation string, h *physics.State, windFrom, length float64) plan {
 		return plan{
 			state: physics.State{X: x, Y: y, Heading: h.Heading, Surge: speed + 1.2, SheetLimit: h.SheetLimit, Boom: h.Boom},
 			sheet: 0.5,
-			steer: func(t float64, s *physics.State) float64 {
+			course: func(t float64) float64 {
 				if t < 0.6 {
-					return hold(h.Heading, s)
+					return h.Heading
 				}
-				return hold(up, s)
+				return up
 			},
 		}
 	default: // capsized

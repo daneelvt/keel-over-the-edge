@@ -18,6 +18,7 @@
 
 import type { BoatPhysics, Encounters, Weather } from '../catalog/types.gen';
 import type { BoatDriver } from '../game/driver';
+import { PILOT_IDLE, type PilotControl } from '../input/pilot';
 import type { OwnSnapshot } from '../net/snapshot';
 import { type BoatPose, StatePair } from './blend';
 import { RECORDS, SIZES } from './layout.gen';
@@ -135,6 +136,9 @@ export class Predictor implements BoatDriver {
   readonly #ticks = new Float64Array(RING).fill(Number.NaN);
   readonly #helm = new Uint16Array(RING);
   readonly #sheet = new Uint16Array(RING);
+  /** Each tick's autopilot control: mode, way and order count, and target. */
+  readonly #pilot = new Uint8Array(RING * 3);
+  readonly #target = new Uint16Array(RING);
   readonly #ring = new Float64Array(RING * N);
   readonly #before = new Float64Array(N);
   /** The drawn boat's offset from the predicted one, eased away. */
@@ -176,22 +180,35 @@ export class Predictor implements BoatDriver {
    * Steps the boat into tick, in the wind at its place and the sea of that
    * tick, as the server does.
    */
-  #stepModule(tick: number, helm: number, sheet: number): void {
+  #stepModule(
+    tick: number,
+    helm: number,
+    sheet: number,
+    mode: number,
+    target: number,
+    order: number,
+    way: number,
+  ): void {
     const r = this.#physics.records;
-    r.control[RECORDS.control.helm] = helmOf(helm);
-    r.control[RECORDS.control.sheet] = sheetOf(sheet);
+    const c = r.control;
+    c[RECORDS.control.helm] = helmOf(helm);
+    c[RECORDS.control.sheet] = sheetOf(sheet);
+    c[RECORDS.control.pilot] = mode;
+    c[RECORDS.control.target] = target;
+    c[RECORDS.control.order] = order;
+    c[RECORDS.control.way] = way;
     this.weather.use(tick);
     this.wakes.use(tick);
     this.seas.use(tick);
     this.#physics.step();
   }
 
-  /** Steps the next tick with the controls' indices. */
-  stepIndices(helm: number, sheet: number): void {
+  /** Steps the next tick with the controls' indices and the autopilot's control. */
+  stepIndices(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE): void {
     const before = this.#physics.records.state;
     // The wind the step sails in is the wind where the boat is as it begins.
     this.weather.read(this.tick + 1, before[S.x] ?? 0, before[S.y] ?? 0, this.wind);
-    this.#stepModule(this.tick + 1, helm, sheet);
+    this.#stepModule(this.tick + 1, helm, sheet, pilot.mode, pilot.target, pilot.order, pilot.way);
     if (this.wakes.reaching > 0) {
       // The wind the step sailed in, in the shadow of the boats near.
       const env = this.#physics.records.env;
@@ -204,14 +221,18 @@ export class Predictor implements BoatDriver {
     this.#ticks[i] = this.tick;
     this.#helm[i] = helm;
     this.#sheet[i] = sheet;
+    this.#pilot[3 * i] = pilot.mode;
+    this.#pilot[3 * i + 1] = pilot.way;
+    this.#pilot[3 * i + 2] = pilot.order;
+    this.#target[i] = pilot.target;
     this.#ring.set(r.state, i * N);
     this.states.push(r.state);
     this.out.set(r.out);
   }
 
   /** A BoatDriver's step: controls already at their resolution. */
-  step(helm: number, sheet: number): void {
-    this.stepIndices(helmIndex(helm), sheetIndex(sheet));
+  step(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE): void {
+    this.stepIndices(helmIndex(helm), sheetIndex(sheet), pilot);
   }
 
   readonly #outcome: Outcome = {
@@ -254,7 +275,16 @@ export class Predictor implements BoatDriver {
     this.#ring.set(sn.state, i * N);
     for (let t = sn.tick + 1; t <= this.tick; t++) {
       const j = t % RING;
-      this.#stepModule(t, this.#helm[j] ?? 512, this.#sheet[j] ?? 512);
+      const p = this.#pilot;
+      this.#stepModule(
+        t,
+        this.#helm[j] ?? 512,
+        this.#sheet[j] ?? 512,
+        p[3 * j] ?? 0,
+        this.#target[j] ?? 0,
+        p[3 * j + 2] ?? 0,
+        p[3 * j + 1] ?? 0,
+      );
       this.#ring.set(r.state, j * N);
     }
     const prev = (this.tick - 1) % RING;

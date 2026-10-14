@@ -354,13 +354,14 @@
       "description": "The boat's physics, in SI units with angles in degrees. Every value is required.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["hull", "rig", "foils", "sailor", "rates"],
+      "required": ["hull", "rig", "foils", "sailor", "rates", "autopilot"],
       "properties": {
         "hull": { "$ref": "#/$defs/PhysicsHull" },
         "rig": { "$ref": "#/$defs/PhysicsRig" },
         "foils": { "$ref": "#/$defs/PhysicsFoils" },
         "sailor": { "$ref": "#/$defs/PhysicsSailor" },
-        "rates": { "$ref": "#/$defs/PhysicsRates" }
+        "rates": { "$ref": "#/$defs/PhysicsRates" },
+        "autopilot": { "$ref": "#/$defs/PhysicsAutopilot" }
       }
     },
     "PhysicsHull": {
@@ -505,6 +506,24 @@
         "rudderTime": { "description": "Time for the rudder's full travel, one side to the other, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
         "sheetHaulTime": { "description": "Time to haul the sheet in over its full range, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
         "sheetEaseTime": { "description": "Time to ease the sheet out over its full range, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 }
+      }
+    },
+    "PhysicsAutopilot": {
+      "title": "PhysicsAutopilot",
+      "description": "How the boat's autopilot steers it: a proportional–integral–derivative law on the angle off its course, and how hard it turns in a tack or a gybe. It sets the helm only, at the sailor's rate.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gain", "damping", "trimTime", "trimLimit", "trimBand", "tackHelm", "gybeHelm", "byTheLee", "onCourse"],
+      "properties": {
+        "gain": { "description": "Helm per radian off course, the helm running from −1 to 1.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
+        "damping": { "description": "Helm per rad/s of turn, against it: the counter rudder.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
+        "trimTime": { "description": "Time for the standing helm to take up a steady error, in s: gain over this is its growth per radian-second.", "type": "number", "exclusiveMinimum": 0, "maximum": 600 },
+        "trimLimit": { "description": "The most standing helm, as a share of the helm.", "type": "number", "minimum": 0, "maximum": 1 },
+        "trimBand": { "description": "The standing helm grows only this near the course, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 },
+        "tackHelm": { "description": "The most helm in a tack.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "gybeHelm": { "description": "The most helm in a gybe.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "byTheLee": { "description": "How far by the lee the boat sails before the autopilot counts it gybed, in degrees. Below the angle at which the boom goes over by itself, about 17° on a dinghy.", "type": "number", "minimum": 0, "exclusiveMaximum": 17 },
+        "onCourse": { "description": "A tack or gybe ends this near its target, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 }
       }
     }
   }

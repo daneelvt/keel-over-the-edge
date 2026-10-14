@@ -5,7 +5,9 @@
 //
 //   Wind: an arrow on the water a few metres upwind of the boat for the true
 //   wind, and a slimmer, fletched arrow above the masthead for the apparent
-//   wind, the wind the moving boat feels.
+//   wind, the wind the moving boat feels; and, while the autopilot is on, a
+//   long thin arrow on the water from the bow along the heading it steers
+//   for.
 //   Sail forces: arrows at the sail's centre of effort for the drive (ahead)
 //   and the side force (across); the screen adds a clinometer for the heel.
 //
@@ -27,11 +29,13 @@ export const WIND_SCALE = 0.45;
 export const FORCE_SCALE = 0.012;
 /** The true wind's arrow lies this far upwind of the boat, in metres. */
 export const UPWIND = 7;
+/** The autopilot's course reaches this far ahead of the boat, in metres. */
+export const COURSE_LENGTH = 9;
 /** No arrow is drawn shorter than this, or longer than MAX_LENGTH, in metres. */
 const MIN_LENGTH = 0.05;
 const MAX_LENGTH = 9;
 
-export type ArrowShape = 'broad' | 'fletched' | 'pointed' | 'blunt';
+export type ArrowShape = 'broad' | 'fletched' | 'pointed' | 'blunt' | 'thin';
 
 /**
  * An arrow along its local −z (as a boat's bow points), its tail at its
@@ -45,7 +49,7 @@ export class Arrow {
 
   constructor(name: string, shape: ArrowShape, colour: number) {
     this.group.name = name;
-    const wide = shape === 'broad' ? 0.3 : shape === 'fletched' ? 0.07 : 0.12;
+    const wide = shape === 'broad' ? 0.3 : shape === 'fletched' || shape === 'thin' ? 0.07 : 0.12;
     const shaft = new BoxGeometry(wide, wide * 0.4, 1);
     shaft.translate(0, 0, -0.5);
     const m = basicMaterial({ color: colour });
@@ -103,8 +107,11 @@ export class Overlays {
   readonly apparentWind = new Arrow('apparent wind', 'fletched', 0xf3c969);
   readonly drive = new Arrow('drive', 'pointed', 0x5fd38a);
   readonly side = new Arrow('side force', 'blunt', 0xe9837a);
+  readonly course = new Arrow('autopilot course', 'thin', 0xb9d3df);
   wind = false;
   forces = false;
+  /** The autopilot is on: its course is drawn with the wind's arrows. */
+  pilot = false;
 
   readonly #labels: Label[] = [];
   readonly #v = new Vector3();
@@ -121,7 +128,7 @@ export class Overlays {
     this.#foot = rig.foot;
     this.world.name = 'overlays';
     this.onBoat.name = 'overlays on the boat';
-    this.world.add(this.trueWind.group);
+    this.world.add(this.trueWind.group, this.course.group);
     this.onBoat.add(this.apparentWind.group, this.drive.group, this.side.group);
     this.#show();
   }
@@ -139,6 +146,7 @@ export class Overlays {
       add('Apparent wind', this.apparentWind);
       add('Drive', this.drive);
       add('Side force', this.side);
+      add('Autopilot', this.course);
     }
     for (const l of this.#labels) {
       if (layer === null) {
@@ -154,6 +162,14 @@ export class Overlays {
     this.wind = wind;
     this.forces = forces;
     this.#show();
+  }
+
+  /** Whether the autopilot is on, to draw its course. */
+  setPilot(on: boolean): void {
+    if (on !== this.pilot) {
+      this.pilot = on;
+      this.#show();
+    }
   }
 
   /**
@@ -188,6 +204,14 @@ export class Overlays {
       );
       a.rotation.set(0, arrowRotation(along), 0);
       this.apparentWind.setLength(alen);
+
+      if (this.pilot) {
+        // From the boat along the heading the autopilot steers for.
+        const c = this.course.group;
+        c.position.set(x, 0.08, z);
+        c.rotation.set(0, arrowRotation(out[RECORDS.out.pilotHeading] ?? pose.heading), 0);
+        this.course.setLength(COURSE_LENGTH);
+      }
     }
     if (this.forces) {
       // The centre of effort, out along the boom with the sail.
@@ -228,6 +252,7 @@ export class Overlays {
     this.apparentWind.group.visible = this.wind;
     this.drive.group.visible = this.forces;
     this.side.group.visible = this.forces;
+    this.course.group.visible = this.wind && this.pilot;
     for (const l of this.#labels) {
       l.el.hidden = !l.arrow.group.visible;
     }

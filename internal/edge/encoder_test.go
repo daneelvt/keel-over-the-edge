@@ -130,7 +130,7 @@ func TestEncoderAllocatesNothing(t *testing.T) {
 		for i, c := range conns {
 			if i%3 == 0 {
 				c.wmu.Lock()
-				c.held[(c.first+c.nheld)%heldWords] = bus.Pack(uint32(next+2), uint16(i%1024), 512, c.gen)
+				c.held[(c.first+c.nheld)%heldWords] = heldPair{word: bus.Pack(uint32(next+2), uint16(i%1024), 512, c.gen), pilot: bus.PilotOffWord(c.gen) | bus.PilotWord(next+2)<<32}
 				c.nheld++
 				c.waiting.Store(int32(c.nheld))
 				c.wmu.Unlock()
@@ -443,7 +443,7 @@ func BenchmarkEncodeSteady(b *testing.B) {
 					b.StopTimer()
 					f := w.Latest()
 					for i, s := range f.Live {
-						w.Bus().Controls.Store(s, bus.Pack(uint32(f.Tick+1), uint16((i*37+int(f.Tick))%1025), 600, f.Gen[s]))
+						w.Bus().Controls.StoreHand(s, bus.Pack(uint32(f.Tick+1), uint16((i*37+int(f.Tick))%1025), 600, f.Gen[s]))
 					}
 					w.Tick()
 					w.Tick()

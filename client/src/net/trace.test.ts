@@ -6,14 +6,18 @@
 // the view the Go client decoded; and every snapshot the predictor
 // reconciles as the Go client did, tick for tick: none corrected without
 // loss, the same ones at 200 ms and 2% loss. The fleet's traces are three
-// sailors sailing together among other boats.
+// sailors sailing together among other boats; the pilot's, a boat on the
+// autopilot in a trade spell, tacking and gybing on its orders.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
 import fleet from '../../../shared/protocol/testdata/trace-fleet.json';
 import lossy from '../../../shared/protocol/testdata/trace-lossy.json';
 import none from '../../../shared/protocol/testdata/trace-none.json';
+import pilot from '../../../shared/protocol/testdata/trace-pilot.json';
+import pilotLossy from '../../../shared/protocol/testdata/trace-pilot-lossy.json';
 import { catalog } from '../catalog';
+import type { PilotControl } from '../input/pilot';
 import { loadPhysics } from '../predict/physics';
 import { Predictor } from '../predict/predictor';
 import { Session } from '../workers/net/session';
@@ -104,6 +108,12 @@ function viewDigest(v: View): string {
   return h.toString(16).padStart(8, '0');
 }
 
+/** The autopilot's control of a trace's step or input: after its tick, helm and sheet, the mode, way, order and target, if any. */
+function pilotOf(v: number[]): PilotControl {
+  const [, , , mode = 0, way = 0, order = 0, target = 0] = v;
+  return { mode, way, order, target };
+}
+
 async function replay(
   trace: Trace,
 ): Promise<{ corrections: number; snapshots: number; others: number; shadowed: number }> {
@@ -162,10 +172,10 @@ async function replay(
       expected.push(...out.map(hexOf));
     } else if (e.input !== undefined) {
       const [seq = 0, helm = 0, sheet = 0] = e.input;
-      expected.push(hexOf(session.input(e.t, seq, helm, sheet)));
+      expected.push(hexOf(session.input(e.t, seq, helm, sheet, pilotOf(e.input))));
     } else if (e.step !== undefined) {
       const [tick = 0, helm = 0, sheet = 0] = e.step;
-      predictor.stepIndices(helm, sheet);
+      predictor.stepIndices(helm, sheet, pilotOf(e.step));
       expect(predictor.tick, where).toBe(tick);
       if (predictor.wakes.reaching > 0) {
         shadowed++;
@@ -207,6 +217,17 @@ describe('the Go client’s traces', () => {
 
   test('at 200 ms and 2% loss: the same messages, the same corrections', async () => {
     const r = await replay(lossy as Trace);
+    expect(r.corrections).toBeGreaterThan(0);
+  });
+
+  test('on the autopilot in a trade spell, without lag: no correction at all', async () => {
+    const r = await replay(pilot as Trace);
+    expect(r.snapshots).toBeGreaterThan(250);
+    expect(r.corrections).toBe(0);
+  });
+
+  test('on the autopilot at 200 ms and 2% loss: the same corrections', async () => {
+    const r = await replay(pilotLossy as Trace);
     expect(r.corrections).toBeGreaterThan(0);
   });
 

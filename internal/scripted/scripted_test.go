@@ -5,12 +5,14 @@ package scripted
 import (
 	"context"
 	"log/slog"
+	"math"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
 
@@ -82,9 +84,69 @@ func TestSailorsSail(t *testing.T) {
 				t.Fatalf("slot %d is account %s's, connection %d", s, f.Owner[s], f.Conn[s])
 			}
 		}
-		// Each sailor moves every 0.2 to 3 s: about 37 moves a minute each.
+		// Each sailor trims every 0.2 to 3 s: about 37 times a minute each.
 		if changes < n*20 || changes > n*60 || len(seq) != n {
 			t.Fatalf("%d changes by %d sailors in a minute", changes, len(seq))
+		}
+	})
+}
+
+// TestSailorsOnTheAutopilot: in a trade spell, scripted sailors stay
+// upright for five minutes, hold their angles to the mean wind once
+// settled, and end on the other tack after each tack or gybe they draw.
+func TestSailorsOnTheAutopilot(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const n = 12
+		w := world(t, 16)
+		reply := make(chan bus.Reply, 1)
+		w.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherHeld, Regime: 1}, Reply: reply})
+		w.Tick()
+		<-reply
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error, 1)
+		go func() {
+			done <- Run(ctx, Config{N: n, Bus: w.Bus(), Seed: 4, Log: slog.New(slog.DiscardHandler), MinTurn: 40 * time.Second, MaxTurn: 90 * time.Second})
+		}()
+		// Since when each slot's pilot word has been as it is: a new
+		// order, or the first word, is given 30 s to settle.
+		since := map[int32]int64{}
+		orders := map[int32]uint8{}
+		turns, worst, checked := 0, 0.0, 0
+		for range 5 * 60 * 30 {
+			time.Sleep(time.Second / 30)
+			w.Tick()
+			f := w.Latest()
+			for _, c := range f.Changed {
+				if _, ok := since[c.Slot]; !ok || c.Pilot.Order() != orders[c.Slot] {
+					if ok {
+						turns++
+					}
+					since[c.Slot], orders[c.Slot] = f.Tick, c.Pilot.Order()
+				}
+			}
+			for _, s := range f.Live {
+				st := &f.State[s]
+				if st.SailorMode != physics.Sailing {
+					t.Fatalf("tick %d: slot %d capsized, holding %d with the sheet at %v", f.Tick, s, f.Pilot[s].Target(), f.Control[s].Sheet())
+				}
+				from, ok := since[s]
+				if !ok || f.Tick-from < 30*30 {
+					continue
+				}
+				target := float64(int16(f.Pilot[s].Target())) * 2 * math.Pi / physics.TurnSteps
+				off := math.Remainder(f.Wind[s].MeanFrom-st.Heading-target, 2*math.Pi)
+				worst = max(worst, math.Abs(off))
+				checked++
+			}
+		}
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		w.Close()
+		t.Logf("%d sailors, five minutes of a trade spell: %d tacks and gybes, at most %.2f° off their angles once settled", n, turns, worst*180/math.Pi)
+		if turns < n || worst > 5*math.Pi/180 || checked == 0 {
+			t.Errorf("%d tacks and gybes, %.2f° off at most over %d checks", turns, worst*180/math.Pi, checked)
 		}
 	})
 }

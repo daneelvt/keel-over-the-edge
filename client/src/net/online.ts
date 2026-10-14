@@ -14,6 +14,7 @@ import { signal } from '@preact/signals';
 import { catalog } from '../catalog';
 import { Fleet } from '../game/fleet';
 import { Floater } from '../game/float';
+import { type PilotControl, PilotInput } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { RECORDS } from '../predict/layout.gen';
 import {
@@ -49,6 +50,7 @@ export interface Port {
 export interface Helmsman {
   readonly helm: { target: number };
   readonly sheet: { target: number };
+  readonly pilot: PilotInput;
   /** Called before each step (the browser tests script controls). */
   beforeStep: (() => void) | null;
   readonly clock: { steps: number; alpha: number };
@@ -117,6 +119,8 @@ export class Online {
   #haveLatest = false;
   /** The indices last sent; the first snapshot after a Welcome sets them. */
   #sent = [-1, -1];
+  /** The autopilot's control last sent, as the first snapshot after a Welcome sets it. */
+  readonly #sentPilot = new PilotInput();
   #fresh = false;
   #hadBoat = false;
   /** The bell rang: the server is restarting, and the boat waits. */
@@ -267,14 +271,20 @@ export class Online {
       this.#fresh = false;
       this.#sent[0] = sn.helm;
       this.#sent[1] = sn.sheet;
+      this.#sentPilot.set(sn);
       this.#helmsman.helm.target = helmOf(sn.helm);
       this.#helmsman.sheet.target = sheetOf(sn.sheet);
+      this.#helmsman.pilot.set(sn);
     }
     const o = this.#predictor.snapshot(sn);
     this.#latest.tick = sn.tick;
     this.#latest.seq = sn.seq;
     this.#latest.helm = sn.helm;
     this.#latest.sheet = sn.sheet;
+    this.#latest.mode = sn.mode;
+    this.#latest.way = sn.way;
+    this.#latest.order = sn.order;
+    this.#latest.target = sn.target;
     this.#latest.margin = sn.margin;
     this.#latest.state.set(sn.state);
     this.#haveLatest = true;
@@ -382,17 +392,28 @@ export class Online {
     const h = this.#helmsman;
     for (let n = Math.min(MAX_STEPS, target - p.tick); n > 0; n--) {
       if (p.tick + 1 < reach) {
-        p.stepIndices(this.#sent[0] ?? 512, this.#sent[1] ?? 512);
+        p.stepIndices(this.#sent[0] ?? 512, this.#sent[1] ?? 512, this.#sentPilot);
         continue;
       }
       h.beforeStep?.();
       const helm = helmIndex(quantiseHelm(h.helm.target));
       const sheet = sheetIndex(quantiseSheet(h.sheet.target));
-      p.stepIndices(helm, sheet);
-      if (helm !== this.#sent[0] || sheet !== this.#sent[1]) {
+      const pilot = h.pilot;
+      p.stepIndices(helm, sheet, pilot);
+      if (helm !== this.#sent[0] || sheet !== this.#sent[1] || !samePilot(pilot, this.#sentPilot)) {
         this.#sent[0] = helm;
         this.#sent[1] = sheet;
-        this.#port.postMessage({ type: 'input', seq: p.tick, helm, sheet });
+        this.#sentPilot.set(pilot);
+        this.#port.postMessage({
+          type: 'input',
+          seq: p.tick,
+          helm,
+          sheet,
+          pilot: pilot.mode,
+          target: pilot.target,
+          order: pilot.order,
+          way: pilot.way,
+        });
       }
     }
     // World time for everything else that moves (the sea): the boat's
@@ -412,4 +433,8 @@ export class Online {
     const v = Array.from(this.#frames.subarray(0, n)).sort((a, b) => a - b);
     this.#port.postMessage({ type: 'frame', ms: v[Math.ceil(0.95 * n) - 1] ?? 0 });
   }
+}
+
+function samePilot(a: PilotControl, b: PilotControl): boolean {
+  return a.mode === b.mode && a.target === b.target && a.order === b.order && a.way === b.way;
 }

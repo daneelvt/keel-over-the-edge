@@ -40,7 +40,7 @@ import (
 //	            strings as a uvarint length and bytes
 //	S snapshot  tick, then sim's snapshot of the world after it: a segment starts
 //	T tick      tick, ticks skipped before it, the control words applied
-//	            (count, then slot and word for each), the commands applied in order with
+//	            (count, then slot, word and pilot word for each), the commands applied in order with
 //	            their results (count, then each: op, its fields, result, slot, boat, generation,
 //	            place in the queue, tick queued at); an account is its 16 bytes; a boat whose
 //	            grace ended is a Leave with the result Expired, and a connection given a boat
@@ -50,7 +50,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 5
+	formatVersion = 6
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -132,6 +132,7 @@ func appendTick(dst []byte, f *bus.Frame) []byte {
 	for _, sw := range f.Changed {
 		dst = binary.AppendUvarint(dst, uint64(sw.Slot))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(sw.Word))
+		dst = binary.LittleEndian.AppendUint64(dst, uint64(sw.Pilot))
 	}
 	dst = binary.AppendUvarint(dst, uint64(len(f.Events)))
 	for i := range f.Events {
@@ -306,9 +307,11 @@ func (f *File) add(kind byte, p *payload) error {
 		r := Record{Kind: kindTick, Tick: p.varint(), Skipped: int64(p.count(math.MaxInt64))}
 		// Counts are bounded by the bytes left, so a damaged count cannot
 		// make the reader allocate more than the log could hold.
-		r.Changed = make([]bus.SlotWord, p.count(min(uint64(f.Header.Capacity), uint64(len(p.b)/9))))
+		r.Changed = make([]bus.SlotWord, p.count(min(uint64(f.Header.Capacity), uint64(len(p.b)/17))))
 		for i := range r.Changed {
-			r.Changed[i] = bus.SlotWord{Slot: int32(p.count(uint64(f.Header.Capacity) - 1)), Word: bus.Word(p.u64())}
+			slot := int32(p.count(uint64(f.Header.Capacity) - 1))
+			word := bus.Word(p.u64())
+			r.Changed[i] = bus.SlotWord{Slot: slot, Word: word, Pilot: bus.PilotWord(p.u64())}
 		}
 		r.Events = make([]bus.Event, p.count(uint64(len(p.b)/6)))
 		for i := range r.Events {

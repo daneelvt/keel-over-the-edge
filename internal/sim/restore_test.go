@@ -123,7 +123,7 @@ func TestRestore(t *testing.T) {
 			f.Control[s] != of.Control[s] || !sameState(f.State[s], of.State[s]) {
 			t.Fatalf("slot %d: boat %d, connection %d, grace %d (want %d)", s, f.Boat[s], f.Conn[s], f.Grace[s], want)
 		}
-		if w.Bus().Controls.Load(s) != f.Control[s] {
+		if word, pilot := w.Bus().Controls.Load(s); word != f.Control[s] || pilot != f.Pilot[s] {
 			t.Fatalf("slot %d's control slot was not set", s)
 		}
 	}

@@ -90,6 +90,7 @@ export interface BoatPhysics {
   foils: PhysicsFoils;
   sailor: PhysicsSailor;
   rates: PhysicsRates;
+  autopilot: PhysicsAutopilot;
 }
 /**
  * The hull: its mass, resistance, inertia and stability.
@@ -604,6 +605,50 @@ export interface PhysicsRates {
    * Time to ease the sheet out over its full range, in s.
    */
   sheetEaseTime: number;
+}
+/**
+ * How the boat's autopilot steers it: a proportional–integral–derivative law on the angle off its course, and how hard it turns in a tack or a gybe. It sets the helm only, at the sailor's rate.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsAutopilot".
+ */
+export interface PhysicsAutopilot {
+  /**
+   * Helm per radian off course, the helm running from −1 to 1.
+   */
+  gain: number;
+  /**
+   * Helm per rad/s of turn, against it: the counter rudder.
+   */
+  damping: number;
+  /**
+   * Time for the standing helm to take up a steady error, in s: gain over this is its growth per radian-second.
+   */
+  trimTime: number;
+  /**
+   * The most standing helm, as a share of the helm.
+   */
+  trimLimit: number;
+  /**
+   * The standing helm grows only this near the course, in degrees.
+   */
+  trimBand: number;
+  /**
+   * The most helm in a tack.
+   */
+  tackHelm: number;
+  /**
+   * The most helm in a gybe.
+   */
+  gybeHelm: number;
+  /**
+   * How far by the lee the boat sails before the autopilot counts it gybed, in degrees. Below the angle at which the boom goes over by itself, about 17° on a dinghy.
+   */
+  byTheLee: number;
+  /**
+   * A tack or gybe ends this near its target, in degrees.
+   */
+  onCourse: number;
 }
 /**
  * A boat's art. Every art object's values are paths under art/, checked to exist.
@@ -1254,4 +1299,4 @@ export interface EncountersOverlay {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '062fe957a9a2278a';
+export const CATALOG_VERSION = '14f5face6054cbc6';

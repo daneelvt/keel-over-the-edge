@@ -39,19 +39,34 @@ type State struct {
 	HeaveRate   float64 // m/s, positive rising
 	Pitch       float64 // rad, positive with the bow up
 	PitchRate   float64 // rad/s
+	// What the autopilot remembers between steps (pilot.go): all three are 0
+	// while it has never been used.
+	PilotTrim  float64 // its standing helm, positive turning the bow toward the wind, −1 … 1
+	PilotWay   float64 // the way it is turning: WayHold, WayTack or WayGybe
+	PilotOrder float64 // the order count of the last order it took
 }
 
-// Control holds what the player sets. Both are targets: the rudder and the
-// sheet follow them at the rates in Params.
+// Control holds what the player sets. Helm and Sheet are targets: the rudder
+// and the sheet follow them at the rates in Params. The autopilot's values
+// are whole numbers, as the wire carries them; while it is on, it sets the
+// helm and Helm is not read.
 type Control struct {
 	Helm  float64 // -1 hard to port … 1 hard to starboard: turns the bow that way
 	Sheet float64 // 0 hauled in hard … 1 let fly
+	Pilot float64 // the autopilot's mode: PilotOff, PilotWind or PilotHeading
+	// Target is what it holds, in 65536ths of a turn: in PilotWind the angle
+	// off the wind, positive with the wind over starboard (from 32768 on,
+	// the angle less a whole turn); in PilotHeading the heading.
+	Target float64
+	Order  float64 // the order count, 0 … 3: a value the state has not taken is a new order
+	Way    float64 // the way of the latest order: WayHold, WayTack or WayGybe
 }
 
 // Env is the world at the boat during the step.
 type Env struct {
 	WindSpeed float64 // true wind 10 m above the sea, m/s
 	WindFrom  float64 // direction the true wind comes from, rad clockwise from north
+	MeanFrom  float64 // the direction the wind comes from without its gusts or any shadow: what the autopilot steers by
 }
 
 // Params describe a kind of boat: the catalog's physics values, in the order
@@ -167,6 +182,17 @@ type Params struct {
 	RudderTime    float64 // s for the rudder's full travel, one side to the other
 	SheetHaulTime float64 // s to haul the sheet in over its full range
 	SheetEaseTime float64 // s to ease it out over its full range
+
+	// Autopilot.
+	Gain      float64 // helm per radian off course
+	Damping   float64 // helm per rad/s of turn, against it
+	TrimTime  float64 // s for the standing helm to take up a steady error
+	TrimLimit float64 // the most standing helm, a share of the helm
+	TrimBand  float64 // the standing helm grows only this near the course, degrees
+	TackHelm  float64 // the most helm in a tack
+	GybeHelm  float64 // the most helm in a gybe
+	ByTheLee  float64 // the most it sails by the lee before counting the boat gybed, degrees
+	OnCourse  float64 // a turn ends this near the target, degrees
 }
 
 // SeaParams describe the waves long enough to move a boat: the catalog's sea
@@ -209,6 +235,9 @@ type Out struct {
 	WaveSlopeAhead    float64 // the sea's slope under the hull, rising toward the bow
 	WaveSlopeAcross   float64 // and rising toward starboard
 	SpeedThroughWater float64 // m/s: the boat's speed less the waves' own motion
+	PilotHelm         float64 // the helm the step sailed with: the autopilot's while it is on, −1 … 1
+	PilotOff          float64 // how far the autopilot has to turn the boat, rad, positive to starboard; 0 while it is off
+	PilotHeading      float64 // the heading the autopilot steers for, rad clockwise from north; the heading while it is off
 }
 
 // The flow over a sail strip, in Out.FootFlow and Out.HeadFlow.

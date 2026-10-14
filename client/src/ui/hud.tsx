@@ -2,8 +2,9 @@
 
 // The screen at sea: the instrument panel top left (a heading-up compass
 // card with the true wind's mark on its rim, the speed over ground, the
-// heading and the wind), the sailor's state when they are out of the boat,
-// the helm bottom left, the sheet bottom right, and the menu. Laid out
+// heading, what the autopilot holds while it is on, and the wind), the sailor's state
+// when they are out of the boat, the helm bottom left, the sheet bottom
+// right, the autopilot's button between them, and the menu. Laid out
 // within the safe area, in portrait and landscape.
 
 import { ConnectionLine, type ConnectionView } from './connection';
@@ -11,10 +12,12 @@ import './hud.css';
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import type { HelmInput } from '../input/helm';
+import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
 import { Helm, Sheet } from './controls';
 import { Menu } from './menu';
 import type { HudModel } from './model';
+import { Pilot } from './pilot';
 import type { SettingsSignal } from './settings';
 
 const POINTS = ['N', 'E', 'S', 'W'];
@@ -77,6 +80,11 @@ function Instruments({ model }: { model: HudModel }) {
         <p>
           Heading <b data-readout="heading">{model.heading}</b>
         </p>
+        {model.pilot.value === '' ? null : (
+          <p>
+            Autopilot <b data-readout="pilot">{model.pilot}</b>
+          </p>
+        )}
         <p>
           Wind <b data-readout="wind">{model.wind}</b>
         </p>
@@ -138,6 +146,8 @@ export interface ScreenProps {
   settings: SettingsSignal;
   helm: HelmInput;
   sheet: SheetInput;
+  /** The autopilot's button and dial. */
+  pilot: PilotActions;
   /** The layer the overlays' labels go in. */
   labels: (el: HTMLElement | null) => void;
   /** The sailor's name, or null in the offline sandbox. */
@@ -178,6 +188,7 @@ function Screen(props: ScreenProps) {
         />
       ) : null}
       <Helm input={props.helm} model={model} />
+      <Pilot actions={props.pilot} model={model} />
       <Sheet input={props.sheet} model={model} />
     </>
   );

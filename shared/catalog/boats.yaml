@@ -172,3 +172,19 @@ boats:
         rudderTime: 0.25 # estimate
         sheetHaulTime: 2.5 # estimate
         sheetEaseTime: 1.0 # estimate
+      # The autopilot. Gain and damping are those of a helmsman's
+      # heading-hold that steers this hull well; a standing helm that settles
+      # in 10 s holds a broad reach within a tenth of a degree. A tack wants
+      # the full helm, slower turns stall head to wind; a gybe in a gale
+      # wants a third of it, or the boom crosses hard enough to capsize her.
+      # Measured with tools/polar and the step in the catalog's spells.
+      autopilot:
+        gain: 2 # helm per radian
+        damping: 0.8 # helm per rad/s
+        trimTime: 10
+        trimLimit: 0.3
+        trimBand: 10
+        tackHelm: 1.0
+        gybeHelm: 0.35
+        byTheLee: 15 # she gybes by herself at about 17° by the lee
+        onCourse: 10

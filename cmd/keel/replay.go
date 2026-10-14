@@ -123,10 +123,20 @@ func (x exact) MarshalJSON() ([]byte, error) {
 }
 
 type dumpedControl struct {
-	Word  string `json:"word"`
-	Seq   uint32 `json:"seq"`
-	Helm  exact  `json:"helm"`
-	Sheet exact  `json:"sheet"`
+	Word  string      `json:"word"`
+	Seq   uint32      `json:"seq"`
+	Helm  exact       `json:"helm"`
+	Sheet exact       `json:"sheet"`
+	Pilot dumpedPilot `json:"pilot"`
+}
+
+// dumpedPilot is the pilot word in force.
+type dumpedPilot struct {
+	Word   string `json:"word"`
+	Mode   uint8  `json:"mode"`
+	Way    uint8  `json:"way"`
+	Order  uint8  `json:"order"`
+	Target uint16 `json:"target"`
 }
 
 type dumpedBoat struct {
@@ -183,12 +193,13 @@ func writeDump(w io.Writer, f *bus.Frame) error {
 		d.Queue = append(d.Queue, dumpedWaiting{Account: q.Account.String(), Connection: q.Conn, Since: q.Since, Grace: q.Grace})
 	}
 	for _, s := range f.Live {
-		c := f.Control[s]
+		c, p := f.Control[s], f.Pilot[s]
 		b := dumpedBoat{
 			Slot: s, Boat: f.Boat[s], Generation: f.Gen[s], Owner: f.Owner[s].String(),
 			Connection: f.Conn[s], Grace: f.Grace[s], Kind: f.Kind[s],
-			Control: dumpedControl{Word: fmt.Sprintf("%#016x", uint64(c)), Seq: c.Seq(), Helm: exact(c.Helm()), Sheet: exact(c.Sheet())},
-			State:   map[string]exact{},
+			Control: dumpedControl{Word: fmt.Sprintf("%#016x", uint64(c)), Seq: c.Seq(), Helm: exact(c.Helm()), Sheet: exact(c.Sheet()),
+				Pilot: dumpedPilot{Word: fmt.Sprintf("%#016x", uint64(p)), Mode: p.Mode(), Way: p.Way(), Order: p.Order(), Target: p.Target()}},
+			State: map[string]exact{},
 		}
 		for i, v := range sim.StateFields(&f.State[s]) {
 			b.State[names[i]] = exact(*v)

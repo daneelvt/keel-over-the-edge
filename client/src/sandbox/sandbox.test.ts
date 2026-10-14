@@ -8,6 +8,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
+import { PILOT_WIND, PilotInput } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import {
   fromHex,
@@ -232,6 +233,13 @@ describe('the sandbox', () => {
       s.setState(sc.state ?? {});
       let helm = sc.control?.helm ?? 0;
       let sheet = sc.control?.sheet ?? 0;
+      // The autopilot's control, as the scenario gives it.
+      const pilot = {
+        mode: sc.control?.pilot ?? 0,
+        target: sc.control?.target ?? 0,
+        order: sc.control?.order ?? 0,
+        way: sc.control?.way ?? 0,
+      };
       const record = SIZES.state + SIZES.out;
       const all = new Float64Array(sc.steps * record);
       const changes = sc.changes ?? [];
@@ -243,6 +251,10 @@ describe('the sandbox', () => {
           const c = changes[next];
           helm = c?.control?.helm ?? helm;
           sheet = c?.control?.sheet ?? sheet;
+          pilot.mode = c?.control?.pilot ?? pilot.mode;
+          pilot.target = c?.control?.target ?? pilot.target;
+          pilot.order = c?.control?.order ?? pilot.order;
+          pilot.way = c?.control?.way ?? pilot.way;
           if (c?.spells !== undefined) {
             s.weather.set(c.spells.map(spellOf));
           }
@@ -257,7 +269,7 @@ describe('the sandbox', () => {
         if (steering) {
           helm = steer(target, s.states.current);
         }
-        s.step(helm, sheet);
+        s.step(helm, sheet, pilot);
         all.set(s.states.current, i * record);
         all.set(s.out, i * record + SIZES.state);
       }
@@ -271,13 +283,21 @@ describe('the sandbox', () => {
 
 /**
  * A scripted sail through the input layer's resolution: trim in, bear away,
- * a trade spell with its gusts, a tack, a steady wind again, ease out.
+ * a trade spell with its gusts, a tack, a steady wind again, ease out; then
+ * the autopilot on at the boat's angle to the wind, and a tack on it.
  * Returns the sandbox's recording.
  */
 async function scriptedSail(): Promise<Recording> {
   const s = await startSandbox(bytes, boat, sea);
   s.record();
+  const pilot = new PilotInput();
   for (let i = 0; i < 1800; i++) {
+    if (i === 1300) {
+      pilot.engage(PILOT_WIND, s.states.current[RECORDS.state.heading] ?? 0, s.wind.meanFrom);
+    }
+    if (i === 1500) {
+      pilot.tack(s.wind.meanFrom);
+    }
     let helm = 0;
     let sheet = 0.5;
     if (i >= 30) {
@@ -302,7 +322,7 @@ async function scriptedSail(): Promise<Recording> {
     if (i >= 1200) {
       sheet = 0.2 + ((i - 1200) / 600) * 0.3;
     }
-    s.step(quantiseHelm(helm), quantiseSheet(sheet));
+    s.step(quantiseHelm(helm), quantiseSheet(sheet), pilot);
   }
   return s.recorded('sandbox-sail');
 }

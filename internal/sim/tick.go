@@ -55,7 +55,7 @@ func (w *World) phaseDone(p Phase) {
 // first the sea moves on if the tick begins a second, by the weather as it
 // stood before this tick's commands; then the boats whose grace has ended leave, and the places in the queue
 // whose grace has ended are given up; then the control words of the
-// boats sailing are applied, each once its tick has come (bus.Due), then
+// boats sailing are applied, each pair once its tick has come (bus.Due), then
 // the commands, in the order they came; last, while there is room, those
 // waiting in the queue get their boats, the longest waiting first.
 func (w *World) inputs() {
@@ -77,6 +77,7 @@ func (w *World) inputs() {
 		next.Grace[s] = cur.Grace[s]
 		next.Kind[s] = cur.Kind[s]
 		next.Control[s] = cur.Control[s]
+		next.Pilot[s] = cur.Pilot[s]
 		next.State[s] = cur.State[s]
 		next.Course[s] = cur.Course[s]
 	}
@@ -96,7 +97,7 @@ func (w *World) inputs() {
 	if in := w.given; in != nil {
 		for _, sw := range in.Changed {
 			if sw.Slot >= 0 && int(sw.Slot) < w.capacity && next.Occupied[sw.Slot] {
-				next.Control[sw.Slot] = sw.Word
+				next.Control[sw.Slot], next.Pilot[sw.Slot] = sw.Word, sw.Pilot
 				next.Changed = append(next.Changed, sw)
 			}
 		}
@@ -110,10 +111,13 @@ func (w *World) inputs() {
 
 	controls := w.bus.Controls
 	for _, s := range next.Live {
-		word := controls.Load(s)
-		if word != next.Control[s] && word.Gen() == next.Gen[s] && bus.Due(word.Seq(), next.Tick) {
-			next.Control[s] = word
-			next.Changed = append(next.Changed, bus.SlotWord{Slot: s, Word: word})
+		word, pilot := controls.Load(s)
+		// The pair is taken whole: two words of different ticks were read
+		// between a writer's two stores, and wait a tick.
+		if (word != next.Control[s] || pilot != next.Pilot[s]) && word.Seq() == pilot.Seq() &&
+			word.Gen() == next.Gen[s] && pilot.Gen() == next.Gen[s] && bus.Due(word.Seq(), next.Tick) {
+			next.Control[s], next.Pilot[s] = word, pilot
+			next.Changed = append(next.Changed, bus.SlotWord{Slot: s, Word: word, Pilot: pilot})
 		}
 	}
 	q := w.bus.Commands
@@ -162,6 +166,7 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 	for _, s := range slots {
 		word := f.Control[s]
 		c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
+		c.Pilot, c.Target, c.Order, c.Way = f.Pilot[s].Control()
 		st := &f.State[s]
 		e := physics.WindAt(&w.wind, st.X, st.Y)
 		kind := &w.kinds[f.Kind[s]]

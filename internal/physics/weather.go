@@ -369,7 +369,7 @@ const (
 func WindAt(t *WeatherTick, x, y float64) Env {
 	var p WindPoint
 	t.point(x, y, &p, pointWind)
-	return Env{WindSpeed: p.Speed, WindFrom: p.From}
+	return Env{WindSpeed: p.Speed, WindFrom: p.From, MeanFrom: p.MeanFrom}
 }
 
 // WindPointAt fills p with the wind at (x, y) in full.

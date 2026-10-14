@@ -51,6 +51,9 @@ type BoatArt struct {
 
 // The boat's physics, in SI units with angles in degrees. Every value is required.
 type BoatPhysics struct {
+	// Autopilot corresponds to the JSON schema field "autopilot".
+	Autopilot PhysicsAutopilot `json:"autopilot"`
+
 	// Foils corresponds to the JSON schema field "foils".
 	Foils PhysicsFoils `json:"foils"`
 
@@ -229,6 +232,41 @@ type NamedStar struct {
 
 	// Right ascension, in degrees.
 	RightAscension float64 `json:"rightAscension"`
+}
+
+// How the boat's autopilot steers it: a proportional–integral–derivative law on
+// the angle off its course, and how hard it turns in a tack or a gybe. It sets the
+// helm only, at the sailor's rate.
+type PhysicsAutopilot struct {
+	// How far by the lee the boat sails before the autopilot counts it gybed, in
+	// degrees. Below the angle at which the boom goes over by itself, about 17° on a
+	// dinghy.
+	ByTheLee float64 `json:"byTheLee"`
+
+	// Helm per rad/s of turn, against it: the counter rudder.
+	Damping float64 `json:"damping"`
+
+	// Helm per radian off course, the helm running from −1 to 1.
+	Gain float64 `json:"gain"`
+
+	// The most helm in a gybe.
+	GybeHelm float64 `json:"gybeHelm"`
+
+	// A tack or gybe ends this near its target, in degrees.
+	OnCourse float64 `json:"onCourse"`
+
+	// The most helm in a tack.
+	TackHelm float64 `json:"tackHelm"`
+
+	// The standing helm grows only this near the course, in degrees.
+	TrimBand float64 `json:"trimBand"`
+
+	// The most standing helm, as a share of the helm.
+	TrimLimit float64 `json:"trimLimit"`
+
+	// Time for the standing helm to take up a steady error, in s: gain over this is
+	// its growth per radian-second.
+	TrimTime float64 `json:"trimTime"`
 }
 
 // The daggerboard or keel, and the rudder.
@@ -851,4 +889,4 @@ type WeatherWaveWind struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "062fe957a9a2278a"
+const Version = "14f5face6054cbc6"

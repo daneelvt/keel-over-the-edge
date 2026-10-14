@@ -185,7 +185,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 				if len(boats) > 0 {
 					p := boats[rng.IntN(len(boats))]
 					seq := uint32(f.Tick + 1 + int64(rng.IntN(4)))
-					w.Bus().Controls.Store(p.slot, bus.Pack(seq, uint16(rng.IntN(bus.Steps+1)), 600, p.gen))
+					w.Bus().Controls.StoreHand(p.slot, bus.Pack(seq, uint16(rng.IntN(bus.Steps+1)), 600, p.gen))
 				}
 				for i := 0; i < len(waiting); {
 					p := waiting[i]
@@ -479,6 +479,8 @@ func TestSandboxRecordings(t *testing.T) {
 				var start physics.State
 				setFloats(t, &start, sc.State)
 				helm, sheet := sc.Control["helm"], sc.Control["sheet"]
+				// The autopilot's control, as whole numbers.
+				pilot := [4]float64{sc.Control["pilot"], sc.Control["target"], sc.Control["order"], sc.Control["way"]}
 				next := 0
 				for step := range sc.Steps {
 					in := &sim.Input{}
@@ -495,6 +497,11 @@ func TestSandboxRecordings(t *testing.T) {
 						if v, ok := ch.Control["sheet"]; ok {
 							sheet, changed = v, true
 						}
+						for i, name := range []string{"pilot", "target", "order", "way"} {
+							if v, ok := ch.Control[name]; ok {
+								pilot[i], changed = v, true
+							}
+						}
 						if s := ch.Set; s != nil {
 							in.Commands = append(in.Commands, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{
 								Mode: bus.WeatherMode(s.Mode), Regime: s.Regime, Speed: s.Speed, Dir: s.Dir}})
@@ -504,7 +511,8 @@ func TestSandboxRecordings(t *testing.T) {
 						}
 					}
 					if changed {
-						in.Changed = []bus.SlotWord{{Slot: slot, Word: bus.Pack(uint32(step), index(t, helm, -1, 1), index(t, sheet, 0, 1), gen)}}
+						in.Changed = []bus.SlotWord{{Slot: slot, Word: bus.Pack(uint32(step), index(t, helm, -1, 1), index(t, sheet, 0, 1), gen),
+							Pilot: bus.PackPilot(uint32(step), uint8(pilot[0]), uint8(pilot[3]), uint8(pilot[2]), uint16(pilot[1]), gen)}}
 					}
 					w.TickWith(in)
 					// The spell the sandbox set is the one the server set.
@@ -594,5 +602,86 @@ func setFields(t *testing.T, record any, values map[string]any) {
 		default:
 			t.Fatalf("%s: %v", name, strconv.Quote(fmt.Sprint(x)))
 		}
+	}
+}
+
+// TestPilotReplaysMidTurn: sailors on the autopilot, tacking and gybing
+// every ten to twenty seconds, are replayed tick for tick from the log's
+// start and from each of its later checkpoints, at least one of which was
+// taken with a boat in the middle of a turn: what the autopilot remembers
+// is in the state the checkpoint holds.
+func TestPilotReplaysMidTurn(t *testing.T) {
+	const capacity = 16
+	dir := t.TempDir()
+	synctest.Test(t, func(t *testing.T) {
+		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: 2, Tick: loop.TickAt(time.Now(), bubbleEpoch)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		discard := slog.New(slog.DiscardHandler)
+		log := replay.New(replay.Config{
+			Frames: w.Bus().Frames,
+			Header: replay.Header{Build: "test", Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: capacity, Epoch: bubbleEpoch, Grace: sim.GraceTicks},
+			Dir:    dir,
+			Log:    discard,
+		})
+		w.Record(log)
+		lp := loop.New(loop.Config{World: w, Epoch: bubbleEpoch, Log: discard})
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{}, 3)
+		go func() { log.Run(); done <- struct{}{} }()
+		go func() { lp.Run(ctx); done <- struct{}{} }()
+		go func() {
+			scripted.Run(ctx, scripted.Config{N: 12, Bus: w.Bus(), Seed: 3, Log: discard, MinTurn: 10 * time.Second, MaxTurn: 20 * time.Second})
+			done <- struct{}{}
+		}()
+		time.Sleep(4 * replay.SegmentTicks * time.Second / physics.StepsPerSecond)
+		cancel()
+		<-done
+		<-done
+		log.Close()
+		<-done
+		w.Close()
+	})
+	names, err := filepath.Glob(filepath.Join(dir, "*.log"))
+	if err != nil || len(names) != 1 {
+		t.Fatalf("logs %v, %v", names, err)
+	}
+	data, err := os.ReadFile(names[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := replay.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Segments) < 3 {
+		t.Fatalf("%d segments", len(f.Segments))
+	}
+	midTurn := 0
+	for k := range f.Segments {
+		frame := bus.NewFrame(capacity)
+		if err := sim.ReadSnapshot(f.Segments[k].Snapshot, frame); err != nil {
+			t.Fatal(err)
+		}
+		turning := false
+		for _, s := range frame.Live {
+			turning = turning || frame.State[s].PilotWay != physics.WayHold
+		}
+		if k > 0 && turning {
+			midTurn++
+		}
+		from := *f
+		from.Segments = f.Segments[k:]
+		res, err := replay.Run(&from, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Diverged != nil || res.Digests == 0 {
+			t.Fatalf("from checkpoint %d (a boat turning: %v): %d digests, %v", k, turning, res.Digests, res.Diverged)
+		}
+	}
+	if midTurn == 0 {
+		t.Fatal("no checkpoint after the first was taken with a boat in the middle of a turn")
 	}
 }

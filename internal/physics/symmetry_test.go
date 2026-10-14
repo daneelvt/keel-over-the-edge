@@ -15,7 +15,8 @@ import (
 // bit; the test allows 10⁻¹² for a later change of summation order.
 
 // mirror turns a state east for west: positions east, headings, turning,
-// sideways motion, heel and everything to one side change sign.
+// sideways motion, heel and everything to one side change sign. The
+// autopilot's standing helm is kept toward the wind, so it does not.
 func mirror(s State) State {
 	s.X, s.Heading, s.Sway, s.YawRate = -s.X, -s.Heading, -s.Sway, -s.YawRate
 	s.Heel, s.RollRate, s.Boom, s.BoomRate = -s.Heel, -s.RollRate, -s.Boom, -s.BoomRate
@@ -42,7 +43,9 @@ func runScenarioStates(t *testing.T, b *Prepared, sc scenario, n int32, mirrored
 		}
 	}
 	flip := func() {
-		c.Helm, e.WindFrom = -c.Helm, -e.WindFrom
+		c.Helm, e.WindFrom, e.MeanFrom = -c.Helm, -e.WindFrom, -e.MeanFrom
+		// An angle off the wind, or a heading, the other way round.
+		c.Target = math.Mod(TurnSteps-c.Target, TurnSteps)
 	}
 	if mirrored {
 		s = mirror(s)
@@ -103,6 +106,7 @@ func TestMirrorSymmetry(t *testing.T) {
 					p.Sway - m.Sway, p.YawRate - m.YawRate, math.Remainder(p.Heel-m.Heel, 2*math.Pi), p.RollRate - m.RollRate,
 					p.Boom - m.Boom, p.BoomRate - m.BoomRate, p.Sailor - m.Sailor, p.Rudder - m.Rudder,
 					p.SheetLimit - m.SheetLimit, p.SailorMode - m.SailorMode, p.SailorTimer - m.SailorTimer,
+					p.PilotTrim - m.PilotTrim, p.PilotWay - m.PilotWay, p.PilotOrder - m.PilotOrder,
 				} {
 					if math.Abs(d) > 1e-12 {
 						t.Fatalf("step %d: the mirrored run differs by %g:\n plain    %+v\n mirrored %+v", i, d, p, m)

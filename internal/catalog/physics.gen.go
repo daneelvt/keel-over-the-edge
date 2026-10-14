@@ -112,6 +112,15 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.RudderTime = b.Physics.Rates.RudderTime
 	p.SheetHaulTime = b.Physics.Rates.SheetHaulTime
 	p.SheetEaseTime = b.Physics.Rates.SheetEaseTime
+	p.Gain = b.Physics.Autopilot.Gain
+	p.Damping = b.Physics.Autopilot.Damping
+	p.TrimTime = b.Physics.Autopilot.TrimTime
+	p.TrimLimit = b.Physics.Autopilot.TrimLimit
+	p.TrimBand = b.Physics.Autopilot.TrimBand
+	p.TackHelm = b.Physics.Autopilot.TackHelm
+	p.GybeHelm = b.Physics.Autopilot.GybeHelm
+	p.ByTheLee = b.Physics.Autopilot.ByTheLee
+	p.OnCourse = b.Physics.Autopilot.OnCourse
 	return p
 }
 

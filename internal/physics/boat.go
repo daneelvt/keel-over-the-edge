@@ -35,10 +35,16 @@ func Step(s *State, c *Control, e *Env, sea *Sea, b *Prepared, o *Out) {
 func step(s *State, c *Control, e *Env, sea *Sea, b *Prepared, o *Out, n int32) {
 	helm := control(c.Helm, -1, 1)
 	sheet := control(c.Sheet, 0, 1)
+	if PilotOn(c) {
+		helm = b.pilot(s, c, e, o)
+	} else {
+		pilotOff(s, c, o)
+	}
 	if s.SailorMode != Sailing {
 		// Nobody holds the tiller or the sheet.
 		helm, sheet = 0, 1
 	}
+	o.PilotHelm = helm
 	// The rudder and the sheet follow the controls as fast as the sailor's
 	// hands can move them; the sheet eases faster than it hauls.
 	s.Rudder = approach(s.Rudder, float64(helm*b.rudderMax), float64(b.rudderRate*Dt))

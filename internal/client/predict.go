@@ -22,9 +22,9 @@ const (
 )
 
 type ringEntry struct {
-	tick        int64
-	helm, sheet uint16
-	state       physics.State
+	tick  int64
+	in    Input
+	state physics.State
 }
 
 // Predictor steps the player's boat ahead of the server with the same
@@ -83,9 +83,10 @@ func (p *Predictor) Reset(sn *protocol.Snapshot) {
 
 // step steps the boat into tick, in the wind at its place and the sea of
 // that tick, as the server does.
-func (p *Predictor) step(tick int64, helm, sheet uint16) {
-	w := bus.Pack(0, helm, sheet, 0)
+func (p *Predictor) step(tick int64, in Input) {
+	w := bus.Pack(0, in.Helm, in.Sheet, 0)
 	c := physics.Control{Helm: w.Helm(), Sheet: w.Sheet()}
+	c.Pilot, c.Target, c.Order, c.Way = in.Pilot(0, 0).Control()
 	if p.wind.Tick != float64(tick) {
 		physics.WeatherAt(&p.Weather, &p.wind, float64(tick))
 	}
@@ -107,12 +108,16 @@ func (p *Predictor) Wind() physics.WindPoint {
 	return w
 }
 
+// Out is what the last step derived: the boat's instruments, and the
+// helm its autopilot set.
+func (p *Predictor) Out() *physics.Out { return &p.out }
+
 // Step steps the next tick with these controls, at the controls'
 // resolution.
-func (p *Predictor) Step(helm, sheet uint16) {
-	p.step(p.Tick+1, helm, sheet)
+func (p *Predictor) Step(in Input) {
+	p.step(p.Tick+1, in)
 	p.Tick++
-	p.ring[p.Tick%Ring] = ringEntry{tick: p.Tick, helm: helm, sheet: sheet, state: p.State}
+	p.ring[p.Tick%Ring] = ringEntry{tick: p.Tick, in: in, state: p.State}
 }
 
 // Outcome is what a snapshot did to the prediction.
@@ -151,7 +156,7 @@ func (p *Predictor) Snapshot(sn *protocol.Snapshot) Outcome {
 	e.state = sn.State
 	for t := sn.Tick + 1; t <= p.Tick; t++ {
 		r := &p.ring[t%Ring]
-		p.step(t, r.helm, r.sheet)
+		p.step(t, r.in)
 		r.state = p.State
 	}
 	return Outcome{

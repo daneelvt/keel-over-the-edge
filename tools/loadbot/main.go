@@ -43,6 +43,7 @@ func main() {
 	sail := flag.Duration("for", time.Minute, "how long to sail, once all have joined")
 	ramp := flag.Duration("ramp", 0, "spread the players' joining over this long")
 	fps := flag.Int("fps", 30, "each player's frames a second")
+	pilot := flag.Float64("pilot", 0.5, "the share of the players that sail on the autopilot, tacking or gybing every one to five minutes")
 	metrics := flag.String("metrics", "http://127.0.0.1:9090/metrics", "keel's metrics; none if empty")
 	sessions := flag.String("sessions", ".dev/loadbot/sessions.json", "where the guests' sessions are kept")
 	ca := flag.String("ca", "", "a root certificate to trust (PEM); mkcert's local root if empty")
@@ -50,13 +51,13 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, *n, *base, *lagFlag, *sail, *ramp, *fps, *metrics, *sessions, *ca); err != nil {
+	if err := run(ctx, *n, *base, *lagFlag, *sail, *ramp, *fps, *pilot, *metrics, *sessions, *ca); err != nil {
 		fmt.Fprintln(os.Stderr, "loadbot:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Duration, fps int, metrics, sessions, ca string) error {
+func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Duration, fps int, pilot float64, metrics, sessions, ca string) error {
 	if n < 1 || fps < 1 {
 		return errors.New("-n and -fps must be at least 1")
 	}
@@ -69,6 +70,7 @@ func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Durat
 		Sail:       sail,
 		Ramp:       ramp,
 		FrameEvery: time.Second / time.Duration(fps),
+		Pilot:      pilot,
 		Guests:     &httpGuests{base: strings.TrimSuffix(base, "/"), client: hc},
 		Sessions:   sessions,
 		Dial:       wsDialer(hc, base),

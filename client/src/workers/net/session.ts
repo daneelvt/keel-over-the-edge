@@ -14,6 +14,7 @@
 // snapshot's other boats are decoded against its base among the last few
 // views; one whose base is gone is dropped, and a Resync asked for.
 
+import { PILOT_IDLE, type PilotControl } from '../../input/pilot';
 import { Clock } from '../../net/clock';
 import { decodeServer, encodeClient } from '../../net/frame';
 import { BumpPart, type Welcome } from '../../net/gen/keel/v1/game_pb';
@@ -203,12 +204,27 @@ export class Session {
     return { kind: 'other' };
   }
 
-  /** The page's controls for tick seq. */
-  input(now: number, seq: number, helm: number, sheet: number): Uint8Array<ArrayBuffer> {
+  /** The page's controls for tick seq: the helm's and sheet's indices, and the autopilot's control. */
+  input(
+    now: number,
+    seq: number,
+    helm: number,
+    sheet: number,
+    pilot: PilotControl = PILOT_IDLE,
+  ): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
       body: {
         case: 'input',
-        value: { seq: seq >>> 0, helm, sheet, ackTick: BigInt(this.#ackTick) },
+        value: {
+          seq: seq >>> 0,
+          helm,
+          sheet,
+          ackTick: BigInt(this.#ackTick),
+          pilot: pilot.mode,
+          target: pilot.target,
+          order: pilot.order,
+          way: pilot.way,
+        },
       },
     });
   }

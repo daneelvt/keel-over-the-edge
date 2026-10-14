@@ -121,6 +121,8 @@ type Prepared struct {
 	rudderRate float64 // rad/s
 	haulRate   float64 // rad/s
 	easeRate   float64 // rad/s
+
+	pilotPrepared
 }
 
 // foil is a daggerboard or a rudder.
@@ -274,6 +276,7 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.rudderRate = 2 * b.rudderMax / p.RudderTime
 	b.haulRate = (b.boomOut - b.boomIn) / p.SheetHaulTime
 	b.easeRate = (b.boomOut - b.boomIn) / p.SheetEaseTime
+	b.pilotPrepared.prepare(p)
 }
 
 func newFoil(span, chord, x, z float64) foil {

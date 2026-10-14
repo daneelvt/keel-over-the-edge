@@ -5,7 +5,8 @@
 // wherever it lands without looking. Dragging left turns the bow to port,
 // whatever the boat steers with. A double tap centres the helm. When the
 // thumb lifts, the helm stays where it was left, or, with the setting,
-// returns to the centre.
+// returns to the centre. Touching the helm takes it back from the
+// autopilot (onTake), before the drag begins from where it left the helm.
 
 /** A drag of this many CSS pixels moves the helm over its full travel, hard to port to hard to starboard. */
 export const HELM_TRAVEL = 140;
@@ -54,6 +55,8 @@ export class HelmInput {
   target = 0;
   /** Return the helm to the centre when the thumb lifts. */
   centreOnRelease = false;
+  /** Called when the player takes the helm: a thumb lands, or a helm key goes down. */
+  onTake: (() => void) | null = null;
 
   readonly #drag = new Drag();
   #lastTap = Number.NEGATIVE_INFINITY;
@@ -68,6 +71,7 @@ export class HelmInput {
     if (this.#drag.pointer !== null) {
       return false;
     }
+    this.take();
     if (t - this.#lastTap < DOUBLE_TAP_MS) {
       this.target = 0;
       this.#lastTap = Number.NEGATIVE_INFINITY;
@@ -97,5 +101,10 @@ export class HelmInput {
 
   centre(): void {
     this.target = 0;
+  }
+
+  /** The player takes the helm. */
+  take(): void {
+    this.onTake?.();
   }
 }

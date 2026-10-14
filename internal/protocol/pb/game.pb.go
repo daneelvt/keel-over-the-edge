@@ -290,7 +290,19 @@ type Input struct {
 	// The tick of the newest snapshot the client has decoded; 0 for none.
 	AckTick int64 `protobuf:"varint,4,opt,name=ack_tick,json=ackTick,proto3" json:"ack_tick,omitempty"`
 	// No control change: the message only acknowledges.
-	AckOnly       bool `protobuf:"varint,5,opt,name=ack_only,json=ackOnly,proto3" json:"ack_only,omitempty"`
+	AckOnly bool `protobuf:"varint,5,opt,name=ack_only,json=ackOnly,proto3" json:"ack_only,omitempty"`
+	// The autopilot: 0 off, 1 holding an angle off the wind, 2 a compass
+	// heading. While it is on it steers, and helm is not used.
+	Pilot uint32 `protobuf:"varint,6,opt,name=pilot,proto3" json:"pilot,omitempty"`
+	// What it holds, in 65536ths of a turn: the angle off the wind, positive
+	// with the wind over starboard (from 32768 on, the angle less a whole
+	// turn), or the heading clockwise from north.
+	Target uint32 `protobuf:"varint,7,opt,name=target,proto3" json:"target,omitempty"`
+	// The order count, 0 to 3: a count the boat has not taken is a new order,
+	// a tack or a gybe, applied at the input's tick as the helm is.
+	Order uint32 `protobuf:"varint,8,opt,name=order,proto3" json:"order,omitempty"`
+	// The way of the latest order: 0 hold, 1 tack, 2 gybe.
+	Way           uint32 `protobuf:"varint,9,opt,name=way,proto3" json:"way,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -358,6 +370,34 @@ func (x *Input) GetAckOnly() bool {
 		return x.AckOnly
 	}
 	return false
+}
+
+func (x *Input) GetPilot() uint32 {
+	if x != nil {
+		return x.Pilot
+	}
+	return 0
+}
+
+func (x *Input) GetTarget() uint32 {
+	if x != nil {
+		return x.Target
+	}
+	return 0
+}
+
+func (x *Input) GetOrder() uint32 {
+	if x != nil {
+		return x.Order
+	}
+	return 0
+}
+
+func (x *Input) GetWay() uint32 {
+	if x != nil {
+		return x.Way
+	}
+	return 0
 }
 
 // Ping asks for the server's world time, for the client's clock.
@@ -1446,13 +1486,17 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\bprotocol\x18\x01 \x01(\tR\bprotocol\x12\x18\n" +
 	"\acatalog\x18\x02 \x01(\tR\acatalog\x12%\n" +
 	"\x0ephysics_layout\x18\x03 \x01(\rR\rphysicsLayout\x12\x14\n" +
-	"\x05build\x18\x04 \x01(\tR\x05build\"y\n" +
+	"\x05build\x18\x04 \x01(\tR\x05build\"\xcf\x01\n" +
 	"\x05Input\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\rR\x03seq\x12\x12\n" +
 	"\x04helm\x18\x02 \x01(\rR\x04helm\x12\x14\n" +
 	"\x05sheet\x18\x03 \x01(\rR\x05sheet\x12\x19\n" +
 	"\back_tick\x18\x04 \x01(\x03R\aackTick\x12\x19\n" +
-	"\back_only\x18\x05 \x01(\bR\aackOnly\"\xb0\x01\n" +
+	"\back_only\x18\x05 \x01(\bR\aackOnly\x12\x14\n" +
+	"\x05pilot\x18\x06 \x01(\rR\x05pilot\x12\x16\n" +
+	"\x06target\x18\a \x01(\rR\x06target\x12\x14\n" +
+	"\x05order\x18\b \x01(\rR\x05order\x12\x10\n" +
+	"\x03way\x18\t \x01(\rR\x03way\"\xb0\x01\n" +
 	"\x04Ping\x12$\n" +
 	"\x0eclient_time_us\x18\x01 \x01(\x03R\fclientTimeUs\x12\x19\n" +
 	"\back_tick\x18\x02 \x01(\x03R\aackTick\x12\x15\n" +

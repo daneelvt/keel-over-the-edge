@@ -58,8 +58,17 @@ export interface HelloVersions {
 export type ToWorker =
   /** Connect to url, and keep connecting. */
   | { type: 'start'; url: string; versions: HelloVersions }
-  /** The controls stepped for tick seq. */
-  | { type: 'input'; seq: number; helm: number; sheet: number }
+  /** The controls stepped for tick seq: the helm and sheet indices, and the autopilot's control. */
+  | {
+      type: 'input';
+      seq: number;
+      helm: number;
+      sheet: number;
+      pilot: number;
+      target: number;
+      order: number;
+      way: number;
+    }
   /** The page's frame time's 95th percentile, ms, for the server's metrics. */
   | { type: 'frame'; ms: number }
   /** How much the page draws: its tier (1 low … 3 high) and its pixel ratio, for the server's metrics. */

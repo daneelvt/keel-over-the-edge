@@ -14,6 +14,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
@@ -64,7 +65,7 @@ func TestEncounters(t *testing.T) {
 						seq := uint32(f.Tick + 1)
 						f.Release()
 						helm := hold(math.Pi/2, &s)
-						w.Bus().Controls.Store(player.Slot, bus.Pack(seq, uint16(math.Round((helm+1)*bus.Steps/2)), uint16(460), player.Gen))
+						w.Bus().Controls.StoreHand(player.Slot, bus.Pack(seq, uint16(math.Round((helm+1)*bus.Steps/2)), uint16(460), player.Gen))
 					}
 				})
 				time.Sleep(15 * time.Second)
@@ -103,6 +104,13 @@ func TestEncounters(t *testing.T) {
 			})
 		})
 	}
+}
+
+// hold is a sailor's heading-hold: the helm toward target, damped by the
+// yaw rate.
+func hold(target float64, s *physics.State) float64 {
+	off := math.Remainder(target-s.Heading, 2*math.Pi)
+	return max(-1, min(1, 2*off-0.8*s.YawRate))
 }
 
 // TestCrowdBumps counts the bumps a second among a thousand scripted
