@@ -277,7 +277,7 @@ world:
     stillSpeed: 0.2 # m/s
     stillTime: 5 # s
     pushDepth: 1 # m
-    pushReach: 20 # m
+    pushReach: 40 # m: a sandy shore has a metre of water some 30 m out
     restitution: 0.3
     friction: 0.2
 

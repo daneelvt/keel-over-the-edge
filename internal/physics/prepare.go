@@ -99,6 +99,7 @@ type Prepared struct {
 	invBoardSpan   float64
 	invRudderSpan  float64
 	groundRings    int32 // rings of hexagons about the one under the centre of gravity the hull may touch
+	pushOffAngle   float64 // off the wind a boat pushed off points, rad
 
 	// Sailor.
 	sailorWeight float64 // N
@@ -290,6 +291,7 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.mastHeight = p.BoomHeight + p.Luff
 	b.effortHeight = cg - b.effortZ
 	b.closeHauled = float64(p.CloseHauled * degree)
+	b.pushOffAngle = b.closeHauled + 10*degree
 
 	b.rudderRate = 2 * b.rudderMax / p.RudderTime
 	b.haulRate = (b.boomOut - b.boomIn) / p.SheetHaulTime

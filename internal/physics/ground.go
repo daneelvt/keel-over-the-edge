@@ -303,42 +303,66 @@ const (
 )
 
 // pushOff moves boat s to the nearest hexagon within reach with the push's
-// depth of water and no land beside it, bow to the wind from from, at
-// rest. It reports whether it found one.
+// depth of water and no land beside it; or, on a shore so gentle that there
+// is none, to the deepest such hexagon within reach, if it is deeper than
+// where the boat lies. There it is at rest, pointing a little off
+// close-hauled in the wind from from, on the tack that leads away from
+// where it lay: a boat left head to wind is in irons, and drifts back
+// astern onto the shore. It reports whether it moved the boat.
 func (b *Prepared) pushOff(s *State, g *Ground, from float64) bool {
 	gp := g.Prepared
 	q0, r0 := HexAt(s.X, s.Y)
 	deep := toInt32(math.Floor(float64(-gp.pushDepth*10) + 0.5))
+	here, _ := g.cellAt(q0, r0)
 	best, found := math.Inf(1), false
-	var bx, by float64
+	shallowest := here // the deepest found short of the push's depth
+	var bx, by, sx, sy float64
 	for dq := -gp.pushRings; dq <= gp.pushRings; dq++ {
 		for dr := max(-gp.pushRings, -dq-gp.pushRings); dr <= min(gp.pushRings, -dq+gp.pushRings); dr++ {
 			q, r := q0+dq, r0+dr
-			if e, _ := g.cellAt(q, r); int32(e) > deep {
+			e, _ := g.cellAt(q, r)
+			if e >= 0 || int32(e) > deep && e >= shallowest {
 				continue
 			}
 			hx, hy := HexCentre(q, r)
 			dx, dy := hx-s.X, hy-s.Y
 			d := float64(dx*dx) + float64(dy*dy)
-			if d >= best || d > float64(gp.pushReach*gp.pushReach) {
+			if d > float64(gp.pushReach*gp.pushReach) || int32(e) <= deep && d >= best {
 				continue
 			}
 			clear := true
 			for _, n := range hexNeighbours {
-				if e, _ := g.cellAt(q+n[0], r+n[1]); e > 0 {
+				if ne, _ := g.cellAt(q+n[0], r+n[1]); ne > 0 {
 					clear = false
 					break
 				}
 			}
-			if clear {
+			switch {
+			case !clear:
+			case int32(e) <= deep:
 				best, bx, by, found = d, hx, hy, true
+			default:
+				shallowest, sx, sy = e, hx, hy
 			}
 		}
 	}
 	if !found {
-		return false
+		if shallowest >= here {
+			return false
+		}
+		bx, by = sx, sy
 	}
-	s.X, s.Y, s.Heading = bx, by, wrapAngle(from)
+	// Of the two headings, the one that points further from where the
+	// boat lay.
+	ax, ay := bx-s.X, by-s.Y
+	h1, h2 := wrapAngle(from+b.pushOffAngle), wrapAngle(from-b.pushOffAngle)
+	s1, c1 := SinCos(h1)
+	s2, c2 := SinCos(h2)
+	heading := h1
+	if float64(ax*s2)+float64(ay*c2) > float64(ax*s1)+float64(ay*c1) {
+		heading = h2
+	}
+	s.X, s.Y, s.Heading = bx, by, heading
 	s.Surge, s.Sway, s.YawRate = 0, 0, 0
 	s.Heel, s.RollRate, s.BoomRate = 0, 0, 0
 	s.Heave, s.HeaveRate, s.Pitch, s.PitchRate = 0, 0, 0, 0

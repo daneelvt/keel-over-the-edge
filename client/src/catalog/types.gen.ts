@@ -2418,4 +2418,4 @@ export interface NameTone {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '4124632239ebb649';
+export const CATALOG_VERSION = '71062201a5a8ddb9';
