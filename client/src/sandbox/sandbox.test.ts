@@ -217,10 +217,10 @@ describe('the sandbox', () => {
     let ran = 0;
     for (const [k, sc] of scenarios.scenarios.entries()) {
       const weather = sc.weather;
-      if (weather === undefined || sc.sea !== undefined) {
-        // The sandbox makes its own wind and sea: a scenario with a wind
-        // given step by step, or a sea, is not its to sail. A recorded
-        // sail, below, has both.
+      if (weather === undefined || sc.sea !== undefined || sc.terrain !== undefined) {
+        // The sandbox makes its own wind and sea, on open water: a scenario
+        // with a wind given step by step, a sea or a terrain is not its to
+        // sail. A recorded sail, below, has both of the first.
         continue;
       }
       ran++;
