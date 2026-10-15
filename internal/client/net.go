@@ -126,9 +126,10 @@ func (n *Net) Receive(now float64, b []byte) ([][]byte, Event, error) {
 }
 
 // Input is the page's controls for tick seq.
-func (n *Net) Input(now float64, seq uint32, helm, sheet uint16) []byte {
+func (n *Net) Input(now float64, seq uint32, in Input) []byte {
 	return n.encode(now, &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{
-		Seq: seq, Helm: uint32(helm), Sheet: uint32(sheet), AckTick: n.ackTick,
+		Seq: seq, Helm: uint32(in.Helm), Sheet: uint32(in.Sheet), AckTick: n.ackTick,
+		Pilot: uint32(in.Mode), Target: uint32(in.Target), Order: uint32(in.Order), Way: uint32(in.Way),
 	}}})
 }
 

@@ -36,7 +36,7 @@ func (w *World) join(account bus.Account, conn uint64) bus.Reply {
 				// sailor: a word it left waiting for its tick is put back
 				// to the word in force, so only the new sailor's are applied
 				// from here on.
-				w.bus.Controls.Store(s, f.Control[s])
+				w.bus.Controls.Store(s, f.Control[s], f.Pilot[s])
 			}
 			return bus.Reply{Result: bus.Rejoined, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s]}
 		}
@@ -95,6 +95,7 @@ func (w *World) newBoat(account bus.Account, conn uint64) int32 {
 	f.Grace[s] = 0
 	f.Kind[s] = 0
 	f.Control[s] = bus.Centred(gen)
+	f.Pilot[s] = bus.PilotOffWord(gen)
 	f.State[s] = w.spawn(f, s)
 	f.Course[s] = physics.Course{}
 	i, _ := slices.BinarySearch(f.Live, s)
@@ -103,7 +104,7 @@ func (w *World) newBoat(account bus.Account, conn uint64) int32 {
 		// The slot may hold a word for the boat that had it before, which
 		// its generation already disowns; this one the new sailor's writer
 		// overwrites.
-		w.bus.Controls.Store(s, f.Control[s])
+		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s])
 	}
 	return s
 }

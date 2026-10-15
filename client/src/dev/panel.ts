@@ -16,6 +16,7 @@
 // offline and online; and the frame statistics. It is a lazy import,
 // outside the game's first download. Built as nodes and text, never markup.
 
+import { PILOT_HEADING, PILOT_OFF, type PilotControl, TURN_STEPS } from '../input/pilot';
 import './panel.css';
 import { catalog } from '../catalog';
 import type { FleetStats } from '../game/fleet';
@@ -637,6 +638,7 @@ export function openPanel(
       `time    ${game.clock.time.toFixed(2)} s, step ${game.clock.steps}`,
       seaLines(band.hs[here] ?? 0, peak, band.count, band.blended),
       windLine(sandbox.wind),
+      pilotLine(game.pilot, sandbox.states.current, sandbox.out),
     ].join('\n');
     log.textContent = ['Steps', ...world.qualityLog().slice(-8)].join('\n');
     records.textContent = [
@@ -648,6 +650,27 @@ export function openPanel(
     ].join('\n');
   };
   render();
+}
+
+const WAYS = ['holding', 'tacking', 'gybing'];
+
+/**
+ * The autopilot, as a line: its mode and target, how far it has to turn,
+ * its standing helm (toward the wind) and the way it turns.
+ */
+export function pilotLine(p: PilotControl, state: Float64Array, out: Float64Array): string {
+  if (p.mode === PILOT_OFF) {
+    return 'pilot   off';
+  }
+  const target = Math.round((p.target / TURN_STEPS) * 3600) / 10;
+  const mode =
+    p.mode === PILOT_HEADING
+      ? `heading ${target.toFixed(1)}°`
+      : `wind ${(target > 180 ? target - 360 : target).toFixed(1)}°`;
+  const off = ((out[RECORDS.out.pilotOff] ?? 0) * 180) / Math.PI;
+  const trim = state[RECORDS.state.pilotTrim] ?? 0;
+  const way = WAYS[state[RECORDS.state.pilotWay] ?? 0] ?? '?';
+  return `pilot   ${mode}, ${off.toFixed(2)}° to turn, standing helm ${trim.toFixed(3)}, ${way}, order ${p.order}`;
 }
 
 /** The detail band, as a line: how it is made, and how long the low tier's loops took to make. */

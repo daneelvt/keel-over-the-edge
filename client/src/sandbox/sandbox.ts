@@ -13,6 +13,7 @@
 
 import type { BoatPhysics, Weather } from '../catalog/types.gen';
 import type { BoatDriver, Wind } from '../game/driver';
+import { PILOT_IDLE, type PilotControl } from '../input/pilot';
 import { StatePair } from '../predict/blend';
 import { RECORDS, SEA_SPEED_STEP, SIZES, WEATHER } from '../predict/layout.gen';
 import { loadPhysics, type Physics, type PhysicsSource } from '../predict/physics';
@@ -417,7 +418,7 @@ export class Sandbox implements BoatDriver {
     this.states.hold(state);
   }
 
-  step(helm: number, sheet: number): void {
+  step(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE): void {
     const r = this.#physics.records;
     const tick = this.clock === null ? this.tick + 1 : this.clock.steps + 2;
     if (this.#pending !== null) {
@@ -431,11 +432,15 @@ export class Sandbox implements BoatDriver {
     const east = r.state[S.x] ?? 0;
     const north = r.state[S.y] ?? 0;
     this.sea.advance(tick, east, north);
-    this.recorder.step(helm, sheet, tick, this.sea, this.#stepWeather);
+    this.recorder.step(helm, sheet, tick, this.sea, this.#stepWeather, pilot);
     // The wind the step sails in: the wind where the boat is as it begins.
     this.weather.read(tick, east, north, this.wind);
     r.control[RECORDS.control.helm] = helm;
     r.control[RECORDS.control.sheet] = sheet;
+    r.control[RECORDS.control.pilot] = pilot.mode;
+    r.control[RECORDS.control.target] = pilot.target;
+    r.control[RECORDS.control.order] = pilot.order;
+    r.control[RECORDS.control.way] = pilot.way;
     this.weather.use(tick);
     this.seas.use(tick);
     this.#physics.step();

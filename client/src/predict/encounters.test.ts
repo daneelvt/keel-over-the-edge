@@ -109,6 +109,7 @@ describe('encounters, bit for bit', () => {
       const r = physics.records;
       r.state[RECORDS.state.x] = fromHex(c.at[0] ?? '');
       r.state[RECORDS.state.y] = fromHex(c.at[1] ?? '');
+      r.env.fill(0);
       r.env[RECORDS.env.windSpeed] = fromHex(c.env[0] ?? '');
       r.env[RECORDS.env.windFrom] = fromHex(c.env[1] ?? '');
       const wakes = physics.wakes;
@@ -117,7 +118,8 @@ describe('encounters, bit for bit', () => {
       });
       const reach = physics.shadowAt(c.wakes.length);
       expect(reach).toBe(c.reach);
-      expect(bits(physics.records.env)).toEqual(c.out);
+      // The wind the shadow changes: its speed and direction.
+      expect(bits(physics.records.env).slice(0, c.out.length)).toEqual(c.out);
     }
   });
 
@@ -125,6 +127,10 @@ describe('encounters, bit for bit', () => {
     let touched = 0;
     for (const c of file.contacts) {
       const r = physics.records;
+      // The file holds the boat's fields; what the autopilot remembers is
+      // no part of a contact.
+      r.state.fill(0);
+      r.other.fill(0);
       r.state.set(c.a.map(fromHex));
       r.other.set(c.b.map(fromHex));
       const t = physics.collide();
@@ -133,8 +139,8 @@ describe('encounters, bit for bit', () => {
         touched++;
         expect(bits(physics.records.contact)).toEqual(c.contact);
       }
-      expect(bits(physics.records.state)).toEqual(c.a2);
-      expect(bits(physics.records.other)).toEqual(c.b2);
+      expect(bits(physics.records.state).slice(0, c.a2.length)).toEqual(c.a2);
+      expect(bits(physics.records.other).slice(0, c.b2.length)).toEqual(c.b2);
     }
     expect(touched).toBeGreaterThan(9);
   });
@@ -156,11 +162,18 @@ describe('two boats sailing together, bit for bit', () => {
     const p = physics;
     p.seaUse(-1);
     const env = sail.env.map(fromHex);
-    const states = sail.start.map((s) => new Float64Array(s.map(fromHex)));
+    const states = sail.start.map((s) => {
+      const a = new Float64Array(SIZES.state);
+      a.set(s.map(fromHex));
+      return a;
+    });
+    const boat = (a: Float64Array | undefined) =>
+      bits(a as Float64Array).slice(0, sail.start[0]?.length);
     const wakes = [new Float64Array(SIZES.wake), new Float64Array(SIZES.wake)];
     const wakeOf = (i: number): void => {
       const r = p.records;
       r.state.set(states[i] as Float64Array);
+      r.env.fill(0);
       r.env.set(env);
       (wakes[i] as Float64Array).set(p.wakeOfState());
     };
@@ -172,7 +185,9 @@ describe('two boats sailing together, bit for bit', () => {
       for (let i = 0; i < 2; i++) {
         const r = p.records;
         r.state.set(states[i] as Float64Array);
+        r.env.fill(0);
         r.env.set(env);
+        r.control.fill(0);
         r.control[RECORDS.control.helm] = sail.controls[i]?.[0] ?? 0;
         r.control[RECORDS.control.sheet] = sail.controls[i]?.[1] ?? 0;
         p.wakes.set(wakes[1 - i] as Float64Array, 0);
@@ -192,10 +207,7 @@ describe('two boats sailing together, bit for bit', () => {
       wakeOf(1);
       const c = sail.checkpoints[k];
       if (c !== undefined && c.step === step) {
-        expect(
-          [bits(states[0] as Float64Array), bits(states[1] as Float64Array)],
-          `step ${step}`,
-        ).toEqual(c.states);
+        expect([boat(states[0]), boat(states[1])], `step ${step}`).toEqual(c.states);
         k++;
       }
     }

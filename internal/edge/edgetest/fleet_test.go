@@ -366,7 +366,7 @@ func steerCrowd(t *testing.T, srv *Server, d time.Duration) {
 		for i, s := range f.Live {
 			if f.Conn[s] == 0 && (i+n)%3 == 0 {
 				helm := uint16(300 + (i*97+n*31)%424)
-				srv.World.Bus().Controls.Store(s, bus.Pack(uint32(f.Tick+1), helm, uint16(400+bits.OnesCount(uint(i+n))*40), f.Gen[s]))
+				srv.World.Bus().Controls.StoreHand(s, bus.Pack(uint32(f.Tick+1), helm, uint16(400+bits.OnesCount(uint(i+n))*40), f.Gen[s]))
 			}
 		}
 		f.Release()

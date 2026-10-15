@@ -2,12 +2,13 @@
 
 // The game at sea: the frame loop that joins the controls, the boat driver
 // and the scene. Each drawn frame the keys move their targets, the step
-// loop takes the steps due (each with the controls at their resolution),
+// loop takes the steps due (each with the controls at their resolution,
+// and the autopilot's control, which the step steers by while it is on),
 // and the scene is given the boat between its last two steps, the latest
 // Out and world time; then the instruments and the sound follow. Input
 // events arrive between frames and only move targets (the helm's, the
-// sheet's, the camera's); the frame reads them. Nothing in the frame
-// allocates.
+// sheet's, the autopilot's, the camera's); the frame reads them. Nothing in
+// the frame allocates.
 
 import { effect } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
@@ -15,9 +16,11 @@ import { KNOCK, knockOf } from '../audio/knock';
 import { type SoundInput, soundInput } from '../audio/voices';
 import { HelmInput } from '../input/helm';
 import { KeyInput } from '../input/keys';
+import { PILOT_HEADING, PILOT_WIND, type PilotActions, PilotInput, WAY_HOLD } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { SheetInput } from '../input/sheet';
 import type { BumpTold } from '../net/messages';
+import { RECORDS } from '../predict/layout.gen';
 import type { SeaScene } from '../render/scene';
 import { HudModel } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
@@ -28,12 +31,13 @@ import { StepLoop } from './loop';
 
 const DEG = Math.PI / 180;
 
-export class Game {
+export class Game implements PilotActions {
   readonly clock = new WorldClock();
   readonly loop: StepLoop;
   readonly helm = new HelmInput();
   readonly sheet = new SheetInput();
-  readonly keys = new KeyInput(this.helm, this.sheet);
+  readonly pilot = new PilotInput();
+  readonly keys = new KeyInput(this.helm, this.sheet, this);
   readonly hud = new HudModel();
   readonly sound = new SoundEngine();
   readonly world: SeaScene;
@@ -71,6 +75,10 @@ export class Game {
     this.#rudderMax = foils.rudderAngle * DEG;
     this.#boomIn = rig.boomIn * DEG;
     this.#boomOut = rig.boomOut * DEG;
+    // The dial and the keys go no closer to the wind than ten degrees
+    // inside close-hauled.
+    this.pilot.least = (rig.closeHauled - 10) * DEG;
+    this.helm.onTake = () => this.takeHelm();
     this.sheet.target = 0.5;
     world.tick = (dt, now) => this.#frame(dt, now);
     effect(() => {
@@ -126,7 +134,13 @@ export class Game {
       );
     };
     doc.addEventListener('keydown', (e) => {
-      if (!typing(e) && !e.metaKey && !e.ctrlKey && !e.altKey && this.keys.down(e.code)) {
+      if (
+        !typing(e) &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        this.keys.down(e.code, e.shiftKey)
+      ) {
         e.preventDefault();
       }
     });
@@ -180,13 +194,58 @@ export class Game {
     this.loop.stepOnce();
   }
 
+  togglePilot(): void {
+    if (this.pilot.on) {
+      this.takeHelm();
+    } else {
+      this.engagePilot(PILOT_WIND);
+    }
+  }
+
+  engagePilot(mode: number): void {
+    const d = this.driver;
+    if (d === null) {
+      return;
+    }
+    this.pilot.engage(mode, d.states.current[RECORDS.state.heading] ?? 0, d.wind.meanFrom);
+  }
+
+  takeHelm(): void {
+    if (!this.pilot.on) {
+      return;
+    }
+    // The helm stays where the autopilot left it, so nothing jumps.
+    const d = this.driver;
+    if (d !== null) {
+      this.helm.target = quantiseHelm(d.out[RECORDS.out.pilotHelm] ?? 0);
+    }
+    this.pilot.off();
+  }
+
+  pilotTack(): void {
+    this.pilot.tack(this.driver?.wind.meanFrom ?? 0);
+  }
+
+  pilotGybe(): void {
+    this.pilot.gybe(this.driver?.wind.meanFrom ?? 0);
+  }
+
+  pilotAdjust(degrees: number): void {
+    this.pilot.adjust(degrees);
+  }
+
+  /** Switches the autopilot between holding an angle to the wind and a heading, at what the boat does now. */
+  pilotMode(): void {
+    this.engagePilot(this.pilot.mode === PILOT_WIND ? PILOT_HEADING : PILOT_WIND);
+  }
+
   #step(): void {
     const d = this.driver;
     if (d === null) {
       return;
     }
     this.beforeStep?.();
-    d.step(quantiseHelm(this.helm.target), quantiseSheet(this.sheet.target));
+    d.step(quantiseHelm(this.helm.target), quantiseSheet(this.sheet.target), this.pilot);
   }
 
   #frame(dt: number, now: number): void {
@@ -200,9 +259,16 @@ export class Game {
         this.loop.advance(dt);
       }
     }
+    w.overlays.setPilot(this.pilot.on);
     if (d !== null) {
       d.states.blend(this.clock.alpha, w.pose);
       d.decorate?.(w.pose, dt);
+      if (this.pilot.on) {
+        // Held on the boat's new tack after it gybed by itself: what the
+        // player holds follows.
+        const turning = (d.states.current[RECORDS.state.pilotWay] ?? 0) !== WAY_HOLD;
+        this.pilot.follow(d.out[RECORDS.out.pilotHeading] ?? 0, d.wind.meanFrom, turning);
+      }
     }
     const time = this.clock.time;
     // At most a second: after a pause or a jump, what eases simply arrives.
@@ -217,10 +283,13 @@ export class Game {
       p,
       w.out,
       w.wind,
-      this.helm.target,
+      // While the autopilot steers, the knob shows its helm.
+      this.pilot.on ? (w.out[RECORDS.out.pilotHelm] ?? 0) : this.helm.target,
       this.sheet.target,
       p.rudder / this.#rudderMax,
       (p.sheetLimit - this.#boomIn) / (this.#boomOut - this.#boomIn),
+      this.pilot,
+      d === null ? 0 : (d.states.current[RECORDS.state.pilotWay] ?? 0),
     );
     this.hud.tack.value = w.rightOfWay.tack;
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));

@@ -20,15 +20,17 @@ The snapshot
 The player's own boat in full, then the other boats in the player's view
 as changes against a base: a snapshot the connection sent before, which
 the client must still hold. After the kind byte, little-endian, a header of
-175 bytes (176 with the kind byte), then the entries:
+175 bytes (176 with the kind byte); then, while the boat's autopilot is in
+use, its block of 32 bytes; then the entries:
 
   offset  bytes  field
-       0      1  layout: 5
+       0      1  layout: 6
        1      8  tick (int64)
        9      2  base: how many ticks before this one the base snapshot is
                  (uint16); 0 for none: the view starts empty
       11      1  flags: bit 0, the far band is sampled by this snapshot;
-                 the rest 0
+                 bit 1, the autopilot's block follows the header; the
+                 rest 0
       12      4  seq of the own boat's control word in force (uint32)
       16      2  arrival margin in ticks (int16): the lowest since the
                  previous snapshot, how many ticks before its tick an input
@@ -40,11 +42,27 @@ the client must still hold. After the kind byte, little-endian, a header of
                  boom, boomRate, sailor, rudder, sheetLimit, sailorMode,
                  sailorTimer, heave, heaveRate, pitch, pitchRate
      174      1  entries that follow, 0 … 128
-     175      …  the entries
+     175      …  the autopilot's block, if flag bit 1; else the entries
 
-A layout byte other than 5 is refused. The wind is not in the snapshot:
-the client computes the wind at its boat from the spells of weather it is
-sent (WeatherSystems), as the server does.
+The autopilot's block, sent while the pilot word in force or what the
+autopilot remembers is not zero (-0 counts), so a boat that never uses it
+pays nothing:
+
+     175      1  mode in force: 0 off, 1 an angle off the wind, 2 a heading
+     176      1  way of the latest order: 0 hold, 1 tack, 2 gybe
+     177      1  order count, 0 … 3
+     178      1  0
+     179      2  target (uint16), 65536ths of a turn
+     181      2  0
+     183     24  what the autopilot remembers, 3 float64s: pilotTrim,
+                 pilotWay, pilotOrder; the state's last three fields, 0
+                 when the block is absent
+     207      …  the entries
+
+A layout byte other than 6 is refused, as are a mode, way or order out of
+range and a spare byte not 0. The wind is not in the snapshot: the client
+computes the wind at its boat from the spells of weather it is sent
+(WeatherSystems), as the server does.
 
 The view
 --------

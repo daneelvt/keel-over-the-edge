@@ -9,6 +9,7 @@
 // world clock (a Pacer), and moves the drawn boat by the correction it is
 // easing away.
 
+import type { PilotControl } from '../input/pilot';
 import type { BoatPose, StatePair } from '../predict/blend';
 import type { Physics } from '../predict/physics';
 import type { Seas } from '../predict/seas';
@@ -28,8 +29,11 @@ export interface BoatDriver {
   readonly out: Float64Array;
   /** The wind at the boat, as its latest step had it. */
   readonly wind: Readonly<BoatWind>;
-  /** Steps the boat once with these controls, already at the controls' resolution. */
-  step(helm: number, sheet: number): void;
+  /**
+   * Steps the boat once with these controls, the helm and the sheet already
+   * at their resolution, and the autopilot's control (off if not given).
+   */
+  step(helm: number, sheet: number, pilot?: PilotControl): void;
   /** Moves the drawn pose, dt seconds after the last frame's. */
   decorate?(pose: BoatPose, dt: number): void;
   /** The physics module that steps the boat, and the sea and the weather it holds, for drawing them. */

@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// How the instruments write speeds, headings and winds.
+// How the instruments write speeds, headings and winds, and what the
+// autopilot holds.
+
+import {
+  PILOT_HEADING,
+  PILOT_OFF,
+  type PilotControl,
+  TURN_STEPS,
+  WAY_GYBE,
+  WAY_TACK,
+} from '../input/pilot';
 
 /** One knot, in m/s. */
 export const KNOT = 1852 / 3600;
@@ -82,4 +92,30 @@ export function beaufortForce(speed: number): number {
 export function windText(speed: number, from: number, mean: number): string {
   const k = Math.round(Math.max(0, speed) / KNOT);
   return `${compassPoint(wholeDegrees(from))} ${k} kn · F${beaufortForce(mean)}`;
+}
+
+/**
+ * The autopilot's state: "Wind 45° S" holding an angle to the wind, with
+ * the wind over starboard (S) or port (P); "Heading 270°"; "Tacking" or
+ * "Gybing" while it turns; empty while it is off.
+ */
+export function pilotText(p: PilotControl, way: number): string {
+  if (p.mode === PILOT_OFF) {
+    return '';
+  }
+  if (way === WAY_TACK) {
+    return 'Tacking';
+  }
+  if (way === WAY_GYBE) {
+    return 'Gybing';
+  }
+  const d = Math.round((p.target / TURN_STEPS) * 360) % 360;
+  if (p.mode === PILOT_HEADING) {
+    return `Heading ${threeDigits(d)}°`;
+  }
+  const angle = d > 180 ? 360 - d : d;
+  if (angle === 0 || angle === 180) {
+    return `Wind ${angle}°`;
+  }
+  return `Wind ${angle}° ${d > 180 ? 'P' : 'S'}`;
 }

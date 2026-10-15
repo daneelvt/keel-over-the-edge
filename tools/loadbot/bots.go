@@ -29,6 +29,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 )
 
 // Guests makes guests and checks sessions.
@@ -49,6 +50,7 @@ type Config struct {
 	Sail       time.Duration // once all have joined
 	Ramp       time.Duration // the joining spread over
 	FrameEvery time.Duration
+	Pilot      float64     // the share of the players on the autopilot
 	Lag        *client.Lag // each connection through it, seeded apart, if not nil
 	Guests     Guests
 	Sessions   string // the sessions file
@@ -150,13 +152,51 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *physics.Waves, wx *physics.WeatherPrepared, enc *physics.EncounterPrepared, cookie string, i uint64, end time.Time, p *Player) {
 	rng := rand.New(rand.NewPCG(i, 7))
 	helm, sheet := 512, 512
-	controls := func(n int) (uint16, uint16) {
-		// The scripted sailors' random walk, a move every half second or so.
-		if n%15 == 0 {
-			helm = max(0, min(bus.Steps, helm+rng.IntN(257)-128))
-			sheet = max(0, min(bus.Steps, sheet+rng.IntN(193)-96))
+	// A share of the players sail on the autopilot as the scripted sailors
+	// do: at an angle to the wind drawn at random, the sheet trimmed for
+	// where the boat points, a tack or a gybe every one to five minutes.
+	// Its own numbers: a player steering by hand walks as it always has.
+	prng := rand.New(rand.NewPCG(i, 11))
+	pilot := prng.Float64() < cfg.Pilot
+	angle := scripted.LeastAngle + prng.Float64()*(scripted.MostAngle-scripted.LeastAngle)
+	engaged := false
+	var order, way uint8
+	turnEvery := func() int { return (60 + prng.IntN(240)) * physics.StepsPerSecond }
+	turnAt := turnEvery()
+	var s *client.Sailor
+	controls := func(n int) client.Input {
+		if !pilot {
+			// The scripted sailors' old random walk, a move every half
+			// second or so.
+			if n%15 == 0 {
+				helm = max(0, min(bus.Steps, helm+rng.IntN(257)-128))
+				sheet = max(0, min(bus.Steps, sheet+rng.IntN(193)-96))
+			}
+			return client.Hand(uint16(helm), uint16(sheet))
 		}
-		return uint16(helm), uint16(sheet)
+		p := s.Predictor
+		if n%15 == 0 && p.Started {
+			w := p.Wind()
+			now := math.Remainder(w.MeanFrom-p.State.Heading, 2*math.Pi) * 180 / math.Pi
+			if !engaged {
+				engaged = true
+				angle = math.Copysign(angle, now)
+			}
+			sheet = int(scripted.SheetIndex(now, w.Speed))
+		}
+		if !engaged {
+			return client.Hand(uint16(helm), uint16(sheet))
+		}
+		if n >= turnAt {
+			way = bus.WayTack
+			if math.Abs(angle) > 90 {
+				way = bus.WayGybe
+			}
+			order = (order + 1) & 3
+			angle = -angle
+			turnAt = n + turnEvery()
+		}
+		return client.Input{Helm: bus.Steps / 2, Sheet: uint16(sheet), Mode: bus.PilotWind, Way: way, Order: order, Target: scripted.Target(angle)}
 	}
 	connection := uint64(0)
 	dial := func(ctx context.Context) (*websocket.Conn, error) {
@@ -169,7 +209,7 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *phy
 		}
 		return cfg.Dial(ctx, cookie, wrap)
 	}
-	s := client.NewSailor(dial, kind, waves, wx, controls)
+	s = client.NewSailor(dial, kind, waves, wx, controls)
 	s.Predictor.Encounters = enc
 	s.FrameEvery = cfg.FrameEvery
 	// The last snapshot, and a return under way: the connection ended,

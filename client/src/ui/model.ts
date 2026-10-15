@@ -8,10 +8,11 @@
 // hand over, without a render, and only when it has moved.
 
 import { signal } from '@preact/signals';
+import { PILOT_IDLE, type PilotControl } from '../input/pilot';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
 import type { BoatWind } from '../predict/weather';
-import { headingText, knots, windText } from './format';
+import { headingText, knots, pilotText, windText } from './format';
 
 /** The signals are written at most this often, in milliseconds. */
 export const SIGNAL_INTERVAL = 100;
@@ -131,6 +132,8 @@ export class HudModel {
   /** A bump's verdict, under the readout for BUMP_LINE ms; and the boat's tack, with the right-of-way overlay. */
   readonly bump = signal('');
   readonly tack = signal('');
+  /** The autopilot: what it holds, or that it is turning; empty while off. */
+  readonly pilot = signal('');
   #bumpUntil = 0;
   /** How many times the signals were written. */
   writes = 0;
@@ -171,7 +174,8 @@ export class HudModel {
   /**
    * Updates the screen for a frame at now (ms), at world time time (s).
    * helm and sheet are the targets; rudder and sheetOut where the rudder and
-   * the sheet really are, on the same scales (−1 to 1, 0 to 1).
+   * the sheet really are, on the same scales (−1 to 1, 0 to 1); pilot the
+   * autopilot's control, and way the turn it has under way.
    */
   frame(
     now: number,
@@ -183,6 +187,8 @@ export class HudModel {
     sheet: number,
     rudder: number,
     sheetOut: number,
+    pilot: PilotControl = PILOT_IDLE,
+    way = 0,
   ): void {
     const headingDeg = (pose.heading * 180) / Math.PI;
     this.rose.set(-headingDeg);
@@ -210,6 +216,7 @@ export class HudModel {
     // gust shows as the knots rising while the force holds.
     this.wind.value = windText(a.speed, a.from, wind.meanSpeed);
     this.sailor.value = SAILOR_LINES[pose.sailorMode] ?? '';
+    this.pilot.value = pilotText(pilot, way);
     if (this.bump.value !== '' && now >= this.#bumpUntil) {
       this.bump.value = '';
     }

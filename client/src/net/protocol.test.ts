@@ -17,8 +17,10 @@ import type { SpellSchema } from './gen/keel/v1/game_pb';
 import {
   HEADER_SIZE,
   KIND_MESSAGE,
+  MAX_HEADER_SIZE,
   NO_MARGIN,
   newSnapshot,
+  PILOT_HELD,
   readSnapshot,
   snapshotTick,
   writeSnapshot,
@@ -116,22 +118,30 @@ describe('the snapshot', () => {
       expect(readSnapshot(new DataView(b.buffer), s), g.name).toBeNull();
       expect(s.tick, g.name).toBe(Number(g.tick));
       expect(snapshotTick(new DataView(b.buffer)), g.name).toBe(Number(g.tick));
-      expect([s.base, s.flags, s.seq, s.margin, s.helm, s.sheet], g.name).toEqual([
+      expect(
+        [s.base, s.flags, s.seq, s.margin, s.helm, s.sheet, s.mode, s.way, s.order, s.target],
+        g.name,
+      ).toEqual([
         g.base,
         g.flags,
         g.seq,
         g.margin,
         g.helm,
         g.sheet,
+        g.mode,
+        g.way,
+        g.order,
+        g.target,
       ]);
       for (const [name, i] of Object.entries(RECORDS.state)) {
         expect(bits(s.state[i] ?? 0), `${g.name}: ${name}`).toBe(
           (g.state as Record<string, string>)[name],
         );
       }
-      const out = new Uint8Array(HEADER_SIZE);
-      writeSnapshot(s, new DataView(out.buffer));
-      expect(hex(out), g.name).toBe(g.bytes.slice(0, 2 * HEADER_SIZE));
+      const out = new Uint8Array(MAX_HEADER_SIZE);
+      const n = writeSnapshot(s, new DataView(out.buffer));
+      expect(n, g.name).toBe(s.header);
+      expect(hex(out.subarray(0, n)), g.name).toBe(g.bytes.slice(0, 2 * n));
     }
   });
 
@@ -209,11 +219,28 @@ describe('the snapshot', () => {
     helm[20] = 0x04;
     expect(refused(helm)).not.toBeNull();
     const flags = good.slice();
-    flags[12] = 2;
+    flags[12] = 4 | PILOT_HELD;
     expect(refused(flags)).not.toBeNull();
     const entries = good.slice();
     entries[HEADER_SIZE - 1] = 129;
     expect(refused(entries)).not.toBeNull();
+    // The second golden snapshot is on the autopilot: its block follows.
+    expect(s.header).toBe(MAX_HEADER_SIZE);
+    expect(refused(good.slice(0, MAX_HEADER_SIZE - 1))).not.toBeNull();
+    for (const [at, v] of [
+      [HEADER_SIZE, 3],
+      [HEADER_SIZE + 1, 3],
+      [HEADER_SIZE + 2, 4],
+      [HEADER_SIZE + 3, 1],
+      [HEADER_SIZE + 6, 1],
+    ] as const) {
+      const pilot = good.slice();
+      pilot[at] = v;
+      expect(refused(pilot), `byte ${at} at ${v}`).not.toBeNull();
+    }
+    const layout5 = good.slice();
+    layout5[1] = 5;
+    expect(refused(layout5)).not.toBeNull();
   });
 
   it('writes a record of the view in metres and radians for the page', () => {
@@ -273,6 +300,21 @@ describe('the envelopes', () => {
       },
     },
     { body: { case: 'input', value: { ackTick: 1n << 40n, ackOnly: true } } },
+    {
+      body: {
+        case: 'input',
+        value: {
+          seq: 727706171,
+          helm: 512,
+          sheet: 300,
+          ackTick: 727706165n,
+          pilot: 1,
+          target: 57344,
+          order: 3,
+          way: 2,
+        },
+      },
+    },
     {
       body: {
         case: 'ping',

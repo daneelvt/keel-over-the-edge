@@ -427,3 +427,143 @@
     flex-basis: 78px;
   }
 }
+
+/* The autopilot: its button between the helm and the sheet, its dial above
+   it. Labelled, and marked by shape as well as colour. */
+.pilot-button {
+  position: absolute;
+  bottom: var(--edge-bottom);
+  left: calc(var(--edge-left) + 190px + 8px);
+  min-width: 44px;
+  max-width: calc(100vw - var(--edge-left) - var(--edge-right) - 190px - 64px - 16px);
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.pilot-button.on {
+  border: 2px solid var(--gold);
+}
+
+.pilot-name {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.pilot-text {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.pilot-dial {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--edge-bottom) + 200px);
+  transform: translateX(-50%);
+  width: min(300px, calc(100vw - var(--edge-left) - var(--edge-right)));
+  box-sizing: border-box;
+  padding: 10px 12px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.pilot-state {
+  margin: 0 0 4px;
+  color: var(--faint);
+  text-align: center;
+}
+
+.pilot-state b {
+  color: var(--ink);
+}
+
+.pilot-ring {
+  display: block;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto;
+  cursor: grab;
+}
+
+.pilot-track {
+  fill: none;
+  stroke: rgb(255 255 255 / 55%);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.pilot-tick {
+  fill: var(--faint);
+  font-size: 9px;
+  text-anchor: middle;
+}
+
+.pilot-boat {
+  fill: var(--ink);
+}
+
+.pilot-needle {
+  stroke: var(--gold);
+  stroke-width: 2;
+}
+
+.pilot-mark {
+  fill: var(--gold);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.pilot-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.pilot-step,
+.pilot-action {
+  flex: 1;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pilot-action[data-pilot="off"] {
+  border: 1px solid var(--faint);
+}
+
+/* A short screen, a phone held sideways: above the controls there is no
+   room, so the dial hangs from the top, between the instruments and the
+   menu. */
+@media (max-height: 640px) {
+  .pilot-dial {
+    top: var(--edge-top);
+    bottom: auto;
+    left: auto;
+    right: calc(var(--edge-right) + 76px);
+    transform: none;
+    padding: 6px 10px;
+  }
+
+  .pilot-ring {
+    width: 100px;
+    height: 100px;
+  }
+}

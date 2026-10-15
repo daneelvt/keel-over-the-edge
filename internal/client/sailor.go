@@ -17,14 +17,32 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
 
-// Controls gives the helm and the sheet, as indices, for the n-th step a
-// sailor takes.
-type Controls func(n int) (helm, sheet uint16)
+// Input is a step's controls as the wire carries them: the helm's and the
+// sheet's indices, and the autopilot's mode, the way of its latest order,
+// its order count and its target.
+type Input struct {
+	Helm, Sheet      uint16
+	Mode, Way, Order uint8
+	Target           uint16
+}
+
+// Hand is steering by hand: the helm and the sheet, the autopilot off.
+func Hand(helm, sheet uint16) Input { return Input{Helm: helm, Sheet: sheet} }
+
+// Pilot is the input's pilot word, stamped seq, for a slot of generation
+// gen.
+func (in Input) Pilot(seq uint32, gen uint16) bus.PilotWord {
+	return bus.PackPilot(seq, in.Mode, in.Way, in.Order, in.Target, gen)
+}
+
+// Controls gives the controls for the n-th step a sailor takes.
+type Controls func(n int) Input
 
 // Stats are what a sail saw.
 type Stats struct {
@@ -94,8 +112,9 @@ type Sailor struct {
 	Predictor *Predictor
 	controls  Controls
 	stepN     int
-	sent      [2]int // the indices last sent: none at first
-	fresh     bool   // a Welcome has come, its first snapshot not yet
+	sent      Input // the controls last sent
+	sentAny   bool  // whether any were
+	fresh     bool  // a Welcome has come, its first snapshot not yet
 	latest    *protocol.Snapshot
 	queued    []*protocol.Snapshot
 
@@ -140,7 +159,7 @@ func NewSailor(dial Dialer, kind *physics.Prepared, waves *physics.Waves, weathe
 	return &Sailor{
 		dial: dial, kind: kind, controls: controls,
 		start: time.Now(), Ahead: NewAhead(), Predictor: NewPredictor(kind, waves, weather),
-		Net: Net{FrameMs: 17}, sent: [2]int{-1, -1},
+		Net: Net{FrameMs: 17},
 	}
 }
 
@@ -329,7 +348,8 @@ func (s *Sailor) frame(ctx context.Context) error {
 		if s.fresh {
 			// On each connection the controls start at the indices in
 			// force: the word the server holds.
-			s.sent = [2]int{int(sn.Helm), int(sn.Sheet)}
+			s.sent = Input{Helm: sn.Helm, Sheet: sn.Sheet, Mode: sn.Mode, Way: sn.Way, Order: sn.Order, Target: sn.Target}
+			s.sentAny = true
 			s.fresh = false
 		}
 		o := s.Predictor.Snapshot(sn)
@@ -369,20 +389,20 @@ func (s *Sailor) frame(ctx context.Context) error {
 	}
 	for steps := min(MaxSteps, target-p.Tick); steps > 0; steps-- {
 		if p.Tick+1 < reach {
-			p.Step(uint16(s.sent[0]), uint16(s.sent[1]))
+			p.Step(s.sent)
 			s.Stats.Steps++
-			s.Trace.step(now, p.Tick, uint16(s.sent[0]), uint16(s.sent[1]))
+			s.Trace.step(now, p.Tick, s.sent)
 			continue
 		}
-		helm, sheet := s.controls(s.stepN)
+		in := s.controls(s.stepN)
 		s.stepN++
-		p.Step(helm, sheet)
+		p.Step(in)
 		s.Stats.Steps++
-		s.Trace.step(now, p.Tick, helm, sheet)
-		if int(helm) != s.sent[0] || int(sheet) != s.sent[1] {
-			s.sent = [2]int{int(helm), int(sheet)}
-			s.Trace.input(now, p.Tick, helm, sheet)
-			if err := s.send(ctx, s.Net.Input(now, uint32(p.Tick), helm, sheet)); err != nil {
+		s.Trace.step(now, p.Tick, in)
+		if !s.sentAny || in != s.sent {
+			s.sent, s.sentAny = in, true
+			s.Trace.input(now, p.Tick, in)
+			if err := s.send(ctx, s.Net.Input(now, uint32(p.Tick), in)); err != nil {
 				return err
 			}
 		}
@@ -409,8 +429,8 @@ type TraceEvent struct {
 	Out     string   `json:"out,omitempty"`
 	Timer   bool     `json:"timer,omitempty"`
 	Reset   bool     `json:"reset,omitempty"`
-	Step    []int64  `json:"step,omitempty"`  // tick, helm, sheet
-	Input   []int64  `json:"input,omitempty"` // seq, helm, sheet
+	Step    []int64  `json:"step,omitempty"`  // tick, helm, sheet; then, with the autopilot used, its mode, way, order and target
+	Input   []int64  `json:"input,omitempty"` // seq, helm, sheet; then the same
 	Snap    *SnapOut `json:"snap,omitempty"`
 }
 
@@ -455,16 +475,35 @@ func (t *Trace) mark(now float64, what string) {
 	t.Events = append(t.Events, TraceEvent{T: now, Timer: what == "timer", Reset: what == "reset"})
 }
 
-func (t *Trace) step(now float64, tick int64, helm, sheet uint16) {
+func (t *Trace) step(now float64, tick int64, in Input) {
 	if t != nil {
-		t.Events = append(t.Events, TraceEvent{T: now, Step: []int64{tick, int64(helm), int64(sheet)}})
+		t.Events = append(t.Events, TraceEvent{T: now, Step: traced(tick, in)})
 	}
 }
 
-func (t *Trace) input(now float64, tick int64, helm, sheet uint16) {
+func (t *Trace) input(now float64, tick int64, in Input) {
 	if t != nil {
-		t.Events = append(t.Events, TraceEvent{T: now, Input: []int64{tick, int64(helm), int64(sheet)}})
+		t.Events = append(t.Events, TraceEvent{T: now, Input: traced(tick, in)})
 	}
+}
+
+// traced is a tick and its controls as a trace holds them: the
+// autopilot's only if any of them is not zero.
+func traced(tick int64, in Input) []int64 {
+	v := []int64{tick, int64(in.Helm), int64(in.Sheet)}
+	if in.Mode|in.Way|in.Order != 0 || in.Target != 0 {
+		v = append(v, int64(in.Mode), int64(in.Way), int64(in.Order), int64(in.Target))
+	}
+	return v
+}
+
+// Untraced is the controls a trace's step or input holds, after its tick.
+func Untraced(v []int64) Input {
+	in := Input{Helm: uint16(v[1]), Sheet: uint16(v[2])}
+	if len(v) >= 7 {
+		in.Mode, in.Way, in.Order, in.Target = uint8(v[3]), uint8(v[4]), uint8(v[5]), uint16(v[6])
+	}
+	return in
 }
 
 func (t *Trace) snap(now float64, tick int64, o Outcome) {

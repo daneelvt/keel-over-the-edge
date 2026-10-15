@@ -12,6 +12,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
+import { PilotInput } from '../input/pilot';
 import { BEHIND, newClockState } from '../net/clock';
 import type { FromWorker, ToWorker } from '../net/messages';
 import { BELL_TEXT, Online, type Port } from '../net/online';
@@ -168,6 +169,7 @@ describe('pacing online', () => {
     const helmsman = {
       helm: { target: 0 },
       sheet: { target: 0.5 },
+      pilot: new PilotInput(),
       beforeStep: null,
       clock: { steps: 0, alpha: 0 },
     };
@@ -202,7 +204,9 @@ describe('pacing online', () => {
     helmsman.helm.target = 0.5;
     o.pace(worldAt(111));
     const inputs = port.sent.filter((m) => m.type === 'input');
-    expect(inputs).toEqual([{ type: 'input', seq: 113, helm: 768, sheet: 700 }]);
+    expect(inputs).toEqual([
+      { type: 'input', seq: 113, helm: 768, sheet: 700, pilot: 0, target: 0, order: 0, way: 0 },
+    ]);
     // Drawn the fraction of the way the clock is.
     expect(helmsman.clock.steps).toBe(112);
   });
@@ -229,7 +233,7 @@ describe('pacing online', () => {
     o.pace(worldAt(100));
     expect(p.tick).toBe(105);
     expect(port.sent.filter((m) => m.type === 'input')).toEqual([
-      { type: 'input', seq: 104, helm: 1024, sheet: 700 },
+      { type: 'input', seq: 104, helm: 1024, sheet: 700, pilot: 0, target: 0, order: 0, way: 0 },
     ]);
   });
 
@@ -252,6 +256,7 @@ describe('the queue and the fleet online', () => {
     const o = new Online(port, p, {
       helm: { target: 0 },
       sheet: { target: 0.5 },
+      pilot: new PilotInput(),
       beforeStep: null,
       clock: { steps: 0, alpha: 0 },
     });
@@ -271,6 +276,7 @@ describe('the queue and the fleet online', () => {
     const o = new Online(port, p, {
       helm: { target: 0 },
       sheet: { target: 0.5 },
+      pilot: new PilotInput(),
       beforeStep: null,
       clock: { steps: 0, alpha: 0 },
     });
@@ -293,6 +299,7 @@ describe('the bell online', () => {
     const o = new Online(port, p, {
       helm: { target: 0 },
       sheet: { target: 0.5 },
+      pilot: new PilotInput(),
       beforeStep: null,
       clock: { steps: 0, alpha: 0 },
     });

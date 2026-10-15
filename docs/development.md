@@ -476,7 +476,7 @@ change begins. The client keeps the latest in the physics module
 (`client/src/predict/weather.ts`, `internal/client`), and before each step
 it predicts or replays asks the module for the wind at its boat at that
 step's tick (`windAt`), as the simulation does for every boat. The snapshot
-carries no wind (layout 5). In a gusty spell and through a change the Go
+carries no wind (layout 6). In a gusty spell and through a change the Go
 client sails five minutes with no correction (`go test
 ./internal/edge/edgetest -run 'SailGusts|SailWeatherChange' -v`).
 
@@ -739,8 +739,117 @@ The behaviour tests say what must stay true
 (`go test ./internal/physics -run 'BoatsBump|DirtyAir|Shadow|Contact|Articles' -v`):
 boats bump at every crossing angle and part, the wake follows the apparent
 wind, and dirty air costs a boat a share of its way to windward (logged in
-three winds). The snapshot is version 7: a change to the courses or the
-pairs is a new version, and a reset at the deploy.
+three winds). The snapshot is version 8: a change to the courses, the
+pairs or the control words is a new version, and a reset at the deploy.
+
+## The autopilot
+
+Every boat has one, open to every sailor. It only steers: it sets the helm
+at the start of a step, the rudder follows at the sailor's rate, and the
+sheet and every force stay the step's (`internal/physics/pilot.go`). A boat
+on the autopilot heels, slips and capsizes as any other; with its sheet
+hauled in it capsizes in a breeze. Because it is part of the step, the server
+runs it for every boat and the page predicts it as it predicts everything
+else; with it off the step is what it was, bit for bit.
+
+### Modes, the law and its values
+
+- **Wind**: it holds an angle off the **mean** wind (`Env.MeanFrom`, the
+  shifts and drift without the gusts, before any other boat's shadow),
+  positive with the wind over starboard. It turns with the shifts and lets
+  the gusts be.
+- **Heading**: it holds a compass heading; upwind, a shift shows in the sail.
+
+The law is a course-keeper's: helm = `gain` × the angle off course −
+`damping` × the rate of turn + the standing helm. The standing helm grows by
+`gain` / `trimTime` per radian-second while the boat is within `trimBand` of
+its course, up to `trimLimit`, and is kept as helm toward the wind, so a tack
+carries it over mirrored. It is frozen while the sailor is out of the boat
+and forgotten when the autopilot is switched off. Each boat's values are its
+catalog's `autopilot` group (`shared/catalog/boats.yaml`).
+
+### Ways, and the gybe inhibitor
+
+The control carries a **way** and an **order count** (0 to 3). A count the
+state has not taken is a new order: the state latches its way (`PilotWay`)
+until the boat is on its target's side within `onCourse` of it.
+
+| Way | Turns |
+|-----|-------|
+| Hold | The short way, never through dead downwind; a target across it is reached through the wind |
+| Tack | Through head to wind, the helm up to `tackHelm`; from a run it goes all the way round |
+| Gybe | Through dead downwind, the helm up to `gybeHelm` (a third, or the boom crosses hard enough to capsize a dinghy in a gale) |
+
+The boat's tack is the side the wind comes over, except within `byTheLee` of
+dead downwind, where it is the side its boom is not on. So a boat a little by
+the lee steers back up without gybing, and one further by the lee has gybed
+(the boom goes over by itself at about 17°). Holding, when the boat and its
+target are both aft of the beam on opposite tacks, it holds the same angle on
+the boat's own tack rather than gybe back or turn all the way round; the page
+then takes that angle as its target, and the readout says so. A heading a
+little by the lee is sailed by the lee.
+
+Tack and gybe are not commands: they are part of the held control, stamped
+with the input's tick like the helm, so the page predicts them. The page
+mirrors the target as it orders the turn: the angle's sign, or in heading
+mode the heading about the mean wind.
+
+### The two words, and what the state carries
+
+A control slot is two 64-bit words, each with the input's tick and the
+slot's generation: the helm and sheet (`bus.Word`), and the autopilot's
+mode, way, order count and target in 65536ths of a turn (`bus.PilotWord`).
+The edge stores the pilot word, then the other; the tick takes the pair only
+when both carry the same tick, and otherwise keeps the pair in force a tick
+longer: a read between the two stores costs a late input, never a mismatch.
+A writer that steers by hand stores its word with the autopilot off
+(`Controls.StoreHand`). The frames (`Frame.Pilot`), the input log, the
+digest and checkpoints (snapshot version 8) carry the pilot word.
+
+What the autopilot remembers is in `State`: `PilotTrim`, `PilotWay` and
+`PilotOrder`, so a replay from the server's state steers as the server did.
+The snapshot (layout 6) sends them, with the pilot word in force, in a block
+after the header only while any is not zero. `Out` gives `PilotHelm` (the
+helm the step sailed with), `PilotOff` (how far it has to turn) and
+`PilotHeading` (the heading it steers for).
+
+### On the page
+
+One button between the helm and the sheet says what it holds ("Off",
+"Wind 45° S", "Heading 270°", "Tacking"). Tapped while off it switches the
+autopilot on at the boat's angle to the mean wind, on its tack, and opens
+the dial: a half-ring of the angle off the wind on the boat's side (no closer
+than ten degrees inside close-hauled), or a compass rose, with the target's
+mark, dragged along the ring or stepped a degree or ten either way; Tack,
+Gybe, the other mode, and Off. A tap elsewhere closes the dial and leaves it
+on. Touching the helm (a thumb, ←, →, A, D or C) takes the helm back where the
+autopilot left it. The instruments show its state; with the Wind overlay
+on, a thin arrow on the water marks the heading it steers for; the developer
+panel has a line of its values.
+
+The scripted sailors sail on it, at an angle from 45° to 160° drawn at random
+on the tack they were on, the sheet set for where the boat points and eased
+for the wind, tacking or gybing every one to five minutes; the staged
+encounters steer by its heading mode; and `tools/loadbot -pilot 0.5` puts
+that share of its players on it.
+
+### Tuning
+
+The values are in `boats.yaml`. The behaviour tests say what must stay true
+(`go test ./internal/physics -run Pilot -v`): in the catalog's spells it holds
+its angle within 1° rms and 3° at most, follows the shifts and turns with
+under a fifth of the gusts' veer; it tacks and gybes in under 6 s keeping
+60% and 75% of the speed; it never gybes unasked; and its helm fed in by hand
+gives the same bits. After a change:
+
+```sh
+go run ./tools/catalog
+go run ./tools/physics
+go test ./internal/physics -run 'Golden|EncounterFile' -update
+go test ./internal/sim -run Fixture -update
+go test ./internal/edge/edgetest -run Traces -update
+(cd client && UPDATE_RECORDING=1 npx vitest run src/sandbox)
+```
 
 ## Waves
 
@@ -1187,7 +1296,7 @@ world; everything reaches it through the **bus** (`internal/bus`).
 
 | Package | What |
 |---------|------|
-| `internal/bus` | A control slot per boat: one atomic 64-bit word (input sequence, helm and sheet in 1/1024 steps, the slot's generation), stored by the boat's sailor and read by the tick. A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`; for developers only `SetWeather` and `Place`; and the server's own `Hold`, admission held while the world's writes are behind); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
+| `internal/bus` | A control slot per boat: two atomic 64-bit words, the helm and sheet in 1/1024 steps and the autopilot's control, each with the input sequence and the slot's generation, stored by the boat's sailor and taken together by the tick (see [The autopilot](#the-autopilot)). A queue of 4,096 commands (`Join`, `Leave`, `Disconnect`; for developers only `SetWeather` and `Place`; and the server's own `Hold`, admission held while the world's writes are behind); `TrySend` never blocks. The frames: the whole world after each tick, with its grid of boats by 64 m cell, each boat's sail byte and the queue for boats, published through an atomic pointer and recycled once no reader holds them (`Acquire`, `Release`). |
 | `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, bring the sea to the tick, step every boat in the shadow of the boats near it, sort the boats into the grid, find the pairs, contacts and bumps, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
 | `internal/persist` | The world's writer: the lasting events and a checkpoint every 10 s, written behind the tick in fenced batches (see [Restarts and deploys](#restarts-and-deploys)). |
 | `internal/sim/loop` | The clock: tick k after the world's epoch (the database's world row; world 1's is 1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
@@ -3451,6 +3560,7 @@ things and their pictures stay in one wind. The developer page is
 |---------|-------|--------------------|
 | Helm | The arc bottom left: drag left to turn the bow to port, right to starboard, relative to where the thumb lands (140 px is the full travel). A double tap centres it | ← and → (or A and D), the full travel in 0.6 s while held; C centres it |
 | Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly) | W trims and S eases, the whole range in 2 s while held |
+| Autopilot | The button between them: on at the boat's angle to the wind, and its dial; touching the helm takes the helm back | P on or off; Q and E turn its target a degree to port or starboard, ten with Shift; T tacks, G gybes; the helm's keys take the helm back |
 | Camera | Drag on the sea to swing it round and up or down; pinch for its distance (5 to 80 m). It eases back behind the boat 5 s after the last touch | Drag with the mouse; the wheel for the distance |
 
 Both controls take a thumb each at once. Each shows its target (the knob)

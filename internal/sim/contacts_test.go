@@ -267,14 +267,15 @@ func TestFarApartAsGhosts(t *testing.T) {
 
 // BenchmarkTickEncounters times the tick with 1,000 boats in the stormy
 // spell, as ghosts and as solid boats: on the spawn grid where they join,
-// 20 m apart, and spread over the disk.
+// 20 m apart, and spread over the disk; and solid with every other boat on
+// the autopilot, holding an angle to the wind from 50° to 150°.
 func BenchmarkTickEncounters(b *testing.B) {
 	for _, layout := range []string{"grid", "spread"} {
-		for _, solid := range []bool{false, true} {
-			name := layout + "/ghosts"
+		for _, kind := range []string{"ghosts", "solid", "pilot"} {
+			name := layout + "/" + kind
 			var enc *physics.EncounterPrepared
-			if solid {
-				name, enc = layout+"/solid", encounters(b)
+			if kind != "ghosts" {
+				enc = encounters(b)
 			}
 			b.Run(name, func(b *testing.B) {
 				w, err := New(Config{Kinds: kinds(b), Waves: waves(b), Weather: sequence(b), Encounters: enc,
@@ -294,6 +295,19 @@ func BenchmarkTickEncounters(b *testing.B) {
 				}
 				send(b, w, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherHeld, Regime: 3}})
 				sail(w, 4*bus.SeaPeriod, 2)
+				if kind == "pilot" {
+					f := w.Latest()
+					for i, s := range f.Live {
+						if i%2 == 0 {
+							seq := uint32(f.Tick)
+							angle := 50 + float64(i%101)
+							target := uint16(int64(math.Round(angle*physics.TurnSteps/360)) & (physics.TurnSteps - 1))
+							w.Bus().Controls.Store(s, bus.Pack(seq, bus.Steps/2, 512, f.Gen[s]),
+								bus.PackPilot(seq, bus.PilotWind, bus.WayHold, 0, target, f.Gen[s]))
+						}
+					}
+					w.Tick()
+				}
 				bumps := 0
 				var phases phaseClock
 				w.Observe(&phases)

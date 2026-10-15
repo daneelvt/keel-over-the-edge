@@ -13,7 +13,7 @@ import (
 // developer's weathers (each one's tick, mode, regime, speed and direction),
 // the sea in effect and next (each run of areas with the same inputs, and
 // its length), whether admission is held, each occupied slot's number, boat, generation,
-// owner, connection, grace, control word, state and course, each waiting
+// owner, connection, grace, control word, pilot word, state and course, each waiting
 // connection's account, connection, tick of joining the queue and grace,
 // and each pair's slots, boats, keep-clear boat, Article, whose action and
 // ticks, as little-endian bits. Two worlds with the
@@ -46,6 +46,7 @@ func Digest(f *bus.Frame) uint64 {
 		h.u64(f.Conn[s])
 		h.u64(uint64(f.Grace[s]))
 		h.u64(uint64(f.Control[s]))
+		h.u64(uint64(f.Pilot[s]))
 		for _, v := range StateFields(&f.State[s]) {
 			h.f64(*v)
 		}
@@ -121,11 +122,17 @@ func StateFields(s *physics.State) [StateSize]*float64 {
 		&s.X, &s.Y, &s.Heading, &s.Surge, &s.Sway, &s.YawRate, &s.Heel, &s.RollRate,
 		&s.Boom, &s.BoomRate, &s.Sailor, &s.Rudder, &s.SheetLimit, &s.SailorMode, &s.SailorTimer,
 		&s.Heave, &s.HeaveRate, &s.Pitch, &s.PitchRate,
+		&s.PilotTrim, &s.PilotWay, &s.PilotOrder,
 	}
 }
 
-// StateSize is the number of a state's fields.
-const StateSize = 19
+// StateSize is the number of a state's fields: BoatSize of the boat's, then
+// PilotSize of what its autopilot remembers.
+const (
+	StateSize = BoatSize + PilotSize
+	BoatSize  = 19
+	PilotSize = 3
+)
 
 // CourseFields lists a course's fields, in their order, as StateFields does
 // a state's.

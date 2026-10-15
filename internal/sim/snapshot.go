@@ -32,8 +32,9 @@ import (
 //
 // Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
-// uvarint, its control word in 8 bytes, its state's fields in 8 bytes each,
-// then its course's, the same; each connection waiting is its account's 16
+// uvarint, its control word and its pilot word in 8 bytes each, its state's
+// fields in 8 bytes each, then its course's, the same; each connection
+// waiting is its account's 16
 // bytes, the connection as a uvarint, the tick it was queued at and the tick
 // its place is given up at (0 while connected) as varints. Each pair is its
 // two slots and two boats, its keep-clear boat, Article and whose action as
@@ -43,7 +44,7 @@ import (
 //
 // A checkpoint stores this snapshot, so a world is restored only by a build
 // that reads its version.
-const SnapshotVersion = 7
+const SnapshotVersion = 8
 
 // AppendSnapshot appends f's snapshot to dst.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
@@ -86,6 +87,7 @@ func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendVarint(dst, f.Grace[s])
 		dst = binary.AppendUvarint(dst, uint64(f.Kind[s]))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Control[s]))
+		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Pilot[s]))
 		for _, v := range StateFields(&f.State[s]) {
 			dst = appendF64(dst, *v)
 		}
@@ -189,6 +191,7 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		r.bytes(owner[:])
 		conn, grace, kind := r.uvarint(), r.varint(), r.uvarint()
 		word := bus.Word(r.u64())
+		pilot := bus.PilotWord(r.u64())
 		if r.err != nil {
 			return r.err
 		}
@@ -198,7 +201,7 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		last = int64(s)
 		f.Live = append(f.Live, int32(s))
 		f.Occupied[s] = true
-		f.Boat[s], f.Owner[s], f.Kind[s], f.Control[s] = boat, owner, uint16(kind), word
+		f.Boat[s], f.Owner[s], f.Kind[s], f.Control[s], f.Pilot[s] = boat, owner, uint16(kind), word, pilot
 		f.Conn[s], f.Grace[s] = conn, grace
 		for _, v := range StateFields(&f.State[s]) {
 			*v = r.f64()

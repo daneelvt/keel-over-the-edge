@@ -58,7 +58,7 @@ type conn struct {
 	// client sends a word a tick, as it does while the tiller is dragged.
 	wmu     sync.Mutex
 	stopped bool
-	held    [heldWords]bus.Word
+	held    [heldWords]heldPair
 	first   int // held's oldest
 	nheld   int
 	waiting atomic.Int32 // nheld, for the encoder to skip connections with none
@@ -410,7 +410,13 @@ func (c *conn) input(in *pb.Input) {
 	d := marginOf(in.GetSeq(), latest)
 	c.margin.record(d)
 	e.m.margin.Observe(float64(d))
-	w := bus.Pack(in.GetSeq(), uint16(min(in.GetHelm(), bus.Steps)), uint16(min(in.GetSheet(), bus.Steps)), c.gen)
+	w := heldPair{
+		word: bus.Pack(in.GetSeq(), uint16(min(in.GetHelm(), bus.Steps)), uint16(min(in.GetSheet(), bus.Steps)), c.gen),
+		// A target is taken modulo a whole turn, the order count modulo
+		// its range; a mode or way out of range is off or hold.
+		pilot: bus.PackPilot(in.GetSeq(), uint8(min(in.GetPilot(), 255)), uint8(min(in.GetWay(), 255)),
+			uint8(in.GetOrder()), uint16(in.GetTarget()), c.gen),
+	}
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
 	if c.stopped {
@@ -425,7 +431,13 @@ func (c *conn) input(in *pb.Input) {
 	c.releaseLocked(latest + 1)
 }
 
-// release stores the newest held word due by tick next, and forgets it and
+// heldPair is an input's two words, held for their tick.
+type heldPair struct {
+	word  bus.Word
+	pilot bus.PilotWord
+}
+
+// release stores the newest held pair due by tick next, and forgets it and
 // those before it.
 func (c *conn) release(next int64) {
 	c.wmu.Lock()
@@ -441,12 +453,13 @@ func (c *conn) releaseLocked(next int64) {
 	}
 	due := -1
 	for i := range c.nheld {
-		if bus.Due(c.held[(c.first+i)%heldWords].Seq(), next) {
+		if bus.Due(c.held[(c.first+i)%heldWords].word.Seq(), next) {
 			due = i
 		}
 	}
 	if due >= 0 {
-		c.e.cfg.Bus.Controls.Store(c.slot, c.held[(c.first+due)%heldWords])
+		p := c.held[(c.first+due)%heldWords]
+		c.e.cfg.Bus.Controls.Store(c.slot, p.word, p.pilot)
 		c.first = (c.first + due + 1) % heldWords
 		c.nheld -= due + 1
 	}

@@ -174,7 +174,7 @@ func TestJoin(t *testing.T) {
 	if !sameState(f.State[0], stepped(t, start, bus.Centred(0), defaultEnv)) {
 		t.Fatalf("state after the join %+v", f.State[0])
 	}
-	if got := w.Bus().Controls.Load(0); got != bus.Centred(0) {
+	if got, pilot := w.Bus().Controls.Load(0); got != bus.Centred(0) || pilot != bus.PilotOffWord(0) {
 		t.Fatalf("the control slot holds %#x", got)
 	}
 
@@ -247,15 +247,15 @@ func TestLeave(t *testing.T) {
 	// A writer left over from the boat that had the slot cannot steer the
 	// new one; the new boat's writer can.
 	controls := w.Bus().Controls
-	controls.Store(0, bus.Pack(9, 0, 0, 0))
+	controls.StoreHand(0, bus.Pack(9, 0, 0, 0))
 	w.Tick()
 	if f := w.Latest(); f.Control[0] != bus.Centred(1) || len(f.Changed) != 0 {
 		t.Fatalf("a stale generation was applied: %#x", f.Control[0])
 	}
 	word := bus.Pack(1, 0, 1024, 1)
-	controls.Store(0, word)
+	controls.StoreHand(0, word)
 	w.Tick()
-	if f := w.Latest(); f.Control[0] != word || !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word}}) {
+	if f := w.Latest(); f.Control[0] != word || !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: bus.HandPilot(word)}}) {
 		t.Fatalf("the new boat's word was not applied: %#x, %v", f.Control[0], f.Changed)
 	}
 	w.Tick()
@@ -317,7 +317,7 @@ func TestTickMatchesStep(t *testing.T) {
 	for i := range 900 {
 		if i%20 == 0 {
 			word = bus.Pack(uint32(i), uint16(rng.IntN(bus.Steps+1)), uint16(rng.IntN(bus.Steps+1)), 0)
-			w.Bus().Controls.Store(0, word)
+			w.Bus().Controls.StoreHand(0, word)
 		}
 		w.Tick()
 		want = stepped(t, want, word, defaultEnv)
@@ -357,7 +357,7 @@ func TestTickWith(t *testing.T) {
 		t.Fatalf("control %#x, changed %v", f.Control[0], f.Changed)
 	}
 	// A replay's ticks read nothing from the bus.
-	w.Bus().Controls.Store(0, bus.Pack(4, 0, 0, 0))
+	w.Bus().Controls.StoreHand(0, bus.Pack(4, 0, 0, 0))
 	w.TickWith(&Input{})
 	if f := w.Latest(); f.Control[0] != word {
 		t.Fatal("TickWith read the control slots")
@@ -387,7 +387,7 @@ func sail(w *World, ticks int, seed uint64) {
 		f := w.Latest()
 		for i, s := range f.Live {
 			if i%3 == rng.IntN(3) {
-				w.Bus().Controls.Store(s, bus.Pack(uint32(f.Tick), uint16(rng.IntN(bus.Steps+1)), uint16(rng.IntN(bus.Steps+1)), f.Gen[s]))
+				w.Bus().Controls.StoreHand(s, bus.Pack(uint32(f.Tick), uint16(rng.IntN(bus.Steps+1)), uint16(rng.IntN(bus.Steps+1)), f.Gen[s]))
 			}
 		}
 		w.Tick()
@@ -614,7 +614,7 @@ func TestGrace(t *testing.T) {
 	// Gone again, for the whole grace: the boat sails on its held controls
 	// until the grace's last tick, then leaves.
 	word := bus.Pack(uint32(w.Now()+1), 300, 700, 0)
-	w.Bus().Controls.Store(0, word)
+	w.Bus().Controls.StoreHand(0, word)
 	do(t, w, bus.Command{Op: bus.Disconnect, Boat: boat, Conn: 9})
 	end := w.Latest().Grace[0]
 	for w.Now() < end-1 {
@@ -672,7 +672,7 @@ func TestWordWaitsForItsTick(t *testing.T) {
 				w.Tick()
 				f := w.Latest()
 				if f.Control[0] == word {
-					if !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word}}) {
+					if !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: bus.HandPilot(word)}}) {
 						t.Fatalf("changed %v", f.Changed)
 					}
 					return f.Tick
@@ -683,23 +683,23 @@ func TestWordWaitsForItsTick(t *testing.T) {
 
 		at := w.Now() + 5
 		word := bus.Pack(uint32(at), 100, 200, 0)
-		controls.Store(0, word)
+		controls.StoreHand(0, word)
 		if got := appliedAt(word, 10); got != at {
 			t.Fatalf("from %d: a word for tick %d applied at %d", start, at, got)
 		}
 		late := bus.Pack(uint32(w.Now()-3), 101, 200, 0)
-		controls.Store(0, late)
+		controls.StoreHand(0, late)
 		if want, got := w.Now()+1, appliedAt(late, 3); got != want {
 			t.Fatalf("from %d: a late word applied at %d, want %d", start, got, want)
 		}
 		far := bus.Pack(uint32(w.Now()+1+bus.MaxAhead+1), 102, 200, 0)
-		controls.Store(0, far)
+		controls.StoreHand(0, far)
 		if want, got := w.Now()+1, appliedAt(far, 3); got != want {
 			t.Fatalf("from %d: a word too far ahead applied at %d, want %d", start, got, want)
 		}
 		at = w.Now() + 1 + bus.MaxAhead
 		held := bus.Pack(uint32(at), 103, 200, 0)
-		controls.Store(0, held)
+		controls.StoreHand(0, held)
 		if got := appliedAt(held, bus.MaxAhead+3); got != at {
 			t.Fatalf("from %d: a word %d ticks ahead applied at %d, want %d", start, bus.MaxAhead, got, at)
 		}
@@ -707,9 +707,9 @@ func TestWordWaitsForItsTick(t *testing.T) {
 		// A newer word, stamped sooner, replaces one still waiting.
 		waiting := bus.Pack(uint32(w.Now()+8), 104, 200, 0)
 		newer := bus.Pack(uint32(w.Now()+3), 105, 200, 0)
-		controls.Store(0, waiting)
+		controls.StoreHand(0, waiting)
 		w.Tick()
-		controls.Store(0, newer)
+		controls.StoreHand(0, newer)
 		at = w.Now() + 2
 		if got := appliedAt(newer, 5); got != at {
 			t.Fatalf("from %d: the newer word applied at %d, want %d", start, got, at)
@@ -731,9 +731,9 @@ func TestRejoinDropsWaitingWord(t *testing.T) {
 	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
 	inForce := w.Latest().Control[0]
 	stale := bus.Pack(uint32(w.Now()+10), 0, 0, 0)
-	w.Bus().Controls.Store(0, stale)
+	w.Bus().Controls.StoreHand(0, stale)
 	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 2})
-	if got := w.Bus().Controls.Load(0); got != inForce {
+	if got, _ := w.Bus().Controls.Load(0); got != inForce {
 		t.Fatalf("the slot holds %#x after the rejoin, not the word in force %#x", got, inForce)
 	}
 	for range 20 {
@@ -782,7 +782,7 @@ func TestTickAllocatesNothing(t *testing.T) {
 		f := w.Latest()
 		for i, s := range f.Live {
 			if i%3 == 0 {
-				w.Bus().Controls.Store(s, bus.Pack(uint32(f.Tick+int64(i%5)), uint16(rng.IntN(bus.Steps+1)), 512, f.Gen[s]))
+				w.Bus().Controls.StoreHand(s, bus.Pack(uint32(f.Tick+int64(i%5)), uint16(rng.IntN(bus.Steps+1)), 512, f.Gen[s]))
 			}
 		}
 		q.TrySend(bus.Command{Op: bus.Join, Account: acct(account), Conn: account, Reply: reply})
@@ -839,5 +839,43 @@ func TestRegionsAllocateNothingWhileTracing(t *testing.T) {
 	fill(t, w, 1, 1)
 	if n := testing.AllocsPerRun(1000, w.Tick); n != 0 {
 		t.Fatalf("a tick allocates %v times while tracing", n)
+	}
+}
+
+// TestPilotPairs: a slot's two words are taken together, once both carry
+// the same tick, and only for the slot's generation; the pilot word in force
+// steers the step.
+func TestPilotPairs(t *testing.T) {
+	w := newWorld(t, 4, 1)
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+	controls := w.Bus().Controls
+	at := uint32(w.Now() + 1)
+	word := bus.Pack(at, bus.Steps/2, 300, 0)
+	pilot := bus.PackPilot(at, bus.PilotWind, bus.WayHold, 0, 16384, 0)
+	// The pilot word of the tick before beside it, as a tick that reads
+	// between a writer's two stores finds them: the pair waits.
+	controls.Store(0, word, bus.PackPilot(at-1, bus.PilotWind, bus.WayHold, 0, 16384, 0))
+	w.Tick()
+	if f := w.Latest(); f.Control[0] == word || len(f.Changed) != 0 {
+		t.Fatalf("a pair of two ticks was taken: %#x, %v", f.Control[0], f.Changed)
+	}
+	// Of another generation: ignored.
+	controls.Store(0, word, bus.PackPilot(at, bus.PilotWind, bus.WayHold, 0, 16384, 1))
+	w.Tick()
+	if f := w.Latest(); f.Control[0] == word || len(f.Changed) != 0 {
+		t.Fatalf("a pilot word of another generation was taken: %v", f.Changed)
+	}
+	controls.Store(0, word, pilot)
+	w.Tick()
+	f := w.Latest()
+	if f.Control[0] != word || f.Pilot[0] != pilot || !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: pilot}}) {
+		t.Fatalf("the pair was not taken: %#x %#x, %v", f.Control[0], f.Pilot[0], f.Changed)
+	}
+	// Its step sailed on the autopilot: it holds an angle, and the helm is
+	// its.
+	var c physics.Control
+	c.Pilot, c.Target, c.Order, c.Way = f.Pilot[0].Control()
+	if !physics.PilotOn(&c) || c.Target != 16384 {
+		t.Fatalf("the pilot word in force reads as %+v", c)
 	}
 }

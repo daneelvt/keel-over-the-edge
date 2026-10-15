@@ -79,9 +79,47 @@ func TestDecodeMatchesClient(t *testing.T) {
 func TestControls(t *testing.T) {
 	c := NewControls(3)
 	w := Pack(5, 100, 200, 3)
-	c.Store(2, w)
-	if c.Load(2) != w || c.Load(0) != 0 || c.Len() != 3 {
-		t.Fatal("a slot does not hold its word")
+	p := PackPilot(5, PilotWind, WayTack, 2, 60000, 3)
+	c.Store(2, w, p)
+	if gw, gp := c.Load(2); gw != w || gp != p || c.Len() != 3 {
+		t.Fatal("a slot does not hold its words")
+	}
+	if gw, gp := c.Load(0); gw != 0 || gp != 0 {
+		t.Fatal("an empty slot holds words")
+	}
+	c.StoreHand(1, w)
+	if gw, gp := c.Load(1); gw != w || gp.Seq() != 5 || gp.Gen() != 3 || gp.Mode() != PilotOff || gp.Target() != 0 {
+		t.Fatalf("by hand: %#x %#x", gw, gp)
+	}
+}
+
+// A pilot word holds its fields apart; a mode or way out of range is off or
+// hold, the order counts modulo 4 and the generation as the Word's.
+func TestPilotWord(t *testing.T) {
+	for _, c := range []struct {
+		seq               uint32
+		mode, way, order  uint8
+		target, gen       uint16
+		wantMode, wantWay uint8
+		wantOrder         uint8
+		wantGen           uint16
+	}{
+		{0, PilotOff, WayHold, 0, 0, 0, PilotOff, WayHold, 0, 0},
+		{1<<32 - 1, PilotHeading, WayGybe, 3, 65535, GenMask, PilotHeading, WayGybe, 3, GenMask},
+		{77, PilotWind, WayTack, 5, 12345, GenMask + 2, PilotWind, WayTack, 1, 1},
+		{78, 3, 3, 4, 1, 7, PilotOff, WayHold, 0, 7},
+	} {
+		p := PackPilot(c.seq, c.mode, c.way, c.order, c.target, c.gen)
+		if p.Seq() != c.seq || p.Mode() != c.wantMode || p.Way() != c.wantWay || p.Order() != c.wantOrder || p.Target() != c.target || p.Gen() != c.wantGen {
+			t.Errorf("%+v: seq %d, mode %d, way %d, order %d, target %d, gen %d", c, p.Seq(), p.Mode(), p.Way(), p.Order(), p.Target(), p.Gen())
+		}
+		pilot, target, order, way := p.Control()
+		if pilot != float64(c.wantMode) || target != float64(c.target) || order != float64(c.wantOrder) || way != float64(c.wantWay) {
+			t.Errorf("%+v: as the physics takes it, %v %v %v %v", c, pilot, target, order, way)
+		}
+	}
+	if PilotOffWord(9) != PackPilot(0, PilotOff, WayHold, 0, 0, 9) {
+		t.Error("a new boat's autopilot is not off")
 	}
 }
 

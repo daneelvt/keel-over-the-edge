@@ -987,6 +987,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         sheet: game.sheet.target,
         steps: game.clock.steps,
         wind: { ...driver.wind },
+        pilot: {
+          mode: game.pilot.mode,
+          target: game.pilot.target,
+          order: game.pilot.order,
+          way: game.pilot.way,
+          degrees: game.pilot.degrees,
+          text: game.hud.pilot.value,
+        },
       };
     },
 
@@ -997,9 +1005,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       );
     },
 
-    /** Back to the start, at rest. */
+    /** Back to the start, at rest, steering by hand. */
     reset(): void {
       offline().reset();
+      game.pilot.off();
       floatBoat();
     },
     /**
@@ -1021,6 +1030,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         world.boat.root.visible = true;
       }
       game.beforeStep = null;
+      game.pilot.off();
       game.helm.target = 0;
       game.sheet.target = 0.5;
       world.windowMs = null;

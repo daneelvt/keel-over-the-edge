@@ -125,7 +125,7 @@ describe('the keyboard', () => {
     k.down('KeyS');
     k.update(SHEET_KEY_TIME);
     expect(s.target).toBe(1);
-    expect(k.down('KeyQ')).toBe(false);
+    expect(k.down('KeyZ')).toBe(false);
   });
 
   test('C centres the helm; the release setting applies to the keys', () => {

@@ -116,6 +116,15 @@ export function writeParams(params: Float64Array, p: BoatPhysics): void {
   params[f.rudderTime] = p.rates.rudderTime;
   params[f.sheetHaulTime] = p.rates.sheetHaulTime;
   params[f.sheetEaseTime] = p.rates.sheetEaseTime;
+  params[f.gain] = p.autopilot.gain;
+  params[f.damping] = p.autopilot.damping;
+  params[f.trimTime] = p.autopilot.trimTime;
+  params[f.trimLimit] = p.autopilot.trimLimit;
+  params[f.trimBand] = p.autopilot.trimBand;
+  params[f.tackHelm] = p.autopilot.tackHelm;
+  params[f.gybeHelm] = p.autopilot.gybeHelm;
+  params[f.byTheLee] = p.autopilot.byTheLee;
+  params[f.onCourse] = p.autopilot.onCourse;
 }
 
 /**

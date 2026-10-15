@@ -72,7 +72,7 @@ func TestFullTickAllocatesNothing(t *testing.T) {
 		f := w.Latest()
 		for i, s := range f.Live {
 			if i%3 == 0 {
-				w.Bus().Controls.Store(s, bus.Pack(uint32(f.Tick), uint16(rng.IntN(bus.Steps+1)), uint16(rng.IntN(bus.Steps+1)), f.Gen[s]))
+				w.Bus().Controls.StoreHand(s, bus.Pack(uint32(f.Tick), uint16(rng.IntN(bus.Steps+1)), uint16(rng.IntN(bus.Steps+1)), f.Gen[s]))
 			}
 		}
 		if len(f.Live) > 0 {
