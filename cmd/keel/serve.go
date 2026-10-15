@@ -386,8 +386,8 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Frames: b.Frames,
 		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch, Grace: world.Grace(), Limit: world.Limit(),
 			Seed: bundle.Seed, Generator: bundle.Generator, Terrain: terrainDigest},
-		Dir:    cfg.ReplayDir,
-		Log:    log,
+		Dir: cfg.ReplayDir,
+		Log: log,
 	})
 	replayHandler.set(inputs)
 	if weatherHandler != nil {

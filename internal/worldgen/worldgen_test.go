@@ -663,7 +663,7 @@ func TestEachRuleFails(t *testing.T) {
 		return nil
 	}
 	cases := []struct {
-		rule  string
+		rule   string
 		break_ func(w *world)
 	}{
 		{"main port's width", func(w *world) { w.islands[0].area /= 4 }},

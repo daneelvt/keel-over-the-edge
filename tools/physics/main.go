@@ -36,11 +36,11 @@ const (
 	// worldgenDir is the world generator, held to the float rules so that
 	// a seed makes the same world on every machine.
 	worldgenDir = "internal/worldgen"
-	wasmPkg    = "./internal/physics/wasm"
-	moduleOut  = "client/src/predict/physics.wasm"
-	goLayout   = "internal/physics/layout.gen.go"
-	tsLayout   = "client/src/predict/layout.gen.ts"
-	stateDir   = ".dev"
+	wasmPkg     = "./internal/physics/wasm"
+	moduleOut   = "client/src/predict/physics.wasm"
+	goLayout    = "internal/physics/layout.gen.go"
+	tsLayout    = "client/src/predict/layout.gen.ts"
+	stateDir    = ".dev"
 	// budget is the most the module may weigh, gzipped. Browsers get it
 	// with Brotli, which is smaller still.
 	budget = 300 << 10

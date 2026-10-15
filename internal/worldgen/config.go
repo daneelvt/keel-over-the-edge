@@ -19,13 +19,13 @@ type config struct {
 	zones      [2]float64
 	calm       float64
 	port       struct {
-		name         string
-		biome        int32
-		across       [2]float64
-		height       [2]float64
-		cliffs       float64
-		offset       float64
-		rocks        [2]int
+		name   string
+		biome  int32
+		across [2]float64
+		height [2]float64
+		cliffs float64
+		offset float64
+		rocks  [2]int
 	}
 	layout struct {
 		landmarks      int

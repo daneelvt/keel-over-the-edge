@@ -98,7 +98,7 @@ type Prepared struct {
 	rudderDepth    float64
 	invBoardSpan   float64
 	invRudderSpan  float64
-	groundRings    int32 // rings of hexagons about the one under the centre of gravity the hull may touch
+	groundRings    int32   // rings of hexagons about the one under the centre of gravity the hull may touch
 	pushOffAngle   float64 // off the wind a boat pushed off points, rad
 
 	// Sailor.

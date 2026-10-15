@@ -64,13 +64,13 @@ const hexArea = 13.856406460551018
 // work is the room an island is made in, kept between islands so that
 // making the next allocates little.
 type work struct {
-	land               []bool
-	height, din, dout  []float64
-	near               []int32
-	cliff              []bool
-	xs                 []float64
-	field              []float64
-	coarse             []float64
+	land              []bool
+	height, din, dout []float64
+	near              []int32
+	cliff             []bool
+	xs                []float64
+	field             []float64
+	coarse            []float64
 }
 
 // grow returns s with length n, reusing its storage.

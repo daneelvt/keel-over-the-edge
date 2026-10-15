@@ -117,16 +117,16 @@ func (sh *Shelter) At(x, y, from float64) (factor, turn float64) {
 // ShelterPrepared holds the constants a shelter table is worked out with,
 // derived from ShelterParams by PrepareShelter.
 type ShelterPrepared struct {
-	reach            float64 // m
-	step             float64 // m
-	near, far        float64 // in heights
-	least, most      float64
-	speedUp          float64
-	flank            float64 // in heights
-	turn             float64 // rad
-	offsets          [4]float64
-	sinDir, cosDir   [ShelterDirections]float64
-	farRange         float64
+	reach          float64 // m
+	step           float64 // m
+	near, far      float64 // in heights
+	least, most    float64
+	speedUp        float64
+	flank          float64 // in heights
+	turn           float64 // rad
+	offsets        [4]float64
+	sinDir, cosDir [ShelterDirections]float64
+	farRange       float64
 }
 
 // PrepareShelter derives the shelter's constants from its parameters.

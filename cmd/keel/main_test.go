@@ -32,8 +32,8 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
-	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
 func TestUsage(t *testing.T) {
@@ -770,7 +770,7 @@ func TestPanicInTheTick(t *testing.T) {
 		vars := map[string]string{"KEEL_PLAY_ORIGIN": "https://play.example.com", "KEEL_DATABASE_URL": "postgres://keel@db.example.com/keel"}
 		err := runServer(context.Background(), env(vars), io.Discard, (&memDB{epoch: firstEpoch}).with(serveOptions{
 			generate: emptyWorld,
-			listen: n.listen, workers: 2,
+			listen:   n.listen, workers: 2,
 			afterTick: func(int64) {
 				if ticks++; ticks == 4 {
 					panic("a planted panic in the tick")

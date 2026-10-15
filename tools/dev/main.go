@@ -16,7 +16,9 @@
 // The database is PostgreSQL in a container (docker, or else podman), left
 // running between runs; KEEL_DEV_DATABASE_URL instead names a PostgreSQL 18
 // of your own, and no container is started. KEEL_DEV_SAILORS, if set, is
-// passed to keel serve: scripted sailors to load the tick. keel runs with
+// passed to keel serve: scripted sailors to load the tick; so are KEEL_LAND
+// and KEEL_WORLD_SEED, the seed a new world's terrain is made from. keel
+// runs with
 // KEEL_DEV_COMMANDS=1, so POST /debug/wind and /debug/weather on its internal
 // listener change the weather. It runs from the repository root.
 package main

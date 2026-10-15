@@ -97,8 +97,10 @@ func (s *stack) startKeel(ctx context.Context) error {
 		// be seen; the boats are kept all the same.
 		"KEEL_BELL=0s",
 	}
-	if n := os.Getenv("KEEL_DEV_SAILORS"); n != "" {
-		env = append(env, "KEEL_DEV_SAILORS="+n)
+	for _, name := range []string{"KEEL_DEV_SAILORS", "KEEL_LAND", "KEEL_WORLD_SEED"} {
+		if v := os.Getenv(name); v != "" {
+			env = append(env, name+"="+v)
+		}
 	}
 	if s.limit > 0 {
 		env = append(env, fmt.Sprintf("KEEL_BOAT_LIMIT=%d", s.limit))

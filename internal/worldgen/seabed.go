@@ -31,11 +31,11 @@ func (c *config) seabedOf(s stream, m *made, b *biome, w *work) {
 	noise := s.seed32()
 	varies := s.seed32()
 	var reef struct {
-		on               bool
-		at, crest, flat  float64
-		passes           [4]float64
-		phase            [4]float64
-		threshold        float64
+		on              bool
+		at, crest, flat float64
+		passes          [4]float64
+		phase           [4]float64
+		threshold       float64
 	}
 	if b.reef && m.kind != kindRock {
 		reef.on = true

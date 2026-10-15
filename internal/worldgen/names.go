@@ -27,11 +27,11 @@ var zoneNames = [zones]string{"centre", "middle", "rim"}
 
 // nameFeature is a feature a name may need, and what shows it.
 type nameFeature struct {
-	word                             string
-	cliffs, peak, twin, twinApart    float64
-	lagoon                           float64
-	stacks                           int32
-	reef                             bool
+	word                          string
+	cliffs, peak, twin, twinApart float64
+	lagoon                        float64
+	stacks                        int32
+	reef                          bool
 }
 
 // tone is a tone of names: its weights by zone, its limit, and whether its
