@@ -3,9 +3,10 @@
 // Package scripted sails boats with no player: sailors that join through the
 // bus as a player's connection does, then sail on the autopilot at an angle
 // to the wind drawn at random, trimming the sheet for the angle and the wind
-// and tacking or gybing now and then, each on its own schedule. Tests and
-// benchmarks use them, and a developer's server runs them to have a loaded
-// tick to look at.
+// and tacking or gybing now and then, each on its own schedule. They do not
+// steer round land: one aground for AgroundTime leaves and joins again, and
+// its new boat starts where every new boat does. Tests and benchmarks use
+// them, and a developer's server runs them to have a loaded tick to look at.
 package scripted
 
 import (
@@ -31,6 +32,11 @@ const (
 	// The angles to the wind a sailor holds, degrees.
 	LeastAngle = 45
 	MostAngle  = 160
+	// AgroundTime is how long a sailor stays aground before it leaves and
+	// joins again; a boat afloat for AfloatTime counts as off the ground,
+	// though its sailor may have pushed it off onto it again meanwhile.
+	AgroundTime = 30 * time.Second
+	AfloatTime  = 10 * time.Second
 )
 
 // Account is scripted sailor i's account: ffffffff-ffff-7fff-bfff- and i in
@@ -68,6 +74,12 @@ type sailor struct {
 	next    time.Time // the next trim
 	turn    time.Time // the next tack or gybe
 	rng     *rand.Rand
+	index   int // its account's number
+	// aground is when the boat was first seen aground, zero while it is
+	// afloat; ashore when it last was. rejoin, while not nil, waits for the
+	// answer to its new Join.
+	aground, ashore time.Time
+	rejoin          chan bus.Reply
 }
 
 // Run joins cfg.N sailors and sails them until ctx ends. It returns once
@@ -127,6 +139,16 @@ func Run(ctx context.Context, cfg Config) error {
 			if !s.next.After(now) {
 				s.next = s.next.Add(cfg.Min + time.Duration(s.rng.Int64N(int64(cfg.Max-cfg.Min))))
 			}
+			if s.rejoin != nil {
+				s.rejoined(cfg)
+				heap.Fix(&q, 0)
+				continue
+			}
+			if f.Occupied[s.slot] && f.Gen[s.slot] == s.gen && s.stuck(&f.State[s.slot], now) {
+				s.leave(cfg, f.Boat[s.slot])
+				heap.Fix(&q, 0)
+				continue
+			}
 			if f.Occupied[s.slot] && f.Gen[s.slot] == s.gen {
 				// The sheet is trimmed for where the boat points now.
 				wind := &f.Wind[s.slot]
@@ -143,6 +165,50 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 		f.Release()
 		timer.Reset(time.Until(q[0].due()))
+	}
+}
+
+// stuck reports whether the sailor's boat has been aground for
+// AgroundTime: aground and still as its state says, with no more than
+// AfloatTime afloat since.
+func (s *sailor) stuck(st *physics.State, now time.Time) bool {
+	if st.GroundTimer > 0 {
+		if s.aground.IsZero() {
+			s.aground = now
+		}
+		s.ashore = now
+	} else if !s.aground.IsZero() && now.Sub(s.ashore) > AfloatTime {
+		s.aground = time.Time{}
+	}
+	return !s.aground.IsZero() && now.Sub(s.aground) >= AgroundTime
+}
+
+// leave has the sailor's boat leave the world and asks for a new one. A
+// full command queue tries again at the sailor's next turn.
+func (s *sailor) leave(cfg Config, boat uint64) {
+	sender := cfg.Bus.Commands.Players()
+	if sender.TrySend(bus.Command{Op: bus.Leave, Boat: boat}) != nil {
+		return
+	}
+	reply := make(chan bus.Reply, 1)
+	for sender.TrySend(bus.Command{Op: bus.Join, Account: Account(s.index), Reply: reply}) != nil {
+		time.Sleep(time.Second / 30)
+	}
+	s.rejoin, s.aground, s.engaged = reply, time.Time{}, false
+	cfg.Log.Debug("a scripted sailor aground joins again", "sailor", s.index)
+}
+
+// rejoined takes the new boat, once the answer has come.
+func (s *sailor) rejoined(cfg Config) {
+	select {
+	case r := <-s.rejoin:
+		s.rejoin = nil
+		if r.Result == bus.Joined || r.Result == bus.Rejoined {
+			s.slot, s.gen = r.Slot, r.Gen
+			return
+		}
+		cfg.Log.Warn("a scripted sailor found no boat again", "sailor", s.index, "result", r.Result.String())
+	default:
 	}
 }
 
@@ -242,7 +308,7 @@ func join(ctx context.Context, cfg Config) ([]sailor, error) {
 		}
 		rng := rand.New(rand.NewPCG(cfg.Seed, uint64(i)))
 		angle := LeastAngle + rng.Float64()*(MostAngle-LeastAngle)
-		sailors = append(sailors, sailor{slot: r.Slot, gen: r.Gen, angle: angle, sheet: bus.Steps / 2, rng: rng})
+		sailors = append(sailors, sailor{slot: r.Slot, gen: r.Gen, angle: angle, sheet: bus.Steps / 2, rng: rng, index: i})
 	}
 	return sailors, nil
 }
