@@ -25,7 +25,7 @@ import { checkSea, type SeaFile } from '../predict/seacheck';
 import { checkWind, loadWindCase, type WindCase, type WindFile } from '../predict/windcheck';
 
 /** The golden scenarios' terrains, by name, as URLs of their gzip files. */
-const terrainUrls = import.meta.glob<string>('../../../internal/physics/testdata/ground/*.bin.gz', {
+const terrainUrls = import.meta.glob<string>('../../../internal/physics/testdata/ground/*.terrain', {
   query: '?url',
   import: 'default',
   eager: true,
@@ -33,7 +33,7 @@ const terrainUrls = import.meta.glob<string>('../../../internal/physics/testdata
 
 /** Loads a terrain's file and unzips it, as the browser can. */
 const loadTerrain: TerrainLoader = async (name) => {
-  const url = Object.entries(terrainUrls).find(([path]) => path.endsWith(`/${name}.bin.gz`))?.[1];
+  const url = Object.entries(terrainUrls).find(([path]) => path.endsWith(`/${name}.terrain`))?.[1];
   if (url === undefined) {
     throw new Error(`no terrain ${name}`);
   }

@@ -32,7 +32,7 @@ let physics: Physics;
 
 /** Loads a golden scenario's terrain from its file. */
 const terrain: TerrainLoader = async (name) =>
-  new Uint8Array(gunzipSync(readFileSync(new URL(`ground/${name}.bin.gz`, testdata))));
+  new Uint8Array(gunzipSync(readFileSync(new URL(`ground/${name}.terrain`, testdata))));
 
 beforeAll(async () => {
   if (!existsSync(wasm)) {

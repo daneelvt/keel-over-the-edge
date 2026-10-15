@@ -14,7 +14,7 @@ import (
 )
 
 // The golden scenarios' terrains: made here from functions of a hexagon's
-// centre, and written to testdata/ground/<name>.bin.gz by
+// centre, and written to testdata/ground/<name>.terrain by
 // go test ./internal/physics -run Golden -update, so that the module's
 // runner (client/src/predict/golden.ts) loads the same chunks. A file is
 // gzip of records one after another: the chunk's number as a little-endian
@@ -162,12 +162,12 @@ func writeTerrain(name string, g *Ground, sh *Shelter) error {
 	if err := os.MkdirAll(terrainDir, 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(terrainDir, name+".bin.gz"), out.Bytes(), 0o644)
+	return os.WriteFile(filepath.Join(terrainDir, name+".terrain"), out.Bytes(), 0o644)
 }
 
 // readTerrain reads a terrain's file: its ground, and its shelter or nil.
 func readTerrain(name string, gp *GroundPrepared) (*Ground, *Shelter, error) {
-	data, err := os.ReadFile(filepath.Join(terrainDir, name+".bin.gz"))
+	data, err := os.ReadFile(filepath.Join(terrainDir, name+".terrain"))
 	if err != nil {
 		return nil, nil, err
 	}

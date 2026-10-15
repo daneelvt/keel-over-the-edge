@@ -28,7 +28,7 @@ export interface ScenarioFile {
 }
 
 /**
- * Gives a terrain's file, testdata/ground/<name>.bin.gz, unzipped: records
+ * Gives a terrain's file, testdata/ground/<name>.terrain, unzipped: records
  * one after another, each a chunk's number as a little-endian uint16, a
  * kind byte (1 its ground: its elevations as int16s, then its surfaces; 2
  * its shelter's table), and that.
