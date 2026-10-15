@@ -24,12 +24,15 @@ import { preparePhysics } from '../predict/predictor';
 import { checkSea, type SeaFile } from '../predict/seacheck';
 import { checkWind, loadWindCase, type WindCase, type WindFile } from '../predict/windcheck';
 
-/** The golden scenarios' terrains, by name, as URLs of their gzip files. */
-const terrainUrls = import.meta.glob<string>('../../../internal/physics/testdata/ground/*.terrain', {
-  query: '?url',
-  import: 'default',
-  eager: true,
-});
+/** The golden scenarios' terrains, by name, as URLs of their files (gzip). */
+const terrainUrls = import.meta.glob<string>(
+  '../../../internal/physics/testdata/ground/*.terrain',
+  {
+    query: '?url',
+    import: 'default',
+    eager: true,
+  },
+);
 
 /** Loads a terrain's file and unzips it, as the browser can. */
 const loadTerrain: TerrainLoader = async (name) => {
