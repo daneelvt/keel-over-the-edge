@@ -115,15 +115,16 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics and simulation tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
 | `pr.render.yaml` | Pull requests, not drafts, that change its files | The physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/physics`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
-| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, the trimmed sail against ORC's mainsail, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
+| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, the trimmed sail against ORC's mainsail, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin; every alert rule made to fire and to stay quiet, with VictoriaMetrics' `vmalert-tool`; the dashboards and the vendored manifests against their records; and the signatures Flux cannot check, of cert-manager's chart and images and Kured's image, with cosign (see [The local cluster](#the-local-cluster), [Releases](#releases) and [Monitoring](#monitoring)) | `go test ./tools/cluster ./tools/release ./tools/dashboards ./tools/vendored ./tools/ops ./tools/internal/...`, `go run ./tools/release -verify-keyed` |
 | `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
 | `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
+| `pr.worldgen.yaml` | Pull requests labelled `worldgen` (each push while the label stays), and by hand; not a required check | The world generator over a hundred seeds: each world passes the validator's rules within its attempts; how long they took, their attempts, land and islands, in the log (see [The world](#the-world)) | `go test ./internal/worldgen -run '^TestSeeds$' -seeds 100 -v` |
 | `machine-test.yaml` | Pull requests labelled `machine` (each push while the label stays), and by hand; not a required check | **The whole playbook on a fresh Ubuntu 26.04 runner, twice, the second run changing nothing**; `verify.yaml` (the firewall, the hardening, k3s, Flux following the real `prod`); Lynis with no warning not accepted; kube-bench as a report (see [The machine](#the-machine)) | |
 | `pr.actions.yaml` | Pull requests, not drafts | actionlint and zizmor over the workflows | `go tool actionlint` |
 | `pr.dependencies.yaml` | Pull requests, not drafts, that change its files | GitHub's dependency review, govulncheck, npm registry signatures | `go tool govulncheck ./...`, `npm audit signatures` in `client/` |
@@ -162,6 +163,13 @@ Kinds of things in the game, such as boat types, are data in
 `internal/catalog/` and the client's copy in `client/src/catalog/`, with
 types for both. Edit the YAML and run the tool; never edit the generated
 files. Code reads a kind's properties, never its id.
+
+The world's values are `shared/catalog/world.yaml`: how a world is made
+and how a boat meets its ground (see [The world](#the-world)). The island
+names under `shared/catalog/names/` are the server's alone: the tool checks
+them and writes them to `internal/names/names.gen.json`, never into the
+client's catalog. The id check covers the world's biomes and surfaces as it
+does the top-level kinds.
 
 A boat's `physics` object holds every number its physics needs, in groups
 (`hull`, `rig`, `foils`, `sailor`, `rates`), in SI units with angles in
@@ -206,6 +214,10 @@ the layout version; the client refuses a module whose version differs.
 - `SeaParams`: the catalog's sea values. The client writes them with
   `writeSeaParams` and calls `seaPrepare`, before `prepare`; the server
   calls `physics.PrepareSea` (`catalog.Prepare` does both, in order).
+- `GroundParams`: the catalog's grounding values, each surface's friction
+  by its index; the client writes them and calls `groundPrepare`. The
+  ground and the shelter themselves are not records: the module holds their
+  chunks (see [The world](#the-world)).
 - `Out`: what a step derives for drawing and instruments (the apparent wind
   at the masthead and the sail, each sail strip's angle of attack and flow,
   the sail's and foils' forces, leeway, speed and course over ground, the
@@ -739,8 +751,9 @@ The behaviour tests say what must stay true
 (`go test ./internal/physics -run 'BoatsBump|DirtyAir|Shadow|Contact|Articles' -v`):
 boats bump at every crossing angle and part, the wake follows the apparent
 wind, and dirty air costs a boat a share of its way to windward (logged in
-three winds). The snapshot is version 8: a change to the courses, the
-pairs or the control words is a new version, and a reset at the deploy.
+three winds). The snapshot is version 9 (8 with the pilot word, 9 with the
+time aground): a change to the courses, the pairs or the control words is a
+new version, and a reset at the deploy.
 
 ## The autopilot
 
@@ -804,7 +817,7 @@ when both carry the same tick, and otherwise keeps the pair in force a tick
 longer: a read between the two stores costs a late input, never a mismatch.
 A writer that steers by hand stores its word with the autopilot off
 (`Controls.StoreHand`). The frames (`Frame.Pilot`), the input log, the
-digest and checkpoints (snapshot version 8) carry the pilot word.
+digest and checkpoints (snapshot version 8, now 9) carry the pilot word.
 
 What the autopilot remembers is in `State`: `PilotTrim`, `PilotWay` and
 `PilotOrder`, so a replay from the server's state steers as the server did.
@@ -851,6 +864,255 @@ go test ./internal/edge/edgetest -run Traces -update
 (cd client && UPDATE_RECORDING=1 npx vitest run src/sandbox)
 ```
 
+## The world
+
+A world is made from a **seed**: Port Royal's island at the centre, a dozen
+or so landmark islands and about a hundred smaller ones, groups of rocks,
+coasts, shallows, reefs and beaches, as a height or a depth for every
+hexagon of the sea's lattice; every island named; each sea area's fetch,
+the land's shelter for the wind, and where boats start. It is made once,
+when a world first starts, stored in PostgreSQL as its **bundle**, and read
+back at every start after; the same seed and generator version make the
+same world on every machine. Boats run aground on it and stop against its
+land in the physics step, so the page will predict it once it holds the
+land's chunks; phones draw no land yet, so production sails it as open sea
+(`KEEL_LAND=off`).
+
+### The lattice and the chunks
+
+The land is made of the sea's hexagons (`client/src/ocean/hex.ts`):
+flat-topped, 4 m across the flats, corners east and west, one centred on
+the disk's centre, named by axial (q, r). `physics.HexAt` finds the hexagon
+that holds a point by exact comparisons, not by rounding, so every machine
+and the module agree on its edges; `client/src/predict/hex.test.ts` checks
+the drawing's own `hexAt` against it on a million points, and the module
+against Go's on edges and corners (`internal/physics/testdata/hex.json`).
+
+For storing, a hexagon is also a column and a row of a grid of 4,864 by
+4,224, cut into **16 × 16 chunks of 304 columns by 264 rows** (about
+1,053 m by 1,056 m; `physics.ChunkOf`). 32 chunks lie wholly outside the
+disk and hold nothing. A hexagon has two values: its **elevation** in
+decimetres (an `int16`; the sea bed's depth as negative, stored no deeper
+than 40 m; land from 0.3 m to 80 m) and its **surface**, an index into the
+catalog's `world.surfaces` (sand, dune grass, grass, forest, rock, ash,
+scrub, reef; the first is the open sea's bed). The **shelter** has cells of
+8 × 8 hexagons, 38 by 33 to a chunk.
+
+### Making a world
+
+`internal/worldgen` makes it in stages, on one goroutine:
+
+1. **Layout** (`layout.go`). Port Royal's island, 500–600 m across, its
+   centre within 100 m of the disk's. The landmarks, 14 of 250–560 m
+   across, their sizes spread evenly over the range, at least 1.2 km apart.
+   The other islands, 90 of 30–250 m, their areas by **Korčák's law** with
+   b = 0.65, stratified so that each world has the law's counts. Groups of
+   rocks and islets. Each island takes the best of 16 candidate places, the
+   one furthest from the land already placed, with at least 150 m between
+   coasts and none in the calm water (1 NM about the centre); then islets
+   fill the widest gaps left. Each island's biome is drawn by its zone's
+   weights.
+2. **Islands** (`island.go`), each on its own piece of the lattice, from
+   its own stream, so it comes out the same whatever its neighbours. Its
+   shape is a field: overlapping lobes, each an anisotropic
+   Euclidean-squared distance, bays bitten into the coast, the first
+   octaves of noise added, the whole **domain-warped**, a finer noise added
+   after; offset so that its area is a circle's of its radius. Its height
+   rises inland by its biome's profile (rolling hills, ridges, a cone and a
+   crater); cliffs stand on a share of its coast, beaches on the rest; then
+   **thermal weathering** to a talus of 35° and a few thousand **rain
+   droplets** wear it. A landmark's shape is tried up to ten times for a
+   shore of the validator's indented-ness.
+3. **The sea bed** (`seabed.go`): **Dean's profile**, h = A x^(2/3), to 8 m,
+   then the shelf at 1:15 to the deep, A by biome; its reach varies along
+   the coast so that the shallows are not rings. Tropical islands get a
+   **fringing reef** (a crest 0.3–0.5 m deep, a flat behind it, passes
+   through it), sandy ones **bars**, rocky and volcanic ones **stacks**.
+4. **Raster** (`raster.go`): each chunk from the islands that reach it, the
+   higher ground winning where two meet.
+5. **Derived** (`derived.go`): each sea area's **fetch** for a wind from
+   each of 16 directions (nine radials 3° apart, upwind to the first land,
+   capped at `weather.sea.fetchCap`; the rim ends nothing); the **shelter**
+   (below); the **start area**: of 16 directions from Port Royal's centre,
+   the stretch of water off its coast where the spawn grid's rows, laid
+   along the coast, hold all 4,096 places in the fewest rows, each place in
+   2 m of water and 10 m from land.
+6. **Names** (`names.go`), from `shared/catalog/names` (below).
+7. **The validator** (`validate.go`): Port Royal's width, height, cliffs
+   (at least a third of its coast) and the centre on it; no other land in
+   the calm water; the start area's 4,096 places; every landmark reachable
+   from the start in 2 m of water; no water inside the mist band further
+   than 1.5 km from land; land 0.7–2.5% of the disk; each size class within
+   30% of the layout's expectation; every landmark's shoreline development
+   index at least 1.4; every island named, none twice; land 0.3–80 m. A
+   world that fails a rule is made again from the next seed (a hash of the
+   seed and the attempt), up to 20 times; the report lists every attempt
+   and rule.
+
+Every random number comes from a stream of its own, a PCG keyed by the seed
+and the stage or the island, so a change to one stage moves no other's
+draws. The generator follows the physics package's float rules (the
+physics package's sines and logarithms, every product added to written
+`float64(…)`, floats made integers only through `toInt32`); `tools/physics
+-check` holds it to them, its disassembly for arm64 and amd64 v3 included.
+**`worldgen.Version`** rises whenever any seed's world changes:
+`internal/worldgen/testdata/digests.json` holds eight seeds' digests, and
+the tests fail on a change without a new version. CI checks them on amd64
+(also built `GOAMD64=v3`) and arm64.
+
+### The biomes
+
+Each biome is an island's terrain, in `shared/catalog/world.yaml`'s
+`biomes`, drawn by zone (centre within 1.6 NM, middle to 3.2 NM, the rim
+beyond):
+
+| Biome | Height | Shape | Coast | Sea bed |
+|-------|--------|-------|-------|---------|
+| sandy | 1–5 m | long, curved | beaches all round | wide shallows, Dean's A 0.1, bars |
+| tropical | 15–55 m | ridged, high middle | beaches in bays | a fringing reef |
+| wooded | 15–50 m | rolling hills, bays | beaches, low cliffs on a tenth to a third | A 0.2 |
+| rocky | 10–70 m | steep, lobed | cliffs on 60–90%, stacks | A 0.6, rock |
+| volcanic | 30–80 m | a cone, half with a crater | black sand, some cliffs, stacks | A 0.6, rock |
+
+To tune a biome: change its values, look at seeds in the preview, then
+raise `worldgen.Version` and write the digests again:
+
+```sh
+go run ./tools/worldgen-preview -seeds 6 -from 1
+go test ./internal/worldgen -run Digests -update
+go test ./internal/worldgen -run '^TestSeeds$' -seeds 100 -v   # what pr.worldgen runs
+```
+
+### Names
+
+`shared/catalog/names` holds the names: whole names for single islands,
+names for groups, generics and the specifics that combine with them, and an
+avoid list. `go run ./tools/catalog` checks them (columns, every tag against
+the world's sizes, biomes, features, zones and tones, no name twice, the
+avoid list against every name and every combination) and writes them,
+parsed, to `internal/names/names.gen.json`; they are the server's alone and
+never in the client's catalog. Port Royal keeps its name; no name is given
+twice in a world; a name must fit the island's size class, biome and the
+features its terrain shows (`world.names.features`: cliffs, a peak, twin
+summits, stacks, a reef, a lagoon; names that need birds, caves or wrecks
+wait for later), its zone preferred, then drawn with each tone weighted by
+zone (`world.names.tones`), at most one grim name, phantom names only in the
+mist band. Whole names come first, then a specific and a generic.
+Neighbours may share a name (Great and Little, …), an islet may be the Calf
+of its neighbour, and names written as a pair go together.
+
+### Fetch and shelter
+
+The simulation gives each sea area the fetch for its wave wind's direction,
+linear between the two nearest of its 16 (`physics.LandSea`), so the sea is
+smaller behind land; an area of open water keeps the cap, as before.
+
+The **shelter** is worked out once, from the land's heights, by the physics
+package (`physics.ShelterDirection`): in the lee of land of height H the
+wind's speed falls to 0.3 within three heights and is whole again at ten;
+beside the lee, within two heights of the wind's path, it is up to 30%
+faster; land on one side turns it toward the other, up to 20°. A cell's
+table holds a factor and a turn for each of 16 directions, in two bytes,
+and travels in its chunk. `physics.WindAt(t, x, y, shelter)` applies it
+after the gusts and before the refuge, bilinear between cells' centres and
+linear between directions; nil, or a chunk not held, is open water, and the
+wind is bit for bit what it was.
+
+### Running aground
+
+`physics.Step` takes a `*physics.Ground`, a view of the chunks' elevations,
+nil for open water (and a chunk the view lacks is deep water). As a step
+begins it reads the bed under the bow, middle, stern, board and rudder:
+
+- where the water is shallower than a foil reaches, the foil is **pushed
+  up**, and only what is left of it in the water works: leeway grows;
+- where it is shallower than the hull, the hull **drags on the bottom**,
+  Coulomb's friction of its surface (`world.surfaces`' `friction`: sand 0.4,
+  rock 0.6, reef 0.5) times the weight it carries;
+- after the substeps, the hull's outline against each land hexagon about it,
+  by separating axes as between two hulls, an impulse against a body that
+  does not move (restitution 0.3, friction 0.2) and the hull pushed out:
+  after a step no hull is in land.
+
+`Out` gives `Depth` (the water under the board), `Aground` (0 afloat, 1 on
+the bottom, 2 against land) and `PushedOff`. A boat aground and slower than
+0.2 m/s for 5 s is **pushed off** by its sailor (`State.GroundTimer` counts
+the steps): moved to the nearest hexagon within 40 m with 1 m of water and
+no land beside it, or on a shore too gentle for that the deepest within
+reach, at rest, pointing 10° off close-hauled on the tack that leads away
+from where it lay. Every value is in `world.yaml`'s `grounding`. The
+scripted sailors do not steer round land: one aground for 30 s leaves and
+joins again. `go test ./internal/physics -run 'Beach|Cliff|LeeShore'` sails
+onto a beach, into a cliff and off a lee shore.
+
+### In the module
+
+The module holds nine chunks of ground and of shelter (`groundChunk`,
+`shelterChunk`: give a slot to a chunk by number and fill its memory),
+`groundUse` and `shelterUse` say whether steps and `windAt` read them, and
+`hexAt` answers for the lattice. The page does not use them yet. The golden
+scenarios `ground-beach`, `ground-reef`, `ground-cliff`, `ground-pushoff`
+and `lee` sail on terrains Go writes to
+`internal/physics/testdata/ground/*.terrain` (`go test ./internal/physics
+-run Golden -update`), natively, under Node and on the developer page.
+
+### The bundle
+
+A world's bundle is its **records** (the islands, groups, fetch table and
+start area, as JSON), its **report**, and **256 chunk payloads**: gzip at
+level 6 of a header (magic, format, chunk, generator version, world id)
+then the elevations column by column, each as its difference from the one
+before, the surfaces, and the shelter (a bitmap of the cells with a table,
+and their tables). A payload of another world, chunk, format or generator
+is refused. In PostgreSQL (`00005_world_bundle.sql`): `world.seed` and
+`world.generator`; `world_bundle`, one row a world; `world_chunk`, a
+payload and its SHA-256 a chunk, stored out of line and not compressed
+again; `place`, each island and group with its name. All partitioned by
+world.
+
+`keel serve` reads the active world's bundle as it starts. A world with
+none gets one first: from its seed, or `KEEL_WORLD_SEED`, or one drawn
+from `crypto/rand`; made on one goroutine while the heartbeat beats and
+`/readyz` says "waiting for the world's terrain"; stored in one
+transaction fenced by the lease, as the world's writes are; then read back.
+A world's terrain is never made again. The input log's header names the
+world's seed, generator and terrain digest (format 7); `keel replay` makes
+the terrain again from them when its generator is the log's, and checks the
+digest, or reads it from `-world FILE`.
+
+```sh
+go run ./cmd/keel worldgen -seed 7                    # the report's summary; exits 1 if no attempt passed
+go run ./cmd/keel worldgen -seed 7 -out .dev/7.bundle  # and the bundle as a file
+go run ./cmd/keel worldgen -seed 7 -report            # the full report, as JSON
+go run ./cmd/keel replay -world .dev/7.bundle keel.log
+```
+
+### The preview
+
+```sh
+go run ./tools/worldgen-preview -seed 7             # .dev/worldgen/chart.svg and index.html
+go run ./tools/worldgen-preview -bundle .dev/7.bundle
+go run ./tools/worldgen-preview -seeds 6 -from 1    # seeds 1 to 6 side by side: seeds.html
+go run ./tools/worldgen-preview -seed 7 -island 3   # island 3 at the lattice's resolution
+```
+
+The chart shows land by height and the sea by depth, coasts, the names
+(a group's, not its rocks'), the start area, the calm water's, the mist
+band's and the edge's rings, and a scale; the page adds the rules, every
+island and group, and layers for the surfaces, each area's fetch and the
+shelter for a wind from a chosen direction. Its tests hold seed 7's chart
+and page to digests (`go test ./tools/worldgen-preview -update` writes them
+again).
+
+### Land on and off
+
+`KEEL_LAND=off` (production's, until phones draw land) makes, stores and
+loads the terrain, and sails it as open sea: no grounding, the open sea's
+fetch, no shelter. `KEEL_WORLD_SEED` is the seed of a world whose terrain is
+not made yet; the local cluster sets 1, and `tools/dev` passes both through
+from its environment. Land shows nowhere yet: on the local cluster, find it
+by the developer panel's position and the preview's chart.
+
 ## Waves
 
 The sea moves boats. The waves longer than about 8 m, which the 4 m tiles can
@@ -886,9 +1148,10 @@ continuous: every place sums the same sines, so the sea is one surface and
 keeps its height where areas meet.
 
 Each area's wind is its **wave wind**, the mean wind at its centre averaged
-over the last minutes (see [The wave wind](#the-wave-wind)), and until land
-shelters the water every area has the fetch of open water
-(`weather.sea.fetchCap`, 6 NM): 10 knots raise a boat band of about 0.25 m, 12 knots 0.33 m, 20 knots 0.6 m, 34 knots
+over the last minutes (see [The wave wind](#the-wave-wind)), and its fetch
+for that wind's direction, which the land shortens (see [Fetch and
+shelter](#fetch-and-shelter)); over open water, and with `KEEL_LAND=off`,
+it is the cap (`weather.sea.fetchCap`, 6 NM): 10 knots raise a boat band of about 0.25 m, 12 knots 0.33 m, 20 knots 0.6 m, 34 knots
 1 m.
 
 Time is the tick. A wave's phase from its frequency is the fraction of
@@ -1341,12 +1604,15 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
+| `KEEL_LAND` | `on` | `off` sails the world's terrain as open sea: made, stored and loaded, but no grounding, shelter or fetch (production's, until phones draw land; see [The world](#the-world)) |
+| `KEEL_WORLD_SEED` | none (drawn at random) | The seed a world's terrain is made from when it has none; the local cluster sets 1 |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
 sets the database's URL, the internal address, `KEEL_TRACE_DIR=.dev/traces` and
 `KEEL_REPLAY_DIR=.dev/replays` (keeping the last hour), passes
-`KEEL_DEV_SAILORS` through, and prints the internal URLs:
+`KEEL_DEV_SAILORS`, `KEEL_LAND` and `KEEL_WORLD_SEED` through, and prints the
+internal URLs:
 
 ```sh
 KEEL_DEV_SAILORS=1000 go run ./tools/dev
@@ -1362,7 +1628,9 @@ database has newer ones. Then it waits for the **simulation's lease**, so
 that only one process ever runs the world (`/readyz` says "waiting for the
 simulation lease (held by …)"). It loads the active world, making world 1
 (epoch 1 January 2026) when there is none, and the world's epoch sets the
-tick clock; restores the world from its checkpoint when it can; then come
+tick clock; reads its terrain, making it first if the world has none
+(`/readyz` says "waiting for the world's terrain"; see [The
+world](#the-world)); restores the world from its checkpoint when it can; then come
 the world, the tick loop and the world's writer, then the public listeners,
 and only then is it ready. On `SIGTERM` or Ctrl-C it is no longer ready at
 once, rings the bell and stops in the order [Restarts and
@@ -1486,7 +1754,10 @@ digest places within a second, and exits 1; `-dump` at that tick from a good
 and a bad run shows which field differs. A log replays faithfully only under
 the build, catalog and physics layout that made it, which its header names
 (`keel replay` warns when they differ): check out that build to replay a
-log from a bug report.
+log from a bug report. The header also names the world's seed, generator
+and terrain digest: `keel replay` makes the terrain again when its
+generator is the log's, and otherwise needs `-world FILE`, a bundle `keel
+worldgen -out` wrote.
 
 `internal/sim/testdata/replays/fixture.log` is a log recorded once and
 committed; CI replays it on amd64 and arm64, with one worker and with eight.
