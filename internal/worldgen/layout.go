@@ -32,6 +32,7 @@ type spot struct {
 	radius float64
 	biome  int32
 	group  int32
+	filler bool // an islet put in a gap, not one of Korčák's
 }
 
 // reachOf is how far an island's land may reach from its centre: its lobes
@@ -177,7 +178,7 @@ func (c *config) fillGaps(s stream, spots *[]spot) {
 				return
 			}
 		}
-		*spots = append(*spots, spot{kind: kindIsland, x: fx, y: fy, radius: r, biome: c.drawBiome(s, fx, fy), group: -1})
+		*spots = append(*spots, spot{kind: kindIsland, x: fx, y: fy, radius: r, biome: c.drawBiome(s, fx, fy), group: -1, filler: true})
 	}
 }
 

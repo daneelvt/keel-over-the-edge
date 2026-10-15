@@ -96,6 +96,9 @@ type Bundle struct {
 	// Digest is the SHA-256 of the records and every chunk's ground and
 	// shelter: the same for the same seed and Version on every machine.
 	Digest [32]byte
+	// made is the world as the validator saw it, with its islands' own
+	// grids: kept by generate for the tests, dropped by Generate.
+	made *world
 }
 
 // Report says how a world was made: its attempts, what it holds, each
@@ -142,6 +145,7 @@ func Generate(seed uint64, cat *catalog.Catalog, db *names.DB) (*Bundle, error) 
 		}
 		attempts = append(attempts, Attempt{Seed: s, Failed: failed})
 		b.Report.Attempts = attempts
+		b.made = nil
 		if len(failed) == 0 {
 			b.Digest = b.digest()
 			return b, nil
@@ -217,7 +221,8 @@ func (c *config) generate(seed uint64) *Bundle {
 	b.Report.LandShare = c.landShare(b.Ground)
 	b.Report.Open = c.largestOpen(k)
 	allNames := append(append([]string{}, islandNames...), groupNames...)
-	b.Report.Rules = c.validate(&world{islands: islands, names: allNames, groups: groups, ground: b.Ground, coarse: k, start: b.Start})
+	b.made = &world{islands: islands, names: allNames, groups: groups, ground: b.Ground, coarse: k, start: b.Start}
+	b.Report.Rules = c.validate(b.made)
 	lap("validate")
 	return b
 }

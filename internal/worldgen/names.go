@@ -110,7 +110,8 @@ type namer struct {
 	used      map[string]bool // names given, in lower case
 	specifics map[string]bool // specifics used
 	toneCount map[string]int
-	pending   []string // partners waiting for an island they fit
+	pending   []string        // partners waiting for an island they fit
+	wholes    map[string]bool // the whole names, in lower case
 }
 
 // fits is what an island offers a name.
@@ -242,7 +243,9 @@ func (n *namer) combined(f *fits, loose bool) string {
 				continue
 			}
 			name := names.Combine(g, sp.Specific)
-			if !n.free(name) {
+			// A combination that makes a whole name would escape the whole
+			// name's own tags.
+			if !n.free(name) || n.wholes[strings.ToLower(name)] {
 				continue
 			}
 			all = append(all, option{name, sp.Specific, sp.Tone, tagged(sp.Zones, zoneNames[f.zone])})
@@ -279,12 +282,22 @@ func (n *namer) prefixable(name string) bool {
 	return true
 }
 
-// nameIslands names every island; the main port's is first.
-func (c *config) nameIslands(seed uint64, islands []*made) []string {
-	n := &namer{c: c, s: newStream(seed, streamNames), used: map[string]bool{}, specifics: map[string]bool{}, toneCount: map[string]int{}}
+// newNamer is a namer for one world, drawing from its seed's stream.
+func newNamer(c *config, seed uint64) *namer {
+	n := &namer{c: c, s: newStream(seed, streamNames), used: map[string]bool{}, specifics: map[string]bool{},
+		toneCount: map[string]int{}, wholes: map[string]bool{}}
 	for _, t := range c.names.Tones {
 		n.tones = append(n.tones, tone{word: t.Word, weight: [zones]float64{t.Centre, t.Middle, t.Rim}, most: t.Most, phantom: t.Phantom})
 	}
+	for i := range c.db.Islands {
+		n.wholes[strings.ToLower(c.db.Islands[i].Name)] = true
+	}
+	return n
+}
+
+// nameIslands names every island; the main port's is first.
+func (c *config) nameIslands(seed uint64, islands []*made) []string {
+	n := newNamer(c, seed)
 	out := make([]string, len(islands))
 	if len(islands) == 0 {
 		return out
