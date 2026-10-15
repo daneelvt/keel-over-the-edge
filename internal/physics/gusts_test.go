@@ -107,7 +107,7 @@ func TestGustsKeepTheMean(t *testing.T) {
 				}
 				a := 2 * math.Pi * rng.Float64()
 				var pt WindPoint
-				WindPointAt(&at, radius*math.Sin(a), radius*math.Cos(a), &pt)
+				WindPointAt(&at, radius*math.Sin(a), radius*math.Cos(a), &pt, nil)
 				sum += pt.Factor
 				most, least = max(most, pt.Factor), min(least, pt.Factor)
 			}
@@ -275,7 +275,7 @@ func TestGustsThroughAChange(t *testing.T) {
 			WeatherAt(weatherOf(p, a, b), &at, b.Begin+math.Round(f*change))
 			for range points {
 				var pt WindPoint
-				WindPointAt(&at, (rng.Float64()-0.5)*8000, (rng.Float64()-0.5)*8000, &pt)
+				WindPointAt(&at, (rng.Float64()-0.5)*8000, (rng.Float64()-0.5)*8000, &pt, nil)
 				sq += pt.Gust * pt.Gust
 			}
 		}

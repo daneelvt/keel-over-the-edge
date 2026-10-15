@@ -120,7 +120,7 @@ func fillWindCase(c *windCase, w *Weather) {
 	c.Values = c.Values[:0]
 	for _, pt := range c.Points {
 		var v WindPoint
-		WindPointAt(&at, c.Origin[0]+pt[0], c.Origin[1]+pt[1], &v)
+		WindPointAt(&at, c.Origin[0]+pt[0], c.Origin[1]+pt[1], &v, nil)
 		c.Values = append(c.Values, [6]string{toHex(v.Speed), toHex(v.From), toHex(v.MeanSpeed), toHex(v.MeanFrom), toHex(v.Gust), toHex(v.Factor)})
 	}
 	var f GustFrame

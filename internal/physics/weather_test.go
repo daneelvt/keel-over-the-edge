@@ -114,7 +114,7 @@ func windAt(w *Weather, x, y, tick float64) WindPoint {
 	var t WeatherTick
 	WeatherAt(w, &t, tick)
 	var p WindPoint
-	WindPointAt(&t, x, y, &p)
+	WindPointAt(&t, x, y, &p, nil)
 	return p
 }
 
@@ -157,7 +157,7 @@ func TestSteadySpell(t *testing.T) {
 		tick := math.Floor(rng.Float64() * (1 << 52))
 		var at WeatherTick
 		WeatherAt(w, &at, tick)
-		if e := WindAt(&at, x, y); e.WindSpeed != speed || e.WindFrom != from {
+		if e := WindAt(&at, x, y, nil); e.WindSpeed != speed || e.WindFrom != from {
 			t.Fatalf("at (%.0f, %.0f), tick %.0f: %+v, the spell's %v from %v", x, y, tick, e, speed, from)
 		}
 	}
@@ -356,7 +356,7 @@ func TestRefuge(t *testing.T) {
 						continue
 					}
 					var pt WindPoint
-					WindPointAt(&at, x, y, &pt)
+					WindPointAt(&at, x, y, &pt, nil)
 					meanMost, windMost = max(meanMost, pt.MeanSpeed), max(windMost, pt.Speed)
 				}
 			}
@@ -410,7 +410,7 @@ func TestWindAllocatesNothingNorNaN(t *testing.T) {
 	var e Env
 	if n := testing.AllocsPerRun(1000, func() {
 		WeatherAt(w, &at, worldTick)
-		e = WindAt(&at, 400, -800)
+		e = WindAt(&at, 400, -800, nil)
 	}); n != 0 {
 		t.Errorf("the wind allocates %v times", n)
 	}
@@ -439,7 +439,7 @@ func BenchmarkWindAt(b *testing.B) {
 			sum := 0.0
 			i := 0
 			for b.Loop() {
-				sum += WindAt(&at, xs[i&65535], xs[(i+7)&65535]).WindSpeed
+				sum += WindAt(&at, xs[i&65535], xs[(i+7)&65535], nil).WindSpeed
 				i++
 			}
 			_ = sum

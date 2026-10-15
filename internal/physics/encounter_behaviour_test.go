@@ -69,7 +69,7 @@ func (f *fleetSail) step() {
 		if !math.IsNaN(f.steer[i]) {
 			f.c[i].Helm = steer(f.steer[i], &f.s[i])
 		}
-		Step(&f.s[i], &f.c[i], &e, nil, f.b, &f.o)
+		Step(&f.s[i], &f.c[i], &e, nil, nil, f.b, &f.o)
 	}
 	f.ts = f.ts[:0]
 	for i := range n {

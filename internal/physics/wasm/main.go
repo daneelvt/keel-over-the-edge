@@ -297,11 +297,11 @@ func seaDrawAt(tick float64) { physics.SeaAt(&waves, &drawTime, tick) }
 //go:wasmexport step
 func step() {
 	if use < 0 {
-		physics.Step(&state, &control, &env, nil, &prepared, &out)
+		physics.Step(&state, &control, &env, nil, nil, &prepared, &out)
 		return
 	}
 	sea := physics.Sea{Waves: &waves, Window: &windows[use].win, Tick: &stepTime}
-	physics.Step(&state, &control, &env, &sea, &prepared, &out)
+	physics.Step(&state, &control, &env, &sea, nil, &prepared, &out)
 }
 
 // waveUnder writes to wave the sea under a hull at (x, y) heading heading,
@@ -399,7 +399,7 @@ func windAt(tick float64) {
 		physics.WeatherAt(&weather, &stepWeather, tick)
 		stepFresh = true
 	}
-	env = physics.WindAt(&stepWeather, state.X, state.Y)
+	env = physics.WindAt(&stepWeather, state.X, state.Y, nil)
 }
 
 // windDrawAt sets the time windPoint, windSample and gustFrameAt answer
@@ -412,7 +412,7 @@ func windDrawAt(tick float64) { physics.WeatherAt(&weather, &drawWeather, tick) 
 // time windDrawAt set.
 //
 //go:wasmexport windPoint
-func windPoint(x, y float64) { physics.WindPointAt(&drawWeather, x, y, &wind) }
+func windPoint(x, y float64) { physics.WindPointAt(&drawWeather, x, y, &wind, nil) }
 
 //go:wasmexport windValues
 func windValuesAddr() uint32 { return addr(unsafe.Pointer(&windValues)) }
@@ -424,7 +424,7 @@ func windValuesAddr() uint32 { return addr(unsafe.Pointer(&windValues)) }
 func windSample(n uint32) {
 	var p physics.WindPoint
 	for i := uint32(0); i < n && i < sampleCapacity; i++ {
-		physics.WindPointAt(&drawWeather, samplePoints[2*i], samplePoints[2*i+1], &p)
+		physics.WindPointAt(&drawWeather, samplePoints[2*i], samplePoints[2*i+1], &p, nil)
 		v := windValues[windValuesEach*i : windValuesEach*(i+1)]
 		v[0], v[1], v[2], v[3], v[4], v[5] = p.Speed, p.From, p.MeanSpeed, p.MeanFrom, p.Gust, p.Factor
 	}

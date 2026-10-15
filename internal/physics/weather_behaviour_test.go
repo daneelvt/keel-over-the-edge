@@ -129,7 +129,7 @@ func beat(t *testing.T, w *Weather, x, y, dir, seconds float64, headers bool) (m
 	var felt, slow, last float64
 	for i := range int(seconds * StepsPerSecond) {
 		WeatherAt(m.wx, &m.wt, m.tick)
-		off := wrapAngle(WindAt(&m.wt, m.s.X, m.s.Y).WindFrom - dir)
+		off := wrapAngle(WindAt(&m.wt, m.s.X, m.s.Y, nil).WindFrom - dir)
 		if i == 0 {
 			felt, slow = off, off
 		}
@@ -221,7 +221,7 @@ func TestCapsizeInAGust(t *testing.T) {
 		var at WeatherTick
 		for range 600 * StepsPerSecond {
 			WeatherAt(w, &at, m.tick)
-			m.e = WindAt(&at, m.s.X, m.s.Y)
+			m.e = WindAt(&at, m.s.X, m.s.Y, nil)
 			if !gusts {
 				m.e.WindSpeed, m.e.WindFrom = MeanWindAt(&at, m.s.X, m.s.Y)
 			}

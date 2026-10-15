@@ -266,8 +266,8 @@ func TestNoSeaNoChange(t *testing.T) {
 		setFields(&e, sc.Env)
 		s2 = s
 		for i := range min(sc.Steps, 1200) {
-			Step(&s, &c, &e, nil, b, &o)
-			Step(&s2, &c, &e, calm.at(7.4e8+float64(i)), b, &o2)
+			Step(&s, &c, &e, nil, nil, b, &o)
+			Step(&s2, &c, &e, calm.at(7.4e8+float64(i)), nil, b, &o2)
 			if s != s2 || o != o2 {
 				t.Fatalf("%s, step %d: a calm sea differs from flat water:\n flat %+v\n calm %+v", sc.Name, i, s, s2)
 			}
@@ -451,7 +451,7 @@ func TestRandomSeasStayFinite(t *testing.T) {
 			}
 			win.Seal()
 		}
-		Step(&s, &c, &e, sea.at(tick), b, &o)
+		Step(&s, &c, &e, sea.at(tick), nil, b, &o)
 		tick++
 		for _, v := range append(fields(&s), fields(&o)...) {
 			if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -499,9 +499,9 @@ func TestMirrorSymmetryInWaves(t *testing.T) {
 		for i := range 1800 {
 			tick := 7.4e8 + float64(i)
 			ctl.Helm = steer(c.heading*deg, &s)
-			Step(&s, &ctl, &e, sea.at(tick), b, &o)
+			Step(&s, &ctl, &e, sea.at(tick), nil, b, &o)
 			mc := Control{Helm: -ctl.Helm, Sheet: ctl.Sheet}
-			Step(&m, &mc, &me, twin.at(tick), b, &o)
+			Step(&m, &mc, &me, twin.at(tick), nil, b, &o)
 			p, q := s, mirror(m)
 			for _, d := range []float64{
 				p.X - q.X, p.Y - q.Y, math.Remainder(p.Heading-q.Heading, 2*math.Pi), p.Surge - q.Surge,
@@ -537,7 +537,7 @@ func TestSubstepsConvergeInWaves(t *testing.T) {
 			var out []State
 			for i := range 600 {
 				ctl.Helm = steer(c.heading*deg, &s)
-				step(&s, &ctl, &e, sea.at(7.4e8+float64(i)), b, &o, n)
+				step(&s, &ctl, &e, sea.at(7.4e8+float64(i)), nil, b, &o, n)
 				out = append(out, s)
 			}
 			return out
@@ -571,7 +571,7 @@ func TestStepInWavesAllocatesNothing(t *testing.T) {
 	e := Env{WindSpeed: 17, WindFrom: 2}
 	var o Out
 	tick := 7.4e8
-	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, sea.at(tick), b, &o); tick++ }); n != 0 {
+	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, sea.at(tick), nil, b, &o); tick++ }); n != 0 {
 		t.Errorf("a step in waves allocates %v times", n)
 	}
 }

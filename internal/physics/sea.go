@@ -194,6 +194,34 @@ func (w *Waves) OpenSea(speed, from float64) SeaInput {
 	return SeaInputOf(speed, from, w.fetchCap)
 }
 
+// FetchDirections is how many directions an area's fetch is known for,
+// from north clockwise.
+const FetchDirections = 16
+
+// Fetch is an area's fetch for a wind from each of FetchDirections
+// directions: the open water upwind of its centre, m.
+type Fetch [FetchDirections]float64
+
+// FetchFor is an area's fetch for a wind from from: linear between the two
+// nearest directions it is known for.
+func FetchFor(f *Fetch, from float64) float64 {
+	turns := float64(wrapAngle(from)*(FetchDirections/(2*math.Pi))) + FetchDirections
+	k0 := math.Floor(turns)
+	t := turns - k0
+	k := toInt32(k0) % FetchDirections
+	return lerp(t, f[k], f[(k+1)%FetchDirections])
+}
+
+// LandSea is the inputs of an area under a wind whose fetch the land
+// limits: its fetch for the wind's direction, never more than the
+// catalog's cap.
+func (w *Waves) LandSea(speed, from float64, f *Fetch) SeaInput {
+	return SeaInputOf(speed, from, min2(FetchFor(f, from), w.fetchCap))
+}
+
+// FetchCap is the fetch of open water, m.
+func (w *Waves) FetchCap() float64 { return w.fetchCap }
+
 // SeaAreaOf is the column of the area whose centre is nearest a point x
 // metres east of the world's centre, or the row of the one nearest a point
 // that far north: the middle area is SeaAreas / 2. It is not clamped to the

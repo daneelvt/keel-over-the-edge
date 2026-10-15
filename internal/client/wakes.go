@@ -97,7 +97,7 @@ func (w *Wakes) Shadow(e *physics.Env, x, y float64, tick int64, weather *physic
 	for i := range n {
 		slot := w.order[i]
 		px, py, vx, vy := w.place(slot, at)
-		physics.WindPointAt(&w.wind, px, py, &p)
+		physics.WindPointAt(&w.wind, px, py, &p, nil)
 		pose := &w.pose[slot]
 		wake := physics.WakeAt(px, py, pose[0], pose[1], pose[2], vx, vy, p.Speed, p.From, kind, enc)
 		w.src.Consider(&wake, int32(i), x, y, enc)

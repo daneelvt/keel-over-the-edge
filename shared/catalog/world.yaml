@@ -1,0 +1,344 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The world's numbers: how a world is made from its seed, and how a boat
+# meets its ground.
+#
+# Starting values, to be judged seed by seed in the preview
+# (go run ./tools/worldgen-preview). A change that changes any seed's world
+# must raise worldgen.Version, which the generator's snapshot tests enforce.
+world:
+  disk:
+    radius: 8334 # m: the edge of the world
+    mist: 4.2 # nautical miles: the mist band begins
+
+  # Where on the disk a place is: the centre round the main port, the
+  # middle waters, and the rim beyond.
+  zones:
+    centre: 1.6 # nautical miles
+    middle: 3.2 # nautical miles
+
+  # The main port's island, at the centre of every world, about the same
+  # size every time: about 0.3 nautical miles across, wooded, with cliffs on
+  # part of its coast. No other land but its own rocks lies in its calm
+  # water.
+  mainPort:
+    name: Port Royal
+    biome: wooded
+    across: [500, 600] # m
+    height: [30, 70] # m
+    cliffs: 0.4 # share of its coast: at least a third
+    offset: 100 # m: its centre lies within this of the disk's
+    calm: 1 # nautical miles
+    rocks: [2, 5] # stacks off its coast
+
+  # Islands. A dozen or so landmarks, worth a voyage, are placed first;
+  # then the rest, whose areas follow Korčák's law, the number larger than
+  # a falling as a^−b, with b about 0.65 on Mandelbrot's average (Korčák
+  # 1938; Mandelbrot 1975); then groups of rocks and islets. Each new island
+  # takes the best of several candidate places, the one furthest from the
+  # land already placed (Mitchell's best-candidate sampling, a Poisson-disk
+  # pattern; Bridson 2007), with at least a gap between coasts.
+  layout:
+    landmarks: 14
+    landmarkAcross: [250, 560] # m
+    landmarkApart: 1200 # m between their centres
+    landmarkRing: [1.3, 4.1] # nautical miles from the centre
+    islands: 90
+    islandAcross: [30, 250] # m
+    korcak: 0.65
+    islandRing: [1.1, 4.4] # nautical miles
+    gap: 150 # m between coasts
+    candidates: 16
+    groups: [3, 8]
+    groupSize: [3, 12]
+    groupSpread: 220 # m: a group's rocks lie within this of its centre
+    rockAcross: [8, 30] # m
+
+  # Size classes by an island's width, the diameter of a circle of its
+  # area: each holds the islands narrower than below m and no narrower than
+  # the class before's, by the word the names give it.
+  sizes:
+    - { class: rock, below: 30 }
+    - { class: islet, below: 100 }
+    - { class: small, below: 250 }
+    - { class: medium, below: 450 }
+    - { class: large, below: 20000 }
+
+  land: [0.3, 80] # m: the lowest and the highest land
+  # Loose ground stands at its angle of repose, 30–40°; steeper is cliff
+  # (Musgrave, Kolb and Mace 1989).
+  talus: 35 # degrees
+
+  # The sea bed out from a coast: Dean's equilibrium profile, h = A x^(2/3)
+  # at x metres from the shore (Bruun 1954; Dean 1977, 1991), A by the
+  # island's biome, to the closure depth; then the shelf; then the deep.
+  # An island's bed reaches base + perRadius × its radius from its coast, at
+  # most most, and fades into the deep over the last part.
+  seabed:
+    closure: 8 # m
+    shelf: 15 # it falls 1 m in this many
+    deep: 40 # m: below this the bed is stored as this
+    reachBase: 60 # m
+    reachPerRadius: 3
+    reachMost: 900 # m
+    # The bed's reach varies along the coast by this share, so that the
+    # shallows are not rings.
+    reachVaries: 0.4
+
+  # A fringing reef: its crest just awash, a flat behind it, the fore reef
+  # falling outside (reef zonation; Living Oceans Foundation).
+  reef:
+    crest: [0.3, 0.5] # m deep
+    flat: [1, 3] # m deep
+    offshore: [40, 100] # m from the coast
+    fore: 20 # m: the fore reef falls to this depth
+    foreWidth: 60 # m
+    passes: 0.15 # share of the crest open as passes
+
+  # Erosion on each island's own grid: thermal weathering moves ground
+  # steeper than the talus down (Musgrave, Kolb and Mace 1989), and
+  # droplets of rain carve gullies and drop what they carry where the
+  # ground flattens (Beneš and Forsbach 2002).
+  erosion:
+    thermal: 24 # passes
+    droplets: 3000 # the most an island
+    dropletSteps: 40
+    erode: 0.04 # m a step a droplet takes per metre of fall
+    deposit: 0.3 # the share of its load it drops where it stops falling
+
+  # The first biomes, each an island's terrain. Weights by zone; heights in
+  # m; shapes: lobes, each lobe's length over its width, how far the domain
+  # is warped as a share of the island's radius, and bays bitten into the
+  # coast; the height profile:
+  # rise is the exponent of the inland distance, then the shares of rolling
+  # hills, ridges and a cone; crater the chance of one; cliffs the share of
+  # the coast; beach the width of low ground at its other shores, m; dean
+  # Dean's A; reef, bars and stacks the sea bed's features; split the height
+  # share above which the high surface lies.
+  biomes:
+    - id: sandy
+      zones: { centre: 3, middle: 2, rim: 0.5 }
+      height: [1, 5]
+      lobes: [1, 3]
+      elongation: [1.8, 3.5]
+      warp: 0.6
+      bays: [0, 2]
+      rise: 0.5
+      hills: 0.5
+      ridges: 0
+      cone: 0
+      crater: 0
+      cliffs: [0, 0]
+      cliffHeight: [0, 0]
+      beach: 30
+      dean: 0.1
+      reef: false
+      bars: true
+      stacks: [0, 0]
+      split: 0.5
+      surfaces: { beach: sand, low: dune-grass, high: dune-grass, steep: sand, bed: sand }
+    - id: tropical
+      zones: { centre: 3, middle: 2, rim: 0.3 }
+      height: [15, 55]
+      lobes: [2, 4]
+      elongation: [1.1, 1.8]
+      warp: 0.45
+      bays: [1, 3]
+      rise: 1.3
+      hills: 0.25
+      ridges: 0.5
+      cone: 0
+      crater: 0
+      cliffs: [0, 0.1]
+      cliffHeight: [5, 12]
+      beach: 15
+      dean: 0.15
+      reef: true
+      bars: false
+      stacks: [0, 0]
+      split: 0.3
+      surfaces: { beach: sand, low: grass, high: forest, steep: rock, bed: sand }
+    - id: wooded
+      zones: { centre: 2, middle: 3, rim: 2 }
+      height: [15, 50]
+      lobes: [2, 4]
+      elongation: [1.2, 2]
+      warp: 0.5
+      bays: [1, 4]
+      rise: 1
+      hills: 0.5
+      ridges: 0.15
+      cone: 0
+      crater: 0
+      cliffs: [0.1, 0.3]
+      cliffHeight: [5, 15]
+      beach: 10
+      dean: 0.2
+      reef: false
+      bars: false
+      stacks: [0, 2]
+      split: 0.25
+      surfaces: { beach: sand, low: grass, high: forest, steep: rock, bed: sand }
+    - id: rocky
+      zones: { centre: 0.3, middle: 2, rim: 3 }
+      height: [10, 70]
+      lobes: [3, 5]
+      elongation: [1.2, 2]
+      warp: 0.55
+      bays: [2, 5]
+      rise: 0.4
+      hills: 0.25
+      ridges: 0.35
+      cone: 0
+      crater: 0
+      cliffs: [0.6, 0.9]
+      cliffHeight: [5, 30]
+      beach: 0
+      dean: 0.6
+      reef: false
+      bars: false
+      stacks: [2, 8]
+      split: 0.7
+      surfaces: { beach: rock, low: grass, high: rock, steep: rock, bed: rock }
+    - id: volcanic
+      zones: { centre: 0.2, middle: 1.5, rim: 2.5 }
+      height: [30, 80]
+      lobes: [1, 2]
+      elongation: [1, 1.4]
+      warp: 0.35
+      bays: [1, 3]
+      rise: 1
+      hills: 0.1
+      ridges: 0.15
+      cone: 0.75
+      crater: 0.5
+      cliffs: [0.2, 0.5]
+      cliffHeight: [5, 20]
+      beach: 8
+      dean: 0.6
+      reef: false
+      bars: false
+      stacks: [1, 4]
+      split: 0.5
+      surfaces: { beach: ash, low: scrub, high: ash, steep: rock, bed: rock }
+
+  # What the ground is covered with. friction is Coulomb's coefficient of a
+  # hull dragging on it, where it lies under water.
+  surfaces:
+    - { id: sand, friction: 0.4 }
+    - { id: dune-grass, friction: 0.5 }
+    - { id: grass, friction: 0.5 }
+    - { id: forest, friction: 0.5 }
+    - { id: rock, friction: 0.6 }
+    - { id: ash, friction: 0.45 }
+    - { id: scrub, friction: 0.5 }
+    - { id: reef, friction: 0.5 }
+
+  # The fetch of each sea area for a wind from each of 16 directions: the
+  # Shore Protection Manual's effective fetch, the mean of radials a few
+  # degrees apart about the wind, each run upwind to the first land
+  # (Rohweder and others 2012). It is never more than weather.sea.fetchCap,
+  # and only land ends it, not the rim.
+  fetch:
+    radials: 9
+    spread: 3 # degrees between radials
+    step: 8 # m
+
+  # The land's shelter for the wind: in its lee the wind is least within
+  # near times the land's height and whole again at far times it (USDA
+  # NRCS; Cleugh 1998); beside the land, within flank heights of the wind's
+  # path, it is faster by up to speedUp, after 1.6–2.0 h/L over a hill
+  # (Jackson and Hunt 1975); land on one side turns it toward the other.
+  shelter:
+    reach: 800 # m upwind
+    step: 16 # m
+    near: 3
+    far: 10
+    least: 0.3
+    most: 1.3
+    speedUp: 0.3
+    flank: 2
+    turn: 20 # degrees
+    offsets: [24, 48, 96, 192] # m beside the wind's path
+
+  # Where boats start, until the main port has a harbour: the stretch of
+  # water off its coast with the most room, its rows along the coast.
+  start:
+    within: 400 # m: the start area begins within this of the coast
+    depth: 2 # m of water at a place, at least
+    clear: 10 # m from any land
+    spacing: 20 # m between places
+    row: 64 # places to a row
+    places: 4096
+
+  # A boat aground and slower than stillSpeed for stillTime is pushed off
+  # by its sailor into pushDepth of water within pushReach, bow to the
+  # wind. Against land a hull bounces as against another hull.
+  grounding:
+    stillSpeed: 0.2 # m/s
+    stillTime: 5 # s
+    pushDepth: 1 # m
+    pushReach: 20 # m
+    restitution: 0.3
+    friction: 0.2
+
+  # The rules a world must pass; one that fails is made again from the next
+  # seed, at most attempts times.
+  validator:
+    attempts: 20
+    centreOffset: 150 # m: the main port's centre from the disk's, at most
+    landShare: [0.7, 2.5] # percent of the disk
+    counts: 0.3 # each size class within this share of its expected count
+    openWater: 1500 # m: inside the mist band no water is further from land
+    shoreline: 1.4 # a landmark's shoreline development index, at least
+    reachDepth: 2 # m: every landmark reachable from the start in this much water
+
+  # How islands are named, from shared/catalog/names: by size class, biome
+  # and the features the terrain shows, then preferring the island's zone,
+  # then by chance, the tones weighted by zone.
+  names:
+    # The features a name may need, by the word the names give each, and
+    # what shows it, if the terrain can yet: a coast with at least cliffs of
+    # cliff; a summit at least peak m high; two summits each at least twin
+    # of the highest, twinApart m apart; at least stacks stacks off the
+    # coast; a reef; a lagoon behind it at least lagoon m wide. A feature
+    # nothing shows is never shown, and no name that needs it is given.
+    features:
+      - { word: cliffs, cliffs: 0.3 }
+      - { word: peak, peak: 40 }
+      - { word: twin, twin: 0.6, twinApart: 150 }
+      - { word: stack, stacks: 1 }
+      - { word: reef, reef: true }
+      - { word: lagoon, lagoon: 40 }
+      - { word: arch }
+      - { word: birds }
+      - { word: cave }
+      - { word: ruins }
+      - { word: smoke }
+      - { word: spring }
+      - { word: waterfall }
+      - { word: wreck }
+    # Weights of each tone by zone, and how many of it a world may have
+    # (0 for no limit). A name of a phantom tone that belongs only to the
+    # rim is given only in the mist band.
+    tones:
+      - { word: plain, centre: 4, middle: 4, rim: 3, most: 0, phantom: false }
+      - { word: cheerful, centre: 3, middle: 2, rim: 1, most: 0, phantom: false }
+      - { word: wry, centre: 2, middle: 2, rim: 1.5, most: 0, phantom: false }
+      - { word: eerie, centre: 0.2, middle: 1, rim: 3, most: 0, phantom: true }
+      - { word: warning, centre: 0.2, middle: 1, rim: 2.5, most: 0, phantom: false }
+      - { word: grim, centre: 0.05, middle: 0.2, rim: 0.5, most: 1, phantom: false }
+    # Neighbours may share a name, as real charts do: two islands of a
+    # biome within neighbours m take one of the pairs of prefixes, the
+    # larger the first of Great and Little, by chance neighbourShare; an
+    # islet within calf m of a larger island may take the generic whose
+    # form names an island, as the Calf of Man does, by chance calfShare.
+    neighbours: 700 # m
+    neighbourShare: 0.15
+    prefixes: [[Great, Little], [North, South], [East, West], [Inner, Outer]]
+    calf: 300 # m
+    calfShare: 0.3
+    # Names written as a pair, best in the same world: when one is given,
+    # the other goes to the next island it fits.
+    partners:
+      - [Nobody Knows What, Somebody Knows What]
+      - [Poverty Island, Plenty Island]

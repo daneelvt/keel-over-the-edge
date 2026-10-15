@@ -7,6 +7,102 @@ package catalog
 // Path of an art file, relative to the repository's art/ folder.
 type ArtPath string
 
+// A biome: an island's terrain.
+type Biome struct {
+	// Its shallows have sand bars.
+	Bars bool `json:"bars"`
+
+	// Bays bitten into its coast, the fewest and the most.
+	Bays []int `json:"bays"`
+
+	// The width of low ground along its other shores, in m.
+	Beach float64 `json:"beach"`
+
+	// The cliffs' height, in m.
+	CliffHeight []float64 `json:"cliffHeight"`
+
+	// The share of its coast with cliffs.
+	Cliffs []float64 `json:"cliffs"`
+
+	// The share of a cone.
+	Cone float64 `json:"cone"`
+
+	// The chance of a crater in the cone.
+	Crater float64 `json:"crater"`
+
+	// Dean's A of its sea bed, in m^(1/3).
+	Dean float64 `json:"dean"`
+
+	// A lobe's length over its width.
+	Elongation []float64 `json:"elongation"`
+
+	// Its highest point, the least and the most, in m.
+	Height []float64 `json:"height"`
+
+	// The share of rolling hills in its height.
+	Hills float64 `json:"hills"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// The lobes its shape is made of, the fewest and the most.
+	Lobes []int `json:"lobes"`
+
+	// It has a fringing reef.
+	Reef bool `json:"reef"`
+
+	// The share of ridges.
+	Ridges float64 `json:"ridges"`
+
+	// The exponent its height rises by with the distance inland.
+	Rise float64 `json:"rise"`
+
+	// The height, as a share of its highest, above which its high surface lies.
+	Split float64 `json:"split"`
+
+	// Stacks off its coast, the fewest and the most.
+	Stacks []int `json:"stacks"`
+
+	// Surfaces corresponds to the JSON schema field "surfaces".
+	Surfaces BiomeSurfaces `json:"surfaces"`
+
+	// How far its shape is warped, as a share of its radius.
+	Warp float64 `json:"warp"`
+
+	// Zones corresponds to the JSON schema field "zones".
+	Zones BiomeZones `json:"zones"`
+}
+
+// The surfaces a biome's island is covered with.
+type BiomeSurfaces struct {
+	// Beach corresponds to the JSON schema field "beach".
+	Beach ID `json:"beach"`
+
+	// Bed corresponds to the JSON schema field "bed".
+	Bed ID `json:"bed"`
+
+	// High corresponds to the JSON schema field "high".
+	High ID `json:"high"`
+
+	// Low corresponds to the JSON schema field "low".
+	Low ID `json:"low"`
+
+	// Steep corresponds to the JSON schema field "steep".
+	Steep ID `json:"steep"`
+}
+
+// A biome's weight in each zone.
+type BiomeZones struct {
+	// Its weight at the centre.
+	Centre float64 `json:"centre"`
+
+	// In the middle waters.
+	Middle float64 `json:"middle"`
+
+	// At the rim.
+	Rim float64 `json:"rim"`
+}
+
 type Boat struct {
 	// Art corresponds to the JSON schema field "art".
 	Art BoatArt `json:"art"`
@@ -88,6 +184,9 @@ type Catalog struct {
 
 	// Weather corresponds to the JSON schema field "weather".
 	Weather Weather `json:"weather"`
+
+	// World corresponds to the JSON schema field "world".
+	World World `json:"world"`
 }
 
 // Boats meeting: their hulls touching, the wind one takes from another, and the
@@ -215,6 +314,54 @@ const LightPort Light = "port"
 const LightStarboard Light = "starboard"
 const LightStern Light = "stern"
 const LightTricolour Light = "tricolour"
+
+// A feature a name may need, by its word, and what shows it.
+type NameFeature struct {
+	// A coast with at least this share of cliff.
+	Cliffs *float64 `json:"cliffs,omitempty,omitzero"`
+
+	// A lagoon behind a reef at least this wide, in m.
+	Lagoon *float64 `json:"lagoon,omitempty,omitzero"`
+
+	// A summit at least this high, in m.
+	Peak *float64 `json:"peak,omitempty,omitzero"`
+
+	// A reef.
+	Reef *bool `json:"reef,omitempty,omitzero"`
+
+	// At least this many stacks.
+	Stacks *int `json:"stacks,omitempty,omitzero"`
+
+	// Two summits each at least this share of the highest.
+	Twin *float64 `json:"twin,omitempty,omitzero"`
+
+	// And at least this far apart, in m.
+	TwinApart *float64 `json:"twinApart,omitempty,omitzero"`
+
+	// Its word, as the names give it.
+	Word string `json:"word"`
+}
+
+// A tone of names: its weight in each zone, and how many a world may have.
+type NameTone struct {
+	// Its weight at the centre.
+	Centre float64 `json:"centre"`
+
+	// In the middle waters.
+	Middle float64 `json:"middle"`
+
+	// The most names of it in a world; 0 for no limit.
+	Most int `json:"most"`
+
+	// Its names that belong only to the rim are given only in the mist band.
+	Phantom bool `json:"phantom"`
+
+	// At the rim.
+	Rim float64 `json:"rim"`
+
+	// Its word, as the names give it.
+	Word string `json:"word"`
+}
 
 // A star with a name, at its place in the Bright Star Catalogue (J2000).
 type NamedStar struct {
@@ -730,6 +877,15 @@ type Sky struct {
 	Year float64 `json:"year"`
 }
 
+// What the ground is covered with.
+type Surface struct {
+	// Coulomb's coefficient of a hull dragging on it under water.
+	Friction float64 `json:"friction"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+}
+
 // The weather's numbers.
 type Weather struct {
 	// Disk corresponds to the JSON schema field "disk".
@@ -888,5 +1044,368 @@ type WeatherWaveWind struct {
 	WaveTimeConstant float64 `json:"waveTimeConstant"`
 }
 
+// How a world is made from its seed, and how a boat meets its ground.
+type World struct {
+	// The biomes: each an island's terrain.
+	Biomes []Biome `json:"biomes"`
+
+	// Disk corresponds to the JSON schema field "disk".
+	Disk WorldDisk `json:"disk"`
+
+	// Erosion corresponds to the JSON schema field "erosion".
+	Erosion WorldErosion `json:"erosion"`
+
+	// Fetch corresponds to the JSON schema field "fetch".
+	Fetch WorldFetch `json:"fetch"`
+
+	// Grounding corresponds to the JSON schema field "grounding".
+	Grounding WorldGrounding `json:"grounding"`
+
+	// The lowest and the highest land, in m.
+	Land []float64 `json:"land"`
+
+	// Layout corresponds to the JSON schema field "layout".
+	Layout WorldLayout `json:"layout"`
+
+	// MainPort corresponds to the JSON schema field "mainPort".
+	MainPort WorldMainPort `json:"mainPort"`
+
+	// Names corresponds to the JSON schema field "names".
+	Names WorldNames `json:"names"`
+
+	// Reef corresponds to the JSON schema field "reef".
+	Reef WorldReef `json:"reef"`
+
+	// Seabed corresponds to the JSON schema field "seabed".
+	Seabed WorldSeabed `json:"seabed"`
+
+	// Shelter corresponds to the JSON schema field "shelter".
+	Shelter WorldShelter `json:"shelter"`
+
+	// Size classes by an island's width, narrowest first.
+	Sizes []WorldSize `json:"sizes"`
+
+	// Start corresponds to the JSON schema field "start".
+	Start WorldStart `json:"start"`
+
+	// What the ground is covered with; a hexagon holds a surface's index here.
+	Surfaces []Surface `json:"surfaces"`
+
+	// The angle of repose: ground steeper than this is cliff, in degrees.
+	Talus float64 `json:"talus"`
+
+	// Validator corresponds to the JSON schema field "validator".
+	Validator WorldValidator `json:"validator"`
+
+	// Zones corresponds to the JSON schema field "zones".
+	Zones WorldZones `json:"zones"`
+}
+
+// The disk.
+type WorldDisk struct {
+	// Where the mist band begins, in nautical miles from the centre.
+	Mist float64 `json:"mist"`
+
+	// The edge of the world from its centre, in m.
+	Radius float64 `json:"radius"`
+}
+
+// Erosion on each island: thermal weathering, and droplets of rain.
+type WorldErosion struct {
+	// The share of its load a droplet drops where it stops falling.
+	Deposit float64 `json:"deposit"`
+
+	// The most steps a droplet takes.
+	DropletSteps int `json:"dropletSteps"`
+
+	// The most droplets an island.
+	Droplets int `json:"droplets"`
+
+	// Ground a droplet takes per metre it falls, in m.
+	Erode float64 `json:"erode"`
+
+	// Passes of thermal weathering.
+	Thermal int `json:"thermal"`
+}
+
+// Each sea area's effective fetch for a wind from each of 16 directions.
+type WorldFetch struct {
+	// Radials averaged about the wind.
+	Radials int `json:"radials"`
+
+	// Degrees between them.
+	Spread float64 `json:"spread"`
+
+	// A radial's step upwind, in m.
+	Step float64 `json:"step"`
+}
+
+// A boat aground.
+type WorldGrounding struct {
+	// Coulomb's coefficient of a hull sliding along land.
+	Friction float64 `json:"friction"`
+
+	// Into water this deep, in m.
+	PushDepth float64 `json:"pushDepth"`
+
+	// Within this distance, in m.
+	PushReach float64 `json:"pushReach"`
+
+	// The share of its closing speed a hull parts from land with.
+	Restitution float64 `json:"restitution"`
+
+	// Slower than this a boat aground is still, in m/s.
+	StillSpeed float64 `json:"stillSpeed"`
+
+	// Still this long, its sailor pushes it off, in s.
+	StillTime float64 `json:"stillTime"`
+}
+
+// Where the islands lie and how big they are.
+type WorldLayout struct {
+	// Candidate places tried for each island; the furthest from the land already
+	// placed is taken.
+	Candidates int `json:"candidates"`
+
+	// The least gap between two islands' coasts, in m.
+	Gap float64 `json:"gap"`
+
+	// Rocks and islets in a group, the fewest and the most.
+	GroupSize []int `json:"groupSize"`
+
+	// A group's rocks lie within this of its centre, in m.
+	GroupSpread float64 `json:"groupSpread"`
+
+	// Groups of rocks and islets, the fewest and the most.
+	Groups []int `json:"groups"`
+
+	// Their widths' range, in m.
+	IslandAcross []float64 `json:"islandAcross"`
+
+	// They lie between these distances from the centre, in nautical miles.
+	IslandRing []float64 `json:"islandRing"`
+
+	// The other islands.
+	Islands int `json:"islands"`
+
+	// Korčák's exponent b: the number of islands larger than an area a falls as a^−b.
+	Korcak float64 `json:"korcak"`
+
+	// A landmark's width, the least and the most, in m.
+	LandmarkAcross []float64 `json:"landmarkAcross"`
+
+	// The least distance between two landmarks' centres, in m.
+	LandmarkApart float64 `json:"landmarkApart"`
+
+	// Landmarks lie between these distances from the centre, in nautical miles.
+	LandmarkRing []float64 `json:"landmarkRing"`
+
+	// Landmark islands, placed first.
+	Landmarks int `json:"landmarks"`
+
+	// A rock's width, in m.
+	RockAcross []float64 `json:"rockAcross"`
+}
+
+// The main port's island, at the centre of every world.
+type WorldMainPort struct {
+	// Its width, the least and the most, in m.
+	Across []float64 `json:"across"`
+
+	// Biome corresponds to the JSON schema field "biome".
+	Biome ID `json:"biome"`
+
+	// No other land but its own rocks lies within this of the centre, in nautical
+	// miles.
+	Calm float64 `json:"calm"`
+
+	// The share of its coast with cliffs.
+	Cliffs float64 `json:"cliffs"`
+
+	// Its highest point, the least and the most, in m.
+	Height []float64 `json:"height"`
+
+	// Its name, never drawn for another place.
+	Name string `json:"name"`
+
+	// Its centre lies within this of the disk's, in m.
+	Offset float64 `json:"offset"`
+
+	// Stacks off its coast, the least and the most.
+	Rocks []int `json:"rocks"`
+}
+
+// How islands are named.
+type WorldNames struct {
+	// An islet this close to a larger island may be named after it, in m.
+	Calf float64 `json:"calf"`
+
+	// The chance it is.
+	CalfShare float64 `json:"calfShare"`
+
+	// The features names may need.
+	Features []NameFeature `json:"features"`
+
+	// The chance they do.
+	NeighbourShare float64 `json:"neighbourShare"`
+
+	// Two islands of a biome this close may share a name, in m.
+	Neighbours float64 `json:"neighbours"`
+
+	// Names written as a pair, best given in the same world.
+	Partners [][]string `json:"partners"`
+
+	// The pairs of words neighbours sharing a name take, the larger the first.
+	Prefixes [][]string `json:"prefixes"`
+
+	// The tones of names.
+	Tones []NameTone `json:"tones"`
+}
+
+// A fringing reef.
+type WorldReef struct {
+	// The crest's depth, in m.
+	Crest []float64 `json:"crest"`
+
+	// The flat behind it, in m deep.
+	Flat []float64 `json:"flat"`
+
+	// The fore reef falls to this depth, in m.
+	Fore float64 `json:"fore"`
+
+	// Over this distance, in m.
+	ForeWidth float64 `json:"foreWidth"`
+
+	// The crest's distance from the coast, in m.
+	Offshore []float64 `json:"offshore"`
+
+	// The share of the crest open as passes.
+	Passes float64 `json:"passes"`
+}
+
+// The sea bed out from a coast: Dean's equilibrium profile to the closure depth,
+// then the shelf, then the deep.
+type WorldSeabed struct {
+	// The closure depth, in m.
+	Closure float64 `json:"closure"`
+
+	// The deepest the bed is stored, in m.
+	Deep float64 `json:"deep"`
+
+	// An island's bed reaches this far from its coast, in m, and more for a larger
+	// island.
+	ReachBase float64 `json:"reachBase"`
+
+	// At most this far, in m.
+	ReachMost float64 `json:"reachMost"`
+
+	// Plus this many of the island's radius.
+	ReachPerRadius float64 `json:"reachPerRadius"`
+
+	// The share by which its reach varies along the coast.
+	ReachVaries float64 `json:"reachVaries"`
+
+	// Beyond it the bed falls 1 m in this many.
+	Shelf float64 `json:"shelf"`
+}
+
+// The land's shelter for the wind.
+type WorldShelter struct {
+	// Beyond this many it is whole again.
+	Far float64 `json:"far"`
+
+	// Land beside the path speeds it within this many heights of it.
+	Flank float64 `json:"flank"`
+
+	// The least factor on the wind's speed.
+	Least float64 `json:"least"`
+
+	// The greatest.
+	Most float64 `json:"most"`
+
+	// In the lee closer than this many heights the wind is at its least.
+	Near float64 `json:"near"`
+
+	// How far beside the path land is looked for, in m.
+	Offsets []float64 `json:"offsets"`
+
+	// How far upwind land is looked for, in m.
+	Reach float64 `json:"reach"`
+
+	// The most land beside the wind's path speeds it, as a share.
+	SpeedUp float64 `json:"speedUp"`
+
+	// The march's step, in m.
+	Step float64 `json:"step"`
+
+	// The most land on one side turns the wind, in degrees.
+	Turn float64 `json:"turn"`
+}
+
+// A size class: the islands narrower than below and no narrower than the class
+// before's.
+type WorldSize struct {
+	// The width it holds islands narrower than, in m.
+	Below float64 `json:"below"`
+
+	// The class's word, as the names give it.
+	Class string `json:"class"`
+}
+
+// Where boats start: the stretch of water off the main port with the most room.
+type WorldStart struct {
+	// And no land within this, in m.
+	Clear float64 `json:"clear"`
+
+	// A place has at least this much water, in m.
+	Depth float64 `json:"depth"`
+
+	// Places in all.
+	Places int `json:"places"`
+
+	// Places to a row.
+	Row int `json:"row"`
+
+	// Places are this far apart, in m.
+	Spacing float64 `json:"spacing"`
+
+	// The start area begins within this of the coast, in m.
+	Within float64 `json:"within"`
+}
+
+// The rules a world must pass.
+type WorldValidator struct {
+	// Attempts before giving up.
+	Attempts int `json:"attempts"`
+
+	// The main port's centre from the disk's, at most, in m.
+	CentreOffset float64 `json:"centreOffset"`
+
+	// Each size class within this share of its expected count.
+	Counts float64 `json:"counts"`
+
+	// Land as a percentage of the disk, the least and the most.
+	LandShare []float64 `json:"landShare"`
+
+	// Inside the mist band no water is further than this from land, in m.
+	OpenWater float64 `json:"openWater"`
+
+	// Every landmark reachable from the start in this much water, in m.
+	ReachDepth float64 `json:"reachDepth"`
+
+	// A landmark's shoreline development index, at least.
+	Shoreline float64 `json:"shoreline"`
+}
+
+// Where on the disk a place is: the centre, the middle waters and, beyond them,
+// the rim.
+type WorldZones struct {
+	// The centre reaches this far from the disk's centre, in nautical miles.
+	Centre float64 `json:"centre"`
+
+	// The middle waters reach this far, in nautical miles.
+	Middle float64 `json:"middle"`
+}
+
 // Version is the catalog version (tools/catalog).
-const Version = "14f5face6054cbc6"
+const Version = "4124632239ebb649"

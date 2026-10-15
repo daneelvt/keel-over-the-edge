@@ -282,7 +282,7 @@ func (sky *scenarioSky) set(spells []map[string]any) error {
 // env is the wind of step i at the boat.
 func (sky *scenarioSky) env(i int, s *State) Env {
 	WeatherAt(&sky.w, &sky.t, sky.tick+float64(i))
-	return WindAt(&sky.t, s.X, s.Y)
+	return WindAt(&sky.t, s.X, s.Y, nil)
 }
 
 // runScenario steps a scenario, hashing the state and Out after every step.
@@ -371,7 +371,7 @@ func runScenario(seaParams map[string]float64, params map[string]any, wind map[s
 		if sky != nil {
 			e = sky.env(i, &s)
 		}
-		Step(&s, &c, &e, at, &b, &o)
+		Step(&s, &c, &e, at, nil, &b, &o)
 		values := fields(&s)
 		for _, v := range append(values, fields(&o)...) {
 			if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -610,7 +610,7 @@ func TestStepAllocatesNothing(t *testing.T) {
 	c := Control{Helm: 0.3, Sheet: 0.4}
 	e := Env{WindSpeed: 7, WindFrom: 2}
 	var o Out
-	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, nil, b, &o) }); n != 0 {
+	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, nil, nil, b, &o) }); n != 0 {
 		t.Errorf("a step allocates %v times", n)
 	}
 }
@@ -623,7 +623,7 @@ func BenchmarkStep(bm *testing.B) {
 	e := Env{WindSpeed: 7, WindFrom: 0}
 	var o Out
 	for bm.Loop() {
-		Step(&s, &c, &e, nil, b, &o)
+		Step(&s, &c, &e, nil, nil, b, &o)
 	}
 }
 

@@ -25,14 +25,15 @@ import "math"
 // first, then positions from the new velocities.
 
 // Step advances a boat by one step of Dt seconds. sea is the sea about the
-// boat at the step's tick, or nil for flat water; b is the boat's kind, from
-// Prepare. It only reads sea, and writes o and never reads it.
-func Step(s *State, c *Control, e *Env, sea *Sea, b *Prepared, o *Out) {
-	step(s, c, e, sea, b, o, Substeps)
+// boat at the step's tick, or nil for flat water; g the ground under it, or
+// nil for the open sea; b is the boat's kind, from Prepare. It only reads
+// sea and g, and writes o and never reads it.
+func Step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out) {
+	step(s, c, e, sea, g, b, o, Substeps)
 }
 
 // step is Step in n substeps; the tests compare Substeps with more.
-func step(s *State, c *Control, e *Env, sea *Sea, b *Prepared, o *Out, n int32) {
+func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out, n int32) {
 	helm := control(c.Helm, -1, 1)
 	sheet := control(c.Sheet, 0, 1)
 	if PilotOn(c) {
@@ -68,16 +69,27 @@ func step(s *State, c *Control, e *Env, sea *Sea, b *Prepared, o *Out, n int32) 
 		v.read(sea, s, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
 		v.twist = float64(v.twist * b.twistArm)
 	}
+	// So is the ground: where the bottom reaches a foil or the hull.
+	var bd bed
+	if g != nil {
+		sinH, cosH := SinCos(s.Heading)
+		bd.read(g, s, b, sinH, cosH)
+	}
 	dt := Dt / float64(n)
 	for i := range n {
-		b.substep(s, wind, sinW, cosW, dt, &v, o, i == n-1)
+		b.substep(s, wind, sinW, cosW, dt, &v, &bd, o, i == n-1)
 		v.advance(dt)
 	}
 	s.Heading = wrapAngle(s.Heading)
 	s.Heel = wrapAngle(s.Heel)
+	o.Depth, o.Aground, o.PushedOff = -DeepWater/10, Afloat, 0
+	if g != nil {
+		o.Depth = bd.depth
+		b.ground(s, e, g, &bd, o)
+	}
 }
 
-func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, o *Out, last bool) {
+func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *bed, o *Out, last bool) {
 	sinH, cosH := SinCos(s.Heading)
 	m := motion{u: s.Surge, v: s.Sway, r: s.YawRate, p: s.RollRate, q: s.PitchRate}
 	m.sinHeel, m.cosHeel = SinCos(s.Heel)
@@ -113,12 +125,20 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, o *O
 	// the boat's speed, and works in the board's downwash (Keuning, Vermeulen
 	// and de Ridder 2005).
 	wet := b.foilsWet(wetHeel)
+	boardWet, rudderWet := wet, wet
+	if bd.active {
+		// The bottom has pushed the foils up: what is left of them works.
+		boardWet, rudderWet = float64(wet*bd.boardCut), float64(wet*bd.rudderCut)
+	}
 	boardLift := float64(b.board.carry * max2(1-float64(b.heelLoss*math.Abs(s.Heel)), 0))
-	board := b.foilLoads(&b.board, &m, 0, 1, 1, 0, boardLift, wet, &l)
+	board := b.foilLoads(&b.board, &m, 0, 1, 1, 0, boardLift, boardWet, &l)
 	sinR, cosR := SinCos(s.Rudder)
-	rudder := b.foilLoads(&b.rudder, &m, sinR, cosR, b.rudderInflow, b.downwash, 1, wet, &l)
+	rudder := b.foilLoads(&b.rudder, &m, sinR, cosR, b.rudderInflow, b.downwash, 1, rudderWet, &l)
 
 	b.hullLoads(&m, &l)
+	if bd.active {
+		bd.loads(&m, b, &l)
+	}
 	b.waveLoads(v, &l)
 	l.K -= float64((b.rollDamping + b.sailorDamping(s)) * m.p)
 	heeling := l.K

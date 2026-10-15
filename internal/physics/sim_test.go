@@ -65,9 +65,9 @@ func (m *sim) step() {
 	}
 	if m.wx != nil {
 		WeatherAt(m.wx, &m.wt, m.tick)
-		m.e = WindAt(&m.wt, m.s.X, m.s.Y)
+		m.e = WindAt(&m.wt, m.s.X, m.s.Y, nil)
 	}
-	Step(&m.s, &m.c, &m.e, sea, m.b, &m.o)
+	Step(&m.s, &m.c, &m.e, sea, nil, m.b, &m.o)
 	m.tick++
 	m.time += Dt
 }

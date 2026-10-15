@@ -153,7 +153,7 @@ func TestTickMatchesStepInWaves(t *testing.T) {
 			c := physics.Control{Helm: f.Control[s].Helm(), Sheet: f.Control[s].Sheet()}
 			e := windAt(w, f, want.X, want.Y)
 			var o physics.Out
-			physics.Step(&want, &c, &e, &sea, kind, &o)
+			physics.Step(&want, &c, &e, &sea, nil, kind, &o)
 			if !sameState(f.State[s], want) {
 				t.Fatalf("tick %d, slot %d: %+v, Step in the frame's sea gives %+v", f.Tick, s, f.State[s], want)
 			}

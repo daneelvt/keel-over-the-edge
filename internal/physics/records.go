@@ -44,6 +44,9 @@ type State struct {
 	PilotTrim  float64 // its standing helm, positive turning the bow toward the wind, −1 … 1
 	PilotWay   float64 // the way it is turning: WayHold, WayTack or WayGybe
 	PilotOrder float64 // the order count of the last order it took
+	// GroundTimer is how many steps the boat has been aground and all but
+	// still: its sailor pushes it off when it reaches the ground's time.
+	GroundTimer float64
 }
 
 // Control holds what the player sets. Helm and Sheet are targets: the rudder
@@ -238,6 +241,38 @@ type Out struct {
 	PilotHelm         float64 // the helm the step sailed with: the autopilot's while it is on, −1 … 1
 	PilotOff          float64 // how far the autopilot has to turn the boat, rad, positive to starboard; 0 while it is off
 	PilotHeading      float64 // the heading the autopilot steers for, rad clockwise from north; the heading while it is off
+	Depth             float64 // the water under the daggerboard as the step began, m; negative over land
+	Aground           float64 // Afloat, OnBottom or AgainstLand
+	PushedOff         float64 // 1 if the step pushed the boat off, else 0
+}
+
+// GroundParams describe how a boat meets the ground: the catalog's world
+// values of its groups surfaces and grounding, in the order of its schema.
+// PrepareGround derives the constants grounding is computed with.
+type GroundParams struct {
+	Friction     [GroundSurfaces]float64 // Coulomb's coefficient of a hull on each surface, by the surface's index
+	StillSpeed   float64                 // a boat aground slower than this is still, m/s
+	StillTime    float64                 // still this long, its sailor pushes it off, s
+	PushDepth    float64                 // into water this deep, m
+	PushReach    float64                 // within this distance, m
+	Restitution  float64                 // the share of its closing speed a hull parts from land with
+	LandFriction float64                 // Coulomb's coefficient of a hull sliding along land
+}
+
+// ShelterParams describe how a shelter table is worked out from the land:
+// the catalog's world values of its group shelter, in the order of its
+// schema. Heights' multiples are of the land's height.
+type ShelterParams struct {
+	Reach   float64    // how far upwind land is looked for, m
+	Step    float64    // the march's step, m
+	Near    float64    // in the lee closer than this many heights the wind is at its least
+	Far     float64    // and beyond this many it is whole again
+	Least   float64    // the least factor
+	Most    float64    // the greatest
+	SpeedUp float64    // the most land beside the wind's path speeds it, a share
+	Flank   float64    // land beside the path speeds it within this many heights of it
+	Turn    float64    // the most land on one side turns the wind, degrees
+	Offsets [4]float64 // how far beside the path land is looked for, m
 }
 
 // The flow over a sail strip, in Out.FootFlow and Out.HeadFlow.

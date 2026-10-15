@@ -350,7 +350,7 @@ func sailTogether(b *Prepared, e *EncounterPrepared, env Env, start [2]State, co
 			en := env
 			ShadowAt(&en, s[i].X, s[i].Y, &src, e)
 			c := controls[i]
-			Step(&s[i], &c, &en, nil, b, &o)
+			Step(&s[i], &c, &en, nil, nil, b, &o)
 		}
 		var ct Contact
 		if h.Collide(&s[0], &s[1], b, b, e, &ct) {

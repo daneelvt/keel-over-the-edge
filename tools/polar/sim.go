@@ -68,7 +68,7 @@ func newBoat(b *physics.Prepared, wind, heading, sheet float64) *boat {
 }
 
 func (bt *boat) step() {
-	physics.Step(&bt.s, &bt.c, &bt.e, bt.sea, bt.b, &bt.o)
+	physics.Step(&bt.s, &bt.c, &bt.e, bt.sea, nil, bt.b, &bt.o)
 	bt.time += physics.Dt
 	if bt.s.SailorMode != physics.Sailing {
 		bt.capsized = true

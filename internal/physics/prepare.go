@@ -91,6 +91,15 @@ type Prepared struct {
 	invFoilWetRange   float64
 	rudderMax         float64
 
+	// The ground.
+	hullDraught    float64 // m
+	invHullDraught float64
+	boardDepth     float64 // how deep the board reaches below the water, m
+	rudderDepth    float64
+	invBoardSpan   float64
+	invRudderSpan  float64
+	groundRings    int32 // rings of hexagons about the one under the centre of gravity the hull may touch
+
 	// Sailor.
 	sailorWeight float64 // N
 	seatHeight   float64
@@ -239,6 +248,12 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.foilDryHeel = float64(p.FoilDryHeel * degree)
 	b.invFoilWetRange = 1 / ((p.FoilDryHeel - p.FoilWetHeel) * degree)
 	b.rudderMax = float64(p.RudderAngle * degree)
+	b.hullDraught = p.HullDraught
+	b.invHullDraught = 1 / p.HullDraught
+	b.boardDepth = p.HullDraught + p.BoardSpan
+	b.rudderDepth = p.HullDraught + p.RudderSpan
+	b.invBoardSpan = 1 / p.BoardSpan
+	b.invRudderSpan = 1 / p.RudderSpan
 	// A deep-water wave's motion dies away with depth as e^(−k z). The
 	// foils feel it at the board's centre of pressure.
 	depth := b.board.z - cg
@@ -268,6 +283,9 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.climbTime = p.ClimbTime
 
 	b.prepareOutline(p)
+	// A hexagon the hull's bounding circle reaches has its centre within
+	// the circle's radius and a hexagon's of the centre of gravity.
+	b.groundRings = toInt32(math.Ceil((b.outline.radius+hexRadius)/hexRing)) + 1
 	b.length = p.Transom + p.Stem
 	b.mastHeight = p.BoomHeight + p.Luff
 	b.effortHeight = cg - b.effortZ
