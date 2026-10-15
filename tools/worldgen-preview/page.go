@@ -39,7 +39,7 @@ func fetchLayer(b *worldgen.Bundle, v view, k int, cap float64) string {
 			l := f / cap * physics.SeaAreaSize * 0.9
 			px, py := v.px(x, y)
 			// Downwind is away from where the wind comes from.
-			qx, qy := v.px(x-l*s, y-l*c)
+			qx, qy := v.px(x-float64(l*s), y-float64(l*c))
 			fmt.Fprintf(&d, "M%.1f %.1fL%.1f %.1f", px, py, qx, qy)
 		}
 	}
@@ -54,16 +54,16 @@ func shelterLayer(b *worldgen.Bundle, v view, k int) []byte {
 	from := float64(k) * 2 * math.Pi / physics.ShelterDirections
 	for py := range v.side {
 		for px := range v.side {
-			x := v.x0 + (float64(px)+0.5)*v.scale
-			y := v.y0 - (float64(py)+0.5)*v.scale
+			x := v.x0 + float64((float64(px)+0.5)*v.scale)
+			y := v.y0 - float64((float64(py)+0.5)*v.scale)
 			f, _ := b.Shelter.At(x, y, from)
 			switch {
 			case f < 0.995:
 				t := (1 - f) / 0.7
-				img.SetNRGBA(px, py, color.NRGBA{0x5e, 0x3c, 0x99, uint8(math.Round(40 + 200*t))})
+				img.SetNRGBA(px, py, color.NRGBA{0x5e, 0x3c, 0x99, uint8(math.Round(40 + float64(200*t)))})
 			case f > 1.005:
 				t := (f - 1) / 0.3
-				img.SetNRGBA(px, py, color.NRGBA{0xe6, 0x61, 0x01, uint8(math.Round(40 + 200*t))})
+				img.SetNRGBA(px, py, color.NRGBA{0xe6, 0x61, 0x01, uint8(math.Round(40 + float64(200*t)))})
 			}
 		}
 	}
@@ -94,8 +94,8 @@ td, th { border-bottom: 1px solid #ddd; padding: 2px 8px; text-align: left; }
 <body>
 <h1>%s</h1>
 `, html.EscapeString(title), html.EscapeString(title))
-	fmt.Fprintf(&p, "<p>Generator %d; made from seed %d at attempt %d; digest <code>%s</code>. %d islands and %d groups; land %.2f%% of the disk; open water at most %.0f m from land; made in %v.</p>\n",
-		b.Generator, b.Made, b.Attempts, b.DigestHex(), len(b.Islands), len(b.Groups), b.Report.LandShare, b.Report.Open, b.Generated())
+	fmt.Fprintf(&p, "<p>Generator %d; made from seed %d at attempt %d; digest <code>%s</code>. %d islands and %d groups; land %.2f%% of the disk; open water at most %.0f m from land.</p>\n",
+		b.Generator, b.Made, b.Attempts, b.DigestHex(), len(b.Islands), len(b.Groups), b.Report.LandShare, b.Report.Open)
 	p.WriteString(`<div id="controls">
 <label><input type="checkbox" data-layer="names" checked> names</label>
 <label><input type="checkbox" data-layer="coasts" checked> coasts</label>
@@ -239,7 +239,7 @@ func islandChart(b *worldgen.Bundle, i int) ([]byte, error) {
 	for c := c0; c <= c1; c++ {
 		for j := j0; j <= j1; j++ {
 			x, y := physics.CellCentre(c, j)
-			px, py := (x-x0+4)*scale, (y1-y+4)*scale
+			px, py := float64((x-x0+4)*scale), float64((y1-y+4)*scale)
 			col := elevationColour(float64(elevation(b.Ground, c, j)) / 10)
 			sb, ok := byColour[col]
 			if !ok {
@@ -247,10 +247,9 @@ func islandChart(b *worldgen.Bundle, i int) ([]byte, error) {
 				byColour[col] = sb
 				order = append(order, col)
 			}
-			fmt.Fprintf(sb, "M%.1f %.1f", px+r*scale, py)
+			fmt.Fprintf(sb, "M%.1f %.1f", px+float64(r*scale), py)
 			for k := 1; k < 6; k++ {
-				a := float64(k) * math.Pi / 3
-				fmt.Fprintf(sb, "L%.1f %.1f", px+r*scale*math.Cos(a), py-r*scale*math.Sin(a))
+				fmt.Fprintf(sb, "L%.1f %.1f", px+float64(r*scale*hexCos[k]), py-float64(r*scale*hexSin[k]))
 			}
 			sb.WriteString("Z")
 		}
@@ -267,6 +266,12 @@ func islandChart(b *worldgen.Bundle, i int) ([]byte, error) {
 	return s.Bytes(), nil
 }
 
+// The corners' directions from a hexagon's centre, every 60°.
+var (
+	hexCos = [6]float64{1, 0.5, -0.5, -1, -0.5, 0.5}
+	hexSin = [6]float64{0, 0.8660254037844386, 0.8660254037844386, 0, -0.8660254037844386, -0.8660254037844386}
+)
+
 // elevation is the ground's elevation at column c and row j, decimetres.
 func elevation(g *physics.Ground, c, j int32) int16 {
 	n, i, ok := physics.ChunkOf(c, j)
@@ -280,10 +285,10 @@ func elevation(g *physics.Ground, c, j int32) int16 {
 // island's centre than any other's: its own land rather than a neighbour's.
 func island(b *worldgen.Bundle, c, j int32, is *worldgen.Island) bool {
 	x, y := physics.CellCentre(c, j)
-	d := math.Hypot(x-is.X, y-is.Y) - is.Across/2
+	d := math.Sqrt(float64((x-is.X)*(x-is.X))+float64((y-is.Y)*(y-is.Y))) - is.Across/2
 	for k := range b.Islands {
 		o := &b.Islands[k]
-		if o.Number != is.Number && math.Hypot(x-o.X, y-o.Y)-o.Across/2 < d {
+		if o.Number != is.Number && math.Sqrt(float64((x-o.X)*(x-o.X))+float64((y-o.Y)*(y-o.Y)))-o.Across/2 < d {
 			return false
 		}
 	}

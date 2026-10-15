@@ -50,7 +50,7 @@ func tintAt(ts []tint, h float64) color.RGBA {
 		if h <= ts[i].at {
 			a, b := ts[i-1], ts[i]
 			t := (h - a.at) / (b.at - a.at)
-			mix := func(x, y uint8) uint8 { return uint8(math.Round(float64(x) + t*(float64(y)-float64(x)))) }
+			mix := func(x, y uint8) uint8 { return uint8(math.Round(float64(x) + float64(t*(float64(y)-float64(x))))) }
 			return color.RGBA{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), 255}
 		}
 	}
@@ -89,14 +89,19 @@ func worldView(scale float64) view {
 	return view{x0: -half, y0: half, scale: scale, side: int(2 * half / scale)}
 }
 
+// The tool's arithmetic writes every product that is added to as
+// float64(…), as the physics package does, so that Go fuses no multiply-add
+// on arm64 and its charts are the same bits on every machine: the tests hold
+// a fixed seed's chart to a digest.
+
 // raster draws an image of the view, a pixel each, coloured by colour of
 // the ground at its centre.
 func raster(g *physics.Ground, v view, colour func(elevation float64, surface int32) color.RGBA) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, v.side, v.side))
 	for py := range v.side {
 		for px := range v.side {
-			x := v.x0 + (float64(px)+0.5)*v.scale
-			y := v.y0 - (float64(py)+0.5)*v.scale
+			x := v.x0 + float64((float64(px)+0.5)*v.scale)
+			y := v.y0 - float64((float64(py)+0.5)*v.scale)
 			e, s := g.At(x, y)
 			img.SetRGBA(px, py, colour(e, s))
 		}
@@ -123,8 +128,8 @@ func coasts(g *physics.Ground, v view) string {
 	e := make([]float64, n*n)
 	for j := range n {
 		for i := range n {
-			x := v.x0 + float64(i)*v.scale
-			y := v.y0 - float64(j)*v.scale
+			x := v.x0 + float64(float64(i)*v.scale)
+			y := v.y0 - float64(float64(j)*v.scale)
 			e[j*n+i], _ = g.At(x, y)
 			if e[j*n+i] <= 0 {
 				e[j*n+i] = -0.5
