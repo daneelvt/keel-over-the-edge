@@ -80,7 +80,7 @@ func startRealWith(t *testing.T, dbURL string, extra map[string]string) *realSer
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &realServer{net: &realNet{addrs: map[string]string{}}, logs: &syncBuffer{}, cancel: cancel, done: make(chan error, 1)}
 	go func() {
-		s.done <- runServer(ctx, env(vars), s.logs, serveOptions{listen: s.net.listen, workers: 2, dbRetry: 50 * time.Millisecond})
+		s.done <- runServer(ctx, env(vars), s.logs, serveOptions{listen: s.net.listen, workers: 2, dbRetry: 50 * time.Millisecond, generate: emptyWorld})
 	}()
 	t.Cleanup(func() {
 		cancel()

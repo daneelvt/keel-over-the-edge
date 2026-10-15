@@ -38,6 +38,64 @@ func (q *Queries) CreateWorldPartitions(ctx context.Context, worldID pgtype.UUID
 	return err
 }
 
+const insertBundle = `-- name: InsertBundle :execrows
+INSERT INTO world_bundle (world_id, format, generator, catalog, made, attempts, digest, records, report, generation_ms)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (world_id) DO NOTHING
+`
+
+type InsertBundleParams struct {
+	WorldID      pgtype.UUID
+	Format       int16
+	Generator    int32
+	Catalog      string
+	Made         int64
+	Attempts     int32
+	Digest       []byte
+	Records      []byte
+	Report       []byte
+	GenerationMs int32
+}
+
+func (q *Queries) InsertBundle(ctx context.Context, arg InsertBundleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertBundle,
+		arg.WorldID,
+		arg.Format,
+		arg.Generator,
+		arg.Catalog,
+		arg.Made,
+		arg.Attempts,
+		arg.Digest,
+		arg.Records,
+		arg.Report,
+		arg.GenerationMs,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+type InsertChunksParams struct {
+	WorldID pgtype.UUID
+	Chunk   int16
+	Payload []byte
+	Digest  []byte
+}
+
+type InsertPlacesParams struct {
+	WorldID pgtype.UUID
+	Number  int32
+	Kind    string
+	Name    string
+	Biome   string
+	Size    pgtype.Text
+	X       float64
+	Y       float64
+	Area    pgtype.Float8
+	Highest pgtype.Float8
+}
+
 const insertWorld = `-- name: InsertWorld :one
 INSERT INTO world (number, epoch, state)
 VALUES ((SELECT coalesce(max(number), 0) + 1 FROM world), $1, 'active')
@@ -54,5 +112,146 @@ func (q *Queries) InsertWorld(ctx context.Context, epoch time.Time) (InsertWorld
 	row := q.db.QueryRow(ctx, insertWorld, epoch)
 	var i InsertWorldRow
 	err := row.Scan(&i.ID, &i.Number, &i.Epoch)
+	return i, err
+}
+
+const setWorldSeed = `-- name: SetWorldSeed :exec
+UPDATE world SET seed = $1, generator = $2 WHERE id = $3
+`
+
+type SetWorldSeedParams struct {
+	Seed      pgtype.Int8
+	Generator pgtype.Int4
+	WorldID   pgtype.UUID
+}
+
+func (q *Queries) SetWorldSeed(ctx context.Context, arg SetWorldSeedParams) error {
+	_, err := q.db.Exec(ctx, setWorldSeed, arg.Seed, arg.Generator, arg.WorldID)
+	return err
+}
+
+const worldBundle = `-- name: WorldBundle :one
+SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms
+FROM world_bundle WHERE world_id = $1
+`
+
+type WorldBundleRow struct {
+	Format       int16
+	Generator    int32
+	Catalog      string
+	Made         int64
+	Attempts     int32
+	Digest       []byte
+	Records      []byte
+	Report       []byte
+	GenerationMs int32
+}
+
+func (q *Queries) WorldBundle(ctx context.Context, worldID pgtype.UUID) (WorldBundleRow, error) {
+	row := q.db.QueryRow(ctx, worldBundle, worldID)
+	var i WorldBundleRow
+	err := row.Scan(
+		&i.Format,
+		&i.Generator,
+		&i.Catalog,
+		&i.Made,
+		&i.Attempts,
+		&i.Digest,
+		&i.Records,
+		&i.Report,
+		&i.GenerationMs,
+	)
+	return i, err
+}
+
+const worldChunks = `-- name: WorldChunks :many
+SELECT chunk, payload, digest FROM world_chunk WHERE world_id = $1 ORDER BY chunk
+`
+
+type WorldChunksRow struct {
+	Chunk   int16
+	Payload []byte
+	Digest  []byte
+}
+
+func (q *Queries) WorldChunks(ctx context.Context, worldID pgtype.UUID) ([]WorldChunksRow, error) {
+	rows, err := q.db.Query(ctx, worldChunks, worldID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorldChunksRow
+	for rows.Next() {
+		var i WorldChunksRow
+		if err := rows.Scan(&i.Chunk, &i.Payload, &i.Digest); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const worldPlaces = `-- name: WorldPlaces :many
+SELECT number, kind, name, biome, size, x, y, area, highest FROM place WHERE world_id = $1 ORDER BY number
+`
+
+type WorldPlacesRow struct {
+	Number  int32
+	Kind    string
+	Name    string
+	Biome   string
+	Size    pgtype.Text
+	X       float64
+	Y       float64
+	Area    pgtype.Float8
+	Highest pgtype.Float8
+}
+
+func (q *Queries) WorldPlaces(ctx context.Context, worldID pgtype.UUID) ([]WorldPlacesRow, error) {
+	rows, err := q.db.Query(ctx, worldPlaces, worldID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorldPlacesRow
+	for rows.Next() {
+		var i WorldPlacesRow
+		if err := rows.Scan(
+			&i.Number,
+			&i.Kind,
+			&i.Name,
+			&i.Biome,
+			&i.Size,
+			&i.X,
+			&i.Y,
+			&i.Area,
+			&i.Highest,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const worldSeed = `-- name: WorldSeed :one
+SELECT seed, generator FROM world WHERE id = $1
+`
+
+type WorldSeedRow struct {
+	Seed      pgtype.Int8
+	Generator pgtype.Int4
+}
+
+func (q *Queries) WorldSeed(ctx context.Context, worldID pgtype.UUID) (WorldSeedRow, error) {
+	row := q.db.QueryRow(ctx, worldSeed, worldID)
+	var i WorldSeedRow
+	err := row.Scan(&i.Seed, &i.Generator)
 	return i, err
 }

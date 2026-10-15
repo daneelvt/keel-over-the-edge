@@ -12,6 +12,7 @@ import (
 	"io"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
 
 // The bundle as it is stored: its records as JSON, its report as JSON, and
@@ -286,4 +287,17 @@ func ReadFile(data []byte) (*Bundle, error) {
 		}
 	}
 	return Load(records, report, chunks, [16]byte{}, digest)
+}
+
+// Terrain is the bundle as the simulation sails it: its ground, read with
+// the catalog's grounding, its shelter and fetch, and its start area's
+// places, each a boat at rest facing the start's heading.
+func (b *Bundle) Terrain(ground *physics.GroundPrepared) *sim.Terrain {
+	g := *b.Ground
+	g.Prepared = ground
+	start := make([]physics.State, len(b.Start.Places))
+	for i, p := range b.Start.Places {
+		start[i] = physics.State{X: p[0], Y: p[1], Heading: b.Start.Heading}
+	}
+	return &sim.Terrain{Ground: &g, Shelter: b.Shelter, Fetch: b.Fetch, Start: start}
 }

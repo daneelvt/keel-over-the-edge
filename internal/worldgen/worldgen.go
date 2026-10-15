@@ -35,7 +35,7 @@ const Version = 1
 // Island is an island of a made world.
 type Island struct {
 	Number    int32    `json:"number"`
-	Kind      string   `json:"kind"` // main, landmark, island or rock
+	Kind      string   `json:"kind"` // main, landmark, island, or group for a group's rock or islet
 	Name      string   `json:"name"`
 	Biome     string   `json:"biome"`
 	Size      string   `json:"size"`
@@ -50,7 +50,7 @@ type Island struct {
 	HighY     float64  `json:"highY"`
 	Cliffs    float64  `json:"cliffs"` // the share of its coast with cliffs
 	Stacks    int32    `json:"stacks"`
-	Reef      bool     `json:"reef"`
+	Reef      bool     `json:"withReef"`
 	Lagoon    float64  `json:"lagoon"` // m
 	Twin      bool     `json:"twin"`
 	Shoreline float64  `json:"shoreline"`
@@ -282,4 +282,17 @@ func (b *Bundle) Generated() time.Duration {
 		ms += b.Report.Millis[s]
 	}
 	return time.Duration(toInt32(ms)) * time.Millisecond
+}
+
+// Empty is a world of open sea, with no island: for tests of everything but
+// the terrain, which have no time to make a world.
+func Empty(seed uint64) *Bundle {
+	b := &Bundle{
+		Records: Records{Format: Format, Generator: Version, Seed: seed, Made: seed, Attempts: 1},
+		Ground:  new(physics.Ground),
+		Shelter: new(physics.Shelter),
+	}
+	b.Report.Millis = map[string]float64{}
+	b.Digest = b.digest()
+	return b
 }

@@ -168,12 +168,12 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 		c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
 		c.Pilot, c.Target, c.Order, c.Way = f.Pilot[s].Control()
 		st := &f.State[s]
-		e := physics.WindAt(&w.wind, st.X, st.Y, nil)
+		e := physics.WindAt(&w.wind, st.X, st.Y, w.shelter)
 		kind := &w.kinds[f.Kind[s]]
 		if w.enc != nil {
 			w.shadow(src, &e, s, st.X, st.Y)
 		}
-		physics.Step(st, &c, &e, w.sea.at, nil, kind, o)
+		physics.Step(st, &c, &e, w.sea.at, w.ground, kind, o)
 		f.Sail[s] = physics.SailByte(o)
 		w.settle(f, s)
 		if w.enc != nil {

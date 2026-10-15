@@ -531,7 +531,7 @@ func TestSnapshotRejects(t *testing.T) {
 		t.Fatal("a snapshot was read into a frame of another capacity")
 	}
 	bad := slices.Clone(snap)
-	bad[0] = 9
+	bad[0] = SnapshotVersion + 1
 	if err := ReadSnapshot(bad, g); err == nil {
 		t.Fatal("another version was read")
 	}

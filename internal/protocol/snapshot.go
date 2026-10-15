@@ -136,7 +136,7 @@ func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, pi
 	clear(b[HeaderSize:MaxHeaderSize])
 	b[offPilotMode], b[offPilotWay], b[offPilotOrder] = pilot.Mode(), pilot.Way(), pilot.Order()
 	le.PutUint16(b[offPilotTarget:], pilot.Target())
-	for i, v := range fields[sim.BoatSize:] {
+	for i, v := range fields[sim.BoatSize : sim.BoatSize+sim.PilotSize] {
 		le.PutUint64(b[offPilotState+8*i:], math.Float64bits(*v))
 	}
 	return MaxHeaderSize
@@ -216,7 +216,7 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 	if s.Mode > bus.PilotHeading || s.Way > bus.WayGybe || s.Order > 3 || b[offPilotTarget-1] != 0 || le.Uint16(b[offPilotTarget+2:]) != 0 {
 		return fmt.Errorf("protocol: a snapshot's autopilot of mode %d, way %d, order %d", s.Mode, s.Way, s.Order)
 	}
-	for i, v := range fields[sim.BoatSize:] {
+	for i, v := range fields[sim.BoatSize : sim.BoatSize+sim.PilotSize] {
 		*v = math.Float64frombits(le.Uint64(b[offPilotState+8*i:]))
 	}
 	s.Header = MaxHeaderSize

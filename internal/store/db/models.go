@@ -48,6 +48,19 @@ type Event struct {
 	Y              pgtype.Float8
 }
 
+type Place struct {
+	WorldID pgtype.UUID
+	Number  int32
+	Kind    string
+	Name    string
+	Biome   string
+	Size    pgtype.Text
+	X       float64
+	Y       float64
+	Area    pgtype.Float8
+	Highest pgtype.Float8
+}
+
 type Sailor struct {
 	AccountID pgtype.UUID
 	Name      string
@@ -77,4 +90,27 @@ type World struct {
 	Epoch     time.Time
 	State     string
 	CreatedAt time.Time
+	Seed      pgtype.Int8
+	Generator pgtype.Int4
+}
+
+type WorldBundle struct {
+	WorldID      pgtype.UUID
+	Format       int16
+	Generator    int32
+	Catalog      string
+	Made         int64
+	Attempts     int32
+	Digest       []byte
+	Records      []byte
+	Report       []byte
+	GenerationMs int32
+	CreatedAt    time.Time
+}
+
+type WorldChunk struct {
+	WorldID pgtype.UUID
+	Chunk   int16
+	Payload []byte
+	Digest  []byte
 }

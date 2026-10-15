@@ -58,6 +58,14 @@ type Config struct {
 	// Bell is how long the world sails on once players have been told the
 	// server is about to restart, before it stops.
 	Bell time.Duration
+	// Land says whether boats sail the world's land: run aground on it,
+	// feel its shelter and its fetch. Off, the world's terrain is still made,
+	// stored and loaded, and boats sail it as open sea.
+	Land bool
+	// WorldSeed, if HasWorldSeed, is the seed of a world whose terrain is
+	// not made yet: for a developer's world, or the local cluster's.
+	WorldSeed    uint64
+	HasWorldSeed bool
 	// DatabaseURL is the database's: a postgres:// URL or key=value pairs,
 	// as pgx reads them. It holds a password: it is never logged.
 	DatabaseURL string
@@ -114,6 +122,7 @@ func Load(getenv func(string) string) (Config, error) {
 		DatabaseURL:  getenv("KEEL_DATABASE_URL"),
 		BoatLimit:    DefaultBoatLimit,
 		Bell:         DefaultBell,
+		Land:         true,
 	}
 	addrs := []struct{ name, addr string }{
 		{"KEEL_PLAY_ADDR", c.PlayAddr},
@@ -167,6 +176,20 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("KEEL_BELL: %q is not a duration from 0s to %v", v, MaxBell))
 		}
 		c.Bell = d
+	}
+	switch v := getenv("KEEL_LAND"); v {
+	case "", "on":
+	case "off":
+		c.Land = false
+	default:
+		errs = append(errs, fmt.Errorf("KEEL_LAND: %q is not on or off", v))
+	}
+	if v := getenv("KEEL_WORLD_SEED"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("KEEL_WORLD_SEED: %q is not a whole number from 0 to 18446744073709551615", v))
+		}
+		c.WorldSeed, c.HasWorldSeed = n, true
 	}
 	switch v := getenv("KEEL_DEV_COMMANDS"); v {
 	case "", "0":

@@ -121,13 +121,18 @@ func boat(kind uint16, far bool, mode uint8, x, y int32, heading uint16, heel, b
 // the far band and changes nothing; one six ticks back; and a lone full
 // snapshot of awkward header values.
 func goldens() []golden {
+	// The snapshot carries the boat's fields and its autopilot's, not how
+	// long it has been aground.
+	wire := sim.BoatSize + sim.PilotSize
 	var sailing physics.State
-	for i, v := range sim.StateFields(&sailing) {
+	sf := sim.StateFields(&sailing)
+	for i, v := range sf[:wire] {
 		*v = float64(i+1)*1.25 - 7.5
 	}
 	sailing.X, sailing.Y, sailing.Heading = 1234.5678901234, -98765.4321, 1.5707963267948966
 	var awkward physics.State
-	for i, v := range sim.StateFields(&awkward) {
+	af := sim.StateFields(&awkward)
+	for i, v := range af[:wire] {
 		switch i % 4 {
 		case 0:
 			*v = math.Copysign(0, -1)

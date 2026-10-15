@@ -1,16 +1,17 @@
 {
  "comment": "Written by go test ./internal/physics -run Golden -update. Floats are their IEEE 754 bits in hexadecimal.",
- "layout": "0x21155602",
+ "layout": "0x0b75b349",
  "scenarios": [
   {
    "name": "beat",
-   "digest": "18213c20dd9e489af623fb3955bc9d63a10532312be8cc5df9d5703eb93c8bca",
+   "digest": "587f8e08d922ee0529b54b66c8e6f62cdb72549fd91a3225ce24ecc309aad6e4",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe7635bf4cae573",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -38,6 +39,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe7635af53016e4",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -65,6 +67,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe7635af5301fee",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -92,6 +95,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe7635af5301fee",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -119,6 +123,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe7635af5301fee",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -146,6 +151,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe7635af5301fee",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -172,13 +178,14 @@
   },
   {
    "name": "reach",
-   "digest": "1480614b56aef9be43423d02662d82e9d998b5f1d57a52bbe5c5615e490dcd8e",
+   "digest": "94526c200b8c9c0dc2b3c6117b781c4ed9534796e785f820f65b98153013ae05",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff901762241ca00",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -206,6 +213,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff90175c673523a",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -233,6 +241,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff90175c67315a0",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -260,6 +269,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff90175c67315a0",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -287,6 +297,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff90175c67315a0",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -314,6 +325,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff90175c67315a0",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -340,13 +352,14 @@
   },
   {
    "name": "run",
-   "digest": "468ad6b816f8e1cf73bb8b264c5d33c8752a048d526120b7dd52cbf9dfe3786e",
+   "digest": "c0e3b513336a20cf9cbfbdfff2cd2d1fd949259cb100e6c4697ac5cc6640df0a",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4007d896ec42f6e9",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -374,6 +387,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4007d89752ddcc4c",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -401,6 +415,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4007d897532c1201",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -428,6 +443,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4007d897532c0cd7",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -455,6 +471,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4007d897532c0cd7",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -482,6 +499,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4007d897532c0cd7",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -508,13 +526,14 @@
   },
   {
    "name": "tacks",
-   "digest": "0b89255ea308be5b7395d552b9cd045f9628f5d58a0d39f4e0e6ab5186cca1bd",
+   "digest": "aa866ee668de3124192515b1c0920daea99a8e5cfce0413da66347fb5f6cc1a1",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbfc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe1516ba8a5c3b0",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -542,6 +561,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe6c9fe89d056a6",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -569,6 +589,7 @@
      "state": {
       "boom": "0xbfc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe757bac11ea3e3",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -596,6 +617,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe765d55fd1ef19",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -623,6 +645,7 @@
      "state": {
       "boom": "0xbfc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe7672d4cec6036",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -650,6 +673,7 @@
      "state": {
       "boom": "0xbfc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe310056f5c0a1b",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -677,6 +701,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe717e4900627bb",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -704,6 +729,7 @@
      "state": {
       "boom": "0xbfc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe751f4a8ce3d4e",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -731,6 +757,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe75652bfc2b6b4",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -758,6 +785,7 @@
      "state": {
       "boom": "0xbfc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe7569f392cd778",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -784,13 +812,14 @@
   },
   {
    "name": "gybes",
-   "digest": "6d37124eab5b0e24c3db13d7dbd51f9754871503b9ed458f53e8456803fdf8aa",
+   "digest": "7231416180b6fb9eb09f05e3c462ebb51fc8c91c061e1ab6477c88e0f8c05975",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3ff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004d1327e4395e6",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -818,6 +847,7 @@
      "state": {
       "boom": "0xbff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc004d15dfd18c984",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -845,6 +875,7 @@
      "state": {
       "boom": "0x3ff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004ce62b7c6085c",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -872,6 +903,7 @@
      "state": {
       "boom": "0xbff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc00521412fc30cb1",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -899,6 +931,7 @@
      "state": {
       "boom": "0xbff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc004d11976f68ea5",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -926,6 +959,7 @@
      "state": {
       "boom": "0x3ff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004e1314cd3ed07",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -953,6 +987,7 @@
      "state": {
       "boom": "0xbff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc004afbe96bef1e5",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -980,6 +1015,7 @@
      "state": {
       "boom": "0x3ff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004d91ae11dca8d",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1007,6 +1043,7 @@
      "state": {
       "boom": "0xbffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc004edddd550eeea",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1034,6 +1071,7 @@
      "state": {
       "boom": "0xbffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc004b959cccf3a4c",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1060,13 +1098,14 @@
   },
   {
    "name": "by-the-lee",
-   "digest": "e704c3f11b758aef5689afe75a1467546a0749139fe96c41fb9b9b7c064b2662",
+   "digest": "3e7e63695fd04a0e762dc964da48ffab3eb9155c330c93c593803ba5a9859518",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc008c071182d8bde",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1094,6 +1133,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc006622902b3737f",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1121,6 +1161,7 @@
      "state": {
       "boom": "0xbff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc003f48928b74170",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1147,13 +1188,14 @@
   },
   {
    "name": "capsize",
-   "digest": "412df2a0947133ebc4665f5f58a6d701928dd37cef6038e76aad077d663026f9",
+   "digest": "05b6f10289db6ddc6dfe7c9c7f245ef16f001b07247b68f6507aa838a08b0d41",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3fe7b93e83cf17c6",
       "boomRate": "0x3fc33786721dab6a",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe9156cde15e279",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1181,6 +1223,7 @@
      "state": {
       "boom": "0x3f5860bf2cf1a47c",
       "boomRate": "0x3fba7b88b4ea3e5c",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfbd24514217bcd6",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1208,6 +1251,7 @@
      "state": {
       "boom": "0xbf856811631f7579",
       "boomRate": "0xbf860d40bf7221a2",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfa0d9292415199c",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1235,6 +1279,7 @@
      "state": {
       "boom": "0xbfb1df46a2529d39",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfda6b0a7a7155d3",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1262,6 +1307,7 @@
      "state": {
       "boom": "0xbfb1df46a2529d39",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfdc558eae3198c9",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1289,6 +1335,7 @@
      "state": {
       "boom": "0x3f95ab42dbe53516",
       "boomRate": "0x3fb9602c251c4a11",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfb8b0c0607e492c",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1315,13 +1362,14 @@
   },
   {
    "name": "death-roll",
-   "digest": "3a6112a1e9e1774a63169340cf7c85056173bf7a3b8991898c1639dbaa252989",
+   "digest": "a88cc60c07301e9986b91995a8c3f84218d51629540261215224c00724b8d4d2",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbffa876a235661f9",
       "boomRate": "0x3f345213db8b3688",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x400441b72de87496",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1349,6 +1397,7 @@
      "state": {
       "boom": "0x3f9461a2dec37b91",
       "boomRate": "0x3fc0c88992c9a222",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fb205c429933188",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1376,6 +1425,7 @@
      "state": {
       "boom": "0x3f9c8ae3d4692cc0",
       "boomRate": "0xbfae3de01c2bab4e",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fa63e36171321ee",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1403,6 +1453,7 @@
      "state": {
       "boom": "0xbf82b87879904104",
       "boomRate": "0xbfb564ce2c84f5be",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbf7d9d0e2ff7c1d8",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1430,6 +1481,7 @@
      "state": {
       "boom": "0x3f47a543daff55d9",
       "boomRate": "0x3fb2e32ddd2c04d7",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fa3a62fa42c3cf8",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1457,6 +1509,7 @@
      "state": {
       "boom": "0x3fa3b749d0f38a14",
       "boomRate": "0xbf8d871c12bd6bca",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fb330f76bb125c6",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1483,13 +1536,14 @@
   },
   {
    "name": "irons",
-   "digest": "7f2fef0504da8c3b5f57af1f99e928e3f641960509a13f814938fce774c206fc",
+   "digest": "562a6078ba6ea00639a132eb73e63b4225b13383264aed6076af17868aa0e523",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x0000000000000000",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x0000000000000000",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1517,6 +1571,7 @@
      "state": {
       "boom": "0xbfe2f25a67881861",
       "boomRate": "0x3f9f406abb2a5543",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe8701755f4ce25",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1544,6 +1599,7 @@
      "state": {
       "boom": "0xbfe3d313df17c178",
       "boomRate": "0xbfa3fe71cf888167",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe769b947a2dc80",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1570,13 +1626,14 @@
   },
   {
    "name": "gusts",
-   "digest": "94bd860505ed397ac16b58604a3eb6edc1bd001ae6df39f34c5ae01fd1492ffb",
+   "digest": "ab6aa170aac886aec7787d40bfc54136de045a7d9a69fe25b2c8f20e4c225a42",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3febc9c770513366",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1604,6 +1661,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3febd6a92a3da1b5",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1631,6 +1689,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3febcc28a73b48a5",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1658,6 +1717,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3febc8847afdec44",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1685,6 +1745,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3feb9ae9c1becb4b",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1712,6 +1773,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3febccbb8f1fce17",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1739,6 +1801,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3feba5be8c53b322",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1766,6 +1829,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3febc738504a9baf",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1793,6 +1857,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3feb8a76fd06151a",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1820,6 +1885,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3febd13a3a0cc89f",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1846,13 +1912,14 @@
   },
   {
    "name": "calm",
-   "digest": "c6c8f0fbe17d378dc5fe9f9bc91f80ef93e017ed85308e5afde1d6fc63bd16b9",
+   "digest": "a2b3370069c1c94c14b16998ec8fcb0116d87984c4331f450a48427509479ef3",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x0000000000000000",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff0000000000000",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1880,6 +1947,7 @@
      "state": {
       "boom": "0x0000000000000000",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff0000000000000",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1906,13 +1974,14 @@
   },
   {
    "name": "storm",
-   "digest": "0ac0e29c2c8a5c08c6e5812cb301b5c92aaec4c76de8238bd25690196a459113",
+   "digest": "da44b09f85b47b5dd9fd0848cf763a1c2903f37b34dea2dff3c411e17eea1f6d",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3ffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4001932994ec3917",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1940,6 +2009,7 @@
      "state": {
       "boom": "0x3ffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x400194ffb6f4aabd",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1967,6 +2037,7 @@
      "state": {
       "boom": "0x3ffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x40019505aec367c3",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -1994,6 +2065,7 @@
      "state": {
       "boom": "0x3ff2e7c8b7b4fd83",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ffe8bfa0d2789c3",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2021,6 +2093,7 @@
      "state": {
       "boom": "0x3ff2e7c8b7b4fd83",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ffe8bf9b7dc68fb",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2048,6 +2121,7 @@
      "state": {
       "boom": "0x3ff2e7c8b7b4fd83",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ffe8bf9b7d4bb2d",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2074,13 +2148,14 @@
   },
   {
    "name": "random",
-   "digest": "495546e6b57fb85e920ef6ff4e914a8314b3503a55cb3780d4dac78c3acff96e",
+   "digest": "5c21cbd8d1eac5d0103bde5fbf95adc5c557e9da08b41a55b62c1cd2c748d9c7",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbfe690492ceeb34b",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3feb1b4eb0e74c92",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2108,6 +2183,7 @@
      "state": {
       "boom": "0x3ff1d56a79b9a2a5",
       "boomRate": "0x3fd6d189307b225f",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe2843f8398f3e6",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2135,6 +2211,7 @@
      "state": {
       "boom": "0x3ff1633c08df82b4",
       "boomRate": "0x3f8a31fa0b136674",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe1e9263f536fde",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2162,6 +2239,7 @@
      "state": {
       "boom": "0x3fef682a59c8656a",
       "boomRate": "0xbf271dd1b9b0da4c",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fdf2698b786efd3",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2189,6 +2267,7 @@
      "state": {
       "boom": "0xbfd7b14c424d89a1",
       "boomRate": "0x3f904edecde0611f",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff9532b75f430ac",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2216,6 +2295,7 @@
      "state": {
       "boom": "0xbfc2159b790ce00c",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff9e2345b782a0f",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2243,6 +2323,7 @@
      "state": {
       "boom": "0x3febc100f82fe71d",
       "boomRate": "0xbfccbebad8c6c045",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfc5d06361969a9c",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2270,6 +2351,7 @@
      "state": {
       "boom": "0x3ff17b7a4b1a1fc8",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbffbd172f50e0b45",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2297,6 +2379,7 @@
      "state": {
       "boom": "0x3ffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe18ff4a2cae3a7",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2324,6 +2407,7 @@
      "state": {
       "boom": "0xbff9594b443c724c",
       "boomRate": "0xbfd91687d8f6609a",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff8a8e47b20b50b",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2351,6 +2435,7 @@
      "state": {
       "boom": "0xbfdb20529b218467",
       "boomRate": "0xbfd05cbb3b752f28",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc00914f9f8396510",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2378,6 +2463,7 @@
      "state": {
       "boom": "0xbfcc16dca7c3ccd2",
       "boomRate": "0x3f8fbc61ac5c03ff",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc0079c7078377450",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2405,6 +2491,7 @@
      "state": {
       "boom": "0xbfe0bff8f7b76f89",
       "boomRate": "0x3fb8c8f2b46075d5",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe9c68d8d695f85",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2432,6 +2519,7 @@
      "state": {
       "boom": "0xbff5cb53216a825c",
       "boomRate": "0xbfb51ceaf41713dd",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbffd4de6fbc0db93",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2459,6 +2547,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x400636f89a62d547",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2486,6 +2575,7 @@
      "state": {
       "boom": "0xbfd32008d4141bd7",
       "boomRate": "0x3f941e99bca0b7cb",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfef520e4febce19",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2513,6 +2603,7 @@
      "state": {
       "boom": "0x3fc42f636eb69ec2",
       "boomRate": "0x3fc91ad61ce2feb8",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfea01d09a6a1aef",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -2539,13 +2630,14 @@
   },
   {
    "name": "beat-breeze",
-   "digest": "31bd45fb2a9137150e5d074e5705f2d220733560bd34f787c3db7759d7fdcf07",
+   "digest": "d77dde6b2b86af13d20b7cdbd2cc61e4435322ffbf8856052bb1acec6b26136a",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe782eb79889ee1",
       "heave": "0xbfc6cd14ce55fa9a",
       "heaveRate": "0x3fab54682c39b188",
@@ -2573,6 +2665,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe73b5dad7b3fe8",
       "heave": "0xbfb08c5db3b9fbe3",
       "heaveRate": "0x3f111587b17fafc0",
@@ -2600,6 +2693,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe7451bb18b0af3",
       "heave": "0x3fb3f8da5ddb8e27",
       "heaveRate": "0xbfc5bac4e5f89f38",
@@ -2627,6 +2721,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe7704bbf2fff18",
       "heave": "0xbf6b5791d75dbd1a",
       "heaveRate": "0x3fc1af45c64781ce",
@@ -2654,6 +2749,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe760b47762cb6d",
       "heave": "0xbfb701b8bf1f0a1f",
       "heaveRate": "0xbfdda523ed11de14",
@@ -2681,6 +2777,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe722a8464e7cac",
       "heave": "0x3fa323e5709d2863",
       "heaveRate": "0xbfd5da8f0790f9dd",
@@ -2707,13 +2804,14 @@
   },
   {
    "name": "reach-fresh",
-   "digest": "f6f4be30f4ce592ff8f0e8643c82efca8ed42e5859cc33664cd06e3fe8108809",
+   "digest": "a4a02c4e4755706234b2bae5f9b423c5153f7e9920025153db4ea2b907b7d7d8",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3fe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff8f34eabe6aa26",
       "heave": "0xbf914989233bb3c6",
       "heaveRate": "0x3fc745338f5aae75",
@@ -2741,6 +2839,7 @@
      "state": {
       "boom": "0x3fe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff8cbc1cb3ed5ec",
       "heave": "0x3fce653a85895edc",
       "heaveRate": "0x3f2e50e4bab6b900",
@@ -2768,6 +2867,7 @@
      "state": {
       "boom": "0x3fe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff8cecbc8d28948",
       "heave": "0x3fa8deb2ddd35a94",
       "heaveRate": "0xbfcf993edeed7f6e",
@@ -2795,6 +2895,7 @@
      "state": {
       "boom": "0x3fe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff8f2e5be9bcf3e",
       "heave": "0x3faa8b19c38260b8",
       "heaveRate": "0x3f9e52a596d4f342",
@@ -2822,6 +2923,7 @@
      "state": {
       "boom": "0x3fe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff8daac739fe89a",
       "heave": "0x3fbb8b2fb26c8c3a",
       "heaveRate": "0xbfd47bcbe59295e7",
@@ -2849,6 +2951,7 @@
      "state": {
       "boom": "0x3fe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff8e0680bd55e2e",
       "heave": "0x3f837b8430cfeebd",
       "heaveRate": "0xbfc490c236b2a938",
@@ -2875,13 +2978,14 @@
   },
   {
    "name": "run-gale",
-   "digest": "b83a2a6af20285c336e7c8efdca84ca83ef920f2a3e00c85969951e8c7e554fd",
+   "digest": "99e2917ab4b48fa62fc6cb103595e6712845b306ea608fefcfcbe82c3d62f041",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4002be43d1662158",
       "heave": "0xbfd02915f023ea23",
       "heaveRate": "0x3fd598cc4052b042",
@@ -2909,6 +3013,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4002bd6f3e2f9170",
       "heave": "0xbfaa08f1ee1f6124",
       "heaveRate": "0x3fb0923f6d74f2e8",
@@ -2936,6 +3041,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4002c8ae89c98f4f",
       "heave": "0xbfc2564f281f3ec4",
       "heaveRate": "0xbfd331ec4ee25937",
@@ -2963,6 +3069,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4002e4050d0d86f2",
       "heave": "0xbfd8761909b29a1c",
       "heaveRate": "0x3fac976a68326de3",
@@ -2990,6 +3097,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4002b4a70dc535f5",
       "heave": "0x3fd878cb47e5a0c6",
       "heaveRate": "0x3fa7a1be8d408702",
@@ -3017,6 +3125,7 @@
      "state": {
       "boom": "0x3ff7fce0cdde156d",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4002d28fb284461a",
       "heave": "0xbfd5e49a95dd8352",
       "heaveRate": "0xbfb7610c37e76774",
@@ -3043,13 +3152,14 @@
   },
   {
    "name": "capsize-gale",
-   "digest": "bf43fe1021bed33d2181c33a5ebbaa4a22b799a274c891d6a77a7021437757cc",
+   "digest": "8e9dd3280c99b1d6463ccecc76a4c0825494d51114e697585d21cd3a45e6c7dd",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3ffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4000d674c2c2fe55",
       "heave": "0xbfced73f7f60f2d0",
       "heaveRate": "0x3fe3033259b4a6af",
@@ -3077,6 +3187,7 @@
      "state": {
       "boom": "0x3ff95e618f375969",
       "boomRate": "0x3fac93e78a3d5fab",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x40005f49992a44f8",
       "heave": "0xbfd37cdbcc3a888e",
       "heaveRate": "0x3fcbef84263ed84b",
@@ -3104,6 +3215,7 @@
      "state": {
       "boom": "0x3fd0aa71ddc413c2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff8cc984378943e",
       "heave": "0xbfc1a98847cf000d",
       "heaveRate": "0x3f91f30c9574f8a2",
@@ -3131,6 +3243,7 @@
      "state": {
       "boom": "0xbfc273aca51b0bb4",
       "boomRate": "0x3fc23be9f7c80741",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fc0ada38b7bff90",
       "heave": "0x3fcb6087a73d0366",
       "heaveRate": "0xbfc0734fafcfa4e8",
@@ -3158,6 +3271,7 @@
      "state": {
       "boom": "0x3fea1b59e6b96e93",
       "boomRate": "0x3f9a02684c4aeeb1",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff807cddef40102",
       "heave": "0x3fc02af803ef89f5",
       "heaveRate": "0x3fcd36635a0bd2e9",
@@ -3185,6 +3299,7 @@
      "state": {
       "boom": "0x3fdaa00594ec8cd3",
       "boomRate": "0xbfdf57c9229a8faa",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff0539b11f974c3",
       "heave": "0xbfd2bcd4016e8204",
       "heaveRate": "0x3fd0c8f3b53d7d99",
@@ -3211,13 +3326,14 @@
   },
   {
    "name": "border",
-   "digest": "e2aa0926407a9d883f3d2f70195de936b6489728c151a02647c293c74330ffef",
+   "digest": "7e469cc70a1bbed8cd1706d8cf15366ce5fa4249dfa6174ef39fda3f3e3eaba0",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff90575886e81b6",
       "heave": "0xbfb6b48dde7a4023",
       "heaveRate": "0xbfbf602fbc2af721",
@@ -3245,6 +3361,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff8d59e58b293fa",
       "heave": "0x3fac31242861b1bd",
       "heaveRate": "0xbfd6fa51fef38549",
@@ -3272,6 +3389,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff89cf7f1ce318e",
       "heave": "0x3fca404f7946bf4c",
       "heaveRate": "0xbfe24ed34d436b41",
@@ -3299,6 +3417,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff92842d180aa0c",
       "heave": "0xbfc94d2ef312c402",
       "heaveRate": "0x3fccfaa0cb887ed0",
@@ -3326,6 +3445,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff90e19db9d580c",
       "heave": "0xbfbe87dd066e3002",
       "heaveRate": "0xbfc1e2912fc21e6f",
@@ -3353,6 +3473,7 @@
      "state": {
       "boom": "0x3fe17b3116c59b62",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff91ee59d21f048",
       "heave": "0xbfaffef9172521f7",
       "heaveRate": "0x3fd91df8bcaea799",
@@ -3379,13 +3500,14 @@
   },
   {
    "name": "rim-late",
-   "digest": "110b036ddff11f4bdb4137c94388887ff5dad2a8e03bc299f3c3b9f8d516a0b6",
+   "digest": "6b4c4d010bbddcd416c104bece5ee4a97b099985b87daad6187f88179ef5444e",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe77312e6900406",
       "heave": "0xbfc245d34fdcbcda",
       "heaveRate": "0x3fe17af98d31c128",
@@ -3413,6 +3535,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe72fde932e0490",
       "heave": "0xbfa2dec2766e4586",
       "heaveRate": "0x3fb8e9b004522fc2",
@@ -3440,6 +3563,7 @@
      "state": {
       "boom": "0x3fd8cc32013906f2",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe74dec377d9439",
       "heave": "0xbfc17a81c1b0e77e",
       "heaveRate": "0xbfb2c85ce8dc0af8",
@@ -3466,13 +3590,14 @@
   },
   {
    "name": "random-sea",
-   "digest": "eaa1abc8ee4c5894c579e5acaeaf5dac3ad8cf58faed55e38371d8efa6e37050",
+   "digest": "c8b5578226598683c70d0868342c1f2a0088c00fa1e94257c0476b42df7a7b20",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbff4dcc87b458039",
       "boomRate": "0x3fc08123d1625893",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff58b6af68123c0",
       "heave": "0xbfa02a3b630428af",
       "heaveRate": "0xbfb483fd1977271f",
@@ -3500,6 +3625,7 @@
      "state": {
       "boom": "0x3f46262fcad3f41c",
       "boomRate": "0xbf70234d98ea0f31",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc000f345421bc46a",
       "heave": "0xbfbff43924a8f807",
       "heaveRate": "0xbfd0728b67a66a3a",
@@ -3527,6 +3653,7 @@
      "state": {
       "boom": "0xbfd369091ceebf85",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfdff81eb43ece7b",
       "heave": "0xbfabe4a0152c376d",
       "heaveRate": "0xbfc68c7d2d04b2c5",
@@ -3554,6 +3681,7 @@
      "state": {
       "boom": "0xbfec758e137049e9",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fa558f59722ca97",
       "heave": "0x3fda41ef8b663ac6",
       "heaveRate": "0xbfd1941e5eabdc6c",
@@ -3581,6 +3709,7 @@
      "state": {
       "boom": "0x3fe284e03f6d6436",
       "boomRate": "0xbfb814691502a086",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff419d661c947e0",
       "heave": "0xbfa13c9995c7fd64",
       "heaveRate": "0x3fcc9065cce30f1a",
@@ -3608,6 +3737,7 @@
      "state": {
       "boom": "0xbffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc001a96cad9e8e19",
       "heave": "0xbfb810cb94402959",
       "heaveRate": "0xbff4f741b0029e8e",
@@ -3635,6 +3765,7 @@
      "state": {
       "boom": "0xbffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc003d7f217042e6e",
       "heave": "0x3f8d6426e6c06c14",
       "heaveRate": "0x3f9bfaa999af0e99",
@@ -3662,6 +3793,7 @@
      "state": {
       "boom": "0xbfa09371d9109147",
       "boomRate": "0xbfc5ff50f5e83fd0",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff15b72585fbdd1",
       "heave": "0xbfb80461e4f1af86",
       "heaveRate": "0xbf8ee21e095bd88c",
@@ -3689,6 +3821,7 @@
      "state": {
       "boom": "0xbfd8e44a27667dea",
       "boomRate": "0x3fdec2a837e386d5",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbffd12b61b70c1a4",
       "heave": "0x3fad3097bdf302c0",
       "heaveRate": "0xbfa246464809599e",
@@ -3716,6 +3849,7 @@
      "state": {
       "boom": "0xbff3dca7a29d4683",
       "boomRate": "0x3fc39719221296a4",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff351fc6200da0d",
       "heave": "0x3fd929e034c3433b",
       "heaveRate": "0xbfe885b1841aad38",
@@ -3743,6 +3877,7 @@
      "state": {
       "boom": "0xbff04337129561b8",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbffed2d6cca7c7fe",
       "heave": "0xbfac5ceed2f16da3",
       "heaveRate": "0xbfd07e94e0d89e74",
@@ -3770,6 +3905,7 @@
      "state": {
       "boom": "0xbfdc2d606c520333",
       "boomRate": "0x3fd3da7af2d68597",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe3fb9f59d7aafc",
       "heave": "0xbfb7e814e57b3e25",
       "heaveRate": "0x3fe354d7ea1e421d",
@@ -3797,6 +3933,7 @@
      "state": {
       "boom": "0xbfdc1a8dfd1b920c",
       "boomRate": "0x3f894e4883b02450",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc00751dbcce9ad11",
       "heave": "0x3fc40f43bbc5231e",
       "heaveRate": "0xbfc0dd6aff7d28ef",
@@ -3824,6 +3961,7 @@
      "state": {
       "boom": "0x3ffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff45d2530f34ea5",
       "heave": "0xbf72e9deb667d576",
       "heaveRate": "0x3fb5351ee947a0c8",
@@ -3851,6 +3989,7 @@
      "state": {
       "boom": "0xbfe6cd01b2bdb7df",
       "boomRate": "0xbfa1a6fd7fd80eba",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fca51a5afb3e7c4",
       "heave": "0xbf93b708cb4d3301",
       "heaveRate": "0x3fd2469e0b4adab9",
@@ -3878,6 +4017,7 @@
      "state": {
       "boom": "0x3fe53e005a5ee565",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fea747699354c8e",
       "heave": "0x3fd223cf69ea1091",
       "heaveRate": "0x3fc6df1ae085d557",
@@ -3905,6 +4045,7 @@
      "state": {
       "boom": "0xbfdf3392e9f1ecc1",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe9d255dc4d823a",
       "heave": "0xbfc95eb335257ffa",
       "heaveRate": "0x3fb0f34b4069d0ac",
@@ -3931,13 +4072,14 @@
   },
   {
    "name": "gusty-beat",
-   "digest": "2019148c7797f7b1afb7aa0fc2219eb6fc4794a71c6d138a67b08174bc12760a",
+   "digest": "b4c800c5bd4cbca11e7e4750a86ba43a644faf625c83c54e592ec0f660fe00ff",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbfcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe90f3b5864a8f1",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -3965,6 +4107,7 @@
      "state": {
       "boom": "0xbfcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe90e497cc22ae0",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -3992,6 +4135,7 @@
      "state": {
       "boom": "0xbfcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe90c4e2ecc7e31",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4019,6 +4163,7 @@
      "state": {
       "boom": "0xbfcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe90f0545fa6532",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4046,6 +4191,7 @@
      "state": {
       "boom": "0xbfcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe91137dc34b976",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4073,6 +4219,7 @@
      "state": {
       "boom": "0xbfcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe90d0c85903622",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4099,13 +4246,14 @@
   },
   {
    "name": "shifty-reach",
-   "digest": "370e808815611b47ecc2b6c8a9e9187f788cc1093631faf2ba71f6c84de805ee",
+   "digest": "132ca63c92dbde4f1455f6c0c9448ba71ac47c4aea75c84c1bcbda10e26d0d06",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff907ec1b72d5d6",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4133,6 +4281,7 @@
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff9075412b768dd",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4160,6 +4309,7 @@
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff905c52ddc78bb",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4187,6 +4337,7 @@
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff908840667ae09",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4214,6 +4365,7 @@
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff906676bf74d01",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4241,6 +4393,7 @@
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff903a70621ca29",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4267,13 +4420,14 @@
   },
   {
    "name": "change",
-   "digest": "8b8031e52578887bdb8f942d0c67ed921734862a9f1a5ba21649fd89ca5d8b96",
+   "digest": "e8172e911156dcb8015a34a3c08a13c90ecb73f66159396032a1bac1fd09f810",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff9026aca759948",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4301,6 +4455,7 @@
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff913b12d76d40a",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4328,6 +4483,7 @@
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ffb7ec8e974e822",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4355,6 +4511,7 @@
      "state": {
       "boom": "0x3feba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x400068cd759dc17e",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4382,6 +4539,7 @@
      "state": {
       "boom": "0xbfeac865a35616ce",
       "boomRate": "0xbfb5addafcd385b1",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fd52693a565b39d",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4409,6 +4567,7 @@
      "state": {
       "boom": "0xbfeba5614317cb34",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fd018583618b377",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4435,13 +4594,14 @@
   },
   {
    "name": "refuge",
-   "digest": "63a2482940454b4df9abee8dee29f1fedee7014ad01e1a54e1e321d6deb70677",
+   "digest": "d607e2ef3e3db1798844702f286a514aba55f572becd986f42f0f8aa029cad1a",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbfe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x40067d2f142d2af2",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4469,6 +4629,7 @@
      "state": {
       "boom": "0xbfe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x40067aa4eeae37a4",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4496,6 +4657,7 @@
      "state": {
       "boom": "0xbfe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4006805f52f5a257",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4523,6 +4685,7 @@
      "state": {
       "boom": "0x3fe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfd3c3b5baec0482",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4550,6 +4713,7 @@
      "state": {
       "boom": "0x3fe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfd3bc8cc2b51834",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4577,6 +4741,7 @@
      "state": {
       "boom": "0x3fe91ad538033f40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfd3c5f9d3cb77f2",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4603,13 +4768,14 @@
   },
   {
    "name": "rim-gusts",
-   "digest": "864b2d043284b65957270a2d3421c281477c7593062de47430beb6056c55dda7",
+   "digest": "f06bf9af15008fdda8500f819aa4c26fb662f2ce73a3800ccfc528099ff9d8a6",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbff2e7c8b7b4fd83",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff945d2986cbaa6",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4637,6 +4803,7 @@
      "state": {
       "boom": "0xbff2e7c8b7b4fd83",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff946a1def1669d",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4664,6 +4831,7 @@
      "state": {
       "boom": "0xbff2e7c8b7b4fd83",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3ff94cd072d14a5b",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4690,13 +4858,14 @@
   },
   {
    "name": "random-weather",
-   "digest": "ff2d41bec3042474084a8007c902929859e54e3f8dd69bbedb6453bafb63f093",
+   "digest": "e82294637f652bdb61d9e5b33b7c7faa86748ae4219139acca5a216d2bb4f117",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbfed45bae3c8c89e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff093786aa2ff68",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4724,6 +4893,7 @@
      "state": {
       "boom": "0x3fbad90203a8f7e5",
       "boomRate": "0x3fcf8a78e6847550",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fca54a8333f0435",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4751,6 +4921,7 @@
      "state": {
       "boom": "0x3fe690492ceeb34b",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfdfa3d48138c809",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4778,6 +4949,7 @@
      "state": {
       "boom": "0x3fea7620b1989036",
       "boomRate": "0x3fb00e4d91532f67",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe54fce1844304e",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4805,6 +4977,7 @@
      "state": {
       "boom": "0x3fb2475d0a7edc93",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbffded84213eeb0f",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4832,6 +5005,7 @@
      "state": {
       "boom": "0x3febcc69aa2862f6",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbffad309ce383fc9",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4859,6 +5033,7 @@
      "state": {
       "boom": "0x3fd7a1fc28a93f64",
       "boomRate": "0x3f69ce833d8f2108",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4008076e03dbd193",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4886,6 +5061,7 @@
      "state": {
       "boom": "0xbfe3c93dd231e4cc",
       "boomRate": "0x3f91968a413f2e87",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff66b63c3528ff7",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4913,6 +5089,7 @@
      "state": {
       "boom": "0x3fe933b1485f7fa1",
       "boomRate": "0x3facb4e6b298efcd",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe4b81cce646c88",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4940,6 +5117,7 @@
      "state": {
       "boom": "0x3fda723d82558010",
       "boomRate": "0x3f88cd200b32db15",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff11d0ff3651fc6",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4967,6 +5145,7 @@
      "state": {
       "boom": "0x3fe041bf41b0eb4b",
       "boomRate": "0x3fbec0d876071fb9",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff12016eb26c2ac",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -4994,6 +5173,7 @@
      "state": {
       "boom": "0x3fe210786935e486",
       "boomRate": "0xbfd0a30c86fd7cd4",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfed6a50bd72911f",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5021,6 +5201,7 @@
      "state": {
       "boom": "0xbfeefbad5cb7b996",
       "boomRate": "0x3fa66ac253cc6e29",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe6f6d39c53648d",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5048,6 +5229,7 @@
      "state": {
       "boom": "0x3ff0d255e1d238d4",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe9eac466a91d4d",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5075,6 +5257,7 @@
      "state": {
       "boom": "0xbffa876cd8f2a161",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004368f88136c15",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5102,6 +5285,7 @@
      "state": {
       "boom": "0xbfe2a416663a47cf",
       "boomRate": "0xbfaba4e13976dc75",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc0082ab0e911fcdb",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5129,6 +5313,7 @@
      "state": {
       "boom": "0x3fe509f52648c5b9",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfffd4001c8332ca",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5155,13 +5340,14 @@
   },
   {
    "name": "pilot-hold",
-   "digest": "d4c55b8f38907e3f8b810973783942682f3937ca9d026fc4111710975d5bd919",
+   "digest": "49991abf55bc07c92e21fe7143e5f0c60fce43556b0417c661f872e812b54de8",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbfdde14a17621edb",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff91fc8ba6de3be",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5189,6 +5375,7 @@
      "state": {
       "boom": "0xbfdde14a17621edb",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff921be473e898b",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5216,6 +5403,7 @@
      "state": {
       "boom": "0xbfdde14a17621edb",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc000c4398ef0d4ea",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5243,6 +5431,7 @@
      "state": {
       "boom": "0xbfdde14a17621edb",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc000c18baf1e4a32",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5270,6 +5459,7 @@
      "state": {
       "boom": "0xbfdde14a17621edb",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfffe1ad3e4084fe",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5297,6 +5487,7 @@
      "state": {
       "boom": "0xbfdde14a17621edb",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfffe8345599e29b",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5323,13 +5514,14 @@
   },
   {
    "name": "pilot-shifts",
-   "digest": "8a614073bd42df8677d3a6116913c52f2f8cf47a3ec5ea2ad8610db7304e2669",
+   "digest": "cbb17c9fa900a879b4d729a95495749a20222452f839d30b8f80a70d5d83ac60",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbfcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfebf73dd7433a24",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5357,6 +5549,7 @@
      "state": {
       "boom": "0xbfcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfecb246d2e59c12",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5384,6 +5577,7 @@
      "state": {
       "boom": "0xbfcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfece61102c88129",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5411,6 +5605,7 @@
      "state": {
       "boom": "0x3fcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe5fc5eb8be189b",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5438,6 +5633,7 @@
      "state": {
       "boom": "0x3fcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe6a95d8bc3c571",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5465,6 +5661,7 @@
      "state": {
       "boom": "0x3fcd4403a9cdae40",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe7e6cac4b7c3db",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5492,6 +5689,7 @@
      "state": {
       "boom": "0xbff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc004f7005a58a3e8",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5519,6 +5717,7 @@
      "state": {
       "boom": "0xbff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc0048a80d058b6ee",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5546,6 +5745,7 @@
      "state": {
       "boom": "0xbff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc0043d3f218c09bf",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5572,13 +5772,14 @@
   },
   {
    "name": "pilot-tack",
-   "digest": "8e1720a12039e0e6f83c7435cdb43427b1a034a78220097b6a68d522eda8ebf6",
+   "digest": "0624f6868db09d42bebf6bf130fe9cdc92e7400978b5d1a0fc8b31a1f41ac0ec",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe9a1f01bf97531",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5606,6 +5807,7 @@
      "state": {
       "boom": "0x3fc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x3fe93043e3263ee2",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5633,6 +5835,7 @@
      "state": {
       "boom": "0xbfc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe951c01c77352d",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5660,6 +5863,7 @@
      "state": {
       "boom": "0xbfc319d37d7b7e6e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbfe91d45743d2513",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5686,13 +5890,14 @@
   },
   {
    "name": "pilot-gybe",
-   "digest": "43ec312664839028bfac6e80afc73a233a13e83bcad471e561f5caa92add33be",
+   "digest": "82ae45c35694628455febd453e3c84fdd6fe6c12fedea13132b295e35cc14fcf",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0x3ff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004cc6a85121d4c",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5720,6 +5925,7 @@
      "state": {
       "boom": "0x3ff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004ecb304d0ef5d",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5747,6 +5953,7 @@
      "state": {
       "boom": "0xbff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc004ed04e8616e96",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5774,6 +5981,7 @@
      "state": {
       "boom": "0x3ff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x400305c8daef3949",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5801,6 +6009,7 @@
      "state": {
       "boom": "0x3ff42d0ebd3f437e",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004f30634ae74b7",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5827,13 +6036,14 @@
   },
   {
    "name": "pilot-heading",
-   "digest": "8bed3e802128185ccc4483265242925f7ebc1ee6363df84fd3115dae6ba22314",
+   "digest": "2666ebbf4bfcfe93833f873b497f98fd24f718e118073a5d77d51d833a45435f",
    "checkpoints": [
     {
      "step": 600,
      "state": {
       "boom": "0xbfe690492ceeb34b",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xbff91dc486fababd",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5861,6 +6071,7 @@
      "state": {
       "boom": "0x3fe690492ceeb34b",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x40050031c3897ebe",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5888,6 +6099,7 @@
      "state": {
       "boom": "0x3fe690492ceeb34b",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004f323c97f1980",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5915,6 +6127,7 @@
      "state": {
       "boom": "0x3fe690492ceeb34b",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0x4004f1a2f181f047",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5942,6 +6155,7 @@
      "state": {
       "boom": "0xbfe690492ceeb34b",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc004efb28c5290b0",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",
@@ -5969,6 +6183,7 @@
      "state": {
       "boom": "0xbfe690492ceeb34b",
       "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
       "heading": "0xc00257a0cd0e2d08",
       "heave": "0x0000000000000000",
       "heaveRate": "0x0000000000000000",

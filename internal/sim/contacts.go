@@ -169,7 +169,7 @@ func (w *World) bump(f *bus.Frame, p *bus.Pair, c *physics.Contact, v physics.Ve
 // of a world restored.
 func (w *World) settle(f *bus.Frame, s int32) {
 	st := &f.State[s]
-	f.Wind[s] = physics.WindAt(&w.wind, st.X, st.Y, nil)
+	f.Wind[s] = physics.WindAt(&w.wind, st.X, st.Y, w.shelter)
 	if w.enc != nil {
 		f.Wake[s] = physics.WakeOf(st, &f.Wind[s], &w.kinds[f.Kind[s]], w.enc)
 	}

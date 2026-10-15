@@ -221,8 +221,9 @@ func (c *config) startOf(g *physics.Ground, port *made) Start {
 		}
 		if full < bestRows || full == bestRows && depth > bestDepth {
 			bestRows, bestDepth = full, depth
+			// A state's heading is in [−π, π).
 			heading := out + math.Pi/2
-			if heading >= 2*math.Pi {
+			if heading >= math.Pi {
 				heading -= 2 * math.Pi
 			}
 			best = Start{Heading: heading, Places: places, Out: out}

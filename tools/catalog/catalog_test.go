@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/names"
 )
 
 // validBoats is one boat, with the real Jolly boat's physics values. Its
@@ -41,6 +43,7 @@ const (
 	skyPath       = "shared/catalog/sky.yaml"
 	boatsPath     = "shared/catalog/boats.yaml"
 	encounterPath = "shared/catalog/encounters.yaml"
+	worldPath     = "shared/catalog/world.yaml"
 )
 
 // glb is a glTF binary holding only its JSON: nodes of the given names.
@@ -80,6 +83,15 @@ func realSky() string {
 // fixture has unless it gives its own.
 func realEncounters() string {
 	data, err := os.ReadFile(filepath.Join("..", "..", encounterPath))
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
+}
+
+// realFile returns a file of the real repository.
+func realFile(path string) string {
+	data, err := os.ReadFile(filepath.Join("..", "..", path))
 	if err != nil {
 		panic(err)
 	}
@@ -153,6 +165,15 @@ func fixture(t *testing.T, files map[string]string) string {
 	if _, ok := files[encounterPath]; !ok {
 		files[encounterPath] = realEncounters()
 	}
+	if _, ok := files[worldPath]; !ok {
+		files[worldPath] = realFile(worldPath)
+	}
+	for _, f := range names.Files {
+		p := namesDir + "/" + f
+		if _, ok := files[p]; !ok {
+			files[p] = realFile(p)
+		}
+	}
 	for p, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -181,6 +202,12 @@ func checkAll(root string) error {
 		return err
 	}
 	if err := checkLights(root, doc); err != nil {
+		return err
+	}
+	if err := checkWorld(doc); err != nil {
+		return err
+	}
+	if _, err := namesFile(root, doc); err != nil {
 		return err
 	}
 	return checkIDsNotInCode(root, ids(doc))

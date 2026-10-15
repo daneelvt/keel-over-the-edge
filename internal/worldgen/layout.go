@@ -16,12 +16,12 @@ import (
 // gap between coasts; so the islands spread over the disk without a grid's
 // rows, and fill its widest stretches of open water first.
 
-// The kinds of island.
+// The kinds of island: a group's are its rocks and islets.
 const (
 	kindMain     = "main"
 	kindLandmark = "landmark"
 	kindIsland   = "island"
-	kindRock     = "rock"
+	kindRock     = "group"
 )
 
 // spot is a placed island before it is made: its centre, its radius, half

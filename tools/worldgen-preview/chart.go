@@ -191,7 +191,7 @@ func chart(b *worldgen.Bundle, c *chartConfig, v view, terrain []byte) []byte {
 	// Names: a landmark's larger.
 	fmt.Fprintln(&s, `<g id="names" fill="#111" stroke="#fff" stroke-width="2.5" paint-order="stroke" text-anchor="middle">`)
 	for _, is := range b.Islands {
-		if is.Kind == "rock" {
+		if is.Group >= 0 {
 			continue // its group's name is shown, and the page lists it
 		}
 		x, y := v.px(is.X, is.Y)

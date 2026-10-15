@@ -436,7 +436,7 @@ func TestSecondSignalKills(t *testing.T) {
 		vars := map[string]string{
 			"KEEL_PLAY_ORIGIN": "https://play.example.com", "KEEL_DATABASE_URL": "postgres://keel@db.example.com/keel", "KEEL_BELL": "10s",
 		}
-		err := runServer(ctx, env(vars), os.Stdout, (&memDB{epoch: firstEpoch}).with(serveOptions{listen: newMemNet().listen, workers: 2}))
+		err := runServer(ctx, env(vars), os.Stdout, (&memDB{epoch: firstEpoch}).with(serveOptions{listen: newMemNet().listen, workers: 2, generate: emptyWorld}))
 		fmt.Println("runServer returned:", err)
 		os.Exit(0)
 	}
