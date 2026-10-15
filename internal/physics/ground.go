@@ -26,6 +26,10 @@ const DeepWater = -400
 // GroundSurfaces is the most kinds of surface the ground has.
 const GroundSurfaces = 16
 
+// GroundSlots is how many chunks of the ground a client's module holds: the
+// one its boat is in and the eight about it.
+const GroundSlots = 9
+
 // GroundChunk is one chunk's ground, each hexagon at its index in the chunk
 // (ChunkOf): its elevation in decimetres above the sea, negative for the
 // sea bed, and its surface, an index into the catalog's surfaces.
@@ -185,20 +189,34 @@ var (
 	hexCornerY = [6]float64{0, HexAcross / 2, HexAcross / 2, 0, -HexAcross / 2, -HexAcross / 2}
 )
 
-// landTouch reports whether the placed hull h touches the hexagon whose
-// centre is (cx, cy) from the hull's centre of gravity, and if it does
+// corner is corner i of outline o placed at the origin heading the way
+// sin, cos say, east and north.
+func (o *outline) corner(i int, sin, cos float64) (x, y float64) {
+	return float64(o.x[i]*sin) + float64(o.y[i]*cos), float64(o.x[i]*cos) - float64(o.y[i]*sin)
+}
+
+// normal is edge i's outward normal, placed the same way.
+func (o *outline) normal(i int, sin, cos float64) (nx, ny float64) {
+	return float64(o.nx[i]*sin) + float64(o.ny[i]*cos), float64(o.nx[i]*cos) - float64(o.ny[i]*sin)
+}
+
+// landTouch reports whether hull o, at the origin heading the way sin, cos
+// say, touches the hexagon whose centre is (cx, cy), and if it does
 // returns the normal pointing from the hull into the land, how deep they
-// overlap along it, and the point they touch at, from the centre of
-// gravity: separating axes, as between two hulls.
-func landTouch(h *hullFrame, cx, cy float64) (nx, ny, depth, px, py float64, ok bool) {
+// overlap along it, and the point they touch at: separating axes, as
+// between two hulls. The hull's corners are worked out as they are needed,
+// with nothing kept: the WebAssembly build keeps a local over a few hundred
+// bytes on its heap, which never frees.
+func landTouch(o *outline, sin, cos, cx, cy float64) (nx, ny, depth, px, py float64, ok bool) {
 	best := math.Inf(-1)
 	fromHull, edge := false, 0
 	for i := range outlinePoints {
+		ex, ey := o.normal(i, sin, cos)
 		low := math.Inf(1)
 		for k := range 6 {
-			low = min2(low, float64(h.nx[i]*(cx+hexCornerX[k]))+float64(h.ny[i]*(cy+hexCornerY[k])))
+			low = min2(low, float64(ex*(cx+hexCornerX[k]))+float64(ey*(cy+hexCornerY[k])))
 		}
-		sep := low - h.edgeOffset(i)
+		sep := low - o.offset[i]
 		if sep > 0 {
 			return 0, 0, 0, 0, 0, false
 		}
@@ -208,7 +226,12 @@ func landTouch(h *hullFrame, cx, cy float64) (nx, ny, depth, px, py float64, ok 
 	}
 	for k := range 6 {
 		mx, my := hexNormalX[k], hexNormalY[k]
-		sep := (h.lowest(mx, my) - (float64(mx*cx) + float64(my*cy))) - HexAcross/2
+		low := math.Inf(1)
+		for i := range outlinePoints {
+			x, y := o.corner(i, sin, cos)
+			low = min2(low, float64(mx*x)+float64(my*y))
+		}
+		sep := (low - (float64(mx*cx) + float64(my*cy))) - HexAcross/2
 		if sep > 0 {
 			return 0, 0, 0, 0, 0, false
 		}
@@ -218,7 +241,7 @@ func landTouch(h *hullFrame, cx, cy float64) (nx, ny, depth, px, py float64, ok 
 	}
 	if fromHull {
 		// A corner of the hexagon pokes into the hull: the deepest one.
-		nx, ny = h.nx[edge], h.ny[edge]
+		nx, ny = o.normal(edge, sin, cos)
 		low := math.Inf(1)
 		for k := range 6 {
 			x, y := cx+hexCornerX[k], cy+hexCornerY[k]
@@ -232,8 +255,9 @@ func landTouch(h *hullFrame, cx, cy float64) (nx, ny, depth, px, py float64, ok 
 	nx, ny = -hexNormalX[edge], -hexNormalY[edge]
 	high := math.Inf(-1)
 	for i := range outlinePoints {
-		if d := float64(nx*h.x[i]) + float64(ny*h.y[i]); d > high {
-			high, px, py = d, h.x[i], h.y[i]
+		x, y := o.corner(i, sin, cos)
+		if d := float64(nx*x) + float64(ny*y); d > high {
+			high, px, py = d, x, y
 		}
 	}
 	return nx, ny, -best, px, py, true
@@ -246,10 +270,9 @@ const landPasses = 2
 // land resolves boat s's contacts with the land about it: each pushes the
 // hull out along its normal, and an impulse stops it closing, with the
 // restitution and friction of land. It reports whether the hull touched.
-func (b *Prepared) land(s *State, g *Ground, h *hullFrame, sinH, cosH float64) bool {
+func (b *Prepared) land(s *State, g *Ground, sinH, cosH float64) bool {
 	gp := g.Prepared
 	q0, r0 := HexAt(s.X, s.Y)
-	h.place(&b.outline, 0, 0, sinH, cosH)
 	touched := false
 	for range landPasses {
 		for dq := -b.groundRings; dq <= b.groundRings; dq++ {
@@ -259,7 +282,7 @@ func (b *Prepared) land(s *State, g *Ground, h *hullFrame, sinH, cosH float64) b
 					continue
 				}
 				hx, hy := HexCentre(q0+dq, r0+dr)
-				nx, ny, depth, px, py, ok := landTouch(h, hx-s.X, hy-s.Y)
+				nx, ny, depth, px, py, ok := landTouch(&b.outline, sinH, cosH, hx-s.X, hy-s.Y)
 				if !ok {
 					continue
 				}
@@ -373,8 +396,7 @@ func (b *Prepared) pushOff(s *State, g *Ground, from float64) bool {
 // land's contacts, the time aground and still, and pushing off.
 func (b *Prepared) ground(s *State, e *Env, g *Ground, bd *bed, o *Out) {
 	sinH, cosH := SinCos(s.Heading)
-	var h hullFrame
-	touched := b.land(s, g, &h, sinH, cosH)
+	touched := b.land(s, g, sinH, cosH)
 	o.Aground = Afloat
 	switch {
 	case touched:

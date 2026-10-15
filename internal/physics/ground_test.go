@@ -126,9 +126,7 @@ func cliff(x, y float64) float64 {
 
 // deepest is how deep the boat's hull is into any land about it.
 func deepest(s *State, g *Ground, b *Prepared) float64 {
-	var h hullFrame
 	sinH, cosH := SinCos(s.Heading)
-	h.place(&b.outline, 0, 0, sinH, cosH)
 	q0, r0 := HexAt(s.X, s.Y)
 	worst := 0.0
 	for dq := int32(-3); dq <= 3; dq++ {
@@ -137,7 +135,7 @@ func deepest(s *State, g *Ground, b *Prepared) float64 {
 				continue
 			}
 			hx, hy := HexCentre(q0+dq, r0+dr)
-			if _, _, d, _, _, ok := landTouch(&h, hx-s.X, hy-s.Y); ok {
+			if _, _, d, _, _, ok := landTouch(&b.outline, sinH, cosH, hx-s.X, hy-s.Y); ok {
 				worst = max(worst, d)
 			}
 		}

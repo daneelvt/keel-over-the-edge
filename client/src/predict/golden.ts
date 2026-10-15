@@ -22,8 +22,18 @@ export interface ScenarioFile {
   params: RecordValues;
   /** The catalog's wind values, for the scenarios that sail in spells of weather. */
   wind?: RecordValues;
+  /** The catalog's grounding values, for the scenarios that sail on a terrain. */
+  ground?: RecordValues;
   scenarios: Scenario[];
 }
+
+/**
+ * Gives a terrain's file, testdata/ground/<name>.bin.gz, unzipped: records
+ * one after another, each a chunk's number as a little-endian uint16, a
+ * kind byte (1 its ground: its elevations as int16s, then its surfaces; 2
+ * its shelter's table), and that.
+ */
+export type TerrainLoader = (name: string) => Promise<Uint8Array>;
 
 /** The spells of weather a scenario sails in, each by its fields' names, and the tick of step 0. */
 export interface ScenarioWeather {
@@ -61,6 +71,8 @@ export interface Scenario {
   sea?: ScenarioSea;
   /** If present, each step's wind is the wind at the boat at the step's tick, and env is not used. */
   weather?: ScenarioWeather;
+  /** If present, the terrain the scenario sails on: its ground, and the land's shelter for its wind. */
+  terrain?: string;
   changes?: ScenarioChange[];
 }
 
@@ -89,12 +101,25 @@ export interface ScenarioResult {
  */
 export async function runScenario(
   physics: Physics,
-  file: Pick<ScenarioFile, 'sea' | 'params' | 'wind'>,
+  file: Pick<ScenarioFile, 'sea' | 'params' | 'wind' | 'ground'>,
   scenario: Scenario,
+  terrain?: TerrainLoader,
 ): Promise<ScenarioResult> {
   const r = physics.records;
   for (const v of Object.values(r)) {
     v.fill(0);
+  }
+  physics.groundUse(false);
+  physics.shelterUse(false);
+  if (scenario.terrain !== undefined) {
+    if (terrain === undefined || file.ground === undefined) {
+      throw new Error(`${scenario.name}: a terrain, and nothing to load it or no ground values`);
+    }
+    setRecord(physics.records.groundParams, 'groundParams', file.ground);
+    physics.prepareGround();
+    const sheltered = loadTerrain(physics, await terrain(scenario.terrain));
+    physics.groundUse(true);
+    physics.shelterUse(sheltered);
   }
   setFields(physics, 'seaParams', file.sea);
   physics.prepareSea();
@@ -200,6 +225,38 @@ export async function runScenario(
 }
 
 /**
+ * Writes a terrain's chunks into the module's slots, in turn, and reports
+ * whether it holds any shelter.
+ */
+function loadTerrain(physics: Physics, raw: Uint8Array): boolean {
+  const v = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+  let at = 0;
+  let groundSlot = 0;
+  let shelterSlot = 0;
+  while (at < raw.byteLength) {
+    const chunk = v.getUint16(at, true);
+    const kind = v.getUint8(at + 2);
+    at += 3;
+    if (kind === 1) {
+      const into = physics.groundChunk(groundSlot++, chunk);
+      for (let i = 0; i < into.elevation.length; i++) {
+        into.elevation[i] = v.getInt16(at + 2 * i, true);
+      }
+      at += 2 * into.elevation.length;
+      into.surface.set(raw.subarray(at, at + into.surface.length));
+      at += into.surface.length;
+    } else if (kind === 2) {
+      const into = physics.shelterChunk(shelterSlot++, chunk);
+      into.set(raw.subarray(at, at + into.length));
+      at += into.length;
+    } else {
+      throw new Error(`a terrain's record of kind ${kind}`);
+    }
+  }
+  return shelterSlot > 0;
+}
+
+/**
  * The scenarios' heading-hold, the twin of steer in golden_test.go. It uses
  * only operations IEEE 754 rounds exactly, so it gives the same bits as Go.
  */
@@ -273,24 +330,35 @@ function setFields(physics: Physics, record: RecordName, values: Values | undefi
 
 export interface GoldenReport {
   scenarios: number;
+  /** Scenarios on a terrain, left out for want of a loader. */
+  skipped: number;
   values: number;
   problems: string[];
 }
 
-/** Runs every scenario and function of the golden files; lists what differs. */
+/**
+ * Runs every scenario and function of the golden files; lists what
+ * differs. Without a terrain loader, the scenarios on a terrain are left
+ * out.
+ */
 export async function checkGolden(
   physics: Physics,
   scenarios: ScenarioFile,
   golden: GoldenFile,
+  terrain?: TerrainLoader,
 ): Promise<GoldenReport> {
-  const report: GoldenReport = { scenarios: 0, values: 0, problems: [] };
+  const report: GoldenReport = { scenarios: 0, skipped: 0, values: 0, problems: [] };
   for (const [i, scenario] of scenarios.scenarios.entries()) {
     const want = golden.scenarios[i];
     if (want?.name !== scenario.name) {
       report.problems.push(`golden.json has no results for ${scenario.name}`);
       continue;
     }
-    const got = await runScenario(physics, scenarios, scenario);
+    if (scenario.terrain !== undefined && terrain === undefined) {
+      report.skipped++;
+      continue;
+    }
+    const got = await runScenario(physics, scenarios, scenario, terrain);
     report.scenarios++;
     if (got.digest !== want.digest) {
       const at = got.checkpoints.findIndex(

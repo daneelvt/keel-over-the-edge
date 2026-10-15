@@ -172,3 +172,26 @@ func TestScenarioWindIsTheCatalogs(t *testing.T) {
 	var w physics.WeatherPrepared
 	physics.PrepareWeather(&p, &w)
 }
+
+// The golden scenarios on a terrain carry the catalog's grounding values,
+// and the test terrains' grounding is the same.
+func TestScenarioGroundIsTheCatalogs(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := catalog.GroundParams(cat)
+	data, err := os.ReadFile("testdata/scenarios.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sf struct {
+		Ground physics.GroundParams `json:"ground"`
+	}
+	if err := json.Unmarshal(data, &sf); err != nil {
+		t.Fatal(err)
+	}
+	if sf.Ground != p {
+		t.Errorf("scenarios.json's ground is %+v, the catalog's %+v: copy the catalog's values", sf.Ground, p)
+	}
+}

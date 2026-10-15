@@ -44,7 +44,9 @@ type scenarioFile struct {
 	Params      map[string]any     `json:"params"`
 	// Wind is WeatherParams, for the scenarios that sail in spells of
 	// weather.
-	Wind      map[string]any `json:"wind,omitempty"`
+	Wind map[string]any `json:"wind,omitempty"`
+	// Ground is GroundParams, for the scenarios that sail on a terrain.
+	Ground    map[string]any `json:"ground,omitempty"`
 	Scenarios []scenario     `json:"scenarios"`
 }
 
@@ -58,7 +60,10 @@ type scenario struct {
 	// Weather, if not nil, is the spells the scenario sails in: each
 	// step's Env is the wind at the boat, at the tick the step makes.
 	Weather *scenarioWeather `json:"weather,omitempty"`
-	Changes []change         `json:"changes"`
+	// Terrain, if not "", is the terrain the scenario sails on, from
+	// testdata/ground: its ground, and the land's shelter for its wind.
+	Terrain string   `json:"terrain,omitempty"`
+	Changes []change `json:"changes"`
 }
 
 // scenarioWeather is the spells a scenario sails in, and the tick of its
@@ -135,8 +140,16 @@ func TestGolden(t *testing.T) {
 		Comment: "Written by go test ./internal/physics -run Golden -update. Floats are their IEEE 754 bits in hexadecimal.",
 		Layout:  fmt.Sprintf("%#08x", LayoutVersion),
 	}
+	if *update {
+		for name, tt := range testTerrains {
+			g, sh := tt.make()
+			if err := writeTerrain(name, g, sh); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	for i, sc := range sf.Scenarios {
-		g, err := runScenario(sf.Sea, sf.Params, sf.Wind, sc)
+		g, err := runScenario(sf.Sea, sf.Params, sf.Wind, sf.Ground, sc)
 		if err != nil {
 			t.Fatalf("%s: %v", sc.Name, err)
 		}
@@ -279,14 +292,14 @@ func (sky *scenarioSky) set(spells []map[string]any) error {
 	return nil
 }
 
-// env is the wind of step i at the boat.
-func (sky *scenarioSky) env(i int, s *State) Env {
+// env is the wind of step i at the boat, in the shelter sh.
+func (sky *scenarioSky) env(i int, s *State, sh *Shelter) Env {
 	WeatherAt(&sky.w, &sky.t, sky.tick+float64(i))
-	return WindAt(&sky.t, s.X, s.Y, nil)
+	return WindAt(&sky.t, s.X, s.Y, sh)
 }
 
 // runScenario steps a scenario, hashing the state and Out after every step.
-func runScenario(seaParams map[string]float64, params map[string]any, wind map[string]any, sc scenario) (goldenScenario, error) {
+func runScenario(seaParams map[string]float64, params map[string]any, wind map[string]any, groundValues map[string]any, sc scenario) (goldenScenario, error) {
 	var (
 		s State
 		c Control
@@ -310,6 +323,19 @@ func runScenario(seaParams map[string]float64, params map[string]any, wind map[s
 	sky, err := newScenarioSky(wind, sc.Weather)
 	if err != nil {
 		return goldenScenario{}, err
+	}
+	var ground *Ground
+	var shelter *Shelter
+	if sc.Terrain != "" {
+		var gp GroundParams
+		if err := setRecord(&gp, groundValues); err != nil {
+			return goldenScenario{}, fmt.Errorf("ground: %w", err)
+		}
+		prepared := new(GroundPrepared)
+		PrepareGround(&gp, prepared)
+		if ground, shelter, err = readTerrain(sc.Terrain, prepared); err != nil {
+			return goldenScenario{}, err
+		}
 	}
 	if sky != nil && sc.Sea != nil && sc.Sea.Tick != sc.Weather.Tick {
 		return goldenScenario{}, fmt.Errorf("the sea's tick is %v, the weather's %v", sc.Sea.Tick, sc.Weather.Tick)
@@ -369,9 +395,9 @@ func runScenario(seaParams map[string]float64, params map[string]any, wind map[s
 			at = sea.at(sc.Sea.Tick + float64(i))
 		}
 		if sky != nil {
-			e = sky.env(i, &s)
+			e = sky.env(i, &s, shelter)
 		}
-		Step(&s, &c, &e, at, nil, &b, &o)
+		Step(&s, &c, &e, at, ground, &b, &o)
 		values := fields(&s)
 		for _, v := range append(values, fields(&o)...) {
 			if math.IsNaN(v) || math.IsInf(v, 0) {

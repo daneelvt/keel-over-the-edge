@@ -27,6 +27,15 @@
 // record and writes the verdict; collide resolves a contact between the
 // state and other records, writing the contact record.
 //
+// The ground: the client writes groundParams and calls groundPrepare once.
+// It holds groundSlots chunks of the ground and of the shelter at a time:
+// groundChunk gives a slot to a chunk by number and returns the address of
+// its elevations, then its surfaces, which the client fills; shelterChunk
+// the same for its shelter's table. groundUse and shelterUse say whether
+// steps sail on the ground and windAt reads the shelter; a chunk not held
+// is deep water and open wind. hexAt writes the hexagon that holds a point
+// to hexValues.
+//
 // The sky is asked about once a frame: the client writes skyParams and
 // calls skyPrepare once, then skyAt with sky time and the boat's place, and
 // reads the sky record; skyStar answers for one star into the skyBody
@@ -82,7 +91,24 @@ var (
 	skyPrepared sky.Prepared
 	skyNow      sky.Sky
 	skyBody     sky.Body
+
+	groundParams   physics.GroundParams
+	groundPrepared physics.GroundPrepared
+	ground         = physics.Ground{Prepared: &groundPrepared}
+	shelter        physics.Shelter
+	groundSlots    [groundSlotCount]physics.GroundChunk
+	shelterSlots   [groundSlotCount]physics.ShelterChunk
+	// groundOf and shelterOf are the chunk each slot holds, or -1.
+	groundOf  = [groundSlotCount]int32{-1, -1, -1, -1, -1, -1, -1, -1, -1}
+	shelterOf = [groundSlotCount]int32{-1, -1, -1, -1, -1, -1, -1, -1, -1}
+	groundOn  bool
+	shelterOn bool
+	hexValues [2]int32
 )
+
+// groundSlotCount is how many chunks of the ground the module holds: the
+// one the boat is in and its eight neighbours.
+const groundSlotCount = physics.GroundSlots
 
 const (
 	// seaSlots is how many windows of the sea the module holds: the one in
@@ -296,13 +322,94 @@ func seaDrawAt(tick float64) { physics.SeaAt(&waves, &drawTime, tick) }
 //
 //go:wasmexport step
 func step() {
+	var g *physics.Ground
+	if groundOn {
+		g = &ground
+	}
 	if use < 0 {
-		physics.Step(&state, &control, &env, nil, nil, &prepared, &out)
+		physics.Step(&state, &control, &env, nil, g, &prepared, &out)
 		return
 	}
 	sea := physics.Sea{Waves: &waves, Window: &windows[use].win, Tick: &stepTime}
-	physics.Step(&state, &control, &env, &sea, nil, &prepared, &out)
+	physics.Step(&state, &control, &env, &sea, g, &prepared, &out)
 }
+
+//go:wasmexport groundParams
+func groundParamsAddr() uint32 { return addr(unsafe.Pointer(&groundParams)) }
+
+// groundPrepare derives grounding's constants from groundParams.
+//
+//go:wasmexport groundPrepare
+func groundPrepare() { physics.PrepareGround(&groundParams, &groundPrepared) }
+
+// groundChunk gives slot s to chunk n, dropping the chunk it held, and
+// returns the address of its elevations, physics.ChunkHexes int16s, then
+// its surfaces, as many bytes. An n off the grid only drops it.
+//
+//go:wasmexport groundChunk
+func groundChunk(s, n uint32) uint32 {
+	s = min(s, groundSlotCount-1)
+	if old := groundOf[s]; old >= 0 {
+		ground.Chunks[old] = nil
+	}
+	groundOf[s] = -1
+	if n < physics.ChunkCount {
+		if old := ground.Chunks[n]; old != nil {
+			for i := range groundSlotCount {
+				if &groundSlots[i] == old {
+					groundOf[i] = -1
+				}
+			}
+		}
+		ground.Chunks[n] = &groundSlots[s]
+		groundOf[s] = int32(n)
+	}
+	return addr(unsafe.Pointer(&groundSlots[s]))
+}
+
+// shelterChunk gives slot s to chunk n's shelter, as groundChunk does, and
+// returns the address of its table.
+//
+//go:wasmexport shelterChunk
+func shelterChunk(s, n uint32) uint32 {
+	s = min(s, groundSlotCount-1)
+	if old := shelterOf[s]; old >= 0 {
+		shelter.Chunks[old] = nil
+	}
+	shelterOf[s] = -1
+	if n < physics.ChunkCount {
+		if old := shelter.Chunks[n]; old != nil {
+			for i := range groundSlotCount {
+				if &shelterSlots[i] == old {
+					shelterOf[i] = -1
+				}
+			}
+		}
+		shelter.Chunks[n] = &shelterSlots[s]
+		shelterOf[s] = int32(n)
+	}
+	return addr(unsafe.Pointer(&shelterSlots[s]))
+}
+
+// groundUse says whether steps sail on the ground: 1 on, 0 the open sea.
+//
+//go:wasmexport groundUse
+func groundUse(on uint32) { groundOn = on != 0 }
+
+// shelterUse says whether windAt reads the land's shelter.
+//
+//go:wasmexport shelterUse
+func shelterUse(on uint32) { shelterOn = on != 0 }
+
+// hexAt writes to hexValues the hexagon that holds (x, y), q then r.
+//
+//go:wasmexport hexAt
+func hexAt(x, y float64) {
+	hexValues[0], hexValues[1] = physics.HexAt(x, y)
+}
+
+//go:wasmexport hexValues
+func hexValuesAddr() uint32 { return addr(unsafe.Pointer(&hexValues)) }
 
 // waveUnder writes to wave the sea under a hull at (x, y) heading heading,
 // with a waterplane of the given length and beam, in window s at the time
@@ -399,7 +506,11 @@ func windAt(tick float64) {
 		physics.WeatherAt(&weather, &stepWeather, tick)
 		stepFresh = true
 	}
-	env = physics.WindAt(&stepWeather, state.X, state.Y, nil)
+	var sh *physics.Shelter
+	if shelterOn {
+		sh = &shelter
+	}
+	env = physics.WindAt(&stepWeather, state.X, state.Y, sh)
 }
 
 // windDrawAt sets the time windPoint, windSample and gustFrameAt answer

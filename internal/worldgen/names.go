@@ -47,29 +47,8 @@ type tone struct {
 func (c *config) features() []nameFeature {
 	var out []nameFeature
 	for _, f := range c.names.Features {
-		n := nameFeature{word: f.Word}
-		if f.Cliffs != nil {
-			n.cliffs = *f.Cliffs
-		}
-		if f.Peak != nil {
-			n.peak = *f.Peak
-		}
-		if f.Twin != nil {
-			n.twin = *f.Twin
-		}
-		if f.TwinApart != nil {
-			n.twinApart = *f.TwinApart
-		}
-		if f.Lagoon != nil {
-			n.lagoon = *f.Lagoon
-		}
-		if f.Stacks != nil {
-			n.stacks = int32(*f.Stacks)
-		}
-		if f.Reef != nil {
-			n.reef = *f.Reef
-		}
-		out = append(out, n)
+		out = append(out, nameFeature{word: f.Word, cliffs: f.Cliffs, peak: f.Peak, twin: f.Twin, twinApart: f.TwinApart,
+			lagoon: f.Lagoon, stacks: int32(f.Stacks), reef: f.Reef})
 	}
 	return out
 }

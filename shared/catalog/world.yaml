@@ -300,23 +300,24 @@ world:
     # what shows it, if the terrain can yet: a coast with at least cliffs of
     # cliff; a summit at least peak m high; two summits each at least twin
     # of the highest, twinApart m apart; at least stacks stacks off the
-    # coast; a reef; a lagoon behind it at least lagoon m wide. A feature
-    # nothing shows is never shown, and no name that needs it is given.
+    # coast; a reef; a lagoon behind it at least lagoon m wide; 0 or false
+    # for a test a feature has not. A feature nothing shows is never shown,
+    # and no name that needs it is given.
     features:
-      - { word: cliffs, cliffs: 0.3 }
-      - { word: peak, peak: 40 }
-      - { word: twin, twin: 0.6, twinApart: 150 }
-      - { word: stack, stacks: 1 }
-      - { word: reef, reef: true }
-      - { word: lagoon, lagoon: 40 }
-      - { word: arch }
-      - { word: birds }
-      - { word: cave }
-      - { word: ruins }
-      - { word: smoke }
-      - { word: spring }
-      - { word: waterfall }
-      - { word: wreck }
+      - { word: cliffs, cliffs: 0.3, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
+      - { word: peak, cliffs: 0, peak: 40, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
+      - { word: twin, cliffs: 0, peak: 0, twin: 0.6, twinApart: 150, stacks: 0, reef: false, lagoon: 0 }
+      - { word: stack, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 1, reef: false, lagoon: 0 }
+      - { word: reef, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: true, lagoon: 0 }
+      - { word: lagoon, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 40 }
+      - { word: arch, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
+      - { word: birds, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
+      - { word: cave, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
+      - { word: ruins, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
+      - { word: smoke, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
+      - { word: spring, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
+      - { word: waterfall, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
+      - { word: wreck, cliffs: 0, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
     # Weights of each tone by zone, and how many of it a world may have
     # (0 for no limit). A name of a phantom tone that belongs only to the
     # rim is given only in the mist band.

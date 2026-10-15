@@ -42,6 +42,25 @@ var records = []struct {
 	{"encounter", reflect.TypeFor[physics.Encounter]()},
 	{"verdict", reflect.TypeFor[physics.Verdict]()},
 	{"contact", reflect.TypeFor[physics.Contact]()},
+	{"groundParams", reflect.TypeFor[physics.GroundParams]()},
+}
+
+// groundConstants are the ground's sizes: a chunk's hexagons, columns and
+// rows, the chunks a side, the surfaces, a shelter table's cells and
+// directions and the factor's one, and the chunks the module holds.
+var groundConstants = []struct {
+	name  string
+	value int
+}{
+	{"chunkHexes", physics.ChunkHexes},
+	{"chunkColumns", physics.ChunkColumns},
+	{"chunkRows", physics.ChunkRows},
+	{"chunkSide", physics.ChunkSide},
+	{"surfaces", physics.GroundSurfaces},
+	{"shelterCells", physics.ShelterCells},
+	{"shelterDirections", physics.ShelterDirections},
+	{"shelterFactorOne", physics.ShelterFactorOne},
+	{"slots", physics.GroundSlots},
 }
 
 // encounterConstants are the encounters' sizes: the wakes a step may be
@@ -163,6 +182,9 @@ func versionOf(l layout) uint32 {
 	for _, c := range encounterConstants {
 		fmt.Fprintf(&b, "encounters.%s:%d\n", c.name, c.value)
 	}
+	for _, c := range groundConstants {
+		fmt.Fprintf(&b, "ground.%s:%d\n", c.name, c.value)
+	}
 	sum := sha256.Sum256([]byte(b.String()))
 	return binary.BigEndian.Uint32(sum[:4])
 }
@@ -268,6 +290,15 @@ export const RECORDS = {
 	for i, c := range encounterConstants {
 		sep := ","
 		if i == len(encounterConstants)-1 {
+			sep = ""
+		}
+		fmt.Fprintf(&b, " %s: %d%s", c.name, c.value, sep)
+	}
+	b.WriteString(" } as const;\n")
+	b.WriteString("\n/**\n * The ground's sizes: a chunk's hexagons, columns and rows, the chunks a side,\n * the surfaces, a shelter table's cells and directions and its factor's one,\n * and the chunks the module holds.\n */\nexport const GROUND = {")
+	for i, c := range groundConstants {
+		sep := ","
+		if i == len(groundConstants)-1 {
 			sep = ""
 		}
 		fmt.Fprintf(&b, " %s: %d%s", c.name, c.value, sep)

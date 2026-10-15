@@ -315,28 +315,29 @@ const LightStarboard Light = "starboard"
 const LightStern Light = "stern"
 const LightTricolour Light = "tricolour"
 
-// A feature a name may need, by its word, and what shows it.
+// A feature a name may need, by its word, and what shows it: 0 or false for a test
+// it does not have; a feature with none is never shown.
 type NameFeature struct {
 	// A coast with at least this share of cliff.
-	Cliffs *float64 `json:"cliffs,omitempty,omitzero"`
+	Cliffs float64 `json:"cliffs"`
 
 	// A lagoon behind a reef at least this wide, in m.
-	Lagoon *float64 `json:"lagoon,omitempty,omitzero"`
+	Lagoon float64 `json:"lagoon"`
 
 	// A summit at least this high, in m.
-	Peak *float64 `json:"peak,omitempty,omitzero"`
+	Peak float64 `json:"peak"`
 
 	// A reef.
-	Reef *bool `json:"reef,omitempty,omitzero"`
+	Reef bool `json:"reef"`
 
 	// At least this many stacks.
-	Stacks *int `json:"stacks,omitempty,omitzero"`
+	Stacks int `json:"stacks"`
 
 	// Two summits each at least this share of the highest.
-	Twin *float64 `json:"twin,omitempty,omitzero"`
+	Twin float64 `json:"twin"`
 
 	// And at least this far apart, in m.
-	TwinApart *float64 `json:"twinApart,omitempty,omitzero"`
+	TwinApart float64 `json:"twinApart"`
 
 	// Its word, as the names give it.
 	Word string `json:"word"`
@@ -1252,10 +1253,11 @@ type WorldNames struct {
 	// Two islands of a biome this close may share a name, in m.
 	Neighbours float64 `json:"neighbours"`
 
-	// Names written as a pair, best given in the same world.
+	// Names written as a pair, best given in the same world: two names each.
 	Partners [][]string `json:"partners"`
 
-	// The pairs of words neighbours sharing a name take, the larger the first.
+	// The pairs of words neighbours sharing a name take, the larger the first: two
+	// words each.
 	Prefixes [][]string `json:"prefixes"`
 
 	// The tones of names.
@@ -1408,4 +1410,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "71062201a5a8ddb9"
+const Version = "1f63a5e49fe428a2"

@@ -3,8 +3,11 @@
 package physics
 
 import (
+	"encoding/json"
 	"math"
 	"math/rand/v2"
+	"os"
+	"reflect"
 	"testing"
 )
 
@@ -131,5 +134,43 @@ func TestChunks(t *testing.T) {
 	}
 	if c, j := HexCell(0, 0); c != columnZero || j != rowZero {
 		t.Errorf("the centre's hexagon is column %d row %d", c, j)
+	}
+}
+
+// hexFile holds points on hexagons' edges and corners and the hexagon
+// HexAt puts each in, for the module's test (client/src/predict/hex.test.ts):
+// floats as their IEEE 754 bits in hexadecimal.
+const hexFile = "testdata/hex.json"
+
+func TestHexFile(t *testing.T) {
+	type point struct {
+		X, Y string
+		Q, R int32
+	}
+	var points []point
+	for _, h := range [][2]int32{{0, 0}, {1, 0}, {-1, 3}, {57, -200}, {-1200, 900}, {2431, -2000}, {-2432, 2111}} {
+		cx, cy := HexCentre(h[0], h[1])
+		for k := range 12 {
+			a := float64(k) * math.Pi / 6
+			r := hexRadius
+			if k%2 == 1 {
+				r = HexAcross / 2
+			}
+			x, y := cx+r*math.Cos(a), cy+r*math.Sin(a)
+			q, rr := HexAt(x, y)
+			points = append(points, point{toHex(x), toHex(y), q, rr})
+		}
+	}
+	if *update {
+		data, _ := json.MarshalIndent(points, "", " ")
+		if err := os.WriteFile(hexFile, append(data, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	var want []point
+	readJSON(t, hexFile, &want)
+	if !reflect.DeepEqual(points, want) {
+		t.Errorf("%s differs from this machine's: rewrite it with -update", hexFile)
 	}
 }

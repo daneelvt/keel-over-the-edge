@@ -560,8 +560,6 @@
         "sizes": {
           "description": "Size classes by an island's width, narrowest first.",
           "type": "array",
-          "minItems": 1,
-          "maxItems": 8,
           "items": { "$ref": "#/$defs/WorldSize" }
         },
         "land": {
@@ -583,15 +581,11 @@
         "biomes": {
           "description": "The biomes: each an island's terrain.",
           "type": "array",
-          "minItems": 1,
-          "maxItems": 16,
           "items": { "$ref": "#/$defs/Biome" }
         },
         "surfaces": {
           "description": "What the ground is covered with; a hexagon holds a surface's index here.",
           "type": "array",
-          "minItems": 1,
-          "maxItems": 16,
           "items": { "$ref": "#/$defs/Surface" }
         },
         "fetch": { "$ref": "#/$defs/WorldFetch" },
@@ -1427,10 +1421,10 @@
     },
     "NameFeature": {
       "title": "NameFeature",
-      "description": "A feature a name may need, by its word, and what shows it.",
+      "description": "A feature a name may need, by its word, and what shows it: 0 or false for a test it does not have; a feature with none is never shown.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["word"],
+      "required": ["word", "cliffs", "peak", "twin", "twinApart", "stacks", "reef", "lagoon"],
       "properties": {
         "word": {
           "description": "Its word, as the names give it.",
@@ -1465,7 +1459,7 @@
         "stacks": {
           "description": "At least this many stacks.",
           "type": "integer",
-          "minimum": 1,
+          "minimum": 0,
           "maximum": 64
         },
         "reef": { "description": "A reef.", "type": "boolean" },
@@ -1534,15 +1528,11 @@
         "features": {
           "description": "The features names may need.",
           "type": "array",
-          "minItems": 1,
-          "maxItems": 64,
           "items": { "$ref": "#/$defs/NameFeature" }
         },
         "tones": {
           "description": "The tones of names.",
           "type": "array",
-          "minItems": 1,
-          "maxItems": 16,
           "items": { "$ref": "#/$defs/NameTone" }
         },
         "neighbours": {
@@ -1558,14 +1548,10 @@
           "maximum": 1
         },
         "prefixes": {
-          "description": "The pairs of words neighbours sharing a name take, the larger the first.",
+          "description": "The pairs of words neighbours sharing a name take, the larger the first: two words each.",
           "type": "array",
-          "minItems": 1,
-          "maxItems": 16,
           "items": {
             "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
             "items": { "type": "string", "minLength": 1, "maxLength": 20 }
           }
         },
@@ -1582,13 +1568,10 @@
           "maximum": 1
         },
         "partners": {
-          "description": "Names written as a pair, best given in the same world.",
+          "description": "Names written as a pair, best given in the same world: two names each.",
           "type": "array",
-          "maxItems": 64,
           "items": {
             "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
             "items": { "type": "string", "minLength": 1, "maxLength": 60 }
           }
         }

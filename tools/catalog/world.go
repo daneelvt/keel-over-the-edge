@@ -120,6 +120,15 @@ func checkWorld(doc map[string]any) error {
 	if !(num(zs["centre"]) < num(zs["middle"])) {
 		bad("world.zones: the centre must end before the middle waters")
 	}
+	nm, _ := world["names"].(map[string]any)
+	for _, key := range []string{"prefixes", "partners"} {
+		list, _ := nm[key].([]any)
+		for i, p := range list {
+			if pair, _ := p.([]any); len(pair) != 2 {
+				bad("world.names.%s[%d]: %d entries, not a pair", key, i, len(pair))
+			}
+		}
+	}
 	shelter, _ := world["shelter"].(map[string]any)
 	if !(num(shelter["near"]) < num(shelter["far"])) {
 		bad("world.shelter: near must be less than far")

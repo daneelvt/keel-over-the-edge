@@ -5,9 +5,18 @@
 // internal/physics/testdata/golden.json.
 
 import { existsSync, readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
-import { checkGolden, fromHex, type GoldenFile, type ScenarioFile, toHex } from './golden';
+import {
+  checkGolden,
+  fromHex,
+  type GoldenFile,
+  runScenario,
+  type ScenarioFile,
+  type TerrainLoader,
+  toHex,
+} from './golden';
 import { LAYOUT_VERSION, RECORDS } from './layout.gen';
 import { writeParams } from './params.gen';
 import { loadPhysics, type Physics } from './physics';
@@ -20,6 +29,10 @@ function readJSON<T>(name: string): T {
 }
 
 let physics: Physics;
+
+/** Loads a golden scenario's terrain from its file. */
+const terrain: TerrainLoader = async (name) =>
+  new Uint8Array(gunzipSync(readFileSync(new URL(`ground/${name}.bin.gz`, testdata))));
 
 beforeAll(async () => {
   if (!existsSync(wasm)) {
@@ -39,9 +52,11 @@ describe('golden', () => {
       physics,
       readJSON<ScenarioFile>('scenarios.json'),
       readJSON<GoldenFile>('golden.json'),
+      terrain,
     );
     expect(report.problems).toEqual([]);
-    expect(report.scenarios).toBeGreaterThanOrEqual(13);
+    expect(report.skipped).toBe(0);
+    expect(report.scenarios).toBeGreaterThanOrEqual(36);
     expect(report.values).toBeGreaterThanOrEqual(6 * 256);
   });
 });
@@ -67,6 +82,29 @@ describe('memory', () => {
     for (const v of physics.records.state) {
       expect(Number.isFinite(v)).toBe(true);
     }
+  });
+
+  test('ten thousand steps against land neither allocate nor grow the memory', async () => {
+    const file = readJSON<ScenarioFile>('scenarios.json');
+    const cliff = file.scenarios.find((s) => s.terrain === 'cliff');
+    if (cliff === undefined) {
+      throw new Error('no scenario on the cliff');
+    }
+    // Run the scenario once to load its terrain, then sail on into the cove.
+    await runScenario(physics, file, cliff, terrain);
+    const bytes = physics.memoryBytes;
+    const allocations = physics.allocations;
+    let touched = 0;
+    for (let i = 0; i < 10_000; i++) {
+      physics.records.control.set([Math.sign(Math.sin(i / 300)), 1]);
+      physics.step();
+      if (physics.records.out[RECORDS.out.aground] === 2) {
+        touched++;
+      }
+    }
+    expect(touched).toBeGreaterThan(0);
+    expect(physics.memoryBytes).toBe(bytes);
+    expect(physics.allocations).toBe(allocations);
   });
 });
 

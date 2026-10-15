@@ -5,7 +5,7 @@
 // anything that must agree with the server is computed in the module, never
 // with JavaScript's Math, whose last bits differ between browsers.
 
-import { ENCOUNTERS, FN, LAYOUT_VERSION, RECORDS, SEA, SIZES, WEATHER } from './layout.gen';
+import { ENCOUNTERS, FN, GROUND, LAYOUT_VERSION, RECORDS, SEA, SIZES, WEATHER } from './layout.gen';
 import { SKY_PARAMS } from './params.gen';
 
 export type RecordName = keyof typeof RECORDS;
@@ -110,6 +110,14 @@ interface Exports {
   fnCapacity(): number;
   fn(op: number, n: number): void;
   allocations(): number;
+  groundParams(): number;
+  groundPrepare(): void;
+  groundChunk(slot: number, chunk: number): number;
+  shelterChunk(slot: number, chunk: number): number;
+  groundUse(on: number): void;
+  shelterUse(on: number): void;
+  hexAt(x: number, y: number): void;
+  hexValues(): number;
 }
 
 const functionExports = [
@@ -192,7 +200,23 @@ const functionExports = [
   'fnCapacity',
   'fn',
   'allocations',
+  'groundParams',
+  'groundPrepare',
+  'groundChunk',
+  'shelterChunk',
+  'groundUse',
+  'shelterUse',
+  'hexAt',
+  'hexValues',
 ] as const satisfies readonly (keyof Exports)[];
+
+/** A chunk of the ground as the module holds it: views of its memory. */
+export interface GroundChunk {
+  /** Each hexagon's elevation in decimetres above the sea, column by column. */
+  elevation: Int16Array;
+  /** Each hexagon's surface, an index into the catalog's surfaces. */
+  surface: Uint8Array;
+}
 
 const recordNames = Object.keys(RECORDS) as RecordName[];
 
@@ -485,6 +509,62 @@ export class Physics {
       this.#x.spellSet(i);
     }
     this.#x.spellCount(n);
+  }
+
+  /**
+   * Derives grounding's constants from the groundParams record. Call it
+   * after writing groundParams.
+   */
+  prepareGround(): void {
+    this.#x.groundPrepare();
+  }
+
+  /**
+   * Gives one of the module's GROUND.slots slots to a chunk of the ground,
+   * by its number, dropping the chunk it held, and returns views of its
+   * elevations and surfaces to fill. A chunk the module does not hold is
+   * deep water.
+   */
+  groundChunk(slot: number, chunk: number): GroundChunk {
+    const at = this.#x.groundChunk(slot, chunk) >>> 0;
+    const buffer = this.#x.memory.buffer;
+    return {
+      elevation: new Int16Array(buffer, at, GROUND.chunkHexes),
+      surface: new Uint8Array(buffer, at + 2 * GROUND.chunkHexes, GROUND.chunkHexes),
+    };
+  }
+
+  /**
+   * Gives a slot to a chunk's shelter, as groundChunk does, and returns a
+   * view of its table: for each cell and direction, the factor's byte and
+   * the turn's.
+   */
+  shelterChunk(slot: number, chunk: number): Uint8Array {
+    const at = this.#x.shelterChunk(slot, chunk) >>> 0;
+    return new Uint8Array(
+      this.#x.memory.buffer,
+      at,
+      GROUND.shelterCells * GROUND.shelterDirections * 2,
+    );
+  }
+
+  /** Says whether steps sail on the ground the module holds, or in the open sea. */
+  groundUse(on: boolean): void {
+    this.#x.groundUse(on ? 1 : 0);
+  }
+
+  /** Says whether windAt reads the land's shelter the module holds. */
+  shelterUse(on: boolean): void {
+    this.#x.shelterUse(on ? 1 : 0);
+  }
+
+  /** The hexagon that holds (east, north), as the server finds it, written to out as q, r. */
+  hexAt(east: number, north: number, out: number[]): number[] {
+    this.#x.hexAt(east, north);
+    const v = new Int32Array(this.#x.memory.buffer, this.#x.hexValues() >>> 0, 2);
+    out[0] = v[0] ?? 0;
+    out[1] = v[1] ?? 0;
+    return out;
   }
 
   /** Sets the env record to the wind at the state's place at a tick: what the next step sails in. */

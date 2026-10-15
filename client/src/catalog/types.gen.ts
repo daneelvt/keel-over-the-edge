@@ -1311,19 +1311,8 @@ export interface World {
   layout: WorldLayout;
   /**
    * Size classes by an island's width, narrowest first.
-   *
-   * @minItems 1
-   * @maxItems 8
    */
-  sizes:
-    | [WorldSize]
-    | [WorldSize, WorldSize]
-    | [WorldSize, WorldSize, WorldSize]
-    | [WorldSize, WorldSize, WorldSize, WorldSize]
-    | [WorldSize, WorldSize, WorldSize, WorldSize, WorldSize]
-    | [WorldSize, WorldSize, WorldSize, WorldSize, WorldSize, WorldSize]
-    | [WorldSize, WorldSize, WorldSize, WorldSize, WorldSize, WorldSize, WorldSize]
-    | [WorldSize, WorldSize, WorldSize, WorldSize, WorldSize, WorldSize, WorldSize, WorldSize];
+  sizes: WorldSize[];
   /**
    * The lowest and the highest land, in m.
    *
@@ -1340,112 +1329,12 @@ export interface World {
   erosion: WorldErosion;
   /**
    * The biomes: each an island's terrain.
-   *
-   * @minItems 1
-   * @maxItems 16
    */
-  biomes:
-    | [Biome]
-    | [Biome, Biome]
-    | [Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome]
-    | [Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome, Biome];
+  biomes: Biome[];
   /**
    * What the ground is covered with; a hexagon holds a surface's index here.
-   *
-   * @minItems 1
-   * @maxItems 16
    */
-  surfaces:
-    | [Surface]
-    | [Surface, Surface]
-    | [Surface, Surface, Surface]
-    | [Surface, Surface, Surface, Surface]
-    | [Surface, Surface, Surface, Surface, Surface]
-    | [Surface, Surface, Surface, Surface, Surface, Surface]
-    | [Surface, Surface, Surface, Surface, Surface, Surface, Surface]
-    | [Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface]
-    | [Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface]
-    | [Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface]
-    | [Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface]
-    | [Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface, Surface]
-    | [
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface
-      ]
-    | [
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface
-      ]
-    | [
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface
-      ]
-    | [
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface,
-        Surface
-      ];
+  surfaces: Surface[];
   fetch: WorldFetch;
   shelter: WorldShelter;
   start: WorldStart;
@@ -2070,109 +1959,12 @@ export interface WorldValidator {
 export interface WorldNames {
   /**
    * The features names may need.
-   *
-   * @minItems 1
-   * @maxItems 64
    */
-  features: [NameFeature, ...NameFeature[]];
+  features: NameFeature[];
   /**
    * The tones of names.
-   *
-   * @minItems 1
-   * @maxItems 16
    */
-  tones:
-    | [NameTone]
-    | [NameTone, NameTone]
-    | [NameTone, NameTone, NameTone]
-    | [NameTone, NameTone, NameTone, NameTone]
-    | [NameTone, NameTone, NameTone, NameTone, NameTone]
-    | [NameTone, NameTone, NameTone, NameTone, NameTone, NameTone]
-    | [NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone]
-    | [NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone]
-    | [NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone]
-    | [NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone]
-    | [NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone, NameTone]
-    | [
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone
-      ]
-    | [
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone
-      ]
-    | [
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone
-      ]
-    | [
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone
-      ]
-    | [
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone,
-        NameTone
-      ];
+  tones: NameTone[];
   /**
    * Two islands of a biome this close may share a name, in m.
    */
@@ -2182,153 +1974,9 @@ export interface WorldNames {
    */
   neighbourShare: number;
   /**
-   * The pairs of words neighbours sharing a name take, the larger the first.
-   *
-   * @minItems 1
-   * @maxItems 16
+   * The pairs of words neighbours sharing a name take, the larger the first: two words each.
    */
-  prefixes:
-    | [[string, string]]
-    | [[string, string], [string, string]]
-    | [[string, string], [string, string], [string, string]]
-    | [[string, string], [string, string], [string, string], [string, string]]
-    | [[string, string], [string, string], [string, string], [string, string], [string, string]]
-    | [[string, string], [string, string], [string, string], [string, string], [string, string], [string, string]]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ]
-    | [
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string],
-        [string, string]
-      ];
+  prefixes: string[][];
   /**
    * An islet this close to a larger island may be named after it, in m.
    */
@@ -2338,14 +1986,12 @@ export interface WorldNames {
    */
   calfShare: number;
   /**
-   * Names written as a pair, best given in the same world.
-   *
-   * @maxItems 64
+   * Names written as a pair, best given in the same world: two names each.
    */
-  partners: [string, string][];
+  partners: string[][];
 }
 /**
- * A feature a name may need, by its word, and what shows it.
+ * A feature a name may need, by its word, and what shows it: 0 or false for a test it does not have; a feature with none is never shown.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "NameFeature".
@@ -2358,31 +2004,31 @@ export interface NameFeature {
   /**
    * A coast with at least this share of cliff.
    */
-  cliffs?: number;
+  cliffs: number;
   /**
    * A summit at least this high, in m.
    */
-  peak?: number;
+  peak: number;
   /**
    * Two summits each at least this share of the highest.
    */
-  twin?: number;
+  twin: number;
   /**
    * And at least this far apart, in m.
    */
-  twinApart?: number;
+  twinApart: number;
   /**
    * At least this many stacks.
    */
-  stacks?: number;
+  stacks: number;
   /**
    * A reef.
    */
-  reef?: boolean;
+  reef: boolean;
   /**
    * A lagoon behind a reef at least this wide, in m.
    */
-  lagoon?: number;
+  lagoon: number;
 }
 /**
  * A tone of names: its weight in each zone, and how many a world may have.
@@ -2418,4 +2064,4 @@ export interface NameTone {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '71062201a5a8ddb9';
+export const CATALOG_VERSION = '1f63a5e49fe428a2';
