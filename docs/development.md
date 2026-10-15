@@ -1604,8 +1604,8 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
-| `KEEL_LAND` | `on` | `off` sails the world's terrain as open sea: made, stored and loaded, but no grounding, shelter or fetch (production's, until phones draw land; see [The world](#the-world)) |
-| `KEEL_WORLD_SEED` | none (drawn at random) | The seed a world's terrain is made from when it has none; the local cluster sets 1 |
+| `KEEL_LAND` | `on` | `off` sails the world's terrain as open sea: made, stored and loaded, but no grounding, shelter or fetch (production's, until phones draw land; see [The world](#the-world); `tools/e2e` sets it too) |
+| `KEEL_WORLD_SEED` | none (drawn at random) | The seed a world's terrain is made from when it has none; the local cluster sets 1, as `tools/e2e` does |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
@@ -3989,7 +3989,7 @@ page loads the physics module, so build it first (`go run ./tools/physics`).
 Playwright starts four servers: `keel`, which `go run ./tools/e2e` builds from
 the tree and serves on a database of its own on the test database's server
 (so start it first: `go run ./tools/dev -db`), on ports 18080, 18081 and
-19090, dropping the database when it stops, with developer commands on, the
+19090, dropping the database when it stops, with developer commands on and land off (the terrain made from seed 1), the
 lag proxy on 18090 (200 ms, 2%) and, on 19099, `POST /restart`, which
 restarts `keel`; Vite on `http://localhost:5181` in front of it; a second
 Vite on `http://localhost:5182` whose traffic goes through the lag proxy;

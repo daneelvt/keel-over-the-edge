@@ -4,7 +4,8 @@
 // built from this tree, migrated and served on a database of its own on the
 // test server (KEEL_TEST_DATABASE_URL, or .dev/db.env from go run ./tools/dev
 // -db), on ports of its own so it can run beside go run ./tools/dev. The
-// database is dropped when it stops. Developer commands are on (POST
+// database is dropped when it stops. Land is off (KEEL_LAND=off), the
+// terrain made from seed 1. Developer commands are on (POST
 // /debug/wind and /debug/weather on keel's internal listener).
 //
 //	go run ./tools/e2e [-lag 200ms,2%] [-limit N] [-sailors N]
@@ -121,6 +122,11 @@ func run() error {
 		"KEEL_DEV_COMMANDS=1",
 		// A restart in a test needs no time for the bell to be seen.
 		"KEEL_BELL=0s",
+		// The page draws no land yet: the tests sail open sea, as production
+		// does, on a world whose terrain is still made (from a fixed seed, in
+		// a time that does not change from run to run), stored and loaded.
+		"KEEL_LAND=off",
+		"KEEL_WORLD_SEED=1",
 		fmt.Sprintf("KEEL_DEV_SAILORS=%d", *sailors),
 	)
 	if *limit > 0 {
