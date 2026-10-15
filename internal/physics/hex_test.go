@@ -147,16 +147,19 @@ func TestHexFile(t *testing.T) {
 		X, Y string
 		Q, R int32
 	}
+	// The corners and the edges' midpoints, anticlockwise from east, as
+	// constants: math.Cos and a multiply-add would give other points on a
+	// machine that fuses them.
+	const r, a = hexRadius, HexAcross
+	offsets := [12][2]float64{
+		{r, 0}, {r * 3 / 4, a / 4}, {r / 2, a / 2}, {0, a / 2}, {-r / 2, a / 2}, {-r * 3 / 4, a / 4},
+		{-r, 0}, {-r * 3 / 4, -a / 4}, {-r / 2, -a / 2}, {0, -a / 2}, {r / 2, -a / 2}, {r * 3 / 4, -a / 4},
+	}
 	var points []point
 	for _, h := range [][2]int32{{0, 0}, {1, 0}, {-1, 3}, {57, -200}, {-1200, 900}, {2431, -2000}, {-2432, 2111}} {
 		cx, cy := HexCentre(h[0], h[1])
-		for k := range 12 {
-			a := float64(k) * math.Pi / 6
-			r := hexRadius
-			if k%2 == 1 {
-				r = HexAcross / 2
-			}
-			x, y := cx+r*math.Cos(a), cy+r*math.Sin(a)
+		for _, o := range offsets {
+			x, y := cx+o[0], cy+o[1]
 			q, rr := HexAt(x, y)
 			points = append(points, point{toHex(x), toHex(y), q, rr})
 		}
