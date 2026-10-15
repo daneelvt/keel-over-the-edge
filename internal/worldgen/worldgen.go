@@ -281,5 +281,5 @@ func (b *Bundle) Generated() time.Duration {
 	for _, s := range stages {
 		ms += b.Report.Millis[s]
 	}
-	return time.Duration(float64(ms * float64(time.Millisecond)))
+	return time.Duration(toInt32(ms)) * time.Millisecond
 }

@@ -2,8 +2,8 @@
 
 // Command physics builds the physics package, and the sky package with it,
 // into the client's WebAssembly module and checks the packages' rules, and
-// that the simulation that runs the physics on the server compiles to no
-// fused multiply-add either.
+// that the simulation that runs the physics on the server, and the world
+// generator, compile to no fused multiply-add either.
 //
 //	go run ./tools/physics          write the layout files and build client/src/predict/physics.wasm
 //	go run ./tools/physics -check   check the rules, the layout files and the module, writing nothing
@@ -33,6 +33,9 @@ const (
 	// weatherPkg says which spells of weather blow when, in whole numbers:
 	// it is checked as the simulation is.
 	weatherPkg = "./internal/weather"
+	// worldgenDir is the world generator, held to the float rules so that
+	// a seed makes the same world on every machine.
+	worldgenDir = "internal/worldgen"
 	wasmPkg    = "./internal/physics/wasm"
 	moduleOut  = "client/src/predict/physics.wasm"
 	goLayout   = "internal/physics/layout.gen.go"
@@ -107,7 +110,12 @@ func runCheck(ctx context.Context) error {
 		return err
 	}
 	problems = append(problems, found...)
-	for _, pkg := range []string{"./" + physicsDir, "./" + skyDir, simPkg, weatherPkg} {
+	found, err = checkGenerator(worldgenDir)
+	if err != nil {
+		return err
+	}
+	problems = append(problems, found...)
+	for _, pkg := range []string{"./" + physicsDir, "./" + skyDir, simPkg, weatherPkg, "./" + worldgenDir} {
 		found, err = checkFused(ctx, pkg)
 		if err != nil {
 			return err

@@ -45,17 +45,17 @@ const (
 )
 
 // hexRadius is the distance from a hexagon's centre to a corner, and
-// hexStep the distance between the centres of neighbouring columns: as the
-// client's drawing computes them.
-var (
-	hexRadius = HexAcross / math.Sqrt(3)
-	hexStep   = float64(1.5 * hexRadius)
+// hexStep the distance between the centres of neighbouring columns: the
+// doubles the client's drawing computes them as, 4 / √3 and 1.5 times it.
+const (
+	hexRadius = 0x1.279a74590331dp+1
+	hexStep   = 0x1.bb67ae8584cacp+1
 )
 
 // HexCentre is where hexagon (q, r)'s centre is, m east and north of the
 // world's centre.
 func HexCentre(q, r int32) (x, y float64) {
-	return float64(hexStep * float64(q)), HexAcross * (float64(r) + float64(q)/2)
+	return float64(hexStep * float64(q)), float64(HexAcross * (float64(r) + float64(float64(q)/2)))
 }
 
 // HexAt is the hexagon that holds the point (x, y): the one whose centre is
@@ -70,8 +70,8 @@ func HexAt(x, y float64) (q, r int32) {
 	var best float64
 	for i := range int32(2) {
 		cq := q + i
-		half := float64(cq) / 2
-		cr := toInt32(math.Floor((y/HexAcross - half) + 0.5))
+		half := float64(float64(cq) / 2)
+		cr := toInt32(math.Floor((float64(y/HexAcross) - half) + 0.5))
 		dx := x - float64(hexStep*float64(cq))
 		dy := y - float64(HexAcross*(float64(cr)+half))
 		d := float64(dx*dx) + float64(dy*dy)

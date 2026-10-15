@@ -213,7 +213,7 @@ func newShape(s stream, radius float64, b *biome, w *work) *shape {
 // sampled every few metres: what a landmark's is judged by.
 func (sh *shape) fineShoreline(w *work) float64 {
 	side := float64(2 * sh.extent)
-	n := min(max(int(float64(side*sh.radius)/6), coarseSide), 1024)
+	n := min(max(int(toInt32(float64(side*sh.radius)/6)), coarseSide), 1024)
 	step := side / float64(n)
 	w.field = grow(w.field, n*n)
 	for i := range n {
@@ -242,7 +242,7 @@ func (sh *shape) fit(w *work) {
 	want := math.Pi / float64(step*step)
 	lo, hi := -1.5, 1.5
 	for range 40 {
-		mid := (lo + hi) / 2
+		mid := float64((lo + hi) / 2)
 		n := 0
 		for _, f := range w.coarse {
 			if f+mid > 0 {
@@ -692,7 +692,7 @@ func (c *config) surfaces(m *made, b *biome, w *work) {
 	var nb [6]int32
 	for i := range total {
 		if !w.land[i] {
-			g.elev[i] = int16(clamp(float64(round(float64(w.height[i]*10))), -float64(c.seabed.Deep*10), -1))
+			g.elev[i] = int16(toInt32(clamp(float64(round(float64(w.height[i]*10))), -float64(c.seabed.Deep*10), -1)))
 			continue
 		}
 		h := w.height[i]
@@ -715,7 +715,7 @@ func (c *config) surfaces(m *made, b *biome, w *work) {
 			surf = b.surfaces.low
 		}
 		g.surf[i] = surf
-		g.elev[i] = int16(clamp(float64(round(float64(h*10))), float64(c.land[0]*10), float64(c.land[1]*10)))
+		g.elev[i] = int16(toInt32(clamp(float64(round(float64(h*10))), float64(c.land[0]*10), float64(c.land[1]*10))))
 	}
 }
 

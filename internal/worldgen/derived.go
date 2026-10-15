@@ -29,7 +29,7 @@ func (c *config) fetchOf(g *physics.Ground, k *coarse) []physics.Fetch {
 				var sum float64
 				for i := range n {
 					a := float64(float64(d)*(2*math.Pi/physics.FetchDirections)) +
-						float64(float64(float64(i)-float64(n-1)/2)*c.fetch.spread)
+						float64(float64(float64(i)-float64(float64(n-1)/2))*c.fetch.spread)
 					sum += c.radial(g, k, x, y, a)
 				}
 				f[d] = math.Floor(sum/float64(n) + 0.5)
@@ -201,7 +201,7 @@ func (c *config) startOf(g *physics.Ground, port *made) Start {
 			r := origin + float64(float64(rows)*st.Spacing)
 			cx, cy := port.x+float64(r*so), port.y+float64(r*co)
 			for col := range st.Row {
-				off := float64((float64(col) - float64(st.Row-1)/2) * st.Spacing)
+				off := float64((float64(col) - float64(float64(st.Row-1)/2)) * st.Spacing)
 				px, py := cx+float64(off*ax), cy+float64(off*ay)
 				if len(places) == st.Places || !c.placeFits(g, px, py) {
 					continue
@@ -245,7 +245,7 @@ func (c *config) placeFits(g *physics.Ground, x, y float64) bool {
 // is land.
 func (c *config) landNear(g *physics.Ground, x, y, r float64) bool {
 	q0, r0 := physics.HexAt(x, y)
-	rings := int32(math.Ceil((r+physics.HexAcross)/(0.866*physics.HexAcross))) + 1
+	rings := toInt32(math.Ceil((r+physics.HexAcross)/(0.866*physics.HexAcross))) + 1
 	for dq := -rings; dq <= rings; dq++ {
 		for dr := max(-rings, -dq-rings); dr <= min(rings, -dq+rings); dr++ {
 			hx, hy := physics.HexCentre(q0+dq, r0+dr)

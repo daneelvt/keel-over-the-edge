@@ -31,10 +31,10 @@ func toInt32(f float64) int32 {
 }
 
 // floor is ⌊f⌋ as an int32.
-func floor(f float64) int32 { return toInt32(math.Floor(f)) }
+func floor(f float64) int32 { return toInt32(math.Floor(float64(f))) }
 
 // round is f rounded to the nearest whole number, halves up, as an int32.
-func round(f float64) int32 { return toInt32(math.Floor(f + 0.5)) }
+func round(f float64) int32 { return toInt32(math.Floor(float64(f) + 0.5)) }
 
 // pow is x to the power y, for x > 0.
 func pow(x, y float64) float64 {

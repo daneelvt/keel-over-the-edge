@@ -42,10 +42,10 @@ func mix(x uint64) uint64 {
 }
 
 // float is a number in [0, 1).
-func (s stream) float() float64 { return s.r.Float64() }
+func (s stream) float() float64 { return float64(s.r.Float64()) }
 
 // in is a number in [lo, hi).
-func (s stream) in(lo, hi float64) float64 { return lerp(s.r.Float64(), lo, hi) }
+func (s stream) in(lo, hi float64) float64 { return lerp(s.float(), lo, hi) }
 
 // pick is a whole number from lo to hi.
 func (s stream) pick(lo, hi int) int {
@@ -56,13 +56,13 @@ func (s stream) pick(lo, hi int) int {
 }
 
 // chance is true with probability p.
-func (s stream) chance(p float64) bool { return s.r.Float64() < p }
+func (s stream) chance(p float64) bool { return s.float() < p }
 
 // seed32 is a number for seeding noise.
 func (s stream) seed32() uint32 { return uint32(s.r.Uint64() >> 32) }
 
 // angle is a direction in [0, 2π).
-func (s stream) angle() float64 { return float64(s.r.Float64() * (2 * 3.141592653589793)) }
+func (s stream) angle() float64 { return float64(s.float() * (2 * 3.141592653589793)) }
 
 // weighted is an index drawn with the weights given; -1 if they add up to
 // nothing.
@@ -76,7 +76,7 @@ func (s stream) weighted(w []float64) int {
 	if !(sum > 0) {
 		return -1
 	}
-	u := float64(s.r.Float64() * sum)
+	u := float64(s.float() * sum)
 	for i, x := range w {
 		if !(x > 0) {
 			continue

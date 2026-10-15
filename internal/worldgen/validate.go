@@ -224,8 +224,8 @@ func (c *config) largestOpen(k *coarse) float64 {
 	far := 0.0
 	for a := range k.side {
 		for b := range k.side {
-			x := float64(float64(a)+0.5)*coarseCell - coarseHalf
-			y := float64(float64(b)+0.5)*coarseCell - coarseHalf
+			x := float64((float64(a)+0.5)*coarseCell) - coarseHalf
+			y := float64((float64(b)+0.5)*coarseCell) - coarseHalf
 			if hypot(x, y) <= c.mist {
 				far = max(far, k.dist[a*k.side+b])
 			}

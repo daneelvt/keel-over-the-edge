@@ -87,8 +87,8 @@ func (sh *Shelter) value(a, b, k int32) (factor, turn float64) {
 // At is the shelter at (x, y) of a wind from from: its factor on the
 // wind's speed and its turn, positive veering.
 func (sh *Shelter) At(x, y, from float64) (factor, turn float64) {
-	fa := float64(x/hexStep+columnZero-(ShelterCell-1)/2.0) / ShelterCell
-	fb := float64((y-HexAcross/4)/HexAcross+rowZero-(ShelterCell-1)/2.0) / ShelterCell
+	fa := float64(float64(float64(x/hexStep)+columnZero-(ShelterCell-1)/2.0) / ShelterCell)
+	fb := float64(float64(float64((y-HexAcross/4)/HexAcross)+rowZero-(ShelterCell-1)/2.0) / ShelterCell)
 	a0, b0 := math.Floor(fa), math.Floor(fb)
 	ta, tb := fa-a0, fb-b0
 	a, b := toInt32(a0), toInt32(b0)

@@ -176,19 +176,14 @@ func (bd *bed) loads(m *motion, b *Prepared, l *loads) {
 // The hexagon's outward normals, east and north, and its corners from its
 // centre: a flat-topped hexagon has corners east and west, so its flats
 // face north and south, and its edges' normals point 30° off east.
-var (
-	hexNormalX, hexNormalY [6]float64
-	hexCornerX, hexCornerY [6]float64
-)
+const halfRoot3 = 0.8660254037844386 // √3/2
 
-func init() {
-	for k := range 6 {
-		sn, cs := SinCos(float64(float64(2*k+1) * (math.Pi / 6)))
-		hexNormalX[k], hexNormalY[k] = cs, sn
-		sc, cc := SinCos(float64(float64(k) * (math.Pi / 3)))
-		hexCornerX[k], hexCornerY[k] = float64(hexRadius*cc), float64(hexRadius*sc)
-	}
-}
+var (
+	hexNormalX = [6]float64{halfRoot3, 0, -halfRoot3, -halfRoot3, 0, halfRoot3}
+	hexNormalY = [6]float64{0.5, 1, 0.5, -0.5, -1, -0.5}
+	hexCornerX = [6]float64{hexRadius, hexRadius / 2, -hexRadius / 2, -hexRadius, -hexRadius / 2, hexRadius / 2}
+	hexCornerY = [6]float64{0, HexAcross / 2, HexAcross / 2, 0, -HexAcross / 2, -HexAcross / 2}
+)
 
 // landTouch reports whether the placed hull h touches the hexagon whose
 // centre is (cx, cy) from the hull's centre of gravity, and if it does

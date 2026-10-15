@@ -139,7 +139,7 @@ func layout(c *config, seed uint64) ([]spot, []groupSpot) {
 func (c *config) fillGaps(s stream, spots *[]spot) {
 	const cell = 100.0
 	limit := c.validator.OpenWater - 2*cell
-	n := int32(2*c.mist/cell) + 1
+	n := toInt32(2*c.mist/cell) + 1
 	for range 40 {
 		far, fx, fy := 0.0, 0.0, 0.0
 		for a := range n {
