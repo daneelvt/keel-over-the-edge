@@ -12,8 +12,8 @@ import (
 )
 
 // beachTerrain is land about the centre: a sandy slope rising east, dry
-// from x = 150, and the start area's places in a row in deep water west of
-// it, heading east.
+// from x = 150, and the start area's places in rows of 64 westward from
+// x = 100, heading east.
 func beachTerrain(t testing.TB) *Terrain {
 	t.Helper()
 	cat, err := catalog.Load()
@@ -31,8 +31,8 @@ func beachTerrain(t testing.TB) *Terrain {
 		g.Chunks[n] = ch
 	}
 	var start []physics.State
-	for i := range 64 {
-		start = append(start, physics.State{X: 100, Y: float64(20 * (i - 32)), Heading: math.Pi / 2})
+	for i := range Capacity {
+		start = append(start, physics.State{X: float64(100 - 20*(i/64)), Y: float64(20 * (i%64 - 32)), Heading: math.Pi / 2})
 	}
 	return &Terrain{Ground: g, Shelter: new(physics.Shelter), Start: start}
 }
@@ -172,11 +172,21 @@ func TestTickWithLandAllocatesNothing(t *testing.T) {
 	}
 }
 
+// BenchmarkTickWithLand times a tick of a thousand boats, four workers, in
+// the catalog's sea, with the beach's terrain and with none.
 func BenchmarkTickWithLand(b *testing.B) {
-	w := terrainWorld(b, Capacity, 4, beachTerrain(b))
-	fill(b, w, 1000, 1)
-	b.ReportAllocs()
-	for b.Loop() {
-		w.Tick()
+	for _, c := range []struct {
+		name    string
+		terrain *Terrain
+	}{{"open", nil}, {"land", beachTerrain(b)}} {
+		b.Run(c.name, func(b *testing.B) {
+			w := terrainWorld(b, Capacity, 4, c.terrain)
+			fill(b, w, 1000, 1)
+			sail(w, 30*20, 2)
+			b.ReportAllocs()
+			for b.Loop() {
+				w.Tick()
+			}
+		})
 	}
 }

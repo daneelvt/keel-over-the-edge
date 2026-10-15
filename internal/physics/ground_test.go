@@ -226,3 +226,31 @@ func TestGroundAllocatesNothing(t *testing.T) {
 		t.Errorf("a step against land allocates %v times", n)
 	}
 }
+
+// BenchmarkStepGround times a step with no ground, over deep ground, in
+// shallows where the foils are cut short and the hull drags, and held
+// against land, beside BenchmarkStep's beam reach.
+func BenchmarkStepGround(bm *testing.B) {
+	b := jolly(bm)
+	for _, c := range []struct {
+		name string
+		g    *Ground
+		s    State
+		e    Env
+	}{
+		{"none", nil, State{X: 0, Heading: math.Pi / 2, Surge: 3, SheetLimit: 0.6}, Env{WindSpeed: 7}},
+		{"deep", testGround(func(x, y float64) float64 { return -40 }), State{X: 0, Heading: math.Pi / 2, Surge: 3, SheetLimit: 0.6}, Env{WindSpeed: 7}},
+		{"shallows", testGround(beach), State{X: 145, Heading: math.Pi / 2, Surge: 1, SheetLimit: 0.6}, Env{WindSpeed: 7}},
+		{"land", testGround(cliff), State{X: 57.7, Heading: math.Pi / 2, SheetLimit: 1.4}, Env{WindSpeed: 5, WindFrom: -math.Pi / 2}},
+	} {
+		bm.Run(c.name, func(bm *testing.B) {
+			ctl := Control{Sheet: 0.35}
+			var o Out
+			for bm.Loop() {
+				// Each step from the same state, so the case stays the case.
+				s := c.s
+				Step(&s, &ctl, &c.e, nil, c.g, b, &o)
+			}
+		})
+	}
+}
