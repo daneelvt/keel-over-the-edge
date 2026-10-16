@@ -44,8 +44,11 @@ export const edgeLook = {
   height: uniform(40),
   /** Its colour, a display value, by the hour. */
   colour: uniform(new Color(0.8, 0.83, 0.85)),
-  /** 1 to draw the edge's mist, 0 for none (?edge=off). */
+  /** 1 to draw the edge's mist, the lip and the falls, 0 for none (?edge=off). */
   on: uniform(1),
+  /** The sea's last tiles before the brink tip outward by this, rad, and drop by this, m. */
+  tip: uniform(0.3),
+  sag: uniform(0.2),
 };
 
 /** The mist's numbers: the band, its density at the lip and its scale height. */

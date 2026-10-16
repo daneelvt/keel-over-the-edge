@@ -14,9 +14,10 @@
 // offsets around a centre tile; when the boat enters a new tile, the centre
 // tile's (q, r) and position change, and every instance names a new tile.
 //
-// A tile over land is not drawn: its vertices all fall to one point. Each
-// tile carries its ground to the look (shore.ts): the depth, the waves' cap,
-// the bed's surface, and the lee about it.
+// A tile over land, or at or beyond the lip of the falls, is not drawn: its
+// vertices all fall to one point. Each tile carries its ground to the look
+// (shore.ts): the depth, the waves' cap, the bed's surface, and the lee
+// about it.
 
 import {
   BufferAttribute,
@@ -44,6 +45,7 @@ import {
   vec3,
 } from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
+import { beyondLip, lipPlane } from '../edge/lip';
 import { GUST_LOOK, type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
 import { FIELD_RADIUS, TILE_RADIUS } from './hex';
@@ -180,9 +182,11 @@ export class Tiles {
     const [from, full] = GUST_LOOK.shows;
     const shown = smoothstep(from, full, abs(field0)).mul(sign(field0));
     const gust = shown.mul(gusts.uniforms.strength).mul(float(1).sub(rim)).mul(lee);
-    // Over land every vertex falls to the tile's centre, well below the sea:
-    // its triangles have no area, and nothing is drawn.
-    const land = ground.z.greaterThan(0.5);
+    // Over land, or at or beyond the lip, every vertex falls to the tile's
+    // centre, well below the sea: its triangles have no area, and nothing is
+    // drawn. Near the lip the tile sags and tips over the brink.
+    const land = ground.z.greaterThan(0.5).or(beyondLip(c));
+    plane = lipPlane(c, plane);
     const e = select(land, positionGeometry.xz.mul(0), positionGeometry.xz);
     const s = positionGeometry.y;
     const y = select(land, plane.x.sub(50), plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH)));

@@ -634,6 +634,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       offline().place(east, north, heading ?? driver.states.current[RECORDS.state.heading] ?? 0);
       floatBoat();
     },
+    /** Shows or hides the falls' parts, for looking at each alone. */
+    showFalls(curtain: boolean, slabs: boolean): void {
+      world.edge.falls.show.curtain = curtain;
+      world.edge.falls.show.slabs = slabs;
+    },
     /** Puts the origin on tile (q, r), as if the boat had come from there. */
     setOrigin(q: number, r: number): void {
       world.origin.moveTo({ q, r });

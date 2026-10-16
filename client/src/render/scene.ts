@@ -10,8 +10,20 @@
 // the boat at that time, lights everything by the hour, and draws it.
 
 import { Vector3 } from 'three';
-import { exp, float, fog, length, positionView } from 'three/tsl';
+import {
+  cameraPosition,
+  exp,
+  float,
+  fog,
+  length,
+  max,
+  mix,
+  positionView,
+  positionWorld,
+} from 'three/tsl';
 import { catalog } from '../catalog';
+import { EdgeScene } from '../edge/edge';
+import { edgeLook, KOSCHMIEDER, mistBetween } from '../edge/mist';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
 import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
@@ -92,6 +104,8 @@ export class SeaScene {
   readonly origin = new FloatingOrigin();
   readonly ocean: Ocean;
   readonly sky: Sky;
+  /** The edge of the world: the mist band, the lip and the falls. */
+  readonly edge: EdgeScene;
   readonly stats = new Stats();
   readonly camera = new ChaseCamera();
   /** The catalog's first boat, the one a new sailor starts in. */
@@ -205,6 +219,14 @@ export class SeaScene {
     this.sky = new Sky(scene);
     this.shadows = new Shadows(this.sky.light);
     this.ocean = new Ocean(scene);
+    this.edge = new EdgeScene(scene, this.ocean.uniforms, {
+      radius: catalog.world.disk.radius,
+      mist: catalog.world.disk.mist,
+      edge: catalog.world.edge,
+      drainAt: catalog.weather.current.drainAt,
+      drain: catalog.weather.current.drain,
+    });
+    this.edge.on = this.#query.get('edge') !== 'off';
     scene.add(this.sprayView.mesh);
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
@@ -218,11 +240,15 @@ export class SeaScene {
     this.stars.attachLabel(label);
     // Solid things fade toward the horizon's colour with distance, keeping
     // exp(−3.912 d / V) of their contrast at d metres: Koschmieder's law, V
-    // the visual range at a 2% threshold. The sea has its own blend to the
-    // sky at its edge.
+    // the visual range at a 2% threshold; and toward the mist's through the
+    // band at the edge of the world, by the mist along the ray. The sea has
+    // its own blend to the sky at its edge.
+    const clear = length(positionView).mul(KOSCHMIEDER).div(look.visualRange);
+    const mist = mistBetween(cameraPosition, positionWorld);
+    const tau = clear.add(mist);
     scene.fogNode = fog(
-      toLinear(look.skyHorizon),
-      float(1).sub(exp(length(positionView).mul(-3.912).div(look.visualRange))),
+      mix(toLinear(look.skyHorizon), toLinear(edgeLook.colour), mist.div(max(tau, 1e-6))),
+      float(1).sub(exp(tau.negate())),
     );
   }
 
@@ -645,6 +671,8 @@ export class SeaScene {
     });
     this.#readSky();
     this.sky.follow(camera.position, this.#v.set(bs.x, bs.y, bs.z));
+    const eye = this.origin.world;
+    this.edge.frame(this.origin, camera.position.x + eye.x, -camera.position.z + eye.y, this.time);
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
     const fs = this.fleetSource;
     if (this.fleet.loaded) {

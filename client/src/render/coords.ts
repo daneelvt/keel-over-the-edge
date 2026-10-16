@@ -14,10 +14,11 @@
 // centre, so tile offsets from it are exact and the tiles never jump when it
 // moves.
 
+import { catalog } from '../catalog';
 import { type Hex, hexAt, hexCentre, type Point } from '../ocean/hex';
 
-/** Radius of the disk, in metres: 4.5 nautical miles. */
-export const DISK_RADIUS = 8334;
+/** Radius of the disk, in metres: the lip of the falls. */
+export const DISK_RADIUS = catalog.world.disk.radius;
 
 /** The origin moves when the boat is further than this from it, in metres. */
 export const ORIGIN_SHIFT = 500;

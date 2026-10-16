@@ -27,7 +27,9 @@ import {
 } from 'three';
 import {
   abs,
+  cameraPosition,
   dot,
+  exp,
   Fn,
   float,
   floor,
@@ -49,6 +51,7 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
+import { edgeLook, mistBetween } from '../edge/mist';
 import { BODY, SKY } from '../predict/physics';
 import {
   LIGHT_TABLE,
@@ -176,6 +179,13 @@ const skyFull = Fn(([dir]: [Node<'vec3'>]) => {
 /** Radius of the sky sphere, in metres: inside the camera's far plane. */
 export const SKY_RADIUS = 3000;
 
+/**
+ * How far along a direction the sky's mist is taken, metres: by then the
+ * dome has dropped the sea 200 m below a level ray, e^(−5) of the mist's
+ * scale height.
+ */
+const SKY_MIST_REACH = 1000;
+
 /** The sky as the module last gave it, in the scene's axes. */
 export interface SkyNow {
   /** Toward the sun and the moon, scene axes. */
@@ -221,7 +231,12 @@ export class Sky {
   constructor(scene: Scene) {
     const material = skyMaterial();
     material.side = BackSide;
-    material.fragmentNode = vec4(toLinear(skyFull(positionLocal) as Node<'vec3'>), 1);
+    // The band's mist over the sky, along each direction out to where the
+    // dome has lifted the ray clear of the mist's layer.
+    const toward = normalize(positionLocal);
+    const mist = mistBetween(cameraPosition, cameraPosition.add(toward.mul(SKY_MIST_REACH)));
+    const seen = mix(edgeLook.colour, skyFull(positionLocal) as Node<'vec3'>, exp(mist.negate()));
+    material.fragmentNode = vec4(toLinear(seen), 1);
     this.mesh = new Mesh(new SphereGeometry(SKY_RADIUS, 48, 24), material);
     this.mesh.name = 'sky';
     this.mesh.renderOrder = -1;
@@ -272,6 +287,7 @@ export class Sky {
     look.moonHalo.value = n.lit * Math.max(v.moonDisc - 0.3, 0) * 0.25;
     rgb(look.skyTop, v.skyTop, 1);
     rgb(look.skyHorizon, v.skyHorizon, 1);
+    rgb(edgeLook.colour, v.mist, 1);
     rgb(look.glow, v.glow, v.glowStrength);
     rgb(look.cloud, v.cloud, 1);
     rgb(look.deep, v.deep, 1);

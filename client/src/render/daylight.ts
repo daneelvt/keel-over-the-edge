@@ -50,6 +50,8 @@ export interface Light {
    * (Koschmieder 1924).
    */
   visualRange: number;
+  /** The mist of the band at the edge of the world, beside the horizon's colour. */
+  mist: Rgb;
   /** The clouds' colour. */
   cloud: Rgb;
   /** The sail's glow on its shaded side, light through flax. */
@@ -81,6 +83,7 @@ const DAY: Light = {
   hazeNear: 220,
   hazeFar: 1000,
   visualRange: 6000,
+  mist: [0.8, 0.83, 0.85],
   cloud: [0.97, 0.96, 0.93],
   sailGlow: [0.68, 0.665, 0.634],
   moonDisc: 0.3,
@@ -109,6 +112,7 @@ export const LIGHT_TABLE: readonly Light[] = [
     height: 3,
     skyTop: [0.23, 0.42, 0.7],
     skyHorizon: [0.72, 0.74, 0.72],
+    mist: [0.78, 0.78, 0.76],
     glowStrength: 0.12,
     sunColour: [1.0, 0.82, 0.6],
     sunLight: 1.9,
@@ -128,6 +132,7 @@ export const LIGHT_TABLE: readonly Light[] = [
     height: 1,
     skyTop: [0.17, 0.3, 0.55],
     skyHorizon: [0.7, 0.62, 0.55],
+    mist: [0.72, 0.67, 0.62],
     glowStrength: 0.2,
     sunColour: [1.0, 0.62, 0.36],
     sunLight: 1.0,
@@ -149,6 +154,7 @@ export const LIGHT_TABLE: readonly Light[] = [
     height: 0,
     skyTop: [0.13, 0.22, 0.44],
     skyHorizon: [0.6, 0.5, 0.45],
+    mist: [0.62, 0.55, 0.52],
     glowStrength: 0.2,
     sunColour: [1.0, 0.55, 0.3],
     sunLight: 0.35,
@@ -173,6 +179,7 @@ export const LIGHT_TABLE: readonly Light[] = [
     height: -3,
     skyTop: [0.06, 0.1, 0.24],
     skyHorizon: [0.32, 0.3, 0.36],
+    mist: [0.33, 0.32, 0.36],
     glowStrength: 0.12,
     sunColour: [1.0, 0.55, 0.3],
     sunLight: 0,
@@ -198,6 +205,7 @@ export const LIGHT_TABLE: readonly Light[] = [
     height: -6,
     skyTop: [0.03, 0.05, 0.12],
     skyHorizon: [0.17, 0.18, 0.24],
+    mist: [0.18, 0.19, 0.24],
     glowStrength: 0.05,
     sunColour: [1.0, 0.55, 0.3],
     sunLight: 0,
@@ -223,6 +231,7 @@ export const LIGHT_TABLE: readonly Light[] = [
     height: -9,
     skyTop: [0.015, 0.025, 0.06],
     skyHorizon: [0.1, 0.12, 0.17],
+    mist: [0.11, 0.12, 0.16],
     glowStrength: 0.02,
     sunColour: [1.0, 0.55, 0.3],
     sunLight: 0,
@@ -251,6 +260,7 @@ export const LIGHT_TABLE: readonly Light[] = [
     height: -12,
     skyTop: [0.01, 0.015, 0.035],
     skyHorizon: [0.07, 0.09, 0.13],
+    mist: [0.08, 0.095, 0.13],
     glowStrength: 0,
     sunColour: [1.0, 0.55, 0.3],
     sunLight: 0,
