@@ -235,7 +235,9 @@ test.describe('going over', () => {
     expect(back.edge.held).toBe(false);
     expect(back.edge.pilot).toBe(false);
     expect(back.edge.helm).toBe(0);
-    expect(Math.hypot(back.boat.state.x - start.state.x, back.boat.state.y - start.state.y)).toBeLessThan(5);
+    expect(
+      Math.hypot(back.boat.state.x - start.state.x, back.boat.state.y - start.state.y),
+    ).toBeLessThan(5);
   });
 
   test('with reduced motion the fade comes at once and the camera does not follow', async ({
