@@ -5,7 +5,8 @@
 // centred on the centre tile, its rings closer near the inside; the outer
 // radius follows the camera's height. It sits a little below the tiles so
 // the two never fight where they overlap, and carries the same boat band
-// and dome as the tiles, evaluated per vertex.
+// and dome as the tiles, evaluated per vertex, capped by the depth of the
+// hexagon under each vertex; and the shallows, out to the window's edge.
 
 import { BufferAttribute, BufferGeometry, Mesh } from 'three';
 import { cos, positionGeometry, sin, uniform, varying, vec2, vec3 } from 'three/tsl';
@@ -13,7 +14,8 @@ import type { Node, UniformNode } from 'three/webgpu';
 import { horizonDistance } from '../render/materials';
 import { FIELD_RADIUS } from './hex';
 import { hulls } from './hulls';
-import { type BandUniforms, boatBandAt, seaAreaAt, seaPlaneOf } from './wave';
+import { depthCap, groundAtHex, hexOf, leeAt, tileGround } from './shore';
+import { type BandUniforms, boatBandAt, cappedBand, periodAt, seaAreaAt, seaPlaneOf } from './wave';
 
 export const FAR_RINGS = 60;
 export const FAR_SPOKES = 200;
@@ -68,9 +70,13 @@ export class FarSea {
   readonly area: Node<'vec4'>;
   /** Above 0 where a hull may be near: the grid's triangles there are a few metres across. */
   readonly nearHull: Node<'float'>;
+  /** The ground at each vertex (depth, the waves' cap, land, surface), the lee, and the sea's peak period. */
+  readonly ground: Node<'vec4'>;
+  readonly lee: Node<'float'>;
+  readonly period: Node<'float'>;
 
-  /** centre is the centre tile's scene position, shared with the tiles. */
-  constructor(band: BandUniforms, centre: Node<'vec2'>) {
+  /** centre is the centre tile's scene position, and centreHex its (q, r), shared with the tiles. */
+  constructor(band: BandUniforms, centre: Node<'vec2'>, centreHex: Node<'vec2'>) {
     this.outer = uniform(FAR_MIN);
     const inner = FIELD_RADIUS - FAR_OVERLAP;
     const u = positionGeometry.x;
@@ -79,9 +85,14 @@ export class FarSea {
     // The angle runs from east toward north: scene (cos, -sin).
     const p = centre.add(vec2(cos(angle), sin(angle).negate()).mul(r));
     const summed = boatBandAt(band)(p);
-    const plane = seaPlaneOf(summed, p);
+    const g = groundAtHex(hexOf(p, centre, centreHex));
+    const f = depthCap(g, summed.w);
+    const plane = seaPlaneOf(cappedBand(summed, f), p);
     this.position = vec3(p.x, plane.x.sub(FAR_DROP), p.y);
     this.plane = varying(plane);
+    this.ground = varying(tileGround(g, f));
+    this.lee = varying(leeAt(p, centre, centreHex));
+    this.period = varying(periodAt(band)(p));
     this.area = varying(seaAreaAt(band)(p));
     this.nearHull = varying(hulls.near(p, 30));
     this.mesh = new Mesh(farGeometry());

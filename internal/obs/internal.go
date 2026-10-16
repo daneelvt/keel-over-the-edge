@@ -13,7 +13,7 @@ var InternalPaths = []string{
 	"/livez", "/readyz", "/metrics",
 	"/debug/pprof/", "/debug/pprof/cmdline", "/debug/pprof/profile", "/debug/pprof/symbol",
 	"/debug/pprof/trace", "/debug/pprof/goroutine", "/debug/pprof/goroutineleak",
-	"/debug/flightrecorder", "/debug/replay", "/debug/wind", "/debug/weather",
+	"/debug/flightrecorder", "/debug/replay", "/debug/wind", "/debug/weather", "/debug/place",
 }
 
 // Internal returns the internal listener's routes: the probes, the metrics,
@@ -21,8 +21,8 @@ var InternalPaths = []string{
 // handlers are registered here by hand; importing net/http/pprof also
 // registers them on http.DefaultServeMux, which the server never serves.
 // flight, replay and weather may be nil, and their routes then answer 404;
-// weather, the developer's commands, is POST /debug/wind and POST
-// /debug/weather.
+// weather, the developer's commands, is POST /debug/wind, /debug/weather,
+// /debug/encounter and /debug/place.
 func Internal(h *Health, m *Metrics, flight, replay, weather http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /livez", h.LiveHandler())
@@ -46,6 +46,7 @@ func Internal(h *Health, m *Metrics, flight, replay, weather http.Handler) http.
 		mux.Handle("POST /debug/wind", weather)
 		mux.Handle("POST /debug/weather", weather)
 		mux.Handle("POST /debug/encounter", weather)
+		mux.Handle("POST /debug/place", weather)
 	}
 	return mux
 }

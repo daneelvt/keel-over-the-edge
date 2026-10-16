@@ -59,6 +59,7 @@ import {
   tileIdentity,
   tileLook,
 } from '../ocean/seamaterial';
+import { groundWindow, shelterTexture, shore } from '../ocean/shore';
 import { GUST_ROW, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
 import { boatBandAt } from '../ocean/wave';
@@ -68,7 +69,7 @@ import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { checkScene, DOME_RADIUS, domeDrop, seaMaterial } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
-import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
+import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Settings } from '../ui/settings';
@@ -626,8 +627,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     setOrigin(q: number, r: number): void {
       world.origin.moveTo({ q, r });
     },
-    camera(name: string): void {
-      const p = CAMERA_PRESETS[name];
+    /** Puts the camera at a preset, by name, or at a view of its own. */
+    camera(name: string | CameraView): void {
+      const p = typeof name === 'string' ? CAMERA_PRESETS[name] : name;
       if (p === undefined) {
         throw new Error(`no camera preset ${name}`);
       }
@@ -1173,6 +1175,28 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         counts: { ...p.counts },
         p95: p.p95(),
         traffic: { ...o.traffic },
+      };
+    },
+    /**
+     * The land: the chunks handed and held, which are drawn this frame,
+     * their highest land, the module's slots, and the worker's counts.
+     */
+    land() {
+      const l = world.land;
+      if (l === null) {
+        return null;
+      }
+      const handed = l.handed.sort((a, b) => a - b);
+      return {
+        handed,
+        grids: [...l.grids.keys()].sort((a, b) => a - b),
+        drawn: handed.filter((n) => l.drawn(n)),
+        highest: Object.fromEntries(handed.map((n) => [n, l.highestOf(n)])),
+        slots: l.slots?.chunks ?? null,
+        stats: { ...l.stats },
+        window: { col: groundWindow.col, row: groundWindow.row, fills: groundWindow.fills },
+        lee: { a0: shelterTexture.a0, b0: shelterTexture.b0, fills: shelterTexture.fills },
+        shore: shore.on.value,
       };
     },
     /** Takes the boat back from another device. */
@@ -1753,7 +1777,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const far = world.ocean.far;
       const m = seaMaterial('sea-far');
       m.positionNode = far.position;
-      m.fragmentNode = farLook(far.plane, far.area, far.nearHull, world.ocean.parts, true);
+      m.fragmentNode = farLook(far, world.ocean.parts, true);
       const scene = new Scene();
       const mesh = new Mesh(far.mesh.geometry, m);
       mesh.frustumCulled = false;

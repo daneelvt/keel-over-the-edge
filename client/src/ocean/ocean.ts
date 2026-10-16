@@ -131,8 +131,9 @@ export class Ocean {
     this.vertexTiles.centre.value = this.passTiles.centre.value;
     this.vertexTiles.centreHex.value = this.passTiles.centreHex.value;
     this.pass.centre.value = this.passTiles.centre.value;
+    this.pass.centreHex.value = this.passTiles.centreHex.value;
     this.wakes = new FoamMap(foamMap);
-    this.far = new FarSea(this.uniforms, this.passTiles.centre);
+    this.far = new FarSea(this.uniforms, this.passTiles.centre, this.passTiles.centreHex);
     const [pass, vertex, far] = this.#materials();
     this.passTiles.mesh.material = pass;
     this.vertexTiles.mesh.material = vertex;
@@ -165,7 +166,7 @@ export class Ocean {
     };
     const far = seaMaterial('sea-far');
     far.positionNode = this.far.position;
-    far.fragmentNode = farLook(this.far.plane, this.far.area, this.far.nearHull, parts);
+    far.fragmentNode = farLook(this.far, parts);
     return [tile(this.passTiles), tile(this.vertexTiles), far];
   }
 

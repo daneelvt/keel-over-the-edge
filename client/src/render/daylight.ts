@@ -41,9 +41,15 @@ export interface Light {
   /** The main light's wide highlight on the water: its power and its strength. */
   broadPower: number;
   broadStrength: number;
-  /** Everything blends toward the horizon's colour from here to there, in metres. */
+  /** The sea blends toward the horizon's colour from here to there, in metres. */
   hazeNear: number;
   hazeFar: number;
+  /**
+   * The visual range, m: solid things (land, boats) keep exp(−3.912 d / V)
+   * of their contrast against the horizon at d metres, 2% at V
+   * (Koschmieder 1924).
+   */
+  visualRange: number;
   /** The clouds' colour. */
   cloud: Rgb;
   /** The sail's glow on its shaded side, light through flax. */
@@ -74,6 +80,7 @@ const DAY: Light = {
   broadStrength: 0.22,
   hazeNear: 220,
   hazeFar: 1000,
+  visualRange: 6000,
   cloud: [0.97, 0.96, 0.93],
   sailGlow: [0.68, 0.665, 0.634],
   moonDisc: 0.3,

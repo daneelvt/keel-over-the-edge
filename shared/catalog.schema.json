@@ -1325,11 +1325,12 @@
       "description": "How a surface is drawn: its land's columns, and the sea bed seen through shallow water.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["top", "side", "bed"],
+      "required": ["top", "side", "bed", "crest"],
       "properties": {
         "top": { "description": "A column's top.", "$ref": "#/$defs/Colour" },
         "side": { "description": "A column's sides, at their top: darker toward the foot.", "$ref": "#/$defs/Colour" },
-        "bed": { "description": "The sea bed of it, under water.", "$ref": "#/$defs/Colour" }
+        "bed": { "description": "The sea bed of it, under water.", "$ref": "#/$defs/Colour" },
+        "crest": { "description": "Foam added where the waves break over it, as a reef's crest foams: 0 to 1.", "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
     "Colour": {

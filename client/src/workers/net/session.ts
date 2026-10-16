@@ -18,7 +18,7 @@ import { PILOT_IDLE, type PilotControl } from '../../input/pilot';
 import { Clock } from '../../net/clock';
 import { decodeServer, encodeClient } from '../../net/frame';
 import { BumpPart, type Welcome } from '../../net/gen/keel/v1/game_pb';
-import type { BumpTold, SeaAreas, WeatherSpells } from '../../net/messages';
+import type { BumpTold, ChunksHanded, SeaAreas, WeatherSpells } from '../../net/messages';
 import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
 import { POSITION_STEP, type View, ViewRing } from '../../net/view';
@@ -59,6 +59,8 @@ export type Received =
   | { kind: 'sea'; sea: SeaAreas }
   | { kind: 'weather'; spells: WeatherSpells }
   | { kind: 'bump'; bump: BumpTold }
+  /** The addresses of chunks of the land, by number. */
+  | { kind: 'chunks'; chunks: ChunksHanded }
   | { kind: 'pong' }
   | { kind: 'other' };
 
@@ -185,6 +187,14 @@ export class Session {
       case 'weatherSystems':
         this.#lastHeard = now;
         return { kind: 'weather', spells: m.body.value.spells.map(spellRecord) };
+      case 'chunks': {
+        this.#lastHeard = now;
+        const c = m.body.value;
+        if (c.number.length !== c.path.length) {
+          throw new Error('chunks with numbers and addresses that do not pair');
+        }
+        return { kind: 'chunks', chunks: { numbers: [...c.number], paths: [...c.path] } };
+      }
       case 'bump': {
         this.#lastHeard = now;
         const v = m.body.value;

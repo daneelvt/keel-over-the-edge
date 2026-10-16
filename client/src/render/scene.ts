@@ -10,9 +10,10 @@
 // the boat at that time, lights everything by the hour, and draws it.
 
 import { Vector3 } from 'three';
-import { fog, rangeFogFactor } from 'three/tsl';
+import { exp, float, fog, length, positionView } from 'three/tsl';
 import { catalog } from '../catalog';
 import type { DrawnBoat } from '../game/fleet';
+import type { Land } from '../land/land';
 import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
 import { beaufort, KNOT, SPRAY } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
@@ -114,6 +115,8 @@ export class SeaScene {
   readonly fleet = new FleetView(this.kind);
   /** Where the other boats' poses come from: the game's fleet online, or a test's. */
   fleetSource: FleetSource | null = null;
+  /** The world's land, once there is a world whose land may be drawn. */
+  land: Land | null = null;
   readonly shadows: Shadows;
   readonly spray = new SprayDrops(0);
   readonly sprayView = new SprayView();
@@ -213,8 +216,14 @@ export class SeaScene {
     label.className = 'star-label';
     container.append(label);
     this.stars.attachLabel(label);
-    // Lit materials blend toward the horizon's colour with distance, as the sea does.
-    scene.fogNode = fog(toLinear(look.skyHorizon), rangeFogFactor(look.hazeNear, look.hazeFar));
+    // Solid things fade toward the horizon's colour with distance, keeping
+    // exp(−3.912 d / V) of their contrast at d metres: Koschmieder's law, V
+    // the visual range at a 2% threshold. The sea has its own blend to the
+    // sky at its edge.
+    scene.fogNode = fog(
+      toLinear(look.skyHorizon),
+      float(1).sub(exp(length(positionView).mul(-3.912).div(look.visualRange))),
+    );
   }
 
   async start(): Promise<void> {
@@ -298,6 +307,15 @@ export class SeaScene {
     }
     this.boat = boat;
     this.stage.scene.add(boat.root);
+  }
+
+  /** Draws a world's land, as the land is handed. */
+  useLand(land: Land): void {
+    if (this.land !== null) {
+      this.stage.scene.remove(this.land.group);
+    }
+    this.land = land;
+    this.stage.scene.add(land.group);
   }
 
   setUsePass(on: boolean): void {
@@ -617,6 +635,7 @@ export class SeaScene {
     const camera = this.stage.camera;
 
     this.#placeHulls();
+    this.land?.frame(this.pose.east, this.pose.north, camera, this.origin, this.wind.meanFrom, now);
     this.ocean.update(gfx.renderer, this.origin, {
       tick: this.ticks,
       dt: this.timeStep,

@@ -1812,6 +1812,10 @@ export interface SurfaceLook {
   top: Colour;
   side: Colour1;
   bed: Colour2;
+  /**
+   * Foam added where the waves break over it, as a reef's crest foams: 0 to 1.
+   */
+  crest: number;
 }
 /**
  * Each sea area's effective fetch for a wind from each of 16 directions.
@@ -2165,4 +2169,4 @@ export interface WorldLook {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '233f871cfd14215f';
+export const CATALOG_VERSION = '97297bad3489251e';

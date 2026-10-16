@@ -23,6 +23,8 @@ const server: ServerOptions = {
     // players use.
     '/api': { target: `http://${playAddr}`, changeOrigin: false },
     '/guest': { target: `http://${playAddr}`, changeOrigin: false },
+    // The world's chunks, at the addresses the game connection hands out.
+    '/w/': { target: `http://${playAddr}`, changeOrigin: false },
     // The game connection. Vite does not check a WebSocket's Origin before
     // proxying it; keel does.
     '/ws': { target: `ws://${playAddr}`, ws: true, changeOrigin: false },

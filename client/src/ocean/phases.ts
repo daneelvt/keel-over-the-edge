@@ -119,6 +119,8 @@ export class SeaBand {
   readonly phases: Vector4[] = Array.from({ length: GROUPS }, () => new Vector4());
   /** The significant height of each area's waves, in metres. */
   readonly hs: number[] = new Array(AREAS).fill(0);
+  /** Each area's peak period, in seconds; 0 for no waves. */
+  readonly period: number[] = new Array(AREAS).fill(0);
   /** Waves drawn, and the fours of them the GPU sums. */
   count = 0;
   groups = 0;
@@ -144,6 +146,7 @@ export class SeaBand {
     this.groups = 0;
     this.blended = false;
     this.hs.fill(0);
+    this.period.fill(0);
   }
 
   /**
@@ -157,6 +160,7 @@ export class SeaBand {
     const active = physics.seaActive(slot);
     const amp = physics.seaAmplitudes(slot);
     const hs = physics.seaHs(slot);
+    const peak = physics.seaPeak(slot);
     const areas = size * size;
     this.count = active.length;
     this.groups = Math.ceil(active.length / 4);
@@ -192,6 +196,8 @@ export class SeaBand {
     this.blended = blended;
     for (let a = 0; a < AREAS; a++) {
       this.hs[a] = a < areas ? (hs[a] ?? 0) : 0;
+      const w = a < areas ? (peak[a] ?? 0) : 0;
+      this.period[a] = w > 0 ? (2 * Math.PI) / w : 0;
     }
     this.waves.needsUpdate = true;
     this.amplitudes.needsUpdate = true;

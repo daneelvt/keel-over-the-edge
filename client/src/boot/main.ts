@@ -29,9 +29,10 @@ import { resolveSailor } from '../account/me';
 import { backSoon, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Game } from '../game/game';
+import { Land } from '../land/land';
 import { Online } from '../net/online';
 import { reloadForVersion } from '../net/reload';
-import { LAYOUT_VERSION } from '../predict/layout.gen';
+import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
 import { loadPhysics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
@@ -156,12 +157,24 @@ async function start(): Promise<void> {
     }
   };
   online.onBump = (b) => game.bump(b, performance.now());
+  // The land: its chunks fetched and built off the page's thread.
+  const land = new Land(
+    new Worker(new URL('../workers/mesh/worker.ts', import.meta.url), { type: 'module' }),
+    catalog.world,
+    catalog.weather.sea.breaking,
+  );
+  world.useLand(land);
+  online.onWorld = (id, sailed) => land.setWorld(id, sailed, sailed ? predictor.physics : null);
+  online.onChunks = (c) => land.hand(c.numbers, c.paths);
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
   // while the sea is full.
   const waiting = online.status.subscribe((status) => notice(status === 'waiting'));
   const queue = showQueue(document.body, online.place);
   await online.ready;
+  // The land about the boat is drawn before the sea is shown, or the sea
+  // shows after three seconds whatever has come.
+  await nearLand(land, predictor, NEAR_LAND, NEAR_LAND_WAIT);
   waiting();
   queue();
   notice(false);
@@ -189,6 +202,27 @@ async function start(): Promise<void> {
   if (query.has('test')) {
     const { exposeHooks } = await import('../dev/hooks');
     exposeHooks(world, game, { online, predictor });
+  }
+}
+
+/** The start screen waits for the chunks handed within this of the boat, m, or this long, ms. */
+const NEAR_LAND = 300;
+const NEAR_LAND_WAIT = 3000;
+
+/** Resolves once the land within reach of the predicted boat has been had, or after wait ms. */
+async function nearLand(
+  land: Land,
+  predictor: Predictor,
+  reach: number,
+  wait: number,
+): Promise<void> {
+  const until = performance.now() + wait;
+  const s = predictor.records.state;
+  while (
+    performance.now() < until &&
+    !land.ready(s[RECORDS.state.x] ?? 0, s[RECORDS.state.y] ?? 0, reach)
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
 

@@ -899,6 +899,9 @@ type SurfaceLook struct {
 	// The sea bed of it, under water.
 	Bed Colour `json:"bed"`
 
+	// Foam added where the waves break over it, as a reef's crest foams: 0 to 1.
+	Crest float64 `json:"crest"`
+
 	// A column's sides, at their top: darker toward the foot.
 	Side Colour `json:"side"`
 
@@ -1488,4 +1491,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "233f871cfd14215f"
+const Version = "97297bad3489251e"

@@ -223,17 +223,18 @@ world:
 
   # What the ground is covered with. friction is Coulomb's coefficient of a
   # hull dragging on it, where it lies under water.
-  # look is how it is drawn: a column's top and sides, and the bed of it
-  # seen through shallow water; starting values, to be judged on a phone.
+  # look is how it is drawn: a column's top and sides, the bed of it seen
+  # through shallow water, and the foam added where the waves break over it
+  # (a reef's crest); starting values, to be judged on a phone.
   surfaces:
-    - { id: sand, friction: 0.4, look: { top: "#e4d3a2", side: "#c9b17c", bed: "#d8c99a" } }
-    - { id: dune-grass, friction: 0.5, look: { top: "#b8b46a", side: "#a8915f", bed: "#c8b98a" } }
-    - { id: grass, friction: 0.5, look: { top: "#7fa04f", side: "#8a7253", bed: "#9a9c70" } }
-    - { id: forest, friction: 0.5, look: { top: "#4d7536", side: "#6e5a42", bed: "#7c8460" } }
-    - { id: rock, friction: 0.6, look: { top: "#9a958a", side: "#7d766c", bed: "#77786c" } }
-    - { id: ash, friction: 0.45, look: { top: "#5a5550", side: "#47423e", bed: "#4f4d4a" } }
-    - { id: scrub, friction: 0.5, look: { top: "#98935a", side: "#857155", bed: "#a39e7e" } }
-    - { id: reef, friction: 0.5, look: { top: "#d9c8a0", side: "#b7a07a", bed: "#c6b38c" } }
+    - { id: sand, friction: 0.4, look: { top: "#e4d3a2", side: "#c9b17c", bed: "#d8c99a", crest: 0 } }
+    - { id: dune-grass, friction: 0.5, look: { top: "#b8b46a", side: "#a8915f", bed: "#c8b98a", crest: 0 } }
+    - { id: grass, friction: 0.5, look: { top: "#7fa04f", side: "#8a7253", bed: "#9a9c70", crest: 0 } }
+    - { id: forest, friction: 0.5, look: { top: "#4d7536", side: "#6e5a42", bed: "#7c8460", crest: 0 } }
+    - { id: rock, friction: 0.6, look: { top: "#9a958a", side: "#7d766c", bed: "#77786c", crest: 0 } }
+    - { id: ash, friction: 0.45, look: { top: "#5a5550", side: "#47423e", bed: "#4f4d4a", crest: 0 } }
+    - { id: scrub, friction: 0.5, look: { top: "#98935a", side: "#857155", bed: "#a39e7e", crest: 0 } }
+    - { id: reef, friction: 0.5, look: { top: "#d9c8a0", side: "#b7a07a", bed: "#c6b38c", crest: 0.5 } }
 
   # The fetch of each sea area for a wind from each of 16 directions: the
   # Shore Protection Manual's effective fetch, the mean of radials a few

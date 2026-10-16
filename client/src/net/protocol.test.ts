@@ -15,12 +15,12 @@ import { RECORDS } from '../predict/layout.gen';
 import { decodeClient, decodeServer, encodeClient, encodeServer } from './frame';
 import type { SpellSchema } from './gen/keel/v1/game_pb';
 import {
+  GROUND_HELD,
   HEADER_SIZE,
   KIND_MESSAGE,
   MAX_HEADER_SIZE,
   NO_MARGIN,
   newSnapshot,
-  GROUND_HELD,
   PILOT_HELD,
   PILOT_SIZE,
   readSnapshot,

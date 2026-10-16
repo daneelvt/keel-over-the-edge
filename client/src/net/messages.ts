@@ -48,6 +48,16 @@ export interface BumpTold {
   article: string;
 }
 
+/**
+ * Chunks of the land the server handed: each one's number on the world's
+ * grid and its address, a path on the play origin to fetch it from, nearest
+ * first. The client never makes an address itself.
+ */
+export interface ChunksHanded {
+  numbers: number[];
+  paths: string[];
+}
+
 /** What the net worker's Hello carries besides the protocol version. */
 export interface HelloVersions {
   catalog: string;
@@ -113,6 +123,10 @@ export type FromWorker =
       tick: number;
       /** The world's epoch, in microseconds of UTC since 1970: sky time counts from it and the world's time. */
       epochUs: number;
+      /** The world's ID, which its chunks carry. */
+      world: string;
+      /** Whether the world's land is sailed: chunks come, and the prediction steps on them. */
+      land: boolean;
     }
   /** A snapshot record: view.ts's FLEET_RECORD_BYTES. */
   | { type: 'snapshot'; data: ArrayBuffer }
@@ -126,6 +140,8 @@ export type FromWorker =
   | { type: 'weather'; spells: WeatherSpells }
   /** The boat, or one near it, touched another. */
   | { type: 'bump'; bump: BumpTold }
+  /** Chunks of the land the boat could see: their addresses to fetch. */
+  | { type: 'chunks'; chunks: ChunksHanded }
   | { type: 'clock'; clock: ClockState }
   | ({ type: 'traffic' } & Traffic);
 

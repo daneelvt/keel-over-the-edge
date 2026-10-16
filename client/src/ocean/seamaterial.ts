@@ -19,7 +19,9 @@
 // leaves the finest ripples out, a shimmer of the pattern's noise stands in
 // for them, the tile's own too.
 //
-// On top comes the foam (foam.ts), held within each tile.
+// On top comes the foam (foam.ts), held within each tile; and against the
+// land (shore.ts) the bed through shallow water, surf where the waves
+// break, and calmer water in the lee.
 
 import {
   abs,
@@ -66,6 +68,7 @@ import { GUST_LOOK } from './gusts';
 import { TILE_APOTHEM } from './hex';
 import { hulls } from './hulls';
 import { FOAM } from './look';
+import { shallows, surf } from './shore';
 import type { TileVaryings } from './tiles';
 
 /** Seconds, wrapped, for the shimmer. */
@@ -190,7 +193,7 @@ export interface SeaParts {
 }
 
 /** What a probe reads of a tile's fragment instead of its colour (the tests). */
-export type Probe = 'detail' | 'foam' | 'crest' | 'gust';
+export type Probe = 'detail' | 'foam' | 'crest' | 'gust' | 'ground';
 
 /**
  * The tiles' fragment colour. With a probe, the fragment's numbers instead:
@@ -199,7 +202,8 @@ export type Probe = 'detail' | 'foam' | 'crest' | 'gust';
  * margin, its amount, the whitecaps' part, the streaks' part); 'crest'
  * vec4(the boat band's height in half significant heights, the detail's
  * height, how near the rim, the hulls' and wakes' foam); 'gust' vec4(the
- * gust on the tile as it shows, its gust and its lull, 1).
+ * gust on the tile as it shows, its gust and its lull, 1); 'ground'
+ * vec4(the water's depth, the waves' cap, the surf's amount, the lee).
  */
 export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<'vec4'> {
   const detail = parts.detail;
@@ -281,6 +285,11 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const gusty = max(gust, 0);
     const lull = max(gust.negate(), 0);
     ripple.mulAssign(gusty.mul(GUST_LOOK.rough).sub(lull.mul(GUST_LOOK.smooth)).add(1));
+    // In the lee the wind raises less: smaller ripples, fewer whitecaps.
+    const lee = clamp(v.lee, 0, 1.3);
+    ripple.mulAssign(lee);
+    const ground = v.ground;
+    const breaking = surf(ground.x, ground.y, ground.w, v.area.w, v.period, lee).toVar();
     const slope = v.plane.yz.add(tilt).add(ripple);
     const N = normalize(vec3(slope.x.negate(), 1, slope.y.negate())).toVar();
     const top = v.side.greaterThan(-0.5);
@@ -290,14 +299,14 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const crest = crestHeight(v.plane.w, v.area.w);
     const lightened = lightening(crest, lift);
     const foam: FoamParts = {
-      area: v.area.xyz as unknown as Node<'vec3'>,
+      area: vec3(v.area.x.mul(lee), v.area.yz) as unknown as Node<'vec3'>,
       crest,
       detail: lift,
       lightened,
       folding,
       pattern,
       streak,
-      boats: wet.add(wakes) as unknown as Node<'float'>,
+      boats: wet.add(wakes).add(breaking) as unknown as Node<'float'>,
     };
     const amount = foamAmount(foam).toVar();
     const cover = foamCover(amount, pattern).mul(foamMargin(fade)).toVar();
@@ -313,11 +322,18 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     if (probe === 'gust') {
       return vec4(gust, gusty, lull, 1);
     }
+    if (probe === 'ground') {
+      return vec4(ground.x, ground.y, breaking, v.lee);
+    }
     // A tile's rim has no ripples of its own to scatter the sun: left to
     // itself it would mirror it, and every tile toward the sun would wear a
     // bright ring.
     const glint = float(1).sub(fade.mul(SEA_LOOK.rimGlint));
-    const col = water({ normal: N, crest: lightened, glint }, V).toVar();
+    const col = shallows(
+      water({ normal: N, crest: lightened, glint }, V),
+      ground.x,
+      ground.w,
+    ).toVar();
     If(top, () => {
       // And darker, as the whole patch reads from a distance.
       col.mulAssign(float(1).sub(gusty.mul(GUST_LOOK.dark)));
@@ -353,18 +369,23 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
   })() as unknown as Node<'vec4'>;
 }
 
+/** What the far sea's look reads at each vertex (far.ts). */
+export interface FarVaryings {
+  plane: Node<'vec4'>;
+  area: Node<'vec4'>;
+  nearHull: Node<'float'>;
+  ground: Node<'vec4'>;
+  lee: Node<'float'>;
+  period: Node<'float'>;
+}
+
 /**
  * The far sea's fragment colour: the same water and foam, without the tile
- * style. plane is the surface's plane there, area the sea area's foam and
- * significant height. With probe, vec4(the detail's slope along x and z, 0, 0).
+ * style, and the shallows and surf as far as the ground window reaches.
+ * With probe, vec4(the detail's slope along x and z, 0, 0).
  */
-export function farLook(
-  plane: Node<'vec4'>,
-  area: Node<'vec4'>,
-  nearHull: Node<'float'>,
-  parts: SeaParts,
-  probe = false,
-): Node<'vec4'> {
+export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'vec4'> {
+  const { plane, area, nearHull } = v;
   const detail = parts.detail;
   return Fn(() => {
     hulls.cut(positionWorld, nearHull);
@@ -391,23 +412,26 @@ export function farLook(
     if (probe) {
       return vec4(ripple, 0, 0);
     }
+    const lee = clamp(v.lee, 0, 1.3);
+    ripple.mulAssign(lee);
     const slope = plane.yz.add(ripple);
     const N = normalize(vec3(slope.x.negate(), 1, slope.y.negate()));
     const crest = crestHeight(plane.w, area.w);
     const lightened = lightening(crest, lift);
+    const g = v.ground;
     const foam: FoamParts = {
-      area: area.xyz as unknown as Node<'vec3'>,
+      area: vec3(area.x.mul(lee), area.yz) as unknown as Node<'vec3'>,
       crest,
       detail: lift,
       lightened,
       folding,
       pattern,
       streak,
-      boats: float(0) as unknown as Node<'float'>,
+      boats: surf(g.x, g.y, g.w, area.w, v.period, lee) as unknown as Node<'float'>,
     };
     const cover = foamCover(foamAmount(foam), pattern);
     const col = mix(
-      water({ normal: N, crest: lightened, glint: 1 }, normalize(toEye)),
+      shallows(water({ normal: N, crest: lightened, glint: 1 }, normalize(toEye)), g.x, g.w),
       foamColour(N),
       cover.mul(FOAM.cover),
     );

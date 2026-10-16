@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -399,7 +400,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	replayHandler.set(inputs)
 	if weatherHandler != nil {
 		weatherHandler.set(devRoutes(ctx, b, cat, log))
-		log.Warn("developer commands are on: POST /debug/wind, /debug/weather and /debug/encounter on the internal listener")
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter and /debug/place on the internal listener")
 	}
 	metrics.CounterFunc("keel_sim_commands_refused_total", "Commands refused because the queue was full.", b.Commands.Refused)
 	metrics.CounterFunc("keel_sim_frames_allocated_total", "Frames made because every frame in the pool was in use.", b.Frames.Allocated)
@@ -673,16 +674,86 @@ func restore(ctx context.Context, db database, world *sim.World, sailed store.Wo
 	return nil
 }
 
-// devRoutes are the developer's commands: the weather, and encounters.
+// devRoutes are the developer's commands: the weather, encounters, and
+// moving a boat.
 func devRoutes(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler {
 	wx := weatherRoute(b.Commands.Developer(), cat)
 	enc := encounterRoute(ctx, b, cat, log)
+	place := placeRoute(b, log)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/debug/encounter" {
+		switch r.URL.Path {
+		case "/debug/encounter":
 			enc.ServeHTTP(w, r)
+		case "/debug/place":
+			place.ServeHTTP(w, r)
+		default:
+			wx.ServeHTTP(w, r)
+		}
+	})
+}
+
+// placeRoute moves a boat by hand, on the internal listener only, with
+// KEEL_DEV_COMMANDS=1: the boat of the account given, or else the first
+// player's sailing, put at rest at a point, heading as given, at the next
+// tick. It answers with the boat moved and where.
+//
+//	POST /debug/place?east=…&north=…&heading=…[&account=…]   metres east and north of the centre, degrees
+func placeRoute(b *bus.Bus, log *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
-		wx.ServeHTTP(w, r)
+		q := r.URL.Query()
+		east, err1 := strconv.ParseFloat(q.Get("east"), 64)
+		north, err2 := strconv.ParseFloat(q.Get("north"), 64)
+		heading, err3 := strconv.ParseFloat(q.Get("heading"), 64)
+		if q.Get("heading") == "" {
+			heading, err3 = 0, nil
+		}
+		if err1 != nil || err2 != nil || err3 != nil || math.Abs(east) > 20000 || math.Abs(north) > 20000 ||
+			math.IsNaN(heading) || math.IsInf(heading, 0) {
+			http.Error(w, "east and north, metres within 20 km of the centre, and heading, degrees, are required", http.StatusBadRequest)
+			return
+		}
+		var account bus.Account
+		byAccount := q.Has("account")
+		if byAccount {
+			raw := strings.ReplaceAll(q.Get("account"), "-", "")
+			if len(raw) != 32 {
+				http.Error(w, "account is not an account's id", http.StatusBadRequest)
+				return
+			}
+			if _, err := hex.Decode(account[:], []byte(raw)); err != nil {
+				http.Error(w, "account is not an account's id", http.StatusBadRequest)
+				return
+			}
+		}
+		f := b.Frames.Acquire()
+		boat := uint64(0)
+		for _, s := range f.Live {
+			if byAccount && f.Owner[s] == account || !byAccount && f.Conn[s] != 0 && f.Grace[s] == 0 {
+				boat = f.Boat[s]
+				break
+			}
+		}
+		f.Release()
+		if boat == 0 {
+			http.Error(w, "no such boat at sea", http.StatusConflict)
+			return
+		}
+		rad := math.Mod(math.Mod(heading, 360)+360, 360) * math.Pi / 180
+		if rad > math.Pi {
+			rad -= 2 * math.Pi
+		}
+		st := physics.State{X: east, Y: north, Heading: rad}
+		if err := b.Commands.Developer().TrySend(bus.Command{Op: bus.Place, Boat: boat, State: st}); err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		log.Info("a boat placed by hand", "boat", boat, "east", east, "north", north, "heading", heading)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"boat": boat, "east": east, "north": north, "heading": heading})
 	})
 }
 
