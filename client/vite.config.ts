@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { readFileSync } from 'node:fs';
-import { type ServerOptions, searchForWorkspaceRoot } from 'vite';
+import { existsSync, readFileSync } from 'node:fs';
+import { type Plugin, type ServerOptions, searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { licences } from './build/licences.ts';
 
@@ -38,6 +38,31 @@ if (cert && key) {
   server.https = { cert: readFileSync(cert), key: readFileSync(key) };
 }
 
+// The sandbox's worlds: .dev/worlds/<seed>.world, which go run ./tools/dev
+// -world <seed> writes, served at /dev-worlds/<seed>.world by the
+// development server alone; a built page has none.
+const devWorlds: Plugin = {
+  name: 'dev-worlds',
+  configureServer(s) {
+    s.middlewares.use('/dev-worlds', (req, res, next) => {
+      const m = /^\/(\d+)\.world$/.exec(req.url ?? '');
+      if (m === null) {
+        next();
+        return;
+      }
+      const file = `../.dev/worlds/${m[1]}.world`;
+      if (!existsSync(file)) {
+        res.statusCode = 404;
+        res.end();
+        return;
+      }
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(readFileSync(file));
+    });
+  },
+};
+
 export default defineConfig({
   server,
   build: {
@@ -54,6 +79,7 @@ export default defineConfig({
     plugins: () => [licences({ allowedFile, shared: workerPackages, emit: false })],
   },
   plugins: [
+    devWorlds,
     licences({
       allowedFile,
       shared: workerPackages,

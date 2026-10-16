@@ -42,6 +42,8 @@ export interface BoatDriver {
   readonly weather?: Spells;
   /** The world clock the boat is drawn by, for a driver that keeps its own time: the game sets it. */
   clock?: { readonly steps: number } | null;
+  /** How many times its sailor has pushed the boat off the ground: each push is drawn as a jump. */
+  readonly pushes?: number;
 }
 
 /** Steps a driver to where the world clock says it should be, each frame. */

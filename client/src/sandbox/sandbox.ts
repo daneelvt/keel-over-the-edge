@@ -149,6 +149,8 @@ export class Sandbox implements BoatDriver {
   clock: { readonly steps: number } | null = null;
   /** The tick the boat's state is after. */
   tick = 1;
+  /** How many steps pushed the boat off the ground. */
+  pushes = 0;
 
   readonly #physics: Physics;
   readonly #boat: BoatPhysics;
@@ -447,8 +449,14 @@ export class Sandbox implements BoatDriver {
     this.tick = tick;
     // The module's memory never grows while stepping, so the views stay valid.
     const after = this.#physics.records;
-    this.states.push(after.state);
     this.out.set(after.out);
+    if ((after.out[RECORDS.out.pushedOff] ?? 0) !== 0) {
+      // Pushed off: drawn at once where the sailor put it.
+      this.pushes++;
+      this.states.hold(after.state);
+    } else {
+      this.states.push(after.state);
+    }
   }
 
   /**

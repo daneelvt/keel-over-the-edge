@@ -635,3 +635,50 @@ func TestEncounterRoute(t *testing.T) {
 		s.stop(t)
 	})
 }
+
+// TestPlaceRoute: POST /debug/place is on the internal listener only with
+// KEEL_DEV_COMMANDS=1; it refuses a place it cannot read, and a world with
+// no player at sea; and moves the first player's boat where asked, at rest.
+func TestPlaceRoute(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s, _ := gameServer(t, map[string]string{}, &memDB{epoch: bubbleEpoch})
+		res, err := s.client.Post(internalURL+"/debug/place?east=10&north=20", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusNotFound && res.StatusCode != http.StatusMethodNotAllowed {
+			t.Fatalf("without KEEL_DEV_COMMANDS: %d", res.StatusCode)
+		}
+		s.stop(t)
+	})
+	synctest.Test(t, func(t *testing.T) {
+		s, token := gameServer(t, map[string]string{"KEEL_DEV_COMMANDS": "1"}, &memDB{epoch: bubbleEpoch})
+		post := func(query string) int {
+			t.Helper()
+			res, err := s.client.Post(internalURL+"/debug/place?"+query, "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			return res.StatusCode
+		}
+		if code := post("east=10&north=20"); code != http.StatusConflict {
+			t.Fatalf("with no player: %d", code)
+		}
+		for _, q := range []string{"east=x&north=1", "north=1", "east=1&north=1&heading=y", "east=1e9&north=0", "east=1&north=1&account=zz"} {
+			if code := post(q); code != http.StatusBadRequest {
+				t.Errorf("%s: %d", q, code)
+			}
+		}
+		connect(t, s, token)
+		time.Sleep(2 * time.Second)
+		if code := post("east=-1234.5&north=678&heading=90"); code != http.StatusOK {
+			t.Fatalf("placing: %d", code)
+		}
+		s.stop(t)
+		if !strings.Contains(s.logs.String(), `"msg":"a boat placed by hand","build":"dev","boat":1,"east":-1234.5,"north":678,"heading":90`) {
+			t.Errorf("the logs lack the boat placed:\n%s", s.logs.String())
+		}
+	})
+}

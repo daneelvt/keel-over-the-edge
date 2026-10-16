@@ -12,6 +12,7 @@
 
 import { effect } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
+import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
 import { KNOCK, knockOf } from '../audio/knock';
 import { type SoundInput, soundInput } from '../audio/voices';
 import { HelmInput } from '../input/helm';
@@ -22,7 +23,7 @@ import { SheetInput } from '../input/sheet';
 import type { BumpTold } from '../net/messages';
 import { RECORDS } from '../predict/layout.gen';
 import type { SeaScene } from '../render/scene';
-import { HudModel } from '../ui/model';
+import { HudModel, PUSHED_OFF } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
 import { bumpLine } from '../ui/verdict';
 import { WorldClock } from './clock';
@@ -52,6 +53,11 @@ export class Game implements PilotActions {
   /** The last bump told, and how many (the developer panel, the tests). */
   lastBump: BumpTold | null = null;
   bumps = 0;
+  /** How the boat met the ground as it last touched it, and how often (the tests). */
+  lastGround: 'knock' | 'scrape' | null = null;
+  groundings = 0;
+  /** The friction of the bed under a point, from the land held; 0 where none is held. */
+  bedFriction: (east: number, north: number) => number = () => 0;
 
   readonly #sound: SoundInput = {
     apparentWind: 0,
@@ -62,6 +68,10 @@ export class Game implements PilotActions {
     luffing: 0,
     time: 0,
   };
+  /** Out's aground after the last frame, the boat's speed then, and the pushes counted. */
+  #aground = 0;
+  #speed = 0;
+  #pushes = 0;
   readonly #rudderMax: number;
   readonly #boomIn: number;
   readonly #boomOut: number;
@@ -189,6 +199,36 @@ export class Game implements PilotActions {
     this.hud.showBump(bumpLine(b.article, b.part), now);
   }
 
+  /**
+   * The boat and the ground, at now (ms): as it first touches, a scrape on a
+   * soft bottom or a knock on land or a hard one, by its speed, and against
+   * land a shake; and after each push off, the line that says so.
+   */
+  #ground(d: BoatDriver, now: number): void {
+    const aground = d.out[RECORDS.out.aground] ?? 0;
+    if (aground !== 0 && this.#aground === 0) {
+      const p = this.world.pose;
+      const sound = groundSound(aground, this.bedFriction(p.east, p.north));
+      if (sound === 'scrape') {
+        this.sound.scrape(scrapeOf(SCRAPE, this.#speed));
+      } else if (sound === 'knock') {
+        this.sound.knock(knockOf(KNOCK, this.#speed, 0, 0));
+      }
+      if (aground === 2) {
+        this.world.camera.shake(this.#speed, now);
+      }
+      this.lastGround = sound;
+      this.groundings++;
+    }
+    this.#aground = aground;
+    this.#speed = d.out[RECORDS.out.speedOverGround] ?? 0;
+    const pushes = d.pushes ?? 0;
+    if (pushes > this.#pushes) {
+      this.hud.showBump(PUSHED_OFF, now);
+    }
+    this.#pushes = pushes;
+  }
+
   /** Steps once with the controls as they are (the panel's single step, the tests). */
   stepOnce(): void {
     this.loop.stepOnce();
@@ -269,6 +309,9 @@ export class Game implements PilotActions {
         const turning = (d.states.current[RECORDS.state.pilotWay] ?? 0) !== WAY_HOLD;
         this.pilot.follow(d.out[RECORDS.out.pilotHeading] ?? 0, d.wind.meanFrom, turning);
       }
+    }
+    if (d !== null) {
+      this.#ground(d, now);
     }
     const time = this.clock.time;
     // At most a second: after a pause or a jump, what eases simply arrives.

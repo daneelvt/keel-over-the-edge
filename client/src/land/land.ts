@@ -33,7 +33,7 @@ import { type ChunkMesh, cellHex, chunkCorner, hexCentre } from '../workers/mesh
 import type { ChunkGrids } from '../workers/mesh/chunk';
 import { colourBytes, landLook } from '../workers/mesh/look';
 import type { FromMesh, ToMesh } from '../workers/mesh/mesh';
-import { ModuleSlots } from './ground';
+import { cellAt, chunkAt, ModuleSlots } from './ground';
 import { landMaterial } from './material';
 
 /** The page's end of the mesh worker. */
@@ -123,6 +123,8 @@ export class Land {
   readonly #grids = new Map<number, ChunkGrids>();
   #version = 0;
   #worldId = '';
+  /** Payloads given with no address, by chunk. */
+  readonly #given = new Map<number, ArrayBuffer>();
   #inFlight = 0;
   readonly #frustum = new Frustum();
   readonly #matrix = new Matrix4();
@@ -175,6 +177,7 @@ export class Land {
       this.#dropMesh(h);
     }
     this.#held.clear();
+    this.#given.clear();
     this.#grids.clear();
     this.#version++;
     this.#inFlight = 0;
@@ -193,16 +196,16 @@ export class Land {
     });
   }
 
-  /** A chunk's payload given with no address (the sandbox's world file). */
+  /**
+   * A chunk's payload given with no address (the sandbox's world file): it
+   * is kept, and given to the worker again whenever the chunk is wanted.
+   */
   give(n: number, payload: ArrayBuffer): void {
     if (!this.#held.has(n)) {
       this.#held.set(n, newHeld(n, ''));
       this.stats.handed++;
     }
-    const h = this.#held.get(n) as Held;
-    h.asked = true;
-    this.#inFlight++;
-    this.#port.postMessage({ type: 'payload', number: n, payload }, [payload]);
+    this.#given.set(n, payload);
   }
 
   /** The chunks handed (the tests). */
@@ -226,6 +229,19 @@ export class Land {
       }
     }
     return true;
+  }
+
+  /** The surface's friction under (east, north), by the grids held; 0 where none is held. */
+  frictionAt(east: number, north: number): number {
+    const [c, j] = cellAt(east, north);
+    const n = chunkAt(east, north);
+    const g = this.#grids.get(n);
+    if (g === undefined || g.surface === null) {
+      return 0;
+    }
+    const [c0, j0] = chunkCorner(n);
+    const s = g.surface[(c - c0) * GROUND.chunkRows + (j - j0)] ?? 0;
+    return this.#world.surfaces[s]?.friction ?? 0;
   }
 
   /** The highest drawn land of chunk n, or −∞ (the tests). */
@@ -259,7 +275,7 @@ export class Land {
     if (this.#inFlight < IN_FLIGHT) {
       const want: [number, Held][] = [];
       for (const h of this.#held.values()) {
-        if (h.asked || h.failed || h.path === '') {
+        if (h.asked || h.failed || (h.path === '' && !this.#given.has(h.number))) {
           continue;
         }
         const d = outlineDistance(h, east, north);
@@ -276,7 +292,13 @@ export class Land {
         }
         h.asked = true;
         this.#inFlight++;
-        this.#port.postMessage({ type: 'fetch', number: h.number, path: h.path });
+        const given = this.#given.get(h.number);
+        if (given !== undefined) {
+          const copy = given.slice(0);
+          this.#port.postMessage({ type: 'payload', number: h.number, payload: copy }, [copy]);
+        } else {
+          this.#port.postMessage({ type: 'fetch', number: h.number, path: h.path });
+        }
       }
     }
     // Let go, place and choose.

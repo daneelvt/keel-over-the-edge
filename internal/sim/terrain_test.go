@@ -190,3 +190,40 @@ func BenchmarkTickWithLand(b *testing.B) {
 		})
 	}
 }
+
+// TestRestoredAshore: a checkpoint of an open sea whose boats lie where a
+// world's land is, restored with the land, starts those boats again at the
+// start; those afloat stay where they were.
+func TestRestoredAshore(t *testing.T) {
+	open := terrainWorld(t, 16, 1, nil)
+	q := open.Bus().Commands.Developer()
+	for i := range 2 {
+		if err := q.TrySend(bus.Command{Op: bus.Join, Account: acct(uint64(i + 1)), Conn: uint64(i + 1)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	open.Tick()
+	f := open.Latest()
+	if len(f.Live) != 2 {
+		t.Fatalf("%d boats", len(f.Live))
+	}
+	ashore, afloat := f.Live[0], f.Live[1]
+	if err := q.TrySend(bus.Command{Op: bus.Place, Boat: f.Boat[ashore], State: physics.State{X: 400, Y: 30}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.TrySend(bus.Command{Op: bus.Place, Boat: f.Boat[afloat], State: physics.State{X: -300, Y: 30}}); err != nil {
+		t.Fatal(err)
+	}
+	open.Tick()
+	f = open.Latest()
+	snap := AppendSnapshot(nil, f)
+	land := terrainWorld(t, 16, 1, beachTerrain(t))
+	r, err := land.Restore(snap, f.Tick+10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := land.Latest()
+	if r.Ashore != 1 || g.State[ashore].X != 100 || g.State[afloat].X != f.State[afloat].X {
+		t.Fatalf("restored %+v: the boat ashore at (%v, %v), the one afloat at %v", r, g.State[ashore].X, g.State[ashore].Y, g.State[afloat].X)
+	}
+}

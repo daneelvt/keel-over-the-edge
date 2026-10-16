@@ -12,6 +12,7 @@
 //
 // Query strings, for development:
 //   ?sandbox          the offline sandbox alone: no server, no account
+//   ?world=7          the sandbox in seed 7's world, from .dev/worlds/7.world (go run ./tools/dev -world 7)
 //   ?wind=12,45       the sandbox's wind: knots 10 m up, and the degrees it comes from
 //   ?sea=gale         the sandbox's wind by the sea it raises: calm, breeze, fresh or gale
 //   ?dev              the developer panel (loaded only when asked for)
@@ -30,6 +31,7 @@ import { backSoon, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Game } from '../game/game';
 import { Land } from '../land/land';
+import { FILE_WORLD, fetchWorldFile, handWorld, type WorldFile } from '../land/world';
 import { Online } from '../net/online';
 import { reloadForVersion } from '../net/reload';
 import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
@@ -83,8 +85,16 @@ async function start(): Promise<void> {
     // pictures and recordings are of one wind; otherwise a spell of the
     // commonest regime, with its shifts and gusts.
     const wind = windFromQuery(query) ?? seaFromQuery(query);
+    // ?world=seed: a whole world, from the file go run ./tools/dev -world
+    // writes, the boat at its start.
+    const seed = query.get('world');
+    const file: WorldFile | null = seed === null ? null : await fetchWorldFile(seed);
+    const place = file?.start.places[0];
     const begin = {
       ...START,
+      ...(file === null || place === undefined
+        ? {}
+        : { east: place[0], north: place[1], heading: file.start.heading }),
       wind: wind ?? START.wind,
       weather:
         weatherFromQuery(query, catalog.weather) ??
@@ -96,6 +106,21 @@ async function start(): Promise<void> {
     ]);
     prepareEncounters(sandbox.physics, catalog.encounters);
     game.setDriver(sandbox);
+    if (file !== null) {
+      const land = new Land(
+        new Worker(new URL('../workers/mesh/worker.ts', import.meta.url), { type: 'module' }),
+        catalog.world,
+        catalog.weather.sea.breaking,
+      );
+      world.useLand(land);
+      game.bedFriction = (east, north) => land.frictionAt(east, north);
+      land.setWorld(FILE_WORLD, true, sandbox.physics);
+      const s = sandbox.physics.records.state;
+      await handWorld(land, file, catalog.world.handout, () => [
+        s[RECORDS.state.x] ?? 0,
+        s[RECORDS.state.y] ?? 0,
+      ]);
+    }
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
     chooseSky(world, query);
     mountScreen(document.body, {
@@ -164,6 +189,7 @@ async function start(): Promise<void> {
     catalog.weather.sea.breaking,
   );
   world.useLand(land);
+  game.bedFriction = (east, north) => land.frictionAt(east, north);
   online.onWorld = (id, sailed) => land.setWorld(id, sailed, sailed ? predictor.physics : null);
   online.onChunks = (c) => land.hand(c.numbers, c.paths);
   connect(online);

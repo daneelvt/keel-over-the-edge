@@ -670,7 +670,7 @@ func restore(ctx context.Context, db database, world *sim.World, sailed store.Wo
 	m.RestoredBoats.Set(float64(r.Boats))
 	m.RestoreGap.Set(age.Seconds())
 	log.Info("the world is restored from its checkpoint", "tick", r.From, "now", now, "gap", age.Round(time.Millisecond).String(),
-		"boats", r.Boats, "waiting", r.Waiting, "written_by", cp.Build, "written_at", cp.WrittenAt)
+		"boats", r.Boats, "waiting", r.Waiting, "ashore", r.Ashore, "written_by", cp.Build, "written_at", cp.WrittenAt)
 	return nil
 }
 
