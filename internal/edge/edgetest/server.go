@@ -67,6 +67,8 @@ type Config struct {
 	Terrain  *sim.Terrain
 	Chunks   *edge.Handout
 	Payloads *api.Chunks
+	// Edge is how boats meet the world's edge; the catalog's if nil.
+	Edge *sim.Edge
 }
 
 // Server is the game's server in a test.
@@ -89,6 +91,18 @@ type Server struct {
 	cancel   context.CancelFunc
 	done     sync.WaitGroup
 	stopped  bool
+}
+
+// CatalogEdge is the catalog's edge: five seconds' fall, and approaches
+// survived 20 m back out of the mist band.
+var CatalogEdge = sim.Edge{Fall: 150, Clear: 20}
+
+// circulation is the way round the disk of a world of terrain t.
+func circulation(t *sim.Terrain) int32 {
+	if t == nil {
+		return 0
+	}
+	return int32(t.Circulation)
 }
 
 // CatalogKinds is the catalog's sea and its boats, prepared.
@@ -121,6 +135,9 @@ func NewServer(t testing.TB, cfg Config) *Server {
 		}
 		cfg.Encounters = cat.PrepareEncounters()
 	}
+	if cfg.Edge == nil {
+		cfg.Edge = &CatalogEdge
+	}
 	m := obs.NewMetrics("test", catalog.Version)
 	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg}
 	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
@@ -136,7 +153,7 @@ func (s *Server) newWorld(t testing.TB) *sim.World {
 	t.Helper()
 	cfg := s.cfg
 	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Waves: cfg.Waves, Encounters: cfg.Encounters, Workers: 1,
-		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain})
+		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain, Edge: cfg.Edge})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +171,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Bus: w.Bus(), World: WorldID, Epoch: Epoch, Clock: s.Loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
-		Land: cfg.Terrain != nil, Chunks: cfg.Chunks,
+		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain),
 	})
 	if cfg.Record != nil {
 		// The test's recorder first, so it has each frame before any

@@ -381,7 +381,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	} else {
 		log.Warn("land is off: the world's terrain is sailed as open sea")
 	}
-	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: terrain})
+	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: terrain, Edge: edgeOf(cat)})
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
@@ -416,7 +416,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Bus: b, World: store.AccountID(sailed.ID).String(), Epoch: epoch, Clock: tickLoop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
-		Land: cfg.Land, Chunks: handout,
+		Land: cfg.Land, Chunks: handout, Circulation: circulationOf(terrain),
 	})
 	lasting := persist.New(persist.Config{
 		Frames: b.Frames, Store: writer, World: sailed.ID, Epoch: leaseEpoch,

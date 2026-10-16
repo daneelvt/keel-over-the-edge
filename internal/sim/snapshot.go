@@ -33,8 +33,11 @@ import (
 // Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
 // uvarint, its control word and its pilot word in 8 bytes each, its state's
-// fields in 8 bytes each, then its course's, the same; each connection
-// waiting is its account's 16
+// fields in 8 bytes each, then its course's, the same, then its voyage at
+// the edge: the tick it went over the lip as a varint (0 afloat), a uvarint
+// of flags (1: an approach under way, 2: one survived), and for each flag
+// set the least distance and where, three floats in 8 bytes each; each
+// connection waiting is its account's 16
 // bytes, the connection as a uvarint, the tick it was queued at and the tick
 // its place is given up at (0 while connected) as varints. Each pair is its
 // two slots and two boats, its keep-clear boat, Article and whose action as
@@ -44,7 +47,7 @@ import (
 //
 // A checkpoint stores this snapshot, so a world is restored only by a build
 // that reads its version.
-const SnapshotVersion = 9
+const SnapshotVersion = 10
 
 // AppendSnapshot appends f's snapshot to dst.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
@@ -94,6 +97,7 @@ func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 		for _, v := range CourseFields(&f.Course[s]) {
 			dst = appendF64(dst, *v)
 		}
+		dst = appendVoyage(dst, &f.Voyage[s])
 	}
 	dst = binary.AppendUvarint(dst, uint64(len(f.Queue)))
 	for _, q := range f.Queue {
@@ -115,6 +119,55 @@ func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendVarint(dst, p.Touched)
 	}
 	return dst
+}
+
+// The flags of a voyage in a snapshot.
+const (
+	voyageApproaching = 1
+	voyageSurvived    = 2
+)
+
+func voyageFlags(v *bus.Voyage) uint64 {
+	var flags uint64
+	if v.Approaching {
+		flags |= voyageApproaching
+	}
+	if v.Survived {
+		flags |= voyageSurvived
+	}
+	return flags
+}
+
+func appendVoyage(dst []byte, v *bus.Voyage) []byte {
+	dst = binary.AppendVarint(dst, v.Over)
+	flags := voyageFlags(v)
+	dst = binary.AppendUvarint(dst, flags)
+	if flags&voyageApproaching != 0 {
+		dst = appendF64(appendF64(appendF64(dst, v.Least), v.X), v.Y)
+	}
+	if flags&voyageSurvived != 0 {
+		dst = appendF64(appendF64(appendF64(dst, v.Best), v.BestX), v.BestY)
+	}
+	return dst
+}
+
+// voyage reads a voyage at the edge.
+func (r *reader) voyage(v *bus.Voyage) error {
+	*v = bus.Voyage{Over: r.varint()}
+	flags := r.uvarint()
+	if r.err != nil {
+		return r.err
+	}
+	if v.Over < 0 || flags > voyageApproaching|voyageSurvived {
+		return fmt.Errorf("sim: snapshot: a voyage over at tick %d with flags %d", v.Over, flags)
+	}
+	if flags&voyageApproaching != 0 {
+		v.Approaching, v.Least, v.X, v.Y = true, r.f64(), r.f64(), r.f64()
+	}
+	if flags&voyageSurvived != 0 {
+		v.Survived, v.Best, v.BestX, v.BestY = true, r.f64(), r.f64(), r.f64()
+	}
+	return r.err
 }
 
 func appendF64(dst []byte, v float64) []byte {
@@ -209,6 +262,9 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		for _, v := range CourseFields(&f.Course[s]) {
 			*v = r.f64()
 		}
+		if err := r.voyage(&f.Voyage[s]); err != nil {
+			return err
+		}
 	}
 	f.Queue = f.Queue[:0]
 	n = r.count(bus.QueueLimit)
@@ -223,6 +279,7 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 	}
 	f.Pairs = f.Pairs[:0]
 	f.Bumps = f.Bumps[:0]
+	f.Edges = f.Edges[:0]
 	n = r.count(capacity * capacity)
 	for range n {
 		a, b, boatA, boatB := r.uvarint(), r.uvarint(), r.uvarint(), r.uvarint()

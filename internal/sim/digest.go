@@ -13,7 +13,9 @@ import (
 // developer's weathers (each one's tick, mode, regime, speed and direction),
 // the sea in effect and next (each run of areas with the same inputs, and
 // its length), whether admission is held, each occupied slot's number, boat, generation,
-// owner, connection, grace, control word, pilot word, state and course, each waiting
+// owner, connection, grace, control word, pilot word, state, course and, if it has
+// anything, its voyage at the edge (the tick it went over, its flags and its six
+// distances and places), each waiting
 // connection's account, connection, tick of joining the queue and grace,
 // and each pair's slots, boats, keep-clear boat, Article, whose action and
 // ticks, as little-endian bits. Two worlds with the
@@ -52,6 +54,15 @@ func Digest(f *bus.Frame) uint64 {
 		}
 		for _, v := range CourseFields(&f.Course[s]) {
 			h.f64(*v)
+		}
+		// A voyage at the edge counts once it has something, so a world
+		// whose boats never near it hashes as before.
+		if v := &f.Voyage[s]; *v != (bus.Voyage{}) {
+			h.u64(uint64(v.Over))
+			h.byte(byte(voyageFlags(v)))
+			for _, x := range [...]float64{v.Least, v.X, v.Y, v.Best, v.BestX, v.BestY} {
+				h.f64(x)
+			}
 		}
 	}
 	for _, q := range f.Queue {

@@ -73,10 +73,14 @@ type Config struct {
 	Encounters *physics.EncounterPrepared
 	// Terrain is the world's land; nil is open sea everywhere.
 	Terrain *Terrain
+	// Edge is how boats meet the world's edge, at the weather's lip; nil
+	// is a world whose boats sail on past it.
+	Edge *Edge
 }
 
 // Terrain is a world's land: the ground boats run aground on, the land's
-// shelter for the wind, each sea area's fetch, and where boats start.
+// shelter for the wind, each sea area's fetch, where boats start, and the
+// way its water circulates.
 type Terrain struct {
 	Ground  *physics.Ground
 	Shelter *physics.Shelter
@@ -86,6 +90,9 @@ type Terrain struct {
 	// Start is the start area's places, in order: where new boats appear.
 	// None is the spawn grid south of the centre.
 	Start []physics.State
+	// Circulation is the world's way round the disk for its current: 1
+	// clockwise seen from above, −1 the other way, 0 none.
+	Circulation float64
 }
 
 // A Phase is a part of a tick.
@@ -99,11 +106,12 @@ const (
 	PhasePhysics               // step every boat, in the shadow of the boats near it
 	PhaseGrid                  // sort the boats into the grid's cells
 	PhaseContacts              // pairs, contacts and bumps, under the Articles
+	PhaseRules                 // the edge: boats over the lip, and their approaches to it
 	PhasePublish               // publish the frame, hand it to the recorder
 	Phases                     // the number of phases
 )
 
-var phaseNames = [Phases]string{"inputs", "sea", "physics", "grid", "contacts", "publish"}
+var phaseNames = [Phases]string{"inputs", "sea", "physics", "grid", "contacts", "rules", "publish"}
 
 func (p Phase) String() string {
 	if p >= Phases {
@@ -161,6 +169,15 @@ type World struct {
 	shelter *physics.Shelter
 	start   []physics.State
 
+	// The edge, or nil for none: the width of the mist band inside the lip
+	// and that plus the edge's clear distance, m; the boats that started
+	// again this tick; and the world's way round the disk.
+	edge        *Edge
+	band        float64
+	bandClear   float64
+	restarted   []int32
+	circulation float64
+
 	// Encounters: their constants, or nil for none; how many cells about
 	// its own a boat looks for wakes; and the contacts phase's room.
 	enc        *physics.EncounterPrepared
@@ -173,7 +190,7 @@ type World struct {
 
 	// The phases as function values made once, so that running one inside
 	// a trace region allocates nothing.
-	inputsFn, seaFn, physicsFn, gridFn, contactsFn, publishFn func()
+	inputsFn, seaFn, physicsFn, gridFn, contactsFn, rulesFn, publishFn func()
 }
 
 // New makes a world of empty slots and starts its workers. Close stops them.
@@ -221,13 +238,24 @@ func New(cfg Config) (*World, error) {
 		w.touched = make([]candidate, 0, 256)
 	}
 	if t := cfg.Terrain; t != nil {
-		w.ground, w.shelter, w.start = t.Ground, t.Shelter, t.Start
+		w.ground, w.shelter, w.start, w.circulation = t.Ground, t.Shelter, t.Start, t.Circulation
 		if t.Fetch != nil && len(t.Fetch) != seaAreas {
 			return nil, fmt.Errorf("sim: a fetch for %d sea areas; the world has %d", len(t.Fetch), seaAreas)
 		}
 	}
 	w.weather.Prepared = cfg.Weather.Prepared()
-	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.contactsFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.contacts, w.publish
+	if e := cfg.Edge; e != nil {
+		if e.Fall < 1 || !(e.Clear >= 0) || !(w.weather.Prepared.Edge() > w.weather.Prepared.MistFrom()) {
+			return nil, fmt.Errorf("sim: an edge with a fall of %d ticks and a clear distance of %v m, its lip at %v m and its mist from %v m",
+				e.Fall, e.Clear, w.weather.Prepared.Edge(), w.weather.Prepared.MistFrom())
+		}
+		c := *e
+		w.edge = &c
+		w.band = w.weather.Prepared.Edge() - w.weather.Prepared.MistFrom()
+		w.bandClear = w.band + e.Clear
+		w.restarted = make([]int32, 0, cfg.Capacity)
+	}
+	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.contactsFn, w.rulesFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.contacts, w.rules, w.publish
 	w.sea.init(cfg.Waves, cfg.Weather)
 	if cfg.Terrain != nil {
 		w.sea.fetch = cfg.Terrain.Fetch

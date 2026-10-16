@@ -120,11 +120,14 @@ func (w *World) contacts() {
 	buildGrid(f)
 }
 
-// placed reports whether a command put boat s where it is this tick: its
-// pairs start afresh, as boats that have just come near, since nothing they
-// did brought them there.
+// placed reports whether a command put boat s where it is this tick, or it
+// started again after going over the lip: its pairs start afresh, as boats
+// that have just come near, since nothing they did brought them there.
 func (w *World) placed(s int32) bool {
 	f := w.next
+	if slices.Contains(w.restarted, s) {
+		return true
+	}
 	for i := range f.Events {
 		if e := &f.Events[i]; e.Op == bus.Place && e.Reply.Result == bus.Done && e.Reply.Slot == s {
 			return true
@@ -133,9 +136,13 @@ func (w *World) placed(s int32) bool {
 	return false
 }
 
-// near makes slots s and o a candidate if their boats are near enough.
+// near makes slots s and o a candidate if their boats are near enough. A
+// boat falling over the lip meets nothing.
 func (w *World) near(s, o int32) {
 	f := w.next
+	if f.Voyage[s].Falling() || f.Voyage[o].Falling() {
+		return
+	}
 	if physics.Near(&f.State[s], &f.State[o], &w.kinds[f.Kind[s]], &w.kinds[f.Kind[o]], w.enc) {
 		a, b := min(s, o), max(s, o)
 		w.candidates = append(w.candidates, candidate{a, b})
@@ -171,6 +178,11 @@ func (w *World) settle(f *bus.Frame, s int32) {
 	st := &f.State[s]
 	f.Wind[s] = physics.WindAt(&w.wind, st.X, st.Y, w.shelter)
 	if w.enc != nil {
+		if f.Voyage[s].Falling() {
+			// A boat over the lip casts no shadow.
+			f.Wake[s] = physics.Wake{}
+			return
+		}
 		f.Wake[s] = physics.WakeOf(st, &f.Wind[s], &w.kinds[f.Kind[s]], w.enc)
 	}
 }

@@ -69,6 +69,8 @@ type Metrics struct {
 	Workers       prometheus.Gauge
 	Commands      *prometheus.CounterVec // by kind and result
 	Snapshots     *prometheus.CounterVec // flight recorder snapshots, by reason
+	Falls         prometheus.Counter     // boats gone over the lip
+	Approaches    prometheus.Counter     // voyages ended with an approach to the lip survived
 
 	DBQueryDuration    *prometheus.HistogramVec // by query
 	DBQueryErrors      *prometheus.CounterVec   // by query
@@ -152,6 +154,12 @@ func NewMetrics(build, catalog string) *Metrics {
 		}),
 		ClockDrift: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "keel_sim_clock_drift_seconds", Help: "World time minus UTC as a tick starts.",
+		}),
+		Falls: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "keel_falls_total", Help: "Boats gone over the lip of the falls.",
+		}),
+		Approaches: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "keel_approaches_total", Help: "Voyages ended with an approach to the lip survived.",
 		}),
 		Boats: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "keel_sim_boats", Help: "Boats in the world.",
@@ -330,7 +338,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused,
-		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded)
+		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded, m.Falls, m.Approaches)
 	return m
 }
 

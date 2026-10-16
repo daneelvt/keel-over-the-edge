@@ -4,6 +4,7 @@ package sim
 
 import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 // Restored is what Restore put back.
@@ -18,6 +19,9 @@ type Restored struct {
 	// start, since a boat inside an island finds no water to be pushed off
 	// into.
 	Ashore int
+	// Fallen is how many boats were falling over the lip: each starts
+	// again at the start.
+	Fallen int
 }
 
 // Restore replaces the world with a snapshot taken by an earlier process,
@@ -42,6 +46,16 @@ func (w *World) Restore(snapshot []byte, now int64) (Restored, error) {
 			f.Conn[s] = 0
 			if f.Grace[s] == 0 {
 				f.Grace[s] = now + w.grace
+			}
+		}
+		// A boat falling over the lip when the snapshot was taken has
+		// fallen: it starts again at the start, its voyage ended.
+		for _, s := range f.Live {
+			if f.Voyage[s].Falling() {
+				f.Voyage[s] = bus.Voyage{}
+				f.State[s] = w.spawn(f, s)
+				f.Course[s] = physics.Course{}
+				r.Fallen++
 			}
 		}
 		if w.ground != nil {

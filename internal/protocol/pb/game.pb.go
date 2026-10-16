@@ -1412,7 +1412,11 @@ type Welcome struct {
 	EpochUs int64 `protobuf:"varint,7,opt,name=epoch_us,json=epochUs,proto3" json:"epoch_us,omitempty"`
 	// The world's land is sailed: boats run aground on it, and the wind and
 	// the waves feel it. Without it the world is open sea, and no Chunks come.
-	Land          bool `protobuf:"varint,8,opt,name=land,proto3" json:"land,omitempty"`
+	Land bool `protobuf:"varint,8,opt,name=land,proto3" json:"land,omitempty"`
+	// The way the world's water circulates round the disk: 1 clockwise seen
+	// from above, -1 the other way, 0 none. The client works the current out
+	// from it, the drain and the ground, as the server does.
+	Circulation   int32 `protobuf:"zigzag32,9,opt,name=circulation,proto3" json:"circulation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1501,6 +1505,13 @@ func (x *Welcome) GetLand() bool {
 		return x.Land
 	}
 	return false
+}
+
+func (x *Welcome) GetCirculation() int32 {
+	if x != nil {
+		return x.Circulation
+	}
+	return 0
 }
 
 // Pong answers a Ping.
@@ -1649,7 +1660,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05in_ms\x18\x01 \x01(\rR\x04inMs\">\n" +
 	"\x06Queued\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\rR\bposition\x12\x18\n" +
-	"\awaiting\x18\x02 \x01(\rR\awaiting\"\xca\x01\n" +
+	"\awaiting\x18\x02 \x01(\rR\awaiting\"\xec\x01\n" +
 	"\aWelcome\x12\x14\n" +
 	"\x05world\x18\x01 \x01(\tR\x05world\x12\x12\n" +
 	"\x04tick\x18\x02 \x01(\x03R\x04tick\x12\"\n" +
@@ -1658,7 +1669,8 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x04kind\x18\x05 \x01(\rR\x04kind\x12\x1a\n" +
 	"\brejoined\x18\x06 \x01(\bR\brejoined\x12\x19\n" +
 	"\bepoch_us\x18\a \x01(\x03R\aepochUs\x12\x12\n" +
-	"\x04land\x18\b \x01(\bR\x04land\"P\n" +
+	"\x04land\x18\b \x01(\bR\x04land\x12 \n" +
+	"\vcirculation\x18\t \x01(\x11R\vcirculation\"P\n" +
 	"\x04Pong\x12$\n" +
 	"\x0eclient_time_us\x18\x01 \x01(\x03R\fclientTimeUs\x12\"\n" +
 	"\rworld_time_us\x18\x02 \x01(\x03R\vworldTimeUs*d\n" +

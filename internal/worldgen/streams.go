@@ -20,8 +20,18 @@ const (
 	streamGroups
 	streamNames
 	streamStart
+	streamCirculation
 	streamIsland = 1 << 32 // plus the island's number
 )
+
+// circulationOf is the way the water of the world of a seed circulates
+// round the disk: 1 clockwise seen from above, −1 the other way.
+func circulationOf(seed uint64) int {
+	if newStream(seed, streamCirculation).r.Uint64()&1 == 0 {
+		return 1
+	}
+	return -1
+}
 
 // stream is a stage's or an island's generator.
 type stream struct{ r *rand.Rand }

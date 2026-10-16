@@ -41,6 +41,8 @@ func (w *World) tick() {
 	w.phaseDone(PhaseGrid)
 	trace.WithRegion(w.ctx, "contacts", w.contactsFn)
 	w.phaseDone(PhaseContacts)
+	trace.WithRegion(w.ctx, "rules", w.rulesFn)
+	w.phaseDone(PhaseRules)
 	trace.WithRegion(w.ctx, "publish", w.publishFn)
 	w.phaseDone(PhasePublish)
 }
@@ -54,7 +56,8 @@ func (w *World) phaseDone(p Phase) {
 // inputs copies the world into the next frame, then applies what changed:
 // first the sea moves on if the tick begins a second, by the weather as it
 // stood before this tick's commands; then the boats whose grace has ended leave, and the places in the queue
-// whose grace has ended are given up; then the control words of the
+// whose grace has ended are given up; then the boats whose fall over the
+// lip has ended start again at the start; then the control words of the
 // boats sailing are applied, each pair once its tick has come (bus.Due), then
 // the commands, in the order they came; last, while there is room, those
 // waiting in the queue get their boats, the longest waiting first.
@@ -80,6 +83,7 @@ func (w *World) inputs() {
 		next.Pilot[s] = cur.Pilot[s]
 		next.State[s] = cur.State[s]
 		next.Course[s] = cur.Course[s]
+		next.Voyage[s] = cur.Voyage[s]
 	}
 	// A bump stays a second in the frames, for encoders that skip one.
 	next.Bumps = next.Bumps[:0]
@@ -92,7 +96,10 @@ func (w *World) inputs() {
 	next.Changed = next.Changed[:0]
 	clear(next.Events) // drop the old events' references
 	next.Events = next.Events[:0]
+	next.Edges = next.Edges[:0]
+	w.restarted = w.restarted[:0]
 	w.expire()
+	w.fallsEnd()
 
 	if in := w.given; in != nil {
 		for _, sw := range in.Changed {
@@ -155,8 +162,8 @@ func sameSpells(w *physics.Weather, f *bus.Frame) bool {
 	return w.Count == f.NSpells && w.Spells == f.Spells
 }
 
-// stepSlots steps the boats in slots of the next frame, each in the wind at
-// its place as its step begins less the shadow of the wakes about it in
+// stepSlots steps the boats in slots of the next frame, each in the wind and
+// the current at its place as its step begins, less the shadow of the wakes about it in
 // the current frame, and keeps what each step says of its sail, for
 // drawing; then works out its wind and wake after the step, and brings its
 // course along. Workers call it on disjoint ranges: a step reads only its
@@ -167,8 +174,16 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 		word := f.Control[s]
 		c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
 		c.Pilot, c.Target, c.Order, c.Way = f.Pilot[s].Control()
+		if f.Voyage[s].Falling() {
+			// A boat falling over the lip is not stepped: it keeps its
+			// state and its sail as it went over.
+			f.Sail[s] = w.cur.Sail[s]
+			w.settle(f, s)
+			continue
+		}
 		st := &f.State[s]
 		e := physics.WindAt(&w.wind, st.X, st.Y, w.shelter)
+		e.CurrentEast, e.CurrentNorth = physics.CurrentAt(w.weather.Prepared, w.circulation, st.X, st.Y, w.ground)
 		kind := &w.kinds[f.Kind[s]]
 		if w.enc != nil {
 			w.shadow(src, &e, s, st.X, st.Y)

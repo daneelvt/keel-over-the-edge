@@ -15,22 +15,25 @@ import (
 
 // The snapshot, as shared/protocol/snapshot.txt lays it out: a header with
 // the player's own boat, its autopilot's block while it has one, its ground
-// block while it is aground, then the entries of the other boats' view.
+// block while it is aground, its over block while it falls over the lip,
+// then the entries of the other boats' view.
 const (
 	// HeaderSize is the header's length, its kind byte included: where
 	// the entries begin, unless the autopilot's or the ground block
 	// follows it.
 	HeaderSize = 176
-	// PilotSize is the autopilot's block's length, and GroundSize the
-	// ground block's.
+	// PilotSize is the autopilot's block's length, GroundSize the ground
+	// block's and OverSize the over block's.
 	PilotSize  = 32
 	GroundSize = 8
-	// MaxHeaderSize is the header's length with both blocks.
-	MaxHeaderSize = HeaderSize + PilotSize + GroundSize
+	OverSize   = 8
+	// MaxHeaderSize is the header's length with every block.
+	MaxHeaderSize = HeaderSize + PilotSize + GroundSize + OverSize
 	// SnapshotLayout is the layout this package writes: the own boat's
 	// state as float64, its autopilot's block if it has one, its ground
-	// block if it is aground, then the view's entries.
-	SnapshotLayout = 7
+	// block if it is aground, its over block if it is falling over the
+	// lip, then the view's entries.
+	SnapshotLayout = 8
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an
@@ -53,6 +56,9 @@ const (
 	// block, if that is there. It does while the boat's time aground is
 	// not zero, so a boat afloat pays nothing.
 	GroundHeld = 1 << 2
+	// OverHeld: the over block follows the header and the blocks before
+	// it: the tick the boat went over the lip, while it falls.
+	OverHeld = 1 << 3
 )
 
 const (
@@ -93,7 +99,10 @@ type Snapshot struct {
 	// Margin is the lowest arrival margin since the previous snapshot, in
 	// ticks, or NoMargin.
 	Margin int16
-	State  physics.State
+	// Over is the tick the boat went over the lip while it is falling, or
+	// 0 while it is afloat.
+	Over  int64
+	State physics.State
 	// Entries is how many entries follow the header, and Header the
 	// header's length, where they begin.
 	Entries int
@@ -114,17 +123,21 @@ func pilotHeld(p bus.PilotWord, s *physics.State) bool {
 
 // PutHeader writes a snapshot's header, its kind byte first, into b, which
 // must hold its length, HeaderSize bytes and each block's, with no entries,
-// and returns that length: where the entries begin. It allocates nothing.
-func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, pilot bus.PilotWord, margin int16, s *physics.State) int {
-	held, aground := pilotHeld(pilot, s), groundHeld(s)
-	n := headerLength(held, aground)
+// and returns that length: where the entries begin. over is the tick the
+// boat went over the lip, 0 while it is afloat. It allocates nothing.
+func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, pilot bus.PilotWord, margin int16, over int64, s *physics.State) int {
+	held, aground, falling := pilotHeld(pilot, s), groundHeld(s), over != 0
+	n := headerLength(held, aground, falling)
 	_ = b[n-1]
-	flags &^= PilotHeld | GroundHeld
+	flags &^= PilotHeld | GroundHeld | OverHeld
 	if held {
 		flags |= PilotHeld
 	}
 	if aground {
 		flags |= GroundHeld
+	}
+	if falling {
+		flags |= OverHeld
 	}
 	le := binary.LittleEndian
 	b[0] = KindSnapshot
@@ -155,17 +168,24 @@ func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, pi
 		le.PutUint64(b[at:], math.Float64bits(s.GroundTimer))
 		at += GroundSize
 	}
+	if falling {
+		le.PutUint64(b[at:], uint64(over))
+		at += OverSize
+	}
 	return at
 }
 
 // headerLength is the header's length with the blocks that follow it.
-func headerLength(pilot, ground bool) int {
+func headerLength(pilot, ground, over bool) int {
 	n := HeaderSize
 	if pilot {
 		n += PilotSize
 	}
 	if ground {
 		n += GroundSize
+	}
+	if over {
+		n += OverSize
 	}
 	return n
 }
@@ -176,13 +196,13 @@ func SetEntries(b []byte, n int) { b[offEntries] = byte(n) }
 // Put writes s's header as PutHeader does, with s.Entries as its count, and
 // sets s.Header to its length.
 func (s *Snapshot) Put(b []byte) {
-	s.Header = PutHeader(b, s.Tick, s.Base, s.Flags, bus.Pack(s.Seq, s.Helm, s.Sheet, 0), s.pilot(), s.Margin, &s.State)
+	s.Header = PutHeader(b, s.Tick, s.Base, s.Flags, bus.Pack(s.Seq, s.Helm, s.Sheet, 0), s.pilot(), s.Margin, s.Over, &s.State)
 	SetEntries(b, s.Entries)
 }
 
 // Len is the length of s's header: where its entries begin.
 func (s *Snapshot) Len() int {
-	return headerLength(pilotHeld(s.pilot(), &s.State), groundHeld(&s.State))
+	return headerLength(pilotHeld(s.pilot(), &s.State), groundHeld(&s.State), s.Over != 0)
 }
 
 func (s *Snapshot) pilot() bus.PilotWord {
@@ -217,7 +237,7 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 	switch {
 	case s.Helm > bus.Steps || s.Sheet > bus.Steps:
 		return fmt.Errorf("protocol: a snapshot's controls %d and %d", s.Helm, s.Sheet)
-	case s.Flags&^(FarSampled|PilotHeld|GroundHeld) != 0:
+	case s.Flags&^(FarSampled|PilotHeld|GroundHeld|OverHeld) != 0:
 		return fmt.Errorf("protocol: a snapshot's flags %#02x", s.Flags)
 	case s.Entries > MaxEntries:
 		return fmt.Errorf("protocol: a snapshot of %d entries", s.Entries)
@@ -230,8 +250,8 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 	for _, v := range fields[sim.BoatSize:] {
 		*v = 0
 	}
-	held, aground := s.Flags&PilotHeld != 0, s.Flags&GroundHeld != 0
-	s.Header = headerLength(held, aground)
+	held, aground, falling := s.Flags&PilotHeld != 0, s.Flags&GroundHeld != 0, s.Flags&OverHeld != 0
+	s.Header = headerLength(held, aground, falling)
 	if len(b) < s.Header {
 		return fmt.Errorf("protocol: a snapshot of %d bytes, shorter than its header and blocks", len(b))
 	}
@@ -247,8 +267,16 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 		}
 		at += PilotSize
 	}
+	s.Over = 0
 	if aground {
 		s.State.GroundTimer = math.Float64frombits(le.Uint64(b[at:]))
+		at += GroundSize
+	}
+	if falling {
+		s.Over = int64(le.Uint64(b[at:]))
+		if s.Over <= 0 || s.Over > s.Tick {
+			return fmt.Errorf("protocol: a snapshot of tick %d over the lip at tick %d", s.Tick, s.Over)
+		}
 	}
 	return nil
 }

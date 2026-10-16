@@ -191,6 +191,9 @@ func Load(records, report []byte, chunks [][]byte, world [16]byte, digest []byte
 	if b.Format != Format {
 		return nil, fmt.Errorf("worldgen: the bundle is of format %d, not %d", b.Format, Format)
 	}
+	if b.Circulation == 0 {
+		b.Circulation = circulationOf(b.Made)
+	}
 	if len(report) > 0 {
 		if err := json.Unmarshal(report, &b.Report); err != nil {
 			return nil, fmt.Errorf("worldgen: the report: %w", err)
@@ -290,8 +293,8 @@ func ReadFile(data []byte) (*Bundle, error) {
 }
 
 // Terrain is the bundle as the simulation sails it: its ground, read with
-// the catalog's grounding, its shelter and fetch, and its start area's
-// places, each a boat at rest facing the start's heading.
+// the catalog's grounding, its shelter and fetch, its start area's places,
+// each a boat at rest facing the start's heading, and its circulation.
 func (b *Bundle) Terrain(ground *physics.GroundPrepared) *sim.Terrain {
 	g := *b.Ground
 	g.Prepared = ground
@@ -299,5 +302,5 @@ func (b *Bundle) Terrain(ground *physics.GroundPrepared) *sim.Terrain {
 	for i, p := range b.Start.Places {
 		start[i] = physics.State{X: p[0], Y: p[1], Heading: b.Start.Heading}
 	}
-	return &sim.Terrain{Ground: &g, Shelter: b.Shelter, Fetch: b.Fetch, Start: start}
+	return &sim.Terrain{Ground: &g, Shelter: b.Shelter, Fetch: b.Fetch, Start: start, Circulation: float64(b.Circulation)}
 }

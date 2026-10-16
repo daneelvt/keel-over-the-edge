@@ -35,6 +35,8 @@ func (w *World) apply(c *bus.Command) {
 		r = bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: c.Boat}
 		if s := slotOf(f, c.Boat); s >= 0 {
 			f.State[s] = c.State
+			// A boat falling over the lip is afloat where it is put.
+			f.Voyage[s].Over = 0
 			r = bus.Reply{Result: bus.Done, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
 		}
 	case bus.Disconnect:
@@ -92,9 +94,13 @@ func (w *World) expire() {
 	}
 }
 
-// free empties slot s of the next frame.
+// free ends the voyage of the boat in slot s of the next frame, unless it
+// ended going over the lip, and empties the slot.
 func (w *World) free(s int32) {
 	f := w.next
+	if w.edge != nil && !f.Voyage[s].Falling() {
+		w.voyageEnds(f, s)
+	}
 	f.Occupied[s] = false
 	f.Gen[s] = (f.Gen[s] + 1) & bus.GenMask
 	i, _ := slices.BinarySearch(f.Live, s)

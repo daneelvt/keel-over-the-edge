@@ -24,6 +24,5 @@ func EdgeDistance(w *WeatherPrepared, x, y float64) float64 {
 // Edge is the lip's distance from the centre, m.
 func (w *WeatherPrepared) Edge() float64 { return w.edge }
 
-// MistFrom is where the mist band begins, m from the centre: where the
-// falls begin to draw the air.
-func (w *WeatherPrepared) MistFrom() float64 { return w.draftFrom }
+// MistFrom is where the mist band begins, m from the centre.
+func (w *WeatherPrepared) MistFrom() float64 { return w.rim }
