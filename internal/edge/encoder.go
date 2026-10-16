@@ -251,11 +251,13 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
 		Boat: c.boat, Kind: uint32(f.Kind[s]), Rejoined: c.rejoined,
-		EpochUs: e.cfg.Epoch.UnixMicro(),
+		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land,
 	}}}, outWelcome)
 	c.ready.Store(ok)
 	c.bumped = f.Tick
-	return ok
+	// The land about the boat, at once after the Welcome: the client draws
+	// what is near before it shows the sea.
+	return ok && c.chunks(f.State[s].X, f.State[s].Y)
 }
 
 // encode writes c's snapshot of f into its mailbox: the own boat, then the
@@ -287,9 +289,9 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	if base != nil {
 		baseView, dist = &base.view, uint16(f.Tick-base.tick)
 	}
-	// The weather, the sea and the bumps first: they are queued, and what
-	// is queued goes out before the snapshot.
-	if !c.weather(f) || !c.seaAreas(f, &f.State[s]) || !c.bumps(f, next) {
+	// The weather, the sea, the land's chunks and the bumps first: they are
+	// queued, and what is queued goes out before the snapshot.
+	if !c.weather(f) || !c.seaAreas(f, &f.State[s]) || !c.chunks(f.State[s].X, f.State[s].Y) || !c.bumps(f, next) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]

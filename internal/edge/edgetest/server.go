@@ -62,6 +62,11 @@ type Config struct {
 	// Record, if not nil, is told of each frame too, on the ticking
 	// goroutine, before the edge.
 	Record sim.Recorder
+	// Terrain, if not nil, is the world's land, sailed; Chunks then hands
+	// out its chunks' addresses, and Payloads serves them.
+	Terrain  *sim.Terrain
+	Chunks   *edge.Handout
+	Payloads *api.Chunks
 }
 
 // Server is the game's server in a test.
@@ -131,7 +136,7 @@ func (s *Server) newWorld(t testing.TB) *sim.World {
 	t.Helper()
 	cfg := s.cfg
 	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Waves: cfg.Waves, Encounters: cfg.Encounters, Workers: 1,
-		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather})
+		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,6 +154,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Bus: w.Bus(), World: WorldID, Epoch: Epoch, Clock: s.Loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
+		Land: cfg.Terrain != nil, Chunks: cfg.Chunks,
 	})
 	if cfg.Record != nil {
 		// The test's recorder first, so it has each frame before any
@@ -163,6 +169,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Metrics:  m,
 		Sessions: s.sessions,
 		Game:     s.Edge,
+		Chunks:   cfg.Payloads,
 	})
 	s.handler.Store(&h)
 	ctx, cancel := context.WithCancel(context.Background())

@@ -30,6 +30,9 @@ type Bundle struct {
 	GenerationMs int
 	Chunks       [][]byte
 	Places       []Place
+	// ChunkKey is the world's chunk key, 32 bytes, or nil if its bundle was
+	// stored without one.
+	ChunkKey []byte
 }
 
 // Place is an island or a group of rocks, by its number in the world.
@@ -81,7 +84,7 @@ func (s *Store) LoadBundle(ctx context.Context, world [16]byte) (*Bundle, error)
 	b := &Bundle{
 		Seed: seed, Format: int(row.Format), Generator: int(row.Generator), Catalog: row.Catalog,
 		Made: uint64(row.Made), Attempts: int(row.Attempts), Digest: row.Digest, Records: row.Records,
-		Report: row.Report, GenerationMs: int(row.GenerationMs),
+		Report: row.Report, GenerationMs: int(row.GenerationMs), ChunkKey: row.ChunkKey,
 	}
 	chunks, err := s.q.WorldChunks(ctx, id)
 	if err != nil {
@@ -126,7 +129,7 @@ func (s *Store) StoreBundle(ctx context.Context, world [16]byte, epoch int64, b 
 		n, err := q.InsertBundle(ctx, db.InsertBundleParams{
 			WorldID: id, Format: int16(b.Format), Generator: int32(b.Generator), Catalog: b.Catalog,
 			Made: int64(b.Made), Attempts: int32(b.Attempts), Digest: b.Digest, Records: b.Records,
-			Report: b.Report, GenerationMs: int32(b.GenerationMs),
+			Report: b.Report, GenerationMs: int32(b.GenerationMs), ChunkKey: b.ChunkKey,
 		})
 		if err != nil || n == 0 {
 			return err
@@ -157,4 +160,32 @@ func (s *Store) StoreBundle(ctx context.Context, world [16]byte, epoch int64, b 
 		_, err = q.InsertPlaces(ctx, places)
 		return err
 	})
+}
+
+// ChunkKeySize is a world's chunk key's length, in bytes.
+const ChunkKeySize = 32
+
+// SetChunkKey gives the world's bundle the chunk key, if it has none, in
+// one statement fenced by the lease's epoch, and returns the key the bundle
+// then has: this one, or the one it had. A write by another epoch is
+// refused with ErrFenced; a world with no bundle is ErrNotFound.
+func (s *Store) SetChunkKey(ctx context.Context, world [16]byte, epoch int64, key []byte) ([]byte, error) {
+	if len(key) != ChunkKeySize {
+		return nil, fmt.Errorf("store: a chunk key of %d bytes", len(key))
+	}
+	id := pgtype.UUID{Bytes: world, Valid: true}
+	if _, err := s.q.SetChunkKey(ctx, db.SetChunkKeyParams{ChunkKey: key, WorldID: id, Epoch: epoch}); err != nil {
+		return nil, err
+	}
+	have, err := s.q.ChunkKey(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if have == nil {
+		return nil, fmt.Errorf("%w: the world's chunk key was not set by epoch %d", ErrFenced, epoch)
+	}
+	return have, nil
 }

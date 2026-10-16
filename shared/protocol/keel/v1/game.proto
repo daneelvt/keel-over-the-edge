@@ -101,7 +101,22 @@ message ServerMessage {
     SeaAreas sea_areas = 5;
     WeatherSystems weather_systems = 6;
     Bump bump = 7;
+    Chunks chunks = 8;
   }
+}
+
+// Chunks hands the client the addresses of chunks of the world's land: each
+// once a connection, once its boat could see something in the chunk (land
+// over the horizon from the highest the camera goes, shallows within the
+// far sea's reach, or the chunk within a few hundred metres). The client
+// fetches each from its address (GET, public and cached for a year), and
+// never makes an address itself: no other address is served. They come
+// after the Welcome, nearest first.
+message Chunks {
+  // Each chunk's number on the world's grid of 16 by 16, row by row from
+  // the south-west, and its address, a path on the play origin.
+  repeated uint32 number = 1;
+  repeated string path = 2;
 }
 
 // Bump is two boats touching after being apart: a correction the
@@ -252,6 +267,9 @@ message Welcome {
   // since 1970. The sky is counted from a moment of its own, the same in
   // every world, so the client needs the world's to tell sky time.
   int64 epoch_us = 7;
+  // The world's land is sailed: boats run aground on it, and the wind and
+  // the waves feel it. Without it the world is open sea, and no Chunks come.
+  bool land = 8;
 }
 
 // Pong answers a Ping.

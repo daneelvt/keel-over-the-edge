@@ -155,6 +155,10 @@ type Config struct {
 	// Encoders is how many goroutines encode snapshots; 0 means
 	// GOMAXPROCS.
 	Encoders int
+	// Land says the world's land is sailed, as the Welcome tells the
+	// client; Chunks, if not nil, hands out its chunks' addresses.
+	Land   bool
+	Chunks *Handout
 }
 
 // Edge serves the game connection.

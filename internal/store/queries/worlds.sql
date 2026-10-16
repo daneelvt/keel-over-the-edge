@@ -20,9 +20,19 @@ SELECT seed, generator FROM world WHERE id = @world_id;
 UPDATE world SET seed = @seed, generator = @generator WHERE id = @world_id;
 
 -- name: InsertBundle :execrows
-INSERT INTO world_bundle (world_id, format, generator, catalog, made, attempts, digest, records, report, generation_ms)
-VALUES (@world_id, @format, @generator, @catalog, @made, @attempts, @digest, @records, @report, @generation_ms)
+INSERT INTO world_bundle (world_id, format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key)
+VALUES (@world_id, @format, @generator, @catalog, @made, @attempts, @digest, @records, @report, @generation_ms, @chunk_key)
 ON CONFLICT (world_id) DO NOTHING;
+
+-- name: SetChunkKey :execrows
+-- The world's chunk key, if its bundle has none, in one statement fenced by
+-- the simulation's lease.
+UPDATE world_bundle SET chunk_key = @chunk_key
+WHERE world_id = @world_id AND chunk_key IS NULL
+  AND (SELECT epoch FROM sim_lease FOR SHARE) = @epoch::bigint;
+
+-- name: ChunkKey :one
+SELECT chunk_key FROM world_bundle WHERE world_id = @world_id;
 
 -- name: InsertChunks :copyfrom
 INSERT INTO world_chunk (world_id, chunk, payload, digest) VALUES (@world_id, @chunk, @payload, @digest);
@@ -32,7 +42,7 @@ INSERT INTO place (world_id, number, kind, name, biome, size, x, y, area, highes
 VALUES (@world_id, @number, @kind, @name, @biome, @size, @x, @y, @area, @highest);
 
 -- name: WorldBundle :one
-SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms
+SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key
 FROM world_bundle WHERE world_id = @world_id;
 
 -- name: WorldChunks :many

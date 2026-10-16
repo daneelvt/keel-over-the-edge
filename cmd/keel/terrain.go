@@ -31,13 +31,23 @@ func catalogGenerator(cat *catalog.Catalog) generator {
 // terrainBeat is how often the heartbeat beats while a world is made.
 const terrainBeat = time.Second
 
+// terrain is the world's terrain as the server holds it: its bundle, its
+// chunks' payloads as stored, which the page fetches, and its chunk key,
+// which signs their addresses.
+type terrain struct {
+	bundle   *worldgen.Bundle
+	payloads [][]byte
+	key      []byte
+}
+
 // worldTerrain is the world's terrain: its bundle read back from the
 // database, as every start reads it. A world without one gets one first:
 // made from its seed, or KEEL_WORLD_SEED, or a seed drawn from crypto/rand,
 // on one goroutine while this one beats the heartbeat, then stored, fenced
-// by the lease's epoch. A world's terrain is never made again.
+// by the lease's epoch, with a chunk key of its own. A world's terrain is
+// never made again; one stored without a chunk key gets one now, once.
 func worldTerrain(ctx context.Context, db database, sailed store.World, epoch int64, cfg config.Config,
-	gen generator, health *obs.Health, log *slog.Logger) (*worldgen.Bundle, error) {
+	gen generator, health *obs.Health, log *slog.Logger) (*terrain, error) {
 	stored, err := db.LoadBundle(ctx, sailed.ID)
 	if errors.Is(err, store.ErrNotFound) {
 		if err := makeTerrain(ctx, db, sailed, epoch, cfg, gen, health, log); err != nil {
@@ -47,6 +57,16 @@ func worldTerrain(ctx context.Context, db database, sailed store.World, epoch in
 	}
 	if err != nil {
 		return nil, err
+	}
+	if stored.ChunkKey == nil {
+		key, err := chunkKey()
+		if err != nil {
+			return nil, err
+		}
+		if stored.ChunkKey, err = db.SetChunkKey(ctx, sailed.ID, epoch, key); err != nil {
+			return nil, fmt.Errorf("the world's chunk key: %w", err)
+		}
+		log.Info("the world's terrain had no chunk key: it has one now")
 	}
 	start := time.Now()
 	b, err := worldgen.Load(stored.Records, stored.Report, stored.Chunks, sailed.ID, stored.Digest)
@@ -60,7 +80,16 @@ func worldTerrain(ctx context.Context, db database, sailed store.World, epoch in
 		log.Warn("the world's terrain was made by another generator: it is sailed as it was made",
 			"generator", b.Generator, "this_generator", worldgen.Version)
 	}
-	return b, nil
+	return &terrain{bundle: b, payloads: stored.Chunks, key: stored.ChunkKey}, nil
+}
+
+// chunkKey is a new chunk key: random bytes from crypto/rand.
+func chunkKey() ([]byte, error) {
+	key := make([]byte, store.ChunkKeySize)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 // makeTerrain makes and stores the world's terrain.
@@ -144,10 +173,14 @@ func storedBundle(b *worldgen.Bundle, world [16]byte, took time.Duration) (*stor
 	if err != nil {
 		return nil, err
 	}
+	key, err := chunkKey()
+	if err != nil {
+		return nil, err
+	}
 	sb := &store.Bundle{
 		Seed: b.Seed, Format: b.Format, Generator: b.Generator, Catalog: catalog.Version, Made: b.Made,
 		Attempts: b.Attempts, Digest: b.Digest[:], Records: records, Report: report,
-		GenerationMs: int(took.Milliseconds()), Chunks: chunks,
+		GenerationMs: int(took.Milliseconds()), Chunks: chunks, ChunkKey: key,
 	}
 	for _, is := range b.Islands {
 		sb.Places = append(sb.Places, store.Place{

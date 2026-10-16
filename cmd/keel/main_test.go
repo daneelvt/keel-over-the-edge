@@ -256,6 +256,22 @@ func (d *memDB) StoreBundle(_ context.Context, _ [16]byte, epoch int64, b *store
 	return nil
 }
 
+// SetChunkKey is fenced by the lease's epoch, and keeps the first key set.
+func (d *memDB) SetChunkKey(_ context.Context, _ [16]byte, epoch int64, key []byte) ([]byte, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.bundle == nil {
+		return nil, store.ErrNotFound
+	}
+	if d.bundle.ChunkKey == nil {
+		if epoch != d.leaseEpoch {
+			return nil, fmt.Errorf("%w: the epoch is %d, the writer's %d", store.ErrFenced, d.leaseEpoch, epoch)
+		}
+		d.bundle.ChunkKey = bytes.Clone(key)
+	}
+	return d.bundle.ChunkKey, nil
+}
+
 func (d *memDB) init() {
 	d.once.Do(func() {
 		d.free = make(chan struct{}, 1)

@@ -106,6 +106,7 @@ type WorldBundle struct {
 	Report       []byte
 	GenerationMs int32
 	CreatedAt    time.Time
+	ChunkKey     []byte
 }
 
 type WorldChunk struct {

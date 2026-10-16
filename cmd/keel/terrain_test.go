@@ -5,7 +5,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +17,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -177,4 +181,83 @@ func TestWorldgenCommand(t *testing.T) {
 	if status := run(context.Background(), []string{"worldgen", "-seed", "x"}, env(nil), &stdout, &stderr); status != 2 {
 		t.Errorf("a seed that is not a number: status %d", status)
 	}
+}
+
+// TestChunkKey: a world's terrain is stored with a chunk key of its own;
+// one stored without, as before keys, gets one at its next start, once,
+// from the process that holds the lease; the key is never logged; and the
+// chunks are served at the addresses it signs.
+func TestChunkKey(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		d := &memDB{epoch: bubbleEpoch}
+		s := startServer(t, map[string]string{}, newMemNet(), d.with(serveOptions{}))
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		key := d.bundle.ChunkKey
+		if len(key) != 32 {
+			t.Fatalf("the stored bundle's chunk key is %x", key)
+		}
+		// Served at the address the key signs, and nowhere else.
+		path := api.ChunkPath(key, [16]byte{}, 136)
+		if code, body, h := get(t, s.client, playURL+path); code != 200 || body != string(d.bundle.Chunks[136]) ||
+			h.Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Errorf("GET %s: %d, %d bytes, %q", path, code, len(body), h.Get("Cache-Control"))
+		}
+		other := api.ChunkPath(bytes.Repeat([]byte{1}, 32), [16]byte{}, 136)
+		if code, _, _ := get(t, s.client, playURL+other); code != 404 {
+			t.Errorf("an address of another key: %d", code)
+		}
+		s.stop(t)
+		noKeyIn(t, s.logs.String(), key)
+
+		// A bundle stored without a key gets one at the next start, and
+		// keeps it after.
+		d.bundle.ChunkKey = nil
+		first := startServer(t, map[string]string{}, newMemNet(), d.with(serveOptions{}))
+		second := startServer(t, map[string]string{}, newMemNet(), d.with(serveOptions{}))
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		made := d.bundle.ChunkKey
+		if len(made) != 32 || bytes.Equal(made, key) {
+			t.Fatalf("the bundle's new key is %x", made)
+		}
+		first.stop(t)
+		time.Sleep(5 * time.Second)
+		synctest.Wait()
+		second.stop(t)
+		if !bytes.Equal(d.bundle.ChunkKey, made) {
+			t.Errorf("the key changed when the second process took the world")
+		}
+		if n := strings.Count(first.logs.String()+second.logs.String(), "it has one now"); n != 1 {
+			t.Errorf("a key was made %d times", n)
+		}
+		noKeyIn(t, first.logs.String()+second.logs.String(), made)
+	})
+}
+
+// noKeyIn fails the test if the logs hold the key, in any of the ways it
+// might be written.
+func noKeyIn(t *testing.T, logs string, key []byte) {
+	t.Helper()
+	for _, form := range []string{string(key), hex.EncodeToString(key), base64.StdEncoding.EncodeToString(key),
+		base64.RawURLEncoding.EncodeToString(key), fmt.Sprint(key)} {
+		if strings.Contains(logs, form) {
+			t.Errorf("the logs hold the chunk key, as %q", form)
+		}
+	}
+}
+
+// TestNoChunksWithLandOff: with KEEL_LAND=off no chunk is served.
+func TestNoChunksWithLandOff(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		d := &memDB{epoch: bubbleEpoch}
+		s := startServer(t, map[string]string{"KEEL_LAND": "off"}, newMemNet(), d.with(serveOptions{}))
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		path := api.ChunkPath(d.bundle.ChunkKey, [16]byte{}, 136)
+		if code, _, _ := get(t, s.client, playURL+path); code != 404 {
+			t.Errorf("a chunk with land off: %d", code)
+		}
+		s.stop(t)
+	})
 }

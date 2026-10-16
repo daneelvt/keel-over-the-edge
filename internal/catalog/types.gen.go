@@ -189,6 +189,9 @@ type Catalog struct {
 	World World `json:"world"`
 }
 
+// A colour, as #rrggbb in sRGB.
+type Colour string
+
 // Boats meeting: their hulls touching, the wind one takes from another, and the
 // Articles, the right-of-way rules that judge them.
 type Encounters struct {
@@ -885,6 +888,22 @@ type Surface struct {
 
 	// ID corresponds to the JSON schema field "id".
 	ID ID `json:"id"`
+
+	// Look corresponds to the JSON schema field "look".
+	Look SurfaceLook `json:"look"`
+}
+
+// How a surface is drawn: its land's columns, and the sea bed seen through shallow
+// water.
+type SurfaceLook struct {
+	// The sea bed of it, under water.
+	Bed Colour `json:"bed"`
+
+	// A column's sides, at their top: darker toward the foot.
+	Side Colour `json:"side"`
+
+	// A column's top.
+	Top Colour `json:"top"`
 }
 
 // The weather's numbers.
@@ -1067,11 +1086,17 @@ type World struct {
 	// Grounding corresponds to the JSON schema field "grounding".
 	Grounding WorldGrounding `json:"grounding"`
 
+	// Handout corresponds to the JSON schema field "handout".
+	Handout WorldHandout `json:"handout"`
+
 	// The lowest and the highest land, in m.
 	Land []float64 `json:"land"`
 
 	// Layout corresponds to the JSON schema field "layout".
 	Layout WorldLayout `json:"layout"`
+
+	// Look corresponds to the JSON schema field "look".
+	Look WorldLook `json:"look"`
 
 	// MainPort corresponds to the JSON schema field "mainPort".
 	MainPort WorldMainPort `json:"mainPort"`
@@ -1167,6 +1192,35 @@ type WorldGrounding struct {
 	StillTime float64 `json:"stillTime"`
 }
 
+// When a game connection is handed a chunk's address: once its boat could see
+// something in the chunk.
+type WorldHandout struct {
+	// The highest the camera goes above the sea, in m: the land seen over the horizon
+	// is what it sees.
+	Camera float64 `json:"camera"`
+
+	// The dome's radius, in m, as the page draws it.
+	Dome float64 `json:"dome"`
+
+	// And this many times the horizon's distance from the camera.
+	FarSeaHorizon float64 `json:"farSeaHorizon"`
+
+	// The far sea the page draws reaches at least this far, in m.
+	FarSeaLeast float64 `json:"farSeaLeast"`
+
+	// The boat is looked at again once it has moved this far, in m.
+	Look float64 `json:"look"`
+
+	// Added to every reach, in m: room for the fetch and the building.
+	Margin float64 `json:"margin"`
+
+	// A chunk whose outline is within this of the boat, in m.
+	Near float64 `json:"near"`
+
+	// Sea bed shallower than this shows through the water, in m.
+	Shallows float64 `json:"shallows"`
+}
+
 // Where the islands lie and how big they are.
 type WorldLayout struct {
 	// Candidate places tried for each island; the furthest from the land already
@@ -1211,6 +1265,28 @@ type WorldLayout struct {
 
 	// A rock's width, in m.
 	RockAcross []float64 `json:"rockAcross"`
+}
+
+// How the land and the shallows are drawn.
+type WorldLook struct {
+	// How fast light fades in the water, per m: the bed shows by exp(-2 K h) in h
+	// metres of it.
+	Attenuation float64 `json:"attenuation"`
+
+	// A chunk's elevations, surfaces and shelter are kept while the boat is within
+	// this of it, in m.
+	KeepGrids float64 `json:"keepGrids"`
+
+	// A chunk's land is drawn while the boat is within this of it, in m, and built
+	// again when it comes back.
+	KeepMeshes float64 `json:"keepMeshes"`
+
+	// A column's sides reach this far below the sea where it meets the water, in m.
+	Shore float64 `json:"shore"`
+
+	// Land is drawn in terraces this high, in m; land lower than one at its own
+	// height.
+	Terrace float64 `json:"terrace"`
 }
 
 // The main port's island, at the centre of every world.
@@ -1412,4 +1488,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "432f7a929229610f"
+const Version = "233f871cfd14215f"

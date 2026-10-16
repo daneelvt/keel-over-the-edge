@@ -121,9 +121,9 @@ func boat(kind uint16, far bool, mode uint8, x, y int32, heading uint16, heel, b
 // the far band and changes nothing; one six ticks back; and a lone full
 // snapshot of awkward header values.
 func goldens() []golden {
-	// The snapshot carries the boat's fields and its autopilot's, not how
-	// long it has been aground.
-	wire := sim.BoatSize + sim.PilotSize
+	// The snapshot carries every field of the state: the boat's, its
+	// autopilot's and how long it has been aground.
+	wire := sim.StateSize
 	var sailing physics.State
 	sf := sim.StateFields(&sailing)
 	for i, v := range sf[:wire] {
@@ -174,8 +174,8 @@ func goldens() []golden {
 	v5.Boats[1].Heading++
 
 	// On the autopilot, tacking: its block follows the header. The
-	// sailing state's autopilot fields are not zero either, so every
-	// snapshot of it has the block.
+	// sailing state's autopilot fields and time aground are not zero
+	// either, so every snapshot of it has both blocks.
 	tacking := header(1002, 2, 0, sailing)
 	tacking.Mode, tacking.Way, tacking.Order, tacking.Target = 1, 1, 2, 60000
 	// Its pilot word alone carries the block.
@@ -193,6 +193,9 @@ func goldens() []golden {
 		{"negative tick", Snapshot{Tick: -30, Seq: 0xffffffe3, Margin: math.MaxInt16, Helm: 1024, Sheet: 1,
 			State: sailing}, View{}, 0, 0},
 		{"autopilot engaged", engaged, v1, v1.Used, 0},
+		// Aground for -0 steps: the ground block alone, -0 counting.
+		{"aground", header(1010, 0, 0, physics.State{X: 140, Heading: 1, GroundTimer: math.Copysign(0, -1)}), v1, v1.Used, 0},
+		{"aground a while", header(1012, 2, 0, physics.State{X: 141, Heading: 1, GroundTimer: 77}), v1, 0, v1.Used},
 	}
 }
 
@@ -446,11 +449,13 @@ func TestSnapshotRefusals(t *testing.T) {
 		"header cut":      good[:HeaderSize-1],
 		"layout 5":        withByte(good, offLayout, 5),
 		"helm over 1024":  withUint16(good, offHelm, 1025),
-		"spare flags":     withByte(good, offFlags, 4|PilotHeld),
+		"spare flags":     withByte(good, offFlags, 8|PilotHeld|GroundHeld),
 		"129 entries":     withByte(good, offEntries, 129),
-		"layout 7":        withByte(good, offLayout, 7),
+		"layout 6":        withByte(good, offLayout, 6),
+		"layout 8":        withByte(good, offLayout, 8),
 		"sheet over 1024": withUint16(good, offSheet, 2000),
-		"autopilot cut":   good[:MaxHeaderSize-1],
+		"ground cut":      good[:MaxHeaderSize-1],
+		"autopilot cut":   good[:HeaderSize+PilotSize-1],
 		"pilot mode 3":    withByte(good, offPilotMode, 3),
 		"way 3":           withByte(good, offPilotWay, 3),
 		"order 4":         withByte(good, offPilotOrder, 4),
@@ -462,7 +467,7 @@ func TestSnapshotRefusals(t *testing.T) {
 		}
 	}
 	if err := ReadSnapshot(good, &sn); err != nil || sn.Header != MaxHeaderSize {
-		t.Fatalf("a snapshot on the autopilot has a header of %d bytes: %v", sn.Header, err)
+		t.Fatalf("a snapshot on the autopilot and aground has a header of %d bytes: %v", sn.Header, err)
 	}
 	// Entries refused against the base, each alone after a good header.
 	header := good[:sn.Header]
@@ -581,7 +586,7 @@ func messages() (clients []*pb.ClientMessage, servers []*pb.ServerMessage) {
 	}
 	servers = []*pb.ServerMessage{
 		{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{World: "0199c2a4-5f7e-7c3a-9d0e-123456789abc", Tick: 727706164,
-			WorldTimeUs: 24256872133333, Boat: 7, Kind: 0, Rejoined: true, EpochUs: 1767225600000000}}},
+			WorldTimeUs: 24256872133333, Boat: 7, Kind: 0, Rejoined: true, EpochUs: 1767225600000000, Land: true}}},
 		{Body: &pb.ServerMessage_Pong{Pong: &pb.Pong{ClientTimeUs: 123456789, WorldTimeUs: 24256872133333}}},
 		{Body: &pb.ServerMessage_Queued{Queued: &pb.Queued{Position: 12, Waiting: 40}}},
 		{Body: &pb.ServerMessage_SeaAreas{SeaAreas: &pb.SeaAreas{Tick: 727706190, Col: -1, Row: 34, Size: 2,
@@ -593,6 +598,8 @@ func messages() (clients []*pb.ClientMessage, servers []*pb.ServerMessage) {
 			{Begin: 727706190, Start: 727706190, Steady: true, Speed: 1000, From: 16384, Gust: 1000,
 				Shift: []uint32{0, 0}, Period: []uint32{0, 0}, Phase: []uint32{0, 0}},
 		}}}},
+		{Body: &pb.ServerMessage_Chunks{Chunks: &pb.Chunks{Number: []uint32{205, 0, 255},
+			Path: []string{"/w/0199c2a4-5f7e-7c3a-9d0e-123456789abc/c/205.j25LcdiAYGp3Y3RFfJ4Bkg.bin", "/w/x/c/0.a.bin", ""}}}},
 	}
 	return clients, servers
 }

@@ -121,6 +121,7 @@ type database interface {
 	WorldSeed(ctx context.Context, world [16]byte) (seed uint64, generator int, ok bool, err error)
 	LoadBundle(ctx context.Context, world [16]byte) (*store.Bundle, error)
 	StoreBundle(ctx context.Context, world [16]byte, epoch int64, b *store.Bundle) error
+	SetChunkKey(ctx context.Context, world [16]byte, epoch int64, key []byte) ([]byte, error)
 	Stats() store.PoolStats
 	Close()
 }
@@ -356,20 +357,26 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	if opt.generate == nil {
 		opt.generate = catalogGenerator(cat)
 	}
-	bundle, err := worldTerrain(ctx, db, sailed, leaseEpoch, cfg, opt.generate, health, log)
+	held, err := worldTerrain(ctx, db, sailed, leaseEpoch, cfg, opt.generate, health, log)
 	if err != nil {
 		if ctx.Err() != nil {
 			return stopEarly(side, flight, nil)
 		}
 		return stopEarly(side, flight, err)
 	}
+	bundle := held.bundle
 	health.Waiting("")
 	health.Beat()
 	var terrain *sim.Terrain
 	var terrainDigest [32]byte
+	var chunks *api.Chunks
+	var handout *edge.Handout
 	if cfg.Land {
 		terrain = bundle.Terrain(cat.PrepareGround())
 		terrainDigest = bundle.Digest
+		chunks = api.NewChunks(sailed.ID, held.key, held.payloads)
+		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat))
+		log.Info("serving the world's chunks", "bytes", chunks.Size())
 	} else {
 		log.Warn("land is off: the world's terrain is sailed as open sea")
 	}
@@ -408,6 +415,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Bus: b, World: store.AccountID(sailed.ID).String(), Epoch: epoch, Clock: tickLoop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
+		Land: cfg.Land, Chunks: handout,
 	})
 	lasting := persist.New(persist.Config{
 		Frames: b.Frames, Store: writer, World: sailed.ID, Epoch: leaseEpoch,
@@ -439,6 +447,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Looks:    looks,
 		Game:     game,
 		Page:     page,
+		Chunks:   chunks,
 	}), log)
 	agents := newServer(obs.AccessLog(log, api.Agents()), log)
 
@@ -609,6 +618,16 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	err = g.Wait()
 	log.Info("stopped", "tick", world.Now())
 	return err
+}
+
+// handoutRule is the catalog's rule for which chunks a connection is
+// handed.
+func handoutRule(cat *catalog.Catalog) edge.HandoutRule {
+	h := &cat.World.Handout
+	return edge.HandoutRule{
+		Near: h.Near, Camera: h.Camera, Dome: h.Dome, Margin: h.Margin, Shallow: h.Shallows, Look: h.Look,
+		FarSea: max(h.FarSeaLeast, h.FarSeaHorizon*math.Sqrt(2*h.Dome*h.Camera)),
+	}
 }
 
 // restore restores the world from its checkpoint, if there is one this

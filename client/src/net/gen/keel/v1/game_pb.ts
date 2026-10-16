@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIp4CCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSABCBgoEYm9keSJtCgRCdW1wEgwKBHRpY2sYASABKAMSCQoBeBgCIAEoERIJCgF5GAMgASgREg8KB2Nsb3NpbmcYBCABKA0SHwoEcGFydBgFIAEoDjIRLmtlZWwudjEuQnVtcFBhcnQSDwoHYXJ0aWNsZRgGIAEoCSIwCg5XZWF0aGVyU3lzdGVtcxIeCgZzcGVsbHMYASADKAsyDi5rZWVsLnYxLlNwZWxsIo4CCgVTcGVsbBINCgViZWdpbhgBIAEoAxIOCgZjaGFuZ2UYAiABKA0SDQoFc3RhcnQYAyABKAMSDgoGbGVuZ3RoGAQgASgEEg4KBnJlZ2ltZRgFIAEoDRIOCgZzdGVhZHkYBiABKAgSDQoFc3BlZWQYByABKA0SDAoEZnJvbRgIIAEoDRINCgVkcmlmdBgJIAEoERIMCgRndXN0GAogASgNEg0KBXNoaWZ0GAsgAygNEg4KBnBlcmlvZBgMIAMoDRINCgVwaGFzZRgNIAMoDRIOCgZhY3Jvc3MYDiABKA0SDAoEYXhpcxgPIAEoDRITCgtheGlzX3BlcmlvZBgQIAEoDRIMCgRzZWVkGBEgASgNImwKCFNlYUFyZWFzEgwKBHRpY2sYASABKAMSCwoDY29sGAIgASgREgsKA3JvdxgDIAEoERIMCgRzaXplGAQgASgNEg0KBXNwZWVkGAUgAygNEgwKBGZyb20YBiADKA0SDQoFZmV0Y2gYByADKA0iGAoHUmVzdGFydBINCgVpbl9tcxgBIAEoDSIrCgZRdWV1ZWQSEAoIcG9zaXRpb24YASABKA0SDwoHd2FpdGluZxgCIAEoDSJ9CgdXZWxjb21lEg0KBXdvcmxkGAEgASgJEgwKBHRpY2sYAiABKAMSFQoNd29ybGRfdGltZV91cxgDIAEoAxIMCgRib2F0GAQgASgEEgwKBGtpbmQYBSABKA0SEAoIcmVqb2luZWQYBiABKAgSEAoIZXBvY2hfdXMYByABKAMiNQoEUG9uZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIVCg13b3JsZF90aW1lX3VzGAIgASgDKmQKCEJ1bXBQYXJ0EhkKFUJVTVBfUEFSVF9VTlNQRUNJRklFRBAAEhMKD0JVTVBfUEFSVF9ZT1VSUxABEhQKEEJVTVBfUEFSVF9USEVJUlMQAhISCg5CVU1QX1BBUlRfTk9ORRADQj1aO2dpdGh1Yi5jb20vZGFuZWVsdnQva2VlbC1vdmVyLXRoZS1lZGdlL2ludGVybmFsL3Byb3RvY29sL3BiYgZwcm90bzM");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIsECCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSAASIQoGY2h1bmtzGAggASgLMg8ua2VlbC52MS5DaHVua3NIAEIGCgRib2R5IiYKBkNodW5rcxIOCgZudW1iZXIYASADKA0SDAoEcGF0aBgCIAMoCSJtCgRCdW1wEgwKBHRpY2sYASABKAMSCQoBeBgCIAEoERIJCgF5GAMgASgREg8KB2Nsb3NpbmcYBCABKA0SHwoEcGFydBgFIAEoDjIRLmtlZWwudjEuQnVtcFBhcnQSDwoHYXJ0aWNsZRgGIAEoCSIwCg5XZWF0aGVyU3lzdGVtcxIeCgZzcGVsbHMYASADKAsyDi5rZWVsLnYxLlNwZWxsIo4CCgVTcGVsbBINCgViZWdpbhgBIAEoAxIOCgZjaGFuZ2UYAiABKA0SDQoFc3RhcnQYAyABKAMSDgoGbGVuZ3RoGAQgASgEEg4KBnJlZ2ltZRgFIAEoDRIOCgZzdGVhZHkYBiABKAgSDQoFc3BlZWQYByABKA0SDAoEZnJvbRgIIAEoDRINCgVkcmlmdBgJIAEoERIMCgRndXN0GAogASgNEg0KBXNoaWZ0GAsgAygNEg4KBnBlcmlvZBgMIAMoDRINCgVwaGFzZRgNIAMoDRIOCgZhY3Jvc3MYDiABKA0SDAoEYXhpcxgPIAEoDRITCgtheGlzX3BlcmlvZBgQIAEoDRIMCgRzZWVkGBEgASgNImwKCFNlYUFyZWFzEgwKBHRpY2sYASABKAMSCwoDY29sGAIgASgREgsKA3JvdxgDIAEoERIMCgRzaXplGAQgASgNEg0KBXNwZWVkGAUgAygNEgwKBGZyb20YBiADKA0SDQoFZmV0Y2gYByADKA0iGAoHUmVzdGFydBINCgVpbl9tcxgBIAEoDSIrCgZRdWV1ZWQSEAoIcG9zaXRpb24YASABKA0SDwoHd2FpdGluZxgCIAEoDSKLAQoHV2VsY29tZRINCgV3b3JsZBgBIAEoCRIMCgR0aWNrGAIgASgDEhUKDXdvcmxkX3RpbWVfdXMYAyABKAMSDAoEYm9hdBgEIAEoBBIMCgRraW5kGAUgASgNEhAKCHJlam9pbmVkGAYgASgIEhAKCGVwb2NoX3VzGAcgASgDEgwKBGxhbmQYCCABKAgiNQoEUG9uZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIVCg13b3JsZF90aW1lX3VzGAIgASgDKmQKCEJ1bXBQYXJ0EhkKFUJVTVBfUEFSVF9VTlNQRUNJRklFRBAAEhMKD0JVTVBfUEFSVF9ZT1VSUxABEhQKEEJVTVBfUEFSVF9USEVJUlMQAhISCg5CVU1QX1BBUlRfTk9ORRADQj1aO2dpdGh1Yi5jb20vZGFuZWVsdnQva2VlbC1vdmVyLXRoZS1lZGdlL2ludGVybmFsL3Byb3RvY29sL3BiYgZwcm90bzM");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -339,6 +339,12 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
      */
     value: Bump;
     case: "bump";
+  } | {
+    /**
+     * @generated from field: keel.v1.Chunks chunks = 8;
+     */
+    value: Chunks;
+    case: "chunks";
   } | { case: undefined; value?: undefined };
 };
 
@@ -348,6 +354,39 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 6);
+
+/**
+ * Chunks hands the client the addresses of chunks of the world's land: each
+ * once a connection, once its boat could see something in the chunk (land
+ * over the horizon from the highest the camera goes, shallows within the
+ * far sea's reach, or the chunk within a few hundred metres). The client
+ * fetches each from its address (GET, public and cached for a year), and
+ * never makes an address itself: no other address is served. They come
+ * after the Welcome, nearest first.
+ *
+ * @generated from message keel.v1.Chunks
+ */
+export type Chunks = Message<"keel.v1.Chunks"> & {
+  /**
+   * Each chunk's number on the world's grid of 16 by 16, row by row from
+   * the south-west, and its address, a path on the play origin.
+   *
+   * @generated from field: repeated uint32 number = 1;
+   */
+  number: number[];
+
+  /**
+   * @generated from field: repeated string path = 2;
+   */
+  path: string[];
+};
+
+/**
+ * Describes the message keel.v1.Chunks.
+ * Use `create(ChunksSchema)` to create a new message.
+ */
+export const ChunksSchema: GenMessage<Chunks> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 7);
 
 /**
  * Bump is two boats touching after being apart: a correction the
@@ -406,7 +445,7 @@ export type Bump = Message<"keel.v1.Bump"> & {
  * Use `create(BumpSchema)` to create a new message.
  */
 export const BumpSchema: GenMessage<Bump> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 7);
+  messageDesc(file_keel_v1_game, 8);
 
 /**
  * WeatherSystems is the weather in play about the present: the spells the
@@ -433,7 +472,7 @@ export type WeatherSystems = Message<"keel.v1.WeatherSystems"> & {
  * Use `create(WeatherSystemsSchema)` to create a new message.
  */
 export const WeatherSystemsSchema: GenMessage<WeatherSystems> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 8);
+  messageDesc(file_keel_v1_game, 9);
 
 /**
  * Spell is a spell of weather: a stretch of time with one base wind, its
@@ -560,7 +599,7 @@ export type Spell = Message<"keel.v1.Spell"> & {
  * Use `create(SpellSchema)` to create a new message.
  */
 export const SpellSchema: GenMessage<Spell> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 9);
+  messageDesc(file_keel_v1_game, 10);
 
 /**
  * SeaAreas is what raises the waves about the boat: a square of sea areas,
@@ -630,7 +669,7 @@ export type SeaAreas = Message<"keel.v1.SeaAreas"> & {
  * Use `create(SeaAreasSchema)` to create a new message.
  */
 export const SeaAreasSchema: GenMessage<SeaAreas> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 10);
+  messageDesc(file_keel_v1_game, 11);
 
 /**
  * Restart says the server is about to restart, as a new version is
@@ -654,7 +693,7 @@ export type Restart = Message<"keel.v1.Restart"> & {
  * Use `create(RestartSchema)` to create a new message.
  */
 export const RestartSchema: GenMessage<Restart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 11);
+  messageDesc(file_keel_v1_game, 12);
 
 /**
  * Queued says the sea is full: the client waits for a boat. It comes after
@@ -684,7 +723,7 @@ export type Queued = Message<"keel.v1.Queued"> & {
  * Use `create(QueuedSchema)` to create a new message.
  */
 export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 12);
+  messageDesc(file_keel_v1_game, 13);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -742,6 +781,14 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
    * @generated from field: int64 epoch_us = 7;
    */
   epochUs: bigint;
+
+  /**
+   * The world's land is sailed: boats run aground on it, and the wind and
+   * the waves feel it. Without it the world is open sea, and no Chunks come.
+   *
+   * @generated from field: bool land = 8;
+   */
+  land: boolean;
 };
 
 /**
@@ -749,7 +796,7 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 13);
+  messageDesc(file_keel_v1_game, 14);
 
 /**
  * Pong answers a Ping.
@@ -777,7 +824,7 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 14);
+  messageDesc(file_keel_v1_game, 15);
 
 /**
  * BumpPart is a connection's part in a bump.

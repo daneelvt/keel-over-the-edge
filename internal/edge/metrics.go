@@ -66,10 +66,11 @@ const (
 	outSeaAreas
 	outWeatherSystems
 	outBump
+	outChunks
 	outs
 )
 
-var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump"}
+var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks"}
 
 // The entries of a snapshot, by op.
 const (
@@ -104,6 +105,7 @@ type metrics struct {
 	bytesOut                      prometheus.Counter
 	droppedRate                   prometheus.Counter
 	replaced                      prometheus.Counter
+	chunksHanded                  prometheus.Counter
 	encode                        prometheus.Observer
 	write                         prometheus.Observer
 	encoders                      prometheus.Gauge
@@ -161,6 +163,7 @@ func newMetrics(m *obs.Metrics) metrics {
 	x.bytesOut = m.EdgeBytes.WithLabelValues("out")
 	x.droppedRate = m.EdgeDropped.WithLabelValues("rate")
 	x.replaced = m.EdgeDropped.WithLabelValues("snapshot_replaced")
+	x.chunksHanded = m.ChunksHanded
 	x.encode = m.EdgeEncodeDuration
 	x.write = m.EdgeWriteDuration
 	x.encoders = m.EdgeEncoders

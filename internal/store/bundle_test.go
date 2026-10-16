@@ -141,3 +141,74 @@ func TestBundleMigration(t *testing.T) {
 	refused(t, exec(t, pool, "INSERT INTO place (world_id, number, kind, name, biome, x, y) VALUES ($1, 0, 'port', 'X', 'b', 0, 0)", w.ID), "23514")
 	refused(t, exec(t, pool, "INSERT INTO world_chunk (world_id, chunk, payload, digest) VALUES ($1, 256, '\\x00', $2)", w.ID, bytes.Repeat([]byte{1}, 32)), "23514")
 }
+
+// TestChunkKey: a bundle stored with its chunk key reads it back; one
+// stored without, as a world made before keys were, gets one once, and only
+// from the lease's holder.
+func TestChunkKey(t *testing.T) {
+	ctx := context.Background()
+	s, u := storetest.Store(t, store.Options{})
+	w, err := s.ActiveOrFirstWorld(ctx, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := func(b byte) []byte { return bytes.Repeat([]byte{b}, store.ChunkKeySize) }
+	l := newLease(t, u, "test", store.LeaseOptions{})
+	epoch := take(t, l)
+	if _, err := s.SetChunkKey(ctx, w.ID, epoch, key(1)); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("a key for a world with no bundle: %v", err)
+	}
+	b := testBundle(t)
+	if err := s.StoreBundle(ctx, w.ID, epoch, b); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.LoadBundle(ctx, w.ID)
+	if err != nil || got.ChunkKey != nil {
+		t.Fatalf("a bundle stored without a key reads back with %x (%v)", got.ChunkKey, err)
+	}
+	// Fenced: another epoch sets nothing.
+	if _, err := s.SetChunkKey(ctx, w.ID, epoch+1, key(2)); !errors.Is(err, store.ErrFenced) {
+		t.Fatalf("a key set by another epoch: %v", err)
+	}
+	if k, err := s.SetChunkKey(ctx, w.ID, epoch, key(3)); err != nil || !bytes.Equal(k, key(3)) {
+		t.Fatalf("the key set is %x (%v)", k, err)
+	}
+	// Once: a second key leaves the first, and is told it.
+	if k, err := s.SetChunkKey(ctx, w.ID, epoch, key(4)); err != nil || !bytes.Equal(k, key(3)) {
+		t.Fatalf("a second key: the bundle's is %x (%v)", k, err)
+	}
+	if got, err := s.LoadBundle(ctx, w.ID); err != nil || !bytes.Equal(got.ChunkKey, key(3)) {
+		t.Fatalf("the bundle reads back with %x (%v)", got.ChunkKey, err)
+	}
+	if _, err := s.SetChunkKey(ctx, w.ID, epoch, key(5)[:16]); err == nil {
+		t.Error("a key of 16 bytes was taken")
+	}
+	pool := storetest.PoolOn(t, u)
+	refused(t, exec(t, pool, "UPDATE world_bundle SET chunk_key = '\\x0102'"), "23514")
+}
+
+// TestChunkKeyMigration: a bundle stored before the chunk key's migration
+// keeps its rows and has no key until one is set.
+func TestChunkKeyMigration(t *testing.T) {
+	ctx := context.Background()
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 5); err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	var w [16]byte
+	if err := pool.QueryRow(ctx, `INSERT INTO world (number, epoch, state) VALUES (1, now(), 'active') RETURNING id`).Scan(&w); err != nil {
+		t.Fatal(err)
+	}
+	must(t, pool, "SELECT create_world_partitions($1)", w)
+	must(t, pool, `INSERT INTO world_bundle (world_id, format, generator, catalog, made, attempts, digest, records, report, generation_ms)
+		VALUES ($1, 1, 1, 'c', 1, 1, $2, '\x7b7d', '{}', 5)`, w, bytes.Repeat([]byte{9}, 32))
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
+		t.Fatal(err)
+	}
+	var have []byte
+	var format int
+	if err := pool.QueryRow(ctx, "SELECT format, chunk_key FROM world_bundle WHERE world_id = $1", w).Scan(&format, &have); err != nil || format != 1 || have != nil {
+		t.Fatalf("the bundle after the migration: format %d, key %x (%v)", format, have, err)
+	}
+}
