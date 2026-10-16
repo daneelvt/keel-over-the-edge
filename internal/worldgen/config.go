@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
@@ -62,7 +61,7 @@ type config struct {
 	start     catalog.WorldStart
 	validator catalog.WorldValidator
 	names     catalog.WorldNames
-	db        *names.DB
+	lists     *nameLists
 }
 
 // sizeClass is a size class: the islands narrower than below.
@@ -98,9 +97,13 @@ func pair(v []float64) [2]float64 { return [2]float64{v[0], v[1]} }
 func ipair(v []int) [2]int        { return [2]int{v[0], v[1]} }
 
 // newConfig reads the catalog's world values.
-func newConfig(cat *catalog.Catalog, db *names.DB) (*config, error) {
+func newConfig(cat *catalog.Catalog) (*config, error) {
 	w := &cat.World
-	c := &config{db: db}
+	lists, err := parseNames()
+	if err != nil {
+		return nil, err
+	}
+	c := &config{lists: lists}
 	c.disk = w.Disk.Radius
 	c.mist = float64(w.Disk.Mist * nauticalMile)
 	c.zones = [2]float64{float64(w.Zones.Centre * nauticalMile), float64(w.Zones.Middle * nauticalMile)}

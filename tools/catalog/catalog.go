@@ -128,10 +128,6 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkWorld(doc); err != nil {
 		return err
 	}
-	namesJSON, err := namesFile(root, doc)
-	if err != nil {
-		return err
-	}
 	goPhysics, err := goPhysics(fields, sea, skyNumbers, wind, regime, encounters)
 	if err != nil {
 		return err
@@ -143,7 +139,6 @@ func run(root string, check bool, out io.Writer) error {
 		tsJSONPath:    canonical,
 		tsTypesPath:   tsTypes,
 		tsParamsPath:  tsParams(fields, sea, skyNumbers, wind, regime, encounters),
-		namesGenPath:  namesJSON,
 	}
 	return writeOrCheck(root, files, check)
 }

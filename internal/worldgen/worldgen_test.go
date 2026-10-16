@@ -13,12 +13,12 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
@@ -29,23 +29,19 @@ import (
 
 var update = flag.Bool("update", false, "write testdata/digests.json again")
 
-func testCatalog(t testing.TB) (*catalog.Catalog, *names.DB) {
+func testCatalog(t testing.TB) *catalog.Catalog {
 	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := names.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cat, db
+	return cat
 }
 
 func testConfig(t testing.TB) *config {
 	t.Helper()
-	cat, db := testCatalog(t)
-	c, err := newConfig(cat, db)
+	cat := testCatalog(t)
+	c, err := newConfig(cat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -485,9 +481,9 @@ func TestNames(t *testing.T) {
 	if testing.Short() {
 		seeds = 100
 	}
-	byName := map[string]*names.Island{}
-	for i := range c.db.Islands {
-		byName[c.db.Islands[i].Name] = &c.db.Islands[i]
+	byName := map[string]*wholeName{}
+	for i := range c.lists.wholes {
+		byName[c.lists.wholes[i].name] = &c.lists.wholes[i]
 	}
 	tone := map[string]*catalog.NameTone{}
 	for i := range c.names.Tones {
@@ -508,9 +504,6 @@ func TestNames(t *testing.T) {
 				t.Fatalf("seed %d: %q twice", seed, n)
 			}
 			seen[n] = true
-			if c.db.Banned(n) && i != 0 {
-				t.Fatalf("seed %d: %q is banned", seed, n)
-			}
 			if i == 0 {
 				if n != c.port.name {
 					t.Fatalf("seed %d: the main port is %q", seed, n)
@@ -527,22 +520,22 @@ func TestNames(t *testing.T) {
 				continue
 			}
 			size := c.sizeOf(m.area)
-			if !slices.Contains(w.Sizes, size) || !tagged(w.Biomes, c.biomeIDs[m.biome]) {
+			if !slices.Contains(w.sizes, size) || !tagged(w.biomes, c.biomeIDs[m.biome]) {
 				t.Fatalf("seed %d: %q for a %s %s island", seed, n, size, c.biomeIDs[m.biome])
 			}
 			shows := c.shows(m)
-			for _, need := range w.Needs {
+			for _, need := range w.needs {
 				if !slices.Contains(shows, need) {
 					t.Fatalf("seed %d: %q needs %s, which the island does not show", seed, n, need)
 				}
 			}
-			if tone[w.Tone].Phantom && len(w.Zones) == 1 && w.Zones[0] == "rim" && d < c.mist {
+			if tone[w.tone].Phantom && len(w.zones) == 1 && w.zones[0] == "rim" && d < c.mist {
 				t.Fatalf("seed %d: the phantom %q %.0f m out, short of the mist band", seed, n, d)
 			}
-			if tone[w.Tone].Most > 0 {
+			if tone[w.tone].Most > 0 {
 				grim++
 			}
-			dark := tone[w.Tone].Phantom || w.Tone == "warning"
+			dark := tone[w.tone].Phantom || w.tone == "warning"
 			switch c.zoneOf(d) {
 			case zoneCentre:
 				centre++
@@ -559,7 +552,7 @@ func TestNames(t *testing.T) {
 		if grim > 1 {
 			t.Fatalf("seed %d: %d grim names", seed, grim)
 		}
-		for _, p := range c.names.Partners {
+		for _, p := range namePartners {
 			if !drawable(c, byName[p[0]]) || !drawable(c, byName[p[1]]) {
 				continue // a name needing a feature no terrain shows yet
 			}
@@ -583,14 +576,119 @@ func TestNames(t *testing.T) {
 
 // drawable reports whether every feature a name needs is one the terrain
 // shows.
-func drawable(c *config, w *names.Island) bool {
-	for _, need := range w.Needs {
+func drawable(c *config, w *wholeName) bool {
+	for _, need := range w.needs {
 		f := c.feature(func(f *nameFeature) bool { return f.word == need })
 		if f == nil || f.cliffs == 0 && f.peak == 0 && f.twin == 0 && f.stacks == 0 && !f.reef && f.lagoon == 0 {
 			return false
 		}
 	}
 	return true
+}
+
+// TestNameLists holds the names to the catalog's words: every tag one the
+// world has, no name twice, none the main port's, a form with one place to
+// fill, a class a specific takes that some generic has, partners that are
+// names.
+func TestNameLists(t *testing.T) {
+	c := testConfig(t)
+	var sizes, features, tones []string
+	for _, s := range c.sizes {
+		sizes = append(sizes, s.class)
+	}
+	for _, f := range c.names.Features {
+		features = append(features, f.Word)
+	}
+	for _, tn := range c.names.Tones {
+		tones = append(tones, tn.Word)
+	}
+	check := func(where, field string, got, allowed []string, any bool) {
+		if len(got) == 0 && field != "needs" {
+			t.Errorf("%s: no %s", where, field)
+		}
+		for _, tag := range got {
+			if !slices.Contains(allowed, tag) && !(any && tag == anyTag && len(got) == 1) {
+				t.Errorf("%s: %s %q is not one of %s", where, field, tag, strings.Join(allowed, ", "))
+			}
+		}
+	}
+	tone := func(where, tn string) {
+		if !slices.Contains(tones, tn) {
+			t.Errorf("%s: tone %q is not one of %s", where, tn, strings.Join(tones, ", "))
+		}
+	}
+	seen := map[string]bool{strings.ToLower(c.port.name): true}
+	once := func(where, name string) {
+		if seen[strings.ToLower(name)] {
+			t.Errorf("%s: %q is given twice, or is the main port's", where, name)
+		}
+		seen[strings.ToLower(name)] = true
+	}
+	for _, w := range c.lists.wholes {
+		where := "whole name " + w.name
+		once(where, w.name)
+		check(where, "sizes", w.sizes, sizes, false)
+		check(where, "biomes", w.biomes, c.biomeIDs, true)
+		check(where, "needs", w.needs, features, false)
+		check(where, "zones", w.zones, zoneNames[:], true)
+		tone(where, w.tone)
+	}
+	for _, g := range c.lists.groups {
+		where := "group name " + g.name
+		once(where, g.name)
+		check(where, "biomes", g.biomes, c.biomeIDs, true)
+		check(where, "zones", g.zones, zoneNames[:], true)
+		tone(where, g.tone)
+	}
+	var classes []string
+	for _, g := range c.lists.generics {
+		where := "generic " + g.word
+		check(where, "sizes", g.sizes, sizes, false)
+		check(where, "biomes", g.biomes, c.biomeIDs, true)
+		if strings.Count(g.form, specificSlot)+strings.Count(g.form, islandSlot) != 1 {
+			t.Errorf("%s: form %q must hold %s or %s once", where, g.form, specificSlot, islandSlot)
+		}
+		classes = append(classes, g.class)
+	}
+	specifics := map[string]bool{}
+	for _, s := range c.lists.specifics {
+		where := "specific " + s.word
+		if specifics[strings.ToLower(s.word)] {
+			t.Errorf("%s: twice", where)
+		}
+		specifics[strings.ToLower(s.word)] = true
+		check(where, "takes", s.takes, classes, false)
+		check(where, "biomes", s.biomes, c.biomeIDs, true)
+		check(where, "zones", s.zones, zoneNames[:], true)
+		tone(where, s.tone)
+	}
+	for _, p := range namePartners {
+		for _, name := range p {
+			if _, ok := byName(c.lists, name); !ok {
+				t.Errorf("partner %q is not a whole name", name)
+			}
+		}
+	}
+}
+
+// TestNamesStayOutOfTheClient: players learn a place's name only when they
+// come upon it, so no name is in the catalog the page is built with.
+func TestNamesStayOutOfTheClient(t *testing.T) {
+	client, err := os.ReadFile("../../client/src/catalog/catalog.gen.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := testConfig(t)
+	for _, w := range c.lists.wholes {
+		if bytes.Contains(client, []byte(`"`+w.name+`"`)) {
+			t.Errorf("the client's catalog holds %q", w.name)
+		}
+	}
+	for _, g := range c.lists.groups {
+		if bytes.Contains(client, []byte(`"`+g.name+`"`)) {
+			t.Errorf("the client's catalog holds %q", g.name)
+		}
+	}
 }
 
 func TestCombinationsOnlyWhenNoWholeNameFits(t *testing.T) {
@@ -604,7 +702,7 @@ func TestCombinationsOnlyWhenNoWholeNameFits(t *testing.T) {
 			break
 		}
 		whole++
-		if _, ok := byName(c.db, name); !ok {
+		if _, ok := byName(c.lists, name); !ok {
 			t.Fatalf("%q came from the whole names", name)
 		}
 	}
@@ -612,16 +710,16 @@ func TestCombinationsOnlyWhenNoWholeNameFits(t *testing.T) {
 	if combined == "" {
 		t.Fatal("no combination once the whole names ran out")
 	}
-	if _, ok := byName(c.db, combined); ok {
+	if _, ok := byName(c.lists, combined); ok {
 		t.Errorf("%q is a whole name", combined)
 	}
 	t.Logf("%d whole names for a sandy islet, then %q", whole, combined)
 }
 
-func byName(db *names.DB, name string) (*names.Island, bool) {
-	for i := range db.Islands {
-		if db.Islands[i].Name == name {
-			return &db.Islands[i], true
+func byName(l *nameLists, name string) (*wholeName, bool) {
+	for i := range l.wholes {
+		if l.wholes[i].name == name {
+			return &l.wholes[i], true
 		}
 	}
 	return nil, false
@@ -705,10 +803,10 @@ func TestFailedAttempts(t *testing.T) {
 	if testing.Short() {
 		t.Skip("makes whole worlds")
 	}
-	cat, db := testCatalog(t)
+	cat := testCatalog(t)
 	cat.World.Validator.Attempts = 2
 	cat.World.Validator.OpenWater = 10
-	b, err := Generate(5, cat, db)
+	b, err := Generate(5, cat)
 	if !errors.Is(err, ErrInvalid) {
 		t.Fatalf("an impossible rule: %v", err)
 	}
@@ -788,12 +886,12 @@ func TestDigests(t *testing.T) {
 	if testing.Short() {
 		t.Skip("makes eight whole worlds")
 	}
-	cat, db := testCatalog(t)
+	cat := testCatalog(t)
 	got := make([]string, len(digestSeeds))
 	var wg sync.WaitGroup
 	for i, seed := range digestSeeds {
 		wg.Go(func() {
-			b, err := Generate(seed, cat, db)
+			b, err := Generate(seed, cat)
 			if err != nil && !errors.Is(err, ErrInvalid) {
 				t.Error(err)
 				return
@@ -861,7 +959,7 @@ func TestSeeds(t *testing.T) {
 	if *seeds == 0 {
 		t.Skip("-seeds N runs it")
 	}
-	cat, db := testCatalog(t)
+	cat := testCatalog(t)
 	type result struct {
 		seed     uint64
 		ms       float64
@@ -879,7 +977,7 @@ func TestSeeds(t *testing.T) {
 				t.Parallel()
 				seed := uint64(i + 1)
 				start := time.Now()
-				b, err := Generate(seed, cat, db)
+				b, err := Generate(seed, cat)
 				r := result{seed: seed, ms: float64(time.Since(start).Microseconds()) / 1000}
 				if b != nil {
 					r.attempts, r.share, r.open, r.classes, r.biomes = b.Attempts, b.Report.LandShare, b.Report.Open, b.Report.ByClass, b.Report.ByBiome

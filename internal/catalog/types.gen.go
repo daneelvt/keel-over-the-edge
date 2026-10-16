@@ -1253,9 +1253,6 @@ type WorldNames struct {
 	// Two islands of a biome this close may share a name, in m.
 	Neighbours float64 `json:"neighbours"`
 
-	// Names written as a pair, best given in the same world: two names each.
-	Partners [][]string `json:"partners"`
-
 	// The pairs of words neighbours sharing a name take, the larger the first: two
 	// words each.
 	Prefixes [][]string `json:"prefixes"`
@@ -1410,4 +1407,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "1f63a5e49fe428a2"
+const Version = "4c9954310646add1"

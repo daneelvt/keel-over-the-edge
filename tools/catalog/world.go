@@ -3,33 +3,18 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 // The world's values are checked here for what the schema cannot say:
 // ranges that run from low to high, the ids a biome names, size classes in
-// order. The names under shared/catalog/names are the server's alone:
-// they are checked against the world's vocabulary and the avoid list and
-// written, parsed, into internal/names, never into the catalog's JSON.
-
-const (
-	namesDir     = "shared/catalog/names"
-	namesGenPath = "internal/names/names.gen.json"
-)
-
-// zones are the words a name's zone may hold besides any.
-var zones = []string{"centre", "middle", "rim"}
+// order.
 
 // checkWorld fails on world values the schema cannot judge.
 func checkWorld(doc map[string]any) error {
@@ -121,12 +106,10 @@ func checkWorld(doc map[string]any) error {
 		bad("world.zones: the centre must end before the middle waters")
 	}
 	nm, _ := world["names"].(map[string]any)
-	for _, key := range []string{"prefixes", "partners"} {
-		list, _ := nm[key].([]any)
-		for i, p := range list {
-			if pair, _ := p.([]any); len(pair) != 2 {
-				bad("world.names.%s[%d]: %d entries, not a pair", key, i, len(pair))
-			}
+	prefixes, _ := nm["prefixes"].([]any)
+	for i, p := range prefixes {
+		if pair, _ := p.([]any); len(pair) != 2 {
+			bad("world.names.prefixes[%d]: %d entries, not a pair", i, len(pair))
 		}
 	}
 	shelter, _ := world["shelter"].(map[string]any)
@@ -138,66 +121,4 @@ func checkWorld(doc map[string]any) error {
 		return fmt.Errorf("the world:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
-}
-
-// namesFile reads the names, checks them against the world's vocabulary,
-// and returns names.gen.json.
-func namesFile(root string, doc map[string]any) ([]byte, error) {
-	files := map[string][]byte{}
-	for _, f := range names.Files {
-		data, err := os.ReadFile(filepath.Join(root, namesDir, f))
-		if err != nil {
-			return nil, err
-		}
-		files[f] = data
-	}
-	db, err := names.Parse(files)
-	if err != nil {
-		return nil, err
-	}
-	if problems := db.Check(vocabulary(doc)); len(problems) > 0 {
-		return nil, fmt.Errorf("the names in %s:\n  %s", namesDir, strings.Join(problems, "\n  "))
-	}
-	var b bytes.Buffer
-	if err := names.Encode(&b, db); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
-}
-
-// vocabulary is what the world lets a name's tags hold.
-func vocabulary(doc map[string]any) names.Vocabulary {
-	var v names.Vocabulary
-	world, _ := doc["world"].(map[string]any)
-	words := func(list any, key string) []string {
-		var out []string
-		items, _ := list.([]any)
-		for _, it := range items {
-			m, _ := it.(map[string]any)
-			if s, ok := m[key].(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	}
-	v.Sizes = words(world["sizes"], "class")
-	v.Biomes = words(world["biomes"], "id")
-	nm, _ := world["names"].(map[string]any)
-	v.Features = words(nm["features"], "word")
-	v.Tones = words(nm["tones"], "word")
-	v.Zones = slices.Clone(zones)
-	partners, _ := nm["partners"].([]any)
-	for _, p := range partners {
-		pair, _ := p.([]any)
-		if len(pair) == 2 {
-			a, _ := pair[0].(string)
-			b, _ := pair[1].(string)
-			v.Partners = append(v.Partners, [2]string{a, b})
-		}
-	}
-	port, _ := world["mainPort"].(map[string]any)
-	if n, ok := port["name"].(string); ok {
-		v.Reserved = []string{n}
-	}
-	return v
 }

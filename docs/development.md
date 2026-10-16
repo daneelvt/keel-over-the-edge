@@ -166,9 +166,8 @@ files. Code reads a kind's properties, never its id.
 
 The world's values are `shared/catalog/world.yaml`: how a world is made
 and how a boat meets its ground (see [The world](#the-world)). The island
-names under `shared/catalog/names/` are the server's alone: the tool checks
-them and writes them to `internal/names/names.gen.json`, never into the
-client's catalog. The id check covers the world's biomes and surfaces as it
+names are not in the catalog: they are the generator's
+([Names](#names)). The id check covers the world's biomes and surfaces as it
 does the top-level kinds.
 
 A boat's `physics` object holds every number its physics needs, in groups
@@ -937,7 +936,7 @@ scrub, reef; the first is the open sea's bed). The **shelter** has cells of
    the stretch of water off its coast where the spawn grid's rows, laid
    along the coast, hold all 4,096 places in the fewest rows, each place in
    2 m of water and 10 m from land.
-6. **Names** (`names.go`), from `shared/catalog/names` (below).
+6. **Names** (`names.go`), from the names in `namelist.go` (below).
 7. **The validator** (`validate.go`): Port Royal's width, height, cliffs
    (at least a third of its coast) and the centre on it; no other land in
    the calm water; the start area's 4,096 places; every landmark reachable
@@ -985,13 +984,14 @@ go test ./internal/worldgen -run '^TestSeeds$' -seeds 100 -v   # what pr.worldge
 
 ### Names
 
-`shared/catalog/names` holds the names: whole names for single islands,
-names for groups, generics and the specifics that combine with them, and an
-avoid list. `go run ./tools/catalog` checks them (columns, every tag against
-the world's sizes, biomes, features, zones and tones, no name twice, the
-avoid list against every name and every combination) and writes them,
-parsed, to `internal/names/names.gen.json`; they are the server's alone and
-never in the client's catalog. Port Royal keeps its name; no name is given
+`internal/worldgen/namelist.go` holds the names, a line each with its
+tags: whole names for single islands, names for groups, generics and the
+specifics that combine with them, and the names written as a pair. The
+tests hold every tag to the world's sizes, biomes, features, zones and
+tones, and no name twice; the names are the server's alone and never in
+the client's catalog. Their order is part of the generator: a change to
+them changes the worlds the seeds make, so it raises `worldgen.Version`.
+Port Royal keeps its name; no name is given
 twice in a world; a name must fit the island's size class, biome and the
 features its terrain shows (`world.names.features`: cliffs, a peak, twin
 summits, stacks, a reef, a lagoon; names that need birds, caves or wrecks

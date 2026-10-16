@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
@@ -68,11 +67,7 @@ func TestPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := names.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := worldgen.Generate(7, cat, db)
+	b, err := worldgen.Generate(7, cat)
 	if err != nil {
 		t.Fatal(err)
 	}

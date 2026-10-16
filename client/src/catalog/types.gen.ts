@@ -1985,10 +1985,6 @@ export interface WorldNames {
    * The chance it is.
    */
   calfShare: number;
-  /**
-   * Names written as a pair, best given in the same world: two names each.
-   */
-  partners: string[][];
 }
 /**
  * A feature a name may need, by its word, and what shows it: 0 or false for a test it does not have; a feature with none is never shown.
@@ -2064,4 +2060,4 @@ export interface NameTone {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '1f63a5e49fe428a2';
+export const CATALOG_VERSION = '4c9954310646add1';

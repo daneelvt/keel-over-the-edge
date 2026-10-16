@@ -18,7 +18,6 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -146,11 +145,8 @@ func replayTerrain(h replay.Header, cat *catalog.Catalog, file string) (*sim.Ter
 	case h.Generator != worldgen.Version:
 		return nil, fmt.Errorf("%w was made by generator %d, and this build has generator %d: give it with -world", errTerrain, h.Generator, worldgen.Version)
 	default:
-		db, err := names.Load()
-		if err != nil {
-			return nil, err
-		}
-		b, err = worldgen.Generate(h.Seed, cat, db)
+		var err error
+		b, err = worldgen.Generate(h.Seed, cat)
 		if err != nil && !errors.Is(err, worldgen.ErrInvalid) {
 			return nil, err
 		}

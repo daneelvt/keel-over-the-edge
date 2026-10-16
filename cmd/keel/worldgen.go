@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
@@ -49,11 +48,7 @@ func worldgenCmd(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	db, err := names.Load()
-	if err != nil {
-		return err
-	}
-	b, genErr := worldgen.Generate(seed, cat, db)
+	b, genErr := worldgen.Generate(seed, cat)
 	if b == nil {
 		return genErr
 	}

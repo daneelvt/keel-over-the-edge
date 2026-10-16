@@ -39,7 +39,6 @@ jobs:
               - 'client/src/catalog/**'
               - 'art/**'
               - 'internal/catalog/**'
-              - 'internal/names/**'
               - 'internal/physics/**'
               - 'tools/catalog/**'
               - '**/*.go'

@@ -3,13 +3,13 @@
 package worldgen
 
 import (
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
-
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 )
 
-// Naming the islands, from the names database, by the rules sailors'
+// Naming the islands, from the names in namelist.go, by the rules sailors'
 // charts follow. The main port keeps its name, and no name is given twice
 // in a world. A name must fit the island: its size class, its biome and the
 // features its terrain shows; of those that fit, the ones that belong to
@@ -20,7 +20,6 @@ import (
 // none fits, a specific and a generic make one. Neighbours may share a name
 // (Great and Little), an islet may be the Calf of its neighbour, and names
 // written as a pair are given together. Groups of rocks get the group names.
-// Nothing the avoid list bans is given.
 
 // zoneNames are the zones as the names give them.
 var zoneNames = [zones]string{"centre", "middle", "rim"}
@@ -117,25 +116,25 @@ func (n *namer) allows(word string) bool {
 }
 
 func tagged(tags []string, v string) bool {
-	return slices.Contains(tags, v) || slices.Contains(tags, names.Any)
+	return slices.Contains(tags, v) || slices.Contains(tags, anyTag)
 }
 
-// free reports whether a name may be given: not given already, nor banned.
+// free reports whether a name may be given: not given already.
 func (n *namer) free(name string) bool {
-	return !n.used[strings.ToLower(name)] && !n.c.db.Banned(name)
+	return !n.used[strings.ToLower(name)]
 }
 
 // wholeFits reports whether a whole name fits an island, its zone aside.
-func (n *namer) wholeFits(w *names.Island, f *fits) bool {
-	if !slices.Contains(w.Sizes, f.size) || !tagged(w.Biomes, f.biome) || !n.allows(w.Tone) || !n.free(w.Name) {
+func (n *namer) wholeFits(w *wholeName, f *fits) bool {
+	if !slices.Contains(w.sizes, f.size) || !tagged(w.biomes, f.biome) || !n.allows(w.tone) || !n.free(w.name) {
 		return false
 	}
-	for _, need := range w.Needs {
+	for _, need := range w.needs {
 		if !slices.Contains(f.shows, need) {
 			return false
 		}
 	}
-	if t := n.tone(w.Tone); t.phantom && len(w.Zones) == 1 && w.Zones[0] == zoneNames[zoneRim] && !f.mist {
+	if t := n.tone(w.tone); t.phantom && len(w.zones) == 1 && w.zones[0] == zoneNames[zoneRim] && !f.mist {
 		return false
 	}
 	return true
@@ -151,22 +150,22 @@ func (n *namer) take(name, toneWord string) string {
 // whole draws a whole name for an island, or "".
 func (n *namer) whole(f *fits) string {
 	for k, p := range n.pending {
-		for i := range n.c.db.Islands {
-			w := &n.c.db.Islands[i]
-			if w.Name == p && n.wholeFits(w, f) {
+		for i := range n.c.lists.wholes {
+			w := &n.c.lists.wholes[i]
+			if w.name == p && n.wholeFits(w, f) {
 				n.pending = slices.Delete(n.pending, k, k+1)
 				return n.give(w)
 			}
 		}
 	}
 	var fit, inZone []int
-	for i := range n.c.db.Islands {
-		w := &n.c.db.Islands[i]
+	for i := range n.c.lists.wholes {
+		w := &n.c.lists.wholes[i]
 		if !n.wholeFits(w, f) {
 			continue
 		}
 		fit = append(fit, i)
-		if tagged(w.Zones, zoneNames[f.zone]) {
+		if tagged(w.zones, zoneNames[f.zone]) {
 			inZone = append(inZone, i)
 		}
 	}
@@ -178,21 +177,21 @@ func (n *namer) whole(f *fits) string {
 	}
 	weights := make([]float64, len(fit))
 	for k, i := range fit {
-		weights[k] = n.tone(n.c.db.Islands[i].Tone).weight[f.zone]
+		weights[k] = n.tone(n.c.lists.wholes[i].tone).weight[f.zone]
 	}
 	k := n.s.weighted(weights)
 	if k < 0 {
 		k = n.s.r.IntN(len(fit))
 	}
-	return n.give(&n.c.db.Islands[fit[k]])
+	return n.give(&n.c.lists.wholes[fit[k]])
 }
 
 // give gives a whole name, and queues its partner.
-func (n *namer) give(w *names.Island) string {
-	for _, p := range n.c.names.Partners {
-		if len(p) == 2 && (p[0] == w.Name || p[1] == w.Name) {
+func (n *namer) give(w *wholeName) string {
+	for _, p := range namePartners {
+		if p[0] == w.name || p[1] == w.name {
 			other := p[0]
-			if other == w.Name {
+			if other == w.name {
 				other = p[1]
 			}
 			if n.free(other) && !slices.Contains(n.pending, other) {
@@ -200,7 +199,7 @@ func (n *namer) give(w *names.Island) string {
 			}
 		}
 	}
-	return n.take(w.Name, w.Tone)
+	return n.take(w.name, w.tone)
 }
 
 // combined draws a specific and a generic for an island, or "".
@@ -210,24 +209,24 @@ func (n *namer) combined(f *fits, loose bool) string {
 		inZone               bool
 	}
 	var all []option
-	for i := range n.c.db.Specifics {
-		sp := &n.c.db.Specifics[i]
-		if n.specifics[strings.ToLower(sp.Specific)] || !n.allows(sp.Tone) || !loose && !tagged(sp.Biomes, f.biome) {
+	for i := range n.c.lists.specifics {
+		sp := &n.c.lists.specifics[i]
+		if n.specifics[strings.ToLower(sp.word)] || !n.allows(sp.tone) || !loose && !tagged(sp.biomes, f.biome) {
 			continue
 		}
-		for j := range n.c.db.Generics {
-			g := &n.c.db.Generics[j]
-			if !strings.Contains(g.Form, names.SpecificSlot) || !slices.Contains(sp.Takes, g.Class) ||
-				!slices.Contains(g.Sizes, f.size) || !loose && !tagged(g.Biomes, f.biome) {
+		for j := range n.c.lists.generics {
+			g := &n.c.lists.generics[j]
+			if !strings.Contains(g.form, specificSlot) || !slices.Contains(sp.takes, g.class) ||
+				!slices.Contains(g.sizes, f.size) || !loose && !tagged(g.biomes, f.biome) {
 				continue
 			}
-			name := names.Combine(g, sp.Specific)
+			name := g.combine(sp.word)
 			// A combination that makes a whole name would escape the whole
 			// name's own tags.
 			if !n.free(name) || n.wholes[strings.ToLower(name)] {
 				continue
 			}
-			all = append(all, option{name, sp.Specific, sp.Tone, tagged(sp.Zones, zoneNames[f.zone])})
+			all = append(all, option{name, sp.word, sp.tone, tagged(sp.zones, zoneNames[f.zone])})
 		}
 	}
 	if len(all) == 0 {
@@ -268,8 +267,8 @@ func newNamer(c *config, seed uint64) *namer {
 	for _, t := range c.names.Tones {
 		n.tones = append(n.tones, tone{word: t.Word, weight: [zones]float64{t.Centre, t.Middle, t.Rim}, most: t.Most, phantom: t.Phantom})
 	}
-	for i := range c.db.Islands {
-		n.wholes[strings.ToLower(c.db.Islands[i].Name)] = true
+	for i := range c.lists.wholes {
+		n.wholes[strings.ToLower(c.lists.wholes[i].name)] = true
 	}
 	return n
 }
@@ -327,12 +326,12 @@ func (n *namer) neighbour(islands []*made, out []string, i int, f *fits) string 
 		}
 		d := hypot(m.x-o.x, m.y-o.y)
 		if d < n.c.names.Calf && o.area > float64(4*m.area) && n.s.chance(n.c.names.CalfShare) {
-			for g := range n.c.db.Generics {
-				gen := &n.c.db.Generics[g]
-				if !strings.Contains(gen.Form, names.IslandSlot) || !slices.Contains(gen.Sizes, f.size) {
+			for g := range n.c.lists.generics {
+				gen := &n.c.lists.generics[g]
+				if !strings.Contains(gen.form, islandSlot) || !slices.Contains(gen.sizes, f.size) {
 					continue
 				}
-				name := strings.ReplaceAll(gen.Form, names.IslandSlot, out[j])
+				name := strings.ReplaceAll(gen.form, islandSlot, out[j])
 				if n.free(name) {
 					n.used[strings.ToLower(name)] = true
 					return name
@@ -374,17 +373,17 @@ func (c *config) nameGroups(seed uint64, groups []groupSpot, used []string) []st
 		var fit []int
 		var weights []float64
 		for pass := range 2 {
-			for i := range c.db.Groups {
-				gr := &c.db.Groups[i]
+			for i := range c.lists.groups {
+				gr := &c.lists.groups[i]
 				count := len(g.members)
-				if taken[strings.ToLower(gr.Name)] || c.db.Banned(gr.Name) || !tagged(gr.Biomes, biome) {
+				if taken[strings.ToLower(gr.name)] || !tagged(gr.biomes, biome) {
 					continue
 				}
-				if pass == 0 && (count < gr.Count[0] || count > gr.Count[1] || !tagged(gr.Zones, zoneNames[zone])) {
+				if pass == 0 && (count < gr.count[0] || count > gr.count[1] || !tagged(gr.zones, zoneNames[zone])) {
 					continue
 				}
 				fit = append(fit, i)
-				weights = append(weights, tones[gr.Tone][zone])
+				weights = append(weights, tones[gr.tone][zone])
 			}
 			if len(fit) > 0 {
 				break
@@ -394,8 +393,118 @@ func (c *config) nameGroups(seed uint64, groups []groupSpot, used []string) []st
 			continue
 		}
 		k := max(s.weighted(weights), 0)
-		out[gi] = c.db.Groups[fit[k]].Name
+		out[gi] = c.lists.groups[fit[k]].name
 		taken[strings.ToLower(out[gi])] = true
 	}
 	return out
+}
+
+// anyTag is the tag that fits every biome or zone.
+const anyTag = "any"
+
+// The places in a generic's form.
+const (
+	specificSlot = "{specific}"
+	islandSlot   = "{island}"
+)
+
+// wholeName is a whole name for a single island, with the size classes,
+// biomes and zones it suits, the features the island must show, and its
+// tone.
+type wholeName struct {
+	name                        string
+	sizes, biomes, needs, zones []string
+	tone                        string
+}
+
+// groupName is a name for a group of count[0] to count[1] rocks.
+type groupName struct {
+	name          string
+	count         [2]int
+	biomes, zones []string
+	tone          string
+}
+
+// genericWord is a generic word, its class, the sizes and biomes it suits,
+// and its form.
+type genericWord struct {
+	word, class   string
+	sizes, biomes []string
+	form          string
+}
+
+// combine is a specific in the generic's form.
+func (g *genericWord) combine(specific string) string {
+	return strings.ReplaceAll(g.form, specificSlot, specific)
+}
+
+// specificWord combines with the generics of the classes it takes.
+type specificWord struct {
+	word                 string
+	takes, biomes, zones []string
+	tone                 string
+}
+
+// nameLists are the names of namelist.go, read.
+type nameLists struct {
+	wholes    []wholeName
+	groups    []groupName
+	generics  []genericWord
+	specifics []specificWord
+}
+
+// parseNames reads the names of namelist.go.
+func parseNames() (*nameLists, error) {
+	l := &nameLists{}
+	fields := func(list string, i int, line string, n int) ([]string, error) {
+		f := strings.Split(line, " | ")
+		if len(f) != n {
+			return nil, fmt.Errorf("worldgen: %s[%d] %q has %d fields, not %d", list, i, line, len(f), n)
+		}
+		return f, nil
+	}
+	tags := func(field string) []string {
+		if field == "-" {
+			return []string{}
+		}
+		return strings.Fields(field)
+	}
+	for i, line := range wholeNames {
+		f, err := fields("wholeNames", i, line, 6)
+		if err != nil {
+			return nil, err
+		}
+		l.wholes = append(l.wholes, wholeName{name: f[0], sizes: tags(f[1]), biomes: tags(f[2]), needs: tags(f[3]), zones: tags(f[4]), tone: f[5]})
+	}
+	for i, line := range groupNames {
+		f, err := fields("groupNames", i, line, 5)
+		if err != nil {
+			return nil, err
+		}
+		a, b, ranged := strings.Cut(f[1], "-")
+		lo, err1 := strconv.Atoi(a)
+		hi, err2 := lo, error(nil)
+		if ranged {
+			hi, err2 = strconv.Atoi(b)
+		}
+		if err1 != nil || err2 != nil || lo < 1 || hi < lo {
+			return nil, fmt.Errorf("worldgen: groupNames[%d] %q: count %q is not a number or a range", i, f[0], f[1])
+		}
+		l.groups = append(l.groups, groupName{name: f[0], count: [2]int{lo, hi}, biomes: tags(f[2]), zones: tags(f[3]), tone: f[4]})
+	}
+	for i, line := range genericWords {
+		f, err := fields("genericWords", i, line, 5)
+		if err != nil {
+			return nil, err
+		}
+		l.generics = append(l.generics, genericWord{word: f[0], class: f[1], sizes: tags(f[2]), biomes: tags(f[3]), form: f[4]})
+	}
+	for i, line := range specificWords {
+		f, err := fields("specificWords", i, line, 5)
+		if err != nil {
+			return nil, err
+		}
+		l.specifics = append(l.specifics, specificWord{word: f[0], takes: tags(f[1]), biomes: tags(f[2]), zones: tags(f[3]), tone: f[4]})
+	}
+	return l, nil
 }

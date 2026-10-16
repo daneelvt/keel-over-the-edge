@@ -14,7 +14,6 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -24,16 +23,9 @@ import (
 // sets another.
 type generator func(seed uint64) (*worldgen.Bundle, error)
 
-// catalogGenerator makes worlds from the catalog's world values and the
-// names built in.
+// catalogGenerator makes worlds from the catalog's world values.
 func catalogGenerator(cat *catalog.Catalog) generator {
-	return func(seed uint64) (*worldgen.Bundle, error) {
-		db, err := names.Load()
-		if err != nil {
-			return nil, err
-		}
-		return worldgen.Generate(seed, cat, db)
-	}
+	return func(seed uint64) (*worldgen.Bundle, error) { return worldgen.Generate(seed, cat) }
 }
 
 // terrainBeat is how often the heartbeat beats while a world is made.

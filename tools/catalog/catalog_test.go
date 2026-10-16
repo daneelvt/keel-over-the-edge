@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 )
 
 // validBoats is one boat, with the real Jolly boat's physics values. Its
@@ -168,12 +166,6 @@ func fixture(t *testing.T, files map[string]string) string {
 	if _, ok := files[worldPath]; !ok {
 		files[worldPath] = realFile(worldPath)
 	}
-	for _, f := range names.Files {
-		p := namesDir + "/" + f
-		if _, ok := files[p]; !ok {
-			files[p] = realFile(p)
-		}
-	}
 	for p, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -205,9 +197,6 @@ func checkAll(root string) error {
 		return err
 	}
 	if err := checkWorld(doc); err != nil {
-		return err
-	}
-	if _, err := namesFile(root, doc); err != nil {
 		return err
 	}
 	return checkIDsNotInCode(root, ids(doc))

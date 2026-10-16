@@ -1521,8 +1521,7 @@
         "neighbourShare",
         "prefixes",
         "calf",
-        "calfShare",
-        "partners"
+        "calfShare"
       ],
       "properties": {
         "features": {
@@ -1566,14 +1565,6 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "partners": {
-          "description": "Names written as a pair, best given in the same world: two names each.",
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": { "type": "string", "minLength": 1, "maxLength": 60 }
-          }
         }
       }
     }

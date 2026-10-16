@@ -292,7 +292,7 @@ world:
     shoreline: 1.4 # a landmark's shoreline development index, at least
     reachDepth: 2 # m: every landmark reachable from the start in this much water
 
-  # How islands are named, from shared/catalog/names: by size class, biome
+  # How islands are named, from the generator's names: by size class, biome
   # and the features the terrain shows, then preferring the island's zone,
   # then by chance, the tones weighted by zone.
   names:
@@ -338,8 +338,3 @@ world:
     prefixes: [[Great, Little], [North, South], [East, West], [Inner, Outer]]
     calf: 300 # m
     calfShare: 0.3
-    # Names written as a pair, best in the same world: when one is given,
-    # the other goes to the next island it fits.
-    partners:
-      - [Nobody Knows What, Somebody Knows What]
-      - [Poverty Island, Plenty Island]

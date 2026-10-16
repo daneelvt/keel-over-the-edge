@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
@@ -57,10 +56,6 @@ func run(seed uint64, bundle string, seeds int, from uint64, isl int, out string
 	if err != nil {
 		return err
 	}
-	db, err := names.Load()
-	if err != nil {
-		return err
-	}
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
@@ -78,7 +73,7 @@ func run(seed uint64, bundle string, seeds int, from uint64, isl int, out string
 		return nil
 	}
 	make1 := func(s uint64) (*worldgen.Bundle, error) {
-		b, err := worldgen.Generate(s, cat, db)
+		b, err := worldgen.Generate(s, cat)
 		if errors.Is(err, worldgen.ErrInvalid) {
 			fmt.Fprintf(os.Stderr, "worldgen-preview: seed %d passed no attempt; drawing the last\n", s)
 			err = nil

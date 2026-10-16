@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
-	"github.com/daneelvt/keel-over-the-edge/internal/names"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
@@ -126,8 +125,8 @@ var ErrInvalid = errors.New("worldgen: no attempt passed the rules")
 // Generate makes the world of a seed: attempts from the seed, then from
 // the next seeds, until one passes the rules, at most the catalog's
 // attempts. If none passes it returns the last, with ErrInvalid.
-func Generate(seed uint64, cat *catalog.Catalog, db *names.DB) (*Bundle, error) {
-	c, err := newConfig(cat, db)
+func Generate(seed uint64, cat *catalog.Catalog) (*Bundle, error) {
+	c, err := newConfig(cat)
 	if err != nil {
 		return nil, err
 	}
