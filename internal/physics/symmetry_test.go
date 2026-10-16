@@ -44,6 +44,7 @@ func runScenarioStates(t *testing.T, b *Prepared, sc scenario, n int32, mirrored
 	}
 	flip := func() {
 		c.Helm, e.WindFrom, e.MeanFrom = -c.Helm, -e.WindFrom, -e.MeanFrom
+		e.CurrentEast = -e.CurrentEast
 		// An angle off the wind, or a heading, the other way round.
 		c.Target = math.Mod(TurnSteps-c.Target, TurnSteps)
 	}

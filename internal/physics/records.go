@@ -67,9 +67,11 @@ type Control struct {
 
 // Env is the world at the boat during the step.
 type Env struct {
-	WindSpeed float64 // true wind 10 m above the sea, m/s
-	WindFrom  float64 // direction the true wind comes from, rad clockwise from north
-	MeanFrom  float64 // the direction the wind comes from without its gusts or any shadow: what the autopilot steers by
+	WindSpeed    float64 // true wind 10 m above the sea, m/s
+	WindFrom     float64 // direction the true wind comes from, rad clockwise from north
+	MeanFrom     float64 // the direction the wind comes from without its gusts or any shadow: what the autopilot steers by
+	CurrentEast  float64 // the water's own motion, the current: east, m/s
+	CurrentNorth float64 // and north, m/s
 }
 
 // Params describe a kind of boat: the catalog's physics values, in the order
@@ -302,6 +304,9 @@ type WeatherParams struct {
 	RimGusts       float64    // the gust factor's excess grows by this share toward the rim
 	RimGustsFrom   float64    // from here to the rim, nautical miles
 	AcrossTurn     [2]float64 // the shortest and longest time the axis of the difference across the disk takes to turn once, hours
+	Edge           float64    // the lip of the falls, the disk's radius, nautical miles
+	FallDraftFrom  float64    // the falls draw the air toward the lip from here, nautical miles
+	FallDraft      float64    // and at the lip this fast, knots
 
 	// The gusts.
 	GustAlong  float64 // the largest cells of the gust field along the wind, m
@@ -315,6 +320,14 @@ type WeatherParams struct {
 	WaveTimeConstant float64 // the time constant of the average the sea follows, s
 	WaveSample       float64 // the wind is sampled on a grid of world time this far apart, s
 	WaveSamples      float64 // and this many samples are kept
+
+	// The current: each part linear between its points, nothing before the
+	// first and its last value beyond the last.
+	CirculationAt [3]float64 // the circulation's points, nautical miles from the centre
+	Circulation   [3]float64 // its speed at each, knots
+	DrainAt       [3]float64 // the drain's points, nautical miles from the centre: the last is the lip
+	Drain         [3]float64 // its speed toward the lip at each, knots
+	Shallow       float64    // in water shallower than this the current falls off with the depth, m
 }
 
 // Regime describes the wind of a kind of spell: the catalog's values of a

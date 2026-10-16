@@ -192,6 +192,61 @@ type Catalog struct {
 // A colour, as #rrggbb in sRGB.
 type Colour string
 
+// The water pouring over the lip.
+type Curtain struct {
+	// Its waves die as e^(−damping t), per s.
+	Damping float64 `json:"damping"`
+
+	// And fades out from and to, in s.
+	Fade []float64 `json:"fade"`
+
+	// It whitens to foam over this long, in s.
+	Foam float64 `json:"foam"`
+
+	// Its first row, in s after the brink: negative before it.
+	From float64 `json:"from"`
+
+	// How fast it falls, in m/s².
+	Gravity float64 `json:"gravity"`
+
+	// And to the mist's colour from and to, in s.
+	Mist []float64 `json:"mist"`
+
+	// It curves out by this times the square of the time, in m/s².
+	Out float64 `json:"out"`
+
+	// The falls are drawn within this of the camera, in m.
+	Reach float64 `json:"reach"`
+
+	// Its last row, in s after the brink.
+	To float64 `json:"to"`
+}
+
+// How the lip, the falls and the drain are drawn.
+type EdgeLook struct {
+	// The water pouring over the lip.
+	Curtain Curtain `json:"curtain"`
+
+	// The drain's foam lines.
+	Lines Lines `json:"lines"`
+
+	// The sea's last tiles before the brink.
+	Lip Lip `json:"lip"`
+
+	// Slabs of the sea breaking off the curtain and falling.
+	Slabs Slabs `json:"slabs"`
+}
+
+// The mist band: a density rising across the band to the lip's, falling off with
+// height.
+type EdgeMist struct {
+	// The scale height of the mist's layer, in m.
+	Height float64 `json:"height"`
+
+	// The visual range at the lip, in m.
+	Range float64 `json:"range"`
+}
+
 // Boats meeting: their hulls touching, the wind one takes from another, and the
 // Articles, the right-of-way rules that judge them.
 type Encounters struct {
@@ -317,6 +372,24 @@ const LightPort Light = "port"
 const LightStarboard Light = "starboard"
 const LightStern Light = "stern"
 const LightTricolour Light = "tricolour"
+
+// The drain's foam lines.
+type Lines struct {
+	// About this far apart across the drain, in m.
+	Apart float64 `json:"apart"`
+
+	// From where the drain runs faster than this, in knots.
+	From float64 `json:"from"`
+}
+
+// The sea's last tiles before the brink.
+type Lip struct {
+	// How far they drop at the brink, in m.
+	Sag float64 `json:"sag"`
+
+	// How far they tip outward at the brink, in rad.
+	Tip float64 `json:"tip"`
+}
 
 // A feature a name may need, by its word, and what shows it: 0 or false for a test
 // it does not have; a feature with none is never shown.
@@ -881,6 +954,30 @@ type Sky struct {
 	Year float64 `json:"year"`
 }
 
+// Slabs of the sea breaking off the curtain and falling.
+type Slabs struct {
+	// A cell lets one go once a cycle of between these, in s.
+	Cycle []float64 `json:"cycle"`
+
+	// They are gone between these depths, in m.
+	Gone []float64 `json:"gone"`
+
+	// How fast they fall, in m/s².
+	Gravity float64 `json:"gravity"`
+
+	// They fade to the mist's colour from and to these depths, in m.
+	Mist []float64 `json:"mist"`
+
+	// A slab breaks off between these times after the brink, in s.
+	Release []float64 `json:"release"`
+
+	// They spin at up to this, in rad/s.
+	Spin float64 `json:"spin"`
+
+	// They tip by the first plus the second times the time, in rad and rad/s.
+	Tip []float64 `json:"tip"`
+}
+
 // What the ground is covered with.
 type Surface struct {
 	// Coulomb's coefficient of a hull dragging on it under water.
@@ -911,6 +1008,9 @@ type SurfaceLook struct {
 
 // The weather's numbers.
 type Weather struct {
+	// Current corresponds to the JSON schema field "current".
+	Current WeatherCurrent `json:"current"`
+
 	// Disk corresponds to the JSON schema field "disk".
 	Disk WeatherDisk `json:"disk"`
 
@@ -933,6 +1033,27 @@ type Weather struct {
 	WaveWind WeatherWaveWind `json:"waveWind"`
 }
 
+// The water's own motion: the circulation round the disk and the drain toward the
+// falls, each linear between its points, nothing before the first and its last
+// value beyond the last, falling off in shallow water.
+type WeatherCurrent struct {
+	// Its speed at each point, in knots.
+	Circulation []float64 `json:"circulation"`
+
+	// The circulation's points, from the centre, in nautical miles.
+	CirculationAt []float64 `json:"circulationAt"`
+
+	// Its speed toward the lip at each point, in knots.
+	Drain []float64 `json:"drain"`
+
+	// The drain's points, from the centre, in nautical miles: the last is the lip.
+	DrainAt []float64 `json:"drainAt"`
+
+	// In water shallower than this the current falls off in proportion to the depth,
+	// in m.
+	Shallow float64 `json:"shallow"`
+}
+
 // The wind over the disk: how its speed rises toward the rim, the refuge at the
 // centre, the stronger gusts of the outer waters and the turning of the difference
 // across the disk.
@@ -940,6 +1061,15 @@ type WeatherDisk struct {
 	// The shortest and longest time the axis of the wind's difference across the disk
 	// takes to turn once, in hours.
 	AcrossTurn []float64 `json:"acrossTurn"`
+
+	// The lip of the falls: the disk's radius, in nautical miles.
+	Edge float64 `json:"edge"`
+
+	// How fast the falls draw the air at the lip, in knots.
+	FallDraft float64 `json:"fallDraft"`
+
+	// The falls draw the air toward the lip from here, in nautical miles.
+	FallDraftFrom float64 `json:"fallDraftFrom"`
 
 	// Within this the refuge's limits hold in full, in nautical miles.
 	RefugeInner float64 `json:"refugeInner"`
@@ -1080,6 +1210,9 @@ type World struct {
 	// Disk corresponds to the JSON schema field "disk".
 	Disk WorldDisk `json:"disk"`
 
+	// Edge corresponds to the JSON schema field "edge".
+	Edge WorldEdge `json:"edge"`
+
 	// Erosion corresponds to the JSON schema field "erosion".
 	Erosion WorldErosion `json:"erosion"`
 
@@ -1142,6 +1275,22 @@ type WorldDisk struct {
 
 	// The edge of the world from its centre, in m.
 	Radius float64 `json:"radius"`
+}
+
+// The edge of the world: going over the falls, approaches to them, the mist and
+// how the falls are drawn.
+type WorldEdge struct {
+	// An approach ends this far back out of the mist band, in m.
+	Clear float64 `json:"clear"`
+
+	// How long a boat that has gone over falls before it starts again, in s.
+	Fall float64 `json:"fall"`
+
+	// Look corresponds to the JSON schema field "look".
+	Look EdgeLook `json:"look"`
+
+	// Mist corresponds to the JSON schema field "mist".
+	Mist EdgeMist `json:"mist"`
 }
 
 // Erosion on each island: thermal weathering, and droplets of rain.
@@ -1491,4 +1640,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "97297bad3489251e"
+const Version = "464a6f6db085fabc"

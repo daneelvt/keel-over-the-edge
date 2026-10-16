@@ -726,6 +726,7 @@ export interface Weather {
   gusts: WeatherGusts;
   ring: WeatherRing;
   waveWind: WeatherWaveWind;
+  current: WeatherCurrent;
   /**
    * The kinds of spell of weather.
    *
@@ -886,6 +887,18 @@ export interface WeatherDisk {
    * @maxItems 2
    */
   acrossTurn: [number, number];
+  /**
+   * The lip of the falls: the disk's radius, in nautical miles.
+   */
+  edge: number;
+  /**
+   * The falls draw the air toward the lip from here, in nautical miles.
+   */
+  fallDraftFrom: number;
+  /**
+   * How fast the falls draw the air at the lip, in knots.
+   */
+  fallDraft: number;
 }
 /**
  * The gust field: gradient noise in three octaves, each with cells and a life half its predecessor's, carried downwind.
@@ -978,6 +991,46 @@ export interface WeatherWaveWind {
    * How many samples are kept.
    */
   waveSamples: number;
+}
+/**
+ * The water's own motion: the circulation round the disk and the drain toward the falls, each linear between its points, nothing before the first and its last value beyond the last, falling off in shallow water.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherCurrent".
+ */
+export interface WeatherCurrent {
+  /**
+   * The circulation's points, from the centre, in nautical miles.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  circulationAt: [number, number, number];
+  /**
+   * Its speed at each point, in knots.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  circulation: [number, number, number];
+  /**
+   * The drain's points, from the centre, in nautical miles: the last is the lip.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  drainAt: [number, number, number];
+  /**
+   * Its speed toward the lip at each point, in knots.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  drain: [number, number, number];
+  /**
+   * In water shallower than this the current falls off in proportion to the depth, in m.
+   */
+  shallow: number;
 }
 /**
  * A kind of spell of weather.
@@ -1329,6 +1382,7 @@ export interface EncountersOverlay {
  */
 export interface World {
   disk: WorldDisk;
+  edge: WorldEdge;
   zones: WorldZones;
   mainPort: WorldMainPort;
   layout: WorldLayout;
@@ -1382,6 +1436,169 @@ export interface WorldDisk {
    * Where the mist band begins, in nautical miles from the centre.
    */
   mist: number;
+}
+/**
+ * The edge of the world: going over the falls, approaches to them, the mist and how the falls are drawn.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldEdge".
+ */
+export interface WorldEdge {
+  /**
+   * How long a boat that has gone over falls before it starts again, in s.
+   */
+  fall: number;
+  /**
+   * An approach ends this far back out of the mist band, in m.
+   */
+  clear: number;
+  mist: EdgeMist;
+  look: EdgeLook;
+}
+/**
+ * The mist band: a density rising across the band to the lip's, falling off with height.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "EdgeMist".
+ */
+export interface EdgeMist {
+  /**
+   * The visual range at the lip, in m.
+   */
+  range: number;
+  /**
+   * The scale height of the mist's layer, in m.
+   */
+  height: number;
+}
+/**
+ * How the lip, the falls and the drain are drawn.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "EdgeLook".
+ */
+export interface EdgeLook {
+  /**
+   * The sea's last tiles before the brink.
+   */
+  lip: {
+    /**
+     * How far they tip outward at the brink, in rad.
+     */
+    tip: number;
+    /**
+     * How far they drop at the brink, in m.
+     */
+    sag: number;
+  };
+  /**
+   * The water pouring over the lip.
+   */
+  curtain: {
+    /**
+     * Its first row, in s after the brink: negative before it.
+     */
+    from: number;
+    /**
+     * Its last row, in s after the brink.
+     */
+    to: number;
+    /**
+     * How fast it falls, in m/s².
+     */
+    gravity: number;
+    /**
+     * It curves out by this times the square of the time, in m/s².
+     */
+    out: number;
+    /**
+     * Its waves die as e^(−damping t), per s.
+     */
+    damping: number;
+    /**
+     * It whitens to foam over this long, in s.
+     */
+    foam: number;
+    /**
+     * And to the mist's colour from and to, in s.
+     *
+     * @minItems 2
+     * @maxItems 2
+     */
+    mist: [number, number];
+    /**
+     * And fades out from and to, in s.
+     *
+     * @minItems 2
+     * @maxItems 2
+     */
+    fade: [number, number];
+    /**
+     * The falls are drawn within this of the camera, in m.
+     */
+    reach: number;
+  };
+  /**
+   * Slabs of the sea breaking off the curtain and falling.
+   */
+  slabs: {
+    /**
+     * A slab breaks off between these times after the brink, in s.
+     *
+     * @minItems 2
+     * @maxItems 2
+     */
+    release: [number, number];
+    /**
+     * A cell lets one go once a cycle of between these, in s.
+     *
+     * @minItems 2
+     * @maxItems 2
+     */
+    cycle: [number, number];
+    /**
+     * How fast they fall, in m/s².
+     */
+    gravity: number;
+    /**
+     * They tip by the first plus the second times the time, in rad and rad/s.
+     *
+     * @minItems 2
+     * @maxItems 2
+     */
+    tip: [number, number];
+    /**
+     * They spin at up to this, in rad/s.
+     */
+    spin: number;
+    /**
+     * They fade to the mist's colour from and to these depths, in m.
+     *
+     * @minItems 2
+     * @maxItems 2
+     */
+    mist: [number, number];
+    /**
+     * They are gone between these depths, in m.
+     *
+     * @minItems 2
+     * @maxItems 2
+     */
+    gone: [number, number];
+  };
+  /**
+   * The drain's foam lines.
+   */
+  lines: {
+    /**
+     * About this far apart across the drain, in m.
+     */
+    apart: number;
+    /**
+     * From where the drain runs faster than this, in knots.
+     */
+    from: number;
+  };
 }
 /**
  * Where on the disk a place is: the centre, the middle waters and, beyond them, the rim.
@@ -2169,4 +2386,4 @@ export interface WorldLook {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '97297bad3489251e';
+export const CATALOG_VERSION = '464a6f6db085fabc';

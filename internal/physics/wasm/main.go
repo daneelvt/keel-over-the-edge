@@ -38,6 +38,11 @@
 // shelter's factor over a square of cells, for drawing the lee. hexAt
 // writes the hexagon that holds a point to hexValues.
 //
+// The current and the edge: the client calls circulation once with the
+// world's way; windAt then sets env's current at the state's place too, on
+// the ground the module holds, and current answers for any point into
+// currentValues. over says whether the state is over the lip.
+//
 // The sky is asked about once a frame: the client writes skyParams and
 // calls skyPrepare once, then skyAt with sky time and the boat's place, and
 // reads the sky record; skyStar answers for one star into the skyBody
@@ -76,6 +81,11 @@ var (
 	// stepFresh says stepWeather is at the tick it holds in the spells in
 	// play.
 	stepFresh bool
+	// way is the world's circulation: 1 clockwise, −1 the other way, 0
+	// none.
+	way float64
+	// currentValues is what current writes: east, then north, m/s.
+	currentValues [2]float64
 
 	other             physics.State
 	encounterParams   physics.EncounterParams
@@ -562,6 +572,34 @@ func windAt(tick float64) {
 		stepFresh = true
 	}
 	env = physics.WindAt(&stepWeather, state.X, state.Y, shelterInUse())
+	env.CurrentEast, env.CurrentNorth = physics.CurrentAt(&weatherPrepared, way, state.X, state.Y, groundInUse())
+}
+
+// circulation sets the world's way round the disk: 1 clockwise seen from
+// above, −1 the other way, 0 none.
+//
+//go:wasmexport circulation
+func circulation(w float64) { way = w }
+
+// current writes to currentValues the current at (x, y), on the ground the
+// module holds while groundUse is on.
+//
+//go:wasmexport current
+func current(x, y float64) {
+	currentValues[0], currentValues[1] = physics.CurrentAt(&weatherPrepared, way, x, y, groundInUse())
+}
+
+//go:wasmexport currentValues
+func currentValuesAddr() uint32 { return addr(unsafe.Pointer(&currentValues)) }
+
+// over returns 1 if the state's centre of gravity is at or beyond the lip.
+//
+//go:wasmexport over
+func over() uint32 {
+	if physics.OverEdge(&weatherPrepared, state.X, state.Y) {
+		return 1
+	}
+	return 0
 }
 
 // windDrawAt sets the time windPoint, windSample and gustFrameAt answer

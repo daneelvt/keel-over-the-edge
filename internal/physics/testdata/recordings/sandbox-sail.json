@@ -223,7 +223,15 @@
   "change": 10,
   "waveTimeConstant": 240,
   "waveSample": 30,
-  "waveSamples": 40
+  "waveSamples": 40,
+  "edge": 4.5,
+  "fallDraftFrom": 4.2,
+  "fallDraft": 4,
+  "circulationAt": [1, 1.4, 3.5],
+  "circulation": [0, 0.2, 0.5],
+  "drainAt": [3.5, 4.2, 4.5],
+  "drain": [0, 0.6, 2],
+  "shallow": 3
  },
  "scenarios": [
   {

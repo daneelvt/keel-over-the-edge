@@ -46,6 +46,10 @@ type wave struct {
 	twist              float64 // the sway force's moment along the hull, per unit of that force, m
 	waterX, waterY     float64 // the water's velocity at the surface, ahead and to starboard, m/s
 	foilX, foilY       float64 // and at the foils' depth
+	// The current, east and north, m/s, which the hull and foils feel with
+	// the waves' motion; current is whether there is any.
+	current                   bool
+	currentEast, currentNorth float64
 }
 
 // read sets v to the effective wave under a hull at the boat's position and

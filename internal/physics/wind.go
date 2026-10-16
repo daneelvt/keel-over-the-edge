@@ -19,6 +19,13 @@ type motion struct {
 	// windX and windY are the true wind's velocity 10 m up, in the heading
 	// frame: where the air moves, m/s.
 	windX, windY float64
+	// In a current, current is true and currentX and currentY are the
+	// current ahead and to starboard. The wind's profile grows from the
+	// water's surface, which moves: windX and windY are then the wind 10 m
+	// up less the current, and the air at every height moves with the
+	// current besides.
+	current            bool
+	currentX, currentY float64
 	// The waves under the hull: how far the centre of gravity has risen
 	// above the surface, the surface's slope toward starboard, and the
 	// water's own velocity at the surface and at the foils' depth.
@@ -69,6 +76,9 @@ func (b *Prepared) flow(m *motion, x, y, z, ex, ey float64, air bool) pointFlow 
 		w := b.windFactor(f.height)
 		fx += float64(w * m.windX)
 		fy += float64(w * m.windY)
+		if m.current {
+			fx, fy = fx+m.currentX, fy+m.currentY
+		}
 	} else {
 		fx += m.foilX
 		fy += m.foilY
