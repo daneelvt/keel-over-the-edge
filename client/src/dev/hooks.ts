@@ -1208,6 +1208,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         window: { col: groundWindow.col, row: groundWindow.row, fills: groundWindow.fills },
         lee: { a0: shelterTexture.a0, b0: shelterTexture.b0, fills: shelterTexture.fills },
         shore: shore.on.value,
+        // Every chunk handed within 1.5 km of the boat had.
+        ready: l.ready(
+          driver.states.current[RECORDS.state.x] ?? 0,
+          driver.states.current[RECORDS.state.y] ?? 0,
+          catalog.world.look.keepGrids,
+        ),
       };
     },
     /**

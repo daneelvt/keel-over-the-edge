@@ -18,19 +18,14 @@ const R = 2500;
 
 test.skip(!existsSync(world), 'no world file for seed 1: run go run ./tools/dev -world 1');
 
-/** Renders until the land has had every chunk it asked for, and has some. */
+/** Renders until the land has had every chunk within reach of the boat, and has some. */
 async function landed(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
       const k = globalThis.keel;
       k.render();
       const l = k.land();
-      return (
-        l !== null &&
-        l.stats.handed > 0 &&
-        l.stats.inFlight === 0 &&
-        l.grids.length === l.handed.length
-      );
+      return l !== null && l.stats.handed > 0 && l.stats.inFlight === 0 && l.ready;
     },
     null,
     { timeout: 60_000, polling: 250 },
@@ -211,4 +206,55 @@ test('a boat sailed onto the beach is aground, pushed off, and told so @long', a
   expect(a.groundings).toBeGreaterThan(0);
   expect(a.sound).not.toBeNull();
   expect(a.pushes).toBeGreaterThan(0);
+});
+
+test.describe('pictures', () => {
+  // Seed 1's coasts at noon, each from the sea view and from above:
+  // Port Royal's eastern beach in a breeze, Lime Cay's reef, 80 m off its
+  // eastern shore with a lagoon behind, in a fresh wind, Port Royal's eastern cliffs in a gale, and the lee west of
+  // Port Royal in a trade wind from the east.
+  const places: {
+    name: string;
+    east: number;
+    north: number;
+    heading: number;
+    sea: string;
+    wind?: [number, number];
+  }[] = [
+    { name: 'beach-breeze', east: 230, north: 300, heading: -Math.PI / 2, sea: 'breeze' },
+    { name: 'reef-fresh', east: 1830, north: -1191, heading: -Math.PI / 2, sea: 'fresh' },
+    { name: 'cliff-gale', east: 260, north: 71, heading: -Math.PI / 2, sea: 'gale' },
+    {
+      name: 'lee-trade',
+      east: -520,
+      north: 71,
+      heading: Math.PI / 2,
+      sea: 'fresh',
+      wind: [18, 90],
+    },
+  ];
+  for (const p of places) {
+    test(`${p.name} @long`, async ({ page }) => {
+      await openWorld(page, p.east, p.north, p.heading);
+      await page.evaluate((p) => {
+        const k = globalThis.keel;
+        k.setSea(p.sea);
+        if (p.wind !== undefined) {
+          k.setWind(p.wind[0], p.wind[1]);
+        }
+        k.setSky(12);
+        k.render();
+      }, p);
+      await landed(page);
+      for (const view of ['sea', 'high']) {
+        await page.evaluate(async (v) => {
+          globalThis.keel.camera(v);
+          await globalThis.keel.show();
+        }, view);
+        await expect
+          .soft(page.locator('canvas.scene'))
+          .toHaveScreenshot(`land-${p.name}-${view}.png`);
+      }
+    });
+  }
 });
