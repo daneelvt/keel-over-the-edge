@@ -11,6 +11,7 @@
 import { BufferAttribute, BufferGeometry, Mesh } from 'three';
 import { cos, positionGeometry, sin, uniform, varying, vec2, vec3 } from 'three/tsl';
 import type { Node, UniformNode } from 'three/webgpu';
+import { mistToSea } from '../edge/mist';
 import { horizonDistance } from '../render/materials';
 import { FIELD_RADIUS } from './hex';
 import { hulls } from './hulls';
@@ -74,6 +75,8 @@ export class FarSea {
   readonly ground: Node<'vec4'>;
   readonly lee: Node<'float'>;
   readonly period: Node<'float'>;
+  /** The band's mist from the camera to each vertex. */
+  readonly mist: Node<'float'>;
 
   /** centre is the centre tile's scene position, and centreHex its (q, r), shared with the tiles. */
   constructor(band: BandUniforms, centre: Node<'vec2'>, centreHex: Node<'vec2'>) {
@@ -95,6 +98,7 @@ export class FarSea {
     this.period = varying(periodAt(band)(p));
     this.area = varying(seaAreaAt(band)(p));
     this.nearHull = varying(hulls.near(p, 30));
+    this.mist = mistToSea(p);
     this.mesh = new Mesh(farGeometry());
     this.mesh.name = 'far sea';
     this.mesh.frustumCulled = false;

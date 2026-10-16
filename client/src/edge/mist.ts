@@ -10,22 +10,21 @@
 // So near water is misty and far land clear of the band's mist yet seen
 // through it, as a fragment's own distance from the centre could not tell.
 //
-// Along a straight ray the integral has a closed form, taken over each half
-// of the ray: the band's share is linear in the distance from the centre at
-// the half's ends, clamped to 0 and 1 (the halves' ends, the ray's middle
-// among them, give the distance's curve along a ray across the band), and
-// the height is linear between the ends' heights above the curved sea,
-// clamped at the sea; a half splits where either clamp
-// starts, and each piece is a linear function times an exponential, whose
-// integral is closed (exponential height fog: Quílez, "Fog"), with a
-// Taylor series where the ray is nearly level and the closed form divides
-// by nearly nothing (as Flax Engine's ExponentialHeightFog does). The
-// shaders and the page compute it the same way: mistDepth here, and its
-// node below.
+// The integral is taken at sixteen points along the straight ray through
+// the scene, the density at each from its distance from the centre and its
+// height above the curved sea: the k-th at u² of the way from the eye, u
+// the middle of the k-th sixteenth, weighted 2u (the midpoint rule after
+// t = u²). The points crowd toward the eye, where an upward ray's mist all
+// lies; over the rays the game draws, from the deck, the cameras and the
+// sky, the light let through is within 0.02 of a 20,000-step integral's
+// (mist.test.ts). It is worked out once a vertex, carried to the fragments
+// between, and only while the camera is near the edge: every material's
+// fog carries it, and a short loop costs a software renderer's compiler,
+// as CI draws with, much less than a long one. The page computes it
+// the same way: mistAlong here, and its node below.
 
 import { Color, Vector2 } from 'three';
 import {
-  abs,
   cameraPosition,
   clamp,
   exp,
@@ -35,18 +34,20 @@ import {
   Loop,
   length,
   max,
-  min,
   positionWorld,
-  select,
   uniform,
   varying,
   vec2,
+  vec3,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { DOME_RADIUS, domeCentre } from '../render/materials';
 
 /** Koschmieder's constant: ln(1/0.02), the contrast threshold of 2%. */
 export const KOSCHMIEDER = 3.912;
+
+/** The points the mist is taken at along a ray. */
+export const MIST_SAMPLES = 16;
 
 /** What the mist is drawn with: its uniforms, which the scene sets each frame. */
 export const edgeLook = {
@@ -65,8 +66,9 @@ export const edgeLook = {
   on: uniform(1),
   /**
    * 1 while the camera is near enough the band and the drain to see them,
-   * else 0: the turns of a loop (nearEdge) the mist and the drain's lines
-   * are worked out in, so that elsewhere they are not worked out at all.
+   * else 0: the turns of a loop (nearEdge) the drain's lines are worked out
+   * in, and a sixteenth of the mist's, so that elsewhere they are not
+   * worked out at all.
    */
   near: uniform(0, 'int'),
   /** The sea's last tiles before the brink tip outward by this, rad, and drop by this, m. */
@@ -83,116 +85,7 @@ export interface MistParams {
   height: number;
 }
 
-/**
- * A ray's two ends and its middle: each one's distance from the centre,
- * metres, and height above the sea, metres; and its length.
- */
-export interface MistRay {
-  r0: number;
-  z0: number;
-  rm: number;
-  zm: number;
-  r1: number;
-  z1: number;
-  length: number;
-}
-
-/** Below this |k w| a piece's exponential is a Taylor series. */
-const LEVEL = 0.02;
-
-/**
- * ∫₀ʷ clamp(a + b u) e^(−max(z + c u, 0) / H) du over a piece in which the
- * clamp and the sea do not change, judged at the piece's middle.
- */
-function piece(
-  t0: number,
-  t1: number,
-  a0: number,
-  da: number,
-  z0: number,
-  dz: number,
-  invH: number,
-): number {
-  const w = t1 - t0;
-  if (!(w > 0)) {
-    return 0;
-  }
-  const tm = 0.5 * (t0 + t1);
-  const am = a0 + da * tm;
-  if (am <= 0) {
-    return 0;
-  }
-  const alpha = am >= 1 ? 1 : a0 + da * t0;
-  const beta = am >= 1 ? 0 : da;
-  if (z0 + dz * tm <= 0) {
-    return alpha * w + 0.5 * beta * w * w;
-  }
-  const e0 = Math.exp(-Math.max(z0 + dz * t0, 0) * invH);
-  const k = dz * invH;
-  if (Math.abs(k * w) < LEVEL) {
-    const w2 = w * w;
-    return (
-      e0 *
-      (alpha * w +
-        ((beta - alpha * k) * w2) / 2 +
-        (((alpha * k * k) / 2 - beta * k) * w2 * w) / 3 +
-        (beta * k * k * w2 * w2) / 8)
-    );
-  }
-  const g0 = alpha / k + beta / (k * k);
-  const g1 = Math.exp(-k * w) * ((alpha + beta * w) / k + beta / (k * k));
-  return e0 * (g0 - g1);
-}
-
-/** Where a linear value v0 + dv t reaches target, or 2 (beyond the ray) if it never does. */
-function cross(v0: number, dv: number, target: number): number {
-  return Math.abs(dv) > 1e-12 ? Math.min(Math.max((target - v0) / dv, 0), 1) : 2;
-}
-
-/**
- * The mist's optical depth along a ray: the integral of its density from
- * one end to the other, the clear air's left out.
- */
-export function mistDepth(ray: MistRay, p: MistParams): number {
-  const half = ray.length / 2;
-  return (
-    mistDepthLinear(ray.r0, ray.z0, ray.rm, ray.zm, half, p) +
-    mistDepthLinear(ray.rm, ray.zm, ray.r1, ray.z1, half, p)
-  );
-}
-
-/** The optical depth along a piece of ray whose distance from the centre and height are linear along it. */
-function mistDepthLinear(
-  r0: number,
-  z0: number,
-  r1: number,
-  z1: number,
-  len: number,
-  p: MistParams,
-): number {
-  const span = p.lip - p.band;
-  const a0 = (r0 - p.band) / span;
-  const da = (r1 - p.band) / span - a0;
-  if (a0 <= 0 && a0 + da <= 0) {
-    return 0;
-  }
-  const dz = z1 - z0;
-  const invH = 1 / p.height;
-  const x = cross(a0, da, 0);
-  const y = cross(a0, da, 1);
-  const z = cross(z0, dz, 0);
-  const s1 = Math.min(x, y, z, 1);
-  const s3 = Math.min(Math.max(x, y, z), 1);
-  const s2 = Math.min(Math.max(Math.min(x, y), Math.min(Math.max(x, y), z)), 1);
-  const sum =
-    piece(0, s1, a0, da, z0, dz, invH) +
-    piece(s1, s2, a0, da, z0, dz, invH) +
-    piece(s2, s3, a0, da, z0, dz, invH) +
-    piece(s3, 1, a0, da, z0, dz, invH);
-  return p.sigma * len * sum;
-}
-
-/** The density at a point, per metre: the reference the closed form is held to. */
+/** The density at a point, per metre, r metres from the centre and z above the sea. */
 export function mistDensity(r: number, z: number, p: MistParams): number {
   const m = Math.min(Math.max((r - p.band) / (p.lip - p.band), 0), 1);
   return p.sigma * m * Math.exp(-Math.max(z, 0) / p.height);
@@ -203,73 +96,46 @@ export function visualRangeAt(r: number, clear: number, p: MistParams): number {
   return KOSCHMIEDER / (KOSCHMIEDER / clear + mistDensity(r, 0, p));
 }
 
-// The node: the same pieces, op for op.
-
-/** One piece, as piece() works it out: the clamp and the sea judged at its middle. */
-const pieceNode = (
-  t0: Node<'float'>,
-  t1: Node<'float'>,
-  a0: Node<'float'>,
-  da: Node<'float'>,
-  z0: Node<'float'>,
-  dz: Node<'float'>,
-  invH: Node<'float'>,
-): Node<'float'> => {
-  const w = max(t1.sub(t0), 0);
-  const tm = t0.add(t1).mul(0.5);
-  const am = a0.add(da.mul(tm));
-  const full = am.greaterThanEqual(1);
-  const alpha = select(full, float(1), a0.add(da.mul(t0)));
-  const beta = select(full, float(0), da);
-  const flat = alpha.mul(w).add(beta.mul(w).mul(w).mul(0.5));
-  const e0 = exp(
-    max(z0.add(dz.mul(t0)), 0)
-      .mul(invH)
-      .negate(),
-  );
-  const k = dz.mul(invH);
-  const kw = k.mul(w);
-  const w2 = w.mul(w);
-  const taylor = alpha
-    .mul(w)
-    .add(beta.sub(alpha.mul(k)).mul(w2).mul(0.5))
-    .add(alpha.mul(k).mul(k).mul(0.5).sub(beta.mul(k)).mul(w2).mul(w).div(3))
-    .add(beta.mul(k).mul(k).mul(w2).mul(w2).mul(0.125));
-  // Away from level, k is far from 0 and the divisions are safe.
-  const ks = select(abs(kw).lessThan(LEVEL), float(1), k);
-  const g0 = alpha.div(ks).add(beta.div(ks.mul(ks)));
-  const g1 = exp(ks.mul(w).negate()).mul(
-    alpha
-      .add(beta.mul(w))
-      .div(ks)
-      .add(beta.div(ks.mul(ks))),
-  );
-  const sloped = select(abs(kw).lessThan(LEVEL), taylor, g0.sub(g1));
-  const above = z0.add(dz.mul(tm)).greaterThan(0);
-  const value = select(above, e0.mul(sloped), flat);
-  return select(am.lessThanEqual(0).or(w.lessThanEqual(0)), float(0), value);
-};
-
-const crossNode = (v0: Node<'float'>, dv: Node<'float'>, target: number): Node<'float'> =>
-  select(
-    abs(dv).greaterThan(1e-6),
-    clamp(
-      float(target)
-        .sub(v0)
-        .div(select(abs(dv).greaterThan(1e-6), dv, float(1))),
-      0,
-      1,
-    ),
-    float(2),
-  );
-
 /**
- * The pieces of the two halves, four each, worked out one at a time by a
- * loop the shader compiler cannot unroll, its count a uniform: every
- * material's fog carries the mist, and one piece's code compiles faster
- * than eight.
+ * Where the scene lies in the world: its origin, metres east and north of
+ * the centre, and the dome's centre, scene x and z.
  */
-const PIECES = /* @__PURE__ */ uniform(8, 'int');
+export interface MistFrame {
+  origin: [number, number];
+  dome: [number, number];
+}
+
+/** A scene point: x east, y up, z south, metres. */
+export type ScenePoint = [number, number, number];
+
+/** The density at a scene point, as the node takes it. */
+export function mistDensityAt(q: ScenePoint, f: MistFrame, p: MistParams): number {
+  const r = Math.hypot(q[0] + f.origin[0], -q[2] + f.origin[1]);
+  const dx = q[0] - f.dome[0];
+  const dz = q[2] - f.dome[1];
+  return mistDensity(r, q[1] + (dx * dx + dz * dz) / (2 * DOME_RADIUS), p);
+}
+
+/** The mist's optical depth from the eye to p, scene points, at samples points as the node takes it. */
+export function mistAlong(
+  eye: ScenePoint,
+  p: ScenePoint,
+  f: MistFrame,
+  params: MistParams,
+  samples = MIST_SAMPLES,
+): number {
+  const d: ScenePoint = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
+  let sum = 0;
+  for (let i = 0; i < samples; i++) {
+    const u = (i + 0.5) / samples;
+    const t = u * u;
+    sum +=
+      2 * u * mistDensityAt([eye[0] + d[0] * t, eye[1] + d[1] * t, eye[2] + d[2] * t], f, params);
+  }
+  return (sum * Math.hypot(d[0], d[1], d[2])) / samples;
+}
+
+// The node: the same samples, op for op.
 
 /** A scene point's distance from the disk's centre, metres. */
 export const centreDistance = (p: Node<'vec3'>): Node<'float'> =>
@@ -291,53 +157,50 @@ export const nearEdge = (body: () => void): void => {
   Loop({ start: int(0), end: edgeLook.near, type: 'int', condition: '<' }, body);
 };
 
-/** The mist's optical depth between two scene points, the eye first; only near the edge. */
+/** The mist's optical depth between two scene points, the eye first; nothing far from the edge. */
 export const mistBetween = (eye: Node<'vec3'>, p: Node<'vec3'>): Node<'float'> =>
   Fn(() => {
-    const tau = float(0).toVar();
-    nearEdge(() => {
-      const mid = eye.add(p).mul(0.5);
-      const half = length(p.sub(eye)).mul(0.5);
-      const rEye = centreDistance(eye).toVar();
-      const zEye = heightAboveSea(eye).toVar();
-      const rMid = centreDistance(mid).toVar();
-      const zMid = heightAboveSea(mid).toVar();
-      const rP = centreDistance(p).toVar();
-      const zP = heightAboveSea(p).toVar();
-      const span = edgeLook.lip.sub(edgeLook.band);
-      const invH = float(1).div(edgeLook.height);
-      const sum = float(0).toVar();
-      Loop(PIECES, ({ i }: { i: Node<'int'> }) => {
-        // The half, and the piece of it.
-        const second = i.greaterThanEqual(4);
-        const j = i.sub(select(second, int(4), int(0)));
-        const r0 = select(second, rMid, rEye);
-        const z0 = select(second, zMid, zEye);
-        const r1 = select(second, rP, rMid);
-        const z1 = select(second, zP, zMid);
-        const a0 = r0.sub(edgeLook.band).div(span);
-        const da = r1.sub(edgeLook.band).div(span).sub(a0);
-        const dz = z1.sub(z0);
-        const x = crossNode(a0, da, 0);
-        const y = crossNode(a0, da, 1);
-        const z = crossNode(z0, dz, 0);
-        const s1 = min(min(min(x, y), z), 1);
-        const s3 = min(max(max(x, y), z), 1);
-        const s2 = min(max(min(x, y), min(max(x, y), z)), 1);
-        const t0 = select(j.equal(0), float(0), select(j.equal(1), s1, select(j.equal(2), s2, s3)));
-        const t1 = select(j.equal(0), s1, select(j.equal(1), s2, select(j.equal(2), s3, float(1))));
-        sum.addAssign(pieceNode(t0, t1, a0, da, z0, dz, invH));
-      });
-      tau.assign(edgeLook.sigma.mul(half).mul(sum));
-    });
-    return tau;
+    const d = p.sub(eye).toVar();
+    const sum = float(0).toVar();
+    const span = edgeLook.lip.sub(edgeLook.band);
+    const invH = float(1).div(edgeLook.height);
+    // Sixteen turns near the edge, none elsewhere.
+    Loop(
+      { start: int(0), end: edgeLook.near.mul(MIST_SAMPLES), type: 'int', condition: '<' },
+      ({ i }: { i: Node<'int'> }) => {
+        const u = float(i).add(0.5).div(float(MIST_SAMPLES));
+        const q = eye.add(d.mul(u.mul(u)));
+        const share = clamp(centreDistance(q).sub(edgeLook.band).div(span), 0, 1);
+        const fall = exp(max(heightAboveSea(q), 0).mul(invH).negate());
+        sum.addAssign(u.mul(2).mul(share).mul(fall));
+      },
+    );
+    return sum.mul(edgeLook.sigma).mul(length(d)).div(float(MIST_SAMPLES));
   })() as unknown as Node<'float'>;
 
 /**
- * The mist's optical depth from the camera to the vertex, carried to each
- * fragment between: a vertex of a tile, a boat or a column of land lies a
- * few metres from the next, and the mist varies over hundreds, so the
- * integral is worked out once a vertex, not once a fragment.
+ * The mist's optical depth from the camera to a vertex at p, scene
+ * position, carried to each fragment between: a vertex of a tile, a boat or
+ * a column of land lies a few metres from the next, and the mist varies
+ * over hundreds, so it is worked out once a vertex, not once a fragment.
  */
-export const mistAtVertex = (): Node<'float'> =>
-  varying(mistBetween(cameraPosition, positionWorld)) as unknown as Node<'float'>;
+export const mistTo = (p: Node<'vec3'>): Node<'float'> =>
+  varying(mistBetween(cameraPosition, p)) as unknown as Node<'float'>;
+
+/**
+ * The mist from the camera to the sea's surface at scene (x, z), a vertex
+ * of the sea: its waves' height is nothing to the mist's scale height, and
+ * the sea's own position, built from the waves' sum in a loop of its own,
+ * left that loop's body in the fragment shader when the mist was taken to
+ * it.
+ */
+export const mistToSea = (xz: Node<'vec2'>): Node<'float'> => mistTo(seaPoint(xz));
+
+/** The sea's surface at scene (x, z), as the dome curves it. */
+export const seaPoint = (xz: Node<'vec2'>): Node<'vec3'> => {
+  const d = xz.sub(domeCentre);
+  return vec3(xz.x, d.dot(d).mul(-1 / (2 * DOME_RADIUS)), xz.y);
+};
+
+/** The mist from the camera to the vertex, as the scene's fog takes it. */
+export const mistAtVertex = (): Node<'float'> => mistTo(positionWorld);

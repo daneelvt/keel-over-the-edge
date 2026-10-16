@@ -1354,10 +1354,15 @@ Go client's run over the lip, which the page's tests replay.
   (visual range `world.edge.mist.range`, 300 m) and thinning with height as
   e^(−z/40 m); beyond the lip the lip's, and below the sea it does not
   thin. A colour keeps exp(−τ) of its contrast, τ the integral along the
-  ray from the eye (Beer–Lambert), taken in closed form over each half of
-  the ray (`mistDepth`, held to a 1,000-step integral within 2%), in the
-  scene's fog node, the sea's finish and the sky. Its colour is the light
-  table's `mist`, by the hour, beside the horizon's.
+  ray from the eye (Beer–Lambert), taken at sixteen points crowded toward
+  the eye (`mistAlong`; the light let through within 0.02 of a 20,000-step
+  integral's along the rays the game draws), once a vertex, in the scene's
+  fog node, the sea's tiles and far sea, and the sky, whose sphere's rings
+  crowd toward the horizon. It is worked out only while the camera is
+  within 4 km of where the drain begins (`edgeLook.near`, the turns of a
+  loop), so far from the edge no shader works it out; and a short loop
+  keeps the shaders quick to compile on CI's software renderer. Its colour
+  is the light table's `mist`, by the hour, beside the horizon's.
 - **The lip** (`edge/lip.ts`): the sea's lattice stays fixed; a tile whose
   centre is at or beyond the lip is not drawn, the tiles within a tile of
   it sag and tip outward (`world.edge.look.lip`), and the far sea is cut

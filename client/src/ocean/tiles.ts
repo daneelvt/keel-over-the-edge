@@ -29,6 +29,7 @@ import {
 import {
   abs,
   attribute,
+  cameraPosition,
   dot,
   float,
   instanceIndex,
@@ -42,10 +43,12 @@ import {
   textureLoad,
   uniform,
   varying,
+  vec2,
   vec3,
 } from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
 import { beyondLip, lipPlane } from '../edge/lip';
+import { mistBetween, seaPoint } from '../edge/mist';
 import { GUST_LOOK, type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
 import { FIELD_RADIUS, TILE_RADIUS } from './hex';
@@ -117,6 +120,8 @@ export interface TileVaryings {
   lee: Node<'float'>;
   /** The sea's peak period at the tile, s. */
   period: Node<'float'>;
+  /** The band's mist from the camera to the vertex. */
+  mist: Node<'float'>;
 }
 
 export class Tiles {
@@ -191,6 +196,11 @@ export class Tiles {
     const s = positionGeometry.y;
     const y = select(land, plane.x.sub(50), plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH)));
     this.position = vec3(c.x.add(e.x), y, c.y.add(e.y));
+    // The sea's period and the band's mist (mistToSea's) share a varying:
+    // with one more, WebGPU drew the tiles' glints wrong.
+    const periodMist = varying(
+      vec2(periodAt(band)(c), mistBetween(cameraPosition, seaPoint(c.add(e)))),
+    ) as unknown as Node<'vec2'>;
     this.varyings = {
       offset: varying(e),
       side: varying(s),
@@ -202,7 +212,8 @@ export class Tiles {
       gust: varying(gust),
       ground: varying(ground),
       lee: varying(lee),
-      period: varying(periodAt(band)(c)),
+      period: periodMist.x,
+      mist: periodMist.y,
     };
 
     this.mesh = new Mesh(geometry);

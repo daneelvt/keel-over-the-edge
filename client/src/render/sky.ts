@@ -16,6 +16,7 @@
 
 import {
   BackSide,
+  type BufferAttribute,
   Color,
   DirectionalLight,
   HemisphereLight,
@@ -51,7 +52,7 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import { edgeLook, mistBetween } from '../edge/mist';
+import { edgeLook, mistTo } from '../edge/mist';
 import { BODY, SKY } from '../predict/physics';
 import {
   LIGHT_TABLE,
@@ -186,6 +187,25 @@ export const SKY_RADIUS = 3000;
  */
 const SKY_MIST_REACH = 1000;
 
+/**
+ * The sky's sphere, its rings crowded toward the horizon: a ring at
+ * elevation φ is moved to 90° (φ / 90°)², so the first lie a fraction of a
+ * degree apart, where the mist, taken at the vertices, changes most.
+ */
+function skyGeometry(): SphereGeometry {
+  const g = new SphereGeometry(SKY_RADIUS, 96, 64);
+  const p = g.attributes.position as BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i) / SKY_RADIUS;
+    const across = Math.hypot(p.getX(i), p.getZ(i));
+    const up = Math.asin(Math.min(Math.max(y, -1), 1));
+    const moved = (Math.sign(up) * (up * up)) / (Math.PI / 2);
+    const scale = across > 0 ? (SKY_RADIUS * Math.cos(moved)) / across : 0;
+    p.setXYZ(i, p.getX(i) * scale, SKY_RADIUS * Math.sin(moved), p.getZ(i) * scale);
+  }
+  return g;
+}
+
 /** The sky as the module last gave it, in the scene's axes. */
 export interface SkyNow {
   /** Toward the sun and the moon, scene axes. */
@@ -232,12 +252,12 @@ export class Sky {
     const material = skyMaterial();
     material.side = BackSide;
     // The band's mist over the sky, along each direction out to where the
-    // dome has lifted the ray clear of the mist's layer.
+    // dome has lifted the ray clear of the mist's layer: at the vertices.
     const toward = normalize(positionLocal);
-    const mist = mistBetween(cameraPosition, cameraPosition.add(toward.mul(SKY_MIST_REACH)));
+    const mist = mistTo(cameraPosition.add(toward.mul(SKY_MIST_REACH)));
     const seen = mix(edgeLook.colour, skyFull(positionLocal) as Node<'vec3'>, exp(mist.negate()));
     material.fragmentNode = vec4(toLinear(seen), 1);
-    this.mesh = new Mesh(new SphereGeometry(SKY_RADIUS, 48, 24), material);
+    this.mesh = new Mesh(skyGeometry(), material);
     this.mesh.name = 'sky';
     this.mesh.renderOrder = -1;
     this.mesh.frustumCulled = false;

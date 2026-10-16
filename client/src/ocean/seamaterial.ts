@@ -53,7 +53,7 @@ import {
 import type { Node, Texture } from 'three/webgpu';
 import { drainLines } from '../edge/lines';
 import { cutAtLip } from '../edge/lip';
-import { edgeLook, mistBetween } from '../edge/mist';
+import { edgeLook } from '../edge/mist';
 import { look, skyColour, toLinear } from '../render/sky';
 import type { DetailNodes } from './detail';
 import {
@@ -180,11 +180,13 @@ const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   );
 };
 
-/** Blends toward the horizon's colour with distance, and converts to linear light. */
-const finish = (col: Node<'vec3'>, dist: Node<'float'>): Node<'vec4'> => {
+/**
+ * Blends toward the horizon's colour with distance, and the band's mist at
+ * the edge of the world (its depth along the ray, from the vertex), and
+ * converts to linear light.
+ */
+const finish = (col: Node<'vec3'>, dist: Node<'float'>, mist: Node<'float'>): Node<'vec4'> => {
   const hazed = mix(col, look.skyHorizon, smoothstep(look.hazeNear, look.hazeFar, dist));
-  // And the band's mist at the edge of the world, along the ray.
-  const mist = mistBetween(cameraPosition, positionWorld);
   return vec4(toLinear(mix(edgeLook.colour, hazed, exp(mist.negate()))), 1);
 };
 
@@ -376,7 +378,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
         ),
       );
     });
-    return finish(col, dist);
+    return finish(col, dist, v.mist);
   })() as unknown as Node<'vec4'>;
 }
 
@@ -388,6 +390,8 @@ export interface FarVaryings {
   ground: Node<'vec4'>;
   lee: Node<'float'>;
   period: Node<'float'>;
+  /** The band's mist from the camera to the vertex. */
+  mist: Node<'float'>;
 }
 
 /**
@@ -449,6 +453,6 @@ export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'v
       foamColour(N),
       cover.mul(FOAM.cover),
     );
-    return finish(col, dist);
+    return finish(col, dist, v.mist);
   })() as unknown as Node<'vec4'>;
 }
