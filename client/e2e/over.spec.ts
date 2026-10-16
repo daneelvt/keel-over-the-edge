@@ -82,7 +82,9 @@ async function seen(page: Page): Promise<Seen> {
 test('carried over the lip, seen falling, and back at the start', async ({ browser, request }) => {
   const falls = await metric(request, 'keel_falls_total');
   const events = await metric(request, 'keel_persist_events_total');
-  const contexts = [await browser.newContext(), await browser.newContext()];
+  // Small pages, so CI's software renderer draws two of them often enough.
+  const small = { viewport: { width: 320, height: 200 } };
+  const contexts = [await browser.newContext(small), await browser.newContext(small)];
   const [ann, bob] = await Promise.all(contexts.map((c) => c.newPage()));
   if (ann === undefined || bob === undefined) {
     throw new Error('no pages');
