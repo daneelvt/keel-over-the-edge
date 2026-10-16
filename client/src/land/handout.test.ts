@@ -26,6 +26,19 @@ function islands(): Map<number, Int16Array | null> {
   const out = new Map<number, Int16Array | null>();
   for (let n = 0; n < GROUND.chunkSide * GROUND.chunkSide; n++) {
     const [c0, j0] = chunkCorner(n);
+    // A chunk no island or its shallows reaches is all deep water.
+    const [x0, y0] = hexCentre(...cellHex(c0, j0));
+    const reaches = file.islands.some(
+      ([ix, iy, radius]) =>
+        ix + radius + 160 > x0 &&
+        ix - radius - 160 < x0 + GROUND.chunkColumns * 3.47 &&
+        iy + radius + 160 > y0 - 4 &&
+        iy - radius - 160 < y0 + GROUND.chunkRows * 4 + 4,
+    );
+    if (!reaches) {
+      out.set(n, null);
+      continue;
+    }
     const e = new Int16Array(GROUND.chunkHexes);
     let any = false;
     for (let i = 0; i < GROUND.chunkHexes; i++) {
