@@ -189,20 +189,34 @@ test('a stack’s top first shows over the sea where the dome says @long', async
 test('a boat sailed onto the beach is aground, pushed off, and told so @long', async ({ page }) => {
   // 25 m off Port Royal's eastern beach in a metre of water, running onto
   // it before a fresh easterly with the sheet eased.
+  test.setTimeout(180_000);
   await openWorld(page, 180, 300, -Math.PI / 2);
-  await page.evaluate(() => {
+  // A minute of sailing with time held, five frames to each second of it,
+  // however slowly the machine draws; the screen's words written each frame.
+  const a = await page.evaluate(async () => {
     const k = globalThis.keel;
     k.setWind(16, 90);
     k.setControls(0, 0.9);
-    k.thaw();
+    let aground = -1;
+    let pushed = -1;
+    for (let f = 0; f < 300 && pushed < 0; f++) {
+      k.game.hud.flush();
+      k.sailFrames(1, 6);
+      const g = k.aground();
+      if (aground < 0 && g.sailor === 'Aground') {
+        aground = f;
+      }
+      if (aground >= 0 && g.line === 'Pushed off') {
+        pushed = f;
+      }
+      // The land's handout and the mesh worker's answers.
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    const b = k.boat().state;
+    return { ...k.aground(), aground, pushed, at: [b.x, b.y] };
   });
-  await page.waitForFunction(() => globalThis.keel.aground().sailor === 'Aground', null, {
-    timeout: 60_000,
-  });
-  await page.waitForFunction(() => globalThis.keel.aground().line === 'Pushed off', null, {
-    timeout: 30_000,
-  });
-  const a = await page.evaluate(() => globalThis.keel.aground());
+  expect(a.aground, `aground: ${JSON.stringify(a)}`).toBeGreaterThanOrEqual(0);
+  expect(a.pushed, `pushed off: ${JSON.stringify(a)}`).toBeGreaterThan(a.aground);
   expect(a.groundings).toBeGreaterThan(0);
   expect(a.sound).not.toBeNull();
   expect(a.pushes).toBeGreaterThan(0);
