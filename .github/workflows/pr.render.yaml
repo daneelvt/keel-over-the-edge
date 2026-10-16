@@ -50,6 +50,7 @@ jobs:
               - 'internal/**'
               - 'shared/**'
               - 'tools/e2e/**'
+              - 'tools/dev/**'
               - 'tools/internal/**'
               - 'tools/physics/**'
               - 'tools/licences/allowed.txt'
@@ -107,6 +108,8 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Build the physics module (the game's page steps it)
         run: go run ./tools/physics
+      - name: Seed 1's world, for the sandbox's land (land.spec.ts)
+        run: go run ./tools/dev -world 1
       - name: Chromium's headless shell for Playwright
         working-directory: client
         run: npx --no-install playwright install --with-deps --only-shell chromium

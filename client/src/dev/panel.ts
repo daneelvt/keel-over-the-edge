@@ -21,6 +21,7 @@ import './panel.css';
 import { catalog } from '../catalog';
 import type { FleetStats } from '../game/fleet';
 import type { Game } from '../game/game';
+import type { LandStats } from '../land/land';
 import type { BumpTold, Traffic } from '../net/messages';
 import type { Online } from '../net/online';
 import { foamOn } from '../ocean/foam';
@@ -711,6 +712,9 @@ export interface NetNumbers {
   course?: Readonly<Float64Array>;
   /** The last bump told, and how long ago, s. */
   bump?: { told: BumpTold; ago: number } | null;
+  /** The land, and the chunks in the module's slots. */
+  land?: LandStats | null;
+  slots?: number[] | null;
 }
 
 /** The connection's numbers, as lines. */
@@ -736,7 +740,22 @@ export function netLines(n: NetNumbers): string {
     `snapshot          ${n.snapshotBytes} bytes`,
     `resyncs           ${t.resyncs}`,
     ...encounterLines(n),
+    ...landLines(n.land ?? null, n.slots ?? null),
   ].join('\n');
+}
+
+/** The land's lines: the chunks handed, had and drawn, the worker's counts and times. */
+export function landLines(s: LandStats | null, slots: number[] | null): string[] {
+  if (s === null) {
+    return [];
+  }
+  return [
+    `land chunks       ${s.handed} handed, ${s.grids} held, ${s.meshes} built, ${s.drawn} drawn, ${s.inFlight} asked`,
+    `land fetched      ${s.fetched} from the network (${(s.bytes / 1024).toFixed(0)} KB), ${s.cached} from the cache, ${s.failed} failed`,
+    `land times        fetch ${s.fetchMs.toFixed(1)} ms, unpack ${s.unpackMs.toFixed(1)} ms, build ${s.buildMs.toFixed(1)} ms (slowest ${s.slowestBuild.toFixed(1)} ms)`,
+    `land drawn        ${s.triangles} triangles`,
+    `module's chunks   ${slots === null ? 'none: open sea' : slots.map((n) => (n < 0 ? '—' : n)).join(' ')}`,
+  ];
 }
 
 /** The encounters' lines: the wind with its shadow, the course, the last bump. */
@@ -813,6 +832,8 @@ export function openNetPanel(
         lastBump === null
           ? null
           : { told: lastBump.told, ago: (performance.now() - lastBump.at) / 1000 },
+      land: world.land?.stats ?? null,
+      slots: world.land?.slots?.chunks ?? null,
     });
   };
   update();

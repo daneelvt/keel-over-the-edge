@@ -20,10 +20,6 @@ configMapGenerator:
     behavior: merge
     literals:
       - KEEL_PLAY_ORIGIN=https://play.keelovertheedge.com
-      # Phones draw no land yet: the world's terrain is made, stored and
-      # loaded here, and sailed as open sea, so that no boat stops against
-      # an island no one can see.
-      - KEEL_LAND=off
 # The Gateway and the players' route answer the players' host alone.
 patches:
   - target:

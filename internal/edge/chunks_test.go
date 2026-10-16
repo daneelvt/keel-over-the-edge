@@ -3,10 +3,14 @@
 package edge
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"log/slog"
 	"math"
 	"math/rand/v2"
+	"os"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -391,5 +395,82 @@ func BenchmarkHandoutLook(b *testing.B) {
 		for n := range physics.ChunkCount {
 			h.sees(n, x, y)
 		}
+	}
+}
+
+// The handout as Go hands it, for the sandbox's copy of the rule
+// (client/src/land/handout.test.ts): testdata/handout.json holds a world
+// of round islands, each with a ring of shallows, which the client makes
+// again, and the chunks a boat at each of 300 points is handed. Rewrite it
+// with go test ./internal/edge -run HandoutFile -update.
+
+var updateHandout = flag.Bool("update", false, "rewrite testdata/handout.json")
+
+type handoutFile struct {
+	Comment string       `json:"comment"`
+	Islands [][4]float64 `json:"islands"` // east, north, radius, height: shallows 3 m deep 150 m beyond
+	Points  [][2]float64 `json:"points"`
+	Handed  [][]int      `json:"handed"`
+}
+
+// fileIslands are handoutFile's islands as ground: land h high within r of
+// each centre, 3 m of water within r + 150, and 40 m elsewhere; distances
+// as sqrt of the sum of squares, which JavaScript computes the same.
+func fileIslands(islands [][4]float64) func(x, y float64) float64 {
+	return func(x, y float64) float64 {
+		e := -40.0
+		for _, is := range islands {
+			dx, dy := x-is[0], y-is[1]
+			d := math.Sqrt(dx*dx + dy*dy)
+			switch {
+			case d < is[2]:
+				return is[3]
+			case d < is[2]+150:
+				e = -3
+			}
+		}
+		return e
+	}
+}
+
+func TestHandoutFile(t *testing.T) {
+	const path = "testdata/handout.json"
+	islands := [][4]float64{{1580, 528, 100, 30}, {-1100, -100, 30, 0.5}, {-3000, 2500, 200, 60}, {4200, -3700, 60, 12}}
+	g := madeGround(fileIslands(islands))
+	h := NewHandout(g, testPaths(), testRule(t))
+	got := handoutFile{Comment: "Written by go test ./internal/edge -run HandoutFile -update.", Islands: islands}
+	rng := rand.New(rand.NewPCG(5, 6))
+	for range 300 {
+		rad, a := 6000*math.Sqrt(rng.Float64()), 2*math.Pi*rng.Float64()
+		x, y := math.Round(rad*math.Cos(a)*4)/4, math.Round(rad*math.Sin(a)*4)/4
+		var handed []int
+		for n := range physics.ChunkCount {
+			if h.sees(n, x, y) {
+				handed = append(handed, n)
+			}
+		}
+		got.Points = append(got.Points, [2]float64{x, y})
+		got.Handed = append(got.Handed, handed)
+	}
+	if *updateHandout {
+		data, err := json.Marshal(got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want handoutFile
+	if err := json.Unmarshal(data, &want); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal("the handout differs from testdata/handout.json: rewrite it with -update")
 	}
 }

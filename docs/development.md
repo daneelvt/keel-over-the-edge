@@ -487,7 +487,7 @@ change begins. The client keeps the latest in the physics module
 (`client/src/predict/weather.ts`, `internal/client`), and before each step
 it predicts or replays asks the module for the wind at its boat at that
 step's tick (`windAt`), as the simulation does for every boat. The snapshot
-carries no wind (layout 6). In a gusty spell and through a change the Go
+carries no wind. In a gusty spell and through a change the Go
 client sails five minutes with no correction (`go test
 ./internal/edge/edgetest -run 'SailGusts|SailWeatherChange' -v`).
 
@@ -820,7 +820,7 @@ digest and checkpoints (snapshot version 8, now 9) carry the pilot word.
 
 What the autopilot remembers is in `State`: `PilotTrim`, `PilotWay` and
 `PilotOrder`, so a replay from the server's state steers as the server did.
-The snapshot (layout 6) sends them, with the pilot word in force, in a block
+The snapshot sends them, with the pilot word in force, in a block
 after the header only while any is not zero. `Out` gives `PilotHelm` (the
 helm the step sailed with), `PilotOff` (how far it has to turn) and
 `PilotHeading` (the heading it steers for).
@@ -873,9 +873,8 @@ the land's shelter for the wind, and where boats start. It is made once,
 when a world first starts, stored in PostgreSQL as its **bundle**, and read
 back at every start after; the same seed and generator version make the
 same world on every machine. Boats run aground on it and stop against its
-land in the physics step, so the page will predict it once it holds the
-land's chunks; phones draw no land yet, so production sails it as open sea
-(`KEEL_LAND=off`).
+land in the physics step, which the page predicts on the chunks it is
+handed, and the page draws it ([Land on the phone](#land-on-the-phone)).
 
 ### The lattice and the chunks
 
@@ -1050,9 +1049,10 @@ onto a beach, into a cliff and off a lee shore.
 The module holds nine chunks of ground and of shelter (`groundChunk`,
 `shelterChunk`: give a slot to a chunk by number and fill its memory),
 `groundUse` and `shelterUse` say whether steps and `windAt` read them, and
-`hexAt` answers for the lattice. The page does not use them yet. The golden
-scenarios `ground-beach`, `ground-reef`, `ground-cliff`, `ground-pushoff`
-and `lee` sail on terrains Go writes to
+`hexAt` answers for the lattice; the page fills the slots about its boat
+([Land on the phone](#land-on-the-phone)). The golden scenarios
+`ground-beach`, `ground-reef`, `ground-cliff`, `ground-pushoff`, `lee` and
+`shoal` sail on terrains Go writes to
 `internal/physics/testdata/ground/*.terrain` (`go test ./internal/physics
 -run Golden -update`), natively, under Node and on the developer page.
 
@@ -1106,12 +1106,165 @@ again).
 
 ### Land on and off
 
-`KEEL_LAND=off` (production's, until phones draw land) makes, stores and
-loads the terrain, and sails it as open sea: no grounding, the open sea's
-fetch, no shelter. `KEEL_WORLD_SEED` is the seed of a world whose terrain is
-not made yet; the local cluster sets 1, and `tools/dev` passes both through
-from its environment. Land shows nowhere yet: on the local cluster, find it
-by the developer panel's position and the preview's chart.
+`KEEL_LAND=off` makes, stores and loads the terrain, and sails it as open
+sea: no grounding, the open sea's fetch, no shelter, no chunks handed, and
+the Welcome says so (`land` false), so a phone never draws land the server
+does not sail. Land is on everywhere else; the browser tests' keel
+(`tools/e2e`) keeps it off, so that their boats start on the spawn grid.
+`KEEL_WORLD_SEED` is the seed of a world whose terrain is not made yet; the
+local cluster sets 1, and `tools/dev` passes both through from its
+environment.
+
+## Land on the phone
+
+The server hands a game connection the address of a chunk of the land
+only when its boat could see something in it; the page fetches it, keeps
+it, builds it into a mesh of hexagonal columns that rises over the horizon
+with the dome, draws the shallows, surf and the lee on the sea's tiles, and
+steps its prediction on the same ground and shelter as the server.
+
+### What a boat is handed
+
+`internal/edge/chunks.go`: a chunk is handed when its outline is within
+**300 m** of the boat; or one of its cells (the shelter's 8 × 8 hexagons)
+holds land H high within **√(2R·80) + √(2R·H) + 100 m**, the dome's sight of
+it from the highest the camera goes; or sea bed shallower than **10 m**
+within the far sea's reach from there (**696 m**) plus 100 m. The server
+cannot know where the camera is, only how high it can go. Each cell's
+highest land and shallowest bed are found once at start; the boat is looked
+at when it joins and whenever it has moved **20 m**; each chunk is handed
+once a connection, nearest first, in a `Chunks` message (numbers and
+paths). A look over all 256 chunks takes about a microsecond, and one that
+finds nothing allocates nothing. The numbers are `world.handout` in
+`shared/catalog/world.yaml`, the dome's radius and the far sea's reach with
+them, which the client's tests hold to the page's. A chunk is about a
+kilometre square, so a modified client knows of land a few hundred metres,
+and at most about 1.4 km, before it could be seen; never further.
+
+### The addresses, and serving them
+
+`/w/<world id>/c/<n>.<mac>.bin`: mac is the first 128 bits of HMAC-SHA-256,
+under the world's **chunk key**, of the world's 16 bytes and the chunk's
+number (two bytes, little-endian), in unpadded base64url. The key is 32
+random bytes in `world_bundle.chunk_key` (`00006_chunk_key.sql`), made with
+the bundle; a world stored before keys gets one at its next start, in one
+statement fenced by the lease. It is never logged or sent. The server sends
+whole paths; the client never makes one.
+
+`GET /w/{world}/c/{file}` (`internal/api/chunks.go`) needs no session and
+reads no database: the payloads are held in memory (about 2.1 MB). A good
+address answers the payload with `Cache-Control: public, max-age=31536000,
+immutable` and no cookie; HEAD, ranges and `If-None-Match` work; any other
+address under `/w/` (another world, a chunk off the grid, a mac one bit
+wrong, by `hmac.Equal`) answers 404 with `Cache-Control: no-store`.
+`robots.txt` keeps crawlers off `/w/`. The access log records the route,
+never the address. Cloudflare caches `/w/` as the origin says (a rule beside
+`/assets/`), with Smart Tiered Cache on (`infra/tofu/rules.tf`), so the
+origin sends a chunk about once. Vite proxies `/w/` in development.
+
+Metrics: `keel_chunks_handed_total`, `keel_chunk_requests_total{result="ok"|"refused"}`
+and `keel_chunk_bytes_total`, the origin's bytes, which are Cloudflare's
+misses: handed against requested says how well the edge caches.
+
+### The mesh worker
+
+`client/src/workers/mesh`: given a chunk's path, it looks it up in
+**CacheStorage** (`chunks-<world id>`, every other world's deleted on a
+Welcome of another), else fetches it and keeps it; unpacks it with
+`DecompressionStream('gzip')`; checks its header (magic, format, the
+world's id, the chunk's number), refusing anything else; builds its mesh;
+and transfers the mesh, the elevations, surfaces and shelter to the page.
+A fetch that fails is tried again after 1, 2, 4, 8 and 16 s, holding up no
+other; a 404 is final. Without CacheStorage, every chunk is fetched. The
+page (`client/src/land/land.ts`) asks for at most **four** at once, nearest
+first, lets a chunk's mesh go beyond **2 km** and its grids beyond
+**1.5 km**, and asks again (from the cache) if the boat comes back
+(`world.look.keepMeshes`, `keepGrids`). The worker remembers each chunk's
+edges, so a chunk built after its neighbour draws no wall where their land
+meets.
+
+### The land's mesh and look
+
+Each chunk is **one mesh**, in the chunk's own coordinates from its
+south-western hexagon (exact in 32-bit floats anywhere on the disk): each
+land hexagon a column, its top a hexagon of four triangles at its drawn
+height, its sides only toward lower neighbours, down to **2 m below the
+sea** at the shore. Heights are drawn in **terraces of 0.8 m**, to the
+nearest (land under 0.8 m at its own height); the physics never sees them.
+Port Royal's chunk is about 82,000 triangles and 3 MB of buffers, built in
+about 6 ms under Node. Each vertex carries its surface's colour
+(`world.surfaces[].look`, top and side, the side darker toward its foot,
+each hexagon shaded a little its own way), and whether it is a top; the
+material (`land/material.ts`, from the factory, with the bend) draws the
+tops with the sea tiles' dark seam and lit bevel, found in the fragment by
+rounding to the lattice, and lights everything by the hour, flat-shaded;
+no textures. A mesh is drawn only when it is in the camera's view, its box
+widened down by the dome's drop, and its highest land is above the horizon
+from the camera. Solid things, land and boats, fade toward the horizon by
+**Koschmieder's law**, keeping exp(−3.912 d / V) of their contrast, V = 6 km
+(the daylight table's `visualRange`); the sea keeps its own blend.
+
+### The sea against the land
+
+- **The ground window** (`land/ground.ts`): a texture of 448 × 384
+  hexagons about the camera (about ±775 m), a texel each: the depth in
+  decimetres, the land's height, the bed's surface; filled from the grids
+  held, moved when the camera has gone 200 m.
+- **Waves feel the depth** (`ocean/shore.ts`, `physics/sea.go`): the boat
+  band at a hexagon is scaled by f = min(1, γ h / Hs), γ = 0.5
+  (`weather.sea.breaking`; Hs/h of 0.4–0.5 in the inner surf zone), 0 on
+  land; where h ≥ Hs/γ f is exactly 1 and nothing changes, bit for bit. The
+  physics step scales the effective wave under a hull by f at its hexagon,
+  `SeaSample` and `WaveUnder` the same, so the server, the prediction and
+  the GPU agree. The tile pass scales each tile's plane by f at its centre
+  and writes each tile's depth, f and land to a third block of rows; a tile
+  over land is not drawn; the far sea is capped per vertex.
+- **The shallows**: the bed's colour (`world.surfaces[].look.bed`) through
+  the water by exp(−2 K h), K = 0.15 /m (`world.look.attenuation`).
+- **Surf**: where f < 1 the waves break: foam in bands that run shoreward
+  once a peak period, placed by the depth so that they follow the coast,
+  more on a surface with a `crest` (the reef's), less in the lee, held
+  within each tile.
+- **The lee** (`land/shelter.ts`): the shelter's factor for the mean wind
+  over 64 × 64 cells about the camera, from the module (`shelterGrid`),
+  refreshed once a second or when the wind turns 5°; it scales the gust
+  patches, the ripples and the whitecaps. The wind readout, the gust ring
+  and dirty air read the sheltered wind (`windPoint`, `windSample`).
+  The waves that move boats in the lee are still the fetch's.
+
+### The prediction on land
+
+On a Welcome with `land`, the page writes the catalog's grounding into the
+module and turns on `groundUse` and `shelterUse`; the **nine slots** follow
+the boat's chunk and its neighbours, written from the grids held. A chunk
+not held is deep water and open wind, and the server corrects whatever
+differs. The snapshot carries `GroundTimer` in a ground block while it is
+not zero (layout 7), so the phone pushes off on the server's tick:
+`internal/edge/edgetest` sails a boat onto a beach and off it with no
+correction. On the phone: a **scrape** as the hull first runs onto a soft
+bottom, a **knock** against land or rock (`art/sound/scrape.json`,
+`audio/ground.ts`), the camera's **shake** against land, **"Aground"**
+while it lies there, **"Pushed off"** after a push, and the boat drawn at
+once where it was pushed, not slid there. The start screen gives way once
+the chunks handed within 300 m are had, or after 3 s. A boat restored from
+a checkpoint onto land starts again at the start.
+
+### Looking at it
+
+```sh
+go run ./tools/dev -world 7      # writes .dev/worlds/7.world, then:
+# https://localhost:5173/?sandbox&world=7   seed 7's world in the sandbox, no server
+curl -X POST 'http://127.0.0.1:9090/debug/place?east=500&north=71&heading=270'   # with KEEL_DEV_COMMANDS=1
+```
+
+`?sandbox&world=<seed>` sails a world file offline: the boat at its start,
+its chunks handed by the server's rule written again in TypeScript
+(`land/handout.ts`, held to Go's by `internal/edge/testdata/handout.json`).
+`POST /debug/place` (internal listener, `KEEL_DEV_COMMANDS=1`) moves the
+first player's boat, or the account's given as `account=`, to a point at
+rest. The developer panel lists the chunks handed, held, built and drawn,
+fetched and cached, and their times. `client/e2e/land.spec.ts` runs on seed
+1's world, which `pr.render` makes in the job.
 
 ## Waves
 
