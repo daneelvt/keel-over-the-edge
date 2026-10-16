@@ -193,7 +193,7 @@ const SKY_MIST_REACH = 1000;
  * degree apart, where the mist, taken at the vertices, changes most.
  */
 function skyGeometry(): SphereGeometry {
-  const g = new SphereGeometry(SKY_RADIUS, 96, 64);
+  const g = new SphereGeometry(SKY_RADIUS, 48, 40);
   const p = g.attributes.position as BufferAttribute;
   for (let i = 0; i < p.count; i++) {
     const y = p.getY(i) / SKY_RADIUS;
