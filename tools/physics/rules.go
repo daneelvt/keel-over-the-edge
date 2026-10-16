@@ -41,6 +41,58 @@ var bannedBuiltins = []string{"append", "make", "new", "panic", "recover", "prin
 // float64ToInt is the one function allowed to convert floats to integers.
 const float64ToInt = "toInt32"
 
+// generatorMath are the functions of package math the world generator may
+// call besides exactMath: a maximum and a minimum round nothing.
+var generatorMath = []string{"Max", "Min"}
+
+// checkGenerator checks the world generator's Go files (tests aside) by the
+// float rules alone: what makes a seed's world the same on every machine.
+// It may allocate, keep maps and use closures; it may not start goroutines
+// or use channels, range over a map, whose order varies, call a math
+// function that differs between machines, convert a float to an integer
+// outside toInt32, or add to a product that is not rounded first.
+func checkGenerator(dir string) ([]string, error) {
+	fset := token.NewFileSet()
+	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		return nil, err
+	}
+	var files []*ast.File
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, parser.ParseComments|parser.SkipObjectResolution)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no Go files in %s", dir)
+	}
+	c := &checker{fset: fset, generator: true}
+	c.info = &types.Info{
+		Types: map[ast.Expr]types.TypeAndValue{},
+		Uses:  map[*ast.Ident]types.Object{},
+	}
+	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
+	if _, err := conf.Check(files[0].Name.Name, fset, files, c.info); err != nil {
+		return nil, err
+	}
+	for _, f := range files {
+		for _, d := range f.Decls {
+			fn, _ := d.(*ast.FuncDecl)
+			c.fn = ""
+			if fn != nil {
+				c.fn = fn.Name.Name
+			}
+			ast.Inspect(d, c.visit)
+		}
+	}
+	return c.problems, nil
+}
+
 // checkRules checks the Go files of the package in dir (tests aside): its
 // imports against the list, and, when strict, every other rule. The
 // module's entry point is held only to its import list.
@@ -104,6 +156,9 @@ type checker struct {
 	info     *types.Info
 	fn       string // the function being walked
 	problems []string
+	// generator holds the code to the float rules alone, as the world
+	// generator is (checkGenerator).
+	generator bool
 }
 
 func (c *checker) report(pos token.Pos, format string, args ...any) {
@@ -120,7 +175,9 @@ func (c *checker) visit(n ast.Node) bool {
 	case *ast.GoStmt:
 		c.report(n.Pos(), "a goroutine; the step runs on one thread")
 	case *ast.DeferStmt:
-		c.report(n.Pos(), "defer; it may allocate")
+		if !c.generator {
+			c.report(n.Pos(), "defer; it may allocate")
+		}
 	case *ast.SelectStmt, *ast.SendStmt, *ast.ChanType:
 		c.report(n.Pos(), "a channel; the step runs on one thread")
 	case *ast.UnaryExpr:
@@ -128,9 +185,19 @@ func (c *checker) visit(n ast.Node) bool {
 			c.report(n.Pos(), "a channel; the step runs on one thread")
 		}
 	case *ast.MapType:
-		c.report(n.Pos(), "a map; its order and its allocations are not fixed")
+		if !c.generator {
+			c.report(n.Pos(), "a map; its order and its allocations are not fixed")
+		}
 	case *ast.FuncLit:
-		c.report(n.Pos(), "a function literal; a closure may allocate")
+		if !c.generator {
+			c.report(n.Pos(), "a function literal; a closure may allocate")
+		}
+	case *ast.RangeStmt:
+		if t, ok := c.info.Types[n.X]; ok {
+			if _, isMap := t.Type.Underlying().(*types.Map); isMap {
+				c.report(n.Pos(), "ranges over a map, whose order differs from run to run")
+			}
+		}
 	case *ast.SelectorExpr:
 		c.checkMath(n)
 	case *ast.CallExpr:
@@ -161,7 +228,7 @@ func (c *checker) checkMath(sel *ast.SelectorExpr) {
 	case *types.Const:
 		return
 	case *types.Func:
-		if slices.Contains(exactMath, obj.Name()) {
+		if slices.Contains(exactMath, obj.Name()) || c.generator && slices.Contains(generatorMath, obj.Name()) {
 			return
 		}
 		c.report(sel.Pos(), "math.%s does not give the same bits on every machine; use the package's own function or one of math.%s",
@@ -172,7 +239,7 @@ func (c *checker) checkMath(sel *ast.SelectorExpr) {
 }
 
 func (c *checker) checkCall(call *ast.CallExpr) {
-	if id, ok := ast.Unparen(call.Fun).(*ast.Ident); ok {
+	if id, ok := ast.Unparen(call.Fun).(*ast.Ident); ok && !c.generator {
 		if b, ok := c.info.Uses[id].(*types.Builtin); ok && slices.Contains(bannedBuiltins, b.Name()) {
 			c.report(call.Pos(), "%s; a step must not allocate or stop", b.Name())
 		}

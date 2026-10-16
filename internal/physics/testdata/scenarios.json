@@ -1,5 +1,5 @@
 {
-  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state and Out with golden.json. params are the Jolly boat's, as the catalog gives them (catalog_test.go checks they match). Winds are 10 m up, in m/s. A change applies before the step it names, counting from 0, and keeps its values until the next change. steer starts a heading-hold to that heading, in radians, which sets the helm before every step to clamp(2 × (heading off course, wrapped to ±π) − 0.8 × yaw rate, −1, 1); a change that sets the helm stops it. The random scenario's changes were drawn once, with seed 3, and are kept as data. A scenario with a sea sails in waves: sea is the catalog's sea values (catalog_test.go checks them too), and the scenario's own sea a window of sea areas, size a side from the area at column col and row row, each area's inputs in whole steps (the wind's speed in 0.01 m/s, the direction it comes from in 65536ths of a turn, the fetch in metres), row by row from the south-west, with the tick of step 0; a change's areas replace them all. The random-sea scenario's changes were drawn once, with seed 5. A scenario with a weather sails in spells of weather: wind is the catalog's wind values (catalog_test.go checks them), and the scenario's weather the spells in play, each in the whole numbers the wire carries, with the tick of step 0; before every step the wind is the wind at the boat at the step's tick, and env is not used. A change's spells replace them all. The random-weather scenario's spells and changes were drawn once, with seed 7. The pilot scenarios sail on the autopilot: the control's pilot, target, order and way are the whole numbers the wire carries, and env's meanFrom is the mean wind it steers by.",
+  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state and Out with golden.json. params are the Jolly boat's, as the catalog gives them (catalog_test.go checks they match). Winds are 10 m up, in m/s. A change applies before the step it names, counting from 0, and keeps its values until the next change. steer starts a heading-hold to that heading, in radians, which sets the helm before every step to clamp(2 × (heading off course, wrapped to ±π) − 0.8 × yaw rate, −1, 1); a change that sets the helm stops it. The random scenario's changes were drawn once, with seed 3, and are kept as data. A scenario with a sea sails in waves: sea is the catalog's sea values (catalog_test.go checks them too), and the scenario's own sea a window of sea areas, size a side from the area at column col and row row, each area's inputs in whole steps (the wind's speed in 0.01 m/s, the direction it comes from in 65536ths of a turn, the fetch in metres), row by row from the south-west, with the tick of step 0; a change's areas replace them all. The random-sea scenario's changes were drawn once, with seed 5. A scenario with a terrain sails on it: ground is the catalog's grounding values, the surfaces' friction by their index (catalog_test.go checks them), and the terrain, its ground and the land's shelter, is testdata/ground/<terrain>.terrain, which go test -run Golden -update writes from terrain_test.go. A scenario with a weather sails in spells of weather: wind is the catalog's wind values (catalog_test.go checks them), and the scenario's weather the spells in play, each in the whole numbers the wire carries, with the tick of step 0; before every step the wind is the wind at the boat at the step's tick, and env is not used. A change's spells replace them all. The random-weather scenario's spells and changes were drawn once, with seed 7. The pilot scenarios sail on the autopilot: the control's pilot, target, order and way are the whole numbers the wire carries, and env's meanFrom is the mean wind it steers by.",
   "sea": {
     "shortest": 8,
     "longest": 76,
@@ -32,6 +32,15 @@
     "waveTimeConstant": 240,
     "waveSample": 30,
     "waveSamples": 40
+  },
+  "ground": {
+    "friction": [0.4, 0.5, 0.5, 0.5, 0.6, 0.45, 0.5, 0.5, 0, 0, 0, 0, 0, 0, 0, 0],
+    "stillSpeed": 0.2,
+    "stillTime": 5,
+    "pushDepth": 1,
+    "pushReach": 40,
+    "restitution": 0.3,
+    "landFriction": 0.2
   },
   "params": {
     "displacement": 160,
@@ -1087,6 +1096,52 @@
         {"at": 2400, "control": {"pilot": 0, "target": 0, "helm": 0.1}},
         {"at": 3000, "control": {"pilot": 1, "target": 40000}}
       ]
+    },
+    {
+      "name": "ground-beach",
+      "steps": 3000,
+      "state": {"x": -40, "heading": 1.5707963267948966, "surge": 2.5, "sheetLimit": 0.6},
+      "control": {"sheet": 0.45},
+      "env": {"windSpeed": 6.2, "windFrom": 0, "meanFrom": 0},
+      "terrain": "beach",
+      "changes": [{"at": 0, "steer": 1.5707963267948966}]
+    },
+    {
+      "name": "ground-reef",
+      "steps": 3000,
+      "state": {"x": -40, "heading": 1.5707963267948966, "surge": 2.5, "sheetLimit": 0.6},
+      "control": {"sheet": 0.45},
+      "env": {"windSpeed": 6.2, "windFrom": 0, "meanFrom": 0},
+      "terrain": "reef",
+      "changes": [{"at": 0, "steer": 1.5707963267948966}]
+    },
+    {
+      "name": "ground-cliff",
+      "steps": 1200,
+      "state": {"x": 30, "heading": 1.5707963267948966, "surge": 2, "sheetLimit": 1.4},
+      "control": {"sheet": 1},
+      "env": {"windSpeed": 5, "windFrom": -1.5707963267948966, "meanFrom": -1.5707963267948966},
+      "terrain": "cliff",
+      "changes": [{"at": 0, "steer": 1.5707963267948966}]
+    },
+    {
+      "name": "ground-pushoff",
+      "steps": 1800,
+      "state": {"x": 148, "heading": 1.5707963267948966, "sheetLimit": 1.4},
+      "control": {"sheet": 1},
+      "env": {"windSpeed": 5.1, "windFrom": -1.5707963267948966, "meanFrom": -1.5707963267948966},
+      "terrain": "beach",
+      "changes": [{"at": 160, "control": {"helm": 0, "sheet": 0.2}}]
+    },
+    {
+      "name": "lee",
+      "steps": 1800,
+      "state": {"x": 60, "y": -150, "heading": 0, "surge": 2, "sheetLimit": 0.7},
+      "control": {"helm": 0, "sheet": 0.45},
+      "env": {"windSpeed": 0, "windFrom": 0},
+      "weather": {"tick": 1000, "spells": [{"begin": 0, "change": 0, "start": 0, "length": 0, "regime": 0, "steady": 1, "speed": 600, "from": 16384, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0}]},
+      "terrain": "lee",
+      "changes": [{"at": 0, "steer": 0}]
     }
   ]
 }

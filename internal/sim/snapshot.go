@@ -44,7 +44,7 @@ import (
 //
 // A checkpoint stores this snapshot, so a world is restored only by a build
 // that reads its version.
-const SnapshotVersion = 8
+const SnapshotVersion = 9
 
 // AppendSnapshot appends f's snapshot to dst.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {

@@ -80,6 +80,11 @@ Configured from the environment:
   KEEL_BELL            how long the world sails on once players are told the
                        server is restarting, from 0s to 10s (default 3s)
   KEEL_DEV_SAILORS     scripted sailors to sail (default 0)
+  KEEL_LAND            on: boats sail the world's land, run aground on it and
+                       feel its shelter and fetch; off: its terrain is made,
+                       stored and loaded, and sailed as open sea (default on)
+  KEEL_WORLD_SEED      the seed a world's terrain is made from when it has
+                       none (default one drawn at random)
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
                        POST /debug/wind?knots=…&from=… (a steady wind),
                        POST /debug/weather?regime=… (a regime held),
@@ -113,6 +118,9 @@ type database interface {
 	CheckSchema(ctx context.Context) (int64, error)
 	ActiveOrFirstWorld(ctx context.Context, epoch time.Time) (store.World, error)
 	LatestCheckpoint(ctx context.Context, world [16]byte) (store.Checkpoint, error)
+	WorldSeed(ctx context.Context, world [16]byte) (seed uint64, generator int, ok bool, err error)
+	LoadBundle(ctx context.Context, world [16]byte) (*store.Bundle, error)
+	StoreBundle(ctx context.Context, world [16]byte, epoch int64, b *store.Bundle) error
 	Stats() store.PoolStats
 	Close()
 }
@@ -159,6 +167,8 @@ type serveOptions struct {
 	// stopping runs as the server begins to stop, once it is no longer
 	// ready.
 	stopping func()
+	// generate makes a world's terrain; the catalog's generator unless set.
+	generate generator
 }
 
 // runServer runs the game until ctx ends, then stops it in order.
@@ -167,7 +177,8 @@ type serveOptions struct {
 // can be observed throughout; then it waits for the database, not ready
 // meanwhile, and checks its schema; then it waits for the simulation's
 // lease, so only one process ever runs the world, and raises its epoch;
-// then it loads the world being sailed and restores it from its checkpoint,
+// then it loads the world being sailed, and its terrain, which it makes
+// first if the world has none, and restores it from its checkpoint,
 // if the checkpoint is recent and of this build's formats; then the world,
 // its tick loop, the world's writer and the game connection's encoder;
 // then the public listeners; and only then is it ready.
@@ -342,7 +353,27 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
-	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit})
+	if opt.generate == nil {
+		opt.generate = catalogGenerator(cat)
+	}
+	bundle, err := worldTerrain(ctx, db, sailed, leaseEpoch, cfg, opt.generate, health, log)
+	if err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, err)
+	}
+	health.Waiting("")
+	health.Beat()
+	var terrain *sim.Terrain
+	var terrainDigest [32]byte
+	if cfg.Land {
+		terrain = bundle.Terrain(cat.PrepareGround())
+		terrainDigest = bundle.Digest
+	} else {
+		log.Warn("land is off: the world's terrain is sailed as open sea")
+	}
+	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: terrain})
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
@@ -353,9 +384,10 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	b := world.Bus()
 	inputs := replay.New(replay.Config{
 		Frames: b.Frames,
-		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch, Grace: world.Grace(), Limit: world.Limit()},
-		Dir:    cfg.ReplayDir,
-		Log:    log,
+		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch, Grace: world.Grace(), Limit: world.Limit(),
+			Seed: bundle.Seed, Generator: bundle.Generator, Terrain: terrainDigest},
+		Dir: cfg.ReplayDir,
+		Log: log,
 	})
 	replayHandler.set(inputs)
 	if weatherHandler != nil {

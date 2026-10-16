@@ -9,6 +9,41 @@ import (
 	"context"
 )
 
+// iteratorForInsertChunks implements pgx.CopyFromSource.
+type iteratorForInsertChunks struct {
+	rows                 []InsertChunksParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForInsertChunks) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForInsertChunks) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].WorldID,
+		r.rows[0].Chunk,
+		r.rows[0].Payload,
+		r.rows[0].Digest,
+	}, nil
+}
+
+func (r iteratorForInsertChunks) Err() error {
+	return nil
+}
+
+func (q *Queries) InsertChunks(ctx context.Context, arg []InsertChunksParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"world_chunk"}, []string{"world_id", "chunk", "payload", "digest"}, &iteratorForInsertChunks{rows: arg})
+}
+
 // iteratorForInsertEvents implements pgx.CopyFromSource.
 type iteratorForInsertEvents struct {
 	rows                 []InsertEventsParams
@@ -49,4 +84,45 @@ func (r iteratorForInsertEvents) Err() error {
 
 func (q *Queries) InsertEvents(ctx context.Context, arg []InsertEventsParams) (int64, error) {
 	return q.db.CopyFrom(ctx, []string{"event"}, []string{"world_id", "tick", "kind", "account_id", "boat", "other_account_id", "other_boat", "article", "fault", "x", "y"}, &iteratorForInsertEvents{rows: arg})
+}
+
+// iteratorForInsertPlaces implements pgx.CopyFromSource.
+type iteratorForInsertPlaces struct {
+	rows                 []InsertPlacesParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForInsertPlaces) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForInsertPlaces) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].WorldID,
+		r.rows[0].Number,
+		r.rows[0].Kind,
+		r.rows[0].Name,
+		r.rows[0].Biome,
+		r.rows[0].Size,
+		r.rows[0].X,
+		r.rows[0].Y,
+		r.rows[0].Area,
+		r.rows[0].Highest,
+	}, nil
+}
+
+func (r iteratorForInsertPlaces) Err() error {
+	return nil
+}
+
+func (q *Queries) InsertPlaces(ctx context.Context, arg []InsertPlacesParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"place"}, []string{"world_id", "number", "kind", "name", "biome", "size", "x", "y", "area", "highest"}, &iteratorForInsertPlaces{rows: arg})
 }

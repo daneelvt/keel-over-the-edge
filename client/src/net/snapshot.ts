@@ -30,10 +30,12 @@ export const FAR_SAMPLED = 1;
 export const PILOT_HELD = 2;
 /** A snapshot's margin when no input arrived since the one before. */
 export const NO_MARGIN = -32768;
-/** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's. */
-export const STATE_FIELDS = 22;
-/** Those of them the header holds; the autopilot's block holds the rest. */
+/** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground. */
+export const STATE_FIELDS = 23;
+/** Those of them the header holds; the autopilot's block holds those up to WIRE_FIELDS. */
 export const BOAT_FIELDS = 19;
+/** Those the snapshot carries: how long the boat has been aground is not sent, and reads as 0. */
+export const WIRE_FIELDS = 22;
 
 /** A snapshot's header: the player's own boat as the server last stepped it. */
 export interface OwnSnapshot {
@@ -183,9 +185,10 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
     out.way = v.getUint8(PILOT_WAY);
     out.order = v.getUint8(PILOT_ORDER);
     out.target = v.getUint16(PILOT_TARGET, true);
-    for (let i = BOAT_FIELDS; i < STATE_FIELDS; i++) {
+    for (let i = BOAT_FIELDS; i < WIRE_FIELDS; i++) {
       s[i] = v.getFloat64(PILOT_STATE + 8 * (i - BOAT_FIELDS), true);
     }
+    s.fill(0, WIRE_FIELDS);
   } else {
     out.mode = 0;
     out.way = 0;
@@ -201,7 +204,7 @@ export function pilotHeld(s: OwnSnapshot): boolean {
   if (s.mode !== 0 || s.way !== 0 || s.order !== 0 || s.target !== 0) {
     return true;
   }
-  for (let i = BOAT_FIELDS; i < STATE_FIELDS; i++) {
+  for (let i = BOAT_FIELDS; i < WIRE_FIELDS; i++) {
     const x = s.state[i] ?? 0;
     if (x !== 0 || Object.is(x, -0)) {
       return true;
@@ -240,7 +243,7 @@ export function writeSnapshot(s: OwnSnapshot, v: DataView): number {
   v.setUint8(PILOT_WAY, s.way);
   v.setUint8(PILOT_ORDER, s.order);
   v.setUint16(PILOT_TARGET, s.target, true);
-  for (let i = BOAT_FIELDS; i < STATE_FIELDS; i++) {
+  for (let i = BOAT_FIELDS; i < WIRE_FIELDS; i++) {
     v.setFloat64(PILOT_STATE + 8 * (i - BOAT_FIELDS), s.state[i] ?? 0, true);
   }
   return MAX_HEADER_SIZE;

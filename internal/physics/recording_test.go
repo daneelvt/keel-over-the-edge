@@ -40,7 +40,7 @@ func TestRecordings(t *testing.T) {
 		readJSON(t, p, &f)
 		for _, sc := range f.Scenarios {
 			t.Run(filepath.Base(p)+"/"+sc.Name, func(t *testing.T) {
-				g, err := runScenario(f.Sea, f.Params, f.Wind, sc.scenario)
+				g, err := runScenario(f.Sea, f.Params, f.Wind, nil, sc.scenario)
 				if err != nil {
 					t.Fatal(err)
 				}

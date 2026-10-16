@@ -132,7 +132,7 @@ func TestPilotByTheLee(t *testing.T) {
 func pilotStep(b *Prepared, s *State, c *Control) Out {
 	e := Env{WindSpeed: 5, WindFrom: 0, MeanFrom: 0}
 	var o Out
-	Step(s, c, &e, nil, b, &o)
+	Step(s, c, &e, nil, nil, b, &o)
 	return o
 }
 
@@ -244,7 +244,7 @@ func TestPilotStepAllocatesNothing(t *testing.T) {
 	c := Control{Sheet: 0.4, Pilot: PilotWind, Target: pilotTarget(60), Order: 1, Way: WayTack}
 	e := Env{WindSpeed: 7, WindFrom: 2, MeanFrom: 2.1}
 	var o Out
-	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, nil, b, &o) }); n != 0 {
+	if n := testing.AllocsPerRun(1000, func() { Step(&s, &c, &e, nil, nil, b, &o) }); n != 0 {
 		t.Errorf("a step on the autopilot allocates %v times", n)
 	}
 }
@@ -258,6 +258,6 @@ func BenchmarkStepPilot(bm *testing.B) {
 	e := Env{WindSpeed: 7, WindFrom: 0}
 	var o Out
 	for bm.Loop() {
-		Step(&s, &c, &e, nil, b, &o)
+		Step(&s, &c, &e, nil, nil, b, &o)
 	}
 }

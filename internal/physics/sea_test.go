@@ -638,7 +638,7 @@ func BenchmarkStepInSea(bm *testing.B) {
 			e := Env{WindSpeed: 7, WindFrom: 0}
 			var o Out
 			for bm.Loop() {
-				Step(&s, &c, &e, &sea.Sea, b, &o)
+				Step(&s, &c, &e, &sea.Sea, nil, b, &o)
 			}
 		})
 	}

@@ -153,7 +153,7 @@ func TestLayout(t *testing.T) {
 
 	ts := string(l.tsFile())
 	for _, want := range []string{"export const LAYOUT_VERSION = 0x", "state: { x: 0, y: 1,", "export const FN = { sin: 0,",
-		"export const ARRAYS = {", "params: { dragArea: 25, rightingLever: 19, outline: 11, normalForce: 19 }", "export const SIZES = { state: 22,",
+		"export const ARRAYS = {", "params: { dragArea: 25, rightingLever: 19, outline: 11, normalForce: 19 }", "export const SIZES = { state: 23,",
 		"seaParams: { shortest: 0,", "components: { omega: 0, k: 256, east: 512, north: 768, phase: 1024, turns: 1280 }", "wave: { height: 0, ahead: 1, across: 2 }",
 		"export const SEA = { components: 256, areaSize: 463, areas: 37, window: 5, slots: 2, fromSteps: 65536, sampleCapacity: 512 }",
 		"export const SEA_SPEED_STEP = 0.01;"} {

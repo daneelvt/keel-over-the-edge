@@ -26,7 +26,7 @@ func TestRestStaysAtRest(t *testing.T) {
 		o Out
 	)
 	for range 300 {
-		Step(&s, &c, &e, nil, b, &o)
+		Step(&s, &c, &e, nil, nil, b, &o)
 	}
 	if s != want {
 		t.Errorf("a boat at rest in no wind moved:\n got  %+v\n want %+v", s, want)
@@ -51,7 +51,7 @@ func TestControlsClamped(t *testing.T) {
 			o Out
 		)
 		for range 120 {
-			Step(&s, &ctl, &e, nil, b, &o)
+			Step(&s, &ctl, &e, nil, nil, b, &o)
 		}
 		if s.Rudder != c.rudder || s.SheetLimit != c.limit {
 			t.Errorf("helm %g, sheet %g: rudder %g, sheet limit %g; want %g, %g", c.helm, c.sheet, s.Rudder, s.SheetLimit, c.rudder, c.limit)
@@ -75,7 +75,7 @@ func TestRandomStaysFinite(t *testing.T) {
 			c = Control{Helm: 2*rng.Float64() - 1, Sheet: rng.Float64()}
 			e = Env{WindSpeed: 45 * knot * rng.Float64(), WindFrom: (2*rng.Float64() - 1) * math.Pi}
 		}
-		Step(&s, &c, &e, nil, b, &o)
+		Step(&s, &c, &e, nil, nil, b, &o)
 		for _, v := range append(fields(&s), fields(&o)...) {
 			if math.IsNaN(v) || math.IsInf(v, 0) {
 				t.Fatalf("step %d: not finite: %+v %+v", i, s, o)
@@ -378,7 +378,7 @@ func TestCapsizeAndRighting(t *testing.T) {
 		// Back in, the sheet comes in at the hauling rate.
 		limit = m.s.SheetLimit
 		m.c.Sheet = 0
-		Step(&m.s, &m.c, &m.e, nil, m.b, &m.o)
+		Step(&m.s, &m.c, &m.e, nil, nil, m.b, &m.o)
 		if d := limit - m.s.SheetLimit; d > m.b.haulRate*Dt*1.000001 {
 			t.Errorf("%g knots: the sheet came in %.2f° in one step", knots, d/deg)
 		}

@@ -22,6 +22,9 @@ type Options struct {
 	// Encounters are how the world's boats meet; nil replays a world of
 	// ghosts. A log must be replayed with what it was recorded with.
 	Encounters *physics.EncounterPrepared
+	// Terrain is the world's land; nil replays open sea. It must be the
+	// terrain the log's header names.
+	Terrain *sim.Terrain
 	// At, if not nil, is called with the world's frame after each tick
 	// replayed, and after each snapshot loaded.
 	At func(*bus.Frame)
@@ -56,7 +59,7 @@ func Run(f *File, opt Options) (Result, error) {
 	if len(f.Segments) == 0 {
 		return res, errors.New("replay: the log has no segment")
 	}
-	w, err := sim.New(sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, Waves: opt.Waves, Weather: opt.Weather, Workers: opt.Workers, Encounters: opt.Encounters, Grace: f.Header.Grace, Limit: f.Header.Limit})
+	w, err := sim.New(sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, Waves: opt.Waves, Weather: opt.Weather, Workers: opt.Workers, Encounters: opt.Encounters, Grace: f.Header.Grace, Limit: f.Header.Limit, Terrain: opt.Terrain})
 	if err != nil {
 		return res, err
 	}

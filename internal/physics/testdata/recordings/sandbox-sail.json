@@ -250,7 +250,8 @@
     "pitchRate": 0,
     "pilotTrim": 0,
     "pilotWay": 0,
-    "pilotOrder": 0
+    "pilotOrder": 0,
+    "groundTimer": 0
    },
    "control": {
     "helm": 0,
@@ -8967,7 +8968,8 @@
     "pitchRate": "0x3faf903e8a0d530a",
     "pilotTrim": "0x3f2d8ee802f2f4a7",
     "pilotWay": "0x3ff0000000000000",
-    "pilotOrder": "0x3ff0000000000000"
+    "pilotOrder": "0x3ff0000000000000",
+    "groundTimer": "0x0000000000000000"
    }
   }
  ]

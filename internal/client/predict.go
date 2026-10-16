@@ -90,13 +90,13 @@ func (p *Predictor) step(tick int64, in Input) {
 	if p.wind.Tick != float64(tick) {
 		physics.WeatherAt(&p.Weather, &p.wind, float64(tick))
 	}
-	e := physics.WindAt(&p.wind, p.State.X, p.State.Y)
+	e := physics.WindAt(&p.wind, p.State.X, p.State.Y, nil)
 	if p.Encounters != nil {
 		if p.Wakes.Shadow(&e, p.State.X, p.State.Y, tick, &p.Weather, p.kind, p.Encounters) > 0 {
 			p.Shadowed++
 		}
 	}
-	physics.Step(&p.State, &c, &e, p.Seas.At(tick), p.kind, &p.out)
+	physics.Step(&p.State, &c, &e, p.Seas.At(tick), nil, p.kind, &p.out)
 }
 
 // Wind is the wind at the boat at the tick its state is after, in full.
@@ -104,7 +104,7 @@ func (p *Predictor) Wind() physics.WindPoint {
 	var t physics.WeatherTick
 	physics.WeatherAt(&p.Weather, &t, float64(p.Tick))
 	var w physics.WindPoint
-	physics.WindPointAt(&t, p.State.X, p.State.Y, &w)
+	physics.WindPointAt(&t, p.State.X, p.State.Y, &w, nil)
 	return w
 }
 

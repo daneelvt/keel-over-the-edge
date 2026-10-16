@@ -71,6 +71,21 @@ type Config struct {
 	// they take from each other and the Articles. nil is a world of
 	// ghosts, whose boats pass through each other in clean air.
 	Encounters *physics.EncounterPrepared
+	// Terrain is the world's land; nil is open sea everywhere.
+	Terrain *Terrain
+}
+
+// Terrain is a world's land: the ground boats run aground on, the land's
+// shelter for the wind, each sea area's fetch, and where boats start.
+type Terrain struct {
+	Ground  *physics.Ground
+	Shelter *physics.Shelter
+	// Fetch is each sea area's fetch, row by row from the south-west, as
+	// physics.SeaAreaCentre numbers them; nil is open water's everywhere.
+	Fetch []physics.Fetch
+	// Start is the start area's places, in order: where new boats appear.
+	// None is the spawn grid south of the centre.
+	Start []physics.State
 }
 
 // A Phase is a part of a tick.
@@ -140,6 +155,12 @@ type World struct {
 
 	workers workers
 
+	// The land: the ground and the shelter a step reads, nil for none, and
+	// the start area's places.
+	ground  *physics.Ground
+	shelter *physics.Shelter
+	start   []physics.State
+
 	// Encounters: their constants, or nil for none; how many cells about
 	// its own a boat looks for wakes; and the contacts phase's room.
 	enc        *physics.EncounterPrepared
@@ -199,9 +220,18 @@ func New(cfg Config) (*World, error) {
 		w.touching = make([]physics.Touching, 0, 256)
 		w.touched = make([]candidate, 0, 256)
 	}
+	if t := cfg.Terrain; t != nil {
+		w.ground, w.shelter, w.start = t.Ground, t.Shelter, t.Start
+		if t.Fetch != nil && len(t.Fetch) != seaAreas {
+			return nil, fmt.Errorf("sim: a fetch for %d sea areas; the world has %d", len(t.Fetch), seaAreas)
+		}
+	}
 	w.weather.Prepared = cfg.Weather.Prepared()
 	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.contactsFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.contacts, w.publish
 	w.sea.init(cfg.Waves, cfg.Weather)
+	if cfg.Terrain != nil {
+		w.sea.fetch = cfg.Terrain.Fetch
+	}
 	f := w.bus.Frames.Latest()
 	f.Tick = cfg.Tick
 	f.Weathers = f.Weathers[:0]
@@ -318,17 +348,26 @@ func spawnAt(p int64) physics.State {
 	}
 }
 
+// placeAt is place p of the world's start: its start area's, if it has
+// one, from the first again past its last; or else the spawn grid's.
+func (w *World) placeAt(p int64) physics.State {
+	if n := int64(len(w.start)); n > 0 {
+		return w.start[p%n]
+	}
+	return spawnAt(p)
+}
+
 // spawn is where a new boat in slot s of f appears: the first place of the
-// spawn grid from its slot's, along the row then the next, with no hull
-// within spawnClear, so that no boat appears inside another. In a world of
+// start from its slot's, along the row then the next, with no hull within
+// spawnClear, so that no boat appears inside another. In a world of
 // ghosts, its slot's place.
 func (w *World) spawn(f *bus.Frame, s int32) physics.State {
 	p := int64(s)
 	if w.enc == nil {
-		return spawnAt(p)
+		return w.placeAt(p)
 	}
 	for end := p + int64(w.capacity); p < end; p++ {
-		st := spawnAt(p)
+		st := w.placeAt(p)
 		free := true
 		for _, o := range f.Live {
 			if o != s && physics.Within(&f.State[o], st.X, st.Y, spawnClear) {
@@ -340,5 +379,5 @@ func (w *World) spawn(f *bus.Frame, s int32) physics.State {
 			return st
 		}
 	}
-	return spawnAt(int64(s))
+	return w.placeAt(int64(s))
 }

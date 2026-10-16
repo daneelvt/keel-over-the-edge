@@ -105,7 +105,7 @@ func stepped(t testing.TB, s physics.State, word bus.Word, e physics.Env) physic
 	t.Helper()
 	c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
 	var o physics.Out
-	physics.Step(&s, &c, &e, nil, &kinds(t)[0], &o)
+	physics.Step(&s, &c, &e, nil, nil, &kinds(t)[0], &o)
 	return s
 }
 
@@ -124,7 +124,7 @@ func steadyEnv(w bus.Weather) physics.Env {
 	wx.Set([]physics.Spell{s})
 	var at physics.WeatherTick
 	physics.WeatherAt(&wx, &at, 0)
-	return physics.WindAt(&at, 0, 0)
+	return physics.WindAt(&at, 0, 0, nil)
 }
 
 // defaultEnv is the wind of a world given no timeline.
@@ -137,7 +137,7 @@ func windAt(w *World, f *bus.Frame, x, y float64) physics.Env {
 	wx.Set(f.SpellsInPlay())
 	var at physics.WeatherTick
 	physics.WeatherAt(&wx, &at, float64(f.Tick))
-	return physics.WindAt(&at, x, y)
+	return physics.WindAt(&at, x, y, nil)
 }
 
 // acct is a test's account n.
@@ -531,7 +531,7 @@ func TestSnapshotRejects(t *testing.T) {
 		t.Fatal("a snapshot was read into a frame of another capacity")
 	}
 	bad := slices.Clone(snap)
-	bad[0] = 9
+	bad[0] = SnapshotVersion + 1
 	if err := ReadSnapshot(bad, g); err == nil {
 		t.Fatal("another version was read")
 	}

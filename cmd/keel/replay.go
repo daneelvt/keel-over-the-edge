@@ -22,17 +22,22 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
-const replayUsage = `usage: keel replay [-dump TICK] [-workers N] FILE
+const replayUsage = `usage: keel replay [-dump TICK] [-workers N] [-world FILE] FILE
 
 Replays an input log through the simulation and checks every digest and
 snapshot in it. Prints "replayed N ticks: identical", or the first tick at
-which the replay differs from the log and exits 1.
+which the replay differs from the log and exits 1. The world's terrain is
+made again from the seed the log names, when this build's generator is the
+one that made it, and checked against the log's digest of it.
 
   -dump TICK   write the world's boats and queue at TICK to stdout as JSON
   -workers N   goroutines stepping boats (default GOMAXPROCS); the result
                never depends on it
+  -world FILE  the world's terrain from a bundle keel worldgen -out wrote,
+               instead of made again
 `
 
 // errDiverged is a replay that differed from its log.
@@ -44,6 +49,7 @@ func replayCmd(args []string, stdout, stderr io.Writer) error {
 	fs.Usage = func() { io.WriteString(stderr, replayUsage) }
 	dump := fs.Int64("dump", math.MinInt64, "")
 	workers := fs.Int("workers", runtime.GOMAXPROCS(0), "")
+	worldFile := fs.String("world", "", "")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
 	}
@@ -77,9 +83,14 @@ func replayCmd(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
+	terrain, err := replayTerrain(h, cat, *worldFile)
+	if err != nil {
+		return err
+	}
+
 	var dumped bool
 	var dumpErr error
-	opt := replay.Options{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: *workers}
+	opt := replay.Options{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: *workers, Terrain: terrain}
 	if *dump != math.MinInt64 {
 		opt.At = func(fr *bus.Frame) {
 			if fr.Tick == *dump && !dumped {
@@ -108,6 +119,42 @@ func replayCmd(args []string, stdout, stderr io.Writer) error {
 	}
 	fmt.Fprintf(out, "replayed %d ticks: identical\n", res.Ticks())
 	return nil
+}
+
+// errTerrain is a log whose terrain this build cannot make again.
+var errTerrain = errors.New("the log's terrain")
+
+// replayTerrain is the terrain the log's world sailed: none if it sailed
+// open sea; the bundle in file if given; or else made again from the log's
+// seed, which only the generator that made it can. Either way its digest
+// must be the log's.
+func replayTerrain(h replay.Header, cat *catalog.Catalog, file string) (*sim.Terrain, error) {
+	if h.Terrain == [32]byte{} {
+		return nil, nil
+	}
+	var b *worldgen.Bundle
+	switch {
+	case file != "":
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+		if b, err = worldgen.ReadFile(data); err != nil {
+			return nil, err
+		}
+	case h.Generator != worldgen.Version:
+		return nil, fmt.Errorf("%w was made by generator %d, and this build has generator %d: give it with -world", errTerrain, h.Generator, worldgen.Version)
+	default:
+		var err error
+		b, err = worldgen.Generate(h.Seed, cat)
+		if err != nil && !errors.Is(err, worldgen.ErrInvalid) {
+			return nil, err
+		}
+	}
+	if b.Digest != h.Terrain {
+		return nil, fmt.Errorf("%w: its digest is %x, the terrain's %s", errTerrain, h.Terrain, b.DigestHex())
+	}
+	return b.Terrain(cat.PrepareGround()), nil
 }
 
 // exact is a float that JSON shows exactly: the shortest decimal that reads

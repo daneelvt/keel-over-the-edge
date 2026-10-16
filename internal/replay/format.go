@@ -36,7 +36,9 @@ import (
 // floats and control words their little-endian bits:
 //
 //	H header    format version, build, catalog, physics layout, capacity,
-//	            epoch (Unix seconds, nanoseconds), grace in ticks, boat limit;
+//	            epoch (Unix seconds, nanoseconds), grace in ticks, boat limit,
+//	            the world's seed and generator version as uvarints, and its
+//	            terrain's digest, 32 bytes, all zero for open sea;
 //	            strings as a uvarint length and bytes
 //	S snapshot  tick, then sim's snapshot of the world after it: a segment starts
 //	T tick      tick, ticks skipped before it, the control words applied
@@ -50,7 +52,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 6
+	formatVersion = 7
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -72,6 +74,11 @@ type Header struct {
 	Grace int64
 	// Limit is the most boats the world held at once; 0 for its capacity.
 	Limit int
+	// Seed and Generator are what made the world's terrain, and Terrain
+	// its digest: all zero if the world sailed in open sea.
+	Seed      uint64
+	Generator int
+	Terrain   [32]byte
 }
 
 // AppendHeader appends the magic and the header record to dst.
@@ -86,6 +93,9 @@ func AppendHeader(dst []byte, h Header) []byte {
 	p = binary.AppendUvarint(p, uint64(h.Epoch.Nanosecond()))
 	p = binary.AppendUvarint(p, uint64(h.Grace))
 	p = binary.AppendUvarint(p, uint64(h.Limit))
+	p = binary.AppendUvarint(p, h.Seed)
+	p = binary.AppendUvarint(p, uint64(h.Generator))
+	p = append(p, h.Terrain[:]...)
 	dst = append(dst, magic...)
 	return appendRecord(dst, kindHeader, p)
 }
@@ -294,6 +304,9 @@ func (f *File) add(kind byte, p *payload) error {
 		f.Header.Epoch = time.Unix(sec, int64(nsec)).UTC()
 		f.Header.Grace = int64(p.count(math.MaxInt64))
 		f.Header.Limit = int(p.count(uint64(f.Header.Capacity)))
+		f.Header.Seed = p.uvarint()
+		f.Header.Generator = int(p.count(math.MaxInt32))
+		p.bytes(f.Header.Terrain[:])
 		if p.err == nil && f.Header.Capacity < 1 {
 			p.err = errors.New("no capacity")
 		}

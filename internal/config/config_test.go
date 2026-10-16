@@ -39,7 +39,7 @@ func TestLoadValid(t *testing.T) {
 	want := Config{
 		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://192.168.1.20:5173",
 		AgentsAddr: "127.0.0.1:8081", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
-		BoatLimit: DefaultBoatLimit, Bell: DefaultBell,
+		BoatLimit: DefaultBoatLimit, Bell: DefaultBell, Land: true,
 	}
 	if c != want {
 		t.Errorf("defaults %+v, want %+v", c, want)
@@ -69,6 +69,8 @@ func TestLoadValid(t *testing.T) {
 		"KEEL_DEV_SAILORS":   "1000",
 		"KEEL_BOAT_LIMIT":    "2",
 		"KEEL_BELL":          "0",
+		"KEEL_LAND":          "off",
+		"KEEL_WORLD_SEED":    "18446744073709551615",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +78,7 @@ func TestLoadValid(t *testing.T) {
 	want = Config{
 		PlayAddr: ":8080", PlayOrigin: "https://play.keelovertheedge.com", AgentsAddr: ":8081", InternalAddr: "0.0.0.0:9090",
 		MetricsAddr: "0.0.0.0:9091", LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
-		BoatLimit: 2, Bell: 0,
+		BoatLimit: 2, Bell: 0, Land: false, WorldSeed: 18446744073709551615, HasWorldSeed: true,
 	}
 	if c != want {
 		t.Errorf("got %+v, want %+v", c, want)

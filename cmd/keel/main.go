@@ -5,6 +5,7 @@
 //	keel serve    run the game
 //	keel migrate  bring the database's schema up to this build's
 //	keel replay   replay an input log and check it
+//	keel worldgen make the world of a seed and check it
 //	keel restore-test  restore the database's backups into a throwaway cluster and check them
 package main
 
@@ -24,6 +25,7 @@ commands:
   serve    run the game
   migrate  bring the database's schema up to this build's
   replay   replay an input log and check it
+  worldgen make the world of a seed and check it
   restore-test  restore the database's backups into a throwaway cluster
            and check them
 `
@@ -67,6 +69,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		err = migrate(ctx, args[1:], getenv, stdout, stderr)
 	case "replay":
 		err = replayCmd(args[1:], stdout, stderr)
+	case "worldgen":
+		err = worldgenCmd(args[1:], stdout, stderr)
 	case "restore-test":
 		err = restoreTest(ctx, args[1:], getenv, stdout, stderr)
 	case "help", "-h", "-help", "--help":

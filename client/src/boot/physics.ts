@@ -11,13 +11,42 @@ import scenarios from '../../../internal/physics/testdata/scenarios.json';
 import sea from '../../../internal/physics/testdata/sea.json';
 import wind from '../../../internal/physics/testdata/wind.json';
 import { catalog } from '../catalog';
-import { checkGolden, type GoldenFile, type ScenarioFile } from '../predict/golden';
+import {
+  checkGolden,
+  type GoldenFile,
+  type ScenarioFile,
+  type TerrainLoader,
+} from '../predict/golden';
 import { LAYOUT_VERSION, RECORDS, SEA } from '../predict/layout.gen';
 import { loadPhysics, type Physics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { preparePhysics } from '../predict/predictor';
 import { checkSea, type SeaFile } from '../predict/seacheck';
 import { checkWind, loadWindCase, type WindCase, type WindFile } from '../predict/windcheck';
+
+/** The golden scenarios' terrains, by name, as URLs of their files (gzip). */
+const terrainUrls = import.meta.glob<string>(
+  '../../../internal/physics/testdata/ground/*.terrain',
+  {
+    query: '?url',
+    import: 'default',
+    eager: true,
+  },
+);
+
+/** Loads a terrain's file and unzips it, as the browser can. */
+const loadTerrain: TerrainLoader = async (name) => {
+  const url = Object.entries(terrainUrls).find(([path]) => path.endsWith(`/${name}.terrain`))?.[1];
+  if (url === undefined) {
+    throw new Error(`no terrain ${name}`);
+  }
+  const res = await fetch(url);
+  if (!res.ok || res.body === null) {
+    throw new Error(`terrain ${name}: ${res.status}`);
+  }
+  const unzipped = res.body.pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(unzipped).arrayBuffer());
+};
 
 export interface PhysicsRow {
   name: string;
@@ -45,7 +74,12 @@ export async function checkPhysics(): Promise<PhysicsRow[]> {
   ];
 
   try {
-    const report = await checkGolden(physics, scenarios as ScenarioFile, golden as GoldenFile);
+    const report = await checkGolden(
+      physics,
+      scenarios as ScenarioFile,
+      golden as GoldenFile,
+      loadTerrain,
+    );
     const ok = report.problems.length === 0;
     rows.push({
       name: 'Same bits as the server',

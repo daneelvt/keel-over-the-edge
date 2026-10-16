@@ -81,7 +81,7 @@ func runScenarioStates(t *testing.T, b *Prepared, sc scenario, n int32, mirrored
 		if steering {
 			c.Helm = steer(target, &s)
 		}
-		step(&s, &c, &e, nil, b, &o, n)
+		step(&s, &c, &e, nil, nil, b, &o, n)
 		out = append(out, s)
 	}
 	return out

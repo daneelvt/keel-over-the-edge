@@ -42,6 +42,7 @@ export interface Catalog {
   weather: Weather;
   sky: Sky;
   encounters: Encounters;
+  world: World;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -1297,6 +1298,766 @@ export interface EncountersOverlay {
    */
   wedgeDeficit: number;
 }
+/**
+ * How a world is made from its seed, and how a boat meets its ground.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "World".
+ */
+export interface World {
+  disk: WorldDisk;
+  zones: WorldZones;
+  mainPort: WorldMainPort;
+  layout: WorldLayout;
+  /**
+   * Size classes by an island's width, narrowest first.
+   */
+  sizes: WorldSize[];
+  /**
+   * The lowest and the highest land, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  land: [number, number];
+  /**
+   * The angle of repose: ground steeper than this is cliff, in degrees.
+   */
+  talus: number;
+  seabed: WorldSeabed;
+  reef: WorldReef;
+  erosion: WorldErosion;
+  /**
+   * The biomes: each an island's terrain.
+   */
+  biomes: Biome[];
+  /**
+   * What the ground is covered with; a hexagon holds a surface's index here.
+   */
+  surfaces: Surface[];
+  fetch: WorldFetch;
+  shelter: WorldShelter;
+  start: WorldStart;
+  grounding: WorldGrounding;
+  validator: WorldValidator;
+  names: WorldNames;
+}
+/**
+ * The disk.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldDisk".
+ */
+export interface WorldDisk {
+  /**
+   * The edge of the world from its centre, in m.
+   */
+  radius: number;
+  /**
+   * Where the mist band begins, in nautical miles from the centre.
+   */
+  mist: number;
+}
+/**
+ * Where on the disk a place is: the centre, the middle waters and, beyond them, the rim.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldZones".
+ */
+export interface WorldZones {
+  /**
+   * The centre reaches this far from the disk's centre, in nautical miles.
+   */
+  centre: number;
+  /**
+   * The middle waters reach this far, in nautical miles.
+   */
+  middle: number;
+}
+/**
+ * The main port's island, at the centre of every world.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldMainPort".
+ */
+export interface WorldMainPort {
+  /**
+   * Its name, never drawn for another place.
+   */
+  name: string;
+  biome: Id;
+  /**
+   * Its width, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  across: [number, number];
+  /**
+   * Its highest point, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
+  /**
+   * The share of its coast with cliffs.
+   */
+  cliffs: number;
+  /**
+   * Its centre lies within this of the disk's, in m.
+   */
+  offset: number;
+  /**
+   * No other land but its own rocks lies within this of the centre, in nautical miles.
+   */
+  calm: number;
+  /**
+   * Stacks off its coast, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  rocks: [number, number];
+}
+/**
+ * Where the islands lie and how big they are.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldLayout".
+ */
+export interface WorldLayout {
+  /**
+   * Landmark islands, placed first.
+   */
+  landmarks: number;
+  /**
+   * A landmark's width, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  landmarkAcross: [number, number];
+  /**
+   * The least distance between two landmarks' centres, in m.
+   */
+  landmarkApart: number;
+  /**
+   * Landmarks lie between these distances from the centre, in nautical miles.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  landmarkRing: [number, number];
+  /**
+   * The other islands.
+   */
+  islands: number;
+  /**
+   * Their widths' range, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  islandAcross: [number, number];
+  /**
+   * Korčák's exponent b: the number of islands larger than an area a falls as a^−b.
+   */
+  korcak: number;
+  /**
+   * They lie between these distances from the centre, in nautical miles.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  islandRing: [number, number];
+  /**
+   * The least gap between two islands' coasts, in m.
+   */
+  gap: number;
+  /**
+   * Candidate places tried for each island; the furthest from the land already placed is taken.
+   */
+  candidates: number;
+  /**
+   * Groups of rocks and islets, the fewest and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  groups: [number, number];
+  /**
+   * Rocks and islets in a group, the fewest and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  groupSize: [number, number];
+  /**
+   * A group's rocks lie within this of its centre, in m.
+   */
+  groupSpread: number;
+  /**
+   * A rock's width, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  rockAcross: [number, number];
+}
+/**
+ * A size class: the islands narrower than below and no narrower than the class before's.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldSize".
+ */
+export interface WorldSize {
+  /**
+   * The class's word, as the names give it.
+   */
+  class: string;
+  /**
+   * The width it holds islands narrower than, in m.
+   */
+  below: number;
+}
+/**
+ * The sea bed out from a coast: Dean's equilibrium profile to the closure depth, then the shelf, then the deep.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldSeabed".
+ */
+export interface WorldSeabed {
+  /**
+   * The closure depth, in m.
+   */
+  closure: number;
+  /**
+   * Beyond it the bed falls 1 m in this many.
+   */
+  shelf: number;
+  /**
+   * The deepest the bed is stored, in m.
+   */
+  deep: number;
+  /**
+   * An island's bed reaches this far from its coast, in m, and more for a larger island.
+   */
+  reachBase: number;
+  /**
+   * Plus this many of the island's radius.
+   */
+  reachPerRadius: number;
+  /**
+   * At most this far, in m.
+   */
+  reachMost: number;
+  /**
+   * The share by which its reach varies along the coast.
+   */
+  reachVaries: number;
+}
+/**
+ * A fringing reef.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldReef".
+ */
+export interface WorldReef {
+  /**
+   * The crest's depth, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  crest: [number, number];
+  /**
+   * The flat behind it, in m deep.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  flat: [number, number];
+  /**
+   * The crest's distance from the coast, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  offshore: [number, number];
+  /**
+   * The fore reef falls to this depth, in m.
+   */
+  fore: number;
+  /**
+   * Over this distance, in m.
+   */
+  foreWidth: number;
+  /**
+   * The share of the crest open as passes.
+   */
+  passes: number;
+}
+/**
+ * Erosion on each island: thermal weathering, and droplets of rain.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldErosion".
+ */
+export interface WorldErosion {
+  /**
+   * Passes of thermal weathering.
+   */
+  thermal: number;
+  /**
+   * The most droplets an island.
+   */
+  droplets: number;
+  /**
+   * The most steps a droplet takes.
+   */
+  dropletSteps: number;
+  /**
+   * Ground a droplet takes per metre it falls, in m.
+   */
+  erode: number;
+  /**
+   * The share of its load a droplet drops where it stops falling.
+   */
+  deposit: number;
+}
+/**
+ * A biome: an island's terrain.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Biome".
+ */
+export interface Biome {
+  id: Id;
+  zones: BiomeZones;
+  /**
+   * Its highest point, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
+  /**
+   * The lobes its shape is made of, the fewest and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  lobes: [number, number];
+  /**
+   * A lobe's length over its width.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  elongation: [number, number];
+  /**
+   * How far its shape is warped, as a share of its radius.
+   */
+  warp: number;
+  /**
+   * Bays bitten into its coast, the fewest and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  bays: [number, number];
+  /**
+   * The exponent its height rises by with the distance inland.
+   */
+  rise: number;
+  /**
+   * The share of rolling hills in its height.
+   */
+  hills: number;
+  /**
+   * The share of ridges.
+   */
+  ridges: number;
+  /**
+   * The share of a cone.
+   */
+  cone: number;
+  /**
+   * The chance of a crater in the cone.
+   */
+  crater: number;
+  /**
+   * The share of its coast with cliffs.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  cliffs: [number, number];
+  /**
+   * The cliffs' height, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  cliffHeight: [number, number];
+  /**
+   * The width of low ground along its other shores, in m.
+   */
+  beach: number;
+  /**
+   * Dean's A of its sea bed, in m^(1/3).
+   */
+  dean: number;
+  /**
+   * It has a fringing reef.
+   */
+  reef: boolean;
+  /**
+   * Its shallows have sand bars.
+   */
+  bars: boolean;
+  /**
+   * Stacks off its coast, the fewest and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  stacks: [number, number];
+  /**
+   * The height, as a share of its highest, above which its high surface lies.
+   */
+  split: number;
+  surfaces: BiomeSurfaces;
+}
+/**
+ * A biome's weight in each zone.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BiomeZones".
+ */
+export interface BiomeZones {
+  /**
+   * Its weight at the centre.
+   */
+  centre: number;
+  /**
+   * In the middle waters.
+   */
+  middle: number;
+  /**
+   * At the rim.
+   */
+  rim: number;
+}
+/**
+ * The surfaces a biome's island is covered with.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BiomeSurfaces".
+ */
+export interface BiomeSurfaces {
+  beach: Id;
+  low: Id;
+  high: Id;
+  steep: Id;
+  bed: Id;
+}
+/**
+ * What the ground is covered with.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Surface".
+ */
+export interface Surface {
+  id: Id;
+  /**
+   * Coulomb's coefficient of a hull dragging on it under water.
+   */
+  friction: number;
+}
+/**
+ * Each sea area's effective fetch for a wind from each of 16 directions.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldFetch".
+ */
+export interface WorldFetch {
+  /**
+   * Radials averaged about the wind.
+   */
+  radials: number;
+  /**
+   * Degrees between them.
+   */
+  spread: number;
+  /**
+   * A radial's step upwind, in m.
+   */
+  step: number;
+}
+/**
+ * The land's shelter for the wind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldShelter".
+ */
+export interface WorldShelter {
+  /**
+   * How far upwind land is looked for, in m.
+   */
+  reach: number;
+  /**
+   * The march's step, in m.
+   */
+  step: number;
+  /**
+   * In the lee closer than this many heights the wind is at its least.
+   */
+  near: number;
+  /**
+   * Beyond this many it is whole again.
+   */
+  far: number;
+  /**
+   * The least factor on the wind's speed.
+   */
+  least: number;
+  /**
+   * The greatest.
+   */
+  most: number;
+  /**
+   * The most land beside the wind's path speeds it, as a share.
+   */
+  speedUp: number;
+  /**
+   * Land beside the path speeds it within this many heights of it.
+   */
+  flank: number;
+  /**
+   * The most land on one side turns the wind, in degrees.
+   */
+  turn: number;
+  /**
+   * How far beside the path land is looked for, in m.
+   *
+   * @minItems 4
+   * @maxItems 4
+   */
+  offsets: [number, number, number, number];
+}
+/**
+ * Where boats start: the stretch of water off the main port with the most room.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldStart".
+ */
+export interface WorldStart {
+  /**
+   * The start area begins within this of the coast, in m.
+   */
+  within: number;
+  /**
+   * A place has at least this much water, in m.
+   */
+  depth: number;
+  /**
+   * And no land within this, in m.
+   */
+  clear: number;
+  /**
+   * Places are this far apart, in m.
+   */
+  spacing: number;
+  /**
+   * Places to a row.
+   */
+  row: number;
+  /**
+   * Places in all.
+   */
+  places: number;
+}
+/**
+ * A boat aground.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldGrounding".
+ */
+export interface WorldGrounding {
+  /**
+   * Slower than this a boat aground is still, in m/s.
+   */
+  stillSpeed: number;
+  /**
+   * Still this long, its sailor pushes it off, in s.
+   */
+  stillTime: number;
+  /**
+   * Into water this deep, in m.
+   */
+  pushDepth: number;
+  /**
+   * Within this distance, in m.
+   */
+  pushReach: number;
+  /**
+   * The share of its closing speed a hull parts from land with.
+   */
+  restitution: number;
+  /**
+   * Coulomb's coefficient of a hull sliding along land.
+   */
+  friction: number;
+}
+/**
+ * The rules a world must pass.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldValidator".
+ */
+export interface WorldValidator {
+  /**
+   * Attempts before giving up.
+   */
+  attempts: number;
+  /**
+   * The main port's centre from the disk's, at most, in m.
+   */
+  centreOffset: number;
+  /**
+   * Land as a percentage of the disk, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  landShare: [number, number];
+  /**
+   * Each size class within this share of its expected count.
+   */
+  counts: number;
+  /**
+   * Inside the mist band no water is further than this from land, in m.
+   */
+  openWater: number;
+  /**
+   * A landmark's shoreline development index, at least.
+   */
+  shoreline: number;
+  /**
+   * Every landmark reachable from the start in this much water, in m.
+   */
+  reachDepth: number;
+}
+/**
+ * How islands are named.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldNames".
+ */
+export interface WorldNames {
+  /**
+   * The features names may need.
+   */
+  features: NameFeature[];
+  /**
+   * The tones of names.
+   */
+  tones: NameTone[];
+  /**
+   * Two islands of a biome this close may share a name, in m.
+   */
+  neighbours: number;
+  /**
+   * The chance they do.
+   */
+  neighbourShare: number;
+  /**
+   * The pairs of words neighbours sharing a name take, the larger the first: two words each.
+   */
+  prefixes: string[][];
+  /**
+   * An islet this close to a larger island may be named after it, in m.
+   */
+  calf: number;
+  /**
+   * The chance it is.
+   */
+  calfShare: number;
+}
+/**
+ * A feature a name may need, by its word, and what shows it: 0 or false for a test it does not have; a feature with none is never shown.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NameFeature".
+ */
+export interface NameFeature {
+  /**
+   * Its word, as the names give it.
+   */
+  word: string;
+  /**
+   * A coast with at least this share of cliff.
+   */
+  cliffs: number;
+  /**
+   * A summit at least this high, in m.
+   */
+  peak: number;
+  /**
+   * Two summits each at least this share of the highest.
+   */
+  twin: number;
+  /**
+   * And at least this far apart, in m.
+   */
+  twinApart: number;
+  /**
+   * At least this many stacks.
+   */
+  stacks: number;
+  /**
+   * A reef.
+   */
+  reef: boolean;
+  /**
+   * A lagoon behind a reef at least this wide, in m.
+   */
+  lagoon: number;
+}
+/**
+ * A tone of names: its weight in each zone, and how many a world may have.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NameTone".
+ */
+export interface NameTone {
+  /**
+   * Its word, as the names give it.
+   */
+  word: string;
+  /**
+   * Its weight at the centre.
+   */
+  centre: number;
+  /**
+   * In the middle waters.
+   */
+  middle: number;
+  /**
+   * At the rim.
+   */
+  rim: number;
+  /**
+   * The most names of it in a world; 0 for no limit.
+   */
+  most: number;
+  /**
+   * Its names that belong only to the rim are given only in the mist band.
+   */
+  phantom: boolean;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '14f5face6054cbc6';
+export const CATALOG_VERSION = '4c9954310646add1';

@@ -108,7 +108,7 @@ func Encounter(ctx context.Context, cfg EncounterConfig, situation string) (Stag
 	var wt physics.WeatherTick
 	physics.WeatherAt(&w, &wt, float64(f.Tick))
 	f.Release()
-	wind := physics.WindAt(&wt, h.X, h.Y)
+	wind := physics.WindAt(&wt, h.X, h.Y, nil)
 
 	p := stage(situation, &h, wind.WindFrom, cfg.Length)
 	slot, gen, boat, err := joinStaged(ctx, cfg.Bus)

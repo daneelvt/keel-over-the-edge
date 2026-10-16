@@ -85,7 +85,7 @@ func TestTickMatchesStepInWeather(t *testing.T) {
 			e := windAt(w, f, want.X, want.Y)
 			lo, hi = min(lo, e.WindSpeed), max(hi, e.WindSpeed)
 			var o physics.Out
-			physics.Step(&want, &c, &e, nil, kind, &o)
+			physics.Step(&want, &c, &e, nil, nil, kind, &o)
 			if !sameState(f.State[s], want) {
 				t.Fatalf("tick %d, slot %d: %+v, Step in the wind at the boat gives %+v", f.Tick, s, f.State[s], want)
 			}

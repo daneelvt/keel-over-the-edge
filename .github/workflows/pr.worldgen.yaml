@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The world generator over a hundred seeds: each world must pass the
+# validator's rules within its attempts. The run prints how long the worlds
+# took to make, how many attempts they needed, their land, islands and
+# widest open water.
+#
+# It takes minutes, so it is not run on every pull request: on one
+# labelled worldgen (again on each push while the label stays), and by
+# hand. ci.yaml runs the generator's own tests and eight seeds' digests on
+# every one.
+name: pr.worldgen
+
+on:
+  pull_request:
+    types: [labeled, opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  seeds:
+    name: seeds
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'worldgen')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+      - name: A hundred seeds' worlds, each passing the rules
+        run: go test -count=1 -timeout 25m -run '^TestSeeds$' -v ./internal/worldgen -seeds 100 2>&1 | grep -v '^=== \|^    --- PASS'

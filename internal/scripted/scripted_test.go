@@ -182,3 +182,47 @@ func TestBusyQueue(t *testing.T) {
 		}
 	})
 }
+
+// TestSailorAground: a sailor whose boat lies aground on a flat of sand at
+// the sea's level, where its sailor cannot push it off, leaves and joins
+// again after AgroundTime, and its new boat is at the start area's place.
+func TestSailorAground(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cat, err := catalog.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		waves, kinds := cat.Prepare()
+		g := &physics.Ground{Prepared: cat.PrepareGround()}
+		for _, n := range []int32{7*physics.ChunkSide + 7, 7*physics.ChunkSide + 8, 8*physics.ChunkSide + 7, 8*physics.ChunkSide + 8} {
+			g.Chunks[n] = new(physics.GroundChunk) // every hexagon at the sea's level
+		}
+		place := physics.State{X: 10, Y: 10, Heading: 1}
+		w, err := sim.New(sim.Config{Capacity: 4, Kinds: kinds[:1], Waves: waves, Workers: 1,
+			Terrain: &sim.Terrain{Ground: g, Start: []physics.State{place}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var first uint64
+		boats := map[uint64]bool{}
+		sail(t, w, 1, AgroundTime+20*time.Second, func(f *bus.Frame) {
+			for _, s := range f.Live {
+				if first == 0 {
+					first = f.Boat[s]
+				}
+				boats[f.Boat[s]] = true
+			}
+		})
+		if len(boats) < 2 {
+			t.Fatalf("the sailor kept boat %d: it never joined again", first)
+		}
+		f := w.Latest()
+		if len(f.Live) != 1 {
+			t.Fatalf("%d boats", len(f.Live))
+		}
+		st := f.State[f.Live[0]]
+		if f.Boat[f.Live[0]] == first || math.Hypot(st.X-place.X, st.Y-place.Y) > 1 {
+			t.Errorf("the sailor's boat is %d at (%.1f, %.1f), not a new one at the start", f.Boat[f.Live[0]], st.X, st.Y)
+		}
+	})
+}

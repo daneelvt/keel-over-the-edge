@@ -365,32 +365,42 @@ const (
 )
 
 // WindAt is the wind a step at (x, y), metres east and north of the centre,
-// sails in, at the tick t was set to.
-func WindAt(t *WeatherTick, x, y float64) Env {
+// sails in, at the tick t was set to, in the shelter of the land sh; nil is
+// open water everywhere.
+func WindAt(t *WeatherTick, x, y float64, sh *Shelter) Env {
 	var p WindPoint
-	t.point(x, y, &p, pointWind)
+	t.point(x, y, &p, pointWind, sh)
 	return Env{WindSpeed: p.Speed, WindFrom: p.From, MeanFrom: p.MeanFrom}
 }
 
-// WindPointAt fills p with the wind at (x, y) in full.
-func WindPointAt(t *WeatherTick, x, y float64, p *WindPoint) { t.point(x, y, p, pointFull) }
+// WindPointAt fills p with the wind at (x, y) in full, in the shelter sh.
+func WindPointAt(t *WeatherTick, x, y float64, p *WindPoint, sh *Shelter) {
+	t.point(x, y, p, pointFull, sh)
+}
 
-// MeanWindAt is the wind at (x, y) without its gusts: what the sea follows.
+// MeanWindAt is the wind at (x, y) without its gusts or any shelter: what
+// the sea follows.
 func MeanWindAt(t *WeatherTick, x, y float64) (speed, from float64) {
 	var p WindPoint
-	t.point(x, y, &p, pointMean)
+	t.point(x, y, &p, pointMean, nil)
 	return p.MeanSpeed, p.MeanFrom
 }
 
 // point computes the wind at (x, y) into p, as much of it as what asks.
-func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32) {
+// The land's shelter applies after the gusts and before the refuge.
+func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter) {
 	*p = WindPoint{Factor: 1}
 	if t.n == 0 {
 		return
 	}
 	a := &t.at[0]
 	if t.n == 1 && a.s.steady {
-		p.Speed, p.From, p.MeanSpeed, p.MeanFrom = a.s.speed, a.s.from, a.s.speed, a.s.from
+		speed, from := a.s.speed, a.s.from
+		if sh != nil {
+			f, turn := sh.At(x, y, from)
+			speed, from = float64(speed*f), wrapAngle(from+turn)
+		}
+		p.Speed, p.From, p.MeanSpeed, p.MeanFrom = speed, from, speed, from
 		return
 	}
 	w := t.p
@@ -443,6 +453,13 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32) {
 	}
 	p.Factor = 1 + float64(float64(excess*rim)*(h-gustMeanH))
 	v := float64(speed * p.Factor)
+	if sh != nil {
+		f, turn := sh.At(x, y, dir)
+		v = float64(v * f)
+		dir += turn
+		p.MeanSpeed = float64(p.MeanSpeed * f)
+		p.MeanFrom = wrapAngle(dir)
+	}
 	p.Speed = v
 	if refuge > 0 {
 		p.Speed += float64(float64(refuge*limited) * (soften(v, w.windKnee, w.windSoft) - v))

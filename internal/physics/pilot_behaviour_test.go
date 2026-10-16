@@ -32,7 +32,7 @@ func onPilot(t testing.TB, b *Prepared, w *Weather, angle, sheet float64, mode f
 	m.under(w)
 	m.s.X, m.s.Y = 0, 2.1*nm
 	WeatherAt(w, &m.wt, m.tick)
-	m.e = WindAt(&m.wt, m.s.X, m.s.Y)
+	m.e = WindAt(&m.wt, m.s.X, m.s.Y, nil)
 	m.s.Heading = wrapAngle(m.e.MeanFrom - angle*deg)
 	m.s.Surge = 2
 	m.s.SheetLimit = b.boomIn + sheet*(b.boomOut-b.boomIn)

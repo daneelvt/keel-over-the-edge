@@ -33,6 +33,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
 func TestUsage(t *testing.T) {
@@ -214,6 +215,45 @@ type memDB struct {
 	checkpoint *store.Checkpoint
 	events     []store.Event
 	down       bool // the world's writes fail
+	bundle     *store.Bundle
+}
+
+// emptyWorld makes a world of open sea at once: the generator of the
+// servers in tests, which have no seconds to spend on a real one.
+func emptyWorld(seed uint64) (*worldgen.Bundle, error) { return worldgen.Empty(seed), nil }
+
+func (d *memDB) WorldSeed(context.Context, [16]byte) (uint64, int, bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.bundle == nil {
+		return 0, 0, false, nil
+	}
+	return d.bundle.Seed, d.bundle.Generator, true, nil
+}
+
+func (d *memDB) LoadBundle(context.Context, [16]byte) (*store.Bundle, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.bundle == nil {
+		return nil, store.ErrNotFound
+	}
+	b := *d.bundle
+	return &b, nil
+}
+
+// StoreBundle is fenced by the lease's epoch, as the world's writes are,
+// and keeps the first bundle stored.
+func (d *memDB) StoreBundle(_ context.Context, _ [16]byte, epoch int64, b *store.Bundle) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if epoch != d.leaseEpoch {
+		return fmt.Errorf("%w: the epoch is %d, the writer's %d", store.ErrFenced, d.leaseEpoch, epoch)
+	}
+	if d.bundle == nil {
+		c := *b
+		d.bundle = &c
+	}
+	return nil
 }
 
 func (d *memDB) init() {
@@ -399,6 +439,9 @@ func startServer(t *testing.T, vars map[string]string, n *memNet, opt serveOptio
 	opt.listen = n.listen
 	if opt.openDB == nil {
 		opt = (&memDB{epoch: bubbleEpoch}).with(opt)
+	}
+	if opt.generate == nil {
+		opt.generate = emptyWorld
 	}
 	if opt.workers == 0 {
 		opt.workers = 2
@@ -726,7 +769,8 @@ func TestPanicInTheTick(t *testing.T) {
 		ticks := 0
 		vars := map[string]string{"KEEL_PLAY_ORIGIN": "https://play.example.com", "KEEL_DATABASE_URL": "postgres://keel@db.example.com/keel"}
 		err := runServer(context.Background(), env(vars), io.Discard, (&memDB{epoch: firstEpoch}).with(serveOptions{
-			listen: n.listen, workers: 2,
+			generate: emptyWorld,
+			listen:   n.listen, workers: 2,
 			afterTick: func(int64) {
 				if ticks++; ticks == 4 {
 					panic("a planted panic in the tick")
@@ -746,12 +790,12 @@ func TestPanicInTheTick(t *testing.T) {
 }
 
 // recordLog runs a server with scripted sailors for a while and returns its
-// input log's file.
-func recordLog(t *testing.T) string {
+// input log's file, and a file of the test world's terrain it sailed.
+func recordLog(t *testing.T) (log, world string) {
 	t.Helper()
 	dir := t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
-		s := startServer(t, map[string]string{"KEEL_REPLAY_DIR": dir, "KEEL_DEV_SAILORS": "12"}, newMemNet(), serveOptions{})
+		s := startServer(t, map[string]string{"KEEL_REPLAY_DIR": dir, "KEEL_DEV_SAILORS": "12", "KEEL_WORLD_SEED": "7"}, newMemNet(), serveOptions{})
 		time.Sleep(40 * time.Second)
 		s.stop(t)
 	})
@@ -759,13 +803,31 @@ func recordLog(t *testing.T) string {
 	if len(names) != 1 {
 		t.Fatalf("logs %v", names)
 	}
-	return names[0]
+	b, _ := emptyWorld(7)
+	world = filepath.Join(t.TempDir(), "world.bundle")
+	f, err := os.Create(world)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.WriteFile(f); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return names[0], world
 }
 
 func TestReplayCommand(t *testing.T) {
-	name := recordLog(t)
+	name, world := recordLog(t)
 	var out, errOut bytes.Buffer
-	if status := run(context.Background(), []string{"replay", "-workers", "3", name}, env(nil), &out, &errOut); status != 0 {
+	// The test world is not one the generator makes: it is given.
+	if status := run(context.Background(), []string{"replay", name}, env(nil), &out, &errOut); status != 1 || !strings.Contains(errOut.String(), "the log's terrain: its digest") {
+		t.Fatalf("a log of another terrain: status %d: %s", status, errOut.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	if status := run(context.Background(), []string{"replay", "-workers", "3", "-world", world, name}, env(nil), &out, &errOut); status != 0 {
 		t.Fatalf("status %d: %s", status, errOut.String())
 	}
 	if !strings.HasPrefix(out.String(), "replayed ") || !strings.HasSuffix(out.String(), " ticks: identical\n") {
@@ -783,13 +845,13 @@ func TestReplayCommand(t *testing.T) {
 	}
 	out.Reset()
 	errOut.Reset()
-	if status := run(context.Background(), []string{"replay", cut}, env(nil), &out, &errOut); status != 0 || !strings.Contains(errOut.String(), "partway") {
+	if status := run(context.Background(), []string{"replay", "-world", world, cut}, env(nil), &out, &errOut); status != 0 || !strings.Contains(errOut.String(), "partway") {
 		t.Fatalf("status %d, %q, %q", status, out.String(), errOut.String())
 	}
 }
 
 func TestReplayDump(t *testing.T) {
-	name := recordLog(t)
+	name, world := recordLog(t)
 	data, err := os.ReadFile(name)
 	if err != nil {
 		t.Fatal(err)
@@ -811,7 +873,7 @@ func TestReplayDump(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	if status := run(context.Background(), []string{"replay", "-dump", strconv.Itoa(at), name}, env(nil), &out, &errOut); status != 0 {
+	if status := run(context.Background(), []string{"replay", "-dump", strconv.Itoa(at), "-world", world, name}, env(nil), &out, &errOut); status != 0 {
 		t.Fatalf("status %d: %s", status, errOut.String())
 	}
 	var got struct {

@@ -62,6 +62,9 @@ type sea struct {
 	scratch physics.Weather
 	at1     physics.WeatherTick
 	spells  [physics.WeatherSpells]physics.Spell
+
+	// fetch is each area's fetch, by the land; nil is open water's.
+	fetch []physics.Fetch
 }
 
 func (s *sea) init(waves *physics.Waves, t *weather.Timeline) {
@@ -104,8 +107,8 @@ func (s *sea) under(f *bus.Sea, tick int64, ws []bus.Weather) {
 	s.fill(f.Next, second+bus.SeaPeriod, ws)
 }
 
-// fill sets every area's inputs to those its wave wind gives at a tick.
-// Until land shelters the water, every area has the fetch of open water.
+// fill sets every area's inputs to those its wave wind gives at a tick,
+// with each area's fetch for its wind's direction, or open water's.
 func (s *sea) fill(areas []physics.SeaInput, tick int64, ws []bus.Weather) {
 	if s.waves == nil {
 		clear(areas)
@@ -135,7 +138,11 @@ func (s *sea) make(tick int64, ws []bus.Weather) {
 	for i := range s.inputs {
 		c := &s.centres[i]
 		speed, from := physics.WaveBlend(s.avg[i], physics.WaveSampleAt(now, c[0], c[1]), share)
-		s.inputs[i] = s.waves.OpenSea(speed, from)
+		if s.fetch != nil {
+			s.inputs[i] = s.waves.LandSea(speed, from, &s.fetch[i])
+		} else {
+			s.inputs[i] = s.waves.OpenSea(speed, from)
+		}
 	}
 	s.inputsAt, s.hasInput = tick, true
 }

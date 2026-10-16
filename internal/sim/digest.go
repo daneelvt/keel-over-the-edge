@@ -123,15 +123,18 @@ func StateFields(s *physics.State) [StateSize]*float64 {
 		&s.Boom, &s.BoomRate, &s.Sailor, &s.Rudder, &s.SheetLimit, &s.SailorMode, &s.SailorTimer,
 		&s.Heave, &s.HeaveRate, &s.Pitch, &s.PitchRate,
 		&s.PilotTrim, &s.PilotWay, &s.PilotOrder,
+		&s.GroundTimer,
 	}
 }
 
 // StateSize is the number of a state's fields: BoatSize of the boat's, then
-// PilotSize of what its autopilot remembers.
+// PilotSize of what its autopilot remembers, then GroundSize of how long it
+// has been aground.
 const (
-	StateSize = BoatSize + PilotSize
-	BoatSize  = 19
-	PilotSize = 3
+	StateSize  = BoatSize + PilotSize + GroundSize
+	BoatSize   = 19
+	PilotSize  = 3
+	GroundSize = 1
 )
 
 // CourseFields lists a course's fields, in their order, as StateFields does

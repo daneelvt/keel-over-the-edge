@@ -125,6 +125,9 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkEncounters(doc); err != nil {
 		return err
 	}
+	if err := checkWorld(doc); err != nil {
+		return err
+	}
 	goPhysics, err := goPhysics(fields, sea, skyNumbers, wind, regime, encounters)
 	if err != nil {
 		return err
@@ -257,13 +260,30 @@ func kinds(doc map[string]any) map[string][]map[string]any {
 	return out
 }
 
+// worldKinds are the world's lists of kinds, which lie inside its group
+// rather than at the top of the catalog.
+var worldKinds = []string{"biomes", "surfaces"}
+
+// ids is every kind's id: those of the catalog's lists, and of the
+// world's.
 func ids(doc map[string]any) []string {
 	var out []string
-	for _, ks := range kinds(doc) {
-		for _, k := range ks {
-			if id, ok := k["id"].(string); ok {
-				out = append(out, id)
+	add := func(list any) {
+		items, _ := list.([]any)
+		for _, it := range items {
+			if k, ok := it.(map[string]any); ok {
+				if id, ok := k["id"].(string); ok {
+					out = append(out, id)
+				}
 			}
+		}
+	}
+	for _, list := range doc {
+		add(list)
+	}
+	if world, ok := doc["world"].(map[string]any); ok {
+		for _, name := range worldKinds {
+			add(world[name])
 		}
 	}
 	sort.Strings(out)
