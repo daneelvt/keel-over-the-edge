@@ -1,6 +1,6 @@
 {
  "comment": "Written by go test ./internal/physics -run Golden -update. Floats are their IEEE 754 bits in hexadecimal.",
- "layout": "0xbecfd299",
+ "layout": "0xf86c4e4c",
  "scenarios": [
   {
    "name": "beat",
@@ -6738,6 +6738,124 @@
       "x": "0x404d9632588de860",
       "y": "0xc040af5ac796da74",
       "yawRate": "0x3f1b0d2b16115cdb"
+     }
+    }
+   ]
+  },
+  {
+   "name": "shoal",
+   "digest": "e84a219a96f7d42a4a9a8625b0adc600e9ae7bb227cc40759afa36454f53056d",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff8a176966e0d49",
+      "heave": "0xbf9e2d29965ff2c7",
+      "heaveRate": "0x3fa61eb1ba02037f",
+      "heel": "0xbf9db3c3400be384",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0xbf9fb4f329a74ff4",
+      "pitchRate": "0xbf8558185422c44c",
+      "rollRate": "0x3f7f8d4c60d8c5ef",
+      "rudder": "0x3fa556a9dffd0e3d",
+      "sailor": "0x3fcac9e6585849bf",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x400e684a76180519",
+      "sway": "0x3f7368bc168ac749",
+      "x": "0x40419a88ab0d6c13",
+      "y": "0x3ff6b8396befec31",
+      "yawRate": "0x3f729e7c6ecb60f8"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0x3ff7fce0cdde156d",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff8fd1ee23fb4fe",
+      "heave": "0x3f93565d4659da0f",
+      "heaveRate": "0xbf740722bde8e477",
+      "heel": "0x3f8fa9fcb13829ee",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0xbf85d1e6171efc43",
+      "pitchRate": "0xbf6a93b51f5e4cda",
+      "rollRate": "0x3fa202971c7c5fae",
+      "rudder": "0x3f7d4cd86c215fef",
+      "sailor": "0x3fc63deeffc97714",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0x400e85a648e05b51",
+      "sway": "0xbfd26aba43a243e6",
+      "x": "0x405e306fc5dd4e68",
+      "y": "0x400c2986edaf64ab",
+      "yawRate": "0x3f8495031b13837a"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0xbfe24dc9b5da6b3a",
+      "boomRate": "0x3fa4cd5d8f1e6776",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xc001dbe60d19bb89",
+      "heave": "0xbfb70496b793f49e",
+      "heaveRate": "0x3fb6562423966c38",
+      "heel": "0x3fb9eba3b72317df",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x3f6da79a31e900a4",
+      "pitchRate": "0x3fa12e2887a2dd6e",
+      "rollRate": "0xbfb86699fb32d991",
+      "rudder": "0x0000000000000000",
+      "sailor": "0xbfa87186223614b8",
+      "sailorMode": "0x4008000000000000",
+      "sailorTimer": "0x400c222222222226",
+      "sheetLimit": "0x3ffa876cd8f2a161",
+      "surge": "0xbff1344466a1c084",
+      "sway": "0xbf97efc5f4dd060f",
+      "x": "0x405fc1eb0943cdba",
+      "y": "0x40192a0e897c707e",
+      "yawRate": "0xbf9988957ae77c99"
+     }
+    },
+    {
+     "step": 2400,
+     "state": {
+      "boom": "0x3fe8070501ddbbdf",
+      "boomRate": "0x3fc215eefb9663c5",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbfe437fd7fc12dbc",
+      "heave": "0xbf928cfc42837edb",
+      "heaveRate": "0x3fc4fbfc0c08f096",
+      "heel": "0x3f83f2557f18de9f",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0xbf94239b49835326",
+      "pitchRate": "0xbfa671147b7ebf91",
+      "rollRate": "0xbfb146c340434019",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0x3fc11e769a7a57b7",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3ff7fce0cdde156d",
+      "surge": "0xbfd409202a0859c6",
+      "sway": "0x3f96edf8b0acc086",
+      "x": "0x405f33b9b873e55c",
+      "y": "0x4027c6e6e5955e66",
+      "yawRate": "0x3fb65b97f7bf304e"
      }
     }
    ]

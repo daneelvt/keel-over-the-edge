@@ -136,6 +136,7 @@ func SeaParams(c *Catalog) physics.SeaParams {
 	p.Spreading = float64(c.Weather.Sea.Spreading)
 	p.FetchCap = float64(c.Weather.Sea.FetchCap)
 	p.Cull = float64(c.Weather.Sea.Cull)
+	p.Breaking = float64(c.Weather.Sea.Breaking)
 	return p
 }
 

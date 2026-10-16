@@ -62,11 +62,13 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 	}
 	sinW, cosW := SinCos(e.WindFrom)
 	// The sea is read once, where the boat is as the step begins: the waves
-	// change little in a step, and their rates carry them across it.
+	// change little in a step, and their rates carry them across it. Over
+	// shallow ground they are capped by the depth at the boat's hexagon.
 	var v wave
 	if sea != nil {
 		sinH, cosH := SinCos(s.Heading)
 		v.read(sea, s, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
+		v.capDepth(sea, g, s.X, s.Y)
 		v.twist = float64(v.twist * b.twistArm)
 	}
 	// So is the ground: where the bottom reaches a foil or the hull.

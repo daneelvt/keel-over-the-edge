@@ -1006,6 +1006,11 @@ type WeatherRing struct {
 // The waves long enough to move a boat: the band of wavelengths they span and the
 // spectrum that gives each its height.
 type WeatherSea struct {
+	// The most significant height the waves keep in shallow water, as a share of its
+	// depth: where the water is shallower than the sea's height over this, its waves
+	// are capped to it and break.
+	Breaking float64 `json:"breaking"`
+
 	// Waves lower than this fraction of an area's highest are left out.
 	Cull float64 `json:"cull"`
 
@@ -1407,4 +1412,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "4c9954310646add1"
+const Version = "432f7a929229610f"

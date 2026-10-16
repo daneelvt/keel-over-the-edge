@@ -46,7 +46,7 @@
       "description": "The waves long enough to move a boat: the band of wavelengths they span and the spectrum that gives each its height.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["shortest", "longest", "gamma", "sigmaBelow", "sigmaAbove", "spreading", "fetchCap", "cull"],
+      "required": ["shortest", "longest", "gamma", "sigmaBelow", "sigmaAbove", "spreading", "fetchCap", "cull", "breaking"],
       "properties": {
         "shortest": { "description": "The shortest wavelength, in m.", "type": "number", "minimum": 1, "maximum": 100 },
         "longest": { "description": "The longest wavelength, in m.", "type": "number", "minimum": 2, "maximum": 1000 },
@@ -55,7 +55,8 @@
         "sigmaAbove": { "description": "The peak's width above the peak frequency.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
         "spreading": { "description": "The directional spreading's exponent s in cos²ˢ(θ/2): a whole number.", "type": "integer", "minimum": 1, "maximum": 100 },
         "fetchCap": { "description": "The fetch of open water, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
-        "cull": { "description": "Waves lower than this fraction of an area's highest are left out.", "type": "number", "minimum": 0, "maximum": 0.5 }
+        "cull": { "description": "Waves lower than this fraction of an area's highest are left out.", "type": "number", "minimum": 0, "maximum": 0.5 },
+        "breaking": { "description": "The most significant height the waves keep in shallow water, as a share of its depth: where the water is shallower than the sea's height over this, its waves are capped to it and break.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
       }
     },
     "WeatherDisk": {

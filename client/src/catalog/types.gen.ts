@@ -804,6 +804,10 @@ export interface WeatherSea {
    * Waves lower than this fraction of an area's highest are left out.
    */
   cull: number;
+  /**
+   * The most significant height the waves keep in shallow water, as a share of its depth: where the water is shallower than the sea's height over this, its waves are capped to it and break.
+   */
+  breaking: number;
 }
 /**
  * The wind over the disk: how its speed rises toward the rim, the refuge at the centre, the stronger gusts of the outer waters and the turning of the difference across the disk.
@@ -2060,4 +2064,4 @@ export interface NameTone {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '4c9954310646add1';
+export const CATALOG_VERSION = '432f7a929229610f';

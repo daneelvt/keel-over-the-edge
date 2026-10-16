@@ -104,13 +104,13 @@ func fillSeaCase(t *testing.T, w *Waves, c *seaCase) {
 	}
 	c.Values = c.Values[:0]
 	for _, p := range c.Points {
-		v := SeaSample(&sea.Sea, c.Origin[0]+p[0], c.Origin[1]+p[1])
+		v := SeaSample(&sea.Sea, nil, c.Origin[0]+p[0], c.Origin[1]+p[1])
 		c.Values = append(c.Values, [4]string{toHex(v.Height), toHex(v.East), toHex(v.North), toHex(v.Hs)})
 	}
 	c.Hulls = [][3]float64{{0, 3.791, 1.103}, {1.3, 3.791, 1.103}, {-2.5, 30, 7}, {4, 0.5, 0.5}}
 	c.Waves = c.Waves[:0]
 	for _, h := range c.Hulls {
-		v := WaveUnder(&sea.Sea, h[1], h[2], c.Origin[0], c.Origin[1], h[0])
+		v := WaveUnder(&sea.Sea, nil, h[1], h[2], c.Origin[0], c.Origin[1], h[0])
 		c.Waves = append(c.Waves, [3]string{toHex(v.Height), toHex(v.Ahead), toHex(v.Across)})
 	}
 }

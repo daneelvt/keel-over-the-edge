@@ -97,6 +97,7 @@ type Waves struct {
 	spreadNorm    float64 // 1 / ∫ cos²ˢ(θ/2) dθ
 	fetchCap      float64 // m
 	cull          float64
+	breaking      float64 // γ: the most Hs a depth keeps, as a share of it
 }
 
 // R2's two steps: the powers 1/φ and 1/φ² of the plastic number
@@ -163,6 +164,7 @@ func PrepareSea(p *SeaParams, w *Waves) {
 	w.spreadNorm = norm
 	w.fetchCap = float64(p.FetchCap * nauticalMile)
 	w.cull = p.Cull
+	w.breaking = p.Breaking
 }
 
 // hash32 mixes the bits of x (Wellons's lowbias32).
@@ -463,15 +465,16 @@ type SeaPoint struct {
 	Height float64 // m
 	East   float64 // slope: the rise per metre eastward
 	North  float64 // and northward
-	Hs     float64 // the significant height of the waves here, m
+	Hs     float64 // the significant height of the waves here, m, before the depth caps them
 }
 
 // SeaSample returns the sea's height and slope at the point x metres east
-// and y north of the world's centre. The slope is that of the waves alone:
-// the blend between areas changes the amplitudes over hundreds of metres,
-// which adds at most a ten-thousandth to it, and is left out here as it is
-// wherever the sea is drawn.
-func SeaSample(sea *Sea, x, y float64) SeaPoint {
+// and y north of the world's centre, capped by the depth of the ground g
+// there (DepthFactor), or nil for the open sea. The slope is that of the
+// waves alone: the blend between areas changes the amplitudes over hundreds
+// of metres, which adds at most a ten-thousandth to it, and is left out
+// here as it is wherever the sea is drawn.
+func SeaSample(sea *Sea, g *Ground, x, y float64) SeaPoint {
 	var p SeaPoint
 	w, win, t := sea.Waves, sea.Window, sea.Tick
 	sw, se, nw, ne, wx, wy := win.corners(x, y)
@@ -487,10 +490,58 @@ func SeaSample(sea *Sea, x, y float64) SeaPoint {
 		p.East += float64(ac * w.kEast[i])
 		p.North += float64(ac * w.kNorth[i])
 	}
+	p.Hs = win.hsAt(sw, se, nw, ne, wx, wy)
+	if f := depthFactor(w, g, x, y, p.Hs); f < 1 {
+		p.Height, p.East, p.North = float64(p.Height*f), float64(p.East*f), float64(p.North*f)
+	}
+	return p
+}
+
+// hsAt is the significant height between the four areas corners found,
+// blended with their weights.
+func (win *SeaWindow) hsAt(sw, se, nw, ne int32, wx, wy float64) float64 {
 	hs := win.Hs
 	a, b, c, d := sw/SeaComponents, se/SeaComponents, nw/SeaComponents, ne/SeaComponents
 	s := hs[a] + float64(wx*(hs[b]-hs[a]))
 	n := hs[c] + float64(wx*(hs[d]-hs[c]))
-	p.Hs = s + float64(wy*(n-s))
-	return p
+	return s + float64(wy*(n-s))
+}
+
+// The waves feel the depth. In water shallower than they are high they
+// break, and in the inner surf zone the significant height is about 0.4 to
+// 0.5 of the depth, the largest waves being about twice Hs (Bosboom and
+// Stive, Coastal Dynamics, 5.2.5; McCowan 1894 has a regular wave break at
+// 0.78 of the depth, and Goda 2010 random waves begin to break about 30%
+// lower). So where the water under a place is h deep and the sea's
+// significant height there is Hs, its waves are scaled by
+//
+//	f = min(1, γ h / Hs)
+//
+// γ the catalog's breaking share, and on land by 0. Where h ≥ Hs / γ, or
+// there is no ground, f is exactly 1 and nothing is scaled: the sea is bit
+// for bit the deep sea's.
+
+// DepthFactor is f at (x, y) for a sea whose significant height there is
+// hs: by the depth of the hexagon that holds the point, 1 where g is nil.
+func DepthFactor(w *Waves, g *Ground, x, y, hs float64) float64 {
+	return depthFactor(w, g, x, y, hs)
+}
+
+func depthFactor(w *Waves, g *Ground, x, y, hs float64) float64 {
+	if g == nil || !(hs > 0) {
+		return 1
+	}
+	e, _ := g.cellAt(HexAt(x, y))
+	keep := float64(w.breaking * float64(float64(-e)*0.1))
+	if !(keep < hs) {
+		return 1
+	}
+	return max2(keep/hs, 0)
+}
+
+// hsAt is the significant height of the sea at (x, y), for the depth's cap
+// on the waves there.
+func (sea *Sea) hsAt(x, y float64) float64 {
+	sw, se, nw, ne, wx, wy := sea.Window.corners(x, y)
+	return sea.Window.hsAt(sw, se, nw, ne, wx, wy)
 }

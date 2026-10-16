@@ -98,6 +98,28 @@ func (v *wave) read(sea *Sea, s *State, sinH, cosH, halfLength, halfBeam float64
 	}
 }
 
+// scale scales the wave by f: its height, slopes and their rates, the
+// twist and the water's motion, as waves f times as high would have them.
+func (v *wave) scale(f float64) {
+	v.height, v.heightRate = float64(v.height*f), float64(v.heightRate*f)
+	v.ahead, v.aheadRate = float64(v.ahead*f), float64(v.aheadRate*f)
+	v.across, v.acrossRate = float64(v.across*f), float64(v.acrossRate*f)
+	v.twist = float64(v.twist * f)
+	v.waterX, v.waterY = float64(v.waterX*f), float64(v.waterY*f)
+	v.foilX, v.foilY = float64(v.foilX*f), float64(v.foilY*f)
+}
+
+// capDepth scales the wave under a boat at (x, y) by the depth's cap
+// there (sea.go), if the ground g caps it.
+func (v *wave) capDepth(sea *Sea, g *Ground, x, y float64) {
+	if g == nil {
+		return
+	}
+	if f := depthFactor(sea.Waves, g, x, y, sea.hsAt(x, y)); f < 1 {
+		v.scale(f)
+	}
+}
+
 // advance carries the wave forward by dt seconds.
 func (v *wave) advance(dt float64) {
 	v.height += float64(v.heightRate * dt)
@@ -142,11 +164,13 @@ type EffectiveWave struct {
 }
 
 // WaveUnder returns the effective wave under a hull at (x, y) heading
-// heading, at rest, whose waterplane is length long and beam wide.
-func WaveUnder(sea *Sea, length, beam, x, y, heading float64) EffectiveWave {
+// heading, at rest, whose waterplane is length long and beam wide, capped
+// by the depth of the ground g there, or nil for the open sea.
+func WaveUnder(sea *Sea, g *Ground, length, beam, x, y, heading float64) EffectiveWave {
 	var v wave
 	s := State{X: x, Y: y}
 	sinH, cosH := SinCos(heading)
 	v.read(sea, &s, sinH, cosH, float64(0.5*length), float64(0.5*beam), nil)
+	v.capDepth(sea, g, x, y)
 	return EffectiveWave{Height: v.height, Ahead: v.ahead, Across: v.across}
 }

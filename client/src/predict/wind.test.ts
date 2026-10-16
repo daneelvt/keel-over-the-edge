@@ -6,11 +6,13 @@
 // for a client with no server is the one the server would make.
 
 import { existsSync, readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { create } from '@bufbuild/protobuf';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { SpellSchema } from '../net/gen/keel/v1/game_pb';
 import { spellRecord } from '../net/weather';
+import { fromHex, loadTerrain, toHex } from './golden';
 import { RECORDS, SIZES, WEATHER } from './layout.gen';
 import { loadPhysics, type Physics } from './physics';
 import { preparePhysics } from './predictor';
@@ -24,7 +26,7 @@ import {
   steadySpell,
   takesEffect,
 } from './weather';
-import { checkWind, loadWindCase, type WindFile } from './windcheck';
+import { checkWind, loadWindCase, type WindCase, type WindFile } from './windcheck';
 
 const wasm = new URL('./physics.wasm', import.meta.url);
 const file = new URL('../../../internal/physics/testdata/wind.json', import.meta.url);
@@ -228,5 +230,87 @@ describe('a spell made with no server', () => {
     expect(s[P.from]).toBe(mix(number ^ catalog.weather.sequence.seed) % WEATHER.turnSteps);
     // The recorded sail, which the server's tick sails too, has a held spell:
     // there the direction is checked against the server's own.
+  });
+});
+
+describe('the wind in the land’s shelter', () => {
+  interface LeeCase extends WindCase {
+    open: string[][];
+    a0: number;
+    b0: number;
+    from: string;
+    grid: string[];
+  }
+  const lee = JSON.parse(
+    readFileSync(new URL('../../../internal/physics/testdata/lee.json', import.meta.url), 'utf8'),
+  ) as { terrain: string; cases: LeeCase[] };
+
+  /** The module's wind at a case's points, as bits: by windPoint, and by windSample. */
+  function windBits(c: LeeCase): { point: string[][]; sample: string[][] } {
+    const points = c.points.flatMap((p) => [
+      (c.origin[0] ?? 0) + (p[0] ?? 0),
+      (c.origin[1] ?? 0) + (p[1] ?? 0),
+    ]);
+    const out = new Float64Array(points.length * 3);
+    physics.windSample(points, out);
+    const point: string[][] = [];
+    const sample: string[][] = [];
+    for (let i = 0; i < c.points.length; i++) {
+      const w = physics.windPoint(points[2 * i] ?? 0, points[2 * i + 1] ?? 0);
+      const W = RECORDS.wind;
+      point.push(
+        [w[W.speed], w[W.from], w[W.meanSpeed], w[W.meanFrom], w[W.gust], w[W.factor]].map((v) =>
+          toHex(v ?? 0),
+        ),
+      );
+      sample.push(Array.from(out.subarray(6 * i, 6 * i + 6), (v) => toHex(v)));
+    }
+    return { point, sample };
+  }
+
+  test('the module’s wind is Go’s, with the shelter on and with it off', () => {
+    physics.prepareGround();
+    loadTerrain(
+      physics,
+      new Uint8Array(
+        gunzipSync(
+          readFileSync(
+            new URL(
+              `../../../internal/physics/testdata/ground/${lee.terrain}.terrain`,
+              import.meta.url,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(lee.cases.length).toBe(2);
+    try {
+      for (const c of lee.cases) {
+        loadWindCase(physics, c);
+        physics.shelterUse(true);
+        const on = windBits(c);
+        expect(on.point, c.name).toEqual(c.values);
+        expect(on.sample, c.name).toEqual(c.values);
+        physics.shelterUse(false);
+        const off = windBits(c);
+        expect(off.point, c.name).toEqual(c.open);
+        expect(off.sample, c.name).toEqual(c.open);
+      }
+    } finally {
+      physics.shelterUse(false);
+    }
+  });
+
+  test('the shelter’s grid is Go’s shelter, cell by cell', () => {
+    for (const c of lee.cases) {
+      const grid = physics.shelterGrid(c.a0, c.b0, fromHex(c.from));
+      expect(physics.shelterSide).toBe(64);
+      expect(
+        Array.from(grid, (v) => toHex(v)),
+        c.name,
+      ).toEqual(c.grid);
+      // The hill casts a lee.
+      expect(Math.min(...grid)).toBeLessThan(0.5);
+    }
   });
 });

@@ -31,10 +31,12 @@
 // It holds groundSlots chunks of the ground and of the shelter at a time:
 // groundChunk gives a slot to a chunk by number and returns the address of
 // its elevations, then its surfaces, which the client fills; shelterChunk
-// the same for its shelter's table. groundUse and shelterUse say whether
-// steps sail on the ground and windAt reads the shelter; a chunk not held
-// is deep water and open wind. hexAt writes the hexagon that holds a point
-// to hexValues.
+// the same for its shelter's table. groundUse says whether steps sail on
+// the ground, and waveUnder, seaSample and seaFactor feel its depth;
+// shelterUse whether windAt, windPoint and windSample read the shelter; a
+// chunk not held is deep water and open wind. shelterGrid writes the
+// shelter's factor over a square of cells, for drawing the lee. hexAt
+// writes the hexagon that holds a point to hexValues.
 //
 // The sky is asked about once a frame: the client writes skyParams and
 // calls skyPrepare once, then skyAt with sky time and the boat's place, and
@@ -104,7 +106,12 @@ var (
 	groundOn  bool
 	shelterOn bool
 	hexValues [2]int32
+	// shelterValues is what shelterGrid writes.
+	shelterValues [shelterSide * shelterSide]float64
 )
+
+// shelterSide is how many cells a side shelterGrid answers for.
+const shelterSide = 64
 
 // groundSlotCount is how many chunks of the ground the module holds: the
 // one the boat is in and its eight neighbours.
@@ -146,6 +153,9 @@ var (
 	// and significant height of each.
 	samplePoints [2 * sampleCapacity]float64
 	sampleValues [4 * sampleCapacity]float64
+	// factorValues is what seaFactor writes: the depth's share of the
+	// waves at each point.
+	factorValues [sampleCapacity]float64
 
 	// windValues is what windSample writes: for each point the wind's
 	// speed and direction, the mean wind's speed and direction, the gust
@@ -318,14 +328,19 @@ func seaAt(tick float64) { physics.SeaAt(&waves, &stepTime, tick) }
 //go:wasmexport seaDrawAt
 func seaDrawAt(tick float64) { physics.SeaAt(&waves, &drawTime, tick) }
 
+// groundInUse is the ground steps sail on, or nil for the open sea.
+func groundInUse() *physics.Ground {
+	if groundOn {
+		return &ground
+	}
+	return nil
+}
+
 // step advances the state by one step and writes out.
 //
 //go:wasmexport step
 func step() {
-	var g *physics.Ground
-	if groundOn {
-		g = &ground
-	}
+	g := groundInUse()
 	if use < 0 {
 		physics.Step(&state, &control, &env, nil, g, &prepared, &out)
 		return
@@ -411,6 +426,28 @@ func hexAt(x, y float64) {
 //go:wasmexport hexValues
 func hexValuesAddr() uint32 { return addr(unsafe.Pointer(&hexValues)) }
 
+// shelterGrid writes to shelterValues the shelter's factor for a wind from
+// from at the centres of shelterSide by shelterSide cells, from cell
+// (a0, b0) of the whole grid: row by row from the south, each from the
+// west. A cell the module holds no shelter for is open water, 1.
+//
+//go:wasmexport shelterGrid
+func shelterGrid(a0, b0 int32, from float64) {
+	for j := range int32(shelterSide) {
+		for i := range int32(shelterSide) {
+			x, y := physics.ShelterCellCentre(a0+i, b0+j)
+			f, _ := shelter.At(x, y, from)
+			shelterValues[j*shelterSide+i] = f
+		}
+	}
+}
+
+//go:wasmexport shelterValues
+func shelterValuesAddr() uint32 { return addr(unsafe.Pointer(&shelterValues)) }
+
+//go:wasmexport shelterSide
+func shelterSideValue() uint32 { return shelterSide }
+
 // waveUnder writes to wave the sea under a hull at (x, y) heading heading,
 // with a waterplane of the given length and beam, in window s at the time
 // seaDrawAt set.
@@ -418,7 +455,7 @@ func hexValuesAddr() uint32 { return addr(unsafe.Pointer(&hexValues)) }
 //go:wasmexport waveUnder
 func waveUnder(s uint32, x, y, heading, length, beam float64) {
 	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Tick: &drawTime}
-	wave = physics.WaveUnder(&sea, length, beam, x, y, heading)
+	wave = physics.WaveUnder(&sea, groundInUse(), length, beam, x, y, heading)
 }
 
 //go:wasmexport samplePoints
@@ -433,11 +470,29 @@ func sampleValuesAddr() uint32 { return addr(unsafe.Pointer(&sampleValues)) }
 //go:wasmexport seaSample
 func seaSample(s, n uint32) {
 	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Tick: &drawTime}
+	g := groundInUse()
 	for i := uint32(0); i < n && i < sampleCapacity; i++ {
-		p := physics.SeaSample(&sea, samplePoints[2*i], samplePoints[2*i+1])
+		p := physics.SeaSample(&sea, g, samplePoints[2*i], samplePoints[2*i+1])
 		sampleValues[4*i], sampleValues[4*i+1], sampleValues[4*i+2], sampleValues[4*i+3] = p.Height, p.East, p.North, p.Hs
 	}
 }
+
+// seaFactor writes to factorValues the share of the waves the depth leaves
+// at the first n of samplePoints, in window s, by the ground the module
+// holds: 1 where it holds none, or groundUse is off.
+//
+//go:wasmexport seaFactor
+func seaFactor(s, n uint32) {
+	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Tick: &drawTime}
+	g := groundInUse()
+	for i := uint32(0); i < n && i < sampleCapacity; i++ {
+		x, y := samplePoints[2*i], samplePoints[2*i+1]
+		factorValues[i] = physics.DepthFactor(&waves, g, x, y, physics.SeaSample(&sea, nil, x, y).Hs)
+	}
+}
+
+//go:wasmexport factorValues
+func factorValuesAddr() uint32 { return addr(unsafe.Pointer(&factorValues)) }
 
 //go:wasmexport weatherParams
 func weatherParamsAddr() uint32 { return addr(unsafe.Pointer(&weatherParams)) }
@@ -506,11 +561,7 @@ func windAt(tick float64) {
 		physics.WeatherAt(&weather, &stepWeather, tick)
 		stepFresh = true
 	}
-	var sh *physics.Shelter
-	if shelterOn {
-		sh = &shelter
-	}
-	env = physics.WindAt(&stepWeather, state.X, state.Y, sh)
+	env = physics.WindAt(&stepWeather, state.X, state.Y, shelterInUse())
 }
 
 // windDrawAt sets the time windPoint, windSample and gustFrameAt answer
@@ -519,23 +570,33 @@ func windAt(tick float64) {
 //go:wasmexport windDrawAt
 func windDrawAt(tick float64) { physics.WeatherAt(&weather, &drawWeather, tick) }
 
+// shelterInUse is the land's shelter the wind reads, or nil for open
+// water.
+func shelterInUse() *physics.Shelter {
+	if shelterOn {
+		return &shelter
+	}
+	return nil
+}
+
 // windPoint writes to the wind record the wind at (x, y) in full, at the
-// time windDrawAt set.
+// time windDrawAt set, in the land's shelter while shelterUse is on.
 //
 //go:wasmexport windPoint
-func windPoint(x, y float64) { physics.WindPointAt(&drawWeather, x, y, &wind, nil) }
+func windPoint(x, y float64) { physics.WindPointAt(&drawWeather, x, y, &wind, shelterInUse()) }
 
 //go:wasmexport windValues
 func windValuesAddr() uint32 { return addr(unsafe.Pointer(&windValues)) }
 
 // windSample writes the wind at the first n of samplePoints to windValues,
-// at the time windDrawAt set.
+// at the time windDrawAt set, in the land's shelter while shelterUse is on.
 //
 //go:wasmexport windSample
 func windSample(n uint32) {
 	var p physics.WindPoint
+	sh := shelterInUse()
 	for i := uint32(0); i < n && i < sampleCapacity; i++ {
-		physics.WindPointAt(&drawWeather, samplePoints[2*i], samplePoints[2*i+1], &p, nil)
+		physics.WindPointAt(&drawWeather, samplePoints[2*i], samplePoints[2*i+1], &p, sh)
 		v := windValues[windValuesEach*i : windValuesEach*(i+1)]
 		v[0], v[1], v[2], v[3], v[4], v[5] = p.Speed, p.From, p.MeanSpeed, p.MeanFrom, p.Gust, p.Factor
 	}

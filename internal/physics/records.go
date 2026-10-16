@@ -209,6 +209,7 @@ type SeaParams struct {
 	Spreading  float64 // the exponent s of the spreading cos²ˢ(θ/2), a whole number
 	FetchCap   float64 // the fetch of open water, nautical miles
 	Cull       float64 // waves lower than this fraction of an area's highest are left out
+	Breaking   float64 // the most significant height the waves keep in shallow water, as a share of its depth
 }
 
 // Out holds values derived during a step for drawing and the player's
