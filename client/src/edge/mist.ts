@@ -24,7 +24,24 @@
 // node below.
 
 import { Color, Vector2 } from 'three';
-import { abs, clamp, exp, Fn, float, If, length, max, min, select, uniform, vec2 } from 'three/tsl';
+import {
+  abs,
+  cameraPosition,
+  clamp,
+  exp,
+  Fn,
+  float,
+  int,
+  Loop,
+  length,
+  max,
+  min,
+  positionWorld,
+  select,
+  uniform,
+  varying,
+  vec2,
+} from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { DOME_RADIUS, domeCentre } from '../render/materials';
 
@@ -46,6 +63,12 @@ export const edgeLook = {
   colour: uniform(new Color(0.8, 0.83, 0.85)),
   /** 1 to draw the edge's mist, the lip and the falls, 0 for none (?edge=off). */
   on: uniform(1),
+  /**
+   * 1 while the camera is near enough the band and the drain to see them,
+   * else 0: the turns of a loop (nearEdge) the mist and the drain's lines
+   * are worked out in, so that elsewhere they are not worked out at all.
+   */
+  near: uniform(0, 'int'),
   /** The sea's last tiles before the brink tip outward by this, rad, and drop by this, m. */
   tip: uniform(0.3),
   sag: uniform(0.2),
@@ -182,51 +205,50 @@ export function visualRangeAt(r: number, clear: number, p: MistParams): number {
 
 // The node: the same pieces, op for op.
 
-const pieceNode = /* @__PURE__ */ Fn(
-  ([t0, t1, a0, da, z0, dz, invH]: [
-    Node<'float'>,
-    Node<'float'>,
-    Node<'float'>,
-    Node<'float'>,
-    Node<'float'>,
-    Node<'float'>,
-    Node<'float'>,
-  ]) => {
-    const w = max(t1.sub(t0), 0);
-    const tm = t0.add(t1).mul(0.5);
-    const am = a0.add(da.mul(tm));
-    const full = am.greaterThanEqual(1);
-    const alpha = select(full, float(1), a0.add(da.mul(t0)));
-    const beta = select(full, float(0), da);
-    const flat = alpha.mul(w).add(beta.mul(w).mul(w).mul(0.5));
-    const e0 = exp(
-      max(z0.add(dz.mul(t0)), 0)
-        .mul(invH)
-        .negate(),
-    );
-    const k = dz.mul(invH);
-    const kw = k.mul(w);
-    const w2 = w.mul(w);
-    const taylor = alpha
-      .mul(w)
-      .add(beta.sub(alpha.mul(k)).mul(w2).mul(0.5))
-      .add(alpha.mul(k).mul(k).mul(0.5).sub(beta.mul(k)).mul(w2).mul(w).div(3))
-      .add(beta.mul(k).mul(k).mul(w2).mul(w2).mul(0.125));
-    // Away from level, k is far from 0 and the divisions are safe.
-    const ks = select(abs(kw).lessThan(LEVEL), float(1), k);
-    const g0 = alpha.div(ks).add(beta.div(ks.mul(ks)));
-    const g1 = exp(ks.mul(w).negate()).mul(
-      alpha
-        .add(beta.mul(w))
-        .div(ks)
-        .add(beta.div(ks.mul(ks))),
-    );
-    const sloped = select(abs(kw).lessThan(LEVEL), taylor, g0.sub(g1));
-    const above = z0.add(dz.mul(tm)).greaterThan(0);
-    const value = select(above, e0.mul(sloped), flat);
-    return select(am.lessThanEqual(0).or(w.lessThanEqual(0)), float(0), value);
-  },
-);
+/** One piece, as piece() works it out: the clamp and the sea judged at its middle. */
+const pieceNode = (
+  t0: Node<'float'>,
+  t1: Node<'float'>,
+  a0: Node<'float'>,
+  da: Node<'float'>,
+  z0: Node<'float'>,
+  dz: Node<'float'>,
+  invH: Node<'float'>,
+): Node<'float'> => {
+  const w = max(t1.sub(t0), 0);
+  const tm = t0.add(t1).mul(0.5);
+  const am = a0.add(da.mul(tm));
+  const full = am.greaterThanEqual(1);
+  const alpha = select(full, float(1), a0.add(da.mul(t0)));
+  const beta = select(full, float(0), da);
+  const flat = alpha.mul(w).add(beta.mul(w).mul(w).mul(0.5));
+  const e0 = exp(
+    max(z0.add(dz.mul(t0)), 0)
+      .mul(invH)
+      .negate(),
+  );
+  const k = dz.mul(invH);
+  const kw = k.mul(w);
+  const w2 = w.mul(w);
+  const taylor = alpha
+    .mul(w)
+    .add(beta.sub(alpha.mul(k)).mul(w2).mul(0.5))
+    .add(alpha.mul(k).mul(k).mul(0.5).sub(beta.mul(k)).mul(w2).mul(w).div(3))
+    .add(beta.mul(k).mul(k).mul(w2).mul(w2).mul(0.125));
+  // Away from level, k is far from 0 and the divisions are safe.
+  const ks = select(abs(kw).lessThan(LEVEL), float(1), k);
+  const g0 = alpha.div(ks).add(beta.div(ks.mul(ks)));
+  const g1 = exp(ks.mul(w).negate()).mul(
+    alpha
+      .add(beta.mul(w))
+      .div(ks)
+      .add(beta.div(ks.mul(ks))),
+  );
+  const sloped = select(abs(kw).lessThan(LEVEL), taylor, g0.sub(g1));
+  const above = z0.add(dz.mul(tm)).greaterThan(0);
+  const value = select(above, e0.mul(sloped), flat);
+  return select(am.lessThanEqual(0).or(w.lessThanEqual(0)), float(0), value);
+};
 
 const crossNode = (v0: Node<'float'>, dv: Node<'float'>, target: number): Node<'float'> =>
   select(
@@ -242,40 +264,12 @@ const crossNode = (v0: Node<'float'>, dv: Node<'float'>, target: number): Node<'
   );
 
 /**
- * The mist's optical depth along a piece of ray, as mistDepth computes each
- * half: its ends' distances from the centre and heights above the sea, and
- * its length.
+ * The pieces of the two halves, four each, worked out one at a time by a
+ * loop the shader compiler cannot unroll, its count a uniform: every
+ * material's fog carries the mist, and one piece's code compiles faster
+ * than eight.
  */
-const mistLinearNode = /* @__PURE__ */ Fn(
-  ([r0, z0, r1, z1, len]: [
-    Node<'float'>,
-    Node<'float'>,
-    Node<'float'>,
-    Node<'float'>,
-    Node<'float'>,
-  ]) => {
-    const tau = float(0).toVar();
-    const span = edgeLook.lip.sub(edgeLook.band);
-    const a0 = r0.sub(edgeLook.band).div(span);
-    const da = r1.sub(edgeLook.band).div(span).sub(a0);
-    If(max(a0, a0.add(da)).greaterThan(0).and(edgeLook.on.greaterThan(0)), () => {
-      const dz = z1.sub(z0);
-      const invH = float(1).div(edgeLook.height);
-      const x = crossNode(a0, da, 0);
-      const y = crossNode(a0, da, 1);
-      const z = crossNode(z0, dz, 0);
-      const s1 = min(min(min(x, y), z), 1);
-      const s3 = min(max(max(x, y), z), 1);
-      const s2 = min(max(min(x, y), min(max(x, y), z)), 1);
-      const sum = pieceNode(float(0), s1, a0, da, z0, dz, invH)
-        .add(pieceNode(s1, s2, a0, da, z0, dz, invH))
-        .add(pieceNode(s2, s3, a0, da, z0, dz, invH))
-        .add(pieceNode(s3, float(1), a0, da, z0, dz, invH));
-      tau.assign(edgeLook.sigma.mul(len).mul(sum));
-    });
-    return tau;
-  },
-);
+const PIECES = /* @__PURE__ */ uniform(8, 'int');
 
 /** A scene point's distance from the disk's centre, metres. */
 export const centreDistance = (p: Node<'vec3'>): Node<'float'> =>
@@ -287,13 +281,63 @@ export const heightAboveSea = (p: Node<'vec3'>): Node<'float'> => {
   return p.y.add(d.dot(d).mul(1 / (2 * DOME_RADIUS)));
 };
 
-/** The mist's optical depth between two scene points, the eye first. */
-export const mistBetween = (eye: Node<'vec3'>, p: Node<'vec3'>): Node<'float'> => {
-  const mid = eye.add(p).mul(0.5);
-  const half = length(p.sub(eye)).mul(0.5);
-  const rm = centreDistance(mid);
-  const zm = heightAboveSea(mid);
-  return mistLinearNode(centreDistance(eye), heightAboveSea(eye), rm, zm, half).add(
-    mistLinearNode(rm, zm, centreDistance(p), heightAboveSea(p), half),
-  );
+/**
+ * Runs body only while the camera is near the edge: as a loop of
+ * edgeLook.near turns rather than an if, since a renderer that runs both
+ * sides of an if, masking off the pixels that do not take it, still runs
+ * no turn of a loop that has none.
+ */
+export const nearEdge = (body: () => void): void => {
+  Loop({ start: int(0), end: edgeLook.near, type: 'int', condition: '<' }, body);
 };
+
+/** The mist's optical depth between two scene points, the eye first; only near the edge. */
+export const mistBetween = (eye: Node<'vec3'>, p: Node<'vec3'>): Node<'float'> =>
+  Fn(() => {
+    const tau = float(0).toVar();
+    nearEdge(() => {
+      const mid = eye.add(p).mul(0.5);
+      const half = length(p.sub(eye)).mul(0.5);
+      const rEye = centreDistance(eye).toVar();
+      const zEye = heightAboveSea(eye).toVar();
+      const rMid = centreDistance(mid).toVar();
+      const zMid = heightAboveSea(mid).toVar();
+      const rP = centreDistance(p).toVar();
+      const zP = heightAboveSea(p).toVar();
+      const span = edgeLook.lip.sub(edgeLook.band);
+      const invH = float(1).div(edgeLook.height);
+      const sum = float(0).toVar();
+      Loop(PIECES, ({ i }: { i: Node<'int'> }) => {
+        // The half, and the piece of it.
+        const second = i.greaterThanEqual(4);
+        const j = i.sub(select(second, int(4), int(0)));
+        const r0 = select(second, rMid, rEye);
+        const z0 = select(second, zMid, zEye);
+        const r1 = select(second, rP, rMid);
+        const z1 = select(second, zP, zMid);
+        const a0 = r0.sub(edgeLook.band).div(span);
+        const da = r1.sub(edgeLook.band).div(span).sub(a0);
+        const dz = z1.sub(z0);
+        const x = crossNode(a0, da, 0);
+        const y = crossNode(a0, da, 1);
+        const z = crossNode(z0, dz, 0);
+        const s1 = min(min(min(x, y), z), 1);
+        const s3 = min(max(max(x, y), z), 1);
+        const s2 = min(max(min(x, y), min(max(x, y), z)), 1);
+        const t0 = select(j.equal(0), float(0), select(j.equal(1), s1, select(j.equal(2), s2, s3)));
+        const t1 = select(j.equal(0), s1, select(j.equal(1), s2, select(j.equal(2), s3, float(1))));
+        sum.addAssign(pieceNode(t0, t1, a0, da, z0, dz, invH));
+      });
+      tau.assign(edgeLook.sigma.mul(half).mul(sum));
+    });
+    return tau;
+  })() as unknown as Node<'float'>;
+
+/**
+ * The mist's optical depth from the camera to the vertex, carried to each
+ * fragment between: a vertex of a tile, a boat or a column of land lies a
+ * few metres from the next, and the mist varies over hundreds, so the
+ * integral is worked out once a vertex, not once a fragment.
+ */
+export const mistAtVertex = (): Node<'float'> =>
+  varying(mistBetween(cameraPosition, positionWorld)) as unknown as Node<'float'>;

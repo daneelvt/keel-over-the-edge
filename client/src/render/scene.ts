@@ -10,20 +10,10 @@
 // the boat at that time, lights everything by the hour, and draws it.
 
 import { type Color, Vector3 } from 'three';
-import {
-  cameraPosition,
-  exp,
-  float,
-  fog,
-  length,
-  max,
-  mix,
-  positionView,
-  positionWorld,
-} from 'three/tsl';
+import { exp, float, fog, length, max, mix, positionView } from 'three/tsl';
 import { catalog } from '../catalog';
 import { EdgeScene } from '../edge/edge';
-import { edgeLook, KOSCHMIEDER, mistBetween } from '../edge/mist';
+import { edgeLook, KOSCHMIEDER, mistAtVertex } from '../edge/mist';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
 import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
@@ -249,7 +239,7 @@ export class SeaScene {
     // band at the edge of the world, by the mist along the ray. The sea has
     // its own blend to the sky at its edge.
     const clear = length(positionView).mul(KOSCHMIEDER).div(look.visualRange);
-    const mist = mistBetween(cameraPosition, positionWorld);
+    const mist = mistAtVertex();
     const tau = clear.add(mist);
     scene.fogNode = fog(
       mix(toLinear(look.skyHorizon), toLinear(edgeLook.colour), mist.div(max(tau, 1e-6))),

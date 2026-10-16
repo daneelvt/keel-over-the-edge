@@ -15,6 +15,7 @@
 import { Vector3, Vector4 } from 'three';
 import {
   abs,
+  Fn,
   float,
   floor,
   fract,
@@ -28,7 +29,7 @@ import {
   vec2,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import { edgeLook } from './mist';
+import { edgeLook, nearEdge } from './mist';
 
 /** The time the dashes repeat in: a dash's time times the dashes before the pattern repeats. */
 const DASH_TIME = 8;
@@ -102,45 +103,47 @@ const hash = (a: Node<'float'>, b: Node<'float'>): Node<'float'> =>
  * point's, as the catalog has it.
  */
 export function drainLines(p: Node<'vec2'>): Node<'float'> {
-  const L = linesLook;
-  const e = p.x.add(edgeLook.origin.x);
-  const n = p.y.negate().add(edgeLook.origin.y);
-  const r = vec2(e, n).length();
-  const [r0, r1, r2] = [L.at.x, L.at.y, L.at.z];
-  const [u0, u1, u2, start] = [L.speed.x, L.speed.y, L.speed.z, L.speed.w];
-  const k1 = u1.sub(u0).div(r1.sub(r0));
-  const k2 = u2.sub(u1).div(r2.sub(r1));
-  const first = u0.add(k1.mul(r.sub(r0)));
-  const second = u1.add(k2.mul(r.sub(r1)));
-  const u = select(r.lessThan(r1), first, min(second, u2));
-  const t1 = log(u1.div(start)).div(k1);
-  const tau = select(
-    r.lessThan(r1),
-    log(max(u, start).div(start)).div(k1),
-    select(
-      r.lessThan(r2),
-      t1.add(log(u.div(u1)).div(k2)),
-      t1.add(log(u2.div(u1)).div(k2)).add(r.sub(r2).div(u2)),
-    ),
-  );
-  // Across: the line's index and the place within its spacing, by the
-  // angle at the band's inner edge.
-  const across = vec2(e, n).normalize();
-  const angle = across.x.atan(across.y);
-  const lane = angle.mul(r1).div(L.apart);
-  const line = floor(lane);
-  const within = abs(fract(lane).sub(0.5)).mul(L.apart);
-  // Along: dashes carried out by the drain.
-  const phase = tau.sub(L.time).div(DASH_TIME);
-  const dash = floor(phase);
-  const inDash = fract(phase);
-  const on = hash(line, dash.sub(floor(dash.div(DASHES)).mul(DASHES))).greaterThan(0.45);
-  const shape = smoothstep(0, 0.15, inDash).mul(float(1).sub(smoothstep(0.75, 1, inDash)));
-  const thin = float(1).sub(smoothstep(HALF_WIDTH * 0.5, HALF_WIDTH, within));
-  const strength = smoothstep(start, u2, u).mul(MOST);
-  return select(
-    on.and(u.greaterThan(start)).and(edgeLook.on.greaterThan(0.5)),
-    shape.mul(thin).mul(strength),
-    float(0),
-  );
+  return Fn(() => {
+    const foam = float(0).toVar();
+    nearEdge(() => {
+      const L = linesLook;
+      const e = p.x.add(edgeLook.origin.x);
+      const n = p.y.negate().add(edgeLook.origin.y);
+      const r = vec2(e, n).length();
+      const [r0, r1, r2] = [L.at.x, L.at.y, L.at.z];
+      const [u0, u1, u2, start] = [L.speed.x, L.speed.y, L.speed.z, L.speed.w];
+      const k1 = u1.sub(u0).div(r1.sub(r0));
+      const k2 = u2.sub(u1).div(r2.sub(r1));
+      const first = u0.add(k1.mul(r.sub(r0)));
+      const second = u1.add(k2.mul(r.sub(r1)));
+      const u = select(r.lessThan(r1), first, min(second, u2));
+      const t1 = log(u1.div(start)).div(k1);
+      const tau = select(
+        r.lessThan(r1),
+        log(max(u, start).div(start)).div(k1),
+        select(
+          r.lessThan(r2),
+          t1.add(log(u.div(u1)).div(k2)),
+          t1.add(log(u2.div(u1)).div(k2)).add(r.sub(r2).div(u2)),
+        ),
+      );
+      // Across: the line's index and the place within its spacing, by the
+      // angle at the band's inner edge.
+      const across = vec2(e, n).normalize();
+      const angle = across.x.atan(across.y);
+      const lane = angle.mul(r1).div(L.apart);
+      const line = floor(lane);
+      const within = abs(fract(lane).sub(0.5)).mul(L.apart);
+      // Along: dashes carried out by the drain.
+      const phase = tau.sub(L.time).div(DASH_TIME);
+      const dash = floor(phase);
+      const inDash = fract(phase);
+      const on = hash(line, dash.sub(floor(dash.div(DASHES)).mul(DASHES))).greaterThan(0.45);
+      const shape = smoothstep(0, 0.15, inDash).mul(float(1).sub(smoothstep(0.75, 1, inDash)));
+      const thin = float(1).sub(smoothstep(HALF_WIDTH * 0.5, HALF_WIDTH, within));
+      const strength = smoothstep(start, u2, u).mul(MOST);
+      foam.assign(select(on.and(u.greaterThan(start)), shape.mul(thin).mul(strength), float(0)));
+    });
+    return foam;
+  })() as unknown as Node<'float'>;
 }

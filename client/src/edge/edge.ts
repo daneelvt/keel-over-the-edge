@@ -13,6 +13,14 @@ import { Falls, type FallsLook } from './falls';
 import { type Drain, LINES_PERIOD, linesLook } from './lines';
 import { edgeLook, KOSCHMIEDER, type MistParams } from './mist';
 
+/**
+ * The mist and the drain's lines are worked out while the camera is within
+ * this of where the first of them begins, m: the farthest anything drawn
+ * can be seen from, the highest land over the dome from the highest
+ * camera, with room.
+ */
+const NEAR_EDGE = 4000;
+
 /** One nautical mile, m; one knot, m/s. */
 const NM = 1852;
 const KNOT = NM / 3600;
@@ -42,6 +50,8 @@ export class EdgeScene {
   /** The lines' start speed, m/s. */
   readonly linesFrom: number;
   readonly #range: number;
+  /** Beyond this from the centre, m, the camera is near the edge (edgeLook.near). */
+  readonly #near: number;
 
   constructor(scene: Scene, band: BandUniforms, c: EdgeCatalog) {
     this.lip = c.radius;
@@ -62,6 +72,7 @@ export class EdgeScene {
     const speed = c.drain.map((x) => x * KNOT) as [number, number, number];
     this.drain = { at, speed };
     this.linesFrom = c.edge.look.lines.from * KNOT;
+    this.#near = Math.min(this.band, at[0]) - NEAR_EDGE;
     (linesLook.at.value as Vector3).set(at[0], at[1], at[2]);
     (linesLook.speed.value as Vector4).set(speed[0], speed[1], speed[2], this.linesFrom);
     linesLook.apart.value = c.edge.look.lines.apart;
@@ -90,6 +101,7 @@ export class EdgeScene {
    */
   frame(origin: FloatingOrigin, east: number, north: number, time: number): void {
     edgeLook.origin.value.set(origin.world.x, origin.world.y);
+    edgeLook.near.value = this.on && Math.hypot(east, north) > this.#near ? 1 : 0;
     const sigma = this.#sigma(look.visualRange.value as number);
     edgeLook.sigma.value = sigma;
     this.mist.sigma = sigma;
