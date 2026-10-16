@@ -16,11 +16,13 @@ import { decodeClient, decodeServer, encodeClient, encodeServer } from './frame'
 import type { SpellSchema } from './gen/keel/v1/game_pb';
 import {
   GROUND_HELD,
+  GROUND_SIZE,
   HEADER_SIZE,
   KIND_MESSAGE,
   MAX_HEADER_SIZE,
   NO_MARGIN,
   newSnapshot,
+  OVER_HELD,
   PILOT_HELD,
   PILOT_SIZE,
   readSnapshot,
@@ -135,6 +137,7 @@ describe('the snapshot', () => {
         g.order,
         g.target,
       ]);
+      expect(s.over, g.name).toBe(Number((g as { over?: string }).over ?? 0));
       for (const [name, i] of Object.entries(RECORDS.state)) {
         expect(bits(s.state[i] ?? 0), `${g.name}: ${name}`).toBe(
           (g.state as Record<string, string>)[name],
@@ -221,18 +224,45 @@ describe('the snapshot', () => {
     helm[20] = 0x04;
     expect(refused(helm)).not.toBeNull();
     const flags = good.slice();
-    flags[12] = 8 | PILOT_HELD | GROUND_HELD;
+    flags[12] = 16 | PILOT_HELD | GROUND_HELD;
     expect(refused(flags)).not.toBeNull();
     const entries = good.slice();
     entries[HEADER_SIZE - 1] = 129;
     expect(refused(entries)).not.toBeNull();
     // The second golden snapshot is on the autopilot and aground: both
     // blocks follow.
-    expect(s.header).toBe(MAX_HEADER_SIZE);
-    expect(refused(good.slice(0, MAX_HEADER_SIZE - 1))).not.toBeNull();
+    expect(s.header).toBe(HEADER_SIZE + PILOT_SIZE + GROUND_SIZE);
+    expect(refused(good.slice(0, HEADER_SIZE + PILOT_SIZE + GROUND_SIZE - 1))).not.toBeNull();
+    // Falling: the over block follows them, its tick above 0 and at most
+    // the snapshot's.
+    const falling = good.slice();
+    falling[12] = PILOT_HELD | GROUND_HELD | OVER_HELD;
+    expect(refused(falling)).not.toBeNull();
+    const fall = new Uint8Array(MAX_HEADER_SIZE);
+    fall.set(good.subarray(0, HEADER_SIZE + PILOT_SIZE + GROUND_SIZE));
+    fall[12] = PILOT_HELD | GROUND_HELD | OVER_HELD;
+    fall[HEADER_SIZE - 1] = 0;
+    const fv = new DataView(fall.buffer);
+    const tick = Number(snapshots[1]?.tick);
+    for (const [over, ok] of [
+      [tick, true],
+      [1, true],
+      [0, false],
+      [tick + 1, false],
+      [-3, false],
+    ] as const) {
+      fv.setInt32(MAX_HEADER_SIZE - 8, over, true);
+      fv.setInt32(MAX_HEADER_SIZE - 4, over < 0 ? -1 : 0, true);
+      const r = newSnapshot();
+      expect(readSnapshot(fv, r) === null, `over at ${over}`).toBe(ok);
+      if (ok) {
+        expect(r.over).toBe(over);
+        expect(r.header).toBe(MAX_HEADER_SIZE);
+      }
+    }
     expect(refused(good.slice(0, HEADER_SIZE + PILOT_SIZE - 1))).not.toBeNull();
     const old = good.slice();
-    old[1] = 6;
+    old[1] = 7;
     expect(refused(old)).not.toBeNull();
     for (const [at, v] of [
       [HEADER_SIZE, 3],

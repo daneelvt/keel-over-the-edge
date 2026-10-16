@@ -123,6 +123,10 @@ interface Exports {
   shelterSide(): number;
   seaFactor(slot: number, n: number): void;
   factorValues(): number;
+  circulation(way: number): void;
+  current(x: number, y: number): void;
+  currentValues(): number;
+  over(): number;
 }
 
 const functionExports = [
@@ -218,6 +222,10 @@ const functionExports = [
   'shelterSide',
   'seaFactor',
   'factorValues',
+  'circulation',
+  'current',
+  'currentValues',
+  'over',
 ] as const satisfies readonly (keyof Exports)[];
 
 /** A chunk of the ground as the module holds it: views of its memory. */
@@ -615,9 +623,34 @@ export class Physics {
     return out;
   }
 
-  /** Sets the env record to the wind at the state's place at a tick: what the next step sails in. */
+  /**
+   * Sets the env record to the wind and the current at the state's place at
+   * a tick: what the next step sails in.
+   */
   windAt(tick: number): void {
     this.#x.windAt(tick);
+  }
+
+  /** Sets the world's way round the disk for its current: 1 clockwise seen from above, −1 the other way, 0 none. */
+  circulation(way: number): void {
+    this.#x.circulation(way);
+  }
+
+  /**
+   * The current at (east, north), on the ground the module holds while
+   * groundUse is on: its east and north parts in m/s, written to out.
+   */
+  current(east: number, north: number, out: number[]): number[] {
+    this.#x.current(east, north);
+    const v = new Float64Array(this.#x.memory.buffer, this.#x.currentValues() >>> 0, 2);
+    out[0] = v[0] ?? 0;
+    out[1] = v[1] ?? 0;
+    return out;
+  }
+
+  /** Whether the state's centre of gravity is at or beyond the lip. */
+  over(): boolean {
+    return this.#x.over() !== 0;
   }
 
   /** Sets the time windPoint, windSample and gustFrame answer for, in ticks, which need not be whole. */

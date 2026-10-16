@@ -127,6 +127,8 @@ export type FromWorker =
       world: string;
       /** Whether the world's land is sailed: chunks come, and the prediction steps on them. */
       land: boolean;
+      /** The world's way round the disk for its current: 1 clockwise seen from above, −1 the other way, 0 none. */
+      circulation: number;
     }
   /** A snapshot record: view.ts's FLEET_RECORD_BYTES. */
   | { type: 'snapshot'; data: ArrayBuffer }

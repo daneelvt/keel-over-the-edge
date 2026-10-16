@@ -3,7 +3,9 @@
 package edgetest
 
 import (
+	"encoding/json"
 	"math"
+	"os"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -69,6 +71,7 @@ func TestOverTheLipOnline(t *testing.T) {
 		bobToken, bobID := srv.Guest("Bob")
 		watch.account = bus.Account(annID)
 		ann := srv.NewSailor(DialOptions{Cookie: annToken}, letGo)
+		ann.Trace = &client.Trace{}
 		bob := srv.NewSailor(DialOptions{Cookie: bobToken}, letGo)
 		falling := map[int64]bool{} // Bob's sampled views of Ann, by tick
 		bob.OnView = func(ev *client.Event) {
@@ -137,5 +140,24 @@ func TestOverTheLipOnline(t *testing.T) {
 			t.Error("Bob never saw Ann fall")
 		}
 		t.Logf("over at tick %d, back at %d; Bob saw Ann falling in %d samples; %d corrections", over, back, seen, ann.Stats.Corrections)
+		// The page's tests replay Ann's trace through the page's own
+		// prediction.
+		if *update {
+			if err := ann.Trace.Write(overTrace); err != nil {
+				t.Fatal(err)
+			}
+		}
 	})
+	data, err := os.ReadFile(overTrace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var trace client.Trace
+	if err := json.Unmarshal(data, &trace); err != nil {
+		t.Fatal(err)
+	}
+	replayTrace(t, &trace)
 }
+
+// overTrace is TestOverTheLipOnline's sailor's trace.
+const overTrace = "../../../shared/protocol/testdata/trace-over.json"

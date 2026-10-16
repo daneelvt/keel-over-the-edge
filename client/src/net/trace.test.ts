@@ -14,6 +14,7 @@ import { beforeAll, describe, expect, test } from 'vitest';
 import fleet from '../../../shared/protocol/testdata/trace-fleet.json';
 import lossy from '../../../shared/protocol/testdata/trace-lossy.json';
 import none from '../../../shared/protocol/testdata/trace-none.json';
+import over from '../../../shared/protocol/testdata/trace-over.json';
 import pilot from '../../../shared/protocol/testdata/trace-pilot.json';
 import pilotLossy from '../../../shared/protocol/testdata/trace-pilot-lossy.json';
 import { catalog } from '../catalog';
@@ -114,9 +115,14 @@ function pilotOf(v: number[]): PilotControl {
   return { mode, way, order, target };
 }
 
-async function replay(
-  trace: Trace,
-): Promise<{ corrections: number; snapshots: number; others: number; shadowed: number }> {
+async function replay(trace: Trace): Promise<{
+  corrections: number;
+  snapshots: number;
+  others: number;
+  shadowed: number;
+  fell: number;
+  falling: number;
+}> {
   const predictor = new Predictor(
     await loadPhysics(bytes),
     catalog.boats[0].physics,
@@ -133,6 +139,8 @@ async function replay(
   let reconciled = 0;
   let others = 0;
   let shadowed = 0;
+  let fell = 0;
+  let falling = 0;
   trace.events.forEach((e, i) => {
     const where = `event ${i} at ${e.t}`;
     if (e.out !== undefined) {
@@ -149,6 +157,9 @@ async function replay(
       expect(r.kind === 'dropped', where).toBe(e.dropped ?? false);
       if (r.kind === 'dropped') {
         expected.push(...r.out.map(hexOf));
+      }
+      if (r.kind === 'welcome') {
+        predictor.setCirculation(r.welcome.circulation);
       }
       if (r.kind === 'sea') {
         predictor.seas.receive(r.sea);
@@ -177,6 +188,7 @@ async function replay(
       const [tick = 0, helm = 0, sheet = 0] = e.step;
       predictor.stepIndices(helm, sheet, pilotOf(e.step));
       expect(predictor.tick, where).toBe(tick);
+      fell = Math.max(fell, predictor.over);
       if (predictor.wakes.reaching > 0) {
         shadowed++;
       }
@@ -186,6 +198,10 @@ async function replay(
         throw new Error(`${where}: no snapshot of tick ${e.snap.tick}`);
       }
       const o = predictor.snapshot(sn);
+      if (sn.over !== 0) {
+        falling++;
+        expect(predictor.over, `${where}: snapshot ${e.snap.tick}`).toBe(sn.over);
+      }
       expect(
         { stale: o.stale, reset: o.reset, corrected: o.corrected },
         `${where}: snapshot ${e.snap.tick}`,
@@ -205,7 +221,7 @@ async function replay(
     }
   });
   expect(expected).toEqual([]);
-  return { corrections, snapshots: reconciled, others, shadowed };
+  return { corrections, snapshots: reconciled, others, shadowed, fell, falling };
 }
 
 describe('the Go client’s traces', () => {
@@ -229,6 +245,14 @@ describe('the Go client’s traces', () => {
   test('on the autopilot at 200 ms and 2% loss: the same corrections', async () => {
     const r = await replay(pilotLossy as Trace);
     expect(r.corrections).toBeGreaterThan(0);
+  });
+
+  test('carried over the lip by the drain: over on the server’s tick, held, then back at the start', async () => {
+    const r = await replay(over as Trace);
+    // The developer's place is the one correction.
+    expect(r.corrections).toBe(1);
+    expect(r.fell).toBeGreaterThan(0);
+    expect(r.falling).toBeGreaterThan(30);
   });
 
   test('three sailing together at 200 ms and 2% loss: each view as Go decoded it', async () => {

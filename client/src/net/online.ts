@@ -218,6 +218,7 @@ export class Online {
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
         this.onWorld?.(m.world, m.land);
+        this.#predictor.setCirculation(m.circulation);
         this.#fresh = true;
         // A snapshot still waiting for a frame is the last connection's:
         // its controls are not this boat's.

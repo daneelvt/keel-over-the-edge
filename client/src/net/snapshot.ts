@@ -9,8 +9,9 @@
 // module: the boat's own fields from the header, what its autopilot
 // remembers from the autopilot's block that follows it while there is any,
 // and how long it has been aground from the ground block after that while
-// it is aground, or nothing. The other boats' entries after them are
-// view.ts's.
+// it is aground, or nothing; and, while it is falling over the lip, the
+// tick it went over from the over block after those. The other boats'
+// entries after them are view.ts's.
 
 /** A message's first byte: a Protocol Buffers envelope. */
 export const KIND_MESSAGE = 1;
@@ -22,10 +23,12 @@ export const HEADER_SIZE = 176;
 export const PILOT_SIZE = 32;
 /** The ground block's length. */
 export const GROUND_SIZE = 8;
-/** The header's length with both blocks. */
-export const MAX_HEADER_SIZE = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE;
-/** The layout this client reads: the own boat's state as float64, its autopilot's and ground blocks, then the view's entries. */
-export const SNAPSHOT_LAYOUT = 7;
+/** The over block's length. */
+export const OVER_SIZE = 8;
+/** The header's length with every block. */
+export const MAX_HEADER_SIZE = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE + OVER_SIZE;
+/** The layout this client reads: the own boat's state as float64, its autopilot's, ground and over blocks, then the view's entries. */
+export const SNAPSHOT_LAYOUT = 8;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */
@@ -34,6 +37,8 @@ export const FAR_SAMPLED = 1;
 export const PILOT_HELD = 2;
 /** A header's flag: the ground block follows it and the autopilot's block, if that is there. */
 export const GROUND_HELD = 4;
+/** A header's flag: the over block follows it and the blocks before it, if they are there. */
+export const OVER_HELD = 8;
 /** A snapshot's margin when no input arrived since the one before. */
 export const NO_MARGIN = -32768;
 /** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground. */
@@ -65,6 +70,8 @@ export interface OwnSnapshot {
   target: number;
   /** The lowest arrival margin since the previous snapshot, in ticks, or NO_MARGIN. */
   margin: number;
+  /** The tick the boat went over the lip while it is falling, or 0 while it is afloat. */
+  over: number;
   /** The boat's state, in the physics module's order. */
   readonly state: Float64Array;
 }
@@ -84,6 +91,7 @@ export function newSnapshot(): OwnSnapshot {
     order: 0,
     target: 0,
     margin: NO_MARGIN,
+    over: 0,
     state: new Float64Array(STATE_FIELDS),
   };
 }
@@ -121,7 +129,8 @@ export function headerLength(flags: number): number {
   return (
     HEADER_SIZE +
     ((flags & PILOT_HELD) !== 0 ? PILOT_SIZE : 0) +
-    ((flags & GROUND_HELD) !== 0 ? GROUND_SIZE : 0)
+    ((flags & GROUND_HELD) !== 0 ? GROUND_SIZE : 0) +
+    ((flags & OVER_HELD) !== 0 ? OVER_SIZE : 0)
   );
 }
 
@@ -156,7 +165,7 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
     return 'a snapshot with controls out of range';
   }
   const flags = v.getUint8(FLAGS);
-  if ((flags & ~(FAR_SAMPLED | PILOT_HELD | GROUND_HELD)) !== 0) {
+  if ((flags & ~(FAR_SAMPLED | PILOT_HELD | GROUND_HELD | OVER_HELD)) !== 0) {
     return 'a snapshot with flags it should not have';
   }
   const entries = v.getUint8(ENTRIES);
@@ -179,7 +188,16 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
       return 'a snapshot with an autopilot out of range';
     }
   }
-  out.tick = getInt64(v, TICK);
+  const tick = getInt64(v, TICK);
+  let over = 0;
+  if ((flags & OVER_HELD) !== 0) {
+    over = getInt64(v, header - OVER_SIZE);
+    if (!(over > 0 && over <= tick)) {
+      return 'a snapshot with its fall out of range';
+    }
+  }
+  out.tick = tick;
+  out.over = over;
   out.base = v.getUint16(BASE, true);
   out.flags = flags;
   out.entries = entries;
@@ -207,7 +225,8 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
     out.target = 0;
     s.fill(0, BOAT_FIELDS, PILOT_FIELDS);
   }
-  s[GROUND_TIMER] = (flags & GROUND_HELD) !== 0 ? v.getFloat64(header - GROUND_SIZE, true) : 0;
+  const groundAt = header - GROUND_SIZE - ((flags & OVER_HELD) !== 0 ? OVER_SIZE : 0);
+  s[GROUND_TIMER] = (flags & GROUND_HELD) !== 0 ? v.getFloat64(groundAt, true) : 0;
   return null;
 }
 
@@ -241,8 +260,12 @@ function notZero(x: number): boolean {
 export function writeSnapshot(s: OwnSnapshot, v: DataView): number {
   const held = pilotHeld(s);
   const aground = groundHeld(s);
+  const falling = s.over !== 0;
   const flags =
-    (s.flags & ~(PILOT_HELD | GROUND_HELD)) | (held ? PILOT_HELD : 0) | (aground ? GROUND_HELD : 0);
+    (s.flags & ~(PILOT_HELD | GROUND_HELD | OVER_HELD)) |
+    (held ? PILOT_HELD : 0) |
+    (aground ? GROUND_HELD : 0) |
+    (falling ? OVER_HELD : 0);
   v.setUint8(0, KIND_SNAPSHOT);
   v.setUint8(1, SNAPSHOT_LAYOUT);
   setInt64(v, TICK, s.tick);
@@ -273,6 +296,10 @@ export function writeSnapshot(s: OwnSnapshot, v: DataView): number {
   if (aground) {
     v.setFloat64(at, s.state[GROUND_TIMER] ?? 0, true);
     at += GROUND_SIZE;
+  }
+  if (falling) {
+    setInt64(v, at, s.over);
+    at += OVER_SIZE;
   }
   return at;
 }

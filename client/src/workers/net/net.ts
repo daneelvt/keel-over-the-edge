@@ -170,6 +170,7 @@ export class NetWorker {
             epochUs: Number(w.epochUs),
             world: w.world,
             land: w.land,
+            circulation: w.circulation,
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#setStatus('sailing');
