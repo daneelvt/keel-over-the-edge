@@ -84,6 +84,8 @@ export interface LandStats {
   failed: number;
   bytes: number;
   triangles: number;
+  /** The meshes' buffers held, on the GPU, bytes. */
+  gpuBytes: number;
   /** The last chunk's times, ms. */
   fetchMs: number;
   unpackMs: number;
@@ -106,6 +108,7 @@ export class Land {
     failed: 0,
     bytes: 0,
     triangles: 0,
+    gpuBytes: 0,
     fetchMs: 0,
     unpackMs: 0,
     buildMs: 0,
@@ -312,6 +315,7 @@ export class Land {
     let meshes = 0;
     let drawn = 0;
     let triangles = 0;
+    let gpuBytes = 0;
     for (const h of this.#held.values()) {
       const d = outlineDistance(h, east, north);
       if (h.mesh !== null && d > keepMeshes) {
@@ -327,6 +331,14 @@ export class Land {
         continue;
       }
       meshes++;
+      for (const at of [
+        m.geometry.attributes.position,
+        m.geometry.attributes.colour,
+        m.geometry.index,
+      ]) {
+        gpuBytes +=
+          (at?.array as (ArrayLike<number> & { byteLength: number }) | undefined)?.byteLength ?? 0;
+      }
       m.position.set(h.east - origin.world.x, 0, -(h.north - origin.world.y));
       // Above the horizon: its highest land seen from the camera over the
       // dome; and in view, its box widened down by the dome's drop.
@@ -351,6 +363,7 @@ export class Land {
     this.stats.meshes = meshes;
     this.stats.drawn = drawn;
     this.stats.triangles = triangles;
+    this.stats.gpuBytes = gpuBytes;
     this.stats.grids = this.#grids.size;
     this.stats.inFlight = this.#inFlight;
     // What reads the grids.
