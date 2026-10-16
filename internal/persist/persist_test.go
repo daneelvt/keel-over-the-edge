@@ -128,7 +128,8 @@ func newRig(t *testing.T, hold bus.Sender, grace int64, limit int) *rig {
 // newRigMeeting is newRig, its boats meeting by enc.
 func newRigMeeting(t *testing.T, hold bus.Sender, grace int64, limit int, enc *physics.EncounterPrepared) *rig {
 	t.Helper()
-	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds(t), Waves: waves(t), Workers: 1, Tick: 1000, Grace: grace, Limit: limit, Encounters: enc})
+	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds(t), Waves: waves(t), Workers: 1, Tick: 1000, Grace: grace, Limit: limit, Encounters: enc,
+		Edge: &sim.Edge{Fall: 150, Clear: 20}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,6 +474,44 @@ func TestBumpEvents(t *testing.T) {
 		if b.Fault != store.FaultAccount || b.Article == "" || !(b.Account == acct(1) && b.Other == acct(2) && b.Boat == 1 && b.OtherBoat == 2 ||
 			b.Account == acct(2) && b.Other == acct(1) && b.Boat == 2 && b.OtherBoat == 1) || math.Abs(b.X-500) > 3 || math.Abs(b.Y-500) > 3 {
 			t.Fatalf("the bump %+v", b)
+		}
+	})
+}
+
+// TestEdgeEvents: a boat going over the lip is a lasting event, where it
+// crossed; so is the closest approach its voyage survived, as the voyage
+// ends over the lip.
+func TestEdgeEvents(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(t, bus.Sender{}, 600, 0)
+		r.tick(bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+		r.tick(bus.Command{Op: bus.Place, Boat: 1, State: physics.State{Y: 8300, Heading: -math.Pi / 2}})
+		r.tick(bus.Command{Op: bus.Place, Boat: 1, State: physics.State{Y: 7700, Heading: -math.Pi / 2}})
+		r.tick(bus.Command{Op: bus.Place, Boat: 1, State: physics.State{X: 8333.5, Heading: math.Pi / 2, Surge: 3, SheetLimit: 0.6}})
+		for range 30 {
+			r.tick()
+		}
+		if err := r.close(t); err != nil {
+			t.Fatal(err)
+		}
+		events, _ := r.db.all()
+		if !slices.Equal(events, r.lasting) {
+			t.Fatalf("written %v, decided %v", events, r.lasting)
+		}
+		var over, approach []store.Event
+		for _, e := range events {
+			switch e.Kind {
+			case store.EventOver:
+				over = append(over, e)
+			case store.EventApproach:
+				approach = append(approach, e)
+			}
+		}
+		if len(over) != 1 || over[0].Account != acct(1) || over[0].Boat != 1 || math.Abs(math.Hypot(over[0].X, over[0].Y)-8334) > 0.2 {
+			t.Fatalf("going over: %+v", over)
+		}
+		if len(approach) != 1 || approach[0].Tick != over[0].Tick || math.Abs(approach[0].Distance-34) > 0.1 || math.Abs(approach[0].Y-8300) > 0.1 {
+			t.Fatalf("the approach survived: %+v", approach)
 		}
 	})
 }

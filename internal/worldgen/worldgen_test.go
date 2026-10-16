@@ -1026,3 +1026,52 @@ func TestSeeds(t *testing.T) {
 		t.Logf("a world's mean:%s", line)
 	}
 }
+
+// TestCirculation: each world's water runs one way round the disk or the
+// other, drawn from its seed, both ways among a few seeds. The digest
+// leaves it out, and a bundle stored without it is given the same way,
+// every time it is loaded.
+func TestCirculation(t *testing.T) {
+	ways := map[int]int{}
+	for seed := range uint64(16) {
+		ways[circulationOf(seed)]++
+	}
+	if len(ways) != 2 || ways[1] == 0 || ways[-1] == 0 {
+		t.Fatalf("the ways of 16 seeds: %v", ways)
+	}
+	b := Empty(5)
+	if b.Circulation != circulationOf(5) {
+		t.Fatalf("the empty world of seed 5 circulates %d", b.Circulation)
+	}
+	var file bytes.Buffer
+	if err := b.WriteFile(&file); err != nil {
+		t.Fatal(err)
+	}
+	read, err := ReadFile(file.Bytes())
+	if err != nil || read.Circulation != b.Circulation || read.Terrain(nil).Circulation != float64(b.Circulation) {
+		t.Fatalf("read back: %v, %v", read, err)
+	}
+	// Stored before the way was kept: the same digest, and the same way.
+	old := *b
+	old.Circulation = 0
+	if old.digest() != b.Digest {
+		t.Fatal("the way changes the digest")
+	}
+	records, err := json.Marshal(old.Records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(records, []byte("circulation")) {
+		t.Fatalf("records without a way hold one: %s", records)
+	}
+	chunks, err := b.Chunks([16]byte{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		got, err := Load(records, nil, chunks, [16]byte{}, b.Digest[:])
+		if err != nil || got.Circulation != b.Circulation {
+			t.Fatalf("loaded without a way: %d, %v", got.Circulation, err)
+		}
+	}
+}
