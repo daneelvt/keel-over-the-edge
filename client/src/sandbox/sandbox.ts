@@ -10,6 +10,11 @@
 // Its weather changes as a server's does at a developer's command: from the
 // second after next, so a sail recorded here can be sailed on a server
 // given the same commands at the same ticks.
+//
+// With an edge, it keeps the server's rules at the lip too: a boat whose
+// centre crosses it is held there, unstepped, for the fall, then starts
+// again at the sandbox's start, at rest. Its current runs the world's way
+// round the disk: a world file's, or clockwise.
 
 import type { BoatPhysics, Weather } from '../catalog/types.gen';
 import type { BoatDriver, Wind } from '../game/driver';
@@ -151,6 +156,14 @@ export class Sandbox implements BoatDriver {
   tick = 1;
   /** How many steps pushed the boat off the ground. */
   pushes = 0;
+  /**
+   * The edge's rules, or null for none: how many ticks a boat that has
+   * gone over the lip falls before it starts again (the catalog's fall).
+   */
+  edge: { fall: number } | null = null;
+  /** The tick the boat went over the lip, 0 while it is afloat; and how many times it has started again since. */
+  over = 0;
+  restarts = 0;
 
   readonly #physics: Physics;
   readonly #boat: BoatPhysics;
@@ -187,7 +200,13 @@ export class Sandbox implements BoatDriver {
       },
     };
     this.#startWeather();
+    this.setCirculation(1);
     this.reset();
+  }
+
+  /** Sets the world's way round the disk for the current: 1 clockwise, −1 the other way, 0 none. */
+  setCirculation(way: number): void {
+    this.#physics.circulation(way);
   }
 
   /** The physics module, for whoever draws its sea. */
@@ -202,6 +221,7 @@ export class Sandbox implements BoatDriver {
 
   /** Back to the start, at rest, in the weather as it is, and a new recording. */
   reset(): void {
+    this.over = 0;
     const r = this.#physics.records;
     r.state.fill(0);
     r.out.fill(0);
@@ -219,6 +239,7 @@ export class Sandbox implements BoatDriver {
    * recording starts again from there.
    */
   place(east: number, north: number, heading: number): void {
+    this.over = 0;
     const s = this.#physics.records.state;
     s[S.x] = east;
     s[S.y] = north;
@@ -431,6 +452,17 @@ export class Sandbox implements BoatDriver {
       this.#made = made;
       this.weather.add(spell);
     }
+    if (this.over !== 0 && this.edge !== null) {
+      if (tick < this.over + this.edge.fall) {
+        // Over the lip, falling: held as it went over.
+        this.tick = tick;
+        this.states.push(r.state);
+        return;
+      }
+      // The fall is over: back at the start, as a server starts it again.
+      this.restarts++;
+      this.reset();
+    }
     const east = r.state[S.x] ?? 0;
     const north = r.state[S.y] ?? 0;
     this.sea.advance(tick, east, north);
@@ -447,6 +479,9 @@ export class Sandbox implements BoatDriver {
     this.seas.use(tick);
     this.#physics.step();
     this.tick = tick;
+    if (this.edge !== null && this.#physics.over()) {
+      this.over = tick;
+    }
     // The module's memory never grows while stepping, so the views stay valid.
     const after = this.#physics.records;
     this.out.set(after.out);

@@ -26,9 +26,10 @@ test.describe('the GPU’s boat band', () => {
   // tick and place are given to the page, whose GPU must sum the same waves
   // to within what its sine is good for, at the world's centre and at its
   // rim, now and after 2³¹ ticks, in one sea and where two are blended.
+  // The edge is off: past the lip there are no tiles to read.
   for (const c of seaFile.cases) {
     test(`is the server’s: ${c.name}`, async ({ page }) => {
-      await openScene(page);
+      await openScene(page, 'edge=off');
       const got = await page.evaluate(async (c) => {
         const k = globalThis.keel;
         k.placeBoat(c.origin[0] ?? 0, c.origin[1] ?? 0);
@@ -297,7 +298,9 @@ test.describe('the floating origin', () => {
   });
 
   test('the scene at the rim looks as it does at the centre', async ({ page }) => {
-    await openScene(page);
+    // Its subject is float32's precision at the rim: the edge's mist and
+    // lip, which are the rim's own, are off.
+    await openScene(page, 'edge=off');
     // Flat water and every tile alike, so only the place differs; the boat
     // heading 330°, as the views were chosen. The sky is the rim's own
     // there, so it is held as the centre has it.

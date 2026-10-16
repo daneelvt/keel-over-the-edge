@@ -9,12 +9,18 @@
 import { expect, type Page, test } from '@playwright/test';
 import { openScene, type Picture, picture } from './helpers';
 
-/** Places on the disk, metres east and north: the centre, half way and the rim. */
+/**
+ * Places on the disk, metres east and north: the centre, half way and the
+ * rim, 4.1 nautical miles out, short of the mist band at the edge.
+ */
 const PLACES: Record<string, [number, number]> = {
   centre: [0, 0],
   'half way': [0, 4167],
-  rim: [5000, -6667],
+  rim: [4555, -6074],
 };
+
+/** The rim north of the centre, short of the mist band. */
+const RIM_NORTH = 7593;
 
 /** Night at all three places: the sun 25° or more below the horizon. */
 const NIGHT_HOURS = [20.5, 23, 1, 3.5];
@@ -242,9 +248,9 @@ test.describe('looking up', () => {
     page,
   }) => {
     await openScene(page);
-    const brought = await page.evaluate(() => {
+    const brought = await page.evaluate((rimNorth) => {
       const k = globalThis.keel;
-      k.placeBoat(0, 8300);
+      k.placeBoat(0, rimNorth);
       k.setSky(0);
       const canvas = document.querySelector('canvas.scene') as HTMLCanvasElement;
       const cx = canvas.clientWidth / 2;
@@ -271,7 +277,7 @@ test.describe('looking up', () => {
         k.dragCamera(dx, dy);
       }
       return { star: star(), cx, cy, camera: k.dragCamera(0, 0) };
-    });
+    }, RIM_NORTH);
     expect(brought).not.toBeNull();
     const { star, cx, cy } = brought as { star: { x: number; y: number }; cx: number; cy: number };
     expect(Math.hypot(star.x - cx, star.y - cy)).toBeLessThan(20);
@@ -459,16 +465,16 @@ test('pictures: the hours, a fleet by night, the sky from the rim', {
   await expect.soft(canvas).toHaveScreenshot('sky-fleet-night.png');
 
   // The Plough and the Hub Star from the rim.
-  await page.evaluate(async () => {
+  await page.evaluate(async (rimNorth) => {
     const k = globalThis.keel;
     k.setFleet(null);
     k.camera('chase');
-    k.placeBoat(0, 8300);
+    k.placeBoat(0, rimNorth);
     k.setSky(2, 0);
     // Turn to the south, where the centre and the Hub Star are, and look up.
     k.dragCamera(Math.PI / 2 / 0.006, 0);
     k.dragCamera(0, -350);
     await k.show();
-  });
+  }, RIM_NORTH);
   await expect.soft(canvas).toHaveScreenshot('sky-rim.png');
 });

@@ -44,6 +44,10 @@ export interface BoatDriver {
   clock?: { readonly steps: number } | null;
   /** How many times its sailor has pushed the boat off the ground: each push is drawn as a jump. */
   readonly pushes?: number;
+  /** The tick the boat went over the lip, 0 while it is afloat. */
+  readonly over?: number;
+  /** How many times the boat has started again at the start after going over. */
+  readonly restarts?: number;
 }
 
 /** Steps a driver to where the world clock says it should be, each frame. */

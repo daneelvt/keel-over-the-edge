@@ -14,7 +14,19 @@ import { effect } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
 import { KNOCK, knockOf } from '../audio/knock';
-import { type SoundInput, soundInput } from '../audio/voices';
+import { edgeInput, type SoundInput, soundInput } from '../audio/voices';
+import { catalog } from '../catalog';
+import {
+  ApproachWatch,
+  BACK_AT_PORT,
+  closestLine,
+  FADE_IN,
+  type FallShape,
+  fadeOver,
+  fallPose,
+  OVER_THE_FALLS,
+  overhang,
+} from '../edge/over';
 import { HelmInput } from '../input/helm';
 import { KeyInput } from '../input/keys';
 import { PILOT_HEADING, PILOT_WIND, type PilotActions, PilotInput, WAY_HOLD } from '../input/pilot';
@@ -26,7 +38,7 @@ import type { SeaScene } from '../render/scene';
 import { HudModel, PUSHED_OFF } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
 import { bumpLine } from '../ui/verdict';
-import { WorldClock } from './clock';
+import { STEPS_PER_SECOND, WorldClock } from './clock';
 import type { BoatDriver, Pacer } from './driver';
 import { StepLoop } from './loop';
 
@@ -58,6 +70,15 @@ export class Game implements PilotActions {
   groundings = 0;
   /** The friction of the bed under a point, from the land held; 0 where none is held. */
   bedFriction: (east: number, north: number) => number = () => 0;
+  /** The approaches to the lip on the boat's own track, for the screen. */
+  readonly approach: ApproachWatch;
+  /** The tick the drawn boat went over the lip, 0 while afloat; the starts again seen; when the last was, s. */
+  #over = 0;
+  #restarts = 0;
+  #back = Number.NEGATIVE_INFINITY;
+  /** How a boat over the lip is drawn falling: the own and the others. */
+  readonly fallShape: FallShape;
+  readonly #halfLength: number;
 
   readonly #sound: SoundInput = {
     apparentWind: 0,
@@ -67,6 +88,9 @@ export class Game implements PilotActions {
     whitecaps: 0,
     luffing: 0,
     time: 0,
+    lip: Number.POSITIVE_INFINITY,
+    lipPan: 0,
+    falling: false,
   };
   /** Out's aground after the last frame, the boat's speed then, and the pushes counted. */
   #aground = 0;
@@ -88,6 +112,16 @@ export class Game implements PilotActions {
     // The dial and the keys go no closer to the wind than ten degrees
     // inside close-hauled.
     this.pilot.least = (rig.closeHauled - 10) * DEG;
+    const edge = world.edge;
+    this.approach = new ApproachWatch(edge.lip, edge.band, catalog.world.edge.clear);
+    const slabs = catalog.world.edge.look.slabs;
+    this.fallShape = {
+      lip: edge.lip,
+      drain: edge.drain.speed[2],
+      gravity: slabs.gravity,
+      tip: [slabs.tip[0] ?? 0.3, slabs.tip[1] ?? 1.9],
+    };
+    this.#halfLength = world.kind.physics.hull.waterlineLength / 2;
     this.helm.onTake = () => this.takeHelm();
     this.sheet.target = 0.5;
     world.tick = (dt, now) => this.#frame(dt, now);
@@ -229,6 +263,58 @@ export class Game implements PilotActions {
     this.#pushes = pushes;
   }
 
+  /**
+   * The boat at the edge, at now (ms): as it goes over, the notice, the
+   * camera held where it is and the boat drawn falling, the screen fading
+   * to the mist; as it starts again, the notice, the autopilot off and the
+   * helm centred, the camera behind it, the screen fading back. Afloat, a
+   * hull hanging over the lip is drawn pitching over it, and an approach
+   * survived is told.
+   */
+  #edge(d: BoatDriver, now: number): void {
+    const w = this.world;
+    const over = d.over ?? 0;
+    const restarts = d.restarts ?? 0;
+    const reduced = w.camera.reducedMotion;
+    if (restarts > this.#restarts) {
+      this.#restarts = restarts;
+      this.#over = 0;
+      this.#back = this.clock.time;
+      this.hud.showBump(BACK_AT_PORT, now);
+      this.pilot.off();
+      this.helm.target = 0;
+      this.approach.over();
+      w.releaseCamera();
+    }
+    if (over !== 0 && this.#over === 0) {
+      this.#over = over;
+      this.hud.showBump(OVER_THE_FALLS, now);
+      this.approach.over();
+      if (!reduced) {
+        w.holdCamera();
+      }
+    } else if (over === 0 && this.#over !== 0) {
+      // A correction found the boat afloat after all.
+      this.#over = 0;
+      w.releaseCamera();
+    }
+    if (this.#over !== 0) {
+      const t = (this.clock.steps + this.clock.alpha - this.#over) / STEPS_PER_SECOND;
+      if (!reduced) {
+        fallPose(w.pose, t, this.fallShape);
+      }
+      w.setFade(fadeOver(t, reduced));
+      return;
+    }
+    overhang(w.pose, this.#halfLength, this.fallShape.lip);
+    const s = d.states.current;
+    const survived = this.approach.follow(s[RECORDS.state.x] ?? 0, s[RECORDS.state.y] ?? 0);
+    if (survived !== null) {
+      this.hud.showBump(closestLine(survived), now);
+    }
+    w.setFade(reduced ? 0 : 1 - (this.clock.time - this.#back) / FADE_IN);
+  }
+
   /** Steps once with the controls as they are (the panel's single step, the tests). */
   stepOnce(): void {
     this.loop.stepOnce();
@@ -312,6 +398,7 @@ export class Game implements PilotActions {
     }
     if (d !== null) {
       this.#ground(d, now);
+      this.#edge(d, now);
     }
     const time = this.clock.time;
     // At most a second: after a pause or a jump, what eases simply arrives.
@@ -335,6 +422,16 @@ export class Game implements PilotActions {
       d === null ? 0 : (d.states.current[RECORDS.state.pilotWay] ?? 0),
     );
     this.hud.tack.value = w.rightOfWay.tack;
+    // The falls: how far the lip is from the boat, and which way it lies
+    // from where the camera looks.
+    const look = w.lookBearing();
+    const out = Math.atan2(p.east, p.north);
+    edgeInput(
+      this.fallShape.lip - Math.hypot(p.east, p.north),
+      Math.sin(out - look),
+      this.#over !== 0,
+      this.#sound,
+    );
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
   }
 }

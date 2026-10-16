@@ -137,6 +137,8 @@ export class Predictor implements BoatDriver {
   pushes = 0;
   /** The tick the boat went over the lip, 0 while it is afloat: held there, unstepped. */
   over = 0;
+  /** How many times a snapshot has put the boat back at the start after going over. */
+  restarts = 0;
 
   /** The sea the boat is stepped in, from the server's SeaAreas. */
   readonly seas: Seas;
@@ -299,6 +301,9 @@ export class Predictor implements BoatDriver {
       this.#ticks[i] !== sn.tick ||
       (this.over !== 0 && sn.over === 0 && sn.tick > this.over)
     ) {
+      if (this.over !== 0 && sn.over === 0 && sn.tick > this.over) {
+        this.restarts++;
+      }
       this.reset(sn);
       o.reset = true;
       return o;

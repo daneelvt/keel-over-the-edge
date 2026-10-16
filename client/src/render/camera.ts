@@ -114,6 +114,8 @@ export class ChaseCamera {
   /** The boat's heave as the camera has followed it, and the sea's height under the boat, metres. */
   lift = 0;
   sea = 0;
+  /** Where the camera holds, in the scene, looking at the boat wherever it goes: going over the lip. */
+  held: { x: number; y: number; z: number } | null = null;
   /** A bump's shake: its size, metres, when it began and the frame's time, ms. */
   shakeSize = 0;
   #shakeAt = Number.NEGATIVE_INFINITY;
@@ -228,6 +230,10 @@ export class ChaseCamera {
     const ty = y + this.lift + LOOK_HEIGHT;
     const tz = z;
     target.set(tx, ty, tz);
+    if (this.held !== null) {
+      position.set(this.held.x, this.held.y, this.held.z);
+      return;
+    }
     const py = Math.max(ty + Math.sin(v.elevation) * v.distance, y + this.sea + MIN_HEIGHT);
     const px = tx + Math.cos(a) * ce * v.distance;
     const pz = tz + Math.sin(a) * ce * v.distance;

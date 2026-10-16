@@ -9,7 +9,7 @@
 // asks the physics module where the sun, the moon and the stars stand from
 // the boat at that time, lights everything by the hour, and draws it.
 
-import { Vector3 } from 'three';
+import { type Color, Vector3 } from 'three';
 import {
   cameraPosition,
   exp,
@@ -106,6 +106,8 @@ export class SeaScene {
   readonly sky: Sky;
   /** The edge of the world: the mist band, the lip and the falls. */
   readonly edge: EdgeScene;
+  /** The screen's fade to the mist, going over the lip. */
+  readonly fade: HTMLDivElement;
   readonly stats = new Stats();
   readonly camera = new ChaseCamera();
   /** The catalog's first boat, the one a new sailor starts in. */
@@ -227,6 +229,9 @@ export class SeaScene {
       drain: catalog.weather.current.drain,
     });
     this.edge.on = this.#query.get('edge') !== 'off';
+    this.fade = document.createElement('div');
+    this.fade.className = 'edge-fade';
+    container.append(this.fade);
     scene.add(this.sprayView.mesh);
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
@@ -354,6 +359,39 @@ export class SeaScene {
     this.camera.place(v, this.pose.heading, this.pose.heave, this.#seaUnderBoat());
     this.#updateBoatScene();
     this.#placeCamera();
+  }
+
+  /** Holds the camera where it is, looking at the boat wherever it goes. */
+  holdCamera(): void {
+    const p = this.stage.camera.position;
+    this.camera.held = { x: p.x, y: p.y, z: p.z };
+  }
+
+  /** Lets the camera follow the boat again, behind it as it rests. */
+  releaseCamera(): void {
+    this.camera.held = null;
+    this.placeCamera(this.camera.rest);
+  }
+
+  /** Where the camera looks, as a bearing: radians clockwise from north. */
+  lookBearing(): number {
+    const e = this.stage.camera.matrixWorld.elements;
+    // The camera looks down its −z axis: east is the scene's x, north its −z.
+    return Math.atan2(-(e[8] ?? 0), e[10] ?? 1);
+  }
+
+  /** Fades the screen to the mist's colour by this much, 0 to 1. */
+  setFade(amount: number): void {
+    const f = this.fade;
+    if (amount <= 0) {
+      if (f.style.opacity !== '0') {
+        f.style.opacity = '0';
+      }
+      return;
+    }
+    const c = edgeLook.colour.value as Color;
+    f.style.backgroundColor = `rgb(${Math.round(255 * c.r)}, ${Math.round(255 * c.g)}, ${Math.round(255 * c.b)})`;
+    f.style.opacity = String(Math.min(amount, 1));
   }
 
   #hull(shape: HullShape): void {

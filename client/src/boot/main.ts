@@ -29,6 +29,7 @@ import { createGuest } from '../account/guest';
 import { resolveSailor } from '../account/me';
 import { backSoon, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
+import { STEPS_PER_SECOND } from '../game/clock';
 import { Game } from '../game/game';
 import { Land } from '../land/land';
 import { FILE_WORLD, fetchWorldFile, handWorld, type WorldFile } from '../land/world';
@@ -105,6 +106,9 @@ async function start(): Promise<void> {
       startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather, begin),
     ]);
     prepareEncounters(sandbox.physics, catalog.encounters);
+    // The edge's rules, as a server keeps them; the world file's water's way.
+    sandbox.edge = { fall: Math.round(catalog.world.edge.fall * STEPS_PER_SECOND) };
+    sandbox.setCirculation(file?.circulation ?? 1);
     game.setDriver(sandbox);
     if (file !== null) {
       const land = new Land(

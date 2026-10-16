@@ -12,6 +12,7 @@
 
 import { signal } from '@preact/signals';
 import { catalog } from '../catalog';
+import type { FallShape } from '../edge/over';
 import { Fleet } from '../game/fleet';
 import { Floater } from '../game/float';
 import { type PilotControl, PilotInput } from '../input/pilot';
@@ -61,6 +62,8 @@ export interface Helmsman {
   /** Called before each step (the browser tests script controls). */
   beforeStep: (() => void) | null;
   readonly clock: { steps: number; alpha: number };
+  /** How the boats that go over the lip are drawn falling, or null for no edge. */
+  readonly fallShape?: FallShape | null;
 }
 
 /** How the connection looks to the player. */
@@ -385,6 +388,7 @@ export class Online {
       this.fleet.update(worldUs(this.clock, now), dt);
       const c = this.#helmsman.clock;
       this.#floater.apply(this.fleet.drawn, this.fleet.count, c.steps + c.alpha, dt);
+      this.fleet.fall(this.#helmsman.fallShape ?? null);
     }
   }
 
