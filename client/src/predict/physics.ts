@@ -118,6 +118,11 @@ interface Exports {
   shelterUse(on: number): void;
   hexAt(x: number, y: number): void;
   hexValues(): number;
+  shelterGrid(a0: number, b0: number, from: number): void;
+  shelterValues(): number;
+  shelterSide(): number;
+  seaFactor(slot: number, n: number): void;
+  factorValues(): number;
 }
 
 const functionExports = [
@@ -208,6 +213,11 @@ const functionExports = [
   'shelterUse',
   'hexAt',
   'hexValues',
+  'shelterGrid',
+  'shelterValues',
+  'shelterSide',
+  'seaFactor',
+  'factorValues',
 ] as const satisfies readonly (keyof Exports)[];
 
 /** A chunk of the ground as the module holds it: views of its memory. */
@@ -480,6 +490,26 @@ export class Physics {
   }
 
   /**
+   * The share of the waves the depth leaves at points (east, north of each,
+   * in turn), in a window, by the ground the module holds: 1 where it holds
+   * none or groundUse is off, 0 on land.
+   */
+  seaFactor(slot: number, points: ArrayLike<number>, out: Float64Array): Float64Array {
+    const x = this.#x;
+    const n = points.length >> 1;
+    for (let start = 0; start < n; start += SEA.sampleCapacity) {
+      const m = Math.min(SEA.sampleCapacity, n - start);
+      const into = new Float64Array(x.memory.buffer, x.samplePoints() >>> 0, 2 * m);
+      for (let i = 0; i < 2 * m; i++) {
+        into[i] = points[2 * start + i] ?? 0;
+      }
+      x.seaFactor(slot, m);
+      out.set(new Float64Array(x.memory.buffer, x.factorValues() >>> 0, m), start);
+    }
+    return out;
+  }
+
+  /**
    * Derives the wind's constants from the weatherParams record. Call it
    * after writing weatherParams (writeWeatherParams) and before setting
    * spells.
@@ -556,6 +586,24 @@ export class Physics {
   /** Says whether windAt reads the land's shelter the module holds. */
   shelterUse(on: boolean): void {
     this.#x.shelterUse(on ? 1 : 0);
+  }
+
+  /** How many cells a side shelterGrid answers for. */
+  get shelterSide(): number {
+    return this.#x.shelterSide();
+  }
+
+  /**
+   * The shelter's factor for a wind from from over shelterSide by
+   * shelterSide cells, from cell (a0, b0) of the whole grid, at each cell's
+   * centre: row by row from the south, each from the west. A view of the
+   * module's memory: read it before the next call.
+   */
+  shelterGrid(a0: number, b0: number, from: number): Float64Array {
+    const x = this.#x;
+    x.shelterGrid(a0, b0, from);
+    const n = x.shelterSide();
+    return new Float64Array(x.memory.buffer, x.shelterValues() >>> 0, n * n);
   }
 
   /** The hexagon that holds (east, north), as the server finds it, written to out as q, r. */

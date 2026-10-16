@@ -12,6 +12,7 @@
 //
 // Query strings, for development:
 //   ?sandbox          the offline sandbox alone: no server, no account
+//   ?world=7          the sandbox in seed 7's world, from .dev/worlds/7.world (go run ./tools/dev -world 7)
 //   ?wind=12,45       the sandbox's wind: knots 10 m up, and the degrees it comes from
 //   ?sea=gale         the sandbox's wind by the sea it raises: calm, breeze, fresh or gale
 //   ?dev              the developer panel (loaded only when asked for)
@@ -29,9 +30,11 @@ import { resolveSailor } from '../account/me';
 import { backSoon, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Game } from '../game/game';
+import { Land } from '../land/land';
+import { FILE_WORLD, fetchWorldFile, handWorld, type WorldFile } from '../land/world';
 import { Online } from '../net/online';
 import { reloadForVersion } from '../net/reload';
-import { LAYOUT_VERSION } from '../predict/layout.gen';
+import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
 import { loadPhysics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
@@ -82,8 +85,16 @@ async function start(): Promise<void> {
     // pictures and recordings are of one wind; otherwise a spell of the
     // commonest regime, with its shifts and gusts.
     const wind = windFromQuery(query) ?? seaFromQuery(query);
+    // ?world=seed: a whole world, from the file go run ./tools/dev -world
+    // writes, the boat at its start.
+    const seed = query.get('world');
+    const file: WorldFile | null = seed === null ? null : await fetchWorldFile(seed);
+    const place = file?.start.places[0];
     const begin = {
       ...START,
+      ...(file === null || place === undefined
+        ? {}
+        : { east: place[0], north: place[1], heading: file.start.heading }),
       wind: wind ?? START.wind,
       weather:
         weatherFromQuery(query, catalog.weather) ??
@@ -95,6 +106,21 @@ async function start(): Promise<void> {
     ]);
     prepareEncounters(sandbox.physics, catalog.encounters);
     game.setDriver(sandbox);
+    if (file !== null) {
+      const land = new Land(
+        new Worker(new URL('../workers/mesh/worker.ts', import.meta.url), { type: 'module' }),
+        catalog.world,
+        catalog.weather.sea.breaking,
+      );
+      world.useLand(land);
+      game.bedFriction = (east, north) => land.frictionAt(east, north);
+      land.setWorld(FILE_WORLD, true, sandbox.physics);
+      const s = sandbox.physics.records.state;
+      await handWorld(land, file, catalog.world.handout, () => [
+        s[RECORDS.state.x] ?? 0,
+        s[RECORDS.state.y] ?? 0,
+      ]);
+    }
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
     chooseSky(world, query);
     mountScreen(document.body, {
@@ -156,12 +182,25 @@ async function start(): Promise<void> {
     }
   };
   online.onBump = (b) => game.bump(b, performance.now());
+  // The land: its chunks fetched and built off the page's thread.
+  const land = new Land(
+    new Worker(new URL('../workers/mesh/worker.ts', import.meta.url), { type: 'module' }),
+    catalog.world,
+    catalog.weather.sea.breaking,
+  );
+  world.useLand(land);
+  game.bedFriction = (east, north) => land.frictionAt(east, north);
+  online.onWorld = (id, sailed) => land.setWorld(id, sailed, sailed ? predictor.physics : null);
+  online.onChunks = (c) => land.hand(c.numbers, c.paths);
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
   // while the sea is full.
   const waiting = online.status.subscribe((status) => notice(status === 'waiting'));
   const queue = showQueue(document.body, online.place);
   await online.ready;
+  // The land about the boat is drawn before the sea is shown, or the sea
+  // shows after three seconds whatever has come.
+  await nearLand(land, predictor, NEAR_LAND, NEAR_LAND_WAIT);
   waiting();
   queue();
   notice(false);
@@ -189,6 +228,27 @@ async function start(): Promise<void> {
   if (query.has('test')) {
     const { exposeHooks } = await import('../dev/hooks');
     exposeHooks(world, game, { online, predictor });
+  }
+}
+
+/** The start screen waits for the chunks handed within this of the boat, m, or this long, ms. */
+const NEAR_LAND = 300;
+const NEAR_LAND_WAIT = 3000;
+
+/** Resolves once the land within reach of the predicted boat has been had, or after wait ms. */
+async function nearLand(
+  land: Land,
+  predictor: Predictor,
+  reach: number,
+  wait: number,
+): Promise<void> {
+  const until = performance.now() + wait;
+  const s = predictor.records.state;
+  while (
+    performance.now() < until &&
+    !land.ready(s[RECORDS.state.x] ?? 0, s[RECORDS.state.y] ?? 0, reach)
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
 

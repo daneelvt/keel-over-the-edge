@@ -36,7 +36,14 @@ import {
   nowUs,
   worldUs,
 } from './clock';
-import type { BumpTold, FromWorker, HelloVersions, Status, ToWorker } from './messages';
+import type {
+  BumpTold,
+  ChunksHanded,
+  FromWorker,
+  HelloVersions,
+  Status,
+  ToWorker,
+} from './messages';
 import { NO_MARGIN, newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
 import { FLEET_META, fleetOf } from './view';
 
@@ -102,6 +109,10 @@ export class Online {
   onEpoch: ((epochUs: number) => void) | null = null;
   /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
   onBump: ((b: BumpTold) => void) | null = null;
+  /** Told of each Welcome's world, and whether its land is sailed. */
+  onWorld: ((world: string, land: boolean) => void) | null = null;
+  /** Told of the chunks of land the server hands. */
+  onChunks: ((c: ChunksHanded) => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
   lastMargin = NO_MARGIN;
   traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
@@ -191,6 +202,9 @@ export class Online {
       case 'bump':
         this.onBump?.(m.bump);
         break;
+      case 'chunks':
+        this.onChunks?.(m.chunks);
+        break;
       case 'welcome':
         if (this.#hadBoat && !m.rejoined) {
           this.notice.value = { text: 'Your boat has returned to port.', takeover: false };
@@ -203,6 +217,7 @@ export class Online {
         this.boat = m.boat;
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
+        this.onWorld?.(m.world, m.land);
         this.#fresh = true;
         // A snapshot still waiting for a frame is the last connection's:
         // its controls are not this boat's.

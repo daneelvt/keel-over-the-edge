@@ -16,12 +16,31 @@ export type Id = string;
  */
 export type Light = "tricolour" | "port" | "starboard" | "stern";
 /**
+ * A column's top.
+ */
+export type Colour = string;
+/**
+ * A column's sides, at their top: darker toward the foot.
+ */
+export type Colour1 = string;
+/**
+ * The sea bed of it, under water.
+ */
+export type Colour2 = string;
+/**
  * Path of an art file, relative to the repository's art/ folder.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "ArtPath".
  */
 export type ArtPath = string;
+/**
+ * A colour, as #rrggbb in sRGB.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Colour".
+ */
+export type Colour3 = string;
 
 /**
  * Every list of kinds in the game. Kinds are data: code reads their properties, never their names.
@@ -804,6 +823,10 @@ export interface WeatherSea {
    * Waves lower than this fraction of an area's highest are left out.
    */
   cull: number;
+  /**
+   * The most significant height the waves keep in shallow water, as a share of its depth: where the water is shallower than the sea's height over this, its waves are capped to it and break.
+   */
+  breaking: number;
 }
 /**
  * The wind over the disk: how its speed rises toward the rim, the refuge at the centre, the stronger gusts of the outer waters and the turning of the difference across the disk.
@@ -1341,6 +1364,8 @@ export interface World {
   grounding: WorldGrounding;
   validator: WorldValidator;
   names: WorldNames;
+  handout: WorldHandout;
+  look: WorldLook;
 }
 /**
  * The disk.
@@ -1775,6 +1800,22 @@ export interface Surface {
    * Coulomb's coefficient of a hull dragging on it under water.
    */
   friction: number;
+  look: SurfaceLook;
+}
+/**
+ * How a surface is drawn: its land's columns, and the sea bed seen through shallow water.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SurfaceLook".
+ */
+export interface SurfaceLook {
+  top: Colour;
+  side: Colour1;
+  bed: Colour2;
+  /**
+   * Foam added where the waves break over it, as a reef's crest foams: 0 to 1.
+   */
+  crest: number;
 }
 /**
  * Each sea area's effective fetch for a wind from each of 16 directions.
@@ -2058,6 +2099,74 @@ export interface NameTone {
    */
   phantom: boolean;
 }
+/**
+ * When a game connection is handed a chunk's address: once its boat could see something in the chunk.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldHandout".
+ */
+export interface WorldHandout {
+  /**
+   * A chunk whose outline is within this of the boat, in m.
+   */
+  near: number;
+  /**
+   * The highest the camera goes above the sea, in m: the land seen over the horizon is what it sees.
+   */
+  camera: number;
+  /**
+   * The dome's radius, in m, as the page draws it.
+   */
+  dome: number;
+  /**
+   * The far sea the page draws reaches at least this far, in m.
+   */
+  farSeaLeast: number;
+  /**
+   * And this many times the horizon's distance from the camera.
+   */
+  farSeaHorizon: number;
+  /**
+   * Added to every reach, in m: room for the fetch and the building.
+   */
+  margin: number;
+  /**
+   * Sea bed shallower than this shows through the water, in m.
+   */
+  shallows: number;
+  /**
+   * The boat is looked at again once it has moved this far, in m.
+   */
+  look: number;
+}
+/**
+ * How the land and the shallows are drawn.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldLook".
+ */
+export interface WorldLook {
+  /**
+   * Land is drawn in terraces this high, in m; land lower than one at its own height.
+   */
+  terrace: number;
+  /**
+   * A column's sides reach this far below the sea where it meets the water, in m.
+   */
+  shore: number;
+  /**
+   * How fast light fades in the water, per m: the bed shows by exp(-2 K h) in h metres of it.
+   */
+  attenuation: number;
+  /**
+   * A chunk's land is drawn while the boat is within this of it, in m, and built again when it comes back.
+   */
+  keepMeshes: number;
+  /**
+   * A chunk's elevations, surfaces and shelter are kept while the boat is within this of it, in m.
+   */
+  keepGrids: number;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '4c9954310646add1';
+export const CATALOG_VERSION = '97297bad3489251e';

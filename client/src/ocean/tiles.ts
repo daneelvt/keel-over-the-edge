@@ -13,6 +13,10 @@
 // The lattice is fixed in the world. The field's instances are fixed
 // offsets around a centre tile; when the boat enters a new tile, the centre
 // tile's (q, r) and position change, and every instance names a new tile.
+//
+// A tile over land is not drawn: its vertices all fall to one point. Each
+// tile carries its ground to the look (shore.ts): the depth, the waves' cap,
+// the bed's surface, and the lee about it.
 
 import {
   BufferAttribute,
@@ -31,6 +35,7 @@ import {
   ivec2,
   length,
   positionGeometry,
+  select,
   sign,
   smoothstep,
   textureLoad,
@@ -43,8 +48,9 @@ import { GUST_LOOK, type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
 import { FIELD_RADIUS, TILE_RADIUS } from './hex';
 import { HULL_MARGIN, hulls } from './hulls';
-import { GUST_ROW, PASS_WIDTH } from './tilepass';
-import { type BandUniforms, boatBandAt, seaAreaAt, seaPlaneOf } from './wave';
+import { depthCap, groundAtHex, leeAt, tileGround } from './shore';
+import { GROUND_ROW, GUST_ROW, PASS_WIDTH } from './tilepass';
+import { type BandUniforms, boatBandAt, cappedBand, periodAt, seaAreaAt, seaPlaneOf } from './wave';
 
 /** Depth of each tile's skirt, in metres: deeper than the steps a gale gives. */
 export const SKIRT_DEPTH = 1.1;
@@ -99,9 +105,16 @@ export interface TileVaryings {
   /**
    * The gust on the tile, as it shows: the gust field at the tile's centre,
    * above 0 in a gust and below in a lull, times how strongly the spell's
-   * gusts show, fading to nothing at the tile field's rim.
+   * gusts show, fading to nothing at the tile field's rim, and calmed in the
+   * lee.
    */
   gust: Node<'float'>;
+  /** The tile's ground: the water's depth, m, the waves' cap there, 1 for land, the bed's surface. */
+  ground: Node<'vec4'>;
+  /** The lee at the tile: the shelter's factor for the mean wind. */
+  lee: Node<'float'>;
+  /** The sea's peak period at the tile, s. */
+  period: Node<'float'>;
 }
 
 export class Tiles {
@@ -138,14 +151,24 @@ export class Tiles {
     const t = attribute<'vec4'>('tile', 'vec4');
     const index = int(instanceIndex);
     const c = this.centre.add(t.xy);
-    // Without the pass the band is summed here for the plane; with it the
-    // plane is read, and only the sea area's values, which need no sum, are
-    // computed here.
+    const hex = this.centreHex.add(t.zw);
+    // Without the pass the band is summed here for the plane, and capped by
+    // the depth; with it the plane and the ground are read, and only the
+    // sea area's values, which need no sum, are computed here.
     const summed = planes === null ? boatBandAt(band)(c) : null;
-    const plane: Node<'vec4'> =
-      summed !== null
-        ? seaPlaneOf(summed, c)
-        : textureLoad(planes as Texture, ivec2(index.mod(PASS_WIDTH), index.div(PASS_WIDTH)));
+    let ground: Node<'vec4'>;
+    let plane: Node<'vec4'>;
+    if (summed !== null) {
+      const g = groundAtHex(hex);
+      const f = depthCap(g, summed.w);
+      ground = tileGround(g, f);
+      plane = seaPlaneOf(cappedBand(summed, f), c);
+    } else {
+      const row = index.div(PASS_WIDTH);
+      plane = textureLoad(planes as Texture, ivec2(index.mod(PASS_WIDTH), row));
+      ground = textureLoad(planes as Texture, ivec2(index.mod(PASS_WIDTH), row.add(GROUND_ROW)));
+    }
+    const lee = leeAt(c, this.centre, this.centreHex);
     // The gust field at the tile's centre: read from the pass, or summed here.
     const field0 =
       planes === null
@@ -156,20 +179,26 @@ export class Tiles {
     // middle, and in full well before its strongest.
     const [from, full] = GUST_LOOK.shows;
     const shown = smoothstep(from, full, abs(field0)).mul(sign(field0));
-    const gust = shown.mul(gusts.uniforms.strength).mul(float(1).sub(rim));
-    const e = positionGeometry.xz;
+    const gust = shown.mul(gusts.uniforms.strength).mul(float(1).sub(rim)).mul(lee);
+    // Over land every vertex falls to the tile's centre, well below the sea:
+    // its triangles have no area, and nothing is drawn.
+    const land = ground.z.greaterThan(0.5);
+    const e = select(land, positionGeometry.xz.mul(0), positionGeometry.xz);
     const s = positionGeometry.y;
-    const y = plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH));
+    const y = select(land, plane.x.sub(50), plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH)));
     this.position = vec3(c.x.add(e.x), y, c.y.add(e.y));
     this.varyings = {
       offset: varying(e),
       side: varying(s),
       plane: varying(plane),
-      hex: varying(this.centreHex.add(t.zw)),
+      hex: varying(hex),
       area: varying(seaAreaAt(band)(c)),
       nearHull: varying(hulls.near(c, TILE_RADIUS + HULL_MARGIN)),
       centre: c,
       gust: varying(gust),
+      ground: varying(ground),
+      lee: varying(lee),
+      period: varying(periodAt(band)(c)),
     };
 
     this.mesh = new Mesh(geometry);

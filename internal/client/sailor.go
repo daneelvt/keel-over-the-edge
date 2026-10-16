@@ -79,6 +79,7 @@ type Stats struct {
 	Bumps     int // Bump messages
 	Seas      int // SeaAreas messages: the sea about the boat
 	Weathers  int // WeatherSystems messages: the spells of weather in play
+	Chunks    int // chunks' addresses handed
 }
 
 // Percentile is the p-th percentile of the corrections' sizes.
@@ -127,6 +128,9 @@ type Sailor struct {
 	Bumps []*pb.Bump
 	// Places are the places in the queue the server told, in order.
 	Places []Place
+	// Handed are the addresses of the chunks of land the server handed,
+	// in order.
+	Handed []string
 	Stats  Stats
 	Trace  *Trace
 	// Ms is m after each snapshot, with its time, for the tests.
@@ -271,6 +275,10 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			if ev.SeaAreas != nil {
 				s.Stats.Seas++
 				s.Predictor.Seas.Receive(ev.SeaAreas)
+			}
+			if c := ev.Chunks; c != nil {
+				s.Stats.Chunks += len(c.GetNumber())
+				s.Handed = append(s.Handed, c.GetPath()...)
 			}
 			if ev.WeatherSystems != nil {
 				s.Stats.Weathers++

@@ -356,7 +356,7 @@ func TestSeaSampleAgainstReference(t *testing.T) {
 	for _, tick := range []float64{7.4e8, 1<<31 + 1, 1 << 52} {
 		sea.at(tick)
 		for _, pt := range [][2]float64{{0, 0}, {8300, 0}, {-5869, 5869}, {12.5, -8299.75}} {
-			got := SeaSample(&sea.Sea, pt[0], pt[1])
+			got := SeaSample(&sea.Sea, nil, pt[0], pt[1])
 			var h, worst float64
 			for i, a := range sea.Window.Amp {
 				if a == 0 {
@@ -430,9 +430,9 @@ func TestBlendIsSmooth(t *testing.T) {
 		{0, SeaAreaSize - 3, 0, step},
 		{SeaAreaSize / 2.0, -SeaAreaSize - 3, step / math.Sqrt2, step / math.Sqrt2},
 	} {
-		prev := SeaSample(&sea.Sea, line.x, line.y)
+		prev := SeaSample(&sea.Sea, nil, line.x, line.y)
 		for i := 1; i <= 600; i++ {
-			p := SeaSample(&sea.Sea, line.x+float64(i)*line.dx, line.y+float64(i)*line.dy)
+			p := SeaSample(&sea.Sea, nil, line.x+float64(i)*line.dx, line.y+float64(i)*line.dy)
 			// The blend adds its own small part: the weights turn over
 			// SeaAreaSize, the heights are a metre or so.
 			if d := math.Abs(p.Height - prev.Height); d > step*(steep+0.02) {
@@ -450,7 +450,7 @@ func TestBlendIsSmooth(t *testing.T) {
 		}
 	}
 	// West of the border the sea is the calm's, east of it the gale's.
-	west, east := SeaSample(&sea.Sea, -400, 0), SeaSample(&sea.Sea, SeaAreaSize+100, 0)
+	west, east := SeaSample(&sea.Sea, nil, -400, 0), SeaSample(&sea.Sea, nil, SeaAreaSize+100, 0)
 	if west.Hs > 0.1 || math.Abs(east.Hs-gale.Hs[0]) > 1e-12 {
 		t.Errorf("Hs %g west of the border and %g east of it, the gale's is %g", west.Hs, east.Hs, gale.Hs[0])
 	}
@@ -475,11 +475,11 @@ func TestUniformWindowIsOneArea(t *testing.T) {
 		one.at(tick)
 		many.at(tick)
 		for _, pt := range [][2]float64{{0, 0}, {231.5, 231.5}, {-600.25, 17}, {463, -463}, {5000, 5000}, {-0.001, 100}} {
-			a, c := SeaSample(&one.Sea, pt[0], pt[1]), SeaSample(&many.Sea, pt[0], pt[1])
+			a, c := SeaSample(&one.Sea, nil, pt[0], pt[1]), SeaSample(&many.Sea, nil, pt[0], pt[1])
 			if a != c {
 				t.Errorf("at (%g, %g): one area gives %+v, the window %+v", pt[0], pt[1], a, c)
 			}
-			if a, c := WaveUnder(&one.Sea, hullL, hullB, pt[0], pt[1], 0.9), WaveUnder(&many.Sea, hullL, hullB, pt[0], pt[1], 0.9); a != c {
+			if a, c := WaveUnder(&one.Sea, nil, hullL, hullB, pt[0], pt[1], 0.9), WaveUnder(&many.Sea, nil, hullL, hullB, pt[0], pt[1], 0.9); a != c {
 				t.Errorf("at (%g, %g): under a hull one area gives %+v, the window %+v", pt[0], pt[1], a, c)
 			}
 		}
@@ -509,7 +509,7 @@ func TestWindowsAgree(t *testing.T) {
 	a, c := Sea{w, world, &tick}, Sea{w, near, &tick}
 	x0, y0 := float64(col-seaMiddle)*SeaAreaSize, float64(row-seaMiddle)*SeaAreaSize
 	for _, d := range [][2]float64{{0, 0}, {200, -200}, {-231.5, 231.4}, {600, 100}, {-650, -650}, {3, 694}} {
-		p, q := SeaSample(&a, x0+d[0], y0+d[1]), SeaSample(&c, x0+d[0], y0+d[1])
+		p, q := SeaSample(&a, nil, x0+d[0], y0+d[1]), SeaSample(&c, nil, x0+d[0], y0+d[1])
 		if p != q {
 			t.Errorf("%g, %g from the window's middle: the world gives %+v, the window %+v", d[0], d[1], p, q)
 		}
@@ -595,7 +595,7 @@ func TestEffectiveWave(t *testing.T) {
 		for i := range 400 {
 			sea := oneWave(c.length, a, c.toward)
 			sea.Waves.Phase[0] = float64(i) * 2 * math.Pi / 400
-			w := WaveUnder(&sea.Sea, length, 2*b.halfBeam, 0, 0, 0)
+			w := WaveUnder(&sea.Sea, nil, length, 2*b.halfBeam, 0, 0, 0)
 			height = max(height, math.Abs(w.Height))
 			slope = max(slope, math.Hypot(w.Ahead, w.Across))
 		}
@@ -610,9 +610,9 @@ func TestEffectiveWave(t *testing.T) {
 	// wave from astern lifts the stern first.
 	sea := oneWave(60, 0.5, 0)
 	sea.Waves.Phase[0] = 0 // the surface rises northward at the centre
-	north := WaveUnder(&sea.Sea, length, 2*b.halfBeam, 0, 0, 0)
-	east := WaveUnder(&sea.Sea, length, 2*b.halfBeam, 0, 0, math.Pi/2)
-	south := WaveUnder(&sea.Sea, length, 2*b.halfBeam, 0, 0, math.Pi)
+	north := WaveUnder(&sea.Sea, nil, length, 2*b.halfBeam, 0, 0, 0)
+	east := WaveUnder(&sea.Sea, nil, length, 2*b.halfBeam, 0, 0, math.Pi/2)
+	south := WaveUnder(&sea.Sea, nil, length, 2*b.halfBeam, 0, 0, math.Pi)
 	if !(north.Ahead > 0.04 && math.Abs(north.Across) < 1e-12) {
 		t.Errorf("heading north up the slope: ahead %g, across %g", north.Ahead, north.Across)
 	}

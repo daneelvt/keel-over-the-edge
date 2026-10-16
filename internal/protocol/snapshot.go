@@ -14,20 +14,23 @@ import (
 )
 
 // The snapshot, as shared/protocol/snapshot.txt lays it out: a header with
-// the player's own boat, its autopilot's block while it has one, then the
-// entries of the other boats' view.
+// the player's own boat, its autopilot's block while it has one, its ground
+// block while it is aground, then the entries of the other boats' view.
 const (
 	// HeaderSize is the header's length, its kind byte included: where
-	// the entries begin, unless the autopilot's block follows it.
+	// the entries begin, unless the autopilot's or the ground block
+	// follows it.
 	HeaderSize = 176
-	// PilotSize is the autopilot's block's length.
-	PilotSize = 32
-	// MaxHeaderSize is the header's length with the autopilot's block.
-	MaxHeaderSize = HeaderSize + PilotSize
+	// PilotSize is the autopilot's block's length, and GroundSize the
+	// ground block's.
+	PilotSize  = 32
+	GroundSize = 8
+	// MaxHeaderSize is the header's length with both blocks.
+	MaxHeaderSize = HeaderSize + PilotSize + GroundSize
 	// SnapshotLayout is the layout this package writes: the own boat's
-	// state as float64, its autopilot's block if it has one, then the
-	// view's entries.
-	SnapshotLayout = 6
+	// state as float64, its autopilot's block if it has one, its ground
+	// block if it is aground, then the view's entries.
+	SnapshotLayout = 7
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an
@@ -46,6 +49,10 @@ const (
 	// the pilot word in force or what the autopilot remembers is not zero,
 	// so a boat that never uses it pays nothing.
 	PilotHeld = 1 << 1
+	// GroundHeld: the ground block follows the header and the autopilot's
+	// block, if that is there. It does while the boat's time aground is
+	// not zero, so a boat afloat pays nothing.
+	GroundHeld = 1 << 2
 )
 
 const (
@@ -93,6 +100,10 @@ type Snapshot struct {
 	Header  int
 }
 
+// groundHeld reports whether a snapshot of the boat in state s carries the
+// ground block: whether its time aground is not zero (-0 counts).
+func groundHeld(s *physics.State) bool { return math.Float64bits(s.GroundTimer) != 0 }
+
 // pilotHeld reports whether a snapshot of the boat in state s, with the
 // pilot word p in force, carries the autopilot's block: whether any of
 // them is not zero.
@@ -102,18 +113,18 @@ func pilotHeld(p bus.PilotWord, s *physics.State) bool {
 }
 
 // PutHeader writes a snapshot's header, its kind byte first, into b, which
-// must hold its length, MaxHeaderSize bytes with the autopilot's block and
-// HeaderSize without, with no entries, and returns that length: where the
-// entries begin. It allocates nothing.
+// must hold its length, HeaderSize bytes and each block's, with no entries,
+// and returns that length: where the entries begin. It allocates nothing.
 func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, pilot bus.PilotWord, margin int16, s *physics.State) int {
-	held := pilotHeld(pilot, s)
-	_ = b[HeaderSize-1]
-	if held {
-		_ = b[MaxHeaderSize-1]
-	}
-	flags &^= PilotHeld
+	held, aground := pilotHeld(pilot, s), groundHeld(s)
+	n := headerLength(held, aground)
+	_ = b[n-1]
+	flags &^= PilotHeld | GroundHeld
 	if held {
 		flags |= PilotHeld
+	}
+	if aground {
+		flags |= GroundHeld
 	}
 	le := binary.LittleEndian
 	b[0] = KindSnapshot
@@ -130,16 +141,33 @@ func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, pi
 		le.PutUint64(b[offState+8*i:], math.Float64bits(*v))
 	}
 	b[offEntries] = 0
-	if !held {
-		return HeaderSize
+	at := HeaderSize
+	if held {
+		clear(b[HeaderSize : HeaderSize+PilotSize])
+		b[offPilotMode], b[offPilotWay], b[offPilotOrder] = pilot.Mode(), pilot.Way(), pilot.Order()
+		le.PutUint16(b[offPilotTarget:], pilot.Target())
+		for i, v := range fields[sim.BoatSize : sim.BoatSize+sim.PilotSize] {
+			le.PutUint64(b[offPilotState+8*i:], math.Float64bits(*v))
+		}
+		at += PilotSize
 	}
-	clear(b[HeaderSize:MaxHeaderSize])
-	b[offPilotMode], b[offPilotWay], b[offPilotOrder] = pilot.Mode(), pilot.Way(), pilot.Order()
-	le.PutUint16(b[offPilotTarget:], pilot.Target())
-	for i, v := range fields[sim.BoatSize : sim.BoatSize+sim.PilotSize] {
-		le.PutUint64(b[offPilotState+8*i:], math.Float64bits(*v))
+	if aground {
+		le.PutUint64(b[at:], math.Float64bits(s.GroundTimer))
+		at += GroundSize
 	}
-	return MaxHeaderSize
+	return at
+}
+
+// headerLength is the header's length with the blocks that follow it.
+func headerLength(pilot, ground bool) int {
+	n := HeaderSize
+	if pilot {
+		n += PilotSize
+	}
+	if ground {
+		n += GroundSize
+	}
+	return n
 }
 
 // SetEntries writes the count of entries into a snapshot's header.
@@ -154,10 +182,7 @@ func (s *Snapshot) Put(b []byte) {
 
 // Len is the length of s's header: where its entries begin.
 func (s *Snapshot) Len() int {
-	if pilotHeld(s.pilot(), &s.State) {
-		return MaxHeaderSize
-	}
-	return HeaderSize
+	return headerLength(pilotHeld(s.pilot(), &s.State), groundHeld(&s.State))
 }
 
 func (s *Snapshot) pilot() bus.PilotWord {
@@ -165,8 +190,8 @@ func (s *Snapshot) pilot() bus.PilotWord {
 }
 
 // ReadSnapshot reads a snapshot's header, its kind byte first, and its
-// autopilot's block if it has one. Its entries are b[s.Header:], read with
-// View.Apply.
+// autopilot's and ground blocks if it has them. Its entries are
+// b[s.Header:], read with View.Apply.
 func ReadSnapshot(b []byte, s *Snapshot) error {
 	switch {
 	case len(b) == 0:
@@ -192,7 +217,7 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 	switch {
 	case s.Helm > bus.Steps || s.Sheet > bus.Steps:
 		return fmt.Errorf("protocol: a snapshot's controls %d and %d", s.Helm, s.Sheet)
-	case s.Flags&^(FarSampled|PilotHeld) != 0:
+	case s.Flags&^(FarSampled|PilotHeld|GroundHeld) != 0:
 		return fmt.Errorf("protocol: a snapshot's flags %#02x", s.Flags)
 	case s.Entries > MaxEntries:
 		return fmt.Errorf("protocol: a snapshot of %d entries", s.Entries)
@@ -201,24 +226,29 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 	for i, v := range fields[:sim.BoatSize] {
 		*v = math.Float64frombits(le.Uint64(b[offState+8*i:]))
 	}
-	s.Mode, s.Way, s.Order, s.Target, s.Header = 0, 0, 0, 0, HeaderSize
+	s.Mode, s.Way, s.Order, s.Target = 0, 0, 0, 0
 	for _, v := range fields[sim.BoatSize:] {
 		*v = 0
 	}
-	if s.Flags&PilotHeld == 0 {
-		return nil
+	held, aground := s.Flags&PilotHeld != 0, s.Flags&GroundHeld != 0
+	s.Header = headerLength(held, aground)
+	if len(b) < s.Header {
+		return fmt.Errorf("protocol: a snapshot of %d bytes, shorter than its header and blocks", len(b))
 	}
-	if len(b) < MaxHeaderSize {
-		return fmt.Errorf("protocol: a snapshot of %d bytes, shorter than its header and autopilot", len(b))
+	at := HeaderSize
+	if held {
+		s.Mode, s.Way, s.Order = b[offPilotMode], b[offPilotWay], b[offPilotOrder]
+		s.Target = le.Uint16(b[offPilotTarget:])
+		if s.Mode > bus.PilotHeading || s.Way > bus.WayGybe || s.Order > 3 || b[offPilotTarget-1] != 0 || le.Uint16(b[offPilotTarget+2:]) != 0 {
+			return fmt.Errorf("protocol: a snapshot's autopilot of mode %d, way %d, order %d", s.Mode, s.Way, s.Order)
+		}
+		for i, v := range fields[sim.BoatSize : sim.BoatSize+sim.PilotSize] {
+			*v = math.Float64frombits(le.Uint64(b[offPilotState+8*i:]))
+		}
+		at += PilotSize
 	}
-	s.Mode, s.Way, s.Order = b[offPilotMode], b[offPilotWay], b[offPilotOrder]
-	s.Target = le.Uint16(b[offPilotTarget:])
-	if s.Mode > bus.PilotHeading || s.Way > bus.WayGybe || s.Order > 3 || b[offPilotTarget-1] != 0 || le.Uint16(b[offPilotTarget+2:]) != 0 {
-		return fmt.Errorf("protocol: a snapshot's autopilot of mode %d, way %d, order %d", s.Mode, s.Way, s.Order)
+	if aground {
+		s.State.GroundTimer = math.Float64frombits(le.Uint64(b[at:]))
 	}
-	for i, v := range fields[sim.BoatSize : sim.BoatSize+sim.PilotSize] {
-		*v = math.Float64frombits(le.Uint64(b[offPilotState+8*i:]))
-	}
-	s.Header = MaxHeaderSize
 	return nil
 }

@@ -54,6 +54,9 @@ type Config struct {
 	// /assets/. Without it, as in development, another server serves the
 	// page and sends the rest here.
 	Page *Page
+	// Chunks, if not nil, are the world's chunks, served at their
+	// addresses under /w/.
+	Chunks *Chunks
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -103,6 +106,15 @@ func Handler(cfg Config) http.Handler {
 	if cfg.Page != nil {
 		cfg.Page.register(mux)
 	}
+	if cfg.Chunks != nil {
+		mux.Handle(chunkRoute, cfg.Chunks.serve(cfg.Metrics))
+	}
+	mux.HandleFunc(chunksRoute, func(w http.ResponseWriter, _ *http.Request) {
+		cfg.Metrics.ChunkRequests.WithLabelValues("refused").Inc()
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		writeError(w, http.StatusNotFound, "not-found")
+	})
+	mux.HandleFunc(robotsRoute, serveRobots)
 
 	cop := http.NewCrossOriginProtection()
 	cop.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -119,12 +131,21 @@ func Handler(cfg Config) http.Handler {
 	return obs.AccessLog(cfg.Log, h)
 }
 
-// session reads the session for every route but the page's: the page is
-// the same for everyone, and loads even when the database cannot be asked.
+// robotsRoute is robots.txt's route.
+const robotsRoute = "GET /robots.txt"
+
+// openRoutes are the routes besides the page's that need no session: what
+// they serve is the same for everyone who has the address.
+var openRoutes = map[string]bool{chunkRoute: true, chunksRoute: true, robotsRoute: true}
+
+// session reads the session for every route but the page's and the open
+// ones: the page is the same for everyone, and loads even when the database
+// cannot be asked; a chunk is cached by the edge for everyone, so its
+// answer carries no cookie.
 func session(mux *http.ServeMux, mw func(http.Handler) http.Handler) http.Handler {
 	withSession := mw(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, pattern := mux.Handler(r); pageRoutes[pattern] {
+		if _, pattern := mux.Handler(r); pageRoutes[pattern] || openRoutes[pattern] {
 			mux.ServeHTTP(w, r)
 			return
 		}

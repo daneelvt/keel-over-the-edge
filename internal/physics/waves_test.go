@@ -409,7 +409,7 @@ func TestWaveYawMoment(t *testing.T) {
 		want := 0.0
 		for i := range n {
 			along := (float64(i)+0.5)/n*length - b.halfLength
-			p := SeaSample(sea, c.x+along*sinH, c.y+along*cosH)
+			p := SeaSample(sea, nil, c.x+along*sinH, c.y+along*cosH)
 			// The slope rising toward starboard pushes the hull to port.
 			push := -b.waveSway / length * (p.East*cosH - p.North*sinH)
 			want += along * push * length / n

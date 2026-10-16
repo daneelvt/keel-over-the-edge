@@ -4,8 +4,12 @@
 # entry point, so each ruleset here holds every rule of its phase.
 
 # The page's hashed assets are cached at the edge for as long as the game
-# says (a year, immutable). The page and the API are not: Cloudflare caches
-# neither by default, and the page says no-cache.
+# says (a year, immutable), and so are the world's chunks, at their signed
+# addresses under /w/ (public, a year, immutable; any other address there is
+# a 404 the game marks no-store). Cloudflare would cache .bin files by
+# their extension alone, but the rule says so whatever its default list
+# becomes. The page and the API are not cached: Cloudflare caches neither by
+# default, and the page says no-cache.
 resource "cloudflare_ruleset" "cache" {
   zone_id = var.cloudflare_zone_id
   name    = "cache"
@@ -23,7 +27,26 @@ resource "cloudflare_ruleset" "cache" {
         browser_ttl = { mode = "respect_origin" }
       }
     },
+    {
+      ref         = "chunks"
+      description = "The world's chunks, as long as the origin says"
+      expression  = "(http.host eq \"${local.play}\" and starts_with(http.request.uri.path, \"/w/\"))"
+      action      = "set_cache_settings"
+      action_parameters = {
+        cache       = true
+        edge_ttl    = { mode = "respect_origin" }
+        browser_ttl = { mode = "respect_origin" }
+      }
+    },
   ]
+}
+
+# Smart Tiered Cache: the data centres players reach ask one upper tier,
+# and only it asks the origin, so a chunk leaves the game about once rather
+# than once per data centre. It is free.
+resource "cloudflare_tiered_cache" "zone" {
+  zone_id = var.cloudflare_zone_id
+  value   = "on"
 }
 
 # The game answers GET, HEAD and POST; the WebSocket's upgrade is a GET.

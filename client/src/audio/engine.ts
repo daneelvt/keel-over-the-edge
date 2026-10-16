@@ -14,6 +14,7 @@
 // context is made and resumed on the first such event, and tried again on
 // every one until it runs. It is suspended while the page is hidden.
 
+import type { Scrape } from './ground';
 import type { Knock } from './knock';
 import {
   newTargets,
@@ -234,6 +235,41 @@ export class SoundEngine {
    * Plays a bump's knock once: a thump falling in pitch and a crack of
    * noise, each dying away, placed left or right.
    */
+  /** How many scrapes were played (tests). */
+  scrapes = 0;
+
+  /** Plays a hull's scrape on the bottom once: band-passed noise swelling and dying away. */
+  scrape(sc: Scrape): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || !(sc.level > 0)) {
+      return;
+    }
+    this.scrapes++;
+    const ctx = g.ctx;
+    const at = ctx.currentTime;
+    const burst = ctx.createBufferSource();
+    burst.buffer = g.noise;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = sc.band;
+    band.Q.value = sc.q;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(sc.level, at + sc.rise);
+    gain.gain.setTargetAtTime(0, at + sc.rise, sc.decay);
+    burst.connect(band);
+    band.connect(gain);
+    gain.connect(g.master);
+    const end = at + sc.rise + 8 * sc.decay;
+    burst.start(at, 0.7);
+    burst.stop(end);
+    burst.onended = () => {
+      for (const n of [burst, band, gain]) {
+        n.disconnect();
+      }
+    };
+  }
+
   knock(k: Knock): void {
     const g = this.#graph;
     if (g === null || g.ctx.state !== 'running' || !(k.level > 0)) {

@@ -95,9 +95,11 @@ export const look = {
   scatter: uniform(new Color(0.07, 0.48, 0.5)),
   /** The main light's wide highlight on the water: its power and strength. */
   broad: uniform(new Vector3(14, 0.22, 0)),
-  /** Everything blends toward the horizon's colour from here to there, in metres. */
+  /** The sea blends toward the horizon's colour from here to there, in metres. */
   hazeNear: uniform(220),
   hazeFar: uniform(1000),
+  /** The visual range solid things fade by, m (Koschmieder). */
+  visualRange: uniform(6000),
   /** The faintest star that shows, as a magnitude. */
   starLimit: uniform(-3),
   /** The lanterns: 0 unlit, 1 lit. */
@@ -277,6 +279,7 @@ export class Sky {
     (look.broad.value as Vector3).set(v.broadPower, v.broadStrength, 0);
     look.hazeNear.value = v.hazeNear;
     look.hazeFar.value = v.hazeFar;
+    look.visualRange.value = v.visualRange;
     // The sail's glow is a light, in linear values.
     const glow = this.#colour.setRGB(
       v.sailGlow[0] ?? 0,

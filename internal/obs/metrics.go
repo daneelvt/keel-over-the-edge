@@ -77,6 +77,9 @@ type Metrics struct {
 	GuestsRefused      *prometheus.CounterVec // by reason
 	SessionLookups     *prometheus.CounterVec // by result: hit, miss or unknown
 	CrossOriginRefused prometheus.Counter
+	ChunkRequests      *prometheus.CounterVec // by result: ok, refused
+	ChunkBytes         prometheus.Counter
+	ChunksHanded       prometheus.Counter
 
 	Grace *prometheus.CounterVec // by result: started, rejoined, expired
 
@@ -199,6 +202,18 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.CrossOriginRefused = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "keel_http_cross_origin_refused_total", Help: "Requests refused as cross-origin.",
 	})
+	m.ChunkRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_chunk_requests_total", Help: "Requests for a world chunk that reached the server: ok, or refused for an address it never handed out.",
+	}, []string{"result"})
+	for _, r := range []string{"ok", "refused"} {
+		m.ChunkRequests.WithLabelValues(r)
+	}
+	m.ChunkBytes = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_chunk_bytes_total", Help: "Bytes of world chunks the server sent: what the edge's cache did not hold.",
+	})
+	m.ChunksHanded = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_chunks_handed_total", Help: "World chunks' addresses handed to game connections.",
+	})
 	m.Grace = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_sim_grace_total",
 		Help: "Boats' graces after their connection ended: started, ended by a join of the same account (rejoined, which counts any join that found the account's boat), or expired.",
@@ -314,7 +329,8 @@ func NewMetrics(build, catalog string) *Metrics {
 		m.EdgeEncoders, m.EdgeQueued, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
-		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused)
+		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused,
+		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded)
 	return m
 }
 

@@ -1,0 +1,9 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A hull running onto the bottom: a scrape, played once as it first touches. Low band-passed noise swelling and dying away over a moment, louder and a little brighter the faster the boat was going. Speeds in m/s, frequencies in Hz, times in seconds, levels as gains.",
+  "band": { "atRest": 180, "perSpeed": 120, "most": 700 },
+  "q": 0.9,
+  "rise": 0.04,
+  "decay": 0.35,
+  "level": { "from": 0.1, "full": 2.5, "least": 0.08, "most": 0.5 }
+}

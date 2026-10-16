@@ -29,6 +29,17 @@ func (q *Queries) ActiveWorld(ctx context.Context) (ActiveWorldRow, error) {
 	return i, err
 }
 
+const chunkKey = `-- name: ChunkKey :one
+SELECT chunk_key FROM world_bundle WHERE world_id = $1
+`
+
+func (q *Queries) ChunkKey(ctx context.Context, worldID pgtype.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, chunkKey, worldID)
+	var chunk_key []byte
+	err := row.Scan(&chunk_key)
+	return chunk_key, err
+}
+
 const createWorldPartitions = `-- name: CreateWorldPartitions :exec
 SELECT create_world_partitions($1)
 `
@@ -39,8 +50,8 @@ func (q *Queries) CreateWorldPartitions(ctx context.Context, worldID pgtype.UUID
 }
 
 const insertBundle = `-- name: InsertBundle :execrows
-INSERT INTO world_bundle (world_id, format, generator, catalog, made, attempts, digest, records, report, generation_ms)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO world_bundle (world_id, format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (world_id) DO NOTHING
 `
 
@@ -55,6 +66,7 @@ type InsertBundleParams struct {
 	Records      []byte
 	Report       []byte
 	GenerationMs int32
+	ChunkKey     []byte
 }
 
 func (q *Queries) InsertBundle(ctx context.Context, arg InsertBundleParams) (int64, error) {
@@ -69,6 +81,7 @@ func (q *Queries) InsertBundle(ctx context.Context, arg InsertBundleParams) (int
 		arg.Records,
 		arg.Report,
 		arg.GenerationMs,
+		arg.ChunkKey,
 	)
 	if err != nil {
 		return 0, err
@@ -115,6 +128,28 @@ func (q *Queries) InsertWorld(ctx context.Context, epoch time.Time) (InsertWorld
 	return i, err
 }
 
+const setChunkKey = `-- name: SetChunkKey :execrows
+UPDATE world_bundle SET chunk_key = $1
+WHERE world_id = $2 AND chunk_key IS NULL
+  AND (SELECT epoch FROM sim_lease FOR SHARE) = $3::bigint
+`
+
+type SetChunkKeyParams struct {
+	ChunkKey []byte
+	WorldID  pgtype.UUID
+	Epoch    int64
+}
+
+// The world's chunk key, if its bundle has none, in one statement fenced by
+// the simulation's lease.
+func (q *Queries) SetChunkKey(ctx context.Context, arg SetChunkKeyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setChunkKey, arg.ChunkKey, arg.WorldID, arg.Epoch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setWorldSeed = `-- name: SetWorldSeed :exec
 UPDATE world SET seed = $1, generator = $2 WHERE id = $3
 `
@@ -131,7 +166,7 @@ func (q *Queries) SetWorldSeed(ctx context.Context, arg SetWorldSeedParams) erro
 }
 
 const worldBundle = `-- name: WorldBundle :one
-SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms
+SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key
 FROM world_bundle WHERE world_id = $1
 `
 
@@ -145,6 +180,7 @@ type WorldBundleRow struct {
 	Records      []byte
 	Report       []byte
 	GenerationMs int32
+	ChunkKey     []byte
 }
 
 func (q *Queries) WorldBundle(ctx context.Context, worldID pgtype.UUID) (WorldBundleRow, error) {
@@ -160,6 +196,7 @@ func (q *Queries) WorldBundle(ctx context.Context, worldID pgtype.UUID) (WorldBu
 		&i.Records,
 		&i.Report,
 		&i.GenerationMs,
+		&i.ChunkKey,
 	)
 	return i, err
 }

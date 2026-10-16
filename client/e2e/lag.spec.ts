@@ -91,23 +91,34 @@ test('a bump at 200 ms: one correction, one knock and shake, the verdict', async
   test.setTimeout(120_000);
   await guest(context, 'Bumped');
   await sail(page, lagged);
-  // Hold a course, as a sailor would while a boat is staged in their path.
+  // A steady breeze on the beam, so the boat has way on whatever the
+  // world's weather is at this hour: in a calm the capsized boat staged
+  // ahead is not reached.
   const heading = await page.evaluate(() => globalThis.keel.boat().state.heading);
-  await page.evaluate((h) => globalThis.keel.script('steer', h), heading);
-  await page.waitForTimeout(5_000);
-  const res = await request.post('http://127.0.0.1:19090/debug/encounter?situation=capsized');
-  expect(res.status()).toBe(200);
-  const staged = (await res.json()) as { article: string };
-  expect(staged.article).toBe('22');
-  await page.waitForFunction(() => globalThis.keel.encounters().bumps > 0, null, {
-    timeout: 20_000,
-  });
-  const e = await page.evaluate(() => globalThis.keel.encounters());
-  expect(e.bump).toBe('Bump · keep clear of a capsized boat (Article 22) · yours');
-  expect(e.shake).toBeGreaterThan(0);
-  const n = await page.evaluate(() => globalThis.keel.net());
-  expect(n.counts.largest).toBeLessThan(3);
-  process.stdout.write(
-    `lag.spec: a bump at ${n.rtt.toFixed(0)} ms: ${e.bumps} told, ${n.counts.corrections} corrections, largest ${n.counts.largest.toFixed(3)} m\n`,
-  );
+  const from = Math.round(((((heading * 180) / Math.PI + 90) % 360) + 360) % 360);
+  const internal = 'http://127.0.0.1:19090';
+  expect((await request.post(`${internal}/debug/wind?knots=12&from=${from}`)).status()).toBe(204);
+  try {
+    // Hold the course, as a sailor would while a boat is staged in their path.
+    await page.evaluate((h) => globalThis.keel.script('steer', h), heading);
+    await page.waitForTimeout(8_000);
+    const res = await request.post(`${internal}/debug/encounter?situation=capsized`);
+    expect(res.status()).toBe(200);
+    const staged = (await res.json()) as { article: string };
+    expect(staged.article).toBe('22');
+    await page.waitForFunction(() => globalThis.keel.encounters().bumps > 0, null, {
+      timeout: 20_000,
+    });
+    const e = await page.evaluate(() => globalThis.keel.encounters());
+    expect(e.bump).toBe('Bump · keep clear of a capsized boat (Article 22) · yours');
+    expect(e.shake).toBeGreaterThan(0);
+    const n = await page.evaluate(() => globalThis.keel.net());
+    expect(n.counts.largest).toBeLessThan(3);
+    process.stdout.write(
+      `lag.spec: a bump at ${n.rtt.toFixed(0)} ms: ${e.bumps} told, ${n.counts.corrections} corrections, largest ${n.counts.largest.toFixed(3)} m\n`,
+    );
+  } finally {
+    // Back to the world's own weather.
+    await request.post(`${internal}/debug/weather?auto`);
+  }
 });

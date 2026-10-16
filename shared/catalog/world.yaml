@@ -223,15 +223,18 @@ world:
 
   # What the ground is covered with. friction is Coulomb's coefficient of a
   # hull dragging on it, where it lies under water.
+  # look is how it is drawn: a column's top and sides, the bed of it seen
+  # through shallow water, and the foam added where the waves break over it
+  # (a reef's crest); starting values, to be judged on a phone.
   surfaces:
-    - { id: sand, friction: 0.4 }
-    - { id: dune-grass, friction: 0.5 }
-    - { id: grass, friction: 0.5 }
-    - { id: forest, friction: 0.5 }
-    - { id: rock, friction: 0.6 }
-    - { id: ash, friction: 0.45 }
-    - { id: scrub, friction: 0.5 }
-    - { id: reef, friction: 0.5 }
+    - { id: sand, friction: 0.4, look: { top: "#e4d3a2", side: "#c9b17c", bed: "#d8c99a", crest: 0 } }
+    - { id: dune-grass, friction: 0.5, look: { top: "#b8b46a", side: "#a8915f", bed: "#c8b98a", crest: 0 } }
+    - { id: grass, friction: 0.5, look: { top: "#7fa04f", side: "#8a7253", bed: "#9a9c70", crest: 0 } }
+    - { id: forest, friction: 0.5, look: { top: "#4d7536", side: "#6e5a42", bed: "#7c8460", crest: 0 } }
+    - { id: rock, friction: 0.6, look: { top: "#9a958a", side: "#7d766c", bed: "#77786c", crest: 0 } }
+    - { id: ash, friction: 0.45, look: { top: "#5a5550", side: "#47423e", bed: "#4f4d4a", crest: 0 } }
+    - { id: scrub, friction: 0.5, look: { top: "#98935a", side: "#857155", bed: "#a39e7e", crest: 0 } }
+    - { id: reef, friction: 0.5, look: { top: "#d9c8a0", side: "#b7a07a", bed: "#c6b38c", crest: 0.5 } }
 
   # The fetch of each sea area for a wind from each of 16 directions: the
   # Shore Protection Manual's effective fetch, the mean of radials a few
@@ -280,6 +283,36 @@ world:
     pushReach: 40 # m: a sandy shore has a metre of water some 30 m out
     restitution: 0.3
     friction: 0.2
+
+  # Which chunks of the land a game connection is handed, each once: those
+  # its boat could see something in. A chunk whose outline is within near of
+  # the boat; or a cell of land H high within the dome's sight from the
+  # highest the camera goes, √(2 dome camera) + √(2 dome H), plus margin; or
+  # a cell of sea bed shallower than shallows within the far sea's reach
+  # from there, max(farSeaLeast, farSeaHorizon × √(2 dome camera)), plus
+  # margin. The server cannot know where the camera is, only how high it
+  # goes. dome and the far sea's reach are the page's, which its tests hold
+  # to these.
+  handout:
+    near: 300 # m: the ground under the hull and the near sea's tiles, with room
+    camera: 80 # m
+    dome: 2500 # m
+    farSeaLeast: 400 # m
+    farSeaHorizon: 1.1
+    margin: 100 # m
+    shallows: 10 # m
+    look: 20 # m
+
+  # How the land and the shallows are drawn: columns of hexagons in terraces,
+  # their sides down below the sea at the shore; the bed shows through the
+  # water by exp(−2 K h) (Beer–Lambert, there and back); and how long a
+  # chunk's mesh and grids are kept as the boat sails away.
+  look:
+    terrace: 0.8 # m
+    shore: 2 # m
+    attenuation: 0.15 # K, per m
+    keepMeshes: 2000 # m
+    keepGrids: 1500 # m
 
   # The rules a world must pass; one that fails is made again from the next
   # seed, at most attempts times.

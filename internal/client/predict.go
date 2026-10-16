@@ -51,6 +51,11 @@ type Predictor struct {
 	Wakes      Wakes
 	// Shadowed counts the steps a wake reached the boat in.
 	Shadowed int
+	// Ground and Shelter are the land the boat is stepped on and the wind
+	// sheltered by, as far as the client holds its chunks; nil is the open
+	// sea, as is a chunk not held.
+	Ground  *physics.Ground
+	Shelter *physics.Shelter
 }
 
 // NewPredictor predicts a boat of kind in the sea of waves, with which the
@@ -90,13 +95,13 @@ func (p *Predictor) step(tick int64, in Input) {
 	if p.wind.Tick != float64(tick) {
 		physics.WeatherAt(&p.Weather, &p.wind, float64(tick))
 	}
-	e := physics.WindAt(&p.wind, p.State.X, p.State.Y, nil)
+	e := physics.WindAt(&p.wind, p.State.X, p.State.Y, p.Shelter)
 	if p.Encounters != nil {
 		if p.Wakes.Shadow(&e, p.State.X, p.State.Y, tick, &p.Weather, p.kind, p.Encounters) > 0 {
 			p.Shadowed++
 		}
 	}
-	physics.Step(&p.State, &c, &e, p.Seas.At(tick), nil, p.kind, &p.out)
+	physics.Step(&p.State, &c, &e, p.Seas.At(tick), p.Ground, p.kind, &p.out)
 }
 
 // Wind is the wind at the boat at the tick its state is after, in full.
@@ -104,7 +109,7 @@ func (p *Predictor) Wind() physics.WindPoint {
 	var t physics.WeatherTick
 	physics.WeatherAt(&p.Weather, &t, float64(p.Tick))
 	var w physics.WindPoint
-	physics.WindPointAt(&t, p.State.X, p.State.Y, &w, nil)
+	physics.WindPointAt(&t, p.State.X, p.State.Y, &w, p.Shelter)
 	return w
 }
 

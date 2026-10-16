@@ -50,6 +50,8 @@ type Event struct {
 	WeatherSystems *pb.WeatherSystems
 	// Bump: the boat, or one it sees near, touched another.
 	Bump *pb.Bump
+	// Chunks: the addresses of chunks of the land the boat could see.
+	Chunks *pb.Chunks
 	// Snapshot is a snapshot's header; View the other boats after it,
 	// valid until ViewsKept more snapshots are decoded; Changes what its
 	// entries did, and Sampled the view slots it samples.
@@ -121,6 +123,9 @@ func (n *Net) Receive(now float64, b []byte) ([][]byte, Event, error) {
 	case *pb.ServerMessage_Bump:
 		n.lastHeard = now
 		return nil, Event{Bump: b.Bump}, nil
+	case *pb.ServerMessage_Chunks:
+		n.lastHeard = now
+		return nil, Event{Chunks: b.Chunks}, nil
 	}
 	return nil, Event{}, nil
 }

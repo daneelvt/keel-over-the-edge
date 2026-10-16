@@ -168,6 +168,8 @@ export class NetWorker {
             kind: w.kind,
             tick: Number(w.tick),
             epochUs: Number(w.epochUs),
+            world: w.world,
+            land: w.land,
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#setStatus('sailing');
@@ -215,6 +217,9 @@ export class NetWorker {
           break;
         case 'bump':
           this.#d.post({ type: 'bump', bump: r.bump });
+          break;
+        case 'chunks':
+          this.#d.post({ type: 'chunks', chunks: r.chunks });
           break;
       }
       this.#arm();

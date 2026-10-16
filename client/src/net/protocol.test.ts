@@ -15,12 +15,14 @@ import { RECORDS } from '../predict/layout.gen';
 import { decodeClient, decodeServer, encodeClient, encodeServer } from './frame';
 import type { SpellSchema } from './gen/keel/v1/game_pb';
 import {
+  GROUND_HELD,
   HEADER_SIZE,
   KIND_MESSAGE,
   MAX_HEADER_SIZE,
   NO_MARGIN,
   newSnapshot,
   PILOT_HELD,
+  PILOT_SIZE,
   readSnapshot,
   snapshotTick,
   writeSnapshot,
@@ -219,14 +221,19 @@ describe('the snapshot', () => {
     helm[20] = 0x04;
     expect(refused(helm)).not.toBeNull();
     const flags = good.slice();
-    flags[12] = 4 | PILOT_HELD;
+    flags[12] = 8 | PILOT_HELD | GROUND_HELD;
     expect(refused(flags)).not.toBeNull();
     const entries = good.slice();
     entries[HEADER_SIZE - 1] = 129;
     expect(refused(entries)).not.toBeNull();
-    // The second golden snapshot is on the autopilot: its block follows.
+    // The second golden snapshot is on the autopilot and aground: both
+    // blocks follow.
     expect(s.header).toBe(MAX_HEADER_SIZE);
     expect(refused(good.slice(0, MAX_HEADER_SIZE - 1))).not.toBeNull();
+    expect(refused(good.slice(0, HEADER_SIZE + PILOT_SIZE - 1))).not.toBeNull();
+    const old = good.slice();
+    old[1] = 6;
+    expect(refused(old)).not.toBeNull();
     for (const [at, v] of [
       [HEADER_SIZE, 3],
       [HEADER_SIZE + 1, 3],
@@ -335,6 +342,7 @@ describe('the envelopes', () => {
           kind: 0,
           rejoined: true,
           epochUs: 1767225600000000n,
+          land: true,
         },
       },
     },
@@ -389,6 +397,19 @@ describe('the envelopes', () => {
               phase: [0, 0] as number[],
             },
           ] as MessageInitShape<typeof SpellSchema>[],
+        },
+      },
+    },
+    {
+      body: {
+        case: 'chunks',
+        value: {
+          number: [205, 0, 255] as number[],
+          path: [
+            '/w/0199c2a4-5f7e-7c3a-9d0e-123456789abc/c/205.j25LcdiAYGp3Y3RFfJ4Bkg.bin',
+            '/w/x/c/0.a.bin',
+            '',
+          ] as string[],
         },
       },
     },

@@ -19,6 +19,10 @@ export const SIGNAL_INTERVAL = 100;
 
 /** The sailor's modes, as State.SailorMode has them, and what the screen says. */
 const SAILOR_LINES = ['', 'In the water', 'Righting the boat', 'Climbing back in'];
+/** The line while the hull is on the bottom or against land. */
+export const AGROUND = 'Aground';
+/** The line a push off the ground shows, for BUMP_LINE. */
+export const PUSHED_OFF = 'Pushed off';
 
 /** An element moved by a transform, and the value it was last moved to. */
 class Moved {
@@ -215,7 +219,10 @@ export class HudModel {
     // The force is the mean wind's, as the Beaufort scale is defined, so a
     // gust shows as the knots rising while the force holds.
     this.wind.value = windText(a.speed, a.from, wind.meanSpeed);
-    this.sailor.value = SAILOR_LINES[pose.sailorMode] ?? '';
+    // On the bottom or against land, while the sailor sails.
+    const aground = out[RECORDS.out.aground] ?? 0;
+    this.sailor.value =
+      pose.sailorMode === 0 && aground !== 0 ? AGROUND : (SAILOR_LINES[pose.sailorMode] ?? '');
     this.pilot.value = pilotText(pilot, way);
     if (this.bump.value !== '' && now >= this.#bumpUntil) {
       this.bump.value = '';

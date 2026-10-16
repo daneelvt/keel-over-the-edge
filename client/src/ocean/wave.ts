@@ -43,6 +43,8 @@ export interface BandUniforms {
   readonly band: SeaBand;
   readonly phases: ReturnType<typeof uniformArray>;
   readonly hs: ReturnType<typeof uniformArray>;
+  /** Each area's peak period, s. */
+  readonly period: ReturnType<typeof uniformArray>;
   /** Each area's foam: whitecaps, streaks and folding (under.ts). */
   readonly foam: ReturnType<typeof uniformArray>;
   /** The fours of waves to sum. */
@@ -67,6 +69,7 @@ export function bandUniforms(band: SeaBand, foam: Vector4[]): BandUniforms {
     band,
     phases: uniformArray(band.phases, 'vec4'),
     hs: uniformArray(band.hs, 'float'),
+    period: uniformArray(band.period, 'float'),
     foam: uniformArray(foam, 'vec4'),
     groups,
     size,
@@ -156,6 +159,14 @@ export function boatBandAt(u: BandUniforms): (p: Node<'vec2'>) => Node<'vec4'> {
   return (p) => fn(p) as unknown as Node<'vec4'>;
 }
 
+/** The sea's peak period at the scene point p, s, blended between the four areas about it. */
+export function periodAt(u: BandUniforms): (p: Node<'vec2'>) => Node<'float'> {
+  const fn = Fn(([p]: [Node<'vec2'>]) =>
+    blend(cornersAt(u, p), (area) => u.period.element(area) as unknown as Node<'float'>),
+  );
+  return (p) => fn(p) as unknown as Node<'float'>;
+}
+
 /**
  * The sea's areas at the scene point p, without the waves: vec4(whitecaps,
  * streaks, folding foam, Hs), each area's foam by its own wind and the
@@ -192,4 +203,12 @@ export function seaPlaneAt(u: BandUniforms): (c: Node<'vec2'>) => Node<'vec4'> {
   const band = boatBandAt(u);
   const fn = Fn(([c]: [Node<'vec2'>]) => seaPlaneOf(band(c), c));
   return (c) => fn(c) as unknown as Node<'vec4'>;
+}
+
+/**
+ * The band capped by the depth: its height and slopes times f, its
+ * significant height as it was.
+ */
+export function cappedBand(band: Node<'vec4'>, f: Node<'float'>): Node<'vec4'> {
+  return vec4(band.xyz.mul(f), band.w) as unknown as Node<'vec4'>;
 }

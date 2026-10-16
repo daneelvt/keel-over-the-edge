@@ -128,6 +128,8 @@ export class Predictor implements BoatDriver {
   readonly counts = { snapshots: 0, corrections: 0, resets: 0, stale: 0, largest: 0, shadowed: 0 };
   /** The last 200 corrections' distances, for the 95th percentile. */
   readonly sizes: number[] = [];
+  /** How many steps pushed the boat off the ground. */
+  pushes = 0;
 
   /** The sea the boat is stepped in, from the server's SeaAreas. */
   readonly seas: Seas;
@@ -231,8 +233,14 @@ export class Predictor implements BoatDriver {
     this.#pilot[3 * i + 2] = pilot.order;
     this.#target[i] = pilot.target;
     this.#ring.set(r.state, i * N);
-    this.states.push(r.state);
     this.out.set(r.out);
+    if ((r.out[RECORDS.out.pushedOff] ?? 0) !== 0) {
+      // Up to 40 m in a step: drawn where it is, not slid there.
+      this.pushes++;
+      this.states.hold(r.state);
+    } else {
+      this.states.push(r.state);
+    }
   }
 
   /** A BoatDriver's step: controls already at their resolution. */

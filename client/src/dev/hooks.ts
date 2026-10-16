@@ -21,6 +21,7 @@ import {
   RenderTarget,
   RGBAFormat,
   Scene,
+  Vector2,
   Vector3,
 } from 'three';
 import {
@@ -29,9 +30,13 @@ import {
   floor,
   instanceIndex,
   ivec2,
+  output,
+  positionGeometry,
   positionWorld,
   screenCoordinate,
+  select,
   textureLoad,
+  uniform,
   varying,
   vec4,
 } from 'three/tsl';
@@ -59,7 +64,8 @@ import {
   tileIdentity,
   tileLook,
 } from '../ocean/seamaterial';
-import { GUST_ROW, PASS_WIDTH } from '../ocean/tilepass';
+import { groundWindow, shelterTexture, shore } from '../ocean/shore';
+import { GROUND_ROW, GUST_ROW, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
 import { boatBandAt } from '../ocean/wave';
 import { type RecordValues, spellOf, steer, toHex } from '../predict/golden';
@@ -68,10 +74,16 @@ import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { checkScene, DOME_RADIUS, domeDrop, seaMaterial } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
-import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
+import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Settings } from '../ui/settings';
+import {
+  cellHex,
+  chunkCorner,
+  drawnHeight,
+  hexCentre as landHexCentre,
+} from '../workers/mesh/build';
 import { setSky } from './skypanel';
 
 export interface Info {
@@ -618,16 +630,17 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       tileIdentity.value = on ? 1 : 0;
     },
     /** Puts the boat at a world position, keeping its heading. */
-    placeBoat(east: number, north: number): void {
-      offline().place(east, north, driver.states.current[RECORDS.state.heading] ?? 0);
+    placeBoat(east: number, north: number, heading?: number): void {
+      offline().place(east, north, heading ?? driver.states.current[RECORDS.state.heading] ?? 0);
       floatBoat();
     },
     /** Puts the origin on tile (q, r), as if the boat had come from there. */
     setOrigin(q: number, r: number): void {
       world.origin.moveTo({ q, r });
     },
-    camera(name: string): void {
-      const p = CAMERA_PRESETS[name];
+    /** Puts the camera at a preset, by name, or at a view of its own. */
+    camera(name: string | CameraView): void {
+      const p = typeof name === 'string' ? CAMERA_PRESETS[name] : name;
       if (p === undefined) {
         throw new Error(`no camera preset ${name}`);
       }
@@ -1175,6 +1188,171 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         traffic: { ...o.traffic },
       };
     },
+    /**
+     * The land: the chunks handed and held, which are drawn this frame,
+     * their highest land, the module's slots, and the worker's counts.
+     */
+    land() {
+      const l = world.land;
+      if (l === null) {
+        return null;
+      }
+      const handed = l.handed.sort((a, b) => a - b);
+      return {
+        handed,
+        grids: [...l.grids.keys()].sort((a, b) => a - b),
+        drawn: handed.filter((n) => l.drawn(n)),
+        highest: Object.fromEntries(handed.map((n) => [n, l.highestOf(n)])),
+        slots: l.slots?.chunks ?? null,
+        stats: { ...l.stats },
+        window: { col: groundWindow.col, row: groundWindow.row, fills: groundWindow.fills },
+        lee: { a0: shelterTexture.a0, b0: shelterTexture.b0, fills: shelterTexture.fills },
+        shore: shore.on.value,
+        // Every chunk handed within 1.5 km of the boat had.
+        ready: l.ready(
+          driver.states.current[RECORDS.state.x] ?? 0,
+          driver.states.current[RECORDS.state.y] ?? 0,
+          catalog.world.look.keepGrids,
+        ),
+      };
+    },
+    /**
+     * Each tile's ground as the tile pass wrote it for the last frame: the
+     * water's depth, the waves' cap f, whether it is land; beside the
+     * module's f at the tile's centre, by the ground it holds.
+     */
+    async tileGround(): Promise<{
+      depth: number[];
+      gpu: number[];
+      land: number[];
+      module: number[];
+      count: number;
+    }> {
+      const ocean = world.ocean;
+      const count = ocean.field.count;
+      const all = await readTarget(
+        gfx().renderer,
+        ocean.pass.target,
+        PASS_WIDTH,
+        ocean.pass.target.height,
+        webgl(),
+      );
+      const centre = ocean.tiles.centre.value;
+      const o = world.origin.world;
+      const depth: number[] = [];
+      const gpu: number[] = [];
+      const land: number[] = [];
+      const points: number[] = [];
+      for (let i = 0; i < count; i++) {
+        const t = (GROUND_ROW * PASS_WIDTH + i) * 4;
+        depth.push(all[t] ?? Number.NaN);
+        gpu.push(all[t + 1] ?? Number.NaN);
+        land.push(all[t + 2] ?? Number.NaN);
+        // The tile's centre in the world, as float32 holds it on the GPU.
+        points.push(
+          o.x + Math.fround(centre.x + (ocean.field.offset[i * 2] ?? 0)),
+          o.y - Math.fround(centre.y - (ocean.field.offset[i * 2 + 1] ?? 0)),
+        );
+      }
+      const physics = driver.physics;
+      const module = new Float64Array(count).fill(Number.NaN);
+      if (physics !== undefined && ocean.slot >= 0) {
+        physics.seaDrawAt(world.ticks);
+        physics.seaFactor(ocean.slot, points, module);
+      }
+      return { depth, gpu, land, module: Array.from(module), count };
+    },
+
+    /** Where the camera's eye is: m east and north in the world, and m above the sea. */
+    eye(): { east: number; north: number; height: number } {
+      const c = stage.camera.position;
+      const o = world.origin.world;
+      return { east: c.x + o.x, north: -c.z + o.y, height: c.y };
+    },
+
+    /**
+     * The highest land held, as drawn, and where: m east and north, m high;
+     * or the highest within reach of (east, north), if given.
+     */
+    landSummit(
+      within: { east: number; north: number; reach: number } | null = null,
+    ): { east: number; north: number; height: number } | null {
+      const l = world.land;
+      if (l === null) {
+        return null;
+      }
+      let best: { east: number; north: number; height: number } | null = null;
+      for (const [n, g] of l.grids) {
+        const e = g.elevation;
+        if (e === null) {
+          continue;
+        }
+        const [c0, j0] = chunkCorner(n);
+        for (let i = 0; i < e.length; i++) {
+          const h = drawnHeight(e[i] ?? 0, catalog.world.look.terrace);
+          if ((e[i] ?? 0) > 0 && (best === null || h > best.height)) {
+            const [q, r] = cellHex(c0 + Math.floor(i / 264), j0 + (i % 264));
+            const [east, north] = landHexCentre(q, r);
+            if (
+              within === null ||
+              Math.hypot(east - within.east, north - within.north) <= within.reach
+            ) {
+              best = { east, north, height: h };
+            }
+          }
+        }
+      }
+      return best;
+    },
+
+    /** The boat and the ground: the line the sailor's panel shows, the bump's line, how it last met the ground, how often, and the pushes off. */
+    aground() {
+      return {
+        sailor: game.hud.sailor.value,
+        line: game.hud.bump.value,
+        sound: game.lastGround,
+        groundings: game.groundings,
+        pushes: driver.pushes ?? 0,
+        out: driver.out[RECORDS.out.aground] ?? 0,
+      };
+    },
+
+    /**
+     * Draws the land higher than above, in metres, within reach of (east,
+     * north), in one flat colour, magenta, unlit and unhazed, and the rest
+     * as it looks; or, with null, all of it as it looks (the pictures that
+     * find land).
+     */
+    landFlat(
+      above: number | null,
+      near: { east: number; north: number; reach: number } | null = null,
+    ): void {
+      const m = world.land?.material;
+      if (m === undefined) {
+        return;
+      }
+      if (above === null) {
+        m.outputNode = null;
+        world.onFrame = null;
+      } else {
+        // Where the place is in the scene, kept up with the floating origin.
+        const at = uniform(new Vector2(0, 0));
+        const reach = near?.reach ?? 1e9;
+        world.onFrame = () => {
+          const o = world.origin.world;
+          at.value.set((near?.east ?? 0) - o.x, -((near?.north ?? 0) - o.y));
+        };
+        world.onFrame();
+        const inside = positionWorld.xz.sub(at).length().lessThan(reach);
+        m.outputNode = select(
+          positionGeometry.y.greaterThan(above).and(inside),
+          vec4(1, 0, 1, 1),
+          output,
+        );
+      }
+      m.needsUpdate = true;
+    },
+
     /** Takes the boat back from another device. */
     takeOver(): void {
       sailing.online?.takeOver();
@@ -1753,7 +1931,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const far = world.ocean.far;
       const m = seaMaterial('sea-far');
       m.positionNode = far.position;
-      m.fragmentNode = farLook(far.plane, far.area, far.nearHull, world.ocean.parts, true);
+      m.fragmentNode = farLook(far, world.ocean.parts, true);
       const scene = new Scene();
       const mesh = new Mesh(far.mesh.geometry, m);
       mesh.frustumCulled = false;

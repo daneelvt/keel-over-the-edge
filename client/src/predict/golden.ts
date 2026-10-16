@@ -228,7 +228,7 @@ export async function runScenario(
  * Writes a terrain's chunks into the module's slots, in turn, and reports
  * whether it holds any shelter.
  */
-function loadTerrain(physics: Physics, raw: Uint8Array): boolean {
+export function loadTerrain(physics: Physics, raw: Uint8Array): boolean {
   const v = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
   let at = 0;
   let groundSlot = 0;

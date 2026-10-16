@@ -12,6 +12,7 @@
 //	go run ./tools/dev -lint    run every linter the pull-request checks run
 //	go run ./tools/dev -db      start the database alone, print its URLs
 //	go run ./tools/dev -db-reset  remove the database's container and data
+//	go run ./tools/dev -world 7   write seed 7's world to .dev/worlds/7.world, for ?sandbox&world=7
 //
 // The database is PostgreSQL in a container (docker, or else podman), left
 // running between runs; KEEL_DEV_DATABASE_URL instead names a PostgreSQL 18
@@ -59,6 +60,7 @@ func main() {
 	dbReset := flag.Bool("db-reset", false, "remove the database's container, its data and its password")
 	lagFlag := flag.String("lag", "", "a round trip and loss such as 200ms,2%: the game's traffic through tools/lag")
 	limit := flag.Int("limit", 0, "the most boats at sea (KEEL_BOAT_LIMIT), from 1 to 4096; keel's default if 0")
+	world := flag.Int64("world", -1, "write this seed's world to .dev/worlds, for the sandbox's ?world, and exit")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -72,6 +74,8 @@ func main() {
 		err = runDB(ctx, os.Stdout)
 	case *dbReset:
 		err = runDBReset(ctx, os.Stdout)
+	case *world >= 0:
+		err = runWorld(os.Stdout, uint64(*world))
 	case *smoke:
 		err = runSmoke(ctx, os.Stdout)
 	default:
