@@ -634,6 +634,27 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       offline().place(east, north, heading ?? driver.states.current[RECORDS.state.heading] ?? 0);
       floatBoat();
     },
+    /**
+     * The edge as the page has it: whether it is drawn, the boat's fall
+     * (the tick it went over, the starts again), the line the screen shows,
+     * the fade, whether the camera is held, the autopilot and the helm, and
+     * the falls drawn.
+     */
+    edge() {
+      const counts = world.edge.falls.counts;
+      return {
+        on: world.edge.on,
+        over: driver.over ?? 0,
+        restarts: driver.restarts ?? 0,
+        notice: game.hud.bump.value,
+        fade: Number(world.fade.style.opacity === '' ? 0 : world.fade.style.opacity),
+        held: world.camera.held !== null,
+        pilot: game.pilot.on,
+        helm: game.helm.target,
+        slabs: counts.slabs,
+        curtain: counts.curtainTriangles,
+      };
+    },
     /** Shows or hides the falls' parts, for looking at each alone. */
     showFalls(curtain: boolean, slabs: boolean): void {
       world.edge.falls.show.curtain = curtain;
