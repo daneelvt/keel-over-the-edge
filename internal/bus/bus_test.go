@@ -187,6 +187,30 @@ func TestDeveloperCommands(t *testing.T) {
 	}
 }
 
+// TestOwnerCommands: the owner's tools' sender sends Teleport, Stay and
+// Unseen, and nothing else; a developer may send them too, a player or
+// the server never.
+func TestOwnerCommands(t *testing.T) {
+	q := NewQueue()
+	for _, op := range []Op{Teleport, Stay, Unseen} {
+		for _, s := range []Sender{q.Owner(), q.Developer()} {
+			if err := s.TrySend(Command{Op: op, Boat: 1, On: true}); err != nil {
+				t.Errorf("%s: %v", op, err)
+			}
+		}
+		for name, s := range map[string]Sender{"player": q.Players(), "server": q.Server()} {
+			if err := s.TrySend(Command{Op: op, Boat: 1}); !errors.Is(err, ErrNotAllowed) {
+				t.Errorf("a %s's %s: %v", name, op, err)
+			}
+		}
+	}
+	for _, op := range []Op{Join, Leave, Disconnect, SetWeather, Place, Hold} {
+		if err := q.Owner().TrySend(Command{Op: op}); !errors.Is(err, ErrNotAllowed) {
+			t.Errorf("the owner's %s: %v", op, err)
+		}
+	}
+}
+
 // TestDue holds a word for its tick, but not when it is late or too far
 // ahead, and across the wrap of the low 32 bits.
 func TestDue(t *testing.T) {

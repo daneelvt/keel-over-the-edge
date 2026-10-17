@@ -138,6 +138,7 @@ describe('the snapshot', () => {
         g.target,
       ]);
       expect(s.over, g.name).toBe(Number((g as { over?: string }).over ?? 0));
+      expect(s.stays, g.name).toBe((g as { stays?: boolean }).stays ?? false);
       for (const [name, i] of Object.entries(RECORDS.state)) {
         expect(bits(s.state[i] ?? 0), `${g.name}: ${name}`).toBe(
           (g.state as Record<string, string>)[name],
@@ -224,8 +225,11 @@ describe('the snapshot', () => {
     helm[20] = 0x04;
     expect(refused(helm)).not.toBeNull();
     const flags = good.slice();
-    flags[12] = 16 | PILOT_HELD | GROUND_HELD;
+    flags[12] = 32 | PILOT_HELD | GROUND_HELD;
     expect(refused(flags)).not.toBeNull();
+    const eight = good.slice();
+    eight[1] = 8;
+    expect(refused(eight)).not.toBeNull();
     const entries = good.slice();
     entries[HEADER_SIZE - 1] = 129;
     expect(refused(entries)).not.toBeNull();

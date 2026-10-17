@@ -52,6 +52,12 @@ type Frame struct {
 	// Voyage is per slot what the edge keeps of a boat's voyage: whether
 	// it is falling, and its approaches to the lip.
 	Voyage []Voyage
+	// Stay and Unseen are per slot the owner's tools' marks: a boat that
+	// stays is not stepped, while its owner's free camera roams; an unseen
+	// boat is in no other connection's view. Neither touches anything or
+	// casts a shadow.
+	Stay   []bool
+	Unseen []bool
 	// Wind and Wake are derived from each boat's state: the true wind at
 	// its place at the frame's tick, before any shadow, and the wake its
 	// sail leaves for the next tick. They are in no snapshot or digest.
@@ -161,6 +167,10 @@ type Voyage struct {
 	// Best is the least distance of those, and BestX and BestY where.
 	Survived           bool
 	Best, BestX, BestY float64
+	// Placed is true once the owner's tools have moved the boat in this
+	// voyage: it earns nothing, and its going over and its approaches are
+	// written as no event.
+	Placed bool
 }
 
 // Falling reports whether the boat is over the lip, falling.
@@ -182,6 +192,9 @@ type EdgeEvent struct {
 	Owner    Account
 	X, Y     float64 // m east and north
 	Distance float64 // the approach's distance inside the lip, m; 0 going over
+	// Placed: the voyage was placed by the owner's tools: counted, but
+	// written as no event.
+	Placed bool
 }
 
 // BumpTicks is how many ticks a frame keeps a bump: a second.
@@ -247,6 +260,8 @@ func NewFrame(capacity int) *Frame {
 		Sail:   make([]uint8, capacity),
 		Course: make([]physics.Course, capacity),
 		Voyage: make([]Voyage, capacity),
+		Stay:   make([]bool, capacity),
+		Unseen: make([]bool, capacity),
 		Edges:  make([]EdgeEvent, 0, 64),
 		Wind:   make([]physics.Env, capacity),
 		Wake:   make([]physics.Wake, capacity),

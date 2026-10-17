@@ -85,6 +85,12 @@ export class NetWorker {
           this.#arm();
         }
         break;
+      case 'roam':
+        if (this.#session?.welcomed) {
+          this.#send(this.#session.roam(this.#d.now(), m.on, m.east, m.north, m.height));
+          this.#arm();
+        }
+        break;
       case 'frame':
         if (this.#session !== null) {
           this.#session.frameMs = Math.round(m.ms);
@@ -171,6 +177,7 @@ export class NetWorker {
             world: w.world,
             land: w.land,
             circulation: w.circulation,
+            tools: w.tools,
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#setStatus('sailing');
@@ -221,6 +228,9 @@ export class NetWorker {
           break;
         case 'chunks':
           this.#d.post({ type: 'chunks', chunks: r.chunks });
+          break;
+        case 'tools':
+          this.#d.post({ type: 'tools', on: r.on });
           break;
       }
       this.#arm();

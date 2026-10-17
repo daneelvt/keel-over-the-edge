@@ -161,12 +161,11 @@ type connChunks struct {
 	dist    [physics.ChunkCount]float64
 }
 
-// chunks hands the connection the chunks its boat at (x, y) could see that
-// it has not been handed, if its boat has moved far enough since it was
-// last looked at, or never was. It reports whether the connection is still
-// good. Looking, and finding nothing new, allocates nothing.
-func (c *conn) chunks(x, y float64) bool {
-	h := c.e.cfg.Chunks
+// chunks hands the connection the chunks h says its eye at (x, y) could
+// see that it has not been handed, if its eye has moved far enough since
+// it was last looked at, or never was. It reports whether the connection is
+// still good. Looking, and finding nothing new, allocates nothing.
+func (c *conn) chunks(h *Handout, x, y float64) bool {
 	if h == nil {
 		return true
 	}

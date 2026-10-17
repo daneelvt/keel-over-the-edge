@@ -278,6 +278,34 @@ func TestForget(t *testing.T) {
 	})
 }
 
+// TestForgetAccount: an account's change is seen by its next lookup, not
+// 30 s later; other accounts' sessions stay cached.
+func TestForgetAccount(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := &fakeSessions{}
+		ann, bob := f.add("Ann"), f.add("Bob")
+		c := NewCache(f, CacheConfig{})
+		ctx := context.Background()
+		for _, h := range [][32]byte{ann, bob} {
+			if _, err := c.Resolve(ctx, h); err != nil {
+				t.Fatal(err)
+			}
+		}
+		f.mu.Lock()
+		s := f.sessions[ann]
+		s.Tools = true
+		f.sessions[ann] = s
+		f.mu.Unlock()
+		c.ForgetAccount(s.ID)
+		if res, err := c.Resolve(ctx, ann); err != nil || !res.Account.Tools {
+			t.Fatalf("after ForgetAccount: %+v, %v", res, err)
+		}
+		if n, _ := f.counts(); n != 3 || c.Len() != 2 {
+			t.Fatalf("%d lookups, %d cached", n, c.Len())
+		}
+	})
+}
+
 func failJSON(w http.ResponseWriter, status int, code string) {
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(code))

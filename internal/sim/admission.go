@@ -99,6 +99,7 @@ func (w *World) newBoat(account bus.Account, conn uint64) int32 {
 	f.State[s] = w.spawn(f, s)
 	f.Course[s] = physics.Course{}
 	f.Voyage[s] = bus.Voyage{}
+	f.Stay[s], f.Unseen[s] = false, false
 	i, _ := slices.BinarySearch(f.Live, s)
 	f.Live = slices.Insert(f.Live, i, s)
 	if w.given == nil {

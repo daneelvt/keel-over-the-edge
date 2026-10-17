@@ -515,3 +515,56 @@ func TestEdgeEvents(t *testing.T) {
 		}
 	})
 }
+
+// TestPlacedEdgeEvents: a voyage the owner's tools placed writes no event
+// going over the lip, nor its approach; the checkpoint holds none of the
+// owner's marks; the voyage after it writes its own again.
+func TestPlacedEdgeEvents(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(t, bus.Sender{}, 600, 0)
+		r.tick(bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+		r.tick(bus.Command{Op: bus.Teleport, Boat: 1, State: physics.State{Y: 8300, Heading: -math.Pi / 2}})
+		r.tick(bus.Command{Op: bus.Teleport, Boat: 1, State: physics.State{Y: 7700, Heading: -math.Pi / 2}})
+		// This world has no current: the boat is given way to cross the lip.
+		r.tick(bus.Command{Op: bus.Teleport, Boat: 1, State: physics.State{X: 8333.5, Heading: math.Pi / 2, Surge: 3, SheetLimit: 0.6}},
+			bus.Command{Op: bus.Unseen, Boat: 1, On: true})
+		for range 30 {
+			r.tick()
+		}
+		if !r.w.Latest().Voyage[0].Falling() {
+			r.close(t)
+			t.Fatal("the boat did not go over")
+		}
+		// After the fall, a voyage of its own, which leaves in the band.
+		for r.w.Latest().Voyage[0].Falling() {
+			r.tick()
+		}
+		r.tick(bus.Command{Op: bus.Place, Boat: 1, State: physics.State{Y: 8300, Heading: -math.Pi / 2}})
+		r.tick(bus.Command{Op: bus.Leave, Boat: 1})
+		if err := r.close(t); err != nil {
+			t.Fatal(err)
+		}
+		events, cps := r.db.all()
+		if !slices.Equal(events, r.lasting) {
+			t.Fatalf("written %v, decided %v", events, r.lasting)
+		}
+		var edge []store.Event
+		for _, e := range events {
+			if e.Kind == store.EventOver || e.Kind == store.EventApproach {
+				edge = append(edge, e)
+			}
+		}
+		if len(edge) != 1 || edge[0].Kind != store.EventApproach || math.Abs(edge[0].Distance-34) > 0.1 {
+			t.Fatalf("the edge's events: %+v", edge)
+		}
+		for _, cp := range cps {
+			f := bus.NewFrame(64)
+			if err := sim.ReadSnapshot(cp.Data, f); err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(cp.Data, sim.AppendCheckpoint(nil, f)) || slices.Contains(f.Unseen, true) {
+				t.Fatal("a checkpoint holds the owner's marks")
+			}
+		}
+	})
+}

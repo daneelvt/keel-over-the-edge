@@ -18,7 +18,10 @@
 // is held there, unstepped, from the tick it crossed, as the server holds
 // it while it falls; a snapshot after the fall that does not say it is
 // falling is the boat back at the start, and the prediction starts again
-// from it. The Go test client predicts the same way
+// from it. A boat that stays where it is while its owner's free camera
+// roams is held so too, as the server holds it, and the first snapshot that
+// lets it go starts the prediction again from it. The Go test client
+// predicts the same way
 // (internal/client/predict.go), and the tests replay its traces here.
 
 import type { BoatPhysics, Encounters, Weather } from '../catalog/types.gen';
@@ -139,6 +142,8 @@ export class Predictor implements BoatDriver {
   over = 0;
   /** How many times a snapshot has put the boat back at the start after going over. */
   restarts = 0;
+  /** The boat stays where it is while its owner's free camera roams: held, unstepped. */
+  stays = false;
 
   /** The sea the boat is stepped in, from the server's SeaAreas. */
   readonly seas: Seas;
@@ -187,6 +192,7 @@ export class Predictor implements BoatDriver {
     this.started = true;
     this.tick = sn.tick;
     this.over = sn.over;
+    this.stays = sn.stays;
     this.#physics.records.state.set(sn.state);
     this.weather.read(sn.tick, sn.state[S.x] ?? 0, sn.state[S.y] ?? 0, this.wind);
     this.#ticks.fill(Number.NaN);
@@ -218,7 +224,7 @@ export class Predictor implements BoatDriver {
     c[RECORDS.control.target] = target;
     c[RECORDS.control.order] = order;
     c[RECORDS.control.way] = way;
-    if (this.over !== 0) {
+    if (this.over !== 0 || this.stays) {
       return;
     }
     this.weather.use(tick);
@@ -299,7 +305,8 @@ export class Predictor implements BoatDriver {
       !this.started ||
       sn.tick > this.tick ||
       this.#ticks[i] !== sn.tick ||
-      (this.over !== 0 && sn.over === 0 && sn.tick > this.over)
+      (this.over !== 0 && sn.over === 0 && sn.tick > this.over) ||
+      (this.stays && !sn.stays)
     ) {
       if (this.over !== 0 && sn.over === 0 && sn.tick > this.over) {
         this.restarts++;
@@ -309,13 +316,19 @@ export class Predictor implements BoatDriver {
       return o;
     }
     const r = this.#physics.records;
-    if (sn.over !== 0) {
-      // The server's boat is falling: held where it went over.
-      if (this.over === sn.over && this.#same(this.tick % RING, sn.state)) {
+    if (sn.over !== 0 || sn.stays) {
+      // The server's boat is falling, held where it went over; or stays
+      // where it is.
+      if (
+        this.over === sn.over &&
+        this.stays === sn.stays &&
+        this.#same(this.tick % RING, sn.state)
+      ) {
         return o;
       }
       this.#before.set(r.state);
       this.over = sn.over;
+      this.stays = sn.stays;
       r.state.set(sn.state);
       for (let t = sn.tick; t <= this.tick; t++) {
         this.#ring.set(sn.state, (t % RING) * N);

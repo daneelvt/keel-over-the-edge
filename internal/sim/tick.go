@@ -84,6 +84,8 @@ func (w *World) inputs() {
 		next.State[s] = cur.State[s]
 		next.Course[s] = cur.Course[s]
 		next.Voyage[s] = cur.Voyage[s]
+		next.Stay[s] = cur.Stay[s]
+		next.Unseen[s] = cur.Unseen[s]
 	}
 	// A bump stays a second in the frames, for encoders that skip one.
 	next.Bumps = next.Bumps[:0]
@@ -174,9 +176,10 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 		word := f.Control[s]
 		c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
 		c.Pilot, c.Target, c.Order, c.Way = f.Pilot[s].Control()
-		if f.Voyage[s].Falling() {
+		if f.Voyage[s].Falling() || f.Stay[s] {
 			// A boat falling over the lip is not stepped: it keeps its
-			// state and its sail as it went over.
+			// state and its sail as it went over; nor is a boat that
+			// stays while its owner's free camera roams.
 			f.Sail[s] = w.cur.Sail[s]
 			w.settle(f, s)
 			continue
@@ -185,7 +188,9 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 		e := physics.WindAt(&w.wind, st.X, st.Y, w.shelter)
 		e.CurrentEast, e.CurrentNorth = physics.CurrentAt(w.weather.Prepared, w.circulation, st.X, st.Y, w.ground)
 		kind := &w.kinds[f.Kind[s]]
-		if w.enc != nil {
+		if w.enc != nil && !f.Unseen[s] {
+			// An unseen boat sails through the others' wakes as through
+			// their hulls.
 			w.shadow(src, &e, s, st.X, st.Y)
 		}
 		physics.Step(st, &c, &e, w.sea.at, w.ground, kind, o)

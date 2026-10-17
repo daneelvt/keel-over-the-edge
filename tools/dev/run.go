@@ -142,6 +142,7 @@ func printInternal(mu *sync.Mutex, out io.Writer) {
 	fmt.Fprintf(out, "    profiles  go tool pprof %s/debug/pprof/profile\n", base)
 	fmt.Fprintf(out, "    trace     curl -o trace.out %s/debug/flightrecorder; go tool trace trace.out\n", base)
 	fmt.Fprintf(out, "    replay    curl -o keel.log %s/debug/replay; go run ./cmd/keel replay keel.log\n", base)
+	fmt.Fprintf(out, "    world     npm run owner in client/, then http://localhost:5184/owner/ (its data: %s/owner/api/world.json)\n", base)
 	fmt.Fprintf(out, "    wind      curl -X POST '%s/debug/wind?knots=15&from=270'\n", base)
 	fmt.Fprintf(out, "    weather   curl -X POST '%s/debug/weather?regime=stormy'   (a regime of the catalog's, or ?auto)\n", base)
 	fmt.Fprintf(out, "    input logs in %s, traces of slow ticks in %s\n\n", replayDir, traceDir)

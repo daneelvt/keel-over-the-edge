@@ -38,6 +38,7 @@ type terrain struct {
 	bundle   *worldgen.Bundle
 	payloads [][]byte
 	key      []byte
+	made     time.Time // when it was stored
 }
 
 // worldTerrain is the world's terrain: its bundle read back from the
@@ -80,7 +81,7 @@ func worldTerrain(ctx context.Context, db database, sailed store.World, epoch in
 		log.Warn("the world's terrain was made by another generator: it is sailed as it was made",
 			"generator", b.Generator, "this_generator", worldgen.Version)
 	}
-	return &terrain{bundle: b, payloads: stored.Chunks, key: stored.ChunkKey}, nil
+	return &terrain{bundle: b, payloads: stored.Chunks, key: stored.ChunkKey, made: stored.Stored}, nil
 }
 
 // chunkKey is a new chunk key: random bytes from crypto/rand.

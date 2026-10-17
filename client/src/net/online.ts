@@ -96,6 +96,8 @@ export class Online {
   readonly rtt = signal(-1);
   /** The place in the queue while the sea is full, or null. */
   readonly place = signal<Place | null>(null);
+  /** The account carries the owner's flag: the free camera is the player's. */
+  readonly tools = signal(false);
   /** The other boats. */
   readonly fleet = new Fleet();
   /** The latest snapshots' sizes, bytes, for the panel. */
@@ -166,6 +168,15 @@ export class Online {
     this.#port.postMessage({ type: 'wake' });
   }
 
+  /**
+   * The owner's free camera: off the boat over (east, north), height up,
+   * metres, or back on it. The server hears it only from an account with
+   * the owner's flag.
+   */
+  roam(on: boolean, east: number, north: number, height: number): void {
+    this.#port.postMessage({ type: 'roam', on, east, north, height });
+  }
+
   takeOver(): void {
     this.#port.postMessage({ type: 'takeover' });
   }
@@ -208,6 +219,9 @@ export class Online {
       case 'chunks':
         this.onChunks?.(m.chunks);
         break;
+      case 'tools':
+        this.tools.value = m.on;
+        break;
       case 'welcome':
         if (this.#hadBoat && !m.rejoined) {
           this.notice.value = { text: 'Your boat has returned to port.', takeover: false };
@@ -221,6 +235,7 @@ export class Online {
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
         this.onWorld?.(m.world, m.land);
+        this.tools.value = m.tools;
         this.#predictor.setCirculation(m.circulation);
         this.#fresh = true;
         // A snapshot still waiting for a frame is the last connection's:

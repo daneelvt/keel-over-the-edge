@@ -76,14 +76,16 @@ export async function fetchWorldFile(seed: string): Promise<WorldFile> {
 
 /**
  * Hands the land a world file's chunks as a boat at where() could see
- * them, as the server would: looked at again every half second. Returns a
- * function that stops it.
+ * them, as the server would: looked at again every half second; and, if
+ * also is given, as its rule sees them from its where() while that is not
+ * null (the free camera, from higher). Returns a function that stops it.
  */
 export async function handWorld(
   land: Land,
   file: WorldFile,
   rule: WorldHandout,
   where: () => [number, number],
+  also: { rule: WorldHandout; where: () => [number, number] | null } | null = null,
 ): Promise<() => void> {
   const elevations = new Map<number, Int16Array | null>();
   const zero = new Uint8Array(16);
@@ -97,15 +99,23 @@ export async function handWorld(
     }),
   );
   const handout = new Handout(rule, elevations);
+  const second = also === null ? null : new Handout(also.rule, elevations);
   const given = new Set<number>();
-  const look = (): void => {
-    const [east, north] = where();
-    for (const n of handout.seen(east, north)) {
+  const give = (seen: number[]): void => {
+    for (const n of seen) {
       if (!given.has(n)) {
         given.add(n);
         const p = file.payloads[n] as Uint8Array;
         land.give(n, p.slice().buffer);
       }
+    }
+  };
+  const look = (): void => {
+    const [east, north] = where();
+    give(handout.seen(east, north));
+    const at = also?.where() ?? null;
+    if (second !== null && at !== null) {
+      give(second.seen(at[0], at[1]));
     }
   };
   look();

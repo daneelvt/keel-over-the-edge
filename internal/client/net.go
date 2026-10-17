@@ -52,6 +52,8 @@ type Event struct {
 	Bump *pb.Bump
 	// Chunks: the addresses of chunks of the land the boat could see.
 	Chunks *pb.Chunks
+	// Tools: the account's owner's flag was set or cleared.
+	Tools *pb.Tools
 	// Snapshot is a snapshot's header; View the other boats after it,
 	// valid until ViewsKept more snapshots are decoded; Changes what its
 	// entries did, and Sampled the view slots it samples.
@@ -126,6 +128,9 @@ func (n *Net) Receive(now float64, b []byte) ([][]byte, Event, error) {
 	case *pb.ServerMessage_Chunks:
 		n.lastHeard = now
 		return nil, Event{Chunks: b.Chunks}, nil
+	case *pb.ServerMessage_Tools:
+		n.lastHeard = now
+		return nil, Event{Tools: b.Tools}, nil
 	}
 	return nil, Event{}, nil
 }
@@ -135,6 +140,16 @@ func (n *Net) Input(now float64, seq uint32, in Input) []byte {
 	return n.encode(now, &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{
 		Seq: seq, Helm: uint32(in.Helm), Sheet: uint32(in.Sheet), AckTick: n.ackTick,
 		Pilot: uint32(in.Mode), Target: uint32(in.Target), Order: uint32(in.Order), Way: uint32(in.Way),
+	}}})
+}
+
+// Roam is the owner's free camera, off the boat at (east, north), height
+// up, m, or back on it.
+func (n *Net) Roam(now float64, on bool, east, north, height float64) []byte {
+	return n.encode(now, &pb.ClientMessage{Body: &pb.ClientMessage_Command{Command: &pb.Command{
+		Body: &pb.Command_Roam{Roam: &pb.Roam{
+			On: on, East: int32(math.Round(east * 100)), North: int32(math.Round(north * 100)), Height: uint32(math.Round(max(height, 0) * 100)),
+		}},
 	}}})
 }
 

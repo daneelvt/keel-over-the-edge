@@ -37,7 +37,7 @@ func get(t *testing.T, client *http.Client, url string) (int, string) {
 func TestLiveness(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		h := NewHealth()
-		srv := httptest.NewTestServer(t, Internal(h, NewMetrics("b", "c"), nil, nil, nil))
+		srv := httptest.NewTestServer(t, Internal(h, NewMetrics("b", "c"), nil, nil, nil, nil))
 		if code, _ := get(t, srv.Client(), srv.URL+"/livez"); code != 200 {
 			t.Fatalf("a fresh heartbeat: %d", code)
 		}
@@ -64,7 +64,7 @@ func TestLiveness(t *testing.T) {
 func TestReadiness(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		h := NewHealth()
-		srv := httptest.NewTestServer(t, Internal(h, NewMetrics("b", "c"), nil, nil, nil))
+		srv := httptest.NewTestServer(t, Internal(h, NewMetrics("b", "c"), nil, nil, nil, nil))
 		ready := func(want int, why string) {
 			t.Helper()
 			code, body := get(t, srv.Client(), srv.URL+"/readyz")
@@ -251,7 +251,7 @@ func TestFlightSnapshotConflict(t *testing.T) {
 		_, err := w.Write([]byte("trace"))
 		return err
 	}
-	srv := httptest.NewTestServer(t, Internal(NewHealth(), NewMetrics("b", "c"), f, nil, nil))
+	srv := httptest.NewTestServer(t, Internal(NewHealth(), NewMetrics("b", "c"), f, nil, nil, nil))
 	var wg sync.WaitGroup
 	var firstCode int
 	var firstBody string
@@ -275,7 +275,7 @@ func TestFlightRecorder(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Stop()
-	srv := httptest.NewTestServer(t, Internal(NewHealth(), NewMetrics("b", "c"), f, nil, nil))
+	srv := httptest.NewTestServer(t, Internal(NewHealth(), NewMetrics("b", "c"), f, nil, nil, nil))
 	code, body := get(t, srv.Client(), srv.URL+"/debug/flightrecorder")
 	if code != 200 || !strings.HasPrefix(body, "go 1.") {
 		t.Fatalf("%d, %d bytes starting %q", code, len(body), body[:min(len(body), 16)])
@@ -283,7 +283,7 @@ func TestFlightRecorder(t *testing.T) {
 }
 
 func TestInternalRoutes(t *testing.T) {
-	srv := httptest.NewTestServer(t, Internal(NewHealth(), NewMetrics("b", "c"), nil, nil, nil))
+	srv := httptest.NewTestServer(t, Internal(NewHealth(), NewMetrics("b", "c"), nil, nil, nil, nil))
 	for _, path := range []string{"/debug/pprof/", "/debug/pprof/goroutine", "/debug/pprof/cmdline", "/metrics", "/livez"} {
 		if code, _ := get(t, srv.Client(), srv.URL+path); code != 200 {
 			t.Errorf("%s: %d", path, code)

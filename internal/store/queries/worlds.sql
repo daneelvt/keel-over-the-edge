@@ -42,7 +42,7 @@ INSERT INTO place (world_id, number, kind, name, biome, size, x, y, area, highes
 VALUES (@world_id, @number, @kind, @name, @biome, @size, @x, @y, @area, @highest);
 
 -- name: WorldBundle :one
-SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key
+SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key, created_at
 FROM world_bundle WHERE world_id = @world_id;
 
 -- name: WorldChunks :many

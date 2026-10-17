@@ -5,10 +5,11 @@
 // through SwiftShader, the CPU's Vulkan. Locally, PW_CHANNEL=chrome uses the
 // installed Chrome instead of downloading Chromium.
 //
-// Three servers: keel, built from this tree and serving a database of its
+// Four servers: keel, built from this tree and serving a database of its
 // own on the test database's server (tools/e2e), and Vite in front of it, as
-// in development; and a second Vite whose traffic to keel goes through the
-// lag proxy tools/e2e runs, for the tests of a slow network. The WebKit
+// in development; a second Vite whose traffic to keel goes through the
+// lag proxy tools/e2e runs, for the tests of a slow network; and the world
+// page's Vite, in front of keel's internal listener. The WebKit
 // project runs only the test of the net worker's upgrade. The compat project
 // runs the sea's tests on WebGPU with a device held to compatibility mode's
 // limits (?compat), as the phones that offer only that have. The page's
@@ -28,6 +29,8 @@ const tls = '../.dev/e2e/tls';
 // tools/e2e's addresses for keel.
 const keelPlay = '127.0.0.1:18080';
 const keelReady = 'http://127.0.0.1:19090/readyz';
+// The world page, on its own Vite, its data from keel's internal listener.
+const ownerPort = 5184;
 const linux = process.platform === 'linux';
 // pr.render splits a back end's short tests over two runners by spec file:
 // SPECS names some files (sea,sail), and SPECS_HALF says which half this
@@ -136,6 +139,13 @@ export default defineConfig({
       },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+    },
+    {
+      command: `npx --no-install vite -c vite.owner.config.ts --port ${ownerPort} --strictPort`,
+      url: `http://localhost:${ownerPort}/owner/`,
+      env: { KEEL_INTERNAL_ADDR: '127.0.0.1:19090' },
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
     },
     {
       command: `npx --no-install vite --port ${laggedPort} --strictPort`,

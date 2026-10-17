@@ -32,8 +32,8 @@ const (
 	// SnapshotLayout is the layout this package writes: the own boat's
 	// state as float64, its autopilot's block if it has one, its ground
 	// block if it is aground, its over block if it is falling over the
-	// lip, then the view's entries.
-	SnapshotLayout = 8
+	// lip, then the view's entries; flag bit 4 while the boat stays.
+	SnapshotLayout = 9
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an
@@ -59,6 +59,9 @@ const (
 	// OverHeld: the over block follows the header and the blocks before
 	// it: the tick the boat went over the lip, while it falls.
 	OverHeld = 1 << 3
+	// Staying: the boat stays where it is, not stepped, while its owner's
+	// free camera roams.
+	Staying = 1 << 4
 )
 
 const (
@@ -101,7 +104,9 @@ type Snapshot struct {
 	Margin int16
 	// Over is the tick the boat went over the lip while it is falling, or
 	// 0 while it is afloat.
-	Over  int64
+	Over int64
+	// Stays: the boat stays where it is, not stepped (flag Staying).
+	Stays bool
 	State physics.State
 	// Entries is how many entries follow the header, and Header the
 	// header's length, where they begin.
@@ -124,12 +129,16 @@ func pilotHeld(p bus.PilotWord, s *physics.State) bool {
 // PutHeader writes a snapshot's header, its kind byte first, into b, which
 // must hold its length, HeaderSize bytes and each block's, with no entries,
 // and returns that length: where the entries begin. over is the tick the
-// boat went over the lip, 0 while it is afloat. It allocates nothing.
-func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, pilot bus.PilotWord, margin int16, over int64, s *physics.State) int {
+// boat went over the lip, 0 while it is afloat; stays, whether it stays
+// where it is while its owner's free camera roams. It allocates nothing.
+func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, pilot bus.PilotWord, margin int16, over int64, stays bool, s *physics.State) int {
 	held, aground, falling := pilotHeld(pilot, s), groundHeld(s), over != 0
 	n := headerLength(held, aground, falling)
 	_ = b[n-1]
-	flags &^= PilotHeld | GroundHeld | OverHeld
+	flags &^= PilotHeld | GroundHeld | OverHeld | Staying
+	if stays {
+		flags |= Staying
+	}
 	if held {
 		flags |= PilotHeld
 	}
@@ -196,7 +205,7 @@ func SetEntries(b []byte, n int) { b[offEntries] = byte(n) }
 // Put writes s's header as PutHeader does, with s.Entries as its count, and
 // sets s.Header to its length.
 func (s *Snapshot) Put(b []byte) {
-	s.Header = PutHeader(b, s.Tick, s.Base, s.Flags, bus.Pack(s.Seq, s.Helm, s.Sheet, 0), s.pilot(), s.Margin, s.Over, &s.State)
+	s.Header = PutHeader(b, s.Tick, s.Base, s.Flags, bus.Pack(s.Seq, s.Helm, s.Sheet, 0), s.pilot(), s.Margin, s.Over, s.Stays, &s.State)
 	SetEntries(b, s.Entries)
 }
 
@@ -237,7 +246,7 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 	switch {
 	case s.Helm > bus.Steps || s.Sheet > bus.Steps:
 		return fmt.Errorf("protocol: a snapshot's controls %d and %d", s.Helm, s.Sheet)
-	case s.Flags&^(FarSampled|PilotHeld|GroundHeld|OverHeld) != 0:
+	case s.Flags&^(FarSampled|PilotHeld|GroundHeld|OverHeld|Staying) != 0:
 		return fmt.Errorf("protocol: a snapshot's flags %#02x", s.Flags)
 	case s.Entries > MaxEntries:
 		return fmt.Errorf("protocol: a snapshot of %d entries", s.Entries)
@@ -251,6 +260,7 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 		*v = 0
 	}
 	held, aground, falling := s.Flags&PilotHeld != 0, s.Flags&GroundHeld != 0, s.Flags&OverHeld != 0
+	s.Stays = s.Flags&Staying != 0
 	s.Header = headerLength(held, aground, falling)
 	if len(b) < s.Header {
 		return fmt.Errorf("protocol: a snapshot of %d bytes, shorter than its header and blocks", len(b))

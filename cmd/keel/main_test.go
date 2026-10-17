@@ -397,6 +397,20 @@ func (d *memDB) Session(ctx context.Context, hash [32]byte) (store.Session, erro
 	return store.Session{}, store.ErrNotFound
 }
 
+func (d *memDB) Accounts(ctx context.Context, ids []store.AccountID) (map[store.AccountID]store.Account, error) {
+	if d.sessions != nil {
+		return d.sessions.Accounts(ctx, ids)
+	}
+	return map[store.AccountID]store.Account{}, nil
+}
+
+func (d *memDB) SetTools(ctx context.Context, id store.AccountID, on bool) error {
+	if d.sessions != nil {
+		return d.sessions.SetTools(ctx, id, on)
+	}
+	return store.ErrNotFound
+}
+
 func (d *memDB) Touch(context.Context, [32]byte) error      { return nil }
 func (d *memDB) CheckSchema(context.Context) (int64, error) { return store.Latest, nil }
 func (d *memDB) Stats() store.PoolStats                     { return store.PoolStats{Max: store.MaxConns} }
@@ -620,7 +634,8 @@ func TestPublicListeners(t *testing.T) {
 		}
 		// The internal listener serves them (the flight recorder aside, off
 		// in tests; profiles and traces, which take seconds, are not asked).
-		for _, path := range []string{"/livez", "/metrics", "/debug/pprof/", "/debug/pprof/goroutine", "/debug/pprof/cmdline", "/debug/replay"} {
+		for _, path := range []string{"/livez", "/metrics", "/debug/pprof/", "/debug/pprof/goroutine", "/debug/pprof/cmdline", "/debug/replay",
+			"/owner/api/world.json", "/owner/api/gusts.bin", "/owner/api/islands.json", "/owner/api/current.json"} {
 			if code, _, _ := get(t, s.client, internalURL+path); code != 200 {
 				t.Errorf("the internal listener answers %s with %d", path, code)
 			}
@@ -701,7 +716,13 @@ func TestServesThePage(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for name, body := range map[string]string{"index.html": "<title>Keel Over the Edge</title>", "assets/main-abc.js": "1"} {
+	if err := os.MkdirAll(filepath.Join(dir, "owner", "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"index.html": "<title>Keel Over the Edge</title>", "assets/main-abc.js": "1",
+		"owner/index.html": "<title>The world</title>", "owner/assets/owner-abc.js": "2",
+	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -717,6 +738,19 @@ func TestServesThePage(t *testing.T) {
 		}
 		if code, _, _ := get(t, s.client, agentsURL+"/"); code != 404 {
 			t.Errorf("the agents' listener serves the page: %d", code)
+		}
+		// The world page, in the page's directory, on the internal
+		// listener alone.
+		for _, path := range []string{"/owner/", "/owner/index.html", "/owner/assets/owner-abc.js", "/owner/owner-abc.js", "/assets/owner-abc.js"} {
+			if code, _, _ := get(t, s.client, playURL+path); code != 404 {
+				t.Errorf("the game's listener serves %s: %d", path, code)
+			}
+		}
+		if code, body, h := get(t, s.client, internalURL+"/owner/"); code != 200 || !strings.Contains(body, "The world") || h.Get("Content-Security-Policy") == "" {
+			t.Errorf("the world page %d %q %v", code, body, h)
+		}
+		if code, _, _ := get(t, s.client, internalURL+"/owner/assets/owner-abc.js"); code != 200 {
+			t.Errorf("the world page's asset %d", code)
 		}
 		s.stop(t)
 	})

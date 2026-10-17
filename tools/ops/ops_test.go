@@ -34,7 +34,7 @@ func TestTunnel(t *testing.T) {
 		local[f.Local] = true
 	}
 	said := links(manifests.Forwards)
-	for _, want := range []string{"http://localhost:3000", "Grafana", "http://localhost:8428", "http://localhost:9428", "port=15432", "user=reader", "localhost:9090/debug/pprof"} {
+	for _, want := range []string{"http://localhost:3000", "Grafana", "http://localhost:8428", "http://localhost:9428", "port=15432", "user=reader", "localhost:9090/debug/pprof", "http://localhost:9090/owner/"} {
 		if !strings.Contains(said, want) {
 			t.Errorf("the links lack %q:\n%s", want, said)
 		}

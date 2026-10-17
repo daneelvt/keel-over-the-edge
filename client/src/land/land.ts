@@ -247,6 +247,18 @@ export class Land {
     return this.#world.surfaces[s]?.friction ?? 0;
   }
 
+  /** The ground's height under (east, north), m, by the grids held: below 0 under the sea; null where none is held. */
+  heightAt(east: number, north: number): number | null {
+    const [c, j] = cellAt(east, north);
+    const n = chunkAt(east, north);
+    const g = this.#grids.get(n);
+    if (g === undefined || g.elevation === null) {
+      return null;
+    }
+    const [c0, j0] = chunkCorner(n);
+    return (g.elevation[(c - c0) * GROUND.chunkRows + (j - j0)] ?? 0) / 10;
+  }
+
   /** The highest drawn land of chunk n, or −∞ (the tests). */
   highestOf(n: number): number {
     return this.#held.get(n)?.highest ?? Number.NEGATIVE_INFINITY;
@@ -260,8 +272,10 @@ export class Land {
   /**
    * The frame: asks for the chunks wanted, lets go those far behind, places
    * every mesh and decides which are drawn; then brings the ground window,
-   * the lee and the module's slots up to date. The boat is at (east,
-   * north); camera is the scene's.
+   * the lee and the module's slots up to date. The scene's focus is at
+   * (east, north): the boat, or the point beneath the free camera; the
+   * boat at (boatEast, boatNorth), whose grids are kept and whose ground
+   * the module's slots hold wherever the focus is. camera is the scene's.
    */
   frame(
     east: number,
@@ -270,6 +284,8 @@ export class Land {
     origin: FloatingOrigin,
     windFrom: number,
     now: number,
+    boatEast = east,
+    boatNorth = north,
   ): void {
     const keepMeshes = this.#world.look.keepMeshes;
     const keepGrids = this.#world.look.keepGrids;
@@ -282,8 +298,9 @@ export class Land {
           continue;
         }
         const d = outlineDistance(h, east, north);
+        const dBoat = Math.min(d, outlineDistance(h, boatEast, boatNorth));
         const mesh = d <= keepMeshes && (!h.had || (h.land && h.mesh === null));
-        const grids = d <= keepGrids && h.grids === null;
+        const grids = dBoat <= keepGrids && h.grids === null;
         if (mesh || grids) {
           want.push([d, h]);
         }
@@ -321,7 +338,7 @@ export class Land {
       if (h.mesh !== null && d > keepMeshes) {
         this.#dropMesh(h);
       }
-      if (h.grids !== null && d > keepGrids) {
+      if (h.grids !== null && Math.min(d, outlineDistance(h, boatEast, boatNorth)) > keepGrids) {
         h.grids = null;
         this.#grids.delete(h.number);
         this.#version++;
@@ -370,7 +387,7 @@ export class Land {
     groundWindow.update(camEast, camNorth, this.#grids, this.#version);
     shore.window.value.set(groundWindow.col, groundWindow.row);
     if (this.#physics !== null) {
-      this.slots?.follow(east, north, this.#grids, this.#version);
+      this.slots?.follow(boatEast, boatNorth, this.#grids, this.#version);
       shelterTexture.update(this.#physics, camEast, camNorth, windFrom, now);
       shore.lee.value.set(shelterTexture.a0, shelterTexture.b0);
     }

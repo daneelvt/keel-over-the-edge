@@ -63,6 +63,10 @@ type Predictor struct {
 	// it is held where it went over, not stepped, until a snapshot puts
 	// it back at the start.
 	Over int64
+	// Stays: the boat stays where it is while its owner's free camera
+	// roams, held as the server holds it, not stepped, until a snapshot
+	// lets it go.
+	Stays bool
 }
 
 // NewPredictor predicts a boat of kind in the sea of waves, with which the
@@ -87,7 +91,7 @@ func (p *Predictor) ReceiveWeather(m *pb.WeatherSystems) error {
 
 // Reset puts the boat at a snapshot's state, forgetting what was predicted.
 func (p *Predictor) Reset(sn *protocol.Snapshot) {
-	p.Started, p.Tick, p.State, p.Over = true, sn.Tick, sn.State, sn.Over
+	p.Started, p.Tick, p.State, p.Over, p.Stays = true, sn.Tick, sn.State, sn.Over, sn.Stays
 	for i := range p.ring {
 		p.ring[i].tick = math.MinInt64
 	}
@@ -95,9 +99,9 @@ func (p *Predictor) Reset(sn *protocol.Snapshot) {
 
 // step steps the boat into tick, in the wind and the current at its place
 // and the sea of that tick, as the server does; a boat over the lip is
-// held.
+// held, as is one that stays.
 func (p *Predictor) step(tick int64, in Input) {
-	if p.Over != 0 {
+	if p.Over != 0 || p.Stays {
 		return
 	}
 	w := bus.Pack(0, in.Helm, in.Sheet, 0)
@@ -164,22 +168,24 @@ type Outcome struct {
 // the prediction is held where the server's boat went over, as it would
 // have held it had it gone over on the same tick. A snapshot after the fall
 // with no fall in it is the boat back at the start, and the prediction
-// starts again from it.
+// starts again from it. A boat that stays while its owner's free camera
+// roams is held so too, and the first snapshot that lets it go starts the
+// prediction again from it.
 func (p *Predictor) Snapshot(sn *protocol.Snapshot) Outcome {
 	if p.Started && sn.Tick <= p.Tick-Ring {
 		return Outcome{Stale: true}
 	}
 	e := &p.ring[sn.Tick%Ring]
-	if !p.Started || sn.Tick > p.Tick || e.tick != sn.Tick || p.Over != 0 && sn.Over == 0 && sn.Tick > p.Over {
+	if !p.Started || sn.Tick > p.Tick || e.tick != sn.Tick || p.Over != 0 && sn.Over == 0 && sn.Tick > p.Over || p.Stays && !sn.Stays {
 		p.Reset(sn)
 		return Outcome{Reset: true}
 	}
-	if sn.Over != 0 {
-		if p.Over == sn.Over && sameBits(&p.State, &sn.State) {
+	if sn.Over != 0 || sn.Stays {
+		if p.Over == sn.Over && p.Stays == sn.Stays && sameBits(&p.State, &sn.State) {
 			return Outcome{}
 		}
 		before := p.State
-		p.Over, p.State = sn.Over, sn.State
+		p.Over, p.Stays, p.State = sn.Over, sn.Stays, sn.State
 		for t := sn.Tick; t <= p.Tick; t++ {
 			p.ring[t%Ring].state = sn.State
 		}

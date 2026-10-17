@@ -27,6 +27,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
 )
 
 // Scales, metres a pixel: the page's chart, the shelter's layers, and each
@@ -90,9 +91,9 @@ func run(seed uint64, bundle string, seeds int, from uint64, isl int, out string
 			if err != nil {
 				return err
 			}
-			terrain := raster(b.Ground, v, func(e float64, _ int32) color.RGBA { return elevationColour(e) })
+			terrain := chart.Raster(b.Ground, v, chart.Terrain)
 			bundles = append(bundles, b)
-			charts = append(charts, chart(b, cc, v, terrain))
+			charts = append(charts, worldChart(b, cc, v, terrain))
 		}
 		return write("seeds.html", seedsPage(bundles, charts))
 	}
@@ -110,21 +111,23 @@ func run(seed uint64, bundle string, seeds int, from uint64, isl int, out string
 		return err
 	}
 	if isl >= 0 {
-		svg, err := islandChart(b, isl)
+		svg, err := chart.Island(b, isl)
 		if err != nil {
 			return err
 		}
 		return write(fmt.Sprintf("island-%d.svg", isl), svg)
 	}
 	v := worldView(chartScale)
-	terrain := raster(b.Ground, v, func(e float64, _ int32) color.RGBA { return elevationColour(e) })
-	surfaces := raster(b.Ground, v, func(_ float64, s int32) color.RGBA { return surfaceColours[int(s)%len(surfaceColours)] })
+	terrain := chart.Raster(b.Ground, v, chart.Terrain)
+	surfaces := chart.Raster(b.Ground, v, func(_ float64, s int32) color.RGBA {
+		return chart.SurfaceColours[int(s)%len(chart.SurfaceColours)]
+	})
 	sv := worldView(shelterScale)
 	var shelters [][]byte
 	for k := range physics.ShelterDirections {
 		shelters = append(shelters, shelterLayer(b, sv, k))
 	}
-	if err := write("chart.svg", chart(b, cc, v, terrain)); err != nil {
+	if err := write("chart.svg", worldChart(b, cc, v, terrain)); err != nil {
 		return err
 	}
 	return write("index.html", page(b, cc, v, terrain, surfaces, shelters, cat.Weather.Sea.FetchCap*1852))

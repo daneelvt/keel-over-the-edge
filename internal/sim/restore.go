@@ -35,7 +35,7 @@ type Restored struct {
 // place. Admission is no longer held: whatever held it was the earlier
 // process's. The weather and the sea are what the developer's weathers
 // make them at the present. A boat that lies on land starts again at the
-// world's start.
+// world's start. The owner's tools' marks are cleared.
 func (w *World) Restore(snapshot []byte, now int64) (Restored, error) {
 	var r Restored
 	err := w.load(snapshot, func(f *bus.Frame) {
@@ -43,6 +43,10 @@ func (w *World) Restore(snapshot []byte, now int64) (Restored, error) {
 		f.Tick = now
 		f.Held = false
 		for _, s := range f.Live {
+			// The owner's tools' marks were the earlier process's: a boat
+			// staying sails again, an unseen one is seen, and a placed
+			// voyage is forgotten.
+			f.Stay[s], f.Unseen[s], f.Voyage[s].Placed = false, false, false
 			f.Conn[s] = 0
 			if f.Grace[s] == 0 {
 				f.Grace[s] = now + w.grace

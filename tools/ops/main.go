@@ -109,6 +109,7 @@ func links(forwards []manifests.Forward) string {
 		case "keel-internal-forward":
 			fmt.Fprintf(&b, "  %-22s %s\n", "localhost:"+strconv.Itoa(f.Local), f.What)
 			fmt.Fprintf(&b, "  %-22s   go tool pprof http://localhost:%d/debug/pprof/profile\n", "", f.Local)
+			fmt.Fprintf(&b, "  %-22s   the world page: http://localhost:%d/owner/\n", "", f.Local)
 		default:
 			fmt.Fprintf(&b, "  %-22s %s\n", "http://localhost:"+strconv.Itoa(f.Local), f.What)
 		}

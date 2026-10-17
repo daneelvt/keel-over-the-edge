@@ -23,8 +23,12 @@
 //   ?sky=dusk,0.5     the sky at an hour (dawn, noon, dusk, midnight, or 0 to 24)
 //                     and the moon's age (0 new, 0.5 full), for the developer
 //   ?test             the hooks the browser tests drive
+//
+// F flies the free camera off the boat and back, Escape brings it back: in
+// the sandbox for anyone, online for an account with the owner's flag.
 
 import './game.css';
+import { signal } from '@preact/signals';
 import { createGuest } from '../account/guest';
 import { resolveSailor } from '../account/me';
 import { backSoon, showStartScreen } from '../account/start';
@@ -39,6 +43,7 @@ import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
 import { loadPhysics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
+import { ROAM_HIGH } from '../render/freecam';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import {
@@ -118,12 +123,20 @@ async function start(): Promise<void> {
       );
       world.useLand(land);
       game.bedFriction = (east, north) => land.frictionAt(east, north);
+      world.freeCam.ground = (east, north) => land.heightAt(east, north);
       land.setWorld(FILE_WORLD, true, sandbox.physics);
       const s = sandbox.physics.records.state;
-      await handWorld(land, file, catalog.world.handout, () => [
-        s[RECORDS.state.x] ?? 0,
-        s[RECORDS.state.y] ?? 0,
-      ]);
+      // The land about the boat, or about the free camera while it flies,
+      // as a server hands it.
+      const free = world.freeCam;
+      const high = { ...catalog.world.handout, camera: ROAM_HIGH };
+      await handWorld(
+        land,
+        file,
+        catalog.world.handout,
+        () => [s[RECORDS.state.x] ?? 0, s[RECORDS.state.y] ?? 0],
+        { rule: high, where: () => (free.on ? [free.east, free.north] : null) },
+      );
     }
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
     chooseSky(world, query);
@@ -136,6 +149,13 @@ async function start(): Promise<void> {
       labels: (el) => world.attachLabels(el),
       sailor: null,
       connection: null,
+      fly: {
+        can: signal(true),
+        flying: game.flying,
+        back: game.backShown,
+        fly: () => game.fly(),
+        land: () => game.land(),
+      },
     });
     game.listen(document, container);
     if (view !== undefined) {
@@ -194,6 +214,10 @@ async function start(): Promise<void> {
   );
   world.useLand(land);
   game.bedFriction = (east, north) => land.frictionAt(east, north);
+  world.freeCam.ground = (east, north) => land.heightAt(east, north);
+  // The free camera is the owner's alone: the server hears it from no other.
+  game.canFly = () => online.tools.value;
+  game.onRoam = (on, east, north, height) => online.roam(on, east, north, height);
   online.onWorld = (id, sailed) => land.setWorld(id, sailed, sailed ? predictor.physics : null);
   online.onChunks = (c) => land.hand(c.numbers, c.paths);
   connect(online);
@@ -220,6 +244,13 @@ async function start(): Promise<void> {
     labels: (el) => world.attachLabels(el),
     sailor: me.name,
     connection: { notice: online.notice, rtt: online.rtt, takeOver: () => online.takeOver() },
+    fly: {
+      can: online.tools,
+      flying: game.flying,
+      back: game.backShown,
+      fly: () => game.fly(),
+      land: () => game.land(),
+    },
   });
   game.listen(document, container);
   if (view !== undefined) {

@@ -69,6 +69,9 @@ type conn struct {
 	tierMu  sync.Mutex
 	counted int32
 
+	// The owner's free camera.
+	roaming
+
 	// sea is what the client has been told of the sea, and wx of the
 	// weather; the encoder's.
 	sea     connSea
@@ -120,7 +123,7 @@ type outgoing struct {
 // read never reaches it.
 const closeWait = 250 * time.Millisecond
 
-func newConn(e *Edge, ws *websocket.Conn, raw net.Conn, account bus.Account, reqID string) *conn {
+func newConn(e *Edge, ws *websocket.Conn, raw net.Conn, account bus.Account, tools bool, reqID string) *conn {
 	c := &conn{
 		e:       e,
 		ws:      ws,
@@ -135,6 +138,7 @@ func newConn(e *Edge, ws *websocket.Conn, raw net.Conn, account bus.Account, req
 		limiter: rate.NewLimiter(e.lim.Rate, e.lim.Burst),
 		buf:     make([]byte, e.lim.ReadLimit+1),
 	}
+	c.tools.Store(tools)
 	c.margin.init()
 	c.box.init()
 	c.writeTimer = time.AfterFunc(time.Hour, c.drop)
@@ -376,6 +380,9 @@ func (c *conn) handle(data []byte) bool {
 		c.e.m.in[inCommand].Inc()
 		if b.Command.GetResync() != nil {
 			c.askResync(time.Now())
+		}
+		if r := b.Command.GetRoam(); r != nil {
+			c.roamTo(r)
 		}
 	}
 	return true
@@ -650,6 +657,8 @@ func (c *conn) finish() {
 	<-c.closed
 	c.writeTimer.Stop()
 	close(c.done)
+	// A camera roaming comes back: the boat sails on in its grace.
+	c.land()
 	switch {
 	case c.joined.Load():
 		e.disconnect(bus.Command{Op: bus.Disconnect, Boat: c.boat, Conn: c.id})

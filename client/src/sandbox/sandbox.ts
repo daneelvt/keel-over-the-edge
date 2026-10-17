@@ -164,6 +164,8 @@ export class Sandbox implements BoatDriver {
   /** The tick the boat went over the lip, 0 while it is afloat; and how many times it has started again since. */
   over = 0;
   restarts = 0;
+  /** The boat stays where it is while the free camera flies: not stepped, as a server keeps it. */
+  stays = false;
 
   readonly #physics: Physics;
   readonly #boat: BoatPhysics;
@@ -441,6 +443,10 @@ export class Sandbox implements BoatDriver {
     this.states.hold(state);
   }
 
+  stay(on: boolean): void {
+    this.stays = on;
+  }
+
   step(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE): void {
     const r = this.#physics.records;
     const tick = this.clock === null ? this.tick + 1 : this.clock.steps + 2;
@@ -451,6 +457,11 @@ export class Sandbox implements BoatDriver {
       this.#set = set;
       this.#made = made;
       this.weather.add(spell);
+    }
+    if (this.stays) {
+      this.tick = tick;
+      this.states.push(r.state);
+      return;
     }
     if (this.over !== 0 && this.edge !== null) {
       if (tick < this.over + this.edge.fall) {

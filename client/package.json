@@ -10,7 +10,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "owner": "vite -c vite.owner.config.ts",
+    "build": "vite build && vite build -c vite.owner.config.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "biome ci . ../art",

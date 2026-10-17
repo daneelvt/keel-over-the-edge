@@ -248,28 +248,43 @@ func (c *conn) welcome(f *bus.Frame) bool {
 		return false
 	}
 	wt, _ := e.cfg.Clock.WorldTime()
+	// Under rmu, so that a Tools for a change of the flag after this one
+	// read it comes after it.
+	c.rmu.Lock()
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
 		Boat: c.boat, Kind: uint32(f.Kind[s]), Rejoined: c.rejoined,
 		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation,
+		Tools: c.tools.Load(),
 	}}}, outWelcome)
+	c.welcomed = ok
+	c.rmu.Unlock()
 	c.ready.Store(ok)
 	c.bumped = f.Tick
 	// The land about the boat, at once after the Welcome: the client draws
 	// what is near before it shows the sea.
-	return ok && c.chunks(f.State[s].X, f.State[s].Y)
+	return ok && c.chunks(e.cfg.Chunks, f.State[s].X, f.State[s].Y)
 }
 
 // encode writes c's snapshot of f into its mailbox: the own boat, then the
 // other boats in view, as changes from the view of the newest snapshot the
 // connection's writer has taken, or in full if it has taken none, or the
-// client asked for one.
+// client asked for one. The view, the sea's window and the land's chunks
+// are about the connection's eye: its boat, or its free camera while it
+// roams.
 func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	s := c.slot
 	if !f.Occupied[s] || f.Boat[s] != c.boat {
 		c.gone.Store(true)
 		c.close(websocket.StatusInternalError, "the boat has gone")
 		return
+	}
+	x, y, chunks := f.State[s].X, f.State[s].Y, c.e.cfg.Chunks
+	if p := c.eye.Load(); p != nil {
+		x, y = p.x, p.y
+		if c.e.cfg.RoamChunks != nil {
+			chunks = c.e.cfg.RoamChunks
+		}
 	}
 	if c.resync.Swap(false) {
 		c.box.restart()
@@ -279,7 +294,7 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 		base = nil
 	}
 	b, next := c.box.fill()
-	enter, sample := enc.aoi.find(f, s, base, next, c.id)
+	enter, sample := enc.aoi.find(f, s, x, y, base, next, c.id)
 	next.tick, next.valid = f.Tick, true
 	var flags uint8
 	if farSampled(c.id, f.Tick) {
@@ -291,11 +306,11 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	}
 	// The weather, the sea, the land's chunks and the bumps first: they are
 	// queued, and what is queued goes out before the snapshot.
-	if !c.weather(f) || !c.seaAreas(f, &f.State[s]) || !c.chunks(f.State[s].X, f.State[s].Y) || !c.bumps(f, next) {
+	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]
-	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], c.margin.take(), f.Voyage[s].Over, &f.State[s])]
+	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], c.margin.take(), f.Voyage[s].Over, f.Stay[s], &f.State[s])]
 	b, n := protocol.AppendEntries(b, baseView, &next.view, enter, sample)
 	protocol.SetEntries(b, n)
 

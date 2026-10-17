@@ -72,6 +72,10 @@ type Metrics struct {
 	Falls         prometheus.Counter     // boats gone over the lip
 	Approaches    prometheus.Counter     // voyages ended with an approach to the lip survived
 
+	OwnerActions *prometheus.CounterVec // the owner's controls, by action
+	OwnerRefused *prometheus.CounterVec // what the owner's tools refused, by what was asked
+	OwnerView    prometheus.Histogram   // building the world page's view
+
 	DBQueryDuration    *prometheus.HistogramVec // by query
 	DBQueryErrors      *prometheus.CounterVec   // by query
 	SchemaVersion      prometheus.Gauge
@@ -160,6 +164,16 @@ func NewMetrics(build, catalog string) *Metrics {
 		}),
 		Approaches: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "keel_approaches_total", Help: "Voyages ended with an approach to the lip survived.",
+		}),
+		OwnerActions: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "keel_owner_actions_total", Help: "The world page's controls used, by action: flag, unflag, place, unseen, seen.",
+		}, []string{"action"}),
+		OwnerRefused: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "keel_owner_refused_total", Help: "What the owner's tools refused, by what was asked: roam from an account without the flag, place, flag, unseen, request (a guard's refusal).",
+		}, []string{"what"}),
+		OwnerView: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "keel_owner_view_seconds", Help: "How long building the world page's view of the world took, once a second.",
+			Buckets: []float64{0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25},
 		}),
 		Boats: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "keel_sim_boats", Help: "Boats in the world.",
@@ -339,6 +353,13 @@ func NewMetrics(build, catalog string) *Metrics {
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused,
 		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded, m.Falls, m.Approaches)
+	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen"} {
+		m.OwnerActions.WithLabelValues(a)
+	}
+	for _, w := range []string{"roam", "place", "flag", "unseen", "request"} {
+		m.OwnerRefused.WithLabelValues(w)
+	}
+	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)
 	return m
 }
 

@@ -9,6 +9,7 @@
 
 import { ConnectionLine, type ConnectionView } from './connection';
 import './hud.css';
+import type { ReadonlySignal } from '@preact/signals';
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import type { HelmInput } from '../input/helm';
@@ -154,12 +155,40 @@ export interface ScreenProps {
   sailor: string | null;
   /** The game connection, or null in the offline sandbox. */
   connection: ConnectionView | null;
+  /** The free camera, where it is offered, or null. */
+  fly?: FlyView | null;
+}
+
+/** The free camera as the screen sees it. */
+export interface FlyView {
+  /** Whether it is offered: online, to an account with the owner's flag. */
+  can: ReadonlySignal<boolean>;
+  /** Whether it flies: the screen is clean. */
+  flying: ReadonlySignal<boolean>;
+  /** Whether the way back shows, a moment after a tap. */
+  back: ReadonlySignal<boolean>;
+  fly: () => void;
+  land: () => void;
 }
 
 function Screen(props: ScreenProps) {
   const { model, settings } = props;
   const [menu, setMenu] = useState(false);
   const s = settings.value.value;
+  const fly = props.fly ?? null;
+  if (fly?.flying.value === true) {
+    // The free camera's picture is clean; a tap shows the way back a moment.
+    return (
+      <button
+        type="button"
+        class={`panel fly-back${fly.back.value ? ' shown' : ''}`}
+        tabIndex={fly.back.value ? 0 : -1}
+        onClick={fly.land}
+      >
+        Back to the boat
+      </button>
+    );
+  }
   return (
     <>
       <div class="overlay-labels" ref={props.labels} aria-hidden="true" />
@@ -185,6 +214,14 @@ function Screen(props: ScreenProps) {
           sailor={props.sailor}
           connection={props.connection}
           close={() => setMenu(false)}
+          fly={
+            fly?.can.value === true
+              ? () => {
+                  setMenu(false);
+                  fly.fly();
+                }
+              : null
+          }
         />
       ) : null}
       <Helm input={props.helm} model={model} />

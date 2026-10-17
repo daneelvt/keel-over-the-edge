@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -67,6 +68,9 @@ type Config struct {
 	Terrain  *sim.Terrain
 	Chunks   *edge.Handout
 	Payloads *api.Chunks
+	// RoamChunks, if not nil, hands out the chunks to the owner's free
+	// camera as it roams.
+	RoamChunks *edge.Handout
 	// Edge is how boats meet the world's edge; the catalog's if nil.
 	Edge *sim.Edge
 }
@@ -172,6 +176,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
 		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain),
+		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks,
 	})
 	if cfg.Record != nil {
 		// The test's recorder first, so it has each frame before any
@@ -289,21 +294,70 @@ func (s *Sessions) Session(_ context.Context, hash [32]byte) (store.Session, err
 // Touch does nothing.
 func (s *Sessions) Touch(context.Context, [32]byte) error { return nil }
 
+// Accounts finds the accounts of ids among the sessions'.
+func (s *Sessions) Accounts(_ context.Context, ids []store.AccountID) (map[store.AccountID]store.Account, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[store.AccountID]store.Account{}
+	for _, v := range s.by {
+		if slices.Contains(ids, v.ID) {
+			out[v.ID] = v.Account
+		}
+	}
+	return out, nil
+}
+
+// SetTools sets or clears the owner's flag of a human account.
+func (s *Sessions) SetTools(_ context.Context, id store.AccountID, on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	found := false
+	for h, v := range s.by {
+		if v.ID == id && v.Kind == store.Human {
+			v.Tools = on
+			s.by[h] = v
+			found = true
+		}
+	}
+	if !found {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 // Add makes an account of kind with a session, and returns the session's
 // cookie's value.
 func (s *Sessions) Add(name string, kind store.Kind) (token string, id store.AccountID) {
+	return s.add(store.Account{Kind: kind, Name: name})
+}
+
+func (s *Sessions) add(a store.Account) (token string, id store.AccountID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.next++
 	id = store.AccountID{0x01, 0x99, 0xc2, 0xa4, 0x5f, 0x7e, 0x7c, 0x3a, 0x9d, 0x0e, 0, 0, 0, 0, 0, s.next}
 	token, hash := auth.NewToken()
-	s.by[hash] = store.Session{Account: store.Account{ID: id, Kind: kind, Name: name}}
+	a.ID = id
+	s.by[hash] = store.Session{Account: a}
 	return token, id
 }
 
 // Guest makes a guest, and returns its session's cookie's value.
 func (s *Server) Guest(name string) (token string, id store.AccountID) {
 	return s.Sessions.Add(name, store.Human)
+}
+
+// Owner makes a guest that carries the owner's flag.
+func (s *Server) Owner(name string) (token string, id store.AccountID) {
+	return s.Sessions.add(store.Account{Kind: store.Human, Name: name, Tools: true})
+}
+
+// Owned sends one of the owner's tools' commands, at the next tick.
+func (s *Server) Owned(c bus.Command) {
+	owner := s.World.Bus().Commands.Owner()
+	for owner.TrySend(c) != nil {
+		time.Sleep(time.Second / 30)
+	}
 }
 
 // SmallReadBuffer makes a client's connection hold at most n bytes the

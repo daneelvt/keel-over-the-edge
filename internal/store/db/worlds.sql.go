@@ -166,7 +166,7 @@ func (q *Queries) SetWorldSeed(ctx context.Context, arg SetWorldSeedParams) erro
 }
 
 const worldBundle = `-- name: WorldBundle :one
-SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key
+SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key, created_at
 FROM world_bundle WHERE world_id = $1
 `
 
@@ -181,6 +181,7 @@ type WorldBundleRow struct {
 	Report       []byte
 	GenerationMs int32
 	ChunkKey     []byte
+	CreatedAt    time.Time
 }
 
 func (q *Queries) WorldBundle(ctx context.Context, worldID pgtype.UUID) (WorldBundleRow, error) {
@@ -197,6 +198,7 @@ func (q *Queries) WorldBundle(ctx context.Context, worldID pgtype.UUID) (WorldBu
 		&i.Report,
 		&i.GenerationMs,
 		&i.ChunkKey,
+		&i.CreatedAt,
 	)
 	return i, err
 }

@@ -162,6 +162,13 @@ type Config struct {
 	// Circulation is the world's way round the disk for its current, as
 	// the Welcome tells the client: 1, −1 or 0 for none.
 	Circulation int32
+	// Lip is the disk's lip, m from the centre; Roam, how far the owner's
+	// free camera roams about it, DefaultRoamReach if zero; and RoamChunks,
+	// if not nil, the handout of the land's chunks to a roaming camera,
+	// made for its greatest height.
+	Lip        float64
+	Roam       RoamReach
+	RoamChunks *Handout
 }
 
 // Edge serves the game connection.
@@ -177,6 +184,7 @@ type Edge struct {
 
 	nextConn atomic.Uint64
 	registry registry
+	reach    RoamReach
 	latest   atomic.Int64 // the latest published tick
 	encs     []*encoder
 
@@ -197,6 +205,10 @@ func New(cfg Config) *Edge {
 		ctx:    ctx,
 		cancel: cancel,
 		conns:  map[*conn]struct{}{},
+	}
+	e.reach = cfg.Roam
+	if e.reach == (RoamReach{}) {
+		e.reach = DefaultRoamReach
 	}
 	if u, err := url.Parse(cfg.Origin); err == nil && u.Host != "" {
 		e.origins = []string{u.Host}
@@ -290,7 +302,7 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e.m.upgrade[upgradeOK].Inc()
-	c := newConn(e, ws, hj.conn, bus.Account(acc.ID), obs.RequestID(r.Context()))
+	c := newConn(e, ws, hj.conn, bus.Account(acc.ID), acc.Tools, obs.RequestID(r.Context()))
 	if !e.track(c) {
 		_ = ws.Close(websocket.StatusServiceRestart, "the server is restarting")
 		return

@@ -11,6 +11,48 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const accountsByID = `-- name: AccountsByID :many
+SELECT a.id, a.kind, (a.saved_at IS NOT NULL)::boolean AS saved, a.tools, coalesce(sl.name, '')::text AS name
+FROM account a
+LEFT JOIN sailor sl ON sl.account_id = a.id
+WHERE a.id = ANY($1::uuid[])
+`
+
+type AccountsByIDRow struct {
+	ID    pgtype.UUID
+	Kind  string
+	Saved bool
+	Tools bool
+	Name  string
+}
+
+// The accounts of ids, with their sailors' names: the world page's lists.
+func (q *Queries) AccountsByID(ctx context.Context, ids []pgtype.UUID) ([]AccountsByIDRow, error) {
+	rows, err := q.db.Query(ctx, accountsByID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AccountsByIDRow
+	for rows.Next() {
+		var i AccountsByIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Saved,
+			&i.Tools,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createGuestAccount = `-- name: CreateGuestAccount :one
 INSERT INTO account (kind) VALUES ('human')
 RETURNING id
@@ -43,4 +85,22 @@ func (q *Queries) CreateSailor(ctx context.Context, arg CreateSailorParams) erro
 		arg.Look,
 	)
 	return err
+}
+
+const setAccountTools = `-- name: SetAccountTools :execrows
+UPDATE account SET tools = $1 WHERE id = $2 AND kind = 'human'
+`
+
+type SetAccountToolsParams struct {
+	Tools bool
+	ID    pgtype.UUID
+}
+
+// The owner's flag of a human account; an AI's is never set.
+func (q *Queries) SetAccountTools(ctx context.Context, arg SetAccountToolsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAccountTools, arg.Tools, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

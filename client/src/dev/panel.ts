@@ -470,6 +470,8 @@ export function openPanel(
         render();
       }),
       button('Jump to the rim', () => set(toRim(readState(pw)))),
+      // The free camera, as F flies it: the boat stays where it is.
+      button('Free camera (F)', () => game.toggleFly()),
     );
     const states = el('div');
     states.className = 'buttons';
