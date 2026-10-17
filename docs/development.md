@@ -1609,7 +1609,7 @@ it, reached over land from its shore (`roomOf`): not the land across a
 bay. A village needs room within its reach. The ports' lights' cover
 chooses among each landmark's best site on each of six sides.
 
-### The plan
+### A town's plan
 
 `town.go`, `townplan.go` and `townplaces.go` lay a town out as the
 period's harbour towns grew: the **quay** along its water (a quay's height,
