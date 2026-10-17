@@ -115,6 +115,22 @@ export interface TownsFrame {
   night: number;
 }
 
+/** A point a town shows: m east, north and up, and its building's own number. */
+export interface TownPoint {
+  east: number;
+  north: number;
+  top: number;
+  seed: number;
+}
+
+/** What the towns held show: flags (with their colours), chimneys and lanterns. */
+export interface TownFeatures {
+  version: number;
+  flags: (TownPoint & { flag: number })[];
+  chimneys: TownPoint[];
+  lanterns: TownPoint[];
+}
+
 /** What the developer panel and the tests read of the towns. */
 export interface TownsStats {
   buildings: number;
@@ -189,6 +205,7 @@ export class Towns {
   readonly #world: World;
   readonly #kinds: BuildingKind[];
   readonly #chunks = new Map<number, ChunkTown>();
+  #features: TownFeatures = { version: -1, flags: [], chimneys: [], lanterns: [] };
   readonly #kits = new Map<number, Kit | 'loading' | 'failed'>();
   readonly #draws = new Map<string, Draw>();
   readonly #material: ReturnType<typeof litMaterial>;
@@ -332,6 +349,59 @@ export class Towns {
     for (const t of this.#chunks.values()) {
       yield* t.harbour;
     }
+  }
+
+  /**
+   * What the towns held show besides their buildings: their flags' staffs'
+   * feet, their chimneys' pots, and their lanterns, on posts and by doors,
+   * m east, north and up, each with its building's own number. Worked out
+   * again only when the towns held change.
+   */
+  features(): TownFeatures {
+    if (this.#features.version === this.#version) {
+      return this.#features;
+    }
+    const f: TownFeatures = { version: this.#version, flags: [], chimneys: [], lanterns: [] };
+    for (const b of this.buildings()) {
+      const kind = this.#kinds[b.kind];
+      if (kind === undefined) {
+        continue;
+      }
+      // The building's front and its right, east and north.
+      const fe = Math.sin(b.heading);
+      const fn = Math.cos(b.heading);
+      const re = fn;
+      const rn = -fe;
+      const own = (x: number): number => {
+        const v = Math.sin(b.seed * 12.9898 + b.kind * 4.1414 + x) * 43758.5453;
+        return v - Math.floor(v);
+      };
+      const chimney = kind.chimney ?? 0;
+      const lantern = kind.lantern ?? 0;
+      if (kind.flag && b.flag > 0) {
+        f.flags.push({ east: b.east, north: b.north, top: b.top, seed: b.seed, flag: b.flag });
+      }
+      if (!kind.prop && chimney > 0 && own(1) < chimney) {
+        // The kits stand a chimney on the ridge, three tenths of the frontage to the right.
+        const x = 0.3 * b.frontage;
+        f.chimneys.push({ east: b.east + re * x, north: b.north + rn * x, top: b.top + 0.6, seed: b.seed });
+      }
+      if (kind.prop && lantern > 0) {
+        f.lanterns.push({ east: b.east, north: b.north, top: b.level + 3.2, seed: b.seed });
+      } else if (!kind.prop && lantern > 0 && own(2) < lantern) {
+        // By the door: a fifth of the frontage to the right of the front's middle.
+        const out = b.depth / 2 + 0.3;
+        const x = 0.2 * b.frontage + 0.9;
+        f.lanterns.push({
+          east: b.east + fe * out + re * x,
+          north: b.north + fn * out + rn * x,
+          top: b.level + 2.5,
+          seed: b.seed,
+        });
+      }
+    }
+    this.#features = f;
+    return f;
   }
 
   /** The catalog's kinds of building. */

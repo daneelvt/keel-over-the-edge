@@ -704,7 +704,7 @@ world:
       buoyancy: 0.6 # m: Briggs's 1.6 F^(1/3), for a cottage's fire, as the puff's rise at 1 m in a 1 m/s wind
       life: 9 # s
       puffs: 6
-      size: [0.6, 3] # m across, at the pot and at its end
+      size: [0.8, 4] # m across, at the pot and at its end
       reach: 600 # m
     # In port: the water within reach m of a port's quay and piers, or of a
     # village's jetty; Port Royal's, its basin and narrows.
