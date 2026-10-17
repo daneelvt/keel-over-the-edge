@@ -404,11 +404,10 @@ const LIGHT_COLOURS: Record<string, string> = {
   green: '#3cff7d',
 };
 
-/** A lighthouse: a ring, filled while its light shows by the world's clock; its range, when picked. */
+/** A lighthouse: a ring, and its range when picked. Its flashes are drawn over the map apart (drawFlashes). */
 function drawLight(ctx: CanvasRenderingContext2D, v: View, l: Light, d: MapData): void {
   const ch = d.places?.characters[l.character];
   const [x, y] = toScreen(v, l.east, l.north);
-  const on = ch !== undefined && lightOn(ch.steps, l.phase, d.worldUs);
   const colour = LIGHT_COLOURS[ch?.colour ?? 'white'] ?? '#ffffff';
   if (l.number === d.light) {
     ctx.strokeStyle = colour;
@@ -419,7 +418,40 @@ function drawLight(ctx: CanvasRenderingContext2D, v: View, l: Light, d: MapData)
     ctx.stroke();
     ctx.setLineDash([]);
   }
-  if (on) {
+  ctx.strokeStyle = '#e8b400';
+  ctx.fillStyle = '#3b2f22';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y, l.role === 'main' ? 6 : 4.5, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+}
+
+/**
+ * The lights that show at world time worldUs, each a glow over its ring,
+ * on a canvas of their own over the map: drawn often, without drawing the
+ * map again.
+ */
+export function drawFlashes(
+  ctx: CanvasRenderingContext2D,
+  v: View,
+  d: MapData,
+  layers: Layers,
+): void {
+  ctx.clearRect(0, 0, v.width, v.height);
+  if (!layers.lights || d.places === null) {
+    return;
+  }
+  for (const l of d.places.lights) {
+    const ch = d.places.characters[l.character];
+    if (ch === undefined || !lightOn(ch.steps, l.phase, d.worldUs)) {
+      continue;
+    }
+    const [x, y] = toScreen(v, l.east, l.north);
+    if (x < -20 || y < -20 || x > v.width + 20 || y > v.height + 20) {
+      continue;
+    }
+    const colour = LIGHT_COLOURS[ch.colour] ?? '#ffffff';
     const g = ctx.createRadialGradient(x, y, 0, x, y, 14);
     g.addColorStop(0, colour);
     g.addColorStop(1, 'rgb(0 0 0 / 0%)');
@@ -428,11 +460,4 @@ function drawLight(ctx: CanvasRenderingContext2D, v: View, l: Light, d: MapData)
     ctx.arc(x, y, 14, 0, 2 * Math.PI);
     ctx.fill();
   }
-  ctx.strokeStyle = '#e8b400';
-  ctx.fillStyle = on ? colour : '#3b2f22';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(x, y, l.role === 'main' ? 6 : 4.5, 0, 2 * Math.PI);
-  ctx.fill();
-  ctx.stroke();
 }

@@ -37,6 +37,7 @@ import {
 } from './api';
 import {
   allLayers,
+  drawFlashes,
   drawMap,
   gustPicture,
   ISLAND_DETAIL,
@@ -105,24 +106,30 @@ function MapCanvas({
   clock: { current: WorldClock };
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const flashes = useRef<HTMLCanvasElement>(null);
   const latest = useRef({ data, layers, view });
   latest.current = { data, layers, view };
-  // The lights flash by the world's clock: the map is drawn again often
-  // while they show, without the page being made again.
+  // The lights flash by the world's clock, on a canvas of their own over
+  // the map, drawn often without the map or the page being made again.
+  const flash = useCallback(() => {
+    const { data: d, layers: l, view: v } = latest.current;
+    const c = flashes.current;
+    const ctx = c?.getContext('2d');
+    if (c == null || ctx == null || v === null) {
+      return;
+    }
+    const dpr = c.width / Math.max(1, v.width);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawFlashes(ctx, v, { ...d, worldUs: worldUsAt(clock.current, performance.now()) }, l);
+  }, [clock]);
   useEffect(() => {
     const timer = setInterval(() => {
-      const { data: d, layers: l, view: v } = latest.current;
-      const c = canvas.current;
-      const ctx = c?.getContext('2d');
-      if (!l.lights || d.places === null || c == null || ctx == null || v === null || hidden()) {
-        return;
+      if (!hidden() && latest.current.data.places !== null && latest.current.layers.lights) {
+        flash();
       }
-      const dpr = c.width / Math.max(1, v.width);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawMap(ctx, v, { ...d, worldUs: worldUsAt(clock.current, performance.now()) }, l);
     }, FLASH_EVERY);
     return () => clearInterval(timer);
-  }, [clock]);
+  }, [flash]);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
   // Fits the canvas to its box, and the view to the canvas.
   useEffect(() => {
@@ -135,6 +142,11 @@ function MapCanvas({
       const dpr = window.devicePixelRatio || 1;
       c.width = Math.round(r.width * dpr);
       c.height = Math.round(r.height * dpr);
+      const f = flashes.current;
+      if (f !== null) {
+        f.width = c.width;
+        f.height = c.height;
+      }
       setView((v) =>
         v === null ? fitView(r.width, r.height) : { ...v, width: r.width, height: r.height },
       );
@@ -151,49 +163,53 @@ function MapCanvas({
     }
     const dpr = c.width / Math.max(1, view.width);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawMap(ctx, view, { ...data, worldUs: worldUsAt(clock.current, performance.now()) }, layers);
+    drawMap(ctx, view, data, layers);
+    flash();
   });
   return (
-    <canvas
-      ref={canvas}
-      class="map"
-      data-testid="map"
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
-      }}
-      onPointerMove={(e) => {
-        const d = drag.current;
-        if (d === null || view === null) {
-          return;
-        }
-        const dx = e.clientX - d.x;
-        const dy = e.clientY - d.y;
-        d.x = e.clientX;
-        d.y = e.clientY;
-        d.moved += Math.hypot(dx, dy);
-        if (d.moved > 3) {
-          setView(pan(view, dx, dy));
-        }
-      }}
-      onPointerUp={(e) => {
-        const d = drag.current;
-        drag.current = null;
-        if (d !== null && d.moved <= 3 && view !== null) {
+    <>
+      <canvas
+        ref={canvas}
+        class="map"
+        data-testid="map"
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
+        }}
+        onPointerMove={(e) => {
+          const d = drag.current;
+          if (d === null || view === null) {
+            return;
+          }
+          const dx = e.clientX - d.x;
+          const dy = e.clientY - d.y;
+          d.x = e.clientX;
+          d.y = e.clientY;
+          d.moved += Math.hypot(dx, dy);
+          if (d.moved > 3) {
+            setView(pan(view, dx, dy));
+          }
+        }}
+        onPointerUp={(e) => {
+          const d = drag.current;
+          drag.current = null;
+          if (d !== null && d.moved <= 3 && view !== null) {
+            const r = e.currentTarget.getBoundingClientRect();
+            const [east, north] = toWorld(view, e.clientX - r.left, e.clientY - r.top);
+            pick(east, north);
+          }
+        }}
+        onWheel={(e) => {
+          e.preventDefault();
+          if (view === null) {
+            return;
+          }
           const r = e.currentTarget.getBoundingClientRect();
-          const [east, north] = toWorld(view, e.clientX - r.left, e.clientY - r.top);
-          pick(east, north);
-        }
-      }}
-      onWheel={(e) => {
-        e.preventDefault();
-        if (view === null) {
-          return;
-        }
-        const r = e.currentTarget.getBoundingClientRect();
-        setView(zoomAt(view, e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.002)));
-      }}
-    />
+          setView(zoomAt(view, e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.002)));
+        }}
+      />
+      <canvas ref={flashes} class="flashes" aria-hidden="true" />
+    </>
   );
 }
 
@@ -279,6 +295,25 @@ function NewWorld({
   );
 }
 
+/** The lights' marks beside their rows, each lit while its light shows: one timer for them all. */
+const marks = new Map<
+  HTMLSpanElement,
+  { light: Light; character: LightCharacter; clock: { current: WorldClock } }
+>();
+let marksTimer: ReturnType<typeof setInterval> | null = null;
+
+function lightMarks(): void {
+  if (hidden()) {
+    return;
+  }
+  const now = performance.now();
+  for (const [dot, m] of marks) {
+    dot.dataset.on = lightOn(m.character.steps, m.light.phase, worldUsAt(m.clock.current, now))
+      ? '1'
+      : '0';
+  }
+}
+
 /** A light's mark beside its row: lit while it shows, by the world's clock. */
 function Flash({
   light,
@@ -291,22 +326,22 @@ function Flash({
 }) {
   const dot = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    let frame = 0;
-    const step = (): void => {
-      const d = dot.current;
-      if (d !== null && character !== undefined) {
-        const on = lightOn(
-          character.steps,
-          light.phase,
-          worldUsAt(clock.current, performance.now()),
-        );
-        d.dataset.on = on ? '1' : '0';
-        d.dataset.colour = character.colour;
+    const d = dot.current;
+    if (d === null || character === undefined) {
+      return;
+    }
+    d.dataset.colour = character.colour;
+    marks.set(d, { light, character, clock });
+    if (marksTimer === null) {
+      marksTimer = setInterval(lightMarks, FLASH_EVERY);
+    }
+    return () => {
+      marks.delete(d);
+      if (marks.size === 0 && marksTimer !== null) {
+        clearInterval(marksTimer);
+        marksTimer = null;
       }
-      frame = requestAnimationFrame(step);
     };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
   }, [light, character, clock]);
   return <span ref={dot} class="flash" data-light={light.number} />;
 }
