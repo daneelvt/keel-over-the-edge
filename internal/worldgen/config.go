@@ -62,6 +62,16 @@ type config struct {
 	validator catalog.WorldValidator
 	names     catalog.WorldNames
 	lists     *nameLists
+
+	hazards     catalog.WorldHazards
+	rockSurface uint8
+	places      catalog.WorldPlaces
+	lights      catalog.WorldLights
+	// kinds are the places' kinds' ids by their site rule.
+	kinds map[catalog.Site]string
+	// mainLight is the main port's light's character, by its index in the
+	// catalog's list.
+	mainLight int
 }
 
 // sizeClass is a size class: the islands narrower than below.
@@ -101,6 +111,12 @@ func newConfig(cat *catalog.Catalog) (*config, error) {
 	w := &cat.World
 	lists, err := parseNames()
 	if err != nil {
+		return nil, err
+	}
+	if lists.places, err = parsePlaceNames(); err != nil {
+		return nil, err
+	}
+	if lists.cargoes, err = parseCargoes(); err != nil {
 		return nil, err
 	}
 	c := &config{lists: lists}
@@ -168,6 +184,28 @@ func newConfig(cat *catalog.Catalog) (*config, error) {
 	sp := catalog.ShelterParams(cat)
 	physics.PrepareShelter(&sp, &c.shelter)
 	c.start, c.validator, c.names = w.Start, w.Validator, w.Names
+	c.hazards, c.places, c.lights = w.Hazards, w.Places, w.Lights
+	if c.rockSurface, err = look(w.Hazards.RockSurface); err != nil {
+		return nil, err
+	}
+	c.kinds = map[catalog.Site]string{}
+	for _, k := range w.Places.Kinds {
+		c.kinds[k.Site] = string(k.ID)
+	}
+	for _, site := range siteRules {
+		if c.kinds[site] == "" {
+			return nil, fmt.Errorf("worldgen: no kind of place has the site %q", site)
+		}
+	}
+	c.mainLight = -1
+	for i, ch := range w.Lights.Characters {
+		if ch.Notation == w.Lights.MainPortCharacter {
+			c.mainLight = i
+		}
+	}
+	if c.mainLight < 0 {
+		return nil, fmt.Errorf("worldgen: the main port's light %q is not a character", w.Lights.MainPortCharacter)
+	}
 	return c, nil
 }
 

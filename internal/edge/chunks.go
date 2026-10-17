@@ -57,11 +57,14 @@ type handChunk struct {
 }
 
 // Handout hands out a world's chunks by the rule: made once from the world's
-// ground and the chunks' addresses, then only read, by every encoder.
+// ground and the chunks' addresses, then only read, by every encoder. With
+// each chunk go the places in it, and as the eye moves, the lights in range.
 type Handout struct {
 	rule   HandoutRule
 	paths  []string
 	chunks [physics.ChunkCount]handChunk
+	places [physics.ChunkCount][]*pb.Place
+	lights *Lights
 }
 
 // NewHandout makes the handout of the world whose ground is g, its chunks at
@@ -162,9 +165,10 @@ type connChunks struct {
 }
 
 // chunks hands the connection the chunks h says its eye at (x, y) could
-// see that it has not been handed, if its eye has moved far enough since
-// it was last looked at, or never was. It reports whether the connection is
-// still good. Looking, and finding nothing new, allocates nothing.
+// see that it has not been handed, with the places in them, and the lights
+// in range, if its eye has moved far enough since it was last looked at, or
+// never was. It reports whether the connection is still good. Looking, and
+// finding nothing new, allocates nothing.
 func (c *conn) chunks(h *Handout, x, y float64) bool {
 	if h == nil {
 		return true
@@ -174,6 +178,9 @@ func (c *conn) chunks(h *Handout, x, y float64) bool {
 		return true
 	}
 	st.looked, st.x, st.y = true, x, y
+	if !c.lights(h.lights, x, y) {
+		return false
+	}
 	n := 0
 	for k := range physics.ChunkCount {
 		if st.handed[k/64]&(1<<(k%64)) != 0 || !h.sees(k, x, y) {
@@ -192,12 +199,17 @@ func (c *conn) chunks(h *Handout, x, y float64) bool {
 		return true
 	}
 	m := &pb.Chunks{Number: make([]uint32, n), Path: make([]string, n)}
+	var places []*pb.Place
 	for i, k := range st.pending[:n] {
 		st.handed[k/64] |= 1 << (k % 64)
 		m.Number[i], m.Path[i] = uint32(k), h.paths[k]
+		places = append(places, h.places[k]...)
 	}
 	c.e.m.chunksHanded.Add(float64(n))
-	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chunks{Chunks: m}}, outChunks)
+	if !c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chunks{Chunks: m}}, outChunks) {
+		return false
+	}
+	return len(places) == 0 || c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Places{Places: &pb.Places{Places: places}}}, outPlaces)
 }
 
 // handedCount is how many chunks the connection has been handed.

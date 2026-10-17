@@ -1420,6 +1420,9 @@ export interface World {
   names: WorldNames;
   handout: WorldHandout;
   look: WorldLook;
+  hazards: WorldHazards;
+  places: WorldPlaces;
+  lights: WorldLights;
 }
 /**
  * The disk.
@@ -2207,6 +2210,14 @@ export interface WorldValidator {
    * Every landmark reachable from the start in this much water, in m.
    */
   reachDepth: number;
+  /**
+   * At every point of water inside the mist band, at least this many lights in range.
+   */
+  lightsInRange: number;
+  /**
+   * On a grid this fine, in m.
+   */
+  lightGrid: number;
 }
 /**
  * How islands are named.
@@ -2243,6 +2254,10 @@ export interface WorldNames {
    * The chance it is.
    */
   calfShare: number;
+  /**
+   * A reef with a wreck on it takes her name by this chance.
+   */
+  wreckReef: number;
 }
 /**
  * A feature a name may need, by its word, and what shows it: 0 or false for a test it does not have; a feature with none is never shown.
@@ -2384,6 +2399,592 @@ export interface WorldLook {
    */
   keepGrids: number;
 }
+/**
+ * Offshore hazards: reefs and sandbanks away from every island's shelf, each with a rock its light stands on.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldHazards".
+ */
+export interface WorldHazards {
+  /**
+   * Offshore reefs a world has.
+   */
+  reefs: number;
+  /**
+   * A reef's length, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  reefLength: [number, number];
+  /**
+   * Its crest's depth, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  reefCrest: [number, number];
+  /**
+   * Offshore sandbanks a world has.
+   */
+  banks: number;
+  /**
+   * A bank's length, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  bankLength: [number, number];
+  /**
+   * The water over a bank, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  bankDepth: [number, number];
+  /**
+   * Of each kind, at least this many lie beyond beyond.
+   */
+  outer: number;
+  /**
+   * In nautical miles from the centre.
+   */
+  beyond: number;
+  /**
+   * Hazards lie between these distances from the centre, in nautical miles.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  ring: [number, number];
+  /**
+   * A hazard lies at least this far from any land, in m.
+   */
+  clear: number;
+  /**
+   * And this far from the next hazard, in m.
+   */
+  apart: number;
+  /**
+   * A hazard's rock's hexagons.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  rockHexes: [number, number];
+  /**
+   * Its height above the sea, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  rockHeight: [number, number];
+  /**
+   * Stable identifier of a kind, stored in the database: never renamed or reused.
+   */
+  rockSurface: string;
+}
+/**
+ * Places: what a sailor finds besides islands, each where the ground makes it true.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldPlaces".
+ */
+export interface WorldPlaces {
+  /**
+   * The kinds of place.
+   */
+  kinds: PlaceKind[];
+  harbour: PlaceHarbour;
+  village: PlaceVillage;
+  anchorage: PlaceAnchorage;
+  cove: PlaceCove;
+  lagoon: PlaceLagoon;
+  reef: PlaceReef;
+  bar: PlaceBar;
+  wreck: PlaceWreck;
+  /**
+   * Water this deep within 60 m is deep enough for a tall ship, in m.
+   */
+  deep: number;
+  /**
+   * A cove or lagoon narrower than this is small, in m.
+   */
+  small: number;
+  /**
+   * A reef or bar shorter than this is small, in m.
+   */
+  long: number;
+  point: PlacePoint;
+  /**
+   * The rigs a wrecked ship may have.
+   *
+   * @minItems 1
+   */
+  rigs: [PlaceRig, ...PlaceRig[]];
+  /**
+   * How long a wreck may have lain.
+   *
+   * @minItems 1
+   */
+  ages: [PlaceAge, ...PlaceAge[]];
+}
+/**
+ * A kind of place: what makes its site, how many a world has, and its mark on the world page.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PlaceKind".
+ */
+export interface PlaceKind {
+  id: Id;
+  /**
+   * Its name, as the world page lists it.
+   */
+  name: string;
+  /**
+   * The rule its sites are found by.
+   */
+  site: "harbour" | "village" | "light" | "anchorage" | "cove" | "lagoon" | "reef" | "bar" | "wreck";
+  /**
+   * How many a world has, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  count: [number, number];
+  /**
+   * A colour, #rrggbb.
+   */
+  mark: string;
+}
+/**
+ * A port's site.
+ */
+export interface PlaceHarbour {
+  /**
+   * Water this deep, in m,
+   */
+  depth: number;
+  /**
+   * within this of the shore, in m.
+   */
+  within: number;
+  /**
+   * Ports at least this far apart, in nautical miles.
+   */
+  apart: number;
+}
+/**
+ * A fishing village's site.
+ */
+export interface PlaceVillage {
+  /**
+   * The size classes of island it may be on.
+   */
+  sizes: string[];
+  /**
+   * Its fishing ground: water shallower than this, in m,
+   */
+  shallows: number;
+  /**
+   * within this, in m.
+   */
+  ground: number;
+  /**
+   * Villages and ports at least this far apart, in m.
+   */
+  apart: number;
+}
+/**
+ * An anchorage's site.
+ */
+export interface PlaceAnchorage {
+  /**
+   * The water's depth, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  depth: [number, number];
+  /**
+   * No shallower water within this, in m: room to swing.
+   */
+  swing: number;
+  /**
+   * Shallower than this, in m.
+   */
+  clear: number;
+  /**
+   * Land within this, in m.
+   */
+  land: number;
+  /**
+   * A direction is sheltered when its fetch is under this, in m.
+   */
+  fetch: number;
+  /**
+   * Snug when this many of the 16 directions are sheltered,
+   */
+  snug: number;
+  /**
+   * good when this many.
+   */
+  good: number;
+  /**
+   * Sampled this far apart, in m.
+   */
+  step: number;
+  /**
+   * Anchorages at least this far apart, in m.
+   */
+  apart: number;
+}
+/**
+ * A cove's site.
+ */
+export interface PlaceCove {
+  /**
+   * Its width, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  across: [number, number];
+  /**
+   * Water at least this deep at its mouth, in m.
+   */
+  mouth: number;
+  /**
+   * Bays are found by closing the coast with a disc of this radius, in m.
+   */
+  closing: number;
+}
+/**
+ * A lagoon's site.
+ */
+export interface PlaceLagoon {
+  /**
+   * The water behind the reef at least this wide, in m.
+   */
+  width: number;
+}
+/**
+ * A reef's site.
+ */
+export interface PlaceReef {
+  /**
+   * A fringing reef's crest runs at least this far, in m.
+   */
+  crest: number;
+}
+/**
+ * A sandbar's site.
+ */
+export interface PlaceBar {
+  /**
+   * A bar runs at least this far, in m.
+   */
+  length: number;
+}
+/**
+ * A wreck's site.
+ */
+export interface PlaceWreck {
+  /**
+   * Sunk in water this deep, in m,
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  depth: [number, number];
+  /**
+   * within this of a reef, rock or bar, in m.
+   */
+  near: number;
+  /**
+   * At least this many in the mist band.
+   */
+  mist: number;
+}
+/**
+ * A point, where a light stands: coast with this much water about it.
+ */
+export interface PlacePoint {
+  /**
+   * Within this, in m,
+   */
+  reach: number;
+  /**
+   * this share of the ground water.
+   */
+  water: number;
+}
+/**
+ * A wrecked ship's rig, and how she is drawn.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PlaceRig".
+ */
+export interface PlaceRig {
+  id: Id;
+  /**
+   * Her length, in m.
+   */
+  length: number;
+  /**
+   * Her beam, in m.
+   */
+  beam: number;
+  /**
+   * Her masts.
+   */
+  masts: number;
+  /**
+   * Her mainmast's height above the deck, in m.
+   */
+  mast: number;
+}
+/**
+ * How long a wreck has lain: how much of her is left.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PlaceAge".
+ */
+export interface PlaceAge {
+  id: Id;
+  /**
+   * The share of her hull left.
+   */
+  hull: number;
+  /**
+   * The share of her masts left.
+   */
+  masts: number;
+}
+/**
+ * Lighthouses: where they stand, their towers, ranges and characters, and how they are drawn.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldLights".
+ */
+export interface WorldLights {
+  towers: LightTowers;
+  /**
+   * Port Royal's stands within this of its coast, in m.
+   */
+  mainPortCoast: number;
+  edge: LightEdge;
+  hazards: LightHazards;
+  range: LightRange;
+  /**
+   * The clear air's visibility, in nautical miles.
+   */
+  clearAir: number;
+  /**
+   * The least illuminance a light is seen by, in lux.
+   */
+  threshold: number;
+  /**
+   * A light is dropped this far beyond its range, in m.
+   */
+  drop: number;
+  /**
+   * Port Royal's character, the same in every world: a notation of the list.
+   */
+  mainPortCharacter: string;
+  colours: LightColours;
+  /**
+   * The characters a world's lights are given.
+   *
+   * @minItems 1
+   */
+  characters: [LightCharacter, ...LightCharacter[]];
+  look: LightLook;
+}
+/**
+ * Each light's tower's height, in m.
+ */
+export interface LightTowers {
+  /**
+   * Port Royal's.
+   */
+  mainPort: number;
+  /**
+   * A port's.
+   */
+  port: number;
+  /**
+   * An edge light's.
+   */
+  edge: number;
+  /**
+   * A hazard's.
+   */
+  hazard: number;
+}
+/**
+ * The ring of lights on the approach to the edge.
+ */
+export interface LightEdge {
+  /**
+   * How many.
+   */
+  count: number;
+  /**
+   * Each within this of its bearing, in degrees.
+   */
+  within: number;
+  /**
+   * At least this far inside the lip, in m.
+   */
+  inside: number;
+}
+/**
+ * Which hazards are lit.
+ */
+export interface LightHazards {
+  /**
+   * Rocks and fringing reefs beyond this, in nautical miles.
+   */
+  beyond: number;
+  /**
+   * One light for hazards within this of each other, in m.
+   */
+  merge: number;
+}
+/**
+ * Nominal ranges, in nautical miles.
+ */
+export interface LightRange {
+  /**
+   * Port Royal's.
+   */
+  mainPort: number;
+  /**
+   * A port's.
+   */
+  port: number;
+  /**
+   * An edge light's.
+   */
+  edge: number;
+  /**
+   * A hazard's.
+   */
+  hazard: number;
+  /**
+   * A red or green light's, as a share of a white one's.
+   */
+  colour: number;
+}
+/**
+ * The lights' colours.
+ */
+export interface LightColours {
+  /**
+   * A colour, #rrggbb.
+   */
+  white: string;
+  /**
+   * A colour, #rrggbb.
+   */
+  red: string;
+  /**
+   * A colour, #rrggbb.
+   */
+  green: string;
+}
+/**
+ * A light's character: its notation, class, group and colour, and its light and dark in turn.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LightCharacter".
+ */
+export interface LightCharacter {
+  /**
+   * As charts write it.
+   */
+  notation: string;
+  /**
+   * Its class.
+   */
+  class: "Fl" | "LFl" | "Oc" | "Iso" | "Mo";
+  /**
+   * Its number in a group, or a Morse letter.
+   */
+  group: string;
+  /**
+   * Its colour.
+   */
+  colour: "white" | "red" | "green";
+  /**
+   * Its light and dark in turn, beginning with light, in ms.
+   *
+   * @minItems 2
+   * @maxItems 40
+   */
+  steps: [number, number, ...number[]];
+}
+/**
+ * How lighthouses are drawn.
+ */
+export interface LightLook {
+  /**
+   * The towers' daymarks.
+   *
+   * @minItems 1
+   */
+  daymarks: [LightDaymark, ...LightDaymark[]];
+  /**
+   * A colour, #rrggbb.
+   */
+  stone: string;
+  /**
+   * A colour, #rrggbb.
+   */
+  iron: string;
+  /**
+   * A colour, #rrggbb.
+   */
+  copper: string;
+  /**
+   * The glow's width at the lantern, in m.
+   */
+  glow: number;
+  /**
+   * The least it is drawn, in CSS pixels.
+   */
+  least: number;
+  /**
+   * A flash rises and falls over this share of it.
+   */
+  rise: number;
+  /**
+   * Beams are seen within this of the light, in m.
+   */
+  beams: number;
+  /**
+   * The loom's strength beside the light's own.
+   */
+  loom: number;
+}
+/**
+ * A tower's daymark.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LightDaymark".
+ */
+export interface LightDaymark {
+  id: Id;
+  /**
+   * A colour, #rrggbb.
+   */
+  body: string;
+  /**
+   * A colour, #rrggbb.
+   */
+  band: string;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '464a6f6db085fabc';
+export const CATALOG_VERSION = '45d4d13033d75374';

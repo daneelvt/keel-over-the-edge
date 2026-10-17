@@ -17,8 +17,15 @@
 import { PILOT_IDLE, type PilotControl } from '../../input/pilot';
 import { Clock } from '../../net/clock';
 import { decodeServer, encodeClient } from '../../net/frame';
-import { BumpPart, type Welcome } from '../../net/gen/keel/v1/game_pb';
-import type { BumpTold, ChunksHanded, SeaAreas, WeatherSpells } from '../../net/messages';
+import { BumpPart, type Light, type Place, type Welcome } from '../../net/gen/keel/v1/game_pb';
+import type {
+  BumpTold,
+  ChunksHanded,
+  LightSeen,
+  PlaceSeen,
+  SeaAreas,
+  WeatherSpells,
+} from '../../net/messages';
 import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
 import { POSITION_STEP, type View, ViewRing } from '../../net/view';
@@ -61,6 +68,10 @@ export type Received =
   | { kind: 'bump'; bump: BumpTold }
   /** The addresses of chunks of the land, by number. */
   | { kind: 'chunks'; chunks: ChunksHanded }
+  /** The places in chunks just handed. */
+  | { kind: 'places'; places: PlaceSeen[] }
+  /** Lights come into range, and lights to drop. */
+  | { kind: 'lights'; lights: LightSeen[]; drop: number[] }
   /** The account's owner's flag was set or cleared. */
   | { kind: 'tools'; on: boolean }
   | { kind: 'pong' }
@@ -200,6 +211,16 @@ export class Session {
       case 'tools':
         this.#lastHeard = now;
         return { kind: 'tools', on: m.body.value.on };
+      case 'places':
+        this.#lastHeard = now;
+        return { kind: 'places', places: m.body.value.places.map(placeSeen) };
+      case 'lights':
+        this.#lastHeard = now;
+        return {
+          kind: 'lights',
+          lights: m.body.value.lights.map(lightSeen),
+          drop: [...m.body.value.drop],
+        };
       case 'bump': {
         this.#lastHeard = now;
         const v = m.body.value;
@@ -353,4 +374,38 @@ export class Session {
     this.#lastSent = now;
     return encodeClient(m);
   }
+}
+
+/** A turn in 65536ths, in radians. */
+const TURN = (2 * Math.PI) / 65536;
+
+/** A place as the page draws it, from the server's. */
+export function placeSeen(p: Place): PlaceSeen {
+  return {
+    number: p.number,
+    kind: p.kind,
+    east: p.east / 100,
+    north: p.north / 100,
+    heading: p.heading * TURN,
+    ground: p.ground / 100,
+    tower: p.tower / 100,
+    daymark: p.daymark,
+    rig: p.rig,
+    age: p.age,
+    sunk: p.sunk,
+    heel: p.heel * TURN,
+  };
+}
+
+/** A light as the page shows it, from the server's. */
+export function lightSeen(l: Light): LightSeen {
+  return {
+    number: l.number,
+    east: l.east / 100,
+    north: l.north / 100,
+    focal: l.focal / 100,
+    character: l.character,
+    phase: Number(l.phase),
+    range: l.range,
+  };
 }

@@ -21,6 +21,10 @@ const (
 	streamNames
 	streamStart
 	streamCirculation
+	streamHazards
+	streamPlaces
+	streamLights
+	streamPlaceNames
 	streamIsland = 1 << 32 // plus the island's number
 )
 

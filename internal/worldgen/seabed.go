@@ -53,6 +53,7 @@ func (c *config) seabedOf(s stream, m *made, b *biome, w *work) {
 		reef.threshold = samples[min(359, round(float64(c.reef.Passes*360)))]
 		m.reef = true
 		m.lagoon = reef.at - physics.HexAcross
+		m.reefAt = reef.at
 	}
 	var bar struct {
 		on            bool
@@ -63,6 +64,7 @@ func (c *config) seabedOf(s stream, m *made, b *biome, w *work) {
 		bar.at = s.in(40, 120)
 		bar.high = s.in(0.8, 1.6)
 		bar.wid = 14
+		m.barAt = bar.at
 	}
 	dean := func(x float64) float64 {
 		if x < closureAt {
@@ -92,6 +94,8 @@ func (c *config) seabedOf(s stream, m *made, b *biome, w *work) {
 				d = reef.crest
 				if pass {
 					d = reef.flat + 1
+				} else {
+					m.crest = append(m.crest, i)
 				}
 			default:
 				out := x - (reef.at + half)
@@ -105,6 +109,9 @@ func (c *config) seabedOf(s stream, m *made, b *biome, w *work) {
 		if bar.on {
 			e := (x - bar.at) / bar.wid
 			d = max(d-float64(bar.high*physics.Exp(-float64(e*e))), min(d, 0.4))
+			if math.Abs(x-bar.at) <= physics.HexAcross/2 {
+				m.bar = append(m.bar, i)
+			}
 		}
 		d = float64(d * (1 + float64(0.15*fbm(float64(px/90), float64(py/90), noise, 0, 3))))
 		d = lerp(smoothstep(float64(0.65*reach), reach, x), d, deep)

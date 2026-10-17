@@ -224,7 +224,9 @@ button:disabled {
   cursor: default;
 }
 
-.islands {
+.islands,
+.places,
+.lights {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -232,7 +234,9 @@ button:disabled {
   font-size: 14px;
 }
 
-.islands button {
+.islands button,
+.places button,
+.lights button {
   padding: 1px 4px;
   background: none;
   text-align: left;
@@ -250,4 +254,41 @@ button:disabled {
   aside {
     width: auto;
   }
+}
+
+/* A light's mark in its row: dark, or lit in its colour while it shows. */
+.flash {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  border: 1px solid #e8b400;
+  background: #3b2f22;
+  vertical-align: middle;
+}
+
+.flash[data-on="1"] {
+  background: #fff3c4;
+  box-shadow: 0 0 6px #fff3c4;
+}
+
+.flash[data-on="1"][data-colour="red"] {
+  background: #ff5a3c;
+  box-shadow: 0 0 6px #ff5a3c;
+}
+
+.flash[data-on="1"][data-colour="green"] {
+  background: #3cff7d;
+  box-shadow: 0 0 6px #3cff7d;
+}
+
+.lights li.chosen button {
+  font-weight: bold;
+}
+
+.places,
+.lights {
+  columns: 1;
+  max-height: 24em;
+  overflow-y: auto;
 }

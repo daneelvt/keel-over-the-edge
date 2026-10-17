@@ -8,7 +8,7 @@
 import type { FromWorker, HelloVersions, Status, ToWorker, Traffic } from '../../net/messages';
 import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
 import { afterClose } from './policy';
-import { Session } from './session';
+import { lightSeen, Session } from './session';
 
 /** The part of a WebSocket the worker uses. */
 export interface Socket {
@@ -178,6 +178,7 @@ export class NetWorker {
             land: w.land,
             circulation: w.circulation,
             tools: w.tools,
+            light: w.light === undefined ? null : lightSeen(w.light),
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#setStatus('sailing');
@@ -231,6 +232,12 @@ export class NetWorker {
           break;
         case 'tools':
           this.#d.post({ type: 'tools', on: r.on });
+          break;
+        case 'places':
+          this.#d.post({ type: 'places', places: r.places });
+          break;
+        case 'lights':
+          this.#d.post({ type: 'lights', lights: r.lights, drop: r.drop });
           break;
       }
       this.#arm();

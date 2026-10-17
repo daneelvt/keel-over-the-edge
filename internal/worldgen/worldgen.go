@@ -16,6 +16,8 @@
 package worldgen
 
 import (
+	"slices"
+
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
@@ -29,7 +31,7 @@ import (
 
 // Version is the generator's version. Raise it whenever a change to the
 // generator or to the catalog's world values changes any seed's world.
-const Version = 1
+const Version = 2
 
 // Island is an island of a made world.
 type Island struct {
@@ -81,6 +83,10 @@ type Records struct {
 	Groups    []Group         `json:"groups"`
 	Fetch     []physics.Fetch `json:"fetch"` // each sea area's, row by row from the south-west
 	Start     Start           `json:"start"`
+	// Places are its places, after its islands and groups in number; Lights
+	// its lighthouses' lights.
+	Places []Place `json:"places"`
+	Lights []Light `json:"lights"`
 	// Circulation is the way the world's water circulates round the disk:
 	// 1 clockwise seen from above, −1 the other way. It is drawn from the
 	// seed of the attempt made, and left out of the digest, so that a
@@ -187,9 +193,16 @@ func (c *config) generate(seed uint64) *Bundle {
 		islands[i] = c.makeIsland(seed, int32(i), sp, &w)
 	}
 	lap("islands")
+	c.reefRocks(seed, islands)
 	b.Ground = c.rasterAll(islands)
 	lap("raster")
 	k := newCoarse(b.Ground)
+	hazards := c.hazardsOf(seed, b.Ground, k)
+	if len(hazards) > 0 {
+		c.rasterHazards(b.Ground, islands, hazards)
+		k = newCoarse(b.Ground)
+	}
+	lap("hazards")
 	b.Fetch = c.fetchOf(b.Ground, k)
 	lap("fetch")
 	b.Shelter = c.shelterOf(b.Ground)
@@ -200,6 +213,13 @@ func (c *config) generate(seed uint64) *Bundle {
 	islandNames := c.nameIslands(seed, islands)
 	groupNames := c.nameGroups(seed, groups, islandNames)
 	lap("names")
+	pw := c.sitesOf(seed, b.Ground, k, islands, hazards, b.Start)
+	lap("places")
+	lights := pw.lightsOf(groups)
+	lap("lights")
+	c.nameSites(seed, pw, lights, islandNames, groupNames)
+	b.Places, b.Lights = c.records(pw, lights, len(islands), len(groups))
+	lap("placeNames")
 
 	b.Report.ByClass, b.Report.ByBiome = map[string]int{}, map[string]int{}
 	for i, m := range islands {
@@ -227,7 +247,8 @@ func (c *config) generate(seed uint64) *Bundle {
 	b.Report.LandShare = c.landShare(b.Ground)
 	b.Report.Open = c.largestOpen(k)
 	allNames := append(append([]string{}, islandNames...), groupNames...)
-	b.made = &world{islands: islands, names: allNames, groups: groups, ground: b.Ground, coarse: k, start: b.Start}
+	b.made = &world{islands: islands, names: allNames, groups: groups, ground: b.Ground, coarse: k, start: b.Start,
+		reach: pw.reach, hazards: hazards, places: b.Places, lights: b.Lights, pw: pw, lightWork: lights}
 	b.Report.Rules = c.validate(b.made)
 	lap("validate")
 	return b
@@ -286,7 +307,7 @@ func (b *Bundle) Passed() bool {
 func (b *Bundle) MainPort() *Island { return &b.Islands[0] }
 
 // stages are the generator's stages, as the report times them.
-var stages = []string{"layout", "islands", "raster", "fetch", "shelter", "start", "names", "validate"}
+var stages = []string{"layout", "islands", "raster", "hazards", "fetch", "shelter", "start", "names", "places", "lights", "placeNames", "validate"}
 
 // Generated reports how long making the world's last attempt took.
 func (b *Bundle) Generated() time.Duration {
@@ -295,6 +316,50 @@ func (b *Bundle) Generated() time.Duration {
 		ms += b.Report.Millis[s]
 	}
 	return time.Duration(toInt32(ms)) * time.Millisecond
+}
+
+// records are the places' and lights' records, the places numbered after
+// the islands and groups.
+func (c *config) records(pw *placesWork, lights []*lightWork, islands, groups int) ([]Place, []Light) {
+	base := int32(islands + groups)
+	places := make([]Place, 0, len(pw.sites))
+	lightPlace := make([]int32, len(lights))
+	for i, s := range pw.sites {
+		p := Place{
+			Number: base + int32(i), Kind: c.kinds[s.rule], Name: s.name, Island: s.island, X: s.x, Y: s.y,
+			Heading: round3(s.heading), Zone: zoneNames[c.zoneOf(hypot(s.x, s.y))], Details: s.details,
+		}
+		p.Details.Offers = slices.Clone(s.offers)
+		if p.Details.Offers == nil {
+			p.Details.Offers = []string{}
+		}
+		if s.light >= 0 {
+			lightPlace[s.light] = p.Number
+		}
+		places = append(places, p)
+	}
+	out := make([]Light, 0, len(lights))
+	for i, lw := range lights {
+		marks := int32(-1)
+		switch {
+		case lw.role == RoleMain:
+			marks = 0
+		case lw.site >= 0:
+			marks = base + int32(lw.site)
+		case lw.group >= 0:
+			marks = int32(islands + lw.group)
+		case lw.role == RoleHazard && lw.island >= 0:
+			marks = lw.island
+		}
+		ch := &c.lights.Characters[lw.character]
+		out = append(out, Light{
+			Number: int32(i), Place: lightPlace[i], Role: lw.role, Marks: marks, X: lw.x, Y: lw.y,
+			Ground: round1(lw.ground), Tower: lw.tower, Focal: round1(lw.ground + lw.tower),
+			Character: int32(lw.character), Notation: ch.Notation, Phase: lw.phase, Range: float64(round(c.lightRange(lw))),
+			Daymark: int32(lw.daymark),
+		})
+	}
+	return places, out
 }
 
 // Empty is a world of open sea, with no island: for tests of everything but

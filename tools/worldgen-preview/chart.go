@@ -34,7 +34,8 @@ func dataURI(p []byte) string { return "data:image/png;base64," + base64.StdEnco
 
 // chart is the world's chart as an SVG: the terrain, its coasts, the rings
 // of the calm water and the mist band and the disk's edge, the start area,
-// every island's name but the rocks', each group's, and a scale.
+// every island's name but the rocks', each group's, the places and the
+// lights with their names and characters, the lights' ranges, and a scale.
 func worldChart(b *worldgen.Bundle, c *chartConfig, v view, terrain []byte) []byte {
 	var s bytes.Buffer
 	side := float64(v.Side)
@@ -79,6 +80,43 @@ func worldChart(b *worldgen.Bundle, c *chartConfig, v view, terrain []byte) []by
 		fmt.Fprintf(&s, `<text x="%.1f" y="%.1f" font-size="10" font-style="italic">%s</text>`+"\n", x, y+14, html.EscapeString(g.Name))
 	}
 	fmt.Fprintln(&s, `</g>`)
+	// The places, each a diamond in its kind's colour, and named.
+	fmt.Fprintln(&s, `<g id="places" font-size="9" stroke-width="0.6">`)
+	for _, p := range b.Places {
+		if c.sites[p.Kind] == "light" {
+			continue // drawn with the lights
+		}
+		x, y := v.Px(p.X, p.Y)
+		fmt.Fprintf(&s, `<path d="M%.1f %.1fl3.5 3.5l-3.5 3.5l-3.5 -3.5z" fill="%s" stroke="#111"/>`+"\n", x, y-3.5, c.marks[p.Kind])
+		fmt.Fprintf(&s, `<text x="%.1f" y="%.1f" fill="#111" stroke="#fff" stroke-width="2" paint-order="stroke" font-style="italic">%s</text>`+"\n", x+5, y+3, html.EscapeString(p.Name))
+	}
+	fmt.Fprintln(&s, `</g>`)
+	// The lights' ranges, each a ring.
+	fmt.Fprintln(&s, `<g id="ranges" fill="none" stroke-width="0.8" stroke-dasharray="3 3" style="display:none">`)
+	for _, l := range b.Lights {
+		x, y := v.Px(l.X, l.Y)
+		fmt.Fprintf(&s, `<circle cx="%.1f" cy="%.1f" r="%.1f" stroke="%s"/>`+"\n", x, y, l.Range/v.Scale, lightColour(l.Notation))
+	}
+	fmt.Fprintln(&s, `</g>`)
+	// The lights, each a ring in its colour, named and with its character.
+	fmt.Fprintln(&s, `<g id="lights" font-size="9">`)
+	for _, l := range b.Lights {
+		x, y := v.Px(l.X, l.Y)
+		r := 4.0
+		if l.Role == "main" {
+			r = 6
+		}
+		fmt.Fprintf(&s, `<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s" stroke="#e8b400" stroke-width="1.5"/>`+"\n", x, y, r, lightColour(l.Notation))
+		name := ""
+		for _, p := range b.Places {
+			if p.Number == l.Place {
+				name = p.Name
+			}
+		}
+		fmt.Fprintf(&s, `<text x="%.1f" y="%.1f" fill="#111" stroke="#fff" stroke-width="2" paint-order="stroke">%s · %s</text>`+"\n",
+			x+7, y-4, html.EscapeString(name), html.EscapeString(l.Notation))
+	}
+	fmt.Fprintln(&s, `</g>`)
 	// The scale: a nautical mile.
 	mile := 1852 / v.Scale
 	fmt.Fprintf(&s, `<g id="scale" stroke="#fff" fill="#fff" font-size="11"><path d="M20 %.1fh%.1fm0 -4v8m-%.1f -8v8" stroke-width="1.5"/><text x="20" y="%.1f">1 nautical mile</text></g>`+"\n",
@@ -87,7 +125,21 @@ func worldChart(b *worldgen.Bundle, c *chartConfig, v view, terrain []byte) []by
 	return s.Bytes()
 }
 
-// chartConfig is what the chart needs of the catalog: its rings.
+// chartConfig is what the chart needs of the catalog: its rings, and the
+// kinds of place's marks and site rules, by id.
 type chartConfig struct {
 	calm, mist, disk float64 // m
+	marks, sites     map[string]string
+}
+
+// lightColour is a light's colour on the chart, by its notation's: R or G,
+// else white.
+func lightColour(notation string) string {
+	switch {
+	case strings.Contains(notation, " R "):
+		return "#ff5a3c"
+	case strings.Contains(notation, " G "):
+		return "#3cff7d"
+	}
+	return "#fff3c4"
 }

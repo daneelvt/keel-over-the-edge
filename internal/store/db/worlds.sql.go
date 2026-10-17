@@ -49,6 +49,18 @@ func (q *Queries) CreateWorldPartitions(ctx context.Context, worldID pgtype.UUID
 	return err
 }
 
+const endWorld = `-- name: EndWorld :execrows
+UPDATE world SET state = 'ended' WHERE state = 'active' AND number = $1
+`
+
+func (q *Queries) EndWorld(ctx context.Context, number int32) (int64, error) {
+	result, err := q.db.Exec(ctx, endWorld, number)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertBundle = `-- name: InsertBundle :execrows
 INSERT INTO world_bundle (world_id, format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -96,17 +108,32 @@ type InsertChunksParams struct {
 	Digest  []byte
 }
 
+type InsertLightsParams struct {
+	WorldID   pgtype.UUID
+	Number    int32
+	Place     int32
+	Role      string
+	Character string
+	Phase     int64
+	Reach     float64
+	Focal     float64
+	Tower     float64
+	Daymark   int16
+}
+
 type InsertPlacesParams struct {
 	WorldID pgtype.UUID
 	Number  int32
 	Kind    string
 	Name    string
-	Biome   string
+	Biome   pgtype.Text
 	Size    pgtype.Text
 	X       float64
 	Y       float64
 	Area    pgtype.Float8
 	Highest pgtype.Float8
+	Island  pgtype.Int4
+	Details []byte
 }
 
 const insertWorld = `-- name: InsertWorld :one
@@ -233,20 +260,68 @@ func (q *Queries) WorldChunks(ctx context.Context, worldID pgtype.UUID) ([]World
 	return items, nil
 }
 
+const worldLights = `-- name: WorldLights :many
+SELECT number, place, role, character, phase, reach, focal, tower, daymark FROM light WHERE world_id = $1 ORDER BY number
+`
+
+type WorldLightsRow struct {
+	Number    int32
+	Place     int32
+	Role      string
+	Character string
+	Phase     int64
+	Reach     float64
+	Focal     float64
+	Tower     float64
+	Daymark   int16
+}
+
+func (q *Queries) WorldLights(ctx context.Context, worldID pgtype.UUID) ([]WorldLightsRow, error) {
+	rows, err := q.db.Query(ctx, worldLights, worldID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorldLightsRow
+	for rows.Next() {
+		var i WorldLightsRow
+		if err := rows.Scan(
+			&i.Number,
+			&i.Place,
+			&i.Role,
+			&i.Character,
+			&i.Phase,
+			&i.Reach,
+			&i.Focal,
+			&i.Tower,
+			&i.Daymark,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const worldPlaces = `-- name: WorldPlaces :many
-SELECT number, kind, name, biome, size, x, y, area, highest FROM place WHERE world_id = $1 ORDER BY number
+SELECT number, kind, name, biome, size, x, y, area, highest, island, details FROM place WHERE world_id = $1 ORDER BY number
 `
 
 type WorldPlacesRow struct {
 	Number  int32
 	Kind    string
 	Name    string
-	Biome   string
+	Biome   pgtype.Text
 	Size    pgtype.Text
 	X       float64
 	Y       float64
 	Area    pgtype.Float8
 	Highest pgtype.Float8
+	Island  pgtype.Int4
+	Details []byte
 }
 
 func (q *Queries) WorldPlaces(ctx context.Context, worldID pgtype.UUID) ([]WorldPlacesRow, error) {
@@ -268,6 +343,8 @@ func (q *Queries) WorldPlaces(ctx context.Context, worldID pgtype.UUID) ([]World
 			&i.Y,
 			&i.Area,
 			&i.Highest,
+			&i.Island,
+			&i.Details,
 		); err != nil {
 			return nil, err
 		}

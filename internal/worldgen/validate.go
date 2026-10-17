@@ -7,6 +7,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
@@ -30,6 +31,13 @@ type world struct {
 	ground  *physics.Ground
 	coarse  *coarse
 	start   Start
+	reach   []uint64 // the hexagons reached from the start, by flood
+	hazards []*hazard
+	places  []Place
+	lights  []Light
+	pw      *placesWork
+	// lightWork are the lights as they were found: what each is named after.
+	lightWork []*lightWork
 }
 
 // validate runs every rule over a world.
@@ -66,6 +74,9 @@ func (c *config) validate(w *world) []Rule {
 	add("start area", len(w.start.Places) == c.start.Places, fmt.Sprintf("%d places", len(w.start.Places)), "%d", c.start.Places)
 
 	// Every landmark reachable from the start in enough water.
+	if w.reach == nil {
+		w.reach = c.flood(w.ground, w.start, v.ReachDepth)
+	}
 	unreached := c.unreachable(w)
 	add("landmarks reachable", len(unreached) == 0, fmt.Sprintf("%d not reached", len(unreached)),
 		"every one, in %.1f m of water", v.ReachDepth)
@@ -138,6 +149,193 @@ func (c *config) validate(w *world) []Rule {
 		highest = max(highest, m.highest)
 	}
 	add("land's height", lowest >= c.land[0]-1e-9 && highest <= c.land[1]+1e-9, fmt.Sprintf("%.1f–%.1f m", lowest, highest), "%.1f–%.0f m", c.land[0], c.land[1])
+	if w.pw != nil {
+		rules = append(rules, c.placeRules(w)...)
+	}
+	return rules
+}
+
+// placeRules are the places' and lights' rules.
+func (c *config) placeRules(w *world) []Rule {
+	var rules []Rule
+	add := func(name string, pass bool, measured, wants string, args ...any) {
+		rules = append(rules, Rule{Name: name, Measured: measured, Wants: fmt.Sprintf(wants, args...), Pass: pass})
+	}
+	l := &c.lights
+	nm := float64(nauticalMile)
+
+	// Each kind's count.
+	counts := map[string]int{}
+	for _, p := range w.places {
+		counts[p.Kind]++
+	}
+	var measured, off []string
+	for _, k := range c.places.Kinds {
+		n := counts[string(k.ID)]
+		measured = append(measured, fmt.Sprintf("%s %d", k.ID, n))
+		if n < k.Count[0] || n > k.Count[1] {
+			off = append(off, fmt.Sprintf("%s %d (wants %d–%d)", k.ID, n, k.Count[0], k.Count[1]))
+		}
+	}
+	inMist := 0
+	for _, p := range w.places {
+		if p.Kind == c.kinds[catalog.SiteWreck] && hypot(p.X, p.Y) >= c.mist {
+			inMist++
+		}
+	}
+	measured = append(measured, fmt.Sprintf("%d wrecks in the mist band", inMist))
+	if inMist < c.places.Wreck.Mist {
+		off = append(off, fmt.Sprintf("%d wrecks in the mist band (wants %d)", inMist, c.places.Wreck.Mist))
+	}
+	add("places", len(off) == 0, strings.Join(measured, ", "), "each kind within its count, and wrecks in the mist band%s", suffix(off))
+
+	// Every port reached from the start in enough water, and lit.
+	marked := map[int32]bool{}
+	for _, lt := range w.lights {
+		marked[lt.Marks] = true
+	}
+	unreached, unlit := 0, 0
+	for _, p := range w.places {
+		if p.Kind != c.kinds[catalog.SiteHarbour] {
+			continue
+		}
+		reached := false
+		w.pw.hexesWithin(p.X, p.Y, c.places.Harbour.Within, func(hx, hy float64, _ int16) bool {
+			reached = w.pw.reached(hx, hy)
+			return !reached
+		})
+		if !reached {
+			unreached++
+		}
+		if !marked[p.Number] {
+			unlit++
+		}
+	}
+	add("ports reachable", unreached == 0, fmt.Sprintf("%d not reached", unreached), "every one, in %.1f m of water", c.validator.ReachDepth)
+	add("ports lit", unlit == 0, fmt.Sprintf("%d unlit", unlit), "every one")
+
+	// Every hazard toward the rim lit: the offshore ones anywhere, and the
+	// groups of rocks and fringing reefs beyond the lights' distance.
+	lit := func(x, y float64) bool {
+		for _, lt := range w.lights {
+			if hypot(x-lt.X, y-lt.Y) <= l.Hazards.Merge {
+				return true
+			}
+		}
+		return false
+	}
+	beyond := float64(l.Hazards.Beyond * nm)
+	dark := 0
+	for _, hz := range w.hazards {
+		if !lit(hz.rockX, hz.rockY) {
+			dark++
+		}
+	}
+	for _, m := range w.islands {
+		if m.reefRock >= 0 {
+			if x, y := m.grid.centre(m.reefRock); !lit(x, y) {
+				dark++
+			}
+		}
+	}
+	for _, g := range w.groups {
+		if hypot(g.x, g.y) <= beyond {
+			continue
+		}
+		var top *made
+		for _, n := range g.members {
+			if int(n) < len(w.islands) && (top == nil || w.islands[n].highest > top.highest) {
+				top = w.islands[n]
+			}
+		}
+		if top != nil && !lit(top.hx, top.hy) {
+			dark++
+		}
+	}
+	add("hazards lit", dark == 0, fmt.Sprintf("%d unlit", dark), "every offshore hazard, and the rocks and reefs beyond %.1f NM, a light within %.0f m", l.Hazards.Beyond, l.Hazards.Merge)
+
+	// The edge ring: a light within reach of each of its bearings.
+	first := w.pw.lightStream().angle()
+	missing := 0
+	for k := range l.Edge.Count {
+		bearing := first + float64(float64(k)*(2*math.Pi/float64(l.Edge.Count)))
+		found := false
+		for _, lt := range w.lights {
+			if lt.Role == RoleEdge && math.Abs(angleBetween(physics.Atan2(lt.X, lt.Y), bearing)) <= float64(l.Edge.Within*degree)+1e-9 {
+				found = true
+			}
+		}
+		if !found {
+			missing++
+		}
+	}
+	add("edge ring", missing == 0, fmt.Sprintf("%d bearings without a light", missing), "a light within %.0f° of each of %d bearings", l.Edge.Within, l.Edge.Count)
+
+	// Characters: one each, of the list, white unless a hazard's, Port
+	// Royal's the catalog's, none like a light whose range overlaps.
+	bad := 0
+	given := map[int32]bool{}
+	for i, a := range w.lights {
+		if a.Character < 0 || int(a.Character) >= len(l.Characters) || given[a.Character] {
+			bad++
+			continue
+		}
+		given[a.Character] = true
+		ch := &l.Characters[a.Character]
+		if a.Role == RoleMain && int(a.Character) != c.mainLight ||
+			a.Role != RoleHazard && ch.Colour != catalog.LightCharacterColourWhite {
+			bad++
+		}
+		for _, b := range w.lights[:i] {
+			if b.Character < 0 || int(b.Character) >= len(l.Characters) {
+				continue
+			}
+			if signature(ch) == signature(&l.Characters[b.Character]) && hypot(a.X-b.X, a.Y-b.Y) < a.Range+b.Range {
+				bad++
+			}
+		}
+	}
+	add("characters", bad == 0, fmt.Sprintf("%d amiss", bad), "one each, of the list, told apart from every light whose range overlaps")
+
+	// Two lights in range everywhere inside the mist band.
+	least := math.MaxInt
+	step := c.validator.LightGrid
+	n := toInt32(c.mist/step) + 1
+	for a := -n; a <= n; a++ {
+		for b := -n; b <= n; b++ {
+			x, y := float64(float64(a)*step), float64(float64(b)*step)
+			if hypot(x, y) > c.mist || landAt(w.ground, x, y) {
+				continue
+			}
+			k := 0
+			for _, lt := range w.lights {
+				if hypot(x-lt.X, y-lt.Y) <= lt.Range {
+					k++
+				}
+			}
+			least = min(least, k)
+		}
+	}
+	add("lights everywhere", least >= c.validator.LightsInRange, fmt.Sprintf("at least %d in range", least), "at least %d in range on a %.0f m grid inside the mist band", c.validator.LightsInRange, step)
+
+	// Every place named, none twice in the world.
+	seen := map[string]bool{}
+	for _, name := range w.names {
+		seen[strings.ToLower(name)] = true
+	}
+	dup, missing2 := 0, 0
+	for _, p := range w.places {
+		if p.Name == "" {
+			missing2++
+			continue
+		}
+		k := strings.ToLower(p.Name)
+		if seen[k] {
+			dup++
+		}
+		seen[k] = true
+	}
+	add("place names", dup == 0 && missing2 == 0, fmt.Sprintf("%d unnamed, %d twice", missing2, dup), "every place named, none twice in the world")
 	return rules
 }
 
@@ -235,20 +433,36 @@ func (c *config) largestOpen(k *coarse) float64 {
 }
 
 // unreachable lists the landmarks no water deep enough leads to from the
-// start's first place: a flood over the lattice's hexagons with that much
-// water, then each landmark is reached if any water beside its land was.
+// start's first place: each is reached if any water beside its land was.
 func (c *config) unreachable(w *world) []int32 {
 	var out []int32
-	if len(w.start.Places) == 0 {
-		for _, m := range w.islands {
-			if m.kind == kindLandmark {
-				out = append(out, m.number)
+	seen := w.reach
+	for _, m := range w.islands {
+		if m.kind != kindLandmark {
+			continue
+		}
+		reached := false
+		for _, a := range m.approach {
+			if k := a[0]*physics.HexRows + a[1]; seen != nil && seen[k>>6]&(1<<(k&63)) != 0 {
+				reached = true
+				break
 			}
 		}
-		return out
+		if !reached {
+			out = append(out, m.number)
+		}
 	}
-	deep := int16(-round(float64(c.validator.ReachDepth * 10)))
-	g := w.ground
+	return out
+}
+
+// flood is the hexagons water at least depth m deep leads to from the
+// start's first place, a bit each, column by column: a flood over the
+// lattice. nil if there is no start.
+func (c *config) flood(g *physics.Ground, start Start, depth float64) []uint64 {
+	if len(start.Places) == 0 {
+		return nil
+	}
+	deep := int16(-round(float64(depth * 10)))
 	seen := make([]uint64, (physics.HexColumns*physics.HexRows+63)/64)
 	idx := func(c, j int32) int32 { return c*physics.HexRows + j }
 	mark := func(i int32) bool {
@@ -258,7 +472,7 @@ func (c *config) unreachable(w *world) []int32 {
 		seen[i>>6] |= 1 << (i & 63)
 		return true
 	}
-	q, r := physics.HexAt(w.start.Places[0][0], w.start.Places[0][1])
+	q, r := physics.HexAt(start.Places[0][0], start.Places[0][1])
 	sc, sj := physics.HexCell(q, r)
 	queue := []int32{idx(sc, sj)}
 	mark(queue[0])
@@ -284,22 +498,7 @@ func (c *config) unreachable(w *world) []int32 {
 			}
 		}
 	}
-	for _, m := range w.islands {
-		if m.kind != kindLandmark {
-			continue
-		}
-		reached := false
-		for _, a := range m.approach {
-			if k := idx(a[0], a[1]); seen[k>>6]&(1<<(k&63)) != 0 {
-				reached = true
-				break
-			}
-		}
-		if !reached {
-			out = append(out, m.number)
-		}
-	}
-	return out
+	return seen
 }
 
 // cellNeighbours are the column and row of the six neighbours of the

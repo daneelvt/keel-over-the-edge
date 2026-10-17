@@ -68,10 +68,12 @@ const (
 	outBump
 	outChunks
 	outTools
+	outPlaces
+	outLights
 	outs
 )
 
-var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools"}
+var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights"}
 
 // The entries of a snapshot, by op.
 const (

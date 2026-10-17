@@ -42,6 +42,8 @@ import type {
   ChunksHanded,
   FromWorker,
   HelloVersions,
+  LightSeen,
+  PlaceSeen,
   Status,
   ToWorker,
 } from './messages';
@@ -118,6 +120,10 @@ export class Online {
   onWorld: ((world: string, land: boolean) => void) | null = null;
   /** Told of the chunks of land the server hands. */
   onChunks: ((c: ChunksHanded) => void) | null = null;
+  /** Told of the places in chunks just handed. */
+  onPlaces: ((p: PlaceSeen[]) => void) | null = null;
+  /** Told of lights come into range, and lights to drop; and at each Welcome, of the main port's light, with all others dropped. */
+  onLights: ((lights: LightSeen[], drop: number[] | 'all') => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
   lastMargin = NO_MARGIN;
   traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
@@ -219,6 +225,12 @@ export class Online {
       case 'chunks':
         this.onChunks?.(m.chunks);
         break;
+      case 'places':
+        this.onPlaces?.(m.places);
+        break;
+      case 'lights':
+        this.onLights?.(m.lights, m.drop);
+        break;
       case 'tools':
         this.tools.value = m.on;
         break;
@@ -235,6 +247,8 @@ export class Online {
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
         this.onWorld?.(m.world, m.land);
+        // A new connection is sent the lights in range again.
+        this.onLights?.(m.light === null ? [] : [m.light], 'all');
         this.tools.value = m.tools;
         this.#predictor.setCirculation(m.circulation);
         this.#fresh = true;

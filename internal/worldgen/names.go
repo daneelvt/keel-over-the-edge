@@ -90,6 +90,10 @@ type namer struct {
 	toneCount map[string]int
 	pending   []string        // partners waiting for an island they fit
 	wholes    map[string]bool // the whole names, in lower case
+	// placeWholes are the places' whole names, in lower case, and
+	// islandSpecifics the specifics used on each island by its places.
+	placeWholes     map[string]bool
+	islandSpecifics map[string]bool
 }
 
 // fits is what an island offers a name.
@@ -263,12 +267,22 @@ func (n *namer) prefixable(name string) bool {
 // newNamer is a namer for one world, drawing from its seed's stream.
 func newNamer(c *config, seed uint64) *namer {
 	n := &namer{c: c, s: newStream(seed, streamNames), used: map[string]bool{}, specifics: map[string]bool{},
-		toneCount: map[string]int{}, wholes: map[string]bool{}}
+		toneCount: map[string]int{}, wholes: map[string]bool{}, placeWholes: map[string]bool{}, islandSpecifics: map[string]bool{}}
 	for _, t := range c.names.Tones {
 		n.tones = append(n.tones, tone{word: t.Word, weight: [zones]float64{t.Centre, t.Middle, t.Rim}, most: t.Most, phantom: t.Phantom})
 	}
 	for i := range c.lists.wholes {
 		n.wholes[strings.ToLower(c.lists.wholes[i].name)] = true
+	}
+	if p := c.lists.places; p != nil {
+		for _, site := range siteRules {
+			for _, w := range p.wholes[string(site)] {
+				n.placeWholes[strings.ToLower(w.name)] = true
+			}
+		}
+		for _, w := range p.wholes[pointSite] {
+			n.placeWholes[strings.ToLower(w.name)] = true
+		}
 	}
 	return n
 }
@@ -451,6 +465,8 @@ type nameLists struct {
 	groups    []groupName
 	generics  []genericWord
 	specifics []specificWord
+	places    *placeLists
+	cargoes   []cargo
 }
 
 // parseNames reads the names of namelist.go.

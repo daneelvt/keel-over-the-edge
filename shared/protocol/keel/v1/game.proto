@@ -123,7 +123,72 @@ message ServerMessage {
     Bump bump = 7;
     Chunks chunks = 8;
     Tools tools = 9;
+    Places places = 10;
+    Lights lights = 11;
   }
+}
+
+// Places are the places in chunks of the land the connection has just been
+// handed: each place once, with its chunk, the chunk the place stands in,
+// after that chunk's Chunks; so a place reaches only a client that could
+// see the land about it. A place carries what is drawn of it, never its
+// name.
+message Places {
+  repeated Place places = 1;
+}
+
+// Place is a place of the world: a port, a lighthouse, a reef, a wreck.
+message Place {
+  // Its number among the world's places.
+  uint32 number = 1;
+  // Its kind: an index into the catalog's kinds of place.
+  uint32 kind = 2;
+  // Where it is, in centimetres east and north of the world's centre, and
+  // the way it faces, in 65536ths of a turn clockwise from north.
+  sint32 east = 3;
+  sint32 north = 4;
+  uint32 heading = 5;
+  // A lighthouse's tower: the ground under it and its height, in
+  // centimetres, and its daymark, an index into the catalog's daymarks.
+  uint32 ground = 6;
+  uint32 tower = 7;
+  uint32 daymark = 8;
+  // A wreck: her rig and her age, indices into the catalog's rigs and
+  // ages; whether she is sunk or lies stranded; and her heel, in 65536ths
+  // of a turn, to starboard.
+  uint32 rig = 9;
+  uint32 age = 10;
+  bool sunk = 11;
+  sint32 heel = 12;
+}
+
+// Lights are the lighthouses' lights the connection is to show, and those
+// it is to drop: a light is sent once the connection's eye is within its
+// range, and dropped once the eye is further than its range by a margin.
+// A light carries what is seen of it, never its name.
+message Lights {
+  repeated Light lights = 1;
+  // The numbers of lights to drop.
+  repeated uint32 drop = 2;
+}
+
+// Light is a lighthouse's light. It shows its character's light and dark
+// in turn at world time t plus its phase, so that every client shows the
+// same flash at the same moment.
+message Light {
+  // Its number among the world's lights.
+  uint32 number = 1;
+  // Where it is, in centimetres east and north of the world's centre, and
+  // its height above the sea, in centimetres.
+  sint32 east = 2;
+  sint32 north = 3;
+  uint32 focal = 4;
+  // Its character: an index into the catalog's characters.
+  uint32 character = 5;
+  // Its phase, in microseconds of world time.
+  int64 phase = 6;
+  // Its nominal range, in metres.
+  uint32 range = 7;
 }
 
 // Tools says the account's owner's flag has been set or cleared while the
@@ -305,6 +370,9 @@ message Welcome {
   sint32 circulation = 9;
   // The account carries the owner's flag: the free camera (Roam) is its.
   bool tools = 10;
+  // The main port's light, seen from everywhere in the world; none in a
+  // world without land.
+  Light light = 11;
 }
 
 // Pong answers a Ping.

@@ -42,10 +42,16 @@ func (c *config) fetchOf(g *physics.Ground, k *coarse) []physics.Fetch {
 // radial is how far upwind of (x, y), toward direction a, the first land
 // is, at most the cap.
 func (c *config) radial(g *physics.Ground, k *coarse, x, y, a float64) float64 {
+	return c.radialTo(g, k, x, y, a, c.fetch.cap)
+}
+
+// radialTo is how far from (x, y), toward direction a, the first land is,
+// at most most m.
+func (c *config) radialTo(g *physics.Ground, k *coarse, x, y, a, most float64) float64 {
 	sa, ca := sincos(a)
 	step := c.fetch.step
 	start, wet := 0.0, false
-	for d := 0.0; d < start+c.fetch.cap; {
+	for d := 0.0; d < start+most; {
 		px, py := x+float64(d*sa), y+float64(d*ca)
 		if wet {
 			if skip := k.clearance(px, py); skip > step {
@@ -62,7 +68,7 @@ func (c *config) radial(g *physics.Ground, k *coarse, x, y, a float64) float64 {
 		}
 		d += step
 	}
-	return c.fetch.cap
+	return most
 }
 
 // shelterHeights is the highest land in each cell of the shelter's grid.

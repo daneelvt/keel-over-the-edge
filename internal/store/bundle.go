@@ -31,6 +31,7 @@ type Bundle struct {
 	GenerationMs int
 	Chunks       [][]byte
 	Places       []Place
+	Lights       []Light
 	// ChunkKey is the world's chunk key, 32 bytes, or nil if its bundle was
 	// stored without one.
 	ChunkKey []byte
@@ -39,16 +40,35 @@ type Bundle struct {
 	Stored time.Time
 }
 
-// Place is an island or a group of rocks, by its number in the world.
+// Place is an island, a group of rocks, or another place of the world (a
+// port, a reef, a wreck …, by the catalog's kinds), by its number in the
+// world.
 type Place struct {
 	Number  int
-	Kind    string // PlaceIsland or PlaceGroup
+	Kind    string // PlaceIsland, PlaceGroup, or the catalog's kind
 	Name    string
-	Biome   string
-	Size    string // its size class; "" for a group
+	Biome   string // "" for a place offshore
+	Size    string // an island's size class; "" for any other place
 	X, Y    float64
-	Area    float64 // m²; 0 for a group
-	Highest float64 // m; 0 for a group
+	Area    float64 // an island's land, m²; 0 for any other place
+	Highest float64 // an island's highest point, m; 0 for any other place
+	// Island is the island another place is on or by, -1 for none or for
+	// an island or group; Details, what its kind measures, as JSON, or nil.
+	Island  int
+	Details []byte
+}
+
+// Light is a lighthouse's light, by its number in the world.
+type Light struct {
+	Number    int
+	Place     int    // its lighthouse
+	Role      string // main, port, edge or hazard
+	Character string // as charts write it
+	Phase     int64  // µs
+	Range     float64
+	Focal     float64
+	Tower     float64
+	Daymark   int
 }
 
 // The kinds of place.
@@ -109,9 +129,23 @@ func (s *Store) LoadBundle(ctx context.Context, world [16]byte) (*Bundle, error)
 		return nil, err
 	}
 	for _, p := range places {
+		island := -1
+		if p.Island.Valid {
+			island = int(p.Island.Int32)
+		}
 		b.Places = append(b.Places, Place{
-			Number: int(p.Number), Kind: p.Kind, Name: p.Name, Biome: p.Biome, Size: p.Size.String,
-			X: p.X, Y: p.Y, Area: p.Area.Float64, Highest: p.Highest.Float64,
+			Number: int(p.Number), Kind: p.Kind, Name: p.Name, Biome: p.Biome.String, Size: p.Size.String,
+			X: p.X, Y: p.Y, Area: p.Area.Float64, Highest: p.Highest.Float64, Island: island, Details: p.Details,
+		})
+	}
+	lights, err := s.q.WorldLights(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range lights {
+		b.Lights = append(b.Lights, Light{
+			Number: int(l.Number), Place: int(l.Place), Role: l.Role, Character: l.Character, Phase: l.Phase,
+			Range: l.Reach, Focal: l.Focal, Tower: l.Tower, Daymark: int(l.Daymark),
 		})
 	}
 	return b, nil
@@ -154,15 +188,27 @@ func (s *Store) StoreBundle(ctx context.Context, world [16]byte, epoch int64, b 
 		}
 		places := make([]db.InsertPlacesParams, len(b.Places))
 		for i, p := range b.Places {
-			r := db.InsertPlacesParams{WorldID: id, Number: int32(p.Number), Kind: p.Kind, Name: p.Name, Biome: p.Biome, X: p.X, Y: p.Y}
+			r := db.InsertPlacesParams{WorldID: id, Number: int32(p.Number), Kind: p.Kind, Name: p.Name,
+				Biome: pgtype.Text{String: p.Biome, Valid: p.Biome != ""}, X: p.X, Y: p.Y, Details: p.Details}
 			if p.Kind == PlaceIsland {
 				r.Size = pgtype.Text{String: p.Size, Valid: true}
 				r.Area = pgtype.Float8{Float64: p.Area, Valid: true}
 				r.Highest = pgtype.Float8{Float64: p.Highest, Valid: true}
 			}
+			if p.Island >= 0 {
+				r.Island = pgtype.Int4{Int32: int32(p.Island), Valid: true}
+			}
 			places[i] = r
 		}
-		_, err = q.InsertPlaces(ctx, places)
+		if _, err := q.InsertPlaces(ctx, places); err != nil {
+			return err
+		}
+		lights := make([]db.InsertLightsParams, len(b.Lights))
+		for i, l := range b.Lights {
+			lights[i] = db.InsertLightsParams{WorldID: id, Number: int32(l.Number), Place: int32(l.Place), Role: l.Role,
+				Character: l.Character, Phase: l.Phase, Reach: l.Range, Focal: l.Focal, Tower: l.Tower, Daymark: int16(l.Daymark)}
+		}
+		_, err = q.InsertLights(ctx, lights)
 		return err
 	})
 }

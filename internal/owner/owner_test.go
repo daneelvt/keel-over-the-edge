@@ -108,6 +108,10 @@ type rig struct {
 	sessions *fakeSessions
 	metrics  *obs.Metrics
 	h        http.Handler
+	// begun are the worlds the page ended, and restarted counts keel's
+	// restarts.
+	begun     []int
+	restarted chan struct{}
 }
 
 func newRig(t testing.TB, limit int) *rig {
@@ -137,6 +141,14 @@ func newRig(t testing.TB, limit int) *rig {
 	b.Islands = []worldgen.Island{{Number: 0, Kind: "main", Name: "Hill", Biome: "test", Size: "small", Group: -1,
 		X: 2000, Across: 200, Area: math.Pi * 100 * 100, Highest: 30, HighX: 2000, Box: [4]int32{c - 40, j - 40, 80, 80}}}
 	b.Start.Places = [][2]float64{{0, -100}}
+	b.Places = []worldgen.Place{
+		{Number: 1, Kind: "reef", Name: "Blowers Rocks", Island: -1, X: 2000, Y: 110, Zone: "middle",
+			Details: worldgen.PlaceDetails{Length: 120, Offshore: true, Offers: []string{"offshore"}}},
+		{Number: 2, Kind: "lighthouse", Name: "Blowers Rocks Light", Island: 0, X: 2000, Y: 0, Zone: "middle",
+			Details: worldgen.PlaceDetails{Offers: []string{}}},
+	}
+	b.Lights = []worldgen.Light{{Number: 0, Place: 2, Role: "hazard", Marks: 1, X: 2000, Y: 0, Ground: 30, Tower: 15, Focal: 45,
+		Character: 1, Notation: "Fl W 10s", Phase: 1234, Range: 2778}}
 	tl := weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(10*knot, 0, 0))
 	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Workers: 1, Tick: 1000, Limit: limit,
 		Weather: tl, Encounters: cat.PrepareEncounters(), Terrain: &sim.Terrain{Ground: g, Start: []physics.State{{X: 0, Y: -100, Heading: math.Pi / 2}}}, Edge: &sim.Edge{Fall: 150, Clear: 20}})
@@ -145,12 +157,22 @@ func newRig(t testing.TB, limit int) *rig {
 	}
 	t.Cleanup(w.Close)
 	r := &rig{w: w, accounts: &fakeAccounts{by: map[store.AccountID]store.Account{}}, edge: &fakeEdge{tools: map[bus.Account]bool{}, eyes: map[bus.Account][2]float64{}},
-		sessions: &fakeSessions{}, metrics: obs.NewMetrics("test", catalog.Version)}
+		sessions: &fakeSessions{}, metrics: obs.NewMetrics("test", catalog.Version), restarted: make(chan struct{}, 1)}
 	r.o = New(Config{
 		Frames: w.Bus().Frames, Owner: w.Bus().Commands.Owner(), Bundle: b, Weather: tl.Prepared(), Ground: g,
 		Kinds: []string{"Jolly boat"}, Regimes: []string{"settled"}, Sky: cat.PrepareSky(), Calm: 900,
 		World:    World{Number: 3, Epoch: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Made: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
 		Accounts: r.accounts, Sessions: r.sessions, Edge: r.edge, Log: slog.New(slog.DiscardHandler), Metrics: r.metrics,
+		PlaceKinds: []PlaceKind{{ID: "reef", Name: "Reef", Site: "reef", Mark: "#c2563a"}, {ID: "lighthouse", Name: "Lighthouse", Site: "light", Mark: "#e8b400"}},
+		Characters: []Character{{Notation: "Fl W 5s", Colour: "white", Steps: []int{500, 4500}}, {Notation: "Fl W 10s", Colour: "white", Steps: []int{1000, 9000}}},
+		BeginWorld: func(_ context.Context, number int) (store.World, error) {
+			if number != 3 {
+				return store.World{}, store.ErrNotActive
+			}
+			r.begun = append(r.begun, number)
+			return store.World{Number: number + 1}, nil
+		},
+		Restart: func() { r.restarted <- struct{}{} },
 	})
 	r.h = r.o.Handler()
 	return r
@@ -720,4 +742,103 @@ func benchTick(b *testing.B, every time.Duration) {
 	close(done)
 	wg.Wait()
 	b.ReportMetric(float64(w.Bus().Frames.Allocated()-before), "frames-made")
+}
+
+// TestPlacesList: places.json lists every place and light of the bundle,
+// with their names, kinds, a light's character as charts write it, and a
+// place's approach in water deep enough.
+func TestPlacesList(t *testing.T) {
+	r := newRig(t, 0)
+	code, body := r.do(t, "GET", "/owner/api/places.json", nil)
+	if code != 200 {
+		t.Fatalf("places.json: %d %s", code, body)
+	}
+	var got struct {
+		Kinds      []PlaceKind `json:"kinds"`
+		Characters []Character `json:"characters"`
+		Places     []struct {
+			Number   int32       `json:"number"`
+			Kind     string      `json:"kind"`
+			Name     string      `json:"name"`
+			Approach *[2]float64 `json:"approach"`
+		} `json:"places"`
+		Lights []struct {
+			Name  string `json:"name"`
+			Chart string `json:"chart"`
+			Phase int64  `json:"phase"`
+		} `json:"lights"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Kinds) != 2 || len(got.Characters) != 2 || len(got.Places) != 2 || len(got.Lights) != 1 {
+		t.Fatalf("places.json holds %s", body)
+	}
+	if p := got.Places[0]; p.Name != "Blowers Rocks" || p.Kind != "reef" || p.Approach == nil {
+		t.Errorf("the reef is %+v", p)
+	} else if e, _ := r.o.cfg.Ground.At(p.Approach[0], p.Approach[1]); e > -3 {
+		t.Errorf("the reef's approach is in %.1f m of water", -e)
+	}
+	if l := got.Lights[0]; l.Name != "Blowers Rocks Light" || l.Chart != "Fl W 10s 45m 1.5M" || l.Phase != 1234 {
+		t.Errorf("the light is %+v", l)
+	}
+}
+
+// TestPlaceAtAPlace: a flagged boat is put at a place's approach, facing
+// it; a place the world has not is refused.
+func TestPlaceAtAPlace(t *testing.T) {
+	r := newRig(t, 0)
+	ann := r.join(t, 1, "Ann", store.Human, true)
+	place := 1
+	code, body := r.do(t, "POST", "/owner/api/place", PlaceRequest{Boat: ann, Place: &place})
+	r.w.Tick()
+	if code != 200 {
+		t.Fatalf("to the reef: %d %s", code, body)
+	}
+	st := r.w.Latest().State[0]
+	if e, _ := r.o.cfg.Ground.At(st.X, st.Y); e > -3 || math.Hypot(st.X-2000, st.Y-110) > 100 {
+		t.Errorf("at %+v, in %.1f m", st, -e)
+	}
+	if want := math.Atan2(2000-st.X, 110-st.Y); math.Abs(math.Remainder(st.Heading-want, 2*math.Pi)) > 0.05 {
+		t.Errorf("facing %.2f rad, not the reef at %.2f", st.Heading, want)
+	}
+	none := 99
+	if code, _ := r.do(t, "POST", "/owner/api/place", PlaceRequest{Boat: ann, Place: &none}); code != 400 {
+		t.Errorf("a place not there: %d", code)
+	}
+}
+
+// TestNewWorld: a new world is begun only with the active world's number
+// typed; then keel is stopped, to start again in it.
+func TestNewWorld(t *testing.T) {
+	r := newRig(t, 0)
+	for _, n := range []int{0, 2, 4} {
+		if code, _ := r.do(t, "POST", "/owner/api/world", NewWorldRequest{Number: n}); code != 400 {
+			t.Errorf("world %d typed: %d", n, code)
+		}
+	}
+	if code, _ := r.do(t, "POST", "/owner/api/world", map[string]any{"number": 3, "more": true}); code != 400 {
+		t.Errorf("a body not the control's: %d", code)
+	}
+	if len(r.begun) != 0 {
+		t.Fatalf("worlds ended: %v", r.begun)
+	}
+	code, body := r.do(t, "POST", "/owner/api/world", NewWorldRequest{Number: 3})
+	if code != 200 || !strings.Contains(string(body), `"begun":4`) || !slices.Equal(r.begun, []int{3}) {
+		t.Fatalf("world 3 typed: %d %s, ended %v", code, body, r.begun)
+	}
+	select {
+	case <-r.restarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("keel was not stopped to start again")
+	}
+	// From another site, it is refused before it is heard.
+	req := httptest.NewRequest("POST", "http://localhost:9090/owner/api/world", strings.NewReader(`{"number":3}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	rec := httptest.NewRecorder()
+	r.h.ServeHTTP(rec, req)
+	if rec.Code < 400 || len(r.begun) != 1 {
+		t.Errorf("a cross-site request: %d, ended %v", rec.Code, r.begun)
+	}
 }

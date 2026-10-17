@@ -572,7 +572,10 @@
         "validator",
         "names",
         "handout",
-        "look"
+        "look",
+        "hazards",
+        "places",
+        "lights"
       ],
       "properties": {
         "disk": { "$ref": "#/$defs/WorldDisk" },
@@ -618,7 +621,1021 @@
         "validator": { "$ref": "#/$defs/WorldValidator" },
         "names": { "$ref": "#/$defs/WorldNames" },
         "handout": { "$ref": "#/$defs/WorldHandout" },
-        "look": { "$ref": "#/$defs/WorldLook" }
+        "look": { "$ref": "#/$defs/WorldLook" },
+        "hazards": { "$ref": "#/$defs/WorldHazards" },
+        "places": { "$ref": "#/$defs/WorldPlaces" },
+        "lights": { "$ref": "#/$defs/WorldLights" }
+      }
+    },
+    "WorldHazards": {
+      "title": "WorldHazards",
+      "description": "Offshore hazards: reefs and sandbanks away from every island's shelf, each with a rock its light stands on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reefs",
+        "reefLength",
+        "reefCrest",
+        "banks",
+        "bankLength",
+        "bankDepth",
+        "outer",
+        "beyond",
+        "ring",
+        "clear",
+        "apart",
+        "rockHexes",
+        "rockHeight",
+        "rockSurface"
+      ],
+      "properties": {
+        "reefs": {
+          "description": "Offshore reefs a world has.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "reefLength": {
+          "description": "A reef's length, in m.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 10,
+            "maximum": 2000
+          }
+        },
+        "reefCrest": {
+          "description": "Its crest's depth, in m.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 5
+          }
+        },
+        "banks": {
+          "description": "Offshore sandbanks a world has.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "bankLength": {
+          "description": "A bank's length, in m.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 10,
+            "maximum": 3000
+          }
+        },
+        "bankDepth": {
+          "description": "The water over a bank, in m.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 0.2,
+            "maximum": 10
+          }
+        },
+        "outer": {
+          "description": "Of each kind, at least this many lie beyond beyond.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "beyond": {
+          "description": "In nautical miles from the centre.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "ring": {
+          "description": "Hazards lie between these distances from the centre, in nautical miles.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10
+          }
+        },
+        "clear": {
+          "description": "A hazard lies at least this far from any land, in m.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "apart": {
+          "description": "And this far from the next hazard, in m.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "rockHexes": {
+          "description": "A hazard's rock's hexagons.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "rockHeight": {
+          "description": "Its height above the sea, in m.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 20
+          }
+        },
+        "rockSurface": {
+          "$ref": "#/$defs/Id",
+          "description": "The surface a hazard's rock is."
+        }
+      }
+    },
+    "PlaceKind": {
+      "title": "PlaceKind",
+      "description": "A kind of place: what makes its site, how many a world has, and its mark on the world page.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "site",
+        "count",
+        "mark"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+        "name": {
+          "description": "Its name, as the world page lists it.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "site": {
+          "description": "The rule its sites are found by.",
+          "type": "string",
+          "enum": [
+            "harbour",
+            "village",
+            "light",
+            "anchorage",
+            "cove",
+            "lagoon",
+            "reef",
+            "bar",
+            "wreck"
+          ]
+        },
+        "count": {
+          "description": "How many a world has, the least and the most.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "mark": {
+          "description": "A colour, #rrggbb.",
+          "type": "string",
+          "pattern": "^#[0-9a-f]{6}$"
+        }
+      }
+    },
+    "PlaceRig": {
+      "title": "PlaceRig",
+      "description": "A wrecked ship's rig, and how she is drawn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "length",
+        "beam",
+        "masts",
+        "mast"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+        "length": {
+          "description": "Her length, in m.",
+          "type": "number",
+          "minimum": 4,
+          "maximum": 80
+        },
+        "beam": {
+          "description": "Her beam, in m.",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 25
+        },
+        "masts": {
+          "description": "Her masts.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "mast": {
+          "description": "Her mainmast's height above the deck, in m.",
+          "type": "number",
+          "minimum": 2,
+          "maximum": 60
+        }
+      }
+    },
+    "PlaceAge": {
+      "title": "PlaceAge",
+      "description": "How long a wreck has lain: how much of her is left.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "hull",
+        "masts"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+        "hull": {
+          "description": "The share of her hull left.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "masts": {
+          "description": "The share of her masts left.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "WorldPlaces": {
+      "title": "WorldPlaces",
+      "description": "Places: what a sailor finds besides islands, each where the ground makes it true.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kinds",
+        "harbour",
+        "village",
+        "anchorage",
+        "cove",
+        "lagoon",
+        "reef",
+        "bar",
+        "wreck",
+        "deep",
+        "small",
+        "long",
+        "point",
+        "rigs",
+        "ages"
+      ],
+      "properties": {
+        "kinds": {
+          "description": "The kinds of place.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlaceKind"
+          }
+        },
+        "harbour": {
+          "title": "PlaceHarbour",
+          "description": "A port's site.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "depth",
+            "within",
+            "apart"
+          ],
+          "properties": {
+            "depth": {
+              "description": "Water this deep, in m,",
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 40
+            },
+            "within": {
+              "description": "within this of the shore, in m.",
+              "type": "number",
+              "minimum": 4,
+              "maximum": 1000
+            },
+            "apart": {
+              "description": "Ports at least this far apart, in nautical miles.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            }
+          }
+        },
+        "village": {
+          "title": "PlaceVillage",
+          "description": "A fishing village's site.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sizes",
+            "shallows",
+            "ground",
+            "apart"
+          ],
+          "properties": {
+            "sizes": {
+              "description": "The size classes of island it may be on.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20
+              }
+            },
+            "shallows": {
+              "description": "Its fishing ground: water shallower than this, in m,",
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 40
+            },
+            "ground": {
+              "description": "within this, in m.",
+              "type": "number",
+              "minimum": 10,
+              "maximum": 5000
+            },
+            "apart": {
+              "description": "Villages and ports at least this far apart, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        "anchorage": {
+          "title": "PlaceAnchorage",
+          "description": "An anchorage's site.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "depth",
+            "swing",
+            "clear",
+            "land",
+            "fetch",
+            "snug",
+            "good",
+            "step",
+            "apart"
+          ],
+          "properties": {
+            "depth": {
+              "description": "The water's depth, in m.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 40
+              }
+            },
+            "swing": {
+              "description": "No shallower water within this, in m: room to swing.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "clear": {
+              "description": "Shallower than this, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 40
+            },
+            "land": {
+              "description": "Land within this, in m.",
+              "type": "number",
+              "minimum": 10,
+              "maximum": 5000
+            },
+            "fetch": {
+              "description": "A direction is sheltered when its fetch is under this, in m.",
+              "type": "number",
+              "minimum": 10,
+              "maximum": 5000
+            },
+            "snug": {
+              "description": "Snug when this many of the 16 directions are sheltered,",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 16
+            },
+            "good": {
+              "description": "good when this many.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 16
+            },
+            "step": {
+              "description": "Sampled this far apart, in m.",
+              "type": "number",
+              "minimum": 4,
+              "maximum": 500
+            },
+            "apart": {
+              "description": "Anchorages at least this far apart, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        "cove": {
+          "title": "PlaceCove",
+          "description": "A cove's site.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "across",
+            "mouth",
+            "closing"
+          ],
+          "properties": {
+            "across": {
+              "description": "Its width, in m.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": 4,
+                "maximum": 2000
+              }
+            },
+            "mouth": {
+              "description": "Water at least this deep at its mouth, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 40
+            },
+            "closing": {
+              "description": "Bays are found by closing the coast with a disc of this radius, in m.",
+              "type": "number",
+              "minimum": 8,
+              "maximum": 1000
+            }
+          }
+        },
+        "lagoon": {
+          "title": "PlaceLagoon",
+          "description": "A lagoon's site.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "width"
+          ],
+          "properties": {
+            "width": {
+              "description": "The water behind the reef at least this wide, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000
+            }
+          }
+        },
+        "reef": {
+          "title": "PlaceReef",
+          "description": "A reef's site.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "crest"
+          ],
+          "properties": {
+            "crest": {
+              "description": "A fringing reef's crest runs at least this far, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        "bar": {
+          "title": "PlaceBar",
+          "description": "A sandbar's site.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "length"
+          ],
+          "properties": {
+            "length": {
+              "description": "A bar runs at least this far, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        "wreck": {
+          "title": "PlaceWreck",
+          "description": "A wreck's site.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "depth",
+            "near",
+            "mist"
+          ],
+          "properties": {
+            "depth": {
+              "description": "Sunk in water this deep, in m,",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 40
+              }
+            },
+            "near": {
+              "description": "within this of a reef, rock or bar, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "mist": {
+              "description": "At least this many in the mist band.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "deep": {
+          "description": "Water this deep within 60 m is deep enough for a tall ship, in m.",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 40
+        },
+        "small": {
+          "description": "A cove or lagoon narrower than this is small, in m.",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "long": {
+          "description": "A reef or bar shorter than this is small, in m.",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "point": {
+          "title": "PlacePoint",
+          "description": "A point, where a light stands: coast with this much water about it.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reach",
+            "water"
+          ],
+          "properties": {
+            "reach": {
+              "description": "Within this, in m,",
+              "type": "number",
+              "minimum": 4,
+              "maximum": 500
+            },
+            "water": {
+              "description": "this share of the ground water.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "rigs": {
+          "description": "The rigs a wrecked ship may have.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/PlaceRig"
+          }
+        },
+        "ages": {
+          "description": "How long a wreck may have lain.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/PlaceAge"
+          }
+        }
+      }
+    },
+    "LightCharacter": {
+      "title": "LightCharacter",
+      "description": "A light's character: its notation, class, group and colour, and its light and dark in turn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "notation",
+        "class",
+        "group",
+        "colour",
+        "steps"
+      ],
+      "properties": {
+        "notation": {
+          "description": "As charts write it.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "class": {
+          "description": "Its class.",
+          "type": "string",
+          "enum": [
+            "Fl",
+            "LFl",
+            "Oc",
+            "Iso",
+            "Mo"
+          ]
+        },
+        "group": {
+          "description": "Its number in a group, or a Morse letter.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8
+        },
+        "colour": {
+          "description": "Its colour.",
+          "type": "string",
+          "enum": [
+            "white",
+            "red",
+            "green"
+          ]
+        },
+        "steps": {
+          "description": "Its light and dark in turn, beginning with light, in ms.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 40,
+          "items": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 60000
+          }
+        }
+      }
+    },
+    "LightDaymark": {
+      "title": "LightDaymark",
+      "description": "A tower's daymark.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "body",
+        "band"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+        "body": {
+          "description": "A colour, #rrggbb.",
+          "type": "string",
+          "pattern": "^#[0-9a-f]{6}$"
+        },
+        "band": {
+          "description": "A colour, #rrggbb.",
+          "type": "string",
+          "pattern": "^#[0-9a-f]{6}$"
+        }
+      }
+    },
+    "WorldLights": {
+      "title": "WorldLights",
+      "description": "Lighthouses: where they stand, their towers, ranges and characters, and how they are drawn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "towers",
+        "mainPortCoast",
+        "edge",
+        "hazards",
+        "range",
+        "clearAir",
+        "threshold",
+        "drop",
+        "mainPortCharacter",
+        "colours",
+        "characters",
+        "look"
+      ],
+      "properties": {
+        "towers": {
+          "title": "LightTowers",
+          "description": "Each light's tower's height, in m.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mainPort",
+            "port",
+            "edge",
+            "hazard"
+          ],
+          "properties": {
+            "mainPort": {
+              "description": "Port Royal's.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "port": {
+              "description": "A port's.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "edge": {
+              "description": "An edge light's.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "hazard": {
+              "description": "A hazard's.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 500
+            }
+          }
+        },
+        "mainPortCoast": {
+          "description": "Port Royal's stands within this of its coast, in m.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "edge": {
+          "title": "LightEdge",
+          "description": "The ring of lights on the approach to the edge.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "within",
+            "inside"
+          ],
+          "properties": {
+            "count": {
+              "description": "How many.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64
+            },
+            "within": {
+              "description": "Each within this of its bearing, in degrees.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 90
+            },
+            "inside": {
+              "description": "At least this far inside the lip, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5000
+            }
+          }
+        },
+        "hazards": {
+          "title": "LightHazards",
+          "description": "Which hazards are lit.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "beyond",
+            "merge"
+          ],
+          "properties": {
+            "beyond": {
+              "description": "Rocks and fringing reefs beyond this, in nautical miles.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "merge": {
+              "description": "One light for hazards within this of each other, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5000
+            }
+          }
+        },
+        "range": {
+          "title": "LightRange",
+          "description": "Nominal ranges, in nautical miles.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mainPort",
+            "port",
+            "edge",
+            "hazard",
+            "colour"
+          ],
+          "properties": {
+            "mainPort": {
+              "description": "Port Royal's.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "port": {
+              "description": "A port's.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "edge": {
+              "description": "An edge light's.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "hazard": {
+              "description": "A hazard's.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "colour": {
+              "description": "A red or green light's, as a share of a white one's.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "clearAir": {
+          "description": "The clear air's visibility, in nautical miles.",
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 100
+        },
+        "threshold": {
+          "description": "The least illuminance a light is seen by, in lux.",
+          "type": "number",
+          "minimum": 1e-09,
+          "maximum": 0.001
+        },
+        "drop": {
+          "description": "A light is dropped this far beyond its range, in m.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "mainPortCharacter": {
+          "description": "Port Royal's character, the same in every world: a notation of the list.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "colours": {
+          "title": "LightColours",
+          "description": "The lights' colours.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "white",
+            "red",
+            "green"
+          ],
+          "properties": {
+            "white": {
+              "description": "A colour, #rrggbb.",
+              "type": "string",
+              "pattern": "^#[0-9a-f]{6}$"
+            },
+            "red": {
+              "description": "A colour, #rrggbb.",
+              "type": "string",
+              "pattern": "^#[0-9a-f]{6}$"
+            },
+            "green": {
+              "description": "A colour, #rrggbb.",
+              "type": "string",
+              "pattern": "^#[0-9a-f]{6}$"
+            }
+          }
+        },
+        "characters": {
+          "description": "The characters a world's lights are given.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/LightCharacter"
+          }
+        },
+        "look": {
+          "title": "LightLook",
+          "description": "How lighthouses are drawn.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "daymarks",
+            "stone",
+            "iron",
+            "copper",
+            "glow",
+            "least",
+            "rise",
+            "beams",
+            "loom"
+          ],
+          "properties": {
+            "daymarks": {
+              "description": "The towers' daymarks.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/LightDaymark"
+              }
+            },
+            "stone": {
+              "description": "A colour, #rrggbb.",
+              "type": "string",
+              "pattern": "^#[0-9a-f]{6}$"
+            },
+            "iron": {
+              "description": "A colour, #rrggbb.",
+              "type": "string",
+              "pattern": "^#[0-9a-f]{6}$"
+            },
+            "copper": {
+              "description": "A colour, #rrggbb.",
+              "type": "string",
+              "pattern": "^#[0-9a-f]{6}$"
+            },
+            "glow": {
+              "description": "The glow's width at the lantern, in m.",
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 50
+            },
+            "least": {
+              "description": "The least it is drawn, in CSS pixels.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "rise": {
+              "description": "A flash rises and falls over this share of it.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.5
+            },
+            "beams": {
+              "description": "Beams are seen within this of the light, in m.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20000
+            },
+            "loom": {
+              "description": "The loom's strength beside the light's own.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            }
+          }
+        }
       }
     },
     "WorldDisk": {
@@ -1532,7 +2549,9 @@
         "counts",
         "openWater",
         "shoreline",
-        "reachDepth"
+        "reachDepth",
+        "lightsInRange",
+        "lightGrid"
       ],
       "properties": {
         "attempts": {
@@ -1577,6 +2596,18 @@
           "type": "number",
           "minimum": 0.1,
           "maximum": 40
+        },
+        "lightsInRange": {
+          "description": "At every point of water inside the mist band, at least this many lights in range.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "lightGrid": {
+          "description": "On a grid this fine, in m.",
+          "type": "number",
+          "minimum": 10,
+          "maximum": 5000
         }
       }
     },
@@ -1682,7 +2713,8 @@
         "neighbourShare",
         "prefixes",
         "calf",
-        "calfShare"
+        "calfShare",
+        "wreckReef"
       ],
       "properties": {
         "features": {
@@ -1723,6 +2755,12 @@
         },
         "calfShare": {
           "description": "The chance it is.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "wreckReef": {
+          "description": "A reef with a wreck on it takes her name by this chance.",
           "type": "number",
           "minimum": 0,
           "maximum": 1

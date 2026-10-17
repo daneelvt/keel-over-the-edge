@@ -2,10 +2,11 @@
 
 // Package owner is the owner's tools on keel's internal listener, which no
 // player ever reaches: the world page, a map of the whole disk with every
-// boat, the wind, the gusts, the current, the islands, the queue, the
-// weather and the world's clock; and its controls, which set and clear an
-// account's owner's flag, move a flagged account's boat anywhere on the
-// disk, and keep it unseen. The internal listener has no route to the
+// boat, the wind, the gusts, the current, the islands, the places and the
+// lighthouses, the queue, the weather and the world's clock; and its
+// controls, which set and clear an account's owner's flag, move a flagged
+// account's boat anywhere on the disk, keep it unseen, and begin a new
+// world. The internal listener has no route to the
 // internet: the owner reaches it from their own computer through the
 // tunnel to the machine, or a port forward on the local cluster.
 //
@@ -127,6 +128,16 @@ type Config struct {
 	Sessions Sessions
 	Edge     Edge
 
+	// PlaceKinds and Characters are the catalog's kinds of place and
+	// lights' characters, by their indices, as the page shows them.
+	PlaceKinds []PlaceKind
+	Characters []Character
+	// BeginWorld ends the active world, of the number given, and begins the
+	// next; Restart stops keel, to start again in it. Without them a new
+	// world cannot be begun from the page.
+	BeginWorld func(ctx context.Context, number int) (store.World, error)
+	Restart    func()
+
 	// Page is the page's built files, or nil: the routes answer without it.
 	Page *api.Page
 
@@ -146,6 +157,7 @@ type Owner struct {
 	// current is the current's grid, once per world.
 	current []byte
 	islands []byte
+	places  []byte
 }
 
 // Paths are the owner's tools' routes, for the tests that the public
@@ -154,7 +166,7 @@ var Paths = []string{
 	"/owner/", "/owner/index.html", "/owner/assets/x.js",
 	"/owner/api/world.json", "/owner/api/gusts.bin", "/owner/api/islands.json", "/owner/api/current.json",
 	"/owner/api/land.png", "/owner/api/coasts.svg", "/owner/api/island/0.svg", "/owner/api/point",
-	"/owner/api/flag", "/owner/api/place", "/owner/api/unseen",
+	"/owner/api/flag", "/owner/api/place", "/owner/api/unseen", "/owner/api/places.json", "/owner/api/world",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -174,6 +186,7 @@ func New(cfg Config) *Owner {
 	o.land.init(&o.cfg)
 	o.current = currentGrid(&o.cfg)
 	o.islands = islandsList(&o.cfg)
+	o.places = placesList(&o.cfg)
 	return o
 }
 
@@ -216,6 +229,7 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/world.json", o.serveView(func(v *view) []byte { return v.world }, "application/json"))
 	mux.HandleFunc("GET /owner/api/gusts.bin", o.serveView(func(v *view) []byte { return v.gusts }, "application/octet-stream"))
 	mux.HandleFunc("GET /owner/api/islands.json", o.serveFixed(func() []byte { return o.islands }, "application/json"))
+	mux.HandleFunc("GET /owner/api/places.json", o.serveFixed(func() []byte { return o.places }, "application/json"))
 	mux.HandleFunc("GET /owner/api/current.json", o.serveFixed(func() []byte { return o.current }, "application/json"))
 	mux.HandleFunc("GET /owner/api/land.png", o.land.serve(landPNG))
 	mux.HandleFunc("GET /owner/api/coasts.svg", o.land.serve(coastsSVG))
@@ -224,6 +238,7 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
 	mux.HandleFunc("POST /owner/api/place", o.place)
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)
+	mux.HandleFunc("POST /owner/api/world", o.newWorld)
 	var refused func()
 	if m := o.cfg.Metrics; m != nil {
 		c := m.OwnerRefused.WithLabelValues("request")

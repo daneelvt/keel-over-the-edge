@@ -3,9 +3,10 @@
 // Command worldgen-preview draws the world of a seed as a chart to review:
 // land by height and the sea by depth, coasts, every island's name, the
 // main port, the start area, the calm water's ring, the mist band's and the
-// edge's, and a scale; and a page around it with the validator's rules,
-// every island, and layers for each sea area's fetch, the land's shelter
-// and the surfaces.
+// edge's, the places and the lighthouses with their names and characters,
+// and a scale; and a page around it with the validator's rules, every
+// island, place and light, and layers for the lights' ranges, each sea
+// area's fetch, the land's shelter and the surfaces.
 //
 //	go run ./tools/worldgen-preview -seed S            chart.svg and index.html for seed S
 //	go run ./tools/worldgen-preview -bundle FILE       the same for a bundle keel worldgen -out wrote
@@ -61,9 +62,14 @@ func run(seed uint64, bundle string, seeds int, from uint64, isl int, out string
 		return err
 	}
 	cc := &chartConfig{
-		calm: cat.World.MainPort.Calm * 1852,
-		mist: cat.World.Disk.Mist * 1852,
-		disk: cat.World.Disk.Radius,
+		calm:  cat.World.MainPort.Calm * 1852,
+		mist:  cat.World.Disk.Mist * 1852,
+		disk:  cat.World.Disk.Radius,
+		marks: map[string]string{},
+		sites: map[string]string{},
+	}
+	for _, k := range cat.World.Places.Kinds {
+		cc.marks[string(k.ID)], cc.sites[string(k.ID)] = k.Mark, string(k.Site)
 	}
 	write := func(name string, data []byte) error {
 		path := filepath.Join(out, name)

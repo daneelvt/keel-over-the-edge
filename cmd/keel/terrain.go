@@ -186,12 +186,31 @@ func storedBundle(b *worldgen.Bundle, world [16]byte, took time.Duration) (*stor
 	for _, is := range b.Islands {
 		sb.Places = append(sb.Places, store.Place{
 			Number: int(is.Number), Kind: store.PlaceIsland, Name: is.Name, Biome: is.Biome, Size: is.Size,
-			X: is.X, Y: is.Y, Area: is.Area, Highest: is.Highest,
+			X: is.X, Y: is.Y, Area: is.Area, Highest: is.Highest, Island: -1,
 		})
 	}
 	for _, g := range b.Groups {
 		sb.Places = append(sb.Places, store.Place{
-			Number: len(b.Islands) + int(g.Number), Kind: store.PlaceGroup, Name: g.Name, Biome: g.Biome, X: g.X, Y: g.Y,
+			Number: len(b.Islands) + int(g.Number), Kind: store.PlaceGroup, Name: g.Name, Biome: g.Biome, X: g.X, Y: g.Y, Island: -1,
+		})
+	}
+	for _, p := range b.Places {
+		details, err := json.Marshal(p.Details)
+		if err != nil {
+			return nil, err
+		}
+		biome := ""
+		if p.Island >= 0 && int(p.Island) < len(b.Islands) {
+			biome = b.Islands[p.Island].Biome
+		}
+		sb.Places = append(sb.Places, store.Place{
+			Number: int(p.Number), Kind: p.Kind, Name: p.Name, Biome: biome, X: p.X, Y: p.Y, Island: int(p.Island), Details: details,
+		})
+	}
+	for _, l := range b.Lights {
+		sb.Lights = append(sb.Lights, store.Light{
+			Number: int(l.Number), Place: int(l.Place), Role: l.Role, Character: l.Notation, Phase: l.Phase,
+			Range: l.Range, Focal: l.Focal, Tower: l.Tower, Daymark: int(l.Daymark),
 		})
 	}
 	return sb, nil

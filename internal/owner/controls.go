@@ -15,6 +15,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
 // The controls: each a POST of a JSON body, each logged with the account,
@@ -32,9 +33,9 @@ type FlagRequest struct {
 
 // PlaceRequest moves a flagged account's boat, at rest: to a point (East
 // and North, m), to the start, to an island's approach (Island, its
-// number), or under its free camera (Camera). Heading is in degrees,
-// clockwise from north; without it the boat keeps its own, or at an
-// island faces it.
+// number), to a place's (Place, its number), or under its free camera
+// (Camera). Heading is in degrees, clockwise from north; without it the
+// boat keeps its own, or at an island or a place faces it.
 type PlaceRequest struct {
 	Boat    uint64   `json:"boat"`
 	East    *float64 `json:"east,omitempty"`
@@ -42,6 +43,7 @@ type PlaceRequest struct {
 	Heading *float64 `json:"heading,omitempty"`
 	Start   bool     `json:"start,omitempty"`
 	Island  *int     `json:"island,omitempty"`
+	Place   *int     `json:"place,omitempty"`
 	Camera  bool     `json:"camera,omitempty"`
 }
 
@@ -271,6 +273,29 @@ func (o *Owner) place(w http.ResponseWriter, r *http.Request) {
 		}
 		x, y = ax, ay
 		heading = math.Atan2(is.X-x, is.Y-y)
+	case req.Place != nil:
+		b := o.cfg.Bundle
+		var p *worldgen.Place
+		if b != nil {
+			for i := range b.Places {
+				if int(b.Places[i].Number) == *req.Place {
+					p = &b.Places[i]
+				}
+			}
+		}
+		if p == nil {
+			o.refuse(w, "place", http.StatusBadRequest, "no such place")
+			return
+		}
+		ax, ay, found := placeApproach(b.Ground, p.X, p.Y, o.cfg.Rules.Approach)
+		if !found {
+			o.refuse(w, "place", http.StatusConflict, "the place has no approach")
+			return
+		}
+		x, y = ax, ay
+		if math.Hypot(p.X-x, p.Y-y) > 1 {
+			heading = math.Atan2(p.X-x, p.Y-y)
+		}
 	case req.Camera:
 		ex, ey, roaming := o.cfg.Edge.Eye(account)
 		if !roaming {
@@ -281,7 +306,7 @@ func (o *Owner) place(w http.ResponseWriter, r *http.Request) {
 	case req.East != nil && req.North != nil:
 		x, y = *req.East, *req.North
 	default:
-		o.refuse(w, "place", http.StatusBadRequest, "east and north, start, island or camera is required")
+		o.refuse(w, "place", http.StatusBadRequest, "east and north, start, island, place or camera is required")
 		return
 	}
 	if req.Heading != nil {
