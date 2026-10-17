@@ -666,7 +666,7 @@ func TestPlaceRoute(t *testing.T) {
 		if code := post("east=10&north=20"); code != http.StatusConflict {
 			t.Fatalf("with no player: %d", code)
 		}
-		for _, q := range []string{"east=x&north=1", "north=1", "east=1&north=1&heading=y", "east=1e9&north=0", "east=1&north=1&account=zz"} {
+		for _, q := range []string{"east=x&north=1", "north=1", "east=1&north=1&heading=y", "east=1e9&north=0", "east=1&north=1&account=zz", "east=1&north=1&boat=x", "east=1&north=1&boat=0"} {
 			if code := post(q); code != http.StatusBadRequest {
 				t.Errorf("%s: %d", q, code)
 			}
@@ -675,6 +675,12 @@ func TestPlaceRoute(t *testing.T) {
 		time.Sleep(2 * time.Second)
 		if code := post("east=-1234.5&north=678&heading=90"); code != http.StatusOK {
 			t.Fatalf("placing: %d", code)
+		}
+		if code := post("east=1&north=1&boat=7"); code != http.StatusConflict {
+			t.Fatalf("placing a boat not at sea: %d", code)
+		}
+		if code := post("east=-1234.5&north=678&heading=90&boat=1"); code != http.StatusOK {
+			t.Fatalf("placing boat 1: %d", code)
 		}
 		s.stop(t)
 		if !strings.Contains(s.logs.String(), `"msg":"a boat placed by hand","build":"dev","boat":1,"east":-1234.5,"north":678,"heading":90`) {

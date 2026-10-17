@@ -1,0 +1,11 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The falls: a low band of noise, the roar of water pouring over the lip, heard from reach metres away. The lip is kilometres long, a line source: its level falls 3 dB each time the distance doubles, from most at near metres. The air takes the highs over distance (absorption, in dB per km, at the frequencies given, at 20 °C and 70% humidity), so far off the falls are a rumble and near them a roar with a hiss. Louder while the boat falls. Distances in metres, frequencies in Hz, levels as gains.",
+  "centre": 140,
+  "q": 0.5,
+  "near": 10,
+  "reach": 1000,
+  "level": { "most": 0.6, "falling": 0.8 },
+  "absorption": { "at": [1000, 2000, 4000, 8000], "dbPerKm": [5, 10, 30, 100] },
+  "cutoff": { "least": 300, "most": 12000 }
+}

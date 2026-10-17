@@ -50,6 +50,16 @@ weather:
     # The wind's direction differs from one side of the disk to the other
     # along an axis that turns once in this many hours, drawn per spell.
     acrossTurn: [4, 8]
+    # The lip of the falls, where the disk ends: world.disk.radius in
+    # nautical miles, which the catalog's check holds it to.
+    edge: 4.5
+    # The falls draw the air toward the lip: from nothing at fallDraftFrom
+    # to fallDraft at the lip, linearly, blowing toward the lip. It is the
+    # falls' and not the weather's, so it blows in a steady spell too, and
+    # the wind that raises the sea leaves it out: over the band's few hundred
+    # metres of fetch it would raise nothing.
+    fallDraftFrom: 4.2 # nautical miles: the mist band
+    fallDraft: 4 # knots at the lip
 
   # Gusts and lulls: gradient noise in three octaves, each with cells and a
   # life half its predecessor's, carried downwind as one body. Sailors find
@@ -65,6 +75,19 @@ weather:
     gustSpeed: 0.9 # the field travels at this share of a spell's wind at mid-disk
     gustVeer: 8 # degrees: the strongest gust veers by this, the deepest lull backs by half
     change: 10 # minutes: one spell gives way to the next over this
+
+  # The water's own motion: a slow circulation round the disk, its way
+  # drawn per world, and the drain toward the falls, running faster toward
+  # the lip. Each is linear between its points, nothing before the first and
+  # its last value beyond the last; both fall off in water shallower than
+  # shallow, in proportion to its depth, and are nothing over land. The
+  # refuge's water, with every start place in it, is still.
+  current:
+    circulationAt: [1, 1.4, 3.5] # nautical miles
+    circulation: [0, 0.2, 0.5] # knots at those points
+    drainAt: [3.5, 4.2, 4.5] # nautical miles: the last is the lip
+    drain: [0, 0.6, 2] # knots at those points
+    shallow: 3 # m
 
   # The beginners' ring round a gust heading for the boat, drawn by the
   # client from the gust field: each patch of a gust factor at least

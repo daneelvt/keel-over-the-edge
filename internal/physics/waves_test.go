@@ -274,7 +274,8 @@ func TestNoSeaNoChange(t *testing.T) {
 			if s.Heave != 0 || s.HeaveRate != 0 || s.Pitch != 0 || s.PitchRate != 0 {
 				t.Fatalf("%s, step %d: the hull moved in flat water: %+v", sc.Name, i, s)
 			}
-			if o.WaveHeight != 0 || o.WaveSlopeAhead != 0 || o.WaveSlopeAcross != 0 || o.SpeedThroughWater != o.SpeedOverGround {
+			still := e.CurrentEast == 0 && e.CurrentNorth == 0
+			if o.WaveHeight != 0 || o.WaveSlopeAhead != 0 || o.WaveSlopeAcross != 0 || still && o.SpeedThroughWater != o.SpeedOverGround {
 				t.Fatalf("%s, step %d: waves in flat water: %+v", sc.Name, i, o)
 			}
 		}

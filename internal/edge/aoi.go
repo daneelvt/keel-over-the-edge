@@ -131,6 +131,9 @@ func (a *aoi) find(f *bus.Frame, own int32, base, next *connView, id uint64) (en
 			continue
 		}
 		protocol.Quantise(&f.State[s], f.Kind[s], f.Sail[s], !near, &next.view.Boats[vs])
+		if f.Voyage[s].Falling() {
+			next.view.Boats[vs].Flags |= protocol.Falling
+		}
 		sample |= 1 << vs
 	}
 	for m := next.view.Used ^ ^uint64(0); m != 0; m &= m - 1 {

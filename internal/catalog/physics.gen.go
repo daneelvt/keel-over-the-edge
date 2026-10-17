@@ -170,6 +170,9 @@ func WeatherParams(c *Catalog) physics.WeatherParams {
 	p.RimGusts = float64(c.Weather.Disk.RimGusts)
 	p.RimGustsFrom = float64(c.Weather.Disk.RimGustsFrom)
 	copy(p.AcrossTurn[:], c.Weather.Disk.AcrossTurn)
+	p.Edge = float64(c.Weather.Disk.Edge)
+	p.FallDraftFrom = float64(c.Weather.Disk.FallDraftFrom)
+	p.FallDraft = float64(c.Weather.Disk.FallDraft)
 	p.GustAlong = float64(c.Weather.Gusts.GustAlong)
 	p.GustAcross = float64(c.Weather.Gusts.GustAcross)
 	p.GustLife = float64(c.Weather.Gusts.GustLife)
@@ -179,6 +182,11 @@ func WeatherParams(c *Catalog) physics.WeatherParams {
 	p.WaveTimeConstant = float64(c.Weather.WaveWind.WaveTimeConstant)
 	p.WaveSample = float64(c.Weather.WaveWind.WaveSample)
 	p.WaveSamples = float64(c.Weather.WaveWind.WaveSamples)
+	copy(p.CirculationAt[:], c.Weather.Current.CirculationAt)
+	copy(p.Circulation[:], c.Weather.Current.Circulation)
+	copy(p.DrainAt[:], c.Weather.Current.DrainAt)
+	copy(p.Drain[:], c.Weather.Current.Drain)
+	p.Shallow = float64(c.Weather.Current.Shallow)
 	return p
 }
 

@@ -19,7 +19,12 @@ func (b *Prepared) foilLoads(f *foil, m *motion, sinAngle, cosAngle, inflow, dow
 	}
 	pf := b.flow(m, f.x, 0, f.z, 0, 0, false)
 	pf.x *= inflow
-	pf.y += float64(float64(downwash*m.v) * m.cosHeel)
+	// Leeway is the boat's sideways motion through the water.
+	sway := m.v
+	if m.current {
+		sway -= m.currentY
+	}
+	pf.y += float64(float64(downwash*sway) * m.cosHeel)
 	// The chord runs aft from the leading edge.
 	a, side, sinA, cosA := attack(&pf, -cosAngle, sinAngle)
 	cl, cd := b.foilCoefficients(f, a, sinA, cosA)

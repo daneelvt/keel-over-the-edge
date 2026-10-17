@@ -81,6 +81,12 @@ type Records struct {
 	Groups    []Group         `json:"groups"`
 	Fetch     []physics.Fetch `json:"fetch"` // each sea area's, row by row from the south-west
 	Start     Start           `json:"start"`
+	// Circulation is the way the world's water circulates round the disk:
+	// 1 clockwise seen from above, −1 the other way. It is drawn from the
+	// seed of the attempt made, and left out of the digest, so that a
+	// bundle stored before it was kept has the same digest and is given
+	// it from the same draw when loaded.
+	Circulation int `json:"circulation,omitempty"`
 }
 
 // Format is the bundle's format: its records' and chunks' encoding.
@@ -189,6 +195,7 @@ func (c *config) generate(seed uint64) *Bundle {
 	b.Shelter = c.shelterOf(b.Ground)
 	lap("shelter")
 	b.Start = c.startOf(b.Ground, islands[0])
+	b.Circulation = circulationOf(seed)
 	lap("start")
 	islandNames := c.nameIslands(seed, islands)
 	groupNames := c.nameGroups(seed, groups, islandNames)
@@ -230,7 +237,9 @@ func (c *config) generate(seed uint64) *Bundle {
 // shelter, which neither the report nor the clock enter.
 func (b *Bundle) digest() [32]byte {
 	h := sha256.New()
-	rec, err := json.Marshal(b.Records)
+	records := b.Records
+	records.Circulation = 0
+	rec, err := json.Marshal(records)
 	if err != nil {
 		panic(err) // the records are plain data
 	}
@@ -292,7 +301,7 @@ func (b *Bundle) Generated() time.Duration {
 // the terrain, which have no time to make a world.
 func Empty(seed uint64) *Bundle {
 	b := &Bundle{
-		Records: Records{Format: Format, Generator: Version, Seed: seed, Made: seed, Attempts: 1},
+		Records: Records{Format: Format, Generator: Version, Seed: seed, Made: seed, Attempts: 1, Circulation: circulationOf(seed)},
 		Ground:  new(physics.Ground),
 		Shelter: new(physics.Shelter),
 	}

@@ -4,7 +4,8 @@
 // buffer of noise feeds five voices: the wind (a band-pass), the rigging's
 // song (a narrow band-pass at the Aeolian tone), the flogging cloth (a band
 // beaten by a flap), the water on the hull (a low-pass, with the bow
-// wave's hiss), and the sea about the boat (a wide, low band). The frame loop sets their parameters at most every 50 ms,
+// wave's hiss), the sea about the boat (a wide, low band), and the falls (a
+// low band through a low-pass, panned toward the lip). The frame loop sets their parameters at most every 50 ms,
 // each gliding to its target with setTargetAtTime. A bump's knock is played
 // once, from the same noise and a tone, and let go when it has died away.
 //
@@ -45,6 +46,9 @@ interface Graph {
   hiss: GainNode;
   seaBand: BiquadFilterNode;
   sea: GainNode;
+  fallsLow: BiquadFilterNode;
+  falls: GainNode;
+  fallsPan: StereoPannerNode;
 }
 
 /** A white-noise buffer, from a fixed sequence so every page sounds alike. */
@@ -111,6 +115,17 @@ function build(ctx: AudioContext, r: Recipes): Graph {
 
   const seaBand = band('bandpass', r.sea.centre.atRest, r.sea.q);
   const sea = voice(seaBand);
+  // The falls: their band, through a low-pass the distance closes, panned.
+  const fallsBand = band('bandpass', r.falls.centre, r.falls.q);
+  const fallsLow = band('lowpass', r.falls.cutoff.most, 0.7);
+  const falls = ctx.createGain();
+  falls.gain.value = 0;
+  const fallsPan = ctx.createStereoPanner();
+  source.connect(fallsBand);
+  fallsBand.connect(fallsLow);
+  fallsLow.connect(falls);
+  falls.connect(fallsPan);
+  fallsPan.connect(master);
 
   source.start();
   flap.start();
@@ -129,6 +144,9 @@ function build(ctx: AudioContext, r: Recipes): Graph {
     hiss,
     seaBand,
     sea,
+    fallsLow,
+    falls,
+    fallsPan,
   };
 }
 
@@ -226,6 +244,9 @@ export class SoundEngine {
     g.hiss.gain.setTargetAtTime(t.hissLevel, at, GLIDE);
     g.seaBand.frequency.setTargetAtTime(t.seaCentre, at, GLIDE);
     g.sea.gain.setTargetAtTime(t.seaLevel, at, GLIDE);
+    g.fallsLow.frequency.setTargetAtTime(t.fallsCutoff, at, GLIDE);
+    g.falls.gain.setTargetAtTime(t.fallsLevel, at, GLIDE);
+    g.fallsPan.pan.setTargetAtTime(t.fallsPan, at, GLIDE);
   }
 
   /** How many knocks were played (tests). */

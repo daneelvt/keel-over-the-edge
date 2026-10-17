@@ -27,6 +27,7 @@ var windGroups = []struct{ def, name string }{
 	{"WeatherDisk", "disk"},
 	{"WeatherGusts", "gusts"},
 	{"WeatherWaveWind", "waveWind"},
+	{"WeatherCurrent", "current"},
 }
 
 const regimeDef = "RegimeWind"
@@ -110,6 +111,31 @@ func checkWeather(doc map[string]any) error {
 	ordered("weather.disk", "rimGustsFrom", "rim", disk)
 	if lo, hi := pair(disk["acrossTurn"]); !(lo <= hi) {
 		bad("weather.disk.acrossTurn: %v is not from low to high", disk["acrossTurn"])
+	}
+
+	// The edge is the world's: its radius and where its mist band begins.
+	world, _ := doc["world"].(map[string]any)
+	worldDisk, _ := world["disk"].(map[string]any)
+	edge := num(disk["edge"])
+	if radius := num(worldDisk["radius"]); math.Abs(edge*1852-radius) > 1e-6 {
+		bad("weather.disk.edge: %v nautical miles is not world.disk.radius, %v m", disk["edge"], worldDisk["radius"])
+	}
+	if mist := num(worldDisk["mist"]); num(disk["rim"]) != mist || num(disk["fallDraftFrom"]) != mist {
+		bad("weather.disk: rim (%v) and fallDraftFrom (%v) must be world.disk.mist, %v", disk["rim"], disk["fallDraftFrom"], worldDisk["mist"])
+	}
+	ordered("weather.disk", "fallDraftFrom", "edge", disk)
+	current, _ := w["current"].(map[string]any)
+	for _, name := range []string{"circulationAt", "drainAt"} {
+		a, _ := current[name].([]any)
+		for i := 1; i < len(a); i++ {
+			if !(num(a[i-1]) < num(a[i])) {
+				bad("weather.current.%s: %v does not rise", name, current[name])
+				break
+			}
+		}
+	}
+	if a, _ := current["drainAt"].([]any); len(a) == 3 && num(a[2]) != edge {
+		bad("weather.current.drainAt: its last point (%v) must be the edge, %v", a[2], disk["edge"])
 	}
 
 	regimes, _ := w["regimes"].([]any)

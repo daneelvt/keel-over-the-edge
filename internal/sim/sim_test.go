@@ -130,14 +130,16 @@ func steadyEnv(w bus.Weather) physics.Env {
 // defaultEnv is the wind of a world given no timeline.
 var defaultEnv = steadyEnv(steadyOf(DefaultSpell))
 
-// windAt is the wind a boat at (x, y) sails in at f's tick, in w's
+// windAt is the wind and the current a boat at (x, y) sails in at f's tick, in w's
 // weather.
 func windAt(w *World, f *bus.Frame, x, y float64) physics.Env {
 	wx := physics.Weather{Prepared: w.timeline.Prepared()}
 	wx.Set(f.SpellsInPlay())
 	var at physics.WeatherTick
 	physics.WeatherAt(&wx, &at, float64(f.Tick))
-	return physics.WindAt(&at, x, y, nil)
+	e := physics.WindAt(&at, x, y, nil)
+	e.CurrentEast, e.CurrentNorth = physics.CurrentAt(w.timeline.Prepared(), w.circulation, x, y, w.ground)
+	return e
 }
 
 // acct is a test's account n.

@@ -264,8 +264,8 @@ func (p *Persist) Err() error {
 }
 
 // lasting reports whether a frame's tick decided anything lasting: an
-// event, or a bump of its own tick (a frame keeps the bumps of the last
-// second).
+// event, a bump of its own tick (a frame keeps the bumps of the last
+// second), or a boat at the edge.
 func lasting(f *bus.Frame) bool {
 	for i := range f.Events {
 		if kindOf(&f.Events[i]) != "" {
@@ -277,7 +277,7 @@ func lasting(f *bus.Frame) bool {
 			return true
 		}
 	}
-	return false
+	return len(f.Edges) > 0
 }
 
 // kindOf is the kind of lasting event a tick's event is, or "".
@@ -305,6 +305,14 @@ func appendEvents(dst []store.Event, f *bus.Frame) []store.Event {
 		if b := &f.Bumps[i]; b.Tick == f.Tick {
 			dst = append(dst, bumpEvent(b))
 		}
+	}
+	for i := range f.Edges {
+		e := &f.Edges[i]
+		kind := store.EventOver
+		if e.Kind == bus.EdgeApproach {
+			kind = store.EventApproach
+		}
+		dst = append(dst, store.Event{Tick: e.Tick, Kind: kind, Account: e.Owner, Boat: e.Boat, X: e.X, Y: e.Y, Distance: e.Distance})
 	}
 	return dst
 }

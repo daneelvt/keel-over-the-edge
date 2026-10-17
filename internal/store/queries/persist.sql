@@ -19,8 +19,8 @@ SELECT epoch, holder, since FROM sim_lease;
 SELECT epoch FROM sim_lease FOR SHARE;
 
 -- name: InsertEvents :copyfrom
-INSERT INTO event (world_id, tick, kind, account_id, boat, other_account_id, other_boat, article, fault, x, y)
-VALUES (@world_id, @tick, @kind, @account_id, @boat, @other_account_id, @other_boat, @article, @fault, @x, @y);
+INSERT INTO event (world_id, tick, kind, account_id, boat, other_account_id, other_boat, article, fault, x, y, distance)
+VALUES (@world_id, @tick, @kind, @account_id, @boat, @other_account_id, @other_boat, @article, @fault, @x, @y, @distance);
 
 -- name: UpsertCheckpoint :exec
 INSERT INTO checkpoint (world_id, tick, format, build, catalog, layout, epoch, boats, data, written_at)

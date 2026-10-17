@@ -49,6 +49,9 @@ type Frame struct {
 	Sail     []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
 	// Course is per slot what the Articles keep of a boat between ticks.
 	Course []physics.Course
+	// Voyage is per slot what the edge keeps of a boat's voyage: whether
+	// it is falling, and its approaches to the lip.
+	Voyage []Voyage
 	// Wind and Wake are derived from each boat's state: the true wind at
 	// its place at the frame's tick, before any shadow, and the wake its
 	// sail leaves for the next tick. They are in no snapshot or digest.
@@ -62,6 +65,11 @@ type Frame struct {
 	// encoder that skips a frame still finds every one. They are events,
 	// in no snapshot or digest.
 	Bumps []Bump
+
+	// Edges are the boats this tick sent over the lip, and the approaches
+	// to it recorded as voyages ended, in the order of their slots. They
+	// are events, in no snapshot or digest.
+	Edges []EdgeEvent
 
 	// Grid is the live boats by the grid cell they are in, built after
 	// the physics.
@@ -137,6 +145,45 @@ type Bump struct {
 	Article        uint8   // the Article that puts the fault there
 }
 
+// Voyage is what a boat's voyage keeps at the edge. A voyage runs from the
+// boat entering the water, by joining or starting again after going over,
+// to its leaving, its expiring or its going over. An approach begins as
+// the boat enters the mist band and ends as it leaves it again, survived,
+// or as the voyage ends: afloat, survived; over the lip, not.
+type Voyage struct {
+	// Over is the tick the boat went over the lip, 0 while afloat.
+	Over int64
+	// Approaching is true while an approach is under way; Least is its
+	// least distance inside the lip so far, m, and X and Y where that was.
+	Approaching bool
+	Least, X, Y float64
+	// Survived is true once an approach of the voyage has been survived;
+	// Best is the least distance of those, and BestX and BestY where.
+	Survived           bool
+	Best, BestX, BestY float64
+}
+
+// Falling reports whether the boat is over the lip, falling.
+func (v *Voyage) Falling() bool { return v.Over != 0 }
+
+// The kinds of EdgeEvent.
+const (
+	EdgeOver     = 1 // the boat went over the lip at X, Y
+	EdgeApproach = 2 // its voyage ended with Distance its closest survived approach, at X, Y
+)
+
+// EdgeEvent is a boat going over the lip, or the closest approach to it
+// that a voyage survived, as the voyage ends.
+type EdgeEvent struct {
+	Tick     int64
+	Kind     uint8 // EdgeOver or EdgeApproach
+	Slot     int32
+	Boat     uint64
+	Owner    Account
+	X, Y     float64 // m east and north
+	Distance float64 // the approach's distance inside the lip, m; 0 going over
+}
+
 // BumpTicks is how many ticks a frame keeps a bump: a second.
 const BumpTicks = 30
 
@@ -199,6 +246,8 @@ func NewFrame(capacity int) *Frame {
 		},
 		Sail:   make([]uint8, capacity),
 		Course: make([]physics.Course, capacity),
+		Voyage: make([]Voyage, capacity),
+		Edges:  make([]EdgeEvent, 0, 64),
 		Wind:   make([]physics.Env, capacity),
 		Wake:   make([]physics.Wake, capacity),
 		Pairs:  make([]Pair, 0, capacity),

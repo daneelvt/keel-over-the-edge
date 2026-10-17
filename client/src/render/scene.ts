@@ -9,9 +9,11 @@
 // asks the physics module where the sun, the moon and the stars stand from
 // the boat at that time, lights everything by the hour, and draws it.
 
-import { Vector3 } from 'three';
-import { exp, float, fog, length, positionView } from 'three/tsl';
+import { type Color, Vector3 } from 'three';
+import { exp, float, fog, length, max, mix, positionView } from 'three/tsl';
 import { catalog } from '../catalog';
+import { EdgeScene } from '../edge/edge';
+import { edgeLook, KOSCHMIEDER, mistAtVertex } from '../edge/mist';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
 import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
@@ -92,6 +94,10 @@ export class SeaScene {
   readonly origin = new FloatingOrigin();
   readonly ocean: Ocean;
   readonly sky: Sky;
+  /** The edge of the world: the mist band, the lip and the falls. */
+  readonly edge: EdgeScene;
+  /** The screen's fade to the mist, going over the lip. */
+  readonly fade: HTMLDivElement;
   readonly stats = new Stats();
   readonly camera = new ChaseCamera();
   /** The catalog's first boat, the one a new sailor starts in. */
@@ -205,6 +211,17 @@ export class SeaScene {
     this.sky = new Sky(scene);
     this.shadows = new Shadows(this.sky.light);
     this.ocean = new Ocean(scene);
+    this.edge = new EdgeScene(scene, this.ocean.uniforms, {
+      radius: catalog.world.disk.radius,
+      mist: catalog.world.disk.mist,
+      edge: catalog.world.edge,
+      drainAt: catalog.weather.current.drainAt,
+      drain: catalog.weather.current.drain,
+    });
+    this.edge.on = this.#query.get('edge') !== 'off';
+    this.fade = document.createElement('div');
+    this.fade.className = 'edge-fade';
+    container.append(this.fade);
     scene.add(this.sprayView.mesh);
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
@@ -218,11 +235,15 @@ export class SeaScene {
     this.stars.attachLabel(label);
     // Solid things fade toward the horizon's colour with distance, keeping
     // exp(−3.912 d / V) of their contrast at d metres: Koschmieder's law, V
-    // the visual range at a 2% threshold. The sea has its own blend to the
-    // sky at its edge.
+    // the visual range at a 2% threshold; and toward the mist's through the
+    // band at the edge of the world, by the mist along the ray. The sea has
+    // its own blend to the sky at its edge.
+    const clear = length(positionView).mul(KOSCHMIEDER).div(look.visualRange);
+    const mist = mistAtVertex();
+    const tau = clear.add(mist);
     scene.fogNode = fog(
-      toLinear(look.skyHorizon),
-      float(1).sub(exp(length(positionView).mul(-3.912).div(look.visualRange))),
+      mix(toLinear(look.skyHorizon), toLinear(edgeLook.colour), mist.div(max(tau, 1e-6))),
+      float(1).sub(exp(tau.negate())),
     );
   }
 
@@ -328,6 +349,39 @@ export class SeaScene {
     this.camera.place(v, this.pose.heading, this.pose.heave, this.#seaUnderBoat());
     this.#updateBoatScene();
     this.#placeCamera();
+  }
+
+  /** Holds the camera where it is, looking at the boat wherever it goes. */
+  holdCamera(): void {
+    const p = this.stage.camera.position;
+    this.camera.held = { x: p.x, y: p.y, z: p.z };
+  }
+
+  /** Lets the camera follow the boat again, behind it as it rests. */
+  releaseCamera(): void {
+    this.camera.held = null;
+    this.placeCamera(this.camera.rest);
+  }
+
+  /** Where the camera looks, as a bearing: radians clockwise from north. */
+  lookBearing(): number {
+    const e = this.stage.camera.matrixWorld.elements;
+    // The camera looks down its −z axis: east is the scene's x, north its −z.
+    return Math.atan2(-(e[8] ?? 0), e[10] ?? 1);
+  }
+
+  /** Fades the screen to the mist's colour by this much, 0 to 1. */
+  setFade(amount: number): void {
+    const f = this.fade;
+    if (amount <= 0) {
+      if (f.style.opacity !== '0') {
+        f.style.opacity = '0';
+      }
+      return;
+    }
+    const c = edgeLook.colour.value as Color;
+    f.style.backgroundColor = `rgb(${Math.round(255 * c.r)}, ${Math.round(255 * c.g)}, ${Math.round(255 * c.b)})`;
+    f.style.opacity = String(Math.min(amount, 1));
   }
 
   #hull(shape: HullShape): void {
@@ -645,6 +699,8 @@ export class SeaScene {
     });
     this.#readSky();
     this.sky.follow(camera.position, this.#v.set(bs.x, bs.y, bs.z));
+    const eye = this.origin.world;
+    this.edge.frame(this.origin, camera.position.x + eye.x, -camera.position.z + eye.y, this.time);
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
     const fs = this.fleetSource;
     if (this.fleet.loaded) {

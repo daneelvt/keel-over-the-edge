@@ -13,7 +13,12 @@
 // which the server says a second ahead (seas.ts), and in the wind at the
 // boat at that tick, computed from the spells of weather the server sends
 // (weather.ts) as the server computes it, so neither the waves nor the wind
-// cause a correction. The Go test client predicts the same way
+// cause a correction; the current there too, from the world's way round the
+// disk and the ground the module holds. A boat whose centre crosses the lip
+// is held there, unstepped, from the tick it crossed, as the server holds
+// it while it falls; a snapshot after the fall that does not say it is
+// falling is the boat back at the start, and the prediction starts again
+// from it. The Go test client predicts the same way
 // (internal/client/predict.go), and the tests replay its traces here.
 
 import type { BoatPhysics, Encounters, Weather } from '../catalog/types.gen';
@@ -130,6 +135,10 @@ export class Predictor implements BoatDriver {
   readonly sizes: number[] = [];
   /** How many steps pushed the boat off the ground. */
   pushes = 0;
+  /** The tick the boat went over the lip, 0 while it is afloat: held there, unstepped. */
+  over = 0;
+  /** How many times a snapshot has put the boat back at the start after going over. */
+  restarts = 0;
 
   /** The sea the boat is stepped in, from the server's SeaAreas. */
   readonly seas: Seas;
@@ -168,10 +177,16 @@ export class Predictor implements BoatDriver {
     return this.#physics.records;
   }
 
+  /** Sets the world's way round the disk, from the Welcome, for the current the boat is stepped in. */
+  setCirculation(way: number): void {
+    this.#physics.circulation(way);
+  }
+
   /** The boat at a snapshot's state, what was predicted forgotten. */
   reset(sn: OwnSnapshot): void {
     this.started = true;
     this.tick = sn.tick;
+    this.over = sn.over;
     this.#physics.records.state.set(sn.state);
     this.weather.read(sn.tick, sn.state[S.x] ?? 0, sn.state[S.y] ?? 0, this.wind);
     this.#ticks.fill(Number.NaN);
@@ -183,8 +198,8 @@ export class Predictor implements BoatDriver {
   }
 
   /**
-   * Steps the boat into tick, in the wind at its place and the sea of that
-   * tick, as the server does.
+   * Steps the boat into tick, in the wind and the current at its place and
+   * the sea of that tick, as the server does; a boat over the lip is held.
    */
   #stepModule(
     tick: number,
@@ -203,10 +218,16 @@ export class Predictor implements BoatDriver {
     c[RECORDS.control.target] = target;
     c[RECORDS.control.order] = order;
     c[RECORDS.control.way] = way;
+    if (this.over !== 0) {
+      return;
+    }
     this.weather.use(tick);
     this.wakes.use(tick);
     this.seas.use(tick);
     this.#physics.step();
+    if (this.#physics.over()) {
+      this.over = tick;
+    }
   }
 
   /** Steps the next tick with the controls' indices and the autopilot's control. */
@@ -274,17 +295,40 @@ export class Predictor implements BoatDriver {
       return o;
     }
     const i = sn.tick % RING;
-    if (!this.started || sn.tick > this.tick || this.#ticks[i] !== sn.tick) {
+    if (
+      !this.started ||
+      sn.tick > this.tick ||
+      this.#ticks[i] !== sn.tick ||
+      (this.over !== 0 && sn.over === 0 && sn.tick > this.over)
+    ) {
+      if (this.over !== 0 && sn.over === 0 && sn.tick > this.over) {
+        this.restarts++;
+      }
       this.reset(sn);
       o.reset = true;
       return o;
     }
+    const r = this.#physics.records;
+    if (sn.over !== 0) {
+      // The server's boat is falling: held where it went over.
+      if (this.over === sn.over && this.#same(this.tick % RING, sn.state)) {
+        return o;
+      }
+      this.#before.set(r.state);
+      this.over = sn.over;
+      r.state.set(sn.state);
+      for (let t = sn.tick; t <= this.tick; t++) {
+        this.#ring.set(sn.state, (t % RING) * N);
+      }
+      this.states.hold(sn.state);
+      return this.#corrected(o, r.state);
+    }
     if (this.#same(i, sn.state)) {
       return o;
     }
-    const r = this.#physics.records;
     this.#before.set(r.state);
     r.state.set(sn.state);
+    this.over = 0;
     this.#ring.set(sn.state, i * N);
     for (let t = sn.tick + 1; t <= this.tick; t++) {
       const j = t % RING;
@@ -306,10 +350,15 @@ export class Predictor implements BoatDriver {
     }
     this.states.current.set(r.state);
     this.out.set(r.out);
+    return this.#corrected(o, r.state);
+  }
+
+  /** Counts a correction from the state before it to s, and eases or snaps the drawn boat. */
+  #corrected(o: Outcome, s: Float64Array): Outcome {
     const b = this.#before;
-    const dx = (b[S.x] ?? 0) - (r.state[S.x] ?? 0);
-    const dy = (b[S.y] ?? 0) - (r.state[S.y] ?? 0);
-    const dh = wrapAngle((b[S.heading] ?? 0) - (r.state[S.heading] ?? 0));
+    const dx = (b[S.x] ?? 0) - (s[S.x] ?? 0);
+    const dy = (b[S.y] ?? 0) - (s[S.y] ?? 0);
+    const dh = wrapAngle((b[S.heading] ?? 0) - (s[S.heading] ?? 0));
     o.corrected = true;
     o.distance = Math.hypot(dx, dy);
     o.heading = Math.abs(dh);

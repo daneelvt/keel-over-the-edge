@@ -121,13 +121,19 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', asyn
 
 test('another device takes the boat, and Take over takes it back', async ({ page, browser }) => {
   // Two pages load the game, one while the other sails: on CI's software
-  // GPU that alone has taken most of the 90 s a test is given.
+  // GPU that alone has taken most of the 90 s a test is given. Small pages,
+  // as together.spec.ts's, so the second loads beside the first.
   test.setTimeout(180_000);
+  const small = { width: 320, height: 200 };
+  await page.setViewportSize(small);
   const context = page.context();
   await guest(context);
   await sail(page);
   const boat = (await net(page)).boat;
-  const other = await browser.newContext({ storageState: await context.storageState() });
+  const other = await browser.newContext({
+    storageState: await context.storageState(),
+    viewport: small,
+  });
   const second = await other.newPage();
   await sail(second);
   expect((await net(second)).boat).toBe(boat);

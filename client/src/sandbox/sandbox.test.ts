@@ -230,6 +230,7 @@ describe('the sandbox', () => {
       // Step 0 sails into the weather's tick.
       s.tick = weather.tick - 1;
       s.weather.set(weather.spells.map(spellOf));
+      s.setCirculation(weather.circulation ?? 0);
       s.setState(sc.state ?? {});
       let helm = sc.control?.helm ?? 0;
       let sheet = sc.control?.sheet ?? 0;

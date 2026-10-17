@@ -115,11 +115,15 @@ func account(n uint64) bus.Account {
 // in the queue, leaving, losing their connections and coming back besides,
 // developer commands and holds of admission now and then, and a tick
 // stalled at stall (if not zero) to force a skip.
+// liveEdge is the edge the live sessions' worlds have: five seconds'
+// fall, and approaches survived 20 m back out of the mist band.
+var liveEdge = &sim.Edge{Fall: 150, Clear: 20}
+
 func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall int64) live {
 	var out live
 	dir := t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
-		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit})
+		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit, Edge: liveEdge})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -260,7 +264,16 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 				case r < 12:
 					held = w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.Hold, Held: true}) == nil
 				case len(boats) > 0:
-					dev.TrySend(bus.Command{Op: bus.Place, Boat: boats[0].boat, State: physics.State{X: 100, Y: 100, Heading: 3}})
+					// Moved to open water, to the lip to go over, or into
+					// the mist band.
+					st := physics.State{X: 100, Y: 100, Heading: 3}
+					switch n % 3 {
+					case 1:
+						st = physics.State{X: 8331, Heading: math.Pi / 2, Surge: 3, SheetLimit: 0.6}
+					case 2:
+						st = physics.State{X: 8000, Heading: -math.Pi / 2, Surge: 3, SheetLimit: 0.6}
+					}
+					dev.TrySend(bus.Command{Op: bus.Place, Boat: boats[0].boat, State: st})
 				}
 			}
 		}()
@@ -293,7 +306,7 @@ func replayLog(t *testing.T, data []byte, workers int) (replay.Result, []byte) {
 		t.Fatal(err)
 	}
 	var end []byte
-	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: workers, At: func(fr *bus.Frame) {
+	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: workers, Edge: liveEdge, At: func(fr *bus.Frame) {
 		end = sim.AppendSnapshot(end[:0], fr)
 	}})
 	if err != nil {

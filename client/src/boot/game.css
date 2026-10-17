@@ -21,6 +21,14 @@ body {
   touch-action: none;
 }
 
+/* The mist the screen fades into going over the lip of the falls. */
+.stage .edge-fade {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* A named star's name, beside it, for a few seconds after a tap. */
 .stage .star-label {
   position: absolute;

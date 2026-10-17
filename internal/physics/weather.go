@@ -63,6 +63,18 @@ type WeatherPrepared struct {
 	acrossTurn [2]int32 // ticks
 	change     int32    // ticks
 
+	// The edge: the lip, its square, and the fall draft.
+	edge, edge2      float64 // m, m²
+	draftFrom, draft float64 // m, m/s at the lip
+	draftFrom2       float64 // m²
+	invDraftSpan     float64 // 1/m
+
+	// The current.
+	circulation, drain polyline
+	stillWithin2       float64 // m²: the water is still within this of the centre, squared
+	shallow            float64 // m
+	invShallow         float64 // 1/m
+
 	waveGrid    int32   // ticks between samples
 	waveSample  float64 // the same
 	waveSamples int32
@@ -90,6 +102,27 @@ func PrepareWeather(p *WeatherParams, w *WeatherPrepared) {
 	w.gustSpeed = p.GustSpeed
 	w.veer = float64(p.GustVeer * degree)
 	w.gustCells.prepare(p)
+	w.edge = float64(p.Edge * nauticalMile)
+	w.edge2 = float64(w.edge * w.edge)
+	w.draftFrom = float64(p.FallDraftFrom * nauticalMile)
+	w.draftFrom2 = float64(w.draftFrom * w.draftFrom)
+	w.draft = float64(p.FallDraft * knotSpeed)
+	w.invDraftSpan = 0
+	if span := w.edge - w.draftFrom; span > 0 {
+		w.invDraftSpan = 1 / span
+	}
+	w.circulation.prepare(&p.CirculationAt, &p.Circulation)
+	w.drain.prepare(&p.DrainAt, &p.Drain)
+	w.stillWithin2 = 0
+	if w.circulation.value[0] == 0 && w.drain.value[0] == 0 {
+		still := min2(w.circulation.at[0], w.drain.at[0])
+		w.stillWithin2 = float64(still * still)
+	}
+	w.shallow = p.Shallow
+	w.invShallow = 0
+	if p.Shallow > 0 {
+		w.invShallow = 1 / p.Shallow
+	}
 	w.acrossTurn = [2]int32{steps(p.AcrossTurn[0], hourTicks), steps(p.AcrossTurn[1], hourTicks)}
 	w.change = steps(p.Change, minuteTicks)
 
@@ -401,6 +434,9 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 			speed, from = float64(speed*f), wrapAngle(from+turn)
 		}
 		p.Speed, p.From, p.MeanSpeed, p.MeanFrom = speed, from, speed, from
+		if what != pointMean {
+			t.p.fallDraft(x, y, p)
+		}
 		return
 	}
 	w := t.p
@@ -465,6 +501,35 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 		p.Speed += float64(float64(refuge*limited) * (soften(v, w.windKnee, w.windSoft) - v))
 	}
 	p.From = wrapAngle(dir + float64(float64(w.veer*gust)*gusty))
+	w.fallDraft(x, y, p)
+}
+
+// fallDraft adds to the wind at (x, y), with and without its gusts, the
+// air the falls draw toward the lip: nothing inside the draft's start,
+// rising linearly to its strength at the lip, and no more beyond it. The
+// wind that raises the sea leaves it out.
+func (w *WeatherPrepared) fallDraft(x, y float64, p *WindPoint) {
+	r2 := float64(x*x) + float64(y*y)
+	if !(r2 > w.draftFrom2) || !(w.draft > 0) {
+		return
+	}
+	r := math.Sqrt(r2)
+	d := float64(w.draft * min2(float64((r-w.draftFrom)*w.invDraftSpan), 1))
+	// The draft's velocity, outward, per metre of (x, y).
+	k := d / r
+	ox, oy := float64(k*x), float64(k*y)
+	p.Speed, p.From = addWind(p.Speed, p.From, ox, oy)
+	p.MeanSpeed, p.MeanFrom = addWind(p.MeanSpeed, p.MeanFrom, ox, oy)
+}
+
+// addWind is a wind of speed coming from from with the air's velocity
+// (east, north) added to it: its speed and the direction it comes from.
+func addWind(speed, from, east, north float64) (float64, float64) {
+	sin, cos := SinCos(from)
+	// The air moves the other way from where the wind comes from.
+	ve := east - float64(speed*sin)
+	vn := north - float64(speed*cos)
+	return math.Sqrt(float64(ve*ve) + float64(vn*vn)), Atan2(-ve, -vn)
 }
 
 // mean is a spell's mean wind at (x, y): its direction, its speed with the

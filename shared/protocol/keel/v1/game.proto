@@ -270,6 +270,10 @@ message Welcome {
   // The world's land is sailed: boats run aground on it, and the wind and
   // the waves feel it. Without it the world is open sea, and no Chunks come.
   bool land = 8;
+  // The way the world's water circulates round the disk: 1 clockwise seen
+  // from above, -1 the other way, 0 none. The client works the current out
+  // from it, the drain and the ground, as the server does.
+  sint32 circulation = 9;
 }
 
 // Pong answers a Ping.

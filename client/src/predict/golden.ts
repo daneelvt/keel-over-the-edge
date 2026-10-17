@@ -39,6 +39,8 @@ export type TerrainLoader = (name: string) => Promise<Uint8Array>;
 export interface ScenarioWeather {
   tick: number;
   spells: RecordValues[];
+  /** The world's way round the disk for the current: 1, −1, or absent for none. */
+  circulation?: number;
 }
 
 /** The sea a scenario sails in: a window of areas, and the tick of step 0. */
@@ -137,6 +139,8 @@ export async function runScenario(
     physics.prepareWeather();
     physics.setSpells(weather.spells.map(spellOf));
   }
+  // windAt sets the current at the boat too, by the world's way.
+  physics.circulation(weather?.circulation ?? 0);
   setFields(physics, 'state', scenario.state);
   setFields(physics, 'control', scenario.control);
   setFields(physics, 'env', scenario.env);

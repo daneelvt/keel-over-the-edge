@@ -28,6 +28,8 @@ const (
 	EventReturned = "returned" // it left
 	EventExpired  = "expired"  // its grace ended
 	EventBump     = "bump"     // it touched another boat, after being apart
+	EventOver     = "over"     // it went over the lip of the falls
+	EventApproach = "approach" // its voyage ended with an approach to the lip survived
 )
 
 // Whose fault a bump was.
@@ -39,10 +41,12 @@ const (
 // Event is something the simulation decided that lasts. A bump's Account
 // and Boat are the boat at fault, or with no fault the first of the two;
 // the rest of it is the other boat, the Article that judged it, whether
-// anyone was at fault, and where they touched.
+// anyone was at fault, and where they touched. Going over is where the
+// boat crossed the lip; an approach is the voyage's least distance inside
+// the lip, and where.
 type Event struct {
 	Tick    int64
-	Kind    string // EventLaunched, EventReturned, EventExpired or EventBump
+	Kind    string // EventLaunched, EventReturned, EventExpired, EventBump, EventOver or EventApproach
 	Account [16]byte
 	Boat    uint64
 
@@ -51,6 +55,7 @@ type Event struct {
 	Article   string // as the Racing Rules of Sailing number the rule: "10", "16.1"
 	Fault     string // FaultAccount or FaultNone
 	X, Y      float64
+	Distance  float64 // an approach's, m
 }
 
 // Checkpoint is a world's whole state at a tick: the simulation's
@@ -147,6 +152,14 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 					r.Fault = pgtype.Text{String: e.Fault, Valid: true}
 					r.X = pgtype.Float8{Float64: e.X, Valid: true}
 					r.Y = pgtype.Float8{Float64: e.Y, Valid: true}
+				}
+				if e.Kind == EventOver || e.Kind == EventApproach {
+					r := &rows[i]
+					r.X = pgtype.Float8{Float64: e.X, Valid: true}
+					r.Y = pgtype.Float8{Float64: e.Y, Valid: true}
+				}
+				if e.Kind == EventApproach {
+					rows[i].Distance = pgtype.Float8{Float64: e.Distance, Valid: true}
 				}
 			}
 			if _, err := q.InsertEvents(ctx, rows); err != nil {

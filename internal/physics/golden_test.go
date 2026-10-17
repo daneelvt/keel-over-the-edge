@@ -71,6 +71,10 @@ type scenario struct {
 type scenarioWeather struct {
 	Tick   float64          `json:"tick"`
 	Spells []map[string]any `json:"spells"`
+	// Circulation is the world's way round the disk for the current: 1
+	// clockwise, −1 the other way, 0 (or absent) none. The drain runs
+	// whatever it is.
+	Circulation float64 `json:"circulation,omitempty"`
 }
 
 // scenarioSea is the sea a scenario sails in: a window of areas, each with
@@ -396,6 +400,7 @@ func runScenario(seaParams map[string]float64, params map[string]any, wind map[s
 		}
 		if sky != nil {
 			e = sky.env(i, &s, shelter)
+			e.CurrentEast, e.CurrentNorth = CurrentAt(sky.w.Prepared, sc.Weather.Circulation, s.X, s.Y, ground)
 		}
 		Step(&s, &c, &e, at, ground, &b, &o)
 		values := fields(&s)

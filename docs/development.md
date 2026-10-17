@@ -750,9 +750,10 @@ The behaviour tests say what must stay true
 (`go test ./internal/physics -run 'BoatsBump|DirtyAir|Shadow|Contact|Articles' -v`):
 boats bump at every crossing angle and part, the wake follows the apparent
 wind, and dirty air costs a boat a share of its way to windward (logged in
-three winds). The snapshot is version 9 (8 with the pilot word, 9 with the
-time aground): a change to the courses, the pairs or the control words is a
-new version, and a reset at the deploy.
+three winds). The snapshot is version 10 (8 with the pilot word, 9 with the
+time aground, 10 with each boat's voyage at the edge): a change to the
+courses, the pairs or the control words is a new version, and a reset at the
+deploy.
 
 ## The autopilot
 
@@ -1239,7 +1240,7 @@ module and turns on `groundUse` and `shelterUse`; the **nine slots** follow
 the boat's chunk and its neighbours, written from the grids held. A chunk
 not held is deep water and open wind, and the server corrects whatever
 differs. The snapshot carries `GroundTimer` in a ground block while it is
-not zero (layout 7), so the phone pushes off on the server's tick:
+not zero (layout 7 on), so the phone pushes off on the server's tick:
 `internal/edge/edgetest` sails a boat onto a beach and off it with no
 correction. On the phone: a **scrape** as the hull first runs onto a soft
 bottom, a **knock** against land or rock (`art/sound/scrape.json`,
@@ -1265,6 +1266,159 @@ first player's boat, or the account's given as `account=`, to a point at
 rest. The developer panel lists the chunks handed, held, built and drawn,
 fetched and cached, and their times. `client/e2e/land.spec.ts` runs on seed
 1's world, which `pr.render` makes in the job.
+
+## The edge
+
+The disk ends at the lip of the falls, `world.disk.radius` (8,334 m, 4.5
+nautical miles). The outer waters run toward it: a current carries boats
+round the disk and out over the lip, the falls draw the air toward it, a
+mist band thickens over the last 556 m so the lip shows only close by, and
+the sea pours over it. A boat whose centre crosses the lip goes over: it
+falls for five seconds, seen by everyone near, then starts again at the
+start.
+
+### The current and the falls' draft
+
+`physics.CurrentAt` (`internal/physics/current.go`): a **circulation** round
+the disk, its way drawn per world (1 clockwise seen from above, −1 the
+other), nothing within 1 NM, 0.2 kn at 1.4 NM and 0.5 kn from 3.5 NM; and
+the **drain** out toward the lip, from 3.5 NM, 0.6 kn at 4.2 NM and 2 kn at
+the lip; each linear between its points (`weather.current` in
+`shared/catalog/weather.yaml`). Both fall off in water shallower than 3 m,
+in proportion to the depth at the boat's hexagon, and are nothing over
+land; a chunk the ground lacks is deep water. The refuge's water, with
+every start place in it, is still, so every scenario and recording near
+the centre steps as before.
+
+The step feels the current (`Env.CurrentEast`, `CurrentNorth`) as it feels
+the waves' orbital motion: the hull and foils meet the flow through the
+water, the state stays over the ground, and the added masses' share of the
+terms of turning is of the velocity through the water (the relative-
+velocity model of marine craft in an irrotational current, Fossen 2021).
+The wind's height profile grows from the water's surface, which moves: 10 m
+up the air is the wind over the ground, and at the surface it moves with
+the water. A current of exactly nothing changes no bit. A boat in a
+current, in air moving with it, is carried at its speed; a boat sailing in
+one is the same boat in still water in the wind over the water, carried
+(`current_test.go`).
+
+The **falls' draft** (`weather.disk.fallDraftFrom`, `fallDraft`): from
+nothing at 4.2 NM to 4 kn at the lip, linear, blowing toward the lip, added
+to `WindAt` after the refuge, in steady spells too, and to the mean wind
+the autopilot steers by; not to `MeanWindAt`, the sea's.
+
+The circulation's way is drawn from the seed of the world made, on a
+stream of the generator's own, and kept in the bundle's records but not in
+its digest: a bundle stored without it is given the same way when loaded.
+`Welcome.circulation` tells the page; the current itself is never sent: the
+page works it out from the way, the drain and the ground it holds, as the
+server does.
+
+### The lip, going over, voyages and approaches
+
+`physics.OverEdge`: x² + y² ≥ R², the products as the module rounds them,
+so the server and the phone name the same tick. After the contacts, the
+tick's **rules** phase (`internal/sim/edge.go`) sends each boat at or
+beyond the lip over it: it is not stepped, touches nothing and casts no
+shadow for `world.edge.fall` (5 s, 150 ticks), its state held as it went
+over, and every view still holds it (view flag bit 3, falling). In the
+inputs of the tick its fall ends, it starts again at the world's start, at
+rest, the same boat in the same slot, its autopilot's memory, ground timer
+and course cleared and its pairs begun afresh, on the controls it held. A
+checkpoint taken mid-fall restores the boat at the start.
+
+A **voyage** runs from a boat entering the water (joined, or started again
+after going over) until it leaves, expires or goes over. An **approach**
+begins as it enters the mist band and is survived 20 m back out of it
+(`world.edge.clear`) or when its voyage ends afloat; going over ends it
+unsurvived. Each slot keeps the approach under way and the least of the
+voyage's survived ones (`bus.Voyage`, in the snapshot's format 10 and, once
+it holds anything, in the digest). Going over writes an **`over`** event
+where the boat crossed; a voyage's end writes one **`approach`** event with
+its closest survived approach and where it was (`00007_edge.sql`: the two
+kinds and a `distance` column). Metrics: `keel_falls_total`,
+`keel_approaches_total`, and the `rules` phase in
+`keel_sim_phase_duration_seconds`.
+
+The snapshot (layout 8) carries an **over block**, the tick the boat went
+over, while it falls. The page's prediction checks `over()` after each
+step: a boat that crosses is held there, unstepped, as the server holds it;
+a snapshot after the fall without the block is the boat back at the start,
+and the prediction starts again from it, once. `trace-over.json` holds the
+Go client's run over the lip, which the page's tests replay.
+
+### The mist, the lip and the falls, drawn
+
+- **The mist** (`client/src/edge/mist.ts`): over the clear air's haze, a
+  density rising linearly across the band from nothing to the lip's
+  (visual range `world.edge.mist.range`, 300 m) and thinning with height as
+  e^(−z/40 m); beyond the lip the lip's, and below the sea it does not
+  thin. A colour keeps exp(−τ) of its contrast, τ the integral along the
+  ray from the eye (Beer–Lambert), taken at sixteen points crowded toward
+  the eye (`mistAlong`; the light let through within 0.02 of a 4,000-step
+  integral's along the rays the game draws), once a vertex, in the scene's
+  fog node, the sea's tiles and far sea, and the sky, whose sphere's rings
+  crowd toward the horizon. It is worked out only while the camera is
+  within 4 km of where the drain begins (`edgeLook.near`, the turns of a
+  loop), so far from the edge no shader works it out; and a short loop
+  keeps the shaders quick to compile on CI's software renderer. Its colour
+  is the light table's `mist`, by the hour, beside the horizon's.
+- **The lip** (`edge/lip.ts`): the sea's lattice stays fixed; a tile whose
+  centre is at or beyond the lip is not drawn, the tiles within a tile of
+  it sag and tip outward (`world.edge.look.lip`), and the far sea is cut
+  there.
+- **The falls** (`edge/falls.ts`), drawn while the camera is within 700 m
+  of the lip: the **curtain**, a ribbon of 150 × 40 vertices along the lip
+  about its point nearest the camera, by the time since the brink (−3.5 s
+  to 10 s), leaving at the waves' height, carried out by the drain and
+  curving further, falling at 3.9 m/s², whitening, taking the mist's colour
+  and fading; and the **slabs**, two in flight from each lattice cell of
+  the ring just beyond the lip within 400 m, riding the curtain until let
+  go, then tipping, spinning and falling at 3 m/s² until gone. Both are
+  functions of world time and the lattice alone (world time reduced on
+  the CPU), so every page draws the same falls (`world.edge.look`).
+- **The foam lines** (`edge/lines.ts`): dashes along the drain, about 12 m
+  apart, carried out at its speed by its closed-form travel time τ(r) less
+  world time, from where it passes 0.3 kn; foam, held in the tiles.
+
+### Going over, on the screen
+
+While the hull overhangs the lip it is drawn pitching over the brink. When
+it goes over, **"Over the falls"**, the camera holds where it was and
+looks after it, the boat is drawn falling as a slab, and the screen fades
+to the mist over the third second; back at the start, **"Back at Port
+Royal"**, the autopilot off and the helm centred, the screen fading back.
+With reduced motion the fade comes at once and nothing is followed. Other
+boats are drawn falling from the frame they are flagged in. An approach
+survived on the boat's own track is told: **"Closest to the edge: N m"**.
+There is no distance to the edge on the screen: the mist, the lip and the
+sound are the warnings.
+
+**The falls' sound** (`art/sound/falls.json`, `audio/voices.ts`): a low
+band of noise, a line source whose level falls 3 dB per doubling of the
+distance to the lip, heard from 1 km, its highs absorbed with distance (ISO
+9613-1's figures), panned toward the nearest point of the lip, loudest
+while falling.
+
+### Looking at it
+
+```sh
+# https://localhost:5173/?sandbox&dev          the developer panel: "Jump to the rim" (8,300 m)
+# https://localhost:5173/?sandbox&edge=off     no mist, lip or falls (tests whose subject is elsewhere)
+go run ./tools/polar -edge                     # the line of no return, in flat water and in spells
+```
+
+The sandbox keeps the rules itself: a boat over the lip falls, then starts
+again at its start (`world.edge.fall`); its current runs the world file's
+way, or clockwise. The developer panel shows the distance inside the lip,
+the current's drain and circulation, the draft, the mist's visual range at
+the boat and the falls drawn. `client/e2e/edge.spec.ts` checks the mist,
+the lip, the falls on two pages, going over and coming back, and takes the
+pictures. `go run ./tools/polar -edge` finds the **line of no return**: at
+each distance inside the lip the best of seventeen courses on the
+autopilot, sailed two minutes in that place's wind, current and sea; the
+least distance from which it gains ground, in each regime's spells and in
+a steady wind in flat water, and a capsize 150 m inside the lip recovered.
 
 ## Waves
 
@@ -1815,7 +1969,7 @@ resolved at start, so updating it allocates nothing:
 | `keel_build_info{build,catalog}` | Which version runs |
 | `keel_sim_tick` | The latest tick |
 | `keel_sim_tick_duration_seconds` | Each tick, in buckets from 0.5 ms to 100 ms with edges at 10, 25 and 33 ms |
-| `keel_sim_phase_duration_seconds{phase}` | `inputs`, `sea`, `physics`, `grid`, `contacts`, `publish` |
+| `keel_sim_phase_duration_seconds{phase}` | `inputs`, `sea`, `physics`, `grid`, `contacts`, `rules`, `publish` |
 | `keel_sim_grid_duration_seconds` | Sorting the boats into the grid, each tick |
 | `keel_sim_ticks_total`, `_late_total`, `_skipped_total` | All ticks; those run back to back to catch up; those skipped |
 | `keel_sim_clock_drift_seconds` | World time minus UTC as a tick starts |
@@ -1823,6 +1977,7 @@ resolved at start, so updating it allocates nothing:
 | `keel_sim_boat_limit`, `keel_sim_queue_length` | The boat limit; players waiting for a boat |
 | `keel_sim_admissions_total{result}` | `joined`, `rejoined`, `queued`, `admitted` from the queue, `dequeued` (gave up waiting), `full` (the queue too) |
 | `keel_sim_queue_wait_seconds` | How long each player given a boat from the queue waited |
+| `keel_falls_total`, `keel_approaches_total` | Boats gone over the lip; voyages ended with an approach to it survived |
 | `keel_sim_commands_total{kind,result}`, `keel_sim_commands_refused_total` | Commands applied; refused because the queue was full |
 | `keel_sim_frames_allocated_total` | Frames made because every pooled frame was held: flat once running |
 | `keel_replay_bytes_total`, `_segments_total`, `_records_dropped_total` | The input log |

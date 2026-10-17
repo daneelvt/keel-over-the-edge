@@ -20,6 +20,7 @@ type catalogWeather struct {
 		Disk     map[string]any `json:"disk"`
 		Gusts    map[string]any `json:"gusts"`
 		WaveWind map[string]any `json:"waveWind"`
+		Current  map[string]any `json:"current"`
 		Regimes  []struct {
 			ID   string         `json:"id"`
 			Wind map[string]any `json:"wind"`
@@ -33,7 +34,7 @@ var weatherOnce = sync.OnceValues(func() (*WeatherParams, error) {
 		return nil, err
 	}
 	values := map[string]any{}
-	for _, g := range []map[string]any{c.Weather.Disk, c.Weather.Gusts, c.Weather.WaveWind} {
+	for _, g := range []map[string]any{c.Weather.Disk, c.Weather.Gusts, c.Weather.WaveWind, c.Weather.Current} {
 		for k, v := range g {
 			values[k] = v
 		}
@@ -136,7 +137,12 @@ func TestSpeedFactor(t *testing.T) {
 	} {
 		// 5 m/s at mid-disk is under the refuge's knee at the centre, so
 		// the refuge leaves it alone.
-		got := windAt(w, 0, c.nm*nm, worldTick).MeanSpeed / 5
+		// The sea's wind: without the falls' draft, which blows in the
+		// mist band.
+		var at WeatherTick
+		WeatherAt(w, &at, worldTick)
+		mean, _ := MeanWindAt(&at, 0, c.nm*nm)
+		got := mean / 5
 		if math.Abs(got-c.want) > c.within*c.want {
 			t.Errorf("%g NM: the speed factor is %.4f, want %.4f", c.nm, got, c.want)
 		}
@@ -144,8 +150,8 @@ func TestSpeedFactor(t *testing.T) {
 }
 
 // A steady spell is the old wind: its speed and direction exactly,
-// everywhere and at every tick, so every scenario sailed in a steady wind
-// sails as before.
+// everywhere short of the mist band and at every tick, so every scenario
+// sailed in a steady wind sails as before.
 func TestSteadySpell(t *testing.T) {
 	p := testWeather(t)
 	s := SteadySpell(10*knot, 0.4, 0)
@@ -154,6 +160,9 @@ func TestSteadySpell(t *testing.T) {
 	rng := rand.New(rand.NewPCG(1, 1))
 	for range 10000 {
 		x, y := (rng.Float64()-0.5)*20000, (rng.Float64()-0.5)*20000
+		if math.Hypot(x, y) > p.MistFrom() {
+			continue
+		}
 		tick := math.Floor(rng.Float64() * (1 << 52))
 		var at WeatherTick
 		WeatherAt(w, &at, tick)

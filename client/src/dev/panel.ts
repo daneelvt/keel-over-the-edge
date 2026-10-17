@@ -19,6 +19,7 @@
 import { PILOT_HEADING, PILOT_OFF, type PilotControl, TURN_STEPS } from '../input/pilot';
 import './panel.css';
 import { catalog } from '../catalog';
+import { type MistParams, visualRangeAt } from '../edge/mist';
 import type { FleetStats } from '../game/fleet';
 import type { Game } from '../game/game';
 import type { LandStats } from '../land/land';
@@ -32,6 +33,7 @@ import type { BoatWind } from '../predict/weather';
 import { DISK_RADIUS } from '../render/coords';
 import { rungName } from '../render/quality';
 import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
+import { look } from '../render/sky';
 import type { Antialias } from '../render/stage';
 import { type SeaOptions, seaAreaOf } from '../sandbox/localsea';
 import { type Sandbox, SEA_STATES, STEADY } from '../sandbox/sandbox';
@@ -42,6 +44,9 @@ const KNOT = 1852 / 3600;
 const DEG = Math.PI / 180;
 const NAUTICAL_MILE = 1852;
 /** "Jump to the rim" puts the boat this far from the centre, in metres. */
+
+/** Where the current at the boat is written, east then north. */
+const currentAt = [0, 0];
 export const RIM = 8300;
 /** Fetches to try, in nautical miles; null is open water's. The look was chosen at 1.5, 4, 6.5 and 9. */
 export const FETCHES: (number | null)[] = [null, 1.5, 4, 6.5, 9];
@@ -240,6 +245,62 @@ export function seaLines(hs: number, peak: number, waves: number, blended: boole
   }
   const period = peak > 0 ? `${((2 * Math.PI) / peak).toFixed(1)} s` : '—';
   return `sea     Hs ${hs.toFixed(2)} m, peak ${period}, ${waves} waves${blended ? ', blended' : ''}`;
+}
+
+/** What the edge's line reads: the lip and the mist, the falls' draft. */
+export interface EdgeNumbers {
+  lip: number;
+  mist: MistParams;
+  /** The falls' draft: from where, m from the centre, and its speed at the lip, m/s. */
+  draftFrom: number;
+  draft: number;
+  /** The clear air's visual range, m. */
+  clear: number;
+  /** The falls' slabs drawn, and the curtain's triangles. */
+  slabs: number;
+  curtain: number;
+  /** The tick the boat went over, 0 afloat. */
+  over: number;
+}
+
+/**
+ * The boat at the edge, as lines: how far inside the lip it is, the current
+ * at it (the drain out and the circulation round), the falls' draft, the
+ * mist's visual range there, and the falls drawn.
+ */
+export function edgeLines(
+  east: number,
+  north: number,
+  current: number[],
+  e: EdgeNumbers,
+): string[] {
+  const r = Math.hypot(east, north);
+  const [ce = 0, cn = 0] = current;
+  const out = r > 0 ? (ce * east + cn * north) / r : 0;
+  const round = r > 0 ? (ce * north - cn * east) / r : 0;
+  const draft = e.draft * Math.min(Math.max((r - e.draftFrom) / (e.lip - e.draftFrom), 0), 1);
+  const range = visualRangeAt(r, e.clear, e.mist);
+  return [
+    `edge    ${e.over !== 0 ? `over the lip since tick ${e.over}` : `${(e.lip - r).toFixed(0)} m inside the lip`}`,
+    `current drain ${(out / KNOT).toFixed(2)} kn, round ${(round / KNOT).toFixed(2)} kn; draft ${(draft / KNOT).toFixed(2)} kn`,
+    `mist    visual range ${range >= 1000 ? `${(range / 1000).toFixed(1)} km` : `${range.toFixed(0)} m`}; falls ${e.slabs} slabs, ${e.curtain} triangles`,
+  ];
+}
+
+/** The edge's numbers for the panel, from the scene and the catalog. */
+function edgeNumbers(world: SeaScene, over: number): EdgeNumbers {
+  const disk = catalog.weather.disk;
+  const counts = world.edge.falls.counts;
+  return {
+    lip: world.edge.lip,
+    mist: world.edge.mist,
+    draftFrom: disk.fallDraftFrom * 1852,
+    draft: disk.fallDraft * KNOT,
+    clear: look.visualRange.value as number,
+    slabs: counts.slabs,
+    curtain: counts.curtainTriangles,
+    over,
+  };
 }
 
 /** The state with the boat moved out to the rim along its bearing from the centre (east, from the centre itself). */
@@ -640,6 +701,12 @@ export function openPanel(
       seaLines(band.hs[here] ?? 0, peak, band.count, band.blended),
       windLine(sandbox.wind),
       pilotLine(game.pilot, sandbox.states.current, sandbox.out),
+      ...edgeLines(
+        p.east,
+        p.north,
+        sandbox.physics.current(p.east, p.north, currentAt),
+        edgeNumbers(world, sandbox.over),
+      ),
     ].join('\n');
     log.textContent = ['Steps', ...world.qualityLog().slice(-8)].join('\n');
     records.textContent = [
@@ -835,6 +902,13 @@ export function openNetPanel(
       land: world.land?.stats ?? null,
       slots: world.land?.slots?.chunks ?? null,
     });
+    const p = world.pose;
+    numbers.textContent += `\n${edgeLines(
+      p.east,
+      p.north,
+      predictor.physics.current(p.east, p.north, currentAt),
+      edgeNumbers(world, predictor.over),
+    ).join('\n')}`;
   };
   update();
   setInterval(update, 500);

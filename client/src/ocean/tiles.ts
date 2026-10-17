@@ -14,9 +14,10 @@
 // offsets around a centre tile; when the boat enters a new tile, the centre
 // tile's (q, r) and position change, and every instance names a new tile.
 //
-// A tile over land is not drawn: its vertices all fall to one point. Each
-// tile carries its ground to the look (shore.ts): the depth, the waves' cap,
-// the bed's surface, and the lee about it.
+// A tile over land, or at or beyond the lip of the falls, is not drawn: its
+// vertices all fall to one point. Each tile carries its ground to the look
+// (shore.ts): the depth, the waves' cap, the bed's surface, and the lee
+// about it.
 
 import {
   BufferAttribute,
@@ -28,6 +29,7 @@ import {
 import {
   abs,
   attribute,
+  cameraPosition,
   dot,
   float,
   instanceIndex,
@@ -41,9 +43,12 @@ import {
   textureLoad,
   uniform,
   varying,
+  vec2,
   vec3,
 } from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
+import { beyondLip, lipPlane } from '../edge/lip';
+import { mistBetween, seaPoint } from '../edge/mist';
 import { GUST_LOOK, type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
 import { FIELD_RADIUS, TILE_RADIUS } from './hex';
@@ -115,6 +120,8 @@ export interface TileVaryings {
   lee: Node<'float'>;
   /** The sea's peak period at the tile, s. */
   period: Node<'float'>;
+  /** The band's mist from the camera to the vertex. */
+  mist: Node<'float'>;
 }
 
 export class Tiles {
@@ -180,13 +187,20 @@ export class Tiles {
     const [from, full] = GUST_LOOK.shows;
     const shown = smoothstep(from, full, abs(field0)).mul(sign(field0));
     const gust = shown.mul(gusts.uniforms.strength).mul(float(1).sub(rim)).mul(lee);
-    // Over land every vertex falls to the tile's centre, well below the sea:
-    // its triangles have no area, and nothing is drawn.
-    const land = ground.z.greaterThan(0.5);
+    // Over land, or at or beyond the lip, every vertex falls to the tile's
+    // centre, well below the sea: its triangles have no area, and nothing is
+    // drawn. Near the lip the tile sags and tips over the brink.
+    const land = ground.z.greaterThan(0.5).or(beyondLip(c));
+    plane = lipPlane(c, plane);
     const e = select(land, positionGeometry.xz.mul(0), positionGeometry.xz);
     const s = positionGeometry.y;
     const y = select(land, plane.x.sub(50), plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH)));
     this.position = vec3(c.x.add(e.x), y, c.y.add(e.y));
+    // The sea's period and the band's mist (mistToSea's) share a varying:
+    // with one more, WebGPU drew the tiles' glints wrong.
+    const periodMist = varying(
+      vec2(periodAt(band)(c), mistBetween(cameraPosition, seaPoint(c.add(e)))),
+    ) as unknown as Node<'vec2'>;
     this.varyings = {
       offset: varying(e),
       side: varying(s),
@@ -198,7 +212,8 @@ export class Tiles {
       gust: varying(gust),
       ground: varying(ground),
       lee: varying(lee),
-      period: varying(periodAt(band)(c)),
+      period: periodMist.x,
+      mist: periodMist.y,
     };
 
     this.mesh = new Mesh(geometry);

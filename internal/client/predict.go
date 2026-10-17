@@ -56,6 +56,13 @@ type Predictor struct {
 	// sea, as is a chunk not held.
 	Ground  *physics.Ground
 	Shelter *physics.Shelter
+	// Circulation is the world's way round the disk, from the Welcome,
+	// for the current the boat is stepped in.
+	Circulation float64
+	// Over is the tick the boat went over the lip, 0 while it is afloat:
+	// it is held where it went over, not stepped, until a snapshot puts
+	// it back at the start.
+	Over int64
 }
 
 // NewPredictor predicts a boat of kind in the sea of waves, with which the
@@ -80,15 +87,19 @@ func (p *Predictor) ReceiveWeather(m *pb.WeatherSystems) error {
 
 // Reset puts the boat at a snapshot's state, forgetting what was predicted.
 func (p *Predictor) Reset(sn *protocol.Snapshot) {
-	p.Started, p.Tick, p.State = true, sn.Tick, sn.State
+	p.Started, p.Tick, p.State, p.Over = true, sn.Tick, sn.State, sn.Over
 	for i := range p.ring {
 		p.ring[i].tick = math.MinInt64
 	}
 }
 
-// step steps the boat into tick, in the wind at its place and the sea of
-// that tick, as the server does.
+// step steps the boat into tick, in the wind and the current at its place
+// and the sea of that tick, as the server does; a boat over the lip is
+// held.
 func (p *Predictor) step(tick int64, in Input) {
+	if p.Over != 0 {
+		return
+	}
 	w := bus.Pack(0, in.Helm, in.Sheet, 0)
 	c := physics.Control{Helm: w.Helm(), Sheet: w.Sheet()}
 	c.Pilot, c.Target, c.Order, c.Way = in.Pilot(0, 0).Control()
@@ -96,12 +107,16 @@ func (p *Predictor) step(tick int64, in Input) {
 		physics.WeatherAt(&p.Weather, &p.wind, float64(tick))
 	}
 	e := physics.WindAt(&p.wind, p.State.X, p.State.Y, p.Shelter)
+	e.CurrentEast, e.CurrentNorth = physics.CurrentAt(p.Weather.Prepared, p.Circulation, p.State.X, p.State.Y, p.Ground)
 	if p.Encounters != nil {
 		if p.Wakes.Shadow(&e, p.State.X, p.State.Y, tick, &p.Weather, p.kind, p.Encounters) > 0 {
 			p.Shadowed++
 		}
 	}
 	physics.Step(&p.State, &c, &e, p.Seas.At(tick), p.Ground, p.kind, &p.out)
+	if physics.OverEdge(p.Weather.Prepared, p.State.X, p.State.Y) {
+		p.Over = tick
+	}
 }
 
 // Wind is the wind at the boat at the tick its state is after, in full.
@@ -144,20 +159,42 @@ type Outcome struct {
 // and the next snapshot reconciles. One newer than the prediction, or of a
 // tick not yet predicted since the last reset, starts the prediction
 // again from it.
+//
+// While the server's boat falls over the lip its snapshots say since when:
+// the prediction is held where the server's boat went over, as it would
+// have held it had it gone over on the same tick. A snapshot after the fall
+// with no fall in it is the boat back at the start, and the prediction
+// starts again from it.
 func (p *Predictor) Snapshot(sn *protocol.Snapshot) Outcome {
 	if p.Started && sn.Tick <= p.Tick-Ring {
 		return Outcome{Stale: true}
 	}
 	e := &p.ring[sn.Tick%Ring]
-	if !p.Started || sn.Tick > p.Tick || e.tick != sn.Tick {
+	if !p.Started || sn.Tick > p.Tick || e.tick != sn.Tick || p.Over != 0 && sn.Over == 0 && sn.Tick > p.Over {
 		p.Reset(sn)
 		return Outcome{Reset: true}
+	}
+	if sn.Over != 0 {
+		if p.Over == sn.Over && sameBits(&p.State, &sn.State) {
+			return Outcome{}
+		}
+		before := p.State
+		p.Over, p.State = sn.Over, sn.State
+		for t := sn.Tick; t <= p.Tick; t++ {
+			p.ring[t%Ring].state = sn.State
+		}
+		return Outcome{
+			Corrected: true,
+			Distance:  math.Hypot(before.X-p.State.X, before.Y-p.State.Y),
+			Heading:   math.Abs(math.Remainder(before.Heading-p.State.Heading, 2*math.Pi)),
+		}
 	}
 	if sameBits(&e.state, &sn.State) {
 		return Outcome{}
 	}
 	before := p.State
 	p.State = sn.State
+	p.Over = 0
 	e.state = sn.State
 	for t := sn.Tick + 1; t <= p.Tick; t++ {
 		r := &p.ring[t%Ring]

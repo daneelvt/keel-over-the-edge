@@ -30,13 +30,14 @@
       "description": "The weather's numbers.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["sea", "disk", "gusts", "ring", "waveWind", "regimes", "sequence"],
+      "required": ["sea", "disk", "gusts", "ring", "waveWind", "current", "regimes", "sequence"],
       "properties": {
         "sea": { "$ref": "#/$defs/WeatherSea" },
         "disk": { "$ref": "#/$defs/WeatherDisk" },
         "gusts": { "$ref": "#/$defs/WeatherGusts" },
         "ring": { "$ref": "#/$defs/WeatherRing" },
         "waveWind": { "$ref": "#/$defs/WeatherWaveWind" },
+        "current": { "$ref": "#/$defs/WeatherCurrent" },
         "regimes": { "description": "The kinds of spell of weather.", "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/Regime" } },
         "sequence": { "$ref": "#/$defs/Sequence" }
       }
@@ -64,7 +65,7 @@
       "description": "The wind over the disk: how its speed rises toward the rim, the refuge at the centre, the stronger gusts of the outer waters and the turning of the difference across the disk.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["speedCentre", "speedRim", "rim", "refugeInner", "refugeOuter", "refugeMeanKnee", "refugeMean", "refugeWindKnee", "refugeWind", "rimGusts", "rimGustsFrom", "acrossTurn"],
+      "required": ["speedCentre", "speedRim", "rim", "refugeInner", "refugeOuter", "refugeMeanKnee", "refugeMean", "refugeWindKnee", "refugeWind", "rimGusts", "rimGustsFrom", "acrossTurn", "edge", "fallDraftFrom", "fallDraft"],
       "properties": {
         "speedCentre": { "description": "The wind's speed at the centre, as a share of a spell's wind at mid-disk.", "type": "number", "minimum": 0, "maximum": 2 },
         "speedRim": { "description": "The wind's speed at the rim, as a share of a spell's wind at mid-disk.", "type": "number", "minimum": 0, "maximum": 2 },
@@ -77,7 +78,24 @@
         "refugeWind": { "description": "The wind with its gusts the refuge holds to, in knots.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "rimGusts": { "description": "The gust factor's excess over 1 grows by this share toward the rim.", "type": "number", "minimum": 0, "maximum": 2 },
         "rimGustsFrom": { "description": "From here to the rim, in nautical miles.", "type": "number", "minimum": 0, "maximum": 10 },
-        "acrossTurn": { "description": "The shortest and longest time the axis of the wind's difference across the disk takes to turn once, in hours.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 1000 } }
+        "acrossTurn": { "description": "The shortest and longest time the axis of the wind's difference across the disk takes to turn once, in hours.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 1000 } },
+        "edge": { "description": "The lip of the falls: the disk's radius, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "fallDraftFrom": { "description": "The falls draw the air toward the lip from here, in nautical miles.", "type": "number", "minimum": 0, "maximum": 10 },
+        "fallDraft": { "description": "How fast the falls draw the air at the lip, in knots.", "type": "number", "minimum": 0, "maximum": 30 }
+      }
+    },
+    "WeatherCurrent": {
+      "title": "WeatherCurrent",
+      "description": "The water's own motion: the circulation round the disk and the drain toward the falls, each linear between its points, nothing before the first and its last value beyond the last, falling off in shallow water.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["circulationAt", "circulation", "drainAt", "drain", "shallow"],
+      "properties": {
+        "circulationAt": { "description": "The circulation's points, from the centre, in nautical miles.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+        "circulation": { "description": "Its speed at each point, in knots.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+        "drainAt": { "description": "The drain's points, from the centre, in nautical miles: the last is the lip.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+        "drain": { "description": "Its speed toward the lip at each point, in knots.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+        "shallow": { "description": "In water shallower than this the current falls off in proportion to the depth, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
       }
     },
     "WeatherGusts": {
@@ -535,6 +553,7 @@
       "additionalProperties": false,
       "required": [
         "disk",
+        "edge",
         "zones",
         "mainPort",
         "layout",
@@ -557,6 +576,7 @@
       ],
       "properties": {
         "disk": { "$ref": "#/$defs/WorldDisk" },
+        "edge": { "$ref": "#/$defs/WorldEdge" },
         "zones": { "$ref": "#/$defs/WorldZones" },
         "mainPort": { "$ref": "#/$defs/WorldMainPort" },
         "layout": { "$ref": "#/$defs/WorldLayout" },
@@ -619,6 +639,91 @@
           "type": "number",
           "minimum": 1,
           "maximum": 10
+        }
+      }
+    },
+    "WorldEdge": {
+      "title": "WorldEdge",
+      "description": "The edge of the world: going over the falls, approaches to them, the mist and how the falls are drawn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fall", "clear", "mist", "look"],
+      "properties": {
+        "fall": { "description": "How long a boat that has gone over falls before it starts again, in s.", "type": "number", "minimum": 0.1, "maximum": 60 },
+        "clear": { "description": "An approach ends this far back out of the mist band, in m.", "type": "number", "minimum": 0, "maximum": 1000 },
+        "mist": { "$ref": "#/$defs/EdgeMist" },
+        "look": { "$ref": "#/$defs/EdgeLook" }
+      }
+    },
+    "EdgeMist": {
+      "title": "EdgeMist",
+      "description": "The mist band: a density rising across the band to the lip's, falling off with height.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["range", "height"],
+      "properties": {
+        "range": { "description": "The visual range at the lip, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100000 },
+        "height": { "description": "The scale height of the mist's layer, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 10000 }
+      }
+    },
+    "EdgeLook": {
+      "title": "EdgeLook",
+      "description": "How the lip, the falls and the drain are drawn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lip", "curtain", "slabs", "lines"],
+      "properties": {
+        "lip": {
+          "description": "The sea's last tiles before the brink.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tip", "sag"],
+          "properties": {
+            "tip": { "description": "How far they tip outward at the brink, in rad.", "type": "number", "minimum": 0, "maximum": 1.6 },
+            "sag": { "description": "How far they drop at the brink, in m.", "type": "number", "minimum": 0, "maximum": 10 }
+          }
+        },
+        "curtain": {
+          "description": "The water pouring over the lip.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to", "gravity", "out", "damping", "foam", "mist", "fade", "reach"],
+          "properties": {
+            "from": { "description": "Its first row, in s after the brink: negative before it.", "type": "number", "minimum": -60, "maximum": 0 },
+            "to": { "description": "Its last row, in s after the brink.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
+            "gravity": { "description": "How fast it falls, in m/s².", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
+            "out": { "description": "It curves out by this times the square of the time, in m/s².", "type": "number", "minimum": 0, "maximum": 10 },
+            "damping": { "description": "Its waves die as e^(−damping t), per s.", "type": "number", "minimum": 0, "maximum": 10 },
+            "foam": { "description": "It whitens to foam over this long, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
+            "mist": { "description": "And to the mist's colour from and to, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 60 } },
+            "fade": { "description": "And fades out from and to, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 60 } },
+            "reach": { "description": "The falls are drawn within this of the camera, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 5000 }
+          }
+        },
+        "slabs": {
+          "description": "Slabs of the sea breaking off the curtain and falling.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["release", "cycle", "gravity", "tip", "spin", "mist", "gone"],
+          "properties": {
+            "release": { "description": "A slab breaks off between these times after the brink, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 60 } },
+            "cycle": { "description": "A cell lets one go once a cycle of between these, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 60 } },
+            "gravity": { "description": "How fast they fall, in m/s².", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
+            "tip": { "description": "They tip by the first plus the second times the time, in rad and rad/s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+            "spin": { "description": "They spin at up to this, in rad/s.", "type": "number", "minimum": 0, "maximum": 10 },
+            "mist": { "description": "They fade to the mist's colour from and to these depths, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1000 } },
+            "gone": { "description": "They are gone between these depths, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1000 } }
+          }
+        },
+        "lines": {
+          "description": "The drain's foam lines.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["apart", "from"],
+          "properties": {
+            "apart": { "description": "About this far apart across the drain, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
+            "from": { "description": "From where the drain runs faster than this, in knots.", "type": "number", "minimum": 0, "maximum": 10 }
+          }
         }
       }
     },

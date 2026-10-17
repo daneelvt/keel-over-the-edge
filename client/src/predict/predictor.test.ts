@@ -183,6 +183,7 @@ describe('pacing online', () => {
       epochUs: 0,
       world: '',
       land: false,
+      circulation: 0,
     });
     const sn = start(100);
     sn.helm = 300;
@@ -283,6 +284,7 @@ describe('the queue and the fleet online', () => {
       epochUs: 0,
       world: '',
       land: false,
+      circulation: 0,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     expect(o.place.value).toBeNull();
@@ -307,6 +309,7 @@ describe('the queue and the fleet online', () => {
       epochUs: 0,
       world: '',
       land: false,
+      circulation: 0,
     });
     const record = new ArrayBuffer(FLEET_RECORD_BYTES);
     writeSnapshot(start(100), new DataView(record));
@@ -339,6 +342,7 @@ describe('the bell online', () => {
       epochUs: 0,
       world: '',
       land: false,
+      circulation: 0,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     return { o, port };
@@ -364,6 +368,7 @@ describe('the bell online', () => {
       epochUs: 0,
       world: '',
       land: false,
+      circulation: 0,
     });
     port.deliver(status('sailing'));
     expect(o.notice.value).toBeNull();
@@ -385,6 +390,7 @@ describe('the bell online', () => {
       epochUs: 0,
       world: '',
       land: false,
+      circulation: 0,
     });
     port.deliver(status('sailing'));
     expect(o.notice.value?.text).toBe('Your boat has returned to port.');

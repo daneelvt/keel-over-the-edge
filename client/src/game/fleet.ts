@@ -12,11 +12,15 @@
 // spread of the snapshots' lateness, and shrink back when it settles. A
 // boat whose data runs out is carried on its last velocity and turn for a
 // moment, then held; when data comes the difference is eased away. Boats
-// fade in as they enter the view and out as they leave it, dithered.
+// fade in as they enter the view and out as they leave it, dithered. A
+// boat flagged as falling over the lip is drawn falling from the render
+// tick of the first sample that flags it (the edge's fallPose), until it
+// leaves the view.
 //
 // Times are world ticks, as floats: 30 a second. Nothing here allocates
 // once made.
 
+import { type FallShape, fallPose } from '../edge/over';
 import { TICKS_PER_SECOND } from '../net/clock';
 import { CHANGE, FLEET_META, SLOT, slotAt, VIEW_SLOTS } from '../net/view';
 import { lerpAngle } from '../predict/blend';
@@ -73,8 +77,9 @@ const F = {
   mode: 8,
   sail: 9,
   far: 10,
+  falling: 11,
 } as const;
-const FIELDS = 11;
+const FIELDS = 12;
 /** Samples kept a boat. */
 export const SAMPLES = 8;
 
@@ -133,6 +138,8 @@ export interface DrawnBoat {
   /** The render tick it was drawn at, and its newest sample's. */
   tick: number;
   newest: number;
+  /** Seconds since it went over the lip, as drawn; below 0 afloat. */
+  fall: number;
 }
 
 /** A drawn boat at the origin, faded out. */
@@ -157,6 +164,7 @@ export function newDrawnBoat(): DrawnBoat {
     motion: 0,
     tick: 0,
     newest: 0,
+    fall: -1,
   };
 }
 
@@ -179,6 +187,8 @@ class Boat {
   dh = 0;
   ease = 0;
   motion: number = MOTION.interpolated;
+  /** The tick of the first sample that has it falling over the lip, or NaN. */
+  fallTick = Number.NaN;
   /** The pose drawn last frame. */
   readonly drawn = newDrawnBoat();
 
@@ -190,6 +200,7 @@ class Boat {
     this.opacity = 0;
     this.ease = 0;
     this.motion = MOTION.interpolated;
+    this.fallTick = Number.NaN;
     this.drawn.opacity = 0;
   }
 
@@ -218,6 +229,13 @@ class Boat {
     r[k + F.mode] = f[o + SLOT.mode] ?? 0;
     r[k + F.sail] = f[o + SLOT.sail] ?? 0;
     r[k + F.far] = f[o + SLOT.far] ?? 0;
+    const falling = f[o + SLOT.falling] ?? 0;
+    r[k + F.falling] = falling;
+    if (falling === 0) {
+      this.fallTick = Number.NaN;
+    } else if (Number.isNaN(this.fallTick)) {
+      this.fallTick = tick;
+    }
     this.next = (this.next + 1) % SAMPLES;
     this.count = Math.min(this.count + 1, SAMPLES);
     this.farTarget = f[o + SLOT.far] ?? 0;
@@ -230,6 +248,7 @@ class Boat {
   pose(rt: number, out: DrawnBoat): number {
     out.kind = this.kind;
     out.tick = rt;
+    out.fall = rt >= this.fallTick ? (rt - this.fallTick) / TICKS_PER_SECOND : -1;
     const newest = this.at(0, F.tick);
     out.newest = newest;
     if (this.count === 1 || rt <= this.at(this.count - 1, F.tick)) {
@@ -507,6 +526,19 @@ export class Fleet {
     s.entries = this.#entriesRate;
   }
 
+  /** Draws the boats falling over the lip as they fall, after the sea has floated them. */
+  fall(shape: FallShape | null): void {
+    if (shape === null) {
+      return;
+    }
+    for (let i = 0; i < this.count; i++) {
+      const b = this.drawn[i] as DrawnBoat;
+      if (b.fall >= 0) {
+        fallPose(b, b.fall, shape);
+      }
+    }
+  }
+
   #fadeOut(b: Boat): void {
     if (!b.present) {
       return;
@@ -559,4 +591,5 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.motion = a.motion;
   b.tick = a.tick;
   b.newest = a.newest;
+  b.fall = a.fall;
 }

@@ -253,6 +253,7 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			}
 			if w := ev.Welcome; w != nil {
 				s.Welcomes = append(s.Welcomes, WelcomeSeen{Boat: w.GetBoat(), Rejoined: w.GetRejoined(), EpochUs: w.GetEpochUs()})
+				s.Predictor.Circulation = float64(w.GetCirculation())
 				s.fresh = true
 				// A snapshot still waiting for a frame is the last
 				// connection's: its controls are not this boat's.

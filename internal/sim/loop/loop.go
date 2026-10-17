@@ -268,6 +268,13 @@ func (l *Loop) tick(tick int64, late bool) {
 	l.m.QueueLength.Set(float64(len(f.Queue)))
 	l.m.GridDuration.Observe(l.phases[sim.PhaseGrid].Seconds())
 	l.m.Workers.Set(float64(l.world.Workers()))
+	for i := range f.Edges {
+		if f.Edges[i].Kind == bus.EdgeOver {
+			l.m.Falls.Inc()
+		} else {
+			l.m.Approaches.Inc()
+		}
+	}
 	for i := range f.Events {
 		ev := &f.Events[i]
 		if int(ev.Op) < len(l.commands) && int(ev.Reply.Result) < len(l.commands[ev.Op]) {

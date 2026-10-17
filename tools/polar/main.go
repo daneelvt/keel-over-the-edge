@@ -28,6 +28,7 @@ func main() {
 	sailFlag := flag.Bool("sail", false, "compare the trimmed sail with ORC's mainsail coefficients")
 	manoeuvres := flag.Bool("manoeuvres", false, "tack and gybe, and find where an accidental gybe comes")
 	sea := flag.Float64("sea", 0, "the polar in this wind, in knots at sail height, in the sea it raises, beside flat water")
+	edge := flag.Bool("edge", false, "the line of no return at the lip, in each regime's spells and in flat water")
 	out := flag.String("out", ".dev/polar", "folder for the polar's JSON and SVG")
 	flag.Parse()
 
@@ -41,6 +42,8 @@ func main() {
 		params := catalog.PhysicsParams(boat)
 		b := kinds[i]
 		switch {
+		case *edge:
+			err = runEdge(&b, waves, cat)
 		case *sea != 0:
 			err = runSea(&b, waves, *sea)
 		case *check:

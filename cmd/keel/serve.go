@@ -381,7 +381,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	} else {
 		log.Warn("land is off: the world's terrain is sailed as open sea")
 	}
-	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: terrain})
+	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: terrain, Edge: edgeOf(cat)})
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
@@ -416,7 +416,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Bus: b, World: store.AccountID(sailed.ID).String(), Epoch: epoch, Clock: tickLoop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
-		Land: cfg.Land, Chunks: handout,
+		Land: cfg.Land, Chunks: handout, Circulation: circulationOf(terrain),
 	})
 	lasting := persist.New(persist.Config{
 		Frames: b.Frames, Store: writer, World: sailed.ID, Epoch: leaseEpoch,
@@ -693,11 +693,11 @@ func devRoutes(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *slog.
 }
 
 // placeRoute moves a boat by hand, on the internal listener only, with
-// KEEL_DEV_COMMANDS=1: the boat of the account given, or else the first
-// player's sailing, put at rest at a point, heading as given, at the next
-// tick. It answers with the boat moved and where.
+// KEEL_DEV_COMMANDS=1: the boat given, or the boat of the account given,
+// or else the first player's sailing, put at rest at a point, heading as
+// given, at the next tick. It answers with the boat moved and where.
 //
-//	POST /debug/place?east=…&north=…&heading=…[&account=…]   metres east and north of the centre, degrees
+//	POST /debug/place?east=…&north=…&heading=…[&boat=…|&account=…]   metres east and north of the centre, degrees
 func placeRoute(b *bus.Bus, log *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -716,6 +716,16 @@ func placeRoute(b *bus.Bus, log *slog.Logger) http.Handler {
 			http.Error(w, "east and north, metres within 20 km of the centre, and heading, degrees, are required", http.StatusBadRequest)
 			return
 		}
+		var wanted uint64
+		byBoat := q.Has("boat")
+		if byBoat {
+			n, err := strconv.ParseUint(q.Get("boat"), 10, 64)
+			if err != nil || n == 0 {
+				http.Error(w, "boat is not a boat's id", http.StatusBadRequest)
+				return
+			}
+			wanted = n
+		}
 		var account bus.Account
 		byAccount := q.Has("account")
 		if byAccount {
@@ -732,7 +742,7 @@ func placeRoute(b *bus.Bus, log *slog.Logger) http.Handler {
 		f := b.Frames.Acquire()
 		boat := uint64(0)
 		for _, s := range f.Live {
-			if byAccount && f.Owner[s] == account || !byAccount && f.Conn[s] != 0 && f.Grace[s] == 0 {
+			if byBoat && f.Boat[s] == wanted || !byBoat && (byAccount && f.Owner[s] == account || !byAccount && f.Conn[s] != 0 && f.Grace[s] == 0) {
 				boat = f.Boat[s]
 				break
 			}

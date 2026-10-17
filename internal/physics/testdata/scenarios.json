@@ -1,5 +1,5 @@
 {
-  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state and Out with golden.json. params are the Jolly boat's, as the catalog gives them (catalog_test.go checks they match). Winds are 10 m up, in m/s. A change applies before the step it names, counting from 0, and keeps its values until the next change. steer starts a heading-hold to that heading, in radians, which sets the helm before every step to clamp(2 × (heading off course, wrapped to ±π) − 0.8 × yaw rate, −1, 1); a change that sets the helm stops it. The random scenario's changes were drawn once, with seed 3, and are kept as data. A scenario with a sea sails in waves: sea is the catalog's sea values (catalog_test.go checks them too), and the scenario's own sea a window of sea areas, size a side from the area at column col and row row, each area's inputs in whole steps (the wind's speed in 0.01 m/s, the direction it comes from in 65536ths of a turn, the fetch in metres), row by row from the south-west, with the tick of step 0; a change's areas replace them all. The random-sea scenario's changes were drawn once, with seed 5. A scenario with a terrain sails on it: ground is the catalog's grounding values, the surfaces' friction by their index (catalog_test.go checks them), and the terrain, its ground and the land's shelter, is testdata/ground/<terrain>.terrain, which go test -run Golden -update writes from terrain_test.go. A scenario with a weather sails in spells of weather: wind is the catalog's wind values (catalog_test.go checks them), and the scenario's weather the spells in play, each in the whole numbers the wire carries, with the tick of step 0; before every step the wind is the wind at the boat at the step's tick, and env is not used. A change's spells replace them all. The random-weather scenario's spells and changes were drawn once, with seed 7. The pilot scenarios sail on the autopilot: the control's pilot, target, order and way are the whole numbers the wire carries, and env's meanFrom is the mean wind it steers by.",
+  "description": "Scenarios for the golden tests. Go (golden_test.go) and the client (client/src/predict/golden.test.ts) both run each one through the physics package, natively and in WebAssembly, and compare every step's state and Out with golden.json. params are the Jolly boat's, as the catalog gives them (catalog_test.go checks they match). Winds are 10 m up, in m/s. A change applies before the step it names, counting from 0, and keeps its values until the next change. steer starts a heading-hold to that heading, in radians, which sets the helm before every step to clamp(2 × (heading off course, wrapped to ±π) − 0.8 × yaw rate, −1, 1); a change that sets the helm stops it. The random scenario's changes were drawn once, with seed 3, and are kept as data. A scenario with a sea sails in waves: sea is the catalog's sea values (catalog_test.go checks them too), and the scenario's own sea a window of sea areas, size a side from the area at column col and row row, each area's inputs in whole steps (the wind's speed in 0.01 m/s, the direction it comes from in 65536ths of a turn, the fetch in metres), row by row from the south-west, with the tick of step 0; a change's areas replace them all. The random-sea scenario's changes were drawn once, with seed 5. A scenario with a terrain sails on it: ground is the catalog's grounding values, the surfaces' friction by their index (catalog_test.go checks them), and the terrain, its ground and the land's shelter, is testdata/ground/<terrain>.terrain, which go test -run Golden -update writes from terrain_test.go. A scenario with a weather sails in spells of weather: wind is the catalog's wind values (catalog_test.go checks them), and the scenario's weather the spells in play, each in the whole numbers the wire carries, with the tick of step 0; before every step the wind is the wind at the boat at the step's tick, and env is not used. A change's spells replace them all. The random-weather scenario's spells and changes were drawn once, with seed 7. The pilot scenarios sail on the autopilot: the control's pilot, target, order and way are the whole numbers the wire carries, and env's meanFrom is the mean wind it steers by. A scenario's env may carry a current, currentEast and currentNorth; a scenario with a weather sails in the current at the boat before every step too, the world's circulation its weather's circulation (1 clockwise, −1 the other way, absent none), on its terrain if it has one. The drift scenario is carried by a current, first in still air, then in air moving with the water; the edge scenario beats off the lip in the drain and the falls' draft, then lets fly and is carried over it.",
   "sea": {
     "shortest": 8,
     "longest": 76,
@@ -31,7 +31,15 @@
     "change": 10,
     "waveTimeConstant": 240,
     "waveSample": 30,
-    "waveSamples": 40
+    "waveSamples": 40,
+    "edge": 4.5,
+    "fallDraftFrom": 4.2,
+    "fallDraft": 4,
+    "circulationAt": [1, 1.4, 3.5],
+    "circulation": [0, 0.2, 0.5],
+    "drainAt": [3.5, 4.2, 4.5],
+    "drain": [0, 0.6, 2],
+    "shallow": 3
   },
   "ground": {
     "friction": [0.4, 0.5, 0.5, 0.5, 0.6, 0.45, 0.5, 0.5, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -1160,6 +1168,8 @@
       "changes": [
         {"at": 0, "steer": 1.5708}
       ]
-    }
+    },
+    {"name": "drift", "steps": 2700, "state": {"heading": 0.5, "sheetLimit": 1.4}, "control": {"helm": 0, "sheet": 1}, "env": {"windSpeed": 0, "windFrom": 0, "currentEast": 1, "currentNorth": 0.5}, "changes": [{"at": 900, "env": {"windSpeed": 1.118033988749895, "windFrom": -2.0344439357957027}}, {"at": 1800, "env": {"currentEast": -0.4, "currentNorth": 0.9}}]},
+    {"name": "edge", "steps": 9000, "state": {"x": 0, "y": 8234, "heading": 2.2689280275926285, "surge": 2, "sheetLimit": 0.3, "boom": 0.3}, "control": {"helm": 0, "sheet": 0.1}, "env": {"windSpeed": 0, "windFrom": 0}, "weather": {"tick": 2147483649, "circulation": 1, "spells": [{"begin": 2147400000, "change": 0, "start": 2147400000, "length": 0, "regime": 0, "steady": 1, "speed": 617, "from": 32768, "drift": 0, "gust": 1000, "shift": [0, 0], "period": [0, 0], "phase": [0, 0], "across": 0, "axis": 0, "axisPeriod": 0, "seed": 0}]}, "changes": [{"at": 0, "steer": 2.2689280275926285}, {"at": 3600, "control": {"helm": 0, "sheet": 1}}]}
   ]
 }

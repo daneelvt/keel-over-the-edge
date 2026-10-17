@@ -10,6 +10,57 @@ world:
     radius: 8334 # m: the edge of the world
     mist: 4.2 # nautical miles: the mist band begins
 
+  # The edge. A boat whose centre of gravity is at or beyond the disk's
+  # radius has gone over the falls: it falls for fall seconds, seen by
+  # everyone near, then starts again at the start. An approach to the edge
+  # begins when a boat enters the mist band and is survived when it is
+  # clear of the band again, or when its voyage ends afloat.
+  edge:
+    fall: 5 # s
+    clear: 20 # m back out of the mist band
+    # The mist: a density that rises linearly across the band from the
+    # clear air's to the lip's, whose visual range is range, and falls off
+    # with height as e^(−z / height). Beyond the lip it is the lip's at
+    # every height, and below the sea.
+    mist:
+      range: 300 # m: very poor visibility
+      height: 40 # m
+    # How the lip and the falls are drawn.
+    look:
+      # The sea's last tiles sag and tip outward over the brink.
+      lip: { tip: 0.3, sag: 0.2 } # rad, m
+      # The curtain of water pouring over: rows by the time since the brink,
+      # from before it to after it, s; falling at gravity, m/s², and curving
+      # out by out × t² m; its waves damped as e^(−damping t); whitening to
+      # foam over foam s, to the mist's colour over mist s and faded out
+      # over fade s; drawn within reach m of the camera.
+      curtain:
+        from: -3.5
+        to: 10
+        gravity: 3.9
+        out: 0.12
+        damping: 0.25
+        foam: 5
+        mist: [5, 10]
+        fade: [6, 10]
+        reach: 700
+      # Slabs of the sea breaking off the curtain: each lattice cell along
+      # the lip lets one go at a time drawn per cell and cycle, s after the
+      # brink, once a cycle of cycle s; falling at gravity, m/s², tipping by
+      # tip[0] + tip[1] t rad and spinning at up to spin rad/s; fading to the
+      # mist from mist[0] to mist[1] m down and gone gone m down.
+      slabs:
+        release: [0.2, 1]
+        cycle: [3, 7]
+        gravity: 3
+        tip: [0.3, 1.9]
+        spin: 0.9
+        mist: [12, 110]
+        gone: [70, 120]
+      # The drain's foam lines, about apart m across the drain, from where
+      # it runs faster than from knots.
+      lines: { apart: 12, from: 0.3 }
+
   # Where on the disk a place is: the centre round the main port, the
   # middle waters, and the rim beyond.
   zones:

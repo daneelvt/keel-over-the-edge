@@ -75,6 +75,7 @@ func (r iteratorForInsertEvents) Values() ([]interface{}, error) {
 		r.rows[0].Fault,
 		r.rows[0].X,
 		r.rows[0].Y,
+		r.rows[0].Distance,
 	}, nil
 }
 
@@ -83,7 +84,7 @@ func (r iteratorForInsertEvents) Err() error {
 }
 
 func (q *Queries) InsertEvents(ctx context.Context, arg []InsertEventsParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"event"}, []string{"world_id", "tick", "kind", "account_id", "boat", "other_account_id", "other_boat", "article", "fault", "x", "y"}, &iteratorForInsertEvents{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"event"}, []string{"world_id", "tick", "kind", "account_id", "boat", "other_account_id", "other_boat", "article", "fault", "x", "y", "distance"}, &iteratorForInsertEvents{rows: arg})
 }
 
 // iteratorForInsertPlaces implements pgx.CopyFromSource.

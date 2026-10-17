@@ -251,7 +251,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
 		Boat: c.boat, Kind: uint32(f.Kind[s]), Rejoined: c.rejoined,
-		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land,
+		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation,
 	}}}, outWelcome)
 	c.ready.Store(ok)
 	c.bumped = f.Tick
@@ -295,7 +295,7 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]
-	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], c.margin.take(), &f.State[s])]
+	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], c.margin.take(), f.Voyage[s].Over, &f.State[s])]
 	b, n := protocol.AppendEntries(b, baseView, &next.view, enter, sample)
 	protocol.SetEntries(b, n)
 

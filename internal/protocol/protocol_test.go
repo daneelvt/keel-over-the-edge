@@ -52,6 +52,7 @@ type goldenSnapshot struct {
 	Way     uint8             `json:"way"`
 	Order   uint8             `json:"order"`
 	Target  uint16            `json:"target"`
+	Over    string            `json:"over,omitempty"` // the tick the boat went over the lip, as Tick
 	State   map[string]string `json:"state"`
 	Bytes   string            `json:"bytes"`
 	View    []goldenBoat      `json:"view"`
@@ -182,6 +183,15 @@ func goldens() []golden {
 	engaged := header(1000, 0, 0, physics.State{Y: -20, Heading: math.Pi / 2})
 	engaged.Mode, engaged.Target = 2, 12345
 
+	v6 := v1
+	v6.Boats[1].Flags |= Falling
+	falling := header(1014, 0, 0, physics.State{X: 8334.000001, Heading: math.Pi / 2, Surge: 3})
+	falling.Over = 1013
+	v7 := v6
+	v7.Boats[5].Flags |= Falling
+	fallingAll := tacking
+	fallingAll.Tick, fallingAll.Base, fallingAll.Over = 1016, 2, 1016
+
 	return []golden{
 		{"full", header(1000, 0, 0, physics.State{Y: -20, Heading: math.Pi / 2}), v1, v1.Used, 0},
 		{"delta of every kind", tacking, v2, 1<<2 | 1<<40, v2.Used &^ (1 << 5)},
@@ -196,6 +206,10 @@ func goldens() []golden {
 		// Aground for -0 steps: the ground block alone, -0 counting.
 		{"aground", header(1010, 0, 0, physics.State{X: 140, Heading: 1, GroundTimer: math.Copysign(0, -1)}), v1, v1.Used, 0},
 		{"aground a while", header(1012, 2, 0, physics.State{X: 141, Heading: 1, GroundTimer: 77}), v1, 0, v1.Used},
+		// Over the lip, falling, as another boat in the view is: the over
+		// block alone, then after every other block.
+		{"falling", falling, v6, v6.Used, 0},
+		{"falling with every block", fallingAll, v7, 0, v7.Used},
 	}
 }
 
@@ -249,6 +263,9 @@ func TestSnapshotGolden(t *testing.T) {
 			gs := goldenSnapshot{Name: g.name, Tick: strconv.FormatInt(h.Tick, 10), Base: h.Base, Flags: b[offFlags], Seq: h.Seq,
 				Margin: h.Margin, Helm: h.Helm, Sheet: h.Sheet, Mode: h.Mode, Way: h.Way, Order: h.Order, Target: h.Target,
 				State: map[string]string{}, Bytes: hex.EncodeToString(b), View: viewOf(&g.view)}
+			if h.Over != 0 {
+				gs.Over = strconv.FormatInt(h.Over, 10)
+			}
 			names := stateNames()
 			for i, v := range sim.StateFields(&h.State) {
 				gs.State[names[i]] = f64bits(*v)
@@ -295,7 +312,8 @@ func TestSnapshotGolden(t *testing.T) {
 		}
 		if tick, _ := strconv.ParseInt(g.Tick, 10, 64); got.Tick != tick || got.Base != g.Base || got.Flags != g.Flags ||
 			got.Seq != g.Seq || got.Margin != g.Margin || got.Helm != g.Helm || got.Sheet != g.Sheet ||
-			got.Mode != g.Mode || got.Way != g.Way || got.Order != g.Order || got.Target != g.Target || got.Header != c.header.Len() {
+			got.Mode != g.Mode || got.Way != g.Way || got.Order != g.Order || got.Target != g.Target || got.Header != c.header.Len() ||
+			got.Over != c.header.Over {
 			t.Errorf("%s: read %+v", g.Name, got)
 		}
 		names := stateNames()
@@ -449,12 +467,13 @@ func TestSnapshotRefusals(t *testing.T) {
 		"header cut":      good[:HeaderSize-1],
 		"layout 5":        withByte(good, offLayout, 5),
 		"helm over 1024":  withUint16(good, offHelm, 1025),
-		"spare flags":     withByte(good, offFlags, 8|PilotHeld|GroundHeld),
+		"spare flags":     withByte(good, offFlags, 16|PilotHeld|GroundHeld),
 		"129 entries":     withByte(good, offEntries, 129),
 		"layout 6":        withByte(good, offLayout, 6),
-		"layout 8":        withByte(good, offLayout, 8),
+		"layout 7":        withByte(good, offLayout, 7),
 		"sheet over 1024": withUint16(good, offSheet, 2000),
-		"ground cut":      good[:MaxHeaderSize-1],
+		"ground cut":      good[:HeaderSize+PilotSize+GroundSize-1],
+		"over unsent":     withByte(good, offFlags, PilotHeld|GroundHeld|OverHeld)[:HeaderSize+PilotSize+GroundSize+OverSize-1],
 		"autopilot cut":   good[:HeaderSize+PilotSize-1],
 		"pilot mode 3":    withByte(good, offPilotMode, 3),
 		"way 3":           withByte(good, offPilotWay, 3),
@@ -466,7 +485,7 @@ func TestSnapshotRefusals(t *testing.T) {
 			t.Errorf("%s: read", name)
 		}
 	}
-	if err := ReadSnapshot(good, &sn); err != nil || sn.Header != MaxHeaderSize {
+	if err := ReadSnapshot(good, &sn); err != nil || sn.Header != HeaderSize+PilotSize+GroundSize {
 		t.Fatalf("a snapshot on the autopilot and aground has a header of %d bytes: %v", sn.Header, err)
 	}
 	// Entries refused against the base, each alone after a good header.
@@ -478,7 +497,7 @@ func TestSnapshotRefusals(t *testing.T) {
 		"update of nothing":     {OpUpdate<<6 | 1, 0},
 		"update of empty slot":  {OpUpdate<<6 | 3, ChangeHeel, 1, 0},
 		"leave of empty slot":   {OpLeave<<6 | 3},
-		"spare boat flags":      {OpUpdate<<6 | 1, ChangeFlags, 8},
+		"spare boat flags":      {OpUpdate<<6 | 1, ChangeFlags, 16},
 		"overlong varint":       {OpUpdate<<6 | 1, ChangePosition, 0x80, 0x00, 0},
 		"kind above 65535":      {OpEnter<<6 | 1, 0x80, 0x80, 0x04, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		"beyond 24 bits":        {OpUpdate<<6 | 2, ChangePosition, 2, 0},
@@ -504,6 +523,21 @@ func TestSnapshotRefusals(t *testing.T) {
 	if err := v.ApplyEntries(b[sn.Header:], sn.Entries+1, &ch); err == nil {
 		t.Error("an entry past the end was read")
 	}
+	// An over block's tick lies above 0 and at most at the snapshot's.
+	var fs Snapshot
+	fall := Snapshot{Tick: 2000, Over: 1990, State: physics.State{X: 8335}}
+	fb := make([]byte, fall.Len())
+	fall.Put(fb)
+	if err := ReadSnapshot(fb, &fs); err != nil || fs.Over != 1990 || fs.Header != HeaderSize+OverSize {
+		t.Fatalf("a falling boat's snapshot: over %d, header %d, %v", fs.Over, fs.Header, err)
+	}
+	for _, over := range []int64{0, -5, 2001, math.MaxInt64} {
+		b := slices.Clone(fb)
+		binary.LittleEndian.PutUint64(b[HeaderSize:], uint64(over))
+		if err := ReadSnapshot(b, &fs); err == nil {
+			t.Errorf("over the lip at tick %d of a snapshot of tick 2000: read", over)
+		}
+	}
 }
 
 func withByte(b []byte, at int, v byte) []byte {
@@ -525,7 +559,7 @@ func TestEncodingAllocatesNothing(t *testing.T) {
 	word := bus.Pack(s.Seq, s.Helm, s.Sheet, 3)
 	if n := testing.AllocsPerRun(100, func() {
 		b = b[:MaxHeaderSize]
-		b = b[:PutHeader(b, s.Tick, s.Base, s.Flags, word, bus.PackPilot(s.Seq, bus.PilotWind, bus.WayTack, 1, 9000, 3), s.Margin, &s.State)]
+		b = b[:PutHeader(b, s.Tick, s.Base, s.Flags, word, bus.PackPilot(s.Seq, bus.PilotWind, bus.WayTack, 1, 9000, 3), s.Margin, s.Over, &s.State)]
 		b, _ = AppendEntries(b, &cases[0].view, &cases[1].view, cases[1].enter, cases[1].sample)
 	}); n != 0 {
 		t.Fatalf("%v allocations", n)

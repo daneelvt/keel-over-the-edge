@@ -24,6 +24,7 @@ type InsertEventsParams struct {
 	Fault          pgtype.Text
 	X              pgtype.Float8
 	Y              pgtype.Float8
+	Distance       pgtype.Float8
 }
 
 const latestCheckpoint = `-- name: LatestCheckpoint :one

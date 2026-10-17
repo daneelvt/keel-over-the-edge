@@ -32,8 +32,8 @@ type Wakes struct {
 func (w *Wakes) Reset() { w.n = [protocol.ViewSlots]uint8{} }
 
 // Observe takes a snapshot's view: the boats it samples in the near band
-// gain a sample; a slot a boat entered starts afresh; one left, or in the
-// far band, holds none.
+// gain a sample; a slot a boat entered starts afresh; one left, in the far
+// band or falling over the lip holds none.
 func (w *Wakes) Observe(tick int64, v *protocol.View, ch protocol.Changes, sampled uint64) {
 	for slot := range protocol.ViewSlots {
 		bit := uint64(1) << slot
@@ -44,7 +44,8 @@ func (w *Wakes) Observe(tick int64, v *protocol.View, ch protocol.Changes, sampl
 			continue
 		}
 		q := &v.Boats[slot]
-		if q.Far() {
+		if q.Far() || q.IsFalling() {
+			// A boat over the lip casts no shadow.
 			w.n[slot] = 0
 			continue
 		}

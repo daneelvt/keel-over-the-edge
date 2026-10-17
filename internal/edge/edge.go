@@ -159,6 +159,9 @@ type Config struct {
 	// client; Chunks, if not nil, hands out its chunks' addresses.
 	Land   bool
 	Chunks *Handout
+	// Circulation is the world's way round the disk for its current, as
+	// the Welcome tells the client: 1, −1 or 0 for none.
+	Circulation int32
 }
 
 // Edge serves the game connection.

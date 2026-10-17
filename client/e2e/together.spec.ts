@@ -95,7 +95,16 @@ test('two players see each other, steer, and one leaves', async ({ browser }) =>
   if (turned === null || turned.truth === null) {
     return;
   }
-  expect(headingOff(turned.boat.heading, before)).toBeGreaterThan((3 * Math.PI) / 180);
+  // What the pages saw, should the boat not have turned.
+  const bob = await b.evaluate(() => {
+    const k = globalThis.keel;
+    const { heading, x, y, surge, sway, yawRate } = k.boat().state;
+    const { over, notice, restarts } = k.edge();
+    return { heading, x, y, surge, sway, yawRate, over, notice, restarts };
+  });
+  const { heading, east, north, fall, opacity, tick } = turned.boat;
+  const saw = JSON.stringify({ before, drawn: { heading, east, north, fall, opacity, tick }, bob });
+  expect(headingOff(turned.boat.heading, before), saw).toBeGreaterThan((3 * Math.PI) / 180);
   expect(headingOff(turned.boat.heading, turned.truth.heading)).toBeLessThan((5 * Math.PI) / 180);
   // Bob closes his page: his boat sails on through its grace, and Ann
   // still sees it.

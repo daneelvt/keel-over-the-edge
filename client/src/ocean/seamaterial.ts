@@ -28,6 +28,7 @@ import {
   cameraPosition,
   clamp,
   dot,
+  exp,
   Fn,
   float,
   floor,
@@ -50,6 +51,9 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
+import { drainLines } from '../edge/lines';
+import { cutAtLip } from '../edge/lip';
+import { edgeLook } from '../edge/mist';
 import { look, skyColour, toLinear } from '../render/sky';
 import type { DetailNodes } from './detail';
 import {
@@ -176,9 +180,15 @@ const water = (input: WaterInput, V: Node<'vec3'>): Node<'vec3'> => {
   );
 };
 
-/** Blends toward the horizon's colour with distance, and converts to linear light. */
-const finish = (col: Node<'vec3'>, dist: Node<'float'>): Node<'vec4'> =>
-  vec4(toLinear(mix(col, look.skyHorizon, smoothstep(look.hazeNear, look.hazeFar, dist))), 1);
+/**
+ * Blends toward the horizon's colour with distance, and the band's mist at
+ * the edge of the world (its depth along the ray, from the vertex), and
+ * converts to linear light.
+ */
+const finish = (col: Node<'vec3'>, dist: Node<'float'>, mist: Node<'float'>): Node<'vec4'> => {
+  const hazed = mix(col, look.skyHorizon, smoothstep(look.hazeNear, look.hazeFar, dist));
+  return vec4(toLinear(mix(edgeLook.colour, hazed, exp(mist.negate()))), 1);
+};
 
 /** What the sea's look is made from, beside the tiles themselves. */
 export interface SeaParts {
@@ -306,7 +316,10 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       folding,
       pattern,
       streak,
-      boats: wet.add(wakes).add(breaking) as unknown as Node<'float'>,
+      boats: wet
+        .add(wakes)
+        .add(breaking)
+        .add(drainLines(positionWorld.xz)) as unknown as Node<'float'>,
     };
     const amount = foamAmount(foam).toVar();
     const cover = foamCover(amount, pattern).mul(foamMargin(fade)).toVar();
@@ -365,7 +378,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
         ),
       );
     });
-    return finish(col, dist);
+    return finish(col, dist, v.mist);
   })() as unknown as Node<'vec4'>;
 }
 
@@ -377,6 +390,8 @@ export interface FarVaryings {
   ground: Node<'vec4'>;
   lee: Node<'float'>;
   period: Node<'float'>;
+  /** The band's mist from the camera to the vertex. */
+  mist: Node<'float'>;
 }
 
 /**
@@ -389,6 +404,7 @@ export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'v
   const detail = parts.detail;
   return Fn(() => {
     hulls.cut(positionWorld, nearHull);
+    cutAtLip(positionWorld);
     const toEye = cameraPosition.sub(positionWorld);
     const dist = length(toEye);
     const at = positionWorld.xz;
@@ -427,7 +443,9 @@ export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'v
       folding,
       pattern,
       streak,
-      boats: surf(g.x, g.y, g.w, area.w, v.period, lee) as unknown as Node<'float'>,
+      boats: surf(g.x, g.y, g.w, area.w, v.period, lee).add(
+        drainLines(at),
+      ) as unknown as Node<'float'>,
     };
     const cover = foamCover(foamAmount(foam), pattern);
     const col = mix(
@@ -435,6 +453,6 @@ export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'v
       foamColour(N),
       cover.mul(FOAM.cover),
     );
-    return finish(col, dist);
+    return finish(col, dist, v.mist);
   })() as unknown as Node<'vec4'>;
 }

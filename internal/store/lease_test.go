@@ -325,3 +325,35 @@ func TestPersisterWrites(t *testing.T) {
 		t.Fatalf("events %v, %v", ticks, err)
 	}
 }
+
+// TestPersisterWritesTheEdge: going over is written where the boat
+// crossed the lip, an approach with its distance too.
+func TestPersisterWritesTheEdge(t *testing.T) {
+	s, u := storetest.Store(t, store.Options{})
+	world, err := s.ActiveOrFirstWorld(context.Background(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	epoch := take(t, newLease(t, u, "keel-a dev", store.LeaseOptions{}))
+	p, err := store.OpenPersister(context.Background(), u, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	err = p.Write(context.Background(), store.Batch{World: world.ID, Epoch: epoch, Events: []store.Event{
+		{Tick: 9, Kind: store.EventOver, Account: [16]byte{1}, Boat: 1, X: 8334.02, Y: -3},
+		{Tick: 9, Kind: store.EventApproach, Account: [16]byte{1}, Boat: 1, X: 12, Y: 8320, Distance: 13.5},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	var x, y, d float64
+	if err := pool.QueryRow(context.Background(), "SELECT x, y, distance FROM event WHERE kind = 'approach'").Scan(&x, &y, &d); err != nil || x != 12 || y != 8320 || d != 13.5 {
+		t.Fatalf("the approach: (%v, %v) at %v, %v", x, y, d, err)
+	}
+	var none *float64
+	if err := pool.QueryRow(context.Background(), "SELECT x, y, distance FROM event WHERE kind = 'over'").Scan(&x, &y, &none); err != nil || x != 8334.02 || y != -3 || none != nil {
+		t.Fatalf("going over: (%v, %v), %v, %v", x, y, none, err)
+	}
+}

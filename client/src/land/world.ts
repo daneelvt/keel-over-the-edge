@@ -18,9 +18,11 @@ const MAGIC = 'KEELWRLD';
 /** The world id the file's chunks carry. */
 export const FILE_WORLD = '00000000-0000-0000-0000-000000000000';
 
-/** A world file read: where boats start, and each chunk's payload by number. */
+/** A world file read: where boats start, its water's way round the disk, and each chunk's payload by number. */
 export interface WorldFile {
   start: { heading: number; places: [number, number][] };
+  /** 1 clockwise seen from above, −1 the other way. */
+  circulation: number;
   payloads: Uint8Array[];
 }
 
@@ -46,6 +48,7 @@ export function readWorldFile(data: ArrayBuffer): WorldFile {
   };
   const records = JSON.parse(new TextDecoder().decode(next())) as {
     start: { heading: number; places: [number, number][] };
+    circulation?: number;
   };
   next(); // the report
   next(); // the digest
@@ -53,7 +56,8 @@ export function readWorldFile(data: ArrayBuffer): WorldFile {
   for (let n = 0; n < GROUND.chunkSide * GROUND.chunkSide; n++) {
     payloads.push(next());
   }
-  return { start: records.start, payloads };
+  // A file written before the way was kept: clockwise.
+  return { start: records.start, circulation: records.circulation ?? 1, payloads };
 }
 
 /** Fetches the world file of a seed from the development server. */

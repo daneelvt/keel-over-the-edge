@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The five voices of a boat at sea, as numbers: what each voice's filter
-// and level should be for the apparent wind, the boat's speed, the sail's
-// flow and the sea under the boat. The recipes (bands, levels, curves) are art, in art/sound/;
+// The voices of a boat at sea, as numbers: what each voice's filter and
+// level should be for the apparent wind, the boat's speed, the sail's flow,
+// the sea under the boat and the falls at the edge. The recipes (bands, levels, curves) are art, in art/sound/;
 // this maps them onto the physics, so pitch follows the wind and the cloth
 // flogs exactly when the physics says a strip is luffing. Nothing swells of
 // itself: the wind's voice rises and falls with the gusts the boat feels,
@@ -11,7 +11,15 @@
 // Wind is broadband noise with a slowly moving band (Farnell, Designing
 // Sound, 2010). A rope in a wind of speed V sings at f = St·V/d, the
 // Strouhal number St about 0.2: the Aeolian tone.
+//
+// The falls are a line source kilometres long: their sound spreads in
+// cylinders, so its level falls 3 dB each time the distance doubles, where
+// a point's falls 6. The air absorbs the highs over distance (ISO 9613-1,
+// 1993: at 20 °C and 70% humidity about 5 dB/km at 1 kHz, 10 at 2 kHz, 30
+// at 4 kHz and 100 at 8 kHz), so a low-pass falls with distance where the
+// absorption reaches 3 dB.
 
+import falls from '../../../art/sound/falls.json';
 import flogging from '../../../art/sound/flogging.json';
 import rigging from '../../../art/sound/rigging.json';
 import sea from '../../../art/sound/sea.json';
@@ -25,9 +33,10 @@ export interface Recipes {
   flogging: typeof flogging;
   water: typeof water;
   sea: typeof sea;
+  falls: typeof falls;
 }
 
-export const RECIPES: Recipes = { wind, rigging, flogging, water, sea };
+export const RECIPES: Recipes = { wind, rigging, flogging, water, sea, falls };
 
 /** Sound parameters are set at most this often, in milliseconds. */
 export const SOUND_INTERVAL = 50;
@@ -50,6 +59,11 @@ export interface SoundInput {
   luffing: number;
   /** World time, seconds. */
   time: number;
+  /** How far the lip is, m (0 while falling over it), and which way, as a pan: −1 left, 1 right. */
+  lip: number;
+  lipPan: number;
+  /** Whether the boat is falling over the lip. */
+  falling: boolean;
 }
 
 export interface SoundTargets {
@@ -64,6 +78,9 @@ export interface SoundTargets {
   hissLevel: number;
   seaCentre: number;
   seaLevel: number;
+  fallsLevel: number;
+  fallsCutoff: number;
+  fallsPan: number;
 }
 
 export function newTargets(): SoundTargets {
@@ -79,7 +96,49 @@ export function newTargets(): SoundTargets {
     hissLevel: 0,
     seaCentre: 0,
     seaLevel: 0,
+    fallsLevel: 0,
+    fallsCutoff: 0,
+    fallsPan: 0,
   };
+}
+
+/**
+ * The falls' level at d metres from the lip: most at near, 3 dB less each
+ * doubling beyond, silent past reach (tapering over its last tenth).
+ */
+export function fallsLevel(r: Recipes['falls'], d: number): number {
+  const at = Math.max(d, r.near);
+  const spread = r.level.most * Math.sqrt(r.near / at);
+  return spread * (1 - ramp(0.9 * r.reach, r.reach, d));
+}
+
+/**
+ * The falls' low-pass at d metres: the frequency at which the air has
+ * absorbed 3 dB over d, read from the table between its points on log
+ * scales, and as the frequency below its first, within the cutoff's range.
+ */
+export function fallsCutoff(r: Recipes['falls'], d: number): number {
+  const { at, dbPerKm } = r.absorption;
+  const want = (3 * 1000) / Math.max(d, 1);
+  let f: number;
+  const first = dbPerKm[0] ?? 5;
+  const last = dbPerKm[dbPerKm.length - 1] ?? 100;
+  if (want <= first) {
+    f = (at[0] ?? 1000) * (want / first);
+  } else if (want >= last) {
+    f = (at[at.length - 1] ?? 8000) * Math.sqrt(want / last);
+  } else {
+    let i = 0;
+    while (i + 2 < dbPerKm.length && (dbPerKm[i + 1] ?? 0) < want) {
+      i++;
+    }
+    const a0 = Math.log(dbPerKm[i] ?? 1);
+    const a1 = Math.log(dbPerKm[i + 1] ?? 1);
+    const f0 = Math.log(at[i] ?? 1);
+    const f1 = Math.log(at[i + 1] ?? 1);
+    f = Math.exp(f0 + ((Math.log(want) - a0) / (a1 - a0)) * (f1 - f0));
+  }
+  return Math.min(Math.max(f, r.cutoff.least), r.cutoff.most);
 }
 
 /** 0 below from, rising smoothly to 1 at full. */
@@ -117,6 +176,19 @@ export function soundInput(
     (out[RECORDS.out.footFlow] === FLOW_LUFFING ? 1 : 0) +
     (out[RECORDS.out.headFlow] === FLOW_LUFFING ? 1 : 0);
   into.time = time;
+  return into;
+}
+
+/** Sets the falls' part of the sound's inputs: how far the lip is, which way, and whether the boat falls. */
+export function edgeInput(
+  lip: number,
+  pan: number,
+  falling: boolean,
+  into: SoundInput,
+): SoundInput {
+  into.lip = lip;
+  into.lipPan = pan;
+  into.falling = falling;
   return into;
 }
 
@@ -162,6 +234,12 @@ export function soundTargets(r: Recipes, x: SoundInput, out: SoundTargets): Soun
     e.level.most *
     ramp(e.level.from, e.level.full, hs) *
     (e.share.sea + e.share.whitecaps * white + e.share.speed * way);
+
+  const fl = r.falls;
+  const d = x.falling ? 0 : Math.max(0, x.lip);
+  out.fallsLevel = x.falling ? fl.level.falling : fallsLevel(fl, d);
+  out.fallsCutoff = fallsCutoff(fl, d);
+  out.fallsPan = x.falling ? 0 : Math.min(Math.max(x.lipPan, -1), 1);
   return out;
 }
 

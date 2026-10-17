@@ -314,3 +314,46 @@ func TestPersistenceTables(t *testing.T) {
 	refused(t, exec(t, pool, "INSERT INTO sim_lease (singleton, epoch, holder) VALUES (false, 0, 'another')"), "23514")
 	refused(t, exec(t, pool, "UPDATE sim_lease SET epoch = -1"), "23514")
 }
+
+// TestEdgeEvents: migration 00007 keeps the events written before it and
+// adds going over, where the boat crossed, and an approach, its distance
+// and where; only an approach has a distance, never negative.
+func TestEdgeEvents(t *testing.T) {
+	ctx := context.Background()
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 6); err != nil {
+		t.Fatal(err)
+	}
+	s, err := store.Open(ctx, u, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	w, err := s.ActiveOrFirstWorld(ctx, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	must(t, pool, "INSERT INTO event (world_id, tick, kind, account_id, boat) VALUES ($1, 1, 'launched', $2, 1)", w.ID, [16]byte{1})
+	must(t, pool, `INSERT INTO event (world_id, tick, kind, account_id, boat, other_account_id, other_boat, article, fault, x, y)
+		VALUES ($1, 2, 'bump', $2, 1, $3, 2, '16.1', 'account', 1.5, -2)`, w.ID, [16]byte{1}, [16]byte{2})
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM event WHERE distance IS NULL").Scan(&n); err != nil || n != 2 {
+		t.Fatalf("after the migration %d of the events before it (%v)", n, err)
+	}
+	must(t, pool, "INSERT INTO event (world_id, tick, kind, account_id, boat, x, y) VALUES ($1, 3, 'over', $2, 1, 8334.01, 0.5)", w.ID, [16]byte{1})
+	must(t, pool, "INSERT INTO event (world_id, tick, kind, account_id, boat, x, y, distance) VALUES ($1, 3, 'approach', $2, 1, 0, 8300, 34)", w.ID, [16]byte{1})
+	for _, q := range []string{
+		"INSERT INTO event (world_id, tick, kind, account_id, boat) VALUES ($1, 4, 'over', $2, 1)",
+		"INSERT INTO event (world_id, tick, kind, account_id, boat, x, y, distance) VALUES ($1, 4, 'over', $2, 1, 8334, 0, 0)",
+		"INSERT INTO event (world_id, tick, kind, account_id, boat, x, y) VALUES ($1, 4, 'approach', $2, 1, 0, 8300)",
+		"INSERT INTO event (world_id, tick, kind, account_id, boat, distance) VALUES ($1, 4, 'approach', $2, 1, 34)",
+		"INSERT INTO event (world_id, tick, kind, account_id, boat, x, y, distance) VALUES ($1, 4, 'approach', $2, 1, 0, 8300, -1)",
+		"INSERT INTO event (world_id, tick, kind, account_id, boat, distance) VALUES ($1, 4, 'launched', $2, 1, 3)",
+	} {
+		refused(t, exec(t, pool, q, w.ID, [16]byte{1}), "23514")
+	}
+}

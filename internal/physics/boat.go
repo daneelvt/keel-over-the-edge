@@ -71,6 +71,12 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 		v.capDepth(sea, g, s.X, s.Y)
 		v.twist = float64(v.twist * b.twistArm)
 	}
+	// The current moves the water under the boat as the waves do, but
+	// steadily over the ground: the substeps turn it into the heading
+	// frame as the boat turns.
+	if e.CurrentEast != 0 || e.CurrentNorth != 0 {
+		v.current, v.currentEast, v.currentNorth = true, e.CurrentEast, e.CurrentNorth
+	}
 	// So is the ground: where the bottom reaches a foil or the hull.
 	var bd bed
 	if g != nil {
@@ -97,6 +103,15 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 	m.sinHeel, m.cosHeel = SinCos(s.Heel)
 	m.rise, m.across = s.Heave-v.height, v.across
 	m.waterX, m.waterY, m.foilX, m.foilY = v.waterX, v.waterY, v.foilX, v.foilY
+	// The current moves the water the hull and foils meet, and the air
+	// near the surface with it: the wind's profile is of the wind over the
+	// water, which 10 m up is the wind over the ground less the current.
+	var currentX, currentY float64
+	if v.current {
+		currentX, currentY = currentInFrame(v.currentEast, v.currentNorth, sinH, cosH)
+		m.waterX, m.waterY = m.waterX+currentX, m.waterY+currentY
+		m.foilX, m.foilY = m.foilX+currentX, m.foilY+currentY
+	}
 	// The hull lies on the water's surface, which the waves tilt: its
 	// stability and how much of its foils are in the water follow the heel
 	// off that surface.
@@ -104,6 +119,10 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 	// The true wind comes from WindFrom: the air moves the other way.
 	m.windX = float64(-wind * (float64(cosW*cosH) + float64(sinW*sinH)))
 	m.windY = float64(-wind * (float64(sinW*cosH) - float64(cosW*sinH)))
+	if v.current {
+		m.current, m.currentX, m.currentY = true, currentX, currentY
+		m.windX, m.windY = m.windX-currentX, m.windY-currentY
+	}
 
 	// The sailor flattens the sail by the apparent wind at its centre of
 	// effort, which flattening also twists.
@@ -161,8 +180,18 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 		l.N -= float64(boomMoment * m.cosHeel)
 	}
 
-	s.Surge += float64(float64((l.X+float64(float64(b.massY*m.v)*m.r))*b.invMassX) * dt)
-	s.Sway += float64(float64((l.Y-float64(float64(b.massX*m.u)*m.r))*b.invMassY) * dt)
+	if v.current {
+		// In a current the added masses' share of the terms of turning is
+		// of the velocity through the water, the hull's own of the velocity
+		// over the ground (Fossen 2021, 10.3): with the current steady over
+		// the ground, its parts in the heading frame turn as the boat does.
+		vr, ur := m.v-currentY, m.u-currentX
+		s.Surge += float64(float64(((l.X+float64(float64(b.massY*vr)*m.r))+float64(float64(b.massX*m.r)*currentY))*b.invMassX) * dt)
+		s.Sway += float64(float64(((l.Y-float64(float64(b.massX*ur)*m.r))-float64(float64(b.massY*m.r)*currentX))*b.invMassY) * dt)
+	} else {
+		s.Surge += float64(float64((l.X+float64(float64(b.massY*m.v)*m.r))*b.invMassX) * dt)
+		s.Sway += float64(float64((l.Y-float64(float64(b.massX*m.u)*m.r))*b.invMassY) * dt)
+	}
 	s.YawRate += float64(float64(l.N*b.invYawInertia) * dt)
 	s.RollRate += float64(float64((heeling+righting)*b.invRollInertia) * dt)
 	if !held {
@@ -194,7 +223,7 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 		o.HeelingMoment, o.RightingMoment = heeling, righting
 		o.Flattening, o.Twist = flat, twist
 		o.WaveHeight, o.WaveSlopeAhead, o.WaveSlopeAcross = v.height, v.ahead, v.across
-		tu, tv := s.Surge-v.waterX, s.Sway-v.waterY
+		tu, tv := s.Surge-m.waterX, s.Sway-m.waterY
 		o.SpeedThroughWater = math.Sqrt(float64(tu*tu) + float64(tv*tv))
 	}
 }

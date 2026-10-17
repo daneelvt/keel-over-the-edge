@@ -134,7 +134,7 @@ func FixedIn(p *physics.WeatherPrepared, s physics.Spell) *Timeline {
 // one sample a tick, with a time constant so short that the wind at each
 // tick is the whole of it.
 var fixedParams = physics.WeatherParams{
-	Rim: 4.2, RefugeInner: 1, RefugeOuter: 1.4, RimGustsFrom: 3,
+	Rim: 4.2, RefugeInner: 1, RefugeOuter: 1.4, RimGustsFrom: 3, Edge: 4.5, FallDraftFrom: 4.2,
 	GustAlong: 300, GustAcross: 200, GustLife: 240,
 	WaveTimeConstant: 1e-9, WaveSample: 1.0 / physics.StepsPerSecond, WaveSamples: 1,
 }

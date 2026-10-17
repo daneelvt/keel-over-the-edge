@@ -181,6 +181,9 @@ export function writeWeatherParams(params: Float64Array, w: Weather): void {
   params[f.rimGusts] = w.disk.rimGusts;
   params[f.rimGustsFrom] = w.disk.rimGustsFrom;
   params.set(w.disk.acrossTurn, f.acrossTurn);
+  params[f.edge] = w.disk.edge;
+  params[f.fallDraftFrom] = w.disk.fallDraftFrom;
+  params[f.fallDraft] = w.disk.fallDraft;
   params[f.gustAlong] = w.gusts.gustAlong;
   params[f.gustAcross] = w.gusts.gustAcross;
   params[f.gustLife] = w.gusts.gustLife;
@@ -190,6 +193,11 @@ export function writeWeatherParams(params: Float64Array, w: Weather): void {
   params[f.waveTimeConstant] = w.waveWind.waveTimeConstant;
   params[f.waveSample] = w.waveWind.waveSample;
   params[f.waveSamples] = w.waveWind.waveSamples;
+  params.set(w.current.circulationAt, f.circulationAt);
+  params.set(w.current.circulation, f.circulation);
+  params.set(w.current.drainAt, f.drainAt);
+  params.set(w.current.drain, f.drain);
+  params[f.shallow] = w.current.shallow;
 }
 
 /** Writes a regime's wind into the physics module's Regime record. */

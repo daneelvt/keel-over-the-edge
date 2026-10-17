@@ -4,6 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import {
   aeolianTone,
+  fallsCutoff,
   newTargets,
   RECIPES,
   SOUND_INTERVAL,
@@ -21,6 +22,9 @@ const input = (v: Partial<SoundInput>): SoundInput => ({
   whitecaps: 0,
   luffing: 0,
   time: 0,
+  lip: Number.POSITIVE_INFINITY,
+  lipPan: 0,
+  falling: false,
   ...v,
 });
 
@@ -154,5 +158,49 @@ describe('the voices', () => {
     expect(closest).toBeGreaterThanOrEqual(SOUND_INTERVAL);
     expect(n).toBeLessThanOrEqual(5000 / SOUND_INTERVAL);
     expect(n).toBeGreaterThan(50);
+  });
+});
+
+describe('the falls', () => {
+  const at = (lip: number, extra: Partial<SoundInput> = {}) =>
+    soundTargets(RECIPES, input({ lip, ...extra }), newTargets());
+
+  test('fall 3 dB each doubling of the distance, from 10 m to the reach, and are silent beyond it', () => {
+    for (let d = 10; d <= 320; d *= 2) {
+      const db = 20 * Math.log10(at(d).fallsLevel / at(2 * d).fallsLevel);
+      expect(db, `${d} m to ${2 * d} m`).toBeCloseTo(10 * Math.log10(2), 6);
+    }
+    expect(at(RECIPES.falls.reach).fallsLevel).toBe(0);
+    expect(at(1500).fallsLevel).toBe(0);
+    expect(at(Number.POSITIVE_INFINITY).fallsLevel).toBe(0);
+    // Nearer than near, as loud as at near.
+    expect(at(2).fallsLevel).toBe(at(10).fallsLevel);
+  });
+
+  test('lose their highs with distance, as the air absorbs them', () => {
+    let last = Number.POSITIVE_INFINITY;
+    for (const d of [5, 20, 50, 100, 200, 400, 800]) {
+      const c = at(d).fallsCutoff;
+      expect(c, `${d} m`).toBeLessThanOrEqual(last);
+      last = c;
+    }
+    // Where the air takes 3 dB over the distance: 30 dB/km at 4 kHz over 100 m.
+    expect(fallsCutoff(RECIPES.falls, 100)).toBeCloseTo(4000, 0);
+    expect(fallsCutoff(RECIPES.falls, 300)).toBeCloseTo(2000, 0);
+    expect(at(10).fallsCutoff).toBeGreaterThan(8000);
+    expect(at(1000).fallsCutoff).toBeLessThan(1000);
+  });
+
+  test('come from the nearest point of the lip, as the camera turns', () => {
+    for (const pan of [-1, -0.5, 0, 0.7, 1]) {
+      expect(at(200, { lipPan: pan }).fallsPan).toBe(pan);
+    }
+    expect(at(200, { lipPan: 3 }).fallsPan).toBe(1);
+  });
+
+  test('are loudest while the boat falls', () => {
+    const falling = at(Number.POSITIVE_INFINITY, { falling: true });
+    expect(falling.fallsLevel).toBe(RECIPES.falls.level.falling);
+    expect(falling.fallsLevel).toBeGreaterThan(at(10).fallsLevel);
   });
 });

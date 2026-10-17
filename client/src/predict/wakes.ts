@@ -60,7 +60,8 @@ export class Wakes {
       if (!present) {
         continue;
       }
-      if (f[o + SLOT.far] !== 0) {
+      if (f[o + SLOT.far] !== 0 || f[o + SLOT.falling] !== 0) {
+        // A boat over the lip casts no shadow.
         this.#n[i] = 0;
         continue;
       }
