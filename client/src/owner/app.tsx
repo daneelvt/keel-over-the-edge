@@ -208,7 +208,7 @@ function MapCanvas({
           setView(zoomAt(view, e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.002)));
         }}
       />
-      <canvas ref={flashes} class="flashes" aria-hidden="true" />
+      <canvas ref={flashes} class="flashes" />
     </>
   );
 }
