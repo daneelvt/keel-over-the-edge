@@ -26,7 +26,7 @@ block of 8 bytes; then, while the boat is falling over the lip, its over
 block of 8 bytes; then the entries:
 
   offset  bytes  field
-       0      1  layout: 8
+       0      1  layout: 9
        1      8  tick (int64)
        9      2  base: how many ticks before this one the base snapshot is
                  (uint16); 0 for none: the view starts empty
@@ -34,7 +34,8 @@ block of 8 bytes; then the entries:
                  bit 1, the autopilot's block follows the header; bit 2,
                  the ground block follows it, or the header; bit 3, the
                  over block follows the blocks before it, or the header;
-                 the rest 0
+                 bit 4, the boat stays where it is, not stepped, while its
+                 owner's free camera roams; the rest 0
       12      4  seq of the own boat's control word in force (uint32)
       16      2  arrival margin in ticks (int16): the lowest since the
                  previous snapshot, how many ticks before its tick an input
@@ -82,7 +83,10 @@ before it end:
                  at most the snapshot's tick
        8      …  the entries
 
-A layout byte other than 8 is refused, as are a mode, way or order out of
+A boat that stays is held where it is, as one falling over the lip is,
+until a snapshot without bit 4 lets it go.
+
+A layout byte other than 9 is refused, as are a mode, way or order out of
 range, a spare byte not 0 and an over block's tick out of its range. The wind is not in the snapshot: the client
 computes the wind at its boat from the spells of weather it is sent
 (WeatherSystems), as the server does.

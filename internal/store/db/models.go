@@ -17,6 +17,7 @@ type Account struct {
 	CreatedAt  time.Time
 	SavedAt    pgtype.Timestamptz
 	LastSeenAt time.Time
+	Tools      bool
 }
 
 type Checkpoint struct {

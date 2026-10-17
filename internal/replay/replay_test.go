@@ -96,7 +96,8 @@ func (s *session) start() { go func() { s.done <- s.log.Run() }() }
 // sail runs ticks with sailors joining, waiting and giving up waiting,
 // leaving, disconnecting (their boats leaving when their grace ends, unless
 // they join again), steering and trimming, the wind changing, a boat placed
-// and admission held and let go now and then.
+// and admission held and let go now and then, and the owner's tools moving,
+// keeping still and hiding boats.
 func (s *session) sail(ticks int) {
 	q := s.w.Bus().Commands.Developer()
 	for range ticks {
@@ -125,6 +126,18 @@ func (s *session) sail(ticks int) {
 		case r < 8:
 			// Admission held now and then, as while the database is behind.
 			q.TrySend(bus.Command{Op: bus.Hold, Held: !f.Held})
+		case r < 9 && len(f.Live) > 0:
+			// The owner's tools: a boat moved, kept still, unseen; chosen
+			// by the tick, so that the random draws are as they were.
+			b := f.Boat[f.Live[int(f.Tick)%len(f.Live)]]
+			switch f.Tick % 3 {
+			case 0:
+				q.TrySend(bus.Command{Op: bus.Teleport, Boat: b, State: physics.State{X: -40, Y: 7, Heading: 2}, Start: f.Tick%2 == 0})
+			case 1:
+				q.TrySend(bus.Command{Op: bus.Stay, Boat: b, On: f.Tick%2 == 0})
+			default:
+				q.TrySend(bus.Command{Op: bus.Unseen, Boat: b, On: f.Tick%2 == 0})
+			}
 		}
 		for _, sl := range f.Live {
 			if s.rng.IntN(20) == 0 {

@@ -45,12 +45,65 @@ import (
 // touched as varints. The boats' winds and wakes follow from their states,
 // and the bumps are events: neither is stored.
 //
-// A checkpoint stores this snapshot, so a world is restored only by a build
-// that reads its version.
+// Then, only if a boat has any, the owner's tools' marks: a uvarint n, then
+// n × the slot and a uvarint of flags (1: it stays, 2: it is unseen, 4: its
+// voyage is placed), slots ascending. A snapshot without them is the same
+// bytes as before they were.
+//
+// A checkpoint stores this snapshot without the owner's tools' marks
+// (AppendCheckpoint), so a world is restored only by a build that reads its
+// version, and a restart clears them.
 const SnapshotVersion = 10
 
-// AppendSnapshot appends f's snapshot to dst.
+// The owner's tools' marks of a boat, in a snapshot.
+const (
+	markStay   = 1
+	markUnseen = 2
+	markPlaced = 4
+	markAll    = markStay | markUnseen | markPlaced
+)
+
+// marks are the owner's tools' marks of slot s of f.
+func marks(f *bus.Frame, s int32) uint64 {
+	var m uint64
+	if f.Stay[s] {
+		m |= markStay
+	}
+	if f.Unseen[s] {
+		m |= markUnseen
+	}
+	if f.Voyage[s].Placed {
+		m |= markPlaced
+	}
+	return m
+}
+
+// AppendSnapshot appends f's snapshot to dst, the owner's tools' marks
+// included: what the input log starts a segment from.
 func AppendSnapshot(dst []byte, f *bus.Frame) []byte {
+	dst = AppendCheckpoint(dst, f)
+	n := 0
+	for _, s := range f.Live {
+		if marks(f, s) != 0 {
+			n++
+		}
+	}
+	if n == 0 {
+		return dst
+	}
+	dst = binary.AppendUvarint(dst, uint64(n))
+	for _, s := range f.Live {
+		if m := marks(f, s); m != 0 {
+			dst = binary.AppendUvarint(dst, uint64(s))
+			dst = binary.AppendUvarint(dst, m)
+		}
+	}
+	return dst
+}
+
+// AppendCheckpoint appends f's snapshot to dst without the owner's tools'
+// marks: what a checkpoint stores.
+func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 	dst = binary.AppendUvarint(dst, SnapshotVersion)
 	dst = binary.AppendVarint(dst, f.Tick)
 	dst = binary.AppendUvarint(dst, uint64(len(f.Weathers)))
@@ -218,6 +271,8 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 	f.Live = f.Live[:0]
 	clear(f.Occupied)
 	clear(f.Gen)
+	clear(f.Stay)
+	clear(f.Unseen)
 	f.Changed = f.Changed[:0]
 	clear(f.Events)
 	f.Events = f.Events[:0]
@@ -304,7 +359,35 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		return r.err
 	}
 	if len(r.b) > 0 {
+		return r.marks(f)
+	}
+	return nil
+}
+
+// marks reads the owner's tools' marks, which follow the pairs only when a
+// boat has one.
+func (r *reader) marks(f *bus.Frame) error {
+	n := r.count(uint64(len(f.Live)))
+	if r.err == nil && n == 0 {
 		return errors.New("sim: snapshot: data after the pairs")
+	}
+	last := int64(-1)
+	for range n {
+		s, m := r.uvarint(), r.uvarint()
+		if r.err != nil {
+			return r.err
+		}
+		if int64(s) <= last || s >= uint64(f.Capacity()) || !f.Occupied[s] || m == 0 || m&^markAll != 0 {
+			return fmt.Errorf("sim: snapshot: the owner's marks %d of slot %d", m, s)
+		}
+		f.Stay[s], f.Unseen[s], f.Voyage[s].Placed = m&markStay != 0, m&markUnseen != 0, m&markPlaced != 0
+		last = int64(s)
+	}
+	if r.err != nil {
+		return r.err
+	}
+	if len(r.b) > 0 {
+		return errors.New("sim: snapshot: data after the owner's marks")
 	}
 	return nil
 }

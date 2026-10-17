@@ -261,6 +261,7 @@
   accent-color: var(--gold);
 }
 
+.menu-fly,
 .menu-close {
   margin-top: 6px;
   min-height: 44px;
@@ -270,6 +271,31 @@
   background: rgb(255 255 255 / 12%);
   color: var(--ink);
   font: inherit;
+}
+
+/* The free camera's way back to the boat: hidden, and shown a moment after
+   a tap, so the picture is clean. */
+.fly-back {
+  position: absolute;
+  top: var(--edge-top);
+  right: var(--edge-right);
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.4s,
+    visibility 0s 0.4s;
+}
+
+.hud .fly-back.shown {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s;
 }
 
 /* The controls. touch-action: none keeps the browser from scrolling or

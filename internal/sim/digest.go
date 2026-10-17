@@ -15,7 +15,7 @@ import (
 // its length), whether admission is held, each occupied slot's number, boat, generation,
 // owner, connection, grace, control word, pilot word, state, course and, if it has
 // anything, its voyage at the edge (the tick it went over, its flags and its six
-// distances and places), each waiting
+// distances and places), and, if it has any, the owner's tools' marks, each waiting
 // connection's account, connection, tick of joining the queue and grace,
 // and each pair's slots, boats, keep-clear boat, Article, whose action and
 // ticks, as little-endian bits. Two worlds with the
@@ -63,6 +63,11 @@ func Digest(f *bus.Frame) uint64 {
 			for _, x := range [...]float64{v.Least, v.X, v.Y, v.Best, v.BestX, v.BestY} {
 				h.f64(x)
 			}
+		}
+		// The owner's tools' marks count once one is set, so a world they
+		// never touched hashes as before.
+		if m := marks(f, s); m != 0 {
+			h.u64(m)
 		}
 	}
 	for _, q := range f.Queue {

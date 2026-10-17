@@ -1340,7 +1340,7 @@ kinds and a `distance` column). Metrics: `keel_falls_total`,
 `keel_approaches_total`, and the `rules` phase in
 `keel_sim_phase_duration_seconds`.
 
-The snapshot (layout 8) carries an **over block**, the tick the boat went
+The snapshot (from layout 8) carries an **over block**, the tick the boat went
 over, while it falls. The page's prediction checks `over()` after each
 step: a boat that crosses is held there, unstepped, as the server holds it;
 a snapshot after the fall without the block is the boat back at the start,
@@ -1419,6 +1419,144 @@ each distance inside the lip the best of seventeen courses on the
 autopilot, sailed two minutes in that place's wind, current and sea; the
 least distance from which it gains ground, in each regime's spells and in
 a steady wind in flat water, and a capsize 150 m inside the lip recovered.
+
+## The owner's tools
+
+Tools for the owner alone, which no player ever sees: **the world page**, a
+map of the whole disk with everything on it and controls beside it, and
+**the free camera** in the game, for an account that carries **the
+owner's flag**.
+
+### The world page
+
+On keel's internal listener at `/owner/`, which has no route to the
+internet. Reach it through the tunnel to production, or a port forward on
+the local cluster, or keel's own address in the inner loop:
+
+```sh
+go run ./tools/ops -tunnel          # production: http://localhost:9090/owner/
+kubectl --kubeconfig .dev/cluster/kubeconfig -n keel port-forward deployment/keel 9090:internal
+                                    # the local cluster: http://localhost:9090/owner/
+cd client && npm run owner          # the inner loop, beside go run ./tools/dev: http://localhost:5184/owner/
+```
+
+**The map**: the land, drawn once per world as the world generator's
+preview draws it (`internal/worldgen/chart`, 8 m a pixel, 2,100 pixels a
+side, cached with the world's digest as its ETag), the coasts, and an
+island zoomed into at the lattice's resolution; over it, redrawn each
+second, every boat pointing its heading (the owner's orange, players' blue,
+AI grey, a boat falling pink, a staying boat hollow, an unseen one dashed)
+with a free camera's eye joined to its boat, the mean wind every kilometre,
+the gusts (the wind over its mean every 100 m, orange a gust, blue a lull),
+the current every 250 m, the calm water's ring, the mist band and the lip,
+and the start area. Each layer switches; a drag pans, the wheel zooms about
+the pointer. **A click picks a point**: its height or depth, how far inside
+the lip, the nearest island, and whether a boat may be put there. Beside
+the map: **the world** (its number, ID, seed and generator, when it was
+made, its epoch, the tick, world time, the sky's hour at the centre),
+**the weather** (the spell's regime, wind at mid-disk, drift, gust factor,
+the next change), **the boats at sea and in the queue**, and **the
+islands**, by number and name, each taking the map to itself.
+
+The page (`client/src/owner/`, Preact and Canvas 2D, no map library) is
+built apart from the game into `dist/owner/` (`vite.owner.config.ts`;
+`npm run build` builds both), which the game's listener never serves.
+
+Its data and controls, under `/owner/api/`, are also for tools: `world.json`
+(the world now: boats, queue, weather, wind, clock; built by one goroutine
+once a second from a copy of the latest frame, so no request holds a
+frame), `gusts.bin` (168 × 168 signed bytes, 0.1 m/s a step), `islands.json`,
+`current.json`, `land.png`, `coasts.svg`, `island/{n}.svg` and
+`point?east=…&north=…`.
+
+**The guard** (`internal/owner/guard.go`): every request whose `Host` is not
+`localhost` or a loopback address, on any port, is refused, so a page the
+owner has open elsewhere cannot read the map or work a control by
+re-pointing a name of its own at this computer (DNS rebinding); a control
+must also pass `net/http`'s cross-origin protection (`Sec-Fetch-Site`,
+`Origin`), be JSON and at most 4 KB. Responses carry no CORS header, forbid
+framing and a strict Content Security Policy. The probes and the metrics
+are not under the guard.
+
+### The controls
+
+Each a POST of JSON, logged at info with the account, the boat, the point
+and the address it came from, and counted (`keel_owner_actions_total`).
+They act on the owner's own boats alone: a boat whose account does not
+carry the flag is refused, and no other player's boat is ever moved.
+
+- **The owner's flag** (`POST /owner/api/flag {"account", "on"}`, a box on
+  a boat's row or the queue's): the account's `tools` column
+  (`00008_tools.sql`; a check keeps it off AI accounts), then the sessions'
+  cache forgets the account and its open connection is told (a `Tools`
+  message), so it takes effect at once. Cleared, its free camera comes back
+  and its boat is seen again.
+- **Teleport** (`POST /owner/api/place`): to the point picked, to the start
+  (where a new boat would appear, clear of other hulls), to an island's
+  approach (the first water 3 m deep on the line from its highest point
+  toward the centre, facing the island), or under the boat's free camera;
+  at rest, its heading kept unless given. Refused over land or shallower
+  than 2 m (with land sailed), at or beyond the lip, or within 10 m of
+  another boat. It is the simulation's `Teleport`, through the owner's
+  sender (`bus.Queue.Owner`, which sends `Teleport`, `Stay` and `Unseen`
+  alone): the boat's course is cleared and its voyage **placed**, so going
+  over the lip or an approach to it in that voyage is counted but written
+  as no event; the voyage after it starts clear. The input log replays it.
+- **Unseen** (`POST /owner/api/unseen {"boat", "on"}`): the boat is left
+  out of every other connection's view, and touches nothing and casts no
+  shadow, as a boat falling over the lip does.
+
+`/debug/place` stays the developer's (`KEEL_DEV_COMMANDS=1`), for the
+browser tests: it moves any boat and marks nothing.
+
+### The free camera
+
+**F** flies it off the boat and back; **Escape** brings it back; on a phone
+the menu's "Free camera (F)" goes in. The keyboard flies it level (W A S D
+or the arrows, Q and E down and up, Shift three times faster), the mouse
+dragged turns it; on a phone one finger looks, two fingers fly it over the
+water, a pinch climbs and descends; the wheel scales its speed, which rises
+with height from 10 m/s at 2 m to 150 m/s at 500 m. It roams the whole disk
+and 500 m past the lip, from 2 m to 500 m above the sea and never into the
+land held under it (`render/freecam.ts`). **The screen is clean**: a tap on
+the picture shows "Back to the boat" for three seconds. With reduced motion
+a flick of two fingers does not glide on.
+
+The scene follows **its focus**: the boat, or under the free camera the
+point beneath it. The floating origin, the dome's bend, the tile field, the
+land's meshes, the ocean and the sky are about the focus; the boat is drawn
+where it is; the module's ground slots stay under the boat.
+
+**Online it is the owner's alone**: `Welcome.tools` and `Tools` say whether
+the account carries the flag. The page sends `Command.roam` (the camera's
+point and height, in centimetres) as it leaves the boat, at most five times
+a second once it has moved 20 m, and as it comes back. The edge honours it
+only from a connection whose account carries the flag (any other is
+counted, `keel_owner_refused_total{what="roam"}`): **the connection's eye**
+becomes the camera's point, and the other boats it is sent, its sea's
+window and the land's chunks it is handed (by a second handout made for
+500 m) are about the eye. Its boat **stays** (`bus.Stay`): not stepped, kept
+in the grid so others see it, touching nothing; the snapshot's flag bit 4
+(layout 9) says so, and the prediction holds it as it holds a fall, starting
+again once from the server's state when the camera comes back, the flag is
+cleared or the connection ends.
+
+**In the sandbox** anyone may fly it (F, or the developer panel's button),
+nothing is sent, the boat stays, and the world file's land is handed about
+the camera as a server would.
+
+The staying, unseen and placed marks are kept in the input log's snapshots
+(an optional trailer, written only when a boat has one) and in the digest
+when set, but **not in the checkpoint**: a restart releases them, and the
+world's snapshot format (10) is unchanged.
+
+### What it costs
+
+The view's builder takes about 3.6 ms on the Mac with 1,000 boats about the
+disk (`go test ./internal/owner -bench Build`), once a second, off the
+tick; the tick with 1,000 boats is the same with it running
+(`-bench Tick`), and no frame is made for want of one. The land is drawn
+once per world, on the first request for it: about 1.3 s.
 
 ## Waves
 
@@ -1891,7 +2029,7 @@ Three HTTP servers, each with a 10 s header timeout, a 120 s idle timeout and
 |----------|-------------------|--------|
 | `play.` | `KEEL_PLAY_ADDR`, `127.0.0.1:8080` | The game's routes (below), with an access log |
 | `agents.` | `KEEL_AGENTS_ADDR`, `127.0.0.1:8081` | Nothing yet: 404 to everything |
-| internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay`, and with `KEEL_DEV_COMMANDS=1` `POST /debug/wind` and `/debug/weather` |
+| internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay`, the owner's world page and its controls under `/owner/` (see [The owner's tools](#the-owners-tools)), and with `KEEL_DEV_COMMANDS=1` `POST /debug/wind` and `/debug/weather` |
 | metrics | `KEEL_METRICS_ADDR`, none | `GET /metrics` and nothing else; not opened unless set |
 
 The internal listener must never be reachable from outside. The addresses
@@ -1907,7 +2045,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
-| `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. The image sets it; in development Vite serves the page instead |
+| `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. Its `owner/` folder, the world page, is served by the internal listener alone, if it is there. The image sets it; in development Vite serves the pages instead |
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
@@ -1978,6 +2116,7 @@ resolved at start, so updating it allocates nothing:
 | `keel_sim_admissions_total{result}` | `joined`, `rejoined`, `queued`, `admitted` from the queue, `dequeued` (gave up waiting), `full` (the queue too) |
 | `keel_sim_queue_wait_seconds` | How long each player given a boat from the queue waited |
 | `keel_falls_total`, `keel_approaches_total` | Boats gone over the lip; voyages ended with an approach to it survived |
+| `keel_owner_actions_total`, `keel_owner_refused_total`, `keel_owner_view_seconds` | The world page's controls used, by action; what the owner's tools refused, by what was asked (`roam` from an account without the flag, a control, or a `request` the guard turned away); the view's building, once a second |
 | `keel_sim_commands_total{kind,result}`, `keel_sim_commands_refused_total` | Commands applied; refused because the queue was full |
 | `keel_sim_frames_allocated_total` | Frames made because every pooled frame was held: flat once running |
 | `keel_replay_bytes_total`, `_segments_total`, `_records_dropped_total` | The input log |
@@ -3928,7 +4067,7 @@ manifests and the list the same.
 | http://localhost:8428 | VictoriaMetrics' own page (vmui), with vmalert's rules and alerts under `/vmalert` |
 | http://localhost:9428 | VictoriaLogs' own page |
 | localhost:15432 | the database, for `psql` as `reader` ([The database](#the-database)) |
-| localhost:9090 | keel's internal listener: `go tool pprof http://localhost:9090/debug/pprof/profile`, the flight recorder, the input log |
+| localhost:9090 | keel's internal listener: `go tool pprof http://localhost:9090/debug/pprof/profile`, the flight recorder, the input log, and the world page at http://localhost:9090/owner/ |
 
 `-tunnel -print` prints the command and runs nothing.
 
@@ -4302,7 +4441,16 @@ lag proxy on 18090 (200 ms, 2%) and, on 19099, `POST /restart`, which
 restarts `keel`; Vite on `http://localhost:5181` in front of it; a second
 Vite on `http://localhost:5182` whose traffic goes through the lag proxy;
 and a third on `https://localhost:5183` with a throwaway certificate, for
-WebKit. `connect.spec.ts` sails online: the sea with the server's boat, a
+WebKit; and the world page's Vite on `http://localhost:5184/owner/`, in
+front of keel's internal listener. `owner.spec.ts` opens the world page:
+its layers switching, an island in the list, the owner flagging their
+account from a boat's row and their page's boat put where they click, the
+page reading nothing while its tab is hidden, and a request with another
+Host refused. `roam.spec.ts` sails two players, one flagged: its free
+camera roams while its boat stays, the other's is not offered and a Roam
+it sends anyway is refused, and the flagged boat teleported beside the
+other, hidden and shown. `freecam.spec.ts` flies the free camera in the
+sandbox, the scene about it 2 km from the boat. `connect.spec.ts` sails online: the sea with the server's boat, a
 sail with no correction, the server's wind reaching the boat, the same boat
 after a reload, the bell and the same boat after a restart, and a second device
 taking the boat and being taken back from. `lag.spec.ts` sails through the

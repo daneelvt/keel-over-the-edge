@@ -138,6 +138,11 @@ type Sailor struct {
 	// OnView, if not nil, is given each snapshot as it is decoded, with the
 	// view after it, what its entries did and the slots it samples.
 	OnView func(ev *Event)
+	// Tools is the account's owner's flag, as the Welcome and Tools last
+	// said.
+	Tools bool
+	// LastSea is the latest SeaAreas the server sent.
+	LastSea *pb.SeaAreas
 }
 
 // Place is a place in the queue, and how many waited.
@@ -193,6 +198,12 @@ func (s *Sailor) Drop() {
 		}
 		s.ws = nil
 	}
+}
+
+// Roam sends the owner's free camera off the boat to (east, north),
+// height up, m, or with on false brings it back.
+func (s *Sailor) Roam(ctx context.Context, on bool, east, north, height float64) error {
+	return s.send(ctx, s.Net.Roam(s.now(), on, east, north, height))
 }
 
 func (s *Sailor) send(ctx context.Context, b []byte) error {
@@ -254,6 +265,7 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			if w := ev.Welcome; w != nil {
 				s.Welcomes = append(s.Welcomes, WelcomeSeen{Boat: w.GetBoat(), Rejoined: w.GetRejoined(), EpochUs: w.GetEpochUs()})
 				s.Predictor.Circulation = float64(w.GetCirculation())
+				s.Tools = w.GetTools()
 				s.fresh = true
 				// A snapshot still waiting for a frame is the last
 				// connection's: its controls are not this boat's.
@@ -275,7 +287,11 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			}
 			if ev.SeaAreas != nil {
 				s.Stats.Seas++
+				s.LastSea = ev.SeaAreas
 				s.Predictor.Seas.Receive(ev.SeaAreas)
+			}
+			if ev.Tools != nil {
+				s.Tools = ev.Tools.GetOn()
 			}
 			if c := ev.Chunks; c != nil {
 				s.Stats.Chunks += len(c.GetNumber())

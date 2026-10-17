@@ -28,7 +28,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 }
 
 const sessionAccount = `-- name: SessionAccount :one
-SELECT a.id, a.kind, (a.saved_at IS NOT NULL)::boolean AS saved, sl.name, sl.look, s.last_seen_at
+SELECT a.id, a.kind, (a.saved_at IS NOT NULL)::boolean AS saved, a.tools, sl.name, sl.look, s.last_seen_at
 FROM session s
 JOIN account a ON a.id = s.account_id
 JOIN sailor sl ON sl.account_id = a.id
@@ -39,6 +39,7 @@ type SessionAccountRow struct {
 	ID         pgtype.UUID
 	Kind       string
 	Saved      bool
+	Tools      bool
 	Name       string
 	Look       string
 	LastSeenAt time.Time
@@ -51,6 +52,7 @@ func (q *Queries) SessionAccount(ctx context.Context, tokenHash []byte) (Session
 		&i.ID,
 		&i.Kind,
 		&i.Saved,
+		&i.Tools,
 		&i.Name,
 		&i.Look,
 		&i.LastSeenAt,

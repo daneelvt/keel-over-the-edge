@@ -20,7 +20,7 @@ type Op uint8
 // The commands. Join, Leave and Disconnect come from players' connections;
 // SetWeather and Place are for developers only: tests, scripted sailors
 // and replays; Hold is the server's own, from what writes the world to the
-// database.
+// database; Teleport, Stay and Unseen are the owner's tools'.
 const (
 	Join       Op = iota + 1 // a boat for Account, sailed through connection Conn: its existing one, a new one, or a place in the queue
 	Leave                    // Boat leaves the world
@@ -28,13 +28,16 @@ const (
 	Place                    // Boat's state becomes State
 	Disconnect               // connection Conn, Boat's, has ended: its grace begins; with Boat 0, Account's connection Conn, waiting or sailing
 	Hold                     // admission is held while Held: a Join without a boat waits in the queue, and the queue gives none
+	Teleport                 // Boat's state becomes State, or with Start the start's: at rest, its course cleared, its voyage marked placed
+	Stay                     // Boat stays where it is while On: not stepped, touching nothing, casting no shadow
+	Unseen                   // Boat is in no other connection's view while On, and touches nothing and casts no shadow
 	opEnd
 )
 
 // Ops lists every op, in order, for tables keyed by op.
-var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold}
+var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen}
 
-var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold"}
+var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen"}
 
 func (o Op) String() string {
 	if o == 0 || o >= opEnd {
@@ -49,6 +52,10 @@ func (o Op) Developer() bool { return o == SetWeather || o == Place }
 // Server reports whether only the server's own parts may send o: a
 // developer's sender may too, a player's never.
 func (o Op) Server() bool { return o == Hold }
+
+// Owner reports whether only the owner's tools may send o: a developer's
+// sender may too, a player's or the server's never.
+func (o Op) Owner() bool { return o == Teleport || o == Stay || o == Unseen }
 
 // An Account is who sails a boat: the account's UUID, its 16 bytes.
 type Account [16]byte
@@ -98,10 +105,12 @@ type Command struct {
 	Op      Op
 	Account Account       // Join, Disconnect with no boat: the account; in a Leave's event, the tick's record of who sailed the boat
 	Conn    uint64        // Join, Disconnect: the connection; 0 for none
-	Boat    uint64        // Leave, Place, Disconnect: the boat; Disconnect: 0 for whatever Account has
+	Boat    uint64        // Leave, Place, Disconnect, Teleport, Stay, Unseen: the boat; Disconnect: 0 for whatever Account has
 	Weather Weather       // SetWeather
-	State   physics.State // Place
+	State   physics.State // Place, Teleport
 	Held    bool          // Hold: held, or let go
+	Start   bool          // Teleport: to the start, where a new boat would appear, rather than State
+	On      bool          // Stay, Unseen: on, or off
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply
@@ -116,7 +125,7 @@ const (
 	Rejoined                   // the account's existing boat
 	Full                       // no free slot, and no room in the queue
 	Left                       // the boat has gone
-	Done                       // SetWeather, Place or Hold applied; Disconnect's grace begun
+	Done                       // SetWeather, Place, Hold, Teleport, Stay or Unseen applied; Disconnect's grace begun
 	NoBoat                     // no such boat
 	Expired                    // the boat left at the end of its grace: the tick's own doing, not a command's
 	Stale                      // Disconnect from a connection that no longer sails the boat, or waits: ignored
@@ -157,9 +166,10 @@ type Reply struct {
 var (
 	// ErrBusy means the queue is full: try again later.
 	ErrBusy = errors.New("bus: the command queue is full")
-	// ErrNotAllowed means the sender may not send that command: a developer
-	// or server command from a player's sender, a command other than the
-	// server's from the server's, or no command at all.
+	// ErrNotAllowed means the sender may not send that command: a developer,
+	// server or owner's command from a player's sender, a command other than
+	// the server's from the server's, other than the owner's from the
+	// owner's, or no command at all.
 	ErrNotAllowed = errors.New("bus: command not allowed from this sender")
 )
 
@@ -185,6 +195,10 @@ func (q *Queue) Developer() Sender { return Sender{q: q, from: fromDeveloper} }
 // Server returns a sender for the server's own commands, Hold alone: what
 // writes the world to the database holds admission while it is behind.
 func (q *Queue) Server() Sender { return Sender{q: q, from: fromServer} }
+
+// Owner returns a sender for the owner's tools' commands alone: Teleport,
+// Stay and Unseen. The world page and the free camera are given one.
+func (q *Queue) Owner() Sender { return Sender{q: q, from: fromOwner} }
 
 // Refused counts the commands refused because the queue was full.
 func (q *Queue) Refused() uint64 { return q.refused.Load() }
@@ -213,6 +227,7 @@ const (
 	fromPlayers source = iota
 	fromDeveloper
 	fromServer
+	fromOwner
 )
 
 // allowed reports whether a sender for from may send o.
@@ -224,8 +239,10 @@ func (from source) allowed(o Op) bool {
 		return true
 	case from == fromServer:
 		return o.Server()
+	case from == fromOwner:
+		return o.Owner()
 	}
-	return !o.Developer() && !o.Server()
+	return !o.Developer() && !o.Server() && !o.Owner()
 }
 
 // TrySend queues c without waiting: ErrBusy if the queue is full,

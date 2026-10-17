@@ -357,3 +357,26 @@ func TestEdgeEvents(t *testing.T) {
 		refused(t, exec(t, pool, q, w.ID, [16]byte{1}), "23514")
 	}
 }
+
+// TestToolsColumn: migration 00008 gives every account already there the
+// owner's flag cleared, and only a human account may carry it.
+func TestToolsColumn(t *testing.T) {
+	ctx := context.Background()
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 7); err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	human := uuidOf(t, pool, "INSERT INTO account (kind, saved_at) VALUES ('human', now()) RETURNING id")
+	ai := uuidOf(t, pool, "INSERT INTO account (kind, owner_id) VALUES ('ai', $1) RETURNING id", human)
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM account WHERE NOT tools").Scan(&n); err != nil || n != 2 {
+		t.Fatalf("after the migration %d of the accounts before it unflagged (%v)", n, err)
+	}
+	must(t, pool, "UPDATE account SET tools = true WHERE id = $1", human)
+	refused(t, exec(t, pool, "UPDATE account SET tools = true WHERE id = $1", ai), "23514")
+	refused(t, exec(t, pool, "UPDATE account SET tools = NULL WHERE id = $1", human), "23502")
+}

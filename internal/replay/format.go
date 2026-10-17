@@ -44,7 +44,9 @@ import (
 //	T tick      tick, ticks skipped before it, the control words applied
 //	            (count, then slot, word and pilot word for each), the commands applied in order with
 //	            their results (count, then each: op, its fields, result, slot, boat, generation,
-//	            place in the queue, tick queued at); an account is its 16 bytes; a boat whose
+//	            place in the queue, tick queued at); an account is its 16 bytes; a yes or
+//	            no a byte, 1 or 0; a Teleport its boat, whether to the start and its state;
+//	            a Stay or Unseen its boat and whether on; a boat whose
 //	            grace ended is a Leave with the result Expired, and a connection given a boat
 //	            from the queue a Join with the result Admitted, which the tick makes itself
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
@@ -174,11 +176,16 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 			dst = appendF64(dst, *v)
 		}
 	case bus.Hold:
-		held := byte(0)
-		if e.Held {
-			held = 1
+		dst = append(dst, flag(e.Held))
+	case bus.Teleport:
+		dst = binary.AppendUvarint(dst, e.Boat)
+		dst = append(dst, flag(e.Start))
+		for _, v := range sim.StateFields(&e.State) {
+			dst = appendF64(dst, *v)
 		}
-		dst = append(dst, held)
+	case bus.Stay, bus.Unseen:
+		dst = binary.AppendUvarint(dst, e.Boat)
+		dst = append(dst, flag(e.On))
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -186,6 +193,14 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 	dst = binary.AppendUvarint(dst, uint64(e.Reply.Gen))
 	dst = binary.AppendUvarint(dst, uint64(e.Reply.Position))
 	return binary.AppendVarint(dst, e.Reply.Since)
+}
+
+// flag is a yes or no as a byte: 1 or 0.
+func flag(b bool) byte {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func appendF64(dst []byte, v float64) []byte {
@@ -454,6 +469,20 @@ func (p *payload) string() string {
 	return s
 }
 
+// flag reads a yes or no, 1 or 0, of what.
+func (p *payload) flag(what string) bool {
+	switch p.byte() {
+	case 0:
+		return false
+	case 1:
+		return true
+	}
+	if p.err == nil {
+		p.err = errors.New(what + " neither on nor off")
+	}
+	return false
+}
+
 func (p *payload) rest() []byte {
 	b := p.b
 	p.b = nil
@@ -484,15 +513,16 @@ func (p *payload) event(e *bus.Event) {
 			*v = p.f64()
 		}
 	case bus.Hold:
-		switch p.byte() {
-		case 0:
-		case 1:
-			e.Held = true
-		default:
-			if p.err == nil {
-				p.err = errors.New("a hold neither on nor off")
-			}
+		e.Held = p.flag("a hold")
+	case bus.Teleport:
+		e.Boat = p.uvarint()
+		e.Start = p.flag("a teleport to the start")
+		for _, v := range sim.StateFields(&e.State) {
+			*v = p.f64()
 		}
+	case bus.Stay, bus.Unseen:
+		e.Boat = p.uvarint()
+		e.On = p.flag("a stay or unseen")
 	default:
 		if p.err == nil {
 			p.err = fmt.Errorf("unknown command %d", e.Op)

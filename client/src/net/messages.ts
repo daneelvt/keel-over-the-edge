@@ -87,6 +87,11 @@ export type ToWorker =
   | { type: 'wake' }
   /** The player chose to take the boat back from another device. */
   | { type: 'takeover' }
+  /**
+   * The owner's free camera: off the boat over (east, north), height up,
+   * metres, or back on it. Only an account with the owner's flag is heard.
+   */
+  | { type: 'roam'; on: boolean; east: number; north: number; height: number }
   /** The page is going: close with 1000. */
   | { type: 'stop' }
   /** A snapshot record read, for the worker to fill again. */
@@ -129,7 +134,11 @@ export type FromWorker =
       land: boolean;
       /** The world's way round the disk for its current: 1 clockwise seen from above, −1 the other way, 0 none. */
       circulation: number;
+      /** The account carries the owner's flag: the free camera is its. */
+      tools: boolean;
     }
+  /** The account's owner's flag was set or cleared. */
+  | { type: 'tools'; on: boolean }
   /** A snapshot record: view.ts's FLEET_RECORD_BYTES. */
   | { type: 'snapshot'; data: ArrayBuffer }
   /** The place in the queue, 1 for the next, and how many wait. */

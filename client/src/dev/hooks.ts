@@ -72,7 +72,7 @@ import { type RecordValues, spellOf, steer, toHex } from '../predict/golden';
 import { RECORDS, SEA } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
-import { checkScene, DOME_RADIUS, domeDrop, seaMaterial } from '../render/materials';
+import { checkScene, DOME_RADIUS, domeCentre, domeDrop, seaMaterial } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
@@ -1212,6 +1212,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         counts: { ...p.counts },
         p95: p.p95(),
         traffic: { ...o.traffic },
+        tools: o.tools.value,
+        stays: p.stays,
       };
     },
     /**
@@ -1287,6 +1289,64 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         physics.seaFactor(ocean.slot, points, module);
       }
       return { depth, gpu, land, module: Array.from(module), count };
+    },
+
+    /**
+     * The free camera: F's toggle (fly), or put flying at a point looking
+     * a way (bearing and pitch in degrees), or back on the boat (land);
+     * and its state, the scene's focus, the dome's centre, the tile
+     * field's centre, whether the screen is hidden and whether it is
+     * offered.
+     */
+    fly(at?: {
+      east: number;
+      north: number;
+      height: number;
+      bearing?: number;
+      pitch?: number;
+    }): void {
+      game.fly();
+      const c = world.freeCam;
+      if (at !== undefined && c.on) {
+        c.enter(
+          at.east,
+          at.north,
+          at.height,
+          ((at.bearing ?? 0) * Math.PI) / 180,
+          ((at.pitch ?? -20) * Math.PI) / 180,
+        );
+      }
+    },
+    flyKey(code: string, down: boolean): void {
+      document.dispatchEvent(
+        new KeyboardEvent(down ? 'keydown' : 'keyup', { code, bubbles: true }),
+      );
+    },
+    landCamera(): void {
+      game.land();
+    },
+    /** Sends a Roam whatever the flag, as a modified client could. */
+    roamAnyway(east: number, north: number, height: number): void {
+      sailing.online?.roam(true, east, north, height);
+    },
+    freeCam() {
+      const c = world.freeCam;
+      const o = world.origin.world;
+      const field = hexCentre(world.origin.centre.q, world.origin.centre.r, { x: 0, y: 0 });
+      return {
+        on: c.on,
+        can: game.canFly(),
+        flying: game.flying.value,
+        east: c.east,
+        north: c.north,
+        height: c.height,
+        focus: { ...world.focus },
+        dome: { east: domeCentre.value.x + o.x, north: -domeCentre.value.y + o.y },
+        tiles: { east: field.x, north: field.y },
+        hud: document.querySelector('.hud .instruments') !== null,
+        back: document.querySelector('.fly-back.shown') !== null,
+        stays: (driver as { stays?: boolean }).stays ?? false,
+      };
     },
 
     /** Where the camera's eye is: m east and north in the world, and m above the sea. */

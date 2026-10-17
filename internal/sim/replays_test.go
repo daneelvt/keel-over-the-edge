@@ -156,7 +156,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 		go func() {
 			defer func() { done <- struct{}{} }()
 			rng := rand.New(rand.NewPCG(2, 2))
-			players, dev := w.Bus().Commands.Players(), w.Bus().Commands.Developer()
+			players, dev, owner := w.Bus().Commands.Players(), w.Bus().Commands.Developer(), w.Bus().Commands.Owner()
 			type player struct {
 				account    bus.Account
 				boat, conn uint64
@@ -212,7 +212,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					dev.TrySend(bus.Command{Op: bus.Hold})
 					held = false
 				}
-				switch r := rng.IntN(15); {
+				switch r := rng.IntN(18); {
 				case r < 5:
 					rep, ok := join(account(n))
 					if !ok {
@@ -263,6 +263,18 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					dev.TrySend(bus.Command{Op: bus.SetWeather, Weather: randomWeather(rng)})
 				case r < 12:
 					held = w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.Hold, Held: true}) == nil
+				case r < 13 && len(boats) > 0:
+					// The owner's tools move a boat: to the start, or to
+					// just inside the lip, to go over placed.
+					p := boats[rng.IntN(len(boats))]
+					st := physics.State{X: 8333, Heading: math.Pi / 2}
+					owner.TrySend(bus.Command{Op: bus.Teleport, Boat: p.boat, State: st, Start: n%2 == 0})
+				case r < 14 && len(boats) > 0:
+					// A boat stays, as while its owner's free camera roams,
+					// and sails on again.
+					owner.TrySend(bus.Command{Op: bus.Stay, Boat: boats[rng.IntN(len(boats))].boat, On: rng.IntN(2) == 0})
+				case r < 15 && len(boats) > 0:
+					owner.TrySend(bus.Command{Op: bus.Unseen, Boat: boats[rng.IntN(len(boats))].boat, On: rng.IntN(2) == 0})
 				case len(boats) > 0:
 					// Moved to open water, to the lip to go over, or into
 					// the mist band.

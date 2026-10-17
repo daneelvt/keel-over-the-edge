@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 // apply applies one command to the next frame, records it as an event and
@@ -39,6 +40,22 @@ func (w *World) apply(c *bus.Command) {
 			f.Voyage[s].Over = 0
 			r = bus.Reply{Result: bus.Done, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
 		}
+	case bus.Teleport:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: c.Boat}
+		if s := slotOf(f, c.Boat); s >= 0 {
+			w.teleport(f, s, c)
+			r = bus.Reply{Result: bus.Done, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
+		}
+	case bus.Stay, bus.Unseen:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: c.Boat}
+		if s := slotOf(f, c.Boat); s >= 0 {
+			if c.Op == bus.Stay {
+				f.Stay[s] = c.On
+			} else {
+				f.Unseen[s] = c.On
+			}
+			r = bus.Reply{Result: bus.Done, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
+		}
 	case bus.Disconnect:
 		if c.Boat == 0 {
 			r = w.disconnectAccount(c.Account, c.Conn)
@@ -64,6 +81,22 @@ func (w *World) apply(c *bus.Command) {
 		default:
 		}
 	}
+}
+
+// teleport moves the boat in slot s of f as the owner's tools ask: to the
+// state given, or to the start, clear of every other hull, as a new boat
+// appears; at rest either way. Its course is cleared, as when it starts
+// again, a fall over the lip ends, and its voyage is marked placed: it
+// earns nothing from here on.
+func (w *World) teleport(f *bus.Frame, s int32, c *bus.Command) {
+	if c.Start {
+		f.State[s] = w.spawn(f, s)
+	} else {
+		f.State[s] = c.State
+	}
+	f.Course[s] = physics.Course{}
+	f.Voyage[s].Over = 0
+	f.Voyage[s].Placed = true
 }
 
 // expire takes out the boats whose grace has ended, each recorded as an
@@ -102,6 +135,7 @@ func (w *World) free(s int32) {
 		w.voyageEnds(f, s)
 	}
 	f.Occupied[s] = false
+	f.Stay[s], f.Unseen[s] = false, false
 	f.Gen[s] = (f.Gen[s] + 1) & bus.GenMask
 	i, _ := slices.BinarySearch(f.Live, s)
 	f.Live = slices.Delete(f.Live, i, i+1)

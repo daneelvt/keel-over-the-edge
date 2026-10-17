@@ -9,8 +9,14 @@
 // events arrive between frames and only move targets (the helm's, the
 // sheet's, the autopilot's, the camera's); the frame reads them. Nothing in
 // the frame allocates.
+//
+// The free camera: F flies it off the boat and back, Escape brings it back;
+// while it flies the keys and the pointers fly it, the boat stays where it
+// was, the screen is clean (a tap shows the way back for a few seconds),
+// and the server is told where it is, so it sends what is about it. Online it is offered only
+// to an account with the owner's flag; in the sandbox, to anyone.
 
-import { effect } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
 import { KNOCK, knockOf } from '../audio/knock';
@@ -34,6 +40,7 @@ import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { SheetInput } from '../input/sheet';
 import type { BumpTold } from '../net/messages';
 import { RECORDS } from '../predict/layout.gen';
+import { type FlyKeys, RoamTeller } from '../render/freecam';
 import type { SeaScene } from '../render/scene';
 import { HudModel, PUSHED_OFF } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
@@ -72,6 +79,16 @@ export class Game implements PilotActions {
   bedFriction: (east: number, north: number) => number = () => 0;
   /** The approaches to the lip on the boat's own track, for the screen. */
   readonly approach: ApproachWatch;
+  /** Whether the free camera flies: the screen is clean. */
+  readonly flying = signal(false);
+  /** Whether the way back to the boat shows: for a few seconds after a tap on the free camera's picture. */
+  readonly backShown = signal(false);
+  #backTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Whether the free camera is offered: online, the owner's flag; in the sandbox, always. */
+  canFly: () => boolean = () => true;
+  /** Told where the free camera is, as it leaves the boat, moves and comes back: online, the server. */
+  onRoam: ((on: boolean, east: number, north: number, height: number) => void) | null = null;
+  readonly #roam = new RoamTeller();
   /** The tick the drawn boat went over the lip, 0 while afloat; the starts again seen; when the last was, s. */
   #over = 0;
   #restarts = 0;
@@ -177,23 +194,44 @@ export class Game implements PilotActions {
         t instanceof HTMLTextAreaElement
       );
     };
+    const free = this.world.freeCam;
     doc.addEventListener('keydown', (e) => {
-      if (
-        !typing(e) &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        this.keys.down(e.code, e.shiftKey)
-      ) {
+      if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+      if (e.code === 'KeyF' && !e.repeat && this.canFly()) {
+        this.toggleFly();
+        e.preventDefault();
+        return;
+      }
+      if (free.on) {
+        if (e.code === 'Escape') {
+          this.land();
+          e.preventDefault();
+        } else if (flyKey(free.keys, e.code, true)) {
+          e.preventDefault();
+        }
+        return;
+      }
+      if (this.keys.down(e.code, e.shiftKey)) {
         e.preventDefault();
       }
     });
     doc.addEventListener('keyup', (e) => {
+      if (flyKey(free.keys, e.code, false) && free.on) {
+        e.preventDefault();
+        return;
+      }
       if (this.keys.up(e.code)) {
         e.preventDefault();
       }
     });
-    doc.defaultView?.addEventListener('blur', () => this.keys.release());
+    doc.defaultView?.addEventListener('blur', () => {
+      this.keys.release();
+      for (const k of Object.keys(free.keys) as (keyof FlyKeys)[]) {
+        free.keys[k] = false;
+      }
+    });
     doc.addEventListener('visibilitychange', () => {
       if (doc.visibilityState === 'visible') {
         this.world.stage.resumed();
@@ -204,12 +242,14 @@ export class Game implements PilotActions {
     // Safari's own pinch-zoom of the page would fight the camera's pinch.
     doc.addEventListener('gesturestart', (e) => e.preventDefault());
     this.sound.listen(doc);
-    bindCamera(surface, this.world);
+    bindCamera(surface, this.world, () => this.showBack());
     const motion = doc.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)');
     if (motion !== undefined) {
       this.world.camera.reducedMotion = motion.matches;
+      this.world.freeCam.reducedMotion = motion.matches;
       motion.addEventListener('change', () => {
         this.world.camera.reducedMotion = motion.matches;
+        this.world.freeCam.reducedMotion = motion.matches;
       });
     }
   }
@@ -315,6 +355,49 @@ export class Game implements PilotActions {
     w.setFade(reduced ? 0 : 1 - (this.clock.time - this.#back) / FADE_IN);
   }
 
+  /** F: the free camera off the boat, or back on it. */
+  toggleFly(): void {
+    if (this.world.freeCam.on) {
+      this.land();
+    } else {
+      this.fly();
+    }
+  }
+
+  /** The free camera off the boat, from where the camera is, if it is offered. */
+  fly(): void {
+    if (this.world.freeCam.on || !this.canFly()) {
+      return;
+    }
+    this.keys.release();
+    this.world.flyFree();
+    this.driver?.stay?.(true);
+    this.flying.value = true;
+  }
+
+  /** A tap on the free camera's picture: the way back shows for BACK_SHOWN ms. */
+  showBack(): void {
+    this.backShown.value = true;
+    if (this.#backTimer !== null) {
+      clearTimeout(this.#backTimer);
+    }
+    this.#backTimer = setTimeout(() => {
+      this.backShown.value = false;
+      this.#backTimer = null;
+    }, BACK_SHOWN);
+  }
+
+  /** The free camera back on the boat: the chase camera behind it at once, the boat sailing again. */
+  land(): void {
+    this.backShown.value = false;
+    if (!this.world.freeCam.on) {
+      return;
+    }
+    this.world.landFree();
+    this.driver?.stay?.(false);
+    this.flying.value = false;
+  }
+
   /** Steps once with the controls as they are (the panel's single step, the tests). */
   stepOnce(): void {
     this.loop.stepOnce();
@@ -400,6 +483,14 @@ export class Game implements PilotActions {
       this.#ground(d, now);
       this.#edge(d, now);
     }
+    // The free camera withdrawn (the owner's flag cleared) comes back.
+    if (w.freeCam.on && !this.canFly()) {
+      this.land();
+    }
+    const roam = this.onRoam;
+    if (roam !== null) {
+      this.#roam.tell(w.freeCam, now / 1000, roam);
+    }
     const time = this.clock.time;
     // At most a second: after a pause or a jump, what eases simply arrives.
     w.timeStep = Math.min(1, Math.max(0, time - this.#lastTime));
@@ -436,6 +527,35 @@ export class Game implements PilotActions {
   }
 }
 
+/** How long the way back shows after a tap on the free camera's picture, ms. */
+const BACK_SHOWN = 3000;
+
+/** The free camera's keys, by their place on the keyboard: held down or let go. */
+const FLY_KEYS: Record<string, keyof FlyKeys> = {
+  KeyW: 'forward',
+  ArrowUp: 'forward',
+  KeyS: 'back',
+  ArrowDown: 'back',
+  KeyA: 'left',
+  ArrowLeft: 'left',
+  KeyD: 'right',
+  ArrowRight: 'right',
+  KeyQ: 'down',
+  KeyE: 'up',
+  ShiftLeft: 'fast',
+  ShiftRight: 'fast',
+};
+
+/** Sets a free camera's key held or let go; returns whether it is one. */
+function flyKey(keys: FlyKeys, code: string, down: boolean): boolean {
+  const k = FLY_KEYS[code];
+  if (k === undefined) {
+    return false;
+  }
+  keys[k] = down;
+  return true;
+}
+
 /** A tap moves less than this, CSS pixels, and is over within this, milliseconds. */
 const TAP_TRAVEL = 8;
 const TAP_TIME = 500;
@@ -446,9 +566,11 @@ const TAP_TIME = 500;
  * star shows its name. The controls over the
  * scene take their own pointers, so these are the sea's.
  */
-function bindCamera(surface: HTMLElement, world: SeaScene): void {
+function bindCamera(surface: HTMLElement, world: SeaScene, flyingTap: () => void): void {
   const pointers = new Map<number, { x: number; y: number }>();
   let spread = 0;
+  // When two fingers last flew the free camera, ms, for its glide.
+  let lastPan = -1;
   // A tap: one pointer, down and up within a moment and a few pixels. A
   // drag is not a tap.
   let tap: { x: number; y: number; at: number; moved: number } | null = null;
@@ -478,12 +600,25 @@ function bindCamera(surface: HTMLElement, world: SeaScene): void {
     if (tap !== null) {
       tap.moved += Math.hypot(dx, dy);
     }
+    const free = world.freeCam;
     if (pointers.size === 1) {
-      world.camera.drag(dx, dy, e.timeStamp);
+      if (free.on) {
+        free.look(dx, dy);
+      } else {
+        world.camera.drag(dx, dy, e.timeStamp);
+      }
     } else if (pointers.size === 2) {
       const now = distance();
       if (spread > 0 && now > 0) {
-        world.camera.zoom(spread / now, e.timeStamp);
+        if (free.on) {
+          free.pinch(spread / now);
+          // Two fingers fly it: each moves the water half the way.
+          const dt = lastPan < 0 ? 0 : (e.timeStamp - lastPan) / 1000;
+          free.pan(dx / 2, dy / 2, dt);
+          lastPan = e.timeStamp;
+        } else {
+          world.camera.zoom(spread / now, e.timeStamp);
+        }
       }
       spread = now;
     }
@@ -497,11 +632,16 @@ function bindCamera(surface: HTMLElement, world: SeaScene): void {
       e.timeStamp - tap.at < TAP_TIME
     ) {
       const r = surface.getBoundingClientRect();
-      world.tap(tap.x - r.left, tap.y - r.top, performance.now());
+      if (world.freeCam.on) {
+        flyingTap();
+      } else {
+        world.tap(tap.x - r.left, tap.y - r.top, performance.now());
+      }
     }
     tap = null;
     pointers.delete(e.pointerId);
     spread = distance();
+    lastPan = -1;
     world.camera.holding = pointers.size > 0;
   };
   surface.addEventListener('pointerup', end);
@@ -510,7 +650,11 @@ function bindCamera(surface: HTMLElement, world: SeaScene): void {
     'wheel',
     (e) => {
       e.preventDefault();
-      world.camera.zoom(Math.exp(e.deltaY * 0.001), e.timeStamp);
+      if (world.freeCam.on) {
+        world.freeCam.wheel(e.deltaY);
+      } else {
+        world.camera.zoom(Math.exp(e.deltaY * 0.001), e.timeStamp);
+      }
     },
     { passive: false },
   );

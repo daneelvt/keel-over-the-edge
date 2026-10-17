@@ -205,6 +205,19 @@ func (c *Cache) Forget(hash [32]byte) {
 	}
 }
 
+// ForgetAccount drops every session of an account from the cache at once,
+// as when the account changes: the next lookup reads it from the store.
+// It walks the whole cache, which a rare change can afford.
+func (c *Cache) ForgetAccount(id store.AccountID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, e := range c.entries {
+		if e.account.ID == id {
+			c.remove(e)
+		}
+	}
+}
+
 // Len is how many sessions are cached.
 func (c *Cache) Len() int {
 	c.mu.Lock()

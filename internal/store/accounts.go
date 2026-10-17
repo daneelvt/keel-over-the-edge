@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/daneelvt/keel-over-the-edge/internal/store/db"
 )
 
@@ -46,6 +48,9 @@ type Account struct {
 	// look like.
 	Name string
 	Look string
+	// Tools is the owner's flag: the account's sailor has the owner's
+	// tools in the game. Only a human account carries it.
+	Tools bool
 }
 
 // Guest is what makes a guest: a sailor, and the first session's token
@@ -87,4 +92,36 @@ func (s *Store) CreateGuest(ctx context.Context, g Guest) (AccountID, error) {
 		return AccountID{}, err
 	}
 	return id, nil
+}
+
+// SetTools sets or clears the owner's flag of a human account, or returns
+// ErrNotFound: no such account, or an AI's, which never carries it.
+func (s *Store) SetTools(ctx context.Context, id AccountID, on bool) error {
+	n, err := s.q.SetAccountTools(ctx, db.SetAccountToolsParams{Tools: on, ID: pgtype.UUID{Bytes: id, Valid: true}})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Accounts finds the accounts of ids, with their sailors' names, by ID;
+// those not found are left out. An AI account has no sailor of its own:
+// its name is empty.
+func (s *Store) Accounts(ctx context.Context, ids []AccountID) (map[AccountID]Account, error) {
+	us := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		us[i] = pgtype.UUID{Bytes: id, Valid: true}
+	}
+	rows, err := s.q.AccountsByID(ctx, us)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[AccountID]Account, len(rows))
+	for _, r := range rows {
+		out[r.ID.Bytes] = Account{ID: r.ID.Bytes, Kind: Kind(r.Kind), Saved: r.Saved, Name: r.Name, Tools: r.Tools}
+	}
+	return out, nil
 }

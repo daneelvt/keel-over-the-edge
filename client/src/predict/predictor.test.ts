@@ -116,6 +116,44 @@ describe('the predictor', () => {
     expect(Math.abs(p.offset.east)).toBeLessThan(1e-4);
   });
 
+  test('a boat that stays is held unstepped, and let go starts again once', async () => {
+    const p = await predictor();
+    p.snapshot(start(100));
+    for (let i = 0; i < 20; i++) {
+      p.stepIndices(...controls(i));
+    }
+    // The server's boat stays from tick 105, where it was then.
+    const server = await predictor();
+    server.reset(start(100));
+    for (let i = 0; i < 5; i++) {
+      server.stepIndices(...controls(i));
+    }
+    const held = snapshotOf(server);
+    held.tick = 110;
+    held.stays = true;
+    expect(p.snapshot(held).corrected).toBe(true);
+    expect(p.stays).toBe(true);
+    const at = Array.from(p.states.current);
+    for (let i = 0; i < 30; i++) {
+      p.stepIndices(...controls(i));
+    }
+    expect(Array.from(p.records.state)).toEqual(at);
+    // Each snapshot while it stays changes nothing more.
+    const corrections = p.counts.corrections;
+    held.tick = 130;
+    expect(p.snapshot(held)).toMatchObject({ corrected: false, reset: false });
+    expect(p.counts.corrections).toBe(corrections);
+    // Let go: the prediction starts again from the server's state, once.
+    const resets = p.counts.resets;
+    const go = snapshotOf(server);
+    go.tick = 135;
+    expect(p.snapshot(go).reset).toBe(true);
+    expect(p.stays).toBe(false);
+    expect(p.counts.resets).toBe(resets + 1);
+    p.stepIndices(512, 512);
+    expect(Array.from(p.records.state)).not.toEqual(Array.from(go.state));
+  });
+
   test('a correction over 3 m is drawn at once', async () => {
     const p = await predictor();
     p.snapshot(start(100));
@@ -184,6 +222,7 @@ describe('pacing online', () => {
       world: '',
       land: false,
       circulation: 0,
+      tools: false,
     });
     const sn = start(100);
     sn.helm = 300;
@@ -285,6 +324,7 @@ describe('the queue and the fleet online', () => {
       world: '',
       land: false,
       circulation: 0,
+      tools: false,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     expect(o.place.value).toBeNull();
@@ -310,6 +350,7 @@ describe('the queue and the fleet online', () => {
       world: '',
       land: false,
       circulation: 0,
+      tools: false,
     });
     const record = new ArrayBuffer(FLEET_RECORD_BYTES);
     writeSnapshot(start(100), new DataView(record));
@@ -343,6 +384,7 @@ describe('the bell online', () => {
       world: '',
       land: false,
       circulation: 0,
+      tools: false,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     return { o, port };
@@ -369,6 +411,7 @@ describe('the bell online', () => {
       world: '',
       land: false,
       circulation: 0,
+      tools: false,
     });
     port.deliver(status('sailing'));
     expect(o.notice.value).toBeNull();
@@ -391,6 +434,7 @@ describe('the bell online', () => {
       world: '',
       land: false,
       circulation: 0,
+      tools: false,
     });
     port.deliver(status('sailing'));
     expect(o.notice.value?.text).toBe('Your boat has returned to port.');

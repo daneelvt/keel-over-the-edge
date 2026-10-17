@@ -292,7 +292,7 @@ func TestHandoutOnce(t *testing.T) {
 	paths := testPaths()
 	h := NewHandout(madeGround(testIslands), paths, r)
 	c := handoutConn(h)
-	if !c.chunks(1000, 0) {
+	if !c.chunks(c.e.cfg.Chunks, 1000, 0) {
 		t.Fatal("the connection went bad")
 	}
 	first, firstPaths := handed(t, c)
@@ -310,7 +310,7 @@ func TestHandoutOnce(t *testing.T) {
 	if !slices.Contains(first, uint32(chunkAt(1580, 528))) {
 		t.Error("the hill's chunk is not handed")
 	}
-	c.chunks(1000, 0)
+	c.chunks(c.e.cfg.Chunks, 1000, 0)
 	if again, _ := handed(t, c); len(again) != 0 {
 		t.Errorf("handed again: %v", again)
 	}
@@ -323,7 +323,7 @@ func TestHandoutOnce(t *testing.T) {
 	looks := 0
 	for x := 1000.0; x < 8000; x += 7 {
 		before := c.handout.x
-		c.chunks(x, 300)
+		c.chunks(c.e.cfg.Chunks, x, 300)
 		if c.handout.x != before {
 			looks++
 			if math.Abs(x-before) < r.Look && x != 1000 {
@@ -347,7 +347,7 @@ func TestHandoutOnce(t *testing.T) {
 	t.Logf("%d chunks handed from the centre to the rim", len(seen))
 	// A new connection where the first began is handed what it was.
 	d := handoutConn(h)
-	d.chunks(1000, 0)
+	d.chunks(d.e.cfg.Chunks, 1000, 0)
 	if got, _ := handed(t, d); !slices.Equal(got, first) {
 		t.Errorf("a new connection is handed %v, the first was %v", got, first)
 	}
@@ -358,14 +358,14 @@ func TestHandoutOnce(t *testing.T) {
 func TestHandoutAllocatesNothing(t *testing.T) {
 	h := NewHandout(madeGround(testIslands), testPaths(), testRule(t))
 	c := handoutConn(h)
-	c.chunks(1000, 0)
+	c.chunks(c.e.cfg.Chunks, 1000, 0)
 	handed(t, c)
 	x := 1000.0
 	if n := testing.AllocsPerRun(200, func() {
 		// Back and forth over 40 m: looked at every other time, nothing new.
 		x = 2040 - x
-		c.chunks(x, 0)
-		c.chunks(x+1, 0)
+		c.chunks(c.e.cfg.Chunks, x, 0)
+		c.chunks(c.e.cfg.Chunks, x+1, 0)
 	}); n != 0 {
 		t.Errorf("a look allocates %v times", n)
 	}
@@ -378,7 +378,7 @@ func TestHandoutAllocatesNothing(t *testing.T) {
 func TestNoHandoutWithoutLand(t *testing.T) {
 	c := handoutConn(nil)
 	c.e.cfg.Land = false
-	if !c.chunks(0, 0) {
+	if !c.chunks(c.e.cfg.Chunks, 0, 0) {
 		t.Fatal("the connection went bad")
 	}
 	if got, _ := handed(t, c); len(got) != 0 {

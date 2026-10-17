@@ -36,3 +36,10 @@ func (r *registry) release(c *conn) {
 		delete(r.by, c.account)
 	}
 }
+
+// get is the account's connection, or nil.
+func (r *registry) get(a bus.Account) *conn {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.by[a]
+}

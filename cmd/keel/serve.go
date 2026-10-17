@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -32,6 +33,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
+	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
@@ -41,6 +43,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
 // shutdownTimeout bounds how long a stopping server waits for requests in
@@ -68,14 +71,16 @@ Configured from the environment:
   KEEL_DATABASE_URL    the database, a postgres:// URL (required)
   KEEL_PLAY_ADDR       the game's listener (default 127.0.0.1:8080)
   KEEL_AGENTS_ADDR     the AI agents' listener (default 127.0.0.1:8081)
-  KEEL_INTERNAL_ADDR   probes, metrics, profiles (default 127.0.0.1:9090)
+  KEEL_INTERNAL_ADDR   probes, metrics, profiles and the owner's world page,
+                       /owner/ (default 127.0.0.1:9090)
   KEEL_METRICS_ADDR    the metrics alone, GET /metrics, for a scraper that may
                        reach nothing else (default none)
   KEEL_LOG_LEVEL       debug, info, warn or error (default info)
   KEEL_TRACE_DIR       where traces of overrunning ticks go (default none)
   KEEL_REPLAY_DIR      where the input log goes (default memory only)
-  KEEL_CLIENT_DIR      the game's built page, served by the game's listener
-                       (default none: another server serves it)
+  KEEL_CLIENT_DIR      the game's built page, served by the game's listener,
+                       and its world page, owner/ in it, by the internal one
+                       (default none: another server serves them)
   KEEL_BOAT_LIMIT      the most boats at sea at once, from 1 to 4096; beyond it
                        players wait in a queue (default 1000)
   KEEL_BELL            how long the world sails on once players are told the
@@ -123,6 +128,7 @@ type database interface {
 	LoadBundle(ctx context.Context, world [16]byte) (*store.Bundle, error)
 	StoreBundle(ctx context.Context, world [16]byte, epoch int64, b *store.Bundle) error
 	SetChunkKey(ctx context.Context, world [16]byte, epoch int64, key []byte) ([]byte, error)
+	owner.Accounts
 	Stats() store.PoolStats
 	Close()
 }
@@ -214,12 +220,17 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	health := obs.NewHealth()
 	metrics := obs.NewMetrics(build, catalog.Version)
 	log.Info("starting", "catalog", catalog.Version)
-	var page *api.Page
+	var page, worldPage *api.Page
 	if cfg.ClientDir != "" {
 		if page, err = api.OpenPage(cfg.ClientDir); err != nil {
 			return err
 		}
 		log.Info("serving the page", "dir", cfg.ClientDir, "bytes", page.Size())
+		dir := filepath.Join(cfg.ClientDir, "owner")
+		if worldPage, err = api.OpenPage(dir); err != nil {
+			log.Warn("the world page is not built: its data alone is served", "dir", dir, "err", err)
+			worldPage = nil
+		}
 	}
 
 	// The internal listener, at once: /livez answers while the rest starts.
@@ -245,8 +256,10 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		weatherHandler = &lateHandler{}
 		weatherRoutes = weatherHandler
 	}
+	// The owner's tools, once the world is ready.
+	ownerHandler := &lateHandler{}
 	side := &sideServers{}
-	side.serve(newServer(obs.Internal(health, metrics, flightHandler, replayHandler, weatherRoutes), log), internalLn)
+	side.serve(newServer(obs.Internal(health, metrics, flightHandler, replayHandler, weatherRoutes, ownerHandler), log), internalLn)
 	log.Info("listening", "listener", "internal", "addr", internalLn.Addr().String())
 	// The metrics alone, on a port of their own, for the scraper.
 	if cfg.MetricsAddr != "" {
@@ -371,12 +384,14 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	var terrain *sim.Terrain
 	var terrainDigest [32]byte
 	var chunks *api.Chunks
-	var handout *edge.Handout
+	var handout, roamHandout *edge.Handout
 	if cfg.Land {
 		terrain = bundle.Terrain(cat.PrepareGround())
 		terrainDigest = bundle.Digest
 		chunks = api.NewChunks(sailed.ID, held.key, held.payloads)
 		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat))
+		// The owner's free camera sees from higher: its own handout.
+		roamHandout = edge.NewHandout(bundle.Ground, chunks.Paths(), roamRule(cat))
 		log.Info("serving the world's chunks", "bytes", chunks.Size())
 	} else {
 		log.Warn("land is off: the world's terrain is sailed as open sea")
@@ -417,6 +432,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
 		Land: cfg.Land, Chunks: handout, Circulation: circulationOf(terrain),
+		Lip: timeline.Prepared().Edge(), RoamChunks: roamHandout,
 	})
 	lasting := persist.New(persist.Config{
 		Frames: b.Frames, Store: writer, World: sailed.ID, Epoch: leaseEpoch,
@@ -439,12 +455,19 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	for i, s := range cat.Sailors {
 		looks[i] = string(s.ID)
 	}
+	sessions := auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log})
+	tools := ownerTools(ownerConfig{
+		cat: cat, bus: b, bundle: bundle, made: held.made, sailed: sailed, timeline: timeline, terrain: terrain,
+		db: db, sessions: sessions, game: game, clock: tickLoop, page: worldPage, log: log, metrics: metrics,
+	})
+	ownerHandler.set(tools.Handler())
+	log.Info("the world page is on the internal listener", "path", "/owner/", "built", worldPage != nil)
 	play := newServer(api.Handler(api.Config{
 		Version:  api.Version{Build: build, Catalog: catalog.Version},
 		Log:      log,
 		Metrics:  metrics,
 		Guests:   db,
-		Sessions: auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log}),
+		Sessions: sessions,
 		Looks:    looks,
 		Game:     game,
 		Page:     page,
@@ -506,7 +529,11 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	})
 	g.Go(func() error {
 		defer close(encoderDone)
+		// The world page's view, built while the encoders run.
+		var wg sync.WaitGroup
+		wg.Go(func() { tools.Run(encoderCtx) })
 		game.Run(encoderCtx)
+		wg.Wait()
 		return nil
 	})
 	if flight != nil {
@@ -619,6 +646,57 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	err = g.Wait()
 	log.Info("stopped", "tick", world.Now())
 	return err
+}
+
+// ownerConfig is what the owner's tools are made from.
+type ownerConfig struct {
+	cat      *catalog.Catalog
+	bus      *bus.Bus
+	bundle   *worldgen.Bundle
+	made     time.Time
+	sailed   store.World
+	timeline *weather.Timeline
+	terrain  *sim.Terrain // nil with land off
+	db       database
+	sessions *auth.Cache
+	game     *edge.Edge
+	clock    owner.Clock
+	page     *api.Page
+	log      *slog.Logger
+	metrics  *obs.Metrics
+}
+
+// ownerTools are the owner's tools: the world page and its controls.
+func ownerTools(c ownerConfig) *owner.Owner {
+	kinds := make([]string, len(c.cat.Boats))
+	for i, b := range c.cat.Boats {
+		kinds[i] = b.Name
+	}
+	regimes := make([]string, len(c.cat.Weather.Regimes))
+	for i, r := range c.cat.Weather.Regimes {
+		regimes[i] = string(r.ID)
+	}
+	cfg := owner.Config{
+		Frames: c.bus.Frames, Owner: c.bus.Commands.Owner(), Bundle: c.bundle, Weather: c.timeline.Prepared(),
+		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), Clock: c.clock,
+		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
+		Calm:     c.cat.World.MainPort.Calm * 1852,
+		Accounts: c.db, Sessions: c.sessions, Edge: c.game, Page: c.page, Log: c.log, Metrics: c.metrics,
+	}
+	if t := c.terrain; t != nil {
+		cfg.Ground, cfg.Shelter, cfg.Circulation = t.Ground, t.Shelter, t.Circulation
+	}
+	return owner.New(cfg)
+}
+
+// roamRule is the rule for the chunks the owner's free camera is handed:
+// the catalog's, seen from the highest the free camera goes.
+func roamRule(cat *catalog.Catalog) edge.HandoutRule {
+	r := handoutRule(cat)
+	h := &cat.World.Handout
+	r.Camera = edge.DefaultRoamReach.High
+	r.FarSea = max(h.FarSeaLeast, h.FarSeaHorizon*math.Sqrt(2*h.Dome*r.Camera))
+	return r
 }
 
 // handoutRule is the catalog's rule for which chunks a connection is

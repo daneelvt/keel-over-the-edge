@@ -5,9 +5,11 @@
 // lanterns, the stars, the chase camera, and the beginners' overlays. Each
 // drawn frame, whatever drives the boat (the game's tick) first sets the
 // pose to draw, the latest step's Out and world time; the scene then
-// follows the boat with the floating origin, the tile field and the camera,
-// asks the physics module where the sun, the moon and the stars stand from
-// the boat at that time, lights everything by the hour, and draws it.
+// follows its focus with the floating origin, the tile field, the land, the
+// dome's bend and the camera, asks the physics module where the sun, the
+// moon and the stars stand from the focus at that time, lights everything
+// by the hour, and draws it. The focus is the boat; or, while the free
+// camera flies, the point beneath it, and the boat is drawn where it is.
 
 import { type Color, Vector3 } from 'three';
 import { exp, float, fog, length, max, mix, positionView } from 'three/tsl';
@@ -31,6 +33,7 @@ import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { DirtyAir } from './dirtyair';
 import { FleetView } from './fleet';
+import { FreeCamera } from './freecam';
 import { GustRings } from './gustring';
 import { Lanterns, lanternLit } from './lanterns';
 import { domeCentre } from './materials';
@@ -100,6 +103,8 @@ export class SeaScene {
   readonly fade: HTMLDivElement;
   readonly stats = new Stats();
   readonly camera = new ChaseCamera();
+  /** The free camera: while it flies, the scene follows it, not the boat. */
+  readonly freeCam = new FreeCamera();
   /** The catalog's first boat, the one a new sailor starts in. */
   readonly kind = catalog.boats[0];
   /** The catalog's sea: the spectrum both bands of waves are drawn from. */
@@ -116,6 +121,9 @@ export class SeaScene {
   /** The beginners' right-of-way overlay. */
   readonly rightOfWay = new RightOfWay(this.kind, catalog.encounters.overlay);
   readonly boatScene: ScenePoint = { x: 0, y: 0, z: 0 };
+  /** What the scene follows, in the world and the scene: the boat, or the point beneath the free camera. */
+  readonly focus = { east: 0, north: 0 };
+  readonly focusScene: ScenePoint = { x: 0, y: 0, z: 0 };
   boat: Boat | null = null;
   /** The other boats, drawn many at once. */
   readonly fleet = new FleetView(this.kind);
@@ -219,6 +227,7 @@ export class SeaScene {
       drain: catalog.weather.current.drain,
     });
     this.edge.on = this.#query.get('edge') !== 'off';
+    this.freeCam.lip = catalog.world.disk.radius;
     this.fade = document.createElement('div');
     this.fade.className = 'edge-fade';
     container.append(this.fade);
@@ -359,6 +368,31 @@ export class SeaScene {
 
   /** Lets the camera follow the boat again, behind it as it rests. */
   releaseCamera(): void {
+    this.camera.held = null;
+    this.placeCamera(this.camera.rest);
+  }
+
+  /**
+   * Starts the free camera from where the camera is and the way it looks;
+   * the scene follows it from the next frame.
+   */
+  flyFree(): void {
+    const cam = this.stage.camera;
+    const p = cam.position;
+    const o = this.origin.world;
+    const e = cam.matrixWorld.elements;
+    // The camera looks down its −z axis.
+    const dy = -(e[9] ?? 0);
+    const pitch = Math.asin(Math.max(-1, Math.min(1, dy)));
+    this.freeCam.enter(p.x + o.x, -p.z + o.y, p.y, this.lookBearing(), pitch);
+  }
+
+  /** Brings the camera back to the boat, behind it at once. */
+  landFree(): void {
+    if (!this.freeCam.on) {
+      return;
+    }
+    this.freeCam.leave();
     this.camera.held = null;
     this.placeCamera(this.camera.rest);
   }
@@ -614,14 +648,24 @@ export class SeaScene {
 
   #updateBoatScene(): void {
     const p = this.pose;
-    this.origin.follow(p.east, p.north);
+    const f = this.focus;
+    const free = this.freeCam;
+    f.east = free.on ? free.east : p.east;
+    f.north = free.on ? free.north : p.north;
+    this.origin.follow(f.east, f.north);
     this.origin.toScene(p.east, p.north, 0, this.boatScene);
+    this.origin.toScene(f.east, f.north, 0, this.focusScene);
   }
 
   #placeCamera(): void {
     const bs = this.boatScene;
     const camera = this.stage.camera;
-    this.camera.place3(bs.x, bs.y, bs.z, camera.position, this.#target);
+    if (this.freeCam.on) {
+      const o = this.origin.world;
+      this.freeCam.place(o.x, o.y, camera.position, this.#target);
+    } else {
+      this.camera.place3(bs.x, bs.y, bs.z, camera.position, this.#target);
+    }
     camera.lookAt(this.#target);
     // The scene pass reads the camera's matrices before the render updates
     // them; without this the picture would lag the camera by a frame.
@@ -636,7 +680,7 @@ export class SeaScene {
       return;
     }
     this.skyAt = time.frame(this.ticks);
-    this.skyRecord.set(physics.skyAt(this.skyAt, this.pose.east, this.pose.north));
+    this.skyRecord.set(physics.skyAt(this.skyAt, this.focus.east, this.focus.north));
     this.sky.read(this.skyRecord);
     this.stars.turn(this.skyRecord, SKY.stars);
   }
@@ -680,25 +724,38 @@ export class SeaScene {
       this.windowMs ?? (now - this.#started < BENCHMARK ? BENCHMARK_WINDOW : WINDOW);
     this.stats.frame(now, gfx);
     this.tick?.(dt, now);
+    this.freeCam.update(dt);
     this.#updateBoatScene();
     const bs = this.boatScene;
-    domeCentre.value.set(bs.x, bs.z);
+    const fs0 = this.focusScene;
+    // The dome bends about the focus: the viewer, wherever the boat is.
+    domeCentre.value.set(fs0.x, fs0.z);
 
     this.camera.update(dt, this.pose.heading, now, this.pose.heave, this.#seaUnderBoat());
     this.#placeCamera();
     const camera = this.stage.camera;
 
     this.#placeHulls();
-    this.land?.frame(this.pose.east, this.pose.north, camera, this.origin, this.wind.meanFrom, now);
+    const focus = this.focus;
+    this.land?.frame(
+      focus.east,
+      focus.north,
+      camera,
+      this.origin,
+      this.wind.meanFrom,
+      now,
+      this.pose.east,
+      this.pose.north,
+    );
     this.ocean.update(gfx.renderer, this.origin, {
       tick: this.ticks,
       dt: this.timeStep,
-      boatEast: this.pose.east,
-      boatNorth: this.pose.north,
+      boatEast: focus.east,
+      boatNorth: focus.north,
       cameraHeight: camera.position.y,
     });
     this.#readSky();
-    this.sky.follow(camera.position, this.#v.set(bs.x, bs.y, bs.z));
+    this.sky.follow(camera.position, this.#v.set(fs0.x, fs0.y, fs0.z));
     const eye = this.origin.world;
     this.edge.frame(this.origin, camera.position.x + eye.x, -camera.position.z + eye.y, this.time);
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
@@ -720,7 +777,12 @@ export class SeaScene {
     this.stars.placeLabel(camera, canvas.clientWidth, canvas.clientHeight, now);
     const o = this.overlays;
     const rings = this.gustRings;
-    rings.on = o.wind;
+    // The free camera's picture has no overlays: the interface is hidden.
+    const free = this.freeCam.on;
+    o.world.visible = !free;
+    this.dirtyAir.group.visible = !free;
+    this.rightOfWay.group.visible = !free;
+    rings.on = o.wind && !free;
     const source = this.ocean.source;
     const speed = this.out[RECORDS.out.speedOverGround] ?? 0;
     const course = this.out[RECORDS.out.courseOverGround] ?? 0;
@@ -759,7 +821,7 @@ export class SeaScene {
       row.group.updateMatrixWorld();
       row.placeLabels(camera, gfx.canvas.clientWidth, gfx.canvas.clientHeight);
     }
-    if (o.wind || o.forces) {
+    if ((o.wind || o.forces) && !free) {
       o.update(bs.x, bs.z, this.pose, this.wind, this.out);
       // The overlays ride the boat: their world matrices must be current to place their labels.
       this.boat?.root.updateMatrixWorld();

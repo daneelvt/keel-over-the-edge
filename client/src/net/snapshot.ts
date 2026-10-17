@@ -10,7 +10,8 @@
 // remembers from the autopilot's block that follows it while there is any,
 // and how long it has been aground from the ground block after that while
 // it is aground, or nothing; and, while it is falling over the lip, the
-// tick it went over from the over block after those. The other boats'
+// tick it went over from the over block after those; while it stays where
+// it is as its owner's free camera roams, a flag says so. The other boats'
 // entries after them are view.ts's.
 
 /** A message's first byte: a Protocol Buffers envelope. */
@@ -27,8 +28,8 @@ export const GROUND_SIZE = 8;
 export const OVER_SIZE = 8;
 /** The header's length with every block. */
 export const MAX_HEADER_SIZE = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE + OVER_SIZE;
-/** The layout this client reads: the own boat's state as float64, its autopilot's, ground and over blocks, then the view's entries. */
-export const SNAPSHOT_LAYOUT = 8;
+/** The layout this client reads: the own boat's state as float64, its autopilot's, ground and over blocks, then the view's entries; flag bit 4 while the boat stays. */
+export const SNAPSHOT_LAYOUT = 9;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */
@@ -39,6 +40,8 @@ export const PILOT_HELD = 2;
 export const GROUND_HELD = 4;
 /** A header's flag: the over block follows it and the blocks before it, if they are there. */
 export const OVER_HELD = 8;
+/** A header's flag: the boat stays where it is, not stepped, while its owner's free camera roams. */
+export const STAYING = 16;
 /** A snapshot's margin when no input arrived since the one before. */
 export const NO_MARGIN = -32768;
 /** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground. */
@@ -54,7 +57,7 @@ export interface OwnSnapshot {
   tick: number;
   /** How many ticks before this one the snapshot its entries change is; 0 for none. */
   base: number;
-  /** FAR_SAMPLED, PILOT_HELD and GROUND_HELD, or 0. */
+  /** FAR_SAMPLED, PILOT_HELD, GROUND_HELD, OVER_HELD and STAYING, or 0. */
   flags: number;
   /** How many entries follow the header, and where they begin. */
   entries: number;
@@ -72,6 +75,8 @@ export interface OwnSnapshot {
   margin: number;
   /** The tick the boat went over the lip while it is falling, or 0 while it is afloat. */
   over: number;
+  /** The boat stays where it is while its owner's free camera roams. */
+  stays: boolean;
   /** The boat's state, in the physics module's order. */
   readonly state: Float64Array;
 }
@@ -92,6 +97,7 @@ export function newSnapshot(): OwnSnapshot {
     target: 0,
     margin: NO_MARGIN,
     over: 0,
+    stays: false,
     state: new Float64Array(STATE_FIELDS),
   };
 }
@@ -165,7 +171,7 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
     return 'a snapshot with controls out of range';
   }
   const flags = v.getUint8(FLAGS);
-  if ((flags & ~(FAR_SAMPLED | PILOT_HELD | GROUND_HELD | OVER_HELD)) !== 0) {
+  if ((flags & ~(FAR_SAMPLED | PILOT_HELD | GROUND_HELD | OVER_HELD | STAYING)) !== 0) {
     return 'a snapshot with flags it should not have';
   }
   const entries = v.getUint8(ENTRIES);
@@ -198,6 +204,7 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
   }
   out.tick = tick;
   out.over = over;
+  out.stays = (flags & STAYING) !== 0;
   out.base = v.getUint16(BASE, true);
   out.flags = flags;
   out.entries = entries;
@@ -262,10 +269,11 @@ export function writeSnapshot(s: OwnSnapshot, v: DataView): number {
   const aground = groundHeld(s);
   const falling = s.over !== 0;
   const flags =
-    (s.flags & ~(PILOT_HELD | GROUND_HELD | OVER_HELD)) |
+    (s.flags & ~(PILOT_HELD | GROUND_HELD | OVER_HELD | STAYING)) |
     (held ? PILOT_HELD : 0) |
     (aground ? GROUND_HELD : 0) |
-    (falling ? OVER_HELD : 0);
+    (falling ? OVER_HELD : 0) |
+    (s.stays ? STAYING : 0);
   v.setUint8(0, KIND_SNAPSHOT);
   v.setUint8(1, SNAPSHOT_LAYOUT);
   setInt64(v, TICK, s.tick);

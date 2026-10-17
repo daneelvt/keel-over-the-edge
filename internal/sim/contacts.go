@@ -129,18 +129,24 @@ func (w *World) placed(s int32) bool {
 		return true
 	}
 	for i := range f.Events {
-		if e := &f.Events[i]; e.Op == bus.Place && e.Reply.Result == bus.Done && e.Reply.Slot == s {
+		if e := &f.Events[i]; (e.Op == bus.Place || e.Op == bus.Teleport) && e.Reply.Result == bus.Done && e.Reply.Slot == s {
 			return true
 		}
 	}
 	return false
 }
 
+// apart reports whether the boat in slot s of f meets no other: falling
+// over the lip, staying while its owner's free camera roams, or unseen.
+func apart(f *bus.Frame, s int32) bool {
+	return f.Voyage[s].Falling() || f.Stay[s] || f.Unseen[s]
+}
+
 // near makes slots s and o a candidate if their boats are near enough. A
-// boat falling over the lip meets nothing.
+// boat apart meets nothing.
 func (w *World) near(s, o int32) {
 	f := w.next
-	if f.Voyage[s].Falling() || f.Voyage[o].Falling() {
+	if apart(f, s) || apart(f, o) {
 		return
 	}
 	if physics.Near(&f.State[s], &f.State[o], &w.kinds[f.Kind[s]], &w.kinds[f.Kind[o]], w.enc) {
@@ -178,8 +184,8 @@ func (w *World) settle(f *bus.Frame, s int32) {
 	st := &f.State[s]
 	f.Wind[s] = physics.WindAt(&w.wind, st.X, st.Y, w.shelter)
 	if w.enc != nil {
-		if f.Voyage[s].Falling() {
-			// A boat over the lip casts no shadow.
+		if apart(f, s) {
+			// A boat over the lip, staying or unseen casts no shadow.
 			f.Wake[s] = physics.Wake{}
 			return
 		}

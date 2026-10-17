@@ -265,7 +265,8 @@ func (p *Persist) Err() error {
 
 // lasting reports whether a frame's tick decided anything lasting: an
 // event, a bump of its own tick (a frame keeps the bumps of the last
-// second), or a boat at the edge.
+// second), or a boat at the edge in a voyage the owner's tools did not
+// place.
 func lasting(f *bus.Frame) bool {
 	for i := range f.Events {
 		if kindOf(&f.Events[i]) != "" {
@@ -277,7 +278,12 @@ func lasting(f *bus.Frame) bool {
 			return true
 		}
 	}
-	return len(f.Edges) > 0
+	for i := range f.Edges {
+		if !f.Edges[i].Placed {
+			return true
+		}
+	}
+	return false
 }
 
 // kindOf is the kind of lasting event a tick's event is, or "".
@@ -308,6 +314,10 @@ func appendEvents(dst []store.Event, f *bus.Frame) []store.Event {
 	}
 	for i := range f.Edges {
 		e := &f.Edges[i]
+		if e.Placed {
+			// A voyage the owner's tools placed earns nothing.
+			continue
+		}
 		kind := store.EventOver
 		if e.Kind == bus.EdgeApproach {
 			kind = store.EventApproach
@@ -400,7 +410,7 @@ func (p *Persist) absorb(it item) {
 	f := it.frame
 	p.cp.Tick = f.Tick
 	p.cp.Boats = len(f.Live)
-	p.cp.Data = sim.AppendSnapshot(p.cp.Data[:0], f)
+	p.cp.Data = sim.AppendCheckpoint(p.cp.Data[:0], f)
 	f.Release()
 	p.cpBytes.Store(int64(len(p.cp.Data)))
 	if p.haveCP {

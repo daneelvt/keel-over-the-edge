@@ -48,6 +48,12 @@ export interface BoatDriver {
   readonly over?: number;
   /** How many times the boat has started again at the start after going over. */
   readonly restarts?: number;
+  /**
+   * Keeps the boat where it is, unstepped, while the free camera flies,
+   * for a driver that keeps its own rules (the sandbox); online the server
+   * keeps it so.
+   */
+  stay?(on: boolean): void;
 }
 
 /** Steps a driver to where the world clock says it should be, each frame. */

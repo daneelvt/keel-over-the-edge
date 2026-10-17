@@ -83,12 +83,32 @@ message Ping {
 message Command {
   oneof body {
     Resync resync = 1;
+    Roam roam = 2;
   }
 }
 
 // Resync asks for the next snapshot in full: the client lacks the base of
 // one it received. At most one a second is honoured.
 message Resync {}
+
+// Roam is the owner's free camera, from an account that carries the
+// owner's flag (Welcome.tools); from any other it is ignored. While it is
+// on, the connection's eye is the camera's point: the other boats, the sea
+// areas and the land's chunks it is sent are those about the eye, not
+// about the boat, which stays where it is, not stepped, until the camera
+// is off or the connection ends. Sent as the camera leaves the boat, as it
+// moves, at most five a second and once it has moved 20 m, and as it comes
+// back. The eye is clamped to the whole disk and 500 m beyond its lip,
+// from 2 m to 500 m above the sea.
+message Roam {
+  // The camera is off the boat.
+  bool on = 1;
+  // The point under the camera, in centimetres east and north of the
+  // world's centre, and its height above the sea, in centimetres.
+  sint32 east = 2;
+  sint32 north = 3;
+  uint32 height = 4;
+}
 
 // ServerMessage is everything the server sends but snapshots, after the
 // kind byte 1.
@@ -102,7 +122,16 @@ message ServerMessage {
     WeatherSystems weather_systems = 6;
     Bump bump = 7;
     Chunks chunks = 8;
+    Tools tools = 9;
   }
+}
+
+// Tools says the account's owner's flag has been set or cleared while the
+// connection is open, as Welcome.tools says it at the start: the free
+// camera is offered or withdrawn. Cleared, a free camera roaming is
+// brought back to the boat.
+message Tools {
+  bool on = 1;
 }
 
 // Chunks hands the client the addresses of chunks of the world's land: each
@@ -274,6 +303,8 @@ message Welcome {
   // from above, -1 the other way, 0 none. The client works the current out
   // from it, the drain and the ground, as the server does.
   sint32 circulation = 9;
+  // The account carries the owner's flag: the free camera (Roam) is its.
+  bool tools = 10;
 }
 
 // Pong answers a Ping.

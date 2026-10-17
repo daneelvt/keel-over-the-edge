@@ -81,7 +81,15 @@ func TestPreview(t *testing.T) {
 			t.Errorf("%q is not in the page's list", is.Name)
 		}
 	}
-	got := map[string]string{"chart.svg": digest(svg), "index.html": digest(page)}
+	// Port Royal alone, at the lattice's resolution.
+	if err := run(7, "", 0, 0, 0, out); err != nil {
+		t.Fatal(err)
+	}
+	port, err := os.ReadFile(filepath.Join(out, "island-0.svg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{"chart.svg": digest(svg), "index.html": digest(page), "island-0.svg": digest(port)}
 	if *update {
 		data, _ := json.MarshalIndent(got, "", "  ")
 		if err := os.WriteFile(filepath.Join("tools", "worldgen-preview", goldenPath), append(data, '\n'), 0o644); err != nil {

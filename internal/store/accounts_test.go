@@ -72,3 +72,54 @@ func TestCreateGuestAllOrNothing(t *testing.T) {
 		}
 	}
 }
+
+// TestTools: the owner's flag is set and cleared on a human account, read
+// with the session and with the account, and never set on an AI's.
+func TestTools(t *testing.T) {
+	ctx := context.Background()
+	s, u := storetest.Store(t, store.Options{})
+	hash := sha256.Sum256([]byte("token"))
+	id, err := s.CreateGuest(ctx, store.Guest{Name: "Ann Bonny", NameKey: "annbonny", Look: "figure", TokenHash: hash})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.CreateGuest(ctx, store.Guest{Name: "Mary Read", NameKey: "maryread", Look: "figure", TokenHash: sha256.Sum256([]byte("other"))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Session(ctx, hash); err != nil || got.Tools {
+		t.Fatalf("a new account: %+v, %v", got.Account, err)
+	}
+	if err := s.SetTools(ctx, id, true); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Session(ctx, hash); err != nil || !got.Tools {
+		t.Fatalf("flagged: %+v, %v", got.Account, err)
+	}
+	accounts, err := s.Accounts(ctx, []store.AccountID{id, other, {9}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(accounts) != 2 || !accounts[id].Tools || accounts[id].Name != "Ann Bonny" || accounts[other].Tools || accounts[other].Kind != store.Human {
+		t.Fatalf("the accounts: %+v", accounts)
+	}
+	if err := s.SetTools(ctx, id, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Session(ctx, hash); got.Tools {
+		t.Fatal("cleared, still flagged")
+	}
+	if err := s.SetTools(ctx, store.AccountID{9}, true); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("no such account: %v", err)
+	}
+	// An AI account, owned by a saved human's.
+	pool := storetest.PoolOn(t, u)
+	must(t, pool, "UPDATE account SET saved_at = now() WHERE id = $1", id)
+	ai := uuidOf(t, pool, "INSERT INTO account (kind, owner_id) VALUES ('ai', $1) RETURNING id", id)
+	if err := s.SetTools(ctx, ai, true); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("an AI's: %v", err)
+	}
+	if got, err := s.Accounts(ctx, []store.AccountID{ai}); err != nil || got[ai].Kind != store.AI || got[ai].Name != "" {
+		t.Fatalf("an AI's account: %+v, %v", got, err)
+	}
+}

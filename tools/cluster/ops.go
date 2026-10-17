@@ -69,6 +69,7 @@ func (c *cluster) status(ctx context.Context) error {
 	}
 	fmt.Fprintf(c.out, "  kubectl         kubectl --kubeconfig %s ...\n", c.kubeconfig)
 	fmt.Fprintf(c.out, "  probes, metrics kubectl --kubeconfig %s -n %s port-forward deployment/%s 9090:internal\n", c.kubeconfig, namespace, deployment)
+	fmt.Fprintf(c.out, "  the world page  http://localhost:9090/owner/, through that port forward\n")
 	return nil
 }
 

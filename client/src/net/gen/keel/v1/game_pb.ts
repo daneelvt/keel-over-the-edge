@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iNAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAQgYKBGJvZHkiCAoGUmVzeW5jIsECCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSAASIQoGY2h1bmtzGAggASgLMg8ua2VlbC52MS5DaHVua3NIAEIGCgRib2R5IiYKBkNodW5rcxIOCgZudW1iZXIYASADKA0SDAoEcGF0aBgCIAMoCSJtCgRCdW1wEgwKBHRpY2sYASABKAMSCQoBeBgCIAEoERIJCgF5GAMgASgREg8KB2Nsb3NpbmcYBCABKA0SHwoEcGFydBgFIAEoDjIRLmtlZWwudjEuQnVtcFBhcnQSDwoHYXJ0aWNsZRgGIAEoCSIwCg5XZWF0aGVyU3lzdGVtcxIeCgZzcGVsbHMYASADKAsyDi5rZWVsLnYxLlNwZWxsIo4CCgVTcGVsbBINCgViZWdpbhgBIAEoAxIOCgZjaGFuZ2UYAiABKA0SDQoFc3RhcnQYAyABKAMSDgoGbGVuZ3RoGAQgASgEEg4KBnJlZ2ltZRgFIAEoDRIOCgZzdGVhZHkYBiABKAgSDQoFc3BlZWQYByABKA0SDAoEZnJvbRgIIAEoDRINCgVkcmlmdBgJIAEoERIMCgRndXN0GAogASgNEg0KBXNoaWZ0GAsgAygNEg4KBnBlcmlvZBgMIAMoDRINCgVwaGFzZRgNIAMoDRIOCgZhY3Jvc3MYDiABKA0SDAoEYXhpcxgPIAEoDRITCgtheGlzX3BlcmlvZBgQIAEoDRIMCgRzZWVkGBEgASgNImwKCFNlYUFyZWFzEgwKBHRpY2sYASABKAMSCwoDY29sGAIgASgREgsKA3JvdxgDIAEoERIMCgRzaXplGAQgASgNEg0KBXNwZWVkGAUgAygNEgwKBGZyb20YBiADKA0SDQoFZmV0Y2gYByADKA0iGAoHUmVzdGFydBINCgVpbl9tcxgBIAEoDSIrCgZRdWV1ZWQSEAoIcG9zaXRpb24YASABKA0SDwoHd2FpdGluZxgCIAEoDSKgAQoHV2VsY29tZRINCgV3b3JsZBgBIAEoCRIMCgR0aWNrGAIgASgDEhUKDXdvcmxkX3RpbWVfdXMYAyABKAMSDAoEYm9hdBgEIAEoBBIMCgRraW5kGAUgASgNEhAKCHJlam9pbmVkGAYgASgIEhAKCGVwb2NoX3VzGAcgASgDEgwKBGxhbmQYCCABKAgSEwoLY2lyY3VsYXRpb24YCSABKBEiNQoEUG9uZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIVCg13b3JsZF90aW1lX3VzGAIgASgDKmQKCEJ1bXBQYXJ0EhkKFUJVTVBfUEFSVF9VTlNQRUNJRklFRBAAEhMKD0JVTVBfUEFSVF9ZT1VSUxABEhQKEEJVTVBfUEFSVF9USEVJUlMQAhISCg5CVU1QX1BBUlRfTk9ORRADQj1aO2dpdGh1Yi5jb20vZGFuZWVsdnQva2VlbC1vdmVyLXRoZS1lZGdlL2ludGVybmFsL3Byb3RvY29sL3BiYgZwcm90bzM");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iUwoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAEh0KBHJvYW0YAiABKAsyDS5rZWVsLnYxLlJvYW1IAEIGCgRib2R5IggKBlJlc3luYyI/CgRSb2FtEgoKAm9uGAEgASgIEgwKBGVhc3QYAiABKBESDQoFbm9ydGgYAyABKBESDgoGaGVpZ2h0GAQgASgNIuICCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSAASIQoGY2h1bmtzGAggASgLMg8ua2VlbC52MS5DaHVua3NIABIfCgV0b29scxgJIAEoCzIOLmtlZWwudjEuVG9vbHNIAEIGCgRib2R5IhMKBVRvb2xzEgoKAm9uGAEgASgIIiYKBkNodW5rcxIOCgZudW1iZXIYASADKA0SDAoEcGF0aBgCIAMoCSJtCgRCdW1wEgwKBHRpY2sYASABKAMSCQoBeBgCIAEoERIJCgF5GAMgASgREg8KB2Nsb3NpbmcYBCABKA0SHwoEcGFydBgFIAEoDjIRLmtlZWwudjEuQnVtcFBhcnQSDwoHYXJ0aWNsZRgGIAEoCSIwCg5XZWF0aGVyU3lzdGVtcxIeCgZzcGVsbHMYASADKAsyDi5rZWVsLnYxLlNwZWxsIo4CCgVTcGVsbBINCgViZWdpbhgBIAEoAxIOCgZjaGFuZ2UYAiABKA0SDQoFc3RhcnQYAyABKAMSDgoGbGVuZ3RoGAQgASgEEg4KBnJlZ2ltZRgFIAEoDRIOCgZzdGVhZHkYBiABKAgSDQoFc3BlZWQYByABKA0SDAoEZnJvbRgIIAEoDRINCgVkcmlmdBgJIAEoERIMCgRndXN0GAogASgNEg0KBXNoaWZ0GAsgAygNEg4KBnBlcmlvZBgMIAMoDRINCgVwaGFzZRgNIAMoDRIOCgZhY3Jvc3MYDiABKA0SDAoEYXhpcxgPIAEoDRITCgtheGlzX3BlcmlvZBgQIAEoDRIMCgRzZWVkGBEgASgNImwKCFNlYUFyZWFzEgwKBHRpY2sYASABKAMSCwoDY29sGAIgASgREgsKA3JvdxgDIAEoERIMCgRzaXplGAQgASgNEg0KBXNwZWVkGAUgAygNEgwKBGZyb20YBiADKA0SDQoFZmV0Y2gYByADKA0iGAoHUmVzdGFydBINCgVpbl9tcxgBIAEoDSIrCgZRdWV1ZWQSEAoIcG9zaXRpb24YASABKA0SDwoHd2FpdGluZxgCIAEoDSKvAQoHV2VsY29tZRINCgV3b3JsZBgBIAEoCRIMCgR0aWNrGAIgASgDEhUKDXdvcmxkX3RpbWVfdXMYAyABKAMSDAoEYm9hdBgEIAEoBBIMCgRraW5kGAUgASgNEhAKCHJlam9pbmVkGAYgASgIEhAKCGVwb2NoX3VzGAcgASgDEgwKBGxhbmQYCCABKAgSEwoLY2lyY3VsYXRpb24YCSABKBESDQoFdG9vbHMYCiABKAgiNQoEUG9uZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIVCg13b3JsZF90aW1lX3VzGAIgASgDKmQKCEJ1bXBQYXJ0EhkKFUJVTVBfUEFSVF9VTlNQRUNJRklFRBAAEhMKD0JVTVBfUEFSVF9ZT1VSUxABEhQKEEJVTVBfUEFSVF9USEVJUlMQAhISCg5CVU1QX1BBUlRfTk9ORRADQj1aO2dpdGh1Yi5jb20vZGFuZWVsdnQva2VlbC1vdmVyLXRoZS1lZGdlL2ludGVybmFsL3Byb3RvY29sL3BiYgZwcm90bzM");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -261,6 +261,12 @@ export type Command = Message<"keel.v1.Command"> & {
      */
     value: Resync;
     case: "resync";
+  } | {
+    /**
+     * @generated from field: keel.v1.Roam roam = 2;
+     */
+    value: Roam;
+    case: "roam";
   } | { case: undefined; value?: undefined };
 };
 
@@ -286,6 +292,53 @@ export type Resync = Message<"keel.v1.Resync"> & {
  */
 export const ResyncSchema: GenMessage<Resync> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 5);
+
+/**
+ * Roam is the owner's free camera, from an account that carries the
+ * owner's flag (Welcome.tools); from any other it is ignored. While it is
+ * on, the connection's eye is the camera's point: the other boats, the sea
+ * areas and the land's chunks it is sent are those about the eye, not
+ * about the boat, which stays where it is, not stepped, until the camera
+ * is off or the connection ends. Sent as the camera leaves the boat, as it
+ * moves, at most five a second and once it has moved 20 m, and as it comes
+ * back. The eye is clamped to the whole disk and 500 m beyond its lip,
+ * from 2 m to 500 m above the sea.
+ *
+ * @generated from message keel.v1.Roam
+ */
+export type Roam = Message<"keel.v1.Roam"> & {
+  /**
+   * The camera is off the boat.
+   *
+   * @generated from field: bool on = 1;
+   */
+  on: boolean;
+
+  /**
+   * The point under the camera, in centimetres east and north of the
+   * world's centre, and its height above the sea, in centimetres.
+   *
+   * @generated from field: sint32 east = 2;
+   */
+  east: number;
+
+  /**
+   * @generated from field: sint32 north = 3;
+   */
+  north: number;
+
+  /**
+   * @generated from field: uint32 height = 4;
+   */
+  height: number;
+};
+
+/**
+ * Describes the message keel.v1.Roam.
+ * Use `create(RoamSchema)` to create a new message.
+ */
+export const RoamSchema: GenMessage<Roam> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 6);
 
 /**
  * ServerMessage is everything the server sends but snapshots, after the
@@ -345,6 +398,12 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
      */
     value: Chunks;
     case: "chunks";
+  } | {
+    /**
+     * @generated from field: keel.v1.Tools tools = 9;
+     */
+    value: Tools;
+    case: "tools";
   } | { case: undefined; value?: undefined };
 };
 
@@ -353,7 +412,29 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
  * Use `create(ServerMessageSchema)` to create a new message.
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 6);
+  messageDesc(file_keel_v1_game, 7);
+
+/**
+ * Tools says the account's owner's flag has been set or cleared while the
+ * connection is open, as Welcome.tools says it at the start: the free
+ * camera is offered or withdrawn. Cleared, a free camera roaming is
+ * brought back to the boat.
+ *
+ * @generated from message keel.v1.Tools
+ */
+export type Tools = Message<"keel.v1.Tools"> & {
+  /**
+   * @generated from field: bool on = 1;
+   */
+  on: boolean;
+};
+
+/**
+ * Describes the message keel.v1.Tools.
+ * Use `create(ToolsSchema)` to create a new message.
+ */
+export const ToolsSchema: GenMessage<Tools> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 8);
 
 /**
  * Chunks hands the client the addresses of chunks of the world's land: each
@@ -386,7 +467,7 @@ export type Chunks = Message<"keel.v1.Chunks"> & {
  * Use `create(ChunksSchema)` to create a new message.
  */
 export const ChunksSchema: GenMessage<Chunks> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 7);
+  messageDesc(file_keel_v1_game, 9);
 
 /**
  * Bump is two boats touching after being apart: a correction the
@@ -445,7 +526,7 @@ export type Bump = Message<"keel.v1.Bump"> & {
  * Use `create(BumpSchema)` to create a new message.
  */
 export const BumpSchema: GenMessage<Bump> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 8);
+  messageDesc(file_keel_v1_game, 10);
 
 /**
  * WeatherSystems is the weather in play about the present: the spells the
@@ -472,7 +553,7 @@ export type WeatherSystems = Message<"keel.v1.WeatherSystems"> & {
  * Use `create(WeatherSystemsSchema)` to create a new message.
  */
 export const WeatherSystemsSchema: GenMessage<WeatherSystems> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 9);
+  messageDesc(file_keel_v1_game, 11);
 
 /**
  * Spell is a spell of weather: a stretch of time with one base wind, its
@@ -599,7 +680,7 @@ export type Spell = Message<"keel.v1.Spell"> & {
  * Use `create(SpellSchema)` to create a new message.
  */
 export const SpellSchema: GenMessage<Spell> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 10);
+  messageDesc(file_keel_v1_game, 12);
 
 /**
  * SeaAreas is what raises the waves about the boat: a square of sea areas,
@@ -669,7 +750,7 @@ export type SeaAreas = Message<"keel.v1.SeaAreas"> & {
  * Use `create(SeaAreasSchema)` to create a new message.
  */
 export const SeaAreasSchema: GenMessage<SeaAreas> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 11);
+  messageDesc(file_keel_v1_game, 13);
 
 /**
  * Restart says the server is about to restart, as a new version is
@@ -693,7 +774,7 @@ export type Restart = Message<"keel.v1.Restart"> & {
  * Use `create(RestartSchema)` to create a new message.
  */
 export const RestartSchema: GenMessage<Restart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 12);
+  messageDesc(file_keel_v1_game, 14);
 
 /**
  * Queued says the sea is full: the client waits for a boat. It comes after
@@ -723,7 +804,7 @@ export type Queued = Message<"keel.v1.Queued"> & {
  * Use `create(QueuedSchema)` to create a new message.
  */
 export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 13);
+  messageDesc(file_keel_v1_game, 15);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -798,6 +879,13 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
    * @generated from field: sint32 circulation = 9;
    */
   circulation: number;
+
+  /**
+   * The account carries the owner's flag: the free camera (Roam) is its.
+   *
+   * @generated from field: bool tools = 10;
+   */
+  tools: boolean;
 };
 
 /**
@@ -805,7 +893,7 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 14);
+  messageDesc(file_keel_v1_game, 16);
 
 /**
  * Pong answers a Ping.
@@ -833,7 +921,7 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 15);
+  messageDesc(file_keel_v1_game, 17);
 
 /**
  * BumpPart is a connection's part in a bump.

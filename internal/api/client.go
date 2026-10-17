@@ -134,6 +134,16 @@ func (p *Page) register(mux *http.ServeMux) {
 	})
 }
 
+// Serve answers a GET for one of the page's files by its name: those in
+// assets/ cached for a year, the rest asked about each time.
+func (p *Page) Serve(w http.ResponseWriter, r *http.Request, name string) {
+	cache := pageCache
+	if strings.HasPrefix(name, "assets/") {
+		cache = assetCache
+	}
+	p.serve(w, r, name, cache)
+}
+
 func (p *Page) serve(w http.ResponseWriter, r *http.Request, name, cache string) {
 	h := w.Header()
 	h.Set("X-Content-Type-Options", "nosniff")

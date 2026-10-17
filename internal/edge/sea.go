@@ -11,7 +11,7 @@ import (
 // A client steps its own boat ahead of the server, in the same waves: so it
 // is sent what raises the waves about its boat, and derives them as the
 // server does. It gets a square of SeaWindow sea areas a side centred on the
-// boat's, which covers the water it draws; and since the sea's changes are
+// boat's (or its owner's free camera's while it roams), which covers the water it draws; and since the sea's changes are
 // fixed a second before they apply (bus.Sea), it gets each before it
 // predicts a tick the change applies to.
 const (
@@ -36,13 +36,13 @@ type connSea struct {
 	nextFrom int64 // the tick next applies from
 }
 
-// seaAreas sends the connection whatever of the sea about its boat, in
-// frame f, its client does not hold: all of it at first and when the window
-// moves with the boat, the window for the next second when it differs from
-// the one in effect, and the one in effect if it changed without having
-// been sent ahead, as when the world's time jumps. It reports whether the
-// connection is still good.
-func (c *conn) seaAreas(f *bus.Frame, boat *physics.State) bool {
+// seaAreas sends the connection whatever of the sea about its eye at (x,
+// y), in frame f, its client does not hold: all of it at first and when the
+// window moves with the eye, the window for the next second when it differs
+// from the one in effect, and the one in effect if it changed without
+// having been sent ahead, as when the world's time jumps. It reports
+// whether the connection is still good.
+func (c *conn) seaAreas(f *bus.Frame, x, y float64) bool {
 	st := &c.sea
 	from := bus.SeaSecond(f.Tick) * bus.SeaPeriod
 	if st.hasNext && f.Tick >= st.nextFrom {
@@ -51,11 +51,11 @@ func (c *conn) seaAreas(f *bus.Frame, boat *physics.State) bool {
 	}
 	col, row := st.col, st.row
 	moved := !st.sent
-	if cx := col + SeaWindow/2; moved || physics.SeaAreaOf(boat.X-seaSlack) > cx || physics.SeaAreaOf(boat.X+seaSlack) < cx {
-		col = physics.SeaAreaOf(boat.X) - SeaWindow/2
+	if cx := col + SeaWindow/2; moved || physics.SeaAreaOf(x-seaSlack) > cx || physics.SeaAreaOf(x+seaSlack) < cx {
+		col = physics.SeaAreaOf(x) - SeaWindow/2
 	}
-	if cy := row + SeaWindow/2; moved || physics.SeaAreaOf(boat.Y-seaSlack) > cy || physics.SeaAreaOf(boat.Y+seaSlack) < cy {
-		row = physics.SeaAreaOf(boat.Y) - SeaWindow/2
+	if cy := row + SeaWindow/2; moved || physics.SeaAreaOf(y-seaSlack) > cy || physics.SeaAreaOf(y+seaSlack) < cy {
+		row = physics.SeaAreaOf(y) - SeaWindow/2
 	}
 	moved = moved || col != st.col || row != st.row
 	var now, next seaWindow

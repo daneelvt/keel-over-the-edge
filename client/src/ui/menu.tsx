@@ -47,11 +47,14 @@ export function Menu({
   sailor,
   connection = null,
   close,
+  fly = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
   connection?: ConnectionView | null;
   close: () => void;
+  /** Flies the free camera, where it is offered; null where it is not. */
+  fly?: (() => void) | null;
 }) {
   const s = settings.value.value;
   return (
@@ -103,6 +106,11 @@ export function Menu({
         on={s.centreHelm}
         set={(centreHelm) => settings.set({ centreHelm })}
       />
+      {fly !== null ? (
+        <button type="button" class="menu-fly" onClick={fly}>
+          Free camera (F)
+        </button>
+      ) : null}
       <button type="button" class="menu-close" onClick={close}>
         Close
       </button>

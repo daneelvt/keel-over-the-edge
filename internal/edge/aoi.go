@@ -10,9 +10,10 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 )
 
-// A connection's area of interest: the other boats near its own, found in
-// the frame's grid. A boat comes into view within ViewEnter of the player's
-// boat and stays until beyond ViewKeep; of those, the ViewSlots nearest are
+// A connection's area of interest: the other boats near its eye, found in
+// the frame's grid: its own boat, or its owner's free camera while it
+// roams. A boat comes into view within ViewEnter of the eye and stays until
+// beyond ViewKeep; of those, the ViewSlots nearest are
 // kept. Within NearEnter a boat is in the near band, sampled by every
 // snapshot, and stays near until beyond NearKeep; beyond, in the far band,
 // it is sampled by every FarEvery-th, on snapshots chosen by the
@@ -57,12 +58,13 @@ func (a *aoi) init(capacity int) {
 	a.cands = make([]candidate, 0, capacity)
 }
 
-// find fills next with the view of the boat in slot own of f, from base
-// (nil for none), and returns which slots enter, and which the snapshot
-// samples. Boats the base holds keep their view slots; boats entering take
-// the lowest free, replacing any boat that left there.
-func (a *aoi) find(f *bus.Frame, own int32, base, next *connView, id uint64) (enter, sample uint64) {
-	x, y := f.State[own].X, f.State[own].Y
+// find fills next with the view about (x, y), the eye of the connection
+// whose boat is in slot own of f, from base (nil for none), and returns
+// which slots enter, and which the snapshot samples. Its own boat is in no
+// view, nor is a boat its owner's tools keep unseen. Boats the base holds
+// keep their view slots; boats entering take the lowest free, replacing any
+// boat that left there.
+func (a *aoi) find(f *bus.Frame, own int32, x, y float64, base, next *connView, id uint64) (enter, sample uint64) {
 	var baseView *protocol.View
 	if base != nil {
 		baseView = &base.view
@@ -85,7 +87,7 @@ func (a *aoi) find(f *bus.Frame, own int32, base, next *connView, id uint64) (en
 		at := row * physics.GridCells
 		start, end := g.Start[at+c0], g.Start[at+c1+1]
 		for _, s := range g.Slots[start:end] {
-			if s == own {
+			if s == own || f.Unseen[s] {
 				continue
 			}
 			dx, dy := f.State[s].X-x, f.State[s].Y-y

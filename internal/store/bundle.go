@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -33,6 +34,9 @@ type Bundle struct {
 	// ChunkKey is the world's chunk key, 32 bytes, or nil if its bundle was
 	// stored without one.
 	ChunkKey []byte
+	// Stored is when the bundle was stored: when the world's terrain was
+	// made.
+	Stored time.Time
 }
 
 // Place is an island or a group of rocks, by its number in the world.
@@ -85,6 +89,7 @@ func (s *Store) LoadBundle(ctx context.Context, world [16]byte) (*Bundle, error)
 		Seed: seed, Format: int(row.Format), Generator: int(row.Generator), Catalog: row.Catalog,
 		Made: uint64(row.Made), Attempts: int(row.Attempts), Digest: row.Digest, Records: row.Records,
 		Report: row.Report, GenerationMs: int(row.GenerationMs), ChunkKey: row.ChunkKey,
+		Stored: row.CreatedAt,
 	}
 	chunks, err := s.q.WorldChunks(ctx, id)
 	if err != nil {

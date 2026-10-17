@@ -1,0 +1,253 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* The world page: the game's fonts and colours, the map beside the lists,
+   at a laptop's width. */
+
+@font-face {
+  font-family: "Alegreya Sans";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/AlegreyaSans-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Alegreya Sans";
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/AlegreyaSans-Medium.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IM Fell English SC";
+  font-display: swap;
+  src: url("../fonts/IMFellEnglishSC-Regular.ttf") format("truetype");
+}
+
+:root {
+  --panel: rgb(26 36 44 / 92%);
+  --ink: #f2efe7;
+  --faint: rgb(242 239 231 / 62%);
+  --gold: #e8b450;
+  --sea: #14365e;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  background: #0d1a24;
+  color: var(--ink);
+  font:
+    15px / 1.35 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-family: "IM Fell English SC", Georgia, serif;
+  font-weight: normal;
+}
+
+h1 {
+  font-size: 24px;
+}
+
+h2 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+header {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  padding: 8px 16px;
+}
+
+.note,
+.small {
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.error {
+  color: #ff9e7a;
+}
+
+.message {
+  color: var(--gold);
+}
+
+main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.map-box {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Out of the flow, so its pixels never size its box. */
+.map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 8px;
+  background: var(--sea);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.layers {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.point {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+aside {
+  width: 520px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.card p {
+  margin: 4px 0;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+dt {
+  color: var(--faint);
+}
+
+dd {
+  margin: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th {
+  text-align: left;
+  color: var(--faint);
+  font-weight: normal;
+}
+
+td,
+th {
+  padding: 2px 4px;
+}
+
+tbody tr[data-boat] {
+  cursor: pointer;
+}
+
+tr.chosen {
+  background: rgb(232 180 80 / 18%);
+}
+
+tr.controls td {
+  padding: 6px 4px 10px;
+}
+
+button,
+select {
+  margin: 2px 4px 2px 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.islands {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  font-size: 14px;
+}
+
+.islands button {
+  padding: 1px 4px;
+  background: none;
+  text-align: left;
+}
+
+@media (width < 1100px) {
+  main {
+    flex-direction: column;
+  }
+
+  .map-box {
+    min-height: 60vh;
+  }
+
+  aside {
+    width: auto;
+  }
+}

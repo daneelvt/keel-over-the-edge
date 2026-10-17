@@ -61,6 +61,8 @@ export type Received =
   | { kind: 'bump'; bump: BumpTold }
   /** The addresses of chunks of the land, by number. */
   | { kind: 'chunks'; chunks: ChunksHanded }
+  /** The account's owner's flag was set or cleared. */
+  | { kind: 'tools'; on: boolean }
   | { kind: 'pong' }
   | { kind: 'other' };
 
@@ -195,6 +197,9 @@ export class Session {
         }
         return { kind: 'chunks', chunks: { numbers: [...c.number], paths: [...c.path] } };
       }
+      case 'tools':
+        this.#lastHeard = now;
+        return { kind: 'tools', on: m.body.value.on };
       case 'bump': {
         this.#lastHeard = now;
         const v = m.body.value;
@@ -234,6 +239,35 @@ export class Session {
           target: pilot.target,
           order: pilot.order,
           way: pilot.way,
+        },
+      },
+    });
+  }
+
+  /**
+   * The owner's free camera: off the boat over (east, north), height up,
+   * metres, or back on it.
+   */
+  roam(
+    now: number,
+    on: boolean,
+    east: number,
+    north: number,
+    height: number,
+  ): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: {
+        case: 'command',
+        value: {
+          body: {
+            case: 'roam',
+            value: {
+              on,
+              east: Math.round(east * 100),
+              north: Math.round(north * 100),
+              height: Math.max(0, Math.round(height * 100)),
+            },
+          },
         },
       },
     });

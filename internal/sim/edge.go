@@ -20,7 +20,9 @@ import (
 // clear distance back out of it, or when the voyage ends afloat; going over
 // ends it unsurvived. When a voyage ends, by leaving, expiring or going
 // over, the least distance of its survived approaches is an event, and
-// going over is one too.
+// going over is one too; unless the owner's tools moved the boat in that
+// voyage, which earns nothing. A boat that stays while its owner's free
+// camera roams does not move, and the rules pass it by.
 
 // Edge is how a world treats boats at its edge; where the lip and the mist
 // band lie is the weather's.
@@ -39,13 +41,13 @@ func (w *World) rules() {
 	p := w.weather.Prepared
 	for _, s := range f.Live {
 		v := &f.Voyage[s]
-		if v.Falling() {
+		if v.Falling() || f.Stay[s] {
 			continue
 		}
 		st := &f.State[s]
 		if physics.OverEdge(p, st.X, st.Y) {
 			v.Over = f.Tick
-			f.Edges = append(f.Edges, bus.EdgeEvent{Tick: f.Tick, Kind: bus.EdgeOver, Slot: s, Boat: f.Boat[s], Owner: f.Owner[s], X: st.X, Y: st.Y})
+			f.Edges = append(f.Edges, bus.EdgeEvent{Tick: f.Tick, Kind: bus.EdgeOver, Slot: s, Boat: f.Boat[s], Owner: f.Owner[s], X: st.X, Y: st.Y, Placed: v.Placed})
 			// The approach under way ended over the lip: it is not survived.
 			v.Approaching = false
 			w.voyageEnds(f, s)
@@ -88,11 +90,12 @@ func (w *World) voyageEnds(f *bus.Frame, s int32) {
 	if v.Survived {
 		f.Edges = append(f.Edges, bus.EdgeEvent{
 			Tick: f.Tick, Kind: bus.EdgeApproach, Slot: s, Boat: f.Boat[s], Owner: f.Owner[s],
-			X: v.BestX, Y: v.BestY, Distance: v.Best,
+			X: v.BestX, Y: v.BestY, Distance: v.Best, Placed: v.Placed,
 		})
 	}
 	v.Approaching, v.Least, v.X, v.Y = false, 0, 0, 0
 	v.Survived, v.Best, v.BestX, v.BestY = false, 0, 0, 0
+	v.Placed = false
 }
 
 // fallsEnd starts again at the world's start each boat of the next frame

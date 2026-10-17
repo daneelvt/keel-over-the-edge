@@ -15,7 +15,8 @@ ARG BASE_IMAGE=gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08
 FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS node
 
 # The page: the physics module built with the pinned TinyGo, then Vite's
-# build, as CI builds it.
+# build, as CI builds it, and the world page's after it, into dist/owner/,
+# which keel serves on its internal listener alone.
 FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS client
 COPY --from=node /usr/local/bin/ /usr/local/bin/
 COPY --from=node /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
@@ -37,7 +38,7 @@ RUN --mount=type=cache,id=keel-gomod,target=/root/go/pkg/mod \
     --mount=type=cache,id=keel-tinygo,target=/src/.dev \
     --mount=type=cache,id=keel-corepack,target=/root/.cache/corepack \
     go run ./tools/physics \
-    && cd client && npx --no-install vite build
+    && cd client && npx --no-install vite build && npx --no-install vite build -c vite.owner.config.ts
 
 # keel, static, for the image's platform.
 FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS server

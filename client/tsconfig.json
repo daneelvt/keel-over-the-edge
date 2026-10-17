@@ -19,5 +19,13 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "include": ["src", "build", "e2e", "playwright.config.ts", "vite.config.ts", "../art"]
+  "include": [
+    "src",
+    "build",
+    "e2e",
+    "playwright.config.ts",
+    "vite.config.ts",
+    "vite.owner.config.ts",
+    "../art"
+  ]
 }
