@@ -17,8 +17,8 @@ import (
 
 // The chunks as Go writes them, for the client's mesh worker to read
 // (client/src/workers/mesh/chunk.test.ts): testdata/chunks.json holds a
-// made chunk, the same chunk as format 1 wrote it, and seed 1's chunk 205,
-// Port Royal's with its town, as payloads of one world, and the SHA-256 of
+// made chunk, the same chunk as format 1 wrote it, and seed 1's chunk that
+// holds the most of Port Royal's town, as payloads of one world, and the SHA-256 of
 // the elevations (int16s, little-endian), the surfaces and the shelter's
 // whole table each should unpack to, with the town's counts and its first
 // building. After a deliberate change, rewrite it with
@@ -159,7 +159,15 @@ func TestChunkFile(t *testing.T) {
 		return
 	}
 	_, w := wholeWorld(t)
-	port, err := fileChunk("seed 1, Port Royal's", 205, w.Ground.Chunks[205], w.Shelter.Chunks[205], w.ChunkTowns()[205], Format, Version)
+	// The chunk that holds the most of Port Royal's town.
+	towns := w.ChunkTowns()
+	at, most := int32(0), -1
+	for n, t := range towns {
+		if t != nil && len(t.Buildings) > most {
+			at, most = int32(n), len(t.Buildings)
+		}
+	}
+	port, err := fileChunk("seed 1, Port Royal's", at, w.Ground.Chunks[at], w.Shelter.Chunks[at], towns[at], Format, Version)
 	if err != nil {
 		t.Fatal(err)
 	}

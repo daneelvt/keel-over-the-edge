@@ -734,6 +734,21 @@ export class SeaScene {
     l.commit(this.stage.camera.fov, gfx.canvas.clientHeight);
   }
 
+  /** The towns: their buildings near and far, their lamps lit by the sun at the camera. */
+  #drawTowns(camera: Vector3): void {
+    const land = this.land;
+    if (land === null) {
+      return;
+    }
+    const o = this.origin.world;
+    land.towns.frame({
+      origin: o,
+      cameraEast: camera.x + o.x,
+      cameraNorth: -camera.z + o.y,
+      night: this.drawSky ? lanternLit(this.sky.now.sunHeight) : 0,
+    });
+  }
+
   /** The lighthouses' towers and lights, each light lit by the sun at its lighthouse. */
   #drawLights(gfx: Gfx, camera: Vector3, now: number): void {
     const sun = SKY.sun + BODY.altitude;
@@ -815,6 +830,7 @@ export class SeaScene {
         this.timeStep,
       );
     }
+    this.#drawTowns(camera.position);
     this.#drawLanterns(gfx, camera.position);
     this.#drawLights(gfx, camera.position, now);
     this.wrecks.frame(this.origin);

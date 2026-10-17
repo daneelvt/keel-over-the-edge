@@ -643,31 +643,32 @@ world:
     # Port Royal, a port and a village have (fill: a weight among the
     # buildings that fill the streets, by count where it has one), and what
     # it shows: a chimney's share, a flag, a lantern by its door's share,
-    # the height its top stands, m. Real sizes: Port Royal's excavated
+    # the height its top stands, m (0: its storeys' and its roof's). Every
+    # kind gives every value, 0 for none. Real sizes: Port Royal's excavated
     # Building 3 was 11.6 m by 8.2 m, two storeys (Hamilton, 1981–1990).
     # Props are small things that stand about, drawn near only.
     buildings:
-      - { id: dwelling, name: Dwelling, frontage: [5, 8], depth: [6, 9], storeys: [1, 2], stands: street, fill: 6, chimney: 1, lantern: 0.5, colour: "#c9b08a" }
-      - { id: town-house, name: Town house, frontage: [6, 9], depth: [7, 10], storeys: [2, 3], stands: street, fill: 3, chimney: 1, lantern: 0.6, colour: "#d1b994" }
-      - { id: merchants-house, name: Merchant's house, frontage: [9, 12], depth: [9, 13], storeys: [2, 3], stands: quay, main: [4, 8], port: [1, 3], chimney: 1, lantern: 1, colour: "#b89a70" }
-      - { id: warehouse, name: Warehouse, frontage: [9, 12], depth: [8, 12], storeys: [2, 2], stands: quayEnd, main: [4, 6], port: [1, 3], lantern: 0.5, colour: "#9b8466" }
-      - { id: tavern, name: Tavern, frontage: [7, 10], depth: [8, 11], storeys: [2, 2], stands: quay, main: [1, 2], port: [1, 1], chimney: 1, lantern: 1, colour: "#a8865c" }
-      - { id: harbourmasters-house, name: Harbourmaster's house, frontage: [7, 10], depth: [7, 9], storeys: [2, 2], stands: square, main: [1, 1], port: [1, 1], chimney: 1, flag: true, lantern: 1, colour: "#b3261e" }
-      - { id: church, name: Church, frontage: [10, 12], depth: [18, 22], storeys: [1, 1], stands: above, main: [1, 1], flag: true, lantern: 1, top: 22, colour: "#e8e0cc" }
-      - { id: windmill, name: Windmill, frontage: [7, 7], depth: [7, 7], storeys: [1, 1], stands: summit, main: [1, 1], flag: true, top: 14, colour: "#d9d2bf" }
-      - { id: farmhouse, name: Farmhouse, frontage: [8, 11], depth: [6, 8], storeys: [1, 2], stands: fields, main: [5, 5], port: [0, 2], chimney: 1, colour: "#9a7e52" }
-      - { id: fishermans-hut, name: Fisherman's hut, frontage: [4, 6], depth: [4, 6], storeys: [1, 1], stands: slope, main: [5, 5], village: [5, 14], chimney: 1, lantern: 0.3, colour: "#7d6a52" }
-      - { id: fish-stage, name: Stage, frontage: [5, 7], depth: [8, 12], storeys: [1, 1], stands: water, village: [1, 3], colour: "#6b5440" }
-      - { id: flake, name: Flake, frontage: [6, 10], depth: [3, 4], storeys: [1, 1], stands: behind, village: [1, 3], colour: "#8c7a5c" }
-      - { id: boat-shed, name: Boat shed, frontage: [4, 5], depth: [7, 9], storeys: [1, 1], stands: shore, village: [0, 2], colour: "#6e5a44" }
-      - { id: shipyard-slip, name: Slip, frontage: [8, 10], depth: [28, 34], storeys: [1, 1], stands: slip, main: [1, 1], top: 8, colour: "#5f4a36" }
-      - { id: market-stall, name: Market stall, prop: true, frontage: [2.5, 3], depth: [2, 2], storeys: [1, 1], stands: square, main: [4, 8], port: [0, 3], colour: "#c8a060" }
-      - { id: well, name: Well, prop: true, frontage: [2, 2], depth: [2, 2], storeys: [1, 1], stands: square, main: [1, 1], port: [0, 1], colour: "#9a958a" }
-      - { id: crane, name: Crane, prop: true, frontage: [3, 3], depth: [3, 3], storeys: [1, 1], stands: quay, main: [1, 2], port: [0, 1], top: 9, colour: "#6a5038" }
-      - { id: bollard, name: Bollard, prop: true, frontage: [0.4, 0.4], depth: [0.4, 0.4], storeys: [1, 1], stands: edge, main: [20, 40], port: [4, 10], colour: "#3c3a36" }
-      - { id: lantern-post, name: Lantern post, prop: true, frontage: [0.4, 0.4], depth: [0.4, 0.4], storeys: [1, 1], stands: post, main: [16, 30], port: [3, 8], village: [0, 2], lantern: 1, colour: "#2c2b2a" }
-      - { id: crates, name: Crates and barrels, prop: true, frontage: [2, 3], depth: [1.5, 2], storeys: [1, 1], stands: quay, main: [6, 12], port: [2, 6], village: [1, 3], colour: "#8a6a48" }
-      - { id: boat-ashore, name: A boat drawn up, prop: true, frontage: [1.6, 1.8], depth: [4.5, 5], storeys: [1, 1], stands: beach, main: [3, 6], village: [2, 6], colour: "#5c4a38" }
+      - { id: dwelling, name: Dwelling, prop: false, frontage: [5, 8], depth: [6, 9], storeys: [1, 2], stands: street, fill: 6, main: [0, 0], port: [0, 0], village: [0, 0], chimney: 1, flag: false, lantern: 0.5, top: 0, colour: "#c9b08a" }
+      - { id: town-house, name: Town house, prop: false, frontage: [6, 9], depth: [7, 10], storeys: [2, 3], stands: street, fill: 3, main: [0, 0], port: [0, 0], village: [0, 0], chimney: 1, flag: false, lantern: 0.6, top: 0, colour: "#d1b994" }
+      - { id: merchants-house, name: Merchant's house, prop: false, frontage: [9, 12], depth: [9, 13], storeys: [2, 3], stands: quay, fill: 0, main: [4, 8], port: [1, 3], village: [0, 0], chimney: 1, flag: false, lantern: 1, top: 0, colour: "#b89a70" }
+      - { id: warehouse, name: Warehouse, prop: false, frontage: [9, 12], depth: [8, 12], storeys: [2, 2], stands: quayEnd, fill: 0, main: [4, 6], port: [1, 3], village: [0, 0], chimney: 0, flag: false, lantern: 0.5, top: 0, colour: "#9b8466" }
+      - { id: tavern, name: Tavern, prop: false, frontage: [7, 10], depth: [8, 11], storeys: [2, 2], stands: quay, fill: 0, main: [1, 2], port: [1, 1], village: [0, 0], chimney: 1, flag: false, lantern: 1, top: 0, colour: "#a8865c" }
+      - { id: harbourmasters-house, name: Harbourmaster's house, prop: false, frontage: [7, 10], depth: [7, 9], storeys: [2, 2], stands: square, fill: 0, main: [1, 1], port: [1, 1], village: [0, 0], chimney: 1, flag: true, lantern: 1, top: 0, colour: "#b3261e" }
+      - { id: church, name: Church, prop: false, frontage: [10, 12], depth: [18, 22], storeys: [1, 1], stands: above, fill: 0, main: [1, 1], port: [0, 0], village: [0, 0], chimney: 0, flag: true, lantern: 1, top: 22, colour: "#e8e0cc" }
+      - { id: windmill, name: Windmill, prop: false, frontage: [7, 7], depth: [7, 7], storeys: [1, 1], stands: summit, fill: 0, main: [1, 1], port: [0, 0], village: [0, 0], chimney: 0, flag: true, lantern: 0, top: 14, colour: "#d9d2bf" }
+      - { id: farmhouse, name: Farmhouse, prop: false, frontage: [8, 11], depth: [6, 8], storeys: [1, 2], stands: fields, fill: 0, main: [5, 5], port: [0, 2], village: [0, 0], chimney: 1, flag: false, lantern: 0, top: 0, colour: "#9a7e52" }
+      - { id: fishermans-hut, name: Fisherman's hut, prop: false, frontage: [4, 6], depth: [4, 6], storeys: [1, 1], stands: slope, fill: 0, main: [5, 5], port: [0, 0], village: [5, 14], chimney: 1, flag: false, lantern: 0.3, top: 0, colour: "#7d6a52" }
+      - { id: fish-stage, name: Stage, prop: false, frontage: [5, 7], depth: [8, 12], storeys: [1, 1], stands: water, fill: 0, main: [0, 0], port: [0, 0], village: [1, 3], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#6b5440" }
+      - { id: flake, name: Flake, prop: false, frontage: [6, 10], depth: [3, 4], storeys: [1, 1], stands: behind, fill: 0, main: [0, 0], port: [0, 0], village: [1, 3], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#8c7a5c" }
+      - { id: boat-shed, name: Boat shed, prop: false, frontage: [4, 5], depth: [7, 9], storeys: [1, 1], stands: shore, fill: 0, main: [0, 0], port: [0, 0], village: [0, 2], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#6e5a44" }
+      - { id: shipyard-slip, name: Slip, prop: false, frontage: [8, 10], depth: [28, 34], storeys: [1, 1], stands: slip, fill: 0, main: [1, 1], port: [0, 0], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 8, colour: "#5f4a36" }
+      - { id: market-stall, name: Market stall, prop: true, frontage: [2.5, 3], depth: [2, 2], storeys: [1, 1], stands: square, fill: 0, main: [4, 8], port: [0, 3], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#c8a060" }
+      - { id: well, name: Well, prop: true, frontage: [2, 2], depth: [2, 2], storeys: [1, 1], stands: square, fill: 0, main: [1, 1], port: [0, 1], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#9a958a" }
+      - { id: crane, name: Crane, prop: true, frontage: [3, 3], depth: [3, 3], storeys: [1, 1], stands: quay, fill: 0, main: [1, 2], port: [0, 1], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 9, colour: "#6a5038" }
+      - { id: bollard, name: Bollard, prop: true, frontage: [0.4, 0.4], depth: [0.4, 0.4], storeys: [1, 1], stands: edge, fill: 0, main: [20, 40], port: [4, 10], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#3c3a36" }
+      - { id: lantern-post, name: Lantern post, prop: true, frontage: [0.4, 0.4], depth: [0.4, 0.4], storeys: [1, 1], stands: post, fill: 0, main: [16, 30], port: [3, 8], village: [0, 2], chimney: 0, flag: false, lantern: 1, top: 0, colour: "#2c2b2a" }
+      - { id: crates, name: Crates and barrels, prop: true, frontage: [2, 3], depth: [1.5, 2], storeys: [1, 1], stands: quay, fill: 0, main: [6, 12], port: [2, 6], village: [1, 3], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#8a6a48" }
+      - { id: boat-ashore, name: A boat drawn up, prop: true, frontage: [1.6, 1.8], depth: [4.5, 5], storeys: [1, 1], stands: beach, fill: 0, main: [3, 6], port: [0, 0], village: [2, 6], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#5c4a38" }
     # Each biome's kit: its models, one for each kind of building, in
     # their storeys, coloured per house from its palette (walls, roofs,
     # shutters and doors, as #rrggbb). Port Royal's is always its biome's.

@@ -1286,6 +1286,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         ),
       };
     },
+    /** The towns drawn: their buildings near and far, props, draws and triangles; the buildings held. */
+    towns() {
+      const t = world.land?.towns;
+      if (t === undefined) {
+        return null;
+      }
+      return { ...t.stats, held: [...t.buildings()].length };
+    },
     /**
      * Each tile's ground as the tile pass wrote it for the last frame: the
      * water's depth, the waves' cap f, whether it is land; beside the

@@ -42,6 +42,7 @@ function chunk(n: number, f: (x: number, y: number) => number, surface = 0): Chu
     elevation: e,
     surface: new Uint8Array(GROUND.chunkHexes).fill(surface),
     shelter: null,
+    town: null,
   };
 }
 

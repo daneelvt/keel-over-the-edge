@@ -216,6 +216,8 @@ export const WINDOW_ROWS = 384;
 export const WINDOW_RECENTRE = 200;
 /** A texel of open water: as deep as the window tells, no land. */
 const DEEP = 255;
+/** The water under a pier's deck, dm. */
+const UNDER_DECK = 40;
 
 /**
  * The ground window: for each hexagon about the camera, a texel of red the
@@ -230,6 +232,11 @@ export class GroundWindow {
   row = 0;
   /** Counts the window's refills (the tests). */
   fills = 0;
+  /**
+   * The surface a pier's deck is, or −1: the sea is drawn under a deck, as
+   * water a pier's depth over sand, though the physics meets it as land.
+   */
+  deck = -1;
   readonly #data: Uint8Array;
   #east = Number.NaN;
   #north = Number.NaN;
@@ -319,6 +326,14 @@ export class GroundWindow {
         for (let j = jFrom; j < jTo; j++) {
           const e = g.elevation[base + (j - j0)] ?? 0;
           const t = ((j - this.row) * WINDOW_COLUMNS + (c - this.col)) * 4;
+          const surface = g.surface[base + (j - j0)] ?? 0;
+          if (e > 0 && surface === this.deck) {
+            d[t] = UNDER_DECK;
+            d[t + 1] = 0;
+            d[t + 2] = 0;
+            d[t + 3] = 0;
+            continue;
+          }
           if (e > 0) {
             d[t] = 0;
             d[t + 1] = Math.min(255, Math.round(e / 4));

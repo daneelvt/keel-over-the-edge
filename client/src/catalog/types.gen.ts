@@ -3830,4 +3830,4 @@ export interface TownLit {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '87a2d8c226f2c6d8';
+export const CATALOG_VERSION = 'fbb762bdbb903d92';
