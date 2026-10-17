@@ -868,15 +868,30 @@ test.describe('adaptive quality', () => {
       k.slowFrames(45);
       k.thaw();
       // Windows long enough to hold a dozen frames on this machine, slowed:
-      // a window of fewer frames is not judged.
-      const t0 = performance.now();
-      await k.frames(10);
-      const frame = (performance.now() - t0) / 10;
-      k.qualityTiming(Math.max(250, 12 * frame), 1000);
+      // a window of fewer frames is not judged. On a software GPU a step
+      // down can make every frame ten times longer, so the windows are made
+      // to fit after each step, by the median of five frames (not one held
+      // by a shader compiling).
+      const fitWindows = async (): Promise<void> => {
+        const times: number[] = [];
+        for (let i = 0; i < 5; i++) {
+          const t0 = performance.now();
+          await k.frames(1);
+          times.push(performance.now() - t0);
+        }
+        times.sort((a, b) => a - b);
+        k.qualityTiming(Math.max(250, 12 * (times[2] ?? 0)), 1000);
+      };
+      await fitWindows();
       k.adapt(true);
       const start = performance.now();
+      let rung = k.info().rung;
       while (k.info().rung < last && performance.now() - start < 240_000) {
         await k.frames(5);
+        if (k.info().rung !== rung) {
+          rung = k.info().rung;
+          await fitWindows();
+        }
       }
       return { rung: k.info().rung, last, tier: k.info().tier };
     }, softwareGPU);
