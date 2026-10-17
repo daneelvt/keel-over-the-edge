@@ -437,7 +437,7 @@ func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work) *made {
 	}
 	for range tries {
 		cand := newShape(s, sp.radius, b, w)
-		if sp.kind == kindLandmark || sp.kind == kindMain {
+		if sp.kind == kindLandmark {
 			cand.shorelineIndex = cand.fineShoreline(w)
 		}
 		if sh == nil || cand.shorelineIndex > sh.shorelineIndex {
@@ -485,10 +485,13 @@ func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work) *made {
 				break
 			}
 			sh = newShape(s, sp.radius, b, w)
-			sh.shorelineIndex = sh.fineShoreline(w)
-			m.shoreline, m.bays = sh.shorelineIndex, len(sh.bays)
+			m.bays = len(sh.bays)
 			fill(sh)
 		}
+		// Its coast measured finely, as a landmark's, once its shape is
+		// the one kept.
+		sh.shorelineIndex = sh.fineShoreline(w)
+		m.shoreline = sh.shorelineIndex
 	}
 	// Inland, the distance to the sea; offshore, to the land.
 	sea := grow(w.cliff, int(total)) // borrowed as the sea's mask

@@ -261,7 +261,8 @@ func (c *config) generate(seed uint64) *Bundle {
 	b.Report.Open = c.largestOpen(k)
 	allNames := append(append([]string{}, islandNames...), groupNames...)
 	b.made = &world{islands: islands, names: allNames, groups: groups, ground: b.Ground, coarse: k, start: b.Start,
-		hazards: hazards, places: b.Places, lights: b.Lights, pw: pw, lightWork: lights, towns: b.Towns, buildings: b.Buildings}
+		reach: pw.reach, hazards: hazards, places: b.Places, lights: b.Lights, pw: pw, lightWork: lights, towns: b.Towns,
+		buildings: b.Buildings}
 	b.Report.Rules = c.validate(b.made)
 	lap("validate")
 	return b

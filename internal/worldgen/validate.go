@@ -76,7 +76,8 @@ func (c *config) validate(w *world) []Rule {
 	// The start area.
 	add("start area", len(w.start.Places) == c.start.Places, fmt.Sprintf("%d places", len(w.start.Places)), "%d", c.start.Places)
 
-	// Every landmark reachable from the start in enough water.
+	// Every landmark reachable from the start in enough water: from the
+	// roads, whose water the moorings' must reach (townRules).
 	if w.reach == nil {
 		w.reach = c.flood(w.ground, w.start, v.ReachDepth)
 	}

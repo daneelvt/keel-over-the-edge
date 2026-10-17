@@ -507,9 +507,6 @@ func (pw *placesWork) ports() {
 			f := pw.meanFetch(dx, dy, 1000)
 			// A town's room: deep water within a pier's reach along one of
 			// the lattice's axes, and gentle land about it.
-			if debugRule != nil {
-				*debugRule = append(*debugRule, [4]float64{x, y, b2f(pw.pierReach(x, y, physics.Atan2(dx-x, dy-y), h.Depth, h.Pier)), float64(roomOf(pw.ground, x, y, h.RoomWithin, h.Steep))})
-			}
 			if f < best[side].fetch && pw.pierReach(x, y, physics.Atan2(dx-x, dy-y), h.Depth, h.Pier) &&
 				roomOf(pw.ground, x, y, h.RoomWithin, h.Steep) >= h.Room {
 				s := pw.newSite(catalog.SiteHarbour, m, x, y)
@@ -530,11 +527,6 @@ func (pw *placesWork) ports() {
 		}
 	}
 	_, most := c.kindCount(catalog.SiteHarbour)
-	if debugCands != nil {
-		for _, cd := range cands {
-			*debugCands = append(*debugCands, [2]float64{cd.light.x, cd.light.y})
-		}
-	}
 	for _, p := range cover(pw, cands, func(p cand) *site { return p.light }, func(p cand) float64 { return -p.fetch },
 		float64(h.Apart*nauticalMile), float64(c.lights.Range.Port*nauticalMile), most) {
 		pw.offerShore(p.s)
@@ -1255,16 +1247,4 @@ func (pw *placesWork) pierReach(x, y, out, depth, most float64) bool {
 		}
 	}
 	return false
-}
-
-// debugCands collects the ports' candidates' lights, for a test.
-var debugCands *[][2]float64
-
-var debugRule *[][4]float64
-
-func b2f(b bool) float64 {
-	if b {
-		return 1
-	}
-	return 0
 }

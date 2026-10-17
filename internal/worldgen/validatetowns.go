@@ -73,7 +73,15 @@ func (c *config) townRules(w *world) []Rule {
 	add("main port's narrows", h.inner >= hc.Narrows[0]-1e-9 && shallow >= hc.Channel-0.05,
 		fmt.Sprintf("%.0f m wide, %.1f m deep along its middle third at least", h.inner, shallow),
 		"at least %.0f m wide, %.0f m deep along its middle third", hc.Narrows[0], hc.Channel)
-	add("moorings", w.start.Moorings >= c.moorings.Least, fmt.Sprintf("%d", w.start.Moorings), "at least %d, before the roads", c.moorings.Least)
+	// The moorings' water reaches the roads': out through the narrows.
+	out := false
+	if w.start.Moorings > 0 && w.pw != nil {
+		p := w.start.Places[0]
+		out = w.pw.reached(p[0], p[1])
+	}
+	add("moorings", w.start.Moorings >= c.moorings.Least && out,
+		fmt.Sprintf("%d, %s", w.start.Moorings, map[bool]string{true: "out to the roads", false: "shut in"}[out]),
+		"at least %d, before the roads, their water out to the roads' in %.1f m", c.moorings.Least, c.validator.ReachDepth)
 
 	// The towns.
 	var main *Town

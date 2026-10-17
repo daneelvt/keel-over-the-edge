@@ -746,12 +746,23 @@ func roomOf(g *physics.Ground, x, y, r, steep float64) int {
 	if start[0] < 0 {
 		return 0
 	}
-	seen := map[[2]int32]bool{start: true}
+	// What is seen, on a box of the columns and rows within r.
+	span := toInt32(r/(0.866*physics.HexAcross)) + 2
+	side := 2*span + 1
+	seen := make([]bool, side*side)
+	key := func(c, j int32) (int32, bool) {
+		dc, dj := c-c0+span, j-j0+span
+		if dc < 0 || dj < 0 || dc >= side || dj >= side {
+			return 0, false
+		}
+		return dc*side + dj, true
+	}
+	k, _ := key(start[0], start[1])
+	seen[k] = true
 	queue := [][2]int32{start}
 	n := 0
-	for len(queue) > 0 {
-		h := queue[0]
-		queue = queue[1:]
+	for head := 0; head < len(queue); head++ {
+		h := queue[head]
 		e := elevationAt(g, h[0], h[1])
 		gentle := true
 		for _, o := range cellNeighbours(h[0], h[1], &nb) {
@@ -764,13 +775,14 @@ func roomOf(g *physics.Ground, x, y, r, steep float64) int {
 			n++
 		}
 		for _, o := range cellNeighbours(h[0], h[1], &nb) {
-			if seen[o] || elevationAt(g, o[0], o[1]) <= 0 {
+			k, ok := key(o[0], o[1])
+			if !ok || seen[k] || elevationAt(g, o[0], o[1]) <= 0 {
 				continue
 			}
 			if hx, hy := physics.CellCentre(o[0], o[1]); hypot(hx-x, hy-y) > r {
 				continue
 			}
-			seen[o] = true
+			seen[k] = true
 			queue = append(queue, o)
 		}
 	}
