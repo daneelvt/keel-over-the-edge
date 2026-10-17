@@ -139,6 +139,8 @@ test.describe('pictures', () => {
     name: string;
     hour: number;
     at: { east: number; north: number; height: number; bearing: number; pitch: number };
+    /** Whether the boat is put where the camera is, for the land about it to be had. */
+    boat?: boolean;
   }[] = [
     {
       name: 'basin-day',
@@ -154,13 +156,18 @@ test.describe('pictures', () => {
     {
       name: 'roads-day',
       hour: 12,
-      at: { east: 700, north: -400, height: 30, bearing: -60, pitch: -4 },
+      at: { east: 290, north: -320, height: 30, bearing: -18, pitch: -4 },
+      boat: true,
     },
   ];
   for (const v of views) {
     test(`${v.name} @long`, async ({ page }) => {
       test.slow(softwareGPU);
       await openScene(page, 'world=1&wind=10,0');
+      if (v.boat === true) {
+        // Out on the roads, the land streams in about the boat, not the camera.
+        await page.evaluate((v) => globalThis.keel.placeBoat(v.at.east, v.at.north, 0), v);
+      }
       await landed(page);
       await page.evaluate((v) => {
         const k = globalThis.keel;
