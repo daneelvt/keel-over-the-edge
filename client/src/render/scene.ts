@@ -772,7 +772,7 @@ export class SeaScene {
     const cameraEast = camera.x + o.x;
     const cameraNorth = -camera.z + o.y;
     const night = this.drawSky ? lanternLit(this.sky.now.sunHeight) : 0;
-    land.towns.frame({ origin: o, cameraEast, cameraNorth, night });
+    land.towns.frame({ origin: o, cameraEast, cameraNorth, night, cameraHeight: camera.y });
     const features = land.towns.features();
     const time = this.ticks / STEPS_PER_SECOND;
     const smoke = catalog.world.towns.smoke;

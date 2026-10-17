@@ -57,7 +57,7 @@ import type { BuildingKind, World } from '../catalog/types.gen';
 import type { ChunkBuilding, ChunkTown } from '../workers/mesh/chunk';
 import { artUrl } from './boat';
 import { headingToRotationY } from './coords';
-import { litMaterial } from './materials';
+import { horizonDistance, litMaterial } from './materials';
 
 /** A storey's height, m, as the kits build them and the generator reckons. */
 export const STOREY = 3;
@@ -113,6 +113,8 @@ export interface TownsFrame {
   cameraNorth: number;
   /** How lit the towns' lamps are, 0 by day to 1 at night. */
   night: number;
+  /** The camera's height, m: a building below its horizon is not drawn. */
+  cameraHeight: number;
 }
 
 /** A point a town shows: m east, north and up, and its building's own number. */
@@ -134,6 +136,8 @@ export interface TownFeatures {
 /** What the developer panel and the tests read of the towns. */
 export interface TownsStats {
   buildings: number;
+  /** Below the horizon, or props beyond their reach: not drawn. */
+  culled: number;
   near: number;
   far: number;
   props: number;
@@ -199,7 +203,7 @@ const UP = new Vector3(0, 1, 0);
 
 export class Towns {
   readonly root = new Group();
-  readonly stats: TownsStats = { buildings: 0, near: 0, far: 0, props: 0, draws: 0, triangles: 0 };
+  readonly stats: TownsStats = { buildings: 0, culled: 0, near: 0, far: 0, props: 0, draws: 0, triangles: 0 };
   /** The lamps: 0 by day, 1 at night. */
   readonly night = uniform(0);
   /** The share of a house's windows lit at night. */
@@ -220,6 +224,7 @@ export class Towns {
   #version = 0;
   #placed = -1;
   #at = { east: Number.NaN, north: Number.NaN };
+  #atHeight = Number.NaN;
   readonly #walls: [number, number, number][][];
   readonly #roofs: [number, number, number][][];
   readonly #shutters: [number, number, number][][];
@@ -589,11 +594,13 @@ export class Towns {
     this.root.position.set(-f.origin.x, 0, f.origin.y);
     this.night.value = f.night;
     const moved = Math.hypot(f.cameraEast - this.#at.east, f.cameraNorth - this.#at.north);
-    if (this.#placed === this.#version && moved < 15) {
+    if (this.#placed === this.#version && moved < 15 && Math.abs(f.cameraHeight - this.#atHeight) < 2) {
       return;
     }
     this.#placed = this.#version;
     this.#at = { east: f.cameraEast, north: f.cameraNorth };
+    this.#atHeight = f.cameraHeight;
+    const sight = horizonDistance(f.cameraHeight);
     const lit = this.#world.towns.lit;
     const near2 = lit.near * lit.near;
     const props2 = lit.props * lit.props;
@@ -611,6 +618,10 @@ export class Towns {
       const dx = b.east - f.cameraEast;
       const dy = b.north - f.cameraNorth;
       const d2 = dx * dx + dy * dy;
+      // Below the horizon on the dome: its top hidden behind the sea.
+      if (Math.sqrt(d2) > sight + horizonDistance(Math.max(b.top, 0)) + 20) {
+        continue;
+      }
       if (kind.prop) {
         if (d2 <= props2 && typeof kit === 'object' && kit.props !== null) {
           const key = `${b.kit}/props`;
@@ -704,6 +715,7 @@ export class Towns {
     }
     const s = this.stats;
     s.buildings = total;
+    s.culled = total - nearCount - far.length - propCount;
     s.near = nearCount;
     s.far = far.length;
     s.props = propCount;

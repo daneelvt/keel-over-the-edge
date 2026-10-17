@@ -60,8 +60,8 @@ test('Port Royal is drawn from the start, in the factory’s materials', async (
 test('the GPU caps the waves on a coast’s tiles as the module does, and draws none on land', async ({
   page,
 }) => {
-  // Off Port Royal's eastern beach, in a fresh breeze's sea.
-  await openWorld(page, 235, 300, -Math.PI / 2);
+  // Off Port Royal's western beach, in a fresh breeze's sea.
+  await openWorld(page, -315, 22, Math.PI / 2);
   await page.evaluate(() => {
     globalThis.keel.setSea('fresh');
     globalThis.keel.render();
@@ -91,11 +91,12 @@ test('the GPU caps the waves on a coast’s tiles as the module does, and draws 
 test('a chunk below the horizon is not drawn; one far behind is let go, and built again on return', async ({
   page,
 }) => {
-  await openWorld(page, 235, 300, Math.PI / 2);
+  // Off Port Royal's eastern cliffs, its chunk east of the centre.
+  await openWorld(page, 320, 150, Math.PI / 2);
   const port = 136;
   expect((await page.evaluate(() => globalThis.keel.land()))?.drawn).toContain(port);
-  // 1.5 km east of its outline: held, but its 36 m are below the horizon
-  // from the chase camera's 6.5 m (180 m + 424 m).
+  // 1.5 km east of its outline: held, but its land and town are below the
+  // horizon from the chase camera's 6.5 m.
   await page.evaluate(() => globalThis.keel.placeBoat(2650, 300, Math.PI / 2));
   await page.evaluate(() => globalThis.keel.render());
   let l = await page.evaluate(() => globalThis.keel.land());
@@ -108,7 +109,7 @@ test('a chunk below the horizon is not drawn; one far behind is let go, and buil
   expect(l?.grids).not.toContain(port);
   const built = l?.stats.meshes ?? 0;
   // Back: built again.
-  await page.evaluate(() => globalThis.keel.placeBoat(235, 300, -Math.PI / 2));
+  await page.evaluate(() => globalThis.keel.placeBoat(320, 150, -Math.PI / 2));
   await landed(page);
   l = await page.evaluate(() => globalThis.keel.land());
   expect(l?.stats.meshes).toBeGreaterThan(built);
@@ -119,9 +120,9 @@ test('a stack’s top first shows over the sea where the dome says @long', async
   test.slow(softwareGPU);
   // Seed 1's tallest stack, off Port Royal's northern shore, with open water
   // east of it for a kilometre: nothing stands between it and the eye.
-  await openWorld(page, 300, 468, -Math.PI / 2);
+  await openWorld(page, 300, 412, -Math.PI / 2);
   const top = await page.evaluate(() =>
-    globalThis.keel.landSummit({ east: -41.6, north: 468, reach: 20 }),
+    globalThis.keel.landSummit({ east: -140, north: 412, reach: 20 }),
   );
   if (top === null) {
     throw new Error('no stack');
@@ -187,15 +188,15 @@ test('a stack’s top first shows over the sea where the dome says @long', async
 });
 
 test('a boat sailed onto the beach is aground, pushed off, and told so @long', async ({ page }) => {
-  // 25 m off Port Royal's eastern beach in a metre of water, running onto
-  // it before a fresh easterly with the sheet eased.
+  // 25 m off Port Royal's western beach in a metre and a half of water,
+  // running onto it before a fresh westerly with the sheet eased.
   test.setTimeout(180_000);
-  await openWorld(page, 180, 300, -Math.PI / 2);
+  await openWorld(page, -315, 22, Math.PI / 2);
   // A minute of sailing with time held, five frames to each second of it,
   // however slowly the machine draws; the screen's words written each frame.
   const a = await page.evaluate(async () => {
     const k = globalThis.keel;
-    k.setWind(16, 90);
+    k.setWind(16, 270);
     k.setControls(0, 0.9);
     let aground = -1;
     let pushed = -1;
@@ -224,9 +225,10 @@ test('a boat sailed onto the beach is aground, pushed off, and told so @long', a
 
 test.describe('pictures', () => {
   // Seed 1's coasts at noon, each from the sea view and from above:
-  // Port Royal's eastern beach in a breeze, Lime Cay's reef, 80 m off its
-  // eastern shore with a lagoon behind, in a fresh wind, Port Royal's eastern cliffs in a gale, and the lee west of
-  // Port Royal in a trade wind from the east.
+  // Port Royal's western beach in a breeze, Wild Orange Cay's reef, 80 m
+  // off its eastern shore with a lagoon behind, in a fresh wind, Port
+  // Royal's eastern cliffs in a gale, and the lee west of Port Royal in a
+  // trade wind from the east.
   const places: {
     name: string;
     east: number;
@@ -235,9 +237,9 @@ test.describe('pictures', () => {
     sea: string;
     wind?: [number, number];
   }[] = [
-    { name: 'beach-breeze', east: 230, north: 300, heading: -Math.PI / 2, sea: 'breeze' },
+    { name: 'beach-breeze', east: -312, north: 22, heading: Math.PI / 2, sea: 'breeze' },
     { name: 'reef-fresh', east: 1830, north: -1191, heading: -Math.PI / 2, sea: 'fresh' },
-    { name: 'cliff-gale', east: 260, north: 71, heading: -Math.PI / 2, sea: 'gale' },
+    { name: 'cliff-gale', east: 300, north: 150, heading: -Math.PI / 2, sea: 'gale' },
     {
       name: 'lee-trade',
       east: -520,
