@@ -15,6 +15,7 @@ import {
   type StateUpdater,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'preact/hooks';
@@ -37,7 +38,6 @@ import {
 } from './api';
 import {
   allLayers,
-  drawFlashes,
   drawMap,
   gustPicture,
   ISLAND_DETAIL,
@@ -86,7 +86,7 @@ function worldUsAt(c: WorldClock, now: number): number {
   return Math.floor((c.worldTime + (now - c.at) / 1000) * 1e6);
 }
 
-/** How often the map is drawn again for the lights' flashes, ms. */
+/** How often the lights' marks beside their rows are looked at, ms. */
 const FLASH_EVERY = 100;
 
 /** The map: a canvas filling its box, panned by a drag, zoomed by the wheel, a click picking a point. */
@@ -96,40 +96,15 @@ function MapCanvas({
   view,
   setView,
   pick,
-  clock,
 }: {
   data: MapData;
   layers: Layers;
   view: View | null;
   setView: Dispatch<StateUpdater<View | null>>;
   pick: (east: number, north: number) => void;
-  clock: { current: WorldClock };
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const flashes = useRef<HTMLCanvasElement>(null);
-  const latest = useRef({ data, layers, view });
-  latest.current = { data, layers, view };
-  // The lights flash by the world's clock, on a canvas of their own over
-  // the map, drawn often without the map or the page being made again.
-  const flash = useCallback(() => {
-    const { data: d, layers: l, view: v } = latest.current;
-    const c = flashes.current;
-    const ctx = c?.getContext('2d');
-    if (c == null || ctx == null || v === null) {
-      return;
-    }
-    const dpr = c.width / Math.max(1, v.width);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawFlashes(ctx, v, { ...d, worldUs: worldUsAt(clock.current, performance.now()) }, l);
-  }, [clock]);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (!hidden() && latest.current.data.places !== null && latest.current.layers.lights) {
-        flash();
-      }
-    }, FLASH_EVERY);
-    return () => clearInterval(timer);
-  }, [flash]);
+
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
   // Fits the canvas to its box, and the view to the canvas.
   useEffect(() => {
@@ -142,11 +117,6 @@ function MapCanvas({
       const dpr = window.devicePixelRatio || 1;
       c.width = Math.round(r.width * dpr);
       c.height = Math.round(r.height * dpr);
-      const f = flashes.current;
-      if (f !== null) {
-        f.width = c.width;
-        f.height = c.height;
-      }
       setView((v) =>
         v === null ? fitView(r.width, r.height) : { ...v, width: r.width, height: r.height },
       );
@@ -164,52 +134,48 @@ function MapCanvas({
     const dpr = c.width / Math.max(1, view.width);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawMap(ctx, view, data, layers);
-    flash();
   });
   return (
-    <>
-      <canvas
-        ref={canvas}
-        class="map"
-        data-testid="map"
-        onPointerDown={(e) => {
-          e.currentTarget.setPointerCapture(e.pointerId);
-          drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
-        }}
-        onPointerMove={(e) => {
-          const d = drag.current;
-          if (d === null || view === null) {
-            return;
-          }
-          const dx = e.clientX - d.x;
-          const dy = e.clientY - d.y;
-          d.x = e.clientX;
-          d.y = e.clientY;
-          d.moved += Math.hypot(dx, dy);
-          if (d.moved > 3) {
-            setView(pan(view, dx, dy));
-          }
-        }}
-        onPointerUp={(e) => {
-          const d = drag.current;
-          drag.current = null;
-          if (d !== null && d.moved <= 3 && view !== null) {
-            const r = e.currentTarget.getBoundingClientRect();
-            const [east, north] = toWorld(view, e.clientX - r.left, e.clientY - r.top);
-            pick(east, north);
-          }
-        }}
-        onWheel={(e) => {
-          e.preventDefault();
-          if (view === null) {
-            return;
-          }
+    <canvas
+      ref={canvas}
+      class="map"
+      data-testid="map"
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (d === null || view === null) {
+          return;
+        }
+        const dx = e.clientX - d.x;
+        const dy = e.clientY - d.y;
+        d.x = e.clientX;
+        d.y = e.clientY;
+        d.moved += Math.hypot(dx, dy);
+        if (d.moved > 3) {
+          setView(pan(view, dx, dy));
+        }
+      }}
+      onPointerUp={(e) => {
+        const d = drag.current;
+        drag.current = null;
+        if (d !== null && d.moved <= 3 && view !== null) {
           const r = e.currentTarget.getBoundingClientRect();
-          setView(zoomAt(view, e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.002)));
-        }}
-      />
-      <canvas ref={flashes} class="flashes" />
-    </>
+          const [east, north] = toWorld(view, e.clientX - r.left, e.clientY - r.top);
+          pick(east, north);
+        }
+      }}
+      onWheel={(e) => {
+        e.preventDefault();
+        if (view === null) {
+          return;
+        }
+        const r = e.currentTarget.getBoundingClientRect();
+        setView(zoomAt(view, e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.002)));
+      }}
+    />
   );
 }
 
@@ -308,9 +274,13 @@ function lightMarks(): void {
   }
   const now = performance.now();
   for (const [dot, m] of marks) {
-    dot.dataset.on = lightOn(m.character.steps, m.light.phase, worldUsAt(m.clock.current, now))
+    // Only a change touches the page: nothing repaints while a light holds.
+    const on = lightOn(m.character.steps, m.light.phase, worldUsAt(m.clock.current, now))
       ? '1'
       : '0';
+    if (dot.dataset.on !== on) {
+      dot.dataset.on = on;
+    }
   }
 }
 
@@ -629,7 +599,6 @@ function App() {
     boat,
     places,
     light,
-    worldUs: 0,
   };
   const chosen = now?.boats.find((b) => b.boat === boat && b.tools) ?? null;
   const kindName = new Map((places?.kinds ?? []).map((k) => [k.id, k.name]));
@@ -641,6 +610,78 @@ function App() {
       setView(centreOn(view, east, north, scale));
     }
   };
+
+  // The lists of places and lights, made again only when what they show
+  // changes, not at each second's reading of the world.
+  const chosenBoat = chosen?.boat ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: made from places, the light picked and the boat chosen alone
+  const lists = useMemo(
+    () => (
+      <>
+        <section class="card" aria-label="Lighthouses">
+          <h2>Lighthouses: {places?.lights.length ?? 0}</h2>
+          <ul class="lights">
+            {(places?.lights ?? []).map((l) => (
+              <li key={l.number} class={l.number === light ? 'chosen' : ''}>
+                <Flash light={l} character={places?.characters[l.character]} clock={clock} />{' '}
+                <button
+                  type="button"
+                  data-light={l.number}
+                  onClick={() => {
+                    setLight(l.number);
+                    goTo(l.east, l.north, 4);
+                  }}
+                >
+                  {l.name}
+                </button>{' '}
+                <span class="small" data-field="chart">
+                  {l.chart}, {l.role}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section class="card" aria-label="Places">
+          <h2>Places: {(places?.places ?? []).filter((p) => !lightSite.has(p.kind)).length}</h2>
+          <ul class="places">
+            {(places?.places ?? [])
+              .filter((p) => !lightSite.has(p.kind))
+              .map((p) => (
+                <li key={p.number}>
+                  <button
+                    type="button"
+                    data-place={p.number}
+                    onClick={() => {
+                      goTo(p.east, p.north, 1);
+                      if (p.approach !== null) {
+                        pick(p.approach[0], p.approach[1]);
+                      }
+                    }}
+                  >
+                    {p.name}
+                  </button>{' '}
+                  <span class="small">
+                    {kindName.get(p.kind) ?? p.kind}: {placeWords(p)}
+                  </span>
+                  {chosenBoat !== null && p.approach !== null ? (
+                    <button
+                      type="button"
+                      class="small"
+                      onClick={() =>
+                        act('place', { boat: chosenBoat, place: p.number }, `teleport to ${p.name}`)
+                      }
+                    >
+                      sail there
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+          </ul>
+        </section>
+      </>
+    ),
+    [places, light, chosenBoat],
+  );
 
   return (
     <div class="page">
@@ -656,14 +697,7 @@ function App() {
       </header>
       <main>
         <div class="map-box">
-          <MapCanvas
-            data={data}
-            layers={layers}
-            view={view}
-            setView={setView}
-            pick={pick}
-            clock={clock}
-          />
+          <MapCanvas data={data} layers={layers} view={view} setView={setView} pick={pick} />
           <fieldset class="layers">
             {(Object.keys(LAYER_NAMES) as (keyof Layers)[]).map((k) => (
               <label key={k}>
@@ -793,70 +827,7 @@ function App() {
               ))}
             </ul>
           </section>
-          <section class="card" aria-label="Lighthouses">
-            <h2>Lighthouses: {places?.lights.length ?? 0}</h2>
-            <ul class="lights">
-              {(places?.lights ?? []).map((l) => (
-                <li key={l.number} class={l.number === light ? 'chosen' : ''}>
-                  <Flash light={l} character={places?.characters[l.character]} clock={clock} />{' '}
-                  <button
-                    type="button"
-                    data-light={l.number}
-                    onClick={() => {
-                      setLight(l.number);
-                      goTo(l.east, l.north, 4);
-                    }}
-                  >
-                    {l.name}
-                  </button>{' '}
-                  <span class="small" data-field="chart">
-                    {l.chart}, {l.role}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-          <section class="card" aria-label="Places">
-            <h2>Places: {(places?.places ?? []).filter((p) => !lightSite.has(p.kind)).length}</h2>
-            <ul class="places">
-              {(places?.places ?? [])
-                .filter((p) => !lightSite.has(p.kind))
-                .map((p) => (
-                  <li key={p.number}>
-                    <button
-                      type="button"
-                      data-place={p.number}
-                      onClick={() => {
-                        goTo(p.east, p.north, 1);
-                        if (p.approach !== null) {
-                          pick(p.approach[0], p.approach[1]);
-                        }
-                      }}
-                    >
-                      {p.name}
-                    </button>{' '}
-                    <span class="small">
-                      {kindName.get(p.kind) ?? p.kind}: {placeWords(p)}
-                    </span>
-                    {chosen !== null && p.approach !== null ? (
-                      <button
-                        type="button"
-                        class="small"
-                        onClick={() =>
-                          act(
-                            'place',
-                            { boat: chosen.boat, place: p.number },
-                            `teleport to ${p.name}`,
-                          )
-                        }
-                      >
-                        sail there
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-            </ul>
-          </section>
+          {lists}
         </aside>
       </main>
     </div>

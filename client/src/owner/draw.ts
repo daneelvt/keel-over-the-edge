@@ -9,7 +9,6 @@
 // free camera's eye; and the point clicked. The marks are in Okabe and
 // Ito's colours, distinguishable in colour-blind vision.
 
-import { lightOn } from '../lights/character';
 import type { Boat, Current, Group, Island, Light, PlacesData, WorldNow } from './api';
 import { canvasAngle, HALF, rectOf, toScreen, type View } from './map';
 
@@ -91,10 +90,9 @@ export interface MapData {
   /** The point clicked, and the boat chosen. */
   picked: [number, number] | null;
   boat: number | null;
-  /** The places and lights, the light picked (its range drawn), and world time, µs, for the lights' flashes. */
+  /** The places and lights, and the light picked, its range drawn. */
   places: PlacesData | null;
   light: number | null;
-  worldUs: number;
 }
 
 /** Below this many metres a pixel, an island in view is drawn at the lattice's resolution. */
@@ -404,7 +402,7 @@ const LIGHT_COLOURS: Record<string, string> = {
   green: '#3cff7d',
 };
 
-/** A lighthouse: a ring, and its range when picked. Its flashes are drawn over the map apart (drawFlashes). */
+/** A lighthouse: a ring, and its range when picked; its flashing shows beside its row in the list. */
 function drawLight(ctx: CanvasRenderingContext2D, v: View, l: Light, d: MapData): void {
   const ch = d.places?.characters[l.character];
   const [x, y] = toScreen(v, l.east, l.north);
@@ -425,39 +423,4 @@ function drawLight(ctx: CanvasRenderingContext2D, v: View, l: Light, d: MapData)
   ctx.arc(x, y, l.role === 'main' ? 6 : 4.5, 0, 2 * Math.PI);
   ctx.fill();
   ctx.stroke();
-}
-
-/**
- * The lights that show at world time worldUs, each a glow over its ring,
- * on a canvas of their own over the map: drawn often, without drawing the
- * map again.
- */
-export function drawFlashes(
-  ctx: CanvasRenderingContext2D,
-  v: View,
-  d: MapData,
-  layers: Layers,
-): void {
-  ctx.clearRect(0, 0, v.width, v.height);
-  if (!layers.lights || d.places === null) {
-    return;
-  }
-  for (const l of d.places.lights) {
-    const ch = d.places.characters[l.character];
-    if (ch === undefined || !lightOn(ch.steps, l.phase, d.worldUs)) {
-      continue;
-    }
-    const [x, y] = toScreen(v, l.east, l.north);
-    if (x < -20 || y < -20 || x > v.width + 20 || y > v.height + 20) {
-      continue;
-    }
-    const colour = LIGHT_COLOURS[ch.colour] ?? '#ffffff';
-    const g = ctx.createRadialGradient(x, y, 0, x, y, 14);
-    g.addColorStop(0, colour);
-    g.addColorStop(1, 'rgb(0 0 0 / 0%)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, 14, 0, 2 * Math.PI);
-    ctx.fill();
-  }
 }
