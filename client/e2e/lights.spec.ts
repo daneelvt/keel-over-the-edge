@@ -146,7 +146,9 @@ test('by night a port’s light flashes its character by world time', async ({ p
   expect(dark).toBeGreaterThan(0);
 });
 
-test('beyond its tower’s horizon, a light is its loom at its true bearing @long', async ({ page }) => {
+test('beyond its tower’s horizon, a light is its loom at its true bearing @long', async ({
+  page,
+}) => {
   await openScene(page, 'world=1&wind=0,0');
   const p = port();
   const s = steps(p.notation);
