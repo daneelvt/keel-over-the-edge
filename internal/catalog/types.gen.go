@@ -166,6 +166,57 @@ type BoatPhysics struct {
 	Sailor PhysicsSailor `json:"sailor"`
 }
 
+// A kind of building, or a prop, of a town.
+type BuildingKind struct {
+	// The share of them with a chimney.
+	Chimney *float64 `json:"chimney,omitempty,omitzero"`
+
+	// Colour corresponds to the JSON schema field "colour".
+	Colour Colour `json:"colour"`
+
+	// Its depth back from its way, the least and the most, in m.
+	Depth []float64 `json:"depth"`
+
+	// Its weight among the buildings that fill the streets.
+	Fill *float64 `json:"fill,omitempty,omitzero"`
+
+	// It flies a flag.
+	Flag *bool `json:"flag,omitempty,omitzero"`
+
+	// Its frontage along its way, the least and the most, in m.
+	Frontage []float64 `json:"frontage"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// The share of them with a lantern by the door.
+	Lantern *float64 `json:"lantern,omitempty,omitzero"`
+
+	// How many Port Royal has.
+	Main []int `json:"main,omitempty,omitzero"`
+
+	// Its name, as the world page lists it.
+	Name string `json:"name"`
+
+	// How many a port has.
+	Port []int `json:"port,omitempty,omitzero"`
+
+	// A small thing that stands about, drawn near only.
+	Prop *bool `json:"prop,omitempty,omitzero"`
+
+	// Where it stands.
+	Stands Stands `json:"stands"`
+
+	// Its storeys, the least and the most.
+	Storeys []int `json:"storeys"`
+
+	// Its top stands this high, in m; else its storeys and roof.
+	Top *float64 `json:"top,omitempty,omitzero"`
+
+	// How many a village has.
+	Village []int `json:"village,omitempty,omitzero"`
+}
+
 // Every list of kinds in the game. Kinds are data: code reads their properties,
 // never their names.
 type Catalog struct {
@@ -373,6 +424,12 @@ type EncountersShadow struct {
 
 // Stable identifier of a kind, stored in the database: never renamed or reused.
 type ID string
+
+// Its models.
+type KitArt struct {
+	// Model corresponds to the JSON schema field "model".
+	Model ArtPath `json:"model"`
+}
 
 type Light string
 
@@ -1044,6 +1101,18 @@ type PlaceHarbour struct {
 	// Water this deep, in m,
 	Depth float64 `json:"depth"`
 
+	// A pier may run this far to the water, along one of the lattice's axes, in m.
+	Pier float64 `json:"pier"`
+
+	// Land at least this many hexagons no steeper than 1 in steep
+	Room int `json:"room"`
+
+	// within this of its quay, in m.
+	RoomWithin float64 `json:"roomWithin"`
+
+	// (the slope's run over its rise),
+	Steep float64 `json:"steep"`
+
 	// within this of the shore, in m.
 	Within float64 `json:"within"`
 }
@@ -1114,6 +1183,10 @@ type PlaceVillage struct {
 	// within this, in m.
 	Ground float64 `json:"ground"`
 
+	// Land at least this many hexagons no steeper than a port's within its
+	// roomWithin.
+	Room int `json:"room"`
+
 	// Its fishing ground: water shallower than this, in m,
 	Shallows float64 `json:"shallows"`
 
@@ -1131,6 +1204,82 @@ type PlaceWreck struct {
 
 	// within this of a reef, rock or bar, in m.
 	Near float64 `json:"near"`
+}
+
+// The most contour streets.
+type PlanContours struct {
+	// Port Royal's.
+	Main int `json:"main"`
+
+	// A port's.
+	Port int `json:"port"`
+}
+
+// The square's size, in m.
+type PlanSquare struct {
+	// Along the quay.
+	Along float64 `json:"along"`
+
+	// Back from it.
+	Back float64 `json:"back"`
+}
+
+// Its harbour: a basin entered through a narrows, carved into the island.
+type PortHarbour struct {
+	// The basin's width, the least and the most, in m.
+	Across []float64 `json:"across"`
+
+	// The narrows' middle third is at least this deep, in m.
+	Channel float64 `json:"channel"`
+
+	// The basin's depth: at its quays, and in its middle, in m.
+	Depth []float64 `json:"depth"`
+
+	// How far its radius wanders, by the second harmonic and on, as shares of it.
+	Harmonics []float64 `json:"harmonics"`
+
+	// Land round it, at least, in m.
+	Land float64 `json:"land"`
+
+	// The mole's length into the basin, the least and the most, in m.
+	Mole []float64 `json:"mole"`
+
+	// The narrows' width at its inner end, the least and the most, in m.
+	Narrows []float64 `json:"narrows"`
+
+	// Its centre off the island's, the least and the most, in m.
+	Offset []float64 `json:"offset"`
+
+	// The town stands on this much of the basin's shore, opposite the narrows, in
+	// degrees.
+	Town float64 `json:"town"`
+
+	// Basins drawn, the best kept.
+	Tries int `json:"tries"`
+
+	// A circle of clear water this wide inside it, in m.
+	Turning float64 `json:"turning"`
+
+	// Its mouth is this many times its inner width.
+	Widen float64 `json:"widen"`
+}
+
+// A port's piers.
+type PortPiers struct {
+	// How many, the least and the most.
+	Count []int `json:"count"`
+
+	// Their width, in m.
+	Width float64 `json:"width"`
+}
+
+// The water at a quay's foot, in m.
+type QuayFoot struct {
+	// Port Royal's.
+	Main float64 `json:"main"`
+
+	// A port's.
+	Port float64 `json:"port"`
 }
 
 // A kind of spell of weather.
@@ -1290,6 +1439,36 @@ type Slabs struct {
 	Tip []float64 `json:"tip"`
 }
 
+type Stands string
+
+const StandsAbove Stands = "above"
+const StandsBeach Stands = "beach"
+const StandsBehind Stands = "behind"
+const StandsEdge Stands = "edge"
+const StandsFields Stands = "fields"
+const StandsPost Stands = "post"
+const StandsQuay Stands = "quay"
+const StandsQuayEnd Stands = "quayEnd"
+const StandsShore Stands = "shore"
+const StandsSlip Stands = "slip"
+const StandsSlope Stands = "slope"
+const StandsSquare Stands = "square"
+const StandsStreet Stands = "street"
+const StandsSummit Stands = "summit"
+const StandsWater Stands = "water"
+
+// The moorings across Port Royal's basin.
+type StartMoorings struct {
+	// And this far from land, quays and piers, in m.
+	Clear float64 `json:"clear"`
+
+	// At least this many.
+	Least int `json:"least"`
+
+	// Moorings are this far apart, in m.
+	Spacing float64 `json:"spacing"`
+}
+
 // What the ground is covered with.
 type Surface struct {
 	// Coulomb's coefficient of a hull dragging on it under water.
@@ -1300,6 +1479,9 @@ type Surface struct {
 
 	// Look corresponds to the JSON schema field "look".
 	Look SurfaceLook `json:"look"`
+
+	// The part of a town it is, if any: streets, quays, piers' decks, yards.
+	Town *Town `json:"town,omitempty,omitzero"`
 }
 
 // How a surface is drawn: its land's columns, and the sea bed seen through shallow
@@ -1317,6 +1499,217 @@ type SurfaceLook struct {
 	// A column's top.
 	Top Colour `json:"top"`
 }
+
+type Town string
+
+const TownDeck Town = "deck"
+
+// Flags ashore.
+type TownFlags struct {
+	// It streams with the wind at this height, in m.
+	At float64 `json:"at"`
+
+	// The ports' pairs of colours.
+	Colours [][]Colour `json:"colours"`
+
+	// It is extended from this, in knots.
+	Extended float64 `json:"extended"`
+
+	// A flag's length, in m.
+	Length float64 `json:"length"`
+
+	// It hangs limp under this, in knots.
+	Limp float64 `json:"limp"`
+
+	// Port Royal's colours.
+	MainPort []Colour `json:"mainPort"`
+
+	// It flaps at this Strouhal number, fL/U.
+	Strouhal float64 `json:"strouhal"`
+}
+
+// In port: the water within this of a town's waterfront.
+type TownInPort struct {
+	// A port's quay and piers, in m.
+	Port float64 `json:"port"`
+
+	// The harbour is kept as discs about this far apart, in m.
+	Step float64 `json:"step"`
+
+	// A village's jetty, in m.
+	Village float64 `json:"village"`
+}
+
+// A village's jetty.
+type TownJetty struct {
+	// Its length, the least and the most, in m.
+	Length []float64 `json:"length"`
+
+	// Its width, in m.
+	Width float64 `json:"width"`
+}
+
+// A biome's kit: its models and palette.
+type TownKit struct {
+	// Its models.
+	Art KitArt `json:"art"`
+
+	// Biome corresponds to the JSON schema field "biome".
+	Biome ID `json:"biome"`
+
+	// Its roofs' colours.
+	Roofs []Colour `json:"roofs"`
+
+	// Its shutters' and doors' colours.
+	Shutters []Colour `json:"shutters"`
+
+	// Its walls' colours.
+	Walls []Colour `json:"walls"`
+}
+
+// Lit at night.
+type TownLit struct {
+	// Houses are drawn in full within this of the camera, in m.
+	Near float64 `json:"near"`
+
+	// Props are drawn within this of the camera, in m.
+	Props float64 `json:"props"`
+
+	// The share of a house's windows lit.
+	Windows float64 `json:"windows"`
+}
+
+// Piers of one length and width.
+type TownPiers struct {
+	// How many.
+	Count int `json:"count"`
+
+	// Its length out, the least and the most, in m.
+	Length []float64 `json:"length"`
+
+	// Its width, in m.
+	Width float64 `json:"width"`
+}
+
+// How a town is laid out.
+type TownPlan struct {
+	// Turned up to this off their way, in degrees.
+	Angle float64 `json:"angle"`
+
+	// Contour streets this much further from the shore than the last, in m.
+	Apart []float64 `json:"apart"`
+
+	// The most contour streets.
+	Contours PlanContours `json:"contours"`
+
+	// Gaps between buildings, the least and the most, in m.
+	Gaps []float64 `json:"gaps"`
+
+	// One place in this many a garden.
+	Gardens int `json:"gardens"`
+
+	// A lane's width, in m.
+	Lane float64 `json:"lane"`
+
+	// Lanes this far apart along the quay, in m.
+	Lanes float64 `json:"lanes"`
+
+	// No building on a slope over 1 in this.
+	Plot float64 `json:"plot"`
+
+	// The quay street's width, in m.
+	Quay float64 `json:"quay"`
+
+	// How far inland a town reaches: Port Royal's, a port's, a village's, in m.
+	Reach []float64 `json:"reach"`
+
+	// A street already made costs this share of its cost.
+	Reuse float64 `json:"reuse"`
+
+	// Buildings set back from their way, the least and the most, in m.
+	SetBack []float64 `json:"setBack"`
+
+	// The square's size, in m.
+	Square PlanSquare `json:"square"`
+
+	// A lane's cost rises steeply over a slope of 1 in this.
+	Steep float64 `json:"steep"`
+
+	// A street's width, in m.
+	Street float64 `json:"street"`
+
+	// A turn's cost, in hexagons' steps.
+	Turn float64 `json:"turn"`
+
+	// Wandering by this, in m.
+	Wander float64 `json:"wander"`
+}
+
+const TownQuay Town = "quay"
+
+// How many buildings a town has.
+type TownSize struct {
+	// Port Royal's.
+	Main []int `json:"main"`
+
+	// A port's.
+	Port []int `json:"port"`
+
+	// A village's.
+	Village []int `json:"village"`
+}
+
+// Chimney smoke.
+type TownSmoke struct {
+	// A puff's rise at 1 m downwind in a wind of 1 m/s, in m (Briggs's 1.6 F^(1/3)).
+	Buoyancy float64 `json:"buoyancy"`
+
+	// The share of chimneys smoking by day.
+	Day float64 `json:"day"`
+
+	// A puff fades over this, in s.
+	Life float64 `json:"life"`
+
+	// And by night.
+	Night float64 `json:"night"`
+
+	// Puffs a chimney.
+	Puffs int `json:"puffs"`
+
+	// Drawn within this of the camera, in m.
+	Reach float64 `json:"reach"`
+
+	// Puffs rise from the pot at this, in m/s.
+	Rise float64 `json:"rise"`
+
+	// A puff's width at the pot and at its end, in m.
+	Size []float64 `json:"size"`
+}
+
+const TownStreet Town = "street"
+
+// Quays and piers.
+type TownWaterfront struct {
+	// The water at a quay's foot, in m.
+	Foot QuayFoot `json:"foot"`
+
+	// A village's jetty.
+	Jetty TownJetty `json:"jetty"`
+
+	// Long corresponds to the JSON schema field "long".
+	Long TownPiers `json:"long"`
+
+	// A port's piers.
+	Port PortPiers `json:"port"`
+
+	// A quay's top above the sea, in m.
+	Quay float64 `json:"quay"`
+
+	// Short corresponds to the JSON schema field "short".
+	Short TownPiers `json:"short"`
+}
+
+const TownYard Town = "yard"
 
 // The weather's numbers.
 type Weather struct {
@@ -1581,6 +1974,9 @@ type World struct {
 
 	// The angle of repose: ground steeper than this is cliff, in degrees.
 	Talus float64 `json:"talus"`
+
+	// Towns corresponds to the JSON schema field "towns".
+	Towns WorldTowns `json:"towns"`
 
 	// Validator corresponds to the JSON schema field "validator".
 	Validator WorldValidator `json:"validator"`
@@ -1860,8 +2256,11 @@ type WorldMainPort struct {
 	// miles.
 	Calm float64 `json:"calm"`
 
-	// The share of its coast with cliffs.
+	// The share of its outer coast with cliffs, the harbour's shore not counted.
 	Cliffs float64 `json:"cliffs"`
+
+	// Its harbour: a basin entered through a narrows, carved into the island.
+	Harbour PortHarbour `json:"harbour"`
 
 	// Its highest point, the least and the most, in m.
 	Height []float64 `json:"height"`
@@ -2043,13 +2442,17 @@ type WorldSize struct {
 	Class string `json:"class"`
 }
 
-// Where boats start: the stretch of water off the main port with the most room.
+// Where boats start: moored in Port Royal's basin, then the roads off its coast
+// with the most room.
 type WorldStart struct {
 	// And no land within this, in m.
 	Clear float64 `json:"clear"`
 
 	// A place has at least this much water, in m.
 	Depth float64 `json:"depth"`
+
+	// The moorings across Port Royal's basin.
+	Moorings StartMoorings `json:"moorings"`
 
 	// Places in all.
 	Places int `json:"places"`
@@ -2062,6 +2465,36 @@ type WorldStart struct {
 
 	// The start area begins within this of the coast, in m.
 	Within float64 `json:"within"`
+}
+
+// Towns: Port Royal's, a port's and a fishing village's.
+type WorldTowns struct {
+	// The kinds of building and prop.
+	Buildings []BuildingKind `json:"buildings"`
+
+	// Flags ashore.
+	Flags TownFlags `json:"flags"`
+
+	// In port: the water within this of a town's waterfront.
+	InPort TownInPort `json:"inPort"`
+
+	// Each biome's kit.
+	Kits []TownKit `json:"kits"`
+
+	// Lit at night.
+	Lit TownLit `json:"lit"`
+
+	// How a town is laid out.
+	Plan TownPlan `json:"plan"`
+
+	// How many buildings a town has.
+	Size TownSize `json:"size"`
+
+	// Chimney smoke.
+	Smoke TownSmoke `json:"smoke"`
+
+	// Quays and piers.
+	Waterfront TownWaterfront `json:"waterfront"`
 }
 
 // The rules a world must pass.
@@ -2106,4 +2539,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "45d4d13033d75374"
+const Version = "31cb7e2da74e40ba"

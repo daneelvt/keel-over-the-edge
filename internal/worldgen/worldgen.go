@@ -16,6 +16,7 @@
 package worldgen
 
 import (
+	"bytes"
 	"slices"
 
 	"crypto/sha256"
@@ -31,7 +32,7 @@ import (
 
 // Version is the generator's version. Raise it whenever a change to the
 // generator or to the catalog's world values changes any seed's world.
-const Version = 2
+const Version = 3
 
 // Island is an island of a made world.
 type Island struct {
@@ -87,6 +88,10 @@ type Records struct {
 	// its lighthouses' lights.
 	Places []Place `json:"places"`
 	Lights []Light `json:"lights"`
+	// Towns are its towns: Port Royal's first, then each port's and
+	// fishing village's, in their places' order. Their buildings are in
+	// the chunks.
+	Towns []Town `json:"towns,omitempty"`
 	// Circulation is the way the world's water circulates round the disk:
 	// 1 clockwise seen from above, −1 the other way. It is drawn from the
 	// seed of the attempt made, and left out of the digest, so that a
@@ -95,15 +100,19 @@ type Records struct {
 	Circulation int `json:"circulation,omitempty"`
 }
 
-// Format is the bundle's format: its records' and chunks' encoding.
-const Format = 1
+// Format is the bundle's format: its records' and chunks' encoding. A
+// bundle of format 1 holds no towns.
+const Format = 2
 
 // Bundle is a made world.
 type Bundle struct {
 	Records
 	Ground  *physics.Ground
 	Shelter *physics.Shelter
-	Report  Report
+	// Buildings are its towns' buildings and props, each in the chunk its
+	// middle is in.
+	Buildings []Building
+	Report    Report
 	// Digest is the SHA-256 of the records and every chunk's ground and
 	// shelter: the same for the same seed and Version on every machine.
 	Digest [32]byte
@@ -220,6 +229,10 @@ func (c *config) generate(seed uint64) *Bundle {
 	c.nameSites(seed, pw, lights, islandNames, groupNames)
 	b.Places, b.Lights = c.records(pw, lights, len(islands), len(groups))
 	lap("placeNames")
+	b.Towns, b.Buildings = c.buildTowns(seed, b.Ground, islands, pw, lights, islandNames, int32(len(islands)+len(groups)))
+	lap("towns")
+	b.Start = c.withMoorings(b.Ground, islands[0], b.Start)
+	lap("moorings")
 
 	b.Report.ByClass, b.Report.ByBiome = map[string]int{}, map[string]int{}
 	for i, m := range islands {
@@ -248,7 +261,7 @@ func (c *config) generate(seed uint64) *Bundle {
 	b.Report.Open = c.largestOpen(k)
 	allNames := append(append([]string{}, islandNames...), groupNames...)
 	b.made = &world{islands: islands, names: allNames, groups: groups, ground: b.Ground, coarse: k, start: b.Start,
-		reach: pw.reach, hazards: hazards, places: b.Places, lights: b.Lights, pw: pw, lightWork: lights}
+		hazards: hazards, places: b.Places, lights: b.Lights, pw: pw, lightWork: lights, towns: b.Towns, buildings: b.Buildings}
 	b.Report.Rules = c.validate(b.made)
 	lap("validate")
 	return b
@@ -285,6 +298,18 @@ func (b *Bundle) digest() [32]byte {
 			h.Write(sh.Values[:])
 		}
 	}
+	// The buildings, in an order of their own bytes, whatever order the
+	// chunks gave them in.
+	if len(b.Buildings) > 0 {
+		recs := make([][]byte, len(b.Buildings))
+		for i := range b.Buildings {
+			recs[i] = appendTown(nil, &ChunkTown{Buildings: b.Buildings[i : i+1]})
+		}
+		slices.SortFunc(recs, bytes.Compare)
+		for _, r := range recs {
+			h.Write(r)
+		}
+	}
 	var out [32]byte
 	copy(out[:], h.Sum(nil))
 	return out
@@ -307,7 +332,8 @@ func (b *Bundle) Passed() bool {
 func (b *Bundle) MainPort() *Island { return &b.Islands[0] }
 
 // stages are the generator's stages, as the report times them.
-var stages = []string{"layout", "islands", "raster", "hazards", "fetch", "shelter", "start", "names", "places", "lights", "placeNames", "validate"}
+var stages = []string{"layout", "islands", "raster", "hazards", "fetch", "shelter", "start", "names", "places", "lights", "placeNames",
+	"towns", "moorings", "validate"}
 
 // Generated reports how long making the world's last attempt took.
 func (b *Bundle) Generated() time.Duration {

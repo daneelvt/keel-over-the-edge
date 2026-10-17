@@ -38,6 +38,8 @@ type world struct {
 	pw      *placesWork
 	// lightWork are the lights as they were found: what each is named after.
 	lightWork []*lightWork
+	towns     []Town
+	buildings []Building
 }
 
 // validate runs every rule over a world.
@@ -51,17 +53,18 @@ func (c *config) validate(w *world) []Rule {
 
 	// The main port's island: its size, height and cliffs, and the disk's
 	// centre on it.
-	width := float64(2 * sqrtArea(port.area))
+	// Its width, of its land and its basin together.
+	width := float64(2 * sqrtArea(port.area+port.basin))
 	lo, hi := float64(c.port.across[0]*0.85), float64(c.port.across[1]*1.15)
-	add("main port's width", width >= lo && width <= hi, fmt.Sprintf("%.0f m", width), "%.0f–%.0f m", lo, hi)
+	add("main port's width", width >= lo && width <= hi, fmt.Sprintf("%.0f m, its basin counted", width), "%.0f–%.0f m", lo, hi)
 	add("main port's height", port.highest >= c.port.height[0]-0.5 && port.highest <= c.port.height[1]+0.5,
 		fmt.Sprintf("%.1f m", port.highest), "%.0f–%.0f m", c.port.height[0], c.port.height[1])
-	add("main port's cliffs", port.cliffs >= 1.0/3, fmt.Sprintf("%.2f of its coast", port.cliffs), "at least a third")
+	add("main port's cliffs", port.cliffs >= 1.0/3, fmt.Sprintf("%.2f of its outer coast", port.cliffs), "at least a third")
 	off := hypot(port.x, port.y)
-	centre := landAt(w.ground, 0, 0)
+	centre := landAt(w.ground, 0, 0) || port.harbour != nil && port.harbour.inHarbour(0, 0)
 	add("main port at the centre", centre && off <= v.CentreOffset,
-		fmt.Sprintf("centre %.0f m off, the disk's centre %s", off, map[bool]string{true: "on land", false: "in water"}[centre]),
-		"within %.0f m, the disk's centre on land", v.CentreOffset)
+		fmt.Sprintf("centre %.0f m off, the disk's centre %s", off, map[bool]string{true: "on it", false: "in the open sea"}[centre]),
+		"within %.0f m, the disk's centre on its land or in its harbour", v.CentreOffset)
 
 	// The calm water: no land but the main port's within its radius.
 	nearest := math.Inf(1)
@@ -151,6 +154,7 @@ func (c *config) validate(w *world) []Rule {
 	add("land's height", lowest >= c.land[0]-1e-9 && highest <= c.land[1]+1e-9, fmt.Sprintf("%.1f–%.1f m", lowest, highest), "%.1f–%.0f m", c.land[0], c.land[1])
 	if w.pw != nil {
 		rules = append(rules, c.placeRules(w)...)
+		rules = append(rules, c.townRules(w)...)
 	}
 	return rules
 }

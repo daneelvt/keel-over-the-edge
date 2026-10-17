@@ -160,6 +160,36 @@ func checkWorld(doc map[string]any) error {
 	if n, _ := lights["mainPortCharacter"].(string); !notations[n] {
 		bad("world.lights.mainPortCharacter: %q is not a character of the list", n)
 	}
+	// Towns: each part of a town one surface; each biome one kit; every
+	// building's counts its own.
+	parts := map[string]int{}
+	for _, s := range list {
+		m, _ := s.(map[string]any)
+		if t, ok := m["town"].(string); ok {
+			parts[t]++
+		}
+	}
+	for _, t := range []string{"street", "quay", "deck", "yard"} {
+		if parts[t] != 1 {
+			bad("world.surfaces: %d surfaces are a town's %s, not one", parts[t], t)
+		}
+	}
+	towns, _ := world["towns"].(map[string]any)
+	kits := map[string]int{}
+	kl, _ := towns["kits"].([]any)
+	for i, k := range kl {
+		m, _ := k.(map[string]any)
+		id, _ := m["biome"].(string)
+		if !biomes[id] {
+			bad("world.towns.kits[%d].biome: %q is not a biome", i, id)
+		}
+		kits[id]++
+	}
+	for id := range biomes {
+		if kits[id] != 1 {
+			bad("world.towns.kits: %d kits for the biome %q, not one", kits[id], id)
+		}
+	}
 	shelter, _ := world["shelter"].(map[string]any)
 	if !(num(shelter["near"]) < num(shelter["far"])) {
 		bad("world.shelter: near must be less than far")

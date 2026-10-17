@@ -349,10 +349,14 @@ func (pw *placesWork) coast(n int32) *coastGrid {
 		cg.din[i] = math.Inf(1)
 		// The island's own land, from its own grid: another's is water
 		// here, so that no bay is found between two islands.
-		if oc, oj := c-g0.c0, j-g0.j0; oc >= 0 && oj >= 0 && oc < g0.w && oj < g0.h && g0.elev[oc*g0.h+oj] > 0 {
+		oc, oj := c-g0.c0, j-g0.j0
+		inGrid := oc >= 0 && oj >= 0 && oc < g0.w && oj < g0.h
+		if inGrid && g0.elev[oc*g0.h+oj] > 0 {
 			cg.land[i] = true
 		}
-		sea[i] = !cg.land[i]
+		// Port Royal's light stands near its outer coast, not its
+		// harbour's.
+		sea[i] = !cg.land[i] && !(inGrid && m.harbourWater != nil && m.harbourWater[oc*g0.h+oj])
 	}
 	g.distances(cg.land, cg.dout, cg.near, cg.xs)
 	if n == 0 {
@@ -428,6 +432,9 @@ func spread[T any](cands []T, score func(T) float64, at func(T) (float64, float6
 	return out
 }
 
+// portSides is how many sides of an island a port's site is found on.
+const portSides = 6
+
 // ports finds the ports: on each landmark island outside the mist band,
 // the stretch of its coast with the least fetch where water deep enough
 // lies near the shore, reached from the start; then the ports spread over
@@ -445,7 +452,12 @@ func (pw *placesWork) ports() {
 			continue
 		}
 		g := &m.grid
-		best := cand{fetch: math.Inf(1)}
+		// The best site on each side of the island: the lights' cover
+		// chooses among them.
+		var best [portSides]cand
+		for k := range best {
+			best[k].fetch = math.Inf(1)
+		}
 		for k, i := range shoreOf(m, false) {
 			if k%5 != 0 {
 				continue
@@ -454,6 +466,7 @@ func (pw *placesWork) ports() {
 			if hypot(x, y) >= c.mist {
 				continue
 			}
+			side := min(int(toInt32(float64(wrapAngle(physics.Atan2(x-m.x, y-m.y))/(2*math.Pi))*portSides)), portSides-1)
 			// The nearest water deep enough within reach of the shore, along
 			// each of 16 directions.
 			dx, dy, dd := 0.0, 0.0, math.Inf(1)
@@ -473,15 +486,20 @@ func (pw *placesWork) ports() {
 				continue
 			}
 			f := pw.meanFetch(dx, dy, 1000)
-			if f < best.fetch {
+			// A town's room: deep water within a pier's reach along one of
+			// the lattice's axes, and gentle land about it.
+			if f < best[side].fetch && pw.pierReach(x, y, physics.Atan2(dx-x, dy-y), h.Depth, h.Pier) &&
+				roomOf(pw.ground, x, y, h.RoomWithin, h.Steep) >= h.Room {
 				s := pw.newSite(catalog.SiteHarbour, m, x, y)
 				s.heading = physics.Atan2(dx-x, dy-y)
 				s.details.Depth = round1(pw.depth(dx, dy))
-				best = cand{s: s, fetch: f}
+				best[side] = cand{s: s, fetch: f}
 			}
 		}
-		if best.s != nil {
-			cands = append(cands, best)
+		for _, b := range best {
+			if b.s != nil {
+				cands = append(cands, b)
+			}
 		}
 	}
 	_, most := c.kindCount(catalog.SiteHarbour)
@@ -651,6 +669,9 @@ func (pw *placesWork) villages() {
 			s := pw.newSite(catalog.SiteVillage, m, x, y)
 			pw.offerShore(s)
 			if !slices.Contains(s.offers, needBeach) {
+				continue
+			}
+			if roomOf(pw.ground, x, y, c.places.Harbour.RoomWithin, c.places.Harbour.Steep) < v.Room {
 				continue
 			}
 			// Its fishing ground: shallows off the beach, not the beach's
@@ -1181,3 +1202,25 @@ func (pw *placesWork) wreckOn(r stream, h wreckHost, wk *catalog.PlaceWreck, mis
 // round1 is v to a tenth; round3 to a thousandth.
 func round1(v float64) float64 { return float64(round(float64(v*10))) / 10 }
 func round3(v float64) float64 { return float64(round(float64(v*1000))) / 1000 }
+
+// pierReach reports whether water depth m deep lies within most m of
+// (x, y) along one of the lattice's axes within 60° of out, with no land
+// between: where a pier may run out to it.
+func (pw *placesWork) pierReach(x, y, out, depth, most float64) bool {
+	for _, a := range latticeAxes {
+		if math.Abs(angleBetween(a, out)) > float64(61*degree) {
+			continue
+		}
+		sa, ca := sincos(a)
+		for t := 0.0; t <= most; t += physics.HexAcross / 2 {
+			e := pw.depth(x+float64(t*sa), y+float64(t*ca))
+			if e < 0 {
+				break
+			}
+			if e >= depth {
+				return true
+			}
+		}
+	}
+	return false
+}

@@ -58,7 +58,19 @@ type made struct {
 	// approach is the water within approachReach of its coast, as columns
 	// and rows of the lattice: where a boat has reached it.
 	approach [][2]int32
+	// harbour is Port Royal's harbour, nil on any other island, and
+	// harbourWater which of its grid's hexagons are the harbour's water;
+	// basin its basin's area, m².
+	harbour      *harbour
+	harbourWater []bool
+	basin        float64
+	// own is which of its grid's hexagons are its own land: not a stack's.
+	own []bool
 }
+
+// harbourShapes is how many shapes Port Royal's island is drawn in, at
+// most, until its harbour fits.
+const harbourShapes = 16
 
 // approachReach is how near its coast a boat must come to have reached an
 // island, m.
@@ -77,6 +89,7 @@ type work struct {
 	xs                []float64
 	field             []float64
 	coarse            []float64
+	harbour           []bool
 }
 
 // grow returns s with length n, reusing its storage.
@@ -453,11 +466,28 @@ func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work) *made {
 		w.xs[cc], _ = physics.CellCentre(g.c0+cc, 0)
 	}
 	inv := 1 / sp.radius
-	for i := range total {
-		x, y := g.centre(i)
-		u, v := float64((x-sp.x)*inv), float64((y-sp.y)*inv)
-		if math.Abs(u) < sh.extent && math.Abs(v) < sh.extent && sh.value(u, v) > 0 {
-			w.land[i] = true
+	fill := func(sh *shape) {
+		for i := range total {
+			x, y := g.centre(i)
+			u, v := float64((x-sp.x)*inv), float64((y-sp.y)*inv)
+			w.land[i] = math.Abs(u) < sh.extent && math.Abs(v) < sh.extent && sh.value(u, v) > 0
+		}
+	}
+	fill(sh)
+	w.harbour = grow(w.harbour, int(total))
+	if sp.kind == kindMain {
+		// Port Royal's island is drawn again, from its own stream, until
+		// its harbour fits: room for the basin with land round it.
+		for range harbourShapes {
+			if h := c.drawHarbour(seed, m, w.land); h != nil {
+				h.carve(&m.grid, w.land, w.harbour)
+				m.harbour = h
+				break
+			}
+			sh = newShape(s, sp.radius, b, w)
+			sh.shorelineIndex = sh.fineShoreline(w)
+			m.shoreline, m.bays = sh.shorelineIndex, len(sh.bays)
+			fill(sh)
 		}
 	}
 	// Inland, the distance to the sea; offshore, to the land.
@@ -474,6 +504,15 @@ func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work) *made {
 	c.seabedOf(s, m, b, w)
 	c.stacksOf(s, m, b, w)
 	c.surfaces(m, b, w)
+	if m.harbour != nil {
+		c.finishHarbour(m, w)
+		m.harbourWater = append([]bool(nil), w.harbour...)
+		for i := range total {
+			if x, y := g.centre(i); w.harbour[i] && m.harbour.inBasin(x, y) {
+				m.basin += hexArea
+			}
+		}
+	}
 	m.measure(c, w)
 	for i := range total {
 		if !w.land[i] && w.dout[i] <= approachReach && (i%g.h)%2 == 0 && (i/g.h)%2 == 0 {
@@ -537,6 +576,9 @@ func (c *config) heights(s stream, m *made, sh *shape, b *biome, w *work) {
 		if !w.land[i] {
 			continue
 		}
+		if harbourShore(g, i, w.harbour, &nb) {
+			continue
+		}
 		k := g.neighbours(i, &nb)
 		for _, j := range nb[:k] {
 			if !w.land[j] {
@@ -586,7 +628,7 @@ func (c *config) heights(s stream, m *made, sh *shape, b *biome, w *work) {
 		x, y := g.centre(i)
 		h := low + float64((top-low)*(w.height[i]/peak))
 		d := w.din[i]
-		if cliffShare > 0 && cliffAt(x, y) >= threshold {
+		if cliffShare > 0 && cliffAt(x, y) >= threshold && !(m.harbour != nil && nearHarbour(g, i, w.harbour, 30)) {
 			w.cliff[i] = true
 			// A cliff stands at the coast, and the ground behind it
 			// falls back to the profile's.
@@ -746,6 +788,12 @@ func (m *made) measure(c *config, w *work) {
 		// Stacks stand in what was water: they are not the island's own.
 		own := w.land[i] && w.din[i] > 0
 		if own {
+			if m.own == nil {
+				m.own = make([]bool, total)
+			}
+			m.own[i] = true
+		}
+		if own {
 			m.area += hexArea
 		}
 		h := float64(float64(g.elev[i]) * 0.1)
@@ -763,7 +811,7 @@ func (m *made) measure(c *config, w *work) {
 				isTop = false
 			}
 		}
-		if isCoast && own {
+		if isCoast && own && !harbourShore(g, i, w.harbour, &nb) {
 			coast++
 			if w.cliff[i] {
 				cliff++
@@ -817,3 +865,38 @@ func (m *made) saddle(ax, ay, bx, by float64) float64 {
 	}
 	return low
 }
+
+// harbourShore reports whether hexagon i of the grid is beside the
+// harbour's water.
+func harbourShore(g *islandGrid, i int32, water []bool, nb *[6]int32) bool {
+	k := g.neighbours(i, nb)
+	for _, j := range nb[:k] {
+		if water[j] {
+			return true
+		}
+	}
+	return false
+}
+
+// nearHarbour reports whether hexagon i of the grid is within r m of the
+// harbour's water: no cliff stands there.
+func nearHarbour(g *islandGrid, i int32, water []bool, r float64) bool {
+	x, y := g.centre(i)
+	n := toInt32(r/physics.HexAcross) + 1
+	cc, jj := i/g.h, i%g.h
+	for dc := -n - 1; dc <= n+1; dc++ {
+		for dj := -n - 1; dj <= n+1; dj++ {
+			c, j := cc+dc, jj+dj
+			if c < 0 || j < 0 || c >= g.w || j >= g.h || !water[c*g.h+j] {
+				continue
+			}
+			if hx, hy := g.centre(c*g.h + j); hypot(hx-x, hy-y) <= r {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ownLand reports whether hexagon i of its grid is the island's own land.
+func (m *made) ownLand(i int32) bool { return m.own != nil && m.own[i] }

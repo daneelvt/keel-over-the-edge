@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -23,7 +25,10 @@ import (
 // elevations, column by column, each as its difference from the one
 // before, which compresses to about half of the values themselves; the
 // surfaces; and the shelter: a bitmap of the cells with a table, and their
-// tables.
+// tables. From format 2, its towns: the buildings and props whose middles
+// are in it, chunkBuilding bytes each, and the discs of harbour water whose
+// centres are; so a town travels with the land it stands on. Format 1, a
+// chunk with no town, is still read.
 
 // chunkMagic begins every chunk's payload.
 var chunkMagic = [4]byte{'K', 'W', 'C', 'H'}
@@ -35,25 +40,169 @@ const chunkHeader = 4 + 2 + 2 + 4 + 16 + 1
 const (
 	holdsGround  = 1
 	holdsShelter = 2
+	holdsTown    = 4
 )
+
+// chunkBuilding is a building's bytes in a payload: its kind and kit; its
+// middle, dm east and north of the world's centre; its heading, in 256ths
+// of a turn; its plot's level, dm; its storeys and a number of its own;
+// its wall's and roof's colours; its shutters' and flag's; its frontage
+// and depth, in fifths of a metre; its top above its plot, in quarters of
+// a metre; and its town.
+const chunkBuilding = 1 + 1 + 4 + 4 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1
+
+// chunkDisc is a disc of harbour water's bytes: its centre, dm, and its
+// radius, dm.
+const chunkDisc = 4 + 4 + 2
+
+// ChunkTown is what a chunk holds of the towns: the buildings and props
+// whose middles are in it, and the discs of harbour water whose centres
+// are.
+type ChunkTown struct {
+	Buildings []Building
+	Harbour   []Disc
+}
+
+// chunkOfPoint is the chunk that holds (x, y).
+func chunkOfPoint(x, y float64) int32 {
+	n, _, _ := physics.ChunkOf(physics.HexCell(physics.HexAt(x, y)))
+	return n
+}
+
+// Towns are what each chunk holds of the bundle's towns, by number; nil
+// for a chunk that holds none.
+func (b *Bundle) ChunkTowns() []*ChunkTown {
+	out := make([]*ChunkTown, physics.ChunkCount)
+	at := func(n int32) *ChunkTown {
+		if out[n] == nil {
+			out[n] = &ChunkTown{}
+		}
+		return out[n]
+	}
+	for _, bd := range b.Buildings {
+		t := at(chunkOfPoint(bd.X, bd.Y))
+		t.Buildings = append(t.Buildings, bd)
+	}
+	for _, tn := range b.Towns {
+		for _, d := range tn.Harbour {
+			t := at(chunkOfPoint(d.X, d.Y))
+			t.Harbour = append(t.Harbour, d)
+		}
+	}
+	return out
+}
+
+// dm is a length, m, in whole decimetres.
+func dm(v float64) int32 { return round(float64(v * 10)) }
+
+// appendTown appends a chunk's towns' bytes.
+func appendTown(out []byte, t *ChunkTown) []byte {
+	out = binary.LittleEndian.AppendUint16(out, uint16(len(t.Buildings)))
+	for _, b := range t.Buildings {
+		turn := float64(2 * math.Pi)
+		out = append(out, b.Kind, b.Kit)
+		out = binary.LittleEndian.AppendUint32(out, uint32(dm(b.X)))
+		out = binary.LittleEndian.AppendUint32(out, uint32(dm(b.Y)))
+		out = append(out, uint8(round(float64(b.Heading/turn)*256)&255))
+		out = binary.LittleEndian.AppendUint16(out, uint16(b.Level))
+		out = append(out, b.Storeys&3|b.Seed<<2, b.Wall&15|b.Roof<<4, b.Shutter&15|b.Flag<<4,
+			uint8(clamp(float64(round(float64(b.Frontage*5))), 0, 255)), uint8(clamp(float64(round(float64(b.Depth*5))), 0, 255)),
+			uint8(clamp(float64(round(float64((b.Top-float64(float64(b.Level)*0.1))*4))), 0, 255)), uint8(b.Town))
+	}
+	out = binary.LittleEndian.AppendUint16(out, uint16(len(t.Harbour)))
+	for _, d := range t.Harbour {
+		out = binary.LittleEndian.AppendUint32(out, uint32(dm(d.X)))
+		out = binary.LittleEndian.AppendUint32(out, uint32(dm(d.Y)))
+		out = binary.LittleEndian.AppendUint16(out, uint16(dm(d.R)))
+	}
+	return out
+}
+
+// readTown reads a chunk's towns' bytes, and returns what is left.
+func readTown(body []byte) (*ChunkTown, []byte, error) {
+	t := &ChunkTown{}
+	if len(body) < 2 {
+		return nil, nil, errors.New("its town is cut short")
+	}
+	n := int(binary.LittleEndian.Uint16(body))
+	body = body[2:]
+	if len(body) < n*chunkBuilding {
+		return nil, nil, errors.New("its buildings are cut short")
+	}
+	for range n {
+		p := body[:chunkBuilding]
+		body = body[chunkBuilding:]
+		b := Building{
+			Kind: p[0], Kit: p[1],
+			X:       float64(int32(binary.LittleEndian.Uint32(p[2:]))) / 10,
+			Y:       float64(int32(binary.LittleEndian.Uint32(p[6:]))) / 10,
+			Heading: float64(float64(p[10]) * (2 * math.Pi / 256)),
+			Level:   int16(binary.LittleEndian.Uint16(p[11:])),
+			Storeys: p[13] & 3, Seed: p[13] >> 2,
+			Wall: p[14] & 15, Roof: p[14] >> 4,
+			Shutter: p[15] & 15, Flag: p[15] >> 4,
+			Frontage: float64(p[16]) / 5, Depth: float64(p[17]) / 5,
+			Town: int32(p[19]),
+		}
+		b.Top = float64(float64(b.Level)*0.1) + float64(p[18])/4
+		t.Buildings = append(t.Buildings, b)
+	}
+	if len(body) < 2 {
+		return nil, nil, errors.New("its harbour is cut short")
+	}
+	n = int(binary.LittleEndian.Uint16(body))
+	body = body[2:]
+	if len(body) < n*chunkDisc {
+		return nil, nil, errors.New("its harbour is cut short")
+	}
+	for range n {
+		p := body[:chunkDisc]
+		body = body[chunkDisc:]
+		t.Harbour = append(t.Harbour, Disc{
+			X: float64(int32(binary.LittleEndian.Uint32(p))) / 10,
+			Y: float64(int32(binary.LittleEndian.Uint32(p[4:]))) / 10,
+			R: float64(binary.LittleEndian.Uint16(p[8:])) / 10,
+		})
+	}
+	return t, body, nil
+}
 
 // shelterBitmap is the size of a payload's bitmap of cells with a table.
 const shelterBitmap = (physics.ShelterCells + 7) / 8
 
-// EncodeChunk is chunk n's payload, for the world with the id given.
+// EncodeChunk is chunk n's payload, for the world with the id given, with
+// no town.
 func EncodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.ShelterChunk) ([]byte, error) {
+	return EncodeChunkTown(n, world, g, s, nil)
+}
+
+// EncodeChunkTown is chunk n's payload, for the world with the id given,
+// with what it holds of the towns, if any.
+func EncodeChunkTown(n int32, world [16]byte, g *physics.GroundChunk, s *physics.ShelterChunk, t *ChunkTown) ([]byte, error) {
+	return encodeChunk(n, world, g, s, t, Format, Version)
+}
+
+// encodeChunk is chunk n's payload in the format given, of the generator
+// given; a format 1 payload holds no town.
+func encodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.ShelterChunk, t *ChunkTown, format uint16, generator uint32) ([]byte, error) {
+	if format < 2 {
+		t = nil
+	}
 	var raw bytes.Buffer
 	var head [chunkHeader]byte
 	copy(head[:4], chunkMagic[:])
-	binary.LittleEndian.PutUint16(head[4:], Format)
+	binary.LittleEndian.PutUint16(head[4:], format)
 	binary.LittleEndian.PutUint16(head[6:], uint16(n))
-	binary.LittleEndian.PutUint32(head[8:], Version)
+	binary.LittleEndian.PutUint32(head[8:], generator)
 	copy(head[12:28], world[:])
 	if g != nil {
 		head[28] |= holdsGround
 	}
 	if s != nil {
 		head[28] |= holdsShelter
+	}
+	if t != nil {
+		head[28] |= holdsTown
 	}
 	raw.Write(head[:])
 	if g != nil {
@@ -80,6 +229,9 @@ func EncodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.She
 			}
 		}
 	}
+	if t != nil {
+		raw.Write(appendTown(nil, t))
+	}
 	var out bytes.Buffer
 	zw, err := gzip.NewWriterLevel(&out, 6)
 	if err != nil {
@@ -97,40 +249,51 @@ func EncodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.She
 // ErrChunk is a payload that is not the chunk asked for.
 var ErrChunk = errors.New("worldgen: not the chunk asked for")
 
-// DecodeChunk reads chunk n's payload for the world with the id given:
-// its ground and shelter, each nil if it holds none. It refuses a payload of
-// another chunk, world, format or generator.
+// DecodeChunk reads chunk n's payload for the world with the id given, of
+// this generator: its ground and shelter, each nil if it holds none. It
+// refuses a payload of another chunk, world, format or generator.
 func DecodeChunk(payload []byte, n int32, world [16]byte) (*physics.GroundChunk, *physics.ShelterChunk, error) {
+	g, s, _, err := DecodeChunkOf(payload, n, world, Version)
+	return g, s, err
+}
+
+// DecodeChunkOf reads chunk n's payload for the world with the id given,
+// made by the generator given: its ground, its shelter and its towns, each
+// nil if it holds none. It refuses a payload of another chunk, world or
+// generator, or of a format it does not know.
+func DecodeChunkOf(payload []byte, n int32, world [16]byte, generator int) (*physics.GroundChunk, *physics.ShelterChunk, *ChunkTown, error) {
 	zr, err := gzip.NewReader(bytes.NewReader(payload))
 	if err != nil {
-		return nil, nil, fmt.Errorf("worldgen: chunk %d: %w", n, err)
+		return nil, nil, nil, fmt.Errorf("worldgen: chunk %d: %w", n, err)
 	}
 	raw, err := io.ReadAll(io.LimitReader(zr, 1<<22))
 	if err != nil {
-		return nil, nil, fmt.Errorf("worldgen: chunk %d: %w", n, err)
+		return nil, nil, nil, fmt.Errorf("worldgen: chunk %d: %w", n, err)
 	}
 	if len(raw) < chunkHeader || !bytes.Equal(raw[:4], chunkMagic[:]) {
-		return nil, nil, fmt.Errorf("%w: chunk %d has no header", ErrChunk, n)
+		return nil, nil, nil, fmt.Errorf("%w: chunk %d has no header", ErrChunk, n)
 	}
-	if f := binary.LittleEndian.Uint16(raw[4:]); f != Format {
-		return nil, nil, fmt.Errorf("%w: chunk %d is of format %d, not %d", ErrChunk, n, f, Format)
+	format := binary.LittleEndian.Uint16(raw[4:])
+	if format < 1 || format > Format {
+		return nil, nil, nil, fmt.Errorf("%w: chunk %d is of format %d, not 1 to %d", ErrChunk, n, format, Format)
 	}
 	if got := int32(binary.LittleEndian.Uint16(raw[6:])); got != n {
-		return nil, nil, fmt.Errorf("%w: chunk %d holds chunk %d", ErrChunk, n, got)
+		return nil, nil, nil, fmt.Errorf("%w: chunk %d holds chunk %d", ErrChunk, n, got)
 	}
-	if v := binary.LittleEndian.Uint32(raw[8:]); v != Version {
-		return nil, nil, fmt.Errorf("%w: chunk %d is of generator %d, not %d", ErrChunk, n, v, Version)
+	if v := binary.LittleEndian.Uint32(raw[8:]); v != uint32(generator) {
+		return nil, nil, nil, fmt.Errorf("%w: chunk %d is of generator %d, not %d", ErrChunk, n, v, generator)
 	}
 	if !bytes.Equal(raw[12:28], world[:]) {
-		return nil, nil, fmt.Errorf("%w: chunk %d is another world's", ErrChunk, n)
+		return nil, nil, nil, fmt.Errorf("%w: chunk %d is another world's", ErrChunk, n)
 	}
 	holds := raw[28]
 	body := raw[chunkHeader:]
 	var g *physics.GroundChunk
 	var s *physics.ShelterChunk
+	var t *ChunkTown
 	if holds&holdsGround != 0 {
 		if len(body) < 3*physics.ChunkHexes {
-			return nil, nil, fmt.Errorf("worldgen: chunk %d is cut short", n)
+			return nil, nil, nil, fmt.Errorf("worldgen: chunk %d is cut short", n)
 		}
 		g = new(physics.GroundChunk)
 		var prev int16
@@ -144,7 +307,7 @@ func DecodeChunk(payload []byte, n int32, world [16]byte) (*physics.GroundChunk,
 	}
 	if holds&holdsShelter != 0 {
 		if len(body) < shelterBitmap {
-			return nil, nil, fmt.Errorf("worldgen: chunk %d's shelter is cut short", n)
+			return nil, nil, nil, fmt.Errorf("worldgen: chunk %d's shelter is cut short", n)
 		}
 		s = newShelterChunk()
 		bitmap := body[:shelterBitmap]
@@ -155,23 +318,32 @@ func DecodeChunk(payload []byte, n int32, world [16]byte) (*physics.GroundChunk,
 			}
 			size := physics.ShelterDirections * 2
 			if len(body) < size {
-				return nil, nil, fmt.Errorf("worldgen: chunk %d's shelter is cut short", n)
+				return nil, nil, nil, fmt.Errorf("worldgen: chunk %d's shelter is cut short", n)
 			}
 			copy(s.Values[i*int32(size):], body[:size])
 			body = body[size:]
 		}
 	}
-	if len(body) != 0 {
-		return nil, nil, fmt.Errorf("worldgen: chunk %d has %d bytes too many", n, len(body))
+	if holds&holdsTown != 0 && format >= 2 {
+		if t, body, err = readTown(body); err != nil {
+			return nil, nil, nil, fmt.Errorf("worldgen: chunk %d: %w", n, err)
+		}
 	}
-	return g, s, nil
+	if len(body) != 0 {
+		return nil, nil, nil, fmt.Errorf("worldgen: chunk %d has %d bytes too many", n, len(body))
+	}
+	return g, s, t, nil
 }
 
 // Chunks are a bundle's chunks' payloads, for the world with the id given.
 func (b *Bundle) Chunks(world [16]byte) ([][]byte, error) {
 	out := make([][]byte, physics.ChunkCount)
+	towns := b.ChunkTowns()
 	for n := range int32(physics.ChunkCount) {
-		p, err := EncodeChunk(n, world, b.Ground.Chunks[n], b.Shelter.Chunks[n])
+		if b.Format < 2 {
+			towns[n] = nil
+		}
+		p, err := b.encodeChunk(n, world, b.Ground.Chunks[n], b.Shelter.Chunks[n], towns[n])
 		if err != nil {
 			return nil, err
 		}
@@ -188,8 +360,8 @@ func Load(records, report []byte, chunks [][]byte, world [16]byte, digest []byte
 	if err := json.Unmarshal(records, &b.Records); err != nil {
 		return nil, fmt.Errorf("worldgen: the records: %w", err)
 	}
-	if b.Format != Format {
-		return nil, fmt.Errorf("worldgen: the bundle is of format %d, not %d", b.Format, Format)
+	if b.Format < 1 || b.Format > Format {
+		return nil, fmt.Errorf("worldgen: the bundle is of format %d, not 1 to %d", b.Format, Format)
 	}
 	if b.Circulation == 0 {
 		b.Circulation = circulationOf(b.Made)
@@ -203,12 +375,16 @@ func Load(records, report []byte, chunks [][]byte, world [16]byte, digest []byte
 		return nil, fmt.Errorf("worldgen: %d chunks, not %d", len(chunks), physics.ChunkCount)
 	}
 	for n := range int32(physics.ChunkCount) {
-		g, s, err := DecodeChunk(chunks[n], n, world)
+		g, s, t, err := DecodeChunkOf(chunks[n], n, world, b.Generator)
 		if err != nil {
 			return nil, err
 		}
 		b.Ground.Chunks[n], b.Shelter.Chunks[n] = g, s
+		if t != nil {
+			b.Buildings = append(b.Buildings, t.Buildings...)
+		}
 	}
+	slices.SortStableFunc(b.Buildings, func(p, q Building) int { return int(p.Town) - int(q.Town) })
 	b.Digest = b.digest()
 	if len(digest) > 0 && !bytes.Equal(digest, b.Digest[:]) {
 		return nil, fmt.Errorf("worldgen: the bundle's digest is %x, not the %x it was stored with", b.Digest, digest)
@@ -300,7 +476,13 @@ func (b *Bundle) Terrain(ground *physics.GroundPrepared) *sim.Terrain {
 	g.Prepared = ground
 	start := make([]physics.State, len(b.Start.Places))
 	for i, p := range b.Start.Places {
-		start[i] = physics.State{X: p[0], Y: p[1], Heading: b.Start.Heading}
+		start[i] = physics.State{X: p[0], Y: p[1], Heading: b.Start.HeadingOf(i)}
 	}
 	return &sim.Terrain{Ground: &g, Shelter: b.Shelter, Fetch: b.Fetch, Start: start, Circulation: float64(b.Circulation)}
+}
+
+// encodeChunk is chunk n's payload as the bundle's format writes it: of the
+// generator that made it.
+func (b *Bundle) encodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.ShelterChunk, t *ChunkTown) ([]byte, error) {
+	return encodeChunk(n, world, g, s, t, uint16(b.Format), uint32(b.Generator))
 }

@@ -25,6 +25,8 @@ type config struct {
 		cliffs float64
 		offset float64
 		rocks  [2]int
+		// harbour is its harbour's values.
+		harbour catalog.PortHarbour
 	}
 	layout struct {
 		landmarks      int
@@ -72,6 +74,14 @@ type config struct {
 	// mainLight is the main port's light's character, by its index in the
 	// catalog's list.
 	mainLight int
+	towns     catalog.WorldTowns
+	buildings []buildingKind
+	terraceDm int16 // the land's terraces, dm
+	moorings  catalog.StartMoorings
+	// townSurface is each part of a town's surface, by its index.
+	townSurface struct{ street, quay, deck, yard uint8 }
+	// kitOf is each biome's kit, by its index in the catalog's list.
+	kitOf []uint8
 }
 
 // sizeClass is a size class: the islands narrower than below.
@@ -165,6 +175,7 @@ func newConfig(cat *catalog.Catalog) (*config, error) {
 	}
 	c.port.across, c.port.height, c.port.cliffs = pair(port.Across), pair(port.Height), port.Cliffs
 	c.port.offset, c.port.rocks = port.Offset, ipair(port.Rocks)
+	c.port.harbour = port.Harbour
 	l := &w.Layout
 	c.layout.landmarks, c.layout.landmarkAcross, c.layout.landmarkApart = l.Landmarks, pair(l.LandmarkAcross), l.LandmarkApart
 	c.layout.landmarkRing = [2]float64{float64(l.LandmarkRing[0] * nauticalMile), float64(l.LandmarkRing[1] * nauticalMile)}
@@ -196,6 +207,31 @@ func newConfig(cat *catalog.Catalog) (*config, error) {
 		if c.kinds[site] == "" {
 			return nil, fmt.Errorf("worldgen: no kind of place has the site %q", site)
 		}
+	}
+	c.towns, c.moorings = w.Towns, w.Start.Moorings
+	c.buildings = kindsOf(w.Towns.Buildings)
+	c.terraceDm = int16(max(round(float64(w.Look.Terrace*10)), 1))
+	parts := map[catalog.Town]*uint8{catalog.TownStreet: &c.townSurface.street, catalog.TownQuay: &c.townSurface.quay,
+		catalog.TownDeck: &c.townSurface.deck, catalog.TownYard: &c.townSurface.yard}
+	found := 0
+	for i, s := range w.Surfaces {
+		if s.Town != nil {
+			if to, ok := parts[*s.Town]; ok {
+				*to = uint8(i)
+				found++
+			}
+		}
+	}
+	if found != len(parts) {
+		return nil, fmt.Errorf("worldgen: %d of a town's %d surfaces are in the catalog", found, len(parts))
+	}
+	c.kitOf = make([]uint8, len(c.biomeIDs))
+	for i, id := range c.biomeIDs {
+		k := slices.IndexFunc(w.Towns.Kits, func(k catalog.TownKit) bool { return string(k.Biome) == id })
+		if k < 0 {
+			return nil, fmt.Errorf("worldgen: the biome %q has no kit", id)
+		}
+		c.kitOf[i] = uint8(k)
 	}
 	c.mainLight = -1
 	for i, ch := range w.Lights.Characters {

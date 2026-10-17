@@ -12,6 +12,8 @@
 //	go run ./tools/worldgen-preview -bundle FILE       the same for a bundle keel worldgen -out wrote
 //	go run ./tools/worldgen-preview -seeds N -from S   seeds S to S+N−1 side by side: seeds.html
 //	go run ./tools/worldgen-preview -seed S -island I  island I at the lattice's resolution: island-I.svg
+//	go run ./tools/worldgen-preview -seed S -town T    town T at the lattice's resolution, its streets,
+//	                                                   quays, piers and buildings: town-T.svg
 //
 // It writes into -out, .dev/worldgen by default, and runs from the
 // repository root.
@@ -45,15 +47,16 @@ func main() {
 	seeds := flag.Int("seeds", 0, "draw this many seeds side by side, from -from")
 	from := flag.Uint64("from", 1, "the first of -seeds")
 	isl := flag.Int("island", -1, "draw this island alone, at the lattice's resolution")
+	town := flag.Int("town", -1, "draw this town alone, at the lattice's resolution")
 	out := flag.String("out", filepath.Join(".dev", "worldgen"), "where to write")
 	flag.Parse()
-	if err := run(*seed, *bundle, *seeds, *from, *isl, *out); err != nil {
+	if err := run(*seed, *bundle, *seeds, *from, *isl, *town, *out); err != nil {
 		fmt.Fprintln(os.Stderr, "worldgen-preview:", err)
 		os.Exit(1)
 	}
 }
 
-func run(seed uint64, bundle string, seeds int, from uint64, isl int, out string) error {
+func run(seed uint64, bundle string, seeds int, from uint64, isl, town int, out string) error {
 	cat, err := catalog.Load()
 	if err != nil {
 		return err
@@ -123,6 +126,13 @@ func run(seed uint64, bundle string, seeds int, from uint64, isl int, out string
 		}
 		return write(fmt.Sprintf("island-%d.svg", isl), svg)
 	}
+	if town >= 0 {
+		svg, err := chart.Town(b, town, townLook(cat))
+		if err != nil {
+			return err
+		}
+		return write(fmt.Sprintf("town-%d.svg", town), svg)
+	}
 	v := worldView(chartScale)
 	terrain := chart.Raster(b.Ground, v, chart.Terrain)
 	surfaces := chart.Raster(b.Ground, v, func(_ float64, s int32) color.RGBA {
@@ -137,4 +147,20 @@ func run(seed uint64, bundle string, seeds int, from uint64, isl int, out string
 		return err
 	}
 	return write("index.html", page(b, cc, v, terrain, surfaces, shelters, cat.Weather.Sea.FetchCap*1852))
+}
+
+// townLook is how a town's sheet is drawn: its surfaces in their own
+// colours, each kind of building in its own.
+func townLook(cat *catalog.Catalog) chart.TownLook {
+	look := chart.TownLook{Surfaces: map[int32]string{}}
+	for i, s := range cat.World.Surfaces {
+		if s.Town != nil {
+			look.Surfaces[int32(i)] = string(s.Look.Top)
+		}
+	}
+	for _, k := range cat.World.Towns.Buildings {
+		look.Kinds = append(look.Kinds, string(k.Colour))
+		look.Props = append(look.Props, k.Prop != nil && *k.Prop)
+	}
+	return look
 }

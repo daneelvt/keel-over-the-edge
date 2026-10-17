@@ -285,6 +285,9 @@ func ids(doc map[string]any) []string {
 		for _, name := range worldKinds {
 			add(world[name])
 		}
+		if towns, ok := world["towns"].(map[string]any); ok {
+			add(towns["buildings"])
+		}
 	}
 	sort.Strings(out)
 	return slices.Compact(out)

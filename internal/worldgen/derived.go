@@ -4,6 +4,7 @@ package worldgen
 
 import (
 	"math"
+	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
@@ -152,13 +153,94 @@ func shelterHas(ch *physics.ShelterChunk, i int32) bool {
 }
 
 // Start is where boats start: their places, in order, and the heading they
-// face.
+// face: the moorings in Port Royal's basin first, each facing the narrows,
+// then the roads outside, facing Heading.
 type Start struct {
 	Heading float64      `json:"heading"`
 	Places  [][2]float64 `json:"places"`
 	// Out is the direction the start area lies in from the main port's
 	// centre, rad clockwise from north.
 	Out float64 `json:"out"`
+	// Moorings is how many of the first places are moorings, and Headings
+	// the heading each of them faces.
+	Moorings int       `json:"moorings,omitempty"`
+	Headings []float64 `json:"headings,omitempty"`
+}
+
+// HeadingOf is the heading place i faces.
+func (s *Start) HeadingOf(i int) float64 {
+	if i < len(s.Headings) {
+		return s.Headings[i]
+	}
+	return s.Heading
+}
+
+// withMoorings puts the moorings before the roads' places: in rows across
+// Port Royal's basin, spacing apart, clear of land, quays and piers and
+// outside the turning circle, nearest the narrows first, each facing the
+// narrows' inner end, so that a beginner's first course is out to sea;
+// then the roads, to as many places as the start had.
+func (c *config) withMoorings(g *physics.Ground, port *made, roads Start) Start {
+	h := port.harbour
+	if h == nil {
+		return roads
+	}
+	mo := &c.moorings
+	type mooring struct {
+		x, y  float64
+		along float64
+		side  float64
+	}
+	var ms []mooring
+	ex, ey := h.x+float64(h.edge*h.sin), h.y+float64(h.edge*h.cos)
+	n := toInt32(float64(2*h.radius)/mo.Spacing) + 2
+	for a := -n; a <= n; a++ {
+		for b := -n; b <= n; b++ {
+			// Rows across the basin, every other one staggered by half a
+			// place, so that each boat is spacing from its neighbours.
+			along := float64(float64(a) * float64(mo.Spacing*0.8660254037844386))
+			side := float64(float64(b) * mo.Spacing)
+			if a&1 == 1 {
+				side += mo.Spacing / 2
+			}
+			x := h.x + float64(along*h.sin) + float64(side*h.cos)
+			y := h.y + float64(along*h.cos) - float64(side*h.sin)
+			if !h.inBasin(x, y) || hypot(x-h.x, y-h.y) < h.turning {
+				continue
+			}
+			if e, _ := g.At(x, y); e > -c.start.Depth || c.landNear(g, x, y, mo.Clear) {
+				continue
+			}
+			ms = append(ms, mooring{x, y, along, math.Abs(side)})
+		}
+	}
+	slices.SortStableFunc(ms, func(p, q mooring) int {
+		if p.along != q.along {
+			return cmpDesc(p.along, q.along)
+		}
+		return cmpAsc(p.side, q.side)
+	})
+	out := Start{Heading: roads.Heading, Out: roads.Out, Moorings: len(ms)}
+	total := len(roads.Places)
+	for _, m := range ms {
+		if len(out.Places) == total {
+			break
+		}
+		out.Places = append(out.Places, [2]float64{m.x, m.y})
+		heading := physics.Atan2(ex-m.x, ey-m.y)
+		if heading >= math.Pi {
+			heading -= 2 * math.Pi
+		}
+		out.Headings = append(out.Headings, heading)
+	}
+	out.Moorings = len(out.Places)
+	for _, p := range roads.Places {
+		if len(out.Places) == total {
+			break
+		}
+		out.Places = append(out.Places, p)
+	}
+	return out
 }
 
 // startOf finds the start area: of the stretches of water off the main

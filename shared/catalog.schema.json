@@ -575,7 +575,8 @@
         "look",
         "hazards",
         "places",
-        "lights"
+        "lights",
+        "towns"
       ],
       "properties": {
         "disk": { "$ref": "#/$defs/WorldDisk" },
@@ -624,7 +625,8 @@
         "look": { "$ref": "#/$defs/WorldLook" },
         "hazards": { "$ref": "#/$defs/WorldHazards" },
         "places": { "$ref": "#/$defs/WorldPlaces" },
-        "lights": { "$ref": "#/$defs/WorldLights" }
+        "lights": { "$ref": "#/$defs/WorldLights" },
+        "towns": { "$ref": "#/$defs/WorldTowns" }
       }
     },
     "WorldHazards": {
@@ -931,7 +933,11 @@
           "required": [
             "depth",
             "within",
-            "apart"
+            "apart",
+            "pier",
+            "room",
+            "steep",
+            "roomWithin"
           ],
           "properties": {
             "depth": {
@@ -951,7 +957,11 @@
               "type": "number",
               "minimum": 0,
               "maximum": 10
-            }
+            },
+            "pier": { "description": "A pier may run this far to the water, along one of the lattice's axes, in m.", "type": "number", "minimum": 0, "maximum": 1000 },
+            "room": { "description": "Land at least this many hexagons no steeper than 1 in steep", "type": "integer", "minimum": 0, "maximum": 100000 },
+            "steep": { "description": "(the slope's run over its rise),", "type": "number", "minimum": 1, "maximum": 100 },
+            "roomWithin": { "description": "within this of its quay, in m.", "type": "number", "minimum": 10, "maximum": 1000 }
           }
         },
         "village": {
@@ -963,7 +973,8 @@
             "sizes",
             "shallows",
             "ground",
-            "apart"
+            "apart",
+            "room"
           ],
           "properties": {
             "sizes": {
@@ -992,7 +1003,8 @@
               "type": "number",
               "minimum": 0,
               "maximum": 10000
-            }
+            },
+            "room": { "description": "Land at least this many hexagons no steeper than a port's within its roomWithin.", "type": "integer", "minimum": 0, "maximum": 100000 }
           }
         },
         "anchorage": {
@@ -1770,7 +1782,7 @@
       "description": "The main port's island, at the centre of every world.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "biome", "across", "height", "cliffs", "offset", "calm", "rocks"],
+      "required": ["name", "biome", "across", "height", "cliffs", "offset", "calm", "rocks", "harbour"],
       "properties": {
         "name": {
           "description": "Its name, never drawn for another place.",
@@ -1794,7 +1806,7 @@
           "items": { "type": "number", "minimum": 1, "maximum": 200 }
         },
         "cliffs": {
-          "description": "The share of its coast with cliffs.",
+          "description": "The share of its outer coast with cliffs, the harbour's shore not counted.",
           "type": "number",
           "minimum": 0,
           "maximum": 1
@@ -1817,6 +1829,27 @@
           "minItems": 2,
           "maxItems": 2,
           "items": { "type": "integer", "minimum": 0, "maximum": 20 }
+        },
+        "harbour": {
+          "title": "PortHarbour",
+          "description": "Its harbour: a basin entered through a narrows, carved into the island.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["across", "harmonics", "offset", "land", "narrows", "widen", "depth", "channel", "turning", "mole", "tries", "town"],
+          "properties": {
+            "across": { "description": "The basin's width, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 20, "maximum": 1000 } },
+            "harmonics": { "description": "How far its radius wanders, by the second harmonic and on, as shares of it.", "type": "array", "minItems": 0, "maxItems": 8, "items": { "type": "number", "minimum": 0, "maximum": 0.5 } },
+            "offset": { "description": "Its centre off the island's, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1000 } },
+            "land": { "description": "Land round it, at least, in m.", "type": "number", "minimum": 0, "maximum": 500 },
+            "narrows": { "description": "The narrows' width at its inner end, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 8, "maximum": 500 } },
+            "widen": { "description": "Its mouth is this many times its inner width.", "type": "number", "minimum": 1, "maximum": 5 },
+            "depth": { "description": "The basin's depth: at its quays, and in its middle, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 40 } },
+            "channel": { "description": "The narrows' middle third is at least this deep, in m.", "type": "number", "minimum": 1, "maximum": 40 },
+            "turning": { "description": "A circle of clear water this wide inside it, in m.", "type": "number", "minimum": 0, "maximum": 1000 },
+            "mole": { "description": "The mole's length into the basin, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 200 } },
+            "tries": { "description": "Basins drawn, the best kept.", "type": "integer", "minimum": 1, "maximum": 200 },
+            "town": { "description": "The town stands on this much of the basin's shore, opposite the narrows, in degrees.", "type": "number", "minimum": 0, "maximum": 360 }
+          }
         }
       }
     },
@@ -2291,7 +2324,8 @@
           "minimum": 0,
           "maximum": 2
         },
-        "look": { "$ref": "#/$defs/SurfaceLook" }
+        "look": { "$ref": "#/$defs/SurfaceLook" },
+        "town": { "description": "The part of a town it is, if any: streets, quays, piers' decks, yards.", "type": "string", "enum": ["street", "quay", "deck", "yard"] }
       }
     },
     "WorldFetch": {
@@ -2399,10 +2433,10 @@
     },
     "WorldStart": {
       "title": "WorldStart",
-      "description": "Where boats start: the stretch of water off the main port with the most room.",
+      "description": "Where boats start: moored in Port Royal's basin, then the roads off its coast with the most room.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["within", "depth", "clear", "spacing", "row", "places"],
+      "required": ["within", "depth", "clear", "spacing", "row", "places", "moorings"],
       "properties": {
         "within": {
           "description": "The start area begins within this of the coast, in m.",
@@ -2439,6 +2473,18 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 65536
+        },
+        "moorings": {
+          "title": "StartMoorings",
+          "description": "The moorings across Port Royal's basin.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spacing", "clear", "least"],
+          "properties": {
+            "spacing": { "description": "Moorings are this far apart, in m.", "type": "number", "minimum": 4, "maximum": 100 },
+            "clear": { "description": "And this far from land, quays and piers, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+            "least": { "description": "At least this many.", "type": "integer", "minimum": 0, "maximum": 4096 }
+          }
         }
       }
     },
@@ -2764,6 +2810,207 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        }
+      }
+    },
+    "TownPiers": {
+      "title": "TownPiers",
+      "description": "Piers of one length and width.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "length", "width"],
+      "properties": {
+        "count": { "description": "How many.", "type": "integer", "minimum": 0, "maximum": 10 },
+        "length": { "description": "Its length out, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 500 } },
+        "width": { "description": "Its width, in m.", "type": "number", "minimum": 1, "maximum": 40 }
+      }
+    },
+    "BuildingKind": {
+      "title": "BuildingKind",
+      "description": "A kind of building, or a prop, of a town.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "frontage", "depth", "storeys", "stands", "colour"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Its name, as the world page lists it.", "type": "string", "minLength": 1, "maxLength": 40 },
+        "prop": { "description": "A small thing that stands about, drawn near only.", "type": "boolean" },
+        "frontage": { "description": "Its frontage along its way, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 40 } },
+        "depth": { "description": "Its depth back from its way, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 40 } },
+        "storeys": { "description": "Its storeys, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 3 } },
+        "stands": { "description": "Where it stands.", "type": "string", "enum": ["street", "quay", "quayEnd", "square", "above", "summit", "fields", "slope", "water", "behind", "shore", "slip", "edge", "post", "beach"] },
+        "fill": { "description": "Its weight among the buildings that fill the streets.", "type": "number", "minimum": 0, "maximum": 100 },
+        "main": { "description": "How many Port Royal has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10000 } },
+        "port": { "description": "How many a port has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10000 } },
+        "village": { "description": "How many a village has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10000 } },
+        "chimney": { "description": "The share of them with a chimney.", "type": "number", "minimum": 0, "maximum": 1 },
+        "flag": { "description": "It flies a flag.", "type": "boolean" },
+        "lantern": { "description": "The share of them with a lantern by the door.", "type": "number", "minimum": 0, "maximum": 1 },
+        "top": { "description": "Its top stands this high, in m; else its storeys and roof.", "type": "number", "minimum": 0, "maximum": 100 },
+        "colour": { "$ref": "#/$defs/Colour" }
+      }
+    },
+    "TownKit": {
+      "title": "TownKit",
+      "description": "A biome's kit: its models and palette.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["biome", "art", "walls", "roofs", "shutters"],
+      "properties": {
+        "biome": { "$ref": "#/$defs/Id" },
+        "art": {
+          "title": "KitArt",
+          "description": "Its models.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": {
+            "model": { "$ref": "#/$defs/ArtPath" }
+          }
+        },
+        "walls": { "description": "Its walls' colours.", "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/Colour" } },
+        "roofs": { "description": "Its roofs' colours.", "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/Colour" } },
+        "shutters": { "description": "Its shutters' and doors' colours.", "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/Colour" } }
+      }
+    },
+    "WorldTowns": {
+      "title": "WorldTowns",
+      "description": "Towns: Port Royal's, a port's and a fishing village's.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["waterfront", "plan", "size", "buildings", "kits", "flags", "smoke", "inPort", "lit"],
+      "properties": {
+        "waterfront": {
+          "title": "TownWaterfront",
+          "description": "Quays and piers.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["quay", "foot", "long", "short", "port", "jetty"],
+          "properties": {
+            "quay": { "description": "A quay's top above the sea, in m.", "type": "number", "minimum": 0.3, "maximum": 10 },
+            "foot": { "title": "QuayFoot", "description": "The water at a quay's foot, in m.", "type": "object", "additionalProperties": false, "required": ["main", "port"], "properties": { "main": { "description": "Port Royal's.", "type": "number", "minimum": 0.5, "maximum": 40 }, "port": { "description": "A port's.", "type": "number", "minimum": 0.5, "maximum": 40 } } },
+            "long": { "$ref": "#/$defs/TownPiers" },
+            "short": { "$ref": "#/$defs/TownPiers" },
+            "port": {
+              "title": "PortPiers",
+              "description": "A port's piers.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["count", "width"],
+              "properties": {
+                "count": { "description": "How many, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10 } },
+                "width": { "description": "Their width, in m.", "type": "number", "minimum": 1, "maximum": 40 }
+              }
+            },
+            "jetty": {
+              "title": "TownJetty",
+              "description": "A village's jetty.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["length", "width"],
+              "properties": {
+                "length": { "description": "Its length, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 200 } },
+                "width": { "description": "Its width, in m.", "type": "number", "minimum": 1, "maximum": 40 }
+              }
+            }
+          }
+        },
+        "plan": {
+          "title": "TownPlan",
+          "description": "How a town is laid out.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["quay", "apart", "wander", "street", "contours", "lane", "steep", "turn", "reuse", "lanes", "setBack", "angle", "gaps", "gardens", "plot", "reach", "square"],
+          "properties": {
+            "quay": { "description": "The quay street's width, in m.", "type": "number", "minimum": 1, "maximum": 40 },
+            "apart": { "description": "Contour streets this much further from the shore than the last, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 4, "maximum": 200 } },
+            "wander": { "description": "Wandering by this, in m.", "type": "number", "minimum": 0, "maximum": 50 },
+            "street": { "description": "A street's width, in m.", "type": "number", "minimum": 1, "maximum": 20 },
+            "contours": { "title": "PlanContours", "description": "The most contour streets.", "type": "object", "additionalProperties": false, "required": ["main", "port"], "properties": { "main": { "description": "Port Royal's.", "type": "integer", "minimum": 0, "maximum": 20 }, "port": { "description": "A port's.", "type": "integer", "minimum": 0, "maximum": 20 } } },
+            "lane": { "description": "A lane's width, in m.", "type": "number", "minimum": 1, "maximum": 20 },
+            "steep": { "description": "A lane's cost rises steeply over a slope of 1 in this.", "type": "number", "minimum": 1, "maximum": 100 },
+            "turn": { "description": "A turn's cost, in hexagons' steps.", "type": "number", "minimum": 0, "maximum": 100 },
+            "reuse": { "description": "A street already made costs this share of its cost.", "type": "number", "minimum": 0, "maximum": 1 },
+            "lanes": { "description": "Lanes this far apart along the quay, in m.", "type": "number", "minimum": 4, "maximum": 500 },
+            "setBack": { "description": "Buildings set back from their way, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 50 } },
+            "angle": { "description": "Turned up to this off their way, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+            "gaps": { "description": "Gaps between buildings, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 50 } },
+            "gardens": { "description": "One place in this many a garden.", "type": "integer", "minimum": 1, "maximum": 1000 },
+            "plot": { "description": "No building on a slope over 1 in this.", "type": "number", "minimum": 1, "maximum": 100 },
+            "reach": { "description": "How far inland a town reaches: Port Royal's, a port's, a village's, in m.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": 10, "maximum": 1000 } },
+            "square": { "title": "PlanSquare", "description": "The square's size, in m.", "type": "object", "additionalProperties": false, "required": ["along", "back"], "properties": { "along": { "description": "Along the quay.", "type": "number", "minimum": 4, "maximum": 200 }, "back": { "description": "Back from it.", "type": "number", "minimum": 4, "maximum": 200 } } }
+          }
+        },
+        "size": {
+          "title": "TownSize",
+          "description": "How many buildings a town has.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["main", "port", "village"],
+          "properties": {
+            "main": { "description": "Port Royal's.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10000 } },
+            "port": { "description": "A port's.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10000 } },
+            "village": { "description": "A village's.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10000 } }
+          }
+        },
+        "buildings": { "description": "The kinds of building and prop.", "type": "array", "items": { "$ref": "#/$defs/BuildingKind" } },
+        "kits": { "description": "Each biome's kit.", "type": "array", "items": { "$ref": "#/$defs/TownKit" } },
+        "flags": {
+          "title": "TownFlags",
+          "description": "Flags ashore.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["length", "at", "limp", "extended", "strouhal", "mainPort", "colours"],
+          "properties": {
+            "length": { "description": "A flag's length, in m.", "type": "number", "minimum": 0.2, "maximum": 10 },
+            "at": { "description": "It streams with the wind at this height, in m.", "type": "number", "minimum": 1, "maximum": 100 },
+            "limp": { "description": "It hangs limp under this, in knots.", "type": "number", "minimum": 0, "maximum": 50 },
+            "extended": { "description": "It is extended from this, in knots.", "type": "number", "minimum": 0, "maximum": 50 },
+            "strouhal": { "description": "It flaps at this Strouhal number, fL/U.", "type": "number", "minimum": 0.01, "maximum": 2 },
+            "mainPort": { "description": "Port Royal's colours.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/Colour" } },
+            "colours": { "description": "The ports' pairs of colours.", "type": "array", "minItems": 1, "maxItems": 32, "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/Colour" } } }
+          }
+        },
+        "smoke": {
+          "title": "TownSmoke",
+          "description": "Chimney smoke.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["day", "night", "rise", "buoyancy", "life", "puffs", "size", "reach"],
+          "properties": {
+            "day": { "description": "The share of chimneys smoking by day.", "type": "number", "minimum": 0, "maximum": 1 },
+            "night": { "description": "And by night.", "type": "number", "minimum": 0, "maximum": 1 },
+            "rise": { "description": "Puffs rise from the pot at this, in m/s.", "type": "number", "minimum": 0, "maximum": 10 },
+            "buoyancy": { "description": "A puff's rise at 1 m downwind in a wind of 1 m/s, in m (Briggs's 1.6 F^(1/3)).", "type": "number", "minimum": 0, "maximum": 10 },
+            "life": { "description": "A puff fades over this, in s.", "type": "number", "minimum": 0.5, "maximum": 60 },
+            "puffs": { "description": "Puffs a chimney.", "type": "integer", "minimum": 1, "maximum": 32 },
+            "size": { "description": "A puff's width at the pot and at its end, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.05, "maximum": 20 } },
+            "reach": { "description": "Drawn within this of the camera, in m.", "type": "number", "minimum": 10, "maximum": 5000 }
+          }
+        },
+        "inPort": {
+          "title": "TownInPort",
+          "description": "In port: the water within this of a town's waterfront.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["port", "village", "step"],
+          "properties": {
+            "port": { "description": "A port's quay and piers, in m.", "type": "number", "minimum": 0, "maximum": 1000 },
+            "village": { "description": "A village's jetty, in m.", "type": "number", "minimum": 0, "maximum": 1000 },
+            "step": { "description": "The harbour is kept as discs about this far apart, in m.", "type": "number", "minimum": 4, "maximum": 500 }
+          }
+        },
+        "lit": {
+          "title": "TownLit",
+          "description": "Lit at night.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["windows", "near", "props"],
+          "properties": {
+            "windows": { "description": "The share of a house's windows lit.", "type": "number", "minimum": 0, "maximum": 1 },
+            "near": { "description": "Houses are drawn in full within this of the camera, in m.", "type": "number", "minimum": 10, "maximum": 5000 },
+            "props": { "description": "Props are drawn within this of the camera, in m.", "type": "number", "minimum": 10, "maximum": 5000 }
+          }
         }
       }
     }
