@@ -344,6 +344,48 @@ function placeWords(p: Place): string {
   return words.join(', ');
 }
 
+/**
+ * An account's flag: what was clicked holds until the world's reading
+ * agrees, so a reading still on its way does not set the box back.
+ */
+function FlagBox({
+  on,
+  disabled,
+  flag,
+}: {
+  on: boolean;
+  disabled: boolean;
+  flag: (on: boolean) => Promise<boolean>;
+}) {
+  const [asked, setAsked] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (asked === on) {
+      setAsked(null);
+    }
+  }, [asked, on]);
+  return (
+    <label>
+      <input
+        type="checkbox"
+        name="flag"
+        checked={asked ?? on}
+        disabled={disabled}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          const want = e.currentTarget.checked;
+          setAsked(want);
+          void flag(want).then((ok) => {
+            if (!ok) {
+              setAsked(null);
+            }
+          });
+        }}
+      />{' '}
+      owner
+    </label>
+  );
+}
+
 /** A boat's row, and for the owner's its controls. */
 function BoatRow({
   b,
@@ -356,7 +398,7 @@ function BoatRow({
   b: Boat;
   chosen: boolean;
   choose: () => void;
-  act: (path: 'flag' | 'place' | 'unseen', body: unknown, what: string) => void;
+  act: (path: 'flag' | 'place' | 'unseen', body: unknown, what: string) => Promise<boolean>;
   picked: [number, number] | null;
   islands: Island[];
 }) {
@@ -381,23 +423,11 @@ function BoatRow({
         <td>{b.fromLip.toFixed(0)} m</td>
         <td>{marks.join(', ')}</td>
         <td>
-          <label>
-            <input
-              type="checkbox"
-              name="flag"
-              checked={b.tools}
-              disabled={!b.human}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) =>
-                act(
-                  'flag',
-                  { account: b.account, on: e.currentTarget.checked },
-                  `${b.sailor}'s flag`,
-                )
-              }
-            />{' '}
-            owner
-          </label>
+          <FlagBox
+            on={b.tools}
+            disabled={!b.human}
+            flag={(on) => act('flag', { account: b.account, on }, `${b.sailor}'s flag`)}
+          />
         </td>
       </tr>
       {chosen && b.tools ? (
@@ -578,11 +608,21 @@ function App() {
       .catch((e: unknown) => setError(String(e)));
   };
 
-  const act = (path: 'flag' | 'place' | 'unseen' | 'world', body: unknown, what: string): void => {
+  /** Asks for a change and says how it went; true when it was done. */
+  const act = (
+    path: 'flag' | 'place' | 'unseen' | 'world',
+    body: unknown,
+    what: string,
+  ): Promise<boolean> =>
     control(path, body)
-      .then((a) => setMessage(a.ok ? `Done: ${what}.` : `Refused (${a.status}): ${a.text}`))
-      .catch((e: unknown) => setMessage(`Failed: ${String(e)}`));
-  };
+      .then((a) => {
+        setMessage(a.ok ? `Done: ${what}.` : `Refused (${a.status}): ${a.text}`);
+        return a.ok;
+      })
+      .catch((e: unknown) => {
+        setMessage(`Failed: ${String(e)}`);
+        return false;
+      });
 
   const im = images.current;
   const data: MapData = {
@@ -614,7 +654,6 @@ function App() {
   // The lists of places and lights, made again only when what they show
   // changes, not at each second's reading of the world.
   const chosenBoat = chosen?.boat ?? null;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: made from places, the light picked and the boat chosen alone
   const lists = useMemo(
     () => (
       <>
@@ -774,21 +813,11 @@ function App() {
                     <td>{seconds(q.waited)}</td>
                     <td>{q.connected ? '' : 'away'}</td>
                     <td>
-                      <label>
-                        <input
-                          type="checkbox"
-                          name="flag"
-                          checked={q.tools}
-                          onChange={(e) =>
-                            act(
-                              'flag',
-                              { account: q.account, on: e.currentTarget.checked },
-                              `${q.sailor}'s flag`,
-                            )
-                          }
-                        />{' '}
-                        owner
-                      </label>
+                      <FlagBox
+                        on={q.tools}
+                        disabled={false}
+                        flag={(on) => act('flag', { account: q.account, on }, `${q.sailor}'s flag`)}
+                      />
                     </td>
                   </tr>
                 ))}
