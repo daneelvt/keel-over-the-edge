@@ -1032,7 +1032,8 @@ func (pw *placesWork) bars() {
 	}
 }
 
-// wreckHost is what a wreck may lie on or near: a reef, a bar or a rock.
+// wreckHost is what a wreck may lie on or near: a reef, a bar, a rock, or
+// in the mist band an island's shore.
 type wreckHost struct {
 	x, y   float64
 	island *made
@@ -1059,6 +1060,25 @@ func (pw *placesWork) wrecks() {
 	for _, m := range pw.islands {
 		if m.kind == kindRock {
 			hosts = append(hosts, wreckHost{m.hx, m.hy, m, -1})
+		}
+	}
+	// In the mist band, where ships are lost, any island's shore will do:
+	// its land furthest out within the band.
+	limit := c.disk - c.lights.Edge.Inside
+	for _, m := range pw.islands {
+		g := &m.grid
+		bx, by, far := 0.0, 0.0, 0.0
+		for i := range g.w * g.h {
+			if g.elev[i] <= 0 {
+				continue
+			}
+			x, y := g.centre(i)
+			if d := hypot(x, y); d >= c.mist && d <= limit && d > far {
+				bx, by, far = x, y, d
+			}
+		}
+		if far > 0 {
+			hosts = append(hosts, wreckHost{bx, by, m, -1})
 		}
 	}
 	_, most := c.kindCount(catalog.SiteWreck)
