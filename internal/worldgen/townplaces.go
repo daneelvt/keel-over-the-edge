@@ -57,10 +57,10 @@ func (tw *townWork) aroundSquare(k *buildingKind, sq [2]float64) bool {
 	f, d := tw.size(k)
 	var spots [][2]float64
 	for _, t := range []float64{0, 0.25, -0.25, 0.45, -0.45} {
-		spots = append(spots, [2]float64{float64(t * s.Along), s.Back/2 + 1})
+		spots = append(spots, [2]float64{float64(t * s.Along), float64(s.Back/2) + 1})
 	}
 	for _, t := range []float64{0, 0.3, -0.3} {
-		spots = append(spots, [2]float64{s.Along/2 + 1, float64(t * s.Back)}, [2]float64{-(s.Along/2 + 1), float64(t * s.Back)})
+		spots = append(spots, [2]float64{float64(s.Along/2) + 1, float64(t * s.Back)}, [2]float64{-(float64(s.Along/2) + 1), float64(t * s.Back)})
 	}
 	for range 2 {
 		for _, at := range spots {
@@ -70,7 +70,7 @@ func (tw *townWork) aroundSquare(k *buildingKind, sq [2]float64) bool {
 			h := physics.Atan2(sq[0]-px, sq[1]-py)
 			sh, ch := sincos(h)
 			for _, gap := range []float64{1, 3, 5} {
-				cx, cy := px-float64((d/2+gap)*sh), py-float64((d/2+gap)*ch)
+				cx, cy := px-float64((float64(d/2)+gap)*sh), py-float64((float64(d/2)+gap)*ch)
 				if tw.placeAt(k, cx, cy, h, f, d) {
 					return true
 				}
@@ -144,7 +144,7 @@ func (tw *townWork) onQuay(quay *way) {
 		nb := physics.Atan2(s.x-tw.ox, s.y-tw.oy)
 		sn, cn := sincos(nb)
 		back := tw.s.in(0.5, 1.5)
-		fx, fy := s.x+float64((quay.width/2+back)*sn), s.y+float64((quay.width/2+back)*cn)
+		fx, fy := s.x+float64((float64(quay.width/2)+back)*sn), s.y+float64((float64(quay.width/2)+back)*cn)
 		h := nb + math.Pi
 		sh, ch := sincos(h)
 		return tw.placeAt(k, fx-float64(d/2*sh), fy-float64(d/2*ch), h, f, d)
@@ -207,7 +207,7 @@ func (tw *townWork) squareOnQuay(quay *way, sq [2]float64) {
 			f, d := tw.size(k)
 			nb := physics.Atan2(s.x-tw.ox, s.y-tw.oy)
 			sn, cn := sincos(nb)
-			fx, fy := s.x+float64((quay.width/2+1)*sn), s.y+float64((quay.width/2+1)*cn)
+			fx, fy := s.x+float64((float64(quay.width/2)+1)*sn), s.y+float64((float64(quay.width/2)+1)*cn)
 			sh, ch := sincos(nb + math.Pi)
 			tw.placeAt(k, fx-float64(d/2*sh), fy-float64(d/2*ch), nb+math.Pi, f, d)
 		}
@@ -428,7 +428,7 @@ func (c *config) mainTown(s stream, g *physics.Ground, m *made, lights []*lightW
 	})
 	if hasSquare {
 		sb, cb := sincos(physics.Atan2(sq[0]-tw.ox, sq[1]-tw.oy))
-		starts = append(starts, [2]float64{sq[0] + float64((p.Square.Back/2+2)*sb), sq[1] + float64((p.Square.Back/2+2)*cb)})
+		starts = append(starts, [2]float64{sq[0] + float64((float64(p.Square.Back/2)+2)*sb), sq[1] + float64((float64(p.Square.Back/2)+2)*cb)})
 	}
 	tw.lanes(starts, top)
 	tw.onQuay(&tw.ways[0])
@@ -620,7 +620,7 @@ func (tw *townWork) mainOutside(h *harbour) {
 					x, y := h.x+float64(rr*sa), h.y+float64(rr*ca)
 					f, d := tw.size(k)
 					// Its lower end in the water, facing it.
-					cx, cy := x-float64((d/2-8)*sa), y-float64((d/2-8)*ca)
+					cx, cy := x-float64((float64(d/2)-8)*sa), y-float64((float64(d/2)-8)*ca)
 					cx, cy, a, f, d = quantise(cx, cy, a, f, d)
 					plot := tw.footprint(cx, cy, a, f, d, 0.5)
 					var dry []int32
@@ -971,7 +971,7 @@ func (c *config) villageTown(s stream, g *physics.Ground, m *made, si *site, lig
 			off := float64(side * float64(10+float64(6*float64(j/2))))
 			x, y := rx+float64(off*ch), ry-float64(off*sh)
 			f, d := tw.size(k)
-			cx, cy := x+float64((d/2-4)*sh), y+float64((d/2-4)*ch)
+			cx, cy := x+float64((float64(d/2)-4)*sh), y+float64((float64(d/2)-4)*ch)
 			cx, cy, hd, f, d := quantise(cx, cy, si.heading, f, d)
 			plot := tw.footprint(cx, cy, hd, f, d, 0.5)
 			dry, wet := 0, 0

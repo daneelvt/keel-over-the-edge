@@ -158,7 +158,7 @@ func (tw *townWork) contours(most int, from float64) []int32 {
 				continue
 			}
 			wander := float64(p.Wander * (float64(0.6*physics.Sin(float64(f1*off)+p1)) + float64(0.4*physics.Sin(float64(f2*off)+p2))))
-			if math.Abs(tw.shore[i]-(d+wander)) <= p.Street/2+0.6 {
+			if math.Abs(tw.shore[i]-(d+wander)) <= float64(p.Street/2)+0.6 {
 				hexes = append(hexes, i)
 			}
 		}
@@ -369,7 +369,7 @@ func (tw *townWork) fillWay(w *way, pick func(x, y float64) *buildingKind) {
 			}
 			if tw.s.r.IntN(max(p.Gardens, 1)) == 0 {
 				// A garden: a plot left to grow.
-				gx, gy := x+float64((w.width/2+3)*sn), y+float64((w.width/2+3)*cn)
+				gx, gy := x+float64((float64(w.width/2)+3)*sn), y+float64((float64(w.width/2)+3)*cn)
 				for _, i := range tw.footprint(gx, gy, nb, 6, 5, 0) {
 					if tw.use[i] == useFree && tw.g.elev[i] > 0 {
 						tw.use[i], tw.g.surf[i] = useGarden, c.townSurface.yard
@@ -389,8 +389,8 @@ func (tw *townWork) fillWay(w *way, pick func(x, y float64) *buildingKind) {
 			// Its front's middle, set back from the way's edge, facing
 			// the way.
 			sb, cb := sincos(b)
-			fx := x + float64((w.width/2+back)*sn) + float64(f/2*sb)
-			fy := y + float64((w.width/2+back)*cn) + float64(f/2*cb)
+			fx := x + float64((float64(w.width/2)+back)*sn) + float64(f/2*sb)
+			fy := y + float64((float64(w.width/2)+back)*cn) + float64(f/2*cb)
 			sh, ch := sincos(nb + math.Pi)
 			cx, cy := fx-float64(d/2*sh), fy-float64(d/2*ch)
 			// Facing the way: the nearest of it before its front.
@@ -717,7 +717,7 @@ func (tw *townWork) outskirtsWithin(share float64, want int, reach float64) {
 		// back.
 		b := &tw.buildings[len(tw.buildings)-1]
 		sh, ch := sincos(b.Heading)
-		door := tw.at(b.X+float64((b.Depth/2+2.5)*sh), b.Y+float64((b.Depth/2+2.5)*ch))
+		door := tw.at(b.X+float64((float64(b.Depth/2)+2.5)*sh), b.Y+float64((float64(b.Depth/2)+2.5)*ch))
 		var route []int32
 		switch {
 		case door < 0 || !crossable(door):

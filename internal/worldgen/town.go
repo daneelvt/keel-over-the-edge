@@ -154,13 +154,13 @@ type townWork struct {
 	// steep, if not 0, is the steepest plot taken, as 1 in steep: a town
 	// short of its least terraces steeper ground.
 	steep float64
-	count     int // how many it has
+	count int // how many it has
 	// last is the last plot levelled, as it was before: its hexagons, and
 	// their elevations, surfaces and uses; so a building can be taken back.
-	last []plotWas
-	counts    []int
-	kit       uint8
-	flag      uint8
+	last   []plotWas
+	counts []int
+	kit    uint8
+	flag   uint8
 }
 
 // way is a street, a lane or the quay: its points in order, its width,
@@ -279,7 +279,7 @@ func (c *config) terrace(e float64) int16 {
 // one it is in, if it is smaller than a hexagon.
 func underFootprint(x, y, h, frontage, depth, margin float64) [][2]int32 {
 	sh, ch := sincos(h)
-	hf, hd := frontage/2+margin, depth/2+margin
+	hf, hd := float64(frontage/2)+margin, float64(depth/2)+margin
 	reach := hypot(hf, hd) + physics.HexAcross
 	var out [][2]int32
 	q0, r0 := physics.HexAt(x, y)
@@ -428,9 +428,12 @@ func (tw *townWork) prop(k *buildingKind, x, y, h float64) bool {
 // wrapAngle is a in [0, 2π).
 func wrapAngle(a float64) float64 {
 	const turn = 2 * math.Pi
-	a = math.Mod(a, turn)
+	a -= float64(math.Floor(a/turn) * turn)
 	if a < 0 {
 		a += turn
+	}
+	if a >= turn {
+		a -= turn
 	}
 	return a
 }

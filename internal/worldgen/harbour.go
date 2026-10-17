@@ -219,7 +219,7 @@ func (c *config) drawHarbour(seed uint64, m *made, land []bool) *harbour {
 			// The mole, along the narrows' inner side, from its inner
 			// corner into the basin, along the lattice's axis nearest the
 			// way in.
-			side := cand.inner/2 + physics.HexAcross
+			side := float64(cand.inner/2) + physics.HexAcross
 			if moleSide {
 				side = -side
 			}

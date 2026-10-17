@@ -6563,6 +6563,130 @@
    ]
   },
   {
+   "name": "ground-pier",
+   "digest": "baafcc0f141666672f1f8bc36a52b8d633225a450b1a029058548c2804373a43",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x3fe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff1d0825f1b92a2",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0xbf5156da2caae000",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0xbfa6a86423eab8a0",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0xbfc80695b21cf6a1",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0xbf70d52d14e7f851",
+      "sway": "0x3fd86602ff86bffe",
+      "x": "0x404d933a0e9552b3",
+      "y": "0xc0078ebfb5d3ad7e",
+      "yawRate": "0xbfce40bf3fb5df84"
+     }
+    },
+    {
+     "step": 900,
+     "state": {
+      "boom": "0xbfe1fdac32787df5",
+      "boomRate": "0xbfb7b671abdccab5",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbfe3d0bdba91e431",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0xbf81c387b46c158c",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0x3f866e51b2553ac3",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0x3f9382098f47f90b",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0xbfe4cf5b466d392f",
+      "sway": "0xbfbdd6a2f8e007e8",
+      "x": "0x404db533d38e8728",
+      "y": "0xc020d4f5a917712d",
+      "yawRate": "0xbfac7647e7ab85ab"
+     }
+    }
+   ]
+  },
+  {
+   "name": "ground-quay",
+   "digest": "c5926d257aac1215427c92f015f37a913912bc24c63dd3e37b73483a250b90ac",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x3fe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff0530a21174bdf",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0xbf983b54dd2bb39d",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0xbfac729e284c5f0d",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0xbfbfa65620897bdf",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0xbfa0404ede8a1c4e",
+      "sway": "0x3fd680c8dcab750e",
+      "x": "0x405d870b04ca56ef",
+      "y": "0x4047757fd3cd5e0a",
+      "yawRate": "0xbfca019a10786173"
+     }
+    },
+    {
+     "step": 900,
+     "state": {
+      "boom": "0xbfe2ea86d755c0a4",
+      "boomRate": "0xbfaec21adb609aca",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbfe505301727c0df",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0x3f6905d8658adb2a",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0x3f976ac66196ae1f",
+      "rudder": "0x3fe657184ae74487",
+      "sailor": "0xbf82a6dbe07803d9",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0xbfe38b798b33bd7d",
+      "sway": "0xbfc65a391260f634",
+      "x": "0x405d9a0a19c9e764",
+      "y": "0x4044aaa49ac30e1f",
+      "yawRate": "0xbfb05f9ad3fc3980"
+     }
+    }
+   ]
+  },
+  {
    "name": "ground-pushoff",
    "digest": "e7808433ab0168668256b91ed5d0ba88f6d485cb8fa8c4e43118d17d8cb10815",
    "checkpoints": [

@@ -106,8 +106,7 @@ func appendTown(out []byte, t *ChunkTown) []byte {
 		out = append(out, uint8(round(float64(b.Heading/turn)*256)&255))
 		out = binary.LittleEndian.AppendUint16(out, uint16(b.Level))
 		out = append(out, b.Storeys&3|b.Seed<<2, b.Wall&15|b.Roof<<4, b.Shutter&15|b.Flag<<4,
-			uint8(clamp(float64(round(float64(b.Frontage*5))), 0, 255)), uint8(clamp(float64(round(float64(b.Depth*5))), 0, 255)),
-			uint8(clamp(float64(round(float64((b.Top-float64(float64(b.Level)*0.1))*4))), 0, 255)), uint8(b.Town))
+			byteOf(float64(b.Frontage*5)), byteOf(float64(b.Depth*5)), byteOf(float64((b.Top-float64(float64(b.Level)*0.1))*4)), uint8(b.Town))
 	}
 	out = binary.LittleEndian.AppendUint16(out, uint16(len(t.Harbour)))
 	for _, d := range t.Harbour {
@@ -144,7 +143,7 @@ func readTown(body []byte) (*ChunkTown, []byte, error) {
 			Frontage: float64(p[16]) / 5, Depth: float64(p[17]) / 5,
 			Town: int32(p[19]),
 		}
-		b.Top = float64(float64(b.Level)*0.1) + float64(p[18])/4
+		b.Top = float64(float64(b.Level)*0.1) + float64(float64(p[18])/4)
 		t.Buildings = append(t.Buildings, b)
 	}
 	if len(body) < 2 {
@@ -486,3 +485,6 @@ func (b *Bundle) Terrain(ground *physics.GroundPrepared) *sim.Terrain {
 func (b *Bundle) encodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.ShelterChunk, t *ChunkTown) ([]byte, error) {
 	return encodeChunk(n, world, g, s, t, uint16(b.Format), uint32(b.Generator))
 }
+
+// byteOf is v rounded to the nearest whole number, within a byte's range.
+func byteOf(v float64) uint8 { return uint8(min(max(round(v), 0), 255)) }

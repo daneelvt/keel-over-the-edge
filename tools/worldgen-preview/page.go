@@ -156,6 +156,20 @@ td, th { border-bottom: 1px solid #ddd; padding: 2px 8px; text-align: left; }
 		fmt.Fprintf(&p, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.0f, %.0f</td></tr>\n",
 			pl.Number, html.EscapeString(pl.Name), pl.Kind, html.EscapeString(island), pl.Zone, html.EscapeString(what), pl.X, pl.Y)
 	}
+	p.WriteString("</table>\n<h2>Towns</h2>\n<p>Each town's own sheet: <code>-town N</code>.</p>\n<table>\n<tr><th>#</th><th>Name</th><th>Kind</th><th>Buildings</th><th>Streets, hexagons</th><th>Quay, m</th><th>Piers, m</th><th>Harbour, discs</th><th>At, m east, north</th></tr>\n")
+	for _, t := range b.Towns {
+		var piers []string
+		for _, pr := range t.Piers {
+			piers = append(piers, fmt.Sprintf("%.0f", pr.Length))
+		}
+		fmt.Fprintf(&p, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td><td>%d</td><td>%s</td><td>%d</td><td>%.0f, %.0f</td></tr>\n",
+			t.Number, html.EscapeString(t.Name), t.Kind, t.Buildings, t.Streets, len(t.Quay)*physics.HexAcross, strings.Join(piers, ", "),
+			len(t.Harbour), t.X, t.Y)
+	}
+	if b.Start.Moorings > 0 {
+		fmt.Fprintf(&p, "<tr><td colspan=\"9\">%d moorings in Port Royal's basin, then %d places in the roads.</td></tr>\n",
+			b.Start.Moorings, len(b.Start.Places)-b.Start.Moorings)
+	}
 	p.WriteString("</table>\n<h2>Lights</h2>\n<table>\n<tr><th>#</th><th>Role</th><th>Character</th><th>Focal, m</th><th>Range, NM</th><th>At, m east, north</th></tr>\n")
 	for _, l := range b.Lights {
 		fmt.Fprintf(&p, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%.1f</td><td>%.1f</td><td>%.0f, %.0f</td></tr>\n",

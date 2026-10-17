@@ -57,9 +57,12 @@ func kindsOf(cat []catalog.BuildingKind) []buildingKind {
 		if k.Fill != nil {
 			o.fill = *k.Fill
 		}
-		for town, c := range map[string][]int{townMain: k.Main, townPort: k.Port, townVillage: k.Village} {
-			if len(c) == 2 {
-				o.counts[town] = ipair(c)
+		for _, tc := range []struct {
+			town string
+			c    []int
+		}{{townMain, k.Main}, {townPort, k.Port}, {townVillage, k.Village}} {
+			if len(tc.c) == 2 {
+				o.counts[tc.town] = ipair(tc.c)
 			}
 		}
 		if k.Chimney != nil {
@@ -94,4 +97,10 @@ func (k *buildingKind) height(storeys int) float64 {
 		return k.top
 	}
 	return float64(float64(storeys)*storeyHeight) + roofHeight
+}
+
+// isTownSurface reports whether a surface is one of a town's.
+func (c *config) isTownSurface(s uint8) bool {
+	t := &c.townSurface
+	return s == t.street || s == t.quay || s == t.deck || s == t.yard
 }

@@ -161,8 +161,10 @@ func (c *config) unsound(w *world) []string {
 			if over && e <= 0 {
 				continue
 			}
-			n, i, _ := physics.ChunkOf(cc, jj)
-			s := g.Chunks[n].Surface[i]
+			var s uint8
+			if n, i, ok := physics.ChunkOf(cc, jj); ok && g.Chunks[n] != nil {
+				s = g.Chunks[n].Surface[i]
+			}
 			switch {
 			case e <= 0:
 				bad = append(bad, fmt.Sprintf("building %d in the water", bi))
@@ -179,7 +181,7 @@ func (c *config) unsound(w *world) []string {
 		if k.stands == catalog.StandsStreet || k.stands == catalog.StandsQuay {
 			sh, ch := sincos(b.Heading)
 			found := false
-			for t := b.Depth / 2; t <= b.Depth/2+c.towns.Plan.SetBack[1]+c.towns.Plan.Quay+physics.HexAcross && !found; t += 1 {
+			for t := b.Depth / 2; t <= float64(b.Depth/2)+c.towns.Plan.SetBack[1]+c.towns.Plan.Quay+physics.HexAcross && !found; t += 1 {
 				for f := -b.Frontage / 2; f <= b.Frontage/2; f += 1 {
 					x := b.X + float64(t*sh) + float64(f*ch)
 					y := b.Y + float64(t*ch) - float64(f*sh)

@@ -17,10 +17,11 @@ import (
 
 // The chunks as Go writes them, for the client's mesh worker to read
 // (client/src/workers/mesh/chunk.test.ts): testdata/chunks.json holds a
-// made chunk and seed 1's chunk 205, Port Royal's, as payloads of one
-// world, and the SHA-256 of the elevations (int16s, little-endian), the
-// surfaces and the shelter's whole table each should unpack to. After a
-// deliberate change, rewrite it with
+// made chunk, the same chunk as format 1 wrote it, and seed 1's chunk 205,
+// Port Royal's with its town, as payloads of one world, and the SHA-256 of
+// the elevations (int16s, little-endian), the surfaces and the shelter's
+// whole table each should unpack to, with the town's counts and its first
+// building. After a deliberate change, rewrite it with
 //
 //	go test ./internal/worldgen -run ChunkFile -update
 
@@ -43,6 +44,28 @@ type chunkFileChunk struct {
 	Elevation string `json:"elevation"`
 	Surface   string `json:"surface"`
 	Shelter   string `json:"shelter"`
+	// Format is the payload's format; Buildings and Discs what it holds of
+	// the towns, and First its first building.
+	Format    int           `json:"format"`
+	Buildings int           `json:"buildings"`
+	Discs     int           `json:"discs"`
+	First     *fileBuilding `json:"first,omitempty"`
+}
+
+// fileBuilding is a building as the page should read it.
+type fileBuilding struct {
+	Kind     uint8   `json:"kind"`
+	Kit      uint8   `json:"kit"`
+	East     float64 `json:"east"`
+	North    float64 `json:"north"`
+	Heading  float64 `json:"heading"`
+	Level    float64 `json:"level"`
+	Top      float64 `json:"top"`
+	Storeys  uint8   `json:"storeys"`
+	Seed     uint8   `json:"seed"`
+	Frontage float64 `json:"frontage"`
+	Depth    float64 `json:"depth"`
+	Town     int32   `json:"town"`
 }
 
 // madeChunk is a chunk of a hill and its shallows, every surface, and a
@@ -72,8 +95,8 @@ func digestOf(b []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func fileChunk(name string, n int32, g *physics.GroundChunk, s *physics.ShelterChunk) (chunkFileChunk, error) {
-	payload, err := EncodeChunk(n, chunkFileWorld, g, s)
+func fileChunk(name string, n int32, g *physics.GroundChunk, s *physics.ShelterChunk, t *ChunkTown, format uint16, generator uint32) (chunkFileChunk, error) {
+	payload, err := encodeChunk(n, chunkFileWorld, g, s, t, format, generator)
 	if err != nil {
 		return chunkFileChunk{}, err
 	}
@@ -82,9 +105,22 @@ func fileChunk(name string, n int32, g *physics.GroundChunk, s *physics.ShelterC
 		e = binary.LittleEndian.AppendUint16(e, uint16(v))
 	}
 	c := chunkFileChunk{Name: name, Number: n, Payload: base64.StdEncoding.EncodeToString(payload),
-		Elevation: digestOf(e), Surface: digestOf(g.Surface[:])}
+		Elevation: digestOf(e), Surface: digestOf(g.Surface[:]), Format: int(format)}
 	if s != nil {
 		c.Shelter = digestOf(s.Values[:])
+	}
+	if t != nil && format >= 2 {
+		// As the page reads it back.
+		_, _, read, err := DecodeChunkOf(payload, n, chunkFileWorld, int(generator))
+		if err != nil {
+			return chunkFileChunk{}, err
+		}
+		c.Buildings, c.Discs = len(read.Buildings), len(read.Harbour)
+		if len(read.Buildings) > 0 {
+			b := read.Buildings[0]
+			c.First = &fileBuilding{Kind: b.Kind, Kit: b.Kit, East: b.X, North: b.Y, Heading: b.Heading,
+				Level: float64(b.Level) / 10, Top: b.Top, Storeys: b.Storeys, Seed: b.Seed, Frontage: b.Frontage, Depth: b.Depth, Town: b.Town}
+		}
 	}
 	return c, nil
 }
@@ -106,19 +142,24 @@ func TestChunkFile(t *testing.T) {
 		World:   "0199c2a4-5f7e-7c3a-9d0e-123456789abc",
 	}
 	n, g, s := madeChunk()
-	made, err := fileChunk("made", n, g, s)
+	made, err := fileChunk("made", n, g, s, nil, Format, Version)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got.Chunks = append(got.Chunks, made)
+	old, err := fileChunk("made, format 1", n, g, s, nil, 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Chunks = append(got.Chunks, made, old)
 	if testing.Short() && !*update {
-		if len(want.Chunks) == 0 || want.Chunks[0] != made || want.Format != Format {
+		if len(want.Chunks) < 2 || want.Chunks[0].Payload != made.Payload ||
+			want.Chunks[1].Payload != old.Payload || want.Format != Format {
 			t.Fatal("the made chunk differs from chunks.json: rewrite it with -update")
 		}
 		return
 	}
 	_, w := wholeWorld(t)
-	port, err := fileChunk("seed 1, Port Royal's", 205, w.Ground.Chunks[205], w.Shelter.Chunks[205])
+	port, err := fileChunk("seed 1, Port Royal's", 205, w.Ground.Chunks[205], w.Shelter.Chunks[205], w.ChunkTowns()[205], Format, Version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +178,8 @@ func TestChunkFile(t *testing.T) {
 		t.Fatal("chunks.json differs: rewrite it with -update")
 	}
 	for i := range got.Chunks {
-		if got.Chunks[i] != want.Chunks[i] {
+		g, w := got.Chunks[i], want.Chunks[i]
+		if g.Payload != w.Payload || g.Buildings != w.Buildings || g.Discs != w.Discs {
 			t.Errorf("%s differs from chunks.json: rewrite it with -update", got.Chunks[i].Name)
 		}
 	}

@@ -201,7 +201,7 @@ func (c *config) withMoorings(g *physics.Ground, port *made, roads Start) Start 
 			along := float64(float64(a) * float64(mo.Spacing*0.8660254037844386))
 			side := float64(float64(b) * mo.Spacing)
 			if a&1 == 1 {
-				side += mo.Spacing / 2
+				side += float64(mo.Spacing / 2)
 			}
 			x := h.x + float64(along*h.sin) + float64(side*h.cos)
 			y := h.y + float64(along*h.cos) - float64(side*h.sin)
