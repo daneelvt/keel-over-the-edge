@@ -191,7 +191,7 @@ test('a boat sailed onto the beach is aground, pushed off, and told so @long', a
   // 25 m off Port Royal's western beach in a metre and a half of water,
   // running onto it before a fresh westerly with the sheet eased.
   test.setTimeout(180_000);
-  await openWorld(page, -315, 22, Math.PI / 2);
+  await openWorld(page, -313, 22, Math.PI / 2);
   // A minute of sailing with time held, five frames to each second of it,
   // however slowly the machine draws; the screen's words written each frame.
   const a = await page.evaluate(async () => {

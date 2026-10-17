@@ -203,7 +203,15 @@ const UP = new Vector3(0, 1, 0);
 
 export class Towns {
   readonly root = new Group();
-  readonly stats: TownsStats = { buildings: 0, culled: 0, near: 0, far: 0, props: 0, draws: 0, triangles: 0 };
+  readonly stats: TownsStats = {
+    buildings: 0,
+    culled: 0,
+    near: 0,
+    far: 0,
+    props: 0,
+    draws: 0,
+    triangles: 0,
+  };
   /** The lamps: 0 by day, 1 at night. */
   readonly night = uniform(0);
   /** The share of a house's windows lit at night. */
@@ -594,7 +602,11 @@ export class Towns {
     this.root.position.set(-f.origin.x, 0, f.origin.y);
     this.night.value = f.night;
     const moved = Math.hypot(f.cameraEast - this.#at.east, f.cameraNorth - this.#at.north);
-    if (this.#placed === this.#version && moved < 15 && Math.abs(f.cameraHeight - this.#atHeight) < 2) {
+    if (
+      this.#placed === this.#version &&
+      moved < 15 &&
+      Math.abs(f.cameraHeight - this.#atHeight) < 2
+    ) {
       return;
     }
     this.#placed = this.#version;

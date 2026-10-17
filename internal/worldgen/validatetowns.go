@@ -5,7 +5,6 @@ package worldgen
 import (
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -198,13 +197,4 @@ func (c *config) unsound(w *world) []string {
 	next:
 	}
 	return bad
-}
-
-// townSummary is the towns' counts for a rule's measure.
-func townSummary(towns []Town) string {
-	var parts []string
-	for _, t := range towns {
-		parts = append(parts, fmt.Sprintf("%s %d", t.Name, t.Buildings))
-	}
-	return strings.Join(parts, ", ")
 }
