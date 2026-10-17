@@ -16,7 +16,7 @@
 // the middle of the k-th sixteenth, weighted 2u (the midpoint rule after
 // t = u²). The points crowd toward the eye, where an upward ray's mist all
 // lies; over the rays the game draws, from the deck, the cameras and the
-// sky, the light let through is within 0.02 of a 20,000-step integral's
+// sky, the light let through is within 0.02 of a 4,000-step integral's
 // (mist.test.ts). It is worked out once a vertex, carried to the fragments
 // between, and only while the camera is near the edge: every material's
 // fog carries it, and a short loop costs a software renderer's compiler,

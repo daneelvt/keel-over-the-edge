@@ -1355,7 +1355,7 @@ Go client's run over the lip, which the page's tests replay.
   e^(−z/40 m); beyond the lip the lip's, and below the sea it does not
   thin. A colour keeps exp(−τ) of its contrast, τ the integral along the
   ray from the eye (Beer–Lambert), taken at sixteen points crowded toward
-  the eye (`mistAlong`; the light let through within 0.02 of a 20,000-step
+  the eye (`mistAlong`; the light let through within 0.02 of a 4,000-step
   integral's along the rays the game draws), once a vertex, in the scene's
   fog node, the sea's tiles and far sea, and the sky, whose sphere's rings
   crowd toward the horizon. It is worked out only while the camera is
