@@ -58,6 +58,44 @@ export interface ChunksHanded {
   paths: string[];
 }
 
+/**
+ * A place the server handed with the chunk it stands in: its number, its
+ * kind (the catalog's index), where it is (metres east and north) and the
+ * way it faces (radians clockwise from north); a lighthouse's ground and
+ * tower (metres) and daymark; a wreck's rig and age (the catalog's indices),
+ * whether she is sunk, and her heel (radians, to starboard). Never a name.
+ */
+export interface PlaceSeen {
+  number: number;
+  kind: number;
+  east: number;
+  north: number;
+  heading: number;
+  ground: number;
+  tower: number;
+  daymark: number;
+  rig: number;
+  age: number;
+  sunk: boolean;
+  heel: number;
+}
+
+/**
+ * A lighthouse's light, sent once the eye is within its range: its number,
+ * where it is (metres east and north), its height above the sea (metres),
+ * its character (the catalog's index), its phase (microseconds of world
+ * time) and its nominal range (metres). Never a name.
+ */
+export interface LightSeen {
+  number: number;
+  east: number;
+  north: number;
+  focal: number;
+  character: number;
+  phase: number;
+  range: number;
+}
+
 /** What the net worker's Hello carries besides the protocol version. */
 export interface HelloVersions {
   catalog: string;
@@ -136,6 +174,8 @@ export type FromWorker =
       circulation: number;
       /** The account carries the owner's flag: the free camera is its. */
       tools: boolean;
+      /** The main port's light, seen from everywhere; null in a world without land. */
+      light: LightSeen | null;
     }
   /** The account's owner's flag was set or cleared. */
   | { type: 'tools'; on: boolean }
@@ -153,6 +193,10 @@ export type FromWorker =
   | { type: 'bump'; bump: BumpTold }
   /** Chunks of the land the boat could see: their addresses to fetch. */
   | { type: 'chunks'; chunks: ChunksHanded }
+  /** The places in chunks just handed. */
+  | { type: 'places'; places: PlaceSeen[] }
+  /** Lights come into range, and lights to drop, by number. */
+  | { type: 'lights'; lights: LightSeen[]; drop: number[] }
   | { type: 'clock'; clock: ClockState }
   | ({ type: 'traffic' } & Traffic);
 

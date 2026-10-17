@@ -43,6 +43,7 @@ import {
 import type { Node } from 'three/webgpu';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
 import { catalog } from '../catalog';
+import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
@@ -1220,6 +1221,47 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * The land: the chunks handed and held, which are drawn this frame,
      * their highest land, the module's slots, and the worker's counts.
      */
+    /**
+     * The lighthouses and wrecks as the page has them: the lighthouses' and
+     * wrecks' places known, the lights in range, and how many towers, glows
+     * (glows, looms and beams), wrecks and sunk wrecks' shadows are drawn,
+     * with each glow drawn's mode and strength.
+     */
+    lights() {
+      const l = world.lighthouses;
+      const place = l.place.array as Float32Array;
+      const shows = l.shows.array as Float32Array;
+      const glows = [];
+      for (let i = 0; i < l.count; i++) {
+        glows.push({
+          x: place[i * 4] ?? 0,
+          y: place[i * 4 + 1] ?? 0,
+          z: place[i * 4 + 2] ?? 0,
+          mode: ['glow', 'loom', 'beam'][place[i * 4 + 3] ?? 0] ?? '',
+          strength: shows[i * 4 + 3] ?? 0,
+        });
+      }
+      return {
+        sites: [...l.sites.values()],
+        lights: [...l.lights.values()].map(
+          ({ number, east, north, focal, character, phase, range }) => ({
+            number,
+            east,
+            north,
+            focal,
+            character,
+            phase,
+            range,
+          }),
+        ),
+        towers: l.towers.count,
+        glows,
+        wrecks: [...world.wrecks.known.values()],
+        wreckVertices: world.wrecks.mesh.geometry.getAttribute('position')?.count ?? 0,
+        shadowVertices: world.wrecks.shadows.geometry.getAttribute('position')?.count ?? 0,
+        worldUs: Math.floor((world.ticks * 1e6) / STEPS_PER_SECOND),
+      };
+    },
     land() {
       const l = world.land;
       if (l === null) {
@@ -2303,6 +2345,20 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         y: ((1 - p.y) / 2) * canvas.clientHeight,
         bearing: a[i * 4 + 3] ?? 0,
       };
+    },
+
+    /** Where a point of the world (east, north, height above the sea, m) is on screen, CSS pixels, with the dome's drop. */
+    worldOnScreen(east: number, north: number, height: number): { x: number; y: number } | null {
+      const canvas = stage.gfx?.canvas;
+      if (canvas === undefined) {
+        return null;
+      }
+      const o = world.origin.world;
+      const p = new Vector3(east - o.x, height, -(north - o.y));
+      const fs = world.focusScene;
+      p.y -= domeDrop(Math.hypot(p.x - fs.x, p.z - fs.z));
+      p.project(stage.camera);
+      return { x: ((p.x + 1) / 2) * canvas.clientWidth, y: ((1 - p.y) / 2) * canvas.clientHeight };
     },
 
     /** Resolves after n frames of the frame loop. */

@@ -1420,6 +1420,160 @@ autopilot, sailed two minutes in that place's wind, current and sea; the
 least distance from which it gains ground, in each regime's spells and in
 a steady wind in flat water, and a capsize 150 m inside the lip recovered.
 
+## Places and lights
+
+Besides its islands a world has **places**, the catalog's kinds
+(`world.places.kinds`): ports, fishing villages, lighthouses, anchorages,
+coves, lagoons, reefs, sandbars and wrecks, each put where the land and
+the sea bed make it true and each named; and **lighthouses**, each with a
+light of its own character. They are made with the world, after its
+terrain and its islands' names (`internal/worldgen/hazards.go`,
+`places.go`, `lights.go`, `placenamer.go`), and saved in its bundle's
+records and the `place` and `light` tables (`00009_places.sql`).
+
+### Offshore hazards
+
+The terrain gains what the lights mark (`world.hazards`): **offshore reefs**,
+a platform awash with a fore reef falling outside it, and **sandbanks**, a
+low dome of sand with a few metres over it, each an ellipse with a
+roughened outline on a grid of its own laid over the sea bed, in deep water
+at least 300 m from land and 1 km from each other, two of each beyond
+3.6 NM. Each has a **rock** of a few hexagons, 2–3 m high, that its light
+stands on, as real hazard lights stand on the hazard; a fringing reef far
+enough out to be lit gets a rock on its crest, on the side toward the rim.
+
+### Sites
+
+Each kind has a **site rule** (its kind's `site`; code reads the rule, never
+the kind's id), from Smyth's *Sailor's Word-Book*:
+
+- **Port**: on a landmark island outside the mist band, the stretch of its
+  coast with the least mean fetch over the 16 directions where water 4 m
+  deep lies within 300 m of the shore, reached from the start in 2 m of
+  water. Five a world, chosen so that each brings a second light to the
+  most water no light but Port Royal's reaches yet (the edge ring and the
+  offshore hazards counted, the hardest water first), at least 1.2 NM
+  apart.
+- **Fishing village**: on a small or larger island without a port, on its
+  beach (the biome's beach surface, where it is not bare rock), with the
+  most shallows under 10 m off it, its fishing ground; at least 600 m from
+  each other and the ports.
+- **Anchorage**: on a 40 m grid, water 3–12 m deep near land on a sandy bed
+  (the nearest island's biome's bed), no water under 2 m within 60 m (room
+  to swing), sheltered: **snug** where the fetch is under 600 m in 6 of the
+  16 directions, **good** in 4 (an island off an anchorage covers at most
+  about a third of the horizon); the snug first, 500 m apart.
+- **Cove**: a bay found by closing an island's coast with a disc of 100 m,
+  narrower at its mouth than it runs inland, 40–200 m across, with 2 m of
+  water at its mouth.
+- **Lagoon**: the water behind each fringing reef 40 m wide or more.
+- **Reef**: each fringing reef whose crest runs 300 m or more, and each
+  offshore reef. **Sandbar**: each sandy island's bar, and each offshore
+  bank.
+- **Wreck**: a ship lost on a reef, a bar or a rock, stranded on it
+  (heeled) or sunk in 2–8 m of water near it; eight a world, two of them in
+  the mist band: her name, rig, cargo and how long she has lain.
+
+What a site **offers** names is kept in its record: its qualities (a cove's
+size, a reef's site, an anchorage's shelter, a point's height) and what it
+shows (its island's features, a beach, mangroves on a tropical shore, a bed
+of sand or rock, deep water, a wreck).
+
+### Lighthouses
+
+Port Royal's, a 60 m tower on its island's highest ground within 100 m of
+the coast; each port's, 30 m, on the point nearest it (coast with water
+over 55% of the ground within 40 m); **the edge ring**, eight 30 m towers
+each on the outermost land within 15° of its bearing (the first drawn per
+world), at least 300 m inside the lip; and the hazards', 15 m, on every
+offshore hazard's rock and on the rocks and fringing reefs beyond 3.6 NM,
+one light for hazards within 400 m of each other (`world.lights`).
+
+Each light has a **character** of its own from `world.lights.characters`:
+IALA's classes within the limits of Recommendation E-110, none the buoyage
+system keeps for its marks, no fixed light; Port Royal's is the same in
+every world (`mainPortCharacter`, Fl(3) W 15s). Lights whose ranges overlap
+differ in class, number in a group or colour (IALA G1116), colour only on a
+hazard; drawn by backtracking, with a phase each so that lights do not
+flash together. A character is its light and dark in turn, in ms; a light
+shows its step at (world time + phase) mod period, in whole microseconds
+(`internal/light`; the page's copy is `client/src/lights/character.ts`,
+held to `internal/light/testdata/schedule.json`, which
+`go test ./internal/light -run Golden -update` writes).
+
+**Range and brightness**: nominal ranges (Port Royal 4.5 NM, ports 2.5,
+the edge ring 2, hazards 1.5; red and green half), and Allard's law,
+E = I T^d / d², with T = 0.05^(1/V) for the clear air's visibility
+V = 4.5 NM: each light's intensity falls to the threshold, 2 × 10⁻⁷ lux, at
+its range, and the glow drawn grows with E over the threshold.
+
+### Names
+
+The namer goes on after the islands, kind by kind (`placenamer.go`, the
+lists in `placenames.go`): a whole name that fits the place (its
+qualities, its island's biome or `any` offshore, what it shows), preferring
+its zone, the tones weighted by zone; then a specific and a generic, no
+specific twice on one island; then the island's own name before a generic
+(Nevis Road). No name twice in a world. A wreck is named by her ship, the
+world's ships mixing their kinds of name; a reef with a wreck may take her
+name (`world.names.wreckReef`); a light is named after its site: its port,
+its hazard, its rock or group, or a point of its island's coast, with
+*Light*.
+
+### On the wire
+
+Places reach a phone **only with the chunk they stand in**: a `Places`
+message after that chunk's `Chunks`, each place once (`internal/edge/places.go`).
+Lights reach it **by range**: a `Lights` message once the connection's eye
+(its boat, or its free camera) is within a light's range, and a drop once
+it is 200 m beyond it; Port Royal's comes in the `Welcome`. Neither carries
+a name: the world page has the names, and players learn them when they
+chart a place.
+
+### On the phone
+
+`client/src/render/lights.ts`: **towers**, stone with an iron gallery, a
+glass lantern and a copper cupola, banded by their daymark, one instanced
+draw; the dome hides a tower below the horizon as it hides the land. **The
+lights**: lit while the sun is below the horizon at the lighthouse, coming
+on through its last degree; a flashing light's flash rises and falls over
+15% of it, an occulting or isophase light is cut sharply; two faint beams
+turn with a flashing light's flash within 1.5 km. A light whose lantern is
+below the horizon (further than the eye's horizon and the lantern's
+together, √(2 R h) each) shows as its **loom**, a glow on the horizon at its
+true bearing, flashing its character; the mist band dims both by the mist
+along the ray. Glows, looms and beams are one instanced draw.
+`client/src/render/wrecks.ts`: each wreck built from her rig and age, a
+fresh one whole with her masts, an old one's masts stumps, of the oldest a
+few ribs; stranded on the bottom heeled, or sunk a few metres down, seen as
+a shadow on the sea dimmed by exp(−2 K h), a fresh one's masts standing out
+of it. Wrecks are not solid. Every wreck is one mesh, every shadow another.
+
+### Looking at it
+
+```sh
+go run ./tools/worldgen-preview -seed 7        # places, lights, their names and characters; a ranges layer
+go run ./tools/worldgen-preview -seeds 8       # counts by kind, and lights, for each
+go run ./tools/dev -world 7                    # then https://localhost:5173/?sandbox&world=7: places and lights offline
+# https://localhost:5173/?sandbox&world=7&sky=midnight   at night
+```
+
+The sandbox hands a world file's places with their chunks and its lights by
+range, as the server does. The world page lists every place and light with
+its name, a light's character as charts write it (*Fl(3) W 15s 85m 4.5M*)
+flashing beside it by the world's clock, and draws them on the map.
+
+### Beginning a new world
+
+A world's terrain is never made again, so a changed generator wants a new
+world. **"Begin a new world"** on the world page (`POST /owner/api/world
+{"number"}`, the active world's number typed) ends the active world and
+begins the next in one transaction fenced by the lease (`store.BeginWorld`),
+logged; a second later keel stops, as at a signal, and starts again in the
+new world, making its terrain from a new seed (or `KEEL_WORLD_SEED`). In the
+cluster the pod starts again by itself; under `go run ./tools/dev`, start
+it again. The ended world's data stays in its partitions.
+
 ## The owner's tools
 
 Tools for the owner alone, which no player ever sees: **the world page**, a
@@ -1466,8 +1620,8 @@ Its data and controls, under `/owner/api/`, are also for tools: `world.json`
 (the world now: boats, queue, weather, wind, clock; built by one goroutine
 once a second from a copy of the latest frame, so no request holds a
 frame), `gusts.bin` (168 × 168 signed bytes, 0.1 m/s a step), `islands.json`,
-`current.json`, `land.png`, `coasts.svg`, `island/{n}.svg` and
-`point?east=…&north=…`.
+`places.json` (every place and light, with names), `current.json`,
+`land.png`, `coasts.svg`, `island/{n}.svg` and `point?east=…&north=…`.
 
 **The guard** (`internal/owner/guard.go`): every request whose `Host` is not
 `localhost` or a loopback address, on any port, is refused, so a page the
@@ -1494,7 +1648,9 @@ carry the flag is refused, and no other player's boat is ever moved.
 - **Teleport** (`POST /owner/api/place`): to the point picked, to the start
   (where a new boat would appear, clear of other hulls), to an island's
   approach (the first water 3 m deep on the line from its highest point
-  toward the centre, facing the island), or under the boat's free camera;
+  toward the centre, facing the island), to a place's (the place itself in
+  water that deep, else the first such water toward the centre), or under
+  the boat's free camera;
   at rest, its heading kept unless given. Refused over land or shallower
   than 2 m (with land sailed), at or beyond the lip, or within 10 m of
   another boat. It is the simulation's `Teleport`, through the owner's
@@ -1505,6 +1661,8 @@ carry the flag is refused, and no other player's boat is ever moved.
 - **Unseen** (`POST /owner/api/unseen {"boat", "on"}`): the boat is left
   out of every other connection's view, and touches nothing and casts no
   shadow, as a boat falling over the lip does.
+- **A new world** (`POST /owner/api/world {"number"}`): see "Beginning a
+  new world" above.
 
 `/debug/place` stays the developer's (`KEEL_DEV_COMMANDS=1`), for the
 browser tests: it moves any boat and marks nothing.

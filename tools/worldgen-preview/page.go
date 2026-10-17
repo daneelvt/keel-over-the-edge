@@ -99,6 +99,9 @@ td, th { border-bottom: 1px solid #ddd; padding: 2px 8px; text-align: left; }
 <label><input type="checkbox" data-layer="names" checked> names</label>
 <label><input type="checkbox" data-layer="coasts" checked> coasts</label>
 <label><input type="checkbox" data-layer="start" checked> start area</label>
+<label><input type="checkbox" data-layer="places" checked> places</label>
+<label><input type="checkbox" data-layer="lights" checked> lights</label>
+<label><input type="checkbox" data-layer="ranges"> ranges</label>
 <label><input type="checkbox" data-layer="surfaces"> surfaces</label>
 <label><input type="checkbox" data-layer="fetch"> fetch</label>
 <label><input type="checkbox" data-layer="shelter"> shelter</label>
@@ -138,6 +141,25 @@ td, th { border-bottom: 1px solid #ddd; padding: 2px 8px; text-align: left; }
 		fmt.Fprintf(&p, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.0f</td><td>%.1f</td><td>%.0f%%</td><td>%s</td><td>%.0f, %.0f</td></tr>\n",
 			is.Number, html.EscapeString(is.Name), is.Kind, is.Biome, is.Size, is.Zone, 2*math.Sqrt(is.Area/math.Pi), is.Highest, 100*is.Cliffs,
 			strings.Join(is.Shows, ", "), is.X, is.Y)
+	}
+	p.WriteString("</table>\n")
+	p.WriteString("<h2>Places</h2>\n<table>\n<tr><th>#</th><th>Name</th><th>Kind</th><th>Island</th><th>Zone</th><th>Offers</th><th>At, m east, north</th></tr>\n")
+	for _, pl := range b.Places {
+		island := ""
+		if pl.Island >= 0 && int(pl.Island) < len(b.Islands) {
+			island = b.Islands[pl.Island].Name
+		}
+		what := strings.Join(pl.Details.Offers, ", ")
+		if s := pl.Details.Ship; s != nil {
+			what = fmt.Sprintf("the %s %s (%s), %s, %s, sunk %v", s.Rig, s.Name, s.Language, s.Cargo, s.Age, s.Sunk)
+		}
+		fmt.Fprintf(&p, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.0f, %.0f</td></tr>\n",
+			pl.Number, html.EscapeString(pl.Name), pl.Kind, html.EscapeString(island), pl.Zone, html.EscapeString(what), pl.X, pl.Y)
+	}
+	p.WriteString("</table>\n<h2>Lights</h2>\n<table>\n<tr><th>#</th><th>Role</th><th>Character</th><th>Focal, m</th><th>Range, NM</th><th>At, m east, north</th></tr>\n")
+	for _, l := range b.Lights {
+		fmt.Fprintf(&p, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%.1f</td><td>%.1f</td><td>%.0f, %.0f</td></tr>\n",
+			l.Number, l.Role, html.EscapeString(l.Notation), l.Focal, l.Range/1852, l.X, l.Y)
 	}
 	p.WriteString("</table>\n")
 	if len(b.Groups) > 0 {
@@ -190,6 +212,19 @@ ul { font-size: 12px; padding-left: 16px; }
 `)
 	for i, b := range bundles {
 		fmt.Fprintf(&p, "<div class=\"seed\"><h2>Seed %d</h2><p>%d islands, land %.2f%%, attempt %d</p>\n", b.Seed, len(b.Islands), b.Report.LandShare, b.Attempts)
+		kinds := map[string]int{}
+		var order []string
+		for _, pl := range b.Places {
+			if kinds[pl.Kind] == 0 {
+				order = append(order, pl.Kind)
+			}
+			kinds[pl.Kind]++
+		}
+		var counts []string
+		for _, k := range order {
+			counts = append(counts, fmt.Sprintf("%s %d", k, kinds[k]))
+		}
+		fmt.Fprintf(&p, "<p>%s; %d lights</p>\n", html.EscapeString(strings.Join(counts, ", ")), len(b.Lights))
 		p.Write(charts[i])
 		p.WriteString("<ul>\n")
 		for _, r := range b.Report.Rules {

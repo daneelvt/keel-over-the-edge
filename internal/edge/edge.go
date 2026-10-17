@@ -41,6 +41,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -159,6 +160,8 @@ type Config struct {
 	// client; Chunks, if not nil, hands out its chunks' addresses.
 	Land   bool
 	Chunks *Handout
+	// MainLight is the main port's light, which the Welcome carries, or nil.
+	MainLight *pb.Light
 	// Circulation is the world's way round the disk for its current, as
 	// the Welcome tells the client: 1, −1 or 0 for none.
 	Circulation int32

@@ -145,6 +145,29 @@ world:
     foreWidth: 60 # m
     passes: 0.15 # share of the crest open as passes
 
+  # Offshore hazards, away from every island's shelf: reefs, a crest awash
+  # with a fore reef falling outside it as a fringing reef's does, and
+  # sandbanks, a smooth bank of sand with a few metres over it. Each lies
+  # within the ring, at least clear m from any land and apart m from the
+  # next, outer of each kind beyond beyond nautical miles; each has a rock
+  # its light stands on, as real hazard lights stand on the hazard (Hogsty
+  # Reef, Elbow Reef, Memory Rock).
+  hazards:
+    reefs: 4
+    reefLength: [50, 250] # m
+    reefCrest: [0.3, 0.5] # m deep
+    banks: 3
+    bankLength: [100, 400] # m
+    bankDepth: [1, 3] # m over the bank
+    outer: 2
+    beyond: 3.6 # nautical miles
+    ring: [1.7, 4.3] # nautical miles from the centre
+    clear: 300 # m from any land
+    apart: 1000 # m
+    rockHexes: [2, 4]
+    rockHeight: [2, 3] # m above the sea
+    rockSurface: rock # the surface it is
+
   # Erosion on each island's own grid: thermal weathering moves ground
   # steeper than the talus down (Musgrave, Kolb and Mace 1989), and
   # droplets of rain carve gullies and drop what they carry where the
@@ -365,6 +388,162 @@ world:
     keepMeshes: 2000 # m
     keepGrids: 1500 # m
 
+  # Places: what a sailor finds besides islands, each put where the land and
+  # the sea bed make it true, by its kind's site, the definitions of
+  # Smyth's Sailor's Word-Book (1867): a harbour's "security from the
+  # effects of the wind and sea"; an anchorage "neither too deep, shallow,
+  # or exposed"; a cove an inlet narrower at its mouth than it is deep.
+  # count is how many a world has, the least and the most; mark the colour
+  # the world page marks it with.
+  places:
+    kinds:
+      - { id: port, name: Port, site: harbour, count: [5, 5], mark: "#b3261e" }
+      - { id: fishing-village, name: Fishing village, site: village, count: [6, 8], mark: "#8a5a2b" }
+      - { id: lighthouse, name: Lighthouse, site: light, count: [20, 30], mark: "#e8b400" }
+      - { id: anchorage, name: Anchorage, site: anchorage, count: [6, 8], mark: "#2b5f8a" }
+      - { id: cove, name: Cove, site: cove, count: [0, 12], mark: "#3d8a6a" }
+      - { id: lagoon, name: Lagoon, site: lagoon, count: [0, 40], mark: "#2aa7a1" }
+      - { id: reef, name: Reef, site: reef, count: [4, 80], mark: "#c2563a" }
+      - { id: sandbar, name: Sandbar, site: bar, count: [3, 80], mark: "#c9a227" }
+      - { id: wreck, name: Wreck, site: wreck, count: [8, 8], mark: "#5a4632" }
+    # A port: on a landmark island, at the stretch of its coast with the
+    # least fetch over the 16 directions where water depth m deep lies
+    # within within m of the shore; reachable from the start; not in the
+    # mist band; ports apart nautical miles from each other.
+    harbour: { depth: 4, within: 300, apart: 1.2 }
+    # A fishing village: on an island of the sizes given without a port, on
+    # its beach or in a cove, with shallows under shallows m within ground
+    # m, its fishing ground; villages apart m from each other and the ports.
+    village: { sizes: [small, medium, large], shallows: 10, ground: 300, apart: 600 }
+    # An anchorage: water depth m deep on sand, none shallower than clear m
+    # within swing m (room to swing), land within land m; its shelter snug
+    # where the fetch is under fetch m in snug of the 16 directions, good in
+    # good (an island off an anchorage covers at most about a third of the
+    # horizon); sampled every step m; anchorages apart m from each other.
+    anchorage: { depth: [3, 12], swing: 60, clear: 2, land: 400, fetch: 600, snug: 6, good: 4, step: 40, apart: 500 }
+    # A cove: a bay of an island's coast whose mouth is narrower than it is
+    # deep, across m wide, with mouth m of water at its mouth; bays are
+    # found by closing the coast with a disc of closing m.
+    cove: { across: [40, 200], mouth: 2, closing: 100 }
+    # A lagoon: the water behind a fringing reef, at least width m wide.
+    lagoon: { width: 40 }
+    # A reef: a fringing reef whose crest runs crest m or more, or an
+    # offshore reef. A sandbar: a bar or spit length m long or more, or an
+    # offshore bank.
+    reef: { crest: 300 }
+    bar: { length: 60 }
+    # A wreck: on a reef's crest, a rock or a bar, or sunk in depth m of
+    # water within near m of one; at least mist of them in the mist band.
+    wreck: { depth: [2, 8], near: 100, mist: 2 }
+    # What a site shows that names may need: water deep m deep within 60 m
+    # for a tall ship. A cove or lagoon under small m across is small; a
+    # reef or bar under long m is small.
+    deep: 6
+    small: 100
+    long: 250
+    # A point, where a light stands: coast with water over water of the
+    # ground within reach m.
+    point: { reach: 40, water: 0.55 }
+    # A wrecked ship: the rigs and ages drawn, each with how she is drawn:
+    # her length, beam and masts, m; how much of her is left.
+    rigs:
+      - { id: sloop, length: 16, beam: 5, masts: 1, mast: 16 }
+      - { id: schooner, length: 22, beam: 6, masts: 2, mast: 19 }
+      - { id: ketch, length: 20, beam: 6, masts: 2, mast: 17 }
+      - { id: brig, length: 28, beam: 8, masts: 2, mast: 24 }
+      - { id: snow, length: 30, beam: 8.5, masts: 2, mast: 25 }
+    ages:
+      - { id: fresh, hull: 1, masts: 1 }
+      - { id: old, hull: 0.7, masts: 0.4 }
+      - { id: ribs, hull: 0.35, masts: 0 }
+
+  # Lighthouses: Port Royal's, the tallest; one at every port; one on every
+  # offshore hazard, and on the rocks and fringing reefs beyond hazards
+  # nautical miles, one light for hazards within merge m of each other; and
+  # a ring of edge lights on the approach to the edge, each on the outermost
+  # land within within degrees of its bearing and at least inside m inside
+  # the lip. Port Royal's stands on its island's highest ground within coast
+  # m of the coast.
+  lights:
+    towers: { mainPort: 60, port: 30, edge: 30, hazard: 15 } # m
+    mainPortCoast: 100 # m
+    edge: { count: 8, within: 15, inside: 300 }
+    hazards: { beyond: 3.6, merge: 400 }
+    # Nominal ranges, nautical miles: the great lights about twice the
+    # minor ones, as the Bahamas' are; a red or green light colour times a
+    # white one's.
+    range: { mainPort: 4.5, port: 2.5, edge: 2, hazard: 1.5, colour: 0.5 }
+    # Allard's law: the illuminance at the eye of a light of intensity I at
+    # d is I T^d / d², with the air's transmissivity per nautical mile T =
+    # 0.05^(1/V) for the clear air's visibility V; a light is seen while it
+    # is above the threshold of 2 × 10⁻⁷ lux (the International Technical
+    # Conference of Lighthouse Authorities, Paris 1933).
+    clearAir: 4.5 # nautical miles
+    threshold: 2.0e-7 # lux
+    # A light is sent to a connection once its eye is within its range, and
+    # dropped drop m beyond it.
+    drop: 200 # m
+    # Each light has a character of its own, from this list: IALA's classes
+    # within the limits of Recommendation E-110, and none the buoyage system
+    # keeps for its marks (quick and very quick; white Fl(2) 5 s or 10 s,
+    # the isolated danger's; white Oc, Iso and LFl 10 s and Mo(A), the safe
+    # water mark's; Mo(U); red or green Fl(2+1)), nor a fixed light. steps
+    # are its light and dark in turn, ms, beginning with light. Lights whose
+    # ranges overlap differ in class, number in a group or colour, not by
+    # period alone (IALA Guideline G1116); colour only on a hazard.
+    mainPortCharacter: Fl(3) W 15s
+    colours: { white: "#fff1d6", red: "#ff3a1e", green: "#2bff74" }
+    characters:
+      - { notation: Fl W 5s, class: Fl, group: "1", colour: white, steps: [500, 4500] }
+      - { notation: Fl W 10s, class: Fl, group: "1", colour: white, steps: [1000, 9000] }
+      - { notation: Fl W 15s, class: Fl, group: "1", colour: white, steps: [1000, 14000] }
+      - { notation: LFl W 15s, class: LFl, group: "1", colour: white, steps: [2000, 13000] }
+      - { notation: Fl(2) W 15s, class: Fl, group: "2", colour: white, steps: [500, 1000, 500, 13000] }
+      - { notation: Fl(2) W 20s, class: Fl, group: "2", colour: white, steps: [500, 1000, 500, 18000] }
+      - { notation: Fl(3) W 10s, class: Fl, group: "3", colour: white, steps: [500, 1500, 500, 1500, 500, 5500] }
+      - { notation: Fl(3) W 15s, class: Fl, group: "3", colour: white, steps: [500, 1500, 500, 1500, 500, 10500] }
+      - { notation: Fl(3) W 20s, class: Fl, group: "3", colour: white, steps: [500, 1500, 500, 1500, 500, 15500] }
+      - { notation: Fl(4) W 15s, class: Fl, group: "4", colour: white, steps: [500, 1500, 500, 1500, 500, 1500, 500, 8500] }
+      - { notation: Fl(4) W 20s, class: Fl, group: "4", colour: white, steps: [500, 1500, 500, 1500, 500, 1500, 500, 13500] }
+      - { notation: Fl(5) W 20s, class: Fl, group: "5", colour: white, steps: [500, 1500, 500, 1500, 500, 1500, 500, 1500, 500, 11500] }
+      - { notation: Fl(5) W 25s, class: Fl, group: "5", colour: white, steps: [500, 1500, 500, 1500, 500, 1500, 500, 1500, 500, 16500] }
+      - { notation: Fl(2+1) W 15s, class: Fl, group: "2+1", colour: white, steps: [500, 1000, 500, 3000, 500, 9500] }
+      - { notation: Oc(2) W 10s, class: Oc, group: "2", colour: white, steps: [7000, 1000, 1000, 1000] }
+      - { notation: Oc(2) W 15s, class: Oc, group: "2", colour: white, steps: [12000, 1000, 1000, 1000] }
+      - { notation: Oc(3) W 15s, class: Oc, group: "3", colour: white, steps: [10000, 1000, 1000, 1000, 1000, 1000] }
+      - { notation: Oc(3) W 20s, class: Oc, group: "3", colour: white, steps: [15000, 1000, 1000, 1000, 1000, 1000] }
+      - { notation: Oc(4) W 20s, class: Oc, group: "4", colour: white, steps: [13000, 1000, 1000, 1000, 1000, 1000, 1000, 1000] }
+      - { notation: Mo(D) W 15s, class: Mo, group: D, colour: white, steps: [1500, 500, 500, 500, 500, 11500] }
+      - { notation: Mo(K) W 15s, class: Mo, group: K, colour: white, steps: [1500, 500, 500, 500, 1500, 10500] }
+      - { notation: Fl R 5s, class: Fl, group: "1", colour: red, steps: [500, 4500] }
+      - { notation: Fl(2) R 10s, class: Fl, group: "2", colour: red, steps: [500, 1000, 500, 8000] }
+      - { notation: Fl(3) R 15s, class: Fl, group: "3", colour: red, steps: [500, 1500, 500, 1500, 500, 10500] }
+      - { notation: Fl G 5s, class: Fl, group: "1", colour: green, steps: [500, 4500] }
+      - { notation: Fl(2) G 10s, class: Fl, group: "2", colour: green, steps: [500, 1000, 500, 8000] }
+      - { notation: Oc R 6s, class: Oc, group: "1", colour: red, steps: [4500, 1500] }
+      - { notation: Oc G 6s, class: Oc, group: "1", colour: green, steps: [4500, 1500] }
+      - { notation: Iso R 6s, class: Iso, group: "1", colour: red, steps: [3000, 3000] }
+      - { notation: Iso G 6s, class: Iso, group: "1", colour: green, steps: [3000, 3000] }
+    # How lighthouses are drawn: stone towers with an iron gallery, a glass
+    # lantern and a copper cupola, each with its daymark, so that towers are
+    # told apart by day as at sea; the light a glow at the lantern, with two
+    # faint beams turning with a flashing light's flash near it, rising and
+    # falling over rise of the flash as a turning lens's does; beyond the
+    # tower's horizon, its loom on the horizon at its true bearing.
+    look:
+      daymarks:
+        - { id: white, body: "#ece6d8", band: "#ece6d8" }
+        - { id: red-bands, body: "#ece6d8", band: "#a8322a" }
+        - { id: black-bands, body: "#ece6d8", band: "#2a2826" }
+      stone: "#bdb3a1"
+      iron: "#2c2b2a"
+      copper: "#5e8f78"
+      glow: 3 # m across the lantern's glow
+      least: 6 # CSS pixels: the glow is never drawn smaller
+      rise: 0.15
+      beams: 1500 # m: beams are seen within this of the light
+      loom: 0.35 # the loom's strength beside the light's own
+
   # The rules a world must pass; one that fails is made again from the next
   # seed, at most attempts times.
   validator:
@@ -375,6 +554,10 @@ world:
     openWater: 1500 # m: inside the mist band no water is further from land
     shoreline: 1.4 # a landmark's shoreline development index, at least
     reachDepth: 2 # m: every landmark reachable from the start in this much water
+    # At every point of water on a grid of lightGrid m inside the mist band,
+    # at least lightsInRange lights in range: two for a fix by bearings.
+    lightsInRange: 2
+    lightGrid: 250 # m
 
   # How islands are named, from the generator's names: by size class, biome
   # and the features the terrain shows, then preferring the island's zone,
@@ -422,3 +605,6 @@ world:
     prefixes: [[Great, Little], [North, South], [East, West], [Inner, Outer]]
     calf: 300 # m
     calfShare: 0.3
+    # A reef with a wreck on it may take her name, as the Florida reefs took
+    # their ships' (Carysfort Reef, Looe Key), by chance wreckReef.
+    wreckReef: 0.3

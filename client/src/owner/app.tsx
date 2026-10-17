@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The world page: the map, and beside it the world's clock, the weather,
-// the boats at sea and in the queue, and the islands. It reads the world
-// once a second, and not while its tab is hidden. A click on the map picks
-// a point: what is there is told, and the owner's boats can be put there.
-// The page acts on the owner's boats alone; the server refuses the rest.
+// the boats at sea and in the queue, the islands, the places and the
+// lighthouses, each light flashing its character by the world's clock as
+// every phone shows it. It reads the world once a second, and not while
+// its tab is hidden. A click on the map picks a point: what is there is
+// told, and the owner's boats can be put there, or at a place. The page
+// acts on the owner's boats alone; the server refuses the rest. And the
+// owner may begin a new world, typing the world's number to end it.
 
 import { render } from 'preact';
 import {
@@ -12,9 +15,11 @@ import {
   type StateUpdater,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'preact/hooks';
+import { lightOn } from '../lights/character';
 import {
   type Boat,
   type Current,
@@ -24,6 +29,10 @@ import {
   getBytes,
   getJSON,
   type Island,
+  type Light,
+  type LightCharacter,
+  type Place,
+  type PlacesData,
   type Point,
   type WorldNow,
 } from './api';
@@ -67,6 +76,19 @@ function hour(h: number): string {
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
+/** World time now, µs, from the world's time last read and when: the page's own clock between reads. */
+interface WorldClock {
+  worldTime: number;
+  at: number;
+}
+
+function worldUsAt(c: WorldClock, now: number): number {
+  return Math.floor((c.worldTime + (now - c.at) / 1000) * 1e6);
+}
+
+/** How often the lights' marks beside their rows are looked at, ms. */
+const FLASH_EVERY = 100;
+
 /** The map: a canvas filling its box, panned by a drag, zoomed by the wheel, a click picking a point. */
 function MapCanvas({
   data,
@@ -82,6 +104,7 @@ function MapCanvas({
   pick: (east: number, north: number) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
   // Fits the canvas to its box, and the view to the canvas.
   useEffect(() => {
@@ -203,6 +226,166 @@ function WeatherCard({ now }: { now: WorldNow }) {
   );
 }
 
+/** Begins a new world: the world's number typed, then the control. */
+function NewWorld({
+  now,
+  act,
+}: {
+  now: WorldNow;
+  act: (path: 'world', body: unknown, what: string) => void;
+}) {
+  const [typed, setTyped] = useState('');
+  const n = now.world.number;
+  return (
+    <section class="card" aria-label="A new world">
+      <h2>Begin a new world</h2>
+      <p class="small">
+        Ends world {n} and begins world {n + 1}: keel stops and starts again in it, making its
+        terrain from a new seed. Every boat goes with the old world. Type {n} to end it.
+      </p>
+      <input
+        name="world-number"
+        inputMode="numeric"
+        value={typed}
+        onInput={(e) => setTyped(e.currentTarget.value)}
+      />{' '}
+      <button
+        type="button"
+        name="new-world"
+        disabled={typed !== String(n)}
+        onClick={() => act('world', { number: Number(typed) }, `world ${n + 1} begun`)}
+      >
+        Begin world {n + 1}
+      </button>
+    </section>
+  );
+}
+
+/** The lights' marks beside their rows, each lit while its light shows: one timer for them all. */
+const marks = new Map<
+  HTMLSpanElement,
+  { light: Light; character: LightCharacter; clock: { current: WorldClock } }
+>();
+let marksTimer: ReturnType<typeof setInterval> | null = null;
+
+function lightMarks(): void {
+  if (hidden()) {
+    return;
+  }
+  const now = performance.now();
+  for (const [dot, m] of marks) {
+    // Only a change touches the page: nothing repaints while a light holds.
+    const on = lightOn(m.character.steps, m.light.phase, worldUsAt(m.clock.current, now))
+      ? '1'
+      : '0';
+    if (dot.dataset.on !== on) {
+      dot.dataset.on = on;
+    }
+  }
+}
+
+/** A light's mark beside its row: lit while it shows, by the world's clock. */
+function Flash({
+  light,
+  character,
+  clock,
+}: {
+  light: Light;
+  character: LightCharacter | undefined;
+  clock: { current: WorldClock };
+}) {
+  const dot = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const d = dot.current;
+    if (d === null || character === undefined) {
+      return;
+    }
+    d.dataset.colour = character.colour;
+    marks.set(d, { light, character, clock });
+    if (marksTimer === null) {
+      marksTimer = setInterval(lightMarks, FLASH_EVERY);
+    }
+    return () => {
+      marks.delete(d);
+      if (marks.size === 0 && marksTimer !== null) {
+        clearInterval(marksTimer);
+        marksTimer = null;
+      }
+    };
+  }, [light, character, clock]);
+  return <span ref={dot} class="flash" data-light={light.number} />;
+}
+
+/** What a place's kind measures of it, in a few words. */
+function placeWords(p: Place): string {
+  const d = p.details;
+  const words: string[] = [p.zone];
+  if (d.shelter !== undefined) {
+    words.push(d.shelter);
+  }
+  if (d.depth !== undefined) {
+    words.push(`${d.depth.toFixed(1)} m`);
+  }
+  if (d.across !== undefined) {
+    words.push(`${d.across.toFixed(0)} m across`);
+  }
+  if (d.length !== undefined) {
+    words.push(`${d.length.toFixed(0)} m long`);
+  }
+  if (d.offshore === true) {
+    words.push('offshore');
+  }
+  if (d.ship !== undefined) {
+    const s = d.ship;
+    words.push(
+      `the ${s.rig} ${s.name} (${s.language}), ${s.cargo}, ${s.age}, ${s.sunk ? 'sunk' : 'stranded'}`,
+    );
+  }
+  return words.join(', ');
+}
+
+/**
+ * An account's flag: what was clicked holds until the world's reading
+ * agrees, so a reading still on its way does not set the box back.
+ */
+function FlagBox({
+  on,
+  disabled,
+  flag,
+}: {
+  on: boolean;
+  disabled: boolean;
+  flag: (on: boolean) => Promise<boolean>;
+}) {
+  const [asked, setAsked] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (asked === on) {
+      setAsked(null);
+    }
+  }, [asked, on]);
+  return (
+    <label>
+      <input
+        type="checkbox"
+        name="flag"
+        checked={asked ?? on}
+        disabled={disabled}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          const want = e.currentTarget.checked;
+          setAsked(want);
+          void flag(want).then((ok) => {
+            if (!ok) {
+              setAsked(null);
+            }
+          });
+        }}
+      />{' '}
+      owner
+    </label>
+  );
+}
+
 /** A boat's row, and for the owner's its controls. */
 function BoatRow({
   b,
@@ -215,7 +398,7 @@ function BoatRow({
   b: Boat;
   chosen: boolean;
   choose: () => void;
-  act: (path: 'flag' | 'place' | 'unseen', body: unknown, what: string) => void;
+  act: (path: 'flag' | 'place' | 'unseen', body: unknown, what: string) => Promise<boolean>;
   picked: [number, number] | null;
   islands: Island[];
 }) {
@@ -240,23 +423,11 @@ function BoatRow({
         <td>{b.fromLip.toFixed(0)} m</td>
         <td>{marks.join(', ')}</td>
         <td>
-          <label>
-            <input
-              type="checkbox"
-              name="flag"
-              checked={b.tools}
-              disabled={!b.human}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) =>
-                act(
-                  'flag',
-                  { account: b.account, on: e.currentTarget.checked },
-                  `${b.sailor}'s flag`,
-                )
-              }
-            />{' '}
-            owner
-          </label>
+          <FlagBox
+            on={b.tools}
+            disabled={!b.human}
+            flag={(on) => act('flag', { account: b.account, on }, `${b.sailor}'s flag`)}
+          />
         </td>
       </tr>
       {chosen && b.tools ? (
@@ -339,6 +510,9 @@ function App() {
   const [picked, setPicked] = useState<[number, number] | null>(null);
   const [point, setPoint] = useState<Point | null>(null);
   const [boat, setBoat] = useState<number | null>(null);
+  const [places, setPlaces] = useState<PlacesData | null>(null);
+  const [light, setLight] = useState<number | null>(null);
+  const clock = useRef<WorldClock>({ worldTime: 0, at: performance.now() });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [, redraw] = useState(0);
@@ -366,6 +540,9 @@ function App() {
     getJSON<Current>('current.json')
       .then(setCurrent)
       .catch((e: unknown) => setError(String(e)));
+    getJSON<PlacesData>('places.json')
+      .then(setPlaces)
+      .catch((e: unknown) => setError(String(e)));
   }, [again]);
 
   // The world each second, paused while the tab is hidden.
@@ -380,6 +557,7 @@ function App() {
       try {
         const [w, g] = await Promise.all([getJSON<WorldNow>('world.json'), getBytes('gusts.bin')]);
         setNow(w);
+        clock.current = { worldTime: w.worldTime, at: performance.now() };
         gustPicture(g, images.current.gusts);
         images.current.hasGusts = true;
         setError('');
@@ -430,11 +608,21 @@ function App() {
       .catch((e: unknown) => setError(String(e)));
   };
 
-  const act = (path: 'flag' | 'place' | 'unseen', body: unknown, what: string): void => {
+  /** Asks for a change and says how it went; true when it was done. */
+  const act = (
+    path: 'flag' | 'place' | 'unseen' | 'world',
+    body: unknown,
+    what: string,
+  ): Promise<boolean> =>
     control(path, body)
-      .then((a) => setMessage(a.ok ? `Done: ${what}.` : `Refused (${a.status}): ${a.text}`))
-      .catch((e: unknown) => setMessage(`Failed: ${String(e)}`));
-  };
+      .then((a) => {
+        setMessage(a.ok ? `Done: ${what}.` : `Refused (${a.status}): ${a.text}`);
+        return a.ok;
+      })
+      .catch((e: unknown) => {
+        setMessage(`Failed: ${String(e)}`);
+        return false;
+      });
 
   const im = images.current;
   const data: MapData = {
@@ -449,12 +637,90 @@ function App() {
     gusts: im.hasGusts ? im.gusts : null,
     picked,
     boat,
+    places,
+    light,
   };
+  const chosen = now?.boats.find((b) => b.boat === boat && b.tools) ?? null;
+  const kindName = new Map((places?.kinds ?? []).map((k) => [k.id, k.name]));
+  const lightSite = new Set(
+    (places?.kinds ?? []).filter((k) => k.site === 'light').map((k) => k.id),
+  );
   const goTo = (east: number, north: number, scale?: number): void => {
     if (view !== null) {
       setView(centreOn(view, east, north, scale));
     }
   };
+
+  // The lists of places and lights, made again only when what they show
+  // changes, not at each second's reading of the world.
+  const chosenBoat = chosen?.boat ?? null;
+  const lists = useMemo(
+    () => (
+      <>
+        <section class="card" aria-label="Lighthouses">
+          <h2>Lighthouses: {places?.lights.length ?? 0}</h2>
+          <ul class="lights">
+            {(places?.lights ?? []).map((l) => (
+              <li key={l.number} class={l.number === light ? 'chosen' : ''}>
+                <Flash light={l} character={places?.characters[l.character]} clock={clock} />{' '}
+                <button
+                  type="button"
+                  data-light={l.number}
+                  onClick={() => {
+                    setLight(l.number);
+                    goTo(l.east, l.north, 4);
+                  }}
+                >
+                  {l.name}
+                </button>{' '}
+                <span class="small" data-field="chart">
+                  {l.chart}, {l.role}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section class="card" aria-label="Places">
+          <h2>Places: {(places?.places ?? []).filter((p) => !lightSite.has(p.kind)).length}</h2>
+          <ul class="places">
+            {(places?.places ?? [])
+              .filter((p) => !lightSite.has(p.kind))
+              .map((p) => (
+                <li key={p.number}>
+                  <button
+                    type="button"
+                    data-place={p.number}
+                    onClick={() => {
+                      goTo(p.east, p.north, 1);
+                      if (p.approach !== null) {
+                        pick(p.approach[0], p.approach[1]);
+                      }
+                    }}
+                  >
+                    {p.name}
+                  </button>{' '}
+                  <span class="small">
+                    {kindName.get(p.kind) ?? p.kind}: {placeWords(p)}
+                  </span>
+                  {chosenBoat !== null && p.approach !== null ? (
+                    <button
+                      type="button"
+                      class="small"
+                      onClick={() =>
+                        act('place', { boat: chosenBoat, place: p.number }, `teleport to ${p.name}`)
+                      }
+                    >
+                      sail there
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+          </ul>
+        </section>
+      </>
+    ),
+    [places, light, chosenBoat],
+  );
 
   return (
     <div class="page">
@@ -504,6 +770,7 @@ function App() {
         <aside>
           {now !== null ? <Clock now={now} /> : null}
           {now !== null ? <WeatherCard now={now} /> : null}
+          {now !== null ? <NewWorld now={now} act={act} /> : null}
           <section class="card" aria-label="Boats at sea">
             <h2>At sea: {now?.boats.length ?? 0}</h2>
             <table class="boats">
@@ -546,21 +813,11 @@ function App() {
                     <td>{seconds(q.waited)}</td>
                     <td>{q.connected ? '' : 'away'}</td>
                     <td>
-                      <label>
-                        <input
-                          type="checkbox"
-                          name="flag"
-                          checked={q.tools}
-                          onChange={(e) =>
-                            act(
-                              'flag',
-                              { account: q.account, on: e.currentTarget.checked },
-                              `${q.sailor}'s flag`,
-                            )
-                          }
-                        />{' '}
-                        owner
-                      </label>
+                      <FlagBox
+                        on={q.tools}
+                        disabled={false}
+                        flag={(on) => act('flag', { account: q.account, on }, `${q.sailor}'s flag`)}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -599,6 +856,7 @@ function App() {
               ))}
             </ul>
           </section>
+          {lists}
         </aside>
       </main>
     </div>

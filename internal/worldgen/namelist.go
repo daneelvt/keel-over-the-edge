@@ -379,6 +379,21 @@ var wholeNames = []string{
 	"Bumboat Cay | islet | any | - | centre | cheerful",
 	"Pooped Rock | rock | rocky | - | rim | warning",
 	"Seer's Rock | rock islet | rocky | - | rim | eerie",
+	"Burning Island | medium | volcanic | smoke twin | middle rim | eerie",
+	"Squally Island | small medium | any | - | rim | warning",
+	"Rosemary Island | small | sandy rocky | - | any | plain",
+	"White Island | medium | wooded rocky | cliffs | any | plain",
+	"One Bush Key | islet | sandy | - | any | wry",
+	"Ram Key | rock islet | rocky | - | middle rim | warning",
+	"Sea Key | islet | sandy | - | any | plain",
+	"Colt Key | islet | any | - | any | plain",
+	"Gammon Isle | small | any | - | any | wry",
+	"Prickle Pear Island | small | tropical sandy | - | centre middle | plain",
+	"Fruitful Island | large | tropical | - | centre middle | cheerful",
+	"Flyaway Isle | small | any | - | rim | eerie",
+	"Memory Rock | rock | rocky | - | any | wry",
+	"Castle Island | medium | rocky | cliffs | any | plain",
+	"Bird Rock | rock | rocky | birds | any | plain",
 }
 
 // groupNames are names for groups of rocks: name | count, a number or
@@ -425,6 +440,7 @@ var groupNames = []string{
 	"The Hogsheads | 3-6 | any | any | plain",
 	"The Pilgrims | 4-8 | any | middle | plain",
 	"Sea Wolves | 3-6 | rocky | rim | warning",
+	"Turtle Isles | 2 | sandy tropical | any | plain",
 }
 
 // genericWords are the generic words: word | class | sizes | biomes |

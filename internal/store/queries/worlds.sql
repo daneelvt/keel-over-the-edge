@@ -5,6 +5,9 @@
 -- name: ActiveWorld :one
 SELECT id, number, epoch FROM world WHERE state = 'active';
 
+-- name: EndWorld :execrows
+UPDATE world SET state = 'ended' WHERE state = 'active' AND number = @number;
+
 -- name: InsertWorld :one
 INSERT INTO world (number, epoch, state)
 VALUES ((SELECT coalesce(max(number), 0) + 1 FROM world), @epoch, 'active')
@@ -38,8 +41,12 @@ SELECT chunk_key FROM world_bundle WHERE world_id = @world_id;
 INSERT INTO world_chunk (world_id, chunk, payload, digest) VALUES (@world_id, @chunk, @payload, @digest);
 
 -- name: InsertPlaces :copyfrom
-INSERT INTO place (world_id, number, kind, name, biome, size, x, y, area, highest)
-VALUES (@world_id, @number, @kind, @name, @biome, @size, @x, @y, @area, @highest);
+INSERT INTO place (world_id, number, kind, name, biome, size, x, y, area, highest, island, details)
+VALUES (@world_id, @number, @kind, @name, @biome, @size, @x, @y, @area, @highest, @island, @details);
+
+-- name: InsertLights :copyfrom
+INSERT INTO light (world_id, number, place, role, character, phase, reach, focal, tower, daymark)
+VALUES (@world_id, @number, @place, @role, @character, @phase, @reach, @focal, @tower, @daymark);
 
 -- name: WorldBundle :one
 SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key, created_at
@@ -49,4 +56,7 @@ FROM world_bundle WHERE world_id = @world_id;
 SELECT chunk, payload, digest FROM world_chunk WHERE world_id = @world_id ORDER BY chunk;
 
 -- name: WorldPlaces :many
-SELECT number, kind, name, biome, size, x, y, area, highest FROM place WHERE world_id = @world_id ORDER BY number;
+SELECT number, kind, name, biome, size, x, y, area, highest, island, details FROM place WHERE world_id = @world_id ORDER BY number;
+
+-- name: WorldLights :many
+SELECT number, place, role, character, phase, reach, focal, tower, daymark FROM light WHERE world_id = @world_id ORDER BY number;

@@ -16,6 +16,7 @@ import { exp, float, fog, length, max, mix, positionView } from 'three/tsl';
 import { catalog } from '../catalog';
 import { EdgeScene } from '../edge/edge';
 import { edgeLook, KOSCHMIEDER, mistAtVertex } from '../edge/mist';
+import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
 import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
@@ -36,6 +37,7 @@ import { FleetView } from './fleet';
 import { FreeCamera } from './freecam';
 import { GustRings } from './gustring';
 import { Lanterns, lanternLit } from './lanterns';
+import { Lighthouses } from './lights';
 import { domeCentre } from './materials';
 import { Overlays } from './overlays';
 import {
@@ -60,6 +62,10 @@ import { type CrestSample, SprayDrops, type SpraySource, SprayView } from './spr
 import { Stage } from './stage';
 import { FEW_STARS, Stars } from './stars';
 import { type FrameStats, Stats, WINDOW } from './stats';
+import { Wrecks } from './wrecks';
+
+/** A tick of world time, µs. */
+const TICK_US = 1e6 / STEPS_PER_SECOND;
 
 /** For this long after the scene starts, the windows adaptive quality judges are short: the first seconds are the benchmark. */
 const BENCHMARK = 6000;
@@ -138,6 +144,18 @@ export class SeaScene {
   sprayHidden = false;
   readonly stars = new Stars();
   readonly lanterns = new Lanterns();
+  /** The lighthouses: their towers, lights and looms. */
+  readonly lighthouses = new Lighthouses(
+    catalog.world.lights,
+    catalog.world.places.kinds.findIndex((k) => k.site === 'light'),
+  );
+  /** The wrecks, stranded and sunk. */
+  readonly wrecks = new Wrecks(
+    catalog.world.places.rigs,
+    catalog.world.places.ages,
+    catalog.world.places.kinds.findIndex((k) => k.site === 'wreck'),
+    catalog.world.look.attenuation,
+  );
   /** Sky time, once the scene knows the world's epoch; and the module that says where everything stands. */
   skyTime: SkyTime | null = null;
   skyPhysics: Physics | null = null;
@@ -238,6 +256,12 @@ export class SeaScene {
     scene.add(this.dirtyAir.group, this.rightOfWay.group);
     scene.add(this.fleet.root);
     scene.add(this.stars.mesh, this.lanterns.mesh);
+    scene.add(this.lighthouses.towers, this.lighthouses.glows);
+    scene.add(this.wrecks.root);
+    this.wrecks.depthAt = (east, north) => {
+      const h = this.land?.heightAt(east, north) ?? null;
+      return h === null ? null : -h;
+    };
     const label = document.createElement('span');
     label.className = 'star-label';
     container.append(label);
@@ -710,6 +734,27 @@ export class SeaScene {
     l.commit(this.stage.camera.fov, gfx.canvas.clientHeight);
   }
 
+  /** The lighthouses' towers and lights, each light lit by the sun at its lighthouse. */
+  #drawLights(gfx: Gfx, camera: Vector3, now: number): void {
+    const sun = SKY.sun + BODY.altitude;
+    const own = this.sky.now.sunHeight;
+    this.lighthouses.frame({
+      origin: this.origin.world,
+      camera,
+      worldUs: Math.floor(this.ticks * TICK_US),
+      now,
+      sunAt: (east, north) => {
+        const at = this.skyFrom(east, north);
+        return at === null ? own : (at[sun] ?? own);
+      },
+      mist: this.edge.mist,
+      dome: [this.focusScene.x, this.focusScene.z],
+      fovY: this.stage.camera.fov,
+      height: gfx.canvas.clientHeight,
+      on: this.drawSky,
+    });
+  }
+
   #frame(gfx: Gfx, dt: number, now: number): void {
     const cap = this.stage.cap;
     if (cap.probed !== this.#probed) {
@@ -771,6 +816,8 @@ export class SeaScene {
       );
     }
     this.#drawLanterns(gfx, camera.position);
+    this.#drawLights(gfx, camera.position, now);
+    this.wrecks.frame(this.origin);
     const canvas = gfx.canvas;
     this.stars.resize(canvas.width, canvas.height);
     this.stars.mesh.visible = this.drawSky && this.stars.total > 0;

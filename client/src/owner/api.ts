@@ -2,8 +2,9 @@
 
 // What the world page reads and asks of keel's internal listener, under
 // /owner/api/, beside the page itself: the world as it is now (once a
-// second), the gusts' grid, the islands, the current and the land, once a
-// world; and the controls, each a POST of JSON.
+// second), the gusts' grid, the islands, the places and lights, the
+// current and the land, once a world; and the controls, each a POST of
+// JSON.
 
 /** A boat at sea, as the page shows it. */
 export interface Boat {
@@ -106,6 +107,81 @@ export interface Group {
   members: number[];
 }
 
+/** A kind of place, as the page lists and marks it. */
+export interface PlaceKind {
+  id: string;
+  name: string;
+  /** The rule its sites are found by: harbour, light, wreck … */
+  site: string;
+  mark: string;
+}
+
+/** A light's character: its notation, colour and steps (ms, light and dark in turn). */
+export interface LightCharacter {
+  notation: string;
+  colour: string;
+  steps: number[];
+}
+
+/** A place: a port, a lighthouse, a reef, a wreck. */
+export interface Place {
+  number: number;
+  kind: string;
+  name: string;
+  island: number;
+  east: number;
+  north: number;
+  zone: string;
+  details: {
+    depth?: number;
+    shelter?: string;
+    across?: number;
+    mouth?: number;
+    length?: number;
+    offshore?: boolean;
+    offers: string[];
+    ship?: {
+      name: string;
+      language: string;
+      rig: string;
+      cargo: string;
+      age: string;
+      sunk: boolean;
+      heel: number;
+    };
+  };
+  /** Where a boat is put to sail to it, or null if there is nowhere. */
+  approach: [number, number] | null;
+}
+
+/** A lighthouse's light. */
+export interface Light {
+  number: number;
+  place: number;
+  name: string;
+  role: string;
+  east: number;
+  north: number;
+  focal: number;
+  tower: number;
+  /** Its nominal range, m. */
+  range: number;
+  character: number;
+  notation: string;
+  /** As charts write it: Fl(3) W 15s 85m 4.5M. */
+  chart: string;
+  /** µs of world time. */
+  phase: number;
+}
+
+/** places.json: the kinds of place, the characters, and the world's places and lights. */
+export interface PlacesData {
+  kinds: PlaceKind[];
+  characters: LightCharacter[];
+  places: Place[];
+  lights: Light[];
+}
+
 /** current.json: east, north, and the current there east and north, m/s. */
 export interface Current {
   step: number;
@@ -161,7 +237,10 @@ export interface Answer {
 }
 
 /** Works a control: a POST of JSON. */
-export async function control(path: 'flag' | 'place' | 'unseen', body: unknown): Promise<Answer> {
+export async function control(
+  path: 'flag' | 'place' | 'unseen' | 'world',
+  body: unknown,
+): Promise<Answer> {
   const res = await fetch(BASE + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

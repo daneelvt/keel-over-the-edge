@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -23,8 +24,14 @@ func testBundle(t *testing.T) *store.Bundle {
 		Digest: bytes.Repeat([]byte{7}, 32), Records: []byte(`{"islands":[]}`), Report: []byte(`{"rules":[]}`),
 		GenerationMs: 3400,
 		Places: []store.Place{
-			{Number: 0, Kind: store.PlaceIsland, Name: "Port Royal", Biome: "wooded", Size: "large", X: 1, Y: -2, Area: 2e5, Highest: 40},
-			{Number: 1, Kind: store.PlaceGroup, Name: "The Brothers", Biome: "rocky", X: 3000, Y: 2},
+			{Number: 0, Kind: store.PlaceIsland, Name: "Port Royal", Biome: "wooded", Size: "large", X: 1, Y: -2, Area: 2e5, Highest: 40, Island: -1},
+			{Number: 1, Kind: store.PlaceGroup, Name: "The Brothers", Biome: "rocky", X: 3000, Y: 2, Island: -1},
+			{Number: 2, Kind: "port", Name: "Old Harbour", Biome: "wooded", X: 10, Y: 20, Island: 0, Details: []byte(`{"depth": 4.5}`)},
+			{Number: 3, Kind: "lighthouse", Name: "Old Harbour Light", Biome: "wooded", X: 12, Y: 22, Island: 0, Details: []byte(`{"offers": []}`)},
+			{Number: 4, Kind: "reef", Name: "Blowers Rocks", X: 4000, Y: 50, Island: -1, Details: []byte(`{"offshore": true}`)},
+		},
+		Lights: []store.Light{
+			{Number: 0, Place: 3, Role: "port", Character: "Fl(2) W 15s", Phase: 1234567, Range: 4630, Focal: 31.5, Tower: 30, Daymark: 1},
 		},
 	}
 	for i := range 256 {
@@ -76,8 +83,11 @@ func TestBundleRoundTrip(t *testing.T) {
 			t.Fatalf("chunk %d differs", i)
 		}
 	}
-	if len(got.Places) != 2 || got.Places[0] != b.Places[0] || got.Places[1] != b.Places[1] {
+	if fmt.Sprint(got.Places) != fmt.Sprint(b.Places) {
 		t.Errorf("the places read back as %+v", got.Places)
+	}
+	if fmt.Sprint(got.Lights) != fmt.Sprint(b.Lights) {
+		t.Errorf("the lights read back as %+v", got.Lights)
 	}
 	seed, generator, ok, err := s.WorldSeed(ctx, w.ID)
 	if err != nil || !ok || seed != b.Seed || generator != b.Generator {
@@ -129,7 +139,7 @@ func TestBundleMigration(t *testing.T) {
 	pool := storetest.PoolOn(t, u)
 	checkPartitioned(t, pool)
 	// The existing world has its partitions, and no seed until it is made.
-	for _, table := range []string{"world_bundle_w1", "world_chunk_w1", "place_w1"} {
+	for _, table := range []string{"world_bundle_w1", "world_chunk_w1", "place_w1", "light_w1"} {
 		var n int
 		if err := pool.QueryRow(ctx, "SELECT count(*) FROM pg_class WHERE relname = $1", table).Scan(&n); err != nil || n != 1 {
 			t.Errorf("no partition %s (%v)", table, err)
@@ -138,7 +148,15 @@ func TestBundleMigration(t *testing.T) {
 	if _, _, ok, err := s.WorldSeed(ctx, w.ID); ok || err != nil {
 		t.Errorf("an existing world has a seed after the migration: %v %v", ok, err)
 	}
-	refused(t, exec(t, pool, "INSERT INTO place (world_id, number, kind, name, biome, x, y) VALUES ($1, 0, 'port', 'X', 'b', 0, 0)", w.ID), "23514")
+	refused(t, exec(t, pool, "INSERT INTO place (world_id, number, kind, name, biome, x, y) VALUES ($1, 0, 'harbour', 'X', 'b', 0, 0)", w.ID), "23514")
+	// The places' kinds, an offshore place without a biome, and a light on
+	// a place: but never a light on a place the world has not.
+	must(t, pool, "INSERT INTO place (world_id, number, kind, name, biome, x, y) VALUES ($1, 0, 'island', 'Port Royal', 'wooded', 0, 0)", w.ID)
+	must(t, pool, `INSERT INTO place (world_id, number, kind, name, x, y, island, details) VALUES ($1, 1, 'lighthouse', 'X Light', 0, 0, 0, '{"offers": []}')`, w.ID)
+	must(t, pool, "INSERT INTO place (world_id, number, kind, name, x, y) VALUES ($1, 2, 'reef', 'Y Reef', 4000, 0)", w.ID)
+	must(t, pool, "INSERT INTO light (world_id, number, place, role, character, phase, reach, focal, tower, daymark) VALUES ($1, 0, 1, 'main', 'Fl(3) W 15s', 0, 8334, 90, 60, 0)", w.ID)
+	refused(t, exec(t, pool, "INSERT INTO light (world_id, number, place, role, character, phase, reach, focal, tower, daymark) VALUES ($1, 1, 9, 'edge', 'Fl W 5s', 0, 3704, 40, 30, 0)", w.ID), "23503")
+	refused(t, exec(t, pool, "INSERT INTO light (world_id, number, place, role, character, phase, reach, focal, tower, daymark) VALUES ($1, 2, 2, 'buoy', 'Fl W 5s', 0, 3704, 40, 30, 0)", w.ID), "23514")
 	refused(t, exec(t, pool, "INSERT INTO world_chunk (world_id, chunk, payload, digest) VALUES ($1, 256, '\\x00', $2)", w.ID, bytes.Repeat([]byte{1}, 32)), "23514")
 }
 

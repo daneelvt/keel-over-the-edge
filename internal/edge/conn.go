@@ -77,8 +77,10 @@ type conn struct {
 	sea     connSea
 	wx      connWeather
 	handout connChunks // what of the land the client has been handed: the encoder's
-	margin  margin
-	ack     atomic.Int64 // the newest snapshot's tick the client has decoded
+	// lightsSent is which lights the client has been sent: the encoder's.
+	lightsSent connLights
+	margin     margin
+	ack        atomic.Int64 // the newest snapshot's tick the client has decoded
 	// resync: the client lacks a base and asked for a full snapshot.
 	resync     atomic.Bool
 	lastResync time.Time

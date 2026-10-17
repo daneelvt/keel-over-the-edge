@@ -37,6 +37,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -128,6 +129,7 @@ type database interface {
 	LoadBundle(ctx context.Context, world [16]byte) (*store.Bundle, error)
 	StoreBundle(ctx context.Context, world [16]byte, epoch int64, b *store.Bundle) error
 	SetChunkKey(ctx context.Context, world [16]byte, epoch int64, key []byte) ([]byte, error)
+	BeginWorld(ctx context.Context, lease int64, number int, epoch time.Time) (store.World, error)
 	owner.Accounts
 	Stats() store.PoolStats
 	Close()
@@ -211,6 +213,10 @@ type serveOptions struct {
 // panics: a bug there stops the process, and the next restores the last
 // checkpoint.
 func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer, opt serveOptions) error {
+	// The owner's tools may stop the server, as a signal does, to start
+	// again in a new world.
+	ctx, restart := context.WithCancel(ctx)
+	defer restart()
 	cfg, err := config.Load(getenv)
 	if err != nil {
 		return err
@@ -385,6 +391,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	var terrainDigest [32]byte
 	var chunks *api.Chunks
 	var handout, roamHandout *edge.Handout
+	var mainLight *pb.Light
 	if cfg.Land {
 		terrain = bundle.Terrain(cat.PrepareGround())
 		terrainDigest = bundle.Digest
@@ -392,7 +399,15 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat))
 		// The owner's free camera sees from higher: its own handout.
 		roamHandout = edge.NewHandout(bundle.Ground, chunks.Paths(), roamRule(cat))
-		log.Info("serving the world's chunks", "bytes", chunks.Size())
+		// The places go with their chunks, the lights by range.
+		places := wirePlaces(bundle, cat)
+		var lights *edge.Lights
+		mainLight, lights = wireLights(bundle, cat)
+		for _, h := range []*edge.Handout{handout, roamHandout} {
+			h.SetPlaces(places)
+			h.SetLights(lights)
+		}
+		log.Info("serving the world's chunks", "bytes", chunks.Size(), "places", len(places), "lights", len(bundle.Lights))
 	} else {
 		log.Warn("land is off: the world's terrain is sailed as open sea")
 	}
@@ -432,7 +447,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
 		Land: cfg.Land, Chunks: handout, Circulation: circulationOf(terrain),
-		Lip: timeline.Prepared().Edge(), RoamChunks: roamHandout,
+		Lip: timeline.Prepared().Edge(), RoamChunks: roamHandout, MainLight: mainLight,
 	})
 	lasting := persist.New(persist.Config{
 		Frames: b.Frames, Store: writer, World: sailed.ID, Epoch: leaseEpoch,
@@ -459,6 +474,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	tools := ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: bundle, made: held.made, sailed: sailed, timeline: timeline, terrain: terrain,
 		db: db, sessions: sessions, game: game, clock: tickLoop, page: worldPage, log: log, metrics: metrics,
+		lease: leaseEpoch, restart: restart,
 	})
 	ownerHandler.set(tools.Handler())
 	log.Info("the world page is on the internal listener", "path", "/owner/", "built", worldPage != nil)
@@ -664,6 +680,10 @@ type ownerConfig struct {
 	page     *api.Page
 	log      *slog.Logger
 	metrics  *obs.Metrics
+	// lease is the lease's epoch the world's writes are fenced by; restart
+	// stops the server, to start again.
+	lease   int64
+	restart func()
 }
 
 // ownerTools are the owner's tools: the world page and its controls.
@@ -682,6 +702,16 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Sessions: c.sessions, Edge: c.game, Page: c.page, Log: c.log, Metrics: c.metrics,
+		Restart: c.restart,
+		BeginWorld: func(ctx context.Context, number int) (store.World, error) {
+			return c.db.BeginWorld(ctx, c.lease, number, time.Now())
+		},
+	}
+	for _, k := range c.cat.World.Places.Kinds {
+		cfg.PlaceKinds = append(cfg.PlaceKinds, owner.PlaceKind{ID: string(k.ID), Name: k.Name, Site: string(k.Site), Mark: k.Mark})
+	}
+	for _, ch := range c.cat.World.Lights.Characters {
+		cfg.Characters = append(cfg.Characters, owner.Character{Notation: ch.Notation, Colour: string(ch.Colour), Steps: ch.Steps})
 	}
 	if t := c.terrain; t != nil {
 		cfg.Ground, cfg.Shelter, cfg.Circulation = t.Ground, t.Shelter, t.Circulation

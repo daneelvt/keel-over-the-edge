@@ -93,6 +93,11 @@ func writeSummary(w io.Writer, b *worldgen.Bundle) {
 		len(b.Islands), len(b.Groups), b.Report.LandShare, b.Report.Open)
 	fmt.Fprintf(w, "  by size:  %s\n", counted(b.Report.ByClass))
 	fmt.Fprintf(w, "  by biome: %s\n", counted(b.Report.ByBiome))
+	kinds := map[string]int{}
+	for _, p := range b.Places {
+		kinds[p.Kind]++
+	}
+	fmt.Fprintf(w, "%d places and %d lights\n  by kind:  %s\n", len(b.Places), len(b.Lights), counted(kinds))
 	port := b.MainPort()
 	fmt.Fprintf(w, "%s: %.0f m across, %.1f m high, cliffs on %.0f%% of its coast; boats start %d places off it\n",
 		port.Name, port.Across, port.Highest, 100*port.Cliffs, len(b.Start.Places))

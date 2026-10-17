@@ -47,6 +47,12 @@ type made struct {
 	stacks    int32
 	reef      bool
 	lagoon    float64 // the lagoon's width behind its reef, m
+	reefAt    float64 // how far its reef's crest is from its coast, m
+	barAt     float64 // how far its bar is from its coast, m; 0 for none
+	crest     []int32 // its reef's crest: the hexagons of its grid awash
+	bar       []int32 // its bar's hexagons, the shallowest across it
+	reefRock  int32   // the hexagon of its grid its reef's rock stands on, or -1
+	bays      int     // how many bays its shape has bitten into its coast
 	twin      bool
 	shoreline float64 // its shoreline development index, on the smoothed coast
 	// approach is the water within approachReach of its coast, as columns
@@ -410,7 +416,7 @@ func (g *islandGrid) distances(seed []bool, d []float64, near []int32, xs []floa
 func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work) *made {
 	s := newStream(seed, streamIsland+uint64(n))
 	b := &c.biomes[sp.biome]
-	m := &made{spot: sp, number: n}
+	m := &made{spot: sp, number: n, reefRock: -1}
 	var sh *shape
 	tries := 1
 	if sp.kind == kindLandmark {
@@ -429,6 +435,7 @@ func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work) *made {
 		}
 	}
 	m.shoreline = sh.shorelineIndex
+	m.bays = len(sh.bays)
 	landReach := float64(sh.extent * sp.radius)
 	bedReach := float64(min(c.seabed.ReachBase+float64(c.seabed.ReachPerRadius*sp.radius), c.seabed.ReachMost) *
 		(1 + c.seabed.ReachVaries))

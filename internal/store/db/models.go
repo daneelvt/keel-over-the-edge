@@ -50,17 +50,32 @@ type Event struct {
 	Distance       pgtype.Float8
 }
 
+type Light struct {
+	WorldID   pgtype.UUID
+	Number    int32
+	Place     int32
+	Role      string
+	Character string
+	Phase     int64
+	Reach     float64
+	Focal     float64
+	Tower     float64
+	Daymark   int16
+}
+
 type Place struct {
 	WorldID pgtype.UUID
 	Number  int32
 	Kind    string
 	Name    string
-	Biome   string
+	Biome   pgtype.Text
 	Size    pgtype.Text
 	X       float64
 	Y       float64
 	Area    pgtype.Float8
 	Highest pgtype.Float8
+	Island  pgtype.Int4
+	Details []byte
 }
 
 type Sailor struct {

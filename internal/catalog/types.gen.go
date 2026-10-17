@@ -189,6 +189,14 @@ type Catalog struct {
 	World World `json:"world"`
 }
 
+type Class string
+
+const ClassFl Class = "Fl"
+const ClassIso Class = "Iso"
+const ClassLFl Class = "LFl"
+const ClassMo Class = "Mo"
+const ClassOc Class = "Oc"
+
 // A colour, as #rrggbb in sRGB.
 type Colour string
 
@@ -368,9 +376,144 @@ type ID string
 
 type Light string
 
+// A light's character: its notation, class, group and colour, and its light and
+// dark in turn.
+type LightCharacter struct {
+	// Its class.
+	Class Class `json:"class"`
+
+	// Its colour.
+	Colour LightCharacterColour `json:"colour"`
+
+	// Its number in a group, or a Morse letter.
+	Group string `json:"group"`
+
+	// As charts write it.
+	Notation string `json:"notation"`
+
+	// Its light and dark in turn, beginning with light, in ms.
+	Steps []int `json:"steps"`
+}
+
+type LightCharacterColour string
+
+const LightCharacterColourGreen LightCharacterColour = "green"
+const LightCharacterColourRed LightCharacterColour = "red"
+const LightCharacterColourWhite LightCharacterColour = "white"
+
+// The lights' colours.
+type LightColours struct {
+	// A colour, #rrggbb.
+	Green string `json:"green"`
+
+	// A colour, #rrggbb.
+	Red string `json:"red"`
+
+	// A colour, #rrggbb.
+	White string `json:"white"`
+}
+
+// A tower's daymark.
+type LightDaymark struct {
+	// A colour, #rrggbb.
+	Band string `json:"band"`
+
+	// A colour, #rrggbb.
+	Body string `json:"body"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+}
+
+// The ring of lights on the approach to the edge.
+type LightEdge struct {
+	// How many.
+	Count int `json:"count"`
+
+	// At least this far inside the lip, in m.
+	Inside float64 `json:"inside"`
+
+	// Each within this of its bearing, in degrees.
+	Within float64 `json:"within"`
+}
+
+// Which hazards are lit.
+type LightHazards struct {
+	// Rocks and fringing reefs beyond this, in nautical miles.
+	Beyond float64 `json:"beyond"`
+
+	// One light for hazards within this of each other, in m.
+	Merge float64 `json:"merge"`
+}
+
+// How lighthouses are drawn.
+type LightLook struct {
+	// Beams are seen within this of the light, in m.
+	Beams float64 `json:"beams"`
+
+	// A colour, #rrggbb.
+	Copper string `json:"copper"`
+
+	// The towers' daymarks.
+	Daymarks []LightDaymark `json:"daymarks"`
+
+	// The glow's width at the lantern, in m.
+	Glow float64 `json:"glow"`
+
+	// A colour, #rrggbb.
+	Iron string `json:"iron"`
+
+	// The least it is drawn, in CSS pixels.
+	Least float64 `json:"least"`
+
+	// The loom's strength beside the light's own.
+	Loom float64 `json:"loom"`
+
+	// A flash rises and falls over this share of it.
+	Rise float64 `json:"rise"`
+
+	// A colour, #rrggbb.
+	Stone string `json:"stone"`
+}
+
 const LightPort Light = "port"
+
+// Nominal ranges, in nautical miles.
+type LightRange struct {
+	// A red or green light's, as a share of a white one's.
+	Colour float64 `json:"colour"`
+
+	// An edge light's.
+	Edge float64 `json:"edge"`
+
+	// A hazard's.
+	Hazard float64 `json:"hazard"`
+
+	// Port Royal's.
+	MainPort float64 `json:"mainPort"`
+
+	// A port's.
+	Port float64 `json:"port"`
+}
+
 const LightStarboard Light = "starboard"
 const LightStern Light = "stern"
+
+// Each light's tower's height, in m.
+type LightTowers struct {
+	// An edge light's.
+	Edge float64 `json:"edge"`
+
+	// A hazard's.
+	Hazard float64 `json:"hazard"`
+
+	// Port Royal's.
+	MainPort float64 `json:"mainPort"`
+
+	// A port's.
+	Port float64 `json:"port"`
+}
+
 const LightTricolour Light = "tricolour"
 
 // The drain's foam lines.
@@ -833,6 +976,163 @@ type PhysicsSailor struct {
 	SwimTime float64 `json:"swimTime"`
 }
 
+// How long a wreck has lain: how much of her is left.
+type PlaceAge struct {
+	// The share of her hull left.
+	Hull float64 `json:"hull"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// The share of her masts left.
+	Masts float64 `json:"masts"`
+}
+
+// An anchorage's site.
+type PlaceAnchorage struct {
+	// Anchorages at least this far apart, in m.
+	Apart float64 `json:"apart"`
+
+	// Shallower than this, in m.
+	Clear float64 `json:"clear"`
+
+	// The water's depth, in m.
+	Depth []float64 `json:"depth"`
+
+	// A direction is sheltered when its fetch is under this, in m.
+	Fetch float64 `json:"fetch"`
+
+	// good when this many.
+	Good int `json:"good"`
+
+	// Land within this, in m.
+	Land float64 `json:"land"`
+
+	// Snug when this many of the 16 directions are sheltered,
+	Snug int `json:"snug"`
+
+	// Sampled this far apart, in m.
+	Step float64 `json:"step"`
+
+	// No shallower water within this, in m: room to swing.
+	Swing float64 `json:"swing"`
+}
+
+// A sandbar's site.
+type PlaceBar struct {
+	// A bar runs at least this far, in m.
+	Length float64 `json:"length"`
+}
+
+// A cove's site.
+type PlaceCove struct {
+	// Its width, in m.
+	Across []float64 `json:"across"`
+
+	// Bays are found by closing the coast with a disc of this radius, in m.
+	Closing float64 `json:"closing"`
+
+	// Water at least this deep at its mouth, in m.
+	Mouth float64 `json:"mouth"`
+}
+
+// A port's site.
+type PlaceHarbour struct {
+	// Ports at least this far apart, in nautical miles.
+	Apart float64 `json:"apart"`
+
+	// Water this deep, in m,
+	Depth float64 `json:"depth"`
+
+	// within this of the shore, in m.
+	Within float64 `json:"within"`
+}
+
+// A kind of place: what makes its site, how many a world has, and its mark on the
+// world page.
+type PlaceKind struct {
+	// How many a world has, the least and the most.
+	Count []int `json:"count"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// A colour, #rrggbb.
+	Mark string `json:"mark"`
+
+	// Its name, as the world page lists it.
+	Name string `json:"name"`
+
+	// The rule its sites are found by.
+	Site Site `json:"site"`
+}
+
+// A lagoon's site.
+type PlaceLagoon struct {
+	// The water behind the reef at least this wide, in m.
+	Width float64 `json:"width"`
+}
+
+// A point, where a light stands: coast with this much water about it.
+type PlacePoint struct {
+	// Within this, in m,
+	Reach float64 `json:"reach"`
+
+	// this share of the ground water.
+	Water float64 `json:"water"`
+}
+
+// A reef's site.
+type PlaceReef struct {
+	// A fringing reef's crest runs at least this far, in m.
+	Crest float64 `json:"crest"`
+}
+
+// A wrecked ship's rig, and how she is drawn.
+type PlaceRig struct {
+	// Her beam, in m.
+	Beam float64 `json:"beam"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Her length, in m.
+	Length float64 `json:"length"`
+
+	// Her mainmast's height above the deck, in m.
+	Mast float64 `json:"mast"`
+
+	// Her masts.
+	Masts int `json:"masts"`
+}
+
+// A fishing village's site.
+type PlaceVillage struct {
+	// Villages and ports at least this far apart, in m.
+	Apart float64 `json:"apart"`
+
+	// within this, in m.
+	Ground float64 `json:"ground"`
+
+	// Its fishing ground: water shallower than this, in m,
+	Shallows float64 `json:"shallows"`
+
+	// The size classes of island it may be on.
+	Sizes []string `json:"sizes"`
+}
+
+// A wreck's site.
+type PlaceWreck struct {
+	// Sunk in water this deep, in m,
+	Depth []float64 `json:"depth"`
+
+	// At least this many in the mist band.
+	Mist int `json:"mist"`
+
+	// within this of a reef, rock or bar, in m.
+	Near float64 `json:"near"`
+}
+
 // A kind of spell of weather.
 type Regime struct {
 	// A spell of it arrives and leaves as a front does: the wind veers.
@@ -920,6 +1220,18 @@ type SequenceSpell struct {
 	// Regime corresponds to the JSON schema field "regime".
 	Regime ID `json:"regime"`
 }
+
+type Site string
+
+const SiteAnchorage Site = "anchorage"
+const SiteBar Site = "bar"
+const SiteCove Site = "cove"
+const SiteHarbour Site = "harbour"
+const SiteLagoon Site = "lagoon"
+const SiteLight Site = "light"
+const SiteReef Site = "reef"
+const SiteVillage Site = "village"
+const SiteWreck Site = "wreck"
 
 // The sky's numbers: the lengths of its day, year and month, its scale, the moment
 // it is counted from, and the stars with names. Where each body stands follows
@@ -1225,11 +1537,17 @@ type World struct {
 	// Handout corresponds to the JSON schema field "handout".
 	Handout WorldHandout `json:"handout"`
 
+	// Hazards corresponds to the JSON schema field "hazards".
+	Hazards WorldHazards `json:"hazards"`
+
 	// The lowest and the highest land, in m.
 	Land []float64 `json:"land"`
 
 	// Layout corresponds to the JSON schema field "layout".
 	Layout WorldLayout `json:"layout"`
+
+	// Lights corresponds to the JSON schema field "lights".
+	Lights WorldLights `json:"lights"`
 
 	// Look corresponds to the JSON schema field "look".
 	Look WorldLook `json:"look"`
@@ -1239,6 +1557,9 @@ type World struct {
 
 	// Names corresponds to the JSON schema field "names".
 	Names WorldNames `json:"names"`
+
+	// Places corresponds to the JSON schema field "places".
+	Places WorldPlaces `json:"places"`
 
 	// Reef corresponds to the JSON schema field "reef".
 	Reef WorldReef `json:"reef"`
@@ -1373,6 +1694,52 @@ type WorldHandout struct {
 	Shallows float64 `json:"shallows"`
 }
 
+// Offshore hazards: reefs and sandbanks away from every island's shelf, each with
+// a rock its light stands on.
+type WorldHazards struct {
+	// And this far from the next hazard, in m.
+	Apart float64 `json:"apart"`
+
+	// The water over a bank, in m.
+	BankDepth []float64 `json:"bankDepth"`
+
+	// A bank's length, in m.
+	BankLength []float64 `json:"bankLength"`
+
+	// Offshore sandbanks a world has.
+	Banks int `json:"banks"`
+
+	// In nautical miles from the centre.
+	Beyond float64 `json:"beyond"`
+
+	// A hazard lies at least this far from any land, in m.
+	Clear float64 `json:"clear"`
+
+	// Of each kind, at least this many lie beyond beyond.
+	Outer int `json:"outer"`
+
+	// Its crest's depth, in m.
+	ReefCrest []float64 `json:"reefCrest"`
+
+	// A reef's length, in m.
+	ReefLength []float64 `json:"reefLength"`
+
+	// Offshore reefs a world has.
+	Reefs int `json:"reefs"`
+
+	// Hazards lie between these distances from the centre, in nautical miles.
+	Ring []float64 `json:"ring"`
+
+	// Its height above the sea, in m.
+	RockHeight []float64 `json:"rockHeight"`
+
+	// A hazard's rock's hexagons.
+	RockHexes []int `json:"rockHexes"`
+
+	// The surface a hazard's rock is.
+	RockSurface ID `json:"rockSurface"`
+}
+
 // Where the islands lie and how big they are.
 type WorldLayout struct {
 	// Candidate places tried for each island; the furthest from the land already
@@ -1417,6 +1784,46 @@ type WorldLayout struct {
 
 	// A rock's width, in m.
 	RockAcross []float64 `json:"rockAcross"`
+}
+
+// Lighthouses: where they stand, their towers, ranges and characters, and how they
+// are drawn.
+type WorldLights struct {
+	// The characters a world's lights are given.
+	Characters []LightCharacter `json:"characters"`
+
+	// The clear air's visibility, in nautical miles.
+	ClearAir float64 `json:"clearAir"`
+
+	// The lights' colours.
+	Colours LightColours `json:"colours"`
+
+	// A light is dropped this far beyond its range, in m.
+	Drop float64 `json:"drop"`
+
+	// The ring of lights on the approach to the edge.
+	Edge LightEdge `json:"edge"`
+
+	// Which hazards are lit.
+	Hazards LightHazards `json:"hazards"`
+
+	// How lighthouses are drawn.
+	Look LightLook `json:"look"`
+
+	// Port Royal's character, the same in every world: a notation of the list.
+	MainPortCharacter string `json:"mainPortCharacter"`
+
+	// Port Royal's stands within this of its coast, in m.
+	MainPortCoast float64 `json:"mainPortCoast"`
+
+	// Nominal ranges, in nautical miles.
+	Range LightRange `json:"range"`
+
+	// The least illuminance a light is seen by, in lux.
+	Threshold float64 `json:"threshold"`
+
+	// Each light's tower's height, in m.
+	Towers LightTowers `json:"towers"`
 }
 
 // How the land and the shallows are drawn.
@@ -1492,6 +1899,58 @@ type WorldNames struct {
 
 	// The tones of names.
 	Tones []NameTone `json:"tones"`
+
+	// A reef with a wreck on it takes her name by this chance.
+	WreckReef float64 `json:"wreckReef"`
+}
+
+// Places: what a sailor finds besides islands, each where the ground makes it
+// true.
+type WorldPlaces struct {
+	// How long a wreck may have lain.
+	Ages []PlaceAge `json:"ages"`
+
+	// An anchorage's site.
+	Anchorage PlaceAnchorage `json:"anchorage"`
+
+	// A sandbar's site.
+	Bar PlaceBar `json:"bar"`
+
+	// A cove's site.
+	Cove PlaceCove `json:"cove"`
+
+	// Water this deep within 60 m is deep enough for a tall ship, in m.
+	Deep float64 `json:"deep"`
+
+	// A port's site.
+	Harbour PlaceHarbour `json:"harbour"`
+
+	// The kinds of place.
+	Kinds []PlaceKind `json:"kinds"`
+
+	// A lagoon's site.
+	Lagoon PlaceLagoon `json:"lagoon"`
+
+	// A reef or bar shorter than this is small, in m.
+	Long float64 `json:"long"`
+
+	// A point, where a light stands: coast with this much water about it.
+	Point PlacePoint `json:"point"`
+
+	// A reef's site.
+	Reef PlaceReef `json:"reef"`
+
+	// The rigs a wrecked ship may have.
+	Rigs []PlaceRig `json:"rigs"`
+
+	// A cove or lagoon narrower than this is small, in m.
+	Small float64 `json:"small"`
+
+	// A fishing village's site.
+	Village PlaceVillage `json:"village"`
+
+	// A wreck's site.
+	Wreck PlaceWreck `json:"wreck"`
 }
 
 // A fringing reef.
@@ -1619,6 +2078,13 @@ type WorldValidator struct {
 	// Land as a percentage of the disk, the least and the most.
 	LandShare []float64 `json:"landShare"`
 
+	// On a grid this fine, in m.
+	LightGrid float64 `json:"lightGrid"`
+
+	// At every point of water inside the mist band, at least this many lights in
+	// range.
+	LightsInRange int `json:"lightsInRange"`
+
 	// Inside the mist band no water is further than this from land, in m.
 	OpenWater float64 `json:"openWater"`
 
@@ -1640,4 +2106,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "464a6f6db085fabc"
+const Version = "45d4d13033d75374"

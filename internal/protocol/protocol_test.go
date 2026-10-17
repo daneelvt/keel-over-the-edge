@@ -644,6 +644,18 @@ func messages() (clients []*pb.ClientMessage, servers []*pb.ServerMessage) {
 		}}}},
 		{Body: &pb.ServerMessage_Chunks{Chunks: &pb.Chunks{Number: []uint32{205, 0, 255},
 			Path: []string{"/w/0199c2a4-5f7e-7c3a-9d0e-123456789abc/c/205.j25LcdiAYGp3Y3RFfJ4Bkg.bin", "/w/x/c/0.a.bin", ""}}}},
+		{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{World: "0199c2a4-5f7e-7c3a-9d0e-123456789abc", Tick: 1,
+			Land: true, Circulation: -1, Tools: true,
+			Light: &pb.Light{Number: 0, East: 4500, North: -6200, Focal: 8470, Character: 7, Phase: 12345678, Range: 8334}}}},
+		{Body: &pb.ServerMessage_Places{Places: &pb.Places{Places: []*pb.Place{
+			{Number: 249, Kind: 2, East: 4500, North: -6200, Heading: 65535, Ground: 2470, Tower: 6000, Daymark: 2},
+			{Number: 241, Kind: 8, East: -783200, North: 4600, Heading: 1, Rig: 4, Age: 2, Sunk: true, Heel: -5000},
+			{Number: 160, Kind: 0, East: 0, North: 0},
+		}}}},
+		{Body: &pb.ServerMessage_Lights{Lights: &pb.Lights{Lights: []*pb.Light{
+			{Number: 14, East: -779800, North: 12600, Focal: 1760, Character: 27, Phase: 5999999, Range: 1389},
+			{Number: 1, East: -247700, North: -163400, Focal: 3640, Character: 9, Range: 4630},
+		}, Drop: []uint32{3, 0}}}},
 	}
 	return clients, servers
 }

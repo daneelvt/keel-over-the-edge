@@ -223,6 +223,7 @@ describe('pacing online', () => {
       land: false,
       circulation: 0,
       tools: false,
+      light: null,
     });
     const sn = start(100);
     sn.helm = 300;
@@ -325,6 +326,7 @@ describe('the queue and the fleet online', () => {
       land: false,
       circulation: 0,
       tools: false,
+      light: null,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     expect(o.place.value).toBeNull();
@@ -351,6 +353,7 @@ describe('the queue and the fleet online', () => {
       land: false,
       circulation: 0,
       tools: false,
+      light: null,
     });
     const record = new ArrayBuffer(FLEET_RECORD_BYTES);
     writeSnapshot(start(100), new DataView(record));
@@ -385,6 +388,7 @@ describe('the bell online', () => {
       land: false,
       circulation: 0,
       tools: false,
+      light: null,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     return { o, port };
@@ -412,6 +416,7 @@ describe('the bell online', () => {
       land: false,
       circulation: 0,
       tools: false,
+      light: null,
     });
     port.deliver(status('sailing'));
     expect(o.notice.value).toBeNull();
@@ -435,6 +440,7 @@ describe('the bell online', () => {
       land: false,
       circulation: 0,
       tools: false,
+      light: null,
     });
     port.deliver(status('sailing'));
     expect(o.notice.value?.text).toBe('Your boat has returned to port.');

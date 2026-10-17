@@ -9,7 +9,7 @@
 // free camera's eye; and the point clicked. The marks are in Okabe and
 // Ito's colours, distinguishable in colour-blind vision.
 
-import type { Boat, Current, Group, Island, WorldNow } from './api';
+import type { Boat, Current, Group, Island, Light, PlacesData, WorldNow } from './api';
 import { canvasAngle, HALF, rectOf, toScreen, type View } from './map';
 
 export const COLOURS = {
@@ -38,6 +38,8 @@ export interface Layers {
   rings: boolean;
   start: boolean;
   names: boolean;
+  places: boolean;
+  lights: boolean;
   boats: boolean;
 }
 
@@ -50,6 +52,8 @@ export const LAYER_NAMES: Record<keyof Layers, string> = {
   rings: 'Mist band and lip',
   start: 'Start area',
   names: 'Names',
+  places: 'Places',
+  lights: 'Lighthouses',
   boats: 'Boats',
 };
 
@@ -63,6 +67,8 @@ export function allLayers(): Layers {
     rings: true,
     start: true,
     names: true,
+    places: true,
+    lights: true,
     boats: true,
   };
 }
@@ -84,6 +90,9 @@ export interface MapData {
   /** The point clicked, and the boat chosen. */
   picked: [number, number] | null;
   boat: number | null;
+  /** The places and lights, and the light picked, its range drawn. */
+  places: PlacesData | null;
+  light: number | null;
 }
 
 /** Below this many metres a pixel, an island in view is drawn at the lattice's resolution. */
@@ -285,6 +294,42 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
     }
     ctx.textAlign = 'start';
   }
+  if (layers.places && d.places !== null) {
+    const kinds = new Map(d.places.kinds.map((k) => [k.id, k]));
+    for (const p of d.places.places) {
+      const kind = kinds.get(p.kind);
+      if (kind?.site === 'light') {
+        continue; // drawn with the lights
+      }
+      const [x, y] = toScreen(v, p.east, p.north);
+      ctx.fillStyle = kind?.mark ?? '#ffffff';
+      ctx.strokeStyle = 'rgb(0 0 0 / 70%)';
+      ctx.lineWidth = 1;
+      // A diamond, larger for a port.
+      const port = kind?.site === 'harbour';
+      const r = port ? 5 : 3.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      if (layers.names && (v.scale < 3 || port)) {
+        ctx.font = 'italic 10px "Alegreya Sans", sans-serif';
+        ctx.lineWidth = 3;
+        ctx.strokeText(p.name, x + 6, y + 3);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(p.name, x + 6, y + 3);
+      }
+    }
+  }
+  if (layers.lights && d.places !== null) {
+    for (const l of d.places.lights) {
+      drawLight(ctx, v, l, d);
+    }
+  }
   if (layers.boats && now !== null) {
     for (const b of now.boats) {
       const [x, y] = toScreen(v, b.east, b.north);
@@ -348,4 +393,34 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
   ctx.stroke();
   ctx.fillText(metres === 1852 ? '1 nautical mile' : '100 m', 16, v.height - 22);
   ctx.restore();
+}
+
+/** The colours a light's mark shows when it is lit. */
+const LIGHT_COLOURS: Record<string, string> = {
+  white: '#fff3c4',
+  red: '#ff5a3c',
+  green: '#3cff7d',
+};
+
+/** A lighthouse: a ring, and its range when picked; its flashing shows beside its row in the list. */
+function drawLight(ctx: CanvasRenderingContext2D, v: View, l: Light, d: MapData): void {
+  const ch = d.places?.characters[l.character];
+  const [x, y] = toScreen(v, l.east, l.north);
+  const colour = LIGHT_COLOURS[ch?.colour ?? 'white'] ?? '#ffffff';
+  if (l.number === d.light) {
+    ctx.strokeStyle = colour;
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(x, y, l.range / v.scale, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.strokeStyle = '#e8b400';
+  ctx.fillStyle = '#3b2f22';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y, l.role === 'main' ? 6 : 4.5, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
 }

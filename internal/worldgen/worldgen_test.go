@@ -321,7 +321,7 @@ func TestChunkRoundTrip(t *testing.T) {
 	spots, _ := layout(c, 1)
 	port := c.makeIsland(1, 0, spots[0], new(work))
 	n := int32(8*physics.ChunkSide + 8)
-	g := c.raster(n, []*made{port})
+	g := c.raster(n, gridsOf([]*made{port}, nil))
 	sh := newShelterChunk()
 	sh.Values[10], sh.Values[11] = 150, 7
 	world := [16]byte{1, 2, 3}
@@ -436,7 +436,7 @@ func TestStartArea(t *testing.T) {
 	port := c.makeIsland(1, 0, spots[0], new(work))
 	g := new(physics.Ground)
 	for _, n := range []int32{7*physics.ChunkSide + 7, 7*physics.ChunkSide + 8, 8*physics.ChunkSide + 7, 8*physics.ChunkSide + 8} {
-		g.Chunks[n] = c.raster(n, []*made{port})
+		g.Chunks[n] = c.raster(n, gridsOf([]*made{port}, nil))
 	}
 	st := c.startOf(g, port)
 	if len(st.Places) != c.start.Places {
@@ -749,7 +749,12 @@ func TestEachRuleFails(t *testing.T) {
 			w.islands[i] = &mm
 		}
 		w.names = slices.Clone(b.made.names)
+		w.places = slices.Clone(b.made.places)
+		w.lights = slices.Clone(b.made.lights)
 		return &w
+	}
+	without := func(lights []Light, role string) []Light {
+		return slices.DeleteFunc(slices.Clone(lights), func(l Light) bool { return l.Role == role })
 	}
 	landmark := func(w *world) *made {
 		for _, m := range w.islands {
@@ -775,6 +780,7 @@ func TestEachRuleFails(t *testing.T) {
 		{"start area", func(w *world) { w.start.Places = w.start.Places[:10] }},
 		{"landmarks reachable", func(w *world) {
 			w.start.Places = append([][2]float64{{w.islands[0].hx, w.islands[0].hy}}, w.start.Places...)
+			w.reach = nil
 		}},
 		{"open water", func(w *world) {
 			k := *w.coarse
@@ -789,6 +795,18 @@ func TestEachRuleFails(t *testing.T) {
 		{"landmarks' shores", func(w *world) { landmark(w).shoreline = 1.05 }},
 		{"names", func(w *world) { w.names[3] = w.names[2] }},
 		{"land's height", func(w *world) { landmark(w).highest = 95 }},
+		{"places", func(w *world) { w.places = w.places[:5] }},
+		{"ports reachable", func(w *world) {
+			pw := *w.pw
+			pw.reach = make([]uint64, len(pw.reach))
+			w.pw = &pw
+		}},
+		{"ports lit", func(w *world) { w.lights = without(w.lights, RolePort) }},
+		{"hazards lit", func(w *world) { w.lights = without(w.lights, RoleHazard) }},
+		{"edge ring", func(w *world) { w.lights = without(w.lights, RoleEdge) }},
+		{"characters", func(w *world) { w.lights[2].Character = w.lights[1].Character }},
+		{"lights everywhere", func(w *world) { w.lights = w.lights[:1] }},
+		{"place names", func(w *world) { w.places[3].Name = w.places[2].Name }},
 	}
 	for _, cs := range cases {
 		w := clone()
@@ -830,7 +848,7 @@ func TestWholeWorld(t *testing.T) {
 	}
 	// Every chunk rastered alone is the world's.
 	for _, n := range []int32{0, 119, 136, 200} {
-		ch := c.raster(n, b.made.islands)
+		ch := c.raster(n, gridsOf(b.made.islands, b.made.hazards))
 		switch {
 		case ch == nil && b.Ground.Chunks[n] == nil:
 		case ch == nil || b.Ground.Chunks[n] == nil || *ch != *b.Ground.Chunks[n]:
@@ -960,6 +978,7 @@ func TestSeeds(t *testing.T) {
 		t.Skip("-seeds N runs it")
 	}
 	cat := testCatalog(t)
+	c0 := testConfig(t)
 	type result struct {
 		seed     uint64
 		ms       float64
@@ -969,6 +988,10 @@ func TestSeeds(t *testing.T) {
 		classes  map[string]int
 		biomes   map[string]int
 		failed   []string
+		kinds    map[string]int
+		lights   int
+		chars    []string
+		placesMs float64
 	}
 	results := make([]result, *seeds)
 	t.Run("seeds", func(t *testing.T) {
@@ -982,6 +1005,16 @@ func TestSeeds(t *testing.T) {
 				if b != nil {
 					r.attempts, r.share, r.open, r.classes, r.biomes = b.Attempts, b.Report.LandShare, b.Report.Open, b.Report.ByClass, b.Report.ByBiome
 					r.failed = failedRules(b.Report.Rules)
+					r.kinds, r.lights = map[string]int{}, len(b.Lights)
+					for _, p := range b.Places {
+						r.kinds[p.Kind]++
+					}
+					for _, l := range b.Lights {
+						r.chars = append(r.chars, l.Notation)
+					}
+					for _, st := range []string{"hazards", "places", "lights", "placeNames"} {
+						r.placesMs += b.Report.Millis[st]
+					}
 				}
 				results[i] = r
 				if err != nil {
@@ -1013,6 +1046,38 @@ func TestSeeds(t *testing.T) {
 	t.Logf("%d seeds: made in median %.0f ms, worst %.0f ms; attempts %v", len(results), ms[len(ms)/2], ms[len(ms)-1], attempts)
 	t.Logf("land share: least %.2f%%, median %.2f%%, most %.2f%%; widest open water: median %.0f m, most %.0f m",
 		share[0], share[len(share)/2], share[len(share)-1], open[len(open)/2], open[len(open)-1])
+	// The places by kind and the lights: the least, median and most a world
+	// has; how long they took; and how often each character is given.
+	perKind := map[string][]int{}
+	var lights []int
+	var placesMs []float64
+	used := map[string]int{}
+	for _, r := range results {
+		for _, k := range c0.places.Kinds {
+			perKind[string(k.ID)] = append(perKind[string(k.ID)], r.kinds[string(k.ID)])
+		}
+		lights = append(lights, r.lights)
+		placesMs = append(placesMs, r.placesMs)
+		for _, ch := range r.chars {
+			used[ch]++
+		}
+	}
+	spread := func(v []int) string {
+		sort.Ints(v)
+		return fmt.Sprintf("%d–%d (median %d)", v[0], v[len(v)-1], v[len(v)/2])
+	}
+	line := ""
+	for _, k := range c0.places.Kinds {
+		line += fmt.Sprintf(" %s %s;", k.ID, spread(perKind[string(k.ID)]))
+	}
+	t.Logf("places by kind:%s lights %s", line, spread(lights))
+	sort.Float64s(placesMs)
+	t.Logf("places and lights made in median %.0f ms, worst %.0f ms", placesMs[len(placesMs)/2], placesMs[len(placesMs)-1])
+	var chars []string
+	for _, ch := range c0.lights.Characters {
+		chars = append(chars, fmt.Sprintf("%s %d", ch.Notation, used[ch.Notation]))
+	}
+	t.Logf("characters given: %s", strings.Join(chars, ", "))
 	for _, m := range []map[string]int{classes, biomes} {
 		keys := make([]string, 0, len(m))
 		for k := range m {

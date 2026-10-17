@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -38,6 +39,42 @@ func (s *Store) ActiveWorld(ctx context.Context) (World, error) {
 func (s *Store) CreateWorld(ctx context.Context, epoch time.Time) (World, error) {
 	var w World
 	err := s.inTx(ctx, func(q *db.Queries) error {
+		row, err := q.InsertWorld(ctx, epoch)
+		if err != nil {
+			return err
+		}
+		w = World{ID: row.ID.Bytes, Number: int(row.Number), Epoch: row.Epoch.UTC()}
+		return q.CreateWorldPartitions(ctx, row.ID)
+	})
+	return w, err
+}
+
+// ErrNotActive is a world asked to end that is not the active one.
+var ErrNotActive = errors.New("store: that world is not the active one")
+
+// BeginWorld ends the active world, whose number must be the number given,
+// and makes the next, active from now with the epoch given, with its
+// partitions: in one transaction fenced by the lease's epoch, as the
+// world's writes are. A world that is not active, or another's number, is
+// ErrNotActive; another epoch's write, ErrFenced. The ended world's data
+// stays, in its partitions.
+func (s *Store) BeginWorld(ctx context.Context, lease int64, number int, epoch time.Time) (World, error) {
+	var w World
+	err := s.inTx(ctx, func(q *db.Queries) error {
+		e, err := q.LeaseEpochForShare(ctx)
+		if err != nil {
+			return err
+		}
+		if e != lease {
+			return fmt.Errorf("%w: the epoch is %d, the writer's %d", ErrFenced, e, lease)
+		}
+		n, err := q.EndWorld(ctx, int32(number))
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("%w: world %d", ErrNotActive, number)
+		}
 		row, err := q.InsertWorld(ctx, epoch)
 		if err != nil {
 			return err

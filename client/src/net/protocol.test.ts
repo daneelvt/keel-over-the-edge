@@ -13,7 +13,7 @@ import messages from '../../../shared/protocol/testdata/messages.json';
 import snapshots from '../../../shared/protocol/testdata/snapshots.json';
 import { RECORDS } from '../predict/layout.gen';
 import { decodeClient, decodeServer, encodeClient, encodeServer } from './frame';
-import type { SpellSchema } from './gen/keel/v1/game_pb';
+import type { LightSchema, PlaceSchema, SpellSchema } from './gen/keel/v1/game_pb';
 import {
   GROUND_HELD,
   GROUND_SIZE,
@@ -444,6 +444,78 @@ describe('the envelopes', () => {
             '/w/x/c/0.a.bin',
             '',
           ] as string[],
+        },
+      },
+    },
+    {
+      body: {
+        case: 'welcome',
+        value: {
+          world: '0199c2a4-5f7e-7c3a-9d0e-123456789abc',
+          tick: 1n,
+          land: true,
+          circulation: -1,
+          tools: true,
+          light: {
+            number: 0,
+            east: 4500,
+            north: -6200,
+            focal: 8470,
+            character: 7,
+            phase: 12345678n,
+            range: 8334,
+          },
+        },
+      },
+    },
+    {
+      body: {
+        case: 'places',
+        value: {
+          places: [
+            {
+              number: 249,
+              kind: 2,
+              east: 4500,
+              north: -6200,
+              heading: 65535,
+              ground: 2470,
+              tower: 6000,
+              daymark: 2,
+            },
+            {
+              number: 241,
+              kind: 8,
+              east: -783200,
+              north: 4600,
+              heading: 1,
+              rig: 4,
+              age: 2,
+              sunk: true,
+              heel: -5000,
+            },
+            { number: 160, kind: 0, east: 0, north: 0 },
+          ] as MessageInitShape<typeof PlaceSchema>[],
+        },
+      },
+    },
+    {
+      body: {
+        case: 'lights',
+        value: {
+          lights: [
+            {
+              number: 14,
+              east: -779800,
+              north: 12600,
+              focal: 1760,
+              character: 27,
+              phase: 5999999n,
+              range: 1389,
+            },
+            { number: 1, east: -247700, north: -163400, focal: 3640, character: 9, range: 4630 },
+          ] as MessageInitShape<typeof LightSchema>[],
+          drop: [3, 0] as number[],
         },
       },
     },

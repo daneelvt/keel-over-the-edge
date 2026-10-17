@@ -36,7 +36,14 @@ import { CATALOG_VERSION, catalog } from '../catalog';
 import { STEPS_PER_SECOND } from '../game/clock';
 import { Game } from '../game/game';
 import { Land } from '../land/land';
-import { FILE_WORLD, fetchWorldFile, handWorld, type WorldFile } from '../land/world';
+import {
+  FILE_WORLD,
+  fetchWorldFile,
+  handWorld,
+  lightsSeen,
+  placesSeen,
+  type WorldFile,
+} from '../land/world';
 import { Online } from '../net/online';
 import { reloadForVersion } from '../net/reload';
 import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
@@ -136,6 +143,16 @@ async function start(): Promise<void> {
         catalog.world.handout,
         () => [s[RECORDS.state.x] ?? 0, s[RECORDS.state.y] ?? 0],
         { rule: high, where: () => (free.on ? [free.east, free.north] : null) },
+        {
+          places: placesSeen(file, catalog.world.places),
+          lights: lightsSeen(file),
+          drop: catalog.world.lights.drop,
+          onPlaces: (p) => {
+            world.lighthouses.setPlaces(p);
+            world.wrecks.setPlaces(p);
+          },
+          onLights: (l, drop) => world.lighthouses.setLights(l, drop),
+        },
       );
     }
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
@@ -218,8 +235,22 @@ async function start(): Promise<void> {
   // The free camera is the owner's alone: the server hears it from no other.
   game.canFly = () => online.tools.value;
   game.onRoam = (on, east, north, height) => online.roam(on, east, north, height);
-  online.onWorld = (id, sailed) => land.setWorld(id, sailed, sailed ? predictor.physics : null);
+  let worldId = '';
+  online.onWorld = (id, sailed) => {
+    if (id !== worldId) {
+      // Another world: its places and lights are its own.
+      world.lighthouses.clear();
+      world.wrecks.clear();
+      worldId = id;
+    }
+    land.setWorld(id, sailed, sailed ? predictor.physics : null);
+  };
   online.onChunks = (c) => land.hand(c.numbers, c.paths);
+  online.onPlaces = (p) => {
+    world.lighthouses.setPlaces(p);
+    world.wrecks.setPlaces(p);
+  };
+  online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
   // while the sea is full.

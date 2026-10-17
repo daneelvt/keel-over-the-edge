@@ -216,6 +216,7 @@ type memDB struct {
 	events     []store.Event
 	down       bool // the world's writes fail
 	bundle     *store.Bundle
+	number     int // worlds ended before the active one
 }
 
 // emptyWorld makes a world of open sea at once: the generator of the
@@ -415,8 +416,27 @@ func (d *memDB) Touch(context.Context, [32]byte) error      { return nil }
 func (d *memDB) CheckSchema(context.Context) (int64, error) { return store.Latest, nil }
 func (d *memDB) Stats() store.PoolStats                     { return store.PoolStats{Max: store.MaxConns} }
 
+// BeginWorld begins the next world: the world's terrain and checkpoint go
+// with the one ended.
+func (d *memDB) BeginWorld(_ context.Context, lease int64, number int, epoch time.Time) (store.World, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if lease != d.leaseEpoch {
+		return store.World{}, store.ErrFenced
+	}
+	if number != d.number+1 {
+		return store.World{}, store.ErrNotActive
+	}
+	d.number++
+	d.epoch = epoch
+	d.bundle, d.checkpoint, d.events = nil, nil, nil
+	return store.World{Number: d.number + 1, Epoch: epoch}, nil
+}
+
 func (d *memDB) ActiveOrFirstWorld(context.Context, time.Time) (store.World, error) {
-	return store.World{Number: 1, Epoch: d.epoch}, nil
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return store.World{Number: d.number + 1, Epoch: d.epoch}, nil
 }
 
 func (d *memDB) Close() {

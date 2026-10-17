@@ -28,9 +28,9 @@ func chunkOutside(n int32, radius float64) bool {
 	return hypot(nx, ny) > radius+physics.HexAcross
 }
 
-// raster makes chunk n's ground from the islands; nil if it lies wholly
-// outside the disk.
-func (c *config) raster(n int32, islands []*made) *physics.GroundChunk {
+// raster makes chunk n's ground from the islands' and hazards' grids; nil
+// if it lies wholly outside the disk.
+func (c *config) raster(n int32, grids []*islandGrid) *physics.GroundChunk {
 	if chunkOutside(n, c.disk) {
 		return nil
 	}
@@ -40,8 +40,7 @@ func (c *config) raster(n int32, islands []*made) *physics.GroundChunk {
 		ch.Elevation[i] = deep
 	}
 	c0, j0 := physics.ChunkCorner(n)
-	for _, m := range islands {
-		g := &m.grid
+	for _, g := range grids {
 		ca, cb := max(c0, g.c0), min(c0+physics.ChunkColumns, g.c0+g.w)
 		ja, jb := max(j0, g.j0), min(j0+physics.ChunkRows, g.j0+g.h)
 		for col := ca; col < cb; col++ {
@@ -61,8 +60,9 @@ func (c *config) raster(n int32, islands []*made) *physics.GroundChunk {
 // rasterAll makes every chunk of the world.
 func (c *config) rasterAll(islands []*made) *physics.Ground {
 	g := new(physics.Ground)
+	grids := gridsOf(islands, nil)
 	for n := range int32(physics.ChunkCount) {
-		g.Chunks[n] = c.raster(n, islands)
+		g.Chunks[n] = c.raster(n, grids)
 	}
 	return g
 }
