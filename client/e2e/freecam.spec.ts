@@ -31,9 +31,18 @@ test('the free camera flies, the scene about it, and comes back to the boat', as
   await page.waitForTimeout(1500);
   const still = await page.evaluate(() => globalThis.keel.boat().state);
   expect(Math.hypot(still.x - held.x, still.y - held.y)).toBe(0);
-  cam = await page.evaluate(() => globalThis.keel.freeCam());
   // The focus is the point beneath the camera; the dome bends about it and
-  // the tile field is centred on its tile.
+  // the tile field is centred on its tile: from the next frame drawn.
+  await expect
+    .poll(
+      async () => {
+        const c = await page.evaluate(() => globalThis.keel.freeCam());
+        return Math.hypot(c.tiles.east - c.east, c.tiles.north - c.north);
+      },
+      { timeout: 20_000 },
+    )
+    .toBeLessThan(10);
+  cam = await page.evaluate(() => globalThis.keel.freeCam());
   for (const p of [cam.focus, cam.dome, cam.tiles]) {
     expect(Math.hypot(p.east - cam.east, p.north - cam.north)).toBeLessThan(10);
   }
@@ -49,13 +58,20 @@ test('the free camera flies, the scene about it, and comes back to the boat', as
       { timeout: 20_000 },
     )
     .toBeGreaterThan(0);
-  // The keys fly it.
+  // The keys fly it: W held until it has moved, however slowly the
+  // renderer draws its frames (CI's software one draws a few a second).
   const before = await page.evaluate(() => globalThis.keel.freeCam());
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(500);
+  await expect
+    .poll(
+      async () => {
+        const c = await page.evaluate(() => globalThis.keel.freeCam());
+        return Math.hypot(c.east - before.east, c.north - before.north);
+      },
+      { timeout: 20_000 },
+    )
+    .toBeGreaterThan(1);
   await page.keyboard.up('KeyW');
-  const after = await page.evaluate(() => globalThis.keel.freeCam());
-  expect(Math.hypot(after.east - before.east, after.north - before.north)).toBeGreaterThan(1);
   // A tap shows the way back.
   await page.mouse.click(480, 300);
   await expect.poll(() => page.evaluate(() => globalThis.keel.freeCam().back)).toBe(true);
