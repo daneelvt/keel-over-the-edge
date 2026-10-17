@@ -76,10 +76,35 @@ world:
     biome: wooded
     across: [500, 600] # m
     height: [30, 70] # m
-    cliffs: 0.4 # share of its coast: at least a third
+    cliffs: 0.4 # share of its outer coast, the harbour's shore not counted: at least a third
     offset: 100 # m: its centre lies within this of the disk's
     calm: 1 # nautical miles
     rocks: [2, 5] # stacks off its coast
+    # Its harbour, carved into the island in every world: a basin, "nearly
+    # surrounded with slopes … circular shape and narrow entrance" (Smyth,
+    # 1867), across m across, its radius wandering by the harmonics given
+    # (the second to the sixth, of its radius), its centre offset m off the
+    # island's toward the bearing that keeps land m of land round it; a
+    # narrows narrows m wide at its inner end, widening to widen times that
+    # at its mouth; the basin depth m deep, the least at its quays, the most
+    # in its middle, the narrows' middle third channel m at least; a circle
+    # of turning m of clear water inside it, three of a tall ship's lengths
+    # (PIANC's guidance without tugs); a mole of mole m along the narrows'
+    # inner side. tries basins are drawn and the best kept. The town stands
+    # on town degrees of its shore, opposite the narrows.
+    harbour:
+      across: [250, 290] # m
+      harmonics: [0.2, 0.17, 0.11, 0.09, 0.045]
+      offset: [70, 120] # m
+      land: 60 # m
+      narrows: [60, 80] # m
+      widen: 1.6
+      depth: [5, 8] # m
+      channel: 6 # m
+      turning: 135 # m
+      mole: [30, 50] # m
+      tries: 24
+      town: 150 # degrees
 
   # Islands. A dozen or so landmarks, worth a voyage, are placed first;
   # then the rest, whose areas follow Korčák's law, the number larger than
@@ -309,6 +334,14 @@ world:
     - { id: ash, friction: 0.45, look: { top: "#5a5550", side: "#47423e", bed: "#4f4d4a", crest: 0 } }
     - { id: scrub, friction: 0.5, look: { top: "#98935a", side: "#857155", bed: "#a39e7e", crest: 0 } }
     - { id: reef, friction: 0.5, look: { top: "#d9c8a0", side: "#b7a07a", bed: "#c6b38c", crest: 0.5 } }
+    # The ground of towns, each with the part of a town it is: cobbles for
+    # streets, lanes and squares; dressed stone for quays and the mole;
+    # planking on piles for piers and jetties, drawn as a deck, not a
+    # column; beaten earth for yards, plots and paths.
+    - { id: cobbles, friction: 0.6, town: street, look: { top: "#a39a8b", side: "#857c6e", bed: "#8b8a80", crest: 0 } }
+    - { id: dressed-stone, friction: 0.6, town: quay, look: { top: "#b9b2a3", side: "#958d7e", bed: "#8b8a80", crest: 0 } }
+    - { id: planking, friction: 0.5, town: deck, look: { top: "#8a6a48", side: "#5e4632", bed: "#7c7a6a", crest: 0 } }
+    - { id: beaten-earth, friction: 0.5, town: yard, look: { top: "#a08a64", side: "#7e6a4c", bed: "#8f8466", crest: 0 } }
 
   # The fetch of each sea area for a wind from each of 16 directions: the
   # Shore Protection Manual's effective fetch, the mean of radials a few
@@ -337,9 +370,13 @@ world:
     turn: 20 # degrees
     offsets: [24, 48, 96, 192] # m beside the wind's path
 
-  # Where boats start, until the main port has a harbour: the stretch of
-  # water off its coast with the most room, its rows along the coast.
+  # Where boats start: first moored in rows across Port Royal's basin,
+  # moorings.spacing m apart, moorings.clear m from land, quays and piers,
+  # outside the turning circle, facing the narrows, at least moorings.least
+  # of them; then the roads, the stretch of water off its coast with the
+  # most room, its rows along the coast.
   start:
+    moorings: { spacing: 20, clear: 10, least: 60 }
     within: 400 # m: the start area begins within this of the coast
     depth: 2 # m of water at a place, at least
     clear: 10 # m from any land
@@ -409,12 +446,17 @@ world:
     # A port: on a landmark island, at the stretch of its coast with the
     # least fetch over the 16 directions where water depth m deep lies
     # within within m of the shore; reachable from the start; not in the
-    # mist band; ports apart nautical miles from each other.
-    harbour: { depth: 4, within: 300, apart: 1.2 }
+    # mist band; ports apart nautical miles from each other. A port's town
+    # needs room: depth m of water within pier m of its quay along one of
+    # the lattice's axes, where a pier may run, and room hexagons of land
+    # no steeper than 1 in steep within roomWithin m.
+    harbour: { depth: 4, within: 300, apart: 1.2, pier: 250, room: 300, steep: 4, roomWithin: 150 }
     # A fishing village: on an island of the sizes given without a port, on
     # its beach or in a cove, with shallows under shallows m within ground
-    # m, its fishing ground; villages apart m from each other and the ports.
-    village: { sizes: [small, medium, large], shallows: 10, ground: 300, apart: 600 }
+    # m, its fishing ground; villages apart m from each other and the ports;
+    # room hexagons of land no steeper than a port's within a village's
+    # reach (towns.plan.reach).
+    village: { sizes: [small, medium, large], shallows: 10, ground: 300, apart: 600, room: 80 }
     # An anchorage: water depth m deep on sand, none shallower than clear m
     # within swing m (room to swing), land within land m; its shelter snug
     # where the fetch is under fetch m in snug of the 16 directions, good in
@@ -544,6 +586,133 @@ world:
       beams: 1500 # m: beams are seen within this of the light
       loom: 0.35 # the loom's strength beside the light's own
 
+  # Towns: Port Royal's round its basin, a smaller one at every port's quay
+  # and pier, and at every fishing village "the room" of Newfoundland's
+  # premises, "stages, sheds and wharves" (Heritage NL), with its houses
+  # scattered up the slope above. Streets first, then buildings along them
+  # facing them, then the ground levelled into the land's terraces, as the
+  # period's harbour towns grew (St George's, Bermuda: a square on the
+  # harbour, a street along the quays, a main street behind, lanes beyond),
+  # with Emilien and others' rules (2012) for where the larger and the
+  # special buildings stand. Starting values, judged in the preview.
+  towns:
+    # Quays and piers: a quay's top quay m above the sea, foot m of water at
+    # its foot at Port Royal and at a port; Port Royal's long piers, where tall
+    # ships lie, and short ones, each length m out and width m wide along
+    # one of the lattice's axes; a port's piers; a village's jetty.
+    waterfront:
+      quay: 1.6 # m
+      foot: { main: 5, port: 4 } # m
+      long: { count: 2, length: [40, 60], width: 8 }
+      short: { count: 2, length: [15, 30], width: 4 }
+      port: { count: [1, 2], width: 8 }
+      jetty: { length: [10, 20], width: 4 }
+    # The plan: the quay street quay m wide along the water; contour streets
+    # behind it, apart m further from the shore than the last, wandering
+    # by wander m, street m wide, at most contours of them at Port Royal
+    # and at a port; lanes lane m wide up the slope between them, each the least-cost
+    # path over the hexagons, whose cost rises steeply over 1 in steep, with
+    # turn the cost of a turn and the streets already made at reuse of their
+    # cost (Galin and others, 2010), lanes of them, apart m along the quay;
+    # buildings set back setBack m from their way, turned up to turn
+    # degrees off it, gaps m apart, one place in gardens left as a garden,
+    # none on a slope over 1 in plot; reach m inland at most (Port Royal's,
+    # a port's, a village's).
+    plan:
+      quay: 6 # m
+      apart: [18, 25] # m
+      wander: 3 # m
+      street: 3.5 # m
+      contours: { main: 5, port: 2 }
+      lane: 3 # m
+      steep: 6
+      turn: 2
+      reuse: 0.2
+      lanes: 35 # m
+      setBack: [2, 5] # m
+      angle: 10 # degrees
+      gaps: [0.5, 2] # m
+      gardens: 8
+      plot: 3
+      reach: [120, 90, 80] # m
+      square: { along: 20, back: 16 } # m along the quay and back from it
+    # How many buildings a town has: Port Royal's, a port's, a village's.
+    size: { main: [150, 250], port: [20, 120], village: [6, 20] }
+    # The kinds of building, each with its footprint (frontage along its
+    # way, depth back from it, m), its storeys, where it stands, how many
+    # Port Royal, a port and a village have (fill: a weight among the
+    # buildings that fill the streets, by count where it has one), and what
+    # it shows: a chimney's share, a flag, a lantern by its door's share,
+    # the height its top stands, m (0: its storeys' and its roof's). Every
+    # kind gives every value, 0 for none. Real sizes: Port Royal's excavated
+    # Building 3 was 11.6 m by 8.2 m, two storeys (Hamilton, 1981–1990).
+    # Props are small things that stand about, drawn near only.
+    buildings:
+      - { id: dwelling, name: Dwelling, prop: false, frontage: [5, 8], depth: [6, 9], storeys: [1, 2], stands: street, fill: 6, main: [0, 0], port: [0, 0], village: [0, 0], chimney: 1, flag: false, lantern: 0.5, top: 0, colour: "#c9b08a" }
+      - { id: town-house, name: Town house, prop: false, frontage: [6, 9], depth: [7, 10], storeys: [2, 3], stands: street, fill: 3, main: [0, 0], port: [0, 0], village: [0, 0], chimney: 1, flag: false, lantern: 0.6, top: 0, colour: "#d1b994" }
+      - { id: merchants-house, name: Merchant's house, prop: false, frontage: [9, 12], depth: [9, 13], storeys: [2, 3], stands: quay, fill: 0, main: [4, 8], port: [1, 3], village: [0, 0], chimney: 1, flag: false, lantern: 1, top: 0, colour: "#b89a70" }
+      - { id: warehouse, name: Warehouse, prop: false, frontage: [9, 12], depth: [8, 12], storeys: [2, 2], stands: quayEnd, fill: 0, main: [4, 6], port: [1, 3], village: [0, 0], chimney: 0, flag: false, lantern: 0.5, top: 0, colour: "#9b8466" }
+      - { id: tavern, name: Tavern, prop: false, frontage: [7, 10], depth: [8, 11], storeys: [2, 2], stands: quay, fill: 0, main: [1, 2], port: [1, 1], village: [0, 0], chimney: 1, flag: false, lantern: 1, top: 0, colour: "#a8865c" }
+      - { id: harbourmasters-house, name: Harbourmaster's house, prop: false, frontage: [7, 10], depth: [7, 9], storeys: [2, 2], stands: square, fill: 0, main: [1, 1], port: [1, 1], village: [0, 0], chimney: 1, flag: true, lantern: 1, top: 0, colour: "#b3261e" }
+      - { id: church, name: Church, prop: false, frontage: [10, 12], depth: [18, 22], storeys: [1, 1], stands: above, fill: 0, main: [1, 1], port: [0, 0], village: [0, 0], chimney: 0, flag: true, lantern: 1, top: 22, colour: "#e8e0cc" }
+      - { id: windmill, name: Windmill, prop: false, frontage: [7, 7], depth: [7, 7], storeys: [1, 1], stands: summit, fill: 0, main: [1, 1], port: [0, 0], village: [0, 0], chimney: 0, flag: true, lantern: 0, top: 14, colour: "#d9d2bf" }
+      - { id: farmhouse, name: Farmhouse, prop: false, frontage: [8, 11], depth: [6, 8], storeys: [1, 2], stands: fields, fill: 0, main: [5, 5], port: [0, 2], village: [0, 0], chimney: 1, flag: false, lantern: 0, top: 0, colour: "#9a7e52" }
+      - { id: fishermans-hut, name: Fisherman's hut, prop: false, frontage: [4, 6], depth: [4, 6], storeys: [1, 1], stands: slope, fill: 0, main: [5, 5], port: [0, 0], village: [5, 14], chimney: 1, flag: false, lantern: 0.3, top: 0, colour: "#7d6a52" }
+      - { id: fish-stage, name: Stage, prop: false, frontage: [5, 7], depth: [8, 12], storeys: [1, 1], stands: water, fill: 0, main: [0, 0], port: [0, 0], village: [1, 3], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#6b5440" }
+      - { id: flake, name: Flake, prop: false, frontage: [6, 10], depth: [3, 4], storeys: [1, 1], stands: behind, fill: 0, main: [0, 0], port: [0, 0], village: [1, 3], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#8c7a5c" }
+      - { id: boat-shed, name: Boat shed, prop: false, frontage: [4, 5], depth: [7, 9], storeys: [1, 1], stands: shore, fill: 0, main: [0, 0], port: [0, 0], village: [0, 2], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#6e5a44" }
+      - { id: shipyard-slip, name: Slip, prop: false, frontage: [8, 10], depth: [28, 34], storeys: [1, 1], stands: slip, fill: 0, main: [1, 1], port: [0, 0], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 8, colour: "#5f4a36" }
+      - { id: market-stall, name: Market stall, prop: true, frontage: [2.5, 3], depth: [2, 2], storeys: [1, 1], stands: square, fill: 0, main: [4, 8], port: [0, 3], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#c8a060" }
+      - { id: well, name: Well, prop: true, frontage: [2, 2], depth: [2, 2], storeys: [1, 1], stands: square, fill: 0, main: [1, 1], port: [0, 1], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#9a958a" }
+      - { id: crane, name: Crane, prop: true, frontage: [3, 3], depth: [3, 3], storeys: [1, 1], stands: quay, fill: 0, main: [1, 2], port: [0, 1], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 9, colour: "#6a5038" }
+      - { id: bollard, name: Bollard, prop: true, frontage: [0.4, 0.4], depth: [0.4, 0.4], storeys: [1, 1], stands: edge, fill: 0, main: [20, 40], port: [4, 10], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#3c3a36" }
+      - { id: lantern-post, name: Lantern post, prop: true, frontage: [0.4, 0.4], depth: [0.4, 0.4], storeys: [1, 1], stands: post, fill: 0, main: [16, 30], port: [3, 8], village: [0, 2], chimney: 0, flag: false, lantern: 1, top: 0, colour: "#2c2b2a" }
+      - { id: crates, name: Crates and barrels, prop: true, frontage: [2, 3], depth: [1.5, 2], storeys: [1, 1], stands: quay, fill: 0, main: [6, 12], port: [2, 6], village: [1, 3], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#8a6a48" }
+      - { id: boat-ashore, name: A boat drawn up, prop: true, frontage: [1.6, 1.8], depth: [4.5, 5], storeys: [1, 1], stands: beach, fill: 0, main: [3, 6], port: [0, 0], village: [2, 6], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#5c4a38" }
+    # Each biome's kit: its models, one for each kind of building, in
+    # their storeys, coloured per house from its palette (walls, roofs,
+    # shutters and doors, as #rrggbb). Port Royal's is always its biome's.
+    kits:
+      - { biome: wooded, art: { model: town/wooded.glb }, walls: ["#e6dcc4", "#d9c7a0", "#e8d2b4", "#cfc0a4", "#ddd6c8"], roofs: ["#a4553a", "#8f4a34", "#b0603f", "#7e4632"], shutters: ["#4a6a52", "#6a3a2e", "#3e5670", "#8a7a3e"] }
+      - { biome: tropical, art: { model: town/tropical.glb }, walls: ["#f0e2c0", "#e6c79a", "#d8e0d0", "#f2d6c4", "#e0d8b8"], roofs: ["#7a6a58", "#8a7660", "#6c5c4c", "#968470"], shutters: ["#3f7a6e", "#2e5e8a", "#c0703e", "#5e8a3e"] }
+      - { biome: rocky, art: { model: town/rocky.glb }, walls: ["#e8e4dc", "#b84a3a", "#d8c890", "#6a7a8a", "#c8c0b0"], roofs: ["#3e3c3a", "#4c4844", "#5a4e44", "#34383c"], shutters: ["#e8e4dc", "#2c2b2a", "#3e5670", "#6a3a2e"] }
+      - { biome: sandy, art: { model: town/sandy.glb }, walls: ["#f4ecd8", "#f0d8d0", "#dce6e0", "#f2e2b8", "#e6dcf0"], roofs: ["#f6f4ee", "#eeece4", "#f2f0ea", "#e8e6de"], shutters: ["#3e6e5e", "#3e5670", "#7a4a3a", "#8a8a5a"] }
+      - { biome: volcanic, art: { model: town/volcanic.glb }, walls: ["#ecebe4", "#e4e0d4", "#d8d4c8", "#efece2", "#dad6cc"], roofs: ["#9a4e36", "#8a4632", "#a45a3e", "#7a4030"], shutters: ["#2e5e3e", "#7a2e2a", "#2e4a6e", "#3a3a3a"] }
+    # Flags on the harbourmaster's house at every port, Port Royal's church
+    # and its windmill: each a pennant length m long that streams with the
+    # true wind at at m, hanging limp under limp knots and extended from
+    # extended knots (Beaufort force 3: "light flags extended"), flapping at
+    # a Strouhal number fL/U of strouhal (Taneda 1968). Port Royal's colours
+    # are its own; each port has a pair of the list's, never a nation's.
+    flags:
+      length: 2.4 # m
+      at: 10 # m
+      limp: 3 # knots
+      extended: 7 # knots
+      strouhal: 0.2
+      mainPort: ["#1f3f7a", "#e8e0cc"]
+      colours: [["#b3261e", "#e8e0cc"], ["#2e6e4e", "#e8c040"], ["#e8e0cc", "#1f3f7a"], ["#3e3a6a", "#d07a2e"], ["#8a2e5e", "#e8e0cc"], ["#2e5e8a", "#e8c040"], ["#c0703e", "#2c2b2a"]]
+    # Chimney smoke: from day of the chimneys by day and night by night,
+    # puffs rising at rise m/s from the pot, carried at the wind's speed at
+    # at m, rising straight in a calm, drifting from force 1, bending over as
+    # Briggs's two-thirds law has a plume, rise ∝ x^(2/3) / u, and fading
+    # over life s; drawn within reach m of the camera.
+    smoke:
+      day: 0.15
+      night: 0.05
+      rise: 0.8 # m/s
+      buoyancy: 0.6 # m: Briggs's 1.6 F^(1/3), for a cottage's fire, as the puff's rise at 1 m in a 1 m/s wind
+      life: 9 # s
+      puffs: 6
+      size: [0.8, 4] # m across, at the pot and at its end
+      reach: 600 # m
+    # In port: the water within reach m of a port's quay and piers, or of a
+    # village's jetty; Port Royal's, its basin and narrows.
+    inPort: { port: 150, village: 100, step: 40 }
+    # Lanterns ashore are lit as boats' are, by the sun at the town: on the
+    # posts, by the doors, and in the windows, a share of each house's.
+    lit: { windows: 0.6, near: 300, props: 120 }
+
   # The rules a world must pass; one that fails is made again from the next
   # seed, at most attempts times.
   validator:
@@ -551,7 +720,7 @@ world:
     centreOffset: 150 # m: the main port's centre from the disk's, at most
     landShare: [0.7, 2.5] # percent of the disk
     counts: 0.3 # each size class within this share of its expected count
-    openWater: 1500 # m: inside the mist band no water is further from land
+    openWater: 1500 # m: inside the mist band, but in the main port's calm water, no water is further from land
     shoreline: 1.4 # a landmark's shoreline development index, at least
     reachDepth: 2 # m: every landmark reachable from the start in this much water
     # At every point of water on a grid of lightGrid m inside the mist band,

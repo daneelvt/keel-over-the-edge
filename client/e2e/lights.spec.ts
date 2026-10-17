@@ -19,6 +19,7 @@ test.skip(!existsSync(world), 'no world file for seed 1: run go run ./tools/dev 
 
 interface Records {
   places: { number: number; kind: string; x: number; y: number }[];
+  towns: { kind: string; x: number; y: number; heading: number }[];
   lights: {
     number: number;
     place: number;
@@ -70,22 +71,28 @@ function brightness(a: Picture, at: { x: number; y: number }): number {
   return best;
 }
 
-/** Puts the boat d metres from (east, north), facing it, at the hour given, and waits for the sandbox to hand what is near. */
+/**
+ * Puts the boat d metres from (east, north), the way from says (north-north-east),
+ * facing it but off radians, at the hour given, and waits for the sandbox to
+ * hand what is near.
+ */
 async function facing(
   page: Page,
   east: number,
   north: number,
   d: number,
   hour: number,
+  from: [number, number] = [0.6, 0.8],
+  off = 0,
 ): Promise<void> {
-  const [x, y] = [east + d * 0.6, north + d * 0.8];
+  const [x, y] = [east + d * from[0], north + d * from[1]];
   await page.evaluate(
     ([px, py, h, hr]) => {
       globalThis.keel.placeBoat(px ?? 0, py ?? 0, h);
       globalThis.keel.setSky(hr ?? 12);
       globalThis.keel.render();
     },
-    [x, y, Math.atan2(east - x, north - y), hour],
+    [x, y, Math.atan2(east - x, north - y) + off, hour],
   );
   // The sandbox looks again every half second.
   await page.waitForTimeout(1200);
@@ -178,16 +185,32 @@ test('a light’s flash shows in the picture by night, at its lantern @long', as
   // An occulting light: no beams turn from its lantern.
   const p = port('Oc');
   const s = steps(p.notation);
-  await facing(page, p.x, p.y, 450, 22);
+  // From the port's own water, where its town looks out: no land between.
+  const town = records()
+    .towns.filter((t) => t.kind === 'port')
+    .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+  const h = town?.heading ?? 0;
+  // Its bow a little off the light, so that the sail does not hide it.
+  await facing(page, p.x, p.y, 450, 22, [Math.sin(h), Math.cos(h)], 0.45);
   // A frame mid-flash and one mid-eclipse: they differ where the light is.
-  const shot = async (want: boolean): Promise<Awaited<ReturnType<typeof picture>>> => {
+  // Each picture with where the light is in it: the chase camera turns
+  // with the boat as it lies to the swell.
+  const shot = async (want: boolean): Promise<{ pic: Picture; at: { x: number; y: number } }> => {
     for (let k = 0; k < 80; k++) {
       const us = await page.evaluate(() => {
         globalThis.keel.sailFrames(1, 3);
         return globalThis.keel.lights().worldUs;
       });
       if (lightOn(s, p.phase, us) === want && lightOn(s, p.phase, us + 150_000) === want) {
-        return picture(page);
+        const pic = await picture(page);
+        const at = await page.evaluate(
+          ([e, n, h]) => globalThis.keel.worldOnScreen(e ?? 0, n ?? 0, h ?? 0),
+          [p.x, p.y, p.focal],
+        );
+        if (at === null) {
+          throw new Error('no canvas');
+        }
+        return { pic, at };
       }
     }
     throw new Error(`the light never ${want ? 'flashed' : 'went dark'}`);
@@ -197,16 +220,11 @@ test('a light’s flash shows in the picture by night, at its lantern @long', as
   const offAgain = await shot(false);
   // The flash brightens the picture where the light is; between two dark
   // frames it is as it was.
-  const at = await page.evaluate(
-    ([e, n, h]) => globalThis.keel.worldOnScreen(e ?? 0, n ?? 0, h ?? 0),
-    [p.x, p.y, p.focal],
-  );
-  if (at === null) {
-    throw new Error('no canvas');
-  }
-  const flash = brightness(on, at) - brightness(off, at);
+  const flash = brightness(on.pic, on.at) - brightness(off.pic, off.at);
   expect(flash).toBeGreaterThan(60);
-  expect(flash).toBeGreaterThan(4 * Math.abs(brightness(offAgain, at) - brightness(off, at)));
+  expect(flash).toBeGreaterThan(
+    4 * Math.abs(brightness(offAgain.pic, offAgain.at) - brightness(off.pic, off.at)),
+  );
   const l = await page.evaluate(() => globalThis.keel.lights());
   expect(l.towers).toBeGreaterThan(0);
 });

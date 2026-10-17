@@ -1286,6 +1286,25 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         ),
       };
     },
+    /** The towns drawn: their buildings near and far, props, draws and triangles; the buildings held. */
+    towns() {
+      const t = world.land?.towns;
+      if (t === undefined) {
+        return null;
+      }
+      const f = t.features();
+      return {
+        ...t.stats,
+        held: [...t.buildings()].length,
+        flags: world.flags.count,
+        puffs: world.smoke.count,
+        chimneys: f.chimneys.length,
+        lanterns: f.lanterns.length,
+        lanternsLit: world.lanterns.count,
+        // The first puffs' places, as the smoke drew them last.
+        puff: Array.from((world.smoke.place.array as Float32Array).slice(0, 12)),
+      };
+    },
     /**
      * Each tile's ground as the tile pass wrote it for the last frame: the
      * water's depth, the waves' cap f, whether it is land; beside the

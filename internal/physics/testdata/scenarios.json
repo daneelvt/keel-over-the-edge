@@ -42,7 +42,7 @@
     "shallow": 3
   },
   "ground": {
-    "friction": [0.4, 0.5, 0.5, 0.5, 0.6, 0.45, 0.5, 0.5, 0, 0, 0, 0, 0, 0, 0, 0],
+    "friction": [0.4, 0.5, 0.5, 0.5, 0.6, 0.45, 0.5, 0.5, 0.6, 0.6, 0.5, 0.5, 0, 0, 0, 0],
     "stillSpeed": 0.2,
     "stillTime": 5,
     "pushDepth": 1,
@@ -1130,6 +1130,24 @@
       "control": {"sheet": 1},
       "env": {"windSpeed": 5, "windFrom": -1.5707963267948966, "meanFrom": -1.5707963267948966},
       "terrain": "cliff",
+      "changes": [{"at": 0, "steer": 1.5707963267948966}]
+    },
+    {
+      "name": "ground-pier",
+      "steps": 900,
+      "state": {"x": 20, "heading": 1.5707963267948966, "surge": 2.5, "sheetLimit": 0.6},
+      "control": {"sheet": 0.45},
+      "env": {"windSpeed": 6.2, "windFrom": 0, "meanFrom": 0},
+      "terrain": "pier",
+      "changes": [{"at": 0, "steer": 1.5707963267948966}]
+    },
+    {
+      "name": "ground-quay",
+      "steps": 900,
+      "state": {"x": 80, "y": 50, "heading": 1.5707963267948966, "surge": 2.5, "sheetLimit": 0.6},
+      "control": {"sheet": 0.45},
+      "env": {"windSpeed": 6.2, "windFrom": 0, "meanFrom": 0},
+      "terrain": "pier",
       "changes": [{"at": 0, "steer": 1.5707963267948966}]
     },
     {

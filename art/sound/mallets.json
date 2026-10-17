@@ -1,0 +1,14 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The shipyard's mallets at Port Royal by day: blows on oak, a short knock of a falling tone and a crack of noise, in runs of a few blows beat seconds apart with rests between, from the slip. A point source, heard within reach metres. Frequencies in Hz, times in seconds, levels as gains.",
+  "thump": 260,
+  "crack": 1800,
+  "q": 3,
+  "decay": 0.05,
+  "beat": 0.65,
+  "run": [3, 8],
+  "rest": [2, 6],
+  "near": 15,
+  "reach": 300,
+  "level": 0.35
+}

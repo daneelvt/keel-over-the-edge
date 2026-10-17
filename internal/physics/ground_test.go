@@ -124,6 +124,53 @@ func cliff(x, y float64) float64 {
 	return -10
 }
 
+// pier is a harbour's works in 5 m of water: a pier 8 m wide along the
+// lattice's north–south axis, and a quay wall further east, each 1.6 m
+// high, as a town lays them.
+func pier(x, y float64) float64 {
+	if x >= 60 && x <= 68 && math.Abs(y) <= 30 || x >= 120 {
+		return 1.6
+	}
+	return -5
+}
+
+// TestPierAndQuay sails into a pier and into a quay: the hull meets each as
+// it meets land, bounces off, and never sails through.
+func TestPierAndQuay(t *testing.T) {
+	g := testGround(pier)
+	b := jolly(t)
+	for _, run := range []struct {
+		name  string
+		y     float64
+		start float64
+		wall  float64
+	}{{"pier", 0, 20, 60}, {"quay", 50, 80, 120}} {
+		s := State{X: run.start, Y: run.y, Heading: math.Pi / 2, Surge: 2.5, SheetLimit: 0.6}
+		c := Control{Sheet: 0.45}
+		e := Env{WindSpeed: 6.2, WindFrom: 0, MeanFrom: 0}
+		touched := -1
+		worst, furthest := 0.0, 0.0
+		sailOver(t, g, &s, &c, &e, 30*30, func(i int, s *State, o *Out) {
+			c.Helm = steer(math.Pi/2, s)
+			if o.Aground == AgainstLand && touched < 0 {
+				touched = i
+			}
+			worst = max(worst, deepest(s, g, b))
+			furthest = max(furthest, s.X)
+		})
+		if touched < 0 {
+			t.Errorf("%s: the boat never touched it", run.name)
+		}
+		if worst > 0.02 {
+			t.Errorf("%s: the hull was %.3f m into it after a step", run.name, worst)
+		}
+		if furthest > run.wall {
+			t.Errorf("%s: the boat's centre reached x = %.2f, past its face at %.0f", run.name, furthest, run.wall)
+		}
+		t.Logf("%s: touched at step %d, the deepest in %.4f m", run.name, touched, worst)
+	}
+}
+
 // deepest is how deep the boat's hull is into any land about it.
 func deepest(s *State, g *Ground, b *Prepared) float64 {
 	sinH, cosH := SinCos(s.Heading)

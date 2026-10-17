@@ -40,7 +40,13 @@ export interface LandLook {
   /** Each surface's top and side colour, sRGB 0 … 255, three bytes each, by the surface's index. */
   top: Uint8Array;
   side: Uint8Array;
+  /** The surface a pier's deck is, drawn as planking on piles, not a column; −1 for none. */
+  deck: number;
 }
+
+/** How deep a deck's planking is, m, and how thick its piles. */
+const DECK = 0.35;
+const PILE = 0.32;
 
 /**
  * The elevation, in decimetres, of the hexagon at column c and row j of the
@@ -163,6 +169,7 @@ export function buildChunk(
     return e > 0 ? drawnHeight(e, look.terrace) : -look.shore;
   };
   let sides = 0;
+  let piles = 0;
   let blind = 0;
   for (let c = 0; c < cols; c++) {
     for (let j = 0; j < rows; j++) {
@@ -171,6 +178,9 @@ export function buildChunk(
         continue;
       }
       const h = drawn[i] ?? 0;
+      if ((surface[i] ?? 0) === look.deck) {
+        piles++;
+      }
       for (let k = 0; k < 6; k++) {
         if (across(c, j, k) < h) {
           sides++;
@@ -181,6 +191,7 @@ export function buildChunk(
       }
     }
   }
+  sides += piles * 4;
   const vertices = tops * 6 + sides * 4;
   const positions = new Float32Array(vertices * 3);
   const colours = new Uint8Array(vertices * 4);
@@ -238,11 +249,43 @@ export function buildChunk(
         indices[x++] = first + k + 1;
       }
       // The sides toward lower neighbours: a quad from this top down to
-      // theirs, facing out.
+      // theirs, facing out; a deck's only its planking's depth, and a pile
+      // under its middle down to the bed.
+      const deck = (surface[i] ?? 0) === look.deck;
+      const quad = (ax: number, az: number, bx: number, bz: number, top: number, low: number) => {
+        const base = v;
+        put(sx + ax, top, sz + az, look.side, s, tint, false);
+        put(sx + bx, top, sz + bz, look.side, s, tint, false);
+        put(sx + ax, low, sz + az, look.side, s, tint * FOOT, false);
+        put(sx + bx, low, sz + bz, look.side, s, tint * FOOT, false);
+        indices[x++] = base;
+        indices[x++] = base + 2;
+        indices[x++] = base + 1;
+        indices[x++] = base + 1;
+        indices[x++] = base + 2;
+        indices[x++] = base + 3;
+      };
+      if (deck) {
+        const p = PILE / 2;
+        const corners = [
+          [p, p],
+          [p, -p],
+          [-p, -p],
+          [-p, p],
+        ] as const;
+        for (let k = 0; k < 4; k++) {
+          const a = corners[k] as readonly [number, number];
+          const b = corners[(k + 1) % 4] as readonly [number, number];
+          quad(a[0], a[1], b[0], b[1], h - DECK, -look.shore);
+        }
+      }
       for (let k = 0; k < 6; k++) {
-        const low = across(c, j, k);
+        let low = across(c, j, k);
         if (low >= h) {
           continue;
+        }
+        if (deck) {
+          low = Math.max(low, h - DECK);
         }
         const a = k;
         const b = (k + 1) % 6;

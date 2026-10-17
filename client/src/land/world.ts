@@ -22,7 +22,8 @@ export const FILE_WORLD = '00000000-0000-0000-0000-000000000000';
 
 /** A world file read: where boats start, its water's way round the disk, and each chunk's payload by number. */
 export interface WorldFile {
-  start: { heading: number; places: [number, number][] };
+  /** Where boats start: the moorings in Port Royal's basin first, each its own heading, then the roads, facing heading. */
+  start: { heading: number; places: [number, number][]; headings?: number[]; moorings?: number };
   /** 1 clockwise seen from above, −1 the other way. */
   circulation: number;
   payloads: Uint8Array[];
@@ -126,7 +127,7 @@ export function readWorldFile(data: ArrayBuffer): WorldFile {
     return part;
   };
   const records = JSON.parse(new TextDecoder().decode(next())) as {
-    start: { heading: number; places: [number, number][] };
+    start: { heading: number; places: [number, number][]; headings?: number[]; moorings?: number };
     circulation?: number;
     places?: RecordPlace[] | null;
     lights?: RecordLight[] | null;

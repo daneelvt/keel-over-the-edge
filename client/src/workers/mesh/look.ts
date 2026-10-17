@@ -23,5 +23,7 @@ export function landLook(world: World): LandLook {
       side.set(colourBytes(s.look.side), i * 3);
     }
   });
-  return { terrace: world.look.terrace, shore: world.look.shore, top, side };
+  // Read by its part in a town, never its name.
+  const deck = world.surfaces.findIndex((s) => s.town === 'deck');
+  return { terrace: world.look.terrace, shore: world.look.shore, top, side, deck };
 }

@@ -39,6 +39,7 @@ import {
   float,
   instancedDynamicBufferAttribute,
   max,
+  select,
   smoothstep,
   uniform,
   varying,
@@ -103,6 +104,10 @@ export function lightWeights(
 const RED = [1, 0.14, 0.08] as const;
 const GREEN = [0.12, 1, 0.42] as const;
 const WHITE = [1, 0.94, 0.82] as const;
+/** A lantern ashore's light: an oil lamp's, warmer than a navigation light's white. */
+const WARM = [1, 0.72, 0.36] as const;
+/** The lanterns ashore drawn at most, the nearest: on the towns' posts and by their doors. */
+export const TOWN_LANTERNS = 256;
 
 /** A boat's pose, as far as its lantern needs it. */
 export interface LanternPose {
@@ -114,8 +119,8 @@ export interface LanternPose {
   heave: number;
 }
 
-/** The most lanterns drawn: every boat in view and the player's. */
-export const LANTERN_CAPACITY = 129;
+/** The most lanterns drawn: every boat in view and the player's, and the lanterns ashore. */
+export const LANTERN_CAPACITY = 129 + TOWN_LANTERNS;
 /** A glow's size, metres, and the least it is drawn on screen, CSS pixels. */
 const GLOW_SIZE = 0.45;
 const LEAST_PIXELS = 7;
@@ -191,10 +196,16 @@ export class Lanterns {
     const green = side(b).mul(vShows.y);
     const red = side(b.negate()).mul(vShows.x);
     const white = smoothstep(SIDELIGHT_ARC - h, SIDELIGHT_ARC + h, b.abs()).mul(vShows.z);
-    const colour = vec3(...RED)
-      .mul(red)
-      .add(vec3(...GREEN).mul(green))
-      .add(vec3(...WHITE).mul(white));
+    // A lantern ashore (its port light marked −1) shows warm all round.
+    const ashore = vShows.x.lessThan(-0.5);
+    const colour = select(
+      ashore,
+      vec3(...WARM),
+      vec3(...RED)
+        .mul(red)
+        .add(vec3(...GREEN).mul(green))
+        .add(vec3(...WHITE).mul(white)),
+    );
     const r2 = dot(vCorner, vCorner);
     const glow = exp(r2.mul(-4)).add(exp(r2.mul(-30)).mul(1.5));
     const strength = clamp(vShows.w.mul(vDim), 0, 1);
@@ -263,6 +274,28 @@ export class Lanterns {
     shows[o + 1] = all || this.#lights.includes('starboard') ? 1 : 0;
     shows[o + 2] = all || this.#lights.includes('stern') ? 1 : 0;
     shows[o + 3] = lit;
+    this.count++;
+  }
+
+  /**
+   * Adds a lantern ashore: on a post or by a door, at a scene point, lit
+   * as given, 0 to 1. It shows warm in every direction.
+   */
+  addAshore(x: number, y: number, z: number, lit: number): void {
+    if (this.count >= LANTERN_CAPACITY || lit <= 0) {
+      return;
+    }
+    const o = this.count * 4;
+    const place = this.place.array as Float32Array;
+    place[o] = x;
+    place[o + 1] = y;
+    place[o + 2] = z;
+    place[o + 3] = 0;
+    const shows = this.shows.array as Float32Array;
+    shows[o] = -1;
+    shows[o + 1] = 0;
+    shows[o + 2] = 0;
+    shows[o + 3] = lit * 0.8;
     this.count++;
   }
 

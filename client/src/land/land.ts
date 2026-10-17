@@ -29,6 +29,7 @@ import { GROUND } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
 import type { FloatingOrigin } from '../render/coords';
 import { domeDrop, horizonDistance } from '../render/materials';
+import { Towns } from '../render/town';
 import { type ChunkMesh, cellHex, chunkCorner, hexCentre } from '../workers/mesh/build';
 import type { ChunkGrids } from '../workers/mesh/chunk';
 import { colourBytes, landLook } from '../workers/mesh/look';
@@ -118,6 +119,8 @@ export class Land {
   slots: ModuleSlots | null = null;
   /** Called with each chunk had (the tests, the panel). */
   onChunk: ((n: number) => void) | null = null;
+  /** The towns on the land held: each chunk's buildings, kept with its mesh. */
+  readonly towns: Towns;
 
   readonly #port: MeshPort;
   readonly #world: World;
@@ -141,8 +144,12 @@ export class Land {
     this.#world = world;
     this.material = landMaterial();
     this.group.name = 'land';
+    this.towns = new Towns(world);
+    this.group.add(this.towns.root);
     port.onmessage = (ev) => this.#receive(ev.data);
-    port.postMessage({ type: 'look', look: landLook(world) });
+    const look = landLook(world);
+    port.postMessage({ type: 'look', look });
+    groundWindow.deck = look.deck;
     setShoreLook(
       breaking,
       world.look.attenuation,
@@ -182,6 +189,7 @@ export class Land {
     this.#held.clear();
     this.#given.clear();
     this.#grids.clear();
+    this.towns.clear();
     this.#version++;
     this.#inFlight = 0;
     this.stats.handed = 0;
@@ -434,6 +442,7 @@ export class Land {
       h.mesh = this.#meshOf(m.mesh);
       h.highest = m.mesh.highest;
       this.group.add(h.mesh);
+      this.towns.add(m.number, m.grids.town);
     }
     this.onChunk?.(m.number);
   }
@@ -460,6 +469,7 @@ export class Land {
     this.group.remove(h.mesh);
     h.mesh.geometry.dispose();
     h.mesh = null;
+    this.towns.drop(h.number);
   }
 }
 

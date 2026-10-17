@@ -27,6 +27,23 @@ interface FileChunk {
   elevation: string;
   surface: string;
   shelter: string;
+  format: number;
+  buildings: number;
+  discs: number;
+  first?: {
+    kind: number;
+    kit: number;
+    east: number;
+    north: number;
+    heading: number;
+    level: number;
+    top: number;
+    storeys: number;
+    seed: number;
+    frontage: number;
+    depth: number;
+    town: number;
+  };
 }
 
 const file = JSON.parse(
@@ -54,7 +71,7 @@ const chunkNamed = (name: string): FileChunk => {
 describe('a chunk', () => {
   test('unpacks to the grids Go wrote', async () => {
     expect(CHUNK_FORMAT).toBe(file.format);
-    expect(file.chunks.length).toBe(2);
+    expect(file.chunks.length).toBe(3);
     for (const c of file.chunks) {
       const g = await unpackChunk(payloadOf(c), c.number, world);
       if (typeof g === 'string') {
@@ -63,7 +80,26 @@ describe('a chunk', () => {
       expect(digest(g.elevation), c.name).toBe(c.elevation);
       expect(digest(g.surface), c.name).toBe(c.surface);
       expect(digest(g.shelter), c.name).toBe(c.shelter);
+      expect(g.town?.buildings.length ?? 0, c.name).toBe(c.buildings);
+      expect(g.town?.harbour.length ?? 0, c.name).toBe(c.discs);
+      if (c.first !== undefined) {
+        const b = g.town?.buildings[0];
+        expect(b, c.name).toBeDefined();
+        for (const [k, v] of Object.entries(c.first)) {
+          expect(b?.[k as keyof typeof b], `${c.name}: ${k}`).toBeCloseTo(v, 9);
+        }
+      }
     }
+  });
+
+  test('of format 1 is a chunk with no town; Port Royal’s holds its town', async () => {
+    const old = chunkNamed('format 1');
+    expect(old.format).toBe(1);
+    const g = await unpackChunk(payloadOf(old), old.number, world);
+    expect(typeof g === 'string' ? g : g.town).toBeNull();
+    const port = chunkNamed('Port Royal');
+    expect(port.buildings).toBeGreaterThan(20);
+    expect(port.discs).toBeGreaterThan(0);
   });
 
   test('of another world, number or format, or cut short, is refused', async () => {
@@ -258,6 +294,7 @@ describe('the land’s mesh', () => {
     shore: 2,
     top: new Uint8Array(GROUND.surfaces * 3).fill(200),
     side: new Uint8Array(GROUND.surfaces * 3).fill(100),
+    deck: -1,
   };
 
   test('is a column for each hexagon of land, its sides only toward lower neighbours', () => {
@@ -286,7 +323,7 @@ describe('the land’s mesh', () => {
     expect(drawnHeight(799, 0.8)).toBeCloseTo(80);
   });
 
-  test('of Port Royal’s chunk is its 82,000 triangles, within its chunk', async () => {
+  test('of Port Royal’s chunk is its 38,200 triangles, within its chunk', async () => {
     const port = chunkNamed('Port Royal');
     const g = await unpackChunk(payloadOf(port), port.number, world);
     if (typeof g === 'string' || g.elevation === null || g.surface === null) {
@@ -305,7 +342,7 @@ describe('the land’s mesh', () => {
     process.stdout.write(
       `mesh: chunk ${port.number}: ${m.blind * 2} of its triangles wall its borders\n`,
     );
-    expect(Math.abs(m.triangles - 2 * m.blind - 82_000) / 82_000).toBeLessThan(0.01);
+    expect(Math.abs(m.triangles - 2 * m.blind - 38_200) / 38_200).toBeLessThan(0.01);
     const [c0] = chunkCorner(port.number);
     expect(c0).toBe((port.number % 16) * GROUND.chunkColumns);
     // Every vertex within the chunk's bounds, from its south-western

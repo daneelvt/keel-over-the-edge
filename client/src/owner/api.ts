@@ -182,6 +182,30 @@ export interface PlacesData {
   lights: Light[];
 }
 
+/** A town: Port Royal's, a port's or a fishing village's. */
+export interface Town {
+  number: number;
+  kind: 'main' | 'port' | 'village';
+  name: string;
+  island: number;
+  east: number;
+  north: number;
+  buildings: number;
+  /** Its buildings and props, by their kinds' names. */
+  counts: Record<string, number>;
+  /** Its piers', jetty's and mole's lengths, m. */
+  piers: number[];
+  streets: number;
+  moorings: number;
+  /** Where a teleport to its harbour puts a boat, or null if none may. */
+  harbour: [number, number] | null;
+}
+
+/** towns.json: the world's towns. */
+export interface TownsData {
+  towns: Town[];
+}
+
 /** current.json: east, north, and the current there east and north, m/s. */
 export interface Current {
   step: number;

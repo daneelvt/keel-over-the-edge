@@ -807,6 +807,46 @@ func TestEachRuleFails(t *testing.T) {
 		{"characters", func(w *world) { w.lights[2].Character = w.lights[1].Character }},
 		{"lights everywhere", func(w *world) { w.lights = w.lights[:1] }},
 		{"place names", func(w *world) { w.places[3].Name = w.places[2].Name }},
+		{"main port's harbour", func(w *world) {
+			h := *w.islands[0].harbour
+			h.radius = 40
+			w.islands[0].harbour = &h
+		}},
+		{"main port's narrows", func(w *world) {
+			h := *w.islands[0].harbour
+			h.inner = 10
+			w.islands[0].harbour = &h
+		}},
+		{"moorings", func(w *world) { w.start.Moorings = 3 }},
+		{"main port's town", func(w *world) {
+			w.towns = slices.Clone(w.towns)
+			w.towns[0].Buildings = 12
+		}},
+		{"ports' towns", func(w *world) {
+			w.towns = slices.Clone(w.towns)
+			for i := range w.towns {
+				if w.towns[i].Kind == townPort {
+					w.towns[i].Piers = nil
+				}
+			}
+		}},
+		{"villages", func(w *world) {
+			w.towns = slices.Clone(w.towns)
+			for i := range w.towns {
+				if w.towns[i].Kind == townVillage {
+					w.towns[i].Buildings = 1
+				}
+			}
+		}},
+		{"towns sound", func(w *world) {
+			w.buildings = slices.Clone(w.buildings)
+			for i, b := range w.buildings {
+				if !c.buildings[b.Kind].prop && i > 0 {
+					w.buildings[i].X, w.buildings[i].Y = w.buildings[0].X, w.buildings[0].Y
+					break
+				}
+			}
+		}},
 	}
 	for _, cs := range cases {
 		w := clone()
@@ -846,13 +886,27 @@ func TestWholeWorld(t *testing.T) {
 	if f := failedRules(b.Report.Rules); len(f) > 0 {
 		t.Errorf("seed 1 fails %v", f)
 	}
-	// Every chunk rastered alone is the world's.
+	// Every chunk rastered alone is the world's, but where the towns laid
+	// their ground: their surfaces, and the water at their quays' feet.
 	for _, n := range []int32{0, 119, 136, 200} {
 		ch := c.raster(n, gridsOf(b.made.islands, b.made.hazards))
+		w := b.Ground.Chunks[n]
 		switch {
-		case ch == nil && b.Ground.Chunks[n] == nil:
-		case ch == nil || b.Ground.Chunks[n] == nil || *ch != *b.Ground.Chunks[n]:
+		case ch == nil && w == nil:
+		case ch == nil || w == nil:
 			t.Errorf("chunk %d rastered alone differs from the world's", n)
+		default:
+			differ := 0
+			for i := range ch.Elevation {
+				if ch.Elevation[i] == w.Elevation[i] && ch.Surface[i] == w.Surface[i] || c.isTownSurface(w.Surface[i]) ||
+					w.Elevation[i] < ch.Elevation[i] && w.Elevation[i] <= 0 {
+					continue
+				}
+				differ++
+			}
+			if differ > 0 {
+				t.Errorf("chunk %d rastered alone differs from the world's in %d hexagons the towns did not lay", n, differ)
+			}
 		}
 	}
 	// The bundle round-trips through its file and its database parts.

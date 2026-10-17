@@ -28,19 +28,19 @@ export type Colour1 = string;
  */
 export type Colour2 = string;
 /**
- * Path of an art file, relative to the repository's art/ folder.
- *
- * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "ArtPath".
- */
-export type ArtPath = string;
-/**
  * A colour, as #rrggbb in sRGB.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "Colour".
  */
 export type Colour3 = string;
+/**
+ * Path of an art file, relative to the repository's art/ folder.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ArtPath".
+ */
+export type ArtPath = string;
 
 /**
  * Every list of kinds in the game. Kinds are data: code reads their properties, never their names.
@@ -1423,6 +1423,7 @@ export interface World {
   hazards: WorldHazards;
   places: WorldPlaces;
   lights: WorldLights;
+  towns: WorldTowns;
 }
 /**
  * The disk.
@@ -1646,7 +1647,7 @@ export interface WorldMainPort {
    */
   height: [number, number];
   /**
-   * The share of its coast with cliffs.
+   * The share of its outer coast with cliffs, the harbour's shore not counted.
    */
   cliffs: number;
   /**
@@ -1664,6 +1665,87 @@ export interface WorldMainPort {
    * @maxItems 2
    */
   rocks: [number, number];
+  harbour: PortHarbour;
+}
+/**
+ * Its harbour: a basin entered through a narrows, carved into the island.
+ */
+export interface PortHarbour {
+  /**
+   * The basin's width, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  across: [number, number];
+  /**
+   * How far its radius wanders, by the second harmonic and on, as shares of it.
+   *
+   * @minItems 0
+   * @maxItems 8
+   */
+  harmonics:
+    | []
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number];
+  /**
+   * Its centre off the island's, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  offset: [number, number];
+  /**
+   * Land round it, at least, in m.
+   */
+  land: number;
+  /**
+   * The narrows' width at its inner end, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  narrows: [number, number];
+  /**
+   * Its mouth is this many times its inner width.
+   */
+  widen: number;
+  /**
+   * The basin's depth: at its quays, and in its middle, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  depth: [number, number];
+  /**
+   * The narrows' middle third is at least this deep, in m.
+   */
+  channel: number;
+  /**
+   * A circle of clear water this wide inside it, in m.
+   */
+  turning: number;
+  /**
+   * The mole's length into the basin, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  mole: [number, number];
+  /**
+   * Basins drawn, the best kept.
+   */
+  tries: number;
+  /**
+   * The town stands on this much of the basin's shore, opposite the narrows, in degrees.
+   */
+  town: number;
 }
 /**
  * Where the islands lie and how big they are.
@@ -2021,6 +2103,10 @@ export interface Surface {
    */
   friction: number;
   look: SurfaceLook;
+  /**
+   * The part of a town it is, if any: streets, quays, piers' decks, yards.
+   */
+  town?: "street" | "quay" | "deck" | "yard";
 }
 /**
  * How a surface is drawn: its land's columns, and the sea bed seen through shallow water.
@@ -2109,7 +2195,7 @@ export interface WorldShelter {
   offsets: [number, number, number, number];
 }
 /**
- * Where boats start: the stretch of water off the main port with the most room.
+ * Where boats start: moored in Port Royal's basin, then the roads off its coast with the most room.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "WorldStart".
@@ -2139,6 +2225,24 @@ export interface WorldStart {
    * Places in all.
    */
   places: number;
+  moorings: StartMoorings;
+}
+/**
+ * The moorings across Port Royal's basin.
+ */
+export interface StartMoorings {
+  /**
+   * Moorings are this far apart, in m.
+   */
+  spacing: number;
+  /**
+   * And this far from land, quays and piers, in m.
+   */
+  clear: number;
+  /**
+   * At least this many.
+   */
+  least: number;
 }
 /**
  * A boat aground.
@@ -2199,7 +2303,7 @@ export interface WorldValidator {
    */
   counts: number;
   /**
-   * Inside the mist band no water is further than this from land, in m.
+   * Inside the mist band, but in the main port's calm water, no water is further than this from land, in m.
    */
   openWater: number;
   /**
@@ -2573,6 +2677,22 @@ export interface PlaceHarbour {
    * Ports at least this far apart, in nautical miles.
    */
   apart: number;
+  /**
+   * A pier may run this far to the water, along one of the lattice's axes, in m.
+   */
+  pier: number;
+  /**
+   * Land at least this many hexagons no steeper than 1 in steep
+   */
+  room: number;
+  /**
+   * (the slope's run over its rise),
+   */
+  steep: number;
+  /**
+   * within this of its quay, in m.
+   */
+  roomWithin: number;
 }
 /**
  * A fishing village's site.
@@ -2594,6 +2714,10 @@ export interface PlaceVillage {
    * Villages and ports at least this far apart, in m.
    */
   apart: number;
+  /**
+   * Land at least this many hexagons no steeper than a port's within a village's reach.
+   */
+  room: number;
 }
 /**
  * An anchorage's site.
@@ -2985,6 +3109,725 @@ export interface LightDaymark {
    */
   band: string;
 }
+/**
+ * Towns: Port Royal's, a port's and a fishing village's.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldTowns".
+ */
+export interface WorldTowns {
+  waterfront: TownWaterfront;
+  plan: TownPlan;
+  size: TownSize;
+  /**
+   * The kinds of building and prop.
+   */
+  buildings: BuildingKind[];
+  /**
+   * Each biome's kit.
+   */
+  kits: TownKit[];
+  flags: TownFlags;
+  smoke: TownSmoke;
+  inPort: TownInPort;
+  lit: TownLit;
+}
+/**
+ * Quays and piers.
+ */
+export interface TownWaterfront {
+  /**
+   * A quay's top above the sea, in m.
+   */
+  quay: number;
+  foot: QuayFoot;
+  long: TownPiers;
+  short: TownPiers;
+  port: PortPiers;
+  jetty: TownJetty;
+}
+/**
+ * The water at a quay's foot, in m.
+ */
+export interface QuayFoot {
+  /**
+   * Port Royal's.
+   */
+  main: number;
+  /**
+   * A port's.
+   */
+  port: number;
+}
+/**
+ * Piers of one length and width.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "TownPiers".
+ */
+export interface TownPiers {
+  /**
+   * How many.
+   */
+  count: number;
+  /**
+   * Its length out, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  length: [number, number];
+  /**
+   * Its width, in m.
+   */
+  width: number;
+}
+/**
+ * A port's piers.
+ */
+export interface PortPiers {
+  /**
+   * How many, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  count: [number, number];
+  /**
+   * Their width, in m.
+   */
+  width: number;
+}
+/**
+ * A village's jetty.
+ */
+export interface TownJetty {
+  /**
+   * Its length, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  length: [number, number];
+  /**
+   * Its width, in m.
+   */
+  width: number;
+}
+/**
+ * How a town is laid out.
+ */
+export interface TownPlan {
+  /**
+   * The quay street's width, in m.
+   */
+  quay: number;
+  /**
+   * Contour streets this much further from the shore than the last, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  apart: [number, number];
+  /**
+   * Wandering by this, in m.
+   */
+  wander: number;
+  /**
+   * A street's width, in m.
+   */
+  street: number;
+  contours: PlanContours;
+  /**
+   * A lane's width, in m.
+   */
+  lane: number;
+  /**
+   * A lane's cost rises steeply over a slope of 1 in this.
+   */
+  steep: number;
+  /**
+   * A turn's cost, in hexagons' steps.
+   */
+  turn: number;
+  /**
+   * A street already made costs this share of its cost.
+   */
+  reuse: number;
+  /**
+   * Lanes this far apart along the quay, in m.
+   */
+  lanes: number;
+  /**
+   * Buildings set back from their way, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  setBack: [number, number];
+  /**
+   * Turned up to this off their way, in degrees.
+   */
+  angle: number;
+  /**
+   * Gaps between buildings, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  gaps: [number, number];
+  /**
+   * One place in this many a garden.
+   */
+  gardens: number;
+  /**
+   * No building on a slope over 1 in this.
+   */
+  plot: number;
+  /**
+   * How far inland a town reaches: Port Royal's, a port's, a village's, in m.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  reach: [number, number, number];
+  square: PlanSquare;
+}
+/**
+ * The most contour streets.
+ */
+export interface PlanContours {
+  /**
+   * Port Royal's.
+   */
+  main: number;
+  /**
+   * A port's.
+   */
+  port: number;
+}
+/**
+ * The square's size, in m.
+ */
+export interface PlanSquare {
+  /**
+   * Along the quay.
+   */
+  along: number;
+  /**
+   * Back from it.
+   */
+  back: number;
+}
+/**
+ * How many buildings a town has.
+ */
+export interface TownSize {
+  /**
+   * Port Royal's.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  main: [number, number];
+  /**
+   * A port's.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  port: [number, number];
+  /**
+   * A village's.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  village: [number, number];
+}
+/**
+ * A kind of building, or a prop, of a town.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BuildingKind".
+ */
+export interface BuildingKind {
+  id: Id;
+  /**
+   * Its name, as the world page lists it.
+   */
+  name: string;
+  /**
+   * A small thing that stands about, drawn near only.
+   */
+  prop?: boolean;
+  /**
+   * Its frontage along its way, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  frontage: [number, number];
+  /**
+   * Its depth back from its way, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  depth: [number, number];
+  /**
+   * Its storeys, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  storeys: [number, number];
+  /**
+   * Where it stands.
+   */
+  stands:
+    | "street"
+    | "quay"
+    | "quayEnd"
+    | "square"
+    | "above"
+    | "summit"
+    | "fields"
+    | "slope"
+    | "water"
+    | "behind"
+    | "shore"
+    | "slip"
+    | "edge"
+    | "post"
+    | "beach";
+  /**
+   * Its weight among the buildings that fill the streets.
+   */
+  fill?: number;
+  /**
+   * How many Port Royal has.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  main?: [number, number];
+  /**
+   * How many a port has.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  port?: [number, number];
+  /**
+   * How many a village has.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  village?: [number, number];
+  /**
+   * The share of them with a chimney.
+   */
+  chimney?: number;
+  /**
+   * It flies a flag.
+   */
+  flag?: boolean;
+  /**
+   * The share of them with a lantern by the door.
+   */
+  lantern?: number;
+  /**
+   * Its top stands this high, in m; else its storeys and roof.
+   */
+  top?: number;
+  colour: Colour3;
+}
+/**
+ * A biome's kit: its models and palette.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "TownKit".
+ */
+export interface TownKit {
+  biome: Id;
+  art: KitArt;
+  /**
+   * Its walls' colours.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  walls:
+    | [Colour3]
+    | [Colour3, Colour3]
+    | [Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ];
+  /**
+   * Its roofs' colours.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  roofs:
+    | [Colour3]
+    | [Colour3, Colour3]
+    | [Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ];
+  /**
+   * Its shutters' and doors' colours.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  shutters:
+    | [Colour3]
+    | [Colour3, Colour3]
+    | [Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3, Colour3]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ]
+    | [
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3,
+        Colour3
+      ];
+}
+/**
+ * Its models.
+ */
+export interface KitArt {
+  model: ArtPath;
+}
+/**
+ * Flags ashore.
+ */
+export interface TownFlags {
+  /**
+   * A flag's length, in m.
+   */
+  length: number;
+  /**
+   * It streams with the wind at this height, in m.
+   */
+  at: number;
+  /**
+   * It hangs limp under this, in knots.
+   */
+  limp: number;
+  /**
+   * It is extended from this, in knots.
+   */
+  extended: number;
+  /**
+   * It flaps at this Strouhal number, fL/U.
+   */
+  strouhal: number;
+  /**
+   * Port Royal's colours.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  mainPort: [Colour3, Colour3];
+  /**
+   * The ports' pairs of colours.
+   *
+   * @minItems 1
+   * @maxItems 32
+   */
+  colours: [[Colour3, Colour3], ...[Colour3, Colour3][]];
+}
+/**
+ * Chimney smoke.
+ */
+export interface TownSmoke {
+  /**
+   * The share of chimneys smoking by day.
+   */
+  day: number;
+  /**
+   * And by night.
+   */
+  night: number;
+  /**
+   * Puffs rise from the pot at this, in m/s.
+   */
+  rise: number;
+  /**
+   * A puff's rise at 1 m downwind in a wind of 1 m/s, in m (Briggs's 1.6 F^(1/3)).
+   */
+  buoyancy: number;
+  /**
+   * A puff fades over this, in s.
+   */
+  life: number;
+  /**
+   * Puffs a chimney.
+   */
+  puffs: number;
+  /**
+   * A puff's width at the pot and at its end, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  size: [number, number];
+  /**
+   * Drawn within this of the camera, in m.
+   */
+  reach: number;
+}
+/**
+ * In port: the water within this of a town's waterfront.
+ */
+export interface TownInPort {
+  /**
+   * A port's quay and piers, in m.
+   */
+  port: number;
+  /**
+   * A village's jetty, in m.
+   */
+  village: number;
+  /**
+   * The harbour is kept as discs about this far apart, in m.
+   */
+  step: number;
+}
+/**
+ * Lit at night.
+ */
+export interface TownLit {
+  /**
+   * The share of a house's windows lit.
+   */
+  windows: number;
+  /**
+   * Houses are drawn in full within this of the camera, in m.
+   */
+  near: number;
+  /**
+   * Props are drawn within this of the camera, in m.
+   */
+  props: number;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '45d4d13033d75374';
+export const CATALOG_VERSION = '77914ac1e333af15';

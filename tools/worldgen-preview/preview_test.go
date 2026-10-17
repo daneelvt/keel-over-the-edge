@@ -49,7 +49,7 @@ func TestPreview(t *testing.T) {
 	// The tool runs from the repository's root.
 	t.Chdir(filepath.Join("..", ".."))
 	out := t.TempDir()
-	if err := run(7, "", 0, 0, -1, out); err != nil {
+	if err := run(7, "", 0, 0, -1, -1, out); err != nil {
 		t.Fatal(err)
 	}
 	svg, err := os.ReadFile(filepath.Join(out, "chart.svg"))
@@ -82,7 +82,7 @@ func TestPreview(t *testing.T) {
 		}
 	}
 	// Port Royal alone, at the lattice's resolution.
-	if err := run(7, "", 0, 0, 0, out); err != nil {
+	if err := run(7, "", 0, 0, 0, -1, out); err != nil {
 		t.Fatal(err)
 	}
 	port, err := os.ReadFile(filepath.Join(out, "island-0.svg"))
@@ -112,13 +112,13 @@ func TestPreview(t *testing.T) {
 	}
 
 	// Several seeds side by side, and one island alone.
-	if err := run(7, "", 4, 3, -1, out); err != nil {
+	if err := run(7, "", 4, 3, -1, -1, out); err != nil {
 		t.Fatal(err)
 	}
 	if data, err := os.ReadFile(filepath.Join(out, "seeds.html")); err != nil || strings.Count(string(data), "<h2>Seed ") != 4 {
 		t.Errorf("seeds.html has %d seeds (%v)", strings.Count(string(data), "<h2>Seed "), err)
 	}
-	if err := run(7, "", 0, 0, 1, out); err != nil {
+	if err := run(7, "", 0, 0, 1, -1, out); err != nil {
 		t.Fatal(err)
 	}
 	island, err := os.ReadFile(filepath.Join(out, "island-1.svg"))
@@ -126,7 +126,7 @@ func TestPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	wellFormed(t, "island-1.svg", island)
-	if err := run(7, "", 0, 0, 100000, out); err == nil {
+	if err := run(7, "", 0, 0, 100000, -1, out); err == nil {
 		t.Error("an island the world has not was drawn")
 	}
 }

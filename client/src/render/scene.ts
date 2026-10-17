@@ -33,10 +33,11 @@ import { Boat } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { DirtyAir } from './dirtyair';
+import { type FlagSeen, Flags } from './flags';
 import { FleetView } from './fleet';
 import { FreeCamera } from './freecam';
 import { GustRings } from './gustring';
-import { Lanterns, lanternLit } from './lanterns';
+import { Lanterns, lanternLit, TOWN_LANTERNS } from './lanterns';
 import { Lighthouses } from './lights';
 import { domeCentre } from './materials';
 import { Overlays } from './overlays';
@@ -58,6 +59,7 @@ import { type Backend, type Gfx, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
 import { Shadows } from './shadows';
 import { look, Sky, toLinear } from './sky';
+import { type Chimney, Smoke, smokes } from './smoke';
 import { type CrestSample, SprayDrops, type SpraySource, SprayView } from './spray';
 import { Stage } from './stage';
 import { FEW_STARS, Stars } from './stars';
@@ -144,6 +146,9 @@ export class SeaScene {
   sprayHidden = false;
   readonly stars = new Stars();
   readonly lanterns = new Lanterns();
+  /** The towns' flags and chimney smoke, each showing the true wind where it is. */
+  readonly flags = new Flags(catalog.world.towns.flags);
+  readonly smoke = new Smoke(catalog.world.towns.smoke);
   /** The lighthouses: their towers, lights and looms. */
   readonly lighthouses = new Lighthouses(
     catalog.world.lights,
@@ -256,6 +261,7 @@ export class SeaScene {
     scene.add(this.dirtyAir.group, this.rightOfWay.group);
     scene.add(this.fleet.root);
     scene.add(this.stars.mesh, this.lanterns.mesh);
+    scene.add(this.flags.mesh, this.smoke.mesh);
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
     this.wrecks.depthAt = (east, north) => {
@@ -731,7 +737,89 @@ export class SeaScene {
       const height = at === null ? own : (at[sun] ?? 0);
       l.add(b, b.east - o.x, -(b.north - o.y), camera, lanternLit(height) * b.opacity);
     }
+    // The lanterns ashore, the nearest, lit by the sun at the camera.
+    const land = this.land;
+    if (land !== null && this.drawSky) {
+      const lit = lanternLit(own);
+      const ce = camera.x + o.x;
+      const cn = -camera.z + o.y;
+      const ashore = land.towns
+        .features()
+        .lanterns.map((t) => ({ t, d: Math.hypot(t.east - ce, t.north - cn) }))
+        .filter((x) => x.d < 1500)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, TOWN_LANTERNS);
+      for (const { t } of ashore) {
+        l.addAshore(t.east - o.x, t.top, -(t.north - o.y), lit);
+      }
+    }
     l.commit(this.stage.camera.fov, gfx.canvas.clientHeight);
+  }
+
+  /**
+   * The towns: their buildings near and far, their lamps lit by the sun at
+   * the camera; their flags and their chimneys' smoke in the true wind
+   * where each is, asked of the physics module every few frames.
+   */
+  #drawTowns(camera: Vector3, now: number): void {
+    const land = this.land;
+    const o = this.origin.world;
+    if (land === null) {
+      this.flags.frame([], o, 0);
+      this.smoke.frame([], o, 0, 1);
+      return;
+    }
+    const cameraEast = camera.x + o.x;
+    const cameraNorth = -camera.z + o.y;
+    const night = this.drawSky ? lanternLit(this.sky.now.sunHeight) : 0;
+    land.towns.frame({ origin: o, cameraEast, cameraNorth, night, cameraHeight: camera.y });
+    const features = land.towns.features();
+    const time = this.ticks / STEPS_PER_SECOND;
+    const smoke = catalog.world.towns.smoke;
+    const flags: FlagSeen[] = [];
+    const chimneys: Chimney[] = [];
+    const near = (p: { east: number; north: number }, reach: number): boolean =>
+      Math.hypot(p.east - cameraEast, p.north - cameraNorth) <= reach;
+    for (const f of features.flags) {
+      if (near(f, 2000)) {
+        flags.push({ ...f, ...this.#windAt(f.east, f.north, now) });
+      }
+    }
+    for (const c of features.chimneys) {
+      if (near(c, smoke.reach) && smokes(c.seed, night > 0.5, smoke)) {
+        chimneys.push({ ...c, ...this.#windAt(c.east, c.north, now) });
+      }
+    }
+    this.flags.frame(flags, o, time);
+    this.smoke.frame(chimneys, o, time, 0.25 + 0.75 * (1 - night));
+  }
+
+  /** The winds asked of the module about the towns, by place, and when. */
+  readonly #townWinds = new Map<string, { speed: number; from: number; asked: number }>();
+
+  /** The true wind at a place ashore, m/s and from: asked again a few times a second, else the boat's. */
+  #windAt(east: number, north: number, now: number): { speed: number; from: number } {
+    const key = `${Math.round(east)},${Math.round(north)}`;
+    const held = this.#townWinds.get(key);
+    if (held !== undefined && now - held.asked < 300) {
+      return held;
+    }
+    const source = this.ocean.source;
+    const physics = source?.weather === true ? source.physics : null;
+    let speed = this.wind.speed;
+    let from = this.wind.from;
+    if (physics !== null) {
+      physics.windDrawAt(this.ticks);
+      const r = physics.windPoint(east, north);
+      speed = r[RECORDS.wind.speed] ?? speed;
+      from = r[RECORDS.wind.from] ?? from;
+    }
+    const w = { speed, from, asked: now };
+    if (this.#townWinds.size > 512) {
+      this.#townWinds.clear();
+    }
+    this.#townWinds.set(key, w);
+    return w;
   }
 
   /** The lighthouses' towers and lights, each light lit by the sun at its lighthouse. */
@@ -815,6 +903,7 @@ export class SeaScene {
         this.timeStep,
       );
     }
+    this.#drawTowns(camera.position, now);
     this.#drawLanterns(gfx, camera.position);
     this.#drawLights(gfx, camera.position, now);
     this.wrecks.frame(this.origin);

@@ -28,6 +28,8 @@ built files are committed; the catalog's `art.model` names them, and
 - `lib/mesh.ts`: a mesh builder: vertices, faces, normals, tubes and boxes.
 - `boats/jolly-boat/build.ts`: the Jolly boat.
 - `sailors/stand-in/build.ts`: the stand-in sailor, a plain figure.
+- `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
+  buildings and props, `town/<biome>.glb`.
 
 A model's nodes are named, and the client finds its parts by those names:
 `hull`, `mast`, `boom` (its origin at the gooseneck), `sail` and `telltales`
@@ -41,6 +43,18 @@ on the GPU.
 
 A sailor's nodes are `body`, `head`, `arm-left` and `arm-right`; its origin
 is at the hips, where it sits, facing +x.
+
+## Towns
+
+A biome's kit holds a node for each kind of building the catalog lists,
+named by the kind's id, its extras the frontage, depth and storeys it was
+built at; its front faces −z and its origin is the middle of its footprint
+on its plot. A model is built at its kind's most storeys. Each vertex's
+second texture coordinate is its part (walls, timber, roof, shutters and
+doors, glass, stone, wood, cloth, iron) and its role (fixed; a storey's
+own, its windows and bands; or above the walls); its first's x a window's
+number. Its colour is the part's own, or for the parts the palette colours,
+a shade. Everything is real size: a storey is 3 m.
 
 ## Sound
 

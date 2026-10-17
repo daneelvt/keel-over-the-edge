@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The sound engine: Web Audio, synthesised, with no sound files. One looped
-// buffer of noise feeds five voices: the wind (a band-pass), the rigging's
+// buffer of noise feeds the voices: the wind (a band-pass), the rigging's
 // song (a narrow band-pass at the Aeolian tone), the flogging cloth (a band
 // beaten by a flap), the water on the hull (a low-pass, with the bow
 // wave's hiss), the sea about the boat (a wide, low band), and the falls (a
-// low band through a low-pass, panned toward the lip). The frame loop sets their parameters at most every 50 ms,
+// low band through a low-pass, panned toward the lip), and in port the
+// water lapping at the quays (audio/harbour.ts, with the bell, the gulls
+// and the mallets, each played once). The frame loop sets their parameters at most every 50 ms,
 // each gliding to its target with setTargetAtTime. A bump's knock is played
 // once, from the same noise and a tone, and let go when it has died away.
 //
@@ -16,6 +18,15 @@
 // every one until it runs. It is suspended while the page is hidden.
 
 import type { Scrape } from './ground';
+import {
+  bellPartials,
+  HARBOUR_RECIPES,
+  type HarbourEvent,
+  type HarbourInput,
+  type HarbourRecipes,
+  harbourEvents,
+  lappingNow,
+} from './harbour';
 import type { Knock } from './knock';
 import {
   newTargets,
@@ -49,6 +60,8 @@ interface Graph {
   fallsLow: BiquadFilterNode;
   falls: GainNode;
   fallsPan: StereoPannerNode;
+  lapping: GainNode;
+  lappingPan: StereoPannerNode;
 }
 
 /** A white-noise buffer, from a fixed sequence so every page sounds alike. */
@@ -127,6 +140,16 @@ function build(ctx: AudioContext, r: Recipes): Graph {
   falls.connect(fallsPan);
   fallsPan.connect(master);
 
+  // The harbour's lapping: a band of noise, panned toward the quay.
+  const lappingBand = band('bandpass', HARBOUR_RECIPES.lapping.centre, HARBOUR_RECIPES.lapping.q);
+  const lapping = ctx.createGain();
+  lapping.gain.value = 0;
+  const lappingPan = ctx.createStereoPanner();
+  source.connect(lappingBand);
+  lappingBand.connect(lapping);
+  lapping.connect(lappingPan);
+  lappingPan.connect(master);
+
   source.start();
   flap.start();
   return {
@@ -147,6 +170,8 @@ function build(ctx: AudioContext, r: Recipes): Graph {
     fallsLow,
     falls,
     fallsPan,
+    lapping,
+    lappingPan,
   };
 }
 
@@ -247,6 +272,143 @@ export class SoundEngine {
     g.fallsLow.frequency.setTargetAtTime(t.fallsCutoff, at, GLIDE);
     g.falls.gain.setTargetAtTime(t.fallsLevel, at, GLIDE);
     g.fallsPan.pan.setTargetAtTime(t.fallsPan, at, GLIDE);
+  }
+
+  /** The harbour's recipes, the world seconds its events are played to, and how many were played (tests). */
+  readonly #harbour: HarbourRecipes = HARBOUR_RECIPES;
+  #harbourTo = Number.NaN;
+  readonly #harbourThrottle = new Throttle(SOUND_INTERVAL);
+  harbourEvents = 0;
+
+  /**
+   * Sets the harbour's voices for the listener now (ms): the lapping, and
+   * the bell's strokes, gulls' calls and mallets' blows due since the last
+   * time, each played once at its world time. secondsPerHour is how long
+   * an hour of the world's day lasts, s.
+   */
+  harbour(now: number, x: HarbourInput, secondsPerHour: number): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || !this.#harbourThrottle.due(now)) {
+      return;
+    }
+    const at = g.ctx.currentTime;
+    const lap = lappingNow(this.#harbour.lapping, x);
+    g.lapping.gain.setTargetAtTime(lap.level, at, GLIDE * 4);
+    g.lappingPan.pan.setTargetAtTime(lap.pan, at, GLIDE * 4);
+    // A jump in world time (a new world, a restore) plays nothing missed.
+    if (!(x.seconds - this.#harbourTo < 2) || x.seconds < this.#harbourTo) {
+      this.#harbourTo = x.seconds;
+      return;
+    }
+    for (const e of harbourEvents(this.#harbour, x, this.#harbourTo, x.seconds, secondsPerHour)) {
+      this.#play(g, e, at + Math.max(0, e.at - x.seconds));
+    }
+    this.#harbourTo = x.seconds;
+  }
+
+  #play(g: Graph, e: HarbourEvent, at: number): void {
+    if (!(e.level > 0)) {
+      return;
+    }
+    this.harbourEvents++;
+    const ctx = g.ctx;
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = e.pan;
+    pan.connect(g.master);
+    const nodes: AudioNode[] = [pan];
+    let end = at;
+    const r = this.#harbour;
+    if (e.kind === 'bell') {
+      // Its partials, each dying away over its own decay.
+      bellPartials(r.bell).forEach((f, i) => {
+        const o = ctx.createOscillator();
+        o.frequency.value = f;
+        const v = ctx.createGain();
+        v.gain.setValueAtTime(0, at);
+        v.gain.linearRampToValueAtTime(e.level * (r.bell.levels[i] ?? 0.3), at + 0.004);
+        const decay = r.bell.decays[i] ?? 1;
+        v.gain.setTargetAtTime(0, at + 0.004, decay / 3);
+        o.connect(v);
+        v.connect(pan);
+        o.start(at);
+        o.stop(at + decay * 2);
+        end = Math.max(end, at + decay * 2);
+        nodes.push(o, v);
+      });
+    } else if (e.kind === 'gull') {
+      // A long call: notes of a harmonic voice, each falling at its end.
+      const c = r.gulls;
+      const unit = (k: number): number => {
+        const v = Math.sin(e.seed * 3.7 + k * 1.3) * 43758.5453;
+        return v - Math.floor(v);
+      };
+      const notes = Math.round(
+        (c.notes[0] ?? 3) + unit(1) * ((c.notes[1] ?? 7) - (c.notes[0] ?? 3)),
+      );
+      const pitch = (c.pitch[0] ?? 1100) + unit(2) * ((c.pitch[1] ?? 1500) - (c.pitch[0] ?? 1100));
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      const bandp = ctx.createBiquadFilter();
+      bandp.type = 'bandpass';
+      bandp.frequency.value = pitch;
+      bandp.Q.value = c.q;
+      const v = ctx.createGain();
+      v.gain.setValueAtTime(0, at);
+      let t = at;
+      for (let k = 0; k < notes; k++) {
+        const note = (c.note[0] ?? 0.2) + unit(3 + k) * ((c.note[1] ?? 0.3) - (c.note[0] ?? 0.2));
+        o.frequency.setValueAtTime(pitch / 2, t);
+        o.frequency.exponentialRampToValueAtTime((pitch / 2) * c.fall, t + note);
+        v.gain.setValueAtTime(0, t);
+        v.gain.linearRampToValueAtTime(e.level, t + 0.02);
+        v.gain.linearRampToValueAtTime(0, t + note);
+        t += note + c.gap;
+      }
+      o.connect(bandp);
+      bandp.connect(v);
+      v.connect(pan);
+      o.start(at);
+      o.stop(t);
+      end = t;
+      nodes.push(o, bandp, v);
+    } else {
+      // A mallet's blow: a falling tone and a crack.
+      const c = r.mallets;
+      const o = ctx.createOscillator();
+      o.frequency.setValueAtTime(c.thump, at);
+      o.frequency.exponentialRampToValueAtTime(c.thump * 0.6, at + 4 * c.decay);
+      const v = ctx.createGain();
+      v.gain.setValueAtTime(e.level, at);
+      v.gain.setTargetAtTime(0, at + 0.003, c.decay);
+      const burst = ctx.createBufferSource();
+      burst.buffer = g.noise;
+      const bandp = ctx.createBiquadFilter();
+      bandp.type = 'bandpass';
+      bandp.frequency.value = c.crack;
+      bandp.Q.value = c.q;
+      const crack = ctx.createGain();
+      crack.gain.setValueAtTime(0.6 * e.level, at);
+      crack.gain.setTargetAtTime(0, at + 0.002, c.decay / 2);
+      o.connect(v);
+      v.connect(pan);
+      burst.connect(bandp);
+      bandp.connect(crack);
+      crack.connect(pan);
+      end = at + 10 * c.decay;
+      o.start(at);
+      o.stop(end);
+      burst.start(at, (e.seed % 10) * 0.1);
+      burst.stop(end);
+      nodes.push(o, v, burst, bandp, crack);
+    }
+    const first = nodes[1] as AudioScheduledSourceNode | undefined;
+    if (first !== undefined && 'onended' in first) {
+      first.onended = () => {
+        for (const n of nodes) {
+          n.disconnect();
+        }
+      };
+    }
   }
 
   /** How many knocks were played (tests). */

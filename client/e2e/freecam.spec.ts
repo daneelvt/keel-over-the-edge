@@ -24,7 +24,7 @@ test('the free camera flies, the scene about it, and comes back to the boat', as
   expect(cam.back).toBe(false);
   // The boat stays where it was.
   const held = await page.evaluate(() => globalThis.keel.boat().state);
-  // 2 km off, south-west of Lime Cay, 60 m up, looking at it.
+  // 2 km off, south-west of Wild Orange Cay, 60 m up, looking at it.
   await page.evaluate(() =>
     globalThis.keel.fly({ east: 1300, north: -1600, height: 60, bearing: 45, pitch: -6 }),
   );

@@ -42,6 +42,7 @@ import type { BumpTold } from '../net/messages';
 import { RECORDS } from '../predict/layout.gen';
 import { type FlyKeys, RoamTeller } from '../render/freecam';
 import type { SeaScene } from '../render/scene';
+import { HOURS, hourAt, skyPeriods } from '../sky/skytime';
 import { HudModel, PUSHED_OFF } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
 import { bumpLine } from '../ui/verdict';
@@ -524,6 +525,37 @@ export class Game implements PilotActions {
       this.#sound,
     );
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
+    this.#harbour(now, look);
+  }
+
+  /** The sky's periods, and how long an hour of the world's day lasts, s. */
+  readonly #periods = skyPeriods(catalog.sky);
+  readonly #secondsPerHour = (catalog.sky.day * 60) / HOURS;
+
+  /** The harbour's sounds, heard at the boat: in port, or near a town. */
+  #harbour(now: number, look: number): void {
+    const w = this.world;
+    const land = w.land;
+    const sky = w.skyTime;
+    if (land === null || sky === null) {
+      return;
+    }
+    const p = w.pose;
+    const heard = land.towns.heardFrom(p.east, p.north, (e, n) => (land.heightAt(e, n) ?? -1) <= 0);
+    this.sound.harbour(
+      now,
+      {
+        seconds: w.ticks / STEPS_PER_SECOND,
+        hour: hourAt(sky.world(w.ticks), this.#periods),
+        day: w.sky.now.sunHeight > 0,
+        listener: { east: p.east, north: p.north },
+        look,
+        ...heard,
+        seaHeight: w.sea.height,
+        period: 4,
+      },
+      this.#secondsPerHour,
+    );
   }
 }
 

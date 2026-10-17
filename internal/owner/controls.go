@@ -44,6 +44,7 @@ type PlaceRequest struct {
 	Start   bool     `json:"start,omitempty"`
 	Island  *int     `json:"island,omitempty"`
 	Place   *int     `json:"place,omitempty"`
+	Town    *int     `json:"town,omitempty"`
 	Camera  bool     `json:"camera,omitempty"`
 }
 
@@ -234,6 +235,7 @@ func (o *Owner) water(x, y float64, others [][2]float64) error {
 //	POST /owner/api/place {"boat": 1, "east": …, "north": …, "heading": …}
 //	POST /owner/api/place {"boat": 1, "start": true}
 //	POST /owner/api/place {"boat": 1, "island": 12}
+//	POST /owner/api/place {"boat": 1, "town": 3}: in its harbour
 //	POST /owner/api/place {"boat": 1, "camera": true}
 func (o *Owner) place(w http.ResponseWriter, r *http.Request) {
 	var req PlaceRequest
@@ -296,6 +298,25 @@ func (o *Owner) place(w http.ResponseWriter, r *http.Request) {
 		if math.Hypot(p.X-x, p.Y-y) > 1 {
 			heading = math.Atan2(p.X-x, p.Y-y)
 		}
+	case req.Town != nil:
+		b := o.cfg.Bundle
+		n := *req.Town
+		if b == nil || n < 0 || n >= len(b.Towns) {
+			o.refuse(w, "place", http.StatusBadRequest, "no such town")
+			return
+		}
+		t := &b.Towns[n]
+		hx, hy, found := harbourPoint(&o.cfg, t)
+		if !found {
+			o.refuse(w, "place", http.StatusConflict, "the town's harbour has no water deep enough")
+			return
+		}
+		x, y = hx, hy
+		if t.Kind == "main" {
+			heading = b.Start.HeadingOf(0)
+		} else if math.Hypot(t.X-x, t.Y-y) > 1 {
+			heading = math.Atan2(t.X-x, t.Y-y)
+		}
 	case req.Camera:
 		ex, ey, roaming := o.cfg.Edge.Eye(account)
 		if !roaming {
@@ -306,7 +327,7 @@ func (o *Owner) place(w http.ResponseWriter, r *http.Request) {
 	case req.East != nil && req.North != nil:
 		x, y = *req.East, *req.North
 	default:
-		o.refuse(w, "place", http.StatusBadRequest, "east and north, start, island, place or camera is required")
+		o.refuse(w, "place", http.StatusBadRequest, "east and north, start, island, place, town or camera is required")
 		return
 	}
 	if req.Heading != nil {

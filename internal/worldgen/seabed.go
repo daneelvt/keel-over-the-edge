@@ -146,7 +146,7 @@ func (c *config) stacksOf(s stream, m *made, b *biome, w *work) {
 	var spots []int32
 	total := g.w * g.h
 	for i := range total {
-		if !w.land[i] && w.dout[i] >= 10 && w.dout[i] <= stackReach {
+		if !w.land[i] && w.dout[i] >= 10 && w.dout[i] <= stackReach && !w.harbour[i] {
 			spots = append(spots, i)
 		}
 	}

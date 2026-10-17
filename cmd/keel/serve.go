@@ -45,6 +45,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
 )
 
 // shutdownTimeout bounds how long a stopping server waits for requests in
@@ -396,9 +397,14 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		terrain = bundle.Terrain(cat.PrepareGround())
 		terrainDigest = bundle.Digest
 		chunks = api.NewChunks(sailed.ID, held.key, held.payloads)
-		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat))
+		// A town's buildings stand over the horizon as land as high would.
+		var tops []edge.Top
+		for _, t := range bundle.Tops() {
+			tops = append(tops, edge.Top{X: t[0], Y: t[1], Height: t[2]})
+		}
+		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat)).WithTops(tops)
 		// The owner's free camera sees from higher: its own handout.
-		roamHandout = edge.NewHandout(bundle.Ground, chunks.Paths(), roamRule(cat))
+		roamHandout = edge.NewHandout(bundle.Ground, chunks.Paths(), roamRule(cat)).WithTops(tops)
 		// The places go with their chunks, the lights by range.
 		places := wirePlaces(bundle, cat)
 		var lights *edge.Lights
@@ -712,6 +718,17 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	for _, ch := range c.cat.World.Lights.Characters {
 		cfg.Characters = append(cfg.Characters, owner.Character{Notation: ch.Notation, Colour: string(ch.Colour), Steps: ch.Steps})
+	}
+	cfg.TownLook = chart.TownLook{Surfaces: map[int32]string{}}
+	for i, s := range c.cat.World.Surfaces {
+		if s.Town != nil {
+			cfg.TownLook.Surfaces[int32(i)] = string(s.Look.Top)
+		}
+	}
+	for _, k := range c.cat.World.Towns.Buildings {
+		cfg.TownKinds = append(cfg.TownKinds, k.Name)
+		cfg.TownLook.Kinds = append(cfg.TownLook.Kinds, string(k.Colour))
+		cfg.TownLook.Props = append(cfg.TownLook.Props, k.Prop != nil && *k.Prop)
 	}
 	if t := c.terrain; t != nil {
 		cfg.Ground, cfg.Shelter, cfg.Circulation = t.Ground, t.Shelter, t.Circulation

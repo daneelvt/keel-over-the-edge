@@ -99,7 +99,7 @@ async function start(): Promise<void> {
     // commonest regime, with its shifts and gusts.
     const wind = windFromQuery(query) ?? seaFromQuery(query);
     // ?world=seed: a whole world, from the file go run ./tools/dev -world
-    // writes, the boat at its start.
+    // writes, the boat at its start: its first mooring, facing the narrows.
     const seed = query.get('world');
     const file: WorldFile | null = seed === null ? null : await fetchWorldFile(seed);
     const place = file?.start.places[0];
@@ -107,7 +107,11 @@ async function start(): Promise<void> {
       ...START,
       ...(file === null || place === undefined
         ? {}
-        : { east: place[0], north: place[1], heading: file.start.heading }),
+        : {
+            east: place[0],
+            north: place[1],
+            heading: file.start.headings?.[0] ?? file.start.heading,
+          }),
       wind: wind ?? START.wind,
       weather:
         weatherFromQuery(query, catalog.weather) ??

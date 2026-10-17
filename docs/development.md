@@ -1059,12 +1059,14 @@ The module holds nine chunks of ground and of shelter (`groundChunk`,
 
 ### The bundle
 
-A world's bundle is its **records** (the islands, groups, fetch table and
-start area, as JSON), its **report**, and **256 chunk payloads**: gzip at
-level 6 of a header (magic, format, chunk, generator version, world id)
-then the elevations column by column, each as its difference from the one
-before, the surfaces, and the shelter (a bitmap of the cells with a table,
-and their tables). A payload of another world, chunk, format or generator
+A world's bundle is its **records** (the islands, groups, fetch table,
+start area, places, lights and towns, as JSON), its **report**, and **256
+chunk payloads**: gzip at level 6 of a header (magic, format, chunk,
+generator version, world id) then the elevations column by column, each as
+its difference from the one before, the surfaces, the shelter (a bitmap of
+the cells with a table, and their tables), and from format 2 the towns'
+buildings and harbour in the chunk (see [Harbours and towns](#harbours-and-towns)).
+A payload of another world, chunk or generator, or of a format not known,
 is refused. In PostgreSQL (`00005_world_bundle.sql`): `world.seed` and
 `world.generator`; `world_bundle`, one row a world; `world_chunk`, a
 payload and its SHA-256 a chunk, stored out of line and not compressed
@@ -1095,6 +1097,7 @@ go run ./tools/worldgen-preview -seed 7             # .dev/worldgen/chart.svg an
 go run ./tools/worldgen-preview -bundle .dev/7.bundle
 go run ./tools/worldgen-preview -seeds 6 -from 1    # seeds 1 to 6 side by side: seeds.html
 go run ./tools/worldgen-preview -seed 7 -island 3   # island 3 at the lattice's resolution
+go run ./tools/worldgen-preview -seed 7 -town 0     # Port Royal's town at the lattice's resolution
 ```
 
 The chart shows land by height and the sea by depth, coasts, the names
@@ -1573,6 +1576,130 @@ logged; a second later keel stops, as at a signal, and starts again in the
 new world, making its terrain from a new seed (or `KEEL_WORLD_SEED`). In the
 cluster the pod starts again by itself; under `go run ./tools/dev`, start
 it again. The ended world's data stays in its partitions.
+
+## Harbours and towns
+
+Every world's Port Royal has a harbour carved into its island, and a town
+on the slope behind it; every port has a smaller town at its quay and
+pier, and every fishing village its stages, flakes and huts above its
+beach. The towns are the ground the physics knows: streets, quays and piers
+are hexagons with surfaces of their own, levelled into the land's
+terraces, and a boat meets a quay or a pier as it meets land.
+
+### Port Royal's harbour
+
+`internal/worldgen/harbour.go` carves it into the island's shape before
+its heights are raised, so its slopes rise from the harbour's shore as from
+any coast: a **basin** whose radius wanders by a few harmonics, its centre
+off the island's toward the bearing that leaves the most land round it; a
+**narrows** from the basin out to the open sea, widening outward, its
+middle third dredged; a **mole** of dressed stone along the narrows' inner
+side. Tries of the basin are drawn from the harbour's own stream, each at
+16 bearings, and the best kept; if none fits the island's shape, the island
+is drawn again from its own stream, up to `harbourShapes` times. The basin
+is deep enough for a tall ship (`world.mainPort.harbour`), with a turning
+circle clear in its middle. Its cliffs are counted on its outer coast, the
+harbour's shore and the 30 m about it left out.
+
+### Sites with room
+
+A port's site needs deep water within a pier's reach of its quay, along
+one of the lattice's three axes out from the shore, and gentle land about
+it, reached over land from its shore (`roomOf`): not the land across a
+bay. A village needs room within its reach. The ports' lights' cover
+chooses among each landmark's best site on each of six sides.
+
+### A town's plan
+
+`town.go`, `townplan.go` and `townplaces.go` lay a town out as the
+period's harbour towns grew: the **quay** along its water (a quay's height,
+dressed stone, its foot dredged), the **square** on it where the town's arc
+is middlemost, the special buildings (the harbourmaster's house on the
+square, the church on the highest ground near it), **contour streets**
+behind the quay at the catalog's spacing, each the shore's shape offset
+and wandering, and **lanes** up the slope, each the least-cost path over
+the hexagons (Galin and others, 2010). Then the buildings along every way,
+both sides, facing it, set back, turned a little, gaps between, a garden
+now and then; the larger nearer the water. Short of its buildings, a town
+puts the rest on its outskirts, each with a lane of its own to the nearest
+way, and short of its least, on steeper ground terraced. Every plot is
+levelled to one terrace; the streets eased along their length.
+
+Outside Port Royal's town: the windmill on its highest open ground, farms
+on gentle ground, the shipyard's slip into the basin, fishermen's huts above
+a beach of its outer coast. A port gets one or two **piers** out to deep
+water (planking on piles, a strip along a lattice axis); a village its
+**jetty**, stages over the water, flakes behind, sheds and huts scattered
+up the slope with paths.
+
+The kinds of building are the catalog's (`world.towns.buildings`): each
+with its footprint, storeys, where it **stands** (the code reads that, never
+an id), how many each kind of town has, and what it shows (a chimney, a
+flag, a lantern by its door, its top's height).
+
+### The start and in port
+
+New boats start **moored** in rows across Port Royal's basin, outside the
+turning circle, each facing the narrows (`Start.Moorings` and `Headings`);
+then the roads outside, as before, to 4,096 places. A town's **harbour**
+is kept as discs of water (`Town.Harbour`): `Bundle.InPort` answers "in
+port?" from them and the ground, and the phone answers it the same from the
+discs its chunks carry.
+
+### Chunks and records
+
+The bundle is **format 2**: each chunk's payload carries, after its
+shelter, the buildings and props whose middles are in it (20 bytes each:
+kind, kit, middle in dm, heading in 256ths of a turn, level, storeys, its
+colours and flag, frontage and depth in fifths of a metre, top, town) and
+the harbour's discs whose centres are. Format 1, and a world of generator
+2, are still read: a chunk with no town. `Records.Towns` lists each town:
+its quay, piers, harbour and counts. The handout counts a building's top in
+its cell's height, so a church tower is handed as it rises over the horizon.
+
+### The kits
+
+`art/town/<biome>/build.ts` builds each biome's kit into
+`art/town/<biome>.glb` from one builder (`art/town/lib/kit.ts`): a model for
+every kind of the catalog, built at its kind's most storeys, each vertex
+tagged with its part and role. The page colours walls, roofs and shutters
+house by house from the kit's palette, lowers the roof for each storey a
+house has fewer, draws the windows of the storeys it has not as nothing,
+and lights a share of its windows at night by the house's own number.
+
+```sh
+cd client && npm run art     # the boats, the sailor and the five kits
+```
+
+### On the phone
+
+`render/town.ts` draws each chunk's buildings with its land: near the
+camera (`world.towns.lit.near`) each kind of each kit one instanced draw,
+further a box and a roof for every building in one draw, props near only in
+one draw, nothing below the horizon. `render/flags.ts` streams each flag
+with the true wind where it flies (limp under 3 knots, extended from 7,
+flapping at a Strouhal number of 0.2); `render/smoke.ts` puts each puff of
+a chimney's smoke where world time puts it, rising straight in a calm and
+bent over in a wind (Briggs's two-thirds law). Lanterns ashore, on posts
+and by doors, are in the lanterns' draw, warm and all round, lit by the sun
+at the camera. `audio/harbour.ts` makes the harbour's voices: water lapping
+at the quays, the bell striking the watches by the world's clock, gulls
+and the shipyard's mallets by day, each panned and fainter with distance,
+heard in port or near a town.
+
+### Looking at it
+
+```sh
+go run ./tools/worldgen-preview -seed 1 -town 0     # Port Royal's town at the lattice's resolution: town-0.svg
+go run ./tools/dev -world 1                         # then ?sandbox&world=1: the boat moored in the basin
+```
+
+The preview's page lists the towns, their buildings, streets, piers and
+harbours; the world page (`/owner/`) lists them too, links each to its
+plan (`/owner/api/town/N.svg`), and teleports a boat into a town's harbour
+(`POST /owner/api/place {"boat": …, "town": N}`). The keel hook
+`keel.towns()` reports what is drawn: buildings near and far, props, draws,
+triangles, flags, puffs and lanterns lit.
 
 ## The owner's tools
 

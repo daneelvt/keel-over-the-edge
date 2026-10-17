@@ -34,6 +34,8 @@ import {
   type Place,
   type PlacesData,
   type Point,
+  type Town,
+  type TownsData,
   type WorldNow,
 } from './api';
 import {
@@ -511,6 +513,7 @@ function App() {
   const [point, setPoint] = useState<Point | null>(null);
   const [boat, setBoat] = useState<number | null>(null);
   const [places, setPlaces] = useState<PlacesData | null>(null);
+  const [towns, setTowns] = useState<Town[]>([]);
   const [light, setLight] = useState<number | null>(null);
   const clock = useRef<WorldClock>({ worldTime: 0, at: performance.now() });
   const [message, setMessage] = useState('');
@@ -542,6 +545,9 @@ function App() {
       .catch((e: unknown) => setError(String(e)));
     getJSON<PlacesData>('places.json')
       .then(setPlaces)
+      .catch((e: unknown) => setError(String(e)));
+    getJSON<TownsData>('towns.json')
+      .then((d) => setTowns(d.towns))
       .catch((e: unknown) => setError(String(e)));
   }, [again]);
 
@@ -680,6 +686,39 @@ function App() {
             ))}
           </ul>
         </section>
+        <section class="card" aria-label="Towns">
+          <h2>Towns: {towns.length}</h2>
+          <ul class="towns">
+            {towns.map((t) => (
+              <li key={t.number}>
+                <button type="button" data-town={t.number} onClick={() => goTo(t.east, t.north, 2)}>
+                  {t.name}
+                </button>{' '}
+                <span class="small">
+                  {townWords(t)}{' '}
+                  <a href={drawing(`town/${t.number}.svg`)} target="_blank" rel="noopener">
+                    its plan
+                  </a>
+                </span>
+                {chosenBoat !== null && t.harbour !== null ? (
+                  <button
+                    type="button"
+                    class="small"
+                    onClick={() =>
+                      act(
+                        'place',
+                        { boat: chosenBoat, town: t.number },
+                        `teleport to ${t.name}'s harbour`,
+                      )
+                    }
+                  >
+                    sail there
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
         <section class="card" aria-label="Places">
           <h2>Places: {(places?.places ?? []).filter((p) => !lightSite.has(p.kind)).length}</h2>
           <ul class="places">
@@ -719,7 +758,7 @@ function App() {
         </section>
       </>
     ),
-    [places, light, chosenBoat],
+    [places, towns, light, chosenBoat],
   );
 
   return (
@@ -861,6 +900,21 @@ function App() {
       </main>
     </div>
   );
+}
+
+/** What a town has, in a few words: its buildings, the most of its kinds, its piers and moorings. */
+export function townWords(t: Town): string {
+  const kind =
+    t.kind === 'main' ? 'Port Royal' : t.kind === 'port' ? 'a port' : 'a fishing village';
+  const most = Object.entries(t.counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([k, n]) => `${n} ${k.toLowerCase()}`)
+    .join(', ');
+  const piers =
+    t.piers.length > 0 ? `; ${t.piers.length} piers to ${Math.max(...t.piers).toFixed(0)} m` : '';
+  const moorings = t.moorings > 0 ? `; ${t.moorings} moorings` : '';
+  return `${kind}: ${t.buildings} buildings (${most})${piers}${moorings}.`;
 }
 
 const root = document.getElementById('app');

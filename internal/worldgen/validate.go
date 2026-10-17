@@ -38,6 +38,8 @@ type world struct {
 	pw      *placesWork
 	// lightWork are the lights as they were found: what each is named after.
 	lightWork []*lightWork
+	towns     []Town
+	buildings []Building
 }
 
 // validate runs every rule over a world.
@@ -51,17 +53,18 @@ func (c *config) validate(w *world) []Rule {
 
 	// The main port's island: its size, height and cliffs, and the disk's
 	// centre on it.
-	width := float64(2 * sqrtArea(port.area))
+	// Its width, of its land and its basin together.
+	width := float64(2 * sqrtArea(port.area+port.basin))
 	lo, hi := float64(c.port.across[0]*0.85), float64(c.port.across[1]*1.15)
-	add("main port's width", width >= lo && width <= hi, fmt.Sprintf("%.0f m", width), "%.0f–%.0f m", lo, hi)
+	add("main port's width", width >= lo && width <= hi, fmt.Sprintf("%.0f m, its basin counted", width), "%.0f–%.0f m", lo, hi)
 	add("main port's height", port.highest >= c.port.height[0]-0.5 && port.highest <= c.port.height[1]+0.5,
 		fmt.Sprintf("%.1f m", port.highest), "%.0f–%.0f m", c.port.height[0], c.port.height[1])
-	add("main port's cliffs", port.cliffs >= 1.0/3, fmt.Sprintf("%.2f of its coast", port.cliffs), "at least a third")
+	add("main port's cliffs", port.cliffs >= 1.0/3, fmt.Sprintf("%.2f of its outer coast", port.cliffs), "at least a third")
 	off := hypot(port.x, port.y)
-	centre := landAt(w.ground, 0, 0)
+	centre := landAt(w.ground, 0, 0) || port.harbour != nil && port.harbour.inHarbour(0, 0)
 	add("main port at the centre", centre && off <= v.CentreOffset,
-		fmt.Sprintf("centre %.0f m off, the disk's centre %s", off, map[bool]string{true: "on land", false: "in water"}[centre]),
-		"within %.0f m, the disk's centre on land", v.CentreOffset)
+		fmt.Sprintf("centre %.0f m off, the disk's centre %s", off, map[bool]string{true: "on it", false: "in the open sea"}[centre]),
+		"within %.0f m, the disk's centre on its land or in its harbour", v.CentreOffset)
 
 	// The calm water: no land but the main port's within its radius.
 	nearest := math.Inf(1)
@@ -73,7 +76,8 @@ func (c *config) validate(w *world) []Rule {
 	// The start area.
 	add("start area", len(w.start.Places) == c.start.Places, fmt.Sprintf("%d places", len(w.start.Places)), "%d", c.start.Places)
 
-	// Every landmark reachable from the start in enough water.
+	// Every landmark reachable from the start in enough water: from the
+	// roads, whose water the moorings' must reach (townRules).
 	if w.reach == nil {
 		w.reach = c.flood(w.ground, w.start, v.ReachDepth)
 	}
@@ -151,6 +155,7 @@ func (c *config) validate(w *world) []Rule {
 	add("land's height", lowest >= c.land[0]-1e-9 && highest <= c.land[1]+1e-9, fmt.Sprintf("%.1f–%.1f m", lowest, highest), "%.1f–%.0f m", c.land[0], c.land[1])
 	if w.pw != nil {
 		rules = append(rules, c.placeRules(w)...)
+		rules = append(rules, c.townRules(w)...)
 	}
 	return rules
 }
@@ -417,14 +422,15 @@ func (c *config) landShare(g *physics.Ground) float64 {
 }
 
 // largestOpen is the furthest any water inside the mist band is from land,
-// on the coarse grid.
+// on the coarse grid; but in the main port's calm water, which is open by
+// design and which the layout's islets keep out of.
 func (c *config) largestOpen(k *coarse) float64 {
 	far := 0.0
 	for a := range k.side {
 		for b := range k.side {
 			x := float64((float64(a)+0.5)*coarseCell) - coarseHalf
 			y := float64((float64(b)+0.5)*coarseCell) - coarseHalf
-			if hypot(x, y) <= c.mist {
+			if d := hypot(x, y); d <= c.mist && d >= c.calm {
 				far = max(far, k.dist[a*k.side+b])
 			}
 		}
