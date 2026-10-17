@@ -276,6 +276,9 @@ export class Lighthouses {
     mesh.name = 'lighthouse towers';
     mesh.count = 0;
     mesh.frustumCulled = false;
+    // Hidden while there is nothing to draw, so that a world without
+    // lighthouses never builds its shaders.
+    mesh.visible = false;
     return mesh;
   }
 
@@ -358,6 +361,7 @@ export class Lighthouses {
     mesh.name = 'lights';
     mesh.count = 0;
     mesh.frustumCulled = false;
+    mesh.visible = false;
     return mesh;
   }
 
@@ -424,6 +428,7 @@ export class Lighthouses {
       t++;
     }
     this.towers.count = t;
+    this.towers.visible = t > 0;
     this.towers.instanceMatrix.needsUpdate = true;
     this.band.needsUpdate = true;
 
@@ -492,6 +497,7 @@ export class Lighthouses {
     }
     this.perPixel.value = (2 * Math.tan((f.fovY * DEG) / 2)) / Math.max(f.height, 1);
     this.glows.count = this.count;
+    this.glows.visible = this.count > 0;
     this.place.needsUpdate = true;
     this.shows.needsUpdate = true;
     this.beam.needsUpdate = true;
