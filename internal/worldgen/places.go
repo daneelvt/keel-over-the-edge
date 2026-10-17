@@ -368,6 +368,24 @@ func (pw *placesWork) coast(n int32) *coastGrid {
 	return cg
 }
 
+// ownShoreOf lists the water hexagons of island m's grid beside its own
+// land, not a stack's: where a town may stand.
+func ownShoreOf(m *made) []int32 {
+	g := &m.grid
+	var out []int32
+	var nb [6]int32
+	for _, i := range shoreOf(m, false) {
+		k := g.neighbours(i, &nb)
+		for _, j := range nb[:k] {
+			if m.ownLand(j) {
+				out = append(out, i)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // shoreOf lists the water hexagons of island m's grid beside its land,
 // and, if land, its land beside the water instead.
 func shoreOf(m *made, land bool) []int32 {
@@ -445,6 +463,7 @@ func (pw *placesWork) ports() {
 	type cand struct {
 		s     *site
 		fetch float64
+		light *site // where its light would stand
 	}
 	var cands []cand
 	for _, m := range pw.islands {
@@ -458,7 +477,7 @@ func (pw *placesWork) ports() {
 		for k := range best {
 			best[k].fetch = math.Inf(1)
 		}
-		for k, i := range shoreOf(m, false) {
+		for k, i := range ownShoreOf(m) {
 			if k%5 != 0 {
 				continue
 			}
@@ -488,6 +507,9 @@ func (pw *placesWork) ports() {
 			f := pw.meanFetch(dx, dy, 1000)
 			// A town's room: deep water within a pier's reach along one of
 			// the lattice's axes, and gentle land about it.
+			if debugRule != nil {
+				*debugRule = append(*debugRule, [4]float64{x, y, b2f(pw.pierReach(x, y, physics.Atan2(dx-x, dy-y), h.Depth, h.Pier)), float64(roomOf(pw.ground, x, y, h.RoomWithin, h.Steep))})
+			}
 			if f < best[side].fetch && pw.pierReach(x, y, physics.Atan2(dx-x, dy-y), h.Depth, h.Pier) &&
 				roomOf(pw.ground, x, y, h.RoomWithin, h.Steep) >= h.Room {
 				s := pw.newSite(catalog.SiteHarbour, m, x, y)
@@ -498,12 +520,22 @@ func (pw *placesWork) ports() {
 		}
 		for _, b := range best {
 			if b.s != nil {
+				// Its light stands on the point nearest it: what it covers.
+				b.light = b.s
+				if lx, ly, ok := pw.pointNear(b.s.island, b.s.x, b.s.y); ok {
+					b.light = &site{x: lx, y: ly, island: b.s.island}
+				}
 				cands = append(cands, b)
 			}
 		}
 	}
 	_, most := c.kindCount(catalog.SiteHarbour)
-	for _, p := range cover(pw, cands, func(p cand) *site { return p.s }, func(p cand) float64 { return -p.fetch },
+	if debugCands != nil {
+		for _, cd := range cands {
+			*debugCands = append(*debugCands, [2]float64{cd.light.x, cd.light.y})
+		}
+	}
+	for _, p := range cover(pw, cands, func(p cand) *site { return p.light }, func(p cand) float64 { return -p.fetch },
 		float64(h.Apart*nauticalMile), float64(c.lights.Range.Port*nauticalMile), most) {
 		pw.offerShore(p.s)
 		pw.sites = append(pw.sites, p.s)
@@ -658,7 +690,7 @@ func (pw *placesWork) villages() {
 		}
 		g := &m.grid
 		var best cand
-		for k, i := range shoreOf(m, false) {
+		for k, i := range ownShoreOf(m) {
 			if k%6 != 0 {
 				continue
 			}
@@ -671,7 +703,7 @@ func (pw *placesWork) villages() {
 			if !slices.Contains(s.offers, needBeach) {
 				continue
 			}
-			if roomOf(pw.ground, x, y, c.places.Harbour.RoomWithin, c.places.Harbour.Steep) < v.Room {
+			if roomOf(pw.ground, x, y, c.towns.Plan.Reach[2], c.places.Harbour.Steep) < v.Room {
 				continue
 			}
 			// Its fishing ground: shallows off the beach, not the beach's
@@ -1223,4 +1255,16 @@ func (pw *placesWork) pierReach(x, y, out, depth, most float64) bool {
 		}
 	}
 	return false
+}
+
+// debugCands collects the ports' candidates' lights, for a test.
+var debugCands *[][2]float64
+
+var debugRule *[][4]float64
+
+func b2f(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
 }

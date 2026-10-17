@@ -450,12 +450,13 @@ world:
     # needs room: depth m of water within pier m of its quay along one of
     # the lattice's axes, where a pier may run, and room hexagons of land
     # no steeper than 1 in steep within roomWithin m.
-    harbour: { depth: 4, within: 300, apart: 1.2, pier: 250, room: 600, steep: 4, roomWithin: 150 }
+    harbour: { depth: 4, within: 300, apart: 1.2, pier: 250, room: 300, steep: 4, roomWithin: 150 }
     # A fishing village: on an island of the sizes given without a port, on
     # its beach or in a cove, with shallows under shallows m within ground
     # m, its fishing ground; villages apart m from each other and the ports;
-    # room hexagons of land no steeper than a port's within its roomWithin.
-    village: { sizes: [small, medium, large], shallows: 10, ground: 300, apart: 600, room: 150 }
+    # room hexagons of land no steeper than a port's within a village's
+    # reach (towns.plan.reach).
+    village: { sizes: [small, medium, large], shallows: 10, ground: 300, apart: 600, room: 80 }
     # An anchorage: water depth m deep on sand, none shallower than clear m
     # within swing m (room to swing), land within land m; its shelter snug
     # where the fetch is under fetch m in snug of the 16 directions, good in
@@ -636,7 +637,7 @@ world:
       reach: [120, 90, 80] # m
       square: { along: 20, back: 16 } # m along the quay and back from it
     # How many buildings a town has: Port Royal's, a port's, a village's.
-    size: { main: [150, 250], port: [30, 120], village: [6, 20] }
+    size: { main: [150, 250], port: [20, 120], village: [6, 20] }
     # The kinds of building, each with its footprint (frontage along its
     # way, depth back from it, m), its storeys, where it stands, how many
     # Port Royal, a port and a village have (fill: a weight among the
@@ -718,7 +719,7 @@ world:
     centreOffset: 150 # m: the main port's centre from the disk's, at most
     landShare: [0.7, 2.5] # percent of the disk
     counts: 0.3 # each size class within this share of its expected count
-    openWater: 1500 # m: inside the mist band no water is further from land
+    openWater: 1500 # m: inside the mist band, but in the main port's calm water, no water is further from land
     shoreline: 1.4 # a landmark's shoreline development index, at least
     reachDepth: 2 # m: every landmark reachable from the start in this much water
     # At every point of water on a grid of lightGrid m inside the mist band,

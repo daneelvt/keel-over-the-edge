@@ -1183,8 +1183,8 @@ type PlaceVillage struct {
 	// within this, in m.
 	Ground float64 `json:"ground"`
 
-	// Land at least this many hexagons no steeper than a port's within its
-	// roomWithin.
+	// Land at least this many hexagons no steeper than a port's within a village's
+	// reach.
 	Room int `json:"room"`
 
 	// Its fishing ground: water shallower than this, in m,
@@ -2518,7 +2518,8 @@ type WorldValidator struct {
 	// range.
 	LightsInRange int `json:"lightsInRange"`
 
-	// Inside the mist band no water is further than this from land, in m.
+	// Inside the mist band, but in the main port's calm water, no water is further
+	// than this from land, in m.
 	OpenWater float64 `json:"openWater"`
 
 	// Every landmark reachable from the start in this much water, in m.
@@ -2539,4 +2540,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "31cb7e2da74e40ba"
+const Version = "87a2d8c226f2c6d8"

@@ -421,14 +421,15 @@ func (c *config) landShare(g *physics.Ground) float64 {
 }
 
 // largestOpen is the furthest any water inside the mist band is from land,
-// on the coarse grid.
+// on the coarse grid; but in the main port's calm water, which is open by
+// design and which the layout's islets keep out of.
 func (c *config) largestOpen(k *coarse) float64 {
 	far := 0.0
 	for a := range k.side {
 		for b := range k.side {
 			x := float64((float64(a)+0.5)*coarseCell) - coarseHalf
 			y := float64((float64(b)+0.5)*coarseCell) - coarseHalf
-			if hypot(x, y) <= c.mist {
+			if d := hypot(x, y); d <= c.mist && d >= c.calm {
 				far = max(far, k.dist[a*k.side+b])
 			}
 		}

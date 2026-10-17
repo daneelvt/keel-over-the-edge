@@ -4,9 +4,12 @@
 // (the magic, the format, the chunk's number, the generator's version, the
 // world's id, and what it holds), then the elevations column by column,
 // each as its difference from the one before, the surfaces, and the
-// shelter: a bitmap of the cells with a table, and their tables. The
-// header is checked before anything is read, so a chunk of another world,
-// another number or another format is never taken for the one asked for.
+// shelter: a bitmap of the cells with a table, and their tables; and from
+// format 2 its towns: the buildings and props whose middles are in it, and
+// the discs of harbour water whose centres are. The header is checked
+// before anything is read, so a chunk of another world, another number or a
+// format it does not know is never taken for the one asked for; a chunk of
+// format 1 is a chunk with no town.
 // The browser unpacks it with DecompressionStream, which every browser the
 // game runs on has, in workers too.
 
@@ -14,17 +17,72 @@ import { GROUND } from '../../predict/layout.gen';
 
 /** "KWCH", every chunk's first four bytes. */
 const MAGIC = [0x4b, 0x57, 0x43, 0x48] as const;
-/** The chunk's format this client reads. */
-export const CHUNK_FORMAT = 1;
+/** The newest chunk format this client reads; it reads every one from 1. */
+export const CHUNK_FORMAT = 2;
 /** The header's length. */
 const HEADER = 4 + 2 + 2 + 4 + 16 + 1;
 /** What a chunk holds, in the header's last byte. */
 const HOLDS_GROUND = 1;
 const HOLDS_SHELTER = 2;
+const HOLDS_TOWN = 4;
 /** A shelter table's bytes for one cell: a factor's and a turn's for each direction. */
 const CELL_TABLE = GROUND.shelterDirections * 2;
-/** The most a chunk may unpack to: its ground and every cell's table, and a little. */
-const MOST = HEADER + 3 * GROUND.chunkHexes + GROUND.shelterCells * (CELL_TABLE + 1) + 1024;
+/** A building's bytes, and a disc of harbour water's. */
+const BUILDING = 20;
+const DISC = 10;
+/** The most buildings and discs a chunk holds. */
+const MOST_BUILDINGS = 8192;
+const MOST_DISCS = 4096;
+/** The most a chunk may unpack to: its ground, every cell's table and its towns, and a little. */
+const MOST =
+  HEADER +
+  3 * GROUND.chunkHexes +
+  GROUND.shelterCells * (CELL_TABLE + 1) +
+  4 +
+  MOST_BUILDINGS * BUILDING +
+  MOST_DISCS * DISC +
+  1024;
+
+/** A building or a prop of a town, as its chunk holds it. */
+export interface ChunkBuilding {
+  /** Its kind and its kit, by their indices in the catalog's lists. */
+  kind: number;
+  kit: number;
+  /** Its middle, m east and north of the world's centre, and the way its front faces, radians clockwise from north. */
+  east: number;
+  north: number;
+  heading: number;
+  /** Its plot's height, m, and its top's. */
+  level: number;
+  top: number;
+  storeys: number;
+  /** A number of its own, 0 … 63: which windows are lit, whether it smokes. */
+  seed: number;
+  /** Its colours, by their indices in its kit's palettes. */
+  wall: number;
+  roof: number;
+  shutter: number;
+  /** Its flag's colours: 0 none, else the catalog's pair's index and one; Port Royal's past the list. */
+  flag: number;
+  /** Its frontage and depth, m. */
+  frontage: number;
+  depth: number;
+  /** Its town's number. */
+  town: number;
+}
+
+/** A disc of harbour water: within it, on water, is in port. */
+export interface ChunkDisc {
+  east: number;
+  north: number;
+  radius: number;
+}
+
+/** What a chunk holds of the towns. */
+export interface ChunkTown {
+  buildings: ChunkBuilding[];
+  harbour: ChunkDisc[];
+}
 
 /** A chunk's grids: each null if it holds none, which is deep water and open wind. */
 export interface ChunkGrids {
@@ -35,6 +93,8 @@ export interface ChunkGrids {
   surface: Uint8Array | null;
   /** For each cell, column by column, and each direction, the shelter's factor byte and turn byte. */
   shelter: Uint8Array | null;
+  /** Its towns' buildings and harbour, or null for none. */
+  town: ChunkTown | null;
 }
 
 /** A world's id, as the Welcome writes it, as its 16 bytes. */
@@ -90,8 +150,8 @@ export function readChunk(raw: Uint8Array, number: number, world: Uint8Array): C
   }
   const v = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
   const format = v.getUint16(4, true);
-  if (format !== CHUNK_FORMAT) {
-    return `a chunk of format ${format}, not ${CHUNK_FORMAT}`;
+  if (format < 1 || format > CHUNK_FORMAT) {
+    return `a chunk of format ${format}, not 1 to ${CHUNK_FORMAT}`;
   }
   const n = v.getUint16(6, true);
   if (n !== number) {
@@ -104,7 +164,7 @@ export function readChunk(raw: Uint8Array, number: number, world: Uint8Array): C
   }
   const holds = raw[28] ?? 0;
   let at = HEADER;
-  const grids: ChunkGrids = { number, elevation: null, surface: null, shelter: null };
+  const grids: ChunkGrids = { number, elevation: null, surface: null, shelter: null, town: null };
   if ((holds & HOLDS_GROUND) !== 0) {
     if (raw.length < at + 3 * GROUND.chunkHexes) {
       return 'a chunk cut short';
@@ -143,10 +203,73 @@ export function readChunk(raw: Uint8Array, number: number, world: Uint8Array): C
     }
     grids.shelter = table;
   }
+  if ((holds & HOLDS_TOWN) !== 0 && format >= 2) {
+    const town = readTown(v, at);
+    if (typeof town === 'string') {
+      return town;
+    }
+    grids.town = town.town;
+    at = town.at;
+  }
   if (at !== raw.length) {
     return `a chunk with ${raw.length - at} bytes too many`;
   }
   return grids;
+}
+
+/** Reads a chunk's towns from at: its buildings, then its discs of harbour water. */
+function readTown(v: DataView, start: number): { town: ChunkTown; at: number } | string {
+  let at = start;
+  if (v.byteLength < at + 2) {
+    return 'a chunk’s town cut short';
+  }
+  const n = v.getUint16(at, true);
+  at += 2;
+  if (v.byteLength < at + n * BUILDING) {
+    return 'a chunk’s buildings cut short';
+  }
+  const buildings: ChunkBuilding[] = [];
+  for (let k = 0; k < n; k++, at += BUILDING) {
+    const level = v.getInt16(at + 11, true) / 10;
+    const sb = v.getUint8(at + 13);
+    const colours = v.getUint8(at + 14);
+    const more = v.getUint8(at + 15);
+    buildings.push({
+      kind: v.getUint8(at),
+      kit: v.getUint8(at + 1),
+      east: v.getInt32(at + 2, true) / 10,
+      north: v.getInt32(at + 6, true) / 10,
+      heading: (v.getUint8(at + 10) * 2 * Math.PI) / 256,
+      level,
+      storeys: sb & 3,
+      seed: sb >> 2,
+      wall: colours & 15,
+      roof: colours >> 4,
+      shutter: more & 15,
+      flag: more >> 4,
+      frontage: v.getUint8(at + 16) / 5,
+      depth: v.getUint8(at + 17) / 5,
+      top: level + v.getUint8(at + 18) / 4,
+      town: v.getUint8(at + 19),
+    });
+  }
+  if (v.byteLength < at + 2) {
+    return 'a chunk’s harbour cut short';
+  }
+  const d = v.getUint16(at, true);
+  at += 2;
+  if (v.byteLength < at + d * DISC) {
+    return 'a chunk’s harbour cut short';
+  }
+  const harbour: ChunkDisc[] = [];
+  for (let k = 0; k < d; k++, at += DISC) {
+    harbour.push({
+      east: v.getInt32(at, true) / 10,
+      north: v.getInt32(at + 4, true) / 10,
+      radius: v.getUint16(at + 8, true) / 10,
+    });
+  }
+  return { town: { buildings, harbour }, at };
 }
 
 /** Unpacks and reads a chunk's payload, as readChunk does; a payload that is not gzip is refused. */

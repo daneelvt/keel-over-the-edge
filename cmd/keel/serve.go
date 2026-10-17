@@ -396,9 +396,14 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		terrain = bundle.Terrain(cat.PrepareGround())
 		terrainDigest = bundle.Digest
 		chunks = api.NewChunks(sailed.ID, held.key, held.payloads)
-		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat))
+		// A town's buildings stand over the horizon as land as high would.
+		var tops []edge.Top
+		for _, t := range bundle.Tops() {
+			tops = append(tops, edge.Top{X: t[0], Y: t[1], Height: t[2]})
+		}
+		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat)).WithTops(tops)
 		// The owner's free camera sees from higher: its own handout.
-		roamHandout = edge.NewHandout(bundle.Ground, chunks.Paths(), roamRule(cat))
+		roamHandout = edge.NewHandout(bundle.Ground, chunks.Paths(), roamRule(cat)).WithTops(tops)
 		// The places go with their chunks, the lights by range.
 		places := wirePlaces(bundle, cat)
 		var lights *edge.Lights

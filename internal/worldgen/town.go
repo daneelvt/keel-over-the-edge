@@ -140,6 +140,7 @@ type townWork struct {
 	// toward the town; half the arc the town covers about it.
 	ox, oy float64
 	sx, sy float64 // its site, on the shore
+	around float64 // how far from its site it may spread, short of its least, m
 	facing float64
 	half   float64
 	reach  float64
@@ -150,6 +151,9 @@ type townWork struct {
 	buildings []Building
 	target    int // how many buildings it is to have
 	least     int // and the least it may have
+	// steep, if not 0, is the steepest plot taken, as 1 in steep: a town
+	// short of its least terraces steeper ground.
+	steep float64
 	count     int // how many it has
 	// last is the last plot levelled, as it was before: its hexagons, and
 	// their elevations, surfaces and uses; so a building can be taken back.
@@ -256,7 +260,11 @@ func (tw *townWork) slopeOK(hexes []int32, span float64) bool {
 	for _, i := range hexes {
 		lo, hi = min(lo, tw.g.elev[i]), max(hi, tw.g.elev[i])
 	}
-	return float64(hi-lo) <= float64(10*max(span, physics.HexAcross)/tw.c.towns.Plan.Plot)
+	rule := tw.c.towns.Plan.Plot
+	if tw.steep > 0 {
+		rule = tw.steep
+	}
+	return float64(hi-lo) <= float64(10*max(span, physics.HexAcross)/rule)
 }
 
 // terrace is an elevation, dm, rounded to the land's terraces, never

@@ -124,6 +124,29 @@ func NewHandout(g *physics.Ground, paths []string, rule HandoutRule) *Handout {
 	return h
 }
 
+// Top is a building's top: where it stands and how high, m above the sea.
+type Top struct{ X, Y, Height float64 }
+
+// WithTops counts buildings' tops in their cells' heights: a chunk is
+// handed once a tower in it stands over the horizon from the boat, as land
+// as high would be. It returns h.
+func (h *Handout) WithTops(tops []Top) *Handout {
+	sight := math.Sqrt(2 * h.rule.Dome * h.rule.Camera)
+	for _, t := range tops {
+		c, j := physics.HexCell(physics.HexAt(t.X, t.Y))
+		n, _, ok := physics.ChunkOf(c, j)
+		if !ok || t.Height <= 0 {
+			continue
+		}
+		reach := sight + math.Sqrt(2*h.rule.Dome*t.Height) + h.rule.Margin
+		hc := &h.chunks[n]
+		x, y := physics.ShelterCellCentre(c/physics.ShelterCell, j/physics.ShelterCell)
+		hc.cells = append(hc.cells, handCell{x: x, y: y, reach2: reach * reach})
+		hc.reach = max(hc.reach, reach)
+	}
+	return h
+}
+
 // hexRadius is a hexagon's centre to a corner, m.
 const hexRadius = physics.HexAcross / 1.7320508075688772
 

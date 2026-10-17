@@ -811,7 +811,7 @@ func (m *made) measure(c *config, w *work) {
 				isTop = false
 			}
 		}
-		if isCoast && own && !harbourShore(g, i, w.harbour, &nb) {
+		if isCoast && own && !harbourShore(g, i, w.harbour, &nb) && !(m.harbour != nil && nearHarbour(g, i, w.harbour, 30)) {
 			coast++
 			if w.cliff[i] {
 				cliff++

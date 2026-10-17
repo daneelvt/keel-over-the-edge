@@ -2303,7 +2303,7 @@ export interface WorldValidator {
    */
   counts: number;
   /**
-   * Inside the mist band no water is further than this from land, in m.
+   * Inside the mist band, but in the main port's calm water, no water is further than this from land, in m.
    */
   openWater: number;
   /**
@@ -2715,7 +2715,7 @@ export interface PlaceVillage {
    */
   apart: number;
   /**
-   * Land at least this many hexagons no steeper than a port's within its roomWithin.
+   * Land at least this many hexagons no steeper than a port's within a village's reach.
    */
   room: number;
 }
@@ -3830,4 +3830,4 @@ export interface TownLit {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '31cb7e2da74e40ba';
+export const CATALOG_VERSION = '87a2d8c226f2c6d8';

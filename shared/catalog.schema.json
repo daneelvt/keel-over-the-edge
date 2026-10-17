@@ -1004,7 +1004,7 @@
               "minimum": 0,
               "maximum": 10000
             },
-            "room": { "description": "Land at least this many hexagons no steeper than a port's within its roomWithin.", "type": "integer", "minimum": 0, "maximum": 100000 }
+            "room": { "description": "Land at least this many hexagons no steeper than a port's within a village's reach.", "type": "integer", "minimum": 0, "maximum": 100000 }
           }
         },
         "anchorage": {
@@ -2626,7 +2626,7 @@
           "maximum": 10
         },
         "openWater": {
-          "description": "Inside the mist band no water is further than this from land, in m.",
+          "description": "Inside the mist band, but in the main port's calm water, no water is further than this from land, in m.",
           "type": "number",
           "minimum": 100,
           "maximum": 20000

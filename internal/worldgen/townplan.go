@@ -18,7 +18,7 @@ import (
 // its water over the share of its arc given, a quay's height, of dressed
 // stone, within m of the town's site; and its water's foot dredged to foot
 // m. Returns its edge along the water, in order, in stretches.
-func (tw *townWork) quay(share, foot, within float64) [][][2]float64 {
+func (tw *townWork) quay(share, foot, within float64, seaward bool) [][][2]float64 {
 	c := tw.c
 	t := &tw.g
 	wf := &c.towns.Waterfront
@@ -36,7 +36,7 @@ func (tw *townWork) quay(share, foot, within float64) [][][2]float64 {
 		}
 		// Only on the shore that faces the town's water: its nearest
 		// water nearer the town's origin than it is.
-		if w := tw.near[i]; w >= 0 {
+		if w := tw.near[i]; w >= 0 && seaward {
 			wx, wy := t.centre(w)
 			if hypot(wx-tw.ox, wy-tw.oy) > hypot(x-tw.ox, y-tw.oy) {
 				continue
@@ -634,6 +634,12 @@ func (tw *townWork) outskirts() {
 	if tw.count < tw.least {
 		tw.outskirtsWithin(2, tw.least, float64(1.5*tw.reach))
 	}
+	// Still short: all round its site, on steeper ground terraced.
+	if tw.count < tw.least {
+		tw.steep = 2
+		tw.outskirtsWithin(4, tw.least, float64(1.5*tw.reach))
+		tw.steep = 0
+	}
 }
 
 // outskirtsWithin puts buildings on the free land within the share of the
@@ -652,7 +658,7 @@ func (tw *townWork) outskirtsWithin(share float64, want int, reach float64) {
 			continue
 		}
 		x, y := t.centre(i)
-		if !tw.inArc(x, y, share) {
+		if !tw.inArc(x, y, share) || share > 2 && hypot(x-tw.sx, y-tw.sy) > tw.around {
 			continue
 		}
 		_, off := tw.bearing(x, y)
@@ -678,7 +684,7 @@ func (tw *townWork) outskirtsWithin(share float64, want int, reach float64) {
 		seen := map[int32]bool{cd.i: true}
 		queue := []int32{cd.i}
 		way := int32(-1)
-		for len(queue) > 0 && way < 0 && len(seen) < 400 {
+		for len(queue) > 0 && way < 0 && len(seen) < 1500 {
 			i := queue[0]
 			queue = queue[1:]
 			k := t.neighbours(i, &nb)

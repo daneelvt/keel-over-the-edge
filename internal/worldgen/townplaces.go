@@ -378,6 +378,7 @@ func (c *config) mainTown(s stream, g *physics.Ground, m *made, lights []*lightW
 	r := float64(m.radius*reachOf) + 60
 	tw := c.newTownWork(g, s, townMain, m, m.x, m.y, r, func(_ int32, x, y float64) bool { return h.inHarbour(x, y) })
 	tw.ox, tw.oy, tw.facing, tw.half, tw.reach = h.x, h.y, wrapAngle(h.bearing+math.Pi), h.town, p.Reach[0]
+	tw.sx, tw.sy, tw.around = h.x, h.y, h.radius+p.Reach[0]
 	tw.town = &Town{Number: 0, Kind: townMain, Place: -1, Island: m.number, Name: name, Flag: -1}
 	tw.flag = uint8(len(c.towns.Flags.Colours) + 1)
 	size := c.towns.Size.Main
@@ -390,7 +391,7 @@ func (c *config) mainTown(s stream, g *physics.Ground, m *made, lights []*lightW
 			tw.use[i] = usePier
 		}
 	}
-	quays := tw.quay(1, wf.Foot.Main, math.Inf(1))
+	quays := tw.quay(1, wf.Foot.Main, math.Inf(1), true)
 	quayEdge := longest(quays)
 	from := p.Quay + 2
 	sq, hasSquare := tw.square(from)
@@ -722,36 +723,55 @@ func (tw *townWork) scatterAbove(k *buildingKind, n int, x, y, out, reach float6
 	return got
 }
 
-// roomOf is how many hexagons of land within r of (x, y) are no steeper
-// than 1 in steep: the room a town has.
+// roomOf is how many hexagons of land within r of (x, y), reached over
+// land from the land nearest it, are no steeper than 1 in steep: the room
+// a town has, not counting the land across a bay.
 func roomOf(g *physics.Ground, x, y, r, steep float64) int {
-	n := 0
-	q0, r0 := physics.HexAt(x, y)
-	rings := toInt32(math.Ceil(r/(0.866*physics.HexAcross))) + 1
-	var nb [6][2]int32
 	most := float64(physics.HexAcross/steep) * 10
-	for dq := -rings; dq <= rings; dq++ {
-		for dr := max(-rings, -dq-rings); dr <= min(rings, -dq+rings); dr++ {
-			hx, hy := physics.HexCentre(q0+dq, r0+dr)
-			if hypot(hx-x, hy-y) > r {
+	var nb [6][2]int32
+	// The land nearest (x, y): itself, or a neighbour.
+	q0, r0 := physics.HexAt(x, y)
+	c0, j0 := physics.HexCell(q0, r0)
+	start := [2]int32{-1, -1}
+	if elevationAt(g, c0, j0) > 0 {
+		start = [2]int32{c0, j0}
+	} else {
+		for _, n := range cellNeighbours(c0, j0, &nb) {
+			if elevationAt(g, n[0], n[1]) > 0 {
+				start = n
+				break
+			}
+		}
+	}
+	if start[0] < 0 {
+		return 0
+	}
+	seen := map[[2]int32]bool{start: true}
+	queue := [][2]int32{start}
+	n := 0
+	for len(queue) > 0 {
+		h := queue[0]
+		queue = queue[1:]
+		e := elevationAt(g, h[0], h[1])
+		gentle := true
+		for _, o := range cellNeighbours(h[0], h[1], &nb) {
+			oe := elevationAt(g, o[0], o[1])
+			if oe > 0 && math.Abs(float64(oe-e)) > most {
+				gentle = false
+			}
+		}
+		if gentle {
+			n++
+		}
+		for _, o := range cellNeighbours(h[0], h[1], &nb) {
+			if seen[o] || elevationAt(g, o[0], o[1]) <= 0 {
 				continue
 			}
-			cc, jj := physics.HexCell(q0+dq, r0+dr)
-			e := elevationAt(g, cc, jj)
-			if e <= 0 {
+			if hx, hy := physics.CellCentre(o[0], o[1]); hypot(hx-x, hy-y) > r {
 				continue
 			}
-			ok := true
-			for _, n := range cellNeighbours(cc, jj, &nb) {
-				o := elevationAt(g, n[0], n[1])
-				if o > 0 && math.Abs(float64(o-e)) > most {
-					ok = false
-					break
-				}
-			}
-			if ok {
-				n++
-			}
+			seen[o] = true
+			queue = append(queue, o)
 		}
 	}
 	return n
@@ -768,7 +788,7 @@ func (c *config) portTown(s stream, g *physics.Ground, m *made, si *site, lights
 	tw := c.newTownWork(g, s, townPort, m, si.x, si.y, max(reach+120, c.places.Harbour.Pier+40), func(int32, float64, float64) bool { return true })
 	sh, ch := sincos(si.heading)
 	tw.ox, tw.oy = si.x+float64(50*sh), si.y+float64(50*ch)
-	tw.sx, tw.sy = si.x, si.y
+	tw.sx, tw.sy, tw.around = si.x, si.y, c.places.Harbour.RoomWithin
 	tw.facing, tw.half, tw.reach = wrapAngle(si.heading+math.Pi), float64(60*degree), reach
 	tw.town = &Town{Number: number, Kind: townPort, Island: m.number, Name: si.name, Flag: int32(flag) - 1}
 	tw.flag = flag
@@ -778,7 +798,12 @@ func (c *config) portTown(s stream, g *physics.Ground, m *made, si *site, lights
 	tw.target = size[0] + int(toInt32(float64(share*float64(size[1]-size[0]))))
 	tw.least = size[0]
 	tw.markTowers(lights)
-	quays := tw.quay(0.6, wf.Foot.Port, portQuay)
+	quays := tw.quay(0.6, wf.Foot.Port, portQuay, true)
+	if len(quays) == 0 {
+		// A shore that does not face the town's water: its quay where it
+		// can be.
+		quays = tw.quay(1, wf.Foot.Port, 2*portQuay, false)
+	}
 	quayEdge := longest(quays)
 	from := p.Quay + 2
 	sq, hasSquare := tw.square(from)
@@ -910,8 +935,13 @@ func (c *config) villageTown(s stream, g *physics.Ground, m *made, si *site, lig
 			if j, ok := m.grid.index(x, y); !ok || m.grid.elev[j] <= 0 || !m.ownLand(j) {
 				continue
 			}
-			// The nearest with room for the village's houses about it.
-			if d := hypot(x-si.x, y-si.y); d < far && d < 150 && roomOf(g, x, y, 50, c.places.Harbour.Steep) >= 40 {
+			// The nearest with room for the village's houses about it, or
+			// failing any, the nearest.
+			d := hypot(x-si.x, y-si.y)
+			if d < 150 && roomOf(g, x, y, 50, c.places.Harbour.Steep) < 40 {
+				d += 1000
+			}
+			if d < far {
 				root, far = i, d
 			}
 		}
