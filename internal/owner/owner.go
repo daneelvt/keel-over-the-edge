@@ -36,6 +36,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
 )
 
 // Accounts is where accounts are kept: the store.
@@ -132,6 +133,10 @@ type Config struct {
 	// lights' characters, by their indices, as the page shows them.
 	PlaceKinds []PlaceKind
 	Characters []Character
+	// TownKinds are the catalog's kinds of building's names, by their
+	// indices; TownLook how a town's sheet is drawn.
+	TownKinds []string
+	TownLook  chart.TownLook
 	// BeginWorld ends the active world, of the number given, and begins the
 	// next; Restart stops keel, to start again in it. Without them a new
 	// world cannot be begun from the page.
@@ -158,6 +163,7 @@ type Owner struct {
 	current []byte
 	islands []byte
 	places  []byte
+	towns   []byte
 }
 
 // Paths are the owner's tools' routes, for the tests that the public
@@ -167,6 +173,7 @@ var Paths = []string{
 	"/owner/api/world.json", "/owner/api/gusts.bin", "/owner/api/islands.json", "/owner/api/current.json",
 	"/owner/api/land.png", "/owner/api/coasts.svg", "/owner/api/island/0.svg", "/owner/api/point",
 	"/owner/api/flag", "/owner/api/place", "/owner/api/unseen", "/owner/api/places.json", "/owner/api/world",
+	"/owner/api/towns.json", "/owner/api/town/0.svg",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -187,6 +194,7 @@ func New(cfg Config) *Owner {
 	o.current = currentGrid(&o.cfg)
 	o.islands = islandsList(&o.cfg)
 	o.places = placesList(&o.cfg)
+	o.towns = townsList(&o.cfg)
 	return o
 }
 
@@ -230,6 +238,8 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/gusts.bin", o.serveView(func(v *view) []byte { return v.gusts }, "application/octet-stream"))
 	mux.HandleFunc("GET /owner/api/islands.json", o.serveFixed(func() []byte { return o.islands }, "application/json"))
 	mux.HandleFunc("GET /owner/api/places.json", o.serveFixed(func() []byte { return o.places }, "application/json"))
+	mux.HandleFunc("GET /owner/api/towns.json", o.serveFixed(func() []byte { return o.towns }, "application/json"))
+	mux.HandleFunc("GET /owner/api/town/{file}", o.land.town)
 	mux.HandleFunc("GET /owner/api/current.json", o.serveFixed(func() []byte { return o.current }, "application/json"))
 	mux.HandleFunc("GET /owner/api/land.png", o.land.serve(landPNG))
 	mux.HandleFunc("GET /owner/api/coasts.svg", o.land.serve(coastsSVG))

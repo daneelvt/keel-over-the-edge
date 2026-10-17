@@ -5,6 +5,7 @@ package owner
 import (
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"math"
 	"net/http"
 	"strconv"
@@ -60,7 +61,17 @@ func (l *land) draw(d int) []byte {
 	v := LandView()
 	switch d {
 	case landPNG:
-		return chart.Raster(b.Ground, v, chart.Terrain)
+		// The towns' streets, quays, piers and yards in their own colours.
+		look := l.cfg.TownLook.Surfaces
+		return chart.Raster(b.Ground, v, func(e float64, s int32) color.RGBA {
+			if c, ok := look[s]; ok && e > 0 {
+				var rgb color.RGBA
+				fmt.Sscanf(c, "#%02x%02x%02x", &rgb.R, &rgb.G, &rgb.B)
+				rgb.A = 255
+				return rgb
+			}
+			return chart.Terrain(e, s)
+		})
 	default:
 		var s strings.Builder
 		fmt.Fprintf(&s, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`+"\n", v.Side, v.Side, v.Side, v.Side)

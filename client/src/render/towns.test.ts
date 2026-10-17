@@ -90,9 +90,9 @@ describe('a town', () => {
     const towns = new Towns(catalog.world);
     const kinds = catalog.world.towns.buildings;
     const k = (pred: (x: (typeof kinds)[number]) => boolean): number => kinds.findIndex(pred);
-    const house = k((x) => (x.chimney ?? 0) >= 1 && !x.prop);
+    const house = k((x) => (x.chimney ?? 0) >= 1 && x.prop !== true);
     const flagged = k((x) => x.flag === true);
-    const post = k((x) => x.prop && (x.lantern ?? 0) > 0);
+    const post = k((x) => x.prop === true && (x.lantern ?? 0) > 0);
     const b = (kind: number, east: number) => ({
       kind,
       kit: 0,

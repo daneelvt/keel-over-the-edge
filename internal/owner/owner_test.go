@@ -27,6 +27,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
 )
 
 // fakeAccounts is a database of accounts in memory.
@@ -149,6 +150,11 @@ func newRig(t testing.TB, limit int) *rig {
 	}
 	b.Lights = []worldgen.Light{{Number: 0, Place: 2, Role: "hazard", Marks: 1, X: 2000, Y: 0, Ground: 30, Tower: 15, Focal: 45,
 		Character: 1, Notation: "Fl W 10s", Phase: 1234, Range: 2778}}
+	b.Towns = []worldgen.Town{{Number: 0, Kind: "port", Place: 3, Island: 0, Name: "Hill Harbour", X: 1840, Y: 0, Heading: -math.Pi / 2,
+		Piers: []worldgen.Pier{{X: 1840, Y: 0, Heading: -math.Pi / 2, Length: 20, Width: 8}}, Buildings: 1, Counts: []int{1, 2},
+		Harbour: []worldgen.Disc{{X: 1700, Y: 0, R: 150}, {X: 1840, Y: 0, R: 150}}}}
+	b.Buildings = []worldgen.Building{{Kind: 0, X: 1880, Y: 10, Heading: -math.Pi / 2, Level: 16, Storeys: 2, Frontage: 6, Depth: 8, Top: 10.6},
+		{Kind: 1, X: 1860, Y: -10, Level: 16, Storeys: 1, Frontage: 0.4, Depth: 0.4, Top: 2.6}}
 	tl := weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(10*knot, 0, 0))
 	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Workers: 1, Tick: 1000, Limit: limit,
 		Weather: tl, Encounters: cat.PrepareEncounters(), Terrain: &sim.Terrain{Ground: g, Start: []physics.State{{X: 0, Y: -100, Heading: math.Pi / 2}}}, Edge: &sim.Edge{Fall: 150, Clear: 20}})
@@ -165,6 +171,8 @@ func newRig(t testing.TB, limit int) *rig {
 		Accounts: r.accounts, Sessions: r.sessions, Edge: r.edge, Log: slog.New(slog.DiscardHandler), Metrics: r.metrics,
 		PlaceKinds: []PlaceKind{{ID: "reef", Name: "Reef", Site: "reef", Mark: "#c2563a"}, {ID: "lighthouse", Name: "Lighthouse", Site: "light", Mark: "#e8b400"}},
 		Characters: []Character{{Notation: "Fl W 5s", Colour: "white", Steps: []int{500, 4500}}, {Notation: "Fl W 10s", Colour: "white", Steps: []int{1000, 9000}}},
+		TownKinds:  []string{"Dwelling", "Bollard"},
+		TownLook:   chart.TownLook{Kinds: []string{"#c9b08a", "#3c3a36"}, Props: []bool{false, true}, Surfaces: map[int32]string{}},
 		BeginWorld: func(_ context.Context, number int) (store.World, error) {
 			if number != 3 {
 				return store.World{}, store.ErrNotActive
@@ -620,6 +628,41 @@ func TestPlace(t *testing.T) {
 	}
 	if testutil.ToFloat64(r.metrics.OwnerActions.WithLabelValues("place")) != 4 {
 		t.Fatal("teleports not counted")
+	}
+}
+
+// TestTowns: the towns' list, a town's sheet, and a teleport to a town's
+// harbour, facing the town.
+func TestTowns(t *testing.T) {
+	r := newRig(t, 0)
+	ann := r.join(t, 1, "Ann", store.Human, true)
+	code, body := r.do(t, "GET", "/owner/api/towns.json", nil)
+	var list struct {
+		Towns []struct {
+			Name    string         `json:"name"`
+			Counts  map[string]int `json:"counts"`
+			Harbour *[2]float64    `json:"harbour"`
+		} `json:"towns"`
+	}
+	if code != 200 || json.Unmarshal(body, &list) != nil || len(list.Towns) != 1 || list.Towns[0].Counts["Bollard"] != 2 ||
+		list.Towns[0].Harbour == nil {
+		t.Fatalf("towns.json: %d %s", code, body)
+	}
+	if code, body := r.do(t, "GET", "/owner/api/town/0.svg", nil); code != 200 || !bytes.Contains(body, []byte("Hill Harbour")) {
+		t.Fatalf("the town's sheet: %d", code)
+	}
+	if code, _ := r.do(t, "GET", "/owner/api/town/5.svg", nil); code != 404 {
+		t.Fatalf("a town not there: %d", code)
+	}
+	town := 0
+	if code, body := r.do(t, "POST", "/owner/api/place", PlaceRequest{Boat: ann, Town: &town}); code != 200 {
+		t.Fatalf("to the town's harbour: %d %s", code, body)
+	}
+	r.w.Tick()
+	st := r.w.Latest().State[0]
+	h := list.Towns[0].Harbour
+	if math.Hypot(st.X-h[0], st.Y-h[1]) > 0.5 || math.Abs(math.Remainder(st.Heading-math.Pi/2, 2*math.Pi)) > 0.05 {
+		t.Fatalf("in the harbour at %+v, heading %v", st, st.Heading)
 	}
 }
 

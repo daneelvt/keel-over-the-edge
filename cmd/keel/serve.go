@@ -45,6 +45,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
 )
 
 // shutdownTimeout bounds how long a stopping server waits for requests in
@@ -717,6 +718,17 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	for _, ch := range c.cat.World.Lights.Characters {
 		cfg.Characters = append(cfg.Characters, owner.Character{Notation: ch.Notation, Colour: string(ch.Colour), Steps: ch.Steps})
+	}
+	cfg.TownLook = chart.TownLook{Surfaces: map[int32]string{}}
+	for i, s := range c.cat.World.Surfaces {
+		if s.Town != nil {
+			cfg.TownLook.Surfaces[int32(i)] = string(s.Look.Top)
+		}
+	}
+	for _, k := range c.cat.World.Towns.Buildings {
+		cfg.TownKinds = append(cfg.TownKinds, k.Name)
+		cfg.TownLook.Kinds = append(cfg.TownLook.Kinds, string(k.Colour))
+		cfg.TownLook.Props = append(cfg.TownLook.Props, k.Prop != nil && *k.Prop)
 	}
 	if t := c.terrain; t != nil {
 		cfg.Ground, cfg.Shelter, cfg.Circulation = t.Ground, t.Shelter, t.Circulation
