@@ -454,9 +454,9 @@ export class Towns {
       }
     }
     let nearTown = Number.POSITIVE_INFINITY;
-    const best = { church: Infinity, square: Infinity, slip: Infinity, edge: Infinity };
+    const best = { belfry: Infinity, square: Infinity, slip: Infinity, edge: Infinity };
     const at: Record<keyof typeof best, { east: number; north: number } | null> = {
-      church: null,
+      belfry: null,
       square: null,
       slip: null,
       edge: null,
@@ -472,7 +472,7 @@ export class Towns {
       }
       const role =
         kind.stands === 'above'
-          ? 'church'
+          ? 'belfry'
           : kind.stands === 'square' && !kind.prop
             ? 'square'
             : kind.stands === 'slip'
@@ -485,7 +485,7 @@ export class Towns {
         at[role] = { east: b.east, north: b.north };
       }
     }
-    return { inPort, nearTown, bell: at.church ?? at.square, yard: at.slip, quay: at.edge };
+    return { inPort, nearTown, bell: at.belfry ?? at.square, yard: at.slip, quay: at.edge };
   }
 
   /** The catalog's kinds of building. */
