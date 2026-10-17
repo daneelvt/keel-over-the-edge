@@ -22,12 +22,12 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  DynamicDrawUsage,
   Float32BufferAttribute,
   Group,
-  DynamicDrawUsage,
   InstancedInterleavedBuffer,
-  InterleavedBufferAttribute,
   InstancedMesh,
+  InterleavedBufferAttribute,
   Matrix4,
   Mesh,
   Quaternion,
@@ -156,7 +156,12 @@ const STRIDE = 16;
 class Draw {
   mesh: InstancedMesh;
   buffer: InstancedInterleavedBuffer;
-  constructor(geometry: BufferGeometry, material: ReturnType<typeof litMaterial>, capacity: number, name: string) {
+  constructor(
+    geometry: BufferGeometry,
+    material: ReturnType<typeof litMaterial>,
+    capacity: number,
+    name: string,
+  ) {
     const g = geometry.clone();
     this.buffer = new InstancedInterleavedBuffer(new Float32Array(capacity * STRIDE), STRIDE, 1);
     this.buffer.setUsage(DynamicDrawUsage);
@@ -384,7 +389,12 @@ export class Towns {
       if (!kind.prop && chimney > 0 && own(1) < chimney) {
         // The kits stand a chimney on the ridge, three tenths of the frontage to the right.
         const x = 0.3 * b.frontage;
-        f.chimneys.push({ east: b.east + re * x, north: b.north + rn * x, top: b.top + 0.6, seed: b.seed });
+        f.chimneys.push({
+          east: b.east + re * x,
+          north: b.north + rn * x,
+          top: b.top + 0.6,
+          seed: b.seed,
+        });
       }
       if (kind.prop && lantern > 0) {
         f.lanterns.push({ east: b.east, north: b.north, top: b.level + 3.2, seed: b.seed });
@@ -402,6 +412,67 @@ export class Towns {
     }
     this.#features = f;
     return f;
+  }
+
+  /**
+   * What the harbour sounds like from (east, north): whether it is in port
+   * (within a disc of harbour water, on water as water(east, north) says),
+   * how far the nearest building is, and the nearest bell (a church's, else
+   * a harbourmaster's house), shipyard and quay's edge (its bollards).
+   */
+  heardFrom(
+    east: number,
+    north: number,
+    water: (east: number, north: number) => boolean,
+  ): {
+    inPort: boolean;
+    nearTown: number;
+    bell: { east: number; north: number } | null;
+    yard: { east: number; north: number } | null;
+    quay: { east: number; north: number } | null;
+  } {
+    let inPort = false;
+    for (const d of this.harbour()) {
+      const dx = east - d.east;
+      const dy = north - d.north;
+      if (dx * dx + dy * dy <= d.radius * d.radius) {
+        inPort = water(east, north);
+        break;
+      }
+    }
+    let nearTown = Number.POSITIVE_INFINITY;
+    const best = { church: Infinity, square: Infinity, slip: Infinity, edge: Infinity };
+    const at: Record<keyof typeof best, { east: number; north: number } | null> = {
+      church: null,
+      square: null,
+      slip: null,
+      edge: null,
+    };
+    for (const b of this.buildings()) {
+      const kind = this.#kinds[b.kind];
+      if (kind === undefined) {
+        continue;
+      }
+      const d = Math.hypot(b.east - east, b.north - north);
+      if (!kind.prop) {
+        nearTown = Math.min(nearTown, d);
+      }
+      const role =
+        kind.stands === 'above'
+          ? 'church'
+          : kind.stands === 'square' && !kind.prop
+            ? 'square'
+            : kind.stands === 'slip'
+              ? 'slip'
+              : kind.stands === 'edge'
+                ? 'edge'
+                : null;
+      if (role !== null && d < best[role]) {
+        best[role] = d;
+        at[role] = { east: b.east, north: b.north };
+      }
+    }
+    return { inPort, nearTown, bell: at.church ?? at.square, yard: at.slip, quay: at.edge };
   }
 
   /** The catalog's kinds of building. */

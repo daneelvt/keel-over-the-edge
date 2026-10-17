@@ -97,15 +97,27 @@ export class Smoke {
     g.setAttribute('corner', new BufferAttribute(corners, 2));
     g.setAttribute('position', new BufferAttribute(new Float32Array(12), 3));
     g.setIndex([0, 1, 2, 0, 2, 3]);
-    const place = instancedDynamicBufferAttribute(this.place, 'vec4', 4, 0) as unknown as Node<'vec4'>;
-    const shade = instancedDynamicBufferAttribute(this.shade, 'vec4', 4, 0) as unknown as Node<'vec4'>;
+    const place = instancedDynamicBufferAttribute(
+      this.place,
+      'vec4',
+      4,
+      0,
+    ) as unknown as Node<'vec4'>;
+    const shade = instancedDynamicBufferAttribute(
+      this.shade,
+      'vec4',
+      4,
+      0,
+    ) as unknown as Node<'vec4'>;
     const corner = attribute('corner', 'vec2') as unknown as Node<'vec2'>;
     const m = basicMaterial();
     m.name = 'smoke';
     m.transparent = true;
     m.depthWrite = false;
     const view = cameraViewMatrix.mul(vec4(bendScene(place.xyz), 1));
-    m.vertexNode = cameraProjectionMatrix.mul(vec4(view.xy.add(corner.mul(place.w.mul(0.5))), view.z, 1));
+    m.vertexNode = cameraProjectionMatrix.mul(
+      vec4(view.xy.add(corner.mul(place.w.mul(0.5))), view.z, 1),
+    );
     const vCorner = varying(corner);
     const vShade = varying(shade);
     const r2 = dot(vCorner, vCorner);
@@ -122,7 +134,12 @@ export class Smoke {
   }
 
   /** The chimneys smoking this frame, placed from the floating origin; time is world time, s; light the daylight on them. */
-  frame(chimneys: readonly Chimney[], origin: { x: number; y: number }, time: number, light: number): void {
+  frame(
+    chimneys: readonly Chimney[],
+    origin: { x: number; y: number },
+    time: number,
+    light: number,
+  ): void {
     const c = this.#cat;
     this.light.value = light;
     const place = this.place.array as Float32Array;

@@ -1,0 +1,14 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "Gulls by day: a long call of a few notes, harmonic, its first peak near 1.2 kHz and falling at each note's end (the long calls of large gulls, gull-research.org; Mierauskas and Greimas, 1992), a few a minute, from a point off the shore. A note lasts note seconds, notes notes a call; the band's centre is the call's pitch. Heard within reach metres of a town.",
+  "pitch": [1100, 1500],
+  "fall": 0.7,
+  "note": [0.18, 0.32],
+  "notes": [3, 7],
+  "gap": 0.12,
+  "perMinute": 3,
+  "q": 6,
+  "near": 20,
+  "reach": 300,
+  "level": 0.18
+}

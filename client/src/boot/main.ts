@@ -107,7 +107,11 @@ async function start(): Promise<void> {
       ...START,
       ...(file === null || place === undefined
         ? {}
-        : { east: place[0], north: place[1], heading: file.start.headings?.[0] ?? file.start.heading }),
+        : {
+            east: place[0],
+            north: place[1],
+            heading: file.start.headings?.[0] ?? file.start.heading,
+          }),
       wind: wind ?? START.wind,
       weather:
         weatherFromQuery(query, catalog.weather) ??

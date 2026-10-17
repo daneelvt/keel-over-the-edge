@@ -1,0 +1,13 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The harbour bell, striking the watches by the world's clock: as many strokes as half hours of the four-hour watch have gone, in pairs, eight at its end (Smyth, The Sailor's Word-Book, 1867). A bell's partials stand at 0.5, 1, 1.2, 1.5 and 2 times its prime (hum, prime, tierce, quint, nominal: Perrin, Charnley and de Pont, 1982), each dying away over its decay; the strike is heard from the nominal. A point source: its level falls 6 dB each time the distance doubles from near metres, and it is heard within reach metres. Strokes in a pair stroke seconds apart, pairs pair seconds apart. Frequencies in Hz, times in seconds, levels as gains.",
+  "prime": 440,
+  "partials": [0.5, 1, 1.2, 1.5, 2],
+  "levels": [0.35, 0.5, 0.3, 0.25, 0.4],
+  "decays": [3.2, 2.2, 1.6, 1.4, 1.0],
+  "stroke": 0.55,
+  "pair": 1.5,
+  "near": 30,
+  "reach": 900,
+  "level": 0.5
+}

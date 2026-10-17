@@ -147,7 +147,11 @@ export class Flags {
     this.#cat = cat;
     this.#colours = [...cat.colours.map((p) => p.map(linear)), cat.mainPort.map(linear)];
     const g = flagGeometry();
-    this.#buffer = new InstancedInterleavedBuffer(new Float32Array(FLAG_CAPACITY * STRIDE), STRIDE, 1);
+    this.#buffer = new InstancedInterleavedBuffer(
+      new Float32Array(FLAG_CAPACITY * STRIDE),
+      STRIDE,
+      1,
+    );
     this.#buffer.setUsage(DynamicDrawUsage);
     for (const [k, name] of ['flagTop', 'flagWind', 'flagFirst', 'flagSecond'].entries()) {
       g.setAttribute(name, new InterleavedBufferAttribute(this.#buffer, 4, k * 4));
@@ -167,8 +171,15 @@ export class Flags {
     const t = at.x;
     // A wave runs down the cloth at the flap's frequency, growing toward
     // its end.
-    const phase = this.time.mul(wind.z).mul(2 * Math.PI).add(wind.y).sub(t.mul(4.2));
-    const flap = sin(phase).mul(t).mul(length * 0.16).mul(ext.mul(0.7).add(0.3));
+    const phase = this.time
+      .mul(wind.z)
+      .mul(2 * Math.PI)
+      .add(wind.y)
+      .sub(t.mul(4.2));
+    const flap = sin(phase)
+      .mul(t)
+      .mul(length * 0.16)
+      .mul(ext.mul(0.7).add(0.3));
     const cloth = fly
       .mul(t.mul(length))
       .add(vec3(0, at.y.mul(length * 0.5), 0))
@@ -177,7 +188,10 @@ export class Flags {
     // the identity.
     const isStaff = at.z.greaterThan(0.5);
     const local = top.xyz.add(select(isStaff, positionLocal, cloth));
-    const m = litMaterial({ roughness: 0.95, metalness: 0, side: DoubleSide }, local as unknown as Node<'vec3'>);
+    const m = litMaterial(
+      { roughness: 0.95, metalness: 0, side: DoubleSide },
+      local as unknown as Node<'vec3'>,
+    );
     m.name = 'flags';
     const vAt = varying(at);
     m.colorNode = select(
@@ -212,7 +226,8 @@ export class Flags {
       a[o + 5] = f.seed * 0.7;
       a[o + 6] = flapFrequency(f.speed, c.length, c.strouhal);
       a[o + 7] = 0;
-      const pair = this.#colours[Math.min(f.flag - 1, this.#colours.length - 1)] ?? this.#colours[0] ?? [];
+      const pair =
+        this.#colours[Math.min(f.flag - 1, this.#colours.length - 1)] ?? this.#colours[0] ?? [];
       const p = pair[0] ?? [1, 1, 1];
       const q = pair[1] ?? [1, 1, 1];
       a.set([p[0] ?? 1, p[1] ?? 1, p[2] ?? 1, 0, q[0] ?? 1, q[1] ?? 1, q[2] ?? 1, 0], o + 8);

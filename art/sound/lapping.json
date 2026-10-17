@@ -1,0 +1,10 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "Water lapping at quays and piers: a band of noise that swells and falls at the waves' period, louder the higher the sea, heard within reach metres of a quay's edge, its level falling with the distance from near metres. Frequencies in Hz, levels as gains, the sea's height in metres.",
+  "centre": 650,
+  "q": 1.2,
+  "near": 6,
+  "reach": 60,
+  "level": { "calm": 0.05, "most": 0.3, "seaHeight": 1.5 },
+  "period": [2.5, 6]
+}
