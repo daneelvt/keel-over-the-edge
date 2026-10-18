@@ -129,13 +129,6 @@ type placesWork struct {
 	sites   []*site
 }
 
-// sitesOf finds the world's places, kind by kind.
-func (c *config) sitesOf(seed uint64, g *physics.Ground, k *coarse, islands []*made, hazards []*hazard, start Start) *placesWork {
-	pw := c.placesWork(seed, g, k, islands, hazards, start)
-	pw.findSites()
-	return pw
-}
-
 // placesWork is the places' work before any is found: the water a boat
 // reaches from the start, which the world's ruins and colonies are also
 // sighted from (ruins.go, colonies.go) before the places keep clear of
