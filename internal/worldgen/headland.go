@@ -23,8 +23,9 @@ import (
 // compresses the air, and air and water burst from the vent" (Kiama,
 // Spouting Horn). The height field cannot overhang, so a cave's or an
 // arch's hexagons are roofs: their ground is rock awash, which no boat
-// sails and the sea foams through, and their land is drawn from the roof's
-// underside up to its top.
+// sails and the sea foams through, at the sea's level, shallower than any
+// hull draws; and their land is drawn from the roof's underside up to its
+// top.
 
 // axial are the axial offsets of a hexagon's six neighbours, the k-th and
 // the (k+3)-th opposite.
@@ -124,7 +125,8 @@ func (c *config) caveOf(s stream, m *made, w *work, k int, spots []spot) {
 		mx, my := g.centre(cd.i)
 		sx, sy := g.centre(g.step(cd.i, cd.dir))
 		heading := headingTo(mx, my, sx, sy)
-		m.addFeature(k, cd.i, heading, float64(float64(len(cells))*physics.HexAcross), w.height[cd.i])
+		cave := m.addFeature(k, cd.i, heading, float64(float64(len(cells))*physics.HexAcross), w.height[cd.i])
+		cave.cells = slices.Clone(cells)
 		back := cells[len(cells)-1]
 		thin := w.height[back]-under <= c.features.headland.Blowhole.Roof
 		for _, i := range cells {
@@ -137,6 +139,7 @@ func (c *config) caveOf(s stream, m *made, w *work, k int, spots []spot) {
 			m.roofs = m.roofs[:len(m.roofs)-1]
 			vx, vy := g.centre(back)
 			b := m.addFeature(bk, back, heading, physics.HexAcross, r.top)
+			b.cells = slices.Clone(cells)
 			b.parts = append(b.parts, Part{X: vx, Y: vy, Level: r.top, Heading: heading, Size: physics.HexAcross,
 				Count: uint16(len(cells))})
 		}
@@ -245,7 +248,7 @@ func (c *config) archOf(s stream, m *made, w *work, k int) {
 		heading = headingTo(x0, y0, x1, y1)
 	}
 	span := float64(float64(len(best.run)) * physics.HexAcross)
-	m.addFeature(k, mid, heading, span, w.height[mid])
+	m.addFeature(k, mid, heading, span, w.height[mid]).cells = slices.Clone(best.run)
 	for _, i := range best.run {
 		c.roof(s, m, w, i, under)
 	}

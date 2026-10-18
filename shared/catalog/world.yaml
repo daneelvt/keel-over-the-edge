@@ -901,10 +901,10 @@ world:
   # preview.
   features:
     kinds:
-      - { id: sea-cave, name: Sea cave, site: cave, word: cave, biomes: [rocky, volcanic, wooded], chance: 0.35, zones: { centre: 0.7, middle: 1.3, rim: 1.3 }, mark: "#5b4a8a" }
-      - { id: sea-arch, name: Sea arch, site: arch, word: arch, biomes: [rocky, volcanic, wooded], chance: 0.4, zones: { centre: 0.6, middle: 1.5, rim: 1.5 }, mark: "#8a3d6b" }
+      - { id: sea-cave, name: Sea cave, site: cave, word: cave, biomes: [rocky, volcanic, wooded], chance: 0.35, zones: { centre: 0.7, middle: 1.6, rim: 1.3 }, mark: "#5b4a8a" }
+      - { id: sea-arch, name: Sea arch, site: arch, word: arch, biomes: [rocky, volcanic, wooded], chance: 0.4, zones: { centre: 0.6, middle: 1.8, rim: 1.5 }, mark: "#8a3d6b" }
       - { id: blowhole, name: Blowhole, site: blowhole, word: cave, biomes: [rocky, volcanic, wooded], chance: 0.6, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#3d6b8a" }
-      - { id: waterfall, name: Waterfall, site: waterfall, word: waterfall, biomes: [tropical, wooded, rocky, volcanic], chance: 0.7, zones: { centre: 0.8, middle: 1.4, rim: 1.2 }, mark: "#2f7fb3" }
+      - { id: waterfall, name: Waterfall, site: waterfall, word: waterfall, biomes: [tropical, wooded, rocky, volcanic], chance: 0.7, zones: { centre: 0.8, middle: 1.6, rim: 1.2 }, mark: "#2f7fb3" }
       - { id: spring, name: Spring, site: spring, word: spring, biomes: [tropical, wooded, rocky, volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#5fa3c9" }
       - { id: crater, name: Crater, site: crater, biomes: [volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#6b4a3a" }
       - { id: fumarole, name: Fumarole, site: fumarole, word: smoke, biomes: [volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#c9b43a" }
@@ -952,10 +952,11 @@ world:
     # neck's height; on a cave whose roof is blowhole.roof m thin or
     # thinner, a vent at its back that spouts with the waves. Under a roof
     # the ground is rock awash, floor m deep: the sea foams through and no
-    # boat sails it.
+    # boat sails it, at the sea's level shallower than any hull draws (the
+    # Jolly boat's 0.094 m).
     headland:
       cliff: 8 # m
-      floor: [0.3, 0.5] # m
+      floor: [0, 0] # m
       cave: { depth: [2, 6], underside: [3, 8], roof: 2, open: 1000 }
       arch: { neck: 3, underside: [0.5, 0.7] }
       blowhole: { roof: 4 } # m
@@ -1048,7 +1049,8 @@ world:
   # form's own classes (A 19 or more, B 12–18). What each factor reads of
   # the island: landform, from 1, its relief (its highest, m, adding
   # nothing at relief[0] and two at relief[1]), cliffs on that share of its
-  # coast or more, twin summits, stacks, a cave, an arch, a crater;
+  # coast or more, twin summits, stacks, a cave, an arch, a crater, a cone
+  # smoking;
   # vegetation by how many major types of plant cover a fiftieth of its
   # land or more (each form of tree one, shrubs one, grasses one); water the
   # best of a waterfall, a lagoon, a stream, a blowhole, the sea's white
@@ -1061,9 +1063,9 @@ world:
   # Starting values, judged by the owner's eye.
   score:
     classes: { a: 19, b: 12 }
-    landform: { relief: [10, 50], cliffs: 0.3, twin: 0.5, stacks: 0.5, cave: 1, arch: 1.5, crater: 1 }
+    landform: { relief: [10, 50], cliffs: 0.3, twin: 0.5, stacks: 0.5, cave: 1, arch: 1.5, crater: 1, fumarole: 1 }
     vegetation: [1, 3, 3, 4, 5]
-    water: { waterfall: 5, lagoon: 3, stream: 3, blowhole: 3, arch: 3, cave: 2 }
+    water: { waterfall: 5, lagoon: 3, stream: 3, blowhole: 3, arch: 3, cave: 3 }
     colour: { least: 0.05, each: 0.5, lagoon: 1, sulphur: 1, guano: 0.5 }
     adjacent: { within: 1000, island: 0.5, featured: 1 }
     scarcity: { rare: 1, few: 3, region: 3000 }

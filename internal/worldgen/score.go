@@ -120,6 +120,9 @@ func (c *config) scenery(m *made, islands []*made, lit, towned bool) Scenery {
 	if has(catalog.FeatureSiteCrater) {
 		land += lf.Crater
 	}
+	if has(catalog.FeatureSiteFumarole) {
+		land += lf.Fumarole
+	}
 	sum.Landform = halves(min(land, 5))
 
 	// Vegetation and colour: the surfaces covering enough of its land, and

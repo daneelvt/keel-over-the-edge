@@ -31,9 +31,9 @@ const (
 // still are cast, and how many of the sixteen may reach open water.
 const (
 	stillReach = 150.0
-	stillOpen  = 5
+	stillOpen  = 3
 	// Behind a fringing reef, whose crest breaks the swell, more may.
-	stillOpenLagoon = 8
+	stillOpenLagoon = 5
 )
 
 // communities lays island m's communities and features' ground over its
@@ -61,6 +61,8 @@ func (c *config) communities(m *made, b *biome, w *work) {
 		}
 	}
 	for _, i := range m.floors {
+		// Rock awash: the sea's level, water no hull floats in.
+		g.elev[i] = int16(-round(float64(-w.height[i] * 10)))
 		g.surf[i] = c.rockSurface
 	}
 }

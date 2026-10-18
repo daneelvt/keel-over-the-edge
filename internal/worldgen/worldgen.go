@@ -218,7 +218,6 @@ func (c *config) generate(seed uint64) *Bundle {
 	lap("islands")
 	c.reefRocks(seed, islands)
 	b.Ground = c.rasterAll(islands)
-	b.Roofs = roofsOf(islands)
 	lap("raster")
 	k := newCoarse(b.Ground)
 	hazards := c.hazardsOf(seed, b.Ground, k)
@@ -229,22 +228,30 @@ func (c *config) generate(seed uint64) *Bundle {
 	lap("hazards")
 	b.Fetch = c.fetchOf(b.Ground, k)
 	lap("fetch")
-	b.Shelter = c.shelterOf(b.Ground, b.Roofs)
-	lap("shelter")
 	b.Start = c.startOf(b.Ground, islands[0])
 	b.Circulation = circulationOf(seed)
 	lap("start")
 	// The ruins and colonies are the world's, chosen before the places,
-	// which keep their towns clear of them as of every feature.
+	// whose towns keep clear of them as of falls; where a town is sited, a
+	// cave or an arch within its reach has fallen in. Then the shelter,
+	// over the roofs that stand, and the names, of what the islands show.
 	pw := c.placesWork(seed, b.Ground, k, islands, hazards, b.Start)
 	c.ruinsOf(seed, pw)
 	c.coloniesOf(seed, pw)
 	lap("features")
+	pw.findSites()
+	c.collapse(pw)
+	b.Roofs = roofsOf(islands)
+	lap("places")
+	b.Shelter = c.shelterOf(b.Ground, b.Roofs)
+	lap("shelter")
 	islandNames := c.nameIslands(seed, islands)
 	groupNames := c.nameGroups(seed, groups, islandNames)
+	pw.shows = pw.shows[:0]
+	for _, m := range islands {
+		pw.shows = append(pw.shows, c.shows(m))
+	}
 	lap("names")
-	pw.findSites()
-	lap("places")
 	lights := pw.lightsOf(groups)
 	lap("lights")
 	c.nameSites(seed, pw, lights, islandNames, groupNames)
@@ -388,7 +395,7 @@ func (b *Bundle) Passed() bool {
 func (b *Bundle) MainPort() *Island { return &b.Islands[0] }
 
 // stages are the generator's stages, as the report times them.
-var stages = []string{"layout", "islands", "raster", "hazards", "fetch", "shelter", "start", "features", "names", "places", "lights",
+var stages = []string{"layout", "islands", "raster", "hazards", "fetch", "start", "features", "places", "shelter", "names", "lights",
 	"placeNames", "towns", "ruins", "moorings", "sighting", "score", "validate"}
 
 // Generated reports how long making the world's last attempt took.

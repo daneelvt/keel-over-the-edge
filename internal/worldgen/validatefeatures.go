@@ -250,7 +250,7 @@ func (c *config) unsoundFeatures(w *world) []string {
 	for _, m := range w.islands {
 		for _, f := range m.features {
 			fk := &c.features.kinds[f.kind]
-			if fk.site != catalog.FeatureSiteSpring && fk.site != catalog.FeatureSiteCrater {
+			if fk.site != catalog.FeatureSiteSpring && fk.site != catalog.FeatureSiteCrater && fk.site != catalog.FeatureSiteFumarole {
 				for _, t := range w.towns {
 					if x, y := townSite(w, &t); hypot(x-f.x, y-f.y) < c.townReach(t.Kind) {
 						bad = append(bad, fmt.Sprintf("%s in %s", fk.id, t.Name))
@@ -271,7 +271,7 @@ func (c *config) unsoundFeatures(w *world) []string {
 		g := &m.grid
 		for _, r := range m.roofs {
 			e := elevationAt(w.ground, g.c0+r.i/g.h, g.j0+r.i%g.h)
-			if e > 0 || e < -10 || r.under >= r.top {
+			if e > 0 || float64(-e) > float64(c.features.headland.Floor[1]*10)+0.5 || r.under >= r.top {
 				bad = append(bad, fmt.Sprintf("a roof over %d dm", e))
 			}
 		}

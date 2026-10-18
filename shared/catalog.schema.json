@@ -3332,7 +3332,7 @@
           "description": "Landform, 1 to 5: what it adds to the least.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["relief", "cliffs", "twin", "stacks", "cave", "arch", "crater"],
+          "required": ["relief", "cliffs", "twin", "stacks", "cave", "arch", "crater", "fumarole"],
           "properties": {
             "relief": { "description": "Its highest, from which relief adds nothing and at which it adds two, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 200 } },
             "cliffs": { "description": "A share.", "type": "number", "minimum": 0, "maximum": 1 },
@@ -3340,7 +3340,8 @@
             "stacks": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 },
             "cave": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 },
             "arch": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 },
-            "crater": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 }
+            "crater": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 },
+            "fumarole": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 }
           }
         },
         "vegetation": { "description": "Vegetation, by how many forms of plant grow on it: none, one, two and on; the last for more.", "type": "array", "minItems": 2, "maxItems": 10, "items": { "type": "number", "minimum": 0, "maximum": 5 } },

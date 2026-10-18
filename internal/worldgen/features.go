@@ -162,6 +162,9 @@ type featureWork struct {
 	// sighted is whether it is in view of water a boat reaches: what the
 	// score counts.
 	sighted bool
+	// cells are the hexagons of its island's grid it is cut from: a cave's,
+	// an arch's or a blowhole's.
+	cells []int32
 }
 
 // site is the feature's site.
@@ -262,8 +265,62 @@ func headingTo(x0, y0, x1, y1 float64) float64 {
 	return a
 }
 
+// kept reports whether a town keeps clear of a feature: of a fall, a
+// ruin and a colony.
+func (c *config) kept(f *featureWork) bool {
+	switch c.siteOf(f) {
+	case catalog.FeatureSiteWaterfall, catalog.FeatureSiteRuin, catalog.FeatureSiteColony:
+		return true
+	}
+	return false
+}
+
+// collapsible reports whether a feature falls in where a town is sited:
+// a cave, an arch, a blowhole.
+func (c *config) collapsible(f *featureWork) bool {
+	switch c.siteOf(f) {
+	case catalog.FeatureSiteCave, catalog.FeatureSiteArch, catalog.FeatureSiteBlowhole:
+		return true
+	}
+	return false
+}
+
+// collapse lets fall in each cave, arch and blowhole within a town's reach
+// of its site: its roofs fall, as an arch's roof falls and leaves a stack,
+// and the rock awash under them is a channel or an inlet, a geo.
+func (c *config) collapse(pw *placesWork) {
+	for _, s := range pw.sites {
+		var reach float64
+		switch s.rule {
+		case catalog.SiteHarbour:
+			reach = c.towns.Plan.Reach[1]
+		case catalog.SiteVillage:
+			reach = c.towns.Plan.Reach[2]
+		default:
+			continue
+		}
+		m := pw.islands[s.island]
+		var fallen []int32
+		m.features = slices.DeleteFunc(m.features, func(f *featureWork) bool {
+			if c.collapsible(f) && hypot(f.x-s.x, f.y-s.y) < reach+featureClear {
+				fallen = append(fallen, f.cells...)
+				return true
+			}
+			return false
+		})
+		if len(fallen) == 0 {
+			continue
+		}
+		// A blowhole falls with its cave.
+		m.features = slices.DeleteFunc(m.features, func(f *featureWork) bool {
+			return c.collapsible(f) && slices.ContainsFunc(f.cells, func(i int32) bool { return slices.Contains(fallen, i) })
+		})
+		m.roofs = slices.DeleteFunc(m.roofs, func(r roofWork) bool { return slices.Contains(fallen, r.i) })
+	}
+}
+
 // featureClear is how far beyond its reach a town keeps from a feature, m.
-const featureClear = 40
+const featureClear = 15
 
 // featureRecords are the world's features' records, island by island, and
 // their parts; each sighted from the nearest water a boat reaches within

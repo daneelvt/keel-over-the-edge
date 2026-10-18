@@ -954,12 +954,29 @@ type digestFile struct {
 
 const digestsPath = "testdata/digests.json"
 
+// featuresFile is what the digests' seeds' worlds hold of features: each
+// seed's features by kind and islands by class, so that a change to the
+// generator shows what it moved.
+type featuresFile struct {
+	Comment string                    `json:"comment"`
+	Version int                       `json:"version"`
+	Seeds   map[string]featuresOfSeed `json:"seeds"`
+}
+
+type featuresOfSeed struct {
+	Features map[string]int `json:"features"`
+	Classes  map[string]int `json:"classes"`
+}
+
+const featuresPath = "testdata/features.json"
+
 func TestDigests(t *testing.T) {
 	if testing.Short() {
 		t.Skip("makes eight whole worlds")
 	}
 	cat := testCatalog(t)
 	got := make([]string, len(digestSeeds))
+	counts := make([]featuresOfSeed, len(digestSeeds))
 	var wg sync.WaitGroup
 	for i, seed := range digestSeeds {
 		wg.Go(func() {
@@ -969,9 +986,44 @@ func TestDigests(t *testing.T) {
 				return
 			}
 			got[i] = b.DigestHex()
+			counts[i] = featuresOfSeed{Features: map[string]int{}, Classes: map[string]int{}}
+			for _, f := range b.Features {
+				counts[i].Features[f.Kind]++
+			}
+			for _, is := range b.Islands {
+				counts[i].Classes[is.Class]++
+			}
 		})
 	}
 	wg.Wait()
+	features := featuresFile{
+		Comment: "Written by go test ./internal/worldgen -run Digests -update: each seed's world's features by kind and islands by class.",
+		Version: Version, Seeds: map[string]featuresOfSeed{},
+	}
+	for i, s := range digestSeeds {
+		features.Seeds[strconv.FormatUint(s, 10)] = counts[i]
+	}
+	if *update {
+		data, _ := json.MarshalIndent(features, "", "  ")
+		if err := os.WriteFile(featuresPath, append(data, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		var want featuresFile
+		data, err := os.ReadFile(featuresPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(data, &want); err != nil {
+			t.Fatal(err)
+		}
+		for i, s := range digestSeeds {
+			key := strconv.FormatUint(s, 10)
+			if g, w := fmt.Sprint(counts[i]), fmt.Sprint(want.Seeds[key]); g != w {
+				t.Errorf("seed %d's features have moved: %s, were %s", s, g, w)
+			}
+		}
+	}
 	if *update {
 		f := digestFile{
 			Comment: "Written by go test ./internal/worldgen -run Digests -update: each seed's world's digest under the generator's version.",
@@ -1046,6 +1098,11 @@ func TestSeeds(t *testing.T) {
 		lights   int
 		chars    []string
 		placesMs float64
+		// features are its features by kind and biome; classA its class A
+		// islands by zone; first the rules its first attempt failed.
+		features map[string]int
+		classA   map[string]int
+		first    []string
 	}
 	results := make([]result, *seeds)
 	t.Run("seeds", func(t *testing.T) {
@@ -1068,6 +1125,18 @@ func TestSeeds(t *testing.T) {
 					}
 					for _, st := range []string{"hazards", "places", "lights", "placeNames"} {
 						r.placesMs += b.Report.Millis[st]
+					}
+					r.features, r.classA = map[string]int{}, map[string]int{}
+					for _, f := range b.Features {
+						r.features[f.Kind+" "+b.Islands[f.Island].Biome]++
+					}
+					for _, is := range b.Islands {
+						if is.Class == "A" {
+							r.classA[is.Zone]++
+						}
+					}
+					if len(b.Report.Attempts) > 0 {
+						r.first = b.Report.Attempts[0].Failed
 					}
 				}
 				results[i] = r
@@ -1132,6 +1201,49 @@ func TestSeeds(t *testing.T) {
 		chars = append(chars, fmt.Sprintf("%s %d", ch.Notation, used[ch.Notation]))
 	}
 	t.Logf("characters given: %s", strings.Join(chars, ", "))
+	// The features by kind and biome, the class A islands by zone, and the
+	// first attempts' failures by rule.
+	features, classA, first := map[string]int{}, map[string][]int{}, map[string][]uint64{}
+	for _, r := range results {
+		for k, v := range r.features {
+			features[k] += v
+		}
+		for _, z := range zoneNames {
+			classA[z] = append(classA[z], r.classA[z])
+		}
+		classA["all"] = append(classA["all"], r.classA[zoneNames[0]]+r.classA[zoneNames[1]]+r.classA[zoneNames[2]])
+		for _, f := range r.first {
+			first[f] = append(first[f], r.seed)
+		}
+	}
+	keys := make([]string, 0, len(features))
+	for k := range features {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	line = ""
+	for _, k := range keys {
+		line += fmt.Sprintf(" %s %.2f;", k, float64(features[k])/n)
+	}
+	t.Logf("features a world, by kind and biome:%s", line)
+	t.Logf("class A islands a world: %s; centre %s, middle %s, rim %s", spread(classA["all"]), spread(classA[zoneNames[0]]),
+		spread(classA[zoneNames[1]]), spread(classA[zoneNames[2]]))
+	failedFirst := 0
+	for _, r := range results {
+		if len(r.first) > 0 {
+			failedFirst++
+		}
+	}
+	rules := make([]string, 0, len(first))
+	for k := range first {
+		rules = append(rules, k)
+	}
+	sort.Strings(rules)
+	line = ""
+	for _, k := range rules {
+		line += fmt.Sprintf(" %s %v;", k, first[k])
+	}
+	t.Logf("first attempts failed: %d of %d;%s", failedFirst, len(results), line)
 	for _, m := range []map[string]int{classes, biomes} {
 		keys := make([]string, 0, len(m))
 		for k := range m {

@@ -1764,6 +1764,9 @@ type ScoreLandform struct {
 	// What it adds.
 	Crater float64 `json:"crater"`
 
+	// What it adds.
+	Fumarole float64 `json:"fumarole"`
+
 	// Its highest, from which relief adds nothing and at which it adds two, in m.
 	Relief []float64 `json:"relief"`
 
@@ -3125,4 +3128,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "135c735fef7c8147"
+const Version = "6b5b63b8fb479693"

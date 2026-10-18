@@ -241,12 +241,12 @@ func (pw *placesWork) mangrovesNear(x, y, r float64) bool {
 }
 
 // nearFeature reports whether a town's reach at (x, y) would take in one of
-// island m's features but its springs and its crater.
+// island m's falls, ruins or colonies: a town keeps to the gentle ground
+// below a crater, a watering place may lie in it, and a cave or an arch in
+// its reach has fallen in (collapse).
 func (pw *placesWork) nearFeature(m *made, x, y, reach float64) bool {
 	for _, f := range m.features {
-		// A town keeps to gentle ground below a crater, and a watering
-		// place may lie in it.
-		if site := pw.c.siteOf(f); site == catalog.FeatureSiteSpring || site == catalog.FeatureSiteCrater {
+		if !pw.c.kept(f) {
 			continue
 		}
 		if hypot(f.x-x, f.y-y) < reach+featureClear {

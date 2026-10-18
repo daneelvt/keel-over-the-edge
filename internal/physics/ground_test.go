@@ -171,6 +171,44 @@ func TestPierAndQuay(t *testing.T) {
 	}
 }
 
+// arch is a headland 12 m thick from x = 120 to 132, 15 m high, with an
+// arch's span through it at |y| < 6, its ground rock awash; 5 m of water
+// before and beyond it.
+func arch(x, y float64) float64 {
+	switch {
+	case x >= 120 && x < 132 && math.Abs(y) < 6:
+		return 0
+	case x >= 120 && x < 132:
+		return 15
+	}
+	return -5
+}
+
+// TestUnderAnArch: a boat sailed at an arch's span grounds on the rock
+// awash under it, and never passes through.
+func TestUnderAnArch(t *testing.T) {
+	g := testGround(arch)
+	s := State{X: 80, Heading: math.Pi / 2, Surge: 2.5, SheetLimit: 0.6}
+	c := Control{Sheet: 0.45}
+	e := Env{WindSpeed: 6.2, WindFrom: 0, MeanFrom: 0}
+	bottomed := -1
+	furthest := 0.0
+	sailOver(t, g, &s, &c, &e, 30*30, func(i int, s *State, o *Out) {
+		c.Helm = steer(math.Pi/2, s)
+		if o.Aground != Afloat && bottomed < 0 {
+			bottomed = i
+		}
+		furthest = max(furthest, s.X)
+	})
+	if bottomed < 0 {
+		t.Fatal("the boat never touched the rock")
+	}
+	if furthest >= 132 {
+		t.Errorf("the boat passed through the arch, to x = %.1f", furthest)
+	}
+	t.Logf("aground at step %d, at most x = %.1f", bottomed, furthest)
+}
+
 // deepest is how deep the boat's hull is into any land about it.
 func deepest(s *State, g *Ground, b *Prepared) float64 {
 	sinH, cosH := SinCos(s.Heading)

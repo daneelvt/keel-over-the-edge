@@ -4449,6 +4449,10 @@ export interface ScoreLandform {
    * What it adds.
    */
   crater: number;
+  /**
+   * What it adds.
+   */
+  fumarole: number;
 }
 /**
  * Water, 0 to 5: the most of what it has.
@@ -4557,4 +4561,4 @@ export interface ScoreCultural {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '135c735fef7c8147';
+export const CATALOG_VERSION = '6b5b63b8fb479693';
