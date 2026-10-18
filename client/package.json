@@ -15,7 +15,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "biome ci . ../art",
-    "art": "cd .. && node art/boats/jolly-boat/build.ts && node art/sailors/stand-in/build.ts && for k in wooded tropical rocky sandy volcanic; do node art/town/$k/build.ts; done"
+    "art": "cd .. && node art/boats/jolly-boat/build.ts && node art/sailors/stand-in/build.ts && for k in wooded tropical rocky sandy volcanic; do node art/town/$k/build.ts; done && node art/flora/build.ts"
   },
   "allowScripts": {
     "@bufbuild/buf": false,

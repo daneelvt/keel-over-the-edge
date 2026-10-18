@@ -10,15 +10,15 @@
         "gannetry": 2,
         "ruined-beacon": 2,
         "ruined-chapel": 1,
-        "sea-arch": 19,
-        "sea-cave": 14,
+        "sea-arch": 21,
+        "sea-cave": 15,
         "spring": 22,
         "waterfall": 7
       },
       "classes": {
-        "A": 14,
-        "B": 48,
-        "C": 88
+        "A": 13,
+        "B": 50,
+        "C": 87
       }
     },
     "2": {
@@ -30,92 +30,92 @@
         "fumarole": 4,
         "gannetry": 6,
         "ruined-chapel": 1,
-        "sea-arch": 11,
+        "sea-arch": 12,
         "sea-cave": 26,
         "spring": 22,
-        "waterfall": 8
+        "waterfall": 9
       },
       "classes": {
-        "A": 11,
-        "B": 43,
-        "C": 82
+        "A": 12,
+        "B": 46,
+        "C": 78
       }
     },
     "3": {
       "features": {
-        "blowhole": 1,
         "booby-colony": 2,
         "crater": 23,
         "fumarole": 8,
         "gannetry": 2,
         "ruined-beacon": 3,
         "ruined-chapel": 2,
-        "sea-arch": 22,
+        "sea-arch": 23,
         "sea-cave": 20,
         "spring": 24,
-        "waterfall": 8
+        "waterfall": 7
       },
       "classes": {
-        "A": 16,
+        "A": 19,
         "B": 42,
-        "C": 91
+        "C": 88
       }
     },
     "4": {
       "features": {
-        "blowhole": 1,
+        "blowhole": 2,
         "crater": 21,
         "fumarole": 7,
         "gannetry": 3,
         "ruined-beacon": 1,
         "ruined-chapel": 2,
-        "sea-arch": 18,
-        "sea-cave": 22,
+        "sea-arch": 21,
+        "sea-cave": 24,
         "spring": 34,
         "waterfall": 21
       },
       "classes": {
         "A": 15,
-        "B": 44,
-        "C": 107
+        "B": 49,
+        "C": 102
       }
     },
     "5": {
       "features": {
+        "blowhole": 1,
         "booby-colony": 1,
         "crater": 26,
         "fumarole": 7,
         "gannetry": 2,
         "ruined-beacon": 2,
         "ruined-chapel": 1,
-        "sea-arch": 21,
-        "sea-cave": 22,
-        "spring": 20,
+        "sea-arch": 25,
+        "sea-cave": 27,
+        "spring": 21,
         "waterfall": 9
       },
       "classes": {
-        "A": 14,
-        "B": 49,
-        "C": 83
+        "A": 16,
+        "B": 50,
+        "C": 80
       }
     },
     "6": {
       "features": {
-        "blowhole": 2,
+        "blowhole": 3,
         "crater": 27,
         "deserted-hamlet": 3,
         "fumarole": 10,
         "gannetry": 2,
         "ruined-beacon": 2,
-        "sea-arch": 13,
-        "sea-cave": 18,
+        "sea-arch": 15,
+        "sea-cave": 21,
         "spring": 30,
         "waterfall": 11
       },
       "classes": {
-        "A": 13,
-        "B": 45,
-        "C": 75
+        "A": 16,
+        "B": 46,
+        "C": 71
       }
     },
     "7": {
@@ -127,20 +127,20 @@
         "fumarole": 9,
         "gannetry": 2,
         "ruined-beacon": 3,
-        "sea-arch": 19,
-        "sea-cave": 26,
-        "spring": 18,
+        "sea-arch": 21,
+        "sea-cave": 30,
+        "spring": 19,
         "waterfall": 12
       },
       "classes": {
         "A": 14,
-        "B": 55,
-        "C": 88
+        "B": 60,
+        "C": 83
       }
     },
     "8": {
       "features": {
-        "blowhole": 2,
+        "blowhole": 3,
         "booby-colony": 1,
         "crater": 20,
         "deserted-hamlet": 1,
@@ -148,14 +148,14 @@
         "gannetry": 5,
         "ruined-chapel": 1,
         "sea-arch": 13,
-        "sea-cave": 31,
+        "sea-cave": 33,
         "spring": 23,
         "waterfall": 7
       },
       "classes": {
-        "A": 15,
-        "B": 51,
-        "C": 69
+        "A": 16,
+        "B": 54,
+        "C": 65
       }
     }
   }

@@ -303,8 +303,21 @@ func (c *config) layRuins(seed uint64, g *physics.Ground, pw *placesWork, lights
 				if well != nil {
 					tw.prop(well, f.x, f.y, f.heading)
 				}
-				houses := tw.scatter(house, s.pick(c.features.ruins.Hamlet[0], c.features.ruins.Hamlet[1]), f.x, f.y, 35, 8, math.Inf(1), 9, f.x, f.y)
-				tw.paths(houses, f.x, f.y)
+				tw.scatter(house, s.pick(c.features.ruins.Hamlet[0], c.features.ruins.Hamlet[1]), f.x, f.y, 35, 8, math.Inf(1), 9, f.x, f.y)
+				// A path from before each door to the well.
+				var doors [][2]float64
+				for _, b := range tw.buildings {
+					if !c.buildings[b.Kind].prop {
+						hs, hc := sincos(b.Heading)
+						out := float64(b.Depth/2) + physics.HexAcross/2
+						door := [2]float64{b.X + float64(out*hs), b.Y + float64(out*hc)}
+						if i := tw.at(door[0], door[1]); i >= 0 && tw.use[i] == useFree && tw.g.elev[i] > 0 {
+							tw.use[i], tw.g.surf[i] = usePath, c.townSurface.yard
+						}
+						doors = append(doors, door)
+					}
+				}
+				tw.paths(doors, f.x, f.y)
 			default:
 				tw.scatter(house, 1, f.x, f.y, 25, 6, math.Inf(1), 0, fx, fy)
 			}

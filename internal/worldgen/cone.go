@@ -88,12 +88,27 @@ func (k *coneWork) along(g *islandGrid, w *work, i int32) float64 {
 	return min(r/k.base[n], 1)
 }
 
+// coneFoot is the share of the way from its rim to its coast over which
+// a cone's flank eases into its apron, and coneApron how steep its flank is
+// at the shore, as a share of the flank's own: a cone's foot spreads in
+// its talus apron and lava, as Pico's fajãs do.
+const (
+	coneFoot  = 0.25
+	coneApron = 0.3
+)
+
 // profile is the cone's height at a share t of the way from its centre to
 // its coast, as a share of its rim's: its flank falls straight from the
-// rim to the coast; inside the rim, its crater is a bowl depth deep.
+// rim, easing into a gentler apron at its foot; inside the rim, its crater
+// is a bowl depth deep.
 func coneProfile(t, crater, depth float64) float64 {
 	if t >= crater {
-		return (1 - t) / max(1-crater, 1e-6)
+		u := (1 - t) / max(1-crater, 1e-6)
+		if u < coneFoot {
+			s := u / coneFoot
+			return float64(u * (coneApron + float64((1-coneApron)*s)))
+		}
+		return u
 	}
 	u := t / max(crater, 1e-6)
 	return (1 - depth) + float64(depth*float64(u*u))
