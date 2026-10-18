@@ -25,6 +25,7 @@ import {
   type Current,
   control,
   drawing,
+  type FeaturesData,
   type Group,
   getBytes,
   getJSON,
@@ -514,6 +515,7 @@ function App() {
   const [boat, setBoat] = useState<number | null>(null);
   const [places, setPlaces] = useState<PlacesData | null>(null);
   const [towns, setTowns] = useState<Town[]>([]);
+  const [features, setFeatures] = useState<FeaturesData | null>(null);
   const [light, setLight] = useState<number | null>(null);
   const clock = useRef<WorldClock>({ worldTime: 0, at: performance.now() });
   const [message, setMessage] = useState('');
@@ -548,6 +550,9 @@ function App() {
       .catch((e: unknown) => setError(String(e)));
     getJSON<TownsData>('towns.json')
       .then((d) => setTowns(d.towns))
+      .catch((e: unknown) => setError(String(e)));
+    getJSON<FeaturesData>('features.json')
+      .then(setFeatures)
       .catch((e: unknown) => setError(String(e)));
   }, [again]);
 
@@ -645,7 +650,10 @@ function App() {
     boat,
     places,
     light,
+    features,
   };
+  const featureName = new Map((features?.kinds ?? []).map((k) => [k.id, k.name]));
+  const islandName = new Map(islands.map((is) => [is.number, is.name]));
   const chosen = now?.boats.find((b) => b.boat === boat && b.tools) ?? null;
   const kindName = new Map((places?.kinds ?? []).map((k) => [k.id, k.name]));
   const lightSite = new Set(
@@ -719,6 +727,46 @@ function App() {
             ))}
           </ul>
         </section>
+        <section class="card" aria-label="Features">
+          <h2>Features: {features?.features.length ?? 0}</h2>
+          <ul class="features">
+            {(features?.features ?? []).map((f) => (
+              <li key={f.number}>
+                <button
+                  type="button"
+                  data-feature={f.number}
+                  onClick={() => {
+                    goTo(f.east, f.north, 1);
+                    if (f.approach !== null) {
+                      pick(f.approach[0], f.approach[1]);
+                    }
+                  }}
+                >
+                  {featureName.get(f.kind) ?? f.kind}
+                </button>{' '}
+                <span class="small">
+                  {islandName.get(f.island) ?? f.island}, {f.height.toFixed(0)} m
+                  {f.seen ? '' : ', not seen from the water'}
+                </span>
+                {chosenBoat !== null && f.approach !== null ? (
+                  <button
+                    type="button"
+                    class="small"
+                    onClick={() =>
+                      act(
+                        'place',
+                        { boat: chosenBoat, feature: f.number },
+                        `teleport to see the ${featureName.get(f.kind) ?? f.kind}`,
+                      )
+                    }
+                  >
+                    sail there
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
         <section class="card" aria-label="Places">
           <h2>Places: {(places?.places ?? []).filter((p) => !lightSite.has(p.kind)).length}</h2>
           <ul class="places">
@@ -758,7 +806,7 @@ function App() {
         </section>
       </>
     ),
-    [places, towns, light, chosenBoat],
+    [places, towns, light, chosenBoat, features, islands],
   );
 
   return (
@@ -868,6 +916,7 @@ function App() {
             <ul class="islands">
               {islands
                 .filter((is) => is.group < 0)
+                .sort((a, b) => b.score - a.score)
                 .map((is) => (
                   <li key={is.number}>
                     <button
@@ -881,7 +930,16 @@ function App() {
                       {is.number}. {is.name}
                     </button>{' '}
                     <span class="small">
-                      {is.kind}, {is.biome}, {is.size}, {is.highest.toFixed(0)} m
+                      {is.kind}, {is.biome}
+                      {is.age !== undefined ? ` (${is.age})` : ''}, {is.size},{' '}
+                      {is.highest.toFixed(0)} m;{' '}
+                      <span data-field="class">
+                        class {is.class}, {is.score.toFixed(1)}
+                      </span>
+                      {is.features.length > 0
+                        ? `; ${is.features.map((k) => featureName.get(k) ?? k).join(', ')}`
+                        : ''}
+                      {is.flora.length > 0 ? `; ${is.flora.join(', ')}` : ''}
                     </span>
                   </li>
                 ))}

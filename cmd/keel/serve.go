@@ -717,6 +717,20 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	for _, k := range c.cat.World.Places.Kinds {
 		cfg.PlaceKinds = append(cfg.PlaceKinds, owner.PlaceKind{ID: string(k.ID), Name: k.Name, Site: string(k.Site), Mark: k.Mark})
 	}
+	for _, k := range c.cat.World.Features.Kinds {
+		cfg.FeatureKinds = append(cfg.FeatureKinds, owner.FeatureKind{ID: string(k.ID), Name: k.Name, Site: string(k.Site), Mark: string(k.Mark)})
+	}
+	plants := map[string]string{}
+	for _, p := range c.cat.World.Flora.Kinds {
+		plants[string(p.ID)] = p.Name
+	}
+	for _, s := range c.cat.World.Surfaces {
+		var names []string
+		for _, cv := range s.Cover {
+			names = append(names, plants[string(cv.Plant)])
+		}
+		cfg.SurfacePlants = append(cfg.SurfacePlants, names)
+	}
 	for _, ch := range c.cat.World.Lights.Characters {
 		cfg.Characters = append(cfg.Characters, owner.Character{Notation: ch.Notation, Colour: string(ch.Colour), Steps: ch.Steps})
 	}

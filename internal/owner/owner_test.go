@@ -155,6 +155,11 @@ func newRig(t testing.TB, limit int) *rig {
 		Harbour: []worldgen.Disc{{X: 1700, Y: 0, R: 150}, {X: 1840, Y: 0, R: 150}}}}
 	b.Buildings = []worldgen.Building{{Kind: 0, X: 1880, Y: 10, Heading: -math.Pi / 2, Level: 16, Storeys: 2, Frontage: 6, Depth: 8, Top: 10.6},
 		{Kind: 1, X: 1860, Y: -10, Level: 16, Storeys: 1, Frontage: 0.4, Depth: 0.4, Top: 2.6}}
+	b.Islands[0].Score, b.Islands[0].Class = 21, "A"
+	b.Features = []worldgen.Feature{
+		{Number: 0, Kind: "sea-arch", Island: 0, X: 2000, Y: 98, Heading: 0, Size: 8, Height: 12, Seen: true, SightX: 2000, SightY: 160},
+		{Number: 1, Kind: "spring", Island: 0, X: 2010, Y: 0, Height: 25},
+	}
 	tl := weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(10*knot, 0, 0))
 	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Workers: 1, Tick: 1000, Limit: limit,
 		Weather: tl, Encounters: cat.PrepareEncounters(), Terrain: &sim.Terrain{Ground: g, Start: []physics.State{{X: 0, Y: -100, Heading: math.Pi / 2}}}, Edge: &sim.Edge{Fall: 150, Clear: 20}})
@@ -169,10 +174,11 @@ func newRig(t testing.TB, limit int) *rig {
 		Kinds: []string{"Jolly boat"}, Regimes: []string{"settled"}, Sky: cat.PrepareSky(), Calm: 900,
 		World:    World{Number: 3, Epoch: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Made: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
 		Accounts: r.accounts, Sessions: r.sessions, Edge: r.edge, Log: slog.New(slog.DiscardHandler), Metrics: r.metrics,
-		PlaceKinds: []PlaceKind{{ID: "reef", Name: "Reef", Site: "reef", Mark: "#c2563a"}, {ID: "lighthouse", Name: "Lighthouse", Site: "light", Mark: "#e8b400"}},
-		Characters: []Character{{Notation: "Fl W 5s", Colour: "white", Steps: []int{500, 4500}}, {Notation: "Fl W 10s", Colour: "white", Steps: []int{1000, 9000}}},
-		TownKinds:  []string{"Dwelling", "Bollard"},
-		TownLook:   chart.TownLook{Kinds: []string{"#c9b08a", "#3c3a36"}, Props: []bool{false, true}, Surfaces: map[int32]string{}},
+		PlaceKinds:   []PlaceKind{{ID: "reef", Name: "Reef", Site: "reef", Mark: "#c2563a"}, {ID: "lighthouse", Name: "Lighthouse", Site: "light", Mark: "#e8b400"}},
+		Characters:   []Character{{Notation: "Fl W 5s", Colour: "white", Steps: []int{500, 4500}}, {Notation: "Fl W 10s", Colour: "white", Steps: []int{1000, 9000}}},
+		TownKinds:    []string{"Dwelling", "Bollard"},
+		FeatureKinds: []FeatureKind{{ID: "sea-arch", Name: "Sea arch", Site: "arch", Mark: "#8a3d6b"}, {ID: "spring", Name: "Spring", Site: "spring", Mark: "#5fa3c9"}},
+		TownLook:     chart.TownLook{Kinds: []string{"#c9b08a", "#3c3a36"}, Props: []bool{false, true}, Surfaces: map[int32]string{}},
 		BeginWorld: func(_ context.Context, number int) (store.World, error) {
 			if number != 3 {
 				return store.World{}, store.ErrNotActive
@@ -663,6 +669,46 @@ func TestTowns(t *testing.T) {
 	h := list.Towns[0].Harbour
 	if math.Hypot(st.X-h[0], st.Y-h[1]) > 0.5 || math.Abs(math.Remainder(st.Heading-math.Pi/2, 2*math.Pi)) > 0.05 {
 		t.Fatalf("in the harbour at %+v, heading %v", st, st.Heading)
+	}
+}
+
+// TestFeatures: the features' list, each with where a boat sees it from;
+// the islands' classes and features; a teleport to a feature, facing it.
+func TestFeatures(t *testing.T) {
+	r := newRig(t, 0)
+	ann := r.join(t, 1, "Ann", store.Human, true)
+	code, body := r.do(t, "GET", "/owner/api/features.json", nil)
+	var list struct {
+		Kinds    []FeatureKind `json:"kinds"`
+		Features []struct {
+			Kind     string      `json:"kind"`
+			Seen     bool        `json:"seen"`
+			Approach *[2]float64 `json:"approach"`
+		} `json:"features"`
+	}
+	if code != 200 || json.Unmarshal(body, &list) != nil || len(list.Kinds) != 2 || len(list.Features) != 2 ||
+		list.Features[0].Approach == nil || list.Features[0].Approach[1] != 160 || !list.Features[0].Seen {
+		t.Fatalf("features.json: %d %s", code, body)
+	}
+	code, body = r.do(t, "GET", "/owner/api/islands.json", nil)
+	var islands struct {
+		Islands []struct {
+			Class    string   `json:"class"`
+			Score    float64  `json:"score"`
+			Features []string `json:"features"`
+		} `json:"islands"`
+	}
+	if code != 200 || json.Unmarshal(body, &islands) != nil || islands.Islands[0].Class != "A" || len(islands.Islands[0].Features) != 2 {
+		t.Fatalf("islands.json: %d %s", code, body)
+	}
+	arch := 0
+	if code, body := r.do(t, "POST", "/owner/api/place", PlaceRequest{Boat: ann, Feature: &arch}); code != 200 {
+		t.Fatalf("to the arch: %d %s", code, body)
+	}
+	r.w.Tick()
+	st := r.w.Latest().State[0]
+	if math.Hypot(st.X-2000, st.Y-160) > 0.5 || math.Abs(math.Remainder(st.Heading-math.Pi, 2*math.Pi)) > 0.05 {
+		t.Fatalf("at %+v, heading %v", st, st.Heading)
 	}
 }
 
