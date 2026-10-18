@@ -88,6 +88,11 @@ export function housed(k: BuildingKind): boolean {
   return !k.prop && ['street', 'quay', 'quayEnd', 'square', 'fields'].includes(k.stands);
 }
 
+/** Whether a kind is a ruin's: no town, no roof, nothing heard. */
+export function ruined(k: BuildingKind): boolean {
+  return ['hamlet', 'chapel', 'beacon'].includes(k.stands);
+}
+
 /** A colour #rrggbb as linear values. */
 function linear(hex: string): [number, number, number] {
   const n = Number.parseInt(hex.slice(1), 16);
@@ -466,6 +471,9 @@ export class Towns {
       if (kind === undefined) {
         continue;
       }
+      if (ruined(kind)) {
+        continue;
+      }
       const d = Math.hypot(b.east - east, b.north - north);
       if (!kind.prop) {
         nearTown = Math.min(nearTown, d);
@@ -644,7 +652,8 @@ export class Towns {
       if (d2 <= near2 && typeof kit === 'object' && kit.geometry.has(b.kind)) {
         const key = `${b.kit}/${b.kind}`;
         (near.get(key) ?? near.set(key, []).get(key) ?? []).push(b);
-      } else {
+      } else if (!ruined(kind)) {
+        // A ruin far off is too low and roofless to draw as a house.
         far.push(b);
       }
     }

@@ -189,6 +189,27 @@ class Plant {
     }
   }
 
+  /**
+   * A far tree: a ring of five corners of radius r at ringY, an apex above
+   * at topY, and below a dark spindle to the ground, which reads as its
+   * trunk and its shade: ten faces.
+   */
+  farCrown(ringY: number, topY: number, r: number, leaf: Vec3, trunk: Vec3): void {
+    const ring: Vec3[] = [];
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * 2 * Math.PI;
+      ring.push([r * Math.sin(a), ringY, r * Math.cos(a)]);
+    }
+    const centre: Vec3 = [0, ringY, 0];
+    for (let k = 0; k < 5; k++) {
+      const a = ring[k] as Vec3;
+      const b = ring[(k + 1) % 5] as Vec3;
+      this.tri(a, b, [0, topY, 0], shade(leaf, 0.95 + 0.1 * Math.cos(k)), true, centre);
+      this.tri(a, b, [0, 0, 0], shade(leaf, 0.55), false, centre);
+    }
+    void trunk;
+  }
+
   /** A cone of n sides over a ring of radius r at y0 to its point at y1, about (x, z). */
   cone(
     x: number,
@@ -291,8 +312,7 @@ function build(k: Kind, seed: number): { near: Plant; far: Plant | null } {
           rnd,
         );
       }
-      far.trunk([0, 0, 0], [0, base, 0], 0.05 * c, 0.04 * c, 2, trunk);
-      far.octa([0, base + ry, 0], [c / 2, ry, c / 2], leaf);
+      far.farCrown(base + ry * 0.8, h, c / 2, leaf, trunk);
       break;
     }
     case 'umbrella': {
@@ -308,8 +328,7 @@ function build(k: Kind, seed: number): { near: Plant; far: Plant | null } {
         rnd,
         0.12,
       );
-      far.trunk([0, 0, 0], [0.3, base, 0], 0.035 * c, 0.03 * c, 2, trunk);
-      far.octa([0.3, base + ry, 0], [c / 2, ry * 0.8, c / 2], leaf);
+      far.farCrown(base + ry * 0.7, h, c / 2, leaf, trunk);
       break;
     }
     case 'columnar': {
@@ -318,7 +337,7 @@ function build(k: Kind, seed: number): { near: Plant; far: Plant | null } {
       near.trunk([0, 0, 0], [0, h * 0.12, 0], r * 0.2, r * 0.18, 4, trunk);
       near.cone(0, 0, h * 0.42, h, r, 7, leaf, true);
       near.cone(0, 0, h * 0.42, h * 0.08, r * 0.95, 7, shade(leaf, 0.9), true);
-      far.octa([0, h * 0.5, 0], [r, h * 0.48, r], leaf);
+      far.farCrown(h * 0.35, h, r, leaf, trunk);
       break;
     }
     case 'conifer': {
@@ -338,7 +357,7 @@ function build(k: Kind, seed: number): { near: Plant; far: Plant | null } {
           true,
         );
       }
-      far.octa([0, h * 0.5, 0], [r, h * 0.48, r], leaf);
+      far.farCrown(h * 0.3, h, r, leaf, trunk);
       break;
     }
     case 'krummholz': {
@@ -404,8 +423,7 @@ function build(k: Kind, seed: number): { near: Plant; far: Plant | null } {
         shade(leaf, 1.08),
         rnd,
       );
-      far.octa([0, base + ry, 0], [c / 2, ry, c / 2], leaf);
-      far.trunk([0, 0, 0], [0, base, 0], 0.3, 0.1, 2, trunk);
+      far.farCrown(base + ry * 0.8, h, c / 2, leaf, trunk);
       break;
     }
     default:
@@ -430,7 +448,7 @@ export function buildPlants(): void {
     nodes.push({ name: k.id, extras, primitives: [near.m.primitive({ colors: true })] });
     let line = `${k.id} ${near.triangles}`;
     if (far !== null) {
-      nodes.push({ name: `${k.id}.far`, extras, primitives: [far.m.primitive({ colors: true })] });
+      nodes.push({ name: `${k.id}-far`, extras, primitives: [far.m.primitive({ colors: true })] });
       line += `/${far.triangles}`;
     }
     counts.push(line);

@@ -1286,6 +1286,29 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         ),
       };
     },
+    /** The plants drawn: near and far, draws and triangles, the plants held; whether their models are loaded, and the wind they sway in. */
+    flora() {
+      const f = world.land?.flora;
+      if (f === undefined) {
+        return null;
+      }
+      const sample = [];
+      for (const p of f.plants()) {
+        if (sample.length >= 4) {
+          break;
+        }
+        sample.push(Array.from(p.chunk.slice(p.at, p.at + 8)));
+      }
+      return { ...f.stats, loaded: f.loaded, speed: f.speed.value, sample };
+    },
+    /** The features drawn: their parts held, the falls, spouts, vents and birds, the spray's puffs and the steam's, and the draws. */
+    features() {
+      const f = world.land?.features;
+      if (f === undefined) {
+        return null;
+      }
+      return { ...f.stats, steam: f.steam.count };
+    },
     /** The towns drawn: their buildings near and far, props, draws and triangles; the buildings held. */
     towns() {
       const t = world.land?.towns;

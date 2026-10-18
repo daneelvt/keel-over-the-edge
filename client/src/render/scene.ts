@@ -773,6 +773,29 @@ export class SeaScene {
     const cameraNorth = -camera.z + o.y;
     const night = this.drawSky ? lanternLit(this.sky.now.sunHeight) : 0;
     land.towns.frame({ origin: o, cameraEast, cameraNorth, night, cameraHeight: camera.y });
+    const wind = this.#windAt(cameraEast, cameraNorth, now);
+    land.flora.frame({
+      origin: o,
+      cameraEast,
+      cameraNorth,
+      cameraHeight: camera.y,
+      rung: ['high', 'medium', 'low'].indexOf(this.rung.tier),
+      time: this.ticks / STEPS_PER_SECOND,
+      windSpeed: wind.speed,
+      windFrom: wind.from,
+    });
+    land.features.frame({
+      origin: o,
+      cameraEast,
+      cameraNorth,
+      cameraHeight: camera.y,
+      time: this.ticks / STEPS_PER_SECOND,
+      light: 0.25 + 0.75 * (1 - night),
+      night: night > 0.5,
+      seaHeight: this.sea.height,
+      windSpeed: wind.speed,
+      windFrom: wind.from,
+    });
     const features = land.towns.features();
     const time = this.ticks / STEPS_PER_SECOND;
     const smoke = catalog.world.towns.smoke;
