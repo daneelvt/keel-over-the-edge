@@ -173,7 +173,7 @@ func alone(t *testing.T, c *config, biome int, radius float64) (*made, *work) {
 	t.Helper()
 	w := new(work)
 	sp := spot{kind: kindLandmark, x: 3000, y: -2500, radius: radius, biome: int32(biome), group: -1}
-	return c.makeIsland(9, 77, sp, w), w
+	return c.makeIsland(9, 77, sp, w, nil), w
 }
 
 // coastHexes are an island's land hexagons beside water, by their index.
@@ -301,16 +301,16 @@ func TestIslandsAreTheirOwn(t *testing.T) {
 	// Island 5 made after others, on the same room, and alone.
 	shared := new(work)
 	for i := range 5 {
-		c.makeIsland(3, int32(i), spots[i], shared)
+		c.makeIsland(3, int32(i), spots[i], shared, spots)
 	}
-	after := c.makeIsland(3, 5, spots[5], shared)
-	first := c.makeIsland(3, 5, spots[5], new(work))
+	after := c.makeIsland(3, 5, spots[5], shared, spots)
+	first := c.makeIsland(3, 5, spots[5], new(work), spots)
 	if !slices.Equal(after.grid.elev, first.grid.elev) || !slices.Equal(after.grid.surf, first.grid.surf) {
 		t.Error("an island differs made after others from made alone")
 	}
 	// Another stream for island 4 leaves island 5 as it was.
-	c.makeIsland(4, 4, spots[4], shared)
-	again := c.makeIsland(3, 5, spots[5], shared)
+	c.makeIsland(4, 4, spots[4], shared, spots)
+	again := c.makeIsland(3, 5, spots[5], shared, spots)
 	if !slices.Equal(again.grid.elev, first.grid.elev) {
 		t.Error("an island changed when another's stream did")
 	}
@@ -319,7 +319,7 @@ func TestIslandsAreTheirOwn(t *testing.T) {
 func TestChunkRoundTrip(t *testing.T) {
 	c := testConfig(t)
 	spots, _ := layout(c, 1)
-	port := c.makeIsland(1, 0, spots[0], new(work))
+	port := c.makeIsland(1, 0, spots[0], new(work), spots)
 	n := int32(8*physics.ChunkSide + 8)
 	g := c.raster(n, gridsOf([]*made{port}, nil))
 	sh := newShelterChunk()
@@ -433,7 +433,7 @@ func TestFetch(t *testing.T) {
 func TestStartArea(t *testing.T) {
 	c := testConfig(t)
 	spots, _ := layout(c, 1)
-	port := c.makeIsland(1, 0, spots[0], new(work))
+	port := c.makeIsland(1, 0, spots[0], new(work), spots)
 	g := new(physics.Ground)
 	for _, n := range []int32{7*physics.ChunkSide + 7, 7*physics.ChunkSide + 8, 8*physics.ChunkSide + 7, 8*physics.ChunkSide + 8} {
 		g.Chunks[n] = c.raster(n, gridsOf([]*made{port}, nil))
@@ -954,12 +954,29 @@ type digestFile struct {
 
 const digestsPath = "testdata/digests.json"
 
+// featuresFile is what the digests' seeds' worlds hold of features: each
+// seed's features by kind and islands by class, so that a change to the
+// generator shows what it moved.
+type featuresFile struct {
+	Comment string                    `json:"comment"`
+	Version int                       `json:"version"`
+	Seeds   map[string]featuresOfSeed `json:"seeds"`
+}
+
+type featuresOfSeed struct {
+	Features map[string]int `json:"features"`
+	Classes  map[string]int `json:"classes"`
+}
+
+const featuresPath = "testdata/features.json"
+
 func TestDigests(t *testing.T) {
 	if testing.Short() {
 		t.Skip("makes eight whole worlds")
 	}
 	cat := testCatalog(t)
 	got := make([]string, len(digestSeeds))
+	counts := make([]featuresOfSeed, len(digestSeeds))
 	var wg sync.WaitGroup
 	for i, seed := range digestSeeds {
 		wg.Go(func() {
@@ -969,9 +986,44 @@ func TestDigests(t *testing.T) {
 				return
 			}
 			got[i] = b.DigestHex()
+			counts[i] = featuresOfSeed{Features: map[string]int{}, Classes: map[string]int{}}
+			for _, f := range b.Features {
+				counts[i].Features[f.Kind]++
+			}
+			for _, is := range b.Islands {
+				counts[i].Classes[is.Class]++
+			}
 		})
 	}
 	wg.Wait()
+	features := featuresFile{
+		Comment: "Written by go test ./internal/worldgen -run Digests -update: each seed's world's features by kind and islands by class.",
+		Version: Version, Seeds: map[string]featuresOfSeed{},
+	}
+	for i, s := range digestSeeds {
+		features.Seeds[strconv.FormatUint(s, 10)] = counts[i]
+	}
+	if *update {
+		data, _ := json.MarshalIndent(features, "", "  ")
+		if err := os.WriteFile(featuresPath, append(data, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		var want featuresFile
+		data, err := os.ReadFile(featuresPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(data, &want); err != nil {
+			t.Fatal(err)
+		}
+		for i, s := range digestSeeds {
+			key := strconv.FormatUint(s, 10)
+			if g, w := fmt.Sprint(counts[i]), fmt.Sprint(want.Seeds[key]); g != w {
+				t.Errorf("seed %d's features have moved: %s, were %s", s, g, w)
+			}
+		}
+	}
 	if *update {
 		f := digestFile{
 			Comment: "Written by go test ./internal/worldgen -run Digests -update: each seed's world's digest under the generator's version.",
@@ -1020,7 +1072,12 @@ func TestEmpty(t *testing.T) {
 	}
 }
 
-var seeds = flag.Int("seeds", 0, "TestSeeds makes the worlds of seeds 1 to this, and reports on them")
+var (
+	seeds        = flag.Int("seeds", 0, "TestSeeds makes the worlds of this many seeds, from -seeds-from, and reports on them")
+	seedsFrom    = flag.Uint64("seeds-from", 1, "TestSeeds's first seed")
+	seedsSummary = flag.String("seeds-summary", "", "a file TestSeeds appends its report to, in Markdown")
+	seedsFirst   = flag.Float64("seeds-first", 0, "TestSeeds fails if more than this share of its seeds fail their first attempt; 0 for no limit")
+)
 
 // TestSeeds makes many seeds' worlds, as pr.worldgen does with a hundred:
 // each must pass the rules within its attempts. It reports how long each
@@ -1030,6 +1087,14 @@ var seeds = flag.Int("seeds", 0, "TestSeeds makes the worlds of seeds 1 to this,
 func TestSeeds(t *testing.T) {
 	if *seeds == 0 {
 		t.Skip("-seeds N runs it")
+	}
+	// What it reports, also as Markdown for a run's summary.
+	var summary strings.Builder
+	fmt.Fprintf(&summary, "### Seeds %d to %d\n\n", *seedsFrom, *seedsFrom+uint64(*seeds)-1)
+	report := func(format string, args ...any) {
+		t.Helper()
+		t.Logf(format, args...)
+		fmt.Fprintf(&summary, "- "+format+"\n", args...)
 	}
 	cat := testCatalog(t)
 	c0 := testConfig(t)
@@ -1046,13 +1111,18 @@ func TestSeeds(t *testing.T) {
 		lights   int
 		chars    []string
 		placesMs float64
+		// features are its features by kind and biome; classA its class A
+		// islands by zone; first the rules its first attempt failed.
+		features map[string]int
+		classA   map[string]int
+		first    []string
 	}
 	results := make([]result, *seeds)
 	t.Run("seeds", func(t *testing.T) {
 		for i := range *seeds {
 			t.Run(strconv.Itoa(i+1), func(t *testing.T) {
 				t.Parallel()
-				seed := uint64(i + 1)
+				seed := *seedsFrom + uint64(i)
 				start := time.Now()
 				b, err := Generate(seed, cat)
 				r := result{seed: seed, ms: float64(time.Since(start).Microseconds()) / 1000}
@@ -1068,6 +1138,18 @@ func TestSeeds(t *testing.T) {
 					}
 					for _, st := range []string{"hazards", "places", "lights", "placeNames"} {
 						r.placesMs += b.Report.Millis[st]
+					}
+					r.features, r.classA = map[string]int{}, map[string]int{}
+					for _, f := range b.Features {
+						r.features[f.Kind+" "+b.Islands[f.Island].Biome]++
+					}
+					for _, is := range b.Islands {
+						if is.Class == "A" {
+							r.classA[is.Zone]++
+						}
+					}
+					if len(b.Report.Attempts) > 0 {
+						r.first = b.Report.Attempts[0].Failed
 					}
 				}
 				results[i] = r
@@ -1097,8 +1179,8 @@ func TestSeeds(t *testing.T) {
 	sort.Float64s(share)
 	sort.Float64s(open)
 	n := float64(len(results))
-	t.Logf("%d seeds: made in median %.0f ms, worst %.0f ms; attempts %v", len(results), ms[len(ms)/2], ms[len(ms)-1], attempts)
-	t.Logf("land share: least %.2f%%, median %.2f%%, most %.2f%%; widest open water: median %.0f m, most %.0f m",
+	report("%d seeds: made in median %.0f ms, worst %.0f ms; attempts %v", len(results), ms[len(ms)/2], ms[len(ms)-1], attempts)
+	report("land share: least %.2f%%, median %.2f%%, most %.2f%%; widest open water: median %.0f m, most %.0f m",
 		share[0], share[len(share)/2], share[len(share)-1], open[len(open)/2], open[len(open)-1])
 	// The places by kind and the lights: the least, median and most a world
 	// has; how long they took; and how often each character is given.
@@ -1124,14 +1206,57 @@ func TestSeeds(t *testing.T) {
 	for _, k := range c0.places.Kinds {
 		line += fmt.Sprintf(" %s %s;", k.ID, spread(perKind[string(k.ID)]))
 	}
-	t.Logf("places by kind:%s lights %s", line, spread(lights))
+	report("places by kind:%s lights %s", line, spread(lights))
 	sort.Float64s(placesMs)
-	t.Logf("places and lights made in median %.0f ms, worst %.0f ms", placesMs[len(placesMs)/2], placesMs[len(placesMs)-1])
+	report("places and lights made in median %.0f ms, worst %.0f ms", placesMs[len(placesMs)/2], placesMs[len(placesMs)-1])
 	var chars []string
 	for _, ch := range c0.lights.Characters {
 		chars = append(chars, fmt.Sprintf("%s %d", ch.Notation, used[ch.Notation]))
 	}
-	t.Logf("characters given: %s", strings.Join(chars, ", "))
+	report("characters given: %s", strings.Join(chars, ", "))
+	// The features by kind and biome, the class A islands by zone, and the
+	// first attempts' failures by rule.
+	features, classA, first := map[string]int{}, map[string][]int{}, map[string][]uint64{}
+	for _, r := range results {
+		for k, v := range r.features {
+			features[k] += v
+		}
+		for _, z := range zoneNames {
+			classA[z] = append(classA[z], r.classA[z])
+		}
+		classA["all"] = append(classA["all"], r.classA[zoneNames[0]]+r.classA[zoneNames[1]]+r.classA[zoneNames[2]])
+		for _, f := range r.first {
+			first[f] = append(first[f], r.seed)
+		}
+	}
+	keys := make([]string, 0, len(features))
+	for k := range features {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	line = ""
+	for _, k := range keys {
+		line += fmt.Sprintf(" %s %.2f;", k, float64(features[k])/n)
+	}
+	report("features a world, by kind and biome:%s", line)
+	report("class A islands a world: %s; centre %s, middle %s, rim %s", spread(classA["all"]), spread(classA[zoneNames[0]]),
+		spread(classA[zoneNames[1]]), spread(classA[zoneNames[2]]))
+	failedFirst := 0
+	for _, r := range results {
+		if len(r.first) > 0 {
+			failedFirst++
+		}
+	}
+	rules := make([]string, 0, len(first))
+	for k := range first {
+		rules = append(rules, k)
+	}
+	sort.Strings(rules)
+	line = ""
+	for _, k := range rules {
+		line += fmt.Sprintf(" %s %v;", k, first[k])
+	}
+	report("first attempts failed: %d of %d;%s", failedFirst, len(results), line)
 	for _, m := range []map[string]int{classes, biomes} {
 		keys := make([]string, 0, len(m))
 		for k := range m {
@@ -1142,7 +1267,22 @@ func TestSeeds(t *testing.T) {
 		for _, k := range keys {
 			line += fmt.Sprintf(" %s %.1f", k, float64(m[k])/n)
 		}
-		t.Logf("a world's mean:%s", line)
+		report("a world's mean:%s", line)
+	}
+	if *seedsSummary != "" {
+		f, err := os.OpenFile(*seedsSummary, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString(summary.String() + "\n"); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if share := float64(failedFirst) / n; *seedsFirst > 0 && share > *seedsFirst {
+		t.Errorf("%d of %d seeds failed their first attempt, more than %.0f%%", failedFirst, len(results), float64(*seedsFirst*100))
 	}
 }
 

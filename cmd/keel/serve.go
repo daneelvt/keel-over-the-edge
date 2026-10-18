@@ -397,9 +397,10 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		terrain = bundle.Terrain(cat.PrepareGround())
 		terrainDigest = bundle.Digest
 		chunks = api.NewChunks(sailed.ID, held.key, held.payloads)
-		// A town's buildings stand over the horizon as land as high would.
+		// A town's buildings, an arch's span and a wood's canopy stand over
+		// the horizon as land as high would.
 		var tops []edge.Top
-		for _, t := range bundle.Tops() {
+		for _, t := range bundle.Tops(cat) {
 			tops = append(tops, edge.Top{X: t[0], Y: t[1], Height: t[2]})
 		}
 		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat)).WithTops(tops)
@@ -715,6 +716,20 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	for _, k := range c.cat.World.Places.Kinds {
 		cfg.PlaceKinds = append(cfg.PlaceKinds, owner.PlaceKind{ID: string(k.ID), Name: k.Name, Site: string(k.Site), Mark: k.Mark})
+	}
+	for _, k := range c.cat.World.Features.Kinds {
+		cfg.FeatureKinds = append(cfg.FeatureKinds, owner.FeatureKind{ID: string(k.ID), Name: k.Name, Site: string(k.Site), Mark: string(k.Mark)})
+	}
+	plants := map[string]string{}
+	for _, p := range c.cat.World.Flora.Kinds {
+		plants[string(p.ID)] = p.Name
+	}
+	for _, s := range c.cat.World.Surfaces {
+		var names []string
+		for _, cv := range s.Cover {
+			names = append(names, plants[string(cv.Plant)])
+		}
+		cfg.SurfacePlants = append(cfg.SurfacePlants, names)
 	}
 	for _, ch := range c.cat.World.Lights.Characters {
 		cfg.Characters = append(cfg.Characters, owner.Character{Notation: ch.Notation, Colour: string(ch.Colour), Steps: ch.Steps})

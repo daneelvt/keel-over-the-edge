@@ -45,6 +45,7 @@ type PlaceRequest struct {
 	Island  *int     `json:"island,omitempty"`
 	Place   *int     `json:"place,omitempty"`
 	Town    *int     `json:"town,omitempty"`
+	Feature *int     `json:"feature,omitempty"`
 	Camera  bool     `json:"camera,omitempty"`
 }
 
@@ -316,6 +317,27 @@ func (o *Owner) place(w http.ResponseWriter, r *http.Request) {
 			heading = b.Start.HeadingOf(0)
 		} else if math.Hypot(t.X-x, t.Y-y) > 1 {
 			heading = math.Atan2(t.X-x, t.Y-y)
+		}
+	case req.Feature != nil:
+		// Where a boat sees it from, facing it.
+		b := o.cfg.Bundle
+		n := *req.Feature
+		if b == nil || n < 0 || n >= len(b.Features) {
+			o.refuse(w, "place", http.StatusBadRequest, "no such feature")
+			return
+		}
+		f := &b.Features[n]
+		fx, fy, found := f.SightX, f.SightY, f.Seen
+		if !found {
+			fx, fy, found = placeApproach(b.Ground, f.X, f.Y, o.cfg.Rules.Approach)
+		}
+		if !found {
+			o.refuse(w, "place", http.StatusConflict, "no water deep enough near the feature")
+			return
+		}
+		x, y = fx, fy
+		if math.Hypot(f.X-x, f.Y-y) > 1 {
+			heading = math.Atan2(f.X-x, f.Y-y)
 		}
 	case req.Camera:
 		ex, ey, roaming := o.cfg.Edge.Eye(account)

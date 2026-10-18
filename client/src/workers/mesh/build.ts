@@ -5,13 +5,18 @@
 // height, its sides drawn only where its neighbour is drawn lower, down to
 // the neighbour's top, or below the sea at the shore. Heights are drawn in
 // terraces (land lower than one at its own height), which the physics never
-// sees. Vertices are in the chunk's own coordinates, from the centre of its
+// sees. A roof, an arch's span or a cave's roof, is a column hanging from
+// its top to its underside, its underside a face looking down at the rock
+// awash and the sea under it, its sides only where nothing as high stands
+// beside it. Vertices are in the chunk's own coordinates, from the centre of its
 // south-western hexagon, in the scene's axes (x east, y up, z south), so
 // that they stay exact in 32-bit floats wherever the chunk lies; each
 // carries its colour, sRGB, and in alpha whether it is a top (255) or a
 // side (0), for the look's seams and bevels.
 
 import { GROUND } from '../../predict/layout.gen';
+import type { ChunkRoof } from './chunk';
+import type { FloraLook } from './plants';
 
 /** A hexagon's width across its flats, m: the sea's tiles'. */
 const HEX_ACROSS = 4;
@@ -42,6 +47,8 @@ export interface LandLook {
   side: Uint8Array;
   /** The surface a pier's deck is, drawn as planking on piles, not a column; −1 for none. */
   deck: number;
+  /** The plants, as the worker places them. */
+  flora: FloraLook;
 }
 
 /** How deep a deck's planking is, m, and how thick its piles. */
@@ -82,6 +89,25 @@ export function hexCentre(q: number, r: number): [number, number] {
 export function cellHex(c: number, j: number): [number, number] {
   const q = c - COLUMN_ZERO;
   return [q, j - ROW_ZERO - (q >> 1)];
+}
+
+/** The column and row of the hexagon that holds (east, north), m: axial coordinates by cube rounding (Red Blob Games, "Hexagonal Grids"). */
+export function cellOf(east: number, north: number): [number, number] {
+  const qf = east / HEX_STEP;
+  const rf = north / HEX_ACROSS - qf / 2;
+  const sf = -qf - rf;
+  let q = Math.round(qf);
+  let r = Math.round(rf);
+  const s = Math.round(sf);
+  const dq = Math.abs(q - qf);
+  const dr = Math.abs(r - rf);
+  const ds = Math.abs(s - sf);
+  if (dq > dr && dq > ds) {
+    q = -r - s;
+  } else if (dr > ds) {
+    r = -q - s;
+  }
+  return hexCell(q, r);
 }
 
 /** The column and row of hexagon (q, r). */
@@ -131,6 +157,7 @@ export function buildChunk(
   surface: Uint8Array,
   look: LandLook,
   outside: Outside = () => undefined,
+  roofs: readonly ChunkRoof[] = [],
 ): ChunkMesh {
   const cols = GROUND.chunkColumns;
   const rows = GROUND.chunkRows;
@@ -192,6 +219,9 @@ export function buildChunk(
     }
   }
   sides += piles * 4;
+  // A roof's top and underside, and its six sides at most.
+  tops += 2 * roofs.length;
+  sides += 6 * roofs.length;
   const vertices = tops * 6 + sides * 4;
   const positions = new Float32Array(vertices * 3);
   const colours = new Uint8Array(vertices * 4);
@@ -305,15 +335,88 @@ export function buildChunk(
       }
     }
   }
+  // The roofs: hanging columns.
+  const roofAt = new Map<number, number>();
+  for (const r of roofs) {
+    roofAt.set(
+      (r.column - c0) * rows + (r.row - j0),
+      drawnHeight(Math.round(r.top * 10), look.terrace),
+    );
+  }
+  for (const r of roofs) {
+    const c = r.column - c0;
+    const j = r.row - j0;
+    if (c < 0 || j < 0 || c >= cols || j >= rows) {
+      continue;
+    }
+    const i = c * rows + j;
+    const h = roofAt.get(i) ?? 0;
+    const under = Math.min(r.under, h - 0.5);
+    highest = Math.max(highest, h);
+    const [q, rr] = cellHex(c0 + c, j0 + j);
+    const [hx, hy] = hexCentre(q, rr);
+    const sx = hx - ox;
+    const sz = -(hy - oy);
+    const s = Math.min(surface[i] ?? 0, GROUND.surfaces - 1) * 3;
+    const tint = shade(c0 + c, j0 + j);
+    const first = v;
+    for (let k = 0; k < 6; k++) {
+      put(sx + (cx[k] ?? 0), h, sz + (cz[k] ?? 0), look.top, s, tint, true);
+    }
+    for (let k = 1; k < 5; k++) {
+      indices[x++] = first;
+      indices[x++] = first + k;
+      indices[x++] = first + k + 1;
+    }
+    // Its underside, facing down, in its sides' shadowed colour.
+    const below = v;
+    for (let k = 0; k < 6; k++) {
+      put(sx + (cx[k] ?? 0), under, sz + (cz[k] ?? 0), look.side, s, tint * FOOT, false);
+    }
+    for (let k = 1; k < 5; k++) {
+      indices[x++] = below;
+      indices[x++] = below + k + 1;
+      indices[x++] = below + k;
+    }
+    for (let k = 0; k < 6; k++) {
+      const [nq, nr] = [q + (NEIGHBOURS[k]?.[0] ?? 0), rr + (NEIGHBOURS[k]?.[1] ?? 0)];
+      const [nc, nj] = hexCell(nq, nr);
+      const lc = nc - c0;
+      const lj = nj - j0;
+      const inside = lc >= 0 && lj >= 0 && lc < cols && lj < rows;
+      const ni = lc * rows + lj;
+      // Beside another roof as high, or land as high, nothing shows.
+      const beside = inside
+        ? (roofAt.get(ni) ?? ((elevation[ni] ?? 0) > 0 ? (drawn[ni] ?? 0) : under))
+        : under;
+      const low = Math.max(under, beside);
+      if (low >= h) {
+        continue;
+      }
+      const a = k;
+      const b = (k + 1) % 6;
+      const base = v;
+      put(sx + (cx[a] ?? 0), h, sz + (cz[a] ?? 0), look.side, s, tint, false);
+      put(sx + (cx[b] ?? 0), h, sz + (cz[b] ?? 0), look.side, s, tint, false);
+      put(sx + (cx[a] ?? 0), low, sz + (cz[a] ?? 0), look.side, s, tint * FOOT, false);
+      put(sx + (cx[b] ?? 0), low, sz + (cz[b] ?? 0), look.side, s, tint * FOOT, false);
+      indices[x++] = base;
+      indices[x++] = base + 2;
+      indices[x++] = base + 1;
+      indices[x++] = base + 1;
+      indices[x++] = base + 2;
+      indices[x++] = base + 3;
+    }
+  }
   return {
     number: n,
-    positions,
-    colours,
-    indices,
+    positions: v * 3 < positions.length ? positions.slice(0, v * 3) : positions,
+    colours: v * 4 < colours.length ? colours.slice(0, v * 4) : colours,
+    indices: x < indices.length ? indices.slice(0, x) : indices,
     east: ox,
     north: oy,
     highest,
-    triangles: indices.length / 3,
+    triangles: x / 3,
     blind,
   };
 }

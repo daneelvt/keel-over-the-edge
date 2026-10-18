@@ -72,33 +72,12 @@ func (c *config) radialTo(g *physics.Ground, k *coarse, x, y, a, most float64) f
 	return most
 }
 
-// shelterHeights is the highest land in each cell of the shelter's grid.
-func shelterHeights(g *physics.Ground) physics.ShelterHeights {
-	h := make(physics.ShelterHeights, physics.ShelterFieldSize)
-	for n := range int32(physics.ChunkCount) {
-		ch := g.Chunks[n]
-		if ch == nil {
-			continue
-		}
-		c0, j0 := physics.ChunkCorner(n)
-		for i := range int32(physics.ChunkHexes) {
-			e := ch.Elevation[i]
-			if e <= 0 {
-				continue
-			}
-			c, j := c0+i/physics.ChunkRows, j0+i%physics.ChunkRows
-			s := physics.ShelterIndex(c/physics.ShelterCell, j/physics.ShelterCell)
-			h[s] = max(h[s], float32(float64(e)*0.1))
-		}
-	}
-	return h
-}
-
 // shelterOf works out the land's shelter for each of the directions and
 // writes it into each chunk's table: a cell gets a table if the land does
-// anything to the wind there from any direction.
-func (c *config) shelterOf(g *physics.Ground) *physics.Shelter {
-	h := shelterHeights(g)
+// anything to the wind there from any direction. The land is as high as
+// its plants and its roofs stand (shelterHeights).
+func (c *config) shelterOf(g *physics.Ground, roofs []Roof) *physics.Shelter {
+	h := c.shelterHeights(g, roofs)
 	field := physics.ShelterField{
 		Lee:   make([]float32, physics.ShelterFieldSize),
 		Right: make([]float32, physics.ShelterFieldSize),

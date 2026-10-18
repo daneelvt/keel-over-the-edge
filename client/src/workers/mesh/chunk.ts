@@ -6,10 +6,13 @@
 // each as its difference from the one before, the surfaces, and the
 // shelter: a bitmap of the cells with a table, and their tables; and from
 // format 2 its towns: the buildings and props whose middles are in it, and
-// the discs of harbour water whose centres are. The header is checked
-// before anything is read, so a chunk of another world, another number or a
-// format it does not know is never taken for the one asked for; a chunk of
-// format 1 is a chunk with no town.
+// the discs of harbour water whose centres are; and from format 3 its
+// features: the roofs over its hexagons (an arch's span, a cave's roof),
+// and the parts of features that stand in it (a fall's lip, a blowhole's
+// vent, a fumarole's, a colony). The header is checked before anything is
+// read, so a chunk of another world, another number or a format it does
+// not know is never taken for the one asked for; a chunk of format 1 is a
+// chunk with no town, one of format 2 a chunk with no feature.
 // The browser unpacks it with DecompressionStream, which every browser the
 // game runs on has, in workers too.
 
@@ -18,21 +21,28 @@ import { GROUND } from '../../predict/layout.gen';
 /** "KWCH", every chunk's first four bytes. */
 const MAGIC = [0x4b, 0x57, 0x43, 0x48] as const;
 /** The newest chunk format this client reads; it reads every one from 1. */
-export const CHUNK_FORMAT = 2;
+export const CHUNK_FORMAT = 3;
 /** The header's length. */
 const HEADER = 4 + 2 + 2 + 4 + 16 + 1;
 /** What a chunk holds, in the header's last byte. */
 const HOLDS_GROUND = 1;
 const HOLDS_SHELTER = 2;
 const HOLDS_TOWN = 4;
+const HOLDS_FEATURES = 8;
 /** A shelter table's bytes for one cell: a factor's and a turn's for each direction. */
 const CELL_TABLE = GROUND.shelterDirections * 2;
 /** A building's bytes, and a disc of harbour water's. */
 const BUILDING = 20;
 const DISC = 10;
+/** A roof's bytes, and a feature's part's. */
+const ROOF = 8;
+const PART = 17;
 /** The most buildings and discs a chunk holds. */
 const MOST_BUILDINGS = 8192;
 const MOST_DISCS = 4096;
+/** The most roofs and parts a chunk holds. */
+const MOST_ROOFS = 8192;
+const MOST_PARTS = 4096;
 /** The most a chunk may unpack to: its ground, every cell's table and its towns, and a little. */
 const MOST =
   HEADER +
@@ -41,6 +51,9 @@ const MOST =
   4 +
   MOST_BUILDINGS * BUILDING +
   MOST_DISCS * DISC +
+  4 +
+  MOST_ROOFS * ROOF +
+  MOST_PARTS * PART +
   1024;
 
 /** A building or a prop of a town, as its chunk holds it. */
@@ -84,6 +97,38 @@ export interface ChunkTown {
   harbour: ChunkDisc[];
 }
 
+/** A roof: a hexagon whose land is drawn from its underside up to its top, over rock awash. */
+export interface ChunkRoof {
+  /** Its hexagon's column and row on the grid. */
+  column: number;
+  row: number;
+  /** Its top and underside, m above the sea. */
+  top: number;
+  under: number;
+}
+
+/** What the page draws of a feature: a fall's lip, a blowhole's vent, a fumarole's, a colony. */
+export interface ChunkPart {
+  /** Its feature's kind, by its index in the catalog's list. */
+  kind: number;
+  /** Its middle, m east and north of the world's centre; how high it stands, m; the way it faces, radians clockwise from north. */
+  east: number;
+  north: number;
+  level: number;
+  heading: number;
+  /** A fall's width, a vent's, how far a colony's birds wheel, m. */
+  size: number;
+  /** A colony's birds; a fall's catchment, in hundreds of m². */
+  count: number;
+  seed: number;
+}
+
+/** What a chunk holds of the features. */
+export interface ChunkFeatures {
+  roofs: ChunkRoof[];
+  parts: ChunkPart[];
+}
+
 /** A chunk's grids: each null if it holds none, which is deep water and open wind. */
 export interface ChunkGrids {
   number: number;
@@ -95,6 +140,8 @@ export interface ChunkGrids {
   shelter: Uint8Array | null;
   /** Its towns' buildings and harbour, or null for none. */
   town: ChunkTown | null;
+  /** Its features' roofs and parts, or null for none. */
+  features: ChunkFeatures | null;
 }
 
 /** A world's id, as the Welcome writes it, as its 16 bytes. */
@@ -164,7 +211,14 @@ export function readChunk(raw: Uint8Array, number: number, world: Uint8Array): C
   }
   const holds = raw[28] ?? 0;
   let at = HEADER;
-  const grids: ChunkGrids = { number, elevation: null, surface: null, shelter: null, town: null };
+  const grids: ChunkGrids = {
+    number,
+    elevation: null,
+    surface: null,
+    shelter: null,
+    town: null,
+    features: null,
+  };
   if ((holds & HOLDS_GROUND) !== 0) {
     if (raw.length < at + 3 * GROUND.chunkHexes) {
       return 'a chunk cut short';
@@ -210,6 +264,14 @@ export function readChunk(raw: Uint8Array, number: number, world: Uint8Array): C
     }
     grids.town = town.town;
     at = town.at;
+  }
+  if ((holds & HOLDS_FEATURES) !== 0 && format >= 3) {
+    const f = readFeatures(v, at, number);
+    if (typeof f === 'string') {
+      return f;
+    }
+    grids.features = f.features;
+    at = f.at;
   }
   if (at !== raw.length) {
     return `a chunk with ${raw.length - at} bytes too many`;
@@ -270,6 +332,60 @@ function readTown(v: DataView, start: number): { town: ChunkTown; at: number } |
     });
   }
   return { town: { buildings, harbour }, at };
+}
+
+/** Reads a chunk's features from at: its roofs, then its parts. */
+function readFeatures(
+  v: DataView,
+  start: number,
+  number: number,
+): { features: ChunkFeatures; at: number } | string {
+  let at = start;
+  if (v.byteLength < at + 2) {
+    return 'a chunk’s roofs cut short';
+  }
+  const n = v.getUint16(at, true);
+  at += 2;
+  if (v.byteLength < at + n * ROOF) {
+    return 'a chunk’s roofs cut short';
+  }
+  const c0 = (number % GROUND.chunkSide) * GROUND.chunkColumns;
+  const j0 = Math.floor(number / GROUND.chunkSide) * GROUND.chunkRows;
+  const roofs: ChunkRoof[] = [];
+  for (let k = 0; k < n; k++, at += ROOF) {
+    const i = v.getUint32(at, true);
+    if (i >= GROUND.chunkHexes) {
+      return 'a roof off its chunk';
+    }
+    roofs.push({
+      column: c0 + Math.floor(i / GROUND.chunkRows),
+      row: j0 + (i % GROUND.chunkRows),
+      top: v.getInt16(at + 4, true) / 10,
+      under: v.getInt16(at + 6, true) / 10,
+    });
+  }
+  if (v.byteLength < at + 2) {
+    return 'a chunk’s parts cut short';
+  }
+  const p = v.getUint16(at, true);
+  at += 2;
+  if (v.byteLength < at + p * PART) {
+    return 'a chunk’s parts cut short';
+  }
+  const parts: ChunkPart[] = [];
+  for (let k = 0; k < p; k++, at += PART) {
+    parts.push({
+      kind: v.getUint8(at),
+      east: v.getInt32(at + 1, true) / 10,
+      north: v.getInt32(at + 5, true) / 10,
+      level: v.getInt16(at + 9, true) / 10,
+      heading: (v.getUint8(at + 11) * 2 * Math.PI) / 256,
+      size: v.getUint16(at + 12, true) / 10,
+      count: v.getUint16(at + 14, true),
+      seed: v.getUint8(at + 16),
+    });
+  }
+  return { features: { roofs, parts }, at };
 }
 
 /** Unpacks and reads a chunk's payload, as readChunk does; a payload that is not gzip is refused. */

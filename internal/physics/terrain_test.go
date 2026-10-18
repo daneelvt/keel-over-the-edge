@@ -73,6 +73,10 @@ var testTerrains = map[string]testTerrain{
 	// A harbour's works: a pier 8 m wide from y = −30 to 30 at x = 60 to
 	// 68, and a quay from x = 120, each 1.6 m above 5 m of water.
 	"pier": {elevation: pier, surface: func(x, y float64) uint8 { return testRock }},
+	// A headland 12 m thick from x = 120 to 132 and 15 m high, through which
+	// an arch's span runs at |y| < 6: under it the rock awash, at the sea's
+	// level; 5 m of water before it.
+	"arch": {elevation: arch, surface: func(x, y float64) uint8 { return testRock }},
 	// A round hill 30 m high and 40 m across at (200, 0), in deep water.
 	"lee": {elevation: func(x, y float64) float64 {
 		if math.Hypot(x-200, y) < 40 {

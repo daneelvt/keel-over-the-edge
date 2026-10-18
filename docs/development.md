@@ -1064,8 +1064,9 @@ start area, places, lights and towns, as JSON), its **report**, and **256
 chunk payloads**: gzip at level 6 of a header (magic, format, chunk,
 generator version, world id) then the elevations column by column, each as
 its difference from the one before, the surfaces, the shelter (a bitmap of
-the cells with a table, and their tables), and from format 2 the towns'
-buildings and harbour in the chunk (see [Harbours and towns](#harbours-and-towns)).
+the cells with a table, and their tables), from format 2 the towns'
+buildings and harbour in the chunk (see [Harbours and towns](#harbours-and-towns)),
+and from format 3 the features' roofs and parts (see [Features and flora](#features-and-flora)).
 A payload of another world, chunk or generator, or of a format not known,
 is refused. In PostgreSQL (`00005_world_bundle.sql`): `world.seed` and
 `world.generator`; `world_bundle`, one row a world; `world_chunk`, a
@@ -1700,6 +1701,127 @@ plan (`/owner/api/town/N.svg`), and teleports a boat into a town's harbour
 (`POST /owner/api/place {"boat": …, "town": N}`). The keel hook
 `keel.towns()` reports what is drawn: buildings near and far, props, draws,
 triangles, flags, puffs and lanterns lit.
+
+## Features and flora
+
+Every island is planted and has its features, made by the generator
+(`internal/worldgen`, **version 4**, chunk **format 3**) and drawn on the
+phone. The kinds are the catalog's (`world.features`, `world.flora`,
+`world.score`); code reads their properties (a feature's `site`, a plant's
+`form`, a surface's `feature`), never their ids.
+
+### The features
+
+Each island's own are made on its grid from a stream of its own, after its
+sea bed and stacks, so a change to one island's features moves no other:
+
+- **Streams, springs and waterfalls** (`drainage.go`): the land drained by
+  Priority-Flood (Barnes, Lehman and Mulla 2014); a stream where the land
+  drained to a hexagon of the coast passes the biome's `stream` m², from
+  its spring at `streams.spring` m². It falls where it reaches a coast
+  `streams.fall` m high; on an island given a waterfall whose streams all
+  reach beaches, the coast at the largest's mouth is raised into a cliff,
+  its last stretch rising gently: a hanging valley. A stream's hexagons are
+  the `stream` surface.
+- **Caves, arches and blowholes** (`headland.go`): on cliffs `headland.cliff`
+  m high, a cave roofed in from the cliff's foot, facing open water; an
+  arch through a headland's neck of `headland.arch.neck` hexagons or fewer;
+  a blowhole's vent at a thin-roofed cave's back. A **roof** is a hexagon
+  drawn from its underside up to its top over **rock awash**, at the sea's
+  level: no hull floats there (the Jolly boat draws 0.094 m), so no boat
+  sails through an arch, and the physics, which never sees a roof, grounds
+  it (`TestUnderAnArch`, the `ground-arch` scenario). The shelter and the
+  handout count a roof's top.
+- **Cones** (`cone.go`): a volcanic island's cone by Porter's and Wood's
+  ratios, height 0.18 and crater 0.40 of its base when fresh, toward 0.10
+  and 0.83 with age (Bloomfield), its flanks no steeper than the angle of
+  repose, easing into an apron at its foot; a young cone's fumaroles steam,
+  with `sulphur` about them.
+
+Ruins (`ruins.go`) and seabird colonies (`colonies.go`) are the world's, a
+few of each, chosen from the islands and the water a boat reaches before
+any place: a ruined beacon, a ruined chapel or a deserted hamlet from the
+island's biome's kit (`stands: hamlet`, `chapel`, `beacon`; laid after the
+towns, each plot levelled); gannets, boobies or frigatebirds on stacks,
+cliffs, cays or mangroves, whitening rock with `guano`. Ports and villages
+keep clear of falls, ruins and colonies; where a town is sited, a cave or
+an arch in its reach has fallen in (`collapse`): an arch's roof falls and
+leaves a stack. The island then shows each feature's `word`, which names
+may need.
+
+### The flora
+
+A hexagon's surface names a community of plants: each surface's `cover`
+lists its plants with the share of the ground their crowns cover (the
+FAO's canopy cover) and where on it they grow (height, distance from the
+shore, slope, hollows); `canopy` is how high they stand, which the shelter
+adds to the land's height (a windbreak shelters some ten times its height)
+and the handout counts. Tropical low shores by still water are
+`mangrove-shore`. Nothing is stored per plant: the mesh worker places them
+from the chunk by a jittered grid a crown wide (`workers/mesh/plants.ts`),
+the same on every phone. The page draws each kind's model (`art/flora`,
+`npm run art`) near (`flora.look.near` by rung) and a far crown beyond, the
+nearest first within the rung's triangles (`render/flora.ts`), swaying in
+the vertex shader by Beaufort's land scale (`flora.wind`).
+
+### Worth seeing
+
+Each island is scored by the US Bureau of Land Management's seven factors
+(`score.go`, `world.score`), counting only what a sailor sees: a feature is
+**sighted** from the nearest water a boat reaches within
+`validator.features.seen` m from which it is in view. Class A is 19 or
+more, B 12 or more. The validator (`validatefeatures.go`) wants a feature
+of each of `validator.features.sites`, at least `classA` class A islands
+with `middle` and `rim` of them there, each showing a feature from the
+water, each biome's qualities, every feature sound, and the ruins' and
+colonies' counts.
+
+### Chunks and records
+
+`Records.Features` lists every feature (its kind, island, place, size,
+height and sighting point); `Island` carries `Score`, `Class`, `Scenery`
+and `Age`. Format 3 chunks add the chunk's **roofs** (8 bytes: the
+hexagon's index, its top and underside in decimetres) and **parts** (17
+bytes: a fall's lip, a vent, a colony). `testdata/features.json` holds
+seeds 1 to 8's features by kind and islands by class:
+
+```sh
+go test ./internal/worldgen -run Digests -update   # digests.json and features.json, after a deliberate change
+```
+
+### On the phone
+
+`render/features.ts` draws the falls' curtains and spray, the blowholes'
+spouts with each wave, the fumaroles' steam and the colonies' birds by day;
+`audio/features.ts` the falls' roar, the blowholes' booms and the colonies'
+calls (`art/sound/{waterfall,blowhole,colony}.json`). The keel hooks
+`keel.flora()` and `keel.features()` report what is drawn.
+
+### Looking at it
+
+```sh
+go run ./tools/worldgen-preview -seed 1             # features, worth seeing, the flora's communities; islands by score
+go run ./tools/worldgen-preview -seed 1 -island 3   # an island's roofs and features
+go run ./tools/worldgen-preview -seeds 6            # each seed's classes and features
+```
+
+The world page (`/owner/`) marks the features and rings the islands worth
+seeing, lists the islands by score with their features and plants, and
+teleports a boat to see a feature (`POST /owner/api/place {"boat": …,
+"feature": N}`).
+
+### A thousand seeds a night
+
+`worldgen-nightly.yaml` runs at 03:17 UTC and by hand: five jobs of 200
+seeds, a different thousand each night keyed by the date, and seeds 1 to 8
+on their first attempt. Each job's tally is in the run's summary; it fails
+on a seed that passes no attempt or on more than 12% failing their first.
+To make a failing seed's world again:
+
+```sh
+go test ./internal/worldgen -run '^TestSeeds$' -v -seeds 1 -seeds-from SEED
+go run ./tools/worldgen-preview -seed SEED
+```
 
 ## The owner's tools
 

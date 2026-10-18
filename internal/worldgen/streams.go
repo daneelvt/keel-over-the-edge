@@ -27,6 +27,8 @@ const (
 	streamPlaceNames
 	streamHarbour
 	streamTowns
+	streamRuins
+	streamColonies
 	streamIsland = 1 << 32 // plus the island's number
 )
 

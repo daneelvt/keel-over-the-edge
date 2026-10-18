@@ -66,6 +66,23 @@ type made struct {
 	basin        float64
 	// own is which of its grid's hexagons are its own land: not a stack's.
 	own []bool
+	// features are its features; roofs its arches' and caves' hexagons
+	// and floors the rock awash under them; streams its streams' hexagons,
+	// each from its spring to its mouth; sulphur the hexagons about its
+	// fumaroles; cone its cone, if it is volcanic.
+	features []*featureWork
+	roofs    []roofWork
+	floors   []int32
+	streams  [][]int32
+	sulphur  []int32
+	cone     *coneWork
+	// din is each hexagon's distance inland as its shape was drawn, m, on
+	// the box of its grid its land lies in (dinBox: the first column and
+	// row of the grid, and how many); beach whether a beach is near each
+	// there, once asked for (beachNear).
+	din    []float32
+	dinBox [4]int32
+	beach  []bool
 }
 
 // harbourShapes is how many shapes Port Royal's island is drawn in, at
@@ -425,8 +442,10 @@ func (g *islandGrid) distances(seed []bool, d []float64, near []int32, xs []floa
 	}
 }
 
-// makeIsland makes island number n at its spot, from its own stream.
-func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work) *made {
+// makeIsland makes island number n at its spot, from its own stream; spots
+// are the world's islands' spots, which its features look for open water
+// among.
+func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work, spots []spot) *made {
 	s := newStream(seed, streamIsland+uint64(n))
 	b := &c.biomes[sp.biome]
 	m := &made{spot: sp, number: n, reefRock: -1}
@@ -506,6 +525,7 @@ func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work) *made {
 	c.erode(s, m, w)
 	c.seabedOf(s, m, b, w)
 	c.stacksOf(s, m, b, w)
+	c.featuresOf(seed, m, b, w, spots)
 	c.surfaces(m, b, w)
 	if m.harbour != nil {
 		c.finishHarbour(m, w)
@@ -517,6 +537,7 @@ func (c *config) makeIsland(seed uint64, n int32, sp spot, w *work) *made {
 		}
 	}
 	m.measure(c, w)
+	m.keepInland(w)
 	for i := range total {
 		if !w.land[i] && w.dout[i] <= approachReach && (i%g.h)%2 == 0 && (i/g.h)%2 == 0 {
 			m.approach = append(m.approach, [2]int32{g.c0 + i/g.h, g.j0 + i%g.h})
@@ -549,6 +570,20 @@ func (c *config) heights(s stream, m *made, sh *shape, b *biome, w *work) {
 	seeds := [4]uint32{s.seed32(), s.seed32(), s.seed32(), s.seed32()}
 	cu, cv := s.in(-0.15, 0.15), s.in(-0.15, 0.15) // the cone's centre, in radii
 	crater := s.chance(b.crater)
+	// A cone stands as high as its age's shape lets it on its base.
+	var coneCrater, coneDepth float64
+	if b.cone > 0 && m.kind != kindRock {
+		age := c.drawAge(s)
+		var coneHeight float64
+		coneHeight, coneCrater, coneDepth = c.coneShape(age)
+		if !crater {
+			coneDepth = 0
+		}
+		m.cone = &coneWork{x: m.x + float64(cu*m.radius), y: m.y + float64(cv*m.radius), crater: coneCrater, age: age}
+		m.cone.measureBase(g, w)
+		top = clamp(c.coneTop(m.radius, coneHeight, coneCrater), c.land[0]+0.2, c.land[1])
+		cliffHeight = min(cliffHeight, top)
+	}
 	inland := 0.0
 	for i := range total {
 		if w.land[i] {
@@ -612,7 +647,13 @@ func (c *config) heights(s stream, m *made, sh *shape, b *biome, w *work) {
 		rest := max(1-(b.hills+b.ridges+b.cone), 0)
 		h := float64(rest*base) + float64(b.hills*float64(base*(0.4+float64(0.6*hills)))) +
 			float64(b.ridges*float64(pow(max(base, 1e-6), 0.7)*rid)) + float64(b.cone*cone)
-		if crater {
+		if m.cone != nil {
+			// The cone's own profile, its hills and ridges only roughening
+			// its flanks below the rim; its crater a smooth bowl of ash.
+			t := m.cone.along(g, w, i)
+			rough := float64(smoothstep(coneCrater, coneCrater+0.15, t) * (float64(b.hills*(hills-0.5)) + float64(b.ridges*(rid-0.5))))
+			h = float64(coneProfile(t, coneCrater, coneDepth) * (1 + rough))
+		} else if crater {
 			if r := hypot(u-cu, v-cv); r < 0.15 {
 				h -= float64(0.4 * (1 - float64(r*r)/0.0225))
 			}
@@ -741,6 +782,11 @@ func (c *config) surfaces(m *made, b *biome, w *work) {
 		}
 	}
 	steepSlope := float64(c.talus * 1.15)
+	// An old cone is green to its rim.
+	high := b.surfaces.high
+	if m.cone != nil && m.cone.age == ageOld {
+		high = b.surfaces.low
+	}
 	var nb [6]int32
 	for i := range total {
 		if !w.land[i] {
@@ -757,7 +803,7 @@ func (c *config) surfaces(m *made, b *biome, w *work) {
 			}
 			slope = max(slope, math.Abs(h-o))
 		}
-		surf := b.surfaces.high
+		surf := high
 		switch {
 		case m.kind == kindRock || w.cliff[i] && w.din[i] < 20 && h > 3 || slope > steepSlope:
 			surf = b.surfaces.steep
@@ -769,6 +815,7 @@ func (c *config) surfaces(m *made, b *biome, w *work) {
 		g.surf[i] = surf
 		g.elev[i] = int16(toInt32(clamp(float64(round(float64(h*10))), float64(c.land[0]*10), float64(c.land[1]*10))))
 	}
+	c.communities(m, b, w)
 }
 
 // measure works out what the island shows: its area, its highest point,

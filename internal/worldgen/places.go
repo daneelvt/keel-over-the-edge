@@ -129,14 +129,24 @@ type placesWork struct {
 	sites   []*site
 }
 
-// sitesOf finds the world's places, kind by kind.
-func (c *config) sitesOf(seed uint64, g *physics.Ground, k *coarse, islands []*made, hazards []*hazard, start Start) *placesWork {
+// placesWork is the places' work before any is found: the water a boat
+// reaches from the start, which the world's ruins and colonies are also
+// sighted from (ruins.go, colonies.go) before the places keep clear of
+// them.
+func (c *config) placesWork(seed uint64, g *physics.Ground, k *coarse, islands []*made, hazards []*hazard, start Start) *placesWork {
 	pw := &placesWork{c: c, seed: seed, ground: g, coarse: k, islands: islands, hazards: hazards,
 		coasts: make([]*coastGrid, len(islands))}
-	for _, m := range islands {
-		pw.shows = append(pw.shows, c.shows(m))
-	}
 	pw.reach = c.flood(g, start, c.validator.ReachDepth)
+	return pw
+}
+
+// findSites finds the places, kind by kind, each island showing what it shows
+// its features counted.
+func (pw *placesWork) findSites() {
+	pw.shows = pw.shows[:0]
+	for _, m := range pw.islands {
+		pw.shows = append(pw.shows, pw.c.shows(m))
+	}
 	pw.ports()
 	pw.villages()
 	pw.anchorages()
@@ -145,7 +155,6 @@ func (c *config) sitesOf(seed uint64, g *physics.Ground, k *coarse, islands []*m
 	pw.reefs()
 	pw.bars()
 	pw.wrecks()
-	return pw
 }
 
 // siteRules are the sites' rules, in the order their streams are keyed.
@@ -189,8 +198,8 @@ func (pw *placesWork) newSite(rule catalog.Site, m *made, x, y float64) *site {
 		s.biome = pw.c.biomeIDs[m.biome]
 		s.offers = append(s.offers, pw.shows[m.number]...)
 		bed = b.surfaces.bed
-		// A tropical shore, where a fringing reef grows, has mangroves.
-		if b.reef {
+		// Mangroves, where they stand near.
+		if b.mangroves && pw.mangrovesNear(x, y, mangroveNear) {
 			s.offers = append(s.offers, needMangrove)
 		}
 	}
@@ -204,6 +213,40 @@ func (pw *placesWork) newSite(rule catalog.Site, m *made, x, y float64) *site {
 		s.offers = append(s.offers, needDeep)
 	}
 	return s
+}
+
+// mangroveNear is how near a site's mangroves stand, at most, m.
+const mangroveNear = 200
+
+// mangrovesNear reports whether mangroves stand within r of (x, y).
+func (pw *placesWork) mangrovesNear(x, y, r float64) bool {
+	found := false
+	pw.hexesWithin(x, y, r, func(hx, hy float64, e int16) bool {
+		if e > 0 {
+			if _, s := pw.ground.At(hx, hy); uint8(s) == pw.c.featureSurface.mangrove {
+				found = true
+				return false
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// nearFeature reports whether a town's reach at (x, y) would take in one of
+// island m's falls, ruins or colonies: a town keeps to the gentle ground
+// below a crater, a watering place may lie in it, and a cave or an arch in
+// its reach has fallen in (collapse).
+func (pw *placesWork) nearFeature(m *made, x, y, reach float64) bool {
+	for _, f := range m.features {
+		if !pw.c.kept(f) {
+			continue
+		}
+		if hypot(f.x-x, f.y-y) < reach+featureClear {
+			return true
+		}
+	}
+	return false
 }
 
 // reefWord is the feature a reef shows, the word names need it by.
@@ -482,7 +525,7 @@ func (pw *placesWork) ports() {
 				continue
 			}
 			x, y := g.centre(i)
-			if hypot(x, y) >= c.mist {
+			if hypot(x, y) >= c.mist || pw.nearFeature(m, x, y, c.towns.Plan.Reach[1]) {
 				continue
 			}
 			side := min(int(toInt32(float64(wrapAngle(physics.Atan2(x-m.x, y-m.y))/(2*math.Pi))*portSides)), portSides-1)
@@ -687,7 +730,7 @@ func (pw *placesWork) villages() {
 				continue
 			}
 			x, y := g.centre(i)
-			if hypot(x, y) >= c.mist {
+			if hypot(x, y) >= c.mist || pw.nearFeature(m, x, y, c.towns.Plan.Reach[2]) {
 				continue
 			}
 			s := pw.newSite(catalog.SiteVillage, m, x, y)

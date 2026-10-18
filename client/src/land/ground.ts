@@ -14,15 +14,12 @@ import { DataTexture, NearestFilter, RGBAFormat, UnsignedByteType } from 'three'
 import type { World } from '../catalog/types.gen';
 import { GROUND, RECORDS } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
-import { chunkCorner } from '../workers/mesh/build';
+import { cellOf, chunkCorner } from '../workers/mesh/build';
 import type { ChunkGrids } from '../workers/mesh/chunk';
 
-/** The grid's size in hexagons, and the column and row of the world's centre's. */
+/** The grid's size in hexagons. */
 const COLUMNS = GROUND.chunkSide * GROUND.chunkColumns;
 const ROWS = GROUND.chunkSide * GROUND.chunkRows;
-const COLUMN_ZERO = COLUMNS / 2;
-const ROW_ZERO = ROWS / 2;
-const HEX_STEP = 1.5 * (4 / Math.sqrt(3));
 
 /** Writes the catalog's grounding into the module's groundParams record, as the server reads it. */
 export function writeGroundParams(view: Float64Array, world: World): void {
@@ -44,22 +41,7 @@ export function writeGroundParams(view: Float64Array, world: World): void {
 
 /** The column and row on the grid of the hexagon nearest (east, north). */
 export function cellAt(east: number, north: number): [number, number] {
-  // Axial coordinates by cube rounding (Red Blob Games, "Hexagonal Grids").
-  const qf = east / HEX_STEP;
-  const rf = north / 4 - qf / 2;
-  const sf = -qf - rf;
-  let q = Math.round(qf);
-  let r = Math.round(rf);
-  const s = Math.round(sf);
-  const dq = Math.abs(q - qf);
-  const dr = Math.abs(r - rf);
-  const ds = Math.abs(s - sf);
-  if (dq > dr && dq > ds) {
-    q = -r - s;
-  } else if (dr > ds) {
-    r = -q - s;
-  }
-  return [q + COLUMN_ZERO, r + (q >> 1) + ROW_ZERO];
+  return cellOf(east, north);
 }
 
 /** The chunk that holds (east, north), or −1 off the grid. */

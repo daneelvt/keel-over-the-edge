@@ -212,7 +212,9 @@ world:
   # hills, ridges and a cone; crater the chance of one; cliffs the share of
   # the coast; beach the width of low ground at its other shores, m; dean
   # Dean's A; reef, bars and stacks the sea bed's features; split the height
-  # share above which the high surface lies.
+  # share above which the high surface lies; stream the catchment, m², from
+  # which a stream runs (sand drains through, and a sandy cay has none); and
+  # mangroves whether they grow on its low shores by still water.
   biomes:
     - id: sandy
       zones: { centre: 3, middle: 2, rim: 0.5 }
@@ -234,6 +236,8 @@ world:
       bars: true
       stacks: [0, 0]
       split: 0.5
+      stream: 1000000
+      mangroves: false
       surfaces: { beach: sand, low: dune-grass, high: dune-grass, steep: sand, bed: sand }
     - id: tropical
       zones: { centre: 3, middle: 2, rim: 0.3 }
@@ -255,7 +259,9 @@ world:
       bars: false
       stacks: [0, 0]
       split: 0.3
-      surfaces: { beach: sand, low: grass, high: forest, steep: rock, bed: sand }
+      stream: 3000
+      mangroves: true
+      surfaces: { beach: sand, low: strand, high: tropical-forest, steep: rock, bed: sand }
     - id: wooded
       zones: { centre: 2, middle: 3, rim: 2 }
       height: [15, 50]
@@ -276,6 +282,8 @@ world:
       bars: false
       stacks: [0, 2]
       split: 0.25
+      stream: 10000
+      mangroves: false
       surfaces: { beach: sand, low: grass, high: forest, steep: rock, bed: sand }
     - id: rocky
       zones: { centre: 0.3, middle: 2, rim: 3 }
@@ -297,7 +305,9 @@ world:
       bars: false
       stacks: [2, 8]
       split: 0.7
-      surfaces: { beach: rock, low: grass, high: rock, steep: rock, bed: rock }
+      stream: 10000
+      mangroves: false
+      surfaces: { beach: rock, low: heath, high: rock, steep: rock, bed: rock }
     - id: volcanic
       zones: { centre: 0.2, middle: 1.5, rim: 2.5 }
       height: [30, 80]
@@ -309,7 +319,7 @@ world:
       hills: 0.1
       ridges: 0.15
       cone: 0.75
-      crater: 0.5
+      crater: 1
       cliffs: [0.2, 0.5]
       cliffHeight: [5, 20]
       beach: 8
@@ -318,6 +328,8 @@ world:
       bars: false
       stacks: [1, 4]
       split: 0.5
+      stream: 10000
+      mangroves: false
       surfaces: { beach: ash, low: scrub, high: ash, steep: rock, bed: rock }
 
   # What the ground is covered with. friction is Coulomb's coefficient of a
@@ -325,23 +337,103 @@ world:
   # look is how it is drawn: a column's top and sides, the bed of it seen
   # through shallow water, and the foam added where the waves break over it
   # (a reef's crest); starting values, to be judged on a phone.
+  # canopy is how high its plants stand over the ground as the wind feels
+  # them, m: a windbreak shelters some ten times its height, its trees
+  # counted (USDA NRCS, Conservation Practice Standard 380). cover is what
+  # grows on it, each plant with the share of the ground its crowns cover
+  # (the FAO's canopy cover: a forest is land with more than a tenth under
+  # trees over 5 m) and, where it is particular, the ground's height, m,
+  # its distance from the shore, m, its steepest slope, degrees, and whether
+  # it grows only in hollows. Each biome's are its real island's: the
+  # Caribbean's strand of coconut palms (there from 1549) and sea grape
+  # before its inland forest of West Indian mahogany, and red mangroves on
+  # sheltered shores; the Bahamas' cays, sea oats on the dunes and sea grape
+  # and cocoplum behind; the Mediterranean's open woodland of holm oak and
+  # stone pine over lentisk; Newfoundland's barrens, tuckamore in the
+  # hollows; and Pico's lenha of Azores heath and juniper.
   surfaces:
-    - { id: sand, friction: 0.4, look: { top: "#e4d3a2", side: "#c9b17c", bed: "#d8c99a", crest: 0 } }
-    - { id: dune-grass, friction: 0.5, look: { top: "#b8b46a", side: "#a8915f", bed: "#c8b98a", crest: 0 } }
-    - { id: grass, friction: 0.5, look: { top: "#7fa04f", side: "#8a7253", bed: "#9a9c70", crest: 0 } }
-    - { id: forest, friction: 0.5, look: { top: "#4d7536", side: "#6e5a42", bed: "#7c8460", crest: 0 } }
-    - { id: rock, friction: 0.6, look: { top: "#9a958a", side: "#7d766c", bed: "#77786c", crest: 0 } }
-    - { id: ash, friction: 0.45, look: { top: "#5a5550", side: "#47423e", bed: "#4f4d4a", crest: 0 } }
-    - { id: scrub, friction: 0.5, look: { top: "#98935a", side: "#857155", bed: "#a39e7e", crest: 0 } }
-    - { id: reef, friction: 0.5, look: { top: "#d9c8a0", side: "#b7a07a", bed: "#c6b38c", crest: 0.5 } }
+    - { id: sand, friction: 0.4, canopy: 0, look: { top: "#e4d3a2", side: "#c9b17c", bed: "#d8c99a", crest: 0 } }
+    - id: dune-grass
+      friction: 0.5
+      canopy: 1
+      look: { top: "#b8b46a", side: "#a8915f", bed: "#c8b98a", crest: 0 }
+      cover:
+        - { plant: sea-oats, share: 0.22, shore: [0, 60] }
+        - { plant: sea-grape, share: 0.05, shore: [12, 1000] }
+        - { plant: cocoplum, share: 0.05, shore: [15, 1000] }
+        - { plant: coconut-palm, share: 0.015 }
+    - id: grass
+      friction: 0.5
+      canopy: 2
+      look: { top: "#7fa04f", side: "#8a7253", bed: "#9a9c70", crest: 0 }
+      cover:
+        - { plant: lentisk, share: 0.06, slope: 34 }
+        - { plant: stone-pine, share: 0.04, slope: 30 }
+        - { plant: holm-oak, share: 0.03, slope: 30 }
+    - id: forest
+      friction: 0.5
+      canopy: 12
+      look: { top: "#4d7536", side: "#6e5a42", bed: "#7c8460", crest: 0 }
+      cover:
+        - { plant: holm-oak, share: 0.15, slope: 32 }
+        - { plant: stone-pine, share: 0.1, slope: 32 }
+        - { plant: lentisk, share: 0.05, slope: 34 }
+    - { id: rock, friction: 0.6, canopy: 0, look: { top: "#9a958a", side: "#7d766c", bed: "#77786c", crest: 0 } }
+    - { id: ash, friction: 0.45, canopy: 0, look: { top: "#5a5550", side: "#47423e", bed: "#4f4d4a", crest: 0 } }
+    - id: scrub
+      friction: 0.5
+      canopy: 3
+      look: { top: "#98935a", side: "#857155", bed: "#a39e7e", crest: 0 }
+      cover:
+        - { plant: azores-heath, share: 0.18, slope: 34 }
+        - { plant: azores-juniper, share: 0.12, slope: 34 }
+    - { id: reef, friction: 0.5, canopy: 0, look: { top: "#d9c8a0", side: "#b7a07a", bed: "#c6b38c", crest: 0.5 } }
     # The ground of towns, each with the part of a town it is: cobbles for
     # streets, lanes and squares; dressed stone for quays and the mole;
     # planking on piles for piers and jetties, drawn as a deck, not a
     # column; beaten earth for yards, plots and paths.
-    - { id: cobbles, friction: 0.6, town: street, look: { top: "#a39a8b", side: "#857c6e", bed: "#8b8a80", crest: 0 } }
-    - { id: dressed-stone, friction: 0.6, town: quay, look: { top: "#b9b2a3", side: "#958d7e", bed: "#8b8a80", crest: 0 } }
-    - { id: planking, friction: 0.5, town: deck, look: { top: "#8a6a48", side: "#5e4632", bed: "#7c7a6a", crest: 0 } }
-    - { id: beaten-earth, friction: 0.5, town: yard, look: { top: "#a08a64", side: "#7e6a4c", bed: "#8f8466", crest: 0 } }
+    - { id: cobbles, friction: 0.6, canopy: 0, town: street, look: { top: "#a39a8b", side: "#857c6e", bed: "#8b8a80", crest: 0 } }
+    - { id: dressed-stone, friction: 0.6, canopy: 0, town: quay, look: { top: "#b9b2a3", side: "#958d7e", bed: "#8b8a80", crest: 0 } }
+    - { id: planking, friction: 0.5, canopy: 0, town: deck, look: { top: "#8a6a48", side: "#5e4632", bed: "#7c7a6a", crest: 0 } }
+    - { id: beaten-earth, friction: 0.5, canopy: 0, town: yard, look: { top: "#a08a64", side: "#7e6a4c", bed: "#8f8466", crest: 0 } }
+    # The ground of features: a stream's bed of stones and water; the mud
+    # of a mangrove shore; a fumarole's yellow sulphur; a colony's guano,
+    # its rock "white-capped from years of guano" (Cape St Mary's).
+    - { id: stream, friction: 0.55, canopy: 0, feature: stream, look: { top: "#7f9aa0", side: "#6f685a", bed: "#7d7a6e", crest: 0 } }
+    - id: mangrove-shore
+      friction: 0.5
+      canopy: 6
+      feature: mangrove
+      look: { top: "#5f6a46", side: "#53493a", bed: "#5e5a46", crest: 0 }
+      cover:
+        - { plant: red-mangrove, share: 0.6 }
+    - { id: sulphur, friction: 0.5, canopy: 0, feature: sulphur, look: { top: "#d8c35a", side: "#a8963e", bed: "#a19250", crest: 0 } }
+    - { id: guano, friction: 0.6, canopy: 0, feature: guano, look: { top: "#ebe8de", side: "#cdc8bb", bed: "#a9a597", crest: 0 } }
+    # The new biomes' own: the tropical strand behind the beach; the rocky
+    # island's grass and heath; the tropical island's inland forest.
+    - id: strand
+      friction: 0.5
+      canopy: 8
+      look: { top: "#9fae62", side: "#a8915f", bed: "#c8b98a", crest: 0 }
+      cover:
+        - { plant: coconut-palm, share: 0.1, shore: [0, 90] }
+        - { plant: sea-grape, share: 0.12, shore: [4, 300] }
+        - { plant: cocoplum, share: 0.04, shore: [10, 300] }
+    - id: heath
+      friction: 0.5
+      canopy: 1
+      look: { top: "#7f8a55", side: "#7d6c54", bed: "#8f8d72", crest: 0 }
+      cover:
+        - { plant: tuckamore, share: 0.15, hollow: true }
+        - { plant: labrador-tea, share: 0.12, slope: 30 }
+        - { plant: tussock, share: 0.1 }
+    - id: tropical-forest
+      friction: 0.5
+      canopy: 15
+      look: { top: "#3f6e33", side: "#6e5a42", bed: "#7c8460", crest: 0 }
+      cover:
+        - { plant: mahogany, share: 0.25, slope: 32 }
+        - { plant: coconut-palm, share: 0.03, height: [0, 25] }
 
   # The fetch of each sea area for a wind from each of 16 directions: the
   # Shore Protection Manual's effective fetch, the mean of radials a few
@@ -669,12 +761,23 @@ world:
       - { id: lantern-post, name: Lantern post, prop: true, frontage: [0.4, 0.4], depth: [0.4, 0.4], storeys: [1, 1], stands: post, fill: 0, main: [16, 30], port: [3, 8], village: [0, 2], chimney: 0, flag: false, lantern: 1, top: 0, colour: "#2c2b2a" }
       - { id: crates, name: Crates and barrels, prop: true, frontage: [2, 3], depth: [1.5, 2], storeys: [1, 1], stands: quay, fill: 0, main: [6, 12], port: [2, 6], village: [1, 3], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#8a6a48" }
       - { id: boat-ashore, name: A boat drawn up, prop: true, frontage: [1.6, 1.8], depth: [4.5, 5], storeys: [1, 1], stands: beach, fill: 0, main: [3, 6], port: [0, 0], village: [2, 6], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#5c4a38" }
+      # Ruins: a deserted hamlet's roofless houses, a ruined chapel, its gable
+      # standing, and a ruined beacon, Smyth's "signal-mark placed on the top
+      # of hills … near the shore for the safe guidance of shipping": a stone
+      # watch-house and its fire-basket; and the hamlet's well, dry. No town
+      # has them.
+      - { id: roofless-house, name: Roofless house, prop: false, frontage: [5, 7], depth: [5, 7], storeys: [1, 1], stands: hamlet, fill: 0, main: [0, 0], port: [0, 0], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 3, colour: "#b8ab90" }
+      - { id: chapel-ruin, name: Ruined chapel, prop: false, frontage: [7, 9], depth: [12, 16], storeys: [1, 1], stands: chapel, fill: 0, main: [0, 0], port: [0, 0], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 9, colour: "#d8d0bc" }
+      - { id: beacon-ruin, name: Ruined beacon, prop: false, frontage: [4, 5], depth: [4, 5], storeys: [1, 1], stands: beacon, fill: 0, main: [0, 0], port: [0, 0], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 7, colour: "#a8a090" }
+      - { id: dry-well, name: Dry well, prop: true, frontage: [2, 2], depth: [2, 2], storeys: [1, 1], stands: hamlet, fill: 0, main: [0, 0], port: [0, 0], village: [0, 0], chimney: 0, flag: false, lantern: 0, top: 0, colour: "#9a958a" }
     # Each biome's kit: its models, one for each kind of building, in
     # their storeys, coloured per house from its palette (walls, roofs,
-    # shutters and doors, as #rrggbb). Port Royal's is always its biome's.
+    # shutters and doors, as #rrggbb), and the tree planted by its houses,
+    # if any (the Mediterranean's cypress, the Caribbean's palm). Port
+    # Royal's is always its biome's.
     kits:
-      - { biome: wooded, art: { model: town/wooded.glb }, walls: ["#e6dcc4", "#d9c7a0", "#e8d2b4", "#cfc0a4", "#ddd6c8"], roofs: ["#a4553a", "#8f4a34", "#b0603f", "#7e4632"], shutters: ["#4a6a52", "#6a3a2e", "#3e5670", "#8a7a3e"] }
-      - { biome: tropical, art: { model: town/tropical.glb }, walls: ["#f0e2c0", "#e6c79a", "#d8e0d0", "#f2d6c4", "#e0d8b8"], roofs: ["#7a6a58", "#8a7660", "#6c5c4c", "#968470"], shutters: ["#3f7a6e", "#2e5e8a", "#c0703e", "#5e8a3e"] }
+      - { biome: wooded, garden: italian-cypress, art: { model: town/wooded.glb }, walls: ["#e6dcc4", "#d9c7a0", "#e8d2b4", "#cfc0a4", "#ddd6c8"], roofs: ["#a4553a", "#8f4a34", "#b0603f", "#7e4632"], shutters: ["#4a6a52", "#6a3a2e", "#3e5670", "#8a7a3e"] }
+      - { biome: tropical, garden: coconut-palm, art: { model: town/tropical.glb }, walls: ["#f0e2c0", "#e6c79a", "#d8e0d0", "#f2d6c4", "#e0d8b8"], roofs: ["#7a6a58", "#8a7660", "#6c5c4c", "#968470"], shutters: ["#3f7a6e", "#2e5e8a", "#c0703e", "#5e8a3e"] }
       - { biome: rocky, art: { model: town/rocky.glb }, walls: ["#e8e4dc", "#b84a3a", "#d8c890", "#6a7a8a", "#c8c0b0"], roofs: ["#3e3c3a", "#4c4844", "#5a4e44", "#34383c"], shutters: ["#e8e4dc", "#2c2b2a", "#3e5670", "#6a3a2e"] }
       - { biome: sandy, art: { model: town/sandy.glb }, walls: ["#f4ecd8", "#f0d8d0", "#dce6e0", "#f2e2b8", "#e6dcf0"], roofs: ["#f6f4ee", "#eeece4", "#f2f0ea", "#e8e6de"], shutters: ["#3e6e5e", "#3e5670", "#7a4a3a", "#8a8a5a"] }
       - { biome: volcanic, art: { model: town/volcanic.glb }, walls: ["#ecebe4", "#e4e0d4", "#d8d4c8", "#efece2", "#dad6cc"], roofs: ["#9a4e36", "#8a4632", "#a45a3e", "#7a4030"], shutters: ["#2e5e3e", "#7a2e2a", "#2e4a6e", "#3a3a3a"] }
@@ -727,18 +830,25 @@ world:
     # at least lightsInRange lights in range: two for a fix by bearings.
     lightsInRange: 2
     lightGrid: 250 # m
+    # Every world has a feature of each of these sites; at least classA
+    # islands of class A, middle of them in the middle waters and rim at the
+    # rim; and each class A island's best feature seen from water a boat
+    # reaches within seen m.
+    features: { sites: [cave, arch, waterfall, crater, ruin, colony], classA: 6, middle: 2, rim: 2, seen: 300 }
 
   # How islands are named, from the generator's names: by size class, biome
   # and the features the terrain shows, then preferring the island's zone,
   # then by chance, the tones weighted by zone.
   names:
     # The features a name may need, by the word the names give each, and
-    # what shows it, if the terrain can yet: a coast with at least cliffs of
-    # cliff; a summit at least peak m high; two summits each at least twin
-    # of the highest, twinApart m apart; at least stacks stacks off the
-    # coast; a reef; a lagoon behind it at least lagoon m wide; 0 or false
-    # for a test a feature has not. A feature nothing shows is never shown,
-    # and no name that needs it is given.
+    # what shows it: a coast with at least cliffs of cliff; a summit at least
+    # peak m high; two summits each at least twin of the highest, twinApart
+    # m apart; at least stacks stacks off the coast; a reef; a lagoon behind
+    # it at least lagoon m wide; 0 or false for a test a feature has not.
+    # An island also shows the word of each of its features' kinds
+    # (world.features.kinds). A feature nothing shows is never shown, and no
+    # name that needs it is given: a wreck, laid after the islands are
+    # named.
     features:
       - { word: cliffs, cliffs: 0.3, peak: 0, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
       - { word: peak, cliffs: 0, peak: 40, twin: 0, twinApart: 0, stacks: 0, reef: false, lagoon: 0 }
@@ -777,3 +887,188 @@ world:
     # A reef with a wreck on it may take her name, as the Florida reefs took
     # their ships' (Carysfort Reef, Looe Key), by chance wreckReef.
     wreckReef: 0.3
+
+  # The islands' features, each made where the land and the sea make it:
+  # caves, arches and blowholes cut into cliffed headlands in the order the
+  # sea cuts them (a notch, a cave, an arch where the headland is narrow, a
+  # stack when its roof falls); springs, streams and waterfalls from each
+  # island's drainage; a volcanic island's cone and crater, smoking while it
+  # is young; ruins; and seabird colonies on stacks, cliffs and cays. Each
+  # kind with its site, the word it shows names, the biomes whose islands
+  # have it, the chance one with a site for it does (a ruin's and a
+  # colony's, its weight among the world's), its weight by zone, and the
+  # colour the world page marks it with. Starting values, judged in the
+  # preview.
+  features:
+    kinds:
+      - { id: sea-cave, name: Sea cave, site: cave, word: cave, biomes: [rocky, volcanic, wooded], chance: 0.35, zones: { centre: 0.7, middle: 1.6, rim: 1.3 }, mark: "#5b4a8a" }
+      - { id: sea-arch, name: Sea arch, site: arch, word: arch, biomes: [rocky, volcanic, wooded], chance: 0.4, zones: { centre: 0.6, middle: 1.8, rim: 1.5 }, mark: "#8a3d6b" }
+      - { id: blowhole, name: Blowhole, site: blowhole, word: cave, biomes: [rocky, volcanic, wooded], chance: 0.6, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#3d6b8a" }
+      - { id: waterfall, name: Waterfall, site: waterfall, word: waterfall, biomes: [tropical, wooded, rocky, volcanic], chance: 0.7, zones: { centre: 0.8, middle: 1.6, rim: 1.2 }, mark: "#2f7fb3" }
+      - { id: spring, name: Spring, site: spring, word: spring, biomes: [tropical, wooded, rocky, volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#5fa3c9" }
+      - { id: crater, name: Crater, site: crater, biomes: [volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#6b4a3a" }
+      - { id: fumarole, name: Fumarole, site: fumarole, word: smoke, biomes: [volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#c9b43a" }
+      - { id: ruined-chapel, name: Ruined chapel, site: ruin, ruin: chapel, word: ruins, biomes: [wooded, tropical, rocky, sandy, volcanic], chance: 1, zones: { centre: 0.5, middle: 1, rim: 1.5 }, mark: "#7a6a5a" }
+      - { id: ruined-beacon, name: Ruined beacon, site: ruin, ruin: beacon, word: ruins, biomes: [wooded, tropical, rocky, volcanic], chance: 1, zones: { centre: 0.5, middle: 1, rim: 1.5 }, mark: "#8a6a3a" }
+      - { id: deserted-hamlet, name: Deserted hamlet, site: ruin, ruin: hamlet, word: ruins, biomes: [wooded, tropical, rocky, sandy, volcanic], chance: 1, zones: { centre: 0.5, middle: 1, rim: 1.5 }, mark: "#9a7a5a" }
+      # Gannets on stacks and cliff ledges (Bird Rock, Cape St Mary's: some
+      # 30,000 birds); brown boobies on cays and cliffs; frigatebirds over
+      # mangroves and trees (Half Moon Caye). Each colony's birds: where they
+      # nest, their wingspan, m, colours, wingbeats, Hz, the share of the
+      # time they glide, and their call.
+      - id: gannetry
+        name: Gannetry
+        site: colony
+        word: birds
+        biomes: [rocky, volcanic, wooded]
+        chance: 1
+        zones: { centre: 0.3, middle: 1, rim: 2 }
+        mark: "#e8e6dc"
+        birds: { nests: [stack, cliff], span: 1.75, body: "#f2f0e8", wing: "#f2f0e8", tip: "#1e1c1a", flap: 3, glide: 0.5, call: harsh }
+      - id: booby-colony
+        name: Booby colony
+        site: colony
+        word: birds
+        biomes: [sandy, tropical]
+        chance: 1
+        zones: { centre: 1, middle: 1, rim: 0.6 }
+        mark: "#b89a70"
+        birds: { nests: [cay, cliff], span: 1.4, body: "#efece4", wing: "#5a4634", tip: "#4a3a2a", flap: 3.5, glide: 0.4, call: whistle }
+      - id: frigatebird-roost
+        name: Frigatebird roost
+        site: colony
+        word: birds
+        biomes: [tropical]
+        chance: 0.6
+        zones: { centre: 1, middle: 1, rim: 0.6 }
+        mark: "#3a3436"
+        birds: { nests: [trees], span: 2.3, body: "#1c1a1a", wing: "#1c1a1a", tip: "#1c1a1a", flap: 2, glide: 0.85, call: rattle }
+    # On a headland whose coast stands cliff m or higher: a cave depth
+    # hexagons in from the cliff's foot, its roof's underside underside m
+    # above the sea with roof m of rock over it at least, facing open m of
+    # open water (Fingal's Cave on Staffa: 69–82 m long, 12 m wide, its roof
+    # 20–22 m over the sea); where the headland's neck is neck hexagons
+    # across or fewer, an arch through it, its underside underside of the
+    # neck's height; on a cave whose roof is blowhole.roof m thin or
+    # thinner, a vent at its back that spouts with the waves. Under a roof
+    # the ground is rock awash, floor m deep: the sea foams through and no
+    # boat sails it, at the sea's level shallower than any hull draws (the
+    # Jolly boat's 0.094 m).
+    headland:
+      cliff: 8 # m
+      floor: [0, 0] # m
+      cave: { depth: [2, 6], underside: [3, 8], roof: 2, open: 1000 }
+      arch: { neck: 3, underside: [0.5, 0.7] }
+      blowhole: { roof: 4 } # m
+    # Each island drained by Priority-Flood (Barnes, Lehman and Mulla 2014):
+    # a stream where its catchment passes its biome's stream, from its
+    # spring, where it first passed spring m²; it falls where it reaches a
+    # coast fall m high or higher; on an island given a waterfall whose
+    # stream reaches a beach, the coast is raised into a cliff valley m
+    # either side of it, its last stretch kept level, as a hanging valley is
+    # left where a cliff retreats faster than its stream cuts down (Leyland
+    # and Darby 2008), never further inland than reach m.
+    streams:
+      spring: 1000 # m²
+      fall: 5 # m
+      valley: [20, 40] # m
+      reach: 120 # m
+    # A cinder cone's height is 0.18 of its basal width and its crater 0.40
+    # when fresh (Porter 1972; Wood 1980); with age the first falls toward
+    # 0.10 and the second rises toward 0.83 (Bloomfield 1975); depth is the
+    # crater's below its rim, of the cone's height. Each volcanic island's
+    # age is drawn by the weights; a young one has fumaroles, steaming, with
+    # sulphur m about each vent, each vent's plume rising up to plume of its
+    # crater's width: the bigger the crater, the bigger its steam.
+    cone:
+      fresh: { height: 0.18, crater: 0.4, depth: 0.3 }
+      old: { height: 0.1, crater: 0.83, depth: 0.1 }
+      ages: { young: 1, middle: 1.5, old: 1 }
+      fumaroles: [1, 4]
+      sulphur: 8 # m
+      plume: 0.25
+    # Ruins: count a world, on islands of the sizes given with no town,
+    # apart m from each other; a deserted hamlet's houses; a beacon within
+    # beacon m of the coast.
+    ruins:
+      count: [2, 5]
+      sizes: [medium, large]
+      hamlet: [3, 10]
+      beacon: 150 # m
+      apart: 1500 # m
+    # Colonies: count a world, each with birds on the wing by day, wheeling
+    # within wheel m of it.
+    colonies:
+      count: [2, 8]
+      birds: [20, 60]
+      wheel: [30, 90] # m
+    # How they are drawn and heard: a fall's width at the least and the most
+    # catchment, m, and its spray, a share of its height; a blowhole's spout,
+    # times the waves' height; a fumarole's steam's rise, m/s; heard within
+    # reach m, falling 6 dB a doubling.
+    look:
+      fall: [1.5, 8]
+      spray: 0.3
+      spout: 4
+      steam: 1.2 # m/s
+      reach: 300 # m
+
+  # The plants (world.surfaces' cover), each in its form at its real size:
+  # its height grown and its crown's width, m (World Agroforestry; UF IFAS;
+  # nurseries' data; the RHS; RBGE), its trunk's and leaves' colours, and
+  # how stiff it is in the wind. Drawn near as its model within look.near
+  # of the camera on the high, medium and low rungs, beyond as a crown to
+  # look.far; shrubs and tufts near only. In the wind by Beaufort's land
+  # scale (Royal Meteorological Society): at force 3 "leaves and small twigs
+  # in constant motion", at 5 "small trees in leaf begin to sway", at 6
+  # "large branches in motion", at 7 "whole trees in motion".
+  flora:
+    art: { model: flora/plants.glb }
+    kinds:
+      - { id: coconut-palm, name: Coconut palm, form: palm, height: [18, 28], crown: [8, 11], trunk: "#8a7a62", leaf: "#5c8a3a", stiffness: 0.15 }
+      - { id: sea-grape, name: Sea grape, form: broadleaf, height: [3, 8], crown: [3, 6], trunk: "#6e5a48", leaf: "#5f8a3c", stiffness: 0.5 }
+      - { id: red-mangrove, name: Red mangrove, form: mangrove, height: [4, 8], crown: [4, 7], trunk: "#6b5240", leaf: "#3f6a34", stiffness: 0.6 }
+      - { id: mahogany, name: West Indian mahogany, form: broadleaf, height: [10, 20], crown: [8, 14], trunk: "#5e4a3a", leaf: "#3d6b2f", stiffness: 0.7 }
+      - { id: sea-oats, name: Sea oats, form: tuft, height: [1, 2], crown: [0.6, 1.2], trunk: "#b8a874", leaf: "#c2b77a", stiffness: 0.2 }
+      - { id: cocoplum, name: Cocoplum, form: shrub, height: [1, 4], crown: [1.5, 3], trunk: "#6e5a48", leaf: "#4f7e3a", stiffness: 0.6 }
+      - { id: holm-oak, name: Holm oak, form: broadleaf, height: [12, 20], crown: [10, 14], trunk: "#4e4238", leaf: "#3a5a32", stiffness: 0.8 }
+      - { id: stone-pine, name: Stone pine, form: umbrella, height: [12, 18], crown: [8, 12], trunk: "#7a5a44", leaf: "#4a6e3c", stiffness: 0.7 }
+      - { id: italian-cypress, name: Italian cypress, form: columnar, height: [10, 18], crown: [1.5, 3], trunk: "#4e4238", leaf: "#2f4a2c", stiffness: 0.5 }
+      - { id: lentisk, name: Lentisk, form: shrub, height: [1, 3], crown: [1.5, 3], trunk: "#5e4e40", leaf: "#4e6a3a", stiffness: 0.7 }
+      - { id: tuckamore, name: Tuckamore, form: krummholz, height: [1, 3], crown: [2, 4], trunk: "#4a3e34", leaf: "#2f4a32", stiffness: 0.9 }
+      - { id: labrador-tea, name: Labrador tea, form: shrub, height: [0.4, 1.2], crown: [0.8, 1.5], trunk: "#5a4a3a", leaf: "#5a6a3e", stiffness: 0.6 }
+      - { id: tussock, name: Tussock grass, form: tuft, height: [0.4, 1], crown: [0.5, 1], trunk: "#8a8250", leaf: "#a39a5e", stiffness: 0.2 }
+      - { id: azores-heath, name: Azores heath, form: shrub, height: [2, 6], crown: [2, 4], trunk: "#5a4a3c", leaf: "#4a6a3a", stiffness: 0.6 }
+      - { id: azores-juniper, name: Azores juniper, form: conifer, height: [2, 6], crown: [1.5, 3], trunk: "#5a4638", leaf: "#3e5a3a", stiffness: 0.7 }
+    look: { near: [150, 100, 60], far: 2000 } # m
+    wind: { leaves: 3, small: 5, large: 6, whole: 7 } # Beaufort's forces
+
+  # Each island's scenic quality by the seven key factors of the US Bureau
+  # of Land Management's Scenic Quality Field Inventory (Form 8400-1), each
+  # in its range: landform 1–5, vegetation 1–5, water 0–5, colour 1–5,
+  # adjacent scenery 0–5, scarcity 1–5 and cultural modifications to 2; a
+  # total of a or more is class A, b or more class B, the rest class C, the
+  # form's own classes (A 19 or more, B 12–18). What each factor reads of
+  # the island: landform, from 1, its relief (its highest, m, adding
+  # nothing at relief[0] and two at relief[1]), cliffs on that share of its
+  # coast or more, twin summits, stacks, a cave, an arch, a crater, a cone
+  # smoking;
+  # vegetation by how many major types of plant cover a fiftieth of its
+  # land or more (each form of tree one, shrubs one, grasses one); water the
+  # best of a waterfall, a lagoon, a stream, a blowhole, the sea's white
+  # water through an arch or into a cave; colour, from 1, each
+  # surface over least of its land, and a lagoon's, sulphur's and guano's;
+  # adjacent scenery, each island within within m and more for each with
+  # features; scarcity, its rarest feature's kind ("very rare within
+  # region") on at most rare other islands within region m (5), or few
+  # (3), else 1, springs aside; cultural, a ruin, a lighthouse, a town.
+  # Starting values, judged by the owner's eye.
+  score:
+    classes: { a: 19, b: 12 }
+    landform: { relief: [10, 50], cliffs: 0.3, twin: 0.5, stacks: 0.5, cave: 1, arch: 1.5, crater: 1, fumarole: 1 }
+    vegetation: [1, 3, 3, 4, 5]
+    water: { waterfall: 5, lagoon: 3, stream: 3, blowhole: 3, arch: 3, cave: 3 }
+    colour: { least: 0.05, each: 0.5, lagoon: 1, sulphur: 1, guano: 0.5 }
+    adjacent: { within: 1000, island: 0.5, featured: 1 }
+    scarcity: { rare: 1, few: 3, region: 3000 }
+    cultural: { ruin: 2, light: 1, town: 1 }

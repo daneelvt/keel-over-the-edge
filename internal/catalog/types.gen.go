@@ -48,6 +48,9 @@ type Biome struct {
 	// The lobes its shape is made of, the fewest and the most.
 	Lobes []int `json:"lobes"`
 
+	// Mangroves grow on its low shores by still water.
+	Mangroves bool `json:"mangroves"`
+
 	// It has a fringing reef.
 	Reef bool `json:"reef"`
 
@@ -62,6 +65,10 @@ type Biome struct {
 
 	// Stacks off its coast, the fewest and the most.
 	Stacks []int `json:"stacks"`
+
+	// Land draining more than this to one hexagon of its coast runs there as a
+	// stream, in m².
+	Stream float64 `json:"stream"`
 
 	// Surfaces corresponds to the JSON schema field "surfaces".
 	Surfaces BiomeSurfaces `json:"surfaces"`
@@ -217,6 +224,12 @@ type BuildingKind struct {
 	Village []int `json:"village,omitempty,omitzero"`
 }
 
+type Call string
+
+const CallHarsh Call = "harsh"
+const CallRattle Call = "rattle"
+const CallWhistle Call = "whistle"
+
 // Every list of kinds in the game. Kinds are data: code reads their properties,
 // never their names.
 type Catalog struct {
@@ -248,8 +261,59 @@ const ClassLFl Class = "LFl"
 const ClassMo Class = "Mo"
 const ClassOc Class = "Oc"
 
+// A colony's birds: where they nest, and how they look, fly and call.
+type ColonyBirds struct {
+	// Body corresponds to the JSON schema field "body".
+	Body Colour `json:"body"`
+
+	// Their call.
+	Call Call `json:"call"`
+
+	// Their wingbeats, in Hz.
+	Flap float64 `json:"flap"`
+
+	// The share of the time they glide.
+	Glide float64 `json:"glide"`
+
+	// Where they nest.
+	Nests []Nest `json:"nests"`
+
+	// Their wingspan, in m.
+	Span float64 `json:"span"`
+
+	// Tip corresponds to the JSON schema field "tip".
+	Tip Colour `json:"tip"`
+
+	// Wing corresponds to the JSON schema field "wing".
+	Wing Colour `json:"wing"`
+}
+
 // A colour, as #rrggbb in sRGB.
 type Colour string
+
+// Each age's weight.
+type ConeAges struct {
+	// Its weight.
+	Middle float64 `json:"middle"`
+
+	// Its weight.
+	Old float64 `json:"old"`
+
+	// Its weight.
+	Young float64 `json:"young"`
+}
+
+// A cinder cone's shape, as shares of its base's width.
+type ConeShape struct {
+	// Its crater's width.
+	Crater float64 `json:"crater"`
+
+	// Its crater's depth below its rim, as a share of its height.
+	Depth float64 `json:"depth"`
+
+	// Its height.
+	Height float64 `json:"height"`
+}
 
 // The water pouring over the lip.
 type Curtain struct {
@@ -420,6 +484,237 @@ type EncountersShadow struct {
 
 	// w: the wake's half-width parameter at one rig height, in h.
 	Width float64 `json:"width"`
+}
+
+type Feature string
+
+// Seabird colonies: a world's, and their birds.
+type FeatureColonies struct {
+	// How many birds a colony has on the wing by day.
+	Birds []int `json:"birds"`
+
+	// How many a world has.
+	Count []int `json:"count"`
+
+	// How far from it they wheel, in m.
+	Wheel []float64 `json:"wheel"`
+}
+
+// A volcanic island's cone, by its age.
+type FeatureCone struct {
+	// Each age's weight.
+	Ages ConeAges `json:"ages"`
+
+	// Fresh corresponds to the JSON schema field "fresh".
+	Fresh ConeShape `json:"fresh"`
+
+	// How many fumaroles a young cone has.
+	Fumaroles []int `json:"fumaroles"`
+
+	// Old corresponds to the JSON schema field "old".
+	Old ConeShape `json:"old"`
+
+	// A vent's plume rises up to this share of its crater's width.
+	Plume float64 `json:"plume"`
+
+	// Sulphur lies this far about a vent, in m.
+	Sulphur float64 `json:"sulphur"`
+}
+
+const FeatureGuano Feature = "guano"
+
+// Caves, arches and blowholes, cut into cliffed headlands.
+type FeatureHeadland struct {
+	// An arch, roofed through a headland's neck.
+	Arch HeadlandArch `json:"arch"`
+
+	// A blowhole: a cave's back open to the sky.
+	Blowhole HeadlandBlowhole `json:"blowhole"`
+
+	// A cave, roofed into a cliff from its foot.
+	Cave HeadlandCave `json:"cave"`
+
+	// A headland's coast this high or higher is cut, in m.
+	Cliff float64 `json:"cliff"`
+
+	// The rock awash under a roof, how deep, in m.
+	Floor []float64 `json:"floor"`
+}
+
+// A kind of feature an island may have.
+type FeatureKind struct {
+	// The biomes whose islands may have it.
+	Biomes []ID `json:"biomes"`
+
+	// Birds corresponds to the JSON schema field "birds".
+	Birds *ColonyBirds `json:"birds,omitempty,omitzero"`
+
+	// The chance an island of its biomes with a site for it has one, before its
+	// zone's weight.
+	Chance float64 `json:"chance"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// The colour the world page marks it with.
+	Mark Colour `json:"mark"`
+
+	// Its name, as the world page lists it.
+	Name string `json:"name"`
+
+	// A ruin: what it was.
+	Ruin *Ruin `json:"ruin,omitempty,omitzero"`
+
+	// Where it is made: the rule its sites follow.
+	Site FeatureSite `json:"site"`
+
+	// The feature it shows names, by the word the names need it by.
+	Word *string `json:"word,omitempty,omitzero"`
+
+	// Zones corresponds to the JSON schema field "zones".
+	Zones BiomeZones `json:"zones"`
+}
+
+// How the features are drawn and heard.
+type FeatureLook struct {
+	// A fall's width, at the least and the most catchment, in m.
+	Fall []float64 `json:"fall"`
+
+	// Features are heard within this, in m.
+	Reach float64 `json:"reach"`
+
+	// A blowhole's spout, as many times the waves' height.
+	Spout float64 `json:"spout"`
+
+	// The spray at a fall's foot, as a share of its height.
+	Spray float64 `json:"spray"`
+
+	// A fumarole's steam rises this fast, in m/s.
+	Steam float64 `json:"steam"`
+}
+
+const FeatureMangrove Feature = "mangrove"
+
+// Ruins: a world's, and how each is laid out.
+type FeatureRuins struct {
+	// Ruins stand this far apart at least, in m.
+	Apart float64 `json:"apart"`
+
+	// A beacon stands this near the coast or nearer, in m.
+	Beacon float64 `json:"beacon"`
+
+	// How many a world has.
+	Count []int `json:"count"`
+
+	// How many houses a deserted hamlet has.
+	Hamlet []int `json:"hamlet"`
+
+	// The size classes of island a ruin stands on.
+	Sizes []string `json:"sizes"`
+}
+
+type FeatureSite string
+
+const FeatureSiteArch FeatureSite = "arch"
+const FeatureSiteBlowhole FeatureSite = "blowhole"
+const FeatureSiteCave FeatureSite = "cave"
+const FeatureSiteColony FeatureSite = "colony"
+const FeatureSiteCrater FeatureSite = "crater"
+const FeatureSiteFumarole FeatureSite = "fumarole"
+const FeatureSiteRuin FeatureSite = "ruin"
+const FeatureSiteSpring FeatureSite = "spring"
+const FeatureSiteWaterfall FeatureSite = "waterfall"
+const FeatureStream Feature = "stream"
+
+// Springs, streams and waterfalls, from each island's drainage.
+type FeatureStreams struct {
+	// A stream falls where it reaches a coast this high or higher, in m.
+	Fall float64 `json:"fall"`
+
+	// A hanging valley is raised no further inland than this, in m.
+	Reach float64 `json:"reach"`
+
+	// A stream rises where its catchment first passes this, in m².
+	Spring float64 `json:"spring"`
+
+	// A hanging valley's coast is raised this far either side of its stream, in m.
+	Valley []float64 `json:"valley"`
+}
+
+const FeatureSulphur Feature = "sulphur"
+
+// Their models.
+type FloraArt struct {
+	// Model corresponds to the JSON schema field "model".
+	Model ArtPath `json:"model"`
+}
+
+// How far plants are drawn.
+type FloraLook struct {
+	// Beyond near, each plant is a crown within this of the camera, in m.
+	Far float64 `json:"far"`
+
+	// Within this of the camera each plant is its model, on the high, medium and low
+	// rungs, in m.
+	Near []float64 `json:"near"`
+}
+
+// Plants in the wind, by Beaufort's land scale: the forces from which each part
+// moves.
+type FloraWind struct {
+	// Beaufort's force.
+	Large float64 `json:"large"`
+
+	// Beaufort's force.
+	Leaves float64 `json:"leaves"`
+
+	// Beaufort's force.
+	Small float64 `json:"small"`
+
+	// Beaufort's force.
+	Whole float64 `json:"whole"`
+}
+
+type Form string
+
+const FormBroadleaf Form = "broadleaf"
+const FormColumnar Form = "columnar"
+const FormConifer Form = "conifer"
+const FormKrummholz Form = "krummholz"
+const FormMangrove Form = "mangrove"
+const FormPalm Form = "palm"
+const FormShrub Form = "shrub"
+const FormTuft Form = "tuft"
+const FormUmbrella Form = "umbrella"
+
+// An arch, roofed through a headland's neck.
+type HeadlandArch struct {
+	// A neck this many hexagons across or fewer is cut through.
+	Neck int `json:"neck"`
+
+	// Its underside, as a share of the neck's height.
+	Underside []float64 `json:"underside"`
+}
+
+// A blowhole: a cave's back open to the sky.
+type HeadlandBlowhole struct {
+	// A cave whose roof is this thin or thinner has a vent at its back, in m.
+	Roof float64 `json:"roof"`
+}
+
+// A cave, roofed into a cliff from its foot.
+type HeadlandCave struct {
+	// How far it runs in, in hexagons.
+	Depth []int `json:"depth"`
+
+	// It faces this much open water, at least, in m.
+	Open float64 `json:"open"`
+
+	// The rock over it, at least, in m.
+	Roof float64 `json:"roof"`
+
+	// Its roof's underside above the sea, in m.
+	Underside []float64 `json:"underside"`
 }
 
 // Stable identifier of a kind, stored in the database: never renamed or reused.
@@ -657,6 +952,13 @@ type NamedStar struct {
 	// Right ascension, in degrees.
 	RightAscension float64 `json:"rightAscension"`
 }
+
+type Nest string
+
+const NestCay Nest = "cay"
+const NestCliff Nest = "cliff"
+const NestStack Nest = "stack"
+const NestTrees Nest = "trees"
 
 // How the boat's autopilot steers it: a proportional–integral–derivative law on
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
@@ -1224,6 +1526,55 @@ type PlanSquare struct {
 	Back float64 `json:"back"`
 }
 
+// A plant that grows on a surface: how much of the ground its crowns cover, and
+// where on it.
+type PlantCover struct {
+	// Only on ground this high, the least and the most, in m.
+	Height []float64 `json:"height,omitempty,omitzero"`
+
+	// Only in hollows, ground lower than about it.
+	Hollow *bool `json:"hollow,omitempty,omitzero"`
+
+	// Plant corresponds to the JSON schema field "plant".
+	Plant ID `json:"plant"`
+
+	// The share of the ground its crowns cover (FAO's canopy cover).
+	Share float64 `json:"share"`
+
+	// Only this far from the shore, the least and the most, in m.
+	Shore []float64 `json:"shore,omitempty,omitzero"`
+
+	// Only on ground no steeper than this, in degrees.
+	Slope *float64 `json:"slope,omitempty,omitzero"`
+}
+
+// A kind of plant.
+type PlantKind struct {
+	// Its crown's width, in m.
+	Crown []float64 `json:"crown"`
+
+	// Its form, which its model is built in.
+	Form Form `json:"form"`
+
+	// Its height grown, in m.
+	Height []float64 `json:"height"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Leaf corresponds to the JSON schema field "leaf".
+	Leaf Colour `json:"leaf"`
+
+	// Its name, as the world page lists it.
+	Name string `json:"name"`
+
+	// How stiff it is in the wind: 0 bends most, 1 least.
+	Stiffness float64 `json:"stiffness"`
+
+	// Trunk corresponds to the JSON schema field "trunk".
+	Trunk Colour `json:"trunk"`
+}
+
 // Its harbour: a basin entered through a narrows, carved into the island.
 type PortHarbour struct {
 	// The basin's width, the least and the most, in m.
@@ -1321,6 +1672,12 @@ type RegimeWind struct {
 	Speed []float64 `json:"speed"`
 }
 
+type Ruin string
+
+const RuinBeacon Ruin = "beacon"
+const RuinChapel Ruin = "chapel"
+const RuinHamlet Ruin = "hamlet"
+
 type Sailor struct {
 	// Art corresponds to the JSON schema field "art".
 	Art SailorArt `json:"art"`
@@ -1341,6 +1698,120 @@ type SailorArt struct {
 	// The sailor's model: a glTF binary with the nodes body, head, arm-left and
 	// arm-right, its origin at the hips, facing +x.
 	Model ArtPath `json:"model"`
+}
+
+// Adjacent scenery, 0 to 5: so much for each island within, and more for each with
+// features.
+type ScoreAdjacent struct {
+	// What it adds.
+	Featured float64 `json:"featured"`
+
+	// What it adds.
+	Island float64 `json:"island"`
+
+	// Within this of its coast, in m.
+	Within float64 `json:"within"`
+}
+
+// The least score of class A and of class B; below, class C.
+type ScoreClasses struct {
+	// A score.
+	A float64 `json:"a"`
+
+	// A score.
+	B float64 `json:"b"`
+}
+
+// Colour, 1 to 5: so much for each surface over least of its land, and for what
+// stands out.
+type ScoreColour struct {
+	// What it adds.
+	Each float64 `json:"each"`
+
+	// What it adds.
+	Guano float64 `json:"guano"`
+
+	// What it adds.
+	Lagoon float64 `json:"lagoon"`
+
+	// A share.
+	Least float64 `json:"least"`
+
+	// What it adds.
+	Sulphur float64 `json:"sulphur"`
+}
+
+// Cultural modifications, at most 2: a ruin's, a lighthouse's, a town's.
+type ScoreCultural struct {
+	// What it adds.
+	Light float64 `json:"light"`
+
+	// What it adds.
+	Ruin float64 `json:"ruin"`
+
+	// What it adds.
+	Town float64 `json:"town"`
+}
+
+// Landform, 1 to 5: what it adds to the least.
+type ScoreLandform struct {
+	// What it adds.
+	Arch float64 `json:"arch"`
+
+	// What it adds.
+	Cave float64 `json:"cave"`
+
+	// A share.
+	Cliffs float64 `json:"cliffs"`
+
+	// What it adds.
+	Crater float64 `json:"crater"`
+
+	// What it adds.
+	Fumarole float64 `json:"fumarole"`
+
+	// Its highest, from which relief adds nothing and at which it adds two, in m.
+	Relief []float64 `json:"relief"`
+
+	// What it adds.
+	Stacks float64 `json:"stacks"`
+
+	// What it adds.
+	Twin float64 `json:"twin"`
+}
+
+// Scarcity, 1 to 5: its rarest feature's kind on at most rare other islands of its
+// region, or few.
+type ScoreScarcity struct {
+	// How many.
+	Few int `json:"few"`
+
+	// How many.
+	Rare int `json:"rare"`
+
+	// Its region: within this of it, in m.
+	Region float64 `json:"region"`
+}
+
+// Water, 0 to 5: the most of what it has.
+type ScoreWater struct {
+	// Its score: the sea through it.
+	Arch float64 `json:"arch"`
+
+	// Its score.
+	Blowhole float64 `json:"blowhole"`
+
+	// Its score: the sea in it.
+	Cave float64 `json:"cave"`
+
+	// Its score.
+	Lagoon float64 `json:"lagoon"`
+
+	// Its score.
+	Stream float64 `json:"stream"`
+
+	// Its score.
+	Waterfall float64 `json:"waterfall"`
 }
 
 // The spells of weather until the world's weather is generated: this sequence,
@@ -1443,9 +1914,12 @@ type Stands string
 
 const StandsAbove Stands = "above"
 const StandsBeach Stands = "beach"
+const StandsBeacon Stands = "beacon"
 const StandsBehind Stands = "behind"
+const StandsChapel Stands = "chapel"
 const StandsEdge Stands = "edge"
 const StandsFields Stands = "fields"
+const StandsHamlet Stands = "hamlet"
 const StandsPost Stands = "post"
 const StandsQuay Stands = "quay"
 const StandsQuayEnd Stands = "quayEnd"
@@ -1471,6 +1945,16 @@ type StartMoorings struct {
 
 // What the ground is covered with.
 type Surface struct {
+	// How high its plants stand over the ground, as the wind feels them, in m.
+	Canopy float64 `json:"canopy"`
+
+	// The plants that grow on it.
+	Cover []PlantCover `json:"cover,omitempty,omitzero"`
+
+	// The feature's ground it is, if any: a stream's bed, a mangrove shore, a
+	// fumarole's sulphur, a colony's guano.
+	Feature *Feature `json:"feature,omitempty,omitzero"`
+
 	// Coulomb's coefficient of a hull dragging on it under water.
 	Friction float64 `json:"friction"`
 
@@ -1556,6 +2040,9 @@ type TownKit struct {
 
 	// Biome corresponds to the JSON schema field "biome".
 	Biome ID `json:"biome"`
+
+	// The plant set by its houses, if any.
+	Garden *ID `json:"garden,omitempty,omitzero"`
 
 	// Its roofs' colours.
 	Roofs []Colour `json:"roofs"`
@@ -1710,6 +2197,25 @@ type TownWaterfront struct {
 }
 
 const TownYard Town = "yard"
+
+// The features and the islands worth seeing every world has.
+type ValidatorFeatures struct {
+	// Class A islands, at least.
+	ClassA int `json:"classA"`
+
+	// Of them in the middle waters, at least.
+	Middle int `json:"middle"`
+
+	// And at the rim, at least.
+	Rim int `json:"rim"`
+
+	// Each class A island's best feature is seen from water a boat reaches within
+	// this, in m.
+	Seen float64 `json:"seen"`
+
+	// At least one feature of each of these sites.
+	Sites []FeatureSite `json:"sites"`
+}
 
 // The weather's numbers.
 type Weather struct {
@@ -1921,8 +2427,14 @@ type World struct {
 	// Erosion corresponds to the JSON schema field "erosion".
 	Erosion WorldErosion `json:"erosion"`
 
+	// Features corresponds to the JSON schema field "features".
+	Features WorldFeatures `json:"features"`
+
 	// Fetch corresponds to the JSON schema field "fetch".
 	Fetch WorldFetch `json:"fetch"`
+
+	// Flora corresponds to the JSON schema field "flora".
+	Flora WorldFlora `json:"flora"`
 
 	// Grounding corresponds to the JSON schema field "grounding".
 	Grounding WorldGrounding `json:"grounding"`
@@ -1956,6 +2468,9 @@ type World struct {
 
 	// Reef corresponds to the JSON schema field "reef".
 	Reef WorldReef `json:"reef"`
+
+	// Score corresponds to the JSON schema field "score".
+	Score WorldScore `json:"score"`
 
 	// Seabed corresponds to the JSON schema field "seabed".
 	Seabed WorldSeabed `json:"seabed"`
@@ -2028,6 +2543,30 @@ type WorldErosion struct {
 	Thermal int `json:"thermal"`
 }
 
+// The islands' features: their kinds, and the rules each kind's sites follow.
+type WorldFeatures struct {
+	// Seabird colonies: a world's, and their birds.
+	Colonies FeatureColonies `json:"colonies"`
+
+	// A volcanic island's cone, by its age.
+	Cone FeatureCone `json:"cone"`
+
+	// Caves, arches and blowholes, cut into cliffed headlands.
+	Headland FeatureHeadland `json:"headland"`
+
+	// The kinds of feature.
+	Kinds []FeatureKind `json:"kinds"`
+
+	// How the features are drawn and heard.
+	Look FeatureLook `json:"look"`
+
+	// Ruins: a world's, and how each is laid out.
+	Ruins FeatureRuins `json:"ruins"`
+
+	// Springs, streams and waterfalls, from each island's drainage.
+	Streams FeatureStreams `json:"streams"`
+}
+
 // Each sea area's effective fetch for a wind from each of 16 directions.
 type WorldFetch struct {
 	// Radials averaged about the wind.
@@ -2038,6 +2577,23 @@ type WorldFetch struct {
 
 	// A radial's step upwind, in m.
 	Step float64 `json:"step"`
+}
+
+// The plants that grow on the islands, how they are drawn, and how they move in
+// the wind.
+type WorldFlora struct {
+	// Their models.
+	Art FloraArt `json:"art"`
+
+	// The kinds of plant.
+	Kinds []PlantKind `json:"kinds"`
+
+	// How far plants are drawn.
+	Look FloraLook `json:"look"`
+
+	// Plants in the wind, by Beaufort's land scale: the forces from which each part
+	// moves.
+	Wind FloraWind `json:"wind"`
 }
 
 // A boat aground.
@@ -2373,6 +2929,38 @@ type WorldReef struct {
 	Passes float64 `json:"passes"`
 }
 
+// Each island's scenic quality, by the US Bureau of Land Management's seven key
+// factors (Form 8400-1), and its class.
+type WorldScore struct {
+	// Adjacent scenery, 0 to 5: so much for each island within, and more for each
+	// with features.
+	Adjacent ScoreAdjacent `json:"adjacent"`
+
+	// The least score of class A and of class B; below, class C.
+	Classes ScoreClasses `json:"classes"`
+
+	// Colour, 1 to 5: so much for each surface over least of its land, and for what
+	// stands out.
+	Colour ScoreColour `json:"colour"`
+
+	// Cultural modifications, at most 2: a ruin's, a lighthouse's, a town's.
+	Cultural ScoreCultural `json:"cultural"`
+
+	// Landform, 1 to 5: what it adds to the least.
+	Landform ScoreLandform `json:"landform"`
+
+	// Scarcity, 1 to 5: its rarest feature's kind on at most rare other islands of
+	// its region, or few.
+	Scarcity ScoreScarcity `json:"scarcity"`
+
+	// Vegetation, by how many forms of plant grow on it: none, one, two and on; the
+	// last for more.
+	Vegetation []float64 `json:"vegetation"`
+
+	// Water, 0 to 5: the most of what it has.
+	Water ScoreWater `json:"water"`
+}
+
 // The sea bed out from a coast: Dean's equilibrium profile to the closure depth,
 // then the shelf, then the deep.
 type WorldSeabed struct {
@@ -2508,6 +3096,9 @@ type WorldValidator struct {
 	// Each size class within this share of its expected count.
 	Counts float64 `json:"counts"`
 
+	// The features and the islands worth seeing every world has.
+	Features ValidatorFeatures `json:"features"`
+
 	// Land as a percentage of the disk, the least and the most.
 	LandShare []float64 `json:"landShare"`
 
@@ -2540,4 +3131,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "77914ac1e333af15"
+const Version = "6296ddce9014d261"

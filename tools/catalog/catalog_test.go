@@ -166,11 +166,14 @@ func fixture(t *testing.T, files map[string]string) string {
 	if _, ok := files[worldPath]; !ok {
 		files[worldPath] = realFile(worldPath)
 	}
-	// The real world's town kits.
+	// The real world's town kits and plants.
 	for _, kit := range []string{"wooded", "tropical", "rocky", "sandy", "volcanic"} {
 		if p := "art/town/" + kit + ".glb"; files[p] == "" {
 			files[p] = "glTF"
 		}
+	}
+	if p := "art/flora/plants.glb"; files[p] == "" {
+		files[p] = "glTF"
 	}
 	for p, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))

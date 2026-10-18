@@ -97,6 +97,40 @@ export interface Island {
   bounds: [number, number, number, number];
   /** Where a boat is put to sail to it. */
   approach: [number, number];
+  /** Its scenic quality, by the seven factors and in all, and its class, A, B or C. */
+  score: number;
+  class: string;
+  scenery: Record<string, number>;
+  /** Its age, if volcanic; its features' kinds; the plants that grow on it. */
+  age?: string;
+  features: string[];
+  flora: string[];
+}
+
+/** A kind of feature as the page lists and marks it. */
+export interface FeatureKind {
+  id: string;
+  name: string;
+  site: string;
+  mark: string;
+}
+
+/** A feature: its kind, island, place and height, and where a boat sees it from. */
+export interface Feature {
+  number: number;
+  kind: string;
+  island: number;
+  east: number;
+  north: number;
+  height: number;
+  size: number;
+  seen: boolean;
+  approach: [number, number] | null;
+}
+
+export interface FeaturesData {
+  kinds: FeatureKind[];
+  features: Feature[];
 }
 
 export interface Group {

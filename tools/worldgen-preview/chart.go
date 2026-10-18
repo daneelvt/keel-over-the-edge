@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html"
 	"image"
+	"image/color"
 	"strings"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -91,6 +92,36 @@ func worldChart(b *worldgen.Bundle, c *chartConfig, v view, terrain []byte) []by
 		fmt.Fprintf(&s, `<text x="%.1f" y="%.1f" fill="#111" stroke="#fff" stroke-width="2" paint-order="stroke" font-style="italic">%s</text>`+"\n", x+5, y+3, html.EscapeString(p.Name))
 	}
 	fmt.Fprintln(&s, `</g>`)
+	// The islands worth seeing: a ring about each of class A, a fainter one
+	// about each of class B.
+	fmt.Fprintln(&s, `<g id="classes" fill="none">`)
+	for _, is := range b.Islands {
+		colour, width := "", 0.0
+		switch is.Class {
+		case "A":
+			colour, width = "#f2c14e", 2.2
+		case "B":
+			colour, width = "#9fc5e8", 0.8
+		default:
+			continue
+		}
+		x, y := v.Px(is.X, is.Y)
+		fmt.Fprintf(&s, `<circle cx="%.1f" cy="%.1f" r="%.1f" stroke="%s" stroke-width="%.1f"><title>%s: class %s, %.1f</title></circle>`+"\n",
+			x, y, is.Across/2/v.Scale+5, colour, width, html.EscapeString(is.Name), is.Class, is.Score)
+	}
+	fmt.Fprintln(&s, `</g>`)
+	// The features, each a triangle in its kind's colour, hollow if no boat
+	// sees it from the water.
+	fmt.Fprintln(&s, `<g id="features" stroke="#111" stroke-width="0.6">`)
+	for _, f := range b.Features {
+		x, y := v.Px(f.X, f.Y)
+		fill := c.featureMarks[f.Kind]
+		if !f.Seen {
+			fill = "none"
+		}
+		fmt.Fprintf(&s, `<path d="M%.1f %.1fl3.5 6h-7z" fill="%s"><title>%s, %.0f m</title></path>`+"\n", x, y-3.5, fill, html.EscapeString(f.Kind), f.Height)
+	}
+	fmt.Fprintln(&s, `</g>`)
 	// The lights' ranges, each a ring.
 	fmt.Fprintln(&s, `<g id="ranges" fill="none" stroke-width="0.8" stroke-dasharray="3 3" style="display:none">`)
 	for _, l := range b.Lights {
@@ -130,6 +161,10 @@ func worldChart(b *worldgen.Bundle, c *chartConfig, v view, terrain []byte) []by
 type chartConfig struct {
 	calm, mist, disk float64 // m
 	marks, sites     map[string]string
+	// featureMarks are the kinds of feature's marks, by id; surfaces each
+	// surface's colour, by its index.
+	featureMarks map[string]string
+	surfaces     []color.RGBA
 }
 
 // lightColour is a light's colour on the chart, by its notation's: R or G,

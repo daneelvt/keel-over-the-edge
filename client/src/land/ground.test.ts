@@ -43,6 +43,7 @@ function chunk(n: number, f: (x: number, y: number) => number, surface = 0): Chu
     surface: new Uint8Array(GROUND.chunkHexes).fill(surface),
     shelter: null,
     town: null,
+    features: null,
   };
 }
 

@@ -850,12 +850,101 @@ function prop(b: Builder, s: Style, k: Kind, f: number, d: number): void {
   }
 }
 
+/**
+ * A wall of rubble stone along x from x0 to x1 at depth z, thick t, its top
+ * broken: in steps falling and rising from the heights given at its ends,
+ * by its own numbers, so no two ruins break alike.
+ */
+function brokenWall(
+  b: Builder,
+  stone: Vec3,
+  x0: number,
+  x1: number,
+  z: number,
+  t: number,
+  h0: number,
+  h1: number,
+  seed: number,
+  alongZ = false,
+): void {
+  const pieces = Math.max(2, Math.round(Math.abs(x1 - x0) / 1.6));
+  for (let i = 0; i < pieces; i++) {
+    const a = x0 + ((x1 - x0) * i) / pieces;
+    const c = x0 + ((x1 - x0) * (i + 1)) / pieces;
+    const u = (i + 0.5) / pieces;
+    const jag = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
+    const h = Math.max(0.4, h0 + (h1 - h0) * u - 0.9 * (jag - Math.floor(jag)));
+    const lo = Math.min(a, c);
+    const hi = Math.max(a, c);
+    if (alongZ) {
+      b.box([z - t / 2, 0, lo], [z + t / 2, h, hi], stone, PART.stone);
+    } else {
+      b.box([lo, 0, z - t / 2], [hi, h, z + t / 2], stone, PART.stone);
+    }
+  }
+}
+
+/**
+ * A ruin: a roofless house of a deserted hamlet, its walls broken and a gap
+ * where its door was; a ruined chapel, its nave open to the sky and its
+ * west gable standing to its top with the bellcote's opening; a ruined
+ * beacon, a roofless watch-house beside its iron fire-basket on a post.
+ * Every face is the style's stone: no palette, no glass, nothing lit.
+ */
+function ruin(b: Builder, s: Style, k: Kind, f: number, d: number): void {
+  const stone = hex(s.stoneColour);
+  const iron = hex(s.ironColour);
+  const t = 0.5;
+  const hf = f / 2;
+  const hd = d / 2;
+  switch (k.stands) {
+    case 'hamlet': {
+      const h = k.top ?? STOREY;
+      // The front, either side of the door's gap; the back; the gable ends.
+      brokenWall(b, stone, -hf, -0.6, -hd, t, h * 0.8, h * 0.5, 1);
+      brokenWall(b, stone, 0.6, hf, -hd, t, h * 0.4, h * 0.7, 2);
+      brokenWall(b, stone, -hf, hf, hd, t, h * 0.6, h * 0.9, 3);
+      brokenWall(b, stone, -hd, hd, -hf, t, h, h * 0.6, 4, true);
+      brokenWall(b, stone, -hd, hd, hf, t, h * 0.5, h + 0.8, 5, true);
+      return;
+    }
+    case 'chapel': {
+      const top = k.top ?? 9;
+      brokenWall(b, stone, -hd, hd, -hf, t, 3.2, 2.2, 6, true);
+      brokenWall(b, stone, -hd, hd, hf, t, 2.6, 3.4, 7, true);
+      brokenWall(b, stone, -hf, hf, hd, t, 3, 1.8, 8);
+      // The west gable, whole to its apex, a door below and the bellcote's
+      // opening at its top.
+      b.box([-hf, 0, -hd - t / 2], [-0.8, top - 2, -hd + t / 2], stone, PART.stone);
+      b.box([0.8, 0, -hd - t / 2], [hf, top - 2, -hd + t / 2], stone, PART.stone);
+      b.box([-0.8, 2.6, -hd - t / 2], [0.8, top - 2, -hd + t / 2], stone, PART.stone);
+      b.box([-0.9, top - 2, -hd - t / 2], [-0.3, top, -hd + t / 2], stone, PART.stone);
+      b.box([0.3, top - 2, -hd - t / 2], [0.9, top, -hd + t / 2], stone, PART.stone);
+      b.box([-0.9, top - 0.3, -hd - t / 2], [0.9, top, -hd + t / 2], stone, PART.stone);
+      return;
+    }
+    case 'beacon': {
+      const top = k.top ?? 7;
+      brokenWall(b, stone, -hf, hf, -hd, t, 2.2, 1.4, 9);
+      brokenWall(b, stone, -hf, hf, hd, t, 1.6, 2.4, 10);
+      brokenWall(b, stone, -hd, hd, -hf, t, 2.4, 1.2, 11, true);
+      // The fire-basket on its post, at the watch-house's seaward corner.
+      b.box([hf + 0.5, 0, -hd - 0.1], [hf + 0.7, top - 0.9, -hd + 0.1], iron, PART.iron);
+      b.prism(hf + 0.6, -hd, top - 0.9, top, 0.3, 0.6, 6, iron, PART.iron);
+      return;
+    }
+  }
+}
+
 /** Builds a kind's model at the middle of its sizes. */
 function build(s: Style, k: Kind): { node: NodeDef; triangles: number } {
   const b = new Builder();
   const f = (k.frontage[0] + k.frontage[1]) / 2;
   const d = (k.depth[0] + k.depth[1]) / 2;
-  if (k.prop === true) {
+  if (k.prop === true && k.stands === 'hamlet') {
+    // A hamlet's well, dry: its stone ring, its frame long gone.
+    b.prism(0, 0, 0, 0.7, f / 2, f / 2, 8, hex(s.stoneColour), PART.stone);
+  } else if (k.prop === true) {
     prop(b, s, k, f, d);
   } else {
     switch (k.stands) {
@@ -875,6 +964,11 @@ function build(s: Style, k: Kind): { node: NodeDef; triangles: number } {
         break;
       case 'slip':
         slip(b, s, k, f, d);
+        break;
+      case 'hamlet':
+      case 'chapel':
+      case 'beacon':
+        ruin(b, s, k, f, d);
         break;
       default:
         house(b, s, k, f, d);

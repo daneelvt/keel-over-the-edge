@@ -9,7 +9,16 @@
 // free camera's eye; and the point clicked. The marks are in Okabe and
 // Ito's colours, distinguishable in colour-blind vision.
 
-import type { Boat, Current, Group, Island, Light, PlacesData, WorldNow } from './api';
+import type {
+  Boat,
+  Current,
+  FeaturesData,
+  Group,
+  Island,
+  Light,
+  PlacesData,
+  WorldNow,
+} from './api';
 import { canvasAngle, HALF, rectOf, toScreen, type View } from './map';
 
 export const COLOURS = {
@@ -39,6 +48,8 @@ export interface Layers {
   start: boolean;
   names: boolean;
   places: boolean;
+  features: boolean;
+  classes: boolean;
   lights: boolean;
   boats: boolean;
 }
@@ -53,6 +64,8 @@ export const LAYER_NAMES: Record<keyof Layers, string> = {
   start: 'Start area',
   names: 'Names',
   places: 'Places',
+  features: 'Features',
+  classes: 'Islands worth seeing',
   lights: 'Lighthouses',
   boats: 'Boats',
 };
@@ -68,6 +81,8 @@ export function allLayers(): Layers {
     start: true,
     names: true,
     places: true,
+    features: true,
+    classes: true,
     lights: true,
     boats: true,
   };
@@ -93,7 +108,12 @@ export interface MapData {
   /** The places and lights, and the light picked, its range drawn. */
   places: PlacesData | null;
   light: number | null;
+  /** The features, and the feature picked. */
+  features: FeaturesData | null;
 }
+
+/** The colours an island's class is ringed in. */
+export const CLASS_COLOURS: Record<string, string> = { A: '#f2c14e', B: '#9fc5e8' };
 
 /** Below this many metres a pixel, an island in view is drawn at the lattice's resolution. */
 export const ISLAND_DETAIL = 1.5;
@@ -322,6 +342,49 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
         ctx.strokeText(p.name, x + 6, y + 3);
         ctx.fillStyle = '#ffffff';
         ctx.fillText(p.name, x + 6, y + 3);
+      }
+    }
+  }
+  if (layers.classes) {
+    // A ring about each island of class A, a fainter one about class B.
+    for (const is of d.islands) {
+      const colour = CLASS_COLOURS[is.class];
+      if (colour === undefined) {
+        continue;
+      }
+      const [x, y] = toScreen(v, is.east, is.north);
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = is.class === 'A' ? 2.5 : 1;
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(is.across / 2 / v.scale + 6, 8), 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+  }
+  if (layers.features && d.features !== null) {
+    const kinds = new Map(d.features.kinds.map((k) => [k.id, k]));
+    for (const f of d.features.features) {
+      const kind = kinds.get(f.kind);
+      const [x, y] = toScreen(v, f.east, f.north);
+      // A triangle, hollow for one not seen from the water.
+      ctx.fillStyle = kind?.mark ?? '#ffffff';
+      ctx.strokeStyle = 'rgb(0 0 0 / 70%)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 4.5);
+      ctx.lineTo(x + 4, y + 3);
+      ctx.lineTo(x - 4, y + 3);
+      ctx.closePath();
+      if (f.seen) {
+        ctx.fill();
+      }
+      ctx.stroke();
+      if (layers.names && v.scale < 2) {
+        const name = kind?.name ?? f.kind;
+        ctx.font = '10px "Alegreya Sans", sans-serif';
+        ctx.lineWidth = 3;
+        ctx.strokeText(name, x + 6, y + 3);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(name, x + 6, y + 3);
       }
     }
   }

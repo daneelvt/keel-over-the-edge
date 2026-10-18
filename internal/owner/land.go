@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"math"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -199,6 +200,14 @@ func islandsList(cfg *Config) []byte {
 		Highest  float64    `json:"highest"`
 		Bounds   [4]float64 `json:"bounds"` // west, south, east, north of its drawing
 		Approach [2]float64 `json:"approach"`
+		// Its scenic quality, by each factor, and its class; its age, if
+		// volcanic; its features' kinds; and the plants that grow on it.
+		Score    float64          `json:"score"`
+		Class    string           `json:"class"`
+		Scenery  worldgen.Scenery `json:"scenery"`
+		Age      string           `json:"age,omitempty"`
+		Features []string         `json:"features"`
+		Flora    []string         `json:"flora"`
 	}
 	type groupJSON struct {
 		Number  int32   `json:"number"`
@@ -221,6 +230,13 @@ func islandsList(cfg *Config) []byte {
 				Number: is.Number, Name: is.Name, Kind: is.Kind, Biome: is.Biome, Size: is.Size, Zone: is.Zone, Group: is.Group,
 				East: round2(is.X), North: round2(is.Y), Across: round2(is.Across), Area: math.Round(is.Area), Highest: round2(is.Highest),
 				Bounds: [4]float64{x0, y0, x1, y1},
+				Score:  is.Score, Class: is.Class, Scenery: is.Scenery, Age: is.Age, Features: []string{},
+				Flora: islandFlora(cfg, b, is),
+			}
+			for _, f := range b.Features {
+				if f.Island == is.Number && !slices.Contains(j.Features, f.Kind) {
+					j.Features = append(j.Features, f.Kind)
+				}
 			}
 			if x, y, ok := approach(b.Ground, is, cfg.Rules.Approach); ok {
 				j.Approach = [2]float64{round2(x), round2(y)}

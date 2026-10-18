@@ -17,6 +17,14 @@
 // context is made and resumed on the first such event, and tried again on
 // every one until it runs. It is suspended while the page is hidden.
 
+import {
+  FEATURE_RECIPES,
+  type FeatureEvent,
+  type FeatureRecipes,
+  type FeaturesInput,
+  featureEvents,
+  roarNow,
+} from './features';
 import type { Scrape } from './ground';
 import {
   bellPartials,
@@ -62,6 +70,8 @@ interface Graph {
   fallsPan: StereoPannerNode;
   lapping: GainNode;
   lappingPan: StereoPannerNode;
+  roar: GainNode;
+  roarPan: StereoPannerNode;
 }
 
 /** A white-noise buffer, from a fixed sequence so every page sounds alike. */
@@ -150,6 +160,16 @@ function build(ctx: AudioContext, r: Recipes): Graph {
   lapping.connect(lappingPan);
   lappingPan.connect(master);
 
+  // A waterfall's roar: a band of noise, panned toward the fall.
+  const roarBand = band('bandpass', FEATURE_RECIPES.waterfall.centre, FEATURE_RECIPES.waterfall.q);
+  const roar = ctx.createGain();
+  roar.gain.value = 0;
+  const roarPan = ctx.createStereoPanner();
+  source.connect(roarBand);
+  roarBand.connect(roar);
+  roar.connect(roarPan);
+  roarPan.connect(master);
+
   source.start();
   flap.start();
   return {
@@ -172,6 +192,8 @@ function build(ctx: AudioContext, r: Recipes): Graph {
     fallsPan,
     lapping,
     lappingPan,
+    roar,
+    roarPan,
   };
 }
 
@@ -304,6 +326,133 @@ export class SoundEngine {
       this.#play(g, e, at + Math.max(0, e.at - x.seconds));
     }
     this.#harbourTo = x.seconds;
+  }
+
+  /** The features' recipes, the world seconds their events are played to, and how many were played (tests). */
+  readonly #features: FeatureRecipes = FEATURE_RECIPES;
+  #featuresTo = Number.NaN;
+  readonly #featuresThrottle = new Throttle(SOUND_INTERVAL);
+  featureEvents = 0;
+
+  /**
+   * Sets the features' voices for the listener now (ms): the nearest
+   * fall's roar, and the blowholes' booms and the colonies' calls due since
+   * the last time, each played once at its world time.
+   */
+  features(now: number, x: FeaturesInput): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || !this.#featuresThrottle.due(now)) {
+      return;
+    }
+    const at = g.ctx.currentTime;
+    const roar = roarNow(this.#features.waterfall, x);
+    g.roar.gain.setTargetAtTime(roar.level, at, GLIDE * 4);
+    g.roarPan.pan.setTargetAtTime(roar.pan, at, GLIDE * 4);
+    if (!(x.seconds - this.#featuresTo < 2) || x.seconds < this.#featuresTo) {
+      this.#featuresTo = x.seconds;
+      return;
+    }
+    for (const e of featureEvents(this.#features, x, this.#featuresTo, x.seconds)) {
+      this.#playFeature(g, e, at + Math.max(0, e.at - x.seconds));
+    }
+    this.#featuresTo = x.seconds;
+  }
+
+  #playFeature(g: Graph, e: FeatureEvent, at: number): void {
+    if (!(e.level > 0)) {
+      return;
+    }
+    this.featureEvents++;
+    const ctx = g.ctx;
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = e.pan;
+    pan.connect(g.master);
+    const nodes: AudioNode[] = [pan];
+    const unit = (k: number): number => {
+      const v = Math.sin(e.seed * 3.7 + k * 1.3) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const between = (r: number[], k: number): number =>
+      (r[0] ?? 0) + unit(k) * ((r[1] ?? 0) - (r[0] ?? 0));
+    if (e.kind === 'boom') {
+      // A thump falling in pitch, and the air's whoosh out of the vent.
+      const c = this.#features.blowhole;
+      const o = ctx.createOscillator();
+      o.frequency.setValueAtTime(c.thump * 1.6, at);
+      o.frequency.exponentialRampToValueAtTime(c.thump, at + c.decay);
+      const v = ctx.createGain();
+      v.gain.setValueAtTime(e.level, at);
+      v.gain.setTargetAtTime(0, at + 0.01, c.decay / 2);
+      const burst = ctx.createBufferSource();
+      burst.buffer = g.noise;
+      const bandp = ctx.createBiquadFilter();
+      bandp.type = 'bandpass';
+      bandp.frequency.value = c.whoosh;
+      bandp.Q.value = c.q;
+      const whoosh = ctx.createGain();
+      whoosh.gain.setValueAtTime(0, at);
+      whoosh.gain.linearRampToValueAtTime(0.7 * e.level, at + 0.08);
+      whoosh.gain.setTargetAtTime(0, at + 0.1, c.decay);
+      o.connect(v);
+      v.connect(pan);
+      burst.connect(bandp);
+      bandp.connect(whoosh);
+      whoosh.connect(pan);
+      const end = at + 5 * c.decay;
+      o.start(at);
+      o.stop(end);
+      burst.start(at, (e.seed % 10) * 0.1);
+      burst.stop(end);
+      nodes.push(o, v, burst, bandp, whoosh);
+    } else {
+      // A call: a rasp, a whistle or a rattle.
+      const c = this.#features.colony;
+      const r = c[e.kind];
+      const pitch = between(r.pitch, 1);
+      const note = between(r.note, 2);
+      const o = ctx.createOscillator();
+      o.type = e.kind === 'whistle' ? 'sine' : 'sawtooth';
+      o.frequency.setValueAtTime(pitch, at);
+      o.frequency.exponentialRampToValueAtTime(
+        pitch * (e.kind === 'harsh' ? 0.75 : 1.1),
+        at + note,
+      );
+      const v = ctx.createGain();
+      v.gain.setValueAtTime(0, at);
+      v.gain.linearRampToValueAtTime(e.level, at + 0.02);
+      v.gain.linearRampToValueAtTime(0, at + note);
+      o.connect(v);
+      if (e.kind === 'rattle') {
+        // Beaten rate times a second.
+        const beat = ctx.createOscillator();
+        beat.type = 'square';
+        beat.frequency.value = (r as typeof c.rattle).rate;
+        const depth = ctx.createGain();
+        depth.gain.value = 0.5;
+        const gate = ctx.createGain();
+        gate.gain.value = 0.5;
+        beat.connect(depth);
+        depth.connect(gate.gain);
+        v.connect(gate);
+        gate.connect(pan);
+        beat.start(at);
+        beat.stop(at + note);
+        nodes.push(beat, depth, gate);
+      } else {
+        v.connect(pan);
+      }
+      o.start(at);
+      o.stop(at + note);
+      nodes.push(o, v);
+    }
+    const first = nodes[1] as AudioScheduledSourceNode | undefined;
+    if (first !== undefined && 'onended' in first) {
+      first.onended = () => {
+        for (const n of nodes) {
+          n.disconnect();
+        }
+      };
+    }
   }
 
   #play(g: Graph, e: HarbourEvent, at: number): void {

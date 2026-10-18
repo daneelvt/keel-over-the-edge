@@ -28,6 +28,8 @@ import { groundWindow, setShoreLook, shelterTexture, shore } from '../ocean/shor
 import { GROUND } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
 import type { FloatingOrigin } from '../render/coords';
+import { Features } from '../render/features';
+import { Flora } from '../render/flora';
 import { domeDrop, horizonDistance } from '../render/materials';
 import { Towns } from '../render/town';
 import { type ChunkMesh, cellHex, chunkCorner, hexCentre } from '../workers/mesh/build';
@@ -121,6 +123,10 @@ export class Land {
   onChunk: ((n: number) => void) | null = null;
   /** The towns on the land held: each chunk's buildings, kept with its mesh. */
   readonly towns: Towns;
+  /** The plants on the land held, kept with its mesh. */
+  readonly flora: Flora;
+  /** The features' parts on the land held: falls, spouts, vents, colonies. */
+  readonly features: Features;
 
   readonly #port: MeshPort;
   readonly #world: World;
@@ -146,6 +152,10 @@ export class Land {
     this.group.name = 'land';
     this.towns = new Towns(world);
     this.group.add(this.towns.root);
+    this.flora = new Flora(world);
+    this.group.add(this.flora.root);
+    this.features = new Features(world);
+    this.group.add(this.features.root, this.features.scene);
     port.onmessage = (ev) => this.#receive(ev.data);
     const look = landLook(world);
     port.postMessage({ type: 'look', look });
@@ -190,6 +200,8 @@ export class Land {
     this.#given.clear();
     this.#grids.clear();
     this.towns.clear();
+    this.flora.clear();
+    this.features.clear();
     this.#version++;
     this.#inFlight = 0;
     this.stats.handed = 0;
@@ -443,6 +455,8 @@ export class Land {
       h.highest = m.mesh.highest;
       this.group.add(h.mesh);
       this.towns.add(m.number, m.grids.town);
+      this.flora.add(m.number, m.plants);
+      this.features.add(m.number, m.grids.features);
     }
     this.onChunk?.(m.number);
   }
@@ -470,6 +484,8 @@ export class Land {
     h.mesh.geometry.dispose();
     h.mesh = null;
     this.towns.drop(h.number);
+    this.flora.drop(h.number);
+    this.features.drop(h.number);
   }
 }
 

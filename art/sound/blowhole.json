@@ -1,0 +1,12 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A blowhole's boom with each spout: the air a wave drives out of the cave, a low thump falling in pitch and a whoosh of noise, louder the higher the sea, whole from seaHeight metres (Kiama, Spouting Horn). A point source heard within reach metres. Frequencies in Hz, times in seconds, levels as gains.",
+  "thump": 55,
+  "decay": 0.7,
+  "whoosh": 900,
+  "q": 1.2,
+  "seaHeight": 2,
+  "near": 20,
+  "reach": 300,
+  "level": 0.6
+}

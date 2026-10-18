@@ -1,0 +1,10 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A waterfall: a band of noise, the roar of a stream falling to the sea, louder the higher it falls, whole from height metres; a point source, its level falling 6 dB each time the distance doubles from near metres, heard within reach metres. Frequencies in Hz, levels as gains.",
+  "centre": 420,
+  "q": 0.6,
+  "height": 15,
+  "near": 15,
+  "reach": 300,
+  "level": 0.45
+}

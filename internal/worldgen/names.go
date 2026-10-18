@@ -42,8 +42,8 @@ type tone struct {
 	phantom bool
 }
 
-// features are the catalog's features, made plain.
-func (c *config) features() []nameFeature {
+// nameFeatures are the features names may need, made plain.
+func (c *config) nameFeatures() []nameFeature {
 	var out []nameFeature
 	for _, f := range c.names.Features {
 		out = append(out, nameFeature{word: f.Word, cliffs: f.Cliffs, peak: f.Peak, twin: f.Twin, twinApart: f.TwinApart,
@@ -54,7 +54,7 @@ func (c *config) features() []nameFeature {
 
 // feature is the first feature that ok accepts, or nil.
 func (c *config) feature(ok func(f *nameFeature) bool) *nameFeature {
-	fs := c.features()
+	fs := c.nameFeatures()
 	for i := range fs {
 		if ok(&fs[i]) {
 			return &fs[i]
@@ -63,10 +63,11 @@ func (c *config) feature(ok func(f *nameFeature) bool) *nameFeature {
 	return nil
 }
 
-// shows lists the features island m shows.
+// shows lists the features island m shows: what its terrain shows, and
+// its features' words.
 func (c *config) shows(m *made) []string {
 	var out []string
-	for _, f := range c.features() {
+	for _, f := range c.nameFeatures() {
 		shown := f.cliffs > 0 && m.cliffs >= f.cliffs ||
 			f.peak > 0 && m.highest >= f.peak ||
 			f.twin > 0 && m.twin ||
@@ -75,6 +76,11 @@ func (c *config) shows(m *made) []string {
 			f.lagoon > 0 && m.reef && m.lagoon >= f.lagoon
 		if shown {
 			out = append(out, f.word)
+		}
+	}
+	for _, w := range c.featureWords(m) {
+		if !slices.Contains(out, w) {
+			out = append(out, w)
 		}
 	}
 	return out

@@ -24,7 +24,7 @@ import "math"
 const DeepWater = -400
 
 // GroundSurfaces is the most kinds of surface the ground has.
-const GroundSurfaces = 16
+const GroundSurfaces = 32
 
 // GroundSlots is how many chunks of the ground a client's module holds: the
 // one its boat is in and the eight about it.

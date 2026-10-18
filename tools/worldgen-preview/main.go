@@ -4,14 +4,17 @@
 // land by height and the sea by depth, coasts, every island's name, the
 // main port, the start area, the calm water's ring, the mist band's and the
 // edge's, the places and the lighthouses with their names and characters,
-// and a scale; and a page around it with the validator's rules, every
-// island, place and light, and layers for the lights' ranges, each sea
-// area's fetch, the land's shelter and the surfaces.
+// the features and the islands worth seeing, and a scale; and a page around
+// it with the validator's rules, every island with its score and class,
+// every feature, place and light, and layers for the lights' ranges, each
+// sea area's fetch, the land's shelter and the surfaces, the flora's
+// communities.
 //
 //	go run ./tools/worldgen-preview -seed S            chart.svg and index.html for seed S
 //	go run ./tools/worldgen-preview -bundle FILE       the same for a bundle keel worldgen -out wrote
 //	go run ./tools/worldgen-preview -seeds N -from S   seeds S to S+N−1 side by side: seeds.html
-//	go run ./tools/worldgen-preview -seed S -island I  island I at the lattice's resolution: island-I.svg
+//	go run ./tools/worldgen-preview -seed S -island I  island I at the lattice's resolution, its roofs
+//	                                                   and features: island-I.svg
 //	go run ./tools/worldgen-preview -seed S -town T    town T at the lattice's resolution, its streets,
 //	                                                   quays, piers and buildings: town-T.svg
 //
@@ -70,9 +73,19 @@ func run(seed uint64, bundle string, seeds int, from uint64, isl, town int, out 
 		disk:  cat.World.Disk.Radius,
 		marks: map[string]string{},
 		sites: map[string]string{},
+
+		featureMarks: map[string]string{},
 	}
 	for _, k := range cat.World.Places.Kinds {
 		cc.marks[string(k.ID)], cc.sites[string(k.ID)] = k.Mark, string(k.Site)
+	}
+	for _, k := range cat.World.Features.Kinds {
+		cc.featureMarks[string(k.ID)] = string(k.Mark)
+	}
+	for _, s := range cat.World.Surfaces {
+		var r, g, bl uint8
+		fmt.Sscanf(string(s.Look.Top), "#%02x%02x%02x", &r, &g, &bl)
+		cc.surfaces = append(cc.surfaces, color.RGBA{r, g, bl, 255})
 	}
 	write := func(name string, data []byte) error {
 		path := filepath.Join(out, name)
@@ -135,8 +148,12 @@ func run(seed uint64, bundle string, seeds int, from uint64, isl, town int, out 
 	}
 	v := worldView(chartScale)
 	terrain := chart.Raster(b.Ground, v, chart.Terrain)
-	surfaces := chart.Raster(b.Ground, v, func(_ float64, s int32) color.RGBA {
-		return chart.SurfaceColours[int(s)%len(chart.SurfaceColours)]
+	// The surfaces in their own colours, land only: the flora's communities.
+	surfaces := chart.Raster(b.Ground, v, func(e float64, s int32) color.RGBA {
+		if e <= 0 || int(s) >= len(cc.surfaces) {
+			return color.RGBA{}
+		}
+		return cc.surfaces[s]
 	})
 	sv := worldView(shelterScale)
 	var shelters [][]byte

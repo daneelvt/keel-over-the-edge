@@ -30,6 +30,10 @@ interface FileChunk {
   format: number;
   buildings: number;
   discs: number;
+  roofs: number;
+  parts: number;
+  firstRoof?: Record<string, number>;
+  firstPart?: Record<string, number>;
   first?: {
     kind: number;
     kit: number;
@@ -71,7 +75,7 @@ const chunkNamed = (name: string): FileChunk => {
 describe('a chunk', () => {
   test('unpacks to the grids Go wrote', async () => {
     expect(CHUNK_FORMAT).toBe(file.format);
-    expect(file.chunks.length).toBe(3);
+    expect(file.chunks.length).toBe(6);
     for (const c of file.chunks) {
       const g = await unpackChunk(payloadOf(c), c.number, world);
       if (typeof g === 'string') {
@@ -87,6 +91,20 @@ describe('a chunk', () => {
         expect(b, c.name).toBeDefined();
         for (const [k, v] of Object.entries(c.first)) {
           expect(b?.[k as keyof typeof b], `${c.name}: ${k}`).toBeCloseTo(v, 9);
+        }
+      }
+      expect(g.features?.roofs.length ?? 0, c.name).toBe(c.roofs);
+      expect(g.features?.parts.length ?? 0, c.name).toBe(c.parts);
+      for (const [want, got] of [
+        [c.firstRoof, g.features?.roofs[0]],
+        [c.firstPart, g.features?.parts[0]],
+      ] as const) {
+        if (want === undefined) {
+          continue;
+        }
+        expect(got, c.name).toBeDefined();
+        for (const [k, v] of Object.entries(want)) {
+          expect(got?.[k as keyof typeof got], `${c.name}: ${k}`).toBeCloseTo(v, 9);
         }
       }
     }
@@ -295,7 +313,27 @@ describe('the land’s mesh', () => {
     top: new Uint8Array(GROUND.surfaces * 3).fill(200),
     side: new Uint8Array(GROUND.surfaces * 3).fill(100),
     deck: -1,
+    flora: { plants: [], cover: [], garden: [] },
   };
+
+  test('hangs a roof from its top to its underside, the sea under it', () => {
+    const e = new Int16Array(GROUND.chunkHexes).fill(-30);
+    const s = new Uint8Array(GROUND.chunkHexes);
+    const n = 7 * GROUND.chunkSide + 8;
+    const [c0, j0] = chunkCorner(n);
+    const bare = buildChunk(n, e, s, look);
+    expect(bare.triangles).toBe(0);
+    const roof = { column: c0 + 40, row: j0 + 40, top: 12, under: 5 };
+    const m = buildChunk(n, e, s, look, () => undefined, [roof]);
+    // Its top, its underside, and its six sides over the water.
+    expect(m.triangles).toBe(4 + 4 + 6 * 2);
+    const ys = new Set<number>();
+    for (let v = 1; v < m.positions.length; v += 3) {
+      ys.add(Math.round((m.positions[v] ?? 0) * 10) / 10);
+    }
+    expect([...ys].sort((a, b) => a - b)).toEqual([5, 12]);
+    expect(m.highest).toBeCloseTo(12, 6);
+  });
 
   test('is a column for each hexagon of land, its sides only toward lower neighbours', () => {
     const e = new Int16Array(GROUND.chunkHexes).fill(-30);
