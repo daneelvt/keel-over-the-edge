@@ -978,13 +978,15 @@ world:
     # 0.10 and the second rises toward 0.83 (Bloomfield 1975); depth is the
     # crater's below its rim, of the cone's height. Each volcanic island's
     # age is drawn by the weights; a young one has fumaroles, steaming, with
-    # sulphur m about each vent.
+    # sulphur m about each vent, each vent's plume rising up to plume of its
+    # crater's width: the bigger the crater, the bigger its steam.
     cone:
       fresh: { height: 0.18, crater: 0.4, depth: 0.3 }
       old: { height: 0.1, crater: 0.83, depth: 0.1 }
       ages: { young: 1, middle: 1.5, old: 1 }
       fumaroles: [1, 4]
       sulphur: 8 # m
+      plume: 0.25
     # Ruins: count a world, on islands of the sizes given with no town,
     # apart m from each other; a deserted hamlet's houses; a beacon within
     # beacon m of the coast.

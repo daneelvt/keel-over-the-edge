@@ -3137,7 +3137,7 @@
           "description": "A volcanic island's cone, by its age.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["fresh", "old", "ages", "fumaroles", "sulphur"],
+          "required": ["fresh", "old", "ages", "fumaroles", "sulphur", "plume"],
           "properties": {
             "fresh": { "$ref": "#/$defs/ConeShape" },
             "old": { "$ref": "#/$defs/ConeShape" },
@@ -3154,7 +3154,8 @@
               }
             },
             "fumaroles": { "description": "How many fumaroles a young cone has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 16 } },
-            "sulphur": { "description": "Sulphur lies this far about a vent, in m.", "type": "number", "minimum": 0, "maximum": 100 }
+            "sulphur": { "description": "Sulphur lies this far about a vent, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+            "plume": { "description": "A vent's plume rises up to this share of its crater's width.", "type": "number", "exclusiveMinimum": 0, "maximum": 2 }
           }
         },
         "ruins": {

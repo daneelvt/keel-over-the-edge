@@ -191,8 +191,8 @@ class Plant {
 
   /**
    * A far tree: a ring of five corners of radius r at ringY, an apex above
-   * at topY, and below a dark spindle to the ground, which reads as its
-   * trunk and its shade: ten faces.
+   * at topY and a shallow one below, and under the crown a thin dark
+   * three-sided spindle to the ground for its trunk: thirteen faces.
    */
   farCrown(ringY: number, topY: number, r: number, leaf: Vec3, trunk: Vec3): void {
     const ring: Vec3[] = [];
@@ -200,14 +200,23 @@ class Plant {
       const a = (k / 5) * 2 * Math.PI;
       ring.push([r * Math.sin(a), ringY, r * Math.cos(a)]);
     }
+    const under = Math.max(ringY - (topY - ringY) * 0.5, ringY * 0.6);
     const centre: Vec3 = [0, ringY, 0];
     for (let k = 0; k < 5; k++) {
       const a = ring[k] as Vec3;
       const b = ring[(k + 1) % 5] as Vec3;
       this.tri(a, b, [0, topY, 0], shade(leaf, 0.95 + 0.1 * Math.cos(k)), true, centre);
-      this.tri(a, b, [0, 0, 0], shade(leaf, 0.55), false, centre);
+      this.tri(a, b, [0, under, 0], shade(leaf, 0.6), true, centre);
     }
-    void trunk;
+    const t = Math.max(r * 0.1, 0.2);
+    const foot: Vec3[] = [0, 1, 2].map((k) => {
+      const a = (k / 3) * 2 * Math.PI;
+      return [t * Math.sin(a), 0, t * Math.cos(a)] as Vec3;
+    });
+    const axis: Vec3 = [0, under / 2, 0];
+    for (let k = 0; k < 3; k++) {
+      this.tri(foot[k] as Vec3, foot[(k + 1) % 3] as Vec3, [0, under, 0], trunk, false, axis);
+    }
   }
 
   /** A cone of n sides over a ring of radius r at y0 to its point at y1, about (x, z). */

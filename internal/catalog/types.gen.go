@@ -514,6 +514,9 @@ type FeatureCone struct {
 	// Old corresponds to the JSON schema field "old".
 	Old ConeShape `json:"old"`
 
+	// A vent's plume rises up to this share of its crater's width.
+	Plume float64 `json:"plume"`
+
 	// Sulphur lies this far about a vent, in m.
 	Sulphur float64 `json:"sulphur"`
 }
@@ -3128,4 +3131,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "6b5b63b8fb479693"
+const Version = "6296ddce9014d261"

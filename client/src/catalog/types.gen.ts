@@ -4142,6 +4142,10 @@ export interface FeatureCone {
    * Sulphur lies this far about a vent, in m.
    */
   sulphur: number;
+  /**
+   * A vent's plume rises up to this share of its crater's width.
+   */
+  plume: number;
 }
 /**
  * A cinder cone's shape, as shares of its base's width.
@@ -4551,4 +4555,4 @@ export interface ScoreCultural {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '6b5b63b8fb479693';
+export const CATALOG_VERSION = '6296ddce9014d261';

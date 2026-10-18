@@ -58,7 +58,7 @@ import { spoutOffset } from '../audio/features';
 import type { FeatureKind, World } from '../catalog/types.gen';
 import type { ChunkFeatures, ChunkPart } from '../workers/mesh/chunk';
 import { headingToRotationY } from './coords';
-import { basicMaterial, bendScene, horizonDistance, litMaterial } from './materials';
+import { basicMaterial, bendScene, horizonDistance } from './materials';
 import { type Chimney, Smoke } from './smoke';
 
 /** A fully developed sea's peak period, s, for waves of significant height h, m (Pierson and Moskowitz 1964). */
@@ -135,6 +135,9 @@ const COLS = 2;
 /** The features drawn within this of the camera, m. */
 const REACH = 2500;
 
+/** How high the steam's own numbers make a plume, m: a vent's part's size is how high its own rises. */
+const STEAM_PLUME = 24;
+
 /** A part, with its feature's kind. */
 interface Held {
   part: ChunkPart;
@@ -173,16 +176,23 @@ export class Features {
     this.root.name = 'features';
     this.scene.name = 'features in the scene';
     const smoke = world.towns.smoke;
-    this.steam = new Smoke({
-      ...smoke,
-      day: 1,
-      night: 1,
-      rise: world.features.look.steam,
-      life: 12,
-      puffs: 8,
-      size: [1.5, 7],
-      reach: REACH,
-    });
+    this.steam = new Smoke(
+      {
+        ...smoke,
+        day: 1,
+        night: 1,
+        rise: world.features.look.steam,
+        // A vent's plume, white over the dark rock and far more buoyant than
+        // a cottage's smoke: these numbers make one STEAM_PLUME m high, in a
+        // calm or a breeze, and each vent's is grown to its own height.
+        buoyancy: 6,
+        life: 20,
+        puffs: 18,
+        size: [6, 28],
+        reach: REACH,
+      },
+      { colour: [0.96, 0.96, 0.94], strength: 1 },
+    );
     this.steam.mesh.name = 'steam';
     this.scene.add(this.steam.mesh);
     [this.#falls, this.#fallData] = this.#makeFalls();
@@ -452,7 +462,8 @@ export class Features {
     for (const { part: p, kind } of this.held()) {
       parts++;
       const d = Math.hypot(p.east - f.cameraEast, p.north - f.cameraNorth);
-      if (d > REACH || d > sight + horizonDistance(Math.max(p.level, 0) + 40) + 50) {
+      const above = kind.site === 'fumarole' ? p.size : 40;
+      if (d > REACH || d > sight + horizonDistance(Math.max(p.level, 0) + above) + 50) {
         continue;
       }
       const own = (x: number): number => {
@@ -511,6 +522,7 @@ export class Features {
             speed: f.windSpeed,
             from: f.windFrom,
             seed: p.seed,
+            scale: p.size / STEAM_PLUME,
           });
           break;
         case 'colony': {

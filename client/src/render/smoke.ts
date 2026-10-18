@@ -47,6 +47,8 @@ export interface Chimney {
   speed: number;
   from: number;
   seed: number;
+  /** How much bigger than the catalog's its plume is, all of it alike: 1 if not given. */
+  scale?: number;
 }
 
 /** A puff's place, m downwind, across and up from its pot, its width, m, and how thick it is still, 0 to 1. */
@@ -90,7 +92,14 @@ export class Smoke {
   count = 0;
   readonly #cat: TownSmoke;
 
-  constructor(cat: TownSmoke) {
+  /** Its puffs' colour, and how opaque a fresh puff's middle is: a chimney's grey smoke by default. */
+  constructor(
+    cat: TownSmoke,
+    look: { colour: [number, number, number]; strength: number } = {
+      colour: [0.78, 0.77, 0.75],
+      strength: 0.85,
+    },
+  ) {
     this.#cat = cat;
     const corners = new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]);
     const g = new BufferGeometry();
@@ -123,8 +132,10 @@ export class Smoke {
     const r2 = dot(vCorner, vCorner);
     const soft = exp(r2.mul(-3)).sub(0.05).max(0);
     m.fragmentNode = vec4(
-      vec3(0.78, 0.77, 0.75).mul(this.light).mul(vShade.y),
-      soft.mul(vShade.x).mul(0.85),
+      vec3(...look.colour)
+        .mul(this.light)
+        .mul(vShade.y),
+      soft.mul(vShade.x).mul(look.strength),
     ) as unknown as Node<'vec4'>;
     this.mesh = new InstancedMesh(g, m, PUFF_CAPACITY);
     this.mesh.name = 'smoke';
@@ -154,11 +165,12 @@ export class Smoke {
         const cycle = time / c.life + k / c.puffs + ch.seed * 0.6180339;
         const age = (cycle - Math.floor(cycle)) * c.life;
         const p = puffAt(age, ch.speed, c);
+        const s = ch.scale ?? 1;
         const i = n * 4;
-        place[i] = ch.east + dx * p.down - origin.x;
-        place[i + 1] = ch.top + p.up;
-        place[i + 2] = -(ch.north + dy * p.down - origin.y);
-        place[i + 3] = p.width;
+        place[i] = ch.east + dx * p.down * s - origin.x;
+        place[i + 1] = ch.top + p.up * s;
+        place[i + 2] = -(ch.north + dy * p.down * s - origin.y);
+        place[i + 3] = p.width * s;
         shade[i] = p.thick;
         shade[i + 1] = 1 - 0.15 * (age / c.life);
         n++;

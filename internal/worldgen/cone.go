@@ -123,10 +123,6 @@ func (c *config) coneTop(radius, height, crater float64) float64 {
 	return min(float64(height*2*radius), c.land[1], float64(repose*float64((1-crater)*radius)))
 }
 
-// fumaroleSteam is how high a fumarole's steam is seen over its vent or
-// its crater's rim, m.
-const fumaroleSteam = 15
-
 // fumarolesOf records island m's crater and, while it is young, its
 // fumaroles: vents on its crater's floor and rim, apart from each other,
 // with sulphur about each.
@@ -187,15 +183,20 @@ func (c *config) fumarolesOf(s stream, m *made, w *work) {
 		return
 	}
 	f := m.addFeature(fk, vents[0], 0, float64(len(vents)), w.height[vents[0]])
-	// Its steam is seen over the rim.
-	f.seen = max(w.height[vents[0]], rim) + fumaroleSteam
+	// Each vent's size is how high its plume rises, from its crater's width;
+	// the upper half of the tallest is seen over the rim.
+	plume := float64(float64(cf.Plume*crater) * float64(2*m.radius))
+	tallest := 0.0
 	for _, v := range vents {
 		x, y := g.centre(v)
-		f.parts = append(f.parts, Part{X: x, Y: y, Level: w.height[v], Size: s.in(1.5, 4), Seed: uint8(s.r.IntN(256))})
+		p := float64(plume * s.in(0.6, 1))
+		tallest = max(tallest, p)
+		f.parts = append(f.parts, Part{X: x, Y: y, Level: w.height[v], Size: p, Seed: uint8(s.r.IntN(256))})
 		for i := range total {
 			if ix, iy := g.centre(i); w.own(i) && hypot(ix-x, iy-y) <= cf.Sulphur {
 				m.sulphur = append(m.sulphur, i)
 			}
 		}
 	}
+	f.seen = max(w.height[vents[0]], rim) + float64(tallest/2)
 }
