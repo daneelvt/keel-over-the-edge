@@ -27,7 +27,7 @@ func TestHarbours(t *testing.T) {
 	var widths, cliffs []float64
 	for seed := uint64(1); seed <= seeds; seed++ {
 		spots, _ := layout(c, seed)
-		m := c.makeIsland(seed, 0, spots[0], new(work))
+		m := c.makeIsland(seed, 0, spots[0], new(work), spots)
 		h := m.harbour
 		if h == nil {
 			t.Errorf("seed %d: no harbour", seed)
@@ -73,9 +73,9 @@ func TestHarbours(t *testing.T) {
 func TestHarbourStreamIsItsOwn(t *testing.T) {
 	c := testConfig(t)
 	spots, _ := layout(c, 1)
-	a := c.makeIsland(1, 3, spots[3], new(work))
+	a := c.makeIsland(1, 3, spots[3], new(work), spots)
 	c.port.harbour.Tries = 3
-	b := c.makeIsland(1, 3, spots[3], new(work))
+	b := c.makeIsland(1, 3, spots[3], new(work), spots)
 	if !slices.Equal(a.grid.elev, b.grid.elev) {
 		t.Error("a change to the harbour's draws changed another island")
 	}

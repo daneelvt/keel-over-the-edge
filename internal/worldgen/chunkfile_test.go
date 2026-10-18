@@ -17,11 +17,13 @@ import (
 
 // The chunks as Go writes them, for the client's mesh worker to read
 // (client/src/workers/mesh/chunk.test.ts): testdata/chunks.json holds a
-// made chunk, the same chunk as format 1 wrote it, and seed 1's chunk that
-// holds the most of Port Royal's town, as payloads of one world, and the SHA-256 of
-// the elevations (int16s, little-endian), the surfaces and the shelter's
-// whole table each should unpack to, with the town's counts and its first
-// building. After a deliberate change, rewrite it with
+// made chunk, the same chunk as formats 1 and 2 wrote it, the made chunk
+// with roofs and parts, seed 1's chunk that holds the most of Port Royal's
+// town and its chunk with the most roofs, as payloads of one world, and
+// the SHA-256 of the elevations (int16s, little-endian), the surfaces and
+// the shelter's whole table each should unpack to, with the town's and the
+// features' counts and their first building, roof and part. After a
+// deliberate change, rewrite it with
 //
 //	go test ./internal/worldgen -run ChunkFile -update
 
@@ -50,6 +52,33 @@ type chunkFileChunk struct {
 	Buildings int           `json:"buildings"`
 	Discs     int           `json:"discs"`
 	First     *fileBuilding `json:"first,omitempty"`
+	// Roofs and Parts are what it holds of the features, with its first of
+	// each.
+	Roofs     int       `json:"roofs"`
+	Parts     int       `json:"parts"`
+	FirstRoof *fileRoof `json:"firstRoof,omitempty"`
+	FirstPart *filePart `json:"firstPart,omitempty"`
+}
+
+// fileRoof is a roof as the page should read it: its hexagon's column and
+// row on the grid, and its top and underside, m.
+type fileRoof struct {
+	Column int32   `json:"column"`
+	Row    int32   `json:"row"`
+	Top    float64 `json:"top"`
+	Under  float64 `json:"under"`
+}
+
+// filePart is a feature's part as the page should read it.
+type filePart struct {
+	Kind    uint8   `json:"kind"`
+	East    float64 `json:"east"`
+	North   float64 `json:"north"`
+	Level   float64 `json:"level"`
+	Heading float64 `json:"heading"`
+	Size    float64 `json:"size"`
+	Count   uint16  `json:"count"`
+	Seed    uint8   `json:"seed"`
 }
 
 // fileBuilding is a building as the page should read it.
@@ -115,14 +144,40 @@ func fileChunk(name string, n int32, g *physics.GroundChunk, s *physics.ShelterC
 		if err != nil {
 			return chunkFileChunk{}, err
 		}
-		c.Buildings, c.Discs = len(read.Buildings), len(read.Harbour)
-		if len(read.Buildings) > 0 {
-			b := read.Buildings[0]
-			c.First = &fileBuilding{Kind: b.Kind, Kit: b.Kit, East: b.X, North: b.Y, Heading: b.Heading,
-				Level: float64(b.Level) / 10, Top: b.Top, Storeys: b.Storeys, Seed: b.Seed, Frontage: b.Frontage, Depth: b.Depth, Town: b.Town}
+		if read != nil {
+			c.Buildings, c.Discs, c.Roofs, c.Parts = len(read.Buildings), len(read.Harbour), len(read.Roofs), len(read.Parts)
+			if len(read.Buildings) > 0 {
+				b := read.Buildings[0]
+				c.First = &fileBuilding{Kind: b.Kind, Kit: b.Kit, East: b.X, North: b.Y, Heading: b.Heading,
+					Level: float64(b.Level) / 10, Top: b.Top, Storeys: b.Storeys, Seed: b.Seed, Frontage: b.Frontage, Depth: b.Depth, Town: b.Town}
+			}
+			if len(read.Roofs) > 0 {
+				r := read.Roofs[0]
+				c.FirstRoof = &fileRoof{Column: r.C, Row: r.J, Top: float64(r.Top) / 10, Under: float64(r.Under) / 10}
+			}
+			if len(read.Parts) > 0 {
+				p := read.Parts[0]
+				c.FirstPart = &filePart{Kind: p.Kind, East: p.X, North: p.Y, Level: p.Level, Heading: p.Heading, Size: p.Size, Count: p.Count, Seed: p.Seed}
+			}
 		}
 	}
 	return c, nil
+}
+
+// madeFeatures are roofs over a few of the made chunk's hexagons, and a
+// part of each kind of feature in it.
+func madeFeatures(n int32) *ChunkTown {
+	c0, j0 := physics.ChunkCorner(n)
+	t := &ChunkTown{}
+	for k := range int32(5) {
+		t.Roofs = append(t.Roofs, Roof{C: c0 + 40 + k, J: j0 + 60, Top: int16(120 + 10*k), Under: int16(50 + 5*k)})
+	}
+	x, y := physics.CellCentre(c0+100, j0+100)
+	for k := range uint8(4) {
+		t.Parts = append(t.Parts, Part{Kind: 2 * k, X: x + float64(k)*3.5, Y: y - float64(k)*1.5, Level: 8.5 + float64(k),
+			Heading: float64(k) * 1.25, Size: 2.5 + float64(k), Count: uint16(20 + 7*k), Seed: 31 * k})
+	}
+	return t
 }
 
 func TestChunkFile(t *testing.T) {
@@ -150,11 +205,23 @@ func TestChunkFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got.Chunks = append(got.Chunks, made, old)
+	two, err := fileChunk("made, format 2", n, g, s, &ChunkTown{}, 2, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	featured, err := fileChunk("made, with features", n, g, s, madeFeatures(n), Format, Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Chunks = append(got.Chunks, made, old, two, featured)
 	if testing.Short() && !*update {
-		if len(want.Chunks) < 2 || want.Chunks[0].Payload != made.Payload ||
-			want.Chunks[1].Payload != old.Payload || want.Format != Format {
-			t.Fatal("the made chunk differs from chunks.json: rewrite it with -update")
+		if len(want.Chunks) < 4 || want.Format != Format {
+			t.Fatal("the made chunks differ from chunks.json: rewrite it with -update")
+		}
+		for i := range 4 {
+			if want.Chunks[i].Payload != got.Chunks[i].Payload {
+				t.Fatalf("%s differs from chunks.json: rewrite it with -update", got.Chunks[i].Name)
+			}
 		}
 		return
 	}
@@ -171,7 +238,18 @@ func TestChunkFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got.Chunks = append(got.Chunks, port)
+	// The chunk with the most roofs.
+	at, most = 0, -1
+	for n, t := range towns {
+		if t != nil && len(t.Roofs) > most {
+			at, most = int32(n), len(t.Roofs)
+		}
+	}
+	arches, err := fileChunk("seed 1, its arches'", at, w.Ground.Chunks[at], w.Shelter.Chunks[at], towns[at], Format, Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Chunks = append(got.Chunks, port, arches)
 	if *update {
 		data, err := json.MarshalIndent(got, "", " ")
 		if err != nil {
@@ -187,7 +265,7 @@ func TestChunkFile(t *testing.T) {
 	}
 	for i := range got.Chunks {
 		g, w := got.Chunks[i], want.Chunks[i]
-		if g.Payload != w.Payload || g.Buildings != w.Buildings || g.Discs != w.Discs {
+		if g.Payload != w.Payload || g.Buildings != w.Buildings || g.Discs != w.Discs || g.Roofs != w.Roofs || g.Parts != w.Parts {
 			t.Errorf("%s differs from chunks.json: rewrite it with -update", got.Chunks[i].Name)
 		}
 	}

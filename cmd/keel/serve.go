@@ -397,9 +397,10 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		terrain = bundle.Terrain(cat.PrepareGround())
 		terrainDigest = bundle.Digest
 		chunks = api.NewChunks(sailed.ID, held.key, held.payloads)
-		// A town's buildings stand over the horizon as land as high would.
+		// A town's buildings, an arch's span and a wood's canopy stand over
+		// the horizon as land as high would.
 		var tops []edge.Top
-		for _, t := range bundle.Tops() {
+		for _, t := range bundle.Tops(cat) {
 			tops = append(tops, edge.Top{X: t[0], Y: t[1], Height: t[2]})
 		}
 		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat)).WithTops(tops)

@@ -40,6 +40,9 @@ type world struct {
 	lightWork []*lightWork
 	towns     []Town
 	buildings []Building
+	// records are the bundle's records as made: its islands' scores, its
+	// features.
+	records *Bundle
 }
 
 // validate runs every rule over a world.
@@ -156,6 +159,9 @@ func (c *config) validate(w *world) []Rule {
 	if w.pw != nil {
 		rules = append(rules, c.placeRules(w)...)
 		rules = append(rules, c.townRules(w)...)
+	}
+	if w.records != nil {
+		rules = append(rules, c.featureRules(w)...)
 	}
 	return rules
 }

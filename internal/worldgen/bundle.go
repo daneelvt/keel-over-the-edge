@@ -27,8 +27,10 @@ import (
 // surfaces; and the shelter: a bitmap of the cells with a table, and their
 // tables. From format 2, its towns: the buildings and props whose middles
 // are in it, chunkBuilding bytes each, and the discs of harbour water whose
-// centres are; so a town travels with the land it stands on. Format 1, a
-// chunk with no town, is still read.
+// centres are; so a town travels with the land it stands on. From format
+// 3, its features: the roofs over its hexagons, chunkRoof bytes each, and
+// the parts of features that stand in it, chunkPart bytes each. Formats 1
+// and 2, chunks with no town and no feature, are still read.
 
 // chunkMagic begins every chunk's payload.
 var chunkMagic = [4]byte{'K', 'W', 'C', 'H'}
@@ -38,9 +40,10 @@ const chunkHeader = 4 + 2 + 2 + 4 + 16 + 1
 
 // What a payload holds, in the header's last byte.
 const (
-	holdsGround  = 1
-	holdsShelter = 2
-	holdsTown    = 4
+	holdsGround   = 1
+	holdsShelter  = 2
+	holdsTown     = 4
+	holdsFeatures = 8
 )
 
 // chunkBuilding is a building's bytes in a payload: its kind and kit; its
@@ -55,13 +58,30 @@ const chunkBuilding = 1 + 1 + 4 + 4 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1
 // radius, dm.
 const chunkDisc = 4 + 4 + 2
 
-// ChunkTown is what a chunk holds of the towns: the buildings and props
-// whose middles are in it, and the discs of harbour water whose centres
-// are.
+// chunkRoof is a roof's bytes: its hexagon's index in the chunk, and its
+// top and underside, dm.
+const chunkRoof = 4 + 2 + 2
+
+// chunkPart is a feature's part's bytes: its feature's kind; its middle,
+// dm east and north of the world's centre; its level, dm; its heading, in
+// 256ths of a turn; its size, dm; its count; and a number of its own.
+const chunkPart = 1 + 4 + 4 + 2 + 1 + 2 + 2 + 1
+
+// ChunkTown is what a chunk holds on its land besides its ground: the
+// towns' buildings and props whose middles are in it, the discs of harbour
+// water whose centres are, the roofs over its hexagons and the features'
+// parts that stand in it.
 type ChunkTown struct {
 	Buildings []Building
 	Harbour   []Disc
+	Roofs     []Roof
+	Parts     []Part
 }
+
+// hasTown reports whether it holds anything of a town, and hasFeatures
+// anything of a feature.
+func (t *ChunkTown) hasTown() bool     { return t != nil && (len(t.Buildings) > 0 || len(t.Harbour) > 0) }
+func (t *ChunkTown) hasFeatures() bool { return t != nil && (len(t.Roofs) > 0 || len(t.Parts) > 0) }
 
 // chunkOfPoint is the chunk that holds (x, y).
 func chunkOfPoint(x, y float64) int32 {
@@ -89,7 +109,89 @@ func (b *Bundle) ChunkTowns() []*ChunkTown {
 			t.Harbour = append(t.Harbour, d)
 		}
 	}
+	for _, r := range b.Roofs {
+		if n, _, ok := physics.ChunkOf(r.C, r.J); ok {
+			t := at(n)
+			t.Roofs = append(t.Roofs, r)
+		}
+	}
+	for _, p := range b.Parts {
+		t := at(chunkOfPoint(p.X, p.Y))
+		t.Parts = append(t.Parts, p)
+	}
 	return out
+}
+
+// appendFeatures appends a chunk's features' bytes: its roofs, then its
+// parts.
+func appendFeatures(out []byte, n int32, t *ChunkTown) []byte {
+	c0, j0 := physics.ChunkCorner(n)
+	out = binary.LittleEndian.AppendUint16(out, uint16(len(t.Roofs)))
+	for _, r := range t.Roofs {
+		out = binary.LittleEndian.AppendUint32(out, uint32((r.C-c0)*physics.ChunkRows+(r.J-j0)))
+		out = binary.LittleEndian.AppendUint16(out, uint16(r.Top))
+		out = binary.LittleEndian.AppendUint16(out, uint16(r.Under))
+	}
+	out = binary.LittleEndian.AppendUint16(out, uint16(len(t.Parts)))
+	for _, p := range t.Parts {
+		turn := float64(2 * math.Pi)
+		out = append(out, p.Kind)
+		out = binary.LittleEndian.AppendUint32(out, uint32(dm(p.X)))
+		out = binary.LittleEndian.AppendUint32(out, uint32(dm(p.Y)))
+		out = binary.LittleEndian.AppendUint16(out, uint16(int16(dm(p.Level))))
+		out = append(out, uint8(round(float64(p.Heading/turn)*256)&255))
+		out = binary.LittleEndian.AppendUint16(out, uint16(min(max(dm(p.Size), 0), 65535)))
+		out = binary.LittleEndian.AppendUint16(out, p.Count)
+		out = append(out, p.Seed)
+	}
+	return out
+}
+
+// readFeatures reads a chunk's features' bytes into t, and returns what is
+// left.
+func readFeatures(body []byte, n int32, t *ChunkTown) ([]byte, error) {
+	c0, j0 := physics.ChunkCorner(n)
+	if len(body) < 2 {
+		return nil, errors.New("its roofs are cut short")
+	}
+	k := int(binary.LittleEndian.Uint16(body))
+	body = body[2:]
+	if len(body) < k*chunkRoof {
+		return nil, errors.New("its roofs are cut short")
+	}
+	for range k {
+		p := body[:chunkRoof]
+		body = body[chunkRoof:]
+		i := int32(binary.LittleEndian.Uint32(p))
+		if i < 0 || i >= physics.ChunkHexes {
+			return nil, errors.New("a roof off the chunk")
+		}
+		t.Roofs = append(t.Roofs, Roof{C: c0 + i/physics.ChunkRows, J: j0 + i%physics.ChunkRows,
+			Top: int16(binary.LittleEndian.Uint16(p[4:])), Under: int16(binary.LittleEndian.Uint16(p[6:]))})
+	}
+	if len(body) < 2 {
+		return nil, errors.New("its parts are cut short")
+	}
+	k = int(binary.LittleEndian.Uint16(body))
+	body = body[2:]
+	if len(body) < k*chunkPart {
+		return nil, errors.New("its parts are cut short")
+	}
+	for range k {
+		p := body[:chunkPart]
+		body = body[chunkPart:]
+		t.Parts = append(t.Parts, Part{
+			Kind:    p[0],
+			X:       float64(int32(binary.LittleEndian.Uint32(p[1:]))) / 10,
+			Y:       float64(int32(binary.LittleEndian.Uint32(p[5:]))) / 10,
+			Level:   float64(int16(binary.LittleEndian.Uint16(p[9:]))) / 10,
+			Heading: float64(float64(p[11]) * (2 * math.Pi / 256)),
+			Size:    float64(binary.LittleEndian.Uint16(p[12:])) / 10,
+			Count:   binary.LittleEndian.Uint16(p[14:]),
+			Seed:    p[16],
+		})
+	}
+	return body, nil
 }
 
 // dm is a length, m, in whole decimetres.
@@ -182,11 +284,13 @@ func EncodeChunkTown(n int32, world [16]byte, g *physics.GroundChunk, s *physics
 }
 
 // encodeChunk is chunk n's payload in the format given, of the generator
-// given; a format 1 payload holds no town.
+// given; a format 1 payload holds no town, and one of format 2 no feature.
 func encodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.ShelterChunk, t *ChunkTown, format uint16, generator uint32) ([]byte, error) {
 	if format < 2 {
 		t = nil
 	}
+	town := t != nil && (format < 3 || t.hasTown())
+	features := format >= 3 && t.hasFeatures()
 	var raw bytes.Buffer
 	var head [chunkHeader]byte
 	copy(head[:4], chunkMagic[:])
@@ -200,8 +304,11 @@ func encodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.She
 	if s != nil {
 		head[28] |= holdsShelter
 	}
-	if t != nil {
+	if town {
 		head[28] |= holdsTown
+	}
+	if features {
+		head[28] |= holdsFeatures
 	}
 	raw.Write(head[:])
 	if g != nil {
@@ -228,8 +335,11 @@ func encodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.She
 			}
 		}
 	}
-	if t != nil {
+	if town {
 		raw.Write(appendTown(nil, t))
+	}
+	if features {
+		raw.Write(appendFeatures(nil, n, t))
 	}
 	var out bytes.Buffer
 	zw, err := gzip.NewWriterLevel(&out, 6)
@@ -328,6 +438,14 @@ func DecodeChunkOf(payload []byte, n int32, world [16]byte, generator int) (*phy
 			return nil, nil, nil, fmt.Errorf("worldgen: chunk %d: %w", n, err)
 		}
 	}
+	if holds&holdsFeatures != 0 && format >= 3 {
+		if t == nil {
+			t = &ChunkTown{}
+		}
+		if body, err = readFeatures(body, n, t); err != nil {
+			return nil, nil, nil, fmt.Errorf("worldgen: chunk %d: %w", n, err)
+		}
+	}
 	if len(body) != 0 {
 		return nil, nil, nil, fmt.Errorf("worldgen: chunk %d has %d bytes too many", n, len(body))
 	}
@@ -381,6 +499,8 @@ func Load(records, report []byte, chunks [][]byte, world [16]byte, digest []byte
 		b.Ground.Chunks[n], b.Shelter.Chunks[n] = g, s
 		if t != nil {
 			b.Buildings = append(b.Buildings, t.Buildings...)
+			b.Roofs = append(b.Roofs, t.Roofs...)
+			b.Parts = append(b.Parts, t.Parts...)
 		}
 	}
 	slices.SortStableFunc(b.Buildings, func(p, q Building) int { return int(p.Town) - int(q.Town) })

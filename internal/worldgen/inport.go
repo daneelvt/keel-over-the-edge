@@ -2,7 +2,10 @@
 
 package worldgen
 
-import "github.com/daneelvt/keel-over-the-edge/internal/physics"
+import (
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+)
 
 // In port: the water of a town's harbour, where later the questions "at a
 // port?" are answered (a boat swapped, a sailor's return, a race's start
@@ -47,12 +50,51 @@ func InPortGround(g *physics.Ground, discs []Disc, x, y float64) bool {
 	return inDiscs(discs, x, y)
 }
 
-// Tops are the buildings' tops: each one's middle and how high it stands,
-// m above the sea.
-func (b *Bundle) Tops() [][3]float64 {
-	out := make([][3]float64, 0, len(b.Buildings))
+// Tops are what stands higher than its ground, each where it stands and
+// how high, m above the sea: the buildings' tops, the roofs' over their rock
+// awash, and in each cell of the shelter's grid its plants' highest canopy
+// where it stands above the cell's highest ground, by the catalog's
+// surfaces: a wood rises over the horizon before its island does.
+func (b *Bundle) Tops(cat *catalog.Catalog) [][3]float64 {
+	out := make([][3]float64, 0, len(b.Buildings)+len(b.Roofs))
 	for _, bd := range b.Buildings {
 		out = append(out, [3]float64{bd.X, bd.Y, bd.Top})
+	}
+	for _, r := range b.Roofs {
+		x, y := physics.CellCentre(r.C, r.J)
+		out = append(out, [3]float64{x, y, float64(r.Top) / 10})
+	}
+	var canopy [physics.GroundSurfaces]float64
+	for i, s := range cat.World.Surfaces {
+		if i < physics.GroundSurfaces {
+			canopy[i] = s.Canopy
+		}
+	}
+	for n := range int32(physics.ChunkCount) {
+		ch := b.Ground.Chunks[n]
+		if ch == nil {
+			continue
+		}
+		var ground, wood [physics.ShelterCells]float64
+		for i := range int32(physics.ChunkHexes) {
+			e := ch.Elevation[i]
+			if e <= 0 {
+				continue
+			}
+			k := (i/physics.ChunkRows/physics.ShelterCell)*physics.ShelterRows + (i%physics.ChunkRows)/physics.ShelterCell
+			h := float64(e) / 10
+			ground[k] = max(ground[k], h)
+			if c := canopy[ch.Surface[i]]; c > 0 {
+				wood[k] = max(wood[k], h+c)
+			}
+		}
+		c0, j0 := physics.ChunkCorner(n)
+		for k := range int32(physics.ShelterCells) {
+			if wood[k] > ground[k] {
+				x, y := physics.ShelterCellCentre(c0/physics.ShelterCell+k/physics.ShelterRows, j0/physics.ShelterCell+k%physics.ShelterRows)
+				out = append(out, [3]float64{x, y, wood[k]})
+			}
+		}
 	}
 	return out
 }

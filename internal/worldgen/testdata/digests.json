@@ -1,14 +1,14 @@
 {
   "comment": "Written by go test ./internal/worldgen -run Digests -update: each seed's world's digest under the generator's version.",
-  "version": 3,
+  "version": 4,
   "digests": {
-    "1": "1978253cf452dcddcaa51b2cadac47afe188a0bfae9b983eb7be4f98a8456fd8",
-    "2": "9d4965b23bf95d65456c61bc8a2c4de32286dd8719edf8328ffdc3df789eab7c",
-    "3": "f68100786c8d8a3e2f01d61feb6ac10ca9ac15e8c0a11c64d1900ccd949fd520",
-    "4": "222e5c9f3f80f2e3dc58cbe146f9036b7c4e4e7e581dbd350138abcdc35b53a1",
-    "5": "1823edde93642714221ffbf104416348b52e51ce165672c03612daeb3e317b84",
-    "6": "5e144b826b500130d6c85d613b8555c41acf40cc41f60ca2ce26119e52645d27",
-    "7": "bb8007ebf3ee3348621ec74315905fb24aa8ab3fd863d0e70dd0dced8329bca7",
-    "8": "355abf3c776e892aba8919b0f317ed61f4624bd98cda7fabaf45593adc7aba8e"
+    "1": "5465f255cee5feb2cf59bcbe974f022d88a206f5210ed8cc4b0579978ba924c3",
+    "2": "55fd98d7f048af2e033dc46b39c8e09fe588ab685fd3ec2b5cb25d863d448f64",
+    "3": "6c4e60a2ed5fca4ed6e9512aa085245229c865c305ee41b6f49233eae123f16f",
+    "4": "41787d4dc47ad80eef5dac8eb8fa6bffec23b6179436bb1f6bb7f8d5e7df21ab",
+    "5": "8529b3d521e94be539ff5174a4f5058e84700e138fabdc8bec0f9408423fbf7f",
+    "6": "184ee42a579ee5899b6a4471f27ecabe30c657b0cf8c045c9f0bd9401b7dbfaf",
+    "7": "5b2cdae19315af8d4a62b793706e889fd3862e082c6d8987b09ad2d109f7b67d",
+    "8": "2688479f5402ff3fd62f0940705044eb5217ef32aa05eaf7c33a4a05bc26ac71"
   }
 }

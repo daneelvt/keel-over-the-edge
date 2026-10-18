@@ -28,6 +28,14 @@ export type Colour1 = string;
  */
 export type Colour2 = string;
 /**
+ * Where a feature is made: the rule its sites follow.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "FeatureSite".
+ */
+export type FeatureSite =
+  "cave" | "arch" | "blowhole" | "waterfall" | "spring" | "crater" | "fumarole" | "ruin" | "colony";
+/**
  * A colour, as #rrggbb in sRGB.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -41,6 +49,15 @@ export type Colour3 = string;
  * via the `definition` "ArtPath".
  */
 export type ArtPath = string;
+/**
+ * Where a feature is made: the rule its sites follow.
+ */
+export type FeatureSite1 =
+  "cave" | "arch" | "blowhole" | "waterfall" | "spring" | "crater" | "fumarole" | "ruin" | "colony";
+/**
+ * A colour, as #rrggbb in sRGB.
+ */
+export type Colour4 = string;
 
 /**
  * Every list of kinds in the game. Kinds are data: code reads their properties, never their names.
@@ -1424,6 +1441,9 @@ export interface World {
   places: WorldPlaces;
   lights: WorldLights;
   towns: WorldTowns;
+  features: WorldFeatures;
+  flora: WorldFlora;
+  score: WorldScore;
 }
 /**
  * The disk.
@@ -2055,6 +2075,14 @@ export interface Biome {
    * The height, as a share of its highest, above which its high surface lies.
    */
   split: number;
+  /**
+   * Land draining more than this to one hexagon of its coast runs there as a stream, in m².
+   */
+  stream: number;
+  /**
+   * Mangroves grow on its low shores by still water.
+   */
+  mangroves: boolean;
   surfaces: BiomeSurfaces;
 }
 /**
@@ -2107,6 +2135,29 @@ export interface Surface {
    * The part of a town it is, if any: streets, quays, piers' decks, yards.
    */
   town?: "street" | "quay" | "deck" | "yard";
+  /**
+   * The feature's ground it is, if any: a stream's bed, a mangrove shore, a fumarole's sulphur, a colony's guano.
+   */
+  feature?: "stream" | "mangrove" | "sulphur" | "guano";
+  /**
+   * How high its plants stand over the ground, as the wind feels them, in m.
+   */
+  canopy: number;
+  /**
+   * The plants that grow on it.
+   *
+   * @maxItems 8
+   */
+  cover?:
+    | []
+    | [PlantCover]
+    | [PlantCover, PlantCover]
+    | [PlantCover, PlantCover, PlantCover]
+    | [PlantCover, PlantCover, PlantCover, PlantCover]
+    | [PlantCover, PlantCover, PlantCover, PlantCover, PlantCover]
+    | [PlantCover, PlantCover, PlantCover, PlantCover, PlantCover, PlantCover]
+    | [PlantCover, PlantCover, PlantCover, PlantCover, PlantCover, PlantCover, PlantCover]
+    | [PlantCover, PlantCover, PlantCover, PlantCover, PlantCover, PlantCover, PlantCover, PlantCover];
 }
 /**
  * How a surface is drawn: its land's columns, and the sea bed seen through shallow water.
@@ -2122,6 +2173,41 @@ export interface SurfaceLook {
    * Foam added where the waves break over it, as a reef's crest foams: 0 to 1.
    */
   crest: number;
+}
+/**
+ * A plant that grows on a surface: how much of the ground its crowns cover, and where on it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PlantCover".
+ */
+export interface PlantCover {
+  plant: Id;
+  /**
+   * The share of the ground its crowns cover (FAO's canopy cover).
+   */
+  share: number;
+  /**
+   * Only on ground this high, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  height?: [number, number];
+  /**
+   * Only this far from the shore, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  shore?: [number, number];
+  /**
+   * Only on ground no steeper than this, in degrees.
+   */
+  slope?: number;
+  /**
+   * Only in hollows, ground lower than about it.
+   */
+  hollow?: boolean;
 }
 /**
  * Each sea area's effective fetch for a wind from each of 16 directions.
@@ -2322,6 +2408,32 @@ export interface WorldValidator {
    * On a grid this fine, in m.
    */
   lightGrid: number;
+  features: ValidatorFeatures;
+}
+/**
+ * The features and the islands worth seeing every world has.
+ */
+export interface ValidatorFeatures {
+  /**
+   * At least one feature of each of these sites.
+   */
+  sites: FeatureSite[];
+  /**
+   * Class A islands, at least.
+   */
+  classA: number;
+  /**
+   * Of them in the middle waters, at least.
+   */
+  middle: number;
+  /**
+   * And at the rim, at least.
+   */
+  rim: number;
+  /**
+   * Each class A island's best feature is seen from water a boat reaches within this, in m.
+   */
+  seen: number;
 }
 /**
  * How islands are named.
@@ -3400,7 +3512,10 @@ export interface BuildingKind {
     | "slip"
     | "edge"
     | "post"
-    | "beach";
+    | "beach"
+    | "hamlet"
+    | "chapel"
+    | "beacon";
   /**
    * Its weight among the buildings that fill the streets.
    */
@@ -3452,6 +3567,10 @@ export interface BuildingKind {
  */
 export interface TownKit {
   biome: Id;
+  /**
+   * Stable identifier of a kind, stored in the database: never renamed or reused.
+   */
+  garden?: string;
   art: KitArt;
   /**
    * Its walls' colours.
@@ -3828,6 +3947,614 @@ export interface TownLit {
    */
   props: number;
 }
+/**
+ * The islands' features: their kinds, and the rules each kind's sites follow.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldFeatures".
+ */
+export interface WorldFeatures {
+  /**
+   * The kinds of feature.
+   *
+   * @minItems 1
+   */
+  kinds: [FeatureKind, ...FeatureKind[]];
+  headland: FeatureHeadland;
+  streams: FeatureStreams;
+  cone: FeatureCone;
+  ruins: FeatureRuins;
+  colonies: FeatureColonies;
+  look: FeatureLook;
+}
+/**
+ * A kind of feature an island may have.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "FeatureKind".
+ */
+export interface FeatureKind {
+  id: Id;
+  /**
+   * Its name, as the world page lists it.
+   */
+  name: string;
+  site: FeatureSite1;
+  /**
+   * The feature it shows names, by the word the names need it by.
+   */
+  word?: string;
+  /**
+   * The biomes whose islands may have it.
+   *
+   * @minItems 1
+   */
+  biomes: [Id, ...Id[]];
+  /**
+   * The chance an island of its biomes with a site for it has one, before its zone's weight.
+   */
+  chance: number;
+  zones: BiomeZones;
+  mark: Colour4;
+  /**
+   * A ruin: what it was.
+   */
+  ruin?: "chapel" | "beacon" | "hamlet";
+  birds?: ColonyBirds;
+}
+/**
+ * A colony's birds: where they nest, and how they look, fly and call.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ColonyBirds".
+ */
+export interface ColonyBirds {
+  /**
+   * Where they nest.
+   *
+   * @minItems 1
+   */
+  nests: ["stack" | "cliff" | "cay" | "trees", ...("stack" | "cliff" | "cay" | "trees")[]];
+  /**
+   * Their wingspan, in m.
+   */
+  span: number;
+  body: Colour3;
+  wing: Colour3;
+  tip: Colour3;
+  /**
+   * Their wingbeats, in Hz.
+   */
+  flap: number;
+  /**
+   * The share of the time they glide.
+   */
+  glide: number;
+  /**
+   * Their call.
+   */
+  call: "harsh" | "whistle" | "rattle";
+}
+/**
+ * Caves, arches and blowholes, cut into cliffed headlands.
+ */
+export interface FeatureHeadland {
+  /**
+   * A headland's coast this high or higher is cut, in m.
+   */
+  cliff: number;
+  /**
+   * The rock awash under a roof, how deep, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  floor: [number, number];
+  cave: HeadlandCave;
+  arch: HeadlandArch;
+  blowhole: HeadlandBlowhole;
+}
+/**
+ * A cave, roofed into a cliff from its foot.
+ */
+export interface HeadlandCave {
+  /**
+   * How far it runs in, in hexagons.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  depth: [number, number];
+  /**
+   * Its roof's underside above the sea, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  underside: [number, number];
+  /**
+   * The rock over it, at least, in m.
+   */
+  roof: number;
+  /**
+   * It faces this much open water, at least, in m.
+   */
+  open: number;
+}
+/**
+ * An arch, roofed through a headland's neck.
+ */
+export interface HeadlandArch {
+  /**
+   * A neck this many hexagons across or fewer is cut through.
+   */
+  neck: number;
+  /**
+   * Its underside, as a share of the neck's height.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  underside: [number, number];
+}
+/**
+ * A blowhole: a cave's back open to the sky.
+ */
+export interface HeadlandBlowhole {
+  /**
+   * A cave whose roof is this thin or thinner has a vent at its back, in m.
+   */
+  roof: number;
+}
+/**
+ * Springs, streams and waterfalls, from each island's drainage.
+ */
+export interface FeatureStreams {
+  /**
+   * A stream rises where its catchment first passes this, in m².
+   */
+  spring: number;
+  /**
+   * A stream falls where it reaches a coast this high or higher, in m.
+   */
+  fall: number;
+  /**
+   * A hanging valley's coast is raised this far either side of its stream, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  valley: [number, number];
+  /**
+   * A hanging valley is raised no further inland than this, in m.
+   */
+  reach: number;
+}
+/**
+ * A volcanic island's cone, by its age.
+ */
+export interface FeatureCone {
+  fresh: ConeShape;
+  old: ConeShape;
+  ages: ConeAges;
+  /**
+   * How many fumaroles a young cone has.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  fumaroles: [number, number];
+  /**
+   * Sulphur lies this far about a vent, in m.
+   */
+  sulphur: number;
+}
+/**
+ * A cinder cone's shape, as shares of its base's width.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ConeShape".
+ */
+export interface ConeShape {
+  /**
+   * Its height.
+   */
+  height: number;
+  /**
+   * Its crater's width.
+   */
+  crater: number;
+  /**
+   * Its crater's depth below its rim, as a share of its height.
+   */
+  depth: number;
+}
+/**
+ * Each age's weight.
+ */
+export interface ConeAges {
+  /**
+   * Its weight.
+   */
+  young: number;
+  /**
+   * Its weight.
+   */
+  middle: number;
+  /**
+   * Its weight.
+   */
+  old: number;
+}
+/**
+ * Ruins: a world's, and how each is laid out.
+ */
+export interface FeatureRuins {
+  /**
+   * How many a world has.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  count: [number, number];
+  /**
+   * The size classes of island a ruin stands on.
+   *
+   * @minItems 1
+   */
+  sizes: [string, ...string[]];
+  /**
+   * How many houses a deserted hamlet has.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  hamlet: [number, number];
+  /**
+   * A beacon stands this near the coast or nearer, in m.
+   */
+  beacon: number;
+  /**
+   * Ruins stand this far apart at least, in m.
+   */
+  apart: number;
+}
+/**
+ * Seabird colonies: a world's, and their birds.
+ */
+export interface FeatureColonies {
+  /**
+   * How many a world has.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  count: [number, number];
+  /**
+   * How many birds a colony has on the wing by day.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  birds: [number, number];
+  /**
+   * How far from it they wheel, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  wheel: [number, number];
+}
+/**
+ * How the features are drawn and heard.
+ */
+export interface FeatureLook {
+  /**
+   * A fall's width, at the least and the most catchment, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  fall: [number, number];
+  /**
+   * The spray at a fall's foot, as a share of its height.
+   */
+  spray: number;
+  /**
+   * A blowhole's spout, as many times the waves' height.
+   */
+  spout: number;
+  /**
+   * A fumarole's steam rises this fast, in m/s.
+   */
+  steam: number;
+  /**
+   * Features are heard within this, in m.
+   */
+  reach: number;
+}
+/**
+ * The plants that grow on the islands, how they are drawn, and how they move in the wind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldFlora".
+ */
+export interface WorldFlora {
+  art: FloraArt;
+  /**
+   * The kinds of plant.
+   *
+   * @minItems 1
+   */
+  kinds: [PlantKind, ...PlantKind[]];
+  look: FloraLook;
+  wind: FloraWind;
+}
+/**
+ * Their models.
+ */
+export interface FloraArt {
+  model: ArtPath;
+}
+/**
+ * A kind of plant.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PlantKind".
+ */
+export interface PlantKind {
+  id: Id;
+  /**
+   * Its name, as the world page lists it.
+   */
+  name: string;
+  /**
+   * Its form, which its model is built in.
+   */
+  form: "palm" | "broadleaf" | "umbrella" | "columnar" | "conifer" | "krummholz" | "shrub" | "tuft" | "mangrove";
+  /**
+   * Its height grown, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
+  /**
+   * Its crown's width, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  crown: [number, number];
+  trunk: Colour3;
+  leaf: Colour3;
+  /**
+   * How stiff it is in the wind: 0 bends most, 1 least.
+   */
+  stiffness: number;
+}
+/**
+ * How far plants are drawn.
+ */
+export interface FloraLook {
+  /**
+   * Within this of the camera each plant is its model, on the high, medium and low rungs, in m.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  near: [number, number, number];
+  /**
+   * Beyond near, each plant is a crown within this of the camera, in m.
+   */
+  far: number;
+}
+/**
+ * Plants in the wind, by Beaufort's land scale: the forces from which each part moves.
+ */
+export interface FloraWind {
+  /**
+   * Beaufort's force.
+   */
+  leaves: number;
+  /**
+   * Beaufort's force.
+   */
+  small: number;
+  /**
+   * Beaufort's force.
+   */
+  large: number;
+  /**
+   * Beaufort's force.
+   */
+  whole: number;
+}
+/**
+ * Each island's scenic quality, by the US Bureau of Land Management's seven key factors (Form 8400-1), and its class.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldScore".
+ */
+export interface WorldScore {
+  classes: ScoreClasses;
+  landform: ScoreLandform;
+  /**
+   * Vegetation, by how many forms of plant grow on it: none, one, two and on; the last for more.
+   *
+   * @minItems 2
+   * @maxItems 10
+   */
+  vegetation:
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number];
+  water: ScoreWater;
+  colour: ScoreColour;
+  adjacent: ScoreAdjacent;
+  scarcity: ScoreScarcity;
+  cultural: ScoreCultural;
+}
+/**
+ * The least score of class A and of class B; below, class C.
+ */
+export interface ScoreClasses {
+  /**
+   * A score.
+   */
+  a: number;
+  /**
+   * A score.
+   */
+  b: number;
+}
+/**
+ * Landform, 1 to 5: what it adds to the least.
+ */
+export interface ScoreLandform {
+  /**
+   * Its highest, from which relief adds nothing and at which it adds two, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  relief: [number, number];
+  /**
+   * A share.
+   */
+  cliffs: number;
+  /**
+   * What it adds.
+   */
+  twin: number;
+  /**
+   * What it adds.
+   */
+  stacks: number;
+  /**
+   * What it adds.
+   */
+  cave: number;
+  /**
+   * What it adds.
+   */
+  arch: number;
+  /**
+   * What it adds.
+   */
+  crater: number;
+}
+/**
+ * Water, 0 to 5: the most of what it has.
+ */
+export interface ScoreWater {
+  /**
+   * Its score.
+   */
+  waterfall: number;
+  /**
+   * Its score.
+   */
+  lagoon: number;
+  /**
+   * Its score.
+   */
+  stream: number;
+  /**
+   * Its score.
+   */
+  blowhole: number;
+  /**
+   * Its score: the sea through it.
+   */
+  arch: number;
+  /**
+   * Its score: the sea in it.
+   */
+  cave: number;
+}
+/**
+ * Colour, 1 to 5: so much for each surface over least of its land, and for what stands out.
+ */
+export interface ScoreColour {
+  /**
+   * A share.
+   */
+  least: number;
+  /**
+   * What it adds.
+   */
+  each: number;
+  /**
+   * What it adds.
+   */
+  lagoon: number;
+  /**
+   * What it adds.
+   */
+  sulphur: number;
+  /**
+   * What it adds.
+   */
+  guano: number;
+}
+/**
+ * Adjacent scenery, 0 to 5: so much for each island within, and more for each with features.
+ */
+export interface ScoreAdjacent {
+  /**
+   * Within this of its coast, in m.
+   */
+  within: number;
+  /**
+   * What it adds.
+   */
+  island: number;
+  /**
+   * What it adds.
+   */
+  featured: number;
+}
+/**
+ * Scarcity, 1 to 5: its rarest feature's kind on at most rare other islands of its region, or few.
+ */
+export interface ScoreScarcity {
+  /**
+   * How many.
+   */
+  rare: number;
+  /**
+   * How many.
+   */
+  few: number;
+  /**
+   * Its region: within this of it, in m.
+   */
+  region: number;
+}
+/**
+ * Cultural modifications, at most 2: a ruin's, a lighthouse's, a town's.
+ */
+export interface ScoreCultural {
+  /**
+   * What it adds.
+   */
+  ruin: number;
+  /**
+   * What it adds.
+   */
+  light: number;
+  /**
+   * What it adds.
+   */
+  town: number;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '77914ac1e333af15';
+export const CATALOG_VERSION = '135c735fef7c8147';

@@ -425,6 +425,25 @@ func (tw *townWork) prop(k *buildingKind, x, y, h float64) bool {
 	return true
 }
 
+// markTaken marks what is already built on the town's grid as taken: the
+// buildings given, with half a metre about them, and every way.
+func (tw *townWork) markTaken(buildings []Building) {
+	t := &tw.g
+	for i := range t.w * t.h {
+		if t.elev[i] > 0 && tw.c.isTownSurface(t.surf[i]) {
+			tw.use[i] = useStreet
+		}
+	}
+	for _, b := range buildings {
+		for _, a := range underFootprint(b.X, b.Y, b.Heading, b.Frontage, b.Depth, 0.5) {
+			hx, hy := physics.HexCentre(a[0], a[1])
+			if i := tw.at(hx, hy); i >= 0 {
+				tw.use[i] = useBuilding
+			}
+		}
+	}
+}
+
 // wrapAngle is a in [0, 2π).
 func wrapAngle(a float64) float64 {
 	const turn = 2 * math.Pi

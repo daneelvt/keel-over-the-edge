@@ -173,7 +173,7 @@ func alone(t *testing.T, c *config, biome int, radius float64) (*made, *work) {
 	t.Helper()
 	w := new(work)
 	sp := spot{kind: kindLandmark, x: 3000, y: -2500, radius: radius, biome: int32(biome), group: -1}
-	return c.makeIsland(9, 77, sp, w), w
+	return c.makeIsland(9, 77, sp, w, nil), w
 }
 
 // coastHexes are an island's land hexagons beside water, by their index.
@@ -301,16 +301,16 @@ func TestIslandsAreTheirOwn(t *testing.T) {
 	// Island 5 made after others, on the same room, and alone.
 	shared := new(work)
 	for i := range 5 {
-		c.makeIsland(3, int32(i), spots[i], shared)
+		c.makeIsland(3, int32(i), spots[i], shared, spots)
 	}
-	after := c.makeIsland(3, 5, spots[5], shared)
-	first := c.makeIsland(3, 5, spots[5], new(work))
+	after := c.makeIsland(3, 5, spots[5], shared, spots)
+	first := c.makeIsland(3, 5, spots[5], new(work), spots)
 	if !slices.Equal(after.grid.elev, first.grid.elev) || !slices.Equal(after.grid.surf, first.grid.surf) {
 		t.Error("an island differs made after others from made alone")
 	}
 	// Another stream for island 4 leaves island 5 as it was.
-	c.makeIsland(4, 4, spots[4], shared)
-	again := c.makeIsland(3, 5, spots[5], shared)
+	c.makeIsland(4, 4, spots[4], shared, spots)
+	again := c.makeIsland(3, 5, spots[5], shared, spots)
 	if !slices.Equal(again.grid.elev, first.grid.elev) {
 		t.Error("an island changed when another's stream did")
 	}
@@ -319,7 +319,7 @@ func TestIslandsAreTheirOwn(t *testing.T) {
 func TestChunkRoundTrip(t *testing.T) {
 	c := testConfig(t)
 	spots, _ := layout(c, 1)
-	port := c.makeIsland(1, 0, spots[0], new(work))
+	port := c.makeIsland(1, 0, spots[0], new(work), spots)
 	n := int32(8*physics.ChunkSide + 8)
 	g := c.raster(n, gridsOf([]*made{port}, nil))
 	sh := newShelterChunk()
@@ -433,7 +433,7 @@ func TestFetch(t *testing.T) {
 func TestStartArea(t *testing.T) {
 	c := testConfig(t)
 	spots, _ := layout(c, 1)
-	port := c.makeIsland(1, 0, spots[0], new(work))
+	port := c.makeIsland(1, 0, spots[0], new(work), spots)
 	g := new(physics.Ground)
 	for _, n := range []int32{7*physics.ChunkSide + 7, 7*physics.ChunkSide + 8, 8*physics.ChunkSide + 7, 8*physics.ChunkSide + 8} {
 		g.Chunks[n] = c.raster(n, gridsOf([]*made{port}, nil))

@@ -32,7 +32,7 @@ import (
 
 // Version is the generator's version. Raise it whenever a change to the
 // generator or to the catalog's world values changes any seed's world.
-const Version = 3
+const Version = 4
 
 // Island is an island of a made world.
 type Island struct {
@@ -56,7 +56,14 @@ type Island struct {
 	Lagoon    float64  `json:"lagoon"` // m
 	Twin      bool     `json:"twin"`
 	Shoreline float64  `json:"shoreline"`
-	Shows     []string `json:"shows"` // the features its terrain shows
+	Shows     []string `json:"shows"` // the features it shows names
+	// Age is a volcanic island's: young, middle or old.
+	Age string `json:"age,omitempty"`
+	// Scenery is its scenic quality by each of the seven factors, Score
+	// their sum and Class its class, A, B or C (score.go).
+	Scenery Scenery `json:"scenery"`
+	Score   float64 `json:"score"`
+	Class   string  `json:"class"`
 	// Box is the columns and rows of the lattice its land and bed lie on:
 	// the first column and row, and how many of each.
 	Box [4]int32 `json:"box"`
@@ -92,6 +99,9 @@ type Records struct {
 	// fishing village's, in their places' order. Their buildings are in
 	// the chunks.
 	Towns []Town `json:"towns,omitempty"`
+	// Features are its features, island by island. Their roofs and parts
+	// are in the chunks.
+	Features []Feature `json:"features,omitempty"`
 	// Circulation is the way the world's water circulates round the disk:
 	// 1 clockwise seen from above, −1 the other way. It is drawn from the
 	// seed of the attempt made, and left out of the digest, so that a
@@ -101,18 +111,22 @@ type Records struct {
 }
 
 // Format is the bundle's format: its records' and chunks' encoding. A
-// bundle of format 1 holds no towns.
-const Format = 2
+// bundle of format 1 holds no towns, one of format 2 no features.
+const Format = 3
 
 // Bundle is a made world.
 type Bundle struct {
 	Records
 	Ground  *physics.Ground
 	Shelter *physics.Shelter
-	// Buildings are its towns' buildings and props, each in the chunk its
-	// middle is in.
+	// Buildings are its towns' and ruins' buildings and props, each in the
+	// chunk its middle is in.
 	Buildings []Building
-	Report    Report
+	// Roofs are its arches' and caves' roofs, and Parts what its features
+	// show beside the ground, each in the chunk it stands in.
+	Roofs  []Roof
+	Parts  []Part
+	Report Report
 	// Digest is the SHA-256 of the records and every chunk's ground and
 	// shelter: the same for the same seed and Version on every machine.
 	Digest [32]byte
@@ -199,11 +213,12 @@ func (c *config) generate(seed uint64) *Bundle {
 	var w work
 	islands := make([]*made, len(spots))
 	for i, sp := range spots {
-		islands[i] = c.makeIsland(seed, int32(i), sp, &w)
+		islands[i] = c.makeIsland(seed, int32(i), sp, &w, spots)
 	}
 	lap("islands")
 	c.reefRocks(seed, islands)
 	b.Ground = c.rasterAll(islands)
+	b.Roofs = roofsOf(islands)
 	lap("raster")
 	k := newCoarse(b.Ground)
 	hazards := c.hazardsOf(seed, b.Ground, k)
@@ -214,15 +229,21 @@ func (c *config) generate(seed uint64) *Bundle {
 	lap("hazards")
 	b.Fetch = c.fetchOf(b.Ground, k)
 	lap("fetch")
-	b.Shelter = c.shelterOf(b.Ground)
+	b.Shelter = c.shelterOf(b.Ground, b.Roofs)
 	lap("shelter")
 	b.Start = c.startOf(b.Ground, islands[0])
 	b.Circulation = circulationOf(seed)
 	lap("start")
+	// The ruins and colonies are the world's, chosen before the places,
+	// which keep their towns clear of them as of every feature.
+	pw := c.placesWork(seed, b.Ground, k, islands, hazards, b.Start)
+	c.ruinsOf(seed, pw)
+	c.coloniesOf(seed, pw)
+	lap("features")
 	islandNames := c.nameIslands(seed, islands)
 	groupNames := c.nameGroups(seed, groups, islandNames)
 	lap("names")
-	pw := c.sitesOf(seed, b.Ground, k, islands, hazards, b.Start)
+	pw.findSites()
 	lap("places")
 	lights := pw.lightsOf(groups)
 	lap("lights")
@@ -231,8 +252,12 @@ func (c *config) generate(seed uint64) *Bundle {
 	lap("placeNames")
 	b.Towns, b.Buildings = c.buildTowns(seed, b.Ground, islands, pw, lights, islandNames, int32(len(islands)+len(groups)))
 	lap("towns")
+	b.Buildings = append(b.Buildings, c.layRuins(seed, b.Ground, pw, lights, b.Buildings)...)
+	lap("ruins")
 	b.Start = c.withMoorings(b.Ground, islands[0], b.Start)
 	lap("moorings")
+	b.Features, b.Parts = c.featureRecords(pw)
+	lap("sighting")
 
 	b.Report.ByClass, b.Report.ByBiome = map[string]int{}, map[string]int{}
 	for i, m := range islands {
@@ -245,6 +270,9 @@ func (c *config) generate(seed uint64) *Bundle {
 			Reef: m.reef, Lagoon: m.lagoon, Twin: m.twin, Shoreline: m.shoreline, Shows: c.shows(m),
 			Box: [4]int32{m.grid.c0, m.grid.j0, m.grid.w, m.grid.h},
 		}
+		if m.cone != nil {
+			is.Age = ageNames[m.cone.age]
+		}
 		if is.Shows == nil {
 			is.Shows = []string{}
 		}
@@ -252,6 +280,8 @@ func (c *config) generate(seed uint64) *Bundle {
 		b.Report.ByClass[is.Size]++
 		b.Report.ByBiome[is.Biome]++
 	}
+	c.scoreIslands(b, islands, pw)
+	lap("score")
 	for gi, g := range groups {
 		b.Groups = append(b.Groups, Group{Number: int32(gi), Name: groupNames[gi], Biome: c.biomeIDs[g.biome],
 			Zone: zoneNames[c.zoneOf(hypot(g.x, g.y))], X: g.x, Y: g.y, Members: g.members})
@@ -262,7 +292,7 @@ func (c *config) generate(seed uint64) *Bundle {
 	allNames := append(append([]string{}, islandNames...), groupNames...)
 	b.made = &world{islands: islands, names: allNames, groups: groups, ground: b.Ground, coarse: k, start: b.Start,
 		reach: pw.reach, hazards: hazards, places: b.Places, lights: b.Lights, pw: pw, lightWork: lights, towns: b.Towns,
-		buildings: b.Buildings}
+		buildings: b.Buildings, records: b}
 	b.Report.Rules = c.validate(b.made)
 	lap("validate")
 	return b
@@ -311,9 +341,34 @@ func (b *Bundle) digest() [32]byte {
 			h.Write(r)
 		}
 	}
+	// The roofs and parts, likewise.
+	if len(b.Roofs) > 0 || len(b.Parts) > 0 {
+		h.Write(sortedRecords(len(b.Roofs), func(i int) []byte {
+			r := b.Roofs[i]
+			rec := binary.LittleEndian.AppendUint32(nil, uint32(r.C))
+			rec = binary.LittleEndian.AppendUint32(rec, uint32(r.J))
+			rec = binary.LittleEndian.AppendUint16(rec, uint16(r.Top))
+			return binary.LittleEndian.AppendUint16(rec, uint16(r.Under))
+		}))
+		h.Write(sortedRecords(len(b.Parts), func(i int) []byte {
+			p := b.Parts[i]
+			n, _, _ := physics.ChunkOf(physics.HexCell(physics.HexAt(p.X, p.Y)))
+			return appendFeatures(nil, n, &ChunkTown{Parts: []Part{p}})
+		}))
+	}
 	var out [32]byte
 	copy(out[:], h.Sum(nil))
 	return out
+}
+
+// sortedRecords is n records' bytes, in an order of their own bytes.
+func sortedRecords(n int, rec func(i int) []byte) []byte {
+	recs := make([][]byte, n)
+	for i := range n {
+		recs[i] = rec(i)
+	}
+	slices.SortFunc(recs, bytes.Compare)
+	return bytes.Join(recs, nil)
 }
 
 // DigestHex is the digest in hexadecimal.
@@ -333,8 +388,8 @@ func (b *Bundle) Passed() bool {
 func (b *Bundle) MainPort() *Island { return &b.Islands[0] }
 
 // stages are the generator's stages, as the report times them.
-var stages = []string{"layout", "islands", "raster", "hazards", "fetch", "shelter", "start", "names", "places", "lights", "placeNames",
-	"towns", "moorings", "validate"}
+var stages = []string{"layout", "islands", "raster", "hazards", "fetch", "shelter", "start", "features", "names", "places", "lights",
+	"placeNames", "towns", "ruins", "moorings", "sighting", "score", "validate"}
 
 // Generated reports how long making the world's last attempt took.
 func (b *Bundle) Generated() time.Duration {

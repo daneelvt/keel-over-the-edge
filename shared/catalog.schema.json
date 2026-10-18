@@ -576,7 +576,10 @@
         "hazards",
         "places",
         "lights",
-        "towns"
+        "towns",
+        "features",
+        "flora",
+        "score"
       ],
       "properties": {
         "disk": { "$ref": "#/$defs/WorldDisk" },
@@ -626,7 +629,10 @@
         "hazards": { "$ref": "#/$defs/WorldHazards" },
         "places": { "$ref": "#/$defs/WorldPlaces" },
         "lights": { "$ref": "#/$defs/WorldLights" },
-        "towns": { "$ref": "#/$defs/WorldTowns" }
+        "towns": { "$ref": "#/$defs/WorldTowns" },
+        "features": { "$ref": "#/$defs/WorldFeatures" },
+        "flora": { "$ref": "#/$defs/WorldFlora" },
+        "score": { "$ref": "#/$defs/WorldScore" }
       }
     },
     "WorldHazards": {
@@ -2197,6 +2203,8 @@
         "bars",
         "stacks",
         "split",
+        "stream",
+        "mangroves",
         "surfaces"
       ],
       "properties": {
@@ -2307,6 +2315,13 @@
           "minimum": 0,
           "maximum": 1
         },
+        "stream": {
+          "description": "Land draining more than this to one hexagon of its coast runs there as a stream, in m².",
+          "type": "number",
+          "minimum": 100,
+          "maximum": 1000000
+        },
+        "mangroves": { "description": "Mangroves grow on its low shores by still water.", "type": "boolean" },
         "surfaces": { "$ref": "#/$defs/BiomeSurfaces" }
       }
     },
@@ -2315,7 +2330,7 @@
       "description": "What the ground is covered with.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "friction", "look"],
+      "required": ["id", "friction", "canopy", "look"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "friction": {
@@ -2325,7 +2340,30 @@
           "maximum": 2
         },
         "look": { "$ref": "#/$defs/SurfaceLook" },
-        "town": { "description": "The part of a town it is, if any: streets, quays, piers' decks, yards.", "type": "string", "enum": ["street", "quay", "deck", "yard"] }
+        "town": { "description": "The part of a town it is, if any: streets, quays, piers' decks, yards.", "type": "string", "enum": ["street", "quay", "deck", "yard"] },
+        "feature": { "description": "The feature's ground it is, if any: a stream's bed, a mangrove shore, a fumarole's sulphur, a colony's guano.", "type": "string", "enum": ["stream", "mangrove", "sulphur", "guano"] },
+        "canopy": { "description": "How high its plants stand over the ground, as the wind feels them, in m.", "type": "number", "minimum": 0, "maximum": 60 },
+        "cover": {
+          "description": "The plants that grow on it.",
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/PlantCover" }
+        }
+      }
+    },
+    "PlantCover": {
+      "title": "PlantCover",
+      "description": "A plant that grows on a surface: how much of the ground its crowns cover, and where on it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plant", "share"],
+      "properties": {
+        "plant": { "$ref": "#/$defs/Id" },
+        "share": { "description": "The share of the ground its crowns cover (FAO's canopy cover).", "type": "number", "minimum": 0, "maximum": 0.9 },
+        "height": { "description": "Only on ground this high, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 200 } },
+        "shore": { "description": "Only this far from the shore, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1000 } },
+        "slope": { "description": "Only on ground no steeper than this, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "hollow": { "description": "Only in hollows, ground lower than about it.", "type": "boolean" }
       }
     },
     "WorldFetch": {
@@ -2597,7 +2635,8 @@
         "shoreline",
         "reachDepth",
         "lightsInRange",
-        "lightGrid"
+        "lightGrid",
+        "features"
       ],
       "properties": {
         "attempts": {
@@ -2654,6 +2693,20 @@
           "type": "number",
           "minimum": 10,
           "maximum": 5000
+        },
+        "features": {
+          "title": "ValidatorFeatures",
+          "description": "The features and the islands worth seeing every world has.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sites", "classA", "middle", "rim", "seen"],
+          "properties": {
+            "sites": { "description": "At least one feature of each of these sites.", "type": "array", "items": { "$ref": "#/$defs/FeatureSite" } },
+            "classA": { "description": "Class A islands, at least.", "type": "integer", "minimum": 0, "maximum": 100 },
+            "middle": { "description": "Of them in the middle waters, at least.", "type": "integer", "minimum": 0, "maximum": 100 },
+            "rim": { "description": "And at the rim, at least.", "type": "integer", "minimum": 0, "maximum": 100 },
+            "seen": { "description": "Each class A island's best feature is seen from water a boat reaches within this, in m.", "type": "number", "minimum": 0, "maximum": 5000 }
+          }
         }
       }
     },
@@ -2838,7 +2891,7 @@
         "frontage": { "description": "Its frontage along its way, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 40 } },
         "depth": { "description": "Its depth back from its way, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 40 } },
         "storeys": { "description": "Its storeys, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 3 } },
-        "stands": { "description": "Where it stands.", "type": "string", "enum": ["street", "quay", "quayEnd", "square", "above", "summit", "fields", "slope", "water", "behind", "shore", "slip", "edge", "post", "beach"] },
+        "stands": { "description": "Where it stands.", "type": "string", "enum": ["street", "quay", "quayEnd", "square", "above", "summit", "fields", "slope", "water", "behind", "shore", "slip", "edge", "post", "beach", "hamlet", "chapel", "beacon"] },
         "fill": { "description": "Its weight among the buildings that fill the streets.", "type": "number", "minimum": 0, "maximum": 100 },
         "main": { "description": "How many Port Royal has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10000 } },
         "port": { "description": "How many a port has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10000 } },
@@ -2858,6 +2911,7 @@
       "required": ["biome", "art", "walls", "roofs", "shutters"],
       "properties": {
         "biome": { "$ref": "#/$defs/Id" },
+        "garden": { "description": "The plant set by its houses, if any.", "$ref": "#/$defs/Id" },
         "art": {
           "title": "KitArt",
           "description": "Its models.",
@@ -3011,6 +3065,324 @@
             "near": { "description": "Houses are drawn in full within this of the camera, in m.", "type": "number", "minimum": 10, "maximum": 5000 },
             "props": { "description": "Props are drawn within this of the camera, in m.", "type": "number", "minimum": 10, "maximum": 5000 }
           }
+        }
+      }
+    },
+    "WorldFeatures": {
+      "title": "WorldFeatures",
+      "description": "The islands' features: their kinds, and the rules each kind's sites follow.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kinds", "headland", "streams", "cone", "ruins", "colonies", "look"],
+      "properties": {
+        "kinds": { "description": "The kinds of feature.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/FeatureKind" } },
+        "headland": {
+          "title": "FeatureHeadland",
+          "description": "Caves, arches and blowholes, cut into cliffed headlands.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cliff", "floor", "cave", "arch", "blowhole"],
+          "properties": {
+            "cliff": { "description": "A headland's coast this high or higher is cut, in m.", "type": "number", "minimum": 1, "maximum": 200 },
+            "floor": { "description": "The rock awash under a roof, how deep, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 5 } },
+            "cave": {
+              "title": "HeadlandCave",
+              "description": "A cave, roofed into a cliff from its foot.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["depth", "underside", "roof", "open"],
+              "properties": {
+                "depth": { "description": "How far it runs in, in hexagons.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 32 } },
+                "underside": { "description": "Its roof's underside above the sea, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.5, "maximum": 100 } },
+                "roof": { "description": "The rock over it, at least, in m.", "type": "number", "minimum": 0.5, "maximum": 50 },
+                "open": { "description": "It faces this much open water, at least, in m.", "type": "number", "minimum": 0, "maximum": 10000 }
+              }
+            },
+            "arch": {
+              "title": "HeadlandArch",
+              "description": "An arch, roofed through a headland's neck.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["neck", "underside"],
+              "properties": {
+                "neck": { "description": "A neck this many hexagons across or fewer is cut through.", "type": "integer", "minimum": 1, "maximum": 16 },
+                "underside": { "description": "Its underside, as a share of the neck's height.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+              }
+            },
+            "blowhole": {
+              "title": "HeadlandBlowhole",
+              "description": "A blowhole: a cave's back open to the sky.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["roof"],
+              "properties": { "roof": { "description": "A cave whose roof is this thin or thinner has a vent at its back, in m.", "type": "number", "minimum": 0, "maximum": 50 } }
+            }
+          }
+        },
+        "streams": {
+          "title": "FeatureStreams",
+          "description": "Springs, streams and waterfalls, from each island's drainage.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spring", "fall", "valley", "reach"],
+          "properties": {
+            "spring": { "description": "A stream rises where its catchment first passes this, in m².", "type": "number", "minimum": 10, "maximum": 1000000 },
+            "fall": { "description": "A stream falls where it reaches a coast this high or higher, in m.", "type": "number", "minimum": 0.5, "maximum": 200 },
+            "valley": { "description": "A hanging valley's coast is raised this far either side of its stream, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 500 } },
+            "reach": { "description": "A hanging valley is raised no further inland than this, in m.", "type": "number", "minimum": 0, "maximum": 2000 }
+          }
+        },
+        "cone": {
+          "title": "FeatureCone",
+          "description": "A volcanic island's cone, by its age.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fresh", "old", "ages", "fumaroles", "sulphur"],
+          "properties": {
+            "fresh": { "$ref": "#/$defs/ConeShape" },
+            "old": { "$ref": "#/$defs/ConeShape" },
+            "ages": {
+              "title": "ConeAges",
+              "description": "Each age's weight.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["young", "middle", "old"],
+              "properties": {
+                "young": { "description": "Its weight.", "type": "number", "minimum": 0, "maximum": 100 },
+                "middle": { "description": "Its weight.", "type": "number", "minimum": 0, "maximum": 100 },
+                "old": { "description": "Its weight.", "type": "number", "minimum": 0, "maximum": 100 }
+              }
+            },
+            "fumaroles": { "description": "How many fumaroles a young cone has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 16 } },
+            "sulphur": { "description": "Sulphur lies this far about a vent, in m.", "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "ruins": {
+          "title": "FeatureRuins",
+          "description": "Ruins: a world's, and how each is laid out.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "sizes", "hamlet", "beacon", "apart"],
+          "properties": {
+            "count": { "description": "How many a world has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 50 } },
+            "sizes": { "description": "The size classes of island a ruin stands on.", "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1, "maxLength": 20 } },
+            "hamlet": { "description": "How many houses a deserted hamlet has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 50 } },
+            "beacon": { "description": "A beacon stands this near the coast or nearer, in m.", "type": "number", "minimum": 0, "maximum": 2000 },
+            "apart": { "description": "Ruins stand this far apart at least, in m.", "type": "number", "minimum": 0, "maximum": 20000 }
+          }
+        },
+        "colonies": {
+          "title": "FeatureColonies",
+          "description": "Seabird colonies: a world's, and their birds.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "birds", "wheel"],
+          "properties": {
+            "count": { "description": "How many a world has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 50 } },
+            "birds": { "description": "How many birds a colony has on the wing by day.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 500 } },
+            "wheel": { "description": "How far from it they wheel, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 1000 } }
+          }
+        },
+        "look": {
+          "title": "FeatureLook",
+          "description": "How the features are drawn and heard.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fall", "spray", "spout", "steam", "reach"],
+          "properties": {
+            "fall": { "description": "A fall's width, at the least and the most catchment, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 100 } },
+            "spray": { "description": "The spray at a fall's foot, as a share of its height.", "type": "number", "minimum": 0, "maximum": 2 },
+            "spout": { "description": "A blowhole's spout, as many times the waves' height.", "type": "number", "minimum": 0, "maximum": 50 },
+            "steam": { "description": "A fumarole's steam rises this fast, in m/s.", "type": "number", "minimum": 0, "maximum": 20 },
+            "reach": { "description": "Features are heard within this, in m.", "type": "number", "minimum": 10, "maximum": 5000 }
+          }
+        }
+      }
+    },
+    "ConeShape": {
+      "title": "ConeShape",
+      "description": "A cinder cone's shape, as shares of its base's width.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "crater", "depth"],
+      "properties": {
+        "height": { "description": "Its height.", "type": "number", "minimum": 0.01, "maximum": 1 },
+        "crater": { "description": "Its crater's width.", "type": "number", "minimum": 0, "maximum": 1 },
+        "depth": { "description": "Its crater's depth below its rim, as a share of its height.", "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "FeatureKind": {
+      "title": "FeatureKind",
+      "description": "A kind of feature an island may have.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "site", "biomes", "chance", "zones", "mark"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Its name, as the world page lists it.", "type": "string", "minLength": 1, "maxLength": 40 },
+        "site": { "description": "Where it is made: the rule its sites follow.", "$ref": "#/$defs/FeatureSite" },
+        "word": { "description": "The feature it shows names, by the word the names need it by.", "type": "string", "minLength": 1, "maxLength": 20 },
+        "biomes": { "description": "The biomes whose islands may have it.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Id" } },
+        "chance": { "description": "The chance an island of its biomes with a site for it has one, before its zone's weight.", "type": "number", "minimum": 0, "maximum": 1 },
+        "zones": { "$ref": "#/$defs/BiomeZones" },
+        "mark": { "description": "The colour the world page marks it with.", "$ref": "#/$defs/Colour" },
+        "ruin": { "description": "A ruin: what it was.", "type": "string", "enum": ["chapel", "beacon", "hamlet"] },
+        "birds": { "$ref": "#/$defs/ColonyBirds" }
+      }
+    },
+    "FeatureSite": {
+      "title": "FeatureSite",
+      "description": "Where a feature is made: the rule its sites follow.",
+      "type": "string",
+      "enum": ["cave", "arch", "blowhole", "waterfall", "spring", "crater", "fumarole", "ruin", "colony"]
+    },
+    "ColonyBirds": {
+      "title": "ColonyBirds",
+      "description": "A colony's birds: where they nest, and how they look, fly and call.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nests", "span", "body", "wing", "tip", "flap", "glide", "call"],
+      "properties": {
+        "nests": { "description": "Where they nest.", "type": "array", "minItems": 1, "items": { "type": "string", "enum": ["stack", "cliff", "cay", "trees"] } },
+        "span": { "description": "Their wingspan, in m.", "type": "number", "minimum": 0.1, "maximum": 5 },
+        "body": { "$ref": "#/$defs/Colour" },
+        "wing": { "$ref": "#/$defs/Colour" },
+        "tip": { "$ref": "#/$defs/Colour" },
+        "flap": { "description": "Their wingbeats, in Hz.", "type": "number", "minimum": 0.1, "maximum": 20 },
+        "glide": { "description": "The share of the time they glide.", "type": "number", "minimum": 0, "maximum": 1 },
+        "call": { "description": "Their call.", "type": "string", "enum": ["harsh", "whistle", "rattle"] }
+      }
+    },
+    "WorldFlora": {
+      "title": "WorldFlora",
+      "description": "The plants that grow on the islands, how they are drawn, and how they move in the wind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["art", "kinds", "look", "wind"],
+      "properties": {
+        "art": {
+          "title": "FloraArt",
+          "description": "Their models.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": { "model": { "$ref": "#/$defs/ArtPath" } }
+        },
+        "kinds": { "description": "The kinds of plant.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/PlantKind" } },
+        "look": {
+          "title": "FloraLook",
+          "description": "How far plants are drawn.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["near", "far"],
+          "properties": {
+            "near": { "description": "Within this of the camera each plant is its model, on the high, medium and low rungs, in m.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": 0, "maximum": 2000 } },
+            "far": { "description": "Beyond near, each plant is a crown within this of the camera, in m.", "type": "number", "minimum": 0, "maximum": 10000 }
+          }
+        },
+        "wind": {
+          "title": "FloraWind",
+          "description": "Plants in the wind, by Beaufort's land scale: the forces from which each part moves.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["leaves", "small", "large", "whole"],
+          "properties": {
+            "leaves": { "description": "Beaufort's force.", "type": "number", "minimum": 0, "maximum": 12 },
+            "small": { "description": "Beaufort's force.", "type": "number", "minimum": 0, "maximum": 12 },
+            "large": { "description": "Beaufort's force.", "type": "number", "minimum": 0, "maximum": 12 },
+            "whole": { "description": "Beaufort's force.", "type": "number", "minimum": 0, "maximum": 12 }
+          }
+        }
+      }
+    },
+    "PlantKind": {
+      "title": "PlantKind",
+      "description": "A kind of plant.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "form", "height", "crown", "trunk", "leaf", "stiffness"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Its name, as the world page lists it.", "type": "string", "minLength": 1, "maxLength": 40 },
+        "form": { "description": "Its form, which its model is built in.", "type": "string", "enum": ["palm", "broadleaf", "umbrella", "columnar", "conifer", "krummholz", "shrub", "tuft", "mangrove"] },
+        "height": { "description": "Its height grown, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 80 } },
+        "crown": { "description": "Its crown's width, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 60 } },
+        "trunk": { "$ref": "#/$defs/Colour" },
+        "leaf": { "$ref": "#/$defs/Colour" },
+        "stiffness": { "description": "How stiff it is in the wind: 0 bends most, 1 least.", "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "WorldScore": {
+      "title": "WorldScore",
+      "description": "Each island's scenic quality, by the US Bureau of Land Management's seven key factors (Form 8400-1), and its class.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classes", "landform", "vegetation", "water", "colour", "adjacent", "scarcity", "cultural"],
+      "properties": {
+        "classes": {
+          "title": "ScoreClasses",
+          "description": "The least score of class A and of class B; below, class C.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["a", "b"],
+          "properties": { "a": { "description": "A score.", "type": "number", "minimum": 0, "maximum": 40 }, "b": { "description": "A score.", "type": "number", "minimum": 0, "maximum": 40 } }
+        },
+        "landform": {
+          "title": "ScoreLandform",
+          "description": "Landform, 1 to 5: what it adds to the least.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relief", "cliffs", "twin", "stacks", "cave", "arch", "crater"],
+          "properties": {
+            "relief": { "description": "Its highest, from which relief adds nothing and at which it adds two, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 200 } },
+            "cliffs": { "description": "A share.", "type": "number", "minimum": 0, "maximum": 1 },
+            "twin": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 },
+            "stacks": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 },
+            "cave": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 },
+            "arch": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 },
+            "crater": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 }
+          }
+        },
+        "vegetation": { "description": "Vegetation, by how many forms of plant grow on it: none, one, two and on; the last for more.", "type": "array", "minItems": 2, "maxItems": 10, "items": { "type": "number", "minimum": 0, "maximum": 5 } },
+        "water": {
+          "title": "ScoreWater",
+          "description": "Water, 0 to 5: the most of what it has.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["waterfall", "lagoon", "stream", "blowhole", "arch", "cave"],
+          "properties": { "waterfall": { "description": "Its score.", "type": "number", "minimum": 0, "maximum": 5 }, "lagoon": { "description": "Its score.", "type": "number", "minimum": 0, "maximum": 5 }, "stream": { "description": "Its score.", "type": "number", "minimum": 0, "maximum": 5 }, "blowhole": { "description": "Its score.", "type": "number", "minimum": 0, "maximum": 5 }, "arch": { "description": "Its score: the sea through it.", "type": "number", "minimum": 0, "maximum": 5 }, "cave": { "description": "Its score: the sea in it.", "type": "number", "minimum": 0, "maximum": 5 } }
+        },
+        "colour": {
+          "title": "ScoreColour",
+          "description": "Colour, 1 to 5: so much for each surface over least of its land, and for what stands out.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["least", "each", "lagoon", "sulphur", "guano"],
+          "properties": { "least": { "description": "A share.", "type": "number", "minimum": 0, "maximum": 1 }, "each": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 }, "lagoon": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 }, "sulphur": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 }, "guano": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 } }
+        },
+        "adjacent": {
+          "title": "ScoreAdjacent",
+          "description": "Adjacent scenery, 0 to 5: so much for each island within, and more for each with features.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["within", "island", "featured"],
+          "properties": { "within": { "description": "Within this of its coast, in m.", "type": "number", "minimum": 0, "maximum": 10000 }, "island": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 }, "featured": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 } }
+        },
+        "scarcity": {
+          "title": "ScoreScarcity",
+          "description": "Scarcity, 1 to 5: its rarest feature's kind on at most rare other islands of its region, or few.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rare", "few", "region"],
+          "properties": { "rare": { "description": "How many.", "type": "integer", "minimum": 0, "maximum": 100 }, "few": { "description": "How many.", "type": "integer", "minimum": 0, "maximum": 100 }, "region": { "description": "Its region: within this of it, in m.", "type": "number", "minimum": 100, "maximum": 20000 } }
+        },
+        "cultural": {
+          "title": "ScoreCultural",
+          "description": "Cultural modifications, at most 2: a ruin's, a lighthouse's, a town's.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ruin", "light", "town"],
+          "properties": { "ruin": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 }, "light": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 }, "town": { "description": "What it adds.", "type": "number", "minimum": 0, "maximum": 5 } }
         }
       }
     }

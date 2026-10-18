@@ -82,6 +82,24 @@ type config struct {
 	townSurface struct{ street, quay, deck, yard uint8 }
 	// kitOf is each biome's kit, by its index in the catalog's list.
 	kitOf []uint8
+	// features are the islands' features' kinds and rules (features.go).
+	features featureConfig
+	// canopy is each surface's plants' height over its ground, m, and
+	// cover the forms of plant that grow on it, each with the share of it
+	// their crowns cover.
+	canopy [physics.GroundSurfaces]float64
+	cover  [physics.GroundSurfaces][]formCover
+	// featureSurface is the surface each feature's ground is, by what it
+	// is: a stream's bed, a mangrove shore, sulphur, guano.
+	featureSurface struct{ stream, mangrove, sulphur, guano uint8 }
+	score          catalog.WorldScore
+}
+
+// formCover is a form of plant on a surface, and the share of it their
+// crowns cover.
+type formCover struct {
+	form  catalog.Form
+	share float64
 }
 
 // sizeClass is a size class: the islands narrower than below.
@@ -110,6 +128,8 @@ type biome struct {
 	reef, bars  bool
 	stacks      [2]int
 	split       float64
+	stream      float64 // m²: the catchment a stream runs from
+	mangroves   bool
 	surfaces    struct{ beach, low, high, steep, bed uint8 }
 }
 
@@ -154,6 +174,7 @@ func newConfig(cat *catalog.Catalog) (*config, error) {
 		o.warp, o.rise, o.hills, o.ridges, o.cone, o.crater = b.Warp, b.Rise, b.Hills, b.Ridges, b.Cone, b.Crater
 		o.cliffs, o.cliffHeight, o.beach, o.dean = pair(b.Cliffs), pair(b.CliffHeight), b.Beach, b.Dean
 		o.reef, o.bars, o.stacks, o.split = b.Reef, b.Bars, ipair(b.Stacks), b.Split
+		o.stream, o.mangroves = b.Stream, b.Mangroves
 		var err error
 		for _, s := range []struct {
 			to *uint8
@@ -233,6 +254,36 @@ func newConfig(cat *catalog.Catalog) (*config, error) {
 		}
 		c.kitOf[i] = uint8(k)
 	}
+	plants := map[string]catalog.Form{}
+	for _, p := range w.Flora.Kinds {
+		plants[string(p.ID)] = p.Form
+	}
+	roles := map[catalog.Feature]*uint8{catalog.FeatureStream: &c.featureSurface.stream, catalog.FeatureMangrove: &c.featureSurface.mangrove,
+		catalog.FeatureSulphur: &c.featureSurface.sulphur, catalog.FeatureGuano: &c.featureSurface.guano}
+	found = 0
+	for i, s := range w.Surfaces {
+		c.canopy[i] = s.Canopy
+		for _, cv := range s.Cover {
+			f, ok := plants[string(cv.Plant)]
+			if !ok {
+				return nil, fmt.Errorf("worldgen: the surface %q grows %q, which is not a plant", s.ID, cv.Plant)
+			}
+			c.cover[i] = append(c.cover[i], formCover{form: f, share: cv.Share})
+		}
+		if s.Feature != nil {
+			if to, ok := roles[*s.Feature]; ok {
+				*to = uint8(i)
+				found++
+			}
+		}
+	}
+	if found != len(roles) {
+		return nil, fmt.Errorf("worldgen: %d of the features' %d surfaces are in the catalog", found, len(roles))
+	}
+	if err := c.features.read(w, c.biomeIDs); err != nil {
+		return nil, err
+	}
+	c.score = w.Score
 	c.mainLight = -1
 	for i, ch := range w.Lights.Characters {
 		if ch.Notation == w.Lights.MainPortCharacter {

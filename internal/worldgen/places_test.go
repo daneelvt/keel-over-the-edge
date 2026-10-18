@@ -275,7 +275,15 @@ func TestHazardsLeaveTheIslands(t *testing.T) {
 	none := *c
 	none.hazards.Reefs, none.hazards.Banks = 0, 0
 	other := none.generate(1)
-	if fmt.Sprint(other.Islands) != fmt.Sprint(b.Islands) || fmt.Sprint(other.Groups) != fmt.Sprint(b.Groups) {
+	// Their scores read the lights and the towns, which the hazards move.
+	unscored := func(islands []Island) string {
+		out := slices.Clone(islands)
+		for i := range out {
+			out[i].Scenery, out[i].Score, out[i].Class = Scenery{}, 0, ""
+		}
+		return fmt.Sprint(out)
+	}
+	if unscored(other.Islands) != unscored(b.Islands) || fmt.Sprint(other.Groups) != fmt.Sprint(b.Groups) {
 		t.Error("the islands differ without the hazards")
 	}
 	if len(other.made.hazards) != 0 {
