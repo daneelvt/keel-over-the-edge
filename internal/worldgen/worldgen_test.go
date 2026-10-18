@@ -1072,7 +1072,12 @@ func TestEmpty(t *testing.T) {
 	}
 }
 
-var seeds = flag.Int("seeds", 0, "TestSeeds makes the worlds of seeds 1 to this, and reports on them")
+var (
+	seeds        = flag.Int("seeds", 0, "TestSeeds makes the worlds of this many seeds, from -seeds-from, and reports on them")
+	seedsFrom    = flag.Uint64("seeds-from", 1, "TestSeeds's first seed")
+	seedsSummary = flag.String("seeds-summary", "", "a file TestSeeds appends its report to, in Markdown")
+	seedsFirst   = flag.Float64("seeds-first", 0, "TestSeeds fails if more than this share of its seeds fail their first attempt; 0 for no limit")
+)
 
 // TestSeeds makes many seeds' worlds, as pr.worldgen does with a hundred:
 // each must pass the rules within its attempts. It reports how long each
@@ -1082,6 +1087,14 @@ var seeds = flag.Int("seeds", 0, "TestSeeds makes the worlds of seeds 1 to this,
 func TestSeeds(t *testing.T) {
 	if *seeds == 0 {
 		t.Skip("-seeds N runs it")
+	}
+	// What it reports, also as Markdown for a run's summary.
+	var summary strings.Builder
+	fmt.Fprintf(&summary, "### Seeds %d to %d\n\n", *seedsFrom, *seedsFrom+uint64(*seeds)-1)
+	report := func(format string, args ...any) {
+		t.Helper()
+		t.Logf(format, args...)
+		fmt.Fprintf(&summary, "- "+format+"\n", args...)
 	}
 	cat := testCatalog(t)
 	c0 := testConfig(t)
@@ -1109,7 +1122,7 @@ func TestSeeds(t *testing.T) {
 		for i := range *seeds {
 			t.Run(strconv.Itoa(i+1), func(t *testing.T) {
 				t.Parallel()
-				seed := uint64(i + 1)
+				seed := *seedsFrom + uint64(i)
 				start := time.Now()
 				b, err := Generate(seed, cat)
 				r := result{seed: seed, ms: float64(time.Since(start).Microseconds()) / 1000}
@@ -1166,8 +1179,8 @@ func TestSeeds(t *testing.T) {
 	sort.Float64s(share)
 	sort.Float64s(open)
 	n := float64(len(results))
-	t.Logf("%d seeds: made in median %.0f ms, worst %.0f ms; attempts %v", len(results), ms[len(ms)/2], ms[len(ms)-1], attempts)
-	t.Logf("land share: least %.2f%%, median %.2f%%, most %.2f%%; widest open water: median %.0f m, most %.0f m",
+	report("%d seeds: made in median %.0f ms, worst %.0f ms; attempts %v", len(results), ms[len(ms)/2], ms[len(ms)-1], attempts)
+	report("land share: least %.2f%%, median %.2f%%, most %.2f%%; widest open water: median %.0f m, most %.0f m",
 		share[0], share[len(share)/2], share[len(share)-1], open[len(open)/2], open[len(open)-1])
 	// The places by kind and the lights: the least, median and most a world
 	// has; how long they took; and how often each character is given.
@@ -1193,14 +1206,14 @@ func TestSeeds(t *testing.T) {
 	for _, k := range c0.places.Kinds {
 		line += fmt.Sprintf(" %s %s;", k.ID, spread(perKind[string(k.ID)]))
 	}
-	t.Logf("places by kind:%s lights %s", line, spread(lights))
+	report("places by kind:%s lights %s", line, spread(lights))
 	sort.Float64s(placesMs)
-	t.Logf("places and lights made in median %.0f ms, worst %.0f ms", placesMs[len(placesMs)/2], placesMs[len(placesMs)-1])
+	report("places and lights made in median %.0f ms, worst %.0f ms", placesMs[len(placesMs)/2], placesMs[len(placesMs)-1])
 	var chars []string
 	for _, ch := range c0.lights.Characters {
 		chars = append(chars, fmt.Sprintf("%s %d", ch.Notation, used[ch.Notation]))
 	}
-	t.Logf("characters given: %s", strings.Join(chars, ", "))
+	report("characters given: %s", strings.Join(chars, ", "))
 	// The features by kind and biome, the class A islands by zone, and the
 	// first attempts' failures by rule.
 	features, classA, first := map[string]int{}, map[string][]int{}, map[string][]uint64{}
@@ -1225,8 +1238,8 @@ func TestSeeds(t *testing.T) {
 	for _, k := range keys {
 		line += fmt.Sprintf(" %s %.2f;", k, float64(features[k])/n)
 	}
-	t.Logf("features a world, by kind and biome:%s", line)
-	t.Logf("class A islands a world: %s; centre %s, middle %s, rim %s", spread(classA["all"]), spread(classA[zoneNames[0]]),
+	report("features a world, by kind and biome:%s", line)
+	report("class A islands a world: %s; centre %s, middle %s, rim %s", spread(classA["all"]), spread(classA[zoneNames[0]]),
 		spread(classA[zoneNames[1]]), spread(classA[zoneNames[2]]))
 	failedFirst := 0
 	for _, r := range results {
@@ -1243,7 +1256,7 @@ func TestSeeds(t *testing.T) {
 	for _, k := range rules {
 		line += fmt.Sprintf(" %s %v;", k, first[k])
 	}
-	t.Logf("first attempts failed: %d of %d;%s", failedFirst, len(results), line)
+	report("first attempts failed: %d of %d;%s", failedFirst, len(results), line)
 	for _, m := range []map[string]int{classes, biomes} {
 		keys := make([]string, 0, len(m))
 		for k := range m {
@@ -1254,7 +1267,22 @@ func TestSeeds(t *testing.T) {
 		for _, k := range keys {
 			line += fmt.Sprintf(" %s %.1f", k, float64(m[k])/n)
 		}
-		t.Logf("a world's mean:%s", line)
+		report("a world's mean:%s", line)
+	}
+	if *seedsSummary != "" {
+		f, err := os.OpenFile(*seedsSummary, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString(summary.String() + "\n"); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if share := float64(failedFirst) / n; *seedsFirst > 0 && share > *seedsFirst {
+		t.Errorf("%d of %d seeds failed their first attempt, more than %.0f%%", failedFirst, len(results), float64(*seedsFirst*100))
 	}
 }
 

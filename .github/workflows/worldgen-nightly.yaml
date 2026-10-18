@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The world generator over a thousand seeds a night, to catch the rare
+# seed none of whose attempts passes the validator's rules: five jobs of
+# two hundred seeds each on the public runners, a different thousand each
+# night, keyed by the date (so about 365,000 seeds a year), and seeds 1 to 8
+# on their first attempt, which the tests and the dev tips rely on. Each
+# job writes its tally to the run's summary: first-attempt failures by
+# rule, attempts, the islands by class, the features by kind, how long the
+# worlds took. A job fails on a seed that passes no attempt, or on more than
+# 12% of its seeds failing their first; a failing seed is made again from its
+# number. GitHub mails a failed scheduled run to whoever
+# last changed its cron.
+#
+# Scheduled workflows run only on the default branch, may be delayed when
+# runners are busy (most at the start of the hour, so this one starts at
+# 17 past), and are disabled after 60 days without activity in a public
+# repository. It is not a required check: pr.worldgen runs a hundred seeds
+# on a pull request labelled worldgen.
+name: worldgen-nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  seeds:
+    name: seeds, part ${{ matrix.part }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [0, 1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+      - name: Seeds 1 to 8, each passing on its first attempt
+        if: matrix.part == 0
+        run: go test -count=1 -timeout 15m -run '^TestSeedsPassFirstTime$' ./internal/worldgen
+      - name: Two hundred of tonight's thousand seeds, each passing the rules
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          # Tonight's thousand: from the day's number, past the fixed seeds.
+          day=$(( $(date -u +%s) / 86400 ))
+          from=$(( day * 1000 + PART * 200 + 1000 ))
+          echo "seeds from $from"
+          go test -count=1 -timeout 40m -run '^TestSeeds$' -v ./internal/worldgen \
+            -seeds 200 -seeds-from "$from" -seeds-first 0.12 -seeds-summary "$GITHUB_STEP_SUMMARY" \
+            2>&1 | grep -v '^=== \|^    --- PASS'
+          exit "${PIPESTATUS[0]}"
