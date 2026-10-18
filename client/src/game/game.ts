@@ -18,6 +18,7 @@
 
 import { effect, signal } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
+import type { FeaturesInput } from '../audio/features';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
 import { KNOCK, knockOf } from '../audio/knock';
 import { edgeInput, type SoundInput, soundInput } from '../audio/voices';
@@ -40,6 +41,7 @@ import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { SheetInput } from '../input/sheet';
 import type { BumpTold } from '../net/messages';
 import { RECORDS } from '../predict/layout.gen';
+import { wavePeriod } from '../render/features';
 import { type FlyKeys, RoamTeller } from '../render/freecam';
 import type { SeaScene } from '../render/scene';
 import { HOURS, hourAt, skyPeriods } from '../sky/skytime';
@@ -526,11 +528,47 @@ export class Game implements PilotActions {
     );
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
     this.#harbour(now, look);
+    this.#features(now, look);
   }
 
   /** The sky's periods, and how long an hour of the world's day lasts, s. */
   readonly #periods = skyPeriods(catalog.sky);
   readonly #secondsPerHour = (catalog.sky.day * 60) / HOURS;
+
+  /** The features' sounds, heard at the boat: falls, blowholes and colonies near it. */
+  #features(now: number, look: number): void {
+    const w = this.world;
+    const land = w.land;
+    if (land === null) {
+      return;
+    }
+    const p = w.pose;
+    const x: FeaturesInput = {
+      seconds: w.ticks / STEPS_PER_SECOND,
+      day: w.sky.now.sunHeight > 0,
+      listener: { east: p.east, north: p.north },
+      look,
+      seaHeight: w.sea.height,
+      period: wavePeriod(w.sea.height),
+      falls: [],
+      blowholes: [],
+      colonies: [],
+    };
+    for (const { part, kind } of land.features.held()) {
+      if (Math.hypot(part.east - p.east, part.north - p.north) > FEATURES_HEARD) {
+        continue;
+      }
+      const at = { east: part.east, north: part.north };
+      if (kind.site === 'waterfall') {
+        x.falls.push({ ...at, drop: part.level });
+      } else if (kind.site === 'blowhole') {
+        x.blowholes.push({ ...at, seed: part.seed });
+      } else if (kind.site === 'colony' && kind.birds !== undefined) {
+        x.colonies.push({ ...at, call: kind.birds.call, seed: part.seed });
+      }
+    }
+    this.sound.features(now, x);
+  }
 
   /** The harbour's sounds, heard at the boat: in port, or near a town. */
   #harbour(now: number, look: number): void {
@@ -558,6 +596,9 @@ export class Game implements PilotActions {
     );
   }
 }
+
+/** The features are listened for within this of the boat, m. */
+const FEATURES_HEARD = 400;
 
 /** How long the way back shows after a tap on the free camera's picture, ms. */
 const BACK_SHOWN = 3000;

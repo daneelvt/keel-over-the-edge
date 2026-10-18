@@ -54,6 +54,7 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
+import { spoutOffset } from '../audio/features';
 import type { FeatureKind, World } from '../catalog/types.gen';
 import type { ChunkFeatures, ChunkPart } from '../workers/mesh/chunk';
 import { headingToRotationY } from './coords';
@@ -491,7 +492,7 @@ export class Features {
         case 'blowhole': {
           spouts++;
           const most = look.spout * Math.max(f.seaHeight, 0.3);
-          const phase = (f.time / period + own(1)) % 1;
+          const phase = (f.time / period + spoutOffset(p.seed, p.east)) % 1;
           const h = spoutHeight(phase, most);
           if (h <= 0.1) {
             break;

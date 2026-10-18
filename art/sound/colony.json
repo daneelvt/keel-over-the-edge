@@ -1,0 +1,11 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A seabird colony by day: its birds' calls, perMinute a minute from each colony, heard within reach metres. Gannets' harsh 'arrah', a rasp of a falling tone; boobies' whistles, short and high; frigatebirds' rattle, a pitch beaten rate times a second (the colonies' calls as BirdLife and the Cornell Lab describe them). Frequencies in Hz, times in seconds, levels as gains.",
+  "perMinute": 18,
+  "harsh": { "pitch": [500, 800], "note": [0.25, 0.45] },
+  "whistle": { "pitch": [1800, 2600], "note": [0.12, 0.25] },
+  "rattle": { "pitch": [700, 1000], "note": [0.4, 0.8], "rate": 14 },
+  "near": 20,
+  "reach": 300,
+  "level": 0.22
+}
