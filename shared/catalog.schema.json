@@ -3075,7 +3075,7 @@
       "additionalProperties": false,
       "required": ["kinds", "headland", "streams", "cone", "ruins", "colonies", "look"],
       "properties": {
-        "kinds": { "description": "The kinds of feature.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/FeatureKind" } },
+        "kinds": { "description": "The kinds of feature.", "type": "array", "items": { "$ref": "#/$defs/FeatureKind" } },
         "headland": {
           "title": "FeatureHeadland",
           "description": "Caves, arches and blowholes, cut into cliffed headlands.",
@@ -3165,7 +3165,7 @@
           "required": ["count", "sizes", "hamlet", "beacon", "apart"],
           "properties": {
             "count": { "description": "How many a world has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 50 } },
-            "sizes": { "description": "The size classes of island a ruin stands on.", "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1, "maxLength": 20 } },
+            "sizes": { "description": "The size classes of island a ruin stands on.", "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 20 } },
             "hamlet": { "description": "How many houses a deserted hamlet has.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 50 } },
             "beacon": { "description": "A beacon stands this near the coast or nearer, in m.", "type": "number", "minimum": 0, "maximum": 2000 },
             "apart": { "description": "Ruins stand this far apart at least, in m.", "type": "number", "minimum": 0, "maximum": 20000 }
@@ -3222,7 +3222,7 @@
         "name": { "description": "Its name, as the world page lists it.", "type": "string", "minLength": 1, "maxLength": 40 },
         "site": { "description": "Where it is made: the rule its sites follow.", "$ref": "#/$defs/FeatureSite" },
         "word": { "description": "The feature it shows names, by the word the names need it by.", "type": "string", "minLength": 1, "maxLength": 20 },
-        "biomes": { "description": "The biomes whose islands may have it.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Id" } },
+        "biomes": { "description": "The biomes whose islands may have it.", "type": "array", "items": { "$ref": "#/$defs/Id" } },
         "chance": { "description": "The chance an island of its biomes with a site for it has one, before its zone's weight.", "type": "number", "minimum": 0, "maximum": 1 },
         "zones": { "$ref": "#/$defs/BiomeZones" },
         "mark": { "description": "The colour the world page marks it with.", "$ref": "#/$defs/Colour" },
@@ -3243,7 +3243,7 @@
       "additionalProperties": false,
       "required": ["nests", "span", "body", "wing", "tip", "flap", "glide", "call"],
       "properties": {
-        "nests": { "description": "Where they nest.", "type": "array", "minItems": 1, "items": { "type": "string", "enum": ["stack", "cliff", "cay", "trees"] } },
+        "nests": { "description": "Where they nest.", "type": "array", "items": { "type": "string", "enum": ["stack", "cliff", "cay", "trees"] } },
         "span": { "description": "Their wingspan, in m.", "type": "number", "minimum": 0.1, "maximum": 5 },
         "body": { "$ref": "#/$defs/Colour" },
         "wing": { "$ref": "#/$defs/Colour" },
@@ -3268,7 +3268,7 @@
           "required": ["model"],
           "properties": { "model": { "$ref": "#/$defs/ArtPath" } }
         },
-        "kinds": { "description": "The kinds of plant.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/PlantKind" } },
+        "kinds": { "description": "The kinds of plant.", "type": "array", "items": { "$ref": "#/$defs/PlantKind" } },
         "look": {
           "title": "FloraLook",
           "description": "How far plants are drawn.",

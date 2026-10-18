@@ -3956,10 +3956,8 @@ export interface TownLit {
 export interface WorldFeatures {
   /**
    * The kinds of feature.
-   *
-   * @minItems 1
    */
-  kinds: [FeatureKind, ...FeatureKind[]];
+  kinds: FeatureKind[];
   headland: FeatureHeadland;
   streams: FeatureStreams;
   cone: FeatureCone;
@@ -3986,10 +3984,8 @@ export interface FeatureKind {
   word?: string;
   /**
    * The biomes whose islands may have it.
-   *
-   * @minItems 1
    */
-  biomes: [Id, ...Id[]];
+  biomes: Id[];
   /**
    * The chance an island of its biomes with a site for it has one, before its zone's weight.
    */
@@ -4011,10 +4007,8 @@ export interface FeatureKind {
 export interface ColonyBirds {
   /**
    * Where they nest.
-   *
-   * @minItems 1
    */
-  nests: ["stack" | "cliff" | "cay" | "trees", ...("stack" | "cliff" | "cay" | "trees")[]];
+  nests: ("stack" | "cliff" | "cay" | "trees")[];
   /**
    * Their wingspan, in m.
    */
@@ -4199,10 +4193,8 @@ export interface FeatureRuins {
   count: [number, number];
   /**
    * The size classes of island a ruin stands on.
-   *
-   * @minItems 1
    */
-  sizes: [string, ...string[]];
+  sizes: string[];
   /**
    * How many houses a deserted hamlet has.
    *
@@ -4283,10 +4275,8 @@ export interface WorldFlora {
   art: FloraArt;
   /**
    * The kinds of plant.
-   *
-   * @minItems 1
    */
-  kinds: [PlantKind, ...PlantKind[]];
+  kinds: PlantKind[];
   look: FloraLook;
   wind: FloraWind;
 }

@@ -18,6 +18,7 @@ import {
 } from './build';
 import { type Caches, ChunkCache } from './cache';
 import { type ChunkGrids, unpackChunk, worldBytes } from './chunk';
+import { placePlants } from './plants';
 
 export type ToMesh =
   /** The sea is this world's: its chunks are checked against its id, and its cache used. */
@@ -47,6 +48,8 @@ export type FromMesh =
       /** Its mesh, null if it holds no land; and its grids. */
       mesh: ChunkMesh | null;
       grids: ChunkGrids;
+      /** Its plants, PLANT_STRIDE floats each (plants.ts), placed on its land; null with none. */
+      plants: Float32Array | null;
     }
   /** A chunk that could not be had: final, for one refused; or not, while it is tried again. */
   | { type: 'failed'; number: number; path: string; world: string; reason: string; final: boolean };
@@ -174,8 +177,20 @@ export class MeshWorker {
     const look = this.#look;
     const mesh =
       look !== null && grids.elevation !== null && grids.surface !== null
-        ? buildChunk(n, grids.elevation, grids.surface, look, outsideOf(this.#edges))
+        ? buildChunk(
+            n,
+            grids.elevation,
+            grids.surface,
+            look,
+            outsideOf(this.#edges),
+            grids.features?.roofs,
+          )
         : null;
+    const placed =
+      look !== null && grids.elevation !== null && grids.surface !== null
+        ? placePlants(n, grids.elevation, grids.surface, grids.town, look.flora, look.terrace)
+        : null;
+    const plants = placed !== null && placed.length > 0 ? placed : null;
     const buildMs = this.#d.now() - t1;
     const transfer: Transferable[] = [];
     for (const b of [grids.elevation, grids.surface, grids.shelter]) {
@@ -185,6 +200,9 @@ export class MeshWorker {
     }
     if (mesh !== null) {
       transfer.push(mesh.positions.buffer, mesh.colours.buffer, mesh.indices.buffer);
+    }
+    if (plants !== null) {
+      transfer.push(plants.buffer);
     }
     const m: FromMesh = {
       type: 'chunk',
@@ -198,6 +216,7 @@ export class MeshWorker {
       buildMs,
       mesh: mesh !== null && mesh.triangles > 0 ? mesh : null,
       grids,
+      plants,
     };
     this.#d.post(m, transfer);
   }

@@ -9,4 +9,7 @@ import type { Catalog } from './types.gen';
 export type { Boat, Catalog, EncountersOverlay, Light, NamedStar, Sky } from './types.gen';
 export { CATALOG_VERSION } from './types.gen';
 
-export const catalog = data as Catalog;
+// The data is the schema's, validated against it by tools/catalog, which
+// writes the types from the same schema; TypeScript cannot compare the
+// JSON's inferred unions of optional lists with them.
+export const catalog = data as unknown as Catalog;
