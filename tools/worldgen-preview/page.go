@@ -4,11 +4,13 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"html"
 	"image"
 	"image/color"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -100,6 +102,8 @@ td, th { border-bottom: 1px solid #ddd; padding: 2px 8px; text-align: left; }
 <label><input type="checkbox" data-layer="coasts" checked> coasts</label>
 <label><input type="checkbox" data-layer="start" checked> start area</label>
 <label><input type="checkbox" data-layer="places" checked> places</label>
+<label><input type="checkbox" data-layer="features" checked> features</label>
+<label><input type="checkbox" data-layer="classes" checked> worth seeing</label>
 <label><input type="checkbox" data-layer="lights" checked> lights</label>
 <label><input type="checkbox" data-layer="ranges"> ranges</label>
 <label><input type="checkbox" data-layer="surfaces"> surfaces</label>
@@ -136,11 +140,28 @@ td, th { border-bottom: 1px solid #ddd; padding: 2px 8px; text-align: left; }
 		fmt.Fprintf(&p, "<tr><td>%s</td><td>%s</td><td>%s</td><td class=\"%s\">%s</td></tr>\n",
 			html.EscapeString(r.Name), html.EscapeString(r.Measured), html.EscapeString(r.Wants), class, word)
 	}
-	p.WriteString("</table>\n<h2>Islands</h2>\n<table>\n<tr><th>#</th><th>Name</th><th>Kind</th><th>Biome</th><th>Size</th><th>Zone</th><th>Across, m</th><th>Highest, m</th><th>Cliffs</th><th>Shows</th><th>At, m east, north</th></tr>\n")
-	for _, is := range b.Islands {
-		fmt.Fprintf(&p, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.0f</td><td>%.1f</td><td>%.0f%%</td><td>%s</td><td>%.0f, %.0f</td></tr>\n",
-			is.Number, html.EscapeString(is.Name), is.Kind, is.Biome, is.Size, is.Zone, 2*math.Sqrt(is.Area/math.Pi), is.Highest, 100*is.Cliffs,
+	p.WriteString("</table>\n<h2>Islands</h2>\n<p>By score, the US Bureau of Land Management's seven factors: landform, vegetation, water, colour, adjacent scenery, scarcity, cultural.</p>\n<table>\n<tr><th>#</th><th>Name</th><th>Kind</th><th>Biome</th><th>Size</th><th>Zone</th><th>Across, m</th><th>Highest, m</th><th>Cliffs</th><th>Class</th><th>Score</th><th>Factors</th><th>Shows</th><th>At, m east, north</th></tr>\n")
+	byScore := slices.Clone(b.Islands)
+	slices.SortStableFunc(byScore, func(a, c worldgen.Island) int { return cmp.Compare(c.Score, a.Score) })
+	for _, is := range byScore {
+		sc := is.Scenery
+		age := ""
+		if is.Age != "" {
+			age = " (" + is.Age + ")"
+		}
+		fmt.Fprintf(&p, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%s%s</td><td>%s</td><td>%s</td><td>%.0f</td><td>%.1f</td><td>%.0f%%</td><td>%s</td><td>%.1f</td><td>%.1f %.1f %.1f %.1f %.1f %.1f %.1f</td><td>%s</td><td>%.0f, %.0f</td></tr>\n",
+			is.Number, html.EscapeString(is.Name), is.Kind, is.Biome, age, is.Size, is.Zone, 2*math.Sqrt(is.Area/math.Pi), is.Highest, 100*is.Cliffs,
+			is.Class, is.Score, sc.Landform, sc.Vegetation, sc.Water, sc.Colour, sc.Adjacent, sc.Scarcity, sc.Cultural,
 			strings.Join(is.Shows, ", "), is.X, is.Y)
+	}
+	p.WriteString("</table>\n<h2>Features</h2>\n<p>Each island's own sheet, its roofs and features: <code>-island N</code>.</p>\n<table>\n<tr><th>#</th><th>Kind</th><th>Island</th><th>Height, m</th><th>Size, m</th><th>Seen from</th><th>At, m east, north</th></tr>\n")
+	for _, f := range b.Features {
+		seen := "not from the water"
+		if f.Seen {
+			seen = fmt.Sprintf("%.0f, %.0f", f.SightX, f.SightY)
+		}
+		fmt.Fprintf(&p, "<tr><td>%d</td><td>%s</td><td>%s</td><td>%.1f</td><td>%.1f</td><td>%s</td><td>%.0f, %.0f</td></tr>\n",
+			f.Number, f.Kind, html.EscapeString(b.Islands[f.Island].Name), f.Height, f.Size, seen, f.X, f.Y)
 	}
 	p.WriteString("</table>\n")
 	p.WriteString("<h2>Places</h2>\n<table>\n<tr><th>#</th><th>Name</th><th>Kind</th><th>Island</th><th>Zone</th><th>Offers</th><th>At, m east, north</th></tr>\n")
@@ -239,6 +260,24 @@ ul { font-size: 12px; padding-left: 16px; }
 			counts = append(counts, fmt.Sprintf("%s %d", k, kinds[k]))
 		}
 		fmt.Fprintf(&p, "<p>%s; %d lights</p>\n", html.EscapeString(strings.Join(counts, ", ")), len(b.Lights))
+		// The islands by class, and the features by kind.
+		classes := map[string]int{}
+		for _, is := range b.Islands {
+			classes[is.Class]++
+		}
+		fkinds := map[string]int{}
+		var forder []string
+		for _, f := range b.Features {
+			if fkinds[f.Kind] == 0 {
+				forder = append(forder, f.Kind)
+			}
+			fkinds[f.Kind]++
+		}
+		var fcounts []string
+		for _, k := range forder {
+			fcounts = append(fcounts, fmt.Sprintf("%s %d", k, fkinds[k]))
+		}
+		fmt.Fprintf(&p, "<p>Class A %d, B %d, C %d; %s</p>\n", classes["A"], classes["B"], classes["C"], html.EscapeString(strings.Join(fcounts, ", ")))
 		p.Write(charts[i])
 		p.WriteString("<ul>\n")
 		for _, r := range b.Report.Rules {

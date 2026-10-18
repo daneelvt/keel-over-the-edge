@@ -72,14 +72,6 @@ func ElevationColour(e float64) color.RGBA {
 	return tintAt(seaTints, -e)
 }
 
-// SurfaceColours are the surfaces' colours, by their index.
-var SurfaceColours = []color.RGBA{
-	{0xe8, 0xdc, 0xa8, 255}, {0xc2, 0xd1, 0x7f, 255}, {0x8f, 0xbf, 0x5e, 255}, {0x3e, 0x7d, 0x45, 255},
-	{0x8a, 0x86, 0x80, 255}, {0x4a, 0x45, 0x48, 255}, {0xa7, 0x9c, 0x5a, 255}, {0xd5, 0x5e, 0x00, 255},
-	// The towns': streets, quays, piers' decks and yards.
-	{0x60, 0x58, 0x50, 255}, {0xff, 0xff, 0xff, 255}, {0x7a, 0x3e, 0x1a, 255}, {0xcc, 0x79, 0xa7, 255},
-}
-
 // View maps the world to a chart: the world point at its top left, metres
 // a pixel and the chart's side in pixels.
 type View struct {
@@ -215,7 +207,9 @@ func islandCells(b *worldgen.Bundle, is *worldgen.Island) (c0, j0, c1, j1 int32)
 
 // Island is island i at the lattice's resolution, as an SVG: every hexagon
 // of its land and the water about it, as a polygon in its colour, three
-// pixels a metre, and a line naming it.
+// pixels a metre; its roofs, an arch's span or a cave's roof, at their
+// tops' colour, outlined, over the rock awash; its features, each named
+// where it is; and a line naming it.
 func Island(b *worldgen.Bundle, i int) ([]byte, error) {
 	if i < 0 || i >= len(b.Islands) {
 		return nil, fmt.Errorf("no island %d: the world has %d", i, len(b.Islands))
@@ -257,8 +251,32 @@ func Island(b *worldgen.Bundle, i int) ([]byte, error) {
 	for _, col := range order {
 		fmt.Fprintf(&s, `<path fill="#%02x%02x%02x" d="%s"/>`+"\n", col.R, col.G, col.B, byColour[col].String())
 	}
-	fmt.Fprintf(&s, `<text x="10" y="24" font-size="18" fill="#111">%s: %s, %s, %.0f m across, %.1f m high</text>`+"\n",
-		html.EscapeString(is.Name), is.Biome, is.Size, 2*math.Sqrt(is.Area/math.Pi), is.Highest)
+	at := func(x, y float64) (float64, float64) {
+		return float64((x - x0 + 4) * scale), float64((y1 - y + 4) * scale)
+	}
+	for _, rf := range b.Roofs {
+		if rf.C < c0 || rf.C > c1 || rf.J < j0 || rf.J > j1 {
+			continue
+		}
+		x, y := physics.CellCentre(rf.C, rf.J)
+		px, py := at(x, y)
+		col := ElevationColour(float64(rf.Top) / 10)
+		fmt.Fprintf(&s, `<path fill="#%02x%02x%02x" fill-opacity="0.75" stroke="#111" stroke-width="1.2" stroke-dasharray="3 2" d="M%.1f %.1f`, col.R, col.G, col.B, px+float64(r*scale), py)
+		for k := 1; k < 6; k++ {
+			fmt.Fprintf(&s, "L%.1f %.1f", px+float64(r*scale*hexCos[k]), py-float64(r*scale*hexSin[k]))
+		}
+		fmt.Fprintf(&s, `Z"><title>a roof from %.1f m to %.1f m</title></path>`+"\n", float64(rf.Under)/10, float64(rf.Top)/10)
+	}
+	for _, f := range b.Features {
+		if f.Island != is.Number {
+			continue
+		}
+		px, py := at(f.X, f.Y)
+		fmt.Fprintf(&s, `<circle cx="%.1f" cy="%.1f" r="5" fill="#fff" stroke="#111"/><text x="%.1f" y="%.1f" font-size="13" fill="#111" stroke="#fff" stroke-width="3" paint-order="stroke">%s, %.0f m</text>`+"\n",
+			px, py, px+8, py+4, html.EscapeString(f.Kind), f.Height)
+	}
+	fmt.Fprintf(&s, `<text x="10" y="24" font-size="18" fill="#111">%s: %s, %s, %.0f m across, %.1f m high, class %s (%.1f)</text>`+"\n",
+		html.EscapeString(is.Name), is.Biome, is.Size, 2*math.Sqrt(is.Area/math.Pi), is.Highest, is.Class, is.Score)
 	s.WriteString("</svg>\n")
 	return s.Bytes(), nil
 }
