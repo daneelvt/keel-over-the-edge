@@ -162,6 +162,9 @@ type Config struct {
 	Chunks *Handout
 	// MainLight is the main port's light, which the Welcome carries, or nil.
 	MainLight *pb.Light
+	// Chart, if not nil, is the world's chart: sent whole after the
+	// Welcome, then what is charted as it is written.
+	Chart ChartSource
 	// Circulation is the world's way round the disk for its current, as
 	// the Welcome tells the client: 1, −1 or 0 for none.
 	Circulation int32

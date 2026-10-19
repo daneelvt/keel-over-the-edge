@@ -18,6 +18,24 @@ type Account struct {
 	SavedAt    pgtype.Timestamptz
 	LastSeenAt time.Time
 	Tools      bool
+	NoticesOff []string
+}
+
+type Charting struct {
+	WorldID     pgtype.UUID
+	Subject     string
+	Number      int32
+	AccountID   pgtype.UUID
+	Sailor      pgtype.Text
+	AccountKind pgtype.Text
+	Boat        pgtype.Int8
+	Tick        int64
+	X           pgtype.Float8
+	Y           pgtype.Float8
+	Worth       float64
+	WithSubject pgtype.Text
+	WithNumber  pgtype.Int4
+	ChartedAt   time.Time
 }
 
 type Checkpoint struct {
@@ -61,6 +79,25 @@ type Light struct {
 	Focal     float64
 	Tower     float64
 	Daymark   int16
+}
+
+type NewsItem struct {
+	WorldID      pgtype.UUID
+	ID           pgtype.UUID
+	NewsColumn   string
+	AccountID    pgtype.UUID
+	Sailor       pgtype.Text
+	AccountKind  pgtype.Text
+	Subject      string
+	Number       int32
+	Title        string
+	What         string
+	IslandNumber pgtype.Int4
+	Worth        float64
+	X            float64
+	Y            float64
+	Also         []byte
+	WrittenAt    time.Time
 }
 
 type Place struct {

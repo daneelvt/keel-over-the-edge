@@ -24,6 +24,9 @@ const (
 	kindRock     = "group"
 )
 
+// KindMain is the kind of the main port's island, as Island.Kind names it.
+const KindMain = kindMain
+
 // spot is a placed island before it is made: its centre, its radius, half
 // its nominal width, and how far its shape may reach, as a multiple of it.
 type spot struct {

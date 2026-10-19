@@ -32,8 +32,15 @@ type Edge struct {
 }
 
 // rules sends the boats at or beyond the lip over it, and follows each
-// boat's approach to it.
+// boat's approach to it; then the lookouts look.
 func (w *World) rules() {
+	w.edgeRules()
+	w.sighting()
+}
+
+// edgeRules sends the boats at or beyond the lip over it, and follows each
+// boat's approach to it.
+func (w *World) edgeRules() {
 	if w.edge == nil {
 		return
 	}

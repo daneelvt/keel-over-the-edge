@@ -73,11 +73,15 @@ type Checkpoint struct {
 }
 
 // Batch is what a fenced transaction writes: events in order, then the
-// checkpoint, if any.
+// chartings and the news they make, then the checkpoint, if any. A
+// charting's news is folded into its sailor's item about its island
+// written within FoldWithin.
 type Batch struct {
 	World      [16]byte
 	Epoch      int64 // the writer's lease epoch
 	Events     []Event
+	Charting   []Charting
+	FoldWithin time.Duration
 	Checkpoint *Checkpoint
 }
 
@@ -165,6 +169,9 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 			if _, err := q.InsertEvents(ctx, rows); err != nil {
 				return err
 			}
+		}
+		if err := writeChartings(ctx, q, world, &b); err != nil {
+			return err
 		}
 		if c := b.Checkpoint; c != nil {
 			err := q.UpsertCheckpoint(ctx, db.UpsertCheckpointParams{

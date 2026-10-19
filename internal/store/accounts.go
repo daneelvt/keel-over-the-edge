@@ -51,6 +51,9 @@ type Account struct {
 	// Tools is the owner's flag: the account's sailor has the owner's
 	// tools in the game. Only a human account carries it.
 	Tools bool
+	// NoticesOff are the kinds of notice its sailor has switched off, by
+	// the catalog's ids.
+	NoticesOff []string
 }
 
 // Guest is what makes a guest: a sailor, and the first session's token

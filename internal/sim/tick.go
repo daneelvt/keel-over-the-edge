@@ -99,6 +99,7 @@ func (w *World) inputs() {
 	clear(next.Events) // drop the old events' references
 	next.Events = next.Events[:0]
 	next.Edges = next.Edges[:0]
+	next.Charted = next.Charted[:0]
 	w.restarted = w.restarted[:0]
 	w.expire()
 	w.fallsEnd()

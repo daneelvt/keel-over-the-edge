@@ -275,6 +275,10 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					owner.TrySend(bus.Command{Op: bus.Stay, Boat: boats[rng.IntN(len(boats))].boat, On: rng.IntN(2) == 0})
 				case r < 15 && len(boats) > 0:
 					owner.TrySend(bus.Command{Op: bus.Unseen, Boat: boats[rng.IntN(len(boats))].boat, On: rng.IntN(2) == 0})
+				case r < 16:
+					// The chart marked by hand, as a world's start marks
+					// what it knows.
+					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.Chart, Subject: int32(n % 4), On: n%7 == 0})
 				case len(boats) > 0:
 					// Moved to open water, to the lip to go over, or into
 					// the mist band.

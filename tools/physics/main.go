@@ -33,6 +33,9 @@ const (
 	// weatherPkg says which spells of weather blow when, in whole numbers:
 	// it is checked as the simulation is.
 	weatherPkg = "./internal/weather"
+	// sightPkg decides what a boat's lookout sees, in the simulation's
+	// tick: it is held to the float rules too, and checked as it is.
+	sightPkg = "./internal/sight"
 	// worldgenDir is the world generator, held to the float rules so that
 	// a seed makes the same world on every machine.
 	worldgenDir = "internal/worldgen"
@@ -115,7 +118,7 @@ func runCheck(ctx context.Context) error {
 		return err
 	}
 	problems = append(problems, found...)
-	for _, pkg := range []string{"./" + physicsDir, "./" + skyDir, simPkg, weatherPkg, "./" + worldgenDir} {
+	for _, pkg := range []string{"./" + physicsDir, "./" + skyDir, simPkg, weatherPkg, sightPkg, "./" + worldgenDir} {
 		found, err = checkFused(ctx, pkg)
 		if err != nil {
 			return err

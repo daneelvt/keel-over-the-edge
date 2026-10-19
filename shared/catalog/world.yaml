@@ -131,13 +131,14 @@ world:
 
   # Size classes by an island's width, the diameter of a circle of its
   # area: each holds the islands narrower than below m and no narrower than
-  # the class before's, by the word the names give it.
+  # the class before's, by the word the names give it; worth is what
+  # charting one is worth before its zone and its scenery (world.chart).
   sizes:
-    - { class: rock, below: 30 }
-    - { class: islet, below: 100 }
-    - { class: small, below: 250 }
-    - { class: medium, below: 450 }
-    - { class: large, below: 20000 }
+    - { class: rock, worth: 1, below: 30 }
+    - { class: islet, worth: 2, below: 100 }
+    - { class: small, worth: 3, below: 250 }
+    - { class: medium, worth: 5, below: 450 }
+    - { class: large, worth: 8, below: 20000 }
 
   land: [0.3, 80] # m: the lowest and the highest land
   # Loose ground stands at its angle of repose, 30–40°; steeper is cliff
@@ -523,18 +524,21 @@ world:
   # effects of the wind and sea"; an anchorage "neither too deep, shallow,
   # or exposed"; a cove an inlet narrower at its mouth than it is deep.
   # count is how many a world has, the least and the most; mark the colour
-  # the world page marks it with.
+  # the world page marks it with; worth what charting one is worth; water
+  # for a place seen by looking into it, awash for one seen by the water
+  # breaking on it (world.chart.sight); news for one whose charting is an
+  # item of the news of its own, not folded into its island's.
   places:
     kinds:
-      - { id: port, name: Port, site: harbour, count: [5, 5], mark: "#b3261e" }
-      - { id: fishing-village, name: Fishing village, site: village, count: [6, 8], mark: "#8a5a2b" }
-      - { id: lighthouse, name: Lighthouse, site: light, count: [20, 30], mark: "#e8b400" }
-      - { id: anchorage, name: Anchorage, site: anchorage, count: [6, 8], mark: "#2b5f8a" }
-      - { id: cove, name: Cove, site: cove, count: [0, 12], mark: "#3d8a6a" }
-      - { id: lagoon, name: Lagoon, site: lagoon, count: [0, 40], mark: "#2aa7a1" }
-      - { id: reef, name: Reef, site: reef, count: [4, 80], mark: "#c2563a" }
-      - { id: sandbar, name: Sandbar, site: bar, count: [3, 80], mark: "#c9a227" }
-      - { id: wreck, name: Wreck, site: wreck, count: [8, 8], mark: "#5a4632" }
+      - { id: port, name: Port, site: harbour, count: [5, 5], mark: "#b3261e", worth: 5, news: true }
+      - { id: fishing-village, name: Fishing village, site: village, count: [6, 8], mark: "#8a5a2b", worth: 2 }
+      - { id: lighthouse, name: Lighthouse, site: light, count: [20, 30], mark: "#e8b400", worth: 3, news: true }
+      - { id: anchorage, name: Anchorage, site: anchorage, count: [6, 8], mark: "#2b5f8a", worth: 1, water: true }
+      - { id: cove, name: Cove, site: cove, count: [0, 12], mark: "#3d8a6a", worth: 1, water: true }
+      - { id: lagoon, name: Lagoon, site: lagoon, count: [0, 40], mark: "#2aa7a1", worth: 1, water: true }
+      - { id: reef, name: Reef, site: reef, count: [4, 80], mark: "#c2563a", worth: 1, awash: true }
+      - { id: sandbar, name: Sandbar, site: bar, count: [3, 80], mark: "#c9a227", worth: 1, awash: true }
+      - { id: wreck, name: Wreck, site: wreck, count: [8, 8], mark: "#5a4632", worth: 3, news: true }
     # A port: on a landmark island, at the stretch of its coast with the
     # least fetch over the 16 directions where water depth m deep lies
     # within within m of the shore; reachable from the start; not in the
@@ -896,21 +900,21 @@ world:
   # is young; ruins; and seabird colonies on stacks, cliffs and cays. Each
   # kind with its site, the word it shows names, the biomes whose islands
   # have it, the chance one with a site for it does (a ruin's and a
-  # colony's, its weight among the world's), its weight by zone, and the
-  # colour the world page marks it with. Starting values, judged in the
-  # preview.
+  # colony's, its weight among the world's), its weight by zone, the
+  # colour the world page marks it with, what charting one is worth and the
+  # chart's symbol for it. Starting values, judged in the preview.
   features:
     kinds:
-      - { id: sea-cave, name: Sea cave, site: cave, word: cave, biomes: [rocky, volcanic, wooded], chance: 0.35, zones: { centre: 0.7, middle: 1.6, rim: 1.3 }, mark: "#5b4a8a" }
-      - { id: sea-arch, name: Sea arch, site: arch, word: arch, biomes: [rocky, volcanic, wooded], chance: 0.4, zones: { centre: 0.6, middle: 1.8, rim: 1.5 }, mark: "#8a3d6b" }
-      - { id: blowhole, name: Blowhole, site: blowhole, word: cave, biomes: [rocky, volcanic, wooded], chance: 0.6, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#3d6b8a" }
-      - { id: waterfall, name: Waterfall, site: waterfall, word: waterfall, biomes: [tropical, wooded, rocky, volcanic], chance: 0.7, zones: { centre: 0.8, middle: 1.6, rim: 1.2 }, mark: "#2f7fb3" }
-      - { id: spring, name: Spring, site: spring, word: spring, biomes: [tropical, wooded, rocky, volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#5fa3c9" }
-      - { id: crater, name: Crater, site: crater, biomes: [volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#6b4a3a" }
-      - { id: fumarole, name: Fumarole, site: fumarole, word: smoke, biomes: [volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#c9b43a" }
-      - { id: ruined-chapel, name: Ruined chapel, site: ruin, ruin: chapel, word: ruins, biomes: [wooded, tropical, rocky, sandy, volcanic], chance: 1, zones: { centre: 0.5, middle: 1, rim: 1.5 }, mark: "#7a6a5a" }
-      - { id: ruined-beacon, name: Ruined beacon, site: ruin, ruin: beacon, word: ruins, biomes: [wooded, tropical, rocky, volcanic], chance: 1, zones: { centre: 0.5, middle: 1, rim: 1.5 }, mark: "#8a6a3a" }
-      - { id: deserted-hamlet, name: Deserted hamlet, site: ruin, ruin: hamlet, word: ruins, biomes: [wooded, tropical, rocky, sandy, volcanic], chance: 1, zones: { centre: 0.5, middle: 1, rim: 1.5 }, mark: "#9a7a5a" }
+      - { id: sea-cave, name: Sea cave, site: cave, word: cave, biomes: [rocky, volcanic, wooded], chance: 0.35, zones: { centre: 0.7, middle: 1.6, rim: 1.3 }, mark: "#5b4a8a", worth: 2, symbol: cave }
+      - { id: sea-arch, name: Sea arch, site: arch, word: arch, biomes: [rocky, volcanic, wooded], chance: 0.4, zones: { centre: 0.6, middle: 1.8, rim: 1.5 }, mark: "#8a3d6b", worth: 2, symbol: arch }
+      - { id: blowhole, name: Blowhole, site: blowhole, word: cave, biomes: [rocky, volcanic, wooded], chance: 0.6, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#3d6b8a", worth: 2, symbol: blowhole }
+      - { id: waterfall, name: Waterfall, site: waterfall, word: waterfall, biomes: [tropical, wooded, rocky, volcanic], chance: 0.7, zones: { centre: 0.8, middle: 1.6, rim: 1.2 }, mark: "#2f7fb3", worth: 2, symbol: fall }
+      - { id: spring, name: Spring, site: spring, word: spring, biomes: [tropical, wooded, rocky, volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#5fa3c9", worth: 2, symbol: spring }
+      - { id: crater, name: Crater, site: crater, biomes: [volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#6b4a3a", worth: 2, symbol: crater }
+      - { id: fumarole, name: Fumarole, site: fumarole, word: smoke, biomes: [volcanic], chance: 1, zones: { centre: 1, middle: 1, rim: 1 }, mark: "#c9b43a", worth: 2, symbol: smoke }
+      - { id: ruined-chapel, name: Ruined chapel, site: ruin, ruin: chapel, word: ruins, biomes: [wooded, tropical, rocky, sandy, volcanic], chance: 1, zones: { centre: 0.5, middle: 1, rim: 1.5 }, mark: "#7a6a5a", worth: 2, symbol: ruin }
+      - { id: ruined-beacon, name: Ruined beacon, site: ruin, ruin: beacon, word: ruins, biomes: [wooded, tropical, rocky, volcanic], chance: 1, zones: { centre: 0.5, middle: 1, rim: 1.5 }, mark: "#8a6a3a", worth: 2, symbol: ruin }
+      - { id: deserted-hamlet, name: Deserted hamlet, site: ruin, ruin: hamlet, word: ruins, biomes: [wooded, tropical, rocky, sandy, volcanic], chance: 1, zones: { centre: 0.5, middle: 1, rim: 1.5 }, mark: "#9a7a5a", worth: 2, symbol: ruin }
       # Gannets on stacks and cliff ledges (Bird Rock, Cape St Mary's: some
       # 30,000 birds); brown boobies on cays and cliffs; frigatebirds over
       # mangroves and trees (Half Moon Caye). Each colony's birds: where they
@@ -924,6 +928,8 @@ world:
         chance: 1
         zones: { centre: 0.3, middle: 1, rim: 2 }
         mark: "#e8e6dc"
+        worth: 2
+        symbol: birds
         birds: { nests: [stack, cliff], span: 1.75, body: "#f2f0e8", wing: "#f2f0e8", tip: "#1e1c1a", flap: 3, glide: 0.5, call: harsh }
       - id: booby-colony
         name: Booby colony
@@ -933,6 +939,8 @@ world:
         chance: 1
         zones: { centre: 1, middle: 1, rim: 0.6 }
         mark: "#b89a70"
+        worth: 2
+        symbol: birds
         birds: { nests: [cay, cliff], span: 1.4, body: "#efece4", wing: "#5a4634", tip: "#4a3a2a", flap: 3.5, glide: 0.4, call: whistle }
       - id: frigatebird-roost
         name: Frigatebird roost
@@ -942,6 +950,8 @@ world:
         chance: 0.6
         zones: { centre: 1, middle: 1, rim: 0.6 }
         mark: "#3a3436"
+        worth: 2
+        symbol: birds
         birds: { nests: [trees], span: 2.3, body: "#1c1a1a", wing: "#1c1a1a", tip: "#1c1a1a", flap: 2, glide: 0.85, call: rattle }
     # On a headland whose coast stands cliff m or higher: a cave depth
     # hexagons in from the cliff's foot, its roof's underside underside m
@@ -1072,3 +1082,45 @@ world:
     adjacent: { within: 1000, island: 0.5, featured: 1 }
     scarcity: { rare: 1, few: 3, region: 3000 }
     cultural: { ruin: 2, light: 1, town: 1 }
+
+  # The shared chart. A boat's lookout looks once every sight.every ticks,
+  # the boats in turn by number: an island is sighted when any cell of its
+  # land, trees and buildings is over the dome's horizon from the eye; a
+  # place or a feature that stands high along its view, worked out on
+  # sight.rays bearings, round its own island's land (a feature within
+  # sight.features m); a cove, an anchorage or a lagoon seen into within
+  # sight.water m; a reef, a bar or a sunk wreck within sight.awash m, by
+  # the water breaking on it; a lighthouse at night by its light, within its
+  # range and as the mist lets it. Every reach is no more than the mist
+  # band's visual range at the eye and at the thing. Sights are filed in
+  # squares of sight.grid m.
+  #
+  # What a discovery is worth: an island's size class's worth (sizes) times
+  # its zone's and its scenery's class's, worth.zones and worth.classes; a
+  # place's or a feature's its kind's. One worth worth.great or more is a
+  # great discovery, told to everyone at sea.
+  #
+  # Each charted island's model on the chart: a grid of cells model.cell
+  # hexagons a side, each its highest ground and its surface, drawn as
+  # columns model.heights times as high as the land.
+  #
+  # The chart's look, after the period's charts: its paper and inks; a
+  # parallel of latitude every look.parallels nautical miles and a meridian
+  # every look.meridians degrees; drawn at most look.fps frames a second; its
+  # wind as streaks from a grid of look.wind points a side.
+  chart:
+    sight: { every: 15, rays: 48, water: 300, awash: 150, features: 300, grid: 500 }
+    worth: { zones: { centre: 1, middle: 1.5, rim: 2 }, classes: { a: 2, b: 1.5, c: 1 }, great: 20 }
+    model: { cell: 4, heights: 6 }
+    look:
+      paper: "#ece0c2"
+      ink: "#3b2e22"
+      sea: "#d8d6c0"
+      shallows: "#c9d3c4"
+      mist: "#9aa3a4"
+      light: "#a8236e"
+      boat: "#c8952c"
+      parallels: 1
+      meridians: 30
+      fps: 30
+      wind: 64

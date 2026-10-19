@@ -214,6 +214,7 @@ type memDB struct {
 	lose       chan struct{} // closed: the holder's lease is lost for good
 	checkpoint *store.Checkpoint
 	events     []store.Event
+	chartings  []store.Charting
 	down       bool // the world's writes fail
 	bundle     *store.Bundle
 	number     int // worlds ended before the active one
@@ -378,6 +379,17 @@ func (d *memDB) Write(_ context.Context, b store.Batch) error {
 		return errors.New("the database is down")
 	}
 	d.events = append(d.events, b.Events...)
+	for i := range b.Charting {
+		c := &b.Charting[i]
+		if slices.ContainsFunc(d.chartings, func(o store.Charting) bool { return o.Subject == c.Subject && o.Number == c.Number }) {
+			continue
+		}
+		c.Written, c.At = true, time.Now()
+		if c.Credited {
+			c.Sailor, c.AccountKind = "a sailor", string(store.Human)
+		}
+		d.chartings = append(d.chartings, *c)
+	}
 	if b.Checkpoint != nil {
 		c := *b.Checkpoint
 		c.Data = slices.Clone(c.Data)
@@ -386,6 +398,18 @@ func (d *memDB) Write(_ context.Context, b store.Batch) error {
 	}
 	return nil
 }
+
+func (d *memDB) Chartings(context.Context, [16]byte) ([]store.Charting, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.chartings), nil
+}
+
+func (d *memDB) News(context.Context, [16]byte, *[16]byte, int) ([]store.News, error) {
+	return nil, nil
+}
+
+func (d *memDB) SetNoticesOff(context.Context, store.AccountID, []string) error { return nil }
 
 func (d *memDB) CreateGuest(context.Context, store.Guest) (store.AccountID, error) {
 	return store.AccountID{}, errors.New("memDB makes no guests")

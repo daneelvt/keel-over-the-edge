@@ -133,6 +133,10 @@ type Boat struct {
 	// full circle once.
 	Lights []Light `json:"lights"`
 
+	// How high its lookout's eye is above the sea, in m: what it sees over the
+	// horizon.
+	Lookout float64 `json:"lookout"`
+
 	// Display name.
 	Name string `json:"name"`
 
@@ -239,6 +243,12 @@ type Catalog struct {
 	// Encounters corresponds to the JSON schema field "encounters".
 	Encounters Encounters `json:"encounters"`
 
+	// News corresponds to the JSON schema field "news".
+	News News `json:"news"`
+
+	// Notices corresponds to the JSON schema field "notices".
+	Notices Notices `json:"notices"`
+
 	// The figures that sail the boats. The first is the one drawn until players
 	// choose their own.
 	Sailors []Sailor `json:"sailors"`
@@ -253,6 +263,86 @@ type Catalog struct {
 	World World `json:"world"`
 }
 
+// How the chart is drawn: its paper and inks, its graticule, how often it is drawn
+// and its wind.
+type ChartLook struct {
+	// Boat corresponds to the JSON schema field "boat".
+	Boat Colour `json:"boat"`
+
+	// The most frames a second the chart is drawn at.
+	Fps int `json:"fps"`
+
+	// Ink corresponds to the JSON schema field "ink".
+	Ink Colour `json:"ink"`
+
+	// Light corresponds to the JSON schema field "light".
+	Light Colour `json:"light"`
+
+	// A meridian every this many degrees.
+	Meridians float64 `json:"meridians"`
+
+	// Mist corresponds to the JSON schema field "mist".
+	Mist Colour `json:"mist"`
+
+	// Paper corresponds to the JSON schema field "paper".
+	Paper Colour `json:"paper"`
+
+	// A parallel of latitude every this many nautical miles from the centre.
+	Parallels float64 `json:"parallels"`
+
+	// Sea corresponds to the JSON schema field "sea".
+	Sea Colour `json:"sea"`
+
+	// Shallows corresponds to the JSON schema field "shallows".
+	Shallows Colour `json:"shallows"`
+
+	// The wind's streaks are drawn from a grid of this many points a side.
+	Wind int `json:"wind"`
+}
+
+// An island's model on the chart: a coarse grid of its land.
+type ChartModel struct {
+	// A cell is this many hexagons on a side.
+	Cell int `json:"cell"`
+
+	// Heights are drawn this many times their own.
+	Heights float64 `json:"heights"`
+}
+
+// How often and how far a lookout looks.
+type ChartSight struct {
+	// A reef, a sandbar or a sunk wreck is seen within this, in m.
+	Awash float64 `json:"awash"`
+
+	// A boat looks once in this many ticks.
+	Every int `json:"every"`
+
+	// A feature is seen within this, in m.
+	Features float64 `json:"features"`
+
+	// The side of the squares the world's sights are filed by, in m.
+	Grid float64 `json:"grid"`
+
+	// The bearings a place's view is worked out on.
+	Rays int `json:"rays"`
+
+	// A cove, an anchorage or a lagoon is seen into within this, in m.
+	Water float64 `json:"water"`
+}
+
+// What a discovery is worth: an island's size class's worth times its zone's and
+// its class of scenery's.
+type ChartWorth struct {
+	// Classes corresponds to the JSON schema field "classes".
+	Classes Classes `json:"classes"`
+
+	// A discovery worth this or more is a great one.
+	Great float64 `json:"great"`
+
+	// Zones corresponds to the JSON schema field "zones".
+	Zones BiomeZones `json:"zones"`
+}
+
 type Class string
 
 const ClassFl Class = "Fl"
@@ -260,6 +350,17 @@ const ClassIso Class = "Iso"
 const ClassLFl Class = "LFl"
 const ClassMo Class = "Mo"
 const ClassOc Class = "Oc"
+
+type Classes struct {
+	// Class A's times.
+	A float64 `json:"a"`
+
+	// Class B's times.
+	B float64 `json:"b"`
+
+	// Class C's times.
+	C float64 `json:"c"`
+}
 
 // A colony's birds: where they nest, and how they look, fly and call.
 type ColonyBirds struct {
@@ -568,8 +669,14 @@ type FeatureKind struct {
 	// Where it is made: the rule its sites follow.
 	Site FeatureSite `json:"site"`
 
+	// How the chart marks it.
+	Symbol *Symbol `json:"symbol,omitempty,omitzero"`
+
 	// The feature it shows names, by the word the names need it by.
 	Word *string `json:"word,omitempty,omitzero"`
+
+	// What charting one is worth.
+	Worth float64 `json:"worth"`
 
 	// Zones corresponds to the JSON schema field "zones".
 	Zones BiomeZones `json:"zones"`
@@ -725,6 +832,11 @@ type KitArt struct {
 	// Model corresponds to the JSON schema field "model".
 	Model ArtPath `json:"model"`
 }
+
+type Level string
+
+const LevelActive Level = "active"
+const LevelPassive Level = "passive"
 
 type Light string
 
@@ -959,6 +1071,77 @@ const NestCay Nest = "cay"
 const NestCliff Nest = "cliff"
 const NestStack Nest = "stack"
 const NestTrees Nest = "trees"
+
+// The news sheet: its columns, and how its items are folded and paged.
+type News struct {
+	// Columns corresponds to the JSON schema field "columns".
+	Columns []NewsColumn `json:"columns"`
+
+	// A sailor's places charted within this of an island's item are folded into it,
+	// in minutes.
+	Fold float64 `json:"fold"`
+
+	// Items to a page.
+	Page int `json:"page"`
+}
+
+// A column of the news sheet.
+type NewsColumn struct {
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// What its items tell of.
+	Of Of `json:"of"`
+
+	// Its heading.
+	Title string `json:"title"`
+}
+
+// A kind of notice: what raises it, its words, how urgent it is, whether it can be
+// switched off and how long it stays.
+type NoticeKind struct {
+	// Its words for several at once: {count} is filled in.
+	Folded string `json:"folded"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Passive notices are for the player's leisure; active ones for now.
+	Level Level `json:"level"`
+
+	// Its name in the menu's switches.
+	Name string `json:"name"`
+
+	// What raises it: a place the player charts, or a great discovery by anyone.
+	On On `json:"on"`
+
+	// How long it stays unless dismissed, in s.
+	Stays float64 `json:"stays"`
+
+	// The player may switch it off.
+	Switchable bool `json:"switchable"`
+
+	// Its words: {name}, {who}, {where} and {worth} are filled in.
+	Text string `json:"text"`
+}
+
+// The notices that pop up: one at a time, the rest queued, the same kind folded.
+type Notices struct {
+	// Kinds corresponds to the JSON schema field "kinds".
+	Kinds []NoticeKind `json:"kinds"`
+
+	// How many notices may wait behind the one shown.
+	Queue int `json:"queue"`
+}
+
+type Of string
+
+const OfCharting Of = "charting"
+
+type On string
+
+const OnChartedGreat On = "charted-great"
+const OnChartedOwn On = "charted-own"
 
 // How the boat's autopilot steers it: a proportional–integral–derivative law on
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
@@ -1422,6 +1605,10 @@ type PlaceHarbour struct {
 // A kind of place: what makes its site, how many a world has, and its mark on the
 // world page.
 type PlaceKind struct {
+	// It lies awash: seen by the water breaking on it, within the chart's awash
+	// reach, not over the horizon.
+	Awash *bool `json:"awash,omitempty,omitzero"`
+
 	// How many a world has, the least and the most.
 	Count []int `json:"count"`
 
@@ -1434,8 +1621,18 @@ type PlaceKind struct {
 	// Its name, as the world page lists it.
 	Name string `json:"name"`
 
+	// Its charting is an item of the news of its own; otherwise it is folded into its
+	// island's.
+	News *bool `json:"news,omitempty,omitzero"`
+
 	// The rule its sites are found by.
 	Site Site `json:"site"`
+
+	// It is water: seen by looking into it, within the chart's water reach.
+	Water *bool `json:"water,omitempty,omitzero"`
+
+	// What charting one is worth.
+	Worth float64 `json:"worth"`
 }
 
 // A lagoon's site.
@@ -1984,6 +2181,18 @@ type SurfaceLook struct {
 	Top Colour `json:"top"`
 }
 
+type Symbol string
+
+const SymbolArch Symbol = "arch"
+const SymbolBirds Symbol = "birds"
+const SymbolBlowhole Symbol = "blowhole"
+const SymbolCave Symbol = "cave"
+const SymbolCrater Symbol = "crater"
+const SymbolFall Symbol = "fall"
+const SymbolRuin Symbol = "ruin"
+const SymbolSmoke Symbol = "smoke"
+const SymbolSpring Symbol = "spring"
+
 type Town string
 
 const TownDeck Town = "deck"
@@ -2418,6 +2627,9 @@ type World struct {
 	// The biomes: each an island's terrain.
 	Biomes []Biome `json:"biomes"`
 
+	// Chart corresponds to the JSON schema field "chart".
+	Chart WorldChart `json:"chart"`
+
 	// Disk corresponds to the JSON schema field "disk".
 	Disk WorldDisk `json:"disk"`
 
@@ -2498,6 +2710,22 @@ type World struct {
 
 	// Zones corresponds to the JSON schema field "zones".
 	Zones WorldZones `json:"zones"`
+}
+
+// The shared chart: what a lookout sees, what a discovery is worth, the islands'
+// models and how the chart is drawn.
+type WorldChart struct {
+	// Look corresponds to the JSON schema field "look".
+	Look ChartLook `json:"look"`
+
+	// Model corresponds to the JSON schema field "model".
+	Model ChartModel `json:"model"`
+
+	// Sight corresponds to the JSON schema field "sight".
+	Sight ChartSight `json:"sight"`
+
+	// Worth corresponds to the JSON schema field "worth".
+	Worth ChartWorth `json:"worth"`
 }
 
 // The disk.
@@ -3028,6 +3256,10 @@ type WorldSize struct {
 
 	// The class's word, as the names give it.
 	Class string `json:"class"`
+
+	// What charting an island of the class is worth, before its zone and its class of
+	// scenery.
+	Worth float64 `json:"worth"`
 }
 
 // Where boats start: moored in Port Royal's basin, then the roads off its coast
@@ -3131,4 +3363,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "6296ddce9014d261"
+const Version = "ed409777f028c3f5"
