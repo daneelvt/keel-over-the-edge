@@ -51,6 +51,7 @@ type Config struct {
 	Limit    int // the boat limit; the capacity if 0
 	Encoders int // the edge's encoders; GOMAXPROCS if 0
 	Limits   edge.Limits
+	Ends     time.Time // the world's end, as Welcome tells it
 	// Kinds are the world's boats, prepared, and Waves the sea they were
 	// prepared for; the catalog's if Kinds is nil.
 	Kinds []physics.Prepared
@@ -172,7 +173,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 	s.World = w
 	s.Loop = loop.New(loop.Config{World: w, Epoch: Epoch, Log: log, Metrics: m})
 	s.Edge = edge.New(edge.Config{
-		Bus: w.Bus(), World: WorldID, Epoch: Epoch, Clock: s.Loop,
+		Bus: w.Bus(), World: WorldID, Epoch: Epoch, Ends: cfg.Ends, Clock: s.Loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
 		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain),

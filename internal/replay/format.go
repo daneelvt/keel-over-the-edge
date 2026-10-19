@@ -46,7 +46,7 @@ import (
 //	            their results (count, then each: op, its fields, result, slot, boat, generation,
 //	            place in the queue, tick queued at); an account is its 16 bytes; a yes or
 //	            no a byte, 1 or 0; a Teleport its boat, whether to the start and its state;
-//	            a Stay or Unseen its boat and whether on; a boat whose
+//	            a Stay or Unseen its boat and whether on; an End its last tick; a boat whose
 //	            grace ended is a Leave with the result Expired, and a connection given a boat
 //	            from the queue a Join with the result Admitted, which the tick makes itself
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
@@ -54,7 +54,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 8
+	formatVersion = 9
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -189,6 +189,8 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 	case bus.Chart:
 		dst = binary.AppendVarint(dst, int64(e.Subject))
 		dst = append(dst, flag(e.On))
+	case bus.End:
+		dst = binary.AppendVarint(dst, e.At)
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -533,6 +535,8 @@ func (p *payload) event(e *bus.Event) {
 		}
 		e.Subject = int32(subject)
 		e.On = p.flag("every subject charted")
+	case bus.End:
+		e.At = p.varint()
 	default:
 		if p.err == nil {
 			p.err = fmt.Errorf("unknown command %d", e.Op)

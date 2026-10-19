@@ -93,7 +93,7 @@ var closeCodes = []websocket.StatusCode{
 	websocket.StatusNormalClosure, websocket.StatusGoingAway, websocket.StatusProtocolError,
 	websocket.StatusUnsupportedData, websocket.StatusPolicyViolation, websocket.StatusMessageTooBig,
 	websocket.StatusInternalError, websocket.StatusServiceRestart, websocket.StatusTryAgainLater,
-	CloseReplaced, CloseVersion, CloseRemoved,
+	CloseReplaced, CloseVersion, CloseRemoved, CloseWorldEnded,
 }
 
 type metrics struct {

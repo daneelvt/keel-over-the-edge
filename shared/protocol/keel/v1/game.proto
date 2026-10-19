@@ -449,6 +449,11 @@ message Welcome {
   // The main port's light, seen from everywhere in the world; none in a
   // world without land.
   Light light = 11;
+  // When the world ends: microseconds of UTC since 1970, 0 for no end
+  // known. At its end the falls take the world, its last tick is
+  // (ends_us - epoch_us) * 30 / 1e6, and every connection is closed with
+  // 4004: the next world is reached by connecting again.
+  int64 ends_us = 12;
 }
 
 // Pong answers a Ping.

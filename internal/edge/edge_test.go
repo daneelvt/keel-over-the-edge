@@ -1036,3 +1036,36 @@ func TestClientTier(t *testing.T) {
 		}
 	})
 }
+
+// TestWorldEnded: Welcome tells the world's end; when it comes, every
+// connection is closed with 4004, and one that comes meanwhile is told to
+// try again with 1013.
+func TestWorldEnded(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ends := edgetest.Epoch.Add(7 * 24 * time.Hour)
+		s := edgetest.NewServer(t, edgetest.Config{Ends: ends})
+		token, _ := s.Guest("Ann")
+		ws, w, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w.GetEndsUs() != ends.UnixMicro() {
+			t.Fatalf("the welcome says the world ends at %d µs, not %d", w.GetEndsUs(), ends.UnixMicro())
+		}
+		ended := make(chan websocket.StatusCode, 1)
+		go func() { ended <- closedWith(t, ws) }()
+		if err := s.Edge.WorldEnded(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if code := <-ended; code != edge.CloseWorldEnded {
+			t.Fatalf("closed with %d", code)
+		}
+		again, _, err := s.Dial(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if code := closedWith(t, again); code != websocket.StatusTryAgainLater {
+			t.Fatalf("a connection after the end closed with %d", code)
+		}
+	})
+}

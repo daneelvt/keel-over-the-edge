@@ -2401,7 +2401,12 @@ type Welcome struct {
 	Tools bool `protobuf:"varint,10,opt,name=tools,proto3" json:"tools,omitempty"`
 	// The main port's light, seen from everywhere in the world; none in a
 	// world without land.
-	Light         *Light `protobuf:"bytes,11,opt,name=light,proto3" json:"light,omitempty"`
+	Light *Light `protobuf:"bytes,11,opt,name=light,proto3" json:"light,omitempty"`
+	// When the world ends: microseconds of UTC since 1970, 0 for no end
+	// known. At its end the falls take the world, its last tick is
+	// (ends_us - epoch_us) * 30 / 1e6, and every connection is closed with
+	// 4004: the next world is reached by connecting again.
+	EndsUs        int64 `protobuf:"varint,12,opt,name=ends_us,json=endsUs,proto3" json:"ends_us,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2511,6 +2516,13 @@ func (x *Welcome) GetLight() *Light {
 		return x.Light
 	}
 	return nil
+}
+
+func (x *Welcome) GetEndsUs() int64 {
+	if x != nil {
+		return x.EndsUs
+	}
+	return 0
 }
 
 // Pong answers a Ping.
@@ -2733,7 +2745,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05in_ms\x18\x01 \x01(\rR\x04inMs\">\n" +
 	"\x06Queued\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\rR\bposition\x12\x18\n" +
-	"\awaiting\x18\x02 \x01(\rR\awaiting\"\xa8\x02\n" +
+	"\awaiting\x18\x02 \x01(\rR\awaiting\"\xc1\x02\n" +
 	"\aWelcome\x12\x14\n" +
 	"\x05world\x18\x01 \x01(\tR\x05world\x12\x12\n" +
 	"\x04tick\x18\x02 \x01(\x03R\x04tick\x12\"\n" +
@@ -2746,7 +2758,8 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\vcirculation\x18\t \x01(\x11R\vcirculation\x12\x14\n" +
 	"\x05tools\x18\n" +
 	" \x01(\bR\x05tools\x12$\n" +
-	"\x05light\x18\v \x01(\v2\x0e.keel.v1.LightR\x05light\"P\n" +
+	"\x05light\x18\v \x01(\v2\x0e.keel.v1.LightR\x05light\x12\x17\n" +
+	"\aends_us\x18\f \x01(\x03R\x06endsUs\"P\n" +
 	"\x04Pong\x12$\n" +
 	"\x0eclient_time_us\x18\x01 \x01(\x03R\fclientTimeUs\x12\"\n" +
 	"\rworld_time_us\x18\x02 \x01(\x03R\vworldTimeUs*{\n" +

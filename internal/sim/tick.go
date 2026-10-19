@@ -100,6 +100,7 @@ func (w *World) inputs() {
 	next.Events = next.Events[:0]
 	next.Edges = next.Edges[:0]
 	next.Charted = next.Charted[:0]
+	next.Ended = false
 	w.restarted = w.restarted[:0]
 	w.expire()
 	w.fallsEnd()

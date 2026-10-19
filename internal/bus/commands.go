@@ -20,8 +20,9 @@ type Op uint8
 // The commands. Join, Leave and Disconnect come from players' connections;
 // SetWeather and Place are for developers only: tests, scripted sailors
 // and replays; Hold is the server's own, from what writes the world to the
-// database, and Chart, which marks what the world's chart holds from its
-// start; Teleport, Stay and Unseen are the owner's tools'.
+// database, Chart, which marks what the world's chart holds from its
+// start, and End, which ends the world at its end; Teleport, Stay and
+// Unseen are the owner's tools'.
 const (
 	Join       Op = iota + 1 // a boat for Account, sailed through connection Conn: its existing one, a new one, or a place in the queue
 	Leave                    // Boat leaves the world
@@ -33,13 +34,14 @@ const (
 	Stay                     // Boat stays where it is while On: not stepped, touching nothing, casting no shadow
 	Unseen                   // Boat is in no other connection's view while On, and touches nothing and casts no shadow
 	Chart                    // Subject is charted, credited to no one; with On, every subject
+	End                      // the world ends after tick At, or after this tick if At has passed: the falls take every boat afloat
 	opEnd
 )
 
 // Ops lists every op, in order, for tables keyed by op.
-var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart}
+var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End}
 
-var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart"}
+var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart", "end"}
 
 func (o Op) String() string {
 	if o == 0 || o >= opEnd {
@@ -53,7 +55,7 @@ func (o Op) Developer() bool { return o == SetWeather || o == Place }
 
 // Server reports whether only the server's own parts may send o: a
 // developer's sender may too, a player's never.
-func (o Op) Server() bool { return o == Hold || o == Chart }
+func (o Op) Server() bool { return o == Hold || o == Chart || o == End }
 
 // Owner reports whether only the owner's tools may send o: a developer's
 // sender may too, a player's or the server's never.
@@ -114,6 +116,7 @@ type Command struct {
 	Start   bool          // Teleport: to the start, where a new boat would appear, rather than State
 	On      bool          // Stay, Unseen: on, or off; Chart: every subject
 	Subject int32         // Chart: the subject, by its index in the world's sight table
+	At      int64         // End: the world's last tick
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply
@@ -128,7 +131,7 @@ const (
 	Rejoined                   // the account's existing boat
 	Full                       // no free slot, and no room in the queue
 	Left                       // the boat has gone
-	Done                       // SetWeather, Place, Hold, Teleport, Stay or Unseen applied; Disconnect's grace begun
+	Done                       // SetWeather, Place, Hold, Teleport, Stay, Unseen or End applied; Disconnect's grace begun
 	NoBoat                     // no such boat
 	Expired                    // the boat left at the end of its grace: the tick's own doing, not a command's
 	Stale                      // Disconnect from a connection that no longer sails the boat, or waits: ignored
@@ -195,9 +198,10 @@ func (q *Queue) Players() Sender { return Sender{q: q, from: fromPlayers} }
 // process (tests, scripted sailors, replays) is given one.
 func (q *Queue) Developer() Sender { return Sender{q: q, from: fromDeveloper} }
 
-// Server returns a sender for the server's own commands, Hold and Chart:
-// what writes the world to the database holds admission while it is
-// behind, and the world's chart is marked from its start.
+// Server returns a sender for the server's own commands, Hold, Chart and
+// End: what writes the world to the database holds admission while it is
+// behind, the world's chart is marked from its start, and the world is
+// ended at its end.
 func (q *Queue) Server() Sender { return Sender{q: q, from: fromServer} }
 
 // Owner returns a sender for the owner's tools' commands alone: Teleport,

@@ -351,8 +351,11 @@ func appendEvents(dst []store.Event, f *bus.Frame) []store.Event {
 			continue
 		}
 		kind := store.EventOver
-		if e.Kind == bus.EdgeApproach {
+		switch e.Kind {
+		case bus.EdgeApproach:
 			kind = store.EventApproach
+		case bus.EdgeTaken:
+			kind = store.EventTaken
 		}
 		dst = append(dst, store.Event{Tick: e.Tick, Kind: kind, Account: e.Owner, Boat: e.Boat, X: e.X, Y: e.Y, Distance: e.Distance})
 	}

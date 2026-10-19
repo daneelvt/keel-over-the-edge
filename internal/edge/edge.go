@@ -54,6 +54,9 @@ const (
 	CloseVersion websocket.StatusCode = 4002
 	// CloseRemoved: the player was removed (not sent yet).
 	CloseRemoved websocket.StatusCode = 4003
+	// CloseWorldEnded: the falls have taken the world; the next one is
+	// reached by connecting again.
+	CloseWorldEnded websocket.StatusCode = 4004
 )
 
 // Limits are a connection's limits; zero fields take the defaults.
@@ -138,6 +141,9 @@ type Config struct {
 	// its time counts from, which Welcome carries too.
 	World string
 	Epoch time.Time
+	// Ends is when the world ends, as Welcome tells it; zero for no end
+	// known.
+	Ends  time.Time
 	Clock Clock
 	// Protocol, Catalog and Layout are the versions a client's Hello must
 	// carry.
@@ -196,6 +202,9 @@ type Edge struct {
 
 	mu      sync.Mutex
 	closing bool
+	// ended: the world has ended, and the next is opening: a connection
+	// that comes meanwhile is told to try again (1013) rather than refused.
+	ended   bool
 	conns   map[*conn]struct{}
 	running sync.WaitGroup // every connection's goroutines
 	helpers sync.WaitGroup // what waits on the simulation for a connection that has gone
@@ -281,9 +290,9 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e.mu.Lock()
-	closing := e.closing
+	closing, ended := e.closing, e.ended
 	e.mu.Unlock()
-	if closing {
+	if closing && !ended {
 		e.cfg.Fail(w, http.StatusServiceUnavailable, "unavailable")
 		return
 	}
@@ -308,6 +317,12 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e.m.upgrade[upgradeOK].Inc()
+	if closing {
+		// A browser cannot read why an upgrade was refused: the close says
+		// to come back in a moment, to the next world.
+		_ = ws.Close(websocket.StatusTryAgainLater, "a new world is opening")
+		return
+	}
 	c := newConn(e, ws, hj.conn, bus.Account(acc.ID), acc.Tools, obs.RequestID(r.Context()))
 	if !e.track(c) {
 		_ = ws.Close(websocket.StatusServiceRestart, "the server is restarting")
@@ -376,4 +391,12 @@ func originAllowed(r *http.Request, patterns []string) bool {
 		}
 	}
 	return false
+}
+
+// endsUs is a world's end as Welcome carries it: µs of UTC, 0 for none.
+func endsUs(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixMicro()
 }

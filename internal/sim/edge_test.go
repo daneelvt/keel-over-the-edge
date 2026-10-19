@@ -287,3 +287,50 @@ func BenchmarkRules(b *testing.B) {
 	}
 	w.cur, w.next = nil, nil
 }
+
+// At its last tick the falls take every boat afloat, each an event where it
+// was, its voyage's closest approach recorded; a boat already falling went
+// over before the end, and is not taken.
+func TestWorldEnds(t *testing.T) {
+	w := edgeWorld(t, false)
+	a := do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
+	b := do(t, w, bus.Command{Op: bus.Join, Account: acct(2)})
+	c := do(t, w, bus.Command{Op: bus.Join, Account: acct(3)})
+	placeAtEdge(t, w, a.Boat, 0, 8234, -math.Pi/2, 0)
+	placeAtEdge(t, w, b.Boat, 100, 50, 0, 0)
+	overTheLip(t, w, c.Boat, c.Slot)
+	end := w.Now() + 10
+	do(t, w, bus.Command{Op: bus.End, At: end})
+	for w.Now() < end-1 {
+		w.Tick()
+		if w.Latest().Ended {
+			t.Fatalf("ended at tick %d, before %d", w.Now(), end)
+		}
+	}
+	w.Tick()
+	f := w.Latest()
+	if f.Tick != end || !f.Ended {
+		t.Fatalf("tick %d, ended %v", f.Tick, f.Ended)
+	}
+	var taken, approaches []bus.EdgeEvent
+	for _, e := range f.Edges {
+		switch e.Kind {
+		case bus.EdgeTaken:
+			taken = append(taken, e)
+		case bus.EdgeApproach:
+			approaches = append(approaches, e)
+		}
+	}
+	if len(taken) != 2 || taken[0].Boat != a.Boat || taken[1].Boat != b.Boat || taken[1].X != f.State[b.Slot].X || taken[1].Y != f.State[b.Slot].Y {
+		t.Fatalf("taken %+v", taken)
+	}
+	if len(approaches) != 1 || approaches[0].Boat != a.Boat {
+		t.Fatalf("approaches %+v", approaches)
+	}
+	// An End whose tick has passed ends the world at the tick that applies it.
+	w2 := edgeWorld(t, false)
+	do(t, w2, bus.Command{Op: bus.End, At: 1})
+	if !w2.Latest().Ended {
+		t.Fatal("a late End did not end the world at once")
+	}
+}

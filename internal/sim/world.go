@@ -194,6 +194,11 @@ type World struct {
 	// The chart: what is charted, and what the lookouts see by.
 	chart chartState
 
+	// endAt is the world's last tick, once an End has set it; 0 until then.
+	// It is in no snapshot: a process that restores the world is told its
+	// end again.
+	endAt int64
+
 	// The phases as function values made once, so that running one inside
 	// a trace region allocates nothing.
 	inputsFn, seaFn, physicsFn, gridFn, contactsFn, rulesFn, publishFn func()

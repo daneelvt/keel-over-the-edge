@@ -82,6 +82,10 @@ type Frame struct {
 	// digest.
 	Charted []Charted
 
+	// Ended says this tick was the world's last: the falls took every boat
+	// afloat (their EdgeTaken events are in Edges), and no tick follows.
+	Ended bool
+
 	// Grid is the live boats by the grid cell they are in, built after
 	// the physics.
 	Grid Grid
@@ -185,13 +189,14 @@ func (v *Voyage) Falling() bool { return v.Over != 0 }
 const (
 	EdgeOver     = 1 // the boat went over the lip at X, Y
 	EdgeApproach = 2 // its voyage ended with Distance its closest survived approach, at X, Y
+	EdgeTaken    = 3 // it was afloat at X, Y when the falls took the world
 )
 
 // EdgeEvent is a boat going over the lip, or the closest approach to it
 // that a voyage survived, as the voyage ends.
 type EdgeEvent struct {
 	Tick     int64
-	Kind     uint8 // EdgeOver or EdgeApproach
+	Kind     uint8 // EdgeOver, EdgeApproach or EdgeTaken
 	Slot     int32
 	Boat     uint64
 	Owner    Account
