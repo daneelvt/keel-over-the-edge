@@ -112,15 +112,18 @@ test.describe('the chart', () => {
     expect(await page.evaluate(() => globalThis.keel.chartInfo().open)).toBe(true);
     const t0 = await page.evaluate(() => globalThis.keel.game.clock.time);
     const sea0 = await page.evaluate(() => globalThis.keel.seaFrames());
-    await page.waitForTimeout(1500);
-    const t1 = await page.evaluate(() => globalThis.keel.game.clock.time);
-    const sea1 = await page.evaluate(() => globalThis.keel.seaFrames());
-    expect(t1).toBeGreaterThan(t0 + 0.5);
-    expect(sea1).toBe(sea0);
+    // A software renderer draws a frame or two a second: wait for the
+    // world's time to move, as it does while the chart is drawn.
+    await expect
+      .poll(() => page.evaluate(() => globalThis.keel.game.clock.time), { timeout: 30_000 })
+      .toBeGreaterThan(t0 + 0.5);
+    expect(await page.evaluate(() => globalThis.keel.seaFrames())).toBe(sea0);
+    const sea1 = sea0;
     expect(await page.evaluate(() => globalThis.keel.chartInfo().draws)).toBeGreaterThan(0);
     await page.getByRole('button', { name: 'Back to sea' }).click();
-    await page.waitForTimeout(500);
-    expect(await page.evaluate(() => globalThis.keel.seaFrames())).toBeGreaterThan(sea1);
+    await expect
+      .poll(() => page.evaluate(() => globalThis.keel.seaFrames()), { timeout: 30_000 })
+      .toBeGreaterThan(sea1);
   });
 
   test('its list puts the nearest first, and a tap shows it on the chart', async ({ page }) => {
