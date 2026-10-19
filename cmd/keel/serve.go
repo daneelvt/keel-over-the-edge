@@ -504,7 +504,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	sessions := auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log})
 	tools := ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: bundle, made: held.made, sailed: sailed, timeline: timeline, terrain: terrain,
-		db: db, sessions: sessions, game: game, clock: tickLoop, page: worldPage, log: log, metrics: metrics,
+		db: db, sessions: sessions, game: game, charts: charts, clock: tickLoop, page: worldPage, log: log, metrics: metrics,
 		lease: leaseEpoch, restart: restart,
 	})
 	ownerHandler.set(tools.Handler())
@@ -713,6 +713,7 @@ type ownerConfig struct {
 	db       database
 	sessions *auth.Cache
 	game     *edge.Edge
+	charts   *worldChart // nil with land off
 	clock    owner.Clock
 	page     *api.Page
 	log      *slog.Logger
@@ -777,6 +778,9 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	if t := c.terrain; t != nil {
 		cfg.Ground, cfg.Shelter, cfg.Circulation = t.Ground, t.Shelter, t.Circulation
+	}
+	if ch := c.charts; ch != nil {
+		cfg.Subjects, cfg.Charted = len(ch.world.Subjects), ch.chartedList
 	}
 	return owner.New(cfg)
 }

@@ -147,6 +147,11 @@ type Config struct {
 	BeginWorld func(ctx context.Context, number int) (store.World, error)
 	Restart    func()
 
+	// Charted, if not nil, is the world's chart as it stands; Subjects how
+	// many subjects there are to chart.
+	Charted  ChartedList
+	Subjects int
+
 	// Page is the page's built files, or nil: the routes answer without it.
 	Page *api.Page
 
@@ -178,7 +183,7 @@ var Paths = []string{
 	"/owner/api/world.json", "/owner/api/gusts.bin", "/owner/api/islands.json", "/owner/api/current.json",
 	"/owner/api/land.png", "/owner/api/coasts.svg", "/owner/api/island/0.svg", "/owner/api/point",
 	"/owner/api/flag", "/owner/api/place", "/owner/api/unseen", "/owner/api/places.json", "/owner/api/world",
-	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json",
+	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json", "/owner/api/charted.json",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -246,6 +251,7 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/places.json", o.serveFixed(func() []byte { return o.places }, "application/json"))
 	mux.HandleFunc("GET /owner/api/towns.json", o.serveFixed(func() []byte { return o.towns }, "application/json"))
 	mux.HandleFunc("GET /owner/api/features.json", o.serveFixed(func() []byte { return o.features }, "application/json"))
+	mux.HandleFunc("GET /owner/api/charted.json", o.charted)
 	mux.HandleFunc("GET /owner/api/town/{file}", o.land.town)
 	mux.HandleFunc("GET /owner/api/current.json", o.serveFixed(func() []byte { return o.current }, "application/json"))
 	mux.HandleFunc("GET /owner/api/land.png", o.land.serve(landPNG))

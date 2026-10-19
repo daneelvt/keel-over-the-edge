@@ -14,6 +14,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
+	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -143,4 +144,18 @@ func chartRoute(b *bus.Bus, charts *worldChart, log *slog.Logger) http.Handler {
 		log.Info("charted by hand", "all", cmd.On, "subject", cmd.Subject)
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+// chartedList is the world's chart as the world page lists it.
+func (c *worldChart) chartedList() []owner.Charted {
+	rows := c.model.Load().Rows
+	out := make([]owner.Charted, len(rows))
+	for i, r := range rows {
+		out[i] = owner.Charted{Subject: r.Subject, Number: r.Number, By: r.Sailor, AI: r.AccountKind == string(store.AI),
+			At: r.At.UnixMilli(), Worth: r.Worth}
+		if r.Credited && r.Sailor == "" {
+			out[i].By = "a sailor"
+		}
+	}
+	return out
 }

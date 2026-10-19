@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
@@ -94,8 +95,15 @@ func (n *news) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "unavailable")
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=5")
-	writeJSON(w, http.StatusOK, page)
+	body, err := json.Marshal(page)
+	if err != nil {
+		panic(err) // a page always marshals
+	}
+	h := w.Header()
+	h.Set("Content-Type", "application/json")
+	h.Set("Cache-Control", "public, max-age=5")
+	h.Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(append(body, '\n'))
 }
 
 // page is the page before the item before, "" for the newest, kept
