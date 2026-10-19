@@ -526,6 +526,7 @@ export class Game implements PilotActions {
       this.#over !== 0,
       this.#sound,
     );
+    this.#sound.endNear = w.endStage.sound;
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
     this.#harbour(now, look);
     this.#features(now, look);

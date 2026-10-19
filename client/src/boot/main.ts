@@ -299,8 +299,21 @@ async function start(): Promise<void> {
     (on, fill, now) => parts.notices.raise(on, fill, now),
   );
   online.onEnd = (e) => {
+    // A new world after the old one's end rises out of the mist.
+    const was = countdown.end.value;
+    if (was !== null && was.world !== e.world && countdown.left <= 0) {
+      world.rise(performance.now());
+    }
     countdown.setEnd(e);
     endNotices.welcome(e.world, performance.now());
+  };
+  // The staged end, by the world clock, the same on every page.
+  world.endIn = () => {
+    const e = countdown.end.value;
+    const now = online.utcMs();
+    return e === null || e.ends === 0 || Number.isNaN(now)
+      ? Number.POSITIVE_INFINITY
+      : (e.ends - now) / 1000;
   };
   setInterval(() => {
     countdown.tick();

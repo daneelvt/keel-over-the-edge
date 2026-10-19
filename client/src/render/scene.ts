@@ -11,12 +11,14 @@
 // by the hour, and draws it. The focus is the boat; or, while the free
 // camera flies, the point beneath it, and the boat is drawn where it is.
 
-import { type Color, Vector3 } from 'three';
+import { type Color, type Vector2, Vector3 } from 'three';
 import { exp, float, fog, length, max, mix, positionView } from 'three/tsl';
 import type { WebGPURenderer } from 'three/webgpu';
 import { catalog } from '../catalog';
+import { endLook } from '../edge/broken';
 import { EdgeScene } from '../edge/edge';
 import { edgeLook, KOSCHMIEDER, mistAtVertex } from '../edge/mist';
+import { closedIn, EndSlabs, type EndStage, endStage, risen } from '../edge/taken';
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
@@ -67,6 +69,8 @@ import { FEW_STARS, Stars } from './stars';
 import { type FrameStats, Stats, WINDOW } from './stats';
 import { Wrecks } from './wrecks';
 
+/** The staged end's timings, from the catalog. */
+const END_LOOK = catalog.world.edge.end;
 /** A tick of world time, µs. */
 const TICK_US = 1e6 / STEPS_PER_SECOND;
 
@@ -209,6 +213,12 @@ export class SeaScene {
   cover: Cover | null = null;
   /** Called after each frame is placed (the panel's statistics, the tests). */
   onFrame: (() => void) | null = null;
+  /** The seconds left to the world's end by the world clock, Infinity for none known: the staged end. */
+  endIn: (() => number) | null = null;
+  /** The staged end at this frame. */
+  endStage: EndStage = endStage(END_LOOK, Number.POSITIVE_INFINITY);
+  /** The near sea's slabs at the world's end. */
+  readonly endSlabs = new EndSlabs();
 
   readonly #target = new Vector3();
   readonly #v = new Vector3();
@@ -220,6 +230,15 @@ export class SeaScene {
   /** The hull every boat has, for now: where its stern is and how wide it is, for the wakes. */
   #aft = 0;
   #halfBeam = 0.5;
+  /** The fade going over the lip, and the world's end's veil, 0 to 1; whether its words show. */
+  #fadeOver = 0;
+  #veil = 0;
+  #veilWords = false;
+  /** When the new world began to rise out of the mist, ms; −1 once risen. */
+  #risingFrom = -1;
+  /** The ground's height at a point, as the land holds it: what has no sea to break at the end. */
+  readonly #groundAt = (east: number, north: number): number | null =>
+    this.land?.heightAt(east, north) ?? null;
   #started = -1;
   #probed = Number.NEGATIVE_INFINITY;
   /** Counts the changes of quality asked for: one that takes long may be overtaken. */
@@ -274,7 +293,11 @@ export class SeaScene {
     this.freeCam.lip = catalog.world.disk.radius;
     this.fade = document.createElement('div');
     this.fade.className = 'edge-fade';
+    const words = document.createElement('p');
+    words.textContent = 'The falls take the world';
+    this.fade.append(words);
     container.append(this.fade);
+    scene.add(this.endSlabs.mesh);
     scene.add(this.sprayView.mesh);
     this.overlays = new Overlays(this.kind);
     scene.add(this.overlays.world);
@@ -455,8 +478,20 @@ export class SeaScene {
     return Math.atan2(-(e[8] ?? 0), e[10] ?? 1);
   }
 
-  /** Fades the screen to the mist's colour by this much, 0 to 1. */
+  /** Fades the screen to the mist's colour by this much, 0 to 1: going over the lip. */
   setFade(amount: number): void {
+    this.#fadeOver = amount;
+    this.#applyFade();
+  }
+
+  /** The fade: going over the lip, or the world's end's veil, whichever is more. */
+  #applyFade(): void {
+    const amount = Math.max(this.#fadeOver, this.#veil);
+    const words = this.#veil > 0;
+    if (words !== this.#veilWords) {
+      this.#veilWords = words;
+      this.fade.classList.toggle('world-end', words);
+    }
     const f = this.fade;
     if (amount <= 0) {
       if (f.style.opacity !== '0') {
@@ -467,6 +502,44 @@ export class SeaScene {
     const c = edgeLook.colour.value as Color;
     f.style.backgroundColor = `rgb(${Math.round(255 * c.r)}, ${Math.round(255 * c.g)}, ${Math.round(255 * c.b)})`;
     f.style.opacity = String(Math.min(amount, 1));
+  }
+
+  /** A new world, after the end: it rises out of the mist from now, ms. */
+  rise(now: number): void {
+    this.#risingFrom = now;
+  }
+
+  /**
+   * The world's end, staged by the time left: the mist closing in, the near
+   * sea breaking away about the boat, the screen fading to the mist; and a
+   * new world rising out of it.
+   */
+  #stageEnd(now: number): void {
+    const left = this.endIn?.() ?? Number.POSITIVE_INFINITY;
+    const st = endStage(END_LOOK, left);
+    this.endStage = st;
+    const cut = Number.isFinite(st.cut);
+    endLook.on.value = cut ? 1 : 0;
+    endLook.cut.value = cut ? st.cut : 1e9;
+    // The far sea goes first, with the edge of the near sea.
+    this.ocean.far.mesh.visible = !cut;
+    (endLook.centre.value as Vector2).set(this.pose.east, this.pose.north);
+    let mist = st.mist;
+    let veil = st.veil;
+    if (this.#risingFrom >= 0) {
+      const r = risen(END_LOOK, (now - this.#risingFrom) / 1000);
+      mist = Math.max(mist, 1 - r);
+      veil = Math.max(veil, 1 - r);
+      if (r >= 1) {
+        this.#risingFrom = -1;
+      }
+    }
+    look.visualRange.value = closedIn(look.visualRange.value as number, mist);
+    this.endSlabs.frame(END_LOOK, left, this.pose.east, this.pose.north, this.#groundAt);
+    if (veil !== this.#veil) {
+      this.#veil = veil;
+      this.#applyFade();
+    }
   }
 
   #hull(shape: HullShape): void {
@@ -932,6 +1005,7 @@ export class SeaScene {
       cameraHeight: camera.position.y,
     });
     this.#readSky();
+    this.#stageEnd(now);
     this.sky.follow(camera.position, this.#v.set(fs0.x, fs0.y, fs0.z));
     const eye = this.origin.world;
     this.edge.frame(this.origin, camera.position.x + eye.x, -camera.position.z + eye.y, this.time);

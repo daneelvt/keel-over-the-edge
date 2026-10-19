@@ -2216,6 +2216,36 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       hooks.render();
     },
 
+    /**
+     * Stages the world's end as it is seconds before it (negative: after),
+     * or as nothing with null; or, with rising, the new world risen that
+     * many seconds after its Welcome. Then a frame.
+     */
+    worldEnd(
+      seconds: number | null,
+      rising: number | null = null,
+    ): {
+      sound: number;
+      mist: number;
+      cut: number;
+      veil: number;
+      slabs: number;
+    } {
+      world.endIn = seconds === null ? null : () => seconds;
+      if (rising !== null) {
+        world.rise(performance.now() - rising * 1000);
+      }
+      hooks.render();
+      const s = world.endStage;
+      return {
+        sound: s.sound,
+        mist: s.mist,
+        cut: s.cut,
+        veil: s.veil,
+        slabs: world.endSlabs.count,
+      };
+    },
+
     /** The sky as last drawn: by the rule at the boat, and as the light's table reads it. */
     sky() {
       const r = world.skyRecord;

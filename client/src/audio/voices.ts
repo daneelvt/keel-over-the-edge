@@ -64,6 +64,8 @@ export interface SoundInput {
   lipPan: number;
   /** Whether the boat is falling over the lip. */
   falling: boolean;
+  /** How near the world's end is, 0 to 1: the falls roar wherever the boat is. */
+  endNear?: number;
 }
 
 export interface SoundTargets {
@@ -237,7 +239,10 @@ export function soundTargets(r: Recipes, x: SoundInput, out: SoundTargets): Soun
 
   const fl = r.falls;
   const d = x.falling ? 0 : Math.max(0, x.lip);
-  out.fallsLevel = x.falling ? fl.level.falling : fallsLevel(fl, d);
+  out.fallsLevel = Math.max(
+    x.falling ? fl.level.falling : fallsLevel(fl, d),
+    (x.endNear ?? 0) * fl.level.falling,
+  );
   out.fallsCutoff = fallsCutoff(fl, d);
   out.fallsPan = x.falling ? 0 : Math.min(Math.max(x.lipPan, -1), 1);
   return out;
