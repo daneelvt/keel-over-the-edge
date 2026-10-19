@@ -308,13 +308,21 @@ func (c *config) generate(seed uint64) *Bundle {
 // digest is the SHA-256 of the records and every chunk's ground and
 // shelter, which neither the report nor the clock enter.
 func (b *Bundle) digest() [32]byte {
-	h := sha256.New()
 	records := b.Records
 	records.Circulation = 0
 	rec, err := json.Marshal(records)
 	if err != nil {
 		panic(err) // the records are plain data
 	}
+	return b.digestOf(rec)
+}
+
+// digestOf is the digest of the records' bytes given, without their
+// circulation, and the chunks'. A bundle loaded is digested with its
+// records' bytes as stored, not as this generator writes them: a field the
+// records gained since would otherwise change an older bundle's digest.
+func (b *Bundle) digestOf(rec []byte) [32]byte {
+	h := sha256.New()
 	h.Write(rec)
 	var buf [8]byte
 	for n := range physics.ChunkCount {

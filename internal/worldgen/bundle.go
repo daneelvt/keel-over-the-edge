@@ -504,11 +504,48 @@ func Load(records, report []byte, chunks [][]byte, world [16]byte, digest []byte
 		}
 	}
 	slices.SortStableFunc(b.Buildings, func(p, q Building) int { return int(p.Town) - int(q.Town) })
-	b.Digest = b.digest()
+	rec, err := withoutCirculation(records)
+	if err != nil {
+		return nil, err
+	}
+	b.Digest = b.digestOf(rec)
 	if len(digest) > 0 && !bytes.Equal(digest, b.Digest[:]) {
 		return nil, fmt.Errorf("worldgen: the bundle's digest is %x, not the %x it was stored with", b.Digest, digest)
 	}
 	return b, nil
+}
+
+// withoutCirculation is the records' bytes as stored without their
+// circulation member, which the digest leaves out: the bytes the digest was
+// taken of when the bundle was made. They are as json.Marshal wrote them,
+// with no space between members.
+func withoutCirculation(records []byte) ([]byte, error) {
+	d := json.NewDecoder(bytes.NewReader(records))
+	if t, err := d.Token(); err != nil || t != json.Delim('{') {
+		return nil, errors.New("worldgen: the records are not an object")
+	}
+	for first := true; d.More(); first = false {
+		start := d.InputOffset()
+		key, err := d.Token()
+		if err != nil {
+			return nil, fmt.Errorf("worldgen: the records: %w", err)
+		}
+		var value json.RawMessage
+		if err := d.Decode(&value); err != nil {
+			return nil, fmt.Errorf("worldgen: the records: %w", err)
+		}
+		if key != "circulation" {
+			continue
+		}
+		// The comma before it goes with it, or the one after it if it is
+		// the first.
+		end := d.InputOffset()
+		if first && end < int64(len(records)) && records[end] == ',' {
+			end++
+		}
+		return slices.Concat(records[:start], records[end:]), nil
+	}
+	return records, nil
 }
 
 // fileMagic begins a bundle written to a file.

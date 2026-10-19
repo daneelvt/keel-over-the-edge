@@ -4,10 +4,12 @@ package worldgen
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"slices"
@@ -1331,6 +1333,64 @@ func TestCirculation(t *testing.T) {
 		got, err := Load(records, nil, chunks, [16]byte{}, b.Digest[:])
 		if err != nil || got.Circulation != b.Circulation {
 			t.Fatalf("loaded without a way: %d, %v", got.Circulation, err)
+		}
+	}
+}
+
+// format1Digest is testdata/format1.bundle.gz's digest: seed 1's records as
+// the first generator made them, of format 1, before the records had
+// places, lights or an island's scenery, over chunks of open sea, written
+// by that generator's WriteFile.
+const format1Digest = "a7cab4ad7e52d7788aa9de0f011e7513dc416666cad1ad8b790af86d1286485b"
+
+// TestFormat1Loads loads a bundle stored before the records gained the
+// fields they have now, as a world sailed since then has its own: with the
+// digest it was stored with.
+func TestFormat1Loads(t *testing.T) {
+	f, err := os.Open("testdata/format1.bundle.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	z, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(z)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := ReadFile(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.DigestHex() != format1Digest || b.Format != 1 || len(b.Islands) != 150 || b.Circulation != circulationOf(b.Made) {
+		t.Fatalf("read as format %d, %d islands, circulation %d, digest %s", b.Format, len(b.Islands), b.Circulation, b.DigestHex())
+	}
+	// This generator writes its records otherwise, so a digest of them
+	// as it writes them is not the one stored.
+	if b.digest() == b.Digest {
+		t.Error("the records are written as the first generator wrote them: the test tests nothing")
+	}
+}
+
+func TestWithoutCirculation(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"a":1,"circulation":-1,"b":[{"circulation":1}]}`: `{"a":1,"b":[{"circulation":1}]}`,
+		`{"a":1,"circulation":1}`:                          `{"a":1}`,
+		`{"circulation":1,"a":"circulation"}`:              `{"a":"circulation"}`,
+		`{"circulation":1}`:                                `{}`,
+		`{"a":{"circulation":1}}`:                          `{"a":{"circulation":1}}`,
+		`{}`:                                               `{}`,
+	} {
+		got, err := withoutCirculation([]byte(in))
+		if err != nil || string(got) != want {
+			t.Errorf("%s without its circulation: %s, %v", in, got, err)
+		}
+	}
+	for _, in := range []string{``, `[]`, `{"a":`} {
+		if _, err := withoutCirculation([]byte(in)); err == nil {
+			t.Errorf("%q has no circulation to leave out", in)
 		}
 	}
 }
