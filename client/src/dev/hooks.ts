@@ -229,6 +229,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     before?.();
     seaFrames++;
   };
+  // Every notice shown, in order, for tests that look after it has gone.
+  const noticesShown: string[] = [];
+  sailing.chart?.notices.shown.subscribe((s) => {
+    if (s !== null && noticesShown.at(-1) !== s.text) {
+      noticesShown.push(s.text);
+    }
+  });
   const chartParts = (): ChartParts => {
     if (sailing.chart === undefined) {
       throw new Error('no chart');
@@ -2486,6 +2493,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         size: c.store.size,
         titles: c.store.entries.map((e) => c.store.title(e)),
         mine: c.store.entries.filter((e) => c.store.mine(e)).map((e) => c.store.title(e)),
+        credits: c.store.entries.map((e) => [c.store.title(e), e.by] as [string, string]),
+        models: v.modelsHad,
         draws: v.draws,
         ...v.size(),
         problems: checkChartScene(v.scene),
@@ -2510,6 +2519,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         waiting: n.waiting,
         off: [...n.off.value],
       };
+    },
+    noticesShown(): string[] {
+      return [...noticesShown];
     },
     raiseNotice(on: string, fill: Record<string, string>): void {
       chartParts().notices.raise(on, fill, performance.now());

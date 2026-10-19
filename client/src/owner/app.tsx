@@ -22,6 +22,7 @@ import {
 import { lightOn } from '../lights/character';
 import {
   type Boat,
+  type ChartedData,
   type Current,
   control,
   drawing,
@@ -502,6 +503,9 @@ function BoatRow({
   );
 }
 
+/** How often what is charted is read, ms. */
+const CHARTED_EVERY = 5000;
+
 function App() {
   const [now, setNow] = useState<WorldNow | null>(null);
   const [islands, setIslands] = useState<Island[]>([]);
@@ -516,6 +520,7 @@ function App() {
   const [places, setPlaces] = useState<PlacesData | null>(null);
   const [towns, setTowns] = useState<Town[]>([]);
   const [features, setFeatures] = useState<FeaturesData | null>(null);
+  const [charted, setCharted] = useState<ChartedData | null>(null);
   const [light, setLight] = useState<number | null>(null);
   const clock = useRef<WorldClock>({ worldTime: 0, at: performance.now() });
   const [message, setMessage] = useState('');
@@ -555,6 +560,21 @@ function App() {
       .then(setFeatures)
       .catch((e: unknown) => setError(String(e)));
   }, [again]);
+
+  // What is charted, every few seconds.
+  useEffect(() => {
+    const read = () => {
+      if (hidden()) {
+        return;
+      }
+      getJSON<ChartedData>('charted.json')
+        .then(setCharted)
+        .catch((e: unknown) => setError(String(e)));
+    };
+    read();
+    const t = setInterval(read, CHARTED_EVERY);
+    return () => clearInterval(t);
+  }, []);
 
   // The world each second, paused while the tab is hidden.
   useEffect(() => {
@@ -651,6 +671,8 @@ function App() {
     places,
     light,
     features,
+    charted:
+      charted === null ? null : new Set(charted.charted.map((c) => `${c.subject}:${c.number}`)),
   };
   const featureName = new Map((features?.kinds ?? []).map((k) => [k.id, k.name]));
   const islandName = new Map(islands.map((is) => [is.number, is.name]));
@@ -692,6 +714,42 @@ function App() {
                 </span>
               </li>
             ))}
+          </ul>
+        </section>
+        <section class="card" aria-label="Charted">
+          <h2>
+            Charted: <span data-field="charted">{charted?.charted.length ?? 0}</span> of{' '}
+            {charted?.subjects ?? 0}
+          </h2>
+          <ul class="charted">
+            {[...(charted?.charted ?? [])].reverse().map((c) => {
+              const at =
+                c.subject === 'island'
+                  ? islands.find((is) => is.number === c.number)
+                  : c.subject === 'place'
+                    ? places?.places.find((p) => p.number === c.number)
+                    : features?.features.find((f) => f.number === c.number);
+              const title =
+                c.subject === 'feature'
+                  ? `${featureName.get((at as { kind?: string } | undefined)?.kind ?? '') ?? 'Feature'} on ${islandName.get((at as { island?: number } | undefined)?.island ?? -1) ?? '?'}`
+                  : ((at as { name?: string } | undefined)?.name ?? `${c.subject} ${c.number}`);
+              return (
+                <li key={`${c.subject}:${c.number}`}>
+                  <button
+                    type="button"
+                    data-charted={`${c.subject}:${c.number}`}
+                    onClick={() => at !== undefined && goTo(at.east, at.north, 4)}
+                  >
+                    {title}
+                  </button>{' '}
+                  <span class="small">
+                    {c.by === '' ? 'known' : <bdi>{c.by}</bdi>}
+                    {c.ai ? ' (AI)' : ''}, {new Date(c.at).toLocaleString()}, worth{' '}
+                    {c.worth.toFixed(1)}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </section>
         <section class="card" aria-label="Towns">
@@ -806,7 +864,7 @@ function App() {
         </section>
       </>
     ),
-    [places, towns, light, chosenBoat, features, islands],
+    [places, towns, light, chosenBoat, features, islands, charted],
   );
 
   return (

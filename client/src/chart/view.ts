@@ -311,6 +311,11 @@ export class ChartView {
     return best;
   }
 
+  /** How many islands' models it has. */
+  get modelsHad(): number {
+    return this.#loaded.size;
+  }
+
   /** Where (east, north) lies on the screen, h m above the paper, CSS pixels; null off it. */
   screenOf(east: number, north: number, h = 0): { x: number; y: number } | null {
     this.#placeCamera();

@@ -422,15 +422,16 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 			h.SetLights(lights)
 		}
 		log.Info("serving the world's chunks", "bytes", chunks.Size(), "places", len(places), "lights", len(bundle.Lights))
-		// What can be charted, and the islands' models.
-		made := time.Now()
-		charts = newWorldChart(bundle, cat, sailed.ID, held.key)
-		sighting = charts.sight(cat, epoch)
-		log.Info("the world's chart is built", "subjects", len(charts.world.Subjects), "models", charts.models.Size(),
-			"took", time.Since(made).Round(time.Millisecond).String())
 	} else {
 		log.Warn("land is off: the world's terrain is sailed as open sea")
 	}
+	// What can be charted, and the islands' models: the world's, whether
+	// its land is sailed or not.
+	made := time.Now()
+	charts = newWorldChart(bundle, cat, sailed.ID, held.key)
+	sighting = charts.sight(cat, epoch)
+	log.Info("the world's chart is built", "subjects", len(charts.world.Subjects), "models", charts.models.Size(),
+		"took", time.Since(made).Round(time.Millisecond).String())
 	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: terrain, Edge: edgeOf(cat), Sight: sighting})
 	if err != nil {
 		return stopEarly(side, flight, err)
