@@ -4367,9 +4367,9 @@ them is restored every week to prove it works.
 
 ```
 keel-db ──WAL, each segment or every 5 min──▶ the plugin's sidecar ──▶ B2 keel-db-backups/keel-db-g1
-        ──a base backup, daily 20:00 UTC────▶        (key keel-barman)      (locked 14 days, kept 30)
-        ──pg_dump, Mondays 21:00 UTC──▶ the dump's job ──(key keel-dumps, no delete)──▶ B2 keel-db-dumps/prod/
-keel restore-test, Tuesdays 21:00 UTC ──(key keel-restore, read-only)──▶ a database of its own, checked, deleted
+        ──a base backup, daily 08:00 UTC────▶        (key keel-barman)      (locked 14 days, kept 30)
+        ──pg_dump, Mondays 09:00 UTC──▶ the dump's job ──(key keel-dumps, no delete)──▶ B2 keel-db-dumps/prod/
+keel restore-test, Tuesdays 09:00 UTC ──(key keel-restore, read-only)──▶ a database of its own, checked, deleted
 ```
 
 **The archive.** CloudNativePG's Barman Cloud plugin runs beside
@@ -4725,10 +4725,11 @@ series and what each scrape adds; VictoriaLogs' its disk.
 
 The machine installs its security updates every day by itself
 (`unattended-upgrades`) and never reboots by itself. Two things in the
-cluster finish the job, each in a two-hour window on a quiet evening, UTC,
-on different days. Both are in production alone.
+cluster finish the job, each in a two-hour window in the US night, UTC,
+on different days, both before a world begins closing on Thursday
+evening in New York and days from its end. Both are in production alone.
 
-**Kured**, Wednesdays 20:00 to 22:00: when an update left
+**Kured**, Wednesdays 08:00 to 10:00: when an update left
 `/var/run/reboot-required`, and no alert fires but `Watchdog`,
 `RebootPending` and `UpdatesPending`, it drains the node and reboots the
 machine. It asks the metrics store, for the series `ALERTS` that vmalert
@@ -4746,7 +4747,7 @@ for a week, so through a whole window; why is in Kured's log
 day from `--reboot-days` in a commit
 (`infra/cluster/infrastructure/controllers/kured/kustomization.yaml`).
 
-**The system-upgrade controller**, Thursdays 20:00 to 22:00: a `Plan`
+**The system-upgrade controller**, Thursdays 08:00 to 10:00: a `Plan`
 (`infra/cluster/clusters/prod/configs/upgrade-plan.yaml`) names the k3s
 version, the same as `infra/k3s/release.yaml`'s, and the upgrade image by
 digest; a test keeps them equal, and Renovate raises them together, a new

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# A base backup every day at 20:00 UTC (the quiet window's start), and one
+# A base backup every day at 08:00 UTC (the quiet window's start, 3 or 4 am
+# in New York, a day and more from a world's end), and one
 # at once when the cluster is made, so a new archive, as after a rebuild,
 # never goes a day without one. The backups belong to this object, not to
 # the cluster: deleting the cluster leaves them.
@@ -9,7 +10,7 @@ metadata:
   name: keel-db-daily
 spec:
   # Seconds, minutes, hours, day of month, month, day of week.
-  schedule: "0 0 20 * * *"
+  schedule: "0 0 8 * * *"
   immediate: true
   backupOwnerReference: self
   method: plugin

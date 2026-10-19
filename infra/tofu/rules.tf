@@ -8,7 +8,9 @@
 # addresses under /w/ (public, a year, immutable; any other address there is
 # a 404 the game marks no-store). Cloudflare would cache .bin files by
 # their extension alone, but the rule says so whatever its default list
-# becomes. The page and the API are not cached: Cloudflare caches neither by
+# becomes. The game's status, which the website reads, is cached as the
+# game says (30 s), so the website's readers never reach the game. The page
+# and the rest of the API are not cached: Cloudflare caches neither by
 # default, and the page says no-cache.
 resource "cloudflare_ruleset" "cache" {
   zone_id = var.cloudflare_zone_id
@@ -31,6 +33,17 @@ resource "cloudflare_ruleset" "cache" {
       ref         = "chunks"
       description = "The world's chunks, as long as the origin says"
       expression  = "(http.host eq \"${local.play}\" and starts_with(http.request.uri.path, \"/w/\"))"
+      action      = "set_cache_settings"
+      action_parameters = {
+        cache       = true
+        edge_ttl    = { mode = "respect_origin" }
+        browser_ttl = { mode = "respect_origin" }
+      }
+    },
+    {
+      ref         = "status"
+      description = "The game's status, as long as the origin says"
+      expression  = "(http.host eq \"${local.play}\" and http.request.uri.path eq \"/api/status\")"
       action      = "set_cache_settings"
       action_parameters = {
         cache       = true

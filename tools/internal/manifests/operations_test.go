@@ -429,15 +429,15 @@ func TestKeyedSources(t *testing.T) {
 }
 
 // TestQuietWindows: what interrupts or loads the game runs in its own
-// evening hour, UTC, no two on one day but the daily base backup: the dump
+// hour of the US night, UTC, no two on one day but the daily base backup: the dump
 // on Monday, the restore test on Tuesday, reboots on Wednesday, k3s
 // upgrades on Thursday.
 func TestQuietWindows(t *testing.T) {
 	apps, controllers, configs := release(t, prod, "apps"), release(t, prod, "controllers"), release(t, prod, "configs")
-	if s := Str(Find(apps, "ScheduledBackup", "keel-db-daily"), "spec", "schedule"); s != "0 0 20 * * *" {
+	if s := Str(Find(apps, "ScheduledBackup", "keel-db-daily"), "spec", "schedule"); s != "0 0 8 * * *" {
 		t.Errorf("base backups at %q", s)
 	}
-	for name, want := range map[string]string{"keel-db-dump": "0 21 * * 1", RestoreTest: "0 21 * * 2"} {
+	for name, want := range map[string]string{"keel-db-dump": "0 9 * * 1", RestoreTest: "0 9 * * 2"} {
 		cj := Find(apps, "CronJob", name)
 		if Str(cj, "spec", "schedule") != want || Str(cj, "spec", "timeZone") != "Etc/UTC" || Str(cj, "spec", "concurrencyPolicy") != "Forbid" {
 			t.Errorf("%s runs at %q in %q", name, Str(cj, "spec", "schedule"), Str(cj, "spec", "timeZone"))
@@ -457,7 +457,7 @@ func TestQuietWindows(t *testing.T) {
 		}
 	}
 	kured := strings.Join(toStrings(List(Containers(PodSpec(Find(controllers, "DaemonSet", "kured")))[0], "command")), " ")
-	for _, want := range []string{"--reboot-days=we", "--start-time=20:00", "--end-time=22:00", "--time-zone=UTC", "--drain-timeout=10m", "--ds-namespace=kured",
+	for _, want := range []string{"--reboot-days=we", "--start-time=08:00", "--end-time=10:00", "--time-zone=UTC", "--drain-timeout=10m", "--ds-namespace=kured",
 		"--prometheus-url=" + store + " ", "--alert-filter-regexp=^(Watchdog|RebootPending|UpdatesPending)$", "--alert-firing-only=true"} {
 		if store == "" || !strings.Contains(kured+" ", want) {
 			t.Errorf("Kured runs without %s: %s", want, kured)
@@ -480,7 +480,7 @@ func TestQuietWindows(t *testing.T) {
 		t.Error("Kured forces a reboot a drain did not finish for")
 	}
 	w := Get(Find(configs, "Plan", "k3s-server"), "spec", "window")
-	if !slices.Equal(toStrings(List(w, "days")), []string{"thursday"}) || Str(w, "startTime") != "20:00" || Str(w, "endTime") != "22:00" {
+	if !slices.Equal(toStrings(List(w, "days")), []string{"thursday"}) || Str(w, "startTime") != "08:00" || Str(w, "endTime") != "10:00" {
 		t.Errorf("k3s upgrades in %v", w)
 	}
 	// Kured and the upgrade controller are production's alone.

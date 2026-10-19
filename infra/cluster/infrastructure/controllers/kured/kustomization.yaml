@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Kured, which reboots the machine when an update asks for it
-# (/var/run/reboot-required), in its window alone: Wednesdays, 20:00 to
-# 22:00 UTC, and only while no alert fires but the three that may. It asks
+# (/var/run/reboot-required), in its window alone: Wednesdays, 08:00 to
+# 10:00 UTC, 3 to 6 am in New York, when the fewest players sail, and only while no alert fires but the three that may. It asks
 # the metrics store for the series ALERTS, which vmalert writes there, with
 # Prometheus' query API (Kured's pkg/blockers/prometheus.go); vmalert
 # itself does not answer queries. An answer it cannot get counts as an
@@ -39,8 +39,8 @@ patches:
           - --ds-namespace=kured
           - --ds-name=kured
           - --reboot-days=we
-          - --start-time=20:00
-          - --end-time=22:00
+          - --start-time=08:00
+          - --end-time=10:00
           - --time-zone=UTC
           - --period=10m
           - --drain-timeout=10m

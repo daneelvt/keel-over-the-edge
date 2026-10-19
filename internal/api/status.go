@@ -32,11 +32,12 @@ const statusKeep = "public, max-age=30"
 // statusHandler serves the status that now gives, 503 before there is one;
 // website, if not "", is the origin whose pages may read it.
 func statusHandler(now func() *Status, website string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
-		h.Add("Vary", "Origin")
-		if website != "" && r.Header.Get("Origin") == website {
+		// The same for every request, so the edge's cache, which keeps one
+		// copy whatever the Origin, never keeps one without it.
+		if website != "" {
 			h.Set("Access-Control-Allow-Origin", website)
 		}
 		st := now()

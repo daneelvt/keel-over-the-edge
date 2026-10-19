@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The weekly dump, Mondays at 21:00 UTC: the game's database as pg_dump's
+# The weekly dump, Mondays at 09:00 UTC, in the US night: the game's database as pg_dump's
 # custom format, a copy that reads with any later PostgreSQL, beside the
 # backups, which need this one's. pg_dump runs from the database's own
 # image, as the owner, over TLS checked against the cluster's CA; then
@@ -14,7 +14,7 @@ kind: CronJob
 metadata:
   name: keel-db-dump
 spec:
-  schedule: "0 21 * * 1"
+  schedule: "0 9 * * 1"
   timeZone: Etc/UTC
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 2
