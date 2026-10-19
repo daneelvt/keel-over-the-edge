@@ -243,6 +243,14 @@ func (p *process) endAt(ctx context.Context, h *worldHalf, tick int64) error {
 	select {
 	case <-h.loop.Ended():
 		return nil
+	case <-h.loopDone:
+		// The loop stopped before the end: keel is stopping.
+		select {
+		case <-h.loop.Ended():
+			return nil
+		default:
+			return errStopping
+		}
 	case <-ctx.Done():
 		return ctx.Err()
 	}
