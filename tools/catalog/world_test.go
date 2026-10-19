@@ -25,7 +25,7 @@ func TestWorldRejects(t *testing.T) {
 		},
 		{
 			name:  "size classes out of order",
-			files: map[string]string{worldPath: strings.Replace(realFile(worldPath), "{ class: islet, below: 100 }", "{ class: islet, below: 10 }", 1)},
+			files: map[string]string{worldPath: strings.Replace(realFile(worldPath), "{ class: islet, worth: 2, below: 100 }", "{ class: islet, worth: 2, below: 10 }", 1)},
 			want:  "world.sizes[1]: below 10 is not above",
 		},
 		{

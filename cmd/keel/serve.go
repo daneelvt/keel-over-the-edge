@@ -95,6 +95,8 @@ Configured from the environment:
                        none (default one drawn at random)
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
                        POST /debug/wind?knots=…&from=… (a steady wind),
+                       POST /debug/chart?all|subject=island:…|place:…|feature:…
+                       (charted, credited to no one),
                        POST /debug/weather?regime=… (a regime held),
                        POST /debug/weather?auto (the world's own) and
                        POST /debug/encounter?situation=… (a scripted boat
@@ -131,6 +133,9 @@ type database interface {
 	StoreBundle(ctx context.Context, world [16]byte, epoch int64, b *store.Bundle) error
 	SetChunkKey(ctx context.Context, world [16]byte, epoch int64, key []byte) ([]byte, error)
 	BeginWorld(ctx context.Context, lease int64, number int, epoch time.Time) (store.World, error)
+	Chartings(ctx context.Context, world [16]byte) ([]store.Charting, error)
+	News(ctx context.Context, world [16]byte, before *[16]byte, limit int) ([]store.News, error)
+	api.Notices
 	owner.Accounts
 	Stats() store.PoolStats
 	Close()
@@ -393,6 +398,8 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	var chunks *api.Chunks
 	var handout, roamHandout *edge.Handout
 	var mainLight *pb.Light
+	var charts *worldChart
+	var sighting *sim.Sight
 	if cfg.Land {
 		terrain = bundle.Terrain(cat.PrepareGround())
 		terrainDigest = bundle.Digest
@@ -418,13 +425,27 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	} else {
 		log.Warn("land is off: the world's terrain is sailed as open sea")
 	}
-	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: terrain, Edge: edgeOf(cat)})
+	// What can be charted, and the islands' models: the world's, whether
+	// its land is sailed or not.
+	made := time.Now()
+	charts = newWorldChart(bundle, cat, sailed.ID, held.key)
+	sighting = charts.sight(cat, epoch)
+	log.Info("the world's chart is built", "subjects", len(charts.world.Subjects), "models", charts.models.Size(),
+		"took", time.Since(made).Round(time.Millisecond).String())
+	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: terrain, Edge: edgeOf(cat), Sight: sighting})
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
 	defer world.Close()
 	if err := restore(ctx, db, world, sailed, log, metrics); err != nil {
 		return stopEarly(side, flight, err)
+	}
+	var chartSource edge.ChartSource
+	if charts != nil {
+		if err := charts.restore(ctx, db, sailed.ID, world, log); err != nil {
+			return stopEarly(side, flight, err)
+		}
+		chartSource = charts.model
 	}
 	b := world.Bus()
 	inputs := replay.New(replay.Config{
@@ -436,8 +457,8 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	})
 	replayHandler.set(inputs)
 	if weatherHandler != nil {
-		weatherHandler.set(devRoutes(ctx, b, cat, log))
-		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter and /debug/place on the internal listener")
+		weatherHandler.set(devRoutes(ctx, b, cat, charts, log))
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place and /debug/chart on the internal listener")
 	}
 	metrics.CounterFunc("keel_sim_commands_refused_total", "Commands refused because the queue was full.", b.Commands.Refused)
 	metrics.CounterFunc("keel_sim_frames_allocated_total", "Frames made because every frame in the pool was in use.", b.Frames.Allocated)
@@ -454,13 +475,17 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
 		Land: cfg.Land, Chunks: handout, Circulation: circulationOf(terrain),
-		Lip: timeline.Prepared().Edge(), RoamChunks: roamHandout, MainLight: mainLight,
+		Lip: timeline.Prepared().Edge(), RoamChunks: roamHandout, MainLight: mainLight, Chart: chartSource,
 	})
-	lasting := persist.New(persist.Config{
+	pcfg := persist.Config{
 		Frames: b.Frames, Store: writer, World: sailed.ID, Epoch: leaseEpoch,
 		Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Hold: b.Commands.Server(), Log: log, Metrics: metrics,
-	})
+	}
+	if charts != nil {
+		pcfg.Chart, pcfg.Written, pcfg.FoldWithin = charts.model, charts.model.Add, charts.model.FoldWithin()
+	}
+	lasting := persist.New(pcfg)
 	metrics.GaugeFunc("keel_persist_inbox_fill_ratio", "The share of the world's writes' inbox holding what is not yet written.", nil, lasting.Fill)
 	metrics.GaugeFunc("keel_persist_oldest_seconds", "World time since the oldest of the world's writes not yet written; 0 when none waits.", nil,
 		func() float64 { return lasting.Oldest().Seconds() })
@@ -480,7 +505,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	sessions := auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log})
 	tools := ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: bundle, made: held.made, sailed: sailed, timeline: timeline, terrain: terrain,
-		db: db, sessions: sessions, game: game, clock: tickLoop, page: worldPage, log: log, metrics: metrics,
+		db: db, sessions: sessions, game: game, charts: charts, clock: tickLoop, page: worldPage, log: log, metrics: metrics,
 		lease: leaseEpoch, restart: restart,
 	})
 	ownerHandler.set(tools.Handler())
@@ -495,6 +520,12 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Game:     game,
 		Page:     page,
 		Chunks:   chunks,
+		Models:   modelsOf(charts),
+
+		News:        news{db: db, world: sailed.ID},
+		NewsPage:    cat.News.Page,
+		Notices:     db,
+		NoticeKinds: noticeKinds(cat),
 	}), log)
 	agents := newServer(obs.AccessLog(log, api.Agents()), log)
 
@@ -683,6 +714,7 @@ type ownerConfig struct {
 	db       database
 	sessions *auth.Cache
 	game     *edge.Edge
+	charts   *worldChart // nil with land off
 	clock    owner.Clock
 	page     *api.Page
 	log      *slog.Logger
@@ -747,6 +779,9 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	if t := c.terrain; t != nil {
 		cfg.Ground, cfg.Shelter, cfg.Circulation = t.Ground, t.Shelter, t.Circulation
+	}
+	if ch := c.charts; ch != nil {
+		cfg.Subjects, cfg.Charted = len(ch.world.Subjects), ch.chartedList
 	}
 	return owner.New(cfg)
 }
@@ -816,16 +851,19 @@ func restore(ctx context.Context, db database, world *sim.World, sailed store.Wo
 
 // devRoutes are the developer's commands: the weather, encounters, and
 // moving a boat.
-func devRoutes(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler {
+func devRoutes(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, charts *worldChart, log *slog.Logger) http.Handler {
 	wx := weatherRoute(b.Commands.Developer(), cat)
 	enc := encounterRoute(ctx, b, cat, log)
 	place := placeRoute(b, log)
+	chartIt := chartRoute(b, charts, log)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/debug/encounter":
 			enc.ServeHTTP(w, r)
 		case "/debug/place":
 			place.ServeHTTP(w, r)
+		case "/debug/chart":
+			chartIt.ServeHTTP(w, r)
 		default:
 			wx.ServeHTTP(w, r)
 		}

@@ -109,6 +109,8 @@ func (enc *encoder) frame() {
 		if c.waiting.Load() > 0 {
 			c.release(next)
 		}
+		// What has been charted since: a closed connection goes next frame.
+		_ = c.chart(enc.e.cfg.Chart)
 		i++
 	}
 	if len(enc.queued) > 0 {
@@ -258,6 +260,11 @@ func (c *conn) welcome(f *bus.Frame) bool {
 		Tools: c.tools.Load(), Light: e.cfg.MainLight,
 	}}}, outWelcome)
 	c.welcomed = ok
+	if ok && e.cfg.Chart != nil {
+		entries := e.cfg.Chart.Entries()
+		ok = c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chart{Chart: &pb.Chart{Entries: entries}}}, outChart)
+		c.charted = len(entries)
+	}
 	c.rmu.Unlock()
 	c.ready.Store(ok)
 	c.bumped = f.Tick

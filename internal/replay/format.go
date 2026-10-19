@@ -54,7 +54,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 7
+	formatVersion = 8
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -185,6 +185,9 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		}
 	case bus.Stay, bus.Unseen:
 		dst = binary.AppendUvarint(dst, e.Boat)
+		dst = append(dst, flag(e.On))
+	case bus.Chart:
+		dst = binary.AppendVarint(dst, int64(e.Subject))
 		dst = append(dst, flag(e.On))
 	}
 	dst = append(dst, byte(e.Reply.Result))
@@ -523,6 +526,13 @@ func (p *payload) event(e *bus.Event) {
 	case bus.Stay, bus.Unseen:
 		e.Boat = p.uvarint()
 		e.On = p.flag("a stay or unseen")
+	case bus.Chart:
+		subject := p.varint()
+		if p.err == nil && (subject < -1 || subject > math.MaxInt32) {
+			p.err = fmt.Errorf("a subject %d charted", subject)
+		}
+		e.Subject = int32(subject)
+		e.On = p.flag("every subject charted")
 	default:
 		if p.err == nil {
 			p.err = fmt.Errorf("unknown command %d", e.Op)

@@ -25,6 +25,8 @@ boats:
     # sternlight in one lantern at the masthead (Collision Regulations, Rule
     # 25(b)). Under 7 m she shows them "if practicable" (Rule 25(d)(i)): she does.
     lights: [tricolour]
+    # Her lookout is the sailor seated on her deck, the eye 2 m above the sea.
+    lookout: 2
     art:
       model: boats/jolly-boat.glb
       far: boats/jolly-boat.far.glb

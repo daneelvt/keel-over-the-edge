@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iUwoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAEh0KBHJvYW0YAiABKAsyDS5rZWVsLnYxLlJvYW1IAEIGCgRib2R5IggKBlJlc3luYyI/CgRSb2FtEgoKAm9uGAEgASgIEgwKBGVhc3QYAiABKBESDQoFbm9ydGgYAyABKBESDgoGaGVpZ2h0GAQgASgNIqgDCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIK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");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iUwoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAEh0KBHJvYW0YAiABKAsyDS5rZWVsLnYxLlJvYW1IAEIGCgRib2R5IggKBlJlc3luYyI/CgRSb2FtEgoKAm9uGAEgASgIEgwKBGVhc3QYAiABKBESDQoFbm9ydGgYAyABKBESDgoGaGVpZ2h0GAQgASgNIu4DCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSAASIQoGY2h1bmtzGAggASgLMg8ua2VlbC52MS5DaHVua3NIABIfCgV0b29scxgJIAEoCzIOLmtlZWwudjEuVG9vbHNIABIhCgZwbGFjZXMYCiABKAsyDy5rZWVsLnYxLlBsYWNlc0gAEiEKBmxpZ2h0cxgLIAEoCzIPLmtlZWwudjEuTGlnaHRzSAASHwoFY2hhcnQYDCABKAsyDi5rZWVsLnYxLkNoYXJ0SAASIwoHY2hhcnRlZBgNIAEoCzIQLmtlZWwudjEuQ2hhcnRlZEgAQgYKBGJvZHkiLQoFQ2hhcnQSJAoHZW50cmllcxgBIAMoCzITLmtlZWwudjEuQ2hhcnRFbnRyeSIvCgdDaGFydGVkEiQKB2VudHJpZXMYASADKAsyEy5rZWVsLnYxLkNoYXJ0RW50cnkivwMKCkNoYXJ0RW50cnkSJgoHc3ViamVjdBgBIAEoDjIVLmtlZWwudjEuQ2hhcnRTdWJqZWN0Eg4KBm51bWJlchgCIAEoDRIMCgRzb3J0GAMgASgNEgwKBG5hbWUYBCABKAkSDAoEZWFzdBgFIAEoERINCgVub3J0aBgGIAEoERIKCgJieRgHIAEoCRIKCgJhaRgIIAEoCBIPCgd3aGVuX21zGAkgASgDEg0KBXdvcnRoGAogASgNEg4KBmlzbGFuZBgLIAEoDRINCgVncm91cBgMIAEoCRIOCgZib3VuZHMYDSADKBESDwoHaGlnaGVzdBgOIAEoDRIMCgR6b25lGA8gASgNEg0KBWNsYXNzGBAgASgJEg0KBW1vZGVsGBEgASgJEg0KBWxpZ2h0GBIgASgNEhEKCWNoYXJhY3RlchgXIAEoDRINCgVmb2NhbBgYIAEoDRINCgVyYW5nZRgZIAEoDRIMCgRzaGlwGBMgASgJEgwKBHN1bmsYFCABKAgSKwoMd2l0aF9zdWJqZWN0GBUgASgOMhUua2VlbC52MS5DaGFydFN1YmplY3QSEwoLd2l0aF9udW1iZXIYFiABKA0iKAoGUGxhY2VzEh4KBnBsYWNlcxgBIAMoCzIOLmtlZWwudjEuUGxhY2UiuQEKBVBsYWNlEg4KBm51bWJlchgBIAEoDRIMCgRraW5kGAIgASgNEgwKBGVhc3QYAyABKBESDQoFbm9ydGgYBCABKBESDwoHaGVhZGluZxgFIAEoDRIOCgZncm91bmQYBiABKA0SDQoFdG93ZXIYByABKA0SDwoHZGF5bWFyaxgIIAEoDRILCgNyaWcYCSABKA0SCwoDYWdlGAogASgNEgwKBHN1bmsYCyABKAgSDAoEaGVlbBgMIAEoESI2CgZMaWdodHMSHgoGbGlnaHRzGAEgAygLMg4ua2VlbC52MS5MaWdodBIMCgRkcm9wGAIgAygNInQKBUxpZ2h0Eg4KBm51bWJlchgBIAEoDRIMCgRlYXN0GAIgASgREg0KBW5vcnRoGAMgASgREg0KBWZvY2FsGAQgASgNEhEKCWNoYXJhY3RlchgFIAEoDRINCgVwaGFzZRgGIAEoAxINCgVyYW5nZRgHIAEoDSITCgVUb29scxIKCgJvbhgBIAEoCCImCgZDaHVua3MSDgoGbnVtYmVyGAEgAygNEgwKBHBhdGgYAiADKAkibQoEQnVtcBIMCgR0aWNrGAEgASgDEgkKAXgYAiABKBESCQoBeRgDIAEoERIPCgdjbG9zaW5nGAQgASgNEh8KBHBhcnQYBSABKA4yES5rZWVsLnYxLkJ1bXBQYXJ0Eg8KB2FydGljbGUYBiABKAkiMAoOV2VhdGhlclN5c3RlbXMSHgoGc3BlbGxzGAEgAygLMg4ua2VlbC52MS5TcGVsbCKOAgoFU3BlbGwSDQoFYmVnaW4YASABKAMSDgoGY2hhbmdlGAIgASgNEg0KBXN0YXJ0GAMgASgDEg4KBmxlbmd0aBgEIAEoBBIOCgZyZWdpbWUYBSABKA0SDgoGc3RlYWR5GAYgASgIEg0KBXNwZWVkGAcgASgNEgwKBGZyb20YCCABKA0SDQoFZHJpZnQYCSABKBESDAoEZ3VzdBgKIAEoDRINCgVzaGlmdBgLIAMoDRIOCgZwZXJpb2QYDCADKA0SDQoFcGhhc2UYDSADKA0SDgoGYWNyb3NzGA4gASgNEgwKBGF4aXMYDyABKA0SEwoLYXhpc19wZXJpb2QYECABKA0SDAoEc2VlZBgRIAEoDSJsCghTZWFBcmVhcxIMCgR0aWNrGAEgASgDEgsKA2NvbBgCIAEoERILCgNyb3cYAyABKBESDAoEc2l6ZRgEIAEoDRINCgVzcGVlZBgFIAMoDRIMCgRmcm9tGAYgAygNEg0KBWZldGNoGAcgAygNIhgKB1Jlc3RhcnQSDQoFaW5fbXMYASABKA0iKwoGUXVldWVkEhAKCHBvc2l0aW9uGAEgASgNEg8KB3dhaXRpbmcYAiABKA0izgEKB1dlbGNvbWUSDQoFd29ybGQYASABKAkSDAoEdGljaxgCIAEoAxIVCg13b3JsZF90aW1lX3VzGAMgASgDEgwKBGJvYXQYBCABKAQSDAoEa2luZBgFIAEoDRIQCghyZWpvaW5lZBgGIAEoCBIQCghlcG9jaF91cxgHIAEoAxIMCgRsYW5kGAggASgIEhMKC2NpcmN1bGF0aW9uGAkgASgREg0KBXRvb2xzGAogASgIEh0KBWxpZ2h0GAsgASgLMg4ua2VlbC52MS5MaWdodCI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKAMqewoMQ2hhcnRTdWJqZWN0Eh0KGUNIQVJUX1NVQkpFQ1RfVU5TUEVDSUZJRUQQABIYChRDSEFSVF9TVUJKRUNUX0lTTEFORBABEhcKE0NIQVJUX1NVQkpFQ1RfUExBQ0UQAhIZChVDSEFSVF9TVUJKRUNUX0ZFQVRVUkUQAypkCghCdW1wUGFydBIZChVCVU1QX1BBUlRfVU5TUEVDSUZJRUQQABITCg9CVU1QX1BBUlRfWU9VUlMQARIUChBCVU1QX1BBUlRfVEhFSVJTEAISEgoOQlVNUF9QQVJUX05PTkUQA0I9WjtnaXRodWIuY29tL2RhbmVlbHZ0L2tlZWwtb3Zlci10aGUtZWRnZS9pbnRlcm5hbC9wcm90b2NvbC9wYmIGcHJvdG8z");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -416,6 +416,18 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
      */
     value: Lights;
     case: "lights";
+  } | {
+    /**
+     * @generated from field: keel.v1.Chart chart = 12;
+     */
+    value: Chart;
+    case: "chart";
+  } | {
+    /**
+     * @generated from field: keel.v1.Charted charted = 13;
+     */
+    value: Charted;
+    case: "charted";
   } | { case: undefined; value?: undefined };
 };
 
@@ -425,6 +437,221 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 7);
+
+/**
+ * Chart is the world's chart so far: every subject charted, once a
+ * connection, after the Welcome. Names reach a client only here: a player
+ * learns a place's name only once it is charted, by anyone.
+ *
+ * @generated from message keel.v1.Chart
+ */
+export type Chart = Message<"keel.v1.Chart"> & {
+  /**
+   * @generated from field: repeated keel.v1.ChartEntry entries = 1;
+   */
+  entries: ChartEntry[];
+};
+
+/**
+ * Describes the message keel.v1.Chart.
+ * Use `create(ChartSchema)` to create a new message.
+ */
+export const ChartSchema: GenMessage<Chart> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 8);
+
+/**
+ * Charted is what has been charted since, sent to every connection as each
+ * is written, each once a connection.
+ *
+ * @generated from message keel.v1.Charted
+ */
+export type Charted = Message<"keel.v1.Charted"> & {
+  /**
+   * @generated from field: repeated keel.v1.ChartEntry entries = 1;
+   */
+  entries: ChartEntry[];
+};
+
+/**
+ * Describes the message keel.v1.Charted.
+ * Use `create(ChartedSchema)` to create a new message.
+ */
+export const ChartedSchema: GenMessage<Charted> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 9);
+
+/**
+ * ChartEntry is a subject of the world's chart: an island, a place or a
+ * feature.
+ *
+ * @generated from message keel.v1.ChartEntry
+ */
+export type ChartEntry = Message<"keel.v1.ChartEntry"> & {
+  /**
+   * What it is: its kind, its number among the world's islands, places or
+   * features, and its sort, by its index in the catalog's list (an
+   * island's size class, a place's or a feature's kind).
+   *
+   * @generated from field: keel.v1.ChartSubject subject = 1;
+   */
+  subject: ChartSubject;
+
+  /**
+   * @generated from field: uint32 number = 2;
+   */
+  number: number;
+
+  /**
+   * @generated from field: uint32 sort = 3;
+   */
+  sort: number;
+
+  /**
+   * Its name: an island's, a place's; none for a feature, which is named
+   * by its sort and its island.
+   *
+   * @generated from field: string name = 4;
+   */
+  name: string;
+
+  /**
+   * Where it is, in centimetres east and north of the world's centre.
+   *
+   * @generated from field: sint32 east = 5;
+   */
+  east: number;
+
+  /**
+   * @generated from field: sint32 north = 6;
+   */
+  north: number;
+
+  /**
+   * Who charted it: the sailor's name as it was, and whether the sailor is
+   * an AI agent; empty for a subject known from the world's start or
+   * charted with another.
+   *
+   * @generated from field: string by = 7;
+   */
+  by: string;
+
+  /**
+   * @generated from field: bool ai = 8;
+   */
+  ai: boolean;
+
+  /**
+   * When, in milliseconds of UTC since 1970.
+   *
+   * @generated from field: int64 when_ms = 9;
+   */
+  whenMs: bigint;
+
+  /**
+   * What charting it was worth, in tenths.
+   *
+   * @generated from field: uint32 worth = 10;
+   */
+  worth: number;
+
+  /**
+   * The island it is on or by, its number and one; 0 for none.
+   *
+   * @generated from field: uint32 island = 11;
+   */
+  island: number;
+
+  /**
+   * An island's: the name of its group of rocks, if it is in one; its
+   * land's bounds, in centimetres (west, south, east, north); its highest
+   * land, in centimetres; its zone, 0 the centre, 1 the middle waters, 2
+   * the rim; its class of scenery, A, B or C; and its model's address, a
+   * path on the play origin, fetched as a chunk is.
+   *
+   * @generated from field: string group = 12;
+   */
+  group: string;
+
+  /**
+   * @generated from field: repeated sint32 bounds = 13;
+   */
+  bounds: number[];
+
+  /**
+   * @generated from field: uint32 highest = 14;
+   */
+  highest: number;
+
+  /**
+   * @generated from field: uint32 zone = 15;
+   */
+  zone: number;
+
+  /**
+   * @generated from field: string class = 16;
+   */
+  class: string;
+
+  /**
+   * @generated from field: string model = 17;
+   */
+  model: string;
+
+  /**
+   * A lighthouse's light, by its number among the world's lights and one,
+   * 0 for none; its character, by its index in the catalog's characters;
+   * its height above the sea, in centimetres; and its nominal range, in
+   * metres: what a chart prints beside it.
+   *
+   * @generated from field: uint32 light = 18;
+   */
+  light: number;
+
+  /**
+   * @generated from field: uint32 character = 23;
+   */
+  character: number;
+
+  /**
+   * @generated from field: uint32 focal = 24;
+   */
+  focal: number;
+
+  /**
+   * @generated from field: uint32 range = 25;
+   */
+  range: number;
+
+  /**
+   * A wreck's ship's name, and whether she lies sunk.
+   *
+   * @generated from field: string ship = 19;
+   */
+  ship: string;
+
+  /**
+   * @generated from field: bool sunk = 20;
+   */
+  sunk: boolean;
+
+  /**
+   * The subject it was charted with, if it was: its kind, and its number.
+   *
+   * @generated from field: keel.v1.ChartSubject with_subject = 21;
+   */
+  withSubject: ChartSubject;
+
+  /**
+   * @generated from field: uint32 with_number = 22;
+   */
+  withNumber: number;
+};
+
+/**
+ * Describes the message keel.v1.ChartEntry.
+ * Use `create(ChartEntrySchema)` to create a new message.
+ */
+export const ChartEntrySchema: GenMessage<ChartEntry> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 10);
 
 /**
  * Places are the places in chunks of the land the connection has just been
@@ -447,7 +674,7 @@ export type Places = Message<"keel.v1.Places"> & {
  * Use `create(PlacesSchema)` to create a new message.
  */
 export const PlacesSchema: GenMessage<Places> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 8);
+  messageDesc(file_keel_v1_game, 11);
 
 /**
  * Place is a place of the world: a port, a lighthouse, a reef, a wreck.
@@ -535,7 +762,7 @@ export type Place = Message<"keel.v1.Place"> & {
  * Use `create(PlaceSchema)` to create a new message.
  */
 export const PlaceSchema: GenMessage<Place> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 9);
+  messageDesc(file_keel_v1_game, 12);
 
 /**
  * Lights are the lighthouses' lights the connection is to show, and those
@@ -564,7 +791,7 @@ export type Lights = Message<"keel.v1.Lights"> & {
  * Use `create(LightsSchema)` to create a new message.
  */
 export const LightsSchema: GenMessage<Lights> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 10);
+  messageDesc(file_keel_v1_game, 13);
 
 /**
  * Light is a lighthouse's light. It shows its character's light and dark
@@ -626,7 +853,7 @@ export type Light = Message<"keel.v1.Light"> & {
  * Use `create(LightSchema)` to create a new message.
  */
 export const LightSchema: GenMessage<Light> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 11);
+  messageDesc(file_keel_v1_game, 14);
 
 /**
  * Tools says the account's owner's flag has been set or cleared while the
@@ -648,7 +875,7 @@ export type Tools = Message<"keel.v1.Tools"> & {
  * Use `create(ToolsSchema)` to create a new message.
  */
 export const ToolsSchema: GenMessage<Tools> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 12);
+  messageDesc(file_keel_v1_game, 15);
 
 /**
  * Chunks hands the client the addresses of chunks of the world's land: each
@@ -681,7 +908,7 @@ export type Chunks = Message<"keel.v1.Chunks"> & {
  * Use `create(ChunksSchema)` to create a new message.
  */
 export const ChunksSchema: GenMessage<Chunks> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 13);
+  messageDesc(file_keel_v1_game, 16);
 
 /**
  * Bump is two boats touching after being apart: a correction the
@@ -740,7 +967,7 @@ export type Bump = Message<"keel.v1.Bump"> & {
  * Use `create(BumpSchema)` to create a new message.
  */
 export const BumpSchema: GenMessage<Bump> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 14);
+  messageDesc(file_keel_v1_game, 17);
 
 /**
  * WeatherSystems is the weather in play about the present: the spells the
@@ -767,7 +994,7 @@ export type WeatherSystems = Message<"keel.v1.WeatherSystems"> & {
  * Use `create(WeatherSystemsSchema)` to create a new message.
  */
 export const WeatherSystemsSchema: GenMessage<WeatherSystems> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 15);
+  messageDesc(file_keel_v1_game, 18);
 
 /**
  * Spell is a spell of weather: a stretch of time with one base wind, its
@@ -894,7 +1121,7 @@ export type Spell = Message<"keel.v1.Spell"> & {
  * Use `create(SpellSchema)` to create a new message.
  */
 export const SpellSchema: GenMessage<Spell> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 16);
+  messageDesc(file_keel_v1_game, 19);
 
 /**
  * SeaAreas is what raises the waves about the boat: a square of sea areas,
@@ -964,7 +1191,7 @@ export type SeaAreas = Message<"keel.v1.SeaAreas"> & {
  * Use `create(SeaAreasSchema)` to create a new message.
  */
 export const SeaAreasSchema: GenMessage<SeaAreas> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 17);
+  messageDesc(file_keel_v1_game, 20);
 
 /**
  * Restart says the server is about to restart, as a new version is
@@ -988,7 +1215,7 @@ export type Restart = Message<"keel.v1.Restart"> & {
  * Use `create(RestartSchema)` to create a new message.
  */
 export const RestartSchema: GenMessage<Restart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 18);
+  messageDesc(file_keel_v1_game, 21);
 
 /**
  * Queued says the sea is full: the client waits for a boat. It comes after
@@ -1018,7 +1245,7 @@ export type Queued = Message<"keel.v1.Queued"> & {
  * Use `create(QueuedSchema)` to create a new message.
  */
 export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 19);
+  messageDesc(file_keel_v1_game, 22);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -1115,7 +1342,7 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 20);
+  messageDesc(file_keel_v1_game, 23);
 
 /**
  * Pong answers a Ping.
@@ -1143,7 +1370,40 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 21);
+  messageDesc(file_keel_v1_game, 24);
+
+/**
+ * ChartSubject is a kind of subject of the chart.
+ *
+ * @generated from enum keel.v1.ChartSubject
+ */
+export enum ChartSubject {
+  /**
+   * @generated from enum value: CHART_SUBJECT_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: CHART_SUBJECT_ISLAND = 1;
+   */
+  ISLAND = 1,
+
+  /**
+   * @generated from enum value: CHART_SUBJECT_PLACE = 2;
+   */
+  PLACE = 2,
+
+  /**
+   * @generated from enum value: CHART_SUBJECT_FEATURE = 3;
+   */
+  FEATURE = 3,
+}
+
+/**
+ * Describes the enum keel.v1.ChartSubject.
+ */
+export const ChartSubjectSchema: GenEnum<ChartSubject> = /*@__PURE__*/
+  enumDesc(file_keel_v1_game, 0);
 
 /**
  * BumpPart is a connection's part in a bump.
@@ -1184,5 +1444,5 @@ export enum BumpPart {
  * Describes the enum keel.v1.BumpPart.
  */
 export const BumpPartSchema: GenEnum<BumpPart> = /*@__PURE__*/
-  enumDesc(file_keel_v1_game, 0);
+  enumDesc(file_keel_v1_game, 1);
 

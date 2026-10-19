@@ -17,9 +17,17 @@
 import { PILOT_IDLE, type PilotControl } from '../../input/pilot';
 import { Clock } from '../../net/clock';
 import { decodeServer, encodeClient } from '../../net/frame';
-import { BumpPart, type Light, type Place, type Welcome } from '../../net/gen/keel/v1/game_pb';
+import {
+  BumpPart,
+  type ChartEntry as ChartEntryWire,
+  ChartSubject,
+  type Light,
+  type Place,
+  type Welcome,
+} from '../../net/gen/keel/v1/game_pb';
 import type {
   BumpTold,
+  ChartEntry,
   ChunksHanded,
   LightSeen,
   PlaceSeen,
@@ -74,6 +82,8 @@ export type Received =
   | { kind: 'lights'; lights: LightSeen[]; drop: number[] }
   /** The account's owner's flag was set or cleared. */
   | { kind: 'tools'; on: boolean }
+  /** The world's chart: whole, or what was charted since. */
+  | { kind: 'chart'; entries: ChartEntry[]; whole: boolean }
   | { kind: 'pong' }
   | { kind: 'other' };
 
@@ -221,6 +231,12 @@ export class Session {
           lights: m.body.value.lights.map(lightSeen),
           drop: [...m.body.value.drop],
         };
+      case 'chart':
+        this.#lastHeard = now;
+        return { kind: 'chart', entries: m.body.value.entries.map(chartEntry), whole: true };
+      case 'charted':
+        this.#lastHeard = now;
+        return { kind: 'chart', entries: m.body.value.entries.map(chartEntry), whole: false };
       case 'bump': {
         this.#lastHeard = now;
         const v = m.body.value;
@@ -407,5 +423,53 @@ export function lightSeen(l: Light): LightSeen {
     character: l.character,
     phase: Number(l.phase),
     range: l.range,
+  };
+}
+
+/** A subject kind as the page names it, or null. */
+function subjectOf(s: ChartSubject): ChartEntry['subject'] | null {
+  switch (s) {
+    case ChartSubject.ISLAND:
+      return 'island';
+    case ChartSubject.PLACE:
+      return 'place';
+    case ChartSubject.FEATURE:
+      return 'feature';
+  }
+  return null;
+}
+
+/** A chart's entry as the page reads it, from the server's. */
+export function chartEntry(e: ChartEntryWire): ChartEntry {
+  const b = e.bounds;
+  return {
+    subject: subjectOf(e.subject) ?? 'island',
+    number: e.number,
+    sort: e.sort,
+    name: e.name,
+    east: e.east / 100,
+    north: e.north / 100,
+    by: e.by,
+    ai: e.ai,
+    at: Number(e.whenMs),
+    worth: e.worth / 10,
+    island: e.island - 1,
+    group: e.group,
+    bounds:
+      b.length === 4
+        ? [(b[0] ?? 0) / 100, (b[1] ?? 0) / 100, (b[2] ?? 0) / 100, (b[3] ?? 0) / 100]
+        : null,
+    highest: e.highest / 100,
+    zone: e.zone,
+    className: e.class,
+    model: e.model,
+    light: e.light - 1,
+    character: e.character,
+    focal: e.focal / 100,
+    range: e.range,
+    ship: e.ship,
+    sunk: e.sunk,
+    withSubject: subjectOf(e.withSubject),
+    withNumber: e.withNumber,
   };
 }

@@ -5,7 +5,7 @@
   "description": "Every list of kinds in the game. Kinds are data: code reads their properties, never their names.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["boats", "sailors", "weather", "sky", "encounters", "world"],
+  "required": ["boats", "sailors", "weather", "sky", "encounters", "world", "notices", "news"],
   "properties": {
     "boats": {
       "description": "Boat types.",
@@ -22,7 +22,9 @@
     "weather": { "$ref": "#/$defs/Weather" },
     "sky": { "$ref": "#/$defs/Sky" },
     "encounters": { "$ref": "#/$defs/Encounters" },
-    "world": { "$ref": "#/$defs/World" }
+    "world": { "$ref": "#/$defs/World" },
+    "notices": { "$ref": "#/$defs/Notices" },
+    "news": { "$ref": "#/$defs/News" }
   },
   "$defs": {
     "Weather": {
@@ -356,7 +358,7 @@
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "physics", "art"],
+      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "lookout", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
@@ -365,6 +367,7 @@
         "lengthOverall": { "description": "Length overall, in metres.", "type": "number", "exclusiveMinimum": 0 },
         "beam": { "description": "Greatest width of the hull, in metres.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
         "lights": { "description": "The navigation lights the boat shows by night. Together their arcs make the full circle once.", "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Light" } },
+        "lookout": { "description": "How high its lookout's eye is above the sea, in m: what it sees over the horizon.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
         "physics": { "$ref": "#/$defs/BoatPhysics" },
         "art": { "$ref": "#/$defs/BoatArt" }
       }
@@ -579,7 +582,8 @@
         "towns",
         "features",
         "flora",
-        "score"
+        "score",
+        "chart"
       ],
       "properties": {
         "disk": { "$ref": "#/$defs/WorldDisk" },
@@ -632,7 +636,140 @@
         "towns": { "$ref": "#/$defs/WorldTowns" },
         "features": { "$ref": "#/$defs/WorldFeatures" },
         "flora": { "$ref": "#/$defs/WorldFlora" },
-        "score": { "$ref": "#/$defs/WorldScore" }
+        "score": { "$ref": "#/$defs/WorldScore" },
+        "chart": { "$ref": "#/$defs/WorldChart" }
+      }
+    },
+    "WorldChart": {
+      "title": "WorldChart",
+      "description": "The shared chart: what a lookout sees, what a discovery is worth, the islands' models and how the chart is drawn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sight", "worth", "model", "look"],
+      "properties": {
+        "sight": { "$ref": "#/$defs/ChartSight" },
+        "worth": { "$ref": "#/$defs/ChartWorth" },
+        "model": { "$ref": "#/$defs/ChartModel" },
+        "look": { "$ref": "#/$defs/ChartLook" }
+      }
+    },
+    "ChartSight": {
+      "title": "ChartSight",
+      "description": "How often and how far a lookout looks.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["every", "rays", "water", "awash", "features", "grid"],
+      "properties": {
+        "every": { "description": "A boat looks once in this many ticks.", "type": "integer", "minimum": 1, "maximum": 300 },
+        "rays": { "description": "The bearings a place's view is worked out on.", "type": "integer", "minimum": 8, "maximum": 360 },
+        "water": { "description": "A cove, an anchorage or a lagoon is seen into within this, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 2000 },
+        "awash": { "description": "A reef, a sandbar or a sunk wreck is seen within this, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 2000 },
+        "features": { "description": "A feature is seen within this, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 2000 },
+        "grid": { "description": "The side of the squares the world's sights are filed by, in m.", "type": "number", "minimum": 50, "maximum": 5000 }
+      }
+    },
+    "ChartWorth": {
+      "title": "ChartWorth",
+      "description": "What a discovery is worth: an island's size class's worth times its zone's and its class of scenery's.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zones", "classes", "great"],
+      "properties": {
+        "zones": { "$ref": "#/$defs/BiomeZones" },
+        "classes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["a", "b", "c"],
+          "properties": {
+            "a": { "description": "Class A's times.", "type": "number", "minimum": 0, "maximum": 10 },
+            "b": { "description": "Class B's times.", "type": "number", "minimum": 0, "maximum": 10 },
+            "c": { "description": "Class C's times.", "type": "number", "minimum": 0, "maximum": 10 }
+          }
+        },
+        "great": { "description": "A discovery worth this or more is a great one.", "type": "number", "minimum": 0, "maximum": 1000 }
+      }
+    },
+    "ChartModel": {
+      "title": "ChartModel",
+      "description": "An island's model on the chart: a coarse grid of its land.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cell", "heights"],
+      "properties": {
+        "cell": { "description": "A cell is this many hexagons on a side.", "type": "integer", "minimum": 1, "maximum": 16 },
+        "heights": { "description": "Heights are drawn this many times their own.", "type": "number", "minimum": 1, "maximum": 50 }
+      }
+    },
+    "ChartLook": {
+      "title": "ChartLook",
+      "description": "How the chart is drawn: its paper and inks, its graticule, how often it is drawn and its wind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper", "ink", "sea", "shallows", "mist", "light", "boat", "parallels", "meridians", "fps", "wind"],
+      "properties": {
+        "paper": { "$ref": "#/$defs/Colour" },
+        "ink": { "$ref": "#/$defs/Colour" },
+        "sea": { "$ref": "#/$defs/Colour" },
+        "shallows": { "$ref": "#/$defs/Colour" },
+        "mist": { "$ref": "#/$defs/Colour" },
+        "light": { "$ref": "#/$defs/Colour" },
+        "boat": { "$ref": "#/$defs/Colour" },
+        "parallels": { "description": "A parallel of latitude every this many nautical miles from the centre.", "type": "number", "exclusiveMinimum": 0, "maximum": 5 },
+        "meridians": { "description": "A meridian every this many degrees.", "type": "number", "minimum": 5, "maximum": 90 },
+        "fps": { "description": "The most frames a second the chart is drawn at.", "type": "integer", "minimum": 1, "maximum": 60 },
+        "wind": { "description": "The wind's streaks are drawn from a grid of this many points a side.", "type": "integer", "minimum": 4, "maximum": 256 }
+      }
+    },
+    "Notices": {
+      "title": "Notices",
+      "description": "The notices that pop up: one at a time, the rest queued, the same kind folded.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queue", "kinds"],
+      "properties": {
+        "queue": { "description": "How many notices may wait behind the one shown.", "type": "integer", "minimum": 0, "maximum": 20 },
+        "kinds": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NoticeKind" } }
+      }
+    },
+    "NoticeKind": {
+      "title": "NoticeKind",
+      "description": "A kind of notice: what raises it, its words, how urgent it is, whether it can be switched off and how long it stays.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "on", "level", "switchable", "stays", "text", "folded"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Its name in the menu's switches.", "type": "string", "minLength": 1, "maxLength": 60 },
+        "on": { "description": "What raises it: a place the player charts, or a great discovery by anyone.", "type": "string", "enum": ["charted-own", "charted-great"] },
+        "level": { "description": "Passive notices are for the player's leisure; active ones for now.", "type": "string", "enum": ["passive", "active"] },
+        "switchable": { "description": "The player may switch it off.", "type": "boolean" },
+        "stays": { "description": "How long it stays unless dismissed, in s.", "type": "number", "minimum": 1, "maximum": 60 },
+        "text": { "description": "Its words: {name}, {who}, {where} and {worth} are filled in.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "folded": { "description": "Its words for several at once: {count} is filled in.", "type": "string", "minLength": 1, "maxLength": 200 }
+      }
+    },
+    "News": {
+      "title": "News",
+      "description": "The news sheet: its columns, and how its items are folded and paged.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fold", "page", "columns"],
+      "properties": {
+        "fold": { "description": "A sailor's places charted within this of an island's item are folded into it, in minutes.", "type": "number", "minimum": 0, "maximum": 1440 },
+        "page": { "description": "Items to a page.", "type": "integer", "minimum": 1, "maximum": 200 },
+        "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NewsColumn" } }
+      }
+    },
+    "NewsColumn": {
+      "title": "NewsColumn",
+      "description": "A column of the news sheet.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "of"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "title": { "description": "Its heading.", "type": "string", "minLength": 1, "maxLength": 60 },
+        "of": { "description": "What its items tell of.", "type": "string", "enum": ["charting"] }
       }
     },
     "WorldHazards": {
@@ -786,7 +923,8 @@
         "name",
         "site",
         "count",
-        "mark"
+        "mark",
+        "worth"
       ],
       "properties": {
         "id": {
@@ -828,7 +966,11 @@
           "description": "A colour, #rrggbb.",
           "type": "string",
           "pattern": "^#[0-9a-f]{6}$"
-        }
+        },
+        "worth": { "description": "What charting one is worth.", "type": "number", "minimum": 0, "maximum": 100 },
+        "awash": { "description": "It lies awash: seen by the water breaking on it, within the chart's awash reach, not over the horizon.", "type": "boolean" },
+        "water": { "description": "It is water: seen by looking into it, within the chart's water reach.", "type": "boolean" },
+        "news": { "description": "Its charting is an item of the news of its own; otherwise it is folded into its island's.", "type": "boolean" }
       }
     },
     "PlaceRig": {
@@ -1979,7 +2121,7 @@
       "description": "A size class: the islands narrower than below and no narrower than the class before's.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["class", "below"],
+      "required": ["class", "below", "worth"],
       "properties": {
         "class": {
           "description": "The class's word, as the names give it.",
@@ -1992,7 +2134,8 @@
           "type": "number",
           "minimum": 1,
           "maximum": 100000
-        }
+        },
+        "worth": { "description": "What charting an island of the class is worth, before its zone and its class of scenery.", "type": "number", "minimum": 0, "maximum": 100 }
       }
     },
     "WorldSeabed": {
@@ -3217,7 +3360,7 @@
       "description": "A kind of feature an island may have.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "site", "biomes", "chance", "zones", "mark"],
+      "required": ["id", "name", "site", "biomes", "chance", "zones", "mark", "worth"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Its name, as the world page lists it.", "type": "string", "minLength": 1, "maxLength": 40 },
@@ -3227,6 +3370,8 @@
         "chance": { "description": "The chance an island of its biomes with a site for it has one, before its zone's weight.", "type": "number", "minimum": 0, "maximum": 1 },
         "zones": { "$ref": "#/$defs/BiomeZones" },
         "mark": { "description": "The colour the world page marks it with.", "$ref": "#/$defs/Colour" },
+        "worth": { "description": "What charting one is worth.", "type": "number", "minimum": 0, "maximum": 100 },
+        "symbol": { "description": "How the chart marks it.", "type": "string", "enum": ["cave", "arch", "blowhole", "fall", "spring", "crater", "smoke", "ruin", "birds"] },
         "ruin": { "description": "A ruin: what it was.", "type": "string", "enum": ["chapel", "beacon", "hamlet"] },
         "birds": { "$ref": "#/$defs/ColonyBirds" }
       }

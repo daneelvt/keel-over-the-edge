@@ -52,6 +52,7 @@ export interface Layers {
   classes: boolean;
   lights: boolean;
   boats: boolean;
+  charted: boolean;
 }
 
 export const LAYER_NAMES: Record<keyof Layers, string> = {
@@ -68,6 +69,7 @@ export const LAYER_NAMES: Record<keyof Layers, string> = {
   classes: 'Islands worth seeing',
   lights: 'Lighthouses',
   boats: 'Boats',
+  charted: 'Charted',
 };
 
 export function allLayers(): Layers {
@@ -85,6 +87,7 @@ export function allLayers(): Layers {
     classes: true,
     lights: true,
     boats: true,
+    charted: true,
   };
 }
 
@@ -110,6 +113,8 @@ export interface MapData {
   light: number | null;
   /** The features, and the feature picked. */
   features: FeaturesData | null;
+  /** What is charted, by subject and number ("island:7"); null until read. */
+  charted: ReadonlySet<string> | null;
 }
 
 /** The colours an island's class is ringed in. */
@@ -358,6 +363,38 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
       ctx.beginPath();
       ctx.arc(x, y, Math.max(is.across / 2 / v.scale + 6, 8), 0, 2 * Math.PI);
       ctx.stroke();
+    }
+  }
+  if (layers.charted && d.charted !== null) {
+    // The islands not yet charted washed paler; a gold ring about each
+    // place and feature charted.
+    ctx.fillStyle = 'rgb(255 255 255 / 45%)';
+    for (const is of d.islands) {
+      if (d.charted.has(`island:${is.number}`)) {
+        continue;
+      }
+      const [x, y] = toScreen(v, is.east, is.north);
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(is.across / 2 / v.scale + 3, 4), 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    ctx.strokeStyle = '#e8b450';
+    ctx.lineWidth = 1.5;
+    const ring = (east: number, north: number) => {
+      const [x, y] = toScreen(v, east, north);
+      ctx.beginPath();
+      ctx.arc(x, y, 7, 0, 2 * Math.PI);
+      ctx.stroke();
+    };
+    for (const p of d.places?.places ?? []) {
+      if (d.charted.has(`place:${p.number}`)) {
+        ring(p.east, p.north);
+      }
+    }
+    for (const f of d.features?.features ?? []) {
+      if (d.charted.has(`feature:${f.number}`)) {
+        ring(f.east, f.north);
+      }
     }
   }
   if (layers.features && d.features !== null) {

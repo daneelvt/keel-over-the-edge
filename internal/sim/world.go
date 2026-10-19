@@ -76,6 +76,9 @@ type Config struct {
 	// Edge is how boats meet the world's edge, at the weather's lip; nil
 	// is a world whose boats sail on past it.
 	Edge *Edge
+	// Sight is what the boats' lookouts see by, to chart the world; nil is
+	// a world nobody charts.
+	Sight *Sight
 }
 
 // Terrain is a world's land: the ground boats run aground on, the land's
@@ -106,7 +109,7 @@ const (
 	PhasePhysics               // step every boat, in the shadow of the boats near it
 	PhaseGrid                  // sort the boats into the grid's cells
 	PhaseContacts              // pairs, contacts and bumps, under the Articles
-	PhaseRules                 // the edge: boats over the lip, and their approaches to it
+	PhaseRules                 // the edge: boats over the lip, and their approaches to it; and what the lookouts sight
 	PhasePublish               // publish the frame, hand it to the recorder
 	Phases                     // the number of phases
 )
@@ -188,6 +191,9 @@ type World struct {
 	meeting    physics.Encounter
 	hulls      physics.Hulls
 
+	// The chart: what is charted, and what the lookouts see by.
+	chart chartState
+
 	// The phases as function values made once, so that running one inside
 	// a trace region allocates nothing.
 	inputsFn, seaFn, physicsFn, gridFn, contactsFn, rulesFn, publishFn func()
@@ -255,6 +261,7 @@ func New(cfg Config) (*World, error) {
 		w.bandClear = w.band + e.Clear
 		w.restarted = make([]int32, 0, cfg.Capacity)
 	}
+	w.initChart(cfg.Sight, len(cfg.Kinds))
 	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.contactsFn, w.rulesFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.contacts, w.rules, w.publish
 	w.sea.init(cfg.Waves, cfg.Weather)
 	if cfg.Terrain != nil {

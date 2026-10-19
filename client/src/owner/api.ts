@@ -133,6 +133,22 @@ export interface FeaturesData {
   features: Feature[];
 }
 
+/** A subject charted: by whom (empty for one known from the start or charted with another), when (ms), and its worth. */
+export interface Charted {
+  subject: 'island' | 'place' | 'feature';
+  number: number;
+  by: string;
+  ai: boolean;
+  at: number;
+  worth: number;
+}
+
+/** charted.json: what is charted, the oldest first, and how many there are to chart. */
+export interface ChartedData {
+  subjects: number;
+  charted: Charted[];
+}
+
 export interface Group {
   number: number;
   name: string;

@@ -7,7 +7,7 @@
 // the next process restores it.
 //
 // It is a recorder (sim.Recorder): on the tick, a frame's lasting events
-// are copied into a recycled buffer and, every CheckpointEvery ticks, the
+// are copied into a recycled buffer, its chartings made rows by Chart, and, every CheckpointEvery ticks, the
 // frame itself is held; either goes to the writer's inbox by a send that
 // never waits. The writer encodes a held frame at once, as the input log
 // does, and releases it, keeping only the newest checkpoint not yet
@@ -89,9 +89,23 @@ type Config struct {
 	Hold    bus.Sender
 	Log     *slog.Logger
 	Metrics *obs.Metrics // may be nil
+	// Chart makes a charting's row, with the news it makes; nil writes
+	// none. Written is told of each batch's chartings once written, those
+	// charted already left out, on the writer's goroutine; it must not
+	// block. FoldWithin is how long a sailor's news item about an island
+	// takes in what they chart about it.
+	Chart      Chart
+	Written    func([]store.Charting)
+	FoldWithin time.Duration
 	// Zero values are the defaults above; tests shorten them.
 	Every                             int64
 	BatchEvery, FirstRetry, LastRetry time.Duration
+}
+
+// Chart makes a charting's row from the simulation's: the world's chart's
+// subjects, what each is worth and the news it makes.
+type Chart interface {
+	Charting(c *bus.Charted) store.Charting
 }
 
 // Persist records a world's lasting state and writes it.
@@ -123,16 +137,18 @@ type Persist struct {
 	done    chan struct{}
 	err     error // why Run ended, read after done
 
-	pending  [][]store.Event // event buffers not yet written, in order
-	batch    []store.Event   // pending flattened, for a write
-	cp       store.Checkpoint
-	haveCP   bool
-	holding  bool
-	fenced   bool
-	retryAt  time.Time
-	retry    time.Duration
-	lastFail time.Time
-	m        metrics
+	pending     [][]store.Event // event buffers not yet written, in order
+	batch       []store.Event   // pending flattened, for a write
+	charts      []store.Charting
+	wroteCharts []store.Charting // scratch: what a write wrote of charts
+	cp          store.Checkpoint
+	haveCP      bool
+	holding     bool
+	fenced      bool
+	retryAt     time.Time
+	retry       time.Duration
+	lastFail    time.Time
+	m           metrics
 }
 
 // metrics are the writer's, resolved once; nil without obs.Metrics.
@@ -143,8 +159,9 @@ type metrics struct {
 
 type item struct {
 	tick   int64
-	events []store.Event // a lasting tick's events, a buffer of free's
-	frame  *bus.Frame    // a checkpoint's, held, for the writer to release
+	events []store.Event    // a lasting tick's events, a buffer of free's
+	charts []store.Charting // its chartings, if any
+	frame  *bus.Frame       // a checkpoint's, held, for the writer to release
 }
 
 // New makes the writer. Run must be running for it to write anything.
@@ -193,7 +210,7 @@ func (p *Persist) Record(f *bus.Frame) {
 	if lasting(f) {
 		select {
 		case buf := <-p.free:
-			if !p.send(item{tick: f.Tick, events: appendEvents(buf[:0], f)}) {
+			if !p.send(item{tick: f.Tick, events: appendEvents(buf[:0], f), charts: p.chartings(f)}) {
 				p.free <- buf
 				return
 			}
@@ -263,11 +280,26 @@ func (p *Persist) Err() error {
 	}
 }
 
+// chartings are the rows of a frame's chartings; nil for none.
+func (p *Persist) chartings(f *bus.Frame) []store.Charting {
+	if len(f.Charted) == 0 || p.cfg.Chart == nil {
+		return nil
+	}
+	out := make([]store.Charting, len(f.Charted))
+	for i := range f.Charted {
+		out[i] = p.cfg.Chart.Charting(&f.Charted[i])
+	}
+	return out
+}
+
 // lasting reports whether a frame's tick decided anything lasting: an
 // event, a bump of its own tick (a frame keeps the bumps of the last
-// second), or a boat at the edge in a voyage the owner's tools did not
-// place.
+// second), a boat at the edge in a voyage the owner's tools did not place,
+// or a subject charted.
 func lasting(f *bus.Frame) bool {
+	if len(f.Charted) > 0 {
+		return true
+	}
 	for i := range f.Events {
 		if kindOf(&f.Events[i]) != "" {
 			return true
@@ -405,6 +437,7 @@ func (p *Persist) absorb(it item) {
 	}
 	if it.events != nil {
 		p.pending = append(p.pending, it.events)
+		p.charts = append(p.charts, it.charts...)
 		return
 	}
 	f := it.frame
@@ -441,7 +474,10 @@ func (p *Persist) write(ctx context.Context) error {
 	for _, buf := range p.pending {
 		p.batch = append(p.batch, buf...)
 	}
-	b := store.Batch{World: p.cfg.World, Epoch: p.cfg.Epoch, Events: p.batch}
+	for i := range p.charts {
+		p.charts[i].Written = false
+	}
+	b := store.Batch{World: p.cfg.World, Epoch: p.cfg.Epoch, Events: p.batch, Charting: p.charts, FoldWithin: p.cfg.FoldWithin}
 	if p.haveCP {
 		p.cp.Format = sim.SnapshotVersion
 		p.cp.Build, p.cp.Catalog, p.cp.Layout, p.cp.Epoch = p.cfg.Build, p.cfg.Catalog, p.cfg.Layout, p.cfg.Epoch
@@ -465,6 +501,7 @@ func (p *Persist) write(ctx context.Context) error {
 		}
 		clear(p.pending)
 		p.pending = p.pending[:0]
+		p.wrote()
 		if p.haveCP {
 			n++
 			p.haveCP = false
@@ -496,6 +533,7 @@ func (p *Persist) write(ctx context.Context) error {
 		}
 		p.unwritten.Add(-int64(len(p.pending)))
 		p.pending = p.pending[:0]
+		p.charts = p.charts[:0]
 		if p.haveCP {
 			p.unwritten.Add(-1)
 			p.haveCP = false
@@ -515,6 +553,21 @@ func (p *Persist) write(ctx context.Context) error {
 		p.lastFail = time.Now()
 	}
 	return err
+}
+
+// wrote tells Written of the chartings just written, and lets them go.
+func (p *Persist) wrote() {
+	p.wroteCharts = p.wroteCharts[:0]
+	for _, c := range p.charts {
+		if c.Written {
+			p.wroteCharts = append(p.wroteCharts, c)
+		}
+	}
+	clear(p.charts)
+	p.charts = p.charts[:0]
+	if len(p.wroteCharts) > 0 && p.cfg.Written != nil {
+		p.cfg.Written(append([]store.Charting(nil), p.wroteCharts...))
+	}
 }
 
 // pressure holds admission while the inbox is half full, and lets it go

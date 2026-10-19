@@ -21,6 +21,7 @@ var validBoats = `boats:
     lengthOverall: 3.5
     beam: 1.2
     lights: [tricolour]
+    lookout: 2
     art:
       model: boats/test-boat/model.glb
       far: boats/test-boat/far.glb
@@ -42,6 +43,7 @@ const (
 	boatsPath     = "shared/catalog/boats.yaml"
 	encounterPath = "shared/catalog/encounters.yaml"
 	worldPath     = "shared/catalog/world.yaml"
+	noticesPath   = "shared/catalog/notices.yaml"
 )
 
 // glb is a glTF binary holding only its JSON: nodes of the given names.
@@ -162,6 +164,9 @@ func fixture(t *testing.T, files map[string]string) string {
 	}
 	if _, ok := files[encounterPath]; !ok {
 		files[encounterPath] = realEncounters()
+	}
+	if _, ok := files[noticesPath]; !ok {
+		files[noticesPath] = realFile(noticesPath)
 	}
 	if _, ok := files[worldPath]; !ok {
 		files[worldPath] = realFile(worldPath)
@@ -515,6 +520,7 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
     name: Test boat
     lights:
       - tricolour
+    lookout: 2.0
     id: test-boat
 ` + realPhysics()
 	b := fixture(t, map[string]string{"shared/catalog/boats.yaml": reordered})

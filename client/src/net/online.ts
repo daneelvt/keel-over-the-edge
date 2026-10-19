@@ -39,6 +39,7 @@ import {
 } from './clock';
 import type {
   BumpTold,
+  ChartEntry,
   ChunksHanded,
   FromWorker,
   HelloVersions,
@@ -122,6 +123,8 @@ export class Online {
   onChunks: ((c: ChunksHanded) => void) | null = null;
   /** Told of the places in chunks just handed. */
   onPlaces: ((p: PlaceSeen[]) => void) | null = null;
+  /** Told of the world's chart: whole after each Welcome, then what is charted. */
+  onChart: ((entries: ChartEntry[], whole: boolean) => void) | null = null;
   /** Told of lights come into range, and lights to drop; and at each Welcome, of the main port's light, with all others dropped. */
   onLights: ((lights: LightSeen[], drop: number[] | 'all') => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
@@ -230,6 +233,9 @@ export class Online {
         break;
       case 'lights':
         this.onLights?.(m.lights, m.drop);
+        break;
+      case 'chart':
+        this.onChart?.(m.entries, m.whole);
         break;
       case 'tools':
         this.tools.value = m.on;

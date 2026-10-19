@@ -5,7 +5,10 @@
 // device runs well, or the least), sound, the beginners' overlays, and
 // whether the helm returns to the centre when let go.
 
+import type { ChartMode } from '../chart/chart';
+import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
+import type { Notices } from './notices';
 import { PlayerText } from './player';
 import type { SettingsSignal } from './settings';
 
@@ -48,6 +51,8 @@ export function Menu({
   connection = null,
   close,
   fly = null,
+  notices = null,
+  chart = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
@@ -55,12 +60,26 @@ export function Menu({
   close: () => void;
   /** Flies the free camera, where it is offered; null where it is not. */
   fly?: (() => void) | null;
+  /** The notices, whose kinds are switched here. */
+  notices?: Notices | null;
+  /** Opens the chart, its list or the news; null where there is none. */
+  chart?: ((mode: ChartMode) => void) | null;
 }) {
   const s = settings.value.value;
   return (
     <section class="panel menu" aria-label="Settings">
       <SailingAs sailor={sailor} />
       {connection !== null ? <RoundTrip view={connection} /> : null}
+      {chart !== null ? (
+        <div class="menu-chart">
+          <button type="button" onClick={() => chart('chart')}>
+            Chart
+          </button>
+          <button type="button" onClick={() => chart('news')}>
+            News
+          </button>
+        </div>
+      ) : null}
       <h2>Settings</h2>
       <Toggle
         name="battery"
@@ -106,6 +125,7 @@ export function Menu({
         on={s.centreHelm}
         set={(centreHelm) => settings.set({ centreHelm })}
       />
+      {notices !== null ? <NoticeSwitches notices={notices} /> : null}
       {fly !== null ? (
         <button type="button" class="menu-fly" onClick={fly}>
           Free camera (F)

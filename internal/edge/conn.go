@@ -79,8 +79,11 @@ type conn struct {
 	handout connChunks // what of the land the client has been handed: the encoder's
 	// lightsSent is which lights the client has been sent: the encoder's.
 	lightsSent connLights
-	margin     margin
-	ack        atomic.Int64 // the newest snapshot's tick the client has decoded
+	// charted is how many of the chart's entries the client has been
+	// sent: the encoder's.
+	charted int
+	margin  margin
+	ack     atomic.Int64 // the newest snapshot's tick the client has decoded
 	// resync: the client lacks a base and asked for a full snapshot.
 	resync     atomic.Bool
 	lastResync time.Time

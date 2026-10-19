@@ -1823,6 +1823,131 @@ go test ./internal/worldgen -run '^TestSeeds$' -v -seeds 1 -seeds-from SEED
 go run ./tools/worldgen-preview -seed SEED
 ```
 
+## Sighting and the chart
+
+No player knows any of the world by name until it is charted. The server
+decides when a boat **sights** something, by the dome's own horizon; the
+first sighting **charts** it for everyone in the world, credited to the
+sailor whose lookout saw it; and the phone shows **the chart**, a miniature
+of the whole disk with each charted island a model of itself, its pocket
+at sea, its list, the notices and the news.
+
+### What a lookout sees
+
+`internal/sight` is the sight table, built once at load from the bundle
+(`internal/chart`'s `Build`), never stored. A thing *H* m high shows over
+the horizon to an eye *h* m high out to √(2 *R* *h*) + √(2 *R* *H*), *R*
+the dome's 2,500 m; every reach is no more than the mist band's visual
+range at the eye and at the thing, `physics.VisualRangeAt`, which the
+page's `edge/mist.ts` computes alike (`internal/physics/testdata/visibility.json`
+holds the two together). A boat kind's lookout is its catalog's `lookout`,
+the Jolly boat's 2 m.
+
+| Subject | Sighted when |
+|---|---|
+| An island | any cell of its land (4 by 4 hexagons) is over the horizon: its ground, trees, roofs and buildings; no line of sight |
+| A port, a village | its tallest building or its light over the horizon, along its view |
+| A lighthouse | its tower's top along its view by day; at night its light, while the sun is below the horizon at it, within its nominal range and by Allard's law in the visibility at the eye and the light |
+| A stranded wreck | her masts (the rig's and the age's) along her view; sunk, or her masts gone, as a reef |
+| A cove, an anchorage, a lagoon | seen into: within `world.chart.sight.water` (300 m), along its view at the water |
+| A reef, a sandbar, a sunk wreck | within `world.chart.sight.awash` (150 m), by the water breaking on it |
+| A feature | its top along its view within `world.chart.sight.features` (300 m); one seen from no water is charted with its island |
+
+A **view** is worked out on `sight.rays` (48) bearings from the thing: on
+each, from each lookout's height, the nearest and furthest water from which
+nothing of the land stands above the line to its top, its own hexagons
+aside. The table files every cell, view and reach in squares of
+`sight.grid` (500 m); a look reads the boat's square alone, skips what is
+charted by a bitmap, and allocates nothing. It follows the physics
+package's float rules, so a replay sees what the world saw: the
+simulation's `TestRules` and `go run ./tools/physics -check` cover it.
+
+### Charting, and who is credited
+
+In the simulation's rules phase (`sim/chart.go`) each boat looks once every
+`sight.every` ticks (15), in turn by its number. The first to see a thing
+charts it: of two in one tick, the nearer, then the lower boat number. A
+boat placed by the owner's tools in its voyage, one staying while its
+owner's free camera roams, and one falling over the lip chart nothing.
+`Frame.Charted` carries each charting; what is charted with it (an
+island's hidden features) follows, credited to no one. The command `Chart`
+charts by hand, credited to no one: keel sends it at start for whatever is
+known from the world's start (the main port's island and everything on it)
+and not yet charted; `/debug/chart` sends it for tests.
+
+### The rows, the model and the wire
+
+Persist writes each charting in the fenced batch with the events
+(`charting`, migration `00010_chart.sql`): the subject's kind and number,
+the sailor's name and account kind **copied**, the boat, tick, place and
+worth; the key (world, subject, number) leaves a second write as it was.
+A charting credited to a sailor, not charted with another, makes a news
+item (`news_item`): an island, a port, a lighthouse or a wreck one of its
+own; a sailor's other places and features about one island within
+`news.fold` minutes are folded into its item.
+
+Only what is written is shown: persist hands each written batch's chartings
+to the chart's model (`chart.Model`), which publishes the chart whole by an
+atomic pointer. At start keel reads the rows back into the model and the
+simulation's bitmap. The game connection sends **`Chart`**, every entry,
+after the Welcome, and **`Charted`** to every connection as more are
+written. An entry carries the subject's name (names reach a client only
+here), who charted it and when, its worth, and, for an island, its bounds,
+highest land and its **model's address**, `/w/<world>/i/<n>.<mac>.bin`,
+signed as the chunks are and served the same way: a grid of 4 by 4
+hexagons, each cell's highest ground and surface, gzipped
+(`chart/models.go`; seed 1's 149 models are 22.5 KB).
+
+| Route | What |
+|---|---|
+| `GET /api/news?before=<id>` | the news, newest first, 40 a page; no session; kept 5 s |
+| `PUT /api/me/notices {"off": [ids]}` | the notices switched off, kept on the account; `GET /api/me` says them |
+| `GET /owner/api/charted.json` | the world page's chart: what is charted, by whom, when, its worth |
+| `POST /debug/chart?all` or `?subject=island:N` | charts by hand, credited to no one (developer's commands) |
+
+A discovery's **worth**: an island's size class's (`world.sizes`) times its
+zone's and its class of scenery's (`world.chart.worth`); a place's or a
+feature's kind's. One worth `worth.great` (20) or more is a great
+discovery, told to everyone at sea.
+
+### On the phone
+
+`chart/store.ts` holds the chart; `chart/view.ts` draws it, a scene of its
+own in the `chart` material kind (no bend; `checkChartScene`), drawn by the
+same renderer **instead of the sea** while it covers the screen
+(`SeaScene.cover`): the game ticks on, the sea is not drawn, at most
+`chart.look.fps` frames a second and only while something moves. The paper
+is painted on a 2D canvas (`chart/paper.ts`): the parallels, which are the
+sky's latitudes (the Hub Star's height, 90° less 10° a mile), the meridians,
+the mist band hatched, the drain's arrows, a compass rose, and the charted
+islands' coasts inked; on it the islands' models as columns, their heights
+`chart.model.heights` times, the lighthouses, the boat's pin, the falls and
+the mean wind's streaks. Names are the page's own elements, land's upright
+and water's sloping, the great islands' lettered from afar and the rest as
+the camera comes nearer; the lights' characters close in.
+
+The **pocket chart** (top right at sea) says how far the edge is; the
+chart's **list** puts the nearest first; **the news** is a page of the
+period. **Notices** (`ui/notices.ts`) are the catalog's kinds
+(`notices.kinds`): one shown at a time, three waiting at most, one kind
+folded; a status, never an alert, dismissed by a button or by time; each
+kind switched off in the menu, on the account.
+
+### Looking at it
+
+```sh
+go run ./tools/dev -world 1     # writes .dev/worlds/1.world and 1.chart
+# https://localhost:5173/?sandbox&world=1               the chart charted whole: the menu's Chart
+# https://localhost:5173/?sandbox&world=1&chart=sight   charted as the boat's lookout sees it
+go test ./internal/chart -run TestRuns -runs 40 -v      # what eight runs from Port Royal chart, 40 seeds
+```
+
+The sandbox's chart file holds every entry, the models and the server's
+sight table; `?chart=sight` looks by it (`chart/sight.ts`), and
+`chart/sight.test.ts` holds its looks to the server's along seed 1's runs.
+The world page washes the islands not yet charted paler, rings the places
+charted, and lists what is charted by whom.
+
 ## The owner's tools
 
 Tools for the owner alone, which no player ever sees: **the world page**, a
