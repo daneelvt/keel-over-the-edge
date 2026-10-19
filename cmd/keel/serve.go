@@ -32,13 +32,11 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
-	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
-	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
-	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
@@ -93,6 +91,14 @@ Configured from the environment:
                        stored and loaded, and sailed as open sea (default on)
   KEEL_WORLD_SEED      the seed a world's terrain is made from when it has
                        none (default one drawn at random)
+  KEEL_WORLD_SCHEDULE  when worlds end: a weekday, a local time and a zone,
+                       with how long before the end a world is closing and
+                       its successor made (default "Sun 18:00
+                       America/New_York notice=72h ahead=24h"); or a period
+                       from an anchor in UTC, "every=10m
+                       from=2026-11-01T00:00:00Z notice=4m ahead=3m"
+  KEEL_WORLD_KEEP      how long an ended world's data is kept before its
+                       partitions are dropped (default 672h)
   KEEL_DEV_COMMANDS    1 for the developer's commands on the internal listener:
                        POST /debug/wind?knots=…&from=… (a steady wind),
                        POST /debug/chart?all|subject=island:…|place:…|feature:…
@@ -132,7 +138,18 @@ type database interface {
 	LoadBundle(ctx context.Context, world [16]byte) (*store.Bundle, error)
 	StoreBundle(ctx context.Context, world [16]byte, epoch int64, b *store.Bundle) error
 	SetChunkKey(ctx context.Context, world [16]byte, epoch int64, key []byte) ([]byte, error)
-	BeginWorld(ctx context.Context, lease int64, number int, epoch time.Time) (store.World, error)
+	SetWorldEnd(ctx context.Context, lease int64, world [16]byte, end time.Time) error
+	NextWorld(ctx context.Context) (store.NextWorld, error)
+	CreateNextWorld(ctx context.Context, lease int64, seed uint64, generator int, epoch time.Time) (store.World, error)
+	SwitchWorld(ctx context.Context, lease int64, number int, next [16]byte, begins, ends time.Time) (store.World, error)
+	DiscardNextWorld(ctx context.Context, lease int64, number int) error
+	WorldsToDrop(ctx context.Context, before time.Time) ([]store.World, error)
+	DropWorld(ctx context.Context, lease int64, w store.World) error
+	WriteWorldNews(ctx context.Context, lease int64, world [16]byte, n store.WorldNews) error
+	DeleteSessions(ctx context.Context, before time.Time) (int64, error)
+	DeleteJobRuns(ctx context.Context, before time.Time) (int64, error)
+	JobRuns(ctx context.Context, limit int) ([]store.JobRun, error)
+	jobs.Store
 	Chartings(ctx context.Context, world [16]byte) ([]store.Charting, error)
 	News(ctx context.Context, world [16]byte, before *[16]byte, limit int) ([]store.News, error)
 	api.Notices
@@ -361,16 +378,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	var closeWriter sync.Once
 	defer closeWriter.Do(writer.Close)
-	sailed, err := db.ActiveOrFirstWorld(ctx, firstEpoch)
-	if err != nil {
-		return stopEarly(side, flight, err)
-	}
-	epoch := sailed.Epoch
-	health.Waiting("")
-	log.Info("world found", "world", sailed.Number, "epoch", epoch)
-	health.Beat()
-
-	// The catalog and the world.
+	// The catalog, and what lasts from one world to the next.
 	cat, err := catalog.Load()
 	if err != nil {
 		return stopEarly(side, flight, err)
@@ -383,211 +391,87 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	if opt.generate == nil {
 		opt.generate = catalogGenerator(cat)
 	}
-	held, err := worldTerrain(ctx, db, sailed, leaseEpoch, cfg, opt.generate, health, log)
+	looks := make([]string, len(cat.Sailors))
+	for i, s := range cat.Sailors {
+		looks[i] = string(s.ID)
+	}
+	p := &process{
+		cfg: cfg, opt: opt, build: build, log: log, health: health, metrics: metrics,
+		db: db, writer: writer, lease: leaseEpoch, cat: cat, waves: waves, kinds: kinds, timeline: timeline,
+		sessions: auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log}),
+		looks:    looks, page: page, ownPage: worldPage, flight: flight,
+		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
+		fail: make(chan error, 1),
+	}
+	p.registerWorldMetrics()
+
+	// The world sailed: its end set if it has none, and if its end passed
+	// while keel was down, the next world begun first, before anyone is
+	// let in.
+	sailed, err := p.worldToSail(ctx)
 	if err != nil {
 		if ctx.Err() != nil {
 			return stopEarly(side, flight, nil)
 		}
 		return stopEarly(side, flight, err)
 	}
-	bundle := held.bundle
+	health.Waiting("")
+	log.Info("world found", "world", sailed.Number, "epoch", sailed.Epoch, "ends", sailed.EndsAt)
+	health.Beat()
+	ready, err := p.loadWorld(ctx, sailed)
+	if err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, err)
+	}
 	health.Waiting("")
 	health.Beat()
-	var terrain *sim.Terrain
-	var terrainDigest [32]byte
-	var chunks *api.Chunks
-	var handout, roamHandout *edge.Handout
-	var mainLight *pb.Light
-	var charts *worldChart
-	var sighting *sim.Sight
-	if cfg.Land {
-		terrain = bundle.Terrain(cat.PrepareGround())
-		terrainDigest = bundle.Digest
-		chunks = api.NewChunks(sailed.ID, held.key, held.payloads)
-		// A town's buildings, an arch's span and a wood's canopy stand over
-		// the horizon as land as high would.
-		var tops []edge.Top
-		for _, t := range bundle.Tops(cat) {
-			tops = append(tops, edge.Top{X: t[0], Y: t[1], Height: t[2]})
-		}
-		handout = edge.NewHandout(bundle.Ground, chunks.Paths(), handoutRule(cat)).WithTops(tops)
-		// The owner's free camera sees from higher: its own handout.
-		roamHandout = edge.NewHandout(bundle.Ground, chunks.Paths(), roamRule(cat)).WithTops(tops)
-		// The places go with their chunks, the lights by range.
-		places := wirePlaces(bundle, cat)
-		var lights *edge.Lights
-		mainLight, lights = wireLights(bundle, cat)
-		for _, h := range []*edge.Handout{handout, roamHandout} {
-			h.SetPlaces(places)
-			h.SetLights(lights)
-		}
-		log.Info("serving the world's chunks", "bytes", chunks.Size(), "places", len(places), "lights", len(bundle.Lights))
-	} else {
-		log.Warn("land is off: the world's terrain is sailed as open sea")
-	}
-	// What can be charted, and the islands' models: the world's, whether
-	// its land is sailed or not.
-	made := time.Now()
-	charts = newWorldChart(bundle, cat, sailed.ID, held.key)
-	sighting = charts.sight(cat, epoch)
-	log.Info("the world's chart is built", "subjects", len(charts.world.Subjects), "models", charts.models.Size(),
-		"took", time.Since(made).Round(time.Millisecond).String())
-	world, err := sim.New(sim.Config{Kinds: kinds, Waves: waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: opt.workers, Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: terrain, Edge: edgeOf(cat), Sight: sighting})
+	first, err := p.openWorld(ctx, ready)
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
-	defer world.Close()
-	if err := restore(ctx, db, world, sailed, log, metrics); err != nil {
-		return stopEarly(side, flight, err)
-	}
-	var chartSource edge.ChartSource
-	if charts != nil {
-		if err := charts.restore(ctx, db, sailed.ID, world, log); err != nil {
-			return stopEarly(side, flight, err)
-		}
-		chartSource = charts.model
-	}
-	b := world.Bus()
-	inputs := replay.New(replay.Config{
-		Frames: b.Frames,
-		Header: replay.Header{Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch, Grace: world.Grace(), Limit: world.Limit(),
-			Seed: bundle.Seed, Generator: bundle.Generator, Terrain: terrainDigest},
-		Dir: cfg.ReplayDir,
-		Log: log,
-	})
-	replayHandler.set(inputs)
+	p.current.Store(first)
 	if weatherHandler != nil {
-		weatherHandler.set(devRoutes(ctx, b, cat, charts, log))
 		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place and /debug/chart on the internal listener")
 	}
-	metrics.CounterFunc("keel_sim_commands_refused_total", "Commands refused because the queue was full.", b.Commands.Refused)
-	metrics.CounterFunc("keel_sim_frames_allocated_total", "Frames made because every frame in the pool was in use.", b.Frames.Allocated)
-	metrics.CounterFunc("keel_replay_bytes_total", "Bytes recorded in the input log.", inputs.Bytes)
-	metrics.CounterFunc("keel_replay_segments_total", "Segments started in the input log.", inputs.Segments)
-	metrics.CounterFunc("keel_replay_records_dropped_total", "Input log records lost because its writer was behind.", inputs.Dropped)
-	lcfg := loop.Config{World: world, Epoch: epoch, Log: log, Metrics: metrics, Health: health, AfterTick: opt.afterTick}
-	if flight != nil {
-		lcfg.Overrun = flight.Overrun
-	}
-	tickLoop := loop.New(lcfg)
-	game := edge.New(edge.Config{
-		Bus: b, World: store.AccountID(sailed.ID).String(), Epoch: epoch, Clock: tickLoop,
-		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
-		Origin: cfg.PlayOrigin, Log: log, Metrics: metrics, Fail: api.WriteError,
-		Land: cfg.Land, Chunks: handout, Circulation: circulationOf(terrain),
-		Lip: timeline.Prepared().Edge(), RoamChunks: roamHandout, MainLight: mainLight, Chart: chartSource,
-	})
-	pcfg := persist.Config{
-		Frames: b.Frames, Store: writer, World: sailed.ID, Epoch: leaseEpoch,
-		Build: build, Catalog: catalog.Version, Layout: physics.LayoutVersion,
-		Hold: b.Commands.Server(), Log: log, Metrics: metrics,
-	}
-	if charts != nil {
-		pcfg.Chart, pcfg.Written, pcfg.FoldWithin = charts.model, charts.model.Add, charts.model.FoldWithin()
-	}
-	lasting := persist.New(pcfg)
-	metrics.GaugeFunc("keel_persist_inbox_fill_ratio", "The share of the world's writes' inbox holding what is not yet written.", nil, lasting.Fill)
-	metrics.GaugeFunc("keel_persist_oldest_seconds", "World time since the oldest of the world's writes not yet written; 0 when none waits.", nil,
-		func() float64 { return lasting.Oldest().Seconds() })
-	metrics.GaugeFunc("keel_persist_checkpoint_bytes", "The latest checkpoint's size, as encoded.", nil,
-		func() float64 { return float64(lasting.CheckpointBytes()) })
-	metrics.CounterFunc("keel_persist_overflow_total", "The world's writes lost because their inbox was full: the process stops.", lasting.Overflows)
-	metrics.CounterFunc("keel_persist_events_total", "The world's lasting events written.", lasting.Events)
-	metrics.CounterFunc("keel_persist_checkpoints_total", "The world's checkpoints written.", lasting.Checkpoints)
-	world.Record(inputs, game, lasting)
-	log.Info("world ready", "kinds", len(kinds), "capacity", world.Capacity(), "limit", world.Limit(), "workers", opt.workers, "tick", world.Now())
 	health.Beat()
-
-	looks := make([]string, len(cat.Sailors))
-	for i, s := range cat.Sailors {
-		looks[i] = string(s.ID)
-	}
-	sessions := auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log})
-	tools := ownerTools(ownerConfig{
-		cat: cat, bus: b, bundle: bundle, made: held.made, sailed: sailed, timeline: timeline, terrain: terrain,
-		db: db, sessions: sessions, game: game, charts: charts, clock: tickLoop, page: worldPage, log: log, metrics: metrics,
-		lease: leaseEpoch, restart: restart,
-	})
-	ownerHandler.set(tools.Handler())
-	log.Info("the world page is on the internal listener", "path", "/owner/", "built", worldPage != nil)
-	play := newServer(api.Handler(api.Config{
-		Version:  api.Version{Build: build, Catalog: catalog.Version},
-		Log:      log,
-		Metrics:  metrics,
-		Guests:   db,
-		Sessions: sessions,
-		Looks:    looks,
-		Game:     game,
-		Page:     page,
-		Chunks:   chunks,
-		Models:   modelsOf(charts),
-
-		News:        news{db: db, world: sailed.ID},
-		NewsPage:    cat.News.Page,
-		Notices:     db,
-		NoticeKinds: noticeKinds(cat),
-	}), log)
+	play := newServer(p.playRoutes, log)
 	agents := newServer(obs.AccessLog(log, api.Agents()), log)
+	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: p.lifecycleJobs(), Log: log, Metrics: metrics})
 
 	g, gctx := errgroup.WithContext(ctx)
-	loopCtx, stopLoop := context.WithCancel(context.Background())
-	sailorsCtx, stopSailors := context.WithCancel(context.Background())
 	flightCtx, stopFlight := context.WithCancel(context.Background())
-	encoderCtx, stopEncoder := context.WithCancel(context.Background())
-	defer stopEncoder()
-	defer stopLoop()
-	defer stopSailors()
+	jobsCtx, stopJobs := context.WithCancel(context.Background())
 	defer stopFlight()
-	loopDone := make(chan struct{})
-	inputsDone := make(chan struct{})
-	sailorsDone := make(chan struct{})
-	encoderDone := make(chan struct{})
-	// lost: another process may hold the world: no bell, no final
-	// checkpoint.
-	var lost atomic.Bool
+	defer stopJobs()
+	jobsDone := make(chan struct{})
 
-	g.Go(func() error {
-		defer close(inputsDone)
-		return inputs.Run()
-	})
-	g.Go(func() error {
-		// What it returns, the stop logs: a fence, or what the final flush
-		// could not write.
-		_ = lasting.Run()
-		return nil
-	})
+	first.start()
+	if nw, err := db.NextWorld(ctx); err == nil && nw.Stored {
+		metrics.WorldNextReady.Set(1)
+	}
+	log.Info("the world page is on the internal listener", "path", "/owner/", "built", worldPage != nil)
 	g.Go(func() error {
 		if err := sl.Watch(gctx); err != nil {
-			lost.Store(true)
+			p.lost.Store(true)
 			log.Error("the simulation lease is lost: stopping", "err", err)
 			return err
 		}
 		return nil
 	})
 	g.Go(func() error {
+		// A world half that fails stops the process.
 		select {
-		case <-lasting.Failed():
-			err := lasting.Err()
-			if errors.Is(err, store.ErrFenced) {
-				lost.Store(true)
-			}
-			log.Error("the world's writes cannot go on: stopping", "err", err)
+		case err := <-p.fail:
 			return err
 		case <-gctx.Done():
 			return nil
 		}
 	})
 	g.Go(func() error {
-		defer close(loopDone)
-		return tickLoop.Run(loopCtx)
-	})
-	g.Go(func() error {
-		defer close(encoderDone)
-		// The world page's view, built while the encoders run.
-		var wg sync.WaitGroup
-		wg.Go(func() { tools.Run(encoderCtx) })
-		game.Run(encoderCtx)
-		wg.Wait()
+		defer close(jobsDone)
+		p.jobs.Run(jobsCtx)
 		return nil
 	})
 	if flight != nil {
@@ -596,13 +480,6 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 			return nil
 		})
 	}
-	g.Go(func() error {
-		defer close(sailorsDone)
-		if cfg.DevSailors == 0 {
-			return nil
-		}
-		return scripted.Run(sailorsCtx, scripted.Config{N: cfg.DevSailors, Bus: b, Seed: uint64(time.Now().UnixNano()), Log: log})
-	})
 	// The public listeners, once the world is ticking.
 	g.Go(func() error {
 		for _, l := range []struct {
@@ -626,13 +503,15 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		<-gctx.Done()
 		health.Stopping()
 		bell := cfg.Bell
-		if lost.Load() {
+		if p.lost.Load() {
 			bell = 0
 		}
 		log.Info("stopping", "bell", bell.String())
 		if opt.stopping != nil {
 			opt.stopping()
 		}
+		// The jobs stop first: a run cut short is the next process's.
+		stopJobs()
 		// The public listeners stop taking requests, beside the rest.
 		listeners := make(chan error, 1)
 		go func() {
@@ -643,47 +522,9 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 			listeners <- err
 		}()
 		// The bell: every phone is told, and the world sails on a moment
-		// so they see it.
-		game.Bell(bell)
-		time.Sleep(bell)
-		stopSailors()
-		<-sailorsDone
-		stopLoop()
-		<-loopDone
-		// The final checkpoint, of the last frame, and every event left,
-		// before any connection is closed.
-		start := time.Now()
-		var final *bus.Frame
-		bound := finalTimeout
-		if lost.Load() {
-			// The events left are tried once more, briefly: fenced at once if
-			// another process holds the world, and if the database is away,
-			// waiting for it only lengthens the pause.
-			bound = time.Second
-		} else {
-			final = b.Frames.Acquire()
-		}
-		fctx, fcancel := context.WithTimeout(context.Background(), bound)
-		err := lasting.Close(fctx, final)
-		fcancel()
-		switch {
-		case lost.Load():
-		case err != nil:
-			log.Error("the final checkpoint was not written", "err", err)
-		default:
-			log.Info("the final checkpoint is written", "tick", world.Now(), "took", time.Since(start).Round(time.Millisecond).String())
-		}
-		// Shutdown leaves hijacked connections alone: the game's are closed
-		// here, with 1012.
-		cctx, ccancel := context.WithTimeout(context.Background(), closeTimeout)
-		if err := game.Shutdown(cctx); err != nil {
-			log.Warn("game connections dropped: they did not answer their close in time", "err", err)
-		}
-		ccancel()
-		stopEncoder()
-		<-encoderDone
-		inputs.Close()
-		<-inputsDone
+		// so they see it; then the world half closes.
+		last := p.closeForStop(bell)
+		<-jobsDone
 		stopFlight()
 		if flight != nil {
 			flight.Stop()
@@ -695,17 +536,17 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		ictx, icancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer icancel()
 		errs = append(errs, side.shutdown(ictx))
+		log.Info("stopped", "tick", last)
 		return errors.Join(errs...)
 	})
-	err = g.Wait()
-	log.Info("stopped", "tick", world.Now())
-	return err
+	return g.Wait()
 }
 
-// ownerConfig is what the owner's tools are made from.
+// ownerConfig is what the owner's tools are made from: a world sailed's,
+// or the next world's, which has no frames, edge or clock.
 type ownerConfig struct {
 	cat      *catalog.Catalog
-	bus      *bus.Bus
+	bus      *bus.Bus // nil for the next world
 	bundle   *worldgen.Bundle
 	made     time.Time
 	sailed   store.World
@@ -719,10 +560,10 @@ type ownerConfig struct {
 	page     *api.Page
 	log      *slog.Logger
 	metrics  *obs.Metrics
-	// lease is the lease's epoch the world's writes are fenced by; restart
-	// stops the server, to start again.
-	lease   int64
-	restart func()
+	// lifecycle is the world's life, and the owner's hand on it; from, a
+	// view of the same world already drawn.
+	lifecycle owner.Life
+	from      *owner.Owner
 }
 
 // ownerTools are the owner's tools: the world page and its controls.
@@ -736,15 +577,16 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		regimes[i] = string(r.ID)
 	}
 	cfg := owner.Config{
-		Frames: c.bus.Frames, Owner: c.bus.Commands.Owner(), Bundle: c.bundle, Weather: c.timeline.Prepared(),
-		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), Clock: c.clock,
+		Bundle: c.bundle, Weather: c.timeline.Prepared(),
+		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(),
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
-		Accounts: c.db, Sessions: c.sessions, Edge: c.game, Page: c.page, Log: c.log, Metrics: c.metrics,
-		Restart: c.restart,
-		BeginWorld: func(ctx context.Context, number int) (store.World, error) {
-			return c.db.BeginWorld(ctx, c.lease, number, time.Now())
-		},
+		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
+		Life: c.lifecycle, From: c.from,
+	}
+	if c.bus != nil {
+		cfg.Frames, cfg.Owner, cfg.Clock = c.bus.Frames, c.bus.Commands.Owner(), c.clock
+		cfg.Sessions, cfg.Edge = c.sessions, c.game
 	}
 	for _, k := range c.cat.World.Places.Kinds {
 		cfg.PlaceKinds = append(cfg.PlaceKinds, owner.PlaceKind{ID: string(k.ID), Name: k.Name, Site: string(k.Site), Mark: k.Mark})

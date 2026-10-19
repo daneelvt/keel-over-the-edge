@@ -3,16 +3,11 @@
 package owner
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"math"
-	"net/http"
-	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/light"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
-	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
 // The world's places and lighthouses on the world page: every place with
@@ -128,53 +123,4 @@ func placeApproach(g *physics.Ground, x, y, deep float64) (float64, float64, boo
 		}
 	}
 	return 0, 0, false
-}
-
-// NewWorldRequest begins a new world: the active world's number, typed, so
-// that a world is never ended by a stray click.
-type NewWorldRequest struct {
-	Number int `json:"number"`
-}
-
-// restartAfter is how long after it answers the page that keel stops, to
-// start again in the new world.
-const restartAfter = time.Second
-
-// newWorld ends the active world and begins the next, in one transaction,
-// then keel stops, to start again in it and make its terrain: a world's
-// terrain is never made again, so a changed generator wants a new world.
-// Every player's boat goes with the world.
-//
-//	POST /owner/api/world {"number": 3}
-func (o *Owner) newWorld(w http.ResponseWriter, r *http.Request) {
-	var req NewWorldRequest
-	if !readBody(w, r, &req) {
-		return
-	}
-	if o.cfg.BeginWorld == nil {
-		o.refuse(w, "world", http.StatusServiceUnavailable, "this keel cannot begin a world")
-		return
-	}
-	if req.Number != o.cfg.World.Number {
-		o.refuse(w, "world", http.StatusBadRequest, "type the active world's number to end it")
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
-	defer cancel()
-	next, err := o.cfg.BeginWorld(ctx, req.Number)
-	switch {
-	case errors.Is(err, store.ErrNotActive):
-		o.refuse(w, "world", http.StatusConflict, "that world is no longer the active one")
-		return
-	case err != nil:
-		http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
-		return
-	}
-	o.count("world")
-	o.cfg.Log.Warn("owner: a new world begun: keel stops, to start again in it", "action", "world",
-		"ended", req.Number, "begun", next.Number, "from", r.RemoteAddr)
-	writeJSON(w, map[string]any{"ended": req.Number, "begun": next.Number})
-	if o.cfg.Restart != nil {
-		time.AfterFunc(restartAfter, o.cfg.Restart)
-	}
 }

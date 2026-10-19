@@ -66,6 +66,10 @@ type Config struct {
 	// NoticeKinds, the kinds that may be.
 	Notices     Notices
 	NoticeKinds []string
+	// Status, if not nil, is the game's status as last published, served
+	// at GET /api/status; Website is the origin whose pages may read it.
+	Status  func() *Status
+	Website string
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -110,10 +114,13 @@ func Handler(cfg Config) http.Handler {
 	mux.HandleFunc("POST /guest", a.guest)
 	mux.Handle("GET /api/me", auth.Required(writeError, http.HandlerFunc(a.me)))
 	if cfg.Notices != nil {
-		mux.Handle("PUT /api/me/notices", auth.Required(writeError, http.HandlerFunc(a.setNotices)))
+		mux.Handle("POST /api/me/notices", auth.Required(writeError, http.HandlerFunc(a.setNotices)))
 	}
 	if cfg.News != nil {
 		mux.Handle(newsRoute, newNews(cfg.News, cfg.NewsPage))
+	}
+	if cfg.Status != nil {
+		mux.Handle(statusRoute, statusHandler(cfg.Status, cfg.Website))
 	}
 	if cfg.Game != nil {
 		mux.Handle("GET /ws", cfg.Game)
@@ -154,7 +161,7 @@ const robotsRoute = "GET /robots.txt"
 
 // openRoutes are the routes besides the page's that need no session: what
 // they serve is the same for everyone who has the address.
-var openRoutes = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true, newsRoute: true}
+var openRoutes = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true, newsRoute: true, statusRoute: true}
 
 // session reads the session for every route but the page's and the open
 // ones: the page is the same for everyone, and loads even when the database

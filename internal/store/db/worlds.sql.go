@@ -38,19 +38,27 @@ func (q *Queries) ActivateNextWorld(ctx context.Context, arg ActivateNextWorldPa
 }
 
 const activeWorld = `-- name: ActiveWorld :one
-SELECT id, number, epoch FROM world WHERE state = 'active'
+SELECT id, number, epoch, begins_at, ends_at FROM world WHERE state = 'active'
 `
 
 type ActiveWorldRow struct {
-	ID     pgtype.UUID
-	Number int32
-	Epoch  time.Time
+	ID       pgtype.UUID
+	Number   int32
+	Epoch    time.Time
+	BeginsAt pgtype.Timestamptz
+	EndsAt   pgtype.Timestamptz
 }
 
 func (q *Queries) ActiveWorld(ctx context.Context) (ActiveWorldRow, error) {
 	row := q.db.QueryRow(ctx, activeWorld)
 	var i ActiveWorldRow
-	err := row.Scan(&i.ID, &i.Number, &i.Epoch)
+	err := row.Scan(
+		&i.ID,
+		&i.Number,
+		&i.Epoch,
+		&i.BeginsAt,
+		&i.EndsAt,
+	)
 	return i, err
 }
 
@@ -541,31 +549,6 @@ func (q *Queries) WorldSeed(ctx context.Context, worldID pgtype.UUID) (WorldSeed
 	row := q.db.QueryRow(ctx, worldSeed, worldID)
 	var i WorldSeedRow
 	err := row.Scan(&i.Seed, &i.Generator)
-	return i, err
-}
-
-const worldTimes = `-- name: WorldTimes :one
-SELECT id, number, epoch, begins_at, ends_at FROM world WHERE state = 'active'
-`
-
-type WorldTimesRow struct {
-	ID       pgtype.UUID
-	Number   int32
-	Epoch    time.Time
-	BeginsAt pgtype.Timestamptz
-	EndsAt   pgtype.Timestamptz
-}
-
-func (q *Queries) WorldTimes(ctx context.Context) (WorldTimesRow, error) {
-	row := q.db.QueryRow(ctx, worldTimes)
-	var i WorldTimesRow
-	err := row.Scan(
-		&i.ID,
-		&i.Number,
-		&i.Epoch,
-		&i.BeginsAt,
-		&i.EndsAt,
-	)
 	return i, err
 }
 

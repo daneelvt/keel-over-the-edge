@@ -386,10 +386,10 @@ func NewMetrics(build, catalog string) *Metrics {
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused,
 		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded, m.Falls, m.Approaches)
-	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen"} {
+	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake"} {
 		m.OwnerActions.WithLabelValues(a)
 	}
-	for _, w := range []string{"roam", "place", "flag", "unseen", "request"} {
+	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake"} {
 		m.OwnerRefused.WithLabelValues(w)
 	}
 	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)

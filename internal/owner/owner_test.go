@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"math"
@@ -109,10 +110,54 @@ type rig struct {
 	sessions *fakeSessions
 	metrics  *obs.Metrics
 	h        http.Handler
-	// begun are the worlds the page ended, and restarted counts keel's
-	// restarts.
-	begun     []int
-	restarted chan struct{}
+	// life is the world's life the page sees and works.
+	life *fakeLife
+}
+
+// fakeLife is a world's life: the worlds begun and made again by hand, and
+// the next world's view once it is made.
+type fakeLife struct {
+	mu       sync.Mutex
+	begun    []int
+	remade   []int
+	next     *Owner
+	tooLate  bool
+	lifetime Lifecycle
+}
+
+func (l *fakeLife) Lifecycle(context.Context) (Lifecycle, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.lifetime, nil
+}
+
+func (l *fakeLife) BeginNext(_ context.Context, number int) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if number != 3 {
+		return 0, store.ErrNotActive
+	}
+	l.begun = append(l.begun, number)
+	return number + 1, nil
+}
+
+func (l *fakeLife) RemakeNext(_ context.Context, number int) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if number != 4 {
+		return store.ErrNoNext
+	}
+	if l.tooLate {
+		return errors.New("too near the end")
+	}
+	l.remade = append(l.remade, number)
+	return nil
+}
+
+func (l *fakeLife) NextView(context.Context) (*Owner, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.next, nil
 }
 
 func newRig(t testing.TB, limit int) *rig {
@@ -168,7 +213,7 @@ func newRig(t testing.TB, limit int) *rig {
 	}
 	t.Cleanup(w.Close)
 	r := &rig{w: w, accounts: &fakeAccounts{by: map[store.AccountID]store.Account{}}, edge: &fakeEdge{tools: map[bus.Account]bool{}, eyes: map[bus.Account][2]float64{}},
-		sessions: &fakeSessions{}, metrics: obs.NewMetrics("test", catalog.Version), restarted: make(chan struct{}, 1)}
+		sessions: &fakeSessions{}, metrics: obs.NewMetrics("test", catalog.Version), life: &fakeLife{}}
 	r.o = New(Config{
 		Frames: w.Bus().Frames, Owner: w.Bus().Commands.Owner(), Bundle: b, Weather: tl.Prepared(), Ground: g,
 		Kinds: []string{"Jolly boat"}, Regimes: []string{"settled"}, Sky: cat.PrepareSky(), Calm: 900,
@@ -179,14 +224,7 @@ func newRig(t testing.TB, limit int) *rig {
 		TownKinds:    []string{"Dwelling", "Bollard"},
 		FeatureKinds: []FeatureKind{{ID: "sea-arch", Name: "Sea arch", Site: "arch", Mark: "#8a3d6b"}, {ID: "spring", Name: "Spring", Site: "spring", Mark: "#5fa3c9"}},
 		TownLook:     chart.TownLook{Kinds: []string{"#c9b08a", "#3c3a36"}, Props: []bool{false, true}, Surfaces: map[int32]string{}},
-		BeginWorld: func(_ context.Context, number int) (store.World, error) {
-			if number != 3 {
-				return store.World{}, store.ErrNotActive
-			}
-			r.begun = append(r.begun, number)
-			return store.World{Number: number + 1}, nil
-		},
-		Restart: func() { r.restarted <- struct{}{} },
+		Life:         r.life,
 	})
 	r.h = r.o.Handler()
 	return r
@@ -897,8 +935,8 @@ func TestPlaceAtAPlace(t *testing.T) {
 	}
 }
 
-// TestNewWorld: a new world is begun only with the active world's number
-// typed; then keel is stopped, to start again in it.
+// TestNewWorld: the next world is begun only with the active world's
+// number typed, in the running process.
 func TestNewWorld(t *testing.T) {
 	r := newRig(t, 0)
 	for _, n := range []int{0, 2, 4} {
@@ -909,17 +947,12 @@ func TestNewWorld(t *testing.T) {
 	if code, _ := r.do(t, "POST", "/owner/api/world", map[string]any{"number": 3, "more": true}); code != 400 {
 		t.Errorf("a body not the control's: %d", code)
 	}
-	if len(r.begun) != 0 {
-		t.Fatalf("worlds ended: %v", r.begun)
+	if len(r.life.begun) != 0 {
+		t.Fatalf("worlds ended: %v", r.life.begun)
 	}
 	code, body := r.do(t, "POST", "/owner/api/world", NewWorldRequest{Number: 3})
-	if code != 200 || !strings.Contains(string(body), `"begun":4`) || !slices.Equal(r.begun, []int{3}) {
-		t.Fatalf("world 3 typed: %d %s, ended %v", code, body, r.begun)
-	}
-	select {
-	case <-r.restarted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("keel was not stopped to start again")
+	if code != 202 || !strings.Contains(string(body), `"begun":4`) || !slices.Equal(r.life.begun, []int{3}) {
+		t.Fatalf("world 3 typed: %d %s, ended %v", code, body, r.life.begun)
 	}
 	// From another site, it is refused before it is heard.
 	req := httptest.NewRequest("POST", "http://localhost:9090/owner/api/world", strings.NewReader(`{"number":3}`))
@@ -927,7 +960,68 @@ func TestNewWorld(t *testing.T) {
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	rec := httptest.NewRecorder()
 	r.h.ServeHTTP(rec, req)
-	if rec.Code < 400 || len(r.begun) != 1 {
-		t.Errorf("a cross-site request: %d, ended %v", rec.Code, r.begun)
+	if rec.Code < 400 || len(r.life.begun) != 1 {
+		t.Errorf("a cross-site request: %d, ended %v", rec.Code, r.life.begun)
+	}
+}
+
+// TestNextWorldView: the next world's view answers 404 until its terrain
+// is stored, then draws and lists it as the current world's view does;
+// and the view of the same world made from it serves the same bytes,
+// drawn once.
+func TestNextWorldView(t *testing.T) {
+	r := newRig(t, 0)
+	if code, _ := r.do(t, "GET", "/owner/api/next/land.png", nil); code != 404 {
+		t.Fatalf("the next world's land before it is made: %d", code)
+	}
+	next := New(Config{Bundle: r.o.cfg.Bundle, World: World{Number: 4, ID: [16]byte{4}}, Weather: r.o.cfg.Weather, Ground: r.o.cfg.Ground,
+		Sky: r.o.cfg.Sky, TownLook: r.o.cfg.TownLook, Log: slog.New(slog.DiscardHandler)})
+	r.life.mu.Lock()
+	r.life.next = next
+	r.life.mu.Unlock()
+	code, land := r.do(t, "GET", "/owner/api/next/land.png", nil)
+	if code != 200 || len(land) < 100 || string(land[1:4]) != "PNG" {
+		t.Fatalf("the next world's land: %d, %d bytes", code, len(land))
+	}
+	code, islands := r.do(t, "GET", "/owner/api/next/islands.json", nil)
+	if code != 200 || !strings.Contains(string(islands), `"name":"Hill"`) {
+		t.Fatalf("the next world's islands: %d %s", code, islands)
+	}
+	if code, _ := r.do(t, "GET", "/owner/api/next/world.json", nil); code != 404 {
+		t.Errorf("the next world's live view: %d", code)
+	}
+	// Once it begins, its view is the one drawn.
+	began := New(Config{Bundle: next.cfg.Bundle, World: next.cfg.World, Weather: r.o.cfg.Weather, Sky: r.o.cfg.Sky, From: next,
+		Log: slog.New(slog.DiscardHandler)})
+	if began.land != next.land {
+		t.Fatal("the world's drawings are drawn again as it begins")
+	}
+	rec := httptest.NewRecorder()
+	began.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "http://localhost:9090/owner/api/land.png", nil))
+	if rec.Code != 200 || !bytes.Equal(rec.Body.Bytes(), land) {
+		t.Fatalf("the begun world's land: %d, %d bytes, not the next world's %d", rec.Code, rec.Body.Len(), len(land))
+	}
+}
+
+// TestRemakeNext: the next world is made again only with its number
+// typed, and not in its last minutes; and the lifecycle is served.
+func TestRemakeNext(t *testing.T) {
+	r := newRig(t, 0)
+	if code, _ := r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 3}); code != 400 {
+		t.Errorf("the active world's number: %d", code)
+	}
+	if code, _ := r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 4}); code != 202 || !slices.Equal(r.life.remade, []int{4}) {
+		t.Errorf("the next world's number: %d, remade %v", code, r.life.remade)
+	}
+	r.life.mu.Lock()
+	r.life.tooLate = true
+	r.life.lifetime = Lifecycle{World: 3, Ends: 1000, Closing: true, Next: &NextWorld{Number: 4, Seed: "18446744073709551615", Stored: true}}
+	r.life.mu.Unlock()
+	if code, _ := r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 4}); code != 409 || len(r.life.remade) != 1 {
+		t.Errorf("in the last minutes: %d, remade %v", code, r.life.remade)
+	}
+	code, body := r.do(t, "GET", "/owner/api/lifecycle.json", nil)
+	if code != 200 || !strings.Contains(string(body), `"seed":"18446744073709551615"`) || !strings.Contains(string(body), `"closing":true`) {
+		t.Errorf("the lifecycle: %d %s", code, body)
 	}
 }

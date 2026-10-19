@@ -42,12 +42,12 @@ type Notices interface {
 	SetNoticesOff(ctx context.Context, id store.AccountID, off []string) error
 }
 
-// noticesBody is PUT /api/me/notices's body: the kinds switched off.
+// noticesBody is POST /api/me/notices's body: the kinds switched off.
 type noticesBody struct {
 	Off []string `json:"off"`
 }
 
-// setNotices answers PUT /api/me/notices, behind auth.Required: the kinds
+// setNotices answers POST /api/me/notices, behind auth.Required: the kinds
 // of notice the sailor has switched off, each one the catalog lets be,
 // kept on the account. A browser's request from another origin never
 // reaches it (Handler's cross-origin protection).

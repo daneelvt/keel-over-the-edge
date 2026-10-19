@@ -45,6 +45,10 @@ type newsItem struct {
 	East    float64      `json:"east"`
 	North   float64      `json:"north"`
 	Also    []newsFolded `json:"also"`
+	// EndsAt is, for an item about the world itself, the world's end it
+	// tells of, ms of UTC since 1970: each reader shows it in their own
+	// time.
+	EndsAt int64 `json:"endsAt,omitempty"`
 }
 
 type newsFolded struct {
@@ -135,7 +139,10 @@ func (n *news) page(ctx context.Context, before string) (newsPage, error) {
 			Subject: it.Subject, Number: it.Number, Title: it.Title, What: it.What, Worth: it.Worth, East: it.X, North: it.Y,
 			Also: make([]newsFolded, 0, len(it.Also)),
 		}
-		if ni.By == "" {
+		if !it.EndsAt.IsZero() {
+			ni.EndsAt = it.EndsAt.UnixMilli()
+		}
+		if ni.By == "" && it.Subject != store.SubjectWorld {
 			ni.By = "a sailor"
 		}
 		for _, f := range it.Also {

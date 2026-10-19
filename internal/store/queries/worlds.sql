@@ -3,7 +3,7 @@
 ;
 
 -- name: ActiveWorld :one
-SELECT id, number, epoch FROM world WHERE state = 'active';
+SELECT id, number, epoch, begins_at, ends_at FROM world WHERE state = 'active';
 
 -- name: InsertWorld :one
 INSERT INTO world (number, epoch, state, begins_at)
@@ -57,9 +57,6 @@ SELECT number, kind, name, biome, size, x, y, area, highest, island, details FRO
 
 -- name: WorldLights :many
 SELECT number, place, role, character, phase, reach, focal, tower, daymark FROM light WHERE world_id = @world_id ORDER BY number;
-
--- name: WorldTimes :one
-SELECT id, number, epoch, begins_at, ends_at FROM world WHERE state = 'active';
 
 -- name: SetWorldEnd :execrows
 UPDATE world SET ends_at = @ends_at WHERE id = @id AND state = 'active';

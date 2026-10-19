@@ -45,7 +45,7 @@ func stamp(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, 
 
 // ActiveWorld is the world being sailed, or ErrNotFound.
 func (s *Store) ActiveWorld(ctx context.Context) (World, error) {
-	w, err := s.q.WorldTimes(ctx)
+	w, err := s.q.ActiveWorld(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return World{}, ErrNotFound
 	}

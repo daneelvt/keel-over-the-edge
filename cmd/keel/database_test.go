@@ -181,7 +181,7 @@ func TestServeWaitsForTheDatabase(t *testing.T) {
 	_, metrics := s.get(t, "127.0.0.1:9090", "/metrics")
 	for _, want := range []string{
 		`keel_db_pool_max_connections 17`, `keel_db_pool_connections{state="idle"}`, "keel_db_schema_version " + strconv.FormatInt(store.Latest, 10),
-		`keel_db_query_duration_seconds_count{query="ActiveWorld"} 1`, `keel_guests_refused_total{reason="taken"} 0`,
+		`keel_db_query_duration_seconds_count{query="ActiveWorld"} 2`, `keel_guests_refused_total{reason="taken"} 0`,
 	} {
 		if !strings.Contains(metrics, want) {
 			t.Errorf("/metrics lacks %q", want)

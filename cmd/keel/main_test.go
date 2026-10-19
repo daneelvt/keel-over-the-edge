@@ -218,24 +218,42 @@ type memDB struct {
 	down       bool // the world's writes fail
 	bundle     *store.Bundle
 	number     int // worlds ended before the active one
+	// The active world's beginning and end; the next world; the jobs'
+	// runs, by job and due time; the news of worlds' ends; and how many
+	// switches there have been.
+	begins, ends time.Time
+	next         *memNext
+	runs         map[string]*memRun
+	news         []store.WorldNews
+	switches     int
 }
 
 // emptyWorld makes a world of open sea at once: the generator of the
 // servers in tests, which have no seconds to spend on a real one.
 func emptyWorld(seed uint64) (*worldgen.Bundle, error) { return worldgen.Empty(seed), nil }
 
-func (d *memDB) WorldSeed(context.Context, [16]byte) (uint64, int, bool, error) {
+func (d *memDB) WorldSeed(_ context.Context, world [16]byte) (uint64, int, bool, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if n := d.next; n != nil && worldID(n.number) == world {
+		return n.seed, 0, true, nil
+	}
 	if d.bundle == nil {
 		return 0, 0, false, nil
 	}
 	return d.bundle.Seed, d.bundle.Generator, true, nil
 }
 
-func (d *memDB) LoadBundle(context.Context, [16]byte) (*store.Bundle, error) {
+func (d *memDB) LoadBundle(_ context.Context, world [16]byte) (*store.Bundle, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if n := d.next; n != nil && worldID(n.number) == world {
+		if n.bundle == nil {
+			return nil, store.ErrNotFound
+		}
+		b := *n.bundle
+		return &b, nil
+	}
 	if d.bundle == nil {
 		return nil, store.ErrNotFound
 	}
@@ -245,11 +263,19 @@ func (d *memDB) LoadBundle(context.Context, [16]byte) (*store.Bundle, error) {
 
 // StoreBundle is fenced by the lease's epoch, as the world's writes are,
 // and keeps the first bundle stored.
-func (d *memDB) StoreBundle(_ context.Context, _ [16]byte, epoch int64, b *store.Bundle) error {
+func (d *memDB) StoreBundle(_ context.Context, world [16]byte, epoch int64, b *store.Bundle) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if epoch != d.leaseEpoch {
 		return fmt.Errorf("%w: the epoch is %d, the writer's %d", store.ErrFenced, d.leaseEpoch, epoch)
+	}
+	if n := d.next; n != nil && worldID(n.number) == world {
+		if n.bundle == nil {
+			c := *b
+			c.Stored = time.Now()
+			n.bundle = &c
+		}
+		return nil
 	}
 	if d.bundle == nil {
 		c := *b
@@ -440,9 +466,81 @@ func (d *memDB) Touch(context.Context, [32]byte) error      { return nil }
 func (d *memDB) CheckSchema(context.Context) (int64, error) { return store.Latest, nil }
 func (d *memDB) Stats() store.PoolStats                     { return store.PoolStats{Max: store.MaxConns} }
 
-// BeginWorld begins the next world: the world's terrain and checkpoint go
-// with the one ended.
-func (d *memDB) BeginWorld(_ context.Context, lease int64, number int, epoch time.Time) (store.World, error) {
+// worldID is the ID of world n in a memDB: the first world's is zero.
+func worldID(n int) [16]byte {
+	if n <= 1 {
+		return [16]byte{}
+	}
+	return [16]byte{0xff, byte(n >> 8), byte(n)}
+}
+
+// memNext is the next world in a memDB.
+type memNext struct {
+	number  int
+	seed    uint64
+	bundle  *store.Bundle
+	created time.Time
+}
+
+// memRun is a job's run in a memDB.
+type memRun struct {
+	outcome, detail string
+	epoch           int64
+	attempts        int
+	finished        time.Time
+}
+
+func (d *memDB) active() store.World {
+	n := d.number + 1
+	return store.World{ID: worldID(n), Number: n, Epoch: d.epoch, BeginsAt: d.begins, EndsAt: d.ends}
+}
+
+func (d *memDB) ActiveOrFirstWorld(context.Context, time.Time) (store.World, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.active(), nil
+}
+
+func (d *memDB) SetWorldEnd(_ context.Context, lease int64, _ [16]byte, end time.Time) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if lease != d.leaseEpoch {
+		return store.ErrFenced
+	}
+	d.ends = end
+	return nil
+}
+
+func (d *memDB) NextWorld(context.Context) (store.NextWorld, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.next == nil {
+		return store.NextWorld{}, store.ErrNotFound
+	}
+	nw := store.NextWorld{World: store.World{ID: worldID(d.next.number), Number: d.next.number}, Seed: d.next.seed, Created: d.next.created,
+		Stored: d.next.bundle != nil}
+	if b := d.next.bundle; b != nil {
+		nw.Attempts, nw.GenerationMs, nw.StoredAt = b.Attempts, b.GenerationMs, b.Stored
+	}
+	return nw, nil
+}
+
+func (d *memDB) CreateNextWorld(_ context.Context, lease int64, seed uint64, _ int, _ time.Time) (store.World, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if lease != d.leaseEpoch {
+		return store.World{}, store.ErrFenced
+	}
+	if d.next != nil {
+		return store.World{}, store.ErrNoNext
+	}
+	d.next = &memNext{number: d.number + 2, seed: seed, created: time.Now()}
+	return store.World{ID: worldID(d.next.number), Number: d.next.number}, nil
+}
+
+// SwitchWorld begins the next world: the old one's checkpoint and chart
+// go with it; its events are kept.
+func (d *memDB) SwitchWorld(_ context.Context, lease int64, number int, next [16]byte, begins, ends time.Time) (store.World, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if lease != d.leaseEpoch {
@@ -451,16 +549,98 @@ func (d *memDB) BeginWorld(_ context.Context, lease int64, number int, epoch tim
 	if number != d.number+1 {
 		return store.World{}, store.ErrNotActive
 	}
-	d.number++
-	d.epoch = epoch
-	d.bundle, d.checkpoint, d.events = nil, nil, nil
-	return store.World{Number: d.number + 1, Epoch: epoch}, nil
+	if d.next == nil || worldID(d.next.number) != next {
+		return store.World{}, store.ErrNoNext
+	}
+	d.number = d.next.number - 1
+	d.bundle, d.next = d.next.bundle, nil
+	d.checkpoint, d.chartings = nil, nil
+	d.epoch, d.begins, d.ends = begins, begins, ends
+	d.switches++
+	return d.active(), nil
 }
 
-func (d *memDB) ActiveOrFirstWorld(context.Context, time.Time) (store.World, error) {
+func (d *memDB) DiscardNextWorld(_ context.Context, lease int64, number int) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return store.World{Number: d.number + 1, Epoch: d.epoch}, nil
+	if lease != d.leaseEpoch {
+		return store.ErrFenced
+	}
+	if d.next == nil || d.next.number != number {
+		return store.ErrNoNext
+	}
+	d.next = nil
+	return nil
+}
+
+func (d *memDB) WorldsToDrop(context.Context, time.Time) ([]store.World, error) { return nil, nil }
+func (d *memDB) DropWorld(context.Context, int64, store.World) error            { return nil }
+func (d *memDB) DeleteSessions(context.Context, time.Time) (int64, error)       { return 0, nil }
+func (d *memDB) DeleteJobRuns(context.Context, time.Time) (int64, error)        { return 0, nil }
+
+func (d *memDB) WriteWorldNews(_ context.Context, lease int64, _ [16]byte, n store.WorldNews) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if lease != d.leaseEpoch {
+		return store.ErrFenced
+	}
+	d.news = append(d.news, n)
+	return nil
+}
+
+func (d *memDB) ClaimJob(_ context.Context, lease int64, job string, due time.Time, retry time.Duration) (store.JobClaim, bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if lease != d.leaseEpoch {
+		return store.JobClaim{}, false, nil
+	}
+	if d.runs == nil {
+		d.runs = map[string]*memRun{}
+	}
+	k := job + " " + due.UTC().Format(time.RFC3339Nano)
+	r := d.runs[k]
+	switch {
+	case r == nil:
+		r = &memRun{}
+		d.runs[k] = r
+	case r.outcome == store.JobFailed && time.Since(r.finished) > retry:
+	case r.outcome == "" && r.epoch < lease:
+	default:
+		return store.JobClaim{}, false, nil
+	}
+	r.outcome, r.epoch = "", lease
+	r.attempts++
+	return store.JobClaim{Job: job, Due: due, Attempt: r.attempts}, true, nil
+}
+
+func (d *memDB) FinishJob(_ context.Context, c store.JobClaim, outcome, detail string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if r := d.runs[c.Job+" "+c.Due.UTC().Format(time.RFC3339Nano)]; r != nil && r.outcome == "" {
+		r.outcome, r.detail, r.finished = outcome, detail, time.Now()
+	}
+	return nil
+}
+
+func (d *memDB) JobRuns(context.Context, int) ([]store.JobRun, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []store.JobRun
+	for k, r := range d.runs {
+		job, _, _ := strings.Cut(k, " ")
+		out = append(out, store.JobRun{Job: job, Outcome: r.outcome, Detail: r.detail, Attempts: r.attempts, Finished: r.finished})
+	}
+	return out, nil
+}
+
+// run is how a job's run due at due ended, "" if it has not.
+func (d *memDB) run(job string, due time.Time) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if r := d.runs[job+" "+due.UTC().Format(time.RFC3339Nano)]; r != nil {
+		return r.outcome
+	}
+	return ""
 }
 
 func (d *memDB) Close() {

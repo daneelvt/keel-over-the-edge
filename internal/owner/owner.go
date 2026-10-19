@@ -141,11 +141,12 @@ type Config struct {
 	// indices; TownLook how a town's sheet is drawn.
 	TownKinds []string
 	TownLook  chart.TownLook
-	// BeginWorld ends the active world, of the number given, and begins the
-	// next; Restart stops keel, to start again in it. Without them a new
-	// world cannot be begun from the page.
-	BeginWorld func(ctx context.Context, number int) (store.World, error)
-	Restart    func()
+	// Life is the world's life: its end, the next world, the jobs' runs,
+	// and the owner's hand on them. Without it the page shows none of it.
+	Life Life
+	// From, if not nil, is a view of the same world already drawn, the
+	// next world's before it began: its drawings are kept, not drawn again.
+	From *Owner
 
 	// Charted, if not nil, is the world's chart as it stands; Subjects how
 	// many subjects there are to chart.
@@ -167,7 +168,7 @@ type Owner struct {
 	cfg  Config
 	view atomic.Pointer[view]
 	b    builder
-	land land
+	land *land
 	// current is the current's grid, once per world.
 	current  []byte
 	islands  []byte
@@ -184,6 +185,7 @@ var Paths = []string{
 	"/owner/api/land.png", "/owner/api/coasts.svg", "/owner/api/island/0.svg", "/owner/api/point",
 	"/owner/api/flag", "/owner/api/place", "/owner/api/unseen", "/owner/api/places.json", "/owner/api/world",
 	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json", "/owner/api/charted.json",
+	"/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -199,8 +201,17 @@ func New(cfg Config) *Owner {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
 	o := &Owner{cfg: cfg}
-	o.b.init(&o.cfg)
-	o.land.init(&o.cfg)
+	if cfg.Frames != nil {
+		// A view of a world not yet sailed, the next world's, has no
+		// frames: what is drawn of it alone is served.
+		o.b.init(&o.cfg)
+	}
+	if f := cfg.From; f != nil && f.cfg.World.ID == cfg.World.ID && f.cfg.Bundle == cfg.Bundle {
+		o.land = f.land
+	} else {
+		o.land = &land{}
+		o.land.init(&o.cfg)
+	}
 	o.current = currentGrid(&o.cfg)
 	o.islands = islandsList(&o.cfg)
 	o.places = placesList(&o.cfg)
@@ -247,27 +258,45 @@ func (o *Owner) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /owner/api/world.json", o.serveView(func(v *view) []byte { return v.world }, "application/json"))
 	mux.HandleFunc("GET /owner/api/gusts.bin", o.serveView(func(v *view) []byte { return v.gusts }, "application/octet-stream"))
-	mux.HandleFunc("GET /owner/api/islands.json", o.serveFixed(func() []byte { return o.islands }, "application/json"))
-	mux.HandleFunc("GET /owner/api/places.json", o.serveFixed(func() []byte { return o.places }, "application/json"))
-	mux.HandleFunc("GET /owner/api/towns.json", o.serveFixed(func() []byte { return o.towns }, "application/json"))
-	mux.HandleFunc("GET /owner/api/features.json", o.serveFixed(func() []byte { return o.features }, "application/json"))
+	o.drawn(mux, "/owner/api/")
 	mux.HandleFunc("GET /owner/api/charted.json", o.charted)
-	mux.HandleFunc("GET /owner/api/town/{file}", o.land.town)
-	mux.HandleFunc("GET /owner/api/current.json", o.serveFixed(func() []byte { return o.current }, "application/json"))
-	mux.HandleFunc("GET /owner/api/land.png", o.land.serve(landPNG))
-	mux.HandleFunc("GET /owner/api/coasts.svg", o.land.serve(coastsSVG))
-	mux.HandleFunc("GET /owner/api/island/{file}", o.land.island)
 	mux.HandleFunc("GET /owner/api/point", o.point)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
 	mux.HandleFunc("POST /owner/api/place", o.place)
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)
 	mux.HandleFunc("POST /owner/api/world", o.newWorld)
+	mux.HandleFunc("GET /owner/api/lifecycle.json", o.lifecycle)
+	mux.HandleFunc("POST /owner/api/next", o.remake)
+	mux.HandleFunc("GET /owner/api/next/", o.next)
 	var refused func()
 	if m := o.cfg.Metrics; m != nil {
 		c := m.OwnerRefused.WithLabelValues("request")
 		refused = c.Inc
 	}
 	return Guard(mux, refused)
+}
+
+// drawn adds the routes of what is drawn and listed of the world's
+// terrain, the same for its life, under prefix: the current world's under
+// /owner/api/, the next world's under /owner/api/next/.
+func (o *Owner) drawn(mux *http.ServeMux, prefix string) {
+	mux.HandleFunc("GET "+prefix+"islands.json", o.serveFixed(func() []byte { return o.islands }, "application/json"))
+	mux.HandleFunc("GET "+prefix+"places.json", o.serveFixed(func() []byte { return o.places }, "application/json"))
+	mux.HandleFunc("GET "+prefix+"towns.json", o.serveFixed(func() []byte { return o.towns }, "application/json"))
+	mux.HandleFunc("GET "+prefix+"features.json", o.serveFixed(func() []byte { return o.features }, "application/json"))
+	mux.HandleFunc("GET "+prefix+"town/{file}", o.land.town)
+	mux.HandleFunc("GET "+prefix+"current.json", o.serveFixed(func() []byte { return o.current }, "application/json"))
+	mux.HandleFunc("GET "+prefix+"land.png", o.land.serve(landPNG))
+	mux.HandleFunc("GET "+prefix+"coasts.svg", o.land.serve(coastsSVG))
+	mux.HandleFunc("GET "+prefix+"island/{file}", o.land.island)
+}
+
+// DrawnHandler is the routes of what is drawn of the world under
+// /owner/api/next/: the next world's view, before it begins.
+func (o *Owner) DrawnHandler() http.Handler {
+	mux := http.NewServeMux()
+	o.drawn(mux, "/owner/api/next/")
+	return mux
 }
 
 // page serves one of the page's files.

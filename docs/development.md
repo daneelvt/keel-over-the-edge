@@ -1901,7 +1901,7 @@ hexagons, each cell's highest ground and surface, gzipped
 | Route | What |
 |---|---|
 | `GET /api/news?before=<id>` | the news, newest first, 40 a page; no session; kept 5 s |
-| `PUT /api/me/notices {"off": [ids]}` | the notices switched off, kept on the account; `GET /api/me` says them |
+| `POST /api/me/notices {"off": [ids]}` | the notices switched off, kept on the account; `GET /api/me` says them |
 | `GET /owner/api/charted.json` | the world page's chart: what is charted, by whom, when, its worth |
 | `POST /debug/chart?all` or `?subject=island:N` | charts by hand, credited to no one (developer's commands) |
 
