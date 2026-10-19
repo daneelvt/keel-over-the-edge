@@ -47,11 +47,16 @@ func world1(t testing.TB) (*worldgen.Bundle, *catalog.Catalog) {
 // what is on it are known; and it is all built within a second.
 func TestSeed1(t *testing.T) {
 	b, cat := world1(t)
+	var before, mem runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
 	start := time.Now()
 	w := Build(b, cat)
 	took := time.Since(start)
-	var mem runtime.MemStats
+	runtime.GC()
 	runtime.ReadMemStats(&mem)
+	kept := int64(mem.HeapAlloc) - int64(before.HeapAlloc)
+	runtime.KeepAlive(w)
 	if n := len(b.Islands) + len(b.Places) + len(b.Features); len(w.Subjects) != n {
 		t.Fatalf("%d subjects, want %d", len(w.Subjects), n)
 	}
@@ -96,8 +101,8 @@ func TestSeed1(t *testing.T) {
 			great++
 		}
 	}
-	t.Logf("built in %v; %d subjects, %d known, %d great; %d cells, %d views, %d awash, %d lights, %d references; %d models in %d bytes, %d islands too small for one; heap %d MB",
-		took.Round(time.Millisecond), len(w.Subjects), len(w.Known), great, cells, views, awash, lights, refs, models, bytes, empty, mem.HeapAlloc>>20)
+	t.Logf("built in %v; %d subjects, %d known, %d great; %d cells, %d views, %d awash, %d lights, %d references; %d models in %d bytes, %d islands too small for one; %.1f MB kept",
+		took.Round(time.Millisecond), len(w.Subjects), len(w.Known), great, cells, views, awash, lights, refs, models, bytes, empty, float64(kept)/(1<<20))
 }
 
 // TestStartSeesOnlyPortRoyal: from the first mooring, with Port Royal's

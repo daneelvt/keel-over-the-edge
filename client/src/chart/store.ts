@@ -37,6 +37,8 @@ export type ChartedListener = (charted: ChartEntry[]) => void;
 export class ChartStore {
   /** Rises at every change: what draws the chart redraws. */
   readonly version = signal(0);
+  /** Rises each time the chart is had whole: a new connection's, perhaps another world's. */
+  generation = 0;
   /** The sailor's name, whose chartings are theirs; null offline. */
   me: string | null = null;
   readonly words: ChartWords;
@@ -75,6 +77,7 @@ export class ChartStore {
     if (whole) {
       this.#entries.length = 0;
       this.#byKey.clear();
+      this.generation++;
     }
     const added: ChartEntry[] = [];
     for (const e of entries) {

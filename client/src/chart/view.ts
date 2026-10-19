@@ -164,6 +164,7 @@ export class ChartView {
   #dirty = true;
   #last = Number.NEGATIVE_INFINITY;
   #version = -1;
+  #generation = -1;
   // The camera: what it looks at, how far, and its bearing.
   #target = new Vector2();
   #distance = FURTHEST * 0.7;
@@ -357,6 +358,17 @@ export class ChartView {
   /** Brings what moves to now: the models had, the boat, the wind. */
   #update(now: number, dt: number): void {
     const store = this.#store;
+    if (store.generation !== this.#generation) {
+      // The chart had whole again: what was drawn of the last goes.
+      this.#generation = store.generation;
+      for (const l of this.#labels.values()) {
+        l.el.remove();
+      }
+      this.#labels.clear();
+      this.#loaded.clear();
+      this.#built = -1;
+      this.#buildWanted = true;
+    }
     if (store.version.value !== this.#version) {
       this.#version = store.version.value;
       this.#fetchModels();
@@ -409,7 +421,9 @@ export class ChartView {
       }
       const address = e.model;
       void this.#models.get(address).then((m) => {
-        if (m !== null && !this.#loaded.has(address)) {
+        // Kept only while the chart still has it: not another world's.
+        const still = this.#store.entries.some((o) => o.model === address);
+        if (m !== null && still && !this.#loaded.has(address)) {
           this.#loaded.set(address, m);
           this.#buildWanted = true;
           this.#dirty = true;
