@@ -88,6 +88,8 @@ type process struct {
 	ahead atomic.Pointer[readyWorld]
 	// nextView is the next world's view on the world page, once stored.
 	nextView atomic.Pointer[owner.Owner]
+	// making is held while the next world is made.
+	making sync.Mutex
 
 	carriedMu sync.Mutex
 	carried   counts
@@ -229,10 +231,23 @@ type worldHalf struct {
 	tools   *owner.Owner
 	play    http.Handler
 
+	// endsAt is when the world ends, Unix ns, 0 for none known: its row's,
+	// unless a developer's command has brought it nearer.
+	endsAt atomic.Int64
+
 	stopLoop, stopSailors, stopEncoder, stopWatch  context.CancelFunc
 	loopDone, inputsDone, sailorsDone, encoderDone chan struct{}
 	lastingDone, watchDone                         chan struct{}
 	closed                                         bool
+}
+
+// ends is when the world ends; zero for none known.
+func (h *worldHalf) ends() time.Time {
+	n := h.endsAt.Load()
+	if n == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, n).UTC()
 }
 
 // counts are the half's counters now.
@@ -271,6 +286,9 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	}
 	b := world.Bus()
 	h := &worldHalf{p: p, ready: rw, row: row, world: world, bus: b}
+	if !row.EndsAt.IsZero() {
+		h.endsAt.Store(row.EndsAt.UnixNano())
+	}
 	h.inputs = replay.New(replay.Config{
 		Frames: b.Frames,
 		Header: replay.Header{Build: p.build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch, Grace: world.Grace(), Limit: world.Limit(),
@@ -385,13 +403,21 @@ func (h *worldHalf) start() {
 	}()
 	p.replayRoutes.set(h.inputs)
 	if p.devRoutes != nil {
-		p.devRoutes.set(devRoutes(sailorsCtx, h.bus, p.cat, h.ready.charts, p.log))
+		dev := devRoutes(sailorsCtx, h.bus, p.cat, h.ready.charts, p.log)
+		end := endRoute(p, h)
+		p.devRoutes.set(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/debug/end" {
+				end.ServeHTTP(w, r)
+				return
+			}
+			dev.ServeHTTP(w, r)
+		}))
 	}
 	p.ownerRoutes.set(p.ownerHandler(h))
 	p.playRoutes.set(h.play)
 	p.metrics.WorldNumber.Set(float64(h.row.Number))
-	if !h.row.EndsAt.IsZero() {
-		p.metrics.WorldEnds.Set(float64(h.row.EndsAt.Unix()))
+	if !h.ends().IsZero() {
+		p.metrics.WorldEnds.Set(float64(h.ends().Unix()))
 	}
 }
 

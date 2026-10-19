@@ -197,6 +197,10 @@ type Edge struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	// endsUs and closingUs are the world's end and its last days' start as
+	// Welcome tells them, µs of UTC, 0 for none.
+	endsUs, closingUs atomic.Int64
+
 	nextConn atomic.Uint64
 	registry registry
 	reach    RoamReach
@@ -232,6 +236,7 @@ func New(cfg Config) *Edge {
 		e.origins = []string{u.Host}
 	}
 	e.registry.init()
+	e.SetEnds(cfg.Ends, cfg.Closing)
 	n := cfg.Encoders
 	if n < 1 {
 		n = runtime.GOMAXPROCS(0)
@@ -394,6 +399,13 @@ func originAllowed(r *http.Request, patterns []string) bool {
 		}
 	}
 	return false
+}
+
+// SetEnds sets the world's end and its last days' start, as the Welcomes
+// from now on tell them.
+func (e *Edge) SetEnds(ends, closing time.Time) {
+	e.endsUs.Store(endsUs(ends))
+	e.closingUs.Store(endsUs(closing))
 }
 
 // endsUs is a world's end as Welcome carries it: µs of UTC, 0 for none.

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -141,6 +142,10 @@ func (p *process) drawSeed() (uint64, error) {
 // seed is KEEL_WORLD_SEED's, which is sailed as it was made, as a new
 // world's first start does.
 func (p *process) makeNext(ctx context.Context) (store.NextWorld, error) {
+	// The next world's job and the switch may both want it at once: one
+	// makes it, the other waits and finds it made.
+	p.making.Lock()
+	defer p.making.Unlock()
 	for range nextSeeds {
 		nw, err := p.db.NextWorld(ctx)
 		if errors.Is(err, store.ErrNotFound) {
@@ -149,8 +154,8 @@ func (p *process) makeNext(ctx context.Context) (store.NextWorld, error) {
 				return store.NextWorld{}, err
 			}
 			placeholder := time.Now()
-			if h := p.current.Load(); h != nil && !h.row.EndsAt.IsZero() {
-				placeholder = h.row.EndsAt
+			if h := p.current.Load(); h != nil && !h.ends().IsZero() {
+				placeholder = h.ends()
 			}
 			if _, err := p.db.CreateNextWorld(ctx, p.lease, seed, worldgen.Version, placeholder); err != nil {
 				return store.NextWorld{}, fmt.Errorf("the next world's row: %w", err)
@@ -270,12 +275,12 @@ func (p *process) switchAt(ctx context.Context, h *worldHalf, tick int64, how st
 func (p *process) lifecycleJobs() []jobs.Job {
 	sc := p.cfg.Schedule
 	// end is the world sailed's end, and whether there is one.
-	end := func() (store.World, bool) {
+	end := func() (time.Time, bool) {
 		h := p.current.Load()
-		if h == nil || h.row.EndsAt.IsZero() {
-			return store.World{}, false
+		if h == nil || h.ends().IsZero() {
+			return time.Time{}, false
 		}
-		return h.row, true
+		return h.ends(), true
 	}
 	before := func(d time.Duration) (func(time.Time) (time.Time, bool), func(time.Time) time.Time) {
 		return func(now time.Time) (time.Time, bool) {
@@ -283,14 +288,14 @@ func (p *process) lifecycleJobs() []jobs.Job {
 				if !ok {
 					return time.Time{}, false
 				}
-				due := w.EndsAt.Add(-d)
+				due := w.Add(-d)
 				return due, !now.Before(due)
 			}, func(time.Time) time.Time {
 				w, ok := end()
 				if !ok {
 					return time.Time{}
 				}
-				return w.EndsAt.Add(-d)
+				return w.Add(-d)
 			}
 	}
 	nextDue, nextNext := before(sc.Ahead)
@@ -317,14 +322,14 @@ func (p *process) lifecycleJobs() []jobs.Job {
 			Name: jobClosing, Due: closingDue, Next: closingNext,
 			Run: func(ctx context.Context, due time.Time) (jobs.Result, error) {
 				h := p.current.Load()
-				if h == nil || !h.row.EndsAt.Add(-sc.Notice).Equal(due) {
+				if h == nil || !h.ends().Add(-sc.Notice).Equal(due) {
 					return jobs.Result{Skipped: true, Detail: "the world's end has moved"}, nil
 				}
 				column := worldColumn(p.cat)
 				if column == "" {
 					return jobs.Result{Skipped: true, Detail: "the news has no column for the world"}, nil
 				}
-				n := store.WorldNews{Column: column, Number: h.row.Number, Title: "THE WORLD", What: "falls", EndsAt: h.row.EndsAt}
+				n := store.WorldNews{Column: column, Number: h.row.Number, Title: "THE WORLD", What: "falls", EndsAt: h.ends()}
 				if b := h.ready.bundle; len(b.Islands) > 0 {
 					port := b.MainPort()
 					n.Title, n.X, n.Y = strings.ToUpper(port.Name), port.X, port.Y
@@ -332,7 +337,7 @@ func (p *process) lifecycleJobs() []jobs.Job {
 				if err := p.db.WriteWorldNews(ctx, p.lease, h.row.ID, n); err != nil {
 					return jobs.Result{}, err
 				}
-				return jobs.Result{Detail: fmt.Sprintf("world %d ends at %s: told in the news", h.row.Number, h.row.EndsAt.Format(time.RFC3339))}, nil
+				return jobs.Result{Detail: fmt.Sprintf("world %d ends at %s: told in the news", h.row.Number, h.ends().Format(time.RFC3339))}, nil
 			},
 		},
 		{
@@ -342,12 +347,12 @@ func (p *process) lifecycleJobs() []jobs.Job {
 				if !ok {
 					return time.Time{}, false
 				}
-				return w.EndsAt, !now.Before(w.EndsAt.Add(-p.lead()))
+				return w, !now.Before(w.Add(-p.lead()))
 			},
 			Next: switchNext, Retry: time.Minute,
 			Run: func(ctx context.Context, due time.Time) (jobs.Result, error) {
 				h := p.current.Load()
-				if h == nil || !h.row.EndsAt.Equal(due) {
+				if h == nil || !h.ends().Equal(due) {
 					return jobs.Result{Skipped: true, Detail: "the world's end has moved"}, nil
 				}
 				if !p.switching.CompareAndSwap(false, true) {
@@ -435,7 +440,7 @@ func (p *process) RemakeNext(ctx context.Context, number int) error {
 	if h == nil {
 		return store.ErrNoNext
 	}
-	if !h.row.EndsAt.IsZero() && !time.Now().Before(h.row.EndsAt.Add(-p.remakeCutoff())) {
+	if !h.ends().IsZero() && !time.Now().Before(h.ends().Add(-p.remakeCutoff())) {
 		return errTooLate
 	}
 	if !p.switching.CompareAndSwap(false, true) {
@@ -490,12 +495,12 @@ func (p *process) Lifecycle(ctx context.Context) (owner.Lifecycle, error) {
 	}
 	if h != nil {
 		lc.World = h.row.Number
-		if !h.row.EndsAt.IsZero() {
-			lc.Ends = h.row.EndsAt.UnixMilli()
-			lc.Closing = p.cfg.Schedule.Closing(h.row.EndsAt, now)
-			lc.ClosingFrom = h.row.EndsAt.Add(-p.cfg.Schedule.Notice).UnixMilli()
-			lc.NextMadeAt = h.row.EndsAt.Add(-p.cfg.Schedule.Ahead).UnixMilli()
-			lc.RemakeUntil = h.row.EndsAt.Add(-p.remakeCutoff()).UnixMilli()
+		if !h.ends().IsZero() {
+			lc.Ends = h.ends().UnixMilli()
+			lc.Closing = p.cfg.Schedule.Closing(h.ends(), now)
+			lc.ClosingFrom = h.ends().Add(-p.cfg.Schedule.Notice).UnixMilli()
+			lc.NextMadeAt = h.ends().Add(-p.cfg.Schedule.Ahead).UnixMilli()
+			lc.RemakeUntil = h.ends().Add(-p.remakeCutoff()).UnixMilli()
 		}
 		if !h.row.BeginsAt.IsZero() {
 			lc.Began = h.row.BeginsAt.UnixMilli()
@@ -557,9 +562,9 @@ func (p *process) publishStatus(ctx context.Context, h *worldHalf) {
 		f := h.bus.Frames.Acquire()
 		st := &api.Status{AtSea: len(f.Live), Queued: len(f.Queue), World: h.row.Number}
 		f.Release()
-		if !h.row.EndsAt.IsZero() {
-			st.EndsAt = h.row.EndsAt.UTC().Format(time.RFC3339)
-			st.Closing = p.cfg.Schedule.Closing(h.row.EndsAt, time.Now())
+		if !h.ends().IsZero() {
+			st.EndsAt = h.ends().UTC().Format(time.RFC3339)
+			st.Closing = p.cfg.Schedule.Closing(h.ends(), time.Now())
 		}
 		p.status.Store(st)
 		select {
@@ -601,4 +606,43 @@ func zoneOf(cfg config.Config) string {
 		return ""
 	}
 	return cfg.Schedule.Zone.String()
+}
+
+// endRoute brings the world's end near, on the internal listener only,
+// with KEEL_DEV_COMMANDS=1: for the browser tests of a world's end, and to
+// see one by hand. The end is stored, Welcomes tell it from now on, and the
+// jobs look again: the next world is made, the news told, the switch
+// prepared, as their times have come.
+//
+//	POST /debug/end?in=90s
+func endRoute(p *process, h *worldHalf) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		in, err := time.ParseDuration(r.URL.Query().Get("in"))
+		if err != nil || in < 10*time.Second || in > 24*time.Hour {
+			http.Error(w, "in, a duration from 10s to 24h, is required", http.StatusBadRequest)
+			return
+		}
+		if p.current.Load() != h || p.switching.Load() {
+			http.Error(w, "the world is changing", http.StatusConflict)
+			return
+		}
+		end := time.Now().Add(in).Truncate(time.Second).UTC()
+		if err := p.db.SetWorldEnd(r.Context(), p.lease, h.row.ID, end); err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		h.endsAt.Store(end.UnixNano())
+		h.game.SetEnds(end, end.Add(-p.cfg.Schedule.Notice))
+		p.metrics.WorldEnds.Set(float64(end.Unix()))
+		if p.jobs != nil {
+			p.jobs.Poke()
+		}
+		p.log.Warn("the world's end brought near by hand", "world", h.row.Number, "ends", end)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"world": h.row.Number, "ends": end.UnixMilli()})
+	})
 }

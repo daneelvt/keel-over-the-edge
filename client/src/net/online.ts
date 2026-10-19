@@ -120,6 +120,9 @@ export class Online {
   onBump: ((b: BumpTold) => void) | null = null;
   /** Told of each Welcome's world, and whether its land is sailed. */
   onWorld: ((world: string, land: boolean) => void) | null = null;
+  /** The world of the latest Welcome, and its end, ms of UTC, 0 for none known. */
+  world = '';
+  endsMs = 0;
   /** Told of each Welcome's world's end. */
   onEnd: ((end: WorldEnd) => void) | null = null;
   /** Told of the chunks of land the server hands. */
@@ -256,6 +259,8 @@ export class Online {
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
         this.onWorld?.(m.world, m.land);
+        this.world = m.world;
+        this.endsMs = m.endsUs / 1000;
         this.onEnd?.({
           world: m.world,
           ends: m.endsUs / 1000,

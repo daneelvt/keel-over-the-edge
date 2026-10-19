@@ -1226,6 +1226,31 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return game.sound.state;
     },
 
+    /**
+     * The world's end as this page sees it: the world of the latest
+     * Welcome, its end, ms of UTC, the world clock's now as UTC, the
+     * countdown shown, and the staged end at the last frame.
+     */
+    ending() {
+      const o = sailing.online;
+      if (o === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      const s = world.endStage;
+      return {
+        world: o.world,
+        ends: o.endsMs,
+        now: o.utcMs(),
+        falls: document.querySelector('[data-readout="falls"]')?.textContent ?? '',
+        stage: {
+          sound: s.sound,
+          mist: s.mist,
+          cut: Number.isFinite(s.cut) ? s.cut : -1,
+          veil: s.veil,
+        },
+      };
+    },
+
     /** The game connection: where it stands and what prediction has seen. */
     net() {
       const o = sailing.online;
