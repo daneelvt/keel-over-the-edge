@@ -309,6 +309,15 @@
   cursor: pointer;
 }
 
+/* Opaque and unblurred, unlike the other panels: it stands over the sea the
+   whole voyage, and a blur behind it is drawn again every frame (a third of
+   the frames, on a software renderer). */
+.hud .pocket-chart {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgb(26 36 44);
+}
+
 .pocket-chart canvas {
   width: 120px;
   height: 90px;
