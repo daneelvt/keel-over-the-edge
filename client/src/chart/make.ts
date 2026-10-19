@@ -66,7 +66,11 @@ export function chartLook(): ChartLook {
     places: w.places.kinds.map((k) => ({
       water: k.water === true,
       mark: PLACE_MARKS[k.site] ?? '',
+      news: k.news === true,
     })),
+    great: w.chart.worth.great,
+    // A medium island of the centre, or a small one further out.
+    middling: 5,
     features: w.features.kinds.map((k) => FEATURE_MARKS[k.symbol ?? ''] ?? ''),
   };
 }

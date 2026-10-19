@@ -90,6 +90,7 @@
 }
 
 .chart-character {
+  display: none;
   color: var(--magenta);
   font:
     11px "Alegreya Sans",
@@ -285,6 +286,11 @@
   border: 1px solid rgb(59 46 34 / 40%);
   border-radius: 8px;
   background: rgb(255 255 255 / 30%);
+}
+
+/* The lights' characters, printed only close in. */
+.chart-close .chart-character {
+  display: block;
 }
 
 /* The pocket chart, top right at sea. */

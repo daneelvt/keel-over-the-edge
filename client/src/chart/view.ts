@@ -56,8 +56,11 @@ export interface ChartLook extends PaperLook {
   sides: readonly string[];
   /** The lights' characters' notations, by index. */
   characters: readonly string[];
-  /** The kinds of place: whether each is water, lettered sloping, and its mark. */
-  places: readonly { water: boolean; mark: string }[];
+  /** The kinds of place: whether each is water, lettered sloping, its mark, and whether it is news of its own (a port, a light, a wreck). */
+  places: readonly { water: boolean; mark: string; news: boolean }[];
+  /** A great discovery's worth, and a middling island's, lettered from further off than the rest. */
+  great: number;
+  middling: number;
   /** The kinds of feature's marks. */
   features: readonly string[];
 }
@@ -97,7 +100,30 @@ interface Label {
   /** Its anchor's height above the paper, m. */
   y: number;
   width: number;
+  /** How far in the chart must be for it to be lettered: 3 always, 0 only close in. */
+  rank: number;
 }
+
+/**
+ * The least rank lettered from a camera this far off, m: as a chart of a
+ * smaller scale names less, the whole disk names its great islands alone,
+ * and nearer in the rest come, the coves and reefs last.
+ */
+export function rankShown(distance: number): number {
+  if (distance > 14000) {
+    return 3;
+  }
+  if (distance > 7000) {
+    return 2;
+  }
+  return distance > 3500 ? 1 : 0;
+}
+
+/** Within this, m, the lights' characters are printed beside their stars. */
+const CHARACTERS_WITHIN = 5000;
+
+/** Room kept about each name, CSS pixels. */
+const LABEL_ROOM = 10;
 
 export class ChartView {
   readonly scene = new Scene();
@@ -508,24 +534,29 @@ export class ChartView {
         this.#labels.set(k, this.#makeLabel(e, layer));
       }
     }
-    const sorted = [...this.#labels.values()].sort((a, b) => b.entry.worth - a.entry.worth);
+    const sorted = [...this.#labels.values()].sort(
+      (a, b) => b.rank - a.rank || b.entry.worth - a.entry.worth,
+    );
     const kept: [number, number, number, number][] = [];
     const scale = this.#look.heights;
+    const least = rankShown(this.#distance);
+    layer.classList.toggle('chart-close', this.#distance < CHARACTERS_WITHIN);
     for (const l of sorted) {
       const e = l.entry;
+      if (l.rank < least) {
+        l.el.hidden = true;
+        continue;
+      }
       this.#v.set(e.east, l.y * scale, -e.north).project(this.camera);
       const x = (this.#v.x * 0.5 + 0.5) * this.#width;
       const y = (-this.#v.y * 0.5 + 0.5) * this.#height;
       const on =
         this.#v.z < 1 && x > -40 && x < this.#width + 40 && y > -20 && y < this.#height + 20;
-      if (l.width === 0 && on) {
-        l.width = l.el.offsetWidth || 60;
-      }
       const box: [number, number, number, number] = [
-        x - l.width / 2,
-        y - 18,
-        x + l.width / 2,
-        y + 2,
+        x - l.width / 2 - LABEL_ROOM,
+        y - 18 - LABEL_ROOM / 2,
+        x + l.width / 2 + LABEL_ROOM,
+        y + 2 + LABEL_ROOM / 2,
       ];
       const free =
         on && !kept.some((b) => b[0] < box[2] && box[0] < b[2] && b[1] < box[3] && box[1] < b[3]);
@@ -534,6 +565,10 @@ export class ChartView {
         l.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
       }
       l.el.hidden = !free;
+      if (free && l.el.offsetWidth > 0) {
+        // Its width as drawn, for the next placing.
+        l.width = l.el.offsetWidth;
+      }
     }
   }
 
@@ -581,7 +616,28 @@ export class ChartView {
     el.addEventListener('click', () => this.onPick?.(e));
     el.hidden = true;
     layer.append(el);
-    return { el, entry: e, y, width: 0 };
+    // Until it is drawn, its width by its letters.
+    const width = Math.max(store.title(e).length * (e.worth >= look.great ? 11 : 7.5), 16);
+    return { el, entry: e, y, width, rank: this.#rank(e) };
+  }
+
+  /** How far in a name is lettered: the main port's and the great islands' always. */
+  #rank(e: ChartEntry): number {
+    const look = this.#look;
+    if (e.subject === 'island') {
+      if (e.number === 0 || e.worth >= look.great) {
+        return 3;
+      }
+      return e.worth >= look.middling ? 2 : 1;
+    }
+    if (e.subject === 'feature') {
+      return 0;
+    }
+    const kind = look.places[e.sort];
+    if (kind?.water === true) {
+      return 0;
+    }
+    return kind?.news === true ? 2 : 1;
   }
 
   /** How many draw calls and triangles the chart's scene takes, roughly: its meshes and their faces. */
