@@ -13,13 +13,13 @@ var InternalPaths = []string{
 	"/livez", "/readyz", "/metrics",
 	"/debug/pprof/", "/debug/pprof/cmdline", "/debug/pprof/profile", "/debug/pprof/symbol",
 	"/debug/pprof/trace", "/debug/pprof/goroutine", "/debug/pprof/goroutineleak",
-	"/debug/flightrecorder", "/debug/replay", "/debug/wind", "/debug/weather", "/debug/place",
+	"/debug/flightrecorder", "/debug/replay", "/debug/wind", "/debug/weather", "/debug/place", "/debug/chart",
 	// The owner's tools' (internal/owner's Paths).
 	"/owner/", "/owner/index.html", "/owner/assets/x.js",
 	"/owner/api/world.json", "/owner/api/gusts.bin", "/owner/api/islands.json", "/owner/api/current.json",
 	"/owner/api/land.png", "/owner/api/coasts.svg", "/owner/api/island/0.svg", "/owner/api/point",
 	"/owner/api/flag", "/owner/api/place", "/owner/api/unseen", "/owner/api/places.json", "/owner/api/world",
-	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json",
+	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json", "/owner/api/charted.json",
 }
 
 // Internal returns the internal listener's routes: the probes, the metrics,
@@ -28,7 +28,7 @@ var InternalPaths = []string{
 // net/http/pprof also registers them on http.DefaultServeMux, which the
 // server never serves. flight, replay, weather and owner may be nil, and
 // their routes then answer 404; weather, the developer's commands, is POST
-// /debug/wind, /debug/weather, /debug/encounter and /debug/place; owner is
+// /debug/wind, /debug/weather, /debug/encounter, /debug/place and /debug/chart; owner is
 // everything under /owner/, which guards itself.
 func Internal(h *Health, m *Metrics, flight, replay, weather, owner http.Handler) http.Handler {
 	mux := http.NewServeMux()
@@ -54,6 +54,7 @@ func Internal(h *Health, m *Metrics, flight, replay, weather, owner http.Handler
 		mux.Handle("POST /debug/weather", weather)
 		mux.Handle("POST /debug/encounter", weather)
 		mux.Handle("POST /debug/place", weather)
+		mux.Handle("POST /debug/chart", weather)
 	}
 	if owner != nil {
 		mux.Handle("/owner/", owner)

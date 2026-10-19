@@ -55,8 +55,17 @@ type Config struct {
 	// page and sends the rest here.
 	Page *Page
 	// Chunks, if not nil, are the world's chunks, served at their
-	// addresses under /w/.
+	// addresses under /w/; Models its islands' models.
 	Chunks *Chunks
+	Models *Models
+	// News, if not nil, is the world's news, served a page of NewsPage
+	// items at a time.
+	News     NewsSource
+	NewsPage int
+	// Notices, if not nil, keeps an account's notices switched off, of
+	// NoticeKinds, the kinds that may be.
+	Notices     Notices
+	NoticeKinds []string
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -100,6 +109,12 @@ func Handler(cfg Config) http.Handler {
 	mux.Handle("GET /api/version", versionHandler(cfg.Version))
 	mux.HandleFunc("POST /guest", a.guest)
 	mux.Handle("GET /api/me", auth.Required(writeError, http.HandlerFunc(a.me)))
+	if cfg.Notices != nil {
+		mux.Handle("PUT /api/me/notices", auth.Required(writeError, http.HandlerFunc(a.setNotices)))
+	}
+	if cfg.News != nil {
+		mux.Handle(newsRoute, newNews(cfg.News, cfg.NewsPage))
+	}
 	if cfg.Game != nil {
 		mux.Handle("GET /ws", cfg.Game)
 	}
@@ -108,6 +123,9 @@ func Handler(cfg Config) http.Handler {
 	}
 	if cfg.Chunks != nil {
 		mux.Handle(chunkRoute, cfg.Chunks.serve(cfg.Metrics))
+	}
+	if cfg.Models != nil {
+		mux.Handle(modelRoute, cfg.Models.serve(cfg.Metrics))
 	}
 	mux.HandleFunc(chunksRoute, func(w http.ResponseWriter, _ *http.Request) {
 		cfg.Metrics.ChunkRequests.WithLabelValues("refused").Inc()
@@ -136,7 +154,7 @@ const robotsRoute = "GET /robots.txt"
 
 // openRoutes are the routes besides the page's that need no session: what
 // they serve is the same for everyone who has the address.
-var openRoutes = map[string]bool{chunkRoute: true, chunksRoute: true, robotsRoute: true}
+var openRoutes = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true, newsRoute: true}
 
 // session reads the session for every route but the page's and the open
 // ones: the page is the same for everyone, and loads even when the database

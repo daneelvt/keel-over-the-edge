@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DOME_RADIUS } from '../render/materials';
 import {
@@ -9,6 +10,7 @@ import {
   mistAlong,
   mistDensityAt,
   type ScenePoint,
+  visualRangeAt,
 } from './mist';
 
 const P: MistParams = {
@@ -99,5 +101,31 @@ describe('the mist', () => {
     const frame: MistFrame = { origin: [0, 8330], dome: [0, 0] };
     const tau = mistAlong([0, 2.5, 0], [800, sea(800, 0), 0], frame, P);
     expect(Math.exp(-tau)).toBeLessThan(0.05);
+  });
+});
+
+/** The server's visual range at radii across the disk (go test ./internal/physics writes it). */
+const golden = new URL('../../../internal/physics/testdata/visibility.json', import.meta.url);
+
+describe('the mist band’s visual range', () => {
+  it('is the server’s, to a centimetre, at every radius', () => {
+    const g = JSON.parse(readFileSync(golden, 'utf8')) as {
+      visibility: { Band: number; Lip: number; Clear: number; Range: number };
+      radii: number[];
+      ranges: number[];
+    };
+    const v = g.visibility;
+    const p: MistParams = {
+      band: v.Band,
+      lip: v.Lip,
+      sigma: KOSCHMIEDER / v.Range - KOSCHMIEDER / v.Clear,
+      height: 40,
+    };
+    expect(g.radii.length).toBe(200);
+    g.radii.forEach((r, i) => {
+      expect(Math.abs(visualRangeAt(r, v.Clear, p) - (g.ranges[i] ?? 0)), `${r} m`).toBeLessThan(
+        0.01,
+      );
+    });
   });
 });

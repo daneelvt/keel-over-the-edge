@@ -70,10 +70,12 @@ const (
 	outTools
 	outPlaces
 	outLights
+	outChart
+	outCharted
 	outs
 )
 
-var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights"}
+var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights", "chart", "charted"}
 
 // The entries of a snapshot, by op.
 const (

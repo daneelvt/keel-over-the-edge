@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -27,8 +28,8 @@ func TestGuestAndSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := store.Account{ID: id, Kind: store.Human, Saved: false, Name: "Ann Bonny", Look: "figure"}
-	if got.Account != want || time.Since(got.LastSeen) > time.Minute {
+	want := store.Account{ID: id, Kind: store.Human, Saved: false, Name: "Ann Bonny", Look: "figure", NoticesOff: []string{}}
+	if !reflect.DeepEqual(got.Account, want) || time.Since(got.LastSeen) > time.Minute {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 	if _, err := s.Session(ctx, sha256.Sum256([]byte("other"))); !errors.Is(err, store.ErrNotFound) {

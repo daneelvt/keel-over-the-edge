@@ -72,7 +72,7 @@ function bendLocal(local: Node<'vec3'>): Node<'vec3'> {
   return modelWorldMatrixInverse.mul(vec4(bendScene(world), 1)).xyz;
 }
 
-export type MaterialKind = 'lit' | 'basic' | 'sea-tile' | 'sea-far' | 'sky';
+export type MaterialKind = 'lit' | 'basic' | 'sea-tile' | 'sea-far' | 'sky' | 'chart';
 
 /** How a material carries the dome: per vertex, at each tile's centre, or not at all. */
 export type Bend = 'vertex' | 'tile-centre' | 'vertex-in-node' | 'none';
@@ -139,6 +139,34 @@ export function seaMaterial(kind: 'sea-tile' | 'sea-far'): MeshBasicNodeMaterial
 export function skyMaterial(): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial({ fog: false, depthWrite: false });
   return register(m, 'sky', 'none');
+}
+
+/**
+ * A material of the chart: a miniature of the whole disk, seen from above,
+ * on which nothing drops over a horizon; it has no bend, and is drawn in a
+ * scene of its own, never the sea's.
+ */
+export function chartMaterial(params: MeshBasicNodeMaterialParameters = {}): MeshBasicNodeMaterial {
+  const m = new MeshBasicNodeMaterial({ fog: false, ...params });
+  return register(m, 'chart', 'none');
+}
+
+/** Walks the chart's scene and lists every material that is not the factory's chart kind. */
+export function checkChartScene(root: Object3D): string[] {
+  const problems: string[] = [];
+  root.traverse((o) => {
+    const mesh = o as Object3D & { material?: Material | Material[] };
+    if (mesh.material === undefined) {
+      return;
+    }
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      const info = made.get(m);
+      if (info?.kind !== 'chart') {
+        problems.push(`${o.name || o.type} (${m.name || m.type}): not a chart material`);
+      }
+    }
+  });
+  return problems;
 }
 
 /**

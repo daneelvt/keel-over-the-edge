@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Notices and the news.
+#
+# A notice pops up for something the player would want to know now: one at a
+# time, at most queue more waiting behind it, several of one kind folded into
+# one. Each kind is passive, for the player's leisure, or active, for now
+# (Apple's levels); it stays stays seconds unless dismissed, and the player
+# may switch it off if switchable. Its words fill in {name}, the place's
+# name; {who}, the sailor's; {where}, its zone's words; {worth}, what it is
+# worth; and, folded, {count}. Whatever a notice tells is in the news or on
+# the chart too, so one missed is never lost (WCAG 2.2, 2.2.1).
+notices:
+  queue: 3
+  kinds:
+    - id: own-charting
+      name: Places you chart
+      on: charted-own
+      level: active
+      switchable: true
+      stays: 8
+      text: You charted {name}
+      folded: You charted {count} places
+    - id: great-discoveries
+      name: Great discoveries
+      on: charted-great
+      level: passive
+      switchable: true
+      stays: 5
+      text: "{who} charted {name}, a great discovery {where}"
+      folded: "{count} great discoveries charted"
+
+# The news, a sheet in the manner of Lloyd's List's: its columns, a page
+# of page items, and a sailor's places charted within fold minutes of an
+# island's item, about that island, folded into it.
+news:
+  fold: 10
+  page: 40
+  columns:
+    - { id: discoveries, title: Discoveries, of: charting }

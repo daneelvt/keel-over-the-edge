@@ -65,6 +65,9 @@ func (w *World) apply(c *bus.Command) {
 	case bus.Hold:
 		f.Held = c.Held
 		r = bus.Reply{Result: bus.Done, Slot: -1}
+	case bus.Chart:
+		r = bus.Reply{Result: bus.Done, Slot: -1}
+		w.chartByHand(f, c.Subject, c.On)
 	default:
 		return
 	}

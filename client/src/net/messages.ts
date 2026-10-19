@@ -96,6 +96,52 @@ export interface LightSeen {
   range: number;
 }
 
+/** What can be charted: an island, a place or a feature. */
+export type ChartSubject = 'island' | 'place' | 'feature';
+
+/**
+ * A subject of the world's chart, as the server tells of it once charted:
+ * what it is (its subject, its number among the world's of its kind, and
+ * its sort, the catalog's index of an island's size class or a place's or
+ * a feature's kind), its name (none for a feature), where it is (metres
+ * east and north), who charted it (the sailor's name, empty for one known
+ * from the start or charted with another) and when (ms of UTC), and its
+ * worth. An island's model's address and its bounds, highest and zone; a
+ * lighthouse's light; a wreck's ship. Names reach the page only here.
+ */
+export interface ChartEntry {
+  subject: ChartSubject;
+  number: number;
+  sort: number;
+  name: string;
+  east: number;
+  north: number;
+  by: string;
+  ai: boolean;
+  at: number;
+  worth: number;
+  /** The island it is on or by, by number; −1 for none. */
+  island: number;
+  group: string;
+  /** An island's land's bounds, metres: west, south, east, north. */
+  bounds: [number, number, number, number] | null;
+  highest: number;
+  /** 0 the centre, 1 the middle waters, 2 the rim. */
+  zone: number;
+  className: string;
+  model: string;
+  /** A lighthouse's light's number, −1 for none; its character's index, its height and its range, metres. */
+  light: number;
+  character: number;
+  focal: number;
+  range: number;
+  ship: string;
+  sunk: boolean;
+  /** The subject it was charted with, if any. */
+  withSubject: ChartSubject | null;
+  withNumber: number;
+}
+
 /** What the net worker's Hello carries besides the protocol version. */
 export interface HelloVersions {
   catalog: string;
@@ -197,6 +243,8 @@ export type FromWorker =
   | { type: 'places'; places: PlaceSeen[] }
   /** Lights come into range, and lights to drop, by number. */
   | { type: 'lights'; lights: LightSeen[]; drop: number[] }
+  /** The world's chart: whole after a Welcome, or what was charted since. */
+  | { type: 'chart'; entries: ChartEntry[]; whole: boolean }
   | { type: 'clock'; clock: ClockState }
   | ({ type: 'traffic' } & Traffic);
 

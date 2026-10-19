@@ -77,6 +77,11 @@ type Frame struct {
 	// are events, in no snapshot or digest.
 	Edges []EdgeEvent
 
+	// Charted are the subjects this tick charted, sighted or charted with
+	// another, in the order they were. They are events, in no snapshot or
+	// digest.
+	Charted []Charted
+
 	// Grid is the live boats by the grid cell they are in, built after
 	// the physics.
 	Grid Grid
@@ -197,6 +202,19 @@ type EdgeEvent struct {
 	Placed bool
 }
 
+// Charted is a subject of the world's chart charted: by its index in the
+// world's sight table, and With the subject it was charted with, or −1 if
+// it was sighted itself; the boat whose lookout sighted it, and where.
+type Charted struct {
+	Tick    int64
+	Subject int32
+	With    int32
+	Slot    int32
+	Boat    uint64
+	Owner   Account
+	X, Y    float64
+}
+
 // BumpTicks is how many ticks a frame keeps a bump: a second.
 const BumpTicks = 30
 
@@ -257,16 +275,17 @@ func NewFrame(capacity int) *Frame {
 			Now:  make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
 			Next: make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
 		},
-		Sail:   make([]uint8, capacity),
-		Course: make([]physics.Course, capacity),
-		Voyage: make([]Voyage, capacity),
-		Stay:   make([]bool, capacity),
-		Unseen: make([]bool, capacity),
-		Edges:  make([]EdgeEvent, 0, 64),
-		Wind:   make([]physics.Env, capacity),
-		Wake:   make([]physics.Wake, capacity),
-		Pairs:  make([]Pair, 0, capacity),
-		Bumps:  make([]Bump, 0, 64),
+		Sail:    make([]uint8, capacity),
+		Course:  make([]physics.Course, capacity),
+		Voyage:  make([]Voyage, capacity),
+		Stay:    make([]bool, capacity),
+		Unseen:  make([]bool, capacity),
+		Edges:   make([]EdgeEvent, 0, 64),
+		Charted: make([]Charted, 0, 64),
+		Wind:    make([]physics.Env, capacity),
+		Wake:    make([]physics.Wake, capacity),
+		Pairs:   make([]Pair, 0, capacity),
+		Bumps:   make([]Bump, 0, 64),
 		Grid: Grid{
 			Start: make([]int32, Cells+1),
 			Slots: make([]int32, 0, capacity),

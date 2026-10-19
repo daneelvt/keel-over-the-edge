@@ -79,6 +79,8 @@ export interface Catalog {
   sky: Sky;
   encounters: Encounters;
   world: World;
+  notices: Notices;
+  news: News;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -112,6 +114,10 @@ export interface Boat {
    * @minItems 1
    */
   lights: [Light, ...Light[]];
+  /**
+   * How high its lookout's eye is above the sea, in m: what it sees over the horizon.
+   */
+  lookout: number;
   physics: BoatPhysics;
   art: BoatArt;
 }
@@ -1444,6 +1450,7 @@ export interface World {
   features: WorldFeatures;
   flora: WorldFlora;
   score: WorldScore;
+  chart: WorldChart;
 }
 /**
  * The disk.
@@ -1867,6 +1874,10 @@ export interface WorldSize {
    * The width it holds islands narrower than, in m.
    */
   below: number;
+  /**
+   * What charting an island of the class is worth, before its zone and its class of scenery.
+   */
+  worth: number;
 }
 /**
  * The sea bed out from a coast: Dean's equilibrium profile to the closure depth, then the shelf, then the deep.
@@ -2772,6 +2783,22 @@ export interface PlaceKind {
    * A colour, #rrggbb.
    */
   mark: string;
+  /**
+   * What charting one is worth.
+   */
+  worth: number;
+  /**
+   * It lies awash: seen by the water breaking on it, within the chart's awash reach, not over the horizon.
+   */
+  awash?: boolean;
+  /**
+   * It is water: seen by looking into it, within the chart's water reach.
+   */
+  water?: boolean;
+  /**
+   * Its charting is an item of the news of its own; otherwise it is folded into its island's.
+   */
+  news?: boolean;
 }
 /**
  * A port's site.
@@ -3993,6 +4020,14 @@ export interface FeatureKind {
   zones: BiomeZones;
   mark: Colour4;
   /**
+   * What charting one is worth.
+   */
+  worth: number;
+  /**
+   * How the chart marks it.
+   */
+  symbol?: "cave" | "arch" | "blowhole" | "fall" | "spring" | "crater" | "smoke" | "ruin" | "birds";
+  /**
    * A ruin: what it was.
    */
   ruin?: "chapel" | "beacon" | "hamlet";
@@ -4553,6 +4588,214 @@ export interface ScoreCultural {
    */
   town: number;
 }
+/**
+ * The shared chart: what a lookout sees, what a discovery is worth, the islands' models and how the chart is drawn.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldChart".
+ */
+export interface WorldChart {
+  sight: ChartSight;
+  worth: ChartWorth;
+  model: ChartModel;
+  look: ChartLook;
+}
+/**
+ * How often and how far a lookout looks.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartSight".
+ */
+export interface ChartSight {
+  /**
+   * A boat looks once in this many ticks.
+   */
+  every: number;
+  /**
+   * The bearings a place's view is worked out on.
+   */
+  rays: number;
+  /**
+   * A cove, an anchorage or a lagoon is seen into within this, in m.
+   */
+  water: number;
+  /**
+   * A reef, a sandbar or a sunk wreck is seen within this, in m.
+   */
+  awash: number;
+  /**
+   * A feature is seen within this, in m.
+   */
+  features: number;
+  /**
+   * The side of the squares the world's sights are filed by, in m.
+   */
+  grid: number;
+}
+/**
+ * What a discovery is worth: an island's size class's worth times its zone's and its class of scenery's.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartWorth".
+ */
+export interface ChartWorth {
+  zones: BiomeZones;
+  classes: {
+    /**
+     * Class A's times.
+     */
+    a: number;
+    /**
+     * Class B's times.
+     */
+    b: number;
+    /**
+     * Class C's times.
+     */
+    c: number;
+  };
+  /**
+   * A discovery worth this or more is a great one.
+   */
+  great: number;
+}
+/**
+ * An island's model on the chart: a coarse grid of its land.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartModel".
+ */
+export interface ChartModel {
+  /**
+   * A cell is this many hexagons on a side.
+   */
+  cell: number;
+  /**
+   * Heights are drawn this many times their own.
+   */
+  heights: number;
+}
+/**
+ * How the chart is drawn: its paper and inks, its graticule, how often it is drawn and its wind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartLook".
+ */
+export interface ChartLook {
+  paper: Colour3;
+  ink: Colour3;
+  sea: Colour3;
+  shallows: Colour3;
+  mist: Colour3;
+  light: Colour3;
+  boat: Colour3;
+  /**
+   * A parallel of latitude every this many nautical miles from the centre.
+   */
+  parallels: number;
+  /**
+   * A meridian every this many degrees.
+   */
+  meridians: number;
+  /**
+   * The most frames a second the chart is drawn at.
+   */
+  fps: number;
+  /**
+   * The wind's streaks are drawn from a grid of this many points a side.
+   */
+  wind: number;
+}
+/**
+ * The notices that pop up: one at a time, the rest queued, the same kind folded.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Notices".
+ */
+export interface Notices {
+  /**
+   * How many notices may wait behind the one shown.
+   */
+  queue: number;
+  /**
+   * @minItems 1
+   */
+  kinds: [NoticeKind, ...NoticeKind[]];
+}
+/**
+ * A kind of notice: what raises it, its words, how urgent it is, whether it can be switched off and how long it stays.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NoticeKind".
+ */
+export interface NoticeKind {
+  id: Id;
+  /**
+   * Its name in the menu's switches.
+   */
+  name: string;
+  /**
+   * What raises it: a place the player charts, or a great discovery by anyone.
+   */
+  on: "charted-own" | "charted-great";
+  /**
+   * Passive notices are for the player's leisure; active ones for now.
+   */
+  level: "passive" | "active";
+  /**
+   * The player may switch it off.
+   */
+  switchable: boolean;
+  /**
+   * How long it stays unless dismissed, in s.
+   */
+  stays: number;
+  /**
+   * Its words: {name}, {who}, {where} and {worth} are filled in.
+   */
+  text: string;
+  /**
+   * Its words for several at once: {count} is filled in.
+   */
+  folded: string;
+}
+/**
+ * The news sheet: its columns, and how its items are folded and paged.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "News".
+ */
+export interface News {
+  /**
+   * A sailor's places charted within this of an island's item are folded into it, in minutes.
+   */
+  fold: number;
+  /**
+   * Items to a page.
+   */
+  page: number;
+  /**
+   * @minItems 1
+   */
+  columns: [NewsColumn, ...NewsColumn[]];
+}
+/**
+ * A column of the news sheet.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NewsColumn".
+ */
+export interface NewsColumn {
+  id: Id;
+  /**
+   * Its heading.
+   */
+  title: string;
+  /**
+   * What its items tell of.
+   */
+  of: "charting";
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '6296ddce9014d261';
+export const CATALOG_VERSION = '9c0acb9ef7adb377';

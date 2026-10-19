@@ -318,7 +318,7 @@ func TestGuest(t *testing.T) {
 	if cookie == nil || !cookie.Secure || !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" || cookie.MaxAge != 400*24*3600 {
 		t.Fatalf("the cookie: %+v", cookie)
 	}
-	if status, body := get(t, c, srv.URL+"/api/me", cookie); status != 200 || body != `{"name":"Ann Bonny","look":"figure","kind":"human","saved":false}` {
+	if status, body := get(t, c, srv.URL+"/api/me", cookie); status != 200 || body != `{"name":"Ann Bonny","look":"figure","kind":"human","saved":false,"noticesOff":[]}` {
 		t.Fatalf("me: %d %s", status, body)
 	}
 	for name, v := range map[string]string{"unknown": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "malformed": "x"} {

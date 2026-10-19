@@ -3,22 +3,77 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
+	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
 // me is the player's own account, what the page asks first: whether to go
-// to sea or to the start screen.
+// to sea or to the start screen; and the kinds of notice its sailor has
+// switched off, which follow the account from device to device.
 type me struct {
-	Name  string `json:"name"`
-	Look  string `json:"look"`
-	Kind  string `json:"kind"`
-	Saved bool   `json:"saved"`
+	Name       string   `json:"name"`
+	Look       string   `json:"look"`
+	Kind       string   `json:"kind"`
+	Saved      bool     `json:"saved"`
+	NoticesOff []string `json:"noticesOff"`
 }
 
 // me answers GET /api/me, behind auth.Required.
 func (a *api) me(w http.ResponseWriter, r *http.Request) {
 	acc, _ := auth.FromContext(r.Context())
-	writeJSON(w, http.StatusOK, me{Name: acc.Name, Look: acc.Look, Kind: string(acc.Kind), Saved: acc.Saved})
+	writeJSON(w, http.StatusOK, meOf(acc))
+}
+
+func meOf(acc store.Account) me {
+	off := acc.NoticesOff
+	if off == nil {
+		off = []string{}
+	}
+	return me{Name: acc.Name, Look: acc.Look, Kind: string(acc.Kind), Saved: acc.Saved, NoticesOff: off}
+}
+
+// Notices sets an account's notices switched off: the store.
+type Notices interface {
+	SetNoticesOff(ctx context.Context, id store.AccountID, off []string) error
+}
+
+// noticesBody is PUT /api/me/notices's body: the kinds switched off.
+type noticesBody struct {
+	Off []string `json:"off"`
+}
+
+// setNotices answers PUT /api/me/notices, behind auth.Required: the kinds
+// of notice the sailor has switched off, each one the catalog lets be,
+// kept on the account. A browser's request from another origin never
+// reaches it (Handler's cross-origin protection).
+func (a *api) setNotices(w http.ResponseWriter, r *http.Request) {
+	acc, _ := auth.FromContext(r.Context())
+	var body noticesBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "body")
+		return
+	}
+	off := []string{}
+	for _, k := range body.Off {
+		if !slices.Contains(a.cfg.NoticeKinds, k) {
+			writeError(w, http.StatusBadRequest, "notice")
+			return
+		}
+		if !slices.Contains(off, k) {
+			off = append(off, k)
+		}
+	}
+	slices.Sort(off)
+	if err := a.cfg.Notices.SetNoticesOff(r.Context(), acc.ID, off); err != nil {
+		writeError(w, http.StatusServiceUnavailable, "unavailable")
+		return
+	}
+	a.cfg.Sessions.ForgetAccount(acc.ID)
+	acc.NoticesOff = off
+	writeJSON(w, http.StatusOK, meOf(acc))
 }

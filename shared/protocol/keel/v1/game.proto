@@ -125,7 +125,83 @@ message ServerMessage {
     Tools tools = 9;
     Places places = 10;
     Lights lights = 11;
+    Chart chart = 12;
+    Charted charted = 13;
   }
+}
+
+// Chart is the world's chart so far: every subject charted, once a
+// connection, after the Welcome. Names reach a client only here: a player
+// learns a place's name only once it is charted, by anyone.
+message Chart {
+  repeated ChartEntry entries = 1;
+}
+
+// Charted is what has been charted since, sent to every connection as each
+// is written, each once a connection.
+message Charted {
+  repeated ChartEntry entries = 1;
+}
+
+// ChartEntry is a subject of the world's chart: an island, a place or a
+// feature.
+message ChartEntry {
+  // What it is: its kind, its number among the world's islands, places or
+  // features, and its sort, by its index in the catalog's list (an
+  // island's size class, a place's or a feature's kind).
+  ChartSubject subject = 1;
+  uint32 number = 2;
+  uint32 sort = 3;
+  // Its name: an island's, a place's; none for a feature, which is named
+  // by its sort and its island.
+  string name = 4;
+  // Where it is, in centimetres east and north of the world's centre.
+  sint32 east = 5;
+  sint32 north = 6;
+  // Who charted it: the sailor's name as it was, and whether the sailor is
+  // an AI agent; empty for a subject known from the world's start or
+  // charted with another.
+  string by = 7;
+  bool ai = 8;
+  // When, in milliseconds of UTC since 1970.
+  int64 when_ms = 9;
+  // What charting it was worth, in tenths.
+  uint32 worth = 10;
+  // The island it is on or by, its number and one; 0 for none.
+  uint32 island = 11;
+  // An island's: the name of its group of rocks, if it is in one; its
+  // land's bounds, in centimetres (west, south, east, north); its highest
+  // land, in centimetres; its zone, 0 the centre, 1 the middle waters, 2
+  // the rim; its class of scenery, A, B or C; and its model's address, a
+  // path on the play origin, fetched as a chunk is.
+  string group = 12;
+  repeated sint32 bounds = 13;
+  uint32 highest = 14;
+  uint32 zone = 15;
+  string class = 16;
+  string model = 17;
+  // A lighthouse's light, by its number among the world's lights and one,
+  // 0 for none; its character, by its index in the catalog's characters;
+  // its height above the sea, in centimetres; and its nominal range, in
+  // metres: what a chart prints beside it.
+  uint32 light = 18;
+  uint32 character = 23;
+  uint32 focal = 24;
+  uint32 range = 25;
+  // A wreck's ship's name, and whether she lies sunk.
+  string ship = 19;
+  bool sunk = 20;
+  // The subject it was charted with, if it was: its kind, and its number.
+  ChartSubject with_subject = 21;
+  uint32 with_number = 22;
+}
+
+// ChartSubject is a kind of subject of the chart.
+enum ChartSubject {
+  CHART_SUBJECT_UNSPECIFIED = 0;
+  CHART_SUBJECT_ISLAND = 1;
+  CHART_SUBJECT_PLACE = 2;
+  CHART_SUBJECT_FEATURE = 3;
 }
 
 // Places are the places in chunks of the land the connection has just been

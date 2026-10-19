@@ -22,6 +22,8 @@
 //   ?view=bands       a camera preset: chase, sea, bands, aboard or high
 //   ?sky=dusk,0.5     the sky at an hour (dawn, noon, dusk, midnight, or 0 to 24)
 //                     and the moon's age (0 new, 0.5 full), for the developer
+//   ?chart=sight      the sandbox's world charted as its lookout sees it, by the
+//                     server's sight table, rather than whole (?chart=all)
 //   ?test             the hooks the browser tests drive
 //
 // F flies the free camera off the boat and back, Escape brings it back: in
@@ -33,6 +35,8 @@ import { createGuest } from '../account/guest';
 import { resolveSailor } from '../account/me';
 import { backSoon, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
+import { chartSandbox, fetchSandboxChart, makeChart, sandboxModels } from '../chart/make';
+import { Models } from '../chart/model';
 import { STEPS_PER_SECOND } from '../game/clock';
 import { Game } from '../game/game';
 import { Land } from '../land/land';
@@ -63,7 +67,9 @@ import {
   windFromQuery,
 } from '../sandbox/sandbox';
 import { sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
+import { serverNews } from '../ui/chart';
 import { mountScreen } from '../ui/hud';
+import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
 
@@ -161,6 +167,22 @@ async function start(): Promise<void> {
     }
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
     chooseSky(world, query);
+    // The world's chart, read once its land is handed, so the sea starts as
+    // it does without one.
+    const chartFile = seed === null ? null : await fetchSandboxChart(seed);
+    const parts = makeChart(world, sandboxModels(chartFile), null);
+    if (chartFile !== null) {
+      chartSandbox(
+        chartFile,
+        parts.chart.store,
+        query.get('chart') === 'sight' ? 'sight' : 'all',
+        () => ({
+          east: world.pose.east,
+          north: world.pose.north,
+          night: world.sky.now.sunHeight < 0,
+        }),
+      );
+    }
     mountScreen(document.body, {
       model: game.hud,
       settings: game.settings,
@@ -177,6 +199,8 @@ async function start(): Promise<void> {
         fly: () => game.fly(),
         land: () => game.land(),
       },
+      sea: parts.sea,
+      notices: parts.notices,
     });
     game.listen(document, container);
     if (view !== undefined) {
@@ -188,7 +212,7 @@ async function start(): Promise<void> {
     }
     if (query.has('test')) {
       const { exposeHooks } = await import('../dev/hooks');
-      exposeHooks(world, game, { sandbox });
+      exposeHooks(world, game, { sandbox, chart: parts });
     }
     return;
   }
@@ -255,6 +279,13 @@ async function start(): Promise<void> {
     world.wrecks.setPlaces(p);
   };
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
+  // The world's chart, as the server tells of it; the notices it raises,
+  // switched off as the account has them.
+  const parts = makeChart(world, new Models(), serverNews);
+  parts.chart.store.me = me.name;
+  parts.notices.off.value = new Set(me.noticesOff ?? []);
+  parts.notices.save = (off) => saveNoticesOff(off);
+  online.onChart = (entries, whole) => parts.chart.store.receive(entries, whole);
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
   // while the sea is full.
@@ -286,6 +317,8 @@ async function start(): Promise<void> {
       fly: () => game.fly(),
       land: () => game.land(),
     },
+    sea: parts.sea,
+    notices: parts.notices,
   });
   game.listen(document, container);
   if (view !== undefined) {
@@ -297,7 +330,7 @@ async function start(): Promise<void> {
   }
   if (query.has('test')) {
     const { exposeHooks } = await import('../dev/hooks');
-    exposeHooks(world, game, { online, predictor });
+    exposeHooks(world, game, { online, predictor, chart: parts });
   }
 }
 

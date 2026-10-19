@@ -28,8 +28,11 @@ export interface FrameInfo {
 }
 
 export interface StageHooks {
-  /** Before each frame's scene render: update uniforms, run the tile pass. */
-  frame(gfx: Gfx, info: FrameInfo): void;
+  /**
+   * Before each frame's scene render: update uniforms, run the tile pass.
+   * False says the hook drew the frame itself, and the scene is not drawn.
+   */
+  frame(gfx: Gfx, info: FrameInfo): boolean | undefined;
   /** After each frame is drawn, with the main thread's work on it in milliseconds. */
   drawn?(gfx: Gfx, work: number): void;
   /** After a new renderer is made (at start and after a loss). */
@@ -210,7 +213,9 @@ export class Stage {
     }
     const start = performance.now();
     g.renderer.info.reset();
-    this.#hooks.frame(g, { dt, now });
+    if (this.#hooks.frame(g, { dt, now }) === false) {
+      return;
+    }
     this.#pipeline.render();
     this.#hooks.drawn?.(g, performance.now() - start);
   }
