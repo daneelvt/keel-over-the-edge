@@ -311,6 +311,16 @@ export class ChartView {
     return best;
   }
 
+  /** Where (east, north) lies on the screen, h m above the paper, CSS pixels; null off it. */
+  screenOf(east: number, north: number, h = 0): { x: number; y: number } | null {
+    this.#placeCamera();
+    this.#v.set(east, h * this.#look.heights, -north).project(this.camera);
+    if (this.#v.z >= 1) {
+      return null;
+    }
+    return { x: (this.#v.x * 0.5 + 0.5) * this.#width, y: (-this.#v.y * 0.5 + 0.5) * this.#height };
+  }
+
   /** Draws the chart, if it is due and something has changed. */
   draw(renderer: WebGPURenderer, dt: number, now: number): void {
     const canvas = renderer.domElement;

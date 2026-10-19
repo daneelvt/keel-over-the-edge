@@ -51,7 +51,9 @@ export class Chart {
   /** Opens the chart at an entry, its box open. */
   showAt(e: ChartEntry): void {
     this.show('chart');
-    this.view.lookAt(e.east, e.north, 4000);
+    // An island from where its name and its neighbours' show; a place or a
+    // feature from where it is lettered too.
+    this.view.lookAt(e.east, e.north, e.subject === 'island' ? 4500 : 2000);
     this.picked.value = e;
   }
 

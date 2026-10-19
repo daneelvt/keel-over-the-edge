@@ -222,6 +222,13 @@ export type KeelHooks = ReturnType<typeof makeHooks>;
 export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   const stage = world.stage;
   const driver: BoatDriver = sailing.sandbox ?? sailing.predictor;
+  // The sea's frames, counted: the chart drawn in its place draws none.
+  let seaFrames = 0;
+  const before = world.onFrame;
+  world.onFrame = () => {
+    before?.();
+    seaFrames++;
+  };
   const chartParts = (): ChartParts => {
     if (sailing.chart === undefined) {
       throw new Error('no chart');
@@ -2422,6 +2429,21 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Opens the chart, its list or the news; null closes it. */
     openChart(mode: ChartMode | null): void {
       chartParts().chart.show(mode);
+    },
+
+    /** Where a charted subject lies on the chart's screen, CSS pixels. */
+    chartPoint(subject: ChartSubject, number: number): { x: number; y: number } | null {
+      const c = chartParts().chart;
+      const e = c.store.get(subject, number);
+      return e === undefined ? null : c.view.screenOf(e.east, e.north);
+    },
+
+    /** How many frames have drawn the sea, and where the boat is. */
+    seaFrames(): number {
+      return seaFrames;
+    },
+    boatAt(): { east: number; north: number } {
+      return { east: world.pose.east, north: world.pose.north };
     },
 
     /** Opens the chart at a subject, its box open. */
