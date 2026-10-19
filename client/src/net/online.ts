@@ -266,6 +266,7 @@ export class Online {
           ends: m.endsUs / 1000,
           closing: m.closingUs / 1000,
           zone: m.zone,
+          epoch: m.epochUs / 1000,
         });
         // A new connection is sent the lights in range again.
         this.onLights?.(m.light === null ? [] : [m.light], 'all');

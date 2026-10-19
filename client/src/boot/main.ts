@@ -305,7 +305,7 @@ async function start(): Promise<void> {
       world.rise();
     }
     countdown.setEnd(e);
-    endNotices.welcome(e.world, performance.now());
+    endNotices.welcome(performance.now());
   };
   // The staged end, by the world clock, the same on every page.
   world.endIn = () => {

@@ -24,7 +24,7 @@ describe('the countdown', () => {
     const ends = Date.UTC(2026, 10, 1, 23, 0, 0);
     let world = ends - (2 * DAY + 3 * HOUR);
     const c = new Countdown(() => world, 'en');
-    c.setEnd({ world: 'w1', ends, closing: ends - 3 * DAY, zone: 'America/New_York' });
+    c.setEnd({ world: 'w1', ends, closing: ends - 3 * DAY, zone: 'America/New_York', epoch: 0 });
     expect(c.text.value).toBe('2d 3h');
     expect(c.closing.value).toBe(true);
     world = ends - 9 * MINUTE - 12 * SECOND;
@@ -39,10 +39,10 @@ describe('the countdown', () => {
   test('is not closing before its last days, and shows nothing with no end known', () => {
     const ends = Date.UTC(2026, 10, 1, 23, 0, 0);
     const c = new Countdown(() => ends - 5 * DAY, 'en');
-    c.setEnd({ world: 'w1', ends, closing: ends - 3 * DAY, zone: '' });
+    c.setEnd({ world: 'w1', ends, closing: ends - 3 * DAY, zone: '', epoch: 0 });
     expect(c.closing.value).toBe(false);
     const none = new Countdown(() => Number.NaN, 'en');
-    none.setEnd({ world: 'w1', ends, closing: ends - 3 * DAY, zone: '' });
+    none.setEnd({ world: 'w1', ends, closing: ends - 3 * DAY, zone: '', epoch: 0 });
     expect(none.text.value).toBe('');
   });
 });
@@ -91,9 +91,15 @@ describe('the notices of the world’s end', () => {
     const n = new EndNotices(c, kinds, shown, (on, fill) =>
       raised.push(`${on} ${Object.values(fill).join(',')}`),
     );
-    c.setEnd({ world: 'w1', ends, closing: ends - 3 * DAY, zone: 'America/New_York' });
-    n.welcome('w1', 0);
-    n.welcome('w1', 1);
+    c.setEnd({
+      world: 'w1',
+      ends,
+      closing: ends - 3 * DAY,
+      zone: 'America/New_York',
+      epoch: world - 3_600_000,
+    });
+    n.welcome(0);
+    n.welcome(1);
     n.tick(0);
     expect(raised).toEqual(['new-world ']);
     // A player who comes on Friday is still told of the closing, once.
@@ -115,10 +121,17 @@ describe('the notices of the world’s end', () => {
     c.tick();
     n.tick(0);
     expect(raised.slice(2)).toEqual(['falls-soon 1h', 'falls-soon 10m']);
+    // A world begun more than a day ago is not new, however new to this
+    // phone.
+    const old: string[] = [];
+    const c2 = new Countdown(() => ends - 4 * DAY, 'en');
+    c2.setEnd({ world: 'w0', ends, closing: ends - 3 * DAY, zone: '', epoch: ends - 7 * DAY });
+    new EndNotices(c2, kinds, memory(), (on) => old.push(on)).welcome(0);
+    expect(old).toEqual([]);
     // Another page of the same phone, the same world: nothing again.
     const again: string[] = [];
     const n2 = new EndNotices(c, kinds, shown, (on) => again.push(on));
-    n2.welcome('w1', 0);
+    n2.welcome(0);
     n2.tick(0);
     expect(again).toEqual([]);
   });

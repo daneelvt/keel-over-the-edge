@@ -23,7 +23,12 @@ export interface WorldEnd {
   closing: number;
   /** The IANA zone the schedule is published in; "" for UTC. */
   zone: string;
+  /** When it began, its epoch, ms of UTC. */
+  epoch: number;
 }
+
+/** A world this young is a new world, told of once on each phone, ms. */
+export const NEW_FOR = 24 * 60 * 60 * 1000;
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -172,11 +177,11 @@ export class Countdown {
   /** ms left at the last tick; Infinity with no end known. */
   left = Number.POSITIVE_INFINITY;
   /** The world clock as UTC, ms; NaN while it is not known. */
-  readonly #now: () => number;
+  readonly now: () => number;
   readonly #locale: string | undefined;
 
   constructor(now: () => number, locale?: string) {
-    this.#now = now;
+    this.now = now;
     this.#locale = locale;
   }
 
@@ -195,7 +200,7 @@ export class Countdown {
   /** Brings the countdown to the world clock's now. */
   tick(): void {
     const e = this.end.value;
-    const now = this.#now();
+    const now = this.now();
     if (e === null || e.ends === 0 || Number.isNaN(now)) {
       this.left = Number.POSITIVE_INFINITY;
       if (this.text.value !== '') {
@@ -313,10 +318,19 @@ export class EndNotices {
     this.#raise(on, fill, now);
   }
 
-  /** A Welcome: a world never seen on this phone is a new world. */
-  welcome(world: string, now: number): void {
+  /**
+   * A Welcome, now ms of the page's clock: a world begun within NEW_FOR by
+   * the world clock is told of once, a new world; an older one, which the
+   * player has merely not sailed before, is not.
+   */
+  welcome(now: number): void {
+    const e = this.#countdown.end.value;
+    const utc = this.#countdown.now();
+    if (e === null || Number.isNaN(utc) || utc - e.epoch >= NEW_FOR || utc < e.epoch) {
+      return;
+    }
     if (this.#kinds.some((k) => k.on === 'new-world')) {
-      this.#once(world, 'new', 'new-world', {}, now);
+      this.#once(e.world, 'new', 'new-world', {}, now);
     }
   }
 
