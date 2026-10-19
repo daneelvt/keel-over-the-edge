@@ -526,3 +526,65 @@ func (t *Table) index(eyeMost float64) {
 func (t *Table) Size() (cells, views, awash, lights, refs int) {
 	return len(t.cells), len(t.views), len(t.awash), len(t.lights), len(t.refs)
 }
+
+// Export is a table as the page's offline sandbox reads it: everything a
+// look reads, by entry, without the grid, which it does without.
+type Export struct {
+	Subjects   int                `json:"subjects"`
+	Rays       int                `json:"rays"`
+	Dome       float64            `json:"dome"`
+	Eyes       []float64          `json:"eyes"`
+	Visibility physics.Visibility `json:"visibility"`
+	LnThresh   float64            `json:"lnThreshold"`
+	// Cells are x, y, the horizon's distance from their top and the
+	// visual range at them, m; CellSubjects their islands.
+	Cells        [][4]float64    `json:"cells"`
+	CellSubjects []int32         `json:"cellSubjects"`
+	Views        []ExportView    `json:"views"`
+	Awash        []ExportReach   `json:"awash"`
+	Lights       []ExportLight   `json:"lights"`
+	With         map[int][]int32 `json:"with"`
+}
+
+// ExportView is a view as Export holds it.
+type ExportView struct {
+	X, Y, Vis, Far2 float64
+	Subject         int32
+	Near, Far       []float32
+}
+
+// ExportReach is a subject seen within a reach.
+type ExportReach struct {
+	X, Y, Reach float64
+	Subject     int32
+}
+
+// ExportLight is a light as Export holds it.
+type ExportLight struct {
+	X, Y, Range, Vis, LnI float64
+	Subject               int32
+}
+
+// Export is the table as the sandbox reads it.
+func (t *Table) Export() Export {
+	e := Export{Subjects: len(t.subjects), Rays: t.rays, Dome: t.dome, Eyes: t.eyes, Visibility: t.vis, LnThresh: t.lnThr, With: map[int][]int32{}}
+	for _, c := range t.cells {
+		e.Cells = append(e.Cells, [4]float64{c.x, c.y, c.high, c.vis})
+		e.CellSubjects = append(e.CellSubjects, c.subject)
+	}
+	for _, v := range t.views {
+		e.Views = append(e.Views, ExportView{X: v.x, Y: v.y, Vis: v.vis, Far2: v.far2, Subject: v.subject, Near: v.near, Far: v.far})
+	}
+	for _, a := range t.awash {
+		e.Awash = append(e.Awash, ExportReach{X: a.x, Y: a.y, Reach: a.reach, Subject: a.subject})
+	}
+	for _, l := range t.lights {
+		e.Lights = append(e.Lights, ExportLight{X: l.x, Y: l.y, Range: l.rng, Vis: l.vis, LnI: l.lnI, Subject: l.subject})
+	}
+	for s, w := range t.with {
+		if len(w) > 0 {
+			e.With[s] = w
+		}
+	}
+	return e
+}

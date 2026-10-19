@@ -13,6 +13,8 @@ export interface Me {
   kind: string;
   /** False for a guest, kept only by this browser's cookie. */
   saved: boolean;
+  /** The kinds of notice the sailor has switched off, by the catalog's ids; none for a new sailor. */
+  noticesOff?: string[];
 }
 
 export type SessionCheck = { kind: 'sailor'; me: Me } | { kind: 'none' } | { kind: 'failed' };

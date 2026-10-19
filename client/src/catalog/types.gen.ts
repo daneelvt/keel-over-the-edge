@@ -4798,4 +4798,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'ed409777f028c3f5';
+export const CATALOG_VERSION = '9c0acb9ef7adb377';

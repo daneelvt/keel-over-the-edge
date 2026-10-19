@@ -13,6 +13,7 @@
 
 import { type Color, Vector3 } from 'three';
 import { exp, float, fog, length, max, mix, positionView } from 'three/tsl';
+import type { WebGPURenderer } from 'three/webgpu';
 import { catalog } from '../catalog';
 import { EdgeScene } from '../edge/edge';
 import { edgeLook, KOSCHMIEDER, mistAtVertex } from '../edge/mist';
@@ -99,6 +100,12 @@ export interface FleetSource {
 
 /** No boats: the fleet before the game is online. */
 const NO_BOATS: readonly DrawnBoat[] = [];
+
+/** What can cover the sea, drawn by the same renderer in its place while it is open. */
+export interface Cover {
+  readonly open: boolean;
+  draw(renderer: WebGPURenderer, dt: number, now: number): void;
+}
 
 export class SeaScene {
   readonly stage: Stage;
@@ -198,6 +205,8 @@ export class SeaScene {
   onQuality: ((tier: number, scale: number) => void) | null = null;
   /** Called at the start of each drawn frame, with the real time since the last one (s) and now (ms). */
   tick: ((dt: number, now: number) => void) | null = null;
+  /** What covers the sea while it is open, drawn in its place: the chart. */
+  cover: Cover | null = null;
   /** Called after each frame is placed (the panel's statistics, the tests). */
   onFrame: (() => void) | null = null;
 
@@ -225,7 +234,19 @@ export class SeaScene {
     this.#store = options.store;
     this.detail = options.detail;
     this.stage = new Stage(container, backend, {
-      frame: (gfx, info) => this.#frame(gfx, info.dt, info.now),
+      frame: (gfx, info) => {
+        const cover = this.cover;
+        if (cover?.open === true) {
+          // The chart covers the screen: the boat sails on, the sea is
+          // not drawn.
+          this.stats.gap();
+          this.tick?.(info.dt, info.now);
+          cover.draw(gfx.renderer, info.dt, info.now);
+          return false;
+        }
+        this.#frame(gfx, info.dt, info.now);
+        return undefined;
+      },
       drawn: (gfx, work) => this.stats.drawn(gfx, work),
       attached: (gfx) => this.#attached(gfx),
       resumed: () => {

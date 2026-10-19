@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
@@ -43,6 +44,18 @@ func runWorld(out io.Writer, seed uint64) error {
 	}
 	fmt.Fprintf(out, "dev: seed %d's world, %d islands, made in %s: %s (%d bytes)\n", seed, len(b.Islands),
 		time.Since(start).Round(time.Millisecond), path, file.Len())
+	// Its chart, for the sandbox: every subject, the islands' models and
+	// the sight table.
+	w := chart.Build(b, cat)
+	sandbox, err := chart.NewModel(w, cat, nil).SandboxFile()
+	if err != nil {
+		return err
+	}
+	chartPath := filepath.Join(worldsDir, fmt.Sprintf("%d.chart", seed))
+	if err := os.WriteFile(chartPath, sandbox, 0o644); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "dev: its chart, %d subjects: %s (%d bytes)\n", len(w.Subjects), chartPath, len(sandbox))
 	fmt.Fprintf(out, "dev: sail it at https://localhost:%d/?sandbox&world=%d\n", vitePort, seed)
 	return nil
 }

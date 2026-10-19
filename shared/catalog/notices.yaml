@@ -12,7 +12,7 @@
 notices:
   queue: 3
   kinds:
-    - id: charted-you
+    - id: own-charting
       name: Places you chart
       on: charted-own
       level: active
@@ -20,7 +20,7 @@ notices:
       stays: 8
       text: You charted {name}
       folded: You charted {count} places
-    - id: charted-great
+    - id: great-discoveries
       name: Great discoveries
       on: charted-great
       level: passive

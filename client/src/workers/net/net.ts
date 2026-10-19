@@ -239,6 +239,9 @@ export class NetWorker {
         case 'lights':
           this.#d.post({ type: 'lights', lights: r.lights, drop: r.drop });
           break;
+        case 'chart':
+          this.#d.post({ type: 'chart', entries: r.entries, whole: r.whole });
+          break;
       }
       this.#arm();
     };

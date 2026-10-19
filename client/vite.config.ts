@@ -38,19 +38,20 @@ if (cert && key) {
   server.https = { cert: readFileSync(cert), key: readFileSync(key) };
 }
 
-// The sandbox's worlds: .dev/worlds/<seed>.world, which go run ./tools/dev
-// -world <seed> writes, served at /dev-worlds/<seed>.world by the
-// development server alone; a built page has none.
+// The sandbox's worlds: .dev/worlds/<seed>.world and its chart,
+// <seed>.chart, which go run ./tools/dev -world <seed> writes, served at
+// /dev-worlds/<seed>.world and .chart by the development server alone; a
+// built page has none.
 const devWorlds: Plugin = {
   name: 'dev-worlds',
   configureServer(s) {
     s.middlewares.use('/dev-worlds', (req, res, next) => {
-      const m = /^\/(\d+)\.world$/.exec(req.url ?? '');
+      const m = /^\/(\d+)\.(world|chart)$/.exec(req.url ?? '');
       if (m === null) {
         next();
         return;
       }
-      const file = `../.dev/worlds/${m[1]}.world`;
+      const file = `../.dev/worlds/${m[1]}.${m[2]}`;
       if (!existsSync(file)) {
         res.statusCode = 404;
         res.end();

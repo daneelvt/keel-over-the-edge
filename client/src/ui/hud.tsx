@@ -15,9 +15,11 @@ import { useState } from 'preact/hooks';
 import type { HelmInput } from '../input/helm';
 import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
+import { ChartScreen, type ChartSea, NoticeLine, PocketChart } from './chart';
 import { Helm, Sheet } from './controls';
 import { Menu } from './menu';
 import type { HudModel } from './model';
+import type { Notices } from './notices';
 import { Pilot } from './pilot';
 import type { SettingsSignal } from './settings';
 
@@ -157,6 +159,10 @@ export interface ScreenProps {
   connection: ConnectionView | null;
   /** The free camera, where it is offered, or null. */
   fly?: FlyView | null;
+  /** The chart, its pocket and its news; null where there is no land. */
+  sea?: ChartSea | null;
+  /** The notices. */
+  notices?: Notices | null;
 }
 
 /** The free camera as the screen sees it. */
@@ -176,6 +182,21 @@ function Screen(props: ScreenProps) {
   const [menu, setMenu] = useState(false);
   const s = settings.value.value;
   const fly = props.fly ?? null;
+  const sea = props.sea ?? null;
+  const notices = props.notices ?? null;
+  if (sea?.chart.open.value) {
+    // The chart covers the screen; the boat sails on under it.
+    return (
+      <>
+        <ChartScreen sea={sea} />
+        {notices !== null ? (
+          <div class="hud-notices">
+            <NoticeLine notices={notices} />
+          </div>
+        ) : null}
+      </>
+    );
+  }
   if (fly?.flying.value === true) {
     // The free camera's picture is clean; a tap shows the way back a moment.
     return (
@@ -196,9 +217,11 @@ function Screen(props: ScreenProps) {
         <Instruments model={model} />
         <SailorLine model={model} />
         <BumpLine model={model} />
+        {notices !== null ? <NoticeLine notices={notices} /> : null}
         {props.connection !== null ? <ConnectionLine view={props.connection} /> : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
       </div>
+      {sea !== null ? <PocketChart sea={sea} /> : null}
       <button
         type="button"
         class="round menu-button"
@@ -214,6 +237,15 @@ function Screen(props: ScreenProps) {
           sailor={props.sailor}
           connection={props.connection}
           close={() => setMenu(false)}
+          notices={notices}
+          chart={
+            sea === null
+              ? null
+              : (mode) => {
+                  setMenu(false);
+                  sea.chart.show(mode);
+                }
+          }
           fly={
             fly?.can.value === true
               ? () => {

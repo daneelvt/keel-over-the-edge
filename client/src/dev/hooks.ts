@@ -43,12 +43,14 @@ import {
 import type { Node } from 'three/webgpu';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
 import { catalog } from '../catalog';
+import type { ChartMode } from '../chart/chart';
+import type { ChartParts } from '../chart/make';
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
 import { nowUs, worldUs } from '../net/clock';
-import type { BumpTold } from '../net/messages';
+import type { BumpTold, ChartEntry, ChartSubject } from '../net/messages';
 import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
 import { FieldMaker, newFields } from '../ocean/field';
@@ -73,7 +75,14 @@ import { type RecordValues, spellOf, steer, toHex } from '../predict/golden';
 import { RECORDS, SEA } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
-import { checkScene, DOME_RADIUS, domeCentre, domeDrop, seaMaterial } from '../render/materials';
+import {
+  checkChartScene,
+  checkScene,
+  DOME_RADIUS,
+  domeCentre,
+  domeDrop,
+  seaMaterial,
+} from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
@@ -193,9 +202,10 @@ function solve3(a: number[], b: number[]): [number, number, number] {
 }
 
 /** What the boat is sailed by: the offline sandbox, or the game online. */
-export type Sailing =
+export type Sailing = (
   | { sandbox: Sandbox; online?: undefined; predictor?: undefined }
-  | { sandbox?: undefined; online: Online; predictor: Predictor };
+  | { sandbox?: undefined; online: Online; predictor: Predictor }
+) & { chart?: ChartParts };
 
 /** Puts the hooks on globalThis.keel. */
 export function exposeHooks(world: SeaScene, game: Game, sailing: Sailing): void {
@@ -212,6 +222,12 @@ export type KeelHooks = ReturnType<typeof makeHooks>;
 export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   const stage = world.stage;
   const driver: BoatDriver = sailing.sandbox ?? sailing.predictor;
+  const chartParts = (): ChartParts => {
+    if (sailing.chart === undefined) {
+      throw new Error('no chart');
+    }
+    return sailing.chart;
+  };
   const offline = (): Sandbox => {
     if (sailing.sandbox === undefined) {
       throw new Error('the offline sandbox only: the boat is sailed online');
@@ -2401,6 +2417,80 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       p.y -= domeDrop(Math.hypot(p.x - fs.x, p.z - fs.z));
       p.project(stage.camera);
       return { x: ((p.x + 1) / 2) * canvas.clientWidth, y: ((1 - p.y) / 2) * canvas.clientHeight };
+    },
+
+    /** Opens the chart, its list or the news; null closes it. */
+    openChart(mode: ChartMode | null): void {
+      chartParts().chart.show(mode);
+    },
+
+    /** Opens the chart at a subject, its box open. */
+    chartAt(subject: ChartSubject, number: number): boolean {
+      const c = chartParts().chart;
+      const e = c.store.get(subject, number);
+      if (e === undefined) {
+        return false;
+      }
+      c.showAt(e);
+      return true;
+    },
+
+    /** Looks at the whole chart. */
+    fitChart(): void {
+      chartParts().chart.view.fit();
+    },
+
+    /** The entry a tap at (x, y) CSS pixels on the chart picks, and opens its box. */
+    pickChart(x: number, y: number): string | null {
+      const c = chartParts().chart;
+      const e = c.view.pick(x, y);
+      c.picked.value = e;
+      return e === null ? null : c.store.title(e);
+    },
+
+    /** Gives the chart entries, as the server would: whole, or charted since. */
+    chartReceive(entries: ChartEntry[], whole: boolean): void {
+      chartParts().chart.store.receive(entries, whole);
+    },
+
+    /** What the chart holds and how it was last drawn. */
+    chartInfo() {
+      const c = chartParts().chart;
+      const v = c.view;
+      const labels = [...document.querySelectorAll<HTMLElement>('.chart-label')];
+      return {
+        open: c.open.value,
+        mode: c.mode.value,
+        size: c.store.size,
+        titles: c.store.entries.map((e) => c.store.title(e)),
+        mine: c.store.entries.filter((e) => c.store.mine(e)).map((e) => c.store.title(e)),
+        draws: v.draws,
+        ...v.size(),
+        problems: checkChartScene(v.scene),
+        labels: labels
+          .filter((l) => !l.hidden)
+          .map((l) => ({
+            text: l.querySelector('.chart-name')?.textContent ?? '',
+            italic: getComputedStyle(l.querySelector('.chart-name') ?? l).fontStyle === 'italic',
+            kind: l.className,
+          })),
+        picked: c.picked.value === null ? null : c.store.title(c.picked.value),
+      };
+    },
+
+    /** The notice shown and how many wait; raises one, for the tests of the notices. */
+    notices() {
+      const n = chartParts().notices;
+      const s = n.shown.value;
+      return {
+        text: s?.text ?? null,
+        level: s?.kind.level ?? null,
+        waiting: n.waiting,
+        off: [...n.off.value],
+      };
+    },
+    raiseNotice(on: string, fill: Record<string, string>): void {
+      chartParts().notices.raise(on, fill, performance.now());
     },
 
     /** Resolves after n frames of the frame loop. */

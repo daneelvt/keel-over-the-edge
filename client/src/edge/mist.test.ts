@@ -123,7 +123,9 @@ describe('the mist band’s visual range', () => {
     };
     expect(g.radii.length).toBe(200);
     g.radii.forEach((r, i) => {
-      expect(Math.abs(visualRangeAt(r, v.Clear, p) - (g.ranges[i] ?? 0)), `${r} m`).toBeLessThan(0.01);
+      expect(Math.abs(visualRangeAt(r, v.Clear, p) - (g.ranges[i] ?? 0)), `${r} m`).toBeLessThan(
+        0.01,
+      );
     });
   });
 });
