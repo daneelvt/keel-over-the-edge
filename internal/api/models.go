@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -112,7 +113,7 @@ func (m *Models) find(world, file string) (int, bool) {
 		return 0, false
 	}
 	n, err := strconv.Atoi(num)
-	if err != nil || n < 0 || n >= len(m.payloads) || strconv.Itoa(n) != num {
+	if err != nil || n < 0 || n > math.MaxUint16 || n >= len(m.payloads) || strconv.Itoa(n) != num {
 		return 0, false
 	}
 	got, err := base64.RawURLEncoding.Strict().DecodeString(mac)

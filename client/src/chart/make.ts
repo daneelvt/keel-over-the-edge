@@ -163,6 +163,9 @@ interface SandboxFile {
 
 /** Fetches the sandbox's chart for a seed: null without one. */
 export async function fetchSandboxChart(seed: string): Promise<SandboxFile | null> {
+  if (!/^\d+$/.test(seed)) {
+    return null;
+  }
   const res = await fetch(`/dev-worlds/${seed}.chart`);
   return res.ok ? ((await res.json()) as SandboxFile) : null;
 }
