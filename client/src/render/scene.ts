@@ -71,6 +71,8 @@ import { Wrecks } from './wrecks';
 
 /** The staged end's timings, from the catalog. */
 const END_LOOK = catalog.world.edge.end;
+/** How thick the mist over the screen is as it closes in fully, before the end's own veil. */
+const MIST_VEIL = 0.6;
 /** A tick of world time, µs. */
 const TICK_US = 1e6 / STEPS_PER_SECOND;
 
@@ -234,8 +236,14 @@ export class SeaScene {
   #fadeOver = 0;
   #veil = 0;
   #veilWords = false;
-  /** When the new world began to rise out of the mist, ms; −1 once risen. */
-  #risingFrom = -1;
+  #words = false;
+  /** The sky's clear visual range before the end's mist, and what the mist made of it last. */
+  #clearRange = 6000;
+  #mistedRange = Number.NaN;
+  /** When the new world began to rise out of the mist, ms by the frames' clock; NaN once risen. */
+  #risingFrom = Number.NaN;
+  /** A rising asked for, to begin at the next frame, so many seconds in; NaN for none. */
+  #riseIn = Number.NaN;
   /** The ground's height at a point, as the land holds it: what has no sea to break at the end. */
   readonly #groundAt = (east: number, north: number): number | null =>
     this.land?.heightAt(east, north) ?? null;
@@ -487,7 +495,7 @@ export class SeaScene {
   /** The fade: going over the lip, or the world's end's veil, whichever is more. */
   #applyFade(): void {
     const amount = Math.max(this.#fadeOver, this.#veil);
-    const words = this.#veil > 0;
+    const words = this.#words;
     if (words !== this.#veilWords) {
       this.#veilWords = words;
       this.fade.classList.toggle('world-end', words);
@@ -504,9 +512,9 @@ export class SeaScene {
     f.style.opacity = String(Math.min(amount, 1));
   }
 
-  /** A new world, after the end: it rises out of the mist from now, ms. */
-  rise(now: number): void {
-    this.#risingFrom = now;
+  /** A new world, after the end: it rises out of the mist from the next frame, already since seconds in. */
+  rise(since = 0): void {
+    this.#riseIn = since;
   }
 
   /**
@@ -526,18 +534,35 @@ export class SeaScene {
     (endLook.centre.value as Vector2).set(this.pose.east, this.pose.north);
     let mist = st.mist;
     let veil = st.veil;
-    if (this.#risingFrom >= 0) {
+    if (!Number.isNaN(this.#riseIn)) {
+      this.#risingFrom = now - this.#riseIn * 1000;
+      this.#riseIn = Number.NaN;
+    }
+    if (!Number.isNaN(this.#risingFrom)) {
       const r = risen(END_LOOK, (now - this.#risingFrom) / 1000);
       mist = Math.max(mist, 1 - r);
       veil = Math.max(veil, 1 - r);
       if (r >= 1) {
-        this.#risingFrom = -1;
+        this.#risingFrom = Number.NaN;
       }
     }
-    look.visualRange.value = closedIn(look.visualRange.value as number, mist);
+    // The sky sets the clear air's range each frame it is read; held, it
+    // keeps the last, which the mist must not close again.
+    const range = look.visualRange.value as number;
+    if (range !== this.#mistedRange) {
+      this.#clearRange = range;
+    }
+    this.#mistedRange = closedIn(this.#clearRange, mist);
+    look.visualRange.value = this.#mistedRange;
     this.endSlabs.frame(END_LOOK, left, this.pose.east, this.pose.north, this.#groundAt);
-    if (veil !== this.#veil) {
+    // The mist over everything, the sea too, thickening as it closes in;
+    // the screen the mist itself, with its words, at the end and as the
+    // new world rises.
+    const words = veil > 0;
+    veil = Math.max(veil, MIST_VEIL * mist);
+    if (veil !== this.#veil || words !== this.#words) {
       this.#veil = veil;
+      this.#words = words;
       this.#applyFade();
     }
   }

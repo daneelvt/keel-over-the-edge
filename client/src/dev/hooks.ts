@@ -2252,20 +2252,20 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     ): {
       sound: number;
       mist: number;
-      cut: number;
+      cut: number | null;
       veil: number;
       slabs: number;
     } {
       world.endIn = seconds === null ? null : () => seconds;
       if (rising !== null) {
-        world.rise(performance.now() - rising * 1000);
+        world.rise(rising);
       }
       hooks.render();
       const s = world.endStage;
       return {
         sound: s.sound,
         mist: s.mist,
-        cut: s.cut,
+        cut: Number.isFinite(s.cut) ? s.cut : null,
         veil: s.veil,
         slabs: world.endSlabs.count,
       };

@@ -1570,13 +1570,13 @@ flashing beside it by the world's clock, and draws them on the map.
 ### Beginning a new world
 
 A world's terrain is never made again, so a changed generator wants a new
-world. **"Begin a new world"** on the world page (`POST /owner/api/world
-{"number"}`, the active world's number typed) ends the active world and
-begins the next in one transaction fenced by the lease (`store.BeginWorld`),
-logged; a second later keel stops, as at a signal, and starts again in the
-new world, making its terrain from a new seed (or `KEEL_WORLD_SEED`). In the
-cluster the pod starts again by itself; under `go run ./tools/dev`, start
-it again. The ended world's data stays in its partitions.
+world. **"Begin the next world now"** on the world page (`POST
+/owner/api/world {"number"}`, the active world's number typed) ends the
+active world a second later and begins the next in the running process, as
+its scheduled end would (see [The weekly world](#the-weekly-world)): the
+next world made first if it is not, from a new seed (or `KEEL_WORLD_SEED`).
+The new world ends at the schedule's end at least a day away. The ended
+world's data stays in its partitions until its keep is over.
 
 ## Harbours and towns
 
@@ -1904,6 +1904,8 @@ hexagons, each cell's highest ground and surface, gzipped
 | `POST /api/me/notices {"off": [ids]}` | the notices switched off, kept on the account; `GET /api/me` says them |
 | `GET /owner/api/charted.json` | the world page's chart: what is charted, by whom, when, its worth |
 | `POST /debug/chart?all` or `?subject=island:N` | charts by hand, credited to no one (developer's commands) |
+| `GET /api/status` | the website's: boats at sea and queued, the world, its end and whether it is closing; no session; kept 30 s |
+| `POST /debug/end?in=90s` | brings the world's end near (developer's commands) |
 
 A discovery's **worth**: an island's size class's (`world.sizes`) times its
 zone's and its class of scenery's (`world.chart.worth`); a place's or a
@@ -1947,6 +1949,126 @@ sight table; `?chart=sight` looks by it (`chart/sight.ts`), and
 `chart/sight.test.ts` holds its looks to the server's along seed 1's runs.
 The world page washes the islands not yet charted paler, rings the places
 charted, and lists what is charted by whom.
+
+## The weekly world
+
+A world lasts a week. Every world ends on a published schedule, **Sunday
+at 6 pm in New York** (`America/New_York`, so 6 pm there all year: 22:00
+UTC in US summer time, 23:00 in winter); the next is made a day ahead,
+inside keel, and begins at once in the running process, in a pause of
+under a second, with every player back at the new Port Royal and a blank
+chart.
+
+### The schedule and the states
+
+`KEEL_WORLD_SCHEDULE` is a weekday, a local time and a zone, with how long
+before the end a world is **closing** (`notice`) and its successor made
+(`ahead`): `Sun 18:00 America/New_York notice=72h ahead=24h`, production's
+and the local cluster's, and the default. An hour the zone skips or
+repeats when its clocks change (`Sun 02:30 America/New_York`) is refused at
+start, as is anything malformed. For tests and a world of minutes it is a
+period from an anchor in UTC instead: `every=10m
+from=2026-11-01T00:00:00Z notice=4m ahead=3m` (`internal/worlds`).
+
+A world's row is `next` from the day before it begins, `active` while it is
+sailed, `ended` after, and `dropped` once its data is gone; `begins_at` and
+`ends_at` say when (UTC, like every stored time). Its end is fixed as it
+begins: the schedule's first end at least `ahead` after its beginning, so a
+world begun late or by hand lasts from one to eight days. **Closing** (the
+last `notice`) and **generating** (a `next` world with no terrain yet) are
+never stored: they follow from the clock and the rows.
+
+### Jobs
+
+`internal/jobs` runs what falls due, only in the process that holds the
+simulation's lease, its writes fenced by its epoch as the world's are; no
+job takes a lock of its own. Each run is a row of `job_run`, one for each
+job and due time, so a job runs once for each however often keel starts:
+a run that fails is tried again in its row after its retry, and one whose
+process stopped first is the next process's. The world page lists the
+last twenty.
+
+| Job | Due | Does |
+|---|---|---|
+| `next-world` | `ahead` before the end (Saturday 6 pm in New York) | the next world's row, a seed from `crypto/rand` (or `KEEL_WORLD_SEED`), its terrain made on one goroutine (about 4.5 s and 400 MB at most on the Mac) and stored; a world no attempt of which passes the rules is discarded and another seed drawn; tried every 5 minutes until stored |
+| `closing` | `notice` before the end (Thursday 6 pm) | the news's Notices to Mariners: the world's end, each reader seeing it in their own time |
+| `switch` | 5 minutes before the end | the next world loaded, the simulation told its last tick, then the switch |
+| `sessions` | daily 07:00 UTC | sessions not seen for 400 days, the cookie's life, deleted 1,000 at a time |
+| `worlds` | daily 07:15 UTC | ended worlds older than `KEEL_WORLD_KEEP` (four weeks): each partition detached `CONCURRENTLY`, then dropped, with a 2 s lock timeout, an interrupted detach finished first; the row kept, `dropped`; job runs older than 90 days deleted |
+
+### The switch
+
+keel is two halves: the process (configuration, logs, metrics, listeners,
+the pools, the lease, the page, sessions, jobs) and the world half
+(terrain, chunks, chart and sight table, the simulation and its loop, the
+input log, the world's writes, the edge, the world page's view of it),
+which `cmd/keel/world.go` opens and closes. The public routes reach the
+world half through one pointer each.
+
+At the end's tick (`(ends_at − epoch) × 30`, an `End` command in the input
+log, so a replay ends there too) the falls take every boat afloat, each an
+event `taken` where it was; the loop stops; the final checkpoint and those
+events are written; one fenced transaction ends the old world and makes the
+next the active one, its epoch the end; the next world's half opens, loaded
+five minutes before; every game connection is closed with **4004**, and a
+connection meanwhile is told **1013**. Phones reconnect in 0.2 to 2 s and
+launch in the new basin. On the Mac with 200 scripted sailors the switch
+took 92 ms, closing the old half 10 ms.
+
+**A world's end missed while keel was down** is switched as keel starts,
+after the lease and before the world is loaded or anyone let in: the next
+world made first if it was not, the missed ends one switch, the new world
+beginning then.
+
+### On the phone
+
+`Welcome` carries the world's end, its closing and the schedule's zone. The
+game shows the countdown at all times, by the world clock and never the
+device's: under the instruments, on the chart and its list, and on the
+pocket chart's caption while the world is closing; in amber then. The menu
+says the end in the player's own time and New York's ("Monday 12:00 NZDT
+(Sunday 6:00 pm ET)"). Three notices are worked out on the phone, each once a
+world: the closing, the end an hour and ten minutes before, and a new world
+at its first Welcome (`ui/countdown.ts`). The clock forgets its samples at a
+Welcome to another world.
+
+The end is staged by the world clock, the same on every page
+(`edge/taken.ts`, `world.edge.end`): from a minute before, the falls' roar
+and the mist closing in; from twenty seconds, the near sea breaking off
+ring by ring toward the boat, the slabs falling into the mist; at the end
+the screen fades to the mist, "The falls take the world"; the new world
+rises out of it after its Welcome.
+
+### `/api/status`
+
+`GET /api/status` is the website's: `{"atSea": 37, "queued": 0, "world":
+14, "endsAt": "2026-11-01T23:00:00Z", "closing": true}`, published once a
+second, cached 30 s by Cloudflare (`infra/tofu/rules.tf`), readable by the
+website's origin (the players' without `play.`).
+
+### On the world page
+
+At the top, always in view: the countdown to the end by keel's clock, the
+end in New York's time, UTC and the owner's own, the closing's start and
+when the next world is made. The lifecycle card holds the next world (its
+number, seed, attempts and time) and the jobs' runs. Once the next world is
+stored, its tab draws it as the current world is drawn; **Make another next
+world** (its number typed) discards it and makes another from a new seed,
+until ten minutes before the end. **Begin the next world now** (the active
+world's number typed) ends the world a second later and switches, as the
+end would.
+
+### A world of minutes
+
+```sh
+KEEL_WORLD_SCHEDULE='every=10m from=2026-01-01T00:00:00Z notice=4m ahead=3m' go run ./tools/dev
+curl -X POST 'http://127.0.0.1:9090/debug/end?in=90s'     # the world sailed ends in 90 s
+```
+
+`/debug/end` (developer's commands) brings the world's end near: stored,
+told by the next Welcomes, the jobs due at once. `client/e2e/world-end.spec.ts`
+ends the browser tests' world so, and keeps keel down across an end with
+`POST http://127.0.0.1:19099/restart?down=25s`.
 
 ## The owner's tools
 
@@ -2583,6 +2705,8 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
 | `KEEL_LAND` | `on` | `off` sails the world's terrain as open sea: made, stored and loaded, but no grounding, shelter or fetch (production's, until phones draw land; see [The world](#the-world); `tools/e2e` sets it too) |
 | `KEEL_WORLD_SEED` | none (drawn at random) | The seed a world's terrain is made from when it has none; the local cluster sets 1, as `tools/e2e` does |
+| `KEEL_WORLD_SCHEDULE` | `Sun 18:00 America/New_York notice=72h ahead=24h` | When worlds end, how long before a world is closing and its successor made; or a period from an anchor in UTC (see [The weekly world](#the-weekly-world)) |
+| `KEEL_WORLD_KEEP` | `672h` | How long an ended world's data is kept before its partitions are dropped |
 | `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
@@ -2656,6 +2780,9 @@ resolved at start, so updating it allocates nothing:
 | `keel_db_pool_connections{state}`, `keel_db_pool_max_connections` | The main pool's connections, `acquired`, `idle` or `constructing`, and its limit (17) |
 | `keel_sim_lease_epoch`, `keel_sim_lease_wait_seconds` | The simulation lease's epoch this process took it at; how long it waited for it |
 | `keel_sim_lease_lost_total{outcome}` | The lease's connection lost and taken back (`retaken`) or not (`lost`); a write refused, another process holding the lease (`fenced`) |
+| `keel_world_number`, `keel_world_ends_timestamp_seconds`, `keel_world_next_ready` | The world sailed; when it ends; 1 once the next world is stored |
+| `keel_world_switches_total{how}`, `keel_world_switch_seconds` | Worlds begun in the running process, `scheduled`, `late` (on start) or `by_hand`; the last switch's pause |
+| `keel_job_runs_total{name,outcome}`, `keel_job_last_ok_timestamp_seconds{name}` | Jobs' runs, `ok`, `skipped` or `failed`; when each last succeeded |
 | `keel_sim_restores_total{result}`, `keel_sim_restored_boats`, `keel_sim_restore_gap_seconds` | The checkpoint at start: `restored`, `none`, `too_old`, `incompatible`; the boats restored; the world time between the checkpoint and the first tick |
 | `keel_persist_inbox_fill_ratio`, `keel_persist_oldest_seconds` | The share of the world's writes' inbox (300 items) not yet written; the world time since the oldest of them |
 | `keel_persist_batch_duration_seconds`, `keel_persist_checkpoint_duration_seconds`, `keel_persist_batches_total{result}` | Each batch's transaction, and those that held a checkpoint; batches `ok`, `failed` (tried again) or `fenced` |
@@ -2924,6 +3051,7 @@ boat has returned to port."
 | 4001 | Another connection for the account | "playing on another device", **Take over** |
 | 4002 | Protocol, catalog or physics differ | reloads |
 | 4003 | Removed (not sent yet) | the reason |
+| 4004 | The world has ended: the falls took it | waits 0.2 to 2 s, to the next world |
 | none | 60 s of silence, a 10 s write | waits from 0.5 s |
 
 Waits are drawn uniformly under a ceiling that doubles with each failure, to
@@ -4674,6 +4802,7 @@ itself is down. The rules are beside what they watch
 | **WALArchivingFailing** (critical) | a segment failed to archive and none succeeded since, or none was archived for 15 minutes; for 10 minutes | The sidecar's log (`plugin-barman-cloud`); B2's status; the key |
 | **DiskFull** (critical) | the disk is over 90% full, or on course to fill within a day | Machine: which volume grows. The database stops when it is full |
 | **TunnelDown** (critical) | no cloudflared replica holds a connection for 2 minutes | cloudflared's pods and logs; Cloudflare's dashboard |
+| **WorldNextNotReady** (critical) | the next world is not stored six hours before the world's end, for 5 minutes | The world page's runs of `next-world`; keel's logs |
 | QueueWaiting | players have waited for a boat for 10 minutes | The tick's time, before raising `KEEL_BOAT_LIMIT` |
 | MemoryNearLimit | a container of keel or the database is over 90% of its limit | Its memory over days; raise the limit in a commit |
 | CPUThrottled | keel is throttled in over a tenth of its CPU periods | Game: does the tick suffer |
@@ -4692,6 +4821,7 @@ itself is down. The rules are beside what they watch
 | UpdatesPending | security updates have waited 3 days | unattended-upgrades' log, in the journal |
 | IntegrityChanged | AIDE found files changed | Its report in the journal; an update explains most |
 | PodRestarting | a container restarted more than three times in 15 minutes | Its logs; `kubectl describe` |
+| JobFailing | one of keel's jobs has failed for half an hour with no run that succeeded | Its runs on the world page, each failure's reason |
 | FluxNotReady | a Flux object is not ready for 15 minutes | `flux get all -A` |
 | SecretNotSynced | an `ExternalSecret` is not synced for 15 minutes | Its conditions; Infisical |
 | CertificateExpiring | a certificate expires within 14 days | cert-manager's `CertificateRequest` |

@@ -302,7 +302,7 @@ async function start(): Promise<void> {
     // A new world after the old one's end rises out of the mist.
     const was = countdown.end.value;
     if (was !== null && was.world !== e.world && countdown.left <= 0) {
-      world.rise(performance.now());
+      world.rise();
     }
     countdown.setEnd(e);
     endNotices.welcome(e.world, performance.now());
