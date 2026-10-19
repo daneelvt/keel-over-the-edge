@@ -53,7 +53,7 @@ export function zoneName(ms: number, zone: string): string {
       ms,
       'timeZoneName',
     );
-    if (!/^GMT[+-−]/.test(name)) {
+    if (!/^GMT[+\-−]/.test(name)) {
       return name;
     }
     first ||= name;

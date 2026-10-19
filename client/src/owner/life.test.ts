@@ -28,6 +28,10 @@ describe("the world's life", () => {
     expect(zoneName(Date.UTC(2026, 6, 1), 'America/New_York')).toBe('EDT');
     expect(zoneName(END, 'Pacific/Auckland')).toBe('NZDT');
     expect(zoneName(END, 'UTC')).toBe('UTC');
+    // London's winter name begins GMT, and is a name, not an offset.
+    expect(zoneName(END, 'Europe/London')).toBe('GMT');
+    // A zone no locale names keeps its offset.
+    expect(zoneName(END, 'Etc/GMT-9')).toMatch(/^GMT[+\-−]9$/);
     expect(zoneName(END, 'Asia/Tokyo')).toBe('GMT+9');
   });
 
