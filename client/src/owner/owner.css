@@ -73,9 +73,63 @@ h2 {
 
 header {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 0 16px;
   align-items: baseline;
   padding: 8px 16px;
+}
+
+/* The world's end, at the top of the page and so always in view. */
+.switch {
+  margin-left: auto;
+  text-align: right;
+}
+
+.switch p {
+  margin: 0;
+}
+
+.countdown {
+  color: var(--gold);
+  font-size: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.marker {
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #b5502a;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* The current world's map, or the next's. */
+.tabs {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.tabs button[aria-pressed="true"] {
+  background: rgb(232 180 80 / 35%);
+}
+
+.map.waiting {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--faint);
+  cursor: default;
+}
+
+.runs {
+  font-size: 13px;
 }
 
 .note,

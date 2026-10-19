@@ -41,6 +41,11 @@ configMapGenerator:
       - KEEL_METRICS_ADDR=0.0.0.0:9091
       - KEEL_LOG_LEVEL=info
       - KEEL_TRACE_DIR=/var/lib/keel/traces
+      # Every world ends on Sunday at 6 pm in New York, where most players
+      # are, all year: closing three days before, the next world made a
+      # day before. An ended world's data is kept four weeks.
+      - KEEL_WORLD_SCHEDULE=Sun 18:00 America/New_York notice=72h ahead=24h
+      - KEEL_WORLD_KEEP=672h
       # The password comes from PGPASSWORD, which pgx reads under any URL;
       # the server's certificate is checked against the operator's CA.
       - KEEL_DATABASE_URL=postgres://keel@keel-db-rw.keel.svc:5432/keel?sslmode=verify-full&sslrootcert=/etc/keel/db-ca/ca.crt

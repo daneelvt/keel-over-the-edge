@@ -99,8 +99,8 @@ type Metrics struct {
 	PersistCheckpoint prometheus.Histogram
 	PersistWrites     *prometheus.CounterVec // by result: ok, failed, fenced
 
-	JobRuns        *prometheus.CounterVec // by job and outcome
-	JobLastOK      *prometheus.GaugeVec   // by job
+	JobRuns        *prometheus.CounterVec // by name and outcome
+	JobLastOK      *prometheus.GaugeVec   // by name
 	WorldNumber    prometheus.Gauge
 	WorldEnds      prometheus.Gauge
 	WorldNextReady prometheus.Gauge
@@ -345,11 +345,11 @@ func NewMetrics(build, catalog string) *Metrics {
 		Name: "keel_persist_batches_total", Help: "Batches of the world's events and checkpoint, by result: ok, failed (tried again) or fenced.",
 	}, []string{"result"})
 	m.JobRuns = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "keel_job_runs_total", Help: "Jobs' runs, by job and outcome: ok, skipped (nothing to do) or failed (tried again).",
-	}, []string{"job", "outcome"})
+		Name: "keel_job_runs_total", Help: "Jobs' runs, by the job's name and outcome: ok, skipped (nothing to do) or failed (tried again).",
+	}, []string{"name", "outcome"})
 	m.JobLastOK = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "keel_job_last_ok_timestamp_seconds", Help: "When each job's last run that succeeded or had nothing to do finished, in Unix seconds; 0 if none has since the process started.",
-	}, []string{"job"})
+	}, []string{"name"})
 	m.WorldNumber = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "keel_world_number", Help: "The number of the world being sailed.",
 	})
