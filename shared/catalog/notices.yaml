@@ -7,8 +7,12 @@
 # (Apple's levels); it stays stays seconds unless dismissed, and the player
 # may switch it off if switchable. Its words fill in {name}, the place's
 # name; {who}, the sailor's; {where}, its zone's words; {worth}, what it is
-# worth; and, folded, {count}. Whatever a notice tells is in the news or on
-# the chart too, so one missed is never lost (WCAG 2.2, 2.2.1).
+# worth; {day}, the world's end in the player's own time; {left}, the time
+# left; and, folded, {count}. Whatever a notice tells is in the news, on
+# the chart or in the countdown too, so one missed is never lost (WCAG 2.2,
+# 2.2.1). The world's end is worked out on the phone from the end the
+# Welcome gives and the world clock: each of its notices is shown once a
+# world, the near end's at each time before it.
 notices:
   queue: 3
   kinds:
@@ -28,6 +32,31 @@ notices:
       stays: 5
       text: "{who} charted {name}, a great discovery {where}"
       folded: "{count} great discoveries charted"
+    - id: falls-coming
+      name: The world's end
+      on: falls-coming
+      level: active
+      switchable: true
+      stays: 8
+      text: The falls take this world on {day}
+      folded: The falls take this world on {day}
+    - id: falls-soon
+      name: The world's end near
+      on: falls-soon
+      before: [60, 10]
+      level: active
+      switchable: true
+      stays: 8
+      text: The falls take this world in {left}
+      folded: The falls take this world in {left}
+    - id: new-world
+      name: A new world
+      on: new-world
+      level: passive
+      switchable: true
+      stays: 5
+      text: "A new world: Port Royal is charted, the rest is yours to find"
+      folded: "A new world: Port Royal is charted, the rest is yours to find"
 
 # The news, a sheet in the manner of Lloyd's List's: its columns, a page
 # of page items, and a sailor's places charted within fold minutes of an
@@ -37,3 +66,4 @@ news:
   page: 40
   columns:
     - { id: discoveries, title: Discoveries, of: charting }
+    - { id: mariners, title: Notices to Mariners, of: world }

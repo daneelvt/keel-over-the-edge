@@ -8,6 +8,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -36,7 +37,7 @@ func TestWorldOfMinutes(t *testing.T) {
 		db.mu.Lock()
 		news := append([]store.WorldNews(nil), db.news...)
 		db.mu.Unlock()
-		if len(news) != 1 || !news[0].EndsAt.Equal(end) || news[0].Column != "notices" {
+		if len(news) != 1 || !news[0].EndsAt.Equal(end) || news[0].Column != worldColumn(testCatalog(t)) {
 			t.Fatalf("the news as the world closes: %+v", news)
 		}
 		if got := db.run(jobClosing, end.Add(-2*time.Minute)); got != store.JobOK {
@@ -175,4 +176,14 @@ func postJSON(t *testing.T, s *server, url, body string) (int, string) {
 		}
 	}
 	return resp.StatusCode, b.String()
+}
+
+// testCatalog is the catalog.
+func testCatalog(t *testing.T) *catalog.Catalog {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cat
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
@@ -56,8 +57,16 @@ const jobRunKeep = 90 * 24 * time.Hour
 // before the run fails, to be tried again.
 const nextSeeds = 5
 
-// newsColumn is the news's column for a world's end.
-const newsColumn = "notices"
+// worldColumn is the news's column for the world's end: the catalog's
+// column of items about the world.
+func worldColumn(cat *catalog.Catalog) string {
+	for _, c := range cat.News.Columns {
+		if c.Of == catalog.OfWorld {
+			return string(c.ID)
+		}
+	}
+	return ""
+}
 
 // lead is how long before a world's end the next world is loaded and the
 // simulation told its last tick: five minutes, or half the schedule's
@@ -310,7 +319,11 @@ func (p *process) lifecycleJobs() []jobs.Job {
 				if h == nil || !h.row.EndsAt.Add(-sc.Notice).Equal(due) {
 					return jobs.Result{Skipped: true, Detail: "the world's end has moved"}, nil
 				}
-				n := store.WorldNews{Column: newsColumn, Number: h.row.Number, Title: "THE WORLD", What: "falls", EndsAt: h.row.EndsAt}
+				column := worldColumn(p.cat)
+				if column == "" {
+					return jobs.Result{Skipped: true, Detail: "the news has no column for the world"}, nil
+				}
+				n := store.WorldNews{Column: column, Number: h.row.Number, Title: "THE WORLD", What: "falls", EndsAt: h.row.EndsAt}
 				if b := h.ready.bundle; len(b.Islands) > 0 {
 					port := b.MainPort()
 					n.Title, n.X, n.Y = strings.ToUpper(port.Name), port.X, port.Y
@@ -570,4 +583,3 @@ func websiteOf(playOrigin string) string {
 	}
 	return "https://" + rest
 }
-

@@ -18,6 +18,16 @@ world:
   edge:
     fall: 5 # s
     clear: 20 # m back out of the mist band
+    # The world's end, staged by the world clock on every phone at once:
+    # the falls heard and the mist closing in from sound and mist seconds
+    # before; the near sea's tiles breaking off and falling from tiles
+    # seconds before; the boat over at the end; then the new world rising
+    # out of the mist over rise seconds.
+    end:
+      sound: 60
+      mist: 60
+      tiles: 20
+      rise: 4
     # The mist: a density that rises linearly across the band from the
     # clear air's to the lip's, whose visual range is range, and falls off
     # with height as e^(−z / height). Beyond the lip it is the lip's at
