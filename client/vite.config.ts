@@ -66,6 +66,10 @@ const devWorlds: Plugin = {
 
 export default defineConfig({
   server,
+  // The net worker's packages, bundled for the development server from the
+  // start: found only when a page first starts the worker, they would be
+  // bundled then, and every page open at that moment reloaded.
+  optimizeDeps: { include: ['@bufbuild/protobuf', '@bufbuild/protobuf/codegenv2'] },
   build: {
     // three.js with its WebGPU renderer is most of the game's first chunk;
     // its size is reported by build/size.ts against the 4 MB critical set.

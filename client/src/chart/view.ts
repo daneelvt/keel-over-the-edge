@@ -159,6 +159,8 @@ export class ChartView {
   #labelLayer: HTMLElement | null = null;
   readonly #labels = new Map<string, Label>();
   readonly #loaded = new Map<string, IslandModel>();
+  /** The models asked for and not yet had. */
+  readonly #asked = new Set<string>();
   #built = -1;
   #buildWanted = true;
   #dirty = true;
@@ -366,6 +368,7 @@ export class ChartView {
       }
       this.#labels.clear();
       this.#loaded.clear();
+      this.#asked.clear();
       this.#built = -1;
       this.#buildWanted = true;
     }
@@ -416,15 +419,26 @@ export class ChartView {
   /** Asks for each charted island's model. */
   #fetchModels(): void {
     for (const e of this.#store.entries) {
-      if (e.subject !== 'island' || e.model === '' || this.#loaded.has(e.model)) {
+      if (
+        e.subject !== 'island' ||
+        e.model === '' ||
+        this.#loaded.has(e.model) ||
+        this.#asked.has(e.model)
+      ) {
         continue;
       }
       const address = e.model;
+      this.#asked.add(address);
       void this.#models.get(address).then((m) => {
+        this.#asked.delete(address);
         // Kept only while the chart still has it: not another world's.
         const still = this.#store.entries.some((o) => o.model === address);
-        if (m !== null && still && !this.#loaded.has(address)) {
+        if (m !== null && still) {
           this.#loaded.set(address, m);
+        }
+        // Built once every model asked for has come, not once a model: the
+        // paper is painted again and sent to the GPU each time.
+        if (this.#asked.size === 0) {
           this.#buildWanted = true;
           this.#dirty = true;
         }
