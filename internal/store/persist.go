@@ -30,6 +30,7 @@ const (
 	EventBump     = "bump"     // it touched another boat, after being apart
 	EventOver     = "over"     // it went over the lip of the falls
 	EventApproach = "approach" // its voyage ended with an approach to the lip survived
+	EventTaken    = "taken"    // it was afloat when the falls took the world
 )
 
 // Whose fault a bump was.
@@ -43,10 +44,10 @@ const (
 // the rest of it is the other boat, the Article that judged it, whether
 // anyone was at fault, and where they touched. Going over is where the
 // boat crossed the lip; an approach is the voyage's least distance inside
-// the lip, and where.
+// the lip, and where; a boat taken is where it was when its world ended.
 type Event struct {
 	Tick    int64
-	Kind    string // EventLaunched, EventReturned, EventExpired, EventBump, EventOver or EventApproach
+	Kind    string // EventLaunched, EventReturned, EventExpired, EventBump, EventOver, EventApproach or EventTaken
 	Account [16]byte
 	Boat    uint64
 
@@ -157,7 +158,7 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 					r.X = pgtype.Float8{Float64: e.X, Valid: true}
 					r.Y = pgtype.Float8{Float64: e.Y, Valid: true}
 				}
-				if e.Kind == EventOver || e.Kind == EventApproach {
+				if e.Kind == EventOver || e.Kind == EventApproach || e.Kind == EventTaken {
 					r := &rows[i]
 					r.X = pgtype.Float8{Float64: e.X, Valid: true}
 					r.Y = pgtype.Float8{Float64: e.Y, Valid: true}

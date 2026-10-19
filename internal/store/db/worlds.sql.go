@@ -12,6 +12,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const activateNextWorld = `-- name: ActivateNextWorld :one
+UPDATE world SET state = 'active', epoch = $1, begins_at = $1, ends_at = $2
+WHERE id = $3 AND state = 'next'
+RETURNING id, number, epoch
+`
+
+type ActivateNextWorldParams struct {
+	BeginsAt time.Time
+	EndsAt   pgtype.Timestamptz
+	ID       pgtype.UUID
+}
+
+type ActivateNextWorldRow struct {
+	ID     pgtype.UUID
+	Number int32
+	Epoch  time.Time
+}
+
+func (q *Queries) ActivateNextWorld(ctx context.Context, arg ActivateNextWorldParams) (ActivateNextWorldRow, error) {
+	row := q.db.QueryRow(ctx, activateNextWorld, arg.BeginsAt, arg.EndsAt, arg.ID)
+	var i ActivateNextWorldRow
+	err := row.Scan(&i.ID, &i.Number, &i.Epoch)
+	return i, err
+}
+
 const activeWorld = `-- name: ActiveWorld :one
 SELECT id, number, epoch FROM world WHERE state = 'active'
 `
@@ -49,12 +74,29 @@ func (q *Queries) CreateWorldPartitions(ctx context.Context, worldID pgtype.UUID
 	return err
 }
 
-const endWorld = `-- name: EndWorld :execrows
-UPDATE world SET state = 'ended' WHERE state = 'active' AND number = $1
+const deleteNextWorld = `-- name: DeleteNextWorld :execrows
+DELETE FROM world WHERE id = $1 AND state = 'next'
 `
 
-func (q *Queries) EndWorld(ctx context.Context, number int32) (int64, error) {
-	result, err := q.db.Exec(ctx, endWorld, number)
+func (q *Queries) DeleteNextWorld(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteNextWorld, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const endActiveWorld = `-- name: EndActiveWorld :execrows
+UPDATE world SET state = 'ended', ends_at = $1 WHERE state = 'active' AND number = $2
+`
+
+type EndActiveWorldParams struct {
+	EndsAt pgtype.Timestamptz
+	Number int32
+}
+
+func (q *Queries) EndActiveWorld(ctx context.Context, arg EndActiveWorldParams) (int64, error) {
+	result, err := q.db.Exec(ctx, endActiveWorld, arg.EndsAt, arg.Number)
 	if err != nil {
 		return 0, err
 	}
@@ -121,6 +163,31 @@ type InsertLightsParams struct {
 	Daymark   int16
 }
 
+const insertNextWorld = `-- name: InsertNextWorld :one
+INSERT INTO world (number, epoch, state, seed, generator)
+VALUES ((SELECT coalesce(max(number), 0) + 1 FROM world), $1, 'next', $2, $3)
+RETURNING id, number, epoch
+`
+
+type InsertNextWorldParams struct {
+	Epoch     time.Time
+	Seed      pgtype.Int8
+	Generator pgtype.Int4
+}
+
+type InsertNextWorldRow struct {
+	ID     pgtype.UUID
+	Number int32
+	Epoch  time.Time
+}
+
+func (q *Queries) InsertNextWorld(ctx context.Context, arg InsertNextWorldParams) (InsertNextWorldRow, error) {
+	row := q.db.QueryRow(ctx, insertNextWorld, arg.Epoch, arg.Seed, arg.Generator)
+	var i InsertNextWorldRow
+	err := row.Scan(&i.ID, &i.Number, &i.Epoch)
+	return i, err
+}
+
 type InsertPlacesParams struct {
 	WorldID pgtype.UUID
 	Number  int32
@@ -137,8 +204,8 @@ type InsertPlacesParams struct {
 }
 
 const insertWorld = `-- name: InsertWorld :one
-INSERT INTO world (number, epoch, state)
-VALUES ((SELECT coalesce(max(number), 0) + 1 FROM world), $1, 'active')
+INSERT INTO world (number, epoch, state, begins_at)
+VALUES ((SELECT coalesce(max(number), 0) + 1 FROM world), $1, 'active', now())
 RETURNING id, number, epoch
 `
 
@@ -153,6 +220,94 @@ func (q *Queries) InsertWorld(ctx context.Context, epoch time.Time) (InsertWorld
 	var i InsertWorldRow
 	err := row.Scan(&i.ID, &i.Number, &i.Epoch)
 	return i, err
+}
+
+const markWorldDropped = `-- name: MarkWorldDropped :execrows
+UPDATE world SET state = 'dropped' WHERE id = $1 AND state = 'ended'
+`
+
+func (q *Queries) MarkWorldDropped(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, markWorldDropped, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const nextWorld = `-- name: NextWorld :one
+SELECT w.id, w.number, w.seed, w.created_at,
+  (b.world_id IS NOT NULL)::boolean AS stored, b.attempts, b.generation_ms, b.made, b.created_at AS stored_at
+FROM world w LEFT JOIN world_bundle b ON b.world_id = w.id
+WHERE w.state = 'next'
+`
+
+type NextWorldRow struct {
+	ID           pgtype.UUID
+	Number       int32
+	Seed         pgtype.Int8
+	CreatedAt    time.Time
+	Stored       bool
+	Attempts     pgtype.Int4
+	GenerationMs pgtype.Int4
+	Made         pgtype.Int8
+	StoredAt     pgtype.Timestamptz
+}
+
+func (q *Queries) NextWorld(ctx context.Context) (NextWorldRow, error) {
+	row := q.db.QueryRow(ctx, nextWorld)
+	var i NextWorldRow
+	err := row.Scan(
+		&i.ID,
+		&i.Number,
+		&i.Seed,
+		&i.CreatedAt,
+		&i.Stored,
+		&i.Attempts,
+		&i.GenerationMs,
+		&i.Made,
+		&i.StoredAt,
+	)
+	return i, err
+}
+
+const recentWorlds = `-- name: RecentWorlds :many
+SELECT number, state, seed, begins_at, ends_at, created_at FROM world ORDER BY number DESC LIMIT $1
+`
+
+type RecentWorldsRow struct {
+	Number    int32
+	State     string
+	Seed      pgtype.Int8
+	BeginsAt  pgtype.Timestamptz
+	EndsAt    pgtype.Timestamptz
+	CreatedAt time.Time
+}
+
+func (q *Queries) RecentWorlds(ctx context.Context, lim int32) ([]RecentWorldsRow, error) {
+	rows, err := q.db.Query(ctx, recentWorlds, lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RecentWorldsRow
+	for rows.Next() {
+		var i RecentWorldsRow
+		if err := rows.Scan(
+			&i.Number,
+			&i.State,
+			&i.Seed,
+			&i.BeginsAt,
+			&i.EndsAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setChunkKey = `-- name: SetChunkKey :execrows
@@ -171,6 +326,23 @@ type SetChunkKeyParams struct {
 // the simulation's lease.
 func (q *Queries) SetChunkKey(ctx context.Context, arg SetChunkKeyParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setChunkKey, arg.ChunkKey, arg.WorldID, arg.Epoch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setWorldEnd = `-- name: SetWorldEnd :execrows
+UPDATE world SET ends_at = $1 WHERE id = $2 AND state = 'active'
+`
+
+type SetWorldEndParams struct {
+	EndsAt pgtype.Timestamptz
+	ID     pgtype.UUID
+}
+
+func (q *Queries) SetWorldEnd(ctx context.Context, arg SetWorldEndParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setWorldEnd, arg.EndsAt, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -370,4 +542,58 @@ func (q *Queries) WorldSeed(ctx context.Context, worldID pgtype.UUID) (WorldSeed
 	var i WorldSeedRow
 	err := row.Scan(&i.Seed, &i.Generator)
 	return i, err
+}
+
+const worldTimes = `-- name: WorldTimes :one
+SELECT id, number, epoch, begins_at, ends_at FROM world WHERE state = 'active'
+`
+
+type WorldTimesRow struct {
+	ID       pgtype.UUID
+	Number   int32
+	Epoch    time.Time
+	BeginsAt pgtype.Timestamptz
+	EndsAt   pgtype.Timestamptz
+}
+
+func (q *Queries) WorldTimes(ctx context.Context) (WorldTimesRow, error) {
+	row := q.db.QueryRow(ctx, worldTimes)
+	var i WorldTimesRow
+	err := row.Scan(
+		&i.ID,
+		&i.Number,
+		&i.Epoch,
+		&i.BeginsAt,
+		&i.EndsAt,
+	)
+	return i, err
+}
+
+const worldsToDrop = `-- name: WorldsToDrop :many
+SELECT id, number FROM world WHERE state = 'ended' AND ends_at < $1 ORDER BY number
+`
+
+type WorldsToDropRow struct {
+	ID     pgtype.UUID
+	Number int32
+}
+
+func (q *Queries) WorldsToDrop(ctx context.Context, before pgtype.Timestamptz) ([]WorldsToDropRow, error) {
+	rows, err := q.db.Query(ctx, worldsToDrop, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorldsToDropRow
+	for rows.Next() {
+		var i WorldsToDropRow
+		if err := rows.Scan(&i.ID, &i.Number); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

@@ -261,14 +261,11 @@ func TestPersistenceTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	before, err := s.ActiveOrFirstWorld(ctx, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := storetest.PoolOn(t, u)
+	before := oldWorld(t, pool)
 	if _, err := store.Migrate(ctx, u, 0); err != nil {
 		t.Fatal(err)
 	}
-	pool := storetest.PoolOn(t, u)
 	checkPartitioned(t, pool)
 	must(t, pool, "UPDATE world SET state = 'ended'")
 	after, err := s.CreateWorld(ctx, time.Now())
@@ -324,16 +321,8 @@ func TestEdgeEvents(t *testing.T) {
 	if _, err := store.Migrate(ctx, u, 6); err != nil {
 		t.Fatal(err)
 	}
-	s, err := store.Open(ctx, u, store.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	w, err := s.ActiveOrFirstWorld(ctx, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
 	pool := storetest.PoolOn(t, u)
+	w := oldWorld(t, pool)
 	must(t, pool, "INSERT INTO event (world_id, tick, kind, account_id, boat) VALUES ($1, 1, 'launched', $2, 1)", w.ID, [16]byte{1})
 	must(t, pool, `INSERT INTO event (world_id, tick, kind, account_id, boat, other_account_id, other_boat, article, fault, x, y)
 		VALUES ($1, 2, 'bump', $2, 1, $3, 2, '16.1', 'account', 1.5, -2)`, w.ID, [16]byte{1}, [16]byte{2})
@@ -379,4 +368,17 @@ func TestToolsColumn(t *testing.T) {
 	must(t, pool, "UPDATE account SET tools = true WHERE id = $1", human)
 	refused(t, exec(t, pool, "UPDATE account SET tools = true WHERE id = $1", ai), "23514")
 	refused(t, exec(t, pool, "UPDATE account SET tools = NULL WHERE id = $1", human), "23502")
+}
+
+// oldWorld makes the first world as the builds before a world's beginning
+// and end were kept made it, on a database migrated as far as theirs.
+func oldWorld(t *testing.T, pool *pgxpool.Pool) store.World {
+	t.Helper()
+	var w store.World
+	if err := pool.QueryRow(context.Background(), `INSERT INTO world (number, epoch, state) VALUES (1, now(), 'active') RETURNING id, number, epoch`).
+		Scan(&w.ID, &w.Number, &w.Epoch); err != nil {
+		t.Fatal(err)
+	}
+	must(t, pool, "SELECT create_world_partitions($1)", w.ID)
+	return w
 }

@@ -124,19 +124,16 @@ func TestBundleMigration(t *testing.T) {
 	if _, err := store.Migrate(ctx, u, 4); err != nil {
 		t.Fatal(err)
 	}
+	pool := storetest.PoolOn(t, u)
+	w := oldWorld(t, pool)
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
+		t.Fatal(err)
+	}
 	s, err := store.Open(ctx, u, store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	w, err := s.ActiveOrFirstWorld(ctx, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.Migrate(ctx, u, 0); err != nil {
-		t.Fatal(err)
-	}
-	pool := storetest.PoolOn(t, u)
 	checkPartitioned(t, pool)
 	// The existing world has its partitions, and no seed until it is made.
 	for _, table := range []string{"world_bundle_w1", "world_chunk_w1", "place_w1", "light_w1"} {

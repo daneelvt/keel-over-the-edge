@@ -189,8 +189,38 @@ func (q *Queries) InsertNews(ctx context.Context, arg InsertNewsParams) error {
 	return err
 }
 
+const insertWorldNews = `-- name: InsertWorldNews :exec
+INSERT INTO news_item (world_id, news_column, subject, number, title, what, worth, x, y, ends_at)
+VALUES ($1, $2, 'world', $3, $4, $5, 0, $6, $7, $8)
+`
+
+type InsertWorldNewsParams struct {
+	WorldID    pgtype.UUID
+	NewsColumn string
+	Number     int32
+	Title      string
+	What       string
+	X          float64
+	Y          float64
+	EndsAt     pgtype.Timestamptz
+}
+
+func (q *Queries) InsertWorldNews(ctx context.Context, arg InsertWorldNewsParams) error {
+	_, err := q.db.Exec(ctx, insertWorldNews,
+		arg.WorldID,
+		arg.NewsColumn,
+		arg.Number,
+		arg.Title,
+		arg.What,
+		arg.X,
+		arg.Y,
+		arg.EndsAt,
+	)
+	return err
+}
+
 const news = `-- name: News :many
-SELECT id, news_column, sailor, account_kind, subject, number, title, what, worth, x, y, also, written_at
+SELECT id, news_column, sailor, account_kind, subject, number, title, what, worth, x, y, also, written_at, ends_at
 FROM news_item
 WHERE world_id = $1 AND ($2::uuid IS NULL OR id < $2::uuid)
 ORDER BY id DESC
@@ -217,6 +247,7 @@ type NewsRow struct {
 	Y           float64
 	Also        []byte
 	WrittenAt   time.Time
+	EndsAt      pgtype.Timestamptz
 }
 
 func (q *Queries) News(ctx context.Context, arg NewsParams) ([]NewsRow, error) {
@@ -242,6 +273,7 @@ func (q *Queries) News(ctx context.Context, arg NewsParams) ([]NewsRow, error) {
 			&i.Y,
 			&i.Also,
 			&i.WrittenAt,
+			&i.EndsAt,
 		); err != nil {
 			return nil, err
 		}
