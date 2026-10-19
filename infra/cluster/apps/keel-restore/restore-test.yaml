@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# keel restore-test, Tuesdays at 21:00 UTC, from the game's own image: it
+# keel restore-test, Tuesdays at 09:00 UTC, from the game's own image: it
 # makes the Cluster keel-restore-check, recovered from the live archive,
 # waits for it, checks it and deletes it, in an hour at most. Its service
 # account may make, read and delete Clusters here, and read the two Secrets
@@ -41,7 +41,7 @@ kind: CronJob
 metadata:
   name: keel-restore-test
 spec:
-  schedule: "0 21 * * 2"
+  schedule: "0 9 * * 2"
   timeZone: Etc/UTC
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 2

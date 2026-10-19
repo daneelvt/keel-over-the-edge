@@ -1226,6 +1226,31 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return game.sound.state;
     },
 
+    /**
+     * The world's end as this page sees it: the world of the latest
+     * Welcome, its end, ms of UTC, the world clock's now as UTC, the
+     * countdown shown, and the staged end at the last frame.
+     */
+    ending() {
+      const o = sailing.online;
+      if (o === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      const s = world.endStage;
+      return {
+        world: o.world,
+        ends: o.endsMs,
+        now: o.utcMs(),
+        falls: document.querySelector('[data-readout="falls"]')?.textContent ?? '',
+        stage: {
+          sound: s.sound,
+          mist: s.mist,
+          cut: Number.isFinite(s.cut) ? s.cut : -1,
+          veil: s.veil,
+        },
+      };
+    },
+
     /** The game connection: where it stands and what prediction has seen. */
     net() {
       const o = sailing.online;
@@ -2214,6 +2239,36 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
       setSky(world.skyTime, { hour, moon }, world.ticks);
       hooks.render();
+    },
+
+    /**
+     * Stages the world's end as it is seconds before it (negative: after),
+     * or as nothing with null; or, with rising, the new world risen that
+     * many seconds after its Welcome. Then a frame.
+     */
+    worldEnd(
+      seconds: number | null,
+      rising: number | null = null,
+    ): {
+      sound: number;
+      mist: number;
+      cut: number | null;
+      veil: number;
+      slabs: number;
+    } {
+      world.endIn = seconds === null ? null : () => seconds;
+      if (rising !== null) {
+        world.rise(rising);
+      }
+      hooks.render();
+      const s = world.endStage;
+      return {
+        sound: s.sound,
+        mist: s.mist,
+        cut: Number.isFinite(s.cut) ? s.cut : null,
+        veil: s.veil,
+        slabs: world.endSlabs.count,
+      };
     },
 
     /** The sky as last drawn: by the rule at the boat, and as the light's table reads it. */

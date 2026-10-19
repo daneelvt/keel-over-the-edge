@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The world's life's alerts (apps/keel/rules.yaml, group world): the next
+# world not made in time, and a job that keeps failing. go test runs them
+# with vmalert-tool unittest, against the rules as production renders them.
+evaluation_interval: 1m
+tests:
+  - name: the next world is stored in time
+    interval: 1m
+    input_series:
+      # The world ends 4 hours after the series begin, which vmalert-tool
+      # starts at midnight UTC on 1 January 2000.
+      - series: keel_world_ends_timestamp_seconds
+        values: 946699200x30
+      - series: keel_world_next_ready
+        values: 1x30
+    alert_rule_test:
+      - eval_time: 20m
+        groupname: world
+        alertname: WorldNextNotReady
+        exp_alerts: []
+
+  - name: the next world is not stored six hours before the end
+    interval: 1m
+    input_series:
+      - series: keel_world_ends_timestamp_seconds
+        values: 946699200x30
+      - series: keel_world_next_ready
+        values: 0x30
+    alert_rule_test:
+      - eval_time: 3m
+        groupname: world
+        alertname: WorldNextNotReady
+        exp_alerts: []
+      - eval_time: 10m
+        groupname: world
+        alertname: WorldNextNotReady
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: game
+              summary: "The next world is not made six hours before the world's end."
+            exp_annotations:
+              description: "The world ends in 3h 50m 0s and its successor is not stored: the switch would make it then, late. Look at the next-world job's runs on the world page and at keel's logs."
+
+  - name: a job fails, then succeeds on its retry
+    interval: 5m
+    input_series:
+      - series: keel_job_runs_total{name="next-world", outcome="failed"}
+        values: 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+      - series: keel_job_runs_total{name="next-world", outcome="ok"}
+        values: 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1
+    alert_rule_test:
+      - eval_time: 60m
+        groupname: world
+        alertname: JobFailing
+        exp_alerts: []
+
+  - name: a job keeps failing
+    interval: 5m
+    input_series:
+      - series: keel_job_runs_total{name="worlds", outcome="failed"}
+        values: 0+1x30
+      - series: keel_job_runs_total{name="worlds", outcome="ok"}
+        values: 0x30
+    alert_rule_test:
+      - eval_time: 20m
+        groupname: world
+        alertname: JobFailing
+        exp_alerts: []
+      - eval_time: 70m
+        groupname: world
+        alertname: JobFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: game
+              name: worlds
+              summary: "One of keel's jobs keeps failing."
+            exp_annotations:
+              description: "The job worlds has failed for half an hour without a run that succeeded. Its runs, and why each failed, are on the world page."

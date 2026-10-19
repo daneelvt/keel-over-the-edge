@@ -17,6 +17,7 @@ import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
 import { ChartScreen, type ChartSea, NoticeLine, PocketChart } from './chart';
 import { Helm, Sheet } from './controls';
+import type { Countdown } from './countdown';
 import { Menu } from './menu';
 import type { HudModel } from './model';
 import type { Notices } from './notices';
@@ -101,6 +102,30 @@ function Instruments({ model }: { model: HudModel }) {
   );
 }
 
+/**
+ * The countdown to the world's end, always shown under the instruments, in
+ * amber in the world's last days: a timer, which a screen reader does not
+ * read as it counts, the last minute announced once.
+ */
+export function FallsLine({ end }: { end: Countdown }) {
+  const text = end.text.value;
+  if (text === '') {
+    return null;
+  }
+  return (
+    <p class={`panel falls-line${end.closing.value ? ' closing' : ''}`} data-readout="falls">
+      <span role="timer" aria-label={`The falls take this world in ${text}`}>
+        Falls in {text}
+      </span>
+      {end.last.value !== '' ? (
+        <span class="visually-hidden" role="status">
+          {end.last.value}
+        </span>
+      ) : null}
+    </p>
+  );
+}
+
 function BumpLine({ model }: { model: HudModel }) {
   const text = model.bump.value;
   return text === '' ? null : (
@@ -163,6 +188,8 @@ export interface ScreenProps {
   sea?: ChartSea | null;
   /** The notices. */
   notices?: Notices | null;
+  /** The countdown to the world's end; null in the offline sandbox. */
+  end?: Countdown | null;
 }
 
 /** The free camera as the screen sees it. */
@@ -184,11 +211,12 @@ function Screen(props: ScreenProps) {
   const fly = props.fly ?? null;
   const sea = props.sea ?? null;
   const notices = props.notices ?? null;
+  const end = props.end ?? null;
   if (sea?.chart.open.value) {
     // The chart covers the screen; the boat sails on under it.
     return (
       <>
-        <ChartScreen sea={sea} />
+        <ChartScreen sea={sea} end={end} />
         {notices !== null ? (
           <div class="hud-notices">
             <NoticeLine notices={notices} />
@@ -215,13 +243,14 @@ function Screen(props: ScreenProps) {
       <div class="overlay-labels" ref={props.labels} aria-hidden="true" />
       <div class="hud-top">
         <Instruments model={model} />
+        {end !== null ? <FallsLine end={end} /> : null}
         <SailorLine model={model} />
         <BumpLine model={model} />
         {notices !== null ? <NoticeLine notices={notices} /> : null}
         {props.connection !== null ? <ConnectionLine view={props.connection} /> : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
       </div>
-      {sea !== null ? <PocketChart sea={sea} /> : null}
+      {sea !== null ? <PocketChart sea={sea} end={end} /> : null}
       <button
         type="button"
         class="round menu-button"
@@ -238,6 +267,7 @@ function Screen(props: ScreenProps) {
           connection={props.connection}
           close={() => setMenu(false)}
           notices={notices}
+          end={end}
           chart={
             sea === null
               ? null

@@ -68,6 +68,7 @@ import {
 } from '../sandbox/sandbox';
 import { sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { serverNews } from '../ui/chart';
+import { Countdown, EndNotices, localShown } from '../ui/countdown';
 import { mountScreen } from '../ui/hud';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
@@ -264,11 +265,13 @@ async function start(): Promise<void> {
   game.canFly = () => online.tools.value;
   game.onRoam = (on, east, north, height) => online.roam(on, east, north, height);
   let worldId = '';
+  const models = new Models();
   online.onWorld = (id, sailed) => {
     if (id !== worldId) {
-      // Another world: its places and lights are its own.
+      // Another world: its places, lights and islands' models are its own.
       world.lighthouses.clear();
       world.wrecks.clear();
+      models.clear();
       worldId = id;
     }
     land.setWorld(id, sailed, sailed ? predictor.physics : null);
@@ -281,11 +284,41 @@ async function start(): Promise<void> {
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
   // The world's chart, as the server tells of it; the notices it raises,
   // switched off as the account has them.
-  const parts = makeChart(world, new Models(), serverNews);
+  const parts = makeChart(world, models, serverNews);
   parts.chart.store.me = me.name;
   parts.notices.off.value = new Set(me.noticesOff ?? []);
   parts.notices.save = (off) => saveNoticesOff(off);
   online.onChart = (entries, whole) => parts.chart.store.receive(entries, whole);
+  // The countdown to the world's end, by the world clock, and the notices
+  // of the world's life, worked out here from the end each Welcome tells.
+  const countdown = new Countdown(() => online.utcMs());
+  const endNotices = new EndNotices(
+    countdown,
+    catalog.notices.kinds,
+    localShown(),
+    (on, fill, now) => parts.notices.raise(on, fill, now),
+  );
+  online.onEnd = (e) => {
+    // A new world after the old one's end rises out of the mist.
+    const was = countdown.end.value;
+    if (was !== null && was.world !== e.world && countdown.left <= 0) {
+      world.rise();
+    }
+    countdown.setEnd(e);
+    endNotices.welcome(performance.now());
+  };
+  // The staged end, by the world clock, the same on every page.
+  world.endIn = () => {
+    const e = countdown.end.value;
+    const now = online.utcMs();
+    return e === null || e.ends === 0 || Number.isNaN(now)
+      ? Number.POSITIVE_INFINITY
+      : (e.ends - now) / 1000;
+  };
+  setInterval(() => {
+    countdown.tick();
+    endNotices.tick(performance.now());
+  }, 250);
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
   // while the sea is full.
@@ -319,6 +352,7 @@ async function start(): Promise<void> {
     },
     sea: parts.sea,
     notices: parts.notices,
+    end: countdown,
   });
   game.listen(document, container);
   if (view !== undefined) {

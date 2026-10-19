@@ -41,11 +41,26 @@ func (e *Edge) closeDoor() []*conn {
 // without its handshake, as its client's own check of the connection would
 // drop it soon anyway. It returns ctx's error if any had to be dropped.
 func (e *Edge) Shutdown(ctx context.Context) error {
+	return e.shutdown(ctx, websocket.StatusServiceRestart, "the server is restarting")
+}
+
+// WorldEnded closes every game connection with 4004, the world having
+// ended, and from then on answers a new one with 1013, to try again in a
+// moment, when the next world's edge will take it; then it waits for them
+// as Shutdown does.
+func (e *Edge) WorldEnded(ctx context.Context) error {
+	e.mu.Lock()
+	e.ended = true
+	e.mu.Unlock()
+	return e.shutdown(ctx, CloseWorldEnded, "the falls have taken the world")
+}
+
+func (e *Edge) shutdown(ctx context.Context, code websocket.StatusCode, reason string) error {
 	open := e.closeDoor()
 	for _, c := range open {
 		// After the bell, if it is still queued: closed at once, the
 		// bell could be lost behind the close.
-		c.closeAfterQueued(websocket.StatusServiceRestart, "the server is restarting")
+		c.closeAfterQueued(code, reason)
 	}
 	done := make(chan struct{})
 	go func() {

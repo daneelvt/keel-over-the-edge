@@ -3,8 +3,9 @@
 // What the world page reads and asks of keel's internal listener, under
 // /owner/api/, beside the page itself: the world as it is now (once a
 // second), the gusts' grid, the islands, the places and lights, the
-// current and the land, once a world; and the controls, each a POST of
-// JSON.
+// current and the land, once a world; the world's life, every few
+// seconds, and the next world's terrain under next/ once it is made; and
+// the controls, each a POST of JSON.
 
 /** A boat at sea, as the page shows it. */
 export interface Boat {
@@ -275,6 +276,53 @@ export interface Point {
   water: string;
 }
 
+/** A run of one of keel's jobs about the world's life. Times are ms of UTC, 0 for none. */
+export interface JobRun {
+  /** next-world, closing, switch, sessions or worlds. */
+  job: string;
+  due: number;
+  started: number;
+  /** 0 while it runs. */
+  finished: number;
+  outcome: 'ok' | 'failed' | 'skipped' | '';
+  detail: string;
+  attempts: number;
+}
+
+/** The next world: its number, its seed, when it was made and its terrain stored. */
+export interface NextWorld {
+  number: number;
+  /** A whole number to 2⁶⁴, so a string. */
+  seed: string;
+  created: number;
+  stored: boolean;
+  storedAt: number;
+  attempts: number;
+  generationMs: number;
+}
+
+/**
+ * lifecycle.json: the world's life. Times are ms of UTC, 0 for none; now is
+ * keel's clock, which the page counts by.
+ */
+export interface Lifecycle {
+  now: number;
+  schedule: string;
+  /** The schedule's zone, "" for a schedule of periods. */
+  zone: string;
+  world: number;
+  began: number;
+  ends: number;
+  closing: boolean;
+  closingFrom: number;
+  nextMadeAt: number;
+  /** The last moment the next world may be made again. */
+  remakeUntil: number;
+  switching: boolean;
+  next: NextWorld | null;
+  runs: JobRun[];
+}
+
 /** The gusts' grid: GUST_SIDE a side over the square of the land's chart, a signed byte a point. */
 export const GUST_STEP = 0.1;
 export const NO_GUST = -128;
@@ -310,11 +358,11 @@ export interface Answer {
   text: string;
 }
 
-/** Works a control: a POST of JSON. */
-export async function control(
-  path: 'flag' | 'place' | 'unseen' | 'world',
-  body: unknown,
-): Promise<Answer> {
+/** The controls, each under /owner/api/. */
+export type Control = 'flag' | 'place' | 'unseen' | 'world' | 'next';
+
+/** Works a control: a POST of JSON, done on any 2xx (202 for one under way). */
+export async function control(path: Control, body: unknown): Promise<Answer> {
   const res = await fetch(BASE + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

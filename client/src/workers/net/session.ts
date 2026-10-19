@@ -100,6 +100,8 @@ export class Session {
   #versions: Versions;
   readonly #header = newSnapshot();
   #welcomed = false;
+  /** The world of the last Welcome: a Welcome to another is a new world's. */
+  #world = '';
   /** Queued for a boat: Pings keep the connection alive. */
   #waiting = false;
   #ackTick = 0;
@@ -177,6 +179,10 @@ export class Session {
         }
         return { kind: 'queued', position: m.body.value.position, waiting: m.body.value.waiting };
       case 'welcome':
+        if (this.#world !== '' && m.body.value.world !== this.#world) {
+          this.clock.reset();
+        }
+        this.#world = m.body.value.world;
         this.clock.welcome(Number(m.body.value.worldTimeUs), now);
         this.#welcomed = true;
         this.#waiting = false;

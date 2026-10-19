@@ -135,14 +135,14 @@ export class Notices {
   }
 }
 
-/** Saves the switches on the account: PUT /api/me/notices. */
+/** Saves the switches on the account: POST /api/me/notices. */
 export async function saveNoticesOff(
   off: string[],
   fetcher: typeof fetch = fetch,
 ): Promise<boolean> {
   try {
     const res = await fetcher('/api/me/notices', {
-      method: 'PUT',
+      method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ off }),

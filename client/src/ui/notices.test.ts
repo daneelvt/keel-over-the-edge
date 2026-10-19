@@ -109,7 +109,7 @@ describe('the notices', () => {
     expect(saved).toEqual([['great'], []]);
   });
 
-  it('keeps the switches on the account: PUT /api/me/notices', async () => {
+  it('keeps the switches on the account: POST /api/me/notices', async () => {
     const calls: [string, RequestInit | undefined][] = [];
     const ok = await saveNoticesOff(['great'], (async (url: string, init?: RequestInit) => {
       calls.push([url, init]);
@@ -117,7 +117,7 @@ describe('the notices', () => {
     }) as typeof fetch);
     expect(ok).toBe(true);
     expect(calls[0]?.[0]).toBe('/api/me/notices');
-    expect(calls[0]?.[1]?.method).toBe('PUT');
+    expect(calls[0]?.[1]?.method).toBe('POST');
     expect(calls[0]?.[1]?.body).toBe('{"off":["great"]}');
   });
 });

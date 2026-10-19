@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # k3s upgraded by the system-upgrade controller, in its window alone:
-# Thursdays, 20:00 to 22:00 UTC. The version is infra/k3s/release.yaml's,
+# Thursdays, 08:00 to 10:00 UTC, the US night, before a world closes. The version is infra/k3s/release.yaml's,
 # and the upgrade image, which copies k3s's binary onto the machine, is
 # pinned by its digest (an image named with a tag or digest is used as
 # written: the controller's pkg/upgrade/container). A test keeps the three
@@ -27,8 +27,8 @@ spec:
       operator: Exists
   window:
     days: [thursday]
-    startTime: "20:00"
-    endTime: "22:00"
+    startTime: "08:00"
+    endTime: "10:00"
     timeZone: UTC
   upgrade:
     # renovate: image=rancher/k3s-upgrade versioning=regex:^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-k3s(?<build>\d+)$

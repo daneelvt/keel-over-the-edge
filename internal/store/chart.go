@@ -73,6 +73,32 @@ type News struct {
 	X, Y        float64
 	Also        []Folded
 	At          time.Time
+	// EndsAt is, for an item about the world itself, the world's end it
+	// tells of; zero for any other.
+	EndsAt time.Time
+}
+
+// SubjectWorld is a news item's subject when it is the world itself.
+const SubjectWorld = "world"
+
+// WorldNews is an item about the world: its end, in a column of its own.
+type WorldNews struct {
+	Column      string
+	Number      int // the world's
+	Title, What string
+	X, Y        float64 // where it is told of: the main port
+	EndsAt      time.Time
+}
+
+// WriteWorldNews writes an item about the world, fenced by the lease's
+// epoch.
+func (s *Store) WriteWorldNews(ctx context.Context, lease int64, world [16]byte, n WorldNews) error {
+	return s.fenced(ctx, lease, func(q *db.Queries) error {
+		return q.InsertWorldNews(ctx, db.InsertWorldNewsParams{
+			WorldID: pgtype.UUID{Bytes: world, Valid: true}, NewsColumn: n.Column, Number: int32(n.Number),
+			Title: n.Title, What: n.What, X: n.X, Y: n.Y, EndsAt: stamp(n.EndsAt),
+		})
+	})
 }
 
 // writeChartings writes a batch's chartings, in order, in its transaction,
@@ -164,6 +190,7 @@ func (s *Store) News(ctx context.Context, world [16]byte, before *[16]byte, limi
 		n := News{
 			ID: r.ID.Bytes, Column: r.NewsColumn, Sailor: r.Sailor.String, AccountKind: r.AccountKind.String,
 			Subject: r.Subject, Number: r.Number, Title: r.Title, What: r.What, Worth: r.Worth, X: r.X, Y: r.Y, At: r.WrittenAt,
+			EndsAt: timeOf(r.EndsAt),
 		}
 		if err := json.Unmarshal(r.Also, &n.Also); err != nil {
 			return nil, err

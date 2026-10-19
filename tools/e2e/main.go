@@ -14,8 +14,10 @@
 // Beside keel it runs the lag proxy (tools/lag) on 127.0.0.1:18090, in
 // front of keel's play listener, at -lag, for the browser tests of a slow
 // network, which reach it through a Vite of their own; and, on
-// 127.0.0.1:19099, POST /restart, which stops keel as a deployment does and
-// starts it again, for the tests of a restart (with no bell: KEEL_BELL=0s). WebKit sends a Secure cookie
+// 127.0.0.1:19099, POST /restart[?down=30s], which stops keel as a
+// deployment does and starts it again, after down if given, for the tests
+// of a restart (with no bell: KEEL_BELL=0s) and of a world's end missed
+// while keel was down. WebKit sends a Secure cookie
 // to https only, even on localhost, so its tests reach keel through a Vite
 // serving https with the certificate -tls writes.
 package main
@@ -153,7 +155,15 @@ func run() error {
 			http.NotFound(w, r)
 			return
 		}
-		if err := k.restart(); err != nil {
+		var down time.Duration
+		if d := r.URL.Query().Get("down"); d != "" {
+			var err error
+			if down, err = time.ParseDuration(d); err != nil || down < 0 || down > 5*time.Minute {
+				http.Error(w, "down: a duration to 5m", http.StatusBadRequest)
+				return
+			}
+		}
+		if err := k.restart(down); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -231,9 +241,11 @@ func (k *keelProc) stop() {
 	}
 }
 
-// restart stops keel and starts it again, and waits until it is ready.
-func (k *keelProc) restart() error {
+// restart stops keel and starts it again after down, and waits until it
+// is ready.
+func (k *keelProc) restart(down time.Duration) error {
 	k.stop()
+	time.Sleep(down)
 	if err := k.start(); err != nil {
 		return err
 	}

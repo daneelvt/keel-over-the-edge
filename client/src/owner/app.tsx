@@ -6,8 +6,11 @@
 // every phone shows it. It reads the world once a second, and not while
 // its tab is hidden. A click on the map picks a point: what is there is
 // told, and the owner's boats can be put there, or at a place. The page
-// acts on the owner's boats alone; the server refuses the rest. And the
-// owner may begin a new world, typing the world's number to end it.
+// acts on the owner's boats alone; the server refuses the rest. At the
+// top, always in view, the world's end counted down by keel's clock; the
+// owner may begin the next world now, typing the world's number to end it,
+// and look over the next world, drawn as the current is, on a tab of its
+// own, and make it again.
 
 import { render } from 'preact';
 import {
@@ -23,6 +26,7 @@ import { lightOn } from '../lights/character';
 import {
   type Boat,
   type ChartedData,
+  type Control,
   type Current,
   control,
   drawing,
@@ -31,6 +35,7 @@ import {
   getBytes,
   getJSON,
   type Island,
+  type Lifecycle,
   type Light,
   type LightCharacter,
   type Place,
@@ -49,15 +54,12 @@ import {
   type Layers,
   type MapData,
 } from './draw';
+import { hidden, serverOffset } from './life';
+import { BeginNext, type Life, LifecycleCard, RemakeNext, SwitchBar } from './lifecycle';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
 
 /** How often the page reads the world, ms. */
 export const EVERY = 1000;
-
-/** Whether the page's tab is hidden: it reads nothing then. */
-function hidden(): boolean {
-  return document.visibilityState === 'hidden';
-}
 
 function image(src: string, onload: () => void): HTMLImageElement {
   const img = new Image();
@@ -226,41 +228,6 @@ function WeatherCard({ now }: { now: WorldNow }) {
           ? `The next change begins in ${seconds(w.nextIn)}, at tick ${w.next}.`
           : 'No change in sight.'}
       </p>
-    </section>
-  );
-}
-
-/** Begins a new world: the world's number typed, then the control. */
-function NewWorld({
-  now,
-  act,
-}: {
-  now: WorldNow;
-  act: (path: 'world', body: unknown, what: string) => void;
-}) {
-  const [typed, setTyped] = useState('');
-  const n = now.world.number;
-  return (
-    <section class="card" aria-label="A new world">
-      <h2>Begin a new world</h2>
-      <p class="small">
-        Ends world {n} and begins world {n + 1}: keel stops and starts again in it, making its
-        terrain from a new seed. Every boat goes with the old world. Type {n} to end it.
-      </p>
-      <input
-        name="world-number"
-        inputMode="numeric"
-        value={typed}
-        onInput={(e) => setTyped(e.currentTarget.value)}
-      />{' '}
-      <button
-        type="button"
-        name="new-world"
-        disabled={typed !== String(n)}
-        onClick={() => act('world', { number: Number(typed) }, `world ${n + 1} begun`)}
-      >
-        Begin world {n + 1}
-      </button>
     </section>
   );
 }
@@ -506,63 +473,431 @@ function BoatRow({
 /** How often what is charted is read, ms. */
 const CHARTED_EVERY = 5000;
 
+/** How often the world's life is read, ms. */
+const LIFE_EVERY = 5000;
+
+/** The layers that are live, drawn of the world being sailed alone: none of them for the next world. */
+const LIVE: ReadonlySet<keyof Layers> = new Set(['gusts', 'wind', 'boats', 'charted']);
+
+/** What is drawn and listed of a world's terrain, the same for its life. */
+interface Drawn {
+  islands: Island[];
+  groups: Group[];
+  start: [number, number][];
+  current: Current | null;
+  places: PlacesData | null;
+  towns: Town[];
+  features: FeaturesData | null;
+  land: HTMLImageElement | null;
+  coasts: HTMLImageElement | null;
+  /** An island's drawing at the lattice's resolution, by number, once asked for. */
+  islandImages: Map<number, HTMLImageElement>;
+}
+
+function noDrawn(): Drawn {
+  return {
+    islands: [],
+    groups: [],
+    start: [],
+    current: null,
+    places: null,
+    towns: [],
+    features: null,
+    land: null,
+    coasts: null,
+    islandImages: new Map(),
+  };
+}
+
+/** A drawing's address under prefix, the key on it so that a drawing of another world is never kept. */
+function drawnAt(prefix: string, key: string, path: string): string {
+  return drawing(`${prefix}${path}?world=${encodeURIComponent(key)}`);
+}
+
+/**
+ * A world's terrain, read under prefix ("" for the current world's, "next/"
+ * for the next's) once for each key it is given, and none for a null key:
+ * a new key, for a new world or the next made again, reads it all again.
+ * An island in view is drawn at the lattice's resolution when zoomed into.
+ */
+function useDrawn(
+  prefix: string,
+  key: string | null,
+  view: View | null,
+  setError: (e: string) => void,
+): Drawn {
+  const [drawn, setDrawn] = useState<Drawn>(noDrawn);
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    if (key === null) {
+      setDrawn(noDrawn());
+      return;
+    }
+    let live = true;
+    const again = (): void => {
+      if (live) {
+        redraw((n) => n + 1);
+      }
+    };
+    const fail = (e: unknown): void => {
+      if (live) {
+        setError(String(e));
+      }
+    };
+    const set = (part: Partial<Drawn>): void => {
+      if (live) {
+        setDrawn((d) => ({ ...d, ...part }));
+      }
+    };
+    setDrawn({
+      ...noDrawn(),
+      land: image(drawnAt(prefix, key, 'land.png'), again),
+      coasts: image(drawnAt(prefix, key, 'coasts.svg'), again),
+    });
+    getJSON<{ islands: Island[]; groups: Group[]; start: [number, number][] }>(
+      `${prefix}islands.json`,
+    )
+      .then((d) => set({ islands: d.islands, groups: d.groups, start: d.start }))
+      .catch(fail);
+    getJSON<Current>(`${prefix}current.json`)
+      .then((current) => set({ current }))
+      .catch(fail);
+    getJSON<PlacesData>(`${prefix}places.json`)
+      .then((places) => set({ places }))
+      .catch(fail);
+    getJSON<TownsData>(`${prefix}towns.json`)
+      .then((d) => set({ towns: d.towns }))
+      .catch(fail);
+    getJSON<FeaturesData>(`${prefix}features.json`)
+      .then((features) => set({ features }))
+      .catch(fail);
+    return () => {
+      live = false;
+    };
+  }, [prefix, key, setError]);
+
+  useEffect(() => {
+    if (key === null || view === null || view.scale >= ISLAND_DETAIL) {
+      return;
+    }
+    const [w, n] = toWorld(view, 0, 0);
+    const [e, s] = toWorld(view, view.width, view.height);
+    for (const is of drawn.islands) {
+      const [bw, bs, be, bn] = is.bounds;
+      if (be < w || bw > e || bn < s || bs > n || drawn.islandImages.has(is.number)) {
+        continue;
+      }
+      drawn.islandImages.set(
+        is.number,
+        image(drawnAt(prefix, key, `island/${is.number}.svg`), () => redraw((c) => c + 1)),
+      );
+    }
+  }, [prefix, key, view, drawn.islands, drawn.islandImages]);
+  return drawn;
+}
+
+/** Centres a map on a point, at a scale if given. */
+type GoTo = (east: number, north: number, scale?: number) => void;
+
+/** Sails the owner's chosen boat to what is named; null when no boat of theirs is chosen. */
+type Sail = ((body: Record<string, number>, what: string) => void) | null;
+
+function IslandsCard({
+  islands,
+  groups,
+  features,
+  goTo,
+  pick,
+}: {
+  islands: Island[];
+  groups: Group[];
+  features: FeaturesData | null;
+  goTo: GoTo;
+  pick?: (east: number, north: number) => void;
+}) {
+  const featureName = new Map((features?.kinds ?? []).map((k) => [k.id, k.name]));
+  return (
+    <section class="card" aria-label="Islands">
+      <h2>Islands: {islands.length}</h2>
+      <ul class="islands">
+        {islands
+          .filter((is) => is.group < 0)
+          .sort((a, b) => b.score - a.score)
+          .map((is) => (
+            <li key={is.number}>
+              <button
+                type="button"
+                data-island={is.number}
+                onClick={() => {
+                  goTo(is.east, is.north, Math.max(0.5, is.across / 300));
+                  pick?.(is.approach[0], is.approach[1]);
+                }}
+              >
+                {is.number}. {is.name}
+              </button>{' '}
+              <span class="small">
+                {is.kind}, {is.biome}
+                {is.age !== undefined ? ` (${is.age})` : ''}, {is.size}, {is.highest.toFixed(0)} m;{' '}
+                <span data-field="class">
+                  class {is.class}, {is.score.toFixed(1)}
+                </span>
+                {is.features.length > 0
+                  ? `; ${is.features.map((k) => featureName.get(k) ?? k).join(', ')}`
+                  : ''}
+                {is.flora.length > 0 ? `; ${is.flora.join(', ')}` : ''}
+              </span>
+            </li>
+          ))}
+        {groups.map((g) => (
+          <li key={`g${g.number}`}>
+            <button type="button" onClick={() => goTo(g.east, g.north, 2)}>
+              {g.name}
+            </button>{' '}
+            <span class="small">{g.members.length} rocks</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function LightsCard({
+  places,
+  light,
+  choose,
+  clock,
+}: {
+  places: PlacesData | null;
+  light: number | null;
+  choose: (l: Light) => void;
+  /** The world's clock the lights flash by; none for a world not yet begun. */
+  clock?: { current: WorldClock };
+}) {
+  return (
+    <section class="card" aria-label="Lighthouses">
+      <h2>Lighthouses: {places?.lights.length ?? 0}</h2>
+      <ul class="lights">
+        {(places?.lights ?? []).map((l) => (
+          <li key={l.number} class={l.number === light ? 'chosen' : ''}>
+            {clock !== undefined ? (
+              <>
+                <Flash light={l} character={places?.characters[l.character]} clock={clock} />{' '}
+              </>
+            ) : null}
+            <button type="button" data-light={l.number} onClick={() => choose(l)}>
+              {l.name}
+            </button>{' '}
+            <span class="small" data-field="chart">
+              {l.chart}, {l.role}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function TownsCard({
+  towns,
+  plan,
+  goTo,
+  sail,
+}: {
+  towns: Town[];
+  /** A town's plan's address. */
+  plan: (number: number) => string;
+  goTo: GoTo;
+  sail: Sail;
+}) {
+  return (
+    <section class="card" aria-label="Towns">
+      <h2>Towns: {towns.length}</h2>
+      <ul class="towns">
+        {towns.map((t) => (
+          <li key={t.number}>
+            <button type="button" data-town={t.number} onClick={() => goTo(t.east, t.north, 2)}>
+              {t.name}
+            </button>{' '}
+            <span class="small">
+              {townWords(t)}{' '}
+              <a href={plan(t.number)} target="_blank" rel="noopener">
+                its plan
+              </a>
+            </span>
+            {sail !== null && t.harbour !== null ? (
+              <button
+                type="button"
+                class="small"
+                onClick={() => sail({ town: t.number }, `teleport to ${t.name}'s harbour`)}
+              >
+                sail there
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function FeaturesCard({
+  features,
+  islands,
+  goTo,
+  pick,
+  sail,
+}: {
+  features: FeaturesData | null;
+  islands: Island[];
+  goTo: GoTo;
+  pick?: (east: number, north: number) => void;
+  sail: Sail;
+}) {
+  const featureName = new Map((features?.kinds ?? []).map((k) => [k.id, k.name]));
+  const islandName = new Map(islands.map((is) => [is.number, is.name]));
+  return (
+    <section class="card" aria-label="Features">
+      <h2>Features: {features?.features.length ?? 0}</h2>
+      <ul class="features">
+        {(features?.features ?? []).map((f) => (
+          <li key={f.number}>
+            <button
+              type="button"
+              data-feature={f.number}
+              onClick={() => {
+                goTo(f.east, f.north, 1);
+                if (f.approach !== null) {
+                  pick?.(f.approach[0], f.approach[1]);
+                }
+              }}
+            >
+              {featureName.get(f.kind) ?? f.kind}
+            </button>{' '}
+            <span class="small">
+              {islandName.get(f.island) ?? f.island}, {f.height.toFixed(0)} m
+              {f.seen ? '' : ', not seen from the water'}
+            </span>
+            {sail !== null && f.approach !== null ? (
+              <button
+                type="button"
+                class="small"
+                onClick={() =>
+                  sail(
+                    { feature: f.number },
+                    `teleport to see the ${featureName.get(f.kind) ?? f.kind}`,
+                  )
+                }
+              >
+                sail there
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function PlacesCard({
+  places,
+  goTo,
+  pick,
+  sail,
+}: {
+  places: PlacesData | null;
+  goTo: GoTo;
+  pick?: (east: number, north: number) => void;
+  sail: Sail;
+}) {
+  const kindName = new Map((places?.kinds ?? []).map((k) => [k.id, k.name]));
+  const lightSite = new Set(
+    (places?.kinds ?? []).filter((k) => k.site === 'light').map((k) => k.id),
+  );
+  const shown = (places?.places ?? []).filter((p) => !lightSite.has(p.kind));
+  return (
+    <section class="card" aria-label="Places">
+      <h2>Places: {shown.length}</h2>
+      <ul class="places">
+        {shown.map((p) => (
+          <li key={p.number}>
+            <button
+              type="button"
+              data-place={p.number}
+              onClick={() => {
+                goTo(p.east, p.north, 1);
+                if (p.approach !== null) {
+                  pick?.(p.approach[0], p.approach[1]);
+                }
+              }}
+            >
+              {p.name}
+            </button>{' '}
+            <span class="small">
+              {kindName.get(p.kind) ?? p.kind}: {placeWords(p)}
+            </span>
+            {sail !== null && p.approach !== null ? (
+              <button
+                type="button"
+                class="small"
+                onClick={() => sail({ place: p.number }, `teleport to ${p.name}`)}
+              >
+                sail there
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function App() {
   const [now, setNow] = useState<WorldNow | null>(null);
-  const [islands, setIslands] = useState<Island[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [start, setStart] = useState<[number, number][]>([]);
-  const [current, setCurrent] = useState<Current | null>(null);
+  const [life, setLife] = useState<Life | null>(null);
+  const [lifeError, setLifeError] = useState('');
+  const [tab, setTab] = useState<'world' | 'next'>('world');
+  const [seenNext, setSeenNext] = useState(false);
   const [view, setView] = useState<View | null>(null);
+  const [nextView, setNextView] = useState<View | null>(null);
   const [layers, setLayers] = useState<Layers>(allLayers());
   const [picked, setPicked] = useState<[number, number] | null>(null);
   const [point, setPoint] = useState<Point | null>(null);
   const [boat, setBoat] = useState<number | null>(null);
-  const [places, setPlaces] = useState<PlacesData | null>(null);
-  const [towns, setTowns] = useState<Town[]>([]);
-  const [features, setFeatures] = useState<FeaturesData | null>(null);
   const [charted, setCharted] = useState<ChartedData | null>(null);
   const [light, setLight] = useState<number | null>(null);
   const clock = useRef<WorldClock>({ worldTime: 0, at: performance.now() });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [, redraw] = useState(0);
-  const images = useRef({
-    land: null as HTMLImageElement | null,
-    coasts: null as HTMLImageElement | null,
-    islands: new Map<number, HTMLImageElement>(),
-    gusts: document.createElement('canvas'),
-    hasGusts: false,
-  });
-  const again = useCallback(() => redraw((n) => n + 1), []);
+  const gusts = useRef({ canvas: document.createElement('canvas'), drawn: false });
+  const readLife = useRef<() => void>(() => undefined);
 
-  // Once per world: the land, the coasts, the islands, the current.
-  useEffect(() => {
-    const im = images.current;
-    im.land = image(drawing('land.png'), again);
-    im.coasts = image(drawing('coasts.svg'), again);
-    getJSON<{ islands: Island[]; groups: Group[]; start: [number, number][] }>('islands.json')
-      .then((d) => {
-        setIslands(d.islands);
-        setGroups(d.groups);
-        setStart(d.start);
-      })
-      .catch((e: unknown) => setError(String(e)));
-    getJSON<Current>('current.json')
-      .then(setCurrent)
-      .catch((e: unknown) => setError(String(e)));
-    getJSON<PlacesData>('places.json')
-      .then(setPlaces)
-      .catch((e: unknown) => setError(String(e)));
-    getJSON<TownsData>('towns.json')
-      .then((d) => setTowns(d.towns))
-      .catch((e: unknown) => setError(String(e)));
-    getJSON<FeaturesData>('features.json')
-      .then(setFeatures)
-      .catch((e: unknown) => setError(String(e)));
-  }, [again]);
+  // The world being sailed, by its number: its terrain read again when
+  // another world begins.
+  const world = now?.world.number ?? life?.life.world ?? null;
+  const next = life?.life.next ?? null;
+  const cur = useDrawn('', world === null ? null : String(world), view, setError);
+  // The next world's terrain, once its tab has been opened and while it
+  // is stored: read again when it is made again.
+  const nextKey = seenNext && next?.stored ? `${next.number}-${next.storedAt}` : null;
+  const nxt = useDrawn('next/', nextKey, nextView, setError);
 
-  // What is charted, every few seconds.
+  // What was picked of a world ended means nothing in the next.
   useEffect(() => {
+    if (world === null) {
+      return;
+    }
+    setPicked(null);
+    setPoint(null);
+    setBoat(null);
+    setLight(null);
+    setTab('world');
+  }, [world]);
+
+  // What is charted, every few seconds, and at once in a new world.
+  useEffect(() => {
+    if (world === null) {
+      return;
+    }
     const read = () => {
       if (hidden()) {
         return;
@@ -574,7 +909,7 @@ function App() {
     read();
     const t = setInterval(read, CHARTED_EVERY);
     return () => clearInterval(t);
-  }, []);
+  }, [world]);
 
   // The world each second, paused while the tab is hidden.
   useEffect(() => {
@@ -589,8 +924,8 @@ function App() {
         const [w, g] = await Promise.all([getJSON<WorldNow>('world.json'), getBytes('gusts.bin')]);
         setNow(w);
         clock.current = { worldTime: w.worldTime, at: performance.now() };
-        gustPicture(g, images.current.gusts);
-        images.current.hasGusts = true;
+        gustPicture(g, gusts.current.canvas);
+        gusts.current.drawn = true;
         setError('');
       } catch (e) {
         setError(String(e));
@@ -615,107 +950,154 @@ function App() {
     };
   }, []);
 
-  // An island zoomed into, at the lattice's resolution.
+  // The world's life every few seconds, paused while the tab is hidden,
+  // and at once after a control touching it. Keel's clock is measured
+  // against the page's at each reading.
   useEffect(() => {
-    if (view === null || view.scale >= ISLAND_DETAIL) {
-      return;
-    }
-    const im = images.current;
-    const [w, n] = toWorld(view, 0, 0);
-    const [e, s] = toWorld(view, view.width, view.height);
-    for (const is of islands) {
-      const [bw, bs, be, bn] = is.bounds;
-      if (be < w || bw > e || bn < s || bs > n || im.islands.has(is.number)) {
-        continue;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    const read = async (): Promise<void> => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
       }
-      im.islands.set(is.number, image(drawing(`island/${is.number}.svg`), again));
-    }
-  }, [view, islands, again]);
+      if (hidden()) {
+        return;
+      }
+      const sent = Date.now();
+      try {
+        const l = await getJSON<Lifecycle>('lifecycle.json');
+        setLife({ life: l, offset: serverOffset(l.now, sent, Date.now()) });
+        setLifeError('');
+      } catch (e) {
+        setLifeError(String(e));
+      }
+      if (!stopped && timer === null && !hidden()) {
+        timer = setTimeout(read, LIFE_EVERY);
+      }
+    };
+    const shown = (): void => {
+      if (!hidden() && timer === null) {
+        void read();
+      }
+    };
+    readLife.current = () => void read();
+    document.addEventListener('visibilitychange', shown);
+    void read();
+    return () => {
+      stopped = true;
+      readLife.current = () => undefined;
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+      document.removeEventListener('visibilitychange', shown);
+    };
+  }, []);
 
-  const pick = (east: number, north: number): void => {
+  const pick = useCallback((east: number, north: number): void => {
     setPicked([east, north]);
     getJSON<Point>(`point?east=${east.toFixed(2)}&north=${north.toFixed(2)}`)
       .then(setPoint)
       .catch((e: unknown) => setError(String(e)));
-  };
+  }, []);
 
   /** Asks for a change and says how it went; true when it was done. */
-  const act = (
-    path: 'flag' | 'place' | 'unseen' | 'world',
-    body: unknown,
-    what: string,
-  ): Promise<boolean> =>
-    control(path, body)
-      .then((a) => {
-        setMessage(a.ok ? `Done: ${what}.` : `Refused (${a.status}): ${a.text}`);
-        return a.ok;
-      })
-      .catch((e: unknown) => {
-        setMessage(`Failed: ${String(e)}`);
-        return false;
-      });
+  const act = useCallback(
+    (path: Control, body: unknown, what: string): Promise<boolean> =>
+      control(path, body)
+        .then((a) => {
+          setMessage(a.ok ? `Done: ${what}.` : `Refused (${a.status}): ${a.text}`);
+          if (a.ok && (path === 'world' || path === 'next')) {
+            // What was begun shows in the world's life within a few seconds.
+            readLife.current();
+            setTimeout(() => readLife.current(), 2000);
+          }
+          return a.ok;
+        })
+        .catch((e: unknown) => {
+          setMessage(`Failed: ${String(e)}`);
+          return false;
+        }),
+    [],
+  );
 
-  const im = images.current;
+  const goTo = useCallback<GoTo>(
+    (east, north, scale) => setView((v) => (v === null ? v : centreOn(v, east, north, scale))),
+    [],
+  );
+  const goToNext = useCallback<GoTo>(
+    (east, north, scale) => setNextView((v) => (v === null ? v : centreOn(v, east, north, scale))),
+    [],
+  );
+
   const data: MapData = {
     now,
-    islands,
-    groups,
-    start,
-    current,
-    land: im.land,
-    coasts: im.coasts,
-    islandImages: im.islands,
-    gusts: im.hasGusts ? im.gusts : null,
+    islands: cur.islands,
+    groups: cur.groups,
+    start: cur.start,
+    current: cur.current,
+    land: cur.land,
+    coasts: cur.coasts,
+    islandImages: cur.islandImages,
+    gusts: gusts.current.drawn ? gusts.current.canvas : null,
     picked,
     boat,
-    places,
+    places: cur.places,
     light,
-    features,
+    features: cur.features,
     charted:
       charted === null ? null : new Set(charted.charted.map((c) => `${c.subject}:${c.number}`)),
   };
-  const featureName = new Map((features?.kinds ?? []).map((k) => [k.id, k.name]));
-  const islandName = new Map(islands.map((is) => [is.number, is.name]));
-  const chosen = now?.boats.find((b) => b.boat === boat && b.tools) ?? null;
-  const kindName = new Map((places?.kinds ?? []).map((k) => [k.id, k.name]));
-  const lightSite = new Set(
-    (places?.kinds ?? []).filter((k) => k.site === 'light').map((k) => k.id),
-  );
-  const goTo = (east: number, north: number, scale?: number): void => {
-    if (view !== null) {
-      setView(centreOn(view, east, north, scale));
-    }
+  // The next world drawn as the current is, without what is live. The
+  // disk's rings are keel's, not a world's: they are drawn from the
+  // current world's reading, with no boat or wind of it.
+  const nextData: MapData = {
+    now: now === null ? null : { ...now, boats: [], wind: { ...now.wind, points: [] } },
+    islands: nxt.islands,
+    groups: nxt.groups,
+    start: nxt.start,
+    current: nxt.current,
+    land: nxt.land,
+    coasts: nxt.coasts,
+    islandImages: nxt.islandImages,
+    gusts: null,
+    picked: null,
+    boat: null,
+    places: nxt.places,
+    light: null,
+    features: nxt.features,
+    charted: null,
   };
+  const chosen = now?.boats.find((b) => b.boat === boat && b.tools) ?? null;
 
   // The lists of places and lights, made again only when what they show
   // changes, not at each second's reading of the world.
   const chosenBoat = chosen?.boat ?? null;
-  const lists = useMemo(
-    () => (
+  const lists = useMemo(() => {
+    const featureName = new Map((cur.features?.kinds ?? []).map((k) => [k.id, k.name]));
+    const islandName = new Map(cur.islands.map((is) => [is.number, is.name]));
+    const sail: Sail =
+      chosenBoat === null
+        ? null
+        : (body, what) => void act('place', { boat: chosenBoat, ...body }, what);
+    return (
       <>
-        <section class="card" aria-label="Lighthouses">
-          <h2>Lighthouses: {places?.lights.length ?? 0}</h2>
-          <ul class="lights">
-            {(places?.lights ?? []).map((l) => (
-              <li key={l.number} class={l.number === light ? 'chosen' : ''}>
-                <Flash light={l} character={places?.characters[l.character]} clock={clock} />{' '}
-                <button
-                  type="button"
-                  data-light={l.number}
-                  onClick={() => {
-                    setLight(l.number);
-                    goTo(l.east, l.north, 4);
-                  }}
-                >
-                  {l.name}
-                </button>{' '}
-                <span class="small" data-field="chart">
-                  {l.chart}, {l.role}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <IslandsCard
+          islands={cur.islands}
+          groups={cur.groups}
+          features={cur.features}
+          goTo={goTo}
+          pick={pick}
+        />
+        <LightsCard
+          places={cur.places}
+          light={light}
+          choose={(l) => {
+            setLight(l.number);
+            goTo(l.east, l.north, 4);
+          }}
+          clock={clock}
+        />
         <section class="card" aria-label="Charted">
           <h2>
             Charted: <span data-field="charted">{charted?.charted.length ?? 0}</span> of{' '}
@@ -725,10 +1107,10 @@ function App() {
             {[...(charted?.charted ?? [])].reverse().map((c) => {
               const at =
                 c.subject === 'island'
-                  ? islands.find((is) => is.number === c.number)
+                  ? cur.islands.find((is) => is.number === c.number)
                   : c.subject === 'place'
-                    ? places?.places.find((p) => p.number === c.number)
-                    : features?.features.find((f) => f.number === c.number);
+                    ? cur.places?.places.find((p) => p.number === c.number)
+                    : cur.features?.features.find((f) => f.number === c.number);
               const title =
                 c.subject === 'feature'
                   ? `${featureName.get((at as { kind?: string } | undefined)?.kind ?? '') ?? 'Feature'} on ${islandName.get((at as { island?: number } | undefined)?.island ?? -1) ?? '?'}`
@@ -752,121 +1134,49 @@ function App() {
             })}
           </ul>
         </section>
-        <section class="card" aria-label="Towns">
-          <h2>Towns: {towns.length}</h2>
-          <ul class="towns">
-            {towns.map((t) => (
-              <li key={t.number}>
-                <button type="button" data-town={t.number} onClick={() => goTo(t.east, t.north, 2)}>
-                  {t.name}
-                </button>{' '}
-                <span class="small">
-                  {townWords(t)}{' '}
-                  <a href={drawing(`town/${t.number}.svg`)} target="_blank" rel="noopener">
-                    its plan
-                  </a>
-                </span>
-                {chosenBoat !== null && t.harbour !== null ? (
-                  <button
-                    type="button"
-                    class="small"
-                    onClick={() =>
-                      act(
-                        'place',
-                        { boat: chosenBoat, town: t.number },
-                        `teleport to ${t.name}'s harbour`,
-                      )
-                    }
-                  >
-                    sail there
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section class="card" aria-label="Features">
-          <h2>Features: {features?.features.length ?? 0}</h2>
-          <ul class="features">
-            {(features?.features ?? []).map((f) => (
-              <li key={f.number}>
-                <button
-                  type="button"
-                  data-feature={f.number}
-                  onClick={() => {
-                    goTo(f.east, f.north, 1);
-                    if (f.approach !== null) {
-                      pick(f.approach[0], f.approach[1]);
-                    }
-                  }}
-                >
-                  {featureName.get(f.kind) ?? f.kind}
-                </button>{' '}
-                <span class="small">
-                  {islandName.get(f.island) ?? f.island}, {f.height.toFixed(0)} m
-                  {f.seen ? '' : ', not seen from the water'}
-                </span>
-                {chosenBoat !== null && f.approach !== null ? (
-                  <button
-                    type="button"
-                    class="small"
-                    onClick={() =>
-                      act(
-                        'place',
-                        { boat: chosenBoat, feature: f.number },
-                        `teleport to see the ${featureName.get(f.kind) ?? f.kind}`,
-                      )
-                    }
-                  >
-                    sail there
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section class="card" aria-label="Places">
-          <h2>Places: {(places?.places ?? []).filter((p) => !lightSite.has(p.kind)).length}</h2>
-          <ul class="places">
-            {(places?.places ?? [])
-              .filter((p) => !lightSite.has(p.kind))
-              .map((p) => (
-                <li key={p.number}>
-                  <button
-                    type="button"
-                    data-place={p.number}
-                    onClick={() => {
-                      goTo(p.east, p.north, 1);
-                      if (p.approach !== null) {
-                        pick(p.approach[0], p.approach[1]);
-                      }
-                    }}
-                  >
-                    {p.name}
-                  </button>{' '}
-                  <span class="small">
-                    {kindName.get(p.kind) ?? p.kind}: {placeWords(p)}
-                  </span>
-                  {chosenBoat !== null && p.approach !== null ? (
-                    <button
-                      type="button"
-                      class="small"
-                      onClick={() =>
-                        act('place', { boat: chosenBoat, place: p.number }, `teleport to ${p.name}`)
-                      }
-                    >
-                      sail there
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-          </ul>
-        </section>
+        <TownsCard
+          towns={cur.towns}
+          plan={(n) => drawnAt('', String(world), `town/${n}.svg`)}
+          goTo={goTo}
+          sail={sail}
+        />
+        <FeaturesCard
+          features={cur.features}
+          islands={cur.islands}
+          goTo={goTo}
+          pick={pick}
+          sail={sail}
+        />
+        <PlacesCard places={cur.places} goTo={goTo} pick={pick} sail={sail} />
+      </>
+    );
+  }, [cur, world, light, chosenBoat, charted, act, goTo, pick]);
+
+  // The next world's lists, as the current world's are, with nothing to sail to.
+  const nextLists = useMemo(
+    () => (
+      <>
+        <IslandsCard
+          islands={nxt.islands}
+          groups={nxt.groups}
+          features={nxt.features}
+          goTo={goToNext}
+        />
+        <LightsCard places={nxt.places} light={null} choose={(l) => goToNext(l.east, l.north, 4)} />
+        <TownsCard
+          towns={nxt.towns}
+          plan={(n) => drawnAt('next/', nextKey ?? '', `town/${n}.svg`)}
+          goTo={goToNext}
+          sail={null}
+        />
+        <FeaturesCard features={nxt.features} islands={nxt.islands} goTo={goToNext} sail={null} />
+        <PlacesCard places={nxt.places} goTo={goToNext} sail={null} />
       </>
     ),
-    [places, towns, light, chosenBoat, features, islands, charted],
+    [nxt, nextKey, goToNext],
   );
 
+  const onNext = tab === 'next' && next !== null;
   return (
     <div class="page">
       <header>
@@ -878,30 +1188,84 @@ function App() {
             {message}
           </p>
         ) : null}
+        <SwitchBar life={life} error={lifeError} />
       </header>
       <main>
         <div class="map-box">
-          <MapCanvas data={data} layers={layers} view={view} setView={setView} pick={pick} />
+          {onNext ? (
+            next.stored ? (
+              <MapCanvas
+                key="next"
+                data={nextData}
+                layers={layers}
+                view={nextView}
+                setView={setNextView}
+                pick={() => undefined}
+              />
+            ) : (
+              <p class="map waiting" data-field="next-waiting">
+                World {next.number} is being made.
+              </p>
+            )
+          ) : (
+            <MapCanvas
+              key="world"
+              data={data}
+              layers={layers}
+              view={view}
+              setView={setView}
+              pick={pick}
+            />
+          )}
           <fieldset class="layers">
-            {(Object.keys(LAYER_NAMES) as (keyof Layers)[]).map((k) => (
-              <label key={k}>
-                <input
-                  type="checkbox"
-                  name={`layer-${k}`}
-                  checked={layers[k]}
-                  onChange={(e) => setLayers({ ...layers, [k]: e.currentTarget.checked })}
-                />{' '}
-                {LAYER_NAMES[k]}
-              </label>
-            ))}
+            {(Object.keys(LAYER_NAMES) as (keyof Layers)[])
+              .filter((k) => !onNext || !LIVE.has(k))
+              .map((k) => (
+                <label key={k}>
+                  <input
+                    type="checkbox"
+                    name={`layer-${k}`}
+                    checked={layers[k]}
+                    onChange={(e) => setLayers({ ...layers, [k]: e.currentTarget.checked })}
+                  />{' '}
+                  {LAYER_NAMES[k]}
+                </label>
+              ))}
             <button
               type="button"
-              onClick={() => view !== null && setView(fitView(view.width, view.height))}
+              onClick={() => {
+                const set = onNext ? setNextView : setView;
+                set((v) => (v === null ? v : fitView(v.width, v.height)));
+              }}
             >
               The whole disk
             </button>
           </fieldset>
-          {point !== null ? (
+          {next !== null ? (
+            <nav class="tabs" aria-label="Which world">
+              <button
+                type="button"
+                name="tab-world"
+                aria-pressed={!onNext}
+                onClick={() => setTab('world')}
+              >
+                World {world}
+              </button>
+              <button
+                type="button"
+                name="tab-next"
+                aria-pressed={onNext}
+                onClick={() => {
+                  setTab('next');
+                  setSeenNext(true);
+                }}
+              >
+                Next: world {next.number}
+                {next.stored ? '' : ', being made'}
+              </button>
+            </nav>
+          ) : null}
+          {!onNext && point !== null ? (
             <p class="point" data-field="point">
               ({point.east.toFixed(0)}, {point.north.toFixed(0)}):{' '}
               {point.elevation > 0
@@ -912,107 +1276,78 @@ function App() {
             </p>
           ) : null}
         </div>
-        <aside>
-          {now !== null ? <Clock now={now} /> : null}
-          {now !== null ? <WeatherCard now={now} /> : null}
-          {now !== null ? <NewWorld now={now} act={act} /> : null}
-          <section class="card" aria-label="Boats at sea">
-            <h2>At sea: {now?.boats.length ?? 0}</h2>
-            <table class="boats">
-              <thead>
-                <tr>
-                  <th>Boat</th>
-                  <th>Sailor</th>
-                  <th>Kind</th>
-                  <th>Speed</th>
-                  <th>Inside the lip</th>
-                  <th />
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {(now?.boats ?? []).map((b) => (
-                  <BoatRow
-                    key={b.boat}
-                    b={b}
-                    chosen={b.boat === boat}
-                    choose={() => {
-                      setBoat(b.boat);
-                      goTo(b.east, b.north);
-                    }}
-                    act={act}
-                    picked={picked}
-                    islands={islands}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </section>
-          <section class="card" aria-label="The queue">
-            <h2>Waiting: {now?.queue.length ?? 0}</h2>
-            <table>
-              <tbody>
-                {(now?.queue ?? []).map((q) => (
-                  <tr key={q.account}>
-                    <td>{q.sailor || '—'}</td>
-                    <td>{seconds(q.waited)}</td>
-                    <td>{q.connected ? '' : 'away'}</td>
-                    <td>
-                      <FlagBox
-                        on={q.tools}
-                        disabled={false}
-                        flag={(on) => act('flag', { account: q.account, on }, `${q.sailor}'s flag`)}
-                      />
-                    </td>
+        {onNext ? (
+          <aside>
+            {life !== null ? <LifecycleCard life={life} /> : null}
+            {life !== null ? <RemakeNext life={life} act={act} /> : null}
+            {next.stored ? nextLists : null}
+          </aside>
+        ) : (
+          <aside>
+            {now !== null ? <Clock now={now} /> : null}
+            {now !== null ? <WeatherCard now={now} /> : null}
+            {world !== null ? (
+              <BeginNext number={world} switching={life?.life.switching ?? false} act={act} />
+            ) : null}
+            {life !== null ? <LifecycleCard life={life} /> : null}
+            <section class="card" aria-label="Boats at sea">
+              <h2>At sea: {now?.boats.length ?? 0}</h2>
+              <table class="boats">
+                <thead>
+                  <tr>
+                    <th>Boat</th>
+                    <th>Sailor</th>
+                    <th>Kind</th>
+                    <th>Speed</th>
+                    <th>Inside the lip</th>
+                    <th />
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-          <section class="card" aria-label="Islands">
-            <h2>Islands: {islands.length}</h2>
-            <ul class="islands">
-              {islands
-                .filter((is) => is.group < 0)
-                .sort((a, b) => b.score - a.score)
-                .map((is) => (
-                  <li key={is.number}>
-                    <button
-                      type="button"
-                      data-island={is.number}
-                      onClick={() => {
-                        goTo(is.east, is.north, Math.max(0.5, is.across / 300));
-                        pick(is.approach[0], is.approach[1]);
+                </thead>
+                <tbody>
+                  {(now?.boats ?? []).map((b) => (
+                    <BoatRow
+                      key={b.boat}
+                      b={b}
+                      chosen={b.boat === boat}
+                      choose={() => {
+                        setBoat(b.boat);
+                        goTo(b.east, b.north);
                       }}
-                    >
-                      {is.number}. {is.name}
-                    </button>{' '}
-                    <span class="small">
-                      {is.kind}, {is.biome}
-                      {is.age !== undefined ? ` (${is.age})` : ''}, {is.size},{' '}
-                      {is.highest.toFixed(0)} m;{' '}
-                      <span data-field="class">
-                        class {is.class}, {is.score.toFixed(1)}
-                      </span>
-                      {is.features.length > 0
-                        ? `; ${is.features.map((k) => featureName.get(k) ?? k).join(', ')}`
-                        : ''}
-                      {is.flora.length > 0 ? `; ${is.flora.join(', ')}` : ''}
-                    </span>
-                  </li>
-                ))}
-              {groups.map((g) => (
-                <li key={`g${g.number}`}>
-                  <button type="button" onClick={() => goTo(g.east, g.north, 2)}>
-                    {g.name}
-                  </button>{' '}
-                  <span class="small">{g.members.length} rocks</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-          {lists}
-        </aside>
+                      act={act}
+                      picked={picked}
+                      islands={cur.islands}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </section>
+            <section class="card" aria-label="The queue">
+              <h2>Waiting: {now?.queue.length ?? 0}</h2>
+              <table>
+                <tbody>
+                  {(now?.queue ?? []).map((q) => (
+                    <tr key={q.account}>
+                      <td>{q.sailor || '—'}</td>
+                      <td>{seconds(q.waited)}</td>
+                      <td>{q.connected ? '' : 'away'}</td>
+                      <td>
+                        <FlagBox
+                          on={q.tools}
+                          disabled={false}
+                          flag={(on) =>
+                            act('flag', { account: q.account, on }, `${q.sailor}'s flag`)
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+            {lists}
+          </aside>
+        )}
       </main>
     </div>
   );

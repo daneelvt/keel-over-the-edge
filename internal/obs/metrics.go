@@ -99,6 +99,14 @@ type Metrics struct {
 	PersistCheckpoint prometheus.Histogram
 	PersistWrites     *prometheus.CounterVec // by result: ok, failed, fenced
 
+	JobRuns        *prometheus.CounterVec // by name and outcome
+	JobLastOK      *prometheus.GaugeVec   // by name
+	WorldNumber    prometheus.Gauge
+	WorldEnds      prometheus.Gauge
+	WorldNextReady prometheus.Gauge
+	WorldSwitches  *prometheus.CounterVec // by how: scheduled, late, by_hand
+	WorldSwitch    prometheus.Gauge
+
 	EdgeConnections     prometheus.Gauge
 	EdgeUpgrades        *prometheus.CounterVec // by result
 	EdgeHellos          *prometheus.CounterVec // by result
@@ -336,6 +344,31 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.PersistWrites = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_persist_batches_total", Help: "Batches of the world's events and checkpoint, by result: ok, failed (tried again) or fenced.",
 	}, []string{"result"})
+	m.JobRuns = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_job_runs_total", Help: "Jobs' runs, by the job's name and outcome: ok, skipped (nothing to do) or failed (tried again).",
+	}, []string{"name", "outcome"})
+	m.JobLastOK = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "keel_job_last_ok_timestamp_seconds", Help: "When each job's last run that succeeded or had nothing to do finished, in Unix seconds; 0 if none has since the process started.",
+	}, []string{"name"})
+	m.WorldNumber = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_world_number", Help: "The number of the world being sailed.",
+	})
+	m.WorldEnds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_world_ends_timestamp_seconds", Help: "When the world being sailed ends, in Unix seconds.",
+	})
+	m.WorldNextReady = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_world_next_ready", Help: "1 when the next world is made, checked and stored; 0 until then.",
+	})
+	m.WorldSwitches = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_world_switches_total", Help: "Worlds begun in the running process, by how: scheduled (at the end), late (on start, the end missed) or by_hand.",
+	}, []string{"how"})
+	m.WorldSwitch = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_world_switch_seconds", Help: "The last switch's pause, from the old world's last tick to the new world's first.",
+	})
+	for _, h := range []string{"scheduled", "late", "by_hand"} {
+		m.WorldSwitches.WithLabelValues(h)
+	}
+	reg.MustRegister(m.JobRuns, m.JobLastOK, m.WorldNumber, m.WorldEnds, m.WorldNextReady, m.WorldSwitches, m.WorldSwitch)
 	for _, o := range []string{"retaken", "lost", "fenced"} {
 		m.LeaseLost.WithLabelValues(o)
 	}
@@ -353,10 +386,10 @@ func NewMetrics(build, catalog string) *Metrics {
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused,
 		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded, m.Falls, m.Approaches)
-	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen"} {
+	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake"} {
 		m.OwnerActions.WithLabelValues(a)
 	}
-	for _, w := range []string{"roam", "place", "flag", "unseen", "request"} {
+	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake"} {
 		m.OwnerRefused.WithLabelValues(w)
 	}
 	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)

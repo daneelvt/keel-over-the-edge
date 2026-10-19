@@ -446,6 +446,25 @@ type Curtain struct {
 	To float64 `json:"to"`
 }
 
+// The world's end, staged on every phone by the world clock: the falls heard and
+// the mist closing in, then the near sea's tiles breaking off and falling toward
+// the boat, then the boat going over; and the new world rising out of the mist.
+type EdgeEnd struct {
+	// The mist closes in from this long before the end, in s.
+	Mist float64 `json:"mist"`
+
+	// The camera eases down out of the mist to the boat in the new world over this
+	// long, in s.
+	Rise float64 `json:"rise"`
+
+	// The falls' sound rises wherever the boat is from this long before the end, in
+	// s.
+	Sound float64 `json:"sound"`
+
+	// The near sea's tiles break off and fall from this long before the end, in s.
+	Tiles float64 `json:"tiles"`
+}
+
 // How the lip, the falls and the drain are drawn.
 type EdgeLook struct {
 	// The water pouring over the lip.
@@ -1090,7 +1109,7 @@ type NewsColumn struct {
 	// ID corresponds to the JSON schema field "id".
 	ID ID `json:"id"`
 
-	// What its items tell of.
+	// What its items tell of: what is charted, or the world itself, its end.
 	Of Of `json:"of"`
 
 	// Its heading.
@@ -1100,6 +1119,10 @@ type NewsColumn struct {
 // A kind of notice: what raises it, its words, how urgent it is, whether it can be
 // switched off and how long it stays.
 type NoticeKind struct {
+	// For a notice of the world's end near: the times before the end it is raised at,
+	// in minutes.
+	Before []float64 `json:"before,omitempty,omitzero"`
+
 	// Its words for several at once: {count} is filled in.
 	Folded string `json:"folded"`
 
@@ -1112,7 +1135,8 @@ type NoticeKind struct {
 	// Its name in the menu's switches.
 	Name string `json:"name"`
 
-	// What raises it: a place the player charts, or a great discovery by anyone.
+	// What raises it: a place the player charts, a great discovery by anyone, the
+	// world closing, its end near, or a new world begun.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -1121,7 +1145,8 @@ type NoticeKind struct {
 	// The player may switch it off.
 	Switchable bool `json:"switchable"`
 
-	// Its words: {name}, {who}, {where} and {worth} are filled in.
+	// Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the
+	// player's own time) and {left} (the time left) are filled in.
 	Text string `json:"text"`
 }
 
@@ -1137,11 +1162,15 @@ type Notices struct {
 type Of string
 
 const OfCharting Of = "charting"
+const OfWorld Of = "world"
 
 type On string
 
 const OnChartedGreat On = "charted-great"
 const OnChartedOwn On = "charted-own"
+const OnFallsComing On = "falls-coming"
+const OnFallsSoon On = "falls-soon"
+const OnNewWorld On = "new-world"
 
 // How the boat's autopilot steers it: a proportional–integral–derivative law on
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
@@ -2743,6 +2772,9 @@ type WorldEdge struct {
 	// An approach ends this far back out of the mist band, in m.
 	Clear float64 `json:"clear"`
 
+	// End corresponds to the JSON schema field "end".
+	End EdgeEnd `json:"end"`
+
 	// How long a boat that has gone over falls before it starts again, in s.
 	Fall float64 `json:"fall"`
 
@@ -3363,4 +3395,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "9c0acb9ef7adb377"
+const Version = "2076b7f8c446157f"

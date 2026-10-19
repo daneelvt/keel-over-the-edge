@@ -25,7 +25,7 @@ func TestNoticesSwitched(t *testing.T) {
 	cookie := sessionCookie(res)
 	put := func(body string, site string) (int, string) {
 		t.Helper()
-		req, _ := http.NewRequest("PUT", srv.URL+"/api/me/notices", strings.NewReader(body))
+		req, _ := http.NewRequest("POST", srv.URL+"/api/me/notices", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		if site != "" {
 			req.Header.Set("Sec-Fetch-Site", site)

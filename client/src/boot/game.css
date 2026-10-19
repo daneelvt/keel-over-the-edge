@@ -52,3 +52,24 @@ body {
     sans-serif;
   color: #2b2118;
 }
+
+/* The world's end: the screen faded to the mist, and its words. */
+.stage .edge-fade p {
+  display: none;
+}
+
+.stage .edge-fade.world-end {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stage .edge-fade.world-end p {
+  display: block;
+  margin: 0;
+  color: #3b3f44;
+  font:
+    28px "IM Fell English SC",
+    serif;
+  text-align: center;
+}

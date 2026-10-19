@@ -36,6 +36,27 @@ type Edge struct {
 func (w *World) rules() {
 	w.edgeRules()
 	w.sighting()
+	w.ends()
+}
+
+// ends ends the world at its last tick, if this is it: the falls take
+// every boat afloat, each an event where it was, and its voyage ends as
+// any voyage does, its closest approach recorded. A boat already falling
+// over the lip went over before the world ended.
+func (w *World) ends() {
+	f := w.next
+	if w.endAt == 0 || f.Tick < w.endAt {
+		return
+	}
+	for _, s := range f.Live {
+		if f.Voyage[s].Falling() {
+			continue
+		}
+		st := &f.State[s]
+		f.Edges = append(f.Edges, bus.EdgeEvent{Tick: f.Tick, Kind: bus.EdgeTaken, Slot: s, Boat: f.Boat[s], Owner: f.Owner[s], X: st.X, Y: st.Y, Placed: f.Voyage[s].Placed})
+		w.voyageEnds(f, s)
+	}
+	f.Ended = true
 }
 
 // edgeRules sends the boats at or beyond the lip over it, and follows each

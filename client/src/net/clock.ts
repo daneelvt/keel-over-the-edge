@@ -75,6 +75,16 @@ export class Clock {
   readonly state = newClockState();
   #samples: Sample[] = [];
 
+  /**
+   * Forgets every sample and the offset: a new world's time counts from its
+   * own epoch, and the old world's samples, kept, would hold the clock at
+   * the old world's age until new ones outnumbered them among the best.
+   */
+  reset(): void {
+    this.#samples = [];
+    Object.assign(this.state, newClockState());
+  }
+
   /** Sets the clock from a Welcome's world time, if it has none yet. */
   welcome(world: number, now: number): void {
     const c = this.state;

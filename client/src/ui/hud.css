@@ -149,6 +149,26 @@
   font-weight: 500;
 }
 
+.falls-line {
+  padding: 4px 12px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.falls-line.closing {
+  color: var(--gold);
+  font-weight: 500;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .bump-line {
   padding: 6px 12px;
   font-weight: 500;
@@ -225,6 +245,9 @@
   top: 50%;
   transform: translateY(-50%);
   width: min(300px, calc(100vw - var(--edge-right) - var(--edge-left) - 56px));
+  /* Within the screen however many switches it holds: it scrolls. */
+  max-height: calc(100dvh - var(--edge-top) - var(--edge-bottom));
+  overflow-y: auto;
   padding: 12px 16px;
 }
 

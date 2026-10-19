@@ -3,14 +3,11 @@
 ;
 
 -- name: ActiveWorld :one
-SELECT id, number, epoch FROM world WHERE state = 'active';
-
--- name: EndWorld :execrows
-UPDATE world SET state = 'ended' WHERE state = 'active' AND number = @number;
+SELECT id, number, epoch, begins_at, ends_at FROM world WHERE state = 'active';
 
 -- name: InsertWorld :one
-INSERT INTO world (number, epoch, state)
-VALUES ((SELECT coalesce(max(number), 0) + 1 FROM world), @epoch, 'active')
+INSERT INTO world (number, epoch, state, begins_at)
+VALUES ((SELECT coalesce(max(number), 0) + 1 FROM world), @epoch, 'active', now())
 RETURNING id, number, epoch;
 
 -- name: CreateWorldPartitions :exec
@@ -60,3 +57,37 @@ SELECT number, kind, name, biome, size, x, y, area, highest, island, details FRO
 
 -- name: WorldLights :many
 SELECT number, place, role, character, phase, reach, focal, tower, daymark FROM light WHERE world_id = @world_id ORDER BY number;
+
+-- name: SetWorldEnd :execrows
+UPDATE world SET ends_at = @ends_at WHERE id = @id AND state = 'active';
+
+-- name: InsertNextWorld :one
+INSERT INTO world (number, epoch, state, seed, generator)
+VALUES ((SELECT coalesce(max(number), 0) + 1 FROM world), @epoch, 'next', @seed, @generator)
+RETURNING id, number, epoch;
+
+-- name: NextWorld :one
+SELECT w.id, w.number, w.seed, w.created_at,
+  (b.world_id IS NOT NULL)::boolean AS stored, b.attempts, b.generation_ms, b.made, b.created_at AS stored_at
+FROM world w LEFT JOIN world_bundle b ON b.world_id = w.id
+WHERE w.state = 'next';
+
+-- name: EndActiveWorld :execrows
+UPDATE world SET state = 'ended', ends_at = @ends_at WHERE state = 'active' AND number = @number;
+
+-- name: ActivateNextWorld :one
+UPDATE world SET state = 'active', epoch = @begins_at, begins_at = @begins_at, ends_at = @ends_at
+WHERE id = @id AND state = 'next'
+RETURNING id, number, epoch;
+
+-- name: DeleteNextWorld :execrows
+DELETE FROM world WHERE id = @id AND state = 'next';
+
+-- name: WorldsToDrop :many
+SELECT id, number FROM world WHERE state = 'ended' AND ends_at < @before ORDER BY number;
+
+-- name: MarkWorldDropped :execrows
+UPDATE world SET state = 'dropped' WHERE id = @id AND state = 'ended';
+
+-- name: RecentWorlds :many
+SELECT number, state, seed, begins_at, ends_at, created_at FROM world ORDER BY number DESC LIMIT @lim;

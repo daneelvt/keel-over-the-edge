@@ -74,6 +74,11 @@ export class Models {
     this.#fetch = fetcher;
   }
 
+  /** Forgets every model kept: another world's islands are its own. */
+  clear(): void {
+    this.#kept.clear();
+  }
+
   /** The model at an address, or null if it cannot be had. */
   get(address: string): Promise<IslandModel | null> {
     let p = this.#kept.get(address);

@@ -68,6 +68,9 @@ func (w *World) apply(c *bus.Command) {
 	case bus.Chart:
 		r = bus.Reply{Result: bus.Done, Slot: -1}
 		w.chartByHand(f, c.Subject, c.On)
+	case bus.End:
+		r = bus.Reply{Result: bus.Done, Slot: -1}
+		w.endAt = max(c.At, f.Tick)
 	default:
 		return
 	}

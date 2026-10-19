@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/worlds"
 )
 
 // Config is the server's configuration.
@@ -66,6 +67,12 @@ type Config struct {
 	// not made yet: for a developer's world, or the local cluster's.
 	WorldSeed    uint64
 	HasWorldSeed bool
+	// Schedule is when worlds end, and how long before the end a world is
+	// closing and the next one made.
+	Schedule worlds.Schedule
+	// WorldKeep is how long an ended world's data is kept before its
+	// partitions are dropped.
+	WorldKeep time.Duration
 	// DatabaseURL is the database's: a postgres:// URL or key=value pairs,
 	// as pgx reads them. It holds a password: it is never logged.
 	DatabaseURL string
@@ -97,6 +104,10 @@ const (
 	MaxBell     = 10 * time.Second
 )
 
+// DefaultWorldKeep is how long an ended world is kept unless
+// KEEL_WORLD_KEEP sets it: four weeks.
+const DefaultWorldKeep = 4 * 7 * 24 * time.Hour
+
 // The bounds of a stop's steps after the bell: the world's final checkpoint
 // and every event left written, then the game connections closed, a peer
 // that has not answered by then dropped. With a Recreate deployment every
@@ -123,6 +134,7 @@ func Load(getenv func(string) string) (Config, error) {
 		BoatLimit:    DefaultBoatLimit,
 		Bell:         DefaultBell,
 		Land:         true,
+		WorldKeep:    DefaultWorldKeep,
 	}
 	addrs := []struct{ name, addr string }{
 		{"KEEL_PLAY_ADDR", c.PlayAddr},
@@ -190,6 +202,19 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("KEEL_WORLD_SEED: %q is not a whole number from 0 to 18446744073709551615", v))
 		}
 		c.WorldSeed, c.HasWorldSeed = n, true
+	}
+	sched := or(getenv("KEEL_WORLD_SCHEDULE"), worlds.Default)
+	sc, err := worlds.Parse(sched)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("KEEL_WORLD_SCHEDULE: %w", err))
+	}
+	c.Schedule = sc
+	if v := getenv("KEEL_WORLD_KEEP"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Hour {
+			errs = append(errs, fmt.Errorf("KEEL_WORLD_KEEP: %q is not a duration of an hour or more", v))
+		}
+		c.WorldKeep = d
 	}
 	switch v := getenv("KEEL_DEV_COMMANDS"); v {
 	case "", "0":

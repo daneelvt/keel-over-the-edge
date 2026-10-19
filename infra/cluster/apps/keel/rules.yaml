@@ -79,6 +79,28 @@ spec:
             summary: "keel's CPU limit is holding it back."
           annotations:
             description: "It is throttled in {{ $value | humanizePercentage }} of its CPU periods. The Game dashboard shows whether the tick suffers."
+    - name: world
+      rules:
+        - alert: WorldNextNotReady
+          expr: (max(keel_world_ends_timestamp_seconds) - time()) < 6 * 3600 unless on () max(keel_world_next_ready) >= 1
+          for: 5m
+          labels:
+            severity: critical
+            component: game
+            summary: "The next world is not made six hours before the world's end."
+          annotations:
+            description: "The world ends in {{ $value | humanizeDuration }} and its successor is not stored: the switch would make it then, late. Look at the next-world job's runs on the world page and at keel's logs."
+        - alert: JobFailing
+          expr: |
+            sum by (name) (increase(keel_job_runs_total{outcome="failed"}[30m])) > 0
+              unless on (name) sum by (name) (increase(keel_job_runs_total{outcome!="failed"}[30m])) > 0
+          for: 30m
+          labels:
+            severity: warning
+            component: game
+            summary: "One of keel's jobs keeps failing."
+          annotations:
+            description: "The job {{ $labels.name }} has failed for half an hour without a run that succeeded. Its runs, and why each failed, are on the world page."
     - name: database
       rules:
         - alert: DatabaseDown

@@ -95,6 +95,8 @@ type Loop struct {
 	// graces started, ended by a join, and expired
 	graceStarted, graceRejoined, graceExpired prometheus.Counter
 	admissions                                [len(admissionResults)]prometheus.Counter
+
+	ended chan struct{} // closed once the world has ticked its last tick
 }
 
 // admissionResults are the results keel_sim_admissions_total counts.
@@ -102,7 +104,7 @@ var admissionResults = [...]bus.Result{bus.Joined, bus.Rejoined, bus.Queued, bus
 
 // New makes a loop for cfg.World, which it observes from now on.
 func New(cfg Config) *Loop {
-	l := &Loop{cfg: cfg, world: cfg.World, m: cfg.Metrics}
+	l := &Loop{cfg: cfg, world: cfg.World, m: cfg.Metrics, ended: make(chan struct{})}
 	if l.m != nil {
 		for p := range sim.Phases {
 			l.phaseObs[p] = l.m.PhaseDuration.WithLabelValues(p.String())
@@ -160,7 +162,12 @@ func (l *Loop) due(tick int64) time.Time {
 	return l.startMono.Add(TimeOf(tick, l.cfg.Epoch).Sub(l.startWall))
 }
 
-// Run ticks the world until ctx ends; a tick under way finishes first.
+// Ended is closed once the world has ticked its last tick (bus.End), when
+// Run returns.
+func (l *Loop) Ended() <-chan struct{} { return l.ended }
+
+// Run ticks the world until ctx ends, or until the world has ticked its
+// last tick; a tick under way finishes first.
 //
 // Each deadline is computed afresh from Run's start, so a timer that wakes
 // late (Linux rounds its waits to whole milliseconds) adds jitter, never
@@ -190,6 +197,10 @@ func (l *Loop) Run(ctx context.Context) error {
 			}
 			l.tick(next, burst > 0)
 			next = w.Now() + 1
+			if w.Latest().Ended {
+				close(l.ended)
+				return nil
+			}
 			if ctx.Err() != nil {
 				return nil
 			}

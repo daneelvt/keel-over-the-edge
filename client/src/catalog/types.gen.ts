@@ -1483,8 +1483,33 @@ export interface WorldEdge {
    * An approach ends this far back out of the mist band, in m.
    */
   clear: number;
+  end: EdgeEnd;
   mist: EdgeMist;
   look: EdgeLook;
+}
+/**
+ * The world's end, staged on every phone by the world clock: the falls heard and the mist closing in, then the near sea's tiles breaking off and falling toward the boat, then the boat going over; and the new world rising out of the mist.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "EdgeEnd".
+ */
+export interface EdgeEnd {
+  /**
+   * The falls' sound rises wherever the boat is from this long before the end, in s.
+   */
+  sound: number;
+  /**
+   * The mist closes in from this long before the end, in s.
+   */
+  mist: number;
+  /**
+   * The near sea's tiles break off and fall from this long before the end, in s.
+   */
+  tiles: number;
+  /**
+   * The camera eases down out of the mist to the boat in the new world over this long, in s.
+   */
+  rise: number;
 }
 /**
  * The mist band: a density rising across the band to the lip's, falling off with height.
@@ -4735,9 +4760,16 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, or a great discovery by anyone.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, or a new world begun.
    */
-  on: "charted-own" | "charted-great";
+  on: "charted-own" | "charted-great" | "falls-coming" | "falls-soon" | "new-world";
+  /**
+   * For a notice of the world's end near: the times before the end it is raised at, in minutes.
+   *
+   * @minItems 1
+   * @maxItems 4
+   */
+  before?: [number] | [number, number] | [number, number, number] | [number, number, number, number];
   /**
    * Passive notices are for the player's leisure; active ones for now.
    */
@@ -4751,7 +4783,7 @@ export interface NoticeKind {
    */
   stays: number;
   /**
-   * Its words: {name}, {who}, {where} and {worth} are filled in.
+   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time) and {left} (the time left) are filled in.
    */
   text: string;
   /**
@@ -4792,10 +4824,10 @@ export interface NewsColumn {
    */
   title: string;
   /**
-   * What its items tell of.
+   * What its items tell of: what is charted, or the world itself, its end.
    */
-  of: "charting";
+  of: "charting" | "world";
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '9c0acb9ef7adb377';
+export const CATALOG_VERSION = '2076b7f8c446157f';

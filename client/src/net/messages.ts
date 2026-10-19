@@ -222,6 +222,11 @@ export type FromWorker =
       tools: boolean;
       /** The main port's light, seen from everywhere; null in a world without land. */
       light: LightSeen | null;
+      /** When the world ends and its last days begin, µs of UTC since 1970; 0 for no end known. */
+      endsUs: number;
+      closingUs: number;
+      /** The zone the schedule's ends are published in; "" for UTC. */
+      zone: string;
     }
   /** The account's owner's flag was set or cleared. */
   | { type: 'tools'; on: boolean }

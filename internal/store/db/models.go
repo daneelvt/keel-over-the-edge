@@ -68,6 +68,18 @@ type Event struct {
 	Distance       pgtype.Float8
 }
 
+type JobRun struct {
+	ID         pgtype.UUID
+	Job        string
+	Due        time.Time
+	StartedAt  time.Time
+	FinishedAt pgtype.Timestamptz
+	Outcome    pgtype.Text
+	Detail     string
+	Attempts   int32
+	Epoch      int64
+}
+
 type Light struct {
 	WorldID   pgtype.UUID
 	Number    int32
@@ -98,6 +110,7 @@ type NewsItem struct {
 	Y            float64
 	Also         []byte
 	WrittenAt    time.Time
+	EndsAt       pgtype.Timestamptz
 }
 
 type Place struct {
@@ -146,6 +159,8 @@ type World struct {
 	CreatedAt time.Time
 	Seed      pgtype.Int8
 	Generator pgtype.Int4
+	BeginsAt  pgtype.Timestamptz
+	EndsAt    pgtype.Timestamptz
 }
 
 type WorldBundle struct {

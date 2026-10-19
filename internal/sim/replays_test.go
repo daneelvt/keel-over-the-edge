@@ -186,6 +186,11 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 				// A player's helm, stamped for a tick a little ahead; and
 				// those the queue has given boats to find them.
 				f := w.Bus().Frames.Acquire()
+				if n == 3 {
+					// The world's end, a month beyond the recording: in
+					// the log, never reached.
+					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.End, At: f.Tick + 30*86400*30})
+				}
 				if len(boats) > 0 {
 					p := boats[rng.IntN(len(boats))]
 					seq := uint32(f.Tick + 1 + int64(rng.IntN(4)))

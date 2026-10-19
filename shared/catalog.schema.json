@@ -740,11 +740,12 @@
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Its name in the menu's switches.", "type": "string", "minLength": 1, "maxLength": 60 },
-        "on": { "description": "What raises it: a place the player charts, or a great discovery by anyone.", "type": "string", "enum": ["charted-own", "charted-great"] },
+        "on": { "description": "What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, or a new world begun.", "type": "string", "enum": ["charted-own", "charted-great", "falls-coming", "falls-soon", "new-world"] },
+        "before": { "description": "For a notice of the world's end near: the times before the end it is raised at, in minutes.", "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 1440 } },
         "level": { "description": "Passive notices are for the player's leisure; active ones for now.", "type": "string", "enum": ["passive", "active"] },
         "switchable": { "description": "The player may switch it off.", "type": "boolean" },
         "stays": { "description": "How long it stays unless dismissed, in s.", "type": "number", "minimum": 1, "maximum": 60 },
-        "text": { "description": "Its words: {name}, {who}, {where} and {worth} are filled in.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "text": { "description": "Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time) and {left} (the time left) are filled in.", "type": "string", "minLength": 1, "maxLength": 200 },
         "folded": { "description": "Its words for several at once: {count} is filled in.", "type": "string", "minLength": 1, "maxLength": 200 }
       }
     },
@@ -769,7 +770,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "title": { "description": "Its heading.", "type": "string", "minLength": 1, "maxLength": 60 },
-        "of": { "description": "What its items tell of.", "type": "string", "enum": ["charting"] }
+        "of": { "description": "What its items tell of: what is charted, or the world itself, its end.", "type": "string", "enum": ["charting", "world"] }
       }
     },
     "WorldHazards": {
@@ -1824,12 +1825,26 @@
       "description": "The edge of the world: going over the falls, approaches to them, the mist and how the falls are drawn.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["fall", "clear", "mist", "look"],
+      "required": ["fall", "clear", "mist", "look", "end"],
       "properties": {
         "fall": { "description": "How long a boat that has gone over falls before it starts again, in s.", "type": "number", "minimum": 0.1, "maximum": 60 },
         "clear": { "description": "An approach ends this far back out of the mist band, in m.", "type": "number", "minimum": 0, "maximum": 1000 },
+        "end": { "$ref": "#/$defs/EdgeEnd" },
         "mist": { "$ref": "#/$defs/EdgeMist" },
         "look": { "$ref": "#/$defs/EdgeLook" }
+      }
+    },
+    "EdgeEnd": {
+      "title": "EdgeEnd",
+      "description": "The world's end, staged on every phone by the world clock: the falls heard and the mist closing in, then the near sea's tiles breaking off and falling toward the boat, then the boat going over; and the new world rising out of the mist.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sound", "mist", "tiles", "rise"],
+      "properties": {
+        "sound": { "description": "The falls' sound rises wherever the boat is from this long before the end, in s.", "type": "number", "minimum": 1, "maximum": 600 },
+        "mist": { "description": "The mist closes in from this long before the end, in s.", "type": "number", "minimum": 1, "maximum": 600 },
+        "tiles": { "description": "The near sea's tiles break off and fall from this long before the end, in s.", "type": "number", "minimum": 1, "maximum": 120 },
+        "rise": { "description": "The camera eases down out of the mist to the boat in the new world over this long, in s.", "type": "number", "minimum": 0.5, "maximum": 30 }
       }
     },
     "EdgeMist": {
