@@ -108,7 +108,6 @@ async function start(): Promise<void> {
     // writes, the boat at its start: its first mooring, facing the narrows.
     const seed = query.get('world');
     const file: WorldFile | null = seed === null ? null : await fetchWorldFile(seed);
-    const chartFile = seed === null ? null : await fetchSandboxChart(seed);
     const place = file?.start.places[0];
     const begin = {
       ...START,
@@ -168,6 +167,9 @@ async function start(): Promise<void> {
     }
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
     chooseSky(world, query);
+    // The world's chart, read once its land is handed, so the sea starts as
+    // it does without one.
+    const chartFile = seed === null ? null : await fetchSandboxChart(seed);
     const parts = makeChart(world, sandboxModels(chartFile), null);
     if (chartFile !== null) {
       chartSandbox(

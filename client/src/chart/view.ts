@@ -654,7 +654,11 @@ export class ChartView {
   #rank(e: ChartEntry): number {
     const look = this.#look;
     if (e.subject === 'island') {
-      if (e.number === 0 || e.worth >= look.great) {
+      if (e.number === 0) {
+        // The main port's island, lettered before all: the chart's middle.
+        return 4;
+      }
+      if (e.worth >= look.great) {
         return 3;
       }
       return e.worth >= look.middling ? 2 : 1;
