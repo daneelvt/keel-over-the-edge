@@ -20,6 +20,7 @@ import {
 } from '../chart/store';
 import type { BoatAt } from '../chart/view';
 import type { ChartEntry } from '../net/messages';
+import { type Countdown, endText } from './countdown';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 
@@ -33,8 +34,16 @@ export interface ChartSea {
   lip: number;
   /** The lights' characters' notations, by index. */
   characters: readonly string[];
-  /** The news, a page at a time. */
+  /** The news, a page at a time, and its columns. */
   news: NewsSource;
+  columns: readonly NewsColumn[];
+}
+
+/** A column of the news: what its items tell of, what is charted or the world itself. */
+export interface NewsColumn {
+  id: string;
+  title: string;
+  of: string;
 }
 
 /** "Charted by <name>, Tuesday", the name as the player wrote it. */
@@ -304,6 +313,8 @@ export interface NewsItem {
   east: number;
   north: number;
   also: { subject: string; number: number; title: string }[];
+  /** An item about the world itself: the end it tells of, ms of UTC. */
+  endsAt?: number;
 }
 
 /** The news, a page at a time, older than before (an item's id), or the newest. */
@@ -351,8 +362,33 @@ export function chartNews(store: ChartStore, news: (e: ChartEntry) => boolean): 
   };
 }
 
-/** The news: a sheet of the period, its column of discoveries, a tap showing where on the chart. */
-export function NewsSheet({ sea }: { sea: ChartSea }) {
+/** An item of the news about what is charted. */
+function ChartedItem({ sea, it, now }: { sea: ChartSea; it: NewsItem; now: number }) {
+  return (
+    <li>
+      <button type="button" onClick={() => sea.chart.showPoint(it.east, it.north)}>
+        <span class="news-title">{it.title.toUpperCase()}</span>
+        {it.what !== '' ? `, ${it.what}` : ''}
+        {it.also.length > 0 ? `, with ${it.also.map((a) => a.title).join(' and ')}` : ''}. Charted
+        by <PlayerText text={it.by} />
+        {it.ai ? ' (AI)' : ''}, {dayText(it.at, now)}.
+      </button>
+    </li>
+  );
+}
+
+/** An item of the Notices to Mariners: the world's end, in the reader's own time. */
+function WorldItem({ it, zone }: { it: NewsItem; zone: string }) {
+  return (
+    <li class="news-world">
+      <span class="news-title">{it.title.toUpperCase()}.</span> The falls take this world on{' '}
+      {endText(it.endsAt ?? 0, zone)}.
+    </li>
+  );
+}
+
+/** The news: a sheet of the period, its columns of discoveries and of notices to mariners, a tap showing where on the chart. */
+export function NewsSheet({ sea, end = null }: { sea: ChartSea; end?: Countdown | null }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [more, setMore] = useState(false);
   const [fresh, setFresh] = useState(0);
@@ -382,32 +418,38 @@ export function NewsSheet({ sea }: { sea: ChartSea }) {
     };
   }, [sea]);
   const now = Date.now();
+  const worldOf = new Set(sea.columns.filter((c) => c.of === 'world').map((c) => c.id));
+  const notices = items.filter((it) => worldOf.has(it.column));
+  const charted = items.filter((it) => !worldOf.has(it.column));
+  const zone = end?.end.value?.zone ?? '';
   return (
     <section class="chart-panel news-sheet" aria-label="The news">
       <header class="news-masthead">
         <h2>The Shipping Intelligence</h2>
-        <p>Discoveries</p>
+        <p>{sea.columns.map((c) => c.title).join(' · ')}</p>
       </header>
+      {notices.length > 0 ? (
+        <section class="news-column" aria-label="Notices to Mariners">
+          <h3>{sea.columns.find((c) => c.of === 'world')?.title}</h3>
+          <ol class="news-items">
+            {notices.map((it) => (
+              <WorldItem key={it.id} it={it} zone={zone} />
+            ))}
+          </ol>
+        </section>
+      ) : null}
       {fresh > 0 ? (
         <button type="button" class="news-fresh" onClick={() => void load(null)}>
           {fresh} new {fresh === 1 ? 'discovery' : 'discoveries'}: read
         </button>
       ) : null}
       {failed ? <p class="news-failed">The news cannot be had just now.</p> : null}
-      {items.length === 0 && !failed ? (
+      {charted.length === 0 && !failed ? (
         <p class="news-none">Nothing charted yet: the chart is blank.</p>
       ) : null}
       <ol class="news-items">
-        {items.map((it) => (
-          <li key={it.id}>
-            <button type="button" onClick={() => sea.chart.showPoint(it.east, it.north)}>
-              <span class="news-title">{it.title.toUpperCase()}</span>
-              {it.what !== '' ? `, ${it.what}` : ''}
-              {it.also.length > 0 ? `, with ${it.also.map((a) => a.title).join(' and ')}` : ''}.
-              Charted by <PlayerText text={it.by} />
-              {it.ai ? ' (AI)' : ''}, {dayText(it.at, now)}.
-            </button>
-          </li>
+        {charted.map((it) => (
+          <ChartedItem key={it.id} sea={sea} it={it} now={now} />
         ))}
       </ol>
       {more ? (
@@ -423,8 +465,20 @@ export function NewsSheet({ sea }: { sea: ChartSea }) {
   );
 }
 
+/** The countdown at the chart's rim, and at the head of its list. */
+function RimCountdown({ end }: { end: Countdown | null }) {
+  if (end === null || end.text.value === '') {
+    return null;
+  }
+  return (
+    <p class={`chart-falls${end.closing.value ? ' closing' : ''}`} data-readout="chart-falls">
+      <span role="timer">Falls in {end.text.value}</span>
+    </p>
+  );
+}
+
 /** The chart over the whole screen, its list, or the news. */
-export function ChartScreen({ sea }: { sea: ChartSea }) {
+export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdown | null }) {
   const chart = sea.chart;
   const surface = useGestures(sea);
   const labels = useRef<HTMLDivElement | null>(null);
@@ -441,20 +495,24 @@ export function ChartScreen({ sea }: { sea: ChartSea }) {
       <header class="chart-top">
         <Tabs sea={sea} />
         <Position sea={sea} />
+        <RimCountdown end={end} />
       </header>
       {mode === 'chart' && picked !== null ? (
         <ChartBox sea={sea} e={picked} close={() => (chart.picked.value = null)} />
       ) : null}
       {mode === 'list' ? <ChartList sea={sea} /> : null}
-      {mode === 'news' ? <NewsSheet sea={sea} /> : null}
+      {mode === 'news' ? <NewsSheet sea={sea} end={end} /> : null}
     </div>
   );
 }
 
 /** The pocket chart: the whole disk small, tilted, with the boat; a tap opens the chart. */
-export function PocketChart({ sea }: { sea: ChartSea }) {
+export function PocketChart({ sea, end = null }: { sea: ChartSea; end?: Countdown | null }) {
   const canvas = useRef<HTMLCanvasElement | null>(null);
-  const [caption, setCaption] = useState('Chart');
+  const [edge, setCaption] = useState('Chart');
+  // In the world's last days the caption carries the countdown too.
+  const caption =
+    end?.closing.value && end.text.value !== '' ? `${edge} · falls ${end.text.value}` : edge;
   useEffect(() => {
     const c = canvas.current;
     if (c === null) {

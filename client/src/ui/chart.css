@@ -134,6 +134,31 @@
   color: var(--gold, #e8b450);
 }
 
+.chart-falls {
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgb(26 36 44 / 72%);
+  color: #f2efe7;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.chart-falls.closing {
+  color: #e8b450;
+  font-weight: 500;
+}
+
+.news-column h3 {
+  margin: 8px 0 4px;
+  font-family: "IM Fell English SC", serif;
+  font-weight: 400;
+}
+
+.news-world {
+  padding: 4px 0;
+}
+
 .chart-position {
   margin: 0;
   padding: 6px 12px;

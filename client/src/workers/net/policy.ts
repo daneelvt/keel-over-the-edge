@@ -20,6 +20,9 @@ export type Plan =
   | { kind: 'version' }
   | { kind: 'removed' };
 
+/** The jitter of a reconnection after the world has ended, ms: every page at once, spread. */
+export const ENDED_WAIT = [200, 2000] as const;
+
 /** A wait under a ceiling of base × 2^attempt, at most WAIT_CAP. */
 export function backoff(attempt: number, base: number, random: () => number): number {
   return random() * Math.min(WAIT_CAP, base * 2 ** attempt);
@@ -47,6 +50,10 @@ export function afterClose(
     case 1012:
       // A restart: back in 0.5 to 5 s, spread out.
       return { kind: 'wait', ms: 500 + random() * 4500 };
+    case 4004:
+      // The falls have taken the world: the next is open, back in 0.2 to
+      // 2 s, spread out.
+      return { kind: 'wait', ms: ENDED_WAIT[0] + random() * (ENDED_WAIT[1] - ENDED_WAIT[0]) };
     case 1013:
       return { kind: 'wait', ms: backoff(attempt, 2000, random) };
     case 1003:

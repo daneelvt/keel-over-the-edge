@@ -284,7 +284,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	}
 	h.loop = loop.New(lcfg)
 	h.game = edge.New(edge.Config{
-		Bus: b, World: store.AccountID(row.ID).String(), Epoch: epoch, Ends: row.EndsAt, Clock: h.loop,
+		Bus: b, World: store.AccountID(row.ID).String(), Epoch: epoch, Ends: row.EndsAt, Closing: closingOf(row, cfg), Zone: zoneOf(cfg), Clock: h.loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: p.log, Metrics: p.metrics, Fail: api.WriteError,
 		Land: cfg.Land, Chunks: rw.handout, Circulation: circulationOf(rw.terrain),

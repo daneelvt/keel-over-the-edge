@@ -26,6 +26,7 @@ import {
   sheetIndex,
   sheetOf,
 } from '../predict/predictor';
+import type { WorldEnd } from '../ui/countdown';
 import { queueLines } from '../ui/queue';
 import {
   Ahead,
@@ -119,6 +120,8 @@ export class Online {
   onBump: ((b: BumpTold) => void) | null = null;
   /** Told of each Welcome's world, and whether its land is sailed. */
   onWorld: ((world: string, land: boolean) => void) | null = null;
+  /** Told of each Welcome's world's end. */
+  onEnd: ((end: WorldEnd) => void) | null = null;
   /** Told of the chunks of land the server hands. */
   onChunks: ((c: ChunksHanded) => void) | null = null;
   /** Told of the places in chunks just handed. */
@@ -253,6 +256,12 @@ export class Online {
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
         this.onWorld?.(m.world, m.land);
+        this.onEnd?.({
+          world: m.world,
+          ends: m.endsUs / 1000,
+          closing: m.closingUs / 1000,
+          zone: m.zone,
+        });
         // A new connection is sent the lights in range again.
         this.onLights?.(m.light === null ? [] : [m.light], 'all');
         this.tools.value = m.tools;
@@ -313,6 +322,14 @@ export class Online {
       default:
         return;
     }
+  }
+
+  /** The world clock's now as UTC, ms since 1970; NaN before a Welcome. */
+  utcMs(now = nowUs()): number {
+    if (!this.clock.have || this.epochUs === 0) {
+      return Number.NaN;
+    }
+    return (this.epochUs + worldUs(this.clock, now)) / 1000;
   }
 
   /** Reconciles one snapshot; the tests call it directly. */

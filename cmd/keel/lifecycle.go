@@ -16,6 +16,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
@@ -582,4 +583,22 @@ func websiteOf(playOrigin string) string {
 		return ""
 	}
 	return "https://" + rest
+}
+
+// closingOf is when a world's last days begin, zero for a world with no
+// end known.
+func closingOf(row store.World, cfg config.Config) time.Time {
+	if row.EndsAt.IsZero() {
+		return time.Time{}
+	}
+	return row.EndsAt.Add(-cfg.Schedule.Notice)
+}
+
+// zoneOf is the time zone the schedule's ends are published in, "" for a
+// schedule of periods.
+func zoneOf(cfg config.Config) string {
+	if cfg.Schedule.Zone == nil {
+		return ""
+	}
+	return cfg.Schedule.Zone.String()
 }

@@ -143,6 +143,7 @@ export function makeChart(world: SeaScene, models: Models, news: NewsSource | nu
     scale: catalog.sky.scale,
     lip: w.disk.radius,
     characters: w.lights.characters.map((c) => c.notation),
+    columns: catalog.news.columns.map((c) => ({ id: c.id, title: c.title, of: c.of })),
     news:
       news ??
       chartNews(

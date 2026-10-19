@@ -8,6 +8,7 @@
 import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
+import type { Countdown } from './countdown';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 import type { SettingsSignal } from './settings';
@@ -53,6 +54,7 @@ export function Menu({
   fly = null,
   notices = null,
   chart = null,
+  end = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
@@ -64,12 +66,19 @@ export function Menu({
   notices?: Notices | null;
   /** Opens the chart, its list or the news; null where there is none. */
   chart?: ((mode: ChartMode) => void) | null;
+  /** The countdown to the world's end; null where there is none. */
+  end?: Countdown | null;
 }) {
   const s = settings.value.value;
   return (
     <section class="panel menu" aria-label="Settings">
       <SailingAs sailor={sailor} />
       {connection !== null ? <RoundTrip view={connection} /> : null}
+      {end !== null && end.when.value !== '' ? (
+        <p class="menu-end" data-readout="ends">
+          The falls take this world on {end.when.value}
+        </p>
+      ) : null}
       {chart !== null ? (
         <div class="menu-chart">
           <button type="button" onClick={() => chart('chart')}>

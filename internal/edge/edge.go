@@ -141,10 +141,13 @@ type Config struct {
 	// its time counts from, which Welcome carries too.
 	World string
 	Epoch time.Time
-	// Ends is when the world ends, as Welcome tells it; zero for no end
-	// known.
-	Ends  time.Time
-	Clock Clock
+	// Ends is when the world ends, as Welcome tells it, and Closing when
+	// its last days begin; zero for no end known. Zone is the time zone the
+	// schedule's ends are published in, "" for UTC.
+	Ends    time.Time
+	Closing time.Time
+	Zone    string
+	Clock   Clock
 	// Protocol, Catalog and Layout are the versions a client's Hello must
 	// carry.
 	Protocol string

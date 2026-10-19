@@ -257,7 +257,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
 		Boat: c.boat, Kind: uint32(f.Kind[s]), Rejoined: c.rejoined,
 		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation,
-		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: endsUs(e.cfg.Ends),
+		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: endsUs(e.cfg.Ends), ClosingUs: endsUs(e.cfg.Closing), Zone: e.cfg.Zone,
 	}}}, outWelcome)
 	c.welcomed = ok
 	if ok && e.cfg.Chart != nil {

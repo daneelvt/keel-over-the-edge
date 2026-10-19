@@ -174,6 +174,8 @@ describe('after a close', () => {
       const p = afterClose(code, attempt, true, r);
       return p.kind === 'wait' ? p.ms : -1;
     };
+    expect(wait(4004, 0, () => 0)).toBe(200);
+    expect(wait(4004, 7, top)).toBeCloseTo(2000, 0);
     expect(wait(1012, 0, () => 0)).toBe(500);
     expect(wait(1012, 5, top)).toBeCloseTo(5000, 0);
     for (const [code, base] of [

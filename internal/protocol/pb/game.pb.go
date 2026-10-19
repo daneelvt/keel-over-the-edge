@@ -2406,7 +2406,13 @@ type Welcome struct {
 	// known. At its end the falls take the world, its last tick is
 	// (ends_us - epoch_us) * 30 / 1e6, and every connection is closed with
 	// 4004: the next world is reached by connecting again.
-	EndsUs        int64 `protobuf:"varint,12,opt,name=ends_us,json=endsUs,proto3" json:"ends_us,omitempty"`
+	EndsUs int64 `protobuf:"varint,12,opt,name=ends_us,json=endsUs,proto3" json:"ends_us,omitempty"`
+	// When the world begins closing, its last days: microseconds of UTC
+	// since 1970, 0 for no end known. The game warns of the end from then.
+	ClosingUs int64 `protobuf:"varint,13,opt,name=closing_us,json=closingUs,proto3" json:"closing_us,omitempty"`
+	// The time zone the schedule's ends are published in, an IANA name such
+	// as America/New_York; "" for a schedule of periods, published in UTC.
+	Zone          string `protobuf:"bytes,14,opt,name=zone,proto3" json:"zone,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2523,6 +2529,20 @@ func (x *Welcome) GetEndsUs() int64 {
 		return x.EndsUs
 	}
 	return 0
+}
+
+func (x *Welcome) GetClosingUs() int64 {
+	if x != nil {
+		return x.ClosingUs
+	}
+	return 0
+}
+
+func (x *Welcome) GetZone() string {
+	if x != nil {
+		return x.Zone
+	}
+	return ""
 }
 
 // Pong answers a Ping.
@@ -2745,7 +2765,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05in_ms\x18\x01 \x01(\rR\x04inMs\">\n" +
 	"\x06Queued\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\rR\bposition\x12\x18\n" +
-	"\awaiting\x18\x02 \x01(\rR\awaiting\"\xc1\x02\n" +
+	"\awaiting\x18\x02 \x01(\rR\awaiting\"\xf4\x02\n" +
 	"\aWelcome\x12\x14\n" +
 	"\x05world\x18\x01 \x01(\tR\x05world\x12\x12\n" +
 	"\x04tick\x18\x02 \x01(\x03R\x04tick\x12\"\n" +
@@ -2759,7 +2779,10 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05tools\x18\n" +
 	" \x01(\bR\x05tools\x12$\n" +
 	"\x05light\x18\v \x01(\v2\x0e.keel.v1.LightR\x05light\x12\x17\n" +
-	"\aends_us\x18\f \x01(\x03R\x06endsUs\"P\n" +
+	"\aends_us\x18\f \x01(\x03R\x06endsUs\x12\x1d\n" +
+	"\n" +
+	"closing_us\x18\r \x01(\x03R\tclosingUs\x12\x12\n" +
+	"\x04zone\x18\x0e \x01(\tR\x04zone\"P\n" +
 	"\x04Pong\x12$\n" +
 	"\x0eclient_time_us\x18\x01 \x01(\x03R\fclientTimeUs\x12\"\n" +
 	"\rworld_time_us\x18\x02 \x01(\x03R\vworldTimeUs*{\n" +

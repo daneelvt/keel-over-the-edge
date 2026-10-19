@@ -32,7 +32,7 @@ notices:
       stays: 5
       text: "{who} charted {name}, a great discovery {where}"
       folded: "{count} great discoveries charted"
-    - id: falls-coming
+    - id: closing-world
       name: The world's end
       on: falls-coming
       level: active
@@ -40,7 +40,7 @@ notices:
       stays: 8
       text: The falls take this world on {day}
       folded: The falls take this world on {day}
-    - id: falls-soon
+    - id: ending-world
       name: The world's end near
       on: falls-soon
       before: [60, 10]
@@ -49,7 +49,7 @@ notices:
       stays: 8
       text: The falls take this world in {left}
       folded: The falls take this world in {left}
-    - id: new-world
+    - id: begun-world
       name: A new world
       on: new-world
       level: passive

@@ -454,6 +454,12 @@ message Welcome {
   // (ends_us - epoch_us) * 30 / 1e6, and every connection is closed with
   // 4004: the next world is reached by connecting again.
   int64 ends_us = 12;
+  // When the world begins closing, its last days: microseconds of UTC
+  // since 1970, 0 for no end known. The game warns of the end from then.
+  int64 closing_us = 13;
+  // The time zone the schedule's ends are published in, an IANA name such
+  // as America/New_York; "" for a schedule of periods, published in UTC.
+  string zone = 14;
 }
 
 // Pong answers a Ping.

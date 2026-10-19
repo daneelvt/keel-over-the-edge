@@ -179,6 +179,9 @@ export class NetWorker {
             circulation: w.circulation,
             tools: w.tools,
             light: w.light === undefined ? null : lightSeen(w.light),
+            endsUs: Number(w.endsUs),
+            closingUs: Number(w.closingUs),
+            zone: w.zone,
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#setStatus('sailing');
