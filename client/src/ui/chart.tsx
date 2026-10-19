@@ -486,7 +486,9 @@ export function PocketChart({ sea }: { sea: ChartSea }) {
 
 /** Draws the pocket chart: a disk seen tilted, its charted islands and lights, the mist band, the boat. */
 export function drawPocket(c: HTMLCanvasElement, sea: ChartSea, b: BoatAt): void {
-  const ctx = c.getContext('2d');
+  // Drawn by the CPU: a canvas the GPU draws, drawn again twice a second,
+  // took most of the sea's frames from a second page on a software renderer.
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   if (ctx === null) {
     return;
   }
