@@ -555,7 +555,7 @@ type ownerConfig struct {
 	sailed   store.World
 	wcfg     *weather.Config
 	timeline *weather.Timeline // nil for a world whose week is not yet made
-	terrain  *sim.Terrain // nil with land off
+	terrain  *sim.Terrain      // nil with land off
 	db       database
 	sessions *auth.Cache
 	game     *edge.Edge
@@ -877,7 +877,7 @@ func weatherRoute(b *bus.Bus, cat *catalog.Catalog) http.Handler {
 			}
 			wx = bus.Weather{Mode: bus.WeatherSystem, Kind: uint16(k), East: int32(math.Round(east * 4)), North: int32(math.Round(north * 4)),
 				In: uint32(in.Seconds() * physics.StepsPerSecond)}
-		
+
 		case r.URL.Path == "/debug/wind":
 			knots, err1 := strconv.ParseFloat(q.Get("knots"), 64)
 			from, err2 := strconv.ParseFloat(q.Get("from"), 64)

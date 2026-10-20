@@ -47,17 +47,17 @@ const MaxKinds = 8
 
 // Units of a System's whole numbers.
 const (
-	quarterMetre   = 0.25
-	strengthSteps  = 4096
-	strengthStep   = 1.0 / strengthSteps
-	hundredthHPa   = 0.01
-	thousandth     = 0.001
-	standardPress  = 1013.25 // hPa: a spell with no level of its own
-	invSqrtE       = 0.6065306597126334
-	sqrtE          = 1.6487212707001282
-	gustRingInner  = 0.6 // a system's gusts are whole within this share of its size
-	gustRingOuter  = 1.6 // and nothing beyond this
-	minArcRadius   = 0.1 // an arc closes on the centre no nearer than this share of its first radius
+	quarterMetre  = 0.25
+	strengthSteps = 4096
+	strengthStep  = 1.0 / strengthSteps
+	hundredthHPa  = 0.01
+	thousandth    = 0.001
+	standardPress = 1013.25 // hPa: a spell with no level of its own
+	invSqrtE      = 0.6065306597126334
+	sqrtE         = 1.6487212707001282
+	gustRingInner = 0.6 // a system's gusts are whole within this share of its size
+	gustRingOuter = 1.6 // and nothing beyond this
+	minArcRadius  = 0.1 // an arc closes on the centre no nearer than this share of its first radius
 )
 
 // Keyframe is the systems at a tick: each slot's system, or none.

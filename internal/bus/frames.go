@@ -27,15 +27,15 @@ type Frame struct {
 	// Spells are the spells of weather in play about the tick: those a
 	// client needs to step its boat ahead of the server and replay it
 	// behind, which follow from the tick and Weathers.
-	Spells   [physics.WeatherSpells]physics.Spell
-	NSpells  int32
+	Spells  [physics.WeatherSpells]physics.Spell
+	NSpells int32
 	// Systems are the developer's weather systems, by their birth: kept
 	// while the sea may still follow them.
 	Systems []System
 	// Keys are the systems' keyframes about the tick: at the last keyframe
 	// at or before it and the two after, which follow from the tick, the
 	// weathers and the systems.
-	Keys [KeyFrames]physics.Keyframe
+	Keys     [KeyFrames]physics.Keyframe
 	Sea      Sea    // what raises the waves, area by area
 	NextBoat uint64 // the next boat's ID: IDs are never reused within a world
 	// Held: admission is held (Hold): a Join without a boat waits in the

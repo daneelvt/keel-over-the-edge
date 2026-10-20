@@ -874,19 +874,6 @@ func logTimeline(t *testing.T, h replay.Header, b *worldgen.Bundle) *weather.Tim
 	return tl
 }
 
-func timeline(t *testing.T) *weather.Timeline {
-	t.Helper()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tl, err := weather.FromCatalog(cat)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return tl
-}
-
 // TestPublicListeners checks that neither public listener serves an
 // internal path, and that the agents' listener serves nothing.
 func TestPublicListeners(t *testing.T) {

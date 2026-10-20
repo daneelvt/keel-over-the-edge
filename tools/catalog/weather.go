@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"slices"
 	"strings"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -300,15 +299,6 @@ func longRun(table [][]float64, length []float64) []float64 {
 		time[i] /= sum
 	}
 	return time
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
 }
 
 func goWind(b *bytes.Buffer, wind, regime []physicsField) {

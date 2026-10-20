@@ -349,7 +349,9 @@ export class Sandbox implements BoatDriver {
       const P = RECORDS.spell;
       const spell = heldSpell(this.#physics, c, frontal, 0);
       // Veering the wind as a week's fronts do, by the middle of their veer.
-      const veer = Math.round((((c.week.veer[0] ?? 0) + (c.week.veer[1] ?? 0)) / 2 / 360) * WEATHER.turnSteps);
+      const veer = Math.round(
+        (((c.week.veer[0] ?? 0) + (c.week.veer[1] ?? 0)) / 2 / 360) * WEATHER.turnSteps,
+      );
       spell[P.from] = ((base[P.from] ?? 0) + veer) % WEATHER.turnSteps;
       const toward = (((spell[P.from] ?? 0) + WEATHER.turnSteps / 2) % WEATHER.turnSteps) as number;
       const a = (toward / WEATHER.turnSteps) * 2 * Math.PI;

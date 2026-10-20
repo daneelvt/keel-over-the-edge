@@ -299,9 +299,8 @@ func checkStorms(t *testing.T, seed uint64, tl *Timeline, w *Week, cfg *Config, 
 			_, all := weatherAt(tl, at, nil)
 			_, rest := weatherAt(tl, at, func(k int) bool { return k != slot })
 			own := stormOnly(tl, at, slot)
-			cx, cy := physics.SystemTrack(&s.SystemRecord, float64(at))
 			wob := physics.SystemAt(&s.SystemRecord, float64(at))
-			cx, cy = wob.East/4, wob.North/4
+			cx, cy := wob.East/4, wob.North/4
 			for rr := 0.1 * s.Size; rr < 1.5*s.Size; rr += 0.1 * s.Size {
 				for a := 0.0; a < 360; a += 15 {
 					x, y := cx+rr*math.Sin(a*degree), cy+rr*math.Cos(a*degree)

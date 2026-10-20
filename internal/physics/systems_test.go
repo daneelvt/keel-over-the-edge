@@ -157,7 +157,7 @@ func TestSystemCut(t *testing.T) {
 		if d := math.Abs(in.MeanSpeed - out.MeanSpeed); d > 0.1*knotSpeed {
 			t.Errorf("%s: the wind steps by %.3f knots at its cut", kind, d/knotSpeed)
 		}
-		pin, pout := PressureAt(&at, -(reach - 0.01), 0), PressureAt(&at, -(reach + 0.01), 0)
+		pin, pout := PressureAt(&at, -(reach-0.01), 0), PressureAt(&at, -(reach+0.01), 0)
 		if d := math.Abs(pin - pout); d > 0.01 {
 			t.Errorf("%s: the pressure steps by %.4f hPa at its cut", kind, d)
 		}

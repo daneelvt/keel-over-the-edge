@@ -29,8 +29,8 @@ const (
 
 // weatherPage is weather.json.
 type weatherPage struct {
-	Now            int64               `json:"now"`  // the world's tick now; 0 for a world not begun
-	At             int64               `json:"at"`   // the tick shown
+	Now            int64               `json:"now"` // the world's tick now; 0 for a world not begun
+	At             int64               `json:"at"`  // the tick shown
 	TicksPerSecond int                 `json:"ticksPerSecond"`
 	Epoch          int64               `json:"epoch"` // the world's tick 0, ms of UTC
 	Until          int64               `json:"until"` // the tick the week reaches to
