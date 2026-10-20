@@ -47,12 +47,15 @@ beforeAll(async () => {
 });
 
 describe('the wind in the module', () => {
-  test('is the server’s, bit for bit: the wind, the gust field’s frame and the wave wind', () => {
+  test('is the server’s, bit for bit: the wind, the pressure, the gust field’s frame and the wave wind', () => {
     const report = checkWind(physics, wind);
     expect(report.problems).toEqual([]);
-    // Seven weathers of 240 points of six values, a frame of 18 and a wave wind of two.
-    expect(wind.cases.length).toBeGreaterThanOrEqual(7);
-    expect(report.values).toBe(wind.cases.length * (240 * 6 + SIZES.gustFrame + 2));
+    // Nine weathers, two with weather systems and one a front crossing, of
+    // 240 points of six values and a pressure, a frame of 18 and a wave
+    // wind of two.
+    expect(wind.cases.length).toBeGreaterThanOrEqual(9);
+    expect(wind.cases.filter((c) => (c.keys ?? []).length > 0)).toHaveLength(2);
+    expect(report.values).toBe(wind.cases.length * (240 * 7 + SIZES.gustFrame + 2));
   });
 
   test('a module that differs is told so', () => {

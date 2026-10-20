@@ -429,13 +429,15 @@ func mix64(x uint64) uint64 {
 	return x
 }
 
-func (s stream) float() float64              { return s.r.Float64() }
-func (s stream) in(lo, hi float64) float64   { return lo + float64(s.float()*(hi-lo)) }
-func (s stream) chance(p float64) bool       { return s.float() < p }
-func (s stream) seed32() uint32              { return uint32(s.r.Uint64() >> 32) }
-func (s stream) ticks(lo, hi int64) int64    { return lo + int64(s.r.Uint64()%uint64(hi-lo+1)) }
-func (s stream) steps(lo, hi int32) int32    { return lo + int32(s.r.Uint64()%uint64(hi-lo+1)) }
-func (s stream) turn() float64               { return float64(s.r.Uint64() % physics.TurnSteps) }
+// float is a number in [0, 1), rounded as it is drawn so that Go fuses it
+// into no sum it is part of.
+func (s stream) float() float64            { return float64(s.r.Float64()) }
+func (s stream) in(lo, hi float64) float64 { return lo + float64(s.float()*(hi-lo)) }
+func (s stream) chance(p float64) bool     { return s.float() < p }
+func (s stream) seed32() uint32            { return uint32(s.r.Uint64() >> 32) }
+func (s stream) ticks(lo, hi int64) int64  { return lo + int64(s.r.Uint64()%uint64(hi-lo+1)) }
+func (s stream) steps(lo, hi int32) int32  { return lo + int32(s.r.Uint64()%uint64(hi-lo+1)) }
+func (s stream) turn() float64             { return float64(s.r.Uint64() % physics.TurnSteps) }
 func (s stream) pick(weights []float64) int { // an index, by weight
 	total := 0.0
 	for _, w := range weights {

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Checks the wind in the physics module against the server's: for each
-// weather of internal/physics/testdata/wind.json, the wind in full at its
-// points, the gust field's frame and the wave wind at its place, which Go
-// wrote and the module must give bit for bit. The tests run it under Node;
-// the developer page runs it on a phone.
+// weather of internal/physics/testdata/wind.json, the wind in full and the
+// pressure at its points, the gust field's frame and the wave wind at its
+// place, which Go wrote and the module must give bit for bit. The tests run
+// it under Node; the developer page runs it on a phone.
 
-import { type RecordValues, spellOf, toHex } from './golden';
-import { ARRAYS, RECORDS } from './layout.gen';
-import { type Physics, WIND_VALUES } from './physics';
+import { type RecordValues, setRecord, spellOf, toHex } from './golden';
+import { ARRAYS, RECORDS, SIZES } from './layout.gen';
+import { type Keyframe, type Physics, WIND_VALUES } from './physics';
 
 /** One weather of the file: the spells, where and when, and what Go computed there. */
 export interface WindCase {
@@ -29,6 +29,10 @@ export interface WindCase {
   frame: Record<string, string[]>;
   /** The wave wind at the origin: its speed and direction, as bits. */
   wave: string[];
+  /** The weather systems' keyframes: each its tick and its systems by their slots, by their fields' names. */
+  keys?: { tick: number; systems: Record<string, RecordValues> }[];
+  /** The pressure at each point, hPa, as bits. */
+  pressure: string[];
 }
 
 export interface WindFile {
@@ -41,9 +45,20 @@ export interface WindReport {
   problems: string[];
 }
 
-/** Puts a case's spells in play in the module, and its tick for drawing. */
+/** Puts a case's spells and keyframes in play in the module, and its tick for drawing. */
 export function loadWindCase(physics: Physics, c: WindCase): void {
   physics.setSpells(c.spells.map(spellOf));
+  physics.setKeyframes(
+    (c.keys ?? []).map((k): Keyframe => {
+      const systems: Float64Array[] = [];
+      for (const [slot, values] of Object.entries(k.systems)) {
+        const s = new Float64Array(SIZES.system);
+        setRecord(s, 'system', values);
+        systems[Number(slot)] = s;
+      }
+      return { tick: k.tick, systems };
+    }),
+  );
   physics.windDrawAt(c.tick);
 }
 
@@ -84,6 +99,13 @@ export function checkWind(physics: Physics, file: WindFile): WindReport {
           want[i],
         );
       }
+    }
+    for (const [i, want] of c.pressure.entries()) {
+      differ(
+        `${c.name}, point ${i}, the pressure`,
+        toHex(physics.pressure(at[2 * i] ?? 0, at[2 * i + 1] ?? 0)),
+        want,
+      );
     }
     const wave = physics.waveWind(east, north, c.tick, [0, 0]);
     differ(`${c.name}, the wave wind's speed`, toHex(wave[0] ?? Number.NaN), c.wave[0]);
