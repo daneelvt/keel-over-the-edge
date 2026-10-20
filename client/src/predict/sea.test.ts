@@ -55,8 +55,23 @@ describe('the sea in the module', () => {
     for (let k = 0; k < 400; k++) {
       physics.seaWindow(1, 30, 18, SEA.window);
       for (let i = 0; i < SEA.window * SEA.window; i++) {
-        const c = physics.seaCurrent(30 + (i % SEA.window), 18 + Math.floor(i / SEA.window), current);
-        physics.seaArea(1, i, 900 + ((k + i) % 300), (k * 97) % SEA.fromSteps, 11112, 60, 580, 9000, c[0] ?? 0, c[1] ?? 0);
+        const c = physics.seaCurrent(
+          30 + (i % SEA.window),
+          18 + Math.floor(i / SEA.window),
+          current,
+        );
+        physics.seaArea(
+          1,
+          i,
+          900 + ((k + i) % 300),
+          (k * 97) % SEA.fromSteps,
+          11112,
+          60,
+          580,
+          9000,
+          c[0] ?? 0,
+          c[1] ?? 0,
+        );
       }
       physics.seaSeal(1);
       physics.leeGrid(1, 300, 260);
