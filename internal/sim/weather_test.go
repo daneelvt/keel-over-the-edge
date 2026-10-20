@@ -366,6 +366,32 @@ func BenchmarkTickInWeather(b *testing.B) {
 			break
 		}
 	}
+	// Four squalls over the boats in a trade spell held: the systems' own
+	// cost, in the same sea as regime1's.
+	for _, n := range []int{100, 1000} {
+		b.Run(fmt.Sprintf("trade-and-squalls/%d", n), func(b *testing.B) {
+			w, err := New(Config{Kinds: kinds(b), Waves: waves(b), Weather: tl, Workers: runtime.GOMAXPROCS(0), Tick: 740_000_000})
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.Cleanup(w.Close)
+			fill(b, w, n, 1)
+			send(b, w, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherHeld, Regime: 1}})
+			for i := range 4 {
+				send(b, w, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherSystem, Kind: uint16(weather.KindIndex(cat, "squall")),
+					East: int32(i*400 - 600), North: 0, In: 30 * physics.StepsPerSecond}})
+			}
+			for range 30 * physics.StepsPerSecond {
+				w.Tick()
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				w.Tick()
+			}
+			b.ReportMetric(float64(w.Workers()), "workers")
+			b.ReportMetric(float64(w.sea.view.Window.Count), "waves")
+		})
+	}
 	for _, n := range []int{100, 1000} {
 		b.Run(fmt.Sprintf("storm-and-squalls/%d", n), func(b *testing.B) {
 			w, err := New(Config{Kinds: kinds(b), Waves: waves(b), Weather: tl, Workers: runtime.GOMAXPROCS(0), Tick: storm})
@@ -386,6 +412,7 @@ func BenchmarkTickInWeather(b *testing.B) {
 				w.Tick()
 			}
 			b.ReportMetric(float64(w.Workers()), "workers")
+			b.ReportMetric(float64(w.sea.view.Window.Count), "waves")
 		})
 	}
 	for _, regime := range []uint16{1, 3} {
