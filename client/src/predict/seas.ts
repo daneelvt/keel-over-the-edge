@@ -34,6 +34,8 @@ interface Held {
   swellHeight: Uint32Array;
   swellPeriod: Uint32Array;
   swellFrom: Uint32Array;
+  /** Each area's current, east and north in steps of 0.01 m/s, if given with the window; else the module's. */
+  current: { east: Int32Array; north: Int32Array } | null;
 }
 
 const AREAS = SEA.window * SEA.window;
@@ -52,6 +54,7 @@ export class Seas {
     swellHeight: new Uint32Array(AREAS),
     swellPeriod: new Uint32Array(AREAS),
     swellFrom: new Uint32Array(AREAS),
+    current: null,
   }));
   /** The swell of the last SeaAreas that had it. */
   readonly #swellHeight = new Uint32Array(AREAS);
@@ -77,9 +80,11 @@ export class Seas {
 
   /**
    * Takes a SeaAreas: it replaces the window held for the same tick, or else
-   * the one with the earlier tick. One that is malformed is let go.
+   * the one with the earlier tick. One that is malformed is let go. A
+   * developer's window may give each area's current, east and north in
+   * steps of 0.01 m/s, in place of the one the module works out.
    */
-  receive(m: SeaAreas): void {
+  receive(m: SeaAreas, current: { east: number[]; north: number[] } | null = null): void {
     const n = m.size * m.size;
     if (
       !Number.isInteger(m.size) ||
@@ -127,6 +132,10 @@ export class Seas {
       h.swellPeriod[i] = this.#swellPeriod[i] ?? 0;
       h.swellFrom[i] = this.#swellFrom[i] ?? 0;
     }
+    h.current =
+      current === null
+        ? null
+        : { east: Int32Array.from(current.east), north: Int32Array.from(current.north) };
     this.#apply(slot);
     this.version++;
   }
@@ -151,7 +160,10 @@ export class Seas {
     p.seaWindow(slot, h.col, h.row, h.size);
     const n = h.size * h.size;
     for (let i = 0; i < n; i++) {
-      const c = p.seaCurrent(h.col + (i % h.size), h.row + Math.floor(i / h.size), this.#current);
+      const c =
+        h.current === null
+          ? p.seaCurrent(h.col + (i % h.size), h.row + Math.floor(i / h.size), this.#current)
+          : [h.current.east[i] ?? 0, h.current.north[i] ?? 0];
       p.seaArea(
         slot,
         i,

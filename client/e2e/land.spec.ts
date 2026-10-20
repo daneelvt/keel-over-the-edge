@@ -4,7 +4,7 @@
 // run ./tools/dev -world 1 writes): Port Royal is drawn from the start, in
 // the factory's materials with the dome's bend; the GPU caps the waves on
 // every tile of its coast as the physics module does, and draws no tile on
-// its land; a chunk below the horizon is not drawn, and one far behind is
+// its land; it calms them in the land's lee as the module does; a chunk below the horizon is not drawn, and one far behind is
 // let go and built again on return; a stack's top first shows over the
 // sea where the dome says; and running onto its beach, the boat is aground,
 // pushed off, and said to be.
@@ -85,6 +85,40 @@ test('the GPU caps the waves on a coast’s tiles as the module does, and draws 
   }
   expect(land).toBeGreaterThan(100);
   expect(capped).toBeGreaterThan(10);
+  expect(worst).toBeLessThan(1e-4);
+});
+
+test('the GPU calms the waves in the lee as the module does: in Port Royal’s basin', async ({
+  page,
+}) => {
+  // At a mooring in the basin, in a fresh breeze's sea.
+  await openWorld(page, 196, -14, 0);
+  await page.evaluate(() => {
+    globalThis.keel.setSea('fresh');
+    globalThis.keel.render();
+    globalThis.keel.render();
+  });
+  const got = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    const o = k.info().origin;
+    const scene: number[] = [];
+    for (let dx = -200; dx <= 200; dx += 12.5) {
+      for (let dy = -200; dy <= 200; dy += 12.5) {
+        scene.push(196 + dx - o.east, -(-14 + dy - o.north));
+      }
+    }
+    return k.waveLee(scene);
+  });
+  let worst = 0;
+  let calm = 0;
+  for (const [i, m] of got.module.entries()) {
+    worst = Math.max(worst, Math.abs((got.gpu[i] ?? Number.NaN) - m));
+    if (m < 0.5) {
+      calm++;
+    }
+  }
+  expect(got.fills).toBeGreaterThan(0);
+  expect(calm).toBeGreaterThan(100);
   expect(worst).toBeLessThan(1e-4);
 });
 

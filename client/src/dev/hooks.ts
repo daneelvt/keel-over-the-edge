@@ -67,7 +67,7 @@ import {
   tileIdentity,
   tileLook,
 } from '../ocean/seamaterial';
-import { groundWindow, shelterTexture, shore } from '../ocean/shore';
+import { groundWindow, leeTexture, shelterTexture, shore, waveLeeAt } from '../ocean/shore';
 import { GROUND_ROW, GUST_ROW, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
 import { boatBandAt } from '../ocean/wave';
@@ -590,24 +590,30 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * Puts a sea of the developer's own in the sandbox, in place of the
      * wind's: a window of areas, each with its inputs in whole steps, as a
-     * scenario has them (a swell from the fourth; the current is the
-     * module's at each area). It stays until the boat is next stepped or placed.
+     * scenario has them: a swell from the fourth, and with eight an area's
+     * current, else the module's. It stays until the boat is next stepped
+     * or placed.
      */
     setSeaWindow(col: number, row: number, size: number, areas: number[][]): void {
       const s = offline();
       s.seas.reset();
-      s.seas.receive({
-        tick: 0,
-        col,
-        row,
-        size,
-        speed: areas.map((a) => a[0] ?? 0),
-        from: areas.map((a) => a[1] ?? 0),
-        fetch: areas.map((a) => a[2] ?? 0),
-        swellHeight: areas.map((a) => a[3] ?? 0),
-        swellPeriod: areas.map((a) => a[4] ?? 0),
-        swellFrom: areas.map((a) => a[5] ?? 0),
-      });
+      s.seas.receive(
+        {
+          tick: 0,
+          col,
+          row,
+          size,
+          speed: areas.map((a) => a[0] ?? 0),
+          from: areas.map((a) => a[1] ?? 0),
+          fetch: areas.map((a) => a[2] ?? 0),
+          swellHeight: areas.map((a) => a[3] ?? 0),
+          swellPeriod: areas.map((a) => a[4] ?? 0),
+          swellFrom: areas.map((a) => a[5] ?? 0),
+        },
+        areas.every((a) => a.length >= 8)
+          ? { east: areas.map((a) => a[6] ?? 0), north: areas.map((a) => a[7] ?? 0) }
+          : null,
+      );
       floatBoat();
     },
 
@@ -668,6 +674,54 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       // As float32 holds the points on the GPU.
       const held = points.map(Math.fround);
       return { gpu: Array.from(got.subarray(0, n * 4)), module: Array.from(moduleSea(held)) };
+    },
+    /**
+     * The share of the boat band the land's lee leaves, as the GPU reads it
+     * from its texture at scene points (x and z of each, in turn), beside
+     * the module's at the same points as float32 holds them.
+     */
+    async waveLee(points: number[]): Promise<{ gpu: number[]; module: number[]; fills: number }> {
+      const n = points.length >> 1;
+      const width = 64;
+      const height = Math.max(1, Math.ceil(n / width));
+      const at = new Float32Array(width * height * 4);
+      for (let i = 0; i < n; i++) {
+        at[i * 4] = points[i * 2] ?? 0;
+        at[i * 4 + 1] = points[i * 2 + 1] ?? 0;
+      }
+      const input = new DataTexture(at, width, height, RGBAFormat, FloatType);
+      input.needsUpdate = true;
+      const m = new MeshBasicNodeMaterial();
+      const p = textureLoad(input, ivec2(floor(screenCoordinate))).xy as unknown as Node<'vec2'>;
+      const pass = world.ocean.pass;
+      m.fragmentNode = vec4(waveLeeAt(p, pass.centre, pass.centreHex), 0, 0, 1);
+      const target = new RenderTarget(width, height, {
+        type: FloatType,
+        format: RGBAFormat,
+        depthBuffer: false,
+      });
+      const r = gfx().renderer;
+      const before = r.getRenderTarget();
+      r.setRenderTarget(target);
+      new QuadMesh(m).render(r);
+      r.setRenderTarget(before);
+      const got = await readTarget(r, target, width, height, webgl());
+      target.dispose();
+      input.dispose();
+      m.dispose();
+      const gpu: number[] = [];
+      const module: number[] = [];
+      const o = world.origin.world;
+      const slot = world.ocean.slot;
+      for (let i = 0; i < n; i++) {
+        gpu.push(got[i * 4] ?? Number.NaN);
+        const x = o.x + Math.fround(points[i * 2] ?? 0);
+        const y = o.y - Math.fround(points[i * 2 + 1] ?? 0);
+        module.push(
+          slot >= 0 && driver.physics !== undefined ? driver.physics.leeAt(slot, x, y) : 1,
+        );
+      }
+      return { gpu, module, fills: leeTexture.fills };
     },
     setPass(on: boolean): void {
       world.setUsePass(on);
