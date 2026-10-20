@@ -91,3 +91,15 @@ UPDATE world SET state = 'dropped' WHERE id = @id AND state = 'ended';
 
 -- name: RecentWorlds :many
 SELECT number, state, seed, begins_at, ends_at, created_at FROM world ORDER BY number DESC LIMIT @lim;
+
+-- name: StoreWeather :execrows
+-- A world's week, stored or made again, in one statement fenced by the
+-- simulation's lease.
+INSERT INTO world_weather (world_id, version, epoch, ends, records, digest, generation_ms)
+SELECT @world_id, @version, @epoch, @ends, @records, @digest, @generation_ms
+WHERE (SELECT epoch FROM sim_lease FOR SHARE) = @lease::bigint
+ON CONFLICT (world_id) DO UPDATE SET version = excluded.version, epoch = excluded.epoch, ends = excluded.ends,
+  records = excluded.records, digest = excluded.digest, generation_ms = excluded.generation_ms, made = now();
+
+-- name: WorldWeather :one
+SELECT version, epoch, ends, records, digest, generation_ms, made FROM world_weather WHERE world_id = @world_id;

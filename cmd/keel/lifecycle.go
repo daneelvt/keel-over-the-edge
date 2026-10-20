@@ -193,6 +193,16 @@ func (p *process) makeNext(ctx context.Context) (store.NextWorld, error) {
 		if err := p.db.StoreBundle(ctx, nw.ID, p.lease, sb); err != nil {
 			return store.NextWorld{}, fmt.Errorf("storing the next world's terrain: %w", err)
 		}
+		// Its week, for when it is planned to begin: the world sailed's
+		// end, or now.
+		planned := time.Now().UTC().Truncate(time.Microsecond)
+		if h := p.current.Load(); h != nil && !h.ends().IsZero() {
+			planned = h.ends()
+		}
+		b.Seed = nw.Seed
+		if _, err := p.makeWeek(ctx, nw.ID, nw.Number, b, planned, p.cfg.Schedule.EndOf(planned)); err != nil {
+			return store.NextWorld{}, err
+		}
 		p.log.Info("the next world is made and stored", "world", nw.Number, "seed", nw.Seed, "made_from", b.Made, "attempts", b.Attempts,
 			"islands", len(b.Islands), "digest", b.DigestHex(), "took", took.Round(time.Millisecond).String())
 		p.metrics.WorldNextReady.Set(1)
@@ -214,7 +224,7 @@ func (p *process) loadNext(ctx context.Context, nw store.NextWorld) (*readyWorld
 	}
 	p.ahead.Store(rw)
 	p.nextView.Store(ownerTools(ownerConfig{
-		cat: p.cat, bundle: rw.bundle, made: rw.held.made, sailed: rw.row, timeline: p.timeline, terrain: rw.terrain,
+		cat: p.cat, bundle: rw.bundle, made: rw.held.made, sailed: rw.row, wcfg: p.wcfg, timeline: rw.timeline, terrain: rw.terrain,
 		db: p.db, charts: rw.charts, page: p.ownPage, log: p.log, metrics: p.metrics,
 	}))
 	p.log.Info("the next world is loaded", "world", nw.Number, "took", time.Since(start).Round(time.Millisecond).String())

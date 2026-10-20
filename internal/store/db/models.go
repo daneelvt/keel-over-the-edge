@@ -184,3 +184,14 @@ type WorldChunk struct {
 	Payload []byte
 	Digest  []byte
 }
+
+type WorldWeather struct {
+	WorldID      pgtype.UUID
+	Version      int32
+	Epoch        time.Time
+	Ends         time.Time
+	Records      []byte
+	Digest       []byte
+	GenerationMs int32
+	Made         time.Time
+}

@@ -32,12 +32,13 @@ import type {
   LightSeen,
   PlaceSeen,
   SeaAreas,
+  WeatherKeyframe,
   WeatherSpells,
 } from '../../net/messages';
 import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
 import { POSITION_STEP, type View, ViewRing } from '../../net/view';
-import { spellRecord } from '../../net/weather';
+import { keyframeRecord, spellRecord } from '../../net/weather';
 
 export const BURST_PINGS = 8;
 export const BURST_EVERY = 100_000;
@@ -72,7 +73,7 @@ export type Received =
   | { kind: 'restart'; inMs: number }
   /** The sea about the boat. */
   | { kind: 'sea'; sea: SeaAreas }
-  | { kind: 'weather'; spells: WeatherSpells }
+  | { kind: 'weather'; spells: WeatherSpells | null; keyframes: WeatherKeyframe[] }
   | { kind: 'bump'; bump: BumpTold }
   /** The addresses of chunks of the land, by number. */
   | { kind: 'chunks'; chunks: ChunksHanded }
@@ -215,7 +216,11 @@ export class Session {
       }
       case 'weatherSystems':
         this.#lastHeard = now;
-        return { kind: 'weather', spells: m.body.value.spells.map(spellRecord) };
+        return {
+          kind: 'weather',
+          spells: m.body.value.keepSpells ? null : m.body.value.spells.map(spellRecord),
+          keyframes: m.body.value.keyframes.map(keyframeRecord),
+        };
       case 'chunks': {
         this.#lastHeard = now;
         const c = m.body.value;

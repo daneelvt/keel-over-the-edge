@@ -275,7 +275,7 @@ export class Sandbox implements BoatDriver {
             this.#catalog,
             regime,
             1,
-            this.#catalog.sequence.seed,
+            this.#catalog.week.seed,
             turnSteps(wind.from),
             0,
             SPELL_TICKS,
@@ -312,6 +312,8 @@ export class Sandbox implements BoatDriver {
     this.#pending = (begin) => {
       const spell = steadySpell(this.#physics, speed, from, begin);
       const P = RECORDS.spell;
+      // A developer's weather stills the world's own systems while it blows.
+      spell[P.still] = 1;
       return {
         spell,
         made: spell,

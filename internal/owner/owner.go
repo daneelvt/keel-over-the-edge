@@ -35,6 +35,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
 )
@@ -107,8 +108,12 @@ type Config struct {
 	// Bundle is the world's terrain: its ground drawn, its records listed.
 	Bundle *worldgen.Bundle
 	// Weather is the world's weather prepared: the lip and the mist band,
-	// and the spells the frames name.
-	Weather *physics.WeatherPrepared
+	// and the spells the frames name. Timeline is the world's week of
+	// weather, nil while it has none; SystemKinds the kinds of weather
+	// system's ids, by their indices.
+	Weather     *physics.WeatherPrepared
+	Timeline    *weather.Timeline
+	SystemKinds []string
 	// Ground and Shelter are the land sailed, nil when land is off: the
 	// water a teleport is checked against, the current and the gusts
 	// sheltered by it. Circulation is the world's way round the disk.
@@ -186,6 +191,7 @@ var Paths = []string{
 	"/owner/api/flag", "/owner/api/place", "/owner/api/unseen", "/owner/api/places.json", "/owner/api/world",
 	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json", "/owner/api/charted.json",
 	"/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
+	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -289,6 +295,8 @@ func (o *Owner) drawn(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("GET "+prefix+"land.png", o.land.serve(landPNG))
 	mux.HandleFunc("GET "+prefix+"coasts.svg", o.land.serve(coastsSVG))
 	mux.HandleFunc("GET "+prefix+"island/{file}", o.land.island)
+	mux.HandleFunc("GET "+prefix+"weather.json", o.weather)
+	mux.HandleFunc("GET "+prefix+"pressure.json", o.pressure)
 }
 
 // DrawnHandler is the routes of what is drawn of the world under

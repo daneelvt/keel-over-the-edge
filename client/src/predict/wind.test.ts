@@ -10,8 +10,9 @@ import { gunzipSync } from 'node:zlib';
 import { create } from '@bufbuild/protobuf';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
-import { SpellSchema } from '../net/gen/keel/v1/game_pb';
-import { spellRecord } from '../net/weather';
+import { KeyframeSchema, SpellSchema, SystemKeySchema } from '../net/gen/keel/v1/game_pb';
+import type { WeatherKeyframe } from '../net/messages';
+import { keyframeRecord, spellRecord } from '../net/weather';
 import { fromHex, loadTerrain, toHex } from './golden';
 import { RECORDS, SIZES, WEATHER } from './layout.gen';
 import { loadPhysics, type Physics } from './physics';
@@ -170,13 +171,74 @@ describe('the spells a client holds', () => {
       axis: 12345,
       axisPeriod: 648000,
       seed: 4294967295,
+      pressure: 101325,
+      front: true,
+      toward: 16384,
+      trough: 450,
+      still: true,
     });
     const r = spellRecord(s);
     expect(r).toHaveLength(SIZES.spell);
     expect(r).toEqual([
       727704000, 18000, 727703999, 432000, 1, 1, 669, 65535, -3641, 1300, 971, 485, 11880, 8940, 7,
-      40000, 910, 12345, 648000, 4294967295,
+      40000, 910, 12345, 648000, 4294967295, 101325, 1, 16384, 450, 1,
     ]);
+  });
+
+  test('a keyframe off the wire is its systems’ records, by their slots', () => {
+    const k = keyframeRecord(
+      create(KeyframeSchema, {
+        tick: 600n,
+        systems: [
+          create(SystemKeySchema, {
+            slot: 3,
+            kind: 2,
+            seed: 4294967295,
+            stage: 1,
+            east: -60000,
+            north: 72000,
+            heading: 65535,
+            speed: 257,
+            strength: 4096,
+            size: 3704,
+            peak: 1131,
+            depth: -1500,
+          }),
+        ],
+      }),
+    );
+    expect(k.tick).toBe(600);
+    expect(k.systems).toHaveLength(1);
+    const [slot, v] = k.systems[0] ?? [0, []];
+    expect(slot).toBe(3);
+    expect(v).toHaveLength(SIZES.system);
+    expect(v).toEqual([1, 2, 4294967295, 1, -60000, 72000, 65535, 257, 4096, 3704, 1131, -1500]);
+  });
+
+  test('keyframes join those held, each replacing any of its tick, the latest four kept', () => {
+    const spells = new Spells(physics);
+    const one = (tick: number, east: number): WeatherKeyframe => {
+      const v = new Array<number>(SIZES.system).fill(0);
+      v[RECORDS.system.on] = 1;
+      v[RECORDS.system.east] = east;
+      v[RECORDS.system.strength] = 4096;
+      v[RECORDS.system.size] = 100;
+      return { tick, systems: [[0, v]] };
+    };
+    expect(spells.receive([], [one(0, 1), one(300, 2), one(600, 3)])).toBe(true);
+    expect(spells.receive(null, [one(600, 4), one(900, 5)])).toBe(true);
+    expect(spells.keyframes.map((k) => [k.tick, k.systems[0]?.[RECORDS.system.east]])).toEqual([
+      [0, 1],
+      [300, 2],
+      [600, 4],
+      [900, 5],
+    ]);
+    expect(spells.receive(null, [one(1200, 6)])).toBe(true);
+    expect(spells.keyframes.map((k) => k.tick)).toEqual([300, 600, 900, 1200]);
+    expect(
+      spells.receive(null, [{ tick: 1500, systems: [[20, new Array(SIZES.system).fill(0)]] }]),
+    ).toBe(false);
+    spells.reset();
   });
 });
 
@@ -227,7 +289,7 @@ describe('a spell made with no server', () => {
       0,
       stormy,
     ]);
-    expect(s[P.from]).toBe(mix(number ^ catalog.weather.sequence.seed) % WEATHER.turnSteps);
+    expect(s[P.from]).toBe(mix(number ^ catalog.weather.week.seed) % WEATHER.turnSteps);
     // The recorded sail, which the server's tick sails too, has a held spell:
     // there the direction is checked against the server's own.
   });

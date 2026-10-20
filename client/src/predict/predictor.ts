@@ -39,7 +39,7 @@ import {
 import type { Physics } from './physics';
 import { Seas } from './seas';
 import { Wakes } from './wakes';
-import { type BoatWind, newBoatWind, Spells } from './weather';
+import { type BoatWind, newBoatWind, Spells, systemKindRecord } from './weather';
 
 /** Ticks of prediction kept. */
 export const RING = 64;
@@ -105,6 +105,7 @@ export function preparePhysics(
   physics.prepare();
   writeWeatherParams(physics.records.weatherParams, weather);
   physics.prepareWeather();
+  physics.setSystemKinds(weather.systems.map(systemKindRecord));
   if (encounters !== undefined) {
     prepareEncounters(physics, encounters);
   }

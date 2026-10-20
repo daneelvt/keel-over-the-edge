@@ -217,6 +217,7 @@ type memDB struct {
 	chartings  []store.Charting
 	down       bool // the world's writes fail
 	bundle     *store.Bundle
+	weathers   map[[16]byte]*store.Weather
 	number     int // worlds ended before the active one
 	// The active world's beginning and end; the next world; the jobs'
 	// runs, by job and due time; the news of worlds' ends; and how many
@@ -282,6 +283,34 @@ func (d *memDB) StoreBundle(_ context.Context, world [16]byte, epoch int64, b *s
 		d.bundle = &c
 	}
 	return nil
+}
+
+// StoreWeather is fenced by the lease's epoch, and replaces the world's
+// week.
+func (d *memDB) StoreWeather(_ context.Context, world [16]byte, epoch int64, w *store.Weather) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if epoch != d.leaseEpoch {
+		return fmt.Errorf("%w: the epoch is %d, the writer's %d", store.ErrFenced, d.leaseEpoch, epoch)
+	}
+	if d.weathers == nil {
+		d.weathers = map[[16]byte]*store.Weather{}
+	}
+	c := *w
+	c.Records = bytes.Clone(w.Records)
+	d.weathers[world] = &c
+	return nil
+}
+
+func (d *memDB) LoadWeather(_ context.Context, world [16]byte) (*store.Weather, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	w, ok := d.weathers[world]
+	if !ok {
+		return nil, store.ErrNotFound
+	}
+	c := *w
+	return &c, nil
 }
 
 // SetChunkKey is fenced by the lease's epoch, and keeps the first key set.
@@ -787,7 +816,7 @@ func TestServe(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: timeline(t), Encounters: encounters(t), Workers: 3})
+		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, worldgen.Empty(f.Header.Seed)), Encounters: encounters(t), Workers: 3})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -830,6 +859,21 @@ func encounters(t *testing.T) *physics.EncounterPrepared {
 }
 
 // timeline is the catalog's weather, as keel serve sails in it.
+// logTimeline is the week of weather the world of a log sailed, made
+// again from its header with the islands of b, the world it sailed.
+func logTimeline(t *testing.T, h replay.Header, b *worldgen.Bundle) *weather.Timeline {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tl, err := replayWeather(h, cat, b, "", io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tl
+}
+
 func timeline(t *testing.T) *weather.Timeline {
 	t.Helper()
 	cat, err := catalog.Load()
@@ -1136,7 +1180,11 @@ func TestReplayDump(t *testing.T) {
 	}
 	const at = 900
 	want := bus.NewFrame(f.Header.Capacity)
-	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: timeline(t), Encounters: encounters(t), Workers: 1, At: func(fr *bus.Frame) {
+	sailed, err := readWorldFile(world)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 1, At: func(fr *bus.Frame) {
 		if fr.Tick == at {
 			if err := sim.ReadSnapshot(sim.AppendSnapshot(nil, fr), want); err != nil {
 				t.Fatal(err)

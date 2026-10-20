@@ -165,7 +165,7 @@ async function replay(trace: Trace): Promise<{
         predictor.seas.receive(r.sea);
       }
       if (r.kind === 'weather') {
-        expect(predictor.weather.receive(r.spells), where).toBe(true);
+        expect(predictor.weather.receive(r.spells, r.keyframes), where).toBe(true);
       }
       if (r.kind === 'snapshot') {
         const sn = newSnapshot();

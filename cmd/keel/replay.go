@@ -38,6 +38,9 @@ one that made it, and checked against the log's digest of it.
                never depends on it
   -world FILE  the world's terrain from a bundle keel worldgen -out wrote,
                instead of made again
+  -weather FILE  the world's week of weather as keel weather -out wrote it,
+               instead of made again from the seed, epoch and end the log
+               names
 `
 
 // errDiverged is a replay that differed from its log.
@@ -50,6 +53,7 @@ func replayCmd(args []string, stdout, stderr io.Writer) error {
 	dump := fs.Int64("dump", math.MinInt64, "")
 	workers := fs.Int("workers", runtime.GOMAXPROCS(0), "")
 	worldFile := fs.String("world", "", "")
+	weatherFile := fs.String("weather", "", "")
 	if err := fs.Parse(args); err != nil {
 		return errUsage
 	}
@@ -78,12 +82,11 @@ func replayCmd(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	waves, kinds := cat.Prepare()
-	timeline, err := weather.FromCatalog(cat)
+	bundle, terrain, err := replayTerrain(h, cat, *worldFile)
 	if err != nil {
 		return err
 	}
-
-	terrain, err := replayTerrain(h, cat, *worldFile)
+	timeline, err := replayWeather(h, cat, bundle, *weatherFile, stderr)
 	if err != nil {
 		return err
 	}
@@ -124,37 +127,90 @@ func replayCmd(args []string, stdout, stderr io.Writer) error {
 // errTerrain is a log whose terrain this build cannot make again.
 var errTerrain = errors.New("the log's terrain")
 
-// replayTerrain is the terrain the log's world sailed: none if it sailed
-// open sea; the bundle in file if given; or else made again from the log's
-// seed, which only the generator that made it can. Either way its digest
-// must be the log's.
-func replayTerrain(h replay.Header, cat *catalog.Catalog, file string) (*sim.Terrain, error) {
+// replayTerrain is the terrain the log's world sailed, and its bundle:
+// none if it sailed open sea; the bundle in file if given; or else made
+// again from the log's seed, which only the generator that made it can.
+// Either way its digest must be the log's.
+func replayTerrain(h replay.Header, cat *catalog.Catalog, file string) (*worldgen.Bundle, *sim.Terrain, error) {
 	if h.Terrain == [32]byte{} {
-		return nil, nil
+		return nil, nil, nil
 	}
-	var b *worldgen.Bundle
+	b, err := replayBundle(h, cat, file)
+	if err != nil {
+		return nil, nil, err
+	}
+	if b.Digest != h.Terrain {
+		return nil, nil, fmt.Errorf("%w: its digest is %x, the terrain's %s", errTerrain, h.Terrain, b.DigestHex())
+	}
+	return b, b.Terrain(cat.PrepareGround()), nil
+}
+
+// replayBundle is the log's world's bundle: the one in file, or made again
+// from its seed.
+func replayBundle(h replay.Header, cat *catalog.Catalog, file string) (*worldgen.Bundle, error) {
+	switch {
+	case file != "":
+		return readWorldFile(file)
+	case h.Generator != worldgen.Version:
+		return nil, fmt.Errorf("%w was made by generator %d, and this build has generator %d: give it with -world", errTerrain, h.Generator, worldgen.Version)
+	}
+	b, err := worldgen.Generate(h.Seed, cat)
+	if err != nil && !errors.Is(err, worldgen.ErrInvalid) {
+		return nil, err
+	}
+	return b, nil
+}
+
+// readWorldFile reads a bundle keel worldgen -out wrote.
+func readWorldFile(file string) (*worldgen.Bundle, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	return worldgen.ReadFile(data)
+}
+
+// errWeather is a log whose week of weather this build cannot make again.
+var errWeather = errors.New("the log's week of weather")
+
+// replayWeather is the week of weather the log's world sailed: the one in
+// file if given; or made again from the log's seed, epoch and end and the
+// world's islands, as the server made it, which only the generator that
+// made it can. Either way its digest must be the log's. A log of a world
+// with no week of its own replays in the catalog's sample week.
+func replayWeather(h replay.Header, cat *catalog.Catalog, b *worldgen.Bundle, file string, stderr io.Writer) (*weather.Timeline, error) {
+	cfg, err := weather.ConfigOf(cat)
+	if err != nil {
+		return nil, err
+	}
+	if h.Weather == [32]byte{} && file == "" {
+		fmt.Fprintln(stderr, "keel replay: the log's world has no week of weather of its own: it replays in the catalog's sample week")
+		return weather.FromCatalog(cat)
+	}
+	var w *weather.Week
 	switch {
 	case file != "":
 		data, err := os.ReadFile(file)
 		if err != nil {
 			return nil, err
 		}
-		if b, err = worldgen.ReadFile(data); err != nil {
+		if w, err = weather.Decode(data, nil); err != nil {
 			return nil, err
 		}
-	case h.Generator != worldgen.Version:
-		return nil, fmt.Errorf("%w was made by generator %d, and this build has generator %d: give it with -world", errTerrain, h.Generator, worldgen.Version)
+	case h.WeatherVersion != weather.Version:
+		return nil, fmt.Errorf("%w was made by version %d of its generator, and this build has %d: give it with -weather", errWeather, h.WeatherVersion, weather.Version)
 	default:
-		var err error
-		b, err = worldgen.Generate(h.Seed, cat)
-		if err != nil && !errors.Is(err, worldgen.ErrInvalid) {
-			return nil, err
+		if b == nil {
+			if b, err = replayBundle(h, cat, ""); err != nil {
+				return nil, err
+			}
 		}
+		w = weather.Generate(cfg, h.Seed, h.Epoch.UnixMicro(), h.WeatherEnds.UnixMicro(), islandsOf(b))
 	}
-	if b.Digest != h.Terrain {
-		return nil, fmt.Errorf("%w: its digest is %x, the terrain's %s", errTerrain, h.Terrain, b.DigestHex())
+	if d := weekDigest(w); h.Weather != [32]byte{} && d != h.Weather {
+		return nil, fmt.Errorf("%w: its digest is %x, the week's %x", errWeather, h.Weather, d)
 	}
-	return b.Terrain(cat.PrepareGround()), nil
+	return weather.New(cfg, w)
 }
 
 // exact is a float that JSON shows exactly: the shortest decimal that reads

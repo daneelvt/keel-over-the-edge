@@ -372,6 +372,44 @@ func (q *Queries) SetWorldSeed(ctx context.Context, arg SetWorldSeedParams) erro
 	return err
 }
 
+const storeWeather = `-- name: StoreWeather :execrows
+INSERT INTO world_weather (world_id, version, epoch, ends, records, digest, generation_ms)
+SELECT $1, $2, $3, $4, $5, $6, $7
+WHERE (SELECT epoch FROM sim_lease FOR SHARE) = $8::bigint
+ON CONFLICT (world_id) DO UPDATE SET version = excluded.version, epoch = excluded.epoch, ends = excluded.ends,
+  records = excluded.records, digest = excluded.digest, generation_ms = excluded.generation_ms, made = now()
+`
+
+type StoreWeatherParams struct {
+	WorldID      pgtype.UUID
+	Version      int32
+	Epoch        time.Time
+	Ends         time.Time
+	Records      []byte
+	Digest       []byte
+	GenerationMs int32
+	Lease        int64
+}
+
+// A world's week, stored or made again, in one statement fenced by the
+// simulation's lease.
+func (q *Queries) StoreWeather(ctx context.Context, arg StoreWeatherParams) (int64, error) {
+	result, err := q.db.Exec(ctx, storeWeather,
+		arg.WorldID,
+		arg.Version,
+		arg.Epoch,
+		arg.Ends,
+		arg.Records,
+		arg.Digest,
+		arg.GenerationMs,
+		arg.Lease,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const worldBundle = `-- name: WorldBundle :one
 SELECT format, generator, catalog, made, attempts, digest, records, report, generation_ms, chunk_key, created_at
 FROM world_bundle WHERE world_id = $1
@@ -549,6 +587,35 @@ func (q *Queries) WorldSeed(ctx context.Context, worldID pgtype.UUID) (WorldSeed
 	row := q.db.QueryRow(ctx, worldSeed, worldID)
 	var i WorldSeedRow
 	err := row.Scan(&i.Seed, &i.Generator)
+	return i, err
+}
+
+const worldWeather = `-- name: WorldWeather :one
+SELECT version, epoch, ends, records, digest, generation_ms, made FROM world_weather WHERE world_id = $1
+`
+
+type WorldWeatherRow struct {
+	Version      int32
+	Epoch        time.Time
+	Ends         time.Time
+	Records      []byte
+	Digest       []byte
+	GenerationMs int32
+	Made         time.Time
+}
+
+func (q *Queries) WorldWeather(ctx context.Context, worldID pgtype.UUID) (WorldWeatherRow, error) {
+	row := q.db.QueryRow(ctx, worldWeather, worldID)
+	var i WorldWeatherRow
+	err := row.Scan(
+		&i.Version,
+		&i.Epoch,
+		&i.Ends,
+		&i.Records,
+		&i.Digest,
+		&i.GenerationMs,
+		&i.Made,
+	)
 	return i, err
 }
 

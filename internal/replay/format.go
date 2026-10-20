@@ -38,7 +38,10 @@ import (
 //	H header    format version, build, catalog, physics layout, capacity,
 //	            epoch (Unix seconds, nanoseconds), grace in ticks, boat limit,
 //	            the world's seed and generator version as uvarints, and its
-//	            terrain's digest, 32 bytes, all zero for open sea;
+//	            terrain's digest, 32 bytes, all zero for open sea; then its
+//	            week's version as a uvarint, the end it was made for (Unix
+//	            seconds, nanoseconds) and its digest, 32 bytes, all zero for
+//	            a world with no week of its own;
 //	            strings as a uvarint length and bytes
 //	S snapshot  tick, then sim's snapshot of the world after it: a segment starts
 //	T tick      tick, ticks skipped before it, the control words applied
@@ -46,7 +49,9 @@ import (
 //	            their results (count, then each: op, its fields, result, slot, boat, generation,
 //	            place in the queue, tick queued at); an account is its 16 bytes; a yes or
 //	            no a byte, 1 or 0; a Teleport its boat, whether to the start and its state;
-//	            a Stay or Unseen its boat and whether on; an End its last tick; a boat whose
+//	            a Stay or Unseen its boat and whether on; an End its last tick; a developer's
+//	            weather its mode, regime, speed and direction, and a system's its kind, point and
+//	            ticks to it; a boat whose
 //	            grace ended is a Leave with the result Expired, and a connection given a boat
 //	            from the queue a Join with the result Admitted, which the tick makes itself
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
@@ -54,7 +59,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 9
+	formatVersion = 10
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -81,6 +86,12 @@ type Header struct {
 	Seed      uint64
 	Generator int
 	Terrain   [32]byte
+	// WeatherVersion is the version of the generator that made the world's
+	// week of weather, WeatherEnds the end it was made for, and Weather its
+	// digest: all zero for a world with no week of its own.
+	WeatherVersion int
+	WeatherEnds    time.Time
+	Weather        [32]byte
 }
 
 // AppendHeader appends the magic and the header record to dst.
@@ -98,6 +109,14 @@ func AppendHeader(dst []byte, h Header) []byte {
 	p = binary.AppendUvarint(p, h.Seed)
 	p = binary.AppendUvarint(p, uint64(h.Generator))
 	p = append(p, h.Terrain[:]...)
+	p = binary.AppendUvarint(p, uint64(h.WeatherVersion))
+	ends := h.WeatherEnds
+	if ends.IsZero() {
+		ends = time.Unix(0, 0)
+	}
+	p = binary.AppendVarint(p, ends.Unix())
+	p = binary.AppendUvarint(p, uint64(ends.Nanosecond()))
+	p = append(p, h.Weather[:]...)
 	dst = append(dst, magic...)
 	return appendRecord(dst, kindHeader, p)
 }
@@ -170,6 +189,12 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = binary.AppendUvarint(dst, uint64(e.Weather.Regime))
 		dst = binary.AppendUvarint(dst, uint64(e.Weather.Speed))
 		dst = binary.AppendUvarint(dst, uint64(e.Weather.Dir))
+		if e.Weather.Mode == bus.WeatherSystem {
+			dst = binary.AppendUvarint(dst, uint64(e.Weather.Kind))
+			dst = binary.AppendVarint(dst, int64(e.Weather.East))
+			dst = binary.AppendVarint(dst, int64(e.Weather.North))
+			dst = binary.AppendUvarint(dst, uint64(e.Weather.In))
+		}
 	case bus.Place:
 		dst = binary.AppendUvarint(dst, e.Boat)
 		for _, v := range sim.StateFields(&e.State) {
@@ -327,6 +352,15 @@ func (f *File) add(kind byte, p *payload) error {
 		f.Header.Seed = p.uvarint()
 		f.Header.Generator = int(p.count(math.MaxInt32))
 		p.bytes(f.Header.Terrain[:])
+		f.Header.WeatherVersion = int(p.count(math.MaxInt32))
+		esec, ensec := p.varint(), p.uvarint()
+		if p.err == nil && ensec >= 1e9 {
+			p.err = errors.New("nanoseconds out of range")
+		}
+		if esec != 0 || ensec != 0 {
+			f.Header.WeatherEnds = time.Unix(esec, int64(ensec)).UTC()
+		}
+		p.bytes(f.Header.Weather[:])
 		if p.err == nil && f.Header.Capacity < 1 {
 			p.err = errors.New("no capacity")
 		}
@@ -512,6 +546,13 @@ func (p *payload) event(e *bus.Event) {
 			p.err = fmt.Errorf("a developer's weather of mode %d", mode)
 		}
 		e.Weather = bus.Weather{Mode: bus.WeatherMode(mode), Regime: uint16(regime), Speed: uint32(speed), Dir: uint32(dir)}
+		if e.Weather.Mode == bus.WeatherSystem {
+			kind, east, north, in := p.uvarint(), p.varint(), p.varint(), p.uvarint()
+			if p.err == nil && (kind > math.MaxUint16 || east < math.MinInt32 || east > math.MaxInt32 || north < math.MinInt32 || north > math.MaxInt32 || in > math.MaxUint32) {
+				p.err = fmt.Errorf("a developer's system of kind %d", kind)
+			}
+			e.Weather.Kind, e.Weather.East, e.Weather.North, e.Weather.In = uint16(kind), int32(east), int32(north), uint32(in)
+		}
 	case bus.Place:
 		e.Boat = p.uvarint()
 		for _, v := range sim.StateFields(&e.State) {
