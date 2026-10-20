@@ -10,7 +10,7 @@
 // on it. The week is read every few seconds while it follows now, and a
 // few times a second at the most while the strip is dragged.
 
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { getWeather, type Spell, type WeatherWeek } from './api';
 import { brief, hidden } from './life';
 import {
@@ -119,6 +119,16 @@ function capital(words: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/** A tick's place along a strip of span ticks from start, as a share of its width. */
+function along(t: number, start: number, span: number): string {
+  return `${(100 * Math.min(Math.max(t - start, 0), span)) / span}%`;
+}
+
+/** A tick of a week as ms of UTC. */
+function msOf(w: WeatherWeek, t: number): number {
+  return w.epoch + (t / w.ticksPerSecond) * 1000;
+}
+
 /** The week as a strip: dragged, clicked or stepped by its keys to show a tick. */
 function Strip({
   w,
@@ -136,8 +146,6 @@ function Strip({
   const start = Math.min(w.spells[0]?.begin ?? 0, now);
   const span = Math.max(1, w.until - start);
   const tps = w.ticksPerSecond;
-  const left = (t: number): string => `${(100 * Math.min(Math.max(t - start, 0), span)) / span}%`;
-  const width = (ticks: number): string => `${(100 * Math.max(0, ticks)) / span}%`;
   const clamp = (t: number): number => Math.round(Math.min(Math.max(t, start), w.until));
   const tickAt = (clientX: number): number => {
     const r = box.current?.getBoundingClientRect();
@@ -145,18 +153,71 @@ function Strip({
       ? start
       : clamp(start + ((clientX - r.left) / r.width) * span);
   };
-  const ms = (t: number): number => w.epoch + (t / tps) * 1000;
   const shown = at ?? now;
-  // The days: each midnight in the owner's own zone.
-  const days: { tick: number; name: string }[] = [];
-  const day = new Date(ms(start));
-  day.setHours(24, 0, 0, 0);
-  for (; day.getTime() < ms(w.until); day.setDate(day.getDate() + 1)) {
-    days.push({
-      tick: ((day.getTime() - w.epoch) / 1000) * tps,
-      name: day.toLocaleDateString('en-GB', { weekday: 'short' }),
-    });
-  }
+  // The spells, fronts, storms and days, made again with each reading of
+  // the week, not at each second's: a world older than a week has a
+  // thousand spells or more.
+  const marks = useMemo(() => {
+    const left = (t: number): string => along(t, start, span);
+    const width = (ticks: number): string => `${(100 * Math.max(0, ticks)) / span}%`;
+    const ms = (t: number): number => msOf(w, t);
+    // The days: each midnight in the owner's own zone.
+    const days: { tick: number; name: string }[] = [];
+    const day = new Date(ms(start));
+    day.setHours(24, 0, 0, 0);
+    for (; day.getTime() < ms(w.until); day.setDate(day.getDate() + 1)) {
+      days.push({
+        tick: ((day.getTime() - w.epoch) / 1000) * w.ticksPerSecond,
+        name: day.toLocaleDateString('en-GB', { weekday: 'short' }),
+      });
+    }
+    return {
+      strip: (
+        <>
+          {w.spells.map((s) => (
+            <span
+              key={s.begin}
+              class="spell"
+              style={{
+                left: left(s.begin),
+                width: width(s.end - Math.max(s.begin, start)),
+                background: regimeColour(s.regime),
+              }}
+              title={`${brief(ms(s.begin))}: ${spellWords(w, s)}`}
+            />
+          ))}
+          {w.spells
+            .filter((s) => s.front)
+            .map((s) => (
+              <span
+                key={`f${s.begin}`}
+                class="mark front"
+                style={{ left: left(s.begin + s.cross / 2) }}
+                title={`A front over the centre, ${brief(ms(s.begin + s.cross / 2))}`}
+              />
+            ))}
+          {w.storms.map((t) => (
+            <span
+              key={`s${t}`}
+              class="mark born"
+              style={{ left: left(t) }}
+              title={`${lows(w)} born, ${brief(ms(t))}`}
+            />
+          ))}
+          <span
+            class="mark end"
+            style={{ left: left(w.ends) }}
+            title={`The world ends, ${brief(ms(w.ends))}`}
+          />
+        </>
+      ),
+      days: days.map((d) => (
+        <span key={d.tick} style={{ left: left(d.tick) }}>
+          {d.name}
+        </span>
+      )),
+    };
+  }, [w, start, span]);
   return (
     <>
       <div
@@ -168,7 +229,7 @@ function Strip({
         aria-valuemin={start}
         aria-valuemax={w.until}
         aria-valuenow={shown}
-        aria-valuetext={brief(ms(shown))}
+        aria-valuetext={brief(msOf(w, shown))}
         data-field="week"
         onPointerDown={(e) => {
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -195,50 +256,12 @@ function Strip({
           }
         }}
       >
-        {w.spells.map((s) => (
-          <span
-            key={s.begin}
-            class="spell"
-            style={{
-              left: left(s.begin),
-              width: width(s.end - Math.max(s.begin, start)),
-              background: regimeColour(s.regime),
-            }}
-            title={`${brief(ms(s.begin))}: ${spellWords(w, s)}`}
-          />
-        ))}
-        {w.spells
-          .filter((s) => s.front)
-          .map((s) => (
-            <span
-              key={`f${s.begin}`}
-              class="mark front"
-              style={{ left: left(s.begin + s.cross / 2) }}
-              title={`A front over the centre, ${brief(ms(s.begin + s.cross / 2))}`}
-            />
-          ))}
-        {w.storms.map((t) => (
-          <span
-            key={`s${t}`}
-            class="mark born"
-            style={{ left: left(t) }}
-            title={`${lows(w)} born, ${brief(ms(t))}`}
-          />
-        ))}
-        <span
-          class="mark end"
-          style={{ left: left(w.ends) }}
-          title={`The world ends, ${brief(ms(w.ends))}`}
-        />
-        <span class="mark now" style={{ left: left(now) }} />
-        {at !== null ? <span class="mark shown" style={{ left: left(at) }} /> : null}
+        {marks.strip}
+        <span class="mark now" style={{ left: along(now, start, span) }} />
+        {at !== null ? <span class="mark shown" style={{ left: along(at, start, span) }} /> : null}
       </div>
       <div class="days small" aria-hidden="true">
-        {days.map((d) => (
-          <span key={d.tick} style={{ left: left(d.tick) }}>
-            {d.name}
-          </span>
-        ))}
+        {marks.days}
       </div>
     </>
   );
