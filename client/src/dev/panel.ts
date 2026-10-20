@@ -28,6 +28,7 @@ import type { Online } from '../net/online';
 import { foamOn } from '../ocean/foam';
 import { detailOn } from '../ocean/seamaterial';
 import { RECORDS, SEA_SPEED_STEP, WEATHER } from '../predict/layout.gen';
+import type { Physics } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import type { BoatWind } from '../predict/weather';
 import { DISK_RADIUS } from '../render/coords';
@@ -36,7 +37,7 @@ import { CAMERA_PRESETS, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
 import type { Antialias } from '../render/stage';
 import { type SeaOptions, seaAreaOf } from '../sandbox/localsea';
-import { type Sandbox, SEA_STATES, STEADY } from '../sandbox/sandbox';
+import { FRONT, type Sandbox, SEA_STATES, STEADY } from '../sandbox/sandbox';
 import { tackText } from '../ui/verdict';
 import { skyPanel } from './skypanel';
 
@@ -236,6 +237,18 @@ export function windLine(w: Readonly<BoatWind>): string {
   const lost = w.speed > 0 ? 1 - w.shadowSpeed / w.speed : 0;
   const turn = (((w.shadowFrom - w.from) / DEG + 540) % 360) - 180;
   return `${line}\nshadow  ${(w.shadowSpeed / KNOT).toFixed(1)} kn, ${(100 * lost).toFixed(0)}% lost, turned ${sign(turn, 1)}°`;
+}
+
+/** The weather at the boat, as a line: the pressure there, and the systems placed. */
+export function weatherLine(
+  physics: Physics,
+  tick: number,
+  east: number,
+  north: number,
+  systems: number,
+): string {
+  physics.windDrawAt(tick);
+  return `weather ${physics.pressure(east, north).toFixed(1)} hPa, ${systems} system${systems === 1 ? '' : 's'} placed`;
 }
 
 /** The sea under the boat, as lines: its height, its peak, and the waves summed. */
@@ -500,7 +513,12 @@ export function openPanel(
       row(
         'Weather',
         select(
-          [STEADY, ...catalog.weather.regimes.map((r) => r.id)],
+          [
+            STEADY,
+            FRONT,
+            ...catalog.weather.regimes.map((r) => r.id),
+            ...catalog.weather.systems.map((k) => k.id),
+          ],
           (x) => x,
           s.weather,
           (weather) => set({ weather }),
@@ -702,6 +720,7 @@ export function openPanel(
       `time    ${game.clock.time.toFixed(2)} s, step ${game.clock.steps}`,
       seaLines(band.hs[here] ?? 0, peak, band.count, band.blended),
       windLine(sandbox.wind),
+      weatherLine(sandbox.physics, sandbox.tick, p.east, p.north, sandbox.systems),
       pilotLine(game.pilot, sandbox.states.current, sandbox.out),
       ...edgeLines(
         p.east,
