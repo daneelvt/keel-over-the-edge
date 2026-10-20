@@ -137,7 +137,9 @@ function MapCanvas({
   }, [setView]);
   useEffect(() => {
     const c = canvas.current;
-    const ctx = c?.getContext('2d');
+    // Drawn on the CPU: the map is drawn again with each reading, and a
+    // canvas drawn by the GPU process starves a software GPU's other pages.
+    const ctx = c?.getContext('2d', { willReadFrequently: true });
     if (c == null || ctx == null || view === null) {
       return;
     }
