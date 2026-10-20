@@ -8,7 +8,7 @@
 // device takes the boat, and is taken back from. One back end is enough: the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
-import { guest, sail } from './helpers';
+import { guest, heldRegime, sail } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
@@ -80,8 +80,10 @@ test('a wind changed on the server reaches the boat', async ({ page, context, re
   // The boat heard of it before it took effect: nothing is corrected.
   await page.waitForTimeout(1_000);
   cleanAir((await net(page)).counts);
-  // Back to the world's own weather.
-  expect((await request.post(`${internal}/debug/weather?auto`)).status()).toBe(204);
+  // Back to the breeze tools/e2e holds.
+  expect((await request.post(`${internal}/debug/weather?regime=${heldRegime()}`)).status()).toBe(
+    204,
+  );
 });
 
 test('a reload within the grace finds the same boat', async ({ page, context }) => {

@@ -534,6 +534,16 @@ func (t *Timeline) Keyframes(tick int64, ss []bus.System, dst *[bus.KeyFrames]ph
 	}
 }
 
+// KeyframePair sets dst to the two keyframes about a tick: at the last
+// keyframe at or before it, and the next; what the wind at the tick is
+// interpolated between.
+func (t *Timeline) KeyframePair(tick int64, ss []bus.System, dst *[2]physics.Keyframe) {
+	every := t.cfg.Every
+	b := floorDiv(tick, every) * every
+	t.Keyframe(b, ss, &dst[0])
+	t.Keyframe(b+every, ss, &dst[1])
+}
+
 // RegimeIndex is the index of the catalog's regime of an id, or −1.
 func RegimeIndex(c *catalog.Catalog, id string) int {
 	for i, r := range c.Weather.Regimes {

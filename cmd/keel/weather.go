@@ -98,6 +98,11 @@ func (p *process) storedWeek(ctx context.Context, row store.World) (*weather.Wee
 // and stored.
 func (p *process) weekFor(ctx context.Context, rw *readyWorld) (*weather.Timeline, error) {
 	row := rw.row
+	// The week read as the world was loaded, if it was made for when the
+	// world begins.
+	if tl := rw.timeline; tl != nil && tl.Week() != nil && tl.Week().Epoch == row.Epoch.UnixMicro() {
+		return tl, nil
+	}
 	w, sw, err := p.storedWeek(ctx, row)
 	if err != nil {
 		return nil, err

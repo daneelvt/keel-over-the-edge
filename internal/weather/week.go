@@ -321,30 +321,46 @@ func numbersOf(v reflect.Value) []float64 {
 	return out
 }
 
-// setNumbers sets a record's fields from numbers named by fields; a field
-// not named is left as it is, and a name the record has not is an error.
-func setNumbers(v reflect.Value, fields []string, numbers []float64) error {
-	if len(numbers) != len(fields) {
-		return fmt.Errorf("%d numbers for %d fields", len(numbers), len(fields))
-	}
+// place is where a named number lies in a record: its field, and its index
+// in the field if it is an array, or −1.
+type place struct{ field, index int }
+
+// placesOf is where each of fields lies in a record of type t, or an error
+// for a name it has not.
+func placesOf(t reflect.Type, fields []string) ([]place, error) {
+	out := make([]place, len(fields))
 	for i, name := range fields {
-		f := v.FieldByName(name)
 		base, index, isArray := strings.Cut(name, ".")
-		if isArray {
-			f = v.FieldByName(base)
+		f, ok := t.FieldByName(base)
+		if !ok || len(f.Index) != 1 {
+			return nil, fmt.Errorf("no field %s", name)
 		}
-		if !f.IsValid() {
-			return fmt.Errorf("no field %s", name)
-		}
-		if isArray {
+		p := place{field: f.Index[0], index: -1}
+		switch {
+		case isArray:
 			j, err := strconv.Atoi(index)
-			if err != nil || f.Kind() != reflect.Array || j < 0 || j >= f.Len() {
-				return fmt.Errorf("no field %s", name)
+			if err != nil || f.Type.Kind() != reflect.Array || f.Type.Elem().Kind() != reflect.Float64 || j < 0 || j >= f.Type.Len() {
+				return nil, fmt.Errorf("no field %s", name)
 			}
-			f = f.Index(j)
+			p.index = j
+		case f.Type.Kind() != reflect.Float64:
+			return nil, fmt.Errorf("field %s is not a number", name)
 		}
-		if f.Kind() != reflect.Float64 {
-			return fmt.Errorf("field %s is not a number", name)
+		out[i] = p
+	}
+	return out, nil
+}
+
+// setNumbers sets a record's fields from numbers at their places; a field
+// with none is left as it is.
+func setNumbers(v reflect.Value, places []place, numbers []float64) error {
+	if len(numbers) != len(places) {
+		return fmt.Errorf("%d numbers for %d fields", len(numbers), len(places))
+	}
+	for i, p := range places {
+		f := v.Field(p.field)
+		if p.index >= 0 {
+			f = f.Index(p.index)
 		}
 		f.SetFloat(numbers[i])
 	}
@@ -386,9 +402,13 @@ func Decode(b []byte, digest []byte) (*Week, error) {
 		return nil, errors.New("weather: a week with no spells")
 	}
 	w := &Week{Version: s.Version, Seed: s.Seed, Epoch: s.Epoch, Ends: s.Ends, Until: s.Until, Report: s.Report}
+	spellPlaces, err := placesOf(reflect.TypeFor[physics.Spell](), s.SpellFields)
+	if err != nil {
+		return nil, fmt.Errorf("weather: the week's spells: %w", err)
+	}
 	w.Spells = make([]physics.Spell, len(s.Spells))
 	for i, n := range s.Spells {
-		if err := setNumbers(reflect.ValueOf(&w.Spells[i]).Elem(), s.SpellFields, n); err != nil {
+		if err := setNumbers(reflect.ValueOf(&w.Spells[i]).Elem(), spellPlaces, n); err != nil {
 			return nil, fmt.Errorf("weather: the week's spell %d: %w", i, err)
 		}
 	}
@@ -397,13 +417,19 @@ func Decode(b []byte, digest []byte) (*Week, error) {
 			return nil, errors.New("weather: the week's systems have no slots")
 		}
 	}
+	var systemPlaces []place
+	if len(s.SystemFields) > 0 {
+		if systemPlaces, err = placesOf(reflect.TypeFor[physics.SystemRecord](), s.SystemFields[1:]); err != nil {
+			return nil, fmt.Errorf("weather: the week's systems: %w", err)
+		}
+	}
 	w.Systems = make([]System, len(s.Systems))
 	for i, n := range s.Systems {
 		if len(n) == 0 || len(n) != len(s.SystemFields) {
 			return nil, fmt.Errorf("weather: the week's system %d has %d numbers", i, len(n))
 		}
 		w.Systems[i].Slot = int(n[0])
-		if err := setNumbers(reflect.ValueOf(&w.Systems[i].SystemRecord).Elem(), s.SystemFields[1:], n[1:]); err != nil {
+		if err := setNumbers(reflect.ValueOf(&w.Systems[i].SystemRecord).Elem(), systemPlaces, n[1:]); err != nil {
 			return nil, fmt.Errorf("weather: the week's system %d: %w", i, err)
 		}
 	}

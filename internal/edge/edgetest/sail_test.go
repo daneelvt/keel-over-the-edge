@@ -90,12 +90,22 @@ func sailIn(t *testing.T, wind *bus.Weather, lag client.Lag, d time.Duration, tr
 	return sailWith(t, nil, wind, lag, d, trace, nil)
 }
 
-// inTrade is the catalog's weather two hours into its sequence's first
-// spell, a trade spell: gusts, shifts, and a sea that changes every second.
+// inTrade is the catalog's sample week two hours into its first trade
+// spell with no front: gusts, shifts, and a sea that changes every second.
 // It reads the time, so it is called inside a test's bubble.
 func inTrade(t *testing.T) *weather.Timeline {
 	t.Helper()
-	return sequenceFrom(t, loop.TickAt(time.Now(), Epoch)-2*3600*physics.StepsPerSecond)
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	trade := float64(weather.RegimeIndex(cat, "trade"))
+	week := sequenceFrom(t, 0).Week()
+	i := slices.IndexFunc(week.Spells, func(s physics.Spell) bool { return s.Regime == trade && s.Front == 0 && s.Begin > 0 })
+	if i < 0 {
+		t.Fatal("the sample week has no trade spell")
+	}
+	return sequenceFrom(t, loop.TickAt(time.Now(), Epoch)-int64(week.Spells[i].Begin)-2*3600*physics.StepsPerSecond)
 }
 
 // piloted sails on the autopilot as a player does: by hand for a second,

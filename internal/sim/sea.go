@@ -63,7 +63,7 @@ type sea struct {
 	scratch physics.Weather
 	at1     physics.WeatherTick
 	spells  [physics.WeatherSpells]physics.Spell
-	keys    [bus.KeyFrames]physics.Keyframe
+	keys    [2]physics.Keyframe
 
 	// fetch is each area's fetch, by the land; nil is open water's.
 	fetch []physics.Fetch
@@ -126,8 +126,8 @@ func (s *sea) fill(areas []physics.SeaInput, tick int64, d dev) {
 func (s *sea) weatherAt(tick int64, d dev) *physics.WeatherTick {
 	n := s.timeline.Spells(tick, d.ws, &s.spells)
 	s.scratch.Set(s.spells[:n])
-	s.timeline.Keyframes(tick, d.ss, &s.keys)
-	s.scratch.SetKeys(s.keys[:2])
+	s.timeline.KeyframePair(tick, d.ss, &s.keys)
+	s.scratch.SetKeys(s.keys[:])
 	physics.WeatherAt(&s.scratch, &s.at1, float64(tick))
 	return &s.at1
 }

@@ -46,6 +46,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
@@ -150,6 +151,7 @@ func run() error {
 	if err := k.start(); err != nil {
 		return err
 	}
+	go holdWeather(ctx)
 	control := &http.Server{Addr: controlAddr, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/restart" {
 			http.NotFound(w, r)
@@ -178,6 +180,39 @@ func run() error {
 	case <-ctx.Done():
 		k.stop()
 		return nil
+	}
+}
+
+// holdWeather holds the world's weather to one endless spell of the
+// catalog's commonest regime once keel is ready, so the specs sail in a
+// steady breeze, gusts and shifts and all, whatever the world's own week
+// brings at the hour they run: a breeze no light air or front stills. A
+// developer's weather is in the checkpoint, so it holds across a restart.
+func holdWeather(ctx context.Context) {
+	cat, err := catalog.Load()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "e2e: the catalog:", err)
+		return
+	}
+	id, share := "", 0.0
+	for _, r := range cat.Weather.Regimes {
+		if r.Share > share {
+			id, share = string(r.ID), r.Share
+		}
+	}
+	for ctx.Err() == nil {
+		if res, err := http.Get("http://" + internalAddr + "/readyz"); err == nil {
+			res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				res, err := http.Post("http://"+internalAddr+"/debug/weather?regime="+id, "", nil)
+				if err == nil {
+					res.Body.Close()
+					fmt.Fprintf(os.Stderr, "e2e: the weather held to %s\n", id)
+					return
+				}
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 }
 

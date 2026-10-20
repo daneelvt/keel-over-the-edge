@@ -9,7 +9,7 @@
 // correction and one knock, one shake and the verdict.
 
 import { expect, test } from '@playwright/test';
-import { guest, sail } from './helpers';
+import { guest, heldRegime, sail } from './helpers';
 
 // CI's netem job sends the page's traffic through the kernel's own delay
 // and loss instead, by the direct Vite.
@@ -118,7 +118,7 @@ test('a bump at 200 ms: one correction, one knock and shake, the verdict', async
       `lag.spec: a bump at ${n.rtt.toFixed(0)} ms: ${e.bumps} told, ${n.counts.corrections} corrections, largest ${n.counts.largest.toFixed(3)} m\n`,
     );
   } finally {
-    // Back to the world's own weather.
-    await request.post(`${internal}/debug/weather?auto`);
+    // Back to the breeze tools/e2e holds.
+    await request.post(`${internal}/debug/weather?regime=${heldRegime()}`);
   }
 });

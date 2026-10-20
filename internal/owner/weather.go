@@ -160,6 +160,11 @@ func (o *Owner) weatherPage(tl *weather.Timeline, now, tick int64, ws []bus.Weat
 		Now: now, At: tick, TicksPerSecond: physics.StepsPerSecond, Epoch: o.cfg.World.Epoch.UnixMilli(),
 		Until: week.Until + origin, Ends: weather.TicksOf(week.Epoch, week.Ends) + origin, Every: tl.Every(),
 		Lip: tl.Prepared().Edge(), Regimes: o.cfg.Regimes,
+		// Lists as JSON's arrays, empty or not: the page reads them so.
+		Kinds: []weatherKind{}, Spells: []weatherSpell{}, Storms: []int64{}, Systems: []weatherSystemJSON{},
+	}
+	if p.Regimes == nil {
+		p.Regimes = []string{}
 	}
 	if b := o.cfg.Bundle; b != nil && len(b.Islands) > 0 {
 		port := b.MainPort()
@@ -279,7 +284,7 @@ func systemJSON(slot int, r *physics.SystemRecord, local float64, origin int64, 
 	s := weatherSystemJSON{
 		Slot: slot, Kind: int(k.Kind), East: k.East / 4, North: k.North / 4, Size: k.Size, Strength: round2(k.Strength / 4096),
 		Stage: int(k.Stage), Heading: round2(k.Heading * 360 / physics.TurnSteps), Knots: round2(k.Speed * physics.SeaSpeedStep / knot),
-		Born: int64(r.Born) + origin, Gone: int64(r.Gone) + origin, Developer: developer,
+		Born: int64(r.Born) + origin, Gone: int64(r.Gone) + origin, Developer: developer, Track: [][2]float64{},
 	}
 	for dt := 0.0; dt <= trackLength; dt += trackStep {
 		at := local + dt*physics.StepsPerSecond

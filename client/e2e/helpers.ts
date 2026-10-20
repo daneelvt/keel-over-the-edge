@@ -185,3 +185,17 @@ export async function sail(page: Page, base = ''): Promise<void> {
   });
   expect(errors).toEqual([]);
 }
+
+/**
+ * The regime tools/e2e holds the world's weather to: the catalog's
+ * commonest. A spec that sets another weather goes back to it after.
+ */
+export function heldRegime(): string {
+  let best = data.weather.regimes[0];
+  for (const r of data.weather.regimes) {
+    if (best === undefined || r.share > best.share) {
+      best = r;
+    }
+  }
+  return best?.id ?? '';
+}
