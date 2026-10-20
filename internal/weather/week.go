@@ -377,6 +377,16 @@ func setNumbers(v reflect.Value, places []place, numbers []float64) error {
 	return nil
 }
 
+// wordsOf is how many numbers count records of fields numbers each hold,
+// if that is no more than most: a header's counts are checked against the
+// bytes after it before they are multiplied, so none can overflow.
+func wordsOf(count, fields, most int) (int, bool) {
+	if count < 0 || fields < 0 || (count > 0 && (fields == 0 || count > most/fields)) {
+		return 0, false
+	}
+	return count * fields, true
+}
+
 // Encode is the week's bytes as stored, and their digest.
 func (w *Week) Encode() ([]byte, [32]byte, error) {
 	h := header{
@@ -390,8 +400,7 @@ func (w *Week) Encode() ([]byte, [32]byte, error) {
 	if err != nil {
 		return nil, [32]byte{}, err
 	}
-	b := make([]byte, 0, len(weekMagic)+4+len(js)+8*(len(w.Spells)*len(h.SpellFields)+len(w.Systems)*len(h.SystemFields)))
-	b = append(b, weekMagic...)
+	b := append([]byte(nil), weekMagic...)
 	b = binary.LittleEndian.AppendUint32(b, uint32(len(js)))
 	b = append(b, js...)
 	put := func(v float64) { b = binary.LittleEndian.AppendUint64(b, math.Float64bits(v)) }
@@ -435,7 +444,10 @@ func Decode(b []byte, digest []byte) (*Week, error) {
 	if h.Systems > 0 && (len(h.SystemFields) == 0 || h.SystemFields[0] != "Slot") {
 		return nil, errors.New("weather: the week's systems have no slots")
 	}
-	if h.Spells < 0 || h.Systems < 0 || len(b) != 8*(h.Spells*len(h.SpellFields)+h.Systems*len(h.SystemFields)) {
+	words := len(b) / 8
+	spellWords, ok := wordsOf(h.Spells, len(h.SpellFields), words)
+	systemWords, ok2 := wordsOf(h.Systems, len(h.SystemFields), words)
+	if !ok || !ok2 || len(b)%8 != 0 || spellWords+systemWords != words {
 		return nil, errors.New("weather: the week's records are not as long as its header says")
 	}
 	next := func() float64 {

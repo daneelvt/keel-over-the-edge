@@ -4,6 +4,7 @@ package weather
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -91,6 +92,20 @@ func TestWeekStored(t *testing.T) {
 	b[len(b)/2] ^= 1
 	if _, err := Decode(b, sum[:]); err == nil {
 		t.Fatal("a week that does not match its digest was read")
+	}
+}
+
+// A week whose header claims more records than its bytes hold is refused,
+// however large its counts: their product would wrap round to the length.
+func TestWeekHeaderChecked(t *testing.T) {
+	for _, counts := range [][2]int{{1<<60 + 2, 0}, {1<<62 + 1, 0}, {1, 1 << 62}, {-1, 0}, {3, 0}} {
+		js, _ := json.Marshal(map[string]any{"version": 1, "spellFields": []string{"Begin", "Length"}, "spells": counts[0], "systemFields": []string{"Slot", "Begin"}, "systems": counts[1]})
+		b := binary.LittleEndian.AppendUint32([]byte(weekMagic), uint32(len(js)))
+		b = append(b, js...)
+		b = append(b, make([]byte, 8*4)...)
+		if _, err := Decode(b, nil); err == nil {
+			t.Errorf("a week of %d spells and %d systems in %d bytes was read", counts[0], counts[1], len(b))
+		}
 	}
 }
 
