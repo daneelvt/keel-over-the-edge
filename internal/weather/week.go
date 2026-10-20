@@ -4,6 +4,7 @@ package weather
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -272,20 +273,29 @@ type Report struct {
 	Most    int       `json:"most"`    // the most systems on the disk at once
 }
 
-// stored is a week as it is stored: each record an array of its whole
-// numbers, in the order of the names of its fields, given once, so that a
-// field added later reads as 0 from a week stored before.
-type stored struct {
-	Version      int         `json:"version"`
-	Seed         uint64      `json:"seed"`
-	Epoch        int64       `json:"epoch"`
-	Ends         int64       `json:"ends"`
-	Until        int64       `json:"until"`
-	SpellFields  []string    `json:"spellFields"`
-	Spells       [][]float64 `json:"spells"`
-	SystemFields []string    `json:"systemFields"`
-	Systems      [][]float64 `json:"systems"`
-	Report       Report      `json:"report"`
+// A week is stored as a header, JSON, and its records' numbers after it,
+// each a little-endian float64 in the order of the names of its record's
+// fields the header gives once, so that a field added later reads as 0 from
+// a week stored before:
+//
+//	magic         "KEELWEEK"
+//	header        uint32 length, then that many bytes of JSON (header)
+//	spells        header.Spells × len(header.SpellFields) float64s
+//	systems       header.Systems × len(header.SystemFields) float64s, the first of each its slot
+const weekMagic = "KEELWEEK"
+
+// header is a stored week's JSON part.
+type header struct {
+	Version      int      `json:"version"`
+	Seed         uint64   `json:"seed"`
+	Epoch        int64    `json:"epoch"`
+	Ends         int64    `json:"ends"`
+	Until        int64    `json:"until"`
+	SpellFields  []string `json:"spellFields"`
+	Spells       int      `json:"spells"`
+	SystemFields []string `json:"systemFields"`
+	Systems      int      `json:"systems"`
+	Report       Report   `json:"report"`
 }
 
 // fieldsOf is the names of a record's numbers: each field's, an array's
@@ -369,21 +379,32 @@ func setNumbers(v reflect.Value, places []place, numbers []float64) error {
 
 // Encode is the week's bytes as stored, and their digest.
 func (w *Week) Encode() ([]byte, [32]byte, error) {
-	s := stored{
+	h := header{
 		Version: w.Version, Seed: w.Seed, Epoch: w.Epoch, Ends: w.Ends, Until: w.Until, Report: w.Report,
 		SpellFields:  fieldsOf(reflect.TypeFor[physics.Spell]()),
+		Spells:       len(w.Spells),
 		SystemFields: append([]string{"Slot"}, fieldsOf(reflect.TypeFor[physics.SystemRecord]())...),
+		Systems:      len(w.Systems),
 	}
-	for i := range w.Spells {
-		s.Spells = append(s.Spells, numbersOf(reflect.ValueOf(w.Spells[i])))
-	}
-	for i := range w.Systems {
-		n := append([]float64{float64(w.Systems[i].Slot)}, numbersOf(reflect.ValueOf(w.Systems[i].SystemRecord))...)
-		s.Systems = append(s.Systems, n)
-	}
-	b, err := json.Marshal(s)
+	js, err := json.Marshal(h)
 	if err != nil {
 		return nil, [32]byte{}, err
+	}
+	b := make([]byte, 0, len(weekMagic)+4+len(js)+8*(len(w.Spells)*len(h.SpellFields)+len(w.Systems)*len(h.SystemFields)))
+	b = append(b, weekMagic...)
+	b = binary.LittleEndian.AppendUint32(b, uint32(len(js)))
+	b = append(b, js...)
+	put := func(v float64) { b = binary.LittleEndian.AppendUint64(b, math.Float64bits(v)) }
+	for i := range w.Spells {
+		for _, v := range numbersOf(reflect.ValueOf(w.Spells[i])) {
+			put(v)
+		}
+	}
+	for i := range w.Systems {
+		put(float64(w.Systems[i].Slot))
+		for _, v := range numbersOf(reflect.ValueOf(w.Systems[i].SystemRecord)) {
+			put(v)
+		}
 	}
 	return b, sha256.Sum256(b), nil
 }
@@ -394,42 +415,62 @@ func Decode(b []byte, digest []byte) (*Week, error) {
 	if sum := sha256.Sum256(b); len(digest) != 0 && string(sum[:]) != string(digest) {
 		return nil, errors.New("weather: the week does not match its digest")
 	}
-	var s stored
-	if err := json.Unmarshal(b, &s); err != nil {
-		return nil, fmt.Errorf("weather: the week: %w", err)
+	if len(b) < len(weekMagic)+4 || string(b[:len(weekMagic)]) != weekMagic {
+		return nil, errors.New("weather: not a week")
 	}
-	if len(s.Spells) == 0 {
+	b = b[len(weekMagic):]
+	n := int(binary.LittleEndian.Uint32(b))
+	b = b[4:]
+	if n > len(b) {
+		return nil, errors.New("weather: the week's header is cut short")
+	}
+	var h header
+	if err := json.Unmarshal(b[:n], &h); err != nil {
+		return nil, fmt.Errorf("weather: the week's header: %w", err)
+	}
+	b = b[n:]
+	if h.Spells <= 0 {
 		return nil, errors.New("weather: a week with no spells")
 	}
-	w := &Week{Version: s.Version, Seed: s.Seed, Epoch: s.Epoch, Ends: s.Ends, Until: s.Until, Report: s.Report}
-	spellPlaces, err := placesOf(reflect.TypeFor[physics.Spell](), s.SpellFields)
+	if h.Systems > 0 && (len(h.SystemFields) == 0 || h.SystemFields[0] != "Slot") {
+		return nil, errors.New("weather: the week's systems have no slots")
+	}
+	if h.Spells < 0 || h.Systems < 0 || len(b) != 8*(h.Spells*len(h.SpellFields)+h.Systems*len(h.SystemFields)) {
+		return nil, errors.New("weather: the week's records are not as long as its header says")
+	}
+	next := func() float64 {
+		v := math.Float64frombits(binary.LittleEndian.Uint64(b))
+		b = b[8:]
+		return v
+	}
+	numbers := func(k int) []float64 {
+		out := make([]float64, k)
+		for i := range out {
+			out[i] = next()
+		}
+		return out
+	}
+	w := &Week{Version: h.Version, Seed: h.Seed, Epoch: h.Epoch, Ends: h.Ends, Until: h.Until, Report: h.Report}
+	spellPlaces, err := placesOf(reflect.TypeFor[physics.Spell](), h.SpellFields)
 	if err != nil {
 		return nil, fmt.Errorf("weather: the week's spells: %w", err)
 	}
-	w.Spells = make([]physics.Spell, len(s.Spells))
-	for i, n := range s.Spells {
-		if err := setNumbers(reflect.ValueOf(&w.Spells[i]).Elem(), spellPlaces, n); err != nil {
+	w.Spells = make([]physics.Spell, h.Spells)
+	for i := range w.Spells {
+		if err := setNumbers(reflect.ValueOf(&w.Spells[i]).Elem(), spellPlaces, numbers(len(h.SpellFields))); err != nil {
 			return nil, fmt.Errorf("weather: the week's spell %d: %w", i, err)
 		}
 	}
-	if len(s.SystemFields) == 0 || s.SystemFields[0] != "Slot" {
-		if len(s.Systems) > 0 {
-			return nil, errors.New("weather: the week's systems have no slots")
-		}
-	}
 	var systemPlaces []place
-	if len(s.SystemFields) > 0 {
-		if systemPlaces, err = placesOf(reflect.TypeFor[physics.SystemRecord](), s.SystemFields[1:]); err != nil {
+	if h.Systems > 0 {
+		if systemPlaces, err = placesOf(reflect.TypeFor[physics.SystemRecord](), h.SystemFields[1:]); err != nil {
 			return nil, fmt.Errorf("weather: the week's systems: %w", err)
 		}
 	}
-	w.Systems = make([]System, len(s.Systems))
-	for i, n := range s.Systems {
-		if len(n) == 0 || len(n) != len(s.SystemFields) {
-			return nil, fmt.Errorf("weather: the week's system %d has %d numbers", i, len(n))
-		}
-		w.Systems[i].Slot = int(n[0])
-		if err := setNumbers(reflect.ValueOf(&w.Systems[i].SystemRecord).Elem(), systemPlaces, n[1:]); err != nil {
+	w.Systems = make([]System, h.Systems)
+	for i := range w.Systems {
+		w.Systems[i].Slot = int(next())
+		if err := setNumbers(reflect.ValueOf(&w.Systems[i].SystemRecord).Elem(), systemPlaces, numbers(len(h.SystemFields)-1)); err != nil {
 			return nil, fmt.Errorf("weather: the week's system %d: %w", i, err)
 		}
 	}

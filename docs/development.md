@@ -582,9 +582,11 @@ and is written again with `go test ./internal/weather -run WeekDigests
 ### The week stored
 
 A world's week is in `world_weather` (`00012_weather.sql`): the version
-that made it, the epoch and end it was made for, its records as JSON (each
-record an array of its numbers, with its fields' names given once, about 90
-KB), their digest, checked as it loads. The next world's job makes it right
+that made it, the epoch and end it was made for, its records (a JSON
+header with the report and each record's fields' names, given once, then
+every record's numbers as little-endian float64s, about 140 KB: JSON's
+reflection cost half a second under the race detector as a world opened),
+their digest, checked as it loads. The next world's job makes it right
 after the terrain, for when the world is planned to begin; a world that
 begins at another time (late, after keel was down, or by the owner's hand)
 has its week made again for its epoch as it opens, and a world stored
