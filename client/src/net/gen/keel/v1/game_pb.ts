@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iUwoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAEh0KBHJvYW0YAiABKAsyDS5rZWVsLnYxLlJvYW1IAEIGCgRib2R5IggKBlJlc3luYyI/CgRSb2FtEgoKAm9uGAEgASgIEgwKBGVhc3QYAiABKBESDQoFbm9ydGgYAyABKBESDgoGaGVpZ2h0GAQgASgNIu4DCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSAASIQoGY2h1bmtzGAggASgLMg8ua2VlbC52MS5DaHVua3NIABIfCgV0b29scxgJIAEoCzIOLmtlZWwudjEuVG9vbHNIABIhCgZwbGFjZXMYCiABKAsyDy5rZWVsLnYxLlBsYWNlc0gAEiEKBmxpZ2h0cxgLIAEoCzIPLmtlZWwudjEuTGlnaHRzSAASHwoFY2hhcnQYDCABKAsyDi5rZWVsLnYxLkNoYXJ0SAASIwoHY2hhcnRlZBgNIAEoCzIQLmtlZWwudjEuQ2hhcnRlZEgAQgYKBGJvZHkiLQoFQ2hhcnQSJAoHZW50cmllcxgBIAMoCzITLmtlZWwudjEuQ2hhcnRFbnRyeSIvCgdDaGFydGVkEiQKB2VudHJpZXMYASADKAsyEy5rZWVsLnYxLkNoYXJ0RW50cnkivwMKCkNoYXJ0RW50cnkSJgoHc3ViamVjdBgBIAEoDjIVLmtlZWwudjEuQ2hhcnRTdWJqZWN0Eg4KBm51bWJlchgCIAEoDRIMCgRzb3J0GAMgASgNEgwKBG5hbWUYBCABKAkSDAoEZWFzdBgFIAEoERINCgVub3J0aBgGIAEoERIKCgJieRgHIAEoCRIKCgJhaRgIIAEoCBIPCgd3aGVuX21zGAkgASgDEg0KBXdvcnRoGAogASgNEg4KBmlzbGFuZBgLIAEoDRINCgVncm91cBgMIAEoCRIOCgZib3VuZHMYDSADKBESDwoHaGlnaGVzdBgOIAEoDRIMCgR6b25lGA8gASgNEg0KBWNsYXNzGBAgASgJEg0KBW1vZGVsGBEgASgJEg0KBWxpZ2h0GBIgASgNEhEKCWNoYXJhY3RlchgXIAEoDRINCgVmb2NhbBgYIAEoDRINCgVyYW5nZRgZIAEoDRIMCgRzaGlwGBMgASgJEgwKBHN1bmsYFCABKAgSKwoMd2l0aF9zdWJqZWN0GBUgASgOMhUua2VlbC52MS5DaGFydFN1YmplY3QSEwoLd2l0aF9udW1iZXIYFiABKA0iKAoGUGxhY2VzEh4KBnBsYWNlcxgBIAMoCzIOLmtlZWwudjEuUGxhY2UiuQEKBVBsYWNlEg4KBm51bWJlchgBIAEoDRIMCgRraW5kGAIgASgNEgwKBGVhc3QYAyABKBESDQoFbm9ydGgYBCABKBESDwoHaGVhZGluZxgFIAEoDRIOCgZncm91bmQYBiABKA0SDQoFdG93ZXIYByABKA0SDwoHZGF5bWFyaxgIIAEoDRILCgNyaWcYCSABKA0SCwoDYWdlGAogASgNEgwKBHN1bmsYCyABKAgSDAoEaGVlbBgMIAEoESI2CgZMaWdodHMSHgoGbGlnaHRzGAEgAygLMg4ua2VlbC52MS5MaWdodBIMCgRkcm9wGAIgAygNInQKBUxpZ2h0Eg4KBm51bWJlchgBIAEoDRIMCgRlYXN0GAIgASgREg0KBW5vcnRoGAMgASgREg0KBWZvY2FsGAQgASgNEhEKCWNoYXJhY3RlchgFIAEoDRINCgVwaGFzZRgGIAEoAxINCgVyYW5nZRgHIAEoDSITCgVUb29scxIKCgJvbhgBIAEoCCImCgZDaHVua3MSDgoGbnVtYmVyGAEgAygNEgwKBHBhdGgYAiADKAkibQoEQnVtcBIMCgR0aWNrGAEgASgDEgkKAXgYAiABKBESCQoBeRgDIAEoERIPCgdjbG9zaW5nGAQgASgNEh8KBHBhcnQYBSABKA4yES5rZWVsLnYxLkJ1bXBQYXJ0Eg8KB2FydGljbGUYBiABKAkiMAoOV2VhdGhlclN5c3RlbXMSHgoGc3BlbGxzGAEgAygLMg4ua2VlbC52MS5TcGVsbCKOAgoFU3BlbGwSDQoFYmVnaW4YASABKAMSDgoGY2hhbmdlGAIgASgNEg0KBXN0YXJ0GAMgASgDEg4KBmxlbmd0aBgEIAEoBBIOCgZyZWdpbWUYBSABKA0SDgoGc3RlYWR5GAYgASgIEg0KBXNwZWVkGAcgASgNEgwKBGZyb20YCCABKA0SDQoFZHJpZnQYCSABKBESDAoEZ3VzdBgKIAEoDRINCgVzaGlmdBgLIAMoDRIOCgZwZXJpb2QYDCADKA0SDQoFcGhhc2UYDSADKA0SDgoGYWNyb3NzGA4gASgNEgwKBGF4aXMYDyABKA0SEwoLYXhpc19wZXJpb2QYECABKA0SDAoEc2VlZBgRIAEoDSJsCghTZWFBcmVhcxIMCgR0aWNrGAEgASgDEgsKA2NvbBgCIAEoERILCgNyb3cYAyABKBESDAoEc2l6ZRgEIAEoDRINCgVzcGVlZBgFIAMoDRIMCgRmcm9tGAYgAygNEg0KBWZldGNoGAcgAygNIhgKB1Jlc3RhcnQSDQoFaW5fbXMYASABKA0iKwoGUXVldWVkEhAKCHBvc2l0aW9uGAEgASgNEg8KB3dhaXRpbmcYAiABKA0igQIKB1dlbGNvbWUSDQoFd29ybGQYASABKAkSDAoEdGljaxgCIAEoAxIVCg13b3JsZF90aW1lX3VzGAMgASgDEgwKBGJvYXQYBCABKAQSDAoEa2luZBgFIAEoDRIQCghyZWpvaW5lZBgGIAEoCBIQCghlcG9jaF91cxgHIAEoAxIMCgRsYW5kGAggASgIEhMKC2NpcmN1bGF0aW9uGAkgASgREg0KBXRvb2xzGAogASgIEh0KBWxpZ2h0GAsgASgLMg4ua2VlbC52MS5MaWdodBIPCgdlbmRzX3VzGAwgASgDEhIKCmNsb3NpbmdfdXMYDSABKAMSDAoEem9uZRgOIAEoCSI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKAMqewoMQ2hhcnRTdWJqZWN0Eh0KGUNIQVJUX1NVQkpFQ1RfVU5TUEVDSUZJRUQQABIYChRDSEFSVF9TVUJKRUNUX0lTTEFORBABEhcKE0NIQVJUX1NVQkpFQ1RfUExBQ0UQAhIZChVDSEFSVF9TVUJKRUNUX0ZFQVRVUkUQAypkCghCdW1wUGFydBIZChVCVU1QX1BBUlRfVU5TUEVDSUZJRUQQABITCg9CVU1QX1BBUlRfWU9VUlMQARIUChBCVU1QX1BBUlRfVEhFSVJTEAISEgoOQlVNUF9QQVJUX05PTkUQA0I9WjtnaXRodWIuY29tL2RhbmVlbHZ0L2tlZWwtb3Zlci10aGUtZWRnZS9pbnRlcm5hbC9wcm90b2NvbC9wYmIGcHJvdG8z");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iUwoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAEh0KBHJvYW0YAiABKAsyDS5rZWVsLnYxLlJvYW1IAEIGCgRib2R5IggKBlJlc3luYyI/CgRSb2FtEgoKAm9uGAEgASgIEgwKBGVhc3QYAiABKBESDQoFbm9ydGgYAyABKBESDgoGaGVpZ2h0GAQgASgNIu4DCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSAASIQoGY2h1bmtzGAggASgLMg8ua2VlbC52MS5DaHVua3NIABIfCgV0b29scxgJIAEoCzIOLmtlZWwudjEuVG9vbHNIABIhCgZwbGFjZXMYCiABKAsyDy5rZWVsLnYxLlBsYWNlc0gAEiEKBmxpZ2h0cxgLIAEoCzIPLmtlZWwudjEuTGlnaHRzSAASHwoFY2hhcnQYDCABKAsyDi5rZWVsLnYxLkNoYXJ0SAASIwoHY2hhcnRlZBgNIAEoCzIQLmtlZWwudjEuQ2hhcnRlZEgAQgYKBGJvZHkiLQoFQ2hhcnQSJAoHZW50cmllcxgBIAMoCzITLmtlZWwudjEuQ2hhcnRFbnRyeSIvCgdDaGFydGVkEiQKB2VudHJpZXMYASADKAsyEy5rZWVsLnYxLkNoYXJ0RW50cnkivwMKCkNoYXJ0RW50cnkSJgoHc3ViamVjdBgBIAEoDjIVLmtlZWwudjEuQ2hhcnRTdWJqZWN0Eg4KBm51bWJlchgCIAEoDRIMCgRzb3J0GAMgASgNEgwKBG5hbWUYBCABKAkSDAoEZWFzdBgFIAEoERINCgVub3J0aBgGIAEoERIKCgJieRgHIAEoCRIKCgJhaRgIIAEoCBIPCgd3aGVuX21zGAkgASgDEg0KBXdvcnRoGAogASgNEg4KBmlzbGFuZBgLIAEoDRINCgVncm91cBgMIAEoCRIOCgZib3VuZHMYDSADKBESDwoHaGlnaGVzdBgOIAEoDRIMCgR6b25lGA8gASgNEg0KBWNsYXNzGBAgASgJEg0KBW1vZGVsGBEgASgJEg0KBWxpZ2h0GBIgASgNEhEKCWNoYXJhY3RlchgXIAEoDRINCgVmb2NhbBgYIAEoDRINCgVyYW5nZRgZIAEoDRIMCgRzaGlwGBMgASgJEgwKBHN1bmsYFCABKAgSKwoMd2l0aF9zdWJqZWN0GBUgASgOMhUua2VlbC52MS5DaGFydFN1YmplY3QSEwoLd2l0aF9udW1iZXIYFiABKA0iKAoGUGxhY2VzEh4KBnBsYWNlcxgBIAMoCzIOLmtlZWwudjEuUGxhY2UiuQEKBVBsYWNlEg4KBm51bWJlchgBIAEoDRIMCgRraW5kGAIgASgNEgwKBGVhc3QYAyABKBESDQoFbm9ydGgYBCABKBESDwoHaGVhZGluZxgFIAEoDRIOCgZncm91bmQYBiABKA0SDQoFdG93ZXIYByABKA0SDwoHZGF5bWFyaxgIIAEoDRILCgNyaWcYCSABKA0SCwoDYWdlGAogASgNEgwKBHN1bmsYCyABKAgSDAoEaGVlbBgMIAEoESI2CgZMaWdodHMSHgoGbGlnaHRzGAEgAygLMg4ua2VlbC52MS5MaWdodBIMCgRkcm9wGAIgAygNInQKBUxpZ2h0Eg4KBm51bWJlchgBIAEoDRIMCgRlYXN0GAIgASgREg0KBW5vcnRoGAMgASgREg0KBWZvY2FsGAQgASgNEhEKCWNoYXJhY3RlchgFIAEoDRINCgVwaGFzZRgGIAEoAxINCgVyYW5nZRgHIAEoDSITCgVUb29scxIKCgJvbhgBIAEoCCImCgZDaHVua3MSDgoGbnVtYmVyGAEgAygNEgwKBHBhdGgYAiADKAkibQoEQnVtcBIMCgR0aWNrGAEgASgDEgkKAXgYAiABKBESCQoBeRgDIAEoERIPCgdjbG9zaW5nGAQgASgNEh8KBHBhcnQYBSABKA4yES5rZWVsLnYxLkJ1bXBQYXJ0Eg8KB2FydGljbGUYBiABKAkiawoOV2VhdGhlclN5c3RlbXMSHgoGc3BlbGxzGAEgAygLMg4ua2VlbC52MS5TcGVsbBIkCglrZXlmcmFtZXMYAiADKAsyES5rZWVsLnYxLktleWZyYW1lEhMKC2tlZXBfc3BlbGxzGAMgASgIIj0KCEtleWZyYW1lEgwKBHRpY2sYASABKAMSIwoHc3lzdGVtcxgCIAMoCzISLmtlZWwudjEuU3lzdGVtS2V5Ir4BCglTeXN0ZW1LZXkSDAoEc2xvdBgBIAEoDRIMCgRraW5kGAIgASgNEgwKBHNlZWQYAyABKA0SDQoFc3RhZ2UYBCABKA0SDAoEZWFzdBgFIAEoERINCgVub3J0aBgGIAEoERIPCgdoZWFkaW5nGAcgASgNEg0KBXNwZWVkGAggASgNEhAKCHN0cmVuZ3RoGAkgASgNEgwKBHNpemUYCiABKA0SDAoEcGVhaxgLIAEoDRINCgVkZXB0aBgMIAEoESLeAgoFU3BlbGwSDQoFYmVnaW4YASABKAMSDgoGY2hhbmdlGAIgASgNEg0KBXN0YXJ0GAMgASgDEg4KBmxlbmd0aBgEIAEoBBIOCgZyZWdpbWUYBSABKA0SDgoGc3RlYWR5GAYgASgIEg0KBXNwZWVkGAcgASgNEgwKBGZyb20YCCABKA0SDQoFZHJpZnQYCSABKBESDAoEZ3VzdBgKIAEoDRINCgVzaGlmdBgLIAMoDRIOCgZwZXJpb2QYDCADKA0SDQoFcGhhc2UYDSADKA0SDgoGYWNyb3NzGA4gASgNEgwKBGF4aXMYDyABKA0SEwoLYXhpc19wZXJpb2QYECABKA0SDAoEc2VlZBgRIAEoDRIQCghwcmVzc3VyZRgSIAEoDRINCgVmcm9udBgTIAEoCBIOCgZ0b3dhcmQYFCABKA0SDgoGdHJvdWdoGBUgASgNEg0KBXN0aWxsGBYgASgIImwKCFNlYUFyZWFzEgwKBHRpY2sYASABKAMSCwoDY29sGAIgASgREgsKA3JvdxgDIAEoERIMCgRzaXplGAQgASgNEg0KBXNwZWVkGAUgAygNEgwKBGZyb20YBiADKA0SDQoFZmV0Y2gYByADKA0iGAoHUmVzdGFydBINCgVpbl9tcxgBIAEoDSIrCgZRdWV1ZWQSEAoIcG9zaXRpb24YASABKA0SDwoHd2FpdGluZxgCIAEoDSKBAgoHV2VsY29tZRINCgV3b3JsZBgBIAEoCRIMCgR0aWNrGAIgASgDEhUKDXdvcmxkX3RpbWVfdXMYAyABKAMSDAoEYm9hdBgEIAEoBBIMCgRraW5kGAUgASgNEhAKCHJlam9pbmVkGAYgASgIEhAKCGVwb2NoX3VzGAcgASgDEgwKBGxhbmQYCCABKAgSEwoLY2lyY3VsYXRpb24YCSABKBESDQoFdG9vbHMYCiABKAgSHQoFbGlnaHQYCyABKAsyDi5rZWVsLnYxLkxpZ2h0Eg8KB2VuZHNfdXMYDCABKAMSEgoKY2xvc2luZ191cxgNIAEoAxIMCgR6b25lGA4gASgJIjUKBFBvbmcSFgoOY2xpZW50X3RpbWVfdXMYASABKAMSFQoNd29ybGRfdGltZV91cxgCIAEoAyp7CgxDaGFydFN1YmplY3QSHQoZQ0hBUlRfU1VCSkVDVF9VTlNQRUNJRklFRBAAEhgKFENIQVJUX1NVQkpFQ1RfSVNMQU5EEAESFwoTQ0hBUlRfU1VCSkVDVF9QTEFDRRACEhkKFUNIQVJUX1NVQkpFQ1RfRkVBVFVSRRADKmQKCEJ1bXBQYXJ0EhkKFUJVTVBfUEFSVF9VTlNQRUNJRklFRBAAEhMKD0JVTVBfUEFSVF9ZT1VSUxABEhQKEEJVTVBfUEFSVF9USEVJUlMQAhISCg5CVU1QX1BBUlRfTk9ORRADQj1aO2dpdGh1Yi5jb20vZGFuZWVsdnQva2VlbC1vdmVyLXRoZS1lZGdlL2ludGVybmFsL3Byb3RvY29sL3BiYgZwcm90bzM");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -970,13 +970,17 @@ export const BumpSchema: GenMessage<Bump> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 17);
 
 /**
- * WeatherSystems is the weather in play about the present: the spells the
- * client needs to compute the wind at its boat, at every tick it steps
- * ahead of the server or replays behind it, exactly as the server does. It
- * comes after the Welcome, and whenever the spells in play change: a spell
- * is sent ten seconds before its change from the one before begins, never
- * earlier, and kept until ten seconds after its change to the next has
- * ended. The client holds the latest it was sent.
+ * WeatherSystems is the weather in play about the present: the spells and
+ * the weather systems' keyframes the client needs to compute the wind at
+ * its boat, at every tick it steps ahead of the server or replays behind
+ * it, exactly as the server does. It comes after the Welcome, with the
+ * keyframes at the last keyframe's tick and the two after; whenever the
+ * spells in play change: a spell is sent ten seconds before its change from
+ * the one before begins, never earlier, and kept until ten seconds after
+ * its change to the next has ended, or a front's line has left the disk;
+ * and at each keyframe's tick, with the keyframe twenty seconds on, never
+ * further, and any the client holds that has changed. The client holds the
+ * latest spells it was sent, and the latest four keyframes by their ticks.
  *
  * @generated from message keel.v1.WeatherSystems
  */
@@ -987,6 +991,21 @@ export type WeatherSystems = Message<"keel.v1.WeatherSystems"> & {
    * @generated from field: repeated keel.v1.Spell spells = 1;
    */
   spells: Spell[];
+
+  /**
+   * Keyframes, by their ticks, ascending: at most 3. Each replaces any the
+   * client holds of its tick.
+   *
+   * @generated from field: repeated keel.v1.Keyframe keyframes = 2;
+   */
+  keyframes: Keyframe[];
+
+  /**
+   * The spells the client holds are still those in play: spells is empty.
+   *
+   * @generated from field: bool keep_spells = 3;
+   */
+  keepSpells: boolean;
 };
 
 /**
@@ -995,6 +1014,130 @@ export type WeatherSystems = Message<"keel.v1.WeatherSystems"> & {
  */
 export const WeatherSystemsSchema: GenMessage<WeatherSystems> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 18);
+
+/**
+ * Keyframe is the weather systems at a tick: each one's place, motion,
+ * strength and size, in whole numbers. Between two keyframes the client
+ * interpolates, as the server does.
+ *
+ * @generated from message keel.v1.Keyframe
+ */
+export type Keyframe = Message<"keel.v1.Keyframe"> & {
+  /**
+   * The tick it is of.
+   *
+   * @generated from field: int64 tick = 1;
+   */
+  tick: bigint;
+
+  /**
+   * The systems, by their slots, ascending: at most 20.
+   *
+   * @generated from field: repeated keel.v1.SystemKey systems = 2;
+   */
+  systems: SystemKey[];
+};
+
+/**
+ * Describes the message keel.v1.Keyframe.
+ * Use `create(KeyframeSchema)` to create a new message.
+ */
+export const KeyframeSchema: GenMessage<Keyframe> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 19);
+
+/**
+ * SystemKey is a weather system at a keyframe.
+ *
+ * @generated from message keel.v1.SystemKey
+ */
+export type SystemKey = Message<"keel.v1.SystemKey"> & {
+  /**
+   * Its slot, which it holds from its birth to its end: below 16 the
+   * world's own, from 16 a developer's.
+   *
+   * @generated from field: uint32 slot = 1;
+   */
+  slot: number;
+
+  /**
+   * The catalog's index of its kind, and a seed for drawing it.
+   *
+   * @generated from field: uint32 kind = 2;
+   */
+  kind: number;
+
+  /**
+   * @generated from field: uint32 seed = 3;
+   */
+  seed: number;
+
+  /**
+   * Growing, mature or decaying: 0, 1 or 2.
+   *
+   * @generated from field: uint32 stage = 4;
+   */
+  stage: number;
+
+  /**
+   * Its centre, in quarter metres east and north of the world's centre.
+   *
+   * @generated from field: sint32 east = 5;
+   */
+  east: number;
+
+  /**
+   * @generated from field: sint32 north = 6;
+   */
+  north: number;
+
+  /**
+   * The direction it moves toward, in 65536ths of a turn clockwise from
+   * north, and how fast, in steps of 0.01 m/s.
+   *
+   * @generated from field: uint32 heading = 7;
+   */
+  heading: number;
+
+  /**
+   * @generated from field: uint32 speed = 8;
+   */
+  speed: number;
+
+  /**
+   * Its strength, in 4096ths; its radius, m.
+   *
+   * @generated from field: uint32 strength = 9;
+   */
+  strength: number;
+
+  /**
+   * @generated from field: uint32 size = 10;
+   */
+  size: number;
+
+  /**
+   * The wind it adds at its peak at full strength, in steps of 0.01 m/s;
+   * for a patch of its kind, the wind's share at its core, in thousandths.
+   *
+   * @generated from field: uint32 peak = 11;
+   */
+  peak: number;
+
+  /**
+   * Its pressure at its centre at full strength, in hundredths of a hPa: a
+   * dome's above, a low's below.
+   *
+   * @generated from field: sint32 depth = 12;
+   */
+  depth: number;
+};
+
+/**
+ * Describes the message keel.v1.SystemKey.
+ * Use `create(SystemKeySchema)` to create a new message.
+ */
+export const SystemKeySchema: GenMessage<SystemKey> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 20);
 
 /**
  * Spell is a spell of weather: a stretch of time with one base wind, its
@@ -1114,6 +1257,41 @@ export type Spell = Message<"keel.v1.Spell"> & {
    * @generated from field: uint32 seed = 17;
    */
   seed: number;
+
+  /**
+   * Its pressure's level, in hundredths of a hPa.
+   *
+   * @generated from field: uint32 pressure = 18;
+   */
+  pressure: number;
+
+  /**
+   * The spell arrives by a front: a line that enters the disk's reach at
+   * begin and leaves it change ticks later, moving toward toward, in
+   * 65536ths of a turn clockwise from north, its trough trough deep, in
+   * hundredths of a hPa.
+   *
+   * @generated from field: bool front = 19;
+   */
+  front: boolean;
+
+  /**
+   * @generated from field: uint32 toward = 20;
+   */
+  toward: number;
+
+  /**
+   * @generated from field: uint32 trough = 21;
+   */
+  trough: number;
+
+  /**
+   * The world's own weather systems do not blow while it is the spell in
+   * effect: a developer's weather.
+   *
+   * @generated from field: bool still = 22;
+   */
+  still: boolean;
 };
 
 /**
@@ -1121,7 +1299,7 @@ export type Spell = Message<"keel.v1.Spell"> & {
  * Use `create(SpellSchema)` to create a new message.
  */
 export const SpellSchema: GenMessage<Spell> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 19);
+  messageDesc(file_keel_v1_game, 21);
 
 /**
  * SeaAreas is what raises the waves about the boat: a square of sea areas,
@@ -1191,7 +1369,7 @@ export type SeaAreas = Message<"keel.v1.SeaAreas"> & {
  * Use `create(SeaAreasSchema)` to create a new message.
  */
 export const SeaAreasSchema: GenMessage<SeaAreas> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 20);
+  messageDesc(file_keel_v1_game, 22);
 
 /**
  * Restart says the server is about to restart, as a new version is
@@ -1215,7 +1393,7 @@ export type Restart = Message<"keel.v1.Restart"> & {
  * Use `create(RestartSchema)` to create a new message.
  */
 export const RestartSchema: GenMessage<Restart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 21);
+  messageDesc(file_keel_v1_game, 23);
 
 /**
  * Queued says the sea is full: the client waits for a boat. It comes after
@@ -1245,7 +1423,7 @@ export type Queued = Message<"keel.v1.Queued"> & {
  * Use `create(QueuedSchema)` to create a new message.
  */
 export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 22);
+  messageDesc(file_keel_v1_game, 24);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -1368,7 +1546,7 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 23);
+  messageDesc(file_keel_v1_game, 25);
 
 /**
  * Pong answers a Ping.
@@ -1396,7 +1574,7 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 24);
+  messageDesc(file_keel_v1_game, 26);
 
 /**
  * ChartSubject is a kind of subject of the chart.
