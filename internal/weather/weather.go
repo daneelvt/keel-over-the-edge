@@ -458,7 +458,8 @@ func (t *Timeline) Trim(ss []bus.System, tick int64) []bus.System {
 }
 
 // record is a developer's system's record: its kind's middling size,
-// strength and life, on a straight track to its point, with no wobble.
+// strength and life, on a straight track to its point, with no wobble,
+// strongest as it reaches it.
 func (t *Timeline) record(s bus.System) physics.SystemRecord {
 	if len(t.cfg.Kinds) == 0 {
 		return physics.SystemRecord{}
@@ -477,9 +478,14 @@ func (t *Timeline) record(s bus.System) physics.SystemRecord {
 		r.Peak = math.Round(float64(speedSteps*(kind.Wind[0]+kind.Wind[1])) / 2)
 		r.Depth = math.Round(float64(50 * (kind.Depth[0] + kind.Depth[1])))
 	}
-	// Back along its track from its point by how far it goes by then.
+	// Back along its track from its point by how far it goes by then: a
+	// dome's gust front, where its outflow is steepest, ahead of its centre
+	// by its width over its steepness ahead, reaches the point then.
 	sin, cos := physics.SinCos(float64(float64(s.Heading) * (2 * math.Pi / turn)))
 	d := float64(float64(float64(float64(s.Speed)*physics.SeaSpeedStep)*physics.Dt) * float64(s.At-s.Born))
+	if kind.Shape == physics.ShapeDome && kind.Ahead > 0 {
+		d += float64(kind.Width*r.Size) / kind.Ahead
+	}
 	r.East = float64(s.East) - math.Round(float64(quarterMetres*float64(d*sin)))
 	r.North = float64(s.North) - math.Round(float64(quarterMetres*float64(d*cos)))
 	return r

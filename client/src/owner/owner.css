@@ -290,7 +290,8 @@ button:disabled {
 
 .islands button,
 .places button,
-.lights button {
+.lights button,
+.systems button {
   padding: 1px 4px;
   background: none;
   text-align: left;
@@ -345,4 +346,109 @@ button:disabled {
   columns: 1;
   max-height: 24em;
   overflow-y: auto;
+}
+
+h3 {
+  margin: 8px 0 4px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* The week's weather: its spells side by side, coloured by regime, and
+   the marks on them; dragged to show another tick. */
+.week {
+  position: relative;
+  height: 30px;
+  margin: 6px 0 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 6%);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.week:focus-visible {
+  outline: 2px solid var(--gold);
+}
+
+.week .spell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 1px solid rgb(0 0 0 / 25%);
+}
+
+.week .mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-1px);
+}
+
+.week .mark.front {
+  bottom: 50%;
+  width: 4px;
+  transform: translateX(-2px);
+  background: #8cc4ff;
+}
+
+.week .mark.born {
+  top: auto;
+  bottom: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transform: translateX(-3.5px);
+  background: #ff9e7a;
+}
+
+.week .mark.end {
+  background: #d55e00;
+}
+
+.week .mark.now {
+  width: 3px;
+  transform: translateX(-1.5px);
+  background: var(--gold);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 70%);
+}
+
+.week .mark.shown {
+  background: #ffffff;
+  box-shadow: 0 0 4px #000000;
+}
+
+.days {
+  position: relative;
+  height: 16px;
+  font-size: 11px;
+}
+
+.days span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.swatch.round {
+  border-radius: 50%;
+}
+
+.systems {
+  font-size: 13px;
 }

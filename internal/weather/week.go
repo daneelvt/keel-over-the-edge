@@ -93,6 +93,8 @@ const (
 // Kind is a kind of system as the week draws it.
 type Kind struct {
 	Shape       float64 // physics.ShapeNone, ShapeDome or ShapeLow
+	Width       float64 // its shape's width, as a share of its size
+	Ahead       float64 // a dome's steepness ahead
 	Track       int
 	SpeedOfWind bool       // Speed is a share of the base wind; otherwise m/s
 	Size        [2]float64 // m
@@ -198,7 +200,7 @@ func ConfigOf(c *catalog.Catalog) (*Config, error) {
 	tracks := map[catalog.Track]int{catalog.TrackWind: trackWind, catalog.TrackOuter: trackOuter, catalog.TrackDrift: trackDrift}
 	for _, k := range w.Systems {
 		g := Kind{
-			Shape: shapes[k.Shape], Track: tracks[k.Track], SpeedOfWind: k.SpeedOf == catalog.SpeedOfWind,
+			Shape: shapes[k.Shape], Width: k.Width, Ahead: k.Ahead, Track: tracks[k.Track], SpeedOfWind: k.SpeedOf == catalog.SpeedOfWind,
 			Size: pair(k.Size, nauticalMile), Speed: pair(k.Speed, 1), Life: ticks(k.Life, ticksPerMinute),
 			Wind: pair(k.Wind, knot), Factor: pair(k.Factor, 1), Depth: pair(k.Depth, 1),
 			Islands: k.Islands, Night: k.Night, Dawn: int64(math.Round(k.Dawn * ticksPerMinute)),

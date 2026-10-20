@@ -363,8 +363,9 @@ func TestKeyframes(t *testing.T) {
 	}
 }
 
-// A developer's system placed to reach a point in five minutes reaches it
-// within ten seconds of then, at its strongest, in a developer's slot.
+// A developer's squall placed to reach a point in five minutes brings its
+// gust front, ahead of its centre, there within ten seconds of then, at its
+// strongest, in a developer's slot.
 func TestPlacedSystem(t *testing.T) {
 	cat, tl := load(t)
 	squall := uint16(KindIndex(cat, "squall"))
@@ -377,11 +378,15 @@ func TestPlacedSystem(t *testing.T) {
 	}
 	r := tl.DeveloperRecord(ss[0])
 	arrive := float64(tick) + float64(in)
+	kind := tl.Config().Kinds[squall]
+	lead := kind.Width * r.Size / kind.Ahead
 	best := math.Inf(1)
 	var bestAt float64
 	for at := arrive - 600; at <= arrive+600; at += 30 {
 		s := physics.SystemAt(&r, at)
-		if d := math.Hypot(s.East-float64(point[0]), s.North-float64(point[1])) / 4; d < best {
+		sin, cos := math.Sincos(s.Heading / physics.TurnSteps * 2 * math.Pi)
+		front := [2]float64{s.East/4 + lead*sin, s.North/4 + lead*cos}
+		if d := math.Hypot(front[0]-float64(point[0])/4, front[1]-float64(point[1])/4); d < best {
 			best, bestAt = d, at
 		}
 	}

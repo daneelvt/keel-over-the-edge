@@ -259,9 +259,135 @@ func TestSeaWorkIsSpreadInWeather(t *testing.T) {
 }
 
 // BenchmarkTickInWeather times the tick with boats spread over the disk in
+// A frame's keyframes are the week's systems' at their ticks, as SystemAt
+// makes them from the week's records, and a developer's system's in its
+// slot.
+func TestFrameKeyframesAreTheWeeks(t *testing.T) {
+	tl := sequence(t)
+	week := tl.Week()
+	s := week.Systems[len(week.Systems)/3]
+	w := weatherWorld(t, int64(s.Mature)-5, 1, false)
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	send(t, w, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherSystem, Kind: uint16(weather.KindIndex(cat, "squall")), East: 4000, In: 900}})
+	for w.Now()%tl.Every() != 0 {
+		w.Tick()
+	}
+	for range tl.Every() * 2 {
+		w.Tick()
+	}
+	f := w.Latest()
+	for k, key := range f.Keys {
+		if want := float64(f.Tick - f.Tick%tl.Every() + int64(k)*tl.Every()); key.Tick != want {
+			t.Fatalf("keyframe %d is of tick %v, not %v", k, key.Tick, want)
+		}
+		for _, ws := range week.Systems {
+			if ws.Born <= key.Tick && key.Tick < ws.Gone && key.Systems[ws.Slot] != physics.SystemAt(&ws.SystemRecord, key.Tick) {
+				t.Fatalf("keyframe %d, slot %d: %+v, the record's %+v", k, ws.Slot, key.Systems[ws.Slot], physics.SystemAt(&ws.SystemRecord, key.Tick))
+			}
+		}
+		if dev := key.Systems[physics.WeekSystems+int(f.Systems[0].Slot)]; dev.On == 0 {
+			t.Fatalf("keyframe %d lacks the developer's system", k)
+		}
+	}
+}
+
+// The sea follows a squall: the wave wind at an area under its track rises
+// after the wind there does, by the lag of its average, and goes down to
+// the wind again after the squall has gone.
+func TestSeaFollowsASquall(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := int64(740_000_000)
+	w := weatherWorld(t, start, 1, true)
+	// A light settled spell, held, and a squall to reach an area's centre
+	// three minutes on.
+	send(t, w, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherHeld, Regime: 0}})
+	for range 20 * bus.SeaPeriod {
+		w.Tick()
+	}
+	col, row := int32(physics.SeaAreas/2+7), int32(physics.SeaAreas/2)
+	x, y := physics.SeaAreaCentre(col, row)
+	area := row*physics.SeaAreas + col
+	send(t, w, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherSystem, Kind: uint16(weather.KindIndex(cat, "squall")),
+		East: int32(x * 4), North: int32(y * 4), In: 180 * physics.StepsPerSecond}})
+	// The wind at the area's centre, and the wave wind there, each second.
+	windAt := func() float64 {
+		var at physics.WeatherTick
+		physics.WeatherAt(&w.weather, &at, float64(w.Now()))
+		v, _ := physics.MeanWindAt(&at, x, y)
+		return v
+	}
+	before, wave0 := windAt(), float64(w.Latest().Sea.Now[area].Speed)*physics.SeaSpeedStep
+	var windPeak, wavePeak float64
+	var windAtPeak, waveAtPeak int64
+	end := w.Now() + 45*60*physics.StepsPerSecond
+	for w.Now() < end {
+		w.Tick()
+		if w.Now()%physics.StepsPerSecond != 0 {
+			continue
+		}
+		if v := windAt(); v > windPeak {
+			windPeak, windAtPeak = v, w.Now()
+		}
+		if v := float64(w.Latest().Sea.Now[area].Speed) * physics.SeaSpeedStep; v > wavePeak {
+			wavePeak, waveAtPeak = v, w.Now()
+		}
+	}
+	wind, wave := windAt(), float64(w.Latest().Sea.Now[area].Speed)*physics.SeaSpeedStep
+	lag := float64(waveAtPeak-windAtPeak) / physics.StepsPerSecond
+	t.Logf("at the area: the wind %.2f m/s, at most %.2f; the wave wind %.2f, at most %.2f, %.0f s after the wind's most; at the end %.2f and %.2f",
+		before, windPeak, wave0, wavePeak, lag, wind, wave)
+	if windPeak < 2*before || wavePeak < 1.2*wave0 || lag < 60 {
+		t.Errorf("the sea did not rise behind the squall's wind, with a lag")
+	}
+	if math.Abs(wave-wind) > 0.1*wind {
+		t.Errorf("after the squall the wave wind is %.2f m/s, the wind %.2f", wave, wind)
+	}
+}
+
 // the catalog's weather, in a trade spell and in the stormy one: every
-// boat's own wind, and every sea area's waves made again each second.
+// boat's own wind, and every sea area's waves made again each second; and
+// in the week's weather under a storm and four squalls.
 func BenchmarkTickInWeather(b *testing.B) {
+	cat, err := catalog.Load()
+	if err != nil {
+		b.Fatal(err)
+	}
+	tl := sequence(b)
+	var storm int64
+	for _, s := range tl.Week().Systems {
+		if tl.Config().Kinds[int(s.Kind)].Shape == physics.ShapeLow {
+			storm = int64(s.Mature)
+			break
+		}
+	}
+	for _, n := range []int{100, 1000} {
+		b.Run(fmt.Sprintf("storm-and-squalls/%d", n), func(b *testing.B) {
+			w, err := New(Config{Kinds: kinds(b), Waves: waves(b), Weather: tl, Workers: runtime.GOMAXPROCS(0), Tick: storm})
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.Cleanup(w.Close)
+			fill(b, w, n, 1)
+			for i := range 4 {
+				send(b, w, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherSystem, Kind: uint16(weather.KindIndex(cat, "squall")),
+					East: int32(i * 2000), North: 4 * 1000, In: 30 * physics.StepsPerSecond}})
+			}
+			for range 70 * physics.StepsPerSecond {
+				w.Tick()
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				w.Tick()
+			}
+			b.ReportMetric(float64(w.Workers()), "workers")
+		})
+	}
 	for _, regime := range []uint16{1, 3} {
 		for _, n := range []int{100, 1000, 4000} {
 			b.Run(fmt.Sprintf("regime%d/%d", regime, n), func(b *testing.B) {

@@ -3,9 +3,10 @@
 // What the world page reads and asks of keel's internal listener, under
 // /owner/api/, beside the page itself: the world as it is now (once a
 // second), the gusts' grid, the islands, the places and lights, the
-// current and the land, once a world; the world's life, every few
-// seconds, and the next world's terrain under next/ once it is made; and
-// the controls, each a POST of JSON.
+// current and the land, once a world; the world's life, and its week of
+// weather at a tick, every few seconds; the pressure at a point clicked;
+// the next world's terrain and week under next/ once it is made; and the
+// controls, each a POST of JSON.
 
 /** A boat at sea, as the page shows it. */
 export interface Boat {
@@ -323,6 +324,117 @@ export interface Lifecycle {
   runs: JobRun[];
 }
 
+/** A kind of weather system: its name, and the shape of the pressure it carries: dome, low or none. */
+export interface SystemKind {
+  id: string;
+  shape: string;
+}
+
+/**
+ * A spell of the week's weather, from its beginning to the next's, ticks.
+ * A spell with a front has it cross the disk from its beginning, over
+ * cross ticks, its line over the centre halfway.
+ */
+export interface Spell {
+  begin: number;
+  end: number;
+  /** Its regime, by index into the regimes' names. */
+  regime: number;
+  /** Degrees the wind comes from, its knots at mid-disk, and the pressure, hPa. */
+  from: number;
+  knots: number;
+  pressure: number;
+  front: boolean;
+  /** Degrees: the way its front moves. */
+  toward: number;
+  cross: number;
+  /** A developer's, holding the weather. */
+  held: boolean;
+}
+
+/** A weather system alive at the tick shown. */
+export interface WeatherSystem {
+  slot: number;
+  /** Its kind, by index into the kinds. */
+  kind: number;
+  east: number;
+  north: number;
+  /** Its radius, m. */
+  size: number;
+  /** Its life and swell, 1 at full. */
+  strength: number;
+  /** 0 growing, 1 mature, 2 decaying. */
+  stage: number;
+  /** Degrees: the way it moves. */
+  heading: number;
+  knots: number;
+  born: number;
+  gone: number;
+  developer: boolean;
+  /** Where it truly is every five minutes for the hour after, while it lives, the first point now. */
+  track: [number, number][];
+}
+
+/** A front crossing the disk: its line square to the way it moves, line metres from the centre along it. */
+export interface Front {
+  toward: number;
+  line: number;
+  knots: number;
+  /** hPa. */
+  depth: number;
+  enters: number;
+  leaves: number;
+  /** The tick its line passes Port Royal. */
+  portRoyal: number;
+}
+
+/**
+ * The pressure over the disk, hPa: side by side points, step metres apart,
+ * row by row from the north-west, null beyond the lip.
+ */
+export interface PressureGrid {
+  step: number;
+  side: number;
+  values: (number | null)[];
+}
+
+/** weather.json: a world's week of weather, and its weather at a tick. */
+export interface WeatherWeek {
+  /** The world's tick now, 0 for a world not begun, and the tick shown. */
+  now: number;
+  at: number;
+  ticksPerSecond: number;
+  /** Tick 0, ms of UTC. */
+  epoch: number;
+  /** The tick the week reaches to, and the tick the world ends at. */
+  until: number;
+  ends: number;
+  /** Ticks between keyframes. */
+  every: number;
+  lip: number;
+  mainPort: [number, number];
+  /** The regimes' names, by index. */
+  regimes: string[];
+  kinds: SystemKind[];
+  spells: Spell[];
+  /** The ticks the week's storms are born at. */
+  storms: number[];
+  /** The spell in effect at the tick shown, and the next to begin after it. */
+  spell: Spell | null;
+  next: Spell | null;
+  systems: WeatherSystem[];
+  front: Front | null;
+  pressure: PressureGrid;
+}
+
+/** pressure.json: the pressure at a point, its change over the quarter of an hour before, and the barometer's words. */
+export interface PressureAt {
+  at: number;
+  hPa: number;
+  change: number;
+  tendency: string;
+}
+
 /** The gusts' grid: GUST_SIDE a side over the square of the land's chart, a signed byte a point. */
 export const GUST_STEP = 0.1;
 export const NO_GUST = -128;
@@ -344,6 +456,30 @@ export async function getJSON<T>(path: string): Promise<T> {
 
 export async function getBytes(path: string): Promise<Int8Array> {
   return new Int8Array(await (await get(path)).arrayBuffer());
+}
+
+/**
+ * A world's weather under prefix ("" for the current world's, "next/" for
+ * the next's), at a tick or now; null for a world with no week of weather.
+ */
+export async function getWeather(prefix: string, at: number | null): Promise<WeatherWeek | null> {
+  const path = `${prefix}weather.json${at === null ? '' : `?at=${Math.round(at)}`}`;
+  const res = await fetch(BASE + path, { cache: 'no-store' });
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(`${path}: ${res.status} ${await res.text()}`);
+  }
+  return res.json() as Promise<WeatherWeek>;
+}
+
+/** The pressure at a point of the current world, at a tick or now. */
+export function getPressure(east: number, north: number, at: number | null): Promise<PressureAt> {
+  const tick = at === null ? '' : `&at=${Math.round(at)}`;
+  return getJSON<PressureAt>(
+    `pressure.json?east=${east.toFixed(2)}&north=${north.toFixed(2)}${tick}`,
+  );
 }
 
 /** A URL of the land's drawings, for an image. */

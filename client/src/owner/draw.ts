@@ -3,7 +3,8 @@
 // Draws the world page's map on a canvas, layer by layer from the bottom:
 // the land, drawn once per world by keel as the world generator's preview
 // draws it, and an island at the lattice's resolution when zoomed into it;
-// the coasts; the gusts, the wind and the current; the rings of the calm
+// the coasts; the gusts, the wind and the current; the isobars, the
+// weather's systems and its front; the rings of the calm
 // water, the mist band and the lip; the start area; the islands' names;
 // the boats, each pointing its heading, the owner's picked out, with its
 // free camera's eye; and the point clicked. The marks are in Okabe and
@@ -17,9 +18,11 @@ import type {
   Island,
   Light,
   PlacesData,
+  WeatherWeek,
   WorldNow,
 } from './api';
 import { canvasAngle, HALF, rectOf, toScreen, type View } from './map';
+import { drawWeather } from './weather';
 
 export const COLOURS = {
   sea: '#14365e',
@@ -44,6 +47,8 @@ export interface Layers {
   gusts: boolean;
   wind: boolean;
   current: boolean;
+  isobars: boolean;
+  systems: boolean;
   rings: boolean;
   start: boolean;
   names: boolean;
@@ -61,6 +66,8 @@ export const LAYER_NAMES: Record<keyof Layers, string> = {
   gusts: 'Gusts',
   wind: 'Wind',
   current: 'Current',
+  isobars: 'Isobars',
+  systems: 'Systems',
   rings: 'Mist band and lip',
   start: 'Start area',
   names: 'Names',
@@ -79,6 +86,8 @@ export function allLayers(): Layers {
     gusts: false,
     wind: true,
     current: false,
+    isobars: false,
+    systems: true,
     rings: true,
     start: true,
     names: true,
@@ -115,6 +124,8 @@ export interface MapData {
   features: FeaturesData | null;
   /** What is charted, by subject and number ("island:7"); null until read. */
   charted: ReadonlySet<string> | null;
+  /** The weather at the tick shown; null until read, or for a world with no week of it. */
+  weather: WeatherWeek | null;
 }
 
 /** The colours an island's class is ringed in. */
@@ -264,6 +275,9 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
       arrow(ctx, x, y, canvasAngle(from + 180), Math.min(40, 6 + knots * 1.5));
     }
     ctx.stroke();
+  }
+  if (d.weather !== null) {
+    drawWeather(ctx, v, d.weather, layers);
   }
   if (layers.rings && now !== null) {
     const w = now.world;
