@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The world generator over a thousand seeds a night, to catch the rare
+# The world generator over a thousand seeds a night, and a thousand
+# worlds' weeks of weather, to catch the rare
 # seed none of whose attempts passes the validator's rules: five jobs of
 # two hundred seeds each on the public runners, a different thousand each
 # night, keyed by the date (so about 365,000 seeds a year), and seeds 1 to 8
@@ -8,8 +9,12 @@
 # rule, attempts, the islands by class, the features by kind, how long the
 # worlds took. A job fails on a seed that passes no attempt, or on more than
 # 12% of its seeds failing their first; a failing seed is made again from its
-# number. GitHub mails a failed scheduled run to whoever
-# last changed its cron.
+# number. The weeks' job holds each week to its checks and to the rules a
+# sailor learns (Buys Ballot's law, the veer at a front, the refuge's
+# limits, sampled every minute) and writes its tally to the summary: the
+# regimes' shares, storms a week, systems at once, storm hours by distance
+# from the centre. GitHub mails a failed scheduled run to whoever last
+# changed its cron.
 #
 # Scheduled workflows run only on the default branch, may be delayed when
 # runners are busy (most at the start of the hour, so this one starts at
@@ -62,3 +67,25 @@ jobs:
             -seeds 200 -seeds-from "$from" -seeds-first 0.12 -seeds-summary "$GITHUB_STEP_SUMMARY" \
             2>&1 | grep -v '^=== \|^    --- PASS'
           exit "${PIPESTATUS[0]}"
+
+  weeks:
+    name: a thousand weeks of weather
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          node: "false"
+      - name: Tonight's thousand worlds' weeks, each passing its checks and the rules
+        run: |
+          # Tonight's thousand: from the day's number.
+          day=$(( $(date -u +%s) / 86400 ))
+          from=$(( day * 1000 ))
+          echo "weeks from seed $(( from + 1 ))"
+          KEEL_WEEKS=1000 KEEL_WEEKS_FROM="$from" KEEL_WEEKS_SUMMARY="$GITHUB_STEP_SUMMARY" \
+            go test -count=1 -timeout 40m -run '^TestWeeks$' ./internal/weather

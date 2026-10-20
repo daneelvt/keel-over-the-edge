@@ -17,16 +17,23 @@ import (
 
 // TestWeeks makes the weeks of many seeds and holds each to its checks and
 // to the rules a sailor learns: fifty in the short run, KEEL_WEEKS of them
-// if it is set, as the nightly run sets it to a thousand. Its tally of
-// them is written to KEEL_WEEKS_SUMMARY, if that is set, in Markdown.
+// if it is set, as the nightly run sets it to a thousand, from seed 1, or
+// the one after KEEL_WEEKS_FROM. Its tally of them is written to
+// KEEL_WEEKS_SUMMARY, if that is set, in Markdown.
 func TestWeeks(t *testing.T) {
 	cat, tl := load(t)
 	cfg := tl.Config()
-	n := 50
+	n, from := 50, uint64(0)
 	if v := os.Getenv("KEEL_WEEKS"); v != "" {
 		var err error
 		if n, err = strconv.Atoi(v); err != nil {
 			t.Fatalf("KEEL_WEEKS=%q", v)
+		}
+	}
+	if v := os.Getenv("KEEL_WEEKS_FROM"); v != "" {
+		var err error
+		if from, err = strconv.ParseUint(v, 10, 64); err != nil {
+			t.Fatalf("KEEL_WEEKS_FROM=%q", v)
 		}
 	}
 	// The refuge is sampled every this many minutes: every minute in the
@@ -37,7 +44,7 @@ func TestWeeks(t *testing.T) {
 	}
 	var tally weeksTally
 	tally.shares = make([]float64, len(cfg.Regimes))
-	for seed := uint64(1); seed <= uint64(n); seed++ {
+	for seed := from + 1; seed <= from+uint64(n); seed++ {
 		// Epochs at different hours of the day, so the nights fall at
 		// different ticks.
 		epoch := SampleEpoch + int64(seed%24)*3600*1_000_000
