@@ -17,12 +17,16 @@ import "math"
 // So each cell of the shelter's tables holds, for each direction, the lee's
 // fetch: the distance upwind of its centre to the first land, up to the
 // sea's reach. In a cell whose fetch toward the wind is F_lee, of an area
-// whose wind sea has the fetch F, that sea is
+// whose wind sea has the variance m₀ over the boat band, that sea is
 //
-//	f_w = √(min(1, F_lee / F))
+//	f_w = √(min(1, m₀(F_lee) / m₀))
 //
-// of the area's; its swell, whose fetch toward where it comes from is
-// F_lee too,
+// of the area's, m₀(F_lee) the band's variance of the sea the same wind
+// raises over F_lee (sea.go's table): over a few hundred metres the wind
+// sea's waves are a second or so long, mostly shorter than the band's, so
+// the boat band is all but flat in a lee. Over the outer half of the reach
+// it gives way to the area's, so that the lee has no edge where the reach
+// ends. The swell, whose fetch toward where it comes from is F_lee too, is
 //
 //	f_s = least + (1 − least) smoothstep(0, reach, F_lee)
 //
@@ -114,20 +118,20 @@ func (w *Waves) leeOf(win *SeaWindow, v []uint8, x, y float64) float64 {
 	r := min(max(SeaAreaOf(y)-win.Row, 0), last)
 	j := r*win.Size + c
 	in := &win.Inputs[j]
-	ew, es := win.Hs[j], 0.0
+	ew, es, band := win.Hs[j], 0.0, 0.0
 	if win.Parts != nil {
-		ew, es = win.Parts[j].WindHs, win.Parts[j].SwellHs
+		ew, es, band = win.Parts[j].WindHs, win.Parts[j].SwellHs, win.Parts[j].WindBand
 	}
 	ew, es = float64(ew*ew), float64(es*es)
 	if !(ew+es > 0) {
 		return 1
 	}
 	fw, fs := 1.0, 1.0
-	if ew > 0 && in.Fetch > 0 {
-		fw = w.leeAlong(v, float64(float64(in.From)*seaFromStep), float64(in.Fetch), false)
+	if ew > 0 && band > 0 {
+		fw = w.leeAlong(v, float64(float64(in.From)*seaFromStep), float64(float64(in.Speed)*SeaSpeedStep), band, false)
 	}
 	if es > 0 {
-		fs = w.leeAlong(v, float64(float64(in.SwellFrom)*seaFromStep), 0, true)
+		fs = w.leeAlong(v, float64(float64(in.SwellFrom)*seaFromStep), 0, 0, true)
 	}
 	if fw == 1 && fs == 1 {
 		return 1
@@ -135,33 +139,35 @@ func (w *Waves) leeOf(win *SeaWindow, v []uint8, x, y float64) float64 {
 	return math.Sqrt(float64(float64(float64(fw*fw)*ew)+float64(float64(fs*fs)*es)) / float64(ew+es))
 }
 
-// leeAlong is a cell's factor on the wind sea of fetch fetch, or on the
-// swell, coming from from: linear between the two nearest directions its
-// table holds.
-func (w *Waves) leeAlong(v []uint8, from, fetch float64, swell bool) float64 {
+// leeAlong is a cell's factor on the wind sea of a wind of u m/s whose
+// band's variance is band, or on the swell, coming from from: linear
+// between the two nearest directions its table holds.
+func (w *Waves) leeAlong(v []uint8, from, u, band float64, swell bool) float64 {
 	turns := float64(wrapAngle(from)*(ShelterDirections/(2*math.Pi))) + ShelterDirections
 	k0 := math.Floor(turns)
 	t := turns - k0
 	k := toInt32(k0) % ShelterDirections
-	f0 := w.leeFactor(v[k*ShelterStride+2], fetch, swell)
-	f1 := w.leeFactor(v[((k+1)%ShelterDirections)*ShelterStride+2], fetch, swell)
+	f0 := w.leeFactor(v[k*ShelterStride+2], u, band, swell)
+	f1 := w.leeFactor(v[((k+1)%ShelterDirections)*ShelterStride+2], u, band, swell)
 	return lerp(t, f0, f1)
 }
 
-// leeFactor is f_w for a wind sea of fetch fetch, or f_s for the swell, by
-// a lee byte.
-func (w *Waves) leeFactor(b uint8, fetch float64, swell bool) float64 {
+// leeFactor is f_w for a wind sea of a wind of u m/s whose band's variance
+// is band, or f_s for the swell, by a lee byte.
+func (w *Waves) leeFactor(b uint8, u, band float64, swell bool) float64 {
 	f, open := leeFetch(b)
-	switch {
-	case open:
-		return 1
-	case swell:
-		u := min2(f/w.leeReach, 1)
-		return w.shadowLeast + float64((1-w.shadowLeast)*smooth(u))
-	case f >= fetch:
+	if open {
 		return 1
 	}
-	return math.Sqrt(f / fetch)
+	near := smooth(min2(f/w.leeReach, 1))
+	if swell {
+		return w.shadowLeast + float64((1-w.shadowLeast)*near)
+	}
+	fw := math.Sqrt(min2(w.leeVariance(u, f)/band, 1))
+	// Toward the reach's end the lee gives way to the open sea's, with no
+	// edge where the table's reach ends.
+	fade := smooth(clamp(float64(2*min2(f/w.leeReach, 1))-1, 0, 1))
+	return fw + float64((1-fw)*fade)
 }
 
 // LeeOf is the lee's fetch of a cell whose table is v for a wind from

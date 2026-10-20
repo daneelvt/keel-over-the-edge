@@ -12,9 +12,10 @@ export type RecordName = keyof typeof RECORDS;
 
 /**
  * How many values seaParts holds for each area: the wind sea's Hs and peak,
- * the swell's, and the Hs with no current.
+ * the swell's, the Hs with no current, and the wind sea's variance over
+ * the band.
  */
-export const SEA_PARTS = 5;
+export const SEA_PARTS = 6;
 export type FnName = keyof typeof FN;
 export type PhysicsSource = Response | PromiseLike<Response> | BufferSource;
 
@@ -510,8 +511,9 @@ export class Physics {
 
   /**
    * A window's partitions: for each area, row by row, SEA_PARTS values, the
-   * wind sea's significant height (m) and peak (rad/s), the swell's, and
-   * the significant height with no current. A view.
+   * wind sea's significant height (m) and peak (rad/s), the swell's, the
+   * significant height with no current, and the wind sea's variance over the
+   * band. A view.
    */
   seaParts(slot: number): Float64Array {
     return new Float64Array(

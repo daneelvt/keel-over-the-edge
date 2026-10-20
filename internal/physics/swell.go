@@ -11,15 +11,15 @@ import "math"
 // come from the general direction of the storm (Bowditch, Tropical
 // Cyclones). So the swell at a place at a tick left its storm when the
 // storm was as far away as the swell has travelled since: the retarded
-// time τ, with |A − P(τ)| = c_g (t − τ), which a few fixed-point steps
+// time τ, with |A − P(τ)| = c_g (t − τ), which a few of Newton's steps
 // find, since the storm moves slower than its swell.
 //
 // The longest waves travel fastest and arrive first (Snodgrass and others
 // 1966): where the storm was born too recently for its whole band to have
 // come, only the waves long enough to have covered the distance since are
-// there, and the swell's period is the shortest of them; its height grows
-// as the rest arrive. So the period shortens as a storm nears, as it does
-// before a hurricane (NOAA AOML Hurricane Research Division).
+// there, and its height grows as the rest arrive. So the period shortens
+// as a storm nears, as it does before a hurricane (NOAA AOML Hurricane
+// Research Division).
 //
 // Far from its source a swell weakens by spreading alone: over the disk
 // dissipation takes nothing (Ardhuin, Chapron and Collard 2009, an
@@ -46,10 +46,24 @@ func (k *systemKind) setSwell(s *SystemKind) {
 	}
 }
 
+// swellSamples is how many periods across a kind's band the swell at a
+// place is summed over.
+const swellSamples = 5
+
 // SwellAt is the swell at (x, y) at a tick, which need not be whole, from
 // the system of record r, whose kind the weather p holds. A kind that
 // raises none, a system not yet born or long gone, or a swell lower than
 // the sea's least, is none: a Swell of no height.
+//
+// The swell is summed over a few periods across the kind's band, each
+// weighed by the swell's spectrum about the system's own peak period. Each
+// period's waves at the place left the system at their own time, at their
+// own group speed, and carry its strength then, spread beyond its edge by
+// the distance they came: so a growing storm's longest waves, which left it
+// last, arrive first and strongest, and the swell's period shortens as the
+// rest arrive. Its height is the spectrum's share that has come at the
+// storm's strength; its period that of the mean frequency of what has come,
+// by energy; its direction toward where its strongest part left.
 func SwellAt(w *Waves, p *WeatherPrepared, r *SystemRecord, x, y, tick float64) Swell {
 	k := p.kindOf(r.Kind)
 	if k == nil || !(k.swell.height[1] > 0) || !(tick > r.Born) {
@@ -59,58 +73,78 @@ func SwellAt(w *Waves, p *WeatherPrepared, r *SystemRecord, x, y, tick float64) 
 	// Its peak period, drawn per system from its seed; its height at its
 	// edge by its peak wind.
 	u := float64(float64(hash32(seedBits(r.Seed)^0x5bd1e995)) * (1.0 / (1 << 32)))
-	period := lerp(u, sk.period[0], sk.period[1])
-	wind := float64(r.Peak * SeaSpeedStep)
-	share := 1.0
-	if span := sk.wind[1] - sk.wind[0]; span > 0 {
-		share = clamp(float64((wind-sk.wind[0])/span), 0, 1)
+	peak := float64(2*math.Pi) / lerp(u, sk.period[0], sk.period[1])
+	h0 := SwellHeight(p, r)
+	inv := 1 / float64(w.swellSigma*peak)
+	lo, hi := float64(2*math.Pi)/sk.band[1], float64(2*math.Pi)/sk.band[0]
+	step := (hi - lo) * (1.0 / swellSamples)
+	var total, sum, omega, best float64
+	var out Swell
+	for i := range int32(swellSamples) {
+		om := lo + float64(step*(float64(i)+0.5))
+		d := float64((om - peak) * inv)
+		weight := Exp(float64(-0.5 * d * d))
+		total += weight
+		perTick := float64(float64(gravity/float64(2*om)) * Dt)
+		tau, far, dx, dy := retarded(r, x, y, tick, perTick, w.swellSteps)
+		if !(tau >= r.Born) {
+			continue
+		}
+		s := SystemAt(r, tau)
+		if s.On == 0 {
+			continue
+		}
+		a := float64(s.Strength * strengthStep)
+		if far > s.Size {
+			a = float64(a * math.Sqrt(s.Size/far))
+		}
+		e := float64(weight * float64(a*a))
+		sum += e
+		omega += float64(e * om)
+		if e > best {
+			best = e
+			out.Far = far
+			out.From = 0
+			if dx != 0 || dy != 0 {
+				out.From = Atan2(dx, dy)
+			}
+		}
 	}
-	h0 := lerp(share, sk.height[0], sk.height[1])
-	// Its group speed, m a tick, and the retarded time, by fixed-point
-	// steps from the tick itself.
-	perTick := float64(float64(float64(gravity*period)/(4*math.Pi)) * Dt)
-	tau := tick
-	var ex, ey, d float64
-	for range w.swellSteps {
-		ex, ey = swellSource(r, tau)
-		dx, dy := ex-x, ey-y
-		d = math.Sqrt(float64(dx*dx) + float64(dy*dy))
-		tau = tick - d/perTick
-	}
-	s := SystemAt(r, tau)
-	if s.On == 0 {
+	if !(sum > 0) {
 		return Swell{}
 	}
-	ex, ey = float64(s.East*quarterMetre), float64(s.North*quarterMetre)
-	dx, dy := ex-x, ey-y
-	d = math.Sqrt(float64(dx*dx) + float64(dy*dy))
-	strength := float64(s.Strength * strengthStep)
-	// The band's longest waves came first: those that have covered the
-	// distance from where it was born are the periods from T on, T = 4π d
-	// / (g (t − born)) (c_g T' = d).
-	bx, by := swellSource(r, r.Born)
-	bx, by = bx-x, by-y
-	since := float64(float64(tick-r.Born) * Dt)
-	arrived := float64(float64(4*math.Pi)*math.Sqrt(float64(bx*bx)+float64(by*by))) / float64(gravity*since)
-	if arrived > sk.band[1] {
+	out.Height = float64(h0 * math.Sqrt(sum/total))
+	if !(out.Height >= w.swellLeast) {
 		return Swell{}
 	}
-	come := 1.0
-	if span := sk.band[1] - sk.band[0]; span > 0 && arrived > sk.band[0] {
-		come = math.Sqrt(float64((sk.band[1] - arrived) / span))
+	out.Period = float64(2*math.Pi) / (omega / sum)
+	return out
+}
+
+// retarded is when the waves at (x, y) at a tick that travel perTick m a
+// tick left the system of record r: by Newton's steps on |A − P(τ)| −
+// c_g (t − τ) from the tick itself, the system's motion over a tick for
+// the slope, which is never less than the difference of their speeds as
+// long as it moves slower than they do. It returns the time, how far the
+// waves came, and the way from the place to where they left, east and
+// north.
+func retarded(r *SystemRecord, x, y, tick, perTick float64, steps int32) (tau, far, dx, dy float64) {
+	tau = tick
+	for range steps {
+		ex, ey := swellSource(r, tau)
+		nx, ny := swellSource(r, tau+1)
+		dx, dy = ex-x, ey-y
+		far = math.Sqrt(float64(dx*dx) + float64(dy*dy))
+		miss := far - float64(perTick*(tick-tau))
+		slope := perTick
+		if far > 0 {
+			slope += float64(float64(dx*(nx-ex))+float64(dy*(ny-ey))) / far
+		}
+		tau -= miss / slope
 	}
-	height := float64(float64(h0*strength) * come)
-	if d > s.Size && d > 0 {
-		height = float64(height * math.Sqrt(s.Size/d))
-	}
-	if !(height >= w.swellLeast) || !(height > 0) {
-		return Swell{}
-	}
-	from := 0.0
-	if dx != 0 || dy != 0 {
-		from = Atan2(dx, dy)
-	}
-	return Swell{Height: height, Period: max2(period, arrived), From: from, Far: d}
+	ex, ey := swellSource(r, tau)
+	dx, dy = ex-x, ey-y
+	return tau, math.Sqrt(float64(dx*dx) + float64(dy*dy)), dx, dy
 }
 
 // swellSource is where a system is at a tick, by its track and its wobble,
@@ -294,4 +328,20 @@ func (w *WeatherPrepared) SwellLinger(kind float64) float64 {
 	}
 	speed := float64(gravity*k.swell.band[0]) / (4 * math.Pi)
 	return math.Ceil(float64(float64(2*w.Edge())/speed) * StepsPerSecond)
+}
+
+// SwellHeight is the significant height of the swell a system of record r
+// raises at its edge at full strength, m: by its kind's swell and its peak
+// wind; 0 for a kind that raises none.
+func SwellHeight(p *WeatherPrepared, r *SystemRecord) float64 {
+	k := p.kindOf(r.Kind)
+	if k == nil || !(k.swell.height[1] > 0) {
+		return 0
+	}
+	sk := &k.swell
+	share := 1.0
+	if span := sk.wind[1] - sk.wind[0]; span > 0 {
+		share = clamp(float64((float64(r.Peak*SeaSpeedStep)-sk.wind[0])/span), 0, 1)
+	}
+	return lerp(share, sk.height[0], sk.height[1])
 }

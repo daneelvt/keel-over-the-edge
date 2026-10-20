@@ -9,7 +9,7 @@
     "spreading": 5,
     "fetchCap": 6,
     "cull": 0.1, "breaking": 0.5,
-    "swellLeast": 0.05, "swellSpreading": 40, "swellSigma": 0.07, "swellSteps": 12,
+    "swellLeast": 0.05, "swellSpreading": 40, "swellSigma": 0.07, "swellSteps": 3,
     "currentMost": 1.6, "shadowLeast": 0.2, "leeReach": 800
   },
   "wind": {

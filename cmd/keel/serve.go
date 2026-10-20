@@ -576,12 +576,13 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	for i, b := range c.cat.Boats {
 		kinds[i] = b.Name
 	}
+	waves, _ := c.cat.Prepare()
 	regimes := make([]string, len(c.cat.Weather.Regimes))
 	for i, r := range c.cat.Weather.Regimes {
 		regimes[i] = string(r.ID)
 	}
 	cfg := owner.Config{
-		Bundle: c.bundle, Weather: c.wcfg.Prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat),
+		Bundle: c.bundle, Weather: c.wcfg.Prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
 		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(),
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,

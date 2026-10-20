@@ -2883,8 +2883,8 @@ type WeatherSea struct {
 	// travels: a whole number.
 	SwellSpreading int `json:"swellSpreading"`
 
-	// The fixed-point steps that find when the swell arriving at a place left its
-	// system: a whole number.
+	// Newton's steps that find when the swell arriving at a place left its system: a
+	// whole number.
 	SwellSteps int `json:"swellSteps"`
 }
 
@@ -3726,4 +3726,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "2ef01252a07b1e82"
+const Version = "8681e0f0a3f9fc78"

@@ -69,7 +69,7 @@
         "swellLeast": { "description": "A swell lower than this, in m, is none.", "type": "number", "minimum": 0, "maximum": 1 },
         "swellSpreading": { "description": "The swell's directional spreading's exponent s in cos²ˢ(θ/2) about the way it travels: a whole number.", "type": "integer", "minimum": 1, "maximum": 200 },
         "swellSigma": { "description": "The swell's spectrum's width: a Gaussian in frequency, its standard deviation as a share of its peak frequency.", "type": "number", "exclusiveMinimum": 0, "maximum": 0.5 },
-        "swellSteps": { "description": "The fixed-point steps that find when the swell arriving at a place left its system: a whole number.", "type": "integer", "minimum": 1, "maximum": 50 },
+        "swellSteps": { "description": "Newton's steps that find when the swell arriving at a place left its system: a whole number.", "type": "integer", "minimum": 1, "maximum": 50 },
         "currentMost": { "description": "The most a current against them raises the waves, as a multiple of their height in still water; a wave the current blocks is raised this much.", "type": "number", "minimum": 1, "maximum": 5 },
         "shadowLeast": { "description": "The least share of a swell that reaches behind land.", "type": "number", "minimum": 0, "maximum": 1 },
         "leeReach": { "description": "How far upwind of a place land calms its waves, in m: the shelter's tables hold the lee's fetch in steps of 4 m, at most 254 of them.", "type": "number", "minimum": 50, "maximum": 1016 }

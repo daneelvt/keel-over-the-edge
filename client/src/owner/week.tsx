@@ -7,7 +7,7 @@
 // as on the card; a double click, Escape or the button goes back to now and
 // follows it. Below the strip the spell in effect, the next and when, the
 // front if one is crossing, and the systems alive, each centring the map
-// on it. The week is read every few seconds while it follows now, and a
+// on it, with the swell it raises. The week is read every few seconds while it follows now, and a
 // few times a second at the most while the strip is dragged.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -358,7 +358,14 @@ export function WeekCard({
                   </button>
                 </td>
                 <td>{whereFrom(s.east, s.north)}</td>
-                <td>{s.strength.toFixed(2)}</td>
+                <td>
+                  {s.strength.toFixed(2)}
+                  {s.swell > 0 ? (
+                    <span class="small" data-field="swell">
+                      , swell {s.swell.toFixed(1)} m
+                    </span>
+                  ) : null}
+                </td>
                 <td>{STAGES[s.stage] ?? s.stage}</td>
                 <td>{fromNow(s.born - now, tps)}</td>
                 <td>{fromNow(s.gone - now, tps)}</td>

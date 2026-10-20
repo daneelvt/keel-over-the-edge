@@ -28,6 +28,11 @@ func testSystems(t testing.TB) (*WeatherPrepared, map[string]int32) {
 			Broad: broad[0].(float64), BroadWidth: broad[1].(float64), Stretch: num("stretch"),
 			Inward: inward[k["inward"].(string)], Gusts: num("gusts"),
 		}
+		if sw, ok := k["swell"].(map[string]any); ok {
+			pair := func(v any) [2]float64 { a := v.([]any); return [2]float64{a[0].(float64), a[1].(float64)} }
+			sk.SwellPeriod, sk.SwellBand, sk.SwellHeight = pair(sw["period"]), pair(sw["band"]), pair(sw["height"])
+			sk.SwellWind = pair(k["wind"])
+		}
 		p.SetKind(int32(i), &sk)
 		index[k["id"].(string)] = int32(i)
 	}

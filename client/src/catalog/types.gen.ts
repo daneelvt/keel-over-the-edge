@@ -884,7 +884,7 @@ export interface WeatherSea {
    */
   swellSigma: number;
   /**
-   * The fixed-point steps that find when the swell arriving at a place left its system: a whole number.
+   * Newton's steps that find when the swell arriving at a place left its system: a whole number.
    */
   swellSteps: number;
   /**
@@ -5258,4 +5258,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '2ef01252a07b1e82';
+export const CATALOG_VERSION = '8681e0f0a3f9fc78';

@@ -216,7 +216,7 @@ type SeaParams struct {
 	SwellLeast     float64 // a swell lower than this is none, m
 	SwellSpreading float64 // the exponent s of its spreading cos²ˢ(θ/2), a whole number
 	SwellSigma     float64 // its spectrum's width, a share of its peak frequency
-	SwellSteps     float64 // the fixed-point steps that find when it left its system, a whole number
+	SwellSteps     float64 // Newton's steps that find when it left its system, a whole number
 	CurrentMost    float64 // the most a current against the waves raises them, a multiple
 	ShadowLeast    float64 // the least share of a swell that reaches behind land
 	LeeReach       float64 // how far upwind of a place land calms its waves, m

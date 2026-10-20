@@ -134,14 +134,16 @@ func SeaCurrent(w *WeatherPrepared, way float64, col, row int32) (east, north fl
 }
 
 // SeaParts are what an area's waves are made of: its wind sea's and its
-// swell's significant heights and peaks, each partition's alone, and the
-// height its waves would have with no current.
+// swell's significant heights and peaks, each partition's alone, the
+// height its waves would have with no current, and its wind sea's variance
+// over the band as its spectrum has it.
 type SeaParts struct {
 	WindHs    float64 // m
 	WindPeak  float64 // rad/s, 0 for none
 	SwellHs   float64 // m
 	SwellPeak float64 // rad/s, 0 for none
 	StillHs   float64 // m
+	WindBand  float64 // the wind sea's variance over the band, before the cull and the current, m²
 }
 
 // Components are the sea's waves, for whoever draws them.
@@ -194,6 +196,7 @@ type Waves struct {
 	currentMost float64
 	shadowLeast float64
 	leeReach    float64
+	leeBand     [leeSpeeds][leeFetches]float64
 }
 
 // R2's two steps: the powers 1/φ and 1/φ² of the plastic number
@@ -277,6 +280,7 @@ func PrepareSea(p *SeaParams, w *Waves) {
 		}
 		w.omegaSorted[j], w.byOmega[j] = w.Omega[i], i
 	}
+	w.prepareLee()
 }
 
 // hash32 mixes the bits of x (Wellons's lowbias32).
@@ -436,7 +440,7 @@ func (win *SeaWindow) Seal() {
 // is raised or lowered by the current along its path first.
 func (w *Waves) amplitudes(in SeaInput, amp []float64) (hs, peak float64, parts SeaParts) {
 	var swell, factor [SeaComponents]float64
-	parts.WindPeak = w.windSea(in, amp)
+	parts.WindPeak, parts.WindBand = w.windSea(in, amp)
 	parts.SwellPeak = w.swellSea(in, &swell)
 	current := in.CurrentEast != 0 || in.CurrentNorth != 0
 	if current {
@@ -508,19 +512,16 @@ func (w *Waves) amplitudes(in SeaInput, amp []float64) (hs, peak float64, parts 
 // steep their sum would be a tenth higher or lower as the wind swings
 // round. So the amplitudes are scaled together to carry exactly the
 // variance the spectrum has over the band.
-func (w *Waves) windSea(in SeaInput, amp []float64) (peak float64) {
+func (w *Waves) windSea(in SeaInput, amp []float64) (peak, m0 float64) {
 	u := float64(float64(in.Speed) * SeaSpeedStep)
 	f := float64(in.Fetch)
 	if !(u > 0) || !(f > 0) {
 		for i := range amp {
 			amp[i] = 0
 		}
-		return 0
+		return 0, 0
 	}
-	x := min2(float64(gravity*f)/float64(u*u), fullFetch)
-	alpha := float64(0.076 * Exp(float64(-0.22*Log(x))))
-	// g² / (U F) = (g / U)³ / x.
-	peak = float64(float64(22*gravity) / u * Exp(float64(Log(x)*(-1.0/3))))
+	alpha, peak := jonswapFit(u, f)
 	// Waves travel toward where the wind blows to: a half turn from where
 	// it comes from, which only changes the signs.
 	sinFrom, cosFrom := SinCos(float64(float64(in.From) * seaFromStep))
@@ -540,13 +541,7 @@ func (w *Waves) windSea(in SeaInput, amp []float64) (peak float64) {
 		amp[i] = a2
 		sum += a2
 	}
-	// The spectrum's variance over the band, ∫ S dω = ∫ S ω d(ln ω), by the
-	// midpoint rule.
-	m0 := 0.0
-	for _, om := range w.rule {
-		m0 += w.shape(om, peak)
-	}
-	m0 = float64(float64(m0*level) * w.ruleStep)
+	m0 = w.bandVariance(level, peak)
 	fit := 0.0
 	if sum > 0 {
 		fit = 2 * m0 / sum
@@ -554,7 +549,68 @@ func (w *Waves) windSea(in SeaInput, amp []float64) (peak float64) {
 	for i, a2 := range amp {
 		amp[i] = math.Sqrt(float64(a2 * fit))
 	}
-	return peak
+	return peak, m0
+}
+
+// jonswapFit is the JONSWAP fits' α and peak frequency for a wind of u m/s
+// over a fetch of f m, the fetch counting only up to full development.
+func jonswapFit(u, f float64) (alpha, peak float64) {
+	x := min2(float64(gravity*f)/float64(u*u), fullFetch)
+	alpha = float64(0.076 * Exp(float64(-0.22*Log(x))))
+	// g² / (U F) = (g / U)³ / x.
+	peak = float64(float64(22*gravity) / u * Exp(float64(Log(x)*(-1.0/3))))
+	return alpha, peak
+}
+
+// bandVariance is the variance over the band of a spectrum of level α g²
+// whose peak is at peak, ∫ S dω = ∫ S ω d(ln ω), by the midpoint rule.
+func (w *Waves) bandVariance(level, peak float64) float64 {
+	m0 := 0.0
+	for _, om := range w.rule {
+		m0 += w.shape(om, peak)
+	}
+	return float64(float64(m0*level) * w.ruleStep)
+}
+
+// The waves' lee needs the band's variance of a wind sea over short water:
+// a table of it by the wind's speed, every leeSpeedStep m/s up to
+// leeSpeeds of them, and by the fetch, every leeFetchStep m up to the
+// most a table's lee byte holds.
+const (
+	leeSpeeds    = 41
+	leeSpeedStep = 1.0 // m/s
+	leeFetches   = 17
+	leeFetchStep = 16 * ShelterLeeStep // m
+)
+
+// prepareLee fills the table.
+func (w *Waves) prepareLee() {
+	for i := range int32(leeSpeeds) {
+		u := float64(float64(i) * leeSpeedStep)
+		for j := range int32(leeFetches) {
+			f := float64(float64(j) * leeFetchStep)
+			if !(u > 0) || !(f > 0) {
+				w.leeBand[i][j] = 0
+				continue
+			}
+			alpha, peak := jonswapFit(u, f)
+			w.leeBand[i][j] = w.bandVariance(float64(alpha*(gravity*gravity)), peak)
+		}
+	}
+}
+
+// leeVariance is the band's variance of a wind sea of u m/s over f m of
+// short water: bilinear in the table, held at its fastest wind.
+func (w *Waves) leeVariance(u, f float64) float64 {
+	su := min2(max2(u*(1/leeSpeedStep), 0), leeSpeeds-1)
+	sf := min2(max2(f*(1.0/leeFetchStep), 0), leeFetches-1)
+	i0, j0 := math.Floor(su), math.Floor(sf)
+	tu, tf := su-i0, sf-j0
+	i, j := toInt32(i0), toInt32(j0)
+	i1, j1 := min(i+1, leeSpeeds-1), min(j+1, leeFetches-1)
+	a := lerp(tf, w.leeBand[i][j], w.leeBand[i][j1])
+	b := lerp(tf, w.leeBand[i1][j], w.leeBand[i1][j1])
+	return lerp(tu, a, b)
 }
 
 // shape returns S(ω) ω / (α g²) for a spectrum whose peak is at peak: what
