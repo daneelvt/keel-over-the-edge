@@ -477,7 +477,9 @@ is under 10 knots. Each has a life (born, mature, decaying, gone), a
 planned track, a line or an arc, and apart from it a wobble a forecast does
 not know (up to 0.4 NM, and its strength ±15%, periods 20–60 minutes). At
 most sixteen are on the disk at once, each in a slot it holds from birth to
-end; one that would be a seventeenth is not born.
+end; one that would be a seventeenth is not born. A storm raises swell,
+which runs ahead of it (see [Swell](#swell)); its strength's swing is its
+throb (`SystemRecord.Throb`, stored in a week under its old name, `Swell`).
 
 ### Pressure
 
@@ -710,7 +712,11 @@ and a pressure grid; `/owner/api/pressure.json?east=…&north=…[&at=…]` a
 point's pressure and tendency. On the map, the Systems layer draws each
 system in a chart's symbols by its kind's shape and the Isobars layer the
 pressure every 2 hPa with its highs and lows; the week's strip drags the
-map through the week.
+map through the week. The Sea layer (`/owner/api/sea.json[?east=…&north=…]`)
+shades each area by its band's Hs, draws an arrow for its swell and hatches
+the areas a current raises by more than a tenth; a clicked point gives the
+wind sea's and the swell's heights and periods, the current's factor and
+the lee's; the systems list gives each storm's swell at its edge.
 
 ### Gusts on the water
 
@@ -1196,7 +1202,8 @@ package (`physics.ShelterDirection`): in the lee of land of height H the
 wind's speed falls to 0.3 within three heights and is whole again at ten;
 beside the lee, within two heights of the wind's path, it is up to 30%
 faster; land on one side turns it toward the other, up to 20°. A cell's
-table holds a factor and a turn for each of 16 directions, in two bytes,
+table holds a factor and a turn for each of 16 directions, and the lee's
+fetch for the waves (see [The waves' lee](#the-waves-lee)), in three bytes,
 and travels in its chunk. `physics.WindAt(t, x, y, shelter)` applies it
 after the gusts and before the refuge, bilinear between cells' centres and
 linear between directions; nil, or a chunk not held, is open water, and the
@@ -1251,6 +1258,8 @@ its difference from the one before, the surfaces, the shelter (a bitmap of
 the cells with a table, and their tables), from format 2 the towns'
 buildings and harbour in the chunk (see [Harbours and towns](#harbours-and-towns)),
 and from format 3 the features' roofs and parts (see [Features and flora](#features-and-flora)).
+From format 4 the shelter's tables hold three bytes a direction, the third
+the lee's fetch for the waves (see [The waves' lee](#the-waves-lee)).
 A payload of another world, chunk or generator, or of a format not known,
 is refused. In PostgreSQL (`00005_world_bundle.sql`): `world.seed` and
 `world.generator`; `world_bundle`, one row a world; `world_chunk`, a
@@ -1419,7 +1428,9 @@ from the camera. Solid things, land and boats, fade toward the horizon by
   refreshed once a second or when the wind turns 5°; it scales the gust
   patches, the ripples and the whitecaps. The wind readout, the gust ring
   and dirty air read the sheltered wind (`windPoint`, `windSample`).
-  The waves that move boats in the lee are still the fetch's.
+- **The waves' lee**: the boat band itself is calmed in the land's lee,
+  on the server, in the prediction and on the tiles alike (see [The waves'
+  lee](#the-waves-lee)).
 
 ### The prediction on land
 
@@ -1889,7 +1900,7 @@ triangles, flags, puffs and lanterns lit.
 ## Features and flora
 
 Every island is planted and has its features, made by the generator
-(`internal/worldgen`, **version 4**, chunk **format 3**) and drawn on the
+(`internal/worldgen`, since **version 4**, chunk **format 3**) and drawn on the
 phone. The kinds are the catalog's (`world.features`, `world.flora`,
 `world.score`); code reads their properties (a feature's `site`, a plant's
 `form`, a surface's `feature`), never their ids.
@@ -2401,7 +2412,10 @@ once per world, on the first request for it: about 1.3 s.
 The sea moves boats. The waves longer than about 8 m, which the 4 m tiles can
 carry, are the **boat band**: a sum of 256 waves that the physics package
 evaluates, so the server, the client's prediction and the tiles on screen
-have the same sea. Shorter waves are not there yet.
+have the same sea. The shorter waves are the detail band, drawn and never
+felt (see [The sea's look](#the-seas-look)). An area's band is its wind sea
+and a storm's swell, each raised or lowered by the current along its path,
+and calmed in the land's lee.
 
 ### The waves
 
@@ -2440,6 +2454,86 @@ it is the cap (`weather.sea.fetchCap`, 6 NM): 10 knots raise a boat band of abou
 Time is the tick. A wave's phase from its frequency is the fraction of
 `turns × tick`, the product taken exactly (`SeaAt`), so it is the same bits
 on every machine and good for ticks to 2⁵³.
+
+### Swell
+
+A storm raises **swell**, a long, low lift that runs ahead of it
+(`physics/swell.go`). Its period is a licence, stated as one in the
+catalog: a storm the size of the game's raises waves of 2–4 s by the growth
+laws, which travel no faster than it does, so its swell is given a peak of
+5.5–6 s (drawn per storm from its seed) across a band of 5–6.5 s
+(`weather.systems[storm].swell`), and runs at the group speed of those
+periods, about twice the storm's own. `SwellAt(record, x, y, tick)` sums
+five periods across the band, each weighed by the swell's spectrum about
+its peak: each period's waves at the place left the storm at their own time
+(three of Newton's steps on |A − P(τ)| = c_g (t − τ),
+`weather.sea.swellSteps`), carry its strength then, and are spread beyond
+its edge as √(R / d). So a growing storm's longest waves, which left it
+last, come first and its swell's period shortens as it nears; its height
+at its edge is 0.6–1 m by its peak wind (`swell.height`); a swell under
+5 cm is none (`swellLeast`).
+
+The server makes every area's swell at each keyframe boundary, the storms'
+of the week (and the developer's) whose swell may be on the disk then
+(`weather.Timeline.SwellSources`), a share of the areas a tick through the
+seconds before it, and holds it until the next. Behind land it is
+shadowed: by the area's open water toward where it comes from over how far
+it came, never under a fifth (`shadowLeast`). It is part of `SeaInput`
+(height in cm, period in 0.01 s, direction), sent in `SeaAreas` only when it
+changed: once a keyframe at most while a storm's swell is on the disk. In
+an area the swell is a partition of its own, a Gaussian in frequency 0.07 of
+its peak wide (`swellSigma`), spread as cos⁸⁰(θ/2) (`swellSpreading`,
+s = 40), scaled to its variance over the band and culled against its own
+highest wave, so it never takes a light wind's sea away; the two combine as
+√(a_w² + a_s²) a wave. An area's `Peak`, which the surf and the sea's sound
+read, is the peak of its partition with more energy.
+
+`go test ./internal/weather -run TestWeeks -v` tallies the swell's lead on
+the storms' own wind over five weeks (two hundred in the nightly run):
+where a storm's 20-knot wind reaches a place half an hour or more after
+the storm is whole, its swell comes first, at 95% of such places by ten
+minutes or more. Where a storm forms over a boat its wind grows with it,
+and nothing runs ahead.
+
+### Waves on a current
+
+Each wave is raised against the current along its path and lowered with
+it, as wave action is kept (Longuet-Higgins and Stewart): a/a₀ =
+2 / ((1 + r) √r), r = √(1 + 4U/c₀), capped at 1.6 (`weather.sea.currentMost`),
+a wave the current blocks (U ≤ −c₀/4) at the cap. A 3 s wave against a
+knot is raised by 1.32. The waves keep their lengths, so the current
+steepens them in height alone. An area's current is the open sea's at its
+centre (`physics.SeaCurrent`), part of its inputs but never sent: the client
+works it out from the world's way round, as the server does. So the outer
+waters are roughest with the wind blowing inward against the drain
+(`go test ./internal/physics -run AgainstTheDrain -v`: 4.4 NM out in a gale
+from the west, Hs 1.46 m against the drain, 0.76 m with it). Whitecaps
+rise with the current's raising of an area's waves.
+
+### The waves' lee
+
+Land of any height stops waves, so the shelter's tables hold a third byte a
+direction, the **lee's fetch**: the distance upwind of the cell's centre
+to the first land, to 800 m (`weather.sea.leeReach`), in 4 m steps, worked
+out when the world is made by walking each cell's ray across the cells
+(`physics.ShelterLee`). In the lee the wind sea is the one that short
+water raises: the boat band keeps √(m₀(F_lee) / m₀) of the area's, m₀ the
+band's variance of the spectrum (a table by wind and short fetch, made with
+the sea), which over a few hundred metres is all but nothing, since the
+waves there are shorter than the band's; it gives way to the area's over
+the reach's outer half. The swell keeps 0.2 + 0.8 smoothstep(0, 800 m,
+F_lee). The two are weighed by their variances. Each cell's factor is for
+the sea of the area its centre is in, bilinear between cells' centres and
+linear between directions (`physics.LeeAt`); the step, `WaveUnder` and
+`SeaSample` scale the waves by it and cap what is left by the depth. A
+chunk of a world made before (format 3) has no lee byte: its lee is open
+water, so a world stored before this keeps its waves in the lee until the
+next world. On the GPU a float texture of the cells' factors about the
+camera (`ocean/lee.ts`, from the module's `leeGrid`) scales the tiles'
+plane, the far sea and the surf, the shader doing the bilinear itself so
+that the plane is the physics'. Port Royal's moorings keep under a quarter
+of the open sea's waves from 13 of 16 directions and under a third from
+any (`go test ./internal/worldgen -run BasinIsCalm -v`).
 
 ### The boat in waves
 
@@ -2628,8 +2722,7 @@ its areas each tick, and only an area whose inputs changed costs anything
 sea's time. In a spell of weather most areas' inputs change every second
 (about 1,140 of the 1,369), so the phase now does that work every tick.
 Checkpoints and the input log do not hold the sea: it is a pure function of
-the tick and the weather, and a world that is loaded makes it again
-(snapshot version 6).
+the tick and the weather, and a world that is loaded makes it again.
 
 On the local cluster `keel` runs with `KEEL_DEV_COMMANDS=1`, so the weather
 can be set there, on the internal listener, which no route leads to: forward
@@ -2649,7 +2742,9 @@ commands: its weather is the sequence's.
 
 `SeaAreas` (`game.proto`) is a window of 5 by 5 areas about the boat's own:
 the tick it applies from, its first area's column and row, and each area's
-inputs. The edge sends it after the `Welcome`; when the next second's sea
+inputs: its wave wind and fetch, and its swell when that changed since the
+last sent (empty, it is as it was); its current the client works out. The
+edge sends it after the `Welcome`; when the next second's sea
 differs from the one in effect, a second before it applies; and when the
 boat sails more than 60 m into another area, with the areas about that one
 (`internal/edge/sea.go`). A client keeps the two with the latest ticks, each
@@ -5173,6 +5268,10 @@ server's does;
 the sea at once in one of four states (the buttons set the wind to 6, 12, 20
 or 34 knots and raise its sea); another fetch than open water's; a second
 wind to the east of the boat, so that two seas meet and blend; flat water;
+a swell of its own (`?swell=height,period,from`, e.g. `?sea=breeze&swell=0.6,6,270`;
+`?weather=storm` brings a storm 45 minutes off, whose swell comes first);
+the sea's parts at the boat (the wind sea's and the swell's Hs and period,
+the current's factor and the lee's);
 the boat, reset to the start, placed at a position and heading, or
 jumped to the rim; time, paused, stepped once or slowed to ½ or ¼; the live
 `State` and `Out`; camera presets; the back end, render scale,
