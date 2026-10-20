@@ -175,6 +175,22 @@ func TestWeekCovers(t *testing.T) {
 	}
 }
 
+// Every spell begins before the week's end and lasts: spacing the fronts
+// moves later spells on, and none is left beyond the end, never reached.
+func TestSpellsWithinTheWeek(t *testing.T) {
+	_, tl := load(t)
+	for seed := uint64(1); seed <= 12; seed++ {
+		for _, days := range []int64{1, 8, 300} {
+			w := Generate(tl.Config(), seed, SampleEpoch, SampleEpoch+days*day, testIslands)
+			for i, s := range w.Spells {
+				if int64(s.Begin) >= w.Until || s.Length <= 0 {
+					t.Errorf("seed %d, %d days: spell %d of %d begins at %v for %v; the week reaches %d", seed, days, i, len(w.Spells), s.Begin, s.Length, w.Until)
+				}
+			}
+		}
+	}
+}
+
 // A spell is in play from ten seconds before its change begins, never
 // earlier, and the one before it until ten seconds after the change has
 // ended: for a front, until ten seconds after its line has left the disk's

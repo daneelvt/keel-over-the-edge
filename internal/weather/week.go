@@ -667,6 +667,13 @@ func (g *gen) chain() chain {
 		}
 		busy = ch.at[i] + change
 	}
+	// Spacing the fronts moves later spells on: any now beyond the week's
+	// end is never reached.
+	n := len(ch.at)
+	for n > 1 && ch.at[n-1] >= g.until {
+		n--
+	}
+	ch.regime, ch.at, ch.cross = ch.regime[:n], ch.at[:n], ch.cross[:n]
 	return ch
 }
 
