@@ -67,6 +67,7 @@ func (o *Owner) sea(w http.ResponseWriter, r *http.Request) {
 	win := physics.SeaWindow{
 		Size: n, Inputs: make([]physics.SeaInput, n*n), Amp: make([]float64, n*n*physics.SeaComponents),
 		Hs: make([]float64, n*n), Peak: make([]float64, n*n), Parts: make([]physics.SeaParts, n*n),
+		Bits: make([]uint64, n*n*physics.SeaWords),
 	}
 	for i, in := range inputs {
 		physics.SeaArea(o.cfg.Waves, &win, int32(i), in)

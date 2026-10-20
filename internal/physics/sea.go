@@ -2,7 +2,10 @@
 
 package physics
 
-import "math"
+import (
+	"math"
+	"math/bits"
+)
 
 // The sea that moves boats is a sum of SeaComponents waves, each
 //
@@ -39,6 +42,9 @@ const (
 	// SeaSampleCapacity is how many points a client's module samples the
 	// sea at in one call.
 	SeaSampleCapacity = 512
+
+	// SeaWords is how many words of an area's Bits hold its waves.
+	SeaWords = SeaComponents / 64
 
 	seaMiddle    = SeaAreas / 2
 	seaRule      = 64
@@ -369,6 +375,10 @@ type SeaWindow struct {
 	// Parts are each partition's: what the lee weighs them by. A window
 	// without them is all wind sea.
 	Parts []SeaParts
+	// Bits are, for each area, SeaWords words whose bits say which waves
+	// have an amplitude there: a point sums only those of the four areas
+	// about it. A window without them sums every wave of Active.
+	Bits []uint64
 	// Active lists the waves with an amplitude in any of the window's
 	// areas, ascending; Count is how many. Seal fills them.
 	Active [SeaComponents]int32
@@ -405,6 +415,17 @@ func SeaArea(w *Waves, win *SeaWindow, i int32, in SeaInput) {
 	win.last = i
 }
 
+// word is word k of the waves with an amplitude in any of the four areas
+// corners found: the union of their Bits, every wave for a window without
+// them.
+func (win *SeaWindow) word(k, sw, se, nw, ne int32) uint64 {
+	if win.Bits == nil {
+		return ^uint64(0)
+	}
+	return win.Bits[sw/SeaComponents*SeaWords+k] | win.Bits[se/SeaComponents*SeaWords+k] |
+		win.Bits[nw/SeaComponents*SeaWords+k] | win.Bits[ne/SeaComponents*SeaWords+k]
+}
+
 // Seal makes the window ready for steps, after its areas are set.
 func (win *SeaWindow) Seal() {
 	if !win.stale {
@@ -412,9 +433,16 @@ func (win *SeaWindow) Seal() {
 	}
 	win.stale = false
 	var used [SeaComponents]bool
+	if win.Bits != nil {
+		clear(win.Bits)
+	}
 	for i, a := range win.Amp {
 		if a > 0 {
-			used[i%SeaComponents] = true
+			c := i % SeaComponents
+			used[c] = true
+			if win.Bits != nil {
+				win.Bits[i/SeaComponents*SeaWords+c>>6] |= 1 << (c & 63)
+			}
 		}
 	}
 	n := int32(0)
@@ -710,17 +738,21 @@ func SeaSample(sea *Sea, g *Ground, x, y float64) SeaPoint {
 	var p SeaPoint
 	w, win, t := sea.Waves, sea.Window, sea.Tick
 	sw, se, nw, ne, wx, wy := win.corners(x, y)
-	for _, i := range win.Active[:win.Count] {
-		a := blend(win.Amp, sw+i, se+i, nw+i, ne+i, wx, wy)
-		if !(a > 0) {
-			continue
+	// The waves of the four areas, ascending.
+	for k := range int32(SeaWords) {
+		for word := win.word(k, sw, se, nw, ne); word != 0; word &= word - 1 {
+			i := k*64 + int32(bits.TrailingZeros64(word))
+			a := blend(win.Amp, sw+i, se+i, nw+i, ne+i, wx, wy)
+			if !(a > 0) {
+				continue
+			}
+			psi := (w.Phase[i] + (float64(w.kEast[i]*x) + float64(w.kNorth[i]*y))) - t.Phase[i]
+			sin, cos := SinCos(psi)
+			p.Height += float64(a * sin)
+			ac := float64(a * cos)
+			p.East += float64(ac * w.kEast[i])
+			p.North += float64(ac * w.kNorth[i])
 		}
-		psi := (w.Phase[i] + (float64(w.kEast[i]*x) + float64(w.kNorth[i]*y))) - t.Phase[i]
-		sin, cos := SinCos(psi)
-		p.Height += float64(a * sin)
-		ac := float64(a * cos)
-		p.East += float64(ac * w.kEast[i])
-		p.North += float64(ac * w.kNorth[i])
 	}
 	p.Hs = win.hsAt(sw, se, nw, ne, wx, wy)
 	if f := LeeAt(sea, x, y); f != 1 {

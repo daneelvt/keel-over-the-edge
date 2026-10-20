@@ -113,6 +113,7 @@ func (s *sea) init(waves *physics.Waves, t *weather.Timeline) {
 			Hs:     make([]float64, seaAreas),
 			Peak:   make([]float64, seaAreas),
 			Parts:  make([]physics.SeaParts, seaAreas),
+			Bits:   make([]uint64, seaAreas*physics.SeaWords),
 		}
 	}
 	s.view = physics.Sea{Waves: waves, Window: &s.windows[0], Tick: &s.time}

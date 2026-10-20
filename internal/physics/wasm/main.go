@@ -149,6 +149,7 @@ type seaWindow struct {
 	hs     [seaAreas]float64
 	peak   [seaAreas]float64
 	parts  [seaAreas]physics.SeaParts
+	bits   [seaAreas * physics.SeaWords]uint64
 }
 
 var (
@@ -201,7 +202,7 @@ const wakeCapacity = physics.ClientWakes
 func init() {
 	for i := range windows {
 		w := &windows[i]
-		w.win = physics.SeaWindow{Size: seaSide, Inputs: w.inputs[:], Amp: w.amp[:], Hs: w.hs[:], Peak: w.peak[:], Parts: w.parts[:]}
+		w.win = physics.SeaWindow{Size: seaSide, Inputs: w.inputs[:], Amp: w.amp[:], Hs: w.hs[:], Peak: w.peak[:], Parts: w.parts[:], Bits: w.bits[:]}
 	}
 }
 

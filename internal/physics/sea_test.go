@@ -43,6 +43,7 @@ func newWindow(col, row, size int32) *SeaWindow {
 		Hs:     make([]float64, n),
 		Peak:   make([]float64, n),
 		Parts:  make([]SeaParts, n),
+		Bits:   make([]uint64, n*SeaWords),
 	}
 }
 
@@ -86,7 +87,8 @@ func oneWave(length, amplitude, toward float64) *ocean {
 	w.speed[0] = gravity / omega
 	win := newWindow(0, 0, 1)
 	win.Amp[0], win.Hs[0] = amplitude, 4*amplitude/math.Sqrt2
-	win.Active[0], win.Count = 0, 1
+	win.stale = true
+	win.Seal()
 	o := &ocean{Sea: Sea{Waves: w, Window: win}}
 	o.Tick = &o.tick
 	o.at(0)
