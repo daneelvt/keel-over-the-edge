@@ -274,3 +274,64 @@ export function systemKindRecord(k: SystemKind): Float64Array {
 export function regimeIndex(weather: Weather, id: string): number {
   return weather.regimes.findIndex((r) => r.id === id);
 }
+
+/** The index of the catalog's kind of weather system of an id, or −1. */
+export function kindIndex(weather: Weather, id: string): number {
+  return weather.systems.findIndex((k) => k.id === id);
+}
+
+/**
+ * The record of a system of the catalog's kind of an index placed to reach
+ * (east, north), m, at tick at, born at born, moving with spell's wind, as
+ * the server makes a developer's: its kind's middling size, strength and
+ * life, on a straight track, with no wobble, strongest as it reaches the
+ * point; a dome's gust front, ahead of its centre, reaches the point then.
+ */
+export function placedRecord(
+  weather: Weather,
+  kind: number,
+  east: number,
+  north: number,
+  born: number,
+  at: number,
+  spell: Spell,
+): Float64Array {
+  const k = weather.systems[kind];
+  if (k === undefined) {
+    throw new Error(`the catalog has no kind of system ${kind}`);
+  }
+  const R = RECORDS.systemRecord;
+  const r = new Float64Array(SIZES.systemRecord);
+  const minute = 60 * SECOND;
+  const life = Math.round(
+    ((Math.round(k.life[0] * minute) + Math.round(k.life[1] * minute)) / 2) | 0,
+  );
+  const size = Math.round(((k.size[0] + k.size[1]) / 2) * 1852);
+  let move = (k.speed[0] + k.speed[1]) / 2;
+  move = k.speedOf === 'wind' ? move * (spell[P.speed] ?? 0) * 0.01 : move * (1852 / 3600);
+  const speed = Math.round(move / 0.01);
+  const heading = ((spell[P.from] ?? 0) + WEATHER.turnSteps / 2) % WEATHER.turnSteps;
+  r[R.kind] = kind;
+  r[R.seed] = mix(born ^ (kind << 24));
+  r[R.born] = born;
+  r[R.mature] = at;
+  r[R.decays] = at + Math.floor(life / 4);
+  r[R.gone] = at + Math.floor(life / 2);
+  r[R.heading] = heading;
+  r[R.speed] = speed;
+  r[R.size] = size;
+  if (k.shape === 'none') {
+    r[R.peak] = Math.round(500 * (k.factor[0] + k.factor[1]));
+  } else {
+    r[R.peak] = Math.round(((k.wind[0] + k.wind[1]) * (1852 / 3600)) / 0.01 / 2);
+    r[R.depth] = Math.round(50 * (k.depth[0] + k.depth[1]));
+  }
+  let d = speed * 0.01 * (1 / SECOND) * (at - born);
+  if (k.shape === 'dome' && k.ahead > 0) {
+    d += (k.width * size) / k.ahead;
+  }
+  const a = (heading / WEATHER.turnSteps) * 2 * Math.PI;
+  r[R.east] = Math.round(4 * east) - Math.round(4 * d * Math.sin(a));
+  r[R.north] = Math.round(4 * north) - Math.round(4 * d * Math.cos(a));
+  return r;
+}

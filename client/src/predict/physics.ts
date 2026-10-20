@@ -74,6 +74,7 @@ interface Exports {
   recordSet(slot: number): void;
   recordCount(n: number): void;
   pressure(x: number, y: number): number;
+  frontReach(): number;
   meanValues(): number;
   meanSample(n: number): void;
   windPoint(x: number, y: number): void;
@@ -196,6 +197,7 @@ const functionExports = [
   'recordSet',
   'recordCount',
   'pressure',
+  'frontReach',
   'meanValues',
   'meanSample',
   'windPoint',
@@ -639,6 +641,11 @@ export class Physics {
       this.#x.recordSet(i);
     }
     this.#x.recordCount(n);
+  }
+
+  /** How far from the centre a front's line enters the disk's reach and leaves it, m. */
+  frontReach(): number {
+    return this.#x.frontReach();
   }
 
   /** The pressure at (east, north), hPa, at the time windDrawAt set. */

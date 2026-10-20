@@ -637,6 +637,12 @@ func recordCount(n uint32) {
 	stepFresh = false
 }
 
+// frontReach returns how far from the centre a front's line enters the
+// disk's reach and leaves it, m.
+//
+//go:wasmexport frontReach
+func frontReach() float64 { return weatherPrepared.FrontReach() }
+
 // pressure returns the pressure at (x, y), hPa, at the time windDrawAt set.
 //
 //go:wasmexport pressure

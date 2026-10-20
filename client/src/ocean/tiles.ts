@@ -30,6 +30,7 @@ import {
   abs,
   attribute,
   cameraPosition,
+  clamp,
   dot,
   float,
   instanceIndex,
@@ -56,6 +57,7 @@ import { FIELD_RADIUS, TILE_RADIUS } from './hex';
 import { HULL_MARGIN, hulls } from './hulls';
 import { depthCap, groundAtHex, leeAt, tileGround } from './shore';
 import { GROUND_ROW, GUST_ROW, PASS_WIDTH } from './tilepass';
+import { waterSignAt } from './water';
 import { type BandUniforms, boatBandAt, cappedBand, periodAt, seaAreaAt, seaPlaneOf } from './wave';
 
 /** Depth of each tile's skirt, in metres: deeper than the steps a gale gives. */
@@ -187,7 +189,11 @@ export class Tiles {
     // middle, and in full well before its strongest.
     const [from, full] = GUST_LOOK.shows;
     const shown = smoothstep(from, full, abs(field0)).mul(sign(field0));
-    const gust = shown.mul(gusts.uniforms.strength).mul(float(1).sub(rim)).mul(lee);
+    // And where the wind is stronger or lighter than the sea has caught
+    // up with: a squall's gust front, a patch of light air (water.ts).
+    const gust = clamp(shown.mul(gusts.uniforms.strength).add(waterSignAt(gusts.water)(c)), -1, 1)
+      .mul(float(1).sub(rim))
+      .mul(lee);
     // Over land, at or beyond the lip, or broken away at the world's end,
     // every vertex falls to the tile's centre, well below the sea: its
     // triangles have no area, and nothing is drawn. Near the lip the tile sags and tips over the brink.

@@ -33,9 +33,10 @@ import {
   vec2,
 } from 'three/tsl';
 import type { Node, UniformNode } from 'three/webgpu';
-import type { WeatherGusts } from '../catalog/types.gen';
+import type { WeatherGusts, WeatherWater } from '../catalog/types.gen';
 import { RECORDS, WEATHER } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
+import { WaterSigns } from './water';
 
 const OCTAVES = WEATHER.octaves;
 /** The spells whose fields are mixed at once: one, or two through a change. */
@@ -85,6 +86,8 @@ export class GustField {
   readonly uniforms: GustUniforms;
   /** 1 to draw the gusts; 0 to draw the water without them (the developer panel, the tests). */
   shown = 1;
+  /** The water's signs of the wind where it is stronger or lighter than the sea's (water.ts). */
+  readonly water: WaterSigns;
 
   readonly #low: Vector4[] = [];
   readonly #high: Vector4[] = [];
@@ -94,7 +97,8 @@ export class GustField {
   readonly #invAcross: number[] = [];
   readonly #invLife: number[] = [];
 
-  constructor(gusts: WeatherGusts) {
+  constructor(gusts: WeatherGusts, water: WeatherWater) {
+    this.water = new WaterSigns(water);
     let along = gusts.gustAlong;
     let across = gusts.gustAcross;
     let life = gusts.gustLife;
