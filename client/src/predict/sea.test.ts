@@ -48,6 +48,25 @@ describe('the sea in the module', () => {
     );
   });
 
+  test('takes swell and a current, and draws the lee, with no allocation', () => {
+    const bytes = physics.memoryBytes;
+    const allocations = physics.allocations;
+    const current = [0, 0];
+    for (let k = 0; k < 400; k++) {
+      physics.seaWindow(1, 30, 18, SEA.window);
+      for (let i = 0; i < SEA.window * SEA.window; i++) {
+        const c = physics.seaCurrent(30 + (i % SEA.window), 18 + Math.floor(i / SEA.window), current);
+        physics.seaArea(1, i, 900 + ((k + i) % 300), (k * 97) % SEA.fromSteps, 11112, 60, 580, 9000, c[0] ?? 0, c[1] ?? 0);
+      }
+      physics.seaSeal(1);
+      physics.leeGrid(1, 300, 260);
+      physics.leeAt(1, 5000, 100);
+      physics.swellAt(1000, 500, 70 * 60 * 30);
+    }
+    expect(physics.allocations).toBe(allocations);
+    expect(physics.memoryBytes).toBe(bytes);
+  });
+
   test('the border’s sea is calm to the west and a gale to the east', () => {
     const border = sea.cases.find((c) => c.name === 'border');
     const hs = (border?.values ?? []).map((v) => fromHex(v[3] ?? '0x0'));

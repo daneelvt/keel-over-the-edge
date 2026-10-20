@@ -386,6 +386,9 @@ type SeaWindow struct {
 
 	last  int32 // the area computed last, whose amplitudes one with the same inputs copies
 	stale bool  // Active is out of date
+	// Room for an area's swell's amplitudes and each wave's current factor
+	// while they are made: a module's allocator never frees.
+	swell, factor [SeaComponents]float64
 }
 
 // SeaArea sets the inputs of the window's area i, and with them its
@@ -407,7 +410,7 @@ func SeaArea(w *Waves, win *SeaWindow, i int32, in SeaInput) {
 		}
 		return
 	}
-	hs, peak, parts := w.amplitudes(in, amp)
+	hs, peak, parts := w.amplitudes(in, amp, &win.swell, &win.factor)
 	win.Hs[i], win.Peak[i] = hs, peak
 	if win.Parts != nil {
 		win.Parts[i] = parts
@@ -457,7 +460,8 @@ func (win *SeaWindow) Seal() {
 
 // amplitudes writes the amplitude of every wave of an area, and returns the
 // significant height of their sum, the frequency of the spectral peak of
-// its partition with more energy, and its partitions.
+// its partition with more energy, and its partitions, with swell and factor
+// for room.
 //
 // The sea is two partitions, as a spectrum with two peaks is (Ochi and
 // Hubble 1976; the WMO's Guide to Wave Analysis and Forecasting, 2018): the
@@ -466,10 +470,10 @@ func (win *SeaWindow) Seal() {
 // highest wave, so that a swell does not take a light wind's sea away; a
 // wave's amplitude is then √(a_w² + a_s²), and the variances add. Each wave
 // is raised or lowered by the current along its path first.
-func (w *Waves) amplitudes(in SeaInput, amp []float64) (hs, peak float64, parts SeaParts) {
-	var swell, factor [SeaComponents]float64
+func (w *Waves) amplitudes(in SeaInput, amp []float64, swell, factor *[SeaComponents]float64) (hs, peak float64, parts SeaParts) {
+	clear(swell[:])
 	parts.WindPeak, parts.WindBand = w.windSea(in, amp)
-	parts.SwellPeak = w.swellSea(in, &swell)
+	parts.SwellPeak = w.swellSea(in, swell)
 	current := in.CurrentEast != 0 || in.CurrentNorth != 0
 	if current {
 		ue := float64(float64(in.CurrentEast) * SeaCurrentStep)
