@@ -114,6 +114,9 @@ func (s *sea) init(waves *physics.Waves, t *weather.Timeline) {
 			Peak:   make([]float64, seaAreas),
 			Parts:  make([]physics.SeaParts, seaAreas),
 			Bits:   make([]uint64, seaAreas*physics.SeaWords),
+
+			Factors:    make([]float64, seaAreas*physics.SeaComponents),
+			FactorKeys: make([]uint64, seaAreas),
 		}
 	}
 	s.view = physics.Sea{Waves: waves, Window: &s.windows[0], Tick: &s.time}
@@ -261,6 +264,12 @@ func (s *sea) makeSwell(set *swellSet, hi int32) {
 	}
 	if set.done == 0 {
 		s.sources = s.timeline.SwellSources(set.at, set.ws, set.ss, s.sources[:0])
+	}
+	if len(s.sources) == 0 {
+		// No storm's swell can be on the disk: none anywhere.
+		clear(set.swell[set.done:hi])
+		set.done = hi
+		return
 	}
 	for i := set.done; i < hi; i++ {
 		var sw physics.Swell

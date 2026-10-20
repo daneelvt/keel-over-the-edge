@@ -82,6 +82,9 @@ func (s *Seas) Receive(m *pb.SeaAreas, way float64) {
 			Peak:   make([]float64, n*n),
 			Parts:  make([]physics.SeaParts, n*n),
 			Bits:   make([]uint64, n*n*physics.SeaWords),
+
+			Factors:    make([]float64, n*n*physics.SeaComponents),
+			FactorKeys: make([]uint64, n*n),
 		}
 	}
 	h.have, h.tick = true, m.GetTick()

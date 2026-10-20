@@ -187,17 +187,19 @@ func (w *Waves) Shadow(f *Fetch, s Swell) float64 {
 }
 
 // swellSea writes the amplitudes of the area's swell, scaled to the
-// variance it has over the band, and returns its peak frequency; with none
-// it writes nothing and returns 0.
+// variance it has over the band, to pre as they are and to amp raised by
+// their current factors if factor is not nil, and returns its peak
+// frequency, the waves it spans by frequency and the highest of amp; with
+// none it writes nothing and returns 0.
 //
 // A swell's spectrum is narrow: a Gaussian in frequency about its peak,
 // σ of the peak frequency wide (Torsethaugen and Haver give a swell's peak
 // a shape factor of 1, no enhancement), spread as cos²ˢ(θ/2) about the way
 // it travels, s large (Goda and Suzuki 1975: 75 for swell). Only the waves
 // within four widths of its peak are visited.
-func (w *Waves) swellSea(in SeaInput, amp *[SeaComponents]float64) (peak float64) {
+func (w *Waves) swellSea(in SeaInput, amp *[SeaComponents]float64, factor []float64, pre *[SeaComponents]float64) (peak float64, first, last int32, high float64) {
 	if in.SwellHeight == 0 || in.SwellPeriod == 0 {
-		return 0
+		return 0, 0, 0, 0
 	}
 	hs := float64(float64(in.SwellHeight) * SeaSwellHeightStep)
 	period := float64(float64(in.SwellPeriod) * SeaSwellPeriodStep)
@@ -216,8 +218,8 @@ func (w *Waves) swellSea(in SeaInput, amp *[SeaComponents]float64) (peak float64
 	sinFrom, cosFrom := SinCos(float64(float64(in.SwellFrom) * seaFromStep))
 	sinTo, cosTo := -sinFrom, -cosFrom
 	lo, hi := peak-float64(4*width), peak+float64(4*width)
-	first := w.omegaIndex(lo)
-	last := w.omegaIndex(hi)
+	first = w.omegaIndex(lo)
+	last = w.omegaIndex(hi)
 	sum := 0.0
 	for j := first; j < last; j++ {
 		i := w.byOmega[j]
@@ -229,14 +231,23 @@ func (w *Waves) swellSea(in SeaInput, amp *[SeaComponents]float64) (peak float64
 		sum += a2
 	}
 	if !(sum > 0) {
-		return 0
+		for j := first; j < last; j++ {
+			amp[w.byOmega[j]] = 0
+		}
+		return 0, 0, 0, 0
 	}
 	fit := 2 * m0 / sum
 	for j := first; j < last; j++ {
 		i := w.byOmega[j]
-		amp[i] = math.Sqrt(float64(amp[i] * fit))
+		v := math.Sqrt(float64(amp[i] * fit))
+		pre[i] = v
+		if factor != nil {
+			v = float64(v * factor[i])
+		}
+		amp[i] = v
+		high = max2(high, v)
 	}
-	return peak
+	return peak, first, last, high
 }
 
 // omegaIndex is how many of the waves have a frequency below om.
@@ -289,6 +300,14 @@ func (w *Waves) currentFactor(i int32, ue, un float64) float64 {
 	}
 	r := math.Sqrt(q)
 	return min2(2/float64((1+r)*math.Sqrt(r)), w.currentMost)
+}
+
+// currentFactors writes to f how much a current (ue, un), m/s, raises
+// each wave.
+func (w *Waves) currentFactors(ue, un float64, f []float64) {
+	for i := range f {
+		f[i] = w.currentFactor(int32(i), ue, un)
+	}
 }
 
 // CurrentFactor is how much a current (east, north), m/s, raises the

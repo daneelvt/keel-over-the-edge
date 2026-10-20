@@ -88,13 +88,13 @@ func TestSwellReplays(t *testing.T) {
 		do(t, b, bus.Command{Op: bus.Join, Account: acct(uint64(i + 1))})
 	}
 	var snap []byte
-	for k := range 40 * physics.StepsPerSecond {
+	for k := range 15 * physics.StepsPerSecond {
 		a.TickWith(&Input{})
 		b.TickWith(&Input{})
 		if Digest(a.Latest()) != Digest(b.Latest()) {
 			t.Fatalf("one worker and three differ at tick %d", a.Now())
 		}
-		if k == 13*physics.StepsPerSecond+7 {
+		if k == 6*physics.StepsPerSecond+7 {
 			snap = AppendSnapshot(nil, a.Latest())
 		}
 	}

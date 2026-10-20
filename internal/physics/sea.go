@@ -379,6 +379,12 @@ type SeaWindow struct {
 	// have an amplitude there: a point sums only those of the four areas
 	// about it. A window without them sums every wave of Active.
 	Bits []uint64
+	// Factors are, for each area, how much its current raises each wave,
+	// and FactorKeys the current they are for: an area's current changes
+	// seldom, so they are worked out once. A window without them works
+	// them out each time.
+	Factors    []float64
+	FactorKeys []uint64
 	// Active lists the waves with an amplitude in any of the window's
 	// areas, ascending; Count is how many. Seal fills them.
 	Active [SeaComponents]int32
@@ -389,6 +395,20 @@ type SeaWindow struct {
 	// Room for an area's swell's amplitudes and each wave's current factor
 	// while they are made: a module's allocator never frees.
 	swell, factor [SeaComponents]float64
+	// The spectra of the area made last, before its current: an area that
+	// differs from it only by its current, as most do in a steady wind,
+	// takes them and is spared the spectra's sums.
+	spectra spectra
+}
+
+// spectra are an area's partitions' amplitudes before its current, for the
+// inputs but the current in.
+type spectra struct {
+	in                            SeaInput
+	have                          bool
+	wind, swell                   [SeaComponents]float64
+	windPeak, windBand, swellPeak float64
+	first, last                   int32 // the swell's waves, by frequency
 }
 
 // SeaArea sets the inputs of the window's area i, and with them its
@@ -410,7 +430,23 @@ func SeaArea(w *Waves, win *SeaWindow, i int32, in SeaInput) {
 		}
 		return
 	}
-	hs, peak, parts := w.amplitudes(in, amp, &win.swell, &win.factor)
+	factor := win.factor[:]
+	if in.CurrentEast != 0 || in.CurrentNorth != 0 {
+		ue := float64(float64(in.CurrentEast) * SeaCurrentStep)
+		un := float64(float64(in.CurrentNorth) * SeaCurrentStep)
+		if win.Factors == nil {
+			w.currentFactors(ue, un, factor)
+		} else {
+			factor = win.Factors[i*SeaComponents : (i+1)*SeaComponents]
+			// 0 is no key: a current's steps lie within ±seaCurrentMax.
+			key := uint64(in.CurrentEast+seaCurrentMax+1)<<32 | uint64(in.CurrentNorth+seaCurrentMax+1)
+			if win.FactorKeys[i] != key {
+				w.currentFactors(ue, un, factor)
+				win.FactorKeys[i] = key
+			}
+		}
+	}
+	hs, peak, parts := w.amplitudes(in, amp, &win.swell, factor, &win.spectra)
 	win.Hs[i], win.Peak[i] = hs, peak
 	if win.Parts != nil {
 		win.Parts[i] = parts
@@ -460,8 +496,10 @@ func (win *SeaWindow) Seal() {
 
 // amplitudes writes the amplitude of every wave of an area, and returns the
 // significant height of their sum, the frequency of the spectral peak of
-// its partition with more energy, and its partitions, with swell and factor
-// for room.
+// its partition with more energy, and its partitions: with swell for room,
+// factor each wave's current factor, read only if the area has a current,
+// and last the spectra of the area made before, which it takes if only the
+// current differs, and else replaces.
 //
 // The sea is two partitions, as a spectrum with two peaks is (Ochi and
 // Hubble 1976; the WMO's Guide to Wave Analysis and Forecasting, 2018): the
@@ -470,25 +508,40 @@ func (win *SeaWindow) Seal() {
 // highest wave, so that a swell does not take a light wind's sea away; a
 // wave's amplitude is then √(a_w² + a_s²), and the variances add. Each wave
 // is raised or lowered by the current along its path first.
-func (w *Waves) amplitudes(in SeaInput, amp []float64, swell, factor *[SeaComponents]float64) (hs, peak float64, parts SeaParts) {
-	clear(swell[:])
-	parts.WindPeak, parts.WindBand = w.windSea(in, amp)
-	parts.SwellPeak = w.swellSea(in, swell)
+func (w *Waves) amplitudes(in SeaInput, amp []float64, swell *[SeaComponents]float64, factor []float64, last *spectra) (hs, peak float64, parts SeaParts) {
 	current := in.CurrentEast != 0 || in.CurrentNorth != 0
+	var f []float64
 	if current {
-		ue := float64(float64(in.CurrentEast) * SeaCurrentStep)
-		un := float64(float64(in.CurrentNorth) * SeaCurrentStep)
-		for i := range amp {
-			f := w.currentFactor(int32(i), ue, un)
-			factor[i] = f
-			amp[i] = float64(amp[i] * f)
-			swell[i] = float64(swell[i] * f)
-		}
+		f = factor
 	}
-	highW, highS := 0.0, 0.0
-	for i, a := range amp {
-		highW = max2(highW, a)
-		highS = max2(highS, swell[i])
+	hasSwell := in.SwellHeight != 0 && in.SwellPeriod != 0
+	calm := in
+	calm.CurrentEast, calm.CurrentNorth = 0, 0
+	var highW, highS float64
+	if last.have && last.in == calm {
+		parts.WindPeak, parts.WindBand, parts.SwellPeak = last.windPeak, last.windBand, last.swellPeak
+		highW = raise(amp, last.wind[:], f)
+		if hasSwell {
+			clear(swell[:])
+			for j := last.first; j < last.last; j++ {
+				i := w.byOmega[j]
+				v := last.swell[i]
+				if f != nil {
+					v = float64(v * f[i])
+				}
+				swell[i] = v
+				highS = max2(highS, v)
+			}
+		}
+	} else {
+		parts.WindPeak, parts.WindBand, highW = w.windSea(in, amp, f, last.wind[:])
+		last.in, last.have = calm, true
+		last.windPeak, last.windBand, last.swellPeak, last.first, last.last = parts.WindPeak, parts.WindBand, 0, 0, 0
+		if hasSwell {
+			clear(swell[:])
+			parts.SwellPeak, last.first, last.last, highS = w.swellSea(in, swell, f, &last.swell)
+			last.swellPeak = parts.SwellPeak
+		}
 	}
 	floorW, floorS := float64(w.cull*highW), float64(w.cull*highS)
 	sumW, sumS, still := 0.0, 0.0, 0.0
@@ -496,15 +549,17 @@ func (w *Waves) amplitudes(in SeaInput, amp []float64, swell, factor *[SeaCompon
 		if a < floorW {
 			a = 0
 		}
-		s := swell[i]
-		if s < floorS {
-			s = 0
+		s := 0.0
+		if hasSwell {
+			if s = swell[i]; s < floorS {
+				s = 0
+			}
 		}
 		a2, s2 := float64(a*a), float64(s*s)
 		sumW += a2
 		sumS += s2
 		if current && a2+s2 > 0 {
-			still += float64(a2+s2) / float64(factor[i]*factor[i])
+			still += float64(a2+s2) / float64(f[i]*f[i])
 		}
 		if s > 0 {
 			a = math.Sqrt(a2 + s2)
@@ -525,6 +580,19 @@ func (w *Waves) amplitudes(in SeaInput, amp []float64, swell, factor *[SeaCompon
 	return hs, peak, parts
 }
 
+// raise writes to amp the amplitudes from, each raised by its current
+// factor in f if f is not nil, and returns the highest.
+func raise(amp, from, f []float64) (high float64) {
+	for i, v := range from {
+		if f != nil {
+			v = float64(v * f[i])
+		}
+		amp[i] = v
+		high = max2(high, v)
+	}
+	return high
+}
+
 // windSea writes the amplitude of every wave under a wind over a fetch,
 // scaled to the variance its spectrum has over the band and not yet
 // culled, and returns the frequency of the spectrum's peak.
@@ -543,15 +611,16 @@ func (w *Waves) amplitudes(in SeaInput, amp []float64, swell, factor *[SeaCompon
 // A few hundred waves sample that plane coarsely: where the spectrum is
 // steep their sum would be a tenth higher or lower as the wind swings
 // round. So the amplitudes are scaled together to carry exactly the
-// variance the spectrum has over the band.
-func (w *Waves) windSea(in SeaInput, amp []float64) (peak, m0 float64) {
+// variance the spectrum has over the band. Each is written to pre as it is,
+// and to amp raised by its current factor, if factor is not nil; it returns
+// the highest of amp too.
+func (w *Waves) windSea(in SeaInput, amp, factor, pre []float64) (peak, m0, high float64) {
 	u := float64(float64(in.Speed) * SeaSpeedStep)
 	f := float64(in.Fetch)
 	if !(u > 0) || !(f > 0) {
-		for i := range amp {
-			amp[i] = 0
-		}
-		return 0, 0
+		clear(amp)
+		clear(pre)
+		return 0, 0, 0
 	}
 	alpha, peak := jonswapFit(u, f)
 	// Waves travel toward where the wind blows to: a half turn from where
@@ -579,9 +648,15 @@ func (w *Waves) windSea(in SeaInput, amp []float64) (peak, m0 float64) {
 		fit = 2 * m0 / sum
 	}
 	for i, a2 := range amp {
-		amp[i] = math.Sqrt(float64(a2 * fit))
+		v := math.Sqrt(float64(a2 * fit))
+		pre[i] = v
+		if factor != nil {
+			v = float64(v * factor[i])
+		}
+		amp[i] = v
+		high = max2(high, v)
 	}
-	return peak, m0
+	return peak, m0, high
 }
 
 // jonswapFit is the JONSWAP fits' α and peak frequency for a wind of u m/s
