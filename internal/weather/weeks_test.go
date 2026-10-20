@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,7 +20,9 @@ import (
 // to the rules a sailor learns: fifty in the short run, KEEL_WEEKS of them
 // if it is set, as the nightly run sets it to a thousand, from seed 1, or
 // the one after KEEL_WEEKS_FROM. Its tally of them is written to
-// KEEL_WEEKS_SUMMARY, if that is set, in Markdown.
+// KEEL_WEEKS_SUMMARY, if that is set, in Markdown. The storms' swell is
+// held to its rule over the first five weeks on a grid half a mile apart,
+// and in the long run over the first two hundred, a quarter of a mile.
 func TestWeeks(t *testing.T) {
 	cat, tl := load(t)
 	cfg := tl.Config()
@@ -42,6 +45,11 @@ func TestWeeks(t *testing.T) {
 	if n > 100 {
 		every = 1
 	}
+	swellWeeks, swellGrid := 5, 0.5*nauticalMile
+	if n > 100 {
+		swellWeeks, swellGrid = 200, 0.25*nauticalMile
+	}
+	waves, _ := cat.Prepare()
 	var tally weeksTally
 	tally.shares = make([]float64, len(cfg.Regimes))
 	for seed := from + 1; seed <= from+uint64(n); seed++ {
@@ -58,6 +66,9 @@ func TestWeeks(t *testing.T) {
 		checkFronts(t, seed, wt, w, &tally)
 		checkStorms(t, seed, wt, w, cfg, &tally)
 		checkRefuge(t, seed, wt, w, every, &tally)
+		if tally.weeks < swellWeeks {
+			checkSwell(wt, w, waves, swellGrid, &tally)
+		}
 		tally.weeks++
 		for i, s := range w.Report.Shares {
 			tally.shares[i] += s
@@ -74,6 +85,17 @@ func TestWeeks(t *testing.T) {
 	if tally.showersByDay > 50 {
 		if share := float64(tally.showersOnIslands) / float64(tally.showersByDay); share < 0.3 {
 			t.Errorf("%.0f%% of the showers by day form over islands", 100*share)
+		}
+	}
+	// Where a storm's own 20-knot wind reaches a place half an hour or more
+	// after the storm is whole, its swell comes first, all but at one place
+	// in a hundred, and at nineteen places in twenty by ten minutes or more.
+	if s := &tally.swell[2]; s.moving > 0 {
+		if early := float64(s.movingShort) / float64(s.moving); early > 0.05 {
+			t.Errorf("the swell came less than 10 minutes before a storm's 20-knot wind at %.1f%% of %d places it reached by moving", 100*early, s.moving)
+		}
+		if late := float64(s.moving-s.movingFirst) / float64(s.moving); late > 0.01 {
+			t.Errorf("a storm's 20-knot wind came before its swell at %d of %d places it reached by moving", s.moving-s.movingFirst, s.moving)
 		}
 	}
 	report := tally.markdown(cat)
@@ -95,7 +117,22 @@ type weeksTally struct {
 	refugePoints                                 int
 	refugeMean, refugeWind                       float64
 	showersByDay, showersOnIslands               int
+	swell                                        [3]swellLead // by the storm's wind: 10, 15 and 20 knots
+	swellStorms                                  int
 }
+
+// swellLead is the swell's lead on a storm's own wind at the places that
+// wind reaches: all of them, and those reached half an hour or more after
+// the storm is whole, by its moving; how many of each the swell came to at
+// least ten minutes before, and at all before, and the leads, minutes.
+type swellLead struct {
+	all, allShort                    int
+	moving, movingShort, movingFirst int
+	leads, movingLeads               []float64
+}
+
+// swellKnots are the storm's own winds the swell's lead is measured to.
+var swellKnots = [3]float64{10, 15, 20}
 
 func (t *weeksTally) markdown(cat *catalog.Catalog) string {
 	var b strings.Builder
@@ -117,7 +154,33 @@ func (t *weeksTally) markdown(cat *catalog.Catalog) string {
 	if t.showersByDay > 0 {
 		fmt.Fprintf(&b, "Showers by day over islands: %.0f%%.\n", 100*float64(t.showersOnIslands)/float64(t.showersByDay))
 	}
+	if t.swellStorms > 0 {
+		fmt.Fprintf(&b, "\nThe storms' swell, over %d storms: its lead, from 0.3 of its height at the storm's edge, on the storm's own wind.\n\n", t.swellStorms)
+		b.WriteString("| The storm's wind | Places it reaches | Lead: median, share under 10 min | Reached 30 min or more after it is whole: places, 10th percentile, median, share under 10 min, share the wind came first |\n|---|---|---|---|\n")
+		for i, s := range t.swell {
+			fmt.Fprintf(&b, "| %.0f kn | %d | %.1f min, %.1f%% | %d, %.1f min, %.1f min, %.1f%%, %.1f%% |\n", swellKnots[i], s.all,
+				percentile(s.leads, 0.5), share(s.allShort, s.all), s.moving, percentile(s.movingLeads, 0.1), percentile(s.movingLeads, 0.5),
+				share(s.movingShort, s.moving), share(s.moving-s.movingFirst, s.moving))
+		}
+	}
 	return b.String()
+}
+
+func share(n, of int) float64 {
+	if of == 0 {
+		return 0
+	}
+	return 100 * float64(n) / float64(of)
+}
+
+// percentile is a's p-quantile, nearest rank, or NaN for none.
+func percentile(a []float64, p float64) float64 {
+	if len(a) == 0 {
+		return math.NaN()
+	}
+	s := slices.Clone(a)
+	slices.Sort(s)
+	return s[min(int(p*float64(len(s))), len(s)-1)]
 }
 
 func minOf(a []float64) float64 {
@@ -318,6 +381,83 @@ func checkStorms(t *testing.T, seed uint64, tl *Timeline, w *Week, cfg *Config, 
 					centre := math.Atan2(cx-x, cy-y) / degree
 					if left := angleTo(toward, centre); left < -135 || left > -5 {
 						t.Errorf("seed %d: at (%.0f, %.0f) a storm's centre is %.0f° off downwind", seed, x, y, left)
+					}
+				}
+			}
+		}
+	}
+}
+
+// checkSwell tallies the week's storms' swell's lead on their own wind: on
+// a grid step apart over the disk, every minute from a storm's birth to its
+// end, the first tick its swell, over open water, is 0.3 of its height at
+// its edge, and the first its own wind, alone in still air, blows 10, 15
+// and 20 knots.
+func checkSwell(tl *Timeline, w *Week, waves *physics.Waves, step float64, tally *weeksTally) {
+	p := tl.Prepared()
+	edge := 0.97 * p.Edge()
+	type place struct {
+		x, y  float64
+		swell int64
+		wind  [3]int64
+	}
+	for _, s := range w.Systems {
+		r := &s.SystemRecord
+		if !p.RaisesSwell(r.Kind) {
+			continue
+		}
+		tally.swellStorms++
+		h := 0.3 * physics.SwellHeight(p, r)
+		var places []place
+		for x := -edge; x <= edge; x += step {
+			for y := -edge; y <= edge; y += step {
+				if math.Hypot(x, y) <= edge {
+					places = append(places, place{x: x, y: y, swell: -1, wind: [3]int64{-1, -1, -1}})
+				}
+			}
+		}
+		for tick := int64(r.Born); tick < int64(r.Gone); tick += ticksPerMinute {
+			own := stormOnly(tl, tick, s.Slot)
+			for i := range places {
+				pl := &places[i]
+				if pl.swell < 0 && physics.SwellAt(waves, p, r, pl.x, pl.y, float64(tick)).Height >= h {
+					pl.swell = tick
+				}
+				if pl.wind[0] >= 0 && pl.wind[1] >= 0 && pl.wind[2] >= 0 {
+					continue
+				}
+				v, _ := meanAt(own, pl.x, pl.y)
+				for k, kn := range swellKnots {
+					if pl.wind[k] < 0 && v >= kn*knot {
+						pl.wind[k] = tick
+					}
+				}
+			}
+		}
+		for _, pl := range places {
+			for k := range swellKnots {
+				if pl.wind[k] < 0 {
+					continue
+				}
+				sl := &tally.swell[k]
+				lead := math.Inf(-1)
+				if pl.swell >= 0 {
+					lead = float64(pl.wind[k]-pl.swell) / ticksPerMinute
+				}
+				sl.all++
+				sl.leads = append(sl.leads, lead)
+				short := lead < 10
+				if short {
+					sl.allShort++
+				}
+				if float64(pl.wind[k]) >= r.Mature+30*ticksPerMinute {
+					sl.moving++
+					sl.movingLeads = append(sl.movingLeads, lead)
+					if short {
+						sl.movingShort++
+					}
+					if lead > 0 {
+						sl.movingFirst++
 					}
 				}
 			}
