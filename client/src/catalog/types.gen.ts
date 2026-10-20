@@ -871,6 +871,34 @@ export interface WeatherSea {
    * The most significant height the waves keep in shallow water, as a share of its depth: where the water is shallower than the sea's height over this, its waves are capped to it and break.
    */
   breaking: number;
+  /**
+   * A swell lower than this, in m, is none.
+   */
+  swellLeast: number;
+  /**
+   * The swell's directional spreading's exponent s in cos²ˢ(θ/2) about the way it travels: a whole number.
+   */
+  swellSpreading: number;
+  /**
+   * The swell's spectrum's width: a Gaussian in frequency, its standard deviation as a share of its peak frequency.
+   */
+  swellSigma: number;
+  /**
+   * The fixed-point steps that find when the swell arriving at a place left its system: a whole number.
+   */
+  swellSteps: number;
+  /**
+   * The most a current against them raises the waves, as a multiple of their height in still water; a wave the current blocks is raised this much.
+   */
+  currentMost: number;
+  /**
+   * The least share of a swell that reaches behind land.
+   */
+  shadowLeast: number;
+  /**
+   * How far upwind of a place land calms its waves, in m: the shelter's tables hold the lee's fetch in steps of 4 m, at most 254 of them.
+   */
+  leeReach: number;
 }
 /**
  * The wind over the disk: how its speed rises toward the rim, the refuge at the centre, the stronger gusts of the outer waters and the turning of the difference across the disk.
@@ -1397,6 +1425,36 @@ export interface SystemKind {
    * Lightning strikes from it above this strength; 0 for none.
    */
   lightning: number;
+  swell?: SystemSwell;
+}
+/**
+ * The swell a kind of system raises, by its strength: a long, low lift that runs ahead of it at its group speed, its longest waves first.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SystemSwell".
+ */
+export interface SystemSwell {
+  /**
+   * The least and the most of a system's swell's peak period, drawn per system, in s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  period: [number, number];
+  /**
+   * The shortest and the longest period its swell spans, in s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  band: [number, number];
+  /**
+   * Its significant height at the system's edge at full strength, in m: the first at the least of the kind's wind, the second at the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
 }
 /**
  * A world's week of weather: how it is drawn and checked.
@@ -5200,4 +5258,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'c6bdaa8f82856088';
+export const CATALOG_VERSION = '2ef01252a07b1e82';

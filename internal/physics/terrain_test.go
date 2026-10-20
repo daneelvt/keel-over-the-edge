@@ -119,7 +119,7 @@ func (tt testTerrain) make() (*Ground, *Shelter) {
 	sh := new(Shelter)
 	for _, n := range terrainChunks {
 		ch := new(ShelterChunk)
-		for v := 0; v < len(ch.Values); v += 2 {
+		for v := 0; v < len(ch.Values); v += ShelterStride {
 			ch.Values[v] = ShelterFactorOne
 		}
 		sh.Chunks[n] = ch
@@ -138,13 +138,21 @@ func (tt testTerrain) make() (*Ground, *Shelter) {
 					continue
 				}
 				fb, tb := ShelterBytes(ShelterAt(&f, ShelterIndex(a, b), &sp))
-				v := sh.Chunks[n].Values[(i*ShelterDirections+k)*2:]
+				v := sh.Chunks[n].Values[(i*ShelterDirections+k)*ShelterStride:]
 				v[0], v[1] = fb, tb
 			}
 		}
 	}
+	land := &ShelterLand{Land: make([]bool, ShelterFieldSize), Across: make([]bool, ShelterFieldSize), Near: make([]bool, ShelterFieldSize)}
+	for i, h := range heights {
+		land.Land[i] = h > 0
+	}
+	ShelterLee(land, testLeeReach, func(n int32) *ShelterChunk { return sh.Chunks[n] })
 	return g, sh
 }
+
+// testLeeReach is the catalog's reach of the waves' lee, m.
+const testLeeReach = 800
 
 // writeTerrain writes a terrain's file.
 func writeTerrain(name string, g *Ground, sh *Shelter) error {

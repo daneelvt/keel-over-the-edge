@@ -2330,6 +2330,9 @@ type SystemKind struct {
 	// A patch is stretched along its track by this.
 	Stretch float64 `json:"stretch"`
 
+	// Swell corresponds to the JSON schema field "swell".
+	Swell *SystemSwell `json:"swell,omitempty,omitzero"`
+
 	// Where it is born and how it moves: wind, across from the windward rim; outer,
 	// round the outer waters; drift, inside, drifting with the wind.
 	Track Track `json:"track"`
@@ -2343,6 +2346,21 @@ type SystemKind struct {
 	// The wind it adds at its peak at full strength, the least and the most, in
 	// knots.
 	Wind []float64 `json:"wind"`
+}
+
+// The swell a kind of system raises, by its strength: a long, low lift that runs
+// ahead of it at its group speed, its longest waves first.
+type SystemSwell struct {
+	// The shortest and the longest period its swell spans, in s.
+	Band []float64 `json:"band"`
+
+	// Its significant height at the system's edge at full strength, in m: the first
+	// at the least of the kind's wind, the second at the most.
+	Height []float64 `json:"height"`
+
+	// The least and the most of a system's swell's peak period, drawn per system, in
+	// s.
+	Period []float64 `json:"period"`
 }
 
 type Town string
@@ -2822,14 +2840,25 @@ type WeatherSea struct {
 	// Waves lower than this fraction of an area's highest are left out.
 	Cull float64 `json:"cull"`
 
+	// The most a current against them raises the waves, as a multiple of their height
+	// in still water; a wave the current blocks is raised this much.
+	CurrentMost float64 `json:"currentMost"`
+
 	// The fetch of open water, in nautical miles.
 	FetchCap float64 `json:"fetchCap"`
 
 	// The JONSWAP spectrum's peak enhancement.
 	Gamma float64 `json:"gamma"`
 
+	// How far upwind of a place land calms its waves, in m: the shelter's tables hold
+	// the lee's fetch in steps of 4 m, at most 254 of them.
+	LeeReach float64 `json:"leeReach"`
+
 	// The longest wavelength, in m.
 	Longest float64 `json:"longest"`
+
+	// The least share of a swell that reaches behind land.
+	ShadowLeast float64 `json:"shadowLeast"`
 
 	// The shortest wavelength, in m.
 	Shortest float64 `json:"shortest"`
@@ -2842,6 +2871,21 @@ type WeatherSea struct {
 
 	// The directional spreading's exponent s in cos²ˢ(θ/2): a whole number.
 	Spreading int `json:"spreading"`
+
+	// A swell lower than this, in m, is none.
+	SwellLeast float64 `json:"swellLeast"`
+
+	// The swell's spectrum's width: a Gaussian in frequency, its standard deviation
+	// as a share of its peak frequency.
+	SwellSigma float64 `json:"swellSigma"`
+
+	// The swell's directional spreading's exponent s in cos²ˢ(θ/2) about the way it
+	// travels: a whole number.
+	SwellSpreading int `json:"swellSpreading"`
+
+	// The fixed-point steps that find when the swell arriving at a place left its
+	// system: a whole number.
+	SwellSteps int `json:"swellSteps"`
 }
 
 // The water's signs of the wind: the mean wind sampled round the camera, against
@@ -3682,4 +3726,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "c6bdaa8f82856088"
+const Version = "2ef01252a07b1e82"

@@ -357,11 +357,7 @@ func spellOf(p *WeatherPrepared, s *Spell) spell {
 		o.axisTurns = 1 / s.AxisPeriod
 	}
 	o.fieldSpeed = float64(p.gustSpeed * o.speed)
-	// A seed is a whole number below 2³², which an int32 cannot hold: its
-	// two halves are converted apart.
-	hi := toInt32(math.Floor(float64(s.Seed * (1.0 / 65536))))
-	lo := toInt32(s.Seed - float64(float64(hi)*65536))
-	seed := uint32(hi)<<16 | uint32(lo)&0xffff
+	seed := seedBits(s.Seed)
 	for k := range o.seeds {
 		o.seeds[k] = hash32(seed + uint32(k)*0x9e3779b9)
 	}
@@ -781,4 +777,12 @@ func soften(v, knee, soft float64) float64 {
 	// tanh(x) = 1 − 2 / (e^(2x) + 1), for x ≥ 0.
 	e := Exp(float64(2*(v-knee)) / soft)
 	return knee + float64(soft*(1-2/(e+1)))
+}
+
+// seedBits is a seed held as a float, a whole number below 2³², which an
+// int32 cannot hold: its two halves are converted apart.
+func seedBits(s float64) uint32 {
+	hi := toInt32(math.Floor(float64(s * (1.0 / 65536))))
+	lo := toInt32(s - float64(float64(hi)*65536))
+	return uint32(hi)<<16 | uint32(lo)&0xffff
 }

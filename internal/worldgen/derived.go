@@ -74,8 +74,8 @@ func (c *config) radialTo(g *physics.Ground, k *coarse, x, y, a, most float64) f
 
 // shelterOf works out the land's shelter for each of the directions and
 // writes it into each chunk's table: a cell gets a table if the land does
-// anything to the wind there from any direction. The land is as high as
-// its plants and its roofs stand (shelterHeights).
+// anything to the wind there from any direction, or to the waves (leeOf).
+// The land is as high as its plants and its roofs stand (shelterHeights).
 func (c *config) shelterOf(g *physics.Ground, roofs []Roof) *physics.Shelter {
 	h := c.shelterHeights(g, roofs)
 	field := physics.ShelterField{
@@ -102,18 +102,49 @@ func (c *config) shelterOf(g *physics.Ground, roofs []Roof) *physics.Shelter {
 				if sh.Chunks[n] == nil {
 					sh.Chunks[n] = newShelterChunk()
 				}
-				v := sh.Chunks[n].Values[(ci*physics.ShelterDirections+k)*2:]
+				v := sh.Chunks[n].Values[(ci*physics.ShelterDirections+k)*physics.ShelterStride:]
 				v[0], v[1] = fb, tb
 			}
 		}
 	}
+	c.leeOf(g, sh)
 	return sh
+}
+
+// leeOf writes into the shelter's tables each cell's lee for the waves
+// (physics.ShelterLee). Land of any height stops the waves, so land here is
+// ground above the water, whatever grows or stands on it.
+func (c *config) leeOf(g *physics.Ground, sh *physics.Shelter) {
+	l := &physics.ShelterLand{
+		Land:   make([]bool, physics.ShelterFieldSize),
+		Across: make([]bool, physics.ShelterFieldSize),
+		Near:   make([]bool, physics.ShelterFieldSize),
+	}
+	for n := range int32(physics.ChunkCount) {
+		ch := g.Chunks[n]
+		if ch == nil {
+			continue
+		}
+		c0, j0 := physics.ChunkCorner(n)
+		for i := range int32(physics.ChunkHexes) {
+			if ch.Elevation[i] > 0 {
+				cc, j := c0+i/physics.ChunkRows, j0+i%physics.ChunkRows
+				l.Land[physics.ShelterIndex(cc/physics.ShelterCell, j/physics.ShelterCell)] = true
+			}
+		}
+	}
+	physics.ShelterLee(l, c.leeReach, func(n int32) *physics.ShelterChunk {
+		if sh.Chunks[n] == nil {
+			sh.Chunks[n] = newShelterChunk()
+		}
+		return sh.Chunks[n]
+	})
 }
 
 // newShelterChunk is a chunk's shelter with every cell open water.
 func newShelterChunk() *physics.ShelterChunk {
 	ch := new(physics.ShelterChunk)
-	for i := 0; i < len(ch.Values); i += 2 {
+	for i := 0; i < len(ch.Values); i += physics.ShelterStride {
 		ch.Values[i] = physics.ShelterFactorOne
 	}
 	return ch
@@ -122,9 +153,10 @@ func newShelterChunk() *physics.ShelterChunk {
 // shelterHas reports whether cell i of a chunk's shelter is anything but
 // open water.
 func shelterHas(ch *physics.ShelterChunk, i int32) bool {
-	v := ch.Values[i*physics.ShelterDirections*2 : (i+1)*physics.ShelterDirections*2]
-	for k := 0; k < len(v); k += 2 {
-		if v[k] != physics.ShelterFactorOne || v[k+1] != 0 {
+	size := int32(physics.ShelterDirections * physics.ShelterStride)
+	v := ch.Values[i*size : (i+1)*size]
+	for k := 0; k < len(v); k += physics.ShelterStride {
+		if v[k] != physics.ShelterFactorOne || v[k+1] != 0 || v[k+2] != physics.ShelterLeeOpen {
 			return true
 		}
 	}

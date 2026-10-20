@@ -55,11 +55,93 @@ const (
 	seaFetchMax  = 1 << 24             // m
 )
 
+// The steps of an area's swell and current.
+const (
+	SeaSwellHeightStep = 0.01 // m
+	SeaSwellPeriodStep = 0.01 // s
+	SeaCurrentStep     = 0.01 // m/s
+	seaSwellMax        = 1 << 16
+	seaCurrentMax      = 1000 // 10 m/s
+)
+
 // SeaInput is what raises the waves of one area, in whole steps.
 type SeaInput struct {
 	Speed uint32 // the wind that raises the waves, 10 m up, in steps of SeaSpeedStep
 	From  uint32 // the direction it comes from, clockwise from north, in steps of a turn / SeaFromSteps
 	Fetch uint32 // the open water the wind has blown over, m
+	// The swell that reaches the area from a storm: its significant height
+	// in steps of SeaSwellHeightStep, none if 0; its peak period in steps
+	// of SeaSwellPeriodStep; and the direction it comes from, as From.
+	SwellHeight uint32
+	SwellPeriod uint32
+	SwellFrom   uint32
+	// The current at the area's centre on the open sea, east and north, in
+	// steps of SeaCurrentStep.
+	CurrentEast  int32
+	CurrentNorth int32
+}
+
+// Swell is a storm's swell at a place.
+type Swell struct {
+	Height float64 // its significant height, m
+	Period float64 // its peak period, s
+	From   float64 // the direction it comes from, rad clockwise from north
+	Far    float64 // how far it has come from where its storm was when it left, m
+}
+
+// SetSwell gives the inputs a swell, rounded to their steps: a swell with
+// no height, or none whose period is a number, is none.
+func (in *SeaInput) SetSwell(s Swell) {
+	h := toInt32(math.Floor(s.Height/SeaSwellHeightStep + 0.5))
+	p := toInt32(math.Floor(s.Period/SeaSwellPeriodStep + 0.5))
+	if h <= 0 || p <= 0 {
+		in.SwellHeight, in.SwellPeriod, in.SwellFrom = 0, 0, 0
+		return
+	}
+	d := toInt32(math.Floor(float64(wrapAngle(s.From)*(1/seaFromStep)) + 0.5))
+	in.SwellHeight = uint32(min(h, seaSwellMax))
+	in.SwellPeriod = uint32(min(p, seaSwellMax))
+	in.SwellFrom = uint32(d) & (SeaFromSteps - 1)
+}
+
+// Swell is the inputs' swell, as its steps stand for.
+func (in *SeaInput) Swell() Swell {
+	return Swell{
+		Height: float64(float64(in.SwellHeight) * SeaSwellHeightStep),
+		Period: float64(float64(in.SwellPeriod) * SeaSwellPeriodStep),
+		From:   float64(float64(in.SwellFrom) * seaFromStep),
+	}
+}
+
+// SetCurrent gives the inputs a current, east and north, m/s, rounded to
+// its steps.
+func (in *SeaInput) SetCurrent(east, north float64) {
+	in.CurrentEast = currentSteps(east)
+	in.CurrentNorth = currentSteps(north)
+}
+
+func currentSteps(v float64) int32 {
+	s := toInt32(math.Floor(v/SeaCurrentStep + 0.5))
+	return min(max(s, -seaCurrentMax), seaCurrentMax)
+}
+
+// SeaCurrent is the current of the area in a column and row, as its inputs
+// hold it: at its centre on the open sea, for the world's way round
+// (CurrentAt), so that a client works it out as the server does.
+func SeaCurrent(w *WeatherPrepared, way float64, col, row int32) (east, north float64) {
+	x, y := SeaAreaCentre(col, row)
+	return CurrentAt(w, way, x, y, nil)
+}
+
+// SeaParts are what an area's waves are made of: its wind sea's and its
+// swell's significant heights and peaks, each partition's alone, and the
+// height its waves would have with no current.
+type SeaParts struct {
+	WindHs    float64 // m
+	WindPeak  float64 // rad/s, 0 for none
+	SwellHs   float64 // m
+	SwellPeak float64 // rad/s, 0 for none
+	StillHs   float64 // m
 }
 
 // Components are the sea's waves, for whoever draws them.
@@ -98,6 +180,20 @@ type Waves struct {
 	fetchCap      float64 // m
 	cull          float64
 	breaking      float64 // γ: the most Hs a depth keeps, as a share of it
+
+	// The swell's partition: its spreading's exponent, its width, the
+	// least of it, and the waves by frequency, ascending, which it visits
+	// only near its peak.
+	swellSpreading int32
+	swellSigma     float64
+	swellLeast     float64
+	swellSteps     int32
+	byOmega        [SeaComponents]int32
+	omegaSorted    [SeaComponents]float64
+	// The current's cap, the shadow's floor and the lee's reach.
+	currentMost float64
+	shadowLeast float64
+	leeReach    float64
 }
 
 // R2's two steps: the powers 1/φ and 1/φ² of the plastic number
@@ -165,6 +261,22 @@ func PrepareSea(p *SeaParams, w *Waves) {
 	w.fetchCap = float64(p.FetchCap * nauticalMile)
 	w.cull = p.Cull
 	w.breaking = p.Breaking
+	w.swellSpreading = max(toInt32(p.SwellSpreading), 1)
+	w.swellSigma = max2(p.SwellSigma, 1e-3)
+	w.swellLeast = p.SwellLeast
+	w.swellSteps = max(toInt32(p.SwellSteps), 1)
+	w.currentMost = max2(p.CurrentMost, 1)
+	w.shadowLeast = clamp(p.ShadowLeast, 0, 1)
+	w.leeReach = max2(p.LeeReach, 1)
+	// The waves by frequency: an insertion sort, the same on every machine.
+	for i := range int32(SeaComponents) {
+		j := i
+		for j > 0 && w.omegaSorted[j-1] > w.Omega[i] {
+			w.omegaSorted[j], w.byOmega[j] = w.omegaSorted[j-1], w.byOmega[j-1]
+			j--
+		}
+		w.omegaSorted[j], w.byOmega[j] = w.Omega[i], i
+	}
 }
 
 // hash32 mixes the bits of x (Wellons's lowbias32).
@@ -249,7 +361,10 @@ type SeaWindow struct {
 	Inputs []SeaInput
 	Amp    []float64 // SeaComponents amplitudes each, m
 	Hs     []float64 // the significant height of the area's waves, m
-	Peak   []float64 // the frequency of the area's spectral peak, rad/s
+	Peak   []float64 // the frequency of the spectral peak of its partition with more energy, rad/s
+	// Parts are each partition's: what the lee weighs them by. A window
+	// without them is all wind sea.
+	Parts []SeaParts
 	// Active lists the waves with an amplitude in any of the window's
 	// areas, ascending; Count is how many. Seal fills them.
 	Active [SeaComponents]int32
@@ -273,9 +388,16 @@ func SeaArea(w *Waves, win *SeaWindow, i int32, in SeaInput) {
 	if j := win.last; j != i && win.Inputs[j] == in {
 		copy(amp, win.Amp[j*SeaComponents:(j+1)*SeaComponents])
 		win.Hs[i], win.Peak[i] = win.Hs[j], win.Peak[j]
+		if win.Parts != nil {
+			win.Parts[i] = win.Parts[j]
+		}
 		return
 	}
-	win.Hs[i], win.Peak[i] = w.amplitudes(in, amp)
+	hs, peak, parts := w.amplitudes(in, amp)
+	win.Hs[i], win.Peak[i] = hs, peak
+	if win.Parts != nil {
+		win.Parts[i] = parts
+	}
 	win.last = i
 }
 
@@ -301,9 +423,75 @@ func (win *SeaWindow) Seal() {
 	win.Count = n
 }
 
-// amplitudes writes the amplitude of every wave under a wind over a fetch,
-// and returns the significant height of their sum and the frequency of the
-// spectrum's peak.
+// amplitudes writes the amplitude of every wave of an area, and returns the
+// significant height of their sum, the frequency of the spectral peak of
+// its partition with more energy, and its partitions.
+//
+// The sea is two partitions, as a spectrum with two peaks is (Ochi and
+// Hubble 1976; the WMO's Guide to Wave Analysis and Forecasting, 2018): the
+// wind sea the area's wind raises, and the swell that reaches it from a
+// storm. Each is scaled to its own variance and culled against its own
+// highest wave, so that a swell does not take a light wind's sea away; a
+// wave's amplitude is then √(a_w² + a_s²), and the variances add. Each wave
+// is raised or lowered by the current along its path first.
+func (w *Waves) amplitudes(in SeaInput, amp []float64) (hs, peak float64, parts SeaParts) {
+	var swell, factor [SeaComponents]float64
+	parts.WindPeak = w.windSea(in, amp)
+	parts.SwellPeak = w.swellSea(in, &swell)
+	current := in.CurrentEast != 0 || in.CurrentNorth != 0
+	if current {
+		ue := float64(float64(in.CurrentEast) * SeaCurrentStep)
+		un := float64(float64(in.CurrentNorth) * SeaCurrentStep)
+		for i := range amp {
+			f := w.currentFactor(int32(i), ue, un)
+			factor[i] = f
+			amp[i] = float64(amp[i] * f)
+			swell[i] = float64(swell[i] * f)
+		}
+	}
+	highW, highS := 0.0, 0.0
+	for i, a := range amp {
+		highW = max2(highW, a)
+		highS = max2(highS, swell[i])
+	}
+	floorW, floorS := float64(w.cull*highW), float64(w.cull*highS)
+	sumW, sumS, still := 0.0, 0.0, 0.0
+	for i, a := range amp {
+		if a < floorW {
+			a = 0
+		}
+		s := swell[i]
+		if s < floorS {
+			s = 0
+		}
+		a2, s2 := float64(a*a), float64(s*s)
+		sumW += a2
+		sumS += s2
+		if current && a2+s2 > 0 {
+			still += float64(a2+s2) / float64(factor[i]*factor[i])
+		}
+		if s > 0 {
+			a = math.Sqrt(a2 + s2)
+		}
+		amp[i] = a
+	}
+	parts.WindHs = float64(4 * math.Sqrt(float64(0.5*sumW)))
+	parts.SwellHs = float64(4 * math.Sqrt(float64(0.5*sumS)))
+	hs = float64(4 * math.Sqrt(float64(0.5*(sumW+sumS))))
+	parts.StillHs = hs
+	if current {
+		parts.StillHs = float64(4 * math.Sqrt(float64(0.5*still)))
+	}
+	peak = parts.WindPeak
+	if sumS > sumW {
+		peak = parts.SwellPeak
+	}
+	return hs, peak, parts
+}
+
+// windSea writes the amplitude of every wave under a wind over a fetch,
+// scaled to the variance its spectrum has over the band and not yet
+// culled, and returns the frequency of the spectrum's peak.
 //
 // The spectrum is JONSWAP's (Hasselmann and others 1973):
 //
@@ -319,16 +507,15 @@ func (win *SeaWindow) Seal() {
 // A few hundred waves sample that plane coarsely: where the spectrum is
 // steep their sum would be a tenth higher or lower as the wind swings
 // round. So the amplitudes are scaled together to carry exactly the
-// variance the spectrum has over the band. Then those below the cull
-// fraction of the highest are left out.
-func (w *Waves) amplitudes(in SeaInput, amp []float64) (hs, peak float64) {
+// variance the spectrum has over the band.
+func (w *Waves) windSea(in SeaInput, amp []float64) (peak float64) {
 	u := float64(float64(in.Speed) * SeaSpeedStep)
 	f := float64(in.Fetch)
 	if !(u > 0) || !(f > 0) {
 		for i := range amp {
 			amp[i] = 0
 		}
-		return 0, 0
+		return 0
 	}
 	x := min2(float64(gravity*f)/float64(u*u), fullFetch)
 	alpha := float64(0.076 * Exp(float64(-0.22*Log(x))))
@@ -364,24 +551,10 @@ func (w *Waves) amplitudes(in SeaInput, amp []float64) (hs, peak float64) {
 	if sum > 0 {
 		fit = 2 * m0 / sum
 	}
-	highest := 0.0
 	for i, a2 := range amp {
-		a := math.Sqrt(float64(a2 * fit))
-		amp[i] = a
-		if a > highest {
-			highest = a
-		}
+		amp[i] = math.Sqrt(float64(a2 * fit))
 	}
-	floor := float64(w.cull * highest)
-	sum = 0
-	for i, a := range amp {
-		if a < floor {
-			amp[i] = 0
-			continue
-		}
-		sum += float64(a * a)
-	}
-	return float64(4 * math.Sqrt(float64(0.5*sum))), peak
+	return peak
 }
 
 // shape returns S(ω) ω / (α g²) for a spectrum whose peak is at peak: what
@@ -425,11 +598,13 @@ func SeaAt(w *Waves, t *SeaTick, tick float64) {
 func SeaAtTick(w *Waves, t *SeaTick, tick int64) { SeaAt(w, t, float64(tick)) }
 
 // Sea is the sea a step reads: the waves, the amplitudes of the areas about
-// the boat, and the time. A nil *Sea is flat water.
+// the boat, the time, and the shelter whose tables calm the waves in the
+// land's lee (lee.go), nil for none. A nil *Sea is flat water.
 type Sea struct {
 	Waves  *Waves
 	Window *SeaWindow
 	Tick   *SeaTick
+	Lee    *Shelter
 }
 
 // corners finds the four areas whose centres surround (x, y), clamped to
@@ -465,12 +640,13 @@ type SeaPoint struct {
 	Height float64 // m
 	East   float64 // slope: the rise per metre eastward
 	North  float64 // and northward
-	Hs     float64 // the significant height of the waves here, m, before the depth caps them
+	Hs     float64 // the significant height of the waves here, m, in the lee and before the depth caps them
 }
 
 // SeaSample returns the sea's height and slope at the point x metres east
-// and y north of the world's centre, capped by the depth of the ground g
-// there (DepthFactor), or nil for the open sea. The slope is that of the
+// and y north of the world's centre, scaled by the land's lee there
+// (LeeAt) and then capped by the depth of the ground g there (DepthFactor),
+// or nil for the open sea. The slope is that of the
 // waves alone: the blend between areas changes the amplitudes over hundreds
 // of metres, which adds at most a ten-thousandth to it, and is left out
 // here as it is wherever the sea is drawn.
@@ -491,6 +667,10 @@ func SeaSample(sea *Sea, g *Ground, x, y float64) SeaPoint {
 		p.North += float64(ac * w.kNorth[i])
 	}
 	p.Hs = win.hsAt(sw, se, nw, ne, wx, wy)
+	if f := LeeAt(sea, x, y); f != 1 {
+		p.Height, p.East, p.North = float64(p.Height*f), float64(p.East*f), float64(p.North*f)
+		p.Hs = float64(p.Hs * f)
+	}
 	if f := depthFactor(w, g, x, y, p.Hs); f < 1 {
 		p.Height, p.East, p.North = float64(p.Height*f), float64(p.East*f), float64(p.North*f)
 	}

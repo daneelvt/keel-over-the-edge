@@ -88,6 +88,13 @@ func SystemKinds(c *Catalog) []physics.SystemKind {
 			Shape: shapes[k.Shape], Turning: k.Turning, Width: k.Width, Ahead: k.Ahead,
 			Broad: k.Broad[0], BroadWidth: k.Broad[1], Stretch: k.Stretch, Inward: inward[k.Inward], Gusts: k.Gusts,
 		}
+		if s := k.Swell; s != nil {
+			o := &out[i]
+			copy(o.SwellPeriod[:], s.Period)
+			copy(o.SwellBand[:], s.Band)
+			copy(o.SwellHeight[:], s.Height)
+			copy(o.SwellWind[:], k.Wind)
+		}
 	}
 	return out
 }

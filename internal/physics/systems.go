@@ -76,6 +76,7 @@ type systemKind struct {
 	stretch          float64
 	inward           int32
 	gusts            float64
+	swell            swellKind
 }
 
 // SetKind sets kind i of the systems. It is called after PrepareWeather,
@@ -94,6 +95,7 @@ func (w *WeatherPrepared) SetKind(i int32, k *SystemKind) {
 	o.stretch = max2(k.Stretch, 1)
 	o.inward = toInt32(k.Inward)
 	o.gusts = max2(k.Gusts, 0)
+	o.setSwell(k)
 	w.nkinds = max(w.nkinds, i+1)
 }
 
@@ -444,7 +446,7 @@ func SystemsAt(t *WeatherTick) int32 { return t.ns }
 
 // SystemAt is the keyframe of a system of the week at a tick, from its
 // record: its planned track with its wobble, its strength by its life and
-// its swell, in whole numbers. A system not alive at the tick is not on.
+// its throb, in whole numbers. A system not alive at the tick is not on.
 func SystemAt(r *SystemRecord, tick float64) System {
 	v, on := recordAt(r, tick)
 	if !on {
@@ -509,13 +511,13 @@ func recordAt(r *SystemRecord, tick float64) (systemValues, bool) {
 	case tick >= r.Decays:
 		life = 1 - smooth(float64((tick-r.Decays)*inverse(r.Gone-r.Decays)))
 	}
-	swell := 1 + float64(float64(r.Swell*strengthStep)*Sin(float64(r.SwellPhase*turnStep)+cycle(inverse(r.SwellPeriod), tick)))
+	throb := 1 + float64(float64(r.Throb*strengthStep)*Sin(float64(r.ThrobPhase*turnStep)+cycle(inverse(r.ThrobPeriod), tick)))
 	return systemValues{
 		kind:     r.Kind,
 		east:     east,
 		north:    north,
 		heading:  heading,
-		strength: float64(life * swell),
+		strength: float64(life * throb),
 		size:     r.Size,
 		peak:     r.Peak,
 		depth:    float64(r.Depth * hundredthHPa),

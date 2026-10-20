@@ -113,13 +113,18 @@ func (v *wave) scale(f float64) {
 	v.foilX, v.foilY = float64(v.foilX*f), float64(v.foilY*f)
 }
 
-// capDepth scales the wave under a boat at (x, y) by the depth's cap
-// there (sea.go), if the ground g caps it.
+// capDepth scales the wave under a boat at (x, y) by the land's lee there
+// (lee.go) and then by the depth's cap (sea.go), if the ground g caps what
+// the lee leaves.
 func (v *wave) capDepth(sea *Sea, g *Ground, x, y float64) {
+	lee := LeeAt(sea, x, y)
+	if lee != 1 {
+		v.scale(lee)
+	}
 	if g == nil {
 		return
 	}
-	if f := depthFactor(sea.Waves, g, x, y, sea.hsAt(x, y)); f < 1 {
+	if f := depthFactor(sea.Waves, g, x, y, float64(sea.hsAt(x, y)*lee)); f < 1 {
 		v.scale(f)
 	}
 }
@@ -168,8 +173,9 @@ type EffectiveWave struct {
 }
 
 // WaveUnder returns the effective wave under a hull at (x, y) heading
-// heading, at rest, whose waterplane is length long and beam wide, capped
-// by the depth of the ground g there, or nil for the open sea.
+// heading, at rest, whose waterplane is length long and beam wide, in the
+// land's lee and capped by the depth of the ground g there, or nil for the
+// open sea.
 func WaveUnder(sea *Sea, g *Ground, length, beam, x, y, heading float64) EffectiveWave {
 	var v wave
 	s := State{X: x, Y: y}

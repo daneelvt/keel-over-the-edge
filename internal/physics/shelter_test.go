@@ -114,11 +114,11 @@ func TestShelterLookup(t *testing.T) {
 				n, i, _ := ShelterCellOf(a, b)
 				if sh.Chunks[n] == nil {
 					sh.Chunks[n] = new(ShelterChunk)
-					for v := 0; v < len(sh.Chunks[n].Values); v += 2 {
+					for v := 0; v < len(sh.Chunks[n].Values); v += ShelterStride {
 						sh.Chunks[n].Values[v] = ShelterFactorOne
 					}
 				}
-				v := sh.Chunks[n].Values[(i*ShelterDirections+k)*2:]
+				v := sh.Chunks[n].Values[(i*ShelterDirections+k)*ShelterStride:]
 				v[0], v[1] = fb, tb
 			}
 		}
@@ -128,7 +128,7 @@ func TestShelterLookup(t *testing.T) {
 	cx, cy := ShelterCellCentre(300, 268)
 	factor, _ := sh.At(cx, cy, 0)
 	n, i, _ := ShelterCellOf(300, 268)
-	if want := float64(sh.Chunks[n].Values[i*ShelterDirections*2]) / ShelterFactorOne; factor != want {
+	if want := float64(sh.Chunks[n].Values[i*ShelterDirections*ShelterStride]) / ShelterFactorOne; factor != want {
 		t.Errorf("at a cell's centre the factor is %v, the table's %v", factor, want)
 	}
 	// Continuous: small moves in space and direction make small changes,
