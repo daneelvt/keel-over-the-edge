@@ -112,8 +112,11 @@ func madeChunk() (int32, *physics.GroundChunk, *physics.ShelterChunk) {
 	s := newShelterChunk()
 	for i := int32(0); i < physics.ShelterCells; i += 3 {
 		for k := range int32(physics.ShelterDirections) {
-			v := s.Values[(i*physics.ShelterDirections+k)*2:]
+			v := s.Values[(i*physics.ShelterDirections+k)*physics.ShelterStride:]
 			v[0], v[1] = uint8(100+(i+k)%96), uint8(int8((i*k)%41-20))
+			if i%2 == 0 {
+				v[2] = uint8(1 + (i+3*k)%255)
+			}
 		}
 	}
 	return n, g, s
@@ -136,7 +139,14 @@ func fileChunk(name string, n int32, g *physics.GroundChunk, s *physics.ShelterC
 	c := chunkFileChunk{Name: name, Number: n, Payload: base64.StdEncoding.EncodeToString(payload),
 		Elevation: digestOf(e), Surface: digestOf(g.Surface[:]), Format: int(format)}
 	if s != nil {
-		c.Shelter = digestOf(s.Values[:])
+		// As a reader gives it back: before format 4 with no lee.
+		v := s.Values
+		if format < 4 {
+			for i := 2; i < len(v); i += physics.ShelterStride {
+				v[i] = physics.ShelterLeeOpen
+			}
+		}
+		c.Shelter = digestOf(v[:])
 	}
 	if t != nil && format >= 2 {
 		// As the page reads it back.
@@ -213,12 +223,16 @@ func TestChunkFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got.Chunks = append(got.Chunks, made, old, two, featured)
+	three, err := fileChunk("made, format 3", n, g, s, madeFeatures(n), 3, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Chunks = append(got.Chunks, made, old, two, featured, three)
 	if testing.Short() && !*update {
-		if len(want.Chunks) < 4 || want.Format != Format {
+		if len(want.Chunks) < 5 || want.Format != Format {
 			t.Fatal("the made chunks differ from chunks.json: rewrite it with -update")
 		}
-		for i := range 4 {
+		for i := range 5 {
 			if want.Chunks[i].Payload != got.Chunks[i].Payload {
 				t.Fatalf("%s differs from chunks.json: rewrite it with -update", got.Chunks[i].Name)
 			}

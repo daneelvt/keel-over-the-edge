@@ -551,7 +551,7 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 				p.Circulation = float64(ev.Welcome.GetCirculation())
 			}
 			if ev.SeaAreas != nil {
-				p.Seas.Receive(ev.SeaAreas)
+				p.Seas.Receive(ev.SeaAreas, p.Circulation)
 			}
 			if ev.WeatherSystems != nil {
 				if err := p.ReceiveWeather(ev.WeatherSystems); err != nil {

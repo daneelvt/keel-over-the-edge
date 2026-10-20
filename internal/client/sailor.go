@@ -290,7 +290,7 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			if ev.SeaAreas != nil {
 				s.Stats.Seas++
 				s.LastSea = ev.SeaAreas
-				s.Predictor.Seas.Receive(ev.SeaAreas)
+				s.Predictor.Seas.Receive(ev.SeaAreas, s.Predictor.Circulation)
 			}
 			if ev.Tools != nil {
 				s.Tools = ev.Tools.GetOn()

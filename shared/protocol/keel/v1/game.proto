@@ -457,6 +457,15 @@ message SeaAreas {
   repeated uint32 speed = 5;
   repeated uint32 from = 6;
   repeated uint32 fetch = 7;
+  // For each area, as above, the swell that reaches it from a storm: its
+  // significant height in centimetres, none if 0; its peak period in steps
+  // of 0.01 s; and the direction it comes from, as the wind's. Sent only
+  // when they differ from those last sent: empty, they are as they were.
+  // An area's current is not sent: the client works it out at the area's
+  // centre from the world's circulation, as the server does.
+  repeated uint32 swell_height = 8;
+  repeated uint32 swell_period = 9;
+  repeated uint32 swell_from = 10;
 }
 
 // Restart says the server is about to restart, as a new version is

@@ -132,6 +132,11 @@ func (h *fnv) sea(areas []physics.SeaInput) {
 		h.u64(uint64(areas[i].Speed))
 		h.u64(uint64(areas[i].From))
 		h.u64(uint64(areas[i].Fetch))
+		h.u64(uint64(areas[i].SwellHeight))
+		h.u64(uint64(areas[i].SwellPeriod))
+		h.u64(uint64(areas[i].SwellFrom))
+		h.u64(uint64(uint32(areas[i].CurrentEast)))
+		h.u64(uint64(uint32(areas[i].CurrentNorth)))
 		i = j
 	}
 }

@@ -277,3 +277,21 @@ func (w *Waves) CurrentFactor(east, north, peak, to float64) float64 {
 	r := math.Sqrt(q)
 	return min2(2/float64((1+r)*math.Sqrt(r)), w.currentMost)
 }
+
+// RaisesSwell says whether a system of kind raises swell.
+func (w *WeatherPrepared) RaisesSwell(kind float64) bool {
+	k := w.kindOf(kind)
+	return k != nil && k.swell.height[1] > 0
+}
+
+// SwellLinger is how long after its end a system of kind's swell may still
+// be on the disk, ticks: the time the band's shortest, slowest waves take
+// to cross it.
+func (w *WeatherPrepared) SwellLinger(kind float64) float64 {
+	k := w.kindOf(kind)
+	if k == nil || !(k.swell.height[1] > 0) || !(k.swell.band[0] > 0) {
+		return 0
+	}
+	speed := float64(gravity*k.swell.band[0]) / (4 * math.Pi)
+	return math.Ceil(float64(float64(2*w.Edge())/speed) * StepsPerSecond)
+}

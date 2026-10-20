@@ -348,7 +348,7 @@ func TestCanopyLengthensTheLee(t *testing.T) {
 			if ch == nil {
 				continue
 			}
-			for k := 0; k < len(ch.Values); k += 2 {
+			for k := 0; k < len(ch.Values); k += physics.ShelterStride {
 				if ch.Values[k] < physics.ShelterFactorOne*9/10 {
 					n++
 				}
