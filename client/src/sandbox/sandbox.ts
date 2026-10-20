@@ -27,7 +27,9 @@ import { Seas } from '../predict/seas';
 import {
   type BoatWind,
   heldSpell,
+  kindIndex,
   newBoatWind,
+  placedRecord,
   regimeIndex,
   regimeSpell,
   type Spell,
@@ -65,6 +67,12 @@ interface Made {
 
 /** The weather that is one wind everywhere, with no shifts or gusts. */
 export const STEADY = 'steady';
+/** The start's weather of ?weather=front: a front crossing the boat three minutes in. */
+export const FRONT = 'front';
+/** A system of ?weather=<kind> and a front reach the boat this many ticks in. */
+const ARRIVE_TICKS = 3 * 60 * 30;
+/** And a front moves at this, m/s: six knots. */
+const FRONT_SPEED = (6 * 1852) / 3600;
 /** How long the sandbox's first spell of a regime lasts, and drifts over: four hours of ticks. */
 const SPELL_TICKS = 4 * 3600 * 30;
 
@@ -112,7 +120,10 @@ export function windFromQuery(query: URLSearchParams): Wind | null {
  */
 export function weatherFromQuery(query: URLSearchParams, weather: Weather): string | null {
   const id = query.get('weather');
-  return id !== null && (id === STEADY || regimeIndex(weather, id) >= 0) ? id : null;
+  return id !== null &&
+    (id === STEADY || id === FRONT || regimeIndex(weather, id) >= 0 || kindIndex(weather, id) >= 0)
+    ? id
+    : null;
 }
 
 /** The weather a sailor meets most: the id of the regime with the greatest share of the time. */
@@ -137,6 +148,8 @@ export class Sandbox implements BoatDriver {
   readonly out = new Float64Array(SIZES.out);
   readonly wind: BoatWind = newBoatWind();
   readonly recorder = new Recorder();
+  /** How many weather systems the sandbox has placed. */
+  systems = 0;
   readonly start: SandboxStart;
   /** Whether the sail is being recorded (the developer panel turns it on). */
   recording = false;
@@ -263,9 +276,23 @@ export class Sandbox implements BoatDriver {
     this.#settle();
   }
 
-  /** The start's weather, as if it had blown for ever: one spell, from tick 0. */
+  /**
+   * The start's weather, as if it had blown for ever: one spell, from tick
+   * 0; for a front, the commonest regime's spell and a front crossing the
+   * boat three minutes in; for a kind of system, the spell of the commonest
+   * regime, or of the lightest for a kind of light winds, and a system of
+   * it reaching the boat three minutes in.
+   */
   #startWeather(): void {
     const { wind, weather } = this.start;
+    const kind = kindIndex(this.#catalog, weather);
+    if (weather === FRONT || kind >= 0) {
+      // At the start's place, where the boat begins and begins again.
+      this.#meet(kind, this.start.east, this.start.north, 0);
+      return;
+    }
+    this.#physics.setRecords([]);
+    this.systems = 0;
     const regime = regimeIndex(this.#catalog, weather);
     const spell =
       regime < 0
@@ -275,7 +302,7 @@ export class Sandbox implements BoatDriver {
             this.#catalog,
             regime,
             1,
-            this.#catalog.sequence.seed,
+            this.#catalog.week.seed,
             turnSteps(wind.from),
             0,
             SPELL_TICKS,
@@ -289,12 +316,87 @@ export class Sandbox implements BoatDriver {
   }
 
   /**
+   * A front, for kind −1, or a system of a kind, meeting the boat at (east,
+   * north) three minutes after tick now, in a spell from now of the
+   * commonest regime, or of the lightest for a kind of light winds.
+   */
+  #meet(kind: number, east: number, north: number, now: number): void {
+    const c = this.#catalog;
+    const calm = kind >= 0 && (c.systems[kind]?.calmBelow ?? 0) > 0;
+    let regime = regimeIndex(c, commonestWeather(c));
+    if (calm) {
+      regime = c.regimes.reduce(
+        (best, r, i) => ((r.wind.speed[1] ?? 0) < (c.regimes[best]?.wind.speed[1] ?? 0) ? i : best),
+        0,
+      );
+    }
+    const base = regimeSpell(
+      this.#physics,
+      c,
+      regime,
+      1,
+      c.week.seed,
+      turnSteps(this.start.wind.from),
+      now,
+      SPELL_TICKS,
+    );
+    const spells = [base];
+    const records: Float64Array[] = [];
+    if (kind >= 0) {
+      records.push(placedRecord(c, kind, east, north, now, now + ARRIVE_TICKS, base));
+    } else {
+      // A front of the first frontal regime, its line moving with that
+      // regime's wind, to cross the boat three minutes in.
+      const frontal = Math.max(
+        0,
+        c.regimes.findIndex((r) => r.frontal),
+      );
+      const reach = this.#physics.frontReach();
+      const change = 2 * Math.round((reach / FRONT_SPEED) * 30);
+      const P = RECORDS.spell;
+      const spell = heldSpell(this.#physics, c, frontal, 0);
+      // Veering the wind as a week's fronts do, by the middle of their veer.
+      const veer = Math.round(
+        (((c.week.veer[0] ?? 0) + (c.week.veer[1] ?? 0)) / 2 / 360) * WEATHER.turnSteps,
+      );
+      spell[P.from] = ((base[P.from] ?? 0) + veer) % WEATHER.turnSteps;
+      const toward = (((spell[P.from] ?? 0) + WEATHER.turnSteps / 2) % WEATHER.turnSteps) as number;
+      const a = (toward / WEATHER.turnSteps) * 2 * Math.PI;
+      const along = east * Math.sin(a) + north * Math.cos(a);
+      const begin = Math.round(now + ARRIVE_TICKS - ((along + reach) / FRONT_SPEED) * 30);
+      spell[P.begin] = begin;
+      spell[P.start] = begin;
+      spell[P.change] = change;
+      spell[P.front] = 1;
+      spell[P.toward] = toward;
+      spell[P.trough] = Math.round(
+        50 * ((c.week.frontTrough[0] ?? 0) + (c.week.frontTrough[1] ?? 0)),
+      );
+      spell[P.still] = 0;
+      // The spell before it begins before it does.
+      base[P.begin] = Math.min(now, begin - 1);
+      base[P.start] = base[P.begin] ?? 0;
+      spells.push(spell);
+    }
+    this.#pending = null;
+    this.#set = null;
+    this.#made = base;
+    this.tuning.gusts = true;
+    this.tuning.shifts = true;
+    this.#physics.setRecords(records);
+    this.systems = records.length;
+    this.weather.set(spells);
+  }
+
+  /**
    * A steady wind at once, as if it had blown for ever: the weather is that
    * one spell, from tick 0. Not what a server does, whose weather changes
    * from the second after next; the sea follows within two seconds, or at
    * once with settleSea.
    */
   steadyNow(speed: number, from: number): void {
+    this.#physics.setRecords([]);
+    this.systems = 0;
     const spell = steadySpell(this.#physics, speed, from, 0);
     this.#pending = null;
     this.#set = null;
@@ -312,6 +414,8 @@ export class Sandbox implements BoatDriver {
     this.#pending = (begin) => {
       const spell = steadySpell(this.#physics, speed, from, begin);
       const P = RECORDS.spell;
+      // A developer's weather stills the world's own systems while it blows.
+      spell[P.still] = 1;
       return {
         spell,
         made: spell,
@@ -326,6 +430,13 @@ export class Sandbox implements BoatDriver {
    * regime, or, for STEADY, the mean wind at the boat held steady.
    */
   setWeather(id: string): void {
+    const kind = kindIndex(this.#catalog, id);
+    if (id === FRONT || kind >= 0) {
+      // A front, or a system of a kind, to meet the boat three minutes on.
+      const s = this.#physics.records.state;
+      this.#meet(kind, s[S.x] ?? 0, s[S.y] ?? 0, this.tick);
+      return;
+    }
     const regime = regimeIndex(this.#catalog, id);
     if (regime < 0) {
       this.setWind(this.wind.meanSpeed, this.wind.meanFrom);
@@ -454,6 +565,9 @@ export class Sandbox implements BoatDriver {
       // As a server applies a developer's weather given at this tick.
       const { spell, made, set } = this.#pending(takesEffect(tick));
       this.#pending = null;
+      // A system the sandbox placed goes with the weather it came in.
+      this.#physics.setRecords([]);
+      this.systems = 0;
       this.#set = set;
       this.#made = made;
       this.weather.add(spell);

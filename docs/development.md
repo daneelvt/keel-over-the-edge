@@ -228,7 +228,7 @@ the layout version; the client refuses a module whose version differs.
 - `WeatherParams`, `Regime` and `Spell`: the catalog's wind values, a kind
   of spell, and a spell of weather; `WindPoint`, the wind at a point in
   full, and `GustFrame`, what the GPU needs of the gust fields (see
-  [Wind](#wind)).
+  [Wind and weather](#wind-and-weather)).
 
 A step sails in a sea, `physics.Sea`, or in flat water with none. The sea is
 not a record: the module keeps it, and the client fills it through exports
@@ -366,55 +366,168 @@ golden file, and copy the catalog's new values into `scenarios.json`'s
   attached trim and a stalled one give nearly the same drive, and which is
   best decides the side force. Drive matches.
 
-## Wind
+## Wind and weather
 
 The wind differs from place to place and from second to second: a base wind
 that is lighter at the centre and stronger at the rim, slow shifts of its
-direction, and a field of gusts and lulls carried downwind. The physics
-package computes it (`weather.go`, `gusts.go`), so the server, the client's
-prediction and the gusts drawn on the water are the same wind. It is a pure
-function of the tick, the place and a few records of whole numbers: nothing
-of it is stored, and no wind is on the wire.
+direction, a field of gusts and lulls carried downwind, fronts that cross
+the disk, and weather systems (squalls, showers, storms, fog banks and
+patches of light air) that move over it. The physics package computes it
+(`weather.go`, `gusts.go`, `systems.go`, `pressure.go`), so the server, the
+client's prediction and what is drawn on the water are the same wind. It is
+a pure function of the tick, the place and a few records of whole numbers.
 
-### Spells and the sequence
+Each world has its own **week** of weather, made from its seed with the
+world and stored with it, so a restart or a deploy never changes it. The
+simulation reads the week's systems into **keyframes** every ten seconds,
+and the server and the phone interpolate between the same keyframes; the
+week itself never leaves the server.
 
-A **spell** is a stretch of time with one base wind, its shifts and its gust
-field (`physics.Spell`, whole numbers all: speeds in steps of 0.01 m/s,
-directions in 65536ths of a turn, times in ticks). A **regime** is a kind of
-spell, in the catalog's `weather.regimes`: the ranges a spell's numbers are
-drawn from.
+### Spells and the week
 
-| Regime | Wind at mid-disk | Gust factor | Shifts | Share of the time |
-|--------|------------------|-------------|--------|-------------------|
-| `settled` | 3–9 knots | 1.2 | ±5°, 6–10 minutes | 25% |
-| `trade` | 10–16 knots | 1.3 | ±8°, 5–8 minutes | 40% |
-| `unsettled` | 12–20 knots | 1.45 | ±12°, 4–7 minutes | 25% |
-| `stormy` | 16–24 knots | 1.5 | ±12°, 4–7 minutes | 10% |
+A **spell** is a stretch of time with one base wind, its shifts, its gust
+field and its pressure's level (`physics.Spell`, whole numbers all: speeds
+in steps of 0.01 m/s, directions in 65536ths of a turn, times in ticks,
+pressures in hundredths of a hPa). A **regime** is a kind of spell, in the
+catalog's `weather.regimes`: the ranges a spell's numbers are drawn from,
+how long a spell of it lasts, and what follows it.
 
-The world's spells follow `weather.sequence`: six spells over twenty hours,
-again and again from the world's epoch (the two-hour day does not divide
-twenty hours, so each regime comes at a different hour each time).
-`internal/weather` is the timeline: `physics.DrawSpell` draws spell number
-n's speed, shifts, periods, phases, drift and seed from its regime by n and
-the sequence's seed, so every process draws the same spell. Its direction
-follows from the spell before: into or out of a `frontal` regime the wind
-veers by 40–90°, as when a front passes; between others it moves either way
-by up to 30°. A spell gives way to the next over ten minutes
-(`weather.gusts.change`), everywhere at once: the direction along the
-shorter arc, the speed and the gust factor between the two, and the two gust
-fields mixed so that their spread is kept.
+| Regime | Wind at mid-disk | Gust factor | Shifts | Spell | Pressure | Gives way to | Share of the time |
+|--------|------------------|-------------|--------|-------|----------|--------------|-------------------|
+| `settled` | 3–9 knots | 1.2 | ±5°, 6–10 minutes | 3–8 h | 1020–1030 hPa | trade | 25% |
+| `trade` | 10–16 knots | 1.3 | ±8°, 5–8 minutes | 4–10 h | 1012–1020 hPa | settled 0.7, unsettled 0.3 | 40% |
+| `unsettled` | 12–20 knots | 1.45 | ±12°, 4–7 minutes | 2–6 h | 1000–1012 hPa | trade 0.31, stormy 0.69 | 25% |
+| `stormy` | 16–24 knots | 1.5 | ±12°, 4–7 minutes | 2–4 h | 990–1005 hPa | unsettled | 10% |
+
+The transition table is fitted to the shares: its long-run shares are 23,
+42, 23 and 12 in a hundred (`tools/catalog` checks each row adds up to 1
+and the long-run shares are within three points of the catalog's).
+
+`weather.Generate` (`internal/weather/week.go`, server only) makes a
+world's week from its seed, its epoch and its end, through a PCG stream of
+its own (the terrain's streams never share it): a chain of spells from the
+table, each spell's length drawn in its regime's range, covering the world
+and a day beyond its end. It is drawn again (the stream goes on) until it
+passes `weather.week`'s checks: the first two hours settled or trade with
+no front on the disk, the last two hours one trade spell with no front on
+the disk (the closing race's), a settled or trade spell of six hours or
+more, and, for a world of three days or more, each regime's share within
+five points of the catalog's. About one chain in thirty-six passes; a week
+takes 2–6 ms. After a thousand draws the best drawn is kept and the log
+says so. Each spell's numbers are drawn from its regime by
+`physics.DrawSpell`, and its direction walks from the last's: a veer of
+40–90° as a front passes, a swing of up to 30° either way at another
+change.
 
 A frame holds the **spells in play** (`bus.Frame.Spells`, four at most):
 the one in effect, the one before it until ten seconds after their change
-has ended, and the next from ten seconds before its change begins. They are
-not in the checkpoint: a world that is loaded computes them again.
+has ended, or a front's line has left the disk, and the next from ten
+seconds before its change begins. They are not in the checkpoint: a world
+that is loaded computes them again.
+
+### Fronts
+
+Every change into or out of a frontal regime (`unsettled`, `stormy`) is a
+**front**: a straight line across the disk, lying in a trough
+(`weather.front`). Its spell carries it (`Spell.Front`, `Toward`,
+`Trough`): the line enters the disk's reach at the spell's `Begin`, moves
+toward where the new spell's wind blows (±15°) at 4–8 knots, crosses the
+centre at the change and leaves at `Begin + Change`. Ahead of the line the
+old spell blows, behind it the new, blended within 0.12 NM of it. The
+trough deepens toward the line as e^(−s / 1.1 NM), tapering to nothing 3.3
+NM ahead, and fills within 0.35 NM behind; its wind is the trough's slope
+turned 70° clockwise, 7 knots at its steepest, weakened toward the centre
+as a squall's. So the wind backs and freshens ahead of the line and veers
+sharply at it, with gusts stronger for a mile behind, as a cold front
+passes. One front is on the disk at a time: a front is made faster, or the
+spell before it longer, until it enters after the last has left. A change
+with no front is a ten-minute blend everywhere at once.
+
+### Weather systems
+
+The kinds are in the catalog's `weather.systems`. Each is a pressure shape
+that moves with it, and its wind blows toward lower pressure turned
+clockwise by its kind's angle, as the northern hemisphere's winds are:
+
+| Kind | Shape | Turned | Size (radius) | Moves | Lasts | Its wind at full strength | Pressure |
+|------|-------|--------|---------------|-------|-------|---------------------------|----------|
+| `squall` | a dome, steeper ahead | 10° | 0.3–0.6 NM | 0.6–0.9 of the wind | 20–50 min | adds 12–18 knots at its gust front | 2–4 hPa |
+| `shower` | a dome | 10° | 0.15–0.35 NM | with the wind | 10–25 min | adds 4–8 knots | 1 hPa |
+| `storm` | a low: a core and a broad shallow low | 70° | 1.5–2.5 NM | 3–6 knots round the outer waters | 1–3 h | adds 18–26 knots in its ring | 10–20 hPa |
+| `fog` | a patch, stretched along its track | — | 0.4–1.5 NM | 0.8 of the wind | 20–90 min | × 0.9 | — |
+| `light-air` | a patch | — | 0.2–0.5 NM | with the wind | 10–30 min | × 0.3–0.5 | — |
+
+Its wind is added to the spells' mean wind, the patches' factors taken
+over the sum, before the refuge, the gusts, the land's shelter, the veer
+and the fall draft; so the refuge still holds the centre to 14 knots and
+gusts of 18 whatever arrives. A front's, a squall's and a shower's wind
+weakens toward the centre to 0.35 of itself, a storm's to nothing, between
+3 NM and 0.8 NM out (`weather.reach`). A shape ends four of its widths from
+its centre, where its wind is 0.2% of its peak.
+
+The week's systems are born at the regimes' rates, a Poisson process in
+each spell, and one storm as each stormy spell begins: squalls beyond the
+windward rim, crossing the disk on a chord; storms on the windward side,
+then round the outer waters at 3–4.5 NM the way the wind carries them, one
+in five turning in; showers inside, by day half of them over an island's
+land by its area; fog in light wind at night or within half an hour of
+sunrise (the sun at the place, `sky.SunAltitude`), lifting 15–30 minutes
+after sunrise or as the wind rises past 12 knots; light air where the wind
+is under 10 knots. Each has a life (born, mature, decaying, gone), a
+planned track, a line or an arc, and apart from it a wobble a forecast does
+not know (up to 0.4 NM, and its strength ±15%, periods 20–60 minutes). At
+most sixteen are on the disk at once, each in a slot it holds from birth to
+end; one that would be a seventeenth is not born.
+
+### Pressure
+
+`physics.PressureAt(t, x, y)`, hPa: the spells' levels mixed as their winds
+are, a front's new spell's level rising behind the line by 0.15 hPa a
+minute to its own, a slope across the disk of 0.02 hPa a knot a mile with
+low pressure on the left of the base wind, a front's trough, and each
+dome's and low's shape. `physics.Tendency(now, five minutes before, fifteen
+minutes before)` names the change over a quarter of an hour (a real three
+hours at the world's pace) as the Met Office's marine forecasts do:
+steady, slowly, plain, quickly, very rapidly, rising or falling, and "now
+rising" when the last minutes turned. A storm 4.5 knots off reads falling
+at least twenty minutes before its ring arrives, and falling quickly at
+least ten (`go test ./internal/physics -run Barometer`).
+
+### Keyframes and the wire
+
+At each ten-second boundary (`weather.keyframe`) the simulation reads each
+system alive from the week (`physics.SystemAt(record, tick)`: its planned
+track and its wobble, its life and its swell, rounded to whole numbers:
+position in quarter metres, heading in 65536ths, speed in 0.01 m/s,
+strength in 4096ths, size in metres). A frame holds the keyframes at the
+last boundary and the two after (`bus.Frame.Keys`), made again only at a
+boundary or when a developer places a system. Between two keyframes the
+physics interpolates linearly, the same on the server and the phone; a
+system in one and not the other fades in or out. The sea's past samples
+are made with the keyframes of their own ticks, so the sea follows a
+squall after its four minutes' lag.
+
+`WeatherSystems` (`game.proto`) carries the spells in play (or
+`keep_spells`) and keyframes. The edge sends it after the `Welcome` with
+the last boundary's keyframe and the two after, whenever the spells change,
+and at each boundary with the keyframe twenty seconds on
+(`internal/edge/weather.go`): never more than twenty seconds of the future.
+About 8 B/s with three systems, under 40 B/s with sixteen. The client keeps
+the latest spells and four keyframes by their ticks in the physics module
+(`client/src/predict/weather.ts`, `internal/client`), and before each step
+it predicts or replays asks the module for the wind at its boat at that
+step's tick (`windAt`), as the simulation does for every boat. The snapshot
+carries no wind. Through a front and a squall the Go client sails with no
+correction (`go test ./internal/edge/edgetest -run 'SailThroughWeather' -v`).
 
 ### The wind at a point
 
 `physics.WeatherAt` computes a tick's part once (each spell's direction, the
-turn of its axis, how far its field has travelled; 22 ns), and
-`physics.WindAt(t, x, y)` the wind one boat sails in (51 ns in a spell, 80 ns
-through a change, on the Mac). From the spell:
+turn of its axis, how far its field has travelled, the systems interpolated;
+22 ns in a spell, about 220 ns with sixteen systems), and
+`physics.WindAt(t, x, y)` the wind one boat sails in (65 ns in a spell, 95
+ns through a change, 150 ns with sixteen systems over the disk and 220 ns
+with all sixteen in reach, on the Mac). From the spell:
 
 - **Speed.** The spell's wind is its wind at mid-disk, 2.1 NM out. It is
   multiplied by 0.65 at the centre rising to 1.35 at the mist band, 4.2 NM
@@ -425,11 +538,14 @@ through a change, on the Mac). From the spell:
   side of the disk to the other along an axis that turns once in four to
   eight hours. A shift's phase is the fraction of `turns × tick`, the
   product taken exactly, as a wave's is.
+- **Systems.** A front's wind and the systems' are added to the mean wind,
+  and the patches' factors taken over it (above).
 - **Gusts.** The gust field, n in [−1, 1], makes the wind `mean × (1 + (G −
   1) × rim × (h(n) − 0.0821))`: G the gust factor, h(n) = n in a gust and
   n ÷ 2 in a lull, the constant h's mean over the field so that the mean
   wind is kept, and `rim` rising from 1 at 3 NM to 1.3 at the rim. The
   strongest gust veers the wind by 8° and the deepest lull backs it by 4°.
+  Near a squall's core and behind a front's line the gust factor is greater.
 - **The refuge.** Within 1 NM of the centre the mean wind above 10 knots is
   passed through `knee + soft × tanh((v − knee) ÷ soft)`, which nears 14
   knots and never passes it, and the wind with its gusts the same way from
@@ -441,26 +557,52 @@ A **steady** spell is one wind everywhere with none of this: what a
 developer's `/debug/wind` sets, what the tests of other things sail in, and
 `sim.DefaultSpell` (10 knots from the north) for a world given no timeline.
 
-### The gust field
+### The rules, tested
 
-Gradient noise (Perlin, 2002) in three dimensions, along the wind, across
-it and in time, in three octaves whose cells and weights halve. The largest
-cells are 300 m along the wind, 200 m across and 240 s (`weather.gusts`), so
-a patch of gust is about 150 m by 100 m. Each spell has its own field, by
-its seed, in a frame turned to the spell's direction that travels downwind
-at 0.9 of its wind at mid-disk: where the field has got to is a closed form
-of the tick. The corners of the lattice are hashed with integer arithmetic,
-which wraps alike in Go, in WebAssembly and on every GPU.
+`go test ./internal/physics -run 'Systems|Front|BuysBallot|Barometer|Tendency|Inward|Refuge'`
+holds the model to what a sailor learns: a squall's wind blows out of its
+dome, a storm's anticlockwise and in; the wind backs or freshens ahead of a
+front and veers at its line; with one's back to the wind a storm's centre is
+on the left wherever its own wind is the greater part of the wind; the
+barometer warns of a storm. `go test ./internal/weather -run TestWeeks`
+makes fifty weeks (a thousand with `KEEL_WEEKS=1000`, as the nightly run
+does, its tally in `KEEL_WEEKS_SUMMARY`) and holds each to its checks, one
+front at a time veering 40–90° spell to spell, fog only at night and dawn
+in light wind, storms in the outer waters, at most sixteen systems, the
+veer across each front's line (15–150°: the spells' 40–90°, their shifts
+and differences across the disk, and the trough's own wind), Buys Ballot's
+law about every storm, and the refuge's limits, sampled every minute on a
+grid a tenth of a mile apart.
 
-`go test ./internal/physics -run GustField -v` measures it: its spread (0.31),
-the 99th percentile the sum is scaled by (`gustScale`), the mean of h
-(`gustMeanH`), how far a patch reaches (its correlation falls to a half
-110 m along the wind and 72 m across) and how long it lasts (0.90 after 30 s,
-0.70 after a minute, moving with it). After changing the cells or the
-octaves, put the two constants it prints into `gusts.go`. `-run SeenGust`
-checks that a gust seen 150 m upwind arrives: the field there, and at the
-boat when the field has travelled that far, correlate at 0.69 in the
-lightest regime and about 0.9 in the others.
+`internal/weather/testdata/weeks.json` holds seeds 1–8's weeks' digests;
+a change that moves any raises `weather.Version`, stored with every week,
+and is written again with `go test ./internal/weather -run WeekDigests
+-update`.
+
+### The week stored
+
+A world's week is in `world_weather` (`00012_weather.sql`): the version
+that made it, the epoch and end it was made for, its records (a JSON
+header with the report and each record's fields' names, given once, then
+every record's numbers as little-endian float64s, about 140 KB: JSON's
+reflection cost half a second under the race detector as a world opened),
+their digest, checked as it loads. The next world's job makes it right
+after the terrain, for when the world is planned to begin; a world that
+begins at another time (late, after keel was down, or by the owner's hand)
+has its week made again for its epoch as it opens, and a world stored
+without one (every world from before weeks) gets one as it opens. Once a
+world has begun its week is never made again: a restart, or a new build,
+sails the week it has.
+
+```sh
+go run ./cmd/keel weather -seed 7 -epoch 2026-10-18T22:00:00Z   # a week's spells, fronts, systems and checks
+go run ./cmd/keel weather -seed 7 -report -world .dev/worlds/7.world
+go run ./cmd/keel weather -seed 7 -out week.json               # as stored
+```
+
+The input log's header holds the week's version, end and digest; `keel
+replay` makes the week again from the seed, epoch and end and the world's
+islands, and checks the digest, or reads `-weather week.json`.
 
 ### The wave wind
 
@@ -473,23 +615,12 @@ every second. It is a pure function of the tick and the weather
 (`physics.WaveWindAt`), so the simulation keeps only a ring of samples for
 each area (`internal/sim/sea.go`) and a world that is loaded makes them
 again. After a change of spell the sea reaches 95% of its new height in
-about twelve minutes.
+about twelve minutes; behind a squall's gust front it builds a few minutes
+later and goes down after the squall has gone (`go test ./internal/sim
+-run SeaFollowsASquall -v`).
 
 Every area now has its own inputs, and most change every second: see
 [Waves](#waves) for what they raise.
-
-### On the wire
-
-`WeatherSystems` (`game.proto`) is the spells in play. The edge sends it
-after the `Welcome` and whenever the frame's spells in play change
-(`internal/edge/weather.go`), so a spell arrives ten seconds before its
-change begins. The client keeps the latest in the physics module
-(`client/src/predict/weather.ts`, `internal/client`), and before each step
-it predicts or replays asks the module for the wind at its boat at that
-step's tick (`windAt`), as the simulation does for every boat. The snapshot
-carries no wind. In a gusty spell and through a change the Go
-client sails five minutes with no correction (`go test
-./internal/edge/edgetest -run 'SailGusts|SailWeatherChange' -v`).
 
 ### Setting the weather
 
@@ -497,36 +628,89 @@ With `KEEL_DEV_COMMANDS=1`, on the internal listener (`bus.SetWeather`):
 
 ```sh
 curl -X POST 'http://127.0.0.1:9090/debug/weather?regime=stormy'   # one endless spell of a regime
+curl -X POST 'http://127.0.0.1:9090/debug/weather?front'           # a front now, the first frontal regime behind it
+curl -X POST 'http://127.0.0.1:9090/debug/weather?front=stormy'    # a front bringing a stormy spell
+curl -X POST 'http://127.0.0.1:9090/debug/weather?system=squall&at=boat&in=5m'          # a squall's gust front at the first player's boat in five minutes
+curl -X POST 'http://127.0.0.1:9090/debug/weather?system=storm&east=5000&north=0&in=20m'
 curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=15&from=270'  # a steady wind
-curl -X POST 'http://127.0.0.1:9090/debug/weather?auto'            # the sequence again
+curl -X POST 'http://127.0.0.1:9090/debug/weather?auto'            # the world's own week again
 ```
 
-Each takes effect at the second after next, at once and without a blend,
-and every client has heard of it by then. A held regime's spell is drawn as
-the sequence draws one, with no drift. The frame keeps the last eight
-weathers a developer set, since the wave wind looks back over twenty
-minutes of them, and so do checkpoints and the input log.
+Each weather takes effect at the second after next, at once and without a
+blend, and every client has heard of it by then. A held regime's spell is
+drawn as the week draws one, with no drift, its pressure the middle of its
+regime's; while it, a steady wind or a front of a developer's blows, the
+week's systems are stilled (`Spell.Still`). A developer's system is born at
+the first keyframe from the second after next, in one of four slots of its
+own (16–19), on a straight track with the wind in effect then, its kind's
+middling size and strength, at its strongest as its gust front (a dome's)
+or its centre reaches the point, and blows under any weather. The frame
+keeps the last eight weathers a developer set and the systems until they
+have gone, since the wave wind looks back over twenty minutes of them, and
+so do checkpoints and the input log.
 
 ### In the module
 
 `go run ./tools/physics` builds the same code into the client's module. Its
-exports: `weatherPrepare` (the catalog's `weather.disk`, `gusts` and
-`waveWind`, written by `writeWeatherParams`), `spellSet` and `spellCount`
-(the spells in play), `spellDraw` (a spell from a regime, for a client with
-no server), `windAt` (the env the next step sails in), `windPoint` and
-`windSample` (the wind in full at the boat or at many points, for the
-instruments and the ring), `gustFrameAt` (what the GPU needs of the fields)
-and `waveWind`.
+exports: `weatherPrepare` (the catalog's `weather.disk`, `gusts`,
+`waveWind`, `front`, `pressure` and `reach`, written by
+`writeWeatherParams`) and `systemKindSet` (each kind of system,
+`systemKindRecord`), `spellSet` and `spellCount` (the spells in play),
+`keyframeSet`, `systemSet` and `keyframeCount` (the keyframes),
+`spellDraw` (a spell from a regime, for a client with no server),
+`systemAt` (a keyframe from a system's record), `recordSet` and
+`recordCount` (systems computed from their records at every tick, for the
+sandbox, which makes its own sea), `windAt` (the env the next step sails
+in), `windPoint`, `windSample` and `meanSample` (the wind at the boat or at
+many points), `pressure`, `frontReach`, `gustFrameAt` (what the GPU needs
+of the fields) and `waveWind`.
 
 `go test ./internal/physics -run WindFile -update` writes
-`internal/physics/testdata/wind.json`: in seven weathers and places (a
-trade spell, a stormy one in the refuge and at the rim, a change of spell
-with and without the next in play, a steady wind alone and after a spell),
-near the present tick and late, the wind in full at 240 points, the gust
-field's frame and the wave wind. `client/src/predict/wind.test.ts` loads the same spells
-into the module, which must give the same bits; `/dev.html` runs the same
-check on a phone and times `windAt`. The golden scenarios sail in spells too
+`internal/physics/testdata/wind.json`: in nine weathers and places (a trade
+spell, a stormy one in the refuge and at the rim, a change of spell with
+and without the next in play, a steady wind alone and after a spell,
+systems of every kind between two keyframes, and a front crossing with a
+squall at its line), near the present tick and late, the wind in full and
+the pressure at 240 points, the gust field's frame and the wave wind.
+`client/src/predict/wind.test.ts` loads the same spells and keyframes into
+the module, which must give the same bits; `/dev.html` runs the same check
+on a phone and times `windAt`. The golden scenarios sail in spells too
 (`"weather"` in `scenarios.json`).
+
+### The sandbox's weather
+
+`?sandbox&weather=front` meets a front crossing the boat three minutes in;
+`?sandbox&weather=squall` (or any kind's id: `shower`, `storm`, `fog`,
+`light-air`) a system of that kind reaching the boat then, in the
+commonest regime's spell, or the lightest's for a kind of light winds. The
+sandbox computes the systems from their records at every tick
+(`recordSet`), so its own sea follows them as the server's does.
+
+### The water's signs
+
+Where the wind is suddenly stronger than the sea has caught up with, as
+under a squall's gust front, the water roughens and darkens before its
+waves build; where it is lighter, as in a patch of light air, the ripples
+die and the water goes glassy. Four times a second the page samples the
+mean wind on a grid of 24 by 24 points 12.5 m apart about the floating
+origin (`weather.water`, `client/src/ocean/water.ts`, `meanSample`), and
+each point's sign is its share of its sea area's wave wind, from −1 at half
+of it to 1 at half again; the tiles add it to the gust field's own
+darkening and roughening (`SIGN_LOOK`). A steady wind, which the sea has
+caught up with, shows none.
+
+### The world page's weather
+
+The world page shows the week, on the internal listener only:
+`/owner/api/weather.json[?at=TICK]` (and `/owner/api/next/weather.json` for
+the next world) is the week's spells, fronts and storms for the strip, and
+at the tick shown the spell, the next, the front's line and when it passes
+Port Royal, the systems alive with their true tracks for the hour after,
+and a pressure grid; `/owner/api/pressure.json?east=…&north=…[&at=…]` a
+point's pressure and tendency. On the map, the Systems layer draws each
+system in a chart's symbols by its kind's shape and the Isobars layer the
+pressure every 2 hPa with its highs and lows; the week's strip drags the
+map through the week.
 
 ### Gusts on the water
 
@@ -1990,7 +2174,7 @@ last twenty.
 
 | Job | Due | Does |
 |---|---|---|
-| `next-world` | `ahead` before the end (Saturday 6 pm in New York) | the next world's row, a seed from `crypto/rand` (or `KEEL_WORLD_SEED`), its terrain made on one goroutine (about 4.5 s and 400 MB at most on the Mac) and stored; a world no attempt of which passes the rules is discarded and another seed drawn; tried every 5 minutes until stored |
+| `next-world` | `ahead` before the end (Saturday 6 pm in New York) | the next world's row, a seed from `crypto/rand` (or `KEEL_WORLD_SEED`), its terrain made on one goroutine (about 4.5 s and 400 MB at most on the Mac) and stored, then its week of weather for when it is planned to begin (a few ms, [Wind and weather](#the-week-stored)); a world no attempt of which passes the rules is discarded and another seed drawn; tried every 5 minutes until stored |
 | `closing` | `notice` before the end (Thursday 6 pm) | the news's Notices to Mariners: the world's end, each reader seeing it in their own time |
 | `switch` | 5 minutes before the end | the next world loaded, the simulation told its last tick, then the switch |
 | `sessions` | daily 07:00 UTC | sessions not seen for 400 days, the cookie's life, deleted 1,000 at a time |
@@ -2662,7 +2846,7 @@ world; everything reaches it through the **bus** (`internal/bus`).
 | `internal/sim` | The world (4,096 slots, at most `KEEL_BOAT_LIMIT` boats, a queue beyond) and `Tick`: read the control slots, apply the commands, admit from the queue, bring the sea to the tick, step every boat in the shadow of the boats near it, sort the boats into the grid, find the pairs, contacts and bumps, publish the frame. A tick is a deterministic function of the world and its inputs: `rules_test.go` checks the package never imports the clock, I/O or unseeded randomness, never ranges over a map and never uses `sync.Pool`, and `go run ./tools/physics -check` disassembles it for fused multiply-adds as it does the physics. Boats are stepped by long-lived workers, in ranges of at least 32. Snapshots (`snapshot.go`) and digests (`digest.go`) of a frame. |
 | `internal/persist` | The world's writer: the lasting events and a checkpoint every 10 s, written behind the tick in fenced batches (see [Restarts and deploys](#restarts-and-deploys)). |
 | `internal/sim/loop` | The clock: tick k after the world's epoch (the database's world row; world 1's is 1 January 2026) is due at k/30 s, computed from the tick, never summed. A late tick is followed by up to 3 more back to back; further behind, the loop skips to the present and counts the skip. It times the tick and its phases, updates the metrics and beats the heartbeat, all between ticks. |
-| `internal/weather` | The weather's timeline: the catalog's sequence of spells, each drawn from its regime, a developer's weathers over it, and the spells in play about a tick (see [Wind](#wind)). |
+| `internal/weather` | The weather's week, made for each world from its seed and stored, and its timeline: the spells in play about a tick, the systems' keyframes, a developer's weathers and systems over it (see [Wind and weather](#wind-and-weather)). |
 | `internal/replay` | The input log, `keel replay` and `/debug/replay` (below). |
 | `internal/scripted` | Scripted sailors: they join through the bus like players and steer and trim at random, each every 0.2–3 s. |
 | `internal/obs` | Logs, metrics, the probes, pprof and the flight recorder. |
@@ -2707,7 +2891,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_WORLD_SEED` | none (drawn at random) | The seed a world's terrain is made from when it has none; the local cluster sets 1, as `tools/e2e` does |
 | `KEEL_WORLD_SCHEDULE` | `Sun 18:00 America/New_York notice=72h ahead=24h` | When worlds end, how long before a world is closing and its successor made; or a period from an anchor in UTC (see [The weekly world](#the-weekly-world)) |
 | `KEEL_WORLD_KEEP` | `672h` | How long an ended world's data is kept before its partitions are dropped |
-| `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
+| `KEEL_DEV_COMMANDS` | 0 | 1 for the developer's commands on the internal listener: `POST /debug/wind?knots=…&from=…` (a steady wind; degrees it comes from) and `POST /debug/weather?regime=…`, `?front`, `?system=…&in=…` or `?auto` (see [Setting the weather](#setting-the-weather)). `tools/dev` and `tools/e2e` set it |
 
 Every problem in the configuration is reported at once. `go run ./tools/dev`
 sets the database's URL, the internal address, `KEEL_TRACE_DIR=.dev/traces` and
@@ -3004,7 +3188,7 @@ the server), or `2`, the packed snapshot (`snapshot.txt`: a 176-byte header
 with the own boat's state as float64, its heave and pitch included, then the
 other boats' entries; see [Other boats](#other-boats)). `SeaAreas` is the
 sea about the boat ([Waves](#waves)) and `WeatherSystems` the spells of
-weather its wind is computed from ([Wind](#wind)). `go run
+weather its wind is computed from ([Wind and weather](#wind-and-weather)). `go run
 ./tools/protocol` generates the Go (`internal/protocol/pb`) and TypeScript
 (`client/src/net/gen`) with buf and its two generators, and the protocol
 version: a hash of the schema and the snapshot's layout. Run it after
@@ -5153,7 +5337,7 @@ scene walk, recovery from a lost device, and pictures.
 every tile against the server's (`wind.json`), a gust's tiles darker and
 rougher at noon and under a full moon and none in a steady wind, the gust
 ring drawn round a gust heading for the boat and travelling with it, and the
-wind readout with its Beaufort force (see [Wind](#wind)).
+wind readout with its Beaufort force (see [Wind and weather](#wind-and-weather)).
 `look.spec.ts` is the sea's look: the detail band the GPU transforms, read
 back and compared with `field.ts`'s at the same time and sea (within a
 thousandth of each field's size, on a core and a compatibility device, and

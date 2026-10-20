@@ -650,3 +650,28 @@ func averages(x float64) (s, g float64) {
 	sin, cos := SinCos(x)
 	return sin / x, 3 * (sin - float64(x*cos)) / float64(x*x2)
 }
+
+// expShape is e^x for x ≤ 0 to within a few parts in a billion: for the
+// shapes of the weather's systems, which need less than Exp's full
+// precision and are computed many times a point. Every machine computes
+// the same bits from it, as from Exp.
+func expShape(x float64) float64 {
+	if !(x > expShapeLeast) {
+		return 0
+	}
+	// x = k·ln2 + r with |r| ≤ ln2/2, and e^r by its series to r⁷.
+	kf := math.Floor(float64(x*invLn2) + 0.5)
+	r := (x - float64(kf*ln2Hi)) - float64(kf*ln2Lo)
+	p := float64(r*e7) + e6
+	p = float64(r*p) + e5
+	p = float64(r*p) + e4
+	p = float64(r*p) + e3
+	p = float64(r*p) + e2
+	p = float64(r*p) + 1
+	p = float64(r*p) + 1
+	return p * pow2(toInt32(kf))
+}
+
+// expShapeLeast is where expShape gives 0: far below anything a shape
+// adds, and above where 2^k would be subnormal.
+const expShapeLeast = -700

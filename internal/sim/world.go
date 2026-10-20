@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -152,6 +153,7 @@ type World struct {
 	kinds     []physics.Prepared
 	sea       sea
 	timeline  *weather.Timeline
+	keyMemo   keyMemo
 	weather   physics.Weather
 	wind      physics.WeatherTick
 	grace     int64
@@ -276,7 +278,7 @@ func New(cfg Config) (*World, error) {
 	f.Tick = cfg.Tick
 	f.Weathers = f.Weathers[:0]
 	w.spells(f)
-	w.sea.under(&f.Sea, f.Tick, f.Weathers)
+	w.sea.under(&f.Sea, f.Tick, devOf(f))
 	f.NextBoat = 1
 	w.workers.start(w, max(cfg.Workers, 1))
 	return w, nil
@@ -336,7 +338,7 @@ func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 		adjust(f)
 	}
 	w.spells(f)
-	w.sea.under(&f.Sea, f.Tick, f.Weathers)
+	w.sea.under(&f.Sea, f.Tick, devOf(f))
 	// Each slot holds the controls in force until its sailor writes again.
 	for _, s := range f.Live {
 		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s])
@@ -355,9 +357,36 @@ func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 // Timeline is the world's own weather.
 func (w *World) Timeline() *weather.Timeline { return w.timeline }
 
-// spells sets f's spells in play from its tick and weathers.
+// spells sets f's spells in play from its tick and weathers, and its
+// systems' keyframes from its tick and systems. The keyframes change only
+// at a keyframe's tick, or when a developer places a system: they are made
+// again only then.
 func (w *World) spells(f *bus.Frame) {
 	f.NSpells = w.timeline.Spells(f.Tick, f.Weathers, &f.Spells)
+	if len(f.Systems) > 0 && f.Tick%physics.StepsPerSecond == 0 {
+		f.Systems = w.timeline.Trim(f.Systems, f.Tick)
+	}
+	every := w.timeline.Every()
+	at := f.Tick - f.Tick%every
+	if f.Tick%every < 0 {
+		at -= every
+	}
+	m := &w.keyMemo
+	if m.made && m.at == at && slices.Equal(m.ss, f.Systems) {
+		f.Keys = m.keys
+		return
+	}
+	w.timeline.Keyframes(f.Tick, f.Systems, &f.Keys)
+	m.made, m.at, m.keys = true, at, f.Keys
+	m.ss = append(m.ss[:0], f.Systems...)
+}
+
+// keyMemo is the keyframes last made, and what they were made from.
+type keyMemo struct {
+	made bool
+	at   int64
+	ss   []bus.System
+	keys [bus.KeyFrames]physics.Keyframe
 }
 
 // Workers is the number of goroutines that stepped boats in the last tick.

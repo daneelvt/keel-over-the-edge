@@ -33,9 +33,10 @@ import {
   vec2,
 } from 'three/tsl';
 import type { Node, UniformNode } from 'three/webgpu';
-import type { WeatherGusts } from '../catalog/types.gen';
+import type { WeatherGusts, WeatherWater } from '../catalog/types.gen';
 import { RECORDS, WEATHER } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
+import { WaterSigns } from './water';
 
 const OCTAVES = WEATHER.octaves;
 /** The spells whose fields are mixed at once: one, or two through a change. */
@@ -78,6 +79,13 @@ export interface GustUniforms {
   readonly spells: UniformNode<'float', number>;
   /** How strongly the gusts show: 0 with none, 1 for a spell whose gusts show in full. */
   readonly strength: UniformNode<'float', number>;
+  /**
+   * A front crossing: the sine and cosine of the way it moves, its line's
+   * distance from the floating origin along it, m, and the spells' blend
+   * within it, m; all 0 with none. Then each spell's share is by which
+   * side of the line a tile lies, its frame's third value its side.
+   */
+  readonly front: UniformNode<'vec4', Vector4>;
 }
 
 /** The gust field's frame for a frame of the picture, and the uniforms that carry it. */
@@ -85,6 +93,8 @@ export class GustField {
   readonly uniforms: GustUniforms;
   /** 1 to draw the gusts; 0 to draw the water without them (the developer panel, the tests). */
   shown = 1;
+  /** The water's signs of the wind where it is stronger or lighter than the sea's (water.ts). */
+  readonly water: WaterSigns;
 
   readonly #low: Vector4[] = [];
   readonly #high: Vector4[] = [];
@@ -94,7 +104,8 @@ export class GustField {
   readonly #invAcross: number[] = [];
   readonly #invLife: number[] = [];
 
-  constructor(gusts: WeatherGusts) {
+  constructor(gusts: WeatherGusts, water: WeatherWater) {
+    this.water = new WaterSigns(water);
     let along = gusts.gustAlong;
     let across = gusts.gustAcross;
     let life = gusts.gustLife;
@@ -122,6 +133,7 @@ export class GustField {
       frame: uniformArray(this.#frame, 'vec4'),
       spells: uniform(0),
       strength: uniform(0),
+      front: uniform(new Vector4()),
     };
   }
 
@@ -146,6 +158,16 @@ export class GustField {
     const f = physics.gustFrame();
     const spells = Math.min(f[F.spells] ?? 0, SPELLS);
     u.spells.value = spells;
+    if ((f[F.front] ?? 0) !== 0) {
+      const sin = f[F.frontSin] ?? 0;
+      const cos = f[F.frontCos] ?? 0;
+      // The line from the floating origin, in float64 here, so the shader
+      // works with a tile's few metres.
+      const line = (f[F.frontLine] ?? 0) - (originEast * sin + originNorth * cos);
+      u.front.value.set(sin, cos, line, f[F.frontBlend] ?? 0);
+    } else {
+      u.front.value.set(0, 0, 0, 0);
+    }
     const excess = f[F.excess] ?? 0;
     u.strength.value =
       spells === 0 ? 0 : this.shown * Math.min(excess / GUST_LOOK.fullAt, GUST_LOOK.most);
@@ -329,19 +351,35 @@ export function gustAt(field: GustField): (p: Node<'vec2'>) => Node<'float'> {
       );
       sum.addAssign(n.mul(WEIGHTS[k] as number));
     }
-    return sum
-      .mul(1 / GUST_SCALE)
-      .clamp(-1, 1)
-      .mul(frame.z) as unknown as Node<'float'>;
+    return sum.mul(1 / GUST_SCALE).clamp(-1, 1) as unknown as Node<'float'>;
   };
   return Fn(([p]: [Node<'vec2'>]) => {
     const gust = float(0).toVar();
+    // Each spell's share: its frame's, or across a front by which side of
+    // the line the point lies, the old spell ahead and the new behind,
+    // blended near it; the fields mixed so that their spread is kept, as
+    // the module mixes them.
+    const f = u.front;
+    const across = f.w.greaterThan(0);
+    const ahead = p.x.mul(f.x).sub(p.y.mul(f.y)).sub(f.z);
+    const t = f.w.sub(ahead).div(f.w.mul(2).max(1e-3)).clamp(0, 1);
+    const behind = t.mul(t).mul(float(3).sub(t.mul(2)));
+    const share = (s: number): Node<'float'> => {
+      const z = (u.frame.element(s) as unknown as Node<'vec4'>).z;
+      return across.select(mix(float(1).sub(behind), behind, z), z) as unknown as Node<'float'>;
+    };
+    const spread = float(0).toVar();
     If(u.spells.greaterThan(0.5), () => {
-      gust.addAssign(spell(p, 0));
+      const w = share(0);
+      gust.addAssign(spell(p, 0).mul(w));
+      spread.addAssign(w.mul(w));
     });
     If(u.spells.greaterThan(1.5), () => {
-      gust.addAssign(spell(p, 1));
+      const w = share(1);
+      gust.addAssign(spell(p, 1).mul(w));
+      spread.addAssign(w.mul(w));
     });
+    gust.assign(across.select(gust.div(spread.sqrt().max(1e-6)), gust));
     return gust.clamp(-1, 1);
   }) as unknown as (p: Node<'vec2'>) => Node<'float'>;
 }

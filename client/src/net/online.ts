@@ -226,7 +226,7 @@ export class Online {
         break;
       case 'weather':
         // Ahead of the tick any of it changes the wind from, as the sea is.
-        this.#predictor.weather.receive(m.spells);
+        this.#predictor.weather.receive(m.spells, m.keyframes);
         break;
       case 'bump':
         this.onBump?.(m.bump);

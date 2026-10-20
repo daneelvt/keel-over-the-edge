@@ -79,7 +79,7 @@ export class Ocean {
   slot = -1;
   readonly field: Field;
   /** The gust field, as the tiles draw it. */
-  readonly gusts = new GustField(catalog.weather.gusts);
+  readonly gusts = new GustField(catalog.weather.gusts, catalog.weather.water);
   readonly pass: TilePass;
   readonly far: FarSea;
   /** The tiles reading the pass, and the fallback computing planes per vertex. */
@@ -269,6 +269,15 @@ export class Ocean {
     this.gusts.update(
       src?.weather === true ? src.physics : null,
       f.tick,
+      origin.world.x,
+      origin.world.y,
+    );
+    this.gusts.water.update(
+      this.gusts.uniforms.spells.value > 0,
+      src?.weather === true ? src.physics : null,
+      src?.seas ?? null,
+      f.tick,
+      f.tick / STEPS_PER_SECOND,
       origin.world.x,
       origin.world.y,
     );

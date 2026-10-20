@@ -71,7 +71,25 @@ func (c *Catalog) PrepareWeather() *physics.WeatherPrepared {
 	p := WeatherParams(c)
 	w := new(physics.WeatherPrepared)
 	physics.PrepareWeather(&p, w)
+	for i, k := range SystemKinds(c) {
+		w.SetKind(int32(i), &k)
+	}
 	return w
+}
+
+// SystemKinds returns the catalog's kinds of weather system as the physics
+// package's SystemKind, in the catalog's order.
+func SystemKinds(c *Catalog) []physics.SystemKind {
+	shapes := map[Shape]float64{ShapeNone: physics.ShapeNone, ShapeDome: physics.ShapeDome, ShapeLow: physics.ShapeLow}
+	inward := map[Inward]float64{InwardNone: physics.InwardNone, InwardWeak: physics.InwardWeak, InwardGone: physics.InwardGone}
+	out := make([]physics.SystemKind, len(c.Weather.Systems))
+	for i, k := range c.Weather.Systems {
+		out[i] = physics.SystemKind{
+			Shape: shapes[k.Shape], Turning: k.Turning, Width: k.Width, Ahead: k.Ahead,
+			Broad: k.Broad[0], BroadWidth: k.Broad[1], Stretch: k.Stretch, Inward: inward[k.Inward], Gusts: k.Gusts,
+		}
+	}
+	return out
 }
 
 // PrepareEncounters readies the catalog's encounters for the physics: how

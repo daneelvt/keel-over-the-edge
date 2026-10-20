@@ -198,6 +198,20 @@ export function writeWeatherParams(params: Float64Array, w: Weather): void {
   params.set(w.current.drainAt, f.drainAt);
   params.set(w.current.drain, f.drain);
   params[f.shallow] = w.current.shallow;
+  params[f.troughAhead] = w.front.troughAhead;
+  params[f.troughBehind] = w.front.troughBehind;
+  params[f.frontWind] = w.front.frontWind;
+  params[f.frontTurning] = w.front.frontTurning;
+  params[f.blend] = w.front.blend;
+  params[f.frontGusts] = w.front.frontGusts;
+  params[f.gustsBehind] = w.front.gustsBehind;
+  params[f.slope] = w.pressure.slope;
+  params[f.rise] = w.pressure.rise;
+  params[f.riseMost] = w.pressure.riseMost;
+  params[f.inwardFrom] = w.reach.inwardFrom;
+  params[f.inwardTo] = w.reach.inwardTo;
+  params[f.inwardLeast] = w.reach.inwardLeast;
+  params[f.cut] = w.reach.cut;
 }
 
 /** Writes a regime's wind into the physics module's Regime record. */

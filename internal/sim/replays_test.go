@@ -572,13 +572,19 @@ func TestSandboxRecordings(t *testing.T) {
 }
 
 // randomWeather is a developer's weather drawn at random: a steady wind,
-// one of the catalog's regimes held, or the world's own.
+// one of the catalog's regimes held, a front, a system placed, or the
+// world's own.
 func randomWeather(rng *rand.Rand) bus.Weather {
-	switch rng.IntN(3) {
+	switch rng.IntN(5) {
 	case 0:
 		return weather.Steady(3+6*rng.Float64(), 2*math.Pi*rng.Float64())
 	case 1:
 		return bus.Weather{Mode: bus.WeatherHeld, Regime: uint16(rng.IntN(4))}
+	case 2:
+		return bus.Weather{Mode: bus.WeatherFront, Regime: uint16(2 + rng.IntN(2))}
+	case 3:
+		return bus.Weather{Mode: bus.WeatherSystem, Kind: uint16(rng.IntN(5)), East: int32(rng.IntN(8000) - 4000), North: int32(rng.IntN(8000) - 4000),
+			In: uint32(rng.IntN(3000))}
 	}
 	return bus.Weather{Mode: bus.WeatherAuto}
 }

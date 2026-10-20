@@ -321,16 +321,63 @@ enum BumpPart {
   BUMP_PART_NONE = 3;
 }
 
-// WeatherSystems is the weather in play about the present: the spells the
-// client needs to compute the wind at its boat, at every tick it steps
-// ahead of the server or replays behind it, exactly as the server does. It
-// comes after the Welcome, and whenever the spells in play change: a spell
-// is sent ten seconds before its change from the one before begins, never
-// earlier, and kept until ten seconds after its change to the next has
-// ended. The client holds the latest it was sent.
+// WeatherSystems is the weather in play about the present: the spells and
+// the weather systems' keyframes the client needs to compute the wind at
+// its boat, at every tick it steps ahead of the server or replays behind
+// it, exactly as the server does. It comes after the Welcome, with the
+// keyframes at the last keyframe's tick and the two after; whenever the
+// spells in play change: a spell is sent ten seconds before its change from
+// the one before begins, never earlier, and kept until ten seconds after
+// its change to the next has ended, or a front's line has left the disk;
+// and at each keyframe's tick, with the keyframe twenty seconds on, never
+// further, and any the client holds that has changed. The client holds the
+// latest spells it was sent, and the latest four keyframes by their ticks.
 message WeatherSystems {
   // The spells in play, by the tick each begins at, ascending: at most 4.
   repeated Spell spells = 1;
+  // Keyframes, by their ticks, ascending: at most 3. Each replaces any the
+  // client holds of its tick.
+  repeated Keyframe keyframes = 2;
+  // The spells the client holds are still those in play: spells is empty.
+  bool keep_spells = 3;
+}
+
+// Keyframe is the weather systems at a tick: each one's place, motion,
+// strength and size, in whole numbers. Between two keyframes the client
+// interpolates, as the server does.
+message Keyframe {
+  // The tick it is of.
+  int64 tick = 1;
+  // The systems, by their slots, ascending: at most 20.
+  repeated SystemKey systems = 2;
+}
+
+// SystemKey is a weather system at a keyframe.
+message SystemKey {
+  // Its slot, which it holds from its birth to its end: below 16 the
+  // world's own, from 16 a developer's.
+  uint32 slot = 1;
+  // The catalog's index of its kind, and a seed for drawing it.
+  uint32 kind = 2;
+  uint32 seed = 3;
+  // Growing, mature or decaying: 0, 1 or 2.
+  uint32 stage = 4;
+  // Its centre, in quarter metres east and north of the world's centre.
+  sint32 east = 5;
+  sint32 north = 6;
+  // The direction it moves toward, in 65536ths of a turn clockwise from
+  // north, and how fast, in steps of 0.01 m/s.
+  uint32 heading = 7;
+  uint32 speed = 8;
+  // Its strength, in 4096ths; its radius, m.
+  uint32 strength = 9;
+  uint32 size = 10;
+  // The wind it adds at its peak at full strength, in steps of 0.01 m/s;
+  // for a patch of its kind, the wind's share at its core, in thousandths.
+  uint32 peak = 11;
+  // Its pressure at its centre at full strength, in hundredths of a hPa: a
+  // dome's above, a low's below.
+  sint32 depth = 12;
 }
 
 // Spell is a spell of weather: a stretch of time with one base wind, its
@@ -370,6 +417,18 @@ message Spell {
   uint32 axis_period = 16;
   // The gust field's seed.
   uint32 seed = 17;
+  // Its pressure's level, in hundredths of a hPa.
+  uint32 pressure = 18;
+  // The spell arrives by a front: a line that enters the disk's reach at
+  // begin and leaves it change ticks later, moving toward toward, in
+  // 65536ths of a turn clockwise from north, its trough trough deep, in
+  // hundredths of a hPa.
+  bool front = 19;
+  uint32 toward = 20;
+  uint32 trough = 21;
+  // The world's own weather systems do not blow while it is the spell in
+  // effect: a developer's weather.
+  bool still = 22;
 }
 
 // SeaAreas is what raises the waves about the boat: a square of sea areas,

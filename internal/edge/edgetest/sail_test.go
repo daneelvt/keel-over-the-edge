@@ -10,6 +10,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"slices"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -89,12 +90,22 @@ func sailIn(t *testing.T, wind *bus.Weather, lag client.Lag, d time.Duration, tr
 	return sailWith(t, nil, wind, lag, d, trace, nil)
 }
 
-// inTrade is the catalog's weather two hours into its sequence's first
-// spell, a trade spell: gusts, shifts, and a sea that changes every second.
+// inTrade is the catalog's sample week two hours into its first trade
+// spell with no front: gusts, shifts, and a sea that changes every second.
 // It reads the time, so it is called inside a test's bubble.
 func inTrade(t *testing.T) *weather.Timeline {
 	t.Helper()
-	return sequenceFrom(t, loop.TickAt(time.Now(), Epoch)-2*3600*physics.StepsPerSecond)
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	trade := float64(weather.RegimeIndex(cat, "trade"))
+	week := sequenceFrom(t, 0).Week()
+	i := slices.IndexFunc(week.Spells, func(s physics.Spell) bool { return s.Regime == trade && s.Front == 0 && s.Begin > 0 })
+	if i < 0 {
+		t.Fatal("the sample week has no trade spell")
+	}
+	return sequenceFrom(t, loop.TickAt(time.Now(), Epoch)-int64(week.Spells[i].Begin)-2*3600*physics.StepsPerSecond)
 }
 
 // piloted sails on the autopilot as a player does: by hand for a second,
@@ -699,10 +710,11 @@ func TestSailGusts(t *testing.T) {
 	for name, lag := range map[string]client.Lag{"no lag": {}, "100 ms each way": {Delay: 100 * time.Millisecond}} {
 		synctest.Test(t, func(t *testing.T) {
 			now := loop.TickAt(time.Now(), Epoch)
-			// The sequence's second spell begins 40 s into the sail: its
-			// first, a trade spell, has blown for four hours less that.
+			// The sample week's second spell begins 40 s into the sail: its
+			// first has blown until then.
 			change := now + 40*physics.StepsPerSecond
-			srv := NewServer(t, Config{Weather: sequenceFrom(t, change-4*3600*physics.StepsPerSecond)})
+			second := int64(sequenceFrom(t, 0).Week().Spells[1].Begin)
+			srv := NewServer(t, Config{Weather: sequenceFrom(t, change-second)})
 			token, _ := srv.Guest("Ann")
 			o := DialOptions{Cookie: token}
 			if lag != (client.Lag{}) {
@@ -817,5 +829,78 @@ func TestSailInShadow(t *testing.T) {
 		if shadowed == 0 {
 			t.Errorf("%s: no step was predicted in a wake", name)
 		}
+	}
+}
+
+// TestSailThroughWeather: a sailor crossing a front's line and met by a
+// squall predicts the wind at its boat as the server computes it, from the
+// spells and keyframes it is sent: no correction, with no lag and with
+// 100 ms each way. It holds the wind from its first ticks, and never a
+// keyframe more than twenty seconds ahead.
+func TestSailThroughWeather(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := time.Minute
+	for name, lag := range map[string]client.Lag{"no lag": {}, "100 ms each way": {Delay: 100 * time.Millisecond}} {
+		synctest.Test(t, func(t *testing.T) {
+			now := loop.TickAt(time.Now(), Epoch)
+			// A front of the sample week, its line crossing the centre 20 s
+			// into the sail.
+			week := sequenceFrom(t, 0).Week()
+			i := slices.IndexFunc(week.Spells, func(s physics.Spell) bool { return s.Front != 0 })
+			f := week.Spells[i]
+			cross := int64(f.Begin + f.Change/2)
+			srv := NewServer(t, Config{Weather: sequenceFrom(t, now+20*physics.StepsPerSecond-cross)})
+			token, _ := srv.Guest("Ann")
+			o := DialOptions{Cookie: token}
+			if lag != (client.Lag{}) {
+				o.Wrap = lag.Wrap
+			}
+			s := srv.NewSailor(o, recorded(t))
+			if err := s.Connect(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Sail(t.Context(), time.Second); err != nil {
+				t.Fatal(err)
+			}
+			if s.Predictor.Weather.Count == 0 || s.Predictor.Weather.NKeys < 2 {
+				t.Fatalf("%s: a second in, %d spells and %d keyframes held", name, s.Predictor.Weather.Count, s.Predictor.Weather.NKeys)
+			}
+			// A squall to reach the boat in 25 s.
+			st := s.Predictor.State
+			squall := bus.Weather{Mode: bus.WeatherSystem, Kind: uint16(weather.KindIndex(cat, "squall")),
+				East: int32(math.Round(st.X * 4)), North: int32(math.Round(st.Y * 4)), In: 25 * physics.StepsPerSecond}
+			if err := srv.World.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.SetWeather, Weather: squall}); err != nil {
+				t.Fatal(err)
+			}
+			lo, hi := math.Inf(1), math.Inf(-1)
+			ahead := int64(0)
+			for sailed := time.Second; sailed < d; sailed += time.Second {
+				if err := s.Sail(t.Context(), time.Second); err != nil {
+					t.Fatal(err)
+				}
+				w := s.Predictor.Wind()
+				lo, hi = min(lo, w.Speed), max(hi, w.Speed)
+				wx := &s.Predictor.Weather
+				for k := range wx.NKeys {
+					ahead = max(ahead, int64(wx.Keys[k].Tick)-s.Predictor.Tick)
+				}
+			}
+			s.Drop()
+			report(t, "weather, "+name, s.Stats, d)
+			t.Logf("%s: the wind at the boat ran from %.1f to %.1f knots; keyframes held up to %.1f s ahead; %d WeatherSystems, %.0f B/s",
+				name, lo*3600/1852, hi*3600/1852, float64(ahead)/physics.StepsPerSecond, s.Stats.Weathers, float64(s.Stats.WeatherBytes)/d.Seconds())
+			if s.Stats.Corrections != 0 || s.Stats.Snapshots < int(d.Seconds())*15-30 {
+				t.Fatalf("%s: %d corrections in %d snapshots", name, s.Stats.Corrections, s.Stats.Snapshots)
+			}
+			if hi < 1.3*lo {
+				t.Errorf("%s: the wind at the boat ran from %.2f to %.2f m/s: no front nor squall", name, lo, hi)
+			}
+			if ahead > 20*physics.StepsPerSecond+physics.StepsPerSecond {
+				t.Errorf("%s: a keyframe held %.1f s ahead", name, float64(ahead)/physics.StepsPerSecond)
+			}
+		})
 	}
 }

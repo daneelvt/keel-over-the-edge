@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,6 +138,8 @@ type database interface {
 	WorldSeed(ctx context.Context, world [16]byte) (seed uint64, generator int, ok bool, err error)
 	LoadBundle(ctx context.Context, world [16]byte) (*store.Bundle, error)
 	StoreBundle(ctx context.Context, world [16]byte, epoch int64, b *store.Bundle) error
+	LoadWeather(ctx context.Context, world [16]byte) (*store.Weather, error)
+	StoreWeather(ctx context.Context, world [16]byte, epoch int64, w *store.Weather) error
 	SetChunkKey(ctx context.Context, world [16]byte, epoch int64, key []byte) ([]byte, error)
 	SetWorldEnd(ctx context.Context, lease int64, world [16]byte, end time.Time) error
 	NextWorld(ctx context.Context) (store.NextWorld, error)
@@ -384,7 +387,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		return stopEarly(side, flight, err)
 	}
 	waves, kinds := cat.Prepare()
-	timeline, err := weather.FromCatalog(cat)
+	wcfg, err := weather.ConfigOf(cat)
 	if err != nil {
 		return stopEarly(side, flight, err)
 	}
@@ -397,7 +400,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	p := &process{
 		cfg: cfg, opt: opt, build: build, log: log, health: health, metrics: metrics,
-		db: db, writer: writer, lease: leaseEpoch, cat: cat, waves: waves, kinds: kinds, timeline: timeline,
+		db: db, writer: writer, lease: leaseEpoch, cat: cat, waves: waves, kinds: kinds, wcfg: wcfg,
 		sessions: auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log}),
 		looks:    looks, page: page, ownPage: worldPage, flight: flight,
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
@@ -550,8 +553,9 @@ type ownerConfig struct {
 	bundle   *worldgen.Bundle
 	made     time.Time
 	sailed   store.World
-	timeline *weather.Timeline
-	terrain  *sim.Terrain // nil with land off
+	wcfg     *weather.Config
+	timeline *weather.Timeline // nil for a world whose week is not yet made
+	terrain  *sim.Terrain      // nil with land off
 	db       database
 	sessions *auth.Cache
 	game     *edge.Edge
@@ -577,7 +581,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		regimes[i] = string(r.ID)
 	}
 	cfg := owner.Config{
-		Bundle: c.bundle, Weather: c.timeline.Prepared(),
+		Bundle: c.bundle, Weather: c.wcfg.Prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat),
 		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(),
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
@@ -694,7 +698,7 @@ func restore(ctx context.Context, db database, world *sim.World, sailed store.Wo
 // devRoutes are the developer's commands: the weather, encounters, and
 // moving a boat.
 func devRoutes(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, charts *worldChart, log *slog.Logger) http.Handler {
-	wx := weatherRoute(b.Commands.Developer(), cat)
+	wx := weatherRoute(b, cat)
 	enc := encounterRoute(ctx, b, cat, log)
 	place := placeRoute(b, log)
 	chartIt := chartRoute(b, charts, log)
@@ -818,16 +822,62 @@ func encounterRoute(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *
 
 // weatherRoute is the developer's weather, on the internal listener only,
 // with KEEL_DEV_COMMANDS=1. Each takes effect from the second after next,
-// so every client hears of it before it predicts a tick it applies to.
+// so every client hears of it before it predicts a tick it applies to; a
+// system is born at the first keyframe from then.
 //
 //	POST /debug/wind?knots=…&from=…   a steady wind of knots 10 m up, from the given degrees
 //	POST /debug/weather?regime=…      one endless spell of the catalog's regime of that id
+//	POST /debug/weather?front[=…]     a front now, an endless spell of that regime, or the first frontal one, behind it
+//	POST /debug/weather?system=…&in=5m[&east=…&north=…|&at=boat]
+//	                                  a system of the catalog's kind of that id, to reach the point, metres east and north
+//	                                  of the centre, or the first player's boat, in the time given, at its strongest
 //	POST /debug/weather?auto          the world's own weather again
-func weatherRoute(dev bus.Sender, cat *catalog.Catalog) http.Handler {
+func weatherRoute(b *bus.Bus, cat *catalog.Catalog) http.Handler {
+	dev := b.Commands.Developer()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		var wx bus.Weather
 		switch {
+		case q.Has("front"):
+			i := weather.RegimeIndex(cat, q.Get("front"))
+			if q.Get("front") == "" {
+				i = slices.IndexFunc(cat.Weather.Regimes, func(r catalog.Regime) bool { return r.Frontal })
+			}
+			if i < 0 {
+				http.Error(w, "front, the id of one of the catalog's regimes, or none for the first frontal one", http.StatusBadRequest)
+				return
+			}
+			wx = bus.Weather{Mode: bus.WeatherFront, Regime: uint16(i)}
+		case q.Has("system"):
+			k := weather.KindIndex(cat, q.Get("system"))
+			in, err := time.ParseDuration(q.Get("in"))
+			if k < 0 || err != nil || in < 0 || in > 6*time.Hour {
+				http.Error(w, "system, the id of one of the catalog's kinds of system, and in, a duration up to 6h, are required", http.StatusBadRequest)
+				return
+			}
+			east, err1 := strconv.ParseFloat(q.Get("east"), 64)
+			north, err2 := strconv.ParseFloat(q.Get("north"), 64)
+			if q.Get("at") == "boat" {
+				f := b.Frames.Acquire()
+				found := false
+				for _, s := range f.Live {
+					if f.Conn[s] != 0 && f.Grace[s] == 0 {
+						east, north, found = f.State[s].X, f.State[s].Y, true
+						break
+					}
+				}
+				f.Release()
+				if !found {
+					http.Error(w, "no player's boat at sea", http.StatusConflict)
+					return
+				}
+			} else if err1 != nil || err2 != nil || math.Abs(east) > 20000 || math.Abs(north) > 20000 {
+				http.Error(w, "east and north, metres within 20 km of the centre, or at=boat, are required", http.StatusBadRequest)
+				return
+			}
+			wx = bus.Weather{Mode: bus.WeatherSystem, Kind: uint16(k), East: int32(math.Round(east * 4)), North: int32(math.Round(north * 4)),
+				In: uint32(in.Seconds() * physics.StepsPerSecond)}
+
 		case r.URL.Path == "/debug/wind":
 			knots, err1 := strconv.ParseFloat(q.Get("knots"), 64)
 			from, err2 := strconv.ParseFloat(q.Get("from"), 64)

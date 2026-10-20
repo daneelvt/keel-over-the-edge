@@ -63,6 +63,20 @@ interface Exports {
   spellCount(n: number): void;
   windAt(tick: number): void;
   windDrawAt(tick: number): void;
+  system(): number;
+  systemKind(): number;
+  systemRecord(): number;
+  systemKindSet(i: number): void;
+  keyframeSet(k: number, tick: number): void;
+  systemSet(k: number, slot: number): void;
+  keyframeCount(n: number): void;
+  systemAt(tick: number): void;
+  recordSet(slot: number): void;
+  recordCount(n: number): void;
+  pressure(x: number, y: number): number;
+  frontReach(): number;
+  meanValues(): number;
+  meanSample(n: number): void;
   windPoint(x: number, y: number): void;
   windValues(): number;
   windSample(n: number): void;
@@ -172,6 +186,20 @@ const functionExports = [
   'spellCount',
   'windAt',
   'windDrawAt',
+  'system',
+  'systemKind',
+  'systemRecord',
+  'systemKindSet',
+  'keyframeSet',
+  'systemSet',
+  'keyframeCount',
+  'systemAt',
+  'recordSet',
+  'recordCount',
+  'pressure',
+  'frontReach',
+  'meanValues',
+  'meanSample',
   'windPoint',
   'windValues',
   'windSample',
@@ -291,6 +319,15 @@ async function compile(source: PhysicsSource): Promise<WebAssembly.Module> {
 }
 
 /** A running physics module and views of its records. */
+/**
+ * A keyframe of the weather systems: its tick, and each slot's system as a
+ * system record's values, or undefined for an empty slot.
+ */
+export interface Keyframe {
+  tick: number;
+  systems: (ArrayLike<number> | undefined)[];
+}
+
 export class Physics {
   readonly #x: Exports;
   readonly #addresses: Record<RecordName, number>;
@@ -547,6 +584,96 @@ export class Physics {
       this.#x.spellSet(i);
     }
     this.#x.spellCount(n);
+  }
+
+  /**
+   * Sets the kinds of weather system, each a systemKind record's values, in
+   * the catalog's order. Call it after prepareWeather.
+   */
+  setSystemKinds(kinds: readonly ArrayLike<number>[]): void {
+    for (let i = 0; i < Math.min(kinds.length, WEATHER.kinds); i++) {
+      this.records.systemKind.set(kinds[i] as ArrayLike<number>);
+      this.#x.systemKindSet(i);
+    }
+  }
+
+  /**
+   * Makes keyframes the weather systems' keyframes the wind is computed
+   * with, each a tick and its systems by their slots, a system record's
+   * values or undefined for an empty slot: at most WEATHER.keySets.
+   */
+  setKeyframes(keyframes: readonly Keyframe[]): void {
+    const n = Math.min(keyframes.length, WEATHER.keySets);
+    for (let k = 0; k < n; k++) {
+      const key = keyframes[k] as Keyframe;
+      this.#x.keyframeSet(k, key.tick);
+      key.systems.forEach((s, slot) => {
+        if (s !== undefined && slot < WEATHER.systems) {
+          this.records.system.set(s);
+          this.#x.systemSet(k, slot);
+        }
+      });
+    }
+    this.#x.keyframeCount(n);
+  }
+
+  /**
+   * The keyframe of the system in a systemRecord record's values at a tick,
+   * as the server makes the keyframes of its week's: a system record. A
+   * view: read it before the next call.
+   */
+  systemAt(record: ArrayLike<number>, tick: number): Float64Array {
+    this.records.systemRecord.set(record);
+    this.#x.systemAt(tick);
+    return this.records.system;
+  }
+
+  /**
+   * Makes records, each a systemRecord record's values, the systems the
+   * wind is computed with at every tick, in place of keyframes: for a client
+   * with no server, which makes its own weather and its own sea. None goes
+   * back to keyframes.
+   */
+  setRecords(records: readonly ArrayLike<number>[]): void {
+    const n = Math.min(records.length, WEATHER.systems);
+    for (let i = 0; i < n; i++) {
+      this.records.systemRecord.set(records[i] as ArrayLike<number>);
+      this.#x.recordSet(i);
+    }
+    this.#x.recordCount(n);
+  }
+
+  /** How far from the centre a front's line enters the disk's reach and leaves it, m. */
+  frontReach(): number {
+    return this.#x.frontReach();
+  }
+
+  /** The pressure at (east, north), hPa, at the time windDrawAt set. */
+  pressure(east: number, north: number): number {
+    return this.#x.pressure(east, north);
+  }
+
+  /**
+   * The mean wind, without its gusts or any shelter, at points (east, north
+   * of each, in turn) at the time windDrawAt set: its speed and the
+   * direction it comes from, written to out, two for each point.
+   */
+  meanSample(
+    points: ArrayLike<number>,
+    out: Float64Array,
+    count = points.length >> 1,
+  ): Float64Array {
+    const x = this.#x;
+    for (let start = 0; start < count; start += SEA.sampleCapacity) {
+      const m = Math.min(SEA.sampleCapacity, count - start);
+      const into = new Float64Array(x.memory.buffer, x.samplePoints() >>> 0, 2 * m);
+      for (let i = 0; i < 2 * m; i++) {
+        into[i] = points[2 * start + i] ?? 0;
+      }
+      x.meanSample(m);
+      out.set(new Float64Array(x.memory.buffer, x.meanValues() >>> 0, 2 * m), 2 * start);
+    }
+    return out;
   }
 
   /**

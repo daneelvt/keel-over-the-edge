@@ -236,7 +236,7 @@ func TestDiscardNextWorld(t *testing.T) {
 	if err := s.StoreBundle(ctx, next.ID, lease, testBundle(t)); err != nil {
 		t.Fatal(err)
 	}
-	if got := partitionsOf(t, pool, 2); len(got) != 8 {
+	if got := partitionsOf(t, pool, 2); len(got) != 9 {
 		t.Fatalf("the next world's partitions: %v", got)
 	}
 	if err := s.DiscardNextWorld(ctx, lease, 3); !errors.Is(err, store.ErrNoNext) {
@@ -364,7 +364,7 @@ func TestDropWorld(t *testing.T) {
 	if err := s.DropPartitions(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
-	if got := partitionsOf(t, pool, 2); len(got) != 8 {
+	if got := partitionsOf(t, pool, 2); len(got) != 9 {
 		t.Fatalf("the active world's partitions: %v", got)
 	}
 }

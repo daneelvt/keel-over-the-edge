@@ -169,6 +169,9 @@ func GustFrameAt(t *WeatherTick, f *GustFrame) {
 			continue
 		}
 		f.Share[n] = t.weight[i] / math.Sqrt(field2)
+		if t.front {
+			f.Share[n] = float64(i)
+		}
 		f.Sin[n], f.Cos[n] = st.sinD, st.cosD
 		f.Travel[n] = st.travel
 		f.Seconds[n] = float64((t.Tick - st.s.start) * Dt)
@@ -178,4 +181,7 @@ func GustFrameAt(t *WeatherTick, f *GustFrame) {
 		n++
 	}
 	f.Spells = float64(n)
+	if t.front {
+		f.Front, f.FrontSin, f.FrontCos, f.FrontLine, f.FrontBlend = 1, t.fe, t.fn, t.line, t.p.blend
+	}
 }

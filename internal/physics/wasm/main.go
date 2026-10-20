@@ -75,6 +75,9 @@ var (
 	spell           physics.Spell
 	wind            physics.WindPoint
 	gustFrame       physics.GustFrame
+	system          physics.System
+	systemKind      physics.SystemKind
+	systemRecord    physics.SystemRecord
 	weather         = physics.Weather{Prepared: &weatherPrepared}
 	stepWeather     physics.WeatherTick
 	drawWeather     physics.WeatherTick
@@ -171,6 +174,9 @@ var (
 	// speed and direction, the mean wind's speed and direction, the gust
 	// field and the gust factor.
 	windValues [windValuesEach * sampleCapacity]float64
+	// meanValues is what meanSample writes: for each point the mean
+	// wind's speed and the direction it comes from.
+	meanValues [2 * sampleCapacity]float64
 	// waveValues is what waveWind writes: the wave wind's speed and the
 	// direction it comes from.
 	waveValues  [2]float64
@@ -560,6 +566,100 @@ func spellGet(i uint32) { spell = weather.Spells[min(i, physics.WeatherSpells-1)
 func spellCount(n uint32) {
 	weather.SetCount(int32(min(n, physics.WeatherSpells)))
 	stepFresh = false
+}
+
+// system, systemKind and systemRecord are the records the systems' exports
+// read and write.
+//
+//go:wasmexport system
+func systemAddr() uint32 { return addr(unsafe.Pointer(&system)) }
+
+//go:wasmexport systemKind
+func systemKindAddr() uint32 { return addr(unsafe.Pointer(&systemKind)) }
+
+//go:wasmexport systemRecord
+func systemRecordAddr() uint32 { return addr(unsafe.Pointer(&systemRecord)) }
+
+// systemKindSet makes the systemKind record kind i of the systems. Call it
+// after weatherPrepare, once for each of the catalog's kinds.
+//
+//go:wasmexport systemKindSet
+func systemKindSet(i uint32) {
+	weatherPrepared.SetKind(int32(min(i, physics.MaxKinds)), &systemKind)
+	stepFresh = false
+}
+
+// keyframeSet makes keyframe k one at a tick with no systems.
+//
+//go:wasmexport keyframeSet
+func keyframeSet(k uint32, tick float64) {
+	weather.SetKeyframe(int32(min(k, physics.KeySets)), tick)
+	stepFresh = false
+}
+
+// systemSet makes the system record slot's system in keyframe k.
+//
+//go:wasmexport systemSet
+func systemSet(k, slot uint32) {
+	weather.SetSystem(int32(min(k, physics.KeySets)), int32(min(slot, physics.MaxSystems)), &system)
+	stepFresh = false
+}
+
+// keyframeCount says how many of the keyframes set are in use: the first n.
+//
+//go:wasmexport keyframeCount
+func keyframeCount(n uint32) {
+	weather.SetKeyCount(int32(min(n, physics.KeySets)))
+	stepFresh = false
+}
+
+// systemAt writes to the system record the keyframe of the system in the
+// systemRecord record at a tick.
+//
+//go:wasmexport systemAt
+func systemAt(tick float64) { system = physics.SystemAt(&systemRecord, tick) }
+
+// recordSet makes the systemRecord record slot's system, computed from it
+// at each tick in place of keyframes: for a client with no server.
+//
+//go:wasmexport recordSet
+func recordSet(slot uint32) {
+	weather.SetRecord(int32(min(slot, physics.MaxSystems)), &systemRecord)
+	stepFresh = false
+}
+
+// recordCount says how many records are in use: the first n set; 0 goes
+// back to keyframes.
+//
+//go:wasmexport recordCount
+func recordCount(n uint32) {
+	weather.SetRecordCount(int32(min(n, physics.MaxSystems)))
+	stepFresh = false
+}
+
+// frontReach returns how far from the centre a front's line enters the
+// disk's reach and leaves it, m.
+//
+//go:wasmexport frontReach
+func frontReach() float64 { return weatherPrepared.FrontReach() }
+
+// pressure returns the pressure at (x, y), hPa, at the time windDrawAt set.
+//
+//go:wasmexport pressure
+func pressure(x, y float64) float64 { return physics.PressureAt(&drawWeather, x, y) }
+
+//go:wasmexport meanValues
+func meanValuesAddr() uint32 { return addr(unsafe.Pointer(&meanValues)) }
+
+// meanSample writes the mean wind at the first n of samplePoints to
+// meanValues, at the time windDrawAt set, without any shelter: what the
+// sea follows.
+//
+//go:wasmexport meanSample
+func meanSample(n uint32) {
+	for i := uint32(0); i < n && i < sampleCapacity; i++ {
+		meanValues[2*i], meanValues[2*i+1] = physics.MeanWindAt(&drawWeather, samplePoints[2*i], samplePoints[2*i+1])
+	}
 }
 
 // windAt sets env to the wind at the state's place at a tick: what the next

@@ -3,7 +3,9 @@
 package client
 
 import (
+	"cmp"
 	"math"
+	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -77,14 +79,32 @@ func NewPredictor(kind *physics.Prepared, waves *physics.Waves, weather *physics
 	return &Predictor{kind: kind, Seas: NewSeas(waves), Weather: physics.Weather{Prepared: weather}}
 }
 
-// ReceiveWeather takes a WeatherSystems: its spells replace those held.
+// ReceiveWeather takes a WeatherSystems: its spells replace those held,
+// unless it keeps them, and its keyframes join those held, each replacing
+// any of its tick, the latest physics.KeySets kept.
 func (p *Predictor) ReceiveWeather(m *pb.WeatherSystems) error {
-	var spells [physics.WeatherSpells]physics.Spell
-	n, err := protocol.SpellsOf(m, &spells)
+	var keys [physics.KeySets]physics.Keyframe
+	nk, err := protocol.KeyframesOf(m, keys[:])
 	if err != nil {
 		return err
 	}
-	p.Weather.Set(spells[:n])
+	if !m.GetKeepSpells() {
+		var spells [physics.WeatherSpells]physics.Spell
+		n, err := protocol.SpellsOf(m, &spells)
+		if err != nil {
+			return err
+		}
+		p.Weather.Set(spells[:n])
+	}
+	if nk > 0 {
+		held := slices.Clone(p.Weather.Keys[:p.Weather.NKeys])
+		for _, k := range keys[:nk] {
+			held = slices.DeleteFunc(held, func(h physics.Keyframe) bool { return h.Tick == k.Tick })
+			held = append(held, k)
+		}
+		slices.SortFunc(held, func(a, b physics.Keyframe) int { return cmp.Compare(a.Tick, b.Tick) })
+		p.Weather.SetKeys(held[max(len(held)-physics.KeySets, 0):])
+	}
 	p.wind.Tick = math.NaN()
 	return nil
 }

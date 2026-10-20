@@ -1025,3 +1025,33 @@ func TestRemakeNext(t *testing.T) {
 		t.Errorf("the lifecycle: %d %s", code, body)
 	}
 }
+
+// weather.json's lists are JSON's arrays even when empty: a week whose
+// tick has no system alive, and no storm yet.
+func TestWeatherListsAreArrays(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := weather.ConfigOf(cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &weather.Week{Version: 1, Epoch: weather.SampleEpoch, Ends: weather.SampleEpoch + weather.SampleWeek, Until: 1000,
+		Spells: []physics.Spell{physics.SteadySpell(5, 0, 0)}}
+	tl, err := weather.New(cfg, w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := New(Config{Timeline: tl, Weather: cfg.Prepared})
+	rec := httptest.NewRecorder()
+	o.weather(rec, httptest.NewRequest("GET", "/owner/api/weather.json?at=10", nil))
+	if rec.Code != 200 {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	for _, key := range []string{`"systems":[]`, `"storms":[]`, `"kinds":[`, `"spells":[`} {
+		if !strings.Contains(rec.Body.String(), key) {
+			t.Errorf("weather.json lacks %s: %s", key, rec.Body.String()[:200])
+		}
+	}
+}

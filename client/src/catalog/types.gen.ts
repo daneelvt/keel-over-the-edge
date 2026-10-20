@@ -750,6 +750,9 @@ export interface Weather {
   ring: WeatherRing;
   waveWind: WeatherWaveWind;
   current: WeatherCurrent;
+  front: WeatherFront;
+  pressure: WeatherPressure;
+  reach: WeatherReach;
   /**
    * The kinds of spell of weather.
    *
@@ -806,7 +809,24 @@ export interface Weather {
         Regime,
         Regime
       ];
-  sequence: Sequence;
+  /**
+   * The kinds of weather system.
+   *
+   * @minItems 1
+   * @maxItems 8
+   */
+  systems:
+    | [SystemKind]
+    | [SystemKind, SystemKind]
+    | [SystemKind, SystemKind, SystemKind]
+    | [SystemKind, SystemKind, SystemKind, SystemKind]
+    | [SystemKind, SystemKind, SystemKind, SystemKind, SystemKind]
+    | [SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind]
+    | [SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind]
+    | [SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind];
+  week: WeatherWeek;
+  keyframe: WeatherKeyframe;
+  water: WeatherWater;
 }
 /**
  * The waves long enough to move a boat: the band of wavelengths they span and the spectrum that gives each its height.
@@ -1056,6 +1076,86 @@ export interface WeatherCurrent {
   shallow: number;
 }
 /**
+ * A front: a line across the disk lying in a trough, the old spell ahead of it and the new behind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherFront".
+ */
+export interface WeatherFront {
+  /**
+   * The trough deepens toward the line as e^(−s / this), in nautical miles.
+   */
+  troughAhead: number;
+  /**
+   * And fills behind it within this, a Gaussian's width, in nautical miles.
+   */
+  troughBehind: number;
+  /**
+   * Its own wind at its steepest, in knots.
+   */
+  frontWind: number;
+  /**
+   * Its wind blows toward the trough turned clockwise by this, in degrees.
+   */
+  frontTurning: number;
+  /**
+   * The spells blend across the line within this either side, in nautical miles.
+   */
+  blend: number;
+  /**
+   * The gust factor's excess rises by this behind the line.
+   */
+  frontGusts: number;
+  /**
+   * Over this behind the line, in nautical miles.
+   */
+  gustsBehind: number;
+}
+/**
+ * The pressure: its slope across the disk, and its rise behind a front.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherPressure".
+ */
+export interface WeatherPressure {
+  /**
+   * The slope across the disk, low on the left of the base wind, in hPa a knot of it a nautical mile.
+   */
+  slope: number;
+  /**
+   * How fast the pressure rises behind a front's line, in hPa a minute.
+   */
+  rise: number;
+  /**
+   * And how far, in hPa.
+   */
+  riseMost: number;
+}
+/**
+ * How far the systems reach: their weakening toward the centre, and where they end.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherReach".
+ */
+export interface WeatherReach {
+  /**
+   * Within this of the centre a system is at its weakest, in nautical miles.
+   */
+  inwardFrom: number;
+  /**
+   * Beyond this it is whole, in nautical miles.
+   */
+  inwardTo: number;
+  /**
+   * What a front, a squall or a shower keeps of itself at its weakest.
+   */
+  inwardLeast: number;
+  /**
+   * A system reaches this many of its widths from its centre.
+   */
+  cut: number;
+}
+/**
  * A kind of spell of weather.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -1068,16 +1168,64 @@ export interface Regime {
    */
   share: number;
   /**
-   * A spell of it arrives and leaves as a front does: the wind veers.
+   * A spell of it arrives and leaves as a front does: a front crosses the disk, and the wind veers.
    */
   frontal: boolean;
   /**
-   * The regimes a spell of it may give way to, by id.
+   * The shortest and the longest a spell of it lasts, in hours.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  spell: [number, number];
+  /**
+   * The lowest and the highest of its pressure's level, in hPa.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  pressure: [number, number];
+  /**
+   * The regimes a spell of it gives way to, with the chance of each.
    *
    * @minItems 1
    */
-  next: [Id, ...Id[]];
+  next: [RegimeNext, ...RegimeNext[]];
+  /**
+   * The systems born in a spell of it.
+   */
+  systems: RegimeSystems[];
   wind: RegimeWind;
+}
+/**
+ * A regime a spell may give way to.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "RegimeNext".
+ */
+export interface RegimeNext {
+  to: Id;
+  /**
+   * The chance a spell gives way to it.
+   */
+  chance: number;
+}
+/**
+ * How many systems of a kind are born in a spell.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "RegimeSystems".
+ */
+export interface RegimeSystems {
+  kind: Id;
+  /**
+   * How many are born an hour over the disk, on average.
+   */
+  rate: number;
+  /**
+   * How many are born as the spell begins.
+   */
+  atStart: number;
 }
 /**
  * A regime's wind, from which each spell's is drawn.
@@ -1118,47 +1266,269 @@ export interface RegimeWind {
   drift: number;
 }
 /**
- * The spells of weather until the world's weather is generated: this sequence, over and over from the world's epoch.
+ * A kind of weather system: a pressure shape moving with it, its wind turned from the pressure's gradient, its size, life and track.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "Sequence".
+ * via the `definition` "SystemKind".
  */
-export interface Sequence {
+export interface SystemKind {
+  id: Id;
   /**
-   * The seed each spell's numbers are drawn with.
+   * A dome, a low, or none: a patch that scales the wind.
    */
-  seed: number;
+  shape: "dome" | "low" | "none";
   /**
-   * How far the wind veers as a spell of a frontal regime arrives or leaves, the least and the most, in degrees.
+   * Its wind blows toward lower pressure turned clockwise by this, in degrees.
+   */
+  turning: number;
+  /**
+   * Its pressure's or its patch's Gaussian width, as a share of its size.
+   */
+  width: number;
+  /**
+   * A dome is steeper ahead: its distance along its track is times this ahead of its centre.
+   */
+  ahead: number;
+  /**
+   * A low's broad low about its core: its share of the depth, and its width as a multiple of the core's.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  broad: [number, number];
+  /**
+   * A patch is stretched along its track by this.
+   */
+  stretch: number;
+  /**
+   * How it weakens toward the centre: weak to the least, gone to nothing, or none.
+   */
+  inward: "weak" | "gone" | "none";
+  /**
+   * The gust factor's excess rises by this near its core.
+   */
+  gusts: number;
+  /**
+   * Its radius, the least and the most, in nautical miles.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  size: [number, number];
+  /**
+   * How fast it moves, the least and the most: a share of the base wind, or knots.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  speed: [number, number];
+  /**
+   * Whether speed is a share of the base wind or knots.
+   */
+  speedOf: "wind" | "knots";
+  /**
+   * How long it lives, the least and the most, in minutes.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  life: [number, number];
+  /**
+   * The wind it adds at its peak at full strength, the least and the most, in knots.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  wind: [number, number];
+  /**
+   * A patch's share of the wind at its core, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  factor: [number, number];
+  /**
+   * Its pressure at its centre at full strength, the least and the most, in hPa: a dome's above, a low's below.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  depth: [number, number];
+  /**
+   * Where it is born and how it moves: wind, across from the windward rim; outer, round the outer waters; drift, inside, drifting with the wind.
+   */
+  track: "wind" | "outer" | "drift";
+  /**
+   * The share of those born by day that are born over an island's land.
+   */
+  islands: number;
+  /**
+   * It is born only at night, or within dawn minutes after sunrise.
+   */
+  night: boolean;
+  /**
+   * Minutes after sunrise it may still be born.
+   */
+  dawn: number;
+  /**
+   * It lifts this long after sunrise, the least and the most, in minutes.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  lift: [number, number];
+  /**
+   * It is born only where the spell's mean wind is under this, in knots; 0 for anywhere.
+   */
+  calmBelow: number;
+  /**
+   * It is gone once the spell's mean wind passes this, in knots; 0 for never.
+   */
+  goneAbove: number;
+  /**
+   * The rain under it, for drawing.
+   */
+  rain: "none" | "light" | "moderate" | "heavy";
+  /**
+   * The cloud of it, for drawing.
+   */
+  cloud: "none" | "fog" | "cumulus" | "cumulonimbus";
+  /**
+   * Lightning strikes from it above this strength; 0 for none.
+   */
+  lightning: number;
+}
+/**
+ * A world's week of weather: how it is drawn and checked.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherWeek".
+ */
+export interface WeatherWeek {
+  /**
+   * A world opens with this long of settled or trade weather and no front on the disk, in hours.
+   */
+  opening: number;
+  /**
+   * And closes with this long of one spell of closingRegime and no front on the disk, in hours.
+   */
+  closing: number;
+  closingRegime: Id;
+  /**
+   * Its longest settled or trade spell is at least this long, in hours.
+   */
+  fair: number;
+  /**
+   * Each regime's share is within this of the catalog's.
+   */
+  shares: number;
+  /**
+   * For a world of this many days or more.
+   */
+  sharesFrom: number;
+  /**
+   * The week covers this long beyond the world's end, in hours.
+   */
+  margin: number;
+  /**
+   * The most weeks drawn before the best is kept.
+   */
+  draws: number;
+  /**
+   * How far the wind veers as a front passes, the least and the most, in degrees.
    *
    * @minItems 2
    * @maxItems 2
    */
   veer: [number, number];
   /**
-   * How far the wind's direction may move either way from one spell to the next otherwise, in degrees.
+   * How far the wind's direction may move either way at another change, in degrees.
    */
   swing: number;
   /**
-   * The spells, in order.
+   * How fast a front moves, the least and the most, in knots.
    *
-   * @minItems 1
-   * @maxItems 64
+   * @minItems 2
+   * @maxItems 2
    */
-  spells: [SequenceSpell, ...SequenceSpell[]];
+  frontSpeed: [number, number];
+  /**
+   * How deep a front's trough is, the least and the most, in hPa.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  frontTrough: [number, number];
+  /**
+   * A front moves toward where the new spell's wind blows, within this either way, in degrees.
+   */
+  spread: number;
+  /**
+   * The most a system wobbles off its track, in nautical miles.
+   */
+  wobble: number;
+  /**
+   * The shortest and the longest period of a wobble, in minutes.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  wobblePeriod: [number, number];
+  /**
+   * The most a system's strength wobbles, as a share of it.
+   */
+  strengthWobble: number;
+  /**
+   * The most systems on the disk at once.
+   */
+  systemsMost: number;
+  /**
+   * The outer waters a storm keeps to, from and to, in nautical miles from the centre.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  outer: [number, number];
+  /**
+   * The share of storms that turn inward.
+   */
+  inwardShare: number;
+  /**
+   * The seed a developer's held spells are drawn with.
+   */
+  seed: number;
 }
 /**
- * A spell of the sequence.
+ * The systems' keyframes, which the server and the phone interpolate between.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "SequenceSpell".
+ * via the `definition` "WeatherKeyframe".
  */
-export interface SequenceSpell {
-  regime: Id;
+export interface WeatherKeyframe {
   /**
-   * How long it lasts, in whole hours.
+   * Seconds between keyframes: a whole number.
    */
-  hours: number;
+  every: number;
+}
+/**
+ * The water's signs of the wind: the mean wind sampled round the camera, against the wave wind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherWater".
+ */
+export interface WeatherWater {
+  /**
+   * The grid's points a side.
+   */
+  points: number;
+  /**
+   * Its spacing, in m.
+   */
+  spacing: number;
+  /**
+   * Samplings a second.
+   */
+  rate: number;
 }
 /**
  * The sky's numbers: the lengths of its day, year and month, its scale, the moment it is counted from, and the stars with names. Where each body stands follows from these and the time alone.
@@ -4830,4 +5200,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '2076b7f8c446157f';
+export const CATALOG_VERSION = 'c6bdaa8f82856088';

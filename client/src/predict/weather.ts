@@ -1,24 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The weather about the boat, as the server sends it: the spells in play,
-// each a record of whole numbers, held in the physics module, which
-// computes the wind at the boat from them exactly as the server does. The
-// server sends a spell ten seconds before its change from the one before
-// begins and keeps the one before in play ten seconds past the change's
-// end, so the prediction, which steps a fraction of a second ahead and
-// replays a fraction behind, always holds the spells of the tick it steps.
-// internal/client/predict.go is its twin.
+// The weather about the boat, as the server sends it: the spells in play
+// and the weather systems' keyframes, each a record of whole numbers, held
+// in the physics module, which computes the wind at the boat from them
+// exactly as the server does. The server sends a spell ten seconds before
+// its change from the one before begins and keeps the one before in play
+// ten seconds past the change's end, and a keyframe twenty seconds before
+// its tick; so the prediction, which steps a fraction of a second ahead and
+// replays a fraction behind, always holds the spells and the keyframes of
+// the tick it steps. internal/client/predict.go is its twin.
 //
 // A client with no server makes its own spells here, by the server's rules:
 // a steady wind, or a spell drawn from one of the catalog's regimes.
 
-import type { Weather } from '../catalog/types.gen';
+import type { SystemKind, Weather } from '../catalog/types.gen';
+import type { WeatherKeyframe } from '../net/messages';
 import { RECORDS, SIZES, WEATHER } from './layout.gen';
 import { writeRegime } from './params.gen';
-import type { Physics } from './physics';
+import type { Keyframe, Physics } from './physics';
 
 const P = RECORDS.spell;
 const W = RECORDS.wind;
+const K = RECORDS.systemKind;
 
 /** A spell of weather: the spell record's values, whole numbers all. */
 export type Spell = Float64Array;
@@ -77,6 +80,8 @@ export function takesEffect(tick: number): number {
 export class Spells {
   /** The spells in play, ascending by the tick each begins at. */
   spells: Spell[] = [];
+  /** The weather systems' keyframes held, ascending by their ticks: the latest WEATHER.keySets. */
+  keyframes: Keyframe[] = [];
   /** Counts the changes, so that whoever draws the gusts knows to read them again. */
   version = 0;
 
@@ -86,21 +91,58 @@ export class Spells {
     this.#physics = physics;
   }
 
-  /** Forgets what was sent: no wind. */
+  /** Forgets what was sent: no wind, and no systems. */
   reset(): void {
+    this.keyframes = [];
+    this.#physics.setKeyframes([]);
     this.set([]);
   }
 
   /**
-   * Takes the spells in play, each a spell record's values: they replace
-   * those held. Reports false, and keeps what it held, if they are not
-   * spells: too many, or not of a record's length.
+   * Takes the spells in play, each a spell record's values, which replace
+   * those held, or null to keep them; and keyframes, each replacing any
+   * held of its tick. Reports false, and keeps what it held, if they are
+   * not spells and keyframes: too many, not of a record's length, or a
+   * system in no slot.
    */
-  receive(spells: readonly ArrayLike<number>[]): boolean {
-    if (spells.length > WEATHER.spells || spells.some((s) => s.length !== SIZES.spell)) {
+  receive(
+    spells: readonly ArrayLike<number>[] | null,
+    keyframes: readonly WeatherKeyframe[] = [],
+  ): boolean {
+    if (
+      spells !== null &&
+      (spells.length > WEATHER.spells || spells.some((s) => s.length !== SIZES.spell))
+    ) {
       return false;
     }
-    this.set(spells.map((s) => Float64Array.from(s)));
+    if (
+      keyframes.length > WEATHER.keySets ||
+      keyframes.some((k) =>
+        k.systems.some(
+          ([slot, v]) => slot < 0 || slot >= WEATHER.systems || v.length !== SIZES.system,
+        ),
+      )
+    ) {
+      return false;
+    }
+    if (keyframes.length > 0) {
+      const held = this.keyframes.filter((h) => !keyframes.some((k) => k.tick === h.tick));
+      for (const k of keyframes) {
+        const systems: (Float64Array | undefined)[] = [];
+        for (const [slot, v] of k.systems) {
+          systems[slot] = Float64Array.from(v);
+        }
+        held.push({ tick: k.tick, systems });
+      }
+      held.sort((a, b) => a.tick - b.tick);
+      this.keyframes = held.slice(-WEATHER.keySets);
+      this.#physics.setKeyframes(this.keyframes);
+    }
+    if (spells !== null) {
+      this.set(spells.map((s) => Float64Array.from(s)));
+    } else {
+      this.version++;
+    }
     return true;
   }
 
@@ -197,14 +239,99 @@ export function regimeSpell(
  */
 export function heldSpell(physics: Physics, weather: Weather, regime: number, from: number): Spell {
   const number = (from ^ 0x5bd1e995) >>> 0;
-  const seed = weather.sequence.seed >>> 0;
+  const seed = weather.week.seed >>> 0;
   const s = regimeSpell(physics, weather, regime, number, seed, 0, from, 0);
   s[P.drift] = 0;
   s[P.from] = mix(number ^ seed) % WEATHER.turnSteps;
+  // Its pressure the middle of its regime's, and the world's own systems
+  // stilled while it blows: a developer's weather.
+  const pressure = weather.regimes[regime]?.pressure ?? [0, 0];
+  s[P.pressure] = Math.round(50 * (pressure[0] + pressure[1]));
+  s[P.still] = 1;
   return s;
+}
+
+/** The shapes and the ways of weakening of the kinds of system, as the module numbers them. */
+const SHAPES = { none: 0, dome: 1, low: 2 } as const;
+const INWARD = { none: 0, weak: 1, gone: 2 } as const;
+
+/** A kind of weather system as the module's systemKind record has it. */
+export function systemKindRecord(k: SystemKind): Float64Array {
+  const r = new Float64Array(SIZES.systemKind);
+  r[K.shape] = SHAPES[k.shape];
+  r[K.turning] = k.turning;
+  r[K.width] = k.width;
+  r[K.ahead] = k.ahead;
+  r[K.broad] = k.broad[0];
+  r[K.broadWidth] = k.broad[1];
+  r[K.stretch] = k.stretch;
+  r[K.inward] = INWARD[k.inward];
+  r[K.gusts] = k.gusts;
+  return r;
 }
 
 /** The index of the catalog's regime of an id, or −1. */
 export function regimeIndex(weather: Weather, id: string): number {
   return weather.regimes.findIndex((r) => r.id === id);
+}
+
+/** The index of the catalog's kind of weather system of an id, or −1. */
+export function kindIndex(weather: Weather, id: string): number {
+  return weather.systems.findIndex((k) => k.id === id);
+}
+
+/**
+ * The record of a system of the catalog's kind of an index placed to reach
+ * (east, north), m, at tick at, born at born, moving with spell's wind, as
+ * the server makes a developer's: its kind's middling size, strength and
+ * life, on a straight track, with no wobble, strongest as it reaches the
+ * point; a dome's gust front, ahead of its centre, reaches the point then.
+ */
+export function placedRecord(
+  weather: Weather,
+  kind: number,
+  east: number,
+  north: number,
+  born: number,
+  at: number,
+  spell: Spell,
+): Float64Array {
+  const k = weather.systems[kind];
+  if (k === undefined) {
+    throw new Error(`the catalog has no kind of system ${kind}`);
+  }
+  const R = RECORDS.systemRecord;
+  const r = new Float64Array(SIZES.systemRecord);
+  const minute = 60 * SECOND;
+  const life = Math.round(
+    ((Math.round(k.life[0] * minute) + Math.round(k.life[1] * minute)) / 2) | 0,
+  );
+  const size = Math.round(((k.size[0] + k.size[1]) / 2) * 1852);
+  let move = (k.speed[0] + k.speed[1]) / 2;
+  move = k.speedOf === 'wind' ? move * (spell[P.speed] ?? 0) * 0.01 : move * (1852 / 3600);
+  const speed = Math.round(move / 0.01);
+  const heading = ((spell[P.from] ?? 0) + WEATHER.turnSteps / 2) % WEATHER.turnSteps;
+  r[R.kind] = kind;
+  r[R.seed] = mix(born ^ (kind << 24));
+  r[R.born] = born;
+  r[R.mature] = at;
+  r[R.decays] = at + Math.floor(life / 4);
+  r[R.gone] = at + Math.floor(life / 2);
+  r[R.heading] = heading;
+  r[R.speed] = speed;
+  r[R.size] = size;
+  if (k.shape === 'none') {
+    r[R.peak] = Math.round(500 * (k.factor[0] + k.factor[1]));
+  } else {
+    r[R.peak] = Math.round(((k.wind[0] + k.wind[1]) * (1852 / 3600)) / 0.01 / 2);
+    r[R.depth] = Math.round(50 * (k.depth[0] + k.depth[1]));
+  }
+  let d = speed * 0.01 * (1 / SECOND) * (at - born);
+  if (k.shape === 'dome' && k.ahead > 0) {
+    d += (k.width * size) / k.ahead;
+  }
+  const a = (heading / WEATHER.turnSteps) * 2 * Math.PI;
+  r[R.east] = Math.round(4 * east) - Math.round(4 * d * Math.sin(a));
+  r[R.north] = Math.round(4 * north) - Math.round(4 * d * Math.cos(a));
+  return r;
 }

@@ -33,6 +33,16 @@ export interface SeaAreas {
 export type WeatherSpells = number[][];
 
 /**
+ * A keyframe of the weather systems, as the server sends it: its tick, and
+ * each system by its slot, a system record's values in the physics
+ * module's order (RECORDS.system), whole numbers all.
+ */
+export interface WeatherKeyframe {
+  tick: number;
+  systems: [slot: number, values: number[]][];
+}
+
+/**
  * A bump, as the server tells it: the tick, where (metres east and north),
  * how fast the hulls closed (m/s), and the connection's part: its boat's
  * fault ('yours'), the other's ('theirs'), no one's ('none'), or a bump
@@ -238,8 +248,12 @@ export type FromWorker =
   | { type: 'restart'; inMs: number }
   /** The sea about the boat, for the prediction and the drawing. */
   | { type: 'sea'; sea: SeaAreas }
-  /** The spells of weather in play, for the prediction's wind and the drawing of the gusts. */
-  | { type: 'weather'; spells: WeatherSpells }
+  /**
+   * The spells of weather in play, for the prediction's wind and the
+   * drawing of the gusts, or null if those held still are; and keyframes
+   * of the weather systems, each replacing any held of its tick.
+   */
+  | { type: 'weather'; spells: WeatherSpells | null; keyframes: WeatherKeyframe[] }
   /** The boat, or one near it, touched another. */
   | { type: 'bump'; bump: BumpTold }
   /** Chunks of the land the boat could see: their addresses to fetch. */

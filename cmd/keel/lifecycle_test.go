@@ -12,6 +12,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // minutes is a schedule of worlds four minutes long, from the bubble's
@@ -43,9 +44,15 @@ func TestWorldOfMinutes(t *testing.T) {
 		if got := db.run(jobClosing, end.Add(-2*time.Minute)); got != store.JobOK {
 			t.Fatalf("the closing's run: %q", got)
 		}
+		// The first world, which had none, has its week, made as it opened.
+		if w, _ := db.ActiveOrFirstWorld(t.Context(), time.Time{}); !weekFor(t, db, w.ID, w.Epoch, end) {
+			t.Fatal("the first world has no week made for its epoch and end")
+		}
 		time.Sleep(time.Until(bubbleEpoch.Add(3*time.Minute + 10*time.Second)))
 		if nw, err := db.NextWorld(t.Context()); err != nil || !nw.Stored || nw.Number != 2 {
 			t.Fatalf("the next world a minute before the end: %+v %v", nw, err)
+		} else if !weekFor(t, db, nw.ID, end, end.Add(4*time.Minute)) {
+			t.Fatal("the next world's week is not made with it for when it is planned to begin")
 		}
 		// A sailor connects, within the connection's idle limit of the end.
 		time.Sleep(time.Until(end.Add(-20 * time.Second)))
@@ -68,6 +75,12 @@ func TestWorldOfMinutes(t *testing.T) {
 		w, _ := db.ActiveOrFirstWorld(t.Context(), time.Time{})
 		if w.Number != 2 || !w.Epoch.Equal(end) || !w.EndsAt.Equal(end.Add(4*time.Minute)) {
 			t.Fatalf("the world after the end: %+v", w)
+		}
+		if !weekFor(t, db, w.ID, end, end.Add(4*time.Minute)) {
+			t.Fatal("the world begun at its planned time has not the week made for it")
+		}
+		if strings.Contains(s.logs.String(), "its week is made again") {
+			t.Fatal("the week of a world begun on time was made again")
 		}
 		_, events, _ := db.state()
 		var taken int
@@ -114,6 +127,9 @@ func TestLateEnd(t *testing.T) {
 		if got := db.run(jobSwitch, bubbleEpoch.Add(-25*time.Minute)); got != store.JobOK {
 			t.Fatalf("the late switch's run: %q", got)
 		}
+		if !weekFor(t, db, w.ID, w.Epoch, w.EndsAt) {
+			t.Fatal("the world begun late has not its week made again for when it began")
+		}
 		ws, _, welcome := connect(t, s, token)
 		defer ws.CloseNow()
 		if welcome.GetEpochUs() != w.Epoch.UnixMicro() {
@@ -145,6 +161,9 @@ func TestBeginNextByHand(t *testing.T) {
 		w, _ := db.ActiveOrFirstWorld(t.Context(), time.Time{})
 		if w.Number != 2 || w.EndsAt.IsZero() {
 			t.Fatalf("the world after: %+v", w)
+		}
+		if !weekFor(t, db, w.ID, w.Epoch, w.EndsAt) {
+			t.Fatal("the world begun by hand has not its week made again for when it began")
 		}
 		if code, _ := postJSON(t, s, "http://127.0.0.1:9090/owner/api/world", `{"number":1}`); code != 400 {
 			t.Fatalf("the old world's number again: %d", code)
@@ -186,4 +205,19 @@ func testCatalog(t *testing.T) *catalog.Catalog {
 		t.Fatal(err)
 	}
 	return cat
+}
+
+// weekFor reports whether the world's week is stored, made for an epoch and
+// an end, and reads back as a week.
+func weekFor(t *testing.T, db *memDB, world [16]byte, epoch, ends time.Time) bool {
+	t.Helper()
+	sw, err := db.LoadWeather(t.Context(), world)
+	if err != nil {
+		return false
+	}
+	w, err := weather.Decode(sw.Records, sw.Digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sw.Epoch.Equal(epoch) && sw.Ends.Equal(ends) && w.Epoch == epoch.UnixMicro() && w.Ends == ends.UnixMicro()
 }

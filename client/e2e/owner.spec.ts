@@ -71,15 +71,15 @@ test('the world page: the map and its layers, the islands, the world', async ({ 
     return imgs.length === 0 || imgs.every((i) => i.complete);
   });
   await page.waitForTimeout(1500);
-  // Each layer switches.
+  // Each layer switches: the map drawn again at the page's next render,
+  // later than a fixed wait while CI's other pages hold the CPU.
   for (const layer of ['land', 'rings', 'wind', 'names']) {
     const before = await mapSum(page);
     await page.locator(`input[name="layer-${layer}"]`).uncheck();
-    await page.waitForTimeout(200);
+    await expect.poll(() => mapSum(page), { message: layer }).not.toBe(before);
     const without = await mapSum(page);
     await page.locator(`input[name="layer-${layer}"]`).check();
-    await page.waitForTimeout(200);
-    expect(without, layer).not.toBe(before);
+    await expect.poll(() => mapSum(page), { message: layer }).not.toBe(without);
   }
   // An island in the list: the map goes to it, and its approach is picked.
   const port = page.locator('.islands button[data-island="0"]');

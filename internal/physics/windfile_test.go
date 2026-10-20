@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -46,12 +47,22 @@ type windCase struct {
 	Frame map[string][]string `json:"frame"`
 	// Wave is the wave wind at the origin: its speed and direction, as bits.
 	Wave [2]string `json:"wave"`
+	// Keys are the weather systems' keyframes, each its tick and its
+	// systems by their slots, each field a whole number; Pressure the
+	// pressure at each point, as bits.
+	Keys     []windKey `json:"keys,omitempty"`
+	Pressure []string  `json:"pressure"`
 }
 
-// spellMap is a spell's fields by the names the client gives them.
-func spellMap(s Spell) map[string]any {
+type windKey struct {
+	Tick    float64                   `json:"tick"`
+	Systems map[string]map[string]any `json:"systems"`
+}
+
+// recordMap is a record's fields by the names the client gives them.
+func recordMap(r any) map[string]any {
 	out := map[string]any{}
-	v := reflect.ValueOf(s)
+	v := reflect.ValueOf(r)
 	for i := range v.NumField() {
 		f := v.Field(i)
 		name := lowerFirst(v.Type().Field(i).Name)
@@ -68,9 +79,13 @@ func spellMap(s Spell) map[string]any {
 	return out
 }
 
+// spellMap is a spell's fields by the names the client gives them.
+func spellMap(s Spell) map[string]any { return recordMap(s) }
+
 // windCases are the weathers written: a trade spell at mid-disk, a stormy
 // one in the refuge and at the rim late in a world's life, a change of
-// spell part of the way through, and a steady wind.
+// spell part of the way through, a steady wind, systems of every kind
+// between two keyframes, and a front crossing with a squall at its line.
 func windCases(t *testing.T, p *WeatherPrepared) ([]windCase, [][]Spell) {
 	const now, late = 740_000_000, 1<<31 + 1
 	regime := map[string]float64{"settled": 0, "trade": 1, "unsettled": 2, "stormy": 3}
@@ -95,14 +110,61 @@ func windCases(t *testing.T, p *WeatherPrepared) ([]windCase, [][]Spell) {
 		{Name: "a change, before the next", Tick: now + 8800.5, Origin: [2]float64{-300, -200}},
 		{Name: "steady", Tick: now, Origin: [2]float64{0, 0}},
 		{Name: "steady, after a trade spell", Tick: now + 0.25, Origin: [2]float64{2000, 2000}},
+		{Name: "systems", Tick: now + 111.5, Origin: [2]float64{-5500, 1200}},
+		{Name: "a front", Tick: now, Origin: [2]float64{-200, 300}},
 	}
+	front := frontSpell(t, p, now)
+	spells = append(spells, []Spell{trade}, []Spell{trade, front})
 	return cases, spells
+}
+
+// windSystems are the keyframes of the windCases' weathers: none, but for
+// systems of every kind about the systems case's place, and a squall at
+// the front's line.
+func windSystems(t *testing.T, kinds map[string]int32, name string, tick float64) []Keyframe {
+	var out []Keyframe
+	switch name {
+	case "systems":
+		b := float64(int64(tick) / 300 * 300)
+		for k := range 2 {
+			key := Keyframe{Tick: b + float64(k)*300}
+			d := float64(k) * 60
+			key.Systems[0] = systemAt(kinds["squall"], -5500+d, 1000, 75, 0.45*nm, 16, 3)
+			key.Systems[1] = systemAt(kinds["storm"], -5000, 2500+d, 160, 2*nm, 22, 15)
+			key.Systems[1].Strength = 3500 + float64(k)*200
+			key.Systems[5] = systemAt(kinds["shower"], -5300, 1500, 75, 0.25*nm, 6, 1)
+			key.Systems[9] = systemAt(kinds["fog"], -5600, 1100, 40, 0.8*nm, 0, 0)
+			key.Systems[9].Peak = 900
+			key.Systems[16] = systemAt(kinds["light-air"], -5450, 1250, 40, 0.3*nm, 0, 0)
+			key.Systems[16].Peak = 400
+			if k == 1 {
+				// One born between the keyframes.
+				key.Systems[3] = systemAt(kinds["squall"], -5800, 1300, 75, 0.35*nm, 14, 2)
+			}
+			out = append(out, key)
+		}
+	case "a front":
+		key := Keyframe{Tick: tick - 100}
+		key.Systems[2] = systemAt(kinds["squall"], -300, 250, 100, 0.4*nm, 15, 3)
+		out = append(out, key)
+	}
+	return out
 }
 
 func fillWindCase(c *windCase, w *Weather) {
 	c.Spells = nil
 	for i := range w.Count {
 		c.Spells = append(c.Spells, spellMap(w.Spells[i]))
+	}
+	c.Keys = nil
+	for k := range w.NKeys {
+		key := windKey{Tick: w.Keys[k].Tick, Systems: map[string]map[string]any{}}
+		for slot, s := range w.Keys[k].Systems {
+			if s.On != 0 {
+				key.Systems[strconv.Itoa(slot)] = recordMap(s)
+			}
+		}
+		c.Keys = append(c.Keys, key)
 	}
 	var at WeatherTick
 	WeatherAt(w, &at, c.Tick)
@@ -118,10 +180,12 @@ func fillWindCase(c *windCase, w *Weather) {
 		c.Points = append(c.Points, [2]float64{math.Round((2*rng.Float64()-1)*reach*4) / 4, math.Round((2*rng.Float64()-1)*reach*4) / 4})
 	}
 	c.Values = c.Values[:0]
+	c.Pressure = c.Pressure[:0]
 	for _, pt := range c.Points {
 		var v WindPoint
 		WindPointAt(&at, c.Origin[0]+pt[0], c.Origin[1]+pt[1], &v, nil)
 		c.Values = append(c.Values, [6]string{toHex(v.Speed), toHex(v.From), toHex(v.MeanSpeed), toHex(v.MeanFrom), toHex(v.Gust), toHex(v.Factor)})
+		c.Pressure = append(c.Pressure, toHex(PressureAt(&at, c.Origin[0]+pt[0], c.Origin[1]+pt[1])))
 	}
 	var f GustFrame
 	GustFrameAt(&at, &f)
@@ -145,14 +209,16 @@ func fillWindCase(c *windCase, w *Weather) {
 }
 
 func TestWindFile(t *testing.T) {
-	p := testWeather(t)
+	p, kinds := testSystems(t)
 	cases, spells := windCases(t, p)
 	got := windFileData{
 		Comment: "Written by go test ./internal/physics -run WindFile -update. Floats marked as bits are their IEEE 754 bits in hexadecimal.",
 	}
 	gusty := 0
 	for i := range cases {
-		fillWindCase(&cases[i], weatherOf(p, spells[i]...))
+		w := weatherOf(p, spells[i]...)
+		w.SetKeys(windSystems(t, kinds, cases[i].Name, cases[i].Tick))
+		fillWindCase(&cases[i], w)
 		for _, v := range cases[i].Values {
 			if g := fromHex(t, v[4]); math.Abs(g) > 0.5 {
 				gusty++

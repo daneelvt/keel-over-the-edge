@@ -164,18 +164,18 @@ func TestWorldgenCommand(t *testing.T) {
 	// log of another generator unless the bundle is given.
 	cat, _ := catalog.Load()
 	h := replay.Header{Seed: 3, Generator: worldgen.Version, Terrain: b.Digest}
-	if terrain, err := replayTerrain(h, cat, ""); err != nil || terrain == nil {
+	if _, terrain, err := replayTerrain(h, cat, ""); err != nil || terrain == nil {
 		t.Fatalf("the terrain made again: %v", err)
 	}
 	h.Generator++
-	if _, err := replayTerrain(h, cat, ""); !errors.Is(err, errTerrain) {
+	if _, _, err := replayTerrain(h, cat, ""); !errors.Is(err, errTerrain) {
 		t.Fatalf("a log of another generator: %v", err)
 	}
-	if _, err := replayTerrain(h, cat, out); err != nil {
+	if _, _, err := replayTerrain(h, cat, out); err != nil {
 		t.Fatalf("a log of another generator, its bundle given: %v", err)
 	}
 	h.Terrain[0]++
-	if _, err := replayTerrain(h, cat, out); !errors.Is(err, errTerrain) {
+	if _, _, err := replayTerrain(h, cat, out); !errors.Is(err, errTerrain) {
 		t.Fatalf("a bundle of another digest: %v", err)
 	}
 	if status := run(context.Background(), []string{"worldgen", "-seed", "x"}, env(nil), &stdout, &stderr); status != 2 {

@@ -78,8 +78,10 @@ type Stats struct {
 	Bells     int // Restart messages: the server about to restart
 	Bumps     int // Bump messages
 	Seas      int // SeaAreas messages: the sea about the boat
-	Weathers  int // WeatherSystems messages: the spells of weather in play
-	Chunks    int // chunks' addresses handed
+	Weathers  int // WeatherSystems messages: the spells of weather in play and the systems' keyframes
+	// WeatherBytes is the WeatherSystems messages' payloads.
+	WeatherBytes int
+	Chunks       int // chunks' addresses handed
 }
 
 // Percentile is the p-th percentile of the corrections' sizes.
@@ -299,6 +301,7 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			}
 			if ev.WeatherSystems != nil {
 				s.Stats.Weathers++
+				s.Stats.WeatherBytes += len(r.Bytes)
 				if err := s.Predictor.ReceiveWeather(ev.WeatherSystems); err != nil {
 					return err
 				}

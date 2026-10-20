@@ -1912,17 +1912,26 @@ func (x *Bump) GetArticle() string {
 	return ""
 }
 
-// WeatherSystems is the weather in play about the present: the spells the
-// client needs to compute the wind at its boat, at every tick it steps
-// ahead of the server or replays behind it, exactly as the server does. It
-// comes after the Welcome, and whenever the spells in play change: a spell
-// is sent ten seconds before its change from the one before begins, never
-// earlier, and kept until ten seconds after its change to the next has
-// ended. The client holds the latest it was sent.
+// WeatherSystems is the weather in play about the present: the spells and
+// the weather systems' keyframes the client needs to compute the wind at
+// its boat, at every tick it steps ahead of the server or replays behind
+// it, exactly as the server does. It comes after the Welcome, with the
+// keyframes at the last keyframe's tick and the two after; whenever the
+// spells in play change: a spell is sent ten seconds before its change from
+// the one before begins, never earlier, and kept until ten seconds after
+// its change to the next has ended, or a front's line has left the disk;
+// and at each keyframe's tick, with the keyframe twenty seconds on, never
+// further, and any the client holds that has changed. The client holds the
+// latest spells it was sent, and the latest four keyframes by their ticks.
 type WeatherSystems struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The spells in play, by the tick each begins at, ascending: at most 4.
-	Spells        []*Spell `protobuf:"bytes,1,rep,name=spells,proto3" json:"spells,omitempty"`
+	Spells []*Spell `protobuf:"bytes,1,rep,name=spells,proto3" json:"spells,omitempty"`
+	// Keyframes, by their ticks, ascending: at most 3. Each replaces any the
+	// client holds of its tick.
+	Keyframes []*Keyframe `protobuf:"bytes,2,rep,name=keyframes,proto3" json:"keyframes,omitempty"`
+	// The spells the client holds are still those in play: spells is empty.
+	KeepSpells    bool `protobuf:"varint,3,opt,name=keep_spells,json=keepSpells,proto3" json:"keep_spells,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1964,6 +1973,222 @@ func (x *WeatherSystems) GetSpells() []*Spell {
 	return nil
 }
 
+func (x *WeatherSystems) GetKeyframes() []*Keyframe {
+	if x != nil {
+		return x.Keyframes
+	}
+	return nil
+}
+
+func (x *WeatherSystems) GetKeepSpells() bool {
+	if x != nil {
+		return x.KeepSpells
+	}
+	return false
+}
+
+// Keyframe is the weather systems at a tick: each one's place, motion,
+// strength and size, in whole numbers. Between two keyframes the client
+// interpolates, as the server does.
+type Keyframe struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The tick it is of.
+	Tick int64 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
+	// The systems, by their slots, ascending: at most 20.
+	Systems       []*SystemKey `protobuf:"bytes,2,rep,name=systems,proto3" json:"systems,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Keyframe) Reset() {
+	*x = Keyframe{}
+	mi := &file_keel_v1_game_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Keyframe) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Keyframe) ProtoMessage() {}
+
+func (x *Keyframe) ProtoReflect() protoreflect.Message {
+	mi := &file_keel_v1_game_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Keyframe.ProtoReflect.Descriptor instead.
+func (*Keyframe) Descriptor() ([]byte, []int) {
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *Keyframe) GetTick() int64 {
+	if x != nil {
+		return x.Tick
+	}
+	return 0
+}
+
+func (x *Keyframe) GetSystems() []*SystemKey {
+	if x != nil {
+		return x.Systems
+	}
+	return nil
+}
+
+// SystemKey is a weather system at a keyframe.
+type SystemKey struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Its slot, which it holds from its birth to its end: below 16 the
+	// world's own, from 16 a developer's.
+	Slot uint32 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
+	// The catalog's index of its kind, and a seed for drawing it.
+	Kind uint32 `protobuf:"varint,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Seed uint32 `protobuf:"varint,3,opt,name=seed,proto3" json:"seed,omitempty"`
+	// Growing, mature or decaying: 0, 1 or 2.
+	Stage uint32 `protobuf:"varint,4,opt,name=stage,proto3" json:"stage,omitempty"`
+	// Its centre, in quarter metres east and north of the world's centre.
+	East  int32 `protobuf:"zigzag32,5,opt,name=east,proto3" json:"east,omitempty"`
+	North int32 `protobuf:"zigzag32,6,opt,name=north,proto3" json:"north,omitempty"`
+	// The direction it moves toward, in 65536ths of a turn clockwise from
+	// north, and how fast, in steps of 0.01 m/s.
+	Heading uint32 `protobuf:"varint,7,opt,name=heading,proto3" json:"heading,omitempty"`
+	Speed   uint32 `protobuf:"varint,8,opt,name=speed,proto3" json:"speed,omitempty"`
+	// Its strength, in 4096ths; its radius, m.
+	Strength uint32 `protobuf:"varint,9,opt,name=strength,proto3" json:"strength,omitempty"`
+	Size     uint32 `protobuf:"varint,10,opt,name=size,proto3" json:"size,omitempty"`
+	// The wind it adds at its peak at full strength, in steps of 0.01 m/s;
+	// for a patch of its kind, the wind's share at its core, in thousandths.
+	Peak uint32 `protobuf:"varint,11,opt,name=peak,proto3" json:"peak,omitempty"`
+	// Its pressure at its centre at full strength, in hundredths of a hPa: a
+	// dome's above, a low's below.
+	Depth         int32 `protobuf:"zigzag32,12,opt,name=depth,proto3" json:"depth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemKey) Reset() {
+	*x = SystemKey{}
+	mi := &file_keel_v1_game_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemKey) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemKey) ProtoMessage() {}
+
+func (x *SystemKey) ProtoReflect() protoreflect.Message {
+	mi := &file_keel_v1_game_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemKey.ProtoReflect.Descriptor instead.
+func (*SystemKey) Descriptor() ([]byte, []int) {
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *SystemKey) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *SystemKey) GetKind() uint32 {
+	if x != nil {
+		return x.Kind
+	}
+	return 0
+}
+
+func (x *SystemKey) GetSeed() uint32 {
+	if x != nil {
+		return x.Seed
+	}
+	return 0
+}
+
+func (x *SystemKey) GetStage() uint32 {
+	if x != nil {
+		return x.Stage
+	}
+	return 0
+}
+
+func (x *SystemKey) GetEast() int32 {
+	if x != nil {
+		return x.East
+	}
+	return 0
+}
+
+func (x *SystemKey) GetNorth() int32 {
+	if x != nil {
+		return x.North
+	}
+	return 0
+}
+
+func (x *SystemKey) GetHeading() uint32 {
+	if x != nil {
+		return x.Heading
+	}
+	return 0
+}
+
+func (x *SystemKey) GetSpeed() uint32 {
+	if x != nil {
+		return x.Speed
+	}
+	return 0
+}
+
+func (x *SystemKey) GetStrength() uint32 {
+	if x != nil {
+		return x.Strength
+	}
+	return 0
+}
+
+func (x *SystemKey) GetSize() uint32 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *SystemKey) GetPeak() uint32 {
+	if x != nil {
+		return x.Peak
+	}
+	return 0
+}
+
+func (x *SystemKey) GetDepth() int32 {
+	if x != nil {
+		return x.Depth
+	}
+	return 0
+}
+
 // Spell is a spell of weather: a stretch of time with one base wind, its
 // shifts and its gust field, in whole numbers.
 type Spell struct {
@@ -2001,14 +2226,26 @@ type Spell struct {
 	Axis       uint32 `protobuf:"varint,15,opt,name=axis,proto3" json:"axis,omitempty"`
 	AxisPeriod uint32 `protobuf:"varint,16,opt,name=axis_period,json=axisPeriod,proto3" json:"axis_period,omitempty"`
 	// The gust field's seed.
-	Seed          uint32 `protobuf:"varint,17,opt,name=seed,proto3" json:"seed,omitempty"`
+	Seed uint32 `protobuf:"varint,17,opt,name=seed,proto3" json:"seed,omitempty"`
+	// Its pressure's level, in hundredths of a hPa.
+	Pressure uint32 `protobuf:"varint,18,opt,name=pressure,proto3" json:"pressure,omitempty"`
+	// The spell arrives by a front: a line that enters the disk's reach at
+	// begin and leaves it change ticks later, moving toward toward, in
+	// 65536ths of a turn clockwise from north, its trough trough deep, in
+	// hundredths of a hPa.
+	Front  bool   `protobuf:"varint,19,opt,name=front,proto3" json:"front,omitempty"`
+	Toward uint32 `protobuf:"varint,20,opt,name=toward,proto3" json:"toward,omitempty"`
+	Trough uint32 `protobuf:"varint,21,opt,name=trough,proto3" json:"trough,omitempty"`
+	// The world's own weather systems do not blow while it is the spell in
+	// effect: a developer's weather.
+	Still         bool `protobuf:"varint,22,opt,name=still,proto3" json:"still,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Spell) Reset() {
 	*x = Spell{}
-	mi := &file_keel_v1_game_proto_msgTypes[19]
+	mi := &file_keel_v1_game_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2020,7 +2257,7 @@ func (x *Spell) String() string {
 func (*Spell) ProtoMessage() {}
 
 func (x *Spell) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[19]
+	mi := &file_keel_v1_game_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2033,7 +2270,7 @@ func (x *Spell) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Spell.ProtoReflect.Descriptor instead.
 func (*Spell) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{19}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Spell) GetBegin() int64 {
@@ -2155,6 +2392,41 @@ func (x *Spell) GetSeed() uint32 {
 	return 0
 }
 
+func (x *Spell) GetPressure() uint32 {
+	if x != nil {
+		return x.Pressure
+	}
+	return 0
+}
+
+func (x *Spell) GetFront() bool {
+	if x != nil {
+		return x.Front
+	}
+	return false
+}
+
+func (x *Spell) GetToward() uint32 {
+	if x != nil {
+		return x.Toward
+	}
+	return 0
+}
+
+func (x *Spell) GetTrough() uint32 {
+	if x != nil {
+		return x.Trough
+	}
+	return 0
+}
+
+func (x *Spell) GetStill() bool {
+	if x != nil {
+		return x.Still
+	}
+	return false
+}
+
 // SeaAreas is what raises the waves about the boat: a square of sea areas,
 // each 463 m on a side, with the wind and the fetch that give each its
 // waves. The client derives the waves from them exactly as the server does.
@@ -2188,7 +2460,7 @@ type SeaAreas struct {
 
 func (x *SeaAreas) Reset() {
 	*x = SeaAreas{}
-	mi := &file_keel_v1_game_proto_msgTypes[20]
+	mi := &file_keel_v1_game_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2200,7 +2472,7 @@ func (x *SeaAreas) String() string {
 func (*SeaAreas) ProtoMessage() {}
 
 func (x *SeaAreas) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[20]
+	mi := &file_keel_v1_game_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2213,7 +2485,7 @@ func (x *SeaAreas) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeaAreas.ProtoReflect.Descriptor instead.
 func (*SeaAreas) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{20}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *SeaAreas) GetTick() int64 {
@@ -2279,7 +2551,7 @@ type Restart struct {
 
 func (x *Restart) Reset() {
 	*x = Restart{}
-	mi := &file_keel_v1_game_proto_msgTypes[21]
+	mi := &file_keel_v1_game_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2291,7 +2563,7 @@ func (x *Restart) String() string {
 func (*Restart) ProtoMessage() {}
 
 func (x *Restart) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[21]
+	mi := &file_keel_v1_game_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2304,7 +2576,7 @@ func (x *Restart) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Restart.ProtoReflect.Descriptor instead.
 func (*Restart) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{21}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *Restart) GetInMs() uint32 {
@@ -2329,7 +2601,7 @@ type Queued struct {
 
 func (x *Queued) Reset() {
 	*x = Queued{}
-	mi := &file_keel_v1_game_proto_msgTypes[22]
+	mi := &file_keel_v1_game_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2341,7 +2613,7 @@ func (x *Queued) String() string {
 func (*Queued) ProtoMessage() {}
 
 func (x *Queued) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[22]
+	mi := &file_keel_v1_game_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2354,7 +2626,7 @@ func (x *Queued) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Queued.ProtoReflect.Descriptor instead.
 func (*Queued) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{22}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Queued) GetPosition() uint32 {
@@ -2419,7 +2691,7 @@ type Welcome struct {
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_keel_v1_game_proto_msgTypes[23]
+	mi := &file_keel_v1_game_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2431,7 +2703,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[23]
+	mi := &file_keel_v1_game_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2444,7 +2716,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{23}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *Welcome) GetWorld() string {
@@ -2558,7 +2830,7 @@ type Pong struct {
 
 func (x *Pong) Reset() {
 	*x = Pong{}
-	mi := &file_keel_v1_game_proto_msgTypes[24]
+	mi := &file_keel_v1_game_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2570,7 +2842,7 @@ func (x *Pong) String() string {
 func (*Pong) ProtoMessage() {}
 
 func (x *Pong) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[24]
+	mi := &file_keel_v1_game_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2583,7 +2855,7 @@ func (x *Pong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pong.ProtoReflect.Descriptor instead.
 func (*Pong) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{24}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *Pong) GetClientTimeUs() int64 {
@@ -2730,9 +3002,29 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x01y\x18\x03 \x01(\x11R\x01y\x12\x18\n" +
 	"\aclosing\x18\x04 \x01(\rR\aclosing\x12%\n" +
 	"\x04part\x18\x05 \x01(\x0e2\x11.keel.v1.BumpPartR\x04part\x12\x18\n" +
-	"\aarticle\x18\x06 \x01(\tR\aarticle\"8\n" +
+	"\aarticle\x18\x06 \x01(\tR\aarticle\"\x8a\x01\n" +
 	"\x0eWeatherSystems\x12&\n" +
-	"\x06spells\x18\x01 \x03(\v2\x0e.keel.v1.SpellR\x06spells\"\x8c\x03\n" +
+	"\x06spells\x18\x01 \x03(\v2\x0e.keel.v1.SpellR\x06spells\x12/\n" +
+	"\tkeyframes\x18\x02 \x03(\v2\x11.keel.v1.KeyframeR\tkeyframes\x12\x1f\n" +
+	"\vkeep_spells\x18\x03 \x01(\bR\n" +
+	"keepSpells\"L\n" +
+	"\bKeyframe\x12\x12\n" +
+	"\x04tick\x18\x01 \x01(\x03R\x04tick\x12,\n" +
+	"\asystems\x18\x02 \x03(\v2\x12.keel.v1.SystemKeyR\asystems\"\x91\x02\n" +
+	"\tSystemKey\x12\x12\n" +
+	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\rR\x04kind\x12\x12\n" +
+	"\x04seed\x18\x03 \x01(\rR\x04seed\x12\x14\n" +
+	"\x05stage\x18\x04 \x01(\rR\x05stage\x12\x12\n" +
+	"\x04east\x18\x05 \x01(\x11R\x04east\x12\x14\n" +
+	"\x05north\x18\x06 \x01(\x11R\x05north\x12\x18\n" +
+	"\aheading\x18\a \x01(\rR\aheading\x12\x14\n" +
+	"\x05speed\x18\b \x01(\rR\x05speed\x12\x1a\n" +
+	"\bstrength\x18\t \x01(\rR\bstrength\x12\x12\n" +
+	"\x04size\x18\n" +
+	" \x01(\rR\x04size\x12\x12\n" +
+	"\x04peak\x18\v \x01(\rR\x04peak\x12\x14\n" +
+	"\x05depth\x18\f \x01(\x11R\x05depth\"\x84\x04\n" +
 	"\x05Spell\x12\x14\n" +
 	"\x05begin\x18\x01 \x01(\x03R\x05begin\x12\x16\n" +
 	"\x06change\x18\x02 \x01(\rR\x06change\x12\x14\n" +
@@ -2752,7 +3044,12 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x04axis\x18\x0f \x01(\rR\x04axis\x12\x1f\n" +
 	"\vaxis_period\x18\x10 \x01(\rR\n" +
 	"axisPeriod\x12\x12\n" +
-	"\x04seed\x18\x11 \x01(\rR\x04seed\"\x96\x01\n" +
+	"\x04seed\x18\x11 \x01(\rR\x04seed\x12\x1a\n" +
+	"\bpressure\x18\x12 \x01(\rR\bpressure\x12\x14\n" +
+	"\x05front\x18\x13 \x01(\bR\x05front\x12\x16\n" +
+	"\x06toward\x18\x14 \x01(\rR\x06toward\x12\x16\n" +
+	"\x06trough\x18\x15 \x01(\rR\x06trough\x12\x14\n" +
+	"\x05still\x18\x16 \x01(\bR\x05still\"\x96\x01\n" +
 	"\bSeaAreas\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x03R\x04tick\x12\x10\n" +
 	"\x03col\x18\x02 \x01(\x11R\x03col\x12\x10\n" +
@@ -2810,7 +3107,7 @@ func file_keel_v1_game_proto_rawDescGZIP() []byte {
 }
 
 var file_keel_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_keel_v1_game_proto_goTypes = []any{
 	(ChartSubject)(0),      // 0: keel.v1.ChartSubject
 	(BumpPart)(0),          // 1: keel.v1.BumpPart
@@ -2833,12 +3130,14 @@ var file_keel_v1_game_proto_goTypes = []any{
 	(*Chunks)(nil),         // 18: keel.v1.Chunks
 	(*Bump)(nil),           // 19: keel.v1.Bump
 	(*WeatherSystems)(nil), // 20: keel.v1.WeatherSystems
-	(*Spell)(nil),          // 21: keel.v1.Spell
-	(*SeaAreas)(nil),       // 22: keel.v1.SeaAreas
-	(*Restart)(nil),        // 23: keel.v1.Restart
-	(*Queued)(nil),         // 24: keel.v1.Queued
-	(*Welcome)(nil),        // 25: keel.v1.Welcome
-	(*Pong)(nil),           // 26: keel.v1.Pong
+	(*Keyframe)(nil),       // 21: keel.v1.Keyframe
+	(*SystemKey)(nil),      // 22: keel.v1.SystemKey
+	(*Spell)(nil),          // 23: keel.v1.Spell
+	(*SeaAreas)(nil),       // 24: keel.v1.SeaAreas
+	(*Restart)(nil),        // 25: keel.v1.Restart
+	(*Queued)(nil),         // 26: keel.v1.Queued
+	(*Welcome)(nil),        // 27: keel.v1.Welcome
+	(*Pong)(nil),           // 28: keel.v1.Pong
 }
 var file_keel_v1_game_proto_depIdxs = []int32{
 	3,  // 0: keel.v1.ClientMessage.hello:type_name -> keel.v1.Hello
@@ -2847,11 +3146,11 @@ var file_keel_v1_game_proto_depIdxs = []int32{
 	6,  // 3: keel.v1.ClientMessage.command:type_name -> keel.v1.Command
 	7,  // 4: keel.v1.Command.resync:type_name -> keel.v1.Resync
 	8,  // 5: keel.v1.Command.roam:type_name -> keel.v1.Roam
-	25, // 6: keel.v1.ServerMessage.welcome:type_name -> keel.v1.Welcome
-	26, // 7: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
-	24, // 8: keel.v1.ServerMessage.queued:type_name -> keel.v1.Queued
-	23, // 9: keel.v1.ServerMessage.restart:type_name -> keel.v1.Restart
-	22, // 10: keel.v1.ServerMessage.sea_areas:type_name -> keel.v1.SeaAreas
+	27, // 6: keel.v1.ServerMessage.welcome:type_name -> keel.v1.Welcome
+	28, // 7: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
+	26, // 8: keel.v1.ServerMessage.queued:type_name -> keel.v1.Queued
+	25, // 9: keel.v1.ServerMessage.restart:type_name -> keel.v1.Restart
+	24, // 10: keel.v1.ServerMessage.sea_areas:type_name -> keel.v1.SeaAreas
 	20, // 11: keel.v1.ServerMessage.weather_systems:type_name -> keel.v1.WeatherSystems
 	19, // 12: keel.v1.ServerMessage.bump:type_name -> keel.v1.Bump
 	18, // 13: keel.v1.ServerMessage.chunks:type_name -> keel.v1.Chunks
@@ -2867,13 +3166,15 @@ var file_keel_v1_game_proto_depIdxs = []int32{
 	14, // 23: keel.v1.Places.places:type_name -> keel.v1.Place
 	16, // 24: keel.v1.Lights.lights:type_name -> keel.v1.Light
 	1,  // 25: keel.v1.Bump.part:type_name -> keel.v1.BumpPart
-	21, // 26: keel.v1.WeatherSystems.spells:type_name -> keel.v1.Spell
-	16, // 27: keel.v1.Welcome.light:type_name -> keel.v1.Light
-	28, // [28:28] is the sub-list for method output_type
-	28, // [28:28] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	23, // 26: keel.v1.WeatherSystems.spells:type_name -> keel.v1.Spell
+	21, // 27: keel.v1.WeatherSystems.keyframes:type_name -> keel.v1.Keyframe
+	22, // 28: keel.v1.Keyframe.systems:type_name -> keel.v1.SystemKey
+	16, // 29: keel.v1.Welcome.light:type_name -> keel.v1.Light
+	30, // [30:30] is the sub-list for method output_type
+	30, // [30:30] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_keel_v1_game_proto_init() }
@@ -2912,7 +3213,7 @@ func file_keel_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_keel_v1_game_proto_rawDesc), len(file_keel_v1_game_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   25,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

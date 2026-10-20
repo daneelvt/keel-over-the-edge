@@ -26,6 +26,7 @@ commands:
   migrate  bring the database's schema up to this build's
   replay   replay an input log and check it
   worldgen make the world of a seed and check it
+  weather  make the week of weather of a world and print it
   restore-test  restore the database's backups into a throwaway cluster
            and check them
 `
@@ -71,6 +72,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		err = replayCmd(args[1:], stdout, stderr)
 	case "worldgen":
 		err = worldgenCmd(args[1:], stdout, stderr)
+	case "weather":
+		err = weatherMain(args[1:], stdout, stderr)
 	case "restore-test":
 		err = restoreTest(ctx, args[1:], getenv, stdout, stderr)
 	case "help", "-h", "-help", "--help":

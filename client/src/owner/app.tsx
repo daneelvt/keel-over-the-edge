@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The world page: the map, and beside it the world's clock, the weather,
-// the boats at sea and in the queue, the islands, the places and the
-// lighthouses, each light flashing its character by the world's clock as
-// every phone shows it. It reads the world once a second, and not while
-// its tab is hidden. A click on the map picks a point: what is there is
-// told, and the owner's boats can be put there, or at a place. The page
+// The world page: the map, and beside it the world's clock, the weather
+// and its week, the boats at sea and in the queue, the islands, the places
+// and the lighthouses, each light flashing its character by the world's
+// clock as every phone shows it. It reads the world once a second, and not
+// while its tab is hidden. A click on the map picks a point: what is there
+// is told, with its pressure at the tick shown and the barometer's
+// tendency, and the owner's boats can be put there, or at a place. The page
 // acts on the owner's boats alone; the server refuses the rest. At the
 // top, always in view, the world's end counted down by keel's clock; the
 // owner may begin the next world now, typing the world's number to end it,
@@ -34,6 +35,7 @@ import {
   type Group,
   getBytes,
   getJSON,
+  getPressure,
   type Island,
   type Lifecycle,
   type Light,
@@ -41,6 +43,7 @@ import {
   type Place,
   type PlacesData,
   type Point,
+  type PressureAt,
   type Town,
   type TownsData,
   type WorldNow,
@@ -57,6 +60,7 @@ import {
 import { hidden, serverOffset } from './life';
 import { BeginNext, type Life, LifecycleCard, RemakeNext, SwitchBar } from './lifecycle';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
+import { useWeather, WEATHER_EVERY, WeekCard } from './week';
 
 /** How often the page reads the world, ms. */
 export const EVERY = 1000;
@@ -133,7 +137,9 @@ function MapCanvas({
   }, [setView]);
   useEffect(() => {
     const c = canvas.current;
-    const ctx = c?.getContext('2d');
+    // Drawn on the CPU: the map is drawn again with each reading, and a
+    // canvas drawn by the GPU process starves a software GPU's other pages.
+    const ctx = c?.getContext('2d', { willReadFrequently: true });
     if (c == null || ctx == null || view === null) {
       return;
     }
@@ -862,6 +868,7 @@ function App() {
   const [layers, setLayers] = useState<Layers>(allLayers());
   const [picked, setPicked] = useState<[number, number] | null>(null);
   const [point, setPoint] = useState<Point | null>(null);
+  const [pressure, setPressure] = useState<PressureAt | null>(null);
   const [boat, setBoat] = useState<number | null>(null);
   const [charted, setCharted] = useState<ChartedData | null>(null);
   const [light, setLight] = useState<number | null>(null);
@@ -880,6 +887,10 @@ function App() {
   // is stored: read again when it is made again.
   const nextKey = seenNext && next?.stored ? `${next.number}-${next.storedAt}` : null;
   const nxt = useDrawn('next/', nextKey, nextView, setError);
+  // Each world's week of weather, at the tick shown: the current world's
+  // following now, the next's at its beginning until the strip is dragged.
+  const weather = useWeather('', world === null ? null : String(world), WEATHER_EVERY, setError);
+  const nextWeather = useWeather('next/', nextKey, null, setError);
 
   // What was picked of a world ended means nothing in the next.
   useEffect(() => {
@@ -994,6 +1005,24 @@ function App() {
     };
   }, []);
 
+  // The pressure at the point picked, at the tick shown, read again with
+  // the weather; none for a world with no weather.
+  const shownAt = weather.weather?.at ?? null;
+  const following = weather.at === null;
+  useEffect(() => {
+    if (picked === null || shownAt === null) {
+      setPressure(null);
+      return;
+    }
+    let live = true;
+    getPressure(picked[0], picked[1], following ? null : shownAt)
+      .then((p) => live && setPressure(p))
+      .catch(() => live && setPressure(null));
+    return () => {
+      live = false;
+    };
+  }, [picked, shownAt, following]);
+
   const pick = useCallback((east: number, north: number): void => {
     setPicked([east, north]);
     getJSON<Point>(`point?east=${east.toFixed(2)}&north=${north.toFixed(2)}`)
@@ -1047,6 +1076,7 @@ function App() {
     features: cur.features,
     charted:
       charted === null ? null : new Set(charted.charted.map((c) => `${c.subject}:${c.number}`)),
+    weather: weather.weather,
   };
   // The next world drawn as the current is, without what is live. The
   // disk's rings are keel's, not a world's: they are drawn from the
@@ -1067,6 +1097,7 @@ function App() {
     light: null,
     features: nxt.features,
     charted: null,
+    weather: nextWeather.weather,
   };
   const chosen = now?.boats.find((b) => b.boat === boat && b.tools) ?? null;
 
@@ -1273,6 +1304,14 @@ function App() {
                 : `${(-point.elevation).toFixed(1)} m deep`}
               , {point.fromLip.toFixed(0)} m inside the lip, {point.off.toFixed(0)} m from{' '}
               {point.island}.{point.water !== '' ? ` No boat here: ${point.water}.` : ''}
+              {pressure !== null ? (
+                <span data-field="pressure">
+                  {' '}
+                  {pressure.hPa.toFixed(1)} hPa, {pressure.tendency} (
+                  {pressure.change >= 0 ? '+' : ''}
+                  {pressure.change.toFixed(1)} in 15 min).
+                </span>
+              ) : null}
             </p>
           ) : null}
         </div>
@@ -1280,12 +1319,28 @@ function App() {
           <aside>
             {life !== null ? <LifecycleCard life={life} /> : null}
             {life !== null ? <RemakeNext life={life} act={act} /> : null}
+            {next.stored ? (
+              <WeekCard
+                w={nextWeather.weather}
+                now={nextWeather.weather?.now ?? 0}
+                at={nextWeather.at}
+                show={nextWeather.show}
+                goTo={goToNext}
+              />
+            ) : null}
             {next.stored ? nextLists : null}
           </aside>
         ) : (
           <aside>
             {now !== null ? <Clock now={now} /> : null}
             {now !== null ? <WeatherCard now={now} /> : null}
+            <WeekCard
+              w={weather.weather}
+              now={now?.tick ?? weather.weather?.now ?? 0}
+              at={weather.at}
+              show={weather.show}
+              goTo={goTo}
+            />
             {world !== null ? (
               <BeginNext number={world} switching={life?.life.switching ?? false} act={act} />
             ) : null}

@@ -71,6 +71,7 @@ type builder struct {
 	spells   [physics.WeatherSpells]physics.Spell
 	nspells  int32
 	weathers []bus.Weather
+	keys     [bus.KeyFrames]physics.Keyframe
 
 	weather physics.Weather
 	wind    physics.WeatherTick
@@ -116,6 +117,7 @@ func (b *builder) copyFrame() {
 	b.queue = append(b.queue[:0], f.Queue...)
 	b.spells, b.nspells = f.Spells, f.NSpells
 	b.weathers = append(b.weathers[:0], f.Weathers...)
+	b.keys = f.Keys
 	f.Release()
 }
 
@@ -124,6 +126,7 @@ func (b *builder) build(ctx context.Context) *view {
 	b.copyFrame()
 	b.lookUp(ctx)
 	b.weather.Set(b.spells[:b.nspells])
+	b.weather.SetKeys(b.keys[:2])
 	physics.WeatherAt(&b.weather, &b.wind, float64(b.tick))
 	w := worldJSON{
 		Tick:  b.tick,
@@ -281,7 +284,7 @@ func (b *builder) weatherNow() weatherJSON {
 	// A developer's weather in force overrides the world's own.
 	for _, d := range slices.Backward(b.weathers) {
 		if d.From <= b.tick {
-			w.Held = d.Mode == bus.WeatherHeld || d.Mode == bus.WeatherSteady
+			w.Held = d.Mode == bus.WeatherHeld || d.Mode == bus.WeatherSteady || d.Mode == bus.WeatherFront
 			break
 		}
 	}

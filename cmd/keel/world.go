@@ -60,7 +60,7 @@ type process struct {
 	cat      *catalog.Catalog
 	waves    *physics.Waves
 	kinds    []physics.Prepared
-	timeline *weather.Timeline
+	wcfg     *weather.Config
 	sessions *auth.Cache
 	looks    []string
 	page     *api.Page
@@ -168,6 +168,9 @@ type readyWorld struct {
 	roamHandout   *edge.Handout
 	mainLight     *pb.Light
 	charts        *worldChart
+	// timeline is the world's weather: its week as stored, until the world
+	// opens with its own.
+	timeline *weather.Timeline
 }
 
 // loadWorld loads a world's terrain, making it first if it has none, and
@@ -206,6 +209,7 @@ func (p *process) loadWorld(ctx context.Context, row store.World) (*readyWorld, 
 	} else {
 		p.log.Warn("land is off: the world's terrain is sailed as open sea")
 	}
+	rw.timeline = p.shownWeek(ctx, row)
 	// What can be charted, and the islands' models: the world's, whether
 	// its land is sailed or not.
 	made := time.Now()
@@ -266,9 +270,14 @@ func (h *worldHalf) counts() counts {
 func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, error) {
 	cat, cfg, row := p.cat, p.cfg, rw.row
 	epoch := row.Epoch
+	timeline, err := p.weekFor(ctx, rw)
+	if err != nil {
+		return nil, fmt.Errorf("the world's week of weather: %w", err)
+	}
+	rw.timeline = timeline
 	sighting := rw.charts.sight(cat, epoch)
 	world, err := sim.New(sim.Config{
-		Kinds: p.kinds, Waves: p.waves, Weather: p.timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
+		Kinds: p.kinds, Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
 		Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: rw.terrain, Edge: edgeOf(cat), Sight: sighting,
 	})
 	if err != nil {
@@ -292,7 +301,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.inputs = replay.New(replay.Config{
 		Frames: b.Frames,
 		Header: replay.Header{Build: p.build, Catalog: catalog.Version, Layout: physics.LayoutVersion, Capacity: world.Capacity(), Epoch: epoch, Grace: world.Grace(), Limit: world.Limit(),
-			Seed: rw.bundle.Seed, Generator: rw.bundle.Generator, Terrain: rw.terrainDigest},
+			Seed: rw.bundle.Seed, Generator: rw.bundle.Generator, Terrain: rw.terrainDigest,
+			WeatherVersion: timeline.Week().Version, WeatherEnds: time.UnixMicro(timeline.Week().Ends).UTC(), Weather: weekDigest(timeline.Week())},
 		Dir: cfg.ReplayDir,
 		Log: p.log,
 	})
@@ -306,7 +316,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: p.log, Metrics: p.metrics, Fail: api.WriteError,
 		Land: cfg.Land, Chunks: rw.handout, Circulation: circulationOf(rw.terrain),
-		Lip: p.timeline.Prepared().Edge(), RoamChunks: rw.roamHandout, MainLight: rw.mainLight, Chart: rw.charts.model,
+		Lip: p.wcfg.Prepared.Edge(), RoamChunks: rw.roamHandout, MainLight: rw.mainLight, Chart: rw.charts.model,
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -316,7 +326,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	})
 	world.Record(h.inputs, h.game, h.lasting)
 	h.tools = ownerTools(ownerConfig{
-		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, timeline: p.timeline, terrain: rw.terrain,
+		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(),
 	})

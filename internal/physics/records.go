@@ -328,6 +328,27 @@ type WeatherParams struct {
 	DrainAt       [3]float64 // the drain's points, nautical miles from the centre: the last is the lip
 	Drain         [3]float64 // its speed toward the lip at each, knots
 	Shallow       float64    // in water shallower than this the current falls off with the depth, m
+
+	// A front: a line across the disk lying in a trough, the spell it
+	// brings behind it and the one before ahead of it.
+	TroughAhead  float64 // the trough deepens toward the line as e^(−s / this), nautical miles
+	TroughBehind float64 // and fills behind it within this, a Gaussian's width, nautical miles
+	FrontWind    float64 // its own wind at its steepest, knots
+	FrontTurning float64 // its wind blows toward the trough turned clockwise by this, degrees
+	Blend        float64 // the spells blend across the line within this either side, nautical miles
+	FrontGusts   float64 // the gust factor's excess rises by this behind the line
+	GustsBehind  float64 // over this behind it, nautical miles
+
+	// The pressure.
+	Slope    float64 // its slope across the disk, low on the left of the base wind: hPa a knot of it a nautical mile
+	Rise     float64 // how fast it rises behind a front's line, hPa a minute
+	RiseMost float64 // and how far, hPa
+
+	// How far the systems reach.
+	InwardFrom  float64 // within this of the centre a system is at its weakest, nautical miles
+	InwardTo    float64 // and beyond this it is whole, nautical miles
+	InwardLeast float64 // what a front, a squall or a shower keeps of itself at its weakest
+	Cut         float64 // a system reaches this many of its widths from its centre
 }
 
 // Regime describes the wind of a kind of spell: the catalog's values of a
@@ -371,6 +392,118 @@ type Spell struct {
 	Axis       float64
 	AxisPeriod float64
 	Seed       float64 // the gust field's seed, a uint32
+	Pressure   float64 // its pressure's level, in hundredths of a hPa
+	// Front is 1 if the spell arrives by a front: a line that enters the
+	// disk's reach at Begin and leaves it at the far side Change ticks
+	// later, moving toward Toward, in 65536ths of a turn clockwise from
+	// north, at an even speed; its trough is Trough deep, in hundredths of
+	// a hPa. The spell before blows ahead of the line, this one behind it.
+	Front  float64
+	Toward float64
+	Trough float64
+	// Still is 1 if the week's systems do not blow while this is the spell
+	// in effect: a developer's weather.
+	Still float64
+}
+
+// The shapes of a system kind's pressure, in SystemKind.Shape.
+const (
+	ShapeNone = 0 // no pressure: a patch that scales the wind
+	ShapeDome = 1 // a dome, steeper ahead
+	ShapeLow  = 2 // a low: a core and a broad shallow low about it
+)
+
+// How a system kind weakens toward the centre, in SystemKind.Inward.
+const (
+	InwardNone = 0 // it does not
+	InwardWeak = 1 // to WeatherParams.InwardLeast of itself
+	InwardGone = 2 // to nothing
+)
+
+// SystemKind describes a kind of weather system: the catalog's values of
+// it the wind is computed with.
+type SystemKind struct {
+	Shape      float64 // ShapeNone, ShapeDome or ShapeLow
+	Turning    float64 // its wind blows toward lower pressure turned clockwise by this, degrees
+	Width      float64 // its pressure's or its patch's Gaussian width, as a share of a system's size
+	Ahead      float64 // a dome is steeper ahead: its distance along its track is times this ahead of its centre
+	Broad      float64 // a low's broad low: its share of the depth
+	BroadWidth float64 // and its width as a multiple of the core's
+	Stretch    float64 // a patch is stretched along its track by this
+	Inward     float64 // InwardNone, InwardWeak or InwardGone
+	Gusts      float64 // the gust factor's excess rises by this near its core
+}
+
+// System is a weather system at a keyframe: where it is, how it moves, how
+// strong and how large it is, in whole numbers, in the units the wire
+// carries, so that a client computes the server's wind from what it is
+// sent, bit for bit. Between two keyframes it is interpolated.
+type System struct {
+	On       float64 // 1 if the slot holds a system
+	Kind     float64 // the catalog's index of its kind
+	Seed     float64 // a uint32, for drawing it
+	Stage    float64 // StageGrowing, StageMature or StageDecaying
+	East     float64 // its centre east of the world's, in quarter metres
+	North    float64 // and north
+	Heading  float64 // the direction it moves toward, in 65536ths of a turn clockwise from north
+	Speed    float64 // how fast, in steps of SeaSpeedStep
+	Strength float64 // its life and wobble, in 4096ths
+	Size     float64 // its radius, m
+	Peak     float64 // the wind it adds at its peak at full strength, in steps of SeaSpeedStep; a patch's share of the wind at its core, in thousandths
+	Depth    float64 // its pressure at its centre at full strength, in hundredths of a hPa: a dome's above, a low's below
+}
+
+// A system's stage of life, in System.Stage.
+const (
+	StageGrowing  = 0
+	StageMature   = 1
+	StageDecaying = 2
+)
+
+// The tracks of a SystemRecord.
+const (
+	TrackLine = 0 // a straight line at an even speed
+	TrackArc  = 1 // round the centre, closing on it at an even speed
+)
+
+// SystemRecord is a system of a world's week as it is stored: its kind, its
+// life, its planned track and, apart from it, its wobble. SystemAt makes
+// its keyframe at a tick from it. Its fields are whole numbers.
+type SystemRecord struct {
+	Kind   float64 // the catalog's index of its kind
+	Seed   float64 // a uint32
+	Born   float64 // the tick it is born at, its strength nothing
+	Mature float64 // the tick its strength has grown to the whole of it
+	Decays float64 // the tick it begins to decay
+	Gone   float64 // the tick it is gone, its strength nothing
+	Track  float64 // TrackLine or TrackArc
+	// A line: where it is at Born, in quarter metres east and north of the
+	// centre, and the direction it moves toward, in 65536ths of a turn.
+	East    float64
+	North   float64
+	Heading float64
+	Speed   float64 // how fast it moves along its track, in steps of SeaSpeedStep
+	// An arc: its distance from the centre at Born, in quarter metres; its
+	// bearing from the centre then, in 65536ths of a turn; which way it goes
+	// round, 1 clockwise seen from above and −1 the other way; and how fast
+	// it closes on the centre, in steps of SeaSpeedStep.
+	Radius float64
+	Angle  float64
+	Sense  float64
+	Inward float64
+	Size   float64 // its radius, m
+	Peak   float64 // as System's
+	Depth  float64 // as System's
+	// Its wobble off the track, which a forecast does not know: how far
+	// east and north it swings, in quarter metres, each with its period in
+	// ticks and its phase at tick 0 in 65536ths of a turn; and its
+	// strength's swing, in 4096ths, with its period and phase.
+	Wobble       float64
+	WobblePeriod [2]float64
+	WobblePhase  [2]float64
+	Swell        float64
+	SwellPeriod  float64
+	SwellPhase   float64
 }
 
 // WindPoint is the wind at a point in full: what the client's instruments
@@ -400,6 +533,16 @@ type GustFrame struct {
 	Seconds [2]float64 // how long its field has lived, s
 	Seed    [2 * 3]float64
 	Excess  float64 // the gust factor less 1, as the spells mix it
+	// Front is 1 while a front crosses: then the spells' shares are by
+	// which side of its line a point lies, and Share says each one's side,
+	// 0 ahead and 1 behind. The line lies FrontLine m from the centre
+	// along the way it moves, (FrontSin, FrontCos), the spells blended
+	// within FrontBlend m of it.
+	Front      float64
+	FrontSin   float64
+	FrontCos   float64
+	FrontLine  float64
+	FrontBlend float64
 }
 
 // EncounterParams describe boats meeting: the catalog's encounters values

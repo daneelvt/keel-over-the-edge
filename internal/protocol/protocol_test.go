@@ -932,21 +932,52 @@ func TestSpellsRoundTrip(t *testing.T) {
 	in := []physics.Spell{
 		{Begin: -30, Change: 18000, Start: 1 << 52, Length: 1 << 40, Regime: 3, Speed: 1234, From: 65535, Drift: -3641,
 			Gust: 1500, Shift: [2]float64{2184, 1092}, Period: [2]float64{7200, 12600}, Phase: [2]float64{1, 65535},
-			Across: 910, Axis: 7, AxisPeriod: 864000, Seed: 4294967295},
+			Across: 910, Axis: 7, AxisPeriod: 864000, Seed: 4294967295, Pressure: 101325, Front: 1, Toward: 12000, Trough: 450, Still: 1},
 		physics.SteadySpell(5.14, 1, 1<<52),
 	}
 	var out [physics.WeatherSpells]physics.Spell
-	n, err := SpellsOf(WeatherSystems(in), &out)
+	n, err := SpellsOf(WeatherSystems(in, false), &out)
 	if err != nil || n != 2 || out[0] != in[0] || out[1] != in[1] {
 		t.Fatalf("%d spells, %v:\n got  %+v\n want %+v", n, err, out[:n], in)
 	}
 	for name, m := range map[string]*pb.WeatherSystems{
 		"five":         {Spells: make([]*pb.Spell, 5)},
 		"one shift":    {Spells: []*pb.Spell{{Shift: []uint32{1}, Period: []uint32{1, 2}, Phase: []uint32{1, 2}}}},
-		"out of order": WeatherSystems([]physics.Spell{in[1], in[0]}),
+		"out of order": WeatherSystems([]physics.Spell{in[1], in[0]}, false),
 		"beyond 2⁵³":   {Spells: []*pb.Spell{{Begin: 1<<53 + 1, Shift: []uint32{0, 0}, Period: []uint32{0, 0}, Phase: []uint32{0, 0}}}},
 	} {
 		if _, err := SpellsOf(m, &out); err == nil {
+			t.Errorf("%s: read", name)
+		}
+	}
+}
+
+// TestKeyframesRoundTrip: a keyframe's systems go out and come back the
+// same, each in its slot, the empty slots left out; keyframes out of order,
+// too many, or with two systems in a slot are refused.
+func TestKeyframesRoundTrip(t *testing.T) {
+	var a, b physics.Keyframe
+	a.Tick, b.Tick = 300, 600
+	a.Systems[3] = physics.System{On: 1, Kind: 2, Seed: 4294967295, Stage: 1, East: -60000, North: 72000, Heading: 65535,
+		Speed: 257, Strength: 4096, Size: 3704, Peak: 1131, Depth: -1500}
+	a.Systems[19] = physics.System{On: 1, Kind: 4, East: 4, North: -4, Strength: 1, Size: 400, Peak: 400}
+	b.Systems[0] = a.Systems[3]
+	m := WeatherSystems(nil, true, &a, &b)
+	if !m.GetKeepSpells() || len(m.GetSpells()) != 0 || len(m.GetKeyframes()[0].GetSystems()) != 2 {
+		t.Fatalf("the message: %v", m)
+	}
+	var out [physics.KeySets]physics.Keyframe
+	n, err := KeyframesOf(m, out[:])
+	if err != nil || n != 2 || out[0] != a || out[1] != b {
+		t.Fatalf("%d keyframes, %v", n, err)
+	}
+	for name, m := range map[string]*pb.WeatherSystems{
+		"out of order": WeatherSystems(nil, true, &b, &a),
+		"too many":     WeatherSystems(nil, true, &a, &b, &b, &b, &b),
+		"a slot twice": {Keyframes: []*pb.Keyframe{{Systems: []*pb.SystemKey{{Slot: 1}, {Slot: 1}}}}},
+		"no slot 20":   {Keyframes: []*pb.Keyframe{{Systems: []*pb.SystemKey{{Slot: 20}}}}},
+	} {
+		if _, err := KeyframesOf(m, out[:]); err == nil {
 			t.Errorf("%s: read", name)
 		}
 	}

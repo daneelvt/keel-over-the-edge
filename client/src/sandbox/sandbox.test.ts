@@ -23,6 +23,7 @@ import { LAYOUT_VERSION, RECORDS, SIZES } from '../predict/layout.gen';
 import { loadPhysics, Physics } from '../predict/physics';
 import type { Recording } from './record';
 import {
+  FRONT,
   KNOT,
   Sandbox,
   START,
@@ -187,8 +188,40 @@ describe('the sandbox', () => {
     expect(Math.abs(s.wind.speed - mean)).toBeLessThan(0.006);
   });
 
-  test('reads ?weather=steady or a regime’s id', () => {
+  test('meets a squall three minutes in, and its gust front, with ?weather=squall', async () => {
+    // Three miles out, where a squall is whole.
+    const s = await startSandbox(bytes, boat, sea, { ...START, east: 5556, weather: 'squall' });
+    s.step(0, 0.6);
+    const before = s.wind.meanSpeed;
+    let most = 0;
+    let mostAt = 0;
+    for (let i = 0; i < 5 * 60 * 30; i++) {
+      s.step(0, 0.6);
+      if (s.wind.meanSpeed > most) {
+        most = s.wind.meanSpeed;
+        mostAt = i;
+      }
+    }
+    expect(most).toBeGreaterThan(1.5 * before);
+    // The boat sails on meanwhile: within a minute of three.
+    expect(Math.abs(mostAt / 30 - 180)).toBeLessThan(60);
+  });
+
+  test('meets a front three minutes in, the wind veering as it passes, with ?weather=front', async () => {
+    const s = await startSandbox(bytes, boat, sea, { ...START, east: 5556, weather: FRONT });
+    s.step(0, 0.6);
+    const before = s.wind.meanFrom;
+    for (let i = 0; i < 4 * 60 * 30; i++) {
+      s.step(0, 0.6);
+    }
+    const veered = ((((s.wind.meanFrom - before) * 180) / Math.PI + 540) % 360) - 180;
+    expect(veered).toBeGreaterThan(25);
+  });
+
+  test('reads ?weather=steady, front, a regime’s id or a kind of system’s', () => {
     expect(weatherFromQuery(new URLSearchParams('weather=stormy'), sea)).toBe('stormy');
+    expect(weatherFromQuery(new URLSearchParams('weather=fog'), sea)).toBe('fog');
+    expect(weatherFromQuery(new URLSearchParams('weather=front'), sea)).toBe(FRONT);
     expect(weatherFromQuery(new URLSearchParams('weather=steady'), sea)).toBe(STEADY);
     expect(weatherFromQuery(new URLSearchParams('weather=doldrums'), sea)).toBeNull();
     expect(weatherFromQuery(new URLSearchParams(''), sea)).toBeNull();
