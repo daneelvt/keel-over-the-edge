@@ -107,7 +107,7 @@ func (t *weeksTally) markdown(cat *catalog.Catalog) string {
 	}
 	fmt.Fprintf(&b, "\nStorms a week (a day's margin with it): %.1f. Systems a week: %.0f; the most at once: %d; not born, the disk full: %d.\n\n",
 		float64(t.storms)/weeks, float64(t.systems)/weeks, t.most, t.refused)
-	b.WriteString("| Storm hours a week, centre within | 1 NM | 2 NM | 3 NM | 4 NM | 5 NM | beyond |\n|---|---|---|---|---|---|---|\n|")
+	b.WriteString("| Storm hours a week, centre from the centre | 0–1 NM | 1–2 NM | 2–3 NM | 3–4 NM | 4–5 NM | beyond |\n|---|---|---|---|---|---|---|\n|")
 	for _, h := range t.stormHours {
 		fmt.Fprintf(&b, " %.2f |", h/weeks)
 	}

@@ -533,6 +533,16 @@ type GustFrame struct {
 	Seconds [2]float64 // how long its field has lived, s
 	Seed    [2 * 3]float64
 	Excess  float64 // the gust factor less 1, as the spells mix it
+	// Front is 1 while a front crosses: then the spells' shares are by
+	// which side of its line a point lies, and Share says each one's side,
+	// 0 ahead and 1 behind. The line lies FrontLine m from the centre
+	// along the way it moves, (FrontSin, FrontCos), the spells blended
+	// within FrontBlend m of it.
+	Front      float64
+	FrontSin   float64
+	FrontCos   float64
+	FrontLine  float64
+	FrontBlend float64
 }
 
 // EncounterParams describe boats meeting: the catalog's encounters values

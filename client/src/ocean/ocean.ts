@@ -273,6 +273,7 @@ export class Ocean {
       origin.world.y,
     );
     this.gusts.water.update(
+      this.gusts.uniforms.spells.value > 0,
       src?.weather === true ? src.physics : null,
       src?.seas ?? null,
       f.tick,

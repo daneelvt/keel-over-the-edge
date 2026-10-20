@@ -30,6 +30,9 @@ export function signOf(share: number): number {
   return Math.sign(x) * t * t * (3 - 2 * t);
 }
 
+/** A sign of nothing, as a texel: the signs from −1 to 1 are 0 to 254. */
+const ZERO = 127;
+
 /** The middle area's column and row, which is centred on the world's centre. */
 const MIDDLE = (SEA.areas - 1) / 2;
 
@@ -61,7 +64,7 @@ export class WaterSigns {
     this.spacing = water.spacing;
     this.#every = 1 / water.rate;
     const n = this.points;
-    this.#data = new Uint8Array(n * n).fill(128);
+    this.#data = new Uint8Array(n * n).fill(ZERO);
     this.texture = new DataTexture(this.#data, n, n, RedFormat, UnsignedByteType);
     this.texture.magFilter = LinearFilter;
     this.texture.minFilter = LinearFilter;
@@ -74,9 +77,12 @@ export class WaterSigns {
   /**
    * Samples the signs again if it is time, at a time in ticks and seconds,
    * about the floating origin, from the module's weather and the sea it
-   * holds; and brings the grid's place in the scene up to date.
+   * holds; and brings the grid's place in the scene up to date. With no
+   * spell of weather with gusts (a steady wind, which stills the systems
+   * too) there are none.
    */
   update(
+    gusty: boolean,
     physics: Physics | null,
     seas: Seas | null,
     tick: number,
@@ -84,7 +90,7 @@ export class WaterSigns {
     originEast: number,
     originNorth: number,
   ): void {
-    if (physics === null || seas === null) {
+    if (physics === null || seas === null || !gusty) {
       this.on.value = 0;
       return;
     }
@@ -127,7 +133,7 @@ export class WaterSigns {
           }
         }
       }
-      this.#data[p] = Math.round(127.5 + 127.5 * sign);
+      this.#data[p] = Math.round(ZERO + ZERO * sign);
     }
     this.texture.needsUpdate = true;
   }
@@ -146,6 +152,10 @@ export const waterSignAt = (w: WaterSigns): ((c: Node<'vec2'>) => Node<'float'>)
       .and(uv.x.lessThan(1))
       .and(uv.y.greaterThan(0))
       .and(uv.y.lessThan(1));
-    const v = texture(w.texture, vec2(uv.x, uv.y)).level(float(0)).x.mul(2).sub(1);
-    return inside.select(v.mul(w.on), float(0));
+    const v = texture(w.texture, vec2(uv.x, uv.y))
+      .level(float(0))
+      .x.mul(255 / ZERO)
+      .sub(1);
+    // A texel's rounding is no sign.
+    return inside.and(v.abs().greaterThan(0.01)).select(v.mul(w.on), float(0));
   }) as unknown as (c: Node<'vec2'>) => Node<'float'>;
