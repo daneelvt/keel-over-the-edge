@@ -81,10 +81,10 @@ type scenarioWeather struct {
 // its inputs in whole steps (wind speed, the direction it comes from, fetch),
 // row by row from the south-west, and the tick of the first step.
 type scenarioSea struct {
-	Tick  float64     `json:"tick"`
-	Col   int32       `json:"col"`
-	Row   int32       `json:"row"`
-	Size  int32       `json:"size"`
+	Tick  float64   `json:"tick"`
+	Col   int32     `json:"col"`
+	Row   int32     `json:"row"`
+	Size  int32     `json:"size"`
 	Areas [][]int64 `json:"areas"`
 }
 
@@ -95,7 +95,7 @@ type change struct {
 	// Areas replaces the inputs of the sea's areas; Window, with it, moves
 	// the sea's window to another first area, column and row.
 	Areas  [][]int64 `json:"areas"`
-	Window *[2]int32   `json:"window"`
+	Window *[2]int32 `json:"window"`
 	// Steer starts the scenarios' heading-hold toward this heading; a
 	// change that sets the helm stops it.
 	Steer *float64 `json:"steer"`

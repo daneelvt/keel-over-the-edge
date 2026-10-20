@@ -85,7 +85,7 @@ type Stats struct {
 	// them carried the areas' swell.
 	SeaBytes int
 	Swells   int
-	Chunks       int // chunks' addresses handed
+	Chunks   int // chunks' addresses handed
 }
 
 // Percentile is the p-th percentile of the corrections' sizes.
