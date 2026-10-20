@@ -57,6 +57,7 @@ import { Predictor, prepareEncounters } from '../predict/predictor';
 import { ROAM_HIGH } from '../render/freecam';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
+import { swellFromQuery } from '../sandbox/localsea';
 import {
   commonestWeather,
   START,
@@ -66,7 +67,6 @@ import {
   weatherFromQuery,
   windFromQuery,
 } from '../sandbox/sandbox';
-import { swellFromQuery } from '../sandbox/localsea';
 import { sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { serverNews } from '../ui/chart';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';

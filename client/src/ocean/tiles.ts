@@ -55,7 +55,7 @@ import { GUST_LOOK, type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
 import { FIELD_RADIUS, TILE_RADIUS } from './hex';
 import { HULL_MARGIN, hulls } from './hulls';
-import { depthCap, groundAtHex, leeAt, tileGround } from './shore';
+import { depthCap, groundAtHex, leeAt, tileGround, waveLeeAt } from './shore';
 import { GROUND_ROW, GUST_ROW, PASS_WIDTH } from './tilepass';
 import { waterSignAt } from './water';
 import { type BandUniforms, boatBandAt, cappedBand, periodAt, seaAreaAt, seaPlaneOf } from './wave';
@@ -165,7 +165,8 @@ export class Tiles {
     // Without the pass the band is summed here for the plane, and capped by
     // the depth; with it the plane and the ground are read, and only the
     // sea area's values, which need no sum, are computed here.
-    const summed = planes === null ? boatBandAt(band)(c) : null;
+    const summed =
+      planes === null ? boatBandAt(band)(c).mul(waveLeeAt(c, this.centre, this.centreHex)) : null;
     let ground: Node<'vec4'>;
     let plane: Node<'vec4'>;
     if (summed !== null) {

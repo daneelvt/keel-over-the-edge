@@ -15,7 +15,7 @@ import { mistToSea } from '../edge/mist';
 import { horizonDistance } from '../render/materials';
 import { FIELD_RADIUS } from './hex';
 import { hulls } from './hulls';
-import { depthCap, groundAtHex, hexOf, leeAt, tileGround } from './shore';
+import { depthCap, groundAtHex, hexOf, leeAt, tileGround, waveLeeAt } from './shore';
 import { type BandUniforms, boatBandAt, cappedBand, periodAt, seaAreaAt, seaPlaneOf } from './wave';
 
 export const FAR_RINGS = 60;
@@ -87,7 +87,7 @@ export class FarSea {
     const r = this.outer.sub(inner).mul(u.mul(u)).add(inner);
     // The angle runs from east toward north: scene (cos, -sin).
     const p = centre.add(vec2(cos(angle), sin(angle).negate()).mul(r));
-    const summed = boatBandAt(band)(p);
+    const summed = boatBandAt(band)(p).mul(waveLeeAt(p, centre, centreHex));
     const g = groundAtHex(hexOf(p, centre, centreHex));
     const f = depthCap(g, summed.w);
     const plane = seaPlaneOf(cappedBand(summed, f), p);

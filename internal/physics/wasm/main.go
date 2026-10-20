@@ -347,6 +347,15 @@ func leeGrid(s uint32, a0, b0 int32) {
 //go:wasmexport leeValues
 func leeValuesAddr() uint32 { return addr(unsafe.Pointer(&leeValues)) }
 
+// leeAt returns the share of the waves the land's lee leaves at (x, y), for
+// the sea of window s, as a step feels it.
+//
+//go:wasmexport leeAt
+func leeAt(s uint32, x, y float64) float64 {
+	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Lee: shelterInUse()}
+	return physics.LeeAt(&sea, x, y)
+}
+
 // seaInputOf rounds a wind and a fetch to an area's inputs, as the server
 // does, and writes them to seaInput. A negative fetch is that of open water.
 // It is for a client that makes its own sea, with no server to send one.

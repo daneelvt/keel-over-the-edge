@@ -54,6 +54,7 @@ interface Exports {
   swellValues(): number;
   leeGrid(slot: number, a0: number, b0: number): void;
   leeValues(): number;
+  leeAt(slot: number, x: number, y: number): number;
   seaSeal(slot: number): void;
   seaInputOf(speed: number, from: number, fetch: number): void;
   seaInput(): number;
@@ -192,6 +193,7 @@ const functionExports = [
   'swellValues',
   'leeGrid',
   'leeValues',
+  'leeAt',
   'seaSeal',
   'seaInputOf',
   'seaInput',
@@ -536,6 +538,11 @@ export class Physics {
    * module holds no shelter, and everywhere while shelterUse is off. A view
    * of the module's memory: read it before the next call.
    */
+  /** The share of the waves the land's lee leaves at (east, north), for the sea of a window, as a step feels it. */
+  leeAt(slot: number, east: number, north: number): number {
+    return this.#x.leeAt(slot, east, north);
+  }
+
   leeGrid(slot: number, a0: number, b0: number): Float64Array {
     const x = this.#x;
     x.leeGrid(slot, a0, b0);

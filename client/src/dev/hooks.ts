@@ -619,7 +619,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     setSwell(height: number | null, period = 6, from = 270): void {
       const s = offline();
       s.sea.options.swell =
-        height === null ? null : { height, period, from: (((from % 360) + 360) % 360) * (Math.PI / 180) };
+        height === null
+          ? null
+          : { height, period, from: (((from % 360) + 360) % 360) * (Math.PI / 180) };
       s.settleSea();
       floatBoat();
     },

@@ -17,8 +17,8 @@
 // gust darkens whole tiles and crosses the sea tile by tile. A third,
 // GROUND_ROW rows down, writes each tile's ground (shore.ts): the water's
 // depth, the waves' cap there, whether it is land, and the bed's surface.
-// The plane itself is capped by the depth, as the physics caps the sea
-// under a hull.
+// The plane itself is calmed in the land's lee and capped by the depth, as
+// the physics has the sea under a hull.
 
 import {
   DataTexture,
@@ -33,7 +33,7 @@ import { floor, ivec2, screenCoordinate, textureLoad, uniform, vec4 } from 'thre
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
 import { type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
-import { depthCap, groundAtHex, tileGround } from './shore';
+import { depthCap, groundAtHex, tileGround, waveLeeAt } from './shore';
 import { type BandUniforms, boatBandAt, cappedBand, seaAreaAt, seaPlaneOf } from './wave';
 
 /** Texels per row of the tile pass's target. */
@@ -99,7 +99,8 @@ export class TilePass {
     const texel = ivec2(floor(screenCoordinate));
     const offset = textureLoad(offsets, texel);
     const c = this.centre.add(offset.xy);
-    const b = summed(c);
+    // In the land's lee, then capped by the depth, as the physics has it.
+    const b = summed(c).mul(waveLeeAt(c, this.centre, this.centreHex));
     const f = depthCap(groundAtHex(this.centreHex.add(offset.zw)), b.w);
     material.fragmentNode = seaPlaneOf(cappedBand(b, f), c);
     this.#quad = new QuadMesh(material);
@@ -121,7 +122,11 @@ export class TilePass {
     // The same tile's texel, GROUND_ROW rows up the target.
     const at = textureLoad(offsets, ivec2(texel.x, texel.y.sub(GROUND_ROW)));
     const g = groundAtHex(this.centreHex.add(at.zw));
-    ground.fragmentNode = tileGround(g, depthCap(g, area(this.centre.add(at.xy)).w));
+    const ac = this.centre.add(at.xy);
+    ground.fragmentNode = tileGround(
+      g,
+      depthCap(g, area(ac).w.mul(waveLeeAt(ac, this.centre, this.centreHex))),
+    );
     this.#ground = new QuadMesh(ground);
   }
 
