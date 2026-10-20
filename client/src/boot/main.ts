@@ -66,6 +66,7 @@ import {
   weatherFromQuery,
   windFromQuery,
 } from '../sandbox/sandbox';
+import { swellFromQuery } from '../sandbox/localsea';
 import { sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { serverNews } from '../ui/chart';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
@@ -132,6 +133,10 @@ async function start(): Promise<void> {
     // The edge's rules, as a server keeps them; the world file's water's way.
     sandbox.edge = { fall: Math.round(catalog.world.edge.fall * STEPS_PER_SECOND) };
     sandbox.setCirculation(file?.circulation ?? 1);
+    // ?swell=height,period,from: a swell of the developer's own.
+    sandbox.startSwell = swellFromQuery(query);
+    sandbox.sea.options.swell = sandbox.startSwell;
+    sandbox.settleSea();
     game.setDriver(sandbox);
     if (file !== null) {
       const land = new Land(

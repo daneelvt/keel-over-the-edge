@@ -7,4 +7,4 @@ package physics
 // LayoutVersion identifies the layout of the records and the list of Fn. The
 // WebAssembly module reports it, and the client refuses a module whose
 // version differs from its own copy in client/src/predict/layout.gen.ts.
-const LayoutVersion uint32 = 0x64085bc4
+const LayoutVersion uint32 = 0x7e625cd6

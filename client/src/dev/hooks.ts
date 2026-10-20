@@ -590,7 +590,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * Puts a sea of the developer's own in the sandbox, in place of the
      * wind's: a window of areas, each with its inputs in whole steps, as a
-     * scenario has them. It stays until the boat is next stepped or placed.
+     * scenario has them (a swell from the fourth; the current is the
+     * module's at each area). It stays until the boat is next stepped or placed.
      */
     setSeaWindow(col: number, row: number, size: number, areas: number[][]): void {
       const s = offline();
@@ -603,7 +604,23 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         speed: areas.map((a) => a[0] ?? 0),
         from: areas.map((a) => a[1] ?? 0),
         fetch: areas.map((a) => a[2] ?? 0),
+        swellHeight: areas.map((a) => a[3] ?? 0),
+        swellPeriod: areas.map((a) => a[4] ?? 0),
+        swellFrom: areas.map((a) => a[5] ?? 0),
       });
+      floatBoat();
+    },
+
+    /**
+     * A swell of the developer's own in every area of the sandbox's sea,
+     * its height in m, period in s and the degrees it comes from; null goes
+     * back to the storms'. The sea takes it at once.
+     */
+    setSwell(height: number | null, period = 6, from = 270): void {
+      const s = offline();
+      s.sea.options.swell =
+        height === null ? null : { height, period, from: (((from % 360) + 360) % 360) * (Math.PI / 180) };
+      s.settleSea();
       floatBoat();
     },
 
@@ -1111,6 +1128,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       s.sea.options.flat = false;
       s.sea.options.fetch = null;
       s.sea.options.split = null;
+      s.sea.options.swell = s.startSwell;
       const knots = sea === null ? undefined : SEA_STATES[sea];
       if (knots !== undefined) {
         s.steadyNow(knots * KNOT, 0);

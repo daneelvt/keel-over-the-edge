@@ -363,6 +363,18 @@ func seaInputOf(speed, from, fetch float64) {
 //go:wasmexport seaInput
 func seaInputAddr() uint32 { return addr(unsafe.Pointer(&seaInput)) }
 
+// swellInputOf rounds a swell, its height (m), period (s) and the
+// direction it comes from (rad), to an area's inputs, as the server does,
+// and writes them to seaInput: its height, period and direction in whole
+// steps.
+//
+//go:wasmexport swellInputOf
+func swellInputOf(height, period, from float64) {
+	var in physics.SeaInput
+	in.SetSwell(physics.Swell{Height: height, Period: period, From: from})
+	seaInput = [3]uint32{in.SwellHeight, in.SwellPeriod, in.SwellFrom}
+}
+
 // seaSeal makes window s ready, once its areas are set.
 //
 //go:wasmexport seaSeal

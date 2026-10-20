@@ -186,6 +186,7 @@ export class Predictor implements BoatDriver {
   /** Sets the world's way round the disk, from the Welcome, for the current the boat is stepped in. */
   setCirculation(way: number): void {
     this.#physics.circulation(way);
+    this.seas.recirculate();
   }
 
   /** The boat at a snapshot's state, what was predicted forgotten. */

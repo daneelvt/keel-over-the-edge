@@ -9,10 +9,12 @@
 // the discs of harbour water whose centres are; and from format 3 its
 // features: the roofs over its hexagons (an arch's span, a cave's roof),
 // and the parts of features that stand in it (a fall's lip, a blowhole's
-// vent, a fumarole's, a colony). The header is checked before anything is
-// read, so a chunk of another world, another number or a format it does
-// not know is never taken for the one asked for; a chunk of format 1 is a
-// chunk with no town, one of format 2 a chunk with no feature.
+// vent, a fumarole's, a colony); and from format 4 a shelter's table holds
+// three bytes a direction, the lee's fetch for the waves the third. The
+// header is checked before anything is read, so a chunk of another world,
+// another number or a format it does not know is never taken for the one
+// asked for; a chunk of format 1 is a chunk with no town, one of format 2 a
+// chunk with no feature, one of format 3 a chunk whose lee is open water.
 // The browser unpacks it with DecompressionStream, which every browser the
 // game runs on has, in workers too.
 
@@ -21,7 +23,7 @@ import { GROUND } from '../../predict/layout.gen';
 /** "KWCH", every chunk's first four bytes. */
 const MAGIC = [0x4b, 0x57, 0x43, 0x48] as const;
 /** The newest chunk format this client reads; it reads every one from 1. */
-export const CHUNK_FORMAT = 3;
+export const CHUNK_FORMAT = 4;
 /** The header's length. */
 const HEADER = 4 + 2 + 2 + 4 + 16 + 1;
 /** What a chunk holds, in the header's last byte. */
@@ -29,8 +31,12 @@ const HOLDS_GROUND = 1;
 const HOLDS_SHELTER = 2;
 const HOLDS_TOWN = 4;
 const HOLDS_FEATURES = 8;
-/** A shelter table's bytes for one cell: a factor's and a turn's for each direction. */
-const CELL_TABLE = GROUND.shelterDirections * 2;
+/**
+ * A shelter table's bytes for one cell: a factor's, a turn's and the lee's
+ * for each direction, as the module holds it; before format 4 a chunk holds
+ * the first two of each.
+ */
+const CELL_TABLE = GROUND.shelterDirections * GROUND.shelterStride;
 /** A building's bytes, and a disc of harbour water's. */
 const BUILDING = 20;
 const DISC = 10;
@@ -136,7 +142,7 @@ export interface ChunkGrids {
   elevation: Int16Array | null;
   /** Each hexagon's surface, an index into the catalog's surfaces. */
   surface: Uint8Array | null;
-  /** For each cell, column by column, and each direction, the shelter's factor byte and turn byte. */
+  /** For each cell, column by column, and each direction, the shelter's factor byte, turn byte and lee byte. */
   shelter: Uint8Array | null;
   /** Its towns' buildings and harbour, or null for none. */
   town: ChunkTown | null;
@@ -240,20 +246,26 @@ export function readChunk(raw: Uint8Array, number: number, world: Uint8Array): C
       return 'a chunk’s shelter cut short';
     }
     const table = new Uint8Array(GROUND.shelterCells * CELL_TABLE);
-    for (let i = 0; i < table.length; i += 2) {
+    for (let i = 0; i < table.length; i += GROUND.shelterStride) {
       table[i] = GROUND.shelterFactorOne;
+      table[i + 2] = GROUND.shelterLeeOpen;
     }
+    const width = format >= 4 ? GROUND.shelterStride : 2;
+    const stored = GROUND.shelterDirections * width;
     const bits = raw.subarray(at, at + bitmap);
     at += bitmap;
     for (let i = 0; i < GROUND.shelterCells; i++) {
       if (((bits[i >> 3] ?? 0) & (1 << (i & 7))) === 0) {
         continue;
       }
-      if (raw.length < at + CELL_TABLE) {
+      if (raw.length < at + stored) {
         return 'a chunk’s shelter cut short';
       }
-      table.set(raw.subarray(at, at + CELL_TABLE), i * CELL_TABLE);
-      at += CELL_TABLE;
+      for (let k = 0; k < GROUND.shelterDirections; k++) {
+        const to = i * CELL_TABLE + k * GROUND.shelterStride;
+        table.set(raw.subarray(at + k * width, at + (k + 1) * width), to);
+      }
+      at += stored;
     }
     grids.shelter = table;
   }

@@ -1,6 +1,6 @@
 {
  "comment": "Written by go test ./internal/physics -run Golden -update. Floats are their IEEE 754 bits in hexadecimal.",
- "layout": "0xceb2cc4d",
+ "layout": "0x7e625cd6",
  "scenarios": [
   {
    "name": "beat",
@@ -7104,7 +7104,7 @@
   },
   {
    "name": "lee-sea",
-   "digest": "8b6b516d9026067a72a29827a2d4126ddf318729ce7e8e9accc7bc3a01db8077",
+   "digest": "9a9a5e6e35b6ae6754f8f72ad1707f33308bac2844acbef9e177f1f4eb870c4d",
    "checkpoints": [
     {
      "step": 600,
@@ -7140,26 +7140,26 @@
       "boom": "0xbfe91ad538033f40",
       "boomRate": "0x0000000000000000",
       "groundTimer": "0x0000000000000000",
-      "heading": "0x3f88ba4df8648398",
-      "heave": "0x3fdabfc900ef2596",
-      "heaveRate": "0x3fb7e3dcbbfd90e3",
-      "heel": "0x3f8b047ac7de24aa",
+      "heading": "0x3f78c1500635d4ae",
+      "heave": "0x3fb32dbdfaadaff8",
+      "heaveRate": "0x3f82e02ada658953",
+      "heel": "0x3f2de2943c5480f4",
       "pilotOrder": "0x0000000000000000",
       "pilotTrim": "0x0000000000000000",
       "pilotWay": "0x0000000000000000",
-      "pitch": "0x3f9234aa2bd2b0b8",
-      "pitchRate": "0x3fb61b3b76787072",
-      "rollRate": "0x3fc1f4bb2b16bf7d",
-      "rudder": "0xbfa6f5bc7f9c4780",
-      "sailor": "0x3fbc28501cdc53a2",
+      "pitch": "0x3f6e7cf283edf97c",
+      "pitchRate": "0x3f914b81c4a160be",
+      "rollRate": "0x3f9e41faf6ca0b23",
+      "rudder": "0xbf8c5f5a7687b231",
+      "sailor": "0x3fba0b9f54a3a48f",
       "sailorMode": "0x0000000000000000",
       "sailorTimer": "0x0000000000000000",
       "sheetLimit": "0x3fe91ad538033f40",
-      "surge": "0x40001bf03fd126ad",
-      "sway": "0xbfdc73e15e85ad8e",
-      "x": "0x404d940157504993",
-      "y": "0xc043979bc697c87d",
-      "yawRate": "0x3fab83826bc6d231"
+      "surge": "0x3ffc470e62ba744a",
+      "sway": "0xbfb8e61a756f7400",
+      "x": "0x404da0bebed3b136",
+      "y": "0xc043a75892edd791",
+      "yawRate": "0x3f851276be78a4e4"
      }
     },
     {
@@ -7168,26 +7168,26 @@
       "boom": "0xbfe91ad538033f40",
       "boomRate": "0x0000000000000000",
       "groundTimer": "0x0000000000000000",
-      "heading": "0x3f842f5a0bd7cb70",
-      "heave": "0x3fd6b94ca9bfa21b",
-      "heaveRate": "0x3f912bd74a65475a",
-      "heel": "0xbf71f0fb397c59ed",
+      "heading": "0x3f7cada1a24af022",
+      "heave": "0x3faed13917351373",
+      "heaveRate": "0xbf74758cb0908aed",
+      "heel": "0x3f554b7d105ae662",
       "pilotOrder": "0x0000000000000000",
       "pilotTrim": "0x0000000000000000",
       "pilotWay": "0x0000000000000000",
-      "pitch": "0xbf879d71f502b5fa",
-      "pitchRate": "0x3fac48e21c8dc65e",
-      "rollRate": "0x3fc1eb97aa22ce25",
-      "rudder": "0xbfa3412dd4648ea2",
-      "sailor": "0x3fbd14cec77e8db8",
+      "pitch": "0xbf42ce3e8a1cf430",
+      "pitchRate": "0x3f85f2c102ec6bd8",
+      "rollRate": "0x3f98829e6202b5af",
+      "rudder": "0xbf8c961cb1756ff5",
+      "sailor": "0x3fb6de2d6cfcc849",
       "sailorMode": "0x0000000000000000",
       "sailorTimer": "0x0000000000000000",
       "sheetLimit": "0x3fe91ad538033f40",
-      "surge": "0x40001bccfbb8c6a2",
-      "sway": "0xbfd8ea3f4c5f3b57",
-      "x": "0x404d59d060e02e3d",
-      "y": "0xc01373ab246a61ef",
-      "yawRate": "0x3fa779eac8502d0f"
+      "surge": "0x3ffc68076231873c",
+      "sway": "0xbfb465b66c622799",
+      "x": "0x404d846132e26ca7",
+      "y": "0xc01426e77b96b20c",
+      "yawRate": "0x3f8062213b7b2d65"
      }
     }
    ]

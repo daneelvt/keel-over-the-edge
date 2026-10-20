@@ -40,7 +40,7 @@ export interface SeaReport {
 export function loadCase(physics: Physics, slot: number, c: SeaCase): void {
   physics.seaWindow(slot, c.sea.col, c.sea.row, c.sea.size);
   for (const [i, a] of c.sea.areas.entries()) {
-    physics.seaArea(slot, i, a[0] ?? 0, a[1] ?? 0, a[2] ?? 0);
+    physics.seaArea(slot, i, a[0] ?? 0, a[1] ?? 0, a[2] ?? 0, a[3] ?? 0, a[4] ?? 0, a[5] ?? 0, a[6] ?? 0, a[7] ?? 0);
   }
   physics.seaSeal(slot);
   physics.seaDrawAt(c.sea.tick);

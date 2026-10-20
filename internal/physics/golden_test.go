@@ -360,6 +360,11 @@ func runScenario(seaParams map[string]float64, params map[string]any, wind map[s
 		if ground, shelter, err = readTerrain(sc.Terrain, prepared); err != nil {
 			return goldenScenario{}, err
 		}
+		if sea != nil {
+			// The waves are calmed in the land's lee, as the wind is
+			// sheltered.
+			sea.Lee = shelter
+		}
 	}
 	if sky != nil && sc.Sea != nil && sc.Sea.Tick != sc.Weather.Tick {
 		return goldenScenario{}, fmt.Errorf("the sea's tick is %v, the weather's %v", sc.Sea.Tick, sc.Weather.Tick)

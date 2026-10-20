@@ -380,7 +380,7 @@ describe('a recorded sail', () => {
     expect(sc.weather.spells).toHaveLength(1);
     expect(sc.weather.spells[0]).toMatchObject({ steady: 1, speed: 514, from: 0, begin: 0 });
     expect(sc.sea.areas).toHaveLength(25);
-    expect(sc.sea.areas[0]).toEqual([514, 0, 11112]);
+    expect(sc.sea.areas[0]).toEqual([514, 0, 11112, 0, 0, 0, 0, 0]);
     // The trade spell is asked for at step 400, which sails into tick 402,
     // and the steady wind at step 1000, into tick 1002: each as a server's
     // developer would set it, to blow from the second after next.

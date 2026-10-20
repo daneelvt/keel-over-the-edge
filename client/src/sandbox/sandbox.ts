@@ -37,7 +37,7 @@ import {
   steadySpell,
   takesEffect,
 } from '../predict/weather';
-import { LocalSea } from './localsea';
+import { LocalSea, type Swell } from './localsea';
 import { Recorder, type Recording, type StepWeather, type WeatherSet } from './record';
 
 const S = RECORDS.state;
@@ -153,6 +153,8 @@ export class Sandbox implements BoatDriver {
   readonly start: SandboxStart;
   /** Whether the sail is being recorded (the developer panel turns it on). */
   recording = false;
+  /** The swell the page asked for (?swell=), which a reset keeps. */
+  startSwell: Swell | null = null;
   /** The sea about the boat, as the physics module holds it, and what makes it. */
   readonly seas: Seas;
   readonly sea: LocalSea;
@@ -200,7 +202,7 @@ export class Sandbox implements BoatDriver {
     this.start = start;
     preparePhysics(physics, boat, weather);
     this.seas = new Seas(physics);
-    this.sea = new LocalSea(physics, this.seas);
+    this.sea = new LocalSea(physics, this.seas, Math.round(weather.keyframe.every * 30));
     this.weather = new Spells(physics);
     const self = this;
     this.#stepWeather = {
@@ -222,6 +224,7 @@ export class Sandbox implements BoatDriver {
   /** Sets the world's way round the disk for the current: 1 clockwise, −1 the other way, 0 none. */
   setCirculation(way: number): void {
     this.#physics.circulation(way);
+    this.seas.recirculate();
   }
 
   /** The physics module, for whoever draws its sea. */

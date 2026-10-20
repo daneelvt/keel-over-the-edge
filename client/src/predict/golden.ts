@@ -154,7 +154,7 @@ export async function runScenario(
     }
     physics.seaWindow(0, col, row, sea.size);
     for (const [i, a] of areas.entries()) {
-      physics.seaArea(0, i, a[0] ?? 0, a[1] ?? 0, a[2] ?? 0);
+      physics.seaArea(0, i, a[0] ?? 0, a[1] ?? 0, a[2] ?? 0, a[3] ?? 0, a[4] ?? 0, a[5] ?? 0, a[6] ?? 0, a[7] ?? 0);
     }
     physics.seaSeal(0);
   };
