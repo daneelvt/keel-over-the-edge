@@ -10,7 +10,8 @@ import (
 )
 
 // Digest is a 64-bit FNV-1a hash of a frame's state: the tick, the
-// developer's weathers (each one's tick, mode, regime, speed and direction),
+// developer's weathers (each one's tick, mode, regime, speed and direction)
+// and systems (each one's ticks, kind, point, slot, heading and speed),
 // the sea in effect and next (each run of areas with the same inputs, and
 // its length), whether admission is held, each occupied slot's number, boat, generation,
 // owner, connection, grace, control word, pilot word, state, course and, if it has
@@ -30,6 +31,16 @@ func Digest(f *bus.Frame) uint64 {
 		h.u64(uint64(w.Regime))
 		h.u64(uint64(w.Speed))
 		h.u64(uint64(w.Dir))
+	}
+	for _, s := range f.Systems {
+		h.u64(uint64(s.Born))
+		h.u64(uint64(s.At))
+		h.u64(uint64(s.Kind))
+		h.u64(uint64(int64(s.East)))
+		h.u64(uint64(int64(s.North)))
+		h.byte(s.Slot)
+		h.u64(uint64(s.Heading))
+		h.u64(uint64(s.Speed))
 	}
 	h.sea(f.Sea.Now)
 	h.sea(f.Sea.Next)

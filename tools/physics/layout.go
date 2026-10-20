@@ -35,6 +35,9 @@ var records = []struct {
 	{"spell", reflect.TypeFor[physics.Spell]()},
 	{"wind", reflect.TypeFor[physics.WindPoint]()},
 	{"gustFrame", reflect.TypeFor[physics.GustFrame]()},
+	{"system", reflect.TypeFor[physics.System]()},
+	{"systemKind", reflect.TypeFor[physics.SystemKind]()},
+	{"systemRecord", reflect.TypeFor[physics.SystemRecord]()},
 	{"other", reflect.TypeFor[physics.State]()},
 	{"encounterParams", reflect.TypeFor[physics.EncounterParams]()},
 	{"wake", reflect.TypeFor[physics.Wake]()},
@@ -93,12 +96,16 @@ var seaConstants = []struct {
 
 // weatherConstants are the weather's sizes: the spells a module holds, the
 // steps in a turn of a spell's directions, the most samples of the wave
-// wind, and the octaves of the gust field.
+// wind, the octaves of the gust field, the systems a keyframe holds, the
+// keyframes a module holds and the kinds of system.
 var weatherConstants = []struct {
 	name  string
 	value int
 }{
 	{"spells", physics.WeatherSpells},
+	{"systems", physics.MaxSystems},
+	{"keySets", physics.KeySets},
+	{"kinds", physics.MaxKinds},
 	{"turnSteps", physics.TurnSteps},
 	{"waveSamples", physics.MaxWaveSamples},
 	{"octaves", physics.GustOctaves},

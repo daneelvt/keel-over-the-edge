@@ -1,0 +1,16 @@
+{
+  "comment": "Written by go test ./internal/weather -run WeekDigests -update: the SHA-256 of seeds 1–8's weeks, as stored, for a week from epoch to ends (µs of UTC), with testIslands.",
+  "version": 1,
+  "epoch": 1792360800000000,
+  "ends": 1792965600000000,
+  "digests": {
+    "1": "6e8d4226ae7383e8379e19d2883857a10b5477a25949e05d383d5bf85286ff28",
+    "2": "59c5838bac62c99c3d93e26e923c50ed4edfd1bb57363a2ea45687b4b3731b96",
+    "3": "c60ffff4c5e1bad11a63387af4ace1acf74ebe118a1ae3f05b9e76e3ba36e0b3",
+    "4": "cac637d6351c1c41edeecb622883884802c203d9a16b30772b742e7c722cf0e2",
+    "5": "f8dc49ca04650426495ce397df2c6fe7a90085e890ab87885b8260a777787ca8",
+    "6": "90fa116fafe8f72a4ff3b9cf6d1fca20b03f20d15af3ab9441bdb4a3de81d0a5",
+    "7": "de4fd55b87c51aec28c8c3ae220f4e369402e85be552ff487565834c333b9a6e",
+    "8": "bc90fa81f02a7fa7d2e112128afec25b2e52a209a9729d2647ba5c58849e78ce"
+  }
+}

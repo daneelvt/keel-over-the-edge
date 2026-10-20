@@ -187,6 +187,20 @@ func WeatherParams(c *Catalog) physics.WeatherParams {
 	copy(p.DrainAt[:], c.Weather.Current.DrainAt)
 	copy(p.Drain[:], c.Weather.Current.Drain)
 	p.Shallow = float64(c.Weather.Current.Shallow)
+	p.TroughAhead = float64(c.Weather.Front.TroughAhead)
+	p.TroughBehind = float64(c.Weather.Front.TroughBehind)
+	p.FrontWind = float64(c.Weather.Front.FrontWind)
+	p.FrontTurning = float64(c.Weather.Front.FrontTurning)
+	p.Blend = float64(c.Weather.Front.Blend)
+	p.FrontGusts = float64(c.Weather.Front.FrontGusts)
+	p.GustsBehind = float64(c.Weather.Front.GustsBehind)
+	p.Slope = float64(c.Weather.Pressure.Slope)
+	p.Rise = float64(c.Weather.Pressure.Rise)
+	p.RiseMost = float64(c.Weather.Pressure.RiseMost)
+	p.InwardFrom = float64(c.Weather.Reach.InwardFrom)
+	p.InwardTo = float64(c.Weather.Reach.InwardTo)
+	p.InwardLeast = float64(c.Weather.Reach.InwardLeast)
+	p.Cut = float64(c.Weather.Reach.Cut)
 	return p
 }
 

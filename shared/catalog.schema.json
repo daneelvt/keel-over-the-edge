@@ -32,7 +32,7 @@
       "description": "The weather's numbers.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["sea", "disk", "gusts", "ring", "waveWind", "current", "regimes", "sequence"],
+      "required": ["sea", "disk", "gusts", "ring", "waveWind", "current", "front", "pressure", "reach", "regimes", "systems", "week", "keyframe", "water"],
       "properties": {
         "sea": { "$ref": "#/$defs/WeatherSea" },
         "disk": { "$ref": "#/$defs/WeatherDisk" },
@@ -40,8 +40,14 @@
         "ring": { "$ref": "#/$defs/WeatherRing" },
         "waveWind": { "$ref": "#/$defs/WeatherWaveWind" },
         "current": { "$ref": "#/$defs/WeatherCurrent" },
+        "front": { "$ref": "#/$defs/WeatherFront" },
+        "pressure": { "$ref": "#/$defs/WeatherPressure" },
+        "reach": { "$ref": "#/$defs/WeatherReach" },
         "regimes": { "description": "The kinds of spell of weather.", "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/Regime" } },
-        "sequence": { "$ref": "#/$defs/Sequence" }
+        "systems": { "description": "The kinds of weather system.", "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/SystemKind" } },
+        "week": { "$ref": "#/$defs/WeatherWeek" },
+        "keyframe": { "$ref": "#/$defs/WeatherKeyframe" },
+        "water": { "$ref": "#/$defs/WeatherWater" }
       }
     },
     "WeatherSea": {
@@ -149,12 +155,15 @@
       "description": "A kind of spell of weather.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "share", "frontal", "next", "wind"],
+      "required": ["id", "share", "frontal", "spell", "pressure", "next", "systems", "wind"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "share": { "description": "The regime's share of the world's time.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-        "frontal": { "description": "A spell of it arrives and leaves as a front does: the wind veers.", "type": "boolean" },
-        "next": { "description": "The regimes a spell of it may give way to, by id.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Id" } },
+        "frontal": { "description": "A spell of it arrives and leaves as a front does: a front crosses the disk, and the wind veers.", "type": "boolean" },
+        "spell": { "description": "The shortest and the longest a spell of it lasts, in hours.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.5, "maximum": 48 } },
+        "pressure": { "description": "The lowest and the highest of its pressure's level, in hPa.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 900, "maximum": 1100 } },
+        "next": { "description": "The regimes a spell of it gives way to, with the chance of each.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/RegimeNext" } },
+        "systems": { "description": "The systems born in a spell of it.", "type": "array", "items": { "$ref": "#/$defs/RegimeSystems" } },
         "wind": { "$ref": "#/$defs/RegimeWind" }
       }
     },
@@ -173,28 +182,154 @@
         "drift": { "description": "The most its direction moves over a spell, in degrees.", "type": "number", "minimum": 0, "maximum": 180 }
       }
     },
-    "Sequence": {
-      "title": "Sequence",
-      "description": "The spells of weather until the world's weather is generated: this sequence, over and over from the world's epoch.",
+    "RegimeNext": {
+      "title": "RegimeNext",
+      "description": "A regime a spell may give way to.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["seed", "veer", "swing", "spells"],
+      "required": ["to", "chance"],
       "properties": {
-        "seed": { "description": "The seed each spell's numbers are drawn with.", "type": "integer", "minimum": 0, "maximum": 4294967295 },
-        "veer": { "description": "How far the wind veers as a spell of a frontal regime arrives or leaves, the least and the most, in degrees.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 180 } },
-        "swing": { "description": "How far the wind's direction may move either way from one spell to the next otherwise, in degrees.", "type": "number", "minimum": 0, "maximum": 180 },
-        "spells": { "description": "The spells, in order.", "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/SequenceSpell" } }
+        "to": { "$ref": "#/$defs/Id" },
+        "chance": { "description": "The chance a spell gives way to it.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
       }
     },
-    "SequenceSpell": {
-      "title": "SequenceSpell",
-      "description": "A spell of the sequence.",
+    "RegimeSystems": {
+      "title": "RegimeSystems",
+      "description": "How many systems of a kind are born in a spell.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["regime", "hours"],
+      "required": ["kind", "rate", "atStart"],
       "properties": {
-        "regime": { "$ref": "#/$defs/Id" },
-        "hours": { "description": "How long it lasts, in whole hours.", "type": "integer", "minimum": 1, "maximum": 100 }
+        "kind": { "$ref": "#/$defs/Id" },
+        "rate": { "description": "How many are born an hour over the disk, on average.", "type": "number", "minimum": 0, "maximum": 20 },
+        "atStart": { "description": "How many are born as the spell begins.", "type": "integer", "minimum": 0, "maximum": 4 }
+      }
+    },
+    "WeatherFront": {
+      "title": "WeatherFront",
+      "description": "A front: a line across the disk lying in a trough, the old spell ahead of it and the new behind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["troughAhead", "troughBehind", "frontWind", "frontTurning", "blend", "frontGusts", "gustsBehind"],
+      "properties": {
+        "troughAhead": { "description": "The trough deepens toward the line as e^(−s / this), in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "troughBehind": { "description": "And fills behind it within this, a Gaussian's width, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "frontWind": { "description": "Its own wind at its steepest, in knots.", "type": "number", "minimum": 0, "maximum": 60 },
+        "frontTurning": { "description": "Its wind blows toward the trough turned clockwise by this, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "blend": { "description": "The spells blend across the line within this either side, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 5 },
+        "frontGusts": { "description": "The gust factor's excess rises by this behind the line.", "type": "number", "minimum": 0, "maximum": 1 },
+        "gustsBehind": { "description": "Over this behind the line, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 }
+      }
+    },
+    "WeatherPressure": {
+      "title": "WeatherPressure",
+      "description": "The pressure: its slope across the disk, and its rise behind a front.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slope", "rise", "riseMost"],
+      "properties": {
+        "slope": { "description": "The slope across the disk, low on the left of the base wind, in hPa a knot of it a nautical mile.", "type": "number", "minimum": 0, "maximum": 1 },
+        "rise": { "description": "How fast the pressure rises behind a front's line, in hPa a minute.", "type": "number", "minimum": 0, "maximum": 10 },
+        "riseMost": { "description": "And how far, in hPa.", "type": "number", "minimum": 0, "maximum": 30 }
+      }
+    },
+    "WeatherReach": {
+      "title": "WeatherReach",
+      "description": "How far the systems reach: their weakening toward the centre, and where they end.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inwardFrom", "inwardTo", "inwardLeast", "cut"],
+      "properties": {
+        "inwardFrom": { "description": "Within this of the centre a system is at its weakest, in nautical miles.", "type": "number", "minimum": 0, "maximum": 10 },
+        "inwardTo": { "description": "Beyond this it is whole, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "inwardLeast": { "description": "What a front, a squall or a shower keeps of itself at its weakest.", "type": "number", "minimum": 0, "maximum": 1 },
+        "cut": { "description": "A system reaches this many of its widths from its centre.", "type": "number", "minimum": 1, "maximum": 10 }
+      }
+    },
+    "SystemKind": {
+      "title": "SystemKind",
+      "description": "A kind of weather system: a pressure shape moving with it, its wind turned from the pressure's gradient, its size, life and track.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "shape", "turning", "width", "ahead", "broad", "stretch", "inward", "gusts", "size", "speed", "speedOf", "life", "wind", "factor", "depth", "track", "islands", "night", "dawn", "lift", "calmBelow", "goneAbove", "rain", "cloud", "lightning"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "shape": { "description": "A dome, a low, or none: a patch that scales the wind.", "enum": ["dome", "low", "none"] },
+        "turning": { "description": "Its wind blows toward lower pressure turned clockwise by this, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "width": { "description": "Its pressure's or its patch's Gaussian width, as a share of its size.", "type": "number", "exclusiveMinimum": 0, "maximum": 2 },
+        "ahead": { "description": "A dome is steeper ahead: its distance along its track is times this ahead of its centre.", "type": "number", "minimum": 1, "maximum": 4 },
+        "broad": { "description": "A low's broad low about its core: its share of the depth, and its width as a multiple of the core's.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+        "stretch": { "description": "A patch is stretched along its track by this.", "type": "number", "minimum": 1, "maximum": 5 },
+        "inward": { "description": "How it weakens toward the centre: weak to the least, gone to nothing, or none.", "enum": ["weak", "gone", "none"] },
+        "gusts": { "description": "The gust factor's excess rises by this near its core.", "type": "number", "minimum": 0, "maximum": 1 },
+        "size": { "description": "Its radius, the least and the most, in nautical miles.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 5 } },
+        "speed": { "description": "How fast it moves, the least and the most: a share of the base wind, or knots.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 30 } },
+        "speedOf": { "description": "Whether speed is a share of the base wind or knots.", "enum": ["wind", "knots"] },
+        "life": { "description": "How long it lives, the least and the most, in minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000 } },
+        "wind": { "description": "The wind it adds at its peak at full strength, the least and the most, in knots.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 60 } },
+        "factor": { "description": "A patch's share of the wind at its core, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1 } },
+        "depth": { "description": "Its pressure at its centre at full strength, the least and the most, in hPa: a dome's above, a low's below.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 60 } },
+        "track": { "description": "Where it is born and how it moves: wind, across from the windward rim; outer, round the outer waters; drift, inside, drifting with the wind.", "enum": ["wind", "outer", "drift"] },
+        "islands": { "description": "The share of those born by day that are born over an island's land.", "type": "number", "minimum": 0, "maximum": 1 },
+        "night": { "description": "It is born only at night, or within dawn minutes after sunrise.", "type": "boolean" },
+        "dawn": { "description": "Minutes after sunrise it may still be born.", "type": "number", "minimum": 0, "maximum": 120 },
+        "lift": { "description": "It lifts this long after sunrise, the least and the most, in minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 120 } },
+        "calmBelow": { "description": "It is born only where the spell's mean wind is under this, in knots; 0 for anywhere.", "type": "number", "minimum": 0, "maximum": 60 },
+        "goneAbove": { "description": "It is gone once the spell's mean wind passes this, in knots; 0 for never.", "type": "number", "minimum": 0, "maximum": 60 },
+        "rain": { "description": "The rain under it, for drawing.", "enum": ["none", "light", "moderate", "heavy"] },
+        "cloud": { "description": "The cloud of it, for drawing.", "enum": ["none", "fog", "cumulus", "cumulonimbus"] },
+        "lightning": { "description": "Lightning strikes from it above this strength; 0 for none.", "type": "number", "minimum": 0, "maximum": 2 }
+      }
+    },
+    "WeatherWeek": {
+      "title": "WeatherWeek",
+      "description": "A world's week of weather: how it is drawn and checked.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["opening", "closing", "closingRegime", "fair", "shares", "sharesFrom", "margin", "draws", "veer", "swing", "frontSpeed", "frontTrough", "spread", "wobble", "wobblePeriod", "strengthWobble", "systemsMost", "outer", "inwardShare", "seed"],
+      "properties": {
+        "opening": { "description": "A world opens with this long of settled or trade weather and no front on the disk, in hours.", "type": "number", "minimum": 0, "maximum": 24 },
+        "closing": { "description": "And closes with this long of one spell of closingRegime and no front on the disk, in hours.", "type": "number", "minimum": 0, "maximum": 24 },
+        "closingRegime": { "$ref": "#/$defs/Id" },
+        "fair": { "description": "Its longest settled or trade spell is at least this long, in hours.", "type": "number", "minimum": 0, "maximum": 48 },
+        "shares": { "description": "Each regime's share is within this of the catalog's.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "sharesFrom": { "description": "For a world of this many days or more.", "type": "number", "minimum": 0, "maximum": 30 },
+        "margin": { "description": "The week covers this long beyond the world's end, in hours.", "type": "number", "minimum": 0, "maximum": 168 },
+        "draws": { "description": "The most weeks drawn before the best is kept.", "type": "integer", "minimum": 1, "maximum": 100000 },
+        "veer": { "description": "How far the wind veers as a front passes, the least and the most, in degrees.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 180 } },
+        "swing": { "description": "How far the wind's direction may move either way at another change, in degrees.", "type": "number", "minimum": 0, "maximum": 180 },
+        "frontSpeed": { "description": "How fast a front moves, the least and the most, in knots.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 30 } },
+        "frontTrough": { "description": "How deep a front's trough is, the least and the most, in hPa.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 30 } },
+        "spread": { "description": "A front moves toward where the new spell's wind blows, within this either way, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "wobble": { "description": "The most a system wobbles off its track, in nautical miles.", "type": "number", "minimum": 0, "maximum": 2 },
+        "wobblePeriod": { "description": "The shortest and the longest period of a wobble, in minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 600 } },
+        "strengthWobble": { "description": "The most a system's strength wobbles, as a share of it.", "type": "number", "minimum": 0, "maximum": 1 },
+        "systemsMost": { "description": "The most systems on the disk at once.", "type": "integer", "minimum": 0, "maximum": 16 },
+        "outer": { "description": "The outer waters a storm keeps to, from and to, in nautical miles from the centre.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+        "inwardShare": { "description": "The share of storms that turn inward.", "type": "number", "minimum": 0, "maximum": 1 },
+        "seed": { "description": "The seed a developer's held spells are drawn with.", "type": "integer", "minimum": 0, "maximum": 4294967295 }
+      }
+    },
+    "WeatherKeyframe": {
+      "title": "WeatherKeyframe",
+      "description": "The systems' keyframes, which the server and the phone interpolate between.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["every"],
+      "properties": {
+        "every": { "description": "Seconds between keyframes: a whole number.", "type": "integer", "minimum": 1, "maximum": 60 }
+      }
+    },
+    "WeatherWater": {
+      "title": "WeatherWater",
+      "description": "The water's signs of the wind: the mean wind sampled round the camera, against the wave wind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["points", "spacing", "rate"],
+      "properties": {
+        "points": { "description": "The grid's points a side.", "type": "integer", "minimum": 2, "maximum": 64 },
+        "spacing": { "description": "Its spacing, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "rate": { "description": "Samplings a second.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 }
       }
     },
     "Encounters": {

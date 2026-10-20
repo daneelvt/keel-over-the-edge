@@ -135,6 +135,7 @@ var defaultEnv = steadyEnv(steadyOf(DefaultSpell))
 func windAt(w *World, f *bus.Frame, x, y float64) physics.Env {
 	wx := physics.Weather{Prepared: w.timeline.Prepared()}
 	wx.Set(f.SpellsInPlay())
+	wx.SetKeys(f.Keys[:2])
 	var at physics.WeatherTick
 	physics.WeatherAt(&wx, &at, float64(f.Tick))
 	e := physics.WindAt(&at, x, y, nil)

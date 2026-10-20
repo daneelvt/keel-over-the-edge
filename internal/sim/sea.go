@@ -30,8 +30,9 @@ const seaShare = (seaAreas + bus.SeaPeriod - 2) / (bus.SeaPeriod - 1)
 // centre averaged over the last few minutes (physics.WaveSample). The
 // samples of that average, on a grid of world time, are kept here too, with
 // each area's average of them: a pure function of the tick and the frames'
-// weathers, so a world loaded from a snapshot makes them again and gets the
-// same.
+// weathers and systems, each sample made with the spells and the systems'
+// keyframes of its own tick, so a world loaded from a snapshot makes them
+// again and gets the same.
 type sea struct {
 	waves   *physics.Waves
 	windows [2]physics.SeaWindow
@@ -62,6 +63,7 @@ type sea struct {
 	scratch physics.Weather
 	at1     physics.WeatherTick
 	spells  [physics.WeatherSpells]physics.Spell
+	keys    [bus.KeyFrames]physics.Keyframe
 
 	// fetch is each area's fetch, by the land; nil is open water's.
 	fetch []physics.Fetch
@@ -101,39 +103,51 @@ func (s *sea) init(waves *physics.Waves, t *weather.Timeline) {
 
 // under sets a sea, in effect and next, to what the wave wind raises over
 // open water: in effect at the second of tick, next at the second after.
-func (s *sea) under(f *bus.Sea, tick int64, ws []bus.Weather) {
+func (s *sea) under(f *bus.Sea, tick int64, d dev) {
 	second := bus.SeaSecond(tick) * bus.SeaPeriod
-	s.fill(f.Now, second, ws)
-	s.fill(f.Next, second+bus.SeaPeriod, ws)
+	s.fill(f.Now, second, d)
+	s.fill(f.Next, second+bus.SeaPeriod, d)
 }
 
 // fill sets every area's inputs to those its wave wind gives at a tick,
 // with each area's fetch for its wind's direction, or open water's.
-func (s *sea) fill(areas []physics.SeaInput, tick int64, ws []bus.Weather) {
+func (s *sea) fill(areas []physics.SeaInput, tick int64, d dev) {
 	if s.waves == nil {
 		clear(areas)
 		return
 	}
 	if !s.hasInput || s.inputsAt != tick {
-		s.make(tick, ws)
+		s.make(tick, d)
 	}
 	copy(areas, s.inputs)
 }
 
-// weatherAt is the weather at a tick.
-func (s *sea) weatherAt(tick int64, ws []bus.Weather) *physics.WeatherTick {
-	n := s.timeline.Spells(tick, ws, &s.spells)
+// weatherAt is the weather at a tick: its spells and its systems.
+func (s *sea) weatherAt(tick int64, d dev) *physics.WeatherTick {
+	n := s.timeline.Spells(tick, d.ws, &s.spells)
 	s.scratch.Set(s.spells[:n])
+	s.timeline.Keyframes(tick, d.ss, &s.keys)
+	s.scratch.SetKeys(s.keys[:2])
 	physics.WeatherAt(&s.scratch, &s.at1, float64(tick))
 	return &s.at1
 }
 
+// dev is what a developer has set of the weather, as a frame holds it: its
+// weathers and its systems.
+type dev struct {
+	ws []bus.Weather
+	ss []bus.System
+}
+
+// devOf is a frame's developer's weathers and systems.
+func devOf(f *bus.Frame) dev { return dev{f.Weathers, f.Systems} }
+
 // make computes every area's inputs at a tick from its wave wind.
-func (s *sea) make(tick int64, ws []bus.Weather) {
+func (s *sea) make(tick int64, d dev) {
 	p := s.prepared
 	k := p.WaveGridOf(tick)
-	s.bring(k, ws)
-	now := s.weatherAt(tick, ws)
+	s.bring(k, d)
+	now := s.weatherAt(tick, d)
 	share := p.WaveDecay(float64(tick - k*p.WaveGrid()))
 	for i := range s.inputs {
 		c := &s.centres[i]
@@ -149,7 +163,7 @@ func (s *sea) make(tick int64, ws []bus.Weather) {
 
 // bring makes the samples and averages up to grid point k: only the new
 // ones if they follow on from those made, all of them otherwise.
-func (s *sea) bring(k int64, ws []bus.Weather) {
+func (s *sea) bring(k int64, d dev) {
 	if s.made && s.newest == k {
 		return
 	}
@@ -158,7 +172,7 @@ func (s *sea) bring(k int64, ws []bus.Weather) {
 		from = s.newest + 1
 	}
 	for j := from; j <= k; j++ {
-		at := s.weatherAt(s.prepared.WaveSampleTick(j), ws)
+		at := s.weatherAt(s.prepared.WaveSampleTick(j), d)
 		slot := j % s.ring
 		if slot < 0 {
 			slot += s.ring
@@ -181,16 +195,16 @@ func (s *sea) bring(k int64, ws []bus.Weather) {
 // the waves no sooner than the next second but one. Over more than a
 // second, as when the world's time jumps, both are the wave wind's. dst may
 // be src.
-func (s *sea) roll(dst, src *bus.Sea, from, to int64, ws []bus.Weather) {
+func (s *sea) roll(dst, src *bus.Sea, from, to int64, d dev) {
 	switch bus.SeaSecond(to) - bus.SeaSecond(from) {
 	case 0:
 		copy(dst.Now, src.Now)
 		copy(dst.Next, src.Next)
 	case 1:
 		copy(dst.Now, src.Next)
-		s.fill(dst.Next, (bus.SeaSecond(to)+1)*bus.SeaPeriod, ws)
+		s.fill(dst.Next, (bus.SeaSecond(to)+1)*bus.SeaPeriod, d)
 	default:
-		s.under(dst, to, ws)
+		s.under(dst, to, d)
 	}
 }
 

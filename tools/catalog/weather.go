@@ -28,6 +28,9 @@ var windGroups = []struct{ def, name string }{
 	{"WeatherGusts", "gusts"},
 	{"WeatherWaveWind", "waveWind"},
 	{"WeatherCurrent", "current"},
+	{"WeatherFront", "front"},
+	{"WeatherPressure", "pressure"},
+	{"WeatherReach", "reach"},
 }
 
 const regimeDef = "RegimeWind"
@@ -138,10 +141,41 @@ func checkWeather(doc map[string]any) error {
 		bad("weather.current.drainAt: its last point (%v) must be the edge, %v", a[2], disk["edge"])
 	}
 
+	front, _ := w["front"].(map[string]any)
+	if !(num(front["troughBehind"]) <= num(front["troughAhead"])) {
+		bad("weather.front: troughBehind (%v) must be no more than troughAhead (%v)", front["troughBehind"], front["troughAhead"])
+	}
+	reach, _ := w["reach"].(map[string]any)
+	ordered("weather.reach", "inwardFrom", "inwardTo", reach)
+
+	kinds := map[string]bool{}
+	systems, _ := w["systems"].([]any)
+	for _, k := range systems {
+		m, _ := k.(map[string]any)
+		id, _ := m["id"].(string)
+		if kinds[id] {
+			bad("weather.systems: id %q is used more than once", id)
+		}
+		kinds[id] = true
+		for _, f := range []string{"size", "speed", "life", "wind", "factor", "depth", "lift"} {
+			if lo, hi := pair(m[f]); !(lo <= hi) {
+				bad("weather.systems[%s].%s: %v is not from low to high", id, f, m[f])
+			}
+		}
+	}
+	week, _ := w["week"].(map[string]any)
+	for _, f := range []string{"veer", "frontSpeed", "frontTrough", "wobblePeriod", "outer"} {
+		if lo, hi := pair(week[f]); !(lo <= hi) {
+			bad("weather.week.%s: %v is not from low to high", f, week[f])
+		}
+	}
+	if _, hi := pair(week["outer"]); hi > edge {
+		bad("weather.week.outer: %v reaches past the edge, %v", week["outer"], disk["edge"])
+	}
+
 	regimes, _ := w["regimes"].([]any)
 	index := map[string]int{}
 	share := map[string]float64{}
-	next := map[string][]string{}
 	total := 0.0
 	for i, r := range regimes {
 		m, _ := r.(map[string]any)
@@ -152,66 +186,121 @@ func checkWeather(doc map[string]any) error {
 		index[id] = i
 		share[id] = num(m["share"])
 		total += share[id]
-		for _, n := range m["next"].([]any) {
-			next[id] = append(next[id], n.(string))
-		}
 		wind, _ := m["wind"].(map[string]any)
 		for _, f := range []string{"speed", "period"} {
 			if lo, hi := pair(wind[f]); !(lo <= hi) {
 				bad("weather.regimes[%s].wind.%s: %v is not from low to high", id, f, wind[f])
 			}
 		}
+		for _, f := range []string{"spell", "pressure"} {
+			if lo, hi := pair(m[f]); !(lo <= hi) {
+				bad("weather.regimes[%s].%s: %v is not from low to high", id, f, m[f])
+			}
+		}
+		ss, _ := m["systems"].([]any)
+		for _, s := range ss {
+			e, _ := s.(map[string]any)
+			if k, _ := e["kind"].(string); !kinds[k] {
+				bad("weather.regimes[%s].systems: no kind %q", id, k)
+			}
+		}
 	}
 	if math.Abs(total-1) > 1e-9 {
 		bad("weather.regimes: the shares add up to %v, not 1", total)
 	}
-	for _, id := range sortedKeys(next) {
-		for _, n := range next[id] {
-			if _, ok := index[n]; !ok {
-				bad("weather.regimes[%s].next: no regime %q", id, n)
+	if id, _ := week["closingRegime"].(string); id != "" {
+		if i, ok := index[id]; !ok {
+			bad("weather.week.closingRegime: no regime %q", id)
+		} else if m, _ := regimes[i].(map[string]any); m["frontal"] == true {
+			bad("weather.week.closingRegime: %s is frontal: a front would cross the disk as it begins", id)
+		}
+	}
+
+	// The transition table: each row adds up to 1 and names regimes there
+	// are, never its own, and its long-run shares are near the catalog's.
+	table := make([][]float64, len(regimes))
+	length := make([]float64, len(regimes))
+	for i, r := range regimes {
+		m, _ := r.(map[string]any)
+		id, _ := m["id"].(string)
+		table[i] = make([]float64, len(regimes))
+		lo, hi := pair(m["spell"])
+		length[i] = (lo + hi) / 2
+		row := 0.0
+		next, _ := m["next"].([]any)
+		for _, x := range next {
+			e, _ := x.(map[string]any)
+			to, _ := e["to"].(string)
+			j, ok := index[to]
+			if !ok {
+				bad("weather.regimes[%s].next: no regime %q", id, to)
+				continue
+			}
+			if j == i {
+				bad("weather.regimes[%s].next: a spell cannot give way to its own regime", id)
+			}
+			table[i][j] += num(e["chance"])
+			row += num(e["chance"])
+		}
+		if math.Abs(row-1) > 1e-9 {
+			bad("weather.regimes[%s].next: the chances add up to %v, not 1", id, row)
+		}
+	}
+	if len(problems) == 0 {
+		long := longRun(table, length)
+		for i, r := range regimes {
+			m, _ := r.(map[string]any)
+			id, _ := m["id"].(string)
+			if math.Abs(long[i]-share[id]) > shareTolerance {
+				bad("weather.regimes: the table gives %s %.0f%% of the time in the long run, its share is %.0f%%", id, 100*long[i], 100*share[id])
 			}
 		}
 	}
 
-	seq, _ := w["sequence"].(map[string]any)
-	spells, _ := seq["spells"].([]any)
-	hours := map[string]float64{}
-	sum := 0.0
-	var order []string
-	for i, s := range spells {
-		m, _ := s.(map[string]any)
-		id, _ := m["regime"].(string)
-		if _, ok := index[id]; !ok {
-			bad("weather.sequence.spells[%d]: no regime %q", i, id)
-			continue
-		}
-		order = append(order, id)
-		hours[id] += num(m["hours"])
-		sum += num(m["hours"])
-	}
-	// The sequence repeats, so its last spell gives way to its first.
-	for i, id := range order {
-		to := order[(i+1)%len(order)]
-		if !slices.Contains(next[id], to) {
-			bad("weather.sequence: a %s spell gives way to a %s one, which its regime does not allow", id, to)
-		}
-	}
-	if sum > 0 {
-		for _, id := range sortedKeys(share) {
-			if got := hours[id] / sum; math.Abs(got-share[id]) > shareTolerance {
-				bad("weather.sequence: %s has %.0f%% of the time, its share is %.0f%%", id, 100*got, 100*share[id])
-			}
-		}
-	}
 	if len(problems) > 0 {
 		return fmt.Errorf("the weather:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
 }
 
-// shareTolerance is how far the sequence's share of a regime may be from
-// the regime's: five hundredths of the time.
-const shareTolerance = 0.05
+// shareTolerance is how far the transition table's long-run share of a
+// regime may be from the regime's: three hundredths of the time.
+const shareTolerance = 0.03
+
+// longRun is the long-run share of the time in each regime of a chain of
+// spells: the chain's stationary distribution over spells, found by
+// iterating, each regime's weighed by its mean spell.
+func longRun(table [][]float64, length []float64) []float64 {
+	n := len(table)
+	p := make([]float64, n)
+	for i := range p {
+		p[i] = 1 / float64(n)
+	}
+	for range 10000 {
+		q := make([]float64, n)
+		for i := range n {
+			for j := range n {
+				q[j] += p[i] * table[i][j]
+			}
+		}
+		// A chain that alternates never settles: keeping half of each
+		// step's start damps the swing without moving where it settles.
+		for i := range q {
+			q[i] = (p[i] + q[i]) / 2
+		}
+		p = q
+	}
+	time := make([]float64, n)
+	sum := 0.0
+	for i := range n {
+		time[i] = p[i] * length[i]
+		sum += time[i]
+	}
+	for i := range time {
+		time[i] /= sum
+	}
+	return time
+}
 
 func sortedKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))

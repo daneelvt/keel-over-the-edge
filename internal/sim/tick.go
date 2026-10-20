@@ -67,7 +67,8 @@ func (w *World) inputs() {
 	next.Skipped = w.skip
 	w.skip = 0
 	next.Weathers = append(next.Weathers[:0], cur.Weathers...)
-	w.sea.roll(&next.Sea, &cur.Sea, cur.Tick, next.Tick, cur.Weathers)
+	next.Systems = append(next.Systems[:0], cur.Systems...)
+	w.sea.roll(&next.Sea, &cur.Sea, cur.Tick, next.Tick, devOf(cur))
 	next.NextBoat = cur.NextBoat
 	next.Held = cur.Held
 	next.Live = append(next.Live[:0], cur.Live...)
@@ -153,10 +154,13 @@ func (w *World) physics() {
 	w.workers.step(w.next.Live)
 }
 
-// weatherAt brings the world's wind to f's tick and spells.
+// weatherAt brings the world's wind to f's tick, spells and systems.
 func (w *World) weatherAt(f *bus.Frame) {
 	if !sameSpells(&w.weather, f) {
 		w.weather.Set(f.SpellsInPlay())
+	}
+	if wx := &w.weather; wx.NKeys != 2 || wx.Keys[0] != f.Keys[0] || wx.Keys[1] != f.Keys[1] {
+		wx.SetKeys(f.Keys[:2])
 	}
 	physics.WeatherAt(&w.weather, &w.wind, float64(f.Tick))
 }

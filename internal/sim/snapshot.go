@@ -18,6 +18,7 @@ import (
 //	version                 uvarint, SnapshotVersion
 //	tick                    varint
 //	developer's weathers    uvarint n, then n × the weather below, ascending by the tick each takes effect from
+//	developer's systems     uvarint n, then n × the system below, by their births
 //	next boat ID            uvarint
 //	capacity                uvarint
 //	admission held          uvarint, 1 if held, else 0
@@ -27,8 +28,12 @@ import (
 //	pairs                   uvarint n, then n × the pair below, by their slots, ascending
 //
 // A developer's weather is the tick it takes effect from as a varint, then
-// its mode, regime, wind speed and direction as uvarints. The spells in
-// play and the sea follow from the tick and these, and are not stored.
+// its mode, regime, wind speed and direction as uvarints; a developer's
+// system the ticks it is born at and reaches its point as varints, its
+// kind as a uvarint, its point east and north as varints, then its slot,
+// heading and speed as uvarints. The spells in play, the systems'
+// keyframes and the sea follow from the tick and these, and are not
+// stored.
 //
 // Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
@@ -53,7 +58,7 @@ import (
 // A checkpoint stores this snapshot without the owner's tools' marks
 // (AppendCheckpoint), so a world is restored only by a build that reads its
 // version, and a restart clears them.
-const SnapshotVersion = 10
+const SnapshotVersion = 11
 
 // The owner's tools' marks of a boat, in a snapshot.
 const (
@@ -113,6 +118,17 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendUvarint(dst, uint64(w.Regime))
 		dst = binary.AppendUvarint(dst, uint64(w.Speed))
 		dst = binary.AppendUvarint(dst, uint64(w.Dir))
+	}
+	dst = binary.AppendUvarint(dst, uint64(len(f.Systems)))
+	for _, s := range f.Systems {
+		dst = binary.AppendVarint(dst, s.Born)
+		dst = binary.AppendVarint(dst, s.At)
+		dst = binary.AppendUvarint(dst, uint64(s.Kind))
+		dst = binary.AppendVarint(dst, int64(s.East))
+		dst = binary.AppendVarint(dst, int64(s.North))
+		dst = binary.AppendUvarint(dst, uint64(s.Slot))
+		dst = binary.AppendUvarint(dst, uint64(s.Heading))
+		dst = binary.AppendUvarint(dst, uint64(s.Speed))
 	}
 	dst = binary.AppendUvarint(dst, f.NextBoat)
 	dst = binary.AppendUvarint(dst, uint64(f.Capacity()))
@@ -250,6 +266,21 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		}
 		w.Mode, w.Regime, w.Speed, w.Dir = bus.WeatherMode(mode), uint16(regime), uint32(speed), uint32(dir)
 		f.Weathers = append(f.Weathers, w)
+	}
+	f.Systems = f.Systems[:0]
+	n = r.count(bus.SystemSlots)
+	for range n {
+		s := bus.System{Born: r.varint(), At: r.varint()}
+		kind, east, north, slot, heading, speed := r.uvarint(), r.varint(), r.varint(), r.uvarint(), r.uvarint(), r.uvarint()
+		if r.err != nil {
+			return r.err
+		}
+		if kind > math.MaxUint16 || east < math.MinInt32 || east > math.MaxInt32 || north < math.MinInt32 || north > math.MaxInt32 ||
+			slot >= bus.SystemSlots || heading > math.MaxUint32 || speed > math.MaxUint32 || s.At < s.Born {
+			return fmt.Errorf("sim: snapshot: a developer's system of kind %d in slot %d", kind, slot)
+		}
+		s.Kind, s.East, s.North, s.Slot, s.Heading, s.Speed = uint16(kind), int32(east), int32(north), uint8(slot), uint32(heading), uint32(speed)
+		f.Systems = append(f.Systems, s)
 	}
 	clear(f.Sea.Now)
 	clear(f.Sea.Next)

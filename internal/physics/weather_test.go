@@ -17,10 +17,14 @@ import (
 // package cannot import the catalog, which imports it.
 type catalogWeather struct {
 	Weather struct {
-		Disk     map[string]any `json:"disk"`
-		Gusts    map[string]any `json:"gusts"`
-		WaveWind map[string]any `json:"waveWind"`
-		Current  map[string]any `json:"current"`
+		Disk     map[string]any   `json:"disk"`
+		Gusts    map[string]any   `json:"gusts"`
+		WaveWind map[string]any   `json:"waveWind"`
+		Current  map[string]any   `json:"current"`
+		Front    map[string]any   `json:"front"`
+		Pressure map[string]any   `json:"pressure"`
+		Reach    map[string]any   `json:"reach"`
+		Systems  []map[string]any `json:"systems"`
 		Regimes  []struct {
 			ID   string         `json:"id"`
 			Wind map[string]any `json:"wind"`
@@ -34,7 +38,7 @@ var weatherOnce = sync.OnceValues(func() (*WeatherParams, error) {
 		return nil, err
 	}
 	values := map[string]any{}
-	for _, g := range []map[string]any{c.Weather.Disk, c.Weather.Gusts, c.Weather.WaveWind, c.Weather.Current} {
+	for _, g := range []map[string]any{c.Weather.Disk, c.Weather.Gusts, c.Weather.WaveWind, c.Weather.Current, c.Weather.Front, c.Weather.Pressure, c.Weather.Reach} {
 		for k, v := range g {
 			values[k] = v
 		}

@@ -80,6 +80,34 @@ type WeatherPrepared struct {
 	waveSamples int32
 	waveWeights [MaxWaveSamples]float64 // newest first, adding up to 1
 	invWaveTime float64                 // 1 / the time constant in ticks
+
+	// A front.
+	troughAhead    float64 // m
+	invTroughAhead float64 // 1/m
+	taperFrom      float64 // m ahead of the line: the trough ahead tapers from here
+	invTaper       float64 // to nothing over 1 / this, m
+	troughBehind   float64 // m
+	frontNorm      float64 // its wind per unit of the trough's slope, m/s
+	frontSin       float64 // of its turning angle
+	frontCos       float64
+	blend          float64 // m
+	invBlend2      float64 // 1 / (2 blend), 1/m
+	frontGusts     float64
+	gustsHalf      float64 // m: half the gusts' band behind the line
+	frontReach     float64 // m: the line enters and leaves this far from the centre
+
+	// The pressure.
+	slope    float64 // hPa per m/s of the base wind per m
+	rise     float64 // hPa a tick
+	riseMost float64 // hPa
+
+	// The systems.
+	inwardFrom    float64 // m
+	invInwardSpan float64 // 1/m
+	inwardLeast   float64
+	cut           float64
+	kinds         [MaxKinds]systemKind
+	nkinds        int32
 }
 
 // PrepareWeather derives the wind's constants from its parameters. It is
@@ -130,6 +158,32 @@ func PrepareWeather(p *WeatherParams, w *WeatherPrepared) {
 	w.waveSample = float64(w.waveGrid)
 	w.waveSamples = min(max(steps(p.WaveSamples, 1), 1), MaxWaveSamples)
 	w.invWaveTime = 1 / float64(p.WaveTimeConstant*StepsPerSecond)
+
+	w.troughAhead = max2(float64(p.TroughAhead*nauticalMile), 1)
+	w.invTroughAhead = 1 / w.troughAhead
+	w.taperFrom = float64(frontTaperFrom * w.troughAhead)
+	w.invTaper = 1 / float64((frontTaperTo-frontTaperFrom)*w.troughAhead)
+	w.troughBehind = max2(float64(p.TroughBehind*nauticalMile), 1)
+	// The trough's steepest is behind the line, one width back:
+	// e^(−½) / troughBehind of its depth a metre.
+	w.frontNorm = float64(float64(p.FrontWind*knotSpeed)*w.troughBehind) * sqrtE
+	w.frontSin, w.frontCos = SinCos(float64(p.FrontTurning * degree))
+	w.blend = max2(float64(p.Blend*nauticalMile), 1)
+	w.invBlend2 = 1 / float64(2*w.blend)
+	w.frontGusts = p.FrontGusts
+	w.gustsHalf = max2(float64(float64(0.5*p.GustsBehind)*nauticalMile), 1)
+	w.frontReach = w.edge + float64(frontTaperTo*w.troughAhead)
+	w.slope = float64(p.Slope/knotSpeed) / nauticalMile
+	w.rise = float64(p.Rise / minuteTicks)
+	w.riseMost = p.RiseMost
+	w.inwardFrom = float64(p.InwardFrom * nauticalMile)
+	w.invInwardSpan = 0
+	if span := float64((p.InwardTo - p.InwardFrom) * nauticalMile); span > 0 {
+		w.invInwardSpan = 1 / span
+	}
+	w.inwardLeast = p.InwardLeast
+	w.cut = max2(p.Cut, 1)
+	w.nkinds = 0
 	// The exponential average of samples a grid step apart: each sample
 	// weighs e^(−step/T) times the one after it, and the weights of those
 	// kept are scaled to add up to 1.
@@ -145,8 +199,28 @@ func PrepareWeather(p *WeatherParams, w *WeatherPrepared) {
 	}
 }
 
+// The trough ahead of a front's line tapers from frontTaperFrom of its
+// e-folding distance to nothing at frontTaperTo, where it is a twentieth of
+// its depth: so the line enters and leaves the disk's reach with nothing
+// of it on the disk.
+const (
+	frontTaperFrom = 2
+	frontTaperTo   = 3
+)
+
+// SpeedFactor is the share of a spell's wind at mid-disk that blows r m
+// from the centre.
+func (w *WeatherPrepared) SpeedFactor(r float64) float64 {
+	return w.speedCentre + float64(w.speedSpan*smooth(float64(r*w.invRim)))
+}
+
 // ChangeTicks is how many ticks one spell takes to give way to the next.
 func (w *WeatherPrepared) ChangeTicks() int64 { return int64(w.change) }
+
+// FrontReach is how far from the centre a front's line enters the disk's
+// reach and leaves it, m: the lip and the trough ahead of the line. A
+// front's spell takes the ticks the line takes to go twice this.
+func (w *WeatherPrepared) FrontReach() float64 { return w.frontReach }
 
 // WaveGrid is how many ticks apart the wave wind's samples are, and
 // WaveSamples how many it keeps.
@@ -240,6 +314,14 @@ type spell struct {
 	across, axis, axisTurns  float64
 	fieldSpeed               float64 // m/s
 	seeds                    [GustOctaves]uint32
+	level                    float64 // its pressure's level, hPa
+	// A front's: the direction it moves toward, its speed, m a tick, and
+	// its trough's depth, hPa.
+	front      bool
+	fsin, fcos float64
+	fspeed     float64
+	trough     float64
+	still      bool // the week's systems do not blow while it is in effect
 }
 
 // spellOf turns a spell's whole numbers into the values the wind is computed
@@ -283,15 +365,32 @@ func spellOf(p *WeatherPrepared, s *Spell) spell {
 	for k := range o.seeds {
 		o.seeds[k] = hash32(seed + uint32(k)*0x9e3779b9)
 	}
+	o.still = s.Still != 0
+	o.level = standardPress
+	if s.Pressure > 0 {
+		o.level = float64(s.Pressure * hundredthHPa)
+	}
+	if s.Front != 0 && o.change > 0 && !o.steady {
+		o.front = true
+		o.fsin, o.fcos = SinCos(float64(s.Toward * turnStep))
+		o.fspeed = float64(2*p.frontReach) * o.invChange
+		o.trough = max2(float64(s.Trough*hundredthHPa), 0)
+	}
 	return o
 }
 
-// Weather is the spells in play, ascending by the tick each begins at.
+// Weather is the spells in play, ascending by the tick each begins at, and
+// the systems: keyframes about the tick, or, for a client with no server,
+// the systems' records.
 type Weather struct {
 	Prepared *WeatherPrepared
 	Spells   [WeatherSpells]Spell
 	Count    int32
 	spells   [WeatherSpells]spell
+	Keys     [KeySets]Keyframe
+	NKeys    int32
+	Records  [MaxSystems]SystemRecord
+	NRecords int32
 }
 
 // SetSpell sets spell i, and makes it ready.
@@ -322,8 +421,17 @@ type WeatherTick struct {
 	Tick   float64
 	p      *WeatherPrepared
 	n      int32      // spells in play at this tick: 0, 1 or 2
-	weight [2]float64 // each one's share
+	weight [2]float64 // each one's share; across a front, the share crossed
 	at     [2]spellTick
+	// front: a front is crossing, and the spells' shares at a point are by
+	// which side of its line the point is: the line lies line from the
+	// centre along (fe, fn), the way it moves.
+	front  bool
+	fe, fn float64
+	line   float64
+	trough float64 // hPa
+	sys    [2 * MaxSystems]systemTick
+	ns     int32
 }
 
 // spellTick is a spell at a tick.
@@ -348,7 +456,7 @@ func cycle(turns, tick float64) float64 {
 // begin by the tick, or the first if none has; during its change the one
 // before it is in play too.
 func WeatherAt(w *Weather, t *WeatherTick, tick float64) {
-	t.Tick, t.p, t.n = tick, w.Prepared, 0
+	t.Tick, t.p, t.n, t.front, t.ns = tick, w.Prepared, 0, false, 0
 	if w.Count == 0 {
 		return
 	}
@@ -359,11 +467,18 @@ func WeatherAt(w *Weather, t *WeatherTick, tick float64) {
 		}
 	}
 	s := &w.spells[i]
+	systemsAt(w, t, tick, s.still)
 	if i > 0 && s.change > 0 && tick < s.begin+s.change {
 		later := smooth(float64((tick - s.begin) * s.invChange))
 		t.n, t.weight = 2, [2]float64{1 - later, later}
 		t.at[0].set(&w.spells[i-1], tick, &w.Prepared.gustCells)
 		t.at[1].set(s, tick, &w.Prepared.gustCells)
+		if s.front {
+			t.front = true
+			t.fe, t.fn = s.fsin, s.fcos
+			t.line = float64(s.fspeed*(tick-s.begin)) - w.Prepared.frontReach
+			t.trough = s.trough
+		}
 		return
 	}
 	t.n, t.weight = 1, [2]float64{1, 0}
@@ -420,7 +535,10 @@ func MeanWindAt(t *WeatherTick, x, y float64) (speed, from float64) {
 }
 
 // point computes the wind at (x, y) into p, as much of it as what asks.
-// The land's shelter applies after the gusts and before the refuge.
+// The spells' mean wind, mixed, with the front's and the systems' added
+// and the patches' taken away, is held by the refuge; then come the gusts,
+// the land's shelter, the refuge's hold on the gusty wind, the veer and
+// the fall draft.
 func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter) {
 	*p = WindPoint{Factor: 1}
 	if t.n == 0 {
@@ -441,38 +559,39 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 	}
 	w := t.p
 	r := math.Sqrt(float64(x*x) + float64(y*y))
-	factor := w.speedCentre + float64(w.speedSpan*smooth(float64(r*w.invRim)))
 	refuge := smooth(float64((w.refugeOuter - r) * w.invRefugeBlend))
+	b := t.base(x, y, r, what)
+	dir, speed, excess, gust, gusty, limited := b.dir, b.speed, b.excess, b.gust, b.gusty, b.limited
+	p.DriftEast, p.DriftNorth = b.driftEast, b.driftNorth
 
-	// Each spell's mean wind and gust field, then the two mixed: the
-	// direction along the shorter arc, the speed and the gust factor as they
-	// stand, and the fields so that their spread is kept.
-	var dir, speed, excess, gust, gusty, limited, field2 float64
-	for i := range t.n {
-		st, share := &t.at[i], t.weight[i]
-		d, v, e, n := st.mean(w, x, y, factor, refuge, what != pointMean)
-		if i == 0 {
-			dir, speed, excess = d, v, e
-		} else {
-			dir += float64(share * wrapAngle(d-dir))
-			speed += float64(share * (v - speed))
-			excess += float64(share * (e - excess))
+	// The front's wind and the systems': air velocities added to the mean
+	// wind's, and the patches' factors on the sum.
+	if t.front || t.ns > 0 {
+		sin, cos := SinCos(dir)
+		// The air moves the other way from where the wind comes from.
+		ve, vn := -float64(speed*sin), -float64(speed*cos)
+		in := w.inwardAt(r)
+		if t.front {
+			excess += t.frontWind(b.s, in.weak, &ve, &vn)
 		}
-		if !st.s.steady {
-			limited += share
-		}
-		if st.s.gusts {
-			gust += float64(share * n)
-			gusty += share
-			field2 += float64(share * share)
-			if what == pointFull {
-				p.DriftEast -= float64(float64(share*st.s.fieldSpeed) * st.sinD)
-				p.DriftNorth -= float64(float64(share*st.s.fieldSpeed) * st.cosD)
+		f := 1.0
+		for i := range t.ns {
+			st := &t.sys[i]
+			if st.k.shape == ShapeNone {
+				f = float64(f * st.factor(x, y))
+				continue
 			}
+			excess += st.wind(x, y, in, &ve, &vn)
 		}
+		ve, vn = float64(ve*f), float64(vn*f)
+		v := math.Sqrt(float64(ve*ve) + float64(vn*vn))
+		if v > 1e-9 {
+			dir = Atan2(-ve, -vn)
+		}
+		speed = v
 	}
-	if field2 > 0 {
-		gust = clamp(gust/math.Sqrt(field2), -1, 1)
+	if refuge > 0 && limited > 0 {
+		speed += float64(float64(refuge*limited) * (soften(speed, w.meanKnee, w.meanSoft) - speed))
 	}
 	p.MeanSpeed, p.MeanFrom, p.Gust = speed, wrapAngle(dir), gust
 	if what == pointMean {
@@ -504,6 +623,110 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 	w.fallDraft(x, y, p)
 }
 
+// baseWind is the spells' wind at a point, mixed, before the front's and
+// the systems' are added.
+type baseWind struct {
+	dir, speed, excess float64 // rad, m/s
+	gust, gusty        float64 // the gust field, and the share of the spells with gusts
+	limited            float64 // the share of the spells the refuge holds
+	driftEast          float64 // how fast the gust field travels, m/s
+	driftNorth         float64
+	shares             [2]float64 // each spell's share
+	s                  float64    // the point's distance ahead of a front's line, m
+}
+
+// base is the spells' wind at (x, y), r from the centre: each spell's mean
+// wind and gust field, then the two mixed, by their shares at the point:
+// the direction along the shorter arc, the speed and the gust factor as
+// they stand, and the fields so that their spread is kept.
+func (t *WeatherTick) base(x, y, r float64, what int32) baseWind {
+	w := t.p
+	var b baseWind
+	factor := w.speedCentre + float64(w.speedSpan*smooth(float64(r*w.invRim)))
+	b.shares, b.s = t.shares(x, y)
+	var field2 float64
+	for i := range t.n {
+		st, share := &t.at[i], b.shares[i]
+		d, v, e, n := st.mean(w, x, y, factor, what != pointMean)
+		if i == 0 {
+			b.dir, b.speed, b.excess = d, v, e
+		} else {
+			b.dir += float64(share * wrapAngle(d-b.dir))
+			b.speed += float64(share * (v - b.speed))
+			b.excess += float64(share * (e - b.excess))
+		}
+		if !st.s.steady {
+			b.limited += share
+		}
+		if st.s.gusts {
+			b.gust += float64(share * n)
+			b.gusty += share
+			field2 += float64(share * share)
+			if what == pointFull {
+				b.driftEast -= float64(float64(share*st.s.fieldSpeed) * st.sinD)
+				b.driftNorth -= float64(float64(share*st.s.fieldSpeed) * st.cosD)
+			}
+		}
+	}
+	if field2 > 0 {
+		b.gust = clamp(b.gust/math.Sqrt(field2), -1, 1)
+	}
+	return b
+}
+
+// shares is each spell's share of the wind at (x, y): across a front by
+// which side of the line the point lies, the old spell ahead and the new
+// behind, blended near it; otherwise the same everywhere. s is the point's
+// distance ahead of the line, m.
+func (t *WeatherTick) shares(x, y float64) (shares [2]float64, s float64) {
+	if !t.front {
+		return t.weight, 0
+	}
+	s = float64(x*t.fe) + float64(y*t.fn) - t.line
+	behind := smooth(float64((t.p.blend - s) * t.p.invBlend2))
+	return [2]float64{1 - behind, behind}, s
+}
+
+// trough is the shape of a front's trough s m ahead of its line, from −1
+// at the line to 0 far from it, and its slope a metre along the way the
+// front moves: falling as e^(−s / ahead) toward the line, tapering to
+// nothing far ahead, and filling within a Gaussian's width behind.
+func (w *WeatherPrepared) trough(s float64) (f, slope float64) {
+	if s >= 0 {
+		u := float64((s - w.taperFrom) * w.invTaper)
+		taper := 1 - smooth(u)
+		if !(taper > 0) {
+			return 0, 0
+		}
+		e := Exp(-float64(s * w.invTroughAhead))
+		f = -float64(e * taper)
+		slope = float64(float64(e*w.invTroughAhead) * taper)
+		if u > 0 {
+			// The taper's own slope: smooth'(u) = 6u(1 − u).
+			slope += float64(float64(e*float64(6*float64(u*(1-u)))) * w.invTaper)
+		}
+		return f, slope
+	}
+	q := float64(s / w.troughBehind)
+	e := Exp(-float64(0.5 * float64(q*q)))
+	return -e, float64(float64(q*e) / w.troughBehind)
+}
+
+// frontWind adds to (ve, vn), the air's velocity s ahead of the line, the
+// front's own wind: its trough's slope downhill, turned clockwise by its
+// angle, times weak, how much a squall keeps of itself there; and returns
+// the gust factor's excess it adds behind the line.
+func (t *WeatherTick) frontWind(s, weak float64, ve, vn *float64) float64 {
+	w := t.p
+	_, slope := w.trough(s)
+	k := -float64(float64(slope*w.frontNorm) * weak)
+	ge, gn := float64(k*t.fe), float64(k*t.fn)
+	*ve += float64(ge*w.frontCos) + float64(gn*w.frontSin)
+	*vn += float64(gn*w.frontCos) - float64(ge*w.frontSin)
+	q := float64((s + w.gustsHalf) / w.gustsHalf)
+	return float64(w.frontGusts * Exp(-float64(q*q)))
+}
+
 // fallDraft adds to the wind at (x, y), with and without its gusts, the
 // air the falls draw toward the lip: nothing inside the draft's start,
 // rising linearly to its strength at the lip, and no more beyond it. The
@@ -532,10 +755,9 @@ func addWind(speed, from, east, north float64) (float64, float64) {
 	return math.Sqrt(float64(ve*ve) + float64(vn*vn)), Atan2(-ve, -vn)
 }
 
-// mean is a spell's mean wind at (x, y): its direction, its speed with the
-// refuge's limit on it, its gust factor's excess, and, if gusts, its gust
-// field.
-func (st *spellTick) mean(w *WeatherPrepared, x, y, factor, refuge float64, gusts bool) (dir, speed, excess, n float64) {
+// mean is a spell's mean wind at (x, y): its direction, its speed, its gust
+// factor's excess, and, if gusts, its gust field.
+func (st *spellTick) mean(w *WeatherPrepared, x, y, factor float64, gusts bool) (dir, speed, excess, n float64) {
 	s := st.s
 	if s.steady {
 		return s.from, s.speed, 0, 0
@@ -543,9 +765,6 @@ func (st *spellTick) mean(w *WeatherPrepared, x, y, factor, refuge float64, gust
 	along := clamp(float64(x*st.sinB)+float64(y*st.cosB), -w.rim, w.rim)
 	dir = st.dir + float64(float64(s.across*along)*w.invRim)
 	speed = float64(s.speed * factor)
-	if refuge > 0 {
-		speed += float64(refuge * (soften(speed, w.meanKnee, w.meanSoft) - speed))
-	}
 	if gusts && s.gusts {
 		n = st.field(&w.gustCells, x, y)
 	}

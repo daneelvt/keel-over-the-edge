@@ -87,6 +87,8 @@ const (
 	WeatherAuto   WeatherMode = iota // the world's own weather
 	WeatherHeld                      // one endless spell of a regime
 	WeatherSteady                    // one wind, the same everywhere, with no shifts or gusts
+	WeatherFront                     // a front now, crossing the disk, an endless spell of a regime behind it
+	WeatherSystem                    // not a weather but a system placed: a kind to reach a point
 	weatherModeEnd
 )
 
@@ -101,7 +103,34 @@ type Weather struct {
 	Regime uint16 // WeatherHeld: the regime's index in the catalog
 	Speed  uint32 // WeatherSteady: the wind 10 m up, in steps of physics.SeaSpeedStep
 	Dir    uint32 // WeatherSteady: the direction it comes from, in steps of a turn / physics.TurnSteps
+	// WeatherSystem: the kind's index in the catalog, the point the system
+	// reaches, in quarter metres east and north of the centre, and how many
+	// ticks after it is placed it reaches it, at its strongest.
+	Kind  uint16
+	East  int32
+	North int32
+	In    uint32
 }
+
+// A System is a developer's weather system: a kind placed to reach a point
+// at a tick, its strength growing from its birth and at its whole there.
+// What it is follows from these, as the world's own systems follow from its
+// week.
+type System struct {
+	Born  int64 // the tick it is born at, a keyframe's
+	At    int64 // the tick it reaches its point
+	Kind  uint16
+	East  int32 // the point, quarter metres east of the centre
+	North int32 // and north
+	Slot  uint8 // its slot among the developer's
+	// The way it moves, in steps of a turn, and how fast, in steps of
+	// physics.SeaSpeedStep: the wind's, as it was when it was placed.
+	Heading uint32
+	Speed   uint32
+}
+
+// SystemSlots is the most systems a developer may place at once.
+const SystemSlots = 4
 
 // A Command asks the simulation to change the world. It is a value; the reply
 // channel is its only pointer.

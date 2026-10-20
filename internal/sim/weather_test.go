@@ -45,9 +45,12 @@ func weatherWorld(t testing.TB, tick int64, workers int, sea bool) *World {
 	return w
 }
 
-// secondSpell is the tick the sequence's second spell begins at: four
-// hours in.
-const secondSpell = 4 * 3600 * physics.StepsPerSecond
+// secondSpell is the tick the catalog's sample week's second spell begins
+// at.
+func secondSpell(t testing.TB) int64 {
+	t.Helper()
+	return int64(sequence(t).Week().Spells[1].Begin)
+}
 
 // Every boat sails in the wind at its own place: a boat the tick steps is
 // the boat physics.Step gives in physics.WindAt at the boat as the step
@@ -55,7 +58,7 @@ const secondSpell = 4 * 3600 * physics.StepsPerSecond
 // a change of spell and under a developer's weather, however the boats are
 // split between workers.
 func TestTickMatchesStepInWeather(t *testing.T) {
-	w := weatherWorld(t, secondSpell-weather.Announce-100, 3, false)
+	w := weatherWorld(t, secondSpell(t)-weather.Announce-100, 3, false)
 	const boats = 40
 	for i := range boats {
 		do(t, w, bus.Command{Op: bus.Join, Account: acct(uint64(i + 1))})
@@ -151,7 +154,7 @@ func TestSnapshotResumesTheWeather(t *testing.T) {
 		ats, gap = []int64{95}, 900
 	}
 	for _, at := range ats {
-		start := int64(secondSpell - 300)
+		start := secondSpell(t) - 300
 		w := weatherWorld(t, start, 2, true)
 		for i := range 8 {
 			do(t, w, bus.Command{Op: bus.Join, Account: acct(uint64(i + 1))})
@@ -202,7 +205,7 @@ func TestSnapshotResumesTheWeather(t *testing.T) {
 // spread, no tick making more than its share, a tick allocates nothing,
 // and the waves the steps sail in are the frame's.
 func TestSeaWorkIsSpreadInWeather(t *testing.T) {
-	w := weatherWorld(t, secondSpell+20000, 1, true)
+	w := weatherWorld(t, secondSpell(t)+20000, 1, true)
 	fill(t, w, 20, 1)
 	for range 70 {
 		w.Tick()
