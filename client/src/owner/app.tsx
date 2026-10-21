@@ -6,10 +6,10 @@
 // clock as every phone shows it. It reads the world once a second, and not
 // while its tab is hidden. A click on the map picks a point: what is there
 // is told, with its pressure at the tick shown and the barometer's
-// tendency, and its sea while the sea is shown, and the owner's boats can
-// be put there, or at a place. The page
-// acts on the owner's boats alone; the server refuses the rest. At the
-// top, always in view, the world's end counted down by keel's clock; the
+// tendency, its sea while the sea is shown and its sky while the clouds
+// or the rain are, and the owner's boats can be put there, or at a place.
+// The page acts on the owner's boats alone; the server refuses the rest.
+// At the top, always in view, the world's end counted down by keel's clock; the
 // owner may begin the next world now, typing the world's number to end it,
 // and look over the next world, drawn as the current is, on a tab of its
 // own, and make it again.
@@ -28,6 +28,7 @@ import { lightOn } from '../lights/character';
 import {
   type Boat,
   type ChartedData,
+  type CloudsPage,
   type Control,
   type Current,
   control,
@@ -35,6 +36,7 @@ import {
   type FeaturesData,
   type Group,
   getBytes,
+  getClouds,
   getJSON,
   getPressure,
   getSea,
@@ -51,6 +53,18 @@ import {
   type TownsData,
   type WorldNow,
 } from './api';
+import {
+  CLOUD_COLOURS,
+  CLOUDS_EVERY,
+  RAIN_SPACING,
+  RAIN_WORDS,
+  rainRanges,
+  shadeOver,
+  sheetShade,
+  sheetsPicture,
+  skyWords,
+  WMO_WORDS,
+} from './clouds';
 import {
   allLayers,
   COLOURS,
@@ -488,7 +502,15 @@ const CHARTED_EVERY = 5000;
 const LIFE_EVERY = 5000;
 
 /** The layers that are live, drawn of the world being sailed alone: none of them for the next world. */
-const LIVE: ReadonlySet<keyof Layers> = new Set(['sea', 'gusts', 'wind', 'boats', 'charted']);
+const LIVE: ReadonlySet<keyof Layers> = new Set([
+  'sea',
+  'cloud',
+  'rain',
+  'gusts',
+  'wind',
+  'boats',
+  'charted',
+]);
 
 /** The sea layer's legend: the waves' heights shaded, the swell's arrow, the hatching. */
 function SeaLegend() {
@@ -512,6 +534,56 @@ function SeaLegend() {
         />{' '}
         raised over ×{RAISED} by a current
       </span>
+    </p>
+  );
+}
+
+/** The cloud layer's legend: each sheet shaded at its whole cover, the cumulus, a heaped cloud's outline. */
+function CloudLegend() {
+  const sheets: [string, number, number, number][] = [
+    ['cirrus', 1, 0, 0],
+    ['middle', 0, 1, 0],
+    ['low', 0, 0, 1],
+  ];
+  return (
+    <p class="small legend" data-field="cloud-legend">
+      {sheets.map(([name, c, m, l]) => (
+        <span key={name}>
+          <i class="swatch" style={{ background: shadeOver(COLOURS.sea, sheetShade(c, m, l)) }} />{' '}
+          {name}
+        </span>
+      ))}
+      <span>
+        <i class="swatch round" style={{ background: CLOUD_COLOURS.cumulus }} /> cumulus
+      </span>
+      <span>
+        <i class="swatch round" style={{ border: `1.5px solid ${CLOUD_COLOURS.outline}` }} /> heaped
+        cloud, its top in m
+      </span>
+    </p>
+  );
+}
+
+/** The rain layer's legend: each word's stipple and the rates it spans. */
+function RainLegend({ words }: { words: readonly number[] }) {
+  const ranges = rainRanges(words);
+  return (
+    <p class="small legend" data-field="rain-legend">
+      {ranges.map((r, k) => {
+        const s = RAIN_SPACING[k + 1] ?? 3;
+        return (
+          <span key={r}>
+            <i
+              class="swatch stipple"
+              style={{
+                background: `radial-gradient(circle, ${CLOUD_COLOURS.rain} 0.9px, transparent 1.3px) 0 0 / ${s}px ${s}px, ${COLOURS.sea}`,
+              }}
+            />{' '}
+            {RAIN_WORDS[k + 1]} {r}
+          </span>
+        );
+      })}
+      <span>mm/h</span>
     </p>
   );
 }
@@ -901,6 +973,7 @@ function App() {
   const [point, setPoint] = useState<Point | null>(null);
   const [pressure, setPressure] = useState<PressureAt | null>(null);
   const [sea, setSea] = useState<SeaPage | null>(null);
+  const [clouds, setClouds] = useState<CloudsPage | null>(null);
   const [boat, setBoat] = useState<number | null>(null);
   const [charted, setCharted] = useState<ChartedData | null>(null);
   const [light, setLight] = useState<number | null>(null);
@@ -1089,6 +1162,47 @@ function App() {
       ? sea.point
       : null;
 
+  // The clouds and the rain every ten seconds while either layer shows the
+  // world being sailed, and the point picked again, for its sky; paused
+  // while the tab is hidden.
+  const skyShown =
+    (layers.cloud || layers.rain) && world !== null && !(tab === 'next' && next !== null);
+  useEffect(() => {
+    if (!skyShown) {
+      setClouds(null);
+      return;
+    }
+    let live = true;
+    const read = (): void => {
+      if (hidden()) {
+        return;
+      }
+      getClouds()
+        .then((c) => live && setClouds(c))
+        .catch((e: unknown) => live && setError(String(e)));
+      if (picked !== null) {
+        getJSON<Point>(`point?east=${picked[0].toFixed(2)}&north=${picked[1].toFixed(2)}`)
+          .then((p) => live && setPoint(p))
+          .catch((e: unknown) => live && setError(String(e)));
+      }
+    };
+    read();
+    const t = setInterval(read, CLOUDS_EVERY);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [skyShown, picked]);
+  // The sheets' picture, drawn once a reading.
+  const sheets = useMemo(() => {
+    if (clouds === null) {
+      return null;
+    }
+    const c = document.createElement('canvas');
+    sheetsPicture(clouds.sheets, c);
+    return c;
+  }, [clouds]);
+
   const pick = useCallback((east: number, north: number): void => {
     setPicked([east, north]);
     getJSON<Point>(`point?east=${east.toFixed(2)}&north=${north.toFixed(2)}`)
@@ -1144,6 +1258,8 @@ function App() {
       charted === null ? null : new Set(charted.charted.map((c) => `${c.subject}:${c.number}`)),
     weather: weather.weather,
     sea,
+    clouds,
+    sheets,
   };
   // The next world drawn as the current is, without what is live. The
   // disk's rings are keel's, not a world's: they are drawn from the
@@ -1166,6 +1282,8 @@ function App() {
     charted: null,
     weather: nextWeather.weather,
     sea: null,
+    clouds: null,
+    sheets: null,
   };
   const chosen = now?.boats.find((b) => b.boat === boat && b.tools) ?? null;
 
@@ -1340,6 +1458,8 @@ function App() {
               The whole disk
             </button>
             {seaShown ? <SeaLegend /> : null}
+            {skyShown && layers.cloud ? <CloudLegend /> : null}
+            {skyShown && layers.rain ? <RainLegend words={clouds?.words ?? WMO_WORDS} /> : null}
           </fieldset>
           {next !== null ? (
             <nav class="tabs" aria-label="Which world">
@@ -1383,6 +1503,9 @@ function App() {
               ) : null}
               {seaShown && seaPoint !== null ? (
                 <span data-field="sea"> Sea: {seaWords(seaPoint)}.</span>
+              ) : null}
+              {skyShown && point.sky !== null ? (
+                <span data-field="sky"> Sky: {skyWords(point.sky)}.</span>
               ) : null}
             </p>
           ) : null}

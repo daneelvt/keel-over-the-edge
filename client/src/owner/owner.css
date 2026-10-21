@@ -173,7 +173,7 @@ main {
   touch-action: none;
 }
 
-/* The sea's legend in the layers' box, wrapped to the box's width. */
+/* The layers' legends in the layers' box, wrapped to the box's width. */
 .layers .legend {
   max-width: 12em;
   flex-wrap: wrap;
@@ -456,6 +456,11 @@ h3 {
 
 .swatch.round {
   border-radius: 50%;
+}
+
+/* The rain's stipple, wide enough to show its spacing. */
+.swatch.stipple {
+  width: 2.4em;
 }
 
 .systems {

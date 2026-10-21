@@ -293,6 +293,12 @@ export class SeaScene {
     const scene = this.stage.scene;
     this.sky = new Sky(scene);
     this.weather = new SkyWeather(scene, catalog.weather.clouds);
+    // A star behind the sheets is not tapped.
+    this.stars.hidden = (dir) => {
+      const c = this.stage.camera.position;
+      const o = this.origin.world;
+      return this.weather.sheets.hides(dir, c.y, c.x + o.x, -c.z + o.y);
+    };
     this.shadows = new Shadows(this.sky.light);
     this.ocean = new Ocean(scene);
     this.edge = new EdgeScene(scene, this.ocean.uniforms, {

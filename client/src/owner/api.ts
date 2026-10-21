@@ -6,7 +6,8 @@
 // current and the land, once a world; the world's life, and its week of
 // weather at a tick, every few seconds; the pressure at a point clicked;
 // the sea, its areas' waves and swell and the waves at a point clicked,
-// every ten seconds while it is shown; the next world's terrain and week under next/ once it is made; and the
+// every ten seconds while it is shown; the clouds and the rain, every ten
+// seconds while either is shown; the next world's terrain and week under next/ once it is made; and the
 // controls, each a POST of JSON.
 
 /** A boat at sea, as the page shows it. */
@@ -276,6 +277,19 @@ export interface Point {
   off: number;
   /** Why a boat may not be put there, or "" if it may. */
   water: string;
+  /** The sky there now; null for a world not yet sailed. */
+  sky: SkyPoint | null;
+}
+
+/** The sky at a point: its rain, the three sheets' cover, and the heaped cloud over it. */
+export interface SkyPoint {
+  /** mm an hour, and its word. */
+  rain: number;
+  rainWord: 'none' | 'light' | 'moderate' | 'heavy' | 'violent';
+  /** Each sheet's cover, 0 to 1. */
+  sheets: { cirrus: number; middle: number; low: number };
+  /** The heaped cloud overhead, the tallest if more than one; null for none. */
+  cloud: { form: CloudForm; slot: number; top: number } | null;
 }
 
 /** A run of one of keel's jobs about the world's life. Times are ms of UTC, 0 for none. */
@@ -486,6 +500,69 @@ export interface SeaPage {
   point?: SeaPoint;
 }
 
+/** A heaped cloud's form. */
+export type CloudForm = 'cumulus' | 'cumulonimbus' | 'storm';
+
+/** A heaped cloud: a squall's, a shower's or a storm's. Distances in m. */
+export interface HeapedCloud {
+  form: CloudForm;
+  /** Its system's slot. */
+  slot: number;
+  east: number;
+  north: number;
+  /** Degrees, the way it moves. */
+  heading: number;
+  /** Its system's radius. */
+  size: number;
+  /** Its cloud strength, 0 to 1. */
+  cloud: number;
+  base: number;
+  top: number;
+  /** How far its top reaches behind its centre and ahead of it, along its heading. */
+  behind: number;
+  ahead: number;
+  /** Its deck's reach and top. */
+  deck: number;
+  deckTop: number;
+  /** Its rain at its core, mm an hour, and how far from its centre it falls at a millimetre an hour or more. */
+  rain: number;
+  rainReach: number;
+}
+
+/** A grid over the disk: side points a side, step metres apart, row by row from the north-west point at west, north; 0 beyond its reach. */
+export interface CloudGrid {
+  west: number;
+  north: number;
+  step: number;
+  side: number;
+  values: number[];
+}
+
+/** A fair-weather cumulus: its radius and top at its whole, m, and how much of itself it is now. */
+export interface Cumulus {
+  east: number;
+  north: number;
+  radius: number;
+  top: number;
+  grow: number;
+}
+
+/** clouds.json: the clouds and the rain now. */
+export interface CloudsPage {
+  tick: number;
+  lip: number;
+  /** The sheets' heights: cirrus, middle and low, m. */
+  layers: [number, number, number];
+  /** Rain is light under the first, moderate under the second, heavy under the third and violent above, mm an hour. */
+  words: [number, number, number];
+  clouds: HeapedCloud[];
+  /** Three values a point: the cirrus's, the middle sheet's and the low cloud's cover, 0 to 1; beyond the lip too. */
+  sheets: CloudGrid;
+  /** mm an hour. */
+  rain: CloudGrid;
+  cumulus: Cumulus[];
+}
+
 /** The gusts' grid: GUST_SIDE a side over the square of the land's chart, a signed byte a point. */
 export const GUST_STEP = 0.1;
 export const NO_GUST = -128;
@@ -537,6 +614,11 @@ export function getPressure(east: number, north: number, at: number | null): Pro
 export function getSea(at: [number, number] | null): Promise<SeaPage> {
   const point = at === null ? '' : `?east=${at[0].toFixed(2)}&north=${at[1].toFixed(2)}`;
   return getJSON<SeaPage>(`sea.json${point}`);
+}
+
+/** The clouds and the rain of the current world now. */
+export function getClouds(): Promise<CloudsPage> {
+  return getJSON<CloudsPage>('clouds.json');
 }
 
 /** A URL of the land's drawings, for an image. */

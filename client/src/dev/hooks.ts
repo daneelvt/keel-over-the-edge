@@ -1213,6 +1213,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     setWeather(id: string): void {
       offline().setWeather(id);
     },
+    /** Draws the weather in the sky, or none of it: no clouds, sheets or rain. */
+    showWeather(on: boolean): void {
+      world.weather.shown = on;
+    },
     /** Holds the rain at the camera, mm an hour, or null to give it back to the weather. */
     setRain(rate: number | null): void {
       world.weather.heldRain = rate;
@@ -1239,7 +1243,25 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         overcast: w.overcast,
         sheets: [0, 1, 2].map((l) => w.sheets.coverAt(l, east, north)),
         visualRange: look.visualRange.value as number,
+        light: world.sky.light.intensity,
+        far: world.stage.camera.far,
+        drawn: w.clouds.mesh.visible && w.clouds.count > 0,
       };
+    },
+    /** Where the sun is on the canvas, CSS pixels, and whether it is in front of the camera. */
+    sunOnScreen(): { x: number; y: number; front: boolean } | null {
+      const canvas = stage.gfx?.canvas;
+      if (canvas === undefined) {
+        return null;
+      }
+      const at = world.stars.screen(
+        (look.sun.value as Vector3).clone(),
+        stage.camera,
+        canvas.clientWidth,
+        canvas.clientHeight,
+        new Vector3(),
+      );
+      return { x: at.x, y: at.y, front: at.z < 1 };
     },
     /** Sets the helm's and the sheet's targets, as the player's thumbs would. */
     setControls(helm: number, sheet: number): void {

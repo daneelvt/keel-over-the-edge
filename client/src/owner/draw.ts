@@ -3,9 +3,9 @@
 // Draws the world page's map on a canvas, layer by layer from the bottom:
 // the land, drawn once per world by keel as the world generator's preview
 // draws it, and an island at the lattice's resolution when zoomed into it;
-// the coasts; the sea's waves and swell; the gusts, the wind and the
-// current; the isobars, the
-// weather's systems and its front; the rings of the calm
+// the coasts; the sea's waves and swell; the sheets of cloud, the rain
+// and the heaped clouds; the gusts, the wind and the current; the
+// isobars, the weather's systems and its front; the rings of the calm
 // water, the mist band and the lip; the start area; the islands' names;
 // the boats, each pointing its heading, the owner's picked out, with its
 // free camera's eye; and the point clicked. The marks are in Okabe and
@@ -13,6 +13,7 @@
 
 import type {
   Boat,
+  CloudsPage,
   Current,
   FeaturesData,
   Group,
@@ -23,6 +24,7 @@ import type {
   WeatherWeek,
   WorldNow,
 } from './api';
+import { drawHeaped, drawRain, drawSheets } from './clouds';
 import { canvasAngle, HALF, rectOf, toScreen, type View } from './map';
 import { drawSea } from './sea';
 import { drawWeather } from './weather';
@@ -48,6 +50,8 @@ export interface Layers {
   land: boolean;
   coasts: boolean;
   sea: boolean;
+  cloud: boolean;
+  rain: boolean;
   gusts: boolean;
   wind: boolean;
   current: boolean;
@@ -68,6 +72,8 @@ export const LAYER_NAMES: Record<keyof Layers, string> = {
   land: 'Land',
   coasts: 'Coasts',
   sea: 'Sea',
+  cloud: 'Cloud',
+  rain: 'Rain',
   gusts: 'Gusts',
   wind: 'Wind',
   current: 'Current',
@@ -89,6 +95,8 @@ export function allLayers(): Layers {
     land: true,
     coasts: true,
     sea: false,
+    cloud: false,
+    rain: false,
     gusts: false,
     wind: true,
     current: false,
@@ -134,6 +142,9 @@ export interface MapData {
   weather: WeatherWeek | null;
   /** The sea now; null until read, or while its layer is hidden. */
   sea: SeaPage | null;
+  /** The clouds and the rain now, and the sheets' picture; null until read, or while their layers are hidden. */
+  clouds: CloudsPage | null;
+  sheets: HTMLCanvasElement | null;
 }
 
 /** The colours an island's class is ringed in. */
@@ -251,6 +262,17 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
   }
   if (layers.sea && d.sea !== null) {
     drawSea(ctx, v, d.sea);
+  }
+  if (d.clouds !== null) {
+    if (layers.cloud && d.sheets !== null) {
+      drawSheets(ctx, v, d.clouds, d.sheets);
+    }
+    if (layers.rain) {
+      drawRain(ctx, v, d.clouds);
+    }
+    if (layers.cloud) {
+      drawHeaped(ctx, v, d.clouds);
+    }
   }
   if (layers.gusts && d.gusts !== null) {
     ctx.imageSmoothingEnabled = true;

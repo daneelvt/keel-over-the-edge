@@ -337,6 +337,9 @@ export class Stars {
   }
 
   /** Whether a named star shows now: out at this hour and above the sea. */
+  /** How much the sky's cloud hides a direction from the camera, 0 to 1: a star more than half hidden is not tapped. */
+  hidden: ((dir: Vector3) => number) | null = null;
+
   shows(p: NamedPlace, dir: Vector3): boolean {
     const s =
       this.table === null
@@ -346,7 +349,8 @@ export class Stars {
       s !== null &&
       p.index < this.count &&
       dir.y > -0.02 &&
-      (look.starLimit.value as number) - (s.magnitude - NAMED_STEP) + 0.5 > 0.3
+      (look.starLimit.value as number) - (s.magnitude - NAMED_STEP) + 0.5 > 0.3 &&
+      (this.hidden?.(dir) ?? 0) < 0.5
     );
   }
 
