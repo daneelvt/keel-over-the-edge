@@ -158,9 +158,7 @@ test.describe('rain', () => {
 });
 
 test.describe('sheet cloud', () => {
-  test('under a front’s sheets the sun’s disc is hidden and the light dimmed', async ({
-    page,
-  }) => {
+  test('under a front’s sheets the sun’s disc is hidden and the light dimmed', async ({ page }) => {
     await openScene(page, 'weather=front&front=1');
     const got = await page.evaluate(() => {
       const k = globalThis.keel;
@@ -171,23 +169,42 @@ test.describe('sheet cloud', () => {
     });
     expect(got.sheets[1]).toBeGreaterThan(0.9);
     expect(got.overcast).toBeGreaterThan(0.7);
-    // Looking at the sun, with the sheets and without.
-    const sun = await page.evaluate(async () => {
+    // Looking at the sun, with the sheets and without: its disc is hidden.
+    const at = await page.evaluate(() => {
       const k = globalThis.keel;
-      const s = k.sky();
-      k.camera({ azimuth: 0, elevation: 0.3, distance: 20 });
+      // The sun low, ahead of the boat: it heads for it.
+      k.setSky(7);
+      const b = k.boat().state;
+      k.placeBoat(b.x, b.y, (k.sky().sun.bearing * Math.PI) / 180);
       k.render();
-      return { s, at: k.sunOnScreen() };
+      // From low astern, looking out over the bow toward it.
+      k.camera({ azimuth: 0, elevation: 0.02, distance: 16 });
+      k.render();
+      return { ...k.sunOnScreen(), height: k.sky().sun.height };
     });
-    expect(sun.at).not.toBeNull();
     const shown = await page.evaluate(() => globalThis.keel.clouds().light);
-    await page.evaluate(() => globalThis.keel.showWeather(false));
+    const covered = await picture(page);
     await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.showWeather(false);
       // Long enough for the light to clear: it eases over ten seconds.
-      globalThis.keel.advance(30 * 20);
-      globalThis.keel.render();
+      k.advance(30 * 20);
+      k.render();
     });
     const clear = await page.evaluate(() => globalThis.keel.clouds().light);
+    const open = await picture(page);
+    const bright = (p: typeof open, x: number, y: number): number => {
+      const i = 4 * (Math.round(y) * p.width + Math.round(x));
+      return (p.data[i] ?? 0) + (p.data[i + 1] ?? 0) + (p.data[i + 2] ?? 0);
+    };
+    test.info().annotations.push({ type: 'sun', description: JSON.stringify(at) });
+    expect(at.front).toBe(true);
+    expect(at.x).toBeGreaterThan(0);
+    expect(at.y).toBeGreaterThan(0);
+    expect(at.x).toBeLessThan(open.width);
+    expect(at.y).toBeLessThan(open.height);
+    expect(bright(open, at.x, at.y)).toBeGreaterThan(700);
+    expect(bright(covered, at.x, at.y)).toBeLessThan(bright(open, at.x, at.y) - 60);
     expect(shown).toBeLessThan(0.6 * clear);
   });
 
