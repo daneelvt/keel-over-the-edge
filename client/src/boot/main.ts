@@ -15,6 +15,13 @@
 //   ?world=7          the sandbox in seed 7's world, from .dev/worlds/7.world (go run ./tools/dev -world 7)
 //   ?wind=12,45       the sandbox's wind: knots 10 m up, and the degrees it comes from
 //   ?sea=gale         the sandbox's wind by the sea it raises: calm, breeze, fresh or gale
+//   ?weather=squall   the sandbox's weather: steady, a regime's id, front, or a kind of
+//                     system's id to meet the boat three minutes in
+//   ?front=40         a front crossing the boat that many minutes in, its sheets first
+//   ?cloud=trade      a regime's weather, with its fair-weather cumulus
+//   ?rain=20          rain held at the camera, mm an hour
+//   ?swell=0.6,6,270  a swell of the sandbox's own: height m, period s, from degrees
+//   ?edge=off         no mist, lip or falls
 //   ?dev              the developer panel (loaded only when asked for)
 //   ?backend=webgl2   the WebGL 2 back end even where WebGPU is offered
 //   ?tier=low         a tier, high, medium or low, held: adaptive quality is off

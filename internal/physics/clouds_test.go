@@ -402,3 +402,60 @@ func TestCloudsAllocateNothing(t *testing.T) {
 		t.Errorf("%.0f allocations", n)
 	}
 }
+
+// benchWeather is a weather with a storm, a squall and a shower about the
+// origin, a trade spell and a front crossing: the most a phone draws at once.
+func benchWeather(b *testing.B) *WeatherTick {
+	b.Helper()
+	p, kinds := testSystems(b)
+	trade := spellOfRegime(b, p, "trade", 1, 225, worldTick-2*hourOfTicks, 8*hourOfTicks)
+	trade.Regime = 1
+	w := weatherOf(p, trade, frontSpell(b, p, worldTick))
+	key := Keyframe{Tick: worldTick - 100}
+	key.Systems[0] = systemAt(kinds["storm"], -3000, -2500, 160, 2*nm, 22, 15)
+	key.Systems[1] = systemAt(kinds["squall"], -1500, 900, 75, 0.45*nm, 16, 3)
+	key.Systems[2] = systemAt(kinds["shower"], 1200, -700, 80, 0.25*nm, 6, 1)
+	w.SetKeys([]Keyframe{key})
+	var at WeatherTick
+	WeatherAt(w, &at, worldTick)
+	return &at
+}
+
+func BenchmarkHeapedClouds(b *testing.B) {
+	at := benchWeather(b)
+	var out [MaxClouds]Cloud
+	for b.Loop() {
+		HeapedClouds(at, out[:])
+	}
+}
+
+func BenchmarkSheetAt(b *testing.B) {
+	at := benchWeather(b)
+	for b.Loop() {
+		SheetAt(at, 120, -340)
+	}
+}
+
+func BenchmarkSheetGrid(b *testing.B) {
+	at := benchWeather(b)
+	var out [Layers * SheetSide * SheetSide]float64
+	for b.Loop() {
+		SheetGrid(at, -24, -24, SheetSide, out[:])
+	}
+}
+
+func BenchmarkRainAt(b *testing.B) {
+	at := benchWeather(b)
+	for b.Loop() {
+		RainAt(at, -1400, 950)
+	}
+}
+
+func BenchmarkCumulusAt(b *testing.B) {
+	at := benchWeather(b)
+	var out [MaxCumulus]Cumulus
+	caps := []Cap{{East: 1500, North: -800, Width: 900}, {East: -2200, North: 1900, Width: 2600}}
+	for b.Loop() {
+		CumulusAt(at, 0, 0, 3500, 0.5, caps, out[:])
+	}
+}

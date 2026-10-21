@@ -158,5 +158,24 @@ describe('clouds and rain in the module', () => {
     }
     expect(physics.allocations).toBe(allocations);
     expect(physics.memoryBytes).toBe(bytes);
+    // What the sky's weather asks a second costs little: the grid once,
+    // the clouds and the cumulus five times, the rain four.
+    const time = (what: string, calls: number, f: () => void): number => {
+      const start = performance.now();
+      for (let i = 0; i < calls; i++) {
+        f();
+      }
+      const each = (performance.now() - start) / calls;
+      process.stdout.write(`clouds: ${what} takes ${(each * 1000).toFixed(2)} µs under Node\n`);
+      return each;
+    };
+    const grid = time('a 48 × 48 sheet grid', 200, () => physics.sheetGrid(c.i0, c.j0, 48));
+    time('the heaped clouds', 20_000, () => physics.cloudsAt());
+    const fair = time('the cumulus within 3.5 km', 2_000, () => physics.cumulusAt(0, 0, 3500, 0.5));
+    time('the rain at a point', 100_000, () => physics.rainAt(10, 20));
+    time('the sheets at a point', 100_000, () => physics.sheetAt(10, 20));
+    // Under a third of a millisecond each refresh, on the machine the tests run on.
+    expect(grid).toBeLessThan(0.3 * (process.env.CI ? 4 : 1));
+    expect(fair).toBeLessThan(0.3 * (process.env.CI ? 4 : 1));
   });
 });
