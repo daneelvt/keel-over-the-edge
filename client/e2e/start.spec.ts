@@ -126,6 +126,8 @@ test('a name accepted: the sea, the cookie, and the sailor kept across a reload'
 });
 
 test('a second browser cannot take the same name', async ({ page, browser }) => {
+  // Two pages on CI's software renderer: a minute on a quick runner.
+  test.setTimeout(120_000);
   await openStart(page);
   const name = freshName('Mary Read');
   await setSail(page, name);

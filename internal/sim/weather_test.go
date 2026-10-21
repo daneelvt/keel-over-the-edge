@@ -298,6 +298,9 @@ func TestFrameKeyframesAreTheWeeks(t *testing.T) {
 // after the wind there does, by the lag of its average, and goes down to
 // the wind again after the squall has gone.
 func TestSeaFollowsASquall(t *testing.T) {
+	if testing.Short() {
+		t.Skip("three quarters of an hour of ticks")
+	}
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatal(err)
