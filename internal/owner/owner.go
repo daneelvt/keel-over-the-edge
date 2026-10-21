@@ -114,6 +114,9 @@ type Config struct {
 	Weather     *physics.WeatherPrepared
 	Timeline    *weather.Timeline
 	SystemKinds []string
+	// Waves are the sea's waves, which the frames' sea areas raise; nil is
+	// flat water.
+	Waves *physics.Waves
 	// Ground and Shelter are the land sailed, nil when land is off: the
 	// water a teleport is checked against, the current and the gusts
 	// sheltered by it. Circulation is the world's way round the disk.
@@ -191,7 +194,7 @@ var Paths = []string{
 	"/owner/api/flag", "/owner/api/place", "/owner/api/unseen", "/owner/api/places.json", "/owner/api/world",
 	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json", "/owner/api/charted.json",
 	"/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
-	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json",
+	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -267,6 +270,7 @@ func (o *Owner) Handler() http.Handler {
 	o.drawn(mux, "/owner/api/")
 	mux.HandleFunc("GET /owner/api/charted.json", o.charted)
 	mux.HandleFunc("GET /owner/api/point", o.point)
+	mux.HandleFunc("GET /owner/api/sea.json", o.sea)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
 	mux.HandleFunc("POST /owner/api/place", o.place)
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)

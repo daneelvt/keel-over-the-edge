@@ -212,6 +212,14 @@ type SeaParams struct {
 	FetchCap   float64 // the fetch of open water, nautical miles
 	Cull       float64 // waves lower than this fraction of an area's highest are left out
 	Breaking   float64 // the most significant height the waves keep in shallow water, as a share of its depth
+	// Swell.
+	SwellLeast     float64 // a swell lower than this is none, m
+	SwellSpreading float64 // the exponent s of its spreading cos²ˢ(θ/2), a whole number
+	SwellSigma     float64 // its spectrum's width, a share of its peak frequency
+	SwellSteps     float64 // Newton's steps that find when it left its system, a whole number
+	CurrentMost    float64 // the most a current against the waves raises them, a multiple
+	ShadowLeast    float64 // the least share of a swell that reaches behind land
+	LeeReach       float64 // how far upwind of a place land calms its waves, m
 }
 
 // Out holds values derived during a step for drawing and the player's
@@ -432,6 +440,11 @@ type SystemKind struct {
 	Stretch    float64 // a patch is stretched along its track by this
 	Inward     float64 // InwardNone, InwardWeak or InwardGone
 	Gusts      float64 // the gust factor's excess rises by this near its core
+	// The swell it raises: none if its height is nothing.
+	SwellPeriod [2]float64 // the least and the most of its peak period, drawn per system, s
+	SwellBand   [2]float64 // the shortest and the longest period it spans, s
+	SwellHeight [2]float64 // its significant height at its edge at full strength, m, at the least and the most of its wind
+	SwellWind   [2]float64 // the least and the most of its wind, knots
 }
 
 // System is a weather system at a keyframe: where it is, how it moves, how
@@ -497,13 +510,14 @@ type SystemRecord struct {
 	// Its wobble off the track, which a forecast does not know: how far
 	// east and north it swings, in quarter metres, each with its period in
 	// ticks and its phase at tick 0 in 65536ths of a turn; and its
-	// strength's swing, in 4096ths, with its period and phase.
+	// strength's throb, how far it swings, in 4096ths, with its period
+	// and phase. A stored week names the throb's fields by their old names.
 	Wobble       float64
 	WobblePeriod [2]float64
 	WobblePhase  [2]float64
-	Swell        float64
-	SwellPeriod  float64
-	SwellPhase   float64
+	Throb        float64 `week:"Swell"`
+	ThrobPeriod  float64 `week:"SwellPeriod"`
+	ThrobPhase   float64 `week:"SwellPhase"`
 }
 
 // WindPoint is the wind at a point in full: what the client's instruments

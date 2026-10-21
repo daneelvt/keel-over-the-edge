@@ -46,7 +46,14 @@ func lastWeather(f *bus.Frame) bus.Weather {
 }
 
 func uniform(areas []physics.SeaInput, in physics.SeaInput) bool {
-	return !slices.ContainsFunc(areas, func(a physics.SeaInput) bool { return a != in })
+	return !slices.ContainsFunc(areas, func(a physics.SeaInput) bool { return withoutCurrent(a) != withoutCurrent(in) })
+}
+
+// withoutCurrent is what raises an area's waves but its current, which differs
+// from area to area by where it lies.
+func withoutCurrent(in physics.SeaInput) physics.SeaInput {
+	in.CurrentEast, in.CurrentNorth = 0, 0
+	return in
 }
 
 // A world starts with the sea its wind raises, in every area.

@@ -53,14 +53,18 @@ type seaCase struct {
 // past 2³¹; at the world's centre and near its rim.
 func seaCases() []seaCase {
 	const fetch = 11112
-	uniform := func(knots float64) [][3]uint32 {
+	with := func(knots float64, swell Swell, east, north float64) [][]int64 {
 		in := SeaInputOf(knots*knot, 0.4, fetch)
-		areas := make([][3]uint32, SeaClientWindow*SeaClientWindow)
+		in.SetSwell(swell)
+		in.SetCurrent(east, north)
+		areas := make([][]int64, SeaClientWindow*SeaClientWindow)
 		for i := range areas {
-			areas[i] = [3]uint32{in.Speed, in.From, in.Fetch}
+			areas[i] = []int64{int64(in.Speed), int64(in.From), int64(in.Fetch),
+				int64(in.SwellHeight), int64(in.SwellPeriod), int64(in.SwellFrom), int64(in.CurrentEast), int64(in.CurrentNorth)}
 		}
 		return areas
 	}
+	uniform := func(knots float64) [][]int64 { return with(knots, Swell{}, 0, 0) }
 	border := uniform(6)
 	for i, a := range uniform(34) {
 		if i%SeaClientWindow >= 3 {
@@ -78,6 +82,10 @@ func seaCases() []seaCase {
 		// world's, and the first of the gale's.
 		{Name: "border", Sea: scenarioSea{Tick: now, Col: 15, Row: 16, Size: 5, Areas: border}, Origin: [2]float64{-231.5, 40}},
 		{Name: "border, late", Sea: scenarioSea{Tick: late, Col: 15, Row: 16, Size: 5, Areas: border}, Origin: [2]float64{-300, -200}},
+		// A swell from the west under a breeze from the north-north-east,
+		// and a gale's sea against a current of a knot and a half.
+		{Name: "swell under a breeze", Sea: scenarioSea{Tick: now, Col: 16, Row: 16, Size: 5, Areas: with(12, Swell{Height: 0.6, Period: 6, From: 1.5 * math.Pi}, 0, 0)}},
+		{Name: "gale against a current", Sea: scenarioSea{Tick: now, Col: 16, Row: 16, Size: 5, Areas: with(34, Swell{Height: 0.8, Period: 5.7, From: 0.9}, -0.3, -0.7)}},
 	}
 }
 

@@ -142,6 +142,13 @@ export function writeSeaParams(params: Float64Array, s: WeatherSea): void {
   params[f.fetchCap] = s.fetchCap;
   params[f.cull] = s.cull;
   params[f.breaking] = s.breaking;
+  params[f.swellLeast] = s.swellLeast;
+  params[f.swellSpreading] = s.swellSpreading;
+  params[f.swellSigma] = s.swellSigma;
+  params[f.swellSteps] = s.swellSteps;
+  params[f.currentMost] = s.currentMost;
+  params[f.shadowLeast] = s.shadowLeast;
+  params[f.leeReach] = s.leeReach;
 }
 
 /** How many values the physics module's SkyParams record holds. */

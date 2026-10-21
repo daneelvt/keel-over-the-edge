@@ -1,6 +1,6 @@
 {
   "comment": "Written by go test ./internal/worldgen -run Digests -update: each seed's world's features by kind and islands by class.",
-  "version": 4,
+  "version": 5,
   "seeds": {
     "1": {
       "features": {

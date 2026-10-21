@@ -38,18 +38,24 @@ const (
 	shelterGridRows    = HexRows / ShelterCell
 )
 
-// A cell's table holds, for each direction, two bytes: the factor in
-// steps of 1/ShelterFactorOne and the turn as a signed byte in steps of
-// ShelterTurnStep radians.
+// A cell's table holds, for each direction, ShelterStride bytes: the
+// factor in steps of 1/ShelterFactorOne, the turn as a signed byte in steps
+// of ShelterTurnStep radians, and the lee's fetch for the waves (lee.go):
+// 255 less the fetch in steps of ShelterLeeStep metres, so that 0, a table
+// without it, is open water.
 const (
+	ShelterStride    = 3
 	ShelterFactorOne = 196
 	ShelterTurnStep  = math.Pi / 720 // a quarter of a degree
+	ShelterLeeStep   = 4             // m
+	ShelterLeeOpen   = 0
+	shelterLeeMost   = 254 // steps
 )
 
 // ShelterChunk is one chunk's shelter: for each cell, column by column, and
-// each direction, the factor's byte and the turn's.
+// each direction, the factor's byte, the turn's and the lee's.
 type ShelterChunk struct {
-	Values [ShelterCells * ShelterDirections * 2]uint8
+	Values [ShelterCells * ShelterDirections * ShelterStride]uint8
 }
 
 // Shelter is a view of the chunks' shelter; a nil chunk is open water.
@@ -80,7 +86,7 @@ func (sh *Shelter) value(a, b, k int32) (factor, turn float64) {
 	if !ok || sh.Chunks[n] == nil {
 		return 1, 0
 	}
-	v := sh.Chunks[n].Values[(i*ShelterDirections+k)*2:]
+	v := sh.Chunks[n].Values[(i*ShelterDirections+k)*ShelterStride:]
 	return float64(v[0]) / ShelterFactorOne, float64(float64(int8(v[1])) * ShelterTurnStep)
 }
 
@@ -254,4 +260,159 @@ func ShelterBytes(factor, turn float64) (f, t uint8) {
 	fi := toInt32(math.Floor(float64(factor*ShelterFactorOne) + 0.5))
 	ti := toInt32(math.Floor(turn/ShelterTurnStep + 0.5))
 	return uint8(min(max(fi, 0), 255)), uint8(int8(min(max(ti, -127), 127)))
+}
+
+// ShelterLand is what the waves' lee is worked out from: the cells of land
+// of the whole grid, true at ShelterIndex, and room for the work. Each
+// holds ShelterFieldSize cells.
+type ShelterLand struct {
+	Land, Across, Near []bool
+}
+
+// at says whether cell (a, b) is land; off the grid it is not.
+func (l *ShelterLand) at(a, b int32) bool {
+	return a >= 0 && b >= 0 && a < shelterGridColumns && b < shelterGridRows && l.Land[ShelterIndex(a, b)]
+}
+
+// ShelterLee works out each cell's lee for the waves (lee.go) from the
+// land: for each direction, how far upwind of its centre the first land
+// is, at most reach m. A cell of water with land within the reach gets it,
+// and so does a cell of land beside water, whose fetch is nothing, so that
+// the lee falls to the shore between cells; chunk gives the table of
+// chunk n to write it into, or nil to leave it. The cells inland and far
+// out are left as they are, open water.
+//
+// Each cell's ray is walked across the cells it passes, as a grid is
+// traversed by a ray (Amanatides and Woo 1987): the fetch is the distance
+// to where the ray enters the first cell of land. A cell spans its columns'
+// and rows' hexagons about its centre.
+func ShelterLee(l *ShelterLand, reach float64, chunk func(n int32) *ShelterChunk) {
+	cols, rows := ShelterGrid()
+	x0, y0 := ShelterCellCentre(0, 0)
+	x1, y1 := ShelterCellCentre(1, 1)
+	width, height := x1-x0, y1-y0
+	// near says a cell has land within the reach: the land spread across
+	// a square of the reach's cells each way, along rows and then along
+	// columns.
+	spanA, spanB := toInt32(math.Ceil(reach/width)), toInt32(math.Ceil(reach/height))
+	spreadCells(l.Land, l.Across, cols, rows, spanA, false)
+	spreadCells(l.Across, l.Near, rows, cols, spanB, true)
+	var sinDir, cosDir [ShelterDirections]float64
+	for k := range int32(ShelterDirections) {
+		sinDir[k], cosDir[k] = SinCos(float64(float64(k) * (2 * math.Pi / ShelterDirections)))
+	}
+	neighbours := [8][2]int32{{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}}
+	var lee [ShelterDirections]uint8
+	for a := range cols {
+		for b := range rows {
+			if !l.Near[ShelterIndex(a, b)] {
+				continue
+			}
+			open := true
+			if l.at(a, b) {
+				shore := false
+				for _, d := range neighbours {
+					shore = shore || !l.at(a+d[0], b+d[1])
+				}
+				if !shore {
+					continue
+				}
+				for k := range lee {
+					lee[k] = LeeByte(0)
+				}
+				open = false
+			} else {
+				for k := range ShelterDirections {
+					lee[k] = ShelterLeeOpen
+					if d, ok := l.ray(a, b, sinDir[k], cosDir[k], width, height, reach); ok {
+						lee[k] = LeeByte(d)
+						open = open && lee[k] == ShelterLeeOpen
+					}
+				}
+			}
+			n, i, ok := ShelterCellOf(a, b)
+			if open || !ok {
+				continue
+			}
+			ch := chunk(n)
+			if ch == nil {
+				continue
+			}
+			for k := range int32(ShelterDirections) {
+				ch.Values[(i*ShelterDirections+k)*ShelterStride+2] = lee[k]
+			}
+		}
+	}
+}
+
+// spreadCells sets out to set spread by up to span cells each way along
+// its first coordinate, us of them, for each of the vs of its second: the
+// grid's columns and rows, or with swap its rows and columns.
+func spreadCells(set, out []bool, us, vs, span int32, swap bool) {
+	for v := range vs {
+		last := int32(-1 << 30)
+		for u := range us {
+			if set[cellIndex(u, v, swap)] {
+				last = u
+			}
+			out[cellIndex(u, v, swap)] = u-last <= span
+		}
+		last = 1 << 30
+		for u := us - 1; u >= 0; u-- {
+			if set[cellIndex(u, v, swap)] {
+				last = u
+			}
+			out[cellIndex(u, v, swap)] = out[cellIndex(u, v, swap)] || last-u <= span
+		}
+	}
+}
+
+// cellIndex is ShelterIndex(u, v), or with swap ShelterIndex(v, u).
+func cellIndex(u, v int32, swap bool) int32 {
+	if swap {
+		return ShelterIndex(v, u)
+	}
+	return ShelterIndex(u, v)
+}
+
+// ray is how far from the centre of cell (a, b), toward the direction
+// whose sine and cosine are sin and cos, the ray enters the first cell of
+// land, if one is within reach: across cells width by height m.
+func (l *ShelterLand) ray(a, b int32, sin, cos, width, height, reach float64) (float64, bool) {
+	stepA, stepB := int32(1), int32(1)
+	nextA, nextB := math.Inf(1), math.Inf(1)
+	deltaA, deltaB := math.Inf(1), math.Inf(1)
+	if sin < 0 {
+		stepA = -1
+	}
+	if cos < 0 {
+		stepB = -1
+	}
+	// A direction along a column or a row has a part across it of a
+	// rounding's size: it never crosses into the next.
+	if s := math.Abs(sin); s > 1e-9 {
+		deltaA = width / s
+		nextA = float64(0.5 * deltaA)
+	}
+	if c := math.Abs(cos); c > 1e-9 {
+		deltaB = height / c
+		nextB = float64(0.5 * deltaB)
+	}
+	for {
+		d := nextA
+		if nextB < nextA {
+			d = nextB
+			b += stepB
+			nextB += deltaB
+		} else {
+			a += stepA
+			nextA += deltaA
+		}
+		if d > reach {
+			return 0, false
+		}
+		if l.at(a, b) {
+			return d, true
+		}
+	}
 }

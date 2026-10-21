@@ -148,6 +148,11 @@ type seaWindow struct {
 	amp    [seaAreas * physics.SeaComponents]float64
 	hs     [seaAreas]float64
 	peak   [seaAreas]float64
+	parts  [seaAreas]physics.SeaParts
+	bits   [seaAreas * physics.SeaWords]uint64
+
+	factors    [seaAreas * physics.SeaComponents]float64
+	factorKeys [seaAreas]uint64
 }
 
 var (
@@ -160,6 +165,14 @@ var (
 	// seaInput is what seaInputOf writes: an area's inputs in whole steps,
 	// the wind's speed, the direction it comes from, the fetch.
 	seaInput [3]uint32
+	// seaCurrentValues is what seaCurrent writes: an area's current east
+	// and north in whole steps.
+	seaCurrentValues [2]int32
+	// swellValues is what swellAt writes: the swell's height, period,
+	// direction and how far it has come.
+	swellValues [4]float64
+	// leeValues is what leeGrid writes.
+	leeValues [shelterSide * shelterSide]float64
 
 	// samplePoints holds the points seaSample reads, east then north of
 	// each; sampleValues what it writes: height, slope east, slope north
@@ -192,7 +205,8 @@ const wakeCapacity = physics.ClientWakes
 func init() {
 	for i := range windows {
 		w := &windows[i]
-		w.win = physics.SeaWindow{Size: seaSide, Inputs: w.inputs[:], Amp: w.amp[:], Hs: w.hs[:], Peak: w.peak[:]}
+		w.win = physics.SeaWindow{Size: seaSide, Inputs: w.inputs[:], Amp: w.amp[:], Hs: w.hs[:], Peak: w.peak[:], Parts: w.parts[:], Bits: w.bits[:],
+			Factors: w.factors[:], FactorKeys: w.factorKeys[:]}
 	}
 }
 
@@ -266,15 +280,85 @@ func seaWindowPlace(s uint32, col, row int32, size uint32) {
 	w.Col, w.Row, w.Size = col, row, int32(min(max(size, 1), seaSide))
 }
 
-// seaArea sets the inputs of area i of window s, in whole steps.
+// seaArea sets the inputs of area i of window s, in whole steps: the
+// wind's speed, the direction it comes from and the fetch; the swell's
+// height, period and direction, none with no height; and the current east
+// and north, which seaCurrent gives.
 //
 //go:wasmexport seaArea
-func seaArea(s, i, speed, from, fetch uint32) {
+func seaArea(s, i, speed, from, fetch, swellHeight, swellPeriod, swellFrom uint32, currentEast, currentNorth int32) {
 	w := &slot(s).win
 	if i >= uint32(w.Size*w.Size) {
 		return
 	}
-	physics.SeaArea(&waves, w, int32(i), physics.SeaInput{Speed: speed, From: from % physics.SeaFromSteps, Fetch: fetch})
+	physics.SeaArea(&waves, w, int32(i), physics.SeaInput{
+		Speed: speed, From: from % physics.SeaFromSteps, Fetch: fetch,
+		SwellHeight: swellHeight, SwellPeriod: swellPeriod, SwellFrom: swellFrom % physics.SeaFromSteps,
+		CurrentEast: currentEast, CurrentNorth: currentNorth,
+	})
+}
+
+// seaCurrent writes to seaCurrentValues the current of the area at a
+// column and row, as the server gives its inputs: at its centre on the open
+// sea, by the world's way (circulation) and the weather's current.
+//
+//go:wasmexport seaCurrent
+func seaCurrent(col, row int32) {
+	var in physics.SeaInput
+	in.SetCurrent(physics.SeaCurrent(&weatherPrepared, way, col, row))
+	seaCurrentValues = [2]int32{in.CurrentEast, in.CurrentNorth}
+}
+
+//go:wasmexport seaCurrentValues
+func seaCurrentValuesAddr() uint32 { return addr(unsafe.Pointer(&seaCurrentValues)) }
+
+// seaParts is window s's partitions: physics.SeaParts' five float64s for
+// each area, the wind sea's Hs and peak, the swell's Hs and peak, and the
+// Hs with no current.
+//
+//go:wasmexport seaParts
+func seaParts(s uint32) uint32 { return addr(unsafe.Pointer(&slot(s).parts)) }
+
+// swellAt writes to swellValues the swell at (x, y) at a tick from the
+// system in the systemRecord record, whose kind systemKindSet gave: for a
+// client with no server, which raises its own storm.
+//
+//go:wasmexport swellAt
+func swellAt(x, y, tick float64) {
+	sw := physics.SwellAt(&waves, &weatherPrepared, &systemRecord, x, y, tick)
+	swellValues = [4]float64{sw.Height, sw.Period, sw.From, sw.Far}
+}
+
+//go:wasmexport swellValues
+func swellValuesAddr() uint32 { return addr(unsafe.Pointer(&swellValues)) }
+
+// leeGrid writes to leeValues the share of the waves the land's lee leaves
+// at the centres of shelterSide by shelterSide cells, from cell (a0, b0)
+// of the whole grid, row by row from the south, each from the west, for
+// the sea of window s: what the tiles' plane is scaled by between the
+// cells, bilinear, as the steps' is. A cell the module holds no shelter
+// for is open water, 1, and every cell is while shelterUse is off.
+//
+//go:wasmexport leeGrid
+func leeGrid(s uint32, a0, b0 int32) {
+	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Lee: shelterInUse()}
+	for j := range int32(shelterSide) {
+		for i := range int32(shelterSide) {
+			leeValues[j*shelterSide+i] = physics.CellLee(&sea, a0+i, b0+j)
+		}
+	}
+}
+
+//go:wasmexport leeValues
+func leeValuesAddr() uint32 { return addr(unsafe.Pointer(&leeValues)) }
+
+// leeAt returns the share of the waves the land's lee leaves at (x, y), for
+// the sea of window s, as a step feels it.
+//
+//go:wasmexport leeAt
+func leeAt(s uint32, x, y float64) float64 {
+	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Lee: shelterInUse()}
+	return physics.LeeAt(&sea, x, y)
 }
 
 // seaInputOf rounds a wind and a fetch to an area's inputs, as the server
@@ -292,6 +376,18 @@ func seaInputOf(speed, from, fetch float64) {
 
 //go:wasmexport seaInput
 func seaInputAddr() uint32 { return addr(unsafe.Pointer(&seaInput)) }
+
+// swellInputOf rounds a swell, its height (m), period (s) and the
+// direction it comes from (rad), to an area's inputs, as the server does,
+// and writes them to seaInput: its height, period and direction in whole
+// steps.
+//
+//go:wasmexport swellInputOf
+func swellInputOf(height, period, from float64) {
+	var in physics.SeaInput
+	in.SetSwell(physics.Swell{Height: height, Period: period, From: from})
+	seaInput = [3]uint32{in.SwellHeight, in.SwellPeriod, in.SwellFrom}
+}
 
 // seaSeal makes window s ready, once its areas are set.
 //
@@ -361,7 +457,7 @@ func step() {
 		physics.Step(&state, &control, &env, nil, g, &prepared, &out)
 		return
 	}
-	sea := physics.Sea{Waves: &waves, Window: &windows[use].win, Tick: &stepTime}
+	sea := physics.Sea{Waves: &waves, Window: &windows[use].win, Tick: &stepTime, Lee: shelterInUse()}
 	physics.Step(&state, &control, &env, &sea, g, &prepared, &out)
 }
 
@@ -470,7 +566,7 @@ func shelterSideValue() uint32 { return shelterSide }
 //
 //go:wasmexport waveUnder
 func waveUnder(s uint32, x, y, heading, length, beam float64) {
-	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Tick: &drawTime}
+	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Tick: &drawTime, Lee: shelterInUse()}
 	wave = physics.WaveUnder(&sea, groundInUse(), length, beam, x, y, heading)
 }
 
@@ -481,11 +577,12 @@ func samplePointsAddr() uint32 { return addr(unsafe.Pointer(&samplePoints)) }
 func sampleValuesAddr() uint32 { return addr(unsafe.Pointer(&sampleValues)) }
 
 // seaSample writes the sea at the first n of samplePoints to sampleValues,
-// in window s at the time seaDrawAt set.
+// in window s at the time seaDrawAt set, in the land's lee while shelterUse
+// is on.
 //
 //go:wasmexport seaSample
 func seaSample(s, n uint32) {
-	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Tick: &drawTime}
+	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Tick: &drawTime, Lee: shelterInUse()}
 	g := groundInUse()
 	for i := uint32(0); i < n && i < sampleCapacity; i++ {
 		p := physics.SeaSample(&sea, g, samplePoints[2*i], samplePoints[2*i+1])
@@ -495,11 +592,12 @@ func seaSample(s, n uint32) {
 
 // seaFactor writes to factorValues the share of the waves the depth leaves
 // at the first n of samplePoints, in window s, by the ground the module
-// holds: 1 where it holds none, or groundUse is off.
+// holds: 1 where it holds none, or groundUse is off. It is the share of
+// what the land's lee leaves, while shelterUse is on.
 //
 //go:wasmexport seaFactor
 func seaFactor(s, n uint32) {
-	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Tick: &drawTime}
+	sea := physics.Sea{Waves: &waves, Window: &slot(s).win, Tick: &drawTime, Lee: shelterInUse()}
 	g := groundInUse()
 	for i := uint32(0); i < n && i < sampleCapacity; i++ {
 		x, y := samplePoints[2*i], samplePoints[2*i+1]

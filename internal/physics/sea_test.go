@@ -42,6 +42,8 @@ func newWindow(col, row, size int32) *SeaWindow {
 		Amp:    make([]float64, n*SeaComponents),
 		Hs:     make([]float64, n),
 		Peak:   make([]float64, n),
+		Parts:  make([]SeaParts, n),
+		Bits:   make([]uint64, n*SeaWords),
 	}
 }
 
@@ -85,7 +87,8 @@ func oneWave(length, amplitude, toward float64) *ocean {
 	w.speed[0] = gravity / omega
 	win := newWindow(0, 0, 1)
 	win.Amp[0], win.Hs[0] = amplitude, 4*amplitude/math.Sqrt2
-	win.Active[0], win.Count = 0, 1
+	win.stale = true
+	win.Seal()
 	o := &ocean{Sea: Sea{Waves: w, Window: win}}
 	o.Tick = &o.tick
 	o.at(0)
@@ -276,12 +279,12 @@ func TestSeaInputOf(t *testing.T) {
 		speed, from, fetch float64
 		want               SeaInput
 	}{
-		{5.144, 0, 11112, SeaInput{514, 0, 11112}},
-		{5.146, math.Pi, 11112.4, SeaInput{515, 32768, 11112}},
-		{-3, -math.Pi / 2, -1, SeaInput{0, 49152, 0}},
-		{1e9, 2 * math.Pi, 1e12, SeaInput{10000, 0, 1 << 24}},
+		{5.144, 0, 11112, SeaInput{Speed: 514, From: 0, Fetch: 11112}},
+		{5.146, math.Pi, 11112.4, SeaInput{Speed: 515, From: 32768, Fetch: 11112}},
+		{-3, -math.Pi / 2, -1, SeaInput{Speed: 0, From: 49152, Fetch: 0}},
+		{1e9, 2 * math.Pi, 1e12, SeaInput{Speed: 10000, From: 0, Fetch: 1 << 24}},
 		{math.NaN(), math.NaN(), math.NaN(), SeaInput{}},
-		{7, -1e-9, 100, SeaInput{700, 0, 100}},
+		{7, -1e-9, 100, SeaInput{Speed: 700, From: 0, Fetch: 100}},
 	} {
 		if got := SeaInputOf(c.speed, c.from, c.fetch); got != c.want {
 			t.Errorf("SeaInputOf(%g, %g, %g) = %+v, want %+v", c.speed, c.from, c.fetch, got, c.want)
@@ -506,7 +509,7 @@ func TestWindowsAgree(t *testing.T) {
 	near.Seal()
 	var tick SeaTick
 	SeaAt(w, &tick, 7.4e8)
-	a, c := Sea{w, world, &tick}, Sea{w, near, &tick}
+	a, c := Sea{Waves: w, Window: world, Tick: &tick}, Sea{Waves: w, Window: near, Tick: &tick}
 	x0, y0 := float64(col-seaMiddle)*SeaAreaSize, float64(row-seaMiddle)*SeaAreaSize
 	for _, d := range [][2]float64{{0, 0}, {200, -200}, {-231.5, 231.4}, {600, 100}, {-650, -650}, {3, 694}} {
 		p, q := SeaSample(&a, nil, x0+d[0], y0+d[1]), SeaSample(&c, nil, x0+d[0], y0+d[1])

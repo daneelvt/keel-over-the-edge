@@ -7,6 +7,9 @@
 // says what it changes to a second before, so the prediction, which runs a
 // fraction of a second ahead, always knows the sea of the tick it steps. At
 // each tick it sails in the later of the windows whose tick has come.
+// An area's swell is sent only when it changes: a SeaAreas without it has
+// the last one's. Its current is not sent: the module works it out at the
+// area's centre from the world's way round, as the server does.
 // internal/client/sea.go is its twin.
 
 import type { SeaAreas } from '../net/messages';
@@ -27,7 +30,15 @@ interface Held {
   speed: Uint32Array;
   from: Uint32Array;
   fetch: Uint32Array;
+  /** Each area's swell: height in centimetres, period in 0.01 s, direction, as sent. */
+  swellHeight: Uint32Array;
+  swellPeriod: Uint32Array;
+  swellFrom: Uint32Array;
+  /** Each area's current, east and north in steps of 0.01 m/s, if given with the window; else the module's. */
+  current: { east: Int32Array; north: Int32Array } | null;
 }
+
+const AREAS = SEA.window * SEA.window;
 
 export class Seas {
   /** What each of the module's windows holds. */
@@ -37,10 +48,19 @@ export class Seas {
     col: 0,
     row: 0,
     size: 0,
-    speed: new Uint32Array(SEA.window * SEA.window),
-    from: new Uint32Array(SEA.window * SEA.window),
-    fetch: new Uint32Array(SEA.window * SEA.window),
+    speed: new Uint32Array(AREAS),
+    from: new Uint32Array(AREAS),
+    fetch: new Uint32Array(AREAS),
+    swellHeight: new Uint32Array(AREAS),
+    swellPeriod: new Uint32Array(AREAS),
+    swellFrom: new Uint32Array(AREAS),
+    current: null,
   }));
+  /** The swell of the last SeaAreas that had it. */
+  readonly #swellHeight = new Uint32Array(AREAS);
+  readonly #swellPeriod = new Uint32Array(AREAS);
+  readonly #swellFrom = new Uint32Array(AREAS);
+  readonly #current = [0, 0];
   /** Counts the windows taken, so that whoever draws them knows to read them again. */
   version = 0;
 
@@ -60,9 +80,11 @@ export class Seas {
 
   /**
    * Takes a SeaAreas: it replaces the window held for the same tick, or else
-   * the one with the earlier tick. One that is malformed is let go.
+   * the one with the earlier tick. One that is malformed is let go. A
+   * developer's window may give each area's current, east and north in
+   * steps of 0.01 m/s, in place of the one the module works out.
    */
-  receive(m: SeaAreas): void {
+  receive(m: SeaAreas, current: { east: number[]; north: number[] } | null = null): void {
     const n = m.size * m.size;
     if (
       !Number.isInteger(m.size) ||
@@ -73,6 +95,17 @@ export class Seas {
       m.fetch.length !== n
     ) {
       return;
+    }
+    const sh = m.swellHeight ?? [];
+    if (sh.length > 0) {
+      if (sh.length !== n || m.swellPeriod?.length !== n || m.swellFrom?.length !== n) {
+        return;
+      }
+      for (let i = 0; i < n; i++) {
+        this.#swellHeight[i] = sh[i] ?? 0;
+        this.#swellPeriod[i] = m.swellPeriod[i] ?? 0;
+        this.#swellFrom[i] = (m.swellFrom[i] ?? 0) % SEA.fromSteps;
+      }
     }
     const [a, b] = this.held as [Held, Held];
     let slot = 0;
@@ -91,17 +124,60 @@ export class Seas {
     h.col = m.col;
     h.row = m.row;
     h.size = m.size;
-    const p = this.#physics;
-    p.seaWindow(slot, m.col, m.row, m.size);
     for (let i = 0; i < n; i++) {
-      const from = (m.from[i] ?? 0) % SEA.fromSteps;
-      p.seaArea(slot, i, m.speed[i] ?? 0, from, m.fetch[i] ?? 0);
       h.speed[i] = m.speed[i] ?? 0;
-      h.from[i] = from;
+      h.from[i] = (m.from[i] ?? 0) % SEA.fromSteps;
       h.fetch[i] = m.fetch[i] ?? 0;
+      h.swellHeight[i] = this.#swellHeight[i] ?? 0;
+      h.swellPeriod[i] = this.#swellPeriod[i] ?? 0;
+      h.swellFrom[i] = this.#swellFrom[i] ?? 0;
+    }
+    h.current =
+      current === null
+        ? null
+        : { east: Int32Array.from(current.east), north: Int32Array.from(current.north) };
+    this.#apply(slot);
+    this.version++;
+  }
+
+  /**
+   * Gives the module's windows their currents again, after the world's way
+   * round has changed.
+   */
+  recirculate(): void {
+    for (let slot = 0; slot < this.held.length; slot++) {
+      if (this.held[slot]?.have) {
+        this.#apply(slot);
+      }
+    }
+    this.version++;
+  }
+
+  /** Sets a window in the module from what it holds, each area's current its own. */
+  #apply(slot: number): void {
+    const h = this.held[slot] as Held;
+    const p = this.#physics;
+    p.seaWindow(slot, h.col, h.row, h.size);
+    const n = h.size * h.size;
+    for (let i = 0; i < n; i++) {
+      const c =
+        h.current === null
+          ? p.seaCurrent(h.col + (i % h.size), h.row + Math.floor(i / h.size), this.#current)
+          : [h.current.east[i] ?? 0, h.current.north[i] ?? 0];
+      p.seaArea(
+        slot,
+        i,
+        h.speed[i] ?? 0,
+        h.from[i] ?? 0,
+        h.fetch[i] ?? 0,
+        h.swellHeight[i] ?? 0,
+        h.swellPeriod[i] ?? 0,
+        h.swellFrom[i] ?? 0,
+        c[0] ?? 0,
+        c[1] ?? 0,
+      );
     }
     p.seaSeal(slot);
-    this.version++;
   }
 
   /**

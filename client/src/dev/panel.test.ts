@@ -55,7 +55,7 @@ function stub(): PanelWorld & { calls: string[] } {
       },
       tuning,
       states: { current: state },
-      sea: { options: { fetch: null, split: null, flat: false } },
+      sea: { options: { fetch: null, split: null, flat: false, swell: null } },
       settleSea() {
         calls.push('settle');
       },
@@ -194,7 +194,7 @@ describe('the panel', () => {
     expect(s.fetch).toBeCloseTo(9, 9);
     expect(s.split).toBeCloseTo(34, 9);
     applyState(w, { ...s, flat: true, fetch: null, split: null });
-    expect(w.sandbox.sea.options).toEqual({ fetch: null, split: null, flat: true });
+    expect(w.sandbox.sea.options).toEqual({ fetch: null, split: null, flat: true, swell: null });
     w.calls.length = 0;
     applyState(w, readState(w));
     expect(w.calls).toEqual([]);

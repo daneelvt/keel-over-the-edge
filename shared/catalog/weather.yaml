@@ -22,6 +22,34 @@ weather:
     # largest waves are about twice Hs (Bosboom and Stive, Coastal Dynamics,
     # 5.2.5; a regular wave breaks at 0.78 of the depth, McCowan 1894).
     breaking: 0.5
+    # Swell: a storm's long waves, which run ahead of it. Its spectrum is a
+    # partition of its own, apart from the wind sea's: a Gaussian in
+    # frequency swellSigma of its peak wide (Ochi and Hubble 1976 give swell
+    # and wind sea each a peak of its own), spread as cos²ˢ(θ/2) with s =
+    # swellSpreading about the way it travels (Goda and Suzuki 1975 give
+    # 10–75 for swell), culled against its own highest wave. A swell lower
+    # than swellLeast is none. The swell at a place left its storm when the
+    # storm was as far away as the swell has travelled since, found in
+    # swellSteps of Newton's steps.
+    swellLeast: 0.05 # m
+    swellSpreading: 40
+    swellSigma: 0.07
+    swellSteps: 3
+    # A current along a wave's path raises it against the wave and lowers it
+    # with it, as wave action is kept (Longuet-Higgins and Stewart 1961), by
+    # at most currentMost: a wave the current blocks is raised that much.
+    currentMost: 1.6
+    # Behind land swell is shadowed, never wholly (diffraction fills it):
+    # at least shadowLeast of it reaches.
+    shadowLeast: 0.2
+    # In the land's lee the waves are those of the short water upwind of
+    # it: land of any height stops them. Each cell of the shelter's tables
+    # holds for each direction its own fetch, the open water upwind of it to
+    # the first land, up to leeReach; there the wind sea grows again from
+    # the shore, as the root of that fetch (the Coastal Engineering Manual's
+    # fetch-limited growth), and the swell is shadowed, filling in over the
+    # reach.
+    leeReach: 800 # m
 
   # The wind over the disk.
   disk:
@@ -340,6 +368,19 @@ weather:
       rain: heavy
       cloud: cumulonimbus
       lightning: 0.75
+      # A storm of this size raises waves of 2–4 s, which travel no faster
+      # than it does (the Coastal Engineering Manual's growth laws). Its
+      # swell is given a longer period, as a real storm's 10–15 s swell
+      # would be on this smaller stage: a licence, which lets it run ahead
+      # of the storm at about twice its speed and warn of it (Bowditch,
+      # Tropical Cyclones: "an early indication of the approach … is the
+      # presence of a long swell"). Its height at the storm's edge goes with
+      # its peak wind, and beyond it falls as the square root of the
+      # distance (Ardhuin, Chapron and Collard 2009, on a plane).
+      swell:
+        period: [5.5, 6] # s, drawn per storm
+        band: [5, 6.5] # s
+        height: [0.6, 1] # m
     - id: fog
       shape: none
       turning: 0

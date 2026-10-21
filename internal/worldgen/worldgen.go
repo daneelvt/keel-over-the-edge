@@ -32,7 +32,7 @@ import (
 
 // Version is the generator's version. Raise it whenever a change to the
 // generator or to the catalog's world values changes any seed's world.
-const Version = 4
+const Version = 5
 
 // Island is an island of a made world.
 type Island struct {
@@ -111,8 +111,9 @@ type Records struct {
 }
 
 // Format is the bundle's format: its records' and chunks' encoding. A
-// bundle of format 1 holds no towns, one of format 2 no features.
-const Format = 3
+// bundle of format 1 holds no towns, one of format 2 no features, and one
+// of format 3 no lee for the waves in its shelter.
+const Format = 4
 
 // Bundle is a made world.
 type Bundle struct {

@@ -2,6 +2,8 @@
 
 package physics
 
+import "math/bits"
+
 // A boat in waves. The hull does not feel the sea at a point: it feels the
 // surface averaged over its waterplane, and the slope of the plane that fits
 // that surface best, along the hull and across it. This is Grim's effective
@@ -63,41 +65,45 @@ type wave struct {
 func (v *wave) read(sea *Sea, s *State, sinH, cosH, halfLength, halfBeam float64, decay *[SeaComponents]float64) {
 	w, win, t := sea.Waves, sea.Window, sea.Tick
 	sw, se, nw, ne, wx, wy := win.corners(s.X, s.Y)
-	for _, i := range win.Active[:win.Count] {
-		a := blend(win.Amp, sw+i, se+i, nw+i, ne+i, wx, wy)
-		if !(a > 0) {
-			continue
-		}
-		ke, kn := w.kEast[i], w.kNorth[i]
-		psi := (w.Phase[i] + (float64(ke*s.X) + float64(kn*s.Y))) - t.Phase[i]
-		kx := float64(ke*sinH) + float64(kn*cosH)
-		ky := float64(ke*cosH) - float64(kn*sinH)
-		sin, cos := SinCos(psi)
-		su, gu := averages(float64(kx * halfLength))
-		sv, gv := averages(float64(ky * halfBeam))
-		as, ac := float64(a*sin), float64(a*cos)
-		rate := (float64(kx*s.Surge) + float64(ky*s.Sway)) - w.Omega[i]
+	// The waves of the four areas, ascending.
+	for k := range int32(SeaWords) {
+		for word := win.word(k, sw, se, nw, ne); word != 0; word &= word - 1 {
+			i := k*64 + int32(bits.TrailingZeros64(word))
+			a := blend(win.Amp, sw+i, se+i, nw+i, ne+i, wx, wy)
+			if !(a > 0) {
+				continue
+			}
+			ke, kn := w.kEast[i], w.kNorth[i]
+			psi := (w.Phase[i] + (float64(ke*s.X) + float64(kn*s.Y))) - t.Phase[i]
+			kx := float64(ke*sinH) + float64(kn*cosH)
+			ky := float64(ke*cosH) - float64(kn*sinH)
+			sin, cos := SinCos(psi)
+			su, gu := averages(float64(kx * halfLength))
+			sv, gv := averages(float64(ky * halfBeam))
+			as, ac := float64(a*sin), float64(a*cos)
+			rate := (float64(kx*s.Surge) + float64(ky*s.Sway)) - w.Omega[i]
 
-		mean := float64(su * sv)
-		v.height += float64(mean * as)
-		v.heightRate += float64(float64(mean*rate) * ac)
-		along := float64(float64(kx*gu) * sv)
-		v.ahead += float64(along * ac)
-		v.aheadRate -= float64(float64(along*rate) * as)
-		athwart := float64(float64(ky*su) * gv)
-		v.across += float64(athwart * ac)
-		v.acrossRate -= float64(float64(athwart*rate) * as)
-		v.twist += float64(float64(along*ky) * as)
+			mean := float64(su * sv)
+			v.height += float64(mean * as)
+			v.heightRate += float64(float64(mean*rate) * ac)
+			along := float64(float64(kx*gu) * sv)
+			v.ahead += float64(along * ac)
+			v.aheadRate -= float64(float64(along*rate) * as)
+			athwart := float64(float64(ky*su) * gv)
+			v.across += float64(athwart * ac)
+			v.acrossRate -= float64(float64(athwart*rate) * as)
+			v.twist += float64(float64(along*ky) * as)
 
-		// The water at a crest moves the way the wave travels, at a ω: along
-		// the hull that is a ω k_x / k, and ω / k is the wave's speed.
-		orbit := float64(float64(w.speed[i]*mean) * as)
-		ox, oy := float64(orbit*kx), float64(orbit*ky)
-		v.waterX += ox
-		v.waterY += oy
-		if decay != nil {
-			v.foilX += float64(ox * decay[i])
-			v.foilY += float64(oy * decay[i])
+			// The water at a crest moves the way the wave travels, at a ω: along
+			// the hull that is a ω k_x / k, and ω / k is the wave's speed.
+			orbit := float64(float64(w.speed[i]*mean) * as)
+			ox, oy := float64(orbit*kx), float64(orbit*ky)
+			v.waterX += ox
+			v.waterY += oy
+			if decay != nil {
+				v.foilX += float64(ox * decay[i])
+				v.foilY += float64(oy * decay[i])
+			}
 		}
 	}
 }
@@ -113,13 +119,18 @@ func (v *wave) scale(f float64) {
 	v.foilX, v.foilY = float64(v.foilX*f), float64(v.foilY*f)
 }
 
-// capDepth scales the wave under a boat at (x, y) by the depth's cap
-// there (sea.go), if the ground g caps it.
+// capDepth scales the wave under a boat at (x, y) by the land's lee there
+// (lee.go) and then by the depth's cap (sea.go), if the ground g caps what
+// the lee leaves.
 func (v *wave) capDepth(sea *Sea, g *Ground, x, y float64) {
+	lee := LeeAt(sea, x, y)
+	if lee != 1 {
+		v.scale(lee)
+	}
 	if g == nil {
 		return
 	}
-	if f := depthFactor(sea.Waves, g, x, y, sea.hsAt(x, y)); f < 1 {
+	if f := depthFactor(sea.Waves, g, x, y, float64(sea.hsAt(x, y)*lee)); f < 1 {
 		v.scale(f)
 	}
 }
@@ -168,8 +179,9 @@ type EffectiveWave struct {
 }
 
 // WaveUnder returns the effective wave under a hull at (x, y) heading
-// heading, at rest, whose waterplane is length long and beam wide, capped
-// by the depth of the ground g there, or nil for the open sea.
+// heading, at rest, whose waterplane is length long and beam wide, in the
+// land's lee and capped by the depth of the ground g there, or nil for the
+// open sea.
 func WaveUnder(sea *Sea, g *Ground, length, beam, x, y, heading float64) EffectiveWave {
 	var v wave
 	s := State{X: x, Y: y}

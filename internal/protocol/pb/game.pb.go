@@ -2451,9 +2451,18 @@ type SeaAreas struct {
 	// that raises its waves, in steps of 0.01 m/s; the direction it comes
 	// from, clockwise from north, in steps of a 65536th of a turn; and the
 	// fetch, in metres.
-	Speed         []uint32 `protobuf:"varint,5,rep,packed,name=speed,proto3" json:"speed,omitempty"`
-	From          []uint32 `protobuf:"varint,6,rep,packed,name=from,proto3" json:"from,omitempty"`
-	Fetch         []uint32 `protobuf:"varint,7,rep,packed,name=fetch,proto3" json:"fetch,omitempty"`
+	Speed []uint32 `protobuf:"varint,5,rep,packed,name=speed,proto3" json:"speed,omitempty"`
+	From  []uint32 `protobuf:"varint,6,rep,packed,name=from,proto3" json:"from,omitempty"`
+	Fetch []uint32 `protobuf:"varint,7,rep,packed,name=fetch,proto3" json:"fetch,omitempty"`
+	// For each area, as above, the swell that reaches it from a storm: its
+	// significant height in centimetres, none if 0; its peak period in steps
+	// of 0.01 s; and the direction it comes from, as the wind's. Sent only
+	// when they differ from those last sent: empty, they are as they were.
+	// An area's current is not sent: the client works it out at the area's
+	// centre from the world's circulation, as the server does.
+	SwellHeight   []uint32 `protobuf:"varint,8,rep,packed,name=swell_height,json=swellHeight,proto3" json:"swell_height,omitempty"`
+	SwellPeriod   []uint32 `protobuf:"varint,9,rep,packed,name=swell_period,json=swellPeriod,proto3" json:"swell_period,omitempty"`
+	SwellFrom     []uint32 `protobuf:"varint,10,rep,packed,name=swell_from,json=swellFrom,proto3" json:"swell_from,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2533,6 +2542,27 @@ func (x *SeaAreas) GetFrom() []uint32 {
 func (x *SeaAreas) GetFetch() []uint32 {
 	if x != nil {
 		return x.Fetch
+	}
+	return nil
+}
+
+func (x *SeaAreas) GetSwellHeight() []uint32 {
+	if x != nil {
+		return x.SwellHeight
+	}
+	return nil
+}
+
+func (x *SeaAreas) GetSwellPeriod() []uint32 {
+	if x != nil {
+		return x.SwellPeriod
+	}
+	return nil
+}
+
+func (x *SeaAreas) GetSwellFrom() []uint32 {
+	if x != nil {
+		return x.SwellFrom
 	}
 	return nil
 }
@@ -3049,7 +3079,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05front\x18\x13 \x01(\bR\x05front\x12\x16\n" +
 	"\x06toward\x18\x14 \x01(\rR\x06toward\x12\x16\n" +
 	"\x06trough\x18\x15 \x01(\rR\x06trough\x12\x14\n" +
-	"\x05still\x18\x16 \x01(\bR\x05still\"\x96\x01\n" +
+	"\x05still\x18\x16 \x01(\bR\x05still\"\xfb\x01\n" +
 	"\bSeaAreas\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x03R\x04tick\x12\x10\n" +
 	"\x03col\x18\x02 \x01(\x11R\x03col\x12\x10\n" +
@@ -3057,7 +3087,12 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x04size\x18\x04 \x01(\rR\x04size\x12\x14\n" +
 	"\x05speed\x18\x05 \x03(\rR\x05speed\x12\x12\n" +
 	"\x04from\x18\x06 \x03(\rR\x04from\x12\x14\n" +
-	"\x05fetch\x18\a \x03(\rR\x05fetch\"\x1e\n" +
+	"\x05fetch\x18\a \x03(\rR\x05fetch\x12!\n" +
+	"\fswell_height\x18\b \x03(\rR\vswellHeight\x12!\n" +
+	"\fswell_period\x18\t \x03(\rR\vswellPeriod\x12\x1d\n" +
+	"\n" +
+	"swell_from\x18\n" +
+	" \x03(\rR\tswellFrom\"\x1e\n" +
 	"\aRestart\x12\x13\n" +
 	"\x05in_ms\x18\x01 \x01(\rR\x04inMs\">\n" +
 	"\x06Queued\x12\x1a\n" +

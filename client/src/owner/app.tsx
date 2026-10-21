@@ -6,7 +6,8 @@
 // clock as every phone shows it. It reads the world once a second, and not
 // while its tab is hidden. A click on the map picks a point: what is there
 // is told, with its pressure at the tick shown and the barometer's
-// tendency, and the owner's boats can be put there, or at a place. The page
+// tendency, and its sea while the sea is shown, and the owner's boats can
+// be put there, or at a place. The page
 // acts on the owner's boats alone; the server refuses the rest. At the
 // top, always in view, the world's end counted down by keel's clock; the
 // owner may begin the next world now, typing the world's number to end it,
@@ -36,6 +37,7 @@ import {
   getBytes,
   getJSON,
   getPressure,
+  getSea,
   type Island,
   type Lifecycle,
   type Light,
@@ -44,12 +46,14 @@ import {
   type PlacesData,
   type Point,
   type PressureAt,
+  type SeaPage,
   type Town,
   type TownsData,
   type WorldNow,
 } from './api';
 import {
   allLayers,
+  COLOURS,
   drawMap,
   gustPicture,
   ISLAND_DETAIL,
@@ -60,6 +64,7 @@ import {
 import { hidden, serverOffset } from './life';
 import { BeginNext, type Life, LifecycleCard, RemakeNext, SwitchBar } from './lifecycle';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
+import { foamOver, RAISED, SEA_COLOURS, SEA_EVERY, SEA_FULL, seaWords } from './sea';
 import { useWeather, WEATHER_EVERY, WeekCard } from './week';
 
 /** How often the page reads the world, ms. */
@@ -483,7 +488,33 @@ const CHARTED_EVERY = 5000;
 const LIFE_EVERY = 5000;
 
 /** The layers that are live, drawn of the world being sailed alone: none of them for the next world. */
-const LIVE: ReadonlySet<keyof Layers> = new Set(['gusts', 'wind', 'boats', 'charted']);
+const LIVE: ReadonlySet<keyof Layers> = new Set(['sea', 'gusts', 'wind', 'boats', 'charted']);
+
+/** The sea layer's legend: the waves' heights shaded, the swell's arrow, the hatching. */
+function SeaLegend() {
+  const heights = [0.25, 0.5, 1, SEA_FULL];
+  return (
+    <p class="small legend" data-field="sea-legend">
+      {heights.map((h) => (
+        <span key={h}>
+          <i class="swatch" style={{ background: foamOver(COLOURS.sea, h) }} /> {h} m
+        </span>
+      ))}
+      <span>
+        <b style={{ color: SEA_COLOURS.swell }}>→</b> swell
+      </span>
+      <span>
+        <i
+          class="swatch"
+          style={{
+            background: `repeating-linear-gradient(-45deg, ${SEA_COLOURS.raised} 0 1px, ${COLOURS.sea} 1px 4px)`,
+          }}
+        />{' '}
+        raised over ×{RAISED} by a current
+      </span>
+    </p>
+  );
+}
 
 /** What is drawn and listed of a world's terrain, the same for its life. */
 interface Drawn {
@@ -869,6 +900,7 @@ function App() {
   const [picked, setPicked] = useState<[number, number] | null>(null);
   const [point, setPoint] = useState<Point | null>(null);
   const [pressure, setPressure] = useState<PressureAt | null>(null);
+  const [sea, setSea] = useState<SeaPage | null>(null);
   const [boat, setBoat] = useState<number | null>(null);
   const [charted, setCharted] = useState<ChartedData | null>(null);
   const [light, setLight] = useState<number | null>(null);
@@ -1023,6 +1055,40 @@ function App() {
     };
   }, [picked, shownAt, following]);
 
+  // The sea every ten seconds while its layer shows the world being
+  // sailed, with the point picked, and at once for a point picked anew;
+  // paused while the tab is hidden.
+  const seaShown = layers.sea && world !== null && !(tab === 'next' && next !== null);
+  useEffect(() => {
+    if (!seaShown) {
+      setSea(null);
+      return;
+    }
+    let live = true;
+    const read = (): void => {
+      if (hidden()) {
+        return;
+      }
+      getSea(picked)
+        .then((s) => live && setSea(s))
+        .catch((e: unknown) => live && setError(String(e)));
+    };
+    read();
+    const t = setInterval(read, SEA_EVERY);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [seaShown, picked]);
+  // The sea at the point picked, once the reading is of it.
+  const seaPoint =
+    sea?.point !== undefined &&
+    picked !== null &&
+    Math.abs(sea.point.east - picked[0]) < 0.01 &&
+    Math.abs(sea.point.north - picked[1]) < 0.01
+      ? sea.point
+      : null;
+
   const pick = useCallback((east: number, north: number): void => {
     setPicked([east, north]);
     getJSON<Point>(`point?east=${east.toFixed(2)}&north=${north.toFixed(2)}`)
@@ -1077,6 +1143,7 @@ function App() {
     charted:
       charted === null ? null : new Set(charted.charted.map((c) => `${c.subject}:${c.number}`)),
     weather: weather.weather,
+    sea,
   };
   // The next world drawn as the current is, without what is live. The
   // disk's rings are keel's, not a world's: they are drawn from the
@@ -1098,6 +1165,7 @@ function App() {
     features: nxt.features,
     charted: null,
     weather: nextWeather.weather,
+    sea: null,
   };
   const chosen = now?.boats.find((b) => b.boat === boat && b.tools) ?? null;
 
@@ -1271,6 +1339,7 @@ function App() {
             >
               The whole disk
             </button>
+            {seaShown ? <SeaLegend /> : null}
           </fieldset>
           {next !== null ? (
             <nav class="tabs" aria-label="Which world">
@@ -1311,6 +1380,9 @@ function App() {
                   {pressure.change >= 0 ? '+' : ''}
                   {pressure.change.toFixed(1)} in 15 min).
                 </span>
+              ) : null}
+              {seaShown && seaPoint !== null ? (
+                <span data-field="sea"> Sea: {seaWords(seaPoint)}.</span>
               ) : null}
             </p>
           ) : null}

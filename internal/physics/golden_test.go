@@ -81,11 +81,11 @@ type scenarioWeather struct {
 // its inputs in whole steps (wind speed, the direction it comes from, fetch),
 // row by row from the south-west, and the tick of the first step.
 type scenarioSea struct {
-	Tick  float64     `json:"tick"`
-	Col   int32       `json:"col"`
-	Row   int32       `json:"row"`
-	Size  int32       `json:"size"`
-	Areas [][3]uint32 `json:"areas"`
+	Tick  float64   `json:"tick"`
+	Col   int32     `json:"col"`
+	Row   int32     `json:"row"`
+	Size  int32     `json:"size"`
+	Areas [][]int64 `json:"areas"`
 }
 
 type change struct {
@@ -94,8 +94,8 @@ type change struct {
 	Env     map[string]float64 `json:"env"`
 	// Areas replaces the inputs of the sea's areas; Window, with it, moves
 	// the sea's window to another first area, column and row.
-	Areas  [][3]uint32 `json:"areas"`
-	Window *[2]int32   `json:"window"`
+	Areas  [][]int64 `json:"areas"`
+	Window *[2]int32 `json:"window"`
 	// Steer starts the scenarios' heading-hold toward this heading; a
 	// change that sets the helm stops it.
 	Steer *float64 `json:"steer"`
@@ -248,15 +248,35 @@ func scenarioOcean(w *Waves, sea *scenarioSea) (*ocean, error) {
 }
 
 // set gives the sea's areas their inputs.
-func (o *ocean) set(areas [][3]uint32) error {
+func (o *ocean) set(areas [][]int64) error {
 	if len(areas) != len(o.Window.Inputs) {
 		return fmt.Errorf("%d areas for a window of %d", len(areas), len(o.Window.Inputs))
 	}
 	for i, a := range areas {
-		SeaArea(o.Waves, o.Window, int32(i), SeaInput{Speed: a[0], From: a[1], Fetch: a[2]})
+		in, err := areaInput(a)
+		if err != nil {
+			return err
+		}
+		SeaArea(o.Waves, o.Window, int32(i), in)
 	}
 	o.Window.Seal()
 	return nil
+}
+
+// areaInput is an area's inputs as a scenario gives them: the wind's speed,
+// its direction and the fetch, and after them, if it has them, its swell's
+// height, period and direction and its current east and north, each in the
+// steps SeaInput holds them in.
+func areaInput(a []int64) (SeaInput, error) {
+	if len(a) != 3 && len(a) != 8 {
+		return SeaInput{}, fmt.Errorf("an area of %d inputs, not 3 or 8", len(a))
+	}
+	in := SeaInput{Speed: uint32(a[0]), From: uint32(a[1]), Fetch: uint32(a[2])}
+	if len(a) == 8 {
+		in.SwellHeight, in.SwellPeriod, in.SwellFrom = uint32(a[3]), uint32(a[4]), uint32(a[5])
+		in.CurrentEast, in.CurrentNorth = int32(a[6]), int32(a[7])
+	}
+	return in, nil
 }
 
 // scenarioSky is a scenario's weather, made ready: nil if it has none.
@@ -339,6 +359,11 @@ func runScenario(seaParams map[string]float64, params map[string]any, wind map[s
 		PrepareGround(&gp, prepared)
 		if ground, shelter, err = readTerrain(sc.Terrain, prepared); err != nil {
 			return goldenScenario{}, err
+		}
+		if sea != nil {
+			// The waves are calmed in the land's lee, as the wind is
+			// sheltered.
+			sea.Lee = shelter
 		}
 	}
 	if sky != nil && sc.Sea != nil && sc.Sea.Tick != sc.Weather.Tick {

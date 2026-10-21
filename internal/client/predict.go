@@ -76,7 +76,7 @@ type Predictor struct {
 // in flat water. Until the server sends its spells of weather, there is no
 // wind.
 func NewPredictor(kind *physics.Prepared, waves *physics.Waves, weather *physics.WeatherPrepared) *Predictor {
-	return &Predictor{kind: kind, Seas: NewSeas(waves), Weather: physics.Weather{Prepared: weather}}
+	return &Predictor{kind: kind, Seas: NewSeas(waves, weather), Weather: physics.Weather{Prepared: weather}}
 }
 
 // ReceiveWeather takes a WeatherSystems: its spells replace those held,
@@ -137,7 +137,7 @@ func (p *Predictor) step(tick int64, in Input) {
 			p.Shadowed++
 		}
 	}
-	physics.Step(&p.State, &c, &e, p.Seas.At(tick), p.Ground, p.kind, &p.out)
+	physics.Step(&p.State, &c, &e, p.Seas.At(tick, p.Shelter), p.Ground, p.kind, &p.out)
 	if physics.OverEdge(p.Weather.Prepared, p.State.X, p.State.Y) {
 		p.Over = tick
 	}

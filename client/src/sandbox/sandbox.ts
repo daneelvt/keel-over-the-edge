@@ -37,7 +37,7 @@ import {
   steadySpell,
   takesEffect,
 } from '../predict/weather';
-import { LocalSea } from './localsea';
+import { LocalSea, type Swell } from './localsea';
 import { Recorder, type Recording, type StepWeather, type WeatherSet } from './record';
 
 const S = RECORDS.state;
@@ -71,6 +71,11 @@ export const STEADY = 'steady';
 export const FRONT = 'front';
 /** A system of ?weather=<kind> and a front reach the boat this many ticks in. */
 const ARRIVE_TICKS = 3 * 60 * 30;
+/**
+ * A system of a kind that raises swell reaches it this many ticks in: from
+ * far enough off that its swell, which runs ahead of it, comes first.
+ */
+const SWELL_ARRIVE_TICKS = 45 * 60 * 30;
 /** And a front moves at this, m/s: six knots. */
 const FRONT_SPEED = (6 * 1852) / 3600;
 /** How long the sandbox's first spell of a regime lasts, and drifts over: four hours of ticks. */
@@ -153,6 +158,8 @@ export class Sandbox implements BoatDriver {
   readonly start: SandboxStart;
   /** Whether the sail is being recorded (the developer panel turns it on). */
   recording = false;
+  /** The swell the page asked for (?swell=), which a reset keeps. */
+  startSwell: Swell | null = null;
   /** The sea about the boat, as the physics module holds it, and what makes it. */
   readonly seas: Seas;
   readonly sea: LocalSea;
@@ -200,7 +207,7 @@ export class Sandbox implements BoatDriver {
     this.start = start;
     preparePhysics(physics, boat, weather);
     this.seas = new Seas(physics);
-    this.sea = new LocalSea(physics, this.seas);
+    this.sea = new LocalSea(physics, this.seas, Math.round(weather.keyframe.every * 30));
     this.weather = new Spells(physics);
     const self = this;
     this.#stepWeather = {
@@ -222,6 +229,7 @@ export class Sandbox implements BoatDriver {
   /** Sets the world's way round the disk for the current: 1 clockwise, −1 the other way, 0 none. */
   setCirculation(way: number): void {
     this.#physics.circulation(way);
+    this.seas.recirculate();
   }
 
   /** The physics module, for whoever draws its sea. */
@@ -281,7 +289,8 @@ export class Sandbox implements BoatDriver {
    * 0; for a front, the commonest regime's spell and a front crossing the
    * boat three minutes in; for a kind of system, the spell of the commonest
    * regime, or of the lightest for a kind of light winds, and a system of
-   * it reaching the boat three minutes in.
+   * it reaching the boat three minutes in, or forty-five for a kind whose
+   * swell runs ahead of it.
    */
   #startWeather(): void {
     const { wind, weather } = this.start;
@@ -317,8 +326,9 @@ export class Sandbox implements BoatDriver {
 
   /**
    * A front, for kind −1, or a system of a kind, meeting the boat at (east,
-   * north) three minutes after tick now, in a spell from now of the
-   * commonest regime, or of the lightest for a kind of light winds.
+   * north) three minutes after tick now, or forty-five for a kind whose
+   * swell runs ahead of it, in a spell from now of the commonest regime, or
+   * of the lightest for a kind of light winds.
    */
   #meet(kind: number, east: number, north: number, now: number): void {
     const c = this.#catalog;
@@ -343,7 +353,8 @@ export class Sandbox implements BoatDriver {
     const spells = [base];
     const records: Float64Array[] = [];
     if (kind >= 0) {
-      records.push(placedRecord(c, kind, east, north, now, now + ARRIVE_TICKS, base));
+      const arrive = c.systems[kind]?.swell === undefined ? ARRIVE_TICKS : SWELL_ARRIVE_TICKS;
+      records.push(placedRecord(c, kind, east, north, now, now + arrive, base));
     } else {
       // A front of the first frontal regime, its line moving with that
       // regime's wind, to cross the boat three minutes in.
@@ -432,7 +443,8 @@ export class Sandbox implements BoatDriver {
   setWeather(id: string): void {
     const kind = kindIndex(this.#catalog, id);
     if (id === FRONT || kind >= 0) {
-      // A front, or a system of a kind, to meet the boat three minutes on.
+      // A front, or a system of a kind, to meet the boat three minutes on
+      // (forty-five for a storm, whose swell comes first).
       const s = this.#physics.records.state;
       this.#meet(kind, s[S.x] ?? 0, s[S.y] ?? 0, this.tick);
       return;

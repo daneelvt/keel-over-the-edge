@@ -29,8 +29,10 @@ import (
 // are in it, chunkBuilding bytes each, and the discs of harbour water whose
 // centres are; so a town travels with the land it stands on. From format
 // 3, its features: the roofs over its hexagons, chunkRoof bytes each, and
-// the parts of features that stand in it, chunkPart bytes each. Formats 1
-// and 2, chunks with no town and no feature, are still read.
+// the parts of features that stand in it, chunkPart bytes each. From format
+// 4, a shelter's table holds three bytes a direction, the lee's fetch for
+// the waves the third; before, two, and its lee is open water. Formats 1
+// to 3 are still read.
 
 // chunkMagic begins every chunk's payload.
 var chunkMagic = [4]byte{'K', 'W', 'C', 'H'}
@@ -330,8 +332,16 @@ func encodeChunk(n int32, world [16]byte, g *physics.GroundChunk, s *physics.She
 		}
 		raw.Write(bitmap[:])
 		for i := range int32(physics.ShelterCells) {
-			if bitmap[i/8]&(1<<(i%8)) != 0 {
-				raw.Write(s.Values[i*physics.ShelterDirections*2 : (i+1)*physics.ShelterDirections*2])
+			if bitmap[i/8]&(1<<(i%8)) == 0 {
+				continue
+			}
+			v := s.Values[i*physics.ShelterDirections*physics.ShelterStride : (i+1)*physics.ShelterDirections*physics.ShelterStride]
+			if format >= 4 {
+				raw.Write(v)
+				continue
+			}
+			for k := 0; k < len(v); k += physics.ShelterStride {
+				raw.Write(v[k : k+2])
 			}
 		}
 	}
@@ -425,11 +435,18 @@ func DecodeChunkOf(payload []byte, n int32, world [16]byte, generator int) (*phy
 			if bitmap[i/8]&(1<<(i%8)) == 0 {
 				continue
 			}
-			size := physics.ShelterDirections * 2
+			width := 2
+			if format >= 4 {
+				width = physics.ShelterStride
+			}
+			size := physics.ShelterDirections * width
 			if len(body) < size {
 				return nil, nil, nil, fmt.Errorf("worldgen: chunk %d's shelter is cut short", n)
 			}
-			copy(s.Values[i*int32(size):], body[:size])
+			v := s.Values[i*physics.ShelterDirections*physics.ShelterStride:]
+			for k := range physics.ShelterDirections {
+				copy(v[k*physics.ShelterStride:k*physics.ShelterStride+width], body[k*width:(k+1)*width])
+			}
 			body = body[size:]
 		}
 	}

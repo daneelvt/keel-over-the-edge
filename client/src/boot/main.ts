@@ -57,6 +57,7 @@ import { Predictor, prepareEncounters } from '../predict/predictor';
 import { ROAM_HIGH } from '../render/freecam';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
+import { swellFromQuery } from '../sandbox/localsea';
 import {
   commonestWeather,
   START,
@@ -132,6 +133,10 @@ async function start(): Promise<void> {
     // The edge's rules, as a server keeps them; the world file's water's way.
     sandbox.edge = { fall: Math.round(catalog.world.edge.fall * STEPS_PER_SECOND) };
     sandbox.setCirculation(file?.circulation ?? 1);
+    // ?swell=height,period,from: a swell of the developer's own.
+    sandbox.startSwell = swellFromQuery(query);
+    sandbox.sea.options.swell = sandbox.startSwell;
+    sandbox.settleSea();
     game.setDriver(sandbox);
     if (file !== null) {
       const land = new Land(

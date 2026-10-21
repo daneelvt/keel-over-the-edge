@@ -60,6 +60,7 @@ type config struct {
 		cap     float64 // m
 	}
 	shelter   physics.ShelterPrepared
+	leeReach  float64 // m: how far upwind land calms the waves
 	start     catalog.WorldStart
 	validator catalog.WorldValidator
 	names     catalog.WorldNames
@@ -215,6 +216,7 @@ func newConfig(cat *catalog.Catalog) (*config, error) {
 	c.fetch.cap = float64(cat.Weather.Sea.FetchCap * nauticalMile)
 	sp := catalog.ShelterParams(cat)
 	physics.PrepareShelter(&sp, &c.shelter)
+	c.leeReach = cat.Weather.Sea.LeeReach
 	c.start, c.validator, c.names = w.Start, w.Validator, w.Names
 	c.hazards, c.places, c.lights = w.Hazards, w.Places, w.Lights
 	if c.rockSurface, err = look(w.Hazards.RockSurface); err != nil {

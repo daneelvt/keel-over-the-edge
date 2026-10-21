@@ -53,6 +53,7 @@ type Timeline struct {
 	week     *Week
 	origin   int64 // the tick the week's tick 0 falls on
 	longest  int64 // the longest life of the week's systems, ticks
+	linger   int64 // the longest their swell lingers after them, ticks
 
 	// fixed, when set, is the world's own weather instead of its week.
 	fixed *physics.Spell
@@ -66,6 +67,7 @@ func New(c *Config, w *Week) (*Timeline, error) {
 	t := &Timeline{cfg: c, prepared: c.Prepared, week: w}
 	for i := range w.Systems {
 		t.longest = max(t.longest, int64(w.Systems[i].Gone-w.Systems[i].Born))
+		t.linger = max(t.linger, int64(c.Prepared.SwellLinger(w.Systems[i].Kind)))
 		if i > 0 && w.Systems[i].Born < w.Systems[i-1].Born {
 			return nil, errors.New("weather: the week's systems are not in the order of their births")
 		}
@@ -522,6 +524,47 @@ func (t *Timeline) Keyframe(at int64, ss []bus.System, dst *physics.Keyframe) {
 			dst.Systems[weekSlots+int(s.Slot)] = physics.SystemAt(&r, float64(at))
 		}
 	}
+}
+
+// SwellSource is a system whose swell may be on the disk at a tick: its
+// record, and the tick in its record's time.
+type SwellSource struct {
+	Record physics.SystemRecord
+	Tick   float64
+}
+
+// SwellSources appends to dst the systems whose swell may be on the disk at
+// a tick: those of kinds that raise it, born by then and gone less than
+// their swell's crossing of the disk before; the week's, unless the spell
+// in effect is a developer's still weather, and the developer's ss.
+func (t *Timeline) SwellSources(at int64, ws []bus.Weather, ss []bus.System, dst []SwellSource) []SwellSource {
+	p := t.prepared
+	if w := t.Week(); w != nil && t.Effective(at, ws).Still == 0 {
+		local := float64(at - t.origin)
+		sys := w.Systems
+		i, _ := slices.BinarySearchFunc(sys, local, func(s System, at float64) int {
+			if s.Born <= at {
+				return -1
+			}
+			return 1
+		})
+		for i--; i >= 0 && sys[i].Born > local-float64(t.longest)-float64(t.linger)-1; i-- {
+			r := &sys[i].SystemRecord
+			if p.RaisesSwell(r.Kind) && local < r.Gone+p.SwellLinger(r.Kind) {
+				dst = append(dst, SwellSource{Record: *r, Tick: local})
+			}
+		}
+	}
+	for _, s := range ss {
+		if len(t.cfg.Kinds) == 0 || !p.RaisesSwell(float64(s.Kind)) {
+			continue
+		}
+		r := t.record(s)
+		if float64(at) >= r.Born && float64(at) < r.Gone+p.SwellLinger(r.Kind) {
+			dst = append(dst, SwellSource{Record: r, Tick: float64(at)})
+		}
+	}
+	return dst
 }
 
 // Keyframes sets dst to the keyframes about a tick: at the last keyframe

@@ -73,7 +73,7 @@ type weatherSystemJSON struct {
 	East      float64      `json:"east"`
 	North     float64      `json:"north"`
 	Size      float64      `json:"size"`     // m
-	Strength  float64      `json:"strength"` // its life and swell, 1 at full
+	Strength  float64      `json:"strength"` // its life and throb, 1 at full
 	Stage     int          `json:"stage"`    // growing, mature, decaying
 	Heading   float64      `json:"heading"`  // degrees
 	Knots     float64      `json:"knots"`
@@ -81,6 +81,7 @@ type weatherSystemJSON struct {
 	Gone      int64        `json:"gone"`
 	Developer bool         `json:"developer"`
 	Track     [][2]float64 `json:"track"` // where it truly is every trackStep s for the hour after, while it lives
+	Swell     float64      `json:"swell"` // the significant height of its swell at its edge at full strength, m; 0 for none
 }
 
 type weatherFront struct {
@@ -219,13 +220,13 @@ func (o *Owner) weatherPage(tl *weather.Timeline, now, tick int64, ws []bus.Weat
 	for _, s := range week.Systems {
 		local := float64(tick - origin)
 		if s.Born <= local && local < s.Gone {
-			p.Systems = append(p.Systems, systemJSON(s.Slot, &s.SystemRecord, local, origin, false))
+			p.Systems = append(p.Systems, systemJSON(o.cfg.Weather, s.Slot, &s.SystemRecord, local, origin, false))
 		}
 	}
 	for _, s := range ss {
 		r := tl.DeveloperRecord(s)
 		if r.Born <= float64(tick) && float64(tick) < r.Gone {
-			p.Systems = append(p.Systems, systemJSON(physics.WeekSystems+int(s.Slot), &r, float64(tick), 0, true))
+			p.Systems = append(p.Systems, systemJSON(o.cfg.Weather, physics.WeekSystems+int(s.Slot), &r, float64(tick), 0, true))
 		}
 	}
 	// The front crossing at the tick.
@@ -279,12 +280,15 @@ func spellJSON(s *physics.Spell, origin, end int64, held bool) weatherSpell {
 
 // systemJSON is a system as the page shows it at a tick of its record's,
 // local, its ticks moved by origin, with its true track for the hour after.
-func systemJSON(slot int, r *physics.SystemRecord, local float64, origin int64, developer bool) weatherSystemJSON {
+func systemJSON(p *physics.WeatherPrepared, slot int, r *physics.SystemRecord, local float64, origin int64, developer bool) weatherSystemJSON {
 	k := physics.SystemAt(r, local)
 	s := weatherSystemJSON{
 		Slot: slot, Kind: int(k.Kind), East: k.East / 4, North: k.North / 4, Size: k.Size, Strength: round2(k.Strength / 4096),
 		Stage: int(k.Stage), Heading: round2(k.Heading * 360 / physics.TurnSteps), Knots: round2(k.Speed * physics.SeaSpeedStep / knot),
 		Born: int64(r.Born) + origin, Gone: int64(r.Gone) + origin, Developer: developer, Track: [][2]float64{},
+	}
+	if p != nil {
+		s.Swell = round2(physics.SwellHeight(p, r))
 	}
 	for dt := 0.0; dt <= trackLength; dt += trackStep {
 		at := local + dt*physics.StepsPerSecond

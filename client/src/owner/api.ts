@@ -5,7 +5,8 @@
 // second), the gusts' grid, the islands, the places and lights, the
 // current and the land, once a world; the world's life, and its week of
 // weather at a tick, every few seconds; the pressure at a point clicked;
-// the next world's terrain and week under next/ once it is made; and the
+// the sea, its areas' waves and swell and the waves at a point clicked,
+// every ten seconds while it is shown; the next world's terrain and week under next/ once it is made; and the
 // controls, each a POST of JSON.
 
 /** A boat at sea, as the page shows it. */
@@ -371,6 +372,8 @@ export interface WeatherSystem {
   born: number;
   gone: number;
   developer: boolean;
+  /** The significant height of its swell at its edge at full strength, m; 0 for a kind that raises none. */
+  swell: number;
   /** Where it truly is every five minutes for the hour after, while it lives, the first point now. */
   track: [number, number][];
 }
@@ -435,6 +438,54 @@ export interface PressureAt {
   tendency: string;
 }
 
+/** A sea area: its waves, its swell, and how much the current raises its waves. */
+export interface SeaArea {
+  /** The waves' significant height, m, and the wind sea's and the swell's. */
+  hs: number;
+  windHs: number;
+  swellHs: number;
+  /** The swell's peak period, s, and the degrees it comes from. */
+  period: number;
+  from: number;
+  /** The waves' height over their height in still water: above 1 where a current against them steepens them. */
+  raised: number;
+  /** The wind the waves are raised by: the degrees it comes from, and its knots. */
+  windFrom: number;
+  windKnots: number;
+}
+
+/** The sea at a point: its wind sea and its swell, the current's and the lee's factors, and the waves' height there. */
+export interface SeaPoint {
+  east: number;
+  north: number;
+  /** m and s. */
+  windHs: number;
+  windPeriod: number;
+  swellHs: number;
+  swellPeriod: number;
+  /** Degrees the swell comes from. */
+  swellFrom: number;
+  /** How much the current raises the wind sea along its way. */
+  current: number;
+  /** The share of the waves the land's lee leaves, 1 in open water. */
+  lee: number;
+  /** The waves' significant height there, in the lee, m. */
+  hs: number;
+}
+
+/**
+ * sea.json: the sea now, side areas a side, each size metres across, row by
+ * row from the south-west, the disk's centre at the middle one's; and the
+ * sea at a point if one was asked about.
+ */
+export interface SeaPage {
+  tick: number;
+  side: number;
+  size: number;
+  areas: SeaArea[];
+  point?: SeaPoint;
+}
+
 /** The gusts' grid: GUST_SIDE a side over the square of the land's chart, a signed byte a point. */
 export const GUST_STEP = 0.1;
 export const NO_GUST = -128;
@@ -480,6 +531,12 @@ export function getPressure(east: number, north: number, at: number | null): Pro
   return getJSON<PressureAt>(
     `pressure.json?east=${east.toFixed(2)}&north=${north.toFixed(2)}${tick}`,
   );
+}
+
+/** The sea of the current world now, and at a point if one is given. */
+export function getSea(at: [number, number] | null): Promise<SeaPage> {
+  const point = at === null ? '' : `?east=${at[0].toFixed(2)}&north=${at[1].toFixed(2)}`;
+  return getJSON<SeaPage>(`sea.json${point}`);
 }
 
 /** A URL of the land's drawings, for an image. */

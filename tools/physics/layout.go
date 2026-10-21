@@ -49,8 +49,9 @@ var records = []struct {
 }
 
 // groundConstants are the ground's sizes: a chunk's hexagons, columns and
-// rows, the chunks a side, the surfaces, a shelter table's cells and
-// directions and the factor's one, and the chunks the module holds.
+// rows, the chunks a side, the surfaces, a shelter table's cells,
+// directions and bytes a direction, the factor's one, the lee's step and
+// its open water, and the chunks the module holds.
 var groundConstants = []struct {
 	name  string
 	value int
@@ -62,7 +63,10 @@ var groundConstants = []struct {
 	{"surfaces", physics.GroundSurfaces},
 	{"shelterCells", physics.ShelterCells},
 	{"shelterDirections", physics.ShelterDirections},
+	{"shelterStride", physics.ShelterStride},
 	{"shelterFactorOne", physics.ShelterFactorOne},
+	{"shelterLeeStep", physics.ShelterLeeStep},
+	{"shelterLeeOpen", physics.ShelterLeeOpen},
 	{"slots", physics.GroundSlots},
 }
 

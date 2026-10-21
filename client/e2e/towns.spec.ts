@@ -102,6 +102,9 @@ test('chimney smoke is where world time puts it, the same on two pages', async (
     await openScene(page, 'world=1&wind=10,0');
     await page.evaluate(() => globalThis.keel.placeBoat(-60, 40, 0));
     await landed(page);
+    // The wind at a chimney is asked of the module again after 300 ms: one
+    // asked before its shelter was held must not be the one drawn.
+    await page.waitForTimeout(400);
     await page.evaluate(() => {
       const k = globalThis.keel;
       k.setSky(12);

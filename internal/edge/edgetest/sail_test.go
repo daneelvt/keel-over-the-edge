@@ -21,6 +21,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
@@ -551,7 +552,7 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 				p.Circulation = float64(ev.Welcome.GetCirculation())
 			}
 			if ev.SeaAreas != nil {
-				p.Seas.Receive(ev.SeaAreas)
+				p.Seas.Receive(ev.SeaAreas, p.Circulation)
 			}
 			if ev.WeatherSystems != nil {
 				if err := p.ReceiveWeather(ev.WeatherSystems); err != nil {
@@ -903,4 +904,74 @@ func TestSailThroughWeather(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSailThroughSwell: a sailor in a storm's swell, in the outer waters'
+// current, predicts the waves at its boat as the server makes them, from
+// the swell it is sent and the current it works out itself: no
+// correction. The swell is sent at most once a keyframe, and only when it
+// changed.
+func TestSailThroughSwell(t *testing.T) {
+	d := time.Minute
+	synctest.Test(t, func(t *testing.T) {
+		now := loop.TickAt(time.Now(), Epoch)
+		// Half an hour after the sample week's first storm is whole.
+		tl := sequenceFrom(t, 0)
+		var mature int64 = -1
+		for _, s := range tl.Week().Systems {
+			if tl.Prepared().RaisesSwell(s.Kind) {
+				mature = int64(s.Mature)
+				break
+			}
+		}
+		if mature < 0 {
+			t.Fatal("the sample week has no storm")
+		}
+		srv := NewServer(t, Config{Weather: sequenceFrom(t, now-mature-30*60*physics.StepsPerSecond), Terrain: &sim.Terrain{Circulation: 1}})
+		token, id := srv.Guest("Ann")
+		s := srv.NewSailor(DialOptions{Cookie: token}, letGo)
+		if err := s.Connect(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Sail(t.Context(), time.Second); err != nil {
+			t.Fatal(err)
+		}
+		// The area with the most swell in the outer waters, where the drain
+		// runs too.
+		f := srv.World.Bus().Frames.Acquire()
+		best, at := uint32(0), -1
+		for i, in := range f.Sea.Now {
+			x, y := physics.SeaAreaCentre(int32(i%physics.SeaAreas), int32(i/physics.SeaAreas))
+			if r := math.Hypot(x, y); r > 3.6*1852 && r < 4*1852 && in.SwellHeight > best {
+				best, at = in.SwellHeight, i
+			}
+		}
+		f.Release()
+		if at < 0 {
+			t.Fatal("no swell in the outer waters")
+		}
+		x, y := physics.SeaAreaCentre(int32(at%physics.SeaAreas), int32(at/physics.SeaAreas))
+		srv.Place(boatOf(srv, bus.Account(id)), physics.State{X: x, Y: y, Heading: math.Atan2(-x, -y), SheetLimit: 0.8})
+		if err := s.Sail(t.Context(), 2*time.Second); err != nil {
+			t.Fatal(err)
+		}
+		before := s.Stats
+		if err := s.Sail(t.Context(), d); err != nil {
+			t.Fatal(err)
+		}
+		s.Drop()
+		st := s.Stats
+		seas, swells, bytes := st.Seas-before.Seas, st.Swells-before.Swells, st.SeaBytes-before.SeaBytes
+		report(t, "swell", st, d)
+		t.Logf("a swell of %d cm at the boat's area; %d SeaAreas, %d with the swell, %.0f B/s", best, seas, swells, float64(bytes)/d.Seconds())
+		if st.Corrections != before.Corrections {
+			t.Errorf("%d corrections in the swell", st.Corrections-before.Corrections)
+		}
+		if every := int(d.Seconds() / 10); swells > every+1 {
+			t.Errorf("the swell was sent %d times in %v", swells, d)
+		}
+		if last := s.LastSea; last == nil {
+			t.Error("no sea")
+		}
+	})
 }

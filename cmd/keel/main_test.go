@@ -816,7 +816,10 @@ func TestServe(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, worldgen.Empty(f.Header.Seed)), Encounters: encounters(t), Workers: 3})
+		// The world it sailed: its empty terrain, its water's way round.
+		sailed := worldgen.Empty(f.Header.Seed)
+		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 3,
+			Terrain: sailed.Terrain(groundOf(t)), Edge: edgeOf(catalogOf(t))})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1171,13 +1174,14 @@ func TestReplayDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 1, At: func(fr *bus.Frame) {
-		if fr.Tick == at {
-			if err := sim.ReadSnapshot(sim.AppendSnapshot(nil, fr), want); err != nil {
-				t.Fatal(err)
+	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 1,
+		Terrain: sailed.Terrain(groundOf(t)), Edge: edgeOf(catalogOf(t)), At: func(fr *bus.Frame) {
+			if fr.Tick == at {
+				if err := sim.ReadSnapshot(sim.AppendSnapshot(nil, fr), want); err != nil {
+					t.Fatal(err)
+				}
 			}
-		}
-	}}); err != nil {
+		}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1248,4 +1252,20 @@ func TestExactJSON(t *testing.T) {
 			t.Errorf("%v reads back as %v from %s", x, y, b)
 		}
 	}
+}
+
+// catalogOf is the catalog, for a test.
+func catalogOf(t *testing.T) *catalog.Catalog {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cat
+}
+
+// groundOf is the catalog's grounding, prepared, for a test.
+func groundOf(t *testing.T) *physics.GroundPrepared {
+	t.Helper()
+	return catalogOf(t).PrepareGround()
 }

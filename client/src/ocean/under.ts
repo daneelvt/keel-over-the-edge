@@ -55,8 +55,14 @@ export class SeaUnder implements WaveWind {
   /** The values the eased ones are on their way to. */
   readonly #to = { speed: 0, east: 0, north: -1, fetch: 0 };
 
-  /** The window of areas to read, or null for flat water. */
-  lay(window: AreaInputs | null): void {
+  /**
+   * The window of areas to read, or null for flat water. current, if
+   * given, is how much the current raises each area's waves, its
+   * significant height over the height it would have in still water: the
+   * waves break more against a current, steeper (NDBC: all should break at
+   * a steepness of 1/7), and less with one.
+   */
+  lay(window: AreaInputs | null, current: ArrayLike<number> | null = null): void {
     this.#window = window;
     for (let i = 0; i < AREAS; i++) {
       const a = this.areas[i] as Vector4;
@@ -65,7 +71,8 @@ export class SeaUnder implements WaveWind {
         continue;
       }
       const look = foamAt(((window.speed[i] ?? 0) * SEA_SPEED_STEP) / KNOT, this.#look);
-      a.set(look.whitecaps, look.streaks, look.folding, 0);
+      const raised = current === null ? 1 : (current[i] ?? 1);
+      a.set(Math.min(1, look.whitecaps * raised), look.streaks, look.folding, 0);
     }
   }
 

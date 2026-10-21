@@ -274,6 +274,10 @@ func New(cfg Config) (*World, error) {
 	if cfg.Terrain != nil {
 		w.sea.fetch = cfg.Terrain.Fetch
 	}
+	w.sea.circulate(w.circulation)
+	// The waves that move boats are calmed in the land's lee, by the
+	// shelter's tables.
+	w.sea.view.Lee = w.shelter
 	f := w.bus.Frames.Latest()
 	f.Tick = cfg.Tick
 	f.Weathers = f.Weathers[:0]

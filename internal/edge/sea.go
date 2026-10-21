@@ -25,6 +25,10 @@ const (
 
 type seaWindow [SeaWindow * SeaWindow]physics.SeaInput
 
+// swellWindow is a window's swell: each area's height, period and
+// direction.
+type swellWindow [SeaWindow * SeaWindow][3]uint32
+
 // connSea is what a connection's client holds of the sea: the window in
 // effect, and the one it has been sent for a tick still to come, if any.
 type connSea struct {
@@ -34,6 +38,11 @@ type connSea struct {
 	hasNext  bool
 	next     seaWindow
 	nextFrom int64 // the tick next applies from
+	// The swell last sent, and the window it was sent for: a SeaAreas
+	// sends its swell only when it differs.
+	swellSent          bool
+	swellCol, swellRow int32
+	swell              swellWindow
 }
 
 // seaAreas sends the connection whatever of the sea about its eye at (x,
@@ -95,8 +104,21 @@ func (c *conn) sendSea(tick int64, col, row int32, w *seaWindow) bool {
 		Tick: tick, Col: col, Row: row, Size: SeaWindow,
 		Speed: make([]uint32, len(w)), From: make([]uint32, len(w)), Fetch: make([]uint32, len(w)),
 	}
+	var swell swellWindow
 	for i, in := range w {
 		m.Speed[i], m.From[i], m.Fetch[i] = in.Speed, in.From, in.Fetch
+		swell[i] = [3]uint32{in.SwellHeight, in.SwellPeriod, in.SwellFrom}
+	}
+	// The swell changes once a keyframe at most, and only while a storm's
+	// is on the disk: it is sent when it differs from the last sent, or the
+	// window moved since.
+	st := &c.sea
+	if !st.swellSent || st.swellCol != col || st.swellRow != row || st.swell != swell {
+		m.SwellHeight, m.SwellPeriod, m.SwellFrom = make([]uint32, len(w)), make([]uint32, len(w)), make([]uint32, len(w))
+		for i, s := range swell {
+			m.SwellHeight[i], m.SwellPeriod[i], m.SwellFrom[i] = s[0], s[1], s[2]
+		}
+		st.swellSent, st.swellCol, st.swellRow, st.swell = true, col, row, swell
 	}
 	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_SeaAreas{SeaAreas: m}}, outSeaAreas)
 }

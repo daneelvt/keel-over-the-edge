@@ -173,10 +173,19 @@ main {
   touch-action: none;
 }
 
+/* The sea's legend in the layers' box, wrapped to the box's width. */
+.layers .legend {
+  max-width: 12em;
+  flex-wrap: wrap;
+}
+
+/* Clear of the point's panel at the map's foot: on a short map it scrolls. */
 .layers {
   position: absolute;
   top: 8px;
   left: 8px;
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;

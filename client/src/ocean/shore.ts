@@ -15,7 +15,9 @@
 //     period, placed by the depth so that they follow the coast; a reef's
 //     crest foams whenever they break on it; less of it in the lee;
 //   - the lee: the shelter's factor for the mean wind, which calms the gust
-//     patches, the ripples and the whitecaps.
+//     patches, the ripples and the whitecaps;
+//   - the waves' lee: the share of the boat band the land leaves, as the
+//     physics scales the waves under a hull (lee.ts), before the depth's cap.
 
 import { Vector2, Vector3 } from 'three';
 import {
@@ -44,11 +46,14 @@ import { GroundWindow, WINDOW_COLUMNS, WINDOW_ROWS } from '../land/ground';
 import { SHELTER_SCALE, SHELTER_SIDE, ShelterTexture } from '../land/shelter';
 import { GROUND } from '../predict/layout.gen';
 import { look } from '../render/sky';
+import { LEE_SIDE, LeeTexture } from './lee';
 import { seaTime } from './seamaterial';
 
 /** The ground window and the lee's texture the sea reads: one each, filled by the land. */
 export const groundWindow = new GroundWindow();
 export const shelterTexture = new ShelterTexture();
+/** The waves' lee, filled from the module for the sea drawn (ocean.ts). */
+export const leeTexture = new LeeTexture();
 
 const HEX_STEP = 1.5 * (4 / Math.sqrt(3));
 const COLUMN_ZERO = (GROUND.chunkSide * GROUND.chunkColumns) / 2;
@@ -60,6 +65,8 @@ export const shore = {
   window: uniform(new Vector2()),
   /** The lee's first texel's cell on the grid of cells. */
   lee: uniform(new Vector2()),
+  /** The waves' lee's first texel's cell. */
+  waves: uniform(new Vector2()),
   /** γ: the most significant height a depth keeps, as a share of it (the catalog's). */
   breaking: uniform(0.5),
   /** K: how fast light fades in the water, per m (the catalog's). */
@@ -185,6 +192,55 @@ export function leeAt(
     .level(float(0))
     .x.mul(255 / SHELTER_SCALE);
   return mix(float(1), select(inside, f, float(1)), shore.on) as unknown as Node<'float'>;
+}
+
+/**
+ * The share of the boat band the land's lee leaves at the scene point p:
+ * bilinear between cells' centres, as the physics reads it (LeeAt), in
+ * floats from the four cells' texels; 1 outside the texture and on the
+ * open sea.
+ */
+export function waveLeeAt(
+  p: Node<'vec2'>,
+  centre: Node<'vec2'>,
+  centreHex: Node<'vec2'>,
+): Node<'float'> {
+  const d = p.sub(centre);
+  const col = centreHex.x.add(d.x.mul(1 / HEX_STEP)).add(COLUMN_ZERO);
+  const row = centreHex.y
+    .add(centreHex.x.mul(0.5))
+    .add(d.y.negate().mul(0.25))
+    .sub(0.25)
+    .add(ROW_ZERO);
+  const fa = col
+    .sub(3.5)
+    .mul(1 / 8)
+    .sub(shore.waves.x);
+  const fb = row
+    .sub(3.5)
+    .mul(1 / 8)
+    .sub(shore.waves.y);
+  const a = floor(fa);
+  const b = floor(fb);
+  const ta = fa.sub(a);
+  const tb = fb.sub(b);
+  const cell = (da: number, db: number): Node<'float'> => {
+    const u = a.add(da);
+    const v = b.add(db);
+    const inside = u
+      .greaterThanEqual(0)
+      .and(v.greaterThanEqual(0))
+      .and(u.lessThan(LEE_SIDE))
+      .and(v.lessThan(LEE_SIDE));
+    const at = ivec2(int(clamp(u, 0, LEE_SIDE - 1)), int(clamp(v, 0, LEE_SIDE - 1)));
+    return select(
+      inside,
+      textureLoad(leeTexture.texture, at).x,
+      float(1),
+    ) as unknown as Node<'float'>;
+  };
+  const f = mix(mix(cell(0, 0), cell(1, 0), ta), mix(cell(0, 1), cell(1, 1), ta), tb);
+  return mix(float(1), f, shore.on) as unknown as Node<'float'>;
 }
 
 /**

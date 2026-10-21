@@ -75,7 +75,7 @@ const chunkNamed = (name: string): FileChunk => {
 describe('a chunk', () => {
   test('unpacks to the grids Go wrote', async () => {
     expect(CHUNK_FORMAT).toBe(file.format);
-    expect(file.chunks.length).toBe(6);
+    expect(file.chunks.length).toBe(7);
     for (const c of file.chunks) {
       const g = await unpackChunk(payloadOf(c), c.number, world);
       if (typeof g === 'string') {

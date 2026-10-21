@@ -27,8 +27,8 @@ import type { BumpTold, Traffic } from '../net/messages';
 import type { Online } from '../net/online';
 import { foamOn } from '../ocean/foam';
 import { detailOn } from '../ocean/seamaterial';
-import { RECORDS, SEA_SPEED_STEP, WEATHER } from '../predict/layout.gen';
-import type { Physics } from '../predict/physics';
+import { RECORDS, SEA, SEA_SPEED_STEP, WEATHER } from '../predict/layout.gen';
+import { type Physics, SEA_PARTS } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import type { BoatWind } from '../predict/weather';
 import { DISK_RADIUS } from '../render/coords';
@@ -249,6 +249,29 @@ export function weatherLine(
 ): string {
   physics.windDrawAt(tick);
   return `weather ${physics.pressure(east, north).toFixed(1)} hPa, ${systems} system${systems === 1 ? '' : 's'} placed`;
+}
+
+/**
+ * The sea's partitions under the boat: the wind sea's height and peak
+ * period, the swell's and the direction it comes from (degrees), how much
+ * the current raises the waves, and the share the land's lee leaves.
+ */
+export function partsLine(
+  windHs: number,
+  windPeak: number,
+  swellHs: number,
+  swellPeak: number,
+  swellFrom: number,
+  current: number,
+  lee: number,
+): string {
+  const period = (peak: number): string =>
+    peak > 0 ? `${((2 * Math.PI) / peak).toFixed(1)} s` : '—';
+  const swell =
+    swellHs > 0
+      ? `swell ${swellHs.toFixed(2)} m ${period(swellPeak)} from ${Math.round(swellFrom).toString().padStart(3, '0')}°`
+      : 'no swell';
+  return `parts   wind sea ${windHs.toFixed(2)} m ${period(windPeak)}, ${swell}, current ×${current.toFixed(2)}, lee ×${lee.toFixed(2)}`;
 }
 
 /** The sea under the boat, as lines: its height, its peak, and the waves summed. */
@@ -700,11 +723,24 @@ export function openPanel(
     const held = sandbox.seas.held[slot];
     let here = 0;
     let peak = 0;
+    let parts = 'parts   —';
     if (held !== undefined) {
       const col = Math.min(Math.max(seaAreaOf(p.east) - held.col, 0), held.size - 1);
       const row = Math.min(Math.max(seaAreaOf(p.north) - held.row, 0), held.size - 1);
       here = row * held.size + col;
       peak = sandbox.physics.seaPeak(slot)[here] ?? 0;
+      const v = sandbox.physics.seaParts(slot);
+      const at = here * SEA_PARTS;
+      const still = v[at + 4] ?? 0;
+      parts = partsLine(
+        v[at] ?? 0,
+        v[at + 1] ?? 0,
+        v[at + 2] ?? 0,
+        v[at + 3] ?? 0,
+        ((held.swellFrom[here] ?? 0) * 360) / SEA.fromSteps,
+        still > 0 ? (sandbox.physics.seaHs(slot)[here] ?? 0) / still : 1,
+        sandbox.physics.leeAt(slot, p.east, p.north),
+      );
     }
     stats.textContent = [
       `frame   ${st.median.toFixed(1)} ms median, ${st.p90.toFixed(1)} ms 90th (${st.frames} in 2 s)`,
@@ -719,6 +755,7 @@ export function openPanel(
       `origin  ${o.world.x.toFixed(0)} E, ${o.world.y.toFixed(0)} N, tile ${o.centre.q},${o.centre.r}`,
       `time    ${game.clock.time.toFixed(2)} s, step ${game.clock.steps}`,
       seaLines(band.hs[here] ?? 0, peak, band.count, band.blended),
+      parts,
       windLine(sandbox.wind),
       weatherLine(sandbox.physics, sandbox.tick, p.east, p.north, sandbox.systems),
       pilotLine(game.pilot, sandbox.states.current, sandbox.out),

@@ -211,6 +211,9 @@ export class Session {
             speed: a.speed,
             from: a.from,
             fetch: a.fetch,
+            swellHeight: a.swellHeight,
+            swellPeriod: a.swellPeriod,
+            swellFrom: a.swellFrom,
           },
         };
       }

@@ -9,6 +9,13 @@ import { ENCOUNTERS, FN, GROUND, LAYOUT_VERSION, RECORDS, SEA, SIZES, WEATHER } 
 import { SKY_PARAMS } from './params.gen';
 
 export type RecordName = keyof typeof RECORDS;
+
+/**
+ * How many values seaParts holds for each area: the wind sea's Hs and peak,
+ * the swell's, the Hs with no current, and the wind sea's variance over
+ * the band.
+ */
+export const SEA_PARTS = 6;
 export type FnName = keyof typeof FN;
 export type PhysicsSource = Response | PromiseLike<Response> | BufferSource;
 
@@ -28,7 +35,27 @@ interface Exports {
   prepare(): void;
   step(): void;
   seaWindow(slot: number, col: number, row: number, size: number): void;
-  seaArea(slot: number, area: number, speed: number, from: number, fetch: number): void;
+  seaArea(
+    slot: number,
+    area: number,
+    speed: number,
+    from: number,
+    fetch: number,
+    swellHeight: number,
+    swellPeriod: number,
+    swellFrom: number,
+    currentEast: number,
+    currentNorth: number,
+  ): void;
+  seaCurrent(col: number, row: number): void;
+  swellInputOf(height: number, period: number, from: number): void;
+  seaCurrentValues(): number;
+  seaParts(slot: number): number;
+  swellAt(x: number, y: number, tick: number): void;
+  swellValues(): number;
+  leeGrid(slot: number, a0: number, b0: number): void;
+  leeValues(): number;
+  leeAt(slot: number, x: number, y: number): number;
   seaSeal(slot: number): void;
   seaInputOf(speed: number, from: number, fetch: number): void;
   seaInput(): number;
@@ -159,6 +186,15 @@ const functionExports = [
   'step',
   'seaWindow',
   'seaArea',
+  'seaCurrent',
+  'swellInputOf',
+  'seaCurrentValues',
+  'seaParts',
+  'swellAt',
+  'swellValues',
+  'leeGrid',
+  'leeValues',
+  'leeAt',
   'seaSeal',
   'seaInputOf',
   'seaInput',
@@ -333,6 +369,7 @@ export class Physics {
   readonly #addresses: Record<RecordName, number>;
   #buffer: ArrayBuffer | undefined;
   #views: Record<RecordName, Float64Array> | undefined;
+  #systemRecords: Float64Array[] = [];
 
   constructor(instance: WebAssembly.Instance) {
     const x = instance.exports as unknown as Exports;
@@ -427,9 +464,92 @@ export class Physics {
     this.#x.seaWindow(slot, col, row, size);
   }
 
-  /** Sets the inputs of one area of a window, in whole steps, and with them its waves. */
-  seaArea(slot: number, area: number, speed: number, from: number, fetch: number): void {
-    this.#x.seaArea(slot, area, speed, from, fetch);
+  /**
+   * Sets the inputs of one area of a window, in whole steps, and with them
+   * its waves: the wind's speed, the direction it comes from and the fetch;
+   * the swell's height, period and direction (SeaInput's steps), none with
+   * no height; and the current east and north, which seaCurrent gives.
+   */
+  seaArea(
+    slot: number,
+    area: number,
+    speed: number,
+    from: number,
+    fetch: number,
+    swellHeight = 0,
+    swellPeriod = 0,
+    swellFrom = 0,
+    currentEast = 0,
+    currentNorth = 0,
+  ): void {
+    this.#x.seaArea(
+      slot,
+      area,
+      speed,
+      from,
+      fetch,
+      swellHeight,
+      swellPeriod,
+      swellFrom,
+      currentEast,
+      currentNorth,
+    );
+  }
+
+  /**
+   * The current of the area at a column and row, east and north in its
+   * inputs' steps of 0.01 m/s, as the server gives it: at its centre on the
+   * open sea, by the world's way (circulation). Written to out.
+   */
+  seaCurrent(col: number, row: number, out: number[]): number[] {
+    this.#x.seaCurrent(col, row);
+    const v = new Int32Array(this.#x.memory.buffer, this.#x.seaCurrentValues() >>> 0, 2);
+    out[0] = v[0] ?? 0;
+    out[1] = v[1] ?? 0;
+    return out;
+  }
+
+  /**
+   * A window's partitions: for each area, row by row, SEA_PARTS values, the
+   * wind sea's significant height (m) and peak (rad/s), the swell's, the
+   * significant height with no current, and the wind sea's variance over the
+   * band. A view.
+   */
+  seaParts(slot: number): Float64Array {
+    return new Float64Array(
+      this.#x.memory.buffer,
+      this.#x.seaParts(slot) >>> 0,
+      SEA.window * SEA.window * SEA_PARTS,
+    );
+  }
+
+  /**
+   * The swell at (east, north) at a tick from the system in the
+   * systemRecord record: its significant height (m), peak period (s), the
+   * direction it comes from (rad) and how far it has come (m). A view.
+   */
+  swellAt(east: number, north: number, tick: number): Float64Array {
+    this.#x.swellAt(east, north, tick);
+    return new Float64Array(this.#x.memory.buffer, this.#x.swellValues() >>> 0, 4);
+  }
+
+  /**
+   * The share of the waves the land's lee leaves at the centres of
+   * shelterSide by shelterSide cells from cell (a0, b0), for the sea of a
+   * window: row by row from the south, each from the west; 1 where the
+   * module holds no shelter, and everywhere while shelterUse is off. A view
+   * of the module's memory: read it before the next call.
+   */
+  /** The share of the waves the land's lee leaves at (east, north), for the sea of a window, as a step feels it. */
+  leeAt(slot: number, east: number, north: number): number {
+    return this.#x.leeAt(slot, east, north);
+  }
+
+  leeGrid(slot: number, a0: number, b0: number): Float64Array {
+    const x = this.#x;
+    x.leeGrid(slot, a0, b0);
+    const n = x.shelterSide();
+    return new Float64Array(x.memory.buffer, x.leeValues() >>> 0, n * n);
   }
 
   /** Makes a window ready, once its areas are set. */
@@ -444,6 +564,20 @@ export class Physics {
    */
   seaInputOf(speed: number, from: number, fetch: number, out: number[]): number[] {
     this.#x.seaInputOf(speed, from, fetch);
+    const v = new Uint32Array(this.#x.memory.buffer, this.#x.seaInput() >>> 0, 3);
+    out[0] = v[0] ?? 0;
+    out[1] = v[1] ?? 0;
+    out[2] = v[2] ?? 0;
+    return out;
+  }
+
+  /**
+   * Rounds a swell (its height in m, its period in s and the radians it
+   * comes from) to an area's inputs, exactly as the server does: its
+   * height, period and direction in whole steps, written to out.
+   */
+  swellInputOf(height: number, period: number, from: number, out: number[]): number[] {
+    this.#x.swellInputOf(height, period, from);
     const v = new Uint32Array(this.#x.memory.buffer, this.#x.seaInput() >>> 0, 3);
     out[0] = v[0] ?? 0;
     out[1] = v[1] ?? 0;
@@ -636,11 +770,18 @@ export class Physics {
    */
   setRecords(records: readonly ArrayLike<number>[]): void {
     const n = Math.min(records.length, WEATHER.systems);
+    this.#systemRecords = [];
     for (let i = 0; i < n; i++) {
       this.records.systemRecord.set(records[i] as ArrayLike<number>);
       this.#x.recordSet(i);
+      this.#systemRecords.push(Float64Array.from(records[i] as ArrayLike<number>));
     }
     this.#x.recordCount(n);
+  }
+
+  /** The records setRecords last set: copies, for whoever raises their swell. */
+  get systemRecords(): readonly Float64Array[] {
+    return this.#systemRecords;
   }
 
   /** How far from the centre a front's line enters the disk's reach and leaves it, m. */
@@ -709,7 +850,7 @@ export class Physics {
     return new Uint8Array(
       this.#x.memory.buffer,
       at,
-      GROUND.shelterCells * GROUND.shelterDirections * 2,
+      GROUND.shelterCells * GROUND.shelterDirections * GROUND.shelterStride,
     );
   }
 

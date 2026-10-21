@@ -267,6 +267,13 @@ export function systemKindRecord(k: SystemKind): Float64Array {
   r[K.stretch] = k.stretch;
   r[K.inward] = INWARD[k.inward];
   r[K.gusts] = k.gusts;
+  // The swell it raises, if any: none with no height.
+  if (k.swell !== undefined) {
+    r.set(k.swell.period, K.swellPeriod);
+    r.set(k.swell.band, K.swellBand);
+    r.set(k.swell.height, K.swellHeight);
+    r.set(k.wind, K.swellWind);
+  }
   return r;
 }
 

@@ -9,7 +9,8 @@ import type { Mesh, Object3D, Scene } from 'three';
 import type { MeshBasicNodeMaterial, WebGPURenderer } from 'three/webgpu';
 import { catalog } from '../catalog';
 import { STEPS_PER_SECOND } from '../game/clock';
-import type { Physics } from '../predict/physics';
+import { SEA } from '../predict/layout.gen';
+import { type Physics, SEA_PARTS } from '../predict/physics';
 import type { Seas } from '../predict/seas';
 import type { FloatingOrigin } from '../render/coords';
 import { seaMaterial } from '../render/materials';
@@ -31,6 +32,7 @@ import { FOAM } from './look';
 import { patternTexture } from './pattern';
 import { SeaBand } from './phases';
 import { farLook, type SeaParts, seaTime, tileLook } from './seamaterial';
+import { leeTexture, shore } from './shore';
 import { TilePass } from './tilepass';
 import { Tiles } from './tiles';
 import { fract1, Turned } from './turn';
@@ -112,6 +114,8 @@ export class Ocean {
   #active: Tiles;
   /** What the band was last laid out from: a window, and the count of windows taken. */
   #laid = -2;
+  /** How much the current raises each area's waves, as laid. */
+  readonly #raised = new Float64Array(SEA.window * SEA.window);
   #version = -1;
   /** The streaks of foam as they are turned to the wind. */
   readonly #streaks = new Turned(STREAK_ALONG, STREAK_ACROSS);
@@ -281,6 +285,18 @@ export class Ocean {
       origin.world.x,
       origin.world.y,
     );
+    // The waves' lee about the focus, for the sea drawn, once there is land.
+    if (src !== null && shore.on.value > 0) {
+      leeTexture.update(
+        src.physics,
+        this.slot,
+        src.seas.version,
+        origin.world.x,
+        origin.world.y,
+        performance.now(),
+      );
+      shore.waves.value.set(leeTexture.a0, leeTexture.b0);
+    }
 
     const u = this.under;
     u.update(f.boatEast, f.boatNorth, f.dt);
@@ -339,7 +355,15 @@ export class Ocean {
       this.under.lay(null);
     } else {
       this.band.set(src.physics, slot, held.col, held.row, held.size);
-      this.under.lay(held);
+      // How much the current raises each area's waves: its Hs over its Hs
+      // in still water.
+      const hs = src.physics.seaHs(slot);
+      const parts = src.physics.seaParts(slot);
+      for (let i = 0; i < this.#raised.length; i++) {
+        const still = parts[i * SEA_PARTS + 4] ?? 0;
+        this.#raised[i] = still > 0 ? (hs[i] ?? 0) / still : 1;
+      }
+      this.under.lay(held, this.#raised);
     }
   }
 }

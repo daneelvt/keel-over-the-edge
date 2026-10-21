@@ -81,7 +81,11 @@ type Stats struct {
 	Weathers  int // WeatherSystems messages: the spells of weather in play and the systems' keyframes
 	// WeatherBytes is the WeatherSystems messages' payloads.
 	WeatherBytes int
-	Chunks       int // chunks' addresses handed
+	// SeaBytes is the SeaAreas messages' payloads, and Swells how many of
+	// them carried the areas' swell.
+	SeaBytes int
+	Swells   int
+	Chunks   int // chunks' addresses handed
 }
 
 // Percentile is the p-th percentile of the corrections' sizes.
@@ -289,8 +293,12 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			}
 			if ev.SeaAreas != nil {
 				s.Stats.Seas++
+				s.Stats.SeaBytes += len(r.Bytes)
+				if len(ev.SeaAreas.GetSwellHeight()) > 0 {
+					s.Stats.Swells++
+				}
 				s.LastSea = ev.SeaAreas
-				s.Predictor.Seas.Receive(ev.SeaAreas)
+				s.Predictor.Seas.Receive(ev.SeaAreas, s.Predictor.Circulation)
 			}
 			if ev.Tools != nil {
 				s.Tools = ev.Tools.GetOn()

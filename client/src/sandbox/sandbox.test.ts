@@ -21,6 +21,8 @@ import {
 } from '../predict/golden';
 import { LAYOUT_VERSION, RECORDS, SIZES } from '../predict/layout.gen';
 import { loadPhysics, Physics } from '../predict/physics';
+import { newBoatWind } from '../predict/weather';
+import { swellFromQuery } from './localsea';
 import type { Recording } from './record';
 import {
   FRONT,
@@ -207,6 +209,56 @@ describe('the sandbox', () => {
     expect(Math.abs(mostAt / 30 - 180)).toBeLessThan(60);
   });
 
+  test('meets a storm whose swell comes before its wind, with ?weather=storm', async () => {
+    // Three miles out, where a storm is whole.
+    const s = await startSandbox(bytes, boat, sea, { ...START, east: 5556, weather: 'storm' });
+    s.step(0, 0.6);
+    const before = s.wind.meanSpeed;
+    const wind = newBoatWind();
+    let swellAt = -1;
+    let windAt = -1;
+    let period = 0;
+    for (let tick = 30; tick < 60 * 60 * 30; tick += 30 * 30) {
+      s.sea.settle(5556, 0, tick);
+      // The window's middle area, the boat's.
+      const a = s.sea.areas()[12] ?? [];
+      if (swellAt < 0 && (a[3] ?? 0) >= 10) {
+        swellAt = tick;
+        period = (a[4] ?? 0) / 100;
+      }
+      s.weather.read(tick, 5556, 0, wind);
+      if (windAt < 0 && wind.meanSpeed >= before + 10 * KNOT) {
+        windAt = tick;
+      }
+    }
+    expect(swellAt).toBeGreaterThan(0);
+    expect(windAt).toBeGreaterThan(0);
+    // Ten minutes and more ahead, of the storm's licensed periods.
+    expect((windAt - swellAt) / 30 / 60).toBeGreaterThan(10);
+    expect(period).toBeGreaterThan(5);
+  });
+
+  test('raises a swell of the page’s own, with ?swell=', async () => {
+    expect(swellFromQuery(new URLSearchParams('swell=0.6,6,270'))).toEqual({
+      height: 0.6,
+      period: 6,
+      from: (270 * Math.PI) / 180,
+    });
+    expect(swellFromQuery(new URLSearchParams('swell=-1,6'))).toBeNull();
+    const s = await startSandbox(bytes, boat, sea, {
+      ...START,
+      wind: { speed: 12 * KNOT, from: 0 },
+    });
+    s.sea.options.swell = { height: 0.6, period: 6, from: (270 * Math.PI) / 180 };
+    s.settleSea();
+    const a = s.sea.areas()[12] ?? [];
+    expect(a.slice(3, 6)).toEqual([60, 600, 49152]);
+    const slot = s.seas.slotAt(s.tick);
+    const parts = s.physics.seaParts(slot);
+    expect(parts[2]).toBeGreaterThan(0.55);
+    expect(parts[2]).toBeLessThan(0.62);
+  });
+
   test('meets a front three minutes in, the wind veering as it passes, with ?weather=front', async () => {
     const s = await startSandbox(bytes, boat, sea, { ...START, east: 5556, weather: FRONT });
     s.step(0, 0.6);
@@ -380,7 +432,7 @@ describe('a recorded sail', () => {
     expect(sc.weather.spells).toHaveLength(1);
     expect(sc.weather.spells[0]).toMatchObject({ steady: 1, speed: 514, from: 0, begin: 0 });
     expect(sc.sea.areas).toHaveLength(25);
-    expect(sc.sea.areas[0]).toEqual([514, 0, 11112]);
+    expect(sc.sea.areas[0]).toEqual([514, 0, 11112, 0, 0, 0, 0, 0]);
     // The trade spell is asked for at step 400, which sails into tick 402,
     // and the steady wind at step 1000, into tick 1002: each as a server's
     // developer would set it, to blow from the second after next.

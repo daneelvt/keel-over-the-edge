@@ -14,11 +14,17 @@ const MaxSeaWindow = physics.SeaClientWindow
 // with the latest ticks, each turned into the waves' amplitudes exactly as
 // the server derives its own. At each tick the prediction sails in the later
 // of those whose tick has come. It is client/src/predict/seas.ts's twin.
+//
+// An area's swell is sent only when it changes: a SeaAreas without it has
+// the swell of the last that had it. Its current is not sent: it is the
+// open sea's at the area's centre, by the world's way round.
 type Seas struct {
-	waves *physics.Waves
-	held  [2]heldSea
-	time  physics.SeaTick
-	view  physics.Sea
+	waves   *physics.Waves
+	weather *physics.WeatherPrepared
+	held    [2]heldSea
+	time    physics.SeaTick
+	view    physics.Sea
+	swell   [MaxSeaWindow * MaxSeaWindow][3]uint32
 }
 
 type heldSea struct {
@@ -27,9 +33,10 @@ type heldSea struct {
 	win  physics.SeaWindow
 }
 
-// NewSeas keeps the sea for waves; with none, the water is flat.
-func NewSeas(waves *physics.Waves) *Seas {
-	s := &Seas{waves: waves}
+// NewSeas keeps the sea for waves, its current computed with weather;
+// with no waves, the water is flat.
+func NewSeas(waves *physics.Waves, weather *physics.WeatherPrepared) *Seas {
+	s := &Seas{waves: waves, weather: weather}
 	s.view = physics.Sea{Waves: waves, Tick: &s.time}
 	return s
 }
@@ -41,12 +48,21 @@ func (s *Seas) Reset() {
 	}
 }
 
-// Receive takes a SeaAreas: it replaces the one held for the same tick, or
-// else the one with the earlier tick. One that is malformed is let go.
-func (s *Seas) Receive(m *pb.SeaAreas) {
+// Receive takes a SeaAreas, for a world whose way round is way: it
+// replaces the one held for the same tick, or else the one with the
+// earlier tick. One that is malformed is let go.
+func (s *Seas) Receive(m *pb.SeaAreas, way float64) {
 	n := int(m.GetSize())
 	if s.waves == nil || n < 1 || n > MaxSeaWindow || len(m.GetSpeed()) != n*n || len(m.GetFrom()) != n*n || len(m.GetFetch()) != n*n {
 		return
+	}
+	if sh := m.GetSwellHeight(); len(sh) > 0 {
+		if len(sh) != n*n || len(m.GetSwellPeriod()) != n*n || len(m.GetSwellFrom()) != n*n {
+			return
+		}
+		for i := range n * n {
+			s.swell[i] = [3]uint32{sh[i], m.GetSwellPeriod()[i], m.GetSwellFrom()[i] % physics.SeaFromSteps}
+		}
 	}
 	h := &s.held[0]
 	switch a, b := &s.held[0], &s.held[1]; {
@@ -64,21 +80,31 @@ func (s *Seas) Receive(m *pb.SeaAreas) {
 			Amp:    make([]float64, n*n*physics.SeaComponents),
 			Hs:     make([]float64, n*n),
 			Peak:   make([]float64, n*n),
+			Parts:  make([]physics.SeaParts, n*n),
+			Bits:   make([]uint64, n*n*physics.SeaWords),
+
+			Factors:    make([]float64, n*n*physics.SeaComponents),
+			FactorKeys: make([]uint64, n*n),
 		}
 	}
 	h.have, h.tick = true, m.GetTick()
 	h.win.Col, h.win.Row = m.GetCol(), m.GetRow()
 	for i := range n * n {
-		physics.SeaArea(s.waves, &h.win, int32(i), physics.SeaInput{
+		in := physics.SeaInput{
 			Speed: m.GetSpeed()[i], From: m.GetFrom()[i] % physics.SeaFromSteps, Fetch: m.GetFetch()[i],
-		})
+			SwellHeight: s.swell[i][0], SwellPeriod: s.swell[i][1], SwellFrom: s.swell[i][2],
+		}
+		if s.weather != nil {
+			in.SetCurrent(physics.SeaCurrent(s.weather, way, m.GetCol()+int32(i%n), m.GetRow()+int32(i/n)))
+		}
+		physics.SeaArea(s.waves, &h.win, int32(i), in)
 	}
 	h.win.Seal()
 }
 
-// At is the sea a step for tick sails in: nil, flat water, until a SeaAreas
-// has come.
-func (s *Seas) At(tick int64) *physics.Sea {
+// At is the sea a step for tick sails in, in the lee of the shelter lee,
+// nil for none: nil, flat water, until a SeaAreas has come.
+func (s *Seas) At(tick int64, lee *physics.Shelter) *physics.Sea {
 	var use *heldSea
 	for i := range s.held {
 		h := &s.held[i]
@@ -100,6 +126,7 @@ func (s *Seas) At(tick int64) *physics.Sea {
 		return nil
 	}
 	s.view.Window = &use.win
+	s.view.Lee = lee
 	physics.SeaAtTick(s.waves, &s.time, tick)
 	return &s.view
 }

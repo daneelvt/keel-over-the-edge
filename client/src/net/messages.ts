@@ -13,7 +13,10 @@ import type { ClockState } from './clock';
  * sea areas, size a side, from the area at column col and row row, each with
  * the wind that raises its waves (speed in steps of 0.01 m/s, the direction
  * it comes from in 65536ths of a turn) and its fetch in metres, row by row
- * from the south-west. It applies from tick on.
+ * from the south-west. It applies from tick on. Each area's swell (height
+ * in centimetres, none if 0, period in steps of 0.01 s, direction as the
+ * wind's) comes only when it changed: empty, it is the last sent's. Its
+ * current is not sent: the client works it out as the server does.
  */
 export interface SeaAreas {
   tick: number;
@@ -23,6 +26,9 @@ export interface SeaAreas {
   speed: number[];
   from: number[];
   fetch: number[];
+  swellHeight?: number[];
+  swellPeriod?: number[];
+  swellFrom?: number[];
 }
 
 /**

@@ -55,7 +55,7 @@
       "description": "The waves long enough to move a boat: the band of wavelengths they span and the spectrum that gives each its height.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["shortest", "longest", "gamma", "sigmaBelow", "sigmaAbove", "spreading", "fetchCap", "cull", "breaking"],
+      "required": ["shortest", "longest", "gamma", "sigmaBelow", "sigmaAbove", "spreading", "fetchCap", "cull", "breaking", "swellLeast", "swellSpreading", "swellSigma", "swellSteps", "currentMost", "shadowLeast", "leeReach"],
       "properties": {
         "shortest": { "description": "The shortest wavelength, in m.", "type": "number", "minimum": 1, "maximum": 100 },
         "longest": { "description": "The longest wavelength, in m.", "type": "number", "minimum": 2, "maximum": 1000 },
@@ -65,7 +65,14 @@
         "spreading": { "description": "The directional spreading's exponent s in cos²ˢ(θ/2): a whole number.", "type": "integer", "minimum": 1, "maximum": 100 },
         "fetchCap": { "description": "The fetch of open water, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
         "cull": { "description": "Waves lower than this fraction of an area's highest are left out.", "type": "number", "minimum": 0, "maximum": 0.5 },
-        "breaking": { "description": "The most significant height the waves keep in shallow water, as a share of its depth: where the water is shallower than the sea's height over this, its waves are capped to it and break.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+        "breaking": { "description": "The most significant height the waves keep in shallow water, as a share of its depth: where the water is shallower than the sea's height over this, its waves are capped to it and break.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "swellLeast": { "description": "A swell lower than this, in m, is none.", "type": "number", "minimum": 0, "maximum": 1 },
+        "swellSpreading": { "description": "The swell's directional spreading's exponent s in cos²ˢ(θ/2) about the way it travels: a whole number.", "type": "integer", "minimum": 1, "maximum": 200 },
+        "swellSigma": { "description": "The swell's spectrum's width: a Gaussian in frequency, its standard deviation as a share of its peak frequency.", "type": "number", "exclusiveMinimum": 0, "maximum": 0.5 },
+        "swellSteps": { "description": "Newton's steps that find when the swell arriving at a place left its system: a whole number.", "type": "integer", "minimum": 1, "maximum": 50 },
+        "currentMost": { "description": "The most a current against them raises the waves, as a multiple of their height in still water; a wave the current blocks is raised this much.", "type": "number", "minimum": 1, "maximum": 5 },
+        "shadowLeast": { "description": "The least share of a swell that reaches behind land.", "type": "number", "minimum": 0, "maximum": 1 },
+        "leeReach": { "description": "How far upwind of a place land calms its waves, in m: the shelter's tables hold the lee's fetch in steps of 4 m, at most 254 of them.", "type": "number", "minimum": 50, "maximum": 1016 }
       }
     },
     "WeatherDisk": {
@@ -246,6 +253,18 @@
         "cut": { "description": "A system reaches this many of its widths from its centre.", "type": "number", "minimum": 1, "maximum": 10 }
       }
     },
+    "SystemSwell": {
+      "title": "SystemSwell",
+      "description": "The swell a kind of system raises, by its strength: a long, low lift that runs ahead of it at its group speed, its longest waves first.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["period", "band", "height"],
+      "properties": {
+        "period": { "description": "The least and the most of a system's swell's peak period, drawn per system, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 30 } },
+        "band": { "description": "The shortest and the longest period its swell spans, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 30 } },
+        "height": { "description": "Its significant height at the system's edge at full strength, in m: the first at the least of the kind's wind, the second at the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10 } }
+      }
+    },
     "SystemKind": {
       "title": "SystemKind",
       "description": "A kind of weather system: a pressure shape moving with it, its wind turned from the pressure's gradient, its size, life and track.",
@@ -278,7 +297,8 @@
         "goneAbove": { "description": "It is gone once the spell's mean wind passes this, in knots; 0 for never.", "type": "number", "minimum": 0, "maximum": 60 },
         "rain": { "description": "The rain under it, for drawing.", "enum": ["none", "light", "moderate", "heavy"] },
         "cloud": { "description": "The cloud of it, for drawing.", "enum": ["none", "fog", "cumulus", "cumulonimbus"] },
-        "lightning": { "description": "Lightning strikes from it above this strength; 0 for none.", "type": "number", "minimum": 0, "maximum": 2 }
+        "lightning": { "description": "Lightning strikes from it above this strength; 0 for none.", "type": "number", "minimum": 0, "maximum": 2 },
+        "swell": { "$ref": "#/$defs/SystemSwell" }
       }
     },
     "WeatherWeek": {

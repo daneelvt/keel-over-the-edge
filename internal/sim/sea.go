@@ -3,6 +3,8 @@
 package sim
 
 import (
+	"slices"
+
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
@@ -33,6 +35,14 @@ const seaShare = (seaAreas + bus.SeaPeriod - 2) / (bus.SeaPeriod - 1)
 // weathers and systems, each sample made with the spells and the systems'
 // keyframes of its own tick, so a world loaded from a snapshot makes them
 // again and gets the same.
+//
+// An area's swell is the storms' at its centre (physics.SwellAt), shadowed
+// by the land toward where it comes from (physics.Waves.Shadow): made for
+// each keyframe boundary, and held for the seconds until the next, since
+// it changes over minutes. The share of a tick's work is small: the
+// boundary's swell is made a few areas a tick through the seconds before
+// it, or all at once when it is needed sooner, as after a load. Its
+// current is the open sea's at its centre, which never changes.
 type sea struct {
 	waves   *physics.Waves
 	windows [2]physics.SeaWindow
@@ -67,6 +77,24 @@ type sea struct {
 
 	// fetch is each area's fetch, by the land; nil is open water's.
 	fetch []physics.Fetch
+	// current is each area's current, in its inputs' steps.
+	current [][2]int32
+	// swells are the areas' swell at two keyframe boundaries: the one the
+	// inputs are made for and the next, in the making.
+	swells  [2]swellSet
+	sources []weather.SwellSource
+}
+
+// swellSet is the areas' swell at a keyframe boundary, made for the
+// developer's weathers and systems it holds a copy of, whose first done
+// areas are made.
+type swellSet struct {
+	at    int64
+	ws    []bus.Weather
+	ss    []bus.System
+	swell []physics.SeaInput // its swell's fields alone
+	done  int32
+	used  bool
 }
 
 func (s *sea) init(waves *physics.Waves, t *weather.Timeline) {
@@ -84,6 +112,11 @@ func (s *sea) init(waves *physics.Waves, t *weather.Timeline) {
 			Amp:    make([]float64, seaAreas*physics.SeaComponents),
 			Hs:     make([]float64, seaAreas),
 			Peak:   make([]float64, seaAreas),
+			Parts:  make([]physics.SeaParts, seaAreas),
+			Bits:   make([]uint64, seaAreas*physics.SeaWords),
+
+			Factors:    make([]float64, seaAreas*physics.SeaComponents),
+			FactorKeys: make([]uint64, seaAreas),
 		}
 	}
 	s.view = physics.Sea{Waves: waves, Window: &s.windows[0], Tick: &s.time}
@@ -92,6 +125,10 @@ func (s *sea) init(waves *physics.Waves, t *weather.Timeline) {
 	s.samples = make([]physics.WaveSample, seaAreas*s.ring)
 	s.avg = make([]physics.WaveSample, seaAreas)
 	s.inputs = make([]physics.SeaInput, seaAreas)
+	s.current = make([][2]int32, seaAreas)
+	for i := range s.swells {
+		s.swells[i].swell = make([]physics.SeaInput, seaAreas)
+	}
 	s.centres = make([][2]float64, seaAreas)
 	for r := range int32(physics.SeaAreas) {
 		for c := range int32(physics.SeaAreas) {
@@ -99,6 +136,22 @@ func (s *sea) init(waves *physics.Waves, t *weather.Timeline) {
 			s.centres[r*physics.SeaAreas+c] = [2]float64{x, y}
 		}
 	}
+}
+
+// circulate gives each area the current of a world that circulates the way
+// way.
+func (s *sea) circulate(way float64) {
+	if s.waves == nil {
+		return
+	}
+	for r := range int32(physics.SeaAreas) {
+		for c := range int32(physics.SeaAreas) {
+			var in physics.SeaInput
+			in.SetCurrent(physics.SeaCurrent(s.prepared, way, c, r))
+			s.current[r*physics.SeaAreas+c] = [2]int32{in.CurrentEast, in.CurrentNorth}
+		}
+	}
+	s.hasInput = false
 }
 
 // under sets a sea, in effect and next, to what the wave wind raises over
@@ -142,23 +195,114 @@ type dev struct {
 // devOf is a frame's developer's weathers and systems.
 func devOf(f *bus.Frame) dev { return dev{f.Weathers, f.Systems} }
 
-// make computes every area's inputs at a tick from its wave wind.
+// make computes every area's inputs at a tick from its wave wind, its
+// swell at the keyframe boundary at or before the tick, and its current.
 func (s *sea) make(tick int64, d dev) {
 	p := s.prepared
 	k := p.WaveGridOf(tick)
 	s.bring(k, d)
+	swell := s.swellAt(s.boundary(tick), d)
 	now := s.weatherAt(tick, d)
 	share := p.WaveDecay(float64(tick - k*p.WaveGrid()))
 	for i := range s.inputs {
 		c := &s.centres[i]
 		speed, from := physics.WaveBlend(s.avg[i], physics.WaveSampleAt(now, c[0], c[1]), share)
+		in := &s.inputs[i]
 		if s.fetch != nil {
-			s.inputs[i] = s.waves.LandSea(speed, from, &s.fetch[i])
+			*in = s.waves.LandSea(speed, from, &s.fetch[i])
 		} else {
-			s.inputs[i] = s.waves.OpenSea(speed, from)
+			*in = s.waves.OpenSea(speed, from)
 		}
+		sw := &swell[i]
+		in.SwellHeight, in.SwellPeriod, in.SwellFrom = sw.SwellHeight, sw.SwellPeriod, sw.SwellFrom
+		in.CurrentEast, in.CurrentNorth = s.current[i][0], s.current[i][1]
 	}
 	s.inputsAt, s.hasInput = tick, true
+}
+
+// boundary is the keyframe boundary at or before a tick.
+func (s *sea) boundary(tick int64) int64 {
+	every := s.timeline.Every()
+	b := tick / every
+	if tick%every < 0 {
+		b--
+	}
+	return b * every
+}
+
+// swellAt is every area's swell at keyframe boundary b, for the
+// developer's weathers and systems d: made now as far as it is not yet.
+func (s *sea) swellAt(b int64, d dev) []physics.SeaInput {
+	set := s.swellSet(b, d)
+	s.makeSwell(set, seaAreas)
+	return set.swell
+}
+
+// swellSet is the set for boundary b and d, begun afresh in the slot not
+// holding the other boundary if there is none yet.
+func (s *sea) swellSet(b int64, d dev) *swellSet {
+	for i := range s.swells {
+		if set := &s.swells[i]; set.used && set.at == b && slices.Equal(set.ws, d.ws) && slices.Equal(set.ss, d.ss) {
+			return set
+		}
+	}
+	// The slot with the earlier boundary, or one unused.
+	set := &s.swells[0]
+	if o := &s.swells[1]; !o.used || (set.used && o.at < set.at) {
+		set = o
+	}
+	set.at, set.done, set.used = b, 0, true
+	set.ws = append(set.ws[:0], d.ws...)
+	set.ss = append(set.ss[:0], d.ss...)
+	return set
+}
+
+// makeSwell makes the set's swell up to area hi.
+func (s *sea) makeSwell(set *swellSet, hi int32) {
+	if set.done >= hi {
+		return
+	}
+	if set.done == 0 {
+		s.sources = s.timeline.SwellSources(set.at, set.ws, set.ss, s.sources[:0])
+	}
+	if len(s.sources) == 0 {
+		// No storm's swell can be on the disk: none anywhere.
+		clear(set.swell[set.done:hi])
+		set.done = hi
+		return
+	}
+	for i := set.done; i < hi; i++ {
+		var sw physics.Swell
+		c := &s.centres[i]
+		for j := range s.sources {
+			src := &s.sources[j]
+			one := physics.SwellAt(s.waves, s.prepared, &src.Record, c[0], c[1], src.Tick)
+			if one.Height > 0 && s.fetch != nil {
+				one.Height = float64(one.Height * s.waves.Shadow(&s.fetch[i], one))
+			}
+			sw = physics.CombineSwell(sw, one)
+		}
+		in := &set.swell[i]
+		in.SetSwell(sw)
+	}
+	set.done = hi
+}
+
+// swellAhead makes a share of the next boundary's swell, in the seconds
+// before the inputs that need it are made: at tick, the boundary after
+// tick's own, for the developer's weathers and systems d.
+func (s *sea) swellAhead(tick int64, d dev) {
+	every := s.timeline.Every()
+	next := s.boundary(tick) + every
+	// Its inputs are made a second ahead, at the start of the second
+	// before next's.
+	left := next - bus.SeaPeriod - tick
+	if left <= 0 {
+		return
+	}
+	set := s.swellSet(next, d)
+	share := (seaAreas - set.done + int32(left) - 1) / int32(left)
+	s.makeSwell(set, min(set.done+share, seaAreas))
 }
 
 // bring makes the samples and averages up to grid point k: only the new
@@ -239,6 +383,7 @@ func (s *sea) tick(f *bus.Frame) {
 		s.bringAreas(&s.windows[1-s.now], f.Sea.Next, s.cursor, end)
 		s.cursor = end
 	}
+	s.swellAhead(f.Tick, devOf(f))
 	physics.SeaAtTick(s.waves, &s.time, f.Tick)
 }
 

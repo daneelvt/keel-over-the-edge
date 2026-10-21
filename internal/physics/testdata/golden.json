@@ -1,6 +1,6 @@
 {
  "comment": "Written by go test ./internal/physics -run Golden -update. Floats are their IEEE 754 bits in hexadecimal.",
- "layout": "0xceb2cc4d",
+ "layout": "0x7e625cd6",
  "scenarios": [
   {
    "name": "beat",
@@ -2972,6 +2972,180 @@
       "x": "0x4079a5476f0a7d63",
       "y": "0xc000e15e5a63d528",
       "yawRate": "0x3f90a81824c040b2"
+     }
+    }
+   ]
+  },
+  {
+   "name": "swell-reach",
+   "digest": "703573e807280a7bbb9d0392eb5e640d6be8f521a525006763bfd587a58af4d2",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0x3fe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff8ce346e2dfaa5",
+      "heave": "0xbfc017fc4eab377d",
+      "heaveRate": "0x3fd73b362fefa248",
+      "heel": "0xbf924888f853b3f1",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x3f85cd094e30283b",
+      "pitchRate": "0xbfb355ec7a7b8278",
+      "rollRate": "0x3fa01942e82433fa",
+      "rudder": "0x3f96d82211890daa",
+      "sailor": "0xbfda893d85370251",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0x400b0d7cd24316d5",
+      "sway": "0x3fb0ca230760989c",
+      "x": "0x4050ed109ede18cf",
+      "y": "0xbfe02ab7d51028d0",
+      "yawRate": "0x3f89b7d818a3c971"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0x3fe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff8b2de3b49cf24",
+      "heave": "0x3fd141661e89cd4c",
+      "heaveRate": "0x3fd34518b7384083",
+      "heel": "0x3fa79c85231e9f0a",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x3f77103449bd9ddb",
+      "pitchRate": "0xbfc5f23cf4574418",
+      "rollRate": "0xbfae6b3fe66d4b00",
+      "rudder": "0x3fa9acd32943311f",
+      "sailor": "0xbfde539021eadf35",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0x400a51b263f704d4",
+      "sway": "0x3fd93c1c88f07a34",
+      "x": "0x406112fb3ebf0e84",
+      "y": "0xbfefc956b05b860c",
+      "yawRate": "0xbf982a079912ad24"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0x3fe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff8f299d01f26c4",
+      "heave": "0x3fc573e359480ed0",
+      "heaveRate": "0xbfdc4ba28c333a13",
+      "heel": "0xbfadad6a3f8daafc",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x3fa700f95a9a2815",
+      "pitchRate": "0xbfbd56ae8ecb8123",
+      "rollRate": "0x3fb51154c70ba3c3",
+      "rudder": "0x3f96e1ba0c350886",
+      "sailor": "0xbfd5442c7efb7012",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0x40099481e502f5cf",
+      "sway": "0x3fc5949b4d7ad287",
+      "x": "0x4069ae8b7f46d0f4",
+      "y": "0xbff537ce619a11ef",
+      "yawRate": "0xbf84bf7f5c0eb577"
+     }
+    },
+    {
+     "step": 2400,
+     "state": {
+      "boom": "0x3fe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff8f31442b5b9d7",
+      "heave": "0xbfc70abea28356b1",
+      "heaveRate": "0xbfc6017b9b295c8f",
+      "heel": "0x3f9b5b263bba049f",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0xbf886bab2b806bff",
+      "pitchRate": "0x3f9532d8b19a39cf",
+      "rollRate": "0xbfb3a764955b4ba5",
+      "rudder": "0x3f9d539c7611d78a",
+      "sailor": "0xbfe0c9fe131a2f21",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0x400ba2157ea65f1f",
+      "sway": "0x3fd34545e4c90358",
+      "x": "0x407119b0e37b1118",
+      "y": "0xbff8e7d018ce459d",
+      "yawRate": "0xbf99bbd70c546b97"
+     }
+    },
+    {
+     "step": 3000,
+     "state": {
+      "boom": "0x3fe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff90633b32d50f0",
+      "heave": "0x3fccbe9c11238be7",
+      "heaveRate": "0xbfd62d8881b688e2",
+      "heel": "0xbfa40776345535bf",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0xbf7a2d651d0a2e96",
+      "pitchRate": "0xbfccbb05dc42459b",
+      "rollRate": "0xbfb5002aa5add337",
+      "rudder": "0x3f838a16ae643a86",
+      "sailor": "0xbfd622bafe09bd11",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0x400b26e019127cae",
+      "sway": "0x3fb3da467c676b46",
+      "x": "0x4075523bf0f49523",
+      "y": "0xbfff7692eabee30f",
+      "yawRate": "0x3f6278a08aba6243"
+     }
+    },
+    {
+     "step": 3600,
+     "state": {
+      "boom": "0x3fe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3ff8c16ea4061b93",
+      "heave": "0x3fc2cae5df0d4dcb",
+      "heaveRate": "0xbfc1caf09e8097a5",
+      "heel": "0xbfa883b266a93eb1",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x3f9d224e9425aa4b",
+      "pitchRate": "0xbfcd6326c965ce9d",
+      "rollRate": "0xbfae6513b7b52d2c",
+      "rudder": "0x3f95f271ce3e7677",
+      "sailor": "0xbfcfb7feebcb18de",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0x400918a7b81aa55a",
+      "sway": "0xbf8fc8ba8c2b8b0c",
+      "x": "0x4079aebf01fec11e",
+      "y": "0xc00594e3c33276e3",
+      "yawRate": "0x3f9a036363350ad6"
      }
     }
    ]
@@ -6924,6 +7098,96 @@
       "x": "0x404d9632588de860",
       "y": "0xc040af5ac796da74",
       "yawRate": "0x3f1b0d2b16115cdb"
+     }
+    }
+   ]
+  },
+  {
+   "name": "lee-sea",
+   "digest": "32c99541749e208eea18688a2f3a808e0ca78d1275869d7c6f8b3536c2c03567",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0xbfe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbf7958fa99a1d7d1",
+      "heave": "0xbfd53db735a4ba63",
+      "heaveRate": "0x3fc568e38658771e",
+      "heel": "0xbfb10b4c2e8d1816",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0xbf8d46be76814933",
+      "pitchRate": "0xbfb211add2341e5c",
+      "rollRate": "0xbfbaa4dc91bf6e00",
+      "rudder": "0x3f90975b6f277fb8",
+      "sailor": "0x3fdf91d4536f560c",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0x40064bc8c4c4abbc",
+      "sway": "0x3fc99521e6ddb49d",
+      "x": "0x404defb080fdec06",
+      "y": "0xc055bdc20a7358eb",
+      "yawRate": "0xbf8b189d038e2b3c"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0xbfe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3f78952a977f795f",
+      "heave": "0x3fb1e8585c88c322",
+      "heaveRate": "0x3f8193bff68c64a6",
+      "heel": "0x3f17113f762f58b4",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x3f6c7a16e914ed1d",
+      "pitchRate": "0x3f902c87153f8ba5",
+      "rollRate": "0x3f9c67e5b191ac70",
+      "rudder": "0xbf8b8bde855f233f",
+      "sailor": "0x3fb9fd491ce3ede6",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0x3ffc37687afabc57",
+      "sway": "0xbfb7a990cde6b319",
+      "x": "0x404da0ba51839305",
+      "y": "0xc043a7871ec7e543",
+      "yawRate": "0x3f83ba5ea135e70a"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0xbfe91ad538033f40",
+      "boomRate": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0x3f7c8d48af974d40",
+      "heave": "0x3facfc955b423989",
+      "heaveRate": "0xbf7372e93c17a5b5",
+      "heel": "0x3f53e6753d3cdf98",
+      "pilotOrder": "0x0000000000000000",
+      "pilotTrim": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0xbf41735e187bc678",
+      "pitchRate": "0x3f84a85456c7c468",
+      "rollRate": "0x3f9711a300e31af2",
+      "rudder": "0xbf8bfe35c8b69743",
+      "sailor": "0x3fb6d9e86f8a42ac",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe91ad538033f40",
+      "surge": "0x3ffc5cbefdd0c817",
+      "sway": "0xbfb379d62ad10053",
+      "x": "0x404d8489c39608d9",
+      "y": "0xc01428b7076da0ef",
+      "yawRate": "0x3f7ed4926546b712"
      }
     }
    ]

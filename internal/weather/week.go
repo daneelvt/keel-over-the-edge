@@ -306,13 +306,32 @@ func fieldsOf(t reflect.Type) []string {
 		f := t.Field(i)
 		if f.Type.Kind() == reflect.Array {
 			for j := range f.Type.Len() {
-				out = append(out, fmt.Sprintf("%s.%d", f.Name, j))
+				out = append(out, fmt.Sprintf("%s.%d", storedName(f), j))
 			}
 			continue
 		}
-		out = append(out, f.Name)
+		out = append(out, storedName(f))
 	}
 	return out
+}
+
+// storedName is the name a stored week gives a field: its week tag, which
+// keeps the name a field had before it was renamed, or else its own.
+func storedName(f reflect.StructField) string {
+	if name, ok := f.Tag.Lookup("week"); ok {
+		return name
+	}
+	return f.Name
+}
+
+// fieldNamed is the field of t a stored week names name.
+func fieldNamed(t reflect.Type, name string) (reflect.StructField, bool) {
+	for i := range t.NumField() {
+		if f := t.Field(i); storedName(f) == name {
+			return f, true
+		}
+	}
+	return reflect.StructField{}, false
 }
 
 // numbersOf is a record's numbers, in the order of fieldsOf.
@@ -341,7 +360,7 @@ func placesOf(t reflect.Type, fields []string) ([]place, error) {
 	out := make([]place, len(fields))
 	for i, name := range fields {
 		base, index, isArray := strings.Cut(name, ".")
-		f, ok := t.FieldByName(base)
+		f, ok := fieldNamed(t, base)
 		if !ok || len(f.Index) != 1 {
 			return nil, fmt.Errorf("no field %s", name)
 		}
@@ -988,9 +1007,9 @@ func (g *gen) system(k int, born int64, i int, ch *chain, spells []physics.Spell
 		r.WobblePeriod[j] = float64(g.s.ticks(w.WobblePeriod[0], w.WobblePeriod[1]))
 		r.WobblePhase[j] = g.s.turn()
 	}
-	r.Swell = math.Round(float64(strengthOne * float64(w.StrengthWobble*g.s.in(0.5, 1))))
-	r.SwellPeriod = float64(g.s.ticks(w.WobblePeriod[0], w.WobblePeriod[1]))
-	r.SwellPhase = g.s.turn()
+	r.Throb = math.Round(float64(strengthOne * float64(w.StrengthWobble*g.s.in(0.5, 1))))
+	r.ThrobPeriod = float64(g.s.ticks(w.WobblePeriod[0], w.WobblePeriod[1]))
+	r.ThrobPhase = g.s.turn()
 
 	gone := born + life
 	ux, uy := physics.SinCos(heading)
