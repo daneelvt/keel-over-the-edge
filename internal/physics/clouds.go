@@ -513,6 +513,16 @@ func (t *WeatherTick) cap(p *Cap, day, x, y, reach float64, out []Cumulus) int {
 	return n
 }
 
+// CapReach is how far from an island's centre its cap or its street can
+// be seen, m, on a dome of radius dome: the street's length, the cap's
+// radius, and as far as its top shows.
+func (w *WeatherPrepared) CapReach(width, dome float64) float64 {
+	c := &w.clouds
+	wide := clamp(float64((width-capNarrow)/(capWide-capNarrow)), 0, 1)
+	street := float64(float64(float64(c.capStreet)*c.cell) * capStreetStep)
+	return street + max2(float64(c.capWidth*width), c.cuSize[0]) + CloudSight(dome, lerp(wide, c.capTops[0], c.capTops[1]))
+}
+
 // An island's cap is its narrowest over an island capNarrow m wide and its
 // tallest over one capWide m wide; its street's clouds stand capStreetStep
 // of a cell apart, each capStreetFade less than the one before.
@@ -530,6 +540,16 @@ func unit(h uint32) float64 { return float64(float64(h>>8) * (1.0 / (1 << 24))) 
 // the horizon of an eye 2 m up on a dome of radius dome, m.
 func CloudSight(dome, h float64) float64 {
 	return cloudSightEye + math.Sqrt(float64(float64(2*dome)*max2(h, 0)))
+}
+
+// ComingAhead is how far beyond the disk's reach a front's line is when
+// its cirrus can first be seen from the disk, m: the cirrus begins its
+// distance ahead of the line, and shows from the lip as far as a cloud at
+// its height can be seen, on a dome of radius dome. A coming front is sent
+// from then.
+func (w *WeatherPrepared) ComingAhead(dome float64) float64 {
+	c := &w.clouds
+	return max2(w.edge+CloudSight(dome, c.heights[LayerCirrus])+c.front[0][0]-w.frontReach, 0)
 }
 
 // cloudSightEye is the horizon's distance from an eye 2 m up, m, taken

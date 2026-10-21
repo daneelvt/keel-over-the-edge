@@ -201,9 +201,11 @@ func (p *process) loadWorld(ctx context.Context, row store.World) (*readyWorld, 
 		places := wirePlaces(bundle, cat)
 		var lights *edge.Lights
 		rw.mainLight, lights = wireLights(bundle, cat)
+		caps := wireCaps(bundle, cat)
 		for _, h := range []*edge.Handout{rw.handout, rw.roamHandout} {
 			h.SetPlaces(places)
 			h.SetLights(lights)
+			h.SetCaps(caps)
 		}
 		p.log.Info("serving the world's chunks", "world", row.Number, "bytes", rw.chunks.Size(), "places", len(places), "lights", len(bundle.Lights))
 	} else {

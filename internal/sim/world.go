@@ -367,6 +367,7 @@ func (w *World) Timeline() *weather.Timeline { return w.timeline }
 // again only then.
 func (w *World) spells(f *bus.Frame) {
 	f.NSpells = w.timeline.Spells(f.Tick, f.Weathers, &f.Spells)
+	f.Coming = w.timeline.Coming(f.Tick, f.Weathers)
 	if len(f.Systems) > 0 && f.Tick%physics.StepsPerSecond == 0 {
 		f.Systems = w.timeline.Trim(f.Systems, f.Tick)
 	}

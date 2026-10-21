@@ -127,6 +127,7 @@ message ServerMessage {
     Lights lights = 11;
     Chart chart = 12;
     Charted charted = 13;
+    IslandCaps island_caps = 14;
   }
 }
 
@@ -340,6 +341,44 @@ message WeatherSystems {
   repeated Keyframe keyframes = 2;
   // The spells the client holds are still those in play: spells is empty.
   bool keep_spells = 3;
+  // The next front, before its spell is in play: from when its cirrus can
+  // first be seen from the disk until its spell is announced. Each message
+  // carries it, or none, which replaces what the client holds.
+  ComingFront coming = 4;
+}
+
+// ComingFront is a front before its spell is in play: its line alone,
+// which its cirrus shows far ahead of it, never its spell's wind. It is a
+// spell's fields of the same names.
+message ComingFront {
+  // The tick its line enters the disk's reach, the ticks it takes to cross
+  // to the far side, and the direction it moves toward, in 65536ths of a
+  // turn clockwise from north.
+  int64 begin = 1;
+  uint32 change = 2;
+  uint32 toward = 3;
+}
+
+// IslandCaps are the islands whose cap of cumulus the connection is to
+// draw by day, and those it is to drop: an island is sent once the
+// connection's eye is within sight of its cap, and dropped once the eye is
+// further than that by a margin. It carries what the sky shows of the
+// island, never its name: its centre and its width, each to 50 m.
+message IslandCaps {
+  repeated IslandCap caps = 1;
+  // The numbers of islands to drop.
+  repeated uint32 drop = 2;
+}
+
+// IslandCap is an island's cap.
+message IslandCap {
+  // Its number among the world's islands.
+  uint32 number = 1;
+  // Its centre, in metres east and north of the world's centre, and its
+  // width, in metres, each to 50 m.
+  sint32 east = 2;
+  sint32 north = 3;
+  uint32 width = 4;
 }
 
 // Keyframe is the weather systems at a tick: each one's place, motion,

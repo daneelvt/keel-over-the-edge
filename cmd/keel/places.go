@@ -72,3 +72,19 @@ func wireLights(b *worldgen.Bundle, cat *catalog.Catalog) (*pb.Light, *edge.Ligh
 	}
 	return main, edge.NewLights(rest, cat.World.Lights.Drop)
 }
+
+// wireCaps are the bundle's islands as their caps are sent: each island's
+// centre and width to 50 m, sent within sight of its cap and its street,
+// and dropped beyond that by the lights' margin.
+func wireCaps(b *worldgen.Bundle, cat *catalog.Catalog) *edge.Caps {
+	w := cat.PrepareWeather()
+	to50 := func(m float64) float64 { return 50 * math.Round(m/50) }
+	var caps []*pb.IslandCap
+	var reach []float64
+	for i, is := range islandsOf(b) {
+		width := to50(is.Across)
+		caps = append(caps, &pb.IslandCap{Number: uint32(i), East: int32(to50(is.X)), North: int32(to50(is.Y)), Width: uint32(width)})
+		reach = append(reach, w.CapReach(width, cat.World.Handout.Dome))
+	}
+	return edge.NewCaps(caps, reach, cat.World.Lights.Drop)
+}
