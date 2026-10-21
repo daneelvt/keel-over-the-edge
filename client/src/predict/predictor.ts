@@ -31,6 +31,7 @@ import type { OwnSnapshot } from '../net/snapshot';
 import { type BoatPose, StatePair } from './blend';
 import { RECORDS, SIZES } from './layout.gen';
 import {
+  writeCloudParams,
   writeEncounterParams,
   writeParams,
   writeSeaParams,
@@ -106,6 +107,8 @@ export function preparePhysics(
   writeWeatherParams(physics.records.weatherParams, weather);
   physics.prepareWeather();
   physics.setSystemKinds(weather.systems.map(systemKindRecord));
+  writeCloudParams(physics.records.cloudParams, weather.clouds);
+  physics.prepareClouds(weather.regimes.map((g) => g.cumulus));
   if (encounters !== undefined) {
     prepareEncounters(physics, encounters);
   }

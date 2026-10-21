@@ -27,6 +27,7 @@ import {
 } from '../../net/gen/keel/v1/game_pb';
 import type {
   BumpTold,
+  CapSeen,
   ChartEntry,
   ChunksHanded,
   LightSeen,
@@ -38,7 +39,7 @@ import type {
 import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
 import { POSITION_STEP, type View, ViewRing } from '../../net/view';
-import { keyframeRecord, spellRecord } from '../../net/weather';
+import { comingRecord, keyframeRecord, spellRecord } from '../../net/weather';
 
 export const BURST_PINGS = 8;
 export const BURST_EVERY = 100_000;
@@ -73,7 +74,14 @@ export type Received =
   | { kind: 'restart'; inMs: number }
   /** The sea about the boat. */
   | { kind: 'sea'; sea: SeaAreas }
-  | { kind: 'weather'; spells: WeatherSpells | null; keyframes: WeatherKeyframe[] }
+  | {
+      kind: 'weather';
+      spells: WeatherSpells | null;
+      keyframes: WeatherKeyframe[];
+      coming: number[];
+    }
+  /** Islands' caps come into sight, and those to drop. */
+  | { kind: 'caps'; caps: CapSeen[]; drop: number[] }
   | { kind: 'bump'; bump: BumpTold }
   /** The addresses of chunks of the land, by number. */
   | { kind: 'chunks'; chunks: ChunksHanded }
@@ -223,6 +231,19 @@ export class Session {
           kind: 'weather',
           spells: m.body.value.keepSpells ? null : m.body.value.spells.map(spellRecord),
           keyframes: m.body.value.keyframes.map(keyframeRecord),
+          coming: comingRecord(m.body.value.coming),
+        };
+      case 'islandCaps':
+        this.#lastHeard = now;
+        return {
+          kind: 'caps',
+          caps: m.body.value.caps.map((c) => ({
+            number: c.number,
+            east: c.east,
+            north: c.north,
+            width: c.width,
+          })),
+          drop: [...m.body.value.drop],
         };
       case 'chunks': {
         this.#lastHeard = now;

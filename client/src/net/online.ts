@@ -40,6 +40,7 @@ import {
 } from './clock';
 import type {
   BumpTold,
+  CapSeen,
   ChartEntry,
   ChunksHanded,
   FromWorker,
@@ -133,6 +134,8 @@ export class Online {
   onChart: ((entries: ChartEntry[], whole: boolean) => void) | null = null;
   /** Told of lights come into range, and lights to drop; and at each Welcome, of the main port's light, with all others dropped. */
   onLights: ((lights: LightSeen[], drop: number[] | 'all') => void) | null = null;
+  /** Islands' caps come into sight, and those to drop: all of them for a new connection. */
+  onCaps: ((caps: CapSeen[], drop: number[] | 'all') => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
   lastMargin = NO_MARGIN;
   traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
@@ -226,7 +229,7 @@ export class Online {
         break;
       case 'weather':
         // Ahead of the tick any of it changes the wind from, as the sea is.
-        this.#predictor.weather.receive(m.spells, m.keyframes);
+        this.#predictor.weather.receive(m.spells, m.keyframes, m.coming);
         break;
       case 'bump':
         this.onBump?.(m.bump);
@@ -239,6 +242,9 @@ export class Online {
         break;
       case 'lights':
         this.onLights?.(m.lights, m.drop);
+        break;
+      case 'caps':
+        this.onCaps?.(m.caps, m.drop);
         break;
       case 'chart':
         this.onChart?.(m.entries, m.whole);
@@ -270,6 +276,7 @@ export class Online {
         });
         // A new connection is sent the lights in range again.
         this.onLights?.(m.light === null ? [] : [m.light], 'all');
+        this.onCaps?.([], 'all');
         this.tools.value = m.tools;
         this.#predictor.setCirculation(m.circulation);
         this.#fresh = true;

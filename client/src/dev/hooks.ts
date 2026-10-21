@@ -85,6 +85,7 @@ import {
 } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
+import { look } from '../render/sky';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Settings } from '../ui/settings';
@@ -1211,6 +1212,34 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      */
     setWeather(id: string): void {
       offline().setWeather(id);
+    },
+    /** Holds the rain at the camera, mm an hour, or null to give it back to the weather. */
+    setRain(rate: number | null): void {
+      world.weather.heldRain = rate;
+    },
+    /**
+     * The weather in the sky as last drawn: the heaped clouds and the
+     * cumulus laid out (each its form, its slot among the heaped or −1,
+     * its centre, top and puffs), the puffs and streaks drawn, the rain and
+     * the overcast at the camera, and the sheets' cover overhead.
+     */
+    clouds() {
+      const w = world.weather;
+      const o = world.origin.world;
+      const cam = world.stage.camera.position;
+      const east = cam.x + o.x;
+      const north = -cam.z + o.y;
+      return {
+        clouds: w.clouds.shown.map((c) => ({ ...c })),
+        puffs: w.clouds.count,
+        heapedPuffs: w.clouds.heaped,
+        curtains: w.curtains.count,
+        streaks: w.streaks.count,
+        rain: w.rain,
+        overcast: w.overcast,
+        sheets: [0, 1, 2].map((l) => w.sheets.coverAt(l, east, north)),
+        visualRange: look.visualRange.value as number,
+      };
     },
     /** Sets the helm's and the sheet's targets, as the player's thumbs would. */
     setControls(helm: number, sheet: number): void {

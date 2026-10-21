@@ -29,6 +29,24 @@ const input = (v: Partial<SoundInput>): SoundInput => ({
 });
 
 describe('the voices', () => {
+  test('the rain is silent in none, and rises with the logarithm of its rate', () => {
+    const level = (rain: number) => soundTargets(RECIPES, input({ rain }), newTargets());
+    expect(level(0).rainLevel).toBe(0);
+    expect(level(0).drumLevel).toBe(0);
+    const rates = [0.5, 2, 6, 10, 20, 75];
+    const hiss = rates.map((r) => level(r).rainLevel);
+    for (let i = 1; i < hiss.length; i++) {
+      expect(hiss[i]).toBeGreaterThan(hiss[i - 1] as number);
+    }
+    // Ten times the rain is as much louder at any rate: its logarithm.
+    const step = (a: number) => level(10 * a).rainLevel - level(a).rainLevel;
+    expect(step(0.5)).toBeCloseTo(step(2), 9);
+    // The drumming comes only in heavy rain.
+    expect(level(6).drumLevel).toBe(0);
+    expect(level(20).drumLevel).toBeGreaterThan(0);
+    expect(level(75).rainLevel).toBe(RECIPES.rain.level.most);
+  });
+
   test('the rigging sings at 0.2 V ÷ 0.01 m', () => {
     expect(aeolianTone(0.2, 5, 0.01)).toBeCloseTo(100, 9);
     for (const v of [2, 5, 10, 20]) {

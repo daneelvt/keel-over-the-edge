@@ -82,6 +82,8 @@ export class Spells {
   spells: Spell[] = [];
   /** The weather systems' keyframes held, ascending by their ticks: the latest WEATHER.keySets. */
   keyframes: Keyframe[] = [];
+  /** The coming front: a coming record's values, all nought for none. */
+  coming: Float64Array = new Float64Array(SIZES.coming);
   /** Counts the changes, so that whoever draws the gusts knows to read them again. */
   version = 0;
 
@@ -94,6 +96,7 @@ export class Spells {
   /** Forgets what was sent: no wind, and no systems. */
   reset(): void {
     this.keyframes = [];
+    this.setComing(new Float64Array(SIZES.coming));
     this.#physics.setKeyframes([]);
     this.set([]);
   }
@@ -108,6 +111,7 @@ export class Spells {
   receive(
     spells: readonly ArrayLike<number>[] | null,
     keyframes: readonly WeatherKeyframe[] = [],
+    coming?: ArrayLike<number>,
   ): boolean {
     if (
       spells !== null &&
@@ -124,6 +128,10 @@ export class Spells {
       )
     ) {
       return false;
+    }
+    if (coming !== undefined && coming.length === SIZES.coming) {
+      this.coming = Float64Array.from(coming);
+      this.#physics.setComing(this.coming);
     }
     if (keyframes.length > 0) {
       const held = this.keyframes.filter((h) => !keyframes.some((k) => k.tick === h.tick));
@@ -144,6 +152,13 @@ export class Spells {
       this.version++;
     }
     return true;
+  }
+
+  /** Makes a coming record's values the coming front: none if it is not on. */
+  setComing(coming: Float64Array): void {
+    this.coming = coming;
+    this.#physics.setComing(coming);
+    this.version++;
   }
 
   /** Makes spells the spells in play. */
@@ -254,6 +269,8 @@ export function heldSpell(physics: Physics, weather: Weather, regime: number, fr
 /** The shapes and the ways of weakening of the kinds of system, as the module numbers them. */
 const SHAPES = { none: 0, dome: 1, low: 2 } as const;
 const INWARD = { none: 0, weak: 1, gone: 2 } as const;
+/** The forms of a kind's cloud, as the module numbers them. */
+export const FORMS = { none: 0, fog: 1, cumulus: 2, cumulonimbus: 3, storm: 4 } as const;
 
 /** A kind of weather system as the module's systemKind record has it. */
 export function systemKindRecord(k: SystemKind): Float64Array {
@@ -267,6 +284,24 @@ export function systemKindRecord(k: SystemKind): Float64Array {
   r[K.stretch] = k.stretch;
   r[K.inward] = INWARD[k.inward];
   r[K.gusts] = k.gusts;
+  // Its cloud and rain.
+  const c = k.cloud;
+  r[K.cloudForm] = FORMS[c.form];
+  r[K.cloudBase] = c.base;
+  r[K.cloudTop] = c.top;
+  r.set(c.reach, K.cloudReach);
+  r.set(c.deck, K.cloudDeck);
+  r[K.cloudLead] = c.lead;
+  r[K.cloudDark] = c.dark;
+  if (c.sheets !== undefined) {
+    r.set(c.sheets.cirrus, K.sheetCirrus);
+    r.set(c.sheets.middle, K.sheetMiddle);
+    r.set(c.sheets.low, K.sheetLow);
+  }
+  r[K.rainRate] = k.rain.rate;
+  r[K.rainWidth] = k.rain.width;
+  r[K.rainBands] = k.rain.bands;
+  r[K.rainTurn] = k.rain.turn;
   // The swell it raises, if any: none with no height.
   if (k.swell !== undefined) {
     r.set(k.swell.period, K.swellPeriod);

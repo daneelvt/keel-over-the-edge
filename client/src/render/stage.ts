@@ -16,9 +16,14 @@ import { type Backend, createGfx, type Gfx } from './renderer';
 
 export type Antialias = 'fxaa' | 'smaa' | 'none';
 
-/** The camera's near and far planes, in metres. The sky sphere lies inside the far one. */
+/**
+ * The camera's near and far planes, in metres. The sky sphere lies inside
+ * the far one. The far plane reaches beyond where a storm's cloud can be
+ * seen (its deck, 7.2 km off); a perspective depth's precision is set by
+ * the near plane, so reaching further costs nothing near.
+ */
 export const NEAR = 0.2;
-export const FAR = 4000;
+export const FAR = 8000;
 
 export interface FrameInfo {
   /** Seconds since the previous drawn frame. */

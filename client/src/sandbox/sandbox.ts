@@ -56,6 +56,31 @@ export interface SandboxStart {
   wind: Wind;
   /** The weather: STEADY, or the id of one of the catalog's regimes. */
   weather: string;
+  /** A front of FRONT weather crosses the boat this many minutes in: three if not given. */
+  frontIn?: number;
+}
+
+/**
+ * Reads ?front=minutes: a front crossing the boat that many minutes in, its
+ * sheets coming ahead of it, or null.
+ */
+export function frontFromQuery(query: URLSearchParams): number | null {
+  const raw = query.get('front');
+  if (raw === null) {
+    return null;
+  }
+  const m = Number(raw);
+  return Number.isFinite(m) && m >= 0 ? m : null;
+}
+
+/** Reads ?rain=mm: rain held at the camera, mm an hour, or null. */
+export function rainFromQuery(query: URLSearchParams): number | null {
+  const raw = query.get('rain');
+  if (raw === null) {
+    return null;
+  }
+  const r = Number(raw);
+  return Number.isFinite(r) && r >= 0 ? r : null;
 }
 
 /** A weather as it is made at a tick: the spell, the spell before any tuning, and the server's command for it, if there is one. */
@@ -297,7 +322,7 @@ export class Sandbox implements BoatDriver {
     const kind = kindIndex(this.#catalog, weather);
     if (weather === FRONT || kind >= 0) {
       // At the start's place, where the boat begins and begins again.
-      this.#meet(kind, this.start.east, this.start.north, 0);
+      this.#meet(kind, this.start.east, this.start.north, 0, this.start.frontIn);
       return;
     }
     this.#physics.setRecords([]);
@@ -326,11 +351,11 @@ export class Sandbox implements BoatDriver {
 
   /**
    * A front, for kind −1, or a system of a kind, meeting the boat at (east,
-   * north) three minutes after tick now, or forty-five for a kind whose
-   * swell runs ahead of it, in a spell from now of the commonest regime, or
+   * north) three minutes after tick now (a front frontIn minutes after),
+   * or forty-five for a kind whose swell runs ahead of it, in a spell from now of the commonest regime, or
    * of the lightest for a kind of light winds.
    */
-  #meet(kind: number, east: number, north: number, now: number): void {
+  #meet(kind: number, east: number, north: number, now: number, frontIn = 3): void {
     const c = this.#catalog;
     const calm = kind >= 0 && (c.systems[kind]?.calmBelow ?? 0) > 0;
     let regime = regimeIndex(c, commonestWeather(c));
@@ -374,7 +399,7 @@ export class Sandbox implements BoatDriver {
       const toward = (((spell[P.from] ?? 0) + WEATHER.turnSteps / 2) % WEATHER.turnSteps) as number;
       const a = (toward / WEATHER.turnSteps) * 2 * Math.PI;
       const along = east * Math.sin(a) + north * Math.cos(a);
-      const begin = Math.round(now + ARRIVE_TICKS - ((along + reach) / FRONT_SPEED) * 30);
+      const begin = Math.round(now + frontIn * 60 * 30 - ((along + reach) / FRONT_SPEED) * 30);
       spell[P.begin] = begin;
       spell[P.start] = begin;
       spell[P.change] = change;

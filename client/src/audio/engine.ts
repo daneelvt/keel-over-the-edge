@@ -72,6 +72,8 @@ interface Graph {
   lappingPan: StereoPannerNode;
   roar: GainNode;
   roarPan: StereoPannerNode;
+  rain: GainNode;
+  drum: GainNode;
 }
 
 /** A white-noise buffer, from a fixed sequence so every page sounds alike. */
@@ -138,6 +140,8 @@ function build(ctx: AudioContext, r: Recipes): Graph {
 
   const seaBand = band('bandpass', r.sea.centre.atRest, r.sea.q);
   const sea = voice(seaBand);
+  const rain = voice(band('bandpass', r.rain.hiss.centre, r.rain.hiss.q));
+  const drum = voice(band('bandpass', r.rain.drum.centre, r.rain.drum.q));
   // The falls: their band, through a low-pass the distance closes, panned.
   const fallsBand = band('bandpass', r.falls.centre, r.falls.q);
   const fallsLow = band('lowpass', r.falls.cutoff.most, 0.7);
@@ -194,6 +198,8 @@ function build(ctx: AudioContext, r: Recipes): Graph {
     lappingPan,
     roar,
     roarPan,
+    rain,
+    drum,
   };
 }
 
@@ -294,6 +300,8 @@ export class SoundEngine {
     g.fallsLow.frequency.setTargetAtTime(t.fallsCutoff, at, GLIDE);
     g.falls.gain.setTargetAtTime(t.fallsLevel, at, GLIDE);
     g.fallsPan.pan.setTargetAtTime(t.fallsPan, at, GLIDE);
+    g.rain.gain.setTargetAtTime(t.rainLevel, at, GLIDE);
+    g.drum.gain.setTargetAtTime(t.drumLevel, at, GLIDE);
   }
 
   /** The harbour's recipes, the world seconds its events are played to, and how many were played (tests). */

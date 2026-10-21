@@ -52,8 +52,11 @@ export interface Light {
   visualRange: number;
   /** The mist of the band at the edge of the world, beside the horizon's colour. */
   mist: Rgb;
-  /** The clouds' colour. */
+  /** The foam's and the falls' white. */
   cloud: Rgb;
+  /** The clouds' sunlit tops and their dark bases (Met Office: bases are grey, getting less of the light than the tops and sides). */
+  cloudTop: Rgb;
+  cloudBase: Rgb;
   /** The sail's glow on its shaded side, light through flax. */
   sailGlow: Rgb;
   /** How pale the moon's disc is against the sky: 1 by night. */
@@ -85,6 +88,8 @@ const DAY: Light = {
   visualRange: 6000,
   mist: [0.8, 0.83, 0.85],
   cloud: [0.97, 0.96, 0.93],
+  cloudTop: [0.98, 0.98, 0.97],
+  cloudBase: [0.55, 0.6, 0.66],
   sailGlow: [0.68, 0.665, 0.634],
   moonDisc: 0.3,
   starLimit: -3,
@@ -124,6 +129,8 @@ export const LIGHT_TABLE: readonly Light[] = [
     broadPower: 8,
     broadStrength: 0.22,
     cloud: [0.95, 0.88, 0.8],
+    cloudTop: [0.97, 0.9, 0.82],
+    cloudBase: [0.5, 0.52, 0.56],
     sailGlow: [0.62, 0.59, 0.53],
   },
   {
@@ -146,6 +153,8 @@ export const LIGHT_TABLE: readonly Light[] = [
     hazeNear: 200,
     hazeFar: 950,
     cloud: [0.88, 0.7, 0.6],
+    cloudTop: [0.92, 0.74, 0.62],
+    cloudBase: [0.42, 0.4, 0.44],
     sailGlow: [0.52, 0.47, 0.41],
   },
   {
@@ -168,6 +177,8 @@ export const LIGHT_TABLE: readonly Light[] = [
     hazeNear: 190,
     hazeFar: 900,
     cloud: [0.7, 0.55, 0.5],
+    cloudTop: [0.75, 0.58, 0.52],
+    cloudBase: [0.32, 0.3, 0.34],
     sailGlow: [0.43, 0.39, 0.35],
     moonDisc: 0.45,
     lanterns: 1,
@@ -194,6 +205,8 @@ export const LIGHT_TABLE: readonly Light[] = [
     hazeNear: 180,
     hazeFar: 850,
     cloud: [0.32, 0.3, 0.36],
+    cloudTop: [0.34, 0.32, 0.38],
+    cloudBase: [0.18, 0.18, 0.22],
     sailGlow: [0.3, 0.28, 0.28],
     moonDisc: 0.75,
     starLimit: -1,
@@ -220,6 +233,8 @@ export const LIGHT_TABLE: readonly Light[] = [
     hazeNear: 170,
     hazeFar: 800,
     cloud: [0.14, 0.15, 0.19],
+    cloudTop: [0.15, 0.16, 0.2],
+    cloudBase: [0.09, 0.1, 0.13],
     sailGlow: [0.22, 0.21, 0.21],
     moonDisc: 0.95,
     starLimit: 3.5,
@@ -246,6 +261,8 @@ export const LIGHT_TABLE: readonly Light[] = [
     hazeNear: 160,
     hazeFar: 750,
     cloud: [0.08, 0.09, 0.12],
+    cloudTop: [0.09, 0.1, 0.13],
+    cloudBase: [0.055, 0.065, 0.085],
     sailGlow: [0.2, 0.2, 0.2],
     moonDisc: 1,
     starLimit: 5.5,
@@ -275,6 +292,8 @@ export const LIGHT_TABLE: readonly Light[] = [
     hazeNear: 150,
     hazeFar: 700,
     cloud: [0.05, 0.06, 0.08],
+    cloudTop: [0.06, 0.07, 0.09],
+    cloudBase: [0.035, 0.045, 0.06],
     sailGlow: [0.19, 0.19, 0.19],
     moonDisc: 1,
     starLimit: 5.5,

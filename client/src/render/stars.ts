@@ -47,8 +47,9 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
+import { sheets, sheetsHide } from '../sky/sheets';
 import { skyMaterial } from './materials';
-import { cloudCover, look, MOON_RADIUS, toLinear } from './sky';
+import { look, MOON_RADIUS, toLinear } from './sky';
 
 /** Bytes a star in the table. */
 export const ENTRY = 6;
@@ -218,7 +219,7 @@ export class Stars {
     const r2 = dot(vCorner, vCorner);
     const spot = mix(step(r2, 1), exp(r2.mul(-3.5)), vFancy);
     const low = mix(float(1), smoothstep(-0.04, 0.05, d.y), vFancy);
-    const clouds = mix(float(1), float(1).sub(cloudCover(d).mul(0.9)), vFancy);
+    const clouds = mix(float(1), float(1).sub(sheetsHide(sheets, d)), vFancy);
     const moon = smoothstep(
       Math.cos(MOON_RADIUS * 1.15),
       Math.cos(MOON_RADIUS * 0.95),

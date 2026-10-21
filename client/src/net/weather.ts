@@ -6,7 +6,7 @@
 // module as it came.
 
 import { RECORDS, SIZES } from '../predict/layout.gen';
-import type { Keyframe, Spell } from './gen/keel/v1/game_pb';
+import type { ComingFront, Keyframe, Spell } from './gen/keel/v1/game_pb';
 import type { WeatherKeyframe } from './messages';
 
 const P = RECORDS.spell;
@@ -39,6 +39,19 @@ export function spellRecord(s: Spell): number[] {
   r[P.toward] = s.toward;
   r[P.trough] = s.trough;
   r[P.still] = s.still ? 1 : 0;
+  return r;
+}
+
+/** A WeatherSystems's coming front as a coming record's values: all nought for none. */
+export function comingRecord(c: ComingFront | undefined): number[] {
+  const r = new Array<number>(SIZES.coming).fill(0);
+  if (c !== undefined) {
+    const C = RECORDS.coming;
+    r[C.on] = 1;
+    r[C.begin] = Number(c.begin);
+    r[C.change] = c.change;
+    r[C.toward] = c.toward;
+  }
   return r;
 }
 

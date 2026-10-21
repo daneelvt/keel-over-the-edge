@@ -43,6 +43,17 @@ export type WeatherSpells = number[][];
  * each system by its slot, a system record's values in the physics
  * module's order (RECORDS.system), whole numbers all.
  */
+/**
+ * An island's cap, as the server sends it: its number, its centre east and
+ * north and its width, m, each to 50 m.
+ */
+export interface CapSeen {
+  number: number;
+  east: number;
+  north: number;
+  width: number;
+}
+
 export interface WeatherKeyframe {
   tick: number;
   systems: [slot: number, values: number[]][];
@@ -257,9 +268,17 @@ export type FromWorker =
   /**
    * The spells of weather in play, for the prediction's wind and the
    * drawing of the gusts, or null if those held still are; and keyframes
-   * of the weather systems, each replacing any held of its tick.
+   * of the weather systems, each replacing any held of its tick; and the
+   * coming front, a coming record's values, which replaces any held.
    */
-  | { type: 'weather'; spells: WeatherSpells | null; keyframes: WeatherKeyframe[] }
+  | {
+      type: 'weather';
+      spells: WeatherSpells | null;
+      keyframes: WeatherKeyframe[];
+      coming: number[];
+    }
+  /** Islands whose caps come into sight, and islands to drop, by number. */
+  | { type: 'caps'; caps: CapSeen[]; drop: number[] }
   /** The boat, or one near it, touched another. */
   | { type: 'bump'; bump: BumpTold }
   /** Chunks of the land the boat could see: their addresses to fetch. */

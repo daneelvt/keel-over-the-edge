@@ -10,8 +10,17 @@
 // sign is how much stronger or lighter it is than its sea area's wave wind,
 // from −1, glassy, to 1, a gust front, and the tiles take it with the gust
 // field's own roughening and darkening.
+//
+// The same grid carries the rain at each point, as its share of heavy rain
+// (10 mm an hour): under it the sea goes flat and grey, pocked with drops.
+// Rain damps the waves longer than 10 cm and raises those under 5 cm with
+// its rings, stalks and crowns (Melsheimer and others, as Long and Nie give
+// it), and "at the onset of a heavy rain the white-capping disappears very
+// rapidly", which is what sailors mean by "rain calms the sea" (Cavaleri
+// and others 2015). Beyond the grid the far sea takes the rain at the
+// camera.
 
-import { DataTexture, LinearFilter, RedFormat, UnsignedByteType, Vector2 } from 'three';
+import { DataTexture, LinearFilter, RGFormat, UnsignedByteType, Vector2 } from 'three';
 import { Fn, float, texture, uniform, vec2 } from 'three/tsl';
 import type { Node, UniformNode } from 'three/webgpu';
 import type { WeatherWater } from '../catalog/types.gen';
@@ -33,6 +42,14 @@ export function signOf(share: number): number {
 /** A sign of nothing, as a texel: the signs from −1 to 1 are 0 to 254. */
 const ZERO = 127;
 
+/** Rain of this rate, mm an hour, shows in full on the water: heavy rain (WMO-No. 8). */
+export const RAIN_FULL = 10;
+
+/** The share of rain of a rate the water shows, 0 to 1. */
+export function rainShare(rate: number): number {
+  return Math.min(Math.max(rate / RAIN_FULL, 0), 1);
+}
+
 /** The middle area's column and row, which is centred on the world's centre. */
 const MIDDLE = (SEA.areas - 1) / 2;
 
@@ -50,11 +67,18 @@ export class WaterSigns {
   readonly on: UniformNode<'float', number> = uniform(0);
   /** 1 to draw the signs; 0 to draw the water without them. */
   shown = 1;
+  /** The rain's share on the far sea: the rain at the camera. */
+  readonly rainFar: UniformNode<'float', number> = uniform(0);
+  /** 1 while the grid holds rain. */
+  readonly rainOn: UniformNode<'float', number> = uniform(0);
+  /** A rain a developer holds everywhere, mm an hour, or null for the weather's. */
+  heldRain: number | null = null;
 
   readonly #every: number;
   readonly #data: Uint8Array<ArrayBuffer>;
   readonly #grid: Float64Array;
   readonly #mean: Float64Array;
+  readonly #rain: Float64Array;
   #last = Number.NEGATIVE_INFINITY;
   #east = 0;
   #north = 0;
@@ -64,14 +88,18 @@ export class WaterSigns {
     this.spacing = water.spacing;
     this.#every = 1 / water.rate;
     const n = this.points;
-    this.#data = new Uint8Array(n * n).fill(ZERO);
-    this.texture = new DataTexture(this.#data, n, n, RedFormat, UnsignedByteType);
+    this.#data = new Uint8Array(2 * n * n);
+    for (let p = 0; p < n * n; p++) {
+      this.#data[2 * p] = ZERO;
+    }
+    this.texture = new DataTexture(this.#data, n, n, RGFormat, UnsignedByteType);
     this.texture.magFilter = LinearFilter;
     this.texture.minFilter = LinearFilter;
     this.texture.needsUpdate = true;
     this.span = uniform(n * this.spacing);
     this.#grid = new Float64Array(2 * n * n);
     this.#mean = new Float64Array(2 * n * n);
+    this.#rain = new Float64Array(n * n);
   }
 
   /**
@@ -79,7 +107,7 @@ export class WaterSigns {
    * about the floating origin, from the module's weather and the sea it
    * holds; and brings the grid's place in the scene up to date. With no
    * spell of weather with gusts (a steady wind, which stills the systems
-   * too) there are none.
+   * too) there are no signs; the rain is sampled whatever the wind.
    */
   update(
     gusty: boolean,
@@ -90,19 +118,27 @@ export class WaterSigns {
     originEast: number,
     originNorth: number,
   ): void {
-    if (physics === null || seas === null || !gusty) {
+    if (physics === null || seas === null) {
       this.on.value = 0;
+      this.rainOn.value = 0;
       return;
     }
     if (seconds - this.#last >= this.#every || seconds < this.#last) {
       this.#last = seconds;
-      this.#sample(physics, seas, tick, originEast, originNorth);
+      this.#sample(physics, seas, tick, originEast, originNorth, gusty);
     }
-    this.on.value = this.shown;
+    this.on.value = gusty ? this.shown : 0;
     this.at.value.set(this.#east - originEast, -(this.#north - originNorth));
   }
 
-  #sample(physics: Physics, seas: Seas, tick: number, east: number, north: number): void {
+  #sample(
+    physics: Physics,
+    seas: Seas,
+    tick: number,
+    east: number,
+    north: number,
+    gusty: boolean,
+  ): void {
     const n = this.points;
     const s = this.spacing;
     this.#east = east;
@@ -116,6 +152,18 @@ export class WaterSigns {
       }
     }
     physics.windDrawAt(tick);
+    physics.rainSample(this.#grid, this.#rain);
+    let any = false;
+    for (let p = 0; p < n * n; p++) {
+      const r = rainShare(this.heldRain ?? this.#rain[p] ?? 0);
+      this.#data[2 * p + 1] = Math.round(255 * r);
+      any ||= r > 0;
+    }
+    this.rainOn.value = any ? 1 : 0;
+    if (!gusty) {
+      this.texture.needsUpdate = true;
+      return;
+    }
     physics.meanSample(this.#grid, this.#mean);
     const slot = seas.slotAt(tick);
     const held = slot < 0 ? null : seas.held[slot];
@@ -133,7 +181,7 @@ export class WaterSigns {
           }
         }
       }
-      this.#data[p] = Math.round(ZERO + ZERO * sign);
+      this.#data[2 * p] = Math.round(ZERO + ZERO * sign);
     }
     this.texture.needsUpdate = true;
   }
@@ -158,4 +206,21 @@ export const waterSignAt = (w: WaterSigns): ((c: Node<'vec2'>) => Node<'float'>)
       .sub(1);
     // A texel's rounding is no sign.
     return inside.and(v.abs().greaterThan(0.01)).select(v.mul(w.on), float(0));
+  }) as unknown as (c: Node<'vec2'>) => Node<'float'>;
+
+/**
+ * The rain's share on the water at a point of the scene, (x east, y south)
+ * from the floating origin, 0 to 1: the grid's within it, the rain at the
+ * camera's beyond.
+ */
+export const waterRainAt = (w: WaterSigns): ((c: Node<'vec2'>) => Node<'float'>) =>
+  Fn(([c]: [Node<'vec2'>]) => {
+    const uv = c.sub(w.at).div(w.span).add(0.5);
+    const inside = uv.x
+      .greaterThan(0)
+      .and(uv.x.lessThan(1))
+      .and(uv.y.greaterThan(0))
+      .and(uv.y.lessThan(1));
+    const v = texture(w.texture, vec2(uv.x, uv.y)).level(float(0)).y;
+    return inside.and(w.rainOn.greaterThan(0)).select(v, w.rainFar);
   }) as unknown as (c: Node<'vec2'>) => Node<'float'>;
