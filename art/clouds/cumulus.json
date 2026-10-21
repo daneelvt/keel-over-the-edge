@@ -2,7 +2,31 @@
   "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
   "description": "A heap of cumulus: a shower's cloud, and the fair-weather cumulus and an island's cap. Places and radii are shares of the cloud's size (a shower's radius, a fair cumulus's), heights shares of its height above its base, as it stands now. A layer grows as the cloud strength goes from grow's first to its second; tone runs from the dark base (0) to the white top (1).",
   "layers": [
-    { "name": "base", "count": 3, "shape": "box", "along": [-0.5, 0.5], "across": [-0.4, 0.4], "height": [0.12, 0.18], "radius": [0.4, 0.5], "flat": 0.5, "stretch": 1, "tone": [0.05, 0.25], "grow": [0, 0.4] },
-    { "name": "heap", "count": 5, "shape": "box", "along": [-0.3, 0.3], "across": [-0.3, 0.3], "height": [0.3, 0.72], "radius": [0.35, 0.5], "flat": 0.75, "stretch": 1, "tone": [0.55, 1], "grow": [0.15, 0.9] }
+    {
+      "name": "base",
+      "count": 3,
+      "shape": "box",
+      "along": [-0.5, 0.5],
+      "across": [-0.4, 0.4],
+      "height": [0.12, 0.18],
+      "radius": [0.4, 0.5],
+      "flat": 0.5,
+      "stretch": 1,
+      "tone": [0.05, 0.25],
+      "grow": [0, 0.4]
+    },
+    {
+      "name": "heap",
+      "count": 5,
+      "shape": "box",
+      "along": [-0.3, 0.3],
+      "across": [-0.3, 0.3],
+      "height": [0.3, 0.72],
+      "radius": [0.35, 0.5],
+      "flat": 0.75,
+      "stretch": 1,
+      "tone": [0.55, 1],
+      "grow": [0.15, 0.9]
+    }
   ]
 }

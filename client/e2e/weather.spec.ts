@@ -203,8 +203,10 @@ test.describe('sheet cloud', () => {
     expect(at.y).toBeGreaterThan(0);
     expect(at.x).toBeLessThan(open.width);
     expect(at.y).toBeLessThan(open.height);
-    expect(bright(open, at.x, at.y)).toBeGreaterThan(700);
-    expect(bright(covered, at.x, at.y)).toBeLessThan(bright(open, at.x, at.y) - 60);
+    const x = at.x ?? 0;
+    const y = at.y ?? 0;
+    expect(bright(open, x, y)).toBeGreaterThan(700);
+    expect(bright(covered, x, y)).toBeLessThan(bright(open, x, y) - 60);
     expect(shown).toBeLessThan(0.6 * clear);
   });
 

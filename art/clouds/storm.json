@@ -2,7 +2,31 @@
   "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
   "description": "A storm: a broad dark deck over the whole of it, and towers rising through it in a spiral toward its centre. Places and radii are shares of the system's size; heights shares of its height above its base as it stands now. A layer grows as the cloud strength goes from grow's first to its second; tone runs from the dark base (0) to the white top (1). A spiral's along is its inner and outer radius, across how many turns it winds.",
   "layers": [
-    { "name": "deck", "count": 22, "shape": "disc", "along": [0, 0.95], "across": [0, 0], "height": [0.18, 0.23], "radius": [0.16, 0.26], "flat": 0.4, "stretch": 1, "tone": [0, 0.2], "grow": [0, 0.5] },
-    { "name": "towers", "count": 9, "shape": "spiral", "along": [0.2, 0.9], "across": [3, 3], "height": [0.45, 0.85], "radius": [0.1, 0.14], "flat": 0.6, "stretch": 1, "tone": [0.5, 1], "grow": [0.3, 1] }
+    {
+      "name": "deck",
+      "count": 22,
+      "shape": "disc",
+      "along": [0, 0.95],
+      "across": [0, 0],
+      "height": [0.18, 0.23],
+      "radius": [0.16, 0.26],
+      "flat": 0.4,
+      "stretch": 1,
+      "tone": [0, 0.2],
+      "grow": [0, 0.5]
+    },
+    {
+      "name": "towers",
+      "count": 9,
+      "shape": "spiral",
+      "along": [0.2, 0.9],
+      "across": [3, 3],
+      "height": [0.45, 0.85],
+      "radius": [0.1, 0.14],
+      "flat": 0.6,
+      "stretch": 1,
+      "tone": [0.5, 1],
+      "grow": [0.3, 1]
+    }
   ]
 }
