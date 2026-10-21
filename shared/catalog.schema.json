@@ -32,7 +32,7 @@
       "description": "The weather's numbers.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["sea", "disk", "gusts", "ring", "waveWind", "current", "front", "pressure", "reach", "regimes", "systems", "week", "keyframe", "water"],
+      "required": ["sea", "disk", "gusts", "ring", "waveWind", "current", "front", "pressure", "reach", "regimes", "systems", "week", "keyframe", "water", "clouds"],
       "properties": {
         "sea": { "$ref": "#/$defs/WeatherSea" },
         "disk": { "$ref": "#/$defs/WeatherDisk" },
@@ -47,7 +47,8 @@
         "systems": { "description": "The kinds of weather system.", "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/SystemKind" } },
         "week": { "$ref": "#/$defs/WeatherWeek" },
         "keyframe": { "$ref": "#/$defs/WeatherKeyframe" },
-        "water": { "$ref": "#/$defs/WeatherWater" }
+        "water": { "$ref": "#/$defs/WeatherWater" },
+        "clouds": { "$ref": "#/$defs/WeatherClouds" }
       }
     },
     "WeatherSea": {
@@ -162,7 +163,7 @@
       "description": "A kind of spell of weather.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "share", "frontal", "spell", "pressure", "next", "systems", "wind"],
+      "required": ["id", "share", "frontal", "spell", "pressure", "next", "systems", "wind", "cumulus"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "share": { "description": "The regime's share of the world's time.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
@@ -171,7 +172,8 @@
         "pressure": { "description": "The lowest and the highest of its pressure's level, in hPa.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 900, "maximum": 1100 } },
         "next": { "description": "The regimes a spell of it gives way to, with the chance of each.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/RegimeNext" } },
         "systems": { "description": "The systems born in a spell of it.", "type": "array", "items": { "$ref": "#/$defs/RegimeSystems" } },
-        "wind": { "$ref": "#/$defs/RegimeWind" }
+        "wind": { "$ref": "#/$defs/RegimeWind" },
+        "cumulus": { "description": "How much of the sky its fair-weather cumulus covers, from 0 to 1.", "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
     "RegimeWind": {
@@ -265,6 +267,53 @@
         "height": { "description": "Its significant height at the system's edge at full strength, in m: the first at the least of the kind's wind, the second at the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10 } }
       }
     },
+    "SystemCloud": {
+      "title": "SystemCloud",
+      "description": "The cloud of a kind of system: its form, its heights and reach at its whole, and how far its cloud grows ahead of its wind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["form", "base", "top", "reach", "deck", "lead", "dark"],
+      "properties": {
+        "form": { "$ref": "#/$defs/CloudForm" },
+        "base": { "description": "Its base above the sea, in m.", "type": "number", "minimum": 0, "maximum": 10000 },
+        "top": { "description": "Its top at its whole, in m.", "type": "number", "minimum": 0, "maximum": 10000 },
+        "reach": { "description": "How far its top reaches from its centre at its whole, behind and ahead along its track, as shares of its size.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 5 } },
+        "deck": { "description": "Its deck of low cloud about the centre at its whole: its reach as a share of its size, and its top in m; no reach for none.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10000 } },
+        "lead": { "description": "Its cloud strength is its strength times this, at most 1: at 2 its cloud is whole when its wind is half grown.", "type": "number", "minimum": 1, "maximum": 10 },
+        "dark": { "description": "How dark its base is, from 0 to 1.", "type": "number", "minimum": 0, "maximum": 1 },
+        "sheets": { "$ref": "#/$defs/SystemSheets" }
+      }
+    },
+    "CloudForm": {
+      "title": "CloudForm",
+      "description": "A cloud's form, which names how it is drawn: fair cumulus, a towering cumulonimbus with its anvil and shelf, a storm's deck with its towers, fog, or none.",
+      "enum": ["none", "fog", "cumulus", "cumulonimbus", "storm"]
+    },
+    "SystemSheets": {
+      "title": "SystemSheets",
+      "description": "The sheet cloud about a system's centre, by its cloud strength: for each layer where it begins and where it is whole, as shares of its size.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cirrus", "middle", "low"],
+      "properties": {
+        "cirrus": { "description": "Its outflow cirrus: from, and whole within.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+        "middle": { "description": "The middle sheet: from, and whole within.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+        "low": { "description": "Low overcast: from, and whole within.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10 } }
+      }
+    },
+    "SystemRain": {
+      "title": "SystemRain",
+      "description": "The rain under a kind of system, at its full strength.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rate", "width", "bands", "turn"],
+      "properties": {
+        "rate": { "description": "Its rate at its core, in mm an hour; 0 for none.", "type": "number", "minimum": 0, "maximum": 200 },
+        "width": { "description": "A core's width, or the bands' reach, as a share of its size.", "type": "number", "minimum": 0, "maximum": 5 },
+        "bands": { "description": "Its rain falls in this many spiral bands about its centre; 0 for a core.", "type": "integer", "minimum": 0, "maximum": 6 },
+        "turn": { "description": "The bands turn once in this many minutes; 0 for never.", "type": "number", "minimum": 0, "maximum": 600 }
+      }
+    },
     "SystemKind": {
       "title": "SystemKind",
       "description": "A kind of weather system: a pressure shape moving with it, its wind turned from the pressure's gradient, its size, life and track.",
@@ -295,8 +344,8 @@
         "lift": { "description": "It lifts this long after sunrise, the least and the most, in minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 120 } },
         "calmBelow": { "description": "It is born only where the spell's mean wind is under this, in knots; 0 for anywhere.", "type": "number", "minimum": 0, "maximum": 60 },
         "goneAbove": { "description": "It is gone once the spell's mean wind passes this, in knots; 0 for never.", "type": "number", "minimum": 0, "maximum": 60 },
-        "rain": { "description": "The rain under it, for drawing.", "enum": ["none", "light", "moderate", "heavy"] },
-        "cloud": { "description": "The cloud of it, for drawing.", "enum": ["none", "fog", "cumulus", "cumulonimbus"] },
+        "rain": { "$ref": "#/$defs/SystemRain" },
+        "cloud": { "$ref": "#/$defs/SystemCloud" },
         "lightning": { "description": "Lightning strikes from it above this strength; 0 for none.", "type": "number", "minimum": 0, "maximum": 2 },
         "swell": { "$ref": "#/$defs/SystemSwell" }
       }
@@ -350,6 +399,36 @@
         "points": { "description": "The grid's points a side.", "type": "integer", "minimum": 2, "maximum": 64 },
         "spacing": { "description": "Its spacing, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "rate": { "description": "Samplings a second.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 }
+      }
+    },
+    "WeatherClouds": {
+      "title": "WeatherClouds",
+      "description": "Clouds and rain: the sheets' layers and the lattice they are held on, the fair-weather cumulus, the islands' caps, a front's sheets and rain, and rain's words and visibility.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cirrus", "middle", "low", "lattice", "cumulusCell", "cumulusJitter", "cumulusBase", "cumulusTops", "cumulusSize", "cumulusLife", "capSun", "capTops", "capWidth", "capStreet", "frontCirrus", "frontMiddle", "frontLow", "frontRain", "rainWords", "rainExtinction", "rainScale"],
+      "properties": {
+        "cirrus": { "description": "The cirrus's height, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 20000 },
+        "middle": { "description": "The middle sheet's height, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 20000 },
+        "low": { "description": "Low cloud's height, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 20000 },
+        "lattice": { "description": "The sheets' cover is held at the corners of a world-fixed lattice this far apart, in m, and is bilinear between them.", "type": "number", "minimum": 10, "maximum": 2000 },
+        "cumulusCell": { "description": "The fair-weather cumulus's lattice cells, in m.", "type": "number", "minimum": 100, "maximum": 10000 },
+        "cumulusJitter": { "description": "Each cloud stands up to this share of a cell from its cell's centre.", "type": "number", "minimum": 0, "maximum": 0.5 },
+        "cumulusBase": { "description": "Their base, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "cumulusTops": { "description": "Their tops, the lowest and the highest, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 5000 } },
+        "cumulusSize": { "description": "Their radius, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 5000 } },
+        "cumulusLife": { "description": "Each cell holds a cloud for this long, growing over its first quarter and shrinking over its last, in minutes.", "type": "number", "exclusiveMinimum": 0, "maximum": 600 },
+        "capSun": { "description": "An island's cap grows as the sun at it rises from the first to the second height, and shrinks as it sinks, in degrees.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": -10, "maximum": 90 } },
+        "capTops": { "description": "A cap's top, over the narrowest island and the widest, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 5000 } },
+        "capWidth": { "description": "A cap's radius, as a share of its island's width.", "type": "number", "exclusiveMinimum": 0, "maximum": 2 },
+        "capStreet": { "description": "How many cumulus trail downwind of a cap, a cell apart.", "type": "integer", "minimum": 0, "maximum": 10 },
+        "frontCirrus": { "description": "A front's cirrus: where it begins ahead of the line and where it is whole, and where it begins to clear behind it and where it is gone, in nautical miles.", "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "number", "minimum": 0, "maximum": 20 } },
+        "frontMiddle": { "description": "Its middle sheet, the same.", "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "number", "minimum": 0, "maximum": 20 } },
+        "frontLow": { "description": "Its low cloud: a band this far behind the line and this wide, in nautical miles.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 5 } },
+        "frontRain": { "description": "Its rain: the rate at the band's middle, in mm an hour, the band this far behind the line and this wide, in nautical miles.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": 0, "maximum": 200 } },
+        "rainWords": { "description": "Rain is light under the first rate, moderate under the second, heavy under the third and violent above, in mm an hour.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 500 } },
+        "rainExtinction": { "description": "Rain's extinction, a R^b per km of rain of R mm an hour: a and b.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 10 } },
+        "rainScale": { "description": "Visibility on the game's stage is this share of the real.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
       }
     },
     "Encounters": {

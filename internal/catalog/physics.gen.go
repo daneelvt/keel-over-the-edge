@@ -227,6 +227,34 @@ func Regimes(c *Catalog) []physics.Regime {
 	return out
 }
 
+// CloudParams returns the catalog's clouds' values as the physics package's
+// CloudParams.
+func CloudParams(c *Catalog) physics.CloudParams {
+	var p physics.CloudParams
+	p.Cirrus = float64(c.Weather.Clouds.Cirrus)
+	p.Middle = float64(c.Weather.Clouds.Middle)
+	p.Low = float64(c.Weather.Clouds.Low)
+	p.Lattice = float64(c.Weather.Clouds.Lattice)
+	p.CumulusCell = float64(c.Weather.Clouds.CumulusCell)
+	p.CumulusJitter = float64(c.Weather.Clouds.CumulusJitter)
+	p.CumulusBase = float64(c.Weather.Clouds.CumulusBase)
+	copy(p.CumulusTops[:], c.Weather.Clouds.CumulusTops)
+	copy(p.CumulusSize[:], c.Weather.Clouds.CumulusSize)
+	p.CumulusLife = float64(c.Weather.Clouds.CumulusLife)
+	copy(p.CapSun[:], c.Weather.Clouds.CapSun)
+	copy(p.CapTops[:], c.Weather.Clouds.CapTops)
+	p.CapWidth = float64(c.Weather.Clouds.CapWidth)
+	p.CapStreet = float64(c.Weather.Clouds.CapStreet)
+	copy(p.FrontCirrus[:], c.Weather.Clouds.FrontCirrus)
+	copy(p.FrontMiddle[:], c.Weather.Clouds.FrontMiddle)
+	copy(p.FrontLow[:], c.Weather.Clouds.FrontLow)
+	copy(p.FrontRain[:], c.Weather.Clouds.FrontRain)
+	copy(p.RainWords[:], c.Weather.Clouds.RainWords)
+	copy(p.RainExtinction[:], c.Weather.Clouds.RainExtinction)
+	p.RainScale = float64(c.Weather.Clouds.RainScale)
+	return p
+}
+
 // EncounterParams returns the catalog's encounters values as the physics
 // package's EncounterParams.
 func EncounterParams(c *Catalog) physics.EncounterParams {

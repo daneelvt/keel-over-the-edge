@@ -77,6 +77,7 @@ type systemKind struct {
 	inward           int32
 	gusts            float64
 	swell            swellKind
+	cloud            cloudKind
 }
 
 // SetKind sets kind i of the systems. It is called after PrepareWeather,
@@ -96,6 +97,7 @@ func (w *WeatherPrepared) SetKind(i int32, k *SystemKind) {
 	o.inward = toInt32(k.Inward)
 	o.gusts = max2(k.Gusts, 0)
 	o.setSwell(k)
+	o.cloud.set(k)
 	w.nkinds = max(w.nkinds, i+1)
 }
 
@@ -125,6 +127,13 @@ type systemTick struct {
 	gustIn   float64 // m: within this the gusts are whole
 	gustOut2 float64 // m²: beyond the square root of this there are none
 	invGusts float64 // 1 / the ring over which they fall off, 1/m
+	// What its cloud and rain are drawn from.
+	slot     int32   // its place among the keyframe's slots, or the records'
+	kind     float64 // the catalog's index of its kind
+	seed     uint32
+	strength float64 // its life and throb
+	size     float64 // its radius, m
+	speed    float64 // how fast it moves, m/s
 }
 
 // systemValues are a system's values as floats: what a keyframe's whole
@@ -132,8 +141,10 @@ type systemTick struct {
 // still in the keyframe's steps, whose unit is its kind's.
 type systemValues struct {
 	kind              float64
+	seed              float64
 	east, north       float64 // m
 	heading           float64 // rad
+	speed             float64 // m/s
 	strength          float64
 	size, peak, depth float64 // m, steps, hPa
 }
@@ -142,9 +153,11 @@ type systemValues struct {
 func valuesOf(s *System) systemValues {
 	return systemValues{
 		kind:     s.Kind,
+		seed:     s.Seed,
 		east:     float64(s.East * quarterMetre),
 		north:    float64(s.North * quarterMetre),
 		heading:  float64(s.Heading * turnStep),
+		speed:    float64(s.Speed * SeaSpeedStep),
 		strength: float64(s.Strength * strengthStep),
 		size:     s.Size,
 		peak:     s.Peak,
@@ -156,9 +169,11 @@ func valuesOf(s *System) systemValues {
 func lerpValues(a, b systemValues, u float64) systemValues {
 	return systemValues{
 		kind:     a.kind,
+		seed:     a.seed,
 		east:     a.east + float64(u*(b.east-a.east)),
 		north:    a.north + float64(u*(b.north-a.north)),
 		heading:  a.heading + float64(u*wrapAngle(b.heading-a.heading)),
+		speed:    a.speed + float64(u*(b.speed-a.speed)),
 		strength: a.strength + float64(u*(b.strength-a.strength)),
 		size:     a.size + float64(u*(b.size-a.size)),
 		peak:     a.peak + float64(u*(b.peak-a.peak)),
@@ -166,11 +181,11 @@ func lerpValues(a, b systemValues, u float64) systemValues {
 	}
 }
 
-// set makes st ready from a system's values, with the kinds of p, and
-// reports whether it adds anything. A dome's or a low's peak is a wind in
+// set makes st ready from the values of the system in slot, with the
+// kinds of p, and reports whether it adds anything. A dome's or a low's peak is a wind in
 // steps of SeaSpeedStep, a patch's the wind's share at its core in
 // thousandths.
-func (st *systemTick) set(p *WeatherPrepared, v *systemValues) bool {
+func (st *systemTick) set(p *WeatherPrepared, v *systemValues, slot int32) bool {
 	k := p.kindOf(v.kind)
 	strength := max2(v.strength, 0)
 	size := max2(v.size, 1)
@@ -178,6 +193,8 @@ func (st *systemTick) set(p *WeatherPrepared, v *systemValues) bool {
 		return false
 	}
 	st.k = k
+	st.slot, st.kind, st.seed = slot, v.kind, seedBits(v.seed)
+	st.strength, st.size, st.speed = strength, size, v.speed
 	st.cx, st.cy = v.east, v.north
 	st.ux, st.uy = SinCos(v.heading)
 	st.w = float64(k.width * size)
@@ -377,7 +394,7 @@ func systemsAt(w *Weather, t *WeatherTick, tick float64, still bool) {
 	if w.NRecords > 0 {
 		for i := first; i < w.NRecords; i++ {
 			v, on := recordAt(&w.Records[i], tick)
-			if on && t.sys[t.ns].set(p, &v) {
+			if on && t.sys[t.ns].set(p, &v, i) {
 				t.ns++
 			}
 		}
@@ -404,7 +421,7 @@ func systemsAt(w *Weather, t *WeatherTick, tick float64, still bool) {
 		for i := first; i < MaxSystems; i++ {
 			if s := &a.Systems[i]; s.On != 0 {
 				v := valuesOf(s)
-				if t.sys[t.ns].set(p, &v) {
+				if t.sys[t.ns].set(p, &v, i) {
 					t.ns++
 				}
 			}
@@ -434,7 +451,7 @@ func systemsAt(w *Weather, t *WeatherTick, tick float64, still bool) {
 			}
 		}
 		for j := range n {
-			if t.ns < int32(len(t.sys)) && t.sys[t.ns].set(p, &v[j]) {
+			if t.ns < int32(len(t.sys)) && t.sys[t.ns].set(p, &v[j], i) {
 				t.ns++
 			}
 		}
@@ -452,7 +469,7 @@ func SystemAt(r *SystemRecord, tick float64) System {
 	if !on {
 		return System{}
 	}
-	_, _, _, speed := trackAt(r, tick)
+	speed := v.speed
 	stage := float64(StageGrowing)
 	if tick >= r.Decays {
 		stage = StageDecaying
@@ -498,7 +515,7 @@ func recordAt(r *SystemRecord, tick float64) (systemValues, bool) {
 	if !(tick >= r.Born) || !(tick < r.Gone) {
 		return systemValues{}, false
 	}
-	east, north, heading, _ := trackAt(r, tick)
+	east, north, heading, speed := trackAt(r, tick)
 	if r.Wobble != 0 {
 		w := float64(r.Wobble * quarterMetre)
 		east += float64(w * Sin(float64(r.WobblePhase[0]*turnStep)+cycle(inverse(r.WobblePeriod[0]), tick)))
@@ -514,9 +531,11 @@ func recordAt(r *SystemRecord, tick float64) (systemValues, bool) {
 	throb := 1 + float64(float64(r.Throb*strengthStep)*Sin(float64(r.ThrobPhase*turnStep)+cycle(inverse(r.ThrobPeriod), tick)))
 	return systemValues{
 		kind:     r.Kind,
+		seed:     r.Seed,
 		east:     east,
 		north:    north,
 		heading:  heading,
+		speed:    speed,
 		strength: float64(life * throb),
 		size:     r.Size,
 		peak:     r.Peak,

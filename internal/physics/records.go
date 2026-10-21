@@ -445,7 +445,32 @@ type SystemKind struct {
 	SwellBand   [2]float64 // the shortest and the longest period it spans, s
 	SwellHeight [2]float64 // its significant height at its edge at full strength, m, at the least and the most of its wind
 	SwellWind   [2]float64 // the least and the most of its wind, knots
+	// Its cloud: none if its form is FormNone or FormFog.
+	CloudForm   float64    // FormNone, FormFog, FormCumulus, FormCumulonimbus or FormStorm
+	CloudBase   float64    // its base, m
+	CloudTop    float64    // its top at its whole, m
+	CloudReach  [2]float64 // how far its top reaches behind and ahead of its centre at its whole, shares of its size
+	CloudDeck   [2]float64 // its deck: its reach, a share of its size, and its top, m
+	CloudLead   float64    // its cloud strength is its strength times this, at most 1
+	CloudDark   float64    // how dark its base is, 0 to 1
+	SheetCirrus [2]float64 // its sheets about its centre: where each begins and where it is whole, shares of its size
+	SheetMiddle [2]float64
+	SheetLow    [2]float64
+	// Its rain at full strength.
+	RainRate  float64 // at its core, mm an hour
+	RainWidth float64 // a core's Gaussian width, or the bands' reach, a share of its size
+	RainBands float64 // how many spiral bands; 0 for a core
+	RainTurn  float64 // the bands turn once in this many minutes; 0 for never
 }
+
+// The forms of a kind's cloud, in SystemKind.CloudForm.
+const (
+	FormNone         = 0
+	FormFog          = 1
+	FormCumulus      = 2 // a heap of cumulus, raining as a shower
+	FormCumulonimbus = 3 // a tower with its anvil and shelf
+	FormStorm        = 4 // a broad deck with its towers
+)
 
 // System is a weather system at a keyframe: where it is, how it moves, how
 // strong and how large it is, in whole numbers, in the units the wire
@@ -518,6 +543,90 @@ type SystemRecord struct {
 	Throb        float64 `week:"Swell"`
 	ThrobPeriod  float64 `week:"SwellPeriod"`
 	ThrobPhase   float64 `week:"SwellPhase"`
+}
+
+// CloudParams describe clouds and rain: the catalog's weather values of
+// its group clouds, in the order of its schema. PrepareClouds derives the
+// constants they are computed with.
+type CloudParams struct {
+	Cirrus         float64    // the layers' heights, m
+	Middle         float64    //
+	Low            float64    //
+	Lattice        float64    // the sheets' lattice, m
+	CumulusCell    float64    // the fair-weather cumulus's cells, m
+	CumulusJitter  float64    // each stands up to this share of a cell from its centre
+	CumulusBase    float64    // their base, m
+	CumulusTops    [2]float64 // their tops, m
+	CumulusSize    [2]float64 // their radius, m
+	CumulusLife    float64    // each cell's cloud lives this long, minutes
+	CapSun         [2]float64 // a cap grows as the sun rises from the first height to the second, degrees
+	CapTops        [2]float64 // a cap's top over the narrowest island and the widest, m
+	CapWidth       float64    // a cap's radius, a share of its island's width
+	CapStreet      float64    // how many cumulus trail downwind of it
+	FrontCirrus    [4]float64 // a front's cirrus: begins and whole ahead of the line, clearing and gone behind it, nautical miles
+	FrontMiddle    [4]float64 // its middle sheet, the same
+	FrontLow       [2]float64 // its low cloud: a band this far behind the line and this wide, nautical miles
+	FrontRain      [3]float64 // its rain: mm an hour, and a band this far behind the line and this wide, nautical miles
+	RainWords      [3]float64 // light, moderate and heavy under these, violent above, mm an hour
+	RainExtinction [2]float64 // rain's extinction, a R^b per km
+	RainScale      float64    // visibility on the stage, a share of the real
+}
+
+// ComingFront is the next front, before its spell is in play: the line
+// alone, which its cirrus shows far ahead of it. Its fields are a Spell's
+// of the same names; On is 1 if there is one.
+type ComingFront struct {
+	On     float64
+	Begin  float64
+	Change float64
+	Toward float64
+}
+
+// Cloud is a heaped cloud at a moment: a system's, for drawing it and for
+// the rules that read the sky.
+type Cloud struct {
+	Slot      float64 // the system's place among those blowing
+	Kind      float64 // the catalog's index of its kind
+	Form      float64 // FormCumulus, FormCumulonimbus or FormStorm
+	Seed      float64 // its system's, a uint32
+	East      float64 // its centre, m east and north of the world's
+	North     float64
+	Heading   float64 // the direction it moves toward, rad clockwise from north
+	Speed     float64 // how fast, m/s
+	Size      float64 // its system's radius, m
+	Strength  float64 // its system's strength
+	Cloud     float64 // its cloud strength, 0 to 1
+	Base      float64 // m
+	Top       float64 // m, at its cloud strength
+	Behind    float64 // how far its top reaches behind and ahead of its centre, m
+	Ahead     float64
+	Deck      float64 // its deck's reach, m, and top, m
+	DeckTop   float64
+	Dark      float64 // how dark its base is
+	Rain      float64 // its rain's rate at its core now, mm an hour
+	RainReach float64 // its rain falls within this of its centre, m
+}
+
+// Cumulus is a fair-weather cumulus at a moment: a cell's of a spell's
+// lattice, or an island's cap or its street.
+type Cumulus struct {
+	East     float64 // its centre, m
+	North    float64
+	Base     float64 // m
+	Top      float64 // m, at its whole
+	Radius   float64 // m, at its whole
+	Grow     float64 // how much of itself it is now, 0 to 1
+	Seed     float64 // a uint32, for drawing it
+	VelEast  float64 // how fast it drifts, m/s
+	VelNorth float64
+}
+
+// Sheets is the cover of the three layers of sheet cloud at a point, 0 to
+// 1 each.
+type Sheets struct {
+	Cirrus float64
+	Middle float64
+	Low    float64
 }
 
 // WindPoint is the wind at a point in full: what the client's instruments

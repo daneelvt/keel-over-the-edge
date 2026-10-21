@@ -362,12 +362,13 @@ type Classes struct {
 	C float64 `json:"c"`
 }
 
-type Cloud string
+type CloudForm string
 
-const CloudCumulonimbus Cloud = "cumulonimbus"
-const CloudCumulus Cloud = "cumulus"
-const CloudFog Cloud = "fog"
-const CloudNone Cloud = "none"
+const CloudFormCumulonimbus CloudForm = "cumulonimbus"
+const CloudFormCumulus CloudForm = "cumulus"
+const CloudFormFog CloudForm = "fog"
+const CloudFormNone CloudForm = "none"
+const CloudFormStorm CloudForm = "storm"
 
 // A colony's birds: where they nest, and how they look, fly and call.
 type ColonyBirds struct {
@@ -1872,15 +1873,11 @@ type QuayFoot struct {
 	Port float64 `json:"port"`
 }
 
-type Rain string
-
-const RainHeavy Rain = "heavy"
-const RainLight Rain = "light"
-const RainModerate Rain = "moderate"
-const RainNone Rain = "none"
-
 // A kind of spell of weather.
 type Regime struct {
+	// How much of the sky its fair-weather cumulus covers, from 0 to 1.
+	Cumulus float64 `json:"cumulus"`
+
 	// A spell of it arrives and leaves as a front does: a front crosses the disk, and
 	// the wind veers.
 	Frontal bool `json:"frontal"`
@@ -2257,6 +2254,37 @@ const SymbolRuin Symbol = "ruin"
 const SymbolSmoke Symbol = "smoke"
 const SymbolSpring Symbol = "spring"
 
+// The cloud of a kind of system: its form, its heights and reach at its whole, and
+// how far its cloud grows ahead of its wind.
+type SystemCloud struct {
+	// Its base above the sea, in m.
+	Base float64 `json:"base"`
+
+	// How dark its base is, from 0 to 1.
+	Dark float64 `json:"dark"`
+
+	// Its deck of low cloud about the centre at its whole: its reach as a share of
+	// its size, and its top in m; no reach for none.
+	Deck []float64 `json:"deck"`
+
+	// Form corresponds to the JSON schema field "form".
+	Form CloudForm `json:"form"`
+
+	// Its cloud strength is its strength times this, at most 1: at 2 its cloud is
+	// whole when its wind is half grown.
+	Lead float64 `json:"lead"`
+
+	// How far its top reaches from its centre at its whole, behind and ahead along
+	// its track, as shares of its size.
+	Reach []float64 `json:"reach"`
+
+	// Sheets corresponds to the JSON schema field "sheets".
+	Sheets *SystemSheets `json:"sheets,omitempty,omitzero"`
+
+	// Its top at its whole, in m.
+	Top float64 `json:"top"`
+}
+
 // A kind of weather system: a pressure shape moving with it, its wind turned from
 // the pressure's gradient, its size, life and track.
 type SystemKind struct {
@@ -2272,8 +2300,8 @@ type SystemKind struct {
 	// anywhere.
 	CalmBelow float64 `json:"calmBelow"`
 
-	// The cloud of it, for drawing.
-	Cloud Cloud `json:"cloud"`
+	// Cloud corresponds to the JSON schema field "cloud".
+	Cloud SystemCloud `json:"cloud"`
 
 	// Minutes after sunrise it may still be born.
 	Dawn float64 `json:"dawn"`
@@ -2312,8 +2340,8 @@ type SystemKind struct {
 	// It is born only at night, or within dawn minutes after sunrise.
 	Night bool `json:"night"`
 
-	// The rain under it, for drawing.
-	Rain Rain `json:"rain"`
+	// Rain corresponds to the JSON schema field "rain".
+	Rain SystemRain `json:"rain"`
 
 	// A dome, a low, or none: a patch that scales the wind.
 	Shape Shape `json:"shape"`
@@ -2346,6 +2374,34 @@ type SystemKind struct {
 	// The wind it adds at its peak at full strength, the least and the most, in
 	// knots.
 	Wind []float64 `json:"wind"`
+}
+
+// The rain under a kind of system, at its full strength.
+type SystemRain struct {
+	// Its rain falls in this many spiral bands about its centre; 0 for a core.
+	Bands int `json:"bands"`
+
+	// Its rate at its core, in mm an hour; 0 for none.
+	Rate float64 `json:"rate"`
+
+	// The bands turn once in this many minutes; 0 for never.
+	Turn float64 `json:"turn"`
+
+	// A core's width, or the bands' reach, as a share of its size.
+	Width float64 `json:"width"`
+}
+
+// The sheet cloud about a system's centre, by its cloud strength: for each layer
+// where it begins and where it is whole, as shares of its size.
+type SystemSheets struct {
+	// Its outflow cirrus: from, and whole within.
+	Cirrus []float64 `json:"cirrus"`
+
+	// Low overcast: from, and whole within.
+	Low []float64 `json:"low"`
+
+	// The middle sheet: from, and whole within.
+	Middle []float64 `json:"middle"`
 }
 
 // The swell a kind of system raises, by its strength: a long, low lift that runs
@@ -2604,6 +2660,9 @@ type ValidatorFeatures struct {
 
 // The weather's numbers.
 type Weather struct {
+	// Clouds corresponds to the JSON schema field "clouds".
+	Clouds WeatherClouds `json:"clouds"`
+
 	// Current corresponds to the JSON schema field "current".
 	Current WeatherCurrent `json:"current"`
 
@@ -2645,6 +2704,81 @@ type Weather struct {
 
 	// Week corresponds to the JSON schema field "week".
 	Week WeatherWeek `json:"week"`
+}
+
+// Clouds and rain: the sheets' layers and the lattice they are held on, the
+// fair-weather cumulus, the islands' caps, a front's sheets and rain, and rain's
+// words and visibility.
+type WeatherClouds struct {
+	// How many cumulus trail downwind of a cap, a cell apart.
+	CapStreet int `json:"capStreet"`
+
+	// An island's cap grows as the sun at it rises from the first to the second
+	// height, and shrinks as it sinks, in degrees.
+	CapSun []float64 `json:"capSun"`
+
+	// A cap's top, over the narrowest island and the widest, in m.
+	CapTops []float64 `json:"capTops"`
+
+	// A cap's radius, as a share of its island's width.
+	CapWidth float64 `json:"capWidth"`
+
+	// The cirrus's height, in m.
+	Cirrus float64 `json:"cirrus"`
+
+	// Their base, in m.
+	CumulusBase float64 `json:"cumulusBase"`
+
+	// The fair-weather cumulus's lattice cells, in m.
+	CumulusCell float64 `json:"cumulusCell"`
+
+	// Each cloud stands up to this share of a cell from its cell's centre.
+	CumulusJitter float64 `json:"cumulusJitter"`
+
+	// Each cell holds a cloud for this long, growing over its first quarter and
+	// shrinking over its last, in minutes.
+	CumulusLife float64 `json:"cumulusLife"`
+
+	// Their radius, the least and the most, in m.
+	CumulusSize []float64 `json:"cumulusSize"`
+
+	// Their tops, the lowest and the highest, in m.
+	CumulusTops []float64 `json:"cumulusTops"`
+
+	// A front's cirrus: where it begins ahead of the line and where it is whole, and
+	// where it begins to clear behind it and where it is gone, in nautical miles.
+	FrontCirrus []float64 `json:"frontCirrus"`
+
+	// Its low cloud: a band this far behind the line and this wide, in nautical
+	// miles.
+	FrontLow []float64 `json:"frontLow"`
+
+	// Its middle sheet, the same.
+	FrontMiddle []float64 `json:"frontMiddle"`
+
+	// Its rain: the rate at the band's middle, in mm an hour, the band this far
+	// behind the line and this wide, in nautical miles.
+	FrontRain []float64 `json:"frontRain"`
+
+	// The sheets' cover is held at the corners of a world-fixed lattice this far
+	// apart, in m, and is bilinear between them.
+	Lattice float64 `json:"lattice"`
+
+	// Low cloud's height, in m.
+	Low float64 `json:"low"`
+
+	// The middle sheet's height, in m.
+	Middle float64 `json:"middle"`
+
+	// Rain's extinction, a R^b per km of rain of R mm an hour: a and b.
+	RainExtinction []float64 `json:"rainExtinction"`
+
+	// Visibility on the game's stage is this share of the real.
+	RainScale float64 `json:"rainScale"`
+
+	// Rain is light under the first rate, moderate under the second, heavy under the
+	// third and violent above, in mm an hour.
+	RainWords []float64 `json:"rainWords"`
 }
 
 // The water's own motion: the circulation round the disk and the drain toward the
@@ -3726,4 +3860,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "8681e0f0a3f9fc78"
+const Version = "ff62116f7628187a"

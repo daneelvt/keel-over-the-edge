@@ -26,9 +26,11 @@ type catalogWeather struct {
 		Reach    map[string]any   `json:"reach"`
 		Systems  []map[string]any `json:"systems"`
 		Regimes  []struct {
-			ID   string         `json:"id"`
-			Wind map[string]any `json:"wind"`
+			ID      string         `json:"id"`
+			Wind    map[string]any `json:"wind"`
+			Cumulus float64        `json:"cumulus"`
 		} `json:"regimes"`
+		Clouds map[string]any `json:"clouds"`
 	} `json:"weather"`
 }
 

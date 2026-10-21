@@ -628,7 +628,11 @@ func TestPhysicsGenerated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := goPhysics(fields, sea, sky, wind, regime, encounters)
+	clouds, err := cloudFields(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := goPhysics(fields, sea, sky, wind, regime, clouds, encounters)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -639,18 +643,20 @@ func TestPhysicsGenerated(t *testing.T) {
 		"p.WaveSamples = float64(c.Weather.WaveWind.WaveSamples)", "copy(p.Speed[:], r.Speed)", "p.Drift = float64(r.Drift)",
 		"copy(p.Outline[:], b.Physics.Hull.Outline)", "p.CloseHauled = b.Physics.Rig.CloseHauled",
 		"p.Restitution = float64(c.Encounters.Contact.Restitution)", "copy(p.Deflection[:], c.Encounters.Shadow.Deflection)",
-		"p.HeadToWind = float64(c.Encounters.Articles.HeadToWind)"} {
+		"p.HeadToWind = float64(c.Encounters.Articles.HeadToWind)",
+		"p.Cirrus = float64(c.Weather.Clouds.Cirrus)", "copy(p.FrontCirrus[:], c.Weather.Clouds.FrontCirrus)"} {
 		if !strings.Contains(string(g), want) {
 			t.Errorf("physics.gen.go lacks %q", want)
 		}
 	}
-	ts := string(tsParams(fields, sea, sky, wind, regime, encounters))
+	ts := string(tsParams(fields, sea, sky, wind, regime, clouds, encounters))
 	for _, want := range []string{"params[f.displacement] = p.hull.displacement;", "params.set(p.hull.dragArea, f.dragArea);",
 		"export function writeSeaParams(", "params[f.fetchCap] = s.fetchCap;",
 		"export function writeSkyParams(", "params[0] = s.day;", "params[4] = s.epoch;",
 		"export function writeWeatherParams(", "params[f.speedCentre] = w.disk.speedCentre;", "params.set(w.disk.acrossTurn, f.acrossTurn);",
 		"export function writeRegime(", "record.set(r.speed, f.speed);", "record[f.gustFactor] = r.gustFactor;",
-		"export function writeEncounterParams(", "params[f.restitution] = e.contact.restitution;", "params.set(e.shadow.deflection, f.deflection);"} {
+		"export function writeEncounterParams(", "params[f.restitution] = e.contact.restitution;", "params.set(e.shadow.deflection, f.deflection);",
+		"export function writeCloudParams(", "params[f.lattice] = c.lattice;", "params.set(c.frontRain, f.frontRain);"} {
 		if !strings.Contains(ts, want) {
 			t.Errorf("params.gen.ts lacks %q", want)
 		}

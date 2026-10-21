@@ -28,7 +28,8 @@ const (
 	schemaPath  = "shared/catalog.schema.json"
 	catalogDir  = "shared/catalog"
 	artDir      = "art"
-	soundDir    = "sound" // under artDir
+	soundDir    = "sound"  // under artDir
+	cloudsDir   = "clouds" // under artDir
 	goJSONPath  = "internal/catalog/catalog.gen.json"
 	goTypesPath = "internal/catalog/types.gen.go"
 	tsJSONPath  = "client/src/catalog/catalog.gen.json"
@@ -109,10 +110,17 @@ func run(root string, check bool, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := checkWindParams(wind, regime); err != nil {
+	clouds, err := cloudFields(root)
+	if err != nil {
+		return err
+	}
+	if err := checkWindParams(wind, regime, clouds); err != nil {
 		return err
 	}
 	if err := checkWeather(doc); err != nil {
+		return err
+	}
+	if err := checkClouds(root, doc); err != nil {
 		return err
 	}
 	encounters, err := encounterFields(root)
@@ -128,7 +136,7 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkWorld(doc); err != nil {
 		return err
 	}
-	goPhysics, err := goPhysics(fields, sea, skyNumbers, wind, regime, encounters)
+	goPhysics, err := goPhysics(fields, sea, skyNumbers, wind, regime, clouds, encounters)
 	if err != nil {
 		return err
 	}
@@ -138,7 +146,7 @@ func run(root string, check bool, out io.Writer) error {
 		goPhysicsPath: goPhysics,
 		tsJSONPath:    canonical,
 		tsTypesPath:   tsTypes,
-		tsParamsPath:  tsParams(fields, sea, skyNumbers, wind, regime, encounters),
+		tsParamsPath:  tsParams(fields, sea, skyNumbers, wind, regime, clouds, encounters),
 	}
 	return writeOrCheck(root, files, check)
 }
@@ -364,12 +372,12 @@ func checkArt(root string, doc map[string]any) (warnings []string, err error) {
 			return err
 		}
 		// The scripts that build the art are its source, not art a kind uses;
-		// the sound recipes are read by the client's sound engine, not named
-		// by a kind.
+		// the sound recipes are read by the client's sound engine and the
+		// clouds' by its sky, not named by a kind.
 		if d.IsDir() || d.Name() == "README.md" || strings.HasSuffix(d.Name(), ".ts") {
 			return nil
 		}
-		if r := filepath.ToSlash(rel(artRoot, p)); strings.HasPrefix(r, soundDir+"/") {
+		if r := filepath.ToSlash(rel(artRoot, p)); strings.HasPrefix(r, soundDir+"/") || strings.HasPrefix(r, cloudsDir+"/") {
 			return nil
 		}
 		r := filepath.ToSlash(rel(artRoot, p))
