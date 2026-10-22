@@ -4,7 +4,10 @@
   "crack": { "centre": 2200, "q": 0.8, "decay": 0.18, "level": 0.8 },
   "rumble": { "cutoff": 320, "swells": 1.6, "depth": 0.7, "level": 0.6 },
   "deep": { "cutoff": 80, "level": 0.5 },
-  "absorption": { "at": [125, 250, 500, 1000, 2000, 4000], "dbPerKm": [0.4, 1, 1.9, 3.7, 9.7, 32.8] },
+  "absorption": {
+    "at": [125, 250, 500, 1000, 2000, 4000],
+    "dbPerKm": [0.4, 1, 1.9, 3.7, 9.7, 32.8]
+  },
   "cutoff": { "least": 120, "most": 6000 },
   "roll": 2.5,
   "stretch": 4000,

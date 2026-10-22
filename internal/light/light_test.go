@@ -302,7 +302,7 @@ type golden struct {
 	Lights  []goldenLight `json:"lights"`
 	// FogSignals are the fog signals' blasts, and Assignment a world's
 	// lights given their fog signals.
-	FogSignals []goldenSignal    `json:"fogSignals"`
+	FogSignals []goldenSignal   `json:"fogSignals"`
 	Assignment goldenAssignment `json:"assignment"`
 }
 

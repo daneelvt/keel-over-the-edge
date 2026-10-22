@@ -429,9 +429,6 @@ func (t *Table) lightSeen(lt *light, d, tau, thr float64) bool {
 	return lt.lnI-tau-float64(2*physics.Log(d)) >= thr
 }
 
-// nauticalMile is a nautical mile, m.
-const nauticalMile = 1852
-
 // ray is the bearing nearest the way (dx, dy) points, clockwise from north.
 func (t *Table) ray(dx, dy float64) int {
 	a := physics.Atan2(dx, dy)

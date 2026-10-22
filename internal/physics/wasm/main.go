@@ -118,12 +118,12 @@ var (
 	// sliceWeather is the weather at a tick of its own: a slot's start, a
 	// blast's.
 	sliceWeather physics.WeatherTick
-	coming      physics.ComingFront
-	clouds      [physics.MaxClouds]physics.Cloud
-	cumulus     [physics.MaxCumulus]physics.Cumulus
-	sheets      physics.Sheets
-	caps        [physics.MaxCaps]physics.Cap
-	ncaps       int32
+	coming       physics.ComingFront
+	clouds       [physics.MaxClouds]physics.Cloud
+	cumulus      [physics.MaxCumulus]physics.Cumulus
+	sheets       physics.Sheets
+	caps         [physics.MaxCaps]physics.Cap
+	ncaps        int32
 	// sheetValues is what sheetGrid writes: each point's cirrus, middle
 	// and low cover; rainValues what rainSample writes.
 	sheetValues [physics.Layers * physics.SheetSide * physics.SheetSide]float64
