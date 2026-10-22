@@ -19,6 +19,8 @@
 import { PILOT_HEADING, PILOT_OFF, type PilotControl, TURN_STEPS } from '../input/pilot';
 import './panel.css';
 import { catalog } from '../catalog';
+import type { Forecasting } from '../chart/forecasting';
+import type { ChartWeather } from '../chart/weatherlayer';
 import { type MistParams, visualRangeAt } from '../edge/mist';
 import type { FleetStats } from '../game/fleet';
 import type { Game } from '../game/game';
@@ -38,6 +40,7 @@ import { look } from '../render/sky';
 import type { Antialias } from '../render/stage';
 import { type SeaOptions, seaAreaOf } from '../sandbox/localsea';
 import { FRONT, type Sandbox, SEA_STATES, STEADY } from '../sandbox/sandbox';
+import type { Barometer } from '../ui/barometer';
 import { tackText } from '../ui/verdict';
 import { skyPanel } from './skypanel';
 
@@ -350,6 +353,46 @@ function airPanel(world: SeaScene, sandbox: Sandbox, p: { east: number; north: n
   return airLines(v, physics.visibilityWord(v), air, signals, flash);
 }
 
+/** What the panel shows of a forecast's system: its kind's name, whether forming, its place and cone at a step. */
+export interface PanelSystem {
+  name: string;
+  forming: boolean;
+  east: number;
+  north: number;
+  cone: number;
+}
+
+/**
+ * The forecast, as lines: the latest issue, how long ago and its steps;
+ * its systems with their cones at the step shown; the gale warning in
+ * force; the barometer's words and its set hand.
+ */
+export function forecastLines(
+  issue: { tick: number; steps: number } | null,
+  now: number,
+  systems: readonly PanelSystem[],
+  warning: string | null,
+  barometer: { words: string; set: number } | null,
+): string[] {
+  if (issue === null) {
+    return ['forecast none issued yet'];
+  }
+  const ago = Math.max(0, Math.floor((now - issue.tick) / 1800));
+  const lines = [
+    `forecast issued ${ago} min ago, ${issue.steps} steps; ${systems.length === 0 ? 'no systems' : systems.length === 1 ? '1 system' : `${systems.length} systems`}`,
+  ];
+  for (const s of systems) {
+    lines.push(
+      `  ${s.name}${s.forming ? ' forming' : ''} at ${s.east.toFixed(0)} E, ${s.north.toFixed(0)} N, cone ${(s.cone / 1852).toFixed(2)} NM`,
+    );
+  }
+  lines.push(`gale    ${warning ?? 'no warning in force'}`);
+  if (barometer !== null && barometer.words !== '') {
+    lines.push(`baro    ${barometer.words}; set hand ${barometer.set.toFixed(1)} hPa`);
+  }
+  return lines;
+}
+
 /** The visibility's words, by the module's numbers. */
 const VISIBILITY_WORDS = ['good', 'moderate', 'poor', 'very poor'];
 
@@ -540,6 +583,7 @@ export function openPanel(
   game: Game,
   sandbox: Sandbox,
   parent: HTMLElement,
+  forecast: PanelForecast | null = null,
 ): void {
   const pw: PanelWorld = {
     get usePass() {
@@ -887,6 +931,7 @@ export function openPanel(
       ),
       ...airPanel(world, sandbox, p),
       pilotLine(game.pilot, sandbox.states.current, sandbox.out),
+      ...(forecast === null ? [] : forecastPanel(forecast)),
       ...edgeLines(
         p.east,
         p.north,
@@ -904,6 +949,38 @@ export function openPanel(
     ].join('\n');
   };
   render();
+}
+
+/** What the panel reads of the forecast: the chart's weather, its gale words and the barometer. */
+export interface PanelForecast {
+  forecasting: Forecasting;
+  weather: ChartWeather | null;
+  warning: () => string | null;
+  barometer: Barometer | null;
+}
+
+/** The forecast's lines from what the page holds. */
+function forecastPanel(p: PanelForecast): string[] {
+  const latest = p.forecasting.forecasts.latest;
+  const H = RECORDS.forecastHead;
+  const scene = p.weather?.scene ?? null;
+  const systems =
+    scene === null
+      ? []
+      : scene.systems.map((s) => ({
+          name: s.name,
+          forming: s.forming,
+          east: s.east,
+          north: s.north,
+          cone: s.cone,
+        }));
+  return forecastLines(
+    latest === null ? null : { tick: latest.head[H.issue] ?? 0, steps: latest.head[H.steps] ?? 0 },
+    p.forecasting.tick(),
+    systems,
+    p.warning(),
+    p.barometer === null ? null : { words: p.barometer.words.value, set: p.barometer.set },
+  );
 }
 
 const WAYS = ['holding', 'tacking', 'gybing'];

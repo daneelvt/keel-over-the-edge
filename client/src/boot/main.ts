@@ -46,6 +46,7 @@ import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
 import { chartSandbox, fetchSandboxChart, makeChart, sandboxModels } from '../chart/make';
 import { Models } from '../chart/model';
+import { warningInForce } from '../chart/placeweather';
 import { STEPS_PER_SECOND } from '../game/clock';
 import { Game } from '../game/game';
 import { Land } from '../land/land';
@@ -326,7 +327,12 @@ async function start(): Promise<void> {
     }
     if (dev) {
       const { openPanel } = await import('../dev/panel');
-      openPanel(world, game, sandbox, document.body);
+      openPanel(world, game, sandbox, document.body, {
+        forecasting,
+        weather: parts.weather,
+        warning: () => warningInForce(forecasting, parts.chart.store),
+        barometer: baro.barometer,
+      });
     }
     if (query.has('test')) {
       const { exposeHooks } = await import('../dev/hooks');
