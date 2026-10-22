@@ -9,7 +9,10 @@
 // water lapping at the quays (audio/harbour.ts, with the bell, the gulls
 // and the mallets, each played once). The frame loop sets their parameters at most every 50 ms,
 // each gliding to its target with setTargetAtTime. A bump's knock is played
-// once, from the same noise and a tone, and let go when it has died away.
+// once, from the same noise and a tone, and let go when it has died away;
+// so are a lighthouse's fog signal's blasts in fog (audio/fogsignals.ts),
+// each a tone of the device's harmonics, and the thunder after a flash
+// (audio/thunder.ts), from the noise.
 //
 // Browsers start audio only from a user gesture. Under the HTML standard's
 // user activation, a keydown (not Escape), a mouse's pointerdown, or a
@@ -25,6 +28,15 @@ import {
   featureEvents,
   roarNow,
 } from './features';
+import {
+  FOG_SIGNAL_RECIPES,
+  FOG_SIGNAL_RULES,
+  type FogSignalEvent,
+  type FogSignalRecipes,
+  type FogSignalRules,
+  type FogSignalsInput,
+  fogSignalEvents,
+} from './fogsignals';
 import type { Scrape } from './ground';
 import {
   bellPartials,
@@ -36,6 +48,15 @@ import {
   lappingNow,
 } from './harbour';
 import type { Knock } from './knock';
+import {
+  THUNDER_RECIPE,
+  THUNDER_RULE,
+  type ThunderEvent,
+  type ThunderInput,
+  type ThunderRecipe,
+  type ThunderRule,
+  thunderEvents,
+} from './thunder';
 import {
   newTargets,
   RECIPES,
@@ -74,6 +95,8 @@ interface Graph {
   roarPan: StereoPannerNode;
   rain: GainNode;
   drum: GainNode;
+  /** The fog signals' tones, by device: made once each. */
+  waves: Map<string, PeriodicWave>;
 }
 
 /** A white-noise buffer, from a fixed sequence so every page sounds alike. */
@@ -200,6 +223,7 @@ function build(ctx: AudioContext, r: Recipes): Graph {
     roarPan,
     rain,
     drum,
+    waves: new Map(),
   };
 }
 
@@ -566,6 +590,265 @@ export class SoundEngine {
         }
       };
     }
+  }
+
+  /** The fog signals' recipes and rules, the world seconds their blasts are played to, and how many were played (tests). */
+  readonly #fog: FogSignalRecipes = FOG_SIGNAL_RECIPES;
+  readonly #fogRules: FogSignalRules = FOG_SIGNAL_RULES;
+  #fogTo = Number.NaN;
+  readonly #fogThrottle = new Throttle(SOUND_INTERVAL);
+  fogSignalEvents = 0;
+
+  /**
+   * Plays the fog signals' blasts heard by the listener since the last
+   * time (ms), each once as its sound arrives.
+   */
+  fogSignals(now: number, x: FogSignalsInput): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || !this.#fogThrottle.due(now)) {
+      return;
+    }
+    if (!(x.seconds - this.#fogTo < 2) || x.seconds < this.#fogTo) {
+      this.#fogTo = x.seconds;
+      return;
+    }
+    const at = g.ctx.currentTime;
+    for (const e of fogSignalEvents(this.#fog, this.#fogRules, x, this.#fogTo, x.seconds)) {
+      this.#playBlast(g, e, at + Math.max(0, e.at - x.seconds));
+    }
+    this.#fogTo = x.seconds;
+  }
+
+  /** A device's tone: a periodic wave of its harmonics, made once. */
+  #wave(g: Graph, device: FogSignalEvent['device']): PeriodicWave {
+    let w = g.waves.get(device);
+    if (w === undefined) {
+      const h = this.#fog[device].harmonics;
+      const real = new Float32Array(h.length + 1);
+      const imag = new Float32Array(h.length + 1);
+      h.forEach((v, i) => {
+        imag[i + 1] = v;
+      });
+      w = g.ctx.createPeriodicWave(real, imag);
+      g.waves.set(device, w);
+    }
+    return w;
+  }
+
+  /**
+   * A blast: the device's tone through a low-pass, never above the air's
+   * over its distance, swelling in over the attack, held, and dying away
+   * over the release after it ends.
+   */
+  #playBlast(g: Graph, e: FogSignalEvent, at: number): void {
+    if (!(e.level > 0) || !(e.length > 0)) {
+      return;
+    }
+    this.fogSignalEvents++;
+    const ctx = g.ctx;
+    const r = this.#fog;
+    const device = r[e.device];
+    const end = at + e.length;
+    const stop = end + 2 * device.release;
+    const o = ctx.createOscillator();
+    o.setPeriodicWave(this.#wave(g, e.device));
+    const low = ctx.createBiquadFilter();
+    low.type = 'lowpass';
+    low.Q.value = 0.7;
+    const v = ctx.createGain();
+    v.gain.setValueAtTime(0, at);
+    v.gain.linearRampToValueAtTime(e.level, at + Math.min(device.attack, e.length / 3));
+    v.gain.setValueAtTime(e.level, end);
+    v.gain.setTargetAtTime(0, end, device.release / 3);
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = e.pan;
+    o.connect(low);
+    low.connect(v);
+    v.connect(pan);
+    pan.connect(g.master);
+    const nodes: AudioNode[] = [o, low, v, pan];
+    // A diaphone's low-pass opens as the blast swells: a horn brightens as
+    // it grows louder.
+    const swell = (c: { from: number; to: number; open: number }): void => {
+      low.frequency.setValueAtTime(Math.min(c.from, e.cutoff), at);
+      low.frequency.exponentialRampToValueAtTime(
+        Math.min(c.to, e.cutoff),
+        at + Math.min(c.open, e.length),
+      );
+    };
+    const f = o.frequency;
+    if (e.device === 'diaphone') {
+      // Its pitch sags as the air runs out, then drops in the grunt.
+      const c = r.diaphone;
+      const grunt = Math.min(c.gruntTime, e.length / 3);
+      f.setValueAtTime(c.pitch, at);
+      f.exponentialRampToValueAtTime(c.sag, end - grunt);
+      f.exponentialRampToValueAtTime(c.sag * c.grunt, end - grunt + Math.min(0.04, grunt));
+      swell(c.cutoff);
+    } else if (e.device === 'twotone') {
+      // The high tone, then the low held to the end.
+      const c = r.twotone;
+      const high = e.tones[0] ?? c.pitch;
+      const turn = at + c.high * e.length;
+      f.setValueAtTime(high, at);
+      f.setValueAtTime(high, turn);
+      f.exponentialRampToValueAtTime(e.tones[1] ?? c.low, turn + c.glide);
+      swell(c.cutoff);
+    } else if (e.device === 'siren') {
+      // The wail: rising as the rotor spins up, falling at the end.
+      const c = r.siren;
+      const k = Math.min(1, e.length / (c.rise + c.fall));
+      f.setValueAtTime(c.low, at);
+      f.exponentialRampToValueAtTime(e.tones[0] ?? c.pitch, at + c.rise * k);
+      f.setValueAtTime(e.tones[0] ?? c.pitch, end - c.fall * k);
+      f.exponentialRampToValueAtTime(c.low, end);
+      low.frequency.value = Math.min(c.cutoff, e.cutoff);
+    } else {
+      // A reed's note, wavering a few cents.
+      const c = r.reedhorn;
+      const pitch = e.tones[0] ?? c.pitch;
+      f.value = pitch;
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = c.vibrato.rate;
+      const depth = ctx.createGain();
+      depth.gain.value = pitch * (2 ** (c.vibrato.cents / 1200) - 1);
+      lfo.connect(depth);
+      depth.connect(f);
+      lfo.start(at);
+      lfo.stop(stop);
+      nodes.push(lfo, depth);
+      low.frequency.value = Math.min(c.cutoff, e.cutoff);
+    }
+    o.start(at);
+    o.stop(stop);
+    o.onended = () => {
+      for (const n of nodes) {
+        n.disconnect();
+      }
+    };
+  }
+
+  /** The thunder's recipe and rule, the world seconds it is played to, and how many were played (tests). */
+  readonly #thunder: ThunderRecipe = THUNDER_RECIPE;
+  readonly #thunderRule: ThunderRule = THUNDER_RULE;
+  #thunderTo = Number.NaN;
+  readonly #thunderThrottle = new Throttle(SOUND_INTERVAL);
+  thunderEvents = 0;
+
+  /** Plays the thunder first heard by the listener since the last time (ms), each once. */
+  thunder(now: number, x: ThunderInput): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || !this.#thunderThrottle.due(now)) {
+      return;
+    }
+    if (!(x.seconds - this.#thunderTo < 2) || x.seconds < this.#thunderTo) {
+      this.#thunderTo = x.seconds;
+      return;
+    }
+    const at = g.ctx.currentTime;
+    for (const e of thunderEvents(
+      this.#thunder,
+      this.#thunderRule,
+      x,
+      this.#thunderTo,
+      x.seconds,
+    )) {
+      this.#playThunder(g, e, at + Math.max(0, e.at - x.seconds));
+    }
+    this.#thunderTo = x.seconds;
+  }
+
+  /**
+   * A thunder, from one run of the noise: near, a crack of band-passed
+   * noise; a rumble of low-passed noise swelling and falling, fainter as
+   * the sound of farther stretches arrives, held while the channel's sound
+   * arrives and dying over the roll; and a deep layer under it.
+   */
+  #playThunder(g: Graph, e: ThunderEvent, at: number): void {
+    if (!(e.level > 0)) {
+      return;
+    }
+    this.thunderEvents++;
+    const ctx = g.ctx;
+    const r = this.#thunder;
+    const unit = (k: number): number => {
+      const v = Math.sin(e.seed * 3.7 + k * 1.3) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const hold = at + Math.max(e.length, 0.3);
+    const stop = hold + 1.5 * r.roll;
+    const burst = ctx.createBufferSource();
+    burst.buffer = g.noise;
+    burst.loop = true;
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = e.pan;
+    pan.connect(g.master);
+    const lowpass = (frequency: number): BiquadFilterNode => {
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = frequency;
+      f.Q.value = 0.7;
+      return f;
+    };
+    const nodes: AudioNode[] = [burst, pan];
+
+    // The rumble: its swells drawn from the flash's seed, each fainter as
+    // the sound comes from farther along the channel.
+    const rumbleLow = lowpass(Math.min(r.rumble.cutoff, e.cutoff));
+    const rumble = ctx.createGain();
+    const level = e.level * r.rumble.level;
+    const step = 1 / r.rumble.swells;
+    const near = Math.max(e.distance, r.near);
+    rumble.gain.setValueAtTime(0, at);
+    rumble.gain.linearRampToValueAtTime(level * (1 - r.rumble.depth * unit(0)), at + 0.15);
+    for (let k = 1; at + k * step < hold; k++) {
+      const fade = near / (near + this.#thunderRule.speed * k * step);
+      rumble.gain.setTargetAtTime(
+        level * fade * (1 - r.rumble.depth * unit(k)),
+        at + k * step,
+        step / 3,
+      );
+    }
+    rumble.gain.setTargetAtTime(0, hold, r.roll / 3);
+    burst.connect(rumbleLow);
+    rumbleLow.connect(rumble);
+    rumble.connect(pan);
+    nodes.push(rumbleLow, rumble);
+
+    // The deep layer, below what the air absorbs.
+    const deepLow = lowpass(r.deep.cutoff);
+    const deep = ctx.createGain();
+    deep.gain.setValueAtTime(0, at);
+    deep.gain.linearRampToValueAtTime(e.level * r.deep.level, at + 0.3);
+    deep.gain.setTargetAtTime(0, hold, r.roll / 3);
+    burst.connect(deepLow);
+    deepLow.connect(deep);
+    deep.connect(pan);
+    nodes.push(deepLow, deep);
+
+    if (e.crack) {
+      // The crack: a band of noise through the air's low-pass, dying fast.
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = r.crack.centre;
+      band.Q.value = r.crack.q;
+      const air = lowpass(e.cutoff);
+      const crack = ctx.createGain();
+      crack.gain.setValueAtTime(e.level * r.crack.level, at);
+      crack.gain.setTargetAtTime(0, at + 0.005, r.crack.decay / 3);
+      burst.connect(band);
+      band.connect(air);
+      air.connect(crack);
+      crack.connect(pan);
+      nodes.push(band, air, crack);
+    }
+    burst.start(at, (Math.abs(Math.floor(e.seed)) % 20) * 0.1);
+    burst.stop(stop);
+    burst.onended = () => {
+      for (const n of nodes) {
+        n.disconnect();
+      }
+    };
   }
 
   /** How many knocks were played (tests). */

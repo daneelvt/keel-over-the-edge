@@ -1,11 +1,13 @@
 {
   "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
-  "description": "Thunder, after its flash by the distance over the speed of sound: near, 'a sharp crack or click', far, 'a rumble' (NWS). Its layers are Farnell's (Designing Sound, practical 17): the crack, band-passed noise dying over its decay, heard within the catalog's crack distance; the rumble, low-passed noise swelling and falling swells times a second as the sound of farther stretches of the channel arrives (Glassner 2000: a clap where the channel lies on an arc about the listener, a rumble end-on), dying over the roll; and a deep layer under deep Hz. Its energy is mostly 'below 500 Hz', peaking 'at or below 100 Hz' (Johnson 2013). The air absorbs the highs over distance (ISO 9613-1, at 10 °C and 70% humidity, in dB per km at the frequencies given), so a low-pass falls with distance where the absorption reaches 3 dB, within the cutoff's range. A point source: its level falls 6 dB each time the distance doubles from near metres. Distances in metres, frequencies in Hz, times in seconds, levels as gains.",
+  "description": "Thunder, after its flash by the distance over the speed of sound: near, 'a sharp crack or click', far, 'a rumble' (NWS). Its layers are Farnell's (Designing Sound, practical 17): the crack, band-passed noise dying over its decay, heard within the catalog's crack distance; the rumble, low-passed noise swelling and falling swells times a second as the sound of farther stretches of the channel arrives (Glassner 2000: a clap where the channel lies on an arc about the listener, a rumble end-on), held as long as the channel's spread takes the sound to cross and then dying over roll, the echoes off the sea and the cloud; and a deep layer under deep Hz. A flash in its cloud has a channel of stretch metres along the cloud's base (a cloud's channels run kilometres through it: the WMO Cloud Atlas, Glassner 2000). Its energy is mostly 'below 500 Hz', peaking 'at or below 100 Hz' (Johnson 2013). The air absorbs the highs over distance (ISO 9613-1, at 10 °C and 70% humidity, in dB per km at the frequencies given), so a low-pass falls with distance where the absorption reaches 3 dB, within the cutoff's range. A point source: its level falls 6 dB each time the distance doubles from near metres. Distances in metres, frequencies in Hz, times in seconds, levels as gains.",
   "crack": { "centre": 2200, "q": 0.8, "decay": 0.18, "level": 0.8 },
   "rumble": { "cutoff": 320, "swells": 1.6, "depth": 0.7, "level": 0.6 },
   "deep": { "cutoff": 80, "level": 0.5 },
   "absorption": { "at": [125, 250, 500, 1000, 2000, 4000], "dbPerKm": [0.4, 1, 1.9, 3.7, 9.7, 32.8] },
   "cutoff": { "least": 120, "most": 6000 },
+  "roll": 2.5,
+  "stretch": 4000,
   "near": 200,
   "level": 0.7
 }
