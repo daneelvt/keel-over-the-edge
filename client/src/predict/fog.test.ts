@@ -75,7 +75,10 @@ function load(c: FogCase): void {
 }
 
 /** A run of records as bits, by the fields' names, an array's as a list. */
-function records(v: Float64Array, name: 'airSource' | 'flash'): Record<string, string | string[]>[] {
+function records(
+  v: Float64Array,
+  name: 'airSource' | 'flash',
+): Record<string, string | string[]>[] {
   const out: Record<string, string | string[]>[] = [];
   const fields = RECORDS[name] as Record<string, number>;
   const names = Object.keys(fields);

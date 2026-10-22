@@ -100,7 +100,9 @@ const expNeg = (x: Node<'float'>): Node<'float'> => exp(max(x, -60).negate());
 const erfcFolded = (x: Node<'float'>, k: Node<'float'>): Node<'float'> => {
   const t = float(1).div(float(1).add(x.mul(0.5)));
   let p: Node<'float'> = t.mul(0.17087277).sub(0.82215223);
-  for (const c of [1.48851587, -1.13520398, 0.27886807, -0.18628806, 0.09678418, 0.37409196, 1.00002368]) {
+  for (const c of [
+    1.48851587, -1.13520398, 0.27886807, -0.18628806, 0.09678418, 0.37409196, 1.00002368,
+  ]) {
     p = t.mul(p).add(c);
   }
   p = t.mul(p).sub(1.26551223);
@@ -108,8 +110,12 @@ const erfcFolded = (x: Node<'float'>, k: Node<'float'>): Node<'float'> => {
 };
 
 /** a u² + b u + c. */
-const quad = (a: Node<'float'>, b: Node<'float'>, c: Node<'float'>, u: Node<'float'>): Node<'float'> =>
-  a.mul(u).mul(u).add(b.mul(u)).add(c);
+const quad = (
+  a: Node<'float'>,
+  b: Node<'float'>,
+  c: Node<'float'>,
+  u: Node<'float'>,
+): Node<'float'> => a.mul(u).mul(u).add(b.mul(u)).add(c);
 
 /**
  * The integral of e^(−(a u² + b u + c)) from u0 to u1: where the exponent
@@ -133,9 +139,13 @@ const gaussInt = (
   // Two points of Gauss–Legendre.
   const mid = u0.add(u1).mul(0.5);
   const off = w.mul(0.5 / Math.sqrt(3));
-  const gl = w.mul(0.5).mul(expNeg(quad(a, b, c, mid.sub(off))).add(expNeg(quad(a, b, c, mid.add(off)))));
+  const gl = w
+    .mul(0.5)
+    .mul(expNeg(quad(a, b, c, mid.sub(off))).add(expNeg(quad(a, b, c, mid.add(off)))));
   // Near linear: its slope.
-  const linear = w.mul(expNeg(e0).sub(expNeg(e1))).div(select(e1.sub(e0).abs().greaterThan(1e-6), e1.sub(e0), float(1e-6)));
+  const linear = w
+    .mul(expNeg(e0).sub(expNeg(e1)))
+    .div(select(e1.sub(e0).abs().greaterThan(1e-6), e1.sub(e0), float(1e-6)));
   // The closed form.
   const s = sqrt(safeA);
   const k = c.sub(b.mul(b).div(safeA.mul(4)));
@@ -190,13 +200,19 @@ export const airBetween = (eye: Node<'vec3'>, p: Node<'vec3'>, noise = true): No
         const a1 = d.x.mul(where.z).add(d.y.mul(where.w));
         const c0 = o.x.mul(where.w).sub(o.y.mul(where.z));
         const c1 = d.x.mul(where.w).sub(d.y.mul(where.z));
-        const qa = shape.x.mul(a1.mul(a1)).add(shape.y.mul(c1.mul(c1))).add(g.mul(shape.z));
+        const qa = shape.x
+          .mul(a1.mul(a1))
+          .add(shape.y.mul(c1.mul(c1)))
+          .add(g.mul(shape.z));
         const qb = shape.x
           .mul(a0.mul(a1))
           .add(shape.y.mul(c0.mul(c1)))
           .mul(2)
           .add(dh.sub(g).mul(shape.z));
-        const qc = shape.x.mul(a0.mul(a0)).add(shape.y.mul(c0.mul(c0))).add(h0.mul(shape.z));
+        const qc = shape.x
+          .mul(a0.mul(a0))
+          .add(shape.y.mul(c0.mul(c0)))
+          .add(h0.mul(shape.z));
         // The stretch of the ray below the source's top: its height,
         // h0 + u dh − g u (1 − u), is convex in u, so it is one.
         const bb = dh.sub(g);
@@ -257,8 +273,10 @@ export const haloBetween = (eye: Node<'vec3'>, p: Node<'vec3'>): Node<'vec3'> =>
     const toLight = vec3(h.x, h.y, h.z).sub(eye);
     const t = toLight.dot(dir);
     const off = max(toLight.sub(dir.mul(t)).length(), 0.5);
-    const along = atan(length.sub(t).div(off)).add(atan(t.div(off))).div(off);
-    return (airLook.haloColour as unknown as Node<"vec3">).mul(along.mul(h.w));
+    const along = atan(length.sub(t).div(off))
+      .add(atan(t.div(off)))
+      .div(off);
+    return (airLook.haloColour as unknown as Node<'vec3'>).mul(along.mul(h.w));
   })() as unknown as Node<'vec3'>;
 
 /**
@@ -355,7 +373,9 @@ export function airDepth(
 function erfcFoldedCpu(x: number, k: number): number {
   const t = 1 / (1 + 0.5 * x);
   let p = t * 0.17087277 - 0.82215223;
-  for (const c of [1.48851587, -1.13520398, 0.27886807, -0.18628806, 0.09678418, 0.37409196, 1.00002368]) {
+  for (const c of [
+    1.48851587, -1.13520398, 0.27886807, -0.18628806, 0.09678418, 0.37409196, 1.00002368,
+  ]) {
     p = t * p + c;
   }
   p = t * p - 1.26551223;
@@ -374,7 +394,7 @@ function gaussIntCpu(a: number, b: number, c: number, u0: number, u1: number): n
   const ex = (x: number): number => Math.exp(-Math.max(x, -60));
   if (spread < 0.1) {
     const mid = (u0 + u1) / 2;
-    const off = (w / 2) / Math.sqrt(3);
+    const off = w / 2 / Math.sqrt(3);
     return (w / 2) * (ex(q(mid - off)) + ex(q(mid + off)));
   }
   if (a * w * w < spread * 1e-4) {
