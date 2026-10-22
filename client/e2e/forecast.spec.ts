@@ -289,7 +289,6 @@ test.describe('the harbourmaster’s board', () => {
     page,
   }) => {
     await openScene(page, 'world=1', true);
-    expect((await page.evaluate(() => globalThis.keel.board())).button).toBe(false);
     expect(await page.evaluate(() => globalThis.keel.toHarbour())).toBe(true);
     await page.evaluate(() => globalThis.keel.issueForecast());
     const before = await page.evaluate(() => {
@@ -314,6 +313,12 @@ test.describe('the harbourmaster’s board', () => {
     expect(after.scene).toEqual([]);
     await page.getByRole('button', { name: 'Close' }).click();
     await expect(page.locator('.board')).toHaveCount(0);
+    // Out at sea, no board: the harbour is looked for once a second.
+    await page.evaluate(() => {
+      globalThis.keel.placeBoat(-3500, -5000, 0);
+      globalThis.keel.render();
+    });
+    await expect(page.locator('.board-button')).toHaveCount(0);
   });
 });
 
