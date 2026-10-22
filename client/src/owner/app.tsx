@@ -6,8 +6,11 @@
 // clock as every phone shows it. It reads the world once a second, and not
 // while its tab is hidden. A click on the map picks a point: what is there
 // is told, with its pressure at the tick shown and the barometer's
-// tendency, its sea while the sea is shown and its sky while the clouds
-// or the rain are, and the owner's boats can be put there, or at a place.
+// tendency, its sea while the sea is shown, its sky while the clouds or
+// the rain are, and its visibility and what makes it, and the owner's
+// boats can be put there, or at a place. The fog and the lightning show
+// while their layers are, and with them the lights sounding their fog
+// signals and those lit by day.
 // The page acts on the owner's boats alone; the server refuses the rest.
 // At the top, always in view, the world's end counted down by keel's clock; the
 // owner may make a new next world, begin it now or chart the whole world,
@@ -40,6 +43,7 @@ import {
   getJSON,
   getPressure,
   getSea,
+  getVisibility,
   type Island,
   type Lifecycle,
   type Light,
@@ -51,6 +55,7 @@ import {
   type SeaPage,
   type Town,
   type TownsData,
+  type VisibilityPage,
   type WorldNow,
 } from './api';
 import {
@@ -75,6 +80,19 @@ import {
   type Layers,
   type MapData,
 } from './draw';
+import {
+  FLASH_FOR,
+  FOG_ALPHA,
+  FOG_COLOURS,
+  fogPicture,
+  lightWords,
+  MET_WORDS,
+  outlinesUnder,
+  VISIBILITY_EVERY,
+  VISIBILITY_WORDS,
+  visibilityRanges,
+  visibilityWords,
+} from './fog';
 import { hidden, serverOffset } from './life';
 import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
@@ -506,6 +524,8 @@ const LIVE: ReadonlySet<keyof Layers> = new Set([
   'sea',
   'cloud',
   'rain',
+  'fog',
+  'lightning',
   'gusts',
   'wind',
   'boats',
@@ -584,6 +604,54 @@ function RainLegend({ words }: { words: readonly number[] }) {
         );
       })}
       <span>mm/h</span>
+    </p>
+  );
+}
+
+/** The fog layer's legend: each word's shade and the visibilities it spans, a very poor area's outline. */
+function FogLegend({ words }: { words: readonly number[] }) {
+  const ranges = visibilityRanges(words);
+  const [r, g, b] = FOG_COLOURS.fog;
+  return (
+    <p class="small legend" data-field="fog-legend">
+      {ranges.map((range, k) => {
+        const word = 3 - k;
+        return (
+          <span key={range}>
+            <i
+              class="swatch"
+              style={{
+                background: `linear-gradient(rgb(${r} ${g} ${b} / ${FOG_ALPHA[word]}), rgb(${r} ${g} ${b} / ${FOG_ALPHA[word]})), ${COLOURS.sea}`,
+                border: word === 3 ? `1.5px solid ${FOG_COLOURS.outline}` : undefined,
+              }}
+            />{' '}
+            {VISIBILITY_WORDS[word]} {range}
+          </span>
+        );
+      })}
+      <span>m; good unshaded</span>
+      <span>
+        <i class="swatch round" style={{ border: `2px solid ${FOG_COLOURS.byDay}` }} /> light lit by
+        day
+      </span>
+      <span>
+        <b style={{ color: FOG_COLOURS.sounding }}>)))</b> sounding its fog signal
+      </span>
+    </p>
+  );
+}
+
+/** The lightning layer's legend: a flash to the sea, one in the cloud, and how long they stay. */
+function LightningLegend() {
+  return (
+    <p class="small legend" data-field="lightning-legend">
+      <span>
+        <b style={{ color: FOG_COLOURS.sea }}>ϟ</b> to the sea
+      </span>
+      <span>
+        <i class="swatch round" style={{ border: `2px solid ${FOG_COLOURS.cloud}` }} /> in the cloud
+      </span>
+      <span>fading over {FLASH_FOR} s</span>
     </p>
   );
 }
@@ -775,12 +843,15 @@ function LightsCard({
   light,
   choose,
   clock,
+  shown,
 }: {
   places: PlacesData | null;
   light: number | null;
   choose: (l: Light) => void;
   /** The world's clock the lights flash by; none for a world not yet begun. */
   clock?: { current: WorldClock };
+  /** How each light shows now, in words, by number: sounding its fog signal, lit by day. */
+  shown?: ReadonlyMap<number, string>;
 }) {
   return (
     <section class="card" aria-label="Lighthouses">
@@ -799,6 +870,12 @@ function LightsCard({
             <span class="small" data-field="chart">
               {l.chart}, {l.role}
             </span>
+            {shown?.has(l.number) === true ? (
+              <span class="small light-now" data-field="light-now">
+                {' '}
+                {shown.get(l.number)}
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -974,6 +1051,7 @@ function App() {
   const [pressure, setPressure] = useState<PressureAt | null>(null);
   const [sea, setSea] = useState<SeaPage | null>(null);
   const [clouds, setClouds] = useState<CloudsPage | null>(null);
+  const [visibility, setVisibility] = useState<VisibilityPage | null>(null);
   const [boat, setBoat] = useState<number | null>(null);
   const [charted, setCharted] = useState<ChartedData | null>(null);
   const [light, setLight] = useState<number | null>(null);
@@ -1205,6 +1283,66 @@ function App() {
     return c;
   }, [clouds]);
 
+  // The fog, the lightning and the lights every few seconds while the fog's
+  // or the lightning's layer shows the world being sailed, and the point
+  // picked again, for its visibility; paused while the tab is hidden.
+  const fogShown =
+    (layers.fog || layers.lightning) && world !== null && !(tab === 'next' && next !== null);
+  useEffect(() => {
+    if (!fogShown) {
+      setVisibility(null);
+      return;
+    }
+    let live = true;
+    let reads = 0;
+    const read = (): void => {
+      if (hidden()) {
+        return;
+      }
+      getVisibility()
+        .then((v) => live && setVisibility(v))
+        .catch((e: unknown) => live && setError(String(e)));
+      // The point's visibility at the pace of the clouds', not of the lights'.
+      if (picked !== null && reads++ % Math.round(CLOUDS_EVERY / VISIBILITY_EVERY) === 0) {
+        getJSON<Point>(`point?east=${picked[0].toFixed(2)}&north=${picked[1].toFixed(2)}`)
+          .then((p) => live && setPoint(p))
+          .catch((e: unknown) => live && setError(String(e)));
+      }
+    };
+    read();
+    const t = setInterval(read, VISIBILITY_EVERY);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [fogShown, picked]);
+  // The fog's picture and its very poor areas' outlines, made once a reading.
+  const fog = useMemo(() => {
+    if (visibility === null) {
+      return null;
+    }
+    const c = document.createElement('canvas');
+    fogPicture(visibility, c);
+    return c;
+  }, [visibility]);
+  const fogOutlines = useMemo(
+    () =>
+      visibility === null
+        ? []
+        : outlinesUnder(visibility.grid, visibility.words[0], visibility.lip),
+    [visibility],
+  );
+  // How the lights show now, in words: the lists made again only when it changes.
+  const lightsKey = JSON.stringify(
+    (visibility?.lights ?? [])
+      .map((l) => [l.number, lightWords(l)] as const)
+      .filter(([, w]) => w !== ''),
+  );
+  const lightsNow = useMemo(
+    () => new Map<number, string>(JSON.parse(lightsKey) as [number, string][]),
+    [lightsKey],
+  );
+
   const pick = useCallback((east: number, north: number): void => {
     setPicked([east, north]);
     getJSON<Point>(`point?east=${east.toFixed(2)}&north=${north.toFixed(2)}`)
@@ -1267,6 +1405,9 @@ function App() {
     sea,
     clouds,
     sheets,
+    visibility,
+    fog,
+    fogOutlines,
   };
   // The next world drawn as the current is, without what is live. The
   // disk's rings are keel's, not a world's: they are drawn from the
@@ -1291,6 +1432,9 @@ function App() {
     sea: null,
     clouds: null,
     sheets: null,
+    visibility: null,
+    fog: null,
+    fogOutlines: [],
   };
   const chosen = now?.boats.find((b) => b.boat === boat && b.tools) ?? null;
 
@@ -1321,6 +1465,7 @@ function App() {
             goTo(l.east, l.north, 4);
           }}
           clock={clock}
+          shown={lightsNow}
         />
         <section class="card" aria-label="Charted">
           <h2>
@@ -1374,7 +1519,7 @@ function App() {
         <PlacesCard places={cur.places} goTo={goTo} pick={pick} sail={sail} />
       </>
     );
-  }, [cur, world, light, chosenBoat, charted, act, goTo, pick]);
+  }, [cur, world, light, chosenBoat, charted, act, goTo, pick, lightsNow]);
 
   // The next world's lists, as the current world's are, with nothing to sail to.
   const nextLists = useMemo(
@@ -1467,6 +1612,8 @@ function App() {
             {seaShown ? <SeaLegend /> : null}
             {skyShown && layers.cloud ? <CloudLegend /> : null}
             {skyShown && layers.rain ? <RainLegend words={clouds?.words ?? WMO_WORDS} /> : null}
+            {fogShown && layers.fog ? <FogLegend words={visibility?.words ?? MET_WORDS} /> : null}
+            {fogShown && layers.lightning ? <LightningLegend /> : null}
           </fieldset>
           {next !== null ? (
             <nav class="tabs" aria-label="Which world">
@@ -1513,6 +1660,9 @@ function App() {
               ) : null}
               {skyShown && point.sky !== null ? (
                 <span data-field="sky"> Sky: {skyWords(point.sky)}.</span>
+              ) : null}
+              {point.sky !== null ? (
+                <span data-field="visibility"> Visibility: {visibilityWords(point.sky)}.</span>
               ) : null}
             </p>
           ) : null}

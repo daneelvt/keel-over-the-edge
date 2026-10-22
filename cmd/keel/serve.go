@@ -613,6 +613,10 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	for _, ch := range c.cat.World.Lights.Characters {
 		cfg.Characters = append(cfg.Characters, owner.Character{Notation: ch.Notation, Colour: string(ch.Colour), Steps: ch.Steps})
 	}
+	for _, f := range c.cat.World.Lights.FogSignals {
+		cfg.FogSignals = append(cfg.FogSignals, owner.FogSignal{Notation: f.Notation, Steps: f.Steps})
+	}
+	cfg.SoundsUnder = c.cat.World.Lights.FogSignal.Sounds * 1852
 	cfg.TownLook = chart.TownLook{Surfaces: map[int32]string{}}
 	for i, s := range c.cat.World.Surfaces {
 		if s.Town != nil {
@@ -629,6 +633,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	if ch := c.charts; ch != nil {
 		cfg.Subjects, cfg.Charted = len(ch.world.Subjects), ch.chartedList
+		cfg.LightSignals = ch.world.FogSignals
 	}
 	return owner.New(cfg)
 }

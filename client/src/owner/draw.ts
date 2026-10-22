@@ -4,11 +4,12 @@
 // the land, drawn once per world by keel as the world generator's preview
 // draws it, and an island at the lattice's resolution when zoomed into it;
 // the coasts; the sea's waves and swell; the sheets of cloud, the rain
-// and the heaped clouds; the gusts, the wind and the current; the
-// isobars, the weather's systems and its front; the rings of the calm
-// water, the mist band and the lip; the start area; the islands' names;
-// the boats, each pointing its heading, the owner's picked out, with its
-// free camera's eye; and the point clicked. The marks are in Okabe and
+// and the heaped clouds; the fog; the gusts, the wind and the current;
+// the isobars, the weather's systems and its front; the lightning; the
+// rings of the calm water, the mist band and the lip; the start area; the
+// islands' names; the lights, with those sounding their fog signals and
+// those lit by day marked; the boats, each pointing its heading, the
+// owner's picked out, with its free camera's eye; and the point clicked. The marks are in Okabe and
 // Ito's colours, distinguishable in colour-blind vision.
 
 import type {
@@ -21,10 +22,12 @@ import type {
   Light,
   PlacesData,
   SeaPage,
+  VisibilityPage,
   WeatherWeek,
   WorldNow,
 } from './api';
 import { drawHeaped, drawRain, drawSheets } from './clouds';
+import { drawFlashes, drawFog, drawLightNow } from './fog';
 import { canvasAngle, HALF, rectOf, toScreen, type View } from './map';
 import { drawSea } from './sea';
 import { drawWeather } from './weather';
@@ -52,6 +55,8 @@ export interface Layers {
   sea: boolean;
   cloud: boolean;
   rain: boolean;
+  fog: boolean;
+  lightning: boolean;
   gusts: boolean;
   wind: boolean;
   current: boolean;
@@ -74,6 +79,8 @@ export const LAYER_NAMES: Record<keyof Layers, string> = {
   sea: 'Sea',
   cloud: 'Cloud',
   rain: 'Rain',
+  fog: 'Fog',
+  lightning: 'Lightning',
   gusts: 'Gusts',
   wind: 'Wind',
   current: 'Current',
@@ -97,6 +104,8 @@ export function allLayers(): Layers {
     sea: false,
     cloud: false,
     rain: false,
+    fog: false,
+    lightning: false,
     gusts: false,
     wind: true,
     current: false,
@@ -145,6 +154,14 @@ export interface MapData {
   /** The clouds and the rain now, and the sheets' picture; null until read, or while their layers are hidden. */
   clouds: CloudsPage | null;
   sheets: HTMLCanvasElement | null;
+  /**
+   * The fog, the lightning and the lights now, the fog's picture and its
+   * very poor areas' outlines; null until read, or while the fog's and the
+   * lightning's layers are hidden.
+   */
+  visibility: VisibilityPage | null;
+  fog: HTMLCanvasElement | null;
+  fogOutlines: [number, number, number, number][];
 }
 
 /** The colours an island's class is ringed in. */
@@ -274,6 +291,9 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
       drawHeaped(ctx, v, d.clouds);
     }
   }
+  if (layers.fog && d.visibility !== null && d.fog !== null) {
+    drawFog(ctx, v, d.visibility, d.fog, d.fogOutlines);
+  }
   if (layers.gusts && d.gusts !== null) {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(d.gusts, ...square);
@@ -311,6 +331,9 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
   }
   if (d.weather !== null) {
     drawWeather(ctx, v, d.weather, layers);
+  }
+  if (layers.lightning && d.visibility !== null) {
+    drawFlashes(ctx, v, d.visibility);
   }
   if (layers.rings && now !== null) {
     const w = now.world;
@@ -473,8 +496,14 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
     }
   }
   if (layers.lights && d.places !== null) {
+    const shown = new Map((d.visibility?.lights ?? []).map((l) => [l.number, l]));
     for (const l of d.places.lights) {
       drawLight(ctx, v, l, d);
+      const now = shown.get(l.number);
+      if (now !== undefined) {
+        const [x, y] = toScreen(v, l.east, l.north);
+        drawLightNow(ctx, x, y, l.role === 'main' ? 6 : 4.5, now);
+      }
     }
   }
   if (layers.boats && now !== null) {
@@ -549,7 +578,7 @@ const LIGHT_COLOURS: Record<string, string> = {
   green: '#3cff7d',
 };
 
-/** A lighthouse: a ring, and its range when picked; its flashing shows beside its row in the list. */
+/** A lighthouse: a ring, and its range when picked; its flashing shows beside its row in the list, and whether it sounds its fog signal or is lit by day beside its ring. */
 function drawLight(ctx: CanvasRenderingContext2D, v: View, l: Light, d: MapData): void {
   const ch = d.places?.characters[l.character];
   const [x, y] = toScreen(v, l.east, l.north);

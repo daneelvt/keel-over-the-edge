@@ -6,15 +6,16 @@ import (
 	"math"
 	"net/http"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 // The clouds and the rain on the world page, as the frame now makes them:
 // each system's heaped cloud, the three sheets' cover and the rain over the
 // disk on grids, and the fair-weather cumulus; and at a point asked about,
-// its rain, its sheets and the heaped cloud over it. The coming front is
-// the frame's, so the cirrus ahead of a front shows before its spell is in
-// play, as every phone shows it.
+// its rain, its sheets, the heaped cloud over it and its visibility. The
+// coming front is the frame's, so the cirrus ahead of a front shows before
+// its spell is in play, as every phone shows it.
 
 // The grids' spacings, in the sheets' lattice: the sheets every other
 // point of it, where their cover is the lattice's own; the rain at every
@@ -101,6 +102,10 @@ type skyPoint struct {
 	RainWord string    `json:"rainWord"`
 	Sheets   skySheets `json:"sheets"`
 	Cloud    *skyCloud `json:"cloud"` // null for none
+	// The visibility at the sea, 2 m up, its word and what makes it.
+	Visibility     float64   `json:"visibility"` // m
+	VisibilityWord string    `json:"visibilityWord"`
+	Air            airShares `json:"air"`
 }
 
 // skySheets are the three sheets' cover, 0 to 1.
@@ -119,8 +124,16 @@ type skyCloud struct {
 // frameWeather is the world's weather at the frame now: its spells in play,
 // its keyframes and the coming front. ok is false without frames.
 func (o *Owner) frameWeather() (t *physics.WeatherTick, tick int64, ok bool) {
+	t, tick, _, _, ok = o.frameState(false)
+	return t, tick, ok
+}
+
+// frameState is frameWeather's, and with developer the developer's
+// weathers and systems as the same frame holds them, which the weather at
+// another tick is made from.
+func (o *Owner) frameState(developer bool) (t *physics.WeatherTick, tick int64, ws []bus.Weather, ss []bus.System, ok bool) {
 	if o.cfg.Frames == nil || o.cfg.Weather == nil {
-		return nil, 0, false
+		return nil, 0, nil, nil, false
 	}
 	w := &physics.Weather{Prepared: o.cfg.Weather}
 	f := o.cfg.Frames.Acquire()
@@ -128,10 +141,13 @@ func (o *Owner) frameWeather() (t *physics.WeatherTick, tick int64, ok bool) {
 	w.Set(f.SpellsInPlay())
 	w.SetKeys(f.Keys[:2])
 	w.SetComing(&f.Coming)
+	if developer {
+		ws, ss = append([]bus.Weather(nil), f.Weathers...), append([]bus.System(nil), f.Systems...)
+	}
 	f.Release()
 	t = new(physics.WeatherTick)
 	physics.WeatherAt(w, t, float64(tick))
-	return t, tick, true
+	return t, tick, ws, ss, true
 }
 
 // clouds serves clouds.json, of the frame now.
@@ -227,6 +243,7 @@ func (o *Owner) skyAt(x, y float64) *skyPoint {
 		Rain: round1(rain), RainWord: rainWordNames[min(max(p.RainWord(rain), 0), int32(len(rainWordNames)-1))],
 		Sheets: skySheets{Cirrus: round3(s.Cirrus), Middle: round3(s.Middle), Low: round3(s.Low)},
 	}
+	out.Visibility, out.VisibilityWord, out.Air = visibilityAt(t, x, y)
 	var heaped [physics.MaxClouds]physics.Cloud
 	for _, c := range heaped[:physics.HeapedClouds(t, heaped[:])] {
 		if !overhead(&c, x, y) || (out.Cloud != nil && out.Cloud.Top >= round2(c.Top)) {

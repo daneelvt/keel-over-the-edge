@@ -87,6 +87,9 @@ describe('the sky at a point in words', () => {
     rainWord: 'heavy',
     sheets: { cirrus: 0.4, middle: 0.125, low: 0 },
     cloud: { form: 'cumulonimbus', slot: 16, top: 2500 },
+    visibility: 2400,
+    visibilityWord: 'moderate',
+    air: { clear: 0.1, fog: 0, rain: 0.9, mist: 0 },
   };
 
   test('its rain, its sheets and the cloud over it', () => {
