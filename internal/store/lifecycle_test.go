@@ -137,7 +137,7 @@ func TestNextWorldAndSwitch(t *testing.T) {
 		t.Fatalf("a second next world: %v", err)
 	}
 	nw, err := s.NextWorld(ctx)
-	if err != nil || nw.Number != 2 || nw.Seed != 7 || nw.Stored {
+	if err != nil || nw.Number != 2 || nw.Seed != 7 || nw.Generator != 4 || nw.Stored {
 		t.Fatalf("the next world: %+v %v", nw, err)
 	}
 	if seed, _, ok, err := s.WorldSeed(ctx, next.ID); err != nil || !ok || seed != 7 {

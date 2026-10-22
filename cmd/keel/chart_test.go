@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -217,4 +218,143 @@ func (g *charts) entry(name string) *pb.ChartEntry {
 		}
 	}
 	return nil
+}
+
+// TestChartWhole: a server sailing seed 1. Ann charts an island; the world
+// page charts the whole world: Ann, connected, is sent the rest in one
+// Charted, every subject known, credited to no one, and her island keeps
+// her credit; nothing charted whole makes news. Carol, welcomed after, is
+// sent the whole chart. The page refuses to chart it again, or another
+// world; the chart survives a restart; and the next world begins with only
+// what is known from its start.
+func TestChartWhole(t *testing.T) {
+	if testing.Short() {
+		t.Skip("makes a whole world")
+	}
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	world, err := seed1()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cw := chart.Build(world, cat)
+	target := slices.IndexFunc(cw.Subjects, func(s chart.Subject) bool { return s.Kind == sight.Island && s.Highest > 10 && s.Zone == "middle" })
+	if target < 0 {
+		t.Fatal("no island of the middle waters")
+	}
+	is := cw.Subjects[target]
+	synctest.Test(t, func(t *testing.T) {
+		d := &memDB{epoch: bubbleEpoch, sessions: edgetest.NewSessions()}
+		ann, _ := d.sessions.Add("Ann", "human")
+		carol, _ := d.sessions.Add("Carol", "human")
+		gen := func(uint64) (*worldgen.Bundle, error) { return world, nil }
+		vars := func() map[string]string { return map[string]string{"KEEL_DEV_COMMANDS": "1"} }
+		s := startServer(t, vars(), newMemNet(), d.with(serveOptions{generate: gen}))
+		time.Sleep(time.Second)
+		var start chartedJSON
+		getJSON(t, s, internalURL+"/owner/api/charted.json", &start)
+		_, ain, _ := connect(t, s, ann)
+		a := &charts{}
+		go func() {
+			for r := range ain.C {
+				a.add(r.Message)
+			}
+		}()
+		res, err := s.client.Post(fmt.Sprintf("%s/debug/place?east=%.1f&north=%.1f&boat=1", internalURL, is.Bounds[2]+80, is.Y), "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		time.Sleep(3 * time.Second)
+		synctest.Wait()
+		if e := a.entry(is.Name); e == nil || e.By == "" {
+			t.Fatalf("Ann did not chart %s: %+v", is.Name, e)
+		}
+		a.mu.Lock()
+		before, entries := a.charted, len(a.entries)
+		a.mu.Unlock()
+		earlier, _ := d.Chartings(t.Context(), [16]byte{})
+
+		if code, body := postJSON(t, s, internalURL+"/owner/api/chart", `{"number":2}`); code != 409 {
+			t.Errorf("another world's number: %d %s", code, body)
+		}
+		code, body := postJSON(t, s, internalURL+"/owner/api/chart", `{"number":1}`)
+		if code != 202 {
+			t.Fatalf("chart the whole world: %d %s", code, body)
+		}
+		time.Sleep(3 * time.Second)
+		synctest.Wait()
+		var whole chartedJSON
+		getJSON(t, s, internalURL+"/owner/api/charted.json", &whole)
+		if len(whole.Charted) != whole.Subjects || whole.Subjects != len(cw.Subjects) {
+			t.Fatalf("charted whole: %d of %d", len(whole.Charted), whole.Subjects)
+		}
+		a.mu.Lock()
+		sent, rest := a.charted-before, a.entries[entries:]
+		a.mu.Unlock()
+		if sent != 1 || len(rest) != len(cw.Subjects)-entries {
+			t.Errorf("Ann was sent %d Charted with %d entries, not one with the %d left", sent, len(rest), len(cw.Subjects)-entries)
+		}
+		for _, e := range rest {
+			if e.By != "" {
+				t.Errorf("%s was charted whole credited to %q", e.Name, e.By)
+			}
+		}
+		rows, _ := d.Chartings(t.Context(), [16]byte{})
+		for _, r := range rows[len(earlier):] {
+			if r.Credited || r.News != nil {
+				t.Errorf("%s %d charted whole: credited %v, news %+v", r.Subject, r.Number, r.Credited, r.News)
+			}
+		}
+		if !slices.ContainsFunc(rows, func(r store.Charting) bool { return r.Subject == "island" && r.Number == is.Number && r.Credited }) {
+			t.Errorf("Ann's credit for %s is lost", is.Name)
+		}
+		if code, body := postJSON(t, s, internalURL+"/owner/api/chart", `{"number":1}`); code != 409 || !strings.Contains(body, "charted whole") {
+			t.Errorf("charted again: %d %s", code, body)
+		}
+		_, cin, _ := connect(t, s, carol)
+		c := &charts{}
+		go func() {
+			for r := range cin.C {
+				c.add(r.Message)
+			}
+		}()
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		if got := len(c.names()); got != len(cw.Subjects) || c.charted > 0 {
+			t.Errorf("Carol was sent %d entries of %d, and %d Charted after", got, len(cw.Subjects), c.charted)
+		}
+		s.stop(t)
+
+		s = startServer(t, vars(), newMemNet(), d.with(serveOptions{generate: gen}))
+		time.Sleep(time.Second)
+		var again chartedJSON
+		getJSON(t, s, internalURL+"/owner/api/charted.json", &again)
+		if len(again.Charted) != len(cw.Subjects) {
+			t.Errorf("after a restart, %d of %d charted", len(again.Charted), len(cw.Subjects))
+		}
+		if code, body := postJSON(t, s, internalURL+"/owner/api/world", `{"number":1}`); code != 202 {
+			t.Fatalf("begin the next world: %d %s", code, body)
+		}
+		time.Sleep(3 * time.Second)
+		synctest.Wait()
+		var next chartedJSON
+		getJSON(t, s, internalURL+"/owner/api/charted.json", &next)
+		if len(next.Charted) != len(start.Charted) {
+			t.Errorf("the next world begins with %d charted, not the %d known", len(next.Charted), len(start.Charted))
+		}
+		s.stop(t)
+	})
+}
+
+// chartedJSON is the world page's charted.json.
+type chartedJSON struct {
+	Subjects int `json:"subjects"`
+	Charted  []struct {
+		Subject string `json:"subject"`
+		Number  int32  `json:"number"`
+		By      string `json:"by"`
+	} `json:"charted"`
 }

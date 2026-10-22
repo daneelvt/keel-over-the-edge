@@ -110,6 +110,8 @@ type NextWorld struct {
 	World
 	Seed    uint64
 	Created time.Time
+	// Generator is the version of the generator its terrain is made by.
+	Generator int
 	// Stored says its bundle is stored: when, of how many attempts, made
 	// from which attempt's seed, and how long making it took.
 	Stored       bool
@@ -130,7 +132,7 @@ func (s *Store) NextWorld(ctx context.Context) (NextWorld, error) {
 	}
 	return NextWorld{
 		World: World{ID: r.ID.Bytes, Number: int(r.Number)},
-		Seed:  uint64(r.Seed.Int64), Created: r.CreatedAt.UTC(),
+		Seed:  uint64(r.Seed.Int64), Generator: int(r.Generator.Int32), Created: r.CreatedAt.UTC(),
 		Stored: r.Stored, StoredAt: timeOf(r.StoredAt), Attempts: int(r.Attempts.Int32),
 		Made: uint64(r.Made.Int64), GenerationMs: int(r.GenerationMs.Int32),
 	}, nil

@@ -404,7 +404,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		sessions: auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log}),
 		looks:    looks, page: page, ownPage: worldPage, flight: flight,
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
-		fail: make(chan error, 1),
+		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
 	p.registerWorldMetrics()
 

@@ -3,11 +3,13 @@
 // The world's life on the world page: its end at the top of the page, the
 // time left ticking by keel's clock, and the moment in three zones; a card
 // of the closing, the next world and the jobs' last runs; the owner's hand
-// on it, beginning the next world now or making the next world again, each
-// with a number typed so that no stray click does either.
+// on it, making a new next world, beginning the next world now or charting
+// the whole world, each confirmed in the card with what it will do, so
+// that no stray click does any of them.
 
+import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { Control, Lifecycle } from './api';
+import type { ChartedData, Control, Lifecycle } from './api';
 import { brief, countdown, hidden, inZone, ownZone, serverNow, threeZones, zoneName } from './life';
 
 /** The world's life last read, and how far keel's clock was then ahead of the page's, ms. */
@@ -136,13 +138,18 @@ export function LifecycleCard({ life }: { life: Life }) {
         ) : null}
         <dt>Next world</dt>
         {n === null ? (
-          <dd data-field="next">not made yet; made from {brief(l.nextMadeAt)}</dd>
+          <dd data-field="next">
+            {l.making
+              ? `world ${l.world + 1}, being made`
+              : `not made yet; made from ${brief(l.nextMadeAt)}`}
+          </dd>
         ) : (
           <dd data-field="next">
             world {n.number}, seed {n.seed}; made {brief(n.created)};{' '}
             {n.stored ? `its terrain stored ${brief(n.storedAt)}` : 'its terrain not yet stored'}
             {n.attempts > 0 ? `; ${n.attempts} attempt${n.attempts === 1 ? '' : 's'}` : ''}
             {n.generationMs > 0 ? `, ${(n.generationMs / 1000).toFixed(1)} s` : ''}
+            <Generator l={l} />
           </dd>
         )}
       </dl>
@@ -174,105 +181,262 @@ export function LifecycleCard({ life }: { life: Life }) {
   );
 }
 
-/** Begins the next world now: the active world's number typed, then the control. */
-export function BeginNext({
-  number,
-  switching,
-  act,
-}: {
+/** What the owner's hand does to the world: makes the next world, begins it, or charts the world whole. */
+export type Hand = 'make' | 'begin' | 'chart';
+
+/** A confirmation open: its control, and the world's number it named when it was opened. */
+interface Asked {
+  hand: Hand;
   number: number;
-  switching: boolean;
-  act: Act;
-}) {
-  const [typed, setTyped] = useState('');
-  const n = number;
-  return (
-    <section class="card" aria-label="Begin the next world">
-      <h2>Begin the next world now</h2>
-      <p class="small">
-        Ends world {n} now and begins world {n + 1} in the running process, as its end on the
-        schedule would. World {n + 1} is made first if it is not yet, which takes some seconds.
-        Every boat goes with the old world. Type {n} to end it.
-      </p>
-      <input
-        name="world-number"
-        inputMode="numeric"
-        value={typed}
-        onInput={(e) => setTyped(e.currentTarget.value)}
-      />{' '}
-      <button
-        type="button"
-        name="new-world"
-        disabled={typed !== String(n) || switching}
-        onClick={() =>
-          void act('world', { number: n }, `world ${n} ended; world ${n + 1} begins`).then(
-            (ok) => ok && setTyped(''),
-          )
-        }
-      >
-        Begin world {n + 1} now
-      </button>
-      {switching ? <p class="small">A switch is under way.</p> : null}
-    </section>
+}
+
+/** Each control's name on the page, for the tests. */
+const NAMES: Record<Hand, string> = {
+  make: 'make-next',
+  begin: 'begin-next',
+  chart: 'chart-whole',
+};
+
+/** A seed in a few figures, enough to tell one from another at a glance. */
+function shortSeed(seed: string): string {
+  return seed.length > 6 ? `${seed.slice(0, 4)}…` : seed;
+}
+
+/** A count of subjects in words: "1 subject", "412 subjects". */
+function subjects(n: number): string {
+  return `${n} subject${n === 1 ? '' : 's'}`;
+}
+
+/** The generator the next world was made by, marked when keel makes worlds with a newer one. */
+function Generator({ l }: { l: Lifecycle }) {
+  const n = l.next;
+  if (n === null || n.generator <= 0) {
+    return null;
+  }
+  return n.generator < l.generator ? (
+    <span class="error" data-field="generator-old">
+      ; made by generator {n.generator}; keel makes {l.generator} now. Make a new next world to use
+      it
+    </span>
+  ) : (
+    <>; made by generator {n.generator}</>
   );
 }
 
-/** Makes another next world: its number typed, until too near the world's end. */
-export function RemakeNext({ life, act }: { life: Life; act: Act }) {
+/**
+ * The owner's hand on the world: making a new next world, beginning the
+ * next world now, charting the whole world for every sailor. Each control
+ * opens a confirmation in the card telling what will happen, its figures
+ * live; confirmed, it sends the world's number the confirmation named when
+ * it was opened, so that one left open across a switch is refused. A
+ * control that cannot be used now says why beside it.
+ */
+export function WorldByHand({
+  life,
+  charted,
+  act,
+  hands,
+}: {
+  life: Life;
+  charted: ChartedData | null;
+  act: Act;
+  hands: Hand[];
+}) {
   useSecond();
-  const [typed, setTyped] = useState('');
+  const [asked, setAsked] = useState<Asked | null>(null);
+  const [sending, setSending] = useState(false);
   const l = life.life;
+  const now = serverNow(life.offset);
   const n = l.next;
-  if (n === null) {
-    return (
-      <section class="card" aria-label="Make another next world">
-        <h2>Make another next world</h2>
-        <p class="small">
-          No next world yet: world {l.world + 1} is made from{' '}
-          <Moment ms={l.nextMadeAt} zone={l.zone} />.
-        </p>
-      </section>
+  const making = l.making || (n !== null && !n.stored);
+  const late = l.remakeUntil > 0 && now > l.remakeUntil;
+  const done = charted?.charted.length ?? 0;
+  const left = charted === null ? 0 : Math.max(0, charted.subjects - done);
+  const whole = charted !== null && left === 0;
+
+  const switching = l.switching ? 'A switch is under way.' : null;
+  const beingMade = making ? `World ${l.world + 1} is being made.` : null;
+  const tooLate = late ? (
+    <>
+      Too near world {l.world}'s end: the next world could be made or begun by hand until{' '}
+      <Moment ms={l.remakeUntil} zone={l.zone} />, and the scheduled switch is at{' '}
+      <Moment ms={l.ends} zone={l.zone} />.
+    </>
+  ) : null;
+  const why: Record<Hand, ComponentChildren> = {
+    make: switching ?? beingMade ?? tooLate,
+    begin: switching ?? beingMade ?? tooLate,
+    chart: switching ?? (charted === null ? 'What is charted is not read yet.' : null),
+  };
+
+  const told: Record<Hand, ComponentChildren> = {
+    make:
+      n === null ? (
+        l.making ? null : (
+          <>
+            No next world yet: world {l.world + 1} is made on the schedule{' '}
+            {now >= l.nextMadeAt ? 'since' : 'from'} <Moment ms={l.nextMadeAt} zone={l.zone} />.
+          </>
+        )
+      ) : (
+        <>
+          World {n.number}, seed {shortSeed(n.seed)},{' '}
+          {n.stored ? (
+            <>
+              made <Moment ms={n.storedAt} zone={l.zone} />
+            </>
+          ) : (
+            'being made'
+          )}
+          <Generator l={l} />. A new one discards it for another from a new seed.
+        </>
+      ),
+    begin: (
+      <>
+        Ends world {l.world} now and begins world {l.world + 1}, as the scheduled switch would;
+        world {l.world + 1} ends when world {l.world} would have.
+      </>
+    ),
+    chart:
+      charted === null ? null : (
+        <>
+          {done} of {subjects(charted.subjects)} of world {l.world} charted.
+        </>
+      ),
+  };
+  const label: Record<Hand, string> = {
+    make: 'Make a new next world',
+    begin: 'Begin the next world now',
+    chart: whole ? `World ${l.world} is charted whole` : 'Chart the whole world',
+  };
+
+  /** What the confirmation says, its figures live but its number the one named at opening. */
+  const ask = (a: Asked): ComponentChildren => {
+    const w = a.number;
+    if (a.hand === 'make') {
+      if (n === null) {
+        return l.nextMadeAt <= 0 ? (
+          <>Make world {w} now?</>
+        ) : now >= l.nextMadeAt ? (
+          <>Make world {w} now? It is due to be made now on the schedule.</>
+        ) : (
+          <>
+            Make world {w} now? It would otherwise be made on {inZone(l.nextMadeAt, l.zone)}.
+          </>
+        );
+      }
+      return (
+        <>
+          Discard world {n.number} (seed {shortSeed(n.seed)},{' '}
+          {n.stored ? `made ${inZone(n.storedAt, l.zone)}` : 'being made'}), which no one has
+          sailed, and make another from a new seed?
+        </>
+      );
+    }
+    if (a.hand === 'begin') {
+      return (
+        <>
+          End world {w} now and begin world {w + 1}? Every boat goes with world {w}.{' '}
+          {l.ends > 0 ? (
+            <>
+              World {w + 1} ends with the schedule on{' '}
+              <span data-field="confirm-ends">{threeZones(l.ends, l.zone, ownZone())}</span>, in{' '}
+              <strong data-field="confirm-countdown">{countdown(l.ends - now)}</strong>
+              {l.closingFrom <= 0
+                ? ''
+                : now >= l.closingFrom
+                  ? ', and is closing from its start'
+                  : `, and is closing from ${inZone(l.closingFrom, l.zone)}`}
+              .
+            </>
+          ) : (
+            <>World {w + 1} has no end set.</>
+          )}{' '}
+          {n?.stored
+            ? `World ${w + 1} is made (seed ${shortSeed(n.seed)}).`
+            : `World ${w + 1} is made first, which takes some seconds.`}
+        </>
+      );
+    }
+    return charted === null ? (
+      <>
+        Chart every subject of world {w} not yet charted, for every sailor, credited to no one? It
+        cannot be undone: nothing will be left to discover in world {w}.
+      </>
+    ) : (
+      <>
+        Chart the {subjects(left)} of world {w} not yet charted ({done} of {charted.subjects} are),
+        for every sailor, credited to no one? It cannot be undone: nothing will be left to discover
+        in world {w}.
+      </>
     );
-  }
-  const m = n.number;
-  const late = l.remakeUntil > 0 && serverNow(life.offset) > l.remakeUntil;
+  };
+
+  const confirm = (a: Asked): void => {
+    const [path, what]: [Control, string] =
+      a.hand === 'make'
+        ? ['next', `world ${a.number} to be made`]
+        : a.hand === 'begin'
+          ? ['world', `world ${a.number} ended; world ${a.number + 1} begins`]
+          : ['chart', `world ${a.number} to be charted whole`];
+    setSending(true);
+    void act(path, { number: a.number }, what).then(() => {
+      setSending(false);
+      setAsked(null);
+    });
+  };
+
   return (
-    <section class="card" aria-label="Make another next world">
-      <h2>Make another next world</h2>
+    <section class="card" aria-label="The world by hand">
+      <h2>The world by hand</h2>
       <p class="small">
-        Discards world {m}, seed {n.seed}, which no one has sailed, and makes another from a new
-        seed under the same number. Type {m} to make it again.
+        {l.ends > 0 ? (
+          <>
+            The scheduled switch: world {l.world} ends <Moment ms={l.ends} zone={l.zone} />.
+            {l.remakeUntil > 0 && !late ? (
+              <>
+                {' '}
+                The next world may be made or begun by hand until{' '}
+                <Moment ms={l.remakeUntil} zone={l.zone} />.
+              </>
+            ) : null}
+          </>
+        ) : (
+          `World ${l.world} has no end set.`
+        )}
       </p>
-      {late ? (
-        <p class="small" data-field="remake-late">
-          Too near world {l.world}'s end: the next world could be made again until{' '}
-          <Moment ms={l.remakeUntil} zone={l.zone} />.
-        </p>
-      ) : l.remakeUntil > 0 ? (
-        <p class="small">
-          It may be made again until <Moment ms={l.remakeUntil} zone={l.zone} />.
-        </p>
+      {hands.map((h) => (
+        <div key={h} class="hand">
+          {told[h] !== null ? <p class="small">{told[h]}</p> : null}
+          <p>
+            <button
+              type="button"
+              name={NAMES[h]}
+              disabled={why[h] !== null || (h === 'chart' && whole)}
+              onClick={() => setAsked({ hand: h, number: h === 'make' ? l.world + 1 : l.world })}
+            >
+              {label[h]}
+            </button>
+            {why[h] !== null ? (
+              <span class="small" data-field={`${NAMES[h]}-why`}>
+                {' '}
+                {why[h]}
+              </span>
+            ) : null}
+          </p>
+        </div>
+      ))}
+      {asked !== null ? (
+        <div class="confirm" data-field="confirmation" data-hand={asked.hand}>
+          <p>{ask(asked)}</p>
+          <button type="button" name="confirm" disabled={sending} onClick={() => confirm(asked)}>
+            Confirm
+          </button>{' '}
+          <button type="button" name="cancel" onClick={() => setAsked(null)}>
+            Cancel
+          </button>
+        </div>
       ) : null}
-      {l.switching ? <p class="small">A switch is under way.</p> : null}
-      {!n.stored && !l.switching ? <p class="small">World {m} is being made.</p> : null}
-      <input
-        name="next-number"
-        inputMode="numeric"
-        value={typed}
-        onInput={(e) => setTyped(e.currentTarget.value)}
-      />{' '}
-      <button
-        type="button"
-        name="remake"
-        disabled={typed !== String(m) || late || l.switching}
-        onClick={() =>
-          void act('next', { number: m }, `world ${m} to be made again`).then(
-            (ok) => ok && setTyped(''),
-          )
-        }
-      >
-        Make world {m} again
-      </button>
     </section>
   );
 }

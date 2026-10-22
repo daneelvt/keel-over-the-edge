@@ -10,9 +10,9 @@
 // or the rain are, and the owner's boats can be put there, or at a place.
 // The page acts on the owner's boats alone; the server refuses the rest.
 // At the top, always in view, the world's end counted down by keel's clock; the
-// owner may begin the next world now, typing the world's number to end it,
-// and look over the next world, drawn as the current is, on a tab of its
-// own, and make it again.
+// owner may make a new next world, begin it now or chart the whole world,
+// each confirmed with what it will do, and look over the next world, drawn
+// as the current is, on a tab of its own, and make it again.
 
 import { render } from 'preact';
 import {
@@ -76,7 +76,7 @@ import {
   type MapData,
 } from './draw';
 import { hidden, serverOffset } from './life';
-import { BeginNext, type Life, LifecycleCard, RemakeNext, SwitchBar } from './lifecycle';
+import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
 import { foamOver, RAISED, SEA_COLOURS, SEA_EVERY, SEA_FULL, seaWords } from './sea';
 import { useWeather, WEATHER_EVERY, WeekCard } from './week';
@@ -982,6 +982,7 @@ function App() {
   const [error, setError] = useState('');
   const gusts = useRef({ canvas: document.createElement('canvas'), drawn: false });
   const readLife = useRef<() => void>(() => undefined);
+  const readCharted = useRef<() => void>(() => undefined);
 
   // The world being sailed, by its number: its terrain read again when
   // another world begins.
@@ -1022,6 +1023,7 @@ function App() {
         .then(setCharted)
         .catch((e: unknown) => setError(String(e)));
     };
+    readCharted.current = read;
     read();
     const t = setInterval(read, CHARTED_EVERY);
     return () => clearInterval(t);
@@ -1220,6 +1222,11 @@ function App() {
             // What was begun shows in the world's life within a few seconds.
             readLife.current();
             setTimeout(() => readLife.current(), 2000);
+          }
+          if (a.ok && path === 'chart') {
+            // What is charted shows once its rows are written, within a second or two.
+            readCharted.current();
+            setTimeout(() => readCharted.current(), 2000);
           }
           return a.ok;
         })
@@ -1513,7 +1520,9 @@ function App() {
         {onNext ? (
           <aside>
             {life !== null ? <LifecycleCard life={life} /> : null}
-            {life !== null ? <RemakeNext life={life} act={act} /> : null}
+            {life !== null ? (
+              <WorldByHand life={life} charted={charted} act={act} hands={['make']} />
+            ) : null}
             {next.stored ? (
               <WeekCard
                 w={nextWeather.weather}
@@ -1536,8 +1545,13 @@ function App() {
               show={weather.show}
               goTo={goTo}
             />
-            {world !== null ? (
-              <BeginNext number={world} switching={life?.life.switching ?? false} act={act} />
+            {life !== null ? (
+              <WorldByHand
+                life={life}
+                charted={charted}
+                act={act}
+                hands={['make', 'begin', 'chart']}
+              />
             ) : null}
             {life !== null ? <LifecycleCard life={life} /> : null}
             <section class="card" aria-label="Boats at sea">
