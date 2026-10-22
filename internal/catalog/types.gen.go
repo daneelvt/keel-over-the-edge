@@ -7,6 +7,18 @@ package catalog
 // Path of an art file, relative to the repository's art/ folder.
 type ArtPath string
 
+// A brass aneroid: its dial, the words about it and its set hand.
+type Barometer struct {
+	// Its dial reads from and to, in hPa.
+	Range []float64 `json:"range"`
+
+	// Its set hand is at the boat's reading this long ago, in minutes.
+	Set float64 `json:"set"`
+
+	// The words about its dial, at their pressures: decoration.
+	Words []Word `json:"words"`
+}
+
 // A biome: an island's terrain.
 type Biome struct {
 	// Its shallows have sand bars.
@@ -296,6 +308,9 @@ type ChartLook struct {
 	// Shallows corresponds to the JSON schema field "shallows".
 	Shallows Colour `json:"shallows"`
 
+	// Weather corresponds to the JSON schema field "weather".
+	Weather ChartWeather `json:"weather"`
+
 	// The wind's streaks are drawn from a grid of this many points a side.
 	Wind int `json:"wind"`
 }
@@ -328,6 +343,32 @@ type ChartSight struct {
 
 	// A cove, an anchorage or a lagoon is seen into within this, in m.
 	Water float64 `json:"water"`
+}
+
+// The chart's weather: the canvas it is painted on, where gusts are drawn and its
+// colours.
+type ChartWeather struct {
+	// The weather's canvas, in pixels a side.
+	Canvas int `json:"canvas"`
+
+	// Fog corresponds to the JSON schema field "fog".
+	Fog Colour `json:"fog"`
+
+	// Front corresponds to the JSON schema field "front".
+	Front Colour `json:"front"`
+
+	// Gusts are drawn where the typical strongest gust is this much over the mean
+	// wind, in knots.
+	Gusts float64 `json:"gusts"`
+
+	// Rain corresponds to the JSON schema field "rain".
+	Rain Colour `json:"rain"`
+
+	// Squall corresponds to the JSON schema field "squall".
+	Squall Colour `json:"squall"`
+
+	// Storm corresponds to the JSON schema field "storm".
+	Storm Colour `json:"storm"`
 }
 
 // What a discovery is worth: an island's size class's worth times its zone's and
@@ -861,6 +902,85 @@ type FogSignalRule struct {
 	Sounds float64 `json:"sounds"`
 }
 
+// The cones the truth lies in four times in five at each step.
+type ForecastCone struct {
+	// A low not yet born at the issue: its cone, whatever the lead, in nautical
+	// miles.
+	Forming float64 `json:"forming"`
+
+	// A front's line moves on at its speed times 1 + this z, z drawn once a front
+	// from a standard normal: the standard deviation of the forecast's error in its
+	// speed.
+	Front float64 `json:"front"`
+
+	// A system's cone grows by this for each hour of lead, from nothing at the issue,
+	// in nautical miles.
+	PerHour float64 `json:"perHour"`
+}
+
+// A gale warning: where the synoptic wind of a step reaches a gale, on a grid over
+// the water.
+type ForecastGale struct {
+	// The grid's spacing, in nautical miles.
+	Grid float64 `json:"grid"`
+
+	// Or the typical strongest gust reaches this, in knots.
+	Gust float64 `json:"gust"`
+
+	// A gale where the mean wind reaches this, in knots.
+	Mean float64 `json:"mean"`
+
+	// The typical strongest gust is the gust field's value of this quantile: its 90th
+	// percentile.
+	Quantile float64 `json:"quantile"`
+
+	// Over the water within this of the centre, in nautical miles.
+	Within float64 `json:"within"`
+}
+
+// A place's outlook in the words of the shipping forecast: when it is sampled,
+// what is a change and the times' words.
+type ForecastOutlook struct {
+	// Or its force changes by this many or more.
+	Forces int `json:"forces"`
+
+	// Imminent: within this of the issue, in minutes.
+	Imminent float64 `json:"imminent"`
+
+	// It is sampled at these minutes from the issue, ascending.
+	Samples []float64 `json:"samples"`
+
+	// Soon: within this, later beyond, in minutes.
+	Soon float64 `json:"soon"`
+
+	// A change where the wind's direction turns this far or more, in degrees.
+	Turn float64 `json:"turn"`
+}
+
+// What a regime brings that the forecast cannot place: the sky in a place's box,
+// and the marks the chart draws.
+type ForecastRisk struct {
+	// The chart's marks: fog patches where the fog's rule lets a bank be born,
+	// scattered showers, squalls from the windward rim, calms.
+	Marks []RiskMark `json:"marks"`
+
+	// Regime corresponds to the JSON schema field "regime".
+	Regime ID `json:"regime"`
+
+	// Sky corresponds to the JSON schema field "sky".
+	Sky RiskSky `json:"sky"`
+}
+
+// The forecast's own error in a spell not yet begun at the issue, drawn from its
+// seed: standard deviations.
+type ForecastSpell struct {
+	// In its wind's direction, in degrees.
+	Direction float64 `json:"direction"`
+
+	// In its wind's speed, as a share of it.
+	Speed float64 `json:"speed"`
+}
+
 type Form string
 
 const FormBroadleaf Form = "broadleaf"
@@ -905,6 +1025,12 @@ type HeadlandCave struct {
 
 // Stable identifier of a kind, stored in the database: never renamed or reused.
 type ID string
+
+// The instruments aboard.
+type Instruments struct {
+	// Barometer corresponds to the JSON schema field "barometer".
+	Barometer Barometer `json:"barometer"`
+}
 
 type Inward string
 
@@ -1202,7 +1328,7 @@ type NoticeKind struct {
 	Name string `json:"name"`
 
 	// What raises it: a place the player charts, a great discovery by anyone, the
-	// world closing, its end near, or a new world begun.
+	// world closing, its end near, a new world begun, or a new gale warning.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -1212,7 +1338,8 @@ type NoticeKind struct {
 	Switchable bool `json:"switchable"`
 
 	// Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the
-	// player's own time) and {left} (the time left) are filled in.
+	// player's own time), {left} (the time left), and for a gale warning {wind},
+	// {when} and {where} are filled in.
 	Text string `json:"text"`
 }
 
@@ -1236,6 +1363,7 @@ const OnChartedGreat On = "charted-great"
 const OnChartedOwn On = "charted-own"
 const OnFallsComing On = "falls-coming"
 const OnFallsSoon On = "falls-soon"
+const OnGaleWarned On = "gale-warned"
 const OnNewWorld On = "new-world"
 
 // How the boat's autopilot steers it: a proportional–integral–derivative law on
@@ -1998,6 +2126,22 @@ type RegimeWind struct {
 	Speed []float64 `json:"speed"`
 }
 
+type RiskMark string
+
+const RiskMarkCalms RiskMark = "calms"
+const RiskMarkFogPatches RiskMark = "fog-patches"
+const RiskMarkShowers RiskMark = "showers"
+const RiskMarkSqualls RiskMark = "squalls"
+
+type RiskSky string
+
+const RiskSkyFair RiskSky = "fair"
+const RiskSkyFogPatches RiskSky = "fog patches"
+const RiskSkyRain RiskSky = "rain"
+const RiskSkyShowers RiskSky = "showers"
+const RiskSkySquallsWithHeavyRain RiskSky = "squalls with heavy rain"
+const RiskSkySquallyShowers RiskSky = "squally showers"
+
 type Ruin string
 
 const RuinBeacon Ruin = "beacon"
@@ -2747,6 +2891,9 @@ type Weather struct {
 	// Disk corresponds to the JSON schema field "disk".
 	Disk WeatherDisk `json:"disk"`
 
+	// Forecast corresponds to the JSON schema field "forecast".
+	Forecast WeatherForecast `json:"forecast"`
+
 	// Front corresponds to the JSON schema field "front".
 	Front WeatherFront `json:"front"`
 
@@ -2940,6 +3087,38 @@ type WeatherDisk struct {
 	SpeedRim float64 `json:"speedRim"`
 }
 
+// The forecast: how often it is issued, how far ahead it runs, its cones, the
+// error it gives a spell not yet begun, its gale warnings, a place's outlook and
+// each regime's risks.
+type WeatherForecast struct {
+	// Cone corresponds to the JSON schema field "cone".
+	Cone ForecastCone `json:"cone"`
+
+	// It is issued at each boundary of this many minutes of world time from the
+	// world's epoch.
+	Every float64 `json:"every"`
+
+	// Gale corresponds to the JSON schema field "gale".
+	Gale ForecastGale `json:"gale"`
+
+	// It runs this far ahead, in minutes.
+	Horizon float64 `json:"horizon"`
+
+	// Outlook corresponds to the JSON schema field "outlook".
+	Outlook ForecastOutlook `json:"outlook"`
+
+	// What each regime brings that the forecast cannot place: one entry for each
+	// regime.
+	Risks []ForecastRisk `json:"risks"`
+
+	// Spell corresponds to the JSON schema field "spell".
+	Spell ForecastSpell `json:"spell"`
+
+	// In steps of this many minutes: the horizon is a whole number of them, at most
+	// 12.
+	Step float64 `json:"step"`
+}
+
 // A front: a line across the disk lying in a trough, the old spell ahead of it and
 // the new behind.
 type WeatherFront struct {
@@ -3017,6 +3196,10 @@ type WeatherLightning struct {
 
 // The pressure: its slope across the disk, and its rise behind a front.
 type WeatherPressure struct {
+	// At a change of spell with no front, the level moves from the old spell's to the
+	// new over this from the change's start, in minutes.
+	Ease float64 `json:"ease"`
+
 	// How fast the pressure rises behind a front's line, in hPa a minute.
 	Rise float64 `json:"rise"`
 
@@ -3251,6 +3434,14 @@ type WeatherWeek struct {
 	WobblePeriod []float64 `json:"wobblePeriod"`
 }
 
+type Word struct {
+	// At corresponds to the JSON schema field "at".
+	At float64 `json:"at"`
+
+	// Text corresponds to the JSON schema field "text".
+	Text string `json:"text"`
+}
+
 // How a world is made from its seed, and how a boat meets its ground.
 type World struct {
 	// The biomes: each an island's terrain.
@@ -3285,6 +3476,9 @@ type World struct {
 
 	// Hazards corresponds to the JSON schema field "hazards".
 	Hazards WorldHazards `json:"hazards"`
+
+	// Instruments corresponds to the JSON schema field "instruments".
+	Instruments Instruments `json:"instruments"`
 
 	// The lowest and the highest land, in m.
 	Land []float64 `json:"land"`
@@ -4005,4 +4199,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "3297ac94fb5a0653"
+const Version = "4f261b85586c873f"

@@ -257,10 +257,20 @@ weather:
   # so that Buys Ballot's law holds of the spell's own wind (American
   # Meteorological Society, Glossary of Meteorology, Buys Ballot's law);
   # rising behind a front; and each system's shape.
+  #
+  # At a change of spell with no front the level moves from the old
+  # spell's to the new evenly over ease minutes from the change's start, so
+  # the barometer reads a change of spell as a real one, over hours, and
+  # not as a storm's fall (Met Office, Marine forecasts glossary: "very
+  # rapidly", over 6 hPa in three hours): two regimes' levels 18 hPa apart
+  # move 4.5 hPa in a quarter of an hour. It eases from the change's start,
+  # never ahead of it, so it tells nothing of the next spell before its
+  # wind is announced.
   pressure:
     slope: 0.02 # hPa a knot of the base wind a nautical mile
     rise: 0.15 # hPa a minute behind a front's line
     riseMost: 6 # hPa
+    ease: 60 # minutes
 
   # How far the systems reach. A front's, a squall's and a shower's wind
   # falls toward Port Royal to inwardLeast of itself within inwardFrom of
@@ -526,7 +536,8 @@ weather:
   # sharesFrom days or more, keeps each regime's share within shares; after
   # draws, the best drawn is kept.
   # Each system wobbles off its track by up to wobble, and its strength by
-  # strengthWobble, each with periods in wobblePeriod; at most systemsMost
+  # strengthWobble, each with periods in wobblePeriod, which a forecast
+  # does not know; at most systemsMost
   # are on the disk at once. Storms keep to the outer waters. seed draws a
   # developer's held spells.
   week:
@@ -543,13 +554,74 @@ weather:
     frontSpeed: [4, 8] # knots
     frontTrough: [3, 6] # hPa
     spread: 15 # degrees
-    wobble: 0.4 # nautical miles
-    wobblePeriod: [20, 60] # minutes
+    # A wobble of 0.5 NM over 6–12 hours puts the true track inside the
+    # forecast's cones, which grow 0.35 NM an hour from nothing, four times
+    # in five at every lead: a wobble quicker than the forecast's horizon
+    # moves a system anywhere within it soon after an issue, so no cone
+    # could grow with the lead and hold it.
+    wobble: 0.5 # nautical miles
+    wobblePeriod: [360, 720] # minutes
     strengthWobble: 0.15
     systemsMost: 16
     outer: [3, 4.5] # nautical miles
     inwardShare: 0.2
     seed: 1852
+
+  # The forecast, issued at each every minutes of world time from the
+  # world's epoch for the next horizon minutes in steps of step minutes,
+  # the same on the server, every phone and the sandbox. It knows the
+  # systems alive at the issue, where they are then, moved on by their
+  # planned tracks; the lows to be born within its horizon, by their plan,
+  # forming; the spells, without their shifts, a spell not yet begun with
+  # an error of the forecast's own, drawn from its seed, spell.direction
+  # degrees and a spell.speed share of its speed (standard deviations); and
+  # each front's line moved on at its speed times 1 + cone.front z, z drawn
+  # once a front. Of what is born after the issue and not a low it gives the
+  # risk, never the place: a real forecast eighteen hours ahead, the game's
+  # ninety minutes at the sky's pace, places a front or a low, never one
+  # shower (Met Office, "Only significant factors included: rain, showers
+  # …, squall, fog").
+  #
+  # Its cones: about each step's forecast position a circle cone.perHour
+  # nautical miles for each hour of lead, swept along the track as the
+  # National Hurricane Center's cone is; a low forming, cone.forming
+  # nautical miles whatever the lead; a front, a band ±1.2816 cone.front v
+  # L about its forecast line, v its speed and L the lead. Each holds the
+  # truth four times in five at each step.
+  #
+  # Its risks: the sky each regime brings that the forecast cannot place,
+  # in the words of a place's box, and the marks the chart draws for it:
+  # fog patches where the fog's own rule lets a bank be born, scattered
+  # showers, squalls from the windward rim, light air.
+  #
+  # Its gale warnings: from the synoptic wind of each issue (the spells,
+  # the fronts, the lows and the patches, not the squalls and showers) at
+  # each step, on a grid of gale.grid nautical miles over the water within
+  # gale.within: a gale where the mean wind reaches gale.mean knots or the
+  # typical strongest gust gale.gust (Met Office: gale "force 8 (34-40
+  # knots) or gusts reaching 43-51 knots"), the typical strongest gust the
+  # mean times 1 + E (gale.quantile − 0.0821), E the gust factor's excess
+  # and gale.quantile the gust field's 90th percentile.
+  #
+  # A place's outlook: the next horizon minutes from the issue, sampled at
+  # outlook.samples minutes, in the shipping forecast's order; a change
+  # where the wind turns outlook.turn degrees or more or its force by
+  # outlook.forces or more, imminent within outlook.imminent minutes of the
+  # issue, soon within outlook.soon, later beyond: the real six and twelve
+  # hours at the sky's pace.
+  forecast:
+    every: 10 # minutes
+    horizon: 90 # minutes
+    step: 10 # minutes
+    cone: { perHour: 0.34, forming: 0.47, front: 0.04 }
+    spell: { direction: 15, speed: 0.1 }
+    gale: { mean: 34, gust: 43, quantile: 0.532, grid: 0.25, within: 4.2 }
+    outlook: { samples: [0, 30, 60, 90], turn: 45, forces: 2, imminent: 30, soon: 60 }
+    risks:
+      - { regime: settled, sky: fog patches, marks: [fog-patches, calms] }
+      - { regime: trade, sky: showers, marks: [showers] }
+      - { regime: unsettled, sky: squally showers, marks: [showers, squalls] }
+      - { regime: stormy, sky: squalls with heavy rain, marks: [showers, squalls] }
 
   # The systems' keyframes: the simulation reads each system's place,
   # motion, strength and size from the week every so often, and the server

@@ -81,7 +81,21 @@ func (c *Catalog) PrepareWeather() *physics.WeatherPrepared {
 	}
 	vis := VisibilityParams(c)
 	w.PrepareVisibility(&vis)
+	fc := ForecastParams(c)
+	w.PrepareForecast(&fc)
 	return w
+}
+
+// ForecastParams returns the catalog's forecast as the physics package's
+// ForecastParams.
+func ForecastParams(c *Catalog) physics.ForecastParams {
+	f := &c.Weather.Forecast
+	return physics.ForecastParams{
+		Every: f.Every, Horizon: f.Horizon, Step: f.Step,
+		PerHour: f.Cone.PerHour, Forming: f.Cone.Forming, Front: f.Cone.Front,
+		Direction: f.Spell.Direction, Speed: f.Spell.Speed,
+		GaleMean: f.Gale.Mean, GaleGust: f.Gale.Gust, Quantile: f.Gale.Quantile, Grid: f.Gale.Grid, Within: f.Gale.Within,
+	}
 }
 
 // VisibilityParams returns the catalog's visibility and lightning as the

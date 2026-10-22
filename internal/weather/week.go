@@ -35,8 +35,9 @@ import (
 // machine.
 
 // Version is the week's generator's version: raised whenever a change makes
-// any seed's week differ. It is stored with each week.
-const Version = 1
+// any seed's week differ. It is stored with each week. 2: the systems'
+// wobble slowed to periods of hours, which the forecast's cones hold.
+const Version = 2
 
 // streamWeek keys the week's stream, which the terrain's keys never are.
 const streamWeek uint64 = 0x7765656b << 32

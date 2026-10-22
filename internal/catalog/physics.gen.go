@@ -204,6 +204,7 @@ func WeatherParams(c *Catalog) physics.WeatherParams {
 	p.Slope = float64(c.Weather.Pressure.Slope)
 	p.Rise = float64(c.Weather.Pressure.Rise)
 	p.RiseMost = float64(c.Weather.Pressure.RiseMost)
+	p.Ease = float64(c.Weather.Pressure.Ease)
 	p.InwardFrom = float64(c.Weather.Reach.InwardFrom)
 	p.InwardTo = float64(c.Weather.Reach.InwardTo)
 	p.InwardLeast = float64(c.Weather.Reach.InwardLeast)

@@ -1188,6 +1188,17 @@ world:
   # parallel of latitude every look.parallels nautical miles and a meridian
   # every look.meridians degrees; drawn at most look.fps frames a second; its
   # wind as streaks from a grid of look.wind points a side.
+  #
+  # Its weather, painted on a canvas of look.weather.canvas pixels over the
+  # paper, each layer a shape of its own as well as a colour (WCAG 2.2,
+  # 1.4.1): the wind's streaks, the gusts' broken dashes and the isobars in
+  # the paper's ink; rain's stipple, fog's wash, fronts, squalls, storms and
+  # gales in colours of their own, chosen on buff paper to stay at least 10
+  # apart (CIEDE2000) under simulated protanopia, deuteranopia and
+  # tritanopia (Machado and others 2009) and 3:1 against the paper and the
+  # sea (WCAG 2.2, 1.4.11). Magenta stays the lights' (IHO S-4, B-142).
+  # Gusts are drawn where the typical strongest gust is look.weather.gusts
+  # knots or more over the mean wind.
   chart:
     sight: { every: 15, rays: 48, water: 300, awash: 150, features: 300, grid: 500 }
     worth: { zones: { centre: 1, middle: 1.5, rim: 2 }, classes: { a: 2, b: 1.5, c: 1 }, great: 20 }
@@ -1204,3 +1215,27 @@ world:
       meridians: 30
       fps: 30
       wind: 64
+      weather:
+        canvas: 1024
+        gusts: 6.5
+        rain: "#4f7896"
+        fog: "#62696b"
+        front: "#123d8c"
+        squall: "#3a3f4a"
+        storm: "#8c3a24"
+
+  # The instruments aboard. The barometer: a brass aneroid whose dial reads
+  # barometer.range hPa, the words about its dial at barometer.words hPa
+  # (decoration: "Do not take any notice of the words Rain, Change, Fair",
+  # Weems & Plath), and its set hand at the boat's own reading
+  # barometer.set minutes ago, the tendency's quarter of an hour.
+  instruments:
+    barometer:
+      range: [950, 1040]
+      set: 15
+      words:
+        - { text: Stormy, at: 960 }
+        - { text: Rain, at: 985 }
+        - { text: Change, at: 1000 }
+        - { text: Fair, at: 1015 }
+        - { text: Very dry, at: 1030 }

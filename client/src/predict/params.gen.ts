@@ -216,6 +216,7 @@ export function writeWeatherParams(params: Float64Array, w: Weather): void {
   params[f.slope] = w.pressure.slope;
   params[f.rise] = w.pressure.rise;
   params[f.riseMost] = w.pressure.riseMost;
+  params[f.ease] = w.pressure.ease;
   params[f.inwardFrom] = w.reach.inwardFrom;
   params[f.inwardTo] = w.reach.inwardTo;
   params[f.inwardLeast] = w.reach.inwardLeast;

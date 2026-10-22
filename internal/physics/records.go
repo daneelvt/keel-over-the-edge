@@ -351,6 +351,7 @@ type WeatherParams struct {
 	Slope    float64 // its slope across the disk, low on the left of the base wind: hPa a knot of it a nautical mile
 	Rise     float64 // how fast it rises behind a front's line, hPa a minute
 	RiseMost float64 // and how far, hPa
+	Ease     float64 // at a change of spell with no front, the level moves to the new spell's over this from the change's start, minutes
 
 	// How far the systems reach.
 	InwardFrom  float64 // within this of the centre a system is at its weakest, nautical miles
@@ -707,6 +708,13 @@ type WindPoint struct {
 	Factor     float64 // the gust factor: Speed over MeanSpeed, before the refuge
 	DriftEast  float64 // how fast the gust field travels: east, m/s
 	DriftNorth float64 // and north, m/s
+	// Excess is the gust factor's excess E where the field is h′: the
+	// factor is 1 + E (h′ − 0.0821).
+	Excess float64
+	// Typical is the typical strongest gust, m/s: the mean wind times the
+	// factor where the field is at the forecast's quantile of it, held by
+	// the refuge as the gusts are.
+	Typical float64
 }
 
 // GustFrame is the gust field's frame at a moment, for drawing it: for each

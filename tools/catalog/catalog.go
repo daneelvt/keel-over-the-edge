@@ -126,6 +126,9 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkFog(root, doc); err != nil {
 		return err
 	}
+	if err := checkForecast(doc); err != nil {
+		return err
+	}
 	encounters, err := encounterFields(root)
 	if err != nil {
 		return err

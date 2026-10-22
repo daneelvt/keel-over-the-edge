@@ -1,16 +1,16 @@
 {
   "comment": "Written by go test ./internal/weather -run WeekDigests -update: the SHA-256 of seeds 1–8's weeks, as stored, for a week from epoch to ends (µs of UTC), with testIslands.",
-  "version": 1,
+  "version": 2,
   "epoch": 1792360800000000,
   "ends": 1792965600000000,
   "digests": {
-    "1": "2c13a3bf490152916e1c14558f9c7f21433f137daac411d112679afd76126937",
-    "2": "8ec3eaa346044564e7f5d701fe401b49fcc1f31fd1d9884141bdb2414aabfadc",
-    "3": "cba33aa55b5eb1a53b57c07b997ad061c68d4b61a286e4ead9918a61068c4efe",
-    "4": "f866d1a553074128633ee149a4fe6d4245466161a35a04adbb88238e35031c7b",
-    "5": "887951eb6a11a6020244a72fc6fdd5abe2f072774770ab1996a7d7b544af7478",
-    "6": "723c83211b0962127bda1111faec7e8fe9575463d719da4ddc471ae4a9ac027e",
-    "7": "c9e00982119406725611418887e8bdb5f7448c17b059da4e378f5064ad43b992",
-    "8": "6c48c8345bc4ffcf2eb00b834953e7ee72f2e206dba61b775ffdd584a7798f18"
+    "1": "df93dcfbdda39784615ec93bd4a76c5269e864cd0af41be3f401ccc37e2791a2",
+    "2": "3bc39033af5f8f3dc47dc910d0dd8b2e928bac4837a2d95ba4db28f9fcb5028b",
+    "3": "d161ceaf24a5f077dbeb50bbf8cc40c6846bf4fbf8f1665105d1167fc9021774",
+    "4": "4c27352f37bd8dee62e482bd53c7bf6e55e0c61f00e4f78d641faee9f8195736",
+    "5": "5535ee74ab97abf2666212bd67588ff0162a48fc7f1d9b67d23078d61d924c52",
+    "6": "aa91faff3468e3a26edc6645cb359174fbd44586580cc32a2628b316c1e9f009",
+    "7": "475ca0e6c7ca64dd96a681255f153b1c7a6e55c424c674b7b61930950fffe9b3",
+    "8": "b1f0f0f8eb92c1cba7f6c3c41615f20fb2ab6b8b6e2d3ebb414533e9d44917a9"
   }
 }

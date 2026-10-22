@@ -21,7 +21,7 @@ import (
 // if it is set, as the nightly run sets it to a thousand, from seed 1, or
 // the one after KEEL_WEEKS_FROM. Its tally of them is written to
 // KEEL_WEEKS_SUMMARY, if that is set, in Markdown. The storms' swell is
-// held to its rule over the first five weeks on a grid half a mile apart,
+// held to its rule over the first eight weeks on a grid half a mile apart,
 // and in the long run over the first two hundred, a quarter of a mile; and
 // so are the signs in the sky before the weather: the clouds' leads on
 // their own wind, and a front's cirrus's on its line.
@@ -47,7 +47,7 @@ func TestWeeks(t *testing.T) {
 	if n > 100 {
 		every = 1
 	}
-	swellWeeks, swellGrid := 5, 0.5*nauticalMile
+	swellWeeks, swellGrid := 8, 0.5*nauticalMile
 	if n > 100 {
 		swellWeeks, swellGrid = 200, 0.25*nauticalMile
 	}
@@ -68,6 +68,7 @@ func TestWeeks(t *testing.T) {
 		checkFronts(t, seed, wt, w, &tally)
 		checkStorms(t, seed, wt, w, cfg, &tally)
 		checkRefuge(t, seed, wt, w, every, &tally)
+		checkForecast(wt, w, &tally.forecast)
 		if tally.weeks < swellWeeks {
 			checkSwell(wt, w, waves, swellGrid, &tally)
 			checkCloudLeads(cat, wt, w, swellGrid, &tally)
@@ -130,7 +131,24 @@ func TestWeeks(t *testing.T) {
 			t.Errorf("a fog bank's wall gave under %d minutes at %.1f%% of %d approaches", fogWarning, s, f.approaches)
 		}
 	}
-	report := tally.markdown(cat) + tally.cloudsMarkdown() + tally.fogMarkdown()
+	// The truth lies inside the cones four times in five at every lead,
+	// within 75–85% (with about 1,100 cases at the longest lead over 50
+	// weeks, 77.6–82.4% at 95% for a true 80%); the lows forming and the
+	// fronts' bands, fewer, within 70–90%.
+	for k := 1; k < tally.forecast.steps; k++ {
+		if c := &tally.forecast.alive; c.cases[k] > 0 && (c.share(k) < 75 || c.share(k) > 85) {
+			t.Errorf("the forecast's cones held %.1f%% of %d systems at step %d", c.share(k), c.cases[k], k)
+		}
+		for _, c := range []struct {
+			name string
+			c    *calibration
+		}{{"lows forming", &tally.forecast.forming}, {"fronts", &tally.forecast.fronts}} {
+			if c.c.cases[k] >= 50 && (c.c.share(k) < 70 || c.c.share(k) > 90) {
+				t.Errorf("the forecast's cones held %.1f%% of %d %s at step %d", c.c.share(k), c.c.cases[k], c.name, k)
+			}
+		}
+	}
+	report := tally.markdown(cat) + tally.cloudsMarkdown() + tally.fogMarkdown() + tally.forecast.markdown(float64(cfg.Prepared.ForecastStep()))
 	t.Log("\n" + report)
 	if path := os.Getenv("KEEL_WEEKS_SUMMARY"); path != "" {
 		if err := os.WriteFile(path, []byte(report), 0o644); err != nil {
@@ -140,6 +158,7 @@ func TestWeeks(t *testing.T) {
 }
 
 type weeksTally struct {
+	forecast                                     forecastTally
 	weeks, storms, systems, most, refused, draws int
 	shares                                       []float64
 	stormHours                                   [6]float64 // by whole nautical miles from the centre, the last beyond
