@@ -5,10 +5,11 @@
 // boat, the wind, the gusts, the current, the islands, the places and the
 // lighthouses, the queue, the weather and the world's clock; and its
 // controls, which set and clear an account's owner's flag, move a flagged
-// account's boat anywhere on the disk, keep it unseen, and begin a new
-// world. The internal listener has no route to the
-// internet: the owner reaches it from their own computer through the
-// tunnel to the machine, or a port forward on the local cluster.
+// account's boat anywhere on the disk, keep it unseen, make a new next
+// world, begin it, and chart the whole world. The internal listener has no
+// route to the internet: the owner reaches it from their own computer
+// through the tunnel to the machine, or a port forward on the local
+// cluster.
 //
 // The page reads the world as a view built once a second by one goroutine
 // (Run): it acquires the latest frame, copies what the page shows and
@@ -103,7 +104,7 @@ var DefaultRules = Rules{Depth: 2, Clear: 10, Approach: 3}
 // Config sets up the owner's tools.
 type Config struct {
 	Frames *bus.Frames
-	// Owner is the owner's tools' sender: Teleport, Stay and Unseen.
+	// Owner is the owner's tools' sender: Teleport, Stay, Unseen and Chart.
 	Owner bus.Sender
 	// Bundle is the world's terrain: its ground drawn, its records listed.
 	Bundle *worldgen.Bundle
@@ -195,7 +196,7 @@ var Paths = []string{
 	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json", "/owner/api/charted.json",
 	"/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
-	"/owner/api/clouds.json",
+	"/owner/api/clouds.json", "/owner/api/chart",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -278,7 +279,8 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)
 	mux.HandleFunc("POST /owner/api/world", o.newWorld)
 	mux.HandleFunc("GET /owner/api/lifecycle.json", o.lifecycle)
-	mux.HandleFunc("POST /owner/api/next", o.remake)
+	mux.HandleFunc("POST /owner/api/next", o.makeNext)
+	mux.HandleFunc("POST /owner/api/chart", o.chartWhole)
 	mux.HandleFunc("GET /owner/api/next/", o.next)
 	var refused func()
 	if m := o.cfg.Metrics; m != nil {

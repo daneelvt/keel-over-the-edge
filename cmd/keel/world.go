@@ -88,8 +88,12 @@ type process struct {
 	ahead atomic.Pointer[readyWorld]
 	// nextView is the next world's view on the world page, once stored.
 	nextView atomic.Pointer[owner.Owner]
-	// making is held while the next world is made.
-	making sync.Mutex
+	// making holds a token while the next world is made, makingNow set;
+	// remaking is set from the owner's asking for a new next world until it
+	// is made. A making may take minutes, and another waits for it.
+	making    chan struct{}
+	makingNow atomic.Bool
+	remaking  atomic.Bool
 
 	carriedMu sync.Mutex
 	carried   counts
@@ -238,8 +242,9 @@ type worldHalf struct {
 	play    http.Handler
 
 	// endsAt is when the world ends, Unix ns, 0 for none known: its row's,
-	// unless a developer's command has brought it nearer.
-	endsAt atomic.Int64
+	// unless a developer's command has brought it nearer; movedAt when that
+	// command last did, 0 for never.
+	endsAt, movedAt atomic.Int64
 
 	stopLoop, stopSailors, stopEncoder, stopWatch  context.CancelFunc
 	loopDone, inputsDone, sailorsDone, encoderDone chan struct{}
@@ -527,11 +532,11 @@ var errSwitching = errors.New("a switch is under way")
 
 // switchTo ends the world sailed, whose last tick has been ticked, and
 // begins the next, loaded: the old half closed, the two worlds' rows
-// switched in one transaction, at begins, the new world's epoch, with the
-// schedule's end; the new half opened and served. how labels the metrics:
-// scheduled or by_hand. A failure once the old half is closed stops the
-// process: the next start finds the world's end passed and switches then.
-func (p *process) switchTo(ctx context.Context, next *readyWorld, begins time.Time, how string) error {
+// switched in one transaction, at begins, the new world's epoch, to end at
+// ends; the new half opened and served. how labels the metrics: scheduled
+// or by_hand. A failure once the old half is closed stops the process: the
+// next start finds the world's end passed and switches then.
+func (p *process) switchTo(ctx context.Context, next *readyWorld, begins, ends time.Time, how string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.stopping {
@@ -541,7 +546,6 @@ func (p *process) switchTo(ctx context.Context, next *readyWorld, begins time.Ti
 	start := time.Now()
 	last := old.close(closeEnded)
 	closed := time.Now()
-	ends := p.cfg.Schedule.EndOf(begins)
 	row, err := p.switchRows(ctx, old.row.Number, next.row.ID, begins, ends)
 	if err != nil {
 		p.failWith(fmt.Errorf("the switch to world %d: %w", next.row.Number, err))

@@ -187,9 +187,9 @@ func TestDeveloperCommands(t *testing.T) {
 	}
 }
 
-// TestOwnerCommands: the owner's tools' sender sends Teleport, Stay and
-// Unseen, and nothing else; a developer may send them too, a player or
-// the server never.
+// TestOwnerCommands: the owner's tools' sender sends Teleport, Stay,
+// Unseen and Chart, and nothing else; a developer may send them too, a
+// player never, the server only Chart.
 func TestOwnerCommands(t *testing.T) {
 	q := NewQueue()
 	for _, op := range []Op{Teleport, Stay, Unseen} {
@@ -204,7 +204,15 @@ func TestOwnerCommands(t *testing.T) {
 			}
 		}
 	}
-	for _, op := range []Op{Join, Leave, Disconnect, SetWeather, Place, Hold} {
+	for _, s := range []Sender{q.Owner(), q.Developer(), q.Server()} {
+		if err := s.TrySend(Command{Op: Chart, Subject: -1, On: true}); err != nil {
+			t.Errorf("chart: %v", err)
+		}
+	}
+	if err := q.Players().TrySend(Command{Op: Chart, Subject: -1, On: true}); !errors.Is(err, ErrNotAllowed) {
+		t.Errorf("a player's chart: %v", err)
+	}
+	for _, op := range []Op{Join, Leave, Disconnect, SetWeather, Place, Hold, End} {
 		if err := q.Owner().TrySend(Command{Op: op}); !errors.Is(err, ErrNotAllowed) {
 			t.Errorf("the owner's %s: %v", op, err)
 		}

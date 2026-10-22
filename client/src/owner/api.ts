@@ -315,6 +315,8 @@ export interface NextWorld {
   storedAt: number;
   attempts: number;
   generationMs: number;
+  /** The version of the world generator it was made by. */
+  generator: number;
 }
 
 /**
@@ -331,10 +333,15 @@ export interface Lifecycle {
   ends: number;
   closing: boolean;
   closingFrom: number;
+  /** When the schedule makes the next world: in the past for a world begun inside its last day. */
   nextMadeAt: number;
-  /** The last moment the next world may be made again. */
+  /** The last moment the next world may be made or begun by hand. */
   remakeUntil: number;
   switching: boolean;
+  /** Whether a next world is being made now, on the schedule or by hand. */
+  making: boolean;
+  /** The version of the world generator keel makes worlds with now. */
+  generator: number;
   next: NextWorld | null;
   runs: JobRun[];
 }
@@ -634,7 +641,7 @@ export interface Answer {
 }
 
 /** The controls, each under /owner/api/. */
-export type Control = 'flag' | 'place' | 'unseen' | 'world' | 'next';
+export type Control = 'flag' | 'place' | 'unseen' | 'world' | 'next' | 'chart';
 
 /** Works a control: a POST of JSON, done on any 2xx (202 for one under way). */
 export async function control(path: Control, body: unknown): Promise<Answer> {

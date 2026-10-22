@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
@@ -17,14 +19,18 @@ type Life interface {
 	// Lifecycle is the world's life now.
 	Lifecycle(ctx context.Context) (Lifecycle, error)
 	// BeginNext ends the active world, of the number given, at once and
-	// begins the next, made first if it was not; it answers before the
-	// switch, with the number of the world to begin.
-	BeginNext(ctx context.Context, number int) (int, error)
-	// RemakeNext discards the next world, of the number given, and makes
-	// another from a new seed; it answers before the making.
-	RemakeNext(ctx context.Context, number int) error
+	// begins the next, made first if it was not, to end when the active
+	// world would have; it answers before the switch, with the number of
+	// the world to begin and its end.
+	BeginNext(ctx context.Context, number int) (int, time.Time, error)
+	// MakeNext makes a new next world, of the number given: with none, one;
+	// with one, it is discarded and another made from a new seed. It
+	// answers before the making, saying whether one is discarded.
+	MakeNext(ctx context.Context, number int) (bool, error)
 	// NextView is the next world's view, nil until its terrain is stored.
 	NextView(ctx context.Context) (*Owner, error)
+	// Switching reports whether a switch is under way.
+	Switching() bool
 }
 
 // Lifecycle is the world's life as the page shows it. Times are ms of UTC
@@ -39,23 +45,29 @@ type Lifecycle struct {
 	Began int64  `json:"began"`
 	Ends  int64  `json:"ends"`
 	// Closing says the world is in its last days; ClosingFrom is when they
-	// began, NextMadeAt when the next world is made, RemakeUntil the last
-	// moment it may be made again.
-	Closing     bool       `json:"closing"`
-	ClosingFrom int64      `json:"closingFrom"`
-	NextMadeAt  int64      `json:"nextMadeAt"`
-	RemakeUntil int64      `json:"remakeUntil"`
-	Switching   bool       `json:"switching"`
-	Next        *NextWorld `json:"next"`
-	Runs        []JobRun   `json:"runs"`
+	// began, NextMadeAt when the next world's job makes it, RemakeUntil the
+	// last moment the next world may be made, or begun, by hand.
+	Closing     bool  `json:"closing"`
+	ClosingFrom int64 `json:"closingFrom"`
+	NextMadeAt  int64 `json:"nextMadeAt"`
+	RemakeUntil int64 `json:"remakeUntil"`
+	Switching   bool  `json:"switching"`
+	// Making says a next world is being made now; Generator is the version
+	// of the generator keel makes worlds with.
+	Making    bool       `json:"making"`
+	Generator int        `json:"generator"`
+	Next      *NextWorld `json:"next"`
+	Runs      []JobRun   `json:"runs"`
 }
 
 // NextWorld is the next world: its number, its seed (as a string: a seed
-// is a whole number to 2⁶⁴), when its row was made, and its terrain if
-// stored.
+// is a whole number to 2⁶⁴), the generator it is made by, when its row was
+// made, and its terrain if stored. A next world is sailed as it was made,
+// however long before its switch, even by an older generator than keel's.
 type NextWorld struct {
 	Number       int    `json:"number"`
 	Seed         string `json:"seed"`
+	Generator    int    `json:"generator"`
 	Created      int64  `json:"created"`
 	Stored       bool   `json:"stored"`
 	StoredAt     int64  `json:"storedAt"`
@@ -93,15 +105,17 @@ func (o *Owner) lifecycle(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, lc)
 }
 
-// NewWorldRequest names a world by its number, typed, so that no world is
-// ended or made again by a stray click.
+// NewWorldRequest names the world a control acts on by its number, as
+// the page's confirmation named it: a page left open across a switch acts
+// on no other world.
 type NewWorldRequest struct {
 	Number int `json:"number"`
 }
 
 // newWorld ends the active world at once and begins the next, in the
 // running process, as its scheduled end would: the next world made first
-// if it was not. Every player's boat goes with the world.
+// if it was not. The new world ends when the old one would have. Every
+// player's boat goes with the world.
 //
 //	POST /owner/api/world {"number": 3}
 func (o *Owner) newWorld(w http.ResponseWriter, r *http.Request) {
@@ -114,51 +128,56 @@ func (o *Owner) newWorld(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Number != o.cfg.World.Number {
-		o.refuse(w, "world", http.StatusBadRequest, "type the active world's number to end it")
+		o.refuse(w, "world", http.StatusConflict, fmt.Sprintf("world %d is not the active world: world %d is", req.Number, o.cfg.World.Number))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
 	defer cancel()
-	next, err := o.cfg.Life.BeginNext(ctx, req.Number)
+	next, ends, err := o.cfg.Life.BeginNext(ctx, req.Number)
 	switch {
 	case errors.Is(err, store.ErrNotActive):
-		o.refuse(w, "world", http.StatusConflict, "that world is no longer the active one")
+		o.refuse(w, "world", http.StatusConflict, fmt.Sprintf("world %d is no longer the active world", req.Number))
 		return
 	case err != nil:
 		o.refuse(w, "world", http.StatusConflict, err.Error())
 		return
 	}
 	o.count("world")
-	o.cfg.Log.Warn("owner: the next world begun by hand", "action", "world", "ended", req.Number, "begun", next, "from", r.RemoteAddr)
-	writeAccepted(w, map[string]any{"ended": req.Number, "begun": next})
+	o.cfg.Log.Warn("owner: the next world begun by hand", "action", "world", "ended", req.Number, "begun", next, "ends", ends, "from", r.RemoteAddr)
+	writeAccepted(w, map[string]any{"ended": req.Number, "begun": next, "ends": ends.UnixMilli()})
 }
 
-// remake discards the next world, before anyone has sailed it, and makes
-// another from a new seed under its number.
+// makeNext makes a new next world, before anyone has sailed it: one now if
+// there is none, or another from a new seed in place of the one there is.
 //
 //	POST /owner/api/next {"number": 4}
-func (o *Owner) remake(w http.ResponseWriter, r *http.Request) {
+func (o *Owner) makeNext(w http.ResponseWriter, r *http.Request) {
 	var req NewWorldRequest
 	if !readBody(w, r, &req) {
 		return
 	}
 	if o.cfg.Life == nil {
-		o.refuse(w, "remake", http.StatusServiceUnavailable, "this keel cannot make a world")
+		o.refuse(w, "make", http.StatusServiceUnavailable, "this keel cannot make a world")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
 	defer cancel()
-	switch err := o.cfg.Life.RemakeNext(ctx, req.Number); {
+	discarding, err := o.cfg.Life.MakeNext(ctx, req.Number)
+	switch {
 	case errors.Is(err, store.ErrNoNext):
-		o.refuse(w, "remake", http.StatusBadRequest, "type the next world's number to make it again")
+		o.refuse(w, "make", http.StatusConflict, fmt.Sprintf("world %d is not the next world: world %d is", req.Number, o.cfg.World.Number+1))
 		return
 	case err != nil:
-		o.refuse(w, "remake", http.StatusConflict, err.Error())
+		o.refuse(w, "make", http.StatusConflict, err.Error())
 		return
 	}
-	o.count("remake")
-	o.cfg.Log.Warn("owner: the next world to be made again", "action", "remake", "world", req.Number, "from", r.RemoteAddr)
-	writeAccepted(w, map[string]any{"remaking": req.Number})
+	action := "make"
+	if discarding {
+		action = "remake"
+	}
+	o.count(action)
+	o.cfg.Log.Warn("owner: a new next world to be made", "action", action, "world", req.Number, "from", r.RemoteAddr)
+	writeAccepted(w, map[string]any{"making": req.Number, "discarding": discarding})
 }
 
 // next serves the next world's view: what is drawn and listed of its

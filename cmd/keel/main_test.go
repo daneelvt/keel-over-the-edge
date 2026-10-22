@@ -505,10 +505,11 @@ func worldID(n int) [16]byte {
 
 // memNext is the next world in a memDB.
 type memNext struct {
-	number  int
-	seed    uint64
-	bundle  *store.Bundle
-	created time.Time
+	number    int
+	seed      uint64
+	generator int
+	bundle    *store.Bundle
+	created   time.Time
 }
 
 // memRun is a job's run in a memDB.
@@ -546,15 +547,15 @@ func (d *memDB) NextWorld(context.Context) (store.NextWorld, error) {
 	if d.next == nil {
 		return store.NextWorld{}, store.ErrNotFound
 	}
-	nw := store.NextWorld{World: store.World{ID: worldID(d.next.number), Number: d.next.number}, Seed: d.next.seed, Created: d.next.created,
-		Stored: d.next.bundle != nil}
+	nw := store.NextWorld{World: store.World{ID: worldID(d.next.number), Number: d.next.number}, Seed: d.next.seed, Generator: d.next.generator,
+		Created: d.next.created, Stored: d.next.bundle != nil}
 	if b := d.next.bundle; b != nil {
 		nw.Attempts, nw.GenerationMs, nw.StoredAt = b.Attempts, b.GenerationMs, b.Stored
 	}
 	return nw, nil
 }
 
-func (d *memDB) CreateNextWorld(_ context.Context, lease int64, seed uint64, _ int, _ time.Time) (store.World, error) {
+func (d *memDB) CreateNextWorld(_ context.Context, lease int64, seed uint64, generator int, _ time.Time) (store.World, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if lease != d.leaseEpoch {
@@ -563,7 +564,7 @@ func (d *memDB) CreateNextWorld(_ context.Context, lease int64, seed uint64, _ i
 	if d.next != nil {
 		return store.World{}, store.ErrNoNext
 	}
-	d.next = &memNext{number: d.number + 2, seed: seed, created: time.Now()}
+	d.next = &memNext{number: d.number + 2, seed: seed, generator: generator, created: time.Now()}
 	return store.World{ID: worldID(d.next.number), Number: d.next.number}, nil
 }
 
@@ -660,6 +661,27 @@ func (d *memDB) JobRuns(context.Context, int) ([]store.JobRun, error) {
 		out = append(out, store.JobRun{Job: job, Outcome: r.outcome, Detail: r.detail, Attempts: r.attempts, Finished: r.finished})
 	}
 	return out, nil
+}
+
+// memRunAt is a job's run, with when it fell due.
+type memRunAt struct {
+	due             string
+	outcome, detail string
+	attempts        int
+}
+
+// runsOf are a job's runs, by when they fell due.
+func (d *memDB) runsOf(job string) []memRunAt {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []memRunAt
+	for k, r := range d.runs {
+		if j, due, _ := strings.Cut(k, " "); j == job {
+			out = append(out, memRunAt{due: due, outcome: r.outcome, detail: r.detail, attempts: r.attempts})
+		}
+	}
+	slices.SortFunc(out, func(a, b memRunAt) int { return strings.Compare(a.due, b.due) })
+	return out
 }
 
 // run is how a job's run due at due ended, "" if it has not.

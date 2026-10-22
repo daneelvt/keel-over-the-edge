@@ -243,7 +243,7 @@ func (q *Queries) MarkWorldDropped(ctx context.Context, id pgtype.UUID) (int64, 
 }
 
 const nextWorld = `-- name: NextWorld :one
-SELECT w.id, w.number, w.seed, w.created_at,
+SELECT w.id, w.number, w.seed, w.generator, w.created_at,
   (b.world_id IS NOT NULL)::boolean AS stored, b.attempts, b.generation_ms, b.made, b.created_at AS stored_at
 FROM world w LEFT JOIN world_bundle b ON b.world_id = w.id
 WHERE w.state = 'next'
@@ -253,6 +253,7 @@ type NextWorldRow struct {
 	ID           pgtype.UUID
 	Number       int32
 	Seed         pgtype.Int8
+	Generator    pgtype.Int4
 	CreatedAt    time.Time
 	Stored       bool
 	Attempts     pgtype.Int4
@@ -268,6 +269,7 @@ func (q *Queries) NextWorld(ctx context.Context) (NextWorldRow, error) {
 		&i.ID,
 		&i.Number,
 		&i.Seed,
+		&i.Generator,
 		&i.CreatedAt,
 		&i.Stored,
 		&i.Attempts,

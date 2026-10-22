@@ -67,7 +67,7 @@ VALUES ((SELECT coalesce(max(number), 0) + 1 FROM world), @epoch, 'next', @seed,
 RETURNING id, number, epoch;
 
 -- name: NextWorld :one
-SELECT w.id, w.number, w.seed, w.created_at,
+SELECT w.id, w.number, w.seed, w.generator, w.created_at,
   (b.world_id IS NOT NULL)::boolean AS stored, b.attempts, b.generation_ms, b.made, b.created_at AS stored_at
 FROM world w LEFT JOIN world_bundle b ON b.world_id = w.id
 WHERE w.state = 'next';

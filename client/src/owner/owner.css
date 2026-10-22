@@ -466,3 +466,11 @@ h3 {
 .systems {
   font-size: 13px;
 }
+
+/* A control's confirmation, in its card. */
+.confirm {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+}

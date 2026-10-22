@@ -114,15 +114,16 @@ type rig struct {
 	life *fakeLife
 }
 
-// fakeLife is a world's life: the worlds begun and made again by hand, and
-// the next world's view once it is made.
+// fakeLife is a world's life: the worlds begun and made by hand, and the
+// next world's view once it is made.
 type fakeLife struct {
-	mu       sync.Mutex
-	begun    []int
-	remade   []int
-	next     *Owner
-	tooLate  bool
-	lifetime Lifecycle
+	mu        sync.Mutex
+	begun     []int
+	made      []int
+	next      *Owner
+	tooLate   bool
+	switching bool
+	lifetime  Lifecycle
 }
 
 func (l *fakeLife) Lifecycle(context.Context) (Lifecycle, error) {
@@ -131,27 +132,33 @@ func (l *fakeLife) Lifecycle(context.Context) (Lifecycle, error) {
 	return l.lifetime, nil
 }
 
-func (l *fakeLife) BeginNext(_ context.Context, number int) (int, error) {
+func (l *fakeLife) BeginNext(_ context.Context, number int) (int, time.Time, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if number != 3 {
-		return 0, store.ErrNotActive
+		return 0, time.Time{}, store.ErrNotActive
 	}
 	l.begun = append(l.begun, number)
-	return number + 1, nil
+	return number + 1, time.UnixMilli(1000), nil
 }
 
-func (l *fakeLife) RemakeNext(_ context.Context, number int) error {
+func (l *fakeLife) MakeNext(_ context.Context, number int) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if number != 4 {
-		return store.ErrNoNext
+		return false, store.ErrNoNext
 	}
 	if l.tooLate {
-		return errors.New("too near the end")
+		return false, errors.New("too near the end")
 	}
-	l.remade = append(l.remade, number)
-	return nil
+	l.made = append(l.made, number)
+	return len(l.made) > 1, nil
+}
+
+func (l *fakeLife) Switching() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.switching
 }
 
 func (l *fakeLife) NextView(context.Context) (*Owner, error) {
@@ -936,12 +943,13 @@ func TestPlaceAtAPlace(t *testing.T) {
 }
 
 // TestNewWorld: the next world is begun only with the active world's
-// number typed, in the running process.
+// number, as the confirmation named it, in the running process; a page
+// left open across a switch is refused.
 func TestNewWorld(t *testing.T) {
 	r := newRig(t, 0)
 	for _, n := range []int{0, 2, 4} {
-		if code, _ := r.do(t, "POST", "/owner/api/world", NewWorldRequest{Number: n}); code != 400 {
-			t.Errorf("world %d typed: %d", n, code)
+		if code, _ := r.do(t, "POST", "/owner/api/world", NewWorldRequest{Number: n}); code != 409 {
+			t.Errorf("world %d named: %d", n, code)
 		}
 	}
 	if code, _ := r.do(t, "POST", "/owner/api/world", map[string]any{"number": 3, "more": true}); code != 400 {
@@ -951,8 +959,9 @@ func TestNewWorld(t *testing.T) {
 		t.Fatalf("worlds ended: %v", r.life.begun)
 	}
 	code, body := r.do(t, "POST", "/owner/api/world", NewWorldRequest{Number: 3})
-	if code != 202 || !strings.Contains(string(body), `"begun":4`) || !slices.Equal(r.life.begun, []int{3}) {
-		t.Fatalf("world 3 typed: %d %s, ended %v", code, body, r.life.begun)
+	if code != 202 || !strings.Contains(string(body), `"begun":4`) || !strings.Contains(string(body), `"ends":1000`) ||
+		!slices.Equal(r.life.begun, []int{3}) {
+		t.Fatalf("world 3 named: %d %s, ended %v", code, body, r.life.begun)
 	}
 	// From another site, it is refused before it is heard.
 	req := httptest.NewRequest("POST", "http://localhost:9090/owner/api/world", strings.NewReader(`{"number":3}`))
@@ -1003,26 +1012,98 @@ func TestNextWorldView(t *testing.T) {
 	}
 }
 
-// TestRemakeNext: the next world is made again only with its number
-// typed, and not in its last minutes; and the lifecycle is served.
-func TestRemakeNext(t *testing.T) {
+// TestMakeNext: a new next world is made only with the next world's
+// number, made with none there and again in place of one, and counted as
+// either; not in the world's last minutes; and the lifecycle is served.
+func TestMakeNext(t *testing.T) {
 	r := newRig(t, 0)
-	if code, _ := r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 3}); code != 400 {
+	if code, _ := r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 3}); code != 409 {
 		t.Errorf("the active world's number: %d", code)
 	}
-	if code, _ := r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 4}); code != 202 || !slices.Equal(r.life.remade, []int{4}) {
-		t.Errorf("the next world's number: %d, remade %v", code, r.life.remade)
+	code, body := r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 4})
+	if code != 202 || !strings.Contains(string(body), `"discarding":false`) || !slices.Equal(r.life.made, []int{4}) {
+		t.Errorf("the next world's number: %d %s, made %v", code, body, r.life.made)
+	}
+	code, body = r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 4})
+	if code != 202 || !strings.Contains(string(body), `"discarding":true`) {
+		t.Errorf("again: %d %s", code, body)
+	}
+	for action, want := range map[string]float64{"make": 1, "remake": 1} {
+		if got := testutil.ToFloat64(r.metrics.OwnerActions.WithLabelValues(action)); got != want {
+			t.Errorf("%s counted %v times", action, got)
+		}
 	}
 	r.life.mu.Lock()
 	r.life.tooLate = true
-	r.life.lifetime = Lifecycle{World: 3, Ends: 1000, Closing: true, Next: &NextWorld{Number: 4, Seed: "18446744073709551615", Stored: true}}
+	r.life.lifetime = Lifecycle{World: 3, Ends: 1000, Closing: true, Generator: 15,
+		Next: &NextWorld{Number: 4, Seed: "18446744073709551615", Generator: 14, Stored: true}}
 	r.life.mu.Unlock()
-	if code, _ := r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 4}); code != 409 || len(r.life.remade) != 1 {
-		t.Errorf("in the last minutes: %d, remade %v", code, r.life.remade)
+	if code, _ := r.do(t, "POST", "/owner/api/next", NewWorldRequest{Number: 4}); code != 409 || len(r.life.made) != 2 {
+		t.Errorf("in the last minutes: %d, made %v", code, r.life.made)
 	}
-	code, body := r.do(t, "GET", "/owner/api/lifecycle.json", nil)
-	if code != 200 || !strings.Contains(string(body), `"seed":"18446744073709551615"`) || !strings.Contains(string(body), `"closing":true`) {
-		t.Errorf("the lifecycle: %d %s", code, body)
+	code, body = r.do(t, "GET", "/owner/api/lifecycle.json", nil)
+	for _, want := range []string{`"seed":"18446744073709551615"`, `"closing":true`, `"generator":15`, `"generator":14`} {
+		if code != 200 || !strings.Contains(string(body), want) {
+			t.Errorf("the lifecycle lacks %s: %d %s", want, code, body)
+		}
+	}
+}
+
+// TestChartWholeControl: the whole world is charted only with the active
+// world's number, not during a switch, and not once all is charted; the
+// command is the owner's sender's, and counted.
+func TestChartWholeControl(t *testing.T) {
+	r := newRig(t, 0)
+	if code, _ := r.do(t, "POST", "/owner/api/chart", NewWorldRequest{Number: 3}); code != 503 {
+		t.Errorf("a world with no chart: %d", code)
+	}
+	var mu sync.Mutex
+	charted := []Charted{{Subject: "island", Number: 0}}
+	r.o.cfg.Subjects = 3
+	r.o.cfg.Charted = func() []Charted {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(charted)
+	}
+	for _, n := range []int{2, 4} {
+		if code, _ := r.do(t, "POST", "/owner/api/chart", NewWorldRequest{Number: n}); code != 409 {
+			t.Errorf("world %d named: %d", n, code)
+		}
+	}
+	r.life.mu.Lock()
+	r.life.switching = true
+	r.life.mu.Unlock()
+	if code, _ := r.do(t, "POST", "/owner/api/chart", NewWorldRequest{Number: 3}); code != 409 {
+		t.Errorf("during a switch: %d", code)
+	}
+	r.life.mu.Lock()
+	r.life.switching = false
+	r.life.mu.Unlock()
+	code, body := r.do(t, "POST", "/owner/api/chart", NewWorldRequest{Number: 3})
+	if code != 202 || !strings.Contains(string(body), `"charting":2`) {
+		t.Fatalf("world 3 named: %d %s", code, body)
+	}
+	if got := testutil.ToFloat64(r.metrics.OwnerActions.WithLabelValues("chart")); got != 1 {
+		t.Errorf("charted whole counted %v times", got)
+	}
+	mu.Lock()
+	charted = append(charted, Charted{Subject: "island", Number: 1}, Charted{Subject: "place", Number: 0})
+	mu.Unlock()
+	code, body = r.do(t, "POST", "/owner/api/chart", NewWorldRequest{Number: 3})
+	if code != 409 || !strings.Contains(string(body), "charted whole") {
+		t.Errorf("charted whole: %d %s", code, body)
+	}
+	if got := testutil.ToFloat64(r.metrics.OwnerRefused.WithLabelValues("chart")); got != 5 {
+		t.Errorf("%v refusals counted", got)
+	}
+	// From another site, it is refused before it is heard.
+	req := httptest.NewRequest("POST", "http://localhost:9090/owner/api/chart", strings.NewReader(`{"number":3}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	rec := httptest.NewRecorder()
+	r.h.ServeHTTP(rec, req)
+	if rec.Code < 400 || testutil.ToFloat64(r.metrics.OwnerActions.WithLabelValues("chart")) != 1 {
+		t.Errorf("a cross-site request: %d", rec.Code)
 	}
 }
 

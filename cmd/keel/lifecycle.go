@@ -30,8 +30,10 @@ import (
 // on one goroutine and stored; three days before (its notice) the news
 // tells of the end; minutes before, the next world is loaded and the
 // simulation told the tick it ends on; at that tick the falls take the
-// world, and the switch begins the next. An end missed while keel was down
-// is switched on start, before anyone is let in.
+// world, and the switch begins the next. A world begun inside its last day
+// or its last days, by hand, has its next world made, or the news told, as
+// it begins. An end missed while keel was down is switched on start,
+// before anyone is let in.
 
 // The jobs' names, as their runs are recorded.
 const (
@@ -76,8 +78,36 @@ func worldColumn(cat *catalog.Catalog) string {
 func (p *process) lead() time.Duration { return min(5*time.Minute, p.cfg.Schedule.Ahead/2) }
 
 // remakeCutoff is how long before a world's end the next world may no
-// longer be made again: it is being loaded.
+// longer be made, or begun, by hand: the scheduled switch is loading it.
 func (p *process) remakeCutoff() time.Duration { return 2 * p.lead() }
+
+// dueOf is when a job of a world that falls d before its end falls due:
+// then, or as the world began, or its end was last moved, if that is
+// later. A run is done once for each due time, so a world begun after its
+// predecessor's run gets a due time of its own, which no other world can
+// have, and the run at once; and so does a world whose end is brought near.
+func dueOf(h *worldHalf, d time.Duration) time.Time {
+	due := h.ends().Add(-d)
+	from := h.row.BeginsAt
+	if n := h.movedAt.Load(); n != 0 && time.Unix(0, n).After(from) {
+		from = time.Unix(0, n)
+	}
+	if b := from.UTC().Truncate(time.Microsecond); b.After(due) {
+		return b
+	}
+	return due
+}
+
+// lockMaking takes the making of the next world, and gives the function
+// that lets it go.
+func (p *process) lockMaking() func() {
+	p.making <- struct{}{}
+	p.makingNow.Store(true)
+	return func() {
+		p.makingNow.Store(false)
+		<-p.making
+	}
+}
 
 // worldToSail is the world to sail as keel starts: the active one, its end
 // set by the schedule if it has none; or, if its end has passed while keel
@@ -106,6 +136,8 @@ func (p *process) worldToSail(ctx context.Context) (store.World, error) {
 	if err != nil {
 		return store.World{}, err
 	}
+	// No one chose this moment, and no one is watching it: the world lasts
+	// at least the schedule's ahead.
 	begins := time.Now()
 	ends := p.cfg.Schedule.EndOf(begins)
 	c, claimed, cerr := p.db.ClaimJob(ctx, p.lease, jobSwitch, row.EndsAt, 0)
@@ -142,10 +174,14 @@ func (p *process) drawSeed() (uint64, error) {
 // seed is KEEL_WORLD_SEED's, which is sailed as it was made, as a new
 // world's first start does.
 func (p *process) makeNext(ctx context.Context) (store.NextWorld, error) {
-	// The next world's job and the switch may both want it at once: one
-	// makes it, the other waits and finds it made.
-	p.making.Lock()
-	defer p.making.Unlock()
+	// The next world's job, the switch and the owner may all want it at
+	// once: one makes it, the others wait and find it made.
+	defer p.lockMaking()()
+	return p.makeNextLocked(ctx)
+}
+
+// makeNextLocked is makeNext with the making held.
+func (p *process) makeNextLocked(ctx context.Context) (store.NextWorld, error) {
 	for range nextSeeds {
 		nw, err := p.db.NextWorld(ctx)
 		if errors.Is(err, store.ErrNotFound) {
@@ -268,8 +304,8 @@ func (p *process) endAt(ctx context.Context, h *worldHalf, tick int64) error {
 
 // switchAt loads the next world, made first if it was not, ends the world
 // sailed at the tick given, and switches to the next, beginning at that
-// tick's time.
-func (p *process) switchAt(ctx context.Context, h *worldHalf, tick int64, how string) (string, error) {
+// tick's time and ending at ends.
+func (p *process) switchAt(ctx context.Context, h *worldHalf, tick int64, ends time.Time, how string) (string, error) {
 	nw, err := p.makeNext(ctx)
 	if err != nil {
 		return "", err
@@ -283,10 +319,10 @@ func (p *process) switchAt(ctx context.Context, h *worldHalf, tick int64, how st
 	}
 	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
-	if err := p.switchTo(sctx, rw, loop.TimeOf(tick, h.row.Epoch), how); err != nil {
+	if err := p.switchTo(sctx, rw, loop.TimeOf(tick, h.row.Epoch), ends, how); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("world %d ended at tick %d; world %d begun", h.row.Number, tick, nw.Number), nil
+	return fmt.Sprintf("world %d ended at tick %d; world %d begun, to end at %s", h.row.Number, tick, nw.Number, ends.Format(time.RFC3339)), nil
 }
 
 // lifecycleJobs are the jobs of a world's life, and the daily cleanup.
@@ -300,20 +336,22 @@ func (p *process) lifecycleJobs() []jobs.Job {
 		}
 		return h.ends(), true
 	}
+	// before is a job of the world sailed's, due d before its end, or as it
+	// began.
 	before := func(d time.Duration) (func(time.Time) (time.Time, bool), func(time.Time) time.Time) {
+		dueNow := func() (time.Time, bool) {
+			h := p.current.Load()
+			if h == nil || h.ends().IsZero() {
+				return time.Time{}, false
+			}
+			return dueOf(h, d), true
+		}
 		return func(now time.Time) (time.Time, bool) {
-				w, ok := end()
-				if !ok {
-					return time.Time{}, false
-				}
-				due := w.Add(-d)
-				return due, !now.Before(due)
+				due, ok := dueNow()
+				return due, ok && !now.Before(due)
 			}, func(time.Time) time.Time {
-				w, ok := end()
-				if !ok {
-					return time.Time{}
-				}
-				return w.Add(-d)
+				due, _ := dueNow()
+				return due
 			}
 	}
 	nextDue, nextNext := before(sc.Ahead)
@@ -340,7 +378,7 @@ func (p *process) lifecycleJobs() []jobs.Job {
 			Name: jobClosing, Due: closingDue, Next: closingNext,
 			Run: func(ctx context.Context, due time.Time) (jobs.Result, error) {
 				h := p.current.Load()
-				if h == nil || !h.ends().Add(-sc.Notice).Equal(due) {
+				if h == nil || h.ends().IsZero() || !dueOf(h, sc.Notice).Equal(due) {
 					return jobs.Result{Skipped: true, Detail: "the world's end has moved"}, nil
 				}
 				column := worldColumn(p.cat)
@@ -377,7 +415,7 @@ func (p *process) lifecycleJobs() []jobs.Job {
 					return jobs.Result{}, errSwitching
 				}
 				defer p.switching.Store(false)
-				detail, err := p.switchAt(ctx, h, loop.TickAt(due, h.row.Epoch), "scheduled")
+				detail, err := p.switchAt(ctx, h, loop.TickAt(due, h.row.Epoch), sc.EndOf(due), "scheduled")
 				return jobs.Result{Detail: detail}, err
 			},
 		},
@@ -422,92 +460,148 @@ func (p *process) lifecycleJobs() []jobs.Job {
 
 // The owner's hand on a world's life, from the world page.
 
+// errTooLate is the next world asked to be made, or begun, by hand in the
+// world's last minutes, as the scheduled switch loads it.
+var errTooLate = errors.New("too near the world's end: the scheduled switch is loading the next world")
+
+// errMaking is the next world asked to be begun while the owner's making
+// of it is under way.
+var errMaking = errors.New("the next world is being made by hand")
+
+// tooLate reports whether the world is in its last minutes, when nothing
+// is made or begun by hand.
+func (p *process) tooLate(h *worldHalf) bool {
+	return !h.ends().IsZero() && !time.Now().Before(h.ends().Add(-p.remakeCutoff()))
+}
+
 // BeginNext ends the world sailed, whose number must be the number given,
-// a second from now, and begins the next: made first if it was not. It
-// answers at once; the switch follows.
-func (p *process) BeginNext(ctx context.Context, number int) (int, error) {
+// a second from now, and begins the next: made first if it was not. The
+// new world keeps the schedule: it ends when the old one would have,
+// however near that is. It answers at once, with the new world's number
+// and end; the switch follows.
+func (p *process) BeginNext(ctx context.Context, number int) (int, time.Time, error) {
 	h := p.current.Load()
 	if h == nil || h.row.Number != number {
-		return 0, store.ErrNotActive
+		return 0, time.Time{}, store.ErrNotActive
+	}
+	if p.tooLate(h) {
+		return 0, time.Time{}, errTooLate
 	}
 	if !p.switching.CompareAndSwap(false, true) {
-		return 0, errSwitching
+		return 0, time.Time{}, errSwitching
+	}
+	if p.remaking.Load() {
+		p.switching.Store(false)
+		return 0, time.Time{}, errMaking
+	}
+	begins := time.Now().Add(time.Second)
+	tick := loop.TickAt(begins, h.row.Epoch)
+	ends := h.ends()
+	if ends.IsZero() {
+		ends = p.cfg.Schedule.EndOf(begins)
 	}
 	go func() {
 		defer p.switching.Store(false)
-		ctx := context.Background()
-		tick := loop.TickAt(time.Now().Add(time.Second), h.row.Epoch)
-		detail, err := p.switchAt(ctx, h, tick, "by_hand")
+		detail, err := p.switchAt(context.Background(), h, tick, ends, "by_hand")
 		if err != nil {
 			p.log.Error("the next world was not begun", "err", err)
 			return
 		}
 		p.log.Warn("owner: the next world begun by hand", "action", "world", "detail", detail)
 	}()
-	return number + 1, nil
+	return number + 1, ends, nil
 }
 
-// errTooLate is a next world asked to be made again in its last minutes.
-var errTooLate = errors.New("the next world is being loaded: too near the end to make another")
-
-// RemakeNext discards the next world, of the number given, and makes
-// another from a new seed, recorded as a run of the next world's job. It
-// answers at once; the making follows.
-func (p *process) RemakeNext(ctx context.Context, number int) error {
+// MakeNext makes a new next world, of the number given: the active
+// world's next. With none, one is made now; with one, stored or being
+// made, it is discarded once made and another made from a new seed. It is
+// recorded as a run of the next world's job, due now, and answers at once,
+// saying whether a next world is to be discarded; the making follows.
+func (p *process) MakeNext(ctx context.Context, number int) (bool, error) {
 	h := p.current.Load()
-	if h == nil {
-		return store.ErrNoNext
+	if h == nil || h.row.Number+1 != number {
+		return false, store.ErrNoNext
 	}
-	if !h.ends().IsZero() && !time.Now().Before(h.ends().Add(-p.remakeCutoff())) {
-		return errTooLate
+	if p.tooLate(h) {
+		return false, errTooLate
 	}
-	if !p.switching.CompareAndSwap(false, true) {
-		return errSwitching
+	if !p.remaking.CompareAndSwap(false, true) {
+		return false, errMaking
 	}
-	nw, err := p.db.NextWorld(ctx)
-	if errors.Is(err, store.ErrNotFound) || err == nil && nw.Number != number {
-		p.switching.Store(false)
-		return store.ErrNoNext
+	if p.switching.Load() {
+		p.remaking.Store(false)
+		return false, errSwitching
 	}
-	if err != nil {
-		p.switching.Store(false)
-		return err
+	_, err := p.db.NextWorld(ctx)
+	discarding := err == nil
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		p.remaking.Store(false)
+		return false, err
 	}
 	go func() {
-		defer p.switching.Store(false)
-		ctx := context.Background()
-		due := time.Now().UTC().Truncate(time.Second)
-		c, ok, err := p.db.ClaimJob(ctx, p.lease, jobNextWorld, due, 0)
-		finish := func(outcome, detail string) {
-			if ok && err == nil {
-				_ = p.db.FinishJob(ctx, c, outcome, detail)
-			}
+		defer p.remaking.Store(false)
+		p.makeByHand(context.Background(), number)
+	}()
+	return discarding, nil
+}
+
+// makeByHand discards the next world, if there is one, and makes another,
+// with the making held throughout: a making under way, the job's, finishes
+// first, and what it made is then discarded. A switch begun meanwhile
+// keeps the next world it is loading.
+func (p *process) makeByHand(ctx context.Context, number int) {
+	due := time.Now().UTC().Truncate(time.Second)
+	c, claimed, cerr := p.db.ClaimJob(ctx, p.lease, jobNextWorld, due, 0)
+	finish := func(outcome, detail string) {
+		if claimed && cerr == nil {
+			_ = p.db.FinishJob(ctx, c, outcome, detail)
 		}
+	}
+	fail := func(what string, err error) {
+		p.log.Error(what, "world", number, "err", err)
+		finish(store.JobFailed, err.Error())
+	}
+	defer p.lockMaking()()
+	if p.switching.Load() {
+		fail("the next world was not made by hand", errSwitching)
+		return
+	}
+	action, was := "make", ""
+	switch nw, err := p.db.NextWorld(ctx); {
+	case err == nil:
 		p.ahead.Store(nil)
 		p.nextView.Store(nil)
 		p.metrics.WorldNextReady.Set(0)
-		if err := p.db.DiscardNextWorld(ctx, p.lease, number); err != nil {
-			p.log.Error("the next world was not discarded", "world", number, "err", err)
-			finish(store.JobFailed, err.Error())
+		if err := p.db.DiscardNextWorld(ctx, p.lease, nw.Number); err != nil {
+			fail("the next world was not discarded", err)
 			return
 		}
-		p.log.Warn("owner: the next world discarded, another to be made", "action", "remake", "world", number, "seed", nw.Seed)
-		made, err := p.makeNext(ctx)
-		if err != nil {
-			p.log.Error("the next world was not made again", "err", err)
-			finish(store.JobFailed, err.Error())
-			return
-		}
-		finish(store.JobOK, fmt.Sprintf("by hand: world %d made again from seed %d (was %d)", made.Number, made.Seed, nw.Seed))
-	}()
-	return nil
+		action, was = "remake", fmt.Sprintf(" (seed %d discarded)", nw.Seed)
+		p.log.Warn("owner: the next world discarded, another to be made", "action", action, "world", nw.Number, "seed", nw.Seed)
+	case !errors.Is(err, store.ErrNotFound):
+		fail("the next world was not read", err)
+		return
+	}
+	start := time.Now()
+	made, err := p.makeNextLocked(ctx)
+	if err != nil {
+		fail("the next world was not made by hand", err)
+		return
+	}
+	took := time.Since(start).Round(time.Millisecond)
+	p.log.Warn("owner: the next world made by hand", "action", action, "world", made.Number, "seed", made.Seed, "took", took.String())
+	finish(store.JobOK, fmt.Sprintf("by hand: world %d made from seed %d in %d attempts, %v%s", made.Number, made.Seed, made.Attempts, took, was))
 }
+
+// Switching reports whether a switch is under way.
+func (p *process) Switching() bool { return p.switching.Load() }
 
 // Lifecycle is the world's life as the world page shows it.
 func (p *process) Lifecycle(ctx context.Context) (owner.Lifecycle, error) {
 	h := p.current.Load()
 	now := time.Now()
-	lc := owner.Lifecycle{Now: now.UnixMilli(), Schedule: p.cfg.Schedule.String(), Switching: p.switching.Load()}
+	lc := owner.Lifecycle{Now: now.UnixMilli(), Schedule: p.cfg.Schedule.String(), Switching: p.switching.Load(),
+		Making: p.makingNow.Load() || p.remaking.Load(), Generator: worldgen.Version}
 	if sc := p.cfg.Schedule; sc.Zone != nil {
 		lc.Zone = sc.Zone.String()
 	}
@@ -517,7 +611,7 @@ func (p *process) Lifecycle(ctx context.Context) (owner.Lifecycle, error) {
 			lc.Ends = h.ends().UnixMilli()
 			lc.Closing = p.cfg.Schedule.Closing(h.ends(), now)
 			lc.ClosingFrom = h.ends().Add(-p.cfg.Schedule.Notice).UnixMilli()
-			lc.NextMadeAt = h.ends().Add(-p.cfg.Schedule.Ahead).UnixMilli()
+			lc.NextMadeAt = dueOf(h, p.cfg.Schedule.Ahead).UnixMilli()
 			lc.RemakeUntil = h.ends().Add(-p.remakeCutoff()).UnixMilli()
 		}
 		if !h.row.BeginsAt.IsZero() {
@@ -527,8 +621,8 @@ func (p *process) Lifecycle(ctx context.Context) (owner.Lifecycle, error) {
 	nw, err := p.db.NextWorld(ctx)
 	switch {
 	case err == nil:
-		lc.Next = &owner.NextWorld{Number: nw.Number, Seed: fmt.Sprint(nw.Seed), Created: nw.Created.UnixMilli(), Stored: nw.Stored,
-			Attempts: nw.Attempts, GenerationMs: nw.GenerationMs}
+		lc.Next = &owner.NextWorld{Number: nw.Number, Seed: fmt.Sprint(nw.Seed), Generator: nw.Generator, Created: nw.Created.UnixMilli(),
+			Stored: nw.Stored, Attempts: nw.Attempts, GenerationMs: nw.GenerationMs}
 		if nw.Stored {
 			lc.Next.StoredAt = nw.StoredAt.UnixMilli()
 		}
@@ -653,6 +747,7 @@ func endRoute(p *process, h *worldHalf) http.Handler {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
+		h.movedAt.Store(time.Now().UnixNano())
 		h.endsAt.Store(end.UnixNano())
 		h.game.SetEnds(end, end.Add(-p.cfg.Schedule.Notice))
 		p.metrics.WorldEnds.Set(float64(end.Unix()))

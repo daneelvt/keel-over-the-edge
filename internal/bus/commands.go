@@ -22,7 +22,8 @@ type Op uint8
 // and replays; Hold is the server's own, from what writes the world to the
 // database, Chart, which marks what the world's chart holds from its
 // start, and End, which ends the world at its end; Teleport, Stay and
-// Unseen are the owner's tools'.
+// Unseen are the owner's tools', and Chart too, which charts the whole
+// world from the world page.
 const (
 	Join       Op = iota + 1 // a boat for Account, sailed through connection Conn: its existing one, a new one, or a place in the queue
 	Leave                    // Boat leaves the world
@@ -57,9 +58,10 @@ func (o Op) Developer() bool { return o == SetWeather || o == Place }
 // developer's sender may too, a player's never.
 func (o Op) Server() bool { return o == Hold || o == Chart || o == End }
 
-// Owner reports whether only the owner's tools may send o: a developer's
-// sender may too, a player's or the server's never.
-func (o Op) Owner() bool { return o == Teleport || o == Stay || o == Unseen }
+// Owner reports whether the owner's tools may send o: a developer's sender
+// may too, a player's never, and the server's only Chart, which is its own
+// as well.
+func (o Op) Owner() bool { return o == Teleport || o == Stay || o == Unseen || o == Chart }
 
 // An Account is who sails a boat: the account's UUID, its 16 bytes.
 type Account [16]byte
@@ -234,7 +236,7 @@ func (q *Queue) Developer() Sender { return Sender{q: q, from: fromDeveloper} }
 func (q *Queue) Server() Sender { return Sender{q: q, from: fromServer} }
 
 // Owner returns a sender for the owner's tools' commands alone: Teleport,
-// Stay and Unseen. The world page and the free camera are given one.
+// Stay, Unseen and Chart. The world page and the free camera are given one.
 func (q *Queue) Owner() Sender { return Sender{q: q, from: fromOwner} }
 
 // Refused counts the commands refused because the queue was full.

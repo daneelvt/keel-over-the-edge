@@ -195,9 +195,10 @@ func (sc Schedule) Next(t time.Time) time.Time {
 }
 
 // EndOf is the end of a world that begins at begins: the schedule's first
-// end at least Ahead after it, so a world begun late, or by hand, lasts
-// until the published end after next rather than ending before anyone has
-// seen it, and its successor can be made ahead.
+// end at least Ahead after it, so a world begun late, on a start after an
+// end missed, lasts until the published end after next rather than ending
+// before anyone has seen it, and its successor can be made ahead. A world
+// begun by hand keeps the end of the world it ends instead.
 func (sc Schedule) EndOf(begins time.Time) time.Time {
 	return sc.Next(begins.Add(sc.Ahead - time.Nanosecond))
 }
