@@ -187,6 +187,19 @@ interface Exports {
   capCount(n: number): void;
   cumulus(): number;
   cumulusAt(x: number, y: number, reach: number, sun: number): number;
+  visibilityParams(): number;
+  visibilityPrepare(): void;
+  opticalDepth(x0: number, y0: number, h0: number, x1: number, y1: number, h1: number): number;
+  visibilityAt(x: number, y: number): number;
+  visibilityAtTick(x: number, y: number, tick: number): number;
+  visibilityWord(v: number): number;
+  airValues(): number;
+  airAt(x: number, y: number, h: number): void;
+  airSource(): number;
+  airSources(x: number, y: number, r: number): number;
+  flash(): number;
+  slotTicks(): number;
+  flashesAt(slot: number): number;
 }
 
 const functionExports = [
@@ -328,6 +341,19 @@ const functionExports = [
   'capCount',
   'cumulus',
   'cumulusAt',
+  'visibilityParams',
+  'visibilityPrepare',
+  'opticalDepth',
+  'visibilityAt',
+  'visibilityAtTick',
+  'visibilityWord',
+  'airValues',
+  'airAt',
+  'airSource',
+  'airSources',
+  'flash',
+  'slotTicks',
+  'flashesAt',
 ] as const satisfies readonly (keyof Exports)[];
 
 /** A chunk of the ground as the module holds it: views of its memory. */
@@ -354,6 +380,9 @@ export const SKY = { sun: 0, moon: 5, lit: 10, stars: 11, size: 20 } as const;
  * its bearing clockwise from north, in radians.
  */
 export const BODY = { east: 0, north: 1, up: 2, altitude: 3, bearing: 4, size: 5 } as const;
+
+/** The words for visibility, as the module's visibilityWord numbers them. */
+export const VISIBILITY = { good: 0, moderate: 1, poor: 2, veryPoor: 3 } as const;
 
 /** How many values windSample writes for each point, and where each is. */
 export const WIND_VALUES = 6;
@@ -916,6 +945,83 @@ export class Physics {
     const x = this.#x;
     const n = x.cumulusAt(east, north, reach, sun) >>> 0;
     return new Float64Array(x.memory.buffer, x.cumulus() >>> 0, n * SIZES.cumulus);
+  }
+
+  /**
+   * Derives visibility's and lightning's constants from the
+   * visibilityParams record. Call it after writing them
+   * (writeVisibilityParams) and after prepareClouds.
+   */
+  prepareVisibility(): void {
+    this.#x.visibilityPrepare();
+  }
+
+  /**
+   * The optical depth along the straight line from (x0, y0), h0 m above
+   * the sea, to (x1, y1), h1 m above it, over the dome, at the time
+   * windDrawAt set: the clear air's, the fog banks', the rain's and the
+   * mist band's.
+   */
+  opticalDepth(x0: number, y0: number, h0: number, x1: number, y1: number, h1: number): number {
+    return this.#x.opticalDepth(x0, y0, h0, x1, y1, h1);
+  }
+
+  /** The visibility at (east, north), 2 m up, at the time windDrawAt set, m. */
+  visibilityAt(east: number, north: number): number {
+    return this.#x.visibilityAt(east, north);
+  }
+
+  /** The visibility at (east, north), 2 m up, at a tick of its own, m: a blast's. */
+  visibilityAtTick(east: number, north: number, tick: number): number {
+    return this.#x.visibilityAtTick(east, north, tick);
+  }
+
+  /** The word for a visibility, m: VISIBILITY's good to very poor. */
+  visibilityWord(v: number): number {
+    return this.#x.visibilityWord(v) >>> 0;
+  }
+
+  /**
+   * The extinction at (east, north), h m above the sea, at the time
+   * windDrawAt set, by what makes it: a view of the clear air's, the
+   * fog's, the rain's and the mist's, 1/m. Read it before the next call.
+   */
+  airAt(east: number, north: number, h: number): Float64Array {
+    const x = this.#x;
+    x.airAt(east, north, h);
+    return new Float64Array(x.memory.buffer, x.airValues() >>> 0, 4);
+  }
+
+  /**
+   * The Gaussian sources of extinction whose reach comes within r of
+   * (east, north) at the time windDrawAt set, as the GPU sums them: the
+   * nearest fog banks first, then rain. A view of the module's airSource
+   * records, SIZES.airSource values each, and how many are fog banks.
+   */
+  airSources(east: number, north: number, r: number): { fog: number; records: Float64Array } {
+    const x = this.#x;
+    const got = x.airSources(east, north, r) >>> 0;
+    const n = got & 0xffff;
+    return {
+      fog: got >>> 16,
+      records: new Float64Array(x.memory.buffer, x.airSource() >>> 0, n * SIZES.airSource),
+    };
+  }
+
+  /** How long lightning's slots of world time are, ticks. */
+  slotTicks(): number {
+    return this.#x.slotTicks();
+  }
+
+  /**
+   * The flashes in a slot of world time, from the systems at its start: a
+   * view of the module's flash records, SIZES.flash values each. The
+   * keyframes held must cover the slot's start.
+   */
+  flashesAt(slot: number): Float64Array {
+    const x = this.#x;
+    const n = x.flashesAt(slot) >>> 0;
+    return new Float64Array(x.memory.buffer, x.flash() >>> 0, n * SIZES.flash);
   }
 
   /** How far from the centre a front's line enters the disk's reach and leaves it, m. */

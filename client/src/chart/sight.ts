@@ -6,54 +6,49 @@
 // sandbox charts as a server would; the server's, online, are the ones
 // that count.
 
-/** The mist band's visibility, as the table carries it. */
-export interface Visibility {
-  Band: number;
-  Lip: number;
-  Clear: number;
-  Range: number;
-}
-
 /** A sight table, as the server exports it. */
 export interface SightExport {
   subjects: number;
   rays: number;
   dome: number;
   eyes: number[];
-  visibility: Visibility;
   lnThreshold: number;
+  /** Each cell's x, y, the horizon's distance from its top, and its top, m. */
   cells: [number, number, number, number][];
   cellSubjects: number[];
   views: {
     X: number;
     Y: number;
-    Vis: number;
+    Top: number;
     Far2: number;
     Subject: number;
     Near: number[];
     Far: number[];
   }[];
   awash: { X: number; Y: number; Reach: number; Subject: number }[];
-  lights: { X: number; Y: number; Range: number; Vis: number; LnI: number; Subject: number }[];
+  lights: { X: number; Y: number; Focal: number; Range: number; LnI: number; Subject: number }[];
   with: Record<string, number[]>;
 }
 
-const KOSCHMIEDER = 3.912;
-const NAUTICAL_MILE = 1852;
-const LN_TWENTIETH = Math.log(0.05);
-
-/** The visual range at the sea r m from the centre, m: physics.VisualRangeAt. */
-export function visualRange(v: Visibility, r: number): number {
-  const m = Math.min(Math.max((r - v.Band) / (v.Lip - v.Band), 0), 1);
-  const clear = KOSCHMIEDER / v.Clear;
-  const sigma = Math.max(KOSCHMIEDER / v.Range - clear, 0);
-  return KOSCHMIEDER / (clear + sigma * m);
+/**
+ * The air a look sees through: the optical depth along the straight line
+ * from (x0, y0), h0 m above the sea, to (x1, y1), h1 m above it, as the
+ * physics module gives it from the weather at the tick, and the depth a
+ * thing is seen through at most.
+ */
+export interface Air {
+  depth(x0: number, y0: number, h0: number, x1: number, y1: number, h1: number): number;
+  contrast: number;
 }
+
+/** The height a cove's or an awash thing's water is looked at, m. */
+const WATER_TOP = 1;
 
 /**
  * What a lookout at (x, y), its eye eye m high, sees of what charted does
- * not hold: each subject once, by its index in the table. lit says which
- * lights are lit, by index.
+ * not hold through the air: each subject once, by its index in the table.
+ * lit says which lights are lit, by index, and thresholds the ln lux each
+ * is seen against (the table's night's for any not given).
  */
 export function look(
   t: SightExport,
@@ -61,10 +56,13 @@ export function look(
   y: number,
   eye: number,
   charted: ReadonlySet<number>,
+  air: Air,
   lit: readonly boolean[] = [],
+  thresholds: readonly number[] = [],
 ): number[] {
   const out = new Set<number>();
-  const vis = visualRange(t.visibility, Math.hypot(x, y));
+  const seen = (tx: number, ty: number, top: number): boolean =>
+    air.depth(x, y, eye, tx, ty, top) <= air.contrast;
   const reach = Math.sqrt(2 * t.dome * eye);
   let e = 0;
   for (let i = 0; i < t.eyes.length; i++) {
@@ -72,14 +70,30 @@ export function look(
       e = i;
     }
   }
-  t.cells.forEach(([cx, cy, high, cvis], i) => {
+  // Each island over the horizon: its nearest cell over it and its
+  // highest, seen along the line to the nearest, or else to the highest.
+  const islands = new Map<number, { near: number; d2: number; high: number }>();
+  t.cells.forEach(([cx, cy, high, top], i) => {
     const s = t.cellSubjects[i] ?? -1;
-    if (charted.has(s) || out.has(s)) {
+    if (charted.has(s)) {
       return;
     }
-    const r = Math.min(reach + high, vis, cvis);
-    if ((cx - x) ** 2 + (cy - y) ** 2 <= r * r) {
-      out.add(s);
+    const r = reach + high;
+    const d2 = (cx - x) ** 2 + (cy - y) ** 2;
+    if (d2 > r * r) {
+      return;
+    }
+    const o = islands.get(s);
+    if (o === undefined) {
+      islands.set(s, { near: i, d2, high: i });
+      return;
+    }
+    if (d2 < o.d2) {
+      o.near = i;
+      o.d2 = d2;
+    }
+    if (top > (t.cells[o.high]?.[3] ?? 0)) {
+      o.high = i;
     }
   });
   for (const v of t.views) {
@@ -93,9 +107,6 @@ export function look(
       continue;
     }
     const d = Math.sqrt(d2);
-    if (d > vis || d > v.Vis) {
-      continue;
-    }
     let a = Math.atan2(dx, dy);
     if (a < 0) {
       a += 2 * Math.PI;
@@ -106,7 +117,7 @@ export function look(
     }
     const near = v.Near[e * t.rays + k] ?? -1;
     const far = v.Far[e * t.rays + k] ?? -1;
-    if (near >= 0 && d >= near && d <= far) {
+    if (near >= 0 && d >= near && d <= far && seen(v.X, v.Y, v.Top)) {
       out.add(v.Subject);
     }
   }
@@ -114,9 +125,18 @@ export function look(
     if (charted.has(a.Subject) || out.has(a.Subject)) {
       continue;
     }
-    const r = Math.min(a.Reach, vis);
-    if ((a.X - x) ** 2 + (a.Y - y) ** 2 <= r * r) {
+    if ((a.X - x) ** 2 + (a.Y - y) ** 2 <= a.Reach * a.Reach && seen(a.X, a.Y, WATER_TOP)) {
       out.add(a.Subject);
+    }
+  }
+  for (const [s, o] of islands) {
+    const n = t.cells[o.near];
+    const h = t.cells[o.high];
+    if (n === undefined || h === undefined) {
+      continue;
+    }
+    if (seen(n[0], n[1], n[3]) || (o.high !== o.near && seen(h[0], h[1], h[3]))) {
+      out.add(s);
     }
   }
   t.lights.forEach((l, i) => {
@@ -127,9 +147,9 @@ export function look(
     if (d > l.Range) {
       return;
     }
-    const v = Math.min(vis, l.Vis);
-    const lnT = (LN_TWENTIETH * NAUTICAL_MILE) / v;
-    if (d < 1 || l.LnI + (d / NAUTICAL_MILE) * lnT - 2 * Math.log(d) >= t.lnThreshold) {
+    const tau = air.depth(x, y, eye, l.X, l.Y, l.Focal);
+    const thr = thresholds[i] ?? t.lnThreshold;
+    if (d < 1 || l.LnI - tau - 2 * Math.log(d) >= thr) {
       out.add(l.Subject);
     }
   });

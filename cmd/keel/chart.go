@@ -49,6 +49,7 @@ func (c *worldChart) sight(cat *catalog.Catalog, epoch time.Time) *sim.Sight {
 	return &sim.Sight{
 		Table: c.world.Table, Every: int64(cat.World.Chart.Sight.Every), Lookouts: c.world.Lookouts,
 		Sky: cat.PrepareSky(), Epoch: epoch.UnixMicro(),
+		Night: cat.World.Lights.Threshold, Day: cat.World.Lights.DayThreshold,
 	}
 }
 

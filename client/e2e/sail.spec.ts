@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { type CDPSession, expect, type Page, test } from '@playwright/test';
-import type { BoatPhysics, Weather } from '../src/catalog/types.gen';
+import type { BoatPhysics, Weather, World } from '../src/catalog/types.gen';
 import { quantiseHelm, quantiseSheet } from '../src/input/quantise';
 import { toHex } from '../src/predict/golden';
 import { RECORDS } from '../src/predict/layout.gen';
@@ -18,7 +18,7 @@ import { decodePng, openScene, picture, pictureDifference } from './helpers';
 
 const catalog = JSON.parse(
   readFileSync(new URL('../src/catalog/catalog.gen.json', import.meta.url), 'utf8'),
-) as { boats: { physics: BoatPhysics }[]; weather: Weather };
+) as { boats: { physics: BoatPhysics }[]; weather: Weather; world: World };
 const wasm = readFileSync(new URL('../src/predict/physics.wasm', import.meta.url));
 
 test('the boat gains speed on a beam reach, with the module’s own bits', async ({ page }) => {
@@ -42,7 +42,7 @@ test('the boat gains speed on a beam reach, with the module’s own bits', async
   }
   // As the page began: time held at 100 s, the boat back at the start and
   // laid on the sea of that time; then each step at the clock's next.
-  const s = await startSandbox(wasm, boat.physics, catalog.weather);
+  const s = await startSandbox(wasm, boat.physics, catalog.weather, catalog.world);
   const clock = { steps: 100 * 30 };
   s.clock = clock;
   s.reset();

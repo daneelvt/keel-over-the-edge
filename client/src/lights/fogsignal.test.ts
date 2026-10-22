@@ -15,7 +15,13 @@ const golden = new URL('../../../internal/light/testdata/schedule.json', import.
 interface Golden {
   times: number[];
   phases: number[];
-  fogSignals: { notation: string; device: string; steps: number[]; on: string[]; starts: number[][] }[];
+  fogSignals: {
+    notation: string;
+    device: string;
+    steps: number[];
+    on: string[];
+    starts: number[][];
+  }[];
   assignment: { places: [number, number][]; devices: string[]; apart: number; signals: number[] };
 }
 

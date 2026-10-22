@@ -6,13 +6,20 @@
 // √(2 R h) + √(2 R H), R the dome's radius (Bowditch's geographic range,
 // "the maximum distance at which the curvature of the earth permits a
 // light to be seen from a particular height of eye", on the world's own
-// sphere). Each reach is the lesser of that and the visual range at the
-// lookout and at the thing: the mist band's, physics.VisualRangeAt.
+// sphere). Within it a thing is seen while the optical depth along the
+// line from the eye to it is at most the contrast, 3.912, Koschmieder's
+// 2%: the clear air's, the fog banks', the rain's and the mist band's,
+// physics.OpticalDepth, as the page draws them. "An island in fog is not
+// charted until a boat is close", and a fog bank between a boat and an
+// island hides it.
 //
 //   - An island is seen when any cell of its land is over the horizon: its
 //     ground, and the trees, roofs and buildings on it, as a wood rises over
-//     the horizon before the summit behind it. Another island seldom hides
-//     one, and only for a moment, so there is no line of sight.
+//     the horizon before the summit behind it; and the air lets it be seen
+//     along the line to its nearest such cell or to its highest, so that a
+//     summit near a fog bank's edge shows over the bank. Another island
+//     seldom hides one, and only for a moment, so there is no line of sight
+//     through land.
 //   - A place or a feature that stands high (a port's town and light, a
 //     lighthouse's tower, a stranded wreck's masts, a cave's roof) is seen
 //     along its view: on each of the table's bearings from it, the water
@@ -22,16 +29,21 @@
 //     its view at the water.
 //   - A reef, a sandbar or a sunk wreck is seen by the water breaking on it,
 //     within its reach.
-//   - A lighthouse is seen by its light at night, while the light is lit:
-//     Allard's law, its intensity's illuminance at the eye above the
-//     threshold, in air of the visual range at the eye and the light, and no
-//     further than its nominal range. Its island is not: a light is seen
-//     "without revealing the islands around it".
+//   - A lighthouse is seen by its light, while the light is lit: Allard's
+//     law, its intensity's illuminance at the eye, I e^(−τ) / d² for the
+//     optical depth τ along the line (IALA R0202), above the threshold, at
+//     night's or by day's, and no further than its nominal range. Its
+//     intensity is the one that reaches its nominal range in the clear air
+//     at night. Its island is not: a light is seen "without revealing the
+//     islands around it".
 //
 // The table is built once from the world (Build), then only read. A look
-// reads the table and the lookout's place, allocates nothing, and follows
-// the physics package's float rules, so a replay sees what the world saw
-// on any machine.
+// reads the table, the lookout's place and the weather at the tick,
+// allocates nothing, and follows the physics package's float rules, so a
+// replay sees what the world saw on any machine. Where no fog, rain or
+// mist lies within reach of the lookout, the air is the clear air's and a
+// line's optical depth its length times the clear air's extinction,
+// exactly what OpticalDepth would give.
 package sight
 
 import (
@@ -90,11 +102,11 @@ type Cell struct {
 	Subject   int32
 }
 
-// Light is a lighthouse's light: where it is, its nominal range, m, and
-// its lighthouse's subject index.
+// Light is a lighthouse's light: where it is, its height above the sea
+// and its nominal range, m, and its lighthouse's subject index.
 type Light struct {
-	X, Y, Range float64
-	Subject     int32
+	X, Y, Focal, Range float64
+	Subject            int32
 }
 
 // Input is what a table is built from.
@@ -106,14 +118,27 @@ type Input struct {
 	// Eyes are the lookouts' heights, m: a view is worked out for each.
 	Eyes []float64
 	// Dome is the dome's radius, m; Rays how many bearings a view is
-	// worked out on; Grid the side of the grid's squares, m.
+	// worked out on; Grid the side of the grid's squares, m; Lip the
+	// disk's radius, m, which the grid covers with a square to spare.
 	Dome float64
 	Rays int
 	Grid float64
-	// Visibility is the mist band's, the clear air's the lights' too.
-	Visibility physics.Visibility
-	// Threshold is the illuminance a light is seen at, lux.
+	Lip  float64
+	// Clear is the clear air's visibility, m, which sets each light's
+	// intensity, and Contrast the optical depth a thing is seen through at
+	// most.
+	Clear, Contrast float64
+	// Threshold is the illuminance a light is seen at at night, lux.
 	Threshold float64
+}
+
+// Conditions are what a look sees by: the weather at the tick, which of
+// the lights are lit, by index, and the threshold each is seen against,
+// ln lux; nil for the night's for all.
+type Conditions struct {
+	Weather   *physics.WeatherTick
+	Lit       []bool
+	Threshold []float64
 }
 
 // The kinds of a grid's entry, in its top bits.
@@ -127,14 +152,15 @@ const (
 // cell is a cell as a look reads it: the square of its reach from an eye at
 // the sea is (eye + high)², high = √(2 R top).
 type cell struct {
-	x, y, high, vis float64
+	x, y, high, top float64
 	subject         int32
 }
 
 // view is a subject seen along its view: on each bearing, for each eye,
-// the nearest and furthest water it is seen from, m, both −1 for none.
+// the nearest and furthest water it is seen from, m, both −1 for none; and
+// the height it is looked at.
 type view struct {
-	x, y, vis, far2 float64
+	x, y, top, far2 float64
 	subject         int32
 	near, far       []float32 // [eye × rays + ray]
 }
@@ -145,11 +171,11 @@ type awash struct {
 	subject     int32
 }
 
-// light is a light as a look reads it: ln of its intensity's
-// threshold-crossing constant, its range, and the visual range at it.
+// light is a light as a look reads it: its height, its range and ln of
+// its intensity.
 type light struct {
-	x, y, rng, vis, lnI float64
-	subject             int32
+	x, y, focal, rng, lnI float64
+	subject               int32
 }
 
 // Table is a world's sight table.
@@ -162,9 +188,13 @@ type Table struct {
 	lights   []light
 	eyes     []float64
 	rays     int
-	vis      physics.Visibility
 	dome     float64
 	lnThr    float64
+	clear    float64 // the clear air's visibility, m
+	lip      float64 // the disk's lip, m: the grid covers it
+	// reachMost is the furthest a cell, a view or a reach is seen from,
+	// and lightMost a light, m.
+	reachMost, lightMost float64
 	// The grid: squares of side grid over the disk and its margin, each
 	// with the entries whose reach touches it.
 	grid   float64
@@ -202,6 +232,11 @@ func (t *Table) Eye(h float64) int {
 	return best
 }
 
+// Lookout is a lookout whose eye is h m high, at the centre.
+func (t *Table) Lookout(h float64) Lookout {
+	return Lookout{Eye: t.Eye(h), Reach: t.EyeReach(h), Height: h}
+}
+
 // EyeReach is how far the horizon is from an eye h m high, m.
 func (t *Table) EyeReach(h float64) float64 { return horizon(t.dome, h) }
 
@@ -216,47 +251,46 @@ func hypot(x, y float64) float64 { return math.Sqrt(float64(x*x) + float64(y*y))
 type Lookout struct {
 	X, Y float64
 	// Eye is the table's view to look along (Eye); Reach the horizon's
-	// distance from the eye (EyeReach).
-	Eye   int
-	Reach float64
+	// distance from the eye (EyeReach); Height the eye's height, m.
+	Eye    int
+	Reach  float64
+	Height float64
 }
 
 // Seen is a subject a look saw, and the square of its distance, m².
 type Seen struct {
 	Subject int32
 	D2      float64
+	// An island, while a look weighs it: its nearest cell over the
+	// horizon and its highest, by index; −1 for no island.
+	near, high int32
+	highD2     float64
 }
 
 // Look appends to out each subject not yet charted that the lookout sees:
-// once each, by any of its cells, its view or its reach; lit says which of
-// the lights are lit, by index, and charted which subjects are charted, a
-// bit each. It allocates nothing once out has room.
-func (t *Table) Look(l *Lookout, charted []uint64, lit []bool, out []Seen) []Seen {
-	vis := physics.VisualRangeAt(&t.vis, math.Sqrt(float64(l.X*l.X)+float64(l.Y*l.Y)))
+// once each, by any of its cells, its view or its reach; c says the
+// weather and which lights are lit, and charted which subjects are
+// charted, a bit each. It allocates nothing once out has room.
+func (t *Table) Look(l *Lookout, charted []uint64, c *Conditions, out []Seen) []Seen {
+	w := c.Weather
+	p := w.Prepared()
+	a := air{w: w, contrast: p.Contrast(), clear: p.ClearExtinction(), l: l}
+	a.open = physics.AirClear(w, l.X, l.Y, t.reachMost)
 	start := len(out)
-	add := func(s int32, d2 float64) {
-		for i := start; i < len(out); i++ {
-			if out[i].Subject == s {
-				out[i].D2 = min(out[i].D2, d2)
-				return
-			}
-		}
-		out = append(out, Seen{Subject: s, D2: d2})
-	}
 	if sq, ok := t.square(l.X, l.Y); ok {
 		for _, ref := range t.refs[t.starts[sq]:t.starts[sq+1]] {
 			i := ref & entryMask
 			switch ref &^ entryMask {
 			case entryCell:
-				c := &t.cells[i]
-				if isCharted(charted, c.subject) {
+				cl := &t.cells[i]
+				if isCharted(charted, cl.subject) {
 					continue
 				}
-				dx, dy := c.x-l.X, c.y-l.Y
+				dx, dy := cl.x-l.X, cl.y-l.Y
 				d2 := float64(dx*dx) + float64(dy*dy)
-				r := min(l.Reach+c.high, vis, c.vis)
+				r := l.Reach + cl.high
 				if d2 <= float64(r*r) {
-					add(c.subject, d2)
+					out = t.weigh(out, start, cl.subject, int32(i), d2)
 				}
 			case entryView:
 				v := &t.views[i]
@@ -269,30 +303,47 @@ func (t *Table) Look(l *Lookout, charted []uint64, lit []bool, out []Seen) []See
 					continue
 				}
 				d := math.Sqrt(d2)
-				if d > vis || d > v.vis {
-					continue
-				}
 				k := l.Eye*t.rays + t.ray(dx, dy)
-				if near, far := float64(v.near[k]), float64(v.far[k]); near >= 0 && d >= near && d <= far {
-					add(v.subject, d2)
+				if near, far := float64(v.near[k]), float64(v.far[k]); near >= 0 && d >= near && d <= far && a.seen(v.x, v.y, v.top) {
+					out = add(out, start, v.subject, d2)
 				}
 			case entryAwash:
-				a := &t.awash[i]
-				if isCharted(charted, a.subject) {
+				aw := &t.awash[i]
+				if isCharted(charted, aw.subject) {
 					continue
 				}
-				dx, dy := a.x-l.X, a.y-l.Y
+				dx, dy := aw.x-l.X, aw.y-l.Y
 				d2 := float64(dx*dx) + float64(dy*dy)
-				r := min(a.reach, vis)
-				if d2 <= float64(r*r) {
-					add(a.subject, d2)
+				if d2 <= float64(aw.reach*aw.reach) && a.seen(aw.x, aw.y, waterTop) {
+					out = add(out, start, aw.subject, d2)
 				}
 			}
 		}
 	}
+	// Each island over the horizon: seen along the line to its nearest
+	// cell over it, or else to its highest.
+	n := start
+	for i := start; i < len(out); i++ {
+		s := out[i]
+		if s.near >= 0 {
+			nc := &t.cells[s.near]
+			switch {
+			case a.seen(nc.x, nc.y, nc.top):
+			case s.high != s.near && a.seen(t.cells[s.high].x, t.cells[s.high].y, t.cells[s.high].top):
+				s.D2 = s.highD2
+			default:
+				continue
+			}
+		}
+		s.near, s.high = -1, -1
+		out[n] = s
+		n++
+	}
+	out = out[:n]
+	looked := false
 	for i := range t.lights {
 		lt := &t.lights[i]
-		if i >= len(lit) || !lit[i] || isCharted(charted, lt.subject) {
+		if i >= len(c.Lit) || !c.Lit[i] || isCharted(charted, lt.subject) {
 			continue
 		}
 		dx, dy := lt.x-l.X, lt.y-l.Y
@@ -300,31 +351,86 @@ func (t *Table) Look(l *Lookout, charted []uint64, lit []bool, out []Seen) []See
 		if d2 > float64(lt.rng*lt.rng) {
 			continue
 		}
-		if t.lightSeen(lt, math.Sqrt(d2), min(vis, lt.vis)) {
-			add(lt.subject, d2)
+		if !looked {
+			a.open, looked = physics.AirClear(w, l.X, l.Y, t.lightMost), true
+		}
+		thr := t.lnThr
+		if i < len(c.Threshold) {
+			thr = c.Threshold[i]
+		}
+		if t.lightSeen(lt, math.Sqrt(d2), a.depth(lt.x, lt.y, lt.focal), thr) {
+			out = add(out, start, lt.subject, d2)
 		}
 	}
 	return out
 }
 
-// lightSeen is Allard's law: a light of intensity I seen at d in air of
-// visual range v, its transmissivity over a nautical mile 0.05^(1852 / v),
-// shows while I T^(d / 1852) / d² is above the threshold.
-func (t *Table) lightSeen(lt *light, d, v float64) bool {
+// add keeps subject s seen at d2 m² in out, once, from start on.
+func add(out []Seen, start int, s int32, d2 float64) []Seen {
+	for i := start; i < len(out); i++ {
+		if out[i].Subject == s {
+			out[i].D2 = min(out[i].D2, d2)
+			return out
+		}
+	}
+	return append(out, Seen{Subject: s, D2: d2, near: -1, high: -1})
+}
+
+// weigh keeps island cell i, d2 m² off and over the horizon, in out from
+// start on: its island's nearest cell and its highest so far.
+func (t *Table) weigh(out []Seen, start int, s, i int32, d2 float64) []Seen {
+	for k := start; k < len(out); k++ {
+		o := &out[k]
+		if o.Subject != s {
+			continue
+		}
+		if d2 < o.D2 {
+			o.D2, o.near = d2, i
+		}
+		if t.cells[i].top > t.cells[o.high].top {
+			o.high, o.highD2 = i, d2
+		}
+		return out
+	}
+	return append(out, Seen{Subject: s, D2: d2, near: i, high: i, highD2: d2})
+}
+
+// air is the air a look sees through.
+type air struct {
+	w               *physics.WeatherTick
+	contrast, clear float64
+	// open: no fog, rain or mist within reach of the lookout, so the air
+	// is the clear air's.
+	open bool
+	l    *Lookout
+}
+
+// depth is the optical depth from the lookout's eye to (x, y), h m up.
+func (a *air) depth(x, y, h float64) float64 {
+	if !a.open {
+		return physics.OpticalDepth(a.w, a.l.X, a.l.Y, a.l.Height, x, y, h)
+	}
+	// As OpticalDepth gives it in the clear air alone, op for op.
+	dx, dy, dh := x-a.l.X, y-a.l.Y, h-a.l.Height
+	d2 := float64(dx*dx) + float64(dy*dy)
+	return float64(a.clear * math.Sqrt(d2+float64(dh*dh)))
+}
+
+// seen reports whether a thing at (x, y), h m up, is seen through the air.
+func (a *air) seen(x, y, h float64) bool { return a.depth(x, y, h) <= a.contrast }
+
+// lightSeen is Allard's law: a light of intensity I seen at d m through an
+// optical depth tau shows while I e^(−tau) / d² is above the threshold,
+// ln lux.
+func (t *Table) lightSeen(lt *light, d, tau, thr float64) bool {
 	if d < 1 {
 		return true
 	}
-	lnT := float64(lnTwentieth*nauticalMile) / v
-	return lt.lnI+float64(d/nauticalMile*lnT)-float64(2*physics.Log(d)) >= t.lnThr
+	return lt.lnI-tau-float64(2*physics.Log(d)) >= thr
 }
 
-// nauticalMile is a nautical mile, m; lnTwentieth is ln 0.05, the
-// transmissivity's over a distance of the visual range (Koschmieder's 2%,
-// as the light lists take it).
-const (
-	nauticalMile = 1852
-	lnTwentieth  = -2.995732273553991
-)
+// nauticalMile is a nautical mile, m.
+const nauticalMile = 1852
 
 // ray is the bearing nearest the way (dx, dy) points, clockwise from north.
 func (t *Table) ray(dx, dy float64) int {
@@ -360,21 +466,21 @@ func Words(n int) int { return (n + 63) / 64 }
 // Build makes the table from in. The views are worked out on every core.
 func Build(in *Input) *Table {
 	t := &Table{
-		subjects: in.Subjects, eyes: in.Eyes, rays: in.Rays, vis: in.Visibility,
+		subjects: in.Subjects, eyes: in.Eyes, rays: in.Rays, clear: in.Clear,
 		grid: in.Grid, dome: in.Dome, with: make([][]int32, len(in.Subjects)),
-		lnThr: physics.Log(in.Threshold),
+		lnThr: physics.Log(in.Threshold), lip: in.Lip,
 	}
 	if len(t.eyes) == 0 {
 		t.eyes = []float64{2}
 	}
-	visAt := func(x, y float64) float64 { return physics.VisualRangeAt(&t.vis, hypot(x, y)) }
 	high := func(h float64) float64 { return horizon(in.Dome, h) }
 	eyeMost := 0.0
 	for _, e := range t.eyes {
 		eyeMost = max(eyeMost, high(e))
 	}
 	for _, c := range in.Cells {
-		t.cells = append(t.cells, cell{x: c.X, y: c.Y, high: high(c.Top), vis: visAt(c.X, c.Y), subject: c.Subject})
+		t.cells = append(t.cells, cell{x: c.X, y: c.Y, high: high(c.Top), top: c.Top, subject: c.Subject})
+		t.reachMost = max(t.reachMost, eyeMost+high(c.Top))
 	}
 	var viewed []int32
 	for i, s := range in.Subjects {
@@ -383,6 +489,7 @@ func Build(in *Input) *Table {
 			viewed = append(viewed, int32(i))
 		case Awash:
 			t.awash = append(t.awash, awash{x: s.X, y: s.Y, reach: s.Reach, subject: int32(i)})
+			t.reachMost = max(t.reachMost, s.Reach)
 		case Hidden:
 			if s.Island >= 0 {
 				t.with[s.Island] = append(t.with[s.Island], int32(i))
@@ -396,8 +503,6 @@ func Build(in *Input) *Table {
 		wg.Go(func() {
 			for k := range next {
 				t.views[k] = buildView(in, viewed[k], high)
-				s := &in.Subjects[viewed[k]]
-				t.views[k].vis = visAt(s.X, s.Y)
 			}
 		})
 	}
@@ -406,12 +511,19 @@ func Build(in *Input) *Table {
 	}
 	close(next)
 	wg.Wait()
-	clearAir := t.vis.Clear
+	for i := range t.views {
+		t.reachMost = max(t.reachMost, math.Sqrt(t.views[i].far2))
+	}
+	// Each light's intensity, whose light is seen at its nominal range in
+	// the clear air at night: ln I = ln E + 2 ln R + σ R.
+	sigma := 0.0
+	if in.Clear > 0 {
+		sigma = in.Contrast / in.Clear
+	}
 	for _, l := range in.Lights {
-		// The intensity whose light is seen at its nominal range in clear air.
-		lnT := float64(lnTwentieth*nauticalMile) / clearAir
-		lnI := t.lnThr + float64(2*physics.Log(l.Range)) - float64(l.Range/nauticalMile*lnT)
-		t.lights = append(t.lights, light{x: l.X, y: l.Y, rng: l.Range, vis: visAt(l.X, l.Y), lnI: lnI, subject: l.Subject})
+		lnI := t.lnThr + float64(2*physics.Log(l.Range)) + float64(sigma*l.Range)
+		t.lights = append(t.lights, light{x: l.X, y: l.Y, focal: l.Focal, rng: l.Range, lnI: lnI, subject: l.Subject})
+		t.lightMost = max(t.lightMost, l.Range)
 	}
 	t.index(eyeMost)
 	return t
@@ -426,6 +538,7 @@ func buildView(in *Input, s int32, high func(float64) float64) view {
 	if sub.Seen == ByWater {
 		top = waterTop
 	}
+	v.top = top
 	most := 0.0
 	for e, eye := range in.Eyes {
 		reach := high(eye) + high(top)
@@ -485,7 +598,7 @@ func inView(g *physics.Ground, x0, y0, x1, y1, eye, top float64) bool {
 // index puts each entry in the grid's squares its reach touches, from an
 // eye whose horizon is eyeMost m off.
 func (t *Table) index(eyeMost float64) {
-	t.half = float64(math.Ceil((t.vis.Lip+t.grid)/t.grid) * t.grid)
+	t.half = float64(math.Ceil((t.lip+t.grid)/t.grid) * t.grid)
 	t.side = int32(2 * t.half / t.grid)
 	n := int(t.side) * int(t.side)
 	lists := make([][]uint32, n)
@@ -528,16 +641,16 @@ func (t *Table) Size() (cells, views, awash, lights, refs int) {
 }
 
 // Export is a table as the page's offline sandbox reads it: everything a
-// look reads, by entry, without the grid, which it does without.
+// look reads, by entry, without the grid, which it does without. The
+// sandbox asks its physics module for the optical depth along each line.
 type Export struct {
-	Subjects   int                `json:"subjects"`
-	Rays       int                `json:"rays"`
-	Dome       float64            `json:"dome"`
-	Eyes       []float64          `json:"eyes"`
-	Visibility physics.Visibility `json:"visibility"`
-	LnThresh   float64            `json:"lnThreshold"`
-	// Cells are x, y, the horizon's distance from their top and the
-	// visual range at them, m; CellSubjects their islands.
+	Subjects int       `json:"subjects"`
+	Rays     int       `json:"rays"`
+	Dome     float64   `json:"dome"`
+	Eyes     []float64 `json:"eyes"`
+	LnThresh float64   `json:"lnThreshold"`
+	// Cells are x, y, the horizon's distance from their top and their
+	// top, m; CellSubjects their islands.
 	Cells        [][4]float64    `json:"cells"`
 	CellSubjects []int32         `json:"cellSubjects"`
 	Views        []ExportView    `json:"views"`
@@ -548,7 +661,7 @@ type Export struct {
 
 // ExportView is a view as Export holds it.
 type ExportView struct {
-	X, Y, Vis, Far2 float64
+	X, Y, Top, Far2 float64
 	Subject         int32
 	Near, Far       []float32
 }
@@ -561,25 +674,25 @@ type ExportReach struct {
 
 // ExportLight is a light as Export holds it.
 type ExportLight struct {
-	X, Y, Range, Vis, LnI float64
-	Subject               int32
+	X, Y, Focal, Range, LnI float64
+	Subject                 int32
 }
 
 // Export is the table as the sandbox reads it.
 func (t *Table) Export() Export {
-	e := Export{Subjects: len(t.subjects), Rays: t.rays, Dome: t.dome, Eyes: t.eyes, Visibility: t.vis, LnThresh: t.lnThr, With: map[int][]int32{}}
+	e := Export{Subjects: len(t.subjects), Rays: t.rays, Dome: t.dome, Eyes: t.eyes, LnThresh: t.lnThr, With: map[int][]int32{}}
 	for _, c := range t.cells {
-		e.Cells = append(e.Cells, [4]float64{c.x, c.y, c.high, c.vis})
+		e.Cells = append(e.Cells, [4]float64{c.x, c.y, c.high, c.top})
 		e.CellSubjects = append(e.CellSubjects, c.subject)
 	}
 	for _, v := range t.views {
-		e.Views = append(e.Views, ExportView{X: v.x, Y: v.y, Vis: v.vis, Far2: v.far2, Subject: v.subject, Near: v.near, Far: v.far})
+		e.Views = append(e.Views, ExportView{X: v.x, Y: v.y, Top: v.top, Far2: v.far2, Subject: v.subject, Near: v.near, Far: v.far})
 	}
 	for _, a := range t.awash {
 		e.Awash = append(e.Awash, ExportReach{X: a.x, Y: a.y, Reach: a.reach, Subject: a.subject})
 	}
 	for _, l := range t.lights {
-		e.Lights = append(e.Lights, ExportLight{X: l.x, Y: l.y, Range: l.rng, Vis: l.vis, LnI: l.lnI, Subject: l.subject})
+		e.Lights = append(e.Lights, ExportLight{X: l.x, Y: l.y, Focal: l.focal, Range: l.rng, LnI: l.lnI, Subject: l.subject})
 	}
 	for s, w := range t.with {
 		if len(w) > 0 {

@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -56,14 +57,17 @@ func wirePlaces(b *worldgen.Bundle, cat *catalog.Catalog) []*pb.Place {
 	return out
 }
 
-// wireLights are the bundle's lights as the game connection sends them:
-// the main port's, which the Welcome carries, and the rest, sent by range.
+// wireLights are the bundle's lights as the game connection sends them,
+// each with its fog signal: the main port's, which the Welcome carries, and
+// the rest, sent by range.
 func wireLights(b *worldgen.Bundle, cat *catalog.Catalog) (*pb.Light, *edge.Lights) {
 	var main *pb.Light
 	var rest []*pb.Light
-	for _, l := range b.Lights {
+	signals := chart.FogSignals(b.Lights, cat)
+	for i, l := range b.Lights {
 		w := &pb.Light{Number: uint32(l.Number), East: cm(l.X), North: cm(l.Y), Focal: uint32(cm(l.Focal)),
-			Character: uint32(l.Character), Phase: l.Phase, Range: uint32(math.Round(l.Range))}
+			Character: uint32(l.Character), Phase: l.Phase, Range: uint32(math.Round(l.Range)),
+			FogSignal: uint32(max(signals[i], 0))}
 		if l.Role == worldgen.RoleMain && main == nil {
 			main = w
 			continue

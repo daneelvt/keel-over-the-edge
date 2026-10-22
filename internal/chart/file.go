@@ -6,8 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math"
+	"reflect"
 	"strconv"
+	"strings"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
@@ -62,6 +65,18 @@ type Sandbox struct {
 	Known   []int32        `json:"known"`
 	Sight   sight.Export   `json:"sight"`
 	Checks  []SandboxCheck `json:"checks"`
+	// Fog is the same runs' looks in a fog bank held off the main port.
+	Fog SandboxFog `json:"fog"`
+}
+
+// SandboxFog is a weather of one fog bank, its spell's and its system's
+// records by the names the page gives their fields, the tick it is looked
+// at, and what a lookout sees in it along the runs.
+type SandboxFog struct {
+	Spell  map[string]float64 `json:"spell"`
+	Record map[string]float64 `json:"record"`
+	Tick   float64            `json:"tick"`
+	Checks []SandboxCheck     `json:"checks"`
 }
 
 // SandboxFile is the sandbox's chart of the world w, as JSON.
@@ -88,22 +103,62 @@ func (m *Model) SandboxFile() ([]byte, error) {
 		}
 		out.Entries = append(out.Entries, se)
 	}
-	// Eight runs out from the main port, a look every 50 m.
-	charted := make([]uint64, sight.Words(len(w.Subjects)))
-	l := sight.Lookout{Eye: w.Table.Eye(2), Reach: w.Table.EyeReach(2)}
-	var seen []sight.Seen
 	home := w.Subjects[0]
+	out.Checks = w.runs(home, w.Calm())
+	// A fog bank of a mile and a half held a mile off the main port.
+	var fog physics.SystemRecord
+	for i, k := range m.cat.Weather.Systems {
+		if k.Fog != nil {
+			fog.Kind = float64(i)
+		}
+	}
+	spell := physics.Spell{Gust: 1000, Pressure: 101300}
+	fog.Seed, fog.Born, fog.Mature, fog.Decays, fog.Gone = 1852, 0, 1, 1e9, 2e9
+	fog.East, fog.North = math.Round((home.X+1852)*4), math.Round(home.Y*4)
+	fog.Heading, fog.Size, fog.Peak = 16384, 1.5*1852, 900
+	weather := &physics.Weather{Prepared: w.Weather}
+	weather.Set([]physics.Spell{spell})
+	weather.SetRecord(0, &fog)
+	weather.SetRecordCount(1)
+	out.Fog = SandboxFog{Spell: fields(spell), Record: fields(fog), Tick: 1000 * physics.StepsPerSecond}
+	foggy := new(physics.WeatherTick)
+	physics.WeatherAt(weather, foggy, out.Fog.Tick)
+	out.Fog.Checks = w.runs(home, foggy)
+	return json.Marshal(out)
+}
+
+// runs are what a lookout sees, nothing charted, in the weather t, along
+// eight runs out from home, a look every 50 m.
+func (w *World) runs(home Subject, t *physics.WeatherTick) []SandboxCheck {
+	charted := make([]uint64, sight.Words(len(w.Subjects)))
+	l := w.Table.Lookout(2)
+	c := &sight.Conditions{Weather: t}
+	var seen []sight.Seen
+	var checks []SandboxCheck
 	for k := range 8 {
 		a := float64(k) * math.Pi / 4
 		for d := 300.0; d < 8300; d += 50 {
 			l.X, l.Y = home.X+d*math.Sin(a), home.Y+d*math.Cos(a)
-			seen = w.Table.Look(&l, charted, nil, seen[:0])
-			c := SandboxCheck{X: l.X, Y: l.Y, Seen: []int32{}}
+			seen = w.Table.Look(&l, charted, c, seen[:0])
+			ch := SandboxCheck{X: l.X, Y: l.Y, Seen: []int32{}}
 			for _, s := range seen {
-				c.Seen = append(c.Seen, s.Subject)
+				ch.Seen = append(ch.Seen, s.Subject)
 			}
-			out.Checks = append(out.Checks, c)
+			checks = append(checks, ch)
 		}
 	}
-	return json.Marshal(out)
+	return checks
+}
+
+// fields is a record's fields by the names the page gives them.
+func fields(r any) map[string]float64 {
+	out := map[string]float64{}
+	v := reflect.ValueOf(r)
+	for i := range v.NumField() {
+		if f := v.Field(i); f.Kind() == reflect.Float64 {
+			name := v.Type().Field(i).Name
+			out[strings.ToLower(name[:1])+name[1:]] = f.Float()
+		}
+	}
+	return out
 }

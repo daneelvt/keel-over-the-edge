@@ -47,7 +47,8 @@ func TestRuns(t *testing.T) {
 			charted[k>>6] |= 1 << (k & 63)
 		}
 		home := w.Subjects[w.Known[0]]
-		l := sight.Lookout{Eye: w.Table.Eye(2), Reach: w.Table.EyeReach(2)}
+		l := w.Table.Lookout(2)
+		calm := &sight.Conditions{Weather: w.Calm()}
 		var seen []sight.Seen
 		all := 0
 		for r := range 8 {
@@ -56,7 +57,7 @@ func TestRuns(t *testing.T) {
 			start := 400.0
 			for d := start; d < cat.World.Disk.Radius; d += 7.5 {
 				l.X, l.Y = home.X+d*math.Sin(a), home.Y+d*math.Cos(a)
-				seen = w.Table.Look(&l, charted, nil, seen[:0])
+				seen = w.Table.Look(&l, charted, calm, seen[:0])
 				for _, s := range seen {
 					charted[s.Subject>>6] |= 1 << (s.Subject & 63)
 					n++

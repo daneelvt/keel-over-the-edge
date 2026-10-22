@@ -37,7 +37,7 @@ beforeAll(() => {
 });
 
 async function predictor(): Promise<Predictor> {
-  return new Predictor(await loadPhysics(bytes), boat, catalog.weather);
+  return new Predictor(await loadPhysics(bytes), boat, catalog.weather, catalog.world);
 }
 
 /** The server's start: on the grid, heading east, at rest, in 10 knots from the north. */

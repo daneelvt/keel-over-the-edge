@@ -36,6 +36,7 @@ import {
   Spells,
   steadySpell,
   takesEffect,
+  type VisibilityWorld,
 } from '../predict/weather';
 import { LocalSea, type Swell } from './localsea';
 import { Recorder, type Recording, type StepWeather, type WeatherSet } from './record';
@@ -225,12 +226,18 @@ export class Sandbox implements BoatDriver {
   #set: WeatherSet | null = null;
   readonly #stepWeather: StepWeather;
 
-  constructor(physics: Physics, boat: BoatPhysics, weather: Weather, start: SandboxStart = START) {
+  constructor(
+    physics: Physics,
+    boat: BoatPhysics,
+    weather: Weather,
+    world: VisibilityWorld,
+    start: SandboxStart = START,
+  ) {
     this.#physics = physics;
     this.#boat = boat;
     this.#catalog = weather;
     this.start = start;
-    preparePhysics(physics, boat, weather);
+    preparePhysics(physics, boat, weather, world);
     this.seas = new Seas(physics);
     this.sea = new LocalSea(physics, this.seas, Math.round(weather.keyframe.every * 30));
     this.weather = new Spells(physics);
@@ -689,9 +696,10 @@ export async function startSandbox(
   source: PhysicsSource,
   boat: BoatPhysics,
   weather: Weather,
+  world: VisibilityWorld,
   start: SandboxStart = START,
 ): Promise<Sandbox> {
-  return new Sandbox(await loadPhysics(source), boat, weather, start);
+  return new Sandbox(await loadPhysics(source), boat, weather, world, start);
 }
 
 function wrap(a: number): number {

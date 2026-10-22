@@ -8,8 +8,11 @@ import (
 	"testing"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
+	"github.com/daneelvt/keel-over-the-edge/internal/sky"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // testReefs is a sight table of reefs awash, seen within 150 m, at the
@@ -17,8 +20,7 @@ import (
 func testReefs(points ...[2]float64) *sight.Table {
 	in := &sight.Input{
 		Ground: &physics.Ground{Prepared: new(physics.GroundPrepared)}, Eyes: []float64{2},
-		Dome: 2500, Rays: 48, Grid: 500, Threshold: 2e-7,
-		Visibility: physics.Visibility{Band: 7778, Lip: 8334, Clear: 8334, Range: 300},
+		Dome: 2500, Rays: 48, Grid: 500, Lip: 8334, Clear: 8334, Contrast: 3.912, Threshold: 2e-7,
 	}
 	for i, p := range points {
 		in.Subjects = append(in.Subjects, sight.Subject{Kind: sight.Place, Number: int32(i), Island: -1, X: p[0], Y: p[1], Seen: sight.Awash, Reach: 150})
@@ -176,5 +178,73 @@ func TestSightingAllocatesNothing(t *testing.T) {
 	}
 	if n := testing.AllocsPerRun(50, w.Tick); n != 0 {
 		t.Errorf("%v allocations a tick", n)
+	}
+}
+
+// TestLightLitByFog: by day a light is dark in clear air, and lit once a
+// fog bank lies over it, seen against the day's threshold; by night it is
+// lit and seen against night's.
+func TestLightLitByFog(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := &sight.Input{
+		Ground: &physics.Ground{Prepared: new(physics.GroundPrepared)}, Eyes: []float64{2},
+		Dome: 2500, Rays: 48, Grid: 500, Lip: 8334, Clear: 8334, Contrast: 3.912, Threshold: 2e-7,
+		Subjects: []sight.Subject{{Kind: sight.Place, Island: -1, X: 3000, Seen: sight.ByLight}},
+		Lights:   []sight.Light{{X: 3000, Y: 0, Focal: 30, Range: 2.5 * 1852, Subject: 0}},
+	}
+	sk := cat.PrepareSky()
+	// An epoch at which the sun stands high over the light at the world's
+	// start, and one at which it is well down.
+	epochWhen := func(day bool) int64 {
+		for h := range int64(48) {
+			e := int64(1_800_000_000_000_000) + h*1800*1_000_000
+			alt := sky.SunAltitude(sk, sky.Time(sk, float64(e), 0), 3000, 0)
+			if day && alt > 0.6 || !day && alt < -0.3 {
+				return e
+			}
+		}
+		t.Fatal("no such hour")
+		return 0
+	}
+	world := func(day bool) *World {
+		cfg := Config{Capacity: 64, Kinds: kinds(t), Workers: 1, Tick: 0, Grace: 600, Weather: sequence(t),
+			Sight: &Sight{Table: sight.Build(in), Every: 15, Lookouts: []float64{2}, Sky: sk, Epoch: epochWhen(day),
+				Night: cat.World.Lights.Threshold, Day: cat.World.Lights.DayThreshold}}
+		w, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(w.Close)
+		// Clear air: a steady breeze, no system near.
+		do(t, w, bus.Command{Op: bus.SetWeather, Weather: steady(5, 1)})
+		for range 2 * physics.StepsPerSecond {
+			w.Tick()
+		}
+		return w
+	}
+	w := world(true)
+	if w.chart.lit[0] {
+		t.Fatal("lit by day in clear air")
+	}
+	if math.Abs(w.chart.thr[0]-math.Log(cat.World.Lights.DayThreshold)) > 1e-9 {
+		t.Errorf("by day seen against %g, not the day's threshold", math.Exp(w.chart.thr[0]))
+	}
+	do(t, w, bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherSystem,
+		Kind: uint16(weather.KindIndex(cat, "fog")), East: 3000 * 4, North: 0, In: 20 * physics.StepsPerSecond}})
+	for range 25 * physics.StepsPerSecond {
+		w.Tick()
+	}
+	if v := physics.VisibilityAt(&w.wind, 3000, 0); v > 400 {
+		t.Fatalf("the fog bank leaves %.0f m at the light", v)
+	}
+	if !w.chart.lit[0] {
+		t.Error("dark by day in fog")
+	}
+	n := world(false)
+	if !n.chart.lit[0] || math.Abs(n.chart.thr[0]-math.Log(cat.World.Lights.Threshold)) > 1e-9 {
+		t.Errorf("by night lit %v, seen against %g", n.chart.lit[0], math.Exp(n.chart.thr[0]))
 	}
 }

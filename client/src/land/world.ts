@@ -8,6 +8,7 @@
 // little-endian length and its bytes. Its chunks carry the zero world's id.
 
 import type { WorldHandout } from '../catalog/types.gen';
+import { assignFogSignals, deviceOf, type FogSignalRule } from '../lights/fogsignal';
 import type { LightSeen, PlaceSeen } from '../net/messages';
 import { GROUND } from '../predict/layout.gen';
 import { unpackChunk } from '../workers/mesh/chunk';
@@ -95,9 +96,27 @@ export function placesSeen(file: WorldFile, lists: PlaceLists): PlaceSeen[] {
   });
 }
 
-/** A world file's lights as the server sends them, the main port's first. */
-export function lightsSeen(file: WorldFile): LightSeen[] {
-  return file.lights.map((l) => ({
+/**
+ * A world file's lights as the server sends them, the main port's first,
+ * each given its fog signal as the server gives it: by the catalog's fog
+ * signals and their rule.
+ */
+export function lightsSeen(
+  file: WorldFile,
+  signals: readonly { device: string }[],
+  rule: FogSignalRule,
+): LightSeen[] {
+  const order = file.lights
+    .map((_, i) => i)
+    .sort((a, b) => (file.lights[a]?.number ?? 0) - (file.lights[b]?.number ?? 0));
+  const got = assignFogSignals(
+    order.map((i) => [file.lights[i]?.x ?? 0, file.lights[i]?.y ?? 0] as const),
+    order.map((i) => deviceOf(rule, file.lights[i]?.role ?? '')),
+    signals.map((s) => s.device),
+    rule.apart * 1852,
+  );
+  const fog = new Map(order.map((i, k) => [i, got[k] ?? 0]));
+  return file.lights.map((l, i) => ({
     number: l.number,
     east: l.x,
     north: l.y,
@@ -105,6 +124,7 @@ export function lightsSeen(file: WorldFile): LightSeen[] {
     character: l.character,
     phase: l.phase,
     range: l.range,
+    fogSignal: Math.max(fog.get(i) ?? 0, 0),
   }));
 }
 

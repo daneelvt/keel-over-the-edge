@@ -11,6 +11,7 @@ import (
 	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/light"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -60,8 +61,12 @@ type World struct {
 	// Lookouts are the boats' kinds' lookouts, by kind, as the table's
 	// eyes take them.
 	Lookouts []float64
-	// Lights are the world's lights, as its bundle holds them.
-	Lights []worldgen.Light
+	// Lights are the world's lights, as its bundle holds them, and
+	// FogSignals each one's fog signal, by its index in the catalog's.
+	Lights     []worldgen.Light
+	FogSignals []int
+	// Weather is the catalog's weather, prepared: what Calm sees by.
+	Weather *physics.WeatherPrepared
 
 	byIsland, byPlace, byFeature map[int32]int32
 }
@@ -292,10 +297,11 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 	}
 
 	w.Lights = b.Lights
+	w.FogSignals = FogSignals(b.Lights, cat)
 	var lights []sight.Light
 	for i, l := range b.Lights {
 		if p, ok := w.byPlace[l.Place]; ok {
-			lights = append(lights, sight.Light{X: l.X, Y: l.Y, Range: l.Range, Subject: p})
+			lights = append(lights, sight.Light{X: l.X, Y: l.Y, Focal: l.Focal, Range: l.Range, Subject: p})
 			w.Subjects[p].Light = i
 		}
 	}
@@ -309,10 +315,12 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 	for i := range w.Subjects {
 		subjects[i] = w.Subjects[i].Subject
 	}
+	w.Weather = cat.PrepareWeather()
 	w.Table = sight.Build(&sight.Input{
 		Ground: b.Ground, Subjects: subjects, Cells: cells, Lights: lights, Eyes: eyes,
-		Dome: cat.World.Handout.Dome, Rays: cs.Sight.Rays, Grid: cs.Sight.Grid,
-		Visibility: Visibility(cat), Threshold: cat.World.Lights.Threshold,
+		Dome: cat.World.Handout.Dome, Rays: cs.Sight.Rays, Grid: cs.Sight.Grid, Lip: cat.World.Disk.Radius,
+		Clear: cat.World.Lights.ClearAir * light.NauticalMile, Contrast: cat.Weather.Visibility.Contrast,
+		Threshold: cat.World.Lights.Threshold,
 	})
 
 	// The main port's island and everything on it are known from the start.
@@ -327,13 +335,53 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 	return w
 }
 
-// Visibility is the mist band's visibility by the catalog: from the band's
-// inner edge to the lip, in air as clear as the lights' clear air.
-func Visibility(cat *catalog.Catalog) physics.Visibility {
-	return physics.Visibility{
-		Band: cat.World.Disk.Mist * 1852, Lip: cat.World.Disk.Radius,
-		Clear: cat.World.Lights.ClearAir * 1852, Range: cat.World.Edge.Mist.Range,
+// Calm is the weather of no fog, rain or system: the clear air and the
+// mist band alone, as a look sees by when no weather is given.
+func (w *World) Calm() *physics.WeatherTick {
+	t := new(physics.WeatherTick)
+	physics.WeatherAt(&physics.Weather{Prepared: w.Weather}, t, 0)
+	return t
+}
+
+// FogSignals gives each of a world's lights, by their numbers' order, its
+// fog signal, by its index in the catalog's: its role's device's first
+// pattern that no light within the catalog's distance has.
+func FogSignals(lights []worldgen.Light, cat *catalog.Catalog) []int {
+	rule := &cat.World.Lights.FogSignal
+	places := make([][2]float64, len(lights))
+	devices := make([]string, len(lights))
+	order := make([]int, len(lights))
+	for i := range lights {
+		order[i] = i
 	}
+	slices.SortStableFunc(order, func(a, b int) int { return int(lights[a].Number - lights[b].Number) })
+	for k, i := range order {
+		places[k] = [2]float64{lights[i].X, lights[i].Y}
+		devices[k] = string(DeviceOf(rule, lights[i].Role))
+	}
+	patterns := make([]string, len(cat.World.Lights.FogSignals))
+	for j, f := range cat.World.Lights.FogSignals {
+		patterns[j] = string(f.Device)
+	}
+	got := light.AssignFogSignals(places, devices, patterns, rule.Apart*light.NauticalMile)
+	out := make([]int, len(lights))
+	for k, i := range order {
+		out[i] = got[k]
+	}
+	return out
+}
+
+// DeviceOf is the device of the fog signal of a light of a role.
+func DeviceOf(rule *catalog.FogSignalRule, role string) catalog.FogSignalDevice {
+	switch role {
+	case worldgen.RoleMain:
+		return rule.Devices.MainPort
+	case worldgen.RolePort:
+		return rule.Devices.Port
+	case worldgen.RoleEdge:
+		return rule.Devices.Edge
+	}
+	return rule.Devices.Hazard
 }
 
 // article is a kind's name as a phrase: "a sea arch", "an ruined chapel".

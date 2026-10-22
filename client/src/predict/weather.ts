@@ -309,7 +309,53 @@ export function systemKindRecord(k: SystemKind): Float64Array {
     r.set(k.swell.height, K.swellHeight);
     r.set(k.wind, K.swellWind);
   }
+  // Its fog and its lightning, if any.
+  if (k.fog !== undefined) {
+    r.set(k.fog.core, K.fogCore);
+    r[K.fogHeight] = k.fog.height;
+  }
+  if (k.lightning !== undefined) {
+    r[K.lightningAbove] = k.lightning.above;
+    r[K.lightningRate] = k.lightning.rate;
+    r.set(k.lightning.within, K.lightningWithin);
+  }
   return r;
+}
+
+/** What visibility takes of the catalog's world: its clear air, dome and mist band. */
+export interface VisibilityWorld {
+  lights: { clearAir: number };
+  handout: { dome: number };
+  disk: { radius: number; mist: number };
+  edge: { mist: { range: number; height: number } };
+}
+
+/**
+ * Writes the catalog's visibility and lightning into the module's
+ * VisibilityParams record, as the server's catalog.VisibilityParams does:
+ * the weather's, with the world's clear air, dome and mist band.
+ */
+export function writeVisibilityParams(
+  params: Float64Array,
+  weather: Weather,
+  world: VisibilityWorld,
+): void {
+  const f = RECORDS.visibilityParams;
+  const v = weather.visibility;
+  const l = weather.lightning;
+  params[f.contrast] = v.contrast;
+  params.set(v.words, f.words);
+  params[f.clear] = world.lights.clearAir * 1852;
+  params[f.dome] = world.handout.dome;
+  params[f.mistBand] = world.disk.mist * 1852;
+  params[f.mistLip] = world.disk.radius;
+  params[f.mistRange] = world.edge.mist.range;
+  params[f.mistHeight] = world.edge.mist.height;
+  params[f.slot] = l.slot;
+  params[f.sea] = l.sea;
+  params[f.single] = l.single;
+  params[f.strokes] = l.most;
+  params[f.apart] = l.apart;
 }
 
 /** The index of the catalog's regime of an id, or −1. */

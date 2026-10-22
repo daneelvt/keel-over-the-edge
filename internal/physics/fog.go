@@ -159,6 +159,9 @@ func (w *WeatherPrepared) PrepareVisibility(p *VisibilityParams) {
 	v.apart = float64(max2(p.Apart, 0) * 0.001)
 }
 
+// Prepared is the constants the weather at the tick is computed with.
+func (t *WeatherTick) Prepared() *WeatherPrepared { return t.p }
+
 // Contrast is the optical depth a thing is seen through at most.
 func (w *WeatherPrepared) Contrast() float64 { return w.vis.contrast }
 

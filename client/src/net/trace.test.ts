@@ -127,6 +127,7 @@ async function replay(trace: Trace): Promise<{
     await loadPhysics(bytes),
     catalog.boats[0].physics,
     catalog.weather,
+    catalog.world,
     catalog.encounters,
   );
   const session = new Session(versions);

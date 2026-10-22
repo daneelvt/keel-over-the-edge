@@ -3,6 +3,7 @@
 package chart
 
 import (
+	"math"
 	"runtime"
 	"sync"
 	"testing"
@@ -115,8 +116,9 @@ func TestStartSeesOnlyPortRoyal(t *testing.T) {
 		charted[k>>6] |= 1 << (k & 63)
 	}
 	p := b.Start.Places[0]
-	l := sight.Lookout{X: p[0], Y: p[1], Eye: w.Table.Eye(2), Reach: w.Table.EyeReach(2)}
-	for _, s := range w.Table.Look(&l, charted, nil, nil) {
+	l := w.Table.Lookout(2)
+	l.X, l.Y = p[0], p[1]
+	for _, s := range w.Table.Look(&l, charted, &sight.Conditions{Weather: w.Calm()}, nil) {
 		if w.Subjects[s.Subject].Kind == sight.Island {
 			t.Errorf("%s seen from the mooring", w.Subjects[s.Subject].Title)
 		}
@@ -129,13 +131,50 @@ func BenchmarkLook(bm *testing.B) {
 	b, cat := world1(bm)
 	w := Build(b, cat)
 	charted := make([]uint64, sight.Words(len(w.Subjects)))
-	lit := make([]bool, w.Table.Lights())
+	c := &sight.Conditions{Weather: w.Calm(), Lit: make([]bool, w.Table.Lights())}
 	out := make([]sight.Seen, 0, 64)
-	l := sight.Lookout{Eye: w.Table.Eye(2), Reach: w.Table.EyeReach(2)}
+	l := w.Table.Lookout(2)
 	bm.ResetTimer()
 	for i := range bm.N {
 		d := float64(i%8000) + 300
 		l.X, l.Y = d*0.6, d*0.8
-		out = w.Table.Look(&l, charted, lit, out[:0])
+		out = w.Table.Look(&l, charted, c, out[:0])
 	}
+}
+
+// TestFogSignalsDiffer: on seeds 1 to 8 no two lights within the catalog's
+// distance share a fog signal, and each light's is of its role's device.
+func TestFogSignalsDiffer(t *testing.T) {
+	if testing.Short() {
+		t.Skip("makes eight worlds")
+	}
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	apart := cat.World.Lights.FogSignal.Apart * 1852
+	var wg sync.WaitGroup
+	for seed := uint64(1); seed <= 8; seed++ {
+		wg.Go(func() {
+			b, err := worldgen.Generate(seed, cat)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			signals := FogSignals(b.Lights, cat)
+			for i, l := range b.Lights {
+				if signals[i] < 0 || cat.World.Lights.FogSignals[signals[i]].Device != DeviceOf(&cat.World.Lights.FogSignal, l.Role) {
+					t.Errorf("seed %d: light %d (%s) has fog signal %d", seed, l.Number, l.Role, signals[i])
+				}
+				for j := range i {
+					m := b.Lights[j]
+					if signals[i] == signals[j] && math.Hypot(l.X-m.X, l.Y-m.Y) <= apart {
+						t.Errorf("seed %d: lights %d and %d, %.0f m apart, both sound %s", seed, l.Number, m.Number,
+							math.Hypot(l.X-m.X, l.Y-m.Y), cat.World.Lights.FogSignals[signals[i]].Notation)
+					}
+				}
+			}
+		})
+	}
+	wg.Wait()
 }

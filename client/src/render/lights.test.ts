@@ -67,7 +67,18 @@ describe('a light', () => {
     }
     // A light 300 m north, its lantern 30 m up: above the horizon.
     l.setLights(
-      [{ number: 1, east: 0, north: 300, focal: 30, character: 3, phase: 0, range: 4630 }],
+      [
+        {
+          number: 1,
+          east: 0,
+          north: 300,
+          focal: 30,
+          character: 3,
+          phase: 0,
+          range: 4630,
+          fogSignal: 1,
+        },
+      ],
       'all',
     );
     const modes = (): number[] => {
@@ -94,7 +105,18 @@ describe('a light', () => {
     expect(l.count).toBe(0);
     // 3 km east, below the horizon: its loom, on the horizon to the east.
     l.setLights(
-      [{ number: 2, east: 3000, north: 0, focal: 30, character: 3, phase: 0, range: 4630 }],
+      [
+        {
+          number: 2,
+          east: 3000,
+          north: 0,
+          focal: 30,
+          character: 3,
+          phase: 0,
+          range: 4630,
+          fogSignal: 1,
+        },
+      ],
       'all',
     );
     l.frame(frame(500_000, -0.2));
@@ -109,7 +131,18 @@ describe('a light', () => {
     const l = new Lighthouses(catalog.world.lights, lighthouse);
     const strength = (north: number): number => {
       l.setLights(
-        [{ number: 1, east: 0, north, focal: 30, character: 3, phase: 0, range: 4630 }],
+        [
+          {
+            number: 1,
+            east: 0,
+            north,
+            focal: 30,
+            character: 3,
+            phase: 0,
+            range: 4630,
+            fogSignal: 1,
+          },
+        ],
         'all',
       );
       l.frame(frame(500_000, -0.2, new Vector3(0, 500, 0)));
@@ -136,9 +169,12 @@ describe('a light', () => {
     };
     l.setPlaces([p, { ...p, number: 10, kind: lighthouse + 1 }]);
     expect([...l.sites.keys()]).toEqual([9]);
-    l.setLights([{ number: 1, east: 0, north: 0, focal: 1, character: 0, phase: 0, range: 1 }], []);
     l.setLights(
-      [{ number: 2, east: 0, north: 0, focal: 1, character: 0, phase: 0, range: 1 }],
+      [{ number: 1, east: 0, north: 0, focal: 1, character: 0, phase: 0, range: 1, fogSignal: 0 }],
+      [],
+    );
+    l.setLights(
+      [{ number: 2, east: 0, north: 0, focal: 1, character: 0, phase: 0, range: 1, fogSignal: 0 }],
       [1],
     );
     expect([...l.lights.keys()]).toEqual([2]);

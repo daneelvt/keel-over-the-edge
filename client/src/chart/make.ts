@@ -8,13 +8,13 @@
 
 import { catalog } from '../catalog';
 import type { ChartEntry } from '../net/messages';
-import { WIND_VALUE, WIND_VALUES } from '../predict/physics';
+import { type Physics, VISIBILITY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { SeaScene } from '../render/scene';
 import { type ChartSea, chartNews, type NewsSource } from '../ui/chart';
 import { type NoticeKind, Notices } from '../ui/notices';
 import { Chart } from './chart';
 import { Models } from './model';
-import { chartedWith, look, type SightExport } from './sight';
+import { type Air, chartedWith, look, type SightExport } from './sight';
 import { ChartStore } from './store';
 import { type ChartLook, ChartView, type WindSampler } from './view';
 
@@ -177,17 +177,32 @@ export function sandboxModels(file: SandboxFile | null): Models {
   return new Models(inline);
 }
 
+/** Where the sandbox's lookout is and what it sees by. */
+export interface SandboxLookout {
+  east: number;
+  north: number;
+  /** The sun's height at the boat, rad. */
+  sun: number;
+  /** The boat's physics module, its weather drawn at tick; null for none yet. */
+  physics: Physics | null;
+  tick: number;
+}
+
+/** The sun's last degree below the horizon, rad, across which a light's threshold goes from the day's to night's. */
+const LAST_DEGREE = Math.PI / 180;
+
 /**
  * Charts the sandbox's world: whole (?chart=all, and by default), or as the
  * boat's lookout sees it, every half second, by the server's own sight
- * table (?chart=sight), what is known from the start charted at once. A
- * subject sighted is the sailor's, "You". Returns a function that stops it.
+ * table through the module's weather (?chart=sight), what is known from the
+ * start charted at once. A subject sighted is the sailor's, "You". Returns
+ * a function that stops it.
  */
 export function chartSandbox(
   file: SandboxFile,
   store: ChartStore,
   how: 'all' | 'sight',
-  where: () => { east: number; north: number; night: boolean },
+  where: () => SandboxLookout,
 ): () => void {
   const now = Date.now();
   const at = (e: ChartEntry, by: string): ChartEntry => ({ ...e, by, at: now });
@@ -207,10 +222,29 @@ export function chartSandbox(
       .map((e) => at(e, '')),
     true,
   );
+  const lights = catalog.world.lights;
+  const night = Math.log(lights.threshold);
+  const day = Math.log(lights.dayThreshold);
   const t = setInterval(() => {
     const p = where();
-    const lit = file.sight.lights.map(() => p.night);
-    const seen = look(file.sight, p.east, p.north, 2, charted, lit);
+    const physics = p.physics;
+    if (physics === null) {
+      return;
+    }
+    physics.windDrawAt(p.tick);
+    const air: Air = {
+      depth: (x0, y0, h0, x1, y1, h1) => physics.opticalDepth(x0, y0, h0, x1, y1, h1),
+      contrast: catalog.weather.visibility.contrast,
+    };
+    // Lit while the sun is down, or in poor visibility or worse; seen
+    // against the day's threshold while the sun is up, night's a degree
+    // below, and between them across the last degree.
+    const lit = file.sight.lights.map(
+      (l) => p.sun < 0 || physics.visibilityWord(physics.visibilityAt(l.X, l.Y)) >= VISIBILITY.poor,
+    );
+    const share = Math.min(Math.max((p.sun + LAST_DEGREE) / LAST_DEGREE, 0), 1);
+    const thresholds = file.sight.lights.map(() => night + share * (day - night));
+    const seen = look(file.sight, p.east, p.north, 2, charted, air, lit, thresholds);
     const out: ChartEntry[] = [];
     for (const s of seen) {
       charted.add(s);
