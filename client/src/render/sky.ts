@@ -62,7 +62,7 @@ import {
   newMainLight,
   readLight,
 } from './daylight';
-import { airBetween, haloBetween } from './fog';
+import { AIR_REACH, airBetween, haloBetween } from './fog';
 import { sailGlowColour, skyMaterial } from './materials';
 
 /** The sun at the table's day before the sky is first read: 30° up in the east. */
@@ -269,7 +269,10 @@ export class Sky {
     // bank. A lit light in a bank lights the fog about it.
     const toward = normalize(positionLocal);
     const reach = cameraPosition.add(toward.mul(SKY_MIST_REACH));
-    const depth = mistTo(reach).add(airBetween(cameraPosition, reach));
+    // The weather's along the whole ray: a bank far off is seen edge-on
+    // low over the horizon, a wall whitening it.
+    const far = cameraPosition.add(toward.mul(AIR_REACH));
+    const depth = mistTo(reach).add(airBetween(cameraPosition, far));
     const seen = mix(edgeLook.colour, skyFull(positionLocal) as Node<'vec3'>, exp(depth.negate()));
     material.fragmentNode = vec4(toLinear(seen).add(haloBetween(cameraPosition, reach)), 1);
     this.mesh = new Mesh(skyGeometry(), material);

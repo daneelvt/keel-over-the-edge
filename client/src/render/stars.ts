@@ -49,7 +49,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { sheets, sheetsHide } from '../sky/sheets';
-import { airBetween } from './fog';
+import { AIR_REACH, airBetween } from './fog';
 import { skyMaterial } from './materials';
 import { look, MOON_RADIUS, toLinear } from './sky';
 
@@ -225,7 +225,7 @@ export class Stars {
     // The fog and the rain in the star's direction hide it by their
     // optical depth, worked out at its corners.
     const air = exp(
-      varying(airBetween(cameraPosition, cameraPosition.add(dir.mul(1000)), false)).negate(),
+      varying(airBetween(cameraPosition, cameraPosition.add(dir.mul(AIR_REACH)), false)).negate(),
     );
     const moon = smoothstep(
       Math.cos(MOON_RADIUS * 1.15),

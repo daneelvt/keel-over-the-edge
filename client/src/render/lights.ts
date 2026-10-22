@@ -194,7 +194,7 @@ interface Held extends LightSeen {
   /** The sun's height at it, rad, and when it was last asked, ms. */
   sun: number;
   asked: number;
-  /** Whether the visibility at it is poor or worse, and the fog's extinction at its lantern, 1/m: asked with the sun. */
+  /** Whether the visibility at it is poor or worse, and the fog's extinction at its lantern, 1/m. */
   fogged: boolean;
   fog: number;
 }
@@ -493,9 +493,10 @@ export class Lighthouses {
         const h = f.sunAt(l.east, l.north);
         l.sun = h ?? 0;
         l.asked = f.now;
-        l.fogged = air?.poor(l.east, l.north) ?? false;
-        l.fog = air?.fog(l.east, l.north, l.focal) ?? 0;
       }
+      // The fog at it, each frame: a bank drifts over it within a second.
+      l.fogged = air?.poor(l.east, l.north) ?? false;
+      l.fog = air?.fog(l.east, l.north, l.focal) ?? 0;
       const lit = Math.max(lightLit(l.sun), l.fogged ? 1 : 0);
       if (lit <= 0) {
         continue;
