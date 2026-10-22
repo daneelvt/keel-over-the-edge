@@ -82,12 +82,17 @@ func (p *process) lead() time.Duration { return min(5*time.Minute, p.cfg.Schedul
 func (p *process) remakeCutoff() time.Duration { return 2 * p.lead() }
 
 // dueOf is when a job of a world that falls d before its end falls due:
-// then, or as the world began if that is later. A run is done once for
-// each due time, so a world begun after its predecessor's run gets a due
-// time of its own, which no other world can have, and the run at once.
+// then, or as the world began, or its end was last moved, if that is
+// later. A run is done once for each due time, so a world begun after its
+// predecessor's run gets a due time of its own, which no other world can
+// have, and the run at once; and so does a world whose end is brought near.
 func dueOf(h *worldHalf, d time.Duration) time.Time {
 	due := h.ends().Add(-d)
-	if b := h.row.BeginsAt.UTC().Truncate(time.Microsecond); b.After(due) {
+	from := h.row.BeginsAt
+	if n := h.movedAt.Load(); n != 0 && time.Unix(0, n).After(from) {
+		from = time.Unix(0, n)
+	}
+	if b := from.UTC().Truncate(time.Microsecond); b.After(due) {
 		return b
 	}
 	return due
@@ -742,6 +747,7 @@ func endRoute(p *process, h *worldHalf) http.Handler {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
+		h.movedAt.Store(time.Now().UnixNano())
 		h.endsAt.Store(end.UnixNano())
 		h.game.SetEnds(end, end.Add(-p.cfg.Schedule.Notice))
 		p.metrics.WorldEnds.Set(float64(end.Unix()))

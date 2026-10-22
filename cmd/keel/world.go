@@ -242,8 +242,9 @@ type worldHalf struct {
 	play    http.Handler
 
 	// endsAt is when the world ends, Unix ns, 0 for none known: its row's,
-	// unless a developer's command has brought it nearer.
-	endsAt atomic.Int64
+	// unless a developer's command has brought it nearer; movedAt when that
+	// command last did, 0 for never.
+	endsAt, movedAt atomic.Int64
 
 	stopLoop, stopSailors, stopEncoder, stopWatch  context.CancelFunc
 	loopDone, inputsDone, sailorsDone, encoderDone chan struct{}

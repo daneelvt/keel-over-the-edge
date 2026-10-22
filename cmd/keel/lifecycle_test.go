@@ -414,6 +414,47 @@ func TestDueOf(t *testing.T) {
 			t.Errorf("begun %v before the end, due %v before: %v, not %v", tc.before, tc.notice, got, tc.want)
 		}
 	}
+	// An end brought near: due again from when it moved.
+	h := &worldHalf{row: store.World{BeginsAt: end.Add(-50 * time.Hour)}}
+	h.endsAt.Store(end.UnixNano())
+	h.movedAt.Store(end.Add(-time.Hour).UnixNano())
+	if got := dueOf(h, 72*time.Hour); !got.Equal(end.Add(-time.Hour)) {
+		t.Errorf("an end moved an hour before it: due %v", got)
+	}
+	if got := dueOf(h, 30*time.Minute); !got.Equal(end.Add(-30 * time.Minute)) {
+		t.Errorf("an end moved, due half an hour before it: %v", got)
+	}
+}
+
+// TestEndBroughtNearTellsTheNews: a world begun in its last days is told
+// closing as it begins; its end brought near by the developer's command,
+// the news tells the new end.
+func TestEndBroughtNearTellsTheNews(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db := &memDB{epoch: bubbleEpoch, begins: bubbleEpoch, ends: bubbleEpoch.Add(50 * time.Hour)}
+		s, _ := gameServer(t, map[string]string{"KEEL_DEV_COMMANDS": "1"}, db)
+		time.Sleep(time.Second)
+		if !toldClosing(db, 1) {
+			t.Fatal("the world begun in its last days is not told closing")
+		}
+		var moved struct {
+			Ends int64 `json:"ends"`
+		}
+		resp, err := s.client.Post(internalURL+"/debug/end?in=90s", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&moved)
+		resp.Body.Close()
+		time.Sleep(2 * time.Second)
+		db.mu.Lock()
+		news := slices.Clone(db.news)
+		db.mu.Unlock()
+		if len(news) != 2 || news[1].EndsAt.UnixMilli() != moved.Ends {
+			t.Fatalf("the news after the end was brought near, to %d: %+v", moved.Ends, news)
+		}
+		s.stop(t)
+	})
 }
 
 // toldClosing reports whether the news tells of world n's end.
