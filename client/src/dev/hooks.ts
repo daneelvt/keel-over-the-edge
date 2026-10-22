@@ -1015,7 +1015,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * Draws a frame in an animation frame, as the game's loop does, and
      * resolves once it is on screen, for a screenshot. (A WebGPU or WebGL
      * canvas is cleared once presented, so the page cannot read its own
-     * pictures back; the tests take screenshots instead.)
+     * pictures back; the tests take screenshots instead.) It waits for the
+     * GPU to finish what it was given: on a software GPU the shaders a
+     * scene first draws compile there for seconds after the page has
+     * moved on, and a screenshot would wait for them.
      */
     async show(): Promise<void> {
       const frame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
@@ -1025,6 +1028,21 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           r();
         }),
       );
+      const backend = stage.gfx?.renderer.backend as
+        | { device?: GPUDevice; gl?: WebGL2RenderingContext }
+        | undefined;
+      if (backend?.device !== undefined) {
+        await backend.device.queue.onSubmittedWorkDone();
+      } else if (backend?.gl !== undefined) {
+        // Chrome's finish() does not wait; a fence, polled between tasks, does.
+        const gl = backend.gl;
+        const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        gl.flush();
+        while (fence !== null && gl.getSyncParameter(fence, gl.SYNC_STATUS) !== gl.SIGNALED) {
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        gl.deleteSync(fence);
+      }
       await frame();
       await frame();
     },

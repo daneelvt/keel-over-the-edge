@@ -11,7 +11,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
 import { lightOn } from '../src/lights/character';
-import { openScene, type Picture, picture } from './helpers';
+import { openScene, type Picture, picture, softwareGPU } from './helpers';
 
 const world = new URL('../../.dev/worlds/1.world', import.meta.url);
 
@@ -181,6 +181,8 @@ test('beyond its tower’s horizon, a light is its loom at its true bearing @lon
 });
 
 test('a light’s flash shows in the picture by night, at its lantern @long', async ({ page }) => {
+  // Three pictures, each waiting for the frames sailed before it to be drawn.
+  test.slow(softwareGPU);
   await openScene(page, 'world=1&wind=0,0');
   // An occulting light: no beams turn from its lantern.
   const p = port('Oc');
