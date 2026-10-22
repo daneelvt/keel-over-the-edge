@@ -436,6 +436,7 @@ export class Physics {
   readonly #addresses: Record<RecordName, number>;
   #buffer: ArrayBuffer | undefined;
   #views: Record<RecordName, Float64Array> | undefined;
+  #air: Float64Array | undefined;
   #systemRecords: Float64Array[] = [];
 
   constructor(instance: WebAssembly.Instance) {
@@ -989,7 +990,12 @@ export class Physics {
   airAt(east: number, north: number, h: number): Float64Array {
     const x = this.#x;
     x.airAt(east, north, h);
-    return new Float64Array(x.memory.buffer, x.airValues() >>> 0, 4);
+    // Asked several times a frame: the view is kept while the memory is.
+    const buffer = x.memory.buffer;
+    if (this.#air === undefined || this.#air.buffer !== buffer) {
+      this.#air = new Float64Array(buffer, x.airValues() >>> 0, 4);
+    }
+    return this.#air;
   }
 
   /**

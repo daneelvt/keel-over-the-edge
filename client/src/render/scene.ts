@@ -1050,6 +1050,25 @@ export class SeaScene {
     return w;
   }
 
+  /** The air the lights are seen through: the module's, made once. */
+  readonly #lightsAir = {
+    physics: null as Physics | null,
+    depth(x0: number, y0: number, h0: number, x1: number, y1: number, h1: number): number {
+      return this.physics?.opticalDepth(x0, y0, h0, x1, y1, h1) ?? 0;
+    },
+    poor(east: number, north: number): boolean {
+      const p = this.physics;
+      return p !== null && p.visibilityWord(p.visibilityAt(east, north)) >= VISIBILITY.poor;
+    },
+    fog(east: number, north: number, h: number): number {
+      return this.physics?.airAt(east, north, h)[1] ?? 0;
+    },
+    extinction(east: number, north: number, h: number): number {
+      const a = this.physics?.airAt(east, north, h);
+      return a === undefined ? 0 : (a[0] ?? 0) + (a[1] ?? 0) + (a[2] ?? 0) + (a[3] ?? 0);
+    },
+  };
+
   /** The lighthouses' towers and lights, each light lit by the sun at its lighthouse or by fog. */
   #drawLights(gfx: Gfx, camera: Vector3, now: number): void {
     const sun = SKY.sun + BODY.altitude;
@@ -1057,20 +1076,9 @@ export class SeaScene {
     const source = this.ocean.source;
     const physics = source?.weather === true ? source.physics : null;
     physics?.windDrawAt(this.ticks);
+    this.#lightsAir.physics = physics;
     this.lighthouses.frame({
-      air:
-        physics === null
-          ? null
-          : {
-              depth: (x0, y0, h0, x1, y1, h1) => physics.opticalDepth(x0, y0, h0, x1, y1, h1),
-              poor: (east, north) =>
-                physics.visibilityWord(physics.visibilityAt(east, north)) >= VISIBILITY.poor,
-              fog: (east, north, h) => physics.airAt(east, north, h)[1] ?? 0,
-              extinction: (east, north, h) => {
-                const a = physics.airAt(east, north, h);
-                return (a[0] ?? 0) + (a[1] ?? 0) + (a[2] ?? 0) + (a[3] ?? 0);
-              },
-            },
+      air: physics === null ? null : this.#lightsAir,
       origin: this.origin.world,
       camera,
       worldUs: Math.floor(this.ticks * TICK_US),
