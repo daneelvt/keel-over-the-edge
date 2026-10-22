@@ -200,7 +200,37 @@ export interface SeaParts {
   pattern: Texture;
   /** The wakes at a scene point (foammap.ts), or null without them. */
   wakes: ((p: Node<'vec2'>) => Node<'float'>) | null;
+  /** The rain's share at a scene point (water.ts), 0 to 1, or null without it. */
+  rain: ((p: Node<'vec2'>) => Node<'float'>) | null;
 }
+
+/**
+ * What rain does to the water, at its fullest: the ripples flatten by flat,
+ * the whitecaps go, the colour goes toward its grey by grey, and pocks of
+ * drops roughen it within pockReach m of the eye, pock deep.
+ */
+export const RAIN_LOOK = { flat: 0.55, grey: 0.35, pock: 0.05, pockReach: 60, pockSize: 1.3 };
+
+/** The rain's share at a scene point, or none. */
+const rainHere = (parts: SeaParts, p: Node<'vec2'>): Node<'float'> =>
+  (parts.rain === null ? float(0) : parts.rain(p)) as Node<'float'>;
+
+/** A colour gone toward its own grey by share. */
+const greyed = (c: Node<'vec3'>, share: Node<'float'>): Node<'vec3'> =>
+  mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), share) as Node<'vec3'>;
+
+/** The pocks of drops on the water at a scene point: a fine noise of the pattern, flickering, as slopes. */
+const pocks = (parts: SeaParts, p: Node<'vec2'>): Node<'vec2'> => {
+  const a = texture(
+    parts.pattern,
+    p.div(RAIN_LOOK.pockSize).add(vec2(seaTime.mul(0.71), seaTime.mul(0.37))),
+  );
+  const b = texture(
+    parts.pattern,
+    p.div(RAIN_LOOK.pockSize * 0.7).sub(vec2(seaTime.mul(0.53), seaTime.mul(0.91))),
+  );
+  return vec2(a.y.sub(b.w), a.w.sub(b.y)) as Node<'vec2'>;
+};
 
 /** What a probe reads of a tile's fragment instead of its colour (the tests). */
 export type Probe = 'detail' | 'foam' | 'crest' | 'gust' | 'ground';
@@ -295,6 +325,17 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const gusty = max(gust, 0);
     const lull = max(gust.negate(), 0);
     ripple.mulAssign(gusty.mul(GUST_LOOK.rough).sub(lull.mul(GUST_LOOK.smooth)).add(1));
+    // Rain flattens the ripples and pocks the water near the eye.
+    const rain = rainHere(parts, positionWorld.xz).toVar();
+    ripple.mulAssign(float(1).sub(rain.mul(RAIN_LOOK.flat)));
+    const pockNear = float(1).sub(
+      smoothstep(
+        RAIN_LOOK.pockReach * 0.5,
+        RAIN_LOOK.pockReach,
+        length(cameraPosition.sub(positionWorld)),
+      ),
+    );
+    ripple.addAssign(pocks(parts, positionWorld.xz).mul(rain.mul(pockNear).mul(RAIN_LOOK.pock)));
     // In the lee the wind raises less: smaller ripples, fewer whitecaps.
     const lee = clamp(v.lee, 0, 1.3);
     ripple.mulAssign(lee);
@@ -309,7 +350,8 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const crest = crestHeight(v.plane.w, v.area.w);
     const lightened = lightening(crest, lift);
     const foam: FoamParts = {
-      area: vec3(v.area.x.mul(lee), v.area.yz) as unknown as Node<'vec3'>,
+      // Rain takes the whitecaps away.
+      area: vec3(v.area.x.mul(lee).mul(float(1).sub(rain)), v.area.yz) as unknown as Node<'vec3'>,
       crest,
       detail: lift,
       lightened,
@@ -350,6 +392,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     If(top, () => {
       // And darker, as the whole patch reads from a distance.
       col.mulAssign(float(1).sub(gusty.mul(GUST_LOOK.dark)));
+      col.assign(greyed(col, rain.mul(RAIN_LOOK.grey)));
       col.assign(mix(col, foamColour(N), cover.mul(FOAM.cover)));
       const [s0, s1, sk] = SEA_LOOK.seam as [number, number, number];
       const [b0, b1, b2, bk] = SEA_LOOK.bevel as [number, number, number, number];
@@ -429,14 +472,15 @@ export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'v
       return vec4(ripple, 0, 0);
     }
     const lee = clamp(v.lee, 0, 1.3);
-    ripple.mulAssign(lee);
+    const rain = rainHere(parts, at);
+    ripple.mulAssign(lee.mul(float(1).sub(rain.mul(RAIN_LOOK.flat))));
     const slope = plane.yz.add(ripple);
     const N = normalize(vec3(slope.x.negate(), 1, slope.y.negate()));
     const crest = crestHeight(plane.w, area.w);
     const lightened = lightening(crest, lift);
     const g = v.ground;
     const foam: FoamParts = {
-      area: vec3(area.x.mul(lee), area.yz) as unknown as Node<'vec3'>,
+      area: vec3(area.x.mul(lee).mul(float(1).sub(rain)), area.yz) as unknown as Node<'vec3'>,
       crest,
       detail: lift,
       lightened,
@@ -449,7 +493,10 @@ export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'v
     };
     const cover = foamCover(foamAmount(foam), pattern);
     const col = mix(
-      shallows(water({ normal: N, crest: lightened, glint: 1 }, normalize(toEye)), g.x, g.w),
+      greyed(
+        shallows(water({ normal: N, crest: lightened, glint: 1 }, normalize(toEye)), g.x, g.w),
+        rain.mul(RAIN_LOOK.grey),
+      ),
       foamColour(N),
       cover.mul(FOAM.cover),
     );

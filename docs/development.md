@@ -514,7 +514,7 @@ squall after its four minutes' lag.
 the last boundary's keyframe and the two after, whenever the spells change,
 and at each boundary with the keyframe twenty seconds on
 (`internal/edge/weather.go`): never more than twenty seconds of the future.
-About 8 B/s with three systems, under 40 B/s with sixteen. The client keeps
+About 13 B/s with three systems, 65 B/s with sixteen. The client keeps
 the latest spells and four keyframes by their ticks in the physics module
 (`client/src/predict/weather.ts`, `internal/client`), and before each step
 it predicts or replays asks the module for the wind at its boat at that
@@ -783,6 +783,102 @@ field and the veer at the boat. The behaviour tests say what must stay true
 sailor's heel follows the gusts, tacking on the headers gains on holding a
 tack, a gust can capsize a boat sheeted hard in, and the refuge's limits
 hold.
+
+## Clouds and rain
+
+What the weather shows in the sky is computed in the physics package
+(`clouds.go`, `rain.go`) from the same spells and systems as the wind, by
+the server and by every phone, so what one player sees another sees and
+the rules that read the sky later read what is drawn. Nothing of it is
+sent: only the coming front's line and the islands' caps, below, are new
+on the wire.
+
+| Field | What |
+|---|---|
+| `HeapedClouds(t, out)` | Each squall's, shower's and storm's cloud: its form (`FormCumulus`, `FormCumulonimbus`, `FormStorm`), centre, heading and speed, its **cloud strength** (its strength times its kind's `lead`, at most 1), base, top, its top's reach behind and ahead of its centre, its deck, how dark its base is, and its rain at its core and how far that falls |
+| `SheetAt(t, x, y)` | The cover of the three **sheets**, cirrus, middle and low, 0 to 1: bilinear between the corners of a world-fixed lattice (`weather.clouds.lattice`, 250 m); `SheetGrid` gives the corners themselves |
+| `CumulusAt(t, x, y, reach, sun, caps, out)` | The fair-weather cumulus within reach: each spell's lattice of cells (`cumulusCell`) in a frame drifting with its wind, each cell's cloud living in slots of `cumulusLife`, growing over its first quarter and shrinking over its last, shown where its hash is under the spell's regime's `cumulus` cover times its share there, less under the middle and low sheets; and by day each island's cap and its street downwind |
+| `RainAt(t, x, y)` | Rain, mm an hour: the most of a front's band behind its line and each system's (a core's Gaussian, or a storm's spiral bands turning with the tick); a system's follows its strength, not its cloud strength, so rain comes with the gust front |
+| `RainVisibility(rate, clear)`, `RainWord(rate)` | Visibility in rain, 3.912 over the clear air's and the rain's extinctions, the rain's 0.16 R^0.74 per km taken over 0.4 for the game's stage; WMO-No. 8's words |
+
+The cloud grows **ahead of its wind**: with a `lead` of 2 it is whole when
+its wind is half grown, its top and reach scaling with its cloud
+strength, so a squall's tower and a storm's cloud are the warning, even
+where a storm forms over the boat and its swell gives none. A front carries
+cirrus far ahead of its line, then a middle sheet, low cloud and rain in a
+band behind it, and clears behind that (`frontCirrus`, `frontMiddle`,
+`frontLow`, `frontRain`); a storm carries its outflow's sheets about it
+(its kind's `cloud.sheets`).
+
+The catalog: each kind's `cloud` (form, heights, reach, deck, lead,
+darkness, a storm's sheets) and `rain` (rate, width, bands and their turn),
+each regime's `cumulus`, and `weather.clouds` (the layers' heights, the
+lattice, the cumulus, the caps, a front's sheets and rain, rain's words and
+visibility), which `writeCloudParams` writes into the module's
+`cloudParams`. A form's puffs are art: `art/clouds/<form>.json`, layers of
+puffs each a count and ranges of place, height, radius and tone as shares
+of the cloud's size and height, and the cloud strength it grows over;
+`tools/catalog -check` fails on a heaped form without its recipe, a top
+under its base and layers out of order. Tuning a recipe changes no
+catalog: the world survives it.
+
+### The coming front and the islands' caps
+
+A front's cirrus shows up to 41 minutes before its spell is in play, which
+the phone hears of only ten seconds before it begins. So `WeatherSystems`
+carries `coming`: the next front's begin, change and direction, **its line
+alone**, from when its cirrus could first be seen from the disk
+(`Timeline.Coming`, `ComingAhead`) until its spell is announced. The
+physics takes the line from the spell or from `coming` alike, so the
+sheets do not step as it is announced.
+
+`IslandCaps` sends each island's centre and width, to 50 m, once the eye
+is within sight of its cap and its street (`CapReach`), and drops it beyond
+that by the lights' margin (`internal/edge/caps.go`), as lights are sent:
+no more of where land is than the sky shows.
+
+### Drawing it
+
+| File | What |
+|---|---|
+| `client/src/sky/weather.ts` | Five times a second lays the heaped clouds and the cumulus out from the module (`cloudsAt`, `cumulusAt`), once a second writes the sheets' texture, four times a second asks the rain and the overcast at the camera; eases the overcast over ten seconds and the rain over one and a half |
+| `client/src/sky/clouds.ts` | Every puff of every cloud, one instanced draw of an icosahedron of one subdivision: laid out by its form's recipe from its system's seed, carried on its cloud's velocity between layouts, lit from the main light with its top's and base's colours (`cloudTop`, `cloudBase` in the light table), hazed toward the sky's colour in its direction, halfway at 3 km, shorter in rain |
+| `client/src/sky/sheets.ts` | The sheets' texture of the module's lattice about the camera (48 points a side) and the sky shader's layers: where each view ray meets each layer's paraboloid over the dome, the cover by the module's own bilinear, a crisp edge where it passes a threshold, cirrus as streaks along the wind, a 22° halo where the cirrus is whole and no middle sheet has come, the sun dimmed through the middle sheet and hidden by the low |
+| `client/src/render/rain.ts` | Curtains under the clouds that rain, and streaks in a box about the camera as many as the rate asks, falling at the median drop's terminal speed (Marshall and Palmer; Atlas's fit to Gunn and Kinzer), slanted by the wind: a draw each |
+| `client/src/ocean/water.ts`, `seamaterial.ts` | The water's grid's second channel: under rain the ripples flatten, the whitecaps go, the colour greys and pocks of drops roughen the water near the eye; the far sea takes the rain at the camera |
+| `art/sound/rain.json`, `client/src/audio/` | Rain's hiss, by the logarithm of the rate at the boat, and in heavy rain a drumming |
+
+The camera's far plane is 8 km, beyond where a storm's deck can be seen.
+Rain shortens the scene's visual range, the clouds' haze and the sea's
+horizon blend. Overcast dims the main light by up to 0.6 and greys the
+sky's and the sea's colours.
+
+### Seeing it
+
+```sh
+# https://localhost:5173/?sandbox&weather=squall    a squall meets the boat three minutes in, its tower first
+# https://localhost:5173/?sandbox&weather=storm     a storm, 45 minutes off: its cloud and its sheets
+# https://localhost:5173/?sandbox&front=40          a front 40 minutes off: its cirrus, then its sheet
+# https://localhost:5173/?sandbox&cloud=trade       a trade spell's cumulus
+# https://localhost:5173/?sandbox&rain=20           20 mm an hour held at the camera
+# https://localhost:5173/?sandbox&world=1&cloud=settled&sky=13   the islands' caps by day
+```
+
+The developer panel reads out the rain and its word, each sheet's cover
+overhead and the overcast, and the heaped clouds in sight. The world page's
+**Cloud** and **Rain** layers draw `/owner/api/clouds.json` (internal
+listener only): each heaped cloud's outline and top, the sheets shaded, the
+cumulus, and the rain stippled by its words; a clicked point gives its
+rain, the sheets' cover and the cloud overhead.
+
+`go test ./internal/physics -run CloudsFile -update` writes
+`internal/physics/testdata/clouds.json`, which `client/src/predict/clouds.test.ts`
+holds the module to bit for bit. `TestWeeks` holds the signs before weather
+to their rule: a squall's tower before its 10-knot gust front at every
+place and by five minutes or more at 95%, a storm's cloud before its
+20-knot wind at every place and by ten minutes or more at 95%, and a front's
+cirrus forty minutes or more before its line (five weeks on a half-mile
+grid in CI; two hundred on a quarter-mile nightly).
 
 ## Encounters
 
@@ -2679,8 +2775,8 @@ writes.
 | File | What |
 |------|------|
 | `client/src/render/daylight.ts` | **The light of the hour**: one table keyed by the sun's true height at the boat, read between its rows: the sky's colours and the glow toward the sun, the sun's and the hemisphere's light, the sea's colours and wide highlight, the haze, the clouds, the sail's glow, the faintest star that shows, the lanterns. By night the main light is the moon, by its lit share and height; never both. The night rows keep a floor: a moonless night is readable |
-| `client/src/render/sky.ts` | Writes the table into `look` and the two lights each frame; the sky's shader: the gradient, the glow, the sun, the moon's disc (1.5°, lit as a sphere by the true sun, so its phase is right), the clouds |
-| `client/src/render/stars.ts` | The stars: one draw of quads, each turned by the module's matrix (one 3 × 3 uniform a frame, no trigonometry on the GPU), sized and dimmed by magnitude, tinted by B−V, faded low down, behind clouds and the moon; a tap on a named star shows its name for four seconds |
+| `client/src/render/sky.ts` | Writes the table into `look` and the two lights each frame, greyed and dimmed by the overcast; the sky's shader: the gradient, the glow, the sun, the moon's disc (1.5°, lit as a sphere by the true sun, so its phase is right), and the weather's sheet cloud over them ([Clouds and rain](#clouds-and-rain)) |
+| `client/src/render/stars.ts` | The stars: one draw of quads, each turned by the module's matrix (one 3 × 3 uniform a frame, no trigonometry on the GPU), sized and dimmed by magnitude, tinted by B−V, faded low down, behind the sheets, the heaped clouds and the moon; a tap on a named star shows its name for four seconds, unless the sheets hide it |
 | `client/src/render/lanterns.ts` | Navigation lights: one instanced draw of glows for every boat in view and the player's, each over its arc in the boat's own frame (Rule 21: red to port and green to starboard to 22.5° abaft the beam, white over the 135° astern, faded across 4°), on the dome so the sea hides them, lit while the sun is below the horizon at the boat |
 | `client/src/render/camera.ts` | The tilt: a drag that would take the camera below its lowest view lifts its gaze toward the sky instead, up to the zenith, and back the same way |
 
@@ -2708,7 +2804,7 @@ star's height and bearing above the horizon, all by the module. Both move
 only the sky this page draws: online nothing is sent, and the server's sky is
 unchanged.
 
-## The server
+### The sea on the server
 
 The frame holds each area's inputs twice (`bus.Sea`): **in effect**, and for
 **the next second**. The sea changes only on a second's first tick, to what
@@ -2890,8 +2986,10 @@ A tier is a set of values (`client/src/render/quality.ts`):
 | Detail band | Transform 256², two patches | Transform 128², one patch; shimmer | The loop; shimmer |
 | Compute dispatches a frame | 8 | 4 | 0 |
 | Foam map | 512² | 512² | 256² |
-| Shadows | 2,048², 40 m, other boats too | 1,024², 12 m, own boat | None |
+| Shadows | 1,024², 40 m, other boats too | 1,024², 12 m, own boat | None |
 | Spray | 512, own boat and 3 nearest, off the crests | 256, own, off the crests | 96, own |
+| Clouds' puffs, at most | 1,024 | 768 | 512 |
+| Rain's streaks at the boat, at most | 2,048 | 1,024 | 512 |
 
 A page starts on the best tier its back end runs, or where this device
 settled last time (kept in `localStorage` with `QUALITY_VERSION` from

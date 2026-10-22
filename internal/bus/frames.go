@@ -29,6 +29,9 @@ type Frame struct {
 	// behind, which follow from the tick and Weathers.
 	Spells  [physics.WeatherSpells]physics.Spell
 	NSpells int32
+	// Coming is the next front before its spell is in play, from when its
+	// cirrus can be seen: its line, which the sky shows.
+	Coming physics.ComingFront
 	// Systems are the developer's weather systems, by their birth: kept
 	// while the sea may still follow them.
 	Systems []System

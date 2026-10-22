@@ -148,7 +148,9 @@ weather:
   # the regime's share of the world's time, which the week keeps; spell how
   # long a spell of it lasts, hours; pressure its level, hPa; next the
   # regimes a spell of it gives way to, with the chance of each; systems the
-  # systems born in it an hour over the disk, and at its start. A spell of
+  # systems born in it an hour over the disk, and at its start; cumulus how
+  # much of the sky its fair-weather cumulus covers: trade cumulus cover
+  # about 0.3 of the sky (Nuijens and others 2014, at Barbados). A spell of
   # a frontal regime arrives and leaves as a front does. The table is fitted
   # to the shares: its long-run shares are 23, 42, 23 and 12 in a hundred.
   # The gust factors are those of the waters dinghies race in; the open
@@ -172,6 +174,7 @@ weather:
         period: [6, 10] # minutes
         across: 5 # degrees
         drift: 20 # degrees
+      cumulus: 0.25
     - id: trade
       share: 0.40
       frontal: false
@@ -191,6 +194,7 @@ weather:
         period: [5, 8]
         across: 5
         drift: 20
+      cumulus: 0.35
     - id: unsettled
       share: 0.25
       frontal: true
@@ -209,6 +213,7 @@ weather:
         period: [4, 7]
         across: 5
         drift: 20
+      cumulus: 0.45
     - id: stormy
       share: 0.10
       frontal: true
@@ -227,6 +232,7 @@ weather:
         period: [4, 7]
         across: 5
         drift: 20
+      cumulus: 0.3
 
   # A front: a straight line across the disk, lying in a trough. Ahead of it
   # the old spell blows, behind it the new, blended within blend of the
@@ -287,8 +293,32 @@ weather:
   # disk, drifting with the wind, by day islands of them over land; a kind
   # with night is born only at night or within dawn minutes of sunrise and
   # lifts lift minutes after it; calmBelow and goneAbove are the spell's
-  # wind it needs, knots, 0 for none. rain, cloud and lightning are for
-  # drawing them.
+  # wind it needs, knots, 0 for none. lightning is for drawing it.
+  #
+  # Its cloud: a form, which names how it is drawn, its base and its top
+  # and reach at its whole, its deck of low cloud and how dark its base
+  # is. Its cloud strength is its strength times lead, at most 1, so with a
+  # lead of 2 its cloud is whole when its wind is half grown and lingers
+  # while its wind decays, as a thunderstorm's cumulus stage, towering with
+  # no rain or outflow, comes before its mature stage, when the downdraft
+  # and the gust front begin (NOAA JetStream, the life cycle of a
+  # thunderstorm). Its top and reach scale with the cloud strength, so its
+  # tower is the warning. The bases are real ones: Bowditch (3617) gives a
+  # base at sea of 126 m a degree of the dew point's spread, 354 m at
+  # 2.8 °C. The tops are a licence for the dome: a real cumulonimbus
+  # reaches 12–18 km (NOAA), which would show over the whole disk from
+  # anywhere; these are chosen for how far each must be seen (a top of H
+  # shows from 100 + √(2 × 2,500 m × H) m away), so a squall's tower shows
+  # about ten minutes before its gust front and a storm's twenty.
+  #
+  # Its rain, at full strength: a rate at its core, mm an hour, as a
+  # Gaussian width of its size; or, with bands, in spiral bands turning
+  # once in turn minutes within width of its size, as a tropical cyclone's
+  # "torrential rains … separated by areas of light rain or no rain"
+  # (Bowditch 3505). Rain follows its strength, not its cloud strength, so
+  # rain and gust front come together. A squall's core is violent (WMO-No.
+  # 8: violent above 50 mm an hour), a shower's moderate, a storm's bands
+  # heavy.
   systems:
     - id: squall
       shape: dome
@@ -313,8 +343,15 @@ weather:
       lift: [0, 0]
       calmBelow: 0
       goneAbove: 0
-      rain: heavy
-      cloud: cumulonimbus
+      rain: { rate: 75, width: 0.42, bands: 0, turn: 0 }
+      cloud:
+        form: cumulonimbus
+        base: 350 # m
+        top: 2500 # m: the anvil's
+        reach: [0.4, 1] # its anvil spreads ahead
+        deck: [0.5, 600] # the base under the tower
+        lead: 2
+        dark: 0.7
       lightning: 0.7
     - id: shower
       shape: dome
@@ -339,8 +376,15 @@ weather:
       lift: [0, 0]
       calmBelow: 0
       goneAbove: 0
-      rain: moderate
-      cloud: cumulus
+      rain: { rate: 6, width: 0.5, bands: 0, turn: 0 }
+      cloud:
+        form: cumulus
+        base: 400
+        top: 1200
+        reach: [0.4, 0.4]
+        deck: [0, 0]
+        lead: 2
+        dark: 0.4
       lightning: 0
     - id: storm
       shape: low
@@ -365,8 +409,24 @@ weather:
       lift: [0, 0]
       calmBelow: 0
       goneAbove: 0
-      rain: heavy
-      cloud: cumulonimbus
+      rain: { rate: 20, width: 1.3, bands: 2, turn: 60 }
+      # A broad dark deck over the whole of it with towers within, and the
+      # sheets of its outflow about it: cirrus "when the storm is about
+      # 300 to 600 miles away", then cirrostratus, then "a dark wall of
+      # heavy cumulonimbus, called the bar of the storm" (Bowditch 3508,
+      # 3509), on this stage.
+      cloud:
+        form: storm
+        base: 350
+        top: 3000 # the towers'
+        reach: [0.7, 0.7]
+        deck: [1, 1200]
+        lead: 2
+        dark: 0.8
+        sheets:
+          cirrus: [2, 0.9]
+          middle: [1.5, 0.6]
+          low: [1.15, 0.4]
       lightning: 0.75
       # A storm of this size raises waves of 2–4 s, which travel no faster
       # than it does (the Coastal Engineering Manual's growth laws). Its
@@ -404,8 +464,8 @@ weather:
       lift: [15, 30] # minutes after sunrise
       calmBelow: 8 # knots
       goneAbove: 12 # knots
-      rain: none
-      cloud: fog
+      rain: { rate: 0, width: 0, bands: 0, turn: 0 }
+      cloud: { form: fog, base: 0, top: 0, reach: [0, 0], deck: [0, 0], lead: 1, dark: 0 }
       lightning: 0
     - id: light-air
       shape: none
@@ -430,8 +490,8 @@ weather:
       lift: [0, 0]
       calmBelow: 10
       goneAbove: 0
-      rain: none
-      cloud: none
+      rain: { rate: 0, width: 0, bands: 0, turn: 0 }
+      cloud: { form: none, base: 0, top: 0, reach: [0, 0], deck: [0, 0], lead: 1, dark: 0 }
       lightning: 0
 
   # The week: each world's weather, made with it from its seed for its
@@ -487,3 +547,62 @@ weather:
     points: 24 # a side
     spacing: 12.5 # m
     rate: 4 # a second
+
+  # Clouds and rain, which the server and the phone compute alike.
+  #
+  # Sheet cloud in three layers, each at one height: cirrus, a middle sheet
+  # and low cloud. Real high cloud starts at 6 km and low cloud lies under
+  # 2 km (WMO International Cloud Atlas); these heights are chosen, as the
+  # heaped clouds' tops are, for how far each must be seen on the dome:
+  # cirrus from 5.6 km, a front's warning about an hour ahead of its line.
+  # Each layer's cover is held at the corners of a world-fixed lattice and
+  # is bilinear between them, so a phone's texture of the lattice draws the
+  # very field the server has.
+  #
+  # Fair-weather cumulus, in settled and trade spells and behind fronts: a
+  # lattice of cells in a frame that drifts with each spell's wind, each
+  # cell's cloud living in slots of its life, growing and shrinking, shown
+  # where its hash is under the spell's cover. Real fair-weather cumulus
+  # are about 1 km across, spaced about twice the boundary layer's depth
+  # apart, "order of 1 km" (Stull, Practical Meteorology, chapter 6); their
+  # base at sea is about 400–700 m (Bowditch 3617; Nuijens and others 2014).
+  #
+  # Islands' caps: by day a cumulus over an island and a street of them
+  # downwind, as Nauru raises "a street of cumulus clouds" over its warm
+  # plume (Matthews and others 2007).
+  #
+  # A front's sheets: cirrus far ahead of its line, a middle sheet nearer
+  # in, low cloud and rain in a band behind it, and clearing behind that. It
+  # is a licence: a warm front's warning ahead ("first, cirrus appear.
+  # These give way successively to cirrostratus, altostratus, altocumulus,
+  # and nimbostratus", Bowditch 3410) and a cold front's clearance behind
+  # ("the visibility usually improves, and the clouds tend to diminish"),
+  # two real fronts in one; the real shield runs hundreds of kilometres
+  # ahead, these few miles are that sequence on this stage.
+  #
+  # Rain's words are WMO-No. 8's (2008): light under 2.5 mm an hour,
+  # moderate to 10, heavy to 50, violent above. Its extinction is
+  # 0.16 R^0.74 per km (Shipley and others 1974), and visibility on the
+  # game's stage is 0.4 of the real, as the game's visibility words are.
+  clouds:
+    cirrus: 6000 # m
+    middle: 1500 # m
+    low: 400 # m
+    lattice: 250 # m
+    cumulusCell: 1300 # m
+    cumulusJitter: 0.4
+    cumulusBase: 400 # m
+    cumulusTops: [650, 900] # m
+    cumulusSize: [150, 350] # m
+    cumulusLife: 20 # minutes
+    capSun: [5, 20] # degrees
+    capTops: [900, 1400] # m
+    capWidth: 0.4
+    capStreet: 3
+    frontCirrus: [3, 0.6, 0.3, 1.6] # nautical miles
+    frontMiddle: [1.5, 0.2, 0.3, 0.9] # nautical miles
+    frontLow: [0.15, 0.38] # nautical miles
+    frontRain: [10, 0.18, 0.17] # mm an hour; nautical miles
+    rainWords: [2.5, 10, 50] # mm an hour
+    rainExtinction: [0.16, 0.74]
+    rainScale: 0.4

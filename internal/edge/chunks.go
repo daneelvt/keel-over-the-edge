@@ -65,6 +65,7 @@ type Handout struct {
 	chunks [physics.ChunkCount]handChunk
 	places [physics.ChunkCount][]*pb.Place
 	lights *Lights
+	caps   *Caps
 }
 
 // NewHandout makes the handout of the world whose ground is g, its chunks at
@@ -201,7 +202,7 @@ func (c *conn) chunks(h *Handout, x, y float64) bool {
 		return true
 	}
 	st.looked, st.x, st.y = true, x, y
-	if !c.lights(h.lights, x, y) {
+	if !c.lights(h.lights, x, y) || !c.islandCaps(h.caps, x, y) {
 		return false
 	}
 	n := 0

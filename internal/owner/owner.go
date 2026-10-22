@@ -195,6 +195,7 @@ var Paths = []string{
 	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json", "/owner/api/charted.json",
 	"/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
+	"/owner/api/clouds.json",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -271,6 +272,7 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/charted.json", o.charted)
 	mux.HandleFunc("GET /owner/api/point", o.point)
 	mux.HandleFunc("GET /owner/api/sea.json", o.sea)
+	mux.HandleFunc("GET /owner/api/clouds.json", o.clouds)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
 	mux.HandleFunc("POST /owner/api/place", o.place)
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)

@@ -10,8 +10,10 @@ import {
   netLines,
   type PanelWorld,
   RIM,
+  rainWord,
   readState,
   seaLines,
+  skyLines,
   toRim,
   windLine,
 } from './panel';
@@ -336,5 +338,25 @@ describe('the connection’s numbers', () => {
     expect(lines).toContain(
       'last bump         3 s ago, yours, Article 10, 1.50 m/s, at 1.3 E -3.0 N',
     );
+  });
+});
+
+describe('the sky lines', () => {
+  test('give the rain in WMO-No. 8’s words, the sheets and the clouds in sight', () => {
+    const words = [2.5, 10, 50];
+    expect(rainWord(0, words)).toBe('none');
+    expect(rainWord(1, words)).toBe('light');
+    expect(rainWord(6, words)).toBe('moderate');
+    expect(rainWord(20, words)).toBe('heavy');
+    expect(rainWord(75, words)).toBe('violent');
+    const lines = skyLines(12.34, words, [1, 0.5, 0], 0.425, [
+      { form: 3, slot: 0, top: 2500, away: 3200 },
+      { form: 2, slot: -1, top: 700, away: 900 },
+    ]);
+    expect(lines).toEqual([
+      'rain    12.3 mm/h, heavy',
+      'sheets  cirrus 1.00, middle 0.50, low 0.00, overcast 0.42',
+      'clouds  cumulonimbus 2500 m at 3.2 km, 1 cumulus',
+    ]);
   });
 });

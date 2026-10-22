@@ -1,0 +1,8 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "Rain on the sea and the sails: a hiss of high band-passed noise, as small drops ring high on water, its level rising with the logarithm of the rate at the boat from from to full mm an hour; and in heavy rain a lower drumming, as large drops are loud across the whole spectrum, from drumFrom to drumFull mm an hour. Frequencies in Hz, levels as gains.",
+  "hiss": { "centre": 7000, "q": 0.5 },
+  "drum": { "centre": 900, "q": 0.7 },
+  "level": { "from": 0.1, "full": 50, "most": 0.22 },
+  "drumLevel": { "from": 8, "full": 60, "most": 0.14 }
+}

@@ -43,6 +43,14 @@
 // the ground the module holds, and current answers for any point into
 // currentValues. over says whether the state is over the lip.
 //
+// Clouds and rain: the client writes cloudParams and calls cloudsPrepare
+// after the systems' kinds, then regimeCumulus for each regime. comingSet
+// takes the coming front from the coming record. At the time windDrawAt
+// set, cloudsAt writes the heaped clouds to the cloud records, sheetGrid the
+// sheets' cover over a window of their lattice, sheetAt the sheets record
+// at a point, rainAt and rainSample the rain, and cumulusAt the
+// fair-weather cumulus and the islands' caps capSet and capCount hold.
+//
 // The sky is asked about once a frame: the client writes skyParams and
 // calls skyPrepare once, then skyAt with sky time and the boat's place, and
 // reads the sky record; skyStar answers for one star into the skyBody
@@ -101,6 +109,18 @@ var (
 	verdict           physics.Verdict
 	contact           physics.Contact
 	hulls             physics.Hulls
+
+	cloudParams physics.CloudParams
+	coming      physics.ComingFront
+	clouds      [physics.MaxClouds]physics.Cloud
+	cumulus     [physics.MaxCumulus]physics.Cumulus
+	sheets      physics.Sheets
+	caps        [physics.MaxCaps]physics.Cap
+	ncaps       int32
+	// sheetValues is what sheetGrid writes: each point's cirrus, middle
+	// and low cover; rainValues what rainSample writes.
+	sheetValues [physics.Layers * physics.SheetSide * physics.SheetSide]float64
+	rainValues  [sampleCapacity]float64
 
 	skyParams   sky.Params
 	skyPrepared sky.Prepared
@@ -857,6 +877,109 @@ func waveWind(x, y, tick float64) {
 
 //go:wasmexport other
 func otherAddr() uint32 { return addr(unsafe.Pointer(&other)) }
+
+//go:wasmexport cloudParams
+func cloudParamsAddr() uint32 { return addr(unsafe.Pointer(&cloudParams)) }
+
+// cloudsPrepare derives the clouds' constants from cloudParams. Call it
+// after weatherPrepare and the systems' kinds.
+//
+//go:wasmexport cloudsPrepare
+func cloudsPrepare() { weatherPrepared.PrepareClouds(&cloudParams) }
+
+// regimeCumulus sets how much of the sky regime i's cumulus covers.
+//
+//go:wasmexport regimeCumulus
+func regimeCumulus(i uint32, cover float64) {
+	weatherPrepared.SetRegimeCumulus(int32(min(i, physics.MaxRegimes)), cover)
+}
+
+//go:wasmexport coming
+func comingAddr() uint32 { return addr(unsafe.Pointer(&coming)) }
+
+// comingSet makes the coming record the coming front.
+//
+//go:wasmexport comingSet
+func comingSet() { weather.SetComing(&coming) }
+
+// cloud is the first of the records cloudsAt writes.
+//
+//go:wasmexport cloud
+func cloudAddr() uint32 { return addr(unsafe.Pointer(&clouds)) }
+
+// cloudsAt writes the heaped clouds at the time windDrawAt set to the
+// cloud records, and returns how many.
+//
+//go:wasmexport cloudsAt
+func cloudsAt() uint32 { return uint32(physics.HeapedClouds(&drawWeather, clouds[:])) }
+
+//go:wasmexport sheets
+func sheetsAddr() uint32 { return addr(unsafe.Pointer(&sheets)) }
+
+// sheetAt writes the sheets' cover at (x, y) to the sheets record.
+//
+//go:wasmexport sheetAt
+func sheetAt(x, y float64) { sheets = physics.SheetAt(&drawWeather, x, y) }
+
+//go:wasmexport sheetValues
+func sheetValuesAddr() uint32 { return addr(unsafe.Pointer(&sheetValues)) }
+
+// sheetGrid writes the sheets' cover at the lattice's points (i0 + i,
+// j0 + j), i and j below n, to sheetValues.
+//
+//go:wasmexport sheetGrid
+func sheetGrid(i0, j0 int32, n uint32) {
+	physics.SheetGrid(&drawWeather, i0, j0, int32(min(n, physics.SheetSide)), sheetValues[:])
+}
+
+// rainAt returns the rain at (x, y), mm an hour.
+//
+//go:wasmexport rainAt
+func rainAt(x, y float64) float64 { return physics.RainAt(&drawWeather, x, y) }
+
+//go:wasmexport rainValues
+func rainValuesAddr() uint32 { return addr(unsafe.Pointer(&rainValues)) }
+
+// rainSample writes the rain at the first n of samplePoints to rainValues.
+//
+//go:wasmexport rainSample
+func rainSample(n uint32) {
+	for i := uint32(0); i < n && i < sampleCapacity; i++ {
+		rainValues[i] = physics.RainAt(&drawWeather, samplePoints[2*i], samplePoints[2*i+1])
+	}
+}
+
+// rainVisibility returns the visibility in rain of a rate, mm an hour,
+// where the clear air's is clear, m.
+//
+//go:wasmexport rainVisibility
+func rainVisibility(rate, clear float64) float64 { return weatherPrepared.RainVisibility(rate, clear) }
+
+// capSet sets island cap i: its centre, m, and its width, m.
+//
+//go:wasmexport capSet
+func capSet(i uint32, east, north, width float64) {
+	caps[min(i, physics.MaxCaps-1)] = physics.Cap{East: east, North: north, Width: width}
+}
+
+// capCount says how many caps are held: the first n set.
+//
+//go:wasmexport capCount
+func capCount(n uint32) { ncaps = int32(min(n, physics.MaxCaps)) }
+
+// cumulus is the first of the records cumulusAt writes.
+//
+//go:wasmexport cumulus
+func cumulusAddr() uint32 { return addr(unsafe.Pointer(&cumulus)) }
+
+// cumulusAt writes the fair-weather cumulus and the caps within reach of
+// (x, y) at the time windDrawAt set, the sun sun rad high, to the cumulus
+// records, and returns how many.
+//
+//go:wasmexport cumulusAt
+func cumulusAt(x, y, reach, sun float64) uint32 {
+	return uint32(physics.CumulusAt(&drawWeather, x, y, reach, sun, caps[:ncaps], cumulus[:]))
+}
 
 //go:wasmexport encounterParams
 func encounterParamsAddr() uint32 { return addr(unsafe.Pointer(&encounterParams)) }

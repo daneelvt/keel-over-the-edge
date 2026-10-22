@@ -15,7 +15,9 @@ import (
 // seconds ahead and ten behind (internal/weather), and its keyframes are at
 // the last keyframe's tick and the two after, twenty seconds ahead at
 // most; so a client holds every spell and keyframe a tick it predicts or
-// replays needs, and none of what is to come beyond.
+// replays needs, and none of what is to come beyond. Beside them goes the
+// coming front's line, which its cirrus shows before its spell is in play,
+// never its spell.
 
 // connWeather is the spells and keyframes a connection's client was last
 // sent.
@@ -24,6 +26,7 @@ type connWeather struct {
 	n      int32
 	spells [physics.WeatherSpells]physics.Spell
 	keys   [bus.KeyFrames]physics.Keyframe
+	coming physics.ComingFront
 }
 
 // weather sends the connection the frame's spells in play and keyframes
@@ -38,11 +41,12 @@ func (c *conn) weather(f *bus.Frame) bool {
 			keys = append(keys, &f.Keys[k])
 		}
 	}
-	if !spells && len(keys) == 0 {
+	if !spells && len(keys) == 0 && w.coming == f.Coming {
 		return true
 	}
-	w.sent, w.n, w.spells, w.keys = true, f.NSpells, f.Spells, f.Keys
+	w.sent, w.n, w.spells, w.keys, w.coming = true, f.NSpells, f.Spells, f.Keys, f.Coming
 	m := protocol.WeatherSystems(f.SpellsInPlay(), !spells, keys...)
+	protocol.SetComing(m, &f.Coming)
 	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_WeatherSystems{WeatherSystems: m}}, outWeatherSystems)
 }
 

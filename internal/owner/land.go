@@ -139,7 +139,8 @@ func (l *land) island(w http.ResponseWriter, r *http.Request) {
 
 // point says what is at a point the page clicked: its height (above 0)
 // or depth (below), the distance inside the lip, the nearest island and
-// how far its centre is, and whether a boat may be put there.
+// how far its centre is, whether a boat may be put there, and its sky
+// now: its rain, its sheets and the heaped cloud over it.
 //
 //	GET /owner/api/point?east=…&north=…
 func (o *Owner) point(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +160,8 @@ func (o *Owner) point(w http.ResponseWriter, r *http.Request) {
 		Number    int32   `json:"number"`
 		Off       float64 `json:"off"` // m from its centre
 		Water     string  `json:"water"`
+		// Sky is null for a world not yet sailed.
+		Sky *skyPoint `json:"sky"`
 	}{East: round2(x), North: round2(y), FromLip: round2(physics.EdgeDistance(o.cfg.Weather, x, y)), Number: -1}
 	if b := o.cfg.Bundle; b != nil {
 		e, _ := b.Ground.At(x, y)
@@ -178,6 +181,7 @@ func (o *Owner) point(w http.ResponseWriter, r *http.Request) {
 	if err := o.water(x, y, nil); err != nil {
 		out.Water = err.Error()
 	}
+	out.Sky = o.skyAt(x, y)
 	writeJSON(w, &out)
 }
 

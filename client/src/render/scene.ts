@@ -25,6 +25,7 @@ import type { Land } from '../land/land';
 import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
 import { beaufort, KNOT, SPRAY } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
+import { rainShare } from '../ocean/water';
 import { type BoatPose, newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import { writeSkyParams } from '../predict/params.gen';
@@ -32,6 +33,7 @@ import { BODY, type Physics, SKY } from '../predict/physics';
 import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
+import { SkyWeather } from '../sky/weather';
 import { Boat } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
@@ -118,6 +120,8 @@ export class SeaScene {
   readonly origin = new FloatingOrigin();
   readonly ocean: Ocean;
   readonly sky: Sky;
+  /** The weather in the sky: clouds, sheets and rain. */
+  readonly weather: SkyWeather;
   /** The edge of the world: the mist band, the lip and the falls. */
   readonly edge: EdgeScene;
   /** The screen's fade to the mist, going over the lip. */
@@ -288,6 +292,13 @@ export class SeaScene {
     this.stats.onWindow = (now, st) => this.#window(now, st);
     const scene = this.stage.scene;
     this.sky = new Sky(scene);
+    this.weather = new SkyWeather(scene, catalog.weather.clouds);
+    // A star behind the sheets is not tapped.
+    this.stars.hidden = (dir) => {
+      const c = this.stage.camera.position;
+      const o = this.origin.world;
+      return this.weather.sheets.hides(dir, c.y, c.x + o.x, -c.z + o.y);
+    };
     this.shadows = new Shadows(this.sky.light);
     this.ocean = new Ocean(scene);
     this.edge = new EdgeScene(scene, this.ocean.uniforms, {
@@ -675,6 +686,7 @@ export class SeaScene {
       }
     }
     this.spray.capacity = tier.spray;
+    this.weather.setCapacity(tier.puffs, tier.streaks);
     this.onQuality?.(tier.number, this.stage.pixelRatio());
     await Promise.all([
       lit,
@@ -819,6 +831,39 @@ export class SeaScene {
     // The scene pass reads the camera's matrices before the render updates
     // them; without this the picture would lag the camera by a frame.
     camera.updateMatrixWorld();
+  }
+
+  /** The clouds, the sheets and the rain for the frame, from the module's weather; and what they do to the light. */
+  #skyWeather(camera: Vector3): void {
+    const source = this.ocean.source;
+    const o = this.origin.world;
+    const w = this.weather;
+    const speed = this.wind.meanSpeed;
+    w.frame(source?.weather === true ? source.physics : null, {
+      tick: this.ticks,
+      seconds: this.ticks / STEPS_PER_SECOND,
+      dt: this.timeStep,
+      camera,
+      cameraEast: camera.x + o.x,
+      cameraNorth: -camera.z + o.y,
+      originEast: o.x,
+      originNorth: o.y,
+      sunHeight: this.sky.now.sunHeight,
+      windEast: -speed * Math.sin(this.wind.meanFrom),
+      windNorth: -speed * Math.cos(this.wind.meanFrom),
+    });
+    this.sky.overcast = w.overcast;
+    // The water's rain: the grid's, and the camera's on the far sea.
+    const water = this.ocean.gusts.water;
+    water.heldRain = w.heldRain;
+    water.rainFar.value = rainShare(w.rain);
+    const physics = source?.physics ?? null;
+    const rain =
+      w.rain > 0.05 && physics !== null
+        ? physics.rainVisibility(w.rain, 0)
+        : Number.POSITIVE_INFINITY;
+    this.sky.rainRange = rain;
+    w.hazeIn(1 / (1 + this.sky.values.visualRange / rain));
   }
 
   /** Asks the module for the sky at the boat at the frame's time, and lights the scene by it. */
@@ -1029,6 +1074,7 @@ export class SeaScene {
       boatNorth: focus.north,
       cameraHeight: camera.position.y,
     });
+    this.#skyWeather(camera.position);
     this.#readSky();
     this.#stageEnd(now);
     this.sky.follow(camera.position, this.#v.set(fs0.x, fs0.y, fs0.z));

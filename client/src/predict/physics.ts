@@ -168,6 +168,25 @@ interface Exports {
   current(x: number, y: number): void;
   currentValues(): number;
   over(): number;
+  cloudParams(): number;
+  cloudsPrepare(): void;
+  regimeCumulus(i: number, cover: number): void;
+  coming(): number;
+  comingSet(): void;
+  cloud(): number;
+  cloudsAt(): number;
+  sheets(): number;
+  sheetAt(x: number, y: number): void;
+  sheetValues(): number;
+  sheetGrid(i0: number, j0: number, n: number): void;
+  rainAt(x: number, y: number): number;
+  rainValues(): number;
+  rainSample(n: number): void;
+  rainVisibility(rate: number, clear: number): number;
+  capSet(i: number, east: number, north: number, width: number): void;
+  capCount(n: number): void;
+  cumulus(): number;
+  cumulusAt(x: number, y: number, reach: number, sun: number): number;
 }
 
 const functionExports = [
@@ -290,6 +309,25 @@ const functionExports = [
   'current',
   'currentValues',
   'over',
+  'cloudParams',
+  'cloudsPrepare',
+  'regimeCumulus',
+  'coming',
+  'comingSet',
+  'cloud',
+  'cloudsAt',
+  'sheets',
+  'sheetAt',
+  'sheetValues',
+  'sheetGrid',
+  'rainAt',
+  'rainValues',
+  'rainSample',
+  'rainVisibility',
+  'capSet',
+  'capCount',
+  'cumulus',
+  'cumulusAt',
 ] as const satisfies readonly (keyof Exports)[];
 
 /** A chunk of the ground as the module holds it: views of its memory. */
@@ -782,6 +820,102 @@ export class Physics {
   /** The records setRecords last set: copies, for whoever raises their swell. */
   get systemRecords(): readonly Float64Array[] {
     return this.#systemRecords;
+  }
+
+  /**
+   * Derives the clouds' constants from the cloudParams record, and sets
+   * each regime's fair-weather cumulus. Call it after writing cloudParams
+   * (writeCloudParams) and setting the systems' kinds.
+   */
+  prepareClouds(cumulus: readonly number[]): void {
+    this.#x.cloudsPrepare();
+    for (let i = 0; i < Math.min(cumulus.length, WEATHER.regimes); i++) {
+      this.#x.regimeCumulus(i, cumulus[i] ?? 0);
+    }
+  }
+
+  /** Makes a coming record's values the coming front: the line of the next front, before its spell is in play. */
+  setComing(coming: ArrayLike<number>): void {
+    this.records.coming.set(coming);
+    this.#x.comingSet();
+  }
+
+  /**
+   * The heaped clouds at the time windDrawAt set: a view of the module's
+   * cloud records, SIZES.cloud values each, read before the next call.
+   */
+  cloudsAt(): Float64Array {
+    const x = this.#x;
+    const n = x.cloudsAt() >>> 0;
+    return new Float64Array(x.memory.buffer, x.cloud() >>> 0, n * SIZES.cloud);
+  }
+
+  /**
+   * The sheets' cover at the lattice's points (i0 + i, j0 + j), i and j
+   * below n, at the time windDrawAt set: each point's cirrus, middle and
+   * low, east then north. A view: read it before the next call.
+   */
+  sheetGrid(i0: number, j0: number, n: number): Float64Array {
+    const x = this.#x;
+    const side = Math.min(n, WEATHER.sheetSide);
+    x.sheetGrid(i0, j0, side);
+    return new Float64Array(x.memory.buffer, x.sheetValues() >>> 0, 3 * side * side);
+  }
+
+  /** The sheets' cover at (east, north) at the time windDrawAt set: a view of the sheets record. */
+  sheetAt(east: number, north: number): Float64Array {
+    this.#x.sheetAt(east, north);
+    return this.records.sheets;
+  }
+
+  /** The rain at (east, north) at the time windDrawAt set, mm an hour. */
+  rainAt(east: number, north: number): number {
+    return this.#x.rainAt(east, north);
+  }
+
+  /** The rain at points (east, north of each) at the time windDrawAt set, written to out. */
+  rainSample(
+    points: ArrayLike<number>,
+    out: Float64Array,
+    count = points.length >> 1,
+  ): Float64Array {
+    const x = this.#x;
+    for (let start = 0; start < count; start += SEA.sampleCapacity) {
+      const m = Math.min(SEA.sampleCapacity, count - start);
+      const into = new Float64Array(x.memory.buffer, x.samplePoints() >>> 0, 2 * m);
+      for (let i = 0; i < 2 * m; i++) {
+        into[i] = points[2 * start + i] ?? 0;
+      }
+      x.rainSample(m);
+      out.set(new Float64Array(x.memory.buffer, x.rainValues() >>> 0, m), start);
+    }
+    return out;
+  }
+
+  /** The visibility in rain of a rate, mm an hour, where the clear air's is clear, m. */
+  rainVisibility(rate: number, clear: number): number {
+    return this.#x.rainVisibility(rate, clear);
+  }
+
+  /** Makes caps, each an island's centre east and north and its width, m, the islands' caps the cumulus are drawn with. */
+  setCaps(caps: readonly (readonly [number, number, number])[]): void {
+    const n = Math.min(caps.length, WEATHER.caps);
+    for (let i = 0; i < n; i++) {
+      const c = caps[i] as readonly [number, number, number];
+      this.#x.capSet(i, c[0], c[1], c[2]);
+    }
+    this.#x.capCount(n);
+  }
+
+  /**
+   * The fair-weather cumulus and the islands' caps within reach of (east,
+   * north) at the time windDrawAt set, the sun sun rad high: a view of the
+   * module's cumulus records, SIZES.cumulus values each.
+   */
+  cumulusAt(east: number, north: number, reach: number, sun: number): Float64Array {
+    const x = this.#x;
+    const n = x.cumulusAt(east, north, reach, sun) >>> 0;
+    return new Float64Array(x.memory.buffer, x.cumulus() >>> 0, n * SIZES.cumulus);
   }
 
   /** How far from the centre a front's line enters the disk's reach and leaves it, m. */

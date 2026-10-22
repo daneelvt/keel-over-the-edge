@@ -16,6 +16,13 @@ export type Id = string;
  */
 export type Light = "tricolour" | "port" | "starboard" | "stern";
 /**
+ * A cloud's form, which names how it is drawn: fair cumulus, a towering cumulonimbus with its anvil and shelf, a storm's deck with its towers, fog, or none.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CloudForm".
+ */
+export type CloudForm = "none" | "fog" | "cumulus" | "cumulonimbus" | "storm";
+/**
  * A column's top.
  */
 export type Colour = string;
@@ -827,6 +834,7 @@ export interface Weather {
   week: WeatherWeek;
   keyframe: WeatherKeyframe;
   water: WeatherWater;
+  clouds: WeatherClouds;
 }
 /**
  * The waves long enough to move a boat: the band of wavelengths they span and the spectrum that gives each its height.
@@ -1224,6 +1232,10 @@ export interface Regime {
    */
   systems: RegimeSystems[];
   wind: RegimeWind;
+  /**
+   * How much of the sky its fair-weather cumulus covers, from 0 to 1.
+   */
+  cumulus: number;
 }
 /**
  * A regime a spell may give way to.
@@ -1413,19 +1425,106 @@ export interface SystemKind {
    * It is gone once the spell's mean wind passes this, in knots; 0 for never.
    */
   goneAbove: number;
-  /**
-   * The rain under it, for drawing.
-   */
-  rain: "none" | "light" | "moderate" | "heavy";
-  /**
-   * The cloud of it, for drawing.
-   */
-  cloud: "none" | "fog" | "cumulus" | "cumulonimbus";
+  rain: SystemRain;
+  cloud: SystemCloud;
   /**
    * Lightning strikes from it above this strength; 0 for none.
    */
   lightning: number;
   swell?: SystemSwell;
+}
+/**
+ * The rain under a kind of system, at its full strength.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SystemRain".
+ */
+export interface SystemRain {
+  /**
+   * Its rate at its core, in mm an hour; 0 for none.
+   */
+  rate: number;
+  /**
+   * A core's width, or the bands' reach, as a share of its size.
+   */
+  width: number;
+  /**
+   * Its rain falls in this many spiral bands about its centre; 0 for a core.
+   */
+  bands: number;
+  /**
+   * The bands turn once in this many minutes; 0 for never.
+   */
+  turn: number;
+}
+/**
+ * The cloud of a kind of system: its form, its heights and reach at its whole, and how far its cloud grows ahead of its wind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SystemCloud".
+ */
+export interface SystemCloud {
+  form: CloudForm;
+  /**
+   * Its base above the sea, in m.
+   */
+  base: number;
+  /**
+   * Its top at its whole, in m.
+   */
+  top: number;
+  /**
+   * How far its top reaches from its centre at its whole, behind and ahead along its track, as shares of its size.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  reach: [number, number];
+  /**
+   * Its deck of low cloud about the centre at its whole: its reach as a share of its size, and its top in m; no reach for none.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  deck: [number, number];
+  /**
+   * Its cloud strength is its strength times this, at most 1: at 2 its cloud is whole when its wind is half grown.
+   */
+  lead: number;
+  /**
+   * How dark its base is, from 0 to 1.
+   */
+  dark: number;
+  sheets?: SystemSheets;
+}
+/**
+ * The sheet cloud about a system's centre, by its cloud strength: for each layer where it begins and where it is whole, as shares of its size.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SystemSheets".
+ */
+export interface SystemSheets {
+  /**
+   * Its outflow cirrus: from, and whole within.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  cirrus: [number, number];
+  /**
+   * The middle sheet: from, and whole within.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  middle: [number, number];
+  /**
+   * Low overcast: from, and whole within.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  low: [number, number];
 }
 /**
  * The swell a kind of system raises, by its strength: a long, low lift that runs ahead of it at its group speed, its longest waves first.
@@ -1587,6 +1686,128 @@ export interface WeatherWater {
    * Samplings a second.
    */
   rate: number;
+}
+/**
+ * Clouds and rain: the sheets' layers and the lattice they are held on, the fair-weather cumulus, the islands' caps, a front's sheets and rain, and rain's words and visibility.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherClouds".
+ */
+export interface WeatherClouds {
+  /**
+   * The cirrus's height, in m.
+   */
+  cirrus: number;
+  /**
+   * The middle sheet's height, in m.
+   */
+  middle: number;
+  /**
+   * Low cloud's height, in m.
+   */
+  low: number;
+  /**
+   * The sheets' cover is held at the corners of a world-fixed lattice this far apart, in m, and is bilinear between them.
+   */
+  lattice: number;
+  /**
+   * The fair-weather cumulus's lattice cells, in m.
+   */
+  cumulusCell: number;
+  /**
+   * Each cloud stands up to this share of a cell from its cell's centre.
+   */
+  cumulusJitter: number;
+  /**
+   * Their base, in m.
+   */
+  cumulusBase: number;
+  /**
+   * Their tops, the lowest and the highest, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  cumulusTops: [number, number];
+  /**
+   * Their radius, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  cumulusSize: [number, number];
+  /**
+   * Each cell holds a cloud for this long, growing over its first quarter and shrinking over its last, in minutes.
+   */
+  cumulusLife: number;
+  /**
+   * An island's cap grows as the sun at it rises from the first to the second height, and shrinks as it sinks, in degrees.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  capSun: [number, number];
+  /**
+   * A cap's top, over the narrowest island and the widest, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  capTops: [number, number];
+  /**
+   * A cap's radius, as a share of its island's width.
+   */
+  capWidth: number;
+  /**
+   * How many cumulus trail downwind of a cap, a cell apart.
+   */
+  capStreet: number;
+  /**
+   * A front's cirrus: where it begins ahead of the line and where it is whole, and where it begins to clear behind it and where it is gone, in nautical miles.
+   *
+   * @minItems 4
+   * @maxItems 4
+   */
+  frontCirrus: [number, number, number, number];
+  /**
+   * Its middle sheet, the same.
+   *
+   * @minItems 4
+   * @maxItems 4
+   */
+  frontMiddle: [number, number, number, number];
+  /**
+   * Its low cloud: a band this far behind the line and this wide, in nautical miles.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  frontLow: [number, number];
+  /**
+   * Its rain: the rate at the band's middle, in mm an hour, the band this far behind the line and this wide, in nautical miles.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  frontRain: [number, number, number];
+  /**
+   * Rain is light under the first rate, moderate under the second, heavy under the third and violent above, in mm an hour.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  rainWords: [number, number, number];
+  /**
+   * Rain's extinction, a R^b per km of rain of R mm an hour: a and b.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  rainExtinction: [number, number];
+  /**
+   * Visibility on the game's stage is this share of the real.
+   */
+  rainScale: number;
 }
 /**
  * The sky's numbers: the lengths of its day, year and month, its scale, the moment it is counted from, and the stars with names. Where each body stands follows from these and the time alone.
@@ -5258,4 +5479,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '8681e0f0a3f9fc78';
+export const CATALOG_VERSION = 'ff62116f7628187a';

@@ -145,6 +145,9 @@ type Config struct {
 	Sky      *sky.Prepared
 	Every    int64
 	HeldSeed uint32
+	// Ahead is how far beyond the disk's reach a front's line is when its
+	// cirrus can first be seen from the disk, m.
+	Ahead float64
 }
 
 // ConfigOf is the catalog's weather as weeks and timelines are made with
@@ -157,6 +160,7 @@ func ConfigOf(c *catalog.Catalog) (*Config, error) {
 		Every:    int64(w.Keyframe.Every) * physics.StepsPerSecond,
 		HeldSeed: uint32(w.Week.Seed),
 	}
+	cfg.Ahead = cfg.Prepared.ComingAhead(c.World.Handout.Dome)
 	regimes := map[catalog.ID]int{}
 	for i, r := range w.Regimes {
 		regimes[r.ID] = i

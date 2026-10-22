@@ -32,7 +32,10 @@ var windGroups = []struct{ def, name string }{
 	{"WeatherReach", "reach"},
 }
 
-const regimeDef = "RegimeWind"
+const (
+	regimeDef = "RegimeWind"
+	cloudsDef = "WeatherClouds"
+)
 
 // windFields reads WeatherParams's values from the schema.
 func windFields(root string) ([]physicsField, error) {
@@ -68,10 +71,26 @@ func regimeFields(root string) ([]physicsField, error) {
 	return groupFields(d, "wind")
 }
 
-// checkWindParams fails unless WeatherParams and Regime have exactly the
-// schema's values, in order.
-func checkWindParams(wind, regime []physicsField) error {
+// cloudFields reads CloudParams's values from the schema.
+func cloudFields(root string) ([]physicsField, error) {
+	defs, err := schemaDefs(root)
+	if err != nil {
+		return nil, err
+	}
+	d, ok := defs[cloudsDef]
+	if !ok {
+		return nil, fmt.Errorf("%s has no %s", schemaPath, cloudsDef)
+	}
+	return groupFields(d, "clouds")
+}
+
+// checkWindParams fails unless WeatherParams, Regime and CloudParams have
+// exactly the schema's values, in order.
+func checkWindParams(wind, regime, clouds []physicsField) error {
 	if err := checkRecord(reflect.TypeFor[physics.WeatherParams](), "weather's disk, gusts and waveWind", wind); err != nil {
+		return err
+	}
+	if err := checkRecord(reflect.TypeFor[physics.CloudParams](), cloudsDef, clouds); err != nil {
 		return err
 	}
 	return checkRecord(reflect.TypeFor[physics.Regime](), regimeDef, regime)
@@ -301,7 +320,7 @@ func longRun(table [][]float64, length []float64) []float64 {
 	return time
 }
 
-func goWind(b *bytes.Buffer, wind, regime []physicsField) {
+func goWind(b *bytes.Buffer, wind, regime, clouds []physicsField) {
 	b.WriteString(`
 // WeatherParams returns the catalog's wind values as the physics package's
 // WeatherParams.
@@ -334,9 +353,24 @@ func Regimes(c *Catalog) []physics.Regime {
 		}
 	}
 	b.WriteString("\t}\n\treturn out\n}\n")
+	b.WriteString(`
+// CloudParams returns the catalog's clouds' values as the physics package's
+// CloudParams.
+func CloudParams(c *Catalog) physics.CloudParams {
+	var p physics.CloudParams
+`)
+	for _, f := range clouds {
+		from := fmt.Sprintf("c.Weather.Clouds.%s", goName(f.name))
+		if f.length > 0 {
+			fmt.Fprintf(b, "\tcopy(p.%s[:], %s)\n", goName(f.name), from)
+		} else {
+			fmt.Fprintf(b, "\tp.%s = float64(%s)\n", goName(f.name), from)
+		}
+	}
+	b.WriteString("\treturn p\n}\n")
 }
 
-func tsWind(b *bytes.Buffer, wind, regime []physicsField) {
+func tsWind(b *bytes.Buffer, wind, regime, clouds []physicsField) {
 	b.WriteString(`
 /**
  * Writes the catalog's wind values into the physics module's WeatherParams
@@ -364,6 +398,23 @@ export function writeRegime(record: Float64Array, r: RegimeWind): void {
 			fmt.Fprintf(b, "  record.set(r.%s, f.%s);\n", f.name, f.name)
 		} else {
 			fmt.Fprintf(b, "  record[f.%s] = r.%s;\n", f.name, f.name)
+		}
+	}
+	b.WriteString(`}
+
+/**
+ * Writes the catalog's clouds' values into the physics module's
+ * CloudParams record. The module's cloudsPrepare export derives the
+ * clouds' constants from them.
+ */
+export function writeCloudParams(params: Float64Array, c: WeatherClouds): void {
+  const f = RECORDS.cloudParams;
+`)
+	for _, f := range clouds {
+		if f.length > 0 {
+			fmt.Fprintf(b, "  params.set(c.%s, f.%s);\n", f.name, f.name)
+		} else {
+			fmt.Fprintf(b, "  params[f.%s] = c.%s;\n", f.name, f.name)
 		}
 	}
 	b.WriteString("}\n")

@@ -74,6 +74,11 @@ func (c *Catalog) PrepareWeather() *physics.WeatherPrepared {
 	for i, k := range SystemKinds(c) {
 		w.SetKind(int32(i), &k)
 	}
+	clouds := CloudParams(c)
+	w.PrepareClouds(&clouds)
+	for i := range c.Weather.Regimes {
+		w.SetRegimeCumulus(int32(i), c.Weather.Regimes[i].Cumulus)
+	}
 	return w
 }
 
@@ -82,19 +87,36 @@ func (c *Catalog) PrepareWeather() *physics.WeatherPrepared {
 func SystemKinds(c *Catalog) []physics.SystemKind {
 	shapes := map[Shape]float64{ShapeNone: physics.ShapeNone, ShapeDome: physics.ShapeDome, ShapeLow: physics.ShapeLow}
 	inward := map[Inward]float64{InwardNone: physics.InwardNone, InwardWeak: physics.InwardWeak, InwardGone: physics.InwardGone}
+	forms := map[CloudForm]float64{
+		CloudFormNone: physics.FormNone, CloudFormFog: physics.FormFog, CloudFormCumulus: physics.FormCumulus,
+		CloudFormCumulonimbus: physics.FormCumulonimbus, CloudFormStorm: physics.FormStorm,
+	}
 	out := make([]physics.SystemKind, len(c.Weather.Systems))
 	for i, k := range c.Weather.Systems {
 		out[i] = physics.SystemKind{
 			Shape: shapes[k.Shape], Turning: k.Turning, Width: k.Width, Ahead: k.Ahead,
 			Broad: k.Broad[0], BroadWidth: k.Broad[1], Stretch: k.Stretch, Inward: inward[k.Inward], Gusts: k.Gusts,
 		}
+		o := &out[i]
 		if s := k.Swell; s != nil {
-			o := &out[i]
 			copy(o.SwellPeriod[:], s.Period)
 			copy(o.SwellBand[:], s.Band)
 			copy(o.SwellHeight[:], s.Height)
 			copy(o.SwellWind[:], k.Wind)
 		}
+		cl := &k.Cloud
+		o.CloudForm = forms[cl.Form]
+		o.CloudBase, o.CloudTop = cl.Base, cl.Top
+		copy(o.CloudReach[:], cl.Reach)
+		copy(o.CloudDeck[:], cl.Deck)
+		o.CloudLead, o.CloudDark = cl.Lead, cl.Dark
+		if s := cl.Sheets; s != nil {
+			copy(o.SheetCirrus[:], s.Cirrus)
+			copy(o.SheetMiddle[:], s.Middle)
+			copy(o.SheetLow[:], s.Low)
+		}
+		o.RainRate, o.RainWidth = k.Rain.Rate, k.Rain.Width
+		o.RainBands, o.RainTurn = float64(k.Rain.Bands), k.Rain.Turn
 	}
 	return out
 }

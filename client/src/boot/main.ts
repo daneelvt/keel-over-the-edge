@@ -15,6 +15,13 @@
 //   ?world=7          the sandbox in seed 7's world, from .dev/worlds/7.world (go run ./tools/dev -world 7)
 //   ?wind=12,45       the sandbox's wind: knots 10 m up, and the degrees it comes from
 //   ?sea=gale         the sandbox's wind by the sea it raises: calm, breeze, fresh or gale
+//   ?weather=squall   the sandbox's weather: steady, a regime's id, front, or a kind of
+//                     system's id to meet the boat three minutes in
+//   ?front=40         a front crossing the boat that many minutes in, its sheets first
+//   ?cloud=trade      a regime's weather, with its fair-weather cumulus
+//   ?rain=20          rain held at the camera, mm an hour
+//   ?swell=0.6,6,270  a swell of the sandbox's own: height m, period s, from degrees
+//   ?edge=off         no mist, lip or falls
 //   ?dev              the developer panel (loaded only when asked for)
 //   ?backend=webgl2   the WebGL 2 back end even where WebGPU is offered
 //   ?tier=low         a tier, high, medium or low, held: adaptive quality is off
@@ -54,12 +61,16 @@ import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
 import { loadPhysics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
+import { regimeIndex } from '../predict/weather';
 import { ROAM_HIGH } from '../render/freecam';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
   commonestWeather,
+  FRONT,
+  frontFromQuery,
+  rainFromQuery,
   START,
   STEADY,
   seaFromQuery,
@@ -106,6 +117,7 @@ async function start(): Promise<void> {
     // pictures and recordings are of one wind; otherwise a spell of the
     // commonest regime, with its shifts and gusts.
     const wind = windFromQuery(query) ?? seaFromQuery(query);
+    const frontIn = frontFromQuery(query);
     // ?world=seed: a whole world, from the file go run ./tools/dev -world
     // writes, the boat at its start: its first mooring, facing the narrows.
     const seed = query.get('world');
@@ -121,9 +133,18 @@ async function start(): Promise<void> {
             heading: file.start.headings?.[0] ?? file.start.heading,
           }),
       wind: wind ?? START.wind,
+      // ?front=minutes: a front that far off, its sheets ahead of it;
+      // ?cloud=regime: that regime's weather, with its cumulus.
       weather:
-        weatherFromQuery(query, catalog.weather) ??
-        (wind !== null || query.has('test') ? STEADY : commonestWeather(catalog.weather)),
+        frontIn !== null
+          ? FRONT
+          : (weatherFromQuery(query, catalog.weather) ??
+            (query.has('cloud') && regimeIndex(catalog.weather, query.get('cloud') ?? '') >= 0
+              ? (query.get('cloud') as string)
+              : wind !== null || query.has('test')
+                ? STEADY
+                : commonestWeather(catalog.weather))),
+      ...(frontIn === null ? {} : { frontIn }),
     };
     const [, sandbox] = await Promise.all([
       world.start(),
@@ -170,8 +191,12 @@ async function start(): Promise<void> {
           onLights: (l, drop) => world.lighthouses.setLights(l, drop),
         },
       );
+      // Every island's cap: the sandbox has the whole world.
+      world.weather.setCaps(file.caps, 'all');
     }
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
+    // ?rain=mm: rain held at the camera.
+    world.weather.heldRain = rainFromQuery(query);
     chooseSky(world, query);
     // The world's chart, read once its land is handed, so the sea starts as
     // it does without one.
@@ -287,6 +312,7 @@ async function start(): Promise<void> {
     world.wrecks.setPlaces(p);
   };
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
+  online.onCaps = (c, drop) => world.weather.setCaps(c, drop);
   // The world's chart, as the server tells of it; the notices it raises,
   // switched off as the account has them.
   const parts = makeChart(world, models, serverNews);

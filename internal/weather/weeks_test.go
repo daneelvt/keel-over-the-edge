@@ -22,7 +22,9 @@ import (
 // the one after KEEL_WEEKS_FROM. Its tally of them is written to
 // KEEL_WEEKS_SUMMARY, if that is set, in Markdown. The storms' swell is
 // held to its rule over the first five weeks on a grid half a mile apart,
-// and in the long run over the first two hundred, a quarter of a mile.
+// and in the long run over the first two hundred, a quarter of a mile; and
+// so are the signs in the sky before the weather: the clouds' leads on
+// their own wind, and a front's cirrus's on its line.
 func TestWeeks(t *testing.T) {
 	cat, tl := load(t)
 	cfg := tl.Config()
@@ -68,6 +70,8 @@ func TestWeeks(t *testing.T) {
 		checkRefuge(t, seed, wt, w, every, &tally)
 		if tally.weeks < swellWeeks {
 			checkSwell(wt, w, waves, swellGrid, &tally)
+			checkCloudLeads(cat, wt, w, swellGrid, &tally)
+			checkFrontCirrus(cat, wt, w, swellGrid, &tally)
 		}
 		tally.weeks++
 		for i, s := range w.Report.Shares {
@@ -98,7 +102,26 @@ func TestWeeks(t *testing.T) {
 			t.Errorf("a storm's 20-knot wind came before its swell at %d of %d places it reached by moving", s.moving-s.movingFirst, s.moving)
 		}
 	}
-	report := tally.markdown(cat)
+	// A squall's tower comes before its gust front at every place, and by
+	// five minutes or more at nineteen in twenty; a storm's cloud before its
+	// 20-knot wind at every place, and by ten minutes or more at nineteen in
+	// twenty; a front's cirrus forty minutes or more before its line,
+	// wherever it crosses.
+	for i, c := range tally.clouds {
+		if c.places == 0 || cloudSigns[i].form == catalog.CloudFormCumulus {
+			continue
+		}
+		if c.windFirst > 0 {
+			t.Errorf("%s: the wind came first at %d of %d places", cloudSigns[i].name, c.windFirst, c.places)
+		}
+		if s := share(c.short, c.places); s > 5 {
+			t.Errorf("%s: under %.0f minutes at %.1f%% of %d places", cloudSigns[i].name, cloudSigns[i].warnings, s, c.places)
+		}
+	}
+	if tally.cirrusShort > 0 {
+		t.Errorf("a front's cirrus came less than %d minutes before its line at %d of %d places", frontWarning, tally.cirrusShort, len(tally.cirrus))
+	}
+	report := tally.markdown(cat) + tally.cloudsMarkdown()
 	t.Log("\n" + report)
 	if path := os.Getenv("KEEL_WEEKS_SUMMARY"); path != "" {
 		if err := os.WriteFile(path, []byte(report), 0o644); err != nil {
@@ -119,6 +142,9 @@ type weeksTally struct {
 	showersByDay, showersOnIslands               int
 	swell                                        [3]swellLead // by the storm's wind: 10, 15 and 20 knots
 	swellStorms                                  int
+	clouds                                       [3]cloudLead // by cloudSigns
+	fronts, cirrusShort                          int
+	cirrus                                       []float64 // a front's cirrus's leads on its line, minutes
 }
 
 // swellLead is the swell's lead on a storm's own wind at the places that

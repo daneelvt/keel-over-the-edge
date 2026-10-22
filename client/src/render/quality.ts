@@ -50,6 +50,9 @@ export interface Tier {
   sprayCrests: boolean;
   /** The detail's anisotropic filtering. */
   anisotropy: number;
+  /** The clouds' puffs drawn at most, and the streaks of rain at the boat. */
+  puffs: number;
+  streaks: number;
 }
 
 export const TIERS: Record<TierName, Tier> = {
@@ -68,6 +71,8 @@ export const TIERS: Record<TierName, Tier> = {
     sprayBoats: 3,
     sprayCrests: true,
     anisotropy: 4,
+    puffs: 1024,
+    streaks: 2048,
   },
   medium: {
     name: 'medium',
@@ -82,6 +87,8 @@ export const TIERS: Record<TierName, Tier> = {
     sprayBoats: 0,
     sprayCrests: true,
     anisotropy: 4,
+    puffs: 768,
+    streaks: 1024,
   },
   low: {
     name: 'low',
@@ -96,6 +103,8 @@ export const TIERS: Record<TierName, Tier> = {
     sprayBoats: 0,
     sprayCrests: false,
     anisotropy: 1,
+    puffs: 512,
+    streaks: 512,
   },
 };
 

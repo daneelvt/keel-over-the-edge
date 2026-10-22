@@ -124,3 +124,23 @@ func bit(b bool) float64 {
 	}
 	return 0
 }
+
+// SetComing sets a WeatherSystems's coming front, or none.
+func SetComing(m *pb.WeatherSystems, c *physics.ComingFront) {
+	m.Coming = nil
+	if c.On != 0 {
+		m.Coming = &pb.ComingFront{Begin: int64(c.Begin), Change: uint32(c.Change), Toward: uint32(c.Toward)}
+	}
+}
+
+// ComingOf reads a WeatherSystems's coming front: none if it carries none.
+func ComingOf(m *pb.WeatherSystems) (physics.ComingFront, error) {
+	c := m.GetComing()
+	if c == nil {
+		return physics.ComingFront{}, nil
+	}
+	if c.GetBegin() < -maxTick || c.GetBegin() > maxTick || c.GetToward() >= physics.TurnSteps {
+		return physics.ComingFront{}, fmt.Errorf("protocol: the coming front's numbers are out of range")
+	}
+	return physics.ComingFront{On: 1, Begin: float64(c.GetBegin()), Change: float64(c.GetChange()), Toward: float64(c.GetToward())}, nil
+}

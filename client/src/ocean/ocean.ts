@@ -37,6 +37,7 @@ import { TilePass } from './tilepass';
 import { Tiles } from './tiles';
 import { fract1, Turned } from './turn';
 import { SeaUnder } from './under';
+import { waterRainAt } from './water';
 import { type BandUniforms, bandUniforms } from './wave';
 
 /**
@@ -156,6 +157,7 @@ export class Ocean {
       shimmer: !(kind.kind === 'fft' && kind.patches === 2),
       pattern: this.pattern,
       wakes: (p) => this.wakes.sample(p),
+      rain: (p) => waterRainAt(this.gusts.water)(p),
     };
   }
 

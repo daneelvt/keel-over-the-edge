@@ -80,14 +80,20 @@ func NewPredictor(kind *physics.Prepared, waves *physics.Waves, weather *physics
 }
 
 // ReceiveWeather takes a WeatherSystems: its spells replace those held,
-// unless it keeps them, and its keyframes join those held, each replacing
-// any of its tick, the latest physics.KeySets kept.
+// unless it keeps them, its coming front the one held, and its keyframes
+// join those held, each replacing any of its tick, the latest
+// physics.KeySets kept.
 func (p *Predictor) ReceiveWeather(m *pb.WeatherSystems) error {
 	var keys [physics.KeySets]physics.Keyframe
 	nk, err := protocol.KeyframesOf(m, keys[:])
 	if err != nil {
 		return err
 	}
+	coming, err := protocol.ComingOf(m)
+	if err != nil {
+		return err
+	}
+	p.Weather.SetComing(&coming)
 	if !m.GetKeepSpells() {
 		var spells [physics.WeatherSpells]physics.Spell
 		n, err := protocol.SpellsOf(m, &spells)

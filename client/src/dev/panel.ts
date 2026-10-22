@@ -274,6 +274,50 @@ export function partsLine(
   return `parts   wind sea ${windHs.toFixed(2)} m ${period(windPeak)}, ${swell}, current ×${current.toFixed(2)}, lee ×${lee.toFixed(2)}`;
 }
 
+/** The forms of heaped cloud, by the module's numbering, as the panel names them. */
+const FORM_NAMES: Record<number, string> = { 2: 'cumulus', 3: 'cumulonimbus', 4: 'storm' };
+
+/** Rain's words, WMO-No. 8's, at the catalog's rates, mm an hour. */
+export function rainWord(rate: number, words: readonly number[]): string {
+  if (rate < 0.05) {
+    return 'none';
+  }
+  const names = ['light', 'moderate', 'heavy'];
+  for (let i = 0; i < names.length; i++) {
+    if (rate < (words[i] ?? Number.POSITIVE_INFINITY)) {
+      return names[i] as string;
+    }
+  }
+  return 'violent';
+}
+
+/**
+ * The sky's weather at the camera, as lines: the rain and its word, each
+ * sheet's cover overhead and the overcast, and the heaped clouds in sight
+ * (their forms and tops, nearest first) with the cumulus's count.
+ */
+export function skyLines(
+  rain: number,
+  words: readonly number[],
+  sheets: readonly number[],
+  overcast: number,
+  clouds: readonly { form: number; slot: number; top: number; away: number }[],
+): string[] {
+  const heaped = clouds.filter((c) => c.slot >= 0);
+  const fair = clouds.length - heaped.length;
+  const shown = heaped
+    .slice(0, 3)
+    .map(
+      (c) =>
+        `${FORM_NAMES[c.form] ?? 'cloud'} ${Math.round(c.top)} m at ${(c.away / 1000).toFixed(1)} km`,
+    );
+  return [
+    `rain    ${rain.toFixed(1)} mm/h, ${rainWord(rain, words)}`,
+    `sheets  cirrus ${(sheets[0] ?? 0).toFixed(2)}, middle ${(sheets[1] ?? 0).toFixed(2)}, low ${(sheets[2] ?? 0).toFixed(2)}, overcast ${overcast.toFixed(2)}`,
+    `clouds  ${shown.length === 0 ? 'no heaped cloud' : shown.join('; ')}, ${fair} cumulus`,
+  ];
+}
+
 /** The sea under the boat, as lines: its height, its peak, and the waves summed. */
 export function seaLines(hs: number, peak: number, waves: number, blended: boolean): string {
   if (waves === 0) {
@@ -758,6 +802,16 @@ export function openPanel(
       parts,
       windLine(sandbox.wind),
       weatherLine(sandbox.physics, sandbox.tick, p.east, p.north, sandbox.systems),
+      ...skyLines(
+        world.weather.rain,
+        catalog.weather.clouds.rainWords,
+        [0, 1, 2].map((l) => world.weather.sheets.coverAt(l, p.east, p.north)),
+        world.weather.overcast,
+        world.weather.clouds.shown.map((c) => ({
+          ...c,
+          away: Math.hypot(c.east - p.east, c.north - p.north),
+        })),
+      ),
       pilotLine(game.pilot, sandbox.states.current, sandbox.out),
       ...edgeLines(
         p.east,

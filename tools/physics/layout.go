@@ -38,6 +38,11 @@ var records = []struct {
 	{"system", reflect.TypeFor[physics.System]()},
 	{"systemKind", reflect.TypeFor[physics.SystemKind]()},
 	{"systemRecord", reflect.TypeFor[physics.SystemRecord]()},
+	{"cloudParams", reflect.TypeFor[physics.CloudParams]()},
+	{"coming", reflect.TypeFor[physics.ComingFront]()},
+	{"cloud", reflect.TypeFor[physics.Cloud]()},
+	{"cumulus", reflect.TypeFor[physics.Cumulus]()},
+	{"sheets", reflect.TypeFor[physics.Sheets]()},
 	{"other", reflect.TypeFor[physics.State]()},
 	{"encounterParams", reflect.TypeFor[physics.EncounterParams]()},
 	{"wake", reflect.TypeFor[physics.Wake]()},
@@ -101,7 +106,9 @@ var seaConstants = []struct {
 // weatherConstants are the weather's sizes: the spells a module holds, the
 // steps in a turn of a spell's directions, the most samples of the wave
 // wind, the octaves of the gust field, the systems a keyframe holds, the
-// keyframes a module holds and the kinds of system.
+// keyframes a module holds and the kinds of system; the regimes, the heaped
+// clouds and the cumulus a module answers for at once, the islands' caps
+// it holds and the side of its window of the sheets' lattice.
 var weatherConstants = []struct {
 	name  string
 	value int
@@ -113,6 +120,11 @@ var weatherConstants = []struct {
 	{"turnSteps", physics.TurnSteps},
 	{"waveSamples", physics.MaxWaveSamples},
 	{"octaves", physics.GustOctaves},
+	{"regimes", physics.MaxRegimes},
+	{"clouds", physics.MaxClouds},
+	{"cumulus", physics.MaxCumulus},
+	{"caps", physics.MaxCaps},
+	{"sheetSide", physics.SheetSide},
 }
 
 type recordLayout struct {

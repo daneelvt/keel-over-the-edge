@@ -85,6 +85,7 @@ import {
 } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
+import { look } from '../render/sky';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Settings } from '../ui/settings';
@@ -1014,7 +1015,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * Draws a frame in an animation frame, as the game's loop does, and
      * resolves once it is on screen, for a screenshot. (A WebGPU or WebGL
      * canvas is cleared once presented, so the page cannot read its own
-     * pictures back; the tests take screenshots instead.)
+     * pictures back; the tests take screenshots instead.) It waits for the
+     * GPU to finish what it was given: on a software GPU the shaders a
+     * scene first draws compile there for seconds after the page has
+     * moved on, and a screenshot would wait for them.
      */
     async show(): Promise<void> {
       const frame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
@@ -1024,6 +1028,21 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           r();
         }),
       );
+      const backend = stage.gfx?.renderer.backend as
+        | { device?: GPUDevice; gl?: WebGL2RenderingContext }
+        | undefined;
+      if (backend?.device !== undefined) {
+        await backend.device.queue.onSubmittedWorkDone();
+      } else if (backend?.gl !== undefined) {
+        // Chrome's finish() does not wait; a fence, polled between tasks, does.
+        const gl = backend.gl;
+        const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        gl.flush();
+        while (fence !== null && gl.getSyncParameter(fence, gl.SYNC_STATUS) !== gl.SIGNALED) {
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        gl.deleteSync(fence);
+      }
       await frame();
       await frame();
     },
@@ -1211,6 +1230,56 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      */
     setWeather(id: string): void {
       offline().setWeather(id);
+    },
+    /** Draws the weather in the sky, or none of it: no clouds, sheets or rain. */
+    showWeather(on: boolean): void {
+      world.weather.shown = on;
+    },
+    /** Holds the rain at the camera, mm an hour, or null to give it back to the weather. */
+    setRain(rate: number | null): void {
+      world.weather.heldRain = rate;
+    },
+    /**
+     * The weather in the sky as last drawn: the heaped clouds and the
+     * cumulus laid out (each its form, its slot among the heaped or −1,
+     * its centre, top and puffs), the puffs and streaks drawn, the rain and
+     * the overcast at the camera, and the sheets' cover overhead.
+     */
+    clouds() {
+      const w = world.weather;
+      const o = world.origin.world;
+      const cam = world.stage.camera.position;
+      const east = cam.x + o.x;
+      const north = -cam.z + o.y;
+      return {
+        clouds: w.clouds.shown.map((c) => ({ ...c })),
+        puffs: w.clouds.count,
+        heapedPuffs: w.clouds.heaped,
+        curtains: w.curtains.count,
+        streaks: w.streaks.count,
+        rain: w.rain,
+        overcast: w.overcast,
+        sheets: [0, 1, 2].map((l) => w.sheets.coverAt(l, east, north)),
+        visualRange: look.visualRange.value as number,
+        light: world.sky.light.intensity,
+        far: world.stage.camera.far,
+        drawn: w.clouds.mesh.visible && w.clouds.count > 0,
+      };
+    },
+    /** Where the sun is on the canvas, CSS pixels, and whether it is in front of the camera. */
+    sunOnScreen(): { x: number; y: number; front: boolean } | null {
+      const canvas = stage.gfx?.canvas;
+      if (canvas === undefined) {
+        return null;
+      }
+      const at = world.stars.screen(
+        (look.sun.value as Vector3).clone(),
+        stage.camera,
+        canvas.clientWidth,
+        canvas.clientHeight,
+        new Vector3(),
+      );
+      return { x: at.x, y: at.y, front: at.z < 1 };
     },
     /** Sets the helm's and the sheet's targets, as the player's thumbs would. */
     setControls(helm: number, sheet: number): void {

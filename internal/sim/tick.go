@@ -159,6 +159,9 @@ func (w *World) weatherAt(f *bus.Frame) {
 	if !sameSpells(&w.weather, f) {
 		w.weather.Set(f.SpellsInPlay())
 	}
+	if w.weather.Coming != f.Coming {
+		w.weather.SetComing(&f.Coming)
+	}
 	if wx := &w.weather; wx.NKeys != 2 || wx.Keys[0] != f.Keys[0] || wx.Keys[1] != f.Keys[1] {
 		wx.SetKeys(f.Keys[:2])
 	}

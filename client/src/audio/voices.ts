@@ -21,6 +21,7 @@
 
 import falls from '../../../art/sound/falls.json';
 import flogging from '../../../art/sound/flogging.json';
+import rain from '../../../art/sound/rain.json';
 import rigging from '../../../art/sound/rigging.json';
 import sea from '../../../art/sound/sea.json';
 import water from '../../../art/sound/water.json';
@@ -34,9 +35,10 @@ export interface Recipes {
   water: typeof water;
   sea: typeof sea;
   falls: typeof falls;
+  rain: typeof rain;
 }
 
-export const RECIPES: Recipes = { wind, rigging, flogging, water, sea, falls };
+export const RECIPES: Recipes = { wind, rigging, flogging, water, sea, falls, rain };
 
 /** Sound parameters are set at most this often, in milliseconds. */
 export const SOUND_INTERVAL = 50;
@@ -66,6 +68,8 @@ export interface SoundInput {
   falling: boolean;
   /** How near the world's end is, 0 to 1: the falls roar wherever the boat is. */
   endNear?: number;
+  /** The rain at the boat, mm an hour. */
+  rain?: number;
 }
 
 export interface SoundTargets {
@@ -83,6 +87,8 @@ export interface SoundTargets {
   fallsLevel: number;
   fallsCutoff: number;
   fallsPan: number;
+  rainLevel: number;
+  drumLevel: number;
 }
 
 export function newTargets(): SoundTargets {
@@ -101,7 +107,22 @@ export function newTargets(): SoundTargets {
     fallsLevel: 0,
     fallsCutoff: 0,
     fallsPan: 0,
+    rainLevel: 0,
+    drumLevel: 0,
   };
+}
+
+/**
+ * The level of a voice that rises with the logarithm of the rain's rate,
+ * mm an hour, from nothing at from to its most at full: rain is heard by
+ * its logarithm, as loudness goes.
+ */
+export function rainLevel(l: { from: number; full: number; most: number }, rate: number): number {
+  if (!(rate > l.from)) {
+    return 0;
+  }
+  const t = Math.min(Math.log(rate / l.from) / Math.log(l.full / l.from), 1);
+  return l.most * t;
 }
 
 /**
@@ -245,6 +266,11 @@ export function soundTargets(r: Recipes, x: SoundInput, out: SoundTargets): Soun
   );
   out.fallsCutoff = fallsCutoff(fl, d);
   out.fallsPan = x.falling ? 0 : Math.min(Math.max(x.lipPan, -1), 1);
+
+  // Rain: its hiss on the sea and the sails, and in heavy rain a drumming.
+  const rr = Math.max(0, x.rain ?? 0);
+  out.rainLevel = rainLevel(r.rain.level, rr);
+  out.drumLevel = rainLevel(r.rain.drumLevel, rr);
   return out;
 }
 

@@ -62,3 +62,16 @@ a shade. Everything is real size: a storey is 3 m.
 bands, levels and curves for the wind, the rigging, the flogging sail, the
 water on the hull and the sea about the boat. They are art like the models. Each names the art licence
 in its first field, `licence`.
+
+## Clouds
+
+`clouds/*.json` are the recipes of the heaped clouds' puffs, one a form
+(`cumulus`, `cumulonimbus`, `storm`): layers of puffs, each a count, a
+shape (a box, a disc, an arc or a spiral), ranges of place, height, radius
+and tone as shares of the cloud's size and height, how flat and stretched
+its puffs are, and the cloud strength over which the layer grows. The
+client's sky lays every cloud out by them from its system's seed, so every
+phone draws the same cloud; `go run ./tools/catalog -check` fails on a
+heaped form without its recipe. They are art like the sound's recipes:
+tuning one changes nothing the server keeps. Each names the art licence in
+its first field, `licence`.

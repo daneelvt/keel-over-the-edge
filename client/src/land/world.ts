@@ -30,6 +30,8 @@ export interface WorldFile {
   /** Its places and lights as its records hold them; none in a file made before it had them. */
   places: RecordPlace[];
   lights: RecordLight[];
+  /** Its islands' caps: each island's centre east and north and its width, m, as the server sends them; none in a file without its islands. */
+  caps: { number: number; east: number; north: number; width: number }[];
 }
 
 /** A place as a world's records hold it. */
@@ -131,6 +133,7 @@ export function readWorldFile(data: ArrayBuffer): WorldFile {
     circulation?: number;
     places?: RecordPlace[] | null;
     lights?: RecordLight[] | null;
+    islands?: { x: number; y: number; across: number; group: number }[] | null;
   };
   next(); // the report
   next(); // the digest
@@ -145,6 +148,16 @@ export function readWorldFile(data: ArrayBuffer): WorldFile {
     payloads,
     places: records.places ?? [],
     lights: records.lights ?? [],
+    // As the server sends them: an island of a group is its group's, each
+    // to 50 m.
+    caps: (records.islands ?? [])
+      .filter((i) => i.group < 0)
+      .map((i, number) => ({
+        number,
+        east: 50 * Math.round(i.x / 50),
+        north: 50 * Math.round(i.y / 50),
+        width: 50 * Math.round(i.across / 50),
+      })),
   };
 }
 

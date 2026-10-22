@@ -108,6 +108,9 @@ type WeatherPrepared struct {
 	cut           float64
 	kinds         [MaxKinds]systemKind
 	nkinds        int32
+
+	// Clouds and rain.
+	clouds cloudsPrepared
 }
 
 // PrepareWeather derives the wind's constants from its parameters. It is
@@ -322,6 +325,7 @@ type spell struct {
 	fspeed     float64
 	trough     float64
 	still      bool // the week's systems do not blow while it is in effect
+	regime     float64
 }
 
 // spellOf turns a spell's whole numbers into the values the wind is computed
@@ -362,6 +366,7 @@ func spellOf(p *WeatherPrepared, s *Spell) spell {
 		o.seeds[k] = hash32(seed + uint32(k)*0x9e3779b9)
 	}
 	o.still = s.Still != 0
+	o.regime = s.Regime
 	o.level = standardPress
 	if s.Pressure > 0 {
 		o.level = float64(s.Pressure * hundredthHPa)
@@ -387,6 +392,10 @@ type Weather struct {
 	NKeys    int32
 	Records  [MaxSystems]SystemRecord
 	NRecords int32
+	// Coming is the next front before its spell is in play: its line,
+	// which its cirrus shows far ahead of it.
+	Coming ComingFront
+	coming spell
 }
 
 // SetSpell sets spell i, and makes it ready.
@@ -396,6 +405,15 @@ func (w *Weather) SetSpell(i int32, s *Spell) {
 	}
 	w.Spells[i] = *s
 	w.spells[i] = spellOf(w.Prepared, s)
+}
+
+// SetComing sets the coming front, and makes it ready.
+func (w *Weather) SetComing(c *ComingFront) {
+	w.Coming = *c
+	w.coming = spell{}
+	if c.On != 0 {
+		w.coming = spellOf(w.Prepared, &Spell{Begin: c.Begin, Start: c.Begin, Change: c.Change, Front: 1, Toward: c.Toward})
+	}
 }
 
 // SetCount says how many spells are in play: the first n set.
@@ -428,6 +446,10 @@ type WeatherTick struct {
 	trough float64 // hPa
 	sys    [2 * MaxSystems]systemTick
 	ns     int32
+	// The fronts whose sheets may be in sight: the latest in play, and the
+	// one coming.
+	fronts [maxFrontLines]frontLine
+	nf     int32
 }
 
 // spellTick is a spell at a tick.
@@ -438,6 +460,7 @@ type spellTick struct {
 	sinB, cosB float64 // the axis of the difference across the disk
 	travel     float64 // how far the gust field has travelled downwind, m
 	time       [GustOctaves]float64
+	seconds    float64 // since its start
 }
 
 // cycle returns 2π × the fraction of turns × tick, taken exactly (Dekker
@@ -453,6 +476,7 @@ func cycle(turns, tick float64) float64 {
 // before it is in play too.
 func WeatherAt(w *Weather, t *WeatherTick, tick float64) {
 	t.Tick, t.p, t.n, t.front, t.ns = tick, w.Prepared, 0, false, 0
+	t.setFronts(w, tick)
 	if w.Count == 0 {
 		return
 	}
@@ -495,6 +519,7 @@ func (st *spellTick) set(s *spell, tick float64, g *gustCells) {
 		float64(s.amp[1]*Sin(s.phase[1]+cycle(s.turns[1], tick)))
 	st.sinB, st.cosB = SinCos(s.axis + cycle(s.axisTurns, tick))
 	seconds := float64(since * Dt)
+	st.seconds = seconds
 	st.travel = float64(s.fieldSpeed * seconds)
 	for k := range st.time {
 		st.time[k] = float64(seconds * g.invLife[k])

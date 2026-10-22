@@ -79,6 +79,9 @@ type conn struct {
 	handout connChunks // what of the land the client has been handed: the encoder's
 	// lightsSent is which lights the client has been sent: the encoder's.
 	lightsSent connLights
+	// capsSent is which islands' caps the client has been sent: the
+	// encoder's.
+	capsSent connCaps
 	// charted is how many of the chart's entries the client has been
 	// sent: the encoder's.
 	charted int

@@ -7,6 +7,7 @@ import type {
   RegimeWind,
   Sky,
   Weather,
+  WeatherClouds,
   WeatherSea,
 } from '../catalog/types.gen';
 import { RECORDS } from './layout.gen';
@@ -230,6 +231,36 @@ export function writeRegime(record: Float64Array, r: RegimeWind): void {
   record.set(r.period, f.period);
   record[f.across] = r.across;
   record[f.drift] = r.drift;
+}
+
+/**
+ * Writes the catalog's clouds' values into the physics module's
+ * CloudParams record. The module's cloudsPrepare export derives the
+ * clouds' constants from them.
+ */
+export function writeCloudParams(params: Float64Array, c: WeatherClouds): void {
+  const f = RECORDS.cloudParams;
+  params[f.cirrus] = c.cirrus;
+  params[f.middle] = c.middle;
+  params[f.low] = c.low;
+  params[f.lattice] = c.lattice;
+  params[f.cumulusCell] = c.cumulusCell;
+  params[f.cumulusJitter] = c.cumulusJitter;
+  params[f.cumulusBase] = c.cumulusBase;
+  params.set(c.cumulusTops, f.cumulusTops);
+  params.set(c.cumulusSize, f.cumulusSize);
+  params[f.cumulusLife] = c.cumulusLife;
+  params.set(c.capSun, f.capSun);
+  params.set(c.capTops, f.capTops);
+  params[f.capWidth] = c.capWidth;
+  params[f.capStreet] = c.capStreet;
+  params.set(c.frontCirrus, f.frontCirrus);
+  params.set(c.frontMiddle, f.frontMiddle);
+  params.set(c.frontLow, f.frontLow);
+  params.set(c.frontRain, f.frontRain);
+  params.set(c.rainWords, f.rainWords);
+  params.set(c.rainExtinction, f.rainExtinction);
+  params[f.rainScale] = c.rainScale;
 }
 
 /**

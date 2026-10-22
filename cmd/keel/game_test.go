@@ -195,7 +195,10 @@ func TestStopWithDeadPeer(t *testing.T) {
 func TestRestartKeepsTheBoats(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		db := &memDB{epoch: bubbleEpoch}
-		vars := map[string]string{"KEEL_DEV_SAILORS": "5", "KEEL_DEV_COMMANDS": "1", "KEEL_BELL": "1s"}
+		// One world, so one sea: the wind is steady but the waves are the
+		// world's own, and on some seas the boat rounds up into the wind
+		// and stops within 20 m of the start.
+		vars := map[string]string{"KEEL_DEV_SAILORS": "5", "KEEL_DEV_COMMANDS": "1", "KEEL_BELL": "1s", "KEEL_WORLD_SEED": "1"}
 		s, token := gameServer(t, vars, db)
 		// A steady 12 knots from the north, a beam reach from the start:
 		// the world's own weather may be a light spell. It blows from the

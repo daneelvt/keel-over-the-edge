@@ -225,7 +225,15 @@ export class NetWorker {
           this.#d.post({ type: 'sea', sea: r.sea });
           break;
         case 'weather':
-          this.#d.post({ type: 'weather', spells: r.spells, keyframes: r.keyframes });
+          this.#d.post({
+            type: 'weather',
+            spells: r.spells,
+            keyframes: r.keyframes,
+            coming: r.coming,
+          });
+          break;
+        case 'caps':
+          this.#d.post({ type: 'caps', caps: r.caps, drop: r.drop });
           break;
         case 'bump':
           this.#d.post({ type: 'bump', bump: r.bump });

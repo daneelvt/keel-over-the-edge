@@ -33,10 +33,36 @@ func testSystems(t testing.TB) (*WeatherPrepared, map[string]int32) {
 			sk.SwellPeriod, sk.SwellBand, sk.SwellHeight = pair(sw["period"]), pair(sw["band"]), pair(sw["height"])
 			sk.SwellWind = pair(k["wind"])
 		}
+		setCloudKind(&sk, k)
 		p.SetKind(int32(i), &sk)
 		index[k["id"].(string)] = int32(i)
 	}
+	var cp CloudParams
+	if err := setRecord(&cp, c.Weather.Clouds); err != nil {
+		t.Fatal(err)
+	}
+	p.PrepareClouds(&cp)
+	for i, r := range c.Weather.Regimes {
+		p.SetRegimeCumulus(int32(i), r.Cumulus)
+	}
 	return p, index
+}
+
+// setCloudKind sets a kind's cloud and rain from the catalog's kind k.
+func setCloudKind(sk *SystemKind, k map[string]any) {
+	pair := func(v any) [2]float64 { a := v.([]any); return [2]float64{a[0].(float64), a[1].(float64)} }
+	forms := map[string]float64{"none": FormNone, "fog": FormFog, "cumulus": FormCumulus, "cumulonimbus": FormCumulonimbus, "storm": FormStorm}
+	c := k["cloud"].(map[string]any)
+	sk.CloudForm = forms[c["form"].(string)]
+	sk.CloudBase, sk.CloudTop = c["base"].(float64), c["top"].(float64)
+	sk.CloudReach, sk.CloudDeck = pair(c["reach"]), pair(c["deck"])
+	sk.CloudLead, sk.CloudDark = c["lead"].(float64), c["dark"].(float64)
+	if sh, ok := c["sheets"].(map[string]any); ok {
+		sk.SheetCirrus, sk.SheetMiddle, sk.SheetLow = pair(sh["cirrus"]), pair(sh["middle"]), pair(sh["low"])
+	}
+	r := k["rain"].(map[string]any)
+	sk.RainRate, sk.RainWidth = r["rate"].(float64), r["width"].(float64)
+	sk.RainBands, sk.RainTurn = r["bands"].(float64), r["turn"].(float64)
 }
 
 // still is a spell with no wind of its own, so that what blows is the

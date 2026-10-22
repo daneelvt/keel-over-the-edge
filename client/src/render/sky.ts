@@ -33,30 +33,28 @@ import {
   exp,
   Fn,
   float,
-  floor,
-  fract,
   length,
   max,
   mix,
   normalize,
   positionLocal,
   pow,
-  sin,
   smoothstep,
   sqrt,
   sRGBTransferEOTF,
   step,
   uniform,
-  vec2,
   vec3,
   vec4,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { edgeLook, mistTo } from '../edge/mist';
 import { BODY, SKY } from '../predict/physics';
+import { sheets, sheetsOver } from '../sky/sheets';
 import {
   LIGHT_TABLE,
   type LightValues,
+  luminance,
   type MainLight,
   MOON_COLOUR,
   mainLight,
@@ -93,7 +91,13 @@ export const look = {
   skyHorizon: uniform(new Color(0.78, 0.86, 0.9)),
   /** The glow at the horizon toward the sun, by its strength. */
   glow: uniform(new Color(0, 0, 0)),
+  /** The foam's and the falls' white. */
   cloud: uniform(new Color(0.97, 0.96, 0.93)),
+  /** The clouds' lit tops and dark bases. */
+  cloudTop: uniform(new Color(0.98, 0.98, 0.97)),
+  cloudBase: uniform(new Color(0.55, 0.6, 0.66)),
+  /** How overcast it is at the camera, 0 to 1: the light dimmed, the sky and the sea greyed. */
+  overcast: uniform(0),
   /** Deep water, and the light scattered through thin water. */
   deep: uniform(new Color(0.02, 0.16, 0.25)),
   scatter: uniform(new Color(0.07, 0.48, 0.5)),
@@ -118,30 +122,7 @@ export const skyColour = /* @__PURE__ */ Fn(([d]: [Node<'vec3'>]) => {
   return mix(look.skyHorizon, look.skyTop, pow(max(d.y, 0), 0.55));
 });
 
-const hash2 = Fn(([p]: [Node<'vec2'>]) => fract(sin(dot(p, vec2(41.3, 289.1))).mul(43758.5453)));
-
-/** Value noise, for the clouds. */
-const valueNoise = Fn(([p]: [Node<'vec2'>]) => {
-  const i = floor(p);
-  const f = fract(p);
-  const u = f.mul(f).mul(float(3).sub(f.mul(2)));
-  const a = hash2(i);
-  const b = hash2(i.add(vec2(1, 0)));
-  const c = hash2(i.add(vec2(0, 1)));
-  const d = hash2(i.add(vec2(1, 1)));
-  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-});
-
-/** How much of the sky a cloud covers in a direction, 0 to 1: the stars dim behind them too. */
-export const cloudCover = /* @__PURE__ */ Fn(([d]: [Node<'vec3'>]) => {
-  const cp = d.xz.div(max(d.y, 0.04)).mul(1.6);
-  const cl = valueNoise(cp)
-    .mul(0.6)
-    .add(valueNoise(cp.mul(2.3).add(4)).mul(0.4));
-  return smoothstep(0.62, 0.95, cl).mul(smoothstep(0, 0.12, d.y));
-});
-
-/** The sky's full colour in a direction: gradient, glow, sun, moon, clouds (display values). */
+/** The sky's full colour in a direction: gradient, glow, sun, moon, sheet cloud (display values). */
 const skyFull = Fn(([dir]: [Node<'vec3'>]) => {
   const d = normalize(dir);
   const y = d.y;
@@ -153,11 +134,12 @@ const skyFull = Fn(([dir]: [Node<'vec3'>]) => {
     max(length(level), 1e-4).mul(max(length(sunLevel), 1e-4)),
   );
   c.addAssign(look.glow.mul(pow(toward, 3).mul(float(1).sub(smoothstep(0, 0.4, abs(y))))));
-  // The sun's disc and glow, while it is up.
+  // The sun's glow, while it is up; its disc after the sheets, which hide it.
   const sd = max(dot(d, look.sun), 0);
+  const overcast = float(1).sub(look.overcast.mul(0.8));
   c.addAssign(
     look.sunColour.mul(
-      pow(sd, 900).mul(5).add(pow(sd, 10).mul(0.28)).add(pow(sd, 3).mul(0.08)).mul(look.sunUp),
+      pow(sd, 10).mul(0.28).add(pow(sd, 3).mul(0.08)).mul(look.sunUp).mul(overcast),
     ),
   );
   // The moon's disc, each point of it lit as the sun lights a sphere there:
@@ -173,7 +155,21 @@ const skyFull = Fn(([dir]: [Node<'vec3'>]) => {
   const face = mix(c.mul(0.9), vec3(...MOON_COLOUR).mul(1.15), lit.mul(look.moonDisc));
   c.assign(mix(c, face, inside));
   c.addAssign(vec3(...MOON_COLOUR).mul(pow(max(md, 0), 4000).mul(look.moonHalo)));
-  c.assign(mix(c, look.cloud, cloudCover(d).mul(0.8)));
+  const s = sheetsOver(
+    sheets,
+    {
+      top: look.cloudTop as unknown as Node<'vec3'>,
+      base: look.cloudBase as unknown as Node<'vec3'>,
+      horizon: look.skyHorizon as unknown as Node<'vec3'>,
+    },
+    d,
+    c,
+    look.sun,
+    look.sunColour as unknown as Node<'vec3'>,
+    look.sunUp,
+  );
+  c.assign(s.colour);
+  c.addAssign(look.sunColour.mul(pow(sd, 900).mul(5).mul(look.sunUp).mul(s.disc)));
   return c;
 });
 
@@ -246,6 +242,14 @@ export class Sky {
   };
   /** Whether the sky follows the rule; until it does, the table's day at the start. */
   ruled = false;
+  /**
+   * How overcast it is at the camera, 0 to 1 (the clouds' weather sets
+   * it): the main light dims by up to 0.6, the sky's colours and the sea's
+   * grey, and the sun's highlight on the water goes.
+   */
+  overcast = 0;
+  /** The visual range in rain alone, m: Infinity in none. Rain's and the clear air's extinctions add. */
+  rainRange = Number.POSITIVE_INFINITY;
   readonly #colour = new Color();
 
   constructor(scene: Scene) {
@@ -305,17 +309,27 @@ export class Sky {
     look.sunUp.value = smooth(-0.6 * DEG, 0.3 * DEG, n.sunHeight);
     look.moonDisc.value = v.moonDisc;
     look.moonHalo.value = n.lit * Math.max(v.moonDisc - 0.3, 0) * 0.25;
-    rgb(look.skyTop, v.skyTop, 1);
-    rgb(look.skyHorizon, v.skyHorizon, 1);
-    rgb(edgeLook.colour, v.mist, 1);
-    rgb(look.glow, v.glow, v.glowStrength);
+    // Under overcast the sky greys toward its horizon's brightness, the
+    // zenith a little darker, and the sea with it.
+    const o = this.overcast;
+    const grey = luminance(v.skyHorizon);
+    look.overcast.value = o;
+    greyed(look.skyTop, v.skyTop, grey * OVERCAST.top, OVERCAST.sky * o);
+    greyed(look.skyHorizon, v.skyHorizon, grey * OVERCAST.horizon, OVERCAST.sky * o);
+    greyed(edgeLook.colour, v.mist, luminance(v.mist) * OVERCAST.horizon, OVERCAST.sky * o);
+    rgb(look.glow, v.glow, v.glowStrength * (1 - o));
     rgb(look.cloud, v.cloud, 1);
-    rgb(look.deep, v.deep, 1);
-    rgb(look.scatter, v.scatter, 1);
-    (look.broad.value as Vector3).set(v.broadPower, v.broadStrength, 0);
-    look.hazeNear.value = v.hazeNear;
-    look.hazeFar.value = v.hazeFar;
-    look.visualRange.value = v.visualRange;
+    rgb(look.cloudTop, v.cloudTop, 1 - OVERCAST.tops * o);
+    rgb(look.cloudBase, v.cloudBase, 1 - OVERCAST.tops * o);
+    greyed(look.deep, v.deep, luminance(v.deep), OVERCAST.sea * o);
+    greyed(look.scatter, v.scatter, luminance(v.scatter), OVERCAST.sea * o);
+    (look.broad.value as Vector3).set(v.broadPower, v.broadStrength * (1 - o), 0);
+    // In rain the visual range shortens to what the rain and the clear air
+    // leave, and the sea's horizon blend with it.
+    const range = 1 / (1 / v.visualRange + 1 / this.rainRange);
+    look.hazeNear.value = Math.min(v.hazeNear, 0.3 * range);
+    look.hazeFar.value = Math.min(v.hazeFar, range);
+    look.visualRange.value = range;
     // The sail's glow is a light, in linear values.
     const glow = this.#colour.setRGB(
       v.sailGlow[0] ?? 0,
@@ -327,7 +341,7 @@ export class Sky {
     look.starLimit.value = v.starLimit;
     look.lanterns.value = v.lanterns;
     this.light.color.setRGB(m.colour[0] ?? 0, m.colour[1] ?? 0, m.colour[2] ?? 0, SRGBColorSpace);
-    this.light.intensity = m.strength;
+    this.light.intensity = m.strength * (1 - OVERCAST.light * o);
     this.hemisphere.color.setRGB(
       v.hemiSky[0] ?? 0,
       v.hemiSky[1] ?? 0,
@@ -340,7 +354,7 @@ export class Sky {
       v.hemiGround[2] ?? 0,
       SRGBColorSpace,
     );
-    this.hemisphere.intensity = v.hemiLight;
+    this.hemisphere.intensity = v.hemiLight * (1 + OVERCAST.hemisphere * o);
   }
 
   /** Keeps the sky on the camera and the main light over the boat. */
@@ -352,6 +366,33 @@ export class Sky {
       .multiplyScalar(100)
       .add(boat);
   }
+}
+
+/**
+ * What overcast does to the light, at its fullest: the main light dims by
+ * light and the hemisphere's rises by hemisphere; the sky's colours go
+ * toward grey by sky, its zenith to top and its horizon to horizon of the
+ * horizon's brightness; the sea's colours toward grey by sea; the clouds'
+ * own light dims by tops.
+ */
+const OVERCAST = {
+  light: 0.6,
+  hemisphere: 0.15,
+  sky: 0.85,
+  top: 0.78,
+  horizon: 0.9,
+  sea: 0.5,
+  tops: 0.25,
+};
+
+/** Writes a display colour into a colour uniform, gone toward a grey of brightness g by share. */
+function greyed(u: { value: unknown }, c: number[], g: number, share: number): void {
+  const k = Math.min(Math.max(share, 0), 1);
+  (u.value as Color).setRGB(
+    (c[0] ?? 0) + (g - (c[0] ?? 0)) * k,
+    (c[1] ?? 0) + (g - (c[1] ?? 0)) * k,
+    (c[2] ?? 0) + (g - (c[2] ?? 0)) * k,
+  );
 }
 
 /** Writes a display colour, scaled, into a colour uniform: the look's colours stay display values. */

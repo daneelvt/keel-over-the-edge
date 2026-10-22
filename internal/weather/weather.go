@@ -373,6 +373,40 @@ func (t *Timeline) Spells(tick int64, ws []bus.Weather, dst *[physics.WeatherSpe
 	return int32(n - skip)
 }
 
+// Coming is the next front of the world's own weather before its spell is
+// in play: its line alone, from when its cirrus can first be seen from the
+// disk until its spell is announced; none while a developer's weather
+// holds, or none is coming.
+func (t *Timeline) Coming(tick int64, ws []bus.Weather) physics.ComingFront {
+	if t.fixed != nil || t.week == nil {
+		return physics.ComingFront{}
+	}
+	if j := segment(ws, tick); j >= 0 && ws[j].Mode != bus.WeatherAuto {
+		return physics.ComingFront{}
+	}
+	reach := t.prepared.FrontReach()
+	for j := t.index(tick) + 1; j < len(t.week.Spells); j++ {
+		s := t.shifted(j)
+		begin := int64(s.Begin)
+		if begin-Announce <= tick {
+			continue
+		}
+		if s.Front == 0 || !(s.Change > 0) || !(reach > 0) {
+			if begin > tick+hourTicks {
+				break
+			}
+			continue
+		}
+		// The line moves 2 reach in its change.
+		lead := int64(math.Ceil(t.cfg.Ahead * s.Change / (2 * reach)))
+		if tick < begin-lead {
+			break
+		}
+		return physics.ComingFront{On: 1, Begin: s.Begin, Change: s.Change, Toward: s.Toward}
+	}
+	return physics.ComingFront{}
+}
+
 // Keep is how far back a developer's weather that has given way to another
 // is kept, and a developer's system that has gone: as long as the wave
 // wind's samples, and the spells in play at each of them, may still fall
