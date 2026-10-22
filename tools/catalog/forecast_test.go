@@ -32,7 +32,7 @@ func TestForecast(t *testing.T) {
 		{"a regime's risks twice", strings.Replace(weather, "      - { regime: trade, sky: showers, marks: [showers] }\n",
 			"      - { regime: trade, sky: showers, marks: [showers] }\n      - { regime: trade, sky: rain, marks: [] }\n", 1), "regime trade has risks 2 times"},
 		{"a gale's gust under its mean", strings.Replace(weather, "gale: { mean: 34, gust: 43", "gale: { mean: 44, gust: 43", 1), "must be more than the mean wind"},
-		{"a cone that does not grow", strings.Replace(weather, "cone: { perHour: 0.35", "cone: { perHour: 0", 1), "the cones must grow"},
+		{"a cone that does not grow", strings.Replace(weather, "cone: { perHour: 0.34", "cone: { perHour: 0", 1), "the cones must grow"},
 		{"a grid too fine", strings.Replace(weather, "grid: 0.25, within: 4.2", "grid: 0.05, within: 4.2", 1), "points a side"},
 	} {
 		root := fixture(t, map[string]string{"shared/catalog/boats.yaml": validBoats, worldPath: realFile(worldPath)})
