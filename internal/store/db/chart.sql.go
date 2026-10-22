@@ -149,6 +149,38 @@ func (q *Queries) InsertCharting(ctx context.Context, arg InsertChartingParams) 
 	return i, err
 }
 
+const insertGaleNews = `-- name: InsertGaleNews :execrows
+INSERT INTO news_item (world_id, news_column, subject, number, title, what, worth, x, y)
+VALUES ($1, $2, 'gale', $3, $4, $5, 0, $6, $7)
+ON CONFLICT (world_id, number) WHERE subject = 'gale' DO NOTHING
+`
+
+type InsertGaleNewsParams struct {
+	WorldID    pgtype.UUID
+	NewsColumn string
+	Number     int32
+	Title      string
+	What       string
+	X          float64
+	Y          float64
+}
+
+func (q *Queries) InsertGaleNews(ctx context.Context, arg InsertGaleNewsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertGaleNews,
+		arg.WorldID,
+		arg.NewsColumn,
+		arg.Number,
+		arg.Title,
+		arg.What,
+		arg.X,
+		arg.Y,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertNews = `-- name: InsertNews :exec
 INSERT INTO news_item (world_id, news_column, account_id, sailor, account_kind, subject, number, title, what, island_number, worth, x, y)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)

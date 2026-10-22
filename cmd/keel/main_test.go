@@ -226,6 +226,7 @@ type memDB struct {
 	next         *memNext
 	runs         map[string]*memRun
 	news         []store.WorldNews
+	gales        []store.GaleNews
 	switches     int
 }
 
@@ -616,6 +617,21 @@ func (d *memDB) WriteWorldNews(_ context.Context, lease int64, _ [16]byte, n sto
 	}
 	d.news = append(d.news, n)
 	return nil
+}
+
+func (d *memDB) WriteGaleNews(_ context.Context, lease int64, _ [16]byte, n store.GaleNews) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if lease != d.leaseEpoch {
+		return false, store.ErrFenced
+	}
+	for _, g := range d.gales {
+		if g.Number == n.Number {
+			return false, nil
+		}
+	}
+	d.gales = append(d.gales, n)
+	return true, nil
 }
 
 func (d *memDB) ClaimJob(_ context.Context, lease int64, job string, due time.Time, retry time.Duration) (store.JobClaim, bool, error) {

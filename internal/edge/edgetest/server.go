@@ -74,6 +74,12 @@ type Config struct {
 	RoamChunks *edge.Handout
 	// Edge is how boats meet the world's edge; the catalog's if nil.
 	Edge *sim.Edge
+	// Forecast, if not nil, is the world's forecast, told of each frame
+	// after the edge.
+	Forecast interface {
+		edge.ForecastSource
+		sim.Recorder
+	}
 }
 
 // Server is the game's server in a test.
@@ -177,15 +183,19 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
 		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain),
-		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks,
+		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks, Forecast: cfg.Forecast,
 	})
+	var recorders []sim.Recorder
 	if cfg.Record != nil {
 		// The test's recorder first, so it has each frame before any
 		// client can be sent it.
-		w.Record(cfg.Record, s.Edge)
-	} else {
-		w.Record(s.Edge)
+		recorders = append(recorders, cfg.Record)
 	}
+	recorders = append(recorders, s.Edge)
+	if cfg.Forecast != nil {
+		recorders = append(recorders, cfg.Forecast)
+	}
+	w.Record(recorders...)
 	h := api.Handler(api.Config{
 		Version:  api.Version{Build: "test", Catalog: catalog.Version},
 		Log:      log,

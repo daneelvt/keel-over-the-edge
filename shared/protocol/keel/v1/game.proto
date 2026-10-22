@@ -128,7 +128,100 @@ message ServerMessage {
     Chart chart = 12;
     Charted charted = 13;
     IslandCaps island_caps = 14;
+    Forecast forecast = 15;
   }
+}
+
+// Forecast is the forecast, issued at each boundary of ten minutes of world
+// time from the world's epoch for the next ninety, in steps of ten: sent to
+// every connection as it is issued, and after the Welcome with its past.
+// It is the whole of the future a client is told: the systems alive at the
+// issue moved on by their planned tracks, the lows to be born within its
+// horizon, forming, the spells planned, without their shifts, and the gale
+// warning in force; never a system's record, its wobble, nor the seed of a
+// system not yet born.
+message Forecast {
+  // The tick it was issued at; how many steps it has, the issue's own
+  // first, fewer as the world's end nears; and the ticks between them.
+  int64 issue = 1;
+  uint32 steps = 2;
+  uint32 step = 3;
+  // The spells over its horizon, by the tick each begins at, ascending, as
+  // the forecast has them: the shifts not placed, a spell not yet begun
+  // with the forecast's error, a front's line moved on at its forecast
+  // speed; and each one's shifts' swing either way, in 65536ths of a turn.
+  repeated Spell spells = 4;
+  repeated uint32 shifts = 5;
+  // Its systems, by their slots.
+  repeated ForecastSystem systems = 6;
+  // The gale warning in force, if any.
+  GaleWarning gale = 7;
+  // After the Welcome, what has been: the issue of ninety minutes before
+  // and the truth since.
+  ForecastPast past = 8;
+}
+
+// ForecastSystem is a system as a forecast gives it, in a keyframe's
+// units: at each step, where it will be, how it moves and how strong it
+// is.
+message ForecastSystem {
+  // Its slot, as its keyframes'; the catalog's index of its kind; a seed
+  // for drawing it, 0 for a low forming, which has none yet; its radius,
+  // m; its peak and its depth, as a keyframe's.
+  uint32 slot = 1;
+  uint32 kind = 2;
+  uint32 seed = 3;
+  uint32 size = 4;
+  uint32 peak = 5;
+  sint32 depth = 6;
+  // A low not yet born at the issue, forecast by its plan alone.
+  bool forming = 7;
+  // Beyond the lip at the issue: the tick it is forecast to cross onto the
+  // disk, and where, in metres east and north of the world's centre.
+  int64 crosses = 8;
+  sint32 cross_east = 9;
+  sint32 cross_north = 10;
+  // At each step: its centre, in metres east and north of the world's
+  // centre; the direction it moves toward, in 65536ths of a turn; how
+  // fast, in steps of 0.01 m/s; and its strength, in 256ths, 0 where it
+  // is not alive.
+  repeated sint32 east = 11;
+  repeated sint32 north = 12;
+  repeated uint32 heading = 13;
+  repeated uint32 speed = 14;
+  repeated uint32 strength = 15;
+}
+
+// GaleWarning is a gale warning in force: issued from the forecast's
+// synoptic wind, its spells, fronts and lows, where the mean wind reaches
+// force 8 or the typical strongest gust a gale's gusts.
+message GaleWarning {
+  // The issue it came into force at: the same while it is in force, so a
+  // client tells a new one by it.
+  int64 key = 1;
+  // The steps it blows at, a bit for each, the issue's the lowest; the
+  // first of them; and its force, 8 to 12.
+  uint32 steps = 2;
+  uint32 first = 3;
+  uint32 force = 4;
+  // The direction its wind first blows from, in 65536ths of a turn; and
+  // its strongest point, in metres east and north of the world's centre.
+  uint32 from = 5;
+  sint32 east = 6;
+  sint32 north = 7;
+  // The nearest charted island or place to its strongest point, by its
+  // kind and number; unspecified for none.
+  ChartSubject subject = 8;
+  uint32 number = 9;
+}
+
+// ForecastPast is what has been, for a client just come: the forecast
+// issued ninety minutes before, and the truth since, the systems'
+// keyframes at each five minutes and the spells in play over them.
+message ForecastPast {
+  Forecast issue = 1;
+  repeated Keyframe truth = 2;
+  repeated Spell spells = 3;
 }
 
 // Chart is the world's chart so far: every subject charted, once a

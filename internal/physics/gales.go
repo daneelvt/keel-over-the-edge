@@ -104,6 +104,29 @@ func GaleGrid(p *WeatherPrepared, t *WeatherTick, water, on []uint8) GaleStep {
 	return g
 }
 
+// GaleWater sets water, the gale grid's water, from the ground: 1 for a
+// point over water, 0 over land; with no ground, all water.
+func GaleWater(p *WeatherPrepared, g *Ground, water []uint8) {
+	fp := &p.forecast
+	side := fp.side
+	c := float64(float64(side-1) * 0.5)
+	for j := range side {
+		y := float64((float64(j) - c) * fp.grid)
+		for i := range side {
+			n := j*side + i
+			if int(n) >= len(water) {
+				return
+			}
+			water[n] = 1
+			if g != nil {
+				if e, _ := g.At(float64((float64(i)-c)*fp.grid), y); e > 0 {
+					water[n] = 0
+				}
+			}
+		}
+	}
+}
+
 // GaleScan sets out to the forecast's gale at each of its steps, from its
 // synoptic wind over the grid's water. w and t are the caller's room to
 // work in, on is the grid's room for each step's points.

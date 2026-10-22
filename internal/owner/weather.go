@@ -309,33 +309,6 @@ type pressurePage struct {
 	Tendency string  `json:"tendency"` // the barometer's words
 }
 
-// tendencyWords are the tendency's words, by its magnitude.
-var tendencyWords = [...]string{"steady", "slowly", "", "quickly", "very rapidly"}
-
-// tendencyOf is the barometer's words for a change.
-func tendencyOf(words int32, turned bool) string {
-	if words == 0 {
-		return "steady"
-	}
-	way := "rising"
-	if words < 0 {
-		way, words = "falling", -words
-	}
-	out := way
-	if turned {
-		if way == "rising" {
-			out = "now falling"
-		} else {
-			out = "now rising"
-		}
-		return out
-	}
-	if w := tendencyWords[words]; w != "" {
-		out += " " + w
-	}
-	return out
-}
-
 // pressure serves pressure.json: the pressure at a point, ?east= and
 // ?north= in m, at a tick, ?at= or now, and the barometer's tendency there.
 func (o *Owner) pressure(w http.ResponseWriter, r *http.Request) {
@@ -355,5 +328,5 @@ func (o *Owner) pressure(w http.ResponseWriter, r *http.Request) {
 	p := func(t int64) float64 { return physics.PressureAt(physicsAt(tl, t, ws, ss), east, north) }
 	nowP, before, quarter := p(tick), p(tick-5*minute), p(tick-15*minute)
 	words, turned := physics.Tendency(nowP, before, quarter)
-	writeJSON(w, pressurePage{At: tick, HPa: round2(nowP), Change: round2(nowP - quarter), Tendency: tendencyOf(words, turned)})
+	writeJSON(w, pressurePage{At: tick, HPa: round2(nowP), Change: round2(nowP - quarter), Tendency: weather.TendencyWords(words, turned)})
 }

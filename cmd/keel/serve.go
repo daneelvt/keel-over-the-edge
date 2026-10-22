@@ -149,6 +149,7 @@ type database interface {
 	WorldsToDrop(ctx context.Context, before time.Time) ([]store.World, error)
 	DropWorld(ctx context.Context, lease int64, w store.World) error
 	WriteWorldNews(ctx context.Context, lease int64, world [16]byte, n store.WorldNews) error
+	WriteGaleNews(ctx context.Context, lease int64, world [16]byte, n store.GaleNews) (bool, error)
 	DeleteSessions(ctx context.Context, before time.Time) (int64, error)
 	DeleteJobRuns(ctx context.Context, before time.Time) (int64, error)
 	JobRuns(ctx context.Context, limit int) ([]store.JobRun, error)

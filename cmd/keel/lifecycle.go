@@ -750,6 +750,7 @@ func endRoute(p *process, h *worldHalf) http.Handler {
 		h.movedAt.Store(time.Now().UnixNano())
 		h.endsAt.Store(end.UnixNano())
 		h.game.SetEnds(end, end.Add(-p.cfg.Schedule.Notice))
+		h.forecasts.SetEnd(lastTick(end, h.row.Epoch))
 		p.metrics.WorldEnds.Set(float64(end.Unix()))
 		if p.jobs != nil {
 			p.jobs.Poke()

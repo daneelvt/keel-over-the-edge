@@ -42,3 +42,8 @@ UPDATE account SET notices_off = @off::text[] WHERE id = @id;
 -- name: InsertWorldNews :exec
 INSERT INTO news_item (world_id, news_column, subject, number, title, what, worth, x, y, ends_at)
 VALUES (@world_id, @news_column, 'world', @number, @title, @what, 0, @x, @y, @ends_at);
+
+-- name: InsertGaleNews :execrows
+INSERT INTO news_item (world_id, news_column, subject, number, title, what, worth, x, y)
+VALUES (@world_id, @news_column, 'gale', @number, @title, @what, 0, @x, @y)
+ON CONFLICT (world_id, number) WHERE subject = 'gale' DO NOTHING;

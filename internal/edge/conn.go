@@ -82,6 +82,10 @@ type conn struct {
 	// capsSent is which islands' caps the client has been sent: the
 	// encoder's.
 	capsSent connCaps
+	// issued is whether the client has been sent a forecast, and issue the
+	// tick of the last it was sent.
+	issued bool
+	issue  int64
 	// charted is how many of the chart's entries the client has been
 	// sent: the encoder's.
 	charted int

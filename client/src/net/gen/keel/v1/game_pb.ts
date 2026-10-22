@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iUwoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAEh0KBHJvYW0YAiABKAsyDS5rZWVsLnYxLlJvYW1IAEIGCgRib2R5IggKBlJlc3luYyI/CgRSb2FtEgoKAm9uGAEgASgIEgwKBGVhc3QYAiABKBESDQoFbm9ydGgYAyABKBESDgoGaGVpZ2h0GAQgASgNIpoECg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSAASIQoGY2h1bmtzGAggASgLMg8ua2VlbC52MS5DaHVua3NIABIfCgV0b29scxgJIAEoCzIOLmtlZWwudjEuVG9vbHNIABIhCgZwbGFjZXMYCiABKAsyDy5rZWVsLnYxLlBsYWNlc0gAEiEKBmxpZ2h0cxgLIAEoCzIPLmtlZWwudjEuTGlnaHRzSAASHwoFY2hhcnQYDCABKAsyDi5rZWVsLnYxLkNoYXJ0SAASIwoHY2hhcnRlZBgNIAEoCzIQLmtlZWwudjEuQ2hhcnRlZEgAEioKC2lzbGFuZF9jYXBzGA4gASgLMhMua2VlbC52MS5Jc2xhbmRDYXBzSABCBgoEYm9keSItCgVDaGFydBIkCgdlbnRyaWVzGAEgAygLMhMua2VlbC52MS5DaGFydEVudHJ5Ii8KB0NoYXJ0ZWQSJAoHZW50cmllcxgBIAMoCzITLmtlZWwudjEuQ2hhcnRFbnRyeSK/AwoKQ2hhcnRFbnRyeRImCgdzdWJqZWN0GAEgASgOMhUua2VlbC52MS5DaGFydFN1YmplY3QSDgoGbnVtYmVyGAIgASgNEgwKBHNvcnQYAyABKA0SDAoEbmFtZRgEIAEoCRIMCgRlYXN0GAUgASgREg0KBW5vcnRoGAYgASgREgoKAmJ5GAcgASgJEgoKAmFpGAggASgIEg8KB3doZW5fbXMYCSABKAMSDQoFd29ydGgYCiABKA0SDgoGaXNsYW5kGAsgASgNEg0KBWdyb3VwGAwgASgJEg4KBmJvdW5kcxgNIAMoERIPCgdoaWdoZXN0GA4gASgNEgwKBHpvbmUYDyABKA0SDQoFY2xhc3MYECABKAkSDQoFbW9kZWwYESABKAkSDQoFbGlnaHQYEiABKA0SEQoJY2hhcmFjdGVyGBcgASgNEg0KBWZvY2FsGBggASgNEg0KBXJhbmdlGBkgASgNEgwKBHNoaXAYEyABKAkSDAoEc3VuaxgUIAEoCBIrCgx3aXRoX3N1YmplY3QYFSABKA4yFS5rZWVsLnYxLkNoYXJ0U3ViamVjdBITCgt3aXRoX251bWJlchgWIAEoDSIoCgZQbGFjZXMSHgoG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b3JsZBgBIAEoCRIMCgR0aWNrGAIgASgDEhUKDXdvcmxkX3RpbWVfdXMYAyABKAMSDAoEYm9hdBgEIAEoBBIMCgRraW5kGAUgASgNEhAKCHJlam9pbmVkGAYgASgIEhAKCGVwb2NoX3VzGAcgASgDEgwKBGxhbmQYCCABKAgSEwoLY2lyY3VsYXRpb24YCSABKBESDQoFdG9vbHMYCiABKAgSHQoFbGlnaHQYCyABKAsyDi5rZWVsLnYxLkxpZ2h0Eg8KB2VuZHNfdXMYDCABKAMSEgoKY2xvc2luZ191cxgNIAEoAxIMCgR6b25lGA4gASgJIjUKBFBvbmcSFgoOY2xpZW50X3RpbWVfdXMYASABKAMSFQoNd29ybGRfdGltZV91cxgCIAEoAyp7CgxDaGFydFN1YmplY3QSHQoZQ0hBUlRfU1VCSkVDVF9VTlNQRUNJRklFRBAAEhgKFENIQVJUX1NVQkpFQ1RfSVNMQU5EEAESFwoTQ0hBUlRfU1VCSkVDVF9QTEFDRRACEhkKFUNIQVJUX1NVQkpFQ1RfRkVBVFVSRRADKmQKCEJ1bXBQYXJ0EhkKFUJVTVBfUEFSVF9VTlNQRUNJRklFRBAAEhMKD0JVTVBfUEFSVF9ZT1VSUxABEhQKEEJVTVBfUEFSVF9USEVJUlMQAhISCg5CVU1QX1BBUlRfTk9ORRADQj1aO2dpdGh1Yi5jb20vZGFuZWVsdnQva2VlbC1vdmVyLXRoZS1lZGdlL2ludGVybmFsL3Byb3RvY29sL3BiYgZwcm90bzM");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5IlEKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iUwoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAEh0KBHJvYW0YAiABKAsyDS5rZWVsLnYxLlJvYW1IAEIGCgRib2R5IggKBlJlc3luYyI/CgRSb2FtEgoKAm9uGAEgASgIEgwKBGVhc3QYAiABKBESDQoFbm9ydGgYAyABKBESDgoGaGVpZ2h0GAQgASgNIsEECg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSAASIQoGY2h1bmtzGAggASgLMg8ua2VlbC52MS5DaHVua3NIABIfCgV0b29scxgJIAEoCzIOLmtlZWwudjEuVG9vbHNIABIhCgZwbGFjZXMYCiABKAsyDy5rZWVsLnYxLlBsYWNlc0gAEiEKBmxpZ2h0cxgLIAEoCzIPLmtlZWwudjEuTGlnaHRzSAASHwoFY2hhcnQYDCABKAsyDi5rZWVsLnYxLkNoYXJ0SAASIwoHY2hhcnRlZBgNIAEoCzIQLmtlZWwudjEuQ2hhcnRlZEgAEioKC2lzbGFuZF9jYXBzGA4gASgLMhMua2VlbC52MS5Jc2xhbmRDYXBzSAASJQoIZm9yZWNhc3QYDyABKAsyES5rZWVsLnYxLkZvcmVjYXN0SABCBgoEYm9keSLZAQoIRm9yZWNhc3QSDQoFaXNzdWUYASABKAMSDQoFc3RlcHMYAiABKA0SDAoEc3RlcBgDIAEoDRIeCgZzcGVsbHMYBCADKAsyDi5rZWVsLnYxLlNwZWxsEg4KBnNoaWZ0cxgFIAMoDRIoCgdzeXN0ZW1zGAYgAygLMhcua2VlbC52MS5Gb3JlY2FzdFN5c3RlbRIiCgRnYWxlGAcgASgLMhQua2VlbC52MS5HYWxlV2FybmluZxIjCgRwYXN0GAggASgLMhUua2VlbC52MS5Gb3JlY2FzdFBhc3Qi/wEKDkZvcmVjYXN0U3lzdGVtEgwKBHNsb3QYASABKA0SDAoEa2luZBgCIAEoDRIMCgRzZWVkGAMgASgNEgwKBHNpemUYBCABKA0SDAoEcGVhaxgFIAEoDRINCgVkZXB0aBgGIAEoERIPCgdmb3JtaW5nGAcgASgIEg8KB2Nyb3NzZXMYCCABKAMSEgoKY3Jvc3NfZWFzdBgJIAEoERITCgtjcm9zc19ub3J0aBgKIAEoERIMCgRlYXN0GAsgAygREg0KBW5vcnRoGAwgAygREg8KB2hlYWRpbmcYDSADKA0SDQoFc3BlZWQYDiADKA0SEAoIc3RyZW5ndGgYDyADKA0iqgEKC0dhbGVXYXJuaW5nEgsKA2tleRgBIAEoAxINCgVzdGVwcxgCIAEo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EAoIZXBvY2hfdXMYByABKAMSDAoEbGFuZBgIIAEoCBITCgtjaXJjdWxhdGlvbhgJIAEoERINCgV0b29scxgKIAEoCBIdCgVsaWdodBgLIAEoCzIOLmtlZWwudjEuTGlnaHQSDwoHZW5kc191cxgMIAEoAxISCgpjbG9zaW5nX3VzGA0gASgDEgwKBHpvbmUYDiABKAkiNQoEUG9uZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIVCg13b3JsZF90aW1lX3VzGAIgASgDKnsKDENoYXJ0U3ViamVjdBIdChlDSEFSVF9TVUJKRUNUX1VOU1BFQ0lGSUVEEAASGAoUQ0hBUlRfU1VCSkVDVF9JU0xBTkQQARIXChNDSEFSVF9TVUJKRUNUX1BMQUNFEAISGQoVQ0hBUlRfU1VCSkVDVF9GRUFUVVJFEAMqZAoIQnVtcFBhcnQSGQoVQlVNUF9QQVJUX1VOU1BFQ0lGSUVEEAASEwoPQlVNUF9QQVJUX1lPVVJTEAESFAoQQlVNUF9QQVJUX1RIRUlSUxACEhIKDkJVTVBfUEFSVF9OT05FEANCPVo7Z2l0aHViLmNvbS9kYW5lZWx2dC9rZWVsLW92ZXItdGhlLWVkZ2UvaW50ZXJuYWwvcHJvdG9jb2wvcGJiBnByb3RvMw");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -434,6 +434,12 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
      */
     value: IslandCaps;
     case: "islandCaps";
+  } | {
+    /**
+     * @generated from field: keel.v1.Forecast forecast = 15;
+     */
+    value: Forecast;
+    case: "forecast";
   } | { case: undefined; value?: undefined };
 };
 
@@ -443,6 +449,291 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 7);
+
+/**
+ * Forecast is the forecast, issued at each boundary of ten minutes of world
+ * time from the world's epoch for the next ninety, in steps of ten: sent to
+ * every connection as it is issued, and after the Welcome with its past.
+ * It is the whole of the future a client is told: the systems alive at the
+ * issue moved on by their planned tracks, the lows to be born within its
+ * horizon, forming, the spells planned, without their shifts, and the gale
+ * warning in force; never a system's record, its wobble, nor the seed of a
+ * system not yet born.
+ *
+ * @generated from message keel.v1.Forecast
+ */
+export type Forecast = Message<"keel.v1.Forecast"> & {
+  /**
+   * The tick it was issued at; how many steps it has, the issue's own
+   * first, fewer as the world's end nears; and the ticks between them.
+   *
+   * @generated from field: int64 issue = 1;
+   */
+  issue: bigint;
+
+  /**
+   * @generated from field: uint32 steps = 2;
+   */
+  steps: number;
+
+  /**
+   * @generated from field: uint32 step = 3;
+   */
+  step: number;
+
+  /**
+   * The spells over its horizon, by the tick each begins at, ascending, as
+   * the forecast has them: the shifts not placed, a spell not yet begun
+   * with the forecast's error, a front's line moved on at its forecast
+   * speed; and each one's shifts' swing either way, in 65536ths of a turn.
+   *
+   * @generated from field: repeated keel.v1.Spell spells = 4;
+   */
+  spells: Spell[];
+
+  /**
+   * @generated from field: repeated uint32 shifts = 5;
+   */
+  shifts: number[];
+
+  /**
+   * Its systems, by their slots.
+   *
+   * @generated from field: repeated keel.v1.ForecastSystem systems = 6;
+   */
+  systems: ForecastSystem[];
+
+  /**
+   * The gale warning in force, if any.
+   *
+   * @generated from field: keel.v1.GaleWarning gale = 7;
+   */
+  gale?: GaleWarning | undefined;
+
+  /**
+   * After the Welcome, what has been: the issue of ninety minutes before
+   * and the truth since.
+   *
+   * @generated from field: keel.v1.ForecastPast past = 8;
+   */
+  past?: ForecastPast | undefined;
+};
+
+/**
+ * Describes the message keel.v1.Forecast.
+ * Use `create(ForecastSchema)` to create a new message.
+ */
+export const ForecastSchema: GenMessage<Forecast> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 8);
+
+/**
+ * ForecastSystem is a system as a forecast gives it, in a keyframe's
+ * units: at each step, where it will be, how it moves and how strong it
+ * is.
+ *
+ * @generated from message keel.v1.ForecastSystem
+ */
+export type ForecastSystem = Message<"keel.v1.ForecastSystem"> & {
+  /**
+   * Its slot, as its keyframes'; the catalog's index of its kind; a seed
+   * for drawing it, 0 for a low forming, which has none yet; its radius,
+   * m; its peak and its depth, as a keyframe's.
+   *
+   * @generated from field: uint32 slot = 1;
+   */
+  slot: number;
+
+  /**
+   * @generated from field: uint32 kind = 2;
+   */
+  kind: number;
+
+  /**
+   * @generated from field: uint32 seed = 3;
+   */
+  seed: number;
+
+  /**
+   * @generated from field: uint32 size = 4;
+   */
+  size: number;
+
+  /**
+   * @generated from field: uint32 peak = 5;
+   */
+  peak: number;
+
+  /**
+   * @generated from field: sint32 depth = 6;
+   */
+  depth: number;
+
+  /**
+   * A low not yet born at the issue, forecast by its plan alone.
+   *
+   * @generated from field: bool forming = 7;
+   */
+  forming: boolean;
+
+  /**
+   * Beyond the lip at the issue: the tick it is forecast to cross onto the
+   * disk, and where, in metres east and north of the world's centre.
+   *
+   * @generated from field: int64 crosses = 8;
+   */
+  crosses: bigint;
+
+  /**
+   * @generated from field: sint32 cross_east = 9;
+   */
+  crossEast: number;
+
+  /**
+   * @generated from field: sint32 cross_north = 10;
+   */
+  crossNorth: number;
+
+  /**
+   * At each step: its centre, in metres east and north of the world's
+   * centre; the direction it moves toward, in 65536ths of a turn; how
+   * fast, in steps of 0.01 m/s; and its strength, in 256ths, 0 where it
+   * is not alive.
+   *
+   * @generated from field: repeated sint32 east = 11;
+   */
+  east: number[];
+
+  /**
+   * @generated from field: repeated sint32 north = 12;
+   */
+  north: number[];
+
+  /**
+   * @generated from field: repeated uint32 heading = 13;
+   */
+  heading: number[];
+
+  /**
+   * @generated from field: repeated uint32 speed = 14;
+   */
+  speed: number[];
+
+  /**
+   * @generated from field: repeated uint32 strength = 15;
+   */
+  strength: number[];
+};
+
+/**
+ * Describes the message keel.v1.ForecastSystem.
+ * Use `create(ForecastSystemSchema)` to create a new message.
+ */
+export const ForecastSystemSchema: GenMessage<ForecastSystem> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 9);
+
+/**
+ * GaleWarning is a gale warning in force: issued from the forecast's
+ * synoptic wind, its spells, fronts and lows, where the mean wind reaches
+ * force 8 or the typical strongest gust a gale's gusts.
+ *
+ * @generated from message keel.v1.GaleWarning
+ */
+export type GaleWarning = Message<"keel.v1.GaleWarning"> & {
+  /**
+   * The issue it came into force at: the same while it is in force, so a
+   * client tells a new one by it.
+   *
+   * @generated from field: int64 key = 1;
+   */
+  key: bigint;
+
+  /**
+   * The steps it blows at, a bit for each, the issue's the lowest; the
+   * first of them; and its force, 8 to 12.
+   *
+   * @generated from field: uint32 steps = 2;
+   */
+  steps: number;
+
+  /**
+   * @generated from field: uint32 first = 3;
+   */
+  first: number;
+
+  /**
+   * @generated from field: uint32 force = 4;
+   */
+  force: number;
+
+  /**
+   * The direction its wind first blows from, in 65536ths of a turn; and
+   * its strongest point, in metres east and north of the world's centre.
+   *
+   * @generated from field: uint32 from = 5;
+   */
+  from: number;
+
+  /**
+   * @generated from field: sint32 east = 6;
+   */
+  east: number;
+
+  /**
+   * @generated from field: sint32 north = 7;
+   */
+  north: number;
+
+  /**
+   * The nearest charted island or place to its strongest point, by its
+   * kind and number; unspecified for none.
+   *
+   * @generated from field: keel.v1.ChartSubject subject = 8;
+   */
+  subject: ChartSubject;
+
+  /**
+   * @generated from field: uint32 number = 9;
+   */
+  number: number;
+};
+
+/**
+ * Describes the message keel.v1.GaleWarning.
+ * Use `create(GaleWarningSchema)` to create a new message.
+ */
+export const GaleWarningSchema: GenMessage<GaleWarning> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 10);
+
+/**
+ * ForecastPast is what has been, for a client just come: the forecast
+ * issued ninety minutes before, and the truth since, the systems'
+ * keyframes at each five minutes and the spells in play over them.
+ *
+ * @generated from message keel.v1.ForecastPast
+ */
+export type ForecastPast = Message<"keel.v1.ForecastPast"> & {
+  /**
+   * @generated from field: keel.v1.Forecast issue = 1;
+   */
+  issue?: Forecast | undefined;
+
+  /**
+   * @generated from field: repeated keel.v1.Keyframe truth = 2;
+   */
+  truth: Keyframe[];
+
+  /**
+   * @generated from field: repeated keel.v1.Spell spells = 3;
+   */
+  spells: Spell[];
+};
+
+/**
+ * Describes the message keel.v1.ForecastPast.
+ * Use `create(ForecastPastSchema)` to create a new message.
+ */
+export const ForecastPastSchema: GenMessage<ForecastPast> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 11);
 
 /**
  * Chart is the world's chart so far: every subject charted, once a
@@ -463,7 +754,7 @@ export type Chart = Message<"keel.v1.Chart"> & {
  * Use `create(ChartSchema)` to create a new message.
  */
 export const ChartSchema: GenMessage<Chart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 8);
+  messageDesc(file_keel_v1_game, 12);
 
 /**
  * Charted is what has been charted since, sent to every connection as each
@@ -483,7 +774,7 @@ export type Charted = Message<"keel.v1.Charted"> & {
  * Use `create(ChartedSchema)` to create a new message.
  */
 export const ChartedSchema: GenMessage<Charted> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 9);
+  messageDesc(file_keel_v1_game, 13);
 
 /**
  * ChartEntry is a subject of the world's chart: an island, a place or a
@@ -657,7 +948,7 @@ export type ChartEntry = Message<"keel.v1.ChartEntry"> & {
  * Use `create(ChartEntrySchema)` to create a new message.
  */
 export const ChartEntrySchema: GenMessage<ChartEntry> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 10);
+  messageDesc(file_keel_v1_game, 14);
 
 /**
  * Places are the places in chunks of the land the connection has just been
@@ -680,7 +971,7 @@ export type Places = Message<"keel.v1.Places"> & {
  * Use `create(PlacesSchema)` to create a new message.
  */
 export const PlacesSchema: GenMessage<Places> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 11);
+  messageDesc(file_keel_v1_game, 15);
 
 /**
  * Place is a place of the world: a port, a lighthouse, a reef, a wreck.
@@ -768,7 +1059,7 @@ export type Place = Message<"keel.v1.Place"> & {
  * Use `create(PlaceSchema)` to create a new message.
  */
 export const PlaceSchema: GenMessage<Place> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 12);
+  messageDesc(file_keel_v1_game, 16);
 
 /**
  * Lights are the lighthouses' lights the connection is to show, and those
@@ -797,7 +1088,7 @@ export type Lights = Message<"keel.v1.Lights"> & {
  * Use `create(LightsSchema)` to create a new message.
  */
 export const LightsSchema: GenMessage<Lights> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 13);
+  messageDesc(file_keel_v1_game, 17);
 
 /**
  * Light is a lighthouse's light. It shows its character's light and dark
@@ -868,7 +1159,7 @@ export type Light = Message<"keel.v1.Light"> & {
  * Use `create(LightSchema)` to create a new message.
  */
 export const LightSchema: GenMessage<Light> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 14);
+  messageDesc(file_keel_v1_game, 18);
 
 /**
  * Tools says the account's owner's flag has been set or cleared while the
@@ -890,7 +1181,7 @@ export type Tools = Message<"keel.v1.Tools"> & {
  * Use `create(ToolsSchema)` to create a new message.
  */
 export const ToolsSchema: GenMessage<Tools> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 15);
+  messageDesc(file_keel_v1_game, 19);
 
 /**
  * Chunks hands the client the addresses of chunks of the world's land: each
@@ -923,7 +1214,7 @@ export type Chunks = Message<"keel.v1.Chunks"> & {
  * Use `create(ChunksSchema)` to create a new message.
  */
 export const ChunksSchema: GenMessage<Chunks> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 16);
+  messageDesc(file_keel_v1_game, 20);
 
 /**
  * Bump is two boats touching after being apart: a correction the
@@ -982,7 +1273,7 @@ export type Bump = Message<"keel.v1.Bump"> & {
  * Use `create(BumpSchema)` to create a new message.
  */
 export const BumpSchema: GenMessage<Bump> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 17);
+  messageDesc(file_keel_v1_game, 21);
 
 /**
  * WeatherSystems is the weather in play about the present: the spells and
@@ -1037,7 +1328,7 @@ export type WeatherSystems = Message<"keel.v1.WeatherSystems"> & {
  * Use `create(WeatherSystemsSchema)` to create a new message.
  */
 export const WeatherSystemsSchema: GenMessage<WeatherSystems> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 18);
+  messageDesc(file_keel_v1_game, 22);
 
 /**
  * ComingFront is a front before its spell is in play: its line alone,
@@ -1072,7 +1363,7 @@ export type ComingFront = Message<"keel.v1.ComingFront"> & {
  * Use `create(ComingFrontSchema)` to create a new message.
  */
 export const ComingFrontSchema: GenMessage<ComingFront> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 19);
+  messageDesc(file_keel_v1_game, 23);
 
 /**
  * IslandCaps are the islands whose cap of cumulus the connection is to
@@ -1102,7 +1393,7 @@ export type IslandCaps = Message<"keel.v1.IslandCaps"> & {
  * Use `create(IslandCapsSchema)` to create a new message.
  */
 export const IslandCapsSchema: GenMessage<IslandCaps> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 20);
+  messageDesc(file_keel_v1_game, 24);
 
 /**
  * IslandCap is an island's cap.
@@ -1141,7 +1432,7 @@ export type IslandCap = Message<"keel.v1.IslandCap"> & {
  * Use `create(IslandCapSchema)` to create a new message.
  */
 export const IslandCapSchema: GenMessage<IslandCap> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 21);
+  messageDesc(file_keel_v1_game, 25);
 
 /**
  * Keyframe is the weather systems at a tick: each one's place, motion,
@@ -1171,7 +1462,7 @@ export type Keyframe = Message<"keel.v1.Keyframe"> & {
  * Use `create(KeyframeSchema)` to create a new message.
  */
 export const KeyframeSchema: GenMessage<Keyframe> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 22);
+  messageDesc(file_keel_v1_game, 26);
 
 /**
  * SystemKey is a weather system at a keyframe.
@@ -1265,7 +1556,7 @@ export type SystemKey = Message<"keel.v1.SystemKey"> & {
  * Use `create(SystemKeySchema)` to create a new message.
  */
 export const SystemKeySchema: GenMessage<SystemKey> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 23);
+  messageDesc(file_keel_v1_game, 27);
 
 /**
  * Spell is a spell of weather: a stretch of time with one base wind, its
@@ -1427,7 +1718,7 @@ export type Spell = Message<"keel.v1.Spell"> & {
  * Use `create(SpellSchema)` to create a new message.
  */
 export const SpellSchema: GenMessage<Spell> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 24);
+  messageDesc(file_keel_v1_game, 28);
 
 /**
  * SeaAreas is what raises the waves about the boat: a square of sea areas,
@@ -1519,7 +1810,7 @@ export type SeaAreas = Message<"keel.v1.SeaAreas"> & {
  * Use `create(SeaAreasSchema)` to create a new message.
  */
 export const SeaAreasSchema: GenMessage<SeaAreas> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 25);
+  messageDesc(file_keel_v1_game, 29);
 
 /**
  * Restart says the server is about to restart, as a new version is
@@ -1543,7 +1834,7 @@ export type Restart = Message<"keel.v1.Restart"> & {
  * Use `create(RestartSchema)` to create a new message.
  */
 export const RestartSchema: GenMessage<Restart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 26);
+  messageDesc(file_keel_v1_game, 30);
 
 /**
  * Queued says the sea is full: the client waits for a boat. It comes after
@@ -1573,7 +1864,7 @@ export type Queued = Message<"keel.v1.Queued"> & {
  * Use `create(QueuedSchema)` to create a new message.
  */
 export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 27);
+  messageDesc(file_keel_v1_game, 31);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -1696,7 +1987,7 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 28);
+  messageDesc(file_keel_v1_game, 32);
 
 /**
  * Pong answers a Ping.
@@ -1724,7 +2015,7 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 29);
+  messageDesc(file_keel_v1_game, 33);
 
 /**
  * ChartSubject is a kind of subject of the chart.

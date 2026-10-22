@@ -135,3 +135,42 @@ func (t *Timeline) PastOf(from, to int64, ws []bus.Weather, ss []bus.System) Pas
 	p.Spells = t.SpellsOver(from, to, ws)
 	return p
 }
+
+// Gale is a forecast's gale warning, from its gale scan: the steps it
+// blows at, a bit for each, the issue's the lowest, and the first of
+// them; its force, the most of any step's; the direction its wind first
+// blows from, rad; and its strongest point over the steps, m east and
+// north, with its mean wind and typical gust there, m/s.
+type Gale struct {
+	Steps       uint32
+	First       int32
+	Force       int32
+	From        float64
+	East, North float64
+	Mean, Gust  float64
+}
+
+// GaleOf is the gale warning of a forecast's gale scan, if any step has a
+// gale.
+func GaleOf(f *physics.Forecast, g *physics.Gales) (Gale, bool) {
+	var out Gale
+	out.First = -1
+	best := 0.0
+	for k := range int(f.Head.Steps) {
+		s := &g.Steps[k]
+		if !(s.Points > 0) {
+			continue
+		}
+		out.Steps |= 1 << k
+		if out.First < 0 {
+			out.First = int32(k)
+			out.From = s.From
+		}
+		out.Force = max(out.Force, int32(s.Force))
+		if score := s.Mean + s.Gust; score > best {
+			best = score
+			out.East, out.North, out.Mean, out.Gust = s.East, s.North, s.Mean, s.Gust
+		}
+	}
+	return out, out.Steps != 0
+}

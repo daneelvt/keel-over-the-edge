@@ -132,6 +132,8 @@ type Sailor struct {
 	Welcomes []WelcomeSeen
 	// Bumps are the Bump messages, in order.
 	Bumps []*pb.Bump
+	// Forecasts are the Forecast messages, in order.
+	Forecasts []*pb.Forecast
 	// Places are the places in the queue the server told, in order.
 	Places []Place
 	// Handed are the addresses of the chunks of land the server handed,
@@ -290,6 +292,9 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			if ev.Bump != nil {
 				s.Stats.Bumps++
 				s.Bumps = append(s.Bumps, ev.Bump)
+			}
+			if ev.Forecast != nil {
+				s.Forecasts = append(s.Forecasts, ev.Forecast)
 			}
 			if ev.SeaAreas != nil {
 				s.Stats.Seas++

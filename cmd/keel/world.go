@@ -18,6 +18,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
@@ -238,8 +239,10 @@ type worldHalf struct {
 	loop    *loop.Loop
 	game    *edge.Edge
 	lasting *persist.Persist
-	tools   *owner.Owner
-	play    http.Handler
+	// forecasts issues the world's forecast.
+	forecasts *forecast.Issuer
+	tools     *owner.Owner
+	play      http.Handler
 
 	// endsAt is when the world ends, Unix ns, 0 for none known: its row's,
 	// unless a developer's command has brought it nearer; movedAt when that
@@ -318,12 +321,14 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		lcfg.Overrun = p.flight.Overrun
 	}
 	h.loop = loop.New(lcfg)
+	h.forecasts = p.forecastsOf(rw, row, timeline)
 	h.game = edge.New(edge.Config{
 		Bus: b, World: store.AccountID(row.ID).String(), Epoch: epoch, Ends: row.EndsAt, Closing: closingOf(row, cfg), Zone: zoneOf(cfg), Clock: h.loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: p.log, Metrics: p.metrics, Fail: api.WriteError,
 		Land: cfg.Land, Chunks: rw.handout, Circulation: circulationOf(rw.terrain),
 		Lip: p.wcfg.Prepared.Edge(), RoamChunks: rw.roamHandout, MainLight: rw.mainLight, Chart: rw.charts.model,
+		Forecast: h.forecasts,
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -331,7 +336,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Hold: b.Commands.Server(), Log: p.log, Metrics: p.metrics,
 		Chart: rw.charts.model, Written: rw.charts.model.Add, FoldWithin: rw.charts.model.FoldWithin(),
 	})
-	world.Record(h.inputs, h.game, h.lasting)
+	world.Record(h.inputs, h.game, h.lasting, h.forecasts)
 	h.tools = ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
@@ -407,6 +412,7 @@ func (h *worldHalf) start() {
 		// run.
 		var wg sync.WaitGroup
 		wg.Go(func() { h.tools.Run(encoderCtx) })
+		wg.Go(func() { h.forecasts.Run(encoderCtx) })
 		wg.Go(func() { p.publishStatus(encoderCtx, h) })
 		h.game.Run(encoderCtx)
 		wg.Wait()
