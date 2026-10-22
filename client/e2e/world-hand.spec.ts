@@ -2,8 +2,8 @@
 
 // The world by hand on the world page, against keel (tools/e2e): each
 // control opens a confirmation in its card, which sends nothing when
-// cancelled; confirmed, a new next world is made, and made again from
-// another seed; a confirmation left open across a switch is refused, and
+// cancelled; confirmed, a new next world is made, and made again in its
+// place; a confirmation left open across a switch is refused, and
 // the page says so; the beginning's confirmation names the world's end in
 // the schedule's zone, UTC's and the page's own, the time left counted
 // down by keel's clock; the whole world is charted, and the control then
@@ -23,7 +23,7 @@ test.beforeEach(() => {
   test.skip(test.info().project.name !== 'webgl2', 'the world page: one back end is enough');
 });
 
-type Next = { number: number; seed: string; stored: boolean };
+type Next = { number: number; seed: string; created: number; stored: boolean };
 
 type Life = {
   now: number;
@@ -71,15 +71,18 @@ function skipLate(l: Life): void {
   test.skip(l.remakeUntil > 0 && l.now > l.remakeUntil, 'too near the world’s end');
 }
 
-/** The next world once stored, made from a seed other than the one given. */
-async function madeAgain(request: APIRequestContext, number: number, not = ''): Promise<Next> {
+/**
+ * The next world once stored, another than the one made at the moment given: keel here makes
+ * every world from one seed, so a world made again is told apart by when its row was made.
+ */
+async function madeAgain(request: APIRequestContext, number: number, not = 0): Promise<Next> {
   let n: Next | null = null;
   await expect
     .poll(
       async () => {
         const l = await life(request);
         n = l.next;
-        return !l.making && n !== null && n.stored && n.seed !== not ? n.number : 0;
+        return !l.making && n !== null && n.stored && n.created !== not ? n.number : 0;
       },
       { timeout: 180_000, message: 'the next world made' },
     )
@@ -151,17 +154,17 @@ test('a new next world: cancelled, nothing; confirmed, made, and made again', as
   await make.click();
   await card.locator('button[name="confirm"]').click();
   await expect(page.locator('p.message')).toContainText(`Done: world ${m} to be made`);
-  const made = await madeAgain(request, m, before.next?.seed);
+  const made = await madeAgain(request, m, before.next?.created);
 
-  // Made again: another seed, the same number.
+  // Made again: another world, the same number.
   await expect(make).toBeEnabled({ timeout: 30_000 });
   await make.click();
   await expect(ask).toContainText(`Discard world ${m} (seed ${made.seed.slice(0, 4)}`);
   await expect(ask).toContainText('which no one has sailed');
   await card.locator('button[name="confirm"]').click();
   await expect(page.locator('p.message')).toContainText(`Done: world ${m} to be made`);
-  const again = await madeAgain(request, m, made.seed);
-  expect(again.seed).not.toBe(made.seed);
+  const again = await madeAgain(request, m, made.created);
+  expect(again.created).toBeGreaterThan(made.created);
 });
 
 test('the beginning’s confirmation names the end in three zones and counts down by keel’s clock', async ({
