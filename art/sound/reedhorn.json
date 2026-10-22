@@ -1,0 +1,12 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A reed horn's blast: 'a steel reed vibrated by compressed air' (IHO S-12) giving 'a high-pitched note' (Bowditch), thinner than a diaphone's, at pitch with a slight waver of vibrato cents at rate times a second. No source gives its pitch (an electric horn 'resonates at about 670 Hz', a maker's sheet): a starting value. harmonics are the partials' levels. A point source: its level falls 6 dB each time the distance doubles from near metres. Frequencies in Hz, times in seconds, levels as gains.",
+  "pitch": 560,
+  "vibrato": { "cents": 8, "rate": 5 },
+  "harmonics": [1, 0.5, 0.3, 0.18, 0.1, 0.06],
+  "cutoff": 3500,
+  "attack": 0.05,
+  "release": 0.12,
+  "near": 30,
+  "level": 0.4
+}

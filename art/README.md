@@ -63,6 +63,11 @@ bands, levels and curves for the wind, the rigging, the flogging sail, the
 water on the hull and the sea about the boat. They are art like the models. Each names the art licence
 in its first field, `licence`.
 
+The lighthouses' fog signals are played from the recipe named for their
+device (`twotone`, `diaphone`, `siren`, `reedhorn`), and thunder from
+`thunder.json`; `go run ./tools/catalog -check` fails on a fog signal's
+device without its recipe.
+
 ## Clouds
 
 `clouds/*.json` are the recipes of the heaped clouds' puffs, one a form

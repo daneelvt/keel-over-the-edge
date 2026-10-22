@@ -1,0 +1,14 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A siren's blast: a wail rising from low to pitch as the rotor spins up over rise, held, and falling back over fall at its end (the siren 'can emit a wailing sound', IHO S-12). Its tone is a rotor chopping air: odd harmonics strong, as a square wave's. No source gives its pitch: a starting value. harmonics are the partials' levels. A point source: its level falls 6 dB each time the distance doubles from near metres. Frequencies in Hz, times in seconds, levels as gains.",
+  "pitch": 480,
+  "low": 160,
+  "rise": 0.7,
+  "fall": 1.1,
+  "harmonics": [1, 0.1, 0.45, 0.08, 0.28, 0.05, 0.16],
+  "cutoff": 3000,
+  "attack": 0.1,
+  "release": 0.2,
+  "near": 30,
+  "level": 0.45
+}

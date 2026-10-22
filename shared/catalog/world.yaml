@@ -622,12 +622,20 @@ world:
     # white one's.
     range: { mainPort: 4.5, port: 2.5, edge: 2, hazard: 1.5, colour: 0.5 }
     # Allard's law: the illuminance at the eye of a light of intensity I at
-    # d is I T^d / d², with the air's transmissivity per nautical mile T =
-    # 0.05^(1/V) for the clear air's visibility V; a light is seen while it
-    # is above the threshold of 2 × 10⁻⁷ lux (the International Technical
-    # Conference of Lighthouse Authorities, Paris 1933).
+    # d is I T / d², T the air's transmittance along the line, e^(−τ) for
+    # its optical depth τ (IALA R0202); each light's intensity is the one
+    # whose light is seen at its nominal range in the clear air, whose
+    # visibility is clearAir. A light is seen while it is above the
+    # threshold, 2 × 10⁻⁷ lux at night (the International Technical
+    # Conference of Lighthouse Authorities, Paris 1933) and 1 × 10⁻³ lux
+    # by day (R0202), blended across the sun's last degree. It is lit while
+    # the sun is down at it, and "at all times when meteorological
+    # visibility in any direction is 2 miles or less" (the UK's Standard
+    # Marking Schedule for Offshore Installations): on this stage, while
+    # the visibility at it is poor or worse.
     clearAir: 4.5 # nautical miles
     threshold: 2.0e-7 # lux
+    dayThreshold: 1.0e-3 # lux
     # A light is sent to a connection once its eye is within its range, and
     # dropped drop m beyond it.
     drop: 200 # m
@@ -672,6 +680,68 @@ world:
       - { notation: Oc G 6s, class: Oc, group: "1", colour: green, steps: [4500, 1500] }
       - { notation: Iso R 6s, class: Iso, group: "1", colour: red, steps: [3000, 3000] }
       - { notation: Iso G 6s, class: Iso, group: "1", colour: green, steps: [3000, 3000] }
+    # Each lighthouse sounds a fog signal of its own: a pattern of blasts
+    # from this list, written "in the same way as the phases of a light"
+    # (IHO S-12), its steps its blasts and silences in turn, ms, beginning
+    # with a blast. The patterns are the light lists' (blasts of 1–5 s,
+    # periods of 10–60 s: the USCG Light List, Mount Desert "2 blasts ev
+    # 30s (2s bl-2s si-2s bl-24s si)", Cape Elizabeth "2 blasts ev 60s";
+    # the Farallon diaphone "1 blast and gp. 2 blasts … every 60 sec.";
+    # US Chart No. 1's "SIREN Mo(N) 60s"). Its device is its role's, as
+    # fogSignal.devices says: the diaphone of the great lights, whose tone
+    # "ends in a suddenly lowered pitch known … as a 'grunt'", or two tones,
+    # the second lower (IHO S-12), the siren of the ring on the approach to
+    # the edge, the reed horn's "high-pitched note" (Bowditch) on the
+    # hazards. Each light takes, in its number's order, the first pattern
+    # of its device that no light within fogSignal.apart has, so signals
+    # heard together differ.
+    fogSignals:
+      - { notation: Dia(2) 60s, device: twotone, steps: [3000, 3000, 3000, 51000] }
+      - { notation: Dia(1) 20s, device: diaphone, steps: [3000, 17000] }
+      - { notation: Dia(1) 30s, device: diaphone, steps: [3000, 27000] }
+      - { notation: Dia(2) 30s, device: diaphone, steps: [2000, 2000, 2000, 24000] }
+      - { notation: Dia(2) 60s, device: diaphone, steps: [3000, 3000, 3000, 51000] }
+      - { notation: Dia(1+2) 60s, device: diaphone, steps: [3000, 9000, 2000, 2000, 2000, 42000] }
+      - { notation: Dia(1) 45s, device: diaphone, steps: [5000, 40000] }
+      - { notation: Dia(1) 60s, device: diaphone, steps: [5000, 55000] }
+      - { notation: Dia(2) 20s, device: diaphone, steps: [2000, 2000, 2000, 14000] }
+      - { notation: Dia(3) 30s, device: diaphone, steps: [2000, 2000, 2000, 2000, 2000, 20000] }
+      - { notation: Dia(3) 60s, device: diaphone, steps: [3000, 3000, 3000, 3000, 3000, 45000] }
+      - { notation: Siren(1) 30s, device: siren, steps: [3000, 27000] }
+      - { notation: Siren(2) 30s, device: siren, steps: [2000, 2000, 2000, 24000] }
+      - { notation: Siren Mo(N) 60s, device: siren, steps: [4500, 1500, 1500, 52500] }
+      - { notation: Siren(1) 60s, device: siren, steps: [5000, 55000] }
+      - { notation: Siren(1) 20s, device: siren, steps: [2000, 18000] }
+      - { notation: Siren(2) 20s, device: siren, steps: [1500, 1500, 1500, 15500] }
+      - { notation: Siren(3) 30s, device: siren, steps: [1500, 1500, 1500, 1500, 1500, 22500] }
+      - { notation: Siren(2) 60s, device: siren, steps: [3000, 3000, 3000, 51000] }
+      - { notation: Siren(1) 45s, device: siren, steps: [4000, 41000] }
+      - { notation: Siren(3) 60s, device: siren, steps: [2000, 2000, 2000, 2000, 2000, 50000] }
+      - { notation: Horn(1) 10s, device: reedhorn, steps: [1000, 9000] }
+      - { notation: Horn(1) 15s, device: reedhorn, steps: [2000, 13000] }
+      - { notation: Horn(2) 20s, device: reedhorn, steps: [2000, 2000, 2000, 14000] }
+      - { notation: Horn(1) 20s, device: reedhorn, steps: [2000, 18000] }
+      - { notation: Horn(3) 30s, device: reedhorn, steps: [1000, 1000, 1000, 1000, 1000, 25000] }
+      - { notation: Horn(2) 15s, device: reedhorn, steps: [1000, 1000, 1000, 12000] }
+      - { notation: Horn(2) 30s, device: reedhorn, steps: [2000, 2000, 2000, 24000] }
+      - { notation: Horn(1) 30s, device: reedhorn, steps: [3000, 27000] }
+      - { notation: Horn(3) 20s, device: reedhorn, steps: [1000, 1000, 1000, 1000, 1000, 15000] }
+      - { notation: Horn(4) 30s, device: reedhorn, steps: [1000, 1000, 1000, 1000, 1000, 1000, 1000, 23000] }
+    # A blast sounds if, as it begins, the visibility at its light is under
+    # sounds: keepers sounded them "observing local visibility" (IALA
+    # NAVGUIDE 2010), detectors switch at 1.5–3 miles (USCG) or 2 nautical
+    # miles (the UK's schedule), on this stage 0.6–1.2. It is heard within
+    # heard of its light: modern signals are rated "usually 2 mile"
+    # (NAVGUIDE), Tyndall's (1874) siren "may certainly be relied on at a
+    # distance of 2 miles", on this stage 0.8–1.2. A licence: it is heard
+    # true, from its light's bearing, never in a shadow, where a real one's
+    # apparent direction "may sometimes be erroneous up to more than 50°"
+    # (Collinder 1929).
+    fogSignal:
+      sounds: 1 # nautical miles
+      heard: 1 # nautical miles
+      apart: 2 # nautical miles
+      devices: { mainPort: twotone, port: diaphone, edge: siren, hazard: reedhorn }
     # How lighthouses are drawn: stone towers with an iron gallery, a glass
     # lantern and a copper cupola, each with its daymark, so that towers are
     # told apart by day as at sea; the light a glow at the lantern, with two

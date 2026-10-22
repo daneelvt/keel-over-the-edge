@@ -293,7 +293,7 @@ weather:
   # disk, drifting with the wind, by day islands of them over land; a kind
   # with night is born only at night or within dawn minutes of sunrise and
   # lifts lift minutes after it; calmBelow and goneAbove are the spell's
-  # wind it needs, knots, 0 for none. lightning is for drawing it.
+  # wind it needs, knots, 0 for none.
   #
   # Its cloud: a form, which names how it is drawn, its base and its top
   # and reach at its whole, its deck of low cloud and how dark its base
@@ -352,7 +352,14 @@ weather:
         deck: [0.5, 600] # the base under the tower
         lead: 2
         dark: 0.7
-      lightning: 0.7
+      # Lightning from its mature stage: none below above, rising to rate
+      # flashes a minute at full strength, struck within its rain core.
+      # Ordinary storms flash 1–10 times a minute (Williams and others
+      # 1999), oceanic ones about half as often as those over land
+      # (Boccippio and others 1999) and squall lines at sea "nevertheless
+      # produce few reports of lightning" (Zipser 1994): 2 a minute is the
+      # low end, about one strike every half minute.
+      lightning: { above: 0.7, rate: 2, within: [0, 0.42] }
     - id: shower
       shape: dome
       turning: 10
@@ -385,7 +392,6 @@ weather:
         deck: [0, 0]
         lead: 2
         dark: 0.4
-      lightning: 0
     - id: storm
       shape: low
       turning: 70
@@ -427,7 +433,9 @@ weather:
           cirrus: [2, 0.9]
           middle: [1.5, 0.6]
           low: [1.15, 0.4]
-      lightning: 0.75
+      # A tropical cyclone's ground flashes are mostly in its outer bands
+      # (Molinari and others 1999): struck from 0.7 to 1.3 of its size.
+      lightning: { above: 0.75, rate: 1.5, within: [0.7, 1.3] }
       # A storm of this size raises waves of 2–4 s, which travel no faster
       # than it does (the Coastal Engineering Manual's growth laws). Its
       # swell is given a longer period, as a real storm's 10–15 s swell
@@ -466,7 +474,17 @@ weather:
       goneAbove: 12 # knots
       rain: { rate: 0, width: 0, bands: 0, turn: 0 }
       cloud: { form: fog, base: 0, top: 0, reach: [0, 0], deck: [0, 0], lead: 1, dark: 0 }
-      lightning: 0
+      # Its fog: an extinction of 3.912 over its core's visibility, drawn
+      # per bank, times its strength and the stretched Gaussian its wind's
+      # patch has, falling as e^(−h / height) above the sea. Fog is "very
+      # poor" visibility, 30–150 m on this stage; Kunkel's (1984)
+      # extinction, 144.7 C^0.88 a km, puts 100 m at about 0.2 g/m³ of
+      # liquid water, and the Met Office calls fog under 100 m dense. A
+      # licence: a well-mixed fog "is densest near the top of the fog
+      # layer" (Stull, Practical Meteorology, 6.8), under its inversion;
+      # thinning with height, as the mist band does, its optical depth
+      # along any line has a closed form.
+      fog: { core: [50, 150], height: 40 }
     - id: light-air
       shape: none
       turning: 0
@@ -492,7 +510,6 @@ weather:
       goneAbove: 0
       rain: { rate: 0, width: 0, bands: 0, turn: 0 }
       cloud: { form: none, base: 0, top: 0, reach: [0, 0], deck: [0, 0], lead: 1, dark: 0 }
-      lightning: 0
 
   # The week: each world's weather, made with it from its seed for its
   # epoch and end, and stored. Its spells are a chain from the regimes'
@@ -606,3 +623,46 @@ weather:
     rainWords: [2.5, 10, 50] # mm an hour
     rainExtinction: [0.16, 0.74]
     rainScale: 0.4
+
+  # Visibility, which the server and the phone compute alike: the optical
+  # depth along a line is the integral of the air's extinction along it,
+  # the clear air's (world.lights.clearAir), each fog bank's, the rain's
+  # and the mist band's added, and a thing is seen while it is at most
+  # contrast, ln 50: Koschmieder's 2% (WMO-No. 8, chapter 9, gives 5% for
+  # the meteorological optical range; the game's visual ranges are all
+  # 3.912 / σ). The visibility at a point is contrast over the extinction
+  # there, 2 m up. Its words are the Met Office's marine ones on the
+  # game's stage, 0.4 of the real: very poor under 1,000 m, poor to 2
+  # nautical miles, moderate to 5, good above.
+  visibility:
+    contrast: 3.912
+    words: [400, 1852, 3704] # m
+
+  # Lightning, the same flash for every player: world time is cut into
+  # slots, and a system above its kind's strength flashes in a slot with a
+  # chance by its rate, at a time, a place, a kind and strokes drawn from
+  # its seed and the slot. "Most lightning (~75-80%) occurs within the
+  # cloud" (NWS Melbourne): a quarter reach the sea. "A third of the
+  # flashes are single-stroke events, while the overall mean … equals
+  # 3.67" (Poelman and others 2021): the rest have from two to most
+  # strokes evenly, a mean of 3.67; "the geometric mean interstroke
+  # interval being about 60 ms" (CIGRÉ TB 549, Rakov and others 2013).
+  lightning:
+    slot: 10 # s
+    sea: 0.25
+    single: 0.33
+    most: 8
+    apart: 60 # ms
+
+  # Thunder, which follows its flash at the speed of sound: 343 m/s at
+  # 20 °C, about 3 seconds a kilometre (Bureau of Meteorology). Real
+  # thunder carries 15–25 km (Bureau of Meteorology), "When the distance
+  # exceeds 20 km, thunder is usually not heard" (WMO Cloud Atlas): on the
+  # game's stage, 0.4 of the real, about 3 nautical miles. Its roll
+  # "rarely exceeds 30−40 s" (WMO); near, "a sharp crack or click"; far, "a
+  # rumble" (NWS).
+  thunder:
+    heard: 3 # nautical miles
+    speed: 343 # m/s
+    longest: 30 # s
+    crack: 1000 # m
