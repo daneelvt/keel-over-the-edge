@@ -110,7 +110,7 @@ test.describe('heaped cloud', () => {
 });
 
 test.describe('rain', () => {
-  test('?rain= holds rain at the boat: streaks, a shorter visual range, one draw', async ({
+  test('?rain= holds rain at the boat: streaks, a shorter visibility, one draw', async ({
     page,
   }) => {
     await openScene(page, 'rain=20');
@@ -118,18 +118,22 @@ test.describe('rain', () => {
       const k = globalThis.keel;
       k.advance(30);
       await k.show();
-      const wet = { ...k.clouds(), draws: k.info().drawCalls };
+      const wet = { ...k.clouds(), draws: k.info().drawCalls, air: k.visibility() };
       k.setRain(0);
       k.advance(30 * 10);
       await k.show();
-      const dry = { ...k.clouds(), draws: k.info().drawCalls };
+      const dry = { ...k.clouds(), draws: k.info().drawCalls, air: k.visibility() };
       return { wet, dry };
     });
     expect(got.wet.rain).toBeCloseTo(20, 0);
     expect(got.wet.streaks).toBeGreaterThan(100);
-    expect(got.wet.visualRange).toBeLessThan(2000);
+    // Its depth is along each ray, as a source the same everywhere; the
+    // sea's horizon is held within the visibility at the camera.
+    expect(got.wet.air?.cameraRange).toBeLessThan(2000);
+    expect(got.wet.air?.sources).toBe(1);
     expect(got.dry.streaks).toBe(0);
-    expect(got.dry.visualRange).toBeGreaterThan(5000);
+    expect(got.dry.air?.cameraRange).toBeGreaterThan(5000);
+    expect(got.dry.air?.sources).toBe(0);
     expect(got.wet.draws - got.dry.draws).toBe(1);
   });
 
