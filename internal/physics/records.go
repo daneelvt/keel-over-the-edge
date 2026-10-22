@@ -461,6 +461,13 @@ type SystemKind struct {
 	RainWidth float64 // a core's Gaussian width, or the bands' reach, a share of its size
 	RainBands float64 // how many spiral bands; 0 for a core
 	RainTurn  float64 // the bands turn once in this many minutes; 0 for never
+	// Its fog: none if its core's visibility is nothing.
+	FogCore   [2]float64 // the visibility at its core at the sea at full strength, the least and the most, drawn per system, m
+	FogHeight float64    // its density falls as e^(−h / this) above the sea, m
+	// Its lightning: none if its rate is nothing.
+	LightningAbove  float64    // it flashes at or above this strength
+	LightningRate   float64    // its flashes a minute at full strength
+	LightningWithin [2]float64 // struck between these shares of its size from its centre
 }
 
 // The forms of a kind's cloud, in SystemKind.CloudForm.
@@ -570,6 +577,66 @@ type CloudParams struct {
 	RainWords      [3]float64 // light, moderate and heavy under these, violent above, mm an hour
 	RainExtinction [2]float64 // rain's extinction, a R^b per km
 	RainScale      float64    // visibility on the stage, a share of the real
+}
+
+// VisibilityParams describe visibility and lightning: the catalog's values
+// the optical depth along a line, the visibility at a point and the flashes
+// are computed with, from its weather's visibility and lightning and its
+// world's clear air, dome and mist band. PrepareVisibility derives their
+// constants.
+type VisibilityParams struct {
+	Contrast   float64    // a thing is seen while the optical depth to it is at most this
+	Words      [3]float64 // the visibility is very poor, poor and moderate under these, m, and good above
+	Clear      float64    // the clear air's visibility, m
+	Dome       float64    // the dome's radius, m
+	MistBand   float64    // the mist band's inner edge, m from the centre
+	MistLip    float64    // the lip, where the mist is whole, m from the centre
+	MistRange  float64    // the visibility at the lip at the sea, m
+	MistHeight float64    // the mist thins as e^(−h / this) above the sea, m
+	Slot       float64    // world time is cut into slots this long, each holding a flash or none, s
+	Sea        float64    // the share of flashes that strike the sea
+	Single     float64    // the share of flashes of a single stroke
+	Strokes    float64    // the most strokes a flash has
+	Apart      float64    // the strokes' geometric mean interval, ms
+}
+
+// MaxStrokes is the most strokes a flash has.
+const MaxStrokes = 8
+
+// Flash is a flash of lightning: when and where it strikes, from which
+// system, and its strokes. Every phone and the server find the same flash
+// from the system's seed and the slot of world time it is in.
+type Flash struct {
+	Slot    float64             // its system's place among the keyframe's slots
+	Kind    float64             // the catalog's index of its system's kind
+	Seed    float64             // its own, a uint32, for drawing its bolt
+	Tick    float64             // when its first stroke strikes, ticks
+	East    float64             // where it strikes, m east and north of the centre
+	North   float64             //
+	Sea     float64             // 1 if it strikes the sea, 0 if it stays in its cloud
+	Base    float64             // its cloud's base, m
+	Strokes float64             // how many strokes, 1 to MaxStrokes
+	Stroke  [MaxStrokes]float64 // each stroke's time after the first, s
+}
+
+// AirSource is a source of extinction whose density is a Gaussian in plan
+// and an exponential in height, as a fog bank's, a rain core's and a
+// front's band of rain are: at a point (x, y) h m above the sea below Top,
+// Sigma × e^(−(Along a² + Across c² + InvHeight h)) per m, a and c the
+// point's distances from (East, North) along (Sin, Cos) and across it.
+// The optical depth along a line through it has a closed form, which the
+// GPU works out from these as the module does.
+type AirSource struct {
+	East      float64 // m east and north of the centre
+	North     float64 //
+	Sin       float64 // the direction a is measured along
+	Cos       float64 //
+	Along     float64 // 1/m²
+	Across    float64 // 1/m²
+	InvHeight float64 // 1/m
+	Sigma     float64 // its extinction at its centre at the sea, 1/m
+	Top       float64 // m: nothing above
+	Reach     float64 // m: nothing worth counting beyond, across its axis for a band
 }
 
 // ComingFront is the next front, before its spell is in play: the line

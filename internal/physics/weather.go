@@ -111,6 +111,9 @@ type WeatherPrepared struct {
 
 	// Clouds and rain.
 	clouds cloudsPrepared
+
+	// Visibility and lightning.
+	vis visibilityPrepared
 }
 
 // PrepareWeather derives the wind's constants from its parameters. It is
