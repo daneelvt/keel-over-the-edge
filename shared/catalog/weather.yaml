@@ -555,7 +555,7 @@ weather:
     frontTrough: [3, 6] # hPa
     spread: 15 # degrees
     # A wobble of 0.5 NM over 6–12 hours puts the true track inside the
-    # forecast's cones, which grow 0.35 NM an hour from nothing, four times
+    # forecast's cones, which grow 0.34 NM an hour from nothing, four times
     # in five at every lead: a wobble quicker than the forecast's horizon
     # moves a system anywhere within it soon after an issue, so no cone
     # could grow with the lead and hold it.
