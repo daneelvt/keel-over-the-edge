@@ -113,10 +113,11 @@ export const NAUTICAL_MILE = 1852;
 
 /**
  * The air's transmissivity over a nautical mile for a visibility of v
- * nautical miles, contrast falling to 5% at the visibility (IALA E-200-2).
+ * nautical miles: e^(−σ × 1 mile) in air of extinction σ (IALA R0202),
+ * the visibility Koschmieder's 3.912 / σ, contrast falling to 2% at it.
  */
 export function transmissivity(v: number): number {
-  return 0.05 ** (1 / v);
+  return Math.exp(-3.912 / v);
 }
 
 /** The illuminance d m from a light of intensity i cd, in air of transmissivity t a mile: Allard's law, lux. */
