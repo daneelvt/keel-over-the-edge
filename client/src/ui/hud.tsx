@@ -15,6 +15,9 @@ import { useState } from 'preact/hooks';
 import type { HelmInput } from '../input/helm';
 import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
+import type { Barometer } from './barometer';
+import { BarometerDial, type DialWord } from './barometerdial';
+import { HarbourBoard, type HarbourView } from './board';
 import { ChartScreen, type ChartSea, NoticeLine, PocketChart } from './chart';
 import { Helm, Sheet } from './controls';
 import type { Countdown } from './countdown';
@@ -190,6 +193,10 @@ export interface ScreenProps {
   notices?: Notices | null;
   /** The countdown to the world's end; null in the offline sandbox. */
   end?: Countdown | null;
+  /** The barometer and the words about its dial; null without. */
+  barometer?: { barometer: Barometer; words: readonly DialWord[] } | null;
+  /** The harbourmaster's board, in port; null without. */
+  harbour?: HarbourView | null;
 }
 
 /** The free camera as the screen sees it. */
@@ -249,8 +256,19 @@ function Screen(props: ScreenProps) {
         {notices !== null ? <NoticeLine notices={notices} /> : null}
         {props.connection !== null ? <ConnectionLine view={props.connection} /> : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
+        {props.barometer != null && s.barometer ? (
+          <BarometerDial barometer={props.barometer.barometer} words={props.barometer.words} />
+        ) : null}
+        {props.harbour != null ? <HarbourBoard harbour={props.harbour} /> : null}
       </div>
-      {sea !== null ? <PocketChart sea={sea} end={end} /> : null}
+      {sea !== null ? (
+        <PocketChart
+          sea={sea}
+          end={end}
+          weather={s.pocketWeather}
+          setWeather={(pocketWeather) => settings.set({ pocketWeather })}
+        />
+      ) : null}
       <button
         type="button"
         class="round menu-button"

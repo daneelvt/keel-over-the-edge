@@ -65,6 +65,7 @@ import {
 import { type Backend, type Gfx, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
 import { Shadows } from './shadows';
+import { StormCones } from './signals';
 import { look, Sky, toLinear } from './sky';
 import { type Chimney, Smoke, smokes } from './smoke';
 import { type CrestSample, SprayDrops, type SpraySource, SprayView } from './spray';
@@ -169,6 +170,13 @@ export class SeaScene {
   readonly lanterns = new Lanterns();
   /** The towns' flags and chimney smoke, each showing the true wind where it is. */
   readonly flags = new Flags(catalog.world.towns.flags);
+  /** The storm cones on the harbourmasters' houses. */
+  readonly cones = new StormCones();
+  /**
+   * The gale warning in force, as the cones show it: whether its gale
+   * first blows from the north, the cone point up; null for none.
+   */
+  galeUp: boolean | null = null;
   readonly smoke = new Smoke(catalog.world.towns.smoke);
   /** The lighthouses: their towers, lights and looms. */
   readonly lighthouses = new Lighthouses(
@@ -329,7 +337,7 @@ export class SeaScene {
     scene.add(this.dirtyAir.group, this.rightOfWay.group);
     scene.add(this.fleet.root);
     scene.add(this.stars.mesh, this.lanterns.mesh);
-    scene.add(this.flags.mesh, this.smoke.mesh);
+    scene.add(this.flags.mesh, this.smoke.mesh, this.cones.mesh);
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
     this.wrecks.depthAt = (east, north) => {
@@ -972,6 +980,7 @@ export class SeaScene {
     if (land === null) {
       this.flags.frame([], o, 0);
       this.smoke.frame([], o, 0, 1);
+      this.cones.frame([], o, null);
       return;
     }
     const cameraEast = camera.x + o.x;
@@ -1019,6 +1028,11 @@ export class SeaScene {
       }
     }
     this.flags.frame(flags, o, time);
+    this.cones.frame(
+      features.flags.filter((f) => f.harbour && near(f, 2000)),
+      o,
+      this.galeUp,
+    );
     this.smoke.frame(chimneys, o, time, 0.25 + 0.75 * (1 - night));
   }
 

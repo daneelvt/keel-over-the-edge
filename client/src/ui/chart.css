@@ -322,10 +322,32 @@
 }
 
 /* The pocket chart, top right at sea. */
-.pocket-chart {
+/* The pocket chart, with its weather's switch beneath it. */
+.pocket {
   position: absolute;
   top: var(--edge-top);
   right: var(--edge-right);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.pocket-weather {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  color: var(--faint);
+  font: inherit;
+  font-size: 13px;
+}
+
+.pocket-weather[aria-pressed="true"] {
+  color: var(--gold, #e8b450);
+}
+
+.pocket-chart {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -340,7 +362,8 @@
 /* Opaque and unblurred, unlike the other panels: it stands over the sea the
    whole voyage, and a blur behind it is drawn again every frame (a third of
    the frames, on a software renderer). */
-.hud .pocket-chart {
+.hud .pocket-chart,
+.hud .pocket-weather {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: rgb(26 36 44);

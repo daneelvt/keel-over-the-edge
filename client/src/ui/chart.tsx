@@ -10,6 +10,7 @@ import './chart.css';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Chart } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
+import { type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
 import {
   bearingText,
@@ -528,8 +529,21 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
   );
 }
 
-/** The pocket chart: the whole disk small, tilted, with the boat; a tap opens the chart. */
-export function PocketChart({ sea, end = null }: { sea: ChartSea; end?: Countdown | null }) {
+/**
+ * The pocket chart: the whole disk small, tilted, with the boat, and its
+ * weather now while its switch is on; a tap opens the chart.
+ */
+export function PocketChart({
+  sea,
+  end = null,
+  weather = true,
+  setWeather = null,
+}: {
+  sea: ChartSea;
+  end?: Countdown | null;
+  weather?: boolean;
+  setWeather?: ((on: boolean) => void) | null;
+}) {
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const [edge, setCaption] = useState('Chart');
   // In the world's last days the caption carries the countdown too.
@@ -543,29 +557,50 @@ export function PocketChart({ sea, end = null }: { sea: ChartSea; end?: Countdow
     const draw = () => {
       const b = sea.boat();
       setCaption(edgeCaption(b.east, b.north, sea.lip));
-      drawPocket(c, sea, b);
+      const w = weather && sea.forecasting !== null ? pocketWeather(sea.forecasting) : null;
+      drawPocket(c, sea, b, w);
     };
     draw();
     const t = setInterval(draw, 500);
     return () => clearInterval(t);
-  }, [sea]);
+  }, [sea, weather]);
   return (
-    <button
-      type="button"
-      class="panel pocket-chart"
-      onClick={() => sea.chart.show('chart')}
-      aria-label={`${caption}: open the chart`}
-    >
-      <canvas ref={canvas} width={240} height={180} />
-      <span class="pocket-caption" data-readout="pocket">
-        {caption}
-      </span>
-    </button>
+    <div class="pocket">
+      <button
+        type="button"
+        class="panel pocket-chart"
+        onClick={() => sea.chart.show('chart')}
+        aria-label={`${caption}: open the chart`}
+      >
+        <canvas ref={canvas} width={240} height={180} />
+        <span class="pocket-caption" data-readout="pocket">
+          {caption}
+        </span>
+      </button>
+      {setWeather !== null && sea.forecasting !== null ? (
+        <button
+          type="button"
+          class="panel pocket-weather"
+          aria-pressed={weather}
+          onClick={() => setWeather(!weather)}
+        >
+          Weather
+        </button>
+      ) : null}
+    </div>
   );
 }
 
-/** Draws the pocket chart: a disk seen tilted, its charted islands and lights, the mist band, the boat. */
-export function drawPocket(c: HTMLCanvasElement, sea: ChartSea, b: BoatAt): void {
+/**
+ * Draws the pocket chart: a disk seen tilted, its weather now if given,
+ * its charted islands and lights, the mist band, the boat.
+ */
+export function drawPocket(
+  c: HTMLCanvasElement,
+  sea: ChartSea,
+  b: BoatAt,
+  weather: PocketWeather | null = null,
+): void {
   // Drawn by the CPU: a canvas the GPU draws, drawn again twice a second,
   // took most of the sea's frames from a second page on a software renderer.
   const ctx = c.getContext('2d', { willReadFrequently: true });
@@ -594,6 +629,9 @@ export function drawPocket(c: HTMLCanvasElement, sea: ChartSea, b: BoatAt): void
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.setLineDash([]);
+  if (weather !== null) {
+    drawPocketWeather(ctx, weather, x, y, k, tilt);
+  }
   for (const e of sea.chart.store.entries) {
     if (e.subject === 'island' && e.bounds !== null) {
       const [w0, s0, e0, n0] = e.bounds;
@@ -618,6 +656,70 @@ export function drawPocket(c: HTMLCanvasElement, sea: ChartSea, b: BoatAt): void
   ctx.arc(bx, by, 4, 0, 2 * Math.PI);
   ctx.fill();
   ctx.restore();
+}
+
+/** The pocket chart's weather, under its islands: fog's wash, rain's dots, the fronts and the systems' marks. */
+function drawPocketWeather(
+  ctx: CanvasRenderingContext2D,
+  w: PocketWeather,
+  x: (east: number) => number,
+  y: (north: number) => number,
+  k: number,
+  tilt: number,
+): void {
+  const cell = (2 * w.lip) / w.n;
+  for (let j = 0; j < w.n; j++) {
+    for (let i = 0; i < w.n; i++) {
+      const kk = j * w.n + i;
+      const east = ((i + 0.5) / w.n - 0.5) * 2 * w.lip;
+      const north = (0.5 - (j + 0.5) / w.n) * 2 * w.lip;
+      if (east * east + north * north > w.lip * w.lip) {
+        continue;
+      }
+      if ((w.fog[kk] ?? Number.POSITIVE_INFINITY) < 1852) {
+        ctx.fillStyle = 'rgb(98 105 107 / 45%)';
+        ctx.fillRect(x(east - cell / 2), y(north + cell / 2), cell * k, cell * k * tilt);
+      }
+      if ((w.rain[kk] ?? 0) >= 0.1) {
+        ctx.fillStyle = 'rgb(79 120 150 / 85%)';
+        ctx.fillRect(x(east) - 1, y(north) - 1, 2, 2);
+      }
+    }
+  }
+  ctx.strokeStyle = '#123d8c';
+  ctx.lineWidth = 2;
+  for (const f of w.fronts) {
+    const a = [f.sin * f.line - f.cos * w.lip, f.cos * f.line + f.sin * w.lip];
+    const z = [f.sin * f.line + f.cos * w.lip, f.cos * f.line - f.sin * w.lip];
+    ctx.beginPath();
+    ctx.moveTo(x(a[0] ?? 0), y(a[1] ?? 0));
+    ctx.lineTo(x(z[0] ?? 0), y(z[1] ?? 0));
+    ctx.stroke();
+  }
+  for (const s of w.systems) {
+    if (s.draw === 'calm' || s.draw === 'bank') {
+      continue;
+    }
+    const colour = s.draw === 'low' ? '#8c3a24' : s.draw === 'cell' ? '#3a3f4a' : '#4f7896';
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = colour;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(
+      x(s.east),
+      y(s.north),
+      Math.max(s.size * k * 0.6, 2),
+      Math.max(s.size * k * 0.6 * tilt, 1.5),
+      0,
+      0,
+      2 * Math.PI,
+    );
+    if (s.draw === 'cell') {
+      ctx.fill();
+    } else {
+      ctx.stroke();
+    }
+  }
 }
 
 /** The notice shown, with its way to dismiss it; the line is in the page from the start, empty. */

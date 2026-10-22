@@ -60,6 +60,20 @@ export class Forecasting implements WeatherSource {
     return this.#parts.physics.skyAt(t, east, north)[SKY.sun + BODY.altitude] ?? -1;
   }
 
+  /**
+   * The truth's pressure at a point at a tick before now, from the truth
+   * kept, hPa; null if none is kept about it, or the module is not made.
+   */
+  pressureBefore(tick: number, east: number, north: number): number | null {
+    const fields = this.fields();
+    const truth = this.forecasts.truthAt(tick);
+    if (fields === null || truth === null) {
+      return null;
+    }
+    fields.truthAt(truth.keys, truth.spells, tick);
+    return fields.physics.pressure(east, north);
+  }
+
   /** The forecast's module, or null while it is made: the first ask starts it. */
   fields(): Fields | null {
     if (this.#fields === null && this.#making === null) {

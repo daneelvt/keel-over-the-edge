@@ -130,10 +130,14 @@ export interface TownPoint {
   seed: number;
 }
 
-/** What the towns held show: flags (with their colours), chimneys and lanterns. */
+/**
+ * What the towns held show: flags (with their colours, and whether each
+ * flies over a harbourmaster's house, on its square), chimneys and
+ * lanterns.
+ */
 export interface TownFeatures {
   version: number;
-  flags: (TownPoint & { flag: number })[];
+  flags: (TownPoint & { flag: number; harbour: boolean })[];
   chimneys: TownPoint[];
   lanterns: TownPoint[];
 }
@@ -402,7 +406,14 @@ export class Towns {
       const chimney = kind.chimney ?? 0;
       const lantern = kind.lantern ?? 0;
       if (kind.flag && b.flag > 0) {
-        f.flags.push({ east: b.east, north: b.north, top: b.top, seed: b.seed, flag: b.flag });
+        f.flags.push({
+          east: b.east,
+          north: b.north,
+          top: b.top,
+          seed: b.seed,
+          flag: b.flag,
+          harbour: kind.stands === 'square',
+        });
       }
       if (!kind.prop && chimney > 0 && own(1) < chimney) {
         // The kits stand a chimney on the ridge, three tenths of the frontage to the right.

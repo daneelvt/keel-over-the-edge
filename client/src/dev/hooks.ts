@@ -42,6 +42,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
+import { harbourWater } from '../boot/harbour';
 import { catalog } from '../catalog';
 import type { ChartMode } from '../chart/chart';
 import type { ChartParts } from '../chart/make';
@@ -94,6 +95,7 @@ import { look } from '../render/sky';
 import type { SandboxForecast } from '../sandbox/forecast';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
+import type { Barometer } from '../ui/barometer';
 import type { Settings } from '../ui/settings';
 import {
   cellHex,
@@ -212,7 +214,7 @@ function solve3(a: number[], b: number[]): [number, number, number] {
 export type Sailing = (
   | { sandbox: Sandbox; online?: undefined; predictor?: undefined }
   | { sandbox?: undefined; online: Online; predictor: Predictor }
-) & { chart?: ChartParts; forecast?: SandboxForecast };
+) & { chart?: ChartParts; forecast?: SandboxForecast; barometer?: Barometer };
 
 /** Puts the hooks on globalThis.keel. */
 export function exposeHooks(world: SeaScene, game: Game, sailing: Sailing): void {
@@ -2833,6 +2835,32 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       };
     },
 
+    /** Puts the boat on the water in Port Royal's harbour, where the board is: the sandbox only. */
+    toHarbour(): boolean {
+      const at = harbourWater(world);
+      if (at === null) {
+        return false;
+      }
+      offline().place(at.east, at.north, 0);
+      floatBoat();
+      return true;
+    },
+
+    /** The harbourmaster's board: whether its button shows, and its words if it is open. */
+    board() {
+      const button = document.querySelector('.board-button');
+      const board = document.querySelector<HTMLElement>('.board');
+      return { button: button !== null, text: board?.innerText ?? null };
+    },
+
+    /** A storm to bring a gale to the boat minutes on, and the forecast issued again: the sandbox only. */
+    galeIn(minutes: number): void {
+      const s = offline();
+      const st = s.physics.records.state;
+      s.meetGale(st[RECORDS.state.x] ?? 0, st[RECORDS.state.y] ?? 0, minutes);
+      sailing.forecast?.again();
+    },
+
     /** Issues the sandbox's forecast again now, as the weather is: the sandbox only. */
     issueForecast(): void {
       if (sailing.forecast === undefined) {
@@ -2893,6 +2921,29 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
       const m = momentOf(c.chart.timeMode.value, c.chart.step.value, f);
       return placeWords(f, m, pointsOf(e), c.chart.store);
+    },
+
+    /** The barometer: its words, its reading and its set hand's, hPa, and its hands' angles. */
+    barometer() {
+      const b = sailing.barometer;
+      if (b === undefined) {
+        return null;
+      }
+      return {
+        words: b.words.value,
+        now: b.now,
+        set: b.set,
+        hand: b.hand.el?.style.transform ?? '',
+        setHand: b.setHand.el?.style.transform ?? '',
+      };
+    },
+
+    /** Holds a change on the barometer, hPa a quarter of an hour, from now; null lets it go. */
+    holdBarometer(rate: number | null): void {
+      const b = sailing.barometer;
+      if (b !== undefined) {
+        b.held = rate === null ? null : { rate, from: world.ticks };
+      }
     },
 
     /** A point's position as the chart writes it. */

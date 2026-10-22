@@ -60,7 +60,7 @@ import {
 import { Online } from '../net/online';
 import { reloadForVersion } from '../net/reload';
 import { LAYOUT_VERSION, RECORDS } from '../predict/layout.gen';
-import { loadPhysics } from '../predict/physics';
+import { loadPhysics, type Physics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
 import { regimeIndex } from '../predict/weather';
@@ -68,6 +68,7 @@ import { ROAM_HIGH } from '../render/freecam';
 import { flashNear } from '../render/lightning';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
+import { pointUp } from '../render/signals';
 import { SandboxForecast } from '../sandbox/forecast';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
@@ -76,6 +77,7 @@ import {
   flashFromQuery,
   fogFromQuery,
   frontFromQuery,
+  galeFromQuery,
   rainFromQuery,
   START,
   STEADY,
@@ -85,12 +87,15 @@ import {
   windFromQuery,
 } from '../sandbox/sandbox';
 import { sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
+import { Barometer } from '../ui/barometer';
+import type { DialWord } from '../ui/barometerdial';
 import { serverNews } from '../ui/chart';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
 import { mountScreen } from '../ui/hud';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
+import { harbourWater, watchHarbour } from './harbour';
 
 async function start(): Promise<void> {
   const query = new URLSearchParams(location.search);
@@ -209,6 +214,19 @@ async function start(): Promise<void> {
     if (fog !== null) {
       sandbox.holdFog(fog);
     }
+    // ?board: the boat in Port Royal's harbour, where the board is.
+    if (query.has('board')) {
+      const at = harbourWater(world);
+      if (at !== null) {
+        sandbox.place(at.east, at.north, 0);
+      }
+    }
+    // ?gale=minutes: a storm to bring a gale to the boat that many minutes on.
+    const gale = galeFromQuery(query);
+    if (gale !== null) {
+      const s = sandbox.physics.records.state;
+      sandbox.meetGale(s[RECORDS.state.x] ?? 0, s[RECORDS.state.y] ?? 0, gale);
+    }
     const flash = flashFromQuery(query);
     if (flash !== null) {
       const s = sandbox.physics.records.state;
@@ -251,8 +269,17 @@ async function start(): Promise<void> {
       },
     );
     const issuer = sandboxForecast;
+    const baro = startBarometer(world, sandbox.physics, forecasting);
+    // ?baro=hPa: a fall or a rise held, that much a quarter of an hour.
+    const held = baroFromQuery(query);
+    if (held !== null) {
+      baro.barometer.held = { rate: held, from: world.ticks };
+    }
     const gales = new GaleNotices(parts.chart.store, parts.notices);
-    issuer.onIssue = (f) => gales.issued(f);
+    issuer.onIssue = (f) => {
+      gales.issued(f);
+      world.galeUp = f.gale === null ? null : pointUp(f.gale.from);
+    };
     setInterval(() => issuer.tick(), 500);
     if (chartFile !== null) {
       chartSandbox(
@@ -286,6 +313,12 @@ async function start(): Promise<void> {
       },
       sea: parts.sea,
       notices: parts.notices,
+      barometer: baro,
+      harbour: {
+        port: watchHarbour(world, parts.chart.store),
+        src: forecasting,
+        store: parts.chart.store,
+      },
     });
     game.listen(document, container);
     if (view !== undefined) {
@@ -297,7 +330,12 @@ async function start(): Promise<void> {
     }
     if (query.has('test')) {
       const { exposeHooks } = await import('../dev/hooks');
-      exposeHooks(world, game, { sandbox, chart: parts, forecast: issuer });
+      exposeHooks(world, game, {
+        sandbox,
+        chart: parts,
+        forecast: issuer,
+        barometer: baro.barometer,
+      });
     }
     return;
   }
@@ -396,6 +434,8 @@ async function start(): Promise<void> {
   online.onForecast = (f, past) => {
     forecasting.forecasts.receive(f, past);
     gales.issued(f);
+    // The storm cone hangs while a warning is in force.
+    world.galeUp = f.gale === null ? null : pointUp(f.gale.from);
   };
   parts.chart.store.me = me.name;
   parts.notices.off.value = new Set(me.noticesOff ?? []);
@@ -446,6 +486,7 @@ async function start(): Promise<void> {
 
   game.setDriver(predictor);
   game.pacer = online;
+  const baro = startBarometer(world, predictor.physics, forecasting);
   mountScreen(document.body, {
     model: game.hud,
     settings: game.settings,
@@ -465,6 +506,12 @@ async function start(): Promise<void> {
     sea: parts.sea,
     notices: parts.notices,
     end: countdown,
+    barometer: baro,
+    harbour: {
+      port: watchHarbour(world, parts.chart.store),
+      src: forecasting,
+      store: parts.chart.store,
+    },
   });
   game.listen(document, container);
   if (view !== undefined) {
@@ -476,8 +523,47 @@ async function start(): Promise<void> {
   }
   if (query.has('test')) {
     const { exposeHooks } = await import('../dev/hooks');
-    exposeHooks(world, game, { online, predictor, chart: parts });
+    exposeHooks(world, game, { online, predictor, chart: parts, barometer: baro.barometer });
   }
+}
+
+/** The barometer and the words about its dial. */
+interface BarometerParts {
+  barometer: Barometer;
+  words: readonly DialWord[];
+}
+
+/** ?baro=hPa: a change held on the barometer, that much a quarter of an hour; null for none. */
+function baroFromQuery(query: URLSearchParams): number | null {
+  const v = Number.parseFloat(query.get('baro') ?? '');
+  return Number.isFinite(v) ? v : null;
+}
+
+/**
+ * The barometer aboard, read once a second at the boat from the first
+ * module's weather now, its past from the truth kept.
+ */
+function startBarometer(
+  world: SeaScene,
+  physics: Physics,
+  forecasting: Forecasting,
+): BarometerParts {
+  const b = catalog.world.instruments.barometer;
+  const barometer = new Barometer({ range: [b.range[0] ?? 950, b.range[1] ?? 1040], set: b.set });
+  setInterval(() => {
+    const tick = world.ticks;
+    const east = world.pose.east;
+    const north = world.pose.north;
+    barometer.update(
+      tick,
+      () => {
+        physics.windDrawAt(tick);
+        return physics.pressure(east, north);
+      },
+      (t) => forecasting.pressureBefore(t, east, north),
+    );
+  }, 1000);
+  return { barometer, words: b.words };
 }
 
 /** The start screen waits for the chunks handed within this of the boat, m, or this long, ms. */
