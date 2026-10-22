@@ -1372,6 +1372,18 @@ func galeAt(tick float64) {
 	gales.Steps[0] = physics.GaleGrid(&weatherPrepared, &galeTick, galeWater[:], galeOn[:])
 }
 
+// nearAt returns what is near (x, y) at the time windDrawAt set: a sum of
+// the physics package's Near bits.
+//
+//go:wasmexport nearAt
+func nearAt(x, y float64) int32 { return physics.NearAt(&drawWeather, x, y) }
+
+// regimeAt returns the catalog's index of the regime of the spell in
+// effect at the time windDrawAt set, or −1 for none.
+//
+//go:wasmexport regimeAt
+func regimeAt() float64 { return physics.RegimeAt(&drawWeather) }
+
 //go:wasmexport typicalValues
 func typicalValuesAddr() uint32 { return addr(unsafe.Pointer(&typicalValues)) }
 

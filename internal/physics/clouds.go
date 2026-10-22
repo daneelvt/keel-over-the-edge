@@ -272,6 +272,48 @@ func HeapedClouds(t *WeatherTick, out []Cloud) int {
 	return n
 }
 
+// RegimeAt is the catalog's index of the regime of the spell in effect at
+// the tick t was set to, or −1 for none.
+func RegimeAt(t *WeatherTick) float64 {
+	if t.n == 0 {
+		return -1
+	}
+	return t.at[t.n-1].s.regime
+}
+
+// What is near a point, by the form of its cloud: bits of NearAt.
+const (
+	NearShower = 1 // a heap of cumulus raining as a shower
+	NearSquall = 2 // a cumulonimbus
+	NearStorm  = 4 // a storm's deck
+	NearFog    = 8 // a fog bank
+)
+
+// NearAt is what is near (x, y) at the tick t was set to: a sum of the
+// Near bits of the systems within their size of it, by their clouds'
+// forms, the words a place's box and its outlook name.
+func NearAt(t *WeatherTick, x, y float64) int32 {
+	var near int32
+	for i := range t.ns {
+		st := &t.sys[i]
+		dx, dy := x-st.cx, y-st.cy
+		if float64(dx*dx)+float64(dy*dy) > float64(st.size*st.size) {
+			continue
+		}
+		switch st.k.cloud.form {
+		case FormCumulus:
+			near |= NearShower
+		case FormCumulonimbus:
+			near |= NearSquall
+		case FormStorm:
+			near |= NearStorm
+		case FormFog:
+			near |= NearFog
+		}
+	}
+	return near
+}
+
 // SheetAt is the cover of the three layers at (x, y): bilinear between the
 // lattice's corners about it.
 func SheetAt(t *WeatherTick, x, y float64) Sheets {

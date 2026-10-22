@@ -13,10 +13,12 @@ import type { SeaScene } from '../render/scene';
 import { type ChartSea, chartNews, type NewsSource } from '../ui/chart';
 import { type NoticeKind, Notices } from '../ui/notices';
 import { Chart } from './chart';
+import type { Forecasting } from './forecasting';
 import { Models } from './model';
 import { type Air, chartedWith, look, type SightExport } from './sight';
 import { ChartStore } from './store';
 import { type ChartLook, ChartView, type WindSampler } from './view';
+import { ChartWeather } from './weatherlayer';
 
 /** The marks of the kinds of place on the chart, by their sites. */
 const PLACE_MARKS: Record<string, string> = {
@@ -75,10 +77,25 @@ export function chartLook(): ChartLook {
   };
 }
 
-/** The mean wind over the disk, as the boat's physics module has it. */
-function windOf(world: SeaScene): WindSampler {
+/**
+ * The mean wind over the disk at the slider's moment, from the weather's
+ * scene, whose grid is the streaks' own, rows from the north; before its
+ * first scene, as the boat's physics module has it now.
+ */
+function windOf(world: SeaScene, weather: ChartWeather | null): WindSampler {
   let out = new Float64Array(0);
   return (points, speeds, froms) => {
+    const g = weather?.scene?.grid;
+    const side = Math.round(Math.sqrt(points.length / 2));
+    if (g !== undefined && g.n === side) {
+      for (let j = 0; j < side; j++) {
+        for (let i = 0; i < side; i++) {
+          speeds[j * side + i] = g.mean[(side - 1 - j) * side + i] ?? 0;
+          froms[j * side + i] = g.from[(side - 1 - j) * side + i] ?? 0;
+        }
+      }
+      return true;
+    }
     const physics = world.ocean.source?.physics;
     if (physics === undefined || world.ocean.source?.weather !== true) {
       return false;
@@ -102,10 +119,20 @@ export interface ChartParts {
   chart: Chart;
   sea: ChartSea;
   notices: Notices;
+  /** The chart's weather, null without a forecast. */
+  weather: ChartWeather | null;
 }
 
-/** Makes the chart, drawn by the world's renderer in the sea's place, its models fetched by models. */
-export function makeChart(world: SeaScene, models: Models, news: NewsSource | null): ChartParts {
+/**
+ * Makes the chart, drawn by the world's renderer in the sea's place, its
+ * models fetched by models, its weather from the forecast, if any.
+ */
+export function makeChart(
+  world: SeaScene,
+  models: Models,
+  news: NewsSource | null,
+  forecasting: Forecasting | null = null,
+): ChartParts {
   const w = catalog.world;
   const store = new ChartStore({
     places: w.places.kinds,
@@ -122,12 +149,27 @@ export function makeChart(world: SeaScene, models: Models, news: NewsSource | nu
     north: world.pose.north,
     heading: world.pose.heading,
   });
-  const view = new ChartView(store, models, chartLook(), boat, windOf(world));
+  let weather: ChartWeather | null = null;
+  const choice = () => ({
+    mode: chart.timeMode.value,
+    step: chart.step.value,
+    layers: chart.layers.value,
+  });
+  if (forecasting !== null) {
+    weather = new ChartWeather(forecasting, choice, w.chart.look.weather.canvas);
+  }
+  const view = new ChartView(store, models, chartLook(), boat, windOf(world, weather));
   const notices = new Notices(
     catalog.notices.kinds as unknown as NoticeKind[],
     catalog.notices.queue,
   );
   const chart = new Chart(store, view, notices);
+  if (weather !== null) {
+    view.attachWeather(weather);
+    for (const s of [chart.timeMode, chart.step, chart.layers]) {
+      s.subscribe(() => view.weatherChanged());
+    }
+  }
   world.cover = view;
   const motion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
   if (motion !== undefined) {
@@ -150,8 +192,9 @@ export function makeChart(world: SeaScene, models: Models, news: NewsSource | nu
         store,
         (e) => e.subject === 'island' || (e.subject === 'place' && placeNews[e.sort] === true),
       ),
+    forecasting,
   };
-  return { chart, sea, notices };
+  return { chart, sea, notices, weather };
 }
 
 /** The sandbox's chart file. */

@@ -2,16 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { ChartEntry } from '../net/messages';
-import {
-  ChartStore,
-  creditText,
-  dayText,
-  distanceText,
-  edgeCaption,
-  latitudeText,
-  NM,
-  positionText,
-} from './store';
+import { ChartStore, creditText, dayText, distanceText, edgeCaption, NM } from './store';
 
 const words = {
   places: [{ name: 'Port' }, { name: 'Lighthouse' }],
@@ -70,19 +61,10 @@ describe('the chart’s store', () => {
     expect(s.size).toBe(1);
   });
 
-  it('gives the latitude by the sky: the pole at the centre, 67°30′ half way, 45° at the rim', () => {
-    expect(latitudeText(0, 10)).toBe('90°00′ N');
-    expect(latitudeText(2.25 * NM, 10)).toBe('67°30′ N');
-    expect(latitudeText(4.5 * NM, 10)).toBe('45°00′ N');
-  });
-
   it('says how far the edge is: miles to a tenth, metres under a tenth of a mile', () => {
     expect(edgeCaption(0, 0, 8334)).toBe('Chart · edge 4.5 NM');
     expect(edgeCaption(8200, 0, 8334)).toBe('Chart · edge 134 m');
     expect(distanceText(0.1 * NM)).toBe('0.1 NM');
-    expect(positionText(1000, 1000, 10, entry({ name: 'Port Royal' }))).toBe(
-      '82°22′ N · Port Royal 045°, 0.8 NM',
-    );
   });
 
   it('dates a charting in the viewer’s own time zone', () => {

@@ -158,14 +158,14 @@ func (w *PlaceWeather) speeds() (lo, hi int) {
 func (w *PlaceWeather) meanFrom() float64 {
 	var e, n float64
 	for _, p := range w.Points {
-		s, c := math.Sincos(p.From)
-		e += p.Mean * s
-		n += p.Mean * c
+		s, c := physics.SinCos(p.From)
+		e += float64(p.Mean * s)
+		n += float64(p.Mean * c)
 	}
 	if e == 0 && n == 0 {
 		return w.Points[0].From
 	}
-	return math.Atan2(e, n)
+	return physics.Atan2(e, n)
 }
 
 // sky is the worst of the points' skies and the risk's, an index into
@@ -289,7 +289,7 @@ func quantile(a []float64, q float64) float64 {
 	}
 	s := slices.Clone(a)
 	slices.Sort(s)
-	i := int(math.Floor(q*float64(len(s)-1) + 0.5))
+	i := int(math.Floor(float64(q*float64(len(s)-1)) + 0.5))
 	return s[min(max(i, 0), len(s)-1)]
 }
 
@@ -471,14 +471,14 @@ func Outlook(samples []OutlookSample, falls bool, words *Words) string {
 // issue; and where, the compass point of its strongest from the nearest
 // charted place, and the place's name.
 type Warning struct {
-	From  float64 `json:"from"`
-	Force int     `json:"force"`
-	First float64 `json:"first"`
-	East  float64 `json:"east"`
-	North float64 `json:"north"`
-	Place string  `json:"place"`
-	PlaceEast,
-	PlaceNorth float64
+	From       float64 `json:"from"`
+	Force      int     `json:"force"`
+	First      float64 `json:"first"`
+	East       float64 `json:"east"`
+	North      float64 `json:"north"`
+	Place      string  `json:"place"`
+	PlaceEast  float64 `json:"placeEast"`
+	PlaceNorth float64 `json:"placeNorth"`
 }
 
 // expected is a time, minutes after the issue, as a gale warning words
@@ -496,10 +496,10 @@ func WarningParts(w *Warning, words *Words) (wind, when, where string) {
 	wind = winds8[point8(w.From)] + " " + forceWord(max(w.Force, 8))
 	when = words.expected(w.First)
 	if w.Place == "" {
-		where = "in the " + where8[point8(math.Atan2(w.East, w.North))] + " outer waters"
+		where = "in the " + where8[point8(physics.Atan2(w.East, w.North))] + " outer waters"
 		return wind, when, where
 	}
-	where = where8[point8(math.Atan2(w.East-w.PlaceEast, w.North-w.PlaceNorth))] + " of " + w.Place
+	where = where8[point8(physics.Atan2(w.East-w.PlaceEast, w.North-w.PlaceNorth))] + " of " + w.Place
 	return wind, when, where
 }
 
@@ -548,7 +548,7 @@ type Situation struct {
 // area is where a point lies: "near Port Royal", "in the south-west middle
 // waters", "in the north outer waters".
 func (s *Situation) area(east, north float64) string {
-	r := math.Hypot(east, north)
+	r := math.Sqrt(float64(east*east) + float64(north*north))
 	if r <= s.Centre {
 		return "near " + s.Port
 	}
@@ -556,7 +556,7 @@ func (s *Situation) area(east, north float64) string {
 	if r <= s.Middle {
 		zone = "middle"
 	}
-	return "in the " + where8[point8(math.Atan2(east, north))] + " " + zone + " waters"
+	return "in the " + where8[point8(physics.Atan2(east, north))] + " " + zone + " waters"
 }
 
 // movingWords are how a system moves (Met Office, Marine forecasts

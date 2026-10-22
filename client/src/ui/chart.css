@@ -199,10 +199,13 @@
   color: inherit;
 }
 
+/* The box sits above the weather's time. */
 .chart-box {
   left: var(--edge-left, 12px);
-  bottom: var(--edge-bottom, 12px);
+  bottom: calc(var(--edge-bottom, 12px) + 132px);
   width: min(320px, calc(100vw - 24px));
+  max-height: calc(100dvh - 260px);
+  overflow-y: auto;
   padding: 12px 16px;
 }
 
@@ -401,4 +404,162 @@
   bottom: var(--edge-bottom);
   left: 50%;
   transform: translateX(-50%);
+}
+
+/* The weather's time: the slider and its mode along the foot of the chart,
+   the layers' switches a row beside them on a wide screen and a sheet on a
+   phone, so the slider and its mode stay on the screen. */
+.chart-time {
+  position: absolute;
+  left: 50%;
+  bottom: var(--edge-bottom, 12px);
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 24px));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgb(236 224 194 / 94%);
+  color: var(--chart-ink);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 30%);
+  pointer-events: auto;
+  font:
+    15px / 1.3 "IM Fell English",
+    Georgia,
+    serif;
+}
+
+.chart-time button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgb(59 46 34 / 40%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 30%);
+  color: inherit;
+  font: inherit;
+}
+
+.chart-time button.chosen,
+.chart-time button[aria-pressed="true"] {
+  background: var(--chart-ink);
+  color: var(--paper);
+}
+
+.chart-time-modes,
+.chart-time-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.chart-slider {
+  flex: 1 1 160px;
+  min-height: 44px;
+  accent-color: var(--chart-ink);
+}
+
+.chart-time-text,
+.chart-inside {
+  flex: 1 1 100%;
+  margin: 0;
+  font-style: italic;
+}
+
+.chart-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.chart-layers legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.chart-layer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+}
+
+.chart-layer input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--chart-ink);
+}
+
+.chart-layers-open {
+  display: none;
+}
+
+/* On a phone the layers fold into a sheet over the slider. */
+@media (max-width: 600px) {
+  .chart-layers-open {
+    display: inline-block;
+  }
+
+  .chart-layers {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 6px);
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgb(236 224 194 / 96%);
+    box-shadow: 0 4px 20px rgb(0 0 0 / 30%);
+  }
+
+  .chart-layers.open {
+    display: flex;
+  }
+
+  .chart-box {
+    bottom: calc(var(--edge-bottom, 12px) + 168px);
+    max-height: calc(100dvh - 300px);
+    overflow-y: auto;
+  }
+}
+
+.chart-weather dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 10px;
+  margin: 4px 0;
+}
+
+.chart-weather dt {
+  font-style: italic;
+}
+
+.chart-weather dd {
+  margin: 0;
+}
+
+.chart-weather-when {
+  font-style: italic;
+}
+
+.chart-warning {
+  padding: 4px 8px;
+  border-left: 4px solid #8c3a24;
+  background: rgb(140 58 36 / 10%);
+  font-weight: bold;
+}
+
+.chart-outlook {
+  margin-top: 6px;
+}
+
+.chart-place-position {
+  font-variant-numeric: tabular-nums;
 }

@@ -43,12 +43,16 @@ import type {
   CapSeen,
   ChartEntry,
   ChunksHanded,
+  ForecastTold,
   FromWorker,
   HelloVersions,
   LightSeen,
+  PastTold,
   PlaceSeen,
   Status,
   ToWorker,
+  WeatherKeyframe,
+  WeatherSpells,
 } from './messages';
 import { NO_MARGIN, newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
 import { FLEET_META, fleetOf } from './view';
@@ -132,6 +136,10 @@ export class Online {
   onPlaces: ((p: PlaceSeen[]) => void) | null = null;
   /** Told of the world's chart: whole after each Welcome, then what is charted. */
   onChart: ((entries: ChartEntry[], whole: boolean) => void) | null = null;
+  /** Told of each forecast as it is issued, with what has been after a Welcome. */
+  onForecast: ((f: ForecastTold, past: PastTold | null) => void) | null = null;
+  /** Told of the weather as it is sent: the spells in play, or null to keep them, and keyframes. */
+  onWeather: ((spells: WeatherSpells | null, keyframes: WeatherKeyframe[]) => void) | null = null;
   /** Told of lights come into range, and lights to drop; and at each Welcome, of the main port's light, with all others dropped. */
   onLights: ((lights: LightSeen[], drop: number[] | 'all') => void) | null = null;
   /** Islands' caps come into sight, and those to drop: all of them for a new connection. */
@@ -230,6 +238,10 @@ export class Online {
       case 'weather':
         // Ahead of the tick any of it changes the wind from, as the sea is.
         this.#predictor.weather.receive(m.spells, m.keyframes, m.coming);
+        this.onWeather?.(m.spells, m.keyframes);
+        break;
+      case 'forecast':
+        this.onForecast?.(m.forecast, m.past);
         break;
       case 'bump':
         this.onBump?.(m.bump);

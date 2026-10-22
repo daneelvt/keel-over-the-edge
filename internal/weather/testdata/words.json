@@ -2929,8 +2929,8 @@
         "east": -3000,
         "north": -2500,
         "place": "Gannet Holm",
-        "PlaceEast": -2000,
-        "PlaceNorth": -1500
+        "placeEast": -2000,
+        "placeNorth": -1500
       },
       "wind": "southwesterly gale 8",
       "when": "expected soon",
@@ -2945,8 +2945,8 @@
         "east": 500,
         "north": 7000,
         "place": "Port Royal",
-        "PlaceEast": 0,
-        "PlaceNorth": 0
+        "placeEast": 0,
+        "placeNorth": 0
       },
       "wind": "northerly severe gale 9",
       "when": "imminent",
@@ -2961,8 +2961,8 @@
         "east": 6500,
         "north": 0,
         "place": "Lantern Rock",
-        "PlaceEast": 6000,
-        "PlaceNorth": 2000
+        "placeEast": 6000,
+        "placeNorth": 2000
       },
       "wind": "easterly storm 10",
       "when": "expected later",
@@ -2977,8 +2977,8 @@
         "east": -6000,
         "north": 4000,
         "place": "",
-        "PlaceEast": 0,
-        "PlaceNorth": 0
+        "placeEast": 0,
+        "placeNorth": 0
       },
       "wind": "northwesterly violent storm 11",
       "when": "imminent",
@@ -2993,8 +2993,8 @@
         "east": 0,
         "north": -7000,
         "place": "Hollow Rock",
-        "PlaceEast": 300,
-        "PlaceNorth": -5000
+        "placeEast": 300,
+        "placeNorth": -5000
       },
       "wind": "southerly hurricane force 12",
       "when": "expected soon",

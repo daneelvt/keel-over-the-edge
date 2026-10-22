@@ -60,6 +60,48 @@ export interface WeatherKeyframe {
 }
 
 /**
+ * A forecast, as the server issues it or the sandbox makes it: its head
+ * (RECORDS.forecastHead), each of its spells (RECORDS.spell) and each of
+ * its systems (RECORDS.forecastSystem) as the physics module's records'
+ * values, whole numbers all; and the gale warning in force, or null.
+ */
+export interface ForecastTold {
+  head: number[];
+  spells: number[][];
+  systems: number[][];
+  gale: GaleTold | null;
+}
+
+/**
+ * A gale warning in force: the issue it came into force at, its key; the
+ * steps it blows at, a bit each, and the first; its force, 8 to 12; the
+ * direction its wind first blows from, radians clockwise from north; its
+ * strongest point, m east and north; and the nearest charted island or
+ * place, by subject and number, or null.
+ */
+export interface GaleTold {
+  key: number;
+  steps: number;
+  first: number;
+  force: number;
+  from: number;
+  east: number;
+  north: number;
+  place: { subject: ChartSubject; number: number } | null;
+}
+
+/**
+ * What has been, for a client just come: the issue of ninety minutes
+ * before, the truth's keyframes at each five minutes since and the spells
+ * in play over them, each a spell record's values.
+ */
+export interface PastTold {
+  issue: ForecastTold;
+  truth: WeatherKeyframe[];
+  spells: number[][];
+}
+
+/**
  * A bump, as the server tells it: the tick, where (metres east and north),
  * how fast the hulls closed (m/s), and the connection's part: its boat's
  * fault ('yours'), the other's ('theirs'), no one's ('none'), or a bump
@@ -291,6 +333,8 @@ export type FromWorker =
   | { type: 'lights'; lights: LightSeen[]; drop: number[] }
   /** The world's chart: whole after a Welcome, or what was charted since. */
   | { type: 'chart'; entries: ChartEntry[]; whole: boolean }
+  /** The forecast as it is issued, with what has been after a Welcome. */
+  | { type: 'forecast'; forecast: ForecastTold; past: PastTold | null }
   | { type: 'clock'; clock: ClockState }
   | ({ type: 'traffic' } & Traffic);
 

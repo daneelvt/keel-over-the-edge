@@ -42,6 +42,8 @@ import { createGuest } from '../account/guest';
 import { resolveSailor } from '../account/me';
 import { backSoon, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
+import { Forecasting } from '../chart/forecasting';
+import { GaleNotices } from '../chart/gales';
 import { chartSandbox, fetchSandboxChart, makeChart, sandboxModels } from '../chart/make';
 import { Models } from '../chart/model';
 import { STEPS_PER_SECOND } from '../game/clock';
@@ -66,6 +68,7 @@ import { ROAM_HIGH } from '../render/freecam';
 import { flashNear } from '../render/lightning';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
+import { SandboxForecast } from '../sandbox/forecast';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
   commonestWeather,
@@ -220,10 +223,37 @@ async function start(): Promise<void> {
       );
     }
     chooseSky(world, query);
+    // The forecast, made as a server makes it from the sandbox's own
+    // weather, every ten minutes of world time.
+    let sandboxForecast: SandboxForecast | null = null;
+    const forecasting = new Forecasting({
+      physics: sandbox.physics,
+      boat: world.kind.physics,
+      tick: () => world.ticks,
+      present: () => ({
+        keys: sandboxForecast === null ? [] : [sandboxForecast.keyframeAt(Math.floor(world.ticks))],
+        spells: sandbox.weather.spells,
+      }),
+      skyTime: (t) => world.skyTime?.at(t) ?? null,
+      end: () => 0,
+    });
     // The world's chart, read once its land is handed, so the sea starts as
     // it does without one.
     const chartFile = seed === null ? null : await fetchSandboxChart(seed);
-    const parts = makeChart(world, sandboxModels(chartFile), null);
+    const parts = makeChart(world, sandboxModels(chartFile), null, forecasting);
+    sandboxForecast = new SandboxForecast(
+      { physics: sandbox.physics, tick: () => world.ticks, spells: () => sandbox.weather.spells },
+      forecasting.forecasts,
+      catalog.weather.forecast.every * 60 * STEPS_PER_SECOND,
+      (east, north) => {
+        const e = parts.chart.store.nearestNamed(east, north);
+        return e === undefined ? null : { subject: e.subject, number: e.number };
+      },
+    );
+    const issuer = sandboxForecast;
+    const gales = new GaleNotices(parts.chart.store, parts.notices);
+    issuer.onIssue = (f) => gales.issued(f);
+    setInterval(() => issuer.tick(), 500);
     if (chartFile !== null) {
       chartSandbox(
         chartFile,
@@ -267,7 +297,7 @@ async function start(): Promise<void> {
     }
     if (query.has('test')) {
       const { exposeHooks } = await import('../dev/hooks');
-      exposeHooks(world, game, { sandbox, chart: parts });
+      exposeHooks(world, game, { sandbox, chart: parts, forecast: issuer });
     }
     return;
   }
@@ -328,10 +358,13 @@ async function start(): Promise<void> {
   const models = new Models();
   online.onWorld = (id, sailed) => {
     if (id !== worldId) {
-      // Another world: its places, lights and islands' models are its own.
+      // Another world: its places, lights and islands' models are its own,
+      // and its weather.
       world.lighthouses.clear();
       world.wrecks.clear();
       models.clear();
+      forecasting.forecasts.reset();
+      gales.reset();
       worldId = id;
     }
     land.setWorld(id, sailed, sailed ? predictor.physics : null);
@@ -343,9 +376,27 @@ async function start(): Promise<void> {
   };
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
   online.onCaps = (c, drop) => world.weather.setCaps(c, drop);
+  // The forecast as the server issues it, and what has been, kept.
+  const forecasting = new Forecasting({
+    physics: predictor.physics,
+    boat: world.kind.physics,
+    tick: () => world.ticks,
+    present: () => ({ keys: predictor.weather.keyframes, spells: predictor.weather.spells }),
+    skyTime: (t) => world.skyTime?.at(t) ?? null,
+    end: () =>
+      online.endsMs > 0 && online.epochUs > 0
+        ? Math.floor(((online.endsMs * 1000 - online.epochUs) * STEPS_PER_SECOND) / 1e6)
+        : 0,
+  });
+  online.onWeather = (spells, keyframes) => forecasting.forecasts.keep(spells, keyframes);
   // The world's chart, as the server tells of it; the notices it raises,
   // switched off as the account has them.
-  const parts = makeChart(world, models, serverNews);
+  const parts = makeChart(world, models, serverNews, forecasting);
+  const gales = new GaleNotices(parts.chart.store, parts.notices);
+  online.onForecast = (f, past) => {
+    forecasting.forecasts.receive(f, past);
+    gales.issued(f);
+  };
   parts.chart.store.me = me.name;
   parts.notices.off.value = new Set(me.noticesOff ?? []);
   parts.notices.save = (off) => saveNoticesOff(off);

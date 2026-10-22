@@ -10,6 +10,7 @@
 // stands on.
 
 import type { IslandModel } from './model';
+import { meridianText, parallelText } from './position';
 import { NM } from './store';
 
 /** What the paper is painted with. */
@@ -108,7 +109,7 @@ export function paintPaper(
     ctx.arc(c, c, n * NM * k, 0, 2 * Math.PI);
     ctx.stroke();
     const lat = 90 - look.scale * n;
-    ctx.fillText(`${Math.round(lat)}°`, c, c - n * NM * k - side / 160);
+    ctx.fillText(parallelText(Math.round(lat)), c, c - n * NM * k - side / 160);
   }
   for (let d = 0; d < 360; d += look.meridians) {
     const a = (d * Math.PI) / 180;
@@ -119,13 +120,11 @@ export function paintPaper(
     );
     ctx.lineTo(c + Math.sin(a) * look.lip * k, c - Math.cos(a) * look.lip * k);
     ctx.stroke();
-    if (d % 90 !== 0) {
-      ctx.fillText(
-        `${d}°`,
-        c + Math.sin(a) * (look.lip + 220) * k,
-        c - Math.cos(a) * (look.lip + 220) * k,
-      );
-    }
+    ctx.fillText(
+      meridianText(d),
+      c + Math.sin(a) * (look.lip + 220) * k,
+      c - Math.cos(a) * (look.lip + 220) * k,
+    );
   }
   ctx.globalAlpha = 1;
 
