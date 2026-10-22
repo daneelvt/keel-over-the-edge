@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
@@ -177,4 +178,41 @@ func TestFogSignalsDiffer(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+// BenchmarkLookInFog is BenchmarkLook with four fog banks over the run, at
+// their whole: every look's lines through them.
+func BenchmarkLookInFog(bm *testing.B) {
+	b, cat := world1(bm)
+	w := Build(b, cat)
+	kind := -1
+	for i, k := range cat.Weather.Systems {
+		if k.Fog != nil {
+			kind = i
+		}
+	}
+	wx := &physics.Weather{Prepared: w.Weather}
+	wx.Set([]physics.Spell{{Gust: 1000, Pressure: 101300}})
+	for k := range int32(2) {
+		wx.SetKeyframe(k, float64(k)*300)
+		for i := range 4 {
+			d := 1500 + float64(i)*1800
+			s := physics.System{On: 1, Kind: float64(kind), Seed: float64(i + 1), East: math.Round(d * 0.6 * 4), North: math.Round(d * 0.8 * 4),
+				Strength: 4096, Size: 1700, Peak: 900}
+			wx.SetSystem(k, int32(i), &s)
+		}
+	}
+	wx.SetKeyCount(2)
+	t := new(physics.WeatherTick)
+	physics.WeatherAt(wx, t, 0)
+	charted := make([]uint64, sight.Words(len(w.Subjects)))
+	c := &sight.Conditions{Weather: t, Lit: make([]bool, w.Table.Lights())}
+	out := make([]sight.Seen, 0, 64)
+	l := w.Table.Lookout(2)
+	bm.ResetTimer()
+	for i := range bm.N {
+		d := float64(i%8000) + 300
+		l.X, l.Y = d*0.6, d*0.8
+		out = w.Table.Look(&l, charted, c, out[:0])
+	}
 }
