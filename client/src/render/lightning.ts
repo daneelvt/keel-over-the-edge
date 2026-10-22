@@ -437,3 +437,39 @@ export class Lightning {
     return n;
   }
 }
+
+/**
+ * A flash of the page's own, as the sandbox makes one: the nearest heaped
+ * cloud of the cloud records given (or, with none, a squall's base a
+ * kilometre north) striking the sea at its centre seconds after tick, with
+ * a flash's mean strokes.
+ */
+export function flashNear(
+  heaped: Float64Array,
+  east: number,
+  north: number,
+  tick: number,
+  seconds: number,
+): FlashSeen {
+  const C = RECORDS.cloud;
+  let best = -1;
+  let d = Number.POSITIVE_INFINITY;
+  for (let o = 0; o + SIZES.cloud <= heaped.length; o += SIZES.cloud) {
+    const away = Math.hypot((heaped[o + C.east] ?? 0) - east, (heaped[o + C.north] ?? 0) - north);
+    if (away < d) {
+      best = o;
+      d = away;
+    }
+  }
+  return {
+    slot: -1,
+    kind: -1,
+    seed: (tick * 2654435761) >>> 0,
+    tick: tick + seconds * 30,
+    east: best < 0 ? east : (heaped[best + C.east] ?? east),
+    north: best < 0 ? north + 1000 : (heaped[best + C.north] ?? north),
+    sea: true,
+    base: best < 0 ? 350 : (heaped[best + C.base] ?? 350),
+    strokes: [0, 0.06, 0.12, 0.2],
+  };
+}

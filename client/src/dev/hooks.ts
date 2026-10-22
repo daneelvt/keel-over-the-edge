@@ -75,6 +75,8 @@ import { type RecordValues, spellOf, steer, toHex } from '../predict/golden';
 import { RECORDS, SEA } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
+import { airLook } from '../render/fog';
+import { flashNear } from '../render/lightning';
 import {
   checkChartScene,
   checkScene,
@@ -1265,6 +1267,104 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         far: world.stage.camera.far,
         drawn: w.clouds.mesh.visible && w.clouds.count > 0,
       };
+    },
+    /**
+     * The air at the camera as last drawn: the visibility there, m, its
+     * word, the extinction by what makes it (clear air, fog, rain, mist),
+     * the sources of extinction the GPU sums, the overcast the fog and rain
+     * overhead make, and the sea's horizon's reach.
+     */
+    visibility() {
+      const source = world.ocean.source;
+      const physics = source?.weather === true ? source.physics : null;
+      const o = world.origin.world;
+      const cam = world.stage.camera.position;
+      const east = cam.x + o.x;
+      const north = -cam.z + o.y;
+      if (physics === null) {
+        return null;
+      }
+      physics.windDrawAt(world.ticks);
+      const v = physics.visibilityAt(east, north);
+      const air = [...physics.airAt(east, north, Math.max(cam.y, 0.5))];
+      return {
+        visibility: v,
+        word: ['good', 'moderate', 'poor', 'very poor'][physics.visibilityWord(v)] ?? 'good',
+        air,
+        sources: airLook.count.value as number,
+        fogOvercast: world.weather.fogOvercast,
+        overcast: world.weather.overcast,
+        cameraRange: world.sky.cameraRange,
+        hazeFar: look.hazeFar.value as number,
+      };
+    },
+    /** The optical depth along a line, as the module gives it at the frame's time. */
+    opticalDepth(
+      x0: number,
+      y0: number,
+      h0: number,
+      x1: number,
+      y1: number,
+      h1: number,
+    ): number | null {
+      const source = world.ocean.source;
+      const physics = source?.weather === true ? source.physics : null;
+      if (physics === null) {
+        return null;
+      }
+      physics.windDrawAt(world.ticks);
+      return physics.opticalDepth(x0, y0, h0, x1, y1, h1);
+    },
+    /** Holds a fog bank on the boat of a core of so many metres of visibility, or none with null. */
+    setFog(core: number | null): void {
+      offline().holdFog(core);
+    },
+    /**
+     * The flashes of the last minute as the page holds them, the pulses it
+     * drew, world seconds, the bolts' segments drawn and how brightly a
+     * flash lights its cloud now.
+     */
+    flashes() {
+      const l = world.lightning;
+      return {
+        flashes: l.flashes.map((f) => ({ ...f, strokes: [...f.strokes] })),
+        pulses: [...l.pulses],
+        segments: l.segments,
+        cloud: l.cloud.strength,
+        seconds: world.ticks / 30,
+      };
+    },
+    /** The nearest heaped cloud flashes to the sea seconds from now: the sandbox's own flash. */
+    flashIn(seconds: number): void {
+      const p = world.pose;
+      world.lightning.force(flashNear(world.weather.heaped, p.east, p.north, world.ticks, seconds));
+    },
+    /**
+     * The lights near as the page holds them, each with its fog signal: its
+     * notation, how far and where it lies from the boat, its blasts' delay,
+     * s, and whether the visibility at it is under the catalog's sounding.
+     */
+    fogSignals() {
+      const source = world.ocean.source;
+      const physics = source?.weather === true ? source.physics : null;
+      physics?.windDrawAt(world.ticks);
+      const p = world.pose;
+      const rule = catalog.world.lights.fogSignal;
+      return [...world.lighthouses.lights.values()].map((l) => {
+        const d = Math.hypot(l.east - p.east, l.north - p.north);
+        const v = physics?.visibilityAt(l.east, l.north) ?? Number.POSITIVE_INFINITY;
+        return {
+          light: l.number,
+          signal: l.fogSignal,
+          notation: catalog.world.lights.fogSignals[l.fogSignal]?.notation ?? '',
+          distance: d,
+          bearing: ((Math.atan2(l.east - p.east, l.north - p.north) * 180) / Math.PI + 360) % 360,
+          delay: d / catalog.weather.thunder.speed,
+          visibility: v,
+          sounding: v < rule.sounds * 1852,
+          heard: d <= rule.heard * 1852,
+        };
+      });
     },
     /** Where the sun is on the canvas, CSS pixels, and whether it is in front of the camera. */
     sunOnScreen(): { x: number; y: number; front: boolean } | null {

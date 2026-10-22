@@ -63,12 +63,15 @@ import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
 import { regimeIndex } from '../predict/weather';
 import { ROAM_HIGH } from '../render/freecam';
+import { flashNear } from '../render/lightning';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
   commonestWeather,
   FRONT,
+  flashFromQuery,
+  fogFromQuery,
   frontFromQuery,
   rainFromQuery,
   START,
@@ -197,6 +200,25 @@ async function start(): Promise<void> {
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
     // ?rain=mm: rain held at the camera.
     world.weather.heldRain = rainFromQuery(query);
+    // ?fog=m: a fog bank of that core held on the boat; ?flash=s: the
+    // nearest heaped cloud flashes to the sea that many seconds in.
+    const fog = fogFromQuery(query);
+    if (fog !== null) {
+      sandbox.holdFog(fog);
+    }
+    const flash = flashFromQuery(query);
+    if (flash !== null) {
+      const s = sandbox.physics.records.state;
+      world.lightning.force(
+        flashNear(
+          world.weather.heaped,
+          s[RECORDS.state.x] ?? 0,
+          s[RECORDS.state.y] ?? 0,
+          world.ticks,
+          flash,
+        ),
+      );
+    }
     chooseSky(world, query);
     // The world's chart, read once its land is handed, so the sea starts as
     // it does without one.

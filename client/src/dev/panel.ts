@@ -318,6 +318,79 @@ export function skyLines(
   ];
 }
 
+/** The air's lines for the boat at p, from the sandbox's module and the world's lights and flashes. */
+function airPanel(world: SeaScene, sandbox: Sandbox, p: { east: number; north: number }): string[] {
+  const physics = sandbox.physics;
+  physics.windDrawAt(world.ticks);
+  const v = physics.visibilityAt(p.east, p.north);
+  const air = [...physics.airAt(p.east, p.north, 2)];
+  const rule = catalog.world.lights.fogSignal;
+  const speed = catalog.weather.thunder.speed;
+  const signals = [...world.lighthouses.lights.values()]
+    .map((l) => ({
+      notation: catalog.world.lights.fogSignals[l.fogSignal]?.notation ?? '',
+      d: Math.hypot(l.east - p.east, l.north - p.north),
+      bearing: ((Math.atan2(l.east - p.east, l.north - p.north) * 180) / Math.PI + 360) % 360,
+      sounding: physics.visibilityAt(l.east, l.north) < rule.sounds * 1852,
+    }))
+    .filter((s) => s.sounding && s.d <= rule.heard * 1852)
+    .sort((a, b) => a.d - b.d)
+    .map((s) => ({ notation: s.notation, bearing: s.bearing, delay: s.d / speed }));
+  const last = world.lightning.flashes[world.lightning.flashes.length - 1];
+  const seconds = world.ticks / 30;
+  const flash =
+    last === undefined || last.tick / 30 > seconds
+      ? null
+      : {
+          away: Math.hypot(last.east - p.east, last.north - p.north),
+          delay: Math.hypot(last.east - p.east, last.north - p.north) / speed,
+          sea: last.sea,
+          ago: seconds - last.tick / 30,
+        };
+  return airLines(v, physics.visibilityWord(v), air, signals, flash);
+}
+
+/** The visibility's words, by the module's numbers. */
+const VISIBILITY_WORDS = ['good', 'moderate', 'poor', 'very poor'];
+
+/**
+ * The air at the boat, as lines: the visibility and its word and what
+ * makes it, each extinction's share; the fog signals heard, nearest first
+ * (each its pattern, bearing and delay); and the last flash, how far off
+ * and its thunder's delay.
+ */
+export function airLines(
+  visibility: number,
+  word: number,
+  air: readonly number[],
+  signals: readonly { notation: string; bearing: number; delay: number }[],
+  flash: { away: number; delay: number; sea: boolean; ago: number } | null,
+): string[] {
+  const total = air.reduce((a, b) => a + b, 0);
+  const share = (k: number): string =>
+    `${Math.round((100 * (air[k] ?? 0)) / Math.max(total, 1e-12))}%`;
+  const v = Number.isFinite(visibility) ? `${Math.round(visibility)} m` : 'unlimited';
+  return [
+    `air     visibility ${v}, ${VISIBILITY_WORDS[word] ?? 'good'}: clear ${share(0)}, fog ${share(1)}, rain ${share(2)}, mist ${share(3)}`,
+    `signals ${
+      signals.length === 0
+        ? 'none heard'
+        : signals
+            .slice(0, 3)
+            .map(
+              (s) =>
+                `${s.notation} from ${s.bearing.toFixed(0).padStart(3, '0')}°, ${s.delay.toFixed(1)} s`,
+            )
+            .join('; ')
+    }`,
+    `flash   ${
+      flash === null
+        ? 'none in the last minute'
+        : `${(flash.away / 1000).toFixed(1)} km ${flash.sea ? 'to the sea' : 'in the cloud'}, ${flash.ago.toFixed(0)} s ago, thunder after ${flash.delay.toFixed(1)} s`
+    }`,
+  ];
+}
+
 /** The sea under the boat, as lines: its height, its peak, and the waves summed. */
 export function seaLines(hs: number, peak: number, waves: number, blended: boolean): string {
   if (waves === 0) {
@@ -812,6 +885,7 @@ export function openPanel(
           away: Math.hypot(c.east - p.east, c.north - p.north),
         })),
       ),
+      ...airPanel(world, sandbox, p),
       pilotLine(game.pilot, sandbox.states.current, sandbox.out),
       ...edgeLines(
         p.east,
