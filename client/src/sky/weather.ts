@@ -4,16 +4,18 @@
 // clouds and the fair-weather cumulus, laid out five times a second; the
 // sheets, written once a second; the rain under the clouds and at the
 // boat; and what they do to the light. Overcast at the camera is the most
-// of 0.85 of the middle sheet, the low sheet, and under a heaped cloud its
-// cloud strength, fading from half its reach to a little beyond it; it is
-// eased over ten seconds, as the eye takes in a change of light.
+// of 0.85 of the middle sheet, the low sheet, under a heaped cloud its
+// cloud strength, fading from half its reach to a little beyond it, and
+// in fog the share of the sky's light the fog and rain overhead take,
+// 1 − e^(−τ) for their optical depth straight up; it is eased over ten
+// seconds, as the eye takes in a change of light.
 
 import type { Scene, Vector3 } from 'three';
 import type { WeatherClouds } from '../catalog/types.gen';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
 import { Curtains, Streaks } from '../render/rain';
-import { Clouds, CUMULUS_REACH, HAZE_HALF } from './clouds';
+import { Clouds, CUMULUS_REACH } from './clouds';
 import { sheets } from './sheets';
 
 /** How often the clouds are laid out again, s, and how often the rain at the camera is asked. */
@@ -28,6 +30,9 @@ const OVERCAST_EASE = 10;
 
 /** The rain at the camera eases over this many seconds: a curtain is crossed, not switched. */
 const RAIN_EASE = 1.5;
+
+/** How far up the fog's and the rain's overcast is taken, m: above any bank's top and any rain's cloud base. */
+const OVERHEAD = 2000;
 
 /** What a frame tells the sky's weather. */
 export interface SkyWeatherFrame {
@@ -61,6 +66,8 @@ export class SkyWeather {
   /** How overcast it is at the camera, 0 to 1, eased; and what the sky shows now. */
   overcast = 0;
   overcastNow = 0;
+  /** The share of the sky's light the fog and rain overhead take, 0 to 1. */
+  fogOvercast = 0;
   /** Whether any of it is drawn: the tests turn it off. */
   shown = true;
   /** The islands' caps held: by number, each its centre east and north and its width, m. */
@@ -122,6 +129,7 @@ export class SkyWeather {
       this.#heaped = new Float64Array(0);
       this.rainNow = this.heldRain ?? 0;
       this.overcastNow = 0;
+      this.fogOvercast = 0;
     } else {
       const since = f.seconds - this.#laid;
       if (since >= LAY_EVERY || since < 0) {
@@ -141,8 +149,26 @@ export class SkyWeather {
         const s = physics.sheetAt(f.cameraEast, f.cameraNorth);
         const middle = s[RECORDS.sheets.middle] ?? 0;
         const low = s[RECORDS.sheets.low] ?? 0;
+        const h = Math.max(f.camera.y, 0.5);
+        const clear = physics.airAt(f.cameraEast, f.cameraNorth, h)[0] ?? 0;
+        const up =
+          physics.opticalDepth(
+            f.cameraEast,
+            f.cameraNorth,
+            h,
+            f.cameraEast,
+            f.cameraNorth,
+            h + OVERHEAD,
+          ) -
+          clear * OVERHEAD;
+        this.fogOvercast = 1 - Math.exp(-Math.max(up, 0));
         this.overcastNow = Math.min(
-          Math.max(0.85 * middle, low, this.#underHeaped(f.cameraEast, f.cameraNorth)),
+          Math.max(
+            0.85 * middle,
+            low,
+            this.#underHeaped(f.cameraEast, f.cameraNorth),
+            this.fogOvercast,
+          ),
           1,
         );
       }
@@ -168,11 +194,6 @@ export class SkyWeather {
       f.windNorth,
       f.dt,
     );
-  }
-
-  /** The clouds' haze in rain: shortened as the visual range is, by share of the clear air's. */
-  hazeIn(share: number): void {
-    this.clouds.hazeScale.value = (HAZE_HALF / Math.LN2) * Math.min(Math.max(share, 0.05), 1);
   }
 
   /** How overcast a heaped cloud makes it at (east, north): its cloud strength under it, fading beyond its reach. */

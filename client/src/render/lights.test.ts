@@ -4,15 +4,28 @@ import { Vector3 } from 'three';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { lightOn } from '../lights/character';
-import { glowStrength, Lighthouses, lanternSeen, lightLit, towerGeometry } from './lights';
+import {
+  glowStrength,
+  Lighthouses,
+  type LightsAir,
+  lanternSeen,
+  lightLit,
+  towerGeometry,
+} from './lights';
 import { horizonDistance } from './materials';
 
 const DEG = Math.PI / 180;
 const lighthouse = catalog.world.places.kinds.findIndex((k) => k.site === 'light');
 
 /** A frame at world time t, the camera 3 m up at the origin, the sun below the horizon or above. */
-function frame(t: number, sun: number, camera = new Vector3(0, 3, 0)) {
+function frame(
+  t: number,
+  sun: number,
+  camera = new Vector3(0, 3, 0),
+  air: LightsAir | null = null,
+) {
   return {
+    air,
     origin: { x: 0, y: 0 },
     camera,
     worldUs: t,
@@ -149,6 +162,67 @@ describe('a light', () => {
       return (l.shows.array as Float32Array)[3] ?? 0;
     };
     expect(strength(1000)).toBeGreaterThan(strength(4000));
+  });
+
+  test('in fog is lit by day and seen only close; by night further; its loom vanishes', () => {
+    // Fog of a 100 m visibility everywhere, over the clear air.
+    const sigma = 3.912 / 100;
+    const clear = 3.912 / (catalog.world.lights.clearAir * 1852);
+    const fog: LightsAir = {
+      depth: (x0, y0, h0, x1, y1, h1) => (sigma + clear) * Math.hypot(x1 - x0, y1 - y0, h1 - h0),
+      poor: () => true,
+      fog: () => sigma,
+      extinction: () => sigma + clear,
+    };
+    const l = new Lighthouses(catalog.world.lights, lighthouse);
+    const glow = (north: number, sun: number, air: LightsAir | null): number => {
+      l.setLights(
+        [
+          {
+            number: 1,
+            east: 0,
+            north,
+            focal: 30,
+            character: 3,
+            phase: 0,
+            range: 8334,
+            fogSignal: 1,
+          },
+        ],
+        'all',
+      );
+      // Mid-flash.
+      l.frame(frame(1_000_000, sun, new Vector3(0, 3, 0), air));
+      return l.count > 0 ? ((l.shows.array as Float32Array)[3] ?? 0) : 0;
+    };
+    // By day in clear air, dark; in fog, lit, and over its threshold
+    // (a glow of 0.2) only close.
+    expect(glow(60, 0.5, null)).toBe(0);
+    expect(glow(60, 0.5, fog)).toBeGreaterThanOrEqual(0.2);
+    expect(glow(200, 0.5, fog)).toBeLessThan(0.2);
+    // By night in fog, seen further than by day.
+    expect(glow(200, -0.2, fog)).toBeGreaterThanOrEqual(0.2);
+    expect(glow(600, -0.2, fog)).toBeLessThan(0.2);
+    // A loom 3 km off shows in clear air by night, and not in fog.
+    l.setLights(
+      [
+        {
+          number: 2,
+          east: 3000,
+          north: 0,
+          focal: 30,
+          character: 3,
+          phase: 0,
+          range: 8334,
+          fogSignal: 1,
+        },
+      ],
+      'all',
+    );
+    l.frame(frame(1_000_000, -0.2));
+    expect(l.count).toBe(1);
+    l.frame({ ...frame(1_000_000, -0.2, new Vector3(0, 3, 0), fog), now: 1e9 });
+    expect(l.count).toBe(0);
   });
 
   test('keeps the lighthouses handed, and drops lights as told', () => {

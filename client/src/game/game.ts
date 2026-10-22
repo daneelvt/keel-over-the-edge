@@ -250,9 +250,11 @@ export class Game implements PilotActions {
     if (motion !== undefined) {
       this.world.camera.reducedMotion = motion.matches;
       this.world.freeCam.reducedMotion = motion.matches;
+      this.world.lightning.reducedMotion = motion.matches;
       motion.addEventListener('change', () => {
         this.world.camera.reducedMotion = motion.matches;
         this.world.freeCam.reducedMotion = motion.matches;
+        this.world.lightning.reducedMotion = motion.matches;
       });
     }
   }

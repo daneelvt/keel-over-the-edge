@@ -10,12 +10,18 @@
 // lens's beam sweeps past, and near it two faint beams turn with the flash;
 // an occulting or isophase light is cut sharply by its screen. The light is
 // lit while the sun is below the horizon at the lighthouse, coming on
-// through the sun's last degree, as the lanterns are at a boat.
+// through the sun's last degree, as the lanterns are at a boat, and while
+// the visibility at it is poor or worse, as the rules light it.
 //
-// How bright a light is follows Allard's law, E = I T^d / d²: its intensity
-// is the one that falls to the threshold at its nominal range in the clear
-// air, and the glow drawn grows with E over the threshold; the mist band at
-// the edge dims it by the mist along the ray. A light whose lantern is below
+// How bright a light is follows Allard's law, E = I e^(−τ) / d², τ the
+// optical depth along the line from the eye, the clear air's, the fog's,
+// the rain's and the mist band's, as the physics module gives it: its
+// intensity is the one that falls to night's threshold at its nominal
+// range in the clear air, and the glow drawn grows with E over the
+// threshold, night's or by day's across the sun's last degree. So a light
+// in fog is seen close by night and barely by day, and its loom, dimmed by
+// the air as far as the horizon, vanishes in fog. A lit light in a bank
+// near the eye lights the fog about it (render/fog.ts). A light whose lantern is below
 // the horizon, further than the eye's horizon and the lantern's together on
 // the dome, shows as its loom: a glow on the horizon at the light's true
 // bearing, flashing its character, as a loom may (IALA Dictionary: "the
@@ -34,7 +40,7 @@ import {
   InstancedInterleavedBuffer,
   InstancedMesh,
   Matrix4,
-  type Vector3,
+  Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
@@ -57,20 +63,28 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { WorldLights } from '../catalog/types.gen';
-import { type MistFrame, type MistParams, mistAlong } from '../edge/mist';
-import {
-  type Character,
-  illuminance,
-  intensity,
-  level,
-  sweep,
-  transmissivity,
-} from '../lights/character';
+import type { MistParams } from '../edge/mist';
+import { type Character, level, sweep } from '../lights/character';
 import type { LightSeen, PlaceSeen } from '../net/messages';
+import { HALO_REACH, setHalo } from './fog';
 import { basicMaterial, bendScene, horizonDistance, litMaterial } from './materials';
 import { toLinear } from './sky';
 
 const DEG = Math.PI / 180;
+
+/** Koschmieder's constant: the optical depth at a contrast of 2%. */
+const KOSCHMIEDER = 3.912;
+
+/** How brightly a light lights the fog about it, by the fog's extinction at it: a look value. */
+const HALO_STRENGTH = 40;
+
+/** The halo's light's place, scene axes. */
+const haloPlace = new Vector3();
+
+/** A display colour as linear values. */
+function toLinearColour(c: readonly number[]): number[] {
+  return c.map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+}
 
 /** The most lights, looms and beams drawn at once. */
 export const LIGHT_CAPACITY = 128;
@@ -174,11 +188,27 @@ function display(hex: string): [number, number, number] {
 
 /** A light as the page keeps it. */
 interface Held extends LightSeen {
-  intensity: number;
+  /** ln of its intensity, cd. */
+  lnI: number;
   character: number;
   /** The sun's height at it, rad, and when it was last asked, ms. */
   sun: number;
   asked: number;
+  /** Whether the visibility at it is poor or worse, and the fog's extinction at its lantern, 1/m: asked with the sun. */
+  fogged: boolean;
+  fog: number;
+}
+
+/** The air the lights are seen through, as the physics module gives it from the weather drawn. */
+export interface LightsAir {
+  /** The optical depth along the line from (x0, y0), h0 m up, to (x1, y1), h1 m up. */
+  depth(x0: number, y0: number, h0: number, x1: number, y1: number, h1: number): number;
+  /** Whether the visibility at (east, north) is poor or worse. */
+  poor(east: number, north: number): boolean;
+  /** The fog's extinction at (east, north), h m up, 1/m. */
+  fog(east: number, north: number, h: number): number;
+  /** The air's whole extinction at (east, north), h m up, 1/m. */
+  extinction(east: number, north: number, h: number): number;
 }
 
 /** What a frame needs to draw the lights. */
@@ -196,6 +226,8 @@ export interface LightsFrame {
   /** The mist band's numbers, and where the dome bends about. */
   mist: MistParams;
   dome: [number, number];
+  /** The air the lights are seen through, or null with no weather: the clear air's alone. */
+  air: LightsAir | null;
   /** The camera's field of view, degrees, and the canvas's height, CSS pixels. */
   fovY: number;
   height: number;
@@ -220,7 +252,10 @@ export class Lighthouses {
 
   readonly #cat: WorldLights;
   readonly #lighthouse: number;
-  readonly #air: number;
+  /** The clear air's extinction, 1/m, and ln of night's and the day's thresholds. */
+  readonly #clear: number;
+  readonly #lnNight: number;
+  readonly #lnDay: number;
   readonly #m = new Matrix4();
   readonly #colours: Record<string, readonly number[]>;
 
@@ -228,7 +263,9 @@ export class Lighthouses {
   constructor(cat: WorldLights, lighthouse: number) {
     this.#cat = cat;
     this.#lighthouse = lighthouse;
-    this.#air = transmissivity(cat.clearAir);
+    this.#clear = KOSCHMIEDER / (cat.clearAir * 1852);
+    this.#lnNight = Math.log(cat.threshold);
+    this.#lnDay = Math.log(cat.dayThreshold);
     this.#colours = {
       white: display(cat.colours.white),
       red: display(cat.colours.red),
@@ -388,10 +425,14 @@ export class Lighthouses {
       const range = l.range;
       this.lights.set(l.number, {
         ...l,
-        intensity: intensity(range, this.#air, this.#cat.threshold),
+        // Seen at its nominal range in the clear air at night: ln I = ln E
+        // + 2 ln R + σ R.
+        lnI: this.#lnNight + 2 * Math.log(range) + this.#clear * range,
         character: ch === undefined ? 0 : l.character,
         sun: 0,
         asked: Number.NEGATIVE_INFINITY,
+        fogged: false,
+        fog: 0,
       });
     }
   }
@@ -435,7 +476,15 @@ export class Lighthouses {
     // The lights.
     this.count = 0;
     const look = this.#cat.look;
-    const frame: MistFrame = { origin: [o.x, o.y], dome: f.dome };
+    const air = f.air;
+    let halo: {
+      d: number;
+      x: number;
+      y: number;
+      z: number;
+      strength: number;
+      colour: readonly number[];
+    } | null = null;
     for (const l of this.lights.values()) {
       if (!f.on || this.count >= LIGHT_CAPACITY - 2) {
         break;
@@ -444,8 +493,10 @@ export class Lighthouses {
         const h = f.sunAt(l.east, l.north);
         l.sun = h ?? 0;
         l.asked = f.now;
+        l.fogged = air?.poor(l.east, l.north) ?? false;
+        l.fog = air?.fog(l.east, l.north, l.focal) ?? 0;
       }
-      const lit = lightLit(l.sun);
+      const lit = Math.max(lightLit(l.sun), l.fogged ? 1 : 0);
       if (lit <= 0) {
         continue;
       }
@@ -454,17 +505,29 @@ export class Lighthouses {
       const dx = l.east - eyeE;
       const dy = l.north - eyeN;
       const d = Math.max(Math.hypot(dx, dy), 1);
-      const ratio = illuminance(l.intensity, d, this.#air) / this.#cat.threshold;
       const sx = l.east - o.x;
       const sz = -(l.north - o.y);
       const seen = lanternSeen(d, eyeH, l.focal);
       const colour = this.#colours[ch.colour] ?? WHITE;
-      let strength = glowStrength(ratio) * shown * lit;
+      // Night's threshold a degree below the horizon, the day's above it.
+      const day = Math.min(Math.max(l.sun / DEG + 1, 0), 1);
+      const lnThr = this.#lnNight + day * (this.#lnDay - this.#lnNight);
       if (seen) {
-        strength *= Math.exp(
-          -mistAlong([cam.x, cam.y, cam.z], [sx, l.focal, sz], frame, f.mist, 8),
-        );
+        const tau = air?.depth(eyeE, eyeN, eyeH, l.east, l.north, l.focal) ?? this.#clear * d;
+        const ratio = Math.exp(l.lnI - tau - 2 * Math.log(d) - lnThr);
+        const strength = glowStrength(ratio) * shown * lit;
         this.#add(sx, l.focal, sz, MODE.glow, colour, strength, 0, 0, 0);
+        // The nearest lit light in fog lights the fog about it.
+        if (l.fog > 0 && d < HALO_REACH && (halo === null || d < halo.d)) {
+          halo = {
+            d,
+            x: sx,
+            y: l.focal,
+            z: sz,
+            strength: HALO_STRENGTH * l.fog * shown * lit,
+            colour,
+          };
+        }
         // Two faint beams, turning with a flashing light's flash, seen near it.
         if (d < look.beams && (ch.class === 'Fl' || ch.class === 'LFl' || ch.class === 'Mo')) {
           const toEye = Math.atan2(-dx, -dy);
@@ -485,15 +548,46 @@ export class Lighthouses {
           }
         }
       } else {
-        // The loom: on the horizon at its true bearing, dimmed by the mist
-        // as far as the horizon.
+        // The loom: on the horizon at its true bearing, its light dimmed by
+        // the air as far as the horizon and by the clear air beyond, as
+        // "the diffused glow observed from a light below the horizon,
+        // due to atmospheric scattering" (Bowditch) is: in fog it vanishes.
         const reach = Math.min(horizonDistance(eyeH) * 0.97, d);
         const hx = cam.x + (dx / d) * reach;
         const hz = cam.z - (dy / d) * reach;
-        strength *=
-          look.loom * Math.exp(-mistAlong([cam.x, cam.y, cam.z], [hx, 1, hz], frame, f.mist, 8));
-        this.#add(hx, 2, hz, MODE.loom, colour, strength, 0, 0, 0);
+        // Beyond the horizon the light's way to it lies below the eye's
+        // line, over the sea: its extinction there, at the horizon, half
+        // way and at the light, by Simpson's rule.
+        const he = hx + o.x;
+        const hn = -hz + o.y;
+        const near = air?.depth(eyeE, eyeN, eyeH, he, hn, 1) ?? this.#clear * reach;
+        const beyond =
+          air === null
+            ? this.#clear
+            : (air.extinction(he, hn, 2) +
+                4 * air.extinction((he + l.east) / 2, (hn + l.north) / 2, l.focal / 2) +
+                air.extinction(l.east, l.north, l.focal)) /
+              6;
+        const tau = near + beyond * (d - reach);
+        const ratio = Math.exp(l.lnI - tau - 2 * Math.log(d) - lnThr);
+        this.#add(
+          hx,
+          2,
+          hz,
+          MODE.loom,
+          colour,
+          look.loom * glowStrength(ratio) * shown * lit,
+          0,
+          0,
+          0,
+        );
       }
+    }
+    if (halo === null) {
+      setHalo(null, 0);
+    } else {
+      haloPlace.set(halo.x, halo.y, halo.z);
+      setHalo(haloPlace, halo.strength, toLinearColour(halo.colour));
     }
     this.perPixel.value = (2 * Math.tan((f.fovY * DEG) / 2)) / Math.max(f.height, 1);
     this.glows.count = this.count;
@@ -508,7 +602,8 @@ export class Lighthouses {
     for (const l of this.lights.values()) {
       if (Math.abs(l.east - east) < 1 && Math.abs(l.north - north) < 1) {
         const ch = this.#cat.characters[l.character] as Character;
-        return lightLit(l.sun) * (0.35 + 0.65 * level(ch, l.phase, f.worldUs, this.#cat.look.rise));
+        const lit = Math.max(lightLit(l.sun), l.fogged ? 1 : 0);
+        return lit * (0.35 + 0.65 * level(ch, l.phase, f.worldUs, this.#cat.look.rise));
       }
     }
     return 0;

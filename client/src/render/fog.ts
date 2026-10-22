@@ -57,6 +57,9 @@ import { DOME_RADIUS } from './materials';
 /** The most sources the GPU sums: the module's fog banks and rain. */
 export const AIR_SOURCES = 10;
 
+/** How far from the camera the module's sources are asked for, m: the camera's far plane. */
+export const AIR_REACH = 8000;
+
 /** A source with no top: above any ray. */
 const NO_TOP = 1e9;
 
@@ -294,6 +297,22 @@ export function setAirSources(records: Float64Array, fields: Record<string, numb
     (airLook.top.array[i] as Vector4).set(Math.min(v('top'), NO_TOP), 0, 0, 0);
   }
   airLook.count.value = n;
+}
+
+/**
+ * Adds rain held at the camera, as a developer holds it, after the
+ * module's sources: a source of extinction sigma, 1/m, the same
+ * everywhere below top, m.
+ */
+export function heldRain(sigma: number, top: number): void {
+  const i = airLook.count.value as number;
+  if (i >= AIR_SOURCES || !(sigma > 0)) {
+    return;
+  }
+  (airLook.where.array[i] as Vector4).set(0, 0, 0, 1);
+  (airLook.shape.array[i] as Vector4).set(0, 0, 0, sigma);
+  (airLook.top.array[i] as Vector4).set(top, 0, 0, 0);
+  airLook.count.value = i + 1;
 }
 
 /** Places the halo's light at a scene point, of a strength (0 for none). */

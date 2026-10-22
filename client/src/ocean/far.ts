@@ -11,7 +11,7 @@
 import { BufferAttribute, BufferGeometry, Mesh } from 'three';
 import { cos, positionGeometry, sin, uniform, varying, vec2, vec3 } from 'three/tsl';
 import type { Node, UniformNode } from 'three/webgpu';
-import { mistToSea } from '../edge/mist';
+import { depthToSea } from '../render/fog';
 import { horizonDistance } from '../render/materials';
 import { FIELD_RADIUS } from './hex';
 import { hulls } from './hulls';
@@ -98,7 +98,7 @@ export class FarSea {
     this.period = varying(periodAt(band)(p));
     this.area = varying(seaAreaAt(band)(p));
     this.nearHull = varying(hulls.near(p, 30));
-    this.mist = mistToSea(p);
+    this.mist = depthToSea(p);
     this.mesh = new Mesh(farGeometry());
     this.mesh.name = 'far sea';
     this.mesh.frustumCulled = false;
