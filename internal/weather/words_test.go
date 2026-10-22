@@ -62,12 +62,14 @@ const kn = knotMS
 func rad(d float64) float64 { return d * math.Pi / 180 }
 
 // ring is a place's centre and eight points about it: the mean winds from
-// lo to hi knots from a direction, gusts g knots over, in clear air.
+// lo to hi knots from a direction, gusts g knots over, in clear air. The
+// products are rounded alone, as Go on amd64 rounds them, not fused into
+// the sum as on arm64: words.json is the same from either.
 func ring(from, lo, hi, g float64) []PlaceSample {
 	var out []PlaceSample
 	for i := range 9 {
-		m := (lo + (hi-lo)*float64(i)/8) * kn
-		out = append(out, PlaceSample{Mean: m, From: rad(from + float64(i%3-1)*4), Gust: m + g*kn, Visibility: 9000})
+		m := float64((lo + (hi-lo)*float64(i)/8) * kn)
+		out = append(out, PlaceSample{Mean: m, From: rad(from + float64(i%3-1)*4), Gust: m + float64(g*kn), Visibility: 9000})
 	}
 	return out
 }
