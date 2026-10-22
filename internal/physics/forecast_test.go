@@ -226,6 +226,44 @@ func TestForecastAllocatesNothing(t *testing.T) {
 	}
 }
 
+// benchInput is a forecast's input: a stormy spell with a front coming,
+// and the systems' records about the issue.
+func benchInput(b *testing.B) (*WeatherPrepared, *ForecastInput) {
+	p, kinds := testForecast(b)
+	const issue = 740_016_000
+	return p, &ForecastInput{Issue: issue, Spells: []Spell{
+		spellOfRegime(b, p, "stormy", 3, 250, issue-hourOfTicks, 3*hourOfTicks),
+		frontSpell(b, p, issue+40*minuteTicks),
+	}, Records: forecastRecords(kinds, issue)}
+}
+
+func BenchmarkMakeForecast(b *testing.B) {
+	p, in := benchInput(b)
+	f := new(Forecast)
+	for b.Loop() {
+		MakeForecast(p, in, f)
+	}
+	b.ReportMetric(float64(f.Head.NSystems), "systems")
+}
+
+// Its gale scan, every point of the grid taken for water.
+func BenchmarkGaleScan(b *testing.B) {
+	p, in := benchInput(b)
+	f := new(Forecast)
+	MakeForecast(p, in, f)
+	w := &Weather{Prepared: p}
+	var at WeatherTick
+	water := make([]uint8, MaxGaleSide*MaxGaleSide)
+	for i := range water {
+		water[i] = 1
+	}
+	on := make([]uint8, len(water))
+	var g Gales
+	for b.Loop() {
+		GaleScan(p, f, w, &at, water, on, &g)
+	}
+}
+
 // The synoptic wind leaves the squalls and showers out: with only a squall
 // on the water its wind there is the spell's alone.
 func TestSynopticLeavesOutTheDomes(t *testing.T) {

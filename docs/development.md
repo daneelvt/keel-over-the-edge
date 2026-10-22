@@ -1081,12 +1081,13 @@ Good.").
   reading a second at the boat, its set hand at its own reading of a
   quarter of an hour before, and beneath it its words, "1009 hPa, falling
   quickly". After a load its past is the truth's at its place.
-- **The harbourmaster's board**: in a port's harbour (a town whose kind
-  stands square), a button opens it: the gale warning in force, the general
-  situation, the next 90 minutes and now. While a warning is in force, its
-  flagstaff hoists the storm cone, point up for a gale first blowing from
-  west-north-west by the north to east-south-east, down for the rest, as
-  FitzRoy's cones were.
+- **The harbourmaster's board**: in the main town's harbour or a port's (as
+  the harbour's sounds find it; not a fishing village's), a button opens
+  it, named by the nearest charted harbour: the gale warning in force, the
+  general situation, the next 90 minutes and now. While a warning is in
+  force, the harbourmaster's house's flagstaff hoists the storm cone, point
+  up for a gale first blowing from west-north-west by the north to
+  east-south-east, down for the rest, as FitzRoy's cones were.
 - **The pocket chart** shows the weather now; its switch is kept.
 
 ### Trying it
