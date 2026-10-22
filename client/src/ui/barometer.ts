@@ -44,10 +44,11 @@ export class Barometer {
   now = Number.NaN;
   set = Number.NaN;
   /**
-   * A held change, hPa a quarter of an hour, from a tick, added to every
-   * reading: the sandbox's, to show the words at each rate.
+   * A held change, hPa a quarter of an hour, from a tick and what was held
+   * then, added to every reading: the sandbox's, to show the words at
+   * each rate.
    */
-  held: { rate: number; from: number } | null = null;
+  held: { rate: number; from: number; base: number } | null = null;
   readonly look: BarometerLook;
   /** The readings kept, a second apart, oldest first: ticks and hPa. */
   readonly #ticks: number[] = [];
@@ -58,9 +59,19 @@ export class Barometer {
     this.look = look;
   }
 
+  /**
+   * Holds a change, hPa a quarter of an hour, from a tick on, carried on
+   * from what was held before so the readings do not jump; null lets it go.
+   */
+  hold(rate: number | null, tick: number): void {
+    this.held = rate === null ? null : { rate, from: tick, base: this.#heldAt(tick) };
+  }
+
   /** A held change added to a reading at a tick. */
   #heldAt(tick: number): number {
-    return this.held === null ? 0 : (this.held.rate * (tick - this.held.from)) / (15 * MINUTE);
+    return this.held === null
+      ? 0
+      : this.held.base + (this.held.rate * (tick - this.held.from)) / (15 * MINUTE);
   }
 
   /**

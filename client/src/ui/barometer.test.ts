@@ -44,7 +44,7 @@ describe('the barometer', () => {
 
   test('a held change is added to every reading, and its words follow', () => {
     const b = new Barometer(LOOK);
-    b.held = { rate: -7, from: 0 };
+    b.hold(-7, 0);
     const none = () => null;
     for (let t = 0; t <= 15 * MINUTE; t += SECOND) {
       b.update(t, () => 1000, none);
@@ -52,6 +52,10 @@ describe('the barometer', () => {
     expect(b.now).toBeCloseTo(993, 9);
     expect(b.set).toBe(1000);
     expect(b.words.value).toBe('993 hPa, falling very rapidly');
+    // Another rate carries on from what was held.
+    b.hold(3, 15 * MINUTE);
+    b.update(15 * MINUTE + SECOND, () => 1000, none);
+    expect(b.now).toBeCloseTo(993 + 3 / 900, 9);
   });
 
   test('after a load its past is the truth’s, and its words are whole at once', () => {

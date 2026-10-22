@@ -85,13 +85,13 @@ export function fogFromQuery(query: URLSearchParams): number | null {
   return Number.isFinite(m) && m > 0 ? m : null;
 }
 
-/** Reads ?flash=s: the nearest heaped cloud flashes to the sea that many seconds in, or null. */
-/** ?gale=minutes: a storm to bring a gale to the boat that many minutes on; null for none. */
+/** Reads ?gale=minutes: a storm to bring a gale to the boat that many minutes on; null for none. */
 export function galeFromQuery(query: URLSearchParams): number | null {
   const v = Number.parseFloat(query.get('gale') ?? '');
   return Number.isFinite(v) && v >= 0 ? v : null;
 }
 
+/** Reads ?flash=s: the nearest heaped cloud flashes to the sea that many seconds in, or null. */
 export function flashFromQuery(query: URLSearchParams): number | null {
   const raw = query.get('flash');
   if (raw === null) {
@@ -485,7 +485,15 @@ export class Sandbox implements BoatDriver {
       SPELL_TICKS,
     );
     base[RECORDS.spell.pressure] = Math.round(100 * (c.regimes[regime]?.pressure[0] ?? 1000));
-    const record = placedRecord(c, low, east, north, now, now + Math.round(minutes * 60 * 30), base);
+    const record = placedRecord(
+      c,
+      low,
+      east,
+      north,
+      now,
+      now + Math.round(minutes * 60 * 30),
+      base,
+    );
     this.#pending = null;
     this.#set = null;
     this.#made = base;

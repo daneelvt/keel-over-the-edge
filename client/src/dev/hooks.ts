@@ -174,6 +174,24 @@ async function readTarget(
   return out;
 }
 
+/** How many of a canvas's pixels are painted, of every fourth row and column. */
+function inkedOf(canvas: HTMLCanvasElement): number {
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) {
+    return 0;
+  }
+  const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  let n = 0;
+  for (let y = 0; y < canvas.height; y += 4) {
+    for (let x = 0; x < canvas.width; x += 4) {
+      if ((d[(y * canvas.width + x) * 4 + 3] ?? 0) > 0) {
+        n++;
+      }
+    }
+  }
+  return n;
+}
+
 /** Solves a 3 × 3 system, row-major, by Cramer's rule. */
 function solve3(a: number[], b: number[]): [number, number, number] {
   const det = (m: number[]): number => {
@@ -214,7 +232,12 @@ function solve3(a: number[], b: number[]): [number, number, number] {
 export type Sailing = (
   | { sandbox: Sandbox; online?: undefined; predictor?: undefined }
   | { sandbox?: undefined; online: Online; predictor: Predictor }
-) & { chart?: ChartParts; forecast?: SandboxForecast; barometer?: Barometer };
+) & {
+  chart?: ChartParts;
+  forecast?: SandboxForecast;
+  barometer?: Barometer;
+  readBarometer?: () => void;
+};
 
 /** Puts the hooks on globalThis.keel. */
 export function exposeHooks(world: SeaScene, game: Game, sailing: Sailing): void {
@@ -2861,6 +2884,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       sailing.forecast?.again();
     },
 
+    /** Ticks the sandbox's forecast and reads the barometer now, as their timers do: the sandbox only. */
+    weatherNow(): void {
+      sailing.forecast?.tick();
+      sailing.readBarometer?.();
+    },
+
     /** Issues the sandbox's forecast again now, as the weather is: the sandbox only. */
     issueForecast(): void {
       if (sailing.forecast === undefined) {
@@ -2908,6 +2937,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         judged: s?.judged ?? 0,
         rain: s === null ? 0 : s.grid.rain.reduce((a, b) => a + (b >= 0.1 ? 1 : 0), 0),
         fog: s === null ? 0 : s.grid.fog.reduce((a, b) => a + (b < 1852 ? 1 : 0), 0),
+        inked: w === null ? 0 : inkedOf(w.canvas),
       };
     },
 
@@ -2942,7 +2972,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     holdBarometer(rate: number | null): void {
       const b = sailing.barometer;
       if (b !== undefined) {
-        b.held = rate === null ? null : { rate, from: world.ticks };
+        b.hold(rate, world.ticks);
       }
     },
 

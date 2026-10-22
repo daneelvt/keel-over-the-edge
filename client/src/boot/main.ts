@@ -274,7 +274,7 @@ async function start(): Promise<void> {
     // ?baro=hPa: a fall or a rise held, that much a quarter of an hour.
     const held = baroFromQuery(query);
     if (held !== null) {
-      baro.barometer.held = { rate: held, from: world.ticks };
+      baro.barometer.hold(held, world.ticks);
     }
     const gales = new GaleNotices(parts.chart.store, parts.notices);
     issuer.onIssue = (f) => {
@@ -341,6 +341,7 @@ async function start(): Promise<void> {
         chart: parts,
         forecast: issuer,
         barometer: baro.barometer,
+        readBarometer: baro.read,
       });
     }
     return;
@@ -537,6 +538,8 @@ async function start(): Promise<void> {
 interface BarometerParts {
   barometer: Barometer;
   words: readonly DialWord[];
+  /** Reads it now, as its timer does each second. */
+  read: () => void;
 }
 
 /** ?baro=hPa: a change held on the barometer, that much a quarter of an hour; null for none. */
@@ -556,7 +559,7 @@ function startBarometer(
 ): BarometerParts {
   const b = catalog.world.instruments.barometer;
   const barometer = new Barometer({ range: [b.range[0] ?? 950, b.range[1] ?? 1040], set: b.set });
-  setInterval(() => {
+  const read = (): void => {
     const tick = world.ticks;
     const east = world.pose.east;
     const north = world.pose.north;
@@ -568,8 +571,9 @@ function startBarometer(
       },
       (t) => forecasting.pressureBefore(t, east, north),
     );
-  }, 1000);
-  return { barometer, words: b.words };
+  };
+  setInterval(read, 1000);
+  return { barometer, words: b.words, read };
 }
 
 /** The start screen waits for the chunks handed within this of the boat, m, or this long, ms. */
