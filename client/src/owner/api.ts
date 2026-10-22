@@ -7,8 +7,11 @@
 // weather at a tick, every few seconds; the pressure at a point clicked;
 // the sea, its areas' waves and swell and the waves at a point clicked,
 // every ten seconds while it is shown; the clouds and the rain, every ten
-// seconds while either is shown; the next world's terrain and week under next/ once it is made; and the
-// controls, each a POST of JSON.
+// seconds while either is shown; the forecast at the tick shown, with how
+// well it has held so far and the world's gale warnings, while it is
+// shown; a place's box and outlook at the tick shown, for a point, an
+// island or a place picked; the next world's terrain and week under next/
+// once it is made; and the controls, each a POST of JSON.
 
 /** A boat at sea, as the page shows it. */
 export interface Boat {
@@ -270,6 +273,8 @@ export interface Current {
 export interface Point {
   east: number;
   north: number;
+  /** Its position as charts write it: 67°24′N 045°12′. */
+  position: string;
   elevation: number;
   fromLip: number;
   island: string;
@@ -626,6 +631,157 @@ export interface VisibilityPage {
   lights: LightNow[];
 }
 
+/**
+ * A system as the forecast gives it: at each step where it will be, east
+ * and north, its cone's radius, m, and its strength, 0 to 1; all 0 at a
+ * step it is not alive at.
+ */
+export interface ForecastSystem {
+  slot: number;
+  /** Its kind, by index into the week's kinds, and its kind's id. */
+  kind: number;
+  id: string;
+  /** A low not yet born at the issue, forecast by its plan: its cone a constant circle. */
+  forming: boolean;
+  /** The tick it is forecast to cross the lip onto the disk; 0 for one on it. */
+  crosses: number;
+  steps: [number, number, number, number][];
+}
+
+/**
+ * A front as the forecast moves it: at each step its line's distance from
+ * the centre along the way it moves, and its band's half-width, m; null at
+ * a step it is not crossing.
+ */
+export interface ForecastFront {
+  /** Degrees: the way it moves. */
+  toward: number;
+  begin: number;
+  cross: number;
+  lines: ([number, number] | null)[];
+}
+
+/** A spell as the forecast names it, with its regime's risk: what it brings that no forecast places. */
+export interface ForecastSpell {
+  begin: number;
+  regime: number;
+  id: string;
+  /** Degrees its wind comes from, its knots at mid-disk, and how far its shifts turn it either way together. */
+  from: number;
+  knots: number;
+  front: boolean;
+  shifts: number;
+  /** The sky its regime's risk names, whether it makes fog patches, and the chart's marks of it. */
+  risk: string;
+  fog: boolean;
+  marks: string[];
+}
+
+/** The gale warning in force. */
+export interface ForecastGale {
+  /** The issue it came into force at. */
+  key: number;
+  force: number;
+  words: string;
+  /** The charted island or place it is told from; "" for none. */
+  place: string;
+  /** Its first step. */
+  first: number;
+  /** Where it blows strongest, its mean wind and gust there, knots, and the degrees it first blows from. */
+  east: number;
+  north: number;
+  mean: number;
+  gust: number;
+  from: number;
+  /** Each step's points of the grid in a gale, a bit a point (point n the bit n mod 8 of byte n / 8), in base64; "" for none. */
+  areas: string[];
+}
+
+/**
+ * forecast.json: the issue in force at the tick shown, the issue's own step
+ * first; the gale grid galeSide points a side, galeGrid m apart about the
+ * centre, row j north and column i east of its south-west point.
+ */
+export interface ForecastPage {
+  at: number;
+  issue: number;
+  /** As the players were sent it; otherwise made on the page's asking from the week. */
+  issued: boolean;
+  /** Ticks between steps, and how many. */
+  step: number;
+  steps: number;
+  lip: number;
+  systems: ForecastSystem[];
+  fronts: ForecastFront[];
+  spells: ForecastSpell[];
+  gale: ForecastGale | null;
+  galeGrid: number;
+  galeSide: number;
+}
+
+/**
+ * calibration.json: of every issue from the world's beginning whose horizon
+ * has passed, at each lead (minutes), the cases inside their cones and the
+ * cases, of the systems alive at the issue, the lows forming and the fronts.
+ */
+export interface CalibrationPage {
+  now: number;
+  from: number;
+  next: number;
+  issues: number;
+  leads: number[];
+  alive: [number, number][];
+  forming: [number, number][];
+  fronts: [number, number][];
+}
+
+/** A gale warning of the world: the issues it was in force at, its most force, and its words as first told. */
+export interface GaleWarning {
+  key: number;
+  last: number;
+  inForce: boolean;
+  force: number;
+  words: string;
+  /** Degrees it first blew from, and its strongest point. */
+  from: number;
+  east: number;
+  north: number;
+}
+
+/** gales.json: every gale warning of the world to the issue in force now, the oldest first. */
+export interface GalesPage {
+  now: number;
+  issue: number;
+  /** Ticks between issues. */
+  every: number;
+  warnings: GaleWarning[];
+}
+
+/** A place's box: its lines of wind, gusts, sky, visibility and barometer. */
+export interface Box {
+  wind: string;
+  gusts: string;
+  sky: string;
+  visibility: string;
+  barometer: string;
+}
+
+/** place.json: a place's box at a tick, its outlook from the issue in force, and its position. */
+export interface PlaceWeather {
+  at: number;
+  issue: number;
+  east: number;
+  north: number;
+  position: string;
+  /** The island's or place's name; "" for a point. */
+  name: string;
+  box: Box;
+  outlook: string;
+}
+
+/** What a place's weather is asked of: a point, an island or a place, by number. */
+export type PlaceOf = { island: number } | { place: number } | null;
+
 /** The gusts' grid: GUST_SIDE a side over the square of the land's chart, a signed byte a point. */
 export const GUST_STEP = 0.1;
 export const NO_GUST = -128;
@@ -687,6 +843,42 @@ export function getClouds(): Promise<CloudsPage> {
 /** The fog, the lightning and the lights of the current world now. */
 export function getVisibility(): Promise<VisibilityPage> {
   return getJSON<VisibilityPage>('visibility.json');
+}
+
+/** The tick asked about, as a query's part: none for now. */
+function atQuery(at: number | null, first: boolean): string {
+  return at === null ? '' : `${first ? '?' : '&'}at=${Math.round(at)}`;
+}
+
+/** The forecast in force at a tick, or now. */
+export function getForecast(at: number | null): Promise<ForecastPage> {
+  return getJSON<ForecastPage>(`forecast.json${atQuery(at, true)}`);
+}
+
+/** How well the forecast has held the truth so far this world. */
+export function getCalibration(): Promise<CalibrationPage> {
+  return getJSON<CalibrationPage>('calibration.json');
+}
+
+/** Every gale warning of the world so far. */
+export function getGales(): Promise<GalesPage> {
+  return getJSON<GalesPage>('gales.json');
+}
+
+/** A place's box and outlook at a tick, or now: of an island or a place if one is given, else of the point. */
+export function getPlaceWeather(
+  east: number,
+  north: number,
+  of: PlaceOf,
+  at: number | null,
+): Promise<PlaceWeather> {
+  const what =
+    of === null
+      ? `east=${east.toFixed(2)}&north=${north.toFixed(2)}`
+      : 'island' in of
+        ? `island=${of.island}`
+        : `place=${of.place}`;
+  return getJSON<PlaceWeather>(`place.json?${what}${atQuery(at, false)}`);
 }
 
 /** A URL of the land's drawings, for an image. */

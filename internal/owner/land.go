@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	position "github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
@@ -137,10 +138,11 @@ func (l *land) island(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(svg)
 }
 
-// point says what is at a point the page clicked: its height (above 0)
-// or depth (below), the distance inside the lip, the nearest island and
-// how far its centre is, whether a boat may be put there, and its sky
-// now: its rain, its sheets and the heaped cloud over it.
+// point says what is at a point the page clicked: its position as charts
+// write it, its height (above 0) or depth (below), the distance inside the
+// lip, the nearest island and how far its centre is, whether a boat may be
+// put there, and its sky now: its rain, its sheets and the heaped cloud
+// over it.
 //
 //	GET /owner/api/point?east=…&north=…
 func (o *Owner) point(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +156,7 @@ func (o *Owner) point(w http.ResponseWriter, r *http.Request) {
 	out := struct {
 		East      float64 `json:"east"`
 		North     float64 `json:"north"`
+		Position  string  `json:"position"`
 		Elevation float64 `json:"elevation"` // m: below 0 the depth
 		FromLip   float64 `json:"fromLip"`
 		Island    string  `json:"island"`
@@ -162,7 +165,7 @@ func (o *Owner) point(w http.ResponseWriter, r *http.Request) {
 		Water     string  `json:"water"`
 		// Sky is null for a world not yet sailed.
 		Sky *skyPoint `json:"sky"`
-	}{East: round2(x), North: round2(y), FromLip: round2(physics.EdgeDistance(o.cfg.Weather, x, y)), Number: -1}
+	}{East: round2(x), North: round2(y), Position: position.Format(x, y), FromLip: round2(physics.EdgeDistance(o.cfg.Weather, x, y)), Number: -1}
 	if b := o.cfg.Bundle; b != nil {
 		e, _ := b.Ground.At(x, y)
 		out.Elevation = round2(e)

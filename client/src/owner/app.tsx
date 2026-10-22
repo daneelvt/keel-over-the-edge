@@ -8,9 +8,13 @@
 // is told, with its pressure at the tick shown and the barometer's
 // tendency, its sea while the sea is shown, its sky while the clouds or
 // the rain are, and its visibility and what makes it, and the owner's
-// boats can be put there, or at a place. The fog and the lightning show
-// while their layers are, and with them the lights sounding their fog
-// signals and those lit by day.
+// boats can be put there, or at a place, or at a position written as
+// charts write it. The fog and the lightning show while their layers are,
+// and with them the lights sounding their fog signals and those lit by
+// day. The forecast shows over the truth while its layer is, with how
+// well it has held so far and every gale warning of the world; a point,
+// an island or a place picked has its box and outlook at the tick shown,
+// as a chart gives them to a sailor there.
 // The page acts on the owner's boats alone; the server refuses the rest.
 // At the top, always in view, the world's end counted down by keel's clock; the
 // owner may make a new next world, begin it now or chart the whole world,
@@ -27,9 +31,11 @@ import {
   useRef,
   useState,
 } from 'preact/hooks';
+import { formatPosition } from '../chart/position';
 import { lightOn } from '../lights/character';
 import {
   type Boat,
+  type CalibrationPage,
   type ChartedData,
   type CloudsPage,
   type Control,
@@ -37,10 +43,16 @@ import {
   control,
   drawing,
   type FeaturesData,
+  type ForecastPage,
+  type GalesPage,
   type Group,
   getBytes,
+  getCalibration,
   getClouds,
+  getForecast,
+  getGales,
   getJSON,
+  getPlaceWeather,
   getPressure,
   getSea,
   getVisibility,
@@ -49,13 +61,16 @@ import {
   type Light,
   type LightCharacter,
   type Place,
+  type PlaceOf,
   type PlacesData,
+  type PlaceWeather,
   type Point,
   type PressureAt,
   type SeaPage,
   type Town,
   type TownsData,
   type VisibilityPage,
+  type WeatherWeek,
   type WorldNow,
 } from './api';
 import {
@@ -93,10 +108,12 @@ import {
   visibilityRanges,
   visibilityWords,
 } from './fog';
-import { hidden, serverOffset } from './life';
+import { calibrationRows, FORECAST_COLOURS, riskWords, spellAt, warningSpan } from './forecast';
+import { brief, hidden, serverOffset } from './life';
 import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
 import { foamOver, RAISED, SEA_COLOURS, SEA_EVERY, SEA_FULL, seaWords } from './sea';
+import { fromNow, whereFrom } from './weather';
 import { useWeather, WEATHER_EVERY, WeekCard } from './week';
 
 /** How often the page reads the world, ms. */
@@ -417,6 +434,7 @@ function BoatRow({
   islands: Island[];
 }) {
   const [island, setIsland] = useState(0);
+  const [position, setPosition] = useState('');
   const marks = [
     b.falling ? 'falling' : '',
     b.connected ? '' : `in its grace, ${seconds(b.grace)}`,
@@ -433,6 +451,9 @@ function BoatRow({
           {b.human ? '' : ' (AI)'}
         </td>
         <td>{b.kind}</td>
+        <td class="small" data-field="boat-position">
+          {formatPosition(b.east, b.north)}
+        </td>
         <td>{b.knots.toFixed(1)} kn</td>
         <td>{b.fromLip.toFixed(0)} m</td>
         <td>{marks.join(', ')}</td>
@@ -446,7 +467,7 @@ function BoatRow({
       </tr>
       {chosen && b.tools ? (
         <tr class="controls">
-          <td colSpan={7}>
+          <td colSpan={8}>
             <button
               type="button"
               disabled={picked === null}
@@ -461,6 +482,25 @@ function BoatRow({
             >
               To the point picked
             </button>
+            <form
+              class="position"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act('place', { boat: b.boat, position }, `teleport to ${position.trim()}`);
+              }}
+            >
+              <input
+                type="text"
+                name="position"
+                placeholder="67°24′N 045°12′"
+                aria-label="A position: degrees and minutes of latitude, then of longitude"
+                value={position}
+                onInput={(e) => setPosition(e.currentTarget.value)}
+              />
+              <button type="submit" disabled={position.trim() === ''}>
+                To the position
+              </button>
+            </form>
             <button
               type="button"
               onClick={() => act('place', { boat: b.boat, start: true }, 'teleport to the start')}
@@ -528,9 +568,13 @@ const LIVE: ReadonlySet<keyof Layers> = new Set([
   'lightning',
   'gusts',
   'wind',
+  'forecast',
   'boats',
   'charted',
 ]);
+
+/** How often the forecast's calibration and the world's gale warnings are read while the forecast shows, ms. */
+const FORECAST_PAST_EVERY = 60_000;
 
 /** The sea layer's legend: the waves' heights shaded, the swell's arrow, the hatching. */
 function SeaLegend() {
@@ -656,6 +700,204 @@ function LightningLegend() {
   );
 }
 
+/** The forecast layer's legend: a track and its cone, the place forecast now, a front's band, a gale. */
+function ForecastLegend() {
+  return (
+    <p class="small legend" data-field="forecast-legend">
+      <span>
+        <i class="swatch round" style={{ border: `2px solid ${FORECAST_COLOURS.system}` }} />{' '}
+        forecast place now, its track and its cone dashed
+      </span>
+      <span>
+        <i class="swatch round" style={{ border: `2px dashed ${FORECAST_COLOURS.forming}` }} /> a
+        low forming
+      </span>
+      <span>
+        <i class="swatch" style={{ background: FORECAST_COLOURS.front, opacity: 0.5 }} /> a front's
+        forecast line and band
+      </span>
+      <span>
+        <i
+          class="swatch"
+          style={{
+            background: `repeating-linear-gradient(45deg, ${FORECAST_COLOURS.gale} 0 1px, transparent 1px 5px)`,
+          }}
+        />{' '}
+        gale
+      </span>
+    </p>
+  );
+}
+
+/** A tick of the world as a moment in a few words, by its week's epoch. */
+function momentOf(w: WeatherWeek | null, tick: number): string {
+  return w === null ? `tick ${tick}` : brief(w.epoch + (tick / w.ticksPerSecond) * 1000);
+}
+
+/** The forecast in force at the tick shown: its issue, its spells and their risks, its systems, its gale warning. */
+function ForecastCard({
+  f,
+  w,
+  now,
+  goTo,
+}: {
+  f: ForecastPage;
+  w: WeatherWeek | null;
+  now: number;
+  goTo: GoTo;
+}) {
+  const tps = w?.ticksPerSecond ?? 30;
+  const minutes = (ticks: number): string => `${Math.round(ticks / tps / 60)} min`;
+  const spell = spellAt(f.spells, f.at);
+  return (
+    <section class="card" aria-label="The forecast">
+      <h2>Forecast</h2>
+      <p data-field="forecast-issue">
+        Issued {momentOf(w, f.issue)} ({fromNow(f.issue - now, tps)}), tick {f.issue};{' '}
+        {f.issued ? 'as the players were sent it' : "made on the page's asking from the week"};{' '}
+        {f.steps} steps of {minutes(f.step)}.
+      </p>
+      <p data-field="gale-warning" class={f.gale !== null ? 'gale' : ''}>
+        {f.gale !== null
+          ? `Gale warning: ${f.gale.words}. Force ${f.gale.force}, in force since ${momentOf(w, f.gale.key)}.`
+          : 'No gale warning in force.'}
+      </p>
+      {spell !== null && riskWords(spell) !== '' ? (
+        <p data-field="risk">Risk now: {riskWords(spell)}.</p>
+      ) : null}
+      <ul class="spells small">
+        {f.spells.map((s) => (
+          <li key={s.begin}>
+            {momentOf(w, s.begin)}: {s.id || s.regime}, {s.knots.toFixed(1)} kn from{' '}
+            {s.from.toFixed(0)}°{s.shifts > 0 ? `, shifting ±${s.shifts.toFixed(0)}°` : ''}
+            {s.front ? ', a front' : ''}
+          </li>
+        ))}
+      </ul>
+      {f.systems.length > 0 ? (
+        <table class="systems">
+          <thead>
+            <tr>
+              <th>Kind</th>
+              <th>At the issue</th>
+              <th>Last step</th>
+              <th>Cone</th>
+            </tr>
+          </thead>
+          <tbody>
+            {f.systems.map((s) => {
+              const alive = s.steps.filter((p) => p[3] > 0);
+              const first = alive[0];
+              const last = alive[alive.length - 1];
+              return (
+                <tr key={`${s.slot}-${s.forming}`} data-forecast-system={s.slot}>
+                  <td>
+                    <button
+                      type="button"
+                      disabled={first === undefined}
+                      onClick={() => first !== undefined && goTo(first[0], first[1])}
+                    >
+                      {s.id || s.kind}
+                    </button>
+                    {s.forming ? ' forming' : ''}
+                    {s.crosses > 0 ? `, onto the disk ${fromNow(s.crosses - now, tps)}` : ''}
+                  </td>
+                  <td>{s.forming || first === undefined ? '—' : whereFrom(first[0], first[1])}</td>
+                  <td>{last === undefined ? '—' : whereFrom(last[0], last[1])}</td>
+                  <td>{last === undefined ? '—' : `${(last[2] / 1852).toFixed(2)} M`}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      ) : null}
+    </section>
+  );
+}
+
+/** How well the forecast has held the truth so far this world: the share inside the cones, lead by lead. */
+function CalibrationCard({ c, w }: { c: CalibrationPage; w: WeatherWeek | null }) {
+  return (
+    <section class="card" aria-label="The forecast's calibration">
+      <h2>The forecast's calibration</h2>
+      <p class="small">
+        The share of the truth inside the cones, sized to hold it four times in five: {c.issues}{' '}
+        issues since {momentOf(w, c.from)}.
+      </p>
+      <table class="calibration" data-field="calibration">
+        <thead>
+          <tr>
+            <th>Lead</th>
+            {c.leads.map((l) => (
+              <th key={l}>{l} min</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {calibrationRows(c).map((r) => (
+            <tr key={r.name}>
+              <th>{r.name}</th>
+              {r.cells.map((cell, k) => (
+                <td key={c.leads[k]} title={`${cell.cases} cases`}>
+                  {cell.share}
+                  <span class="small"> ({cell.cases})</span>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+/** Every gale warning of the world, the latest first. */
+function GalesCard({ g, w, goTo }: { g: GalesPage; w: WeatherWeek | null; goTo: GoTo }) {
+  return (
+    <section class="card" aria-label="Gale warnings">
+      <h2>Gale warnings: {g.warnings.length}</h2>
+      <ul class="gales" data-field="gales">
+        {[...g.warnings].reverse().map((x) => (
+          <li key={x.key} class={x.inForce ? 'chosen' : ''}>
+            <button type="button" onClick={() => goTo(x.east, x.north, 4)}>
+              {x.words}
+            </button>{' '}
+            <span class="small">
+              force {x.force};{' '}
+              {w === null ? `tick ${x.key}` : warningSpan(x, g.every, w.epoch, w.ticksPerSecond)}
+              {x.inForce ? ', in force' : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** A place's box at the tick shown, as a chart gives it, and its outlook. */
+function PlaceBox({ p }: { p: PlaceWeather }) {
+  return (
+    <div class="place-box" data-field="place-box">
+      <p>
+        <b>{p.name === '' ? 'The point' : p.name}</b>, {p.position}
+      </p>
+      <dl>
+        <dt>Wind</dt>
+        <dd data-field="box-wind">{p.box.wind}</dd>
+        <dt>Gusts</dt>
+        <dd>{p.box.gusts}</dd>
+        <dt>Sky</dt>
+        <dd>{p.box.sky}</dd>
+        <dt>Visibility</dt>
+        <dd>{p.box.visibility}</dd>
+        <dt>Barometer</dt>
+        <dd>{p.box.barometer}</dd>
+      </dl>
+      <p data-field="outlook">Outlook: {p.outlook}</p>
+    </div>
+  );
+}
+
 /** What is drawn and listed of a world's terrain, the same for its life. */
 interface Drawn {
   islands: Island[];
@@ -776,6 +1018,9 @@ function useDrawn(
 /** Centres a map on a point, at a scale if given. */
 type GoTo = (east: number, north: number, scale?: number) => void;
 
+/** Picks a point, and the island or place it was picked for, if one was. */
+type Pick = (east: number, north: number, of?: PlaceOf) => void;
+
 /** Sails the owner's chosen boat to what is named; null when no boat of theirs is chosen. */
 type Sail = ((body: Record<string, number>, what: string) => void) | null;
 
@@ -790,7 +1035,7 @@ function IslandsCard({
   groups: Group[];
   features: FeaturesData | null;
   goTo: GoTo;
-  pick?: (east: number, north: number) => void;
+  pick?: Pick;
 }) {
   const featureName = new Map((features?.kinds ?? []).map((k) => [k.id, k.name]));
   return (
@@ -807,13 +1052,13 @@ function IslandsCard({
                 data-island={is.number}
                 onClick={() => {
                   goTo(is.east, is.north, Math.max(0.5, is.across / 300));
-                  pick?.(is.approach[0], is.approach[1]);
+                  pick?.(is.approach[0], is.approach[1], { island: is.number });
                 }}
               >
                 {is.number}. {is.name}
               </button>{' '}
               <span class="small">
-                {is.kind}, {is.biome}
+                {formatPosition(is.east, is.north)}; {is.kind}, {is.biome}
                 {is.age !== undefined ? ` (${is.age})` : ''}, {is.size}, {is.highest.toFixed(0)} m;{' '}
                 <span data-field="class">
                   class {is.class}, {is.score.toFixed(1)}
@@ -936,7 +1181,7 @@ function FeaturesCard({
   features: FeaturesData | null;
   islands: Island[];
   goTo: GoTo;
-  pick?: (east: number, north: number) => void;
+  pick?: Pick;
   sail: Sail;
 }) {
   const featureName = new Map((features?.kinds ?? []).map((k) => [k.id, k.name]));
@@ -992,7 +1237,7 @@ function PlacesCard({
 }: {
   places: PlacesData | null;
   goTo: GoTo;
-  pick?: (east: number, north: number) => void;
+  pick?: Pick;
   sail: Sail;
 }) {
   const kindName = new Map((places?.kinds ?? []).map((k) => [k.id, k.name]));
@@ -1012,14 +1257,15 @@ function PlacesCard({
               onClick={() => {
                 goTo(p.east, p.north, 1);
                 if (p.approach !== null) {
-                  pick?.(p.approach[0], p.approach[1]);
+                  pick?.(p.approach[0], p.approach[1], { place: p.number });
                 }
               }}
             >
               {p.name}
             </button>{' '}
             <span class="small">
-              {kindName.get(p.kind) ?? p.kind}: {placeWords(p)}
+              {kindName.get(p.kind) ?? p.kind}: {placeWords(p)};{' '}
+              <span data-field="place-position">{formatPosition(p.east, p.north)}</span>
             </span>
             {sail !== null && p.approach !== null ? (
               <button
@@ -1047,7 +1293,12 @@ function App() {
   const [nextView, setNextView] = useState<View | null>(null);
   const [layers, setLayers] = useState<Layers>(allLayers());
   const [picked, setPicked] = useState<[number, number] | null>(null);
+  const [pickedOf, setPickedOf] = useState<PlaceOf>(null);
   const [point, setPoint] = useState<Point | null>(null);
+  const [placeWeather, setPlaceWeather] = useState<PlaceWeather | null>(null);
+  const [forecast, setForecast] = useState<ForecastPage | null>(null);
+  const [calibration, setCalibration] = useState<CalibrationPage | null>(null);
+  const [gales, setGales] = useState<GalesPage | null>(null);
   const [pressure, setPressure] = useState<PressureAt | null>(null);
   const [sea, setSea] = useState<SeaPage | null>(null);
   const [clouds, setClouds] = useState<CloudsPage | null>(null);
@@ -1082,6 +1333,7 @@ function App() {
       return;
     }
     setPicked(null);
+    setPickedOf(null);
     setPoint(null);
     setBoat(null);
     setLight(null);
@@ -1207,6 +1459,66 @@ function App() {
       live = false;
     };
   }, [picked, shownAt, following]);
+
+  // The box and outlook of the point, island or place picked, at the tick
+  // shown, read again with the weather.
+  useEffect(() => {
+    if (picked === null || shownAt === null) {
+      setPlaceWeather(null);
+      return;
+    }
+    let live = true;
+    getPlaceWeather(picked[0], picked[1], pickedOf, following ? null : shownAt)
+      .then((p) => live && setPlaceWeather(p))
+      .catch(() => live && setPlaceWeather(null));
+    return () => {
+      live = false;
+    };
+  }, [picked, pickedOf, shownAt, following]);
+
+  // The forecast in force at the tick shown while its layer shows the
+  // world being sailed, read again with the weather; and how well it has
+  // held and the world's gale warnings every minute, paused while the tab
+  // is hidden.
+  const forecastShown = layers.forecast && world !== null && !(tab === 'next' && next !== null);
+  useEffect(() => {
+    if (!forecastShown || shownAt === null) {
+      setForecast(null);
+      return;
+    }
+    let live = true;
+    getForecast(following ? null : shownAt)
+      .then((f) => live && setForecast(f))
+      .catch((e: unknown) => live && setError(String(e)));
+    return () => {
+      live = false;
+    };
+  }, [forecastShown, shownAt, following]);
+  useEffect(() => {
+    if (!forecastShown) {
+      setCalibration(null);
+      setGales(null);
+      return;
+    }
+    let live = true;
+    const read = (): void => {
+      if (hidden()) {
+        return;
+      }
+      getCalibration()
+        .then((c) => live && setCalibration(c))
+        .catch((e: unknown) => live && setError(String(e)));
+      getGales()
+        .then((g) => live && setGales(g))
+        .catch((e: unknown) => live && setError(String(e)));
+    };
+    read();
+    const t = setInterval(read, FORECAST_PAST_EVERY);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [forecastShown]);
 
   // The sea every ten seconds while its layer shows the world being
   // sailed, with the point picked, and at once for a point picked anew;
@@ -1343,8 +1655,9 @@ function App() {
     [lightsKey],
   );
 
-  const pick = useCallback((east: number, north: number): void => {
+  const pick = useCallback((east: number, north: number, of: PlaceOf = null): void => {
     setPicked([east, north]);
+    setPickedOf(of);
     getJSON<Point>(`point?east=${east.toFixed(2)}&north=${north.toFixed(2)}`)
       .then(setPoint)
       .catch((e: unknown) => setError(String(e)));
@@ -1402,6 +1715,7 @@ function App() {
     charted:
       charted === null ? null : new Set(charted.charted.map((c) => `${c.subject}:${c.number}`)),
     weather: weather.weather,
+    forecast: forecastShown ? forecast : null,
     sea,
     clouds,
     sheets,
@@ -1429,6 +1743,7 @@ function App() {
     features: nxt.features,
     charted: null,
     weather: nextWeather.weather,
+    forecast: null,
     sea: null,
     clouds: null,
     sheets: null,
@@ -1614,6 +1929,7 @@ function App() {
             {skyShown && layers.rain ? <RainLegend words={clouds?.words ?? WMO_WORDS} /> : null}
             {fogShown && layers.fog ? <FogLegend words={visibility?.words ?? MET_WORDS} /> : null}
             {fogShown && layers.lightning ? <LightningLegend /> : null}
+            {forecastShown ? <ForecastLegend /> : null}
           </fieldset>
           {next !== null ? (
             <nav class="tabs" aria-label="Which world">
@@ -1641,7 +1957,8 @@ function App() {
           ) : null}
           {!onNext && point !== null ? (
             <p class="point" data-field="point">
-              ({point.east.toFixed(0)}, {point.north.toFixed(0)}):{' '}
+              <span data-field="point-position">{point.position}</span> ({point.east.toFixed(0)},{' '}
+              {point.north.toFixed(0)}):{' '}
               {point.elevation > 0
                 ? `land ${point.elevation.toFixed(1)} m high`
                 : `${(-point.elevation).toFixed(1)} m deep`}
@@ -1666,6 +1983,7 @@ function App() {
               ) : null}
             </p>
           ) : null}
+          {!onNext && placeWeather !== null ? <PlaceBox p={placeWeather} /> : null}
         </div>
         {onNext ? (
           <aside>
@@ -1695,6 +2013,20 @@ function App() {
               show={weather.show}
               goTo={goTo}
             />
+            {forecastShown && forecast !== null ? (
+              <ForecastCard
+                f={forecast}
+                w={weather.weather}
+                now={now?.tick ?? weather.weather?.now ?? 0}
+                goTo={goTo}
+              />
+            ) : null}
+            {forecastShown && calibration !== null ? (
+              <CalibrationCard c={calibration} w={weather.weather} />
+            ) : null}
+            {forecastShown && gales !== null ? (
+              <GalesCard g={gales} w={weather.weather} goTo={goTo} />
+            ) : null}
             {life !== null ? (
               <WorldByHand
                 life={life}
@@ -1712,6 +2044,7 @@ function App() {
                     <th>Boat</th>
                     <th>Sailor</th>
                     <th>Kind</th>
+                    <th>Position</th>
                     <th>Speed</th>
                     <th>Inside the lip</th>
                     <th />

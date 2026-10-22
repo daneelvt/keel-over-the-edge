@@ -3,13 +3,13 @@
 // Package owner is the owner's tools on keel's internal listener, which no
 // player ever reaches: the world page, a map of the whole disk with every
 // boat, the wind, the gusts, the current, the islands, the places and the
-// lighthouses, the queue, the weather and the world's clock; and its
-// controls, which set and clear an account's owner's flag, move a flagged
-// account's boat anywhere on the disk, keep it unseen, make a new next
-// world, begin it, and chart the whole world. The internal listener has no
-// route to the internet: the owner reaches it from their own computer
-// through the tunnel to the machine, or a port forward on the local
-// cluster.
+// lighthouses, the queue, the weather with the forecast beside it, and the
+// world's clock; and its controls, which set and clear an account's
+// owner's flag, move a flagged account's boat anywhere on the disk, keep
+// it unseen, make a new next world, begin it, and chart the whole world.
+// The internal listener has no route to the internet: the owner reaches it
+// from their own computer through the tunnel to the machine, or a port
+// forward on the local cluster.
 //
 // The page reads the world as a view built once a second by one goroutine
 // (Run): it acquires the latest frame, copies what the page shows and
@@ -169,6 +169,18 @@ type Config struct {
 	Charted  ChartedList
 	Subjects int
 
+	// Forecasts, if not nil, is the world's forecast as issued; a world not
+	// sailed has none. Words are the catalog's words of the weather; Risks
+	// and RiskMarks each regime's risk and the chart's marks of it, by the
+	// regimes' indices; Fog the rule a fog bank is born by; and Outlook the
+	// minutes after an issue a place's outlook is sampled at.
+	Forecasts Forecasts
+	Words     weather.Words
+	Risks     []weather.Risk
+	RiskMarks [][]string
+	Fog       weather.FogRule
+	Outlook   []float64
+
 	// Page is the page's built files, or nil: the routes answer without it.
 	Page *api.Page
 
@@ -191,6 +203,8 @@ type Owner struct {
 	features []byte
 	places   []byte
 	towns    []byte
+	// fc is what the forecast's routes keep for the world.
+	fc forecastCache
 }
 
 // Paths are the owner's tools' routes, for the tests that the public
@@ -204,6 +218,7 @@ var Paths = []string{
 	"/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
 	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
+	"/owner/api/forecast.json", "/owner/api/calibration.json", "/owner/api/gales.json", "/owner/api/place.json",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -282,6 +297,10 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/sea.json", o.sea)
 	mux.HandleFunc("GET /owner/api/clouds.json", o.clouds)
 	mux.HandleFunc("GET /owner/api/visibility.json", o.visibility)
+	mux.HandleFunc("GET /owner/api/forecast.json", o.forecastJSON)
+	mux.HandleFunc("GET /owner/api/calibration.json", o.calibration)
+	mux.HandleFunc("GET /owner/api/gales.json", o.gales)
+	mux.HandleFunc("GET /owner/api/place.json", o.placeWeather)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
 	mux.HandleFunc("POST /owner/api/place", o.place)
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)

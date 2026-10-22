@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	position "github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -32,21 +33,23 @@ type FlagRequest struct {
 }
 
 // PlaceRequest moves a flagged account's boat, at rest: to a point (East
-// and North, m), to the start, to an island's approach (Island, its
-// number), to a place's (Place, its number), or under its free camera
-// (Camera). Heading is in degrees, clockwise from north; without it the
-// boat keeps its own, or at an island or a place faces it.
+// and North, m), to a position as written (Position: 67°24′N 045°12′), to
+// the start, to an island's approach (Island, its number), to a place's
+// (Place, its number), or under its free camera (Camera). Heading is in
+// degrees, clockwise from north; without it the boat keeps its own, or at
+// an island or a place faces it.
 type PlaceRequest struct {
-	Boat    uint64   `json:"boat"`
-	East    *float64 `json:"east,omitempty"`
-	North   *float64 `json:"north,omitempty"`
-	Heading *float64 `json:"heading,omitempty"`
-	Start   bool     `json:"start,omitempty"`
-	Island  *int     `json:"island,omitempty"`
-	Place   *int     `json:"place,omitempty"`
-	Town    *int     `json:"town,omitempty"`
-	Feature *int     `json:"feature,omitempty"`
-	Camera  bool     `json:"camera,omitempty"`
+	Boat     uint64   `json:"boat"`
+	East     *float64 `json:"east,omitempty"`
+	North    *float64 `json:"north,omitempty"`
+	Position *string  `json:"position,omitempty"`
+	Heading  *float64 `json:"heading,omitempty"`
+	Start    bool     `json:"start,omitempty"`
+	Island   *int     `json:"island,omitempty"`
+	Place    *int     `json:"place,omitempty"`
+	Town     *int     `json:"town,omitempty"`
+	Feature  *int     `json:"feature,omitempty"`
+	Camera   bool     `json:"camera,omitempty"`
 }
 
 // UnseenRequest keeps a flagged account's boat out of every other
@@ -234,6 +237,7 @@ func (o *Owner) water(x, y float64, others [][2]float64) error {
 // Teleport: its course is cleared and its voyage earns nothing.
 //
 //	POST /owner/api/place {"boat": 1, "east": …, "north": …, "heading": …}
+//	POST /owner/api/place {"boat": 1, "position": "67°24′N 045°12′"}
 //	POST /owner/api/place {"boat": 1, "start": true}
 //	POST /owner/api/place {"boat": 1, "island": 12}
 //	POST /owner/api/place {"boat": 1, "town": 3}: in its harbour
@@ -346,10 +350,17 @@ func (o *Owner) place(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		x, y = ex, ey
+	case req.Position != nil:
+		px, py, err := position.ParsePosition(*req.Position)
+		if err != nil {
+			o.refuse(w, "place", http.StatusBadRequest, "the position: "+err.Error())
+			return
+		}
+		x, y = px, py
 	case req.East != nil && req.North != nil:
 		x, y = *req.East, *req.North
 	default:
-		o.refuse(w, "place", http.StatusBadRequest, "east and north, start, island, place, town or camera is required")
+		o.refuse(w, "place", http.StatusBadRequest, "east and north, a position, start, island, place, town or camera is required")
 		return
 	}
 	if req.Heading != nil {
