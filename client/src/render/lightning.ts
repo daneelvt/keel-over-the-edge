@@ -90,15 +90,15 @@ const SLOW_FADE = 2.5;
 const CLOUD_LIT = 900;
 
 /** A bolt's segments, and its branches' at most; the segments drawn at most, for every bolt. */
-const BOLT_SEGMENTS = 20;
+const BOLT_SEGMENTS = 28;
 const BRANCH_SEGMENTS = 7;
 export const SEGMENTS_MOST = 256;
 
-/** How far a bolt's segment turns from the last at most, rad: about 16° (Hill). */
-const TURN = (16 * Math.PI) / 180;
+/** How far a bolt's segment turns from the last at most, rad: evenly up to twice 16°, about 16° in the mean (Hill). */
+const TURN = (32 * Math.PI) / 180;
 
 /** A bolt's width, m, and its branches' brightness beside its own. */
-const BOLT_WIDTH = 6;
+const BOLT_WIDTH = 3.5;
 const BRANCH_BRIGHT = 0.45;
 
 /** The bolt's light, linear: a little blue. */
@@ -131,7 +131,7 @@ export function boltPath(seed: number, base: number): [number, number, number][]
     const b = hash(seed, 3 * i + 1) * 2 * Math.PI;
     dx += Math.sin(a) * Math.cos(b);
     dz += Math.sin(a) * Math.sin(b);
-    dy = Math.min(dy - 0.25, -0.35);
+    dy = Math.min(dy - 0.12, -0.3);
     const n = Math.hypot(dx, dy, dz);
     dx /= n;
     dy /= n;
