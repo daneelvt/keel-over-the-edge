@@ -72,6 +72,7 @@ func TestWeeks(t *testing.T) {
 			checkSwell(wt, w, waves, swellGrid, &tally)
 			checkCloudLeads(cat, wt, w, swellGrid, &tally)
 			checkFrontCirrus(cat, wt, w, swellGrid, &tally)
+			checkFogWall(cat, wt, w, swellGrid, &tally)
 		}
 		tally.weeks++
 		for i, s := range w.Report.Shares {
@@ -121,7 +122,15 @@ func TestWeeks(t *testing.T) {
 	if tally.cirrusShort > 0 {
 		t.Errorf("a front's cirrus came less than %d minutes before its line at %d of %d places", frontWarning, tally.cirrusShort, len(tally.cirrus))
 	}
-	report := tally.markdown(cat) + tally.cloudsMarkdown()
+	// A fog bank's wall whitens the horizon toward it three minutes or more
+	// before a boat sailing toward it at 4 knots meets very poor
+	// visibility, at nineteen approaches in twenty.
+	if f := &tally.fog; f.approaches > 0 {
+		if s := share(f.short, f.approaches); s > 5 {
+			t.Errorf("a fog bank's wall gave under %d minutes at %.1f%% of %d approaches", fogWarning, s, f.approaches)
+		}
+	}
+	report := tally.markdown(cat) + tally.cloudsMarkdown() + tally.fogMarkdown()
 	t.Log("\n" + report)
 	if path := os.Getenv("KEEL_WEEKS_SUMMARY"); path != "" {
 		if err := os.WriteFile(path, []byte(report), 0o644); err != nil {
@@ -145,6 +154,7 @@ type weeksTally struct {
 	clouds                                       [3]cloudLead // by cloudSigns
 	fronts, cirrusShort                          int
 	cirrus                                       []float64 // a front's cirrus's leads on its line, minutes
+	fog                                          fogWall
 }
 
 // swellLead is the swell's lead on a storm's own wind at the places that

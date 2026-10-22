@@ -19,8 +19,10 @@
 import { effect, signal } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
 import type { FeaturesInput } from '../audio/features';
+import { FOG_SIGNAL_RULES, type FogSignalsInput, poorBy } from '../audio/fogsignals';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
 import { KNOCK, knockOf } from '../audio/knock';
+import type { ThunderInput } from '../audio/thunder';
 import { edgeInput, type SoundInput, soundInput } from '../audio/voices';
 import { catalog } from '../catalog';
 import {
@@ -250,9 +252,11 @@ export class Game implements PilotActions {
     if (motion !== undefined) {
       this.world.camera.reducedMotion = motion.matches;
       this.world.freeCam.reducedMotion = motion.matches;
+      this.world.lightning.reducedMotion = motion.matches;
       motion.addEventListener('change', () => {
         this.world.camera.reducedMotion = motion.matches;
         this.world.freeCam.reducedMotion = motion.matches;
+        this.world.lightning.reducedMotion = motion.matches;
       });
     }
   }
@@ -531,6 +535,8 @@ export class Game implements PilotActions {
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
     this.#harbour(now, look);
     this.#features(now, look);
+    this.#fogSignals(now, look);
+    this.#thunder(now, look);
   }
 
   /** The sky's periods, and how long an hour of the world's day lasts, s. */
@@ -596,6 +602,55 @@ export class Game implements PilotActions {
       },
       this.#secondsPerHour,
     );
+  }
+
+  /** The lights' fog signals, heard at the boat in fog. */
+  readonly #fogInput: FogSignalsInput = {
+    seconds: 0,
+    listener: { east: 0, north: 0 },
+    look: 0,
+    lights: [],
+    // A blast sounds while the visibility at its light, when it begins, is
+    // under the rule's limit; with no weather, none does.
+    poorAt: poorBy(FOG_SIGNAL_RULES.rule, (e, n, tick) => {
+      const source = this.world.ocean.source;
+      const physics = source?.weather === true ? source.physics : null;
+      return physics === null ? Number.POSITIVE_INFINITY : physics.visibilityAtTick(e, n, tick);
+    }),
+  };
+
+  #fogSignals(now: number, look: number): void {
+    const w = this.world;
+    const source = w.ocean.source;
+    if (source?.weather !== true) {
+      return;
+    }
+    const x = this.#fogInput;
+    x.seconds = w.ticks / STEPS_PER_SECOND;
+    x.listener.east = w.pose.east;
+    x.listener.north = w.pose.north;
+    x.look = look;
+    x.lights = w.lighthouses.lights.values();
+    this.sound.fogSignals(now, x);
+  }
+
+  /** The thunder after each flash, heard at the boat. */
+  readonly #thunderInput: ThunderInput = {
+    seconds: 0,
+    listener: { east: 0, north: 0 },
+    look: 0,
+    flashes: [],
+  };
+
+  #thunder(now: number, look: number): void {
+    const w = this.world;
+    const x = this.#thunderInput;
+    x.seconds = w.ticks / STEPS_PER_SECOND;
+    x.listener.east = w.pose.east;
+    x.listener.north = w.pose.north;
+    x.look = look;
+    x.flashes = w.lightning.flashes;
+    this.sound.thunder(now, x);
   }
 }
 

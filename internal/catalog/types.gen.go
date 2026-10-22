@@ -809,6 +809,58 @@ type FloraWind struct {
 	Whole float64 `json:"whole"`
 }
 
+// A fog signal's pattern: its device, its notation, and its blasts and silences in
+// turn.
+type FogSignal struct {
+	// Device corresponds to the JSON schema field "device".
+	Device FogSignalDevice `json:"device"`
+
+	// As charts write it.
+	Notation string `json:"notation"`
+
+	// Its blasts and silences in turn, beginning with a blast, in ms.
+	Steps []int `json:"steps"`
+}
+
+type FogSignalDevice string
+
+const FogSignalDeviceDiaphone FogSignalDevice = "diaphone"
+const FogSignalDeviceReedhorn FogSignalDevice = "reedhorn"
+const FogSignalDeviceSiren FogSignalDevice = "siren"
+const FogSignalDeviceTwotone FogSignalDevice = "twotone"
+
+// The device of each light's fog signal, by its role.
+type FogSignalDevices struct {
+	// Edge corresponds to the JSON schema field "edge".
+	Edge FogSignalDevice `json:"edge"`
+
+	// Hazard corresponds to the JSON schema field "hazard".
+	Hazard FogSignalDevice `json:"hazard"`
+
+	// MainPort corresponds to the JSON schema field "mainPort".
+	MainPort FogSignalDevice `json:"mainPort"`
+
+	// Port corresponds to the JSON schema field "port".
+	Port FogSignalDevice `json:"port"`
+}
+
+// When a fog signal sounds, how far it is heard, and which device each light's
+// has.
+type FogSignalRule struct {
+	// Signals within this of each other differ, in nautical miles.
+	Apart float64 `json:"apart"`
+
+	// The device of each light's fog signal, by its role.
+	Devices FogSignalDevices `json:"devices"`
+
+	// It is heard within this of its light, in nautical miles.
+	Heard float64 `json:"heard"`
+
+	// A blast sounds while the visibility at its light is under this, in nautical
+	// miles.
+	Sounds float64 `json:"sounds"`
+}
+
 type Form string
 
 const FormBroadleaf Form = "broadleaf"
@@ -2285,6 +2337,16 @@ type SystemCloud struct {
 	Top float64 `json:"top"`
 }
 
+// The fog of a fog bank: its visibility at its core at the sea, drawn per bank,
+// and how it thins with height.
+type SystemFog struct {
+	// Its visibility at its core at full strength, the least and the most, in m.
+	Core []float64 `json:"core"`
+
+	// Its density falls as e^(−h / height) above the sea, in m.
+	Height float64 `json:"height"`
+}
+
 // A kind of weather system: a pressure shape moving with it, its wind turned from
 // the pressure's gradient, its size, life and track.
 type SystemKind struct {
@@ -2313,6 +2375,9 @@ type SystemKind struct {
 	// A patch's share of the wind at its core, the least and the most.
 	Factor []float64 `json:"factor"`
 
+	// Fog corresponds to the JSON schema field "fog".
+	Fog *SystemFog `json:"fog,omitempty,omitzero"`
+
 	// It is gone once the spell's mean wind passes this, in knots; 0 for never.
 	GoneAbove float64 `json:"goneAbove"`
 
@@ -2334,8 +2399,8 @@ type SystemKind struct {
 	// It lifts this long after sunrise, the least and the most, in minutes.
 	Lift []float64 `json:"lift"`
 
-	// Lightning strikes from it above this strength; 0 for none.
-	Lightning float64 `json:"lightning"`
+	// Lightning corresponds to the JSON schema field "lightning".
+	Lightning *SystemLightning `json:"lightning,omitempty,omitzero"`
 
 	// It is born only at night, or within dawn minutes after sunrise.
 	Night bool `json:"night"`
@@ -2374,6 +2439,19 @@ type SystemKind struct {
 	// The wind it adds at its peak at full strength, the least and the most, in
 	// knots.
 	Wind []float64 `json:"wind"`
+}
+
+// The lightning from a kind of system: above a strength, at a rate rising with it,
+// struck within a ring about its centre.
+type SystemLightning struct {
+	// It flashes at or above this strength.
+	Above float64 `json:"above"`
+
+	// Its flashes a minute at full strength, rising from none at above.
+	Rate float64 `json:"rate"`
+
+	// Its flashes strike between these shares of its size from its centre.
+	Within []float64 `json:"within"`
 }
 
 // The rain under a kind of system, at its full strength.
@@ -2678,6 +2756,9 @@ type Weather struct {
 	// Keyframe corresponds to the JSON schema field "keyframe".
 	Keyframe WeatherKeyframe `json:"keyframe"`
 
+	// Lightning corresponds to the JSON schema field "lightning".
+	Lightning WeatherLightning `json:"lightning"`
+
 	// Pressure corresponds to the JSON schema field "pressure".
 	Pressure WeatherPressure `json:"pressure"`
 
@@ -2695,6 +2776,12 @@ type Weather struct {
 
 	// The kinds of weather system.
 	Systems []SystemKind `json:"systems"`
+
+	// Thunder corresponds to the JSON schema field "thunder".
+	Thunder WeatherThunder `json:"thunder"`
+
+	// Visibility corresponds to the JSON schema field "visibility".
+	Visibility WeatherVisibility `json:"visibility"`
 
 	// Water corresponds to the JSON schema field "water".
 	Water WeatherWater `json:"water"`
@@ -2907,6 +2994,27 @@ type WeatherKeyframe struct {
 	Every int `json:"every"`
 }
 
+// Lightning: the slots of world time a flash is drawn in, its share to the sea and
+// its strokes.
+type WeatherLightning struct {
+	// The strokes' geometric mean interval, in ms.
+	Apart float64 `json:"apart"`
+
+	// The most strokes a flash has.
+	Most int `json:"most"`
+
+	// The share of flashes that strike the sea; the rest stay in the cloud.
+	Sea float64 `json:"sea"`
+
+	// The share of flashes of a single stroke; the rest have from two to most,
+	// evenly.
+	Single float64 `json:"single"`
+
+	// World time is cut into slots this long, each holding a flash or none, in s: a
+	// whole number.
+	Slot int `json:"slot"`
+}
+
 // The pressure: its slope across the disk, and its rise behind a front.
 type WeatherPressure struct {
 	// How fast the pressure rises behind a front's line, in hPa a minute.
@@ -3020,6 +3128,33 @@ type WeatherSea struct {
 	// Newton's steps that find when the swell arriving at a place left its system: a
 	// whole number.
 	SwellSteps int `json:"swellSteps"`
+}
+
+// Thunder: how far it is heard, how fast it comes, how long it rolls and where it
+// cracks.
+type WeatherThunder struct {
+	// Within this of its channel it begins with a crack, in m.
+	Crack float64 `json:"crack"`
+
+	// It is heard within this of its flash, in nautical miles.
+	Heard float64 `json:"heard"`
+
+	// It rolls at most this long, in s.
+	Longest float64 `json:"longest"`
+
+	// The speed of sound, in m/s.
+	Speed float64 `json:"speed"`
+}
+
+// Visibility: the contrast a thing is seen at, and the words for it.
+type WeatherVisibility struct {
+	// A thing is seen while the optical depth to it is at most this: ln of the
+	// contrast threshold's inverse.
+	Contrast float64 `json:"contrast"`
+
+	// Visibility is very poor under the first, poor under the second, moderate under
+	// the third and good above, in m.
+	Words []float64 `json:"words"`
 }
 
 // The water's signs of the wind: the mean wind sampled round the camera, against
@@ -3475,11 +3610,21 @@ type WorldLights struct {
 	// The lights' colours.
 	Colours LightColours `json:"colours"`
 
+	// The least illuminance a light is seen by in daylight, in lux.
+	DayThreshold float64 `json:"dayThreshold"`
+
 	// A light is dropped this far beyond its range, in m.
 	Drop float64 `json:"drop"`
 
 	// The ring of lights on the approach to the edge.
 	Edge LightEdge `json:"edge"`
+
+	// When a fog signal sounds, how far it is heard, and which device each light's
+	// has.
+	FogSignal FogSignalRule `json:"fogSignal"`
+
+	// The patterns of blasts a world's lighthouses' fog signals are given.
+	FogSignals []FogSignal `json:"fogSignals"`
 
 	// Which hazards are lit.
 	Hazards LightHazards `json:"hazards"`
@@ -3496,7 +3641,7 @@ type WorldLights struct {
 	// Nominal ranges, in nautical miles.
 	Range LightRange `json:"range"`
 
-	// The least illuminance a light is seen by, in lux.
+	// The least illuminance a light is seen by at night, in lux.
 	Threshold float64 `json:"threshold"`
 
 	// Each light's tower's height, in m.
@@ -3860,4 +4005,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "ff62116f7628187a"
+const Version = "3297ac94fb5a0653"

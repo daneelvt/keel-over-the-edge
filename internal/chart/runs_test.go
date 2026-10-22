@@ -15,6 +15,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
@@ -47,7 +48,8 @@ func TestRuns(t *testing.T) {
 			charted[k>>6] |= 1 << (k & 63)
 		}
 		home := w.Subjects[w.Known[0]]
-		l := sight.Lookout{Eye: w.Table.Eye(2), Reach: w.Table.EyeReach(2)}
+		l := w.Table.Lookout(2)
+		calm := &sight.Conditions{Weather: w.Calm()}
 		var seen []sight.Seen
 		all := 0
 		for r := range 8 {
@@ -56,7 +58,7 @@ func TestRuns(t *testing.T) {
 			start := 400.0
 			for d := start; d < cat.World.Disk.Radius; d += 7.5 {
 				l.X, l.Y = home.X+d*math.Sin(a), home.Y+d*math.Cos(a)
-				seen = w.Table.Look(&l, charted, nil, seen[:0])
+				seen = w.Table.Look(&l, charted, calm, seen[:0])
 				for _, s := range seen {
 					charted[s.Subject>>6] |= 1 << (s.Subject & 63)
 					n++
@@ -98,19 +100,29 @@ func median(v []float64) float64 {
 }
 
 // BenchmarkSighting is a tick of a world of n boats spread over seed 1's
-// disk, sailing, with sighting on and off: what sighting costs a tick.
+// disk, sailing, with sighting on and off, and on with half of them in a
+// fog bank: what sighting costs a tick.
 func BenchmarkSighting(bm *testing.B) {
 	b, cat := world1(bm)
 	w := Build(b, cat)
 	waves, kinds := cat.Prepare()
+	tl, err := weather.FromCatalog(cat)
+	if err != nil {
+		bm.Fatal(err)
+	}
+	fogKind := -1
+	for i, k := range cat.Weather.Systems {
+		if k.Fog != nil {
+			fogKind = i
+		}
+	}
+	// The fog bank's centre, m east.
+	const bank = 2500
 	for _, n := range []int{100, 1000} {
-		for _, on := range []bool{false, true} {
-			name := "off"
-			if on {
-				name = "on"
-			}
+		for _, name := range []string{"off", "on", "fog"} {
+			on, fog := name != "off", name == "fog"
 			bm.Run(name+"/"+strconv.Itoa(n), func(bm *testing.B) {
-				cfg := sim.Config{Kinds: kinds, Waves: waves, Workers: 4, Tick: 100, Capacity: n + 16}
+				cfg := sim.Config{Kinds: kinds, Waves: waves, Workers: 4, Tick: 100, Capacity: n + 16, Weather: tl}
 				if on {
 					cfg.Sight = &sim.Sight{Table: w.Table, Every: 15, Lookouts: w.Lookouts}
 				}
@@ -130,9 +142,28 @@ func BenchmarkSighting(bm *testing.B) {
 				for i, s := range f.Live {
 					a := float64(i) * 2.399963
 					r := 7000 * math.Sqrt(float64(i)/float64(n))
-					_ = q.TrySend(bus.Command{Op: bus.Place, Boat: f.Boat[s], State: physics.State{X: r * math.Sin(a), Y: r * math.Cos(a), Heading: a}})
+					x, y := r*math.Sin(a), r*math.Cos(a)
+					if fog && i%2 == 0 {
+						// Half of them in the bank's very poor core.
+						r = 700 * math.Sqrt(float64(i)/float64(n))
+						x, y = bank+r*math.Sin(a), r*math.Cos(a)
+					}
+					_ = q.TrySend(bus.Command{Op: bus.Place, Boat: f.Boat[s], State: physics.State{X: x, Y: y, Heading: a}})
 				}
 				world.Tick()
+				// A steady breeze, and in the fog variant a fog bank at its
+				// whole over the boats.
+				_ = q.TrySend(bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherSteady, Speed: 300, Dir: 0}})
+				world.Tick()
+				if fog {
+					_ = q.TrySend(bus.Command{Op: bus.SetWeather, Weather: bus.Weather{Mode: bus.WeatherSystem, Kind: uint16(fogKind), East: bank * 4, In: 30}})
+					for range 60 {
+						world.Tick()
+					}
+					if len(world.Latest().Systems) == 0 {
+						bm.Fatal("no fog bank placed")
+					}
+				}
 				phases := &phaseClock{}
 				world.Observe(phases)
 				bm.ResetTimer()

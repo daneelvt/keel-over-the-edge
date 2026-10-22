@@ -23,7 +23,7 @@ beforeAll(async () => {
 
 /** A sandbox in a wind of knots from the north and its sea, the boat reaching east. */
 function inSea(knots: number): Sandbox {
-  return new Sandbox(physics, catalog.boats[0].physics, catalog.weather, {
+  return new Sandbox(physics, catalog.boats[0].physics, catalog.weather, catalog.world, {
     ...START,
     wind: { speed: knots * KNOT, from: 0 },
   });

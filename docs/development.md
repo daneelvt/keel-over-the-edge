@@ -849,9 +849,9 @@ no more of where land is than the sky shows.
 | `art/sound/rain.json`, `client/src/audio/` | Rain's hiss, by the logarithm of the rate at the boat, and in heavy rain a drumming |
 
 The camera's far plane is 8 km, beyond where a storm's deck can be seen.
-Rain shortens the scene's visual range, the clouds' haze and the sea's
-horizon blend. Overcast dims the main light by up to 0.6 and greys the
-sky's and the sea's colours.
+Rain's optical depth along each ray, with the fog's, is drawn in every
+material (see Fog, visibility and lightning). Overcast dims the main light
+by up to 0.6 and greys the sky's and the sea's colours.
 
 ### Seeing it
 
@@ -879,6 +879,95 @@ place and by five minutes or more at 95%, a storm's cloud before its
 20-knot wind at every place and by ten minutes or more at 95%, and a front's
 cirrus forty minutes or more before its line (five weeks on a half-mile
 grid in CI; two hundred on a quarter-mile nightly).
+
+## Fog, visibility and lightning
+
+How far a thing is seen is one rule of the physics package (`fog.go`),
+computed from the same spells and systems as the wind, by the server and
+every phone: the **optical depth** along a straight line over the dome,
+the integral of the air's **extinction** along it. The extinction is the
+clear air's (3.912 over `world.lights.clearAir`, 4.5 NM), each **fog
+bank**'s, the rain's and the mist band's. A thing is seen while the depth
+to it is at most `weather.visibility.contrast`, 3.912, Koschmieder's 2%,
+as every visual range in the game is.
+
+| Function | What |
+|---|---|
+| `FogAt(t, x, y, h)` | The fog banks' extinction: each bank's core's, 3.912 over its core's visibility drawn from its seed in `fog.core` (50–150 m), times its strength (at most 1) and the stretched Gaussian its wind's patch has, times e^(−h / `fog.height`), 40 m |
+| `OpticalDepth(t, x0, y0, h0, x1, y1, h1)` | Along the line, the height above the curved sea h0 + u (h1 − h0) − (D² / 2R) u (1 − u): fog banks, rain's cores (Shipley's R^0.74 of a Gaussian is a narrower Gaussian) and a front's band in closed form, a difference of Numerical Recipes' erfcc with the peak's exponent folded into each, cut at their cloud's base; a storm's spiral bands and the mist at sixteen points |
+| `AirAt(t, x, y, h)`, `VisibilityAt(t, x, y)`, `VisibilityWord(v)` | The extinction by what makes it; the visibility 2 m up, 3.912 over it; its words, the Met Office's marine ones × 0.4 (`weather.visibility.words`: very poor under 400 m, poor to 1 NM, moderate to 2, good above) |
+| `AirSources(t, x, y, r, out)` | The Gaussian sources near a place, the nearest four fog banks and six of rain, for the GPU |
+| `AirClear(t, x, y, r)` | No fog, rain or mist within r: lines within it see the clear air alone, the same bits |
+| `Flashes(t, slot, out)` | **Lightning**: world time cut into slots (`weather.lightning.slot`, 10 s); a squall or storm at or over its kind's `lightning.above` flashes in a slot with a chance by its rate, `lightning.rate` × (s − above) / (1 − above) a minute; its time, place in its kind's ring (`within`), whether it strikes the sea (`sea`, a quarter), its strokes (one in three single, the rest two to `most` evenly, `apart` 60 ms at the geometric mean) and its seed, from a hash of the system's seed and the slot |
+
+`go test ./internal/physics -run FogFile -update` writes
+`testdata/fog.json`, which `client/src/predict/fog.test.ts` holds the
+module to bit for bit; the GPU's sum of the sources (`render/fog.ts`'s
+`airDepth`, its float64 twin) is held to the module's.
+
+**Sighting** (`internal/sight`) looks through `OpticalDepth` of the weather
+at the tick, the simulation's own (see Sighting and the chart). **Lights**
+are lit while the sun is down at them or while the visibility there is poor
+or worse, looked at once a second, and seen by Allard's law through the
+depth along the line against night's threshold (`threshold`) or the day's
+(`dayThreshold`), blended across the sun's last degree.
+
+**Fog signals**: every lighthouse has one, a pattern of blasts from
+`world.lights.fogSignals` (blasts and silences in ms, beginning with a
+blast, its notation as charts write it), of its role's device
+(`fogSignal.devices`: Port Royal's two-tone diaphone, ports' diaphones, the
+edge ring's sirens, hazards' reed horns). Each light takes, in its number's
+order, the first pattern of its device that no light within
+`fogSignal.apart` (2 NM) has (`light.AssignFogSignals`, at load: the world
+file is untouched); the `Light` message carries it as `fog_signal`. A blast
+keeps its light's phase (`light.Blast`) and sounds if, as it begins, the
+visibility at the light is under `fogSignal.sounds` (1 NM). It is heard
+within `fogSignal.heard` (1 NM), its distance over 343 m/s later, from the
+light's true bearing, fainter and duller with distance
+(`client/src/audio/fogsignals.ts`); the page's copy of the rule is
+`client/src/lights/fogsignal.ts`, held to `internal/light/testdata/schedule.json`.
+The recipes are art, `art/sound/<device>.json`; `tools/catalog -check` fails
+on a device without its recipe, a pattern ending on a blast and a role's
+device with fewer than ten patterns.
+
+**Thunder** follows every flash within `weather.thunder.heard` (3 NM), its
+distance to the flash's channel over 343 m/s later, rolling for the
+channel's spread over the speed of sound (at most 30 s), a crack first
+within 1 km; `art/sound/thunder.json` (`client/src/audio/thunder.ts`).
+
+### Drawing it
+
+| File | What |
+|---|---|
+| `client/src/render/fog.ts` | The sources' closed form along each ray from the camera, a loop of their count (none near: no turns), per vertex in every material's fog, the sea, the clouds' puffs and the stars, joined to the mist band's depth; the sky per fragment along the whole ray, so a bank far off whitens the horizon; a drifting noise varies the drawn fog by a quarter about the rules'; a lit light in a bank lights the fog about it (Sun and others' single scattering) in the sky |
+| `client/src/render/scene.ts`, `sky.ts`, `sky/weather.ts` | Each frame the module's sources about the camera into the uniforms (a rain held at the camera as one the same everywhere); the visibility at the camera holds the sea's horizon blend; the fog and rain overhead overcast the sky, 1 − e^(−τ) straight up |
+| `client/src/render/lights.ts` | Allard's law through the module's `opticalDepth`; lit by day in poor visibility; looms dimmed by the air to the horizon and beyond |
+| `client/src/render/lightning.ts` | Each slot's flashes from the module as it begins (`flashesAt`); a flash lights its cloud's puffs, more by night; one to the sea draws a bolt while its cloud's base clears the horizon, a random walk turning about 16° a segment with two or three dimmer branches, camera-facing ribbons blended by the brightest, one draw. At most three pulses a second (WCAG 2.3.1): a flash's later strokes flicker its cloud by under a tenth, and a pulse within a third of a second of the last joins it; with reduced motion, no pulses |
+
+### Seeing it
+
+```sh
+# https://localhost:5173/?sandbox&fog=100              a fog bank of a 100 m core held on the boat
+# https://localhost:5173/?sandbox&weather=fog          a fog bank meets the boat three minutes in
+# https://localhost:5173/?sandbox&weather=squall&sky=22&flash=200   a squall by night, its nearest cloud flashing to the sea 200 s in
+# https://localhost:5173/?sandbox&world=1&fog=100&sky=22   Port Royal's light and fog signal in fog
+```
+
+The developer panel reads out the visibility, its word and what makes it,
+the fog signals heard (pattern, bearing and delay) and the last flash and
+its thunder's delay. Test hooks: `visibility()`, `opticalDepth()`,
+`setFog(m)`, `flashes()`, `flashIn(s)`, `fogSignals()`. The world page's
+**Fog** layer shades the visibility at the sea by its words and outlines the
+very poor; its **Lightning** layer marks each flash of the last minute; the
+lights sounding their fog signal and those lit by day are marked; a clicked
+point gives its visibility and what makes it (`/owner/api/visibility.json`,
+internal listener only).
+
+`TestWeeks` holds a fog bank's wall to its rule: a boat sailing toward a
+bank at its strongest at 4 knots sees the horizon toward it whiten (its own
+fog's optical depth 1 along the horizontal ray 2 m up) three minutes or
+more before very poor visibility at nineteen approaches in twenty; the
+warning to a boat lying where a bank grows is tallied beside it.
 
 ## Encounters
 
@@ -1657,7 +1746,10 @@ Go client's run over the lip, which the page's tests replay.
   within 4 km of where the drain begins (`edgeLook.near`, the turns of a
   loop), so far from the edge no shader works it out; and a short loop
   keeps the shaders quick to compile on CI's software renderer. Its colour
-  is the light table's `mist`, by the hour, beside the horizon's.
+  is the light table's `mist`, by the hour, beside the horizon's. The
+  weather's fog and rain join its optical depth (`render/fog.ts`), and the
+  rules integrate the same density along a lookout's line at the same
+  sixteen points (`physics.OpticalDepth`).
 - **The lip** (`edge/lip.ts`): the sea's lattice stays fixed; a tile whose
   centre is at or beyond the lip is not drawn, the tiles within a tile of
   it sag and tip outward (`world.edge.look.lip`), and the far sea is cut
@@ -1798,9 +1890,14 @@ held to `internal/light/testdata/schedule.json`, which
 
 **Range and brightness**: nominal ranges (Port Royal 4.5 NM, ports 2.5,
 the edge ring 2, hazards 1.5; red and green half), and Allard's law,
-E = I T^d / d², with T = 0.05^(1/V) for the clear air's visibility
-V = 4.5 NM: each light's intensity falls to the threshold, 2 × 10⁻⁷ lux, at
-its range, and the glow drawn grows with E over the threshold.
+E = I e^(−τ) / d², τ the optical depth along the line (IALA R0202): each
+light's intensity falls to night's threshold, 2 × 10⁻⁷ lux, at its range in
+the clear air (`clearAir`, 4.5 NM, Koschmieder's 3.912 / σ as every
+visibility in the game), and the glow drawn grows with E over the
+threshold, the day's 1 × 10⁻³ lux by day. A light is lit while the sun is
+down at it and while the visibility at it is poor or worse; its loom
+vanishes in fog. Each lighthouse also sounds a fog signal (see Fog,
+visibility and lightning).
 
 ### Names
 
@@ -2128,17 +2225,21 @@ at sea, its list, the notices and the news.
 `internal/sight` is the sight table, built once at load from the bundle
 (`internal/chart`'s `Build`), never stored. A thing *H* m high shows over
 the horizon to an eye *h* m high out to √(2 *R* *h*) + √(2 *R* *H*), *R*
-the dome's 2,500 m; every reach is no more than the mist band's visual
-range at the eye and at the thing, `physics.VisualRangeAt`, which the
-page's `edge/mist.ts` computes alike (`internal/physics/testdata/visibility.json`
-holds the two together). A boat kind's lookout is its catalog's `lookout`,
-the Jolly boat's 2 m.
+the dome's 2,500 m; within it a thing is seen while the optical depth along
+the line from the eye to it, `physics.OpticalDepth` of the weather at the
+tick, is at most 3.912 (see Fog, visibility and lightning): an island along
+the line to its nearest cell over the horizon or else to its highest, so a
+fog bank between hides it and a summit near a bank's edge shows over it;
+a place or a feature to its top; a reef to its water. Where no fog, rain or
+mist lies within reach of the lookout (`AirClear`), the clear air's
+arithmetic, the same bits. A boat kind's lookout is its catalog's
+`lookout`, the Jolly boat's 2 m.
 
 | Subject | Sighted when |
 |---|---|
 | An island | any cell of its land (4 by 4 hexagons) is over the horizon: its ground, trees, roofs and buildings; no line of sight |
 | A port, a village | its tallest building or its light over the horizon, along its view |
-| A lighthouse | its tower's top along its view by day; at night its light, while the sun is below the horizon at it, within its nominal range and by Allard's law in the visibility at the eye and the light |
+| A lighthouse | its tower's top along its view by day; its light while it is lit (the sun below the horizon at it, or poor visibility or worse there), within its nominal range and by Allard's law through the optical depth along the line, against night's threshold or the day's |
 | A stranded wreck | her masts (the rig's and the age's) along her view; sunk, or her masts gone, as a reef |
 | A cove, an anchorage, a lagoon | seen into: within `world.chart.sight.water` (300 m), along its view at the water |
 | A reef, a sandbar, a sunk wreck | within `world.chart.sight.awash` (150 m), by the water breaking on it |

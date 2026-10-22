@@ -32,7 +32,7 @@
       "description": "The weather's numbers.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["sea", "disk", "gusts", "ring", "waveWind", "current", "front", "pressure", "reach", "regimes", "systems", "week", "keyframe", "water", "clouds"],
+      "required": ["sea", "disk", "gusts", "ring", "waveWind", "current", "front", "pressure", "reach", "regimes", "systems", "week", "keyframe", "water", "clouds", "visibility", "lightning", "thunder"],
       "properties": {
         "sea": { "$ref": "#/$defs/WeatherSea" },
         "disk": { "$ref": "#/$defs/WeatherDisk" },
@@ -48,7 +48,10 @@
         "week": { "$ref": "#/$defs/WeatherWeek" },
         "keyframe": { "$ref": "#/$defs/WeatherKeyframe" },
         "water": { "$ref": "#/$defs/WeatherWater" },
-        "clouds": { "$ref": "#/$defs/WeatherClouds" }
+        "clouds": { "$ref": "#/$defs/WeatherClouds" },
+        "visibility": { "$ref": "#/$defs/WeatherVisibility" },
+        "lightning": { "$ref": "#/$defs/WeatherLightning" },
+        "thunder": { "$ref": "#/$defs/WeatherThunder" }
       }
     },
     "WeatherSea": {
@@ -319,7 +322,7 @@
       "description": "A kind of weather system: a pressure shape moving with it, its wind turned from the pressure's gradient, its size, life and track.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "shape", "turning", "width", "ahead", "broad", "stretch", "inward", "gusts", "size", "speed", "speedOf", "life", "wind", "factor", "depth", "track", "islands", "night", "dawn", "lift", "calmBelow", "goneAbove", "rain", "cloud", "lightning"],
+      "required": ["id", "shape", "turning", "width", "ahead", "broad", "stretch", "inward", "gusts", "size", "speed", "speedOf", "life", "wind", "factor", "depth", "track", "islands", "night", "dawn", "lift", "calmBelow", "goneAbove", "rain", "cloud"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "shape": { "description": "A dome, a low, or none: a patch that scales the wind.", "enum": ["dome", "low", "none"] },
@@ -346,8 +349,70 @@
         "goneAbove": { "description": "It is gone once the spell's mean wind passes this, in knots; 0 for never.", "type": "number", "minimum": 0, "maximum": 60 },
         "rain": { "$ref": "#/$defs/SystemRain" },
         "cloud": { "$ref": "#/$defs/SystemCloud" },
-        "lightning": { "description": "Lightning strikes from it above this strength; 0 for none.", "type": "number", "minimum": 0, "maximum": 2 },
+        "lightning": { "$ref": "#/$defs/SystemLightning" },
+        "fog": { "$ref": "#/$defs/SystemFog" },
         "swell": { "$ref": "#/$defs/SystemSwell" }
+      }
+    },
+    "SystemLightning": {
+      "title": "SystemLightning",
+      "description": "The lightning from a kind of system: above a strength, at a rate rising with it, struck within a ring about its centre.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["above", "rate", "within"],
+      "properties": {
+        "above": { "description": "It flashes at or above this strength.", "type": "number", "minimum": 0, "maximum": 2 },
+        "rate": { "description": "Its flashes a minute at full strength, rising from none at above.", "type": "number", "minimum": 0, "maximum": 60 },
+        "within": { "description": "Its flashes strike between these shares of its size from its centre.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 5 } }
+      }
+    },
+    "SystemFog": {
+      "title": "SystemFog",
+      "description": "The fog of a fog bank: its visibility at its core at the sea, drawn per bank, and how it thins with height.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core", "height"],
+      "properties": {
+        "core": { "description": "Its visibility at its core at full strength, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 } },
+        "height": { "description": "Its density falls as e^(−h / height) above the sea, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 }
+      }
+    },
+    "WeatherVisibility": {
+      "title": "WeatherVisibility",
+      "description": "Visibility: the contrast a thing is seen at, and the words for it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contrast", "words"],
+      "properties": {
+        "contrast": { "description": "A thing is seen while the optical depth to it is at most this: ln of the contrast threshold's inverse.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "words": { "description": "Visibility is very poor under the first, poor under the second, moderate under the third and good above, in m.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 100000 } }
+      }
+    },
+    "WeatherLightning": {
+      "title": "WeatherLightning",
+      "description": "Lightning: the slots of world time a flash is drawn in, its share to the sea and its strokes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot", "sea", "single", "most", "apart"],
+      "properties": {
+        "slot": { "description": "World time is cut into slots this long, each holding a flash or none, in s: a whole number.", "type": "integer", "minimum": 1, "maximum": 60 },
+        "sea": { "description": "The share of flashes that strike the sea; the rest stay in the cloud.", "type": "number", "minimum": 0, "maximum": 1 },
+        "single": { "description": "The share of flashes of a single stroke; the rest have from two to most, evenly.", "type": "number", "minimum": 0, "maximum": 1 },
+        "most": { "description": "The most strokes a flash has.", "type": "integer", "minimum": 1, "maximum": 8 },
+        "apart": { "description": "The strokes' geometric mean interval, in ms.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 }
+      }
+    },
+    "WeatherThunder": {
+      "title": "WeatherThunder",
+      "description": "Thunder: how far it is heard, how fast it comes, how long it rolls and where it cracks.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["heard", "speed", "longest", "crack"],
+      "properties": {
+        "heard": { "description": "It is heard within this of its flash, in nautical miles.", "type": "number", "minimum": 0, "maximum": 20 },
+        "speed": { "description": "The speed of sound, in m/s.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
+        "longest": { "description": "It rolls at most this long, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 120 },
+        "crack": { "description": "Within this of its channel it begins with a crack, in m.", "type": "number", "minimum": 0, "maximum": 10000 }
       }
     },
     "WeatherWeek": {
@@ -1651,6 +1716,50 @@
         }
       }
     },
+    "FogSignal": {
+      "title": "FogSignal",
+      "description": "A fog signal's pattern: its device, its notation, and its blasts and silences in turn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "notation",
+        "device",
+        "steps"
+      ],
+      "properties": {
+        "notation": {
+          "description": "As charts write it.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "device": {
+          "$ref": "#/$defs/FogSignalDevice"
+        },
+        "steps": {
+          "description": "Its blasts and silences in turn, beginning with a blast, in ms.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 20,
+          "items": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 60000
+          }
+        }
+      }
+    },
+    "FogSignalDevice": {
+      "title": "FogSignalDevice",
+      "description": "What sounds a fog signal: its recipe in art/sound is named for it.",
+      "type": "string",
+      "enum": [
+        "twotone",
+        "diaphone",
+        "siren",
+        "reedhorn"
+      ]
+    },
     "LightCharacter": {
       "title": "LightCharacter",
       "description": "A light's character: its notation, class, group and colour, and its light and dark in turn.",
@@ -1748,10 +1857,13 @@
         "range",
         "clearAir",
         "threshold",
+        "dayThreshold",
         "drop",
         "mainPortCharacter",
         "colours",
         "characters",
+        "fogSignals",
+        "fogSignal",
         "look"
       ],
       "properties": {
@@ -1906,10 +2018,16 @@
           "maximum": 100
         },
         "threshold": {
-          "description": "The least illuminance a light is seen by, in lux.",
+          "description": "The least illuminance a light is seen by at night, in lux.",
           "type": "number",
           "minimum": 1e-09,
           "maximum": 0.001
+        },
+        "dayThreshold": {
+          "description": "The least illuminance a light is seen by in daylight, in lux.",
+          "type": "number",
+          "minimum": 1e-09,
+          "maximum": 1
         },
         "drop": {
           "description": "A light is dropped this far beyond its range, in m.",
@@ -1957,6 +2075,72 @@
           "minItems": 1,
           "items": {
             "$ref": "#/$defs/LightCharacter"
+          }
+        },
+        "fogSignals": {
+          "description": "The patterns of blasts a world's lighthouses' fog signals are given.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/FogSignal"
+          }
+        },
+        "fogSignal": {
+          "title": "FogSignalRule",
+          "description": "When a fog signal sounds, how far it is heard, and which device each light's has.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sounds",
+            "heard",
+            "apart",
+            "devices"
+          ],
+          "properties": {
+            "sounds": {
+              "description": "A blast sounds while the visibility at its light is under this, in nautical miles.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "heard": {
+              "description": "It is heard within this of its light, in nautical miles.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "apart": {
+              "description": "Signals within this of each other differ, in nautical miles.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "devices": {
+              "title": "FogSignalDevices",
+              "description": "The device of each light's fog signal, by its role.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "mainPort",
+                "port",
+                "edge",
+                "hazard"
+              ],
+              "properties": {
+                "mainPort": {
+                  "$ref": "#/$defs/FogSignalDevice"
+                },
+                "port": {
+                  "$ref": "#/$defs/FogSignalDevice"
+                },
+                "edge": {
+                  "$ref": "#/$defs/FogSignalDevice"
+                },
+                "hazard": {
+                  "$ref": "#/$defs/FogSignalDevice"
+                }
+              }
+            }
           }
         },
         "look": {

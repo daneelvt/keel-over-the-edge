@@ -11,13 +11,13 @@
 // by the hour, and draws it. The focus is the boat; or, while the free
 // camera flies, the point beneath it, and the boat is drawn where it is.
 
-import { type Color, type Vector2, Vector3 } from 'three';
-import { exp, float, fog, length, max, mix, positionView } from 'three/tsl';
+import { type Color, type Vector2, Vector3, type Vector4 } from 'three';
+import { exp, float, fog, length, max, mix, positionView, positionWorld } from 'three/tsl';
 import type { WebGPURenderer } from 'three/webgpu';
 import { catalog } from '../catalog';
 import { endLook } from '../edge/broken';
 import { EdgeScene } from '../edge/edge';
-import { edgeLook, KOSCHMIEDER, mistAtVertex } from '../edge/mist';
+import { edgeLook, KOSCHMIEDER } from '../edge/mist';
 import { closedIn, EndSlabs, type EndStage, endStage, risen } from '../edge/taken';
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
@@ -29,7 +29,7 @@ import { rainShare } from '../ocean/water';
 import { type BoatPose, newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import { writeSkyParams } from '../predict/params.gen';
-import { BODY, type Physics, SKY } from '../predict/physics';
+import { BODY, type Physics, SKY, VISIBILITY } from '../predict/physics';
 import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
@@ -40,9 +40,11 @@ import { FloatingOrigin, type ScenePoint } from './coords';
 import { DirtyAir } from './dirtyair';
 import { type FlagSeen, Flags } from './flags';
 import { FleetView } from './fleet';
+import { AIR_REACH, airLook, depthTo, heldRain, setAirSources } from './fog';
 import { FreeCamera } from './freecam';
 import { GustRings } from './gustring';
 import { Lanterns, lanternLit, TOWN_LANTERNS } from './lanterns';
+import { Lightning } from './lightning';
 import { Lighthouses } from './lights';
 import { domeCentre } from './materials';
 import { Overlays } from './overlays';
@@ -162,6 +164,8 @@ export class SeaScene {
   /** Whether the spray is hidden (the tests). */
   sprayHidden = false;
   readonly stars = new Stars();
+  /** The flashes of the weather's squalls and storms, their clouds lit and their bolts. */
+  readonly lightning = new Lightning();
   readonly lanterns = new Lanterns();
   /** The towns' flags and chimney smoke, each showing the true wind where it is. */
   readonly flags = new Flags(catalog.world.towns.flags);
@@ -293,6 +297,7 @@ export class SeaScene {
     const scene = this.stage.scene;
     this.sky = new Sky(scene);
     this.weather = new SkyWeather(scene, catalog.weather.clouds);
+    scene.add(this.lightning.mesh);
     // A star behind the sheets is not tapped.
     this.stars.hidden = (dir) => {
       const c = this.stage.camera.position;
@@ -338,10 +343,11 @@ export class SeaScene {
     // Solid things fade toward the horizon's colour with distance, keeping
     // exp(−3.912 d / V) of their contrast at d metres: Koschmieder's law, V
     // the visual range at a 2% threshold; and toward the mist's through the
-    // band at the edge of the world, by the mist along the ray. The sea has
-    // its own blend to the sky at its edge.
+    // band at the edge of the world and the weather's fog and rain, by
+    // their optical depth along the ray. The sea has its own blend to the
+    // sky at its edge.
     const clear = length(positionView).mul(KOSCHMIEDER).div(look.visualRange);
-    const mist = mistAtVertex();
+    const mist = depthTo(positionWorld);
     const tau = clear.add(mist);
     scene.fogNode = fog(
       mix(toLinear(look.skyHorizon), toLinear(edgeLook.colour), mist.div(max(tau, 1e-6))),
@@ -857,13 +863,48 @@ export class SeaScene {
     const water = this.ocean.gusts.water;
     water.heldRain = w.heldRain;
     water.rainFar.value = rainShare(w.rain);
-    const physics = source?.physics ?? null;
-    const rain =
-      w.rain > 0.05 && physics !== null
-        ? physics.rainVisibility(w.rain, 0)
-        : Number.POSITIVE_INFINITY;
-    this.sky.rainRange = rain;
-    w.hazeIn(1 / (1 + this.sky.values.visualRange / rain));
+    const physics = source?.weather === true ? source.physics : null;
+    this.#air(physics, camera, w.heldRain);
+    // The flashes: each slot's from the module, the cloud a flash lights
+    // and its bolt; more of the flash's light by night.
+    const sun = this.sky.now.sunHeight;
+    this.lightning.frame(physics, {
+      tick: this.ticks,
+      seconds: this.ticks / STEPS_PER_SECOND,
+      camera,
+      origin: o,
+      night: Math.min(Math.max(-sun / (6 * (Math.PI / 180)) + 0.5, 0), 1),
+      on: this.drawSky && w.shown,
+    });
+    const c = this.lightning.cloud;
+    (w.clouds.flash.value as Vector4).set(c.x, c.y, c.z, c.strength);
+  }
+
+  /**
+   * The weather's fog and rain along each ray: the module's sources of
+   * extinction near the camera into the materials' uniforms, a rain held
+   * at the camera as one that is the same everywhere; and the visibility at
+   * the camera, which the sea's horizon blend is held within.
+   */
+  #air(physics: Physics | null, camera: Vector3, held: number | null): void {
+    const o = this.origin.world;
+    const east = camera.x + o.x;
+    const north = -camera.z + o.y;
+    airLook.seconds.value = this.ticks / STEPS_PER_SECOND;
+    if (physics === null) {
+      airLook.count.value = 0;
+      this.sky.cameraRange = Number.POSITIVE_INFINITY;
+      return;
+    }
+    physics.windDrawAt(this.ticks);
+    setAirSources(physics.airSources(east, north, AIR_REACH).records, RECORDS.airSource);
+    let range = physics.visibilityAt(east, north);
+    if (held !== null && held > 0.05) {
+      const v = physics.rainVisibility(held, 0);
+      heldRain(KOSCHMIEDER / v, catalog.weather.clouds.low);
+      range = 1 / (1 / range + 1 / v);
+    }
+    this.sky.cameraRange = range;
   }
 
   /** Asks the module for the sky at the boat at the frame's time, and lights the scene by it. */
@@ -1009,11 +1050,35 @@ export class SeaScene {
     return w;
   }
 
-  /** The lighthouses' towers and lights, each light lit by the sun at its lighthouse. */
+  /** The air the lights are seen through: the module's, made once. */
+  readonly #lightsAir = {
+    physics: null as Physics | null,
+    depth(x0: number, y0: number, h0: number, x1: number, y1: number, h1: number): number {
+      return this.physics?.opticalDepth(x0, y0, h0, x1, y1, h1) ?? 0;
+    },
+    poor(east: number, north: number): boolean {
+      const p = this.physics;
+      return p !== null && p.visibilityWord(p.visibilityAt(east, north)) >= VISIBILITY.poor;
+    },
+    fog(east: number, north: number, h: number): number {
+      return this.physics?.airAt(east, north, h)[1] ?? 0;
+    },
+    extinction(east: number, north: number, h: number): number {
+      const a = this.physics?.airAt(east, north, h);
+      return a === undefined ? 0 : (a[0] ?? 0) + (a[1] ?? 0) + (a[2] ?? 0) + (a[3] ?? 0);
+    },
+  };
+
+  /** The lighthouses' towers and lights, each light lit by the sun at its lighthouse or by fog. */
   #drawLights(gfx: Gfx, camera: Vector3, now: number): void {
     const sun = SKY.sun + BODY.altitude;
     const own = this.sky.now.sunHeight;
+    const source = this.ocean.source;
+    const physics = source?.weather === true ? source.physics : null;
+    physics?.windDrawAt(this.ticks);
+    this.#lightsAir.physics = physics;
     this.lighthouses.frame({
+      air: physics === null ? null : this.#lightsAir,
       origin: this.origin.world,
       camera,
       worldUs: Math.floor(this.ticks * TICK_US),

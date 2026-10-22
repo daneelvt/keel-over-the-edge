@@ -63,12 +63,15 @@ import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
 import { regimeIndex } from '../predict/weather';
 import { ROAM_HIGH } from '../render/freecam';
+import { flashNear } from '../render/lightning';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
   commonestWeather,
   FRONT,
+  flashFromQuery,
+  fogFromQuery,
   frontFromQuery,
   rainFromQuery,
   START,
@@ -148,7 +151,7 @@ async function start(): Promise<void> {
     };
     const [, sandbox] = await Promise.all([
       world.start(),
-      startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather, begin),
+      startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather, catalog.world, begin),
     ]);
     prepareEncounters(sandbox.physics, catalog.encounters);
     // The edge's rules, as a server keeps them; the world file's water's way.
@@ -182,7 +185,7 @@ async function start(): Promise<void> {
         { rule: high, where: () => (free.on ? [free.east, free.north] : null) },
         {
           places: placesSeen(file, catalog.world.places),
-          lights: lightsSeen(file),
+          lights: lightsSeen(file, catalog.world.lights.fogSignals, catalog.world.lights.fogSignal),
           drop: catalog.world.lights.drop,
           onPlaces: (p) => {
             world.lighthouses.setPlaces(p);
@@ -197,6 +200,25 @@ async function start(): Promise<void> {
     world.useSky(sandbox.physics, sandboxEpochUs(catalog.sky));
     // ?rain=mm: rain held at the camera.
     world.weather.heldRain = rainFromQuery(query);
+    // ?fog=m: a fog bank of that core held on the boat; ?flash=s: the
+    // nearest heaped cloud flashes to the sea that many seconds in.
+    const fog = fogFromQuery(query);
+    if (fog !== null) {
+      sandbox.holdFog(fog);
+    }
+    const flash = flashFromQuery(query);
+    if (flash !== null) {
+      const s = sandbox.physics.records.state;
+      world.lightning.force(
+        flashNear(
+          world.weather.heaped,
+          s[RECORDS.state.x] ?? 0,
+          s[RECORDS.state.y] ?? 0,
+          world.ticks,
+          flash,
+        ),
+      );
+    }
     chooseSky(world, query);
     // The world's chart, read once its land is handed, so the sea starts as
     // it does without one.
@@ -210,7 +232,9 @@ async function start(): Promise<void> {
         () => ({
           east: world.pose.east,
           north: world.pose.north,
-          night: world.sky.now.sunHeight < 0,
+          sun: world.sky.now.sunHeight,
+          physics: world.ocean.source?.weather === true ? world.ocean.source.physics : null,
+          tick: world.ticks,
         }),
       );
     }
@@ -264,7 +288,13 @@ async function start(): Promise<void> {
       backSoon: notice,
     }),
   ]);
-  const predictor = new Predictor(physics, world.kind.physics, catalog.weather, catalog.encounters);
+  const predictor = new Predictor(
+    physics,
+    world.kind.physics,
+    catalog.weather,
+    catalog.world,
+    catalog.encounters,
+  );
   const worker = new Worker(new URL('../workers/net/worker.ts', import.meta.url), {
     type: 'module',
   });

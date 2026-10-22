@@ -111,7 +111,8 @@ export interface PlaceSeen {
  * A lighthouse's light, sent once the eye is within its range: its number,
  * where it is (metres east and north), its height above the sea (metres),
  * its character (the catalog's index), its phase (microseconds of world
- * time) and its nominal range (metres). Never a name.
+ * time), its nominal range (metres) and its lighthouse's fog signal (the
+ * catalog's index). Never a name.
  */
 export interface LightSeen {
   number: number;
@@ -121,6 +122,7 @@ export interface LightSeen {
   character: number;
   phase: number;
   range: number;
+  fogSignal: number;
 }
 
 /** What can be charted: an island, a place or a feature. */

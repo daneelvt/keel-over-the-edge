@@ -221,10 +221,48 @@ func TestOn(t *testing.T) {
 	}
 }
 
+func TestBlast(t *testing.T) {
+	steps := []int{2000, 2000, 2000, 24000} // two blasts every 30 s
+	for _, c := range []struct {
+		phase, t, start int64
+		on              bool
+	}{
+		{0, 0, 0, true}, {0, 1_999_999, 0, true}, {0, 2_000_000, 0, false}, {0, 4_000_000, 4_000_000, true},
+		{0, 5_500_000, 4_000_000, true}, {0, 6_000_000, 0, false}, {0, 29_999_999, 0, false},
+		{0, 30_500_000, 30_000_000, true}, {1_000_000, 0, -1_000_000, true}, {0, -29_000_000, -30_000_000, true},
+	} {
+		start, on := light.Blast(steps, c.phase, c.t)
+		if on != c.on || on && start != c.start {
+			t.Errorf("phase %d at %d: %v from %d, not %v from %d", c.phase, c.t, on, start, c.on, c.start)
+		}
+		if on != light.On(steps, c.phase, c.t) {
+			t.Errorf("phase %d at %d: a blast where a light would not show", c.phase, c.t)
+		}
+	}
+}
+
+// Each light takes the first pattern of its device no light before it
+// within the distance has; when every one is had, the one held furthest.
+func TestAssignFogSignals(t *testing.T) {
+	patterns := []string{"a", "b", "b", "b", "c"}
+	places := [][2]float64{{0, 0}, {100, 0}, {200, 0}, {300, 0}, {400, 0}, {10000, 0}, {500, 0}, {50, 0}}
+	devices := []string{"b", "b", "b", "a", "b", "b", "d", "b"}
+	got := light.AssignFogSignals(places, devices, patterns, 1000)
+	// The fourth b is within 1000 m of all three before it: the one whose
+	// holder is furthest, the first's, 400 m off; the last, 50 m from the
+	// first and within reach of all, takes the one held 150 m off.
+	want := []int{1, 2, 3, 0, 1, 1, -1, 3}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("light %d: pattern %d, want %d", i, got[i], want[i])
+		}
+	}
+}
+
 func TestAllard(t *testing.T) {
 	tr := light.Transmissivity(10)
-	if math.Abs(tr-0.741) > 0.0005 {
-		t.Errorf("the transmissivity in 10 miles' visibility is %.4f, not 0.741", tr)
+	if math.Abs(tr-0.676) > 0.0005 {
+		t.Errorf("the transmissivity in 10 miles' visibility is %.4f, not 0.676", tr)
 	}
 	for _, r := range []float64{1389, 2778, 4630, 8334} {
 		ta := light.Transmissivity(4.5)
@@ -262,12 +300,35 @@ type golden struct {
 	Times   []int64       `json:"times"`
 	Phases  []int64       `json:"phases"`
 	Lights  []goldenLight `json:"lights"`
+	// FogSignals are the fog signals' blasts, and Assignment a world's
+	// lights given their fog signals.
+	FogSignals []goldenSignal   `json:"fogSignals"`
+	Assignment goldenAssignment `json:"assignment"`
 }
 
 type goldenLight struct {
 	Notation string   `json:"notation"`
 	Steps    []int    `json:"steps"`
 	On       []string `json:"on"` // by phase
+}
+
+// goldenSignal is a fog signal's blasts in the schedule file: at each time
+// and phase, 1 for a blast and 0 for silence, and each blast's start.
+type goldenSignal struct {
+	Notation string    `json:"notation"`
+	Device   string    `json:"device"`
+	Steps    []int     `json:"steps"`
+	On       []string  `json:"on"`     // by phase
+	Starts   [][]int64 `json:"starts"` // by phase, the blasts' starts at the times in a blast
+}
+
+// goldenAssignment is an assignment of fog signals to lights in the
+// schedule file, which the page's makes too.
+type goldenAssignment struct {
+	Places  [][2]float64 `json:"places"`
+	Devices []string     `json:"devices"`
+	Apart   float64      `json:"apart"`
+	Signals []int        `json:"signals"`
 }
 
 // TestGoldenSchedule holds the rule to testdata/schedule.json, which the
@@ -291,6 +352,43 @@ func TestGoldenSchedule(t *testing.T) {
 			g.Times = append(g.Times, d+k*499_999, d+k*500_000, d+k*500_001)
 		}
 	}
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var patterns []string
+	for _, fs := range cat.World.Lights.FogSignals {
+		gs := goldenSignal{Notation: fs.Notation, Device: string(fs.Device), Steps: fs.Steps}
+		patterns = append(patterns, string(fs.Device))
+		for _, p := range g.Phases {
+			var b strings.Builder
+			starts := []int64{}
+			for _, tm := range g.Times {
+				if start, on := light.Blast(fs.Steps, p, tm); on {
+					b.WriteByte('1')
+					starts = append(starts, start)
+				} else {
+					b.WriteByte('0')
+				}
+			}
+			gs.On = append(gs.On, b.String())
+			gs.Starts = append(gs.Starts, starts)
+		}
+		g.FogSignals = append(g.FogSignals, gs)
+	}
+	// Forty lights about a disk, each of a device of the catalog's, many
+	// within reach of one another.
+	devices := cat.World.Lights.FogSignal.Devices
+	roles := []string{string(devices.Port), string(devices.Hazard), string(devices.Edge), string(devices.Hazard)}
+	a := goldenAssignment{Apart: cat.World.Lights.FogSignal.Apart * light.NauticalMile, Devices: []string{string(devices.MainPort)}, Places: [][2]float64{{-36.25, 71.5}}}
+	for k := range 40 {
+		r := 300 + float64(k*k%37)*210.125
+		th := float64(k) * 2.399963
+		a.Places = append(a.Places, [2]float64{math.Round(r*math.Sin(th)*8) / 8, math.Round(r*math.Cos(th)*8) / 8})
+		a.Devices = append(a.Devices, roles[k%len(roles)])
+	}
+	a.Signals = light.AssignFogSignals(a.Places, a.Devices, patterns, a.Apart)
+	g.Assignment = a
 	for _, ch := range chars {
 		gl := goldenLight{Notation: ch.Notation, Steps: ch.Steps}
 		for _, p := range g.Phases {
@@ -323,6 +421,12 @@ func TestGoldenSchedule(t *testing.T) {
 	}
 	if fmt.Sprint(want.Times) != fmt.Sprint(g.Times) || fmt.Sprint(want.Phases) != fmt.Sprint(g.Phases) || len(want.Lights) != len(g.Lights) {
 		t.Fatalf("%s is for other times, phases or characters: write it again with -update", scheduleFile)
+	}
+	if fmt.Sprint(want.FogSignals) != fmt.Sprint(g.FogSignals) {
+		t.Errorf("the fog signals' blasts differ from %s", scheduleFile)
+	}
+	if fmt.Sprint(want.Assignment) != fmt.Sprint(g.Assignment) {
+		t.Errorf("the fog signals' assignment differs from %s", scheduleFile)
 	}
 	for i := range g.Lights {
 		if fmt.Sprint(want.Lights[i]) != fmt.Sprint(g.Lights[i]) {

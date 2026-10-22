@@ -1640,7 +1640,11 @@ type Light struct {
 	// Its phase, in microseconds of world time.
 	Phase int64 `protobuf:"varint,6,opt,name=phase,proto3" json:"phase,omitempty"`
 	// Its nominal range, in metres.
-	Range         uint32 `protobuf:"varint,7,opt,name=range,proto3" json:"range,omitempty"`
+	Range uint32 `protobuf:"varint,7,opt,name=range,proto3" json:"range,omitempty"`
+	// Its lighthouse's fog signal: an index into the catalog's fog signals.
+	// Its blasts keep the light's phase, and each sounds while the
+	// visibility at the light is poor or worse as it begins.
+	FogSignal     uint32 `protobuf:"varint,8,opt,name=fog_signal,json=fogSignal,proto3" json:"fog_signal,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1720,6 +1724,13 @@ func (x *Light) GetPhase() int64 {
 func (x *Light) GetRange() uint32 {
 	if x != nil {
 		return x.Range
+	}
+	return 0
+}
+
+func (x *Light) GetFogSignal() uint32 {
+	if x != nil {
+		return x.FogSignal
 	}
 	return 0
 }
@@ -3237,7 +3248,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x04heel\x18\f \x01(\x11R\x04heel\"D\n" +
 	"\x06Lights\x12&\n" +
 	"\x06lights\x18\x01 \x03(\v2\x0e.keel.v1.LightR\x06lights\x12\x12\n" +
-	"\x04drop\x18\x02 \x03(\rR\x04drop\"\xa9\x01\n" +
+	"\x04drop\x18\x02 \x03(\rR\x04drop\"\xc8\x01\n" +
 	"\x05Light\x12\x16\n" +
 	"\x06number\x18\x01 \x01(\rR\x06number\x12\x12\n" +
 	"\x04east\x18\x02 \x01(\x11R\x04east\x12\x14\n" +
@@ -3245,7 +3256,9 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05focal\x18\x04 \x01(\rR\x05focal\x12\x1c\n" +
 	"\tcharacter\x18\x05 \x01(\rR\tcharacter\x12\x14\n" +
 	"\x05phase\x18\x06 \x01(\x03R\x05phase\x12\x14\n" +
-	"\x05range\x18\a \x01(\rR\x05range\"\x17\n" +
+	"\x05range\x18\a \x01(\rR\x05range\x12\x1d\n" +
+	"\n" +
+	"fog_signal\x18\b \x01(\rR\tfogSignal\"\x17\n" +
 	"\x05Tools\x12\x0e\n" +
 	"\x02on\x18\x01 \x01(\bR\x02on\"4\n" +
 	"\x06Chunks\x12\x16\n" +

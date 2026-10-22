@@ -78,6 +78,8 @@ type systemKind struct {
 	gusts            float64
 	swell            swellKind
 	cloud            cloudKind
+	fog              fogKind
+	lightning        lightningKind
 }
 
 // SetKind sets kind i of the systems. It is called after PrepareWeather,
@@ -98,6 +100,8 @@ func (w *WeatherPrepared) SetKind(i int32, k *SystemKind) {
 	o.gusts = max2(k.Gusts, 0)
 	o.setSwell(k)
 	o.cloud.set(k)
+	o.fog.set(k)
+	o.lightning.set(k)
 	w.nkinds = max(w.nkinds, i+1)
 }
 
@@ -134,6 +138,7 @@ type systemTick struct {
 	strength float64 // its life and throb
 	size     float64 // its radius, m
 	speed    float64 // how fast it moves, m/s
+	fog      float64 // a fog bank's extinction at its core at the sea, 1/m
 }
 
 // systemValues are a system's values as floats: what a keyframe's whole
@@ -224,6 +229,7 @@ func (st *systemTick) set(p *WeatherPrepared, v *systemValues, slot int32) bool 
 	out := float64(gustRingOuter * size)
 	st.gustOut2 = float64(out * out)
 	st.invGusts = 1 / float64((gustRingOuter-gustRingInner)*size)
+	st.fog = st.fogOf(p)
 	return true
 }
 

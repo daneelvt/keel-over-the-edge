@@ -45,6 +45,8 @@ func testSystems(t testing.TB) (*WeatherPrepared, map[string]int32) {
 	for i, r := range c.Weather.Regimes {
 		p.SetRegimeCumulus(int32(i), r.Cumulus)
 	}
+	vis := visibilityOf(c)
+	p.PrepareVisibility(&vis)
 	return p, index
 }
 
@@ -63,6 +65,12 @@ func setCloudKind(sk *SystemKind, k map[string]any) {
 	r := k["rain"].(map[string]any)
 	sk.RainRate, sk.RainWidth = r["rate"].(float64), r["width"].(float64)
 	sk.RainBands, sk.RainTurn = r["bands"].(float64), r["turn"].(float64)
+	if f, ok := k["fog"].(map[string]any); ok {
+		sk.FogCore, sk.FogHeight = pair(f["core"]), f["height"].(float64)
+	}
+	if l, ok := k["lightning"].(map[string]any); ok {
+		sk.LightningAbove, sk.LightningRate, sk.LightningWithin = l["above"].(float64), l["rate"].(float64), pair(l["within"])
+	}
 }
 
 // still is a spell with no wind of its own, so that what blows is the

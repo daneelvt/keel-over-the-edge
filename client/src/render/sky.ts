@@ -62,6 +62,7 @@ import {
   newMainLight,
   readLight,
 } from './daylight';
+import { AIR_REACH, airBetween, haloBetween } from './fog';
 import { sailGlowColour, skyMaterial } from './materials';
 
 /** The sun at the table's day before the sky is first read: 30° up in the east. */
@@ -248,19 +249,32 @@ export class Sky {
    * grey, and the sun's highlight on the water goes.
    */
   overcast = 0;
-  /** The visual range in rain alone, m: Infinity in none. Rain's and the clear air's extinctions add. */
-  rainRange = Number.POSITIVE_INFINITY;
+  /**
+   * The visibility at the camera, m, as the physics module gives it from
+   * the weather: Infinity while none is known. The sea's horizon blend is
+   * held within it; the fog and the rain along each ray are the weather's
+   * own optical depth (render/fog.ts).
+   */
+  cameraRange = Number.POSITIVE_INFINITY;
   readonly #colour = new Color();
 
   constructor(scene: Scene) {
     const material = skyMaterial();
     material.side = BackSide;
     // The band's mist over the sky, along each direction out to where the
-    // dome has lifted the ray clear of the mist's layer: at the vertices.
+    // dome has lifted the ray clear of the mist's layer: at the vertices;
+    // and the weather's fog and rain, whose banks' edges are finer than the
+    // sphere's vertices are apart, at each fragment, the sun's disc and the
+    // sky hidden by the depth in their direction, white overhead in a
+    // bank. A lit light in a bank lights the fog about it.
     const toward = normalize(positionLocal);
-    const mist = mistTo(cameraPosition.add(toward.mul(SKY_MIST_REACH)));
-    const seen = mix(edgeLook.colour, skyFull(positionLocal) as Node<'vec3'>, exp(mist.negate()));
-    material.fragmentNode = vec4(toLinear(seen), 1);
+    const reach = cameraPosition.add(toward.mul(SKY_MIST_REACH));
+    // The weather's along the whole ray: a bank far off is seen edge-on
+    // low over the horizon, a wall whitening it.
+    const far = cameraPosition.add(toward.mul(AIR_REACH));
+    const depth = mistTo(reach).add(airBetween(cameraPosition, far));
+    const seen = mix(edgeLook.colour, skyFull(positionLocal) as Node<'vec3'>, exp(depth.negate()));
+    material.fragmentNode = vec4(toLinear(seen).add(haloBetween(cameraPosition, reach)), 1);
     this.mesh = new Mesh(skyGeometry(), material);
     this.mesh.name = 'sky';
     this.mesh.renderOrder = -1;
@@ -324,12 +338,12 @@ export class Sky {
     greyed(look.deep, v.deep, luminance(v.deep), OVERCAST.sea * o);
     greyed(look.scatter, v.scatter, luminance(v.scatter), OVERCAST.sea * o);
     (look.broad.value as Vector3).set(v.broadPower, v.broadStrength * (1 - o), 0);
-    // In rain the visual range shortens to what the rain and the clear air
-    // leave, and the sea's horizon blend with it.
-    const range = 1 / (1 / v.visualRange + 1 / this.rainRange);
+    // In fog or rain the sea's horizon blend shortens to the visibility at
+    // the camera.
+    const range = Math.min(v.visualRange, this.cameraRange);
     look.hazeNear.value = Math.min(v.hazeNear, 0.3 * range);
     look.hazeFar.value = Math.min(v.hazeFar, range);
-    look.visualRange.value = range;
+    look.visualRange.value = v.visualRange;
     // The sail's glow is a light, in linear values.
     const glow = this.#colour.setRGB(
       v.sailGlow[0] ?? 0,

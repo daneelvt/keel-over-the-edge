@@ -458,6 +458,7 @@ export function lightSeen(l: Light): LightSeen {
     character: l.character,
     phase: Number(l.phase),
     range: l.range,
+    fogSignal: l.fogSignal,
   };
 }
 

@@ -50,7 +50,8 @@ import {
 import type { Node, Texture } from 'three/webgpu';
 import { brokenOff } from '../edge/broken';
 import { beyondLip, lipPlane } from '../edge/lip';
-import { mistBetween, seaPoint } from '../edge/mist';
+import { seaPoint } from '../edge/mist';
+import { depthBetween } from '../render/fog';
 import { GUST_LOOK, type GustField, gustAt } from './gusts';
 import type { Field } from './hex';
 import { FIELD_RADIUS, TILE_RADIUS } from './hex';
@@ -204,10 +205,11 @@ export class Tiles {
     const s = positionGeometry.y;
     const y = select(land, plane.x.sub(50), plane.x.add(dot(plane.yz, e)).add(s.mul(SKIRT_DEPTH)));
     this.position = vec3(c.x.add(e.x), y, c.y.add(e.y));
-    // The sea's period and the band's mist (mistToSea's) share a varying:
-    // with one more, WebGPU drew the tiles' glints wrong.
+    // The sea's period and the optical depth of the band's mist and the
+    // weather (depthToSea's) share a varying: with one more, WebGPU drew
+    // the tiles' glints wrong.
     const periodMist = varying(
-      vec2(periodAt(band)(c), mistBetween(cameraPosition, seaPoint(c.add(e)))),
+      vec2(periodAt(band)(c), depthBetween(cameraPosition, seaPoint(c.add(e)))),
     ) as unknown as Node<'vec2'>;
     this.varyings = {
       offset: varying(e),

@@ -142,6 +142,13 @@ type Config struct {
 	// lights' characters, by their indices, as the page shows them.
 	PlaceKinds []PlaceKind
 	Characters []Character
+	// FogSignals are the catalog's fog signals' patterns, by their
+	// indices; LightSignals each of the bundle's lights' fog signal, by its
+	// index in them, −1 for none; and SoundsUnder the visibility at its
+	// light a blast sounds under, m.
+	FogSignals   []FogSignal
+	LightSignals []int
+	SoundsUnder  float64
 	// FeatureKinds are the catalog's kinds of feature; SurfacePlants the
 	// names of the plants that grow on each surface, by its index.
 	FeatureKinds  []FeatureKind
@@ -196,7 +203,7 @@ var Paths = []string{
 	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json", "/owner/api/charted.json",
 	"/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
-	"/owner/api/clouds.json", "/owner/api/chart",
+	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -274,6 +281,7 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/point", o.point)
 	mux.HandleFunc("GET /owner/api/sea.json", o.sea)
 	mux.HandleFunc("GET /owner/api/clouds.json", o.clouds)
+	mux.HandleFunc("GET /owner/api/visibility.json", o.visibility)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
 	mux.HandleFunc("POST /owner/api/place", o.place)
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)

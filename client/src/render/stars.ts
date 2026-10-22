@@ -31,6 +31,7 @@ import {
 } from 'three';
 import {
   attribute,
+  cameraPosition,
   cameraProjectionMatrix,
   cameraViewMatrix,
   clamp,
@@ -48,6 +49,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { sheets, sheetsHide } from '../sky/sheets';
+import { AIR_REACH, airBetween } from './fog';
 import { skyMaterial } from './materials';
 import { look, MOON_RADIUS, toLinear } from './sky';
 
@@ -220,6 +222,11 @@ export class Stars {
     const spot = mix(step(r2, 1), exp(r2.mul(-3.5)), vFancy);
     const low = mix(float(1), smoothstep(-0.04, 0.05, d.y), vFancy);
     const clouds = mix(float(1), float(1).sub(sheetsHide(sheets, d)), vFancy);
+    // The fog and the rain in the star's direction hide it by their
+    // optical depth, worked out at its corners.
+    const air = exp(
+      varying(airBetween(cameraPosition, cameraPosition.add(dir.mul(AIR_REACH)), false)).negate(),
+    );
     const moon = smoothstep(
       Math.cos(MOON_RADIUS * 1.15),
       Math.cos(MOON_RADIUS * 0.95),
@@ -229,6 +236,7 @@ export class Stars {
       .mul(shown)
       .mul(low)
       .mul(clouds)
+      .mul(air)
       .mul(float(1).sub(moon.mul(vFancy)));
     m.fragmentNode = vec4(
       toLinear(tint.mul(bright)).mul(max(alpha, 0)),

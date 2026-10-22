@@ -281,7 +281,7 @@ export interface Point {
   sky: SkyPoint | null;
 }
 
-/** The sky at a point: its rain, the three sheets' cover, and the heaped cloud over it. */
+/** The sky at a point: its rain, the three sheets' cover, the heaped cloud over it, and its visibility. */
 export interface SkyPoint {
   /** mm an hour, and its word. */
   rain: number;
@@ -290,6 +290,21 @@ export interface SkyPoint {
   sheets: { cirrus: number; middle: number; low: number };
   /** The heaped cloud overhead, the tallest if more than one; null for none. */
   cloud: { form: CloudForm; slot: number; top: number } | null;
+  /** The visibility at the sea 2 m up, m, its word, and each thing's share of the air's extinction, 0 to 1. */
+  visibility: number;
+  visibilityWord: VisibilityWord;
+  air: AirShares;
+}
+
+/** Visibility's words, the Met Office's marine ones. */
+export type VisibilityWord = 'good' | 'moderate' | 'poor' | 'very poor';
+
+/** The shares of the air's extinction at a point, 0 to 1: the clear air's, the fog's, the rain's and the mist's. */
+export interface AirShares {
+  clear: number;
+  fog: number;
+  rain: number;
+  mist: number;
 }
 
 /** A run of one of keel's jobs about the world's life. Times are ms of UTC, 0 for none. */
@@ -570,6 +585,47 @@ export interface CloudsPage {
   cumulus: Cumulus[];
 }
 
+/** A flash of the last minute: where it struck, to the sea or in the cloud. */
+export interface Flash {
+  /** Its system's slot. */
+  slot: number;
+  /** Its first stroke's tick. */
+  tick: number;
+  east: number;
+  north: number;
+  /** It struck the sea; otherwise it stayed in the cloud. */
+  sea: boolean;
+  strokes: number;
+}
+
+/** A light as it shows now. */
+export interface LightNow {
+  number: number;
+  east: number;
+  north: number;
+  /** Its fog signal as charts write it; "" for none. */
+  signal: string;
+  /** Its fog signal is blasting, the visibility at it under the threshold as the blast began. */
+  sounding: boolean;
+  /** Lit: by night, or with the visibility at it poor or worse; byDay, lit while the sun is up. */
+  lit: boolean;
+  byDay: boolean;
+}
+
+/** visibility.json: the fog, the lightning and the lights now. */
+export interface VisibilityPage {
+  tick: number;
+  lip: number;
+  /** Very poor under the first, poor under the second, moderate under the third and good above, m. */
+  words: [number, number, number];
+  /** A fog signal sounds while the visibility at its light is under this, m. */
+  sounds: number;
+  /** The visibility at the sea, m; 0 beyond the lip. */
+  grid: CloudGrid;
+  flashes: Flash[];
+  lights: LightNow[];
+}
+
 /** The gusts' grid: GUST_SIDE a side over the square of the land's chart, a signed byte a point. */
 export const GUST_STEP = 0.1;
 export const NO_GUST = -128;
@@ -626,6 +682,11 @@ export function getSea(at: [number, number] | null): Promise<SeaPage> {
 /** The clouds and the rain of the current world now. */
 export function getClouds(): Promise<CloudsPage> {
   return getJSON<CloudsPage>('clouds.json');
+}
+
+/** The fog, the lightning and the lights of the current world now. */
+export function getVisibility(): Promise<VisibilityPage> {
+  return getJSON<VisibilityPage>('visibility.json');
 }
 
 /** A URL of the land's drawings, for an image. */

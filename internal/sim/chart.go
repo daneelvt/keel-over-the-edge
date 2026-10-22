@@ -3,6 +3,8 @@
 package sim
 
 import (
+	"math"
+
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
@@ -20,8 +22,14 @@ import (
 // in its voyage charts nothing, nor one staying while its owner's free
 // camera roams, nor one falling over the lip.
 //
-// A light is lit while the sun is below the horizon at it, looked at again
-// once a second.
+// A look sees through the weather at the tick: the optical depth along
+// the line to a thing, the clear air's, the fog banks', the rain's and the
+// mist band's (package sight). A light is lit while the sun is below the
+// horizon at it, or while the visibility at it is poor or worse, looked
+// at again once a second; it is seen against night's threshold while the
+// sun is a degree or more below the horizon, against the day's while it
+// is up, and between them across the sun's last degree, as the lanterns
+// light.
 
 // Sight is what a world's lookouts see by.
 type Sight struct {
@@ -34,7 +42,14 @@ type Sight struct {
 	// the sun is down at a light; nil for always.
 	Sky   *sky.Prepared
 	Epoch int64
+	// Night and Day are the thresholds a light is seen against at night
+	// and by day, lux; nothing for the table's night's always.
+	Night, Day float64
 }
+
+// lastDegree is the sun's last degree below the horizon, rad, across which
+// a light's threshold goes from the day's to night's.
+const lastDegree = math.Pi / 180
 
 // litEvery is how often the lights are looked at, ticks: a second.
 const litEvery = physics.StepsPerSecond
@@ -44,6 +59,7 @@ type chartState struct {
 	sight    *Sight
 	charted  []uint64
 	lit      []bool
+	thr      []float64 // each light's threshold, ln lux
 	litAt    int64
 	lookouts []sight.Lookout
 	seen     []sight.Seen
@@ -70,13 +86,16 @@ func (w *World) initChart(s *Sight, kinds int) {
 	}
 	c.charted = make([]uint64, sight.Words(len(s.Table.Subjects())))
 	c.lit = make([]bool, s.Table.Lights())
+	if s.Night > 0 && s.Day > 0 {
+		c.thr = make([]float64, s.Table.Lights())
+	}
 	c.litAt = -1 << 62
 	for k := range kinds {
 		h := 2.0
 		if k < len(s.Lookouts) {
 			h = s.Lookouts[k]
 		}
-		c.lookouts = append(c.lookouts, sight.Lookout{Eye: s.Table.Eye(h), Reach: s.Table.EyeReach(h)})
+		c.lookouts = append(c.lookouts, s.Table.Lookout(h))
 	}
 	c.seen = make([]sight.Seen, 0, 64)
 	c.found = make([]chartFound, 0, 64)
@@ -112,6 +131,7 @@ func (w *World) sighting() {
 	}
 	every := c.sight.Every
 	c.found = c.found[:0]
+	cond := sight.Conditions{Weather: &w.wind, Lit: c.lit, Threshold: c.thr}
 	for _, s := range f.Live {
 		if (int64(f.Boat[s])+f.Tick)%every != 0 {
 			continue
@@ -122,7 +142,7 @@ func (w *World) sighting() {
 		}
 		l := c.lookouts[f.Kind[s]]
 		l.X, l.Y = f.State[s].X, f.State[s].Y
-		c.seen = c.sight.Table.Look(&l, c.charted, c.lit, c.seen[:0])
+		c.seen = c.sight.Table.Look(&l, c.charted, &cond, c.seen[:0])
 		for _, seen := range c.seen {
 			w.found(f, seen.Subject, s, seen.D2)
 		}
@@ -188,8 +208,9 @@ func (w *World) chartByHand(f *bus.Frame, subject int32, all bool) {
 	}
 }
 
-// lights sets which lights are lit at tick: those with the sun below the
-// horizon at them.
+// lights sets which lights are lit at tick, those with the sun below the
+// horizon at them or the visibility at them poor or worse, and the
+// threshold each is seen against.
 func (w *World) lights(tick int64) {
 	c := &w.chart
 	sk := c.sight.Sky
@@ -197,12 +218,21 @@ func (w *World) lights(tick int64) {
 	if sk != nil {
 		t = sky.Time(sk, float64(c.sight.Epoch), float64(float64(tick)*1e6)/physics.StepsPerSecond)
 	}
+	p := w.wind.Prepared()
+	night, day := 0.0, 0.0
+	if c.thr != nil {
+		night, day = physics.Log(c.sight.Night), physics.Log(c.sight.Day)
+	}
 	for i := range c.lit {
-		if sk == nil {
-			c.lit[i] = true
-			continue
-		}
 		x, y, _ := c.sight.Table.LightAt(i)
-		c.lit[i] = sky.SunAltitude(sk, t, x, y) < 0
+		sun := -math.Pi / 2
+		if sk != nil {
+			sun = sky.SunAltitude(sk, t, x, y)
+		}
+		c.lit[i] = sun < 0 || p != nil && p.VisibilityWord(physics.VisibilityAt(&w.wind, x, y)) >= physics.VisibilityPoor
+		if c.thr != nil {
+			share := min(max(float64((sun+lastDegree)/lastDegree), 0), 1)
+			c.thr[i] = night + float64(share*(day-night))
+		}
 	}
 }

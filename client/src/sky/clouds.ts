@@ -25,6 +25,7 @@ import {
   Matrix4,
   Quaternion,
   Vector3,
+  Vector4,
 } from 'three';
 import {
   cameraPosition,
@@ -46,10 +47,11 @@ import type { Node } from 'three/webgpu';
 import cumulonimbus from '../../../art/clouds/cumulonimbus.json';
 import cumulus from '../../../art/clouds/cumulus.json';
 import storm from '../../../art/clouds/storm.json';
-import { edgeLook, mistTo } from '../edge/mist';
+import { edgeLook } from '../edge/mist';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import { FORMS } from '../predict/weather';
-import { basicMaterial } from '../render/materials';
+import { depthTo } from '../render/fog';
+import { basicMaterial, bendScene } from '../render/materials';
 import { look, skyColour, toLinear } from '../render/sky';
 
 /** A layer of a recipe's puffs. */
@@ -229,6 +231,9 @@ export class Clouds {
   readonly anchor = uniform(new Vector3());
   readonly since = uniform(0);
   readonly hazeScale = uniform(HAZE_HALF / Math.LN2);
+  /** A flash lighting its cloud from within: where, scene axes, and how bright; and how far it lights, m. */
+  readonly flash = uniform(new Vector4(0, 0, 0, 0));
+  readonly flashReach = uniform(900);
   /** How many puffs the quality in use draws at most. */
   capacity = PUFF_MOST;
   /** The puffs laid out last, and how many of them are the systems' clouds'. */
@@ -290,7 +295,23 @@ export class Clouds {
     const lambert = max(dot(n, look.light), 0);
     const base = mix(look.cloudBase, look.cloudBase.mul(0.55), shade.y);
     const tone = mix(base, look.cloudTop, shade.x);
-    const lit = tone.mul(float(0.72).add(lambert.mul(0.22)).add(n.y.mul(0.08)));
+    const lit = tone
+      .mul(float(0.72).add(lambert.mul(0.22)).add(n.y.mul(0.08)))
+      // A flash within lights the puffs about it, the nearer the brighter.
+      .add(
+        vec3(0.85, 0.88, 1.1).mul(
+          this.flash.w.mul(
+            exp(
+              positionWorld
+                .sub(bendScene(this.flash.xyz))
+                .length()
+                .div(this.flashReach)
+                .pow(2)
+                .negate(),
+            ),
+          ),
+        ),
+      );
     // Its haze, toward the sky's colour in its direction, then the mist of
     // the band at the world's edge.
     const toward = positionWorld.sub(cameraPosition);
@@ -301,7 +322,7 @@ export class Clouds {
         .sub(exp(toward.length().div(this.hazeScale).negate()))
         .mul(0.96),
     );
-    const seen = mix(hazed, edgeLook.colour, float(1).sub(exp(mistTo(positionWorld).negate())));
+    const seen = mix(hazed, edgeLook.colour, float(1).sub(exp(depthTo(positionWorld).negate())));
     m.colorNode = vec4(toLinear(seen), 1) as unknown as Node<'vec4'>;
     this.mesh = new InstancedMesh(new IcosahedronGeometry(1, 1), m, PUFF_MOST);
     this.mesh.name = 'clouds';

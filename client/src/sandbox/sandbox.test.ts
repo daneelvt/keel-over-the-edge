@@ -57,7 +57,7 @@ beforeAll(() => {
 
 describe('the sandbox', () => {
   test('starts at the centre, at rest, heading 090°, in a steady 10 knots from the north', async () => {
-    const s = await startSandbox(bytes, boat, sea);
+    const s = await startSandbox(bytes, boat, sea, catalog.world);
     const c = s.states.current;
     expect(c[RECORDS.state.x]).toBe(0);
     expect(c[RECORDS.state.y]).toBe(0);
@@ -99,7 +99,7 @@ describe('the sandbox', () => {
   });
 
   test('raises the sea its wind gives, and sails in it', async () => {
-    const s = await startSandbox(bytes, boat, sea, {
+    const s = await startSandbox(bytes, boat, sea, catalog.world, {
       ...START,
       wind: { speed: 34 * KNOT, from: 0 },
     });
@@ -122,7 +122,7 @@ describe('the sandbox', () => {
   });
 
   test('a change of wind blows from the second after next, and the sea follows it over minutes, as the server’s does', async () => {
-    const s = await startSandbox(bytes, boat, sea);
+    const s = await startSandbox(bytes, boat, sea, catalog.world);
     const hs = (): number => s.physics.seaHs(s.seas.slotAt(s.tick))[0] ?? 0;
     // The state is at tick 1; steps sail into ticks 2, 3 …
     for (let i = 0; i < 40; i++) {
@@ -159,7 +159,7 @@ describe('the sandbox', () => {
   });
 
   test('sails in a spell of a regime, with its gusts, when asked', async () => {
-    const s = await startSandbox(bytes, boat, sea, { ...START, weather: 'trade' });
+    const s = await startSandbox(bytes, boat, sea, catalog.world, { ...START, weather: 'trade' });
     expect(s.regime).toBe('trade');
     const regime = sea.regimes.find((r) => r.id === 'trade');
     let lo = Number.POSITIVE_INFINITY;
@@ -192,7 +192,11 @@ describe('the sandbox', () => {
 
   test('meets a squall three minutes in, and its gust front, with ?weather=squall', async () => {
     // Three miles out, where a squall is whole.
-    const s = await startSandbox(bytes, boat, sea, { ...START, east: 5556, weather: 'squall' });
+    const s = await startSandbox(bytes, boat, sea, catalog.world, {
+      ...START,
+      east: 5556,
+      weather: 'squall',
+    });
     s.step(0, 0.6);
     const before = s.wind.meanSpeed;
     let most = 0;
@@ -211,7 +215,11 @@ describe('the sandbox', () => {
 
   test('meets a storm whose swell comes before its wind, with ?weather=storm', async () => {
     // Three miles out, where a storm is whole.
-    const s = await startSandbox(bytes, boat, sea, { ...START, east: 5556, weather: 'storm' });
+    const s = await startSandbox(bytes, boat, sea, catalog.world, {
+      ...START,
+      east: 5556,
+      weather: 'storm',
+    });
     s.step(0, 0.6);
     const before = s.wind.meanSpeed;
     const wind = newBoatWind();
@@ -245,7 +253,7 @@ describe('the sandbox', () => {
       from: (270 * Math.PI) / 180,
     });
     expect(swellFromQuery(new URLSearchParams('swell=-1,6'))).toBeNull();
-    const s = await startSandbox(bytes, boat, sea, {
+    const s = await startSandbox(bytes, boat, sea, catalog.world, {
       ...START,
       wind: { speed: 12 * KNOT, from: 0 },
     });
@@ -260,7 +268,11 @@ describe('the sandbox', () => {
   });
 
   test('meets a front three minutes in, the wind veering as it passes, with ?weather=front', async () => {
-    const s = await startSandbox(bytes, boat, sea, { ...START, east: 5556, weather: FRONT });
+    const s = await startSandbox(bytes, boat, sea, catalog.world, {
+      ...START,
+      east: 5556,
+      weather: FRONT,
+    });
     s.step(0, 0.6);
     const before = s.wind.meanFrom;
     for (let i = 0; i < 4 * 60 * 30; i++) {
@@ -280,7 +292,7 @@ describe('the sandbox', () => {
   });
 
   test('its window of the sea follows the boat', async () => {
-    const s = await startSandbox(bytes, boat, sea);
+    const s = await startSandbox(bytes, boat, sea, catalog.world);
     expect([s.sea.col, s.sea.row]).toEqual([16, 16]);
     s.place(1000, -700, 0);
     expect([s.sea.col, s.sea.row]).toEqual([18, 14]);
@@ -309,7 +321,7 @@ describe('the sandbox', () => {
         continue;
       }
       ran++;
-      const s = new Sandbox(physics, boat, sea, { ...START, heading: 0, sheet: 0 });
+      const s = new Sandbox(physics, boat, sea, catalog.world, { ...START, heading: 0, sheet: 0 });
       // The scenarios without a sea are in flat water.
       s.sea.options.flat = true;
       // Step 0 sails into the weather's tick.
@@ -374,7 +386,7 @@ describe('the sandbox', () => {
  * Returns the sandbox's recording.
  */
 async function scriptedSail(): Promise<Recording> {
-  const s = await startSandbox(bytes, boat, sea);
+  const s = await startSandbox(bytes, boat, sea, catalog.world);
   s.record();
   const pilot = new PilotInput();
   for (let i = 0; i < 1800; i++) {

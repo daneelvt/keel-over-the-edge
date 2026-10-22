@@ -68,7 +68,7 @@ describe('a light’s character', () => {
 
 describe('Allard’s law', () => {
   test('a light is at the threshold at its range, and brighter within', () => {
-    expect(transmissivity(10)).toBeCloseTo(0.741, 3);
+    expect(transmissivity(10)).toBeCloseTo(0.676, 3);
     const t = transmissivity(catalog.world.lights.clearAir);
     const th = catalog.world.lights.threshold;
     for (const r of [1389, 2778, 4630, 8334]) {

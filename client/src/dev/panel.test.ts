@@ -5,6 +5,7 @@ import { Fleet } from '../game/fleet';
 import { CHANGE, FLEET_META, SLOT, SLOT_FIELDS, slotAt, VIEW_SLOTS } from '../net/view';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import {
+  airLines,
   applyState,
   inSeaState,
   netLines,
@@ -357,6 +358,27 @@ describe('the sky lines', () => {
       'rain    12.3 mm/h, heavy',
       'sheets  cirrus 1.00, middle 0.50, low 0.00, overcast 0.42',
       'clouds  cumulonimbus 2500 m at 3.2 km, 1 cumulus',
+    ]);
+  });
+});
+
+describe('the air’s lines', () => {
+  test('tell the visibility, its word and what makes it, the signals heard and the last flash', () => {
+    const lines = airLines(
+      104,
+      3,
+      [0.0005, 0.037, 0, 0],
+      [{ notation: 'Dia(2) 60s', bearing: 42, delay: 2.1 }],
+      { away: 1200, delay: 3.5, sea: true, ago: 4 },
+    );
+    expect(lines[0]).toBe(
+      'air     visibility 104 m, very poor: clear 1%, fog 99%, rain 0%, mist 0%',
+    );
+    expect(lines[1]).toBe('signals Dia(2) 60s from 042°, 2.1 s');
+    expect(lines[2]).toBe('flash   1.2 km to the sea, 4 s ago, thunder after 3.5 s');
+    expect(airLines(8334, 0, [0.00047, 0, 0, 0], [], null).slice(1)).toEqual([
+      'signals none heard',
+      'flash   none in the last minute',
     ]);
   });
 });

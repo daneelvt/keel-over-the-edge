@@ -111,12 +111,19 @@ var (
 	hulls             physics.Hulls
 
 	cloudParams physics.CloudParams
-	coming      physics.ComingFront
-	clouds      [physics.MaxClouds]physics.Cloud
-	cumulus     [physics.MaxCumulus]physics.Cumulus
-	sheets      physics.Sheets
-	caps        [physics.MaxCaps]physics.Cap
-	ncaps       int32
+	visParams   physics.VisibilityParams
+	airSrc      [physics.MaxAirSources]physics.AirSource
+	airValues   [4]float64
+	flashes     [physics.MaxFlashes]physics.Flash
+	// sliceWeather is the weather at a tick of its own: a slot's start, a
+	// blast's.
+	sliceWeather physics.WeatherTick
+	coming       physics.ComingFront
+	clouds       [physics.MaxClouds]physics.Cloud
+	cumulus      [physics.MaxCumulus]physics.Cumulus
+	sheets       physics.Sheets
+	caps         [physics.MaxCaps]physics.Cap
+	ncaps        int32
 	// sheetValues is what sheetGrid writes: each point's cirrus, middle
 	// and low cover; rainValues what rainSample writes.
 	sheetValues [physics.Layers * physics.SheetSide * physics.SheetSide]float64
@@ -979,6 +986,90 @@ func cumulusAddr() uint32 { return addr(unsafe.Pointer(&cumulus)) }
 //go:wasmexport cumulusAt
 func cumulusAt(x, y, reach, sun float64) uint32 {
 	return uint32(physics.CumulusAt(&drawWeather, x, y, reach, sun, caps[:ncaps], cumulus[:]))
+}
+
+//go:wasmexport visibilityParams
+func visibilityParamsAddr() uint32 { return addr(unsafe.Pointer(&visParams)) }
+
+// visibilityPrepare derives visibility's and lightning's constants from
+// visibilityParams. Call it after cloudsPrepare.
+//
+//go:wasmexport visibilityPrepare
+func visibilityPrepare() { weatherPrepared.PrepareVisibility(&visParams) }
+
+// opticalDepth returns the optical depth along the line from (x0, y0), h0
+// m above the sea, to (x1, y1), h1 m above it, at the time windDrawAt set.
+//
+//go:wasmexport opticalDepth
+func opticalDepth(x0, y0, h0, x1, y1, h1 float64) float64 {
+	return physics.OpticalDepth(&drawWeather, x0, y0, h0, x1, y1, h1)
+}
+
+// visibilityAt returns the visibility at (x, y), m, at the time windDrawAt
+// set.
+//
+//go:wasmexport visibilityAt
+func visibilityAt(x, y float64) float64 { return physics.VisibilityAt(&drawWeather, x, y) }
+
+// visibilityAtTick returns the visibility at (x, y), m, at a tick of its
+// own: a fog signal's blast's.
+//
+//go:wasmexport visibilityAtTick
+func visibilityAtTick(x, y, tick float64) float64 {
+	physics.WeatherAt(&weather, &sliceWeather, tick)
+	return physics.VisibilityAt(&sliceWeather, x, y)
+}
+
+// visibilityWord returns the word for a visibility, m.
+//
+//go:wasmexport visibilityWord
+func visibilityWord(v float64) uint32 { return uint32(weatherPrepared.VisibilityWord(v)) }
+
+//go:wasmexport airValues
+func airValuesAddr() uint32 { return addr(unsafe.Pointer(&airValues)) }
+
+// airAt writes the extinction at (x, y), h m above the sea, by what makes
+// it, to airValues: the clear air's, the fog's, the rain's and the mist's,
+// 1/m.
+//
+//go:wasmexport airAt
+func airAt(x, y, h float64) {
+	a := physics.AirAt(&drawWeather, x, y, h)
+	airValues = [4]float64{a.Clear, a.Fog, a.Rain, a.Mist}
+}
+
+// airSource is the first of the records airSources writes.
+//
+//go:wasmexport airSource
+func airSourceAddr() uint32 { return addr(unsafe.Pointer(&airSrc)) }
+
+// airSources writes the sources of extinction within r of (x, y) at the
+// time windDrawAt set to the airSource records, the fog banks first, and
+// returns how many in all, plus 65536 times how many fog banks.
+//
+//go:wasmexport airSources
+func airSources(x, y, r float64) uint32 {
+	fog, n := physics.AirSources(&drawWeather, x, y, r, airSrc[:])
+	return uint32(n) | uint32(fog)<<16
+}
+
+// flash is the first of the records flashesAt writes.
+//
+//go:wasmexport flash
+func flashAddr() uint32 { return addr(unsafe.Pointer(&flashes)) }
+
+// slotTicks returns how long lightning's slots of world time are, ticks.
+//
+//go:wasmexport slotTicks
+func slotTicks() float64 { return weatherPrepared.SlotTicks() }
+
+// flashesAt writes the flashes in a slot of world time to the flash
+// records, from the systems at the slot's start, and returns how many.
+//
+//go:wasmexport flashesAt
+func flashesAt(slot float64) uint32 {
+	physics.WeatherAt(&weather, &sliceWeather, slot*weatherPrepared.SlotTicks())
+	return uint32(physics.Flashes(&sliceWeather, slot, flashes[:]))
 }
 
 //go:wasmexport encounterParams

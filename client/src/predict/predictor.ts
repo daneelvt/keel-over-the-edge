@@ -40,7 +40,14 @@ import {
 import type { Physics } from './physics';
 import { Seas } from './seas';
 import { Wakes } from './wakes';
-import { type BoatWind, newBoatWind, Spells, systemKindRecord } from './weather';
+import {
+  type BoatWind,
+  newBoatWind,
+  Spells,
+  systemKindRecord,
+  type VisibilityWorld,
+  writeVisibilityParams,
+} from './weather';
 
 /** Ticks of prediction kept. */
 export const RING = 64;
@@ -87,13 +94,14 @@ export function sheetIndex(sheet: number): number {
 /**
  * Readies a physics module for a kind of boat in the catalog's weather:
  * every record cleared, the sea's waves derived, then the boat's constants,
- * the wind's and, if given, the encounters'. No spell of weather is in play
+ * the wind's, the visibility's and, if given, the encounters'. No spell of weather is in play
  * until one is set.
  */
 export function preparePhysics(
   physics: Physics,
   boat: BoatPhysics,
   weather: Weather,
+  world: VisibilityWorld,
   encounters?: Encounters,
 ): void {
   const r = physics.records;
@@ -109,6 +117,8 @@ export function preparePhysics(
   physics.setSystemKinds(weather.systems.map(systemKindRecord));
   writeCloudParams(physics.records.cloudParams, weather.clouds);
   physics.prepareClouds(weather.regimes.map((g) => g.cumulus));
+  writeVisibilityParams(physics.records.visibilityParams, weather, world);
+  physics.prepareVisibility();
   if (encounters !== undefined) {
     prepareEncounters(physics, encounters);
   }
@@ -168,9 +178,15 @@ export class Predictor implements BoatDriver {
   /** The drawn boat's offset from the predicted one, eased away. */
   readonly offset = { east: 0, north: 0, heading: 0 };
 
-  constructor(physics: Physics, boat: BoatPhysics, weather: Weather, encounters?: Encounters) {
+  constructor(
+    physics: Physics,
+    boat: BoatPhysics,
+    weather: Weather,
+    world: VisibilityWorld,
+    encounters?: Encounters,
+  ) {
     this.#physics = physics;
-    preparePhysics(physics, boat, weather, encounters);
+    preparePhysics(physics, boat, weather, world, encounters);
     this.seas = new Seas(physics);
     this.weather = new Spells(physics);
     this.wakes = new Wakes(physics);

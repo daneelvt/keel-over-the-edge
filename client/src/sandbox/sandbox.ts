@@ -35,7 +35,9 @@ import {
   type Spell,
   Spells,
   steadySpell,
+  systemKindRecord,
   takesEffect,
+  type VisibilityWorld,
 } from '../predict/weather';
 import { LocalSea, type Swell } from './localsea';
 import { Recorder, type Recording, type StepWeather, type WeatherSet } from './record';
@@ -71,6 +73,26 @@ export function frontFromQuery(query: URLSearchParams): number | null {
   }
   const m = Number(raw);
   return Number.isFinite(m) && m >= 0 ? m : null;
+}
+
+/** Reads ?fog=m: a fog bank held on the boat, of that visibility at its core, m, or null. */
+export function fogFromQuery(query: URLSearchParams): number | null {
+  const raw = query.get('fog');
+  if (raw === null) {
+    return null;
+  }
+  const m = Number(raw);
+  return Number.isFinite(m) && m > 0 ? m : null;
+}
+
+/** Reads ?flash=s: the nearest heaped cloud flashes to the sea that many seconds in, or null. */
+export function flashFromQuery(query: URLSearchParams): number | null {
+  const raw = query.get('flash');
+  if (raw === null) {
+    return null;
+  }
+  const s = Number(raw);
+  return Number.isFinite(s) && s >= 0 ? s : null;
 }
 
 /** Reads ?rain=mm: rain held at the camera, mm an hour, or null. */
@@ -225,12 +247,18 @@ export class Sandbox implements BoatDriver {
   #set: WeatherSet | null = null;
   readonly #stepWeather: StepWeather;
 
-  constructor(physics: Physics, boat: BoatPhysics, weather: Weather, start: SandboxStart = START) {
+  constructor(
+    physics: Physics,
+    boat: BoatPhysics,
+    weather: Weather,
+    world: VisibilityWorld,
+    start: SandboxStart = START,
+  ) {
     this.#physics = physics;
     this.#boat = boat;
     this.#catalog = weather;
     this.start = start;
-    preparePhysics(physics, boat, weather);
+    preparePhysics(physics, boat, weather, world);
     this.seas = new Seas(physics);
     this.sea = new LocalSea(physics, this.seas, Math.round(weather.keyframe.every * 30));
     this.weather = new Spells(physics);
@@ -422,6 +450,44 @@ export class Sandbox implements BoatDriver {
     this.#physics.setRecords(records);
     this.systems = records.length;
     this.weather.set(spells);
+  }
+
+  /**
+   * Holds a fog bank on the boat, of the catalog's kind of fog bank but of
+   * core m of visibility at its core at the sea, in the weather as it is;
+   * null lets it go. Its kind is the catalog's fog bank's with that core,
+   * set beside the catalog's kinds: the server's own come from the week.
+   */
+  holdFog(core: number | null): void {
+    const c = this.#catalog;
+    const kinds = c.systems.map(systemKindRecord);
+    const fogKind = c.systems.findIndex((k) => k.fog !== undefined);
+    if (core === null || fogKind < 0) {
+      this.#physics.setSystemKinds(kinds);
+      this.#physics.setRecords([]);
+      this.systems = 0;
+      return;
+    }
+    const k = c.systems[fogKind] as (typeof c.systems)[number];
+    const held = systemKindRecord(k);
+    held.set([core, core], RECORDS.systemKind.fogCore);
+    this.#physics.setSystemKinds([...kinds, held]);
+    const R = RECORDS.systemRecord;
+    const r = new Float64Array(SIZES.systemRecord);
+    const s = this.#physics.records.state;
+    const day = 24 * 3600 * 30;
+    r[R.kind] = kinds.length;
+    r[R.seed] = 1852;
+    r[R.born] = this.tick - day;
+    r[R.mature] = this.tick - day + 1;
+    r[R.decays] = this.tick + day;
+    r[R.gone] = this.tick + day + 1;
+    r[R.east] = Math.round((s[S.x] ?? 0) * 4);
+    r[R.north] = Math.round((s[S.y] ?? 0) * 4);
+    r[R.size] = Math.round(((k.size[0] + k.size[1]) / 2) * 1852);
+    r[R.peak] = Math.round(k.factor[0] * 1000);
+    this.#physics.setRecords([r]);
+    this.systems = 1;
   }
 
   /**
@@ -689,9 +755,10 @@ export async function startSandbox(
   source: PhysicsSource,
   boat: BoatPhysics,
   weather: Weather,
+  world: VisibilityWorld,
   start: SandboxStart = START,
 ): Promise<Sandbox> {
-  return new Sandbox(await loadPhysics(source), boat, weather, start);
+  return new Sandbox(await loadPhysics(source), boat, weather, world, start);
 }
 
 function wrap(a: number): number {

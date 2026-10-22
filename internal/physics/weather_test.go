@@ -30,8 +30,42 @@ type catalogWeather struct {
 			Wind    map[string]any `json:"wind"`
 			Cumulus float64        `json:"cumulus"`
 		} `json:"regimes"`
-		Clouds map[string]any `json:"clouds"`
+		Clouds     map[string]any `json:"clouds"`
+		Visibility struct {
+			Contrast float64    `json:"contrast"`
+			Words    [3]float64 `json:"words"`
+		} `json:"visibility"`
+		Lightning struct {
+			Slot, Sea, Single, Most, Apart float64
+		} `json:"lightning"`
 	} `json:"weather"`
+	World struct {
+		Lights struct {
+			ClearAir float64 `json:"clearAir"`
+		} `json:"lights"`
+		Handout struct {
+			Dome float64 `json:"dome"`
+		} `json:"handout"`
+		Disk struct {
+			Radius, Mist float64
+		} `json:"disk"`
+		Edge struct {
+			Mist struct {
+				Range, Height float64
+			} `json:"mist"`
+		} `json:"edge"`
+	} `json:"world"`
+}
+
+// visibilityOf is the catalog's visibility and lightning, as the server
+// takes them.
+func visibilityOf(c *catalogWeather) VisibilityParams {
+	v, l, wd := &c.Weather.Visibility, &c.Weather.Lightning, &c.World
+	return VisibilityParams{
+		Contrast: v.Contrast, Words: v.Words, Clear: wd.Lights.ClearAir * nauticalMile, Dome: wd.Handout.Dome,
+		MistBand: wd.Disk.Mist * nauticalMile, MistLip: wd.Disk.Radius, MistRange: wd.Edge.Mist.Range, MistHeight: wd.Edge.Mist.Height,
+		Slot: l.Slot, Sea: l.Sea, Single: l.Single, Strokes: l.Most, Apart: l.Apart,
+	}
 }
 
 var weatherOnce = sync.OnceValues(func() (*WeatherParams, error) {

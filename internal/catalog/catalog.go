@@ -79,8 +79,28 @@ func (c *Catalog) PrepareWeather() *physics.WeatherPrepared {
 	for i := range c.Weather.Regimes {
 		w.SetRegimeCumulus(int32(i), c.Weather.Regimes[i].Cumulus)
 	}
+	vis := VisibilityParams(c)
+	w.PrepareVisibility(&vis)
 	return w
 }
+
+// VisibilityParams returns the catalog's visibility and lightning as the
+// physics package's VisibilityParams: the weather's, with the world's
+// clear air, dome and mist band.
+func VisibilityParams(c *Catalog) physics.VisibilityParams {
+	v, l := &c.Weather.Visibility, &c.Weather.Lightning
+	p := physics.VisibilityParams{
+		Contrast: v.Contrast, Clear: c.World.Lights.ClearAir * nauticalMile, Dome: c.World.Handout.Dome,
+		MistBand: c.World.Disk.Mist * nauticalMile, MistLip: c.World.Disk.Radius,
+		MistRange: c.World.Edge.Mist.Range, MistHeight: c.World.Edge.Mist.Height,
+		Slot: float64(l.Slot), Sea: l.Sea, Single: l.Single, Strokes: float64(l.Most), Apart: l.Apart,
+	}
+	copy(p.Words[:], v.Words)
+	return p
+}
+
+// nauticalMile is a nautical mile, m.
+const nauticalMile = 1852
 
 // SystemKinds returns the catalog's kinds of weather system as the physics
 // package's SystemKind, in the catalog's order.
@@ -117,6 +137,14 @@ func SystemKinds(c *Catalog) []physics.SystemKind {
 		}
 		o.RainRate, o.RainWidth = k.Rain.Rate, k.Rain.Width
 		o.RainBands, o.RainTurn = float64(k.Rain.Bands), k.Rain.Turn
+		if f := k.Fog; f != nil {
+			copy(o.FogCore[:], f.Core)
+			o.FogHeight = f.Height
+		}
+		if l := k.Lightning; l != nil {
+			o.LightningAbove, o.LightningRate = l.Above, l.Rate
+			copy(o.LightningWithin[:], l.Within)
+		}
 	}
 	return out
 }

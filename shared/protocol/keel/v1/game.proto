@@ -266,6 +266,10 @@ message Light {
   int64 phase = 6;
   // Its nominal range, in metres.
   uint32 range = 7;
+  // Its lighthouse's fog signal: an index into the catalog's fog signals.
+  // Its blasts keep the light's phase, and each sounds while the
+  // visibility at the light is poor or worse as it begins.
+  uint32 fog_signal = 8;
 }
 
 // Tools says the account's owner's flag has been set or cleared while the

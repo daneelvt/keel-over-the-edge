@@ -350,6 +350,11 @@ button:disabled {
   font-weight: bold;
 }
 
+/* How a light shows now beside its row: sounding its fog signal, lit by day. */
+.light-now {
+  color: #56b4e9;
+}
+
 .places,
 .lights {
   columns: 1;

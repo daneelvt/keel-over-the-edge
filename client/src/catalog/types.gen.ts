@@ -43,6 +43,13 @@ export type Colour2 = string;
 export type FeatureSite =
   "cave" | "arch" | "blowhole" | "waterfall" | "spring" | "crater" | "fumarole" | "ruin" | "colony";
 /**
+ * What sounds a fog signal: its recipe in art/sound is named for it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "FogSignalDevice".
+ */
+export type FogSignalDevice = "twotone" | "diaphone" | "siren" | "reedhorn";
+/**
  * A colour, as #rrggbb in sRGB.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -835,6 +842,9 @@ export interface Weather {
   keyframe: WeatherKeyframe;
   water: WeatherWater;
   clouds: WeatherClouds;
+  visibility: WeatherVisibility;
+  lightning: WeatherLightning;
+  thunder: WeatherThunder;
 }
 /**
  * The waves long enough to move a boat: the band of wavelengths they span and the spectrum that gives each its height.
@@ -1427,10 +1437,8 @@ export interface SystemKind {
   goneAbove: number;
   rain: SystemRain;
   cloud: SystemCloud;
-  /**
-   * Lightning strikes from it above this strength; 0 for none.
-   */
-  lightning: number;
+  lightning?: SystemLightning;
+  fog?: SystemFog;
   swell?: SystemSwell;
 }
 /**
@@ -1525,6 +1533,48 @@ export interface SystemSheets {
    * @maxItems 2
    */
   low: [number, number];
+}
+/**
+ * The lightning from a kind of system: above a strength, at a rate rising with it, struck within a ring about its centre.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SystemLightning".
+ */
+export interface SystemLightning {
+  /**
+   * It flashes at or above this strength.
+   */
+  above: number;
+  /**
+   * Its flashes a minute at full strength, rising from none at above.
+   */
+  rate: number;
+  /**
+   * Its flashes strike between these shares of its size from its centre.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  within: [number, number];
+}
+/**
+ * The fog of a fog bank: its visibility at its core at the sea, drawn per bank, and how it thins with height.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SystemFog".
+ */
+export interface SystemFog {
+  /**
+   * Its visibility at its core at full strength, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  core: [number, number];
+  /**
+   * Its density falls as e^(−h / height) above the sea, in m.
+   */
+  height: number;
 }
 /**
  * The swell a kind of system raises, by its strength: a long, low lift that runs ahead of it at its group speed, its longest waves first.
@@ -1808,6 +1858,77 @@ export interface WeatherClouds {
    * Visibility on the game's stage is this share of the real.
    */
   rainScale: number;
+}
+/**
+ * Visibility: the contrast a thing is seen at, and the words for it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherVisibility".
+ */
+export interface WeatherVisibility {
+  /**
+   * A thing is seen while the optical depth to it is at most this: ln of the contrast threshold's inverse.
+   */
+  contrast: number;
+  /**
+   * Visibility is very poor under the first, poor under the second, moderate under the third and good above, in m.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  words: [number, number, number];
+}
+/**
+ * Lightning: the slots of world time a flash is drawn in, its share to the sea and its strokes.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherLightning".
+ */
+export interface WeatherLightning {
+  /**
+   * World time is cut into slots this long, each holding a flash or none, in s: a whole number.
+   */
+  slot: number;
+  /**
+   * The share of flashes that strike the sea; the rest stay in the cloud.
+   */
+  sea: number;
+  /**
+   * The share of flashes of a single stroke; the rest have from two to most, evenly.
+   */
+  single: number;
+  /**
+   * The most strokes a flash has.
+   */
+  most: number;
+  /**
+   * The strokes' geometric mean interval, in ms.
+   */
+  apart: number;
+}
+/**
+ * Thunder: how far it is heard, how fast it comes, how long it rolls and where it cracks.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherThunder".
+ */
+export interface WeatherThunder {
+  /**
+   * It is heard within this of its flash, in nautical miles.
+   */
+  heard: number;
+  /**
+   * The speed of sound, in m/s.
+   */
+  speed: number;
+  /**
+   * It rolls at most this long, in s.
+   */
+  longest: number;
+  /**
+   * Within this of its channel it begins with a crack, in m.
+   */
+  crack: number;
 }
 /**
  * The sky's numbers: the lengths of its day, year and month, its scale, the moment it is counted from, and the stars with names. Where each body stands follows from these and the time alone.
@@ -3718,9 +3839,13 @@ export interface WorldLights {
    */
   clearAir: number;
   /**
-   * The least illuminance a light is seen by, in lux.
+   * The least illuminance a light is seen by at night, in lux.
    */
   threshold: number;
+  /**
+   * The least illuminance a light is seen by in daylight, in lux.
+   */
+  dayThreshold: number;
   /**
    * A light is dropped this far beyond its range, in m.
    */
@@ -3736,6 +3861,13 @@ export interface WorldLights {
    * @minItems 1
    */
   characters: [LightCharacter, ...LightCharacter[]];
+  /**
+   * The patterns of blasts a world's lighthouses' fog signals are given.
+   *
+   * @minItems 1
+   */
+  fogSignals: [FogSignal, ...FogSignal[]];
+  fogSignal: FogSignalRule;
   look: LightLook;
 }
 /**
@@ -3861,6 +3993,183 @@ export interface LightCharacter {
    * @maxItems 40
    */
   steps: [number, number, ...number[]];
+}
+/**
+ * A fog signal's pattern: its device, its notation, and its blasts and silences in turn.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "FogSignal".
+ */
+export interface FogSignal {
+  /**
+   * As charts write it.
+   */
+  notation: string;
+  device: FogSignalDevice;
+  /**
+   * Its blasts and silences in turn, beginning with a blast, in ms.
+   *
+   * @minItems 2
+   * @maxItems 20
+   */
+  steps:
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number, number, number, number]
+    | [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number
+      ]
+    | [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number
+      ]
+    | [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number
+      ]
+    | [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number
+      ]
+    | [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number
+      ]
+    | [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number
+      ];
+}
+/**
+ * When a fog signal sounds, how far it is heard, and which device each light's has.
+ */
+export interface FogSignalRule {
+  /**
+   * A blast sounds while the visibility at its light is under this, in nautical miles.
+   */
+  sounds: number;
+  /**
+   * It is heard within this of its light, in nautical miles.
+   */
+  heard: number;
+  /**
+   * Signals within this of each other differ, in nautical miles.
+   */
+  apart: number;
+  devices: FogSignalDevices;
+}
+/**
+ * The device of each light's fog signal, by its role.
+ */
+export interface FogSignalDevices {
+  mainPort: FogSignalDevice;
+  port: FogSignalDevice;
+  edge: FogSignalDevice;
+  hazard: FogSignalDevice;
 }
 /**
  * How lighthouses are drawn.
@@ -5479,4 +5788,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'ff62116f7628187a';
+export const CATALOG_VERSION = '3297ac94fb5a0653';

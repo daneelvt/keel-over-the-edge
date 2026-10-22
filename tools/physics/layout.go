@@ -43,6 +43,9 @@ var records = []struct {
 	{"cloud", reflect.TypeFor[physics.Cloud]()},
 	{"cumulus", reflect.TypeFor[physics.Cumulus]()},
 	{"sheets", reflect.TypeFor[physics.Sheets]()},
+	{"visibilityParams", reflect.TypeFor[physics.VisibilityParams]()},
+	{"flash", reflect.TypeFor[physics.Flash]()},
+	{"airSource", reflect.TypeFor[physics.AirSource]()},
 	{"other", reflect.TypeFor[physics.State]()},
 	{"encounterParams", reflect.TypeFor[physics.EncounterParams]()},
 	{"wake", reflect.TypeFor[physics.Wake]()},
@@ -108,7 +111,9 @@ var seaConstants = []struct {
 // wind, the octaves of the gust field, the systems a keyframe holds, the
 // keyframes a module holds and the kinds of system; the regimes, the heaped
 // clouds and the cumulus a module answers for at once, the islands' caps
-// it holds and the side of its window of the sheets' lattice.
+// it holds and the side of its window of the sheets' lattice; the sources
+// of extinction it gives for drawing, a flash's strokes and the flashes a
+// slot holds.
 var weatherConstants = []struct {
 	name  string
 	value int
@@ -125,6 +130,11 @@ var weatherConstants = []struct {
 	{"cumulus", physics.MaxCumulus},
 	{"caps", physics.MaxCaps},
 	{"sheetSide", physics.SheetSide},
+	{"fogSources", physics.MaxFogSources},
+	{"rainSources", physics.MaxRainSources},
+	{"airSources", physics.MaxAirSources},
+	{"strokes", physics.MaxStrokes},
+	{"flashes", physics.MaxFlashes},
 }
 
 type recordLayout struct {
