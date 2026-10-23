@@ -42,10 +42,10 @@ var releases = []release{
 	{"tinygo-org/tinygo", "linux-amd64", "v0.42.0", "b87688fa2e19cee7d813cad7fd7dadb71dff3198e47125aba66ba4af5e490438"},
 	{"tinygo-org/tinygo", "linux-arm64", "v0.42.0", "f2f3f863e63728b87772e7306bd6030df6e6c89773a7082eb0122113cf9e453d"},
 
-	{"sigstore/cosign", "darwin-amd64", "v3.1.3", "2347488e5d5b25336644024dfeca5601b190e91197a71a917bda44744aff106c"},
-	{"sigstore/cosign", "darwin-arm64", "v3.1.3", "5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76"},
-	{"sigstore/cosign", "linux-amd64", "v3.1.3", "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"},
-	{"sigstore/cosign", "linux-arm64", "v3.1.3", "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a"},
+	{"sigstore/cosign", "darwin-amd64", "v3.1.4", "9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834e3e6d44039c238867334f"},
+	{"sigstore/cosign", "darwin-arm64", "v3.1.4", "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"},
+	{"sigstore/cosign", "linux-amd64", "v3.1.4", "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"},
+	{"sigstore/cosign", "linux-arm64", "v3.1.4", "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2"},
 
 	{"fluxcd/flux2", "darwin-amd64", "v2.9.6", "c3c3532c8c6cf689ef7b93125b33dc170df84a9d5d036f578568bfdf88a2d7e6"},
 	{"fluxcd/flux2", "darwin-arm64", "v2.9.6", "7008a758da4b8d57c5845aad6552f256d4d23630c2b2de2ca8da362f9a48c126"},
