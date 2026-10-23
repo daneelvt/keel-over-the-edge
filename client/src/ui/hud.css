@@ -616,3 +616,153 @@
     height: 100px;
   }
 }
+
+/* The barometer: a brass aneroid, its set hand a fine dark line, its
+   reading in words beneath. */
+.barometer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 10px 6px;
+}
+
+.barometer svg {
+  width: 96px;
+  height: 96px;
+}
+
+.baro-face {
+  fill: #f4ecd8;
+}
+
+.baro-scale,
+.baro-tick {
+  fill: none;
+  stroke: #3b2e22;
+  stroke-width: 0.8;
+}
+
+.baro-number {
+  fill: #3b2e22;
+  font:
+    6px "IM Fell English",
+    Georgia,
+    serif;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.baro-word {
+  fill: #5a4632;
+  font:
+    italic 5px "IM Fell English",
+    Georgia,
+    serif;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.baro-hand {
+  fill: #1f1a14;
+}
+
+.baro-set {
+  stroke: #a8236e;
+  stroke-width: 1;
+}
+
+.baro-boss {
+  fill: #8a6524;
+}
+
+.baro-words {
+  max-width: 140px;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* The harbourmaster's board: a button in port, and the board, painted as
+   a board, over the sea. */
+.board-button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  pointer-events: auto;
+}
+
+.board {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  padding: 16px 20px;
+  border: 6px solid #5a3e22;
+  border-radius: 6px;
+  background: #2e3b2f;
+  color: #f2efe7;
+  font:
+    15px / 1.4 "IM Fell English",
+    Georgia,
+    serif;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.board h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: normal;
+}
+
+.board h3 {
+  margin: 12px 0 2px;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: italic;
+  border-bottom: 1px solid rgb(242 239 231 / 30%);
+}
+
+.board p {
+  margin: 0 0 4px;
+}
+
+.board-office {
+  font-style: italic;
+  color: rgb(242 239 231 / 75%);
+}
+
+.board-warning {
+  padding: 4px 8px;
+  border-left: 4px solid #e8b450;
+}
+
+.board dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 10px;
+  margin: 0;
+}
+
+.board dt {
+  font-style: italic;
+}
+
+.board dd {
+  margin: 0;
+}
+
+.board-close {
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 0 16px;
+  border: 1px solid rgb(242 239 231 / 40%);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}

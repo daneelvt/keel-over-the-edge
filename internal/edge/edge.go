@@ -174,6 +174,9 @@ type Config struct {
 	// Chart, if not nil, is the world's chart: sent whole after the
 	// Welcome, then what is charted as it is written.
 	Chart ChartSource
+	// Forecast, if not nil, is the world's forecast: its latest issue sent
+	// after the Welcome with what has been, then each issue as it is made.
+	Forecast ForecastSource
 	// Circulation is the world's way round the disk for its current, as
 	// the Welcome tells the client: 1, −1 or 0 for none.
 	Circulation int32

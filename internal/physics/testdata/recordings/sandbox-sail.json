@@ -265,6 +265,7 @@
   "slope": 0.02,
   "rise": 0.15,
   "riseMost": 6,
+  "ease": 60,
   "inwardFrom": 0.8,
   "inwardTo": 3,
   "inwardLeast": 0.35,

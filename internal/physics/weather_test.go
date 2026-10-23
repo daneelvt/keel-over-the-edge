@@ -38,6 +38,7 @@ type catalogWeather struct {
 		Lightning struct {
 			Slot, Sea, Single, Most, Apart float64
 		} `json:"lightning"`
+		Forecast catalogForecast `json:"forecast"`
 	} `json:"weather"`
 	World struct {
 		Lights struct {

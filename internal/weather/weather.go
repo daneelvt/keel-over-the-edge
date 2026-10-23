@@ -325,9 +325,10 @@ func (t *Timeline) after(tick int64, ws []bus.Weather) (int64, bool) {
 // Spells writes to dst the spells in play about a tick, ascending by the
 // tick each begins at, and returns how many: the one in effect; those
 // before it whose change to the next ended less than Grace ago, or has not
-// ended, as a front's has not while its line is on the disk; and those to
-// come that begin within Announce. If there are more than dst holds, the
-// oldest are left out; the rest of dst is cleared.
+// ended, as a front's has not while its line is on the disk, nor a plain
+// change's while its pressure eases; and those to come that begin within
+// Announce. If there are more than dst holds, the oldest are left out; the
+// rest of dst is cleared.
 func (t *Timeline) Spells(tick int64, ws []bus.Weather, dst *[physics.WeatherSpells]physics.Spell) int32 {
 	var buf [2 * physics.WeatherSpells]physics.Spell
 	n := 0
@@ -336,7 +337,7 @@ func (t *Timeline) Spells(tick int64, ws []bus.Weather, dst *[physics.WeatherSpe
 	var back [physics.WeatherSpells]physics.Spell
 	nb := 0
 	first := cur
-	for nb < physics.WeatherSpells-1 && float64(tick) < first.Begin+first.Change+Grace {
+	for nb < physics.WeatherSpells-1 && float64(tick) < first.Begin+t.holds(&first)+Grace {
 		prev := t.Effective(int64(first.Begin)-1, ws)
 		if prev.Begin >= first.Begin {
 			break
@@ -371,6 +372,16 @@ func (t *Timeline) Spells(tick int64, ws []bus.Weather, dst *[physics.WeatherSpe
 	*dst = [physics.WeatherSpells]physics.Spell{}
 	copy(dst[:], buf[skip:n])
 	return int32(n - skip)
+}
+
+// holds is how long after a spell begins the one before it is still needed:
+// its change, or a change with no front's ease of the pressure's level if
+// that is longer.
+func (t *Timeline) holds(s *physics.Spell) float64 {
+	if s.Front == 0 && s.Change > 0 {
+		return max(s.Change, float64(t.prepared.EaseTicks()))
+	}
+	return s.Change
 }
 
 // Coming is the next front of the world's own weather before its spell is

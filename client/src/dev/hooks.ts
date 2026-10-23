@@ -42,9 +42,13 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
+import { harbourWater } from '../boot/harbour';
 import { catalog } from '../catalog';
 import type { ChartMode } from '../chart/chart';
 import type { ChartParts } from '../chart/make';
+import { placeWords, pointsOf, warningInForce } from '../chart/placeweather';
+import { formatPosition } from '../chart/position';
+import { type Layer, momentOf } from '../chart/weather';
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
@@ -88,8 +92,10 @@ import {
 import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
+import type { SandboxForecast } from '../sandbox/forecast';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
+import type { Barometer } from '../ui/barometer';
 import type { Settings } from '../ui/settings';
 import {
   cellHex,
@@ -168,6 +174,24 @@ async function readTarget(
   return out;
 }
 
+/** How many of a canvas's pixels are painted, of every fourth row and column. */
+function inkedOf(canvas: HTMLCanvasElement): number {
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) {
+    return 0;
+  }
+  const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  let n = 0;
+  for (let y = 0; y < canvas.height; y += 4) {
+    for (let x = 0; x < canvas.width; x += 4) {
+      if ((d[(y * canvas.width + x) * 4 + 3] ?? 0) > 0) {
+        n++;
+      }
+    }
+  }
+  return n;
+}
+
 /** Solves a 3 × 3 system, row-major, by Cramer's rule. */
 function solve3(a: number[], b: number[]): [number, number, number] {
   const det = (m: number[]): number => {
@@ -208,7 +232,12 @@ function solve3(a: number[], b: number[]): [number, number, number] {
 export type Sailing = (
   | { sandbox: Sandbox; online?: undefined; predictor?: undefined }
   | { sandbox?: undefined; online: Online; predictor: Predictor }
-) & { chart?: ChartParts };
+) & {
+  chart?: ChartParts;
+  forecast?: SandboxForecast;
+  barometer?: Barometer;
+  readBarometer?: () => void;
+};
 
 /** Puts the hooks on globalThis.keel. */
 export function exposeHooks(world: SeaScene, game: Game, sailing: Sailing): void {
@@ -2805,6 +2834,151 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           })),
         picked: c.picked.value === null ? null : c.store.title(c.picked.value),
       };
+    },
+
+    /** The forecast held: the latest issue, its steps and systems, its gale warning, and what is kept. */
+    forecast() {
+      const f = chartParts().sea.forecasting;
+      if (f === null) {
+        return null;
+      }
+      const latest = f.forecasts.latest;
+      const H = RECORDS.forecastHead;
+      return {
+        issue: latest === null ? null : (latest.head[H.issue] ?? 0),
+        steps: latest === null ? 0 : (latest.head[H.steps] ?? 0),
+        systems: latest?.systems.length ?? 0,
+        forming:
+          latest?.systems.filter((s) => (s[RECORDS.forecastSystem.forming] ?? 0) !== 0).length ?? 0,
+        gale: latest?.gale ?? null,
+        warning: warningInForce(f, chartParts().chart.store),
+        truth: f.forecasts.truth.map((k) => k.tick),
+        tick: f.tick(),
+        version: f.forecasts.version,
+      };
+    },
+
+    /** Puts the boat on the water in Port Royal's harbour, where the board is: the sandbox only. */
+    toHarbour(): boolean {
+      const at = harbourWater(world);
+      if (at === null) {
+        return false;
+      }
+      offline().place(at.east, at.north, 0);
+      floatBoat();
+      return true;
+    },
+
+    /** The harbourmaster's board: whether its button shows, and its words if it is open. */
+    board() {
+      const button = document.querySelector('.board-button');
+      const board = document.querySelector<HTMLElement>('.board');
+      return { button: button !== null, text: board?.innerText ?? null };
+    },
+
+    /** A storm to bring a gale to the boat minutes on, and the forecast issued again: the sandbox only. */
+    galeIn(minutes: number): void {
+      const s = offline();
+      const st = s.physics.records.state;
+      s.meetGale(st[RECORDS.state.x] ?? 0, st[RECORDS.state.y] ?? 0, minutes);
+      sailing.forecast?.again();
+    },
+
+    /** Ticks the sandbox's forecast and reads the barometer now, as their timers do: the sandbox only. */
+    weatherNow(): void {
+      sailing.forecast?.tick();
+      sailing.readBarometer?.();
+    },
+
+    /** Issues the sandbox's forecast again now, as the weather is: the sandbox only. */
+    issueForecast(): void {
+      if (sailing.forecast === undefined) {
+        throw new Error('the sandbox only');
+      }
+      sailing.forecast.again();
+    },
+
+    /** The chart's slider to minutes ahead (the forecast's steps) or, negative, back (what happened). */
+    chartTime(minutes: number): void {
+      const c = chartParts().chart;
+      c.playing.value = false;
+      c.timeMode.value = minutes < 0 ? 'past' : 'forecast';
+      c.step.value = Math.round(minutes / 10);
+    },
+
+    /** The chart's weather's layers, those given switched as given. */
+    chartLayers(layers: Partial<Record<Layer, boolean>>): void {
+      const c = chartParts().chart;
+      c.layers.value = { ...c.layers.value, ...layers };
+    },
+
+    /** What the chart's weather last painted: its moment, what it drew and how long it took. */
+    chartWeather() {
+      const w = chartParts().weather;
+      const s = w?.scene ?? null;
+      return {
+        paints: w?.paints ?? 0,
+        took: w?.took ?? null,
+        moment:
+          s === null ? null : { kind: s.moment.kind, step: s.moment.step, tick: s.moment.tick },
+        systems:
+          s?.systems.map((x) => ({
+            draw: x.draw,
+            forming: x.forming,
+            cone: x.cone,
+            east: x.east,
+            north: x.north,
+          })) ?? [],
+        fronts: s?.fronts.length ?? 0,
+        risks: s?.risks.map((r) => r.mark) ?? [],
+        gale: s?.gale === null || s?.gale === undefined ? 0 : s.gale.on.reduce((a, b) => a + b, 0),
+        forecast: s?.forecast.length ?? 0,
+        inside: s?.inside ?? 0,
+        judged: s?.judged ?? 0,
+        rain: s === null ? 0 : s.grid.rain.reduce((a, b) => a + (b >= 0.1 ? 1 : 0), 0),
+        fog: s === null ? 0 : s.grid.fog.reduce((a, b) => a + (b < 1852 ? 1 : 0), 0),
+        inked: w === null ? 0 : inkedOf(w.canvas),
+      };
+    },
+
+    /** A charted place's weather by its name, at the slider's time: its box's lines, outlook and warning. */
+    async placeWeather(name: string) {
+      const c = chartParts();
+      const f = c.sea.forecasting;
+      const e = c.chart.store.entries.find((x) => x.name === name);
+      if (f === null || e === undefined) {
+        return null;
+      }
+      const m = momentOf(c.chart.timeMode.value, c.chart.step.value, f);
+      return placeWords(f, m, pointsOf(e), c.chart.store);
+    },
+
+    /** The barometer: its words, its reading and its set hand's, hPa, and its hands' angles. */
+    barometer() {
+      const b = sailing.barometer;
+      if (b === undefined) {
+        return null;
+      }
+      return {
+        words: b.words.value,
+        now: b.now,
+        set: b.set,
+        hand: b.hand.el?.style.transform ?? '',
+        setHand: b.setHand.el?.style.transform ?? '',
+      };
+    },
+
+    /** Holds a change on the barometer, hPa a quarter of an hour, from now; null lets it go. */
+    holdBarometer(rate: number | null): void {
+      const b = sailing.barometer;
+      if (b !== undefined) {
+        b.hold(rate, world.ticks);
+      }
+    },
+
+    /** A point's position as the chart writes it. */
+    position(east: number, north: number): string {
+      return formatPosition(east, north);
     },
 
     /** The notice shown and how many wait; raises one, for the tests of the notices. */

@@ -387,10 +387,10 @@ func (w *Weather) SetRecordCount(n int32) { w.NRecords = min(max(n, 0), MaxSyste
 
 // systemsAt sets t's systems at a tick: from the records if any are in use,
 // or else interpolated between the keyframes about the tick, the week's
-// left out if still. A system in one keyframe of the two and not the other
-// is being born or has gone in between: its strength fades from or to
-// nothing.
-func systemsAt(w *Weather, t *WeatherTick, tick float64, still bool) {
+// left out if still, and the domes left out if synoptic. A system in one
+// keyframe of the two and not the other is being born or has gone in
+// between: its strength fades from or to nothing.
+func systemsAt(w *Weather, t *WeatherTick, tick float64, still, synoptic bool) {
 	t.ns = 0
 	p := w.Prepared
 	first := int32(0)
@@ -400,7 +400,7 @@ func systemsAt(w *Weather, t *WeatherTick, tick float64, still bool) {
 	if w.NRecords > 0 {
 		for i := first; i < w.NRecords; i++ {
 			v, on := recordAt(&w.Records[i], tick)
-			if on && t.sys[t.ns].set(p, &v, i) {
+			if on && !(synoptic && p.isDome(v.kind)) && t.sys[t.ns].set(p, &v, i) {
 				t.ns++
 			}
 		}
@@ -425,7 +425,7 @@ func systemsAt(w *Weather, t *WeatherTick, tick float64, still bool) {
 	a := &w.Keys[k0]
 	if k1 < 0 {
 		for i := first; i < MaxSystems; i++ {
-			if s := &a.Systems[i]; s.On != 0 {
+			if s := &a.Systems[i]; s.On != 0 && !(synoptic && p.isDome(s.Kind)) {
 				v := valuesOf(s)
 				if t.sys[t.ns].set(p, &v, i) {
 					t.ns++
@@ -438,6 +438,9 @@ func systemsAt(w *Weather, t *WeatherTick, tick float64, still bool) {
 	u := clamp(float64((tick-a.Tick)/(b.Tick-a.Tick)), 0, 1)
 	for i := first; i < MaxSystems; i++ {
 		sa, sb := &a.Systems[i], &b.Systems[i]
+		if synoptic && (sa.On == 0 || p.isDome(sa.Kind)) && (sb.On == 0 || p.isDome(sb.Kind)) {
+			continue
+		}
 		va, vb := valuesOf(sa), valuesOf(sb)
 		var v [2]systemValues
 		n := 0
@@ -462,6 +465,13 @@ func systemsAt(w *Weather, t *WeatherTick, tick float64, still bool) {
 			}
 		}
 	}
+}
+
+// isDome reports whether a system of kind i is a dome: a squall's or a
+// shower's, which the synoptic wind leaves out.
+func (w *WeatherPrepared) isDome(i float64) bool {
+	k := w.kindOf(i)
+	return k != nil && k.shape == ShapeDome
 }
 
 // SystemsAt is how many systems blow at the tick t was set to.
@@ -527,13 +537,7 @@ func recordAt(r *SystemRecord, tick float64) (systemValues, bool) {
 		east += float64(w * Sin(float64(r.WobblePhase[0]*turnStep)+cycle(inverse(r.WobblePeriod[0]), tick)))
 		north += float64(w * Sin(float64(r.WobblePhase[1]*turnStep)+cycle(inverse(r.WobblePeriod[1]), tick)))
 	}
-	life := 1.0
-	switch {
-	case tick < r.Mature:
-		life = smooth(float64((tick - r.Born) * inverse(r.Mature-r.Born)))
-	case tick >= r.Decays:
-		life = 1 - smooth(float64((tick-r.Decays)*inverse(r.Gone-r.Decays)))
-	}
+	life := lifeOf(r, tick)
 	throb := 1 + float64(float64(r.Throb*strengthStep)*Sin(float64(r.ThrobPhase*turnStep)+cycle(inverse(r.ThrobPeriod), tick)))
 	return systemValues{
 		kind:     r.Kind,
@@ -547,6 +551,19 @@ func recordAt(r *SystemRecord, tick float64) (systemValues, bool) {
 		peak:     r.Peak,
 		depth:    float64(r.Depth * hundredthHPa),
 	}, true
+}
+
+// lifeOf is a system's planned strength at a tick of its life, without its
+// throb: growing from nothing at its birth to the whole of it as it
+// matures, and decaying to nothing as it goes.
+func lifeOf(r *SystemRecord, tick float64) float64 {
+	switch {
+	case tick < r.Mature:
+		return smooth(float64((tick - r.Born) * inverse(r.Mature-r.Born)))
+	case tick >= r.Decays:
+		return 1 - smooth(float64((tick-r.Decays)*inverse(r.Gone-r.Decays)))
+	}
+	return 1
 }
 
 // inverse is 1 / x, or 0 for no x.

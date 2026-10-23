@@ -200,6 +200,25 @@ interface Exports {
   flash(): number;
   slotTicks(): number;
   flashesAt(slot: number): number;
+  forecastParams(): number;
+  forecastPrepare(): void;
+  forecastHead(): number;
+  forecastSpells(): number;
+  forecastSystem(): number;
+  forecastMake(issue: number, end: number): void;
+  forecastAt(tick: number): void;
+  synoptic(on: number): void;
+  galeWater(): number;
+  galeOn(): number;
+  galeSide(): number;
+  galeStep(): number;
+  galeScan(): void;
+  galeAt(tick: number): void;
+  nearAt(x: number, y: number): number;
+  regimeAt(): number;
+  typicalValues(): number;
+  typicalSample(n: number): void;
+  tendency(now: number, before: number, quarter: number): number;
 }
 
 const functionExports = [
@@ -354,6 +373,25 @@ const functionExports = [
   'flash',
   'slotTicks',
   'flashesAt',
+  'forecastParams',
+  'forecastPrepare',
+  'forecastHead',
+  'forecastSpells',
+  'forecastSystem',
+  'forecastMake',
+  'forecastAt',
+  'synoptic',
+  'galeWater',
+  'galeOn',
+  'galeSide',
+  'galeStep',
+  'galeScan',
+  'galeAt',
+  'nearAt',
+  'regimeAt',
+  'typicalValues',
+  'typicalSample',
+  'tendency',
 ] as const satisfies readonly (keyof Exports)[];
 
 /** A chunk of the ground as the module holds it: views of its memory. */
@@ -401,7 +439,7 @@ export async function loadPhysics(source: PhysicsSource): Promise<Physics> {
   if (WebAssembly.Module.imports(module).length > 0) {
     throw new Error('physics module: it imports from its host, and must not');
   }
-  return new Physics(await WebAssembly.instantiate(module, {}));
+  return new Physics(await WebAssembly.instantiate(module, {}), module);
 }
 
 async function compile(source: PhysicsSource): Promise<WebAssembly.Module> {
@@ -433,13 +471,15 @@ export interface Keyframe {
 
 export class Physics {
   readonly #x: Exports;
+  readonly #module: WebAssembly.Module | undefined;
   readonly #addresses: Record<RecordName, number>;
   #buffer: ArrayBuffer | undefined;
   #views: Record<RecordName, Float64Array> | undefined;
   #air: Float64Array | undefined;
   #systemRecords: Float64Array[] = [];
 
-  constructor(instance: WebAssembly.Instance) {
+  constructor(instance: WebAssembly.Instance, module?: WebAssembly.Module) {
+    this.#module = module;
     const x = instance.exports as unknown as Exports;
     for (const name of functionExports) {
       if (typeof x[name] !== 'function') {
@@ -1033,6 +1073,155 @@ export class Physics {
   /** How far from the centre a front's line enters the disk's reach and leaves it, m. */
   frontReach(): number {
     return this.#x.frontReach();
+  }
+
+  /**
+   * A second instance of the same module, with memory of its own: one for
+   * the forecast and the past, whose spells and keyframes are not the
+   * prediction's. It is prepared afresh, as the first was.
+   */
+  async twin(): Promise<Physics> {
+    if (this.#module === undefined) {
+      throw new Error('physics module: made from an instance, it has no module to make a twin of');
+    }
+    return new Physics(await WebAssembly.instantiate(this.#module, {}), this.#module);
+  }
+
+  /**
+   * Derives the forecast's constants from the forecastParams record. Call
+   * it after writing them (writeForecastParams) and after prepareWeather.
+   */
+  prepareForecast(): void {
+    this.#x.forecastPrepare();
+  }
+
+  /**
+   * The forecast: views of its head, its spells (SIZES.spell values each)
+   * and its systems (SIZES.forecastSystem values each), all of the room
+   * the module has. Take them afresh after any call.
+   */
+  get forecast(): { head: Float64Array; spells: Float64Array; systems: Float64Array } {
+    const x = this.#x;
+    const b = x.memory.buffer;
+    return {
+      head: new Float64Array(b, x.forecastHead() >>> 0, SIZES.forecastHead),
+      spells: new Float64Array(b, x.forecastSpells() >>> 0, WEATHER.forecastSpells * SIZES.spell),
+      systems: new Float64Array(
+        b,
+        x.forecastSystem() >>> 0,
+        WEATHER.forecastSystems * SIZES.forecastSystem,
+      ),
+    };
+  }
+
+  /**
+   * Makes the forecast issued at a tick, for a world whose last tick is end
+   * (0 for none), from the spells in play and the records the module
+   * holds, as the server makes its own: for a client with no server.
+   */
+  forecastMake(issue: number, end: number): void {
+    this.#x.forecastMake(issue, end);
+  }
+
+  /**
+   * Makes the module's spells and keyframes the forecast's about a tick:
+   * then windDrawAt and the fields answer for the forecast. Only for a
+   * module of its own, never the prediction's.
+   */
+  forecastAt(tick: number): void {
+    this.#x.forecastAt(tick);
+  }
+
+  /** Leaves the squalls and showers out of the wind while on: the synoptic wind. */
+  synoptic(on: boolean): void {
+    this.#x.synoptic(on ? 1 : 0);
+  }
+
+  /** How many points a side the gale grid has. */
+  galeSide(): number {
+    return this.#x.galeSide() >>> 0;
+  }
+
+  /** The gale grid's water, a byte for each point, 1 over the water: a view to write. */
+  galeWater(): Uint8Array {
+    const x = this.#x;
+    const n = WEATHER.galeSide * WEATHER.galeSide;
+    return new Uint8Array(x.memory.buffer, x.galeWater() >>> 0, n);
+  }
+
+  /**
+   * The forecast's gale at each of its steps, from its synoptic wind over
+   * the grid's water: a view of the galeStep records, SIZES.galeStep
+   * values each.
+   */
+  galeScan(): Float64Array {
+    const x = this.#x;
+    x.galeScan();
+    return new Float64Array(
+      x.memory.buffer,
+      x.galeStep() >>> 0,
+      WEATHER.forecastSteps * SIZES.galeStep,
+    );
+  }
+
+  /**
+   * The points of the gale grid in a gale in the forecast's synoptic wind
+   * at a tick, a byte each, 1 in a gale, and the step's gale (a galeStep
+   * record's values). Views: read them before the next call.
+   */
+  galeAt(tick: number): { on: Uint8Array; gale: Float64Array } {
+    const x = this.#x;
+    x.galeAt(tick);
+    const n = WEATHER.galeSide * WEATHER.galeSide;
+    return {
+      on: new Uint8Array(x.memory.buffer, x.galeOn() >>> 0, n),
+      gale: new Float64Array(x.memory.buffer, x.galeStep() >>> 0, SIZES.galeStep),
+    };
+  }
+
+  /**
+   * The mean wind and its typical strongest gust at points (east, north of
+   * each) at the time windDrawAt set, without any shelter: for each point
+   * the mean's speed, the direction it comes from and the gust, m/s and
+   * rad, written to out.
+   */
+  typicalSample(
+    points: ArrayLike<number>,
+    out: Float64Array,
+    count = points.length >> 1,
+  ): Float64Array {
+    const x = this.#x;
+    for (let start = 0; start < count; start += SEA.sampleCapacity) {
+      const m = Math.min(SEA.sampleCapacity, count - start);
+      const into = new Float64Array(x.memory.buffer, x.samplePoints() >>> 0, 2 * m);
+      for (let i = 0; i < 2 * m; i++) {
+        into[i] = points[2 * start + i] ?? 0;
+      }
+      x.typicalSample(m);
+      out.set(new Float64Array(x.memory.buffer, x.typicalValues() >>> 0, 3 * m), 3 * start);
+    }
+    return out;
+  }
+
+  /** What is near (east, north) at the time windDrawAt set: a sum of NEAR's bits (chart/words.ts). */
+  nearAt(east: number, north: number): number {
+    return this.#x.nearAt(east, north) | 0;
+  }
+
+  /** The catalog's index of the regime of the spell in effect at the time windDrawAt set, or −1. */
+  regimeAt(): number {
+    return this.#x.regimeAt();
+  }
+
+  /**
+   * The barometer's tendency for readings now, a few minutes before and a
+   * quarter of an hour before, hPa: its words, −4 falling very rapidly to
+   * 4 rising very rapidly, and whether the last minutes turned against it.
+   */
+  tendency(now: number, before: number, quarter: number): { words: number; turned: boolean } {
+    const v = this.#x.tendency(now, before, quarter) | 0;
+    const turned = (v & 1) !== 0;
+    return { words: (v - (turned ? 1 : 0)) / 2, turned };
   }
 
   /** The pressure at (east, north), hPa, at the time windDrawAt set. */

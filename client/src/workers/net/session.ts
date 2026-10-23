@@ -30,7 +30,9 @@ import type {
   CapSeen,
   ChartEntry,
   ChunksHanded,
+  ForecastTold,
   LightSeen,
+  PastTold,
   PlaceSeen,
   SeaAreas,
   WeatherKeyframe,
@@ -39,7 +41,13 @@ import type {
 import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
 import { POSITION_STEP, type View, ViewRing } from '../../net/view';
-import { comingRecord, keyframeRecord, spellRecord } from '../../net/weather';
+import {
+  comingRecord,
+  forecastTold,
+  keyframeRecord,
+  pastTold,
+  spellRecord,
+} from '../../net/weather';
 
 export const BURST_PINGS = 8;
 export const BURST_EVERY = 100_000;
@@ -93,6 +101,8 @@ export type Received =
   | { kind: 'tools'; on: boolean }
   /** The world's chart: whole, or what was charted since. */
   | { kind: 'chart'; entries: ChartEntry[]; whole: boolean }
+  /** The forecast as it is issued, with what has been after a Welcome. */
+  | { kind: 'forecast'; forecast: ForecastTold; past: PastTold | null }
   | { kind: 'pong' }
   | { kind: 'other' };
 
@@ -272,6 +282,13 @@ export class Session {
       case 'charted':
         this.#lastHeard = now;
         return { kind: 'chart', entries: m.body.value.entries.map(chartEntry), whole: false };
+      case 'forecast':
+        this.#lastHeard = now;
+        return {
+          kind: 'forecast',
+          forecast: forecastTold(m.body.value),
+          past: pastTold(m.body.value.past),
+        };
       case 'bump': {
         this.#lastHeard = now;
         const v = m.body.value;

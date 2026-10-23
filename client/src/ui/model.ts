@@ -25,7 +25,7 @@ export const AGROUND = 'Aground';
 export const PUSHED_OFF = 'Pushed off';
 
 /** An element moved by a transform, and the value it was last moved to. */
-class Moved {
+export class Moved {
   el: HTMLElement | SVGElement | null = null;
   #last = Number.NaN;
   readonly #write: (el: HTMLElement | SVGElement, v: number) => void;
@@ -51,7 +51,7 @@ class Moved {
   }
 }
 
-const rotate = (el: HTMLElement | SVGElement, deg: number): void => {
+export const rotate = (el: HTMLElement | SVGElement, deg: number): void => {
   el.style.transform = `rotate(${deg.toFixed(1)}deg)`;
 };
 

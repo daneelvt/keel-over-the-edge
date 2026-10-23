@@ -6,10 +6,12 @@ import "math"
 
 // The pressure at a point is a function of the same inputs as the wind, so
 // the barometer, the isobars and the wind agree: the spells' levels, mixed
-// as their winds are; behind a front's line, the new spell's level rising
-// back to itself; a gentle slope across the disk with low pressure on the
-// left of the base wind, so that Buys Ballot's law holds of the spells'
-// own wind (American Meteorological Society, Glossary of Meteorology, Buys
+// as their winds are, or at a change with no front eased evenly from the
+// old level to the new over the ease, so a change of spell never reads as
+// a storm's fall; behind a front's line, the new spell's level rising back
+// to itself; a gentle slope across the disk with low pressure on the left
+// of the base wind, so that Buys Ballot's law holds of the spells' own
+// wind (American Meteorological Society, Glossary of Meteorology, Buys
 // Ballot's law); a front's trough; and each dome's and low's shape.
 
 // The tendency's words: the change over a quarter of an hour, at the
@@ -48,8 +50,16 @@ func PressureAt(t *WeatherTick, x, y float64) float64 {
 	r := math.Sqrt(float64(x*x) + float64(y*y))
 	b := t.base(x, y, r, pointMean)
 	var p float64
-	for i := range t.n {
-		p += float64(b.shares[i] * t.levelOf(&t.at[i], x, y))
+	if t.easing {
+		// A change with no front, from the level the spell before gave
+		// here, still rising if a front brought it, to the spell in
+		// effect's, the last in play.
+		from := t.levelOf(t.easeFrom, x, y)
+		p = from + float64(t.ease*(t.at[t.n-1].s.level-from))
+	} else {
+		for i := range t.n {
+			p += float64(b.shares[i] * t.levelOf(t.at[i].s, x, y))
+		}
 	}
 	// Low on the left with the base wind at one's back: the air's motion
 	// turned anticlockwise, by the angle a large system's wind is turned
@@ -74,8 +84,7 @@ func PressureAt(t *WeatherTick, x, y float64) float64 {
 // levelOf is a spell's pressure level at (x, y): its own, or for a spell a
 // front brought, its own less what it has still to rise since the line
 // passed the point.
-func (t *WeatherTick) levelOf(st *spellTick, x, y float64) float64 {
-	s := st.s
+func (t *WeatherTick) levelOf(s *spell, x, y float64) float64 {
 	if !s.front {
 		return s.level
 	}

@@ -7,6 +7,7 @@ import { RECORDS, SIZES } from '../predict/layout.gen';
 import {
   airLines,
   applyState,
+  forecastLines,
   inSeaState,
   netLines,
   type PanelWorld,
@@ -379,6 +380,32 @@ describe('the air’s lines', () => {
     expect(airLines(8334, 0, [0.00047, 0, 0, 0], [], null).slice(1)).toEqual([
       'signals none heard',
       'flash   none in the last minute',
+    ]);
+  });
+});
+
+describe('the forecast’s lines', () => {
+  test('none before the first issue', () => {
+    expect(forecastLines(null, 0, [], null, null)).toEqual(['forecast none issued yet']);
+  });
+
+  test('the issue’s age and systems, the gale warning and the barometer', () => {
+    const lines = forecastLines(
+      { tick: 1800 * 100, steps: 10 },
+      1800 * 106 + 900,
+      [{ name: 'storm', forming: true, east: 1234.4, north: -50.6, cone: 1852 * 0.47 }],
+      'Northerly gale 8 soon, north of Port Royal',
+      { words: '1003 hPa, falling quickly', set: 1006.04 },
+    );
+    expect(lines).toEqual([
+      'forecast issued 6 min ago, 10 steps; 1 system',
+      '  storm forming at 1234 E, -51 N, cone 0.47 NM',
+      'gale    Northerly gale 8 soon, north of Port Royal',
+      'baro    1003 hPa, falling quickly; set hand 1006.0 hPa',
+    ]);
+    expect(forecastLines({ tick: 0, steps: 10 }, 0, [], null, { words: '', set: 0 })).toEqual([
+      'forecast issued 0 min ago, 10 steps; no systems',
+      'gale    no warning in force',
     ]);
   });
 });

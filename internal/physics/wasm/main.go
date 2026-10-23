@@ -1252,6 +1252,167 @@ func fn(op, n uint32) {
 	}
 }
 
+// The forecast: its params, the forecast itself, the gale grid's water and
+// points, its gales, and what typicalSample writes for each point: the
+// mean wind's speed and the direction it comes from, and its typical
+// strongest gust.
+var (
+	forecastParams physics.ForecastParams
+	fcast          physics.Forecast
+	galeWater      [physics.MaxGaleSide * physics.MaxGaleSide]uint8
+	galeOn         [physics.MaxGaleSide * physics.MaxGaleSide]uint8
+	gales          physics.Gales
+	galeWeather    physics.Weather
+	galeTick       physics.WeatherTick
+	typicalValues  [3 * sampleCapacity]float64
+)
+
+// The gale grid's water is all water until the page says otherwise.
+func init() {
+	for i := range len(galeWater) {
+		galeWater[i] = 1
+	}
+}
+
+//go:wasmexport forecastParams
+func forecastParamsAddr() uint32 { return addr(unsafe.Pointer(&forecastParams)) }
+
+// forecastPrepare derives the forecast's constants from forecastParams.
+// Call it after weatherPrepare.
+//
+//go:wasmexport forecastPrepare
+func forecastPrepare() {
+	weatherPrepared.PrepareForecast(&forecastParams)
+	stepFresh = false
+}
+
+// forecastHead is the forecast's head; forecastSpells its spells, each a
+// spell record; forecastSystem its first system, the rest after it.
+//
+//go:wasmexport forecastHead
+func forecastHeadAddr() uint32 { return addr(unsafe.Pointer(&fcast.Head)) }
+
+//go:wasmexport forecastSpells
+func forecastSpellsAddr() uint32 { return addr(unsafe.Pointer(&fcast.Spells)) }
+
+//go:wasmexport forecastSystem
+func forecastSystemAddr() uint32 { return addr(unsafe.Pointer(&fcast.Systems)) }
+
+// forecastMake makes the forecast issued at a tick, for a world whose last
+// tick is end (0 for none), from the spells in play and the records the
+// module holds, each record's slot its place: as the server makes its own
+// from the week, for a client with no server.
+//
+//go:wasmexport forecastMake
+func forecastMake(issue, end float64) {
+	in := physics.ForecastInput{
+		Issue: issue, End: end,
+		Spells: weather.Spells[:weather.Count], Records: weather.Records[:weather.NRecords],
+	}
+	physics.MakeForecast(&weatherPrepared, &in, &fcast)
+}
+
+// forecastAt makes the spells and keyframes the forecast's about a tick:
+// the wind, the pressure, the rain and the visibility then answer for the
+// forecast. Only for a module of its own: the prediction's spells and
+// keyframes are the server's.
+//
+//go:wasmexport forecastAt
+func forecastAt(tick float64) {
+	physics.ForecastAt(&weather, &fcast, tick)
+	stepFresh = false
+}
+
+// synoptic leaves the squalls and showers out of the wind, while on: the
+// synoptic wind, which a gale warning reads.
+//
+//go:wasmexport synoptic
+func synoptic(on uint32) {
+	weather.Synoptic = on != 0
+	stepFresh = false
+}
+
+// galeWater is the gale grid's water, a byte for each point, 1 over the
+// water; galeOn what galeAt writes, 1 for a point in a gale.
+//
+//go:wasmexport galeWater
+func galeWaterAddr() uint32 { return addr(unsafe.Pointer(&galeWater)) }
+
+//go:wasmexport galeOn
+func galeOnAddr() uint32 { return addr(unsafe.Pointer(&galeOn)) }
+
+// galeSide is how many points a side the gale grid has, as the forecast's
+// params give it.
+//
+//go:wasmexport galeSide
+func galeSide() uint32 { return uint32(weatherPrepared.GaleSide()) }
+
+// galeStep is what galeScan writes: a galeStep record for each step, the
+// first here.
+//
+//go:wasmexport galeStep
+func galeStepAddr() uint32 { return addr(unsafe.Pointer(&gales.Steps)) }
+
+// galeScan writes to gales the forecast's gale at each of its steps.
+//
+//go:wasmexport galeScan
+func galeScan() {
+	physics.GaleScan(&weatherPrepared, &fcast, &galeWeather, &galeTick, galeWater[:], galeOn[:], &gales)
+}
+
+// galeAt writes to galeOn the points in a gale in the synoptic wind of the
+// forecast at a tick, and to gales' first step its gale.
+//
+//go:wasmexport galeAt
+func galeAt(tick float64) {
+	galeWeather.Prepared = &weatherPrepared
+	galeWeather.Synoptic = true
+	physics.ForecastAt(&galeWeather, &fcast, tick)
+	physics.WeatherAt(&galeWeather, &galeTick, tick)
+	gales.Steps[0] = physics.GaleGrid(&weatherPrepared, &galeTick, galeWater[:], galeOn[:])
+}
+
+// nearAt returns what is near (x, y) at the time windDrawAt set: a sum of
+// the physics package's Near bits.
+//
+//go:wasmexport nearAt
+func nearAt(x, y float64) int32 { return physics.NearAt(&drawWeather, x, y) }
+
+// regimeAt returns the catalog's index of the regime of the spell in
+// effect at the time windDrawAt set, or −1 for none.
+//
+//go:wasmexport regimeAt
+func regimeAt() float64 { return physics.RegimeAt(&drawWeather) }
+
+//go:wasmexport typicalValues
+func typicalValuesAddr() uint32 { return addr(unsafe.Pointer(&typicalValues)) }
+
+// typicalSample writes the mean wind and its typical strongest gust at the
+// first n of samplePoints to typicalValues, at the time windDrawAt set,
+// without any shelter.
+//
+//go:wasmexport typicalSample
+func typicalSample(n uint32) {
+	for i := uint32(0); i < n && i < sampleCapacity; i++ {
+		v := typicalValues[3*i : 3*(i+1)]
+		v[0], v[1], v[2], _ = physics.TypicalAt(&drawWeather, samplePoints[2*i], samplePoints[2*i+1])
+	}
+}
+
+// tendency returns the barometer's words for readings now, a few minutes
+// before and a quarter of an hour before, hPa: one of the Tendency
+// constants, negative falling, times two, plus one if the last few minutes
+// turned against it.
+//
+//go:wasmexport tendency
+func tendency(now, before, quarter float64) int32 {
+	words, turned := physics.Tendency(now, before, quarter)
+	if turned {
+		return 2*words + 1
+	}
+	return 2 * words
+}
+
 // allocations returns how many heap allocations the module has made, for the
 // test that a step makes none.
 //

@@ -9,17 +9,20 @@
 import './chart.css';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Chart } from '../chart/chart';
+import type { Forecasting } from '../chart/forecasting';
+import { type PocketWeather, pocketWeather } from '../chart/pocketweather';
+import { formatPosition } from '../chart/position';
 import {
   bearingText,
   type ChartStore,
   dayText,
   distanceText,
   edgeCaption,
-  positionText,
   whenText,
 } from '../chart/store';
 import type { BoatAt } from '../chart/view';
 import type { ChartEntry } from '../net/messages';
+import { PlaceWeatherLines, TimeBar } from './chartweather';
 import { type Countdown, endText } from './countdown';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
@@ -37,6 +40,8 @@ export interface ChartSea {
   /** The news, a page at a time, and its columns. */
   news: NewsSource;
   columns: readonly NewsColumn[];
+  /** The forecast and what has been, or null without. */
+  forecasting: Forecasting | null;
 }
 
 /** A column of the news: what its items tell of, what is charted or the world itself. */
@@ -104,6 +109,11 @@ function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () =
           Found here: {found.map((f) => store.title(f).replace(/ on .*$/, '')).join(', ')}
         </p>
       ) : null}
+      {sea.forecasting !== null && store.weathered(e) ? (
+        <PlaceWeatherLines chart={sea.chart} src={sea.forecasting} e={e} />
+      ) : (
+        <p class="chart-place-position">{formatPosition(e.east, e.north)}</p>
+      )}
       <div class="chart-buttons">
         <button type="button" onClick={() => sea.chart.show('list')}>
           Show in the list
@@ -116,14 +126,14 @@ function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () =
   );
 }
 
-/** Where the boat is, as the sky gives it, and how far the edge. */
+/** Where the boat is, as its latitude and longitude, and how far the edge. */
 function Position({ sea }: { sea: ChartSea }) {
   const [text, setText] = useState('');
   useEffect(() => {
     const at = () => {
       const b = sea.boat();
       setText(
-        `${positionText(b.east, b.north, sea.scale, sea.chart.store.home())} · ${edgeCaption(b.east, b.north, sea.lip).replace('Chart · ', '')}`,
+        `${formatPosition(b.east, b.north)} · ${edgeCaption(b.east, b.north, sea.lip).replace('Chart · ', '')}`,
       );
     };
     at();
@@ -284,7 +294,7 @@ export function ChartList({ sea }: { sea: ChartSea }) {
                       <span class="chart-list-kind">{store.kindName(e)}</span>
                       <span class="chart-list-where">
                         {bearingText(Math.atan2(e.east - b.east, e.north - b.north))}{' '}
-                        {distanceText(d(e))}
+                        {distanceText(d(e))} · {formatPosition(e.east, e.north)}
                       </span>
                       <Credit e={e} now={now} />
                     </button>
@@ -378,7 +388,17 @@ function ChartedItem({ sea, it, now }: { sea: ChartSea; it: NewsItem; now: numbe
 }
 
 /** An item of the Notices to Mariners: the world's end, in the reader's own time. */
-function WorldItem({ it, zone }: { it: NewsItem; zone: string }) {
+function WorldItem({ sea, it, zone }: { sea: ChartSea; it: NewsItem; zone: string }) {
+  if (it.subject === 'gale') {
+    // A gale warning: where its strongest wind was forecast, on the chart at a tap.
+    return (
+      <li class="news-world news-gale">
+        <button type="button" onClick={() => sea.chart.showPoint(it.east, it.north)}>
+          <span class="news-title">{it.title.toUpperCase()}.</span> {it.what}.
+        </button>
+      </li>
+    );
+  }
   return (
     <li class="news-world">
       <span class="news-title">{it.title.toUpperCase()}.</span> The falls take this world on{' '}
@@ -433,7 +453,7 @@ export function NewsSheet({ sea, end = null }: { sea: ChartSea; end?: Countdown 
           <h3>{sea.columns.find((c) => c.of === 'world')?.title}</h3>
           <ol class="news-items">
             {notices.map((it) => (
-              <WorldItem key={it.id} it={it} zone={zone} />
+              <WorldItem key={it.id} sea={sea} it={it} zone={zone} />
             ))}
           </ol>
         </section>
@@ -500,14 +520,30 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
       {mode === 'chart' && picked !== null ? (
         <ChartBox sea={sea} e={picked} close={() => (chart.picked.value = null)} />
       ) : null}
+      {mode === 'chart' && sea.forecasting !== null ? (
+        <TimeBar chart={chart} src={sea.forecasting} />
+      ) : null}
       {mode === 'list' ? <ChartList sea={sea} /> : null}
       {mode === 'news' ? <NewsSheet sea={sea} end={end} /> : null}
     </div>
   );
 }
 
-/** The pocket chart: the whole disk small, tilted, with the boat; a tap opens the chart. */
-export function PocketChart({ sea, end = null }: { sea: ChartSea; end?: Countdown | null }) {
+/**
+ * The pocket chart: the whole disk small, tilted, with the boat, and its
+ * weather now while its switch is on; a tap opens the chart.
+ */
+export function PocketChart({
+  sea,
+  end = null,
+  weather = true,
+  setWeather = null,
+}: {
+  sea: ChartSea;
+  end?: Countdown | null;
+  weather?: boolean;
+  setWeather?: ((on: boolean) => void) | null;
+}) {
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const [edge, setCaption] = useState('Chart');
   // In the world's last days the caption carries the countdown too.
@@ -521,29 +557,50 @@ export function PocketChart({ sea, end = null }: { sea: ChartSea; end?: Countdow
     const draw = () => {
       const b = sea.boat();
       setCaption(edgeCaption(b.east, b.north, sea.lip));
-      drawPocket(c, sea, b);
+      const w = weather && sea.forecasting !== null ? pocketWeather(sea.forecasting) : null;
+      drawPocket(c, sea, b, w);
     };
     draw();
     const t = setInterval(draw, 500);
     return () => clearInterval(t);
-  }, [sea]);
+  }, [sea, weather]);
   return (
-    <button
-      type="button"
-      class="panel pocket-chart"
-      onClick={() => sea.chart.show('chart')}
-      aria-label={`${caption}: open the chart`}
-    >
-      <canvas ref={canvas} width={240} height={180} />
-      <span class="pocket-caption" data-readout="pocket">
-        {caption}
-      </span>
-    </button>
+    <div class="pocket">
+      <button
+        type="button"
+        class="panel pocket-chart"
+        onClick={() => sea.chart.show('chart')}
+        aria-label={`${caption}: open the chart`}
+      >
+        <canvas ref={canvas} width={240} height={180} />
+        <span class="pocket-caption" data-readout="pocket">
+          {caption}
+        </span>
+      </button>
+      {setWeather !== null && sea.forecasting !== null ? (
+        <button
+          type="button"
+          class="panel pocket-weather"
+          aria-pressed={weather}
+          onClick={() => setWeather(!weather)}
+        >
+          Weather
+        </button>
+      ) : null}
+    </div>
   );
 }
 
-/** Draws the pocket chart: a disk seen tilted, its charted islands and lights, the mist band, the boat. */
-export function drawPocket(c: HTMLCanvasElement, sea: ChartSea, b: BoatAt): void {
+/**
+ * Draws the pocket chart: a disk seen tilted, its weather now if given,
+ * its charted islands and lights, the mist band, the boat.
+ */
+export function drawPocket(
+  c: HTMLCanvasElement,
+  sea: ChartSea,
+  b: BoatAt,
+  weather: PocketWeather | null = null,
+): void {
   // Drawn by the CPU: a canvas the GPU draws, drawn again twice a second,
   // took most of the sea's frames from a second page on a software renderer.
   const ctx = c.getContext('2d', { willReadFrequently: true });
@@ -572,6 +629,9 @@ export function drawPocket(c: HTMLCanvasElement, sea: ChartSea, b: BoatAt): void
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.setLineDash([]);
+  if (weather !== null) {
+    drawPocketWeather(ctx, weather, x, y, k, tilt);
+  }
   for (const e of sea.chart.store.entries) {
     if (e.subject === 'island' && e.bounds !== null) {
       const [w0, s0, e0, n0] = e.bounds;
@@ -596,6 +656,70 @@ export function drawPocket(c: HTMLCanvasElement, sea: ChartSea, b: BoatAt): void
   ctx.arc(bx, by, 4, 0, 2 * Math.PI);
   ctx.fill();
   ctx.restore();
+}
+
+/** The pocket chart's weather, under its islands: fog's wash, rain's dots, the fronts and the systems' marks. */
+function drawPocketWeather(
+  ctx: CanvasRenderingContext2D,
+  w: PocketWeather,
+  x: (east: number) => number,
+  y: (north: number) => number,
+  k: number,
+  tilt: number,
+): void {
+  const cell = (2 * w.lip) / w.n;
+  for (let j = 0; j < w.n; j++) {
+    for (let i = 0; i < w.n; i++) {
+      const kk = j * w.n + i;
+      const east = ((i + 0.5) / w.n - 0.5) * 2 * w.lip;
+      const north = (0.5 - (j + 0.5) / w.n) * 2 * w.lip;
+      if (east * east + north * north > w.lip * w.lip) {
+        continue;
+      }
+      if ((w.fog[kk] ?? Number.POSITIVE_INFINITY) < 1852) {
+        ctx.fillStyle = 'rgb(98 105 107 / 45%)';
+        ctx.fillRect(x(east - cell / 2), y(north + cell / 2), cell * k, cell * k * tilt);
+      }
+      if ((w.rain[kk] ?? 0) >= 0.1) {
+        ctx.fillStyle = 'rgb(79 120 150 / 85%)';
+        ctx.fillRect(x(east) - 1, y(north) - 1, 2, 2);
+      }
+    }
+  }
+  ctx.strokeStyle = '#123d8c';
+  ctx.lineWidth = 2;
+  for (const f of w.fronts) {
+    const a = [f.sin * f.line - f.cos * w.lip, f.cos * f.line + f.sin * w.lip];
+    const z = [f.sin * f.line + f.cos * w.lip, f.cos * f.line - f.sin * w.lip];
+    ctx.beginPath();
+    ctx.moveTo(x(a[0] ?? 0), y(a[1] ?? 0));
+    ctx.lineTo(x(z[0] ?? 0), y(z[1] ?? 0));
+    ctx.stroke();
+  }
+  for (const s of w.systems) {
+    if (s.draw === 'calm' || s.draw === 'bank') {
+      continue;
+    }
+    const colour = s.draw === 'low' ? '#8c3a24' : s.draw === 'cell' ? '#3a3f4a' : '#4f7896';
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = colour;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(
+      x(s.east),
+      y(s.north),
+      Math.max(s.size * k * 0.6, 2),
+      Math.max(s.size * k * 0.6 * tilt, 1.5),
+      0,
+      0,
+      2 * Math.PI,
+    );
+    if (s.draw === 'cell') {
+      ctx.fill();
+    } else {
+      ctx.stroke();
+    }
+  }
 }
 
 /** The notice shown, with its way to dismiss it; the line is in the page from the start, empty. */

@@ -54,6 +54,8 @@ type Event struct {
 	Chunks *pb.Chunks
 	// Tools: the account's owner's flag was set or cleared.
 	Tools *pb.Tools
+	// Forecast: the forecast, as it is issued.
+	Forecast *pb.Forecast
 	// Snapshot is a snapshot's header; View the other boats after it,
 	// valid until ViewsKept more snapshots are decoded; Changes what its
 	// entries did, and Sampled the view slots it samples.
@@ -131,6 +133,9 @@ func (n *Net) Receive(now float64, b []byte) ([][]byte, Event, error) {
 	case *pb.ServerMessage_Tools:
 		n.lastHeard = now
 		return nil, Event{Tools: b.Tools}, nil
+	case *pb.ServerMessage_Forecast:
+		n.lastHeard = now
+		return nil, Event{Forecast: b.Forecast}, nil
 	}
 	return nil, Event{}, nil
 }

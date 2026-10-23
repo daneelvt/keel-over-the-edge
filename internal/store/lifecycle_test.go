@@ -492,3 +492,34 @@ func TestWorldNews(t *testing.T) {
 		t.Fatalf("%+v", it)
 	}
 }
+
+// A gale warning is in the news once, however often it is written: after
+// a restart, the process writes it again and nothing changes.
+func TestGaleNews(t *testing.T) {
+	ctx := context.Background()
+	s, _, lease := lifecycleStore(t)
+	w, err := s.ActiveOrFirstWorld(ctx, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := store.GaleNews{Column: "notices", Number: 41, Title: "GALE WARNING", What: "Southwesterly gale 8 expected soon, south-west of Gannet Holm", X: -3000, Y: -2500}
+	if _, err := s.WriteGaleNews(ctx, lease+1, w.ID, n); !errors.Is(err, store.ErrFenced) {
+		t.Fatalf("another epoch wrote: %v", err)
+	}
+	for i, want := range []bool{true, false, false} {
+		if written, err := s.WriteGaleNews(ctx, lease, w.ID, n); err != nil || written != want {
+			t.Fatalf("write %d: written %v, %v", i, written, err)
+		}
+	}
+	n.Number = 42
+	if written, err := s.WriteGaleNews(ctx, lease, w.ID, n); err != nil || !written {
+		t.Fatalf("another warning: written %v, %v", written, err)
+	}
+	items, err := s.News(ctx, w.ID, nil, 10)
+	if err != nil || len(items) != 2 {
+		t.Fatal(items, err)
+	}
+	if it := items[1]; it.Subject != store.SubjectGale || it.Number != 41 || it.What != n.What {
+		t.Fatalf("%+v", it)
+	}
+}

@@ -6,8 +6,16 @@
 // module as it came.
 
 import { RECORDS, SIZES } from '../predict/layout.gen';
-import type { ComingFront, Keyframe, Spell } from './gen/keel/v1/game_pb';
-import type { WeatherKeyframe } from './messages';
+import {
+  ChartSubject,
+  type ComingFront,
+  type Forecast,
+  type ForecastPast,
+  type GaleWarning,
+  type Keyframe,
+  type Spell,
+} from './gen/keel/v1/game_pb';
+import type { ForecastTold, GaleTold, PastTold, WeatherKeyframe } from './messages';
 
 const P = RECORDS.spell;
 const Y = RECORDS.system;
@@ -75,5 +83,78 @@ export function keyframeRecord(k: Keyframe): WeatherKeyframe {
       r[Y.depth] = s.depth;
       return [s.slot, r];
     }),
+  };
+}
+
+const H = RECORDS.forecastHead;
+const S = RECORDS.forecastSystem;
+
+/** A Forecast as the module's records' values: its head, spells and systems, and its gale warning. */
+export function forecastTold(f: Forecast): ForecastTold {
+  const head = new Array<number>(SIZES.forecastHead).fill(0);
+  head[H.issue] = Number(f.issue);
+  head[H.steps] = f.steps;
+  head[H.step] = f.step;
+  head[H.nSpells] = f.spells.length;
+  head[H.nSystems] = f.systems.length;
+  f.shifts.forEach((s, i) => {
+    head[H.shifts + i] = s;
+  });
+  const systems = f.systems.map((s) => {
+    const r = new Array<number>(SIZES.forecastSystem).fill(0);
+    r[S.slot] = s.slot;
+    r[S.kind] = s.kind;
+    r[S.seed] = s.seed;
+    r[S.size] = s.size;
+    r[S.peak] = s.peak;
+    r[S.depth] = s.depth;
+    r[S.forming] = s.forming ? 1 : 0;
+    r[S.crosses] = Number(s.crosses);
+    r[S.crossEast] = s.crossEast;
+    r[S.crossNorth] = s.crossNorth;
+    for (let k = 0; k < f.steps; k++) {
+      r[S.east + k] = s.east[k] ?? 0;
+      r[S.north + k] = s.north[k] ?? 0;
+      r[S.heading + k] = s.heading[k] ?? 0;
+      r[S.speed + k] = s.speed[k] ?? 0;
+      r[S.strength + k] = s.strength[k] ?? 0;
+    }
+    return r;
+  });
+  return { head, spells: f.spells.map(spellRecord), systems, gale: galeTold(f.gale) };
+}
+
+/** A gale warning off the wire, or null for none. */
+export function galeTold(g: GaleWarning | undefined): GaleTold | null {
+  if (g === undefined) {
+    return null;
+  }
+  const subject =
+    g.subject === ChartSubject.ISLAND
+      ? 'island'
+      : g.subject === ChartSubject.PLACE
+        ? 'place'
+        : null;
+  return {
+    key: Number(g.key),
+    steps: g.steps,
+    first: g.first,
+    force: g.force,
+    from: (g.from / 65536) * 2 * Math.PI,
+    east: g.east,
+    north: g.north,
+    place: subject === null ? null : { subject, number: g.number },
+  };
+}
+
+/** What has been, off the wire, or null. */
+export function pastTold(p: ForecastPast | undefined): PastTold | null {
+  if (p === undefined || p.issue === undefined) {
+    return null;
+  }
+  return {
+    issue: forecastTold(p.issue),
+    truth: p.truth.map(keyframeRecord),
+    spells: p.spells.map(spellRecord),
   };
 }

@@ -253,6 +253,9 @@ export class NetWorker {
         case 'chart':
           this.#d.post({ type: 'chart', entries: r.entries, whole: r.whole });
           break;
+        case 'forecast':
+          this.#d.post({ type: 'forecast', forecast: r.forecast, past: r.past });
+          break;
       }
       this.#arm();
     };

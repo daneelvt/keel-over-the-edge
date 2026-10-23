@@ -475,7 +475,9 @@ sunrise (the sun at the place, `sky.SunAltitude`), lifting 15–30 minutes
 after sunrise or as the wind rises past 12 knots; light air where the wind
 is under 10 knots. Each has a life (born, mature, decaying, gone), a
 planned track, a line or an arc, and apart from it a wobble a forecast does
-not know (up to 0.4 NM, and its strength ±15%, periods 20–60 minutes). At
+not know (up to 0.5 NM, and its strength ±15%, over 6–12 hours: see [The
+forecast](#the-forecast)); a week made before the wobble was slowed
+(`weather.Version` 1) is sailed as it was made. At
 most sixteen are on the disk at once, each in a slot it holds from birth to
 end; one that would be a seventeenth is not born. A storm raises swell,
 which runs ahead of it (see [Swell](#swell)); its strength's swing is its
@@ -485,7 +487,10 @@ throb (`SystemRecord.Throb`, stored in a week under its old name, `Swell`).
 
 `physics.PressureAt(t, x, y)`, hPa: the spells' levels mixed as their winds
 are, a front's new spell's level rising behind the line by 0.15 hPa a
-minute to its own, a slope across the disk of 0.02 hPa a knot a mile with
+minute to its own, at a change with no front the old spell's level moving
+evenly to the new over the hour from the change's start (`pressure.ease`,
+so a change of spell reads as a real one does, over hours, and never
+"very rapidly"), a slope across the disk of 0.02 hPa a knot a mile with
 low pressure on the left of the base wind, a front's trough, and each
 dome's and low's shape. `physics.Tendency(now, five minutes before, fifteen
 minutes before)` names the change over a quarter of an hour (a real three
@@ -717,6 +722,17 @@ shades each area by its band's Hs, draws an arrow for its swell and hatches
 the areas a current raises by more than a tenth; a clicked point gives the
 wind sea's and the swell's heights and periods, the current's factor and
 the lee's; the systems list gives each storm's swell at its edge.
+
+The Forecast layer (off at first) draws the forecast over the truth: each
+system's track and its cone, a forming low's in its own colour, where the
+forecast puts it at the tick shown, the fronts' lines and bands, the gale's
+area at the nearest step and the regime's risk
+(`/owner/api/forecast.json[?at=…]`; within an hour of now the issue the
+players were sent, further off one made again). Beside the week:
+the forecast in force, its calibration lead by lead since the world began
+(`calibration.json`), the gale warnings issued (`gales.json`), and the box
+of a clicked point, island or place, its weather and outlook as the phone
+words them (`place.json?east=…&north=…`, `?island=n` or `?place=n`).
 
 ### Gusts on the water
 
@@ -968,6 +984,130 @@ bank at its strongest at 4 knots sees the horizon toward it whiten (its own
 fog's optical depth 1 along the horizontal ray 2 m up) three minutes or
 more before very poor visibility at nineteen approaches in twenty; the
 warning to a boat lying where a bank grows is tallied beside it.
+
+## The forecast
+
+Every ten minutes of world time from the epoch (`weather.forecast.every`),
+off the tick, `internal/forecast`'s issuer makes the world's forecast for
+the ninety minutes after, ten steps of ten minutes
+(`weather.Timeline.Forecast`, `physics.MakeForecast`), from what a
+forecaster could know at the issue:
+
+- each system alive is moved on by its plan, its wobble as it stood at the
+  issue carried along (`SystemTrack + (SystemAt − SystemTrack)` at the
+  issue), so the forecast starts where the system is and parts from it as
+  the wobble changes;
+- a low born within the horizon is **forming**, at its planned place;
+- squalls, showers, fog and light air born after the issue are not
+  forecast: the regime's **risk** stands for them (`forecast.risks`:
+  settled, fog patches and calms; trade, showers; unsettled, squally
+  showers; stormy, squalls with heavy rain);
+- the spells lose their shifts; a spell not yet begun is given an error
+  drawn from its own seed (its direction σ 15°, its speed σ 10%), and a
+  front its speed's (σ 4%): with k = 1 + σz its line is moved on as
+  Begin′ = issue − (issue − Begin) / k and Change′ = Change / k.
+
+Each system's **cone** is 0.34 NM an hour of lead, from nothing at the
+issue (`cone.perHour`), a forming low's 0.47 NM at every lead
+(`cone.forming`); a front's **band** is ±1.2816 σ v L about its forecast
+line. They are fitted so the truth lies inside four times in five at every
+lead: `go test ./internal/weather -run Calibration -v` tallies 200 weeks,
+77–81% for the systems alive at the issue, 82% for the lows forming and 80%
+for the fronts' lines. The wobble is slow for that (0.5 NM over 6–12
+hours): one quicker than the horizon moves a system anywhere within it
+soon after an issue, and no cone growing with the lead could hold it.
+
+### Gale warnings
+
+Each step's synoptic wind (`physics.Weather.Synoptic`: the spells, the
+fronts and the lows, not the domes) is scanned over the water within 4.2 NM
+of Port Royal on a grid of 0.25 NM (`physics.GaleScan`). A point blows a
+gale where its mean is 34 knots or more, or its typical gust 43 or more:
+the mean × (1 + E (q − 0.0821)), the gust field's 0.532 quantile, softened
+by the refuge as a gust is. A forecast with a gale at any step carries a
+**warning**: its force, the direction it first blows from, when (imminent
+within 30 minutes, soon within 60, later), and where, by the nearest
+charted island or place to its strongest point: "Gale warning: Northerly
+gale 8 soon, north of Galley Packet Cay" (`weather.WarningText`). A warning
+keeps its key, the issue it came into force at, for as long as it is
+issued again, so it is told once: a notice on the phone (`gale-warnings`,
+which the menu can switch off) and an item in the world's news (subject
+`gale`, one by world and key, migration 00013).
+
+### On the wire
+
+`Forecast` (`game.proto`, the server message's field 15) carries an issue:
+its head, its spells, each system's steps and the warning; 277 B on
+average, 837 B at most. The edge sends the latest after the `Welcome` with
+**what has been**: the issue of ninety minutes before and the keyframes at
+each five minutes since, 4.8 kB; then each issue as it is made, 0.46 B/s
+(`internal/edge/forecast.go`). The phone keeps the issues of the last
+ninety minutes and a step, and the keyframe at each five minutes as the
+weather is sent (`client/src/predict/forecast.ts`). The forecast is worked
+on a second physics module (`Physics.twin()`), so asking of the future or
+the past never touches the one that steps the boat: a forecast takes 0.2
+µs there, a gale scan 0.65 ms.
+
+### Words
+
+The words of the chart's box, the board and the warnings are the Met
+Office's (`internal/weather/words.go` and `client/src/chart/words.ts`, both
+held to `testdata/words.json`): the wind by the sixteen points with its
+Beaufort force, the gusts, the sky, the visibility, the barometer's reading
+and tendency, and an outlook of the next ninety minutes sampled at 0, 30,
+60 and 90 ("West 4, backing southwest 5 later. Squalls with heavy rain.
+Good.").
+
+### On the phone
+
+- **The chart's weather** is painted on a canvas of 1024 px over the paper
+  (`chart/weatherlayer.ts`, `chart/weatherpaint.ts`): the gusts hatched
+  where they are 6.5 knots over the mean, the rain stippled, a wash where
+  the fog banks bring the visibility under a mile, the isobars (off at
+  first), and the systems: a low's spiral with its track and its cone, a
+  front's line and band, a gale's area hatched, the risks' marks. Each has
+  its switch; the wind's arrows are always on. It is painted afresh when
+  the moment, the issue, the layers or what is kept change, and once a
+  second while it shows now or the past: 1–2 ms to sample and 2–9 ms to
+  paint on a Mac. Its colours are told apart under each colour vision
+  deficiency (`chart/colours.test.ts`, the least ΔE 11.9).
+- **The slider**: Forecast, the latest issue's steps ahead; What happened,
+  ninety minutes back by tens, the truth's systems drawn over the forecast
+  of then with its cones, and how many were inside them. The past is never
+  shown with what came after it.
+- **A place's box** gives its weather at the slider's moment and its
+  outlook.
+- **The barometer** among the instruments (the menu can put it away): a
+  reading a second at the boat, its set hand at its own reading of a
+  quarter of an hour before, and beneath it its words, "1009 hPa, falling
+  quickly". After a load its past is the truth's at its place.
+- **The harbourmaster's board**: in the main town's harbour or a port's (as
+  the harbour's sounds find it; not a fishing village's), a button opens
+  it, named by the nearest charted harbour: the gale warning in force, the
+  general situation, the next 90 minutes and now. While a warning is in
+  force, the harbourmaster's house's flagstaff hoists the storm cone, point
+  up for a gale first blowing from west-north-west by the north to
+  east-south-east, down for the rest, as FitzRoy's cones were.
+- **The pocket chart** shows the weather now; its switch is kept.
+
+### Trying it
+
+```sh
+go run ./tools/dev -world 1
+# https://localhost:5173/?sandbox&world=1&weather=storm   a storm's forecast on the chart
+# https://localhost:5173/?sandbox&world=1&gale=30         a gale reaching the boat in 30 minutes: its warning and the cone
+# https://localhost:5173/?sandbox&world=1&baro=-5         the barometer falling 5 hPa a quarter of an hour
+# https://localhost:5173/?sandbox&world=1&board           in Port Royal's harbour, at its board
+go test ./internal/weather -run Calibration -v          # the cones held to the truth
+```
+
+The sandbox issues its own forecast as the server does, from its own
+weather (`sandbox/forecast.ts`). With `&dev` the panel gives the issue's
+age, its systems and cones, the warning in force and the barometer.
+`e2e/forecast.spec.ts` holds the slider, the layers' switches, the
+warning told once, the barometer, the board and the pocket's switch, and
+attaches the chart's weather under each colour vision deficiency to its
+report.
 
 ## Encounters
 
@@ -2326,6 +2466,20 @@ period. **Notices** (`ui/notices.ts`) are the catalog's kinds
 (`notices.kinds`): one shown at a time, three waiting at most, one kind
 folded; a status, never an alert, dismissed by a button or by time; each
 kind switched off in the menu, on the account.
+
+### Positions
+
+A position is a latitude and a longitude, the same words on the phone, the
+world page and the server (`internal/chart/position.go`,
+`client/src/chart/position.ts`, both held to
+`internal/chart/testdata/positions.json`). The pole is the disk's centre,
+under the Hub Star: the latitude is the Hub Star's height, 90° at the pole
+falling 10° a nautical mile out, 45° at the rim, every one north; the
+longitude is the true bearing from the pole, 000° to 359°. Both are given
+to the minute as IHO S-4 writes them, the longitude in three figures and
+with no letter: 67°24′N 045°12′; at the pole, 90°00′N. The chart's box,
+its list, the pocket's caption and the world page write them so, and the
+world page can put a flagged boat at one.
 
 ### Looking at it
 

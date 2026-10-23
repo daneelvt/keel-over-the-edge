@@ -109,8 +109,9 @@ func (enc *encoder) frame() {
 		if c.waiting.Load() > 0 {
 			c.release(next)
 		}
-		// What has been charted since: a closed connection goes next frame.
-		_ = c.chart(enc.e.cfg.Chart)
+		// What has been charted since, and the forecast if it is issued
+		// since: a closed connection goes next frame.
+		_ = c.chart(enc.e.cfg.Chart) && c.forecast(enc.e.cfg.Forecast)
 		i++
 	}
 	if len(enc.queued) > 0 {

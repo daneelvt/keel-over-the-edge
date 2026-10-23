@@ -479,3 +479,60 @@ h3 {
   border: 1px solid var(--gold);
   border-radius: 6px;
 }
+
+/* A place's box and outlook, at the map's top right, clear of the layers. */
+.place-box {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  max-width: 22em;
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.place-box p {
+  margin: 0 0 4px;
+}
+
+.place-box p[data-field="outlook"] {
+  margin: 4px 0 0;
+}
+
+/* The teleport to a position, in the boat's controls' row. */
+form.position {
+  display: inline-flex;
+  gap: 4px;
+}
+
+form.position input {
+  width: 11em;
+  margin: 2px 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* The gale warning in force, and the forecast's calibration by lead. */
+p.gale {
+  color: #d55e00;
+  font-weight: bold;
+}
+
+table.calibration {
+  font-size: 13px;
+}
+
+table.calibration td {
+  white-space: nowrap;
+}
+
+.gales li.chosen button {
+  color: #d55e00;
+}

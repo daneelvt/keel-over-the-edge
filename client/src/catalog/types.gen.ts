@@ -23,6 +23,20 @@ export type Light = "tricolour" | "port" | "starboard" | "stern";
  */
 export type CloudForm = "none" | "fog" | "cumulus" | "cumulonimbus" | "storm";
 /**
+ * A sky's words in a place's box, mildest first.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "RiskSky".
+ */
+export type RiskSky = "fair" | "showers" | "fog patches" | "rain" | "squally showers" | "squalls with heavy rain";
+/**
+ * A risk's mark on the chart.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "RiskMark".
+ */
+export type RiskMark = "fog-patches" | "showers" | "squalls" | "calms";
+/**
  * A column's top.
  */
 export type Colour = string;
@@ -839,6 +853,7 @@ export interface Weather {
     | [SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind]
     | [SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind, SystemKind];
   week: WeatherWeek;
+  forecast: WeatherForecast;
   keyframe: WeatherKeyframe;
   water: WeatherWater;
   clouds: WeatherClouds;
@@ -1176,6 +1191,10 @@ export interface WeatherPressure {
    * And how far, in hPa.
    */
   riseMost: number;
+  /**
+   * At a change of spell with no front, the level moves from the old spell's to the new over this from the change's start, in minutes.
+   */
+  ease: number;
 }
 /**
  * How far the systems reach: their weakening toward the centre, and where they end.
@@ -1706,6 +1725,282 @@ export interface WeatherWeek {
   seed: number;
 }
 /**
+ * The forecast: how often it is issued, how far ahead it runs, its cones, the error it gives a spell not yet begun, its gale warnings, a place's outlook and each regime's risks.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeatherForecast".
+ */
+export interface WeatherForecast {
+  /**
+   * It is issued at each boundary of this many minutes of world time from the world's epoch.
+   */
+  every: number;
+  /**
+   * It runs this far ahead, in minutes.
+   */
+  horizon: number;
+  /**
+   * In steps of this many minutes: the horizon is a whole number of them, at most 12.
+   */
+  step: number;
+  cone: ForecastCone;
+  spell: ForecastSpell;
+  gale: ForecastGale;
+  outlook: ForecastOutlook;
+  /**
+   * What each regime brings that the forecast cannot place: one entry for each regime.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  risks:
+    | [ForecastRisk]
+    | [ForecastRisk, ForecastRisk]
+    | [ForecastRisk, ForecastRisk, ForecastRisk]
+    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
+    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
+    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
+    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
+    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
+    | [
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk
+      ]
+    | [
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk
+      ]
+    | [
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk
+      ]
+    | [
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk
+      ]
+    | [
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk
+      ]
+    | [
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk
+      ]
+    | [
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk
+      ]
+    | [
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk,
+        ForecastRisk
+      ];
+}
+/**
+ * The cones the truth lies in four times in five at each step.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ForecastCone".
+ */
+export interface ForecastCone {
+  /**
+   * A system's cone grows by this for each hour of lead, from nothing at the issue, in nautical miles.
+   */
+  perHour: number;
+  /**
+   * A low not yet born at the issue: its cone, whatever the lead, in nautical miles.
+   */
+  forming: number;
+  /**
+   * A front's line moves on at its speed times 1 + this z, z drawn once a front from a standard normal: the standard deviation of the forecast's error in its speed.
+   */
+  front: number;
+}
+/**
+ * The forecast's own error in a spell not yet begun at the issue, drawn from its seed: standard deviations.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ForecastSpell".
+ */
+export interface ForecastSpell {
+  /**
+   * In its wind's direction, in degrees.
+   */
+  direction: number;
+  /**
+   * In its wind's speed, as a share of it.
+   */
+  speed: number;
+}
+/**
+ * A gale warning: where the synoptic wind of a step reaches a gale, on a grid over the water.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ForecastGale".
+ */
+export interface ForecastGale {
+  /**
+   * A gale where the mean wind reaches this, in knots.
+   */
+  mean: number;
+  /**
+   * Or the typical strongest gust reaches this, in knots.
+   */
+  gust: number;
+  /**
+   * The typical strongest gust is the gust field's value of this quantile: its 90th percentile.
+   */
+  quantile: number;
+  /**
+   * The grid's spacing, in nautical miles.
+   */
+  grid: number;
+  /**
+   * Over the water within this of the centre, in nautical miles.
+   */
+  within: number;
+}
+/**
+ * A place's outlook in the words of the shipping forecast: when it is sampled, what is a change and the times' words.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ForecastOutlook".
+ */
+export interface ForecastOutlook {
+  /**
+   * It is sampled at these minutes from the issue, ascending.
+   *
+   * @minItems 2
+   * @maxItems 10
+   */
+  samples:
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number];
+  /**
+   * A change where the wind's direction turns this far or more, in degrees.
+   */
+  turn: number;
+  /**
+   * Or its force changes by this many or more.
+   */
+  forces: number;
+  /**
+   * Imminent: within this of the issue, in minutes.
+   */
+  imminent: number;
+  /**
+   * Soon: within this, later beyond, in minutes.
+   */
+  soon: number;
+}
+/**
+ * What a regime brings that the forecast cannot place: the sky in a place's box, and the marks the chart draws.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ForecastRisk".
+ */
+export interface ForecastRisk {
+  regime: Id;
+  sky: RiskSky;
+  /**
+   * The chart's marks: fog patches where the fog's rule lets a bank be born, scattered showers, squalls from the windward rim, calms.
+   *
+   * @maxItems 4
+   */
+  marks:
+    [] | [RiskMark] | [RiskMark, RiskMark] | [RiskMark, RiskMark, RiskMark] | [RiskMark, RiskMark, RiskMark, RiskMark];
+}
+/**
  * The systems' keyframes, which the server and the phone interpolate between.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -2221,6 +2516,7 @@ export interface World {
   flora: WorldFlora;
   score: WorldScore;
   chart: WorldChart;
+  instruments: Instruments;
 }
 /**
  * The disk.
@@ -5688,6 +5984,223 @@ export interface ChartLook {
    * The wind's streaks are drawn from a grid of this many points a side.
    */
   wind: number;
+  weather: ChartWeather;
+}
+/**
+ * The chart's weather: the canvas it is painted on, where gusts are drawn and its colours.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartWeather".
+ */
+export interface ChartWeather {
+  /**
+   * The weather's canvas, in pixels a side.
+   */
+  canvas: number;
+  /**
+   * Gusts are drawn where the typical strongest gust is this much over the mean wind, in knots.
+   */
+  gusts: number;
+  rain: Colour3;
+  fog: Colour3;
+  front: Colour3;
+  squall: Colour3;
+  storm: Colour3;
+}
+/**
+ * The instruments aboard.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Instruments".
+ */
+export interface Instruments {
+  barometer: Barometer;
+}
+/**
+ * A brass aneroid: its dial, the words about it and its set hand.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Barometer".
+ */
+export interface Barometer {
+  /**
+   * Its dial reads from and to, in hPa.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  range: [number, number];
+  /**
+   * Its set hand is at the boat's reading this long ago, in minutes.
+   */
+  set: number;
+  /**
+   * The words about its dial, at their pressures: decoration.
+   *
+   * @maxItems 8
+   */
+  words:
+    | []
+    | [
+        {
+          text: string;
+          at: number;
+        }
+      ]
+    | [
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        }
+      ]
+    | [
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        }
+      ]
+    | [
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        }
+      ]
+    | [
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        }
+      ]
+    | [
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        }
+      ]
+    | [
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        }
+      ]
+    | [
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        },
+        {
+          text: string;
+          at: number;
+        }
+      ];
 }
 /**
  * The notices that pop up: one at a time, the rest queued, the same kind folded.
@@ -5718,9 +6231,9 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, or a new world begun.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, or a new gale warning.
    */
-  on: "charted-own" | "charted-great" | "falls-coming" | "falls-soon" | "new-world";
+  on: "charted-own" | "charted-great" | "falls-coming" | "falls-soon" | "new-world" | "gale-warned";
   /**
    * For a notice of the world's end near: the times before the end it is raised at, in minutes.
    *
@@ -5741,7 +6254,7 @@ export interface NoticeKind {
    */
   stays: number;
   /**
-   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time) and {left} (the time left) are filled in.
+   * Its words: {name}, {who}, {where}, {worth}, {day} (the world's end, in the player's own time), {left} (the time left), and for a gale warning {wind}, {when} and {where} are filled in.
    */
   text: string;
   /**
@@ -5788,4 +6301,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '3297ac94fb5a0653';
+export const CATALOG_VERSION = '4f261b85586c873f';

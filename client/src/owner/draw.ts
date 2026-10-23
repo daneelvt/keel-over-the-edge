@@ -5,7 +5,8 @@
 // draws it, and an island at the lattice's resolution when zoomed into it;
 // the coasts; the sea's waves and swell; the sheets of cloud, the rain
 // and the heaped clouds; the fog; the gusts, the wind and the current;
-// the isobars, the weather's systems and its front; the lightning; the
+// the isobars, the weather's systems and its front; the forecast over
+// them, its tracks, cones, fronts' bands and gales; the lightning; the
 // rings of the calm water, the mist band and the lip; the start area; the
 // islands' names; the lights, with those sounding their fog signals and
 // those lit by day marked; the boats, each pointing its heading, the
@@ -17,6 +18,7 @@ import type {
   CloudsPage,
   Current,
   FeaturesData,
+  ForecastPage,
   Group,
   Island,
   Light,
@@ -28,6 +30,7 @@ import type {
 } from './api';
 import { drawHeaped, drawRain, drawSheets } from './clouds';
 import { drawFlashes, drawFog, drawLightNow } from './fog';
+import { drawForecast } from './forecast';
 import { canvasAngle, HALF, rectOf, toScreen, type View } from './map';
 import { drawSea } from './sea';
 import { drawWeather } from './weather';
@@ -62,6 +65,7 @@ export interface Layers {
   current: boolean;
   isobars: boolean;
   systems: boolean;
+  forecast: boolean;
   rings: boolean;
   start: boolean;
   names: boolean;
@@ -86,6 +90,7 @@ export const LAYER_NAMES: Record<keyof Layers, string> = {
   current: 'Current',
   isobars: 'Isobars',
   systems: 'Systems',
+  forecast: 'Forecast',
   rings: 'Mist band and lip',
   start: 'Start area',
   names: 'Names',
@@ -111,6 +116,7 @@ export function allLayers(): Layers {
     current: false,
     isobars: false,
     systems: true,
+    forecast: false,
     rings: true,
     start: true,
     names: true,
@@ -149,6 +155,8 @@ export interface MapData {
   charted: ReadonlySet<string> | null;
   /** The weather at the tick shown; null until read, or for a world with no week of it. */
   weather: WeatherWeek | null;
+  /** The forecast in force at the tick shown; null until read, or while its layer is hidden. */
+  forecast: ForecastPage | null;
   /** The sea now; null until read, or while its layer is hidden. */
   sea: SeaPage | null;
   /** The clouds and the rain now, and the sheets' picture; null until read, or while their layers are hidden. */
@@ -331,6 +339,9 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
   }
   if (d.weather !== null) {
     drawWeather(ctx, v, d.weather, layers);
+  }
+  if (layers.forecast && d.forecast !== null) {
+    drawForecast(ctx, v, d.forecast, d.weather?.at ?? d.forecast.at, d.weather?.kinds ?? []);
   }
   if (layers.lightning && d.visibility !== null) {
     drawFlashes(ctx, v, d.visibility);

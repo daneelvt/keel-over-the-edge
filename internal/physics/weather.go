@@ -100,6 +100,8 @@ type WeatherPrepared struct {
 	slope    float64 // hPa per m/s of the base wind per m
 	rise     float64 // hPa a tick
 	riseMost float64 // hPa
+	ease     float64 // ticks
+	invEase  float64 // 1/ticks, 0 for no ease
 
 	// The systems.
 	inwardFrom    float64 // m
@@ -114,6 +116,9 @@ type WeatherPrepared struct {
 
 	// Visibility and lightning.
 	vis visibilityPrepared
+
+	// The forecast.
+	forecast forecastPrepared
 }
 
 // PrepareWeather derives the wind's constants from its parameters. It is
@@ -182,6 +187,8 @@ func PrepareWeather(p *WeatherParams, w *WeatherPrepared) {
 	w.slope = float64(p.Slope/knotSpeed) / nauticalMile
 	w.rise = float64(p.Rise / minuteTicks)
 	w.riseMost = p.RiseMost
+	w.ease = float64(steps(p.Ease, minuteTicks))
+	w.invEase = inverse(w.ease)
 	w.inwardFrom = float64(p.InwardFrom * nauticalMile)
 	w.invInwardSpan = 0
 	if span := float64((p.InwardTo - p.InwardFrom) * nauticalMile); span > 0 {
@@ -227,6 +234,10 @@ func (w *WeatherPrepared) ChangeTicks() int64 { return int64(w.change) }
 // reach and leaves it, m: the lip and the trough ahead of the line. A
 // front's spell takes the ticks the line takes to go twice this.
 func (w *WeatherPrepared) FrontReach() float64 { return w.frontReach }
+
+// EaseTicks is how many ticks a spell's pressure level takes to give way
+// to the next one's at a change with no front.
+func (w *WeatherPrepared) EaseTicks() int64 { return int64(toInt32(w.ease)) }
 
 // WaveGrid is how many ticks apart the wave wind's samples are, and
 // WaveSamples how many it keeps.
@@ -399,6 +410,10 @@ type Weather struct {
 	// which its cirrus shows far ahead of it.
 	Coming ComingFront
 	coming spell
+	// Synoptic leaves out the domes, the squalls' and showers', which a
+	// forecast cannot place: what is left is the synoptic wind, which a
+	// gale warning reads.
+	Synoptic bool
 }
 
 // SetSpell sets spell i, and makes it ready.
@@ -453,6 +468,12 @@ type WeatherTick struct {
 	// one coming.
 	fronts [maxFrontLines]frontLine
 	nf     int32
+	// easing: the level is moving from the spell before's, easeFrom's,
+	// to the spell in effect's, which has ease of it: a change of spell
+	// with no front within its ease.
+	easing   bool
+	ease     float64
+	easeFrom *spell
 }
 
 // spellTick is a spell at a tick.
@@ -478,7 +499,7 @@ func cycle(turns, tick float64) float64 {
 // begin by the tick, or the first if none has; during its change the one
 // before it is in play too.
 func WeatherAt(w *Weather, t *WeatherTick, tick float64) {
-	t.Tick, t.p, t.n, t.front, t.ns = tick, w.Prepared, 0, false, 0
+	t.Tick, t.p, t.n, t.front, t.ns, t.easing = tick, w.Prepared, 0, false, 0, false
 	t.setFronts(w, tick)
 	if w.Count == 0 {
 		return
@@ -490,7 +511,15 @@ func WeatherAt(w *Weather, t *WeatherTick, tick float64) {
 		}
 	}
 	s := &w.spells[i]
-	systemsAt(w, t, tick, s.still)
+	systemsAt(w, t, tick, s.still, w.Synoptic)
+	if p := w.Prepared; i > 0 && !s.front && s.change > 0 && p.invEase > 0 && tick < s.begin+p.ease {
+		// The level eases from the spell before's to this one's, evenly:
+		// a smooth step's steepest, half as steep again, would read "very
+		// rapidly" between two spells' levels 17 hPa apart.
+		t.easing = true
+		t.ease = clamp(float64((tick-s.begin)*p.invEase), 0, 1)
+		t.easeFrom = &w.spells[i-1]
+	}
 	if i > 0 && s.change > 0 && tick < s.begin+s.change {
 		later := smooth(float64((tick - s.begin) * s.invChange))
 		t.n, t.weight = 2, [2]float64{1 - later, later}
@@ -531,9 +560,10 @@ func (st *spellTick) set(s *spell, tick float64, g *gustCells) {
 
 // How much of the wind at a point is computed.
 const (
-	pointMean = iota // the mean wind alone
-	pointWind        // and the wind a step sails in
-	pointFull        // and how fast the gust field drifts
+	pointMean    = iota // the mean wind alone
+	pointTypical        // and its typical strongest gust, the field aside
+	pointWind           // and the wind a step sails in
+	pointFull           // and how fast the gust field drifts
 )
 
 // WindAt is the wind a step at (x, y), metres east and north of the centre,
@@ -548,6 +578,15 @@ func WindAt(t *WeatherTick, x, y float64, sh *Shelter) Env {
 // WindPointAt fills p with the wind at (x, y) in full, in the shelter sh.
 func WindPointAt(t *WeatherTick, x, y float64, p *WindPoint, sh *Shelter) {
 	t.point(x, y, p, pointFull, sh)
+}
+
+// TypicalAt is the mean wind at (x, y), without any shelter, and its
+// typical strongest gust: the speed, the direction it comes from and the
+// gust, m/s and rad, and the gust factor's excess.
+func TypicalAt(t *WeatherTick, x, y float64) (mean, from, gust, excess float64) {
+	var p WindPoint
+	t.point(x, y, &p, pointTypical, nil)
+	return p.MeanSpeed, p.MeanFrom, p.Typical, p.Excess
 }
 
 // MeanWindAt is the wind at (x, y) without its gusts or any shelter: what
@@ -575,8 +614,8 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 			f, turn := sh.At(x, y, from)
 			speed, from = float64(speed*f), wrapAngle(from+turn)
 		}
-		p.Speed, p.From, p.MeanSpeed, p.MeanFrom = speed, from, speed, from
-		if what != pointMean {
+		p.Speed, p.From, p.MeanSpeed, p.MeanFrom, p.Typical = speed, from, speed, from, speed
+		if what >= pointWind {
 			t.p.fallDraft(x, y, p)
 		}
 		return
@@ -630,7 +669,8 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 	if h < 0 {
 		h = float64(0.5 * h)
 	}
-	p.Factor = 1 + float64(float64(excess*rim)*(h-gustMeanH))
+	p.Excess = float64(excess * rim)
+	p.Factor = 1 + float64(p.Excess*(h-gustMeanH))
 	v := float64(speed * p.Factor)
 	if sh != nil {
 		f, turn := sh.At(x, y, dir)
@@ -640,8 +680,14 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 		p.MeanFrom = wrapAngle(dir)
 	}
 	p.Speed = v
+	// The typical strongest gust: the gust field at its quantile.
+	p.Typical = float64(p.MeanSpeed * (1 + float64(p.Excess*w.forecast.quantile)))
 	if refuge > 0 {
 		p.Speed += float64(float64(refuge*limited) * (soften(v, w.windKnee, w.windSoft) - v))
+		p.Typical += float64(float64(refuge*limited) * (soften(p.Typical, w.windKnee, w.windSoft) - p.Typical))
+	}
+	if what == pointTypical {
+		return
 	}
 	p.From = wrapAngle(dir + float64(float64(w.veer*gust)*gusty))
 	w.fallDraft(x, y, p)
@@ -671,7 +717,7 @@ func (t *WeatherTick) base(x, y, r float64, what int32) baseWind {
 	var field2 float64
 	for i := range t.n {
 		st, share := &t.at[i], b.shares[i]
-		d, v, e, n := st.mean(w, x, y, factor, what != pointMean)
+		d, v, e, n := st.mean(w, x, y, factor, what >= pointWind)
 		if i == 0 {
 			b.dir, b.speed, b.excess = d, v, e
 		} else {

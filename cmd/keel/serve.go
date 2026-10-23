@@ -33,6 +33,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
@@ -149,6 +150,7 @@ type database interface {
 	WorldsToDrop(ctx context.Context, before time.Time) ([]store.World, error)
 	DropWorld(ctx context.Context, lease int64, w store.World) error
 	WriteWorldNews(ctx context.Context, lease int64, world [16]byte, n store.WorldNews) error
+	WriteGaleNews(ctx context.Context, lease int64, world [16]byte, n store.GaleNews) (bool, error)
 	DeleteSessions(ctx context.Context, before time.Time) (int64, error)
 	DeleteJobRuns(ctx context.Context, before time.Time) (int64, error)
 	JobRuns(ctx context.Context, limit int) ([]store.JobRun, error)
@@ -568,6 +570,8 @@ type ownerConfig struct {
 	// view of the same world already drawn.
 	lifecycle owner.Life
 	from      *owner.Owner
+	// forecasts is the world's forecast issuer; nil for the next world.
+	forecasts *forecast.Issuer
 }
 
 // ownerTools are the owner's tools: the world page and its controls.
@@ -592,6 +596,19 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	if c.bus != nil {
 		cfg.Frames, cfg.Owner, cfg.Clock = c.bus.Frames, c.bus.Commands.Owner(), c.clock
 		cfg.Sessions, cfg.Edge = c.sessions, c.game
+	}
+	if c.forecasts != nil {
+		cfg.Forecasts = c.forecasts
+	}
+	cfg.Words, cfg.Outlook = weather.WordsOf(c.cat), c.cat.Weather.Forecast.Outlook.Samples
+	cfg.Risks, cfg.Fog = weather.RisksOf(c.cat)
+	cfg.RiskMarks = make([][]string, len(c.cat.Weather.Regimes))
+	for _, r := range c.cat.Weather.Forecast.Risks {
+		if i := weather.RegimeIndex(c.cat, string(r.Regime)); i >= 0 {
+			for _, m := range r.Marks {
+				cfg.RiskMarks[i] = append(cfg.RiskMarks[i], string(m))
+			}
+		}
 	}
 	for _, k := range c.cat.World.Places.Kinds {
 		cfg.PlaceKinds = append(cfg.PlaceKinds, owner.PlaceKind{ID: string(k.ID), Name: k.Name, Site: string(k.Site), Mark: k.Mark})

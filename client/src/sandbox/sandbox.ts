@@ -85,6 +85,12 @@ export function fogFromQuery(query: URLSearchParams): number | null {
   return Number.isFinite(m) && m > 0 ? m : null;
 }
 
+/** Reads ?gale=minutes: a storm to bring a gale to the boat that many minutes on; null for none. */
+export function galeFromQuery(query: URLSearchParams): number | null {
+  const v = Number.parseFloat(query.get('gale') ?? '');
+  return Number.isFinite(v) && v >= 0 ? v : null;
+}
+
 /** Reads ?flash=s: the nearest heaped cloud flashes to the sea that many seconds in, or null. */
 export function flashFromQuery(query: URLSearchParams): number | null {
   const raw = query.get('flash');
@@ -450,6 +456,50 @@ export class Sandbox implements BoatDriver {
     this.#physics.setRecords(records);
     this.systems = records.length;
     this.weather.set(spells);
+  }
+
+  /**
+   * A storm of the catalog's low, in a spell of the stormiest regime from
+   * now, placed to be at its strongest at (east, north) minutes on: what
+   * brings a gale there, as a forecast would warn of it.
+   */
+  meetGale(east: number, north: number, minutes: number): void {
+    const c = this.#catalog;
+    const low = c.systems.findIndex((k) => k.shape === 'low');
+    if (low < 0) {
+      return;
+    }
+    const regime = c.regimes.reduce(
+      (best, r, i) => ((r.wind.speed[1] ?? 0) > (c.regimes[best]?.wind.speed[1] ?? 0) ? i : best),
+      0,
+    );
+    const now = this.tick;
+    const base = regimeSpell(
+      this.#physics,
+      c,
+      regime,
+      1,
+      c.week.seed,
+      turnSteps(this.start.wind.from),
+      now,
+      SPELL_TICKS,
+    );
+    base[RECORDS.spell.pressure] = Math.round(100 * (c.regimes[regime]?.pressure[0] ?? 1000));
+    const record = placedRecord(
+      c,
+      low,
+      east,
+      north,
+      now,
+      now + Math.round(minutes * 60 * 30),
+      base,
+    );
+    this.#pending = null;
+    this.#set = null;
+    this.#made = base;
+    this.#physics.setRecords([record]);
+    this.systems = 1;
+    this.weather.set([base]);
   }
 
   /**

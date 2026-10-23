@@ -54,6 +54,10 @@ var records = []struct {
 	{"verdict", reflect.TypeFor[physics.Verdict]()},
 	{"contact", reflect.TypeFor[physics.Contact]()},
 	{"groundParams", reflect.TypeFor[physics.GroundParams]()},
+	{"forecastParams", reflect.TypeFor[physics.ForecastParams]()},
+	{"forecastHead", reflect.TypeFor[physics.ForecastHead]()},
+	{"forecastSystem", reflect.TypeFor[physics.ForecastSystem]()},
+	{"galeStep", reflect.TypeFor[physics.GaleStep]()},
 }
 
 // groundConstants are the ground's sizes: a chunk's hexagons, columns and
@@ -135,6 +139,10 @@ var weatherConstants = []struct {
 	{"airSources", physics.MaxAirSources},
 	{"strokes", physics.MaxStrokes},
 	{"flashes", physics.MaxFlashes},
+	{"forecastSteps", physics.MaxForecastSteps},
+	{"forecastSpells", physics.MaxForecastSpells},
+	{"forecastSystems", physics.MaxForecastSystems},
+	{"galeSide", physics.MaxGaleSide},
 }
 
 type recordLayout struct {

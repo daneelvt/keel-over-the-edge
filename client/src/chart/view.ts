@@ -40,6 +40,7 @@ import { chartMaterial } from '../render/materials';
 import type { IslandModel, Models } from './model';
 import { PAPER_MARGIN, type PaperLook, paintPaper } from './paper';
 import { type ChartStore, keyOf } from './store';
+import type { ChartWeather } from './weatherlayer';
 
 /** What the chart is drawn with, from the catalog. */
 export interface ChartLook extends PaperLook {
@@ -148,6 +149,9 @@ export class ChartView {
   readonly #towers = new Mesh(new BufferGeometry(), chartMaterial({ vertexColors: true }));
   readonly #boat: Mesh;
   readonly #streaks: LineSegments;
+  /** The weather's canvas over the paper, and its texture; null without. */
+  #weather: ChartWeather | null = null;
+  #weatherTexture: CanvasTexture | null = null;
   readonly #streakXY = new Float32Array(STREAKS * 4); // x, y, age, life
   readonly #windGrid: {
     speeds: Float64Array;
@@ -228,6 +232,39 @@ export class ChartView {
       this.#dirty = true;
       this.#buildWanted = true;
     });
+  }
+
+  /**
+   * Lays the weather's canvas over the paper, just above it, under the
+   * islands' models: it is painted at the slider's moment and sent to the
+   * GPU only when it is painted afresh.
+   */
+  attachWeather(weather: ChartWeather): void {
+    this.#weather = weather;
+    const extent = this.#look.lip * PAPER_MARGIN;
+    this.#weatherTexture = new CanvasTexture(weather.canvas);
+    this.#weatherTexture.colorSpace = SRGBColorSpace;
+    const plane = new Mesh(
+      new PlaneGeometry(2 * extent, 2 * extent),
+      chartMaterial({ map: this.#weatherTexture, transparent: true, depthWrite: false }),
+    );
+    plane.name = 'weather';
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = 2;
+    plane.renderOrder = 1;
+    this.scene.add(plane);
+    this.#dirty = true;
+  }
+
+  /** The chart's weather, or null without. */
+  get weather(): ChartWeather | null {
+    return this.#weather;
+  }
+
+  /** Paints the weather again at the next frame, whatever has changed. */
+  weatherChanged(): void {
+    this.#weather?.invalidate();
+    this.#dirty = true;
   }
 
   /** Puts the chart's labels in a layer over the picture. */
@@ -392,6 +429,14 @@ export class ChartView {
       this.#dirty = true;
     }
     this.#boat.scale.setScalar(Math.max(this.#distance / 9000, 0.25));
+    if (this.open && this.#weather?.update(now)) {
+      if (this.#weatherTexture !== null) {
+        this.#weatherTexture.needsUpdate = true;
+      }
+      // The streaks follow the weather's moment at once.
+      this.#windGrid.at = Number.NEGATIVE_INFINITY;
+      this.#dirty = true;
+    }
     if (this.#wind !== null && now - this.#windGrid.at > 1000) {
       const g = this.#windGrid;
       g.at = now;

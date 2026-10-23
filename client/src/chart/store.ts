@@ -3,9 +3,8 @@
 // The world's chart as the page holds it: every subject charted, as the
 // server tells of it, whole after each Welcome and then as each is charted;
 // or, offline, as the sandbox charts it. The chart, its pocket, its list,
-// the notices and the news read it. Where a boat is is told as the sky
-// gives it: its latitude, the Hub Star's height over the pole above the
-// main port, and its bearing and distance from the main port.
+// the notices and the news read it. Where a boat or a place is is told as
+// its latitude and longitude (position.ts).
 
 import { signal } from '@preact/signals';
 import type { ChartEntry, ChartSubject } from '../net/messages';
@@ -20,8 +19,8 @@ export function keyOf(subject: ChartSubject, number: number): string {
 
 /** What the store needs of the catalog. */
 export interface ChartWords {
-  /** The kinds of place's and of feature's names, by their indices. */
-  places: { name: string }[];
+  /** The kinds of place's names and sites, and of feature's names, by their indices. */
+  places: { name: string; site?: string }[];
   features: { name: string; symbol?: string }[];
   /** The degrees the Hub Star sinks a nautical mile out from the centre. */
   scale: number;
@@ -107,6 +106,15 @@ export class ChartStore {
     return e.worth >= this.words.great;
   }
 
+  /** Whether an entry has weather of its own in its box: an island, a port or a lighthouse. */
+  weathered(e: ChartEntry): boolean {
+    if (e.subject === 'island') {
+      return true;
+    }
+    const site = e.subject === 'place' ? this.words.places[e.sort]?.site : undefined;
+    return site === 'harbour' || site === 'light';
+  }
+
   /** The island an entry is on or by, if it is charted. */
   islandOf(e: ChartEntry): ChartEntry | undefined {
     return e.island < 0 ? undefined : this.get('island', e.island);
@@ -137,34 +145,29 @@ export class ChartStore {
   home(): ChartEntry | undefined {
     return this.get('island', 0);
   }
+
+  /** The charted island or place with a name nearest a point, or undefined: a feature is named by its island. */
+  nearestNamed(east: number, north: number): ChartEntry | undefined {
+    let best: ChartEntry | undefined;
+    let d = Number.POSITIVE_INFINITY;
+    for (const e of this.#entries) {
+      if (e.subject === 'feature' || e.name === '') {
+        continue;
+      }
+      const x = Math.hypot(e.east - east, e.north - north);
+      if (x < d) {
+        best = e;
+        d = x;
+      }
+    }
+    return best;
+  }
 }
 
 /** A kind's name as a phrase: "a sea arch", "an anchorage". */
 export function article(name: string): string {
   const lower = name.charAt(0).toLowerCase() + name.slice(1);
   return /^[aeiou]/.test(lower) ? `an ${lower}` : `a ${lower}`;
-}
-
-/** Degrees and minutes, as "67°24′". */
-function degreesMinutes(deg: number): string {
-  const whole = Math.floor(deg);
-  let minutes = Math.round((deg - whole) * 60);
-  let d = whole;
-  if (minutes === 60) {
-    d++;
-    minutes = 0;
-  }
-  return `${d}°${String(minutes).padStart(2, '0')}′`;
-}
-
-/** The latitude at r m from the centre, by the sky: 90° less scale degrees a nautical mile. */
-export function latitude(r: number, scale: number): number {
-  return 90 - (scale * r) / NM;
-}
-
-/** A latitude as charts print it: "67°24′ N". */
-export function latitudeText(r: number, scale: number): string {
-  return `${degreesMinutes(Math.max(latitude(r, scale), 0))} N`;
 }
 
 /** A bearing, radians clockwise from north, as three figures: "045°". */
@@ -179,25 +182,6 @@ export function distanceText(m: number): string {
     return `${Math.max(Math.round(m), 0)} m`;
   }
   return `${(m / NM).toFixed(1)} NM`;
-}
-
-/**
- * Where a boat is, as the sky and the chart give it: its latitude, and its
- * bearing and distance from the main port: "67°24′ N · Port Royal 045°, 2.3 NM".
- */
-export function positionText(
-  east: number,
-  north: number,
-  scale: number,
-  home: ChartEntry | undefined,
-): string {
-  const lat = latitudeText(Math.hypot(east, north), scale);
-  if (home === undefined) {
-    return lat;
-  }
-  const dx = east - home.east;
-  const dy = north - home.north;
-  return `${lat} · ${home.name} ${bearingText(Math.atan2(dx, dy))}, ${distanceText(Math.hypot(dx, dy))}`;
 }
 
 /** The pocket chart's caption: "Chart · edge 4.3 NM". */

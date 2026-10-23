@@ -101,6 +101,35 @@ func (s *Store) WriteWorldNews(ctx context.Context, lease int64, world [16]byte,
 	})
 }
 
+// SubjectGale is a news item's subject when it is a gale warning.
+const SubjectGale = "gale"
+
+// GaleNews is an item about a gale warning: its column, its number, the
+// issue it came into force at counted in issues from the world's epoch,
+// its title and its words, and where its strongest wind is forecast.
+type GaleNews struct {
+	Column      string
+	Number      int32
+	Title, What string
+	X, Y        float64
+}
+
+// WriteGaleNews writes an item about a gale warning, once a warning: a
+// second write of its number does nothing, and reports false. It is fenced
+// by the lease's epoch.
+func (s *Store) WriteGaleNews(ctx context.Context, lease int64, world [16]byte, n GaleNews) (bool, error) {
+	var written int64
+	err := s.fenced(ctx, lease, func(q *db.Queries) error {
+		var err error
+		written, err = q.InsertGaleNews(ctx, db.InsertGaleNewsParams{
+			WorldID: pgtype.UUID{Bytes: world, Valid: true}, NewsColumn: n.Column, Number: n.Number,
+			Title: n.Title, What: n.What, X: n.X, Y: n.Y,
+		})
+		return err
+	})
+	return written > 0, err
+}
+
 // writeChartings writes a batch's chartings, in order, in its transaction,
 // and the news they make; one already written is left as it was.
 func writeChartings(ctx context.Context, q *db.Queries, world pgtype.UUID, b *Batch) error {

@@ -358,6 +358,28 @@ export function writeVisibilityParams(
   params[f.apart] = l.apart;
 }
 
+/**
+ * Writes the catalog's forecast into the module's ForecastParams record,
+ * as the server's catalog.ForecastParams does.
+ */
+export function writeForecastParams(params: Float64Array, weather: Weather): void {
+  const f = RECORDS.forecastParams;
+  const c = weather.forecast;
+  params[f.every] = c.every;
+  params[f.horizon] = c.horizon;
+  params[f.step] = c.step;
+  params[f.perHour] = c.cone.perHour;
+  params[f.forming] = c.cone.forming;
+  params[f.front] = c.cone.front;
+  params[f.direction] = c.spell.direction;
+  params[f.speed] = c.spell.speed;
+  params[f.galeMean] = c.gale.mean;
+  params[f.galeGust] = c.gale.gust;
+  params[f.quantile] = c.gale.quantile;
+  params[f.grid] = c.gale.grid;
+  params[f.within] = c.gale.within;
+}
+
 /** The index of the catalog's regime of an id, or −1. */
 export function regimeIndex(weather: Weather, id: string): number {
   return weather.regimes.findIndex((r) => r.id === id);

@@ -46,6 +46,7 @@ import {
   Spells,
   systemKindRecord,
   type VisibilityWorld,
+  writeForecastParams,
   writeVisibilityParams,
 } from './weather';
 
@@ -119,6 +120,8 @@ export function preparePhysics(
   physics.prepareClouds(weather.regimes.map((g) => g.cumulus));
   writeVisibilityParams(physics.records.visibilityParams, weather, world);
   physics.prepareVisibility();
+  writeForecastParams(physics.records.forecastParams, weather);
+  physics.prepareForecast();
   if (encounters !== undefined) {
     prepareEncounters(physics, encounters);
   }

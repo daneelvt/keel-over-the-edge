@@ -11,6 +11,7 @@ import type { Notices } from '../ui/notices';
 import type { ChartStore } from './store';
 import { zoneWhere } from './store';
 import type { ChartView } from './view';
+import { LAYERS_AT_FIRST, type Layer, type Layers, type TimeMode } from './weather';
 
 export type ChartMode = 'chart' | 'list' | 'news';
 
@@ -22,6 +23,16 @@ export class Chart {
   readonly mode = signal<ChartMode>('chart');
   /** The entry whose box is open, or null. */
   readonly picked = signal<ChartEntry | null>(null);
+  /**
+   * The slider: the forecast ahead, its step 0 now; or what happened, its
+   * step the tens of minutes back, negative. Play steps it on a step a
+   * second.
+   */
+  readonly timeMode = signal<TimeMode>('forecast');
+  readonly step = signal(0);
+  readonly playing = signal(false);
+  /** The weather's layers, each switched on or off. */
+  readonly layers = signal<Layers>({ ...LAYERS_AT_FIRST });
   /** The clock notices are raised by, ms. */
   now: () => number = () => performance.now();
 
@@ -41,6 +52,10 @@ export class Chart {
       this.open.value = false;
       this.picked.value = null;
       this.view.show(false);
+      // Back to now for the next look.
+      this.timeMode.value = 'forecast';
+      this.step.value = 0;
+      this.playing.value = false;
       return;
     }
     this.mode.value = mode;
@@ -61,6 +76,18 @@ export class Chart {
   showPoint(east: number, north: number): void {
     this.show('chart');
     this.view.lookAt(east, north, 4000);
+  }
+
+  /** Switches a layer of the weather on or off. */
+  setLayer(layer: Layer, on: boolean): void {
+    this.layers.value = { ...this.layers.value, [layer]: on };
+  }
+
+  /** The slider to the forecast ahead or what happened, at now. */
+  setTimeMode(mode: TimeMode): void {
+    this.timeMode.value = mode;
+    this.step.value = 0;
+    this.playing.value = false;
   }
 
   #told(es: ChartEntry[]): void {

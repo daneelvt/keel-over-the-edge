@@ -8,9 +8,12 @@
 # may switch it off if switchable. Its words fill in {name}, the place's
 # name; {who}, the sailor's; {where}, its zone's words; {worth}, what it is
 # worth; {day}, the world's end in the player's own time; {left}, the time
-# left; and, folded, {count}. Whatever a notice tells is in the news, on
-# the chart or in the countdown too, so one missed is never lost (WCAG 2.2,
-# 2.2.1). The world's end is worked out on the phone from the end the
+# left; and, folded, {count}. A gale warning's fill in {wind}, the gale's
+# direction and force ("southwesterly gale 8"), {when}, its time
+# ("expected soon"), and {where}, the compass point from the nearest
+# charted place ("south-west of Gannet Holm"): the Met Office's grammar.
+# Whatever a notice tells is in the news, on the chart or in the countdown
+# too, so one missed is never lost (WCAG 2.2, 2.2.1). The world's end is worked out on the phone from the end the
 # Welcome gives and the world clock: each of its notices is shown once a
 # world, the near end's at each time before it.
 notices:
@@ -49,6 +52,14 @@ notices:
       stays: 8
       text: The falls take this world in {left}
       folded: The falls take this world in {left}
+    - id: gale-warnings
+      name: Gale warnings
+      on: gale-warned
+      level: active
+      switchable: true
+      stays: 8
+      text: "Gale warning: {wind} {when}, {where}"
+      folded: "Gale warning: {wind} {when}, {where}"
     - id: begun-world
       name: A new world
       on: new-world

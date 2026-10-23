@@ -20,6 +20,10 @@ export interface Settings {
   centreHelm: boolean;
   /** How much the sea is drawn with: as much as the device runs well, or the least, to save battery. */
   detail: 'auto' | 'low';
+  /** The barometer among the instruments. */
+  barometer: boolean;
+  /** The pocket chart's weather: rain, fog and the systems over the disk. */
+  pocketWeather: boolean;
 }
 
 export const DEFAULTS: Settings = {
@@ -30,6 +34,8 @@ export const DEFAULTS: Settings = {
   rightOfWay: false,
   centreHelm: false,
   detail: 'auto',
+  barometer: true,
+  pocketWeather: true,
 };
 
 const KEY = 'keel.settings';
@@ -68,7 +74,15 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
   if (r.detail === 'auto' || r.detail === 'low') {
     out.detail = r.detail;
   }
-  for (const k of ['sound', 'windOverlay', 'forcesOverlay', 'rightOfWay', 'centreHelm'] as const) {
+  for (const k of [
+    'sound',
+    'windOverlay',
+    'forcesOverlay',
+    'rightOfWay',
+    'centreHelm',
+    'barometer',
+    'pocketWeather',
+  ] as const) {
     if (typeof r[k] === 'boolean') {
       out[k] = r[k];
     }
