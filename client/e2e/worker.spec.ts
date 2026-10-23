@@ -5,7 +5,7 @@
 // Standard), so the server welcomes it. The page runs the net worker alone.
 
 import { expect, test } from '@playwright/test';
-import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
+import { sailor } from './helpers';
 
 test.beforeEach(() => {
   const p = test.info().project.name;
@@ -13,11 +13,7 @@ test.beforeEach(() => {
 });
 
 test('the net worker connects with the page’s cookie', async ({ page, context }) => {
-  const look = data.sailors[0]?.id ?? '';
-  const res = await context.request.post('/guest', {
-    data: { name: `Worker ${Date.now() % 10_000_000}`, look },
-  });
-  expect(res.status()).toBe(201);
+  await sailor(context, 'Worker');
   await page.goto('/e2e/net.html');
   await expect(page.locator('#result')).toHaveText(/welcome \d+.*snapshot/, { timeout: 30_000 });
 });

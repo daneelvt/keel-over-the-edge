@@ -229,7 +229,13 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
     case 'recover':
       return (
         <div class="start">
-          <form class="start-panel" onSubmit={recover} aria-labelledby="start-title" noValidate>
+          <form
+            key="recover"
+            class="start-panel"
+            onSubmit={recover}
+            aria-labelledby="start-title"
+            noValidate
+          >
             <h1 id="start-title">Lost your passkey?</h1>
             <p class="start-text">
               Your recovery code signs your sailor in once. Then you add a new passkey, and get a
@@ -245,6 +251,7 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
               type="text"
               autocomplete="one-time-code"
               autocapitalize="characters"
+              maxLength={32}
               spellcheck={false}
               enterkeyhint="go"
               value={code}
@@ -290,7 +297,13 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
 
   return (
     <div class="start">
-      <form class="start-panel" onSubmit={submit} aria-labelledby="start-title" noValidate>
+      <form
+        key="start"
+        class="start-panel"
+        onSubmit={submit}
+        aria-labelledby="start-title"
+        noValidate
+      >
         <h1 id="start-title">Keel Over the Edge</h1>
         {support?.kind === 'maybe' ? (
           <p class="start-warning" role="note">

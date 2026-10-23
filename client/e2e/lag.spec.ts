@@ -9,7 +9,7 @@
 // correction and one knock, one shake and the verdict.
 
 import { expect, test } from '@playwright/test';
-import { guest, heldRegime, sail } from './helpers';
+import { heldRegime, sail, sailor } from './helpers';
 
 // CI's netem job sends the page's traffic through the kernel's own delay
 // and loss instead, by the direct Vite.
@@ -21,7 +21,7 @@ test.beforeEach(() => {
 
 test('at 200 ms and 2% loss: no correction over the snap thresholds', async ({ page, context }) => {
   test.setTimeout(120_000);
-  await guest(context, 'Lagged');
+  await sailor(context, 'Lagged');
   await sail(page, lagged);
   await page.evaluate(() => globalThis.keel.script('wiggle'));
   await page.waitForTimeout(40_000);
@@ -39,7 +39,7 @@ test('at 200 ms and 2% loss: a tack or a gybe on the autopilot, with no correcti
   context,
 }) => {
   test.setTimeout(120_000);
-  await guest(context, 'Autopilot');
+  await sailor(context, 'Autopilot');
   await sail(page, lagged);
   await page.evaluate(() => globalThis.keel.setControls(0, 0.3));
   await page.waitForTimeout(5_000);
@@ -67,7 +67,7 @@ test('at 200 ms and 2% loss: a tack or a gybe on the autopilot, with no correcti
 });
 
 test('the boat answers the helm on the frame it is moved', async ({ page, context }) => {
-  await guest(context, 'Helmsman');
+  await sailor(context, 'Helmsman');
   await sail(page, lagged);
   await page.evaluate(() => globalThis.keel.setControls(0, 0.5));
   await page.waitForTimeout(1_000);
@@ -89,7 +89,7 @@ test('a bump at 200 ms: one correction, one knock and shake, the verdict', async
   request,
 }) => {
   test.setTimeout(120_000);
-  await guest(context, 'Bumped');
+  await sailor(context, 'Bumped');
   await sail(page, lagged);
   // A steady breeze on the beam, so the boat has way on whatever the
   // world's weather is at this hour: in a calm the capsized boat staged

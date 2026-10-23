@@ -101,10 +101,11 @@ export default defineConfig({
         launchOptions: { args },
       },
     },
-    // The upgrade from a worker on WebKit, Safari's engine: nothing drawn.
+    // The upgrade from a worker on WebKit, Safari's engine, and the
+    // account's passkeys there: nothing drawn.
     {
       name: 'webkit',
-      testMatch: 'worker.spec.ts',
+      testMatch: ['worker.spec.ts', 'account.spec.ts'],
       use: {
         ...devices['Desktop Safari'],
         baseURL: `https://localhost:${securePort}`,

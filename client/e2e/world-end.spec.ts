@@ -10,7 +10,7 @@
 // so the spec's name sorts it after the others that sail it.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { guest, sail } from './helpers';
+import { sailor as newSailor, sail } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
@@ -42,7 +42,7 @@ async function sailor(browser: import('@playwright/test').Browser, name: string)
     baseURL: 'http://localhost:5181',
     viewport: { width: 320, height: 200 },
   });
-  await guest(c, name);
+  await newSailor(c, name);
   const p = await c.newPage();
   await sail(p);
   return { c, p };

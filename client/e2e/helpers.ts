@@ -4,6 +4,7 @@ import { inflateSync } from 'node:zlib';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import type { KeelHooks } from '../src/dev/hooks';
+import { createPasskey, type Passkey } from './passkey';
 
 declare global {
   // The hooks the game's page puts on window with ?test.
@@ -165,13 +166,47 @@ export function pictureDifference(pa: Picture, pb: Picture): number {
   return sum / n;
 }
 
-/** Makes a guest in the context: its cookie is the context's. */
-export async function guest(context: BrowserContext, word = 'Sailor'): Promise<void> {
+/** A sailor made by sailor(): its name, its passkey and its recovery code. */
+export interface Made {
+  name: string;
+  passkey: Passkey;
+  recoveryCode: string;
+}
+
+/**
+ * Makes a sailor in the context, as the start screen does, through the
+ * server's routes, with a passkey of the test's own: its session's cookie
+ * is the context's.
+ */
+export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<Made> {
   const name = `${word} ${Date.now() % 10_000_000}`;
-  const res = await context.request.post('/guest', {
+  const begun = await context.request.post('/account/begin', {
     data: { name, look: data.sailors[0]?.id ?? '' },
   });
-  expect(res.status(), await res.text()).toBe(201);
+  expect(begun.status(), await begun.text()).toBe(200);
+  const { passkey, answer } = createPasskey(await begun.json(), new URL(begun.url()).origin);
+  const done = await context.request.post('/account/finish', { data: answer });
+  expect(done.status(), await done.text()).toBe(201);
+  const body = (await done.json()) as { name: string; recoveryCode: string };
+  return { name: body.name, passkey, recoveryCode: body.recoveryCode };
+}
+
+/**
+ * Hands passkeys to the context's virtual authenticator, which stands in
+ * for the browser's prompt from then on: the page signs in with them. Call
+ * it before the page first asks for a passkey.
+ */
+export async function holdPasskeys(context: BrowserContext, ...keys: Passkey[]): Promise<void> {
+  await context.credentials.install();
+  for (const k of keys) {
+    await context.credentials.create(k.rpId, {
+      id: k.id,
+      userHandle: k.userHandle,
+      privateKey: k.privateKey,
+      publicKey: k.publicKey,
+      signCount: k.signCount,
+    });
+  }
 }
 
 /** Opens the game with the test hooks, and waits until it sails. */

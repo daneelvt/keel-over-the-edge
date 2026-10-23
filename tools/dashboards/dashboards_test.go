@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -174,5 +175,48 @@ func TestPull(t *testing.T) {
 	os.WriteFile(filepath.Join(d, indexFile), []byte(strings.Replace(string(got), strings.Repeat("ab", 20), "master", 1)), 0o644)
 	if err := pullAll(context.Background(), d, srv.URL, srv.Client(), io.Discard); err == nil || !strings.Contains(err.Error(), "is not a commit") {
 		t.Errorf("a branch: %v", err)
+	}
+}
+
+// TestGameMetricsExist: every keel_ metric the game's own dashboards query
+// is one keel defines, so a metric renamed in the code cannot leave a panel
+// empty. (The machine's and the database's come from exporters.)
+func TestGameMetricsExist(t *testing.T) {
+	t.Chdir("../..")
+	defined := map[string]bool{}
+	name := regexp.MustCompile(`"(keel_[a-z0-9_]+)"`)
+	for _, root := range []string{"internal", "cmd"} {
+		err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+				return err
+			}
+			src, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			for _, m := range name.FindAllSubmatch(src, -1) {
+				defined[string(m[1])] = true
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	queried := regexp.MustCompile(`keel_[a-z0-9_]+`)
+	for _, board := range []string{"game.json", "edge.json"} {
+		data, err := os.ReadFile(filepath.Join(dir, "keel", board))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range queried.FindAllString(string(data), -1) {
+			base := m
+			for _, suffix := range []string{"_bucket", "_count", "_sum"} {
+				base = strings.TrimSuffix(base, suffix)
+			}
+			if !defined[m] && !defined[base] {
+				t.Errorf("%s queries %s, which keel does not define", board, m)
+			}
+		}
 	}
 }
