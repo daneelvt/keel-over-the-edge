@@ -48,6 +48,9 @@ type Accounts interface {
 	// SetTools sets or clears an account's owner's flag, or returns
 	// store.ErrNotFound for an account that is not a human's.
 	SetTools(ctx context.Context, id store.AccountID, on bool) error
+	// AccountCounts counts the human accounts: all, made in the last week,
+	// seen in the last day.
+	AccountCounts(ctx context.Context) (store.AccountCounts, error)
 }
 
 // Sessions are the sessions' cache, which forgets an account at once when
@@ -215,7 +218,7 @@ var Paths = []string{
 	"/owner/api/land.png", "/owner/api/coasts.svg", "/owner/api/island/0.svg", "/owner/api/point",
 	"/owner/api/flag", "/owner/api/place", "/owner/api/unseen", "/owner/api/places.json", "/owner/api/world",
 	"/owner/api/towns.json", "/owner/api/town/0.svg", "/owner/api/features.json", "/owner/api/charted.json",
-	"/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
+	"/owner/api/accounts.json", "/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
 	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
 	"/owner/api/forecast.json", "/owner/api/calibration.json", "/owner/api/gales.json", "/owner/api/place.json",
@@ -293,6 +296,7 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/gusts.bin", o.serveView(func(v *view) []byte { return v.gusts }, "application/octet-stream"))
 	o.drawn(mux, "/owner/api/")
 	mux.HandleFunc("GET /owner/api/charted.json", o.charted)
+	mux.HandleFunc("GET /owner/api/accounts.json", o.accounts)
 	mux.HandleFunc("GET /owner/api/point", o.point)
 	mux.HandleFunc("GET /owner/api/sea.json", o.sea)
 	mux.HandleFunc("GET /owner/api/clouds.json", o.clouds)

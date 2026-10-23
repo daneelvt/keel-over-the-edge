@@ -205,12 +205,12 @@ func runDev(ctx context.Context, out io.Writer, lag string, limit int) error {
 	if err != nil {
 		return err
 	}
-	lan := devcert.LANAddresses()
-	c, err := makeCerts(ctx, out, certHosts(lan), true)
+	lan, name := devcert.LANAddresses(), devcert.LocalName(ctx)
+	c, err := makeCerts(ctx, out, certHosts(name, lan), true)
 	if err != nil {
 		return err
 	}
-	s := &stack{out: out, origin: playOrigin(lan), certs: c, dbURL: db.App, limit: limit}
+	s := &stack{out: out, origin: playOrigin(name), certs: c, dbURL: db.App, limit: limit}
 	if limit > 0 {
 		fmt.Fprintf(newPrefixed(&s.mu, out, "dev"), "at most %d boats at sea: more players wait in the queue\n", limit)
 	}
@@ -286,7 +286,8 @@ func runDev(ctx context.Context, out io.Writer, lag string, limit int) error {
 }
 
 // runSmoke starts everything, checks the page and /api/version over HTTPS
-// trusting only the local root, makes a guest and reads it back, and stops.
+// trusting only the local root, makes a sailor with a passkey and reads it
+// back, and stops.
 // CI runs it on every push.
 func runSmoke(ctx context.Context, out io.Writer) error {
 	if err := prepare(ctx, out); err != nil {
@@ -296,11 +297,12 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	c, err := makeCerts(ctx, out, certHosts(devcert.LANAddresses()), false)
+	c, err := makeCerts(ctx, out, certHosts(devcert.LocalName(ctx), devcert.LANAddresses()), false)
 	if err != nil {
 		return err
 	}
-	base := fmt.Sprintf("https://127.0.0.1:%d", vitePort)
+	// localhost, not 127.0.0.1: a passkey's relying party is a name.
+	base := fmt.Sprintf("https://localhost:%d", vitePort)
 	s := &stack{out: out, origin: base, certs: c, dbURL: db.App}
 	if err := s.start(ctx); err != nil {
 		return err
@@ -338,18 +340,18 @@ func runSmoke(ctx context.Context, out io.Writer) error {
 	if err := checkInternal(ctx, s); err != nil {
 		return err
 	}
-	name, jar, err := smoke.Guest(ctx, client, base)
+	name, jar, err := smoke.Sailor(ctx, client, base)
 	if err != nil {
 		return err
 	}
-	_, jar2, err := smoke.Guest(ctx, client, base)
+	_, jar2, err := smoke.Sailor(ctx, client, base)
 	if err != nil {
 		return err
 	}
 	if err := smoke.Game(ctx, client, jar, jar2, base); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics, a guest made and read back (%s), the game connection's Welcome, snapshot and Pong, and a second player seeing the first's boat (build %s, catalog %s)\n", name, v.Build, v.Catalog)
+	fmt.Fprintf(out, "smoke: ok: page, /api/version and the physics module over HTTPS, keel's probes and metrics, a sailor made with a passkey and read back (%s), the game connection's Welcome, snapshot and Pong, and a second player seeing the first's boat (build %s, catalog %s)\n", name, v.Build, v.Catalog)
 	return nil
 }
 

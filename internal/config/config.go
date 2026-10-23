@@ -27,6 +27,15 @@ type Config struct {
 	// https://play.keelovertheedge.com, or an http:// origin on a loopback
 	// address, which browsers treat as secure, for tests.
 	PlayOrigin string
+	// PasskeyRPID is the relying party players' passkeys are made for: the
+	// play origin's host, or a parent domain of it, never an IP address,
+	// which no browser accepts (WebAuthn Level 3, 5.1.3).
+	PasskeyRPID string
+	// PasskeyOrigins are the origins whose pages may make and use the
+	// players' passkeys: the play origin, and the origins
+	// KEEL_PASSKEY_ORIGINS adds, which the browser tests' other servers
+	// need.
+	PasskeyOrigins []string
 	// AgentsAddr is the address the AI agents' HTTP server listens on.
 	AgentsAddr string
 	// InternalAddr is the address of the internal HTTP server: probes,
@@ -157,6 +166,26 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	if err := checkOrigin(c.PlayOrigin); err != nil {
 		errs = append(errs, fmt.Errorf("KEEL_PLAY_ORIGIN: %w", err))
+	} else {
+		c.PasskeyOrigins = []string{c.PlayOrigin}
+		c.PasskeyRPID = or(getenv("KEEL_PASSKEY_RP_ID"), hostOf(c.PlayOrigin))
+		if err := CheckRPID(c.PasskeyRPID, c.PlayOrigin); err != nil {
+			errs = append(errs, fmt.Errorf("KEEL_PASSKEY_RP_ID: %w", err))
+		}
+		if v := getenv("KEEL_PASSKEY_ORIGINS"); v != "" {
+			for _, o := range strings.Split(v, ",") {
+				o = strings.TrimSpace(o)
+				if err := checkOrigin(o); err != nil {
+					errs = append(errs, fmt.Errorf("KEEL_PASSKEY_ORIGINS: %w", err))
+					continue
+				}
+				if err := CheckRPID(c.PasskeyRPID, o); err != nil {
+					errs = append(errs, fmt.Errorf("KEEL_PASSKEY_ORIGINS: %w", err))
+					continue
+				}
+				c.PasskeyOrigins = append(c.PasskeyOrigins, o)
+			}
+		}
 	}
 	if err := CheckDatabaseURL(c.DatabaseURL); err != nil {
 		errs = append(errs, fmt.Errorf("KEEL_DATABASE_URL: %w", err))
@@ -288,6 +317,36 @@ func CheckDatabaseURL(s string) error {
 		}
 	case !strings.Contains(s, "="):
 		return errors.New("neither a postgres:// URL nor key=value pairs")
+	}
+	return nil
+}
+
+// hostOf is an origin's host, without its port.
+func hostOf(origin string) string {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
+}
+
+// CheckRPID checks that a passkey relying party ID can serve an origin: a
+// domain, not an IP address, which browsers refuse; and the origin's host,
+// or a parent of it (WebAuthn Level 3, 5.1.3: "a registrable domain suffix
+// of or is equal to" the origin's effective domain).
+func CheckRPID(rpID, origin string) error {
+	host := hostOf(origin)
+	switch {
+	case rpID == "":
+		return errors.New("empty")
+	case net.ParseIP(strings.Trim(rpID, "[]")) != nil:
+		return fmt.Errorf("%q is an IP address: browsers make passkeys for a domain name alone (serve the game at a name, such as the Mac's .local one)", rpID)
+	case strings.ContainsAny(rpID, ":/ ") || rpID != strings.ToLower(rpID):
+		return fmt.Errorf("%q is not a lowercase domain name", rpID)
+	case host != rpID && !strings.HasSuffix(host, "."+rpID):
+		return fmt.Errorf("%q is neither %s's host nor a parent of it", rpID, origin)
+	case !strings.Contains(rpID, ".") && rpID != "localhost":
+		return fmt.Errorf("%q is a top-level domain, which no site may claim", rpID)
 	}
 	return nil
 }

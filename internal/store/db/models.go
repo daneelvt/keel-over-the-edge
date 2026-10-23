@@ -11,14 +11,18 @@ import (
 )
 
 type Account struct {
-	ID         pgtype.UUID
-	Kind       string
-	OwnerID    pgtype.UUID
-	CreatedAt  time.Time
-	SavedAt    pgtype.Timestamptz
-	LastSeenAt time.Time
-	Tools      bool
-	NoticesOff []string
+	ID             pgtype.UUID
+	Kind           string
+	OwnerID        pgtype.UUID
+	CreatedAt      time.Time
+	SavedAt        pgtype.Timestamptz
+	LastSeenAt     time.Time
+	Tools          bool
+	NoticesOff     []string
+	UserHandle     []byte
+	RecoveryHash   []byte
+	RecoveryMadeAt pgtype.Timestamptz
+	RecoveredAt    pgtype.Timestamptz
 }
 
 type Charting struct {
@@ -113,6 +117,26 @@ type NewsItem struct {
 	EndsAt       pgtype.Timestamptz
 }
 
+type Passkey struct {
+	ID                pgtype.UUID
+	AccountID         pgtype.UUID
+	CredentialID      []byte
+	PublicKey         []byte
+	Algorithm         int32
+	SignCount         int64
+	CloneWarning      bool
+	Flags             int16
+	BackupEligible    bool
+	BackupState       bool
+	Aaguid            []byte
+	Transports        []string
+	AttestationFormat string
+	Attachment        string
+	MadeOn            string
+	CreatedAt         time.Time
+	LastUsedAt        time.Time
+}
+
 type Place struct {
 	WorldID pgtype.UUID
 	Number  int32
@@ -137,11 +161,13 @@ type Sailor struct {
 }
 
 type Session struct {
-	ID         pgtype.UUID
-	AccountID  pgtype.UUID
-	TokenHash  []byte
-	CreatedAt  time.Time
-	LastSeenAt time.Time
+	ID             pgtype.UUID
+	AccountID      pgtype.UUID
+	TokenHash      []byte
+	CreatedAt      time.Time
+	LastSeenAt     time.Time
+	Held           bool
+	ConfirmedUntil pgtype.Timestamptz
 }
 
 type SimLease struct {
@@ -149,6 +175,20 @@ type SimLease struct {
 	Epoch     int64
 	Holder    string
 	Since     pgtype.Timestamptz
+}
+
+type WebauthnCeremony struct {
+	HandleHash []byte
+	Kind       string
+	AccountID  pgtype.UUID
+	Name       pgtype.Text
+	NameKey    pgtype.Text
+	Look       pgtype.Text
+	UserHandle []byte
+	Session    []byte
+	Build      string
+	ExpiresAt  time.Time
+	CreatedAt  time.Time
 }
 
 type World struct {

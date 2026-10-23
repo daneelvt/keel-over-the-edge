@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/store/db"
@@ -42,8 +44,6 @@ const (
 type Account struct {
 	ID   AccountID
 	Kind Kind
-	// Saved is false for a guest, kept only by its browser's cookie.
-	Saved bool
 	// Name is the sailor's name as shown, and Look the catalog sailor they
 	// look like.
 	Name string
@@ -56,14 +56,19 @@ type Account struct {
 	NoticesOff []string
 }
 
-// Guest is what makes a guest: a sailor, and the first session's token
+// NewAccount is what makes a human's account, all at once: its sailor, its
+// first passkey, its recovery code's hash and its first session's token
 // hash.
-type Guest struct {
+type NewAccount struct {
 	// Name is the sailor's name in its display form, and NameKey the key
 	// names are compared by: two sailors cannot share a key.
 	Name, NameKey string
 	Look          string
-	TokenHash     [32]byte
+	// UserHandle is the WebAuthn user handle its passkeys carry.
+	UserHandle   []byte
+	Passkey      Passkey
+	RecoveryHash [32]byte
+	TokenHash    [32]byte
 }
 
 var (
@@ -71,36 +76,211 @@ var (
 	ErrNameTaken = errors.New("store: the name is taken")
 	// ErrNotFound is a row that is not there.
 	ErrNotFound = errors.New("store: not found")
+	// ErrPasskeyTaken is a passkey whose credential ID is already an
+	// account's.
+	ErrPasskeyTaken = errors.New("store: the passkey is already an account's")
+	// ErrLastPasskey is the one passkey an account has left, which stays.
+	ErrLastPasskey = errors.New("store: an account's last passkey stays")
 )
 
-// CreateGuest makes a guest account, its sailor and its session, all or
-// nothing.
-func (s *Store) CreateGuest(ctx context.Context, g Guest) (AccountID, error) {
+func uuidOf(id AccountID) pgtype.UUID { return pgtype.UUID{Bytes: id, Valid: true} }
+
+// CreateAccount makes a human's account with its sailor, passkey, recovery
+// code and session, all or nothing: there is never an account without a
+// passkey.
+func (s *Store) CreateAccount(ctx context.Context, a NewAccount) (AccountID, error) {
 	var id AccountID
 	err := s.inTx(ctx, func(q *db.Queries) error {
-		u, err := q.CreateGuestAccount(ctx)
+		u, err := q.CreateAccount(ctx, db.CreateAccountParams{UserHandle: a.UserHandle, RecoveryHash: a.RecoveryHash[:]})
 		if err != nil {
 			return err
 		}
 		id = u.Bytes
-		if err := q.CreateSailor(ctx, db.CreateSailorParams{AccountID: u, Name: g.Name, NameKey: g.NameKey, Look: g.Look}); err != nil {
+		if err := q.CreateSailor(ctx, db.CreateSailorParams{AccountID: u, Name: a.Name, NameKey: a.NameKey, Look: a.Look}); err != nil {
 			return err
 		}
-		return q.CreateSession(ctx, db.CreateSessionParams{AccountID: u, TokenHash: g.TokenHash[:]})
+		if err := q.CreatePasskey(ctx, passkeyParams(u, &a.Passkey)); err != nil {
+			return err
+		}
+		return q.CreateSession(ctx, db.CreateSessionParams{AccountID: u, TokenHash: a.TokenHash[:]})
 	})
-	if uniqueViolation(err, "sailor_name_key") {
+	switch {
+	case uniqueViolation(err, "sailor_name_key"):
 		return AccountID{}, ErrNameTaken
-	}
-	if err != nil {
+	case uniqueViolation(err, "passkey_credential_id"):
+		return AccountID{}, ErrPasskeyTaken
+	case err != nil:
 		return AccountID{}, err
 	}
 	return id, nil
 }
 
+// NameFree reports whether no sailor has the name key.
+func (s *Store) NameFree(ctx context.Context, key string) (bool, error) {
+	taken, err := s.q.NameTaken(ctx, key)
+	return !taken, err
+}
+
+// Holder is a human account with the user handle its passkeys carry and
+// the passkeys themselves.
+type Holder struct {
+	Account
+	UserHandle []byte
+	Passkeys   []Passkey
+}
+
+// AccountByUserHandle finds the account a passkey's user handle names,
+// with its passkeys, or ErrNotFound.
+func (s *Store) AccountByUserHandle(ctx context.Context, handle []byte) (Holder, error) {
+	row, err := s.q.AccountByUserHandle(ctx, handle)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Holder{}, ErrNotFound
+	}
+	if err != nil {
+		return Holder{}, err
+	}
+	keys, err := s.Passkeys(ctx, row.ID.Bytes)
+	if err != nil {
+		return Holder{}, err
+	}
+	return Holder{
+		Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: row.Look, Tools: row.Tools, NoticesOff: row.NoticesOff},
+		UserHandle: row.UserHandle, Passkeys: keys,
+	}, nil
+}
+
+// Profile is what the account page shows of an account.
+type Profile struct {
+	Holder
+	Created time.Time
+	// RecoveryMade is when its recovery code was made; zero if it has none.
+	RecoveryMade time.Time
+}
+
+// Profile is a human account's page, or ErrNotFound.
+func (s *Store) Profile(ctx context.Context, id AccountID) (Profile, error) {
+	row, err := s.q.AccountByID(ctx, uuidOf(id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Profile{}, ErrNotFound
+	}
+	if err != nil {
+		return Profile{}, err
+	}
+	keys, err := s.Passkeys(ctx, id)
+	if err != nil {
+		return Profile{}, err
+	}
+	p := Profile{
+		Holder: Holder{
+			Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: row.Look, Tools: row.Tools, NoticesOff: row.NoticesOff},
+			UserHandle: row.UserHandle, Passkeys: keys,
+		},
+		Created: row.CreatedAt,
+	}
+	if row.HasRecovery && row.RecoveryMadeAt.Valid {
+		p.RecoveryMade = row.RecoveryMadeAt.Time
+	}
+	return p, nil
+}
+
+// SetRecoveryCode gives an account a new recovery code, by its hash, in
+// place of any it had.
+func (s *Store) SetRecoveryCode(ctx context.Context, id AccountID, hash [32]byte) error {
+	n, err := s.q.SetRecoveryCode(ctx, db.SetRecoveryCodeParams{RecoveryHash: hash[:], ID: uuidOf(id)})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Recover spends the recovery code whose hash is code: every session of
+// its account ends, and a new one, whose token hashes to token, is made
+// held to adding a passkey. It returns the account, or ErrNotFound when no
+// account has the code.
+func (s *Store) Recover(ctx context.Context, code, token [32]byte) (Account, error) {
+	var id AccountID
+	err := s.inTx(ctx, func(q *db.Queries) error {
+		u, err := q.SpendRecoveryCode(ctx, code[:])
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		id = u.Bytes
+		if _, err := q.DeleteAccountSessions(ctx, u); err != nil {
+			return err
+		}
+		return q.CreateSession(ctx, db.CreateSessionParams{AccountID: u, TokenHash: token[:], Held: true})
+	})
+	if err != nil {
+		return Account{}, err
+	}
+	p, err := s.Profile(ctx, id)
+	return p.Account, err
+}
+
+// SignIn makes a session for an account signed in, whose token hashes to
+// token, and takes the notice of a recovery code used since the last
+// sign-in: when it was used, or zero.
+func (s *Store) SignIn(ctx context.Context, id AccountID, token [32]byte) (recovered time.Time, err error) {
+	err = s.inTx(ctx, func(q *db.Queries) error {
+		if err := q.CreateSession(ctx, db.CreateSessionParams{AccountID: uuidOf(id), TokenHash: token[:]}); err != nil {
+			return err
+		}
+		at, err := q.TakeRecoveryNotice(ctx, uuidOf(id))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if at.Valid {
+			recovered = at.Time
+		}
+		return nil
+	})
+	return recovered, err
+}
+
+// DeleteAccount deletes a human account with its sailor, passkeys,
+// sessions and ceremonies, freeing its name. What its sailor charted keeps
+// its place under no name. ErrNotFound if there is no such account.
+func (s *Store) DeleteAccount(ctx context.Context, id AccountID) error {
+	return s.inTx(ctx, func(q *db.Queries) error {
+		if err := q.ForgetCredits(ctx, uuidOf(id)); err != nil {
+			return err
+		}
+		n, err := q.DeleteAccount(ctx, uuidOf(id))
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
+// AccountCounts is how many human accounts there are, how many were made
+// in the last week and how many were seen in the last day.
+type AccountCounts struct {
+	Total, Week, Today int64
+}
+
+// AccountCounts counts the human accounts.
+func (s *Store) AccountCounts(ctx context.Context) (AccountCounts, error) {
+	r, err := s.q.AccountCounts(ctx)
+	return AccountCounts{Total: r.Total, Week: r.Week, Today: r.Today}, err
+}
+
 // SetTools sets or clears the owner's flag of a human account, or returns
 // ErrNotFound: no such account, or an AI's, which never carries it.
 func (s *Store) SetTools(ctx context.Context, id AccountID, on bool) error {
-	n, err := s.q.SetAccountTools(ctx, db.SetAccountToolsParams{Tools: on, ID: pgtype.UUID{Bytes: id, Valid: true}})
+	n, err := s.q.SetAccountTools(ctx, db.SetAccountToolsParams{Tools: on, ID: uuidOf(id)})
 	if err != nil {
 		return err
 	}
@@ -124,7 +304,7 @@ func (s *Store) Accounts(ctx context.Context, ids []AccountID) (map[AccountID]Ac
 	}
 	out := make(map[AccountID]Account, len(rows))
 	for _, r := range rows {
-		out[r.ID.Bytes] = Account{ID: r.ID.Bytes, Kind: Kind(r.Kind), Saved: r.Saved, Name: r.Name, Tools: r.Tools}
+		out[r.ID.Bytes] = Account{ID: r.ID.Bytes, Kind: Kind(r.Kind), Name: r.Name, Tools: r.Tools}
 	}
 	return out, nil
 }

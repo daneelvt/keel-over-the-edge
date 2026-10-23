@@ -8,7 +8,7 @@
 //	go run ./tools/dev          start keel serve and Vite; restart keel on Go changes, rebuild the physics module
 //	go run ./tools/dev -lag 200ms,2%   the same, with the game's traffic slowed and lost as a phone's network would (tools/lag)
 //	go run ./tools/dev -limit 2        the same, with at most 2 boats at sea: a third player waits in the queue
-//	go run ./tools/dev -smoke   start everything, check the page, /api/version, the physics module, a guest, the game connection, a second player seeing the first's boat, and keel's probes and metrics, stop
+//	go run ./tools/dev -smoke   start everything, check the page, /api/version, the physics module, a sailor made with a passkey, the game connection, a second player seeing the first's boat, and keel's probes and metrics, stop
 //	go run ./tools/dev -lint    run every linter the pull-request checks run
 //	go run ./tools/dev -db      start the database alone, print its URLs
 //	go run ./tools/dev -db-reset  remove the database's container and data

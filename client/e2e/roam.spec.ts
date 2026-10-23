@@ -14,7 +14,7 @@ import {
   type Page,
   test,
 } from '@playwright/test';
-import { guest, sail } from './helpers';
+import { sail, sailor } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 
@@ -81,8 +81,8 @@ test('the owner roams and teleports; another sailor can do neither', async ({
   if (ann === undefined || bob === undefined) {
     throw new Error('no pages');
   }
-  await guest(contexts[0] as BrowserContext, 'Ann');
-  await guest(contexts[1] as BrowserContext, 'Bob');
+  await sailor(contexts[0] as BrowserContext, 'Ann');
+  await sailor(contexts[1] as BrowserContext, 'Bob');
   await sail(ann);
   await sail(bob);
   const annBoat = await ann.evaluate(() => globalThis.keel.net().boat);

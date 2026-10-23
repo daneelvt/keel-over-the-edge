@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package smoke holds the checks the development tools' smoke tests make of
-// a running game, wherever it is served: a guest made and read back, the
-// game connection, a second player seeing the first's boat, the physics
-// module and keel's metrics.
+// a running game, wherever it is served: a sailor made with a passkey and
+// read back, the game connection, a second player seeing the first's boat,
+// the physics module and keel's metrics.
 package smoke
 
 import (
@@ -19,6 +19,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/auth/softkey"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
@@ -39,9 +40,9 @@ func Metrics(page string) error {
 }
 
 // Game opens the game connection over HTTPS with the
-// guest's cookie, as the page's net worker does, says Hello, and expects a
-// Welcome, a snapshot, and a Pong to its Ping; then a second guest's
-// connection, whose snapshots must show the first guest's boat.
+// sailor's cookie, as the page's net worker does, says Hello, and expects a
+// Welcome, a snapshot, and a Pong to its Ping; then a second sailor's
+// connection, whose snapshots must show the first sailor's boat.
 func Game(ctx context.Context, hc *http.Client, jar, jar2 http.CookieJar, base string) error {
 	ws, err := dialGame(ctx, hc, jar, base)
 	if err != nil {
@@ -70,7 +71,7 @@ func Game(ctx context.Context, hc *http.Client, jar, jar2 http.CookieJar, base s
 			snapshot = true
 		}
 	}
-	// The first guest's connection reads on, so the server can write to it.
+	// The first sailor's connection reads on, so the server can write to it.
 	client.Read(ws)
 	if err := second(ctx, hc, jar2, base); err != nil {
 		return err
@@ -78,8 +79,8 @@ func Game(ctx context.Context, hc *http.Client, jar, jar2 http.CookieJar, base s
 	return ws.Close(websocket.StatusNormalClosure, "")
 }
 
-// second connects a second guest and decodes its snapshots until one
-// shows another boat: the first guest's, who joined just before, 20 m off
+// second connects a second sailor and decodes its snapshots until one
+// shows another boat: the first sailor's, who joined just before, 20 m off
 // on the start grid.
 func second(ctx context.Context, hc *http.Client, jar http.CookieJar, base string) error {
 	ws, err := dialGame(ctx, hc, jar, base)
@@ -130,56 +131,98 @@ func dialGame(ctx context.Context, hc *http.Client, jar http.CookieJar, base str
 	return ws, nil
 }
 
-// Guest makes a guest, as the page does, keeping its
-// cookie in a jar, and reads it back from /api/me.
-func Guest(ctx context.Context, client *http.Client, base string) (string, http.CookieJar, error) {
-	return GuestNamed(ctx, client, base, fmt.Sprintf("Smoke Test %d", time.Now().UnixNano()%1_000_000))
+// Sailor makes a sailor with a passkey, as the page does, through the
+// player's routes with a software authenticator, keeping its cookie in a
+// jar, and reads it back from /api/me.
+func Sailor(ctx context.Context, client *http.Client, base string) (string, http.CookieJar, error) {
+	name, jar, _, err := SailorNamed(ctx, client, base, fmt.Sprintf("Smoke Test %d", time.Now().UnixNano()%1_000_000))
+	return name, jar, err
 }
 
-// GuestNamed is Guest, with the guest's name.
-func GuestNamed(ctx context.Context, client *http.Client, base, name string) (string, http.CookieJar, error) {
+// SailorNamed is Sailor, with the sailor's name, and its passkey.
+func SailorNamed(ctx context.Context, client *http.Client, base, name string) (string, http.CookieJar, *softkey.Key, error) {
 	cat, err := catalog.Load()
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	c := *client
 	c.Jar = jar
 	body, err := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/guest", bytes.NewReader(body))
+	opts, err := Post(ctx, &c, base, "/account/begin", body, http.StatusOK)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	key, answer, err := softkey.Create(opts, base)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	if _, err := Post(ctx, &c, base, "/account/finish", answer, http.StatusCreated); err != nil {
+		return "", nil, nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/me", nil)
+	if err != nil {
+		return "", nil, nil, err
+	}
 	res, err := c.Do(req)
 	if err != nil {
-		return "", nil, fmt.Errorf("smoke: POST /guest: %w", err)
-	}
-	reply, _ := io.ReadAll(res.Body)
-	res.Body.Close()
-	if res.StatusCode != http.StatusCreated {
-		return "", nil, fmt.Errorf("smoke: POST /guest answered %s: %s", res.Status, reply)
-	}
-	req, err = http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/me", nil)
-	if err != nil {
-		return "", nil, err
-	}
-	res, err = c.Do(req)
-	if err != nil {
-		return "", nil, fmt.Errorf("smoke: /api/me: %w", err)
+		return "", nil, nil, fmt.Errorf("smoke: /api/me: %w", err)
 	}
 	defer res.Body.Close()
 	var me struct{ Name string }
 	if err := json.NewDecoder(res.Body).Decode(&me); err != nil || res.StatusCode != http.StatusOK || me.Name != name {
-		return "", nil, fmt.Errorf("smoke: /api/me answered %s, %q (%v); want the guest %q", res.Status, me.Name, err, name)
+		return "", nil, nil, fmt.Errorf("smoke: /api/me answered %s, %q (%v); want the sailor %q", res.Status, me.Name, err, name)
 	}
-	return name, jar, nil
+	return name, jar, key, nil
+}
+
+// Post sends a JSON body, or none for nil, to one of the game's routes,
+// and returns the answer's body if its status is want.
+func Post(ctx context.Context, c *http.Client, base, path string, body []byte, want int) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	res, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("smoke: POST %s: %w", path, err)
+	}
+	defer res.Body.Close()
+	reply, _ := io.ReadAll(res.Body)
+	if res.StatusCode != want {
+		return nil, fmt.Errorf("smoke: POST %s answered %s: %s", path, res.Status, reply)
+	}
+	return reply, nil
+}
+
+// Delete deletes a sailor made by SailorNamed as its player would: its
+// passkey confirmed, its name typed again.
+func Delete(ctx context.Context, client *http.Client, jar http.CookieJar, key *softkey.Key, base, name string) error {
+	c := *client
+	c.Jar = jar
+	opts, err := Post(ctx, &c, base, "/api/account/confirm/begin", nil, http.StatusOK)
+	if err != nil {
+		return err
+	}
+	answer, err := key.Get(opts)
+	if err != nil {
+		return err
+	}
+	if _, err := Post(ctx, &c, base, "/api/account/confirm/finish", answer, http.StatusOK); err != nil {
+		return err
+	}
+	body, _ := json.Marshal(map[string]string{"name": name})
+	_, err = Post(ctx, &c, base, "/api/account/delete", body, http.StatusOK)
+	return err
 }
 
 // ModuleServed fetches the physics module as the page does. Browsers

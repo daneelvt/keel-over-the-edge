@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The game in production: the base's sizes, which are production's, the
-# players' address, the database's passwords and the backups' keys from
-# Infisical, the weekly restore test, and cloudflared, which carries
-# players' traffic in from Cloudflare.
+# players' address and their passkeys' domain, the database's passwords
+# and the backups' keys from Infisical, the weekly restore test, and
+# cloudflared, which carries players' traffic in from Cloudflare.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -20,6 +20,8 @@ configMapGenerator:
     behavior: merge
     literals:
       - KEEL_PLAY_ORIGIN=https://play.keelovertheedge.com
+      # Players' passkeys are the domain's, not the play host's alone.
+      - KEEL_PASSKEY_RP_ID=keelovertheedge.com
 # The Gateway and the players' route answer the players' host alone.
 patches:
   - target:

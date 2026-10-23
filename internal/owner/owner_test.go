@@ -63,6 +63,18 @@ func (f *fakeAccounts) SetTools(_ context.Context, id store.AccountID, on bool) 
 	return nil
 }
 
+func (f *fakeAccounts) AccountCounts(context.Context) (store.AccountCounts, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := int64(0)
+	for _, a := range f.by {
+		if a.Kind == store.Human {
+			n++
+		}
+	}
+	return store.AccountCounts{Total: n, Week: n, Today: 1}, nil
+}
+
 // fakeEdge records what it is told, and has eyes where a test puts them.
 type fakeEdge struct {
 	mu    sync.Mutex
@@ -1134,5 +1146,17 @@ func TestWeatherListsAreArrays(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), key) {
 			t.Errorf("weather.json lacks %s: %s", key, rec.Body.String()[:200])
 		}
+	}
+}
+
+// TestAccountsCounted: the world page's line of accounts, counted from the
+// database each time.
+func TestAccountsCounted(t *testing.T) {
+	r := newRig(t, 0)
+	r.join(t, 1, "Ann", store.Human, false)
+	r.join(t, 2, "Bob", store.Human, false)
+	code, body := r.do(t, "GET", "/owner/api/accounts.json", nil)
+	if code != 200 || string(body) != `{"total":2,"week":2,"today":1}` {
+		t.Fatalf("%d %s", code, body)
 	}
 }

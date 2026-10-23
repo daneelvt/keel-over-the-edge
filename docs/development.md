@@ -45,9 +45,12 @@ The first run asks for your computer's password once, to trust the local
 certificate authority that signs the certificate (mkcert). On macOS it also
 asks to allow incoming connections, so phones can reach Vite.
 
-The game is served at your computer's local network address, for example
-`https://192.168.1.20:5173`. Use that address on the computer too, so the
-computer and phones share one origin.
+The game is served at your computer's `.local` name, for example
+`https://macbook.local:5173` (on a Mac, its `LocalHostName`: System Settings
+→ General → Sharing → Local hostname). Use that address on the computer
+too, so the computer and phones share one origin, and one passkey: no
+browser makes a passkey for an IP address ([Passkeys on a
+phone](#passkeys-on-a-phone)).
 
 `go run ./tools/dev -lag 200ms,2%` does the same with the game's traffic
 between Vite and `keel` slowed and lost as a phone's network would: half the
@@ -106,6 +109,21 @@ compatibility mode), the screen wake lock, passkeys and module workers. Under
 **Physics**, the phone runs every golden scenario in the physics module and
 shows whether it got the same bits as the server, and how long a step takes.
 
+### Passkeys on a phone
+
+A sailor is made with a passkey ([Accounts and
+passkeys](#accounts-and-passkeys)), and a passkey belongs to a domain name:
+Chrome and WebKit refuse an IP address ("This is an invalid domain"), and so
+does `keel`, which will not start with one as `KEEL_PASSKEY_RP_ID`. So both
+`tools/dev` and the local cluster serve the game at the Mac's `.local` name,
+and the passkey is made for that name. Chrome on the Mac makes and uses
+passkeys at a `.local` name and at `localhost`. A phone must reach the
+`.local` name, trust the local root (above), and accept a passkey for it:
+check on each new phone that Set sail shows the phone's own passkey prompt.
+A phone that cannot resolve `.local` names (some Androids, or one on a VPN)
+can open the game at the Wi-Fi address, but cannot make or use a passkey
+there.
+
 The certificate stays trusted until you remove it, so next time just scan the
 game's QR code. To remove it later: on iPhone, Settings → General → VPN &
 Device Management; on Android, Settings → Encryption & credentials → User
@@ -115,7 +133,7 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a guest made and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
 | `pr.render.yaml` | Pull requests, not drafts, that change its files | The physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest | `go run ./tools/physics`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
@@ -2435,6 +2453,7 @@ hexagons, each cell's highest ground and surface, gzipped
 | `GET /api/news?before=<id>` | the news, newest first, 40 a page; no session; kept 5 s |
 | `POST /api/me/notices {"off": [ids]}` | the notices switched off, kept on the account; `GET /api/me` says them |
 | `GET /owner/api/charted.json` | the world page's chart: what is charted, by whom, when, its worth |
+| `GET /owner/api/accounts.json` | the players' accounts: how many, made in the last seven days, seen in the last day (the world card's "Accounts" line) |
 | `POST /debug/chart?all` or `?subject=island:N` | charts by hand, credited to no one (developer's commands) |
 | `GET /api/status` | the website's: boats at sea and queued, the world, its end and whether it is closing; no session; kept 30 s |
 | `POST /debug/end?in=90s` | brings the world's end near (developer's commands) |
@@ -3326,7 +3345,9 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 
 | Variable | Default | What |
 |----------|---------|------|
-| `KEEL_PLAY_ORIGIN` | required | The players' HTTPS origin; `http://` only on `localhost`, `127.0.0.1` or `[::1]`, which browsers treat as secure (the browser tests) |
+| `KEEL_PLAY_ORIGIN` | required | The players' HTTPS origin; `http://` only on `localhost`, `127.0.0.1` or `[::1]`, which browsers treat as secure (the browser tests). Its host must be a name, not an IP address, for the passkeys |
+| `KEEL_PASSKEY_RP_ID` | the play origin's host | The domain players' passkeys are made for (WebAuthn's relying party ID): the play origin's host or a parent of it, never an IP address. Production's is `keelovertheedge.com` |
+| `KEEL_PASSKEY_ORIGINS` | none | More origins of that domain whose pages may make and use passkeys, comma-separated: the browser tests' lagged and WebKit servers |
 | `KEEL_DATABASE_URL` | required | The database: a `postgres://` URL or `key=value` pairs, as pgx reads them. It holds the password and is never logged |
 | `KEEL_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
@@ -3423,7 +3444,10 @@ resolved at start, so updating it allocates nothing:
 | `keel_db_pool_acquire_wait_seconds_total`, `keel_db_pool_empty_acquire_total` | Time requests waited for a connection; requests that found none idle |
 | `keel_db_query_duration_seconds{query}`, `keel_db_query_errors_total{query}` | Each query's time and failures, by its sqlc name (`other` for the rest) |
 | `keel_db_schema_version` | The newest migration the database has had |
-| `keel_guests_created_total`, `keel_guests_refused_total{reason}` | Guests made, and names refused by reason (`short`, `long`, `characters`, `scripts`, `words`, `taken`) |
+| `keel_accounts_created_total`, `keel_names_refused_total{reason}` | Accounts made, and new sailors' names refused by reason (`short`, `long`, `characters`, `scripts`, `words`, `taken`) |
+| `keel_ceremonies_total{kind, result}` | Ceremonies with the browser's passkey prompt: `create`, `signin`, `add`, `confirm`; `begun`, `finished`, `refused` (the answer not accepted), `expired`, `again` (its state gone: used, never begun, or another build's) |
+| `keel_signins_total{mediation}` | Sign-ins with a passkey: by the browser's `prompt`, or offered on the name field (`conditional`) |
+| `keel_recovery_used_total`, `keel_accounts_deleted_total`, `keel_clone_warnings_total` | Recovery codes used; accounts deleted by their players; sign-ins whose passkey's count did not go up (logged, never refused) |
 | `keel_session_cache_lookups_total{result}` | Sessions found in the cache (`hit`), fetched (`miss`) or unknown |
 | `keel_sim_grace_total{result}` | Boats' graces `started`, ended by a join of the account (`rejoined`), or `expired` |
 | `keel_edge_connections` | Game connections open |
@@ -3535,11 +3559,26 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | Route | What |
 |-------|------|
 | `GET /api/version` | The build and the catalog's version |
-| `POST /guest` | `{"name", "look"}` makes a guest: 201 with the sailor (`{"name", "look"}`, the name in its display form) and the session cookie; 422 `{"error": reason}` for a refused name; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
-| `GET /api/me` | The session's account, `{"name", "look", "kind", "saved"}`, or 401 |
+| `POST /account/begin` | `{"name", "look"}` begins making a sailor: 200 with the creation options (`{"publicKey": …}`) and the ceremony's cookie; 422 `{"error": reason}` for a refused name, before any passkey; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
+| `POST /account/finish` | The browser's answer (`PublicKeyCredential.toJSON()`): 201 `{"name", "look", "recoveryCode"}` and the session cookie, the account made with its passkey; 400 `refused`; 409 `again`; 422 `taken` with `unknown`, the passkey for the browser to forget, when another sailor took the name meanwhile |
+| `POST /signin/begin`, `/signin/finish` | A sign-in with any of the game's passkeys the browser holds (`?mediation=conditional` on both for autofill): 200 `{"name", "look", "accepted", "recovered"?}` and a new session's cookie; 404 `unknown-passkey` with `unknown` for a passkey no account has |
+| `POST /recovery` | `{"code"}`: 200 `{"name", "look", "addPasskey": true}` and a session held to adding a passkey; 422 `code` |
+| `POST /logout` | This session ends: 204, the cookie cleared |
+| `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?}`, or 401; a session held to adding a passkey is answered too |
+| `GET /api/account` | The account page: `{"name", "look", "created", "recoveryMade", "passkeys", "confirmedUntil"}`, each passkey `{"id", "madeOn", "created", "lastUsed", "synced"}` |
+| `POST /api/account/passkeys/begin`, `…/finish` | One more passkey; after the recovery code, the session let go and `recoveryCode` in the answer |
+| `POST /api/account/confirm/begin`, `…/finish` | One of the account's own passkeys, user verification required: 200 `{"confirmedUntil"}`, the session confirmed for 5 minutes |
+| `POST /api/account/passkeys/remove` | `{"id"}`, confirmed: 200 `{"passkeys", "accepted"}`; 409 `last-passkey`; 404 `not-found` |
+| `POST /api/account/recovery` | Confirmed: 200 `{"recoveryCode", "recoveryMade"}`, the old code void |
+| `POST /api/account/logout-others` | 200 `{"ended": n}` |
+| `POST /api/account/delete` | `{"name"}`, confirmed: 200 `{"unknown": [...]}`, every passkey for the browser to forget; 422 `name` |
 | `GET /`, `GET /{file}`, `GET /assets/{file}` | With `KEEL_CLIENT_DIR`, the built page, read into memory at start: `index.html` at `/`, the other files of the directory's top level (`dev.html`, the licences notice) by name, and the hashed files in `assets/`. Assets are cached for a year as `immutable`, the rest `no-cache`. No listings, no other folders, no hidden files; types from a table of the build's extensions (`.wasm` as `application/wasm`, `.glb` as `model/gltf-binary`); `HEAD` too. These routes need no session, so the page loads while the database cannot be asked |
 
-Errors are `{"error": "<code>"}`; the client puts codes into words. Nothing
+Errors are `{"error": "<code>"}`; the client puts codes into words
+(`client/src/account/reasons.ts`). A session held to adding a passkey is
+answered 403 `add-passkey` everywhere but `GET /api/me`, adding a passkey
+and `POST /logout`; removing a passkey, a new recovery code and deleting
+are 403 `confirm` without a passkey confirmed in the last 5 minutes. Nothing
 the API answers is cached. A path with dot segments or repeated slashes is
 404, never redirected. Every request passes, in order: the request ID
 and the access log; the client's address (a place kept: players reach the
@@ -3549,22 +3588,109 @@ Go's `http.CrossOriginProtection`, which refuses a browser's unsafe request
 from another origin (`Sec-Fetch-Site`, or else `Origin` against `Host`);
 the session; and limits on how often a client may ask (a place kept).
 
-### Guests and sessions
+### Accounts and passkeys
 
-A guest is an account made from a sailor's name and a look, with no
-password: its browser's cookie is all that keeps it. The cookie,
-`__Host-keel-session`, carries 32 random bytes in base64url; the database
-keeps only their SHA-256. It is `Secure`, `HttpOnly`, `SameSite=Lax`, for
-`/`, with no `Domain` (the `__Host-` prefix makes browsers insist), and lives
-400 days, the most browsers allow; it is set again on a request a day or
-more after it was last set, so a player who comes back never loses it.
-Chromium counts `localhost` as secure, so the browser tests use the same
-cookie over `http://localhost`; WebKit does not, so its tests use https.
+Every account is a human's, made with a passkey from the first sail
+(`internal/api`, `internal/auth`): there are no guests. Making it is one
+step for the player and two for the browser. `POST /account/begin` checks
+the sailor's name (below) and that it is free, and only then asks the
+browser to make a passkey: a refused name never costs one. The browser's
+prompt (the phone's face, fingerprint or PIN) makes it, and `POST
+/account/finish` checks it and makes, in one transaction, the account, its
+sailor, the passkey, a recovery code and a session. Nothing is made before
+the passkey is, and the name is not held while the prompt is open: a
+player who closes it leaves nothing behind, and a name another player took
+meanwhile is refused at finish, with the passkey just made named for the
+browser to forget (the Signal API's `signalUnknownCredential`, where the
+browser has it).
+
+The passkeys are go-webauthn's (`github.com/go-webauthn/webauthn`): a
+discoverable credential required; user verification preferred, required
+to confirm; no attestation; ES256, EdDSA and RS256; the `credProps`
+extension asked for, since browsers commonly return it and go-webauthn
+refuses an output it did not ask for. The relying party is
+`KEEL_PASSKEY_RP_ID` (`keelovertheedge.com` in production, the play
+origin's host elsewhere); the origins are the play origin's. Each account
+has a user handle of 64 random bytes, which its passkeys carry and which
+names nothing else; the passkey manager shows the sailor's name.
+
+**Ceremonies.** Each exchange with the prompt (`create`, `signin`, `add`,
+`confirm`) is begun by the server, whose state is a row of
+`webauthn_ceremony`, keyed by the SHA-256 of a random handle in a cookie of
+its kind (`__Host-keel-<kind>`, `HttpOnly`, `SameSite=Strict`, 5 minutes).
+Finishing takes the row (`DELETE … RETURNING`), so a ceremony is used once;
+one expired, or written by another build (go-webauthn's state changes
+between releases), answers 409 `again`. One cookie a kind, because the
+start screen holds a sign-in open while a sailor may be made. The sessions
+job deletes the rows that expired.
+
+**Signing in** asks for no name: the browser offers the game's passkeys it
+holds, as the name field is touched (autofill: `autocomplete="username
+webauthn"`, a sign-in with conditional mediation begun as the start screen
+shows) or on its own prompt ("Sign in with a passkey"), which reaches a
+passkey on another device by its QR code. The account is found by the user
+handle; what the passkey says of itself (its count, its backup state) is
+written back; a count that goes back is logged and counted, never refused,
+since passkeys that sync count 0. Each sign-in makes a new session. A
+passkey of a deleted account, or one removed, is answered 404
+`unknown-passkey`, for the browser to forget; after a sign-in the browser
+is told which of the account's passkeys stand
+(`signalAllAcceptedCredentials`).
+
+**The recovery code** is 128 random bits in Crockford's base 32, 26
+characters in groups of four (`7KQ2-M9XD-0F3H-RB6C-Z1WN-5TPE-4G`), read
+without regard to case, spaces or hyphens, with I and L as 1 and O as 0.
+It is shown once, after the passkey and before the sea, and kept as its
+SHA-256: at 128 bits it needs neither a salt nor a slow hash (NIST SP
+800-63B-4, 3.1.2), and the code alone finds its account. An account has one
+at a time. Used (`POST /recovery`), it is spent, every other session ends,
+and the session made may only add a passkey; the passkey added brings a
+new code. The next sign-in is told the code was used. A player with no
+passkey and no code cannot be helped: nothing else shows the sailor is
+theirs, and the start screen says so.
+
+**What cannot be undone** (removing a passkey, a new recovery code,
+deleting the account) needs one of the account's own passkeys, with the
+player verified by their device, within the last 5 minutes. Deleting takes
+the sailor's name typed again; the account goes with its sailor, passkeys,
+sessions and ceremonies, its boat leaves the water at once, its game
+connection is closed with 4003, and its name is free. What it charted
+keeps its place on the chart and in the news, read as "a former sailor's".
+
+**Sessions.** The cookie, `__Host-keel-session`, carries 32 random bytes
+in base64url; the database keeps only their SHA-256. It is `Secure`,
+`HttpOnly`, `SameSite=Lax`, for `/`, with no `Domain` (the `__Host-` prefix
+makes browsers insist), and lives 400 days, the most browsers allow; it is
+set again on a request a day or more after it was last set, so a player who
+comes back never loses it. "Sign out" ends this one, "Sign out everywhere
+else" the others. Chromium counts `localhost` as secure, so the browser
+tests use the same cookies over `http://localhost`; WebKit does not, so its
+tests use https.
 
 Sessions are looked up through a cache (`internal/auth`): an account found
 is kept 30 s, at most 100,000 of them, oldest dropped first; tokens nobody
 holds are never kept. A session's last-seen time, and its account's, are
-written at most once an hour.
+written at most once an hour. An account is kept until its player deletes
+it.
+
+**The start screen** (`client/src/account`) leads with making a sailor and
+offers signing in beside it. Before anything is asked, it checks the
+browser can make a passkey (`inapp.ts`): an app's own browser (Instagram,
+Facebook, TikTok… by the marks in its user agent, kept in that one module)
+is asked to open the game in the phone's browser, with "Try here anyway"; a
+browser without WebAuthn is told so; one that offers neither a passkey of
+its own nor a phone by QR code is warned, never stopped. The account page
+is a panel from the menu, "Account".
+
+**Tests and tools** make their sailors through the same routes with a
+software authenticator: `internal/auth/softkey` in Go (the API's tests,
+`cmd/keel`'s, the smoke checks, the load bot, `tools/online`) and
+`client/e2e/passkey.ts` for the browser specs (`helpers.sailor()`), which
+can hand the same key to Playwright's virtual authenticator
+(`context.credentials`, `helpers.holdPasskeys()`). That authenticator is a
+script in place of `navigator.credentials`: it answers at once, autofill
+too, and checks no origin; one test runs on Chrome's own virtual
+authenticator (the DevTools protocol), which is the browser's WebAuthn.
 
 A sailor's name (`internal/moderation`) is shown in its display form, RFC
 8266's Nickname profile: spaces trimmed and collapsed, characters
@@ -3811,20 +3937,21 @@ tabs.
 **The load bot.**
 
 ```sh
-go run ./tools/loadbot -n 200 -url https://127.0.0.1:5173 -for 2m
+go run ./tools/loadbot -n 200 -url https://localhost:5173 -for 2m
 go run ./tools/loadbot -n 200 -lag 200ms,2% -ramp 30s
 ```
 
-sails N guests with `internal/client` against a server, steering at random,
+sails N players with `internal/client` against a server, steering at random,
 and reports bytes and messages each way, others in view, corrections,
 resyncs and closes, and, from keel's metrics, the tick's and the encoders'
 99th percentiles and the frames allocated. After a close with 1012 a bot
 waits 0.5 to 5 s, as the page does (a second after any other); each time
 one comes back it reports the pause (its last snapshot before to its first
 after), whether it got its own boat back, and how far the boat had sailed
-meanwhile. Its guests ("Loadbot 1" …) are
-made by `POST /guest` once, their sessions kept in
-`.dev/loadbot/sessions.json` and used again.
+meanwhile. Its sailors ("Loadbot 1" …) are made once, as the start screen
+makes them, with passkeys of `internal/auth/softkey`; their sessions and
+passkeys are kept in `.dev/loadbot/sessions.json` and used again, a passkey
+signing in again when its session is gone.
 
 ## The local cluster
 
@@ -3887,8 +4014,8 @@ and there is no restore test ([Backups](#backups)). `KEEL_DEV_SAILORS=100 go run
 
 `-smoke` checks, over HTTPS at the Mac's name and trusting only the local
 root: the page and its scripts with their caching, the physics module as
-WebAssembly, `/api/version` naming the build just deployed, a guest made and
-read back, the game connection, a second player seeing the first's boat,
+WebAssembly, `/api/version` naming the build just deployed, a sailor made
+with a passkey and read back, the game connection, a second player seeing the first's boat,
 `/readyz` and `/metrics` through `kubectl port-forward`, and the database
 refusing a connection without TLS (`keel migrate` with `sslmode=disable`,
 from a pod of its own).
@@ -3914,7 +4041,8 @@ up a new phone, `go run ./tools/cluster -phone` serves the same setup page
 on port 5175. The game is at `https://macbook.local` (your Mac's
 `LocalHostName`, in System Settings → General → Sharing → Local hostname);
 the Mac's Wi-Fi address works too (`https://192.168.…`), with a cookie of
-its own, for a phone that cannot resolve `.local` names.
+its own, for a phone that cannot resolve `.local` names, but no passkey can
+be made or used there ([Passkeys on a phone](#passkeys-on-a-phone)).
 
 Lima forwards Traefik's ports 80 and 443 to every address of the Mac
 (IPv6 included), and the Kubernetes API to `127.0.0.1:16443` alone; no other
@@ -4314,7 +4442,7 @@ The artifact is rendered for a Mac named `macbook` (`clusters/local/apps`
 names `https://macbook.local`); on another Mac `-release` stops and says
 so, since nothing puts the Mac's own name in, as `-deploy` does. When the
 working tree is another commit than the release, `-smoke` checks only what
-every build shares (the page, the build, the database's TLS): the guest
+every build shares (the page, the build, the database's TLS): the sailor
 and the game connection are this tree's protocol.
 
 `go run ./tools/cluster -deploy` goes back: it deletes Flux's layers and
@@ -4682,7 +4810,7 @@ secrets are made from:
 | `tunnel.tf` | The tunnel `keel-prod`, remotely managed: `play.keelovertheedge.com` → `http://traefik.kube-system.svc.cluster.local:80`, anything else 404. Its token, written into Infisical |
 | `dns.tf` | `play` (proxied, to the tunnel); DNSSEC; CAA for Universal SSL's authorities; a null MX, SPF and DMARC refusing all mail in the domain's name |
 | `zone.tf` | TLS strict, HTTPS always, TLS 1.2 at least, no 0-RTT, WebSockets; HSTS; nothing that rewrites the page or answers in its place; no bot or AI-crawler blocking |
-| `rules.tf` | `/assets/` cached as the game says; methods other than GET, HEAD and POST blocked; `POST /guest` at most 10 in 10 s per address; no script of Cloudflare's added to the page (its Web Analytics beacon, Zaraz) |
+| `rules.tf` | `/assets/` cached as the game says; methods other than GET, HEAD and POST blocked; `POST /account/begin` at most 10 in 10 s per address (signing in is never limited); no script of Cloudflare's added to the page (its Web Analytics beacon, Zaraz) |
 | `secrets.tf` | The database's password: ephemeral, written into Infisical write-only, in no plan or state |
 | `notifications.tf` | An e-mail to the owner when the tunnel's health changes |
 
@@ -4838,7 +4966,9 @@ go run ./tools/online -hold 0                           # without the long one
 go run ./tools/online -page client/dist/index.html      # and the page's bytes against the build's
 ```
 
-It changes nothing but one guest it makes, named `Zz Online …`: HSTS; the
+It changes nothing lasting: the one sailor it makes, with a passkey of its
+own, named `Zz Online …`, it deletes at the end, its game connection open
+(closed then with 4003). It checks: HSTS; the
 asset cached at the edge and the page not; nothing injected into the page,
 asked for as a browser asks;
 `/api/version` naming the build `prod` holds; HEAD; a PUT blocked by
@@ -5772,11 +5902,17 @@ none by day and none beyond the horizon; 64 boats by night within 150 draw
 calls; and pictures of the hours. `worker.spec.ts`,
 on Chromium and WebKit (`--project webkit`, `npx playwright install
 webkit`), opens `e2e/net.html`, which runs the net worker alone. The scene's tests open `?sandbox`.
-`start.spec.ts`, on WebGL 2 alone, starts as a guest: the start screen,
-names refused in words (too short, a symbol, a reserved name, mixed
-scripts, a name taken through the API and look-alikes of it), a name
-accepted, the cookie's attributes, the sailor kept across a reload without
-the start screen, and a second browser refused the same name.
+`start.spec.ts`, on WebGL 2 alone, makes a new sailor: the start screen
+and its autofill request, names refused in words before any passkey (too
+short, a symbol, a reserved name, mixed scripts, a name taken and
+look-alikes of it), a sailor made with a passkey by Playwright's
+authenticator, its recovery code shown once, the cookie's attributes, the
+sailor kept across a reload without the start screen, and a second
+browser refused the same name. `passkeys.spec.ts`, on Chromium and WebKit
+(WebKit up to the session), signs in by the prompt and by autofill, comes
+back with the recovery code, adds and removes a passkey on the account
+page, signs out the other devices and deletes the sailor; one test runs
+on Chrome's own virtual authenticator.
 `sea.spec.ts` reads back what the GPU computed and checks it against the
 server's sea: the boat band at the points of `sea.json`, which Go wrote,
 within what the GPU's sine is good for, in six seas, places and ticks; every
@@ -5927,8 +6063,9 @@ Both use your own `gh` login. Settings GitHub has no API for are listed in
   the message names whatever else is missing.
 - **`tools/cluster`: the phone cannot open `https://macbook.local`.** Some
   Android phones cannot resolve `.local` names (on a VPN, or without the
-  updated resolver); use the Mac's Wi-Fi address shown by `-status`. Check
-  the Mac's name with `scutil --get LocalHostName`.
+  updated resolver); use the Mac's Wi-Fi address shown by `-status`, where
+  it plays but makes no passkey. Check the Mac's name with `scutil --get
+  LocalHostName`.
 - **`tools/cluster`: port 80 or 443 is in use on the Mac.** Something else
   holds it; Lima cannot forward Traefik's ports until it is stopped.
 - **`tools/cluster`: a step waits and then fails.** `go run ./tools/cluster

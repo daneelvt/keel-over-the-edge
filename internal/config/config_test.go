@@ -4,6 +4,7 @@ package config
 
 import (
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +27,7 @@ func env(vars map[string]string) func(string) string {
 
 func TestLoadValid(t *testing.T) {
 	c, err := Load(env(map[string]string{
-		"KEEL_PLAY_ORIGIN": "https://192.168.1.20:5173",
+		"KEEL_PLAY_ORIGIN": "https://keel.local:5173",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -34,11 +35,11 @@ func TestLoadValid(t *testing.T) {
 	if c.PlayAddr != "127.0.0.1:8080" {
 		t.Errorf("PlayAddr = %q, want the default", c.PlayAddr)
 	}
-	if c.PlayOrigin != "https://192.168.1.20:5173" {
+	if c.PlayOrigin != "https://keel.local:5173" {
 		t.Errorf("PlayOrigin = %q", c.PlayOrigin)
 	}
 	want := Config{
-		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://192.168.1.20:5173",
+		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://keel.local:5173", PasskeyRPID: "keel.local", PasskeyOrigins: []string{"https://keel.local:5173"},
 		AgentsAddr: "127.0.0.1:8081", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
 		BoatLimit: DefaultBoatLimit, Bell: DefaultBell, Land: true, WorldKeep: DefaultWorldKeep,
 		// A zone loaded is a pointer of its own: the schedule is compared
@@ -48,7 +49,7 @@ func TestLoadValid(t *testing.T) {
 	if got := c.Schedule.String(); got != "Sun 18:00 America/New_York notice=72h0m0s ahead=24h0m0s" {
 		t.Errorf("the default schedule is %q", got)
 	}
-	if c != want {
+	if !reflect.DeepEqual(c, want) {
 		t.Errorf("defaults %+v, want %+v", c, want)
 	}
 
@@ -80,12 +81,14 @@ func TestLoadValid(t *testing.T) {
 		"KEEL_WORLD_SEED":     "18446744073709551615",
 		"KEEL_WORLD_SCHEDULE": "every=10m from=2026-11-01T00:00:00Z notice=4m ahead=3m",
 		"KEEL_WORLD_KEEP":     "2h",
+		"KEEL_PASSKEY_RP_ID":  "keelovertheedge.com",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = Config{
 		PlayAddr: ":8080", PlayOrigin: "https://play.keelovertheedge.com", AgentsAddr: ":8081", InternalAddr: "0.0.0.0:9090",
+		PasskeyRPID: "keelovertheedge.com", PasskeyOrigins: []string{"https://play.keelovertheedge.com"},
 		MetricsAddr: "0.0.0.0:9091", LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
 		BoatLimit: 2, Bell: 0, Land: false, WorldSeed: 18446744073709551615, HasWorldSeed: true,
 		Schedule: c.Schedule, WorldKeep: 2 * time.Hour,
@@ -93,13 +96,17 @@ func TestLoadValid(t *testing.T) {
 	if c.Schedule.Every != 10*time.Minute {
 		t.Errorf("the schedule %v", c.Schedule)
 	}
-	if c != want {
+	if !reflect.DeepEqual(c, want) {
 		t.Errorf("got %+v, want %+v", c, want)
 	}
-	for _, origin := range []string{"http://localhost:5181", "http://127.0.0.1:8080", "http://[::1]:5181", "http://127.0.0.2"} {
+	for _, origin := range []string{"http://localhost:5181", "https://macbook.local", "https://localhost:5183"} {
 		if _, err := Load(env(map[string]string{"KEEL_PLAY_ORIGIN": origin})); err != nil {
 			t.Errorf("%s: %v", origin, err)
 		}
+	}
+	c, err = Load(env(map[string]string{"KEEL_PLAY_ORIGIN": "http://localhost:5181", "KEEL_PASSKEY_ORIGINS": "http://localhost:5182, https://localhost:5183"}))
+	if err != nil || c.PasskeyRPID != "localhost" || strings.Join(c.PasskeyOrigins, " ") != "http://localhost:5181 http://localhost:5182 https://localhost:5183" {
+		t.Errorf("the browser tests' origins: %v %v, %v", c.PasskeyRPID, c.PasskeyOrigins, err)
 	}
 	for _, u := range []string{"postgresql://h/db", "host=db user=keel dbname=keel", "postgres:///keel?host=/tmp"} {
 		if _, err := Load(env(map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_DATABASE_URL": u})); err != nil {
@@ -121,7 +128,18 @@ func TestLoadRejects(t *testing.T) {
 		vars map[string]string
 		want []string
 	}{
-		"origin missing":   {map[string]string{}, []string{"KEEL_PLAY_ORIGIN: required"}},
+		"origin missing": {map[string]string{}, []string{"KEEL_PLAY_ORIGIN: required"}},
+		// A passkey's relying party is a domain name: never an IP address,
+		// and the play origin's host or a parent of it.
+		"origin an IP":     {map[string]string{"KEEL_PLAY_ORIGIN": "https://192.168.1.20:5173"}, []string{"KEEL_PASSKEY_RP_ID", "is an IP address"}},
+		"origin loopback":  {map[string]string{"KEEL_PLAY_ORIGIN": "http://127.0.0.1:8080"}, []string{"is an IP address"}},
+		"origin v6":        {map[string]string{"KEEL_PLAY_ORIGIN": "http://[::1]:5181"}, []string{"is an IP address"}},
+		"rp elsewhere":     {map[string]string{"KEEL_PLAY_ORIGIN": "https://play.keelovertheedge.com", "KEEL_PASSKEY_RP_ID": "example.com"}, []string{"neither"}},
+		"rp a child":       {map[string]string{"KEEL_PLAY_ORIGIN": "https://keelovertheedge.com", "KEEL_PASSKEY_RP_ID": "play.keelovertheedge.com"}, []string{"neither"}},
+		"rp a suffix":      {map[string]string{"KEEL_PLAY_ORIGIN": "https://play.keelovertheedge.com", "KEEL_PASSKEY_RP_ID": "edge.com"}, []string{"neither"}},
+		"rp a tld":         {map[string]string{"KEEL_PLAY_ORIGIN": "https://play.keelovertheedge.com", "KEEL_PASSKEY_RP_ID": "com"}, []string{"top-level"}},
+		"rp uppercase":     {map[string]string{"KEEL_PLAY_ORIGIN": "https://play.keelovertheedge.com", "KEEL_PASSKEY_RP_ID": "Keelovertheedge.com"}, []string{"lowercase"}},
+		"passkey origin":   {map[string]string{"KEEL_PLAY_ORIGIN": "http://localhost:5181", "KEEL_PASSKEY_ORIGINS": "https://evil.example"}, []string{"KEEL_PASSKEY_ORIGINS", "neither"}},
 		"origin http":      {map[string]string{"KEEL_PLAY_ORIGIN": "http://example.com"}, []string{"not https"}},
 		"origin http lan":  {map[string]string{"KEEL_PLAY_ORIGIN": "http://192.168.1.20:5173"}, []string{"not https"}},
 		"origin http host": {map[string]string{"KEEL_PLAY_ORIGIN": "http://localhost.example.com"}, []string{"not https"}},

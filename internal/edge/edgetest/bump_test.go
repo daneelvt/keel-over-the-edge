@@ -57,7 +57,7 @@ func TestBumpTold(t *testing.T) {
 		var sailors []*client.Sailor
 		var accounts []bus.Account
 		for _, name := range []string{"Ann", "Bob", "Cid"} {
-			token, id := srv.Guest(name)
+			token, id := srv.Sailor(name)
 			s := srv.NewSailor(DialOptions{Cookie: token}, letGo)
 			if err := s.Connect(t.Context()); err != nil {
 				t.Fatal(err)
@@ -151,7 +151,7 @@ func TestDrawnOverlap(t *testing.T) {
 				for i, name := range []string{"Ann", "Bob"} {
 					// Each sailor's views come on its own goroutine.
 					var h physics.Hulls
-					token, id := srv.Guest(name)
+					token, id := srv.Sailor(name)
 					o := DialOptions{Cookie: token, Wrap: client.Lag{Delay: rtt / 2, Seed: uint64(i + 1)}.Wrap}
 					s := srv.NewSailor(o, letGo)
 					var past [3]*protocol.Boat

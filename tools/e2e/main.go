@@ -118,6 +118,9 @@ func run() error {
 	env := append(os.Environ(),
 		"KEEL_DATABASE_URL="+dbURL,
 		"KEEL_PLAY_ORIGIN="+origin,
+		// The lagged server's page and WebKit's, on https, make and use
+		// passkeys too.
+		"KEEL_PASSKEY_ORIGINS=http://localhost:5182,https://localhost:5183",
 		"KEEL_PLAY_ADDR="+playAddr,
 		"KEEL_AGENTS_ADDR="+agentsAddr,
 		"KEEL_INTERNAL_ADDR="+internalAddr,

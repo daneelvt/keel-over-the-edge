@@ -10,6 +10,25 @@ import (
 	"time"
 )
 
+const deleteExpiredCeremonies = `-- name: DeleteExpiredCeremonies :execrows
+DELETE FROM webauthn_ceremony WHERE handle_hash IN (
+  SELECT c.handle_hash FROM webauthn_ceremony c WHERE c.expires_at < $1 ORDER BY c.expires_at LIMIT $2
+)
+`
+
+type DeleteExpiredCeremoniesParams struct {
+	Before time.Time
+	Lim    int32
+}
+
+func (q *Queries) DeleteExpiredCeremonies(ctx context.Context, arg DeleteExpiredCeremoniesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredCeremonies, arg.Before, arg.Lim)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteStaleSessions = `-- name: DeleteStaleSessions :execrows
 DELETE FROM session WHERE id IN (
   SELECT s.id FROM session s WHERE s.last_seen_at < $1 ORDER BY s.last_seen_at LIMIT $2

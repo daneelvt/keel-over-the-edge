@@ -2,8 +2,8 @@
 
 // Command online checks the game from outside, as a player reaches it:
 // through Cloudflare and the tunnel, at https://play.keelovertheedge.com.
-// It changes nothing but one guest it makes for itself, named
-// "Zz Online …".
+// It changes nothing lasting: the one sailor it makes for itself, with a
+// passkey of its own, named "Zz Online …", it deletes at the end.
 //
 //	go run ./tools/online [-url https://play.keelovertheedge.com] [-page client/dist/index.html] [-hold 10m]
 //
@@ -15,7 +15,8 @@
 // or from another origin; that one address is limited by Traefik, even
 // when it forges CF-Connecting-IP on every request (so Cloudflare writes
 // the header); that another host is not served; and that a game
-// connection stays open for -hold (0 skips it). It exits 1 if any check
+// connection stays open for -hold (0 skips it), and is closed with 4003
+// when its sailor is deleted. It exits 1 if any check
 // fails.
 package main
 

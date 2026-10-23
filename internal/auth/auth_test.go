@@ -198,7 +198,7 @@ func TestCacheAddedSessionNeedsNothing(t *testing.T) {
 		f := &fakeSessions{}
 		hash := f.add("Ann")
 		c := NewCache(f, CacheConfig{})
-		c.Add(hash, store.Account{Name: "Ann"})
+		c.Add(hash, store.Session{Account: store.Account{Name: "Ann"}})
 		res, err := c.Resolve(context.Background(), hash)
 		if lookups, touches := f.counts(); err != nil || res.RenewCookie || lookups != 0 || touches != 0 {
 			t.Fatalf("%+v, %v; %d lookups, %d touches", res, err, lookups, touches)

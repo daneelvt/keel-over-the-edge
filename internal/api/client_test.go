@@ -48,7 +48,7 @@ func builtPage(t *testing.T) string {
 }
 
 // downSessions is a database that cannot be asked about sessions.
-type downSessions struct{ noGuests }
+type downSessions struct{ noDatabase }
 
 func (downSessions) Session(context.Context, [32]byte) (store.Session, error) {
 	return store.Session{}, errors.New("the database is down")
@@ -56,7 +56,7 @@ func (downSessions) Session(context.Context, [32]byte) (store.Session, error) {
 
 func pageServer(t *testing.T) *testServer {
 	t.Helper()
-	return pageServerWith(t, noGuests{})
+	return pageServerWith(t, noDatabase{})
 }
 
 func pageServerWith(t *testing.T, db database) *testServer {
@@ -163,9 +163,9 @@ func TestPageLeavesTheOtherRoutes(t *testing.T) {
 	if res, _ := raw(t, srv, "GET", "/ws"); res.StatusCode != http.StatusTeapot {
 		t.Errorf("/ws: %d", res.StatusCode)
 	}
-	status, body, _ := post(t, nil, srv.URL+"/guest", "application/json", `{"name":"Al","look":"figure"}`)
+	status, body, _ := post(t, nil, srv.URL+"/account/begin", "application/json", `{"name":"Al","look":"figure"}`)
 	if status != 422 || body != `{"error":"short"}` {
-		t.Errorf("/guest: %d %s", status, body)
+		t.Errorf("/account/begin: %d %s", status, body)
 	}
 }
 
@@ -182,7 +182,7 @@ func TestPageNeedsNoSession(t *testing.T) {
 }
 
 func TestNoPageServesNoFiles(t *testing.T) {
-	srv := newTestServer(t, noGuests{}, nil)
+	srv := newTestServer(t, noDatabase{}, nil)
 	for _, p := range []string{"/", "/index.html", "/assets/main-D6eWoT1T.js"} {
 		if res, _ := raw(t, srv, "GET", p); res.StatusCode != http.StatusNotFound {
 			t.Errorf("%s: %d", p, res.StatusCode)

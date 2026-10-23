@@ -7,7 +7,7 @@
 // writes its events. One back end is enough: the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
-import { guest, sail } from './helpers';
+import { sail, sailor } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 
@@ -131,8 +131,8 @@ test('carried over the lip, seen falling, and back at the start', async ({ brows
   if (ann === undefined || bob === undefined) {
     throw new Error('no pages');
   }
-  await guest(contexts[0] as import('@playwright/test').BrowserContext, 'Ann');
-  await guest(contexts[1] as import('@playwright/test').BrowserContext, 'Bob');
+  await sailor(contexts[0] as import('@playwright/test').BrowserContext, 'Ann');
+  await sailor(contexts[1] as import('@playwright/test').BrowserContext, 'Bob');
   await sail(ann);
   await sail(bob);
   await watch(ann);

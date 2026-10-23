@@ -12,7 +12,8 @@ locals {
     always_use_https = "on"
     min_tls_version  = "1.2"
     tls_1_3          = "on"
-    # Early data can be replayed, and POST /guest makes an account.
+    # Early data can be replayed, and the account's routes make accounts,
+    # sessions and passkeys.
     "0rtt"     = "off"
     websockets = "on"
 

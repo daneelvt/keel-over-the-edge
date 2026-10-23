@@ -157,3 +157,21 @@ func exists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
 }
+
+// LocalName is the name phones on the local network reach this computer
+// by: its Bonjour name on a Mac (scutil's LocalHostName), its host name
+// elsewhere, with .local after it. A passkey needs a name: no browser
+// makes one for an IP address.
+func LocalName(ctx context.Context) string {
+	if out, err := exec.CommandContext(ctx, "scutil", "--get", "LocalHostName").Output(); err == nil {
+		if name := strings.TrimSpace(string(out)); name != "" {
+			return strings.ToLower(name) + ".local"
+		}
+	}
+	name, err := os.Hostname()
+	if err != nil || name == "" {
+		return ""
+	}
+	short, _, _ := strings.Cut(name, ".")
+	return strings.ToLower(short) + ".local"
+}

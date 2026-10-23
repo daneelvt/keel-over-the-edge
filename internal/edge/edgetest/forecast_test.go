@@ -41,8 +41,8 @@ func TestForecastOnline(t *testing.T) {
 		defer cancel()
 		go issuer.Run(ctx)
 		srv := NewServer(t, Config{Weather: tl, Forecast: issuer})
-		annToken, _ := srv.Guest("Ann")
-		bobToken, _ := srv.Guest("Bob")
+		annToken, _ := srv.Sailor("Ann")
+		bobToken, _ := srv.Sailor("Bob")
 		ann := srv.NewSailor(DialOptions{Cookie: annToken}, letGo)
 		bob := srv.NewSailor(DialOptions{Cookie: bobToken}, letGo)
 		for _, s := range []*client.Sailor{ann, bob} {

@@ -79,8 +79,13 @@ type Metrics struct {
 	DBQueryDuration    *prometheus.HistogramVec // by query
 	DBQueryErrors      *prometheus.CounterVec   // by query
 	SchemaVersion      prometheus.Gauge
-	GuestsCreated      prometheus.Counter
-	GuestsRefused      *prometheus.CounterVec // by reason
+	AccountsCreated    prometheus.Counter
+	NamesRefused       *prometheus.CounterVec // by reason
+	Ceremonies         *prometheus.CounterVec // by kind and result
+	SignIns            *prometheus.CounterVec // by mediation: prompt or conditional
+	RecoveryUsed       prometheus.Counter
+	AccountsDeleted    prometheus.Counter
+	CloneWarnings      prometheus.Counter
 	SessionLookups     *prometheus.CounterVec // by result: hit, miss or unknown
 	CrossOriginRefused prometheus.Counter
 	ChunkRequests      *prometheus.CounterVec // by result: ok, refused
@@ -220,12 +225,28 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.SchemaVersion = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "keel_db_schema_version", Help: "The newest migration the database has had.",
 	})
-	m.GuestsCreated = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "keel_guests_created_total", Help: "Guests created.",
+	m.AccountsCreated = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_accounts_created_total", Help: "Accounts made, each with its first passkey.",
 	})
-	m.GuestsRefused = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "keel_guests_refused_total", Help: "Guests refused for their name, by reason.",
+	m.NamesRefused = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_names_refused_total", Help: "New sailors' names refused, by reason.",
 	}, []string{"reason"})
+	m.Ceremonies = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_ceremonies_total",
+		Help: "Ceremonies with the browser's passkey prompt, by kind (create, signin, add, confirm) and result (begun, finished, refused, expired, again).",
+	}, []string{"kind", "result"})
+	m.SignIns = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_signins_total", Help: "Sign-ins with a passkey, by mediation: the browser's prompt, or offered on the name field (conditional).",
+	}, []string{"mediation"})
+	m.RecoveryUsed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_recovery_used_total", Help: "Recovery codes used.",
+	})
+	m.AccountsDeleted = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_accounts_deleted_total", Help: "Accounts deleted by their players.",
+	})
+	m.CloneWarnings = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_clone_warnings_total", Help: "Sign-ins whose passkey's count did not go up: a copied authenticator, or a faulty one.",
+	})
 	m.SessionLookups = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_session_cache_lookups_total", Help: "Sessions looked up: found in the cache, fetched from the database, or unknown.",
 	}, []string{"result"})
@@ -384,7 +405,8 @@ func NewMetrics(build, catalog string) *Metrics {
 		m.EdgeEncoders, m.EdgeQueued, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
-		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.GuestsCreated, m.GuestsRefused, m.SessionLookups, m.CrossOriginRefused,
+		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.AccountsCreated, m.NamesRefused, m.Ceremonies, m.SignIns,
+		m.RecoveryUsed, m.AccountsDeleted, m.CloneWarnings, m.SessionLookups, m.CrossOriginRefused,
 		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded, m.Falls, m.Approaches)
 	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake"} {
 		m.OwnerActions.WithLabelValues(a)

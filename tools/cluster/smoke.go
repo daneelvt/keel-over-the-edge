@@ -76,14 +76,14 @@ func (c *cluster) smoke(ctx context.Context) error {
 		if err := c.plainRefused(ctx, game.image); err != nil {
 			return err
 		}
-		c.logf("smoke: ok: at %s, the page and its assets with their caching, the physics module, /api/version naming build %s, and the database refusing a connection without TLS. The working tree is another commit than the release: check out %s for the guest, the game connection and keel's metrics", base, build, build)
+		c.logf("smoke: ok: at %s, the page and its assets with their caching, the physics module, /api/version naming build %s, and the database refusing a connection without TLS. The working tree is another commit than the release: check out %s for the sailor, the game connection and keel's metrics", base, build, build)
 		return nil
 	}
-	name, jar, err := smoke.Guest(ctx, hc, base)
+	name, jar, err := smoke.Sailor(ctx, hc, base)
 	if err != nil {
 		return err
 	}
-	_, jar2, err := smoke.Guest(ctx, hc, base)
+	_, jar2, err := smoke.Sailor(ctx, hc, base)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (c *cluster) smoke(ctx context.Context) error {
 	if err := c.plainRefused(ctx, game.image); err != nil {
 		return err
 	}
-	c.logf("smoke: ok: at %s, the page and its assets with their caching, the physics module, /api/version naming build %s, a guest made and read back (%s), the game connection, a second player seeing the first's boat, keel's probes and metrics, and the database refusing a connection without TLS", base, build, name)
+	c.logf("smoke: ok: at %s, the page and its assets with their caching, the physics module, /api/version naming build %s, a sailor made with a passkey and read back (%s), the game connection, a second player seeing the first's boat, keel's probes and metrics, and the database refusing a connection without TLS", base, build, name)
 	return nil
 }
 

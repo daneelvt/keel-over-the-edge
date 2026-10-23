@@ -8,7 +8,7 @@
 // test.
 
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
-import { guest, sail } from './helpers';
+import { sailor as newSailor, sail } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const owner = 'http://localhost:5184/owner/';
@@ -97,7 +97,7 @@ test('the owner flags their account and puts their boat where they click', async
   const small = { viewport: { width: 320, height: 200 } };
   const context = await browser.newContext(small);
   const sailor = await context.newPage();
-  await guest(context, 'Owner');
+  await newSailor(context, 'Owner');
   await sail(sailor);
   const boat = await sailor.evaluate(() => globalThis.keel.net().boat);
   expect(await sailor.evaluate(() => globalThis.keel.net().tools)).toBe(false);

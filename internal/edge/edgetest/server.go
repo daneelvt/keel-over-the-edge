@@ -353,12 +353,13 @@ func (s *Sessions) add(a store.Account) (token string, id store.AccountID) {
 	return token, id
 }
 
-// Guest makes a guest, and returns its session's cookie's value.
-func (s *Server) Guest(name string) (token string, id store.AccountID) {
+// Sailor makes a human's account with a session, and returns the
+// session's cookie's value.
+func (s *Server) Sailor(name string) (token string, id store.AccountID) {
 	return s.Sessions.Add(name, store.Human)
 }
 
-// Owner makes a guest that carries the owner's flag.
+// Owner makes a human's account that carries the owner's flag.
 func (s *Server) Owner(name string) (token string, id store.AccountID) {
 	return s.Sessions.add(store.Account{Kind: store.Human, Name: name, Tools: true})
 }

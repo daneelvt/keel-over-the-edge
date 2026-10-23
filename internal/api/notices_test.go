@@ -21,8 +21,7 @@ func TestNoticesSwitched(t *testing.T) {
 		c.Notices, c.NoticeKinds = st, []string{"great-discoveries", "own-charting"}
 	})
 	c := http.DefaultClient
-	_, _, res := post(t, c, srv.URL+"/guest", "application/json", `{"name":"Ann Bonny","look":"figure"}`)
-	cookie := sessionCookie(res)
+	_, cookie := makeSailor(t, srv, "Ann Bonny")
 	put := func(body string, site string) (int, string) {
 		t.Helper()
 		req, _ := http.NewRequest("POST", srv.URL+"/api/me/notices", strings.NewReader(body))

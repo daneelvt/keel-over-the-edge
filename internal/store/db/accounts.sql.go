@@ -7,12 +7,106 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const accountByID = `-- name: AccountByID :one
+SELECT a.id, a.kind, a.tools, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look,
+  a.created_at, a.recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery
+FROM account a
+JOIN sailor sl ON sl.account_id = a.id
+WHERE a.id = $1
+`
+
+type AccountByIDRow struct {
+	ID             pgtype.UUID
+	Kind           string
+	Tools          bool
+	NoticesOff     []string
+	UserHandle     []byte
+	Name           string
+	Look           string
+	CreatedAt      time.Time
+	RecoveryMadeAt pgtype.Timestamptz
+	HasRecovery    bool
+}
+
+func (q *Queries) AccountByID(ctx context.Context, id pgtype.UUID) (AccountByIDRow, error) {
+	row := q.db.QueryRow(ctx, accountByID, id)
+	var i AccountByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Tools,
+		&i.NoticesOff,
+		&i.UserHandle,
+		&i.Name,
+		&i.Look,
+		&i.CreatedAt,
+		&i.RecoveryMadeAt,
+		&i.HasRecovery,
+	)
+	return i, err
+}
+
+const accountByUserHandle = `-- name: AccountByUserHandle :one
+SELECT a.id, a.kind, a.tools, a.notices_off, a.user_handle, sl.name, sl.look
+FROM account a
+JOIN sailor sl ON sl.account_id = a.id
+WHERE a.user_handle = $1 AND a.kind = 'human'
+`
+
+type AccountByUserHandleRow struct {
+	ID         pgtype.UUID
+	Kind       string
+	Tools      bool
+	NoticesOff []string
+	UserHandle []byte
+	Name       string
+	Look       string
+}
+
+// The account a passkey's user handle names, as a sign-in finds it.
+func (q *Queries) AccountByUserHandle(ctx context.Context, userHandle []byte) (AccountByUserHandleRow, error) {
+	row := q.db.QueryRow(ctx, accountByUserHandle, userHandle)
+	var i AccountByUserHandleRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Tools,
+		&i.NoticesOff,
+		&i.UserHandle,
+		&i.Name,
+		&i.Look,
+	)
+	return i, err
+}
+
+const accountCounts = `-- name: AccountCounts :one
+SELECT count(*) AS total,
+  count(*) FILTER (WHERE created_at > now() - interval '7 days') AS week,
+  count(*) FILTER (WHERE last_seen_at > now() - interval '1 day') AS today
+FROM account WHERE kind = 'human'
+`
+
+type AccountCountsRow struct {
+	Total int64
+	Week  int64
+	Today int64
+}
+
+// The human accounts: how many, made in the last week, seen in the last day.
+func (q *Queries) AccountCounts(ctx context.Context) (AccountCountsRow, error) {
+	row := q.db.QueryRow(ctx, accountCounts)
+	var i AccountCountsRow
+	err := row.Scan(&i.Total, &i.Week, &i.Today)
+	return i, err
+}
+
 const accountsByID = `-- name: AccountsByID :many
-SELECT a.id, a.kind, (a.saved_at IS NOT NULL)::boolean AS saved, a.tools, coalesce(sl.name, '')::text AS name
+SELECT a.id, a.kind, a.tools, coalesce(sl.name, '')::text AS name
 FROM account a
 LEFT JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = ANY($1::uuid[])
@@ -21,7 +115,6 @@ WHERE a.id = ANY($1::uuid[])
 type AccountsByIDRow struct {
 	ID    pgtype.UUID
 	Kind  string
-	Saved bool
 	Tools bool
 	Name  string
 }
@@ -39,7 +132,6 @@ func (q *Queries) AccountsByID(ctx context.Context, ids []pgtype.UUID) ([]Accoun
 		if err := rows.Scan(
 			&i.ID,
 			&i.Kind,
-			&i.Saved,
 			&i.Tools,
 			&i.Name,
 		); err != nil {
@@ -53,13 +145,20 @@ func (q *Queries) AccountsByID(ctx context.Context, ids []pgtype.UUID) ([]Accoun
 	return items, nil
 }
 
-const createGuestAccount = `-- name: CreateGuestAccount :one
-INSERT INTO account (kind) VALUES ('human')
+const createAccount = `-- name: CreateAccount :one
+INSERT INTO account (kind, saved_at, user_handle, recovery_hash, recovery_made_at)
+VALUES ('human', now(), $1, $2, now())
 RETURNING id
 `
 
-func (q *Queries) CreateGuestAccount(ctx context.Context) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, createGuestAccount)
+type CreateAccountParams struct {
+	UserHandle   []byte
+	RecoveryHash []byte
+}
+
+// A human's account, made with its first passkey: saved from the start.
+func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createAccount, arg.UserHandle, arg.RecoveryHash)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -87,6 +186,52 @@ func (q *Queries) CreateSailor(ctx context.Context, arg CreateSailorParams) erro
 	return err
 }
 
+const deleteAccount = `-- name: DeleteAccount :execrows
+DELETE FROM account WHERE id = $1 AND kind = 'human'
+`
+
+// An account deleted, with its sailor, passkeys, sessions and ceremonies.
+func (q *Queries) DeleteAccount(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAccount, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const forgetCredits = `-- name: ForgetCredits :exec
+WITH c AS (UPDATE charting SET sailor = NULL WHERE charting.account_id = $1)
+UPDATE news_item SET sailor = NULL WHERE news_item.account_id = $1
+`
+
+// A deleted account's credits keep their places, under no name.
+func (q *Queries) ForgetCredits(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, forgetCredits, id)
+	return err
+}
+
+const lockAccount = `-- name: LockAccount :one
+SELECT id FROM account WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockAccount(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, lockAccount, id)
+	var id_2 pgtype.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
+const nameTaken = `-- name: NameTaken :one
+SELECT EXISTS (SELECT 1 FROM sailor WHERE name_key = $1)::boolean
+`
+
+func (q *Queries) NameTaken(ctx context.Context, nameKey string) (bool, error) {
+	row := q.db.QueryRow(ctx, nameTaken, nameKey)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const setAccountTools = `-- name: SetAccountTools :execrows
 UPDATE account SET tools = $1 WHERE id = $2 AND kind = 'human'
 `
@@ -103,4 +248,52 @@ func (q *Queries) SetAccountTools(ctx context.Context, arg SetAccountToolsParams
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setRecoveryCode = `-- name: SetRecoveryCode :execrows
+UPDATE account SET recovery_hash = $1, recovery_made_at = now()
+WHERE id = $2 AND kind = 'human'
+`
+
+type SetRecoveryCodeParams struct {
+	RecoveryHash []byte
+	ID           pgtype.UUID
+}
+
+func (q *Queries) SetRecoveryCode(ctx context.Context, arg SetRecoveryCodeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setRecoveryCode, arg.RecoveryHash, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const spendRecoveryCode = `-- name: SpendRecoveryCode :one
+UPDATE account SET recovery_hash = NULL, recovered_at = now()
+WHERE recovery_hash = $1 AND kind = 'human'
+RETURNING id
+`
+
+// A recovery code used: it is spent, and the next sign-in is told.
+func (q *Queries) SpendRecoveryCode(ctx context.Context, recoveryHash []byte) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, spendRecoveryCode, recoveryHash)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const takeRecoveryNotice = `-- name: TakeRecoveryNotice :one
+UPDATE account a SET recovered_at = NULL
+FROM (SELECT o.id, o.recovered_at FROM account o WHERE o.id = $1 FOR UPDATE) old
+WHERE a.id = old.id
+RETURNING old.recovered_at
+`
+
+// When the recovery code was last used, if no sign-in has been told yet;
+// telling this one clears it.
+func (q *Queries) TakeRecoveryNotice(ctx context.Context, id pgtype.UUID) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, takeRecoveryNotice, id)
+	var recovered_at pgtype.Timestamptz
+	err := row.Scan(&recovered_at)
+	return recovered_at, err
 }

@@ -68,3 +68,40 @@ func SessionCookie(token string) *http.Cookie {
 		SameSite: http.SameSiteLaxMode,
 	}
 }
+
+// ClearedSessionCookie ends the session cookie in the browser, as signing
+// out does.
+func ClearedSessionCookie() *http.Cookie {
+	c := SessionCookie("")
+	c.MaxAge = -1
+	return c
+}
+
+// CeremonyCookieName is the cookie of a kind of ceremony with the
+// browser's passkey prompt: one per kind, so a sign-in held open as the
+// start screen shows and the making of a new sailor do not overwrite each
+// other's.
+func CeremonyCookieName(kind string) string { return "__Host-keel-" + kind }
+
+// CeremonyCookie carries the handle of a ceremony begun, which a token
+// draws as it does a session's, for as long as the ceremony lasts:
+// SameSite=Strict, since a ceremony is begun and finished on the game's own
+// page.
+func CeremonyCookie(kind, handle string) *http.Cookie {
+	return &http.Cookie{
+		Name:     CeremonyCookieName(kind),
+		Value:    handle,
+		Path:     "/",
+		MaxAge:   int(PasskeyTimeout / time.Second),
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	}
+}
+
+// ClearedCeremonyCookie ends a ceremony's cookie, as finishing it does.
+func ClearedCeremonyCookie(kind string) *http.Cookie {
+	c := CeremonyCookie(kind, "")
+	c.MaxAge = -1
+	return c
+}

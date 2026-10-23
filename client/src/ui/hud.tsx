@@ -12,6 +12,7 @@ import './hud.css';
 import type { ReadonlySignal } from '@preact/signals';
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
+import { AccountPanel } from '../account/account';
 import type { HelmInput } from '../input/helm';
 import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
@@ -214,6 +215,7 @@ export interface FlyView {
 function Screen(props: ScreenProps) {
   const { model, settings } = props;
   const [menu, setMenu] = useState(false);
+  const [account, setAccount] = useState(false);
   const s = settings.value.value;
   const fly = props.fly ?? null;
   const sea = props.sea ?? null;
@@ -278,12 +280,21 @@ function Screen(props: ScreenProps) {
       >
         ☰
       </button>
-      {menu ? (
+      {account ? <AccountPanel close={() => setAccount(false)} /> : null}
+      {menu && !account ? (
         <Menu
           settings={settings}
           sailor={props.sailor}
           connection={props.connection}
           close={() => setMenu(false)}
+          account={
+            props.sailor === null
+              ? null
+              : () => {
+                  setMenu(false);
+                  setAccount(true);
+                }
+          }
           notices={notices}
           end={end}
           chart={

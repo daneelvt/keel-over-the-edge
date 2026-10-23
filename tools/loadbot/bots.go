@@ -23,6 +23,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/auth/softkey"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
@@ -32,12 +33,24 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 )
 
-// Guests makes guests and checks sessions.
-type Guests interface {
-	// Create makes a guest of name and returns its session's cookie.
-	Create(ctx context.Context, name string) (string, error)
+// Accounts makes the bots' sailors, and checks and renews their sessions.
+type Accounts interface {
+	// Create makes a sailor of name with a passkey, as the start screen
+	// does.
+	Create(ctx context.Context, name string) (Bot, error)
 	// Valid says whether a session's cookie is still good.
 	Valid(ctx context.Context, cookie string) (bool, error)
+	// SignIn signs in with a bot's passkey and returns a new session's
+	// cookie, or errUnknownPasskey when its account is gone.
+	SignIn(ctx context.Context, key *softkey.Key) (string, error)
+}
+
+// Bot is a bot's account as the sessions file keeps it: its session's
+// cookie, and its passkey, which signs it in again when the session is
+// gone.
+type Bot struct {
+	Cookie string       `json:"cookie"`
+	Key    *softkey.Key `json:"passkey,omitempty"`
 }
 
 // Dialer opens the game connection with a session's cookie, through wrap if
@@ -52,7 +65,7 @@ type Config struct {
 	FrameEvery time.Duration
 	Pilot      float64     // the share of the players on the autopilot
 	Lag        *client.Lag // each connection through it, seeded apart, if not nil
-	Guests     Guests
+	Accounts   Accounts
 	Sessions   string // the sessions file
 	Dial       Dialer
 	// Metrics, if not nil, reads the server's metrics in Prometheus's text
@@ -64,7 +77,7 @@ type Config struct {
 // Report is what a run saw.
 type Report struct {
 	Players []Player
-	Made    int // guests made this run
+	Made    int // sailors made this run
 	Seconds float64
 	Server  ServerReport
 }
@@ -97,7 +110,7 @@ type Return struct {
 	Distance float64
 }
 
-// Run makes or finds the guests, sails them, and reports.
+// Run makes or finds the bots' sailors, sails them, and reports.
 func Run(ctx context.Context, cfg Config) (*Report, error) {
 	cookies, made, err := sessions(ctx, cfg)
 	if err != nil {
@@ -117,7 +130,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 	var wg sync.WaitGroup
 	for i := range cfg.N {
 		p := &rep.Players[i]
-		p.Name = guestName(i)
+		p.Name = botName(i)
 		p.Closes = map[int]int{}
 		delay := time.Duration(0)
 		if cfg.N > 1 {
@@ -282,26 +295,27 @@ func jollyBoat() (*physics.Prepared, *physics.Waves, *physics.WeatherPrepared, *
 	return &kinds[0], waves, cat.PrepareWeather(), cat.PrepareEncounters(), nil
 }
 
-func guestName(i int) string { return fmt.Sprintf("Loadbot %d", i+1) }
+func botName(i int) string { return fmt.Sprintf("Loadbot %d", i+1) }
 
-// savedSessions is the sessions file: the guests' cookies by origin, the
+// savedSessions is the sessions file: the bots' accounts by origin, the
 // i-th the i-th player's.
-type savedSessions map[string][]string
+type savedSessions map[string][]Bot
 
-// sessions finds the cookies of the guests saved for the origin, makes the
-// guests missing or whose sessions are gone, and saves them, after each
-// guest made, so that a run cut short keeps the guests it made.
+// sessions finds the bots saved for the origin, signs in again those whose
+// sessions are gone, makes those missing or whose accounts are gone, and
+// saves them after each, so that a run cut short keeps the sailors it
+// made. A file of an older form, from before passkeys, is started over.
 func sessions(ctx context.Context, cfg Config) (cookies []string, made int, err error) {
 	saved := savedSessions{}
 	if data, err := os.ReadFile(cfg.Sessions); err == nil {
 		if err := json.Unmarshal(data, &saved); err != nil {
-			return nil, 0, fmt.Errorf("%s: %w", cfg.Sessions, err)
+			saved = savedSessions{}
 		}
 	}
-	key := originKey(cfg.Guests)
-	cookies = slices.Clone(saved[key])
+	key := originKey(cfg.Accounts)
+	bots := slices.Clone(saved[key])
 	save := func() error {
-		saved[key] = cookies
+		saved[key] = bots
 		data, err := json.MarshalIndent(saved, "", "  ")
 		if err != nil {
 			return err
@@ -312,108 +326,196 @@ func sessions(ctx context.Context, cfg Config) (cookies []string, made int, err 
 		return os.WriteFile(cfg.Sessions, append(data, '\n'), 0o600)
 	}
 	for i := range cfg.N {
-		if i < len(cookies) {
-			ok, err := cfg.Guests.Valid(ctx, cookies[i])
+		if i < len(bots) {
+			ok, err := cfg.Accounts.Valid(ctx, bots[i].Cookie)
 			if err != nil {
 				return nil, made, err
 			}
 			if ok {
 				continue
 			}
+			if bots[i].Key != nil {
+				c, err := cfg.Accounts.SignIn(ctx, bots[i].Key)
+				if err == nil {
+					bots[i].Cookie = c
+					if err := save(); err != nil {
+						return nil, made, err
+					}
+					continue
+				}
+				if !errors.Is(err, errUnknownPasskey) {
+					return nil, made, fmt.Errorf("signing in %s: %w", botName(i), err)
+				}
+			}
 		}
-		c, err := createGuest(ctx, cfg.Guests, i)
+		b, err := createBot(ctx, cfg.Accounts, i)
 		if err != nil {
 			return nil, made, err
 		}
 		made++
-		if i < len(cookies) {
-			cookies[i] = c
+		if i < len(bots) {
+			bots[i] = b
 		} else {
-			cookies = append(cookies, c)
+			bots = append(bots, b)
 		}
 		if err := save(); err != nil {
 			return nil, made, err
 		}
 	}
+	cookies = make([]string, cfg.N)
+	for i := range cookies {
+		cookies[i] = bots[i].Cookie
+	}
 	return cookies, made, save()
 }
 
-// errNameRefused is a guest's name the server would not take: taken, or
+// errNameRefused is a sailor's name the server would not take: taken, or
 // caught by its filter (which reads digits as the letters they look like).
 var errNameRefused = errors.New("the name was refused")
 
-// createGuest makes player i's guest, trying other names when one is
+// errUnknownPasskey is a passkey whose account is gone.
+var errUnknownPasskey = errors.New("no account has the passkey")
+
+// createBot makes player i's sailor, trying other names when one is
 // refused.
-func createGuest(ctx context.Context, g Guests, i int) (string, error) {
-	name := guestName(i)
+func createBot(ctx context.Context, a Accounts, i int) (Bot, error) {
+	name := botName(i)
 	for try := 1; ; try++ {
-		c, err := g.Create(ctx, name)
+		b, err := a.Create(ctx, name)
 		if !errors.Is(err, errNameRefused) || try == 8 {
 			if err != nil {
-				return "", fmt.Errorf("guest %d (%s): %w", i+1, name, err)
+				return Bot{}, fmt.Errorf("sailor %d (%s): %w", i+1, name, err)
 			}
-			return c, nil
+			return b, nil
 		}
 		name = fmt.Sprintf("Loadbot %d", rand.IntN(90000)+10000)
 	}
 }
 
-// originKey is what a sessions file keeps a server's guests under.
-func originKey(g Guests) string {
-	if h, ok := g.(*httpGuests); ok {
+// originKey is what a sessions file keeps a server's bots under.
+func originKey(a Accounts) string {
+	if h, ok := a.(*httpAccounts); ok {
 		return h.base
 	}
-	return fmt.Sprintf("%T", g)
+	return fmt.Sprintf("%T", a)
 }
 
-// httpGuests makes guests as the start screen does: POST /guest.
-type httpGuests struct {
+// httpAccounts makes sailors as the start screen does, with a passkey
+// made by a software authenticator: POST /account/begin and /finish.
+type httpAccounts struct {
 	base   string
 	client *http.Client
 }
 
-func (g *httpGuests) Create(ctx context.Context, name string) (string, error) {
+// post sends a JSON body to one of the game's routes, with the cookies
+// given, and returns the answer.
+func (a *httpAccounts) post(ctx context.Context, path string, body []byte, cookies []*http.Cookie) (*http.Response, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.base+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", a.base)
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	res, err := a.client.Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer res.Body.Close()
+	reply, err := io.ReadAll(res.Body)
+	return res, reply, err
+}
+
+func cookieOf(res *http.Response, name string) *http.Cookie {
+	for _, c := range res.Cookies() {
+		if c.Name == name {
+			return c
+		}
+	}
+	return nil
+}
+
+func (a *httpAccounts) Create(ctx context.Context, name string) (Bot, error) {
 	cat, err := catalog.Load()
 	if err != nil {
-		return "", err
+		return Bot{}, err
 	}
 	body, err := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
 	if err != nil {
-		return "", err
+		return Bot{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.base+"/guest", bytes.NewReader(body))
+	res, opts, err := a.post(ctx, "/account/begin", body, nil)
 	if err != nil {
-		return "", err
+		return Bot{}, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", g.base)
-	res, err := g.client.Do(req)
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnprocessableEntity:
+		return Bot{}, fmt.Errorf("%w: %s", errNameRefused, opts)
+	default:
+		return Bot{}, fmt.Errorf("POST /account/begin answered %s: %s", res.Status, opts)
+	}
+	ceremony := cookieOf(res, auth.CeremonyCookieName("create"))
+	key, answer, err := softkey.Create(opts, a.base)
 	if err != nil {
-		return "", err
+		return Bot{}, err
 	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusCreated {
-		reply, _ := io.ReadAll(res.Body)
-		if res.StatusCode == http.StatusUnprocessableEntity {
-			return "", fmt.Errorf("%w: %s", errNameRefused, reply)
-		}
-		return "", fmt.Errorf("POST /guest answered %s: %s", res.Status, reply)
+	res, reply, err := a.post(ctx, "/account/finish", answer, []*http.Cookie{ceremony})
+	if err != nil {
+		return Bot{}, err
 	}
-	for _, c := range res.Cookies() {
-		if c.Name == auth.CookieName {
-			return c.Value, nil
-		}
+	switch res.StatusCode {
+	case http.StatusCreated:
+	case http.StatusUnprocessableEntity:
+		return Bot{}, fmt.Errorf("%w: %s", errNameRefused, reply)
+	default:
+		return Bot{}, fmt.Errorf("POST /account/finish answered %s: %s", res.Status, reply)
 	}
-	return "", errors.New("POST /guest set no session")
+	if c := cookieOf(res, auth.CookieName); c != nil {
+		return Bot{Cookie: c.Value, Key: key}, nil
+	}
+	return Bot{}, errors.New("POST /account/finish set no session")
 }
 
-func (g *httpGuests) Valid(ctx context.Context, cookie string) (bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.base+"/api/me", nil)
+func (a *httpAccounts) SignIn(ctx context.Context, key *softkey.Key) (string, error) {
+	res, opts, err := a.post(ctx, "/signin/begin", nil, nil)
+	if err != nil {
+		return "", err
+	}
+	if res.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("POST /signin/begin answered %s: %s", res.Status, opts)
+	}
+	ceremony := cookieOf(res, auth.CeremonyCookieName("signin"))
+	answer, err := key.Get(opts)
+	if err != nil {
+		return "", err
+	}
+	res, reply, err := a.post(ctx, "/signin/finish", answer, []*http.Cookie{ceremony})
+	if err != nil {
+		return "", err
+	}
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return "", errUnknownPasskey
+	default:
+		return "", fmt.Errorf("POST /signin/finish answered %s: %s", res.Status, reply)
+	}
+	if c := cookieOf(res, auth.CookieName); c != nil {
+		return c.Value, nil
+	}
+	return "", errors.New("POST /signin/finish set no session")
+}
+
+func (a *httpAccounts) Valid(ctx context.Context, cookie string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.base+"/api/me", nil)
 	if err != nil {
 		return false, err
 	}
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
-	res, err := g.client.Do(req)
+	res, err := a.client.Do(req)
 	if err != nil {
 		return false, err
 	}

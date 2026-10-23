@@ -23,7 +23,7 @@ func TestModelsServed(t *testing.T) {
 	payloads := [][]byte{[]byte("island zero"), []byte("island one")}
 	models := NewModels(testChunkWorld, testChunkKey, payloads)
 	chunks := NewChunks(testChunkWorld, testChunkKey, testPayloads())
-	s := newTestServer(t, unaskedStore{t}, func(c *Config) { c.Models, c.Chunks = models, chunks })
+	s := newTestServer(t, unaskedStore{t: t}, func(c *Config) { c.Models, c.Chunks = models, chunks })
 	get := func(path string) (int, []byte, http.Header) {
 		t.Helper()
 		res, err := s.Client().Get(s.URL + path)
@@ -81,7 +81,7 @@ func TestNewsPaged(t *testing.T) {
 		src.items = append(src.items, store.News{ID: [16]byte{byte(10 - i)}, Column: "discoveries", Sailor: "Ann", Title: "Isle " + string(rune('A'+i)),
 			Also: []store.Folded{{Subject: "place", Number: 3, Title: "a cove"}}, At: time.UnixMilli(int64(1000 - i))})
 	}
-	s := newTestServer(t, unaskedStore{t}, func(c *Config) { c.News, c.NewsPage = src, 2 })
+	s := newTestServer(t, unaskedStore{t: t}, func(c *Config) { c.News, c.NewsPage = src, 2 })
 	page := func(q string) newsPage {
 		t.Helper()
 		res, err := s.Client().Get(s.URL + "/api/news" + q)

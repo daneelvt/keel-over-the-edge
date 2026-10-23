@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The game connection in the browser, against keel (tools/e2e): a guest
+// The game connection in the browser, against keel (tools/e2e): a sailor
 // connects and the sea appears with the server's boat; a sail predicted
 // with no correction; a wind changed on the server reaches the boat; a
 // reload within the grace finds the same boat; a restart of keel rings the
@@ -8,7 +8,7 @@
 // device takes the boat, and is taken back from. One back end is enough: the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
-import { guest, heldRegime, sail } from './helpers';
+import { heldRegime, sail, sailor } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
@@ -21,8 +21,8 @@ function net(page: Page) {
   return page.evaluate(() => globalThis.keel.net());
 }
 
-test('a guest connects, and the sea appears with the server’s boat', async ({ page, context }) => {
-  await guest(context);
+test('a sailor connects, and the sea appears with the server’s boat', async ({ page, context }) => {
+  await sailor(context);
   await sail(page);
   const n = await net(page);
   expect(n.boat).toBeGreaterThan(0);
@@ -51,7 +51,7 @@ function cleanAir(c: { corrections: number; shadowed: number; largest: number })
 }
 
 test('a sail predicted with no correction', async ({ page, context }) => {
-  await guest(context);
+  await sailor(context);
   await sail(page);
   await page.evaluate(() => globalThis.keel.script('wiggle'));
   await page.waitForTimeout(15_000);
@@ -62,7 +62,7 @@ test('a sail predicted with no correction', async ({ page, context }) => {
 });
 
 test('a wind changed on the server reaches the boat', async ({ page, context, request }) => {
-  await guest(context);
+  await sailor(context);
   await sail(page);
   const res = await request.post(`${internal}/debug/wind?knots=15&from=90`);
   expect(res.status()).toBe(204);
@@ -87,7 +87,7 @@ test('a wind changed on the server reaches the boat', async ({ page, context, re
 });
 
 test('a reload within the grace finds the same boat', async ({ page, context }) => {
-  await guest(context);
+  await sailor(context);
   await sail(page);
   await page.evaluate(() => globalThis.keel.setControls(0.3, 0.4));
   await page.waitForTimeout(3_000);
@@ -106,7 +106,7 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', asyn
   context,
   request,
 }) => {
-  await guest(context);
+  await sailor(context);
   await sail(page);
   const before = await net(page);
   const line = page.locator('[data-readout="connection"]');
@@ -129,7 +129,7 @@ test('another device takes the boat, and Take over takes it back', async ({ page
   const small = { width: 320, height: 200 };
   await page.setViewportSize(small);
   const context = page.context();
-  await guest(context);
+  await sailor(context);
   await sail(page);
   const boat = (await net(page)).boat;
   const other = await browser.newContext({

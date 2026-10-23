@@ -24,7 +24,7 @@ func TestChartingsWritten(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ann, err := s.CreateGuest(ctx, store.Guest{Name: "Ann Bonny", NameKey: "annbonny", Look: "figure", TokenHash: [32]byte{1}})
+	ann, err := s.CreateAccount(ctx, storetest.NewAccount("Ann Bonny", "annbonny", [32]byte{1}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestNoticesOff(t *testing.T) {
 	ctx := context.Background()
 	s, _ := storetest.Store(t, store.Options{})
 	hash := [32]byte{2}
-	id, err := s.CreateGuest(ctx, store.Guest{Name: "Ann Bonny", NameKey: "annbonny", Look: "figure", TokenHash: hash})
+	id, err := s.CreateAccount(ctx, storetest.NewAccount("Ann Bonny", "annbonny", hash))
 	if err != nil {
 		t.Fatal(err)
 	}

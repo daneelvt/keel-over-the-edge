@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Command loadbot sails many headless players against a server: each a
-// guest, connected over the game connection with the Go client
+// sailor made with a passkey, connected over the game connection with the Go client
 // (internal/client), which keeps the clock, predicts its boat, decodes the
 // other boats' views and sends its controls as the page does, steering and
 // trimming at random as the scripted sailors do. It reports what each
 // received and sent, and what the server's metrics say of the tick and the
 // encoders.
 //
-//	go run ./tools/loadbot -n 200 -url https://127.0.0.1:5173 [-lag 200ms,2%] [-for 5m] [-ramp 30s]
+//	go run ./tools/loadbot -n 200 -url https://localhost:5173 [-lag 200ms,2%] [-for 5m] [-ramp 30s]
 //
-// Its guests are made by POST /guest and named "Loadbot 1" and on; their
-// session cookies are kept in .dev/loadbot/sessions.json and used again, so
-// that repeated runs make no new guests. Against go run ./tools/dev it
+// Its sailors are made as the start screen makes them, with a passkey a
+// software authenticator holds, and named "Loadbot 1" and on; their
+// session cookies and passkeys are kept in .dev/loadbot/sessions.json and
+// used again, so that repeated runs make no new sailors (a session gone,
+// the passkey signs in again). Against go run ./tools/dev it
 // trusts mkcert's local root, and reads keel's metrics from its internal
 // listener. It runs from the repository root.
 package main
@@ -38,14 +40,14 @@ import (
 
 func main() {
 	n := flag.Int("n", 20, "how many players")
-	base := flag.String("url", "https://127.0.0.1:5173", "the game's origin: the page's, which serves /guest and /ws")
+	base := flag.String("url", "https://localhost:5173", "the game's origin: the page's, which serves the account's routes and /ws")
 	lagFlag := flag.String("lag", "", "a round trip and loss such as 200ms,2%: each connection through the lag model")
 	sail := flag.Duration("for", time.Minute, "how long to sail, once all have joined")
 	ramp := flag.Duration("ramp", 0, "spread the players' joining over this long")
 	fps := flag.Int("fps", 30, "each player's frames a second")
 	pilot := flag.Float64("pilot", 0.5, "the share of the players that sail on the autopilot, tacking or gybing every one to five minutes")
 	metrics := flag.String("metrics", "http://127.0.0.1:9090/metrics", "keel's metrics; none if empty")
-	sessions := flag.String("sessions", ".dev/loadbot/sessions.json", "where the guests' sessions are kept")
+	sessions := flag.String("sessions", ".dev/loadbot/sessions.json", "where the bots' sessions and passkeys are kept")
 	ca := flag.String("ca", "", "a root certificate to trust (PEM); mkcert's local root if empty")
 	flag.Parse()
 
@@ -71,7 +73,7 @@ func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Durat
 		Ramp:       ramp,
 		FrameEvery: time.Second / time.Duration(fps),
 		Pilot:      pilot,
-		Guests:     &httpGuests{base: strings.TrimSuffix(base, "/"), client: hc},
+		Accounts:   &httpAccounts{base: strings.TrimSuffix(base, "/"), client: hc},
 		Sessions:   sessions,
 		Dial:       wsDialer(hc, base),
 		Out:        os.Stdout,

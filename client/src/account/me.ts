@@ -2,8 +2,9 @@
 
 // The session check: the page's first question to the server, asked while
 // the scene loads. A player with a session goes straight to sea; one
-// without gets the start screen; and when the server cannot answer, the
-// page says so and asks again.
+// without gets the start screen; one whose session came from the recovery
+// code is asked for a new passkey first; and when the server cannot
+// answer, the page says so and asks again.
 
 /** The player's own account, as GET /api/me gives it. */
 export interface Me {
@@ -11,8 +12,8 @@ export interface Me {
   /** The catalog sailor the player looks like, by id. */
   look: string;
   kind: string;
-  /** False for a guest, kept only by this browser's cookie. */
-  saved: boolean;
+  /** A session made by the recovery code, which may only add a passkey until it has. */
+  addPasskey?: boolean;
   /** The kinds of notice the sailor has switched off, by the catalog's ids; none for a new sailor. */
   noticesOff?: string[];
 }
@@ -48,17 +49,19 @@ export function retryDelay(attempt: number): number {
 
 export interface SailorPaths {
   fetch?: Fetch;
-  /** Shows the start screen; resolves with the sailor made there. */
+  /** Shows the start screen; resolves with the sailor made or signed in there. */
   start: () => Promise<Me>;
+  /** Asks for a new passkey, the session the recovery code's; resolves once it is added. */
+  addPasskey: (me: Me) => Promise<Me>;
   /** Shows that the server cannot be reached, or hides it with false. */
   backSoon: (shown: boolean) => void;
   wait?: (ms: number) => Promise<void>;
 }
 
 /**
- * The sailor this browser sails as: the session's, or one made on the start
- * screen. While the server cannot answer it shows "Back soon" and asks
- * again, waiting longer each time.
+ * The sailor this browser sails as: the session's, or one made or signed in
+ * on the start screen. While the server cannot answer it shows "Back soon"
+ * and asks again, waiting longer each time.
  */
 export async function resolveSailor(paths: SailorPaths): Promise<Me> {
   const wait = paths.wait ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
@@ -66,7 +69,10 @@ export async function resolveSailor(paths: SailorPaths): Promise<Me> {
     const check = await checkSession(paths.fetch);
     if (check.kind !== 'failed') {
       paths.backSoon(false);
-      return check.kind === 'sailor' ? check.me : paths.start();
+      if (check.kind === 'none') {
+        return paths.start();
+      }
+      return check.me.addPasskey === true ? paths.addPasskey(check.me) : check.me;
     }
     paths.backSoon(true);
     await wait(retryDelay(attempt));

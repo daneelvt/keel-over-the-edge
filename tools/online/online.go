@@ -57,7 +57,7 @@ func (c *checker) run(ctx context.Context) int {
 		{"/ws refuses a request without a session", c.wsWithoutSession},
 		{"another host is not served", c.otherHost},
 		{"one address is limited, and cannot forge CF-Connecting-IP", c.limited},
-		{"a game connection from another origin is refused, and one from the game's stays open", c.gameConnection},
+		{"a game connection from another origin is refused, one from the game's stays open, and the sailor deleted closes it", c.gameConnection},
 	}
 	failed := 0
 	for _, k := range checks {
@@ -324,10 +324,17 @@ func (c *checker) gameConnection(ctx context.Context) error {
 	if c.hold == 0 {
 		return nil
 	}
-	_, jar, err := smoke.GuestNamed(ctx, c.hc, c.base, fmt.Sprintf("Zz Online %06d", time.Now().UnixNano()%1_000_000))
+	name, jar, key, err := smoke.SailorNamed(ctx, c.hc, c.base, fmt.Sprintf("Zz Online %06d", time.Now().UnixNano()%1_000_000))
 	if err != nil {
 		return err
 	}
+	// Whatever happens, production keeps no sailor of this tool's.
+	deleted := false
+	defer func() {
+		if !deleted {
+			_ = smoke.Delete(context.WithoutCancel(ctx), c.hc, jar, key, c.base, name)
+		}
+	}()
 	// From another origin, with the session: refused.
 	other := *c.hc
 	other.Jar = jar
@@ -372,7 +379,25 @@ func (c *checker) gameConnection(ctx context.Context) error {
 				return fmt.Errorf("the game connection, after %v: %w", time.Since(start).Round(time.Second), err)
 			}
 		case <-end:
-			return ws.Close(websocket.StatusNormalClosure, "")
+			// The sailor deleted, as its player would, its connection
+			// open: closed with 4003, and the account gone.
+			if err := smoke.Delete(ctx, c.hc, jar, key, c.base, name); err != nil {
+				return err
+			}
+			deleted = true
+			select {
+			case err := <-read:
+				if code := websocket.CloseStatus(err); code != 4003 {
+					return fmt.Errorf("the game connection of a sailor deleted closed with %d: %w", code, err)
+				}
+			case <-time.After(10 * time.Second):
+				return errors.New("the game connection of a sailor deleted stayed open")
+			}
+			if ws, err := smoke.DialGame(ctx, c.hc, jar, c.base); err == nil {
+				ws.CloseNow()
+				return errors.New("a game connection with a deleted sailor's cookie was accepted")
+			}
+			return nil
 		case <-ctx.Done():
 			return ctx.Err()
 		}

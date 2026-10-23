@@ -10,7 +10,7 @@
 // frames, and no correction of another boat is drawn at once.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { guest, sail } from './helpers';
+import { sail, sailor } from './helpers';
 
 const direct = 'http://localhost:5181';
 const lagged = process.env.KEEL_LAG_BASE ?? 'http://localhost:5182';
@@ -26,7 +26,7 @@ async function two(browser: import('@playwright/test').Browser, base = direct) {
   for (const name of ['Ann', 'Bob']) {
     // Small pages, so CI's software renderer draws two of them often enough.
     const c = await browser.newContext({ baseURL: base, viewport: { width: 320, height: 200 } });
-    await guest(c, name);
+    await sailor(c, name);
     const p = await c.newPage();
     await sail(p, base);
     contexts.push(c);

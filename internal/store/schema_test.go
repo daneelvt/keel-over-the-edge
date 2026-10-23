@@ -84,33 +84,99 @@ func TestAccountKindAndOwner(t *testing.T) {
 	refused(t, exec(t, pool, "DELETE FROM account WHERE id = $1", saved), "23001") // restrict_violation
 }
 
-func TestDeletingAnAccountFreesItsName(t *testing.T) {
+func hashOf(s string) []byte {
+	h := sha256.Sum256([]byte(s))
+	return h[:]
+}
+
+// TestGuestsDeleted: migration 00014 deletes every guest, with its sailor
+// and sessions, and leaves the saved accounts as they were; the credits of
+// a guest keep their places under no name, and its name is free.
+func TestGuestsDeleted(t *testing.T) {
 	ctx := context.Background()
-	s, u := storetest.Store(t, store.Options{})
-	pool, err := pgxpool.New(ctx, u)
-	if err != nil {
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 13); err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
-	g := store.Guest{Name: "Sea Wolf", NameKey: "seawolf", Look: "a", TokenHash: sha256.Sum256([]byte("one"))}
-	id, err := s.CreateGuest(ctx, g)
-	if err != nil {
+	pool := storetest.PoolOn(t, u)
+	w := oldWorld(t, pool)
+	guest := uuidOf(t, pool, "INSERT INTO account (kind) VALUES ('human') RETURNING id")
+	saved := uuidOf(t, pool, "INSERT INTO account (kind, saved_at) VALUES ('human', now()) RETURNING id")
+	for i, a := range [][16]byte{guest, saved} {
+		name := []string{"Sea Wolf", "Ann Bonny"}[i]
+		must(t, pool, "INSERT INTO sailor (account_id, name, name_key, look) VALUES ($1, $2, $3, 'figure')", a, name, strings.ToLower(strings.ReplaceAll(name, " ", "")))
+		must(t, pool, "INSERT INTO session (account_id, token_hash) VALUES ($1, $2)", a, hashOf(name))
+		must(t, pool, `INSERT INTO charting (world_id, subject, number, account_id, sailor, account_kind, boat, tick, worth)
+			VALUES ($1, 'island', $2, $3, $4, 'human', 1, 1, 1)`, w.ID, i, a, name)
+		must(t, pool, `INSERT INTO news_item (world_id, news_column, account_id, sailor, account_kind, subject, number, title, what, worth, x, y)
+			VALUES ($1, 'discoveries', $3, $4, 'human', 'island', $2, 'T', 'w', 1, 0, 0)`, w.ID, i, a, name)
+	}
+	ai := uuidOf(t, pool, "INSERT INTO account (kind, owner_id) VALUES ('ai', $1) RETURNING id", saved)
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
 		t.Fatal(err)
 	}
-	g.TokenHash = sha256.Sum256([]byte("two"))
-	if _, err := s.CreateGuest(ctx, g); !errors.Is(err, store.ErrNameTaken) {
-		t.Fatalf("the name again: %v", err)
+	var accounts []string
+	rows, _ := pool.Query(ctx, "SELECT kind FROM account ORDER BY kind")
+	accounts, _ = pgx.CollectRows(rows, pgx.RowTo[string])
+	if strings.Join(accounts, " ") != "ai human" {
+		t.Fatalf("accounts left: %v", accounts)
 	}
-	must(t, pool, "DELETE FROM account WHERE id = $1", id)
-	for _, table := range []string{"sailor", "session"} {
+	for table, want := range map[string]int{"sailor": 1, "session": 1, "charting": 2, "news_item": 2} {
 		var n int
-		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil || n != 0 {
-			t.Fatalf("%s: %d rows left, %v", table, n, err)
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil || n != want {
+			t.Errorf("%s: %d rows, want %d (%v)", table, n, want, err)
 		}
 	}
-	if _, err := s.CreateGuest(ctx, g); err != nil {
-		t.Fatalf("the name once freed: %v", err)
+	for _, table := range []string{"charting", "news_item"} {
+		var named []string
+		rows, _ := pool.Query(ctx, "SELECT coalesce(sailor, '(none)') FROM "+table+" ORDER BY number")
+		named, _ = pgx.CollectRows(rows, pgx.RowTo[string])
+		if strings.Join(named, ", ") != "(none), Ann Bonny" {
+			t.Errorf("%s's names: %v", table, named)
+		}
 	}
+	var gone bool
+	if err := pool.QueryRow(ctx, "SELECT NOT EXISTS (SELECT 1 FROM account WHERE id = $1) AND EXISTS (SELECT 1 FROM account WHERE id = $2)", guest, ai).Scan(&gone); err != nil || !gone {
+		t.Fatalf("the guest gone and the AI kept: %v, %v", gone, err)
+	}
+	s, err := store.Open(ctx, u, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.CreateAccount(ctx, storetest.NewAccount("Sea Wolf", "seawolf", [32]byte{9})); err != nil {
+		t.Fatalf("the guest's name: %v", err)
+	}
+}
+
+// TestOlderBuildsQueries: the queries the build before passkeys ran still
+// run once the database has migration 00014, so a rollback finds what it
+// reads; its accounts read as saved, as every account now is.
+func TestOlderBuildsQueries(t *testing.T) {
+	ctx := context.Background()
+	s, u := storetest.Store(t, store.Options{})
+	pool := storetest.PoolOn(t, u)
+	hash := sha256.Sum256([]byte("token"))
+	id, err := s.CreateAccount(ctx, storetest.NewAccount("Ann Bonny", "annbonny", hash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved bool
+	var name string
+	if err := pool.QueryRow(ctx, `SELECT (a.saved_at IS NOT NULL)::boolean AS saved, sl.name
+		FROM session s JOIN account a ON a.id = s.account_id JOIN sailor sl ON sl.account_id = a.id
+		WHERE s.token_hash = $1`, hash[:]).Scan(&saved, &name); err != nil || !saved || name != "Ann Bonny" {
+		t.Fatalf("the older SessionAccount: %v %q, %v", saved, name, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT (a.saved_at IS NOT NULL)::boolean AS saved FROM account a
+		LEFT JOIN sailor sl ON sl.account_id = a.id WHERE a.id = ANY($1::uuid[])`, [][16]byte{id}).Scan(&saved); err != nil || !saved {
+		t.Fatalf("the older AccountsByID: %v, %v", saved, err)
+	}
+	// The older build's guest, all three statements of it.
+	guest := uuidOf(t, pool, "INSERT INTO account (kind) VALUES ('human') RETURNING id")
+	must(t, pool, "INSERT INTO sailor (account_id, name, name_key, look) VALUES ($1, 'Sea Wolf', 'seawolf', 'figure')", guest)
+	must(t, pool, "INSERT INTO session (account_id, token_hash) VALUES ($1, $2)", guest, hashOf("guest"))
+	must(t, pool, "DELETE FROM session WHERE id IN (SELECT s.id FROM session s WHERE s.last_seen_at < now() ORDER BY s.last_seen_at LIMIT 1000)")
 }
 
 func TestKeysAreUUIDv7(t *testing.T) {

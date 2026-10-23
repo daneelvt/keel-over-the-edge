@@ -16,13 +16,20 @@ const allowedFile = '../tools/licences/allowed.txt';
 
 const server: ServerOptions = {
   host: true,
+  // Phones reach this computer by its .local name, which passkeys need: no
+  // browser makes one for an IP address.
+  allowedHosts: ['.local'],
   port: 5173,
   strictPort: true,
   proxy: {
     // The browser's Host header is kept, so the server sees the origin
     // players use.
     '/api': { target: `http://${playAddr}`, changeOrigin: false },
-    '/guest': { target: `http://${playAddr}`, changeOrigin: false },
+    // The account's routes: making a sailor, signing in and out.
+    '/account/': { target: `http://${playAddr}`, changeOrigin: false },
+    '/signin/': { target: `http://${playAddr}`, changeOrigin: false },
+    '/recovery': { target: `http://${playAddr}`, changeOrigin: false },
+    '/logout': { target: `http://${playAddr}`, changeOrigin: false },
     // The world's chunks, at the addresses the game connection hands out.
     '/w/': { target: `http://${playAddr}`, changeOrigin: false },
     // The game connection. Vite does not check a WebSocket's Origin before

@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { guest, sail } from './helpers';
+import { sail, sailor } from './helpers';
 
 const direct = 'http://localhost:5181';
 const internal = 'http://127.0.0.1:19090';
@@ -57,7 +57,7 @@ function islands(charted: Set<string>): [Entry, Entry] {
 /** A player sailing in a small page of its own. */
 async function player(browser: import('@playwright/test').Browser, name: string) {
   const c = await browser.newContext({ baseURL: direct, viewport: { width: 320, height: 200 } });
-  await guest(c, name);
+  await sailor(c, name);
   const p = await c.newPage();
   await sail(p, direct);
   const me = (await (await c.request.get('/api/me')).json()) as { name: string };

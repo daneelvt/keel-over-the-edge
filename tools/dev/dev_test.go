@@ -93,14 +93,14 @@ func TestCompareVersions(t *testing.T) {
 }
 
 func TestPlayOrigin(t *testing.T) {
-	if got := playOrigin(nil); got != "https://localhost:5173" {
-		t.Errorf("no network: %s", got)
+	if got := playOrigin(""); got != "https://localhost:5173" {
+		t.Errorf("no name: %s", got)
 	}
-	if got := playOrigin([]net.IP{net.ParseIP("192.168.1.20")}); got != "https://192.168.1.20:5173" {
-		t.Errorf("network: %s", got)
+	if got := playOrigin("macbook.local"); got != "https://macbook.local:5173" {
+		t.Errorf("a name: %s", got)
 	}
-	hosts := certHosts([]net.IP{net.ParseIP("10.0.0.5")})
-	if len(hosts) != 4 || hosts[3] != "10.0.0.5" {
+	hosts := certHosts("macbook.local", []net.IP{net.ParseIP("10.0.0.5")})
+	if len(hosts) != 5 || hosts[3] != "macbook.local" || hosts[4] != "10.0.0.5" {
 		t.Errorf("certHosts = %v", hosts)
 	}
 }

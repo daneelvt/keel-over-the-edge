@@ -34,6 +34,7 @@ import {
 import { formatPosition } from '../chart/position';
 import { lightOn } from '../lights/character';
 import {
+  type AccountsData,
   type Boat,
   type CalibrationPage,
   type ChartedData,
@@ -245,7 +246,7 @@ function MapCanvas({
   );
 }
 
-function Clock({ now }: { now: WorldNow }) {
+function Clock({ now, accounts }: { now: WorldNow; accounts: AccountsData | null }) {
   const w = now.world;
   return (
     <section class="card" aria-label="The world">
@@ -267,6 +268,12 @@ function Clock({ now }: { now: WorldNow }) {
         <dd>{w.epoch}</dd>
         <dt>ID</dt>
         <dd class="small">{w.id}</dd>
+        <dt>Accounts</dt>
+        <dd data-field="accounts">
+          {accounts === null
+            ? '—'
+            : `${accounts.total}: ${accounts.week} made this week, ${accounts.today} seen today`}
+        </dd>
       </dl>
     </section>
   );
@@ -1305,6 +1312,7 @@ function App() {
   const [visibility, setVisibility] = useState<VisibilityPage | null>(null);
   const [boat, setBoat] = useState<number | null>(null);
   const [charted, setCharted] = useState<ChartedData | null>(null);
+  const [accounts, setAccounts] = useState<AccountsData | null>(null);
   const [light, setLight] = useState<number | null>(null);
   const clock = useRef<WorldClock>({ worldTime: 0, at: performance.now() });
   const [message, setMessage] = useState('');
@@ -1352,6 +1360,9 @@ function App() {
       getJSON<ChartedData>('charted.json')
         .then(setCharted)
         .catch((e: unknown) => setError(String(e)));
+      getJSON<AccountsData>('accounts.json')
+        .then(setAccounts)
+        .catch(() => setAccounts(null));
     };
     readCharted.current = read;
     read();
@@ -2004,7 +2015,7 @@ function App() {
           </aside>
         ) : (
           <aside>
-            {now !== null ? <Clock now={now} /> : null}
+            {now !== null ? <Clock now={now} accounts={accounts} /> : null}
             {now !== null ? <WeatherCard now={now} /> : null}
             <WeekCard
               w={weather.weather}

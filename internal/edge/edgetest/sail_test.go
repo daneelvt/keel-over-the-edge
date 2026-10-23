@@ -167,7 +167,7 @@ func sailWith(t *testing.T, timeline func(*testing.T) *weather.Timeline, wind *b
 				t.Fatalf("after three seconds the wind is %+v and its sea %+v", blows, raised)
 			}
 		}
-		token, _ := srv.Guest("Ann")
+		token, _ := srv.Sailor("Ann")
 		o := DialOptions{Cookie: token}
 		if lag != (client.Lag{}) {
 			o.Wrap = lag.Wrap
@@ -244,7 +244,7 @@ func TestSailGale(t *testing.T) {
 func TestSailWeatherChange(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
-		token, _ := srv.Guest("Ann")
+		token, _ := srv.Sailor("Ann")
 		lag := client.Lag{Delay: 100 * time.Millisecond}
 		s := srv.NewSailor(DialOptions{Cookie: token, Wrap: lag.Wrap}, recorded(t))
 		s.Trace = &client.Trace{}
@@ -285,7 +285,7 @@ func TestSailWeatherChange(t *testing.T) {
 func TestSailSlowFrames(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
-		token, _ := srv.Guest("Ann")
+		token, _ := srv.Sailor("Ann")
 		lag := client.Lag{Delay: 100 * time.Millisecond}
 		s := srv.NewSailor(DialOptions{Cookie: token, Wrap: lag.Wrap}, recorded(t))
 		s.FrameEvery = 200 * time.Millisecond
@@ -468,7 +468,7 @@ func TestFleetTraces(t *testing.T) {
 			})
 			var sailors []*client.Sailor
 			for i := range traces {
-				token, _ := srv.Guest(fmt.Sprint("Crew ", i))
+				token, _ := srv.Sailor(fmt.Sprint("Crew ", i))
 				l := lag
 				l.Seed += uint64(i)
 				s := srv.NewSailor(DialOptions{Cookie: token, Wrap: l.Wrap}, recorded(t))
@@ -609,7 +609,7 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 func TestAheadSettlesAndRises(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
-		token, _ := srv.Guest("Ann")
+		token, _ := srv.Sailor("Ann")
 		lag := client.Lag{Delay: 100 * time.Millisecond}
 		// The tiller dragged to and fro: a word every step.
 		wiggle := func(n int) client.Input { return client.Hand(uint16(256+n%512), 512) }
@@ -653,7 +653,7 @@ func TestAheadSettlesAndRises(t *testing.T) {
 func TestDropout(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
-		token, _ := srv.Guest("Ann")
+		token, _ := srv.Sailor("Ann")
 		s := srv.NewSailor(DialOptions{Cookie: token}, recorded(t))
 		sailFor := func(d time.Duration) {
 			t.Helper()
@@ -716,7 +716,7 @@ func TestSailGusts(t *testing.T) {
 			change := now + 40*physics.StepsPerSecond
 			second := int64(sequenceFrom(t, 0).Week().Spells[1].Begin)
 			srv := NewServer(t, Config{Weather: sequenceFrom(t, change-second)})
-			token, _ := srv.Guest("Ann")
+			token, _ := srv.Sailor("Ann")
 			o := DialOptions{Cookie: token}
 			if lag != (client.Lag{}) {
 				o.Wrap = lag.Wrap
@@ -775,7 +775,7 @@ func TestSailInShadow(t *testing.T) {
 				var sailors []*client.Sailor
 				var accounts []bus.Account
 				for i, name := range []string{"Ann", "Bob"} {
-					token, id := srv.Guest(name)
+					token, id := srv.Sailor(name)
 					o := DialOptions{Cookie: token}
 					if lossy {
 						o.Wrap = client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02, Seed: 10*seed + uint64(i) + 1}.Wrap
@@ -854,7 +854,7 @@ func TestSailThroughWeather(t *testing.T) {
 			f := week.Spells[i]
 			cross := int64(f.Begin + f.Change/2)
 			srv := NewServer(t, Config{Weather: sequenceFrom(t, now+20*physics.StepsPerSecond-cross)})
-			token, _ := srv.Guest("Ann")
+			token, _ := srv.Sailor("Ann")
 			o := DialOptions{Cookie: token}
 			if lag != (client.Lag{}) {
 				o.Wrap = lag.Wrap
@@ -928,7 +928,7 @@ func TestSailThroughSwell(t *testing.T) {
 			t.Fatal("the sample week has no storm")
 		}
 		srv := NewServer(t, Config{Weather: sequenceFrom(t, now-mature-30*60*physics.StepsPerSecond), Terrain: &sim.Terrain{Circulation: 1}})
-		token, id := srv.Guest("Ann")
+		token, id := srv.Sailor("Ann")
 		s := srv.NewSailor(DialOptions{Cookie: token}, letGo)
 		if err := s.Connect(t.Context()); err != nil {
 			t.Fatal(err)
