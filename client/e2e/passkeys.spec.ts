@@ -203,8 +203,10 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   await expect(page.getByRole('heading', { name: `Delete ${made.name} for good?` })).toBeVisible();
   await page.locator('input[name="delete-name"]').fill(made.name.toLowerCase());
   await page.getByRole('button', { name: 'Delete this sailor' }).click();
+  // The page reloads to it: the renderer starting beside the start screen
+  // holds CI's software GPU half a minute.
   await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({
-    timeout: 30_000,
+    timeout: 90_000,
   });
   expect(await session(context)).toBeUndefined();
   // Its name is free at once.
