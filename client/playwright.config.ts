@@ -10,7 +10,8 @@
 // in development; a second Vite whose traffic to keel goes through the
 // lag proxy tools/e2e runs, for the tests of a slow network; and the world
 // page's Vite, in front of keel's internal listener. The WebKit
-// project runs only the test of the net worker's upgrade. The compat project
+// project runs the test of the net worker's upgrade and the account's
+// passkeys, up to the session. The compat project
 // runs the sea's tests on WebGPU with a device held to compatibility mode's
 // limits (?compat), as the phones that offer only that have. The page's
 // origin is http://localhost, where browsers allow the session's Secure

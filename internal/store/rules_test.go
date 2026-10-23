@@ -184,12 +184,12 @@ func TestOnlyStoreTalksToTheDatabase(t *testing.T) {
 
 func TestQueryName(t *testing.T) {
 	for sql, want := range map[string]string{
-		"-- name: CreateAccount :one\nINSERT …":      "CreateAccount",
-		"-- name: TouchSession :exec\n":              "TouchSession",
-		"begin":                                      "other",
-		"SELECT 1":                                   "other",
-		"-- name: \n":                                "other",
-		"-- a comment\nSELECT 1":                     "other",
+		"-- name: CreateAccount :one\nINSERT …": "CreateAccount",
+		"-- name: TouchSession :exec\n":         "TouchSession",
+		"begin":                                 "other",
+		"SELECT 1":                              "other",
+		"-- name: \n":                           "other",
+		"-- a comment\nSELECT 1":                "other",
 	} {
 		if got := queryName(sql); got != want {
 			t.Errorf("queryName(%q) = %q, want %q", sql, got, want)

@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -279,25 +278,6 @@ func TestBodyCutAtItsDeadline(t *testing.T) {
 	if took := time.Since(start); res.StatusCode != 400 || took < 200*time.Millisecond || took > 3*time.Second {
 		t.Fatalf("%d after %v", res.StatusCode, took)
 	}
-}
-
-func jar(t *testing.T) *http.Client {
-	t.Helper()
-	j, err := cookiejar.New(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &http.Client{Jar: j}
-}
-
-// sessionCookie is the session cookie a response set.
-func sessionCookie(res *http.Response) *http.Cookie {
-	for _, c := range res.Cookies() {
-		if c.Name == auth.CookieName {
-			return c
-		}
-	}
-	return nil
 }
 
 func get(t *testing.T, c *http.Client, url string, cookie *http.Cookie) (int, string) {

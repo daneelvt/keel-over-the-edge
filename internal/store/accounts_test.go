@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
