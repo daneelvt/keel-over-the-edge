@@ -284,11 +284,12 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
   tag: '@long',
 }, async ({ page }) => {
   // What the heap keeps does not depend on the picture's size, and a small
-  // one keeps SwiftShader's CPU rendering inside the time; on CI's WebGPU
-  // adapter, through SwiftShader, 1,800 frames still take minutes: 7 to 9
-  // of them, by the runner.
+  // one keeps SwiftShader's CPU rendering inside the time. A frame there
+  // costs about the same whatever the size, though: about 0.23 s in an x86
+  // container at 4 CPUs, and up to twice that on CI's runners. So the test
+  // sails as few frames as show the heap level, 1,100: 4 to 8 minutes.
   test.setTimeout(720_000);
-  await page.setViewportSize({ width: 320, height: 200 });
+  await page.setViewportSize({ width: 160, height: 100 });
   await openScene(page, 'sea=gale');
   const cdp = await page.context().newCDPSession(page);
   const used = async (): Promise<number> => {
@@ -301,12 +302,15 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
     k.settings({ windOverlay: true, forcesOverlay: true });
     k.script('wiggle');
     k.thaw();
-    // The first 800 frames grow the heap once, by about 1 MB, as the hot
-    // paths are compiled and caches fill; after them it stays put.
-    await k.frames(800);
+    // The first 600 frames grow the heap by about 2.4 MB, as the hot paths
+    // are compiled and caches fill, the last of it a step of about 360 KB
+    // between frames 500 and 600; after them it grows by under 50 KB in a
+    // hundred frames, less and less. Measured over the 400 frames after
+    // 700, it grew 92 to 119 KB.
+    await k.frames(700);
   });
   const before = await used();
-  await page.evaluate(() => globalThis.keel.frames(1000));
+  await page.evaluate(() => globalThis.keel.frames(400));
   const after = await used();
   const steps = await page.evaluate(() => globalThis.keel.boat().steps);
   expect(steps).toBeGreaterThan(3000 + 500);
