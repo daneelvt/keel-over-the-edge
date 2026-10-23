@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The menu: who is sailing, and this device's settings. The frame rate (60,
+// The menu: who is sailing, their account, and this device's settings. The frame rate (60,
 // or 30 to save battery), how much the sea is drawn with (as much as the
 // device runs well, or the least), sound, the beginners' overlays, and
 // whether the helm returns to the centre when let go.
@@ -55,6 +55,7 @@ export function Menu({
   notices = null,
   chart = null,
   end = null,
+  account = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
@@ -68,11 +69,18 @@ export function Menu({
   chart?: ((mode: ChartMode) => void) | null;
   /** The countdown to the world's end; null where there is none. */
   end?: Countdown | null;
+  /** Opens the account page; null in the offline sandbox. */
+  account?: (() => void) | null;
 }) {
   const s = settings.value.value;
   return (
     <section class="panel menu" aria-label="Settings">
       <SailingAs sailor={sailor} />
+      {account !== null ? (
+        <button type="button" class="menu-account" onClick={account}>
+          Account
+        </button>
+      ) : null}
       {connection !== null ? <RoundTrip view={connection} /> : null}
       {end !== null && end.when.value !== '' ? (
         <p class="menu-end" data-readout="ends">

@@ -126,7 +126,7 @@ func (e *Edge) Tools(account bus.Account, on bool) bool {
 func (e *Edge) Remove(account bus.Account) {
 	if c := e.registry.get(account); c != nil {
 		c.stop()
-		c.close(CloseRemoved, "this sailor has been deleted")
+		c.close(CloseRemoved, "This sailor has been deleted.")
 	}
 	f := e.cfg.Bus.Frames.Acquire()
 	var boat uint64

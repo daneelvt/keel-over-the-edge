@@ -6,12 +6,11 @@ import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { SailingAs } from '../ui/menu';
 import { PlayerText } from '../ui/player';
-import { createGuest } from './guest';
 import { drawLook } from './looks';
 import { checkSession, type Fetch, type Me, resolveSailor, retryDelay } from './me';
 import { displayForm, lengthProblem, nameLength, REASONS, reasonText } from './reasons';
 
-// Every code the server answers a guest's start with (internal/api).
+// Every code the server answers the account's routes with (internal/api).
 const SERVER_CODES = [
   'short',
   'long',
@@ -26,11 +25,28 @@ const SERVER_CODES = [
   'too-large',
   'cross-origin',
   'unavailable',
+  'again',
+  'refused',
+  'unknown-passkey',
+  'code',
+  'add-passkey',
+  'confirm',
+  'last-passkey',
+  'not-found',
+  'name',
+  'account',
 ];
 
 describe('reasons', () => {
   test('every server code has words of its own', () => {
-    for (const code of [...SERVER_CODES, 'offline']) {
+    for (const code of [
+      ...SERVER_CODES,
+      'offline',
+      'passkey-here',
+      'passkey-domain',
+      'no-passkeys',
+      'passkey-failed',
+    ]) {
       expect(REASONS[code], code).toBeDefined();
       expect(reasonText(code)).toBe(REASONS[code]);
     }
@@ -129,7 +145,7 @@ function answer(status: number, body: unknown): Response {
   return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
 }
 
-const ann: Me = { name: 'Ann Bonny', look: 'a', kind: 'human', saved: false };
+const ann: Me = { name: 'Ann Bonny', look: 'a', kind: 'human' };
 
 describe('the session check', () => {
   test('a session, none, or a failure', async () => {
@@ -163,6 +179,10 @@ describe('the session check', () => {
           log.push('start');
           return { ...ann, name: 'New' };
         },
+        addPasskey: async (me) => {
+          log.push('add a passkey');
+          return { ...me, addPasskey: false };
+        },
         backSoon: (shown) => log.push(shown ? 'back soon' : 'hidden'),
         wait: async (ms) => {
           log.push(`wait ${ms}`);
@@ -175,6 +195,11 @@ describe('the session check', () => {
       me: { ...ann, name: 'New' },
       log: ['hidden', 'start'],
     });
+    // A session the recovery code made: a passkey first.
+    expect(await run([() => answer(200, { ...ann, addPasskey: true })])).toEqual({
+      me: { ...ann, addPasskey: false },
+      log: ['hidden', 'add a passkey'],
+    });
     const offline = () => {
       throw new TypeError('offline');
     };
@@ -183,31 +208,5 @@ describe('the session check', () => {
       log: ['back soon', 'wait 1000', 'back soon', 'wait 2000', 'hidden'],
     });
     expect(retryDelay(10)).toBe(30_000);
-  });
-});
-
-describe('making a guest', () => {
-  test('made, refused with a reason, or failed', async () => {
-    let sent: RequestInit | undefined;
-    const made = await createGuest('Ann Bonny', 'a', async (_url, init) => {
-      sent = init;
-      return answer(201, { name: 'Ann Bonny', look: 'a' });
-    });
-    expect(made).toEqual({ ok: true, me: ann });
-    expect(sent?.method).toBe('POST');
-    expect(JSON.parse(String(sent?.body))).toEqual({ name: 'Ann Bonny', look: 'a' });
-    expect(await createGuest('Ann', 'a', async () => answer(422, { error: 'taken' }))).toEqual({
-      ok: false,
-      reason: 'taken',
-    });
-    expect(await createGuest('Ann', 'a', async () => answer(502, '<html>'))).toEqual({
-      ok: false,
-      reason: 'unavailable',
-    });
-    expect(
-      await createGuest('Ann', 'a', async () => {
-        throw new TypeError('offline');
-      }),
-    ).toEqual({ ok: false, reason: 'offline' });
   });
 });

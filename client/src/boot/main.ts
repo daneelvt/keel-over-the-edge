@@ -38,9 +38,8 @@
 
 import './game.css';
 import { signal } from '@preact/signals';
-import { createGuest } from '../account/guest';
 import { resolveSailor } from '../account/me';
-import { backSoon, showStartScreen } from '../account/start';
+import { backSoon, showAddPasskey, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
@@ -355,11 +354,8 @@ async function start(): Promise<void> {
     world.start(),
     loadPhysics(fetch(wasmUrl)),
     resolveSailor({
-      start: () =>
-        showStartScreen(document.body, {
-          sailors: catalog.sailors,
-          create: (name, look) => createGuest(name, look),
-        }),
+      start: () => showStartScreen(document.body, { sailors: catalog.sailors }),
+      addPasskey: (me) => showAddPasskey(document.body, me),
       backSoon: notice,
     }),
   ]);
@@ -635,6 +631,10 @@ function connect(online: Online): void {
   online.status.subscribe((status) => {
     if (status === 'signed-out') {
       location.reload();
+    } else if (status === 'removed') {
+      // The sailor was deleted, here or on another device: its notice
+      // shows a moment, then the start screen.
+      setTimeout(() => location.reload(), 4000);
     } else if (status === 'version') {
       let marks: Storage | null = null;
       try {

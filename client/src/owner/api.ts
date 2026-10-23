@@ -150,6 +150,13 @@ export interface Charted {
   worth: number;
 }
 
+/** accounts.json: the players' accounts, those made in the last week, and those seen in the last day. */
+export interface AccountsData {
+  total: number;
+  week: number;
+  today: number;
+}
+
 /** charted.json: what is charted, the oldest first, and how many there are to chart. */
 export interface ChartedData {
   subjects: number;
