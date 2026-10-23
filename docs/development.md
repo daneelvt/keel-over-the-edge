@@ -5908,7 +5908,7 @@ short, a symbol, a reserved name, mixed scripts, a name taken and
 look-alikes of it), a sailor made with a passkey by Playwright's
 authenticator, its recovery code shown once, the cookie's attributes, the
 sailor kept across a reload without the start screen, and a second
-browser refused the same name. `account.spec.ts`, on Chromium and WebKit
+browser refused the same name. `passkeys.spec.ts`, on Chromium and WebKit
 (WebKit up to the session), signs in by the prompt and by autofill, comes
 back with the recovery code, adds and removes a passkey on the account
 page, signs out the other devices and deletes the sailor; one test runs

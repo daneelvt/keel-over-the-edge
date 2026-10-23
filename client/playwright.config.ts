@@ -106,7 +106,7 @@ export default defineConfig({
     // account's passkeys there: nothing drawn.
     {
       name: 'webkit',
-      testMatch: ['worker.spec.ts', 'account.spec.ts'],
+      testMatch: ['worker.spec.ts', 'passkeys.spec.ts'],
       use: {
         ...devices['Desktop Safari'],
         baseURL: `https://localhost:${securePort}`,

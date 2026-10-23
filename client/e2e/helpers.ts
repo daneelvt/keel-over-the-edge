@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { inflateSync } from 'node:zlib';
-import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import { type APIResponse, type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import type { KeelHooks } from '../src/dev/hooks';
-import { createPasskey, type Passkey } from './passkey';
+import { assertPasskey, createPasskey, type Passkey } from './passkey';
 
 declare global {
   // The hooks the game's page puts on window with ?test.
@@ -189,6 +189,20 @@ export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<
   expect(done.status(), await done.text()).toBe(201);
   const body = (await done.json()) as { name: string; recoveryCode: string };
   return { name: body.name, passkey, recoveryCode: body.recoveryCode };
+}
+
+/**
+ * Signs in in the context through the server's routes with a passkey of the
+ * test's own, as another device holding it would, no page opened: the
+ * answer to /signin/finish.
+ */
+export async function signInWith(context: BrowserContext, p: Passkey): Promise<APIResponse> {
+  const begun = await context.request.post('/signin/begin');
+  expect(begun.status(), await begun.text()).toBe(200);
+  const origin = new URL(begun.url()).origin;
+  return context.request.post('/signin/finish', {
+    data: assertPasskey({ ...p, origin }, await begun.json()),
+  });
 }
 
 /**

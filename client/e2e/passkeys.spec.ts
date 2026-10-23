@@ -13,7 +13,7 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { holdPasskeys, sailor } from './helpers';
+import { holdPasskeys, sailor, signInWith } from './helpers';
 
 const look = data.sailors[0]?.id ?? '';
 
@@ -166,33 +166,33 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   await passkeys.first().getByRole('button', { name: 'Remove' }).click();
   await expect(page.locator('.account-status')).toHaveText('Passkey removed.');
   await expect(passkeys).toHaveCount(1);
+  // The other devices sign in through the routes, no page opened: a second
+  // page beside the sea takes over a minute to load on CI's software GPU.
   // The removed passkey signs in no more.
   const gone = await browser.newContext();
-  await holdPasskeys(gone, made.passkey);
-  await noAutofill(gone);
-  const gonePage = await gone.newPage();
-  await openStart(gonePage);
-  await gonePage.getByRole('button', { name: 'Sign in with a passkey' }).click();
-  await expect(gonePage.locator('#start-problem')).toHaveText(/not one of a sailor here/);
+  const refused = await signInWith(gone, made.passkey);
+  expect(refused.status()).toBe(404);
+  expect(await refused.json()).toMatchObject({ error: 'unknown-passkey' });
   await gone.close();
 
-  // Another device signed in, then signed out from here.
+  // Another device signed in with the passkey this browser added, then
+  // signed out from here.
   const other = await browser.newContext();
-  const otherKeys = await context.credentials.get();
-  await holdPasskeys(other, {
-    rpId: otherKeys[0]?.rpId ?? '',
+  const [added] = await context.credentials.get();
+  if (added === undefined) {
+    throw new Error('the browser holds no passkey');
+  }
+  const signin = await signInWith(other, {
+    rpId: added.rpId,
     origin: '',
-    id: otherKeys[0]?.id ?? '',
-    userHandle: otherKeys[0]?.userHandle ?? '',
-    privateKey: otherKeys[0]?.privateKey ?? '',
-    publicKey: otherKeys[0]?.publicKey ?? '',
-    signCount: otherKeys[0]?.signCount ?? 0,
+    id: added.id,
+    userHandle: added.userHandle ?? '',
+    privateKey: added.privateKey,
+    publicKey: added.publicKey ?? '',
+    signCount: added.signCount ?? 0,
   });
-  await noAutofill(other);
-  const otherPage = await other.newPage();
-  await openStart(otherPage);
-  await otherPage.getByRole('button', { name: 'Sign in with a passkey' }).click();
-  await signedIn(otherPage, other);
+  expect(signin.status(), await signin.text()).toBe(200);
+  expect((await other.request.get('/api/me')).status()).toBe(200);
   await page.getByRole('button', { name: 'Sign out everywhere else' }).click();
   await expect(page.locator('.account-status')).toHaveText('Signed out on 1 other device.');
   expect((await other.request.get('/api/me')).status()).toBe(401);
