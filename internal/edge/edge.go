@@ -52,7 +52,7 @@ const (
 	// CloseVersion: the client's protocol, catalog or physics layout
 	// differs from the server's.
 	CloseVersion websocket.StatusCode = 4002
-	// CloseRemoved: the player was removed (not sent yet).
+	// CloseRemoved: the player's account was deleted.
 	CloseRemoved websocket.StatusCode = 4003
 	// CloseWorldEnded: the falls have taken the world; the next one is
 	// reached by connecting again.

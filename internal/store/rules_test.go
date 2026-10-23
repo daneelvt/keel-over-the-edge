@@ -184,7 +184,7 @@ func TestOnlyStoreTalksToTheDatabase(t *testing.T) {
 
 func TestQueryName(t *testing.T) {
 	for sql, want := range map[string]string{
-		"-- name: CreateGuestAccount :one\nINSERT …": "CreateGuestAccount",
+		"-- name: CreateAccount :one\nINSERT …":      "CreateAccount",
 		"-- name: TouchSession :exec\n":              "TouchSession",
 		"begin":                                      "other",
 		"SELECT 1":                                   "other",

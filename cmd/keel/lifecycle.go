@@ -426,7 +426,13 @@ func (p *process) lifecycleJobs() []jobs.Job {
 				if err != nil {
 					return jobs.Result{}, err
 				}
-				return jobs.Result{Detail: fmt.Sprintf("%d sessions deleted", n), Skipped: n == 0}, nil
+				// Ceremonies begun and never finished: a start screen
+				// opened and left, a prompt closed.
+				c, err := p.db.DeleteCeremonies(ctx, due)
+				if err != nil {
+					return jobs.Result{}, err
+				}
+				return jobs.Result{Detail: fmt.Sprintf("%d sessions and %d ceremonies deleted", n, c), Skipped: n == 0 && c == 0}, nil
 			},
 		},
 		{

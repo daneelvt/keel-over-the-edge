@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -70,6 +71,12 @@ const serveUsage = `usage: keel serve
 
 Configured from the environment:
   KEEL_PLAY_ORIGIN     the players' HTTPS origin (required)
+  KEEL_PASSKEY_RP_ID   the domain players' passkeys are made for: the play
+                       origin's host or a parent of it, never an IP address
+                       (default the play origin's host)
+  KEEL_PASSKEY_ORIGINS more origins of that domain whose pages may make and
+                       use passkeys, comma-separated, for the browser tests'
+                       other servers (default none)
   KEEL_DATABASE_URL    the database, a postgres:// URL (required)
   KEEL_PLAY_ADDR       the game's listener (default 127.0.0.1:8080)
   KEEL_AGENTS_ADDR     the AI agents' listener (default 127.0.0.1:8081)
@@ -131,7 +138,7 @@ func serve(ctx context.Context, args []string, getenv func(string) string, stdou
 
 // database is what the server asks of the store.
 type database interface {
-	api.Guests
+	api.Accounts
 	auth.Sessions
 	CheckSchema(ctx context.Context) (int64, error)
 	ActiveOrFirstWorld(ctx context.Context, epoch time.Time) (store.World, error)
@@ -152,6 +159,7 @@ type database interface {
 	WriteWorldNews(ctx context.Context, lease int64, world [16]byte, n store.WorldNews) error
 	WriteGaleNews(ctx context.Context, lease int64, world [16]byte, n store.GaleNews) (bool, error)
 	DeleteSessions(ctx context.Context, before time.Time) (int64, error)
+	DeleteCeremonies(ctx context.Context, before time.Time) (int64, error)
 	DeleteJobRuns(ctx context.Context, before time.Time) (int64, error)
 	JobRuns(ctx context.Context, limit int) ([]store.JobRun, error)
 	jobs.Store
@@ -396,6 +404,10 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	if opt.generate == nil {
 		opt.generate = catalogGenerator(cat)
 	}
+	passkeys, err := auth.NewPasskeys(cfg.PasskeyRPID, cfg.PasskeyOrigins)
+	if err != nil {
+		return stopEarly(side, flight, fmt.Errorf("passkeys: %w", err))
+	}
 	looks := make([]string, len(cat.Sailors))
 	for i, s := range cat.Sailors {
 		looks[i] = string(s.ID)
@@ -404,7 +416,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		cfg: cfg, opt: opt, build: build, log: log, health: health, metrics: metrics,
 		db: db, writer: writer, lease: leaseEpoch, cat: cat, waves: waves, kinds: kinds, wcfg: wcfg,
 		sessions: auth.NewCache(db, auth.CacheConfig{Lookups: metrics.SessionLookups, Log: log}),
-		looks:    looks, page: page, ownPage: worldPage, flight: flight,
+		passkeys: passkeys, looks: looks, page: page, ownPage: worldPage, flight: flight,
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}

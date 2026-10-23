@@ -88,7 +88,7 @@ func TestTownHanded(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 		handed := func(name string) []uint32 {
-			token, _ := srv.Guest(name)
+			token, _ := srv.Sailor(name)
 			ws, _, err := srv.Connect(ctx, DialOptions{Cookie: token})
 			if err != nil {
 				t.Fatal(err)

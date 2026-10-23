@@ -121,7 +121,7 @@ func hillChunk(t testing.TB) string {
 func TestRoamRefused(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, roamWorld(t))
-		token, id := srv.Guest("Bob")
+		token, id := srv.Sailor("Bob")
 		far := srv.Crowd(t, 1, func(int) physics.State { return physics.State{X: 3000, Heading: 1} })
 		bob := srv.NewSailor(DialOptions{Cookie: token}, letGo)
 		views := watchViews(bob)
@@ -170,7 +170,7 @@ func TestRoam(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, roamWorld(t))
 		annToken, annID := srv.Owner("Ann")
-		bobToken, _ := srv.Guest("Bob")
+		bobToken, _ := srv.Sailor("Bob")
 		srv.Crowd(t, 1, func(int) physics.State { return physics.State{X: 3000, Heading: 1} })
 		ann := srv.NewSailor(DialOptions{Cookie: annToken}, letGo)
 		bob := srv.NewSailor(DialOptions{Cookie: bobToken}, letGo)
@@ -311,7 +311,7 @@ func TestUnseen(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
 		annToken, annID := srv.Owner("Ann")
-		bobToken, _ := srv.Guest("Bob")
+		bobToken, _ := srv.Sailor("Bob")
 		ann := srv.NewSailor(DialOptions{Cookie: annToken}, letGo)
 		bob := srv.NewSailor(DialOptions{Cookie: bobToken}, letGo)
 		bobViews := watchViews(bob)

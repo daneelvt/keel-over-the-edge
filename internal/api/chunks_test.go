@@ -17,12 +17,11 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
-// unaskedStore is a store that fails the test if anything asks it.
-type unaskedStore struct{ t *testing.T }
-
-func (s unaskedStore) CreateGuest(context.Context, store.Guest) (store.AccountID, error) {
-	s.t.Error("the store was asked for a guest")
-	return store.AccountID{}, store.ErrNotFound
+// unaskedStore is a store that fails the test if anything asks it for a
+// session.
+type unaskedStore struct {
+	noAccounts
+	t *testing.T
 }
 
 func (s unaskedStore) Session(context.Context, [32]byte) (store.Session, error) {
@@ -80,7 +79,7 @@ func testPayloads() [][]byte {
 func TestChunksServed(t *testing.T) {
 	payloads := testPayloads()
 	chunks := NewChunks(testChunkWorld, testChunkKey, payloads)
-	s := newTestServer(t, unaskedStore{t}, func(c *Config) { c.Chunks = chunks })
+	s := newTestServer(t, unaskedStore{t: t}, func(c *Config) { c.Chunks = chunks })
 	client := s.Client()
 	jar := &cookieCount{}
 	get := func(method, path string, header http.Header) (*http.Response, []byte) {
@@ -203,7 +202,7 @@ func spareBits(c byte) byte {
 type cookieCount struct{ n int }
 
 func TestRobots(t *testing.T) {
-	s := newTestServer(t, unaskedStore{t}, nil)
+	s := newTestServer(t, unaskedStore{t: t}, nil)
 	res, err := s.Client().Get(s.URL + "/robots.txt")
 	if err != nil {
 		t.Fatal(err)

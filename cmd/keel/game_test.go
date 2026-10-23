@@ -30,7 +30,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
-// gameServer is keel serve on db, with a guest's session, and the guest's
+// gameServer is keel serve on db, with a sailor's session, and the sailor's
 // cookie; it is ready when it returns.
 func gameServer(t *testing.T, vars map[string]string, db *memDB) (*server, string) {
 	t.Helper()

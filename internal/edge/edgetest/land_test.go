@@ -92,7 +92,7 @@ func TestWelcomeOnLand(t *testing.T) {
 				cfg = landWorld(t)
 			}
 			srv := NewServer(t, cfg)
-			token, _ := srv.Guest("Ann")
+			token, _ := srv.Sailor("Ann")
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ws, w, err := srv.Connect(ctx, DialOptions{Cookie: token})
@@ -154,7 +154,7 @@ func TestSailAground(t *testing.T) {
 			t.Fatal(err)
 		}
 		time.Sleep(3 * time.Second)
-		token, _ := srv.Guest("Ann")
+		token, _ := srv.Sailor("Ann")
 		// Holding east: the helm against the heading's error, as the golden
 		// scenarios steer.
 		var s *client.Sailor
@@ -202,7 +202,7 @@ func TestChunksSecret(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := landWorld(t)
 		srv := NewServer(t, cfg)
-		token, _ := srv.Guest("Ann")
+		token, _ := srv.Sailor("Ann")
 		s := srv.NewSailor(DialOptions{Cookie: token}, func(int) client.Input { return client.Hand(bus.Steps/2, 1024) })
 		if err := s.Connect(t.Context()); err != nil {
 			t.Fatal(err)

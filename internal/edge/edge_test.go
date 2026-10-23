@@ -110,7 +110,7 @@ func TestAIAccountRefused(t *testing.T) {
 func TestOrigins(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		for _, tc := range []struct {
 			origin string
 			ok     bool
@@ -143,7 +143,7 @@ func TestOrigins(t *testing.T) {
 func TestHelloVersions(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		for _, tc := range []struct {
 			label string
 			edit  func(h *pb.Hello)
@@ -174,7 +174,7 @@ func TestHelloVersions(t *testing.T) {
 func TestNoHello(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Dial(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -198,7 +198,7 @@ func TestNoHello(t *testing.T) {
 func TestWelcome(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, w, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -287,7 +287,7 @@ func TestWelcome(t *testing.T) {
 func TestSeaAreas(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, w, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -418,8 +418,8 @@ func TestSeaAreas(t *testing.T) {
 func TestFull(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{Capacity: 1})
-		ann, _ := s.Guest("Ann")
-		bob, _ := s.Guest("Bob")
+		ann, _ := s.Sailor("Ann")
+		bob, _ := s.Sailor("Bob")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: ann})
 		if err != nil {
 			t.Fatal(err)
@@ -453,7 +453,7 @@ func TestFull(t *testing.T) {
 func TestHeldTenMinutes(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -493,7 +493,7 @@ func TestHeldTenMinutes(t *testing.T) {
 func TestMessageTooBig(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -512,7 +512,7 @@ func TestMessageTooBig(t *testing.T) {
 func TestUnsupportedData(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		for _, send := range []func(ws *websocket.Conn){
 			func(ws *websocket.Conn) { ws.Write(t.Context(), websocket.MessageText, []byte("hello")) },
 			func(ws *websocket.Conn) { ws.Write(t.Context(), websocket.MessageBinary, []byte{9, 1, 2}) },
@@ -540,7 +540,7 @@ func TestUnsupportedData(t *testing.T) {
 func TestIdle(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -568,7 +568,7 @@ func TestIdle(t *testing.T) {
 func TestRate(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ack := &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{AckOnly: true}}}
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
@@ -635,7 +635,7 @@ func TestTakeover(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		rec := &changes{words: map[int64][]bus.Word{}}
 		s := edgetest.NewServer(t, edgetest.Config{Record: rec})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		first, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -706,7 +706,7 @@ func TestTakeover(t *testing.T) {
 func TestMargin(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -753,7 +753,7 @@ func TestMargin(t *testing.T) {
 func TestStalledReader(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token, Wrap: edgetest.SmallReadBuffer(4096)})
 		if err != nil {
 			t.Fatal(err)
@@ -781,7 +781,7 @@ func TestStalledReader(t *testing.T) {
 func TestStalledWriteDropped(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{Limits: edge.Limits{Idle: time.Hour}})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token, Wrap: edgetest.SmallReadBuffer(4096)})
 		if err != nil {
 			t.Fatal(err)
@@ -810,7 +810,7 @@ func TestStalledWriteDropped(t *testing.T) {
 func TestShutdown(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -837,7 +837,7 @@ func TestBell(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{Limit: 1})
 		var inboxes []*client.Inbox
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -845,7 +845,7 @@ func TestBell(t *testing.T) {
 		defer ws.CloseNow()
 		inboxes = append(inboxes, client.Read(ws))
 		// Bob waits in the queue.
-		token, _ = s.Guest("Bob")
+		token, _ = s.Sailor("Bob")
 		ws, _, err = s.Dial(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -855,7 +855,7 @@ func TestBell(t *testing.T) {
 		inboxes = append(inboxes, client.Read(ws))
 		time.Sleep(time.Second)
 		s.Edge.Bell(3 * time.Second)
-		token, _ = s.Guest("Cy")
+		token, _ = s.Sailor("Cy")
 		if _, resp, err := s.Dial(t.Context(), edgetest.DialOptions{Cookie: token}); err == nil || resp == nil || resp.StatusCode != http.StatusServiceUnavailable {
 			t.Fatalf("a connection after the bell: %v, %v", resp, err)
 		}
@@ -897,7 +897,7 @@ func TestBell(t *testing.T) {
 func TestShutdownDropsDeadPeers(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{Limits: edge.Limits{Idle: time.Hour}})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token, Wrap: edgetest.SmallReadBuffer(4096)})
 		if err != nil {
 			t.Fatal(err)
@@ -935,7 +935,7 @@ func drag(t *testing.T, encoders int) {
 		s := edgetest.NewServer(t, edgetest.Config{Record: rec, Encoders: encoders})
 		// Other players, on the other encoders.
 		for i := range encoders - 1 {
-			token, _ := s.Guest(fmt.Sprint("Crew ", i))
+			token, _ := s.Sailor(fmt.Sprint("Crew ", i))
 			ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 			if err != nil {
 				t.Fatal(err)
@@ -943,7 +943,7 @@ func drag(t *testing.T, encoders int) {
 			defer ws.CloseNow()
 			client.Read(ws)
 		}
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -985,7 +985,7 @@ func drag(t *testing.T, encoders int) {
 func TestClientTier(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -1044,7 +1044,7 @@ func TestWorldEnded(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ends := edgetest.Epoch.Add(7 * 24 * time.Hour)
 		s := edgetest.NewServer(t, edgetest.Config{Ends: ends})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, w, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -1066,6 +1066,52 @@ func TestWorldEnded(t *testing.T) {
 		}
 		if code := closedWith(t, again); code != websocket.StatusTryAgainLater {
 			t.Fatalf("a connection after the end closed with %d", code)
+		}
+	})
+}
+
+// TestRemove: an account deleted is taken out of the game: its connection
+// closed with 4003, its boat out of the water at once, without its grace;
+// a boat in its grace, its connection gone, goes too.
+func TestRemove(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := edgetest.NewServer(t, edgetest.Config{})
+		token, id := s.Sailor("Ann")
+		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ended := make(chan websocket.StatusCode, 1)
+		go func() { ended <- closedWith(t, ws) }()
+		time.Sleep(time.Second)
+		if occupied, _, _ := boatOf(s, 0); !occupied {
+			t.Fatal("no boat")
+		}
+		s.Edge.Remove(bus.Account(id))
+		if code := <-ended; code != edge.CloseRemoved {
+			t.Fatalf("closed with %d", code)
+		}
+		time.Sleep(time.Second)
+		if occupied, _, _ := boatOf(s, 0); occupied {
+			t.Fatal("the boat is still in the water")
+		}
+
+		// In its grace, with no connection.
+		bob, bobID := s.Sailor("Bob")
+		ws, _, err = s.Connect(t.Context(), edgetest.DialOptions{Cookie: bob})
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Second)
+		ws.Close(websocket.StatusNormalClosure, "")
+		time.Sleep(time.Second)
+		if occupied, _, grace := boatOf(s, 0); !occupied || grace == 0 {
+			t.Fatalf("Bob's boat: %v, grace %d", occupied, grace)
+		}
+		s.Edge.Remove(bus.Account(bobID))
+		time.Sleep(time.Second)
+		if occupied, _, _ := boatOf(s, 0); occupied {
+			t.Fatal("the boat in its grace is still in the water")
 		}
 	})
 }

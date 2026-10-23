@@ -4,6 +4,7 @@ package chart
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -102,6 +103,47 @@ func (m *Model) Add(rows []store.Charting) {
 	}
 }
 
+// Forget takes an account's name off its credits, the account having been
+// deleted: they keep their places, read as a former sailor's, as the
+// database's do. The chart published from now on carries them so; a
+// player's connection already open is sent what is charted next, and sees
+// the old credits so when it connects again.
+func (m *Model) Forget(account [16]byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	old := m.cur.Load()
+	next := &Chart{Entries: slices.Clone(old.Entries), Rows: slices.Clone(old.Rows), Subjects: old.Subjects}
+	changed := false
+	for i := range next.Rows {
+		r := &next.Rows[i]
+		if !r.Credited || r.Account != account || r.Sailor == "" {
+			continue
+		}
+		r.Sailor = ""
+		next.Entries[i] = m.entry(next.Subjects[i], r)
+		changed = true
+	}
+	if changed {
+		m.cur.Store(next)
+	}
+}
+
+// Credit is who a charting is credited to, as the chart shows them: the
+// sailor's name as it was then; "a former sailor" for an account deleted
+// since; "a sailor" for one of the server's own, which has no name.
+func Credit(r *store.Charting) string {
+	switch {
+	case r.Sailor != "":
+		return r.Sailor
+	case r.AccountKind != "":
+		return FormerSailor
+	}
+	return "a sailor"
+}
+
+// FormerSailor is how a credit of an account deleted reads.
+const FormerSailor = "a former sailor"
+
 // Charted are the subjects charted, by their index in the sight table.
 func (m *Model) Charted() []int32 { return m.cur.Load().Subjects }
 
@@ -142,10 +184,7 @@ func (m *Model) entry(i int32, r *store.Charting) *pb.ChartEntry {
 		Zone: zoneNumber(s.Zone), Ship: s.Ship, Sunk: s.Sunk,
 	}
 	if r.Credited {
-		e.By, e.Ai = r.Sailor, r.AccountKind == string(store.AI)
-		if e.By == "" {
-			e.By = "a sailor"
-		}
+		e.By, e.Ai = Credit(r), r.AccountKind == string(store.AI)
 	}
 	if s.Island >= 0 {
 		e.Island = uint32(w.Subjects[s.Island].Number) + 1

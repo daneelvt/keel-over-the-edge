@@ -114,7 +114,7 @@ func TestTwoSeeEachOther(t *testing.T) {
 		var mu sync.Mutex
 		saw := make([]int, 2)
 		for i, name := range []string{"Ann", "Bob"} {
-			token, id := srv.Guest(name)
+			token, id := srv.Sailor(name)
 			s := srv.NewSailor(DialOptions{Cookie: token}, recorded(t))
 			sailors = append(sailors, s)
 			accounts = append(accounts, bus.Account(id))
@@ -163,8 +163,8 @@ func sailAll(t *testing.T, sailors []*client.Sailor, d time.Duration) {
 func TestGoneAfterGrace(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv := NewServer(t, Config{})
-		ann, _ := srv.Guest("Ann")
-		bob, _ := srv.Guest("Bob")
+		ann, _ := srv.Sailor("Ann")
+		bob, _ := srv.Sailor("Bob")
 		a := srv.NewSailor(DialOptions{Cookie: ann}, recorded(t))
 		b := srv.NewSailor(DialOptions{Cookie: bob}, recorded(t))
 		var lastSeen, leftAt time.Duration
@@ -205,7 +205,7 @@ func TestQueue(t *testing.T) {
 		srv := NewServer(t, Config{Limit: 2})
 		var sailors []*client.Sailor
 		for _, name := range []string{"Ann", "Bob", "Cat"} {
-			token, _ := srv.Guest(name)
+			token, _ := srv.Sailor(name)
 			sailors = append(sailors, srv.NewSailor(DialOptions{Cookie: token}, recorded(t)))
 		}
 		for _, s := range sailors {
@@ -325,7 +325,7 @@ func sailCrowd(t *testing.T, n int, radius float64, gusty bool, lag client.Lag, 
 			cfg.Weather = inTrade(t)
 		}
 		srv := NewServer(t, cfg)
-		token, _ := srv.Guest("Ann")
+		token, _ := srv.Sailor("Ann")
 		o := DialOptions{Cookie: token}
 		if lag.Delay > 0 {
 			o.Wrap = lag.Wrap

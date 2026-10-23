@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -15,12 +16,33 @@ import (
 // ErrorWriter answers a request with an error: a status and a code.
 type ErrorWriter func(w http.ResponseWriter, status int, code string)
 
-type accountKey struct{}
+type sessionKey struct{}
 
-// FromContext is the account a request's session names, if it has one.
+// Current is a request's session: the account it names, and the hash of
+// its token.
+type Current struct {
+	store.Session
+	Hash [32]byte
+}
+
+// Confirmed reports whether a passkey was confirmed on the session lately
+// enough to allow what cannot be undone.
+func (c Current) Confirmed(now time.Time) bool { return now.Before(c.ConfirmedUntil) }
+
+// FromContext is the account a request's session names, if it has one
+// that is not held to adding a passkey.
 func FromContext(ctx context.Context) (store.Account, bool) {
-	a, ok := ctx.Value(accountKey{}).(store.Account)
-	return a, ok
+	c, ok := ctx.Value(sessionKey{}).(Current)
+	if !ok || c.Held {
+		return store.Account{}, false
+	}
+	return c.Account, true
+}
+
+// SessionFromContext is a request's session, if it has one, held or not.
+func SessionFromContext(ctx context.Context) (Current, bool) {
+	c, ok := ctx.Value(sessionKey{}).(Current)
+	return c, ok
 }
 
 // Session reads the session cookie of each request, resolves it through
@@ -56,17 +78,34 @@ func Session(c *Cache, log *slog.Logger, fail ErrorWriter) func(http.Handler) ht
 				http.SetCookie(w, SessionCookie(cookie.Value))
 			}
 			obs.SetAccount(r.Context(), res.Account.ID.String())
-			ctx := context.WithValue(r.Context(), accountKey{}, res.Account)
+			ctx := context.WithValue(r.Context(), sessionKey{}, Current{Session: res.Session, Hash: hash})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// Required answers 401 to a request without a session, and passes the rest
-// to h.
+// Required answers 401 to a request without a session and 403
+// "add-passkey" to one whose session is held to adding a passkey, and
+// passes the rest to h.
 func Required(fail ErrorWriter, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := FromContext(r.Context()); !ok {
+		c, ok := SessionFromContext(r.Context())
+		switch {
+		case !ok:
+			fail(w, http.StatusUnauthorized, "session")
+		case c.Held:
+			fail(w, http.StatusForbidden, "add-passkey")
+		default:
+			h.ServeHTTP(w, r)
+		}
+	})
+}
+
+// Signed answers 401 to a request without a session, and passes the rest
+// to h, sessions held to adding a passkey among them.
+func Signed(fail ErrorWriter, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := SessionFromContext(r.Context()); !ok {
 			fail(w, http.StatusUnauthorized, "session")
 			return
 		}

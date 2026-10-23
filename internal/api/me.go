@@ -13,20 +13,25 @@ import (
 )
 
 // me is the player's own account, what the page asks first: whether to go
-// to sea or to the start screen; and the kinds of notice its sailor has
-// switched off, which follow the account from device to device.
+// to sea, to the start screen, or, after the recovery code, to adding a
+// passkey; and the kinds of notice its sailor has switched off, which
+// follow the account from device to device.
 type me struct {
 	Name       string   `json:"name"`
 	Look       string   `json:"look"`
 	Kind       string   `json:"kind"`
-	Saved      bool     `json:"saved"`
 	NoticesOff []string `json:"noticesOff"`
+	// AddPasskey is a session held to adding a passkey.
+	AddPasskey bool `json:"addPasskey,omitempty"`
 }
 
-// me answers GET /api/me, behind auth.Required.
+// me answers GET /api/me, behind auth.Signed: a session held to adding a
+// passkey is answered too, so the page knows to ask for one.
 func (a *api) me(w http.ResponseWriter, r *http.Request) {
-	acc, _ := auth.FromContext(r.Context())
-	writeJSON(w, http.StatusOK, meOf(acc))
+	cur, _ := auth.SessionFromContext(r.Context())
+	m := meOf(cur.Account)
+	m.AddPasskey = cur.Held
+	writeJSON(w, http.StatusOK, m)
 }
 
 func meOf(acc store.Account) me {
@@ -34,7 +39,7 @@ func meOf(acc store.Account) me {
 	if off == nil {
 		off = []string{}
 	}
-	return me{Name: acc.Name, Look: acc.Look, Kind: string(acc.Kind), Saved: acc.Saved, NoticesOff: off}
+	return me{Name: acc.Name, Look: acc.Look, Kind: string(acc.Kind), NoticesOff: off}
 }
 
 // Notices sets an account's notices switched off: the store.

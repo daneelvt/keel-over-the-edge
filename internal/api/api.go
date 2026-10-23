@@ -4,7 +4,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -23,11 +22,6 @@ type Version struct {
 	Catalog string `json:"catalog"`
 }
 
-// Guests makes guests: the store.
-type Guests interface {
-	CreateGuest(ctx context.Context, g store.Guest) (store.AccountID, error)
-}
-
 // The limits on an ordinary request.
 const (
 	// ReadTimeout is how long a request may take to arrive, its body
@@ -43,9 +37,15 @@ type Config struct {
 	Version  Version
 	Log      *slog.Logger
 	Metrics  *obs.Metrics
-	Guests   Guests
+	Accounts Accounts
 	Sessions *auth.Cache
-	// Looks are the catalog's sailors a guest may choose, by id.
+	// Passkeys are the ceremonies with the browser's passkey prompt.
+	Passkeys *auth.Passkeys
+	// Deleted, if not nil, is told of an account just deleted: its boat
+	// leaves the water, its game connection closes and its credits lose its
+	// name.
+	Deleted func(id store.AccountID)
+	// Looks are the catalog's sailors a new sailor may choose, by id.
 	Looks []string
 	// Game, if not nil, is the game connection, GET /ws: it checks the
 	// session itself, so it can count those it refuses.
@@ -106,15 +106,38 @@ func Handler(cfg Config) http.Handler {
 		a.looks[l] = true
 	}
 	for _, r := range refusals {
-		cfg.Metrics.GuestsRefused.WithLabelValues(r)
+		cfg.Metrics.NamesRefused.WithLabelValues(r)
 	}
+	for _, k := range ceremonyKinds {
+		for _, r := range ceremonyResults {
+			cfg.Metrics.Ceremonies.WithLabelValues(k, r)
+		}
+	}
+	cfg.Metrics.SignIns.WithLabelValues("prompt")
+	cfg.Metrics.SignIns.WithLabelValues("conditional")
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/version", versionHandler(cfg.Version))
-	mux.HandleFunc("POST /guest", a.guest)
-	mux.Handle("GET /api/me", auth.Required(writeError, http.HandlerFunc(a.me)))
+	required := func(h http.HandlerFunc) http.Handler { return auth.Required(writeError, h) }
+	signed := func(h http.HandlerFunc) http.Handler { return auth.Signed(writeError, h) }
+	mux.HandleFunc("POST /account/begin", a.beginAccount)
+	mux.HandleFunc("POST /account/finish", a.finishAccount)
+	mux.HandleFunc("POST /signin/begin", a.beginSignIn)
+	mux.HandleFunc("POST /signin/finish", a.finishSignIn)
+	mux.HandleFunc("POST /recovery", a.recover)
+	mux.Handle("POST /logout", signed(a.logout))
+	mux.Handle("GET /api/me", signed(a.me))
+	mux.Handle("GET /api/account", required(a.account))
+	mux.Handle("POST /api/account/passkeys/begin", signed(a.beginPasskey))
+	mux.Handle("POST /api/account/passkeys/finish", signed(a.finishPasskey))
+	mux.Handle("POST /api/account/passkeys/remove", required(a.removePasskey))
+	mux.Handle("POST /api/account/confirm/begin", required(a.beginConfirm))
+	mux.Handle("POST /api/account/confirm/finish", required(a.finishConfirm))
+	mux.Handle("POST /api/account/recovery", required(a.newRecoveryCode))
+	mux.Handle("POST /api/account/logout-others", required(a.logoutOthers))
+	mux.Handle("POST /api/account/delete", required(a.deleteAccount))
 	if cfg.Notices != nil {
-		mux.Handle("POST /api/me/notices", auth.Required(writeError, http.HandlerFunc(a.setNotices)))
+		mux.Handle("POST /api/me/notices", required(a.setNotices))
 	}
 	if cfg.News != nil {
 		mux.Handle(newsRoute, newNews(cfg.News, cfg.NewsPage))
@@ -178,8 +201,8 @@ func session(mux *http.ServeMux, mw func(http.Handler) http.Handler) http.Handle
 	})
 }
 
-// refusals are the reasons a guest's name is refused, as the metrics label
-// them.
+// refusals are the reasons a new sailor's name is refused, as the metrics
+// label them.
 var refusals = []string{
 	string(moderation.Short), string(moderation.Long), string(moderation.Characters),
 	string(moderation.Scripts), string(moderation.Words), "taken",

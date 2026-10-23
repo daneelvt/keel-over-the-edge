@@ -67,8 +67,8 @@ func TestOverTheLipOnline(t *testing.T) {
 		wind := weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(12*1852.0/3600, math.Pi, 0))
 		watch := &overWatch{}
 		srv := NewServer(t, Config{Weather: wind, Terrain: &sim.Terrain{Circulation: 1}, Record: watch})
-		annToken, annID := srv.Guest("Ann")
-		bobToken, bobID := srv.Guest("Bob")
+		annToken, annID := srv.Sailor("Ann")
+		bobToken, bobID := srv.Sailor("Bob")
 		watch.account = bus.Account(annID)
 		ann := srv.NewSailor(DialOptions{Cookie: annToken}, letGo)
 		ann.Trace = &client.Trace{}

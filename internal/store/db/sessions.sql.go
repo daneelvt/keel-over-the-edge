@@ -12,23 +12,102 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const confirmSession = `-- name: ConfirmSession :execrows
+UPDATE session SET confirmed_until = $1 WHERE token_hash = $2 AND account_id = $3
+`
+
+type ConfirmSessionParams struct {
+	Until     pgtype.Timestamptz
+	TokenHash []byte
+	AccountID pgtype.UUID
+}
+
+func (q *Queries) ConfirmSession(ctx context.Context, arg ConfirmSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, confirmSession, arg.Until, arg.TokenHash, arg.AccountID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createSession = `-- name: CreateSession :exec
-INSERT INTO session (account_id, token_hash)
-VALUES ($1, $2)
+INSERT INTO session (account_id, token_hash, held)
+VALUES ($1, $2, $3)
 `
 
 type CreateSessionParams struct {
 	AccountID pgtype.UUID
 	TokenHash []byte
+	Held      bool
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
-	_, err := q.db.Exec(ctx, createSession, arg.AccountID, arg.TokenHash)
+	_, err := q.db.Exec(ctx, createSession, arg.AccountID, arg.TokenHash, arg.Held)
 	return err
 }
 
+const deleteAccountSessions = `-- name: DeleteAccountSessions :execrows
+DELETE FROM session WHERE account_id = $1
+`
+
+func (q *Queries) DeleteAccountSessions(ctx context.Context, accountID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAccountSessions, accountID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteOtherSessions = `-- name: DeleteOtherSessions :execrows
+DELETE FROM session WHERE account_id = $1 AND token_hash <> $2
+`
+
+type DeleteOtherSessionsParams struct {
+	AccountID pgtype.UUID
+	Keep      []byte
+}
+
+func (q *Queries) DeleteOtherSessions(ctx context.Context, arg DeleteOtherSessionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOtherSessions, arg.AccountID, arg.Keep)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteSession = `-- name: DeleteSession :execrows
+DELETE FROM session WHERE token_hash = $1
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSession, tokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const releaseSession = `-- name: ReleaseSession :execrows
+UPDATE session SET held = false WHERE token_hash = $1 AND account_id = $2
+`
+
+type ReleaseSessionParams struct {
+	TokenHash []byte
+	AccountID pgtype.UUID
+}
+
+// A session held to adding a passkey, let go once one is added.
+func (q *Queries) ReleaseSession(ctx context.Context, arg ReleaseSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseSession, arg.TokenHash, arg.AccountID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const sessionAccount = `-- name: SessionAccount :one
-SELECT a.id, a.kind, (a.saved_at IS NOT NULL)::boolean AS saved, a.tools, a.notices_off, sl.name, sl.look, s.last_seen_at
+SELECT a.id, a.kind, a.tools, a.notices_off, sl.name, sl.look, s.last_seen_at,
+  s.held, coalesce(s.confirmed_until, 'epoch')::timestamptz AS confirmed_until
 FROM session s
 JOIN account a ON a.id = s.account_id
 JOIN sailor sl ON sl.account_id = a.id
@@ -36,14 +115,15 @@ WHERE s.token_hash = $1
 `
 
 type SessionAccountRow struct {
-	ID         pgtype.UUID
-	Kind       string
-	Saved      bool
-	Tools      bool
-	NoticesOff []string
-	Name       string
-	Look       string
-	LastSeenAt time.Time
+	ID             pgtype.UUID
+	Kind           string
+	Tools          bool
+	NoticesOff     []string
+	Name           string
+	Look           string
+	LastSeenAt     time.Time
+	Held           bool
+	ConfirmedUntil time.Time
 }
 
 func (q *Queries) SessionAccount(ctx context.Context, tokenHash []byte) (SessionAccountRow, error) {
@@ -52,12 +132,13 @@ func (q *Queries) SessionAccount(ctx context.Context, tokenHash []byte) (Session
 	err := row.Scan(
 		&i.ID,
 		&i.Kind,
-		&i.Saved,
 		&i.Tools,
 		&i.NoticesOff,
 		&i.Name,
 		&i.Look,
 		&i.LastSeenAt,
+		&i.Held,
+		&i.ConfirmedUntil,
 	)
 	return i, err
 }

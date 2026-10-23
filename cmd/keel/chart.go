@@ -154,8 +154,8 @@ func (c *worldChart) chartedList() []owner.Charted {
 	for i, r := range rows {
 		out[i] = owner.Charted{Subject: r.Subject, Number: r.Number, By: r.Sailor, AI: r.AccountKind == string(store.AI),
 			At: r.At.UnixMilli(), Worth: r.Worth}
-		if r.Credited && r.Sailor == "" {
-			out[i].By = "a sailor"
+		if r.Credited {
+			out[i].By = chart.Credit(&r)
 		}
 	}
 	return out

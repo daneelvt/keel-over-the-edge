@@ -63,6 +63,7 @@ type process struct {
 	kinds    []physics.Prepared
 	wcfg     *weather.Config
 	sessions *auth.Cache
+	passkeys *auth.Passkeys
 	looks    []string
 	page     *api.Page
 	ownPage  *api.Page
@@ -346,8 +347,10 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Version:  api.Version{Build: p.build, Catalog: catalog.Version},
 		Log:      p.log,
 		Metrics:  p.metrics,
-		Guests:   p.db,
+		Accounts: p.db,
 		Sessions: p.sessions,
+		Passkeys: p.passkeys,
+		Deleted:  h.deleted(rw.charts),
 		Looks:    p.looks,
 		Game:     h.game,
 		Page:     p.page,
@@ -364,6 +367,18 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	p.log.Info("world ready", "world", row.Number, "kinds", len(p.kinds), "capacity", world.Capacity(), "limit", world.Limit(),
 		"workers", p.opt.workers, "tick", world.Now(), "ends", row.EndsAt)
 	return h, nil
+}
+
+// deleted is told of an account just deleted: its boat leaves the water
+// and its game connection closes, and its credits on the chart lose its
+// name, as the database's have.
+func (h *worldHalf) deleted(charts *worldChart) func(store.AccountID) {
+	return func(id store.AccountID) {
+		h.game.Remove(bus.Account(id))
+		if charts != nil {
+			charts.model.Forget(id)
+		}
+	}
 }
 
 // start runs the world half and serves it: its loop, its writes, its

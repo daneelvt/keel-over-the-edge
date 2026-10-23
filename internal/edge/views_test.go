@@ -106,7 +106,7 @@ func (r *reader) read() {
 func TestBases(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{Capacity: 64})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		var gate *pausable
 		small := edgetest.SmallReadBuffer(2048)
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token, Wrap: func(c net.Conn) net.Conn {
@@ -163,7 +163,7 @@ func TestBases(t *testing.T) {
 func TestResync(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{})
-		token, _ := s.Guest("Ann")
+		token, _ := s.Sailor("Ann")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)
@@ -205,7 +205,7 @@ func TestResync(t *testing.T) {
 func TestModifiedClient(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := edgetest.NewServer(t, edgetest.Config{Capacity: 256})
-		token, _ := s.Guest("Mallory")
+		token, _ := s.Sailor("Mallory")
 		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
 		if err != nil {
 			t.Fatal(err)

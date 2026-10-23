@@ -120,6 +120,30 @@ func (e *Edge) Tools(account bus.Account, on bool) bool {
 	return true
 }
 
+// Remove takes an account just deleted out of the game: its connection,
+// if it has one, is closed with 4003, and its boat, in the water with a
+// connection or in its grace without one, leaves at once.
+func (e *Edge) Remove(account bus.Account) {
+	if c := e.registry.get(account); c != nil {
+		c.stop()
+		c.close(CloseRemoved, "this sailor has been deleted")
+	}
+	f := e.cfg.Bus.Frames.Acquire()
+	var boat uint64
+	for _, s := range f.Live {
+		if f.Owner[s] == account {
+			boat = f.Boat[s]
+			break
+		}
+	}
+	f.Release()
+	if boat != 0 {
+		// Sent as a Disconnect is, trying again each tick while the
+		// queue is full.
+		e.disconnect(bus.Command{Op: bus.Leave, Boat: boat})
+	}
+}
+
 // Eye is where the free camera of an account's connection is, east and
 // north, m; ok is false unless it roams.
 func (e *Edge) Eye(account bus.Account) (x, y float64, ok bool) {

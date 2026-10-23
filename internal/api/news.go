@@ -142,7 +142,12 @@ func (n *news) page(ctx context.Context, before string) (newsPage, error) {
 		if !it.EndsAt.IsZero() {
 			ni.EndsAt = it.EndsAt.UnixMilli()
 		}
-		if ni.By == "" && it.Subject != store.SubjectWorld {
+		switch {
+		case ni.By != "" || it.Subject == store.SubjectWorld:
+		case it.AccountKind != "":
+			// The account was deleted: its credit keeps its place.
+			ni.By = "a former sailor"
+		default:
 			ni.By = "a sailor"
 		}
 		for _, f := range it.Also {

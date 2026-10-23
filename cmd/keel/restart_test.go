@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"math"
 	"net/http"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/auth/softkey"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
@@ -25,32 +27,53 @@ import (
 // Restarts against the test database, on real sockets in real time: two
 // keel serves, one after the other or both at once, on one database.
 
-// realGuest makes a guest through the server's POST /guest and returns its
-// session's cookie.
-func realGuest(t *testing.T, s *realServer, name string) string {
+// realSailor makes a sailor through the server's routes, as a player's
+// browser does, with a passkey in memory, and returns its session's
+// cookie.
+func realSailor(t *testing.T, s *realServer, name string) string {
 	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, _ := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
-	req, err := http.NewRequest(http.MethodPost, s.net.url(t, "127.0.0.1:8080")+"/guest", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res.Body.Close()
-	for _, c := range res.Cookies() {
-		if c.Name == auth.CookieName {
-			return c.Value
+	base := s.net.url(t, "127.0.0.1:8080")
+	cookies := map[string]string{}
+	post := func(path string, body []byte) []byte {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodPost, base+path, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
 		}
+		req.Header.Set("Content-Type", "application/json")
+		for k, v := range cookies {
+			req.AddCookie(&http.Cookie{Name: k, Value: v})
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		out, _ := io.ReadAll(res.Body)
+		if res.StatusCode/100 != 2 {
+			t.Fatalf("POST %s answered %s: %s", path, res.Status, out)
+		}
+		for _, c := range res.Cookies() {
+			cookies[c.Name] = c.Value
+		}
+		return out
 	}
-	t.Fatalf("POST /guest answered %s with no session", res.Status)
-	return ""
+	body, _ := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
+	opts := post("/account/begin", body)
+	// The page's origin, as the server is configured with it.
+	_, answer, err := softkey.Create(opts, "http://localhost:5181")
+	if err != nil {
+		t.Fatal(err)
+	}
+	post("/account/finish", answer)
+	if cookies[auth.CookieName] == "" {
+		t.Fatal("POST /account/finish set no session")
+	}
+	return cookies[auth.CookieName]
 }
 
 // sailing is a game connection whose snapshots are kept as they come.
@@ -179,7 +202,7 @@ func TestRestartRejoinsTheBoat(t *testing.T) {
 	}
 	wind("knots=12&from=0")
 	time.Sleep(2500 * time.Millisecond)
-	cookie := realGuest(t, first, "Ann")
+	cookie := realSailor(t, first, "Ann")
 	c := realConnect(t, first, cookie)
 	start := c.last(t)
 	if err := client.Send(t.Context(), c.ws, &pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{Helm: 512, Sheet: 400}}}); err != nil {

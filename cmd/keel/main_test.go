@@ -197,10 +197,11 @@ const (
 var bubbleEpoch = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // memDB is a database in memory, for servers in synctest bubbles, which
-// cannot wait on a real one: one world, no guests; the simulation's lease,
+// cannot wait on a real one: one world, no accounts made; the simulation's lease,
 // the world's checkpoint and its events. Two servers given one share them,
 // as two processes share a database.
 type memDB struct {
+	noAccounts
 	epoch    time.Time
 	onClose  func()
 	sessions *edgetest.Sessions // nil for none
@@ -467,8 +468,55 @@ func (d *memDB) News(context.Context, [16]byte, *[16]byte, int) ([]store.News, e
 
 func (d *memDB) SetNoticesOff(context.Context, store.AccountID, []string) error { return nil }
 
-func (d *memDB) CreateGuest(context.Context, store.Guest) (store.AccountID, error) {
-	return store.AccountID{}, errors.New("memDB makes no guests")
+// noAccounts makes and keeps no accounts: a memDB's accounts are
+// edgetest's sessions.
+type noAccounts struct{}
+
+var errNoAccounts = errors.New("memDB makes no accounts")
+
+func (noAccounts) NameFree(context.Context, string) (bool, error) { return false, errNoAccounts }
+func (noAccounts) CreateAccount(context.Context, store.NewAccount) (store.AccountID, error) {
+	return store.AccountID{}, errNoAccounts
+}
+func (noAccounts) AccountByUserHandle(context.Context, []byte) (store.Holder, error) {
+	return store.Holder{}, store.ErrNotFound
+}
+func (noAccounts) Profile(context.Context, store.AccountID) (store.Profile, error) {
+	return store.Profile{}, store.ErrNotFound
+}
+func (noAccounts) SignIn(context.Context, store.AccountID, [32]byte) (time.Time, error) {
+	return time.Time{}, errNoAccounts
+}
+func (noAccounts) Recover(context.Context, [32]byte, [32]byte) (store.Account, error) {
+	return store.Account{}, store.ErrNotFound
+}
+func (noAccounts) AddPasskey(context.Context, store.AccountID, store.Passkey, *[32]byte, *[32]byte) error {
+	return errNoAccounts
+}
+func (noAccounts) PasskeyUsed(context.Context, store.AccountID, store.Passkey) error {
+	return errNoAccounts
+}
+func (noAccounts) RemovePasskey(context.Context, store.AccountID, [16]byte) error {
+	return errNoAccounts
+}
+func (noAccounts) SetRecoveryCode(context.Context, store.AccountID, [32]byte) error {
+	return errNoAccounts
+}
+func (noAccounts) EndSession(context.Context, [32]byte) error { return nil }
+func (noAccounts) EndOtherSessions(context.Context, store.AccountID, [32]byte) (int64, error) {
+	return 0, nil
+}
+func (noAccounts) ConfirmSession(context.Context, store.AccountID, [32]byte, time.Time) error {
+	return errNoAccounts
+}
+func (noAccounts) DeleteAccount(context.Context, store.AccountID) error { return errNoAccounts }
+func (noAccounts) SaveCeremony(context.Context, store.Ceremony) error   { return errNoAccounts }
+func (noAccounts) TakeCeremony(context.Context, [32]byte, string) (store.Ceremony, error) {
+	return store.Ceremony{}, store.ErrNotFound
+}
+func (noAccounts) DeleteCeremonies(context.Context, time.Time) (int64, error) { return 0, nil }
+func (noAccounts) AccountCounts(context.Context) (store.AccountCounts, error) {
+	return store.AccountCounts{}, nil
 }
 
 func (d *memDB) Session(ctx context.Context, hash [32]byte) (store.Session, error) {

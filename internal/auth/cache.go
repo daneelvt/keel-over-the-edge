@@ -68,7 +68,7 @@ type Cache struct {
 
 type entry struct {
 	hash    [32]byte
-	account store.Account
+	session store.Session
 	fetched time.Time
 	// seen is when the session was last recorded seen, as the database has
 	// it or as this cache last wrote it.
@@ -113,9 +113,10 @@ func count(c prometheus.Counter) {
 	}
 }
 
-// Resolved is a session's account, and whether to set its cookie again.
+// Resolved is a session, its account, and whether to set its cookie
+// again.
 type Resolved struct {
-	Account     store.Account
+	store.Session
 	RenewCookie bool
 }
 
@@ -151,7 +152,7 @@ func (c *Cache) Resolve(ctx context.Context, hash [32]byte) (Resolved, error) {
 	} else {
 		c.order.MoveToBack(e.elem)
 	}
-	e.account, e.fetched = s.Account, now
+	e.session, e.fetched = s, now
 	if s.LastSeen.After(e.seen) {
 		e.seen = s.LastSeen
 	}
@@ -172,7 +173,7 @@ func (c *Cache) use(e *entry, now time.Time) (Resolved, bool) {
 	if renew {
 		e.cookieSet = now
 	}
-	return Resolved{Account: e.account, RenewCookie: renew}, touch
+	return Resolved{Session: e.session, RenewCookie: renew}, touch
 }
 
 func (c *Cache) touch(ctx context.Context, hash [32]byte, touch bool) {
@@ -186,14 +187,15 @@ func (c *Cache) touch(ctx context.Context, hash [32]byte, touch bool) {
 }
 
 // Add caches a session just made, its cookie just set.
-func (c *Cache) Add(hash [32]byte, account store.Account) {
+func (c *Cache) Add(hash [32]byte, s store.Session) {
 	now := c.cfg.Now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if old := c.entries[hash]; old != nil {
 		c.remove(old)
 	}
-	c.add(&entry{hash: hash, account: account, fetched: now, seen: now, cookieSet: now})
+	s.LastSeen = now
+	c.add(&entry{hash: hash, session: s, fetched: now, seen: now, cookieSet: now})
 }
 
 // Forget drops a session from the cache at once, as when it ends.
@@ -212,7 +214,7 @@ func (c *Cache) ForgetAccount(id store.AccountID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, e := range c.entries {
-		if e.account.ID == id {
+		if e.session.ID == id {
 			c.remove(e)
 		}
 	}
