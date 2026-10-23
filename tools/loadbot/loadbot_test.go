@@ -14,13 +14,15 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/auth/softkey"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
-// testGuests makes guests in the test server's own store, counting them.
-type testGuests struct {
+// testAccounts makes sailors in the test server's own store, counting
+// them.
+type testAccounts struct {
 	srv     *edgetest.Server
 	mu      sync.Mutex
 	made    int
@@ -28,49 +30,53 @@ type testGuests struct {
 	refused bool
 }
 
-func (g *testGuests) Create(_ context.Context, name string) (string, error) {
+func (g *testAccounts) Create(_ context.Context, name string) (Bot, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	// The name of guest 3 is refused once, as the server's filter might.
+	// The name of sailor 3 is refused once, as the server's filter might.
 	if name == "Loadbot 3" && !g.refused {
 		g.refused = true
-		return "", errNameRefused
+		return Bot{}, errNameRefused
 	}
 	token, _ := g.srv.Sessions.Add(name, store.Human)
 	g.made++
 	g.valid[token] = true
-	return token, nil
+	return Bot{Cookie: token}, nil
 }
 
-func (g *testGuests) Valid(_ context.Context, cookie string) (bool, error) {
+func (g *testAccounts) Valid(_ context.Context, cookie string) (bool, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.valid[cookie], nil
 }
 
+func (g *testAccounts) SignIn(context.Context, *softkey.Key) (string, error) {
+	return "", errUnknownPasskey
+}
+
 // TestBots: 20 bots join the in-memory server, sail, see each other, are
 // reported, and close cleanly; a second run, on the autopilot, uses the
-// sessions the first saved and makes no guest; with lag, the connections
+// sessions the first saved and makes no sailor; with lag, the connections
 // go through the lag model.
 func TestBots(t *testing.T) {
 	sessions := filepath.Join(t.TempDir(), "sessions.json")
 	synctest.Test(t, func(t *testing.T) {
 		srv := edgetest.NewServer(t, edgetest.Config{Capacity: 64})
-		guests := &testGuests{srv: srv, valid: map[string]bool{}}
+		accounts := &testAccounts{srv: srv, valid: map[string]bool{}}
 		dial := func(ctx context.Context, cookie string, wrap func(net.Conn) net.Conn) (*websocket.Conn, error) {
 			ws, _, err := srv.Dial(ctx, edgetest.DialOptions{Cookie: cookie, Wrap: wrap})
 			return ws, err
 		}
 		var out strings.Builder
 		cfg := Config{N: 20, Sail: 20 * time.Second, Ramp: 2 * time.Second, FrameEvery: time.Second / 30,
-			Guests: guests, Sessions: sessions, Dial: dial, Out: &out}
+			Accounts: accounts, Sessions: sessions, Dial: dial, Out: &out}
 		rep, err := Run(t.Context(), cfg)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Log(out.String())
 		if rep.Made != 20 {
-			t.Fatalf("%d guests made", rep.Made)
+			t.Fatalf("%d sailors made", rep.Made)
 		}
 		for _, p := range rep.Players {
 			if p.RTT > 10*time.Millisecond {
@@ -101,7 +107,7 @@ func TestBots(t *testing.T) {
 			}
 		}
 
-		// Again, through the lag model: the same guests, none made.
+		// Again, through the lag model: the same sailors, none made.
 		cfg.Pilot = 0
 		cfg.Lag = &client.Lag{Delay: 100 * time.Millisecond, Loss: 0.02}
 		cfg.Sail, cfg.Ramp, cfg.Out = 10*time.Second, 0, nil
@@ -109,8 +115,8 @@ func TestBots(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if again.Made != 0 || piloted.Made != 0 || guests.made != 20 {
-			t.Fatalf("the second run made %d guests", again.Made)
+		if again.Made != 0 || piloted.Made != 0 || accounts.made != 20 {
+			t.Fatalf("the second run made %d sailors", again.Made)
 		}
 		for _, p := range again.Players {
 			// The round trip the clock measured is the model's.
@@ -129,7 +135,7 @@ func TestBotsAcrossARestart(t *testing.T) {
 	sessions := filepath.Join(t.TempDir(), "sessions.json")
 	synctest.Test(t, func(t *testing.T) {
 		srv := edgetest.NewServer(t, edgetest.Config{Capacity: 64})
-		guests := &testGuests{srv: srv, valid: map[string]bool{}}
+		accounts := &testAccounts{srv: srv, valid: map[string]bool{}}
 		dial := func(ctx context.Context, cookie string, wrap func(net.Conn) net.Conn) (*websocket.Conn, error) {
 			ws, _, err := srv.Dial(ctx, edgetest.DialOptions{Cookie: cookie, Wrap: wrap})
 			return ws, err
@@ -140,7 +146,7 @@ func TestBotsAcrossARestart(t *testing.T) {
 		}()
 		var out strings.Builder
 		rep, err := Run(t.Context(), Config{N: 10, Sail: 20 * time.Second, FrameEvery: time.Second / 30,
-			Guests: guests, Sessions: sessions, Dial: dial, Out: &out})
+			Accounts: accounts, Sessions: sessions, Dial: dial, Out: &out})
 		if err != nil {
 			t.Fatal(err)
 		}

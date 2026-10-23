@@ -65,7 +65,7 @@ func (c *cluster) status(ctx context.Context) error {
 	}
 	fmt.Fprintf(c.out, "  the game        https://%s\n", host)
 	for _, ip := range devcert.LANAddresses() {
-		fmt.Fprintf(c.out, "                  https://%s\n", ip)
+		fmt.Fprintf(c.out, "                  https://%s (for a phone that cannot find %s: it plays, but cannot make or use a passkey there)\n", ip, host)
 	}
 	fmt.Fprintf(c.out, "  kubectl         kubectl --kubeconfig %s ...\n", c.kubeconfig)
 	fmt.Fprintf(c.out, "  probes, metrics kubectl --kubeconfig %s -n %s port-forward deployment/%s 9090:internal\n", c.kubeconfig, namespace, deployment)

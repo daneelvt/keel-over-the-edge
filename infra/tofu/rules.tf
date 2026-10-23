@@ -79,8 +79,8 @@ resource "cloudflare_ruleset" "firewall" {
   ]
 }
 
-# Guests are made with no human check yet: a burst from one address is
-# stopped at the edge. The free plan's one rate rule: its expression may
+# Accounts are made with no human check yet: a burst of them from one
+# address is stopped at the edge. Signing in is never limited. The free plan's one rate rule: its expression may
 # name the path alone, counting is per address (and per Cloudflare data
 # centre, which every rule counts by), over 10 s, blocking for 10 s
 # (Cloudflare's rate limiting rules, availability).
@@ -91,9 +91,9 @@ resource "cloudflare_ruleset" "rate" {
   phase   = "http_ratelimit"
   rules = [
     {
-      ref         = "guests"
-      description = "New guests: 10 in 10 s per address"
-      expression  = "(http.request.uri.path eq \"/guest\")"
+      ref         = "accounts"
+      description = "New accounts: 10 in 10 s per address"
+      expression  = "(http.request.uri.path eq \"/account/begin\")"
       action      = "block"
       ratelimit = {
         characteristics     = ["cf.colo.id", "ip.src"]

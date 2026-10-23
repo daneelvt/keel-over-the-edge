@@ -71,8 +71,11 @@ func buildPhysics(ctx context.Context, out io.Writer) error {
 }
 
 // certHosts are the names a phone or a browser on this computer may use.
-func certHosts(lan []net.IP) []string {
+func certHosts(name string, lan []net.IP) []string {
 	hosts := []string{"localhost", "127.0.0.1", "::1"}
+	if name != "" {
+		hosts = append(hosts, name)
+	}
 	for _, ip := range lan {
 		hosts = append(hosts, ip.String())
 	}
@@ -85,13 +88,14 @@ func makeCerts(ctx context.Context, out io.Writer, hosts []string, trust bool) (
 	return devcert.Make(ctx, out, filepath.Join(stateDir, "certs"), hosts, trust)
 }
 
-// playOrigin is the one address players use: the first local network
-// address, so a phone and this computer share an origin, or localhost when
-// there is no network.
-func playOrigin(lan []net.IP) string {
+// playOrigin is the one address players use: this computer's .local name,
+// so a phone and this computer share an origin, and passkeys, which no
+// browser makes for an IP address, work on both; localhost when it has no
+// name.
+func playOrigin(name string) string {
 	host := "localhost"
-	if len(lan) > 0 {
-		host = lan[0].String()
+	if name != "" {
+		host = name
 	}
 	return fmt.Sprintf("https://%s", net.JoinHostPort(host, strconv.Itoa(vitePort)))
 }

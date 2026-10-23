@@ -12,7 +12,7 @@ step 3 to step 7**. The target is under an hour.
 What is lost: at most the last five minutes before the machine went (the
 WAL not yet archived); and the boats at sea, as after any stop longer
 than the 60 seconds a checkpoint is good for: the sea starts empty, and
-players join again. What is not: accounts, guests, sailors, the world.
+players join again. What is not: accounts, their sailors and passkeys, the world.
 
 ## Before
 

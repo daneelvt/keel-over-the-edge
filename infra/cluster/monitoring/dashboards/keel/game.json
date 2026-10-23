@@ -982,8 +982,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Guests",
-      "description": "",
+      "title": "Accounts",
+      "description": "Accounts made, each with its first passkey; sign-ins with a passkey, by the browser’s prompt or offered on the name field; names refused; passkeys the server refused; recovery codes used; accounts deleted.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -995,7 +995,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(rate(keel_guests_created_total[$__rate_interval]))",
+          "expr": "sum(rate(keel_accounts_created_total[$__rate_interval]))",
           "legendFormat": "made",
           "editorMode": "code",
           "range": true,
@@ -1007,8 +1007,56 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(rate(keel_guests_refused_total[$__rate_interval]))",
-          "legendFormat": "refused",
+          "expr": "sum by (mediation) (rate(keel_signins_total[$__rate_interval]))",
+          "legendFormat": "signed in ({{mediation}})",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(keel_names_refused_total[$__rate_interval]))",
+          "legendFormat": "names refused",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (kind) (rate(keel_ceremonies_total{result=\"refused\"}[$__rate_interval]))",
+          "legendFormat": "passkeys refused ({{kind}})",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(keel_recovery_used_total[$__rate_interval]))",
+          "legendFormat": "recovery codes used",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(keel_accounts_deleted_total[$__rate_interval]))",
+          "legendFormat": "deleted",
           "editorMode": "code",
           "range": true,
           "instant": false

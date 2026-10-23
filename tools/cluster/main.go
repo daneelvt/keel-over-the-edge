@@ -14,7 +14,7 @@
 //	go run ./tools/cluster -restart  restart keel on the build it runs, as a deploy does
 //	go run ./tools/cluster -kill     delete keel's pod by force, as when its node is lost
 //	go run ./tools/cluster -crash    kill keel with SIGKILL in its container, as a crash does
-//	go run ./tools/cluster -smoke    check the game in the cluster over HTTPS: the page, a guest, the game connection, probes, the database's TLS
+//	go run ./tools/cluster -smoke    check the game in the cluster over HTTPS: the page, a sailor made with a passkey, the game connection, probes, the database's TLS
 //	go run ./tools/cluster -status   the VM, the node, the pods, the build running, the addresses
 //	go run ./tools/cluster -logs     follow keel's logs
 //	go run ./tools/cluster -phone    serve the page that sets up a phone, and print the game's address

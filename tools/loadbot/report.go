@@ -129,7 +129,7 @@ func (r *Report) print(w io.Writer, cfg Config) {
 	if cfg.Lag != nil {
 		lag = cfg.Lag.String()
 	}
-	fmt.Fprintf(w, "loadbot: %d players (%d guests made), %s, %.0f s each on average\n", len(r.Players), r.Made, lag, secs)
+	fmt.Fprintf(w, "loadbot: %d players (%d sailors made), %s, %.0f s each on average\n", len(r.Players), r.Made, lag, secs)
 	r.printSky(w, time.Now())
 	var in, out, inMsgs, outMsgs, others []float64
 	var snaps, corr, over, resyncs, dropped, errs int
