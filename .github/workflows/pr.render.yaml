@@ -166,7 +166,7 @@ jobs:
       - name: WebKit for Playwright
         working-directory: client
         run: npx --no-install playwright install --with-deps webkit
-      - name: The net worker's upgrade on WebKit
+      - name: The net worker's upgrade and the account's passkeys on WebKit
         working-directory: client
         run: npx --no-install playwright test --project webkit
       - name: The pictures and traces of a failure
