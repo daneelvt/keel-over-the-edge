@@ -86,7 +86,15 @@ test('@long a world ends on stage, and a new one begins with a blank chart', asy
   await expect
     .poll(async () => (await ending(ann.p)).now, { timeout: 90_000 })
     .toBeGreaterThan(ends - 10_000);
-  const [a, b] = await Promise.all([ending(ann.p), ending(bob.p)]);
+  // Each page draws a frame and reads its stage in one go: the stage is
+  // set as a frame is drawn, and two pages on CI's renderer draw one only
+  // every second or so.
+  const drawn = (p: Page): Promise<Ending> =>
+    p.evaluate(() => {
+      globalThis.keel.render();
+      return globalThis.keel.ending();
+    });
+  const [a, b] = await Promise.all([drawn(ann.p), drawn(bob.p)]);
   expect(a.stage.cut).toBeGreaterThan(0);
   const rate = 120 / 20; // the near sea's metres a second
   expect(Math.abs(a.stage.cut - b.stage.cut)).toBeLessThan(
