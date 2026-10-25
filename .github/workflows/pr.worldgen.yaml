@@ -24,7 +24,7 @@ concurrency:
 jobs:
   seeds:
     name: seeds
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'worldgen')
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.draft == false && contains(github.event.pull_request.labels.*.name, 'worldgen'))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

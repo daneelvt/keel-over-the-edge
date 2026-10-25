@@ -1,9 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:best-practices", ":dependencyDashboard"],
+  "extends": ["config:best-practices", ":dependencyDashboard", "group:all"],
   "minimumReleaseAge": "3 days",
   "vulnerabilityAlerts": { "enabled": false },
   "platformCommit": "enabled",
+  "draftPR": true,
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
   "kubernetes": { "managerFilePatterns": ["/^infra/cluster/.+\\.yaml$/"] },
@@ -100,61 +101,34 @@
       "description": "PostgreSQL moves a major version with the production operator's image; locally and in CI it follows production.",
       "matchDepNames": ["postgres", "ghcr.io/cloudnative-pg/postgresql"],
       "matchUpdateTypes": ["major"],
-      "dependencyDashboardApproval": true
+      "dependencyDashboardApproval": true,
+      "groupName": null
     },
     {
       "description": "Node follows the LTS line in .nvmrc; a new major is a deliberate change.",
       "matchDepNames": ["node"],
       "matchUpdateTypes": ["major"],
-      "dependencyDashboardApproval": true
+      "dependencyDashboardApproval": true,
+      "groupName": null
     },
     {
       "description": "k3s follows its stable channel, which takes up a new minor version of Kubernetes some time after it is out; a new minor is a deliberate change.",
       "matchDepNames": ["k3s-io/k3s", "rancher/k3s-upgrade"],
       "matchUpdateTypes": ["major", "minor"],
-      "dependencyDashboardApproval": true
-    },
-    {
-      "description": "k3s moves as one: its release and commit, the version the upgrade plan names, and the upgrade image of that release, which a rule of the manifests holds together.",
-      "matchDepNames": ["k3s-io/k3s", "rancher/k3s-upgrade"],
-      "groupName": "k3s"
-    },
-    {
-      "description": "The CloudNativePG chart, by tag and digest, moves with the operator's image its values pin; the Barman Cloud plugin, its chart and its two images, with them.",
-      "matchDepNames": [
-        "ghcr.io/cloudnative-pg/charts/cloudnative-pg", "ghcr.io/cloudnative-pg/cloudnative-pg",
-        "ghcr.io/cloudnative-pg/charts/plugin-barman-cloud", "ghcr.io/cloudnative-pg/plugin-barman-cloud", "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar"
-      ],
-      "groupName": "CloudNativePG operator"
-    },
-    {
-      "description": "cert-manager's chart moves with the images its values pin, all checked against cert-manager's key before a release (tools/release -verify-keyed).",
-      "matchDepNames": ["quay.io/jetstack/charts/cert-manager", "/^quay\\.io/jetstack/cert-manager-/"],
-      "groupName": "cert-manager"
-    },
-    {
-      "description": "The monitoring stack moves as one: VictoriaMetrics' charts, the images their values and the logs' objects pin, and vmalert-tool, which tests the rules with the release that evaluates them.",
-      "matchDepNames": [
-        "/^ghcr\\.io/victoriametrics/helm-charts//", "/^victoriametrics//", "VictoriaMetrics/VictoriaMetrics", "prom/alertmanager", "grafana/grafana",
-        "quay.io/kiwigrid/k8s-sidecar", "quay.io/prometheus/node-exporter", "registry.k8s.io/kube-state-metrics/kube-state-metrics", "curlimages/curl"
-      ],
-      "groupName": "Monitoring stack"
+      "dependencyDashboardApproval": true,
+      "groupName": null
     },
     {
       "description": "Kured and the system-upgrade controller run from their releases' manifests, kept as published (infra/vendor.yaml): a new release is a deliberate change, made with go run ./tools/vendored -pull beside the image.",
       "matchDepNames": ["ghcr.io/kubereboot/kured", "rancher/system-upgrade-controller", "rancher/kubectl"],
-      "dependencyDashboardApproval": true
+      "dependencyDashboardApproval": true,
+      "groupName": null
     },
     {
       "description": "The vendored manifests are their releases' own and never edited: the images they name are pinned by digest beside them, in each kustomization.",
       "matchManagers": ["kubernetes"],
       "matchFileNames": ["infra/cluster/infrastructure/controllers/kured/kured-*.yaml", "infra/cluster/infrastructure/controllers/system-upgrade/system-upgrade-controller.yaml"],
       "enabled": false
-    },
-    {
-      "description": "External Secrets supports only its newest minor version: its chart, by tag and digest, moves with the image its values pin.",
-      "matchDepNames": ["ghcr.io/external-secrets/charts/external-secrets", "ghcr.io/external-secrets/external-secrets"],
-      "groupName": "External Secrets"
     },
     {
       "description": "OpenTofu's providers come from OpenTofu's registry, at exact versions; Renovate keeps the lock file's hashes with them.",
@@ -167,11 +141,6 @@
       "matchManagers": ["terraform"],
       "matchDepTypes": ["required_version"],
       "enabled": false
-    },
-    {
-      "description": "Flux moves as one: its manifests, its controllers' images by digest, and its command line.",
-      "matchDepNames": ["fluxcd/flux2", "/^ghcr\\.io/fluxcd//"],
-      "groupName": "Flux"
     },
     {
       "description": "Flux's manifests are written by flux install and never edited: the images they name are pinned by digest beside them, in kustomization.yaml, and move with Flux.",
