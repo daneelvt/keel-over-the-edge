@@ -2,13 +2,15 @@
 # Builds and tests the game. The other checks are the pr.*.yaml workflows.
 # On a pull request the Go tests run only when Go code or what it reads
 # changed, the client's only when the client or what it loads changed, the
-# smoke test when either did, and the image when anything it holds did. On
-# a push to main, release.yaml calls this workflow first, and it runs
-# everything: a release is built only from a commit that passed.
+# smoke test when either did, and the image when anything it holds did; on
+# a draft nothing runs until it is marked ready for review. On a push to
+# main, release.yaml calls this workflow first, and it runs everything: a
+# release is built only from a commit that passed.
 name: ci
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_call:
 
 permissions: {}
@@ -23,6 +25,7 @@ concurrency:
 jobs:
   changes:
     name: changes
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-slim
     permissions:
       pull-requests: read # list the pull request's changed files

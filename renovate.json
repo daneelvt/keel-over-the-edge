@@ -4,6 +4,7 @@
   "minimumReleaseAge": "3 days",
   "vulnerabilityAlerts": { "enabled": false },
   "platformCommit": "enabled",
+  "draftPR": true,
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
   "kubernetes": { "managerFilePatterns": ["/^infra/cluster/.+\\.yaml$/"] },
