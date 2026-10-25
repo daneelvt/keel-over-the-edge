@@ -2,5 +2,5 @@
 # What checks the playbook; lint-requirements.txt pins it, with every
 # file's hash:
 #   pip-compile --generate-hashes --allow-unsafe lint-requirements.in
-ansible-lint==26.9.0
+ansible-lint==26.10.1
 ansible-core==2.21.5
