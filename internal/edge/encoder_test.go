@@ -104,7 +104,7 @@ func sailing(w *sim.World, e *Edge) []*conn {
 	f := w.Latest()
 	conns := make([]*conn, len(f.Live))
 	for i, s := range f.Live {
-		c := &conn{e: e, id: uint64(i + 1), slot: s, gen: f.Gen[s], boat: f.Boat[s], queue: make(chan outgoing, 8)}
+		c := &conn{e: e, id: uint64(i + 1), slot: s, gen: f.Gen[s], boat: f.Boat[s], queue: make(chan outgoing, 8), active: true}
 		c.margin.init()
 		c.box.init()
 		conns[i] = c
@@ -431,6 +431,12 @@ func BenchmarkEncodeSteady(b *testing.B) {
 						buf, _ := c.box.take()
 						size += len(buf)
 						snapshots++
+						// What else was queued, the bumps of boats sailing
+						// into each other: a full queue would close the
+						// connection, which has no socket.
+						for len(c.queue) > 0 {
+							<-c.queue
+						}
 					}
 					b.StartTimer()
 				}

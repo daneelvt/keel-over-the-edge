@@ -4,7 +4,8 @@
 // device's settings. The frame rate (60, or 30 to save battery), how much
 // the sea is drawn with (as much as the device runs well, or the least),
 // sound, the beginners' overlays, and whether the helm returns to the
-// centre when let go.
+// centre when let go. Online, a sailor to watch, and who may watch the
+// player's own boat.
 
 import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
@@ -13,6 +14,14 @@ import type { Countdown } from './countdown';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 import type { SettingsSignal } from './settings';
+import { useWatch, type WatchView } from './watchlazy';
+import { STOP_WATCHING, WATCH_A_SAILOR } from './watchwords';
+
+/** "Allow spectators", once its module is loaded. */
+function LazySpectators() {
+  const m = useWatch();
+  return m === null ? null : <m.SpectatorsChoice />;
+}
 
 function Toggle({
   label,
@@ -58,6 +67,7 @@ export function Menu({
   end = null,
   account = null,
   machines = null,
+  watch = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
@@ -75,6 +85,8 @@ export function Menu({
   account?: (() => void) | null;
   /** Opens the machine sailors' panel; null in the offline sandbox. */
   machines?: (() => void) | null;
+  /** Watching another sailor's boat; null in the offline sandbox. */
+  watch?: WatchView | null;
 }) {
   const s = settings.value.value;
   return (
@@ -90,6 +102,30 @@ export function Menu({
           {machines !== null ? (
             <button type="button" onClick={machines}>
               Machine sailors
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {watch !== null ? (
+        <div class="menu-chart">
+          <button
+            type="button"
+            onClick={() => {
+              watch.list.value = true;
+              close();
+            }}
+          >
+            {WATCH_A_SAILOR}
+          </button>
+          {watch.watching.value !== null ? (
+            <button
+              type="button"
+              onClick={() => {
+                watch.unwatch();
+                close();
+              }}
+            >
+              {STOP_WATCHING}
             </button>
           ) : null}
         </div>
@@ -162,6 +198,7 @@ export function Menu({
         set={(centreHelm) => settings.set({ centreHelm })}
       />
       {notices !== null ? <NoticeSwitches notices={notices} /> : null}
+      {watch !== null ? <LazySpectators /> : null}
       {fly !== null ? (
         <button type="button" class="menu-fly" onClick={fly}>
           Free camera (F)

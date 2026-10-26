@@ -34,6 +34,9 @@ message Hello {
   uint32 physics_layout = 3;
   // The client's build, for the log only.
   string build = 4;
+  // A sailor's name, to watch their boat rather than sail: empty to sail.
+  // Watching is as Command.watch asks it, the connection's first.
+  string watch = 5;
 }
 
 // Input is the controls the client steps its boat with, stamped with the
@@ -84,8 +87,34 @@ message Command {
   oneof body {
     Resync resync = 1;
     Roam roam = 2;
+    Watch watch = 3;
+    Sail sail = 4;
+    Unwatch unwatch = 5;
   }
 }
+
+// Watch asks to watch another sailor's boat from that boat's own place: a
+// spectator, holding no boat. A boat the connection sails leaves the water
+// at once, with no grace; a place in the queue for one is kept, and the
+// watch ends when the queue gives the boat. The watch begins with a
+// Welcome whose watching names the sailor, its snapshots the watched
+// boat's; or, refused, a WatchEnded, the connection sailing, waiting or
+// idle as it was. While the spectators are as many as may watch, a Queued
+// with spectators set comes first. At most one a second is honoured.
+message Watch {
+  // The sailor's name, as players see it: case and look-alikes do not
+  // matter.
+  string sailor = 1;
+}
+
+// Sail asks for a boat, as a connection that opens to sail does: a new one
+// at the start, or a place in the queue, while the watch, if any, goes on.
+// A connection that sails or waits already is answered nothing.
+message Sail {}
+
+// Unwatch ends the watch: the connection is idle, sent no snapshots, until
+// it watches again or sails.
+message Unwatch {}
 
 // Resync asks for the next snapshot in full: the client lacks the base of
 // one it received. At most one a second is honoured.
@@ -129,7 +158,48 @@ message ServerMessage {
     Charted charted = 13;
     IslandCaps island_caps = 14;
     Forecast forecast = 15;
+    WatchEnded watch_ended = 16;
+    Watchers watchers = 17;
   }
+}
+
+// WatchEnded says a watch has ended, or was refused: the connection is
+// idle, sent no snapshots, unless it sails or waits for a boat. A refusal
+// never tells whether a human sailor who does not allow spectators is at
+// sea.
+message WatchEnded {
+  WatchEnd why = 1;
+  // The sailor's name: as the game has it, or as it was asked for when
+  // there is no such sailor.
+  string sailor = 2;
+}
+
+// WatchEnd is why a watch ended or was refused.
+enum WatchEnd {
+  WATCH_END_UNSPECIFIED = 0;
+  // The boat has left the water.
+  WATCH_END_LEFT = 1;
+  // The sailor no longer allows spectators.
+  WATCH_END_OFF = 2;
+  // The sailor cannot be watched now: a human not at sea or not allowing
+  // spectators, or a boat kept out of sight.
+  WATCH_END_CANNOT = 3;
+  // A machine sailor not at sea.
+  WATCH_END_NOT_AT_SEA = 4;
+  // No sailor of that name.
+  WATCH_END_NO_SAILOR = 5;
+  // The connection's own boat.
+  WATCH_END_OWN = 6;
+  // Asked again within a second: not honoured.
+  WATCH_END_QUICK = 7;
+  // The game could not look the sailor up in time: try again.
+  WATCH_END_BUSY = 8;
+}
+
+// Watchers says how many watch the connection's boat, as it changes, at
+// most every two seconds; never who.
+message Watchers {
+  uint32 count = 1;
 }
 
 // Forecast is the forecast, issued at each boundary of ten minutes of world
@@ -621,6 +691,8 @@ message Queued {
   uint32 position = 1;
   // How many wait in all.
   uint32 waiting = 2;
+  // A place in the spectators' queue, to watch, not the queue for a boat.
+  bool spectators = 3;
 }
 
 // Welcome says the client has its boat; its snapshots follow.
@@ -664,6 +736,20 @@ message Welcome {
   // The time zone the schedule's ends are published in, an IANA name such
   // as America/New_York; "" for a schedule of periods, published in UTC.
   string zone = 14;
+  // The connection watches another sailor's boat, not sails its own: boat
+  // and kind are the watched boat's, and so are the snapshots. A Welcome
+  // comes again at each new watch, and for the connection's own boat when
+  // it sails again.
+  Watching watching = 15;
+}
+
+// Watching is whose boat a connection watches.
+message Watching {
+  // The sailor's name; whether it is a machine sailor, sailed by an AI
+  // agent; and whether it is one of the account's own machine sailors.
+  string sailor = 1;
+  bool machine = 2;
+  bool mine = 3;
 }
 
 // Pong answers a Ping.

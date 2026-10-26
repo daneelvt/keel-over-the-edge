@@ -198,3 +198,14 @@
   padding: 6px 0;
   border-bottom: 1px solid rgb(242 239 231 / 15%);
 }
+
+/* Watch, beside a machine sailor at sea, and how many watch it. */
+.machine-watch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.machine-watch .start-sign-in {
+  padding: 0 16px;
+}

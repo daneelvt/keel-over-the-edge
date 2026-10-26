@@ -293,7 +293,7 @@ describe('the connection’s numbers', () => {
       margin: 2,
       counts: { snapshots: 60, corrections: 0, resets: 1, stale: 0, largest: 0 },
       p95: 0,
-      traffic: { bytesIn: 1, bytesOut: 2, messagesIn: 3, messagesOut: 4, resyncs: 0 },
+      traffic: { bytesIn: 1, bytesOut: 2, messagesIn: 3, messagesOut: 4, resyncs: 0, controls: 0 },
       fleet: fleet.stats,
       snapshotBytes: 190,
     });
@@ -314,7 +314,7 @@ describe('the connection’s numbers', () => {
       margin: 2,
       counts: { snapshots: 60, corrections: 0, resets: 1, stale: 0, largest: 0 },
       p95: 0,
-      traffic: { bytesIn: 1, bytesOut: 2, messagesIn: 3, messagesOut: 4, resyncs: 0 },
+      traffic: { bytesIn: 1, bytesOut: 2, messagesIn: 3, messagesOut: 4, resyncs: 0, controls: 0 },
       fleet: new Fleet().stats,
       snapshotBytes: 190,
       wind: {

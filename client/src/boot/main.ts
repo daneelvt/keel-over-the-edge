@@ -9,7 +9,10 @@
 // page says so and asks again. Then the net
 // worker opens the game connection, and the sea appears with the boat's
 // first snapshot; the page goes on predicting it, and says so when the
-// connection is poor or lost.
+// connection is poor or lost. A page opened with ?watch=Iron%20Mary, or a
+// sailor chosen to watch on the start screen, watches that sailor's boat
+// instead, from its own place: nothing steers it, and the player may
+// watch another or sail from there.
 //
 // Query strings, for development:
 //   ?sandbox          the offline sandbox alone: no server, no account
@@ -33,14 +36,15 @@
 //   ?chart=sight      the sandbox's world charted as its lookout sees it, by the
 //                     server's sight table, rather than whole (?chart=all)
 //   ?test             the hooks the browser tests drive
+//   ?watch=Iron%20Mary  watches that sailor's boat rather than sail, once signed in
 //
 // F flies the free camera off the boat and back, Escape brings it back: in
 // the sandbox for anyone, online for an account with the owner's flag.
 
 import './game.css';
-import { signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { loadMachines } from '../account/lazy';
-import { resolveSailor } from '../account/me';
+import { type Me, resolveSailor } from '../account/me';
 import { backSoon, showAddPasskey, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Forecasting } from '../chart/forecasting';
@@ -97,6 +101,8 @@ import { mountScreen } from '../ui/hud';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
+import { loadWatch, type WatchView } from '../ui/watchlazy';
+import { watchFromQuery } from '../ui/watchwords';
 import { harbourWater, watchHarbour } from './harbour';
 
 async function start(): Promise<void> {
@@ -350,18 +356,29 @@ async function start(): Promise<void> {
 
   // The physics module compiles while the renderer starts and the sailor is
   // found, so none waits on another; the controls listen only at sea, so
-  // typing a name steers nothing.
+  // typing a name steers nothing. A link to watch a sailor goes straight
+  // to the watch, past the machine sailors.
   const notice = backSoon(document.body);
+  const linked = watchFromQuery(query);
   const [, physics, me] = await Promise.all([
     world.start(),
     loadPhysics(fetch(wasmUrl)),
     resolveSailor({
-      start: () => showStartScreen(document.body, { sailors: catalog.sailors }),
+      start: () =>
+        showStartScreen(document.body, {
+          sailors: catalog.sailors,
+          ...(linked === '' ? {} : { machines: false }),
+        }),
       addPasskey: (me) => showAddPasskey(document.body, me),
-      machines: async (me) => (await loadMachines()).showMachineStart(document.body, me),
+      ...(linked === ''
+        ? {
+            machines: async (me: Me) => (await loadMachines()).showMachineStart(document.body, me),
+          }
+        : {}),
       backSoon: notice,
     }),
   ]);
+  const watchFirst = linked !== '' ? linked : (me.watch ?? '');
   const predictor = new Predictor(
     physics,
     world.kind.physics,
@@ -373,6 +390,10 @@ async function start(): Promise<void> {
     type: 'module',
   });
   const online = new Online(worker, predictor, game);
+  if (watchFirst !== '') {
+    // The connection's first Hello asks to watch.
+    online.watch(watchFirst);
+  }
   world.fleetSource = online.fleet;
   world.onQuality = (tier, scale) => online.quality(tier, scale);
   online.quality(world.tier.number, world.stage.pixelRatio());
@@ -385,7 +406,7 @@ async function start(): Promise<void> {
       chooseSky(world, query);
     }
   };
-  online.onBump = (b) => game.bump(b, performance.now());
+  online.onBump = (b) => game.bump(b, performance.now(), online.watching.value?.sailor ?? null);
   // The land: its chunks fetched and built off the page's thread.
   const land = new Land(
     new Worker(new URL('../workers/mesh/worker.ts', import.meta.url), { type: 'module' }),
@@ -395,8 +416,10 @@ async function start(): Promise<void> {
   world.useLand(land);
   game.bedFriction = (east, north) => land.frictionAt(east, north);
   world.freeCam.ground = (east, north) => land.heightAt(east, north);
-  // The free camera is the owner's alone: the server hears it from no other.
-  game.canFly = () => online.tools.value;
+  // The free camera is the owner's alone: the server hears it from no other;
+  // and nothing on a boat watched is the player's to move.
+  game.canFly = () => online.tools.value && !online.spectating.value;
+  game.canSteer = () => !online.spectating.value;
   game.onRoam = (on, east, north, height) => online.roam(on, east, north, height);
   let worldId = '';
   const models = new Models();
@@ -477,11 +500,51 @@ async function start(): Promise<void> {
     countdown.tick();
     endNotices.tick(performance.now());
   }, 250);
+  // Watching, as the screens see it.
+  const watchView: WatchView = {
+    watching: online.watching,
+    spectating: online.spectating,
+    status: online.status,
+    ended: online.ended,
+    place: online.watchPlace,
+    boatPlace: online.place,
+    watchers: online.watchers,
+    list: signal(false),
+    watch: (sailor) => online.watch(sailor),
+    sail: () => {
+      // A reload from now on sails, not watches the sailor linked.
+      if (query.has('watch')) {
+        query.delete('watch');
+        const q = query.toString();
+        history.replaceState(history.state, '', `${location.pathname}${q === '' ? '' : `?${q}`}`);
+      }
+      online.sail();
+    },
+    unwatch: () => online.unwatch(),
+    behind: () => world.camera.behind(),
+  };
+  // A boat watched: the camera stays where the player puts it, and a
+  // machine sailor's sail carries its mark.
+  effect(() => {
+    world.camera.easesBack = !online.spectating.value;
+    world.boat?.setMachine(online.spectating.value && online.watching.value?.machine === true);
+  });
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
-  // while the sea is full.
+  // while the sea is full; a watch refused, or the spectators' queue, with
+  // the way to watch another or sail.
   const waiting = online.status.subscribe((status) => notice(status === 'waiting'));
   const queue = showQueue(document.body, online.place);
+  const watchWaiting: { atSea: boolean; hide: (() => void) | null } = { atSea: false, hide: null };
+  const waitingWatch = effect(() => {
+    if (online.status.value === 'idle' || online.watchPlace.value !== null) {
+      void loadWatch().then((m) => {
+        if (!watchWaiting.atSea && watchWaiting.hide === null) {
+          watchWaiting.hide = m.showWatchWaiting(document.body, watchView);
+        }
+      });
+    }
+  });
   await online.ready;
   // The land about the boat is drawn before the sea is shown, or the sea
   // shows after three seconds whatever has come.
@@ -489,8 +552,12 @@ async function start(): Promise<void> {
   waiting();
   queue();
   notice(false);
+  watchWaiting.atSea = true;
+  waitingWatch();
+  watchWaiting.hide?.();
 
-  game.setDriver(predictor);
+  game.setDriver(online.driver);
+  online.onDriver = (d) => game.setDriver(d);
   game.pacer = online;
   const baro = startBarometer(world, predictor.physics, forecasting);
   mountScreen(document.body, {
@@ -518,6 +585,7 @@ async function start(): Promise<void> {
       src: forecasting,
       store: parts.chart.store,
     },
+    watch: watchView,
   });
   game.listen(document, container);
   if (view !== undefined) {

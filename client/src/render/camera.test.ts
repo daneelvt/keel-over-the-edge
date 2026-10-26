@@ -84,6 +84,36 @@ describe('the chase camera', () => {
     expect(Math.abs(cam.view.elevation - CHASE.elevation)).toBeLessThan(0.01);
   });
 
+  test('watching another’s boat it does not ease back by itself; Behind the boat brings it back', () => {
+    const cam = new ChaseCamera();
+    cam.place(CHASE, 0);
+    cam.easesBack = false;
+    cam.drag(-200, -400, 1000);
+    const swung = cam.view.azimuth;
+    expect(cam.looksUp).toBe(true);
+    for (let t = 1000; t < 1000 + 3 * EASE_BACK_AFTER; t += 1000 / 60) {
+      cam.update(1 / 60, 0, t);
+    }
+    expect(cam.view.azimuth).toBe(swung);
+    cam.behind();
+    expect(cam.looksUp).toBe(false);
+    let t = 1000 + 3 * EASE_BACK_AFTER;
+    for (let i = 0; i < 6 * 60; i++) {
+      t += 1000 / 60;
+      cam.update(1 / 60, 0, t);
+    }
+    expect(Math.abs(cam.view.azimuth - CHASE.azimuth)).toBeLessThan(0.01);
+    expect(Math.abs(cam.view.elevation - CHASE.elevation)).toBeLessThan(0.01);
+    // Back there, a drag holds again.
+    cam.drag(-200, 0, t);
+    const again = cam.view.azimuth;
+    for (let i = 0; i < 60 * 10; i++) {
+      t += 1000 / 60;
+      cam.update(1 / 60, 0, t);
+    }
+    expect(cam.view.azimuth).toBe(again);
+  });
+
   test('rises and falls with the boat, over half a second, and not with its heel or pitch', () => {
     const cam = new ChaseCamera();
     cam.place(CHASE, 0);

@@ -41,6 +41,8 @@ import { AddPasskey, RecoveredNotice, RecoveryCode, SetSailOrMake } from './reco
 export interface StartProps {
   sailors: readonly Look[];
   done: (me: Me) => void;
+  /** Whether a player with machine sailors is shown them before the sea: not one come by a link to watch. */
+  machines?: boolean;
   random?: () => number;
   /** The server and the browser's prompt; the browser's own unless a test stands in. */
   reach?: Reach;
@@ -66,7 +68,7 @@ type View =
   | { kind: 'recovered'; me: Me; at: number }
   | { kind: 'add-passkey'; me: Me };
 
-export function StartScreen({ sailors, done, random, reach }: StartProps) {
+export function StartScreen({ sailors, done, random, reach, machines = true }: StartProps) {
   const [view, setView] = useState<View>({ kind: 'form' });
   const [support, setSupport] = useState<Support | null>(null);
   const [anyway, setAnyway] = useState(false);
@@ -95,7 +97,7 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
 
   // To sea, or to the machine sailors first for a player who has any.
   const onward = (me: Me) => {
-    if ((me.machines ?? 0) > 0) {
+    if (machines && (me.machines ?? 0) > 0) {
       setView({ kind: 'machines', me, first: false });
     } else {
       done(me);
@@ -104,9 +106,12 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
 
   const signedIn = async (s: SignedIn) => {
     // The sign-in's answer does not say how many machine sailors the
-    // account has; the session's does.
+    // account has, nor whether its boat is at sea; the session's does.
     const check = await checkSession(reach?.fetch);
-    const me = check.kind === 'sailor' ? { ...s.me, machines: check.me.machines ?? 0 } : s.me;
+    const me =
+      check.kind === 'sailor'
+        ? { ...s.me, machines: check.me.machines ?? 0, atSea: check.me.atSea === true }
+        : s.me;
     if (s.recovered > 0) {
       setView({ kind: 'recovered', me, at: s.recovered });
     } else {
@@ -249,7 +254,11 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
     case 'machines':
       return (
         <div class="start">
-          <Machines first={view.first} done={() => done(view.me)} />
+          <Machines
+            first={view.first}
+            atSea={view.me.atSea === true}
+            done={(watch) => done(watch === undefined ? view.me : { ...view.me, watch })}
+          />
         </div>
       );
     case 'recovered':
@@ -420,20 +429,28 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
   );
 }
 
-/** The start screen with machine sailors, once its module is loaded. */
-function Machines({ first, done }: { first: boolean; done: () => void }) {
+/** The start screen with machine sailors, once its module is loaded; done is given a sailor chosen to watch, or nothing to sail. */
+function Machines({
+  first,
+  atSea,
+  done,
+}: {
+  first: boolean;
+  atSea: boolean;
+  done: (watch?: string) => void;
+}) {
   const m = useMachines();
   if (m === null) {
     return (
       <section class="start-panel" aria-labelledby="start-title">
         <h1 id="start-title">Keel Over the Edge</h1>
-        <button type="button" class="start-go" onClick={done}>
+        <button type="button" class="start-go" onClick={() => done()}>
           Set sail
         </button>
       </section>
     );
   }
-  return <m.MachineStart first={first} done={done} />;
+  return <m.MachineStart first={first} done={done} atSea={atSea} />;
 }
 
 /** A browser that cannot make the player's passkey: the game's address, to open elsewhere. */

@@ -13,6 +13,8 @@
 // the queue for a boat it pings every 2 s, and sends nothing else. Each
 // snapshot's other boats are decoded against its base among the last few
 // views; one whose base is gone is dropped, and a Resync asked for.
+// Every Hello asks for what the page last asked for: a boat, or a watch of
+// a sailor's; a watch refused before any Welcome pings as the queue does.
 
 import { PILOT_IDLE, type PilotControl } from '../../input/pilot';
 import { Clock } from '../../net/clock';
@@ -23,6 +25,7 @@ import {
   ChartSubject,
   type Light,
   type Place,
+  WatchEnd,
   type Welcome,
 } from '../../net/gen/keel/v1/game_pb';
 import type {
@@ -48,6 +51,7 @@ import {
   pastTold,
   spellRecord,
 } from '../../net/weather';
+import type { WatchEndWhy } from '../../ui/watchwords';
 
 export const BURST_PINGS = 8;
 export const BURST_EVERY = 100_000;
@@ -62,7 +66,6 @@ export interface Versions {
   build: string;
 }
 
-/** What a message from the server was. */
 /** A bump's part, as the page names it. */
 const PARTS: Record<number, BumpTold['part']> = {
   [BumpPart.UNSPECIFIED]: 'seen',
@@ -71,13 +74,31 @@ const PARTS: Record<number, BumpTold['part']> = {
   [BumpPart.NONE]: 'none',
 };
 
+/** Why a watch ended, as the page names it. */
+const ENDS: Record<number, WatchEndWhy> = {
+  [WatchEnd.LEFT]: 'left',
+  [WatchEnd.OFF]: 'off',
+  [WatchEnd.CANNOT]: 'cannot',
+  [WatchEnd.NOT_AT_SEA]: 'not-at-sea',
+  [WatchEnd.NO_SAILOR]: 'no-sailor',
+  [WatchEnd.OWN]: 'own',
+  [WatchEnd.QUICK]: 'quick',
+  [WatchEnd.BUSY]: 'busy',
+};
+
+/** What a message from the server was. */
 export type Received =
   | { kind: 'welcome'; welcome: Welcome }
   /** The view stays valid until a few more snapshots are decoded; the ring's changes and sampled are its. */
   | { kind: 'snapshot'; tick: number; flags: number; view: View }
   /** Its base was gone: out asks for a full snapshot. */
   | { kind: 'dropped'; tick: number; out: Uint8Array<ArrayBuffer>[] }
-  | { kind: 'queued'; position: number; waiting: number }
+  /** A place in the queue: for a boat, or, spectators, for a place to watch. */
+  | { kind: 'queued'; position: number; waiting: number; spectators: boolean }
+  /** A watch ended, or was refused. */
+  | { kind: 'watchEnded'; why: WatchEndWhy; sailor: string }
+  /** How many watch the connection's own boat. */
+  | { kind: 'watchers'; count: number }
   /** The server is about to restart, in about inMs. */
   | { kind: 'restart'; inMs: number }
   /** The sea about the boat. */
@@ -115,13 +136,15 @@ export class Session {
   /** The tier and the pixel ratio, in hundredths, Pings report; 0 unknown. */
   tier = 0;
   renderScale = 0;
+  /** The sailor every Hello asks to watch; "" to sail. */
+  watch = '';
 
   #versions: Versions;
   readonly #header = newSnapshot();
   #welcomed = false;
   /** The world of the last Welcome: a Welcome to another is a new world's. */
   #world = '';
-  /** Queued for a boat: Pings keep the connection alive. */
+  /** Queued, or idle before any Welcome: Pings keep the connection alive. */
   #waiting = false;
   #ackTick = 0;
   #lastSent = 0;
@@ -160,6 +183,7 @@ export class Session {
             catalog: v.catalog,
             physicsLayout: v.physicsLayout,
             build: v.build,
+            watch: this.watch,
           },
         },
       }),
@@ -196,7 +220,27 @@ export class Session {
           this.#waiting = true;
           this.#nextPing = now + PING_EVERY;
         }
-        return { kind: 'queued', position: m.body.value.position, waiting: m.body.value.waiting };
+        return {
+          kind: 'queued',
+          position: m.body.value.position,
+          waiting: m.body.value.waiting,
+          spectators: m.body.value.spectators,
+        };
+      case 'watchEnded':
+        this.#lastHeard = now;
+        if (!this.#welcomed && !this.#waiting) {
+          // Refused before any Welcome: idle, kept alive as the queue is.
+          this.#waiting = true;
+          this.#nextPing = now + PING_EVERY;
+        }
+        return {
+          kind: 'watchEnded',
+          why: ENDS[m.body.value.why] ?? 'other',
+          sailor: m.body.value.sailor,
+        };
+      case 'watchers':
+        this.#lastHeard = now;
+        return { kind: 'watchers', count: m.body.value.count };
       case 'welcome':
         if (this.#world !== '' && m.body.value.world !== this.#world) {
           this.clock.reset();
@@ -208,6 +252,9 @@ export class Session {
         this.#lastHeard = now;
         this.#pingsLeft = BURST_PINGS;
         this.#nextPing = now;
+        // Another boat's snapshots, or the own boat's again, start afresh
+        // from a full one.
+        this.views.reset();
         return { kind: 'welcome', welcome: m.body.value };
       case 'pong':
         this.clock.sample(Number(m.body.value.clientTimeUs), Number(m.body.value.worldTimeUs), now);
@@ -362,7 +409,28 @@ export class Session {
     });
   }
 
-  /** When time() must next be called; Infinity before the Welcome, unless queued. */
+  /** Asks to watch a sailor's boat. */
+  watchCommand(now: number, sailor: string): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'watch', value: { sailor } } } },
+    });
+  }
+
+  /** Asks for a boat, as a new connection does. */
+  sailCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'sail', value: {} } } },
+    });
+  }
+
+  /** Stops watching, without sailing. */
+  unwatchCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'unwatch', value: {} } } },
+    });
+  }
+
+  /** When time() must next be called; Infinity before the Welcome, unless queued or idle. */
   deadline(): number {
     if (this.#waiting) {
       return Math.min(this.#nextPing, this.#lastHeard + PONG_TIMEOUT);

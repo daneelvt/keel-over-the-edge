@@ -6,6 +6,7 @@ import (
 	"context"
 	"math"
 	"math/bits"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,25 +21,28 @@ import (
 
 // An encoder runs on a goroutine of its own, one of several, each with its
 // own connections, and each woken by the simulation as it publishes each
-// frame. For each frame it first stores in their boats' slots its
-// connections' words held for the next tick, then welcomes the connections
-// the queue has given boats, then, on even ticks, writes each of its
-// connections' snapshots into the connection's mailbox: 15 a second. It
-// holds the frame only while it works, and for connections already
-// sailing it allocates nothing.
+// frame. For each frame it first does what its connections have asked of
+// it (a boat welcomed, a watch begun or ended), stores in their boats'
+// slots its connections' words held for the next tick, then welcomes the
+// connections the queue has given boats, then, on even ticks, writes each
+// of its sailing and watching connections' snapshots into the
+// connection's mailbox: 15 a second. It holds the frame only while it
+// works, and for connections already sailing or watching it allocates
+// nothing.
 type encoder struct {
 	e      *Edge
 	wakeCh chan struct{}
 	load   atomic.Int32 // connections handed to it and not yet let go
 
-	mu       sync.Mutex
-	pending  []*conn // joined or queued, not yet taken on
-	npending atomic.Int32
+	mu    sync.Mutex
+	asks  []ask // asked of it, not yet done, in the order asked
+	nasks atomic.Int32
 
-	active []*conn           // sailing
+	active []*conn           // sailing or watching
 	queued map[uint64]*conn  // waiting for a boat, by connection ID
 	last   int64             // the tick last encoded
 	swept  int64             // the tick the queue was last read for positions
+	told   int64             // the tick sailors were last told how many watch
 	aoi    aoi               // scratch for finding views
 	empty  connView          // the base of a full snapshot
 	counts [entryOps]float64 // entries written this round, by op
@@ -49,6 +53,7 @@ func (enc *encoder) init(e *Edge, capacity int) {
 	enc.wakeCh = make(chan struct{}, 1)
 	enc.last = math.MinInt64
 	enc.swept = math.MinInt64
+	enc.told = math.MinInt64
 	enc.queued = map[uint64]*conn{}
 	enc.aoi.init(capacity)
 }
@@ -61,13 +66,12 @@ func (enc *encoder) wake() {
 	}
 }
 
-// add hands over a connection whose Join has been answered: it is welcomed
-// with the first frame that holds its boat, or, if it waits for one, told
-// its place.
-func (enc *encoder) add(c *conn) {
+// ask hands over something a connection asks: done with the next frame,
+// or, for a boat, with the first frame that holds it.
+func (enc *encoder) ask(a ask) {
 	enc.mu.Lock()
-	enc.pending = append(enc.pending, c)
-	enc.npending.Add(1)
+	enc.asks = append(enc.asks, a)
+	enc.nasks.Add(1)
 	enc.mu.Unlock()
 }
 
@@ -91,7 +95,7 @@ func (enc *encoder) frame() {
 	}
 	enc.last = f.Tick
 	start := time.Now()
-	if enc.npending.Load() > 0 {
+	if enc.nasks.Load() > 0 {
 		enc.adopt(f)
 	}
 	// The words for the next tick first: it runs in a thirtieth of a
@@ -99,11 +103,11 @@ func (enc *encoder) frame() {
 	next := f.Tick + 1
 	for i := 0; i < len(enc.active); {
 		c := enc.active[i]
-		if c.gone.Load() {
+		if c.gone.Load() || !c.active {
+			c.active = false
 			last := len(enc.active) - 1
 			enc.active[i], enc.active[last] = enc.active[last], nil
 			enc.active = enc.active[:last]
-			enc.load.Add(-1)
 			continue
 		}
 		if c.waiting.Load() > 0 {
@@ -117,11 +121,21 @@ func (enc *encoder) frame() {
 	if len(enc.queued) > 0 {
 		enc.admit(f)
 	}
+	if enc.told == math.MinInt64 || f.Tick-enc.told >= watchersEvery {
+		enc.told = f.Tick
+		for _, c := range enc.active {
+			if c.active && !c.w.on {
+				c.tellWatchers()
+			}
+		}
+	}
 	if f.Tick%2 != 0 {
 		return
 	}
 	for _, c := range enc.active {
-		enc.encode(c, f)
+		if c.active {
+			enc.encode(c, f)
+		}
 	}
 	m := &enc.e.m
 	for op, n := range enc.counts {
@@ -133,31 +147,94 @@ func (enc *encoder) frame() {
 	m.encode.Observe(time.Since(start).Seconds())
 }
 
-// adopt takes on the connections handed over: those whose boat f holds
-// are welcomed, those waiting for one told their place.
+// adopt does what the connections asked, in the order they asked it: a
+// connection whose boat f does not hold yet waits, with all it asked
+// after.
 func (enc *encoder) adopt(f *bus.Frame) {
 	enc.mu.Lock()
-	defer enc.mu.Unlock()
-	keep := enc.pending[:0]
-	for _, c := range enc.pending {
-		switch {
-		case c.gone.Load():
-			enc.load.Add(-1)
-		case c.joinTick > f.Tick:
-			keep = append(keep, c)
-		case c.queued.Load():
+	asks := enc.asks
+	enc.asks = nil
+	enc.nasks.Store(0)
+	enc.mu.Unlock()
+	var later []ask
+	for _, a := range asks {
+		if a.kind == askJoined && a.r.Tick > f.Tick || slices.ContainsFunc(later, func(l ask) bool { return l.c == a.c }) {
+			later = append(later, a)
+			continue
+		}
+		enc.do(a, f)
+	}
+	if len(later) > 0 {
+		enc.mu.Lock()
+		enc.asks = append(later, enc.asks...)
+		enc.nasks.Store(int32(len(enc.asks)))
+		enc.mu.Unlock()
+	}
+}
+
+// do does what a connection asked, with frame f.
+func (enc *encoder) do(a ask, f *bus.Frame) {
+	c, e := a.c, enc.e
+	if a.kind == askGone {
+		enc.endWatch(c, pb.WatchEnd_WATCH_END_UNSPECIFIED, "")
+		e.spect.release(c)
+		enc.unqueue(c)
+		c.active = false
+		enc.load.Add(-1)
+		return
+	}
+	if c.gone.Load() {
+		// Its askGone follows.
+		return
+	}
+	switch a.kind {
+	case askJoined:
+		if a.r.Result == bus.Queued {
 			enc.queued[c.id] = c
-			enc.e.m.queuedConns.Inc()
-			c.place(c.position, max(humansWaiting(f), c.position))
-		case c.welcome(f):
-			enc.active = append(enc.active, c)
-		default:
-			enc.load.Add(-1)
+			e.m.queuedConns.Inc()
+			c.place(a.r.Position, max(humansWaiting(f), a.r.Position))
+			return
+		}
+		enc.sail(c, f)
+	case askWatch:
+		enc.beginWatch(c, f, a.target)
+	case askUnwatch:
+		if c.w.on {
+			enc.stopWatching(c, pb.WatchEnd_WATCH_END_UNSPECIFIED)
+		}
+		if a.why != pb.WatchEnd_WATCH_END_UNSPECIFIED {
+			c.watchEnded(a.why, a.name)
 		}
 	}
-	clear(enc.pending[len(keep):])
-	enc.pending = keep
-	enc.npending.Store(int32(len(keep)))
+}
+
+// sail welcomes a connection to its own boat, its watch, if any, over.
+func (enc *encoder) sail(c *conn, f *bus.Frame) {
+	if c.w.on {
+		enc.endWatch(c, pb.WatchEnd_WATCH_END_UNSPECIFIED, "")
+		enc.e.spect.release(c)
+	}
+	if c.welcome(f) {
+		enc.activate(c)
+	} else {
+		c.active = false
+	}
+}
+
+// activate has the encoder write the connection's snapshots.
+func (enc *encoder) activate(c *conn) {
+	if !c.active {
+		c.active = true
+		enc.active = append(enc.active, c)
+	}
+}
+
+// unqueue forgets a connection waiting for a boat.
+func (enc *encoder) unqueue(c *conn) {
+	if _, ok := enc.queued[c.id]; ok {
+		delete(enc.queued, c.id)
+		enc.e.m.queuedConns.Dec()
+	}
 }
 
 // admit welcomes the waiting connections the queue has given boats: those
@@ -174,7 +251,7 @@ func (enc *encoder) admit(f *bus.Frame) {
 			enc.welcomeQueued(c, f, ev.Reply.Slot)
 		}
 	}
-	if f.Tick-enc.swept < sweepTicks {
+	if enc.swept != math.MinInt64 && f.Tick-enc.swept < sweepTicks {
 		return
 	}
 	enc.swept = f.Tick
@@ -191,13 +268,11 @@ func (enc *encoder) admit(f *bus.Frame) {
 			c.place(position, waiting)
 		}
 	}
-	for id, c := range enc.queued {
+	for _, c := range enc.queued {
 		switch {
 		case c.gone.Load():
-			delete(enc.queued, id)
-			enc.e.m.queuedConns.Dec()
-			enc.load.Add(-1)
-		case c.seen == f.Tick || c.joinTick > f.Tick:
+			enc.unqueue(c)
+		case c.seen == f.Tick:
 		default:
 			// Out of the queue, and not in an admission this encoder saw.
 			slot := int32(-1)
@@ -228,23 +303,20 @@ func humansWaiting(f *bus.Frame) int32 {
 const sweepTicks = 30
 
 // welcomeQueued welcomes a waiting connection to its boat in slot, of f; a
-// slot of −1, no boat, closes it.
+// slot of −1, no boat, closes it. A watch it kept up while it waited ends
+// as it sails.
 func (enc *encoder) welcomeQueued(c *conn, f *bus.Frame, slot int32) {
-	delete(enc.queued, c.id)
-	enc.e.m.queuedConns.Dec()
+	enc.unqueue(c)
 	if slot < 0 {
 		c.close(websocket.StatusInternalError, "no boat")
-		enc.load.Add(-1)
 		return
 	}
-	c.slot, c.gen, c.boat, c.joinTick = slot, f.Gen[slot], f.Boat[slot], f.Tick
+	c.wmu.Lock()
+	c.slot, c.gen, c.boat, c.rejoined, c.joinTick = slot, f.Gen[slot], f.Boat[slot], false, f.Tick
+	c.wmu.Unlock()
 	c.joined.Store(true)
 	c.queued.Store(false)
-	if c.welcome(f) {
-		enc.active = append(enc.active, c)
-		return
-	}
-	enc.load.Add(-1)
+	enc.sail(c, f)
 }
 
 // place tells a waiting connection its place in the queue, and how many
@@ -259,7 +331,8 @@ func (c *conn) place(position, waiting int32) {
 	}}}, outQueued)
 }
 
-// welcome queues the Welcome, from the first frame that holds the boat.
+// welcome queues the Welcome to the connection's own boat, from the first
+// frame that holds it: from then on its inputs steer the boat.
 func (c *conn) welcome(f *bus.Frame) bool {
 	e := c.e
 	s := c.slot
@@ -267,6 +340,11 @@ func (c *conn) welcome(f *bus.Frame) bool {
 		c.close(websocket.StatusInternalError, "the boat has gone")
 		return false
 	}
+	e.voyages.sails(c.account, c.boat)
+	c.wmu.Lock()
+	c.steering = true
+	c.wmu.Unlock()
+	c.toldWatchers = 0
 	wt, _ := e.cfg.Clock.WorldTime()
 	// Under rmu, so that a Tools for a change of the flag after this one
 	// read it comes after it.
@@ -277,32 +355,39 @@ func (c *conn) welcome(f *bus.Frame) bool {
 		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation,
 		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: e.endsUs.Load(), ClosingUs: e.closingUs.Load(), Zone: e.cfg.Zone,
 	}}}, outWelcome)
-	c.welcomed = ok
-	if ok && e.cfg.Chart != nil {
-		entries := e.cfg.Chart.Entries()
-		ok = c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chart{Chart: &pb.Chart{Entries: entries}}}, outChart)
-		c.charted = len(entries)
-	}
+	ok = ok && c.firstChart()
 	c.rmu.Unlock()
 	c.ready.Store(ok)
+	c.box.restart()
 	c.bumped = f.Tick
 	// The land about the boat, at once after the Welcome: the client draws
 	// what is near before it shows the sea.
 	return ok && c.chunks(e.cfg.Chunks, f.State[s].X, f.State[s].Y)
 }
 
-// encode writes c's snapshot of f into its mailbox: the own boat, then the
-// other boats in view, as changes from the view of the newest snapshot the
-// connection's writer has taken, or in full if it has taken none, or the
-// client asked for one. The view, the sea's window and the land's chunks
-// are about the connection's eye: its boat, or its free camera while it
-// roams.
+// encode writes c's snapshot of f into its mailbox: the own boat, or the
+// boat it watches, then the other boats in view, as changes from the view
+// of the newest snapshot the connection's writer has taken, or in full if
+// it has taken none, or the client asked for one. The view, the sea's
+// window and the land's chunks are about the connection's eye: its boat,
+// the boat it watches, or its free camera while it roams. A watched boat
+// gone, or no longer to be watched, ends the watch.
 func (enc *encoder) encode(c *conn, f *bus.Frame) {
-	s := c.slot
-	if !f.Occupied[s] || f.Boat[s] != c.boat {
+	s, boat := c.eyeSlot()
+	if !f.Occupied[s] || f.Boat[s] != boat {
+		if c.w.on {
+			enc.stopWatching(c, pb.WatchEnd_WATCH_END_LEFT)
+			return
+		}
 		c.gone.Store(true)
 		c.close(websocket.StatusInternalError, "the boat has gone")
 		return
+	}
+	if c.w.on {
+		if why := enc.stillWatchable(c, f, s); why != pb.WatchEnd_WATCH_END_UNSPECIFIED {
+			enc.stopWatching(c, why)
+			return
+		}
 	}
 	x, y, chunks := f.State[s].X, f.State[s].Y, c.e.cfg.Chunks
 	if p := c.eye.Load(); p != nil {
@@ -331,11 +416,11 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	}
 	// The weather, the sea, the land's chunks and the bumps first: they are
 	// queued, and what is queued goes out before the snapshot.
-	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next) {
+	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]
-	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], c.margin.take(), f.Voyage[s].Over, f.Stay[s], &f.State[s])]
+	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], c.marginNow(), f.Voyage[s].Over, f.Stay[s], &f.State[s])]
 	b, n := protocol.AppendEntries(b, baseView, &next.view, enter, sample)
 	protocol.SetEntries(b, n)
 
@@ -360,9 +445,10 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 }
 
 // bumps sends c the bumps of f after the last it was sent: with the
-// verdict if its boat is one of the two, without if it sees either in its
-// near band, by v, the view it is about to be sent.
-func (c *conn) bumps(f *bus.Frame, v *connView) bool {
+// verdict if the boat in slot s, its own or the one it watches, is one of
+// the two, without if it sees either in its near band, by v, the view it
+// is about to be sent.
+func (c *conn) bumps(f *bus.Frame, v *connView, s int32, boat uint64) bool {
 	newest := c.bumped
 	for i := range f.Bumps {
 		b := &f.Bumps[i]
@@ -372,9 +458,9 @@ func (c *conn) bumps(f *bus.Frame, v *connView) bool {
 		newest = max(newest, b.Tick)
 		who := uint8(physics.Neither)
 		switch {
-		case b.A == c.slot && b.BoatA == c.boat:
+		case b.A == s && b.BoatA == boat:
 			who = physics.First
-		case b.B == c.slot && b.BoatB == c.boat:
+		case b.B == s && b.BoatB == boat:
 			who = physics.Second
 		case !nearIn(v, b):
 			continue
@@ -399,4 +485,32 @@ func nearIn(v *connView, b *bus.Bump) bool {
 		}
 	}
 	return false
+}
+
+// stopWatching ends c's watch, told why, and frees its place: it is idle,
+// sent no snapshots.
+func (enc *encoder) stopWatching(c *conn, why pb.WatchEnd) {
+	if !c.w.on {
+		return
+	}
+	name := c.w.target.Name
+	enc.endWatch(c, why, name)
+	enc.e.spect.release(c)
+	if !c.joined.Load() {
+		c.active = false
+	}
+}
+
+// firstChart sends the world's chart whole after the connection's first
+// Welcome; after a later one, for a watch begun or a boat sailed again,
+// the client holds it already. rmu must be held.
+func (c *conn) firstChart() bool {
+	c.welcomes++
+	c.welcomed = true
+	if c.welcomes > 1 || c.e.cfg.Chart == nil {
+		return true
+	}
+	entries := c.e.cfg.Chart.Entries()
+	c.charted = len(entries)
+	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chart{Chart: &pb.Chart{Entries: entries}}}, outChart)
 }

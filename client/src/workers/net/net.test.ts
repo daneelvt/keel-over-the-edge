@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'vitest';
 import { applied, Clock, SET_BEYOND } from '../../net/clock';
 import { decodeClient, encodeServer } from '../../net/frame';
+import { WatchEnd } from '../../net/gen/keel/v1/game_pb';
 import type { FromWorker } from '../../net/messages';
 import { HEADER_SIZE, newSnapshot, writeSnapshot } from '../../net/snapshot';
 import { FLEET_META, FLEET_RECORD_BYTES, fleetOf } from '../../net/view';
@@ -144,11 +145,51 @@ describe('the session', () => {
       1_000,
       encodeServer({ body: { case: 'queued', value: { position: 3, waiting: 7 } } }),
     );
-    expect(r).toEqual({ kind: 'queued', position: 3, waiting: 7 });
+    expect(r).toEqual({ kind: 'queued', position: 3, waiting: 7, spectators: false });
     expect(s.deadline()).toBe(1_000 + PING_EVERY);
     const out = s.time(1_000 + PING_EVERY).out.map((b) => decodeClient(b).body.case);
     expect(out).toEqual(['ping']);
     expect(s.time(1_000 + PING_EVERY + ACK_AFTER).out).toEqual([]);
+  });
+
+  test('the Hello asks to watch the sailor asked for, or for a boat', () => {
+    const s = new Session(versions);
+    const hello = () => decodeClient(s.open(0)[0] as Uint8Array).body;
+    expect(hello()).toMatchObject({ case: 'hello', value: { watch: '' } });
+    s.watch = 'Iron Mary';
+    expect(hello()).toMatchObject({ case: 'hello', value: { watch: 'Iron Mary' } });
+  });
+
+  test('a watch refused before any Welcome: idle, a Ping every 2 s and nothing else', () => {
+    const s = new Session(versions);
+    s.watch = 'Ann Bonny';
+    s.open(0);
+    const r = s.receive(
+      1_000,
+      encodeServer({
+        body: { case: 'watchEnded', value: { why: WatchEnd.CANNOT, sailor: 'Ann Bonny' } },
+      }),
+    );
+    expect(r).toEqual({ kind: 'watchEnded', why: 'cannot', sailor: 'Ann Bonny' });
+    expect(s.deadline()).toBe(1_000 + PING_EVERY);
+    const out = s.time(1_000 + PING_EVERY).out.map((b) => decodeClient(b).body.case);
+    expect(out).toEqual(['ping']);
+  });
+
+  test('the commands to watch, to sail and to stop watching', () => {
+    const s = welcomed();
+    expect(decodeClient(s.watchCommand(1, 'Iron Mary')).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'watch', value: { sailor: 'Iron Mary' } } },
+    });
+    expect(decodeClient(s.sailCommand(2)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'sail' } },
+    });
+    expect(decodeClient(s.unwatchCommand(3)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'unwatch' } },
+    });
   });
 });
 
@@ -365,8 +406,8 @@ describe('the net worker', () => {
     s.deliver(encodeServer({ body: { case: 'queued', value: { position: 2, waiting: 5 } } }));
     s.deliver(encodeServer({ body: { case: 'queued', value: { position: 1, waiting: 4 } } }));
     expect(h.posted.filter((m) => m.type === 'queued')).toEqual([
-      { type: 'queued', position: 2, waiting: 5 },
-      { type: 'queued', position: 1, waiting: 4 },
+      { type: 'queued', position: 2, waiting: 5, spectators: false },
+      { type: 'queued', position: 1, waiting: 4, spectators: false },
     ]);
     h.welcome(s);
     expect(h.statuses()).toEqual(['connecting', 'queued', 'sailing']);
@@ -491,5 +532,177 @@ describe('the net worker', () => {
       await h.advance(20_000);
     }
     expect(more).toEqual([1000, 2000, 4000]);
+  });
+});
+
+describe('watching, in the net worker', () => {
+  const watchWelcome = (s: FakeSocket, sailor: string) =>
+    s.deliver(
+      encodeServer({
+        body: {
+          case: 'welcome',
+          value: {
+            tick: 2n,
+            worldTimeUs: 0n,
+            boat: 9n,
+            watching: { sailor, machine: true, mine: true },
+          },
+        },
+      }),
+    );
+  const ended = (s: FakeSocket, why: WatchEnd, sailor: string) =>
+    s.deliver(encodeServer({ body: { case: 'watchEnded', value: { why, sailor } } }));
+  const inputs = (s: FakeSocket) =>
+    s.sent.map(decodeClient).flatMap((m) => (m.body.case === 'input' ? [m.body.value] : []));
+
+  test('a page that watches says so in its Hello, and every Hello after', async () => {
+    const h = harness();
+    h.net.handle({ type: 'watch', sailor: 'Iron Mary' });
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    expect(decodeClient(s.sent[0] as Uint8Array).body).toMatchObject({
+      case: 'hello',
+      value: { watch: 'Iron Mary' },
+    });
+    watchWelcome(s, 'Iron Mary');
+    const w = h.posted.find((m) => m.type === 'welcome');
+    expect(w?.type === 'welcome' && w.watching).toEqual({
+      sailor: 'Iron Mary',
+      machine: true,
+      mine: true,
+    });
+    expect(w?.type === 'welcome' && w.first).toBe(true);
+    expect(h.statuses()).toEqual(['connecting', 'sailing']);
+    // The connection made again watches still.
+    s.end(1006);
+    await h.advance(10_000);
+    const again = h.sockets[1] as FakeSocket;
+    again.open();
+    expect(decodeClient(again.sent[0] as Uint8Array).body).toMatchObject({
+      case: 'hello',
+      value: { watch: 'Iron Mary' },
+    });
+  });
+
+  test('watching, no controls go: only acknowledgements', () => {
+    const h = harness();
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    h.welcome(s);
+    h.net.handle({
+      type: 'input',
+      seq: 10,
+      helm: 600,
+      sheet: 500,
+      pilot: 0,
+      target: 0,
+      order: 0,
+      way: 0,
+    });
+    expect(inputs(s).filter((i) => !i.ackOnly)).toHaveLength(1);
+    // Asked to watch: the command goes at once, and a Welcome for the watch.
+    h.net.handle({ type: 'watch', sailor: 'Iron Mary' });
+    expect(s.sent.map(decodeClient).at(-1)?.body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'watch', value: { sailor: 'Iron Mary' } } },
+    });
+    watchWelcome(s, 'Iron Mary');
+    const second = h.posted.filter((m) => m.type === 'welcome').at(-1);
+    expect(second?.type === 'welcome' && second.first).toBe(false);
+    h.net.handle({
+      type: 'input',
+      seq: 20,
+      helm: 700,
+      sheet: 500,
+      pilot: 0,
+      target: 0,
+      order: 0,
+      way: 0,
+    });
+    expect(inputs(s).filter((i) => !i.ackOnly)).toHaveLength(1);
+  });
+
+  test('a watch ended leaves the connection idle; one refused while sailing leaves it sailing', () => {
+    const h = harness();
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    h.welcome(s);
+    ended(s, WatchEnd.QUICK, 'Iron Mary');
+    expect(h.posted.at(-1)).toEqual({ type: 'watchEnded', why: 'quick', sailor: 'Iron Mary' });
+    expect(h.statuses()).toEqual(['connecting', 'sailing']);
+    watchWelcome(s, 'Iron Mary');
+    ended(s, WatchEnd.LEFT, 'Iron Mary');
+    expect(h.statuses()).toEqual(['connecting', 'sailing', 'sailing', 'idle']);
+    // Sail: the command, and the own boat's Welcome.
+    h.net.handle({ type: 'sail' });
+    expect(s.sent.map(decodeClient).at(-1)?.body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'sail' } },
+    });
+    h.welcome(s);
+    expect(h.statuses().at(-1)).toBe('sailing');
+  });
+
+  test('a watch goes on while the connection waits for a boat; the spectators’ queue is its own', () => {
+    const h = harness();
+    h.net.handle({ type: 'watch', sailor: 'Iron Mary' });
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    s.deliver(
+      encodeServer({
+        body: { case: 'queued', value: { position: 12, waiting: 30, spectators: true } },
+      }),
+    );
+    expect(h.posted.at(-2)).toEqual({
+      type: 'queued',
+      position: 12,
+      waiting: 30,
+      spectators: true,
+    });
+    expect(h.statuses()).toEqual(['connecting', 'queued']);
+    watchWelcome(s, 'Iron Mary');
+    h.net.handle({ type: 'sail' });
+    s.deliver(encodeServer({ body: { case: 'queued', value: { position: 3, waiting: 9 } } }));
+    // Watching still: the snapshots come.
+    expect(h.statuses()).toEqual(['connecting', 'queued', 'sailing']);
+    // The watch ends while it waits: queued.
+    ended(s, WatchEnd.LEFT, 'Iron Mary');
+    expect(h.statuses().at(-1)).toBe('queued');
+  });
+
+  test('stopping a watch: the command, and the connection idle', () => {
+    const h = harness();
+    h.net.handle({ type: 'watch', sailor: 'Iron Mary' });
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    watchWelcome(s, 'Iron Mary');
+    h.net.handle({ type: 'unwatch' });
+    expect(s.sent.map(decodeClient).at(-1)?.body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'unwatch' } },
+    });
+    expect(h.statuses()).toEqual(['connecting', 'sailing', 'idle']);
+  });
+
+  test('after another device took the connection, a watch asked for here takes it back', () => {
+    const h = harness();
+    h.start();
+    const s = h.sockets[0] as FakeSocket;
+    s.open();
+    h.welcome(s);
+    s.end(4001);
+    expect(h.statuses().at(-1)).toBe('replaced');
+    h.net.handle({ type: 'watch', sailor: 'Iron Mary' });
+    const again = h.sockets[1] as FakeSocket;
+    again.open();
+    expect(decodeClient(again.sent[0] as Uint8Array).body).toMatchObject({
+      case: 'hello',
+      value: { watch: 'Iron Mary' },
+    });
   });
 });

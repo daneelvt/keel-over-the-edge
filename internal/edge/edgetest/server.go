@@ -24,12 +24,14 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/watch"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
@@ -81,6 +83,8 @@ type Config struct {
 	// LongAfter is the edge's: how long a connection is open to be seen
 	// as it ends.
 	LongAfter time.Duration
+	// SpectatorLimit is the edge's: how many may watch at once.
+	SpectatorLimit int
 	// Forecast, if not nil, is the world's forecast, told of each frame
 	// after the edge.
 	Forecast interface {
@@ -102,6 +106,8 @@ type Server struct {
 	Weather  *weather.Timeline
 	// Encounters are how the world's boats meet.
 	Encounters *physics.EncounterPrepared
+	// Allowing is the accounts that let anyone watch them always.
+	Allowing *watch.Allowing
 
 	cfg      Config
 	sessions *auth.Cache
@@ -157,7 +163,8 @@ func NewServer(t testing.TB, cfg Config) *Server {
 		cfg.Edge = &CatalogEdge
 	}
 	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg}
+	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg,
+		Allowing: watch.NewAllowing(nil)}
 	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
 	s.start(t, s.newWorld(t))
 	s.HTTP = httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +199,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain),
 		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks, Forecast: cfg.Forecast,
 		Stopped: cfg.Stopped, Seen: cfg.Seen, LongAfter: cfg.LongAfter,
+		Watch: s.Sessions.Target, Allowing: s.Allowing, SpectatorLimit: cfg.SpectatorLimit,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {
@@ -295,10 +303,40 @@ type Sessions struct {
 	mu   sync.Mutex
 	by   map[[32]byte]store.Session
 	next byte
+	// machines are the machine sailors, which have no session.
+	machines []watch.Target
 }
 
 // NewSessions makes an empty store of sessions.
 func NewSessions() *Sessions { return &Sessions{by: map[[32]byte]store.Session{}} }
+
+// addMachine makes a machine sailor of owner's.
+func (s *Sessions) addMachine(name string, owner store.AccountID) store.AccountID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.next++
+	id := store.AccountID{0x01, 0x99, 0xc2, 0xa4, 0x5f, 0x7e, 0x7c, 0x3a, 0x9d, 0x0e, 0xaa, 0, 0, 0, 0, s.next}
+	s.machines = append(s.machines, watch.Target{ID: id, Kind: store.AI, Owner: owner, Name: name})
+	return id
+}
+
+// Target finds the sailor whose name has key, moderation.Key's, to watch:
+// the edge's Watch.
+func (s *Sessions) Target(_ context.Context, key string) (watch.Target, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.machines {
+		if moderation.Key(m.Name) == key {
+			return m, nil
+		}
+	}
+	for _, v := range s.by {
+		if moderation.Key(v.Name) == key {
+			return watch.Target{ID: v.ID, Kind: v.Kind, Name: v.Name}, nil
+		}
+	}
+	return watch.Target{}, store.ErrNotFound
+}
 
 // Session finds a session by its token's hash.
 func (s *Sessions) Session(_ context.Context, hash [32]byte) (store.Session, error) {
@@ -382,6 +420,34 @@ func (s *Server) Priority(name string) (token string, id store.AccountID) {
 func (s *Server) Machines(t testing.TB, n int, at func(i int) physics.State) []uint64 {
 	t.Helper()
 	return s.crowd(t, n, at, true)
+}
+
+// Machine makes a machine sailor of owner's, an AI account with no
+// session, its boat in the world at st with no connection, as its agent's
+// is; and returns its account and its boat's ID.
+func (s *Server) Machine(t testing.TB, name string, owner store.AccountID, st physics.State) (store.AccountID, uint64) {
+	t.Helper()
+	id := s.Sessions.addMachine(name, owner)
+	return id, s.Launch(t, id, true, st)
+}
+
+// Launch puts an account's boat in the world at st with no connection, a
+// machine sailor's or not, and returns its ID.
+func (s *Server) Launch(t testing.TB, id store.AccountID, machine bool, st physics.State) uint64 {
+	t.Helper()
+	dev := s.World.Bus().Commands.Developer()
+	reply := make(chan bus.Reply, 1)
+	for dev.TrySend(bus.Command{Op: bus.Join, Account: bus.Account(id), Machine: machine, Reply: reply}) != nil {
+		time.Sleep(time.Second / 30)
+	}
+	r := <-reply
+	if r.Result != bus.Joined && r.Result != bus.Rejoined {
+		t.Fatalf("a boat for %v: %+v", id, r)
+	}
+	s.Place(r.Boat, st)
+	// In the frames from the next tick on.
+	time.Sleep(time.Second / 15)
+	return r.Boat
 }
 
 // Owned sends one of the owner's tools' commands, at the next tick.

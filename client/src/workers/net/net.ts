@@ -4,6 +4,11 @@
 // records it hands the page each snapshot in, and what to do when it ends. Everything it touches outside itself (the
 // socket, timers, the clock, the page, fetch, chance) is given to it, so
 // the tests drive it with fakes; worker.ts gives it the real ones.
+//
+// A connection sails its own boat, watches another sailor's, waits in a
+// queue, or is idle, a watch ended; it may wait for a boat while it
+// watches. The controls go to the server only while it sails: watching or
+// idle, only the acknowledgements and the Pings do.
 
 import type { FromWorker, HelloVersions, Status, ToWorker, Traffic } from '../../net/messages';
 import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
@@ -48,7 +53,20 @@ export class NetWorker {
   #attempt = 0;
   #timer = -1;
   #wait = -1;
-  #traffic: Traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
+  #traffic: Traffic = {
+    bytesIn: 0,
+    bytesOut: 0,
+    messagesIn: 0,
+    messagesOut: 0,
+    resyncs: 0,
+    controls: 0,
+  };
+  /** The sailor the page last asked to watch, which every Hello asks for; "" to sail. */
+  #watch = '';
+  /** The connection sails its own boat; watches another's; waits in the queue for a boat. */
+  #sailing = false;
+  #watching = false;
+  #boatQueued = false;
   /** Records the page has handed back, to fill again. */
   readonly #pool: ArrayBuffer[] = [];
   /** Records made: a few at first, then none while the page hands them back. */
@@ -68,12 +86,14 @@ export class NetWorker {
       case 'start':
         this.#url = m.url;
         this.#session = new Session(m.versions as HelloVersions);
+        this.#session.watch = this.#watch;
         this.#session.tier = this.#tier;
         this.#session.renderScale = this.#scale;
         this.#connect();
         break;
       case 'input':
-        if (this.#session?.welcomed) {
+        if (this.#session?.welcomed && this.#sailing) {
+          this.#traffic.controls++;
           this.#send(
             this.#session.input(this.#d.now(), m.seq, m.helm, m.sheet, {
               mode: m.pilot,
@@ -89,6 +109,32 @@ export class NetWorker {
         if (this.#session?.welcomed) {
           this.#send(this.#session.roam(this.#d.now(), m.on, m.east, m.north, m.height));
           this.#arm();
+        }
+        break;
+      case 'watch':
+        this.#ask(m.sailor);
+        if (!this.#takeBack() && this.#session !== null) {
+          this.#send(this.#session.watchCommand(this.#d.now(), m.sailor));
+          this.#arm();
+        }
+        break;
+      case 'sail':
+        this.#ask('');
+        if (!this.#takeBack() && this.#session !== null) {
+          this.#send(this.#session.sailCommand(this.#d.now()));
+          this.#arm();
+        }
+        break;
+      case 'unwatch':
+        // The Hellos go on asking for the last sailor watched: an idle
+        // connection made again watches, rather than take a boat.
+        if (this.#session !== null) {
+          this.#send(this.#session.unwatchCommand(this.#d.now()));
+          this.#arm();
+        }
+        if (this.#watching) {
+          this.#watching = false;
+          this.#setStatus(this.#boatQueued ? 'queued' : 'idle');
         }
         break;
       case 'frame':
@@ -129,6 +175,27 @@ export class NetWorker {
     }
   }
 
+  /**
+   * After another device took the connection, a watch or a boat asked for
+   * here takes it back, its Hello asking for it; whether it did.
+   */
+  #takeBack(): boolean {
+    if (this.#status !== 'replaced') {
+      return false;
+    }
+    this.#attempt = 0;
+    this.#connect();
+    return true;
+  }
+
+  /** What every Hello from now on asks for: a sailor's boat to watch, or "" to sail. */
+  #ask(sailor: string): void {
+    this.#watch = sailor;
+    if (this.#session !== null) {
+      this.#session.watch = sailor;
+    }
+  }
+
   #setStatus(status: Status, waitMs = 0, reason = ''): void {
     this.#status = status;
     this.#d.post({ type: 'status', status, waitMs, reason });
@@ -144,6 +211,9 @@ export class NetWorker {
     ws.binaryType = 'arraybuffer';
     this.#socket = ws;
     let welcomed = false;
+    this.#sailing = false;
+    this.#watching = false;
+    this.#boatQueued = false;
     ws.onopen = () => {
       for (const b of s.open(this.#d.now())) {
         this.#send(b);
@@ -164,9 +234,16 @@ export class NetWorker {
       }
       switch (r.kind) {
         case 'welcome': {
+          const first = !welcomed;
           welcomed = true;
           this.#attempt = 0;
           const w = r.welcome;
+          const watching = w.watching ?? null;
+          this.#watching = watching !== null;
+          this.#sailing = !this.#watching;
+          if (this.#sailing) {
+            this.#boatQueued = false;
+          }
           this.#d.post({
             type: 'welcome',
             boat: Number(w.boat),
@@ -182,6 +259,11 @@ export class NetWorker {
             endsUs: Number(w.endsUs),
             closingUs: Number(w.closingUs),
             zone: w.zone,
+            watching:
+              watching === null
+                ? null
+                : { sailor: watching.sailor, machine: watching.machine, mine: watching.mine },
+            first,
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#setStatus('sailing');
@@ -209,10 +291,38 @@ export class NetWorker {
           }
           break;
         case 'queued':
-          this.#d.post({ type: 'queued', position: r.position, waiting: r.waiting });
-          if (this.#status !== 'queued') {
+          this.#d.post({
+            type: 'queued',
+            position: r.position,
+            waiting: r.waiting,
+            spectators: r.spectators,
+          });
+          if (r.spectators) {
+            // Waiting to watch: a boat sailed has left the water.
+            this.#sailing = false;
+          } else {
+            this.#boatQueued = true;
+          }
+          // A watch goes on while the connection waits for a boat.
+          if (!this.#watching && this.#status !== 'queued') {
             this.#setStatus('queued');
           }
+          break;
+        case 'watchEnded': {
+          this.#d.post({ type: 'watchEnded', why: r.why, sailor: r.sailor });
+          const was = this.#watching;
+          this.#watching = false;
+          // A watch refused to a connection that sails leaves it sailing.
+          if (was || !this.#sailing) {
+            const status = this.#boatQueued ? 'queued' : 'idle';
+            if (this.#status !== status) {
+              this.#setStatus(status);
+            }
+          }
+          break;
+        }
+        case 'watchers':
+          this.#d.post({ type: 'watchers', count: r.count });
           break;
         case 'pong':
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });

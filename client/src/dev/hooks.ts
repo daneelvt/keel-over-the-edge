@@ -1173,13 +1173,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         Object.fromEntries(Object.entries(record).map(([k, i]) => [k, v[i] ?? 0])) as {
           [K in keyof R]: number;
         };
+      // The boat drawn: the own, or one watched.
+      const drawn = game.driver ?? driver;
       return {
-        state: named(RECORDS.state, driver.states.current),
-        out: named(RECORDS.out, driver.out),
+        state: named(RECORDS.state, drawn.states.current),
+        out: named(RECORDS.out, drawn.out),
         helm: game.helm.target,
         sheet: game.sheet.target,
         steps: game.clock.steps,
-        wind: { ...driver.wind },
+        wind: { ...drawn.wind },
         pilot: {
           mode: game.pilot.mode,
           target: game.pilot.target,
@@ -1543,6 +1545,40 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         tools: o.tools.value,
         stays: p.stays,
       };
+    },
+    /**
+     * Watching another sailor's boat: whose, whether the boat drawn is not
+     * the own, where the connection stands, why the last watch ended, the
+     * place in the spectators' queue, how many watch the own boat, the
+     * Inputs sent that carried controls (the worker's count, as its last
+     * traffic said), and the boat drawn as the page draws it.
+     */
+    watch() {
+      const o = sailing.online;
+      if (o === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      const s = o.driver.states.current;
+      return {
+        watching: o.watching.value,
+        spectating: o.spectating.value,
+        status: o.status.value,
+        ended: o.ended.value,
+        place: o.watchPlace.value,
+        watchers: o.watchers.value,
+        controls: o.traffic.controls,
+        east: s[RECORDS.state.x] ?? 0,
+        north: s[RECORDS.state.y] ?? 0,
+        ticks: world.ticks,
+      };
+    },
+    /** Asks to watch a sailor's boat, as the list does. */
+    watchSailor(name: string): void {
+      sailing.online?.watch(name);
+    },
+    /** Asks for a boat, as Sail does. */
+    sailAgain(): void {
+      sailing.online?.sail();
     },
     /**
      * The land: the chunks handed and held, which are drawn this frame,

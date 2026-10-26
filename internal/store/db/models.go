@@ -27,6 +27,7 @@ type Account struct {
 	Priority       bool
 	StoppedAt      pgtype.Timestamptz
 	StopReason     pgtype.Text
+	Spectators     bool
 }
 
 type AccountAction struct {

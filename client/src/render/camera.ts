@@ -17,6 +17,9 @@
 // boat toward the sky, up to the zenith; the opposite drag brings the gaze
 // back down the same way, and only then raises the camera. While it looks
 // above the horizon it does not ease back by itself.
+//
+// Watching another sailor's boat, it never eases back by itself: the
+// player looks where they choose, and "Behind the boat" brings it back.
 
 /** A view of the boat: azimuth from astern (radians, toward the port quarter positive), elevation above the horizon, distance in metres. */
 export interface CameraView {
@@ -60,6 +63,8 @@ export const YAW_OMEGA_REDUCED = 12;
 export const EASE_BACK_AFTER = 5000;
 /** The easing back's time constant, in seconds. */
 const EASE_BACK_TIME = 0.8;
+/** Within this of its resting view, radians, the camera asked back behind the boat is there. */
+const HOME = 0.001;
 /** Radians a CSS pixel of drag swings the camera. */
 const DRAG_SCALE = 0.006;
 
@@ -114,6 +119,8 @@ export class ChaseCamera {
   /** The boat's heave as the camera has followed it, and the sea's height under the boat, metres. */
   lift = 0;
   sea = 0;
+  /** Whether it eases back to its resting view untouched: not while watching another's boat. */
+  easesBack = true;
   /** Where the camera holds, in the scene, looking at the boat wherever it goes: going over the lip. */
   held: { x: number; y: number; z: number } | null = null;
   /** A bump's shake: its size, metres, when it began and the frame's time, ms. */
@@ -121,6 +128,8 @@ export class ChaseCamera {
   #shakeAt = Number.NEGATIVE_INFINITY;
   #now = 0;
   #touched = Number.NEGATIVE_INFINITY;
+  /** Easing back to the resting view as asked, until a touch or it is there. */
+  #homing = false;
 
   /**
    * Puts the camera at a view, behind a boat heading this way and heaved
@@ -152,6 +161,13 @@ export class ChaseCamera {
     this.view.elevation = Math.max(at, MIN_ELEVATION);
     this.tilt = Math.max(MIN_ELEVATION - at, 0);
     this.#touched = now;
+    this.#homing = false;
+  }
+
+  /** Eases back to the resting view behind the boat, at once, whether or not it would by itself. */
+  behind(): void {
+    this.tilt = 0;
+    this.#homing = true;
   }
 
   /** Whether the camera looks above the horizon. */
@@ -190,12 +206,19 @@ export class ChaseCamera {
     this.yawRate = (v - w * c) * k;
     this.yaw = angleDiff(heading + e1, 0);
 
-    if (!this.holding && !this.looksUp && now - this.#touched > EASE_BACK_AFTER) {
+    const untouched = this.easesBack && now - this.#touched > EASE_BACK_AFTER;
+    if (!this.holding && !this.looksUp && (untouched || this.#homing)) {
       // Looking at the boat again, the tilt goes with the rest.
       this.tilt = 0;
       const f = 1 - Math.exp(-dt / EASE_BACK_TIME);
       this.view.azimuth += angleDiff(this.rest.azimuth, this.view.azimuth) * f;
       this.view.elevation += (this.rest.elevation - this.view.elevation) * f;
+      if (
+        Math.abs(angleDiff(this.rest.azimuth, this.view.azimuth)) < HOME &&
+        Math.abs(this.rest.elevation - this.view.elevation) < HOME
+      ) {
+        this.#homing = false;
+      }
     }
   }
 

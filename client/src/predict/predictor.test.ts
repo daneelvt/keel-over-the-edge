@@ -227,6 +227,8 @@ describe('pacing online', () => {
       endsUs: 0,
       closingUs: 0,
       zone: '',
+      watching: null,
+      first: true,
     });
     const sn = start(100);
     sn.helm = 300;
@@ -314,9 +316,9 @@ describe('the queue and the fleet online', () => {
       clock: { steps: 0, alpha: 0 },
     });
     port.deliver({ type: 'status', status: 'queued', waitMs: 0, reason: '' });
-    port.deliver({ type: 'queued', position: 3, waiting: 9 });
+    port.deliver({ type: 'queued', position: 3, waiting: 9, spectators: false });
     expect(o.place.value).toEqual({ position: 3, waiting: 9 });
-    port.deliver({ type: 'queued', position: 1, waiting: 4 });
+    port.deliver({ type: 'queued', position: 1, waiting: 4, spectators: false });
     expect(o.place.value).toEqual({ position: 1, waiting: 4 });
     port.deliver({
       type: 'welcome',
@@ -333,6 +335,8 @@ describe('the queue and the fleet online', () => {
       endsUs: 0,
       closingUs: 0,
       zone: '',
+      watching: null,
+      first: true,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     expect(o.place.value).toBeNull();
@@ -363,6 +367,8 @@ describe('the queue and the fleet online', () => {
       endsUs: 0,
       closingUs: 0,
       zone: '',
+      watching: null,
+      first: true,
     });
     const record = new ArrayBuffer(FLEET_RECORD_BYTES);
     writeSnapshot(start(100), new DataView(record));
@@ -401,6 +407,8 @@ describe('the bell online', () => {
       endsUs: 0,
       closingUs: 0,
       zone: '',
+      watching: null,
+      first: true,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
     return { o, port };
@@ -432,6 +440,8 @@ describe('the bell online', () => {
       endsUs: 0,
       closingUs: 0,
       zone: '',
+      watching: null,
+      first: true,
     });
     port.deliver(status('sailing'));
     expect(o.notice.value).toBeNull();
@@ -459,6 +469,8 @@ describe('the bell online', () => {
       endsUs: 0,
       closingUs: 0,
       zone: '',
+      watching: null,
+      first: true,
     });
     port.deliver(status('sailing'));
     expect(o.notice.value?.text).toBe('Your boat has returned to port.');

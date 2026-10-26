@@ -12,6 +12,8 @@
 // angle, the twist and the sailor's flattening, and ripples where it
 // luffs; the telltales read each sail strip's flow; the pennant streams in
 // the apparent wind at the masthead. A stand-in figure shows the sailor.
+// Watching a machine sailor's boat, its sail carries the machine mark, as
+// the fleet's do.
 
 import {
   CanvasTexture,
@@ -34,6 +36,7 @@ import { type HullShape, hullShape } from '../ocean/hulls';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
 import { headingToRotationY, type ScenePoint } from './coords';
+import { chordAtHalf, type MarkPlace, markInk, markPlace, paintMark } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
@@ -115,6 +118,12 @@ export class Boat {
   readonly #place: SailorPlace = { x: 0, y: 0, z: 0, facing: 0, tilt: 0 };
   readonly #ripple = new Float64Array(2);
   #side = -1;
+  /** The sail's cloth, what is printed on it, and where the machine mark goes. */
+  #cloth: CanvasTexture | null = null;
+  #number = '';
+  #insignia = '';
+  #mark: MarkPlace | null = null;
+  #marked = false;
 
   constructor(kind: BoatKind) {
     this.#kind = kind;
@@ -146,6 +155,17 @@ export class Boat {
       }
     });
     const cloth = sailCloth(sailNumber, insignia);
+    this.#cloth = cloth;
+    this.#number = sailNumber;
+    this.#insignia = insignia;
+    let sail: Mesh | undefined;
+    this.parts.get('sail')?.traverse((o) => {
+      if (sail === undefined && o instanceof Mesh) {
+        sail = o;
+      }
+    });
+    const { foot, luff } = this.#kind.physics.rig;
+    this.#mark = markPlace(foot, luff, chordAtHalf(sail?.geometry));
     model.traverse((o) => {
       if (o instanceof Mesh) {
         o.material = this.#replace(o, o.material as Material, cloth);
@@ -159,6 +179,21 @@ export class Boat {
       this.#frame.seatZ = seat.position.z;
     }
     this.hullShape = hullShape(this.parts.get('hull')?.userData);
+  }
+
+  /** Prints the machine mark on the sail, or takes it off: the boat is a machine sailor's. */
+  setMachine(on: boolean): void {
+    const cloth = this.#cloth;
+    if (on === this.#marked || cloth === null || this.#mark === null) {
+      return;
+    }
+    this.#marked = on;
+    const g = (cloth.image as HTMLCanvasElement).getContext('2d') as CanvasRenderingContext2D;
+    paintCloth(g, this.#number, this.#insignia);
+    if (on) {
+      paintMark(g, this.#mark, CLOTH_WIDTH, CLOTH_HEIGHT, markInk(CLOTH));
+    }
+    cloth.needsUpdate = true;
   }
 
   /** Loads the sailor's figure from an art path and seats it in the boat. */
