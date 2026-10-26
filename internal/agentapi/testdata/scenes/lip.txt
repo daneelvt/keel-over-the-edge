@@ -1,0 +1,15 @@
+# about 197 tokens
+tick 1062 · seq 0
+Boat: Jolly boat · sailing · heading 089° · 4.8 kn · heel 3° to starboard · port tack
+Pilot: wind 90° port · boom 40° (sheet out to 40°) · rudder 1° to starboard · sail drawing
+Wind: 000° N 12 kn F4 · 89° off the bow, port side · apparent 13 kn 69°
+Sea: waves 0.2 m from 000° · current 1.0 kn setting 211°
+Weather: 1013 hPa, steady · visibility good
+Where: 48°14′N 179°58′ · edge 0.3 NM
+In sight:
+ land (uncharted) · wooded island 140 m across · 220° ~400 m
+ a light Oc(3) W 15s (uncharted) · 220° ~400 m
+ a light Oc(4) W 20s (uncharted) · 325° ~0.6 NM
+ a light Fl(5) W 20s (uncharted) · 015° ~2.4 NM
+ Table Head Light · 359° 4.3 NM · light Fl(3) W 15s · known
+Hear: the roar of the falls to the S · a fog signal to the SW

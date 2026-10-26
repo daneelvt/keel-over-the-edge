@@ -1,0 +1,27 @@
+# about 353 tokens
+tick 1102 · seq 0
+Boat: Jolly boat · sailing · heading 156° · 0.6 kn · heel 0° · port tack
+Pilot: hand · boom 50° (sheet out to 50°) · rudder 0° · sail stalled
+Wind: 041° NE 5 kn F2 · 115° off the bow, port side · apparent 4 kn 108°
+Sea: waves 0.0 m from 045° · current slack
+Weather: 1013 hPa, steady · visibility good
+Where: 88°56′N 094°21′ · edge 4.4 NM
+In sight:
+ B1 human · 000° 25 m · port tack, heading 160°, stopped
+ B2 machine · 045° 35 m · port tack, heading 160°, stopped
+ B3 human · 315° 35 m · port tack, heading 160°, stopped
+ B4 machine · 295° 60 m · port tack, heading 160°, stopped
+ B5 machine · 335° 60 m · port tack, heading 165°, stopped
+ B6 human · 025° 60 m · port tack, heading 165°, stopped
+ B7 human · 065° 60 m · port tack, heading 165°, stopped
+ B8 human · 315° 70 m · port tack, heading 160°, stopped
+ B9 machine · 045° 70 m · port tack, heading 165°, stopped
+ B10 machine · 000° 80 m · port tack, heading 165°, stopped
+ B11 human · 340° 80 m · port tack, heading 165°, stopped
+ B12 human · 020° 80 m · port tack, heading 165°, stopped
+ and 7 more boats
+ Port Royal · 290° 0.1 NM · known
+ Table Head Light · 298° 0.2 NM · light Fl(3) W 15s · known
+ a light Fl(4) W 15s (uncharted) · 235° ~1.6 NM
+ a light Fl(5) W 20s (uncharted) · 165° ~1.9 NM
+ a light Mo(D) W 15s (uncharted) · 035° ~2.5 NM

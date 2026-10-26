@@ -406,6 +406,7 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 	}
 	if len(seen) > mostContacts {
 		more = fmt.Sprintf("and %d more boats", len(seen)-mostContacts)
+		lines = append(lines, more)
 	}
 	if brief {
 		return lines, more
@@ -555,6 +556,9 @@ func (s *Sea) lookOf(sub *chart.Subject) string {
 		}
 		return fmt.Sprintf("land (uncharted) · %s %s across", look, rangeWords(across))
 	case sight.Place:
+		if l := s.lightOf(sub); l != "" {
+			return "a light " + l + " (uncharted)"
+		}
 		if sub.Sort >= 0 && sub.Sort < len(s.PlaceKinds) {
 			return article(s.PlaceKinds[sub.Sort]) + " (uncharted)"
 		}
@@ -681,9 +685,6 @@ func (r *report) text() string {
 		b.WriteString("In sight:\n")
 		for _, l := range r.InSight {
 			b.WriteString(" " + l + "\n")
-		}
-		if r.More != "" {
-			b.WriteString(" " + r.More + "\n")
 		}
 	} else if !r.brief {
 		b.WriteString("In sight: nothing\n")
