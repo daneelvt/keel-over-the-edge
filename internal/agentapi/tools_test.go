@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -278,3 +279,13 @@ func TestRing(t *testing.T) {
 
 // acceptedFor is a machine sailor the door accepted, for tests.
 var acceptedFor = oauth.Accepted{Account: [16]byte{1, 2, 3}, Name: "Iron Mary", OwnerName: "Ann Bonny"}
+
+// TestAHelmIsSmall: a helm in memory, its ring of events full, under 64
+// KB.
+func TestAHelmIsSmall(t *testing.T) {
+	size := int(unsafe.Sizeof(helm{})) + ringSize*len("the autopilot finished its tack")
+	if size > 64<<10 {
+		t.Fatalf("a helm is %d bytes", size)
+	}
+	t.Logf("a helm: %d bytes, its ring full", size)
+}
