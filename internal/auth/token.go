@@ -9,8 +9,12 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
+	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
 // CookieName is the session cookie's. The __Host- prefix makes browsers
@@ -104,4 +108,39 @@ func ClearedCeremonyCookie(kind string) *http.Cookie {
 	c := CeremonyCookie(kind, "")
 	c.MaxAge = -1
 	return c
+}
+
+// IssueRetries is how many times a token is drawn again after its hash
+// clashed with another's as it was kept. 256 random bits never clash by
+// chance, so a clash is a fault worth an error in the log.
+const IssueRetries = 3
+
+// Issue draws a token with draw and keeps it with keep, drawing again when
+// keep reports the token's hash taken (store.ErrTokenTaken), IssueRetries
+// times at most, each clash logged as an error.
+func Issue[T any](log *slog.Logger, what string, draw func() T, keep func(T) error) (T, error) {
+	for try := 0; ; try++ {
+		t := draw()
+		err := keep(t)
+		if !errors.Is(err, store.ErrTokenTaken) {
+			return t, err
+		}
+		log.Error("a token drawn clashed with another", "token", what, "try", try+1)
+		if try == IssueRetries {
+			var zero T
+			return zero, err
+		}
+	}
+}
+
+// Drawn is a token drawn, and its hash.
+type Drawn struct {
+	Token string
+	Hash  [32]byte
+}
+
+// DrawToken draws a session token, for Issue.
+func DrawToken() Drawn {
+	t, h := NewToken()
+	return Drawn{t, h}
 }

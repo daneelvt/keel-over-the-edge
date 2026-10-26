@@ -38,6 +38,11 @@ type Config struct {
 	PasskeyOrigins []string
 	// AgentsAddr is the address the AI agents' HTTP server listens on.
 	AgentsAddr string
+	// AgentsURL is the MCP address AI apps connect to, the resource their
+	// tokens are for: https://agents.keelovertheedge.com/mcp in
+	// production; elsewhere, the play origin's host on the path /mcp,
+	// which the proxy in front sends to the agents' listener.
+	AgentsURL string
 	// InternalAddr is the address of the internal HTTP server: probes,
 	// metrics, profiles. It must not be reachable from outside.
 	InternalAddr string
@@ -185,6 +190,12 @@ func Load(getenv func(string) string) (Config, error) {
 				}
 				c.PasskeyOrigins = append(c.PasskeyOrigins, o)
 			}
+		}
+	}
+	if c.PlayOrigin != "" {
+		c.AgentsURL = or(getenv("KEEL_AGENTS_URL"), c.PlayOrigin+"/mcp")
+		if err := CheckResource(c.AgentsURL); err != nil {
+			errs = append(errs, fmt.Errorf("KEEL_AGENTS_URL: %w", err))
 		}
 	}
 	if err := CheckDatabaseURL(c.DatabaseURL); err != nil {
@@ -383,6 +394,32 @@ func checkOrigin(origin string) error {
 		return fmt.Errorf("%q has no host, or has user information", origin)
 	case u.Path != "" || u.RawQuery != "" || u.Fragment != "" || strings.HasSuffix(origin, "/"):
 		return fmt.Errorf("%q is not an origin: no path, query or trailing slash", origin)
+	}
+	return nil
+}
+
+// CheckResource checks the MCP address as tokens name it (RFC 8707, 2):
+// an absolute https URL with a path, no query, no fragment, no trailing
+// slash; http on a loopback address alone, for tests.
+func CheckResource(resource string) error {
+	u, err := url.Parse(resource)
+	if err != nil {
+		return err
+	}
+	switch {
+	case u.Scheme == "http" && loopback(u.Hostname()):
+	case u.Scheme != "https":
+		return fmt.Errorf("%q is not https (http is allowed on localhost, 127.0.0.1 or [::1] alone)", resource)
+	}
+	switch {
+	case u.Host == "" || u.User != nil:
+		return fmt.Errorf("%q has no host, or has user information", resource)
+	case u.Path == "" || u.Path == "/" || strings.HasSuffix(u.Path, "/"):
+		return fmt.Errorf("%q has no path, or ends in /", resource)
+	case u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(resource, "#"):
+		return fmt.Errorf("%q has a query or a fragment", resource)
+	case resource != strings.ToLower(u.Scheme)+"://"+strings.ToLower(u.Host)+u.EscapedPath():
+		return fmt.Errorf("%q is not in its canonical form: a lowercase scheme and host", resource)
 	}
 	return nil
 }

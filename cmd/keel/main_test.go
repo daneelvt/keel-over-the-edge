@@ -509,8 +509,10 @@ func (noAccounts) EndOtherSessions(context.Context, store.AccountID, [32]byte) (
 func (noAccounts) ConfirmSession(context.Context, store.AccountID, [32]byte, time.Time) error {
 	return errNoAccounts
 }
-func (noAccounts) DeleteAccount(context.Context, store.AccountID) error { return errNoAccounts }
-func (noAccounts) SaveCeremony(context.Context, store.Ceremony) error   { return errNoAccounts }
+func (noAccounts) DeleteAccount(context.Context, store.AccountID) ([]store.AccountID, error) {
+	return nil, errNoAccounts
+}
+func (noAccounts) SaveCeremony(context.Context, store.Ceremony) error { return errNoAccounts }
 func (noAccounts) TakeCeremony(context.Context, [32]byte, string) (store.Ceremony, error) {
 	return store.Ceremony{}, store.ErrNotFound
 }

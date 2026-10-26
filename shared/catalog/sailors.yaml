@@ -9,3 +9,52 @@ sailors:
     art:
       model: sailors/stand-in.glb
       far: sailors/stand-in.far.glb
+
+# The machine sailors' look: the choices a player makes their AI account's
+# sailor from. A starting set, until the machines are drawn: the versions,
+# four metal finishes, and eight main colours that stay apart for
+# colour-blind players.
+machine:
+  versions:
+    - id: female
+      name: female
+    - id: male
+      name: male
+  finishes:
+    - id: brass
+      name: Brass
+      colour: "#c9a04a"
+    - id: copper
+      name: Copper
+      colour: "#b8673f"
+    - id: bronze
+      name: Bronze
+      colour: "#8c6a3c"
+    - id: iron
+      name: Iron
+      colour: "#5d6066"
+  colours:
+    - id: deep-red
+      name: deep red
+      colour: "#9e2b25"
+    - id: navy
+      name: navy blue
+      colour: "#24406b"
+    - id: ochre
+      name: ochre
+      colour: "#c08a2e"
+    - id: sea-green
+      name: sea green
+      colour: "#2f6b5e"
+    - id: sky-blue
+      name: sky blue
+      colour: "#6f9cc4"
+    - id: plum
+      name: plum
+      colour: "#7a3f6e"
+    - id: black
+      name: black
+      colour: "#2b2a2e"
+    - id: rust
+      name: rust orange
+      colour: "#c4622d"

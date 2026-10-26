@@ -103,6 +103,7 @@ export interface Catalog {
    * @minItems 1
    */
   sailors: [Sailor, ...Sailor[]];
+  machine: Machine;
   weather: Weather;
   sky: Sky;
   encounters: Encounters;
@@ -764,6 +765,47 @@ export interface SailorArt {
    * The sailor's far model, drawn in boats seen from afar: the model's nodes, with few segments.
    */
   far: string;
+}
+/**
+ * The look of the machine sailors AI accounts sail as: the choices a player makes one from, a version, a metal finish and a main colour. A machine sailor's sailor keeps the three ids.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Machine".
+ */
+export interface Machine {
+  /**
+   * The machine's versions.
+   *
+   * @minItems 1
+   */
+  versions: [MachineChoice, ...MachineChoice[]];
+  /**
+   * The finishes of its metal, each with its colour.
+   *
+   * @minItems 1
+   */
+  finishes: [MachineChoice, ...MachineChoice[]];
+  /**
+   * Its main colours, chosen to stay apart for colour-blind players.
+   *
+   * @minItems 1
+   */
+  colours: [MachineChoice, ...MachineChoice[]];
+}
+/**
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "MachineChoice".
+ */
+export interface MachineChoice {
+  id: Id;
+  /**
+   * Display name, as the player reads it: lowercase but where a name is a proper noun.
+   */
+  name: string;
+  /**
+   * Its colour, sRGB, #rrggbb; none for a version.
+   */
+  colour?: string;
 }
 /**
  * The weather's numbers.
@@ -6301,4 +6343,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '4f261b85586c873f';
+export const CATALOG_VERSION = '6a5fc8cef8ba6591';

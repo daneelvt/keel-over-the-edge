@@ -38,3 +38,8 @@ UPDATE session SET confirmed_until = @until WHERE token_hash = @token_hash AND a
 -- name: ReleaseSession :execrows
 -- A session held to adding a passkey, let go once one is added.
 UPDATE session SET held = false WHERE token_hash = @token_hash AND account_id = @account_id;
+
+-- name: AccountHeld :one
+-- Whether an account has a session held to adding a passkey: its
+-- recovery code used, and no passkey added since.
+SELECT EXISTS (SELECT 1 FROM session WHERE account_id = @account_id AND held)::boolean;

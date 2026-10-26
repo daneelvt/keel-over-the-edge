@@ -36,7 +36,7 @@ type Accounts interface {
 	EndSession(ctx context.Context, hash [32]byte) error
 	EndOtherSessions(ctx context.Context, id store.AccountID, keep [32]byte) (int64, error)
 	ConfirmSession(ctx context.Context, id store.AccountID, hash [32]byte, until time.Time) error
-	DeleteAccount(ctx context.Context, id store.AccountID) error
+	DeleteAccount(ctx context.Context, id store.AccountID) ([]store.AccountID, error)
 	SaveCeremony(ctx context.Context, c store.Ceremony) error
 	TakeCeremony(ctx context.Context, hash [32]byte, kind string) (store.Ceremony, error)
 }
@@ -46,7 +46,7 @@ type Accounts interface {
 // minutes up; again, its state gone, used or written by another build.
 var ceremonyResults = []string{"begun", "finished", "refused", "expired", "again"}
 
-var ceremonyKinds = []string{store.CeremonyCreate, store.CeremonySignIn, store.CeremonyAdd, store.CeremonyConfirm}
+var ceremonyKinds = []string{store.CeremonyCreate, store.CeremonySignIn, store.CeremonyAdd, store.CeremonyConfirm, store.CeremonyApprove}
 
 func (a *api) ceremonyCounted(kind, result string) {
 	a.cfg.Metrics.Ceremonies.WithLabelValues(kind, result).Inc()
@@ -54,14 +54,17 @@ func (a *api) ceremonyCounted(kind, result string) {
 
 // begin keeps a ceremony begun, sets its cookie and answers its options.
 func (a *api) begin(w http.ResponseWriter, r *http.Request, c store.Ceremony, b auth.Begun) {
-	handle, hash := auth.NewToken()
-	c.Hash, c.Session, c.Build, c.Expires = hash, b.State, a.cfg.Version.Build, b.Expires
-	if err := a.cfg.Accounts.SaveCeremony(r.Context(), c); err != nil {
+	c.Session, c.Build, c.Expires = b.State, a.cfg.Version.Build, b.Expires
+	handle, err := auth.Issue(a.cfg.Log, "ceremony", auth.DrawToken, func(d auth.Drawn) error {
+		c.Hash = d.Hash
+		return a.cfg.Accounts.SaveCeremony(r.Context(), c)
+	})
+	if err != nil {
 		a.unavailable(w, r, "keeping a ceremony", err)
 		return
 	}
 	a.ceremonyCounted(c.Kind, "begun")
-	http.SetCookie(w, auth.CeremonyCookie(c.Kind, handle))
+	http.SetCookie(w, auth.CeremonyCookie(c.Kind, handle.Token))
 	writeRaw(w, http.StatusOK, b.Options)
 }
 

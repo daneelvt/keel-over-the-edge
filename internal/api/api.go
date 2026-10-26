@@ -11,6 +11,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
+	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
@@ -47,6 +48,23 @@ type Config struct {
 	Deleted func(id store.AccountID)
 	// Looks are the catalog's sailors a new sailor may choose, by id.
 	Looks []string
+	// Boat is the kind of boat each sailor brings to its account's fleet,
+	// the catalog's.
+	Boat string
+	// OAuth, if not nil, is the authorization server AI apps sign in with,
+	// whose routes this serves; Grants is the MCP address's check, told
+	// of every grant ended here. MCP is the MCP address, Lifetime how long
+	// a grant lasts and MachineLooks the choices of a machine sailor's
+	// look. AtSea, if not nil, reports whether a machine sailor is at sea.
+	OAuth        *oauth.Server
+	Grants       *oauth.Grants
+	MCP          string
+	Lifetime     *oauth.Lifetime
+	MachineLooks oauth.MachineLooks
+	AtSea        func(store.AccountID) bool
+	// Machines are the account's machine sailors, their grants and
+	// connection tokens: the store.
+	Machines Machines
 	// Game, if not nil, is the game connection, GET /ws: it checks the
 	// session itself, so it can count those it refuses.
 	Game http.Handler
@@ -88,7 +106,8 @@ var longLived = map[string]bool{"GET /ws": true}
 //  3. read and write deadlines, except on long-lived routes
 //  4. a limit on the body's size
 //  5. cross-origin protection: a browser's unsafe request from another
-//     origin is refused
+//     origin is refused, but at the routes AI apps call (their token,
+//     revocation and registration), which read no cookie
 //  6. the session: the account the cookie names, if any
 //  7. limits on how often a client may ask (not yet)
 //
@@ -136,6 +155,17 @@ func Handler(cfg Config) http.Handler {
 	mux.Handle("POST /api/account/recovery", required(a.newRecoveryCode))
 	mux.Handle("POST /api/account/logout-others", required(a.logoutOthers))
 	mux.Handle("POST /api/account/delete", required(a.deleteAccount))
+	if cfg.Machines != nil {
+		mux.Handle("GET /api/machines", required(a.machines))
+		mux.Handle("POST /api/machines", required(a.makeMachine))
+		mux.Handle("POST /api/machines/delete", required(a.deleteMachine))
+		mux.Handle("POST /api/machines/revoke", required(a.revokeApp))
+		mux.Handle("POST /api/machines/token", required(a.makeToken))
+		mux.Handle("POST /api/machines/token/revoke", required(a.revokeToken))
+	}
+	if cfg.OAuth != nil {
+		cfg.OAuth.Register(mux)
+	}
 	if cfg.Notices != nil {
 		mux.Handle("POST /api/me/notices", required(a.setNotices))
 	}
@@ -165,12 +195,29 @@ func Handler(cfg Config) http.Handler {
 	mux.HandleFunc(robotsRoute, serveRobots)
 
 	cop := http.NewCrossOriginProtection()
+	if cfg.OAuth != nil {
+		// The routes AI apps call from their own servers, or from a page
+		// of their own origin, read no cookie: nothing a page could make
+		// them do is the player's.
+		for _, p := range oauth.CrossOrigin {
+			cop.AddInsecureBypassPattern(p)
+		}
+	}
 	cop.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		cfg.Metrics.CrossOriginRefused.Inc()
 		writeError(w, http.StatusForbidden, "cross-origin")
 	}))
 
-	var h http.Handler = session(mux, auth.Session(cfg.Sessions, cfg.Log, writeError))
+	open := map[string]bool{}
+	for p := range openRoutes {
+		open[p] = true
+	}
+	if cfg.OAuth != nil {
+		for _, p := range oauth.Routes {
+			open[p] = true
+		}
+	}
+	var h http.Handler = session(mux, open, auth.Session(cfg.Sessions, cfg.Log, writeError))
 	h = cop.Handler(h)
 	h = bodyLimit(BodyLimit, h)
 	h = deadlines(mux, cfg.ReadTimeout, cfg.WriteTimeout, h)
@@ -183,17 +230,19 @@ func Handler(cfg Config) http.Handler {
 const robotsRoute = "GET /robots.txt"
 
 // openRoutes are the routes besides the page's that need no session: what
-// they serve is the same for everyone who has the address.
+// they serve is the same for everyone who has the address. The
+// authorization server's routes need none either: an AI app's sign-in is
+// never the game's session.
 var openRoutes = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true, newsRoute: true, statusRoute: true}
 
 // session reads the session for every route but the page's and the open
 // ones: the page is the same for everyone, and loads even when the database
 // cannot be asked; a chunk is cached by the edge for everyone, so its
 // answer carries no cookie.
-func session(mux *http.ServeMux, mw func(http.Handler) http.Handler) http.Handler {
+func session(mux *http.ServeMux, open map[string]bool, mw func(http.Handler) http.Handler) http.Handler {
 	withSession := mw(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, pattern := mux.Handler(r); pageRoutes[pattern] || openRoutes[pattern] {
+		if _, pattern := mux.Handler(r); pageRoutes[pattern] || open[pattern] {
 			mux.ServeHTTP(w, r)
 			return
 		}

@@ -140,6 +140,12 @@ type Config struct {
 	Accounts Accounts
 	Sessions Sessions
 	Edge     Edge
+	// Machines, if not nil, is the owner's hand on machine sailors and AI
+	// apps' grants; Lifetime the grant lifetime kept in memory, and
+	// LifetimeChanged, if not nil, told when it is set.
+	Machines        AISailors
+	Lifetime        Lifetime
+	LifetimeChanged func()
 
 	// PlaceKinds and Characters are the catalog's kinds of place and
 	// lights' characters, by their indices, as the page shows them.
@@ -306,6 +312,8 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/gales.json", o.gales)
 	mux.HandleFunc("GET /owner/api/place.json", o.placeWeather)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
+	mux.HandleFunc("POST /owner/api/lifetime", o.lifetime)
+	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
 	mux.HandleFunc("POST /owner/api/place", o.place)
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)
 	mux.HandleFunc("POST /owner/api/world", o.newWorld)

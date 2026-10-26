@@ -69,6 +69,8 @@ type process struct {
 	ownPage  *api.Page
 	flight   *obs.Flight
 	jobs     *jobs.Runner
+	// agents is sign-in for AI apps and the MCP address.
+	agents *agents
 
 	// The routes the world half serves, set as each opens.
 	replayRoutes, devRoutes, ownerRoutes, playRoutes *lateHandler
@@ -341,9 +343,9 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.tools = ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
-		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts,
+		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents,
 	})
-	h.play = api.Handler(api.Config{
+	playCfg := api.Config{
 		Version:  api.Version{Build: p.build, Catalog: catalog.Version},
 		Log:      p.log,
 		Metrics:  p.metrics,
@@ -363,7 +365,9 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		NoticeKinds: noticeKinds(cat),
 		Status:      p.statusNow,
 		Website:     websiteOf(cfg.PlayOrigin),
-	})
+	}
+	p.agents.apiConfig(&playCfg, p)
+	h.play = api.Handler(playCfg)
 	p.log.Info("world ready", "world", row.Number, "kinds", len(p.kinds), "capacity", world.Capacity(), "limit", world.Limit(),
 		"workers", p.opt.workers, "tick", world.Now(), "ends", row.EndsAt)
 	return h, nil

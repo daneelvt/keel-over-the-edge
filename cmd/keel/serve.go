@@ -36,6 +36,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
+	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
@@ -80,6 +81,9 @@ Configured from the environment:
   KEEL_DATABASE_URL    the database, a postgres:// URL (required)
   KEEL_PLAY_ADDR       the game's listener (default 127.0.0.1:8080)
   KEEL_AGENTS_ADDR     the AI agents' listener (default 127.0.0.1:8081)
+  KEEL_AGENTS_URL      the MCP address AI apps connect to, which the proxy in
+                       front sends to the agents' listener: https, a path, no
+                       trailing slash (default the play origin's /mcp)
   KEEL_INTERNAL_ADDR   probes, metrics, profiles and the owner's world page,
                        /owner/ (default 127.0.0.1:9090)
   KEEL_METRICS_ADDR    the metrics alone, GET /metrics, for a scraper that may
@@ -149,6 +153,7 @@ type database interface {
 	LoadWeather(ctx context.Context, world [16]byte) (*store.Weather, error)
 	StoreWeather(ctx context.Context, world [16]byte, epoch int64, w *store.Weather) error
 	SetChunkKey(ctx context.Context, world [16]byte, epoch int64, key []byte) ([]byte, error)
+	owner.AISailors
 	SetWorldEnd(ctx context.Context, lease int64, world [16]byte, end time.Time) error
 	NextWorld(ctx context.Context) (store.NextWorld, error)
 	CreateNextWorld(ctx context.Context, lease int64, seed uint64, generator int, epoch time.Time) (store.World, error)
@@ -158,6 +163,12 @@ type database interface {
 	DropWorld(ctx context.Context, lease int64, w store.World) error
 	WriteWorldNews(ctx context.Context, lease int64, world [16]byte, n store.WorldNews) error
 	WriteGaleNews(ctx context.Context, lease int64, world [16]byte, n store.GaleNews) (bool, error)
+	oauth.Store
+	api.Machines
+	GrantUsed(ctx context.Context, grant [16]byte, at time.Time) error
+	GrantLifetime(ctx context.Context) (time.Duration, error)
+	MachineCounts(ctx context.Context, lifetime time.Duration) (store.MachineCounts, error)
+	DeleteOAuthLeftovers(ctx context.Context, now time.Time, lifetime time.Duration) (store.OAuthCleanup, error)
 	DeleteSessions(ctx context.Context, before time.Time) (int64, error)
 	DeleteCeremonies(ctx context.Context, before time.Time) (int64, error)
 	DeleteJobRuns(ctx context.Context, before time.Time) (int64, error)
@@ -421,6 +432,12 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
 	p.registerWorldMetrics()
+	if p.agents, err = p.newAgents(ctx); err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, err)
+	}
 
 	// The world sailed: its end set if it has none, and if its end passed
 	// while keel was down, the next world begun first, before anyone is
@@ -454,8 +471,8 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	health.Beat()
 	play := newServer(p.playRoutes, log)
-	agents := newServer(obs.AccessLog(log, api.Agents()), log)
-	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: p.lifecycleJobs(), Log: log, Metrics: metrics})
+	agents := newServer(p.agents.handler, log)
+	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(p.lifecycleJobs(), p.oauthJob()), Log: log, Metrics: metrics})
 
 	g, gctx := errgroup.WithContext(ctx)
 	flightCtx, stopFlight := context.WithCancel(context.Background())
@@ -488,7 +505,11 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	})
 	g.Go(func() error {
 		defer close(jobsDone)
+		var wg sync.WaitGroup
+		wg.Go(func() { p.agents.usage.Run(jobsCtx) })
+		wg.Go(func() { p.countGrants(jobsCtx) })
 		p.jobs.Run(jobsCtx)
+		wg.Wait()
 		return nil
 	})
 	if flight != nil {
@@ -584,6 +605,9 @@ type ownerConfig struct {
 	from      *owner.Owner
 	// forecasts is the world's forecast issuer; nil for the next world.
 	forecasts *forecast.Issuer
+	// agents is sign-in for AI apps, whose lifetime and caps the owner
+	// sets.
+	agents *agents
 }
 
 // ownerTools are the owner's tools: the world page and its controls.
@@ -604,6 +628,9 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
 		Life: c.lifecycle, From: c.from,
+	}
+	if a := c.agents; a != nil {
+		cfg.Machines, cfg.Lifetime, cfg.LifetimeChanged = c.db, a.lifetime, a.grants.ForgetAll
 	}
 	if c.bus != nil {
 		cfg.Frames, cfg.Owner, cfg.Clock = c.bus.Frames, c.bus.Commands.Owner(), c.clock

@@ -134,6 +134,12 @@ func (p *Page) register(mux *http.ServeMux) {
 	})
 }
 
+// Has reports whether the page has a file of the name.
+func (p *Page) Has(name string) bool {
+	_, ok := p.files[name]
+	return ok
+}
+
 // Serve answers a GET for one of the page's files by its name: those in
 // assets/ cached for a year, the rest asked about each time.
 func (p *Page) Serve(w http.ResponseWriter, r *http.Request, name string) {

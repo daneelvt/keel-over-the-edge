@@ -40,7 +40,7 @@ func TestLoadValid(t *testing.T) {
 	}
 	want := Config{
 		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://keel.local:5173", PasskeyRPID: "keel.local", PasskeyOrigins: []string{"https://keel.local:5173"},
-		AgentsAddr: "127.0.0.1:8081", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
+		AgentsAddr: "127.0.0.1:8081", AgentsURL: "https://keel.local:5173/mcp", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
 		BoatLimit: DefaultBoatLimit, Bell: DefaultBell, Land: true, WorldKeep: DefaultWorldKeep,
 		// A zone loaded is a pointer of its own: the schedule is compared
 		// by what it says.
@@ -82,12 +82,14 @@ func TestLoadValid(t *testing.T) {
 		"KEEL_WORLD_SCHEDULE": "every=10m from=2026-11-01T00:00:00Z notice=4m ahead=3m",
 		"KEEL_WORLD_KEEP":     "2h",
 		"KEEL_PASSKEY_RP_ID":  "keelovertheedge.com",
+		"KEEL_AGENTS_URL":     "https://agents.keelovertheedge.com/mcp",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = Config{
 		PlayAddr: ":8080", PlayOrigin: "https://play.keelovertheedge.com", AgentsAddr: ":8081", InternalAddr: "0.0.0.0:9090",
+		AgentsURL:   "https://agents.keelovertheedge.com/mcp",
 		PasskeyRPID: "keelovertheedge.com", PasskeyOrigins: []string{"https://play.keelovertheedge.com"},
 		MetricsAddr: "0.0.0.0:9091", LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
 		BoatLimit: 2, Bell: 0, Land: false, WorldSeed: 18446744073709551615, HasWorldSeed: true,
@@ -155,6 +157,12 @@ func TestLoadRejects(t *testing.T) {
 			map[string]string{"KEEL_PLAY_ADDR": "x", "KEEL_PLAY_ORIGIN": "ftp://x"},
 			[]string{"KEEL_PLAY_ADDR", "KEEL_PLAY_ORIGIN"},
 		},
+		"agents url http":       {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_URL": "http://agents.example.com/mcp"}, []string{"KEEL_AGENTS_URL", "not https"}},
+		"agents url slash":      {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_URL": "https://agents.example.com/mcp/"}, []string{"KEEL_AGENTS_URL", "ends in /"}},
+		"agents url no path":    {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_URL": "https://agents.example.com"}, []string{"KEEL_AGENTS_URL", "no path"}},
+		"agents url query":      {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_URL": "https://agents.example.com/mcp?x=1"}, []string{"KEEL_AGENTS_URL", "query"}},
+		"agents url fragment":   {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_URL": "https://agents.example.com/mcp#x"}, []string{"KEEL_AGENTS_URL", "fragment"}},
+		"agents url uppercase":  {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_URL": "https://Agents.example.com/mcp"}, []string{"KEEL_AGENTS_URL", "canonical"}},
 		"agents addr bad":       {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_ADDR": "8081"}, []string{"KEEL_AGENTS_ADDR"}},
 		"internal addr bad":     {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_INTERNAL_ADDR": "x:y"}, []string{"KEEL_INTERNAL_ADDR"}},
 		"same as play":          {map[string]string{"KEEL_PLAY_ORIGIN": "https://example.com", "KEEL_AGENTS_ADDR": "127.0.0.1:8080"}, []string{"KEEL_AGENTS_ADDR: \"127.0.0.1:8080\" is KEEL_PLAY_ADDR's"}},

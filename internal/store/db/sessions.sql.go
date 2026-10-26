@@ -12,6 +12,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const accountHeld = `-- name: AccountHeld :one
+SELECT EXISTS (SELECT 1 FROM session WHERE account_id = $1 AND held)::boolean
+`
+
+// Whether an account has a session held to adding a passkey: its
+// recovery code used, and no passkey added since.
+func (q *Queries) AccountHeld(ctx context.Context, accountID pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, accountHeld, accountID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const confirmSession = `-- name: ConfirmSession :execrows
 UPDATE session SET confirmed_until = $1 WHERE token_hash = $2 AND account_id = $3
 `
