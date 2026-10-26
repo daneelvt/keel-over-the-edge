@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The recovery code: shown once, as the account is made and whenever a new
-// one is, with three ways to keep it, any of which moves on. Used, it signs
+// one is, with three ways to keep it, any of which moves on (for a new
+// sailor, to the choice of setting sail or making a machine sailor first). Used, it signs
 // the sailor in once and asks for a new passkey, which brings a new code;
 // the next sign-in is told it was used, in case it was not the player.
 
@@ -73,6 +74,28 @@ export function RecoveryCode({
       </button>
       <button type="button" class="start-link" onClick={done}>
         I’ve written it down
+      </button>
+    </section>
+  );
+}
+
+/**
+ * After a new sailor's recovery code is kept: to sea, or a machine sailor
+ * made first, for an AI app of the player's to sail.
+ */
+export function SetSailOrMake({ sail, make }: { sail: () => void; make: () => void }) {
+  return (
+    <section class="start-panel" aria-labelledby="ready-title">
+      <h1 id="ready-title">Ready to sail</h1>
+      <p class="start-text">
+        You can also make a machine sailor: one an AI app of yours sails, and speaks as, beside you
+        or while you are away.
+      </p>
+      <button type="button" class="start-go" onClick={sail}>
+        Set sail
+      </button>
+      <button type="button" class="start-sign-in" onClick={make}>
+        Make a machine sailor first
       </button>
     </section>
   );

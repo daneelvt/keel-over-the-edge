@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The menu: who is sailing, their account, and this device's settings. The frame rate (60,
-// or 30 to save battery), how much the sea is drawn with (as much as the
-// device runs well, or the least), sound, the beginners' overlays, and
-// whether the helm returns to the centre when let go.
+// The menu: who is sailing, their account and machine sailors, and this
+// device's settings. The frame rate (60, or 30 to save battery), how much
+// the sea is drawn with (as much as the device runs well, or the least),
+// sound, the beginners' overlays, and whether the helm returns to the
+// centre when let go.
 
 import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
@@ -56,6 +57,7 @@ export function Menu({
   chart = null,
   end = null,
   account = null,
+  machines = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
@@ -71,15 +73,26 @@ export function Menu({
   end?: Countdown | null;
   /** Opens the account page; null in the offline sandbox. */
   account?: (() => void) | null;
+  /** Opens the machine sailors' panel; null in the offline sandbox. */
+  machines?: (() => void) | null;
 }) {
   const s = settings.value.value;
   return (
     <section class="panel menu" aria-label="Settings">
       <SailingAs sailor={sailor} />
-      {account !== null ? (
-        <button type="button" class="menu-account" onClick={account}>
-          Account
-        </button>
+      {account !== null || machines !== null ? (
+        <div class="menu-accounts">
+          {account !== null ? (
+            <button type="button" onClick={account}>
+              Account
+            </button>
+          ) : null}
+          {machines !== null ? (
+            <button type="button" onClick={machines}>
+              Machine sailors
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {connection !== null ? <RoundTrip view={connection} /> : null}
       {end !== null && end.when.value !== '' ? (

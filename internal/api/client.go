@@ -119,6 +119,11 @@ func (p *Page) Size() int {
 	return n
 }
 
+// servedElsewhere are the page's files served at a route of their own,
+// with headers of their own, and not by name: the approval page, at
+// /oauth/authorize.
+var servedElsewhere = map[string]bool{"approve.html": true}
+
 // pageRoutes are the page's routes: GET, and so HEAD. They need no session.
 var pageRoutes = map[string]bool{"GET /{$}": true, "GET /{file}": true, "GET /assets/{file}": true}
 
@@ -127,6 +132,11 @@ func (p *Page) register(mux *http.ServeMux) {
 		p.serve(w, r, "index.html", pageCache)
 	})
 	mux.HandleFunc("GET /{file}", func(w http.ResponseWriter, r *http.Request) {
+		if servedElsewhere[r.PathValue("file")] {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			writeError(w, http.StatusNotFound, "not-found")
+			return
+		}
 		p.serve(w, r, r.PathValue("file"), pageCache)
 	})
 	mux.HandleFunc("GET /assets/{file}", func(w http.ResponseWriter, r *http.Request) {

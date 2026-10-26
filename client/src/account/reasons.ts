@@ -41,7 +41,45 @@ export const REASONS: Readonly<Record<string, string>> = {
   'passkey-domain': 'This address cannot hold a passkey. Open the game at its usual address.',
   'no-passkeys': 'This browser cannot make passkeys. Try your phone’s own browser.',
   'passkey-failed': 'The passkey could not be made. Try again.',
+  // Machine sailors.
+  cap: 'You have as many machine sailors as you may.',
+  'too-many-apps':
+    'That machine sailor has as many AI apps approved as it may. Revoke one on the account page first.',
 };
+
+/**
+ * The machine sailors' words, where a code means something of its own
+ * there: the look is a machine's, and what is not found is a machine
+ * sailor or its app.
+ */
+export const MACHINE_REASONS: Readonly<Record<string, string>> = {
+  look: 'That look is not one of ours. Draw another.',
+  'not-found': 'That machine sailor, or its app, is gone already.',
+  name: 'Type the machine sailor’s name exactly to delete it.',
+};
+
+/**
+ * The approval page's words, where a code means something of its own
+ * there: the request is the AI app's, and the passkey confirms it for a
+ * few minutes.
+ */
+export const APPROVE_REASONS: Readonly<Record<string, string>> = {
+  again: 'This request has ended. Go back to your AI app and connect again.',
+  confirm: 'Your passkey’s confirmation has lapsed. Continue with your passkey again.',
+  'add-passkey': 'Your recovery code was used: open the game and add a passkey first.',
+  'not-found': 'That machine sailor is gone. Choose another.',
+  window: 'Passkeys don’t work in this window.',
+};
+
+/** The words for a reason code on the approval page. */
+export function approveReasonText(code: string): string {
+  return APPROVE_REASONS[code] ?? machineReasonText(code);
+}
+
+/** The words for a reason code about a machine sailor. */
+export function machineReasonText(code: string): string {
+  return MACHINE_REASONS[code] ?? reasonText(code);
+}
 
 /** Added to taken on the start screen: the player may be the sailor's. */
 export const TAKEN_SIGN_IN = 'If that’s you, sign in with your passkey.';

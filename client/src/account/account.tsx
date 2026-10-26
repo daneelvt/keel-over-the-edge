@@ -3,14 +3,17 @@
 // The account page, a panel from the menu: the account's passkeys, where
 // each was made and when it was last used, with one more added on this
 // device or another, or one removed while another stays; the recovery code,
-// made anew; signing out, here or everywhere else; and deleting the sailor
-// for good. What cannot be undone (removing a passkey, a new code,
-// deleting) first asks for one of the account's own passkeys, which allows
-// it for five minutes.
+// made anew; the machine sailors, with their approved apps and connection
+// tokens; signing out, here or everywhere else; and deleting the sailor for
+// good. What cannot be undone (removing a passkey, a new code, deleting)
+// first asks for one of the account's own passkeys, which allows it for
+// five minutes. The machine sailors' part is loaded as the page opens, as
+// is the menu's panel of them.
 
 import './account.css';
 import './start.css';
 import { useEffect, useState } from 'preact/hooks';
+import { useMachines } from './lazy';
 import {
   type AccountData,
   addPasskey,
@@ -26,6 +29,28 @@ import {
 } from './passkeys';
 import { reasonText } from './reasons';
 import { dayOf, RecoveryCode } from './recovery';
+
+/** The account page's machine sailors, once their module is loaded. */
+function MachinesSection() {
+  const m = useMachines();
+  return m === null ? <h3>Machine sailors</h3> : <m.MachinesAccount />;
+}
+
+/** The menu's panel of machine sailors, once their module is loaded. */
+export function MachinesPanel({ close }: { close: () => void }) {
+  const m = useMachines();
+  if (m !== null) {
+    return <m.MachinesPanel close={close} />;
+  }
+  return (
+    <section class="panel menu account" aria-label="Machine sailors">
+      <p class="account-status">Reading your machine sailors…</p>
+      <button type="button" class="menu-close" onClick={close}>
+        Close
+      </button>
+    </section>
+  );
+}
 
 type Shown = { kind: 'page' } | { kind: 'code'; code: string } | { kind: 'delete' };
 
@@ -222,6 +247,7 @@ export function AccountPanel({
           >
             Make a new code
           </button>
+          <MachinesSection />
           <h3>Signed in</h3>
           <div class="account-row">
             <button type="button" disabled={busy} onClick={() => void run(signOut, reload)}>
