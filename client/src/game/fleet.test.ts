@@ -34,6 +34,7 @@ interface SlotIn {
   far?: boolean;
   sampled?: boolean;
   kind?: number;
+  machine?: boolean;
 }
 
 /** A snapshot record's fleet: the slots given present, the rest empty. */
@@ -50,6 +51,7 @@ function record(tick: number, slots: SlotIn[]): Float64Array {
     f[o + SLOT.x] = s.x ?? 0;
     f[o + SLOT.y] = s.y ?? 0;
     f[o + SLOT.heading] = s.heading ?? 0;
+    f[o + SLOT.machine] = s.machine ? 1 : 0;
   }
   return f;
 }
@@ -283,6 +285,60 @@ describe('the fleet', () => {
     // Leaves: gone in half a second.
     step(world + 600_000, (t) => fleet.add(record(t, [{ slot: 5, change: CHANGE.left }]), world));
     expect(fleet.count).toBe(0);
+  });
+});
+
+describe('a machine sailor’s boat', () => {
+  test('is drawn flagged while its slot holds it, and not once a human’s takes the slot', () => {
+    const fleet = new Fleet();
+    let world = 0;
+    const step = (until: number, feed: (tick: number) => void) => {
+      while (world < until) {
+        world += FRAME * 1e6;
+        const tick = Math.floor(world / TICK_US);
+        if (tick % 2 === 0) {
+          feed(tick);
+        }
+        fleet.update(world + 200_000, FRAME);
+      }
+    };
+    let entered = false;
+    step(1e6, (t) => {
+      fleet.add(
+        record(t, [
+          { slot: 2, change: entered ? CHANGE.none : CHANGE.entered, x: 7, machine: true },
+          { slot: 3, change: entered ? CHANGE.none : CHANGE.entered, x: 9 },
+        ]),
+        world,
+      );
+      entered = true;
+    });
+    const at = (slot: number) => fleet.drawn.slice(0, fleet.count).find((b) => b.slot === slot);
+    expect(at(2)?.machine).toBe(1);
+    expect(at(3)?.machine).toBe(0);
+    // A record that does not sample the boat still says whose it is.
+    fleet.add(record(Math.floor(world / TICK_US) + 1, [{ slot: 2, sampled: false }]), world);
+    fleet.update(world + 200_000, 0);
+    expect(at(2)?.machine).toBe(0);
+    fleet.add(
+      record(Math.floor(world / TICK_US) + 1, [{ slot: 2, sampled: false, machine: true }]),
+      world,
+    );
+    fleet.update(world + 200_000, 0);
+    expect(at(2)?.machine).toBe(1);
+    // A human's boat enters the slot: drawn unflagged at once, while the
+    // machine sailor's fades out where it was, still flagged.
+    let replaced = false;
+    step(world + 0.2e6, (t) => {
+      fleet.add(
+        record(t, [{ slot: 2, change: replaced ? CHANGE.none : CHANGE.entered, x: 500 }]),
+        world,
+      );
+      replaced = true;
+    });
+    expect(at(2)?.machine).toBe(0);
+    expect(at(-1)?.machine).toBe(1);
+    expect(at(-1)?.east).toBeCloseTo(7, 9);
   });
 });
 

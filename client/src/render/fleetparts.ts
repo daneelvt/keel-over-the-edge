@@ -195,7 +195,8 @@ export async function loadFigure(
  * rig: boom, rudder, opacity, the side the sail fills to (−1 … 1);
  * sail: the head's twist (signed), camber, the foot's and head's ripple;
  * seat: the sailor's place, x, y, z in the model's frame, and facing;
- * lean: the sailor's tilt; then the boat's heave and its pitch.
+ * lean: the sailor's tilt; then the boat's heave and its pitch; and 1 for
+ * a machine sailor's boat, whose sail carries the machine mark.
  */
 export interface Instances {
   pose: Node<'vec4'>;

@@ -8,13 +8,18 @@
 // Boats fade in and out dithered (alphaHash), so they stay in the opaque
 // pass, in the same draw, with no sorting. The telltales and pennant of
 // other boats are too small to see, and not drawn; their sails carry the
-// class insignia and no number.
+// class insignia and no number. A machine sailor's sail carries the
+// machine mark too (machinemark.ts): the fleet's cloth is drawn twice in
+// one texture, plain above and marked below, and each instance's flag
+// picks its half in the vertex stage, so the sail's fragments sample the
+// cloth once, as without the mark.
 //
 // Each frame the fleet's drawn boats are written into the attributes'
 // arrays, which, being dynamic, go to the GPU with each draw; nothing is
 // allocated.
 
 import {
+  type CanvasTexture,
   type Color,
   DoubleSide,
   DynamicDrawUsage,
@@ -25,11 +30,19 @@ import {
   type Material,
   type Vector3,
 } from 'three';
-import { instancedDynamicBufferAttribute, uniform } from 'three/tsl';
+import {
+  float,
+  instancedDynamicBufferAttribute,
+  texture,
+  uniform,
+  uv,
+  varying,
+  vec2,
+} from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { Boat as BoatKind } from '../catalog';
 import type { DrawnBoat } from '../game/fleet';
-import { FULL_CAMBER, sailCloth } from './boat';
+import { CLOTH, CLOTH_HEIGHT, CLOTH_WIDTH, clothTexture, FULL_CAMBER, paintCloth } from './boat';
 import type { FloatingOrigin } from './coords';
 import {
   type BoatParts,
@@ -40,6 +53,7 @@ import {
   sailNode,
   solidNode,
 } from './fleetparts';
+import { chordAtHalf, type MarkPlace, markInk, markPlace, paintMark } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
 import { FLOW_LUFFING } from './telltales';
@@ -84,7 +98,7 @@ class Level {
     parts: BoatParts,
     figure: Awaited<ReturnType<typeof loadFigure>>,
     kind: BoatKind,
-    cloth: ReturnType<typeof sailCloth>,
+    cloth: CanvasTexture,
     time: Node<'float'>,
   ): void {
     const { hull, rig } = kind.physics;
@@ -106,10 +120,15 @@ class Level {
     }
     if (parts.sail !== null) {
       const m = litMaterial(
-        { map: cloth, roughness: parts.sail.material.roughness, metalness: 0, side: DoubleSide },
+        { roughness: parts.sail.material.roughness, metalness: 0, side: DoubleSide },
         sailNode(i, parts, cog, rig.footStrip, rig.headStrip, time),
       );
-      m.emissiveNode = sailGlow(cloth);
+      // The cloth's half: the plain one above, or, for a machine
+      // sailor's boat, the marked one below.
+      const at = varying(vec2(uv().x, uv().y.add(float(1).sub(i.lean.w)).mul(0.5)));
+      const c = texture(cloth, at) as unknown as Node<'vec4'>;
+      m.colorNode = c;
+      m.emissiveNode = sailGlow(c);
       this.#add(parts.sail.geometry, m, 'sail');
     }
     const fm = figure.material;
@@ -200,13 +219,15 @@ export class FleetView {
   /** Loads both levels' models: the boat's and its sailor's, near and far. */
   async load(sailor: { model: string; far: string }): Promise<void> {
     const kind = this.#kind;
-    const cloth = sailCloth('', kind.name.slice(0, 1));
     const [nearParts, farParts, nearFigure, farFigure] = await Promise.all([
       loadBoatParts(kind.art.model),
       loadBoatParts(kind.art.far),
       loadFigure(sailor.model),
       loadFigure(sailor.far),
     ]);
+    const { foot, luff } = kind.physics.rig;
+    const mark = markPlace(foot, luff, chordAtHalf(nearParts.sail?.geometry));
+    const cloth = fleetCloth(kind.name.slice(0, 1), mark);
     this.#frame.seatZ = nearParts.seatZ;
     this.near.build(nearParts, nearFigure, kind, cloth, this.time);
     this.far.build(farParts, farFigure, kind, cloth, this.time);
@@ -337,6 +358,7 @@ export class FleetView {
     lean[o] = p.tilt;
     lean[o + 1] = b.heave;
     lean[o + 2] = b.pitch;
+    lean[o + 3] = b.machine === 1 ? 1 : 0;
   }
 
   /** The draw calls and triangles the fleet's meshes make this frame. */
@@ -356,4 +378,25 @@ export class FleetView {
     }
     return { drawCalls, triangles };
   }
+}
+
+/**
+ * The fleet's cloth: the sail's, with the insignia and no number, drawn
+ * twice, one above the other; the lower carries the machine mark at its
+ * place.
+ */
+export function fleetCloth(insignia: string, mark: MarkPlace): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = CLOTH_WIDTH;
+  canvas.height = 2 * CLOTH_HEIGHT;
+  const g = canvas.getContext('2d') as CanvasRenderingContext2D;
+  paintCloth(g, '', insignia);
+  // The lower half, its seams kept out of the upper one.
+  g.translate(0, CLOTH_HEIGHT);
+  g.beginPath();
+  g.rect(0, 0, CLOTH_WIDTH, CLOTH_HEIGHT);
+  g.clip();
+  paintCloth(g, '', insignia);
+  paintMark(g, mark, CLOTH_WIDTH, CLOTH_HEIGHT, markInk(CLOTH));
+  return clothTexture(canvas);
 }
