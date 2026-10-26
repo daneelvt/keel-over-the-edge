@@ -421,7 +421,7 @@ func (h *helm) atSea(ctx context.Context) (*Sea, *bus.Frame, joinResult, error) 
 	}
 	h.mu.Unlock()
 	f = s.Bus.Frames.Acquire()
-	if r.Result == bus.Joined || r.Result == bus.Rejoined {
+	if r.Result != bus.Full {
 		// The frame that took the Join may not be the one acquired yet.
 		for f.Tick < r.Tick {
 			f.Release()

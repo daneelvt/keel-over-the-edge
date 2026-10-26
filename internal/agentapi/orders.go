@@ -117,7 +117,18 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 	seq := uint32(f.Tick + 1)
 	gen := f.Gen[sl]
 	order, way := pw.Order(), uint8(bus.WayHold)
+	given := 0
+	for _, set := range []bool{o.WindAngle != nil, o.Heading != nil, o.Rudder != nil} {
+		if set {
+			given++
+		}
+	}
+	if given > 1 {
+		given = 0
+	}
 	switch {
+	case given == 0:
+		return w, "Send exactly one of wind_angle (with side), heading or rudder: wind_angle 45 side starboard, heading 120, or rudder -10."
 	case o.Rudder != nil:
 		r := *o.Rudder
 		most := int(b.Physics.Foils.RudderAngle)
@@ -193,7 +204,7 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 		s.Bus.Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, gen), bus.PackPilot(seq, bus.PilotHeading, way, order, target, gen))
 		return written{turning: turn}, ""
 	}
-	return w, "Send exactly one of wind_angle (with side), heading or rudder: wind_angle 45 side starboard, heading 120, or rudder -10."
+	return w, ""
 }
 
 // pendingTurn is the turn the boat in slot sl is making or has yet to
