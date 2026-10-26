@@ -299,3 +299,32 @@ func helmsmanSails(t *testing.T, world *worldgen.Bundle, target string, best, fr
 		s.stop(t)
 	})
 }
+
+// TestAMachineSailorAcrossARestart: a machine sailor's boat is restored
+// in its grace as keel starts again, and its agent's next call takes it
+// back, the boat where it was, its grace ended.
+func TestAMachineSailorAcrossARestart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db := &memDB{epoch: bubbleEpoch}
+		vars := map[string]string{"KEEL_DEV_COMMANDS": "1", "KEEL_WORLD_SEED": "1", "KEEL_BELL": "1s"}
+		s, _ := gameServer(t, vars, db)
+		token, _ := db.machine("Iron Mary", "Ann Bonny", false)
+		cs := agentSession(t, s, token)
+		callTool(t, cs, "observe", nil)
+		callTool(t, cs, "steer", map[string]any{"wind_angle": 90, "side": "same", "boom": 40})
+		time.Sleep(10 * time.Second)
+		cs.Close()
+		s.stop(t)
+		s = again(t, vars, db)
+		cs = agentSession(t, s, token)
+		text, refused := callTool(t, cs, "observe", map[string]any{"wait": 50, "wake_on": []string{"heel"}, "heel_over": 60})
+		if refused || strings.Contains(text, "At sea: you are in the water") || !strings.Contains(text, "waited 50 s") {
+			t.Fatalf("after the restart: %v %q", refused, text)
+		}
+		text, _ = callTool(t, cs, "observe", map[string]any{"wait": 30, "wake_on": []string{"heel"}, "heel_over": 60})
+		if strings.Contains(text, "left the water") {
+			t.Fatalf("the restored boat left the water: %q", text)
+		}
+		s.stop(t)
+	})
+}

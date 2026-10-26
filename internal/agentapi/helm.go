@@ -98,6 +98,9 @@ func NewCore(cfg CoreConfig) *Core {
 		cfg.Log = slog.Default()
 	}
 	c := &Core{cfg: cfg, helms: map[store.AccountID]*helm{}, stopping: make(chan struct{})}
+	// Connection numbers go on from the clock, so a process's never meet
+	// those of the process before, whose boats a checkpoint may restore.
+	c.conns.Store(uint64(time.Now().UnixNano()) &^ connBase >> 1)
 	c.hub = newHub(c)
 	return c
 }
@@ -258,6 +261,7 @@ func (c *Core) sweep(now time.Time) {
 // Why a boat left the water, told at the next call.
 const (
 	leftSilent  = "silent"  // its agent fell silent, and its grace ended
+	leftGrace   = "grace"   // its grace ended with no call: after keel restarted
 	leftAsked   = "asked"   // its agent asked: boat leave
 	leftFalls   = "falls"   // the falls took the world
 	leftWorld   = "world"   // a new world began
@@ -392,7 +396,10 @@ func (h *helm) atSea(ctx context.Context) (*Sea, *bus.Frame, joinResult, error) 
 	}
 	res.told, h.left = h.left, ""
 	found := h.locate(f)
-	need := !found || h.away
+	// A boat found that the helm does not sail (one restored as keel
+	// started, in its grace, or one another process's helm joined) is
+	// taken over with a Join, which ends its grace.
+	need := !found || h.away || f.Conn[h.slot] != h.conn || f.Grace[h.slot] != 0
 	h.mu.Unlock()
 	if !need {
 		return s, f, res, nil

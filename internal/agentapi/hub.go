@@ -242,7 +242,10 @@ func (h *hub) dispatch(r recordFor) {
 		if r.result == bus.Expired {
 			why = "your boat left the water at the end of its grace"
 			if hm.left == "" {
-				hm.left = leftSilent
+				hm.left = leftGrace
+				if hm.away {
+					hm.left = leftSilent
+				}
 			}
 		}
 		hm.boat = 0

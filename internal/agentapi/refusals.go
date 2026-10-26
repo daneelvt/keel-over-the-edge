@@ -106,6 +106,8 @@ func leftWords(why string, silence time.Duration) string {
 	switch why {
 	case leftSilent:
 		return fmt.Sprintf("Your boat left the water after %s without a call and a minute's grace.", durationWords(silence))
+	case leftGrace:
+		return "Your boat left the water at the end of its grace, with no call from you."
 	case leftFalls:
 		return "The falls took the world, and your boat with it: this is a new world."
 	case leftWorld:
