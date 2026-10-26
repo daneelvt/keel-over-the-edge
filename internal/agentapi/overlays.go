@@ -126,13 +126,13 @@ func (s *Sea) marks(f *bus.Frame, sl int32, seen []seenBoat) map[int32]string {
 	return out
 }
 
-// rightOfWayShown reports whether the right-of-way overlay would show a
-// verdict for the boat in slot sl, of the boats seen from it.
-func (h *helm) rightOfWayShown(s *Sea, f *bus.Frame, sl int32, seen []seenBoat) bool {
+// rightOfWayMarked are the boats, by their IDs, the right-of-way overlay
+// would mark for the boat in slot sl, of the boats seen from it.
+func (h *helm) rightOfWayMarked(s *Sea, f *bus.Frame, sl int32, seen []seenBoat) []uint64 {
 	o := s.rules()
 	k := int(f.Kind[sl])
 	if k >= len(o.right) {
-		return false
+		return nil
 	}
 	var judged []lookout.Judged
 	for _, c := range seen {
@@ -141,7 +141,16 @@ func (h *helm) rightOfWayShown(s *Sea, f *bus.Frame, sl int32, seen []seenBoat) 
 		}
 		judged = append(judged, judgedOf(f, c.slot, false))
 	}
-	return len(judged) > 0 && len(o.right[k].Show(judgedOf(f, sl, true), judged)) > 0
+	if len(judged) == 0 {
+		return nil
+	}
+	var out []uint64
+	for _, m := range o.right[k].Show(judgedOf(f, sl, true), judged) {
+		if m.Index >= 0 && m.Index < len(judged) {
+			out = append(out, f.Boat[seen[m.Index].slot])
+		}
+	}
+	return out
 }
 
 // gusts are the gust ring's patches coming down on the boat in slot sl.
@@ -157,9 +166,20 @@ func (s *Sea) gusts(f *bus.Frame, sl int32) []lookout.Gust {
 	return lookout.GustRings(s.weatherAt(f), s.Shelter, b, &s.Catalog.Weather.Ring)
 }
 
-// gustComing reports whether the gust ring shows a patch coming down on
-// the boat in slot sl.
-func (h *helm) gustComing(s *Sea, f *bus.Frame, sl int32) bool { return len(s.gusts(f, sl)) > 0 }
+// gustSoon is how near a ringed patch's arrival is, s, for a wait to wake
+// for it: time to ease the sheet before it comes.
+const gustSoon = 20.0
+
+// gustComing reports whether the gust ring shows a patch arriving on the
+// boat in slot sl within gustSoon.
+func (h *helm) gustComing(s *Sea, f *bus.Frame, sl int32) bool {
+	for _, g := range s.gusts(f, sl) {
+		if g.Arrives <= gustSoon {
+			return true
+		}
+	}
+	return false
+}
 
 // gustLines are the gust ring's patches in words: "dark patch 220° ~150
 // m, arriving ~15 s, ~30% stronger (~19 kn)".

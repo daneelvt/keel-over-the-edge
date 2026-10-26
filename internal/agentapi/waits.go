@@ -90,6 +90,12 @@ type waiter struct {
 	// bearings are each boat's bearings since the wait began, for a
 	// steady one.
 	tracks map[uint64]*track
+	// The overlays: the boats the right-of-way overlay has marked, and
+	// whether it has been looked at; whether the gust ring has been looked
+	// at, and whether a gust coming soon would be news.
+	marked                map[uint64]bool
+	markedLooked          bool
+	gustLooked, gustArmed bool
 
 	done chan string
 	once sync.Once
@@ -110,7 +116,7 @@ type track struct {
 
 func newWaiter(now time.Time, on []string) *waiter {
 	w := &waiter{since: now, on: map[string]bool{}, done: make(chan string, 1), boats: map[uint64]bool{}, sighted: map[int32]bool{},
-		tracks: map[uint64]*track{}}
+		tracks: map[uint64]*track{}, marked: map[uint64]bool{}}
 	for _, o := range on {
 		w.on[o] = true
 	}
@@ -269,8 +275,17 @@ func (h *helm) watch(s *Sea, f *bus.Frame, sl int32, w *waiter, sight bool) stri
 	// The gust ring is the dearest look, so a wait looks for gusts every
 	// gustEvery-th look, each helm on its own: a patch is rung up to a
 	// minute ahead, and a wake half a second later changes nothing seen.
-	if w.on[wakeGust] && (f.Tick/checkEvery+int64(h.conn))%gustEvery == 0 && h.gustComing(s, f, sl) {
-		return wakeGust
+	if w.on[wakeGust] && (f.Tick/checkEvery+int64(h.conn))%gustEvery == 0 {
+		// A gust coming when the wait began is no news: the wait wakes
+		// for the next.
+		switch soon := h.gustComing(s, f, sl); {
+		case !w.gustLooked:
+			w.gustLooked, w.gustArmed = true, !soon
+		case !soon:
+			w.gustArmed = true
+		case w.gustArmed:
+			return wakeGust
+		}
 	}
 	return ""
 }
@@ -307,9 +322,20 @@ func (h *helm) boatsWatch(s *Sea, f *bus.Frame, sl int32, w *waiter, now time.Ti
 			return wakeBoat
 		}
 	}
-	// The overlay judges a few times a second, as the phone's does.
-	if (f.Tick/checkEvery+int64(h.conn))%2 == 0 && h.rightOfWayShown(s, f, sl, seen) {
-		return wakeBoat
+	// The overlay judges a few times a second, as the phone's does; a
+	// boat it marked as the wait began is no news.
+	if (f.Tick/checkEvery+int64(h.conn))%2 == 0 {
+		news := false
+		for _, b := range h.rightOfWayMarked(s, f, sl, seen) {
+			if !w.marked[b] {
+				w.marked[b] = true
+				news = news || w.markedLooked
+			}
+		}
+		w.markedLooked = true
+		if news {
+			return wakeBoat
+		}
 	}
 	return ""
 }
