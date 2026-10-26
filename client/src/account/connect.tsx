@@ -63,7 +63,7 @@ export function Sailing() {
         Then tell it: <q>{STARTER}</q> It sails by calling the game’s tools in a loop; each app
         needs letting do that.
       </p>
-      <ul class="connect-recipes">
+      <ul class="connect-recipes connect-sailing">
         {sailing().map((r) => (
           <li key={r.app}>
             <h3>{r.app}</h3>

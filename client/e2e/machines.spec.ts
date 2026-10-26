@@ -114,9 +114,14 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   await expect(page.getByRole('heading', { name: 'Connect your AI' })).toBeVisible();
   const origin = new URL(page.url()).origin;
   await expect(page.locator('[data-mcp]')).toHaveText(`${origin}/mcp`);
+  const connecting = page.locator('.connect-recipes:not(.connect-sailing)');
   for (const app of ['Claude', 'Claude Code', 'ChatGPT', 'Gemini', 'Codex', 'VS Code']) {
-    await expect(page.getByRole('heading', { name: app, exact: true })).toBeVisible();
+    await expect(connecting.getByRole('heading', { name: app, exact: true })).toBeVisible();
   }
+  // And how to let it sail, once connected.
+  await expect(
+    page.locator('.connect-sailing').getByRole('heading', { name: 'Claude Code', exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(`claude mcp add --transport http keel ${origin}/mcp`)).toBeVisible();
   await page.getByRole('button', { name: 'Done' }).click();
 
