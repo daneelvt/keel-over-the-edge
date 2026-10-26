@@ -152,6 +152,10 @@ func TestDoor(t *testing.T) {
 	if code, _, body := h.mcpCall(token); code != 200 || !strings.Contains(body, "Iron Mary") {
 		t.Fatalf("the connection token: %d %s", code, body)
 	}
+	// An app that sends no Content-Type is answered: its body is JSON.
+	if code, _, body := h.mcpCallAs(token, ""); code != 200 || !strings.Contains(body, "Iron Mary") {
+		t.Fatalf("no Content-Type: %d %s", code, body)
+	}
 	// Deleting the machine sailor ends every token of it at once.
 	if status, body := game.post("/api/machines/delete", `{"machine":"`+machineOf(t, h)+`","name":"iron mary"}`); status != 200 {
 		t.Fatalf("delete: %d %s", status, body)

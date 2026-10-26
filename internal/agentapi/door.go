@@ -147,6 +147,11 @@ func (d *door) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.counted("accepted")
+	if r.Method == http.MethodPost && r.Header.Get("Content-Type") == "" {
+		// Some apps send their JSON with no Content-Type: it is read as
+		// JSON, as it can only be.
+		r.Header.Set("Content-Type", "application/json")
+	}
 	obs.SetAccount(r.Context(), a.Account.String())
 	if d.cfg.Used != nil {
 		d.cfg.Used(a.Grant)
