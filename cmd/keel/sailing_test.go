@@ -5,6 +5,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -14,8 +16,14 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/chart"
+	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/helmsman"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
+	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
 // A machine sailor at sea through keel's own agents' listener: an agent
@@ -199,6 +207,95 @@ func TestAMachineSailorSails(t *testing.T) {
 		if refused || !strings.Contains(text, "left the water after 20 seconds without a call") || !strings.Contains(text, "At sea") {
 			t.Fatalf("after the silence: %v %q", refused, text)
 		}
+		s.stop(t)
+	})
+}
+
+// session calls an MCP session's tools, for the helmsman.
+type session struct{ cs *mcp.ClientSession }
+
+func (s session) Call(ctx context.Context, tool string, args map[string]any) (string, bool, error) {
+	res, err := s.cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	if err != nil {
+		return "", false, err
+	}
+	var b strings.Builder
+	for _, c := range res.Content {
+		if t, ok := c.(*mcp.TextContent); ok {
+			b.WriteString(t.Text)
+		}
+	}
+	return b.String(), res.IsError, nil
+}
+
+// TestTheHelmsmanSails: a program with no model, given only a charted
+// place's name, sails there from the start by the chart's bearings, in
+// seed 1's world.
+func TestTheHelmsmanSails(t *testing.T) {
+	if testing.Short() {
+		t.Skip("makes a whole world")
+	}
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	world, err := seed1()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cw := chart.Build(world, cat)
+	// A place on another island, a passage away from the start.
+	target := ""
+	best, toward := math.Inf(1), 0.0
+	for _, s := range cw.Subjects {
+		d := math.Sqrt(s.X*s.X + s.Y*s.Y)
+		if s.Kind == sight.Place && s.Name != "" && d > 900 && d < best {
+			target, best, toward = s.Name, d, math.Mod(math.Atan2(s.X, s.Y)*180/math.Pi+360, 360)
+		}
+	}
+	if target == "" {
+		t.Fatal("no place to sail to")
+	}
+	// Off the wind, and beating to it into a wind from its way. (With the
+	// wind from the other beam, the south, the start's basin lies in the
+	// land's lee, and a boat with no way on cannot get out of it.)
+	for _, from := range []float64{math.Mod(toward+270, 360), toward} {
+		t.Run(fmt.Sprintf("the wind from %03.0f", from), func(t *testing.T) { helmsmanSails(t, world, target, best, from) })
+	}
+}
+
+func helmsmanSails(t *testing.T, world *worldgen.Bundle, target string, best, from float64) {
+	synctest.Test(t, func(t *testing.T) {
+		d := &memDB{epoch: bubbleEpoch, sessions: edgetest.NewSessions()}
+		gen := func(uint64) (*worldgen.Bundle, error) { return world, nil }
+		s := startServer(t, map[string]string{"KEEL_DEV_COMMANDS": "1"}, newMemNet(), d.with(serveOptions{generate: gen}))
+		time.Sleep(time.Second)
+		res, err := s.client.Post(fmt.Sprintf("%s/debug/wind?knots=12&from=%.0f", internalURL, from), "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		for n := range 4 {
+			res, err := s.client.Post(internalURL+"/owner/api/chart", "application/json", strings.NewReader(fmt.Sprintf(`{"number":%d}`, n)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				break
+			}
+		}
+		time.Sleep(5 * time.Second)
+		token, _ := d.machine("Iron Mary", "Ann Bonny", false)
+		cs := agentSession(t, s, token)
+		r, err := helmsman.Sail(t.Context(), session{cs}, target, 200, 300, t.Logf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !r.Arrived {
+			t.Fatalf("the helmsman did not reach %s, %.0f m away from the centre: %.0f m off after %d looks and %d tacks", target, best, r.Distance, r.Looks, r.Tacks)
+		}
+		t.Logf("reached %s, %.0f m from the centre, in %d looks and %d tacks", target, best, r.Looks, r.Tacks)
 		s.stop(t)
 	})
 }
