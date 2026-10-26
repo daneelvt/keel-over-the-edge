@@ -5,7 +5,7 @@
 // page, where the player chooses which machine sailor it sails.
 
 import { useState } from 'preact/hooks';
-import { type Part, recipes } from './recipes';
+import { type Part, recipes, STARTER, sailing } from './recipes';
 
 function Parts({ parts }: { parts: Part[] }) {
   return (
@@ -55,6 +55,26 @@ export function Recipes({ mcp }: { mcp: string }) {
   );
 }
 
+/** How to let each app sail, once connected, and what to tell it first. */
+export function Sailing() {
+  return (
+    <>
+      <p class="start-text">
+        Then tell it: <q>{STARTER}</q> It sails by calling the game’s tools in a loop; each app
+        needs letting do that.
+      </p>
+      <ul class="connect-recipes">
+        {sailing().map((r) => (
+          <li key={r.app}>
+            <h3>{r.app}</h3>
+            <Parts parts={r.parts} />
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 /** How to connect: for the machine sailor named, or any when name is empty. */
 export function Connect({ mcp, name }: { mcp: string; name: string }) {
   return (
@@ -72,6 +92,7 @@ export function Connect({ mcp, name }: { mcp: string; name: string }) {
       </p>
       <Address mcp={mcp} />
       <Recipes mcp={mcp} />
+      <Sailing />
     </>
   );
 }
