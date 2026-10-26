@@ -22,12 +22,13 @@ import (
 // conn is one game connection. Its reader is the request's goroutine (run);
 // its writer has one of its own; the encoder fills its mailbox.
 type conn struct {
-	e       *Edge
-	ws      *websocket.Conn
-	raw     net.Conn // the socket under ws
-	id      uint64
-	account bus.Account
-	reqID   string
+	e        *Edge
+	ws       *websocket.Conn
+	raw      net.Conn // the socket under ws
+	id       uint64
+	account  bus.Account
+	priority bool // a priority account's: it never waits for a boat
+	reqID    string
 
 	// The boat, set by the reader once the Join is answered and before the
 	// encoder is given the connection; read by the encoder after.
@@ -135,20 +136,21 @@ type outgoing struct {
 // read never reaches it.
 const closeWait = 250 * time.Millisecond
 
-func newConn(e *Edge, ws *websocket.Conn, raw net.Conn, account bus.Account, tools bool, reqID string) *conn {
+func newConn(e *Edge, ws *websocket.Conn, raw net.Conn, account bus.Account, tools, priority bool, reqID string) *conn {
 	c := &conn{
-		e:       e,
-		ws:      ws,
-		raw:     raw,
-		id:      e.nextConn.Add(1),
-		account: account,
-		reqID:   reqID,
-		counted: -1,
-		queue:   make(chan outgoing, e.lim.Queue),
-		done:    make(chan struct{}),
-		closed:  make(chan struct{}),
-		limiter: rate.NewLimiter(e.lim.Rate, e.lim.Burst),
-		buf:     make([]byte, e.lim.ReadLimit+1),
+		e:        e,
+		ws:       ws,
+		raw:      raw,
+		id:       e.nextConn.Add(1),
+		account:  account,
+		priority: priority,
+		reqID:    reqID,
+		counted:  -1,
+		queue:    make(chan outgoing, e.lim.Queue),
+		done:     make(chan struct{}),
+		closed:   make(chan struct{}),
+		limiter:  rate.NewLimiter(e.lim.Rate, e.lim.Burst),
+		buf:      make([]byte, e.lim.ReadLimit+1),
 	}
 	c.tools.Store(tools)
 	c.margin.init()
@@ -301,7 +303,7 @@ func (c *conn) join() bool {
 		c.wmu.Unlock()
 		return false
 	}
-	err := e.cfg.Bus.Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: c.account, Conn: c.id, Reply: reply})
+	err := e.cfg.Bus.Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: c.account, Conn: c.id, Priority: c.priority, Reply: reply})
 	c.wmu.Unlock()
 	if err != nil {
 		e.m.join[joinBusy].Inc()

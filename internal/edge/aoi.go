@@ -136,6 +136,9 @@ func (a *aoi) find(f *bus.Frame, own int32, x, y float64, base, next *connView, 
 		if f.Voyage[s].Falling() {
 			next.view.Boats[vs].Flags |= protocol.Falling
 		}
+		if f.Machine[s] {
+			next.view.Boats[vs].Flags |= protocol.Machine
+		}
 		sample |= 1 << vs
 	}
 	for m := next.view.Used ^ ^uint64(0); m != 0; m &= m - 1 {

@@ -507,7 +507,7 @@ func TestSnapshotRefusals(t *testing.T) {
 		"update of nothing":     {OpUpdate<<6 | 1, 0},
 		"update of empty slot":  {OpUpdate<<6 | 3, ChangeHeel, 1, 0},
 		"leave of empty slot":   {OpLeave<<6 | 3},
-		"spare boat flags":      {OpUpdate<<6 | 1, ChangeFlags, 16},
+		"spare boat flags":      {OpUpdate<<6 | 1, ChangeFlags, 32},
 		"overlong varint":       {OpUpdate<<6 | 1, ChangePosition, 0x80, 0x00, 0},
 		"kind above 65535":      {OpEnter<<6 | 1, 0x80, 0x80, 0x04, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		"beyond 24 bits":        {OpUpdate<<6 | 2, ChangePosition, 2, 0},

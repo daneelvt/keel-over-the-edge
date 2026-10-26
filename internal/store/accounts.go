@@ -52,6 +52,9 @@ type Account struct {
 	// Tools is the owner's flag: the account's sailor has the owner's
 	// tools in the game. Only a human account carries it.
 	Tools bool
+	// Priority marks an account, human or AI, that never waits for a
+	// boat: the owner sets it from the world page.
+	Priority bool
 	// NoticesOff are the kinds of notice its sailor has switched off, by
 	// the catalog's ids.
 	NoticesOff []string
@@ -171,7 +174,7 @@ func (s *Store) AccountByUserHandle(ctx context.Context, handle []byte) (Holder,
 		return Holder{}, err
 	}
 	return Holder{
-		Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: row.Look, Tools: row.Tools, NoticesOff: row.NoticesOff},
+		Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: row.Look, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
 		UserHandle: row.UserHandle, Passkeys: keys,
 	}, nil
 }
@@ -199,7 +202,7 @@ func (s *Store) Profile(ctx context.Context, id AccountID) (Profile, error) {
 	}
 	p := Profile{
 		Holder: Holder{
-			Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: row.Look, Tools: row.Tools, NoticesOff: row.NoticesOff},
+			Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: row.Look, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
 			UserHandle: row.UserHandle, Passkeys: keys,
 		},
 		Created: row.CreatedAt,
@@ -343,6 +346,19 @@ func (s *Store) SetTools(ctx context.Context, id AccountID, on bool) error {
 	return nil
 }
 
+// SetPriority marks an account, human or AI, as a priority account or
+// not, or returns ErrNotFound.
+func (s *Store) SetPriority(ctx context.Context, id AccountID, on bool) error {
+	n, err := s.q.SetAccountPriority(ctx, db.SetAccountPriorityParams{Priority: on, ID: uuidOf(id)})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Accounts finds the accounts of ids, with their sailors' names, by ID;
 // those not found are left out. An AI account has no sailor of its own:
 // its name is empty.
@@ -357,7 +373,7 @@ func (s *Store) Accounts(ctx context.Context, ids []AccountID) (map[AccountID]Ac
 	}
 	out := make(map[AccountID]Account, len(rows))
 	for _, r := range rows {
-		out[r.ID.Bytes] = Account{ID: r.ID.Bytes, Kind: Kind(r.Kind), Name: r.Name, Tools: r.Tools}
+		out[r.ID.Bytes] = Account{ID: r.ID.Bytes, Kind: Kind(r.Kind), Name: r.Name, Tools: r.Tools, Priority: r.Priority}
 	}
 	return out, nil
 }

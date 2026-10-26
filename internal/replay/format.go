@@ -46,7 +46,8 @@ import (
 //	S snapshot  tick, then sim's snapshot of the world after it: a segment starts
 //	T tick      tick, ticks skipped before it, the control words applied
 //	            (count, then slot, word and pilot word for each), the commands applied in order with
-//	            their results (count, then each: op, its fields, result, slot, boat, generation,
+//	            their results (count, then each: op, its fields (a Join's account, connection
+//	            and kind: a byte, 1 for a machine sailor's, 2 a priority account's), result, slot, boat, generation,
 //	            place in the queue, tick queued at); an account is its 16 bytes; a yes or
 //	            no a byte, 1 or 0; a Teleport its boat, whether to the start and its state;
 //	            a Stay or Unseen its boat and whether on; an End its last tick; a developer's
@@ -59,7 +60,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 10
+	formatVersion = 11
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -172,12 +173,30 @@ func appendTick(dst []byte, f *bus.Frame) []byte {
 	return endRecord(dst, at)
 }
 
+// The flags of a Join's account's kind.
+const (
+	joinMachine  = 1
+	joinPriority = 2
+)
+
+func joinKind(machine, priority bool) byte {
+	var k byte
+	if machine {
+		k |= joinMachine
+	}
+	if priority {
+		k |= joinPriority
+	}
+	return k
+}
+
 func appendEvent(dst []byte, e *bus.Event) []byte {
 	dst = append(dst, byte(e.Op))
 	switch e.Op {
 	case bus.Join:
 		dst = append(dst, e.Account[:]...)
 		dst = binary.AppendUvarint(dst, e.Conn)
+		dst = append(dst, joinKind(e.Machine, e.Priority))
 	case bus.Leave:
 		dst = binary.AppendUvarint(dst, e.Boat)
 	case bus.Disconnect:
@@ -534,6 +553,11 @@ func (p *payload) event(e *bus.Event) {
 	case bus.Join:
 		p.bytes(e.Account[:])
 		e.Conn = p.uvarint()
+		if k := p.byte(); k&^(joinMachine|joinPriority) != 0 {
+			p.err = fmt.Errorf("a join of kind %d", k)
+		} else {
+			e.Machine, e.Priority = k&joinMachine != 0, k&joinPriority != 0
+		}
 	case bus.Leave:
 		e.Boat = p.uvarint()
 	case bus.Disconnect:

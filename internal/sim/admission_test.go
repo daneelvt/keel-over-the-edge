@@ -3,6 +3,7 @@
 package sim
 
 import (
+	"math"
 	"slices"
 	"testing"
 
@@ -150,5 +151,195 @@ func TestLimitOutOfRange(t *testing.T) {
 	defer w.Close()
 	if w.Limit() != 8 {
 		t.Fatalf("the default limit is %d", w.Limit())
+	}
+}
+
+// TestAdmissionByKind: humans and machine sailors wait apart, humans go
+// first, machine sailors are kept a reserve within their cap, a priority
+// account never waits, and no boat at sea is ever taken out for another.
+// In a world of 4 boats the cap is 2 and the reserve 1.
+func TestAdmissionByKind(t *testing.T) {
+	w := limitedWorld(t, 8, 1, 4)
+	if w.AICap() != 2 || w.AIReserve() != 1 {
+		t.Fatalf("a cap of %d and a reserve of %d", w.AICap(), w.AIReserve())
+	}
+	human := func(n uint64) bus.Command { return bus.Command{Op: bus.Join, Account: acct(n), Conn: n} }
+	machine := func(n uint64) bus.Command {
+		return bus.Command{Op: bus.Join, Account: acct(n), Conn: n, Machine: true}
+	}
+	boatOf := map[uint64]uint64{}
+	join := func(c bus.Command, want bus.Result, position int32) {
+		t.Helper()
+		r := do(t, w, c)
+		if r.Result != want || want == bus.Queued && r.Position != position {
+			t.Fatalf("join of %d: %+v, not %s at %d", c.Account[15], r, want, position)
+		}
+		if r.Result == bus.Joined {
+			boatOf[uint64(c.Account[15])] = r.Boat
+		}
+	}
+	// Who sails, by account, and how many are machine sailors.
+	sailing := func() (who []uint64, ai int) {
+		f := w.Latest()
+		for _, s := range f.Live {
+			who = append(who, uint64(f.Owner[s][15]))
+			if f.Machine[s] {
+				ai++
+			}
+		}
+		slices.Sort(who)
+		return who, ai
+	}
+	leave := func(n uint64) {
+		t.Helper()
+		f := w.Latest()
+		for _, s := range f.Live {
+			if f.Owner[s] == acct(n) {
+				if r := do(t, w, bus.Command{Op: bus.Leave, Boat: f.Boat[s]}); r.Result != bus.Left {
+					t.Fatalf("leave of %d: %+v", n, r)
+				}
+				return
+			}
+		}
+		t.Fatalf("%d sails no boat", n)
+	}
+	expect := func(want ...uint64) {
+		t.Helper()
+		if who, _ := sailing(); !slices.Equal(who, want) {
+			t.Fatalf("sailing %v, not %v", who, want)
+		}
+	}
+
+	for n := uint64(1); n <= 4; n++ {
+		join(human(n), bus.Joined, 0)
+	}
+	// Two machine sailors and three humans wait, each told their place
+	// in their own queue.
+	join(machine(11), bus.Queued, 1)
+	join(machine(12), bus.Queued, 2)
+	join(human(5), bus.Queued, 1)
+	join(human(6), bus.Queued, 2)
+	join(human(7), bus.Queued, 3)
+
+	// Machine sailors below the reserve: the first of them goes first.
+	leave(1)
+	expect(2, 3, 4, 11)
+	// At the reserve, humans go first while any wait.
+	leave(2)
+	expect(3, 4, 5, 11)
+	leave(3)
+	leave(4)
+	expect(5, 6, 7, 11)
+	// With no human waiting, a machine sailor below the cap.
+	leave(5)
+	expect(6, 7, 11, 12)
+	// At the cap, a machine sailor waits though there is room; a human
+	// arriving is given the room at once.
+	join(machine(13), bus.Queued, 1)
+	leave(6)
+	expect(7, 11, 12)
+	join(human(8), bus.Joined, 0)
+	expect(7, 8, 11, 12)
+
+	// A priority account never waits, beyond the limit and the cap.
+	join(bus.Command{Op: bus.Join, Account: acct(20), Conn: 20, Priority: true}, bus.Joined, 0)
+	join(bus.Command{Op: bus.Join, Account: acct(21), Conn: 21, Priority: true, Machine: true}, bus.Joined, 0)
+	if who, ai := sailing(); len(who) != 6 || ai != 3 {
+		t.Fatalf("sailing %v, %d of them machine sailors", who, ai)
+	}
+	if f := w.Latest(); !f.Priority[slotOf(f, boatOf[20])] || f.Priority[slotOf(f, boatOf[8])] {
+		t.Fatal("priority is not the boat's")
+	}
+	// Room again under the limit is the humans' first: none wait, and the
+	// machine sailors are above their cap.
+	leave(20)
+	leave(21)
+	leave(7)
+	expect(8, 11, 12)
+	if q := queueOf(w.Latest()); !slices.Equal(q, [][2]uint64{{13, 13}}) {
+		t.Fatalf("queue %v", q)
+	}
+	leave(11)
+	expect(8, 12, 13)
+}
+
+// TestPriorityWaitsOnlyForASlot: a priority account beyond the limit is
+// bounded by the world's slots, and while admission is held waits like
+// anyone, first when it is let go.
+func TestPriorityWaitsOnlyForASlot(t *testing.T) {
+	w := limitedWorld(t, 3, 1, 2)
+	for n := uint64(1); n <= 3; n++ {
+		if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(n), Conn: n, Priority: true}); r.Result != bus.Joined {
+			t.Fatalf("join %d: %+v", n, r)
+		}
+	}
+	if r := do(t, w, bus.Command{Op: bus.Join, Account: acct(4), Conn: 4}); r.Result != bus.Queued {
+		t.Fatalf("a human with every slot taken: %+v", r)
+	}
+	r := do(t, w, bus.Command{Op: bus.Join, Account: acct(5), Conn: 5, Priority: true})
+	if r.Result != bus.Queued || r.Position != 2 {
+		t.Fatalf("a priority account with every slot taken: %+v", r)
+	}
+	if r := do(t, w, bus.Command{Op: bus.Leave, Boat: 1}); r.Result != bus.Left {
+		t.Fatalf("leave: %+v", r)
+	}
+	if f := w.Latest(); len(f.Queue) != 1 || f.Queue[0].Account != acct(4) || f.Owner[0] != acct(5) {
+		t.Fatalf("queue %v, slot 0 %v's", queueOf(f), f.Owner[0][15])
+	}
+}
+
+// TestKindsInTheCheckpoint: a restored checkpoint keeps its machine and
+// priority boats and places.
+func TestKindsInTheCheckpoint(t *testing.T) {
+	w := limitedWorld(t, 8, 1, 2)
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1, Machine: true})
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(2), Conn: 2, Priority: true})
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(3), Conn: 3})
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(4), Conn: 4, Machine: true})
+	f := w.Latest()
+	if len(f.Queue) != 2 {
+		t.Fatalf("queue %v", queueOf(f))
+	}
+	w2 := limitedWorld(t, 8, 1, 2)
+	if err := w2.Load(AppendCheckpoint(nil, f)); err != nil {
+		t.Fatal(err)
+	}
+	g := w2.Latest()
+	for _, s := range f.Live {
+		if g.Machine[s] != f.Machine[s] || g.Priority[s] != f.Priority[s] {
+			t.Fatalf("slot %d: machine %v priority %v, saved %v %v", s, g.Machine[s], g.Priority[s], f.Machine[s], f.Priority[s])
+		}
+	}
+	if !slices.Equal(g.Queue, f.Queue) || !g.Queue[1].Machine || g.Queue[0].Machine {
+		t.Fatalf("queue %+v, saved %+v", g.Queue, f.Queue)
+	}
+	if Digest(g) != Digest(f) {
+		t.Fatal("the restored world's digest differs")
+	}
+	// The kinds count in the digest: the same world of humans differs.
+	g.Machine[f.Live[0]] = false
+	if Digest(g) == Digest(f) {
+		t.Fatal("a boat's kind is not in the digest")
+	}
+}
+
+// TestInstruments: a machine boat's step leaves what it read in the
+// frame; a human's leaves nothing.
+func TestInstruments(t *testing.T) {
+	w := limitedWorld(t, 8, 1, 8)
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1, Machine: true})
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(2), Conn: 2})
+	for range 60 {
+		w.Tick()
+	}
+	f := w.Latest()
+	in := f.Instruments[0]
+	// The default weather: 10 knots from the north, the same everywhere.
+	if math.Abs(float64(in.WindSpeed)-f.Wind[0].WindSpeed) > 1e-6 || in.WindFrom != float32(f.Wind[0].WindFrom) ||
+		in.ApparentSpeed <= 0 || in.SpeedOverGround <= 0 {
+		t.Fatalf("a machine boat's instruments %+v, its wind %+v", in, f.Wind[0])
+	}
+	if f.Instruments[1] != (bus.Instruments{}) {
+		t.Fatalf("a human's boat's instruments %+v", f.Instruments[1])
 	}
 }

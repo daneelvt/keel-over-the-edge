@@ -24,6 +24,7 @@ type Account struct {
 	RecoveryMadeAt pgtype.Timestamptz
 	RecoveredAt    pgtype.Timestamptz
 	MachineCap     int16
+	Priority       bool
 }
 
 type AiGrant struct {

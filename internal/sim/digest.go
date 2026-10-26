@@ -14,10 +14,12 @@ import (
 // and systems (each one's ticks, kind, point, slot, heading and speed),
 // the sea in effect and next (each run of areas with the same inputs, and
 // its length), whether admission is held, each occupied slot's number, boat, generation,
-// owner, connection, grace, control word, pilot word, state, course and, if it has
+// owner, connection, grace, control word, pilot word, state, course, its account's
+// kind unless a human's alone, and, if it has
 // anything, its voyage at the edge (the tick it went over, its flags and its six
 // distances and places), and, if it has any, the owner's tools' marks, each waiting
-// connection's account, connection, tick of joining the queue and grace,
+// connection's account, connection, tick of joining the queue, grace and
+// kind unless a human's alone,
 // and each pair's slots, boats, keep-clear boat, Article, whose action and
 // ticks, as little-endian bits. Two worlds with the
 // same digest at a tick are, all but certainly, the same world; a replay
@@ -76,9 +78,13 @@ func Digest(f *bus.Frame) uint64 {
 			}
 		}
 		// The owner's tools' marks count once one is set, so a world they
-		// never touched hashes as before.
+		// never touched hashes as before; and an account's kind once it is
+		// not a human's alone, so a world of humans does.
 		if m := marks(f, s); m != 0 {
 			h.u64(m)
+		}
+		if k := kindFlags(f.Machine[s], f.Priority[s]); k != 0 {
+			h.u64(k << 8)
 		}
 	}
 	for _, q := range f.Queue {
@@ -88,6 +94,9 @@ func Digest(f *bus.Frame) uint64 {
 		h.u64(q.Conn)
 		h.u64(uint64(q.Since))
 		h.u64(uint64(q.Grace))
+		if k := kindFlags(q.Machine, q.Priority); k != 0 {
+			h.u64(k << 8)
+		}
 	}
 	for _, p := range f.Pairs {
 		h.u64(uint64(p.A))

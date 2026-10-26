@@ -102,8 +102,9 @@ waves for everyone. A view slot's boat is:
   kind       an index into the catalog's boats
   flags      bit 0: in the far band; bits 1–2: the sailor's mode
              (sailing, in the water, on the board, climbing); bit 3: the
-             boat has gone over the lip and is falling, not stepped; the
-             rest 0
+             boat has gone over the lip and is falling, not stepped; bit
+             4: the boat is a machine sailor's, sailed by an AI agent,
+             and carries the machine mark on its sail; the rest 0
   x, y       position, cm east and north of the world's centre, each
              within a signed 24-bit integer
   heading    uint16, 2π/65536 rad a step, clockwise from north
