@@ -51,6 +51,28 @@ type Result struct {
 // ErrNotCharted is a place the chart does not know.
 var ErrNotCharted = errors.New("helmsman: no charted place of that name")
 
+// A turn has stalled when the answer to an order still says the boat is
+// turning, at under stallKnots, stallLooks times running.
+const (
+	stallKnots = 1.0
+	stallLooks = 3
+)
+
+var (
+	turning = regexp.MustCompile(`(tacking|gybing) to`)
+	knots   = regexp.MustCompile(` ([0-9.]+) kn · heel`)
+)
+
+// speedOf is the boat's speed in an order's answer, knots.
+func speedOf(said string) float64 {
+	g := knots.FindStringSubmatch(said)
+	if g == nil {
+		return math.Inf(1)
+	}
+	v, _ := strconv.ParseFloat(g[1], 64)
+	return v
+}
+
 var whereFrom = regexp.MustCompile(`(\d{3})° ([0-9.]+) (NM|m) from you`)
 
 // bearing reads the place's bearing and distance from the chart's answer.
@@ -101,6 +123,7 @@ func Sail(ctx context.Context, c Caller, place string, arrive float64, looks int
 	}
 	c = polite{c}
 	side := ""
+	stalled := 0
 	for r.Looks = 0; r.Looks < looks; r.Looks++ {
 		text, refused, err := c.Call(ctx, "chart", map[string]any{"place": place})
 		if err != nil {
@@ -162,6 +185,27 @@ func Sail(ctx context.Context, c Caller, place string, arrive float64, looks int
 			return r, err
 		}
 		logf("%.0f m off at %03.0f°, the wind from %03.0f°: %v → %s (refused %v)", d, b, w, order, said, refused)
+		// A boat with no way on cannot turn through the wind: its turn
+		// stalls. The helm in hand ends it; on the tack it is on, it
+		// gathers way, and the next order turns it.
+		if turning.MatchString(said) && speedOf(said) < stallKnots {
+			stalled++
+		} else {
+			stalled = 0
+		}
+		if stalled >= stallLooks {
+			logf("the turn has stalled: gathering way on this tack")
+			for _, o := range []map[string]any{{"rudder": 0, "boom": 40}, {"wind_angle": 100, "side": "same", "boom": 40}} {
+				if _, _, err := c.Call(ctx, "steer", o); err != nil {
+					return r, err
+				}
+			}
+			if _, _, err := c.Call(ctx, "observe", map[string]any{"wait": 20, "wake_on": []string{"land"}}); err != nil {
+				return r, err
+			}
+			stalled, side = 0, ""
+			continue
+		}
 		if _, _, err := c.Call(ctx, "observe", map[string]any{"wait": waitFor, "wake_on": []string{"land", "boat"}}); err != nil {
 			return r, err
 		}

@@ -118,6 +118,14 @@ func agent(ctx context.Context, hc *http.Client, mcp, token string, seed uint64,
 			c.woke = wokeOf(said)
 		}
 		calls <- c
+		if c.refused || c.took < 200*time.Millisecond && tool == "observe" {
+			// As an agent does: a refusal says to wait, and a wait that
+			// ended at once is no reason to call again at once.
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Second):
+			}
+		}
 	}
 	call("observe", `{}`)
 	for k := 0; ctx.Err() == nil; k++ {
