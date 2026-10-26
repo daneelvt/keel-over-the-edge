@@ -65,6 +65,9 @@ type Config struct {
 	// BoatLimit is the most boats the world holds at once; beyond it,
 	// players wait in a queue.
 	BoatLimit int
+	// SpectatorLimit is the most players who may watch boats at once;
+	// beyond it, they wait in a queue of their own.
+	SpectatorLimit int
 	// DevSailors is how many scripted sailors sail in the world.
 	DevSailors int
 	// AISilence is how long a machine sailor's boat stays at sea with no
@@ -121,6 +124,10 @@ const (
 // starting value, until load tests on the server's machine set it.
 const DefaultBoatLimit = 1000
 
+// DefaultSpectatorLimit is the spectator limit unless KEEL_SPECTATOR_LIMIT
+// sets one: a spectator costs the server what a sailor does.
+const DefaultSpectatorLimit = 1000
+
 // DefaultBell is the bell unless KEEL_BELL sets one, and MaxBell the
 // longest it may be: the stop's other steps and its bell must fit in the
 // time Kubernetes gives a pod to stop.
@@ -147,20 +154,21 @@ const (
 func Load(getenv func(string) string) (Config, error) {
 	var errs []error
 	c := Config{
-		PlayAddr:     or(getenv("KEEL_PLAY_ADDR"), DefaultPlayAddr),
-		PlayOrigin:   getenv("KEEL_PLAY_ORIGIN"),
-		AgentsAddr:   or(getenv("KEEL_AGENTS_ADDR"), DefaultAgentsAddr),
-		InternalAddr: or(getenv("KEEL_INTERNAL_ADDR"), DefaultInternalAddr),
-		MetricsAddr:  getenv("KEEL_METRICS_ADDR"),
-		TraceDir:     getenv("KEEL_TRACE_DIR"),
-		ReplayDir:    getenv("KEEL_REPLAY_DIR"),
-		ClientDir:    getenv("KEEL_CLIENT_DIR"),
-		DatabaseURL:  getenv("KEEL_DATABASE_URL"),
-		BoatLimit:    DefaultBoatLimit,
-		AISilence:    DefaultAISilence,
-		Bell:         DefaultBell,
-		Land:         true,
-		WorldKeep:    DefaultWorldKeep,
+		PlayAddr:       or(getenv("KEEL_PLAY_ADDR"), DefaultPlayAddr),
+		PlayOrigin:     getenv("KEEL_PLAY_ORIGIN"),
+		AgentsAddr:     or(getenv("KEEL_AGENTS_ADDR"), DefaultAgentsAddr),
+		InternalAddr:   or(getenv("KEEL_INTERNAL_ADDR"), DefaultInternalAddr),
+		MetricsAddr:    getenv("KEEL_METRICS_ADDR"),
+		TraceDir:       getenv("KEEL_TRACE_DIR"),
+		ReplayDir:      getenv("KEEL_REPLAY_DIR"),
+		ClientDir:      getenv("KEEL_CLIENT_DIR"),
+		DatabaseURL:    getenv("KEEL_DATABASE_URL"),
+		BoatLimit:      DefaultBoatLimit,
+		SpectatorLimit: DefaultSpectatorLimit,
+		AISilence:      DefaultAISilence,
+		Bell:           DefaultBell,
+		Land:           true,
+		WorldKeep:      DefaultWorldKeep,
 	}
 	addrs := []struct{ name, addr string }{
 		{"KEEL_PLAY_ADDR", c.PlayAddr},
@@ -226,6 +234,13 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("KEEL_BOAT_LIMIT: %q is not a number from 1 to %d", v, sim.Capacity))
 		}
 		c.BoatLimit = n
+	}
+	if v := getenv("KEEL_SPECTATOR_LIMIT"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > 100_000 {
+			errs = append(errs, fmt.Errorf("KEEL_SPECTATOR_LIMIT: %q is not a number from 0 to 100000", v))
+		}
+		c.SpectatorLimit = n
 	}
 	if v := getenv("KEEL_DEV_SAILORS"); v != "" {
 		n, err := strconv.Atoi(v)

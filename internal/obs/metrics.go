@@ -157,7 +157,7 @@ type Metrics struct {
 	EdgeSpectators      *prometheus.GaugeVec   // by state
 	EdgeSpectatorLimit  prometheus.Gauge
 	EdgeWatchers        prometheus.Histogram
-	EdgeRefused         *prometheus.CounterVec // by what
+	EdgeRefused         *prometheus.CounterVec   // by what
 	EdgeViewBoats       *prometheus.HistogramVec // by band
 	EdgeSnapshotBytes   prometheus.Histogram
 	EdgeSnapshotEntries *prometheus.CounterVec // by op

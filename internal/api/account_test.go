@@ -804,6 +804,7 @@ type deletedWorld chan store.AccountID
 func (deletedWorld) Stopped(store.AccountID)                  {}
 func (w deletedWorld) Deleted(id store.AccountID)             { w <- id }
 func (deletedWorld) Sea(store.AccountID) (accounts.Sea, bool) { return accounts.Sea{}, false }
+func (deletedWorld) Watching(store.AccountID) (string, bool)  { return "", false }
 
 // TestAccountRoutesNeedASession: none of the account's routes without a
 // session, and none from another site.

@@ -91,6 +91,9 @@ type World interface {
 	Deleted(id store.AccountID)
 	// Sea is where the account's boat is, if it has one at sea or waits.
 	Sea(id store.AccountID) (Sea, bool)
+	// Watching is whose boat the account's game connection watches, by
+	// the sailor's name, if it watches one.
+	Watching(id store.AccountID) (string, bool)
 }
 
 // Config is what the accounts' actions reach.

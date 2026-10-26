@@ -213,7 +213,7 @@ func TestWatchRefused(t *testing.T) {
 		_, owner := srv.Sailor("Dee")
 		srv.Machine(t, "Iron Mary", owner, near(0))
 		srv.Sessions.addMachine("Tin Tom", owner) // not at sea
-		srv.Launch(t, bob, false, near(1))         // at sea, not allowing
+		srv.Launch(t, bob, false, near(1))        // at sea, not allowing
 		v := dial(t, srv, token, client.HelloWatch("Nobody"))
 		for i, tc := range []struct {
 			name string

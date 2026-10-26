@@ -207,6 +207,7 @@ type memDB struct {
 	sessions *edgetest.Sessions // nil for none
 	tokens   machineTokens
 	stops    memStops
+	watching memWatching
 	mu       sync.Mutex
 	closed   bool
 

@@ -92,10 +92,10 @@ type conn struct {
 	wmu      sync.Mutex
 	stopped  bool
 	steering bool
-	held    [heldWords]heldPair
-	first   int // held's oldest
-	nheld   int
-	waiting atomic.Int32 // nheld, for the encoder to skip connections with none
+	held     [heldWords]heldPair
+	first    int // held's oldest
+	nheld    int
+	waiting  atomic.Int32 // nheld, for the encoder to skip connections with none
 
 	// counted is the tier the client last said it draws at, as an index of
 	// tierNames, or -1 before it has said: it is counted under that tier

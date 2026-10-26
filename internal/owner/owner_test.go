@@ -22,6 +22,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -93,6 +94,10 @@ type fakeEdge struct {
 	tools map[bus.Account]bool
 	eyes  map[bus.Account][2]float64
 }
+
+func (e *fakeEdge) Watched() map[bus.Account]int { return nil }
+
+func (e *fakeEdge) Spectators() edge.Spectators { return edge.Spectators{} }
 
 func (e *fakeEdge) Tools(a bus.Account, on bool) bool {
 	e.mu.Lock()

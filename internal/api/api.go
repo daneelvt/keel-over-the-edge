@@ -87,6 +87,9 @@ type Config struct {
 	// NoticeKinds, the kinds that may be.
 	Notices     Notices
 	NoticeKinds []string
+	// Watch, if not nil, is the world's watching: the list of sailors to
+	// watch, and the setting that lets others watch a human.
+	Watch Watching
 	// Status, if not nil, is the game's status as last published, served
 	// at GET /api/status; Website is the origin whose pages may read it.
 	Status  func() *Status
@@ -179,6 +182,10 @@ func Handler(cfg Config) http.Handler {
 	}
 	if cfg.Notices != nil {
 		mux.Handle("POST /api/me/notices", required(a.setNotices))
+	}
+	if cfg.Watch != nil {
+		mux.Handle("GET /api/watch", required(a.watchList))
+		mux.Handle("POST /api/me/spectators", required(a.setSpectators))
 	}
 	if cfg.News != nil {
 		mux.Handle(newsRoute, newNews(cfg.News, cfg.NewsPage))

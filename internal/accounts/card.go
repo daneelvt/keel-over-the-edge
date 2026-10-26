@@ -30,6 +30,8 @@ type Card struct {
 	Sea          *SeaCard   `json:"sea"`
 	Queue        *QueueCard `json:"queue"`
 	Own          bool       `json:"own"`
+	// Watching is the sailor whose boat the account watches, if it does.
+	Watching string `json:"watching,omitempty"`
 
 	// A human's.
 	Passkeys     []PasskeyCard  `json:"passkeys,omitempty"`
@@ -177,6 +179,7 @@ func (a *Accounts) base(c *store.Card) Card {
 				out.LastActive = AtSeaNow
 			}
 		}
+		out.Watching, _ = w.Watching(c.ID)
 	}
 	return out
 }

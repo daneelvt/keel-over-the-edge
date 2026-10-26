@@ -72,6 +72,13 @@ func (a *api) machinesOf(ctx context.Context, cur auth.Current) (machinesPage, e
 	if err != nil {
 		return machinesPage{}, err
 	}
+	if a.cfg.Watch != nil {
+		for i := range items {
+			if id, ok := store.ParseID(items[i].ID); ok && items[i].AtSea {
+				items[i].Watchers = a.cfg.Watch.Watchers(id)
+			}
+		}
+	}
 	p := machinesPage{MCP: a.cfg.MCP, Cap: limit, Machines: items, Fleet: fleet, Looks: a.cfg.MachineLooks}
 	if cur.Confirmed(time.Now()) {
 		p.ConfirmedUntil = ms(cur.ConfirmedUntil)

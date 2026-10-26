@@ -60,6 +60,8 @@ func (w *world) Deleted(id store.AccountID) {
 	w.deleted = append(w.deleted, id)
 }
 
+func (w *world) Watching(store.AccountID) (string, bool) { return "", false }
+
 func (w *world) Sea(id store.AccountID) (accounts.Sea, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
