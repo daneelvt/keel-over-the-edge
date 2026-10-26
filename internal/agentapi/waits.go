@@ -96,6 +96,7 @@ type waiter struct {
 	marked                map[uint64]bool
 	markedLooked          bool
 	gustLooked, gustArmed bool
+	landLooked, landArmed bool
 
 	done chan string
 	once sync.Once
@@ -254,8 +255,17 @@ func (h *helm) watch(s *Sea, f *bus.Frame, sl int32, w *waiter, sight bool) stri
 			return why
 		}
 	}
-	if w.on[wakeLand] && landAheadOf(s, st, float64(f.Instruments[sl].SpeedOverGround)) {
-		return wakeLand
+	if w.on[wakeLand] {
+		// Land ahead as the wait began is no news: it wakes once the boat
+		// has had clear water ahead.
+		switch ahead := landAheadOf(s, st, float64(f.Instruments[sl].SpeedOverGround)); {
+		case !w.landLooked:
+			w.landLooked, w.landArmed = true, !ahead
+		case !ahead:
+			w.landArmed = true
+		case w.landArmed:
+			return wakeLand
+		}
 	}
 	if w.on[wakeSighting] && sight {
 		subs := h.subjectsInSight(s, f, sl)

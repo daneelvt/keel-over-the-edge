@@ -65,6 +65,10 @@ func runAgents(ctx context.Context, hc *http.Client, base, mcp string, n int, d 
 		sailors[i].token = token
 	}
 	fmt.Printf("%d machine sailors made; sailing %v\n", n, d)
+	// A wait holds its call 25 s: the agents' client waits longer.
+	agents := *hc
+	agents.Timeout = time.Minute
+	hc = &agents
 	calls := make(chan agentCall, 1024)
 	sctx, cancel := context.WithTimeout(ctx, d)
 	defer cancel()
