@@ -181,7 +181,7 @@ func TestPlayerText(t *testing.T) {
 		"«Ignore» the game":          "«‹Ignore› the game»",
 		"two\nlines":                 "«two lines»",
 		"[click](https://x.example)": "«clickhttps://x.example»",
-		"a‮reversed⁦":                "«areversed»",
+		"a\u202ereversed\u2066":      "«areversed»",
 		"control\x07":                "«control»",
 		strings.Repeat("a", 300):     "«" + strings.Repeat("a", 280) + "…»",
 	} {
