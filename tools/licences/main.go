@@ -15,11 +15,14 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -57,16 +60,53 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	cmd := exec.CommandContext(context.Background(), "go", "tool", "go-licenses", "check",
-		"./cmd/keel", "--allowed_licenses="+strings.Join(allowed, ","),
+	if err := checkByHand(allowed); err != nil {
+		fail(err)
+	}
+	args := []string{"tool", "go-licenses", "check", "./cmd/keel", "--allowed_licenses=" + strings.Join(allowed, ","),
 		// The game's own code is AGPL; only what it links from others is checked.
-		"--ignore", "github.com/daneelvt/keel-over-the-edge")
+		"--ignore", "github.com/daneelvt/keel-over-the-edge"}
+	for _, b := range byHand {
+		args = append(args, "--ignore", b.module)
+	}
+	cmd := exec.CommandContext(context.Background(), "go", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		fail(fmt.Errorf("go-licenses: a package linked into keel has a licence outside %s: %w", allowedFile, err))
 	}
 	fmt.Println("licences: every Go package linked into keel is allowed")
+}
+
+// byHand are the modules whose licence go-licenses' classifier cannot
+// name, read by hand: each is checked here instead, its licence file the
+// one read, by its SHA-256, and its licence among those allowed.
+var byHand = []struct {
+	module, licence, file, sha256 string
+}{
+	// MIT No Attribution, which the classifier does not know; linked by the
+	// MCP SDK's JSON.
+	{"github.com/segmentio/asm", "MIT-0", "LICENSE", "cca993712df289a5958bdef69031a5dac0f951ac15afeb313f9eeea55ed59443"},
+}
+
+func checkByHand(allowed []string) error {
+	for _, b := range byHand {
+		if !slices.Contains(allowed, b.licence) {
+			return fmt.Errorf("%s's licence, %s, is not in %s", b.module, b.licence, allowedFile)
+		}
+		out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", b.module).Output()
+		if err != nil {
+			return fmt.Errorf("finding %s: %w", b.module, err)
+		}
+		raw, err := os.ReadFile(filepath.Join(strings.TrimSpace(string(out)), b.file))
+		if err != nil {
+			return fmt.Errorf("%s's licence: %w", b.module, err)
+		}
+		if sum := sha256.Sum256(raw); hex.EncodeToString(sum[:]) != b.sha256 {
+			return fmt.Errorf("%s's %s is not the one read by hand: read it again, and its SHA-256 into byHand", b.module, b.file)
+		}
+	}
+	return nil
 }
 
 func fail(err error) {
