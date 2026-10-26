@@ -317,7 +317,7 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 			return err
 		}
 		var out owner.MachinesRequest
-		return c.show(raw, &out, func() { fmt.Fprintf(stdout, "%d machine sailors allowed.\n", out.Cap) })
+		return c.show(raw, &out, func() { fmt.Fprintf(stdout, "%s allowed.\n", count(out.Cap, "machine sailor")) })
 	case "lifetime":
 		if len(pos) != 1 {
 			fmt.Fprintln(stderr, "keel admin lifetime: DURATION, as 90d, 12h or 30m")
@@ -409,6 +409,14 @@ func marks(matched, tools, priority, stopped, queued bool) string {
 	return "  [" + strings.Join(out, ", ") + "]"
 }
 
+// count is a number and its noun: "1 passkey", "2 passkeys".
+func count(n int, one string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return strconv.Itoa(n) + " " + one + "s"
+}
+
 // date is a time of the answers, ms, as a date in UTC; "never" for none.
 func date(ms int64) string {
 	if ms == 0 {
@@ -467,7 +475,7 @@ func writeCard(w io.Writer, c *accounts.Card, indent string) {
 		p("  waiting for a boat, %d in line", c.Queue.Position)
 	}
 	if c.Kind == store.Human {
-		p("  %d passkeys:", len(c.Passkeys))
+		p("  %s:", count(len(c.Passkeys), "passkey"))
 		for _, k := range c.Passkeys {
 			warn := ""
 			if k.CloneWarning {
@@ -481,9 +489,9 @@ func writeCard(w io.Writer, c *accounts.Card, indent string) {
 			p("  no recovery code")
 		}
 		if s := c.Sessions; s != nil {
-			p("  %d sessions, the latest seen %s", s.Count, stamp(s.Latest))
+			p("  %s, the latest seen %s", count(int(s.Count), "session"), stamp(s.Latest))
 		}
-		p("  fleet %v; %d machine sailors allowed", c.Fleet, c.Cap)
+		p("  fleet %v; %s allowed", c.Fleet, count(c.Cap, "machine sailor"))
 	}
 	for _, a := range c.Apps {
 		state := "ends " + stamp(a.Ends)
