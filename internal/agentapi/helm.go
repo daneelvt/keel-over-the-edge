@@ -531,17 +531,38 @@ func (h *helm) leave(ctx context.Context, s *Sea) (bool, error) {
 	h.mu.Lock()
 	boat, queued := h.boat, h.queued
 	h.mu.Unlock()
+	var c bus.Command
 	switch {
 	case boat != 0:
-		if err := send(ctx, s, bus.Command{Op: bus.Leave, Boat: boat}); err != nil {
-			return false, err
-		}
+		c = bus.Command{Op: bus.Leave, Boat: boat}
 	case queued:
-		if err := send(ctx, s, bus.Command{Op: bus.Disconnect, Account: bus.Account(h.account), Conn: h.conn}); err != nil {
-			return false, err
-		}
+		c = bus.Command{Op: bus.Disconnect, Account: bus.Account(h.account), Conn: h.conn}
 	default:
 		return false, nil
+	}
+	// The boat is gone once the simulation has answered: a call after
+	// this one never finds it again.
+	reply := make(chan bus.Reply, 1)
+	c.Reply = reply
+	if err := send(ctx, s, c); err != nil {
+		return false, err
+	}
+	t := time.NewTimer(joinWait)
+	defer t.Stop()
+	select {
+	case r := <-reply:
+		for f := s.Bus.Frames.Acquire(); f.Tick < r.Tick; f = s.Bus.Frames.Acquire() {
+			f.Release()
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case <-time.After(time.Second / 60):
+			}
+		}
+	case <-t.C:
+		return false, errBusy
+	case <-ctx.Done():
+		return false, ctx.Err()
 	}
 	h.mu.Lock()
 	h.boat, h.queued, h.left = 0, false, ""

@@ -287,3 +287,27 @@ func TestOrdersOutOfBounds(t *testing.T) {
 		}
 	})
 }
+
+func TestLeaveAndSailAgain(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t, 8, 12, 0)
+		a := sailor(1, "Iron Mary")
+		h.call(t, a, "observe", nil)
+		time.Sleep(5 * time.Second)
+		if text, _ := h.call(t, a, "boat", map[string]any{"action": "leave"}); !strings.Contains(text, "left the water") {
+			t.Fatalf("leave: %q", text)
+		}
+		text, refused := h.call(t, a, "observe", nil)
+		t.Logf("observe: %v %q", refused, text)
+		text, refused = h.call(t, a, "steer", map[string]any{"rudder": 0, "boom": 95})
+		t.Logf("steer: %v %q", refused, text)
+		text, refused = h.call(t, a, "observe", map[string]any{"wait": 5, "wake_on": []string{"heel"}, "heel_over": 60})
+		t.Logf("wait: %v %q", refused, text)
+		if refused || !strings.Contains(text, "waited 5 s") {
+			t.Fatalf("after leaving and sailing again: %v %q", refused, text)
+		}
+		if n := h.boats(); n != 1 {
+			t.Fatalf("%d boats", n)
+		}
+	})
+}
