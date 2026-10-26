@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -94,11 +95,16 @@ func checkByHand(allowed []string) error {
 		if !slices.Contains(allowed, b.licence) {
 			return fmt.Errorf("%s's licence, %s, is not in %s", b.module, b.licence, allowedFile)
 		}
-		out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", b.module).Output()
+		// The module downloaded if it is not yet, and its directory.
+		out, err := exec.Command("go", "mod", "download", "-json", b.module).Output()
 		if err != nil {
 			return fmt.Errorf("finding %s: %w", b.module, err)
 		}
-		raw, err := os.ReadFile(filepath.Join(strings.TrimSpace(string(out)), b.file))
+		var mod struct{ Dir string }
+		if err := json.Unmarshal(out, &mod); err != nil || mod.Dir == "" {
+			return fmt.Errorf("finding %s: no directory (%v)", b.module, err)
+		}
+		raw, err := os.ReadFile(filepath.Join(mod.Dir, b.file))
 		if err != nil {
 			return fmt.Errorf("%s's licence: %w", b.module, err)
 		}
