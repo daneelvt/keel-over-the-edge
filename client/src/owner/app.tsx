@@ -21,7 +21,13 @@
 // each confirmed with what it will do, and look over the next world, drawn
 // as the current is, on a tab of its own, and make it again. For AI apps,
 // the owner sets the token lifetime, confirmed with the grants it ends, and
-// how many machine sailors an account may have.
+// how many machine sailors an account may have. Beside each account's
+// owner's flag is its priority, which its next join takes: a priority
+// account never waits. A machine sailor's boat is marked with its agent's
+// app, its last call and its wait; humans and machine sailors wait in
+// queues of their own, each shown with its places' positions, and the
+// machine sailors at sea are counted against their cap and the places kept
+// for them.
 
 import { render } from 'preact';
 import {
@@ -35,8 +41,10 @@ import {
 } from 'preact/hooks';
 import { formatPosition } from '../chart/position';
 import { lightOn } from '../lights/character';
+import { agentWords, machinesLine, rulesLine } from './admission';
 import {
   type AccountsData,
+  type Admission,
   type Boat,
   type CalibrationPage,
   type ChartedData,
@@ -73,6 +81,7 @@ import {
   type Town,
   type TownsData,
   type VisibilityPage,
+  type Waiting,
   type WeatherWeek,
   type WorldNow,
 } from './api';
@@ -388,14 +397,19 @@ function placeWords(p: Place): string {
 }
 
 /**
- * An account's flag: what was clicked holds until the world's reading
- * agrees, so a reading still on its way does not set the box back.
+ * An account's flag or its priority: what was clicked holds until the
+ * world's reading agrees, so a reading still on its way does not set the
+ * box back.
  */
-function FlagBox({
+function AccountBox({
+  name,
+  label,
   on,
   disabled,
   flag,
 }: {
+  name: 'flag' | 'priority';
+  label: string;
   on: boolean;
   disabled: boolean;
   flag: (on: boolean) => Promise<boolean>;
@@ -410,7 +424,7 @@ function FlagBox({
     <label>
       <input
         type="checkbox"
-        name="flag"
+        name={name}
         checked={asked ?? on}
         disabled={disabled}
         onClick={(e) => e.stopPropagation()}
@@ -424,8 +438,117 @@ function FlagBox({
           });
         }}
       />{' '}
-      owner
+      {label}
     </label>
+  );
+}
+
+/** An account's owner's flag, for a human's account alone, and its priority, for any. */
+function AccountBoxes({
+  account,
+  sailor,
+  tools,
+  priority,
+  human,
+  act,
+}: {
+  account: string;
+  sailor: string;
+  tools: boolean;
+  priority: boolean;
+  human: boolean;
+  act: (path: 'flag' | 'priority', body: unknown, what: string) => Promise<boolean>;
+}) {
+  const who = sailor || account;
+  return (
+    <>
+      <AccountBox
+        name="flag"
+        label="owner"
+        on={tools}
+        disabled={!human}
+        flag={(on) => act('flag', { account, on }, `${who}'s flag`)}
+      />{' '}
+      <AccountBox
+        name="priority"
+        label="priority"
+        on={priority}
+        disabled={false}
+        flag={(on) =>
+          act(
+            'priority',
+            { account, on },
+            `${who}'s priority ${on ? 'given' : 'taken'}, from its next join`,
+          )
+        }
+      />
+    </>
+  );
+}
+
+/** The boats at sea by kind: the machine sailors against their cap and reserve, and their agents' rules. */
+function AdmissionLines({ a }: { a: Admission }) {
+  const rules = rulesLine(a);
+  return (
+    <>
+      <p class="small" data-field="machines-at-sea">
+        {machinesLine(a)}; {a.humans} {a.humans === 1 ? 'human' : 'humans'} at sea.
+      </p>
+      {rules !== '' ? (
+        <p class="small" data-field="agent-rules">
+          {rules}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** One kind's queue, the head first, each place with its position among its kind's. */
+function Queue({
+  title,
+  field,
+  queue,
+  act,
+}: {
+  title: string;
+  field: string;
+  queue: Waiting[];
+  act: (path: 'flag' | 'priority', body: unknown, what: string) => Promise<boolean>;
+}) {
+  return (
+    <>
+      <h3 data-field={field}>
+        {title}: {queue.length}
+      </h3>
+      {queue.length > 0 ? (
+        <table class="queue">
+          <tbody>
+            {queue.map((q) => (
+              <tr key={q.account}>
+                <td>{q.position}</td>
+                <td>{q.sailor || '—'}</td>
+                <td>{seconds(q.waited)}</td>
+                <td>
+                  {[q.connected ? '' : 'away', q.admitted ? 'priority' : '']
+                    .filter((m) => m !== '')
+                    .join(', ')}
+                </td>
+                <td>
+                  <AccountBoxes
+                    account={q.account}
+                    sailor={q.sailor}
+                    tools={q.tools}
+                    priority={q.priority}
+                    human={!q.machine}
+                    act={act}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+    </>
   );
 }
 
@@ -441,7 +564,11 @@ function BoatRow({
   b: Boat;
   chosen: boolean;
   choose: () => void;
-  act: (path: 'flag' | 'place' | 'unseen', body: unknown, what: string) => Promise<boolean>;
+  act: (
+    path: 'flag' | 'place' | 'unseen' | 'priority',
+    body: unknown,
+    what: string,
+  ) => Promise<boolean>;
   picked: [number, number] | null;
   islands: Island[];
 }) {
@@ -453,6 +580,7 @@ function BoatRow({
     b.stays ? 'staying' : '',
     b.unseen ? 'unseen' : '',
     b.eye !== null ? 'roaming' : '',
+    b.admitted ? 'given as a priority account’s' : '',
   ].filter((m) => m !== '');
   return (
     <>
@@ -460,7 +588,12 @@ function BoatRow({
         <td>{b.boat}</td>
         <td>
           {b.sailor || '—'}
-          {b.human ? '' : ' (AI)'}
+          {b.machine ? ' (AI)' : ''}
+          {b.machine ? (
+            <div class="small agent" data-field="agent">
+              {agentWords(b.agent)}
+            </div>
+          ) : null}
         </td>
         <td>{b.kind}</td>
         <td class="small" data-field="boat-position">
@@ -470,10 +603,13 @@ function BoatRow({
         <td>{b.fromLip.toFixed(0)} m</td>
         <td>{marks.join(', ')}</td>
         <td>
-          <FlagBox
-            on={b.tools}
-            disabled={!b.human}
-            flag={(on) => act('flag', { account: b.account, on }, `${b.sailor}'s flag`)}
+          <AccountBoxes
+            account={b.account}
+            sailor={b.sailor}
+            tools={b.tools}
+            priority={b.priority}
+            human={b.human && !b.machine}
+            act={act}
           />
         </td>
       </tr>
@@ -1721,10 +1857,10 @@ function App() {
   // sailors' control offers by name.
   const known: Known[] = [
     ...new Map(
-      [...(now?.boats ?? []).filter((b) => b.human), ...(now?.queue ?? [])].map((k) => [
-        k.account,
-        { account: k.account, sailor: k.sailor },
-      ]),
+      [
+        ...(now?.boats ?? []).filter((b) => b.human && !b.machine),
+        ...(now?.queue ?? []).filter((q) => !q.machine),
+      ].map((k) => [k.account, { account: k.account, sailor: k.sailor }]),
     ).values(),
   ];
 
@@ -2070,6 +2206,7 @@ function App() {
             {accounts !== null ? <AISignIn accounts={accounts} known={known} act={act} /> : null}
             <section class="card" aria-label="Boats at sea">
               <h2>At sea: {now?.boats.length ?? 0}</h2>
+              {now !== null ? <AdmissionLines a={now.admission} /> : null}
               <table class="boats">
                 <thead>
                   <tr>
@@ -2103,26 +2240,18 @@ function App() {
             </section>
             <section class="card" aria-label="The queue">
               <h2>Waiting: {now?.queue.length ?? 0}</h2>
-              <table>
-                <tbody>
-                  {(now?.queue ?? []).map((q) => (
-                    <tr key={q.account}>
-                      <td>{q.sailor || '—'}</td>
-                      <td>{seconds(q.waited)}</td>
-                      <td>{q.connected ? '' : 'away'}</td>
-                      <td>
-                        <FlagBox
-                          on={q.tools}
-                          disabled={false}
-                          flag={(on) =>
-                            act('flag', { account: q.account, on }, `${q.sailor}'s flag`)
-                          }
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Queue
+                title="Humans"
+                field="humans-waiting"
+                queue={(now?.queue ?? []).filter((q) => !q.machine)}
+                act={act}
+              />
+              <Queue
+                title="Machine sailors"
+                field="machines-waiting"
+                queue={(now?.queue ?? []).filter((q) => q.machine)}
+                act={act}
+              />
             </section>
             {lists}
           </aside>

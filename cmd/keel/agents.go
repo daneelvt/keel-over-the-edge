@@ -16,6 +16,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
+	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
@@ -148,6 +149,14 @@ func systemWords(k catalog.SystemKind) string {
 		return "a low"
 	}
 	return "a patch of light air"
+}
+
+// ownerAgents tells the world page of the machine sailors' agents.
+type ownerAgents struct{ core *agentapi.Core }
+
+func (o ownerAgents) Agent(account bus.Account) (owner.AgentInfo, bool) {
+	app, last, waiting, refusals, ok := o.core.Agent(account)
+	return owner.AgentInfo{App: app, LastCall: last, Waiting: waiting, Refusals: refusals}, ok
 }
 
 // approvePage is the approval page's file in the built page.

@@ -638,6 +638,10 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	if a := c.agents; a != nil {
 		cfg.Machines, cfg.Lifetime, cfg.LifetimeChanged = c.db, a.lifetime, a.grants.ForgetAll
 		cfg.Door = a.grants
+		cfg.Agents, cfg.AISilence = ownerAgents{a.core}, a.core.Silence()
+		l := a.core.Limits()
+		cfg.AIOrders = fmt.Sprintf("%g a second, a burst of %d", float64(l.Orders), l.OrderBurst)
+		cfg.AILooks = fmt.Sprintf("%g a second, a burst of %d", float64(l.Looks), l.LookBurst)
 	}
 	cfg.AICap, cfg.AIReserve = c.aiCap, c.aiReserve
 	if c.bus != nil {

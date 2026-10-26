@@ -117,6 +117,58 @@ tests:
             exp_annotations:
               description: "3 wait: the sea is at its boat limit. Look at the tick's time before raising KEEL_BOAT_LIMIT."
 
+  - name: a machine sailor waits under the reserve with room at sea
+    interval: 1m
+    input_series:
+      - series: keel_sim_queue_oldest_seconds{kind="machine"}
+        values: 0+60x30
+      - series: keel_sim_boats_by_kind{kind="machine"}
+        values: 2x30
+      - series: keel_sim_ai_reserve
+        values: 250x30
+      - series: keel_sim_boats
+        values: 40x30
+      - series: keel_sim_boat_limit
+        values: 1000x30
+    alert_rule_test:
+      - eval_time: 14m
+        groupname: game
+        alertname: MachineSailorsShutOut
+        exp_alerts: []
+      - eval_time: 16m
+        groupname: game
+        alertname: MachineSailorsShutOut
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: game
+              summary: "Machine sailors wait while places kept for them are free."
+            exp_annotations:
+              description: "The head of the machine sailors' queue has waited 16m 0s while they sail fewer boats than their reserve and the sea has room: admission is not keeping their places. Look at the queues on the world page and at keel's logs."
+
+  - name: a machine sailor waits with its reserve sailing, or with the sea full
+    interval: 1m
+    input_series:
+      - series: keel_sim_queue_oldest_seconds{kind="machine"}
+        values: 0+60x30
+      - series: keel_sim_boats_by_kind{kind="machine"}
+        values: 250x15 2x15
+      - series: keel_sim_ai_reserve
+        values: 250x30
+      - series: keel_sim_boats
+        values: 900x15 1000x15
+      - series: keel_sim_boat_limit
+        values: 1000x30
+    alert_rule_test:
+      - eval_time: 14m
+        groupname: game
+        alertname: MachineSailorsShutOut
+        exp_alerts: []
+      - eval_time: 25m
+        groupname: game
+        alertname: MachineSailorsShutOut
+        exp_alerts: []
+
   - name: keel uses 3.9 of its 4 GiB
     interval: 1m
     input_series:

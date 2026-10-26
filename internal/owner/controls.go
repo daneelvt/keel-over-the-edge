@@ -32,6 +32,13 @@ type FlagRequest struct {
 	On      bool   `json:"on"`
 }
 
+// PriorityRequest marks an account, human or AI, as a priority account,
+// which never waits for a boat, or not.
+type PriorityRequest struct {
+	Account string `json:"account"`
+	On      bool   `json:"on"`
+}
+
 // PlaceRequest moves a flagged account's boat, at rest: to a point (East
 // and North, m), to a position as written (Position: 67°24′N 045°12′), to
 // the start, to an island's approach (Island, its number), to a place's
@@ -150,6 +157,50 @@ func (o *Owner) flag(w http.ResponseWriter, r *http.Request) {
 	o.count(action)
 	o.cfg.Log.Info("owner: an account's flag set", "action", action, "account", id.String(), "connected", connected, "from", r.RemoteAddr)
 	writeJSON(w, map[string]any{"account": id.String(), "on": req.On, "connected": connected})
+}
+
+// priority marks an account, human or AI, as a priority account or not:
+// the database first, then the sessions' cache and the machine sailors'
+// door forget the account, so its next join reads it again. A boat at sea
+// keeps the place it was given; the change applies from the account's
+// next join.
+//
+//	POST /owner/api/priority {"account": "…", "on": true}
+func (o *Owner) priority(w http.ResponseWriter, r *http.Request) {
+	var req PriorityRequest
+	if !readBody(w, r, &req) {
+		return
+	}
+	id, ok := parseAccount(req.Account)
+	if !ok {
+		o.refuse(w, "priority", http.StatusBadRequest, "account is not an account's id")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
+	defer cancel()
+	err := o.cfg.Accounts.SetPriority(ctx, id, req.On)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		o.refuse(w, "priority", http.StatusNotFound, "no account of that id")
+		return
+	case err != nil:
+		http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	if o.cfg.Sessions != nil {
+		o.cfg.Sessions.ForgetAccount(id)
+	}
+	if o.cfg.Door != nil {
+		o.cfg.Door.ForgetAccounts(id)
+	}
+	o.b.forget(id)
+	action := "priority"
+	if !req.On {
+		action = "unpriority"
+	}
+	o.count(action)
+	o.cfg.Log.Info("owner: an account's priority set", "action", action, "account", id.String(), "from", r.RemoteAddr)
+	writeJSON(w, map[string]any{"account": id.String(), "on": req.On})
 }
 
 // boatOf is the boat of an account at sea and its state, in the latest

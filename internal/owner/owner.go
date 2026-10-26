@@ -5,8 +5,8 @@
 // boat, the wind, the gusts, the current, the islands, the places and the
 // lighthouses, the queue, the weather with the forecast beside it, and the
 // world's clock; and its controls, which set and clear an account's
-// owner's flag, move a flagged account's boat anywhere on the disk, keep
-// it unseen, make a new next world, begin it, and chart the whole world.
+// owner's flag and an account's priority, move a flagged account's boat
+// anywhere on the disk, keep it unseen, make a new next world, begin it, and chart the whole world.
 // The internal listener has no route to the internet: the owner reaches it
 // from their own computer through the tunnel to the machine, or a port
 // forward on the local cluster.
@@ -48,6 +48,9 @@ type Accounts interface {
 	// SetTools sets or clears an account's owner's flag, or returns
 	// store.ErrNotFound for an account that is not a human's.
 	SetTools(ctx context.Context, id store.AccountID, on bool) error
+	// SetPriority marks an account, human or AI, as a priority account or
+	// not, or returns store.ErrNotFound for no such account.
+	SetPriority(ctx context.Context, id store.AccountID, on bool) error
 	// AccountCounts counts the human accounts: all, made in the last week,
 	// seen in the last day.
 	AccountCounts(ctx context.Context) (store.AccountCounts, error)
@@ -57,6 +60,30 @@ type Accounts interface {
 // its flag changes.
 type Sessions interface {
 	ForgetAccount(id store.AccountID)
+}
+
+// Door is the machine sailors' door, which keeps its connection tokens'
+// accounts in a cache of its own: it forgets an account at once when the
+// account's priority changes.
+type Door interface {
+	ForgetAccounts(ids ...store.AccountID)
+}
+
+// Agents tells of the machine sailors' agents: the app each boat's agent
+// is, and what it last did. It is asked from the view's goroutine, once a
+// second for each machine boat at sea.
+type Agents interface {
+	Agent(account bus.Account) (AgentInfo, bool)
+}
+
+// AgentInfo is what the page shows of a machine boat's agent.
+type AgentInfo struct {
+	App      string // the app's label: claude-ai, chatgpt, codex, …
+	LastCall time.Time
+	// Waiting is how long its observe has waited so far, 0 while it is not
+	// waiting.
+	Waiting  time.Duration
+	Refusals uint64 // its calls refused since keel started
 }
 
 // Edge is the game connection, told of a flag's change at once, and asked
@@ -140,6 +167,20 @@ type Config struct {
 	Accounts Accounts
 	Sessions Sessions
 	Edge     Edge
+	// Door, if not nil, is the machine sailors' door, whose cache of
+	// tokens' accounts forgets an account whose priority changes.
+	Door Door
+	// Agents, if not nil, tells of the machine sailors' agents.
+	Agents Agents
+	// AICap and AIReserve are the most boats machine sailors sail at once,
+	// and how many places are kept for them ahead of humans waiting.
+	AICap, AIReserve int
+	// AISilence, if not zero, is how long a machine boat's agent may make
+	// no call before its boat is sent into its grace; AIOrders and
+	// AILooks, if not empty, are its budgets of orders and of looks, as
+	// the page shows them: "2 a second, a burst of 5".
+	AISilence         time.Duration
+	AIOrders, AILooks string
 	// Machines, if not nil, is the owner's hand on machine sailors and AI
 	// apps' grants; Lifetime the grant lifetime kept in memory, and
 	// LifetimeChanged, if not nil, told when it is set.
@@ -228,7 +269,7 @@ var Paths = []string{
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
 	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
 	"/owner/api/forecast.json", "/owner/api/calibration.json", "/owner/api/gales.json", "/owner/api/place.json",
-	"/owner/api/lifetime", "/owner/api/machines",
+	"/owner/api/lifetime", "/owner/api/machines", "/owner/api/priority",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -313,6 +354,7 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/gales.json", o.gales)
 	mux.HandleFunc("GET /owner/api/place.json", o.placeWeather)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
+	mux.HandleFunc("POST /owner/api/priority", o.priority)
 	mux.HandleFunc("POST /owner/api/lifetime", o.lifetime)
 	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
 	mux.HandleFunc("POST /owner/api/place", o.place)

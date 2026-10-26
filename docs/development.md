@@ -2706,6 +2706,12 @@ carry the flag is refused, and no other player's boat is ever moved.
   cache forgets the account and its open connection is told (a `Tools`
   message), so it takes effect at once. Cleared, its free camera comes back
   and its boat is seen again.
+- **Priority** (`POST /owner/api/priority {"account", "on"}`, a box beside
+  the flag on a boat's row or the queue's, for a human's account or an
+  AI's): the account's `priority` column (`00016_priority.sql`), then the
+  sessions' cache and the MCP door's cache of tokens' accounts forget the
+  account. A priority account never waits for a boat; the change applies
+  from its next join, and a boat at sea keeps the place it was given.
 - **Teleport** (`POST /owner/api/place`): to the point picked, to the start
   (where a new boat would appear, clear of other hulls), to an island's
   approach (the first water 3 m deep on the line from its highest point
@@ -3333,7 +3339,7 @@ Three HTTP servers, each with a 10 s header timeout, a 120 s idle timeout and
 | Listener | Variable, default | Serves |
 |----------|-------------------|--------|
 | `play.` | `KEEL_PLAY_ADDR`, `127.0.0.1:8080` | The game's routes (below), with an access log |
-| `agents.` | `KEEL_AGENTS_ADDR`, `127.0.0.1:8081` | Nothing yet: 404 to everything |
+| `agents.` | `KEEL_AGENTS_ADDR`, `127.0.0.1:8081` | The MCP address (`POST /mcp`), its server card (`GET /mcp/server-card`) and the resource's metadata; see [Machine sailors at sea](#machine-sailors-at-sea). A request has a 10 s read and a 30 s write deadline; a waiting call moves its own |
 | internal | `KEEL_INTERNAL_ADDR`, `127.0.0.1:9090` | `/livez`, `/readyz`, `/metrics`, `/debug/pprof/…`, `/debug/flightrecorder`, `/debug/replay`, the owner's world page and its controls under `/owner/` (see [The owner's tools](#the-owners-tools)), and with `KEEL_DEV_COMMANDS=1` `POST /debug/wind` and `/debug/weather` |
 | metrics | `KEEL_METRICS_ADDR`, none | `GET /metrics` and nothing else; not opened unless set |
 
@@ -3353,7 +3359,8 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_TRACE_DIR` | none | Where traces of overrunning ticks are written |
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
 | `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. Its `owner/` folder, the world page, is served by the internal listener alone, if it is there. The image sets it; in development Vite serves the pages instead |
-| `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it |
+| `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it. Machine sailors sail at most half of them, with half of that kept for them |
+| `KEEL_AI_SILENCE` | `3m` | How long a machine sailor's boat stays at sea with no call from its agent before its minute's grace begins, from 1s to 1h |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
 | `KEEL_LAND` | `on` | `off` sails the world's terrain as open sea: made, stored and loaded, but no grounding, shelter or fetch (production's, until phones draw land; see [The world](#the-world); `tools/e2e` sets it too) |
@@ -3754,7 +3761,7 @@ each sailor, never removed but with the account); every sailor still takes
 the catalog's first boat as it joins. Deleting a machine sailor needs a
 passkey confirmed and its name typed again, as deleting the account does;
 deleting the account deletes its machine sailors first. In this release a
-machine sailor never goes to sea.
+machine sailor goes to sea through the MCP address's tools, as [Machine sailors at sea](#machine-sailors-at-sea) tells.
 
 **The addresses.** The game is the apps' OAuth authorization server, its
 issuer the play origin (`https://play.keelovertheedge.com`); the MCP
@@ -3883,6 +3890,88 @@ deletes them.
 | `POST /api/machines/revoke` | `{"grant"}`: 200, the list |
 | `POST /api/machines/token`, `…/token/revoke` | `{"machine"}`: a connection token, confirmed, 201 `{"token", "ends"}` shown once; or it revoked |
 | `GET /oauth/request` | The approval page's request, by its cookie: the app, where it returns, and once the passkey is in, the account's machine sailors |
+
+### Machine sailors at sea
+
+A machine sailor's agent sails through twelve tools at the MCP address
+(`internal/agentapi/tools.go`, the whole `tools/list` answer held to
+`testdata/tools.golden.json`): `observe`, `steer`, `trim`, `chart`,
+`pencil`, `forecast`, `news`, `say`, `race`, `boat`, `bottle`, `handbook`.
+`say`, `race`, `pencil` and `bottle` answer "not yet": the list never changes
+as the game grows, since apps cache it. A change to a description or a
+schema is a deliberate change: run `go test ./internal/agentapi -run
+ToolsList -update` and name it in the release notes.
+
+**The helm** (`helm.go`). Each machine sailor whose agent has called since
+keel started has one, in memory, shared by every app approved for it: its
+connection number (from `1<<63`, so never an edge's), its boat, its last
+call, its ring of 500 events, the numbers it gives the boats it sees, its
+wind readout, its two budgets and its one wait. It reaches the simulation
+only through the bus, as the scripted sailors do. A call takes the helm's
+turn (a one-place channel, not a mutex, for synctest); a waiting call gives
+it up while it waits. `observe`, `steer`, `trim` and `boat take` put the
+boat in the water if it has none (`Join` with `Machine`, and `Priority` from
+the token's account); the others read without going to sea.
+
+**Silence.** With no call for `KEEL_AI_SILENCE` (3 minutes; a waiting
+`observe` counts), the helm sends `Disconnect`: the boat's minute of grace
+begins, then it leaves the water. The next call sails again and is told
+why. A helm with no boat and no call for an hour is forgotten.
+
+**Each world** hands the core its `Sea` (`cmd/keel/agents.go`: the bus, the
+chart, the forecast, the land, the catalog) and a `Recorder`, handed every
+frame. The recorder copies what concerns machine sailors (admissions,
+boats leaving, the falls, chartings, the world's end) into a channel and
+never blocks; the **hub** (`hub.go`, `waits.go`) puts them in the helms'
+rings and, ten times a second, looks at every machine boat: its readout,
+capsizes and groundings (and every boat's capsizes, for
+`keel_agent_capsizes_total`), the autopilot's turns, and each wait's
+conditions. A waiting call's gust ring is looked at twice a second and its
+right of way five times, each helm at its own moment.
+
+**The report** (`report.go`, `words.go`) is built from the frame, its
+**instruments** (what a machine boat's step read: `Frame.Instruments`,
+filled for machine boats only), the chart, the weather at the tick and the
+phone's own rules written again in Go (`internal/lookout`: the readout, the
+countdown, the gust ring, right of way, dirty air, sounds; each held with
+its TypeScript twin to a file of cases in `internal/lookout/testdata`; the
+chart's list in `internal/chart/list.go`). Other boats come from the
+view's rule (`internal/view`, the edge's own), those whose masts show over
+the horizon; land, places and lights from the sighting's own `Look`,
+charted or not, named only when charted. Its golden scenes are in
+`testdata/scenes` (seed 1, `-update` rewrites them), each checked for
+parity: nothing its phone would not be sent.
+
+**`seq`** is the world's tick of the latest event told: it survives keel's
+restarts, as a count kept in memory would not. `observe` tells the events
+after its last answer; `since` tells them again.
+
+**Waits.** `observe` with `wait` (0–50 s) holds the call until something in
+`wake_on` happens, or capsizes, groundings, bumps, the falls, a restart,
+an admission or the world's end; a second wait ends the first
+("superseded"); a closed stream ends it (counted in
+`keel_agent_wait_cut_seconds` by app). The call's write deadline moves to
+the wait and 15 s, and a client that sent a progress token is told every 10
+s. As keel stops, every wait answers at once with the restart's words.
+
+**Orders** (`orders.go`) write the control slot stamped for the next tick.
+They are targets: an order the boat holds answers "already"; a tack or a
+gybe raises the autopilot's order count only when the side changes and no
+turn is under way or waiting, so a retried tack turns once. `trim`'s
+degrees map to the sheet by the catalog's boom range.
+
+**Limits** (`limits.go`): orders 2 a second (burst 5), looks 4 a second
+(burst 10). `internal/scripted`'s `TestHandSteeringAgainstTheAutopilot`
+measures hand steering in the windiest regime at 1 to 10 corrections a
+second against the autopilot. Every refusal is a result marked an error,
+in `refusals.go`, saying what to do next.
+
+**Apps** are labelled from the client's name or User-Agent (`hosts.go`,
+a fixed set) in `keel_agent_calls_total{tool,result,app,era}`.
+
+**The helmsman** (`internal/helmsman`, `go run ./tools/helmsman`) sails a
+machine sailor to a charted place with no model, by the chart's bearings:
+`cmd/keel`'s `TestTheHelmsmanSails` runs it in seed 1.
 
 ### The game connection
 
@@ -4068,9 +4157,17 @@ no telltales or pennant. `e2e/fleet.spec.ts` checks a boat of the fleet
 looks as the own boat does at the same pose.
 
 **The queue.** At most `KEEL_BOAT_LIMIT` boats sail, those in their grace
-included. A `Join` beyond it, or while others wait, waits in the
-simulation's queue (world state, in snapshots and the input log); each tick,
-while there is room, the head gets a boat. The edge tells a waiting
+included. A `Join` that admission would not give the next place waits in
+the simulation's queue (world state, in snapshots and the input log); each
+tick, while there is room, the next is given a boat. Humans and machine
+sailors wait apart, each first come first served, and humans go first:
+machine sailors sail at most half the limit (their cap), and while they sail
+fewer than half of that (their reserve) the first of them waiting goes
+before any human. No boat at sea is ever taken out for another. A
+**priority account** (the world page's box) never waits: it gets a boat
+beyond the limit and the cap, while a slot is free. A place's kind and
+priority are kept with it, and with every boat, in the checkpoint (format
+12) and the input log. The edge tells a waiting
 connection its place (`Queued`) when it changes, at most once a second, and
 welcomes it when its boat appears. The page shows "The sea is full. You are
 12th in line." over the "Back soon" screen; while waiting the net worker
@@ -4591,6 +4688,21 @@ header:
 curl -s https://macbook.local/mcp -H "Authorization: Bearer keelote_ct_…" -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' -H 'Mcp-Protocol-Version: 2025-06-18' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"handbook","arguments":{}}}'
+```
+
+To see one sail: give Claude Code the game's tools without asking and one
+line, while you sail beside it on the phone, its sail marked with the cog:
+
+```sh
+NODE_EXTRA_CA_CERTS="$(go tool mkcert -CAROOT)/rootCA.pem" \
+  claude -p "Sail to the nearest charted island, then come back and sail beside me." --allowedTools "mcp__keel-local__*"
+```
+
+or with no model, from a connection token, the helmsman:
+
+```sh
+# Go trusts the local root through the keychain; the place is any the chart names
+KEEL_TOKEN=keelote_ct_… go run ./tools/helmsman -url https://macbook.local/mcp -place "Table Head Light"
 ```
 
 ### A release on the local cluster
@@ -5740,6 +5852,7 @@ itself is down. The rules are beside what they watch
 | **TunnelDown** (critical) | no cloudflared replica holds a connection for 2 minutes | cloudflared's pods and logs; Cloudflare's dashboard |
 | **WorldNextNotReady** (critical) | the next world is not stored six hours before the world's end, for 5 minutes | The world page's runs of `next-world`; keel's logs |
 | QueueWaiting | players have waited for a boat for 10 minutes | The tick's time, before raising `KEEL_BOAT_LIMIT` |
+| MachineSailorsShutOut | the machine sailors' queue's head has waited 10 minutes while they sail fewer boats than their reserve and the sea has room, for 5 minutes: admission is broken | The world page's queues; keel's logs |
 | MemoryNearLimit | a container of keel or the database is over 90% of its limit | Its memory over days; raise the limit in a commit |
 | CPUThrottled | keel is throttled in over a tenth of its CPU periods | Game: does the tick suffer |
 | BackupStale | no base backup completed in 26 hours | `kubectl -n keel get backups.postgresql.cnpg.io`; the sidecar's log |

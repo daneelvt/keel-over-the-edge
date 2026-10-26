@@ -41,8 +41,8 @@ spec:
         - name: keel
           port: 8080
 ---
-# AI apps' route: the MCP address and its resource's metadata, nothing
-# else. Named with no host, it shares the players' host, as on the local
+# AI apps' route: the MCP address, its server's card and its resource's
+# metadata, nothing else. Named with no host, it shares the players' host, as on the local
 # cluster, where these are the only paths that do not reach the game's
 # listener (an exact path and a longer prefix win over the players' /);
 # production gives it a host of its own, agents., where any other path
@@ -60,6 +60,9 @@ spec:
         - path:
             type: Exact
             value: /mcp
+        - path:
+            type: Exact
+            value: /mcp/server-card
         - path:
             type: PathPrefix
             value: /.well-known/oauth-protected-resource
