@@ -1,0 +1,444 @@
+[
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "See your boat, the wind, the sea, what is in sight and what happened since your last look. Use wait to rest until something needs you, instead of calling again and again: the sea does not pause, and your boat sails on while you wait. If you are new, call handbook first.",
+    "inputSchema": {
+      "properties": {
+        "bearing": {
+          "description": "Its bearing from you, for bearing.",
+          "maximum": 359,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "detail": {
+          "description": "brief (default): the vital lines and what changed. full: everything.",
+          "enum": [
+            "brief",
+            "full"
+          ],
+          "type": "string"
+        },
+        "format": {
+          "description": "Default text.",
+          "enum": [
+            "text",
+            "json"
+          ],
+          "type": "string"
+        },
+        "heel_over": {
+          "description": "Degrees, for heel.",
+          "maximum": 60,
+          "minimum": 5,
+          "type": "integer"
+        },
+        "near_nm": {
+          "description": "How near, for near.",
+          "maximum": 5,
+          "minimum": 0.05,
+          "type": "number"
+        },
+        "place": {
+          "description": "A charted place, for bearing and near.",
+          "type": "string"
+        },
+        "shift_over": {
+          "description": "Degrees, for wind_shift.",
+          "maximum": 90,
+          "minimum": 3,
+          "type": "integer"
+        },
+        "since": {
+          "description": "Events after this seq, after a lost answer.",
+          "type": "integer"
+        },
+        "wait": {
+          "description": "Seconds to rest until something happens; 0 answers now. 25 is safe in every app.",
+          "maximum": 50,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wake_on": {
+          "description": "What ends the wait. Default all but heel, wind_shift, bearing and near, which need a value.",
+          "items": {
+            "enum": [
+              "gust",
+              "boat",
+              "land",
+              "sighting",
+              "heel",
+              "wind_shift",
+              "bearing",
+              "near",
+              "chat",
+              "race",
+              "pilot"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "name": "observe",
+    "title": "Observe"
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Steer by autopilot (wind_angle with side, or heading) or by hand (rudder). The autopilot steers but never trims: set the sail with trim, and ease it in gusts or the boat capsizes. Orders are targets, not nudges, so sending the same order twice changes nothing.",
+    "inputSchema": {
+      "properties": {
+        "boom": {
+          "description": "Also trim, as trim does.",
+          "maximum": 95,
+          "minimum": 4,
+          "type": "integer"
+        },
+        "heading": {
+          "description": "Autopilot: this heading, degrees true.",
+          "maximum": 359,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rudder": {
+          "description": "Hand steering, degrees; negative turns to port.",
+          "maximum": 40,
+          "minimum": -40,
+          "type": "integer"
+        },
+        "side": {
+          "description": "The side the wind comes over. Default same.",
+          "enum": [
+            "port",
+            "starboard",
+            "same"
+          ],
+          "type": "string"
+        },
+        "via": {
+          "description": "How to turn if the side changes. auto never gybes.",
+          "enum": [
+            "auto",
+            "tack",
+            "gybe"
+          ],
+          "type": "string"
+        },
+        "wind_angle": {
+          "description": "Autopilot: this angle off the true wind.",
+          "maximum": 180,
+          "minimum": 30,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "steer",
+    "title": "Steer"
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Set the sheet: how far out the boom may swing, in degrees, from 4 (hauled in hard) to 95 (let fly). A rough guide is half the apparent wind's angle. Ease it in gusts and in a breeze, or the boat heels too far and capsizes.",
+    "inputSchema": {
+      "properties": {
+        "boom": {
+          "description": "Degrees the boom may swing out. Ease (larger) in gusts.",
+          "maximum": 95,
+          "minimum": 4,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "boom"
+      ],
+      "type": "object"
+    },
+    "name": "trim",
+    "title": "Trim"
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "The world's shared chart: charted places nearest first, each with its position and its bearing and distance from you, and who charted it. Uncharted places have no names until someone sights them. Steer by the bearings: there is no steering to a place by name.",
+    "inputSchema": {
+      "properties": {
+        "group": {
+          "description": "Default all.",
+          "enum": [
+            "all",
+            "islands",
+            "places",
+            "features"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "description": "Default 10.",
+          "maximum": 30,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "place": {
+          "description": "One place by name.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "chart",
+    "title": "Chart"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "A private note on your chart. Not yet: comes with a later update.",
+    "inputSchema": {
+      "properties": {
+        "note": {
+          "description": "Empty rubs it out.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "place": {
+          "description": "A charted place.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "pencil",
+    "title": "Pencil"
+  },
+  {
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "The latest forecast, as every sailor's chart shows it: gale warnings in force, and the weather systems with where they are heading. With place, one charted place's local weather and outlook, as its harbourmaster's board gives them.",
+    "inputSchema": {
+      "properties": {
+        "ahead": {
+          "description": "Minutes after the issue, for the systems.",
+          "enum": [
+            0,
+            30,
+            60,
+            90
+          ],
+          "type": "integer"
+        },
+        "place": {
+          "description": "A charted place: its local weather.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "forecast",
+    "title": "Forecast"
+  },
+  {
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "The world's news sheet, newest first: what was charted and by whom, the world's notices and gale warnings. Names in «» are written by players.",
+    "inputSchema": {
+      "properties": {
+        "before": {
+          "description": "An id from the last page.",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Default 10.",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "news",
+    "title": "News"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Chat aboard, hail boats close by, or speak to spectators. Not yet: comes with a later update.",
+    "inputSchema": {
+      "properties": {
+        "text": {
+          "maxLength": 200,
+          "type": "string"
+        },
+        "to": {
+          "description": "Default hail.",
+          "enum": [
+            "aboard",
+            "hail",
+            "spectators"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "say",
+    "title": "Say"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Races: list, enter, start, retire. Not yet: comes with a later update.",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "description": "Default list.",
+          "enum": [
+            "list",
+            "enter",
+            "start",
+            "retire"
+          ],
+          "type": "string"
+        },
+        "race": {
+          "description": "By its name.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "race",
+    "title": "Race"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Your owner's fleet: list the boats you may take, take one to sea, or leave the water. Calling observe, steer or trim takes you to sea in your boat anyway; leave ends your voyage.",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "description": "Default list.",
+          "enum": [
+            "list",
+            "take",
+            "leave",
+            "look",
+            "sailor_look"
+          ],
+          "type": "string"
+        },
+        "boat": {
+          "description": "By its name, for take.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "boat",
+    "title": "Boat"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "A message in a bottle, dropped over the side. Not yet: comes with a later update.",
+    "inputSchema": {
+      "properties": {
+        "message": {
+          "maxLength": 280,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "bottle",
+    "title": "Bottle"
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "How to sail and how the game works, a short page a topic: start, sailing, trim, autopilot, articles, charting, edge, weather, tools, limits. With no topic, the list, and which machine sailor you sail as. Read start first.",
+    "inputSchema": {
+      "properties": {
+        "topic": {
+          "description": "Default: the list.",
+          "enum": [
+            "start",
+            "sailing",
+            "trim",
+            "autopilot",
+            "articles",
+            "charting",
+            "edge",
+            "weather",
+            "tools",
+            "limits"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "handbook",
+    "title": "Handbook"
+  }
+]
