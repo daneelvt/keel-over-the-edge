@@ -10,6 +10,7 @@
 //
 //	go run ./tools/loadbot -n 200 -url https://localhost:5173 [-lag 200ms,2%] [-for 5m] [-ramp 30s]
 //	go run ./tools/loadbot -apps 200 -refreshes 1000 -url https://localhost:5173 [-mcp …]
+//	go run ./tools/loadbot -agents 50 -for 5m -url https://macbook.local [-mcp …]
 //
 // Its sailors are made as the start screen makes them, with a passkey a
 // software authenticator holds, and named "Loadbot 1" and on; their
@@ -52,18 +53,23 @@ func main() {
 	ca := flag.String("ca", "", "a root certificate to trust (PEM); mkcert's local root if empty")
 	apps := flag.Int("apps", 0, "instead of sailing, approve an AI app this many times, then refresh its tokens -refreshes times, calling the MCP address -mcp")
 	refreshes := flag.Int("refreshes", 1000, "with -apps, how many refreshes")
-	mcp := flag.String("mcp", "", "with -apps, the MCP address: the game's origin's /mcp if empty")
+	mcp := flag.String("mcp", "", "with -apps or -agents, the MCP address: the game's origin's /mcp if empty")
+	agents := flag.Int("agents", 0, "instead of sailing on phones, sail this many machine sailors over the MCP address for -for, each with a connection token")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if *apps > 0 {
+	if *apps > 0 || *agents > 0 {
 		hc, err := httpClient(ctx, *base, *ca)
 		if err == nil {
 			if *mcp == "" {
 				*mcp = strings.TrimSuffix(*base, "/") + "/mcp"
 			}
-			err = runApps(ctx, hc, *base, *mcp, *apps, *refreshes)
+			if *agents > 0 {
+				err = runAgents(ctx, hc, *base, *mcp, *agents, *sail)
+			} else {
+				err = runApps(ctx, hc, *base, *mcp, *apps, *refreshes)
+			}
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "loadbot:", err)
