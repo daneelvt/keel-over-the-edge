@@ -61,7 +61,7 @@ func TestDoor(t *testing.T) {
 			t.Errorf("%s: %d %q %q", name, code, challenge, body)
 		}
 	}
-	if code, _, body := h.mcpCall(access); code != 200 || !strings.Contains(body, "You sail as Iron Mary, Ann Bonny's machine sailor") {
+	if code, _, body := h.mcpCall(access); code != 200 || !strings.Contains(body, "You sail as «Iron Mary», «Ann Bonny»'s machine sailor") {
 		t.Fatalf("accepted: %d %s", code, body)
 	}
 

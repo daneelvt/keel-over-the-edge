@@ -439,7 +439,7 @@ func (c *checker) machineSailor(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if status != http.StatusOK || !strings.Contains(said, "You sail as "+machine+", "+name+"'s machine sailor") {
+	if status != http.StatusOK || !strings.Contains(said, "You sail as «"+machine+"», «"+name+"»'s machine sailor") {
 		return fmt.Errorf("handbook: %d %s", status, said)
 	}
 	if err := smoke.DeleteMachine(ctx, c.hc, jar, key, c.base, m.Machines[0].ID, machine); err != nil {

@@ -157,7 +157,7 @@ func TestTheSDKsClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the app by its document: %v\n%s", err, h.logs)
 	}
-	if !strings.Contains(text, "You sail as Iron Mary, Ann Bonny's machine sailor") {
+	if !strings.Contains(text, "You sail as «Iron Mary», «Ann Bonny»'s machine sailor") {
 		t.Fatalf("handbook: %q", text)
 	}
 	if h.fetchedCount("/client.json") != 1 {

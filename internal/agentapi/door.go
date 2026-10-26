@@ -54,7 +54,10 @@ type Config struct {
 	// the request: Usage records it.
 	Used func(grant [16]byte)
 	// Build names the MCP server's version.
-	Build   string
+	Build string
+	// Core sails the machine sailors' boats; nil for one with no world,
+	// whose tools answer that the sea is closed.
+	Core    *Core
 	Log     *slog.Logger
 	Metrics *obs.Metrics
 }
