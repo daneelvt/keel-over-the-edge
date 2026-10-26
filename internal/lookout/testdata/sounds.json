@@ -1,0 +1,1501 @@
+{
+  "comment": "Written by go test ./internal/lookout -run SoundsFile -update: an hour of the world's day, s; listeners and the world about them, m, s, rad and µs, the interval of world time heard, s, and the sounds the phone plays: the held ones now, then those heard in the interval in the order the phone finds them, each with its true bearing in degrees and to 5°, its distance, m, when it is heard, s, its delay and length, s, and its level.",
+  "secondsPerHour": 295,
+  "cases": [
+    {
+      "name": "the open sea",
+      "from": 1000,
+      "to": 1060,
+      "seconds": 1060,
+      "east": 0,
+      "north": 0,
+      "day": true,
+      "seaHeight": 1,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": []
+    },
+    {
+      "name": "near the lip",
+      "from": 1000,
+      "to": 1001,
+      "seconds": 1001,
+      "east": 1000,
+      "north": -7000,
+      "day": false,
+      "seaHeight": 2,
+      "lip": 400,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "falls",
+          "degrees": 171.86989764584402,
+          "bearing": 170,
+          "distance": 400,
+          "at": 1001,
+          "level": 0.09486832980505137,
+          "seed": 0
+        }
+      ]
+    },
+    {
+      "name": "within the falls' last tenth",
+      "from": 1000,
+      "to": 1001,
+      "seconds": 1001,
+      "east": -7000,
+      "north": 1000,
+      "day": false,
+      "seaHeight": 0,
+      "lip": 950,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "falls",
+          "degrees": 278.13010235415595,
+          "bearing": 280,
+          "distance": 950,
+          "at": 1001,
+          "level": 0.03077935056255462,
+          "seed": 0
+        }
+      ]
+    },
+    {
+      "name": "on the lip",
+      "from": 1000,
+      "to": 1001,
+      "seconds": 1001,
+      "east": 0,
+      "north": 7100,
+      "day": false,
+      "seaHeight": 0,
+      "lip": -2,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "falls",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 0,
+          "at": 1001,
+          "level": 0.6,
+          "seed": 0
+        }
+      ]
+    },
+    {
+      "name": "going over",
+      "from": 1000,
+      "to": 1001,
+      "seconds": 1001,
+      "east": 7100,
+      "north": 10,
+      "day": false,
+      "seaHeight": 0,
+      "lip": -30,
+      "falling": true,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "falls",
+          "degrees": 89.91930177235689,
+          "bearing": 90,
+          "distance": 0,
+          "at": 1001,
+          "level": 0.8,
+          "seed": 0
+        }
+      ]
+    },
+    {
+      "name": "the world's end near",
+      "from": 1000,
+      "to": 1001,
+      "seconds": 1001,
+      "east": 100,
+      "north": 100,
+      "day": false,
+      "seaHeight": 0,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0.7407407407407408,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "falls",
+          "degrees": 45,
+          "bearing": 45,
+          "distance": 5000,
+          "at": 1001,
+          "level": 0.5925925925925927,
+          "seed": 0
+        }
+      ]
+    },
+    {
+      "name": "an island by day",
+      "from": 123496.5,
+      "to": 123516.5,
+      "seconds": 123516.5,
+      "east": 2300.5,
+      "north": -1700.25,
+      "day": true,
+      "seaHeight": 1.2,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": [
+        {
+          "site": "waterfall",
+          "east": 2420.5,
+          "north": -1700.25,
+          "drop": 20,
+          "seed": 0,
+          "call": ""
+        },
+        {
+          "site": "waterfall",
+          "east": 2300.5,
+          "north": -1650.25,
+          "drop": 5,
+          "seed": 0,
+          "call": ""
+        },
+        {
+          "site": "waterfall",
+          "east": 1900.5,
+          "north": -1700.25,
+          "drop": 40,
+          "seed": 0,
+          "call": ""
+        },
+        {
+          "site": "blowhole",
+          "east": 2240.5,
+          "north": -1755.25,
+          "drop": 0,
+          "seed": 3,
+          "call": ""
+        },
+        {
+          "site": "blowhole",
+          "east": 2550.5,
+          "north": -1450.25,
+          "drop": 0,
+          "seed": 200,
+          "call": ""
+        },
+        {
+          "site": "colony",
+          "east": 2200.5,
+          "north": -1590.25,
+          "drop": 0,
+          "seed": 7,
+          "call": "harsh"
+        },
+        {
+          "site": "colony",
+          "east": 2500.5,
+          "north": -1850.25,
+          "drop": 0,
+          "seed": 41,
+          "call": "whistle"
+        },
+        {
+          "site": "colony",
+          "east": 2300.5,
+          "north": -2010.25,
+          "drop": 0,
+          "seed": 9,
+          "call": "rattle"
+        },
+        {
+          "site": "arch",
+          "east": 2310.5,
+          "north": -1690.25,
+          "drop": 0,
+          "seed": 0,
+          "call": ""
+        }
+      ],
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "roar",
+          "degrees": 90,
+          "bearing": 90,
+          "distance": 120,
+          "at": 123516.5,
+          "level": 0.05625,
+          "seed": 0
+        },
+        {
+          "kind": "boom",
+          "degrees": 227.48955292199915,
+          "bearing": 225,
+          "distance": 81.39410298049853,
+          "at": 123497.16597069836,
+          "level": 0.08845849682408896,
+          "seed": 21433
+        },
+        {
+          "kind": "boom",
+          "degrees": 227.48955292199915,
+          "bearing": 225,
+          "distance": 81.39410298049853,
+          "at": 123502.92801200332,
+          "level": 0.08845849682408896,
+          "seed": 21434
+        },
+        {
+          "kind": "boom",
+          "degrees": 227.48955292199915,
+          "bearing": 225,
+          "distance": 81.39410298049853,
+          "at": 123508.69005330828,
+          "level": 0.08845849682408896,
+          "seed": 21435
+        },
+        {
+          "kind": "boom",
+          "degrees": 227.48955292199915,
+          "bearing": 225,
+          "distance": 81.39410298049853,
+          "at": 123514.45209461323,
+          "level": 0.08845849682408896,
+          "seed": 21436
+        },
+        {
+          "kind": "call",
+          "call": "harsh",
+          "degrees": 317.7263109939063,
+          "bearing": 320,
+          "distance": 148.66068747318505,
+          "at": 123498.13771209477,
+          "level": 0.029597602935837748,
+          "seed": 37049
+        },
+        {
+          "kind": "call",
+          "call": "harsh",
+          "degrees": 317.7263109939063,
+          "bearing": 320,
+          "distance": 148.66068747318505,
+          "at": 123501.38833320716,
+          "level": 0.029597602935837748,
+          "seed": 37050
+        },
+        {
+          "kind": "call",
+          "call": "harsh",
+          "degrees": 317.7263109939063,
+          "bearing": 320,
+          "distance": 148.66068747318505,
+          "at": 123507.22365822131,
+          "level": 0.029597602935837748,
+          "seed": 37052
+        },
+        {
+          "kind": "call",
+          "call": "harsh",
+          "degrees": 317.7263109939063,
+          "bearing": 320,
+          "distance": 148.66068747318505,
+          "at": 123514.44581872612,
+          "level": 0.029597602935837748,
+          "seed": 37054
+        },
+        {
+          "kind": "call",
+          "call": "whistle",
+          "degrees": 126.86989764584402,
+          "bearing": 125,
+          "distance": 250,
+          "at": 123497.89549558942,
+          "level": 0.0176,
+          "seed": 37049
+        },
+        {
+          "kind": "call",
+          "call": "whistle",
+          "degrees": 126.86989764584402,
+          "bearing": 125,
+          "distance": 250,
+          "at": 123503.769747125,
+          "level": 0.0176,
+          "seed": 37051
+        },
+        {
+          "kind": "call",
+          "call": "whistle",
+          "degrees": 126.86989764584402,
+          "bearing": 125,
+          "distance": 250,
+          "at": 123508.09033102429,
+          "level": 0.0176,
+          "seed": 37052
+        },
+        {
+          "kind": "call",
+          "call": "whistle",
+          "degrees": 126.86989764584402,
+          "bearing": 125,
+          "distance": 250,
+          "at": 123513.69420744873,
+          "level": 0.0176,
+          "seed": 37054
+        }
+      ]
+    },
+    {
+      "name": "the island by night, the sea high",
+      "from": 50040,
+      "to": 50060,
+      "seconds": 50060,
+      "east": 2300.5,
+      "north": -1700.25,
+      "day": false,
+      "seaHeight": 3.5,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": [
+        {
+          "site": "waterfall",
+          "east": 2420.5,
+          "north": -1700.25,
+          "drop": 20,
+          "seed": 0,
+          "call": ""
+        },
+        {
+          "site": "waterfall",
+          "east": 2300.5,
+          "north": -1650.25,
+          "drop": 5,
+          "seed": 0,
+          "call": ""
+        },
+        {
+          "site": "waterfall",
+          "east": 1900.5,
+          "north": -1700.25,
+          "drop": 40,
+          "seed": 0,
+          "call": ""
+        },
+        {
+          "site": "blowhole",
+          "east": 2240.5,
+          "north": -1755.25,
+          "drop": 0,
+          "seed": 3,
+          "call": ""
+        },
+        {
+          "site": "blowhole",
+          "east": 2550.5,
+          "north": -1450.25,
+          "drop": 0,
+          "seed": 200,
+          "call": ""
+        },
+        {
+          "site": "colony",
+          "east": 2200.5,
+          "north": -1590.25,
+          "drop": 0,
+          "seed": 7,
+          "call": "harsh"
+        },
+        {
+          "site": "colony",
+          "east": 2500.5,
+          "north": -1850.25,
+          "drop": 0,
+          "seed": 41,
+          "call": "whistle"
+        },
+        {
+          "site": "colony",
+          "east": 2300.5,
+          "north": -2010.25,
+          "drop": 0,
+          "seed": 9,
+          "call": "rattle"
+        },
+        {
+          "site": "arch",
+          "east": 2310.5,
+          "north": -1690.25,
+          "drop": 0,
+          "seed": 0,
+          "call": ""
+        }
+      ],
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "roar",
+          "degrees": 90,
+          "bearing": 90,
+          "distance": 120,
+          "at": 50060,
+          "level": 0.05625,
+          "seed": 0
+        },
+        {
+          "kind": "boom",
+          "degrees": 227.48955292199915,
+          "bearing": 225,
+          "distance": 81.39410298049853,
+          "at": 50047.94645635667,
+          "level": 0.1474308280401483,
+          "seed": 5086
+        },
+        {
+          "kind": "boom",
+          "degrees": 227.48955292199915,
+          "bearing": 225,
+          "distance": 81.39410298049853,
+          "at": 50057.78701528389,
+          "level": 0.1474308280401483,
+          "seed": 5087
+        }
+      ]
+    },
+    {
+      "name": "the island in a calm",
+      "from": 822,
+      "to": 837,
+      "seconds": 837,
+      "east": 2320.5,
+      "north": -1720.25,
+      "day": true,
+      "seaHeight": 0,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": [
+        {
+          "site": "waterfall",
+          "east": 2420.5,
+          "north": -1700.25,
+          "drop": 20,
+          "seed": 0,
+          "call": ""
+        },
+        {
+          "site": "waterfall",
+          "east": 2300.5,
+          "north": -1650.25,
+          "drop": 5,
+          "seed": 0,
+          "call": ""
+        },
+        {
+          "site": "waterfall",
+          "east": 1900.5,
+          "north": -1700.25,
+          "drop": 40,
+          "seed": 0,
+          "call": ""
+        },
+        {
+          "site": "blowhole",
+          "east": 2240.5,
+          "north": -1755.25,
+          "drop": 0,
+          "seed": 3,
+          "call": ""
+        },
+        {
+          "site": "blowhole",
+          "east": 2550.5,
+          "north": -1450.25,
+          "drop": 0,
+          "seed": 200,
+          "call": ""
+        },
+        {
+          "site": "colony",
+          "east": 2200.5,
+          "north": -1590.25,
+          "drop": 0,
+          "seed": 7,
+          "call": "harsh"
+        },
+        {
+          "site": "colony",
+          "east": 2500.5,
+          "north": -1850.25,
+          "drop": 0,
+          "seed": 41,
+          "call": "whistle"
+        },
+        {
+          "site": "colony",
+          "east": 2300.5,
+          "north": -2010.25,
+          "drop": 0,
+          "seed": 9,
+          "call": "rattle"
+        },
+        {
+          "site": "arch",
+          "east": 2310.5,
+          "north": -1690.25,
+          "drop": 0,
+          "seed": 0,
+          "call": ""
+        }
+      ],
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "roar",
+          "degrees": 78.69006752597979,
+          "bearing": 80,
+          "distance": 101.9803902718557,
+          "at": 837,
+          "level": 0.06618919560913712,
+          "seed": 0
+        },
+        {
+          "kind": "boom",
+          "degrees": 246.3706222693432,
+          "bearing": 245,
+          "distance": 87.32124598286491,
+          "at": 824.6536027670008,
+          "level": 0.020613540035299253,
+          "seed": 275
+        },
+        {
+          "kind": "boom",
+          "degrees": 246.3706222693432,
+          "bearing": 245,
+          "distance": 87.32124598286491,
+          "at": 827.6536027670008,
+          "level": 0.020613540035299253,
+          "seed": 276
+        },
+        {
+          "kind": "boom",
+          "degrees": 246.3706222693432,
+          "bearing": 245,
+          "distance": 87.32124598286491,
+          "at": 830.6536027670008,
+          "level": 0.020613540035299253,
+          "seed": 277
+        },
+        {
+          "kind": "boom",
+          "degrees": 246.3706222693432,
+          "bearing": 245,
+          "distance": 87.32124598286491,
+          "at": 833.6536027670008,
+          "level": 0.020613540035299253,
+          "seed": 278
+        },
+        {
+          "kind": "boom",
+          "degrees": 246.3706222693432,
+          "bearing": 245,
+          "distance": 87.32124598286491,
+          "at": 836.6536027670008,
+          "level": 0.020613540035299253,
+          "seed": 279
+        },
+        {
+          "kind": "call",
+          "call": "harsh",
+          "degrees": 317.29061004263855,
+          "bearing": 315,
+          "distance": 176.91806012954132,
+          "at": 826.8619542770709,
+          "level": 0.024870270433545748,
+          "seed": 248
+        },
+        {
+          "kind": "call",
+          "call": "harsh",
+          "degrees": 317.29061004263855,
+          "bearing": 315,
+          "distance": 176.91806012954132,
+          "at": 838.0774117029016,
+          "level": 0.024870270433545748,
+          "seed": 251
+        },
+        {
+          "kind": "call",
+          "call": "whistle",
+          "degrees": 125.8376529542783,
+          "bearing": 125,
+          "distance": 222.03603311174518,
+          "at": 824.9050065002333,
+          "level": 0.019816603360885976,
+          "seed": 247
+        },
+        {
+          "kind": "call",
+          "call": "whistle",
+          "degrees": 125.8376529542783,
+          "bearing": 125,
+          "distance": 222.03603311174518,
+          "at": 828.1601886005411,
+          "level": 0.019816603360885976,
+          "seed": 248
+        },
+        {
+          "kind": "call",
+          "call": "whistle",
+          "degrees": 125.8376529542783,
+          "bearing": 125,
+          "distance": 222.03603311174518,
+          "at": 831.5019623338958,
+          "level": 0.019816603360885976,
+          "seed": 249
+        },
+        {
+          "kind": "call",
+          "call": "whistle",
+          "degrees": 125.8376529542783,
+          "bearing": 125,
+          "distance": 222.03603311174518,
+          "at": 833.361293687085,
+          "level": 0.019816603360885976,
+          "seed": 250
+        },
+        {
+          "kind": "call",
+          "call": "whistle",
+          "degrees": 125.8376529542783,
+          "bearing": 125,
+          "distance": 222.03603311174518,
+          "at": 838.2609362943429,
+          "level": 0.019816603360885976,
+          "seed": 251
+        },
+        {
+          "kind": "call",
+          "call": "rattle",
+          "degrees": 183.94518622903755,
+          "bearing": 185,
+          "distance": 290.68883707497264,
+          "at": 827.5513590092427,
+          "level": 0.015136460155383192,
+          "seed": 248
+        },
+        {
+          "kind": "call",
+          "call": "rattle",
+          "degrees": 183.94518622903755,
+          "bearing": 185,
+          "distance": 290.68883707497264,
+          "at": 837.0752998550355,
+          "level": 0.015136460155383192,
+          "seed": 251
+        }
+      ]
+    },
+    {
+      "name": "in port at a half hour by day",
+      "from": 90000,
+      "to": 90010,
+      "seconds": 90010,
+      "east": 50,
+      "north": 60,
+      "day": true,
+      "seaHeight": 0.8,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": true,
+        "town": true,
+        "nearTown": 120,
+        "bell": {
+          "east": 140,
+          "north": 60
+        },
+        "yard": {
+          "east": -150,
+          "north": 60
+        },
+        "quay": {
+          "east": 50,
+          "north": 80
+        },
+        "hour": 14.50677966101695
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "lapping",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 20,
+          "at": 90010,
+          "level": 0.027499999999764577,
+          "seed": 0
+        },
+        {
+          "kind": "bell",
+          "degrees": 90,
+          "bearing": 90,
+          "distance": 90,
+          "at": 90010,
+          "level": 0.16666666666666666,
+          "seed": 29
+        },
+        {
+          "kind": "bell",
+          "degrees": 90,
+          "bearing": 90,
+          "distance": 90,
+          "at": 90010.55,
+          "level": 0.16666666666666666,
+          "seed": 29
+        },
+        {
+          "kind": "bell",
+          "degrees": 90,
+          "bearing": 90,
+          "distance": 90,
+          "at": 90012.05,
+          "level": 0.16666666666666666,
+          "seed": 29
+        },
+        {
+          "kind": "bell",
+          "degrees": 90,
+          "bearing": 90,
+          "distance": 90,
+          "at": 90012.6,
+          "level": 0.16666666666666666,
+          "seed": 29
+        },
+        {
+          "kind": "bell",
+          "degrees": 90,
+          "bearing": 90,
+          "distance": 90,
+          "at": 90014.1,
+          "level": 0.16666666666666666,
+          "seed": 29
+        },
+        {
+          "kind": "mallet",
+          "degrees": 270,
+          "bearing": 270,
+          "distance": 200,
+          "at": 90004.2,
+          "level": 0.02625,
+          "seed": 138468
+        },
+        {
+          "kind": "mallet",
+          "degrees": 270,
+          "bearing": 270,
+          "distance": 200,
+          "at": 90004.85,
+          "level": 0.02625,
+          "seed": 138469
+        },
+        {
+          "kind": "mallet",
+          "degrees": 270,
+          "bearing": 270,
+          "distance": 200,
+          "at": 90005.5,
+          "level": 0.02625,
+          "seed": 138470
+        },
+        {
+          "kind": "mallet",
+          "degrees": 270,
+          "bearing": 270,
+          "distance": 200,
+          "at": 90006.15000000001,
+          "level": 0.02625,
+          "seed": 138471
+        },
+        {
+          "kind": "mallet",
+          "degrees": 270,
+          "bearing": 270,
+          "distance": 200,
+          "at": 90006.8,
+          "level": 0.02625,
+          "seed": 138472
+        },
+        {
+          "kind": "mallet",
+          "degrees": 270,
+          "bearing": 270,
+          "distance": 200,
+          "at": 90007.45,
+          "level": 0.02625,
+          "seed": 138473
+        }
+      ]
+    },
+    {
+      "name": "near a town at a watch's end by night",
+      "from": 4000,
+      "to": 4005,
+      "seconds": 4005,
+      "east": 0,
+      "north": 0,
+      "day": false,
+      "seaHeight": 0,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": true,
+        "nearTown": 250,
+        "bell": {
+          "east": 0,
+          "north": 280
+        },
+        "yard": null,
+        "quay": {
+          "east": 40,
+          "north": 0
+        },
+        "hour": 20.003389830508475
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "lapping",
+          "degrees": 90,
+          "bearing": 90,
+          "distance": 40,
+          "at": 4005,
+          "level": 0.0075,
+          "seed": 0
+        },
+        {
+          "kind": "bell",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 280,
+          "at": 4005,
+          "level": 0.05357142857142857,
+          "seed": 40
+        },
+        {
+          "kind": "bell",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 280,
+          "at": 4005.55,
+          "level": 0.05357142857142857,
+          "seed": 40
+        },
+        {
+          "kind": "bell",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 280,
+          "at": 4007.05,
+          "level": 0.05357142857142857,
+          "seed": 40
+        },
+        {
+          "kind": "bell",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 280,
+          "at": 4007.6,
+          "level": 0.05357142857142857,
+          "seed": 40
+        },
+        {
+          "kind": "bell",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 280,
+          "at": 4009.1,
+          "level": 0.05357142857142857,
+          "seed": 40
+        },
+        {
+          "kind": "bell",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 280,
+          "at": 4009.65,
+          "level": 0.05357142857142857,
+          "seed": 40
+        },
+        {
+          "kind": "bell",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 280,
+          "at": 4011.15,
+          "level": 0.05357142857142857,
+          "seed": 40
+        },
+        {
+          "kind": "bell",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 280,
+          "at": 4011.7,
+          "level": 0.05357142857142857,
+          "seed": 40
+        }
+      ]
+    },
+    {
+      "name": "near a town between the bells",
+      "from": 4000,
+      "to": 4030,
+      "seconds": 4030,
+      "east": 0,
+      "north": 0,
+      "day": true,
+      "seaHeight": 2,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": true,
+        "nearTown": 290,
+        "bell": {
+          "east": 0,
+          "north": 280
+        },
+        "yard": {
+          "east": 310,
+          "north": 0
+        },
+        "quay": {
+          "east": 20,
+          "north": 30
+        },
+        "hour": 9.2
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "lapping",
+          "degrees": 33.690067525979785,
+          "bearing": 35,
+          "distance": 36.05551275463989,
+          "at": 4030,
+          "level": 0.024961508830141203,
+          "seed": 0
+        },
+        {
+          "kind": "gull",
+          "degrees": 33.86456271313364,
+          "bearing": 35,
+          "distance": 108.49662294058362,
+          "at": 4010,
+          "level": 0.03318075625239949,
+          "seed": 401
+        }
+      ]
+    },
+    {
+      "name": "past a town",
+      "from": 4000,
+      "to": 4030,
+      "seconds": 4030,
+      "east": 0,
+      "north": 0,
+      "day": true,
+      "seaHeight": 0,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": true,
+        "nearTown": 301,
+        "bell": {
+          "east": 0,
+          "north": 280
+        },
+        "yard": {
+          "east": 30,
+          "north": 0
+        },
+        "quay": {
+          "east": 20,
+          "north": 30
+        },
+        "hour": 12.003389830508475
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "sounds": []
+    },
+    {
+      "name": "fog signals in fog",
+      "from": 600000,
+      "to": 600060,
+      "seconds": 600060,
+      "east": 0,
+      "north": 0,
+      "day": false,
+      "seaHeight": 0,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": true,
+      "lights": [
+        {
+          "number": 4,
+          "east": 900,
+          "north": 300,
+          "phase": 1234567,
+          "signal": 0,
+          "visibility": 500
+        },
+        {
+          "number": 9,
+          "east": -1000,
+          "north": -1000,
+          "phase": 98765432,
+          "signal": 1,
+          "visibility": 1851
+        },
+        {
+          "number": 12,
+          "east": 0,
+          "north": -1500,
+          "phase": 0,
+          "signal": 11,
+          "visibility": 1852
+        },
+        {
+          "number": 15,
+          "east": 1900,
+          "north": 0,
+          "phase": 5,
+          "signal": 21,
+          "visibility": 100
+        },
+        {
+          "number": 20,
+          "east": 30,
+          "north": 40,
+          "phase": 77,
+          "signal": -1,
+          "visibility": 100
+        }
+      ],
+      "flashes": null,
+      "sounds": [
+        {
+          "kind": "fog",
+          "device": "twotone",
+          "light": 4,
+          "degrees": 71.56505117707799,
+          "bearing": 70,
+          "distance": 948.6832980505138,
+          "at": 600001.5312735192,
+          "delay": 2.765840519097708,
+          "length": 3,
+          "level": 0.018973665961010275,
+          "seed": 0
+        },
+        {
+          "kind": "fog",
+          "device": "twotone",
+          "light": 4,
+          "degrees": 71.56505117707799,
+          "bearing": 70,
+          "distance": 948.6832980505138,
+          "at": 600007.5312735192,
+          "delay": 2.765840519097708,
+          "length": 3,
+          "level": 0.018973665961010275,
+          "seed": 0
+        },
+        {
+          "kind": "fog",
+          "device": "diaphone",
+          "light": 9,
+          "degrees": 225,
+          "bearing": 225,
+          "distance": 1414.213562373095,
+          "at": 600005.3576396104,
+          "delay": 4.1230716104171865,
+          "length": 3,
+          "level": 0.011667261889578034,
+          "seed": 0
+        },
+        {
+          "kind": "fog",
+          "device": "diaphone",
+          "light": 9,
+          "degrees": 225,
+          "bearing": 225,
+          "distance": 1414.213562373095,
+          "at": 600025.3576396104,
+          "delay": 4.1230716104171865,
+          "length": 3,
+          "level": 0.011667261889578034,
+          "seed": 0
+        },
+        {
+          "kind": "fog",
+          "device": "diaphone",
+          "light": 9,
+          "degrees": 225,
+          "bearing": 225,
+          "distance": 1414.213562373095,
+          "at": 600045.3576396104,
+          "delay": 4.1230716104171865,
+          "length": 3,
+          "level": 0.011667261889578034,
+          "seed": 0
+        }
+      ]
+    },
+    {
+      "name": "fog signals in a world with no weather",
+      "from": 600000,
+      "to": 600060,
+      "seconds": 600060,
+      "east": 0,
+      "north": 0,
+      "day": false,
+      "seaHeight": 0,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": [
+        {
+          "number": 4,
+          "east": 900,
+          "north": 300,
+          "phase": 1234567,
+          "signal": 0,
+          "visibility": 500
+        },
+        {
+          "number": 9,
+          "east": -1000,
+          "north": -1000,
+          "phase": 98765432,
+          "signal": 1,
+          "visibility": 1851
+        },
+        {
+          "number": 12,
+          "east": 0,
+          "north": -1500,
+          "phase": 0,
+          "signal": 11,
+          "visibility": 1852
+        },
+        {
+          "number": 15,
+          "east": 1900,
+          "north": 0,
+          "phase": 5,
+          "signal": 21,
+          "visibility": 100
+        },
+        {
+          "number": 20,
+          "east": 30,
+          "north": 40,
+          "phase": 77,
+          "signal": -1,
+          "visibility": 100
+        }
+      ],
+      "flashes": null,
+      "sounds": []
+    },
+    {
+      "name": "thunder",
+      "from": 200,
+      "to": 260,
+      "seconds": 260,
+      "east": 100,
+      "north": -200,
+      "day": false,
+      "seaHeight": 0,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": [
+        {
+          "tick": 6000,
+          "east": 100,
+          "north": 1800,
+          "sea": true,
+          "base": 600,
+          "seed": 7
+        },
+        {
+          "tick": 6300,
+          "east": 4100,
+          "north": -200,
+          "sea": false,
+          "base": 900,
+          "seed": 3141592653
+        },
+        {
+          "tick": 6600,
+          "east": 7100,
+          "north": -200,
+          "sea": false,
+          "base": 800,
+          "seed": 12
+        },
+        {
+          "tick": 7500,
+          "east": 400,
+          "north": 300,
+          "sea": true,
+          "base": 500,
+          "seed": 99
+        },
+        {
+          "tick": 7650,
+          "east": -800,
+          "north": -600,
+          "sea": false,
+          "base": 700,
+          "seed": 2718281828
+        },
+        {
+          "tick": 3000,
+          "east": 100,
+          "north": 300,
+          "sea": true,
+          "base": 600,
+          "seed": 1
+        },
+        {
+          "tick": 7790,
+          "east": 5000,
+          "north": 2000,
+          "sea": true,
+          "base": 600,
+          "seed": 5
+        }
+      ],
+      "sounds": [
+        {
+          "kind": "thunder",
+          "degrees": 0,
+          "bearing": 0,
+          "distance": 2000,
+          "at": 205.83090379008746,
+          "delay": 5.830903790087463,
+          "length": 0.256738489160671,
+          "level": 0.06999999999999999,
+          "seed": 7
+        },
+        {
+          "kind": "thunder",
+          "degrees": 64.75688577131224,
+          "bearing": 65,
+          "distance": 3728.2850412827747,
+          "at": 220.86963568887106,
+          "delay": 10.869635688871064,
+          "length": 4.456149443379648,
+          "level": 0.03755077695235201,
+          "seed": 3141592653
+        },
+        {
+          "kind": "thunder",
+          "degrees": 30.96375653207352,
+          "bearing": 30,
+          "distance": 583.09518948453,
+          "at": 251.69998597517355,
+          "delay": 1.6999859751735569,
+          "length": 0.5394151174995065,
+          "crack": true,
+          "level": 0.24009801919951237,
+          "seed": 99
+        },
+        {
+          "kind": "thunder",
+          "degrees": 159.93106637879467,
+          "bearing": 160,
+          "distance": 703.1873876580664,
+          "at": 257.05010900191854,
+          "delay": 2.050109001918561,
+          "length": 6.883955638468519,
+          "crack": true,
+          "level": 0.19909344572612947,
+          "seed": 2718281828
+        }
+      ]
+    }
+  ]
+}

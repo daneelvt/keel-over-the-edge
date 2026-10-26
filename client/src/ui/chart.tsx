@@ -12,14 +12,7 @@ import type { Chart } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
 import { type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
-import {
-  bearingText,
-  type ChartStore,
-  dayText,
-  distanceText,
-  edgeCaption,
-  whenText,
-} from '../chart/store';
+import { type ChartStore, chartList, dayText, edgeCaption, whenText } from '../chart/store';
 import type { BoatAt } from '../chart/view';
 import type { ChartEntry } from '../net/messages';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
@@ -268,38 +261,24 @@ export function ChartList({ sea }: { sea: ChartSea }) {
   void store.version.value;
   const b = sea.boat();
   const now = Date.now();
-  const groups: [string, ChartEntry[]][] = [
-    ['Islands', []],
-    ['Places', []],
-    ['Features', []],
-  ];
-  for (const e of store.entries) {
-    groups[e.subject === 'island' ? 0 : e.subject === 'place' ? 1 : 2]?.[1].push(e);
-  }
-  const d = (e: ChartEntry) => Math.hypot(e.east - b.east, e.north - b.north);
   return (
     <section class="chart-panel chart-list" aria-label="Everything charted">
       <h2>Charted: {store.size}</h2>
-      {groups.map(([title, es]) =>
-        es.length === 0 ? null : (
+      {chartList(store.entries, b.east, b.north).map(({ title, lines }) =>
+        lines.length === 0 ? null : (
           <div key={title}>
             <h3>{title}</h3>
             <ul>
-              {es
-                .sort((x, y) => d(x) - d(y))
-                .map((e) => (
-                  <li key={`${e.subject}:${e.number}`}>
-                    <button type="button" onClick={() => sea.chart.showAt(e)}>
-                      <span class="chart-list-name">{store.title(e)}</span>
-                      <span class="chart-list-kind">{store.kindName(e)}</span>
-                      <span class="chart-list-where">
-                        {bearingText(Math.atan2(e.east - b.east, e.north - b.north))}{' '}
-                        {distanceText(d(e))} · {formatPosition(e.east, e.north)}
-                      </span>
-                      <Credit e={e} now={now} />
-                    </button>
-                  </li>
-                ))}
+              {lines.map(({ entry: e, where }) => (
+                <li key={`${e.subject}:${e.number}`}>
+                  <button type="button" onClick={() => sea.chart.showAt(e)}>
+                    <span class="chart-list-name">{store.title(e)}</span>
+                    <span class="chart-list-kind">{store.kindName(e)}</span>
+                    <span class="chart-list-where">{where}</span>
+                    <Credit e={e} now={now} />
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
         ),

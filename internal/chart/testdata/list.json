@@ -1,0 +1,271 @@
+{
+  "comment": "Written by go test ./internal/chart -run ListFile -update: a boat m east and north of the centre, the entries charted, and the chart's list: its groups, each line's entry by its index, its distance, m, and where it is, as written.",
+  "cases": [
+    {
+      "name": "about a boat",
+      "east": 1200,
+      "north": -3400,
+      "entries": [
+        {
+          "subject": "island",
+          "east": 1200.0435778713738,
+          "north": -3399.501902650954
+        },
+        {
+          "subject": "place",
+          "east": 1208.0295672763064,
+          "north": -3391.0822620942713
+        },
+        {
+          "subject": "feature",
+          "east": 1381.7973543745074,
+          "north": -3364.6621740562637
+        },
+        {
+          "subject": "island",
+          "east": 1366.5465367792356,
+          "north": -3481.230173500016
+        },
+        {
+          "subject": "place",
+          "east": 1410.1976013794101,
+          "north": -3812.5360206992145
+        },
+        {
+          "subject": "feature",
+          "east": 1039.2017874804224,
+          "north": -4311.931979289305
+        },
+        {
+          "subject": "island",
+          "east": -154.467055398703,
+          "north": -4663.060962835748
+        },
+        {
+          "subject": "place",
+          "east": -1286.702547178831,
+          "north": -3661.3629695544405
+        },
+        {
+          "subject": "feature",
+          "east": -6514.505706319011,
+          "north": 1235.3426741904877
+        },
+        {
+          "subject": "island",
+          "east": -4044.492307822773,
+          "north": 9580.573963935023
+        },
+        {
+          "subject": "place",
+          "east": 1500,
+          "north": -3400
+        },
+        {
+          "subject": "place",
+          "east": 900,
+          "north": -3400
+        },
+        {
+          "subject": "feature",
+          "east": 1200,
+          "north": -3250
+        },
+        {
+          "subject": "island",
+          "east": 1172.0749588081546,
+          "north": 599.9025228215792
+        },
+        {
+          "subject": "feature",
+          "east": 1200.4188756178778,
+          "north": -3340.0014621576765
+        },
+        {
+          "subject": "place",
+          "east": 1193.8914251511385,
+          "north": -4099.97334614492
+        }
+      ],
+      "groups": [
+        {
+          "title": "Islands",
+          "lines": [
+            {
+              "entry": 0,
+              "distance": 0.5000000000001465,
+              "where": "005° 1 m · 70°32′N 160°33′"
+            },
+            {
+              "entry": 3,
+              "distance": 185.29999999999993,
+              "where": "116° 0.1 NM · 69°48′N 158°34′"
+            },
+            {
+              "entry": 6,
+              "distance": 1851.9999999999998,
+              "where": "227° 1.0 NM · 64°48′N 181°54′"
+            },
+            {
+              "entry": 13,
+              "distance": 4000,
+              "where": "000° 2.2 NM · 82°53′N 062°54′"
+            },
+            {
+              "entry": 9,
+              "distance": 14000.000000000002,
+              "where": "338° 7.6 NM · 33°51′N 337°07′"
+            }
+          ]
+        },
+        {
+          "title": "Places",
+          "lines": [
+            {
+              "entry": 1,
+              "distance": 12.000000000000012,
+              "where": "042° 12 m · 70°34′N 160°24′"
+            },
+            {
+              "entry": 10,
+              "distance": 300,
+              "where": "090° 0.2 NM · 69°56′N 156°12′"
+            },
+            {
+              "entry": 11,
+              "distance": 300,
+              "where": "270° 0.2 NM · 71°01′N 165°10′"
+            },
+            {
+              "entry": 4,
+              "distance": 463.00000000000017,
+              "where": "153° 0.3 NM · 68°03′N 159°42′"
+            },
+            {
+              "entry": 15,
+              "distance": 699.9999999999997,
+              "where": "180° 0.4 NM · 66°57′N 163°46′"
+            },
+            {
+              "entry": 7,
+              "distance": 2500.4000000000005,
+              "where": "264° 1.4 NM · 69°03′N 199°22′"
+            }
+          ]
+        },
+        {
+          "title": "Features",
+          "lines": [
+            {
+              "entry": 14,
+              "distance": 59.99999999999977,
+              "where": "000° 60 m · 70°50′N 160°14′"
+            },
+            {
+              "entry": 12,
+              "distance": 150,
+              "where": "000° 150 m · 71°18′N 159°44′"
+            },
+            {
+              "entry": 2,
+              "distance": 185.20000000000013,
+              "where": "079° 0.1 NM · 70°22′N 157°40′"
+            },
+            {
+              "entry": 5,
+              "distance": 926.0000000000001,
+              "where": "190° 0.5 NM · 66°03′N 166°27′"
+            },
+            {
+              "entry": 8,
+              "distance": 9000,
+              "where": "301° 4.9 NM · 54°12′N 280°44′"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "islands alone",
+      "east": 0,
+      "north": 0,
+      "entries": [
+        {
+          "subject": "island",
+          "east": 0,
+          "north": 0
+        },
+        {
+          "subject": "island",
+          "east": -5000,
+          "north": 5000
+        },
+        {
+          "subject": "island",
+          "east": 1000,
+          "north": 0
+        },
+        {
+          "subject": "island",
+          "east": 0,
+          "north": -1000
+        }
+      ],
+      "groups": [
+        {
+          "title": "Islands",
+          "lines": [
+            {
+              "entry": 0,
+              "distance": 0,
+              "where": "000° 0 m · 90°00′N"
+            },
+            {
+              "entry": 2,
+              "distance": 1000,
+              "where": "090° 0.5 NM · 84°36′N 090°00′"
+            },
+            {
+              "entry": 3,
+              "distance": 1000,
+              "where": "180° 0.5 NM · 84°36′N 180°00′"
+            },
+            {
+              "entry": 1,
+              "distance": 7071.067811865475,
+              "where": "315° 3.8 NM · 51°49′N 315°00′"
+            }
+          ]
+        },
+        {
+          "title": "Places",
+          "lines": []
+        },
+        {
+          "title": "Features",
+          "lines": []
+        }
+      ]
+    },
+    {
+      "name": "nothing charted",
+      "east": 10,
+      "north": 10,
+      "entries": [],
+      "groups": [
+        {
+          "title": "Islands",
+          "lines": []
+        },
+        {
+          "title": "Places",
+          "lines": []
+        },
+        {
+          "title": "Features",
+          "lines": []
+        }
+      ]
+    }
+  ]
+}
