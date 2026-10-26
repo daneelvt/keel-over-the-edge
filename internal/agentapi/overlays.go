@@ -127,15 +127,15 @@ func (s *Sea) marks(f *bus.Frame, sl int32, seen []seenBoat) map[int32]string {
 }
 
 // rightOfWayShown reports whether the right-of-way overlay would show a
-// verdict for the boat in slot sl. With the helm's mu held.
-func (h *helm) rightOfWayShown(s *Sea, f *bus.Frame, sl int32) bool {
+// verdict for the boat in slot sl, of the boats seen from it.
+func (h *helm) rightOfWayShown(s *Sea, f *bus.Frame, sl int32, seen []seenBoat) bool {
 	o := s.rules()
 	k := int(f.Kind[sl])
 	if k >= len(o.right) {
 		return false
 	}
 	var judged []lookout.Judged
-	for _, c := range h.inSight(s, f, sl) {
+	for _, c := range seen {
 		if c.d > 60 {
 			break
 		}

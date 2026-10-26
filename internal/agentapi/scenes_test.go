@@ -41,7 +41,7 @@ var seed1 = sync.OnceValues(func() (*worldgen.Bundle, error) {
 // scene is a world to set a scene in: seed 1's land, its chart with only
 // what is known from the start charted, a steady wind.
 type scene struct {
-	t    *testing.T
+	t    testing.TB
 	cat  *catalog.Catalog
 	w    *sim.World
 	sea  *Sea
@@ -50,7 +50,12 @@ type scene struct {
 	next byte
 }
 
-func newScene(t *testing.T, knots, from float64) *scene {
+func newScene(t testing.TB, knots, from float64) *scene {
+	return newSceneOf(t, 64, knots, from)
+}
+
+// newSceneOf is a scene of capacity boats.
+func newSceneOf(t testing.TB, capacity int, knots, from float64) *scene {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("makes a whole world")
@@ -65,6 +70,12 @@ func newScene(t *testing.T, knots, from float64) *scene {
 	}
 	waves, kinds := cat.Prepare()
 	tl := weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(knots*nm/3600, from*math.Pi/180, 0))
+	if knots < 0 {
+		// The world's own weather, its gusts and shifts.
+		if tl, err = weather.FromCatalog(cat); err != nil {
+			t.Fatal(err)
+		}
+	}
 	cw := chart.Build(b, cat)
 	model := chart.NewModel(cw, cat, nil)
 	var known []store.Charting
@@ -76,13 +87,13 @@ func newScene(t *testing.T, knots, from float64) *scene {
 	sg := &sim.Sight{Table: cw.Table, Every: int64(cat.World.Chart.Sight.Every), Lookouts: cw.Lookouts}
 	enc := cat.PrepareEncounters()
 	terrain := b.Terrain(cat.PrepareGround())
-	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Terrain: terrain, Sight: sg, Tick: 1000})
+	w, err := sim.New(sim.Config{Capacity: capacity, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Terrain: terrain, Sight: sg, Tick: 1000})
 	if err != nil {
 		t.Fatal(err)
 	}
 	w.SetCharted(cw.Known)
 	t.Cleanup(w.Close)
-	s := &Sea{Number: 1, Bus: w.Bus(), Boats: cat.Boats, Limit: 64, Timeline: tl, Waves: waves, Ground: terrain.Ground, Shelter: terrain.Shelter,
+	s := &Sea{Number: 1, Bus: w.Bus(), Boats: cat.Boats, Limit: capacity, Timeline: tl, Waves: waves, Ground: terrain.Ground, Shelter: terrain.Shelter,
 		Bundle: b, Chart: model, Sight: sg, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc,
 		Biomes: map[string]string{}}
 	for _, bm := range cat.World.Biomes {
@@ -315,4 +326,85 @@ func TestSceneOffAnIsland(t *testing.T) {
 	}
 	golden(t, "island", text)
 	sc.parity(me, text)
+}
+
+// BenchmarkReport times a report's making in a crowded harbour: full and
+// brief.
+func BenchmarkReport(b *testing.B) {
+	sc := newScene(b, 10, 45)
+	at := sc.start()
+	me := sc.boat(at, true)
+	for i := range 30 {
+		st := at
+		st.X += float64((i%6)-3) * 25
+		st.Y += float64(i/6+1) * 25
+		sc.boat(st, i%3 == 0)
+	}
+	sc.sail(2 * time.Second)
+	f := sc.w.Bus().Frames.Acquire()
+	defer f.Release()
+	h := sc.core.helmOf(sailor(1, "Iron Mary"))
+	h.sea, h.slot, h.boat = sc.sea, me, f.Boat[me]
+	for _, detail := range []string{detailBrief, detailFull} {
+		b.Run(detail, func(b *testing.B) {
+			var text string
+			for b.Loop() {
+				text = h.reportFor(sc.sea, f, me, detail, 0).text()
+			}
+			b.ReportMetric(float64(estimateTokens(text)), "tokens")
+		})
+	}
+	b.Run("order", func(b *testing.B) {
+		o := &steerOrder{WindAngle: new(int), Boom: new(int)}
+		*o.WindAngle, *o.Boom = 90, 40
+		for b.Loop() {
+			h.steer(sc.sea, f, me, o)
+			_ = orderLine(sc.sea, f, me, written{})
+		}
+	})
+}
+
+// BenchmarkHub times the hub's look at the boats with 500 machine sailors
+// waiting, each for the wakes a wait has by default, in the world's own
+// weather: what it does ten times a second.
+func BenchmarkHub(b *testing.B) {
+	sc := newSceneOf(b, 600, -1, 0)
+	at := sc.start()
+	at.X, at.Y = 0, -1500
+	var waiters []*waiter
+	for i := range 500 {
+		st := at
+		st.X += float64(i%25) * 40
+		st.Y -= float64(i/25) * 40
+		sl := sc.boat(st, true)
+		h := sc.core.helmOf(sailor(byte(i%250), "Iron Mary"))
+		h.account[3] = byte(i / 250)
+		f := sc.w.Latest()
+		h.sea, h.slot, h.boat = sc.sea, sl, f.Boat[sl]
+		sc.core.mu.Lock()
+		sc.core.helms[h.account] = h
+		sc.core.mu.Unlock()
+		w := newWaiter(time.Now(), wakeDefault)
+		h.waiter = w
+		waiters = append(waiters, w)
+	}
+	sc.sail(time.Second)
+	hub := sc.core.hub
+	f := sc.w.Bus().Frames.Acquire()
+	defer f.Release()
+	hub.reset(sc.sea, f)
+	hub.look(sc.sea, f)
+	b.ResetTimer()
+	n := 0
+	for b.Loop() {
+		// The lookouts look every half second: every fifth look.
+		hub.sightAt = f.Tick
+		if n%5 == 0 {
+			hub.sightAt = f.Tick - sightEvery
+		}
+		f.Tick += checkEvery
+		hub.look(sc.sea, f)
+		n++
+	}
+	b.ReportMetric(float64(len(waiters)), "waiting")
 }

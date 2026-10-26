@@ -51,6 +51,10 @@ const (
 	progressEvery = 10 * time.Second
 )
 
+// gustEvery is how many of the hub's looks apart a wait looks for gusts:
+// twice a second.
+const gustEvery = 5
+
 // landAhead is how far ahead the ground is watched for, in seconds at the
 // boat's speed, and the depth under which water counts as shoal, m.
 const (
@@ -262,7 +266,10 @@ func (h *helm) watch(s *Sea, f *bus.Frame, sl int32, w *waiter, sight bool) stri
 			}
 		}
 	}
-	if w.on[wakeGust] && h.gustComing(s, f, sl) {
+	// The gust ring is the dearest look, so a wait looks for gusts every
+	// gustEvery-th look, each helm on its own: a patch is rung up to a
+	// minute ahead, and a wake half a second later changes nothing seen.
+	if w.on[wakeGust] && (f.Tick/checkEvery+int64(h.conn))%gustEvery == 0 && h.gustComing(s, f, sl) {
 		return wakeGust
 	}
 	return ""
@@ -275,7 +282,8 @@ func (h *helm) watch(s *Sea, f *bus.Frame, sl int32, w *waiter, sight bool) stri
 // right-of-way overlay would show.
 func (h *helm) boatsWatch(s *Sea, f *bus.Frame, sl int32, w *waiter, now time.Time) string {
 	st := &f.State[sl]
-	for _, c := range h.inSight(s, f, sl) {
+	seen := h.inSight(s, f, sl)
+	for _, c := range seen {
 		boat := f.Boat[c.slot]
 		if !w.boats[boat] {
 			w.boats[boat] = true
@@ -298,7 +306,8 @@ func (h *helm) boatsWatch(s *Sea, f *bus.Frame, sl int32, w *waiter, now time.Ti
 			return wakeBoat
 		}
 	}
-	if h.rightOfWayShown(s, f, sl) {
+	// The overlay judges a few times a second, as the phone's does.
+	if (f.Tick/checkEvery+int64(h.conn))%2 == 0 && h.rightOfWayShown(s, f, sl, seen) {
 		return wakeBoat
 	}
 	return ""

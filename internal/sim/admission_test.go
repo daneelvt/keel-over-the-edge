@@ -3,6 +3,7 @@
 package sim
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"testing"
@@ -341,5 +342,31 @@ func TestInstruments(t *testing.T) {
 	}
 	if f.Instruments[1] != (bus.Instruments{}) {
 		t.Fatalf("a human's boat's instruments %+v", f.Instruments[1])
+	}
+}
+
+// BenchmarkTickMachines times the tick of a thousand boats in a sea, with
+// none and with half of them machine sailors', whose steps keep what they
+// read for their agents.
+func BenchmarkTickMachines(b *testing.B) {
+	for _, machines := range []int{0, 500} {
+		b.Run(fmt.Sprintf("machines=%d", machines), func(b *testing.B) {
+			w, err := New(Config{Kinds: kinds(b), Waves: waves(b), Workers: 1, Tick: 740_000_000})
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.Cleanup(w.Close)
+			q := w.Bus().Commands.Developer()
+			for i := range 1000 {
+				q.TrySend(bus.Command{Op: bus.Join, Account: acct(uint64(i + 1)), Conn: uint64(i + 1), Machine: i < machines})
+			}
+			w.Tick()
+			send(b, w, bus.Command{Op: bus.SetWeather, Weather: steady(12*1852.0/3600, 0)})
+			sail(w, 4*bus.SeaPeriod, 1)
+			b.ReportAllocs()
+			for b.Loop() {
+				w.Tick()
+			}
+		})
 	}
 }
