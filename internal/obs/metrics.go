@@ -63,6 +63,8 @@ type Metrics struct {
 	Boats         prometheus.Gauge
 	BoatLimit     prometheus.Gauge
 	QueueLength   prometheus.Gauge
+	BoatsByKind   *prometheus.GaugeVec   // by kind: human, machine
+	QueueByKind   *prometheus.GaugeVec   // by kind: human, machine
 	Admissions    *prometheus.CounterVec // by result
 	QueueWait     prometheus.Histogram
 	GridDuration  prometheus.Histogram
@@ -105,6 +107,18 @@ type Metrics struct {
 	DoorRequests    *prometheus.CounterVec   // by result
 	DoorDuration    *prometheus.HistogramVec // by cache: warm, cold
 	GrantsLive      *prometheus.GaugeVec     // by kind: app, connection
+
+	// The machine sailors' interface.
+	AgentCalls       *prometheus.CounterVec   // by tool, result, app, era
+	AgentCallTime    *prometheus.HistogramVec // by tool
+	AgentWaits       *prometheus.CounterVec   // by what woke it
+	AgentWaitCut     *prometheus.HistogramVec // by app
+	AgentRefusals    *prometheus.CounterVec   // by kind
+	AgentReport      *prometheus.HistogramVec // by detail: brief, full
+	AgentHelms       prometheus.Gauge
+	AgentCapsizes    *prometheus.CounterVec // by who: human, machine
+	AgentSilences    prometheus.Counter
+	AgentWaitSeconds *prometheus.HistogramVec // by asked or served
 
 	LeaseEpoch        prometheus.Gauge
 	LeaseWait         prometheus.Gauge
@@ -209,6 +223,12 @@ func NewMetrics(build, catalog string) *Metrics {
 		QueueLength: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "keel_sim_queue_length", Help: "Players waiting for a boat.",
 		}),
+		BoatsByKind: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "keel_sim_boats_by_kind", Help: "Boats in the world, by their account's kind: human, or machine (sailed by an AI agent).",
+		}, []string{"kind"}),
+		QueueByKind: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "keel_sim_queue_by_kind", Help: "Accounts waiting for a boat, by kind: humans and machine sailors wait apart.",
+		}, []string{"kind"}),
 		Admissions: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "keel_sim_admissions_total", Help: "Joins and the queue, by result: joined, rejoined, queued, admitted, dequeued or full.",
 		}, []string{"result"}),
@@ -416,7 +436,7 @@ func NewMetrics(build, catalog string) *Metrics {
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame, m.ClientTier, m.ClientRenderScale,
 		m.EdgeEncoders, m.EdgeQueued, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
-		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
+		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.BoatsByKind, m.QueueByKind, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.AccountsCreated, m.NamesRefused, m.Ceremonies, m.SignIns,
 		m.RecoveryUsed, m.AccountsDeleted, m.CloneWarnings, m.SessionLookups, m.CrossOriginRefused,
 		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded, m.Falls, m.Approaches)
@@ -456,6 +476,48 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.GrantsLive = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "keel_grants_live", Help: "Grants unrevoked and within the lifetime, by kind: an approved AI app, or a connection token.",
 	}, []string{"kind"})
+	m.AgentCalls = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_agent_calls_total", Help: "Tool calls at the MCP address, by tool, result (ok, refused, error), the app that called and its protocol era.",
+	}, []string{"tool", "result", "app", "era"})
+	m.AgentCallTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "keel_agent_call_seconds", Help: "How long a tool call took, a wait included, by tool.",
+		Buckets: []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 1, 5, 15, 30, 50},
+	}, []string{"tool"})
+	m.AgentWaits = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_agent_waits_total", Help: "Waits of observe, by what ended them: a wake's kind, time, superseded or cut (the call's stream closed).",
+	}, []string{"woke"})
+	m.AgentWaitCut = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "keel_agent_wait_cut_seconds", Help: "How long a wait had run when its call's stream closed before it ended, by app: where hosts cut long calls.",
+		Buckets: []float64{1, 5, 10, 15, 20, 25, 30, 40, 50, 60},
+	}, []string{"app"})
+	m.AgentWaitSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "keel_agent_wait_seconds", Help: "Waits of observe: the seconds asked for, and the seconds served before the answer.",
+		Buckets: []float64{0, 1, 5, 10, 15, 20, 25, 30, 40, 50},
+	}, []string{"what"})
+	m.AgentRefusals = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_agent_refusals_total", Help: "Tool calls refused in their result, by the refusal's kind.",
+	}, []string{"kind"})
+	m.AgentReport = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "keel_agent_report_tokens", Help: "The lookout report's size in tokens, estimated from its length, by detail: brief or full.",
+		Buckets: []float64{25, 50, 100, 150, 200, 300, 400, 600, 800, 1000, 1500},
+	}, []string{"detail"})
+	m.AgentHelms = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_agent_helms", Help: "Machine sailors whose agents have called since the process started, held in memory.",
+	})
+	m.AgentCapsizes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_agent_capsizes_total", Help: "Capsizes, by who sailed the boat: a human or a machine sailor.",
+	}, []string{"who"})
+	m.AgentSilences = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_agent_silences_total", Help: "Machine sailors' boats sent into their grace after their agents fell silent.",
+	})
+	for _, w := range []string{"human", "machine"} {
+		m.AgentCapsizes.WithLabelValues(w)
+	}
+	for _, w := range []string{"time", "superseded", "cut", "shutdown"} {
+		m.AgentWaits.WithLabelValues(w)
+	}
+	reg.MustRegister(m.AgentCalls, m.AgentCallTime, m.AgentWaits, m.AgentWaitCut, m.AgentWaitSeconds, m.AgentRefusals,
+		m.AgentReport, m.AgentHelms, m.AgentCapsizes, m.AgentSilences)
 	for _, w := range []string{"game", "approval"} {
 		m.MachinesCreated.WithLabelValues(w)
 	}
@@ -481,10 +543,10 @@ func NewMetrics(build, catalog string) *Metrics {
 	}
 	reg.MustRegister(m.MachinesCreated, m.MachinesDeleted, m.OAuthAuthorize, m.OAuthTokens, m.OAuthReuse, m.OAuthRegistered,
 		m.ClientFetches, m.ClientFetchTime, m.DoorRequests, m.DoorDuration, m.GrantsLive)
-	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake", "lifetime", "cap"} {
+	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake", "lifetime", "cap", "priority", "unpriority"} {
 		m.OwnerActions.WithLabelValues(a)
 	}
-	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake", "lifetime", "cap"} {
+	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake", "lifetime", "cap", "priority"} {
 		m.OwnerRefused.WithLabelValues(w)
 	}
 	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)

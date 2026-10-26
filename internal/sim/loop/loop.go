@@ -277,6 +277,20 @@ func (l *Loop) tick(tick int64, late bool) {
 	}
 	l.m.Boats.Set(float64(len(f.Live)))
 	l.m.QueueLength.Set(float64(len(f.Queue)))
+	if f.Tick%physics.StepsPerSecond == 0 {
+		// Boats and places by kind, once a second.
+		var boats, waiting [2]int
+		for _, s := range f.Live {
+			boats[kindIndex(f.Machine[s])]++
+		}
+		for i := range f.Queue {
+			waiting[kindIndex(f.Queue[i].Machine)]++
+		}
+		for k, name := range kindNames {
+			l.m.BoatsByKind.WithLabelValues(name).Set(float64(boats[k]))
+			l.m.QueueByKind.WithLabelValues(name).Set(float64(waiting[k]))
+		}
+	}
 	l.m.GridDuration.Observe(l.phases[sim.PhaseGrid].Seconds())
 	l.m.Workers.Set(float64(l.world.Workers()))
 	for i := range f.Edges {
@@ -310,4 +324,14 @@ func (l *Loop) tick(tick int64, late bool) {
 			l.graceExpired.Inc()
 		}
 	}
+}
+
+// kindNames are the kinds of account, as the metrics label them.
+var kindNames = [2]string{"human", "machine"}
+
+func kindIndex(machine bool) int {
+	if machine {
+		return 1
+	}
+	return 0
 }
