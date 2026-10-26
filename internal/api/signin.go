@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -84,8 +85,13 @@ func (a *api) finishSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.used(r, holder.ID, key)
-	token, hash := auth.NewToken()
-	recovered, err := a.cfg.Accounts.SignIn(r.Context(), holder.ID, hash)
+	var recovered time.Time
+	session, err := auth.Issue(a.cfg.Log, "session", auth.DrawToken, func(d auth.Drawn) error {
+		var err error
+		recovered, err = a.cfg.Accounts.SignIn(r.Context(), holder.ID, d.Hash)
+		return err
+	})
+	token, hash := session.Token, session.Hash
 	if err != nil {
 		a.unavailable(w, r, "signing in", err)
 		return
@@ -132,8 +138,13 @@ func (a *api) recover(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "code")
 		return
 	}
-	token, hash := auth.NewToken()
-	acc, err := a.cfg.Accounts.Recover(r.Context(), code, hash)
+	var acc store.Account
+	session, err := auth.Issue(a.cfg.Log, "session", auth.DrawToken, func(d auth.Drawn) error {
+		var err error
+		acc, err = a.cfg.Accounts.Recover(r.Context(), code, d.Hash)
+		return err
+	})
+	token, hash := session.Token, session.Hash
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusUnprocessableEntity, "code")
 		return

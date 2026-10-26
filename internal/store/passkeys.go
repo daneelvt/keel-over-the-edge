@@ -153,6 +153,7 @@ const (
 	CeremonySignIn  = "signin"
 	CeremonyAdd     = "add"
 	CeremonyConfirm = "confirm"
+	CeremonyApprove = "approve"
 )
 
 // Ceremony is a ceremony with the browser's passkey prompt, begun and not
@@ -176,7 +177,8 @@ type Ceremony struct {
 
 func text(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} }
 
-// SaveCeremony keeps a ceremony begun.
+// SaveCeremony keeps a ceremony begun: ErrTokenTaken if another has its
+// handle.
 func (s *Store) SaveCeremony(ctx context.Context, c Ceremony) error {
 	p := db.InsertCeremonyParams{
 		HandleHash: c.Hash[:], Kind: c.Kind, Name: text(c.Name), NameKey: text(c.NameKey), Look: text(c.Look),
@@ -185,7 +187,11 @@ func (s *Store) SaveCeremony(ctx context.Context, c Ceremony) error {
 	if c.HasAccount {
 		p.AccountID = uuidOf(c.Account)
 	}
-	return s.q.InsertCeremony(ctx, p)
+	err := s.q.InsertCeremony(ctx, p)
+	if uniqueViolation(err, "webauthn_ceremony_pkey") {
+		return ErrTokenTaken
+	}
+	return err
 }
 
 // TakeCeremony takes a ceremony of a kind to finish it, so it is used

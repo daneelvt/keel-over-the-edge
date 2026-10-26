@@ -62,8 +62,24 @@ resource "cloudflare_tiered_cache" "zone" {
   value   = "on"
 }
 
+# What AI apps reach. On agents., the MCP address and its resource's
+# metadata alone, by GET, POST and OPTIONS: the game's server keeps no MCP
+# session, so the DELETE that ends one is refused here rather than by it.
+# On play., the authorization server's metadata and the three addresses
+# AI apps call from their own servers, or from a browser after a CORS
+# preflight.
+locals {
+  agents_paths = ["/mcp", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"]
+  oauth_paths  = ["/.well-known/oauth-authorization-server", "/oauth/token", "/oauth/revoke", "/oauth/register"]
+  # A set in a rule's expression, as {"/a" "/b"}.
+  agents_path_set = "{${join(" ", formatlist("\"%s\"", local.agents_paths))}}"
+  oauth_path_set  = "{${join(" ", formatlist("\"%s\"", local.oauth_paths))}}"
+}
+
 # The game answers GET, HEAD and POST; the WebSocket's upgrade is a GET.
-# Cloudflare's free managed ruleset stays on beside this, as it is.
+# OPTIONS reaches it only where a browser-based AI app's preflight goes.
+# agents. answers nothing but the MCP address. Cloudflare's free managed
+# ruleset stays on beside this, as it is.
 resource "cloudflare_ruleset" "firewall" {
   zone_id = var.cloudflare_zone_id
   name    = "firewall"
@@ -73,7 +89,13 @@ resource "cloudflare_ruleset" "firewall" {
     {
       ref         = "methods"
       description = "Only the methods the game answers"
-      expression  = "(http.host eq \"${local.play}\" and not http.request.method in {\"GET\" \"HEAD\" \"POST\"})"
+      expression  = "(http.host eq \"${local.play}\" and not http.request.method in {\"GET\" \"HEAD\" \"POST\"} and not (http.request.method eq \"OPTIONS\" and http.request.uri.path in ${local.oauth_path_set}))"
+      action      = "block"
+    },
+    {
+      ref         = "agents"
+      description = "Only the MCP address, by the methods it answers"
+      expression  = "(http.host eq \"${local.agents}\" and (not http.request.method in {\"GET\" \"POST\" \"OPTIONS\"} or not http.request.uri.path in ${local.agents_path_set}))"
       action      = "block"
     },
   ]
@@ -109,6 +131,12 @@ resource "cloudflare_ruleset" "rate" {
 # beacon (Real User Monitoring, a script from static.cloudflareinsights.com)
 # into every HTML answer of a proxied zone unless told not to, and Zaraz
 # would add its own. The page loads its own scripts alone.
+#
+# AI apps call the MCP address and the token addresses from their servers,
+# in data centres whose addresses Cloudflare's Security Level scores as
+# threats, and with no browser's headers, which Browser Integrity Check
+# refuses: neither is a challenge they can answer, so both are off there.
+# The game's own checks and limits hold the line, as for every player.
 resource "cloudflare_ruleset" "config" {
   zone_id = var.cloudflare_zone_id
   name    = "config"
@@ -123,6 +151,16 @@ resource "cloudflare_ruleset" "config" {
       action_parameters = {
         disable_rum   = true
         disable_zaraz = true
+      }
+    },
+    {
+      ref         = "ai-apps"
+      description = "No challenge for AI apps' servers at the MCP address and the token addresses"
+      expression  = "(http.host eq \"${local.agents}\" or (http.host eq \"${local.play}\" and http.request.uri.path in ${local.oauth_path_set}))"
+      action      = "set_config"
+      action_parameters = {
+        security_level = "essentially_off"
+        bic            = false
       }
     },
   ]

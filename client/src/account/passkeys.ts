@@ -164,7 +164,7 @@ function browserReach(): Reach {
 }
 
 /** A server's answer: its status, and its JSON, or null. */
-interface Answer {
+export interface Answer {
   status: number;
   body: JSONObject | null;
 }
@@ -193,7 +193,7 @@ export async function call(f: Fetch, path: string, body?: unknown): Promise<Answ
 }
 
 /** A reason code from an answer that is not the one hoped for. */
-function reasonOf(a: Answer): string {
+export function reasonOf(a: Answer): string {
   if (a.status === 0) {
     return 'offline';
   }

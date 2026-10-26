@@ -255,6 +255,9 @@ type Catalog struct {
 	// Encounters corresponds to the JSON schema field "encounters".
 	Encounters Encounters `json:"encounters"`
 
+	// Machine corresponds to the JSON schema field "machine".
+	Machine Machine `json:"machine"`
+
 	// News corresponds to the JSON schema field "news".
 	News News `json:"news"`
 
@@ -1207,6 +1210,32 @@ type Lip struct {
 
 	// How far they tip outward at the brink, in rad.
 	Tip float64 `json:"tip"`
+}
+
+// The look of the machine sailors AI accounts sail as: the choices a player makes
+// one from, a version, a metal finish and a main colour. A machine sailor's sailor
+// keeps the three ids.
+type Machine struct {
+	// Its main colours, chosen to stay apart for colour-blind players.
+	Colours []MachineChoice `json:"colours"`
+
+	// The finishes of its metal, each with its colour.
+	Finishes []MachineChoice `json:"finishes"`
+
+	// The machine's versions.
+	Versions []MachineChoice `json:"versions"`
+}
+
+type MachineChoice struct {
+	// Its colour, sRGB, #rrggbb; none for a version.
+	Colour *string `json:"colour,omitempty,omitzero"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Display name, as the player reads it: lowercase but where a name is a proper
+	// noun.
+	Name string `json:"name"`
 }
 
 // A feature a name may need, by its word, and what shows it: 0 or false for a test
@@ -4199,4 +4228,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "4f261b85586c873f"
+const Version = "6a5fc8cef8ba6591"

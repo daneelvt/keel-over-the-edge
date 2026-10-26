@@ -3,12 +3,15 @@
 // The start screen, over the loading sea. A new player makes a sailor: a
 // name, a look drawn at random from the catalog (drawn again on asking),
 // and Set sail, which makes the sailor's passkey with the browser's own
-// prompt and the account with it; then the recovery code, shown once. A
-// returning player signs in beside it: the browser offers the passkeys it
+// prompt and the account with it; then the recovery code, shown once, and
+// a choice: Set sail, or make a machine sailor first (one an AI app of
+// theirs sails), connect it, and set sail from the start screen with
+// machine sailors. A returning player signs in beside it: the browser offers the passkeys it
 // holds as the name field is touched (autofill, held open from the start),
 // or "Sign in with a passkey" opens the browser's prompt, which reaches a
 // passkey on another device by its QR code. "Lost your passkey?" takes the
-// recovery code.
+// recovery code. One who has machine sailors is shown them before the
+// sea.
 //
 // The page checks only the name's length; the server applies the rest and
 // says why it refuses, which is shown in words beside the field. A prompt
@@ -19,8 +22,9 @@ import './start.css';
 import { type JSX, render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type InApp, passkeySupport, type Support } from './inapp';
+import { useMachines } from './lazy';
 import { drawLook, type Look } from './looks';
-import type { Me } from './me';
+import { checkSession, type Me } from './me';
 import {
   codeForm,
   makeSailor,
@@ -32,7 +36,7 @@ import {
   useRecoveryCode,
 } from './passkeys';
 import { lengthProblem, MAX_NAME, reasonText, TAKEN_SIGN_IN } from './reasons';
-import { AddPasskey, RecoveredNotice, RecoveryCode } from './recovery';
+import { AddPasskey, RecoveredNotice, RecoveryCode, SetSailOrMake } from './recovery';
 
 export interface StartProps {
   sailors: readonly Look[];
@@ -57,6 +61,8 @@ type View =
   | { kind: 'form' }
   | { kind: 'recover' }
   | { kind: 'code'; me: Me; code: string }
+  | { kind: 'choose'; me: Me }
+  | { kind: 'machines'; me: Me; first: boolean }
   | { kind: 'recovered'; me: Me; at: number }
   | { kind: 'add-passkey'; me: Me };
 
@@ -87,11 +93,24 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
     };
   }, [reach]);
 
-  const signedIn = (s: SignedIn) => {
-    if (s.recovered > 0) {
-      setView({ kind: 'recovered', me: s.me, at: s.recovered });
+  // To sea, or to the machine sailors first for a player who has any.
+  const onward = (me: Me) => {
+    if ((me.machines ?? 0) > 0) {
+      setView({ kind: 'machines', me, first: false });
     } else {
-      done(s.me);
+      done(me);
+    }
+  };
+
+  const signedIn = async (s: SignedIn) => {
+    // The sign-in's answer does not say how many machine sailors the
+    // account has; the session's does.
+    const check = await checkSession(reach?.fetch);
+    const me = check.kind === 'sailor' ? { ...s.me, machines: check.me.machines ?? 0 } : s.me;
+    if (s.recovered > 0) {
+      setView({ kind: 'recovered', me, at: s.recovered });
+    } else {
+      onward(me);
     }
   };
 
@@ -123,7 +142,7 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
           return;
         }
         if (res.ok) {
-          signedIn(res.value);
+          await signedIn(res.value);
         } else if (!quiet(res.reason, true)) {
           setProblem(reasonText(res.reason));
         }
@@ -185,7 +204,7 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
     const res = await signIn(false, undefined, reach);
     setBusy('');
     if (res.ok) {
-      signedIn(res.value);
+      await signedIn(res.value);
     } else {
       failed(res);
     }
@@ -211,13 +230,32 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
     case 'code':
       return (
         <div class="start">
-          <RecoveryCode code={view.code} name={view.me.name} done={() => done(view.me)} />
+          <RecoveryCode
+            code={view.code}
+            name={view.me.name}
+            done={() => setView({ kind: 'choose', me: view.me })}
+          />
+        </div>
+      );
+    case 'choose':
+      return (
+        <div class="start">
+          <SetSailOrMake
+            sail={() => done(view.me)}
+            make={() => setView({ kind: 'machines', me: view.me, first: true })}
+          />
+        </div>
+      );
+    case 'machines':
+      return (
+        <div class="start">
+          <Machines first={view.first} done={() => done(view.me)} />
         </div>
       );
     case 'recovered':
       return (
         <div class="start">
-          <RecoveredNotice at={view.at} done={() => done(view.me)} />
+          <RecoveredNotice at={view.at} done={() => onward(view.me)} />
         </div>
       );
     case 'add-passkey':
@@ -380,6 +418,22 @@ export function StartScreen({ sailors, done, random, reach }: StartProps) {
       </form>
     </div>
   );
+}
+
+/** The start screen with machine sailors, once its module is loaded. */
+function Machines({ first, done }: { first: boolean; done: () => void }) {
+  const m = useMachines();
+  if (m === null) {
+    return (
+      <section class="start-panel" aria-labelledby="start-title">
+        <h1 id="start-title">Keel Over the Edge</h1>
+        <button type="button" class="start-go" onClick={done}>
+          Set sail
+        </button>
+      </section>
+    );
+  }
+  return <m.MachineStart first={first} done={done} />;
 }
 
 /** A browser that cannot make the player's passkey: the game's address, to open elsewhere. */

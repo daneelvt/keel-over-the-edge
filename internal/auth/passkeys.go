@@ -300,6 +300,36 @@ func (p *Passkeys) FinishSignIn(state, answer []byte, find func(handle []byte) (
 	return found, used, err
 }
 
+// BeginApprove asks for whichever of the relying party's passkeys the
+// browser holds, with the player verified by the device, to approve an AI
+// app: on the browser's own prompt, never autofill, and with no account
+// named, since the page an app opens has no game session to name one.
+func (p *Passkeys) BeginApprove() (Begun, error) {
+	assertion, s, err := p.w.BeginDiscoverableLogin(webauthn.WithUserVerification(protocol.VerificationRequired))
+	if err != nil {
+		return Begun{}, err
+	}
+	return begun(assertion, s)
+}
+
+// ErrUnverified is an approval whose passkey did not verify the player:
+// the authenticator data's UV flag was not set.
+var ErrUnverified = fmt.Errorf("%w: the player was not verified", ErrRefused)
+
+// FinishApprove checks the browser's answer to BeginApprove, as
+// FinishSignIn does, and refuses one whose player was not verified,
+// whatever the browser was asked.
+func (p *Passkeys) FinishApprove(state, answer []byte, find func(handle []byte) (*User, error)) (*User, store.Passkey, error) {
+	u, key, err := p.FinishSignIn(state, answer, find)
+	if err != nil {
+		return u, key, err
+	}
+	if protocol.AuthenticatorFlags(key.Flags)&protocol.FlagUserVerified == 0 {
+		return nil, store.Passkey{}, ErrUnverified
+	}
+	return u, key, nil
+}
+
 // BeginConfirm asks for one of u's own passkeys, with the player verified
 // by the device (its face, fingerprint or PIN), before something that
 // cannot be undone (OWASP ASVS 5.0, 7.5.1).

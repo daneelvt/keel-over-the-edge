@@ -19,7 +19,9 @@
 // At the top, always in view, the world's end counted down by keel's clock; the
 // owner may make a new next world, begin it now or chart the whole world,
 // each confirmed with what it will do, and look over the next world, drawn
-// as the current is, on a tab of its own, and make it again.
+// as the current is, on a tab of its own, and make it again. For AI apps,
+// the owner sets the token lifetime, confirmed with the grants it ends, and
+// how many machine sailors an account may have.
 
 import { render } from 'preact';
 import {
@@ -112,6 +114,7 @@ import {
 import { calibrationRows, FORECAST_COLOURS, riskWords, spellAt, warningSpan } from './forecast';
 import { brief, hidden, serverOffset } from './life';
 import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
+import { AISignIn, type Known, machinesWords } from './machines';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
 import { foamOver, RAISED, SEA_COLOURS, SEA_EVERY, SEA_FULL, seaWords } from './sea';
 import { fromNow, whereFrom } from './weather';
@@ -272,7 +275,9 @@ function Clock({ now, accounts }: { now: WorldNow; accounts: AccountsData | null
         <dd data-field="accounts">
           {accounts === null
             ? '—'
-            : `${accounts.total}: ${accounts.week} made this week, ${accounts.today} seen today`}
+            : `${accounts.total}: ${accounts.week} made this week, ${accounts.today} seen today${
+                accounts.machines === undefined ? '' : `; ${machinesWords(accounts.machines)}`
+              }`}
         </dd>
       </dl>
     </section>
@@ -1685,6 +1690,10 @@ function App() {
             readLife.current();
             setTimeout(() => readLife.current(), 2000);
           }
+          if (a.ok && path === 'lifetime') {
+            // The lifetime and the grants it leaves live show at once.
+            readCharted.current();
+          }
           if (a.ok && path === 'chart') {
             // What is charted shows once its rows are written, within a second or two.
             readCharted.current();
@@ -1707,6 +1716,17 @@ function App() {
     (east, north, scale) => setNextView((v) => (v === null ? v : centreOn(v, east, north, scale))),
     [],
   );
+
+  // The human sailors at sea and waiting, whose accounts' ids the machine
+  // sailors' control offers by name.
+  const known: Known[] = [
+    ...new Map(
+      [...(now?.boats ?? []).filter((b) => b.human), ...(now?.queue ?? [])].map((k) => [
+        k.account,
+        { account: k.account, sailor: k.sailor },
+      ]),
+    ).values(),
+  ];
 
   const data: MapData = {
     now,
@@ -2047,6 +2067,7 @@ function App() {
               />
             ) : null}
             {life !== null ? <LifecycleCard life={life} /> : null}
+            {accounts !== null ? <AISignIn accounts={accounts} known={known} act={act} /> : null}
             <section class="card" aria-label="Boats at sea">
               <h2>At sea: {now?.boats.length ?? 0}</h2>
               <table class="boats">

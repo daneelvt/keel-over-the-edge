@@ -34,7 +34,8 @@ const (
 
 // The sailors every fixture has unless it gives its own, and their art.
 const (
-	validSailors  = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n      far: sailors/test.far.glb\n"
+	validSailors  = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n      far: sailors/test.far.glb\n" + validMachine
+	validMachine  = "machine:\n  versions:\n    - {id: test-version, name: version}\n  finishes:\n    - {id: test-finish, name: Finish, colour: \"#808080\"}\n  colours:\n    - {id: test-colour, name: colour, colour: \"#9e2b25\"}\n"
 	sailorArt     = "art/sailors/test.glb"
 	sailorFarArt  = "art/sailors/test.far.glb"
 	sailorsPath   = "shared/catalog/sailors.yaml"
@@ -430,7 +431,7 @@ func TestRejects(t *testing.T) {
 			name: "no sailors",
 			files: map[string]string{
 				"shared/catalog/boats.yaml": validBoats,
-				sailorsPath:                 "sailors: []\n",
+				sailorsPath:                 "sailors: []\n" + validMachine,
 			},
 			want: "/sailors: ",
 		},

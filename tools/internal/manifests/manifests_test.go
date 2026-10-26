@@ -191,12 +191,16 @@ func TestProductionSizes(t *testing.T) {
 	if o := PlayOrigin(objs); o != "https://play.keelovertheedge.com" {
 		t.Errorf("production's origin %q", o)
 	}
-	// The players' route on plain HTTP, the Gateway with no other listener.
-	if l := List(Find(objs, "Gateway", gatewayName), "spec", "listeners"); len(l) != 1 || Str(l[0], "name") != "http" {
+	// The players' route and AI apps' on plain HTTP, the Gateway with no
+	// other listener.
+	if l := List(Find(objs, "Gateway", gatewayName), "spec", "listeners"); len(l) != 2 || Str(l[0], "name") != "http" || Str(l[1], "name") != "agents" {
 		t.Errorf("production's listeners %v", l)
 	}
 	if s := Str(Find(objs, "HTTPRoute", "play"), "spec", "parentRefs", 0, "sectionName"); s != "http" {
 		t.Errorf("the players' route is on %q", s)
+	}
+	if s := Str(Find(objs, "HTTPRoute", "agents"), "spec", "parentRefs", 0, "sectionName"); s != "agents" {
+		t.Errorf("AI apps' route is on %q", s)
 	}
 }
 
@@ -1041,6 +1045,18 @@ func TestEachRuleFails(t *testing.T) {
 		}},
 		{"production's host on its Gateway and routes", inRelease(prod, "apps"), func(objs []Object) []Object {
 			delete(spec(Find(objs, "HTTPRoute", "play")), "hostnames")
+			return objs
+		}},
+		{"production's host on its Gateway and routes", inRelease(prod, "apps"), func(objs []Object) []Object {
+			// AI apps' route moved onto the players' host.
+			r := Find(objs, "HTTPRoute", "agents")
+			Get(r, "spec", "parentRefs", 0).(map[string]any)["sectionName"] = "http"
+			spec(r)["hostnames"] = []any{PlayHost}
+			return objs
+		}},
+		{"production's host on its Gateway and routes", inRelease(prod, "apps"), func(objs []Object) []Object {
+			Get(Find(objs, "Gateway", gatewayName), "spec", "listeners", 1).(map[string]any)["hostname"] = "elsewhere." + prodDomain
+			spec(Find(objs, "HTTPRoute", "agents"))["hostnames"] = []any{"elsewhere." + prodDomain}
 			return objs
 		}},
 		// The archive: the live generation's name, through the plugin, to

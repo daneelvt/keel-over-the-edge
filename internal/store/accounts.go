@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -69,6 +70,9 @@ type NewAccount struct {
 	Passkey      Passkey
 	RecoveryHash [32]byte
 	TokenHash    [32]byte
+	// Boat is the kind of its fleet's first boat, the catalog's; none
+	// when empty.
+	Boat string
 }
 
 var (
@@ -85,9 +89,25 @@ var (
 
 func uuidOf(id AccountID) pgtype.UUID { return pgtype.UUID{Bytes: id, Valid: true} }
 
+// ParseID reads an account's or a grant's ID, a UUID, with its dashes or
+// without.
+func ParseID(s string) (AccountID, bool) {
+	var id AccountID
+	raw := strings.ReplaceAll(s, "-", "")
+	if len(raw) != 32 {
+		return id, false
+	}
+	_, err := hex.Decode(id[:], []byte(raw))
+	return id, err == nil
+}
+
+// sessionTokenKey is the constraint that keeps two sessions from sharing a
+// token's hash.
+const sessionTokenKey = "session_token_hash_key"
+
 // CreateAccount makes a human's account with its sailor, passkey, recovery
-// code and session, all or nothing: there is never an account without a
-// passkey.
+// code, session and first boat, all or nothing: there is never an account
+// without a passkey. ErrTokenTaken if the session's token hash is taken.
 func (s *Store) CreateAccount(ctx context.Context, a NewAccount) (AccountID, error) {
 	var id AccountID
 	err := s.inTx(ctx, func(q *db.Queries) error {
@@ -102,6 +122,11 @@ func (s *Store) CreateAccount(ctx context.Context, a NewAccount) (AccountID, err
 		if err := q.CreatePasskey(ctx, passkeyParams(u, &a.Passkey)); err != nil {
 			return err
 		}
+		if a.Boat != "" {
+			if err := fillFleet(ctx, q, id, a.Boat, 1); err != nil {
+				return err
+			}
+		}
 		return q.CreateSession(ctx, db.CreateSessionParams{AccountID: u, TokenHash: a.TokenHash[:]})
 	})
 	switch {
@@ -109,6 +134,8 @@ func (s *Store) CreateAccount(ctx context.Context, a NewAccount) (AccountID, err
 		return AccountID{}, ErrNameTaken
 	case uniqueViolation(err, "passkey_credential_id"):
 		return AccountID{}, ErrPasskeyTaken
+	case uniqueViolation(err, sessionTokenKey):
+		return AccountID{}, ErrTokenTaken
 	case err != nil:
 		return AccountID{}, err
 	}
@@ -216,6 +243,9 @@ func (s *Store) Recover(ctx context.Context, code, token [32]byte) (Account, err
 		}
 		return q.CreateSession(ctx, db.CreateSessionParams{AccountID: u, TokenHash: token[:], Held: true})
 	})
+	if uniqueViolation(err, sessionTokenKey) {
+		return Account{}, ErrTokenTaken
+	}
 	if err != nil {
 		return Account{}, err
 	}
@@ -243,14 +273,33 @@ func (s *Store) SignIn(ctx context.Context, id AccountID, token [32]byte) (recov
 		}
 		return nil
 	})
+	if uniqueViolation(err, sessionTokenKey) {
+		return time.Time{}, ErrTokenTaken
+	}
 	return recovered, err
 }
 
 // DeleteAccount deletes a human account with its sailor, passkeys,
-// sessions and ceremonies, freeing its name. What its sailor charted keeps
-// its place under no name. ErrNotFound if there is no such account.
-func (s *Store) DeleteAccount(ctx context.Context, id AccountID) error {
-	return s.inTx(ctx, func(q *db.Queries) error {
+// sessions, ceremonies and fleet, and its machine sailors first, with
+// their grants and tokens, freeing every name; it returns the machine
+// sailors deleted. What its sailors charted keeps its place under no name.
+// ErrNotFound if there is no such account.
+func (s *Store) DeleteAccount(ctx context.Context, id AccountID) ([]AccountID, error) {
+	var machines []AccountID
+	err := s.inTx(ctx, func(q *db.Queries) error {
+		ids, err := q.MachineIDsOf(ctx, uuidOf(id))
+		if err != nil {
+			return err
+		}
+		for _, m := range ids {
+			if err := q.ForgetCredits(ctx, m); err != nil {
+				return err
+			}
+			machines = append(machines, m.Bytes)
+		}
+		if _, err := q.DeleteMachinesOf(ctx, uuidOf(id)); err != nil {
+			return err
+		}
 		if err := q.ForgetCredits(ctx, uuidOf(id)); err != nil {
 			return err
 		}
@@ -263,6 +312,10 @@ func (s *Store) DeleteAccount(ctx context.Context, id AccountID) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return machines, nil
 }
 
 // AccountCounts is how many human accounts there are, how many were made

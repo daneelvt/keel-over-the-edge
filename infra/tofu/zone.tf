@@ -60,6 +60,9 @@ resource "cloudflare_zone_setting" "hsts" {
 # Bots and AI agents are players too: nothing blocks them for what they
 # are. Bot Fight Mode cannot be told what to leave alone on the free plan,
 # so it is off; the rate rule and the game's own limits hold the line.
+# Cloudflare's AI bot groups, search, training and agents acting for a
+# person (its AI Crawl Control), are each allowed: "disabled" is the
+# block switched off.
 resource "cloudflare_bot_management" "zone" {
   zone_id                 = var.cloudflare_zone_id
   fight_mode              = false
@@ -67,4 +70,7 @@ resource "cloudflare_bot_management" "zone" {
   ai_bots_protection      = "disabled"
   crawler_protection      = "disabled"
   content_bots_protection = "disabled"
+  aisearch                = "disabled"
+  ai_training             = "disabled"
+  ai_user                 = "disabled"
 }

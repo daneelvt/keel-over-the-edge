@@ -29,6 +29,8 @@ const securePort = 5183;
 const tls = '../.dev/e2e/tls';
 // tools/e2e's addresses for keel.
 const keelPlay = '127.0.0.1:18080';
+// Its listener for AI apps, the MCP address's.
+const keelAgents = '127.0.0.1:18081';
 const keelReady = 'http://127.0.0.1:19090/readyz';
 // The world page, on its own Vite, its data from keel's internal listener.
 const ownerPort = 5184;
@@ -126,7 +128,7 @@ export default defineConfig({
     {
       command: `npx --no-install vite --port ${port} --strictPort`,
       url: `http://localhost:${port}/`,
-      env: { KEEL_PLAY_ADDR: keelPlay },
+      env: { KEEL_PLAY_ADDR: keelPlay, KEEL_AGENTS_ADDR: keelAgents },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
@@ -136,6 +138,7 @@ export default defineConfig({
       ignoreHTTPSErrors: true,
       env: {
         KEEL_PLAY_ADDR: keelPlay,
+        KEEL_AGENTS_ADDR: keelAgents,
         KEEL_DEV_CERT: `${tls}/cert.pem`,
         KEEL_DEV_KEY: `${tls}/key.pem`,
       },
@@ -152,7 +155,7 @@ export default defineConfig({
     {
       command: `npx --no-install vite --port ${laggedPort} --strictPort`,
       url: `http://localhost:${laggedPort}/`,
-      env: { KEEL_PLAY_ADDR: keelLagged },
+      env: { KEEL_PLAY_ADDR: keelLagged, KEEL_AGENTS_ADDR: keelAgents },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

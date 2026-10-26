@@ -140,6 +140,12 @@ type Config struct {
 	Accounts Accounts
 	Sessions Sessions
 	Edge     Edge
+	// Machines, if not nil, is the owner's hand on machine sailors and AI
+	// apps' grants; Lifetime the grant lifetime kept in memory, and
+	// LifetimeChanged, if not nil, told when it is set.
+	Machines        AISailors
+	Lifetime        Lifetime
+	LifetimeChanged func()
 
 	// PlaceKinds and Characters are the catalog's kinds of place and
 	// lights' characters, by their indices, as the page shows them.
@@ -222,6 +228,7 @@ var Paths = []string{
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
 	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
 	"/owner/api/forecast.json", "/owner/api/calibration.json", "/owner/api/gales.json", "/owner/api/place.json",
+	"/owner/api/lifetime", "/owner/api/machines",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -306,6 +313,8 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/gales.json", o.gales)
 	mux.HandleFunc("GET /owner/api/place.json", o.placeWeather)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)
+	mux.HandleFunc("POST /owner/api/lifetime", o.lifetime)
+	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
 	mux.HandleFunc("POST /owner/api/place", o.place)
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)
 	mux.HandleFunc("POST /owner/api/world", o.newWorld)

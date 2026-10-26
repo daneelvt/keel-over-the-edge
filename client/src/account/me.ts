@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The session check: the page's first question to the server, asked while
-// the scene loads. A player with a session goes straight to sea; one
-// without gets the start screen; one whose session came from the recovery
-// code is asked for a new passkey first; and when the server cannot
-// answer, the page says so and asks again.
+// the scene loads. A player with a session goes straight to sea, or, with
+// machine sailors, to the start screen that shows them; one without gets
+// the start screen; one whose session came from the recovery code is
+// asked for a new passkey first; and when the server cannot answer, the
+// page says so and asks again.
 
 /** The player's own account, as GET /api/me gives it. */
 export interface Me {
@@ -16,6 +17,8 @@ export interface Me {
   addPasskey?: boolean;
   /** The kinds of notice the sailor has switched off, by the catalog's ids; none for a new sailor. */
   noticesOff?: string[];
+  /** How many machine sailors the account has; none when absent. */
+  machines?: number;
 }
 
 export type SessionCheck = { kind: 'sailor'; me: Me } | { kind: 'none' } | { kind: 'failed' };
@@ -55,12 +58,15 @@ export interface SailorPaths {
   addPasskey: (me: Me) => Promise<Me>;
   /** Shows that the server cannot be reached, or hides it with false. */
   backSoon: (shown: boolean) => void;
+  /** Shows the player's machine sailors before the sea, to one who has any; resolves on Set sail. */
+  machines?: (me: Me) => Promise<Me>;
   wait?: (ms: number) => Promise<void>;
 }
 
 /**
- * The sailor this browser sails as: the session's, or one made or signed in
- * on the start screen. While the server cannot answer it shows "Back soon"
+ * The sailor this browser sails as: the session's, its machine sailors
+ * shown first when it has any, or one made or signed in on the start
+ * screen. While the server cannot answer it shows "Back soon"
  * and asks again, waiting longer each time.
  */
 export async function resolveSailor(paths: SailorPaths): Promise<Me> {
@@ -72,7 +78,12 @@ export async function resolveSailor(paths: SailorPaths): Promise<Me> {
       if (check.kind === 'none') {
         return paths.start();
       }
-      return check.me.addPasskey === true ? paths.addPasskey(check.me) : check.me;
+      if (check.me.addPasskey === true) {
+        return paths.addPasskey(check.me);
+      }
+      return (check.me.machines ?? 0) > 0 && paths.machines !== undefined
+        ? paths.machines(check.me)
+        : check.me;
     }
     paths.backSoon(true);
     await wait(retryDelay(attempt));

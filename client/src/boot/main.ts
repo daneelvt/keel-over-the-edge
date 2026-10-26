@@ -4,8 +4,9 @@
 // keyboard), the physics module stepping it in the page ahead of the
 // server. While the scene and the physics module load, the page asks the
 // server whose session this browser holds: a returning player goes
-// straight to sea, a new one gets the start screen first, and while the
-// server cannot answer the page says so and asks again. Then the net
+// straight to sea (one with machine sailors is shown them first), a new
+// one gets the start screen first, and while the server cannot answer the
+// page says so and asks again. Then the net
 // worker opens the game connection, and the sea appears with the boat's
 // first snapshot; the page goes on predicting it, and says so when the
 // connection is poor or lost.
@@ -38,6 +39,7 @@
 
 import './game.css';
 import { signal } from '@preact/signals';
+import { loadMachines } from '../account/lazy';
 import { resolveSailor } from '../account/me';
 import { backSoon, showAddPasskey, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
@@ -356,6 +358,7 @@ async function start(): Promise<void> {
     resolveSailor({
       start: () => showStartScreen(document.body, { sailors: catalog.sailors }),
       addPasskey: (me) => showAddPasskey(document.body, me),
+      machines: async (me) => (await loadMachines()).showMachineStart(document.body, me),
       backSoon: notice,
     }),
   ]);

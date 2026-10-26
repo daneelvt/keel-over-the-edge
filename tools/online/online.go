@@ -29,10 +29,12 @@ import (
 
 type checker struct {
 	base, page string
-	hold       time.Duration
-	hc         *http.Client
-	out        io.Writer
-	reg        *registry.Registry
+	// mcp is the MCP address; empty skips its check.
+	mcp  string
+	hold time.Duration
+	hc   *http.Client
+	out  io.Writer
+	reg  *registry.Registry
 	// pause waits for a rate limiter's bucket to fill again.
 	pause func(time.Duration)
 
@@ -58,6 +60,7 @@ func (c *checker) run(ctx context.Context) int {
 		{"another host is not served", c.otherHost},
 		{"one address is limited, and cannot forge CF-Connecting-IP", c.limited},
 		{"a game connection from another origin is refused, one from the game's stays open, and the sailor deleted closes it", c.gameConnection},
+		{"a machine sailor's connection token calls handbook at the MCP address, and is refused once the machine sailor is deleted", c.machineSailor},
 	}
 	failed := 0
 	for _, k := range checks {
@@ -402,4 +405,48 @@ func (c *checker) gameConnection(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
+}
+
+// machineSailor makes a sailor and a machine sailor of its, makes it a
+// connection token, calls handbook with it at the MCP address, and deletes
+// both; the token is refused after.
+func (c *checker) machineSailor(ctx context.Context) error {
+	if c.mcp == "" {
+		return nil
+	}
+	stamp := time.Now().UnixNano() % 1_000_000
+	name, jar, key, err := smoke.SailorNamed(ctx, c.hc, c.base, fmt.Sprintf("Zz Online %06d", stamp))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = smoke.Delete(context.WithoutCancel(ctx), c.hc, jar, key, c.base, name) }()
+	machine := fmt.Sprintf("Zz Machine %06d", stamp)
+	m, err := smoke.Machine(ctx, c.hc, jar, c.base, machine)
+	if err != nil {
+		return err
+	}
+	if m.MCP != c.mcp {
+		return fmt.Errorf("the game names its MCP address %s, not %s", m.MCP, c.mcp)
+	}
+	if len(m.Machines) != 1 {
+		return fmt.Errorf("%d machine sailors made", len(m.Machines))
+	}
+	token, err := smoke.ConnectionToken(ctx, c.hc, jar, key, c.base, m.Machines[0].ID)
+	if err != nil {
+		return err
+	}
+	status, said, err := smoke.Handbook(ctx, c.hc, c.mcp, token)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK || !strings.Contains(said, "You sail as "+machine+", "+name+"'s machine sailor") {
+		return fmt.Errorf("handbook: %d %s", status, said)
+	}
+	if err := smoke.DeleteMachine(ctx, c.hc, jar, key, c.base, m.Machines[0].ID, machine); err != nil {
+		return err
+	}
+	if status, said, err := smoke.Handbook(ctx, c.hc, c.mcp, token); err != nil || status != http.StatusUnauthorized {
+		return fmt.Errorf("the token of a machine sailor deleted: %d %s %v", status, said, err)
+	}
+	return nil
 }

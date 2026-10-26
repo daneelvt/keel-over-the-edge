@@ -12,7 +12,7 @@ import './hud.css';
 import type { ReadonlySignal } from '@preact/signals';
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
-import { AccountPanel } from '../account/account';
+import { AccountPanel, MachinesPanel } from '../account/account';
 import type { HelmInput } from '../input/helm';
 import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
@@ -215,7 +215,7 @@ export interface FlyView {
 function Screen(props: ScreenProps) {
   const { model, settings } = props;
   const [menu, setMenu] = useState(false);
-  const [account, setAccount] = useState(false);
+  const [account, setAccount] = useState<'' | 'account' | 'machines'>('');
   const s = settings.value.value;
   const fly = props.fly ?? null;
   const sea = props.sea ?? null;
@@ -280,8 +280,9 @@ function Screen(props: ScreenProps) {
       >
         ☰
       </button>
-      {account ? <AccountPanel close={() => setAccount(false)} /> : null}
-      {menu && !account ? (
+      {account === 'account' ? <AccountPanel close={() => setAccount('')} /> : null}
+      {account === 'machines' ? <MachinesPanel close={() => setAccount('')} /> : null}
+      {menu && account === '' ? (
         <Menu
           settings={settings}
           sailor={props.sailor}
@@ -292,7 +293,15 @@ function Screen(props: ScreenProps) {
               ? null
               : () => {
                   setMenu(false);
-                  setAccount(true);
+                  setAccount('account');
+                }
+          }
+          machines={
+            props.sailor === null
+              ? null
+              : () => {
+                  setMenu(false);
+                  setAccount('machines');
                 }
           }
           notices={notices}

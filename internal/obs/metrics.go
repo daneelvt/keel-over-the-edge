@@ -94,6 +94,18 @@ type Metrics struct {
 
 	Grace *prometheus.CounterVec // by result: started, rejoined, expired
 
+	MachinesCreated *prometheus.CounterVec // by where: game, approval
+	MachinesDeleted prometheus.Counter
+	OAuthAuthorize  *prometheus.CounterVec // by result
+	OAuthTokens     *prometheus.CounterVec // by grant and result
+	OAuthReuse      *prometheus.CounterVec // by outcome: grace, revoked
+	OAuthRegistered *prometheus.CounterVec // by result
+	ClientFetches   *prometheus.CounterVec // by result
+	ClientFetchTime prometheus.Histogram
+	DoorRequests    *prometheus.CounterVec   // by result
+	DoorDuration    *prometheus.HistogramVec // by cache: warm, cold
+	GrantsLive      *prometheus.GaugeVec     // by kind: app, connection
+
 	LeaseEpoch        prometheus.Gauge
 	LeaseWait         prometheus.Gauge
 	LeaseLost         *prometheus.CounterVec // by outcome: retaken, lost, fenced
@@ -408,10 +420,71 @@ func NewMetrics(build, catalog string) *Metrics {
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.AccountsCreated, m.NamesRefused, m.Ceremonies, m.SignIns,
 		m.RecoveryUsed, m.AccountsDeleted, m.CloneWarnings, m.SessionLookups, m.CrossOriginRefused,
 		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded, m.Falls, m.Approaches)
-	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake"} {
+	m.MachinesCreated = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_machine_sailors_created_total", Help: "Machine sailors made, by where: in the game, or on the approval page.",
+	}, []string{"where"})
+	m.MachinesDeleted = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_machine_sailors_deleted_total", Help: "Machine sailors deleted by their owners, or with their owners' accounts.",
+	})
+	m.OAuthAuthorize = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_oauth_authorize_total", Help: "AI apps' authorization requests, by result: shown, refused, approved, denied.",
+	}, []string{"result"})
+	m.OAuthTokens = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_oauth_tokens_total", Help: "Token requests from AI apps, by grant type and result.",
+	}, []string{"grant", "result"})
+	m.OAuthReuse = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_oauth_refresh_reuse_total", Help: "Refresh tokens presented again: within the grace, or after it, which revokes the grant.",
+	}, []string{"outcome"})
+	m.OAuthRegistered = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_oauth_registrations_total", Help: "AI apps' dynamic registrations, by result: registered, refused, limited.",
+	}, []string{"result"})
+	m.ClientFetches = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_oauth_client_fetches_total", Help: "AI apps' metadata documents found: fetched, cached, refused (too many lately) or failed.",
+	}, []string{"result"})
+	m.ClientFetchTime = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_oauth_client_fetch_seconds", Help: "How long fetching an AI app's metadata document took.",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 3},
+	})
+	m.DoorRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_mcp_door_total",
+		Help: "Requests at the MCP address, by result: accepted, or refused (missing, malformed, unknown, ended, revoked, expired, host, origin).",
+	}, []string{"result"})
+	m.DoorDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "keel_mcp_door_seconds", Help: "How long the MCP address's door took to check a token, by whether it was cached.",
+		Buckets: []float64{0.0001, 0.00025, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1},
+	}, []string{"cache"})
+	m.GrantsLive = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "keel_grants_live", Help: "Grants unrevoked and within the lifetime, by kind: an approved AI app, or a connection token.",
+	}, []string{"kind"})
+	for _, w := range []string{"game", "approval"} {
+		m.MachinesCreated.WithLabelValues(w)
+	}
+	for _, r := range []string{"shown", "refused", "approved", "denied"} {
+		m.OAuthAuthorize.WithLabelValues(r)
+	}
+	for _, g := range []string{"authorization_code", "refresh_token"} {
+		for _, r := range []string{"issued", "refused"} {
+			m.OAuthTokens.WithLabelValues(g, r)
+		}
+	}
+	for _, o := range []string{"grace", "revoked"} {
+		m.OAuthReuse.WithLabelValues(o)
+	}
+	for _, r := range []string{"registered", "refused", "limited"} {
+		m.OAuthRegistered.WithLabelValues(r)
+	}
+	for _, r := range []string{"fetched", "cached", "refused", "failed"} {
+		m.ClientFetches.WithLabelValues(r)
+	}
+	for _, r := range []string{"accepted", "missing", "malformed", "unknown", "ended", "revoked", "expired", "host", "origin"} {
+		m.DoorRequests.WithLabelValues(r)
+	}
+	reg.MustRegister(m.MachinesCreated, m.MachinesDeleted, m.OAuthAuthorize, m.OAuthTokens, m.OAuthReuse, m.OAuthRegistered,
+		m.ClientFetches, m.ClientFetchTime, m.DoorRequests, m.DoorDuration, m.GrantsLive)
+	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake", "lifetime", "cap"} {
 		m.OwnerActions.WithLabelValues(a)
 	}
-	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake"} {
+	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake", "lifetime", "cap"} {
 		m.OwnerRefused.WithLabelValues(w)
 	}
 	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)

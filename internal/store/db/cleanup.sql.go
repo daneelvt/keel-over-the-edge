@@ -8,7 +8,75 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const deleteEndedGrants = `-- name: DeleteEndedGrants :execrows
+DELETE FROM ai_grant WHERE id IN (
+  SELECT g.id FROM ai_grant g
+  WHERE coalesce(g.revoked_at, g.approved_at + $1::bigint * interval '1 microsecond') < $2
+  LIMIT $3
+)
+`
+
+type DeleteEndedGrantsParams struct {
+	Micros int64
+	Before pgtype.Timestamptz
+	Lim    int32
+}
+
+// The grants revoked, or ended by the lifetime, before the time given,
+// with their tokens and codes.
+func (q *Queries) DeleteEndedGrants(ctx context.Context, arg DeleteEndedGrantsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteEndedGrants, arg.Micros, arg.Before, arg.Lim)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteEndedRefreshTokens = `-- name: DeleteEndedRefreshTokens :execrows
+DELETE FROM oauth_token WHERE hash IN (
+  SELECT t.hash FROM oauth_token t JOIN ai_grant g ON g.id = t.grant_id
+  WHERE t.kind = 'refresh' AND t.used_at IS NOT NULL
+    AND (g.revoked_at IS NOT NULL OR g.approved_at + $1::bigint * interval '1 microsecond' <= now())
+  LIMIT $2
+)
+`
+
+type DeleteEndedRefreshTokensParams struct {
+	Micros int64
+	Lim    int32
+}
+
+// The used refresh tokens of grants revoked, or ended by the lifetime.
+func (q *Queries) DeleteEndedRefreshTokens(ctx context.Context, arg DeleteEndedRefreshTokensParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteEndedRefreshTokens, arg.Micros, arg.Lim)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteExpiredAccessTokens = `-- name: DeleteExpiredAccessTokens :execrows
+DELETE FROM oauth_token WHERE hash IN (
+  SELECT t.hash FROM oauth_token t WHERE t.kind = 'access' AND t.expires_at < $1 ORDER BY t.expires_at LIMIT $2
+)
+`
+
+type DeleteExpiredAccessTokensParams struct {
+	Before pgtype.Timestamptz
+	Lim    int32
+}
+
+func (q *Queries) DeleteExpiredAccessTokens(ctx context.Context, arg DeleteExpiredAccessTokensParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredAccessTokens, arg.Before, arg.Lim)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
 
 const deleteExpiredCeremonies = `-- name: DeleteExpiredCeremonies :execrows
 DELETE FROM webauthn_ceremony WHERE handle_hash IN (
@@ -29,6 +97,44 @@ func (q *Queries) DeleteExpiredCeremonies(ctx context.Context, arg DeleteExpired
 	return result.RowsAffected(), nil
 }
 
+const deleteExpiredCodes = `-- name: DeleteExpiredCodes :execrows
+DELETE FROM oauth_code WHERE hash IN (
+  SELECT c.hash FROM oauth_code c WHERE c.expires_at < $1 ORDER BY c.expires_at LIMIT $2
+)
+`
+
+type DeleteExpiredCodesParams struct {
+	Before time.Time
+	Lim    int32
+}
+
+func (q *Queries) DeleteExpiredCodes(ctx context.Context, arg DeleteExpiredCodesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredCodes, arg.Before, arg.Lim)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteExpiredRequests = `-- name: DeleteExpiredRequests :execrows
+DELETE FROM oauth_request WHERE handle_hash IN (
+  SELECT r.handle_hash FROM oauth_request r WHERE r.expires_at < $1 ORDER BY r.expires_at LIMIT $2
+)
+`
+
+type DeleteExpiredRequestsParams struct {
+	Before time.Time
+	Lim    int32
+}
+
+func (q *Queries) DeleteExpiredRequests(ctx context.Context, arg DeleteExpiredRequestsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredRequests, arg.Before, arg.Lim)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteStaleSessions = `-- name: DeleteStaleSessions :execrows
 DELETE FROM session WHERE id IN (
   SELECT s.id FROM session s WHERE s.last_seen_at < $1 ORDER BY s.last_seen_at LIMIT $2
@@ -42,6 +148,29 @@ type DeleteStaleSessionsParams struct {
 
 func (q *Queries) DeleteStaleSessions(ctx context.Context, arg DeleteStaleSessionsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteStaleSessions, arg.Before, arg.Lim)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteUnusedClients = `-- name: DeleteUnusedClients :execrows
+DELETE FROM oauth_client WHERE client_id IN (
+  SELECT c.client_id FROM oauth_client c
+  WHERE c.last_used_at < $1 AND NOT EXISTS (SELECT 1 FROM ai_grant g WHERE g.client_id = c.client_id)
+  LIMIT $2
+)
+`
+
+type DeleteUnusedClientsParams struct {
+	Before time.Time
+	Lim    int32
+}
+
+// The clients that registered and have no grant left, unused since the
+// time given.
+func (q *Queries) DeleteUnusedClients(ctx context.Context, arg DeleteUnusedClientsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUnusedClients, arg.Before, arg.Lim)
 	if err != nil {
 		return 0, err
 	}

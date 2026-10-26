@@ -21,11 +21,13 @@
   },
   "include": [
     "src",
+    "approve",
     "build",
     "e2e",
     "playwright.config.ts",
     "vite.config.ts",
     "vite.owner.config.ts",
+    "vite.approve.config.ts",
     "../art"
   ]
 }

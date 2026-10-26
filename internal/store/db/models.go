@@ -23,6 +23,30 @@ type Account struct {
 	RecoveryHash   []byte
 	RecoveryMadeAt pgtype.Timestamptz
 	RecoveredAt    pgtype.Timestamptz
+	MachineCap     int16
+}
+
+type AiGrant struct {
+	ID          pgtype.UUID
+	AccountID   pgtype.UUID
+	Kind        string
+	ClientID    pgtype.Text
+	ClientName  pgtype.Text
+	RedirectUri pgtype.Text
+	Scope       string
+	ApprovedAt  time.Time
+	ApprovedBy  pgtype.UUID
+	PasskeyID   pgtype.UUID
+	LastUsedAt  pgtype.Timestamptz
+	RevokedAt   pgtype.Timestamptz
+	RevokedWhy  pgtype.Text
+}
+
+type Boat struct {
+	ID        pgtype.UUID
+	AccountID pgtype.UUID
+	Kind      string
+	MadeAt    time.Time
 }
 
 type Charting struct {
@@ -117,6 +141,51 @@ type NewsItem struct {
 	EndsAt       pgtype.Timestamptz
 }
 
+type OauthClient struct {
+	ClientID     string
+	Name         string
+	RedirectUris []string
+	Metadata     []byte
+	CreatedAt    time.Time
+	LastUsedAt   time.Time
+}
+
+type OauthCode struct {
+	Hash          []byte
+	GrantID       pgtype.UUID
+	ClientID      string
+	RedirectUri   string
+	CodeChallenge string
+	ExpiresAt     time.Time
+	UsedAt        pgtype.Timestamptz
+}
+
+type OauthRequest struct {
+	HandleHash     []byte
+	ClientID       string
+	ClientName     string
+	Registered     bool
+	RedirectUri    string
+	State          string
+	CodeChallenge  string
+	AccountID      pgtype.UUID
+	PasskeyID      pgtype.UUID
+	ConfirmedUntil pgtype.Timestamptz
+	ExpiresAt      time.Time
+	CreatedAt      time.Time
+}
+
+type OauthToken struct {
+	Hash      []byte
+	GrantID   pgtype.UUID
+	Kind      string
+	Pair      pgtype.UUID
+	ExpiresAt pgtype.Timestamptz
+	UsedAt    pgtype.Timestamptz
+	NextPair  pgtype.UUID
+	CreatedAt time.Time
+}
+
 type Passkey struct {
 	ID                pgtype.UUID
 	AccountID         pgtype.UUID
@@ -158,6 +227,9 @@ type Sailor struct {
 	NameKey   string
 	Look      string
 	CreatedAt time.Time
+	Version   pgtype.Text
+	Finish    pgtype.Text
+	Colour    pgtype.Text
 }
 
 type Session struct {
@@ -168,6 +240,11 @@ type Session struct {
 	LastSeenAt     time.Time
 	Held           bool
 	ConfirmedUntil pgtype.Timestamptz
+}
+
+type Setting struct {
+	One           bool
+	GrantLifetime pgtype.Interval
 }
 
 type SimLease struct {

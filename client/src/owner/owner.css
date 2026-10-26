@@ -472,6 +472,27 @@ h3 {
   font-size: 13px;
 }
 
+/* The AI sign-in card's fields. */
+.ai form input {
+  width: 6em;
+  margin: 2px 4px 2px 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+}
+
+.ai form input.account {
+  width: 20em;
+}
+
+.ai h3 {
+  margin: 12px 0 4px;
+  font-size: 15px;
+}
+
 /* A control's confirmation, in its card. */
 .confirm {
   margin-top: 8px;

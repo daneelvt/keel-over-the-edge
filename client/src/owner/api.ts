@@ -11,7 +11,8 @@
 // well it has held so far and the world's gale warnings, while it is
 // shown; a place's box and outlook at the tick shown, for a point, an
 // island or a place picked; the next world's terrain and week under next/
-// once it is made; and the controls, each a POST of JSON.
+// once it is made; and the controls, each a POST of JSON, among them the
+// token lifetime of AI apps' grants and an account's machine sailors.
 
 /** A boat at sea, as the page shows it. */
 export interface Boat {
@@ -150,11 +151,22 @@ export interface Charted {
   worth: number;
 }
 
-/** accounts.json: the players' accounts, those made in the last week, and those seen in the last day. */
+/**
+ * accounts.json: the players' accounts, those made in the last week, and
+ * those seen in the last day; and, while sign-in for AI apps runs, the
+ * machine sailors, those made in the last week, the grants live by kind,
+ * and the token lifetime, s.
+ */
 export interface AccountsData {
   total: number;
   week: number;
   today: number;
+  machines?: {
+    total: number;
+    week: number;
+    grants: { app?: number; connection?: number };
+    lifetime: number;
+  };
 }
 
 /** charted.json: what is charted, the oldest first, and how many there are to chart. */
@@ -901,7 +913,15 @@ export interface Answer {
 }
 
 /** The controls, each under /owner/api/. */
-export type Control = 'flag' | 'place' | 'unseen' | 'world' | 'next' | 'chart';
+export type Control =
+  | 'flag'
+  | 'place'
+  | 'unseen'
+  | 'world'
+  | 'next'
+  | 'chart'
+  | 'lifetime'
+  | 'machines';
 
 /** Works a control: a POST of JSON, done on any 2xx (202 for one under way). */
 export async function control(path: Control, body: unknown): Promise<Answer> {

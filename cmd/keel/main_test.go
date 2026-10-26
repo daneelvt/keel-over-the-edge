@@ -509,8 +509,10 @@ func (noAccounts) EndOtherSessions(context.Context, store.AccountID, [32]byte) (
 func (noAccounts) ConfirmSession(context.Context, store.AccountID, [32]byte, time.Time) error {
 	return errNoAccounts
 }
-func (noAccounts) DeleteAccount(context.Context, store.AccountID) error { return errNoAccounts }
-func (noAccounts) SaveCeremony(context.Context, store.Ceremony) error   { return errNoAccounts }
+func (noAccounts) DeleteAccount(context.Context, store.AccountID) ([]store.AccountID, error) {
+	return nil, errNoAccounts
+}
+func (noAccounts) SaveCeremony(context.Context, store.Ceremony) error { return errNoAccounts }
 func (noAccounts) TakeCeremony(context.Context, [32]byte, string) (store.Ceremony, error) {
 	return store.Ceremony{}, store.ErrNotFound
 }
@@ -984,10 +986,18 @@ func TestPublicListeners(t *testing.T) {
 				t.Errorf("the internal listener answers %s with %d", path, code)
 			}
 		}
-		for _, path := range []string{"/", "/mcp", "/api/version", "/sse"} {
+		for _, path := range []string{"/", "/api/version", "/sse", "/mcp/x", "/oauth/token"} {
 			if code, _, _ := get(t, s.client, agentsURL+path); code != 404 {
 				t.Errorf("agents %s answered %d", path, code)
 			}
+		}
+		// The MCP address answers, behind its door: here, asked by another
+		// host than the address's own, the play origin's, it refuses.
+		if code, _, _ := get(t, s.client, agentsURL+"/mcp"); code != 403 {
+			t.Errorf("agents /mcp answered %d", code)
+		}
+		if code, body, _ := get(t, s.client, agentsURL+"/.well-known/oauth-protected-resource/mcp"); code != 200 || !strings.Contains(body, `"resource"`) {
+			t.Errorf("the resource's metadata: %d %s", code, body)
 		}
 		s.stop(t)
 	})

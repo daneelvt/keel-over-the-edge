@@ -5,7 +5,7 @@
   "description": "Every list of kinds in the game. Kinds are data: code reads their properties, never their names.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["boats", "sailors", "weather", "sky", "encounters", "world", "notices", "news"],
+  "required": ["boats", "sailors", "machine", "weather", "sky", "encounters", "world", "notices", "news"],
   "properties": {
     "boats": {
       "description": "Boat types.",
@@ -19,6 +19,7 @@
       "minItems": 1,
       "items": { "$ref": "#/$defs/Sailor" }
     },
+    "machine": { "$ref": "#/$defs/Machine" },
     "weather": { "$ref": "#/$defs/Weather" },
     "sky": { "$ref": "#/$defs/Sky" },
     "encounters": { "$ref": "#/$defs/Encounters" },
@@ -736,6 +737,29 @@
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
         "art": { "$ref": "#/$defs/SailorArt" }
+      }
+    },
+    "Machine": {
+      "title": "Machine",
+      "description": "The look of the machine sailors AI accounts sail as: the choices a player makes one from, a version, a metal finish and a main colour. A machine sailor's sailor keeps the three ids.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["versions", "finishes", "colours"],
+      "properties": {
+        "versions": { "description": "The machine's versions.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/MachineChoice" } },
+        "finishes": { "description": "The finishes of its metal, each with its colour.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/MachineChoice" } },
+        "colours": { "description": "Its main colours, chosen to stay apart for colour-blind players.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/MachineChoice" } }
+      }
+    },
+    "MachineChoice": {
+      "title": "MachineChoice",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Display name, as the player reads it: lowercase but where a name is a proper noun.", "type": "string", "minLength": 1 },
+        "colour": { "description": "Its colour, sRGB, #rrggbb; none for a version.", "type": "string", "pattern": "^#[0-9a-f]{6}$" }
       }
     },
     "Boat": {

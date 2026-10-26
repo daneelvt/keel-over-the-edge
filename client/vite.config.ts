@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { existsSync, readFileSync } from 'node:fs';
-import { type Plugin, type ServerOptions, searchForWorkspaceRoot } from 'vite';
+import { build, type Plugin, type ServerOptions, searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { licences } from './build/licences.ts';
 
@@ -9,6 +9,8 @@ import { licences } from './build/licences.ts';
 const cert = process.env.KEEL_DEV_CERT;
 const key = process.env.KEEL_DEV_KEY;
 const playAddr = process.env.KEEL_PLAY_ADDR ?? '127.0.0.1:8080';
+// keel's listener for AI apps: the MCP address.
+const agentsAddr = process.env.KEEL_AGENTS_ADDR ?? '127.0.0.1:8081';
 
 // The net worker is bundled apart; its packages join the page's notice.
 const workerPackages = new Set<string>();
@@ -30,6 +32,19 @@ const server: ServerOptions = {
     '/signin/': { target: `http://${playAddr}`, changeOrigin: false },
     '/recovery': { target: `http://${playAddr}`, changeOrigin: false },
     '/logout': { target: `http://${playAddr}`, changeOrigin: false },
+    // Sign-in for AI apps: the authorization server's routes and metadata,
+    // and the approval page's; the MCP address and its metadata on the
+    // agents' listener.
+    '/oauth/': { target: `http://${playAddr}`, changeOrigin: false },
+    '/.well-known/oauth-authorization-server': {
+      target: `http://${playAddr}`,
+      changeOrigin: false,
+    },
+    '/mcp': { target: `http://${agentsAddr}`, changeOrigin: false },
+    '/.well-known/oauth-protected-resource': {
+      target: `http://${agentsAddr}`,
+      changeOrigin: false,
+    },
     // The world's chunks, at the addresses the game connection hands out.
     '/w/': { target: `http://${playAddr}`, changeOrigin: false },
     // The game connection. Vite does not check a WebSocket's Origin before
@@ -71,6 +86,16 @@ const devWorlds: Plugin = {
   },
 };
 
+// The approval page for AI apps, built apart once the game's build is
+// written (vite.approve.config.ts says why), so vite build builds both.
+const approvePage: Plugin = {
+  name: 'approve-page',
+  apply: 'build',
+  async closeBundle() {
+    await build({ configFile: 'vite.approve.config.ts', logLevel: 'warn' });
+  },
+};
+
 export default defineConfig({
   server,
   // The net worker's packages, bundled for the development server from the
@@ -92,6 +117,7 @@ export default defineConfig({
   },
   plugins: [
     devWorlds,
+    approvePage,
     licences({
       allowedFile,
       shared: workerPackages,
@@ -120,6 +146,6 @@ export default defineConfig({
     }),
   ],
   test: {
-    include: ['src/**/*.test.ts', 'build/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'build/**/*.test.ts', 'approve/**/*.test.ts'],
   },
 });

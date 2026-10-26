@@ -259,10 +259,10 @@ func TestDeleteAccount(t *testing.T) {
 		Session: []byte("{}"), Build: "abc", Expires: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteAccount(ctx, ann); err != nil {
+	if _, err := s.DeleteAccount(ctx, ann); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteAccount(ctx, ann); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.DeleteAccount(ctx, ann); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("deleted twice: %v", err)
 	}
 	for table, want := range map[string]int{"account": 1, "sailor": 1, "session": 1, "passkey": 1, "webauthn_ceremony": 0} {

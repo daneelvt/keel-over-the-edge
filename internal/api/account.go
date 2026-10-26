@@ -138,11 +138,16 @@ func (a *api) finishAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	key.MadeOn = madeOn(r.UserAgent())
 	code, recovery := auth.NewRecoveryCode()
-	token, hash := auth.NewToken()
-	id, err := a.cfg.Accounts.CreateAccount(r.Context(), store.NewAccount{
-		Name: c.Name, NameKey: c.NameKey, Look: c.Look, UserHandle: c.UserHandle,
-		Passkey: key, RecoveryHash: recovery, TokenHash: hash,
+	var id store.AccountID
+	session, err := auth.Issue(a.cfg.Log, "session", auth.DrawToken, func(d auth.Drawn) error {
+		var err error
+		id, err = a.cfg.Accounts.CreateAccount(r.Context(), store.NewAccount{
+			Name: c.Name, NameKey: c.NameKey, Look: c.Look, UserHandle: c.UserHandle,
+			Passkey: key, RecoveryHash: recovery, TokenHash: d.Hash, Boat: a.cfg.Boat,
+		})
+		return err
 	})
+	token, hash := session.Token, session.Hash
 	switch {
 	case errors.Is(err, store.ErrNameTaken):
 		a.ceremonyCounted(c.Kind, "refused")
@@ -494,7 +499,8 @@ type deleteRequest struct {
 
 // deleteAccount answers POST /api/account/delete, behind auth.Required and
 // a passkey confirmed: the account goes, with its sailor, passkeys and
-// sessions, and its name is free. Its boat leaves the water at once and its
+// sessions, and its machine sailors with their grants, and every name is
+// free. Its boat leaves the water at once and its
 // game connection is closed; what it charted reads "a former sailor". The
 // answer lists its passkeys, which the browser may forget.
 //
@@ -518,11 +524,13 @@ func (a *api) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := a.cfg.Accounts.DeleteAccount(r.Context(), cur.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
+	machines, err := a.cfg.Accounts.DeleteAccount(r.Context(), cur.ID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		a.unavailable(w, r, "deleting an account", err)
 		return
 	}
 	a.cfg.Sessions.ForgetAccount(cur.ID)
+	a.machinesDeleted(machines...)
 	if a.cfg.Deleted != nil {
 		a.cfg.Deleted(cur.ID)
 	}

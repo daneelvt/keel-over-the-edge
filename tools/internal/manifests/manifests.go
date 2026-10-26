@@ -8,6 +8,7 @@
 package manifests
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -1546,12 +1547,21 @@ func routesLimited(objs []Object, _ Target) error {
 	return errors.Join(errs...)
 }
 
-// PlayHost is the players' host in production.
-const PlayHost = "play." + prodDomain
+// PlayHost is the players' host in production, and AgentsHost the MCP
+// address's, which AI apps connect to.
+const (
+	PlayHost   = "play." + prodDomain
+	AgentsHost = "agents." + prodDomain
+)
 
-// productionHost: production's Gateway listens for the players' host
-// alone, and its routes answer it alone: a request through the tunnel
-// for any other host is refused.
+// productionHosts are production's listeners and routes, each with the one
+// host it answers.
+var productionHosts = map[string]string{"http": PlayHost, "play": PlayHost, "agents": AgentsHost}
+
+// productionHost: production's Gateway listens for the players' host and
+// the MCP address's alone, each on its own listener, and each route
+// answers its own alone: a request through the tunnel for any other host
+// is refused.
 func productionHost(objs []Object, t Target) error {
 	if !t.Production() {
 		return nil
@@ -1561,13 +1571,15 @@ func productionHost(objs []Object, t Target) error {
 		switch o.Kind() {
 		case "Gateway":
 			for _, l := range List(o, "spec", "listeners") {
-				if h := Str(l, "hostname"); h != PlayHost {
-					errs = append(errs, fmt.Errorf("%s: listener %s's hostname is %q, want %s", o.ID(), Str(l, "name"), h, PlayHost))
+				name := Str(l, "name")
+				if h, want := Str(l, "hostname"), productionHosts[name]; want == "" || h != want {
+					errs = append(errs, fmt.Errorf("%s: listener %s's hostname is %q, want %s", o.ID(), name, h, cmp.Or(want, PlayHost+" or "+AgentsHost)))
 				}
 			}
 		case "HTTPRoute":
-			if hs := List(o, "spec", "hostnames"); !slices.Equal(hs, []any{PlayHost}) {
-				errs = append(errs, fmt.Errorf("%s answers %v, want %s alone", o.ID(), hs, PlayHost))
+			want := cmp.Or(productionHosts[o.Name()], PlayHost)
+			if hs := List(o, "spec", "hostnames"); !slices.Equal(hs, []any{want}) {
+				errs = append(errs, fmt.Errorf("%s answers %v, want %s alone", o.ID(), hs, want))
 			}
 		}
 	}

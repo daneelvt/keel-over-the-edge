@@ -3,8 +3,8 @@
 // A new sailor's start, against keel and its database: the start screen,
 // names refused in words, a sailor made with a passkey (Playwright's
 // virtual authenticator standing in for the browser's prompt), its recovery
-// code shown once, its cookie, and the sailor kept across a reload. A form
-// draws nothing, so one back end is enough.
+// code shown once, Set sail, its cookie, and the sailor kept across a
+// reload. A form draws nothing, so one back end is enough.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -126,6 +126,9 @@ test('a sailor made: the passkey, the recovery code once, the sea, the cookie, a
   expect(held).toHaveLength(1);
   expect(held[0]?.rpId).toBe('localhost');
   await page.getByRole('button', { name: 'I’ve written it down' }).click();
+  // Then the choice: to sea, or a machine sailor made first.
+  await expect(page.getByRole('button', { name: 'Make a machine sailor first' })).toBeVisible();
+  await page.getByRole('button', { name: 'Set sail' }).click();
   await atSea(page);
   expect(await sailingAs(page)).toBe(name);
 
