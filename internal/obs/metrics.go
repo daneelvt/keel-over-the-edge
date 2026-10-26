@@ -63,8 +63,11 @@ type Metrics struct {
 	Boats         prometheus.Gauge
 	BoatLimit     prometheus.Gauge
 	QueueLength   prometheus.Gauge
-	BoatsByKind   *prometheus.GaugeVec   // by kind: human, machine
-	QueueByKind   *prometheus.GaugeVec   // by kind: human, machine
+	BoatsByKind   *prometheus.GaugeVec // by kind: human, machine
+	QueueByKind   *prometheus.GaugeVec // by kind: human, machine
+	QueueOldest   *prometheus.GaugeVec // by kind: human, machine
+	AICap         prometheus.Gauge
+	AIReserve     prometheus.Gauge
 	Admissions    *prometheus.CounterVec // by result
 	QueueWait     prometheus.Histogram
 	GridDuration  prometheus.Histogram
@@ -229,6 +232,15 @@ func NewMetrics(build, catalog string) *Metrics {
 		QueueByKind: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "keel_sim_queue_by_kind", Help: "Accounts waiting for a boat, by kind: humans and machine sailors wait apart.",
 		}, []string{"kind"}),
+		QueueOldest: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "keel_sim_queue_oldest_seconds", Help: "How long the head of each kind's queue has waited, 0 when none waits.",
+		}, []string{"kind"}),
+		AICap: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "keel_sim_ai_cap", Help: "The most boats machine sailors sail at once: half the boat limit.",
+		}),
+		AIReserve: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "keel_sim_ai_reserve", Help: "The boats kept for machine sailors ahead of humans waiting: half their cap.",
+		}),
 		Admissions: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "keel_sim_admissions_total", Help: "Joins and the queue, by result: joined, rejoined, queued, admitted, dequeued or full.",
 		}, []string{"result"}),
@@ -436,7 +448,7 @@ func NewMetrics(build, catalog string) *Metrics {
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame, m.ClientTier, m.ClientRenderScale,
 		m.EdgeEncoders, m.EdgeQueued, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
-		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.BoatsByKind, m.QueueByKind, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
+		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.BoatsByKind, m.QueueByKind, m.QueueOldest, m.AICap, m.AIReserve, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.AccountsCreated, m.NamesRefused, m.Ceremonies, m.SignIns,
 		m.RecoveryUsed, m.AccountsDeleted, m.CloneWarnings, m.SessionLookups, m.CrossOriginRefused,
 		m.ChunkRequests, m.ChunkBytes, m.ChunksHanded, m.Falls, m.Approaches)

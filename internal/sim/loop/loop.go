@@ -280,16 +280,24 @@ func (l *Loop) tick(tick int64, late bool) {
 	if f.Tick%physics.StepsPerSecond == 0 {
 		// Boats and places by kind, once a second.
 		var boats, waiting [2]int
+		var oldest [2]int64
 		for _, s := range f.Live {
 			boats[kindIndex(f.Machine[s])]++
 		}
 		for i := range f.Queue {
-			waiting[kindIndex(f.Queue[i].Machine)]++
+			k := kindIndex(f.Queue[i].Machine)
+			if waiting[k] == 0 {
+				oldest[k] = f.Tick - f.Queue[i].Since
+			}
+			waiting[k]++
 		}
 		for k, name := range kindNames {
 			l.m.BoatsByKind.WithLabelValues(name).Set(float64(boats[k]))
 			l.m.QueueByKind.WithLabelValues(name).Set(float64(waiting[k]))
+			l.m.QueueOldest.WithLabelValues(name).Set(float64(oldest[k]) / physics.StepsPerSecond)
 		}
+		l.m.AICap.Set(float64(l.world.AICap()))
+		l.m.AIReserve.Set(float64(l.world.AIReserve()))
 	}
 	l.m.GridDuration.Observe(l.phases[sim.PhaseGrid].Seconds())
 	l.m.Workers.Set(float64(l.world.Workers()))
