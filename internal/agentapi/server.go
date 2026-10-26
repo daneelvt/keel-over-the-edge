@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,7 +47,24 @@ func NewServer(build string, core *Core) *mcp.Server {
 			}
 		}})
 	core.addTools(s)
+	s.AddReceivingMiddleware(inOrder)
 	return s
+}
+
+// inOrder lists the tools in their own order, which the SDK would list by
+// name: the loop's tools first.
+func inOrder(next mcp.MethodHandler) mcp.MethodHandler {
+	order := map[string]int{}
+	for i, d := range tools() {
+		order[d.tool.Name] = i
+	}
+	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+		res, err := next(ctx, method, req)
+		if l, ok := res.(*mcp.ListToolsResult); ok && err == nil {
+			slices.SortStableFunc(l.Tools, func(a, b *mcp.Tool) int { return order[a.Name] - order[b.Name] })
+		}
+		return res, err
+	}
 }
 
 // Handler is the agents' listener's routes: the MCP address, behind its

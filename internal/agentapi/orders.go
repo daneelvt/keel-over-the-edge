@@ -158,8 +158,8 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 		if turn != "" {
 			order, way = (order+1)&3, wayOf(turn)
 		}
-		if turn == "" && pw.Mode() == bus.PilotWind && pw.Target() == target && word.SheetIndex() == sheet && !pending(f, sl, pw) {
-			return written{already: true}, ""
+		if turn == "" && pw.Mode() == bus.PilotWind && pw.Target() == target && word.SheetIndex() == sheet {
+			return written{already: true, turning: pendingTurn(f, sl, pw)}, ""
 		}
 		s.Bus.Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, gen), bus.PackPilot(seq, bus.PilotWind, way, order, target, gen))
 		return written{turning: turn}, ""
@@ -187,13 +187,32 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 		if turn != "" {
 			order, way = (order+1)&3, wayOf(turn)
 		}
-		if turn == "" && pw.Mode() == bus.PilotHeading && pw.Target() == target && word.SheetIndex() == sheet && !pending(f, sl, pw) {
-			return written{already: true}, ""
+		if turn == "" && pw.Mode() == bus.PilotHeading && pw.Target() == target && word.SheetIndex() == sheet {
+			return written{already: true, turning: pendingTurn(f, sl, pw)}, ""
 		}
 		s.Bus.Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, gen), bus.PackPilot(seq, bus.PilotHeading, way, order, target, gen))
 		return written{turning: turn}, ""
 	}
 	return w, "Send exactly one of wind_angle (with side), heading or rudder: wind_angle 45 side starboard, heading 120, or rudder -10."
+}
+
+// pendingTurn is the turn the boat in slot sl is making or has yet to
+// take, "" for none.
+func pendingTurn(f *bus.Frame, sl int32, pw bus.PilotWord) string {
+	if !pending(f, sl, pw) {
+		return ""
+	}
+	way := uint8(f.State[sl].PilotWay)
+	if way == physics.WayHold {
+		way = pw.Way()
+	}
+	switch way {
+	case physics.WayTack:
+		return viaTack
+	case physics.WayGybe:
+		return viaGybe
+	}
+	return ""
 }
 
 // wayOf is a turn's way, as the pilot word holds it.
@@ -207,7 +226,8 @@ func wayOf(turn string) uint8 {
 // turnFor is the turn an order on the side sign at angle degrees off the wind
 // needs, "tack", "gybe" or "" for none, by the way asked: none when the
 // boat is on that side already, or is turning or has a turn it has not
-// taken; auto tacks through the wind, never through dead downwind.
+// taken; auto tacks through the wind, and never gybes: a turn between two
+// courses abaft the beam it leaves to the agent.
 func (h *helm) turnFor(f *bus.Frame, sl int32, pw bus.PilotWord, sign, angle float64, via string) (string, string) {
 	if presentSide(f, sl) == sign || pending(f, sl, pw) {
 		return "", ""
@@ -218,8 +238,10 @@ func (h *helm) turnFor(f *bus.Frame, sl int32, pw bus.PilotWord, sign, angle flo
 	case viaGybe:
 		return viaGybe, ""
 	case "", viaAuto:
+		// Abaft the beam both now and after, the short way is through dead
+		// downwind; otherwise it is through the wind.
 		now := deg(math.Abs(wrap(f.Wind[sl].MeanFrom - f.State[sl].Heading)))
-		if now+angle <= 180 {
+		if now <= 90 || angle <= 90 {
 			return viaTack, ""
 		}
 		return "", fmt.Sprintf("Getting onto the other side at %d° means turning through dead downwind, which auto never does. "+
@@ -277,10 +299,11 @@ func orderLine(s *Sea, f *bus.Frame, sl int32, w written) string {
 		what = "tacking to " + what
 	case w.turning == viaGybe || uint8(st.PilotWay) == physics.WayGybe:
 		what = "gybing to " + what
-	case w.already:
-		what = "already holding " + what
 	default:
 		what = "holding " + what
+	}
+	if w.already {
+		what = "already " + what
 	}
 	return fmt.Sprintf("%s · %s · boom out to %d° · %s · heel %d°", clockOf(s, f, st.X, st.Y), what,
 		int(math.Round(boomOf(b, word.SheetIndex()))), knots1(float64(f.Instruments[sl].SpeedOverGround)), degrees(math.Abs(st.Heel)))

@@ -71,6 +71,14 @@ type Sea struct {
 	SystemKinds []string
 	// Start is the place new boats start at: "Port Royal".
 	Start string
+	// Catalog, Kinds and Encounters are what the phone's overlays and
+	// sounds are worked out from: the catalog, the kinds of boat prepared,
+	// and how boats meet; nil for none.
+	Catalog    *catalog.Catalog
+	Kinds      []physics.Prepared
+	Encounters *physics.EncounterPrepared
+
+	overlays overlays
 
 	air air
 }
@@ -110,11 +118,16 @@ func (s *Sea) weatherAt(f *bus.Frame) *physics.WeatherTick {
 	return t
 }
 
-// weatherBefore is the weather minutes before f's tick, as the world's
-// timeline and its developer's weathers and systems make it.
+// weatherBefore is the weather minutes before f's tick, at a whole
+// minute.
 func (s *Sea) weatherBefore(f *bus.Frame, minutes int64) *physics.WeatherTick {
 	minute := int64(60 * physics.StepsPerSecond)
-	tick := (f.Tick/minute - minutes) * minute
+	return s.weatherAtTick(f, (f.Tick/minute-minutes)*minute)
+}
+
+// weatherAtTick is the weather at a tick near f's, as the world's timeline
+// and the frame's developer's weathers and systems make it.
+func (s *Sea) weatherAtTick(f *bus.Frame, tick int64) *physics.WeatherTick {
 	a := &s.air
 	a.mu.Lock()
 	defer a.mu.Unlock()

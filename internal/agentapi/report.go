@@ -12,6 +12,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
+	"github.com/daneelvt/keel-over-the-edge/internal/lookout"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
@@ -134,13 +135,17 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	b.Tack = tackOf(&f.Course[sl])
 	r.Boat = b
 
-	// The wind, as the readout reads it.
-	from, speed, mean, ok := h.readout.read(f.Tick)
-	if !ok {
-		from, speed, mean = float64(in.WindFrom), float64(in.WindSpeed), f.Wind[sl].WindSpeed
+	// The wind, as the readout reads it: the wind the boat feels over 3 s,
+	// its force from the mean wind.
+	var wp physics.WindPoint
+	physics.WindPointAt(s.weatherAt(f), st.X, st.Y, &wp, s.Shelter)
+	from, speed := h.readout.From, h.readout.Speed
+	if speed == 0 {
+		from, speed = float64(in.WindFrom), float64(in.WindSpeed)
 	}
+	shown := lookout.WindOf(speed, from, wp.MeanSpeed)
 	off := wrap(from - st.Heading)
-	r.Wind = &windFacts{From: degrees(from), Point: point16(from), Knots: knots0(speed), Force: weather.ForceOf(mean),
+	r.Wind = &windFacts{From: shown.Degrees, Point: shown.Point, Knots: shown.Knots, Force: shown.Force,
 		OffBow: degrees(math.Abs(off)), Side: side(off), Apparent: knots0(float64(in.ApparentSpeed)),
 		AppAngle: degrees(math.Abs(float64(in.ApparentAngle)))}
 
@@ -362,6 +367,7 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 	st := &f.State[sl]
 	now := time.Now()
 	seen := h.inSight(s, f, sl)
+	marks := s.marks(f, sl, seen)
 	inView := map[uint64]bool{}
 	for i, c := range seen {
 		boat := f.Boat[c.slot]
@@ -386,7 +392,7 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 		if t := h.drift(boat, bear, c.d, now); t != "" {
 			line += " · " + t
 		}
-		if v := h.verdictWords(s, f, sl, c.slot); v != "" {
+		if v := marks[c.slot]; v != "" {
 			line += " · " + v
 		}
 		lines = append(lines, line)
@@ -686,7 +692,11 @@ func (r *report) text() string {
 		b.WriteString("Hear: " + strings.Join(r.Hear, " · ") + "\n")
 	}
 	if s := r.Since; s != nil {
-		fmt.Fprintf(&b, "Since %d: ", s.From)
+		if s.From > 0 {
+			fmt.Fprintf(&b, "Since %d: ", s.From)
+		} else {
+			b.WriteString("Since: ")
+		}
 		if s.Lost > 0 {
 			fmt.Fprintf(&b, "(events before tick %d were not kept) ", s.Lost)
 		}

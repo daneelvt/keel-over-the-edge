@@ -13,6 +13,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/lookout"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -307,7 +308,7 @@ type helm struct {
 	seq      int64
 	contacts map[uint64]int
 	next     int
-	readout  readout
+	readout  lookout.Readout
 	ring     ring
 	waiter   *waiter
 	// tracks are the boats' bearings and ranges at the last report.

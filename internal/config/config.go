@@ -67,6 +67,9 @@ type Config struct {
 	BoatLimit int
 	// DevSailors is how many scripted sailors sail in the world.
 	DevSailors int
+	// AISilence is how long a machine sailor's boat stays at sea with no
+	// call from its agent before its grace begins.
+	AISilence time.Duration
 	// DevCommands turns on the developer's commands on the internal
 	// listener: POST /debug/wind. Only tools/dev and tools/e2e set it.
 	DevCommands bool
@@ -104,6 +107,14 @@ const (
 	DefaultPlayAddr     = "127.0.0.1:8080"
 	DefaultAgentsAddr   = "127.0.0.1:8081"
 	DefaultInternalAddr = "127.0.0.1:9090"
+)
+
+// DefaultAISilence is how long a machine sailor's boat stays at sea with
+// no call, unless KEEL_AI_SILENCE says otherwise; MaxAISilence the most it
+// may be.
+const (
+	DefaultAISilence = 3 * time.Minute
+	MaxAISilence     = time.Hour
 )
 
 // DefaultBoatLimit is the boat limit unless KEEL_BOAT_LIMIT sets one: a
@@ -146,6 +157,7 @@ func Load(getenv func(string) string) (Config, error) {
 		ClientDir:    getenv("KEEL_CLIENT_DIR"),
 		DatabaseURL:  getenv("KEEL_DATABASE_URL"),
 		BoatLimit:    DefaultBoatLimit,
+		AISilence:    DefaultAISilence,
 		Bell:         DefaultBell,
 		Land:         true,
 		WorldKeep:    DefaultWorldKeep,
@@ -221,6 +233,13 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("KEEL_DEV_SAILORS: %q is not a number from 0 to %d", v, sim.Capacity))
 		}
 		c.DevSailors = n
+	}
+	if v := getenv("KEEL_AI_SILENCE"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Second || d > MaxAISilence {
+			errs = append(errs, fmt.Errorf("KEEL_AI_SILENCE: %q is not a duration from 1s to %v", v, MaxAISilence))
+		}
+		c.AISilence = d
 	}
 	if v := getenv("KEEL_BELL"); v != "" {
 		d, err := time.ParseDuration(v)

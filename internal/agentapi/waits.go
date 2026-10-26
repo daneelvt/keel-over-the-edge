@@ -156,7 +156,7 @@ func (h *helm) look(s *Sea, f *bus.Frame, sight bool) {
 	}
 	sl := h.slot
 	in := &f.Instruments[sl]
-	h.readout.add(f.Tick, float64(in.WindSpeed), float64(in.WindFrom), f.Wind[sl].WindSpeed)
+	h.readout.Add(float64(f.Tick)*1000/physics.StepsPerSecond, float64(in.WindSpeed), float64(in.WindFrom))
 	turned := h.turnDone(f, sl)
 	w := h.waiter
 	why := ""
