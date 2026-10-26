@@ -239,7 +239,8 @@ func TestTheHelmsmanSails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	world, err := seed1()
+	// A world of its own: a server that sails a bundle changes it.
+	world, err := worldgen.Generate(1, cat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,10 +270,23 @@ func helmsmanSails(t *testing.T, world *worldgen.Bundle, target string, best, fr
 		d := &memDB{epoch: bubbleEpoch, sessions: edgetest.NewSessions()}
 		gen := func(uint64) (*worldgen.Bundle, error) { return world, nil }
 		s := startServer(t, map[string]string{"KEEL_DEV_COMMANDS": "1"}, newMemNet(), d.with(serveOptions{generate: gen}))
-		time.Sleep(time.Second)
-		res, err := s.client.Post(fmt.Sprintf("%s/debug/wind?knots=12&from=%.0f", internalURL, from), "", nil)
+		// Seed 1's chart and sight table take their time to build: keel
+		// listens once they are.
+		var res *http.Response
+		var err error
+		for range 120 {
+			time.Sleep(time.Second)
+			if res, err = s.client.Post(fmt.Sprintf("%s/debug/wind?knots=12&from=%.0f", internalURL, from), "", nil); err == nil {
+				break
+			}
+		}
 		if err != nil {
-			t.Fatal(err)
+			select {
+			case e := <-s.done:
+				t.Fatalf("keel stopped: %v", e)
+			default:
+			}
+			t.Fatalf("%v\n%s", err, s.logs.String())
 		}
 		res.Body.Close()
 		for n := range 4 {
