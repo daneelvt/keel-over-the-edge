@@ -13,7 +13,7 @@ import (
 )
 
 const accountByID = `-- name: AccountByID :one
-SELECT a.id, a.kind, a.tools, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look,
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look,
   a.created_at, a.recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
@@ -24,6 +24,7 @@ type AccountByIDRow struct {
 	ID             pgtype.UUID
 	Kind           string
 	Tools          bool
+	Priority       bool
 	NoticesOff     []string
 	UserHandle     []byte
 	Name           string
@@ -40,6 +41,7 @@ func (q *Queries) AccountByID(ctx context.Context, id pgtype.UUID) (AccountByIDR
 		&i.ID,
 		&i.Kind,
 		&i.Tools,
+		&i.Priority,
 		&i.NoticesOff,
 		&i.UserHandle,
 		&i.Name,
@@ -52,7 +54,7 @@ func (q *Queries) AccountByID(ctx context.Context, id pgtype.UUID) (AccountByIDR
 }
 
 const accountByUserHandle = `-- name: AccountByUserHandle :one
-SELECT a.id, a.kind, a.tools, a.notices_off, a.user_handle, sl.name, sl.look
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.user_handle = $1 AND a.kind = 'human'
@@ -62,6 +64,7 @@ type AccountByUserHandleRow struct {
 	ID         pgtype.UUID
 	Kind       string
 	Tools      bool
+	Priority   bool
 	NoticesOff []string
 	UserHandle []byte
 	Name       string
@@ -76,6 +79,7 @@ func (q *Queries) AccountByUserHandle(ctx context.Context, userHandle []byte) (A
 		&i.ID,
 		&i.Kind,
 		&i.Tools,
+		&i.Priority,
 		&i.NoticesOff,
 		&i.UserHandle,
 		&i.Name,
@@ -106,17 +110,18 @@ func (q *Queries) AccountCounts(ctx context.Context) (AccountCountsRow, error) {
 }
 
 const accountsByID = `-- name: AccountsByID :many
-SELECT a.id, a.kind, a.tools, coalesce(sl.name, '')::text AS name
+SELECT a.id, a.kind, a.tools, a.priority, coalesce(sl.name, '')::text AS name
 FROM account a
 LEFT JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = ANY($1::uuid[])
 `
 
 type AccountsByIDRow struct {
-	ID    pgtype.UUID
-	Kind  string
-	Tools bool
-	Name  string
+	ID       pgtype.UUID
+	Kind     string
+	Tools    bool
+	Priority bool
+	Name     string
 }
 
 // The accounts of ids, with their sailors' names: the world page's lists.
@@ -133,6 +138,7 @@ func (q *Queries) AccountsByID(ctx context.Context, ids []pgtype.UUID) ([]Accoun
 			&i.ID,
 			&i.Kind,
 			&i.Tools,
+			&i.Priority,
 			&i.Name,
 		); err != nil {
 			return nil, err
@@ -230,6 +236,24 @@ func (q *Queries) NameTaken(ctx context.Context, nameKey string) (bool, error) {
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const setAccountPriority = `-- name: SetAccountPriority :execrows
+UPDATE account SET priority = $1 WHERE id = $2
+`
+
+type SetAccountPriorityParams struct {
+	Priority bool
+	ID       pgtype.UUID
+}
+
+// A priority account, human or AI, never waits for a boat.
+func (q *Queries) SetAccountPriority(ctx context.Context, arg SetAccountPriorityParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAccountPriority, arg.Priority, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setAccountTools = `-- name: SetAccountTools :execrows

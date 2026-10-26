@@ -1,0 +1,937 @@
+{
+  "comment": "Written by go test ./internal/lookout -run RightOfWayFile -update: the overlay's range, m, seconds ahead, closeness, m, and most marks; the sailor's boat and others as the page draws them, m, rad and m/s, the true wind's direction at each, rad, their courses the Articles' first; the boats that will come close, by index, how close, m, and when, s; the marks over them; the sailor's tack.",
+  "range": 40,
+  "ahead": 10,
+  "close": 8.4,
+  "marks": 3,
+  "cases": [
+    {
+      "name": "port and starboard crossing",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 0.7853981633974483,
+        "heel": 0,
+        "boom": 0.39269908169872414,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 20,
+          "north": -2,
+          "heading": -0.7853981633974483,
+          "heel": 0,
+          "boom": -0.39269908169872414,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 2,
+          "time": 7.071067811865476
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": true,
+          "article": "10",
+          "label": "Keep clear · Article 10",
+          "distance": 2,
+          "time": 7.071067811865476
+        }
+      ],
+      "tack": "Port tack"
+    },
+    {
+      "name": "starboard and port crossing",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": -0.7853981633974483,
+        "heel": 0,
+        "boom": -0.39269908169872414,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": -20,
+          "north": -2,
+          "heading": 0.7853981633974483,
+          "heel": 0,
+          "boom": 0.39269908169872414,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 2,
+          "time": 7.071067811865476
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": false,
+          "article": "10",
+          "label": "Right of way · Article 10",
+          "distance": 2,
+          "time": 7.071067811865476
+        }
+      ],
+      "tack": "Starboard tack"
+    },
+    {
+      "name": "windward and leeward on one tack",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 0.7853981633974483,
+        "heel": 0,
+        "boom": 0.39269908169872414,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 3,
+          "north": -3,
+          "heading": 0.7853981633974483,
+          "heel": 0,
+          "boom": 0.39269908169872414,
+          "mode": 0,
+          "speed": 2.2,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 4.242640687119285,
+          "time": 0
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": true,
+          "article": "11",
+          "label": "Keep clear · Article 11",
+          "distance": 4.242640687119285,
+          "time": 0
+        }
+      ],
+      "tack": "Port tack"
+    },
+    {
+      "name": "leeward of one on the same tack",
+      "own": {
+        "east": 3,
+        "north": -3,
+        "heading": 0.7853981633974483,
+        "heel": 0,
+        "boom": 0.39269908169872414,
+        "mode": 0,
+        "speed": 2.2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 0,
+          "north": 0,
+          "heading": 0.7853981633974483,
+          "heel": 0,
+          "boom": 0.39269908169872414,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 4.242640687119285,
+          "time": 0
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": false,
+          "article": "11",
+          "label": "Right of way · Article 11",
+          "distance": 4.242640687119285,
+          "time": 0
+        }
+      ],
+      "tack": "Port tack"
+    },
+    {
+      "name": "clear astern",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 2.0943951023931953,
+        "heel": 0,
+        "boom": 1.0471975511965976,
+        "mode": 0,
+        "speed": 3,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 5.2,
+          "north": -3,
+          "heading": 2.0943951023931953,
+          "heel": 0,
+          "boom": 1.0471975511965976,
+          "mode": 0,
+          "speed": 1,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 0.0019237886466829555,
+          "time": 3.0016660498395407
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": true,
+          "article": "12",
+          "label": "Keep clear · Article 12",
+          "distance": 0.0019237886466829555,
+          "time": 3.0016660498395407
+        }
+      ],
+      "tack": "Port tack"
+    },
+    {
+      "name": "clear ahead",
+      "own": {
+        "east": 5.2,
+        "north": -3,
+        "heading": 2.0943951023931953,
+        "heel": 0,
+        "boom": 1.0471975511965976,
+        "mode": 0,
+        "speed": 1,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 0,
+          "north": 0,
+          "heading": 2.0943951023931953,
+          "heel": 0,
+          "boom": 1.0471975511965976,
+          "mode": 0,
+          "speed": 3,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 0.0019237886466829555,
+          "time": 3.0016660498395407
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": false,
+          "article": "12",
+          "label": "Right of way · Article 12",
+          "distance": 0.0019237886466829555,
+          "time": 3.0016660498395407
+        }
+      ],
+      "tack": "Port tack"
+    },
+    {
+      "name": "a boat tacking",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": -0.7853981633974483,
+        "heel": 0,
+        "boom": -0.39269908169872414,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": -6,
+          "north": 8,
+          "heading": -0.3490658503988659,
+          "heel": 0,
+          "boom": -0.17453292519943295,
+          "mode": 0,
+          "speed": 1.2,
+          "windFrom": 0,
+          "before": [
+            {
+              "heading": 0.7853981633974483,
+              "boom": 0.39269908169872414
+            },
+            {
+              "heading": 0.5235987755982988,
+              "boom": 0.2617993877991494
+            },
+            {
+              "heading": 0.17453292519943295,
+              "boom": 0.08726646259971647
+            }
+          ]
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 6.0454391252689055,
+          "time": 7.6307452118066585
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": false,
+          "article": "13",
+          "label": "Right of way · Article 13",
+          "distance": 6.0454391252689055,
+          "time": 7.6307452118066585
+        }
+      ],
+      "tack": "Starboard tack"
+    },
+    {
+      "name": "tacking",
+      "own": {
+        "east": -6,
+        "north": 8,
+        "heading": -0.3490658503988659,
+        "heel": 0,
+        "boom": -0.17453292519943295,
+        "mode": 0,
+        "speed": 1.2,
+        "windFrom": 0,
+        "before": [
+          {
+            "heading": 0.7853981633974483,
+            "boom": 0.39269908169872414
+          },
+          {
+            "heading": 0.5235987755982988,
+            "boom": 0.2617993877991494
+          },
+          {
+            "heading": 0.17453292519943295,
+            "boom": 0.08726646259971647
+          }
+        ]
+      },
+      "others": [
+        {
+          "east": 0,
+          "north": 0,
+          "heading": -0.7853981633974483,
+          "heel": 0,
+          "boom": -0.39269908169872414,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 6.0454391252689055,
+          "time": 7.6307452118066585
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": true,
+          "article": "13",
+          "label": "Keep clear · Article 13",
+          "distance": 6.0454391252689055,
+          "time": 7.6307452118066585
+        }
+      ],
+      "tack": "Tacking"
+    },
+    {
+      "name": "tacked and close-hauled",
+      "own": {
+        "east": 8,
+        "north": 6,
+        "heading": -0.7853981633974483,
+        "heel": 0,
+        "boom": -0.39269908169872414,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": [
+          {
+            "heading": 0.7853981633974483,
+            "boom": 0.39269908169872414
+          },
+          {
+            "heading": 0.5235987755982988,
+            "boom": 0.2617993877991494
+          },
+          {
+            "heading": 0.17453292519943295,
+            "boom": 0.08726646259971647
+          },
+          {
+            "heading": -0.3490658503988659,
+            "boom": -0.17453292519943295
+          }
+        ]
+      },
+      "others": [
+        {
+          "east": 0,
+          "north": 0,
+          "heading": 0.7853981633974483,
+          "heel": 0,
+          "boom": 0.39269908169872414,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 6,
+          "time": 2.8284271247461903
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": false,
+          "article": "10",
+          "label": "Right of way · Article 10",
+          "distance": 6,
+          "time": 2.8284271247461903
+        }
+      ],
+      "tack": "Starboard tack"
+    },
+    {
+      "name": "beside a capsized boat",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 1.5707963267948966,
+        "heel": 0,
+        "boom": 0.7853981633974483,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 12,
+          "north": 1,
+          "heading": 0.5235987755982988,
+          "heel": 1.7453292519943295,
+          "boom": 0.2617993877991494,
+          "mode": 1,
+          "speed": 0,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 0.9999999999999992,
+          "time": 6
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": true,
+          "article": "22",
+          "label": "Keep clear · Article 22",
+          "distance": 0.9999999999999992,
+          "time": 6
+        }
+      ],
+      "tack": "Port tack"
+    },
+    {
+      "name": "capsized beside a boat",
+      "own": {
+        "east": 12,
+        "north": 1,
+        "heading": 0.5235987755982988,
+        "heel": 1.7453292519943295,
+        "boom": 0.2617993877991494,
+        "mode": 1,
+        "speed": 0,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 0,
+          "north": 0,
+          "heading": 1.5707963267948966,
+          "heel": 0,
+          "boom": 0.7853981633974483,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 0.9999999999999992,
+          "time": 6
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": false,
+          "article": "22",
+          "label": "Right of way · Article 22",
+          "distance": 0.9999999999999992,
+          "time": 6
+        }
+      ],
+      "tack": "Port tack"
+    },
+    {
+      "name": "both capsized",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 0,
+        "heel": 1.7453292519943295,
+        "boom": 0,
+        "mode": 1,
+        "speed": 0,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 3,
+          "north": 0,
+          "heading": 0,
+          "heel": 1.7453292519943295,
+          "boom": 0,
+          "mode": 1,
+          "speed": 0,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 3,
+          "time": 0
+        }
+      ],
+      "marks": null,
+      "tack": "Starboard tack"
+    },
+    {
+      "name": "near head to wind",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 0.03490658503988659,
+        "heel": 0,
+        "boom": 0.017453292519943295,
+        "mode": 0,
+        "speed": 0.5,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 6,
+          "north": 6,
+          "heading": -0.8726646259971648,
+          "heel": 0,
+          "boom": -0.4363323129985824,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 8.065060489315233,
+          "time": 1.517867892937626
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": true,
+          "article": "10",
+          "label": "Keep clear · Article 10",
+          "distance": 8.065060489315233,
+          "time": 1.517867892937626
+        }
+      ],
+      "tack": "Port tack"
+    },
+    {
+      "name": "running",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 2.9670597283903604,
+        "heel": 0,
+        "boom": 1.3962634015954636,
+        "mode": 0,
+        "speed": 3,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 2,
+          "north": -6,
+          "heading": 3.2288591161895095,
+          "heel": 0,
+          "boom": -1.3962634015954636,
+          "mode": 0,
+          "speed": 2.5,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 4.017720408705199,
+          "time": 5.598760066345243
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": true,
+          "article": "10",
+          "label": "Keep clear · Article 10",
+          "distance": 4.017720408705199,
+          "time": 5.598760066345243
+        }
+      ],
+      "tack": "Port tack"
+    },
+    {
+      "name": "the nearest three of many",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 0,
+        "heel": 0,
+        "boom": 0,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 30,
+          "north": 20,
+          "heading": 4.71238898038469,
+          "heel": 0,
+          "boom": -0.7853981633974483,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        },
+        {
+          "east": 10,
+          "north": 10,
+          "heading": 4.71238898038469,
+          "heel": 0,
+          "boom": -0.7853981633974483,
+          "mode": 0,
+          "speed": 1,
+          "windFrom": 0,
+          "before": []
+        },
+        {
+          "east": -6,
+          "north": 6,
+          "heading": 1.5707963267948966,
+          "heel": 0,
+          "boom": 0.7853981633974483,
+          "mode": 0,
+          "speed": 1,
+          "windFrom": 0,
+          "before": []
+        },
+        {
+          "east": 5,
+          "north": 3,
+          "heading": 4.71238898038469,
+          "heel": 0,
+          "boom": -0.7853981633974483,
+          "mode": 0,
+          "speed": 1,
+          "windFrom": 0,
+          "before": []
+        },
+        {
+          "east": 0,
+          "north": -10,
+          "heading": 0,
+          "heel": 0,
+          "boom": 0,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        },
+        {
+          "east": 8,
+          "north": 8,
+          "heading": 4.956735075663896,
+          "heel": 0,
+          "boom": -0.6632251157578453,
+          "mode": 0,
+          "speed": 0.82,
+          "windFrom": 0,
+          "before": []
+        },
+        {
+          "east": 0,
+          "north": 39,
+          "heading": 3.141592653589793,
+          "heel": 0,
+          "boom": 1.3962634015954636,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 6,
+          "distance": 2.388061258337339e-15,
+          "time": 9.75
+        },
+        {
+          "index": 2,
+          "distance": 2.6832815729997477,
+          "time": 3.6
+        },
+        {
+          "index": 3,
+          "distance": 3.1304951684997055,
+          "time": 2.2
+        }
+      ],
+      "marks": [
+        {
+          "index": 6,
+          "keepClear": false,
+          "article": "10",
+          "label": "Right of way · Article 10",
+          "distance": 2.388061258337339e-15,
+          "time": 9.75
+        },
+        {
+          "index": 2,
+          "keepClear": false,
+          "article": "10",
+          "label": "Right of way · Article 10",
+          "distance": 2.6832815729997477,
+          "time": 3.6
+        },
+        {
+          "index": 3,
+          "keepClear": false,
+          "article": "11",
+          "label": "Right of way · Article 11",
+          "distance": 3.1304951684997055,
+          "time": 2.2
+        }
+      ],
+      "tack": "Starboard tack"
+    },
+    {
+      "name": "all passing wide",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 0,
+        "heel": 0,
+        "boom": 0,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 20,
+          "north": 0,
+          "heading": 0,
+          "heel": 0,
+          "boom": 0,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0,
+          "before": []
+        },
+        {
+          "east": -15,
+          "north": 5,
+          "heading": 0,
+          "heel": 0,
+          "boom": 0,
+          "mode": 0,
+          "speed": 1,
+          "windFrom": 0,
+          "before": []
+        },
+        {
+          "east": 0,
+          "north": -30,
+          "heading": 3.141592653589793,
+          "heel": 0,
+          "boom": 1.3962634015954636,
+          "mode": 0,
+          "speed": 0.5,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": null,
+      "marks": null,
+      "tack": "Starboard tack"
+    },
+    {
+      "name": "out of range",
+      "own": {
+        "east": 0,
+        "north": 0,
+        "heading": 0,
+        "heel": 0,
+        "boom": 0,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 0,
+          "north": 41,
+          "heading": 3.141592653589793,
+          "heel": 0,
+          "boom": 1.3962634015954636,
+          "mode": 0,
+          "speed": 5,
+          "windFrom": 0,
+          "before": []
+        }
+      ],
+      "approaches": null,
+      "marks": null,
+      "tack": "Starboard tack"
+    },
+    {
+      "name": "a wind that differs between them",
+      "own": {
+        "east": 100,
+        "north": 100,
+        "heading": 0.5235987755982988,
+        "heel": 0,
+        "boom": 0.2617993877991494,
+        "mode": 0,
+        "speed": 2,
+        "windFrom": 0,
+        "before": []
+      },
+      "others": [
+        {
+          "east": 106,
+          "north": 108,
+          "heading": 5.235987755982989,
+          "heel": 0,
+          "boom": -0.5235987755982988,
+          "mode": 0,
+          "speed": 2,
+          "windFrom": 0.3,
+          "before": []
+        }
+      ],
+      "approaches": [
+        {
+          "index": 0,
+          "distance": 6.174492339697422,
+          "time": 2.781088913245535
+        }
+      ],
+      "marks": [
+        {
+          "index": 0,
+          "keepClear": true,
+          "article": "10",
+          "label": "Keep clear · Article 10",
+          "distance": 6.174492339697422,
+          "time": 2.781088913245535
+        }
+      ],
+      "tack": "Port tack"
+    }
+  ]
+}

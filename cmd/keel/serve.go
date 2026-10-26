@@ -507,6 +507,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		defer close(jobsDone)
 		var wg sync.WaitGroup
 		wg.Go(func() { p.agents.usage.Run(jobsCtx) })
+		wg.Go(func() { p.agents.core.Run(jobsCtx) })
 		wg.Go(func() { p.countGrants(jobsCtx) })
 		p.jobs.Run(jobsCtx)
 		wg.Wait()
@@ -555,6 +556,8 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		go func() {
 			sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 			defer cancel()
+			// Waiting calls answer at once, with the restart's words.
+			p.agents.core.Shutdown()
 			err := errors.Join(play.Shutdown(sctx), agents.Shutdown(sctx))
 			health.Listening(false)
 			listeners <- err
@@ -608,6 +611,9 @@ type ownerConfig struct {
 	// agents is sign-in for AI apps, whose lifetime and caps the owner
 	// sets.
 	agents *agents
+	// aiCap and aiReserve are the world's most boats for machine sailors
+	// and the places kept for them; 0 for the next world.
+	aiCap, aiReserve int
 }
 
 // ownerTools are the owner's tools: the world page and its controls.
@@ -631,7 +637,13 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	if a := c.agents; a != nil {
 		cfg.Machines, cfg.Lifetime, cfg.LifetimeChanged = c.db, a.lifetime, a.grants.ForgetAll
+		cfg.Door = a.grants
+		cfg.Agents, cfg.AISilence = ownerAgents{a.core}, a.core.Silence()
+		l := a.core.Limits()
+		cfg.AIOrders = fmt.Sprintf("%g a second, a burst of %d", float64(l.Orders), l.OrderBurst)
+		cfg.AILooks = fmt.Sprintf("%g a second, a burst of %d", float64(l.Looks), l.LookBurst)
 	}
+	cfg.AICap, cfg.AIReserve = c.aiCap, c.aiReserve
 	if c.bus != nil {
 		cfg.Frames, cfg.Owner, cfg.Clock = c.bus.Frames, c.bus.Commands.Owner(), c.clock
 		cfg.Sessions, cfg.Edge = c.sessions, c.game

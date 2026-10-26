@@ -258,3 +258,36 @@ func TestModifiedClient(t *testing.T) {
 		}
 	})
 }
+
+// TestMachineMark: a machine sailor's boat carries the machine bit in
+// every phone's view; a human's never does.
+func TestMachineMark(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := edgetest.NewServer(t, edgetest.Config{Capacity: 16})
+		token, _ := s.Sailor("Ann")
+		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws.CloseNow()
+		s.Crowd(t, 2, ring(4, 100))
+		s.Machines(t, 2, func(i int) physics.State { return ring(4, 100)(i + 2) })
+		r := newReader(t, ws)
+		for range 10 {
+			time.Sleep(100 * time.Millisecond)
+			r.read()
+		}
+		if r.lastView == nil || r.lastView.Len() != 4 {
+			t.Fatalf("a view of %v", r.lastView)
+		}
+		machines := 0
+		for i := range protocol.ViewSlots {
+			if q := &r.lastView.Boats[i]; r.lastView.Has(i) && q.IsMachine() {
+				machines++
+			}
+		}
+		if machines != 2 {
+			t.Fatalf("%d boats marked a machine's, not 2", machines)
+		}
+	})
+}

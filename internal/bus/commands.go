@@ -148,6 +148,11 @@ type Command struct {
 	On      bool          // Stay, Unseen: on, or off; Chart: every subject
 	Subject int32         // Chart: the subject, by its index in the world's sight table
 	At      int64         // End: the world's last tick
+	// Machine and Priority are a Join's account's kind: a machine
+	// sailor's, sailed by an AI agent, and a priority account's, which
+	// never waits for a boat.
+	Machine  bool
+	Priority bool
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply

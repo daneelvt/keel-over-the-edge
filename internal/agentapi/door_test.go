@@ -24,6 +24,15 @@ func poolQuery(t *testing.T, h *harness, sql string, dest ...any) error {
 	return storetest.PoolOn(t, h.db).QueryRow(context.Background(), sql).Scan(dest...)
 }
 
+// lookAlike is tok with one character changed.
+func lookAlike(tok string) string {
+	c := "0"
+	if tok[20] == '0' {
+		c = "1"
+	}
+	return tok[:20] + c + tok[21:]
+}
+
 func uuid(id [16]byte) string {
 	s := hex.EncodeToString(id[:])
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
@@ -53,7 +62,7 @@ func TestDoor(t *testing.T) {
 	at, _ := oauth.NewToken(oauth.KindAccess)
 	rt, _ := oauth.NewToken(oauth.KindRefresh)
 	for name, tok := range map[string]string{
-		"malformed": "keelote_at_short", "a look-alike": strings.Replace(access, access[20:21], "0", 1), "unknown": at, "a refresh token": rt,
+		"malformed": "keelote_at_short", "a look-alike": lookAlike(access), "unknown": at, "a refresh token": rt,
 	} {
 		code, challenge, body := h.mcpCall(tok)
 		if code != 401 || !strings.Contains(challenge, `error="invalid_token"`) || !strings.Contains(challenge, "error_description=") ||
@@ -61,7 +70,7 @@ func TestDoor(t *testing.T) {
 			t.Errorf("%s: %d %q %q", name, code, challenge, body)
 		}
 	}
-	if code, _, body := h.mcpCall(access); code != 200 || !strings.Contains(body, "You sail as Iron Mary, Ann Bonny's machine sailor") {
+	if code, _, body := h.mcpCall(access); code != 200 || !strings.Contains(body, "You sail as «Iron Mary», «Ann Bonny»'s machine sailor") {
 		t.Fatalf("accepted: %d %s", code, body)
 	}
 
@@ -151,6 +160,10 @@ func TestDoor(t *testing.T) {
 	token := game.connectionToken()
 	if code, _, body := h.mcpCall(token); code != 200 || !strings.Contains(body, "Iron Mary") {
 		t.Fatalf("the connection token: %d %s", code, body)
+	}
+	// An app that sends no Content-Type is answered: its body is JSON.
+	if code, _, body := h.mcpCallAs(token, ""); code != 200 || !strings.Contains(body, "Iron Mary") {
+		t.Fatalf("no Content-Type: %d %s", code, body)
 	}
 	// Deleting the machine sailor ends every token of it at once.
 	if status, body := game.post("/api/machines/delete", `{"machine":"`+machineOf(t, h)+`","name":"iron mary"}`); status != 200 {

@@ -1,0 +1,811 @@
+{
+  "comment": "Written by go test ./internal/lookout -run WindFile -update: runs of the wind at the boat, ms of world time, m/s and rad, and the readout after some of them, the mean over three seconds and its words; winds and their means and the readout's words; headings, rad, and their words.",
+  "sequences": [
+    {
+      "name": "steady",
+      "start": 1000,
+      "every": 100,
+      "count": 10,
+      "back": 0,
+      "backBy": 0,
+      "speeds": [
+        6
+      ],
+      "froms": [
+        1
+      ],
+      "mean": 6,
+      "at": [
+        0,
+        9
+      ],
+      "shown": [
+        {
+          "speed": 6,
+          "from": 0.9999999999999999,
+          "text": "ENE 12 kn · F4"
+        },
+        {
+          "speed": 6,
+          "from": 0.9999999999999999,
+          "text": "ENE 12 kn · F4"
+        }
+      ]
+    },
+    {
+      "name": "gusts over three seconds",
+      "start": 50000,
+      "every": 16.5,
+      "count": 400,
+      "back": 0,
+      "backBy": 0,
+      "speeds": [
+        5,
+        5.5,
+        7.25,
+        8,
+        6.75,
+        4.5,
+        5.25
+      ],
+      "froms": [
+        4,
+        4.1,
+        3.9,
+        4.05,
+        4.2
+      ],
+      "mean": 5.6,
+      "at": [
+        0,
+        50,
+        181,
+        182,
+        250,
+        399
+      ],
+      "shown": [
+        {
+          "speed": 5,
+          "from": -2.2831853071795867,
+          "text": "SW 10 kn · F4"
+        },
+        {
+          "speed": 6.004901960784314,
+          "from": -2.2329839891356986,
+          "text": "SW 12 kn · F4"
+        },
+        {
+          "speed": 6.035714285714286,
+          "from": -2.2331965099222093,
+          "text": "SW 12 kn · F4"
+        },
+        {
+          "speed": 6.035714285714286,
+          "from": -2.2336514938658354,
+          "text": "SW 12 kn · F4"
+        },
+        {
+          "speed": 6.035714285714286,
+          "from": -2.2327187767633134,
+          "text": "SW 12 kn · F4"
+        },
+        {
+          "speed": 6.035714285714286,
+          "from": -2.2321828827521104,
+          "text": "SW 12 kn · F4"
+        }
+      ]
+    },
+    {
+      "name": "about north",
+      "start": 0,
+      "every": 33.25,
+      "count": 120,
+      "back": 0,
+      "backBy": 0,
+      "speeds": [
+        4,
+        4.5
+      ],
+      "froms": [
+        6.2,
+        0.1,
+        6.25,
+        0.05
+      ],
+      "mean": 4.2,
+      "at": [
+        1,
+        60,
+        119
+      ],
+      "shown": [
+        {
+          "speed": 4.25,
+          "from": 0.013810214199115562,
+          "text": "N 8 kn · F3"
+        },
+        {
+          "speed": 4.245901639344262,
+          "from": 0.01085367125507587,
+          "text": "N 8 kn · F3"
+        },
+        {
+          "speed": 4.252747252747253,
+          "from": 0.013318553029323006,
+          "text": "N 8 kn · F3"
+        }
+      ]
+    },
+    {
+      "name": "the ring full",
+      "start": 7,
+      "every": 1,
+      "count": 600,
+      "back": 0,
+      "backBy": 0,
+      "speeds": [
+        3,
+        9,
+        4.5
+      ],
+      "froms": [
+        2,
+        2.5
+      ],
+      "mean": 5.5,
+      "at": [
+        510,
+        511,
+        512,
+        599
+      ],
+      "shown": [
+        {
+          "speed": 5.495107632093934,
+          "from": 2.2497271988088787,
+          "text": "SE 11 kn · F4"
+        },
+        {
+          "speed": 5.501953125,
+          "from": 2.2505438592035025,
+          "text": "SE 11 kn · F4"
+        },
+        {
+          "speed": 5.5048828125,
+          "from": 2.2504076773396595,
+          "text": "SE 11 kn · F4"
+        },
+        {
+          "speed": 5.5048828125,
+          "from": 2.249592322660335,
+          "text": "SE 11 kn · F4"
+        }
+      ]
+    },
+    {
+      "name": "time goes back",
+      "start": 4000,
+      "every": 100,
+      "count": 50,
+      "back": 30,
+      "backBy": 2500,
+      "speeds": [
+        7,
+        11
+      ],
+      "froms": [
+        -1,
+        -1.25
+      ],
+      "mean": 8,
+      "at": [
+        29,
+        30,
+        31,
+        49
+      ],
+      "shown": [
+        {
+          "speed": 9,
+          "from": -1.1529161096619398,
+          "text": "WNW 17 kn · F4"
+        },
+        {
+          "speed": 7,
+          "from": -0.9999999999999999,
+          "text": "WNW 14 kn · F4"
+        },
+        {
+          "speed": 9,
+          "from": -1.1529161096619398,
+          "text": "WNW 17 kn · F4"
+        },
+        {
+          "speed": 9,
+          "from": -1.1529161096619398,
+          "text": "WNW 17 kn · F4"
+        }
+      ]
+    },
+    {
+      "name": "calm",
+      "start": 0,
+      "every": 50,
+      "count": 5,
+      "back": 0,
+      "backBy": 0,
+      "speeds": [
+        0
+      ],
+      "froms": [
+        2
+      ],
+      "mean": 0,
+      "at": [
+        0,
+        4
+      ],
+      "shown": [
+        {
+          "speed": 0,
+          "from": 2,
+          "text": "ESE 0 kn · F0"
+        },
+        {
+          "speed": 0,
+          "from": 2,
+          "text": "ESE 0 kn · F0"
+        }
+      ]
+    },
+    {
+      "name": "a pause between",
+      "start": 0,
+      "every": 2000,
+      "count": 6,
+      "back": 0,
+      "backBy": 0,
+      "speeds": [
+        2,
+        20,
+        12
+      ],
+      "froms": [
+        0.5,
+        3
+      ],
+      "mean": 10,
+      "at": [
+        0,
+        1,
+        2,
+        5
+      ],
+      "shown": [
+        {
+          "speed": 2,
+          "from": 0.5,
+          "text": "NNE 4 kn · F5"
+        },
+        {
+          "speed": 11,
+          "from": 2.9350321531854706,
+          "text": "SSE 21 kn · F5"
+        },
+        {
+          "speed": 16,
+          "from": 2.395030499125532,
+          "text": "SE 31 kn · F5"
+        },
+        {
+          "speed": 16,
+          "from": 1.104969500874468,
+          "text": "ENE 31 kn · F5"
+        }
+      ]
+    },
+    {
+      "name": "a gale",
+      "start": 100,
+      "every": 40,
+      "count": 90,
+      "back": 0,
+      "backBy": 0,
+      "speeds": [
+        24,
+        31,
+        28.5,
+        35
+      ],
+      "froms": [
+        5.5,
+        5.6
+      ],
+      "mean": 27,
+      "at": [
+        89
+      ],
+      "shown": [
+        {
+          "speed": 29.625,
+          "from": -0.7274844148216538,
+          "text": "NW 58 kn · F10"
+        }
+      ]
+    }
+  ],
+  "words": [
+    {
+      "speed": -0.2623666666666667,
+      "from": -2,
+      "mean": -0.2623666666666667,
+      "text": "WSW 0 kn · F0",
+      "force": 0,
+      "knots": "0.0"
+    },
+    {
+      "speed": -0.2520777777777778,
+      "from": -2,
+      "mean": -0.2520777777777778,
+      "text": "WSW 0 kn · F0",
+      "force": 0,
+      "knots": "0.0"
+    },
+    {
+      "speed": 0.2520777777777778,
+      "from": -2,
+      "mean": 0.2520777777777778,
+      "text": "WSW 0 kn · F0",
+      "force": 0,
+      "knots": "0.5"
+    },
+    {
+      "speed": 0.2520777777777778,
+      "from": -1.5,
+      "mean": 0.2520777777777778,
+      "text": "W 0 kn · F0",
+      "force": 0,
+      "knots": "0.5"
+    },
+    {
+      "speed": 0.2623666666666667,
+      "from": -1.5,
+      "mean": 0.2623666666666667,
+      "text": "W 1 kn · F1",
+      "force": 1,
+      "knots": "0.5"
+    },
+    {
+      "speed": 0.7665222222222223,
+      "from": -1.5,
+      "mean": 0.7665222222222223,
+      "text": "W 1 kn · F1",
+      "force": 1,
+      "knots": "1.5"
+    },
+    {
+      "speed": 1.7954111111111113,
+      "from": -1,
+      "mean": 1.7954111111111113,
+      "text": "WNW 3 kn · F1",
+      "force": 1,
+      "knots": "3.5"
+    },
+    {
+      "speed": 1.8057,
+      "from": -1,
+      "mean": 1.8057,
+      "text": "WNW 4 kn · F2",
+      "force": 2,
+      "knots": "3.5"
+    },
+    {
+      "speed": 2.309855555555556,
+      "from": -1,
+      "mean": 2.309855555555556,
+      "text": "WNW 4 kn · F2",
+      "force": 2,
+      "knots": "4.5"
+    },
+    {
+      "speed": 3.338744444444445,
+      "from": -0.5,
+      "mean": 3.338744444444445,
+      "text": "NNW 6 kn · F2",
+      "force": 2,
+      "knots": "6.5"
+    },
+    {
+      "speed": 3.3490333333333333,
+      "from": -0.5,
+      "mean": 3.3490333333333333,
+      "text": "NNW 7 kn · F3",
+      "force": 3,
+      "knots": "6.5"
+    },
+    {
+      "speed": 3.8531888888888894,
+      "from": -0.5,
+      "mean": 3.8531888888888894,
+      "text": "NNW 7 kn · F3",
+      "force": 3,
+      "knots": "7.5"
+    },
+    {
+      "speed": 5.396522222222223,
+      "from": 0,
+      "mean": 5.396522222222223,
+      "text": "N 10 kn · F3",
+      "force": 3,
+      "knots": "10.5"
+    },
+    {
+      "speed": 5.406811111111112,
+      "from": 0,
+      "mean": 5.406811111111112,
+      "text": "N 11 kn · F4",
+      "force": 4,
+      "knots": "10.5"
+    },
+    {
+      "speed": 5.910966666666667,
+      "from": 0,
+      "mean": 5.910966666666667,
+      "text": "N 11 kn · F4",
+      "force": 4,
+      "knots": "11.5"
+    },
+    {
+      "speed": 8.483188888888888,
+      "from": 0.5,
+      "mean": 8.483188888888888,
+      "text": "NNE 16 kn · F4",
+      "force": 4,
+      "knots": "16.5"
+    },
+    {
+      "speed": 8.493477777777779,
+      "from": 0.5,
+      "mean": 8.493477777777779,
+      "text": "NNE 17 kn · F5",
+      "force": 5,
+      "knots": "16.5"
+    },
+    {
+      "speed": 8.997633333333333,
+      "from": 0.5,
+      "mean": 8.997633333333333,
+      "text": "NNE 17 kn · F5",
+      "force": 5,
+      "knots": "17.5"
+    },
+    {
+      "speed": 11.05541111111111,
+      "from": 1,
+      "mean": 11.05541111111111,
+      "text": "ENE 21 kn · F5",
+      "force": 5,
+      "knots": "21.5"
+    },
+    {
+      "speed": 11.065700000000001,
+      "from": 1,
+      "mean": 11.065700000000001,
+      "text": "ENE 22 kn · F6",
+      "force": 6,
+      "knots": "21.5"
+    },
+    {
+      "speed": 11.569855555555556,
+      "from": 1,
+      "mean": 11.569855555555556,
+      "text": "ENE 22 kn · F6",
+      "force": 6,
+      "knots": "22.5"
+    },
+    {
+      "speed": 14.142077777777779,
+      "from": 1.5,
+      "mean": 14.142077777777779,
+      "text": "E 27 kn · F6",
+      "force": 6,
+      "knots": "27.5"
+    },
+    {
+      "speed": 14.15236666666667,
+      "from": 1.5,
+      "mean": 14.15236666666667,
+      "text": "E 28 kn · F7",
+      "force": 7,
+      "knots": "27.5"
+    },
+    {
+      "speed": 14.656522222222222,
+      "from": 1.5,
+      "mean": 14.656522222222222,
+      "text": "E 28 kn · F7",
+      "force": 7,
+      "knots": "28.5"
+    },
+    {
+      "speed": 17.228744444444448,
+      "from": 2,
+      "mean": 17.228744444444448,
+      "text": "ESE 33 kn · F7",
+      "force": 7,
+      "knots": "33.5"
+    },
+    {
+      "speed": 17.239033333333335,
+      "from": 2,
+      "mean": 17.239033333333335,
+      "text": "ESE 34 kn · F8",
+      "force": 8,
+      "knots": "33.5"
+    },
+    {
+      "speed": 17.74318888888889,
+      "from": 2,
+      "mean": 17.74318888888889,
+      "text": "ESE 34 kn · F8",
+      "force": 8,
+      "knots": "34.5"
+    },
+    {
+      "speed": 20.829855555555557,
+      "from": 2.5,
+      "mean": 20.829855555555557,
+      "text": "SE 40 kn · F8",
+      "force": 8,
+      "knots": "40.5"
+    },
+    {
+      "speed": 20.840144444444444,
+      "from": 2.5,
+      "mean": 20.840144444444444,
+      "text": "SE 41 kn · F9",
+      "force": 9,
+      "knots": "40.5"
+    },
+    {
+      "speed": 21.344300000000004,
+      "from": 2.5,
+      "mean": 21.344300000000004,
+      "text": "SE 41 kn · F9",
+      "force": 9,
+      "knots": "41.5"
+    },
+    {
+      "speed": 24.43096666666667,
+      "from": 3,
+      "mean": 24.43096666666667,
+      "text": "S 47 kn · F9",
+      "force": 9,
+      "knots": "47.5"
+    },
+    {
+      "speed": 24.441255555555557,
+      "from": 3,
+      "mean": 24.441255555555557,
+      "text": "S 48 kn · F10",
+      "force": 10,
+      "knots": "47.5"
+    },
+    {
+      "speed": 24.945411111111113,
+      "from": 3,
+      "mean": 24.945411111111113,
+      "text": "S 48 kn · F10",
+      "force": 10,
+      "knots": "48.5"
+    },
+    {
+      "speed": 28.546522222222226,
+      "from": 3.5,
+      "mean": 28.546522222222226,
+      "text": "SSW 55 kn · F10",
+      "force": 10,
+      "knots": "55.5"
+    },
+    {
+      "speed": 28.556811111111113,
+      "from": 3.5,
+      "mean": 28.556811111111113,
+      "text": "SSW 56 kn · F11",
+      "force": 11,
+      "knots": "55.5"
+    },
+    {
+      "speed": 29.06096666666667,
+      "from": 3.5,
+      "mean": 29.06096666666667,
+      "text": "SSW 56 kn · F11",
+      "force": 11,
+      "knots": "56.5"
+    },
+    {
+      "speed": 32.66207777777778,
+      "from": 4,
+      "mean": 32.66207777777778,
+      "text": "SW 63 kn · F11",
+      "force": 11,
+      "knots": "63.5"
+    },
+    {
+      "speed": 32.67236666666667,
+      "from": 4,
+      "mean": 32.67236666666667,
+      "text": "SW 64 kn · F12",
+      "force": 12,
+      "knots": "63.5"
+    },
+    {
+      "speed": 33.176522222222225,
+      "from": 4,
+      "mean": 33.176522222222225,
+      "text": "SW 64 kn · F12",
+      "force": 12,
+      "knots": "64.5"
+    },
+    {
+      "speed": -1,
+      "from": 0,
+      "mean": -1,
+      "text": "N 0 kn · F0",
+      "force": 0,
+      "knots": "0.0"
+    },
+    {
+      "speed": 36.01111111111111,
+      "from": 1,
+      "mean": 30,
+      "text": "ENE 70 kn · F11",
+      "force": 11,
+      "knots": "70.0"
+    },
+    {
+      "speed": 5,
+      "from": 0,
+      "mean": 5,
+      "text": "N 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": 0.19617500792416262,
+      "mean": 5,
+      "text": "N 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": 0.19652407377456152,
+      "mean": 5,
+      "text": "N 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": 0.5888740896228868,
+      "mean": 5,
+      "text": "NE 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": 0.5892231554732856,
+      "mean": 5,
+      "text": "NE 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": 3.141592653589793,
+      "mean": 5,
+      "text": "S 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": 6.0866612334050245,
+      "mean": 5,
+      "text": "N 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": 6.087010299255423,
+      "mean": 5,
+      "text": "N 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": 6.274458660919615,
+      "mean": 5,
+      "text": "N 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": -0.008726646259971648,
+      "mean": 5,
+      "text": "N 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": -1.5707963267948966,
+      "mean": 5,
+      "text": "W 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    },
+    {
+      "speed": 5,
+      "from": 12.566370614359172,
+      "mean": 5,
+      "text": "N 10 kn · F3",
+      "force": 3,
+      "knots": "9.7"
+    }
+  ],
+  "headings": [
+    {
+      "heading": 0,
+      "text": "000° N"
+    },
+    {
+      "heading": 0.008552113334772213,
+      "text": "000° N"
+    },
+    {
+      "heading": 0.00890117918517108,
+      "text": "001° N"
+    },
+    {
+      "heading": 0.7853981633974483,
+      "text": "045° NE"
+    },
+    {
+      "heading": 1.5707963267948966,
+      "text": "090° E"
+    },
+    {
+      "heading": 3.132866007329821,
+      "text": "180° S"
+    },
+    {
+      "heading": 4.71238898038469,
+      "text": "270° W"
+    },
+    {
+      "heading": 6.274284127994415,
+      "text": "359° N"
+    },
+    {
+      "heading": 6.2746331938448145,
+      "text": "000° N"
+    },
+    {
+      "heading": -0.7853981633974483,
+      "text": "315° NW"
+    },
+    {
+      "heading": 6.981317007977318,
+      "text": "040° NE"
+    }
+  ]
+}

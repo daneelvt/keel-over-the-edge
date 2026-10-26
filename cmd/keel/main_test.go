@@ -205,6 +205,7 @@ type memDB struct {
 	epoch    time.Time
 	onClose  func()
 	sessions *edgetest.Sessions // nil for none
+	tokens   machineTokens
 	mu       sync.Mutex
 	closed   bool
 
@@ -520,6 +521,7 @@ func (noAccounts) DeleteCeremonies(context.Context, time.Time) (int64, error) { 
 func (noAccounts) AccountCounts(context.Context) (store.AccountCounts, error) {
 	return store.AccountCounts{}, nil
 }
+func (noAccounts) SetPriority(context.Context, store.AccountID, bool) error { return store.ErrNotFound }
 
 func (d *memDB) Session(ctx context.Context, hash [32]byte) (store.Session, error) {
 	if d.sessions != nil {

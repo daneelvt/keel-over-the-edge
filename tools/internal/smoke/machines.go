@@ -119,7 +119,14 @@ func DeleteMachine(ctx context.Context, client *http.Client, jar http.CookieJar,
 // that sends only the header does, and returns the status and what it
 // answered: the tool's words, or the refusal's.
 func Handbook(ctx context.Context, client *http.Client, mcp, token string) (int, string, error) {
-	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"handbook","arguments":{}}}`
+	return CallTool(ctx, client, mcp, token, "handbook", "{}")
+}
+
+// CallTool calls a tool at the MCP address with a token, its arguments
+// as JSON, and returns the status and the answer as the stream carries
+// it, or the challenge of a refusal.
+func CallTool(ctx context.Context, client *http.Client, mcp, token, tool, args string) (int, string, error) {
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + tool + `","arguments":` + args + `}}`
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, mcp, strings.NewReader(body))
 	if err != nil {
 		return 0, "", err

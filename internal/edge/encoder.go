@@ -148,7 +148,7 @@ func (enc *encoder) adopt(f *bus.Frame) {
 		case c.queued.Load():
 			enc.queued[c.id] = c
 			enc.e.m.queuedConns.Inc()
-			c.place(c.position, max(int32(len(f.Queue)), c.position))
+			c.place(c.position, max(humansWaiting(f), c.position))
 		case c.welcome(f):
 			enc.active = append(enc.active, c)
 		default:
@@ -178,12 +178,17 @@ func (enc *encoder) admit(f *bus.Frame) {
 		return
 	}
 	enc.swept = f.Tick
-	waiting := int32(len(f.Queue))
+	// A connection is a human's: told its place among humans waiting.
+	position, waiting := int32(0), humansWaiting(f)
 	for i := range f.Queue {
 		q := &f.Queue[i]
+		if q.Machine {
+			continue
+		}
+		position++
 		if c := enc.queued[q.Conn]; c != nil && c.account == q.Account {
 			c.seen = f.Tick
-			c.place(int32(i+1), waiting)
+			c.place(position, waiting)
 		}
 	}
 	for id, c := range enc.queued {
@@ -204,6 +209,18 @@ func (enc *encoder) admit(f *bus.Frame) {
 			enc.welcomeQueued(c, f, slot)
 		}
 	}
+}
+
+// humansWaiting counts the humans in f's queue: machine sailors wait in a
+// queue of their own.
+func humansWaiting(f *bus.Frame) int32 {
+	n := int32(0)
+	for i := range f.Queue {
+		if !f.Queue[i].Machine {
+			n++
+		}
+	}
+	return n
 }
 
 // sweepTicks is how often waiting connections are told their place: once

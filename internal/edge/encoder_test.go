@@ -239,26 +239,6 @@ func checkView(t *testing.T, f *bus.Frame, own int32, v *protocol.View, flags ui
 	}
 }
 
-func TestNearestKeepsTheNearest(t *testing.T) {
-	for n := range 200 {
-		cs := make([]candidate, n)
-		for i := range cs {
-			cs[i] = candidate{slot: int32(i), d2: float64((i * 7919) % 97)}
-		}
-		k := min(n, 64)
-		nearest(cs, k)
-		worst := -1.0
-		for _, c := range cs[:k] {
-			worst = max(worst, c.d2)
-		}
-		for _, c := range cs[k:] {
-			if c.d2 < worst {
-				t.Fatalf("%d candidates: %v left out while %v kept", n, c.d2, worst)
-			}
-		}
-	}
-}
-
 // aoiWorld is a world with the player's boat at the centre and one other,
 // placed at will, for the area's rules.
 type aoiWorld struct {

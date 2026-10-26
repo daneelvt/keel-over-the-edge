@@ -364,6 +364,18 @@ func (s *Server) Owner(name string) (token string, id store.AccountID) {
 	return s.Sessions.add(store.Account{Kind: store.Human, Name: name, Tools: true})
 }
 
+// Priority makes a human's account that never waits for a boat.
+func (s *Server) Priority(name string) (token string, id store.AccountID) {
+	return s.Sessions.add(store.Account{Kind: store.Human, Name: name, Priority: true})
+}
+
+// Machines puts n machine sailors' boats with no connection in the world,
+// each at a position at, and returns their IDs.
+func (s *Server) Machines(t testing.TB, n int, at func(i int) physics.State) []uint64 {
+	t.Helper()
+	return s.crowd(t, n, at, true)
+}
+
 // Owned sends one of the owner's tools' commands, at the next tick.
 func (s *Server) Owned(c bus.Command) {
 	owner := s.World.Bus().Commands.Owner()
@@ -389,13 +401,21 @@ func SmallReadBuffer(n int) func(netConn) netConn {
 // at, and returns their IDs.
 func (s *Server) Crowd(t testing.TB, n int, at func(i int) physics.State) []uint64 {
 	t.Helper()
+	return s.crowd(t, n, at, false)
+}
+
+func (s *Server) crowd(t testing.TB, n int, at func(i int) physics.State, machine bool) []uint64 {
+	t.Helper()
 	dev := s.World.Bus().Commands.Developer()
 	replies := make([]chan bus.Reply, n)
 	for i := range n {
 		replies[i] = make(chan bus.Reply, 1)
 		var a bus.Account
 		a[0], a[1], a[14], a[15] = 0xcc, 0xcc, byte(i>>8), byte(i)
-		for dev.TrySend(bus.Command{Op: bus.Join, Account: a, Reply: replies[i]}) != nil {
+		if machine {
+			a[1] = 0xaa
+		}
+		for dev.TrySend(bus.Command{Op: bus.Join, Account: a, Machine: machine, Reply: replies[i]}) != nil {
 			time.Sleep(time.Second / 30)
 		}
 	}

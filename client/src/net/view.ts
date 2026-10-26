@@ -29,10 +29,14 @@ export const Q = {
 } as const;
 export const VIEW_STRIDE = 10;
 
-/** A boat's flags: in the far band; the sailor's mode is bits 1–2; falling over the lip. */
+/**
+ * A boat's flags: in the far band; the sailor's mode is bits 1–2; falling
+ * over the lip; a machine sailor's, sailed by an AI agent.
+ */
 export const FAR_BAND = 1;
 export const FALLING = 8;
-const FLAGS_USED = 15;
+export const MACHINE = 16;
+const FLAGS_USED = 31;
 
 /** The steps of the fields: the heading's, heel's, boom's and rudder's, and the position's. */
 export const ANGLE_STEP = (2 * Math.PI) / 65536;
@@ -376,8 +380,10 @@ export const SLOT = {
   sail: 13,
   /** 1 while the boat falls over the lip. */
   falling: 14,
+  /** 1 for a machine sailor's boat: it carries the machine mark. */
+  machine: 15,
 } as const;
-export const SLOT_FIELDS = 15;
+export const SLOT_FIELDS = 16;
 /** A record's length in bytes. */
 export const FLEET_RECORD_BYTES = MAX_HEADER_SIZE + 8 * (META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
 
@@ -440,6 +446,7 @@ export function writeRecord(
     f[o + SLOT.sailor] = (q[b + Q.sailor] ?? 0) * POSITION_STEP;
     f[o + SLOT.sail] = q[b + Q.sail] ?? 0;
     f[o + SLOT.falling] = (flagBits & FALLING) !== 0 ? 1 : 0;
+    f[o + SLOT.machine] = (flagBits & MACHINE) !== 0 ? 1 : 0;
   }
   f[FLEET_META.boats] = boats;
 }

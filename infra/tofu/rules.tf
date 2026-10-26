@@ -64,12 +64,14 @@ resource "cloudflare_tiered_cache" "zone" {
 
 # What AI apps reach. On agents., the MCP address and its resource's
 # metadata alone, by GET, POST and OPTIONS: the game's server keeps no MCP
-# session, so the DELETE that ends one is refused here rather than by it.
+# session, so the DELETE that ends one is refused here rather than by it;
+# and the MCP server's card beside the address, by GET alone.
 # On play., the authorization server's metadata and the three addresses
 # AI apps call from their own servers, or from a browser after a CORS
 # preflight.
 locals {
-  agents_paths = ["/mcp", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"]
+  agents_card  = "/mcp/server-card"
+  agents_paths = ["/mcp", local.agents_card, "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"]
   oauth_paths  = ["/.well-known/oauth-authorization-server", "/oauth/token", "/oauth/revoke", "/oauth/register"]
   # A set in a rule's expression, as {"/a" "/b"}.
   agents_path_set = "{${join(" ", formatlist("\"%s\"", local.agents_paths))}}"
@@ -95,7 +97,7 @@ resource "cloudflare_ruleset" "firewall" {
     {
       ref         = "agents"
       description = "Only the MCP address, by the methods it answers"
-      expression  = "(http.host eq \"${local.agents}\" and (not http.request.method in {\"GET\" \"POST\" \"OPTIONS\"} or not http.request.uri.path in ${local.agents_path_set}))"
+      expression  = "(http.host eq \"${local.agents}\" and (not http.request.method in {\"GET\" \"POST\" \"OPTIONS\"} or not http.request.uri.path in ${local.agents_path_set} or (http.request.uri.path eq \"${local.agents_card}\" and http.request.method ne \"GET\")))"
       action      = "block"
     },
   ]

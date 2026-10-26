@@ -12,11 +12,12 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/manifests"
 )
 
-// The agents' listener, which only the MCP address and its resource's
-// metadata may reach, and the paths that reach it.
+// The agents' listener, which only the MCP address, its server's card and
+// its resource's metadata may reach, and the paths that reach it.
 const (
 	agentsPort     = 8081
 	mcpPath        = "/mcp"
+	cardPath       = "/mcp/server-card"
 	resourcePrefix = "/.well-known/oauth-protected-resource"
 )
 
@@ -118,7 +119,8 @@ func backendPort(objs []manifests.Object, game map[string]any, rule any) int {
 	return 0
 }
 
-// TestAgentsRoutes: the MCP address and its resource's metadata reach
+// TestAgentsRoutes: the MCP address, its server's card and its resource's
+// metadata reach
 // keel's agents' listener, through the per-address rate limit, and
 // nothing else does: on the local cluster on the players' host, beside
 // every other path, which stays on the game's listener; in production on
@@ -153,11 +155,12 @@ func TestAgentsRoutes(t *testing.T) {
 		}
 		return objs
 	}
-	agentsPaths := []string{mcpPath, resourcePrefix, resourcePrefix + mcpPath}
+	agentsPaths := []string{mcpPath, cardPath, resourcePrefix, resourcePrefix + mcpPath}
 	otherPaths := []string{
 		"/", "/ws", "/api/status", "/assets/index.js", "/w/chunk.bin",
 		"/oauth/authorize", "/oauth/token", "/oauth/register", "/.well-known/oauth-authorization-server",
-		"/mcp/", "/mcp/x", "/mcpx", "/.well-known/oauth-protected-resourcex", "/.well-known/",
+		"/mcp/", "/mcp/x", "/mcpx", "/mcp/server-card/", "/mcp/server-cardx", "/mcp/server-card/x",
+		"/.well-known/oauth-protected-resourcex", "/.well-known/",
 	}
 	type place struct {
 		name string
@@ -207,7 +210,7 @@ func TestAgentsRoutes(t *testing.T) {
 				check("elsewhere.example", path, 0)
 			}
 		}
-		// Every rule to the agents' listener matches the two paths alone.
+		// Every rule to the agents' listener matches the three paths alone.
 		game := manifests.Container(manifests.PodSpec(manifests.Find(p.objs, "Deployment", "keel")), "containers", "keel")
 		for _, o := range p.objs {
 			if o.Kind() != "HTTPRoute" {
@@ -221,7 +224,7 @@ func TestAgentsRoutes(t *testing.T) {
 				for _, m := range manifests.List(rule, "matches") {
 					matches = append(matches, manifests.Str(m, "path", "type")+" "+manifests.Str(m, "path", "value"))
 				}
-				if !slices.Equal(matches, []string{"Exact " + mcpPath, "PathPrefix " + resourcePrefix}) {
+				if !slices.Equal(matches, []string{"Exact " + mcpPath, "Exact " + cardPath, "PathPrefix " + resourcePrefix}) {
 					t.Errorf("%s: %s reaches the agents' listener for %v", p.name, o.ID(), matches)
 				}
 			}

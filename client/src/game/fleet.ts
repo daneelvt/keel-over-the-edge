@@ -140,6 +140,8 @@ export interface DrawnBoat {
   newest: number;
   /** Seconds since it went over the lip, as drawn; below 0 afloat. */
   fall: number;
+  /** 1 for a machine sailor's boat, which carries the machine mark; 0 for a human's. */
+  machine: number;
 }
 
 /** A drawn boat at the origin, faded out. */
@@ -165,6 +167,7 @@ export function newDrawnBoat(): DrawnBoat {
     tick: 0,
     newest: 0,
     fall: -1,
+    machine: 0,
   };
 }
 
@@ -172,6 +175,8 @@ export function newDrawnBoat(): DrawnBoat {
 class Boat {
   present = false;
   kind = 0;
+  /** 1 while a machine sailor sails it. */
+  machine = 0;
   readonly ring = new Float64Array(SAMPLES * FIELDS);
   /** Samples held, and where the next goes. */
   count = 0;
@@ -195,6 +200,7 @@ class Boat {
   reset(kind: number): void {
     this.present = true;
     this.kind = kind;
+    this.machine = 0;
     this.count = 0;
     this.next = 0;
     this.opacity = 0;
@@ -247,6 +253,7 @@ class Boat {
   /** Sets out to the boat at render tick rt from its samples; returns how it is drawn. */
   pose(rt: number, out: DrawnBoat): number {
     out.kind = this.kind;
+    out.machine = this.machine;
     out.tick = rt;
     out.fall = rt >= this.fallTick ? (rt - this.fallTick) / TICKS_PER_SECOND : -1;
     const newest = this.at(0, F.tick);
@@ -415,6 +422,10 @@ export class Fleet {
       }
       if (change === CHANGE.entered) {
         b.reset(f[o + SLOT.kind] ?? 0);
+      }
+      // Every record carries whose boat the slot holds, sampled or not.
+      if (f[o + SLOT.present] === 1 && b.present) {
+        b.machine = f[o + SLOT.machine] === 1 ? 1 : 0;
       }
       if (f[o + SLOT.present] === 1 && f[o + SLOT.sampled] === 1 && b.present) {
         b.add(f, o, tick);
@@ -592,4 +603,5 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.tick = a.tick;
   b.newest = a.newest;
   b.fall = a.fall;
+  b.machine = a.machine;
 }

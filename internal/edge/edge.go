@@ -334,7 +334,7 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = ws.Close(websocket.StatusTryAgainLater, "a new world is opening")
 		return
 	}
-	c := newConn(e, ws, hj.conn, bus.Account(acc.ID), acc.Tools, obs.RequestID(r.Context()))
+	c := newConn(e, ws, hj.conn, bus.Account(acc.ID), acc.Tools, acc.Priority, obs.RequestID(r.Context()))
 	if !e.track(c) {
 		_ = ws.Close(websocket.StatusServiceRestart, "the server is restarting")
 		return

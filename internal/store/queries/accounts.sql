@@ -19,22 +19,26 @@ SELECT EXISTS (SELECT 1 FROM sailor WHERE name_key = @name_key)::boolean;
 -- The owner's flag of a human account; an AI's is never set.
 UPDATE account SET tools = @tools WHERE id = @id AND kind = 'human';
 
+-- name: SetAccountPriority :execrows
+-- A priority account, human or AI, never waits for a boat.
+UPDATE account SET priority = @priority WHERE id = @id;
+
 -- name: AccountsByID :many
 -- The accounts of ids, with their sailors' names: the world page's lists.
-SELECT a.id, a.kind, a.tools, coalesce(sl.name, '')::text AS name
+SELECT a.id, a.kind, a.tools, a.priority, coalesce(sl.name, '')::text AS name
 FROM account a
 LEFT JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = ANY(@ids::uuid[]);
 
 -- name: AccountByUserHandle :one
 -- The account a passkey's user handle names, as a sign-in finds it.
-SELECT a.id, a.kind, a.tools, a.notices_off, a.user_handle, sl.name, sl.look
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.user_handle = @user_handle AND a.kind = 'human';
 
 -- name: AccountByID :one
-SELECT a.id, a.kind, a.tools, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look,
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look,
   a.created_at, a.recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id

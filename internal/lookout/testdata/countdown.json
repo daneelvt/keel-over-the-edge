@@ -1,0 +1,146 @@
+{
+  "comment": "Written by go test ./internal/lookout -run CountdownFile -update: times left, ms, and the countdown's words for them; ends, ms of UTC, in a schedule's zone (\"\" for UTC), as written in American English in that zone.",
+  "left": [
+    {
+      "ms": -5000,
+      "text": "0s"
+    },
+    {
+      "ms": 0,
+      "text": "0s"
+    },
+    {
+      "ms": 1,
+      "text": "1s"
+    },
+    {
+      "ms": 999,
+      "text": "1s"
+    },
+    {
+      "ms": 1000,
+      "text": "1s"
+    },
+    {
+      "ms": 1001,
+      "text": "2s"
+    },
+    {
+      "ms": 12000,
+      "text": "12s"
+    },
+    {
+      "ms": 59999,
+      "text": "1m"
+    },
+    {
+      "ms": 60000,
+      "text": "1m"
+    },
+    {
+      "ms": 61000,
+      "text": "1m 1s"
+    },
+    {
+      "ms": 552000,
+      "text": "9m 12s"
+    },
+    {
+      "ms": 599999,
+      "text": "10m"
+    },
+    {
+      "ms": 600000,
+      "text": "10m"
+    },
+    {
+      "ms": 600001,
+      "text": "10m"
+    },
+    {
+      "ms": 3599999,
+      "text": "1h"
+    },
+    {
+      "ms": 3600000,
+      "text": "1h"
+    },
+    {
+      "ms": 18180000,
+      "text": "5h 3m"
+    },
+    {
+      "ms": 18239000,
+      "text": "5h 3m"
+    },
+    {
+      "ms": 86399999,
+      "text": "1d"
+    },
+    {
+      "ms": 86400000,
+      "text": "1d"
+    },
+    {
+      "ms": 86400001,
+      "text": "1d"
+    },
+    {
+      "ms": 89940000,
+      "text": "1d"
+    },
+    {
+      "ms": 367200000,
+      "text": "4d 6h"
+    },
+    {
+      "ms": 345900000,
+      "text": "4d"
+    },
+    {
+      "ms": 604799000,
+      "text": "6d 23h"
+    },
+    {
+      "ms": 2592000000,
+      "text": "30d"
+    }
+  ],
+  "ends": [
+    {
+      "ends": 1792965600000,
+      "zone": "America/New_York",
+      "text": "Sunday, 6:00 PM EDT"
+    },
+    {
+      "ends": 1797807600000,
+      "zone": "America/New_York",
+      "text": "Sunday, 6:00 PM EST"
+    },
+    {
+      "ends": 1783224000000,
+      "zone": "America/New_York",
+      "text": "Sunday, 12:00 AM EDT"
+    },
+    {
+      "ends": 1783269000000,
+      "zone": "America/New_York",
+      "text": "Sunday, 12:30 PM EDT"
+    },
+    {
+      "ends": 1773007500000,
+      "zone": "America/Los_Angeles",
+      "text": "Sunday, 3:05 PM PDT"
+    },
+    {
+      "ends": 1792965600000,
+      "zone": "",
+      "text": "Sunday, 10:00 PM UTC"
+    },
+    {
+      "ends": 1792972800000,
+      "zone": "UTC",
+      "text": "Monday, 12:00 AM UTC"
+    }
+  ]
+}

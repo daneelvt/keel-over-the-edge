@@ -1,0 +1,14 @@
+# about 240 tokens
+tick 1094 · seq 0
+Boat: Jolly boat · sailing · heading 089° · 5.6 kn · heel 5° to port · port tack
+Pilot: wind 90° port · boom 40° (sheet out to 40°) · rudder 1° to starboard · sail drawing
+Wind: 000° N 12 kn F4 · 89° off the bow, port side · apparent 12 kn 75°
+Sea: waves 0.3 m from 000° · current slack
+Weather: 1013 hPa, steady · visibility good
+Where: 78°31′N 134°51′ · edge 3.4 NM
+In sight:
+ B1 human · 085° 45 m · starboard tack, heading 290°, ~5 kn
+ land (uncharted) · tropical island 80 m across · 030° ~350 m
+ a light Fl(5) W 20s (uncharted) · 195° ~1.1 NM
+ Table Head Light · 315° 1.3 NM · light Fl(3) W 15s · known
+ a light Fl(4) W 15s (uncharted) · 265° ~2.0 NM

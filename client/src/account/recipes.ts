@@ -99,6 +99,89 @@ export function recipes(address: string): Recipe[] {
   ];
 }
 
+/** What to tell an AI app first, to see it sail. */
+export const STARTER = 'Sail to the nearest charted island and tell me what you see.';
+
+/**
+ * How to let each app sail, once connected: an agent sails by calling the
+ * game's tools in a loop, observe with a wait, then steer and trim, so an
+ * app must be let call them without asking each time, and must hold a
+ * call for the wait (up to 50 s; 25 is safe in every app).
+ */
+export function sailing(): Recipe[] {
+  const n = SERVER_NAME;
+  return [
+    // https://code.claude.com/docs/en/cli-reference
+    // https://code.claude.com/docs/en/mcp
+    // Read 2026-10-25.
+    {
+      app: 'Claude Code',
+      parts: [
+        'Let it call the game’s tools without asking, and give it the first instruction: ',
+        { code: `claude -p "${STARTER}" --allowedTools "mcp__${n}__*"` },
+        '. In a session of your own, ',
+        { code: '/loop' },
+        ' keeps it sailing. A wait longer than its tool timeout needs ',
+        { code: 'MCP_TOOL_TIMEOUT=60000' },
+        '.',
+      ],
+    },
+    // https://openai.github.io/openai-agents-python/mcp/
+    // https://openai.github.io/openai-agents-python/running_agents/
+    // Read 2026-10-25.
+    {
+      app: 'OpenAI Agents SDK',
+      parts: [
+        'Raise the MCP session’s read timeout above the wait, ',
+        { code: 'client_session_timeout_seconds=60' },
+        ' on ',
+        { code: 'MCPServerStreamableHttp' },
+        ', and the run’s turns, ',
+        { code: 'max_turns' },
+        ': a passage takes hundreds of calls.',
+      ],
+    },
+    // https://learn.chatgpt.com/docs/extend/mcp?surface=cli
+    // Read 2026-10-25.
+    {
+      app: 'Codex',
+      parts: [
+        `Under [mcp_servers.${n}] in its config.toml, set `,
+        { code: 'tool_timeout_sec = 80' },
+        ' so a wait fits, and a ',
+        { code: 'default_tools_approval_mode' },
+        ' that runs the game’s tools without asking; then ',
+        { code: `codex exec "${STARTER}"` },
+        '.',
+      ],
+    },
+    // https://geminicli.com/docs/tools/mcp-server/
+    // Read 2026-10-25.
+    {
+      app: 'Gemini CLI',
+      parts: [
+        'Give it a timeout above the wait in its settings, ',
+        { code: '"timeout": 60000' },
+        ` under mcpServers.${n}, and run `,
+        { code: `gemini --yolo -p "${STARTER}"` },
+        '.',
+      ],
+    },
+    {
+      app: 'Chat apps',
+      parts: [
+        'Claude, ChatGPT and the Gemini app stop after a number of steps: say Continue to sail on. Ask it to observe with a wait of 25, which every app holds. Your boat stays at sea only while it keeps calling.',
+      ],
+    },
+    {
+      app: 'A program',
+      parts: [
+        'With a connection token: call observe with wait 25 in a loop, then steer and trim as it says. The game’s handbook tool teaches the rest.',
+      ],
+    },
+  ];
+}
+
 /** A recipe as plain text. */
 export function recipeText(r: Recipe): string {
   return r.parts.map((p) => (typeof p === 'string' ? p : p.code)).join('');

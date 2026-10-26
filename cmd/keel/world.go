@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/agentapi"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -244,8 +245,10 @@ type worldHalf struct {
 	lasting *persist.Persist
 	// forecasts issues the world's forecast.
 	forecasts *forecast.Issuer
-	tools     *owner.Owner
-	play      http.Handler
+	// sea is the world as the machine sailors' tools reach it.
+	sea   *agentapi.Sea
+	tools *owner.Owner
+	play  http.Handler
 
 	// endsAt is when the world ends, Unix ns, 0 for none known: its row's,
 	// unless a developer's command has brought it nearer; movedAt when that
@@ -339,11 +342,13 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Hold: b.Commands.Server(), Log: p.log, Metrics: p.metrics,
 		Chart: rw.charts.model, Written: rw.charts.model.Add, FoldWithin: rw.charts.model.FoldWithin(),
 	})
-	world.Record(h.inputs, h.game, h.lasting, h.forecasts)
+	h.sea = p.seaOf(h, rw, sighting)
+	world.Record(h.inputs, h.game, h.lasting, h.forecasts, p.agents.core.Open(h.sea))
 	h.tools = ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents,
+		aiCap: world.AICap(), aiReserve: world.AIReserve(),
 	})
 	playCfg := api.Config{
 		Version:  api.Version{Build: p.build, Catalog: catalog.Version},
@@ -530,6 +535,7 @@ func (h *worldHalf) close(how closeHow) int64 {
 		p.log.Warn("game connections dropped: they did not answer their close in time", "err", err)
 	}
 	ccancel()
+	p.agents.core.Close(h.sea)
 	h.stopEncoder()
 	<-h.encoderDone
 	h.inputs.Close()
@@ -630,6 +636,7 @@ func (p *process) closeForStop(bell time.Duration) int64 {
 		return 0
 	}
 	h.game.Bell(bell)
+	p.agents.core.Bell(bell)
 	time.Sleep(bell)
 	return h.close(closeStop)
 }

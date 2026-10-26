@@ -53,7 +53,11 @@ type Frame struct {
 	Conn     []uint64  // per slot: the connection sailing it, 0 for none
 	Grace    []int64   // per slot: the tick at which a disconnected boat leaves, 0 while connected
 	Kind     []uint16  // per slot: the boat's kind, an index into the world's kinds
-	Control  []Word    // per slot: the controls in force
+	// Machine and Priority are per slot its account's kind: a machine
+	// sailor's boat, sailed by an AI agent, and a priority account's.
+	Machine  []bool
+	Priority []bool
+	Control  []Word // per slot: the controls in force
 	Pilot    []PilotWord
 	State    []physics.State
 	Sail     []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
@@ -73,6 +77,10 @@ type Frame struct {
 	// sail leaves for the next tick. They are in no snapshot or digest.
 	Wind []physics.Env
 	Wake []physics.Wake
+	// Instruments are per slot what a machine boat's last step read, for
+	// its agent; a human's sailor reads its own phone's. They are in no
+	// snapshot or digest: the next step makes them again.
+	Instruments []Instruments
 
 	// Pairs are the boats near enough each other that the Articles
 	// remember them, by their slots, ascending.
@@ -247,6 +255,38 @@ type Waiting struct {
 	// Grace, for a place with no connection, is the tick it is given up
 	// at, unless its account joins first; 0 while connected.
 	Grace int64
+	// Machine and Priority are its account's kind, as the Join gave it.
+	Machine  bool
+	Priority bool
+}
+
+// QueuePlace is the place in the queue of q[i] among those of its kind, human
+// or machine, 1 for the head, and how many of its kind wait: humans and
+// machine sailors wait in queues of their own.
+func QueuePlace(q []Waiting, i int) (position, waiting int32) {
+	for j := range q {
+		if q[j].Machine != q[i].Machine {
+			continue
+		}
+		waiting++
+		if j <= i {
+			position++
+		}
+	}
+	return position, waiting
+}
+
+// Instruments are what a machine boat's last step read: the true wind it
+// felt, in the shadow of the boats about it, the wind over its deck, its
+// way over the ground and the water under it.
+type Instruments struct {
+	WindSpeed        float32 // the true wind 10 m up, m/s
+	WindFrom         float32 // where it comes from, rad clockwise from north
+	ApparentSpeed    float32 // at the masthead, m/s
+	ApparentAngle    float32 // where it comes from off the bow, rad, positive from starboard
+	SpeedOverGround  float32 // m/s
+	CourseOverGround float32 // rad clockwise from north
+	Depth            float32 // under the daggerboard, m; negative over land
 }
 
 // WeatherHistory is the most developer's weathers a frame keeps.
@@ -287,6 +327,8 @@ func NewFrame(capacity int) *Frame {
 		Conn:     make([]uint64, capacity),
 		Grace:    make([]int64, capacity),
 		Kind:     make([]uint16, capacity),
+		Machine:  make([]bool, capacity),
+		Priority: make([]bool, capacity),
 		Control:  make([]Word, capacity),
 		Pilot:    make([]PilotWord, capacity),
 		State:    make([]physics.State, capacity),
@@ -294,17 +336,18 @@ func NewFrame(capacity int) *Frame {
 			Now:  make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
 			Next: make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
 		},
-		Sail:    make([]uint8, capacity),
-		Course:  make([]physics.Course, capacity),
-		Voyage:  make([]Voyage, capacity),
-		Stay:    make([]bool, capacity),
-		Unseen:  make([]bool, capacity),
-		Edges:   make([]EdgeEvent, 0, 64),
-		Charted: make([]Charted, 0, 64),
-		Wind:    make([]physics.Env, capacity),
-		Wake:    make([]physics.Wake, capacity),
-		Pairs:   make([]Pair, 0, capacity),
-		Bumps:   make([]Bump, 0, 64),
+		Sail:        make([]uint8, capacity),
+		Course:      make([]physics.Course, capacity),
+		Voyage:      make([]Voyage, capacity),
+		Stay:        make([]bool, capacity),
+		Unseen:      make([]bool, capacity),
+		Edges:       make([]EdgeEvent, 0, 64),
+		Charted:     make([]Charted, 0, 64),
+		Wind:        make([]physics.Env, capacity),
+		Wake:        make([]physics.Wake, capacity),
+		Instruments: make([]Instruments, capacity),
+		Pairs:       make([]Pair, 0, capacity),
+		Bumps:       make([]Bump, 0, 64),
 		Grid: Grid{
 			Start: make([]int32, Cells+1),
 			Slots: make([]int32, 0, capacity),

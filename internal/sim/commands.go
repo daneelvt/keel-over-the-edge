@@ -17,7 +17,7 @@ func (w *World) apply(c *bus.Command) {
 	var sailor bus.Account // a Leave's: the boat's
 	switch c.Op {
 	case bus.Join:
-		r = w.join(c.Account, c.Conn)
+		r = w.join(c)
 	case bus.Leave:
 		r = bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: c.Boat}
 		if s := slotOf(f, c.Boat); s >= 0 {

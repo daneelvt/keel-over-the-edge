@@ -26,7 +26,8 @@ const (
 	FarBand   = 1 << 0 // the boat is in the far band, sampled less often
 	modeShift = 1      // the sailor's mode, in bits 1–2
 	Falling   = 1 << 3 // the boat has gone over the lip and is falling
-	flagsUsed = FarBand | 3<<modeShift | Falling
+	Machine   = 1 << 4 // the boat is a machine sailor's, sailed by an AI agent
+	flagsUsed = FarBand | 3<<modeShift | Falling | Machine
 )
 
 // The steps of a Boat's fields.
@@ -49,7 +50,7 @@ const (
 // Boat is a boat in a view, as the wire carries it.
 type Boat struct {
 	Kind    uint16
-	Flags   uint8 // FarBand, the sailor's mode and Falling
+	Flags   uint8 // FarBand, the sailor's mode, Falling and Machine
 	X, Y    int32 // cm, east and north
 	Heading uint16
 	Heel    int16
@@ -64,6 +65,9 @@ func (q *Boat) Far() bool { return q.Flags&FarBand != 0 }
 
 // IsFalling says whether the boat is falling over the lip.
 func (q *Boat) IsFalling() bool { return q.Flags&Falling != 0 }
+
+// IsMachine says whether the boat is a machine sailor's.
+func (q *Boat) IsMachine() bool { return q.Flags&Machine != 0 }
 
 // Mode is the sailor's mode: physics.Sailing, InWater, OnBoard or Climbing.
 func (q *Boat) Mode() uint8 { return q.Flags >> modeShift & 3 }

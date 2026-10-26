@@ -218,7 +218,7 @@ function boatColour(b: Boat): string {
   if (b.tools) {
     return COLOURS.owner;
   }
-  return b.human ? COLOURS.player : COLOURS.ai;
+  return b.machine ? COLOURS.ai : COLOURS.player;
 }
 
 function arrow(

@@ -55,6 +55,21 @@ spec:
             summary: "Players have waited for a boat for 10 minutes."
           annotations:
             description: "{{ $value }} wait: the sea is at its boat limit. Look at the tick's time before raising KEEL_BOAT_LIMIT."
+        - alert: MachineSailorsShutOut
+          # While the sea is under its limit and machine sailors sail fewer
+          # boats than their reserve, the head of their queue is the next
+          # admitted: one waiting ten minutes is admission broken.
+          expr: |
+            max(keel_sim_queue_oldest_seconds{kind="machine"}) > 600
+              and on () max(keel_sim_boats_by_kind{kind="machine"}) < max(keel_sim_ai_reserve)
+              and on () max(keel_sim_boats) < max(keel_sim_boat_limit)
+          for: 5m
+          labels:
+            severity: warning
+            component: game
+            summary: "Machine sailors wait while places kept for them are free."
+          annotations:
+            description: "The head of the machine sailors' queue has waited {{ $value | humanizeDuration }} while they sail fewer boats than their reserve and the sea has room: admission is not keeping their places. Look at the queues on the world page and at keel's logs."
         - alert: MemoryNearLimit
           expr: |
             max by (pod, container) (container_memory_working_set_bytes{namespace="keel", container=~"keel|postgres"})

@@ -47,6 +47,9 @@ type boatCopy struct {
 	speed          float64 // over the ground, m/s
 	falling, stays bool
 	unseen         bool
+	// machine is a machine sailor's boat; priority, admitted as a priority
+	// account's.
+	machine, priority bool
 }
 
 // named is an account as the database last said, and when.
@@ -112,6 +115,7 @@ func (b *builder) copyFrame() {
 			boat: f.Boat[s], owner: f.Owner[s], conn: f.Conn[s], grace: f.Grace[s], kind: f.Kind[s],
 			x: st.X, y: st.Y, heading: st.Heading, speed: math.Hypot(st.Surge, st.Sway),
 			falling: f.Voyage[s].Falling(), stays: f.Stay[s], unseen: f.Unseen[s],
+			machine: f.Machine[s], priority: f.Priority[s],
 		})
 	}
 	b.queue = append(b.queue[:0], f.Queue...)
@@ -143,6 +147,9 @@ func (b *builder) build(ctx context.Context) *view {
 		}
 	}
 	p := b.cfg.Weather
+	now := time.Now()
+	w.Admission = admissionJSON{AICap: b.cfg.AICap, AIReserve: b.cfg.AIReserve,
+		AISilence: b.cfg.AISilence.Seconds(), AIOrders: b.cfg.AIOrders, AILooks: b.cfg.AILooks}
 	for i := range b.boats {
 		bc := &b.boats[i]
 		n := b.names[bc.owner]
@@ -155,6 +162,17 @@ func (b *builder) build(ctx context.Context) *view {
 			Kind: kind, East: round2(bc.x), North: round2(bc.y), Heading: round2(degrees(bc.heading)), Knots: round2(bc.speed / knot),
 			FromLip: round2(physics.EdgeDistance(p, bc.x, bc.y)), Connected: bc.conn != 0,
 			Falling: bc.falling, Stays: bc.stays, Unseen: bc.unseen, Tools: n.acc.Tools,
+			Machine: bc.machine, Priority: n.acc.Priority, Admitted: bc.priority,
+		}
+		if bc.machine {
+			w.Admission.Machines++
+			if a := b.cfg.Agents; a != nil {
+				if info, ok := a.Agent(bc.owner); ok {
+					j.Agent = agentOf(info, now)
+				}
+			}
+		} else {
+			w.Admission.Humans++
 		}
 		if bc.grace != 0 {
 			j.Grace = round2(float64(bc.grace-b.tick) * physics.Dt)
@@ -166,12 +184,24 @@ func (b *builder) build(ctx context.Context) *view {
 		}
 		w.Boats = append(w.Boats, j)
 	}
+	// Humans and machine sailors wait in queues of their own: each place's
+	// position is among those of its kind, as bus.QueuePlace counts it,
+	// counted here in one pass.
 	for i := range b.queue {
 		q := &b.queue[i]
 		n := b.names[q.Account]
+		var position int
+		if q.Machine {
+			w.Admission.MachinesWaiting++
+			position = w.Admission.MachinesWaiting
+		} else {
+			w.Admission.HumansWaiting++
+			position = w.Admission.HumansWaiting
+		}
 		w.Queue = append(w.Queue, waitJSON{
 			Account: store.AccountID(q.Account).String(), Sailor: n.acc.Name, Tools: n.acc.Tools,
 			Waited: round2(float64(b.tick-q.Since) * physics.Dt), Connected: q.Conn != 0,
+			Machine: q.Machine, Priority: n.acc.Priority, Admitted: q.Priority, Position: position,
 		})
 	}
 	w.Weather = b.weatherNow()
@@ -182,6 +212,16 @@ func (b *builder) build(ctx context.Context) *view {
 		panic(err) // the view always encodes
 	}
 	return &view{world: body, gusts: slices.Clone(b.gusts)}
+}
+
+// agentOf is what the page shows of a machine boat's agent, now.
+func agentOf(info AgentInfo, now time.Time) *agentJSON {
+	a := &agentJSON{App: info.App, Waiting: round2(info.Waiting.Seconds()), Refusals: info.Refusals}
+	if !info.LastCall.IsZero() {
+		since := round2(max(0, now.Sub(info.LastCall).Seconds()))
+		a.SinceCall = &since
+	}
+	return a
 }
 
 // lookUp reads from the database the accounts the frame names that it
@@ -381,6 +421,25 @@ type worldJSON struct {
 	Wind      windJSON      `json:"wind"`
 	Boats     []boatJSON    `json:"boats"`
 	Queue     []waitJSON    `json:"queue"`
+	Admission admissionJSON `json:"admission"`
+}
+
+// admissionJSON is world.json's admission by kind: the boats at sea and
+// the places waiting, of humans and of machine sailors; the machine
+// sailors' cap and reserve; and the rules their agents are held to, as
+// keel is configured.
+type admissionJSON struct {
+	Humans          int `json:"humans"`
+	Machines        int `json:"machines"`
+	HumansWaiting   int `json:"humansWaiting"`
+	MachinesWaiting int `json:"machinesWaiting"`
+	AICap           int `json:"aiCap"`
+	AIReserve       int `json:"aiReserve"`
+	// AISilence is how long an agent may make no call before its boat is
+	// sent into its grace, s; 0 when the page is not told.
+	AISilence float64 `json:"aiSilence"`
+	AIOrders  string  `json:"aiOrders,omitempty"`
+	AILooks   string  `json:"aiLooks,omitempty"`
 }
 
 type worldInfoJSON struct {
@@ -431,6 +490,23 @@ type boatJSON struct {
 	Unseen    bool        `json:"unseen"`
 	Tools     bool        `json:"tools"`
 	Eye       *[2]float64 `json:"eye"` // the free camera, east and north, while it roams
+	// Machine is a machine sailor's boat, as the world holds it.
+	Machine bool `json:"machine"`
+	// Priority is the account's priority as the database last said, which
+	// its next join takes; Admitted, whether this boat was given as a
+	// priority account's.
+	Priority bool `json:"priority"`
+	Admitted bool `json:"admitted"`
+	// Agent is a machine boat's agent, while keel knows of it.
+	Agent *agentJSON `json:"agent,omitempty"`
+}
+
+// agentJSON is what the page shows of a machine boat's agent.
+type agentJSON struct {
+	App       string   `json:"app"`
+	SinceCall *float64 `json:"sinceCall"` // s since its last call, null for none
+	Waiting   float64  `json:"waiting"`   // s its observe has waited so far, 0 while not waiting
+	Refusals  uint64   `json:"refusals"`  // its calls refused since keel started
 }
 
 type waitJSON struct {
@@ -439,4 +515,13 @@ type waitJSON struct {
 	Tools     bool    `json:"tools"`
 	Waited    float64 `json:"waited"` // s
 	Connected bool    `json:"connected"`
+	// Machine is a machine sailor's place, Position its place among those
+	// of its kind, 1 for the head: humans and machine sailors wait in
+	// queues of their own.
+	Machine  bool `json:"machine"`
+	Position int  `json:"position"`
+	// Priority is the account's priority as the database last said;
+	// Admitted, whether this place waits as a priority account's.
+	Priority bool `json:"priority"`
+	Admitted bool `json:"admitted"`
 }

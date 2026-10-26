@@ -80,6 +80,7 @@ func (w *World) inputs() {
 		next.Conn[s] = cur.Conn[s]
 		next.Grace[s] = cur.Grace[s]
 		next.Kind[s] = cur.Kind[s]
+		next.Machine[s], next.Priority[s] = cur.Machine[s], cur.Priority[s]
 		next.Control[s] = cur.Control[s]
 		next.Pilot[s] = cur.Pilot[s]
 		next.State[s] = cur.State[s]
@@ -190,6 +191,7 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 			// state and its sail as it went over; nor is a boat that
 			// stays while its owner's free camera roams.
 			f.Sail[s] = w.cur.Sail[s]
+			f.Instruments[s] = w.cur.Instruments[s]
 			w.settle(f, s)
 			continue
 		}
@@ -204,6 +206,16 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 		}
 		physics.Step(st, &c, &e, w.sea.at, w.ground, kind, o)
 		f.Sail[s] = physics.SailByte(o)
+		if f.Machine[s] {
+			// What a phone reads from its own prediction, a machine
+			// boat's agent is told: the step worked it out.
+			f.Instruments[s] = bus.Instruments{
+				WindSpeed: float32(e.WindSpeed), WindFrom: float32(e.WindFrom),
+				ApparentSpeed: float32(o.ApparentWindSpeed), ApparentAngle: float32(o.ApparentWindAngle),
+				SpeedOverGround: float32(o.SpeedOverGround), CourseOverGround: float32(o.CourseOverGround),
+				Depth: float32(o.Depth),
+			}
+		}
 		w.settle(f, s)
 		if w.enc != nil {
 			physics.TrackCourse(&f.Course[s], st, f.Wind[s].WindFrom, kind, w.enc)

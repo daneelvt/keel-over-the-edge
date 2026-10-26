@@ -118,7 +118,7 @@ UPDATE oauth_token SET used_at = coalesce(used_at, now()), next_pair = @next_pai
 SELECT t.kind, t.grant_id, coalesce(t.expires_at, 'epoch')::timestamptz AS expires_at,
   g.kind AS grant_kind, g.approved_at, coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at,
   coalesce(g.revoked_why, '')::text AS revoked_why, coalesce(g.client_name, '')::text AS client_name,
-  g.account_id, sl.name, coalesce(osl.name, '')::text AS owner_name
+  g.account_id, a.priority, sl.name, coalesce(osl.name, '')::text AS owner_name
 FROM oauth_token t
 JOIN ai_grant g ON g.id = t.grant_id
 JOIN account a ON a.id = g.account_id

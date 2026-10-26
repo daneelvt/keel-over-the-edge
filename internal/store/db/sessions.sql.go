@@ -119,7 +119,7 @@ func (q *Queries) ReleaseSession(ctx context.Context, arg ReleaseSessionParams) 
 }
 
 const sessionAccount = `-- name: SessionAccount :one
-SELECT a.id, a.kind, a.tools, a.notices_off, sl.name, sl.look, s.last_seen_at,
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, sl.name, sl.look, s.last_seen_at,
   s.held, coalesce(s.confirmed_until, 'epoch')::timestamptz AS confirmed_until
 FROM session s
 JOIN account a ON a.id = s.account_id
@@ -131,6 +131,7 @@ type SessionAccountRow struct {
 	ID             pgtype.UUID
 	Kind           string
 	Tools          bool
+	Priority       bool
 	NoticesOff     []string
 	Name           string
 	Look           string
@@ -146,6 +147,7 @@ func (q *Queries) SessionAccount(ctx context.Context, tokenHash []byte) (Session
 		&i.ID,
 		&i.Kind,
 		&i.Tools,
+		&i.Priority,
 		&i.NoticesOff,
 		&i.Name,
 		&i.Look,

@@ -12,7 +12,8 @@
 // shown; a place's box and outlook at the tick shown, for a point, an
 // island or a place picked; the next world's terrain and week under next/
 // once it is made; and the controls, each a POST of JSON, among them the
-// token lifetime of AI apps' grants and an account's machine sailors.
+// token lifetime of AI apps' grants, an account's machine sailors and an
+// account's priority.
 
 /** A boat at sea, as the page shows it. */
 export interface Boat {
@@ -37,6 +38,39 @@ export interface Boat {
   tools: boolean;
   /** Its owner's free camera, east and north, while it roams. */
   eye: [number, number] | null;
+  /** A machine sailor's boat, as the world holds it. */
+  machine: boolean;
+  /** The account's priority, which its next join takes; and whether this boat was given as a priority account's. */
+  priority: boolean;
+  admitted: boolean;
+  /** A machine boat's agent, while keel knows of it. */
+  agent?: Agent;
+}
+
+/** A machine boat's agent: its app, the seconds since its last call (null for none), how long its observe has waited so far and its calls refused. */
+export interface Agent {
+  app: string;
+  sinceCall: number | null;
+  waiting: number;
+  refusals: number;
+}
+
+/**
+ * Admission by kind: the boats at sea and the places waiting, of humans and
+ * of machine sailors; the machine sailors' cap and the places kept for
+ * them; and the rules their agents are held to: the silence, s (0 when not
+ * told), and the budgets of orders and looks.
+ */
+export interface Admission {
+  humans: number;
+  machines: number;
+  humansWaiting: number;
+  machinesWaiting: number;
+  aiCap: number;
+  aiReserve: number;
+  aiSilence: number;
+  aiOrders?: string;
+  aiLooks?: string;
 }
 
 /** A connection waiting for a boat. */
@@ -47,6 +81,12 @@ export interface Waiting {
   /** Seconds waited. */
   waited: number;
   connected: boolean;
+  /** A machine sailor's place, and its position among those of its kind, 1 for the head. */
+  machine: boolean;
+  position: number;
+  /** The account's priority, and whether this place waits as a priority account's. */
+  priority: boolean;
+  admitted: boolean;
 }
 
 export interface WorldInfo {
@@ -86,6 +126,7 @@ export interface WorldNow {
   wind: { step: number; points: [number, number, number, number][] };
   boats: Boat[];
   queue: Waiting[];
+  admission: Admission;
 }
 
 export interface Island {
@@ -921,7 +962,8 @@ export type Control =
   | 'next'
   | 'chart'
   | 'lifetime'
-  | 'machines';
+  | 'machines'
+  | 'priority';
 
 /** Works a control: a POST of JSON, done on any 2xx (202 for one under way). */
 export async function control(path: Control, body: unknown): Promise<Answer> {

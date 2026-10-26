@@ -54,7 +54,10 @@ type Config struct {
 	// the request: Usage records it.
 	Used func(grant [16]byte)
 	// Build names the MCP server's version.
-	Build   string
+	Build string
+	// Core sails the machine sailors' boats; nil for one with no world,
+	// whose tools answer that the sea is closed.
+	Core    *Core
 	Log     *slog.Logger
 	Metrics *obs.Metrics
 }
@@ -144,6 +147,11 @@ func (d *door) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.counted("accepted")
+	if r.Method == http.MethodPost && r.Header.Get("Content-Type") == "" {
+		// Some apps send their JSON with no Content-Type: it is read as
+		// JSON, as it can only be.
+		r.Header.Set("Content-Type", "application/json")
+	}
 	obs.SetAccount(r.Context(), a.Account.String())
 	if d.cfg.Used != nil {
 		d.cfg.Used(a.Grant)

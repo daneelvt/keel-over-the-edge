@@ -63,6 +63,18 @@ func (f *fakeAccounts) SetTools(_ context.Context, id store.AccountID, on bool) 
 	return nil
 }
 
+func (f *fakeAccounts) SetPriority(_ context.Context, id store.AccountID, on bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a, ok := f.by[id]
+	if !ok {
+		return store.ErrNotFound
+	}
+	a.Priority = on
+	f.by[id] = a
+	return nil
+}
+
 func (f *fakeAccounts) AccountCounts(context.Context) (store.AccountCounts, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

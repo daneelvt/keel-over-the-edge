@@ -7,7 +7,7 @@ import { drawMachine, endsWords, lookWords, withPart } from './machineform';
 import { fleetLine } from './machines';
 import { type Fetch, type Me, resolveSailor } from './me';
 import { MACHINE_REASONS, machineReasonText, REASONS } from './reasons';
-import { recipes, recipeText } from './recipes';
+import { recipes, recipeText, STARTER, sailing } from './recipes';
 
 const DAY = 86_400_000;
 
@@ -99,15 +99,34 @@ describe('the recipes', () => {
     }
   });
 
+  test('how each app is let sail', () => {
+    const text = Object.fromEntries(sailing().map((r) => [r.app, recipeText(r)]));
+    expect(text['Claude Code']).toContain('--allowedTools "mcp__keel__*"');
+    expect(text['Claude Code']).toContain(STARTER);
+    expect(text.Codex).toContain('tool_timeout_sec');
+    expect(text['Gemini CLI']).toContain('--yolo');
+    expect(text['Chat apps']).toContain('wait of 25');
+  });
+
   test('each app’s with its source and the day it was read', () => {
-    const src = readFileSync(new URL('./recipes.ts', import.meta.url), 'utf8');
-    const blocks = src.split(/\n {4}\{\n {6}app: /).slice(1);
-    const comments = src.split(/\n {4}\{\n {6}app: /).slice(0, -1);
-    expect(blocks).toHaveLength(all.length);
-    for (let i = 0; i < all.length - 1; i++) {
-      const above = comments[i]?.split('\n').slice(-4).join('\n') ?? '';
-      expect(above, all[i]?.app).toMatch(/\/\/ https:\/\//);
-      expect(above, all[i]?.app).toContain('Read 2026-10-25.');
+    const [connecting = '', letting = ''] = readFileSync(
+      new URL('./recipes.ts', import.meta.url),
+      'utf8',
+    ).split('export function sailing');
+    // The last of each list is the game's own, with no app's documentation:
+    // other programs, and in the sailing list the chat apps and a program.
+    for (const [src, list, own] of [
+      [connecting, all, 1],
+      [letting, sailing(), 2],
+    ] as const) {
+      const blocks = src.split(/\n {4}\{\n {6}app: /).slice(1);
+      const comments = src.split(/\n {4}\{\n {6}app: /).slice(0, -1);
+      expect(blocks).toHaveLength(list.length);
+      for (let i = 0; i < list.length - own; i++) {
+        const above = comments[i]?.split('\n').slice(-4).join('\n') ?? '';
+        expect(above, list[i]?.app).toMatch(/\/\/ https:\/\//);
+        expect(above, list[i]?.app).toContain('Read 2026-10-25.');
+      }
     }
   });
 });

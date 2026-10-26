@@ -8,6 +8,7 @@
 
 import { signal } from '@preact/signals';
 import type { ChartEntry, ChartSubject } from '../net/messages';
+import { formatPosition } from './position';
 
 /** A nautical mile, m. */
 export const NM = 1852;
@@ -182,6 +183,42 @@ export function distanceText(m: number): string {
     return `${Math.max(Math.round(m), 0)} m`;
   }
   return `${(m / NM).toFixed(1)} NM`;
+}
+
+/** A line of the chart's list: an entry, how far it is from the boat, m, and where it is, as written. */
+export interface ListLine {
+  entry: ChartEntry;
+  distance: number;
+  where: string;
+}
+
+/**
+ * The chart's list for a boat at (east, north): the islands, the places
+ * and the features, each nearest first, and where each is from the boat and
+ * on the chart, "045° 1.2 NM · 67°24′N 045°12′". A group may be empty.
+ */
+export function chartList(
+  entries: readonly ChartEntry[],
+  east: number,
+  north: number,
+): { title: string; lines: ListLine[] }[] {
+  const groups: { title: string; lines: ListLine[] }[] = [
+    { title: 'Islands', lines: [] },
+    { title: 'Places', lines: [] },
+    { title: 'Features', lines: [] },
+  ];
+  for (const e of entries) {
+    const d = Math.hypot(e.east - east, e.north - north);
+    groups[e.subject === 'island' ? 0 : e.subject === 'place' ? 1 : 2]?.lines.push({
+      entry: e,
+      distance: d,
+      where: `${bearingText(Math.atan2(e.east - east, e.north - north))} ${distanceText(d)} · ${formatPosition(e.east, e.north)}`,
+    });
+  }
+  for (const g of groups) {
+    g.lines.sort((x, y) => x.distance - y.distance);
+  }
+  return groups;
 }
 
 /** The pocket chart's caption: "Chart · edge 4.3 NM". */

@@ -1115,3 +1115,42 @@ func TestRemove(t *testing.T) {
 		}
 	})
 }
+
+// TestPriorityNeverWaits: a priority account is given a boat at once,
+// beyond the boat limit, while a human waits.
+func TestPriorityNeverWaits(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := edgetest.NewServer(t, edgetest.Config{Limit: 1})
+		ann, _ := s.Sailor("Ann")
+		ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: ann})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws.CloseNow()
+		bob, _ := s.Sailor("Bob")
+		ws2, _, err := s.Dial(t.Context(), edgetest.DialOptions{Cookie: bob})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws2.CloseNow()
+		client.Send(t.Context(), ws2, client.Hello())
+		time.Sleep(time.Second)
+		cy, _ := s.Priority("Cy")
+		ws3, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: cy})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ws3.CloseNow()
+		f := s.World.Bus().Frames.Acquire()
+		defer f.Release()
+		priority := 0
+		for _, sl := range f.Live {
+			if f.Priority[sl] {
+				priority++
+			}
+		}
+		if len(f.Live) != 2 || len(f.Queue) != 1 || priority != 1 {
+			t.Fatalf("%d boats, %d of them a priority account's, and %d waiting", len(f.Live), priority, len(f.Queue))
+		}
+	})
+}

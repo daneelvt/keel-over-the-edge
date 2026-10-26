@@ -111,8 +111,10 @@ export function litMaterial(
  */
 export const sailGlowColour = uniform(new Vector3(0.42, 0.4, 0.36));
 
-export function sailGlow(cloth: Texture): Node<'vec3'> {
-  return texture(cloth).rgb.mul(sailGlowColour) as unknown as Node<'vec3'>;
+/** The glow of a sail's cloth: its texture, or the node that samples it. */
+export function sailGlow(cloth: Texture | Node<'vec4'>): Node<'vec3'> {
+  const c = 'isTexture' in cloth ? texture(cloth) : cloth;
+  return c.rgb.mul(sailGlowColour) as unknown as Node<'vec3'>;
 }
 
 /** An unlit material. */

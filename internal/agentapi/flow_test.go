@@ -106,9 +106,17 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 // app's next call does, and returns the status, its challenge and body.
 func (h *harness) mcpCall(token string) (int, string, string) {
 	h.t.Helper()
+	return h.mcpCallAs(token, "application/json")
+}
+
+// mcpCallAs is mcpCall with a Content-Type, "" for none.
+func (h *harness) mcpCallAs(token, contentType string) (int, string, string) {
+	h.t.Helper()
 	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"handbook","arguments":{}}}`
 	req, _ := http.NewRequest("POST", h.resource, strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("Mcp-Protocol-Version", "2025-06-18")
 	if token != "" {
@@ -157,7 +165,7 @@ func TestTheSDKsClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the app by its document: %v\n%s", err, h.logs)
 	}
-	if !strings.Contains(text, "You sail as Iron Mary, Ann Bonny's machine sailor") {
+	if !strings.Contains(text, "You sail as «Iron Mary», «Ann Bonny»'s machine sailor") {
 		t.Fatalf("handbook: %q", text)
 	}
 	if h.fetchedCount("/client.json") != 1 {

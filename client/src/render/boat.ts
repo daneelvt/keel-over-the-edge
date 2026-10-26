@@ -313,6 +313,12 @@ export class Boat {
   }
 }
 
+/** The sail's cloth's colour: cream flax. */
+export const CLOTH = '#efe6d2';
+/** The cloth's canvas: its width the foot, its height the luff, at the same scale. */
+export const CLOTH_WIDTH = 512;
+export const CLOTH_HEIGHT = 960;
+
 /**
  * The sail's cloth, drawn into a canvas: cream flax in crosscut panels,
  * the class insignia near the head and the sail number, if any, below it.
@@ -321,24 +327,31 @@ export class Boat {
  */
 export function sailCloth(number: string, insignia: string): CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 960;
-  const g = canvas.getContext('2d') as CanvasRenderingContext2D;
-  g.fillStyle = '#efe6d2';
-  g.fillRect(0, 0, canvas.width, canvas.height);
+  canvas.width = CLOTH_WIDTH;
+  canvas.height = CLOTH_HEIGHT;
+  paintCloth(canvas.getContext('2d') as CanvasRenderingContext2D, number, insignia);
+  return clothTexture(canvas);
+}
+
+/** Paints the cloth into a canvas's CLOTH_WIDTH × CLOTH_HEIGHT from its origin, as sailCloth has it. */
+export function paintCloth(g: CanvasRenderingContext2D, number: string, insignia: string): void {
+  const width = CLOTH_WIDTH;
+  const height = CLOTH_HEIGHT;
+  g.fillStyle = CLOTH;
+  g.fillRect(0, 0, width, height);
   // Panel seams, square to the leech, and a faint weave.
   g.strokeStyle = 'rgba(120, 100, 70, 0.28)';
   g.lineWidth = 2;
-  for (let y = 40; y < canvas.height; y += 62) {
+  for (let y = 40; y < height; y += 62) {
     g.beginPath();
     g.moveTo(0, y);
-    g.lineTo(canvas.width, y - 70);
+    g.lineTo(width, y - 70);
     g.stroke();
   }
   // The insignia in a ring, 22% of the foot across, near the head.
-  const cx = 0.115 * canvas.width;
-  const cy = 0.2 * canvas.height;
-  const r = 0.085 * canvas.width;
+  const cx = 0.115 * width;
+  const cy = 0.2 * height;
+  const r = 0.085 * width;
   g.strokeStyle = '#a3362a';
   g.fillStyle = '#a3362a';
   g.lineWidth = 7;
@@ -351,7 +364,11 @@ export function sailCloth(number: string, insignia: string): CanvasTexture {
   g.fillText(insignia, cx, cy + r * 0.06);
   g.fillStyle = '#2b2118';
   g.font = `${Math.round(r * 1.25)}px Georgia, serif`;
-  g.fillText(number, 0.16 * canvas.width, 0.38 * canvas.height);
+  g.fillText(number, 0.16 * width, 0.38 * height);
+}
+
+/** A cloth's canvas as the sail's texture. */
+export function clothTexture(canvas: HTMLCanvasElement): CanvasTexture {
   const t = new CanvasTexture(canvas);
   t.colorSpace = SRGBColorSpace;
   t.anisotropy = 4;

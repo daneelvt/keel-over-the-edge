@@ -169,7 +169,10 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 			held := false
 			join := func(a bus.Account) (bus.Reply, bool) {
 				conn++
-				players.TrySend(bus.Command{Op: bus.Join, Account: a, Conn: conn, Reply: reply})
+				// Every third account is a machine sailor's, and every
+				// eleventh a priority account's.
+				players.TrySend(bus.Command{Op: bus.Join, Account: a, Conn: conn, Reply: reply,
+					Machine: a[15]%3 == 0, Priority: a[15]%11 == 0})
 				select {
 				case rep := <-reply:
 					return rep, true
@@ -385,7 +388,7 @@ func TestFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var skipped, held bool
+	var skipped, held, machine, priority bool
 	ops := map[bus.Op]bool{}
 	results := map[bus.Result]bool{}
 	for _, seg := range f.Segments {
@@ -394,6 +397,8 @@ func TestFixture(t *testing.T) {
 			for _, e := range r.Events {
 				ops[e.Op] = true
 				results[e.Reply.Result] = true
+				machine = machine || e.Machine && e.Reply.Result == bus.Admitted
+				priority = priority || e.Priority
 			}
 			for _, c := range r.Changed {
 				// A word applied after the tick its writer read: held for its tick.
@@ -402,9 +407,9 @@ func TestFixture(t *testing.T) {
 		}
 	}
 	if !skipped || len(ops) != len(bus.Ops) || len(f.Segments) < 3 || !results[bus.Expired] || !results[bus.Rejoined] || !held ||
-		!results[bus.Queued] || !results[bus.Admitted] || !results[bus.Dequeued] || f.Header.Limit != 24 {
-		t.Fatalf("the fixture lacks a skip (%v), an op (%v), a grace that ended or was cut short, a wait, an admission or one who gave up waiting (%v), a held word (%v), segments (%d) or its limit",
-			skipped, ops, results, held, len(f.Segments))
+		!results[bus.Queued] || !results[bus.Admitted] || !results[bus.Dequeued] || f.Header.Limit != 24 || !machine || !priority {
+		t.Fatalf("the fixture lacks a skip (%v), an op (%v), a grace that ended or was cut short, a wait, an admission or one who gave up waiting (%v), a held word (%v), segments (%d), its limit, a machine sailor admitted (%v) or a priority account (%v)",
+			skipped, ops, results, held, len(f.Segments), machine, priority)
 	}
 	_, one := replayLog(t, data, 1)
 	_, eight := replayLog(t, data, 8)

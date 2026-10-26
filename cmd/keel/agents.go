@@ -6,15 +6,21 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/agentapi"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
+	"github.com/daneelvt/keel-over-the-edge/internal/owner"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
 // Sign-in for AI apps, kept across worlds: the authorization server on the
@@ -26,6 +32,7 @@ type agents struct {
 	grants   *oauth.Grants
 	server   *oauth.Server
 	usage    *agentapi.Usage
+	core     *agentapi.Core
 	handler  http.Handler
 	looks    oauth.MachineLooks
 	boat     string
@@ -67,15 +74,89 @@ func (p *process) newAgents(ctx context.Context) (*agents, error) {
 		Page: page, AtSea: p.atSea,
 	})
 	a.usage = agentapi.NewUsage(p.db, p.log)
+	a.core = agentapi.NewCore(agentapi.CoreConfig{Log: p.log, Metrics: p.metrics, Silence: p.cfg.AISilence})
 	a.handler, err = agentapi.Handler(agentapi.Config{
 		Resource: p.cfg.AgentsURL, Issuer: p.cfg.PlayOrigin, Grants: a.grants, Used: a.usage.Used,
-		Build: p.build, Log: p.log, Metrics: p.metrics,
+		Build: p.build, Log: p.log, Metrics: p.metrics, Core: a.core,
 	})
 	if err != nil {
 		return nil, err
 	}
 	p.log.Info("the MCP address", "url", p.cfg.AgentsURL, "grant_lifetime", d.String())
 	return a, nil
+}
+
+// seaOf is the world half h as the machine sailors' tools reach it.
+func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agentapi.Sea {
+	cat := p.cat
+	s := &agentapi.Sea{
+		Number: h.row.Number, Epoch: h.row.Epoch, Ends: h.ends, Bus: h.bus, Boats: cat.Boats,
+		Limit: h.world.Limit(), AICap: h.world.AICap(), AIReserve: h.world.AIReserve(),
+		Timeline: rw.timeline, Waves: p.waves, Sky: cat.PrepareSky(), Bundle: rw.bundle,
+		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Kinds: p.kinds, Encounters: cat.PrepareEncounters(),
+		News: news{db: p.db, world: h.row.ID}.News, Columns: map[string]string{}, Biomes: map[string]string{},
+	}
+	if t := rw.terrain; t != nil {
+		s.Ground, s.Shelter = t.Ground, t.Shelter
+	}
+	if rw.charts != nil {
+		s.Chart, s.Sight = rw.charts.model, sighting
+	}
+	risks, fog := weather.RisksOf(cat)
+	s.Place = &forecast.PlaceWords{Timeline: rw.timeline, Words: s.Words, Risks: risks, Fog: fog,
+		Outlook: cat.Weather.Forecast.Outlook.Samples, Sky: s.Sky, Epoch: h.row.Epoch}
+	copy(s.RainWords[:], cat.Weather.Clouds.RainWords)
+	for _, c := range cat.News.Columns {
+		s.Columns[string(c.ID)] = c.Title
+	}
+	for _, b := range cat.World.Biomes {
+		s.Biomes[string(b.ID)] = strings.ReplaceAll(string(b.ID), "-", " ")
+	}
+	for _, k := range cat.World.Places.Kinds {
+		s.PlaceKinds = append(s.PlaceKinds, k.Name)
+	}
+	for _, k := range cat.World.Features.Kinds {
+		s.FeatureKinds = append(s.FeatureKinds, k.Name)
+	}
+	for _, k := range cat.Weather.Systems {
+		s.SystemKinds = append(s.SystemKinds, systemWords(k))
+	}
+	if b := rw.bundle; b != nil {
+		for _, is := range b.Islands {
+			if is.Kind == worldgen.KindMain {
+				s.Start = is.Name
+				break
+			}
+		}
+	}
+	return s
+}
+
+// systemWords are what the forecast calls a kind of weather system, by
+// its cloud and its shape.
+func systemWords(k catalog.SystemKind) string {
+	switch k.Cloud.Form {
+	case catalog.CloudFormStorm:
+		return "a thunderstorm"
+	case catalog.CloudFormCumulonimbus:
+		return "a squall"
+	case catalog.CloudFormCumulus:
+		return "showers"
+	case catalog.CloudFormFog:
+		return "a fog bank"
+	}
+	if k.Shape == catalog.ShapeLow {
+		return "a low"
+	}
+	return "a patch of light air"
+}
+
+// ownerAgents tells the world page of the machine sailors' agents.
+type ownerAgents struct{ core *agentapi.Core }
+
+func (o ownerAgents) Agent(account bus.Account) (owner.AgentInfo, bool) {
+	app, last, waiting, refusals, ok := o.core.Agent(account)
+	return owner.AgentInfo{App: app, LastCall: last, Waiting: waiting, Refusals: refusals}, ok
 }
 
 // approvePage is the approval page's file in the built page.
