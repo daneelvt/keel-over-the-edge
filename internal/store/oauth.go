@@ -675,9 +675,10 @@ func (s *Store) SetGrantLifetime(ctx context.Context, d time.Duration) error {
 	return err
 }
 
-// GrantsEndedBy is how many unrevoked grants a lifetime would end at once.
-func (s *Store) GrantsEndedBy(ctx context.Context, d time.Duration) (int64, error) {
-	return s.q.GrantsEndedBy(ctx, d.Microseconds())
+// GrantsEndedBy is how many grants live under the lifetime now a new
+// lifetime d would end at once.
+func (s *Store) GrantsEndedBy(ctx context.Context, now, d time.Duration) (int64, error) {
+	return s.q.GrantsEndedBy(ctx, db.GrantsEndedByParams{NowMicros: now.Microseconds(), Micros: d.Microseconds()})
 }
 
 // OAuthCleanup is what DeleteOAuthLeftovers deleted.

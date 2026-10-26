@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The game in production: the base's sizes, which are production's, the
-# players' address and their passkeys' domain, the database's passwords
-# and the backups' keys from Infisical, the weekly restore test, and
-# cloudflared, which carries players' traffic in from Cloudflare.
+# players' address and their passkeys' domain, the MCP address, the
+# database's passwords and the backups' keys from Infisical, the weekly
+# restore test, and cloudflared, which carries players' and AI apps'
+# traffic in from Cloudflare.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -22,7 +23,10 @@ configMapGenerator:
       - KEEL_PLAY_ORIGIN=https://play.keelovertheedge.com
       # Players' passkeys are the domain's, not the play host's alone.
       - KEEL_PASSKEY_RP_ID=keelovertheedge.com
-# The Gateway and the players' route answer the players' host alone.
+      # The MCP address has a host of its own.
+      - KEEL_AGENTS_URL=https://agents.keelovertheedge.com/mcp
+# The Gateway and the players' route answer the players' host alone; a
+# second listener and AI apps' route answer the MCP address's host alone.
 patches:
   - target:
       kind: Gateway
@@ -31,6 +35,16 @@ patches:
       - op: add
         path: /spec/listeners/0/hostname
         value: play.keelovertheedge.com
+      - op: add
+        path: /spec/listeners/-
+        value:
+          name: agents
+          port: 8000
+          protocol: HTTP
+          hostname: agents.keelovertheedge.com
+          allowedRoutes:
+            namespaces:
+              from: Same
   - target:
       kind: HTTPRoute
       name: play
@@ -39,3 +53,14 @@ patches:
         path: /spec/hostnames
         value:
           - play.keelovertheedge.com
+  - target:
+      kind: HTTPRoute
+      name: agents
+    patch: |-
+      - op: replace
+        path: /spec/parentRefs/0/sectionName
+        value: agents
+      - op: add
+        path: /spec/hostnames
+        value:
+          - agents.keelovertheedge.com

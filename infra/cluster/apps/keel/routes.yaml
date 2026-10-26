@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The players' routes: the page, the API and the game connection, all
-# served by keel's game listener. Never the internal listener. The game
-# connection counts against the connections one address may hold open;
-# everything else against the requests it may make a second (the
-# middlewares, through Gateway API filters naming them).
+# served by keel's game listener; and AI apps', served by its agents'
+# listener. Never the internal listener. The game connection counts
+# against the connections one address may hold open; everything else
+# against the requests it may make a second (the middlewares, through
+# Gateway API filters naming them).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -39,3 +40,35 @@ spec:
       backendRefs:
         - name: keel
           port: 8080
+---
+# AI apps' route: the MCP address and its resource's metadata, nothing
+# else. Named with no host, it shares the players' host, as on the local
+# cluster, where these are the only paths that do not reach the game's
+# listener (an exact path and a longer prefix win over the players' /);
+# production gives it a host of its own, agents., where any other path
+# finds no route.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents
+spec:
+  parentRefs:
+    - name: keel
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-protected-resource
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: traefik.io
+            kind: Middleware
+            name: per-address-rate
+      backendRefs:
+        - name: keel
+          port: 8081

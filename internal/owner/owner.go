@@ -228,6 +228,7 @@ var Paths = []string{
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
 	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
 	"/owner/api/forecast.json", "/owner/api/calibration.json", "/owner/api/gales.json", "/owner/api/place.json",
+	"/owner/api/lifetime", "/owner/api/machines",
 }
 
 // New makes the owner's tools. Run must be running for the page to see

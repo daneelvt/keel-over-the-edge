@@ -195,3 +195,22 @@ func TestOAuthLeftovers(t *testing.T) {
 		t.Fatalf("kept: %d tokens, %d clients, %v", tokens, clients, err)
 	}
 }
+
+// TestGrantsEndedBy: a shorter lifetime counts the grants live now that it
+// would end, not those the lifetime has ended already.
+func TestGrantsEndedBy(t *testing.T) {
+	ctx := context.Background()
+	s, u := storetest.Store(t, store.Options{})
+	pool := storetest.PoolOn(t, u)
+	owner, _ := s.CreateAccount(ctx, withBoat(storetest.NewAccount("Ann Bonny", "annbonny", sha256.Sum256([]byte("t")))))
+	m, _ := s.CreateMachine(ctx, owner, store.NewMachine{Name: "Iron Mary", NameKey: "ironmary", Version: "v", Finish: "f", Colour: "c"}, "jolly-boat")
+	for _, age := range []string{"200 days", "10 days", "1 hour"} {
+		must(t, pool, "INSERT INTO ai_grant (account_id, kind, client_id, client_name, redirect_uri, approved_by, approved_at) VALUES ($1, 'app', 'c', 'C', 'https://c', $2, now() - $3::interval)", m, owner, age)
+	}
+	day := 24 * time.Hour
+	for d, want := range map[time.Duration]int64{5 * day: 1, 2 * time.Minute: 2, 400 * day: 0} {
+		if n, err := s.GrantsEndedBy(ctx, 90*day, d); err != nil || n != want {
+			t.Errorf("a lifetime of %v ends %d, want %d (%v)", d, n, want, err)
+		}
+	}
+}

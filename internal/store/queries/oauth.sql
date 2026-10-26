@@ -140,9 +140,10 @@ SELECT (extract(epoch FROM grant_lifetime) * 1000000)::bigint AS micros FROM set
 UPDATE setting SET grant_lifetime = sqlc.arg(micros)::bigint * interval '1 microsecond';
 
 -- name: GrantsEndedBy :one
--- How many unrevoked grants a lifetime would end at once.
+-- How many grants live under the lifetime now a new one would end at once.
 SELECT count(*) FROM ai_grant
-WHERE revoked_at IS NULL AND approved_at + sqlc.arg(micros)::bigint * interval '1 microsecond' <= now();
+WHERE revoked_at IS NULL AND approved_at + sqlc.arg(now_micros)::bigint * interval '1 microsecond' > now()
+  AND approved_at + sqlc.arg(micros)::bigint * interval '1 microsecond' <= now();
 
 -- name: LiveGrants :many
 -- The unrevoked grants within a lifetime, by kind.

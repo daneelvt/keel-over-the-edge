@@ -49,6 +49,8 @@ variable "state_passphrase" {
 locals {
   domain = "keelovertheedge.com"
   play   = "play.${local.domain}"
+  # The MCP address's host, where AI apps connect.
+  agents = "agents.${local.domain}"
   # Every secret the cluster reads is in keel-cluster's one environment.
   cluster_environment = "prod"
 }

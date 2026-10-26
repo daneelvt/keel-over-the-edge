@@ -37,7 +37,7 @@ type machinesJSON struct {
 // apps: the store.
 type AISailors interface {
 	MachineCounts(ctx context.Context, lifetime time.Duration) (store.MachineCounts, error)
-	GrantsEndedBy(ctx context.Context, d time.Duration) (int64, error)
+	GrantsEndedBy(ctx context.Context, now, d time.Duration) (int64, error)
 	SetGrantLifetime(ctx context.Context, d time.Duration) error
 	SetMachineCap(ctx context.Context, id store.AccountID, limit int) error
 }
@@ -110,7 +110,7 @@ func (o *Owner) lifetime(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
 	defer cancel()
-	ended, err := o.cfg.Machines.GrantsEndedBy(ctx, d)
+	ended, err := o.cfg.Machines.GrantsEndedBy(ctx, o.cfg.Lifetime.Get(), d)
 	if err != nil {
 		http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
 		return

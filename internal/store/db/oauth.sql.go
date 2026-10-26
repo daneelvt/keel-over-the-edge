@@ -115,12 +115,18 @@ func (q *Queries) GrantUsed(ctx context.Context, arg GrantUsedParams) error {
 
 const grantsEndedBy = `-- name: GrantsEndedBy :one
 SELECT count(*) FROM ai_grant
-WHERE revoked_at IS NULL AND approved_at + $1::bigint * interval '1 microsecond' <= now()
+WHERE revoked_at IS NULL AND approved_at + $1::bigint * interval '1 microsecond' > now()
+  AND approved_at + $2::bigint * interval '1 microsecond' <= now()
 `
 
-// How many unrevoked grants a lifetime would end at once.
-func (q *Queries) GrantsEndedBy(ctx context.Context, micros int64) (int64, error) {
-	row := q.db.QueryRow(ctx, grantsEndedBy, micros)
+type GrantsEndedByParams struct {
+	NowMicros int64
+	Micros    int64
+}
+
+// How many grants live under the lifetime now a new one would end at once.
+func (q *Queries) GrantsEndedBy(ctx context.Context, arg GrantsEndedByParams) (int64, error) {
+	row := q.db.QueryRow(ctx, grantsEndedBy, arg.NowMicros, arg.Micros)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

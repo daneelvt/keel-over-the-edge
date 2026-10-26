@@ -67,7 +67,7 @@ func (noAccounts) ConfirmSession(context.Context, store.AccountID, [32]byte, tim
 func (noAccounts) DeleteAccount(context.Context, store.AccountID) ([]store.AccountID, error) {
 	return nil, errNoDatabase
 }
-func (noAccounts) SaveCeremony(context.Context, store.Ceremony) error   { return errNoDatabase }
+func (noAccounts) SaveCeremony(context.Context, store.Ceremony) error { return errNoDatabase }
 func (noAccounts) TakeCeremony(context.Context, [32]byte, string) (store.Ceremony, error) {
 	return store.Ceremony{}, errNoDatabase
 }

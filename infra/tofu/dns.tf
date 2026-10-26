@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The zone's records: play., and what keeps certificates and e-mail from
-# being issued or sent in the domain's name. Nothing else: no apex, www or
-# agents record yet.
+# The zone's records: play., agents., and what keeps certificates and
+# e-mail from being issued or sent in the domain's name. Nothing else: no
+# apex or www record yet.
 
 # play. through Cloudflare to the tunnel.
 resource "cloudflare_dns_record" "play" {
@@ -11,6 +11,17 @@ resource "cloudflare_dns_record" "play" {
   content = "${cloudflare_zero_trust_tunnel_cloudflared.prod.id}.cfargotunnel.com"
   proxied = true
   ttl     = 1 # automatic, as for every proxied record
+}
+
+# agents., the MCP address AI apps connect to, through Cloudflare to the
+# same tunnel.
+resource "cloudflare_dns_record" "agents" {
+  zone_id = var.cloudflare_zone_id
+  name    = local.agents
+  type    = "CNAME"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.prod.id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
 }
 
 # The zone signed. Its DS record is entered at the registrar by hand once

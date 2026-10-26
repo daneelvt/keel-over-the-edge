@@ -46,7 +46,9 @@ patches:
         path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/value
         value: ":memory:keel-db-dumps/local"
   # HTTPS on Traefik's websecure entry point, with the certificate
-  # tools/cluster makes; the players' route moves to it.
+  # tools/cluster makes; the players' and AI apps' routes move to it. AI
+  # apps reach the MCP address on the players' host, where keel expects
+  # it by default (KEEL_AGENTS_URL unset: the play origin's /mcp).
   - target:
       kind: Gateway
       name: keel
@@ -67,6 +69,13 @@ patches:
   - target:
       kind: HTTPRoute
       name: play
+    patch: |-
+      - op: replace
+        path: /spec/parentRefs/0/sectionName
+        value: https
+  - target:
+      kind: HTTPRoute
+      name: agents
     patch: |-
       - op: replace
         path: /spec/parentRefs/0/sectionName

@@ -26,9 +26,9 @@ resource "cloudflare_zero_trust_tunnel_cloudflared" "prod" {
   }
 }
 
-# play. goes to Traefik inside the cluster, which routes by host as
-# before, keeping the original Host header; anything else that reaches the
-# tunnel is refused.
+# play. and agents. go to Traefik inside the cluster, which routes by host
+# as before, keeping the original Host header; anything else that reaches
+# the tunnel is refused.
 resource "cloudflare_zero_trust_tunnel_cloudflared_config" "prod" {
   account_id = var.cloudflare_account_id
   tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.prod.id
@@ -36,6 +36,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "prod" {
     ingress = [
       {
         hostname = local.play
+        service  = "http://traefik.kube-system.svc.cluster.local:80"
+      },
+      {
+        hostname = local.agents
         service  = "http://traefik.kube-system.svc.cluster.local:80"
       },
       {

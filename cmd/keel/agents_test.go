@@ -80,8 +80,10 @@ func (noAccounts) MachineCounts(context.Context, time.Duration) (store.MachineCo
 func (noAccounts) DeleteOAuthLeftovers(context.Context, time.Time, time.Duration) (store.OAuthCleanup, error) {
 	return store.OAuthCleanup{}, nil
 }
-func (noAccounts) GrantsEndedBy(context.Context, time.Duration) (int64, error) { return 0, nil }
-func (noAccounts) SetGrantLifetime(context.Context, time.Duration) error       { return nil }
+func (noAccounts) GrantsEndedBy(context.Context, time.Duration, time.Duration) (int64, error) {
+	return 0, nil
+}
+func (noAccounts) SetGrantLifetime(context.Context, time.Duration) error { return nil }
 func (noAccounts) SetMachineCap(context.Context, store.AccountID, int) error {
 	return store.ErrNotFound
 }
