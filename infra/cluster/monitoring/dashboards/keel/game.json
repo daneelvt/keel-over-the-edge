@@ -1055,8 +1055,8 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(rate(keel_accounts_deleted_total[$__rate_interval]))",
-          "legendFormat": "deleted",
+          "expr": "sum by (by) (rate(keel_accounts_deleted_total[$__rate_interval]))",
+          "legendFormat": "deleted (by {{by}})",
           "editorMode": "code",
           "range": true,
           "instant": false
@@ -1241,8 +1241,8 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(rate(keel_machine_sailors_deleted_total[$__rate_interval]))",
-          "legendFormat": "deleted",
+          "expr": "sum by (by) (rate(keel_machine_sailors_deleted_total[$__rate_interval]))",
+          "legendFormat": "deleted (by {{by}})",
           "editorMode": "code",
           "range": true,
           "instant": false
@@ -1819,6 +1819,158 @@
       }
     },
     {
+      "type": "timeseries",
+      "title": "Accounts stopped",
+      "description": "Grants unrevoked and within the lifetime: approved AI apps, and connection tokens.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (kind) (keel_accounts_stopped)",
+          "legendFormat": "{{kind}}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 57,
+      "gridPos": {
+        "x": 0,
+        "y": 66,
+        "w": 12,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "The owner’s account actions, and refusals of stopped accounts",
+      "description": "Grants unrevoked and within the lifetime: approved AI apps, and connection tokens.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (action) (increase(keel_owner_actions_total{action=~\"stop|start|revoke|delete\"}[$__rate_interval]))",
+          "legendFormat": "{{action}}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(keel_ceremonies_total{result=\"stopped\"}[$__rate_interval]))",
+          "legendFormat": "passkeys of stopped accounts",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(keel_mcp_door_total{result=\"stopped\"}[$__rate_interval]))",
+          "legendFormat": "tokens of stopped machine sailors",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(keel_edge_upgrades_total{result=\"stopped\"}[$__rate_interval]))",
+          "legendFormat": "game connections of stopped accounts",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 58,
+      "gridPos": {
+        "x": 12,
+        "y": 66,
+        "w": 12,
+        "h": 7
+      }
+    },
+    {
       "type": "row",
       "title": "Machine sailors",
       "collapsed": false,
@@ -1826,7 +1978,7 @@
       "id": 42,
       "gridPos": {
         "x": 0,
-        "y": 66,
+        "y": 73,
         "w": 24,
         "h": 1
       }
@@ -1884,7 +2036,7 @@
       "id": 43,
       "gridPos": {
         "x": 0,
-        "y": 67,
+        "y": 74,
         "w": 8,
         "h": 7
       }
@@ -1942,7 +2094,7 @@
       "id": 44,
       "gridPos": {
         "x": 8,
-        "y": 67,
+        "y": 74,
         "w": 8,
         "h": 7
       }
@@ -2012,7 +2164,7 @@
       "id": 45,
       "gridPos": {
         "x": 16,
-        "y": 67,
+        "y": 74,
         "w": 8,
         "h": 7
       }
@@ -2070,7 +2222,7 @@
       "id": 46,
       "gridPos": {
         "x": 0,
-        "y": 74,
+        "y": 81,
         "w": 8,
         "h": 7
       }
@@ -2140,7 +2292,7 @@
       "id": 47,
       "gridPos": {
         "x": 8,
-        "y": 74,
+        "y": 81,
         "w": 8,
         "h": 7
       }
@@ -2198,7 +2350,7 @@
       "id": 48,
       "gridPos": {
         "x": 16,
-        "y": 74,
+        "y": 81,
         "w": 8,
         "h": 7
       }
@@ -2256,7 +2408,7 @@
       "id": 49,
       "gridPos": {
         "x": 0,
-        "y": 81,
+        "y": 88,
         "w": 8,
         "h": 7
       }
@@ -2326,7 +2478,7 @@
       "id": 50,
       "gridPos": {
         "x": 8,
-        "y": 81,
+        "y": 88,
         "w": 8,
         "h": 7
       }
@@ -2384,7 +2536,7 @@
       "id": 51,
       "gridPos": {
         "x": 16,
-        "y": 81,
+        "y": 88,
         "w": 8,
         "h": 7
       }
@@ -2466,7 +2618,7 @@
       "id": 52,
       "gridPos": {
         "x": 0,
-        "y": 88,
+        "y": 95,
         "w": 8,
         "h": 7
       }
@@ -2524,7 +2676,7 @@
       "id": 53,
       "gridPos": {
         "x": 8,
-        "y": 88,
+        "y": 95,
         "w": 8,
         "h": 7
       }
@@ -2582,7 +2734,7 @@
       "id": 54,
       "gridPos": {
         "x": 16,
-        "y": 88,
+        "y": 95,
         "w": 8,
         "h": 7
       }
@@ -2640,7 +2792,7 @@
       "id": 55,
       "gridPos": {
         "x": 0,
-        "y": 95,
+        "y": 102,
         "w": 12,
         "h": 7
       }
@@ -2698,7 +2850,7 @@
       "id": 56,
       "gridPos": {
         "x": 12,
-        "y": 95,
+        "y": 102,
         "w": 12,
         "h": 7
       }
@@ -2711,7 +2863,7 @@
       "id": 16,
       "gridPos": {
         "x": 0,
-        "y": 102,
+        "y": 109,
         "w": 24,
         "h": 1
       }
@@ -2785,7 +2937,7 @@
       "id": 17,
       "gridPos": {
         "x": 0,
-        "y": 103,
+        "y": 110,
         "w": 8,
         "h": 7
       }
@@ -2855,7 +3007,7 @@
       "id": 18,
       "gridPos": {
         "x": 8,
-        "y": 103,
+        "y": 110,
         "w": 8,
         "h": 7
       }
@@ -2913,7 +3065,7 @@
       "id": 19,
       "gridPos": {
         "x": 16,
-        "y": 103,
+        "y": 110,
         "w": 4,
         "h": 7
       }
@@ -2971,7 +3123,7 @@
       "id": 20,
       "gridPos": {
         "x": 20,
-        "y": 103,
+        "y": 110,
         "w": 4,
         "h": 7
       }
@@ -3029,7 +3181,7 @@
       "id": 21,
       "gridPos": {
         "x": 0,
-        "y": 110,
+        "y": 117,
         "w": 8,
         "h": 7
       }
@@ -3099,7 +3251,7 @@
       "id": 22,
       "gridPos": {
         "x": 8,
-        "y": 110,
+        "y": 117,
         "w": 8,
         "h": 7
       }
@@ -3157,7 +3309,7 @@
       "id": 23,
       "gridPos": {
         "x": 16,
-        "y": 110,
+        "y": 117,
         "w": 8,
         "h": 7
       }
@@ -3170,7 +3322,7 @@
       "id": 24,
       "gridPos": {
         "x": 0,
-        "y": 117,
+        "y": 124,
         "w": 24,
         "h": 1
       }
@@ -3252,7 +3404,7 @@
       "id": 25,
       "gridPos": {
         "x": 0,
-        "y": 118,
+        "y": 125,
         "w": 8,
         "h": 7
       }
@@ -3328,7 +3480,7 @@
       "id": 26,
       "gridPos": {
         "x": 8,
-        "y": 118,
+        "y": 125,
         "w": 8,
         "h": 7
       }
@@ -3398,7 +3550,7 @@
       "id": 27,
       "gridPos": {
         "x": 16,
-        "y": 118,
+        "y": 125,
         "w": 8,
         "h": 7
       }
@@ -3468,7 +3620,7 @@
       "id": 28,
       "gridPos": {
         "x": 0,
-        "y": 125,
+        "y": 132,
         "w": 12,
         "h": 7
       }
@@ -3505,7 +3657,7 @@
       "id": 29,
       "gridPos": {
         "x": 12,
-        "y": 125,
+        "y": 132,
         "w": 12,
         "h": 7
       }

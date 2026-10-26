@@ -19,9 +19,11 @@
 // At the top, always in view, the world's end counted down by keel's clock; the
 // owner may make a new next world, begin it now or chart the whole world,
 // each confirmed with what it will do, and look over the next world, drawn
-// as the current is, on a tab of its own, and make it again. For AI apps,
-// the owner sets the token lifetime, confirmed with the grants it ends, and
-// how many machine sailors an account may have. Beside each account's
+// as the current is, on a tab of its own, and make it again. The players'
+// accounts are on a third tab: searched, and each opened on its card, from
+// the search or from its boat or place in the queue, where the owner stops,
+// starts again, revokes or deletes it, sets how many machine sailors it may
+// have, and sets the token lifetime of AI apps. Beside each account's
 // owner's flag is its priority, which its next join takes: a priority
 // account never waits. A machine sailor's boat is marked with its agent's
 // app, its last call and its wait; humans and machine sailors wait in
@@ -41,6 +43,7 @@ import {
 } from 'preact/hooks';
 import { formatPosition } from '../chart/position';
 import { lightOn } from '../lights/character';
+import { AccountBoxes, AccountsTab } from './accounts';
 import { agentWords, machinesLine, rulesLine } from './admission';
 import {
   type AccountsData,
@@ -123,7 +126,7 @@ import {
 import { calibrationRows, FORECAST_COLOURS, riskWords, spellAt, warningSpan } from './forecast';
 import { brief, hidden, serverOffset } from './life';
 import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
-import { AISignIn, type Known, machinesWords } from './machines';
+import { machinesWords } from './machines';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
 import { foamOver, RAISED, SEA_COLOURS, SEA_EVERY, SEA_FULL, seaWords } from './sea';
 import { fromNow, whereFrom } from './weather';
@@ -396,96 +399,6 @@ function placeWords(p: Place): string {
   return words.join(', ');
 }
 
-/**
- * An account's flag or its priority: what was clicked holds until the
- * world's reading agrees, so a reading still on its way does not set the
- * box back.
- */
-function AccountBox({
-  name,
-  label,
-  on,
-  disabled,
-  flag,
-}: {
-  name: 'flag' | 'priority';
-  label: string;
-  on: boolean;
-  disabled: boolean;
-  flag: (on: boolean) => Promise<boolean>;
-}) {
-  const [asked, setAsked] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (asked === on) {
-      setAsked(null);
-    }
-  }, [asked, on]);
-  return (
-    <label>
-      <input
-        type="checkbox"
-        name={name}
-        checked={asked ?? on}
-        disabled={disabled}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          const want = e.currentTarget.checked;
-          setAsked(want);
-          void flag(want).then((ok) => {
-            if (!ok) {
-              setAsked(null);
-            }
-          });
-        }}
-      />{' '}
-      {label}
-    </label>
-  );
-}
-
-/** An account's owner's flag, for a human's account alone, and its priority, for any. */
-function AccountBoxes({
-  account,
-  sailor,
-  tools,
-  priority,
-  human,
-  act,
-}: {
-  account: string;
-  sailor: string;
-  tools: boolean;
-  priority: boolean;
-  human: boolean;
-  act: (path: 'flag' | 'priority', body: unknown, what: string) => Promise<boolean>;
-}) {
-  const who = sailor || account;
-  return (
-    <>
-      <AccountBox
-        name="flag"
-        label="owner"
-        on={tools}
-        disabled={!human}
-        flag={(on) => act('flag', { account, on }, `${who}'s flag`)}
-      />{' '}
-      <AccountBox
-        name="priority"
-        label="priority"
-        on={priority}
-        disabled={false}
-        flag={(on) =>
-          act(
-            'priority',
-            { account, on },
-            `${who}'s priority ${on ? 'given' : 'taken'}, from its next join`,
-          )
-        }
-      />
-    </>
-  );
-}
-
 /** The boats at sea by kind: the machine sailors against their cap and reserve, and their agents' rules. */
 function AdmissionLines({ a }: { a: Admission }) {
   const rules = rulesLine(a);
@@ -509,11 +422,13 @@ function Queue({
   field,
   queue,
   act,
+  account,
 }: {
   title: string;
   field: string;
   queue: Waiting[];
   act: (path: 'flag' | 'priority', body: unknown, what: string) => Promise<boolean>;
+  account: (id: string) => void;
 }) {
   return (
     <>
@@ -541,7 +456,8 @@ function Queue({
                     priority={q.priority}
                     human={!q.machine}
                     act={act}
-                  />
+                  />{' '}
+                  <AccountButton id={q.account} account={account} />
                 </td>
               </tr>
             ))}
@@ -552,11 +468,29 @@ function Queue({
   );
 }
 
+/** Opens the account's card on the Accounts tab. */
+function AccountButton({ id, account }: { id: string; account: (id: string) => void }) {
+  return (
+    <button
+      type="button"
+      name="account"
+      class="small"
+      onClick={(e) => {
+        e.stopPropagation();
+        account(id);
+      }}
+    >
+      Account
+    </button>
+  );
+}
+
 /** A boat's row, and for the owner's its controls. */
 function BoatRow({
   b,
   chosen,
   choose,
+  account,
   act,
   picked,
   islands,
@@ -564,6 +498,7 @@ function BoatRow({
   b: Boat;
   chosen: boolean;
   choose: () => void;
+  account: (id: string) => void;
   act: (
     path: 'flag' | 'place' | 'unseen' | 'priority',
     body: unknown,
@@ -610,7 +545,8 @@ function BoatRow({
             priority={b.priority}
             human={b.human && !b.machine}
             act={act}
-          />
+          />{' '}
+          <AccountButton id={b.account} account={account} />
         </td>
       </tr>
       {chosen && b.tools ? (
@@ -1435,7 +1371,9 @@ function App() {
   const [now, setNow] = useState<WorldNow | null>(null);
   const [life, setLife] = useState<Life | null>(null);
   const [lifeError, setLifeError] = useState('');
-  const [tab, setTab] = useState<'world' | 'next'>('world');
+  const [tab, setTab] = useState<'world' | 'next' | 'accounts'>('world');
+  // The account whose card is open on the Accounts tab.
+  const [card, setCard] = useState<string | null>(null);
   const [seenNext, setSeenNext] = useState(false);
   const [view, setView] = useState<View | null>(null);
   const [nextView, setNextView] = useState<View | null>(null);
@@ -1475,6 +1413,11 @@ function App() {
   // following now, the next's at its beginning until the strip is dragged.
   const weather = useWeather('', world === null ? null : String(world), WEATHER_EVERY, setError);
   const nextWeather = useWeather('next/', nextKey, null, setError);
+  // The tab shown: the next world's while there is one, the accounts, or
+  // the world being sailed, whose live layers are read only while it shows.
+  const onNext = tab === 'next' && next !== null;
+  const onAccounts = tab === 'accounts';
+  const onWorld = !onNext && !onAccounts;
 
   // What was picked of a world ended means nothing in the next.
   useEffect(() => {
@@ -1486,7 +1429,7 @@ function App() {
     setPoint(null);
     setBoat(null);
     setLight(null);
-    setTab('world');
+    setTab((t) => (t === 'next' ? 'world' : t));
   }, [world]);
 
   // What is charted, every few seconds, and at once in a new world.
@@ -1632,7 +1575,7 @@ function App() {
   // world being sailed, read again with the weather; and how well it has
   // held and the world's gale warnings every minute, paused while the tab
   // is hidden.
-  const forecastShown = layers.forecast && world !== null && !(tab === 'next' && next !== null);
+  const forecastShown = layers.forecast && world !== null && onWorld;
   useEffect(() => {
     if (!forecastShown || shownAt === null) {
       setForecast(null);
@@ -1675,7 +1618,7 @@ function App() {
   // The sea every ten seconds while its layer shows the world being
   // sailed, with the point picked, and at once for a point picked anew;
   // paused while the tab is hidden.
-  const seaShown = layers.sea && world !== null && !(tab === 'next' && next !== null);
+  const seaShown = layers.sea && world !== null && onWorld;
   useEffect(() => {
     if (!seaShown) {
       setSea(null);
@@ -1709,8 +1652,7 @@ function App() {
   // The clouds and the rain every ten seconds while either layer shows the
   // world being sailed, and the point picked again, for its sky; paused
   // while the tab is hidden.
-  const skyShown =
-    (layers.cloud || layers.rain) && world !== null && !(tab === 'next' && next !== null);
+  const skyShown = (layers.cloud || layers.rain) && world !== null && onWorld;
   useEffect(() => {
     if (!skyShown) {
       setClouds(null);
@@ -1750,8 +1692,7 @@ function App() {
   // The fog, the lightning and the lights every few seconds while the fog's
   // or the lightning's layer shows the world being sailed, and the point
   // picked again, for its visibility; paused while the tab is hidden.
-  const fogShown =
-    (layers.fog || layers.lightning) && world !== null && !(tab === 'next' && next !== null);
+  const fogShown = (layers.fog || layers.lightning) && world !== null && onWorld;
   useEffect(() => {
     if (!fogShown) {
       setVisibility(null);
@@ -1826,8 +1767,9 @@ function App() {
             readLife.current();
             setTimeout(() => readLife.current(), 2000);
           }
-          if (a.ok && path === 'lifetime') {
-            // The lifetime and the grants it leaves live show at once.
+          if (a.ok && (path === 'lifetime' || path.startsWith('accounts/'))) {
+            // The lifetime and the grants it leaves live show at once, and
+            // the accounts stopped.
             readCharted.current();
           }
           if (a.ok && path === 'chart') {
@@ -1853,16 +1795,20 @@ function App() {
     [],
   );
 
-  // The human sailors at sea and waiting, whose accounts' ids the machine
-  // sailors' control offers by name.
-  const known: Known[] = [
-    ...new Map(
-      [
-        ...(now?.boats ?? []).filter((b) => b.human && !b.machine),
-        ...(now?.queue ?? []).filter((q) => !q.machine),
-      ].map((k) => [k.account, { account: k.account, sailor: k.sailor }]),
-    ).values(),
-  ];
+  // An account's card opened from the world: on the Accounts tab.
+  const openAccount = useCallback((id: string): void => {
+    setCard(id);
+    setTab('accounts');
+  }, []);
+  // A boat shown from its account's card: chosen on the world's tab, the map on it.
+  const showBoat = useCallback(
+    (b: number, east: number, north: number): void => {
+      setTab('world');
+      setBoat(b);
+      goTo(east, north);
+    },
+    [goTo],
+  );
 
   const data: MapData = {
     now,
@@ -2027,7 +1973,6 @@ function App() {
     [nxt, nextKey, goToNext],
   );
 
-  const onNext = tab === 'next' && next !== null;
   return (
     <div class="page">
       <header>
@@ -2040,223 +1985,243 @@ function App() {
           </p>
         ) : null}
         <SwitchBar life={life} error={lifeError} />
-      </header>
-      <main>
-        <div class="map-box">
-          {onNext ? (
-            next.stored ? (
-              <MapCanvas
-                key="next"
-                data={nextData}
-                layers={layers}
-                view={nextView}
-                setView={setNextView}
-                pick={() => undefined}
-              />
-            ) : (
-              <p class="map waiting" data-field="next-waiting">
-                World {next.number} is being made.
-              </p>
-            )
-          ) : (
-            <MapCanvas
-              key="world"
-              data={data}
-              layers={layers}
-              view={view}
-              setView={setView}
-              pick={pick}
-            />
-          )}
-          <fieldset class="layers">
-            {(Object.keys(LAYER_NAMES) as (keyof Layers)[])
-              .filter((k) => !onNext || !LIVE.has(k))
-              .map((k) => (
-                <label key={k}>
-                  <input
-                    type="checkbox"
-                    name={`layer-${k}`}
-                    checked={layers[k]}
-                    onChange={(e) => setLayers({ ...layers, [k]: e.currentTarget.checked })}
-                  />{' '}
-                  {LAYER_NAMES[k]}
-                </label>
-              ))}
+        <nav class="tabs" aria-label="Which tab">
+          <button
+            type="button"
+            name="tab-world"
+            aria-pressed={onWorld}
+            onClick={() => setTab('world')}
+          >
+            World {world}
+          </button>
+          {next !== null ? (
             <button
               type="button"
+              name="tab-next"
+              aria-pressed={onNext}
               onClick={() => {
-                const set = onNext ? setNextView : setView;
-                set((v) => (v === null ? v : fitView(v.width, v.height)));
+                setTab('next');
+                setSeenNext(true);
               }}
             >
-              The whole disk
+              Next: world {next.number}
+              {next.stored ? '' : ', being made'}
             </button>
-            {seaShown ? <SeaLegend /> : null}
-            {skyShown && layers.cloud ? <CloudLegend /> : null}
-            {skyShown && layers.rain ? <RainLegend words={clouds?.words ?? WMO_WORDS} /> : null}
-            {fogShown && layers.fog ? <FogLegend words={visibility?.words ?? MET_WORDS} /> : null}
-            {fogShown && layers.lightning ? <LightningLegend /> : null}
-            {forecastShown ? <ForecastLegend /> : null}
-          </fieldset>
-          {next !== null ? (
-            <nav class="tabs" aria-label="Which world">
+          ) : null}
+          <button
+            type="button"
+            name="tab-accounts"
+            aria-pressed={onAccounts}
+            onClick={() => setTab('accounts')}
+          >
+            Accounts
+          </button>
+        </nav>
+      </header>
+      <AccountsTab
+        accounts={accounts}
+        shown={onAccounts}
+        chosen={card}
+        open={setCard}
+        showBoat={showBoat}
+        act={act}
+      />
+      {onAccounts ? null : (
+        <main>
+          <div class="map-box">
+            {onNext ? (
+              next.stored ? (
+                <MapCanvas
+                  key="next"
+                  data={nextData}
+                  layers={layers}
+                  view={nextView}
+                  setView={setNextView}
+                  pick={() => undefined}
+                />
+              ) : (
+                <p class="map waiting" data-field="next-waiting">
+                  World {next.number} is being made.
+                </p>
+              )
+            ) : (
+              <MapCanvas
+                key="world"
+                data={data}
+                layers={layers}
+                view={view}
+                setView={setView}
+                pick={pick}
+              />
+            )}
+            <fieldset class="layers">
+              {(Object.keys(LAYER_NAMES) as (keyof Layers)[])
+                .filter((k) => !onNext || !LIVE.has(k))
+                .map((k) => (
+                  <label key={k}>
+                    <input
+                      type="checkbox"
+                      name={`layer-${k}`}
+                      checked={layers[k]}
+                      onChange={(e) => setLayers({ ...layers, [k]: e.currentTarget.checked })}
+                    />{' '}
+                    {LAYER_NAMES[k]}
+                  </label>
+                ))}
               <button
                 type="button"
-                name="tab-world"
-                aria-pressed={!onNext}
-                onClick={() => setTab('world')}
-              >
-                World {world}
-              </button>
-              <button
-                type="button"
-                name="tab-next"
-                aria-pressed={onNext}
                 onClick={() => {
-                  setTab('next');
-                  setSeenNext(true);
+                  const set = onNext ? setNextView : setView;
+                  set((v) => (v === null ? v : fitView(v.width, v.height)));
                 }}
               >
-                Next: world {next.number}
-                {next.stored ? '' : ', being made'}
+                The whole disk
               </button>
-            </nav>
-          ) : null}
-          {!onNext && point !== null ? (
-            <p class="point" data-field="point">
-              <span data-field="point-position">{point.position}</span> ({point.east.toFixed(0)},{' '}
-              {point.north.toFixed(0)}):{' '}
-              {point.elevation > 0
-                ? `land ${point.elevation.toFixed(1)} m high`
-                : `${(-point.elevation).toFixed(1)} m deep`}
-              , {point.fromLip.toFixed(0)} m inside the lip, {point.off.toFixed(0)} m from{' '}
-              {point.island}.{point.water !== '' ? ` No boat here: ${point.water}.` : ''}
-              {pressure !== null ? (
-                <span data-field="pressure">
-                  {' '}
-                  {pressure.hPa.toFixed(1)} hPa, {pressure.tendency} (
-                  {pressure.change >= 0 ? '+' : ''}
-                  {pressure.change.toFixed(1)} in 15 min).
-                </span>
-              ) : null}
-              {seaShown && seaPoint !== null ? (
-                <span data-field="sea"> Sea: {seaWords(seaPoint)}.</span>
-              ) : null}
-              {skyShown && point.sky !== null ? (
-                <span data-field="sky"> Sky: {skyWords(point.sky)}.</span>
-              ) : null}
-              {point.sky !== null ? (
-                <span data-field="visibility"> Visibility: {visibilityWords(point.sky)}.</span>
-              ) : null}
-            </p>
-          ) : null}
-          {!onNext && placeWeather !== null ? <PlaceBox p={placeWeather} /> : null}
-        </div>
-        {onNext ? (
-          <aside>
-            {life !== null ? <LifecycleCard life={life} /> : null}
-            {life !== null ? (
-              <WorldByHand life={life} charted={charted} act={act} hands={['make']} />
+              {seaShown ? <SeaLegend /> : null}
+              {skyShown && layers.cloud ? <CloudLegend /> : null}
+              {skyShown && layers.rain ? <RainLegend words={clouds?.words ?? WMO_WORDS} /> : null}
+              {fogShown && layers.fog ? <FogLegend words={visibility?.words ?? MET_WORDS} /> : null}
+              {fogShown && layers.lightning ? <LightningLegend /> : null}
+              {forecastShown ? <ForecastLegend /> : null}
+            </fieldset>
+            {!onNext && point !== null ? (
+              <p class="point" data-field="point">
+                <span data-field="point-position">{point.position}</span> ({point.east.toFixed(0)},{' '}
+                {point.north.toFixed(0)}):{' '}
+                {point.elevation > 0
+                  ? `land ${point.elevation.toFixed(1)} m high`
+                  : `${(-point.elevation).toFixed(1)} m deep`}
+                , {point.fromLip.toFixed(0)} m inside the lip, {point.off.toFixed(0)} m from{' '}
+                {point.island}.{point.water !== '' ? ` No boat here: ${point.water}.` : ''}
+                {pressure !== null ? (
+                  <span data-field="pressure">
+                    {' '}
+                    {pressure.hPa.toFixed(1)} hPa, {pressure.tendency} (
+                    {pressure.change >= 0 ? '+' : ''}
+                    {pressure.change.toFixed(1)} in 15 min).
+                  </span>
+                ) : null}
+                {seaShown && seaPoint !== null ? (
+                  <span data-field="sea"> Sea: {seaWords(seaPoint)}.</span>
+                ) : null}
+                {skyShown && point.sky !== null ? (
+                  <span data-field="sky"> Sky: {skyWords(point.sky)}.</span>
+                ) : null}
+                {point.sky !== null ? (
+                  <span data-field="visibility"> Visibility: {visibilityWords(point.sky)}.</span>
+                ) : null}
+              </p>
             ) : null}
-            {next.stored ? (
+            {!onNext && placeWeather !== null ? <PlaceBox p={placeWeather} /> : null}
+          </div>
+          {onNext ? (
+            <aside>
+              {life !== null ? <LifecycleCard life={life} /> : null}
+              {life !== null ? (
+                <WorldByHand life={life} charted={charted} act={act} hands={['make']} />
+              ) : null}
+              {next.stored ? (
+                <WeekCard
+                  w={nextWeather.weather}
+                  now={nextWeather.weather?.now ?? 0}
+                  at={nextWeather.at}
+                  show={nextWeather.show}
+                  goTo={goToNext}
+                />
+              ) : null}
+              {next.stored ? nextLists : null}
+            </aside>
+          ) : (
+            <aside>
+              {now !== null ? <Clock now={now} accounts={accounts} /> : null}
+              {now !== null ? <WeatherCard now={now} /> : null}
               <WeekCard
-                w={nextWeather.weather}
-                now={nextWeather.weather?.now ?? 0}
-                at={nextWeather.at}
-                show={nextWeather.show}
-                goTo={goToNext}
-              />
-            ) : null}
-            {next.stored ? nextLists : null}
-          </aside>
-        ) : (
-          <aside>
-            {now !== null ? <Clock now={now} accounts={accounts} /> : null}
-            {now !== null ? <WeatherCard now={now} /> : null}
-            <WeekCard
-              w={weather.weather}
-              now={now?.tick ?? weather.weather?.now ?? 0}
-              at={weather.at}
-              show={weather.show}
-              goTo={goTo}
-            />
-            {forecastShown && forecast !== null ? (
-              <ForecastCard
-                f={forecast}
                 w={weather.weather}
                 now={now?.tick ?? weather.weather?.now ?? 0}
+                at={weather.at}
+                show={weather.show}
                 goTo={goTo}
               />
-            ) : null}
-            {forecastShown && calibration !== null ? (
-              <CalibrationCard c={calibration} w={weather.weather} />
-            ) : null}
-            {forecastShown && gales !== null ? (
-              <GalesCard g={gales} w={weather.weather} goTo={goTo} />
-            ) : null}
-            {life !== null ? (
-              <WorldByHand
-                life={life}
-                charted={charted}
-                act={act}
-                hands={['make', 'begin', 'chart']}
-              />
-            ) : null}
-            {life !== null ? <LifecycleCard life={life} /> : null}
-            {accounts !== null ? <AISignIn accounts={accounts} known={known} act={act} /> : null}
-            <section class="card" aria-label="Boats at sea">
-              <h2>At sea: {now?.boats.length ?? 0}</h2>
-              {now !== null ? <AdmissionLines a={now.admission} /> : null}
-              <table class="boats">
-                <thead>
-                  <tr>
-                    <th>Boat</th>
-                    <th>Sailor</th>
-                    <th>Kind</th>
-                    <th>Position</th>
-                    <th>Speed</th>
-                    <th>Inside the lip</th>
-                    <th />
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {(now?.boats ?? []).map((b) => (
-                    <BoatRow
-                      key={b.boat}
-                      b={b}
-                      chosen={b.boat === boat}
-                      choose={() => {
-                        setBoat(b.boat);
-                        goTo(b.east, b.north);
-                      }}
-                      act={act}
-                      picked={picked}
-                      islands={cur.islands}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </section>
-            <section class="card" aria-label="The queue">
-              <h2>Waiting: {now?.queue.length ?? 0}</h2>
-              <Queue
-                title="Humans"
-                field="humans-waiting"
-                queue={(now?.queue ?? []).filter((q) => !q.machine)}
-                act={act}
-              />
-              <Queue
-                title="Machine sailors"
-                field="machines-waiting"
-                queue={(now?.queue ?? []).filter((q) => q.machine)}
-                act={act}
-              />
-            </section>
-            {lists}
-          </aside>
-        )}
-      </main>
+              {forecastShown && forecast !== null ? (
+                <ForecastCard
+                  f={forecast}
+                  w={weather.weather}
+                  now={now?.tick ?? weather.weather?.now ?? 0}
+                  goTo={goTo}
+                />
+              ) : null}
+              {forecastShown && calibration !== null ? (
+                <CalibrationCard c={calibration} w={weather.weather} />
+              ) : null}
+              {forecastShown && gales !== null ? (
+                <GalesCard g={gales} w={weather.weather} goTo={goTo} />
+              ) : null}
+              {life !== null ? (
+                <WorldByHand
+                  life={life}
+                  charted={charted}
+                  act={act}
+                  hands={['make', 'begin', 'chart']}
+                />
+              ) : null}
+              {life !== null ? <LifecycleCard life={life} /> : null}
+              <section class="card" aria-label="Boats at sea">
+                <h2>At sea: {now?.boats.length ?? 0}</h2>
+                {now !== null ? <AdmissionLines a={now.admission} /> : null}
+                <table class="boats">
+                  <thead>
+                    <tr>
+                      <th>Boat</th>
+                      <th>Sailor</th>
+                      <th>Kind</th>
+                      <th>Position</th>
+                      <th>Speed</th>
+                      <th>Inside the lip</th>
+                      <th />
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(now?.boats ?? []).map((b) => (
+                      <BoatRow
+                        key={b.boat}
+                        b={b}
+                        chosen={b.boat === boat}
+                        choose={() => {
+                          setBoat(b.boat);
+                          goTo(b.east, b.north);
+                        }}
+                        account={openAccount}
+                        act={act}
+                        picked={picked}
+                        islands={cur.islands}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+              <section class="card" aria-label="The queue">
+                <h2>Waiting: {now?.queue.length ?? 0}</h2>
+                <Queue
+                  title="Humans"
+                  field="humans-waiting"
+                  queue={(now?.queue ?? []).filter((q) => !q.machine)}
+                  act={act}
+                  account={openAccount}
+                />
+                <Queue
+                  title="Machine sailors"
+                  field="machines-waiting"
+                  queue={(now?.queue ?? []).filter((q) => q.machine)}
+                  act={act}
+                  account={openAccount}
+                />
+              </section>
+              {lists}
+            </aside>
+          )}
+        </main>
+      )}
     </div>
   );
 }

@@ -54,7 +54,8 @@ func (q *Queries) AccountByID(ctx context.Context, id pgtype.UUID) (AccountByIDR
 }
 
 const accountByUserHandle = `-- name: AccountByUserHandle :one
-SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look,
+  (a.stopped_at IS NOT NULL)::boolean AS stopped
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.user_handle = $1 AND a.kind = 'human'
@@ -69,9 +70,11 @@ type AccountByUserHandleRow struct {
 	UserHandle []byte
 	Name       string
 	Look       string
+	Stopped    bool
 }
 
-// The account a passkey's user handle names, as a sign-in finds it.
+// The account a passkey's user handle names, as a sign-in finds it, and
+// whether it is stopped.
 func (q *Queries) AccountByUserHandle(ctx context.Context, userHandle []byte) (AccountByUserHandleRow, error) {
 	row := q.db.QueryRow(ctx, accountByUserHandle, userHandle)
 	var i AccountByUserHandleRow
@@ -84,6 +87,73 @@ func (q *Queries) AccountByUserHandle(ctx context.Context, userHandle []byte) (A
 		&i.UserHandle,
 		&i.Name,
 		&i.Look,
+		&i.Stopped,
+	)
+	return i, err
+}
+
+const accountCard = `-- name: AccountCard :one
+SELECT a.id, a.kind, a.owner_id, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.finish, '')::text AS finish,
+  coalesce(sl.colour, '')::text AS colour, a.created_at, a.last_seen_at, a.tools, a.priority, a.machine_cap,
+  coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at, coalesce(a.stop_reason, '')::text AS stop_reason,
+  coalesce(a.recovery_made_at, 'epoch')::timestamptz AS recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery,
+  coalesce(osl.name, '')::text AS owner_name, coalesce(o.tools, false)::boolean AS owner_tools,
+  coalesce(o.stopped_at, 'epoch')::timestamptz AS owner_stopped_at
+FROM account a
+JOIN sailor sl ON sl.account_id = a.id
+LEFT JOIN account o ON o.id = a.owner_id
+LEFT JOIN sailor osl ON osl.account_id = o.id
+WHERE a.id = $1
+`
+
+type AccountCardRow struct {
+	ID             pgtype.UUID
+	Kind           string
+	OwnerID        pgtype.UUID
+	Name           string
+	Look           string
+	Version        string
+	Finish         string
+	Colour         string
+	CreatedAt      time.Time
+	LastSeenAt     time.Time
+	Tools          bool
+	Priority       bool
+	MachineCap     int16
+	StoppedAt      time.Time
+	StopReason     string
+	RecoveryMadeAt time.Time
+	HasRecovery    bool
+	OwnerName      string
+	OwnerTools     bool
+	OwnerStoppedAt time.Time
+}
+
+// What the world page's card shows of an account, and of its owner.
+func (q *Queries) AccountCard(ctx context.Context, id pgtype.UUID) (AccountCardRow, error) {
+	row := q.db.QueryRow(ctx, accountCard, id)
+	var i AccountCardRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.OwnerID,
+		&i.Name,
+		&i.Look,
+		&i.Version,
+		&i.Finish,
+		&i.Colour,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.Tools,
+		&i.Priority,
+		&i.MachineCap,
+		&i.StoppedAt,
+		&i.StopReason,
+		&i.RecoveryMadeAt,
+		&i.HasRecovery,
+		&i.OwnerName,
+		&i.OwnerTools,
+		&i.OwnerStoppedAt,
 	)
 	return i, err
 }
@@ -107,6 +177,57 @@ func (q *Queries) AccountCounts(ctx context.Context) (AccountCountsRow, error) {
 	var i AccountCountsRow
 	err := row.Scan(&i.Total, &i.Week, &i.Today)
 	return i, err
+}
+
+const accountForAction = `-- name: AccountForAction :one
+SELECT a.id, a.kind, a.owner_id, coalesce(sl.name, '')::text AS name, a.tools, (a.stopped_at IS NOT NULL)::boolean AS stopped,
+  coalesce(o.tools, false)::boolean AS owner_tools, (o.stopped_at IS NOT NULL)::boolean AS owner_stopped
+FROM account a
+LEFT JOIN sailor sl ON sl.account_id = a.id
+LEFT JOIN account o ON o.id = a.owner_id
+WHERE a.id = $1
+FOR UPDATE OF a
+`
+
+type AccountForActionRow struct {
+	ID           pgtype.UUID
+	Kind         string
+	OwnerID      pgtype.UUID
+	Name         string
+	Tools        bool
+	Stopped      bool
+	OwnerTools   bool
+	OwnerStopped bool
+}
+
+// An account the operator acts on, locked for the rest of the transaction,
+// so that two actions on it run one after the other: its kind, its
+// sailor's name, its owner, its flag, and whether it, or its owner, is
+// stopped.
+func (q *Queries) AccountForAction(ctx context.Context, id pgtype.UUID) (AccountForActionRow, error) {
+	row := q.db.QueryRow(ctx, accountForAction, id)
+	var i AccountForActionRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.OwnerID,
+		&i.Name,
+		&i.Tools,
+		&i.Stopped,
+		&i.OwnerTools,
+		&i.OwnerStopped,
+	)
+	return i, err
+}
+
+const accountSeen = `-- name: AccountSeen :exec
+UPDATE account SET last_seen_at = now() WHERE id = $1
+`
+
+// An account seen now: signed in.
+func (q *Queries) AccountSeen(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, accountSeen, id)
+	return err
 }
 
 const accountsByID = `-- name: AccountsByID :many
@@ -149,6 +270,69 @@ func (q *Queries) AccountsByID(ctx context.Context, ids []pgtype.UUID) ([]Accoun
 		return nil, err
 	}
 	return items, nil
+}
+
+const actionsOf = `-- name: ActionsOf :many
+SELECT at, action, account_id, coalesce(kind, '')::text AS kind, name, detail, source, from_addr
+FROM account_action WHERE account_id = $1
+ORDER BY at DESC, id DESC LIMIT $2
+`
+
+type ActionsOfParams struct {
+	AccountID pgtype.UUID
+	Lim       int32
+}
+
+type ActionsOfRow struct {
+	At        time.Time
+	Action    string
+	AccountID pgtype.UUID
+	Kind      string
+	Name      string
+	Detail    string
+	Source    string
+	FromAddr  string
+}
+
+// The record of an account, the newest first.
+func (q *Queries) ActionsOf(ctx context.Context, arg ActionsOfParams) ([]ActionsOfRow, error) {
+	rows, err := q.db.Query(ctx, actionsOf, arg.AccountID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ActionsOfRow
+	for rows.Next() {
+		var i ActionsOfRow
+		if err := rows.Scan(
+			&i.At,
+			&i.Action,
+			&i.AccountID,
+			&i.Kind,
+			&i.Name,
+			&i.Detail,
+			&i.Source,
+			&i.FromAddr,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countSessions = `-- name: CountSessions :one
+SELECT count(*) FROM session WHERE account_id = $1
+`
+
+func (q *Queries) CountSessions(ctx context.Context, accountID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countSessions, accountID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const createAccount = `-- name: CreateAccount :one
@@ -216,6 +400,188 @@ func (q *Queries) ForgetCredits(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const humansByActiveNewest = `-- name: HumansByActiveNewest :many
+SELECT h.id, sl.name, h.created_at, h.last_seen_at, h.tools, h.priority, (h.stopped_at IS NOT NULL)::boolean AS stopped
+FROM account h JOIN sailor sl ON sl.account_id = h.id
+WHERE h.kind = 'human'
+ORDER BY h.last_seen_at DESC, h.id DESC
+LIMIT $2 OFFSET $1
+`
+
+type HumansByActiveNewestParams struct {
+	Off int32
+	Lim int32
+}
+
+type HumansByActiveNewestRow struct {
+	ID         pgtype.UUID
+	Name       string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	Tools      bool
+	Priority   bool
+	Stopped    bool
+}
+
+// A page of every human account, the most lately active first.
+func (q *Queries) HumansByActiveNewest(ctx context.Context, arg HumansByActiveNewestParams) ([]HumansByActiveNewestRow, error) {
+	rows, err := q.db.Query(ctx, humansByActiveNewest, arg.Off, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HumansByActiveNewestRow
+	for rows.Next() {
+		var i HumansByActiveNewestRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.Tools,
+			&i.Priority,
+			&i.Stopped,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const humansByActiveOldest = `-- name: HumansByActiveOldest :many
+SELECT h.id, sl.name, h.created_at, h.last_seen_at, h.tools, h.priority, (h.stopped_at IS NOT NULL)::boolean AS stopped
+FROM account h JOIN sailor sl ON sl.account_id = h.id
+WHERE h.kind = 'human'
+ORDER BY h.last_seen_at, h.id
+LIMIT $2 OFFSET $1
+`
+
+type HumansByActiveOldestParams struct {
+	Off int32
+	Lim int32
+}
+
+type HumansByActiveOldestRow struct {
+	ID         pgtype.UUID
+	Name       string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	Tools      bool
+	Priority   bool
+	Stopped    bool
+}
+
+// A page of every human account, the least lately active first, by the
+// index of last active.
+func (q *Queries) HumansByActiveOldest(ctx context.Context, arg HumansByActiveOldestParams) ([]HumansByActiveOldestRow, error) {
+	rows, err := q.db.Query(ctx, humansByActiveOldest, arg.Off, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HumansByActiveOldestRow
+	for rows.Next() {
+		var i HumansByActiveOldestRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.Tools,
+			&i.Priority,
+			&i.Stopped,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertAction = `-- name: InsertAction :exec
+INSERT INTO account_action (at, action, account_id, kind, name, detail, source, from_addr)
+VALUES (clock_timestamp(), $1, $2, $3, $4, $5, $6, $7)
+`
+
+type InsertActionParams struct {
+	Action    string
+	AccountID pgtype.UUID
+	Kind      pgtype.Text
+	Name      string
+	Detail    string
+	Source    string
+	FromAddr  string
+}
+
+// An action recorded at the moment it is taken, under its account's lock,
+// not as its transaction began: two actions on one account are recorded
+// in the order they were taken.
+func (q *Queries) InsertAction(ctx context.Context, arg InsertActionParams) error {
+	_, err := q.db.Exec(ctx, insertAction,
+		arg.Action,
+		arg.AccountID,
+		arg.Kind,
+		arg.Name,
+		arg.Detail,
+		arg.Source,
+		arg.FromAddr,
+	)
+	return err
+}
+
+const latestActions = `-- name: LatestActions :many
+SELECT at, action, account_id, coalesce(kind, '')::text AS kind, name, detail, source, from_addr
+FROM account_action
+ORDER BY at DESC, id DESC LIMIT $1
+`
+
+type LatestActionsRow struct {
+	At        time.Time
+	Action    string
+	AccountID pgtype.UUID
+	Kind      string
+	Name      string
+	Detail    string
+	Source    string
+	FromAddr  string
+}
+
+func (q *Queries) LatestActions(ctx context.Context, lim int32) ([]LatestActionsRow, error) {
+	rows, err := q.db.Query(ctx, latestActions, lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LatestActionsRow
+	for rows.Next() {
+		var i LatestActionsRow
+		if err := rows.Scan(
+			&i.At,
+			&i.Action,
+			&i.AccountID,
+			&i.Kind,
+			&i.Name,
+			&i.Detail,
+			&i.Source,
+			&i.FromAddr,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockAccount = `-- name: LockAccount :one
 SELECT id FROM account WHERE id = $1 FOR UPDATE
 `
@@ -227,6 +593,54 @@ func (q *Queries) LockAccount(ctx context.Context, id pgtype.UUID) (pgtype.UUID,
 	return id_2, err
 }
 
+const machinesOfMany = `-- name: MachinesOfMany :many
+SELECT a.id, a.owner_id, sl.name, sl.name_key, a.created_at, a.last_seen_at, a.priority, (a.stopped_at IS NOT NULL)::boolean AS stopped
+FROM account a JOIN sailor sl ON sl.account_id = a.id
+WHERE a.owner_id = ANY($1::uuid[]) AND a.kind = 'ai'
+ORDER BY a.created_at, a.id
+`
+
+type MachinesOfManyRow struct {
+	ID         pgtype.UUID
+	OwnerID    pgtype.UUID
+	Name       string
+	NameKey    string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	Priority   bool
+	Stopped    bool
+}
+
+// The machine sailors of human accounts, the oldest first.
+func (q *Queries) MachinesOfMany(ctx context.Context, owners []pgtype.UUID) ([]MachinesOfManyRow, error) {
+	rows, err := q.db.Query(ctx, machinesOfMany, owners)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MachinesOfManyRow
+	for rows.Next() {
+		var i MachinesOfManyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.Name,
+			&i.NameKey,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.Priority,
+			&i.Stopped,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nameTaken = `-- name: NameTaken :one
 SELECT EXISTS (SELECT 1 FROM sailor WHERE name_key = $1)::boolean
 `
@@ -236,6 +650,142 @@ func (q *Queries) NameTaken(ctx context.Context, nameKey string) (bool, error) {
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const recoveryCodeStopped = `-- name: RecoveryCodeStopped :one
+SELECT EXISTS (SELECT 1 FROM account WHERE recovery_hash = $1 AND kind = 'human' AND stopped_at IS NOT NULL)::boolean
+`
+
+// Whether a recovery code is a stopped account's.
+func (q *Queries) RecoveryCodeStopped(ctx context.Context, recoveryHash []byte) (bool, error) {
+	row := q.db.QueryRow(ctx, recoveryCodeStopped, recoveryHash)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const searchAccounts = `-- name: SearchAccounts :many
+WITH hit AS (
+  SELECT coalesce(a.owner_id, a.id) AS id, bool_or(sl.name_key = $4::text) AS exact
+  FROM account a JOIN sailor sl ON sl.account_id = a.id
+  WHERE $5::boolean OR sl.name_key = $4::text
+     OR ($6::boolean AND sl.name_key LIKE $7::text)
+  GROUP BY 1
+), found AS (
+  SELECT h.id, sl.name, h.created_at, h.last_seen_at, h.tools, h.priority, (h.stopped_at IS NOT NULL)::boolean AS stopped, hit.exact,
+    (SELECT max(m.last_seen_at) FROM account m WHERE m.owner_id = h.id AND m.kind = 'ai' AND m.last_seen_at > m.created_at) AS machines_seen
+  FROM hit
+  JOIN account h ON h.id = hit.id AND h.kind = 'human'
+  JOIN sailor sl ON sl.account_id = h.id
+)
+SELECT id, name, created_at, last_seen_at, tools, priority, stopped, exact,
+  coalesce(machines_seen, 'epoch')::timestamptz AS machines_seen, count(*) OVER () AS total
+FROM found
+ORDER BY exact DESC,
+  CASE WHEN $1::text = 'active-old' THEN last_seen_at END ASC,
+  CASE WHEN $1::text = 'active-new' THEN last_seen_at END DESC,
+  CASE WHEN $1::text = 'made' THEN created_at END DESC,
+  CASE WHEN $1::text = 'machines' THEN machines_seen END DESC NULLS LAST,
+  id
+LIMIT $3 OFFSET $2
+`
+
+type SearchAccountsParams struct {
+	Sort    string
+	Off     int32
+	Lim     int32
+	Key     string
+	Every   bool
+	Part    bool
+	Pattern string
+}
+
+type SearchAccountsRow struct {
+	ID           pgtype.UUID
+	Name         string
+	CreatedAt    time.Time
+	LastSeenAt   time.Time
+	Tools        bool
+	Priority     bool
+	Stopped      bool
+	Exact        bool
+	MachinesSeen time.Time
+	Total        int64
+}
+
+// The human accounts whose sailor, or one of whose machine sailors, has a
+// name whose key is the key given or, with part, holds the pattern; every
+// human account with every. A page of them, those with the key itself
+// first, sorted as asked: by last active, oldest or newest first; the
+// newest made; or their machine sailors' latest call; with how many
+// there are in all.
+func (q *Queries) SearchAccounts(ctx context.Context, arg SearchAccountsParams) ([]SearchAccountsRow, error) {
+	rows, err := q.db.Query(ctx, searchAccounts,
+		arg.Sort,
+		arg.Off,
+		arg.Lim,
+		arg.Key,
+		arg.Every,
+		arg.Part,
+		arg.Pattern,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchAccountsRow
+	for rows.Next() {
+		var i SearchAccountsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.Tools,
+			&i.Priority,
+			&i.Stopped,
+			&i.Exact,
+			&i.MachinesSeen,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const sessionOf = `-- name: SessionOf :one
+SELECT account_id FROM session WHERE token_hash = $1
+`
+
+// The account a session's token names, stopped or not, as the operator's
+// search finds it.
+func (q *Queries) SessionOf(ctx context.Context, tokenHash []byte) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, sessionOf, tokenHash)
+	var account_id pgtype.UUID
+	err := row.Scan(&account_id)
+	return account_id, err
+}
+
+const sessionsSeen = `-- name: SessionsSeen :one
+SELECT count(*) AS sessions, coalesce(max(last_seen_at), 'epoch')::timestamptz AS latest FROM session WHERE account_id = $1
+`
+
+type SessionsSeenRow struct {
+	Sessions int64
+	Latest   time.Time
+}
+
+// How many sessions an account has, and when the latest was last seen.
+func (q *Queries) SessionsSeen(ctx context.Context, accountID pgtype.UUID) (SessionsSeenRow, error) {
+	row := q.db.QueryRow(ctx, sessionsSeen, accountID)
+	var i SessionsSeenRow
+	err := row.Scan(&i.Sessions, &i.Latest)
+	return i, err
 }
 
 const setAccountPriority = `-- name: SetAccountPriority :execrows
@@ -293,17 +843,80 @@ func (q *Queries) SetRecoveryCode(ctx context.Context, arg SetRecoveryCodeParams
 }
 
 const spendRecoveryCode = `-- name: SpendRecoveryCode :one
-UPDATE account SET recovery_hash = NULL, recovered_at = now()
-WHERE recovery_hash = $1 AND kind = 'human'
+UPDATE account SET recovery_hash = NULL, recovered_at = now(), last_seen_at = now()
+WHERE recovery_hash = $1 AND kind = 'human' AND stopped_at IS NULL
 RETURNING id
 `
 
-// A recovery code used: it is spent, and the next sign-in is told.
+// A recovery code used: it is spent, and the next sign-in is told. A
+// stopped account's is not.
 func (q *Queries) SpendRecoveryCode(ctx context.Context, recoveryHash []byte) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, spendRecoveryCode, recoveryHash)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const startAccount = `-- name: StartAccount :execrows
+UPDATE account SET stopped_at = NULL, stop_reason = NULL WHERE id = $1 AND stopped_at IS NOT NULL
+`
+
+func (q *Queries) StartAccount(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, startAccount, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const stopAccount = `-- name: StopAccount :execrows
+UPDATE account SET stopped_at = now(), stop_reason = $1 WHERE id = $2 AND stopped_at IS NULL
+`
+
+type StopAccountParams struct {
+	Reason pgtype.Text
+	ID     pgtype.UUID
+}
+
+func (q *Queries) StopAccount(ctx context.Context, arg StopAccountParams) (int64, error) {
+	result, err := q.db.Exec(ctx, stopAccount, arg.Reason, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const stoppedAccounts = `-- name: StoppedAccounts :many
+SELECT a.id, a.kind FROM account a
+LEFT JOIN account o ON o.id = a.owner_id
+WHERE a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL
+`
+
+type StoppedAccountsRow struct {
+	ID   pgtype.UUID
+	Kind string
+}
+
+// The accounts stopped: those stopped themselves, and the machine sailors
+// of a human stopped.
+func (q *Queries) StoppedAccounts(ctx context.Context) ([]StoppedAccountsRow, error) {
+	rows, err := q.db.Query(ctx, stoppedAccounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StoppedAccountsRow
+	for rows.Next() {
+		var i StoppedAccountsRow
+		if err := rows.Scan(&i.ID, &i.Kind); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const takeRecoveryNotice = `-- name: TakeRecoveryNotice :one

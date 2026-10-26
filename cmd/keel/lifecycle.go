@@ -432,7 +432,13 @@ func (p *process) lifecycleJobs() []jobs.Job {
 				if err != nil {
 					return jobs.Result{}, err
 				}
-				return jobs.Result{Detail: fmt.Sprintf("%d sessions and %d ceremonies deleted", n, c), Skipped: n == 0 && c == 0}, nil
+				// The record of the owner's actions, past its keep.
+				a, err := p.db.DeleteActions(ctx, due.Add(-store.ActionKeep))
+				if err != nil {
+					return jobs.Result{}, err
+				}
+				return jobs.Result{Detail: fmt.Sprintf("%d sessions, %d ceremonies and %d recorded actions deleted", n, c, a),
+					Skipped: n == 0 && c == 0 && a == 0}, nil
 			},
 		},
 		{

@@ -25,6 +25,8 @@ var InternalPaths = []string{
 	"/owner/api/visibility.json", "/owner/api/chart",
 	"/owner/api/forecast.json", "/owner/api/calibration.json", "/owner/api/gales.json", "/owner/api/place.json",
 	"/owner/api/lifetime", "/owner/api/machines", "/owner/api/priority",
+	"/owner/api/accounts/search", "/owner/api/account.json", "/owner/api/accounts/stop", "/owner/api/accounts/start",
+	"/owner/api/accounts/revoke", "/owner/api/accounts/delete", "/owner/api/actions.json",
 }
 
 // Internal returns the internal listener's routes: the probes, the metrics,

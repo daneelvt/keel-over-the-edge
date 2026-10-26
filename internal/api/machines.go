@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
@@ -28,7 +29,6 @@ import (
 type Machines interface {
 	oauth.Machines
 	CreateMachine(ctx context.Context, owner store.AccountID, m store.NewMachine, boat string) (store.AccountID, error)
-	DeleteMachine(ctx context.Context, owner, id store.AccountID) error
 	MachineCap(ctx context.Context, owner store.AccountID) (int, error)
 	Fleet(ctx context.Context, owner store.AccountID) (map[string]int, error)
 	RevokeOwnedGrant(ctx context.Context, owner store.AccountID, grant [16]byte) (store.AccountID, error)
@@ -153,23 +153,6 @@ func (a *api) makeMachine(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, p)
 }
 
-// machinesDeleted tells what must forget machine sailors just deleted:
-// their boats leave the water, their tokens are refused at once.
-func (a *api) machinesDeleted(ids ...store.AccountID) {
-	if len(ids) == 0 {
-		return
-	}
-	if a.cfg.Grants != nil {
-		a.cfg.Grants.ForgetAccounts(ids...)
-	}
-	for _, id := range ids {
-		if a.cfg.Deleted != nil {
-			a.cfg.Deleted(id)
-		}
-		a.cfg.Metrics.MachinesDeleted.Inc()
-	}
-}
-
 // machineDelete is POST /api/machines/delete's body: the machine sailor,
 // and its name typed again.
 type machineDelete struct {
@@ -219,14 +202,13 @@ func (a *api) deleteMachine(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "name")
 		return
 	}
-	if err := a.cfg.Machines.DeleteMachine(r.Context(), cur.ID, id); errors.Is(err, store.ErrNotFound) {
+	if err := a.cfg.Deletions.DeleteMachineByPlayer(r.Context(), cur.ID, id); errors.Is(err, accounts.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not-found")
 		return
 	} else if err != nil {
 		a.unavailable(w, r, "deleting a machine sailor", err)
 		return
 	}
-	a.machinesDeleted(id)
 	a.cfg.Log.Info("a machine sailor deleted", "request_id", obs.RequestID(r.Context()), "account", cur.ID.String(), "machine", id.String())
 	a.writeMachines(w, r, cur)
 }
@@ -287,6 +269,7 @@ type machineRef struct {
 //	201 {"token", "ends"}      the token, and when it ends, ms
 //	403 {"error":"confirm"}    no passkey confirmed lately
 //	404 {"error":"not-found"}  no such machine sailor of the account
+//	409 {"error":"stopped"}    the machine sailor is stopped by the game's operator
 func (a *api) makeToken(w http.ResponseWriter, r *http.Request) {
 	cur, _ := auth.SessionFromContext(r.Context())
 	var req machineRef
@@ -312,6 +295,10 @@ func (a *api) makeToken(w http.ResponseWriter, r *http.Request) {
 	})
 	if errors.Is(err, store.ErrNoMachine) {
 		writeError(w, http.StatusNotFound, "not-found")
+		return
+	}
+	if errors.Is(err, store.ErrStopped) {
+		writeError(w, http.StatusConflict, "stopped")
 		return
 	}
 	if err != nil {

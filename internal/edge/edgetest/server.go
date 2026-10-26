@@ -74,6 +74,13 @@ type Config struct {
 	RoamChunks *edge.Handout
 	// Edge is how boats meet the world's edge; the catalog's if nil.
 	Edge *sim.Edge
+	// Stopped and Seen are the edge's: the accounts stopped, and the
+	// sessions of long connections ended.
+	Stopped func(bus.Account) bool
+	Seen    func(hash [32]byte)
+	// LongAfter is the edge's: how long a connection is open to be seen
+	// as it ends.
+	LongAfter time.Duration
 	// Forecast, if not nil, is the world's forecast, told of each frame
 	// after the edge.
 	Forecast interface {
@@ -184,6 +191,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
 		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain),
 		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks, Forecast: cfg.Forecast,
+		Stopped: cfg.Stopped, Seen: cfg.Seen, LongAfter: cfg.LongAfter,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {

@@ -9,6 +9,12 @@
 export const MIN_NAME = 3;
 export const MAX_NAME = 20;
 
+/** A sailor stopped by the game's operator, as the player reads it at sign-in. */
+const STOPPED = 'This sailor has been stopped. It cannot sign in or sail.';
+
+/** A machine sailor stopped on its own, its player not. */
+const MACHINE_STOPPED = 'That machine sailor has been stopped.';
+
 export const REASONS: Readonly<Record<string, string>> = {
   short: `That name is too short: use at least ${MIN_NAME} letters.`,
   long: `That name is too long: use at most ${MAX_NAME} letters.`,
@@ -30,6 +36,7 @@ export const REASONS: Readonly<Record<string, string>> = {
   refused: 'That passkey could not be checked. Try again, or use another.',
   'unknown-passkey':
     'That passkey is not one of a sailor here: its sailor was deleted, or the passkey removed.',
+  stopped: STOPPED,
   code: 'That is not a recovery code we know. Check it and try again: each code works once.',
   'add-passkey': 'Add a passkey first.',
   confirm: 'Confirm with your passkey first.',
@@ -56,14 +63,23 @@ export const MACHINE_REASONS: Readonly<Record<string, string>> = {
   look: 'That look is not one of ours. Draw another.',
   'not-found': 'That machine sailor, or its app, is gone already.',
   name: 'Type the machine sailor’s name exactly to delete it.',
+  stopped: MACHINE_STOPPED,
 };
 
 /**
+ * The approval page's passkey step refused as stopped: there it is the
+ * player's own sailor that is stopped, not the machine sailor chosen.
+ */
+export const SAILOR_STOPPED = 'sailor-stopped';
+
+/**
  * The approval page's words, where a code means something of its own
- * there: the request is the AI app's, and the passkey confirms it for a
- * few minutes.
+ * there: the request is the AI app's, the passkey confirms it for a few
+ * minutes, and stopped is the machine sailor chosen unless the passkey's
+ * step says the player's own sailor is.
  */
 export const APPROVE_REASONS: Readonly<Record<string, string>> = {
+  [SAILOR_STOPPED]: STOPPED,
   again: 'This request has ended. Go back to your AI app and connect again.',
   confirm: 'Your passkey’s confirmation has lapsed. Continue with your passkey again.',
   'add-passkey': 'Your recovery code was used: open the game and add a passkey first.',

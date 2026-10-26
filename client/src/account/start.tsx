@@ -53,8 +53,8 @@ export function quiet(reason: string, autofill: boolean): boolean {
   }
   // An autofill request the browser refuses at once (it holds no passkey
   // of ours, or offers none) is no failure of the player's; a passkey
-  // chosen and refused is.
-  return autofill && reason !== 'unknown-passkey' && reason !== 'refused';
+  // chosen and refused is, and so is the sailor of one chosen stopped.
+  return autofill && reason !== 'unknown-passkey' && reason !== 'refused' && reason !== 'stopped';
 }
 
 type View =

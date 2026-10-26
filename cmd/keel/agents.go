@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/agentapi"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -56,7 +57,7 @@ func machineLooks(cat *catalog.Catalog) oauth.MachineLooks {
 
 // newAgents makes sign-in for AI apps, the lifetime read from the
 // database.
-func (p *process) newAgents(ctx context.Context) (*agents, error) {
+func (p *process) newAgents(ctx context.Context, stopped *accounts.Set) (*agents, error) {
 	d, err := p.db.GrantLifetime(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("the grant lifetime: %w", err)
@@ -74,7 +75,7 @@ func (p *process) newAgents(ctx context.Context) (*agents, error) {
 		Page: page, AtSea: p.atSea,
 	})
 	a.usage = agentapi.NewUsage(p.db, p.log)
-	a.core = agentapi.NewCore(agentapi.CoreConfig{Log: p.log, Metrics: p.metrics, Silence: p.cfg.AISilence})
+	a.core = agentapi.NewCore(agentapi.CoreConfig{Log: p.log, Metrics: p.metrics, Silence: p.cfg.AISilence, Stopped: stopped.Has})
 	a.handler, err = agentapi.Handler(agentapi.Config{
 		Resource: p.cfg.AgentsURL, Issuer: p.cfg.PlayOrigin, Grants: a.grants, Used: a.usage.Used,
 		Build: p.build, Log: p.log, Metrics: p.metrics, Core: a.core,

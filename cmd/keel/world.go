@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/agentapi"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
@@ -72,6 +73,8 @@ type process struct {
 	jobs     *jobs.Runner
 	// agents is sign-in for AI apps and the MCP address.
 	agents *agents
+	// hand is the owner's hand on accounts, and every deletion's.
+	hand *accounts.Accounts
 
 	// The routes the world half serves, set as each opens.
 	replayRoutes, devRoutes, ownerRoutes, playRoutes *lateHandler
@@ -335,6 +338,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Land: cfg.Land, Chunks: rw.handout, Circulation: circulationOf(rw.terrain),
 		Lip: p.wcfg.Prepared.Edge(), RoamChunks: rw.roamHandout, MainLight: rw.mainLight, Chart: rw.charts.model,
 		Forecast: h.forecasts,
+		Stopped:  func(a bus.Account) bool { return p.hand.Stopped().Has(store.AccountID(a)) },
+		Seen:     p.sessions.Seen,
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -347,22 +352,22 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.tools = ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
-		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents,
+		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
 		aiCap: world.AICap(), aiReserve: world.AIReserve(),
 	})
 	playCfg := api.Config{
-		Version:  api.Version{Build: p.build, Catalog: catalog.Version},
-		Log:      p.log,
-		Metrics:  p.metrics,
-		Accounts: p.db,
-		Sessions: p.sessions,
-		Passkeys: p.passkeys,
-		Deleted:  h.deleted(rw.charts),
-		Looks:    p.looks,
-		Game:     h.game,
-		Page:     p.page,
-		Chunks:   rw.chunks,
-		Models:   modelsOf(rw.charts),
+		Version:   api.Version{Build: p.build, Catalog: catalog.Version},
+		Log:       p.log,
+		Metrics:   p.metrics,
+		Accounts:  p.db,
+		Sessions:  p.sessions,
+		Passkeys:  p.passkeys,
+		Deletions: p.hand,
+		Looks:     p.looks,
+		Game:      h.game,
+		Page:      p.page,
+		Chunks:    rw.chunks,
+		Models:    modelsOf(rw.charts),
 
 		News:        news{db: p.db, world: row.ID},
 		NewsPage:    cat.News.Page,
@@ -378,16 +383,56 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	return h, nil
 }
 
-// deleted is told of an account just deleted: its boat leaves the water
-// and its game connection closes, and its credits on the chart lose its
-// name, as the database's have.
-func (h *worldHalf) deleted(charts *worldChart) func(store.AccountID) {
-	return func(id store.AccountID) {
-		h.game.Remove(bus.Account(id))
-		if charts != nil {
-			charts.model.Forget(id)
+// accountsWorld is the world sailed as the accounts' actions reach it, or
+// nil between worlds.
+func (p *process) accountsWorld() accounts.World {
+	h := p.current.Load()
+	if h == nil {
+		return nil
+	}
+	return accountsWorld{h}
+}
+
+// accountsWorld is a world half as the accounts' actions reach it.
+type accountsWorld struct{ h *worldHalf }
+
+// Stopped takes a stopped account out of the game: its connection closes
+// with 4003, its boat leaves the water, its place in the queue goes.
+func (w accountsWorld) Stopped(id store.AccountID) {
+	w.h.game.Remove(bus.Account(id), edge.ReasonStopped)
+}
+
+// Deleted does the same for an account deleted, and its credits on the
+// chart lose its name, as the database's have.
+func (w accountsWorld) Deleted(id store.AccountID) {
+	w.h.game.Remove(bus.Account(id), edge.ReasonDeleted)
+	if c := w.h.ready.charts; c != nil {
+		c.model.Forget(id)
+	}
+}
+
+// Sea is where an account's boat is in the latest frame.
+func (w accountsWorld) Sea(id store.AccountID) (accounts.Sea, bool) {
+	f := w.h.bus.Frames.Acquire()
+	defer f.Release()
+	a := bus.Account(id)
+	for _, s := range f.Live {
+		if f.Owner[s] == a {
+			st := &f.State[s]
+			out := accounts.Sea{Boat: f.Boat[s], East: st.X, North: st.Y, Connected: f.Conn[s] != 0 && f.Grace[s] == 0, Machine: f.Machine[s]}
+			if g := f.Grace[s]; g != 0 {
+				out.Grace = float64(g-f.Tick) * physics.Dt
+			}
+			return out, true
 		}
 	}
+	for i := range f.Queue {
+		if f.Queue[i].Account == a {
+			pos, _ := bus.QueuePlace(f.Queue, i)
+			return accounts.Sea{Queued: true, Position: int(pos), Machine: f.Queue[i].Machine}, true
+		}
+	}
+	return accounts.Sea{}, false
 }
 
 // start runs the world half and serves it: its loop, its writes, its

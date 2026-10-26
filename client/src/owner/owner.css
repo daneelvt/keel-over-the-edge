@@ -105,11 +105,8 @@ header {
   font-weight: 500;
 }
 
-/* The current world's map, or the next's. */
+/* The world being sailed, the next, or the accounts. */
 .tabs {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   display: flex;
   padding: 4px;
   border-radius: 8px;
@@ -315,7 +312,8 @@ button:disabled {
     min-height: 60vh;
   }
 
-  aside {
+  aside,
+  .accounts-tab aside {
     width: auto;
   }
 }
@@ -472,6 +470,96 @@ h3 {
   font-size: 13px;
 }
 
+/* The Accounts tab: the search beside the card; the world's tab not drawn. */
+main[hidden] {
+  display: none;
+}
+
+.accounts-list {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.accounts-tab aside {
+  width: 600px;
+}
+
+.accounts-tab h3 {
+  margin: 12px 0 4px;
+  font-size: 15px;
+}
+
+.search input,
+.hand input,
+.cap input {
+  margin: 2px 4px 2px 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+}
+
+.search input {
+  width: 26em;
+}
+
+.hand input {
+  width: 22em;
+}
+
+.cap input {
+  width: 5em;
+}
+
+table.accounts tbody tr {
+  cursor: pointer;
+}
+
+table.accounts tr.matched {
+  background: rgb(232 180 80 / 10%);
+}
+
+table.accounts tr.chosen {
+  background: rgb(232 180 80 / 25%);
+}
+
+table.accounts tr.machine td:first-child {
+  padding-left: 20px;
+}
+
+table.accounts .side {
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+button.link {
+  margin: 0;
+  padding: 0;
+  background: none;
+  color: var(--gold);
+  text-decoration: underline;
+}
+
+button.danger {
+  background: rgb(181 80 42 / 60%);
+}
+
+ul.plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+table.record {
+  font-size: 13px;
+}
+
 /* The AI sign-in card's fields. */
 .ai form input {
   width: 6em;
@@ -482,10 +570,6 @@ h3 {
   background: rgb(255 255 255 / 12%);
   color: var(--ink);
   font: inherit;
-}
-
-.ai form input.account {
-  width: 20em;
 }
 
 .ai h3 {

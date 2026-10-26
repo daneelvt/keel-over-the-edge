@@ -18,6 +18,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth/softkey"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -755,8 +756,11 @@ func TestConfirmFirst(t *testing.T) {
 // sign-in with one of them is told the passkey is unknown.
 func TestDeleteAnAccount(t *testing.T) {
 	st, u := storetest.Store(t, store.Options{})
-	deleted := make(chan store.AccountID, 4)
-	srv := newTestServer(t, st, func(c *Config) { c.Deleted = func(id store.AccountID) { deleted <- id } })
+	deleted := make(deletedWorld, 4)
+	srv := newTestServer(t, st, func(c *Config) {
+		c.Deletions = accounts.New(accounts.Config{Store: st, Sessions: c.Sessions, Metrics: c.Metrics,
+			World: func() accounts.World { return deleted }})
+	})
 	a, _ := makeSailor(t, srv, "Ann Bonny")
 	other := newBrowser(t, srv)
 	other.keys = a.keys
@@ -789,10 +793,17 @@ func TestDeleteAnAccount(t *testing.T) {
 	if status, _ := newBrowser(t, srv).create("Ann Bonny"); status != 201 {
 		t.Fatalf("the name again: %d", status)
 	}
-	if n := testutil.ToFloat64(srv.metrics.AccountsDeleted); n != 1 {
+	if n := testutil.ToFloat64(srv.metrics.AccountsDeleted.WithLabelValues("player")); n != 1 {
 		t.Errorf("%v deletions counted", n)
 	}
 }
+
+// deletedWorld is told of the accounts deleted.
+type deletedWorld chan store.AccountID
+
+func (deletedWorld) Stopped(store.AccountID)                  {}
+func (w deletedWorld) Deleted(id store.AccountID)             { w <- id }
+func (deletedWorld) Sea(store.AccountID) (accounts.Sea, bool) { return accounts.Sea{}, false }
 
 // TestAccountRoutesNeedASession: none of the account's routes without a
 // session, and none from another site.

@@ -4,6 +4,7 @@ package edge_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
@@ -1087,7 +1089,7 @@ func TestRemove(t *testing.T) {
 		if occupied, _, _ := boatOf(s, 0); !occupied {
 			t.Fatal("no boat")
 		}
-		s.Edge.Remove(bus.Account(id))
+		s.Edge.Remove(bus.Account(id), edge.ReasonDeleted)
 		if code := <-ended; code != edge.CloseRemoved {
 			t.Fatalf("closed with %d", code)
 		}
@@ -1108,7 +1110,7 @@ func TestRemove(t *testing.T) {
 		if occupied, _, grace := boatOf(s, 0); !occupied || grace == 0 {
 			t.Fatalf("Bob's boat: %v, grace %d", occupied, grace)
 		}
-		s.Edge.Remove(bus.Account(bobID))
+		s.Edge.Remove(bus.Account(bobID), edge.ReasonDeleted)
 		time.Sleep(time.Second)
 		if occupied, _, _ := boatOf(s, 0); occupied {
 			t.Fatal("the boat in its grace is still in the water")
@@ -1151,6 +1153,82 @@ func TestPriorityNeverWaits(t *testing.T) {
 		}
 		if len(f.Live) != 2 || len(f.Queue) != 1 || priority != 1 {
 			t.Fatalf("%d boats, %d of them a priority account's, and %d waiting", len(f.Live), priority, len(f.Queue))
+		}
+	})
+}
+
+// TestStoppedAtTheDoor: an account stopped is refused at the upgrade, and
+// one stopped between its upgrade and its claim is closed with 4003 and
+// the stop's reason as it claims its boat, which it never gets.
+func TestStoppedAtTheDoor(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var mu sync.Mutex
+		asked := 0
+		// Stopped from the second time it is asked: after the upgrade.
+		s := edgetest.NewServer(t, edgetest.Config{Stopped: func(bus.Account) bool {
+			mu.Lock()
+			defer mu.Unlock()
+			asked++
+			return asked > 1
+		}})
+		token, _ := s.Sailor("Ann")
+		ws, _, err := s.Dial(t.Context(), edgetest.DialOptions{Cookie: token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := client.Send(t.Context(), ws, client.Hello()); err != nil {
+			t.Fatal(err)
+		}
+		var ce websocket.CloseError
+		for {
+			if _, _, err := ws.Read(t.Context()); err != nil {
+				if !errors.As(err, &ce) {
+					t.Fatal(err)
+				}
+				break
+			}
+		}
+		if ce.Code != edge.CloseRemoved || ce.Reason != edge.ReasonStopped {
+			t.Fatalf("closed with %d %q", ce.Code, ce.Reason)
+		}
+		time.Sleep(time.Second)
+		if occupied, _, _ := boatOf(s, 0); occupied {
+			t.Fatal("a boat for a stopped account")
+		}
+		if _, resp, err := s.Dial(t.Context(), edgetest.DialOptions{Cookie: token}); err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("stopped at the upgrade: %v, %v", resp, err)
+		}
+		if n := count(t, s, "upgrades", "stopped"); n != 1 {
+			t.Errorf("%v upgrades counted stopped", n)
+		}
+	})
+}
+
+// TestALongConnectionIsSeen: a game connection open long is recorded as
+// its session seen as it ends; one open briefly is not. (Long is an hour;
+// ten seconds here, so the world ticks less.)
+func TestALongConnectionIsSeen(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		seen := make(chan [32]byte, 4)
+		long := 10 * time.Second
+		s := edgetest.NewServer(t, edgetest.Config{Seen: func(h [32]byte) { seen <- h }, LongAfter: long})
+		token, _ := s.Sailor("Ann")
+		want, _ := auth.HashToken(token)
+		for _, open := range []time.Duration{time.Second, 2 * long} {
+			ws, _, err := s.Connect(t.Context(), edgetest.DialOptions{Cookie: token})
+			if err != nil {
+				t.Fatal(err)
+			}
+			time.Sleep(open)
+			ws.Close(websocket.StatusNormalClosure, "")
+			time.Sleep(time.Second)
+			synctest.Wait()
+			switch {
+			case open < long && len(seen) != 0:
+				t.Fatalf("open %s: seen", open)
+			case open >= long && (len(seen) != 1 || <-seen != want):
+				t.Fatalf("open %s: not seen", open)
+			}
 		}
 	})
 }

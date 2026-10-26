@@ -89,14 +89,16 @@ type TokenItem struct {
 	Ended    bool   `json:"ended,omitempty"`
 }
 
-// MachineItem is a machine sailor as the pages list it.
+// MachineItem is a machine sailor as the pages list it. Stopped is when
+// the game's operator stopped it on its own, ms; 0 if not.
 type MachineItem struct {
-	ID    string     `json:"id"`
-	Name  string     `json:"name"`
-	Look  Look       `json:"look"`
-	AtSea bool       `json:"atSea"`
-	Apps  []AppItem  `json:"apps"`
-	Token *TokenItem `json:"token"`
+	ID      string     `json:"id"`
+	Name    string     `json:"name"`
+	Look    Look       `json:"look"`
+	AtSea   bool       `json:"atSea"`
+	Stopped int64      `json:"stopped"`
+	Apps    []AppItem  `json:"apps"`
+	Token   *TokenItem `json:"token"`
 }
 
 // Machines are what the lists of an account's machine sailors are made
@@ -131,7 +133,7 @@ func ListMachines(ctx context.Context, st Machines, owner store.AccountID, looks
 	for i, m := range ms0 {
 		out[i] = MachineItem{
 			ID: m.ID.String(), Name: m.Name, Look: looks.LookOf(m.Version, m.Finish, m.Colour), Apps: []AppItem{},
-			AtSea: atSea != nil && atSea(m.ID),
+			AtSea: atSea != nil && atSea(m.ID), Stopped: ms(m.Stopped),
 		}
 		index[m.ID] = i
 	}

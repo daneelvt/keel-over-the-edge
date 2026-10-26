@@ -64,6 +64,24 @@ func (q *Queries) ConfirmRequest(ctx context.Context, arg ConfirmRequestParams) 
 	return result.RowsAffected(), nil
 }
 
+const countLiveGrantsOf = `-- name: CountLiveGrantsOf :one
+SELECT count(*) FROM ai_grant
+WHERE account_id = ANY($1::uuid[]) AND revoked_at IS NULL
+  AND approved_at + $2::bigint * interval '1 microsecond' > now()
+`
+
+type CountLiveGrantsOfParams struct {
+	Ids    []pgtype.UUID
+	Micros int64
+}
+
+func (q *Queries) CountLiveGrantsOf(ctx context.Context, arg CountLiveGrantsOfParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countLiveGrantsOf, arg.Ids, arg.Micros)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deletePair = `-- name: DeletePair :execrows
 DELETE FROM oauth_token WHERE pair = $1
 `
@@ -100,16 +118,22 @@ func (q *Queries) GrantLifetime(ctx context.Context) (int64, error) {
 }
 
 const grantUsed = `-- name: GrantUsed :exec
-UPDATE ai_grant SET last_used_at = $1 WHERE id = $2
+WITH g AS (
+  UPDATE ai_grant SET last_used_at = $1 WHERE ai_grant.id = $2::uuid
+  RETURNING account_id
+)
+UPDATE account SET last_seen_at = greatest(account.last_seen_at, $1)
+WHERE account.id IN (SELECT account_id FROM g)
 `
 
 type GrantUsedParams struct {
-	At pgtype.Timestamptz
-	ID pgtype.UUID
+	At      time.Time
+	GrantID pgtype.UUID
 }
 
+// A grant used, and its machine sailor active, at the time given.
 func (q *Queries) GrantUsed(ctx context.Context, arg GrantUsedParams) error {
-	_, err := q.db.Exec(ctx, grantUsed, arg.At, arg.ID)
+	_, err := q.db.Exec(ctx, grantUsed, arg.At, arg.GrantID)
 	return err
 }
 
@@ -494,6 +518,40 @@ func (q *Queries) RevokeGrant(ctx context.Context, arg RevokeGrantParams) (pgtyp
 	return account_id, err
 }
 
+const revokeGrantsOf = `-- name: RevokeGrantsOf :many
+UPDATE ai_grant SET revoked_at = now(), revoked_why = 'operator'
+WHERE account_id = ANY($1::uuid[]) AND revoked_at IS NULL
+  AND approved_at + $2::bigint * interval '1 microsecond' > now()
+RETURNING id
+`
+
+type RevokeGrantsOfParams struct {
+	Ids    []pgtype.UUID
+	Micros int64
+}
+
+// Every grant of the machine sailors given that is unrevoked and within
+// the lifetime, revoked by the operator.
+func (q *Queries) RevokeGrantsOf(ctx context.Context, arg RevokeGrantsOfParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, revokeGrantsOf, arg.Ids, arg.Micros)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const rotateToken = `-- name: RotateToken :exec
 UPDATE oauth_token SET used_at = coalesce(used_at, now()), next_pair = $1 WHERE hash = $2
 `
@@ -562,11 +620,13 @@ const tokenByHash = `-- name: TokenByHash :one
 SELECT t.kind, t.grant_id, coalesce(t.expires_at, 'epoch')::timestamptz AS expires_at,
   g.kind AS grant_kind, g.approved_at, coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at,
   coalesce(g.revoked_why, '')::text AS revoked_why, coalesce(g.client_name, '')::text AS client_name,
-  g.account_id, a.priority, sl.name, coalesce(osl.name, '')::text AS owner_name
+  g.account_id, a.priority, sl.name, coalesce(osl.name, '')::text AS owner_name,
+  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
 FROM oauth_token t
 JOIN ai_grant g ON g.id = t.grant_id
 JOIN account a ON a.id = g.account_id
 JOIN sailor sl ON sl.account_id = a.id
+LEFT JOIN account o ON o.id = a.owner_id
 LEFT JOIN sailor osl ON osl.account_id = a.owner_id
 WHERE t.hash = $1
 `
@@ -584,10 +644,11 @@ type TokenByHashRow struct {
 	Priority   bool
 	Name       string
 	OwnerName  string
+	Stopped    bool
 }
 
 // A token as the door checks it: its grant, its machine sailor and its
-// owner's sailor.
+// owner's sailor, and whether either is stopped.
 func (q *Queries) TokenByHash(ctx context.Context, hash []byte) (TokenByHashRow, error) {
 	row := q.db.QueryRow(ctx, tokenByHash, hash)
 	var i TokenByHashRow
@@ -604,6 +665,7 @@ func (q *Queries) TokenByHash(ctx context.Context, hash []byte) (TokenByHashRow,
 		&i.Priority,
 		&i.Name,
 		&i.OwnerName,
+		&i.Stopped,
 	)
 	return i, err
 }
@@ -611,9 +673,12 @@ func (q *Queries) TokenByHash(ctx context.Context, hash []byte) (TokenByHashRow,
 const tokenForRefresh = `-- name: TokenForRefresh :one
 SELECT t.hash, t.grant_id, t.pair, coalesce(t.used_at, 'epoch')::timestamptz AS used_at, t.next_pair,
   g.account_id, g.kind AS grant_kind, coalesce(g.client_id, '')::text AS client_id, g.approved_at,
-  coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at, coalesce(g.revoked_why, '')::text AS revoked_why
+  coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at, coalesce(g.revoked_why, '')::text AS revoked_why,
+  (m.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
 FROM oauth_token t
 JOIN ai_grant g ON g.id = t.grant_id
+JOIN account m ON m.id = g.account_id
+LEFT JOIN account o ON o.id = m.owner_id
 WHERE t.hash = $1 AND t.kind = 'refresh'
 FOR UPDATE OF t, g
 `
@@ -630,6 +695,7 @@ type TokenForRefreshRow struct {
 	ApprovedAt time.Time
 	RevokedAt  time.Time
 	RevokedWhy string
+	Stopped    bool
 }
 
 // A refresh token presented, its grant and the pair issued in its place,
@@ -649,6 +715,7 @@ func (q *Queries) TokenForRefresh(ctx context.Context, hash []byte) (TokenForRef
 		&i.ApprovedAt,
 		&i.RevokedAt,
 		&i.RevokedWhy,
+		&i.Stopped,
 	)
 	return i, err
 }
@@ -682,7 +749,10 @@ UPDATE oauth_code c SET used_at = now()
 FROM ai_grant g
 WHERE c.hash = $1 AND c.used_at IS NULL AND g.id = c.grant_id
 RETURNING c.grant_id, c.client_id, c.redirect_uri, c.code_challenge, c.expires_at,
-  g.account_id, g.approved_at, coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at
+  g.account_id, g.approved_at, coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at,
+  coalesce(g.revoked_why, '')::text AS revoked_why,
+  EXISTS (SELECT 1 FROM account m LEFT JOIN account o ON o.id = m.owner_id
+          WHERE m.id = g.account_id AND (m.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL))::boolean AS stopped
 `
 
 type UseCodeRow struct {
@@ -694,6 +764,8 @@ type UseCodeRow struct {
 	AccountID     pgtype.UUID
 	ApprovedAt    time.Time
 	RevokedAt     time.Time
+	RevokedWhy    string
+	Stopped       bool
 }
 
 // A code exchanged: marked used, so a second use is known.
@@ -709,6 +781,8 @@ func (q *Queries) UseCode(ctx context.Context, hash []byte) (UseCodeRow, error) 
 		&i.AccountID,
 		&i.ApprovedAt,
 		&i.RevokedAt,
+		&i.RevokedWhy,
+		&i.Stopped,
 	)
 	return i, err
 }

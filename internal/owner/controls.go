@@ -155,6 +155,7 @@ func (o *Owner) flag(w http.ResponseWriter, r *http.Request) {
 		action = "unflag"
 	}
 	o.count(action)
+	o.record(r, action, &id, "")
 	o.cfg.Log.Info("owner: an account's flag set", "action", action, "account", id.String(), "connected", connected, "from", r.RemoteAddr)
 	writeJSON(w, map[string]any{"account": id.String(), "on": req.On, "connected": connected})
 }
@@ -199,6 +200,7 @@ func (o *Owner) priority(w http.ResponseWriter, r *http.Request) {
 		action = "unpriority"
 	}
 	o.count(action)
+	o.record(r, action, &id, "")
 	o.cfg.Log.Info("owner: an account's priority set", "action", action, "account", id.String(), "from", r.RemoteAddr)
 	writeJSON(w, map[string]any{"account": id.String(), "on": req.On})
 }

@@ -186,6 +186,25 @@ func (c *Cache) touch(ctx context.Context, hash [32]byte, touch bool) {
 	}
 }
 
+// Seen records a session, and its account, seen now, as a game connection
+// open for long ends: it used no route meanwhile that would have. As a
+// request's use does, it writes at most once each TouchEvery.
+func (c *Cache) Seen(hash [32]byte) {
+	now := c.cfg.Now()
+	c.mu.Lock()
+	if e := c.entries[hash]; e != nil {
+		if now.Sub(e.seen) < c.cfg.TouchEvery {
+			c.mu.Unlock()
+			return
+		}
+		e.seen = now
+	}
+	c.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c.touch(ctx, hash, true)
+}
+
 // Add caches a session just made, its cookie just set.
 func (c *Cache) Add(hash [32]byte, s store.Session) {
 	now := c.cfg.Now()

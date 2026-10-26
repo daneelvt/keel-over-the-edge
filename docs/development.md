@@ -2558,7 +2558,7 @@ last twenty.
 | `next-world` | `ahead` before the end (Saturday 6 pm in New York) | the next world's row, a seed from `crypto/rand` (or `KEEL_WORLD_SEED`), its terrain made on one goroutine (about 4.5 s and 400 MB at most on the Mac) and stored, then its week of weather for when it is planned to begin (a few ms, [Wind and weather](#the-week-stored)); a world no attempt of which passes the rules is discarded and another seed drawn; tried every 5 minutes until stored |
 | `closing` | `notice` before the end (Thursday 6 pm) | the news's Notices to Mariners: the world's end, each reader seeing it in their own time |
 | `switch` | 5 minutes before the end | the next world loaded, the simulation told its last tick, then the switch |
-| `sessions` | daily 07:00 UTC | sessions not seen for 400 days, the cookie's life, deleted 1,000 at a time |
+| `sessions` | daily 07:00 UTC | sessions not seen for 400 days, the cookie's life, deleted 1,000 at a time; and the record of the owner's actions older than two years |
 | `worlds` | daily 07:15 UTC | ended worlds older than `KEEL_WORLD_KEEP` (four weeks): each partition detached `CONCURRENTLY`, then dropped, with a 2 s lock timeout, an interrupted detach finished first; the row kept, `dropped`; job runs older than 90 days deleted |
 
 ### The switch
@@ -2733,6 +2733,106 @@ carry the flag is refused, and no other player's boat is ever moved.
 
 `/debug/place` stays the developer's (`KEEL_DEV_COMMANDS=1`), for the
 browser tests: it moves any boat and marks nothing.
+
+### Accounts
+
+**The Accounts tab**, always shown beside "World N" (and "Next: world N+1"
+while there is one), is the owner's hand on every account, at sea or
+ashore. At its head: the counts (`accounts.json`: humans, made this week,
+seen today; machine sailors; grants live; accounts stopped) and the grant
+lifetime. **The search** takes one box: an account's ID; an AI app's
+access, refresh or connection token, or a session's cookie, found by its
+hash (a token comes only in the POST's body, is never logged and never
+echoed back, and the answer says when it has ended, and when nothing is
+known of it: an access token's row goes a day after it expires, a grant's
+30 days after it ends, a session's after 400 days unused); or a sailor's
+name or part of it, compared by its key (`moderation.Key`: case, width,
+spacing, separators and letters that look alike make no difference; `%`,
+`_` and `\` are themselves), the exact key first. Nothing typed lists
+every account. Results are humans, 50 a page, each with its machine
+sailors (a machine sailor found shows under its human), sorted by **last
+active** (oldest or newest first), made, or the machine sailors' latest
+call. A boat's row and a queue place's on the World tab have "Account",
+which opens the card.
+
+**The card** shows what the game keeps, and nothing it does not (no
+addresses, devices or history of sessions): name, look, made, last active;
+passkeys (made on, made, last used, synced, a clone warning); the recovery
+code's date; sessions (how many, the latest seen); the machine sailors
+with their own cards; the fleet; the machine sailors allowed; its boat at
+sea or its queue place; the owner's flag and priority; stopped, when and
+why; a machine sailor's apps and connection token, as its player's account
+page lists them; and **the record** of what the owner did to it. It is read
+again every 5 s while the tab is shown.
+
+**Last active** is `account.last_seen_at`, written at most once an hour:
+for a human as an account is made, a session is used (the sessions'
+cache), a passkey signs in, a recovery code is used, and a game
+connection open over an hour ends (it uses no other route meanwhile); for
+a machine sailor with its grant's last use, off the call. It is shown in
+whole days of 24 hours from now ("today", "1 day ago", "41 days ago"), or
+"never" for a machine sailor not called since it was made, or "at sea now".
+
+**The actions**, each a POST of JSON on the card; with `"check": true`
+each answers what it would do, in numbers and words, and does nothing,
+which is what the confirmation shows. Each is one transaction with the
+account's row locked, then reaches every cache at once, so nothing waits
+out the sessions' 30 s or the door's:
+
+| Action | What it does |
+|---|---|
+| **Stop** (`/owner/api/accounts/stop {"account", "reason"}`) | `stopped_at` and the reason set; every session ended; every live grant of the machine sailors it reaches (its own, or a human's) revoked `operator`, for good. Then the stopped set gains the account (and a human's machine sailors), the sessions' and the door's caches forget them, the game connection is closed with 4003 and "This sailor has been stopped.", every boat leaves the water with no grace and every queue place goes, and each machine sailor's waiting call ends in the stop's words and its helm is dropped |
+| **Start again** (`…/start {"account", "reason"?}`) | Clears the stop. Revoked grants stay revoked, ended sessions ended: the player signs in with a passkey or the recovery code, and approves their apps again. A human's machine sailors start with it, but those stopped on their own |
+| **Revoke tokens** (`…/revoke {"account", "reason"}`) | Every live grant of an AI account, or of each of a human's machine sailors, revoked `operator`; each machine sailor's waiting call ends and its boat goes into its grace, so an agent approved again within it keeps the boat. Nothing is stopped: the answer to a leaked token |
+| **Delete** (`…/delete {"account", "name", "reason"}`) | The player's own deletion, its sailor's name typed again: a human with its machine sailors, or one machine sailor; then the same as a player's (connection closed with 4003 and "This sailor has been deleted.", credits "a former sailor"). An account carrying the owner's flag is refused until it is cleared |
+
+A stop and a delete need a reason (1 to 500 characters), a start does
+not. The owner's flag, priority and the machine sailors allowed are on the
+card too (the routes above), and the grant lifetime moved here from the
+World tab.
+
+**A stopped account** is refused at every door, and why:
+
+| Door | The refusal |
+|---|---|
+| A session's cookie | `SessionAccount` finds no stopped account's session, so an old cookie, the cache's next miss and a sign-in racing the stop all fail |
+| Passkey sign-in (`/signin/finish`) | 403 `stopped`, **after** the passkey is checked and its counters written back, never 404 `unknown-passkey`: that answer lets the browser forget the passkey (WebAuthn Level 3, `signalUnknownCredential`), and a start would find it gone |
+| The recovery code (`/recovery`) | 403 `stopped`; the code stays unspent |
+| The approval page | 403 `stopped` after the passkey; approving for, or making a connection token for, a machine sailor stopped on its own, 409 `stopped` |
+| The code exchange and the refresh | `invalid_grant`, "revoked by the game's operator" |
+| The MCP door | 401, "This machine sailor has been stopped by Keel Over the Edge: its tokens no longer work." (`keel_mcp_door_total{result="stopped"}`) |
+| The game connection | 403 `stopped` at the upgrade, and 4003 as a connection claims its boat, from **the stopped set** (`internal/accounts`, the accounts stopped in memory, loaded as keel starts and changed only after a stop's or start's commit), which closes the instant between a session read and its connection registering |
+
+A machine sailor is stopped when it, or its human, is. A stopped player
+sees the reason's words, not the owner's reason, which may name a report or
+another player.
+
+**The record** (`account_action`): every stop, start, revoke and delete,
+and every flag, priority, cap and lifetime set, with the sailor's name as
+it was, the reason or value, `page` or `command`, and the address. It has
+no foreign key, so it outlives a deletion; the `sessions` job deletes
+entries older than two years. The logs keep 14 days: a stop's reason must
+outlive them. `GET /owner/api/actions.json[?account=…]` lists the latest
+100.
+
+**`keel admin`** is the same from the command line, a client of these very
+routes (never of the database: one process holds the boats, the
+connections and the caches):
+
+```sh
+# production, in keel's own pod (distroless: keel is the only program)
+tailscale ssh root@keel-prod-1 'kubectl -n keel exec deploy/keel -c keel -- /keel admin search ann'
+# or through the tunnel's forward of the internal listener
+go run ./cmd/keel admin -addr 127.0.0.1:9090 show 0199…
+```
+
+`search [TEXT]` (`-` reads it from the standard input, so a token stays out
+of the shell's history), `show ID`, `stop ID -reason …`, `start ID`,
+`revoke ID -reason …`, `delete ID -name … -reason …`, `flag ID on|off`,
+`priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`; text, or
+`-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete` and
+`lifetime` only say what they would do. The command's actions are recorded
+as `command` (the `Keel-Source` header).
 
 ### The free camera
 
@@ -3452,13 +3552,14 @@ resolved at start, so updating it allocates nothing:
 | `keel_db_query_duration_seconds{query}`, `keel_db_query_errors_total{query}` | Each query's time and failures, by its sqlc name (`other` for the rest) |
 | `keel_db_schema_version` | The newest migration the database has had |
 | `keel_accounts_created_total`, `keel_names_refused_total{reason}` | Accounts made, and new sailors' names refused by reason (`short`, `long`, `characters`, `scripts`, `words`, `taken`) |
-| `keel_ceremonies_total{kind, result}` | Ceremonies with the browser's passkey prompt: `create`, `signin`, `add`, `confirm`; `begun`, `finished`, `refused` (the answer not accepted), `expired`, `again` (its state gone: used, never begun, or another build's) |
+| `keel_ceremonies_total{kind, result}` | Ceremonies with the browser's passkey prompt: `create`, `signin`, `add`, `confirm`, `approve`; `begun`, `finished`, `refused` (the answer not accepted), `expired`, `again` (its state gone: used, never begun, or another build's), `stopped` (the passkey good, its account stopped) |
 | `keel_signins_total{mediation}` | Sign-ins with a passkey: by the browser's `prompt`, or offered on the name field (`conditional`) |
-| `keel_recovery_used_total`, `keel_accounts_deleted_total`, `keel_clone_warnings_total` | Recovery codes used; accounts deleted by their players; sign-ins whose passkey's count did not go up (logged, never refused) |
+| `keel_recovery_used_total`, `keel_accounts_deleted_total{by}`, `keel_clone_warnings_total` | Recovery codes used; accounts deleted, by their `player` or the `owner`; sign-ins whose passkey's count did not go up (logged, never refused) |
+| `keel_accounts_stopped{kind}` | Accounts stopped by the owner, `human` or `ai` (a stopped human's machine sailors among them), from the stopped set |
 | `keel_session_cache_lookups_total{result}` | Sessions found in the cache (`hit`), fetched (`miss`) or unknown |
 | `keel_sim_grace_total{result}` | Boats' graces `started`, ended by a join of the account (`rejoined`), or `expired` |
 | `keel_edge_connections` | Game connections open |
-| `keel_edge_upgrades_total{result}` | `ok`, `no_session`, `ai_account`, `origin`, `bad_request` |
+| `keel_edge_upgrades_total{result}` | `ok`, `no_session`, `ai_account`, `origin`, `bad_request`, `stopped` |
 | `keel_edge_hello_total{result}` | `ok`, or what differed: `protocol`, `catalog`, `layout`; or `timeout` |
 | `keel_edge_joins_total{result}` | `joined`, `rejoined`, `queued`, `full`, `busy`, `timeout` |
 | `keel_edge_queued_connections` | Connections waiting in the queue |
@@ -3661,7 +3762,8 @@ deleting the account) needs one of the account's own passkeys, with the
 player verified by their device, within the last 5 minutes. Deleting takes
 the sailor's name typed again; the account goes with its sailor, passkeys,
 sessions and ceremonies, its boat leaves the water at once, its game
-connection is closed with 4003, and its name is free. What it charted
+connection is closed with 4003, and its name is free (the owner's
+deletion, on the world page's Accounts tab, is the same code). What it charted
 keeps its place on the chart and in the news, read as "a former sailor's".
 
 **Sessions.** The cookie, `__Host-keel-session`, carries 32 random bytes
@@ -3832,8 +3934,8 @@ machine sailor's, made on the account page after a passkey and shown once,
 for programs that take a header and run no OAuth; one at a time, a new one
 ending the old. Every grant ends at its making plus **the grant lifetime**
 (`setting.grant_lifetime`, 90 days, from a minute to 400 days), reckoned at
-each use from the lifetime as it is now, so shortening it on the world page
-ends older grants at once. The account page lists each machine sailor's
+each use from the lifetime as it is now, so shortening it on the world
+page's Accounts tab ends older grants at once. The account page lists each machine sailor's
 apps and token with when each ends, and revokes them.
 
 **The door at the MCP address** (`internal/agentapi`) checks, in order: a
@@ -3841,14 +3943,14 @@ preflight answered; the Host the MCP address's own (DNS rebinding; the MCP
 SDK's own check is off, since it refuses every proxied local request); an
 `Origin`, if sent, https or this computer's; the bearer token's shape, then
 the token found (cached 30 s, forgotten at once by every revocation,
-deletion and lifetime change), its grant unrevoked and within the
-lifetime. A refusal is a 401 with `error="invalid_token"` and words for the
+deletion, stop and lifetime change), its machine sailor and its human not
+stopped, its grant unrevoked and within the lifetime. A refusal is a 401 with `error="invalid_token"` and words for the
 player in `error_description` (RFC 6750), and the same words as its body.
 What it accepts reaches the official Go SDK (`github.com/modelcontextprotocol/go-sdk`),
 stateless, whose bearer middleware hands the machine sailor to the tools.
 There is one tool, `handbook`, which names the machine sailor and its
 player. A grant's last use is written at most once an hour, off the
-request.
+request, and its machine sailor's last active with it.
 
 **Fetching a client's document** (`internal/oauth/fetch.go`) is guarded:
 the dialer refuses every special-use address by the address it connects to
@@ -3865,7 +3967,7 @@ past their expiry, access tokens a day past, the used refresh tokens of
 ended grants, grants ended 30 days ago with their tokens, and registered
 clients with no grant left unused for 30 days.
 
-**Metrics**: `keel_machine_sailors_created_total`, `…_deleted_total`,
+**Metrics**: `keel_machine_sailors_created_total`, `…_deleted_total{by}`,
 `keel_oauth_authorize_total`, `keel_oauth_tokens_total`,
 `keel_oauth_refresh_reuse_total`, `keel_oauth_registrations_total`,
 `keel_oauth_client_fetches_total` and `keel_oauth_client_fetch_seconds`,
@@ -3884,7 +3986,7 @@ deletes them.
 
 | Route | What |
 |-------|------|
-| `GET /api/machines` | The account's machine sailors: `{"mcp", "cap", "machines", "fleet", "looks", "confirmedUntil"}`, each `{"id", "name", "look", "atSea", "apps", "token"}` |
+| `GET /api/machines` | The account's machine sailors: `{"mcp", "cap", "machines", "fleet", "looks", "confirmedUntil"}`, each `{"id", "name", "look", "atSea", "stopped", "apps", "token"}` (`stopped`, ms, for one the owner stopped on its own: the page then offers only "Delete") |
 | `POST /api/machines` | `{"name", "version", "finish", "colour"}`: 201, the list; 409 `cap`; 422 a name's reason; 400 `look` |
 | `POST /api/machines/delete` | `{"machine", "name"}`, confirmed: 200, the list |
 | `POST /api/machines/revoke` | `{"grant"}`: 200, the list |
@@ -4041,7 +4143,7 @@ boat has returned to port."
 | 1013 | The queue for boats is full (4,096), or the simulation's command queue | waits from 2 s |
 | 4001 | Another connection for the account | "playing on another device", **Take over** |
 | 4002 | Protocol, catalog or physics differ | reloads |
-| 4003 | Removed (not sent yet) | the reason |
+| 4003 | Removed: the account stopped by the owner, or deleted | the reason ("This sailor has been stopped.", "This sailor has been deleted."), and the start screen |
 | 4004 | The world has ended: the falls took it | waits 0.2 to 2 s, to the next world |
 | none | 60 s of silence, a 10 s write | waits from 0.5 s |
 

@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/agentapi"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
@@ -77,8 +78,11 @@ type harness struct {
 	resource string
 	lifetime *oauth.Lifetime
 	grants   *oauth.Grants
-	metrics  *obs.Metrics
-	logs     *syncBuffer
+	// hand is the owner's hand on accounts, on the play listener's
+	// sessions and the door's grants.
+	hand    *accounts.Accounts
+	metrics *obs.Metrics
+	logs    *syncBuffer
 	// documents are the documents served, by path.
 	docMu     sync.Mutex
 	documents map[string]docAnswer
@@ -173,11 +177,14 @@ func newHarness(t *testing.T, opt ...harnessOptions) *harness {
 		Log: log, Metrics: h.metrics, Now: h.now, RegistrationsPerHour: o.registrations,
 		Page: func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "the approval page") },
 	})
+	sessions := auth.NewCache(st, auth.CacheConfig{})
+	h.hand = accounts.New(accounts.Config{Store: st, Sessions: sessions, Door: h.grants, Lifetime: h.lifetime.Get, Looks: testLooks,
+		Metrics: h.metrics, Now: h.now})
 	play := api.Handler(api.Config{
 		Version: api.Version{Build: "test", Catalog: "cat"}, Log: log, Metrics: h.metrics,
-		Accounts: st, Sessions: auth.NewCache(st, auth.CacheConfig{}), Passkeys: passkeys, Looks: []string{"figure"},
+		Accounts: st, Sessions: sessions, Passkeys: passkeys, Looks: []string{"figure"},
 		Boat: boatKind, OAuth: server, Grants: h.grants, MCP: h.resource, Lifetime: h.lifetime, MachineLooks: testLooks,
-		Machines: st,
+		Machines: st, Deletions: h.hand,
 	})
 	h.play = httptest.NewUnstartedServer(play)
 	h.play.Listener.Close()

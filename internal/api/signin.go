@@ -44,6 +44,10 @@ func (a *api) beginSignIn(w http.ResponseWriter, r *http.Request) {
 //
 //	200 {"name", "look", "accepted", "recovered"?}
 //	400 {"error":"refused"}          the browser's answer is not accepted
+//	403 {"error":"stopped"}          the account is stopped by the game's
+//	                                 operator: never unknown-passkey, which
+//	                                 lets the browser forget the passkey a
+//	                                 start would need again
 //	404 {"error":"unknown-passkey", "unknown"}  no account has the passkey
 //	                                 (its account was deleted, or it was
 //	                                 removed); the browser may forget it
@@ -85,6 +89,12 @@ func (a *api) finishSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.used(r, holder.ID, key)
+	if holder.Stopped {
+		a.ceremonyCounted(c.Kind, "stopped")
+		a.cfg.Log.Info("a stopped account's sign-in refused", "request_id", obs.RequestID(r.Context()), "account", holder.ID.String())
+		writeError(w, http.StatusForbidden, "stopped")
+		return
+	}
 	var recovered time.Time
 	session, err := auth.Issue(a.cfg.Log, "session", auth.DrawToken, func(d auth.Drawn) error {
 		var err error
@@ -122,6 +132,7 @@ type recoveryRequest struct {
 // added, when a new code is shown.
 //
 //	200 {"name", "look", "addPasskey": true}
+//	403 {"error":"stopped"} the code's account is stopped: the code stays unspent
 //	409 {"error":"session"} the request already has a session
 //	422 {"error":"code"}    not a recovery code, or one no account has
 func (a *api) recover(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +158,10 @@ func (a *api) recover(w http.ResponseWriter, r *http.Request) {
 	token, hash := session.Token, session.Hash
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusUnprocessableEntity, "code")
+		return
+	}
+	if errors.Is(err, store.ErrStopped) {
+		writeError(w, http.StatusForbidden, "stopped")
 		return
 	}
 	if err != nil {

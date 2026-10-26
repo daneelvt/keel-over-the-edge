@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Sign-in for AI apps on the world page: the token lifetime, which every
-// app's grant and every connection token ends after, set in days, hours or
-// minutes; first counted, then confirmed in the card with how many grants
-// it ends at once, so that no stray click cuts every app off; and how many
-// machine sailors an account may have, by the account's id, as the flag
-// takes it.
+// Sign-in for AI apps on the world page's Accounts tab: the token
+// lifetime, which every app's grant and every connection token ends after,
+// set in days, hours or minutes; first counted, then confirmed in the card
+// with how many grants it ends at once, so that no stray click cuts every
+// app off. How many machine sailors an account may have is set on its
+// card.
 
 import { useState } from 'preact/hooks';
 import { type AccountsData, control } from './api';
@@ -60,27 +60,13 @@ interface Checked {
   ends: number;
 }
 
-/** A sailor the page knows of, for the account's id. */
-export interface Known {
-  account: string;
-  sailor: string;
-}
-
 /**
- * The owner's hand on sign-in for AI apps: the token lifetime, and an
- * account's machine sailors allowed. A lifetime is counted first, with
- * check: true, and set only once the confirmation naming what it ends is
- * confirmed; one left open is counted again if the figure is changed.
+ * The owner's hand on sign-in for AI apps: the token lifetime. A lifetime
+ * is counted first, with check: true, and set only once the confirmation
+ * naming what it ends is confirmed; one left open is closed if the figure
+ * is changed.
  */
-export function AISignIn({
-  accounts,
-  known,
-  act,
-}: {
-  accounts: AccountsData;
-  known: Known[];
-  act: Act;
-}) {
+export function AISignIn({ accounts, act }: { accounts: AccountsData; act: Act }) {
   const m = accounts.machines;
   const [amount, setAmount] = useState('');
   const [unit, setUnit] = useState<Unit>('days');
@@ -88,8 +74,6 @@ export function AISignIn({
   const [checking, setChecking] = useState(false);
   const [sending, setSending] = useState(false);
   const [why, setWhy] = useState('');
-  const [account, setAccount] = useState('');
-  const [cap, setCap] = useState('');
   if (m === undefined) {
     return null;
   }
@@ -97,8 +81,6 @@ export function AISignIn({
   const n = Number(amount);
   const seconds = amount.trim() !== '' && Number.isInteger(n) ? n * UNITS[unit] : 0;
   const outOfBounds = seconds !== 0 && (seconds < MIN_LIFETIME || seconds > MAX_LIFETIME);
-  const capN = Number(cap);
-  const capOK = cap.trim() !== '' && Number.isInteger(capN) && capN >= 0 && capN <= MAX_CAP;
 
   const check = (): void => {
     setChecking(true);
@@ -205,52 +187,6 @@ export function AISignIn({
           </button>
         </div>
       ) : null}
-      <h3>Machine sailors allowed</h3>
-      <p class="small">
-        For one account, by its id: those it has already stay. From 0 to {MAX_CAP}.
-      </p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const who = known.find((k) => k.account === account.trim())?.sailor;
-          void act(
-            'machines',
-            { account: account.trim(), cap: capN },
-            `${plural(capN, 'machine sailor')} allowed for ${who ?? account.trim()}`,
-          );
-        }}
-      >
-        <input
-          type="text"
-          name="machines-account"
-          class="account"
-          list="known-accounts"
-          placeholder="the account's id"
-          aria-label="The account's id"
-          value={account}
-          onInput={(e) => setAccount(e.currentTarget.value)}
-        />
-        <datalist id="known-accounts">
-          {known.map((k) => (
-            <option key={k.account} value={k.account}>
-              {k.sailor}
-            </option>
-          ))}
-        </datalist>
-        <input
-          type="number"
-          name="machines-cap"
-          min={0}
-          max={MAX_CAP}
-          step={1}
-          aria-label="Machine sailors allowed"
-          value={cap}
-          onInput={(e) => setCap(e.currentTarget.value)}
-        />
-        <button type="submit" name="set-machines" disabled={account.trim() === '' || !capOK}>
-          Allow
-        </button>
-      </form>
     </section>
   );
 }

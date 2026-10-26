@@ -155,6 +155,9 @@ const (
 	wokeSuperseded = "superseded"
 	wokeCut        = "cut"
 	wokeShutdown   = "shutdown"
+	// wokeEnded: the game's operator stopped the machine sailor, or
+	// revoked its grants, or it was deleted.
+	wokeEnded = "ended"
 )
 
 // look is the hub's look at the helm's boat in f: its wind's readout, its
