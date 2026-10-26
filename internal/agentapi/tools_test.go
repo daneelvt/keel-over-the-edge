@@ -290,3 +290,20 @@ func TestAHelmIsSmall(t *testing.T) {
 	}
 	t.Logf("a helm: %d bytes, its ring full", size)
 }
+
+func TestCollisionCourse(t *testing.T) {
+	deg := func(d float64) float64 { return d * 3.141592653589793 / 180 }
+	for _, c := range []struct {
+		b0, r0, b1, r1, dt float64
+		want               bool
+	}{
+		{deg(45), 200, deg(45), 150, 5, true},  // steady, closing at 10 m/s: here in 15 s
+		{deg(45), 200, deg(45), 198, 5, false}, // steady, closing slowly: not within a minute
+		{deg(45), 200, deg(60), 150, 5, false}, // drifting: passes wide
+		{deg(45), 200, deg(45), 210, 5, false}, // opening
+	} {
+		if got := collision(c.b0, c.r0, c.b1, c.r1, c.dt); got != c.want {
+			t.Errorf("%+v: %v", c, got)
+		}
+	}
+}

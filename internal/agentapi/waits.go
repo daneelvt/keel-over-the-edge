@@ -276,10 +276,10 @@ func (h *helm) watch(s *Sea, f *bus.Frame, sl int32, w *waiter, sight bool) stri
 }
 
 // boatsWatch wakes for a boat come into sight, or one within closeBy
-// closing on a steady bearing: a collision course, as a lookout judges one
-// (COLREG Rule 7: risk "shall be deemed to exist if the compass bearing
-// of an approaching vessel does not appreciably change"); or one the
-// right-of-way overlay would show.
+// closing on a steady bearing to pass close within a minute: a collision
+// course, as a lookout judges one (COLREG Rule 7: risk "shall be deemed to
+// exist if the compass bearing of an approaching vessel does not
+// appreciably change"); or one the right-of-way overlay would show.
 func (h *helm) boatsWatch(s *Sea, f *bus.Frame, sl int32, w *waiter, now time.Time) string {
 	st := &f.State[sl]
 	seen := h.inSight(s, f, sl)
@@ -302,7 +302,8 @@ func (h *helm) boatsWatch(s *Sea, f *bus.Frame, sl int32, w *waiter, now time.Ti
 			t.oldAt, t.oldB, t.oldR = t.at, t.b, t.r
 		}
 		t.at, t.b, t.r = now, b, r
-		if r < closeBy && now.Sub(t.oldAt) >= driftWindow/2 && r < t.oldR-1 && math.Abs(wrap(b-t.oldB)) < steadyDrift {
+		if dt := now.Sub(t.oldAt).Seconds(); r < closeBy && dt >= driftWindow.Seconds()/2 && r < t.oldR-1 && math.Abs(wrap(b-t.oldB)) < steadyDrift &&
+			collision(t.oldB, t.oldR, b, r, dt) {
 			return wakeBoat
 		}
 	}
@@ -311,6 +312,34 @@ func (h *helm) boatsWatch(s *Sea, f *bus.Frame, sl int32, w *waiter, now time.Ti
 		return wakeBoat
 	}
 	return ""
+}
+
+// The collision course a lookout judges, from a boat's bearing and range
+// some seconds apart: it will pass within passWithin of the boat within
+// passBefore.
+const (
+	passWithin = 25.0
+	passBefore = 60.0
+)
+
+// collision reports whether a boat seen at bearing b0 and range r0, then
+// dt s later at b1 and r1, holds on to pass within passWithin before
+// passBefore, by its motion over them.
+func collision(b0, r0, b1, r1, dt float64) bool {
+	s0, c0 := physics.SinCos(b0)
+	s1, c1 := physics.SinCos(b1)
+	x, y := r1*s1, r1*c1
+	vx, vy := (x-r0*s0)/dt, (y-r0*c0)/dt
+	v2 := vx*vx + vy*vy
+	if v2 < 0.01 {
+		return false
+	}
+	t := -(x*vx + y*vy) / v2
+	if t <= 0 || t > passBefore {
+		return false
+	}
+	px, py := x+vx*t, y+vy*t
+	return px*px+py*py < passWithin*passWithin
 }
 
 // landAheadOf reports land or shoal water ahead within landAhead seconds
