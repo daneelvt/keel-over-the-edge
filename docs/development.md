@@ -3564,7 +3564,7 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | `POST /signin/begin`, `/signin/finish` | A sign-in with any of the game's passkeys the browser holds (`?mediation=conditional` on both for autofill): 200 `{"name", "look", "accepted", "recovered"?}` and a new session's cookie; 404 `unknown-passkey` with `unknown` for a passkey no account has |
 | `POST /recovery` | `{"code"}`: 200 `{"name", "look", "addPasskey": true}` and a session held to adding a passkey; 422 `code` |
 | `POST /logout` | This session ends: 204, the cookie cleared |
-| `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?}`, or 401; a session held to adding a passkey is answered too |
+| `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?, "machines"?}` (how many machine sailors it has), or 401; a session held to adding a passkey is answered too |
 | `GET /api/account` | The account page: `{"name", "look", "created", "recoveryMade", "passkeys", "confirmedUntil"}`, each passkey `{"id", "madeOn", "created", "lastUsed", "synced"}` |
 | `POST /api/account/passkeys/begin`, `…/finish` | One more passkey; after the recovery code, the session let go and `recoveryCode` in the answer |
 | `POST /api/account/confirm/begin`, `…/finish` | One of the account's own passkeys, user verification required: 200 `{"confirmedUntil"}`, the session confirmed for 5 minutes |
@@ -3739,6 +3739,150 @@ The client checks a name's length only, counting as the server does
 is the server's count of a table of names, written by
 `go test ./internal/moderation -run LengthTable -args -update`, and the
 client's tests read it.
+
+### AI apps and machine sailors
+
+A player's AI app sails a **machine sailor**: an AI account
+(`kind = 'ai'`) the player's account owns, with a sailor of its own whose
+look is `machine` and three choices from the catalog's `machine` sets
+(`shared/catalog/sailors.yaml`: a version, a metal finish, a main colour).
+A machine sailor has no passkey, session or recovery code. An account may
+have `machine_cap` of them (one unless the owner raises it, from the world
+page); its name follows every sailor's rules, in the one namespace. Each
+sailor brings a boat to the account's **fleet** (`boat`: a Jolly boat for
+each sailor, never removed but with the account); every sailor still takes
+the catalog's first boat as it joins. Deleting a machine sailor needs a
+passkey confirmed and its name typed again, as deleting the account does;
+deleting the account deletes its machine sailors first. In this release a
+machine sailor never goes to sea.
+
+**The addresses.** The game is the apps' OAuth authorization server, its
+issuer the play origin (`https://play.keelovertheedge.com`); the MCP
+address is `KEEL_AGENTS_URL` (`https://agents.keelovertheedge.com/mcp` in
+production), served by the agents' listener. Outside production the MCP
+address is the play origin's host on `/mcp`: the local cluster's routes and
+Vite's proxy send `/mcp` and `/.well-known/oauth-protected-resource` to the
+agents' listener (`https://<name>.local/mcp`, `https://<name>.local:5173/mcp`
+with `tools/dev`, `http://localhost:5181/mcp` in the browser tests).
+
+**The flow**, as MCP's authorization (revision 2026-07-28) has it:
+
+1. The app's call to the MCP address is answered 401, naming the
+   resource's metadata (RFC 9728) at
+   `/.well-known/oauth-protected-resource/mcp` (and the same at the root),
+   which names the authorization server.
+2. The app reads `/.well-known/oauth-authorization-server` (RFC 8414):
+   PKCE with S256, public clients (`none`) only, client ID metadata
+   documents supported, the issuer in every authorization response
+   (RFC 9207), one scope, `sail`. No OpenID Connect, no `offline_access`:
+   refresh tokens are always issued.
+3. The app names itself by a **client ID that is an https URL**, whose
+   document the game fetches at `GET /oauth/authorize` (the client ID
+   metadata document draft, -02), or by one it was issued at **`POST
+   /oauth/register`** (RFC 7591; any secret asked for is answered `none`;
+   120 registrations an hour in all, no per-address limit, since hosted
+   apps register from their makers' servers; one unused for 30 days with no
+   grant left is deleted).
+4. `GET /oauth/authorize` checks the client, its redirect URI (https
+   exactly; a loopback `http://127.0.0.1`, `[::1]` or `localhost` on any
+   port, its path and query exactly), PKCE and the `resource` (absent, the
+   MCP address, or it with one trailing slash). What fails before the
+   redirect is trusted is said on a page and never redirected; what fails
+   after returns to the app with `error`, `state` and `iss`. A good request
+   is an `oauth_request` row for 10 minutes under the cookie
+   `__Host-keel-authorize` (`SameSite=Strict`), answered with the approval
+   page.
+5. **The approval page** (`client/approve/`, `approve.html` in the build,
+   its own Content Security Policy) shows the redirect's host first, or "an
+   app on this computer", the app's name as vouched for by its client ID's
+   host or as it calls itself, and asks for the player's passkey: the
+   browser's prompt, user verification required (`POST
+   /oauth/approve/begin`, `…/finish`, the ceremony kind `approve`). No game
+   session is made or read: an app's sign-in window may be shared. The
+   passkey confirms the request for its account for 5 minutes; then `POST
+   /oauth/approve` (`{"machine"}` or `{"make"}`, which makes one) or `POST
+   /oauth/deny` gives the page the redirect back to the app. The same app
+   approved again for a machine sailor replaces its older approval; at most
+   10 apps a machine sailor.
+6. `POST /oauth/token` exchanges the code (60 s, once; used twice, its
+   grant ends) for an access token (an hour, or less if the grant ends
+   sooner) and a refresh token. A refresh rotates both; the refresh token
+   just replaced is accepted once more within 30 s, ending the pair issued
+   in between, and any other reuse ends the grant. `POST /oauth/revoke`
+   (RFC 7009): a refresh token ends its grant, an access token itself.
+   These three routes answer any origin (CORS without credentials) and
+   pass the game's cross-origin protection: they read no cookie.
+
+**Tokens** are `keelote_<kind>_`, 43 base62 characters of 256 random bits
+and 6 of their CRC-32 (`at` access, `rt` refresh, `ct` connection): a
+secret scanner finds them, and the door refuses a mistyped one before any
+lookup. The database keeps the SHA-256 of the whole string. Every token,
+session and ceremony handle is drawn again on a clash, three times, each
+clash logged as an error (`auth.Issue`).
+
+**A grant** (`ai_grant`) is one approval, or one **connection token**: a
+machine sailor's, made on the account page after a passkey and shown once,
+for programs that take a header and run no OAuth; one at a time, a new one
+ending the old. Every grant ends at its making plus **the grant lifetime**
+(`setting.grant_lifetime`, 90 days, from a minute to 400 days), reckoned at
+each use from the lifetime as it is now, so shortening it on the world page
+ends older grants at once. The account page lists each machine sailor's
+apps and token with when each ends, and revokes them.
+
+**The door at the MCP address** (`internal/agentapi`) checks, in order: a
+preflight answered; the Host the MCP address's own (DNS rebinding; the MCP
+SDK's own check is off, since it refuses every proxied local request); an
+`Origin`, if sent, https or this computer's; the bearer token's shape, then
+the token found (cached 30 s, forgotten at once by every revocation,
+deletion and lifetime change), its grant unrevoked and within the
+lifetime. A refusal is a 401 with `error="invalid_token"` and words for the
+player in `error_description` (RFC 6750), and the same words as its body.
+What it accepts reaches the official Go SDK (`github.com/modelcontextprotocol/go-sdk`),
+stateless, whose bearer middleware hands the machine sailor to the tools.
+There is one tool, `handbook`, which names the machine sailor and its
+player. A grant's last use is written at most once an hour, off the
+request.
+
+**Fetching a client's document** (`internal/oauth/fetch.go`) is guarded:
+the dialer refuses every special-use address by the address it connects to
+(`code.dny.dev/ssrf`, port 443 alone), so a name re-pointed at a private
+address is stopped too; no proxy; no redirect followed; 200 only; 5 KB; 3 s
+in all; one fetch per client ID at a time and 30 a minute in all. A
+document is kept by its `Cache-Control`, at least 5 minutes and at most a
+day; an error never. The loopback exception the tests need is a test
+option only (`FetcherOptions.Loopback`): no setting turns it on. In the
+cluster, keel may reach port 443 anywhere but the cluster's ranges.
+
+**The job** `oauth` (daily, 07:30 UTC) deletes requests and codes an hour
+past their expiry, access tokens a day past, the used refresh tokens of
+ended grants, grants ended 30 days ago with their tokens, and registered
+clients with no grant left unused for 30 days.
+
+**Metrics**: `keel_machine_sailors_created_total`, `…_deleted_total`,
+`keel_oauth_authorize_total`, `keel_oauth_tokens_total`,
+`keel_oauth_refresh_reuse_total`, `keel_oauth_registrations_total`,
+`keel_oauth_client_fetches_total` and `keel_oauth_client_fetch_seconds`,
+`keel_mcp_door_total` and `keel_mcp_door_seconds`, `keel_grants_live`.
+
+**Tests.** `internal/agentapi`'s tests sign in with the official Go SDK's
+own client, by a metadata document served over TLS on loopback and by
+registration, approved by `internal/auth/softkey`, and call `handbook`;
+they test each rule of the routes above against the test database.
+`internal/oauth`'s test the token shapes, the redirects, the client IDs and
+documents, and the fetch against every special-use range through a fake
+DNS server. The load bot's `-apps 200 -refreshes 1000` times approvals,
+refreshes and the MCP address against a running keel; `tools/online`
+makes a machine sailor and a connection token, calls `handbook`, and
+deletes them.
+
+| Route | What |
+|-------|------|
+| `GET /api/machines` | The account's machine sailors: `{"mcp", "cap", "machines", "fleet", "looks", "confirmedUntil"}`, each `{"id", "name", "look", "atSea", "apps", "token"}` |
+| `POST /api/machines` | `{"name", "version", "finish", "colour"}`: 201, the list; 409 `cap`; 422 a name's reason; 400 `look` |
+| `POST /api/machines/delete` | `{"machine", "name"}`, confirmed: 200, the list |
+| `POST /api/machines/revoke` | `{"grant"}`: 200, the list |
+| `POST /api/machines/token`, `…/token/revoke` | `{"machine"}`: a connection token, confirmed, 201 `{"token", "ends"}` shown once; or it revoked |
+| `GET /oauth/request` | The approval page's request, by its cookie: the app, where it returns, and once the passkey is in, the account's machine sailors |
 
 ### The game connection
 
@@ -4418,6 +4562,36 @@ removes what a release no longer holds, with two exceptions it never
 removes: the database and the namespace it is in (an annotation on each).
 Deleting one of Flux's `Kustomization` objects deletes nothing it applied
 (`deletionPolicy: Orphan`). Removing the database takes a person.
+
+### Connecting an AI on the local cluster
+
+The MCP address here is `https://<name>.local/mcp`, on the play host. The
+apps that run on the Mac can sign in to it; those that run in their makers'
+clouds (claude.ai, ChatGPT, the Gemini app) cannot reach a `.local` name,
+and are tried in production. Each app must trust the local root that
+signs the cluster's certificate (`go tool mkcert -CAROOT`):
+
+```sh
+# Claude Code (Node): trust the local root, add the address, then /mcp in Claude Code to sign in
+NODE_EXTRA_CA_CERTS="$(go tool mkcert -CAROOT)/rootCA.pem" claude
+claude mcp add --transport http keel-local https://macbook.local/mcp
+
+# The MCP Inspector, in the browser (Chrome trusts the root through the keychain)
+NODE_EXTRA_CA_CERTS="$(go tool mkcert -CAROOT)/rootCA.pem" npx @modelcontextprotocol/inspector
+```
+
+The approval page opens in the Mac's browser, at the cluster's name, and
+asks for a passkey made there: make the sailor in that browser first. To
+see an approval end, set the grant lifetime to a minute on the world page:
+the app's next call is refused, with the words in its `WWW-Authenticate`.
+A connection token from the account page works with anything that sends a
+header:
+
+```sh
+curl -s https://macbook.local/mcp -H "Authorization: Bearer keelote_ct_…" -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' -H 'Mcp-Protocol-Version: 2025-06-18' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"handbook","arguments":{}}}'
+```
 
 ### A release on the local cluster
 

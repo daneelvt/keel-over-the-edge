@@ -53,7 +53,6 @@ func EndedWords(connection bool, why string, at time.Time, zone *time.Location) 
 const (
 	wordsExpired   = "The access token has expired: refresh it, or approve the app again."
 	wordsInvalid   = "This is not a token of Keel Over the Edge, or it is no longer known. Approve the app again, or make a new connection token on the account page."
-	wordsMachine   = "The machine sailor this token sailed as was deleted."
 	wordsCode      = "The code is unknown, used already or expired. Approve the app again."
 	wordsCodeTwice = "The code was used twice, so its approval was ended. Approve the app again."
 	wordsClient    = "The token was issued to another app."

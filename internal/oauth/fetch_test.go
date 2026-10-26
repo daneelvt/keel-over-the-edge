@@ -153,7 +153,7 @@ func TestFetch(t *testing.T) {
 			_, _ = w.Write([]byte("{}"))
 		case "/ok":
 			if r.Header.Get("Accept") != "application/json" {
-				http.Error(w, "accept", 406)
+				http.Error(w, "accept", http.StatusNotAcceptable)
 				return
 			}
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
