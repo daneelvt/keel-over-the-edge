@@ -553,7 +553,7 @@ func (q *Queries) TakeRequest(ctx context.Context, handleHash []byte) (TakeReque
 }
 
 const tokenByHash = `-- name: TokenByHash :one
-SELECT t.kind, t.grant_id, coalesce(t.expires_at, 'infinity')::timestamptz AS expires_at,
+SELECT t.kind, t.grant_id, coalesce(t.expires_at, 'epoch')::timestamptz AS expires_at,
   g.kind AS grant_kind, g.approved_at, coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at,
   coalesce(g.revoked_why, '')::text AS revoked_why, coalesce(g.client_name, '')::text AS client_name,
   g.account_id, sl.name, coalesce(osl.name, '')::text AS owner_name

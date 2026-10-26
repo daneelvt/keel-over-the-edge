@@ -498,7 +498,7 @@ func (s *Store) TokenGrant(ctx context.Context, hash [32]byte) (TokenGrant, erro
 		Kind: r.Kind, Grant: r.GrantID.Bytes, GrantKind: r.GrantKind, Approved: r.ApprovedAt, RevokedWhy: r.RevokedWhy,
 		ClientName: r.ClientName, Account: r.AccountID.Bytes, Name: r.Name, OwnerName: r.OwnerName,
 	}
-	if r.Kind == TokenAccess {
+	if r.ExpiresAt.After(time.Unix(0, 0)) {
 		t.Expires = r.ExpiresAt
 	}
 	if r.RevokedAt.After(time.Unix(0, 0)) {
@@ -615,7 +615,7 @@ func (s *Store) RevokeOwnedGrant(ctx context.Context, owner AccountID, grant [16
 func (s *Store) MakeConnection(ctx context.Context, owner, machine AccountID, hash [32]byte) (grant [16]byte, replaced [][16]byte, err error) {
 	err = s.inTx(ctx, func(q *db.Queries) error {
 		var err error
-		if replaced, err = revokeConnections(ctx, q, owner, machine); err != nil {
+		if replaced, err = revokeConnections(ctx, q, owner, machine, RevokedReplaced); err != nil {
 			return err
 		}
 		g, err := q.InsertGrant(ctx, db.InsertGrantParams{AccountID: uuidOf(machine), Kind: GrantConnection, ApprovedBy: uuidOf(owner)})
@@ -631,7 +631,7 @@ func (s *Store) MakeConnection(ctx context.Context, owner, machine AccountID, ha
 	return grant, replaced, err
 }
 
-func revokeConnections(ctx context.Context, q *db.Queries, owner, machine AccountID) ([][16]byte, error) {
+func revokeConnections(ctx context.Context, q *db.Queries, owner, machine AccountID, why string) ([][16]byte, error) {
 	if _, err := q.MachineOf(ctx, db.MachineOfParams{ID: uuidOf(machine), OwnerID: uuidOf(owner)}); errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoMachine
 	} else if err != nil {
@@ -643,7 +643,7 @@ func revokeConnections(ctx context.Context, q *db.Queries, owner, machine Accoun
 	}
 	var out [][16]byte
 	for _, g := range live {
-		if _, err := q.RevokeGrant(ctx, db.RevokeGrantParams{Why: text(RevokedReplaced), ID: g.ID}); err != nil {
+		if _, err := q.RevokeGrant(ctx, db.RevokeGrantParams{Why: text(why), ID: g.ID}); err != nil {
 			return nil, err
 		}
 		out = append(out, g.ID.Bytes)
@@ -657,7 +657,7 @@ func (s *Store) RevokeConnection(ctx context.Context, owner, machine AccountID) 
 	var out [][16]byte
 	err := s.inTx(ctx, func(q *db.Queries) error {
 		var err error
-		out, err = revokeConnections(ctx, q, owner, machine)
+		out, err = revokeConnections(ctx, q, owner, machine, RevokedOwner)
 		return err
 	})
 	return out, err

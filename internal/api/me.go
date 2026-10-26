@@ -13,8 +13,8 @@ import (
 )
 
 // me is the player's own account, what the page asks first: whether to go
-// to sea, to the start screen, or, after the recovery code, to adding a
-// passkey; and the kinds of notice its sailor has switched off, which
+// to sea, to the start screen (with its machine sailors, when it has
+// any), or, after the recovery code, to adding a passkey; and the kinds of notice its sailor has switched off, which
 // follow the account from device to device.
 type me struct {
 	Name       string   `json:"name"`
@@ -23,6 +23,9 @@ type me struct {
 	NoticesOff []string `json:"noticesOff"`
 	// AddPasskey is a session held to adding a passkey.
 	AddPasskey bool `json:"addPasskey,omitempty"`
+	// Machines is how many machine sailors the account has: a player with
+	// any is shown them on the start screen before going to sea.
+	Machines int `json:"machines,omitempty"`
 }
 
 // me answers GET /api/me, behind auth.Signed: a session held to adding a
@@ -31,6 +34,14 @@ func (a *api) me(w http.ResponseWriter, r *http.Request) {
 	cur, _ := auth.SessionFromContext(r.Context())
 	m := meOf(cur.Account)
 	m.AddPasskey = cur.Held
+	if a.cfg.Machines != nil && cur.Kind == store.Human && !cur.Held {
+		list, err := a.cfg.Machines.Machines(r.Context(), cur.ID)
+		if err != nil {
+			a.unavailable(w, r, "listing machine sailors", err)
+			return
+		}
+		m.Machines = len(list)
+	}
 	writeJSON(w, http.StatusOK, m)
 }
 

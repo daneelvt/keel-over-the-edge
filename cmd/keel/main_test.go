@@ -986,10 +986,18 @@ func TestPublicListeners(t *testing.T) {
 				t.Errorf("the internal listener answers %s with %d", path, code)
 			}
 		}
-		for _, path := range []string{"/", "/mcp", "/api/version", "/sse"} {
+		for _, path := range []string{"/", "/api/version", "/sse", "/mcp/x", "/oauth/token"} {
 			if code, _, _ := get(t, s.client, agentsURL+path); code != 404 {
 				t.Errorf("agents %s answered %d", path, code)
 			}
+		}
+		// The MCP address answers, behind its door: here, asked by another
+		// host than the address's own, the play origin's, it refuses.
+		if code, _, _ := get(t, s.client, agentsURL+"/mcp"); code != 403 {
+			t.Errorf("agents /mcp answered %d", code)
+		}
+		if code, body, _ := get(t, s.client, agentsURL+"/.well-known/oauth-protected-resource/mcp"); code != 200 || !strings.Contains(body, `"resource"`) {
+			t.Errorf("the resource's metadata: %d %s", code, body)
 		}
 		s.stop(t)
 	})

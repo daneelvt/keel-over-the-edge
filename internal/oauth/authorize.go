@@ -363,7 +363,8 @@ func (s *Server) finishApprove(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		s.unavailable(w, r, "taking a ceremony", err)
 		return
-	case !s.cfg.Now().Before(cer.Expires):
+	case !time.Now().Before(cer.Expires):
+		// The ceremony's expiry is WebAuthn's, on the real clock.
 		counted("expired")
 		writeError(w, http.StatusConflict, "again")
 		return
