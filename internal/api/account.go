@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -524,17 +525,10 @@ func (a *api) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	machines, err := a.cfg.Accounts.DeleteAccount(r.Context(), cur.ID)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
+	if err := a.cfg.Deletions.DeleteByPlayer(r.Context(), cur.ID); err != nil && !errors.Is(err, accounts.ErrNotFound) {
 		a.unavailable(w, r, "deleting an account", err)
 		return
 	}
-	a.cfg.Sessions.ForgetAccount(cur.ID)
-	a.machinesDeleted(machines...)
-	if a.cfg.Deleted != nil {
-		a.cfg.Deleted(cur.ID)
-	}
-	a.cfg.Metrics.AccountsDeleted.Inc()
 	a.cfg.Log.Info("an account deleted", "request_id", obs.RequestID(r.Context()), "account", cur.ID.String())
 	unknown := make([]protocol.SignalUnknownCredential, len(h.Passkeys))
 	for i, k := range h.Passkeys {

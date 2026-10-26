@@ -31,6 +31,8 @@ type Machine struct {
 	Name                    string
 	Version, Finish, Colour string
 	Created                 time.Time
+	// Stopped is when the operator stopped it on its own; zero if not.
+	Stopped time.Time
 }
 
 // ErrCap is a machine sailor refused: its owner has as many as it may.
@@ -112,7 +114,8 @@ func (s *Store) Machines(ctx context.Context, owner AccountID) ([]Machine, error
 	}
 	out := make([]Machine, len(rows))
 	for i, r := range rows {
-		out[i] = Machine{ID: r.ID.Bytes, Name: r.Name, Version: r.Version, Finish: r.Finish, Colour: r.Colour, Created: r.CreatedAt}
+		out[i] = Machine{ID: r.ID.Bytes, Name: r.Name, Version: r.Version, Finish: r.Finish, Colour: r.Colour, Created: r.CreatedAt,
+			Stopped: notEpoch(r.StoppedAt)}
 	}
 	return out, nil
 }
@@ -161,19 +164,23 @@ func (s *Store) Fleet(ctx context.Context, owner AccountID) (map[string]int, err
 // place under no name, and its boat stays in the fleet. ErrNotFound if the
 // account has no such machine sailor.
 func (s *Store) DeleteMachine(ctx context.Context, owner, id AccountID) error {
-	return s.inTx(ctx, func(q *db.Queries) error {
-		if err := q.ForgetCredits(ctx, uuidOf(id)); err != nil {
-			return err
-		}
-		n, err := q.DeleteMachine(ctx, db.DeleteMachineParams{ID: uuidOf(id), OwnerID: uuidOf(owner)})
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			return ErrNotFound
-		}
-		return nil
-	})
+	return s.inTx(ctx, func(q *db.Queries) error { return deleteMachine(ctx, q, owner, id) })
+}
+
+// deleteMachine deletes one of a human account's machine sailors within a
+// transaction, its credits kept under no name.
+func deleteMachine(ctx context.Context, q *db.Queries, owner, id AccountID) error {
+	if err := q.ForgetCredits(ctx, uuidOf(id)); err != nil {
+		return err
+	}
+	n, err := q.DeleteMachine(ctx, db.DeleteMachineParams{ID: uuidOf(id), OwnerID: uuidOf(owner)})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // MachineCounts is how many machine sailors there are, how many were made

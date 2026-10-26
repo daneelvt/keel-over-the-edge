@@ -29,6 +29,10 @@ type conn struct {
 	account  bus.Account
 	priority bool // a priority account's: it never waits for a boat
 	reqID    string
+	// session is its session's token hash, and opened when it was
+	// upgraded.
+	session [32]byte
+	opened  time.Time
 
 	// The boat, set by the reader once the Join is answered and before the
 	// encoder is given the connection; read by the encoder after.
@@ -145,6 +149,7 @@ func newConn(e *Edge, ws *websocket.Conn, raw net.Conn, account bus.Account, too
 		account:  account,
 		priority: priority,
 		reqID:    reqID,
+		opened:   time.Now(),
 		counted:  -1,
 		queue:    make(chan outgoing, e.lim.Queue),
 		done:     make(chan struct{}),
@@ -295,6 +300,12 @@ func (c *conn) join() bool {
 	if old := e.registry.claim(c); old != nil {
 		old.stop()
 		old.close(CloseReplaced, "playing on another device")
+	}
+	if e.stopped(c.account) {
+		// Stopped since the upgrade: the stop's Remove may have looked
+		// before this connection was its account's.
+		c.close(CloseRemoved, ReasonStopped)
+		return false
 	}
 	reply := make(chan bus.Reply, 1)
 	c.wmu.Lock()
@@ -678,6 +689,9 @@ func (c *conn) finish() {
 		e.disconnect(bus.Command{Op: bus.Disconnect, Boat: c.boat, Conn: c.id})
 	case c.queued.Load():
 		e.disconnect(bus.Command{Op: bus.Disconnect, Account: c.account, Conn: c.id})
+	}
+	if e.cfg.Seen != nil && c.session != ([32]byte{}) && time.Since(c.opened) >= e.cfg.LongAfter {
+		e.helpers.Go(func() { e.cfg.Seen(c.session) })
 	}
 	code := websocket.StatusCode(-1)
 	switch {

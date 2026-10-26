@@ -11,9 +11,11 @@
 // well it has held so far and the world's gale warnings, while it is
 // shown; a place's box and outlook at the tick shown, for a point, an
 // island or a place picked; the next world's terrain and week under next/
-// once it is made; and the controls, each a POST of JSON, among them the
-// token lifetime of AI apps' grants, an account's machine sailors and an
-// account's priority.
+// once it is made; the players' accounts, searched by name, id or token,
+// and an account's card; and the controls, each a POST of JSON, among them
+// the token lifetime of AI apps' grants, an account's machine sailors and
+// priority, and an account stopped, started again, its tokens revoked or
+// deleted.
 
 /** A boat at sea, as the page shows it. */
 export interface Boat {
@@ -194,14 +196,16 @@ export interface Charted {
 
 /**
  * accounts.json: the players' accounts, those made in the last week, and
- * those seen in the last day; and, while sign-in for AI apps runs, the
- * machine sailors, those made in the last week, the grants live by kind,
- * and the token lifetime, s.
+ * those seen in the last day; the accounts stopped, of humans and of
+ * machine sailors; and, while sign-in for AI apps runs, the machine
+ * sailors, those made in the last week, the grants live by kind, and the
+ * token lifetime, s.
  */
 export interface AccountsData {
   total: number;
   week: number;
   today: number;
+  stopped?: { human: number; ai: number };
   machines?: {
     total: number;
     week: number;
@@ -842,6 +846,133 @@ export interface PlaceWeather {
 /** What a place's weather is asked of: a point, an island or a place, by number. */
 export type PlaceOf = { island: number } | { place: number } | null;
 
+/** How the accounts found are ordered: by last active, oldest or newest first; the newest made first; or by the machine sailors' latest call. */
+export type Sort = 'active-old' | 'active-new' | 'made' | 'machines';
+
+/** What a row of the accounts found shares with its machine sailors'. Times are ms, 0 for never. */
+interface Found {
+  id: string;
+  name: string;
+  made: number;
+  /** In words: "today", "41 days ago", "never", "at sea now". */
+  lastActive: string;
+  lastActiveAt: number;
+  atSea: boolean;
+  queued: boolean;
+  priority: boolean;
+  stopped: boolean;
+  /** One the search itself hit. */
+  matched: boolean;
+}
+
+/** A machine sailor under its human, stopped when it or its human is. */
+export type MachineRow = Found;
+
+/** A human's account found, with its machine sailors. */
+export interface AccountRow extends Found {
+  tools: boolean;
+  machines: MachineRow[];
+}
+
+/** accounts/search: a page of the humans' accounts found, and words about what the text was taken for. */
+export interface SearchAnswer {
+  found: 'all' | 'name' | 'id' | 'token' | 'session';
+  note: string;
+  total: number;
+  page: number;
+  pages: number;
+  sort: Sort;
+  accounts: AccountRow[];
+}
+
+/** A passkey of a human's account. */
+export interface CardPasskey {
+  madeOn: string;
+  made: number;
+  lastUsed: number;
+  synced: boolean;
+  cloneWarning: boolean;
+}
+
+/** An AI app approved for a machine sailor, and how its grant ended if it has. */
+export interface CardApp {
+  id: string;
+  name: string;
+  returnHost: string;
+  loopback: boolean;
+  approved: number;
+  lastUsed: number;
+  ends: number;
+  ended: boolean;
+  endedHow?: string;
+}
+
+/** A machine sailor's connection token. */
+export interface CardToken {
+  id: string;
+  made: number;
+  lastUsed: number;
+  ends: number;
+  ended: boolean;
+}
+
+/** What was done to an account, by the page or by keel's admin command, and from where. */
+export interface AccountAction {
+  at: number;
+  action: string;
+  account: string;
+  kind: string;
+  name: string;
+  detail: string;
+  source: string;
+  from: string;
+}
+
+/**
+ * account.json: an account's card. Times are ms, 0 for never. A human's has
+ * its passkeys, sessions, fleet, cap and machine sailors' cards; a machine
+ * sailor's its human, its look in words, its apps and its connection
+ * token; the card asked for has the record of what was done to it.
+ */
+export interface AccountCard {
+  id: string;
+  kind: 'human' | 'ai';
+  name: string;
+  look: string;
+  made: number;
+  lastActive: string;
+  lastActiveAt: number;
+  tools: boolean;
+  priority: boolean;
+  /** byOwner: a machine sailor stopped only because its human is. */
+  stopped: { at: number; reason: string; byOwner: boolean } | null;
+  sea: { boat: number; east: number; north: number; connected: boolean; grace: number } | null;
+  queue: { position: number } | null;
+  passkeys?: CardPasskey[];
+  recoveryMade?: number;
+  sessions?: { count: number; latest: number };
+  fleet?: Record<string, number>;
+  cap?: number;
+  machines?: AccountCard[];
+  owner?: { id: string; name: string };
+  lookWords?: string;
+  apps?: CardApp[];
+  token?: CardToken | null;
+  /** One of the owner's own: flagged, or a flagged human's machine sailor. */
+  own: boolean;
+  actions?: AccountAction[];
+}
+
+/** What an action on an account would do, with check, or did: the words the confirmation shows. */
+export interface ActionAnswer {
+  account: string;
+  action: string;
+  done: boolean;
+  words: string;
+  own: boolean;
+  effects: { machines: number; sessions: number; grants: number; boats: number };
+}
+
 /** The gusts' grid: GUST_SIDE a side over the square of the land's chart, a signed byte a point. */
 export const GUST_STEP = 0.1;
 export const NO_GUST = -128;
@@ -963,14 +1094,39 @@ export type Control =
   | 'chart'
   | 'lifetime'
   | 'machines'
-  | 'priority';
+  | 'priority'
+  | 'accounts/stop'
+  | 'accounts/start'
+  | 'accounts/revoke'
+  | 'accounts/delete';
 
 /** Works a control: a POST of JSON, done on any 2xx (202 for one under way). */
-export async function control(path: Control, body: unknown): Promise<Answer> {
+export async function control(path: Control | 'accounts/search', body: unknown): Promise<Answer> {
   const res = await fetch(BASE + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   return { ok: res.ok, status: res.status, text: (await res.text()).trim() };
+}
+
+/**
+ * Searches the accounts: the text, which may be a token, goes in the body
+ * alone, never in an address.
+ */
+export async function searchAccounts(
+  text: string,
+  sort: Sort,
+  page: number,
+): Promise<SearchAnswer> {
+  const a = await control('accounts/search', { text, sort, page });
+  if (!a.ok) {
+    throw new Error(`${a.status}: ${a.text}`);
+  }
+  return JSON.parse(a.text) as SearchAnswer;
+}
+
+/** An account's card, by its id. */
+export function getAccount(id: string): Promise<AccountCard> {
+  return getJSON<AccountCard>(`account.json?id=${encodeURIComponent(id)}`);
 }

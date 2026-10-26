@@ -157,6 +157,9 @@ type Holder struct {
 	Account
 	UserHandle []byte
 	Passkeys   []Passkey
+	// Stopped: the operator has stopped the account. A sign-in finds it
+	// all the same, so that its passkey is checked, and then refuses it.
+	Stopped bool
 }
 
 // AccountByUserHandle finds the account a passkey's user handle names,
@@ -175,7 +178,7 @@ func (s *Store) AccountByUserHandle(ctx context.Context, handle []byte) (Holder,
 	}
 	return Holder{
 		Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: row.Look, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
-		UserHandle: row.UserHandle, Passkeys: keys,
+		UserHandle: row.UserHandle, Passkeys: keys, Stopped: row.Stopped,
 	}, nil
 }
 
@@ -229,12 +232,18 @@ func (s *Store) SetRecoveryCode(ctx context.Context, id AccountID, hash [32]byte
 // Recover spends the recovery code whose hash is code: every session of
 // its account ends, and a new one, whose token hashes to token, is made
 // held to adding a passkey. It returns the account, or ErrNotFound when no
-// account has the code.
+// account has the code, or ErrStopped, the code left unspent, when its
+// account is stopped.
 func (s *Store) Recover(ctx context.Context, code, token [32]byte) (Account, error) {
 	var id AccountID
 	err := s.inTx(ctx, func(q *db.Queries) error {
 		u, err := q.SpendRecoveryCode(ctx, code[:])
 		if errors.Is(err, pgx.ErrNoRows) {
+			if stopped, err := q.RecoveryCodeStopped(ctx, code[:]); err != nil {
+				return err
+			} else if stopped {
+				return ErrStopped
+			}
 			return ErrNotFound
 		}
 		if err != nil {
@@ -257,11 +266,14 @@ func (s *Store) Recover(ctx context.Context, code, token [32]byte) (Account, err
 }
 
 // SignIn makes a session for an account signed in, whose token hashes to
-// token, and takes the notice of a recovery code used since the last
-// sign-in: when it was used, or zero.
+// token, records the account active now, and takes the notice of a
+// recovery code used since the last sign-in: when it was used, or zero.
 func (s *Store) SignIn(ctx context.Context, id AccountID, token [32]byte) (recovered time.Time, err error) {
 	err = s.inTx(ctx, func(q *db.Queries) error {
 		if err := q.CreateSession(ctx, db.CreateSessionParams{AccountID: uuidOf(id), TokenHash: token[:]}); err != nil {
+			return err
+		}
+		if err := q.AccountSeen(ctx, uuidOf(id)); err != nil {
 			return err
 		}
 		at, err := q.TakeRecoveryNotice(ctx, uuidOf(id))
@@ -294,31 +306,44 @@ func (s *Store) DeleteAccount(ctx context.Context, id AccountID) ([]AccountID, e
 		if err != nil {
 			return err
 		}
+		machines = machines[:0]
 		for _, m := range ids {
-			if err := q.ForgetCredits(ctx, m); err != nil {
-				return err
-			}
 			machines = append(machines, m.Bytes)
 		}
-		if _, err := q.DeleteMachinesOf(ctx, uuidOf(id)); err != nil {
-			return err
-		}
-		if err := q.ForgetCredits(ctx, uuidOf(id)); err != nil {
-			return err
-		}
-		n, err := q.DeleteAccount(ctx, uuidOf(id))
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			return ErrNotFound
-		}
-		return nil
+		return deleteHuman(ctx, q, id)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return machines, nil
+}
+
+// deleteHuman deletes a human account within a transaction: its machine
+// sailors first, then the account, their credits kept under no name.
+func deleteHuman(ctx context.Context, q *db.Queries, id AccountID) error {
+	ids, err := q.MachineIDsOf(ctx, uuidOf(id))
+	if err != nil {
+		return err
+	}
+	for _, m := range ids {
+		if err := q.ForgetCredits(ctx, m); err != nil {
+			return err
+		}
+	}
+	if _, err := q.DeleteMachinesOf(ctx, uuidOf(id)); err != nil {
+		return err
+	}
+	if err := q.ForgetCredits(ctx, uuidOf(id)); err != nil {
+		return err
+	}
+	n, err := q.DeleteAccount(ctx, uuidOf(id))
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // AccountCounts is how many human accounts there are, how many were made

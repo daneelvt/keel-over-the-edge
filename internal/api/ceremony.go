@@ -36,15 +36,15 @@ type Accounts interface {
 	EndSession(ctx context.Context, hash [32]byte) error
 	EndOtherSessions(ctx context.Context, id store.AccountID, keep [32]byte) (int64, error)
 	ConfirmSession(ctx context.Context, id store.AccountID, hash [32]byte, until time.Time) error
-	DeleteAccount(ctx context.Context, id store.AccountID) ([]store.AccountID, error)
 	SaveCeremony(ctx context.Context, c store.Ceremony) error
 	TakeCeremony(ctx context.Context, hash [32]byte, kind string) (store.Ceremony, error)
 }
 
 // The ceremonies' results, as keel_ceremonies_total labels them: begun;
 // finished; refused, the browser's answer not accepted; expired, its five
-// minutes up; again, its state gone, used or written by another build.
-var ceremonyResults = []string{"begun", "finished", "refused", "expired", "again"}
+// minutes up; again, its state gone, used or written by another build;
+// stopped, its passkey good but its account stopped.
+var ceremonyResults = []string{"begun", "finished", "refused", "expired", "again", "stopped"}
 
 var ceremonyKinds = []string{store.CeremonyCreate, store.CeremonySignIn, store.CeremonyAdd, store.CeremonyConfirm, store.CeremonyApprove}
 

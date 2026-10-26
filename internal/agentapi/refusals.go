@@ -34,11 +34,14 @@ const (
 	refusedNoWorld    refusalKind = "no_world"    // keel is between worlds
 	refusedBusy       refusalKind = "busy"        // the simulation did not answer in time
 	refusedFalling    refusalKind = "falling"     // over the falls: no orders until the boat starts again
+	refusedStopped    refusalKind = "stopped"     // the machine sailor was stopped by the game's operator, or deleted
+	refusedRevoked    refusalKind = "revoked"     // its grants were revoked by the game's operator
 )
 
 // refusalKinds lists every kind, for the metrics and the tests.
 var refusalKinds = []refusalKind{refusedOrders, refusedLooks, refusedOrder, refusedArgs, refusedPlace, refusedNotAtSea, refusedQueued,
-	refusedFull, refusedSuperseded, refusedEnded, refusedRestarting, refusedNoWorld, refusedBusy, refusedFalling}
+	refusedFull, refusedSuperseded, refusedEnded, refusedRestarting, refusedNoWorld, refusedBusy, refusedFalling, refusedStopped,
+	refusedRevoked}
 
 // refusal is a call refused: its kind and its words.
 type refusal struct {

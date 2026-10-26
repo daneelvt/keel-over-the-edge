@@ -31,6 +31,8 @@ func EndedWords(connection bool, why string, at time.Time, zone *time.Location) 
 			return "This connection token for Keel Over the Edge ended on " + day(at, zone) + ": make a new one on the account page."
 		case store.RevokedReplaced:
 			return "This connection token for Keel Over the Edge was replaced by a new one: use the new token, or make another on the account page."
+		case store.RevokedOperator:
+			return "This connection token for Keel Over the Edge was revoked by the game's operator: make a new one on the account page."
 		default:
 			return "This connection token for Keel Over the Edge was revoked on the account page: make a new one there."
 		}
@@ -44,10 +46,17 @@ func EndedWords(connection bool, why string, at time.Time, zone *time.Location) 
 		return "This approval of Keel Over the Edge was replaced: the app was approved again for this machine sailor. Use the newer approval."
 	case store.RevokedReuse:
 		return "This approval of Keel Over the Edge was ended because one of its tokens was used twice. Approve the app again, with your passkey."
+	case store.RevokedOperator:
+		return "This approval of Keel Over the Edge was revoked by the game's operator."
 	default:
 		return "This approval of Keel Over the Edge was revoked by the app. Approve the app again from your AI app, with your passkey."
 	}
 }
+
+// WordsStopped are the words for a machine sailor stopped by the game's
+// operator, or whose human is: at the MCP address, and as its waiting call
+// ends.
+const WordsStopped = "This machine sailor has been stopped by Keel Over the Edge: its tokens no longer work."
 
 // The other words.
 const (

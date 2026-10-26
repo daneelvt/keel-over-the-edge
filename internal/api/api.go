@@ -4,11 +4,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
@@ -42,10 +44,11 @@ type Config struct {
 	Sessions *auth.Cache
 	// Passkeys are the ceremonies with the browser's passkey prompt.
 	Passkeys *auth.Passkeys
-	// Deleted, if not nil, is told of an account just deleted: its boat
-	// leaves the water, its game connection closes and its credits lose its
-	// name.
-	Deleted func(id store.AccountID)
+	// Deletions deletes accounts at their players' word, as the owner's
+	// deletions do: its boat leaves the water, its game connection closes,
+	// its credits lose its name, and its machine sailors' tokens are
+	// refused at once.
+	Deletions Deletions
 	// Looks are the catalog's sailors a new sailor may choose, by id.
 	Looks []string
 	// Boat is the kind of boat each sailor brings to its account's fleet,
@@ -92,6 +95,14 @@ type Config struct {
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
 }
+
+// Deletions are the accounts' deletions: internal/accounts.
+type Deletions interface {
+	DeleteByPlayer(ctx context.Context, id store.AccountID) error
+	DeleteMachineByPlayer(ctx context.Context, owner, id store.AccountID) error
+}
+
+var _ Deletions = (*accounts.Accounts)(nil)
 
 // longLived are the routes whose connections stay open, which set deadlines
 // of their own: the game connection.

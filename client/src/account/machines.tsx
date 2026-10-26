@@ -10,7 +10,9 @@
 // revoked, a connection token made (shown once) or revoked, a machine
 // sailor deleted. A connection token hands the machine sailor out, and
 // deleting cannot be undone, so both first ask for one of the account's
-// own passkeys, as the account page's own deletions do.
+// own passkeys, as the account page's own deletions do. A machine sailor
+// the game's operator stopped says so: its apps are revoked, and it may
+// only be deleted.
 //
 // Loaded only when shown: none of it is in the game's first download.
 
@@ -34,12 +36,15 @@ import { call, confirmPasskey, type Outcome, reasonOf } from './passkeys';
 import { lengthProblem, machineReasonText } from './reasons';
 import { dayOf } from './recovery';
 
+/** A machine sailor as the account's page lists it: stopped, ms, when the game's operator stopped it on its own, 0 for not. */
+export type Machine = MachineItem & { stopped?: number };
+
 /** GET /api/machines: the account's machine sailors and what goes with them. */
 export interface MachinesPage {
   /** The MCP address AI apps connect to. */
   mcp: string;
   cap: number;
-  machines: MachineItem[];
+  machines: Machine[];
   /** The account's boats, how many of each kind, by the catalog's ids. */
   fleet: Record<string, number>;
   looks: MachineLooks;
@@ -83,6 +88,11 @@ export const makeToken = (machine: string, f?: Fetch) =>
   post<{ token: string; ends: number }>('/api/machines/token', { machine }, 201, f);
 export const revokeToken = (machine: string, f?: Fetch) =>
   post('/api/machines/token/revoke', { machine }, 200, f);
+
+/** When a machine sailor was stopped, "Stopped on 26 October"; "" for one not stopped. */
+export function stoppedOn(m: Machine, now = Date.now()): string {
+  return (m.stopped ?? 0) > 0 ? `Stopped on ${dayOf(m.stopped ?? 0, now)}` : '';
+}
 
 /** The fleet in one line: 2 Jolly boats, by the catalog's boats' names. */
 export function fleetLine(fleet: Record<string, number>): string {
@@ -225,14 +235,18 @@ function MachinesBody({
           {page.machines.map((m) => (
             <li key={m.id}>
               <MachineSummary m={m} />
-              <button
-                type="button"
-                class="start-sign-in"
-                aria-expanded={open === m.id}
-                onClick={() => setOpen(open === m.id ? '' : m.id)}
-              >
-                How to connect
-              </button>
+              {stoppedOn(m) !== '' ? (
+                <p class="start-text start-faint">{stoppedOn(m)}.</p>
+              ) : (
+                <button
+                  type="button"
+                  class="start-sign-in"
+                  aria-expanded={open === m.id}
+                  onClick={() => setOpen(open === m.id ? '' : m.id)}
+                >
+                  How to connect
+                </button>
+              )}
               {open === m.id ? <Connect mcp={page.mcp} name={m.name} /> : null}
             </li>
           ))}
@@ -464,84 +478,122 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
         <p class="account-faint">None: make one from the menu’s Machine sailors.</p>
       ) : null}
       <ul class="machine-list">
-        {page.machines.map((m) => (
-          <li key={m.id} data-machine={m.name}>
-            <MachineSummary m={m} apps={false} />
-            <AppsList
-              m={m}
-              now={now}
-              busy={busy}
-              revoke={(grant) =>
-                void run(
-                  () => revokeApp(grant),
-                  (p) => {
-                    setPage(p);
-                    setStatus('App revoked.');
-                  },
-                )
-              }
-            />
-            <span class="account-faint">
-              Connection token:{' '}
-              {m.token === null || m.token.ended === true ? (
-                'none'
-              ) : (
-                <>
-                  made on {dayOf(m.token.made, now)}, {lastUsed(m.token.lastUsed, now)},{' '}
-                  <Ends ends={m.token.ends} now={now} />
-                </>
-              )}
-            </span>
-            <div class="account-row">
+        {page.machines.map((m) =>
+          stoppedOn(m, now) !== '' ? (
+            <li key={m.id} data-machine={m.name} data-stopped="">
+              <MachineSummary m={m} apps={false} />
+              <span class="machine-soon">{stoppedOn(m, now)}.</span>
+              <RevokedApps m={m} />
               <button
                 type="button"
+                class="account-danger"
                 disabled={busy}
-                onClick={() =>
+                onClick={() => {
+                  setStatus('');
+                  setTyped('');
+                  setShown({ kind: 'delete', m });
+                }}
+              >
+                Delete this machine sailor
+              </button>
+            </li>
+          ) : (
+            <li key={m.id} data-machine={m.name}>
+              <MachineSummary m={m} apps={false} />
+              <AppsList
+                m={m}
+                now={now}
+                busy={busy}
+                revoke={(grant) =>
                   void run(
-                    () => confirmed(() => makeToken(m.id)),
-                    (t) => setShown({ kind: 'token', m, token: t.token, ends: t.ends }),
+                    () => revokeApp(grant),
+                    (p) => {
+                      setPage(p);
+                      setStatus('App revoked.');
+                    },
                   )
                 }
-              >
-                {m.token === null || m.token.ended === true ? 'Make a token' : 'Make a new token'}
-              </button>
-              {m.token !== null && m.token.ended !== true ? (
+              />
+              <span class="account-faint">
+                Connection token:{' '}
+                {m.token === null || m.token.ended === true ? (
+                  'none'
+                ) : (
+                  <>
+                    made on {dayOf(m.token.made, now)}, {lastUsed(m.token.lastUsed, now)},{' '}
+                    <Ends ends={m.token.ends} now={now} />
+                  </>
+                )}
+              </span>
+              <div class="account-row">
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() =>
                     void run(
-                      () => revokeToken(m.id),
-                      (p) => {
-                        setPage(p);
-                        setStatus('Token revoked.');
-                      },
+                      () => confirmed(() => makeToken(m.id)),
+                      (t) => setShown({ kind: 'token', m, token: t.token, ends: t.ends }),
                     )
                   }
                 >
-                  Revoke
+                  {m.token === null || m.token.ended === true ? 'Make a token' : 'Make a new token'}
                 </button>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              class="account-danger"
-              disabled={busy}
-              onClick={() => {
-                setStatus('');
-                setTyped('');
-                setShown({ kind: 'delete', m });
-              }}
-            >
-              Delete this machine sailor
-            </button>
-          </li>
-        ))}
+                {m.token !== null && m.token.ended !== true ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(
+                        () => revokeToken(m.id),
+                        (p) => {
+                          setPage(p);
+                          setStatus('Token revoked.');
+                        },
+                      )
+                    }
+                  >
+                    Revoke
+                  </button>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                class="account-danger"
+                disabled={busy}
+                onClick={() => {
+                  setStatus('');
+                  setTyped('');
+                  setShown({ kind: 'delete', m });
+                }}
+              >
+                Delete this machine sailor
+              </button>
+            </li>
+          ),
+        )}
       </ul>
       <p class="machines-status" aria-live="polite">
         {status}
       </p>
     </section>
+  );
+}
+
+/** A stopped machine sailor's apps, each revoked with it. */
+function RevokedApps({ m }: { m: MachineItem }) {
+  if (m.apps.length === 0) {
+    return null;
+  }
+  return (
+    <ul class="machine-apps">
+      {m.apps.map((a) => (
+        <li key={a.id}>
+          <span>
+            <strong>{a.name}</strong> <span class="account-faint">· revoked</span>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

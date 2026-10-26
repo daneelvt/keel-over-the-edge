@@ -52,12 +52,26 @@ const (
 	// CloseVersion: the client's protocol, catalog or physics layout
 	// differs from the server's.
 	CloseVersion websocket.StatusCode = 4002
-	// CloseRemoved: the player's account was deleted.
+	// CloseRemoved: the player's account was stopped by the game's
+	// operator, or deleted; the reason says which, and the client shows it
+	// and does not connect again.
 	CloseRemoved websocket.StatusCode = 4003
 	// CloseWorldEnded: the falls have taken the world; the next one is
 	// reached by connecting again.
 	CloseWorldEnded websocket.StatusCode = 4004
 )
+
+// The reasons a connection closed with CloseRemoved carries, which the
+// client shows its player.
+const (
+	ReasonStopped = "This sailor has been stopped."
+	ReasonDeleted = "This sailor has been deleted."
+)
+
+// SeenAfter is how long a game connection must have been open for its end
+// to be recorded as its session's and its account's last seen: one open
+// longer than this has used no other route meanwhile, perhaps.
+const SeenAfter = time.Hour
 
 // Limits are a connection's limits; zero fields take the defaults.
 type Limits struct {
@@ -187,6 +201,15 @@ type Config struct {
 	Lip        float64
 	Roam       RoamReach
 	RoamChunks *Handout
+	// Stopped, if not nil, reports whether an account is stopped by the
+	// game's operator: it is refused at the upgrade, and again as its
+	// connection claims its boat, so a stop in between is not missed.
+	Stopped func(bus.Account) bool
+	// Seen, if not nil, is told of a connection that ends after SeenAfter
+	// open (or after LongAfter, if not zero), by its session's token hash:
+	// its session and account were seen then.
+	Seen      func(hash [32]byte)
+	LongAfter time.Duration
 }
 
 // Edge serves the game connection.
@@ -230,6 +253,9 @@ func New(cfg Config) *Edge {
 		ctx:    ctx,
 		cancel: cancel,
 		conns:  map[*conn]struct{}{},
+	}
+	if e.cfg.LongAfter == 0 {
+		e.cfg.LongAfter = SeenAfter
 	}
 	e.reach = cfg.Roam
 	if e.reach == (RoamReach{}) {
@@ -300,6 +326,11 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		e.cfg.Fail(w, http.StatusForbidden, "ai-account")
 		return
 	}
+	if e.stopped(bus.Account(acc.ID)) {
+		e.m.upgrade[upgradeStopped].Inc()
+		e.cfg.Fail(w, http.StatusForbidden, "stopped")
+		return
+	}
 	e.mu.Lock()
 	closing, ended := e.closing, e.ended
 	e.mu.Unlock()
@@ -335,6 +366,9 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := newConn(e, ws, hj.conn, bus.Account(acc.ID), acc.Tools, acc.Priority, obs.RequestID(r.Context()))
+	if cur, ok := auth.SessionFromContext(r.Context()); ok {
+		c.session = cur.Hash
+	}
 	if !e.track(c) {
 		_ = ws.Close(websocket.StatusServiceRestart, "the server is restarting")
 		return
@@ -342,6 +376,9 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer e.untrack(c)
 	c.run()
 }
+
+// stopped reports whether an account is stopped by the game's operator.
+func (e *Edge) stopped(a bus.Account) bool { return e.cfg.Stopped != nil && e.cfg.Stopped(a) }
 
 // hijacked keeps the socket the library hijacks, so a connection can be
 // closed under a close handshake its peer never answers.

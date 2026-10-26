@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -21,6 +22,8 @@ type accountsJSON struct {
 	Week     int64         `json:"week"`
 	Today    int64         `json:"today"`
 	Machines *machinesJSON `json:"machines,omitempty"`
+	// Stopped are the accounts stopped, by kind.
+	Stopped *stoppedJSON `json:"stopped,omitempty"`
 }
 
 // machinesJSON is accounts.json's machine sailors: how many, how many made
@@ -59,6 +62,9 @@ func (o *Owner) accounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := accountsJSON{Total: n.Total, Week: n.Week, Today: n.Today}
+	if h := o.cfg.Hand; h != nil {
+		out.Stopped = &stoppedJSON{Human: h.Stopped().Count(store.Human), AI: h.Stopped().Count(store.AI)}
+	}
 	if o.cfg.Machines != nil && o.cfg.Lifetime != nil {
 		life := o.cfg.Lifetime.Get()
 		m, err := o.cfg.Machines.MachineCounts(ctx, life)
@@ -129,6 +135,7 @@ func (o *Owner) lifetime(w http.ResponseWriter, r *http.Request) {
 		o.cfg.LifetimeChanged()
 	}
 	o.count("lifetime")
+	o.record(r, store.ActionLifetime, nil, d.String())
 	o.cfg.Log.Info("owner: the grant lifetime set", "action", "lifetime", "was", was.String(), "now", d.String(), "ended", ended, "from", r.RemoteAddr)
 	writeJSON(w, map[string]any{"seconds": req.Seconds, "ends": ended, "set": true})
 }
@@ -173,6 +180,7 @@ func (o *Owner) machineCap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o.count("cap")
+	o.record(r, store.ActionCap, &id, strconv.Itoa(req.Cap))
 	o.cfg.Log.Info("owner: an account's machine sailors allowed", "action", "cap", "account", id.String(), "cap", req.Cap, "from", r.RemoteAddr)
 	writeJSON(w, map[string]any{"account": id.String(), "cap": req.Cap})
 }

@@ -135,6 +135,25 @@ func (q *Queries) DeleteExpiredRequests(ctx context.Context, arg DeleteExpiredRe
 	return result.RowsAffected(), nil
 }
 
+const deleteOldActions = `-- name: DeleteOldActions :execrows
+DELETE FROM account_action WHERE id IN (
+  SELECT x.id FROM account_action x WHERE x.at < $1 ORDER BY x.at LIMIT $2
+)
+`
+
+type DeleteOldActionsParams struct {
+	Before time.Time
+	Lim    int32
+}
+
+func (q *Queries) DeleteOldActions(ctx context.Context, arg DeleteOldActionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOldActions, arg.Before, arg.Lim)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteStaleSessions = `-- name: DeleteStaleSessions :execrows
 DELETE FROM session WHERE id IN (
   SELECT s.id FROM session s WHERE s.last_seen_at < $1 ORDER BY s.last_seen_at LIMIT $2

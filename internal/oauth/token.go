@@ -157,7 +157,14 @@ func (s *Server) exchange(w http.ResponseWriter, r *http.Request, clientID strin
 		return
 	}
 	ends := c.Approved.Add(s.cfg.Lifetime.Get())
-	if c.Revoked || !now.Before(ends) {
+	switch {
+	case c.Stopped:
+		refuse(http.StatusBadRequest, "invalid_grant", EndedWords(false, store.RevokedOperator, now, s.cfg.Zone))
+		return
+	case c.Revoked && c.RevokedWhy == store.RevokedOperator:
+		refuse(http.StatusBadRequest, "invalid_grant", EndedWords(false, c.RevokedWhy, now, s.cfg.Zone))
+		return
+	case c.Revoked || !now.Before(ends):
 		refuse(http.StatusBadRequest, "invalid_grant", EndedWords(false, "", ends, s.cfg.Zone))
 		return
 	}

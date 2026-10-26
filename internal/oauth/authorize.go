@@ -330,6 +330,7 @@ func writeRaw(w http.ResponseWriter, body []byte) {
 //
 //	200 pageData                     signedIn set
 //	400 {"error":"refused"}          the browser's answer is not accepted, or the player was not verified
+//	403 {"error":"stopped"}          the account is stopped by the game's operator
 //	403 {"error":"add-passkey"}      the account's recovery code was used and no passkey added since
 //	404 {"error":"unknown-passkey"}  no account has the passkey
 //	409 {"error":"again"}            no ceremony or request to finish
@@ -399,6 +400,16 @@ func (s *Server) finishApprove(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.unavailable(w, r, "finding a passkey's account", err)
+		return
+	}
+	if holder.Stopped {
+		// Its passkey is good: what it says of itself is written back, as
+		// at any sign-in, and the account refused.
+		if err := s.cfg.Store.PasskeyUsed(r.Context(), holder.ID, key); err != nil {
+			s.cfg.Log.Warn("writing back a passkey", "request_id", obs.RequestID(r.Context()), "err", err)
+		}
+		counted("stopped")
+		writeError(w, http.StatusForbidden, "stopped")
 		return
 	}
 	held, err := s.cfg.Store.AccountHeld(r.Context(), holder.ID)
@@ -481,6 +492,7 @@ func CheckMachine(looks MachineLooks, name, version, finish, colour string) (sto
 //	403 {"error":"confirm"}         no passkey confirmed lately: continue with it again
 //	404 {"error":"not-found"}       no such machine sailor of the account
 //	409 {"error":"again"}           no request to go on with
+//	409 {"error":"stopped"}         the machine sailor is stopped by the game's operator
 //	409 {"error":"cap"}             the account has as many machine sailors as it may
 //	409 {"error":"too-many-apps"}   the machine sailor has as many apps as it may
 //	422 {"error": reason}           the new machine sailor's name is refused
@@ -545,6 +557,9 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.Is(err, store.ErrNoMachine):
 		writeError(w, http.StatusNotFound, "not-found")
+		return
+	case errors.Is(err, store.ErrStopped):
+		writeError(w, http.StatusConflict, "stopped")
 		return
 	case errors.Is(err, store.ErrCap):
 		writeError(w, http.StatusConflict, "cap")

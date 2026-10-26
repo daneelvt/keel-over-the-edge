@@ -18,10 +18,11 @@ const (
 	upgradeAI
 	upgradeOrigin
 	upgradeBad
+	upgradeStopped
 	upgrades
 )
 
-var upgradeNames = [upgrades]string{"ok", "no_session", "ai_account", "origin", "bad_request"}
+var upgradeNames = [upgrades]string{"ok", "no_session", "ai_account", "origin", "bad_request", "stopped"}
 
 const (
 	helloOK = iota

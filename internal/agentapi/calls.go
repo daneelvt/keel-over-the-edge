@@ -45,6 +45,14 @@ func (c *Core) handler(d toolDef) mcp.ToolHandler {
 			return nil, errors.New("no machine sailor signed in")
 		}
 		app, era := hostOf(req)
+		if c.stopped(a.Account) {
+			// Stopped since the door let the token in: no helm is made.
+			if m := c.cfg.Metrics; m != nil {
+				m.AgentRefusals.WithLabelValues(string(refusedStopped)).Inc()
+				m.AgentCalls.WithLabelValues(name, resultRefused, app, era).Inc()
+			}
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: oauth.WordsStopped}}}, nil
+		}
 		h := c.helmOf(a)
 		h.mu.Lock()
 		before, seen := h.lastCall, h.apps[app]
@@ -125,6 +133,14 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 		return "", nil, nil
 	}
 	taken := true
+	h.mu.Lock()
+	ended := h.ended
+	h.mu.Unlock()
+	if ended != nil {
+		// Stopped while this call waited for its turn.
+		h.give()
+		return "", nil, ended
+	}
 	defer func() {
 		if taken {
 			h.give()
@@ -568,6 +584,17 @@ func (c *Core) wait(ctx context.Context, h *helm, req *mcp.CallToolRequest, o *o
 		return why, refuse(refusedSuperseded, wordsSuperseded)
 	case wokeShutdown:
 		return why, refuse(refusedRestarting, wordsRestarting)
+	case wokeEnded:
+		h.mu.Lock()
+		r := h.waitEnd
+		if h.waitEnd != h.ended {
+			h.waitEnd = nil
+		}
+		h.mu.Unlock()
+		if r == nil {
+			r = refuse(refusedStopped, oauth.WordsStopped)
+		}
+		return why, r
 	case evWorldEnded.word():
 		return why, refuse(refusedEnded, wordsEnded)
 	}
@@ -582,7 +609,7 @@ func (c *Core) wait(ctx context.Context, h *helm, req *mcp.CallToolRequest, o *o
 // wake_on word, an event's, time, superseded, cut or shutdown.
 func wakeLabel(why string) string {
 	switch why {
-	case wokeTime, wokeSuperseded, wokeCut, wokeShutdown:
+	case wokeTime, wokeSuperseded, wokeCut, wokeShutdown, wokeEnded:
 		return why
 	}
 	for _, w := range wakeWords {

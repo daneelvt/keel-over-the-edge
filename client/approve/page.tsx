@@ -43,7 +43,7 @@ import {
   reasonOf,
   requestOptions,
 } from '../src/account/passkeys';
-import { approveReasonText, lengthProblem } from '../src/account/reasons';
+import { approveReasonText, lengthProblem, SAILOR_STOPPED } from '../src/account/reasons';
 
 /** GET /oauth/request: the request as the page shows it. */
 export interface RequestData {
@@ -121,7 +121,9 @@ export async function continueWithPasskey(r: ApproveReach): Promise<Outcome<Requ
     answerJSON(cred as Parameters<typeof answerJSON>[0]),
   );
   if (done.status !== 200 || done.body === null) {
-    return { ok: false, reason: reasonOf(done) };
+    // Stopped here is the player's own sailor, not a machine sailor.
+    const reason = reasonOf(done);
+    return { ok: false, reason: reason === 'stopped' ? SAILOR_STOPPED : reason };
   }
   return { ok: true, value: done.body as unknown as RequestData };
 }

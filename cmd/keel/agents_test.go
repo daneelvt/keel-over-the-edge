@@ -87,3 +87,40 @@ func (noAccounts) SetGrantLifetime(context.Context, time.Duration) error { retur
 func (noAccounts) SetMachineCap(context.Context, store.AccountID, int) error {
 	return store.ErrNotFound
 }
+
+// memDB stops, searches and records nothing: the owner's hand on accounts
+// is tested against the test database.
+
+func (noAccounts) Stop(context.Context, store.Operation) (store.Operated, error) {
+	return store.Operated{}, store.ErrNotFound
+}
+func (noAccounts) Start(context.Context, store.Operation) (store.Operated, error) {
+	return store.Operated{}, store.ErrNotFound
+}
+func (noAccounts) Revoke(context.Context, store.Operation) (store.Operated, error) {
+	return store.Operated{}, store.ErrNotFound
+}
+func (noAccounts) Delete(context.Context, store.Operation) (store.Operated, error) {
+	return store.Operated{}, store.ErrNotFound
+}
+func (noAccounts) RecordAction(context.Context, store.Action) error { return nil }
+func (noAccounts) Actions(context.Context, *store.AccountID, int) ([]store.Action, error) {
+	return nil, nil
+}
+func (noAccounts) Stopped(context.Context) (map[store.AccountID]store.Kind, error) { return nil, nil }
+func (noAccounts) SearchAccounts(context.Context, store.Search) ([]store.Found, int64, error) {
+	return nil, 0, nil
+}
+func (noAccounts) MachinesOfOwners(context.Context, []store.AccountID) ([]store.FoundMachine, error) {
+	return nil, nil
+}
+func (noAccounts) SessionOf(context.Context, [32]byte) (store.AccountID, error) {
+	return store.AccountID{}, store.ErrNotFound
+}
+func (noAccounts) Card(context.Context, store.AccountID) (store.Card, error) {
+	return store.Card{}, store.ErrNotFound
+}
+func (noAccounts) Passkeys(context.Context, store.AccountID) ([]store.Passkey, error) {
+	return nil, nil
+}
+func (noAccounts) DeleteActions(context.Context, time.Time) (int64, error) { return 0, nil }

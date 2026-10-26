@@ -28,13 +28,14 @@ const (
 )
 
 // Why a grant was revoked: by its owner on the account page, replaced by
-// a new approval or connection token, a token of it used again, or by the
-// app itself (RFC 7009).
+// a new approval or connection token, a token of it used again, by the
+// app itself (RFC 7009), or by the game's operator.
 const (
 	RevokedOwner    = "owner"
 	RevokedReplaced = "replaced"
 	RevokedReuse    = "reuse"
 	RevokedApp      = "app"
+	RevokedOperator = "operator"
 )
 
 var (
@@ -58,6 +59,9 @@ var (
 	// ErrRefreshReused is a refresh token used again after the grace; its
 	// grant is revoked.
 	ErrRefreshReused = errors.New("store: the refresh token was used already")
+	// ErrStopped is an account stopped by the operator: it may not sign
+	// in, approve, or be given a token.
+	ErrStopped = errors.New("store: the account is stopped")
 )
 
 // GrantEnded is a token whose grant has ended: revoked (Why says by what),
@@ -231,8 +235,9 @@ type Approved struct {
 // request taken, a machine sailor made if asked, the app's older grant for
 // the machine sailor revoked, the grant made and the code given. Errors,
 // on which nothing changes: ErrNotFound for a request gone; ErrNoMachine
-// for a machine sailor not the owner's; ErrUnconfirmed; ErrCap and ErrNameTaken for a
-// machine sailor to make; ErrTooManyGrants.
+// for a machine sailor not the owner's; ErrStopped for one stopped;
+// ErrUnconfirmed; ErrCap and ErrNameTaken for a machine sailor to make;
+// ErrTooManyGrants.
 func (s *Store) Approve(ctx context.Context, a Approval) (Approved, error) {
 	var out Approved
 	err := s.inTx(ctx, func(q *db.Queries) error {
@@ -254,10 +259,12 @@ func (s *Store) Approve(ctx context.Context, a Approval) (Approved, error) {
 			if machine, err = createMachine(ctx, q, a.Owner, *a.Make, a.Boat); err != nil {
 				return err
 			}
-		} else if _, err := q.MachineOf(ctx, db.MachineOfParams{ID: uuidOf(machine), OwnerID: uuidOf(a.Owner)}); errors.Is(err, pgx.ErrNoRows) {
+		} else if m, err := q.MachineOf(ctx, db.MachineOfParams{ID: uuidOf(machine), OwnerID: uuidOf(a.Owner)}); errors.Is(err, pgx.ErrNoRows) {
 			return ErrNoMachine
 		} else if err != nil {
 			return err
+		} else if m.Stopped {
+			return ErrStopped
 		}
 		out.Machine = machine
 		live, err := q.LiveGrantsOfMachine(ctx, db.LiveGrantsOfMachineParams{AccountID: uuidOf(machine), Kind: GrantApp})
@@ -311,8 +318,11 @@ type CodeGrant struct {
 	CodeChallenge string
 	Expires       time.Time
 	Approved      time.Time
-	// Revoked is the grant revoked meanwhile.
-	Revoked bool
+	// Revoked is the grant revoked meanwhile, and RevokedWhy by what.
+	Revoked    bool
+	RevokedWhy string
+	// Stopped: the machine sailor, or its owner, is stopped.
+	Stopped bool
 }
 
 // UseCode exchanges an authorization code, once: ErrNotFound for a code
@@ -324,6 +334,7 @@ func (s *Store) UseCode(ctx context.Context, hash [32]byte) (CodeGrant, error) {
 		return CodeGrant{
 			Grant: r.GrantID.Bytes, Account: r.AccountID.Bytes, ClientID: r.ClientID, RedirectURI: r.RedirectUri,
 			CodeChallenge: r.CodeChallenge, Expires: r.ExpiresAt, Approved: r.ApprovedAt, Revoked: r.RevokedAt.After(time.Unix(0, 0)),
+			RevokedWhy: r.RevokedWhy, Stopped: r.Stopped,
 		}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -427,6 +438,11 @@ func (s *Store) Refresh(ctx context.Context, r Refresh) (Refreshed, error) {
 		if t.RevokedAt.After(time.Unix(0, 0)) {
 			return &GrantEnded{At: t.RevokedAt, Why: t.RevokedWhy}
 		}
+		if t.Stopped {
+			// Its grants were revoked with the stop; one made since is
+			// refused as well.
+			return &GrantEnded{At: r.Now, Why: RevokedOperator}
+		}
 		if !r.Now.Before(out.GrantEnds) {
 			return &GrantEnded{At: out.GrantEnds}
 		}
@@ -484,6 +500,8 @@ type TokenGrant struct {
 	OwnerName string
 	// Priority: the machine sailor is a priority account's.
 	Priority bool
+	// Stopped: the machine sailor, or its owner, is stopped.
+	Stopped bool
 }
 
 // TokenGrant finds a token by its hash, with its grant and machine sailor,
@@ -499,6 +517,7 @@ func (s *Store) TokenGrant(ctx context.Context, hash [32]byte) (TokenGrant, erro
 	t := TokenGrant{
 		Kind: r.Kind, Grant: r.GrantID.Bytes, GrantKind: r.GrantKind, Approved: r.ApprovedAt, RevokedWhy: r.RevokedWhy,
 		ClientName: r.ClientName, Account: r.AccountID.Bytes, Name: r.Name, OwnerName: r.OwnerName, Priority: r.Priority,
+		Stopped: r.Stopped,
 	}
 	if r.ExpiresAt.After(time.Unix(0, 0)) {
 		t.Expires = r.ExpiresAt
@@ -509,9 +528,10 @@ func (s *Store) TokenGrant(ctx context.Context, hash [32]byte) (TokenGrant, erro
 	return t, nil
 }
 
-// GrantUsed records a grant used at the time given.
+// GrantUsed records a grant used at the time given, and its machine
+// sailor active then.
 func (s *Store) GrantUsed(ctx context.Context, grant [16]byte, at time.Time) error {
-	return s.q.GrantUsed(ctx, db.GrantUsedParams{At: pgtype.Timestamptz{Time: at, Valid: true}, ID: pgtype.UUID{Bytes: grant, Valid: true}})
+	return s.q.GrantUsed(ctx, db.GrantUsedParams{At: at, GrantID: pgtype.UUID{Bytes: grant, Valid: true}})
 }
 
 // Revoked is a token revoked: its grant, and its machine sailor; Grant is
@@ -613,9 +633,12 @@ func (s *Store) RevokeOwnedGrant(ctx context.Context, owner AccountID, grant [16
 // MakeConnection gives one of a human account's machine sailors a new
 // connection token, by its hash, in place of any it had, whose grants are
 // returned: ErrNoMachine for a machine sailor not the account's,
-// ErrTokenTaken for a hash taken.
+// ErrStopped for one stopped, ErrTokenTaken for a hash taken.
 func (s *Store) MakeConnection(ctx context.Context, owner, machine AccountID, hash [32]byte) (grant [16]byte, replaced [][16]byte, err error) {
 	err = s.inTx(ctx, func(q *db.Queries) error {
+		if m, err := q.MachineOf(ctx, db.MachineOfParams{ID: uuidOf(machine), OwnerID: uuidOf(owner)}); err == nil && m.Stopped {
+			return ErrStopped
+		}
 		var err error
 		if replaced, err = revokeConnections(ctx, q, owner, machine, RevokedReplaced); err != nil {
 			return err

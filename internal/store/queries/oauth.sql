@@ -69,7 +69,26 @@ SELECT g.id, g.account_id, g.kind FROM ai_grant g JOIN account a ON a.id = g.acc
 WHERE g.id = @id AND a.owner_id = @owner_id;
 
 -- name: GrantUsed :exec
-UPDATE ai_grant SET last_used_at = @at WHERE id = @id;
+-- A grant used, and its machine sailor active, at the time given.
+WITH g AS (
+  UPDATE ai_grant SET last_used_at = @at WHERE ai_grant.id = sqlc.arg(grant_id)::uuid
+  RETURNING account_id
+)
+UPDATE account SET last_seen_at = greatest(account.last_seen_at, @at)
+WHERE account.id IN (SELECT account_id FROM g);
+
+-- name: RevokeGrantsOf :many
+-- Every grant of the machine sailors given that is unrevoked and within
+-- the lifetime, revoked by the operator.
+UPDATE ai_grant SET revoked_at = now(), revoked_why = 'operator'
+WHERE account_id = ANY(@ids::uuid[]) AND revoked_at IS NULL
+  AND approved_at + sqlc.arg(micros)::bigint * interval '1 microsecond' > now()
+RETURNING id;
+
+-- name: CountLiveGrantsOf :one
+SELECT count(*) FROM ai_grant
+WHERE account_id = ANY(@ids::uuid[]) AND revoked_at IS NULL
+  AND approved_at + sqlc.arg(micros)::bigint * interval '1 microsecond' > now();
 
 -- name: InsertCode :exec
 INSERT INTO oauth_code (hash, grant_id, client_id, redirect_uri, code_challenge, expires_at)
@@ -81,7 +100,10 @@ UPDATE oauth_code c SET used_at = now()
 FROM ai_grant g
 WHERE c.hash = @hash AND c.used_at IS NULL AND g.id = c.grant_id
 RETURNING c.grant_id, c.client_id, c.redirect_uri, c.code_challenge, c.expires_at,
-  g.account_id, g.approved_at, coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at;
+  g.account_id, g.approved_at, coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at,
+  coalesce(g.revoked_why, '')::text AS revoked_why,
+  EXISTS (SELECT 1 FROM account m LEFT JOIN account o ON o.id = m.owner_id
+          WHERE m.id = g.account_id AND (m.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL))::boolean AS stopped;
 
 -- name: UsedCode :one
 -- A code that was exchanged already: its grant.
@@ -96,9 +118,12 @@ VALUES (@hash, @grant_id, @kind, @pair, @expires_at);
 -- locked, so that two refreshes of one token run one after the other.
 SELECT t.hash, t.grant_id, t.pair, coalesce(t.used_at, 'epoch')::timestamptz AS used_at, t.next_pair,
   g.account_id, g.kind AS grant_kind, coalesce(g.client_id, '')::text AS client_id, g.approved_at,
-  coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at, coalesce(g.revoked_why, '')::text AS revoked_why
+  coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at, coalesce(g.revoked_why, '')::text AS revoked_why,
+  (m.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
 FROM oauth_token t
 JOIN ai_grant g ON g.id = t.grant_id
+JOIN account m ON m.id = g.account_id
+LEFT JOIN account o ON o.id = m.owner_id
 WHERE t.hash = @hash AND t.kind = 'refresh'
 FOR UPDATE OF t, g;
 
@@ -114,15 +139,17 @@ UPDATE oauth_token SET used_at = coalesce(used_at, now()), next_pair = @next_pai
 
 -- name: TokenByHash :one
 -- A token as the door checks it: its grant, its machine sailor and its
--- owner's sailor.
+-- owner's sailor, and whether either is stopped.
 SELECT t.kind, t.grant_id, coalesce(t.expires_at, 'epoch')::timestamptz AS expires_at,
   g.kind AS grant_kind, g.approved_at, coalesce(g.revoked_at, 'epoch')::timestamptz AS revoked_at,
   coalesce(g.revoked_why, '')::text AS revoked_why, coalesce(g.client_name, '')::text AS client_name,
-  g.account_id, a.priority, sl.name, coalesce(osl.name, '')::text AS owner_name
+  g.account_id, a.priority, sl.name, coalesce(osl.name, '')::text AS owner_name,
+  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
 FROM oauth_token t
 JOIN ai_grant g ON g.id = t.grant_id
 JOIN account a ON a.id = g.account_id
 JOIN sailor sl ON sl.account_id = a.id
+LEFT JOIN account o ON o.id = a.owner_id
 LEFT JOIN sailor osl ON osl.account_id = a.owner_id
 WHERE t.hash = @hash;
 

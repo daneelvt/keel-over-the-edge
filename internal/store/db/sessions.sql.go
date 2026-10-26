@@ -124,7 +124,7 @@ SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, sl.name, sl.look, s.las
 FROM session s
 JOIN account a ON a.id = s.account_id
 JOIN sailor sl ON sl.account_id = a.id
-WHERE s.token_hash = $1
+WHERE s.token_hash = $1 AND a.stopped_at IS NULL
 `
 
 type SessionAccountRow struct {
@@ -140,6 +140,7 @@ type SessionAccountRow struct {
 	ConfirmedUntil time.Time
 }
 
+// The account a session names; none for a stopped account's.
 func (q *Queries) SessionAccount(ctx context.Context, tokenHash []byte) (SessionAccountRow, error) {
 	row := q.db.QueryRow(ctx, sessionAccount, tokenHash)
 	var i SessionAccountRow

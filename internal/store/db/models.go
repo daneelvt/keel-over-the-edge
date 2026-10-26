@@ -25,6 +25,20 @@ type Account struct {
 	RecoveredAt    pgtype.Timestamptz
 	MachineCap     int16
 	Priority       bool
+	StoppedAt      pgtype.Timestamptz
+	StopReason     pgtype.Text
+}
+
+type AccountAction struct {
+	ID        pgtype.UUID
+	At        time.Time
+	Action    string
+	AccountID pgtype.UUID
+	Kind      pgtype.Text
+	Name      string
+	Detail    string
+	Source    string
+	FromAddr  string
 }
 
 type AiGrant struct {

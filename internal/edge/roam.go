@@ -120,27 +120,39 @@ func (e *Edge) Tools(account bus.Account, on bool) bool {
 	return true
 }
 
-// Remove takes an account just deleted out of the game: its connection,
-// if it has one, is closed with 4003, and its boat, in the water with a
-// connection or in its grace without one, leaves at once.
-func (e *Edge) Remove(account bus.Account) {
+// Remove takes an account stopped or deleted out of the game: its
+// connection, if it has one, is closed with 4003 and the reason given; its
+// boat, in the water with a connection or in its grace without one,
+// leaves at once, with no grace; and its place in the queue, a machine
+// sailor's too, is given up.
+func (e *Edge) Remove(account bus.Account, reason string) {
 	if c := e.registry.get(account); c != nil {
 		c.stop()
-		c.close(CloseRemoved, "This sailor has been deleted.")
+		c.close(CloseRemoved, reason)
 	}
 	f := e.cfg.Bus.Frames.Acquire()
-	var boat uint64
+	var boat, waiting uint64
+	queued := false
 	for _, s := range f.Live {
 		if f.Owner[s] == account {
 			boat = f.Boat[s]
 			break
 		}
 	}
+	for i := range f.Queue {
+		if f.Queue[i].Account == account {
+			queued, waiting = true, f.Queue[i].Conn
+			break
+		}
+	}
 	f.Release()
+	// Each sent as a Disconnect is, trying again each tick while the
+	// queue is full.
 	if boat != 0 {
-		// Sent as a Disconnect is, trying again each tick while the
-		// queue is full.
 		e.disconnect(bus.Command{Op: bus.Leave, Boat: boat})
+	}
+	if queued {
+		e.disconnect(bus.Command{Op: bus.Disconnect, Account: account, Conn: waiting})
 	}
 }
 

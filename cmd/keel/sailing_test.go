@@ -55,15 +55,6 @@ func (d *memDB) machine(name, owner string, priority bool) (string, store.Accoun
 	return token, id
 }
 
-func (d *memDB) TokenGrant(_ context.Context, hash [32]byte) (store.TokenGrant, error) {
-	d.tokens.mu.Lock()
-	defer d.tokens.mu.Unlock()
-	if t, ok := d.tokens.tokens[hash]; ok {
-		return t, nil
-	}
-	return store.TokenGrant{}, store.ErrNotFound
-}
-
 // agentsHost is the MCP address's host the tests' servers have: the play
 // origin's, by default.
 const agentsHost = "play.example.com"

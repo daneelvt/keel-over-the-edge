@@ -19,6 +19,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -91,6 +92,9 @@ func newTestServer(t *testing.T, db database, change func(*Config)) *testServer 
 		Sessions: auth.NewCache(db, auth.CacheConfig{Lookups: m.SessionLookups}),
 		Passkeys: testPasskeys(t),
 		Looks:    []string{"figure", "other-figure"},
+	}
+	if st, ok := db.(accounts.Store); ok {
+		cfg.Deletions = accounts.New(accounts.Config{Store: st, Sessions: cfg.Sessions, Metrics: m})
 	}
 	if change != nil {
 		change(&cfg)

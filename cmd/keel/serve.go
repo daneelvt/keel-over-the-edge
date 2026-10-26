@@ -28,6 +28,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -165,6 +166,8 @@ type database interface {
 	WriteGaleNews(ctx context.Context, lease int64, world [16]byte, n store.GaleNews) (bool, error)
 	oauth.Store
 	api.Machines
+	accounts.Store
+	DeleteActions(ctx context.Context, before time.Time) (int64, error)
 	GrantUsed(ctx context.Context, grant [16]byte, at time.Time) error
 	GrantLifetime(ctx context.Context) (time.Duration, error)
 	MachineCounts(ctx context.Context, lifetime time.Duration) (store.MachineCounts, error)
@@ -432,11 +435,27 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
 	p.registerWorldMetrics()
-	if p.agents, err = p.newAgents(ctx); err != nil {
+	// The accounts stopped, before anyone is let in.
+	stopped, err := accounts.Load(ctx, db)
+	if err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the accounts stopped: %w", err))
+	}
+	if p.agents, err = p.newAgents(ctx, stopped); err != nil {
 		if ctx.Err() != nil {
 			return stopEarly(side, flight, nil)
 		}
 		return stopEarly(side, flight, err)
+	}
+	p.hand = accounts.New(accounts.Config{
+		Store: db, Sessions: p.sessions, Door: p.agents.grants, Agents: p.agents.core, World: p.accountsWorld,
+		Lifetime: p.agents.lifetime.Get, Looks: p.agents.looks, Stopped: stopped, Log: log, Metrics: metrics,
+	})
+	for _, k := range []store.Kind{store.Human, store.AI} {
+		metrics.GaugeFunc("keel_accounts_stopped", "Accounts stopped by the operator, by kind; a stopped human's machine sailors among the AI accounts.",
+			prometheus.Labels{"kind": string(k)}, func() float64 { return float64(stopped.Count(k)) })
 	}
 
 	// The world sailed: its end set if it has none, and if its end passed
@@ -611,6 +630,8 @@ type ownerConfig struct {
 	// agents is sign-in for AI apps, whose lifetime and caps the owner
 	// sets.
 	agents *agents
+	// hand is the owner's hand on accounts.
+	hand *accounts.Accounts
 	// aiCap and aiReserve are the world's most boats for machine sailors
 	// and the places kept for them; 0 for the next world.
 	aiCap, aiReserve int
@@ -633,7 +654,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
-		Life: c.lifecycle, From: c.from,
+		Life: c.lifecycle, From: c.from, Hand: c.hand,
 	}
 	if a := c.agents; a != nil {
 		cfg.Machines, cfg.Lifetime, cfg.LifetimeChanged = c.db, a.lifetime, a.grants.ForgetAll

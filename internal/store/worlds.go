@@ -34,6 +34,14 @@ const (
 	WorldDropped = "dropped" // its data dropped, its row kept
 )
 
+// notEpoch is a time a query gives as the epoch for none: zero then.
+func notEpoch(t time.Time) time.Time {
+	if !t.After(time.Unix(0, 0)) {
+		return time.Time{}
+	}
+	return t
+}
+
 func timeOf(t pgtype.Timestamptz) time.Time {
 	if !t.Valid {
 		return time.Time{}

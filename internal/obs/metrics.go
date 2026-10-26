@@ -89,7 +89,7 @@ type Metrics struct {
 	Ceremonies         *prometheus.CounterVec // by kind and result
 	SignIns            *prometheus.CounterVec // by mediation: prompt or conditional
 	RecoveryUsed       prometheus.Counter
-	AccountsDeleted    prometheus.Counter
+	AccountsDeleted    *prometheus.CounterVec // by who: player or owner
 	CloneWarnings      prometheus.Counter
 	SessionLookups     *prometheus.CounterVec // by result: hit, miss or unknown
 	CrossOriginRefused prometheus.Counter
@@ -100,7 +100,7 @@ type Metrics struct {
 	Grace *prometheus.CounterVec // by result: started, rejoined, expired
 
 	MachinesCreated *prometheus.CounterVec // by where: game, approval
-	MachinesDeleted prometheus.Counter
+	MachinesDeleted *prometheus.CounterVec // by who: player or owner
 	OAuthAuthorize  *prometheus.CounterVec // by result
 	OAuthTokens     *prometheus.CounterVec // by grant and result
 	OAuthReuse      *prometheus.CounterVec // by outcome: grace, revoked
@@ -277,7 +277,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	}, []string{"reason"})
 	m.Ceremonies = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_ceremonies_total",
-		Help: "Ceremonies with the browser's passkey prompt, by kind (create, signin, add, confirm) and result (begun, finished, refused, expired, again).",
+		Help: "Ceremonies with the browser's passkey prompt, by kind (create, signin, add, confirm, approve) and result (begun, finished, refused, expired, again, stopped).",
 	}, []string{"kind", "result"})
 	m.SignIns = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_signins_total", Help: "Sign-ins with a passkey, by mediation: the browser's prompt, or offered on the name field (conditional).",
@@ -285,9 +285,9 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.RecoveryUsed = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "keel_recovery_used_total", Help: "Recovery codes used.",
 	})
-	m.AccountsDeleted = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "keel_accounts_deleted_total", Help: "Accounts deleted by their players.",
-	})
+	m.AccountsDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_accounts_deleted_total", Help: "Accounts deleted, by who: their players, or the owner.",
+	}, []string{"by"})
 	m.CloneWarnings = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "keel_clone_warnings_total", Help: "Sign-ins whose passkey's count did not go up: a copied authenticator, or a faulty one.",
 	})
@@ -455,9 +455,10 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.MachinesCreated = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_machine_sailors_created_total", Help: "Machine sailors made, by where: in the game, or on the approval page.",
 	}, []string{"where"})
-	m.MachinesDeleted = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "keel_machine_sailors_deleted_total", Help: "Machine sailors deleted by their owners, or with their owners' accounts.",
-	})
+	m.MachinesDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_machine_sailors_deleted_total",
+		Help: "Machine sailors deleted, alone or with their humans' accounts, by who: their players, or the owner.",
+	}, []string{"by"})
 	m.OAuthAuthorize = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_oauth_authorize_total", Help: "AI apps' authorization requests, by result: shown, refused, approved, denied.",
 	}, []string{"result"})
@@ -479,7 +480,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	})
 	m.DoorRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_mcp_door_total",
-		Help: "Requests at the MCP address, by result: accepted, or refused (missing, malformed, unknown, ended, revoked, expired, host, origin).",
+		Help: "Requests at the MCP address, by result: accepted, or refused (missing, malformed, unknown, ended, revoked, expired, stopped, host, origin).",
 	}, []string{"result"})
 	m.DoorDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "keel_mcp_door_seconds", Help: "How long the MCP address's door took to check a token, by whether it was cached.",
@@ -525,7 +526,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	for _, w := range []string{"human", "machine"} {
 		m.AgentCapsizes.WithLabelValues(w)
 	}
-	for _, w := range []string{"time", "superseded", "cut", "shutdown"} {
+	for _, w := range []string{"time", "superseded", "cut", "shutdown", "ended"} {
 		m.AgentWaits.WithLabelValues(w)
 	}
 	reg.MustRegister(m.AgentCalls, m.AgentCallTime, m.AgentWaits, m.AgentWaitCut, m.AgentWaitSeconds, m.AgentRefusals,
@@ -550,15 +551,21 @@ func NewMetrics(build, catalog string) *Metrics {
 	for _, r := range []string{"fetched", "cached", "refused", "failed"} {
 		m.ClientFetches.WithLabelValues(r)
 	}
-	for _, r := range []string{"accepted", "missing", "malformed", "unknown", "ended", "revoked", "expired", "host", "origin"} {
+	for _, r := range []string{"accepted", "missing", "malformed", "unknown", "ended", "revoked", "expired", "stopped", "host", "origin"} {
 		m.DoorRequests.WithLabelValues(r)
+	}
+	for _, by := range []string{"player", "owner"} {
+		m.AccountsDeleted.WithLabelValues(by)
+		m.MachinesDeleted.WithLabelValues(by)
 	}
 	reg.MustRegister(m.MachinesCreated, m.MachinesDeleted, m.OAuthAuthorize, m.OAuthTokens, m.OAuthReuse, m.OAuthRegistered,
 		m.ClientFetches, m.ClientFetchTime, m.DoorRequests, m.DoorDuration, m.GrantsLive)
-	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake", "lifetime", "cap", "priority", "unpriority"} {
+	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake", "lifetime", "cap", "priority", "unpriority",
+		"stop", "start", "revoke", "delete", "search", "card"} {
 		m.OwnerActions.WithLabelValues(a)
 	}
-	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake", "lifetime", "cap", "priority"} {
+	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake", "lifetime", "cap", "priority",
+		"stop", "start", "revoke", "delete", "search", "card"} {
 		m.OwnerRefused.WithLabelValues(w)
 	}
 	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)

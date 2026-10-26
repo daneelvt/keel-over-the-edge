@@ -65,6 +65,9 @@ type CoreConfig struct {
 	// Limits are the two budgets of every machine sailor; DefaultLimits
 	// if zero.
 	Limits Limits
+	// Stopped, if not nil, reports whether a machine sailor is stopped by
+	// the game's operator, or its human is: its calls are refused.
+	Stopped func(store.AccountID) bool
 }
 
 // Core is the machine sailors' side of the game: their helms, the world
@@ -194,16 +197,67 @@ func (c *Core) helmOf(a *oauth.Accepted) *helm {
 	return h
 }
 
-// Forget forgets a machine sailor's helm, as when the account is
-// deleted: its boat, if it has one, is left to its grace.
-func (c *Core) Forget(id store.AccountID) {
+// stopped reports whether a machine sailor is stopped.
+func (c *Core) stopped(id store.AccountID) bool { return c.cfg.Stopped != nil && c.cfg.Stopped(id) }
+
+// Stop forgets a machine sailor's helm, as when the account is stopped
+// or deleted: a call waiting ends at once, refused with the words given,
+// as does a call waiting for its turn; its boat leaves the water and its
+// place in the queue is given up, with no grace.
+func (c *Core) Stop(id store.AccountID, words string) {
 	c.mu.Lock()
 	h := c.helms[id]
 	delete(c.helms, id)
-	c.mu.Unlock()
-	if h != nil {
-		h.disconnect()
+	if c.cfg.Metrics != nil {
+		c.cfg.Metrics.AgentHelms.Set(float64(len(c.helms)))
 	}
+	c.mu.Unlock()
+	if h == nil {
+		return
+	}
+	r := refuse(refusedStopped, words)
+	h.mu.Lock()
+	h.ended, h.waitEnd = r, r
+	w, s, boat, queued := h.waiter, h.sea, h.boat, h.queued
+	h.boat, h.queued, h.away = 0, false, true
+	h.mu.Unlock()
+	if w != nil {
+		w.wake(wokeEnded)
+	}
+	if s == nil || s != c.sea.Load() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	switch {
+	case boat != 0:
+		_ = send(ctx, s, bus.Command{Op: bus.Leave, Boat: boat})
+	case queued:
+		_ = send(ctx, s, bus.Command{Op: bus.Disconnect, Account: bus.Account(id), Conn: h.conn})
+	}
+}
+
+// Revoked is told a machine sailor's grants were revoked by the game's
+// operator: a call waiting ends at once, refused with the words given, and
+// its boat goes into its grace, so that its player's agent, approved
+// again within it, keeps the boat.
+func (c *Core) Revoked(id store.AccountID, words string) {
+	c.mu.Lock()
+	h := c.helms[id]
+	c.mu.Unlock()
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	w := h.waiter
+	if w != nil {
+		h.waitEnd = refuse(refusedRevoked, words)
+	}
+	h.mu.Unlock()
+	if w != nil {
+		w.wake(wokeEnded)
+	}
+	h.disconnect()
 }
 
 // Run looks for silent agents once a second and forgets idle helms, until
@@ -300,6 +354,9 @@ type helm struct {
 	away bool
 	// left is why its boat last left the water, until a call is told.
 	left string
+	// ended is a stopped machine sailor's refusal, for every call still
+	// under way; waitEnd ends the call waiting, once.
+	ended, waitEnd *refusal
 	// pilot is the last order written: its mode, way, order count and
 	// target; held is the sheet it holds, in the control's steps.
 	ordered  bool

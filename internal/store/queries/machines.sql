@@ -32,17 +32,19 @@ INSERT INTO boat (account_id, kind) VALUES (@account_id, @kind);
 SELECT kind, count(*) AS boats FROM boat WHERE account_id = @account_id GROUP BY kind ORDER BY kind;
 
 -- name: MachinesOf :many
--- A human account's machine sailors, the oldest first.
+-- A human account's machine sailors, the oldest first, and when each was
+-- stopped on its own, if it was.
 SELECT a.id, sl.name, coalesce(sl.version, '')::text AS version, coalesce(sl.finish, '')::text AS finish,
-  coalesce(sl.colour, '')::text AS colour, a.created_at
+  coalesce(sl.colour, '')::text AS colour, a.created_at, coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.owner_id = @owner_id AND a.kind = 'ai'
 ORDER BY a.created_at, a.id;
 
 -- name: MachineOf :one
--- One of a human account's machine sailors.
-SELECT a.id, sl.name FROM account a JOIN sailor sl ON sl.account_id = a.id
+-- One of a human account's machine sailors, and whether it is stopped on
+-- its own.
+SELECT a.id, sl.name, (a.stopped_at IS NOT NULL)::boolean AS stopped FROM account a JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = @id AND a.owner_id = @owner_id AND a.kind = 'ai';
 
 -- name: MachineIDsOf :many

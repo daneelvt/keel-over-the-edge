@@ -53,3 +53,8 @@ DELETE FROM oauth_client WHERE client_id IN (
   WHERE c.last_used_at < @before AND NOT EXISTS (SELECT 1 FROM ai_grant g WHERE g.client_id = c.client_id)
   LIMIT @lim
 );
+
+-- name: DeleteOldActions :execrows
+DELETE FROM account_action WHERE id IN (
+  SELECT x.id FROM account_action x WHERE x.at < @before ORDER BY x.at LIMIT @lim
+);

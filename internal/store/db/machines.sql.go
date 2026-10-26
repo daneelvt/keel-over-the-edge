@@ -222,7 +222,7 @@ func (q *Queries) MachineIDsOf(ctx context.Context, ownerID pgtype.UUID) ([]pgty
 }
 
 const machineOf = `-- name: MachineOf :one
-SELECT a.id, sl.name FROM account a JOIN sailor sl ON sl.account_id = a.id
+SELECT a.id, sl.name, (a.stopped_at IS NOT NULL)::boolean AS stopped FROM account a JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = $1 AND a.owner_id = $2 AND a.kind = 'ai'
 `
 
@@ -232,21 +232,23 @@ type MachineOfParams struct {
 }
 
 type MachineOfRow struct {
-	ID   pgtype.UUID
-	Name string
+	ID      pgtype.UUID
+	Name    string
+	Stopped bool
 }
 
-// One of a human account's machine sailors.
+// One of a human account's machine sailors, and whether it is stopped on
+// its own.
 func (q *Queries) MachineOf(ctx context.Context, arg MachineOfParams) (MachineOfRow, error) {
 	row := q.db.QueryRow(ctx, machineOf, arg.ID, arg.OwnerID)
 	var i MachineOfRow
-	err := row.Scan(&i.ID, &i.Name)
+	err := row.Scan(&i.ID, &i.Name, &i.Stopped)
 	return i, err
 }
 
 const machinesOf = `-- name: MachinesOf :many
 SELECT a.id, sl.name, coalesce(sl.version, '')::text AS version, coalesce(sl.finish, '')::text AS finish,
-  coalesce(sl.colour, '')::text AS colour, a.created_at
+  coalesce(sl.colour, '')::text AS colour, a.created_at, coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.owner_id = $1 AND a.kind = 'ai'
@@ -260,9 +262,11 @@ type MachinesOfRow struct {
 	Finish    string
 	Colour    string
 	CreatedAt time.Time
+	StoppedAt time.Time
 }
 
-// A human account's machine sailors, the oldest first.
+// A human account's machine sailors, the oldest first, and when each was
+// stopped on its own, if it was.
 func (q *Queries) MachinesOf(ctx context.Context, ownerID pgtype.UUID) ([]MachinesOfRow, error) {
 	rows, err := q.db.Query(ctx, machinesOf, ownerID)
 	if err != nil {
@@ -279,6 +283,7 @@ func (q *Queries) MachinesOf(ctx context.Context, ownerID pgtype.UUID) ([]Machin
 			&i.Finish,
 			&i.Colour,
 			&i.CreatedAt,
+			&i.StoppedAt,
 		); err != nil {
 			return nil, err
 		}

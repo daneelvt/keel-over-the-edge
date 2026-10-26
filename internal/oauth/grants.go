@@ -136,6 +136,10 @@ func (g *Grants) Check(ctx context.Context, token string) (a *Accepted, warm boo
 	if (kind == KindConnection) != (t.Kind == store.TokenConnection) {
 		return nil, warm, &Refused{Result: "unknown", Words: wordsInvalid}
 	}
+	if t.Stopped {
+		// A stop revokes the grants too: its words say why.
+		return nil, warm, &Refused{Result: "stopped", Words: WordsStopped}
+	}
 	if !t.Revoked.IsZero() {
 		return nil, warm, &Refused{Result: "revoked", Words: EndedWords(connection, t.RevokedWhy, t.Revoked, g.zone)}
 	}

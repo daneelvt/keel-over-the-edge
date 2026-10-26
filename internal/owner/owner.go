@@ -4,9 +4,12 @@
 // player ever reaches: the world page, a map of the whole disk with every
 // boat, the wind, the gusts, the current, the islands, the places and the
 // lighthouses, the queue, the weather with the forecast beside it, and the
-// world's clock; and its controls, which set and clear an account's
-// owner's flag and an account's priority, move a flagged account's boat
-// anywhere on the disk, keep it unseen, make a new next world, begin it, and chart the whole world.
+// world's clock; its controls, which set and clear an account's owner's
+// flag and an account's priority, move a flagged account's boat anywhere on
+// the disk, keep it unseen, make a new next world, begin it, and chart the
+// whole world; and the Accounts tab, where any account is found, shown,
+// stopped, started again, has its tokens revoked or is deleted
+// (internal/accounts), every action written in the record.
 // The internal listener has no route to the internet: the owner reaches it
 // from their own computer through the tunnel to the machine, or a port
 // forward on the local cluster.
@@ -30,6 +33,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -167,6 +171,10 @@ type Config struct {
 	Accounts Accounts
 	Sessions Sessions
 	Edge     Edge
+	// Hand, if not nil, is the owner's hand on accounts: the Accounts
+	// tab's search, cards and actions, and the record every control
+	// writes.
+	Hand *accounts.Accounts
 	// Door, if not nil, is the machine sailors' door, whose cache of
 	// tokens' accounts forgets an account whose priority changes.
 	Door Door
@@ -270,6 +278,8 @@ var Paths = []string{
 	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
 	"/owner/api/forecast.json", "/owner/api/calibration.json", "/owner/api/gales.json", "/owner/api/place.json",
 	"/owner/api/lifetime", "/owner/api/machines", "/owner/api/priority",
+	"/owner/api/accounts/search", "/owner/api/account.json", "/owner/api/accounts/stop", "/owner/api/accounts/start",
+	"/owner/api/accounts/revoke", "/owner/api/accounts/delete", "/owner/api/actions.json",
 }
 
 // New makes the owner's tools. Run must be running for the page to see
@@ -357,6 +367,13 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("POST /owner/api/priority", o.priority)
 	mux.HandleFunc("POST /owner/api/lifetime", o.lifetime)
 	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
+	mux.HandleFunc("POST /owner/api/accounts/search", o.searchAccounts)
+	mux.HandleFunc("GET /owner/api/account.json", o.accountCard)
+	mux.HandleFunc("GET /owner/api/actions.json", o.actions)
+	mux.HandleFunc("POST /owner/api/accounts/stop", o.act(store.ActionStop, (*accounts.Accounts).Stop))
+	mux.HandleFunc("POST /owner/api/accounts/start", o.act(store.ActionStart, (*accounts.Accounts).Start))
+	mux.HandleFunc("POST /owner/api/accounts/revoke", o.act(store.ActionRevoke, (*accounts.Accounts).Revoke))
+	mux.HandleFunc("POST /owner/api/accounts/delete", o.act(store.ActionDelete, (*accounts.Accounts).Delete))
 	mux.HandleFunc("POST /owner/api/place", o.place)
 	mux.HandleFunc("POST /owner/api/unseen", o.unseen)
 	mux.HandleFunc("POST /owner/api/world", o.newWorld)
