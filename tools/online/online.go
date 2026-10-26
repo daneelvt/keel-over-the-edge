@@ -60,7 +60,7 @@ func (c *checker) run(ctx context.Context) int {
 		{"another host is not served", c.otherHost},
 		{"one address is limited, and cannot forge CF-Connecting-IP", c.limited},
 		{"a game connection from another origin is refused, one from the game's stays open, and the sailor deleted closes it", c.gameConnection},
-		{"a machine sailor's connection token calls handbook at the MCP address, and is refused once the machine sailor is deleted", c.machineSailor},
+		{"a machine sailor's connection token calls handbook at the MCP address and sails a minute, and is refused once the machine sailor is deleted", c.machineSailor},
 	}
 	failed := 0
 	for _, k := range checks {
@@ -408,8 +408,8 @@ func (c *checker) gameConnection(ctx context.Context) error {
 }
 
 // machineSailor makes a sailor and a machine sailor of its, makes it a
-// connection token, calls handbook with it at the MCP address, and deletes
-// both; the token is refused after.
+// connection token, calls handbook with it at the MCP address, sails it
+// for a minute, and deletes both; the token is refused after.
 func (c *checker) machineSailor(ctx context.Context) error {
 	if c.mcp == "" {
 		return nil
@@ -441,6 +441,23 @@ func (c *checker) machineSailor(ctx context.Context) error {
 	}
 	if status != http.StatusOK || !strings.Contains(said, "You sail as «"+machine+"», «"+name+"»'s machine sailor") {
 		return fmt.Errorf("handbook: %d %s", status, said)
+	}
+	// A minute at sea: in the water, an order, waits, and out again.
+	for _, step := range []struct{ tool, args, want string }{
+		{"observe", `{}`, "At sea"},
+		{"steer", `{"wind_angle":90,"boom":40}`, "holding wind 90°"},
+		{"observe", `{"wait":20}`, "Boat: sailing"},
+		{"observe", `{"wait":20}`, "Boat: sailing"},
+		{"observe", `{"wait":20,"detail":"full"}`, "Where:"},
+		{"boat", `{"action":"leave"}`, "left the water"},
+	} {
+		status, said, err := smoke.CallTool(ctx, c.hc, c.mcp, token, step.tool, step.args)
+		if err != nil {
+			return err
+		}
+		if status != http.StatusOK || !strings.Contains(said, step.want) {
+			return fmt.Errorf("%s %s: %d %s", step.tool, step.args, status, said)
+		}
 	}
 	if err := smoke.DeleteMachine(ctx, c.hc, jar, key, c.base, m.Machines[0].ID, machine); err != nil {
 		return err

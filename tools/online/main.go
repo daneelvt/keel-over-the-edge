@@ -18,7 +18,7 @@
 // connection stays open for -hold (0 skips it), and is closed with 4003
 // when its sailor is deleted; and that a machine sailor of a second sailor
 // of its own, with a connection token, is answered by handbook at the MCP
-// address, until it is deleted. It exits 1 if any check fails.
+// address and sails a minute there, until it is deleted. It exits 1 if any check fails.
 package main
 
 import (
