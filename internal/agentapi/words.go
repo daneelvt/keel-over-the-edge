@@ -127,6 +127,7 @@ func rad(d float64) float64 { return d * math.Pi / 180 }
 // deg is rad in degrees.
 func deg(r float64) float64 { return r * 180 / math.Pi }
 
-// estimateTokens estimates a text's length in o200k tokens: about four
-// characters a token in the report's English and figures.
-func estimateTokens(s string) int { return (len(s) + 3) / 4 }
+// estimateTokens estimates a text's length in o200k tokens: about three
+// bytes a token in the report's English, figures and signs (the reports'
+// golden scenes measure 2.8 to 3.4).
+func estimateTokens(s string) int { return (len(s) + 2) / 3 }

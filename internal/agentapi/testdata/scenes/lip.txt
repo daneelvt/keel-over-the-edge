@@ -1,4 +1,4 @@
-# about 197 tokens
+# about 262 tokens
 tick 1062 · seq 0
 Boat: Jolly boat · sailing · heading 089° · 4.8 kn · heel 3° to starboard · port tack
 Pilot: wind 90° port · boom 40° (sheet out to 40°) · rudder 1° to starboard · sail drawing

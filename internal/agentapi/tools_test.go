@@ -113,7 +113,8 @@ func TestInstructionsShort(t *testing.T) {
 	if len(instructions) >= 512 {
 		t.Fatalf("the server's instructions are %d characters", len(instructions))
 	}
-	if n := estimateTokens(primer); n > 200 {
+	// 163 o200k tokens when it was written.
+	if n := estimateTokens(primer); n > 240 {
 		t.Fatalf("the primer is about %d tokens", n)
 	}
 }
