@@ -80,7 +80,7 @@ func (c *config) validate(w *world) []Rule {
 	add("start area", len(w.start.Places) == c.start.Places, fmt.Sprintf("%d places", len(w.start.Places)), "%d", c.start.Places)
 	// The roads' places clear of banks, their water out to open water.
 	stranded, joins := 0, map[int32]int8{}
-	for _, p := range w.start.Places[w.start.Moorings:] {
+	for _, p := range w.start.Places[min(w.start.Moorings, len(w.start.Places)):] {
 		if !c.placeFits(w.ground, p[0], p[1]) || !c.joined(w.ground, p[0], p[1], joins) {
 			stranded++
 		}
