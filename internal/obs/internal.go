@@ -23,7 +23,7 @@ var InternalPaths = []string{
 	"/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json", "/owner/api/clouds.json",
 	"/owner/api/visibility.json", "/owner/api/chart",
-	"/owner/api/forecast.json", "/owner/api/calibration.json", "/owner/api/gales.json", "/owner/api/place.json",
+	"/owner/api/forecast.json", "/owner/api/busy.json", "/owner/api/gales.json", "/owner/api/place.json",
 	"/owner/api/lifetime", "/owner/api/machines", "/owner/api/priority",
 	"/owner/api/accounts/search", "/owner/api/account.json", "/owner/api/accounts/stop", "/owner/api/accounts/start",
 	"/owner/api/accounts/revoke", "/owner/api/accounts/delete", "/owner/api/actions.json",

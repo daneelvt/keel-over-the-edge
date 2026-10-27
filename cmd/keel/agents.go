@@ -103,9 +103,7 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 	if rw.charts != nil {
 		s.Chart, s.Sight = rw.charts.model, sighting
 	}
-	risks, fog := weather.RisksOf(cat)
-	s.Place = &forecast.PlaceWords{Timeline: rw.timeline, Words: s.Words, Risks: risks, Fog: fog,
-		Outlook: cat.Weather.Forecast.Outlook.Samples, Sky: s.Sky, Epoch: h.row.Epoch}
+	s.Place = &forecast.PlaceWords{Timeline: rw.timeline, Words: s.Words, Outlook: cat.Weather.Forecast.Outlook.Samples}
 	copy(s.RainWords[:], cat.Weather.Clouds.RainWords)
 	for _, c := range cat.News.Columns {
 		s.Columns[string(c.ID)] = c.Title
@@ -120,7 +118,7 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 		s.FeatureKinds = append(s.FeatureKinds, k.Name)
 	}
 	for _, k := range cat.Weather.Systems {
-		s.SystemKinds = append(s.SystemKinds, systemWords(k))
+		s.SystemKinds = append(s.SystemKinds, k.Name)
 	}
 	if b := rw.bundle; b != nil {
 		for _, is := range b.Islands {
@@ -131,25 +129,6 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 		}
 	}
 	return s
-}
-
-// systemWords are what the forecast calls a kind of weather system, by
-// its cloud and its shape.
-func systemWords(k catalog.SystemKind) string {
-	switch k.Cloud.Form {
-	case catalog.CloudFormStorm:
-		return "a thunderstorm"
-	case catalog.CloudFormCumulonimbus:
-		return "a squall"
-	case catalog.CloudFormCumulus:
-		return "showers"
-	case catalog.CloudFormFog:
-		return "a fog bank"
-	}
-	if k.Shape == catalog.ShapeLow {
-		return "a low"
-	}
-	return "a patch of light air"
 }
 
 // ownerAgents tells the world page of the machine sailors' agents.

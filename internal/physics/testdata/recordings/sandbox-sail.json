@@ -216,6 +216,8 @@
   "refugeMean": 14,
   "refugeWindKnee": 14,
   "refugeWind": 18,
+  "refugeSwellKnee": 0.7,
+  "refugeSwell": 1,
   "rimGusts": 0.3,
   "rimGustsFrom": 3,
   "acrossTurn": [

@@ -171,6 +171,20 @@ func CombineSwell(a, b Swell) Swell {
 	return a
 }
 
+// RefugeSwell is a swell at (x, y) as the refuge holds it: its height
+// above the refuge's knee softened toward its limit, as the refuge holds
+// the wind, in full within its radius and blending to nothing at its
+// outer edge, so the storms' swells together never raise Port Royal's
+// water past what one storm's did.
+func (w *WeatherPrepared) RefugeSwell(s Swell, x, y float64) Swell {
+	r := math.Sqrt(float64(x*x) + float64(y*y))
+	refuge := smooth(float64((w.refugeOuter - r) * w.invRefugeBlend))
+	if refuge > 0 && s.Height > w.swellKnee {
+		s.Height += float64(refuge * (soften(s.Height, w.swellKnee, w.swellSoft) - s.Height))
+	}
+	return s
+}
+
 // Shadow is the share of a swell that reaches an area whose fetch is f,
 // behind the land between it and where the swell left its storm: the open
 // water toward where the swell comes from over how far it has come, at

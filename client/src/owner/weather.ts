@@ -4,10 +4,13 @@
 // drawn by the shape of the pressure it carries and never by its name: a
 // dome a dark cell, darker the stronger it is, with a barbed arc on its
 // leading edge, the gusts it drives before it; a low a spiral turning
-// anticlockwise inward, as the wind turns round it; a patch with no
-// pressure of its own a wavy ring. Each trails its true track for the hour
-// after, dashed. A front is a line across the disk, its teeth on the side
-// it moves toward. Over the systems the isobars, every 2 hPa and
+// anticlockwise inward, as the wind turns round it, a storm's heavier; a
+// line its length across its motion, dash-dot-dot or dashed by its kind's
+// symbol, with barbs along its leading edge; a patch with no pressure of
+// its own a wavy ring. Each trails its true track for the hour after,
+// dashed, and is lettered with its kind's name. A front is a line across
+// the disk, on the side it moves toward a cold front's triangles in blue
+// or a warm front's semicircles in red. Over the systems the isobars, every 2 hPa and
 // labelled, with the highs and the lows marked, so that a dark cell hides
 // none of them. And the few words the week's card tells
 // the weather in.
@@ -26,7 +29,9 @@ export function regimeColour(i: number): string {
 /** The colours of the weather's marks, on the map and on the strip alike. */
 export const WEATHER_COLOURS = {
   front: '#8cc4ff',
+  warm: '#ff8a80',
   dome: '#dfe7ee',
+  line: '#f2e6a6',
   low: '#ff9e7a',
   patch: '#d8dee2',
   isobar: 'rgb(255 255 255 / 42%)',
@@ -158,30 +163,127 @@ function drawFront(ctx: CanvasRenderingContext2D, v: View, f: Front, lip: number
   }
   const [x0, y0] = toScreen(v, ends[0][0], ends[0][1]);
   const [x1, y1] = toScreen(v, ends[1][0], ends[1][1]);
-  ctx.strokeStyle = WEATHER_COLOURS.front;
-  ctx.fillStyle = WEATHER_COLOURS.front;
+  drawFrontLine(ctx, x0, y0, x1, y1, f.toward, f.warm, 1);
+}
+
+/**
+ * A front's line on the canvas from one end to the other, moving toward
+ * degrees: a cold front's triangles or a warm front's semicircles about
+ * every 28 pixels on the side it moves toward, at an opacity.
+ */
+export function drawFrontLine(
+  ctx: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  toward: number,
+  warm: boolean,
+  alpha: number,
+): void {
+  const colour = warm ? WEATHER_COLOURS.warm : WEATHER_COLOURS.front;
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = colour;
+  ctx.fillStyle = colour;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.moveTo(x0, y0);
   ctx.lineTo(x1, y1);
   ctx.stroke();
-  // Its teeth, about every 28 pixels, pointing the way it moves: north up
-  // the canvas, so the canvas's y is the north turned over.
+  // Its teeth pointing the way it moves: north up the canvas, so the
+  // canvas's y is the north turned over.
   const length = Math.hypot(x1 - x0, y1 - y0);
   const teeth = Math.floor(length / 28);
+  if (teeth === 0) {
+    ctx.globalAlpha = 1;
+    return;
+  }
   const [dx, dy] = [(x1 - x0) / length, (y1 - y0) / length];
-  const a = (f.toward * Math.PI) / 180;
+  const a = (toward * Math.PI) / 180;
   const [mx, my] = [Math.sin(a), -Math.cos(a)];
+  // The way it moves as a canvas angle, for a semicircle's middle.
+  const ahead = Math.atan2(my, mx);
   ctx.beginPath();
   for (let k = 0; k < teeth; k++) {
     const c = ((k + 0.5) * length) / teeth;
     const [cx, cy] = [x0 + dx * c, y0 + dy * c];
-    ctx.moveTo(cx - dx * 6, cy - dy * 6);
-    ctx.lineTo(cx + dx * 6, cy + dy * 6);
-    ctx.lineTo(cx + mx * 8, cy + my * 8);
-    ctx.closePath();
+    if (warm) {
+      ctx.moveTo(cx - dx * 6, cy - dy * 6);
+      ctx.arc(cx, cy, 6, ahead - Math.PI / 2, ahead + Math.PI / 2, false);
+      ctx.closePath();
+    } else {
+      ctx.moveTo(cx - dx * 6, cy - dy * 6);
+      ctx.lineTo(cx + dx * 6, cy + dy * 6);
+      ctx.lineTo(cx + mx * 8, cy + my * 8);
+      ctx.closePath();
+    }
   }
   ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * The two ends of a line on the canvas: its centre, its length, m, and the
+ * degrees it moves toward, its length running square to its motion.
+ */
+export function lineEnds(
+  v: View,
+  east: number,
+  north: number,
+  length: number,
+  heading: number,
+): [[number, number], [number, number]] {
+  const a = (heading * Math.PI) / 180;
+  // Along its length: (cos, −sin) of the way it moves, east and north.
+  const [we, wn] = [Math.cos(a), -Math.sin(a)];
+  const half = length / 2;
+  return [
+    toScreen(v, east - half * we, north - half * wn),
+    toScreen(v, east + half * we, north + half * wn),
+  ];
+}
+
+/**
+ * A line: its length across its motion, dash-dot-dot for a squall line's
+ * symbol, dashed for a trough's, with barbs along it on the side it moves
+ * toward.
+ */
+export function drawLine(
+  ctx: CanvasRenderingContext2D,
+  ends: [[number, number], [number, number]],
+  heading: number,
+  symbol: string,
+  strength: number,
+): void {
+  const [[x0, y0], [x1, y1]] = ends;
+  ctx.strokeStyle = WEATHER_COLOURS.line;
+  ctx.fillStyle = WEATHER_COLOURS.line;
+  ctx.globalAlpha = 0.4 + 0.6 * strength;
+  ctx.lineWidth = 3;
+  ctx.setLineDash(symbol === 'dash-dot' ? [12, 4, 2, 4, 2, 4] : [9, 6]);
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const length = Math.hypot(x1 - x0, y1 - y0);
+  const barbs = Math.floor(length / 18);
+  if (barbs > 0) {
+    const [dx, dy] = [(x1 - x0) / length, (y1 - y0) / length];
+    const a = canvasAngle(heading);
+    const [mx, my] = [Math.cos(a), Math.sin(a)];
+    ctx.beginPath();
+    for (let k = 0; k < barbs; k++) {
+      const c = ((k + 0.5) * length) / barbs;
+      const [cx, cy] = [x0 + dx * c, y0 + dy * c];
+      ctx.moveTo(cx - dx * 3, cy - dy * 3);
+      ctx.lineTo(cx + dx * 3, cy + dy * 3);
+      ctx.lineTo(cx + mx * 6, cy + my * 6);
+      ctx.closePath();
+    }
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 /** A dome: a dark cell, and its barbed arc on the side it moves toward. */
@@ -224,8 +326,8 @@ function drawDome(
 
 /**
  * A low: two arms spiralling inward, turning anticlockwise as they go in,
- * as the wind does about it north up. The canvas's angles turn clockwise,
- * so an arm going in turns through falling angles.
+ * as the wind does about it north up, a storm's heavier. The canvas's
+ * angles turn clockwise, so an arm going in turns through falling angles.
  */
 function drawLow(
   ctx: CanvasRenderingContext2D,
@@ -233,10 +335,11 @@ function drawLow(
   y: number,
   r: number,
   strength: number,
+  storm: boolean,
 ): void {
   ctx.strokeStyle = WEATHER_COLOURS.low;
   ctx.globalAlpha = 0.4 + 0.6 * strength;
-  ctx.lineWidth = 1.5 + strength;
+  ctx.lineWidth = (storm ? 2.5 : 1.5) + strength;
   ctx.beginPath();
   for (const arm of [0, Math.PI]) {
     for (let k = 0; k <= 48; k++) {
@@ -302,7 +405,9 @@ function drawSystem(
       ? WEATHER_COLOURS.dome
       : shape === 'low'
         ? WEATHER_COLOURS.low
-        : WEATHER_COLOURS.patch;
+        : shape === 'line'
+          ? WEATHER_COLOURS.line
+          : WEATHER_COLOURS.patch;
   // Its track for the hour after, dashed, a dot at each five minutes.
   ctx.strokeStyle = colour;
   ctx.fillStyle = colour;
@@ -326,7 +431,15 @@ function drawSystem(
   if (shape === 'dome') {
     drawDome(ctx, x, y, r, s.heading, strength);
   } else if (shape === 'low') {
-    drawLow(ctx, x, y, r, strength);
+    drawLow(ctx, x, y, r, strength, kind?.storm === true);
+  } else if (shape === 'line') {
+    drawLine(
+      ctx,
+      lineEnds(v, s.east, s.north, s.length, s.heading),
+      s.heading,
+      kind?.symbol ?? '',
+      strength,
+    );
   } else {
     drawPatch(ctx, x, y, r, strength);
   }
@@ -343,7 +456,12 @@ function drawSystem(
   ctx.font = 'italic 10px "Alegreya Sans", sans-serif';
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffffff';
-  label(ctx, `${kind?.id ?? s.kind}${s.developer ? ' (developer)' : ''}`, x, y + r + 16);
+  label(
+    ctx,
+    `${kind?.name || kind?.id || s.kind}${s.developer ? ' (developer)' : ''}`,
+    x,
+    y + r + 16,
+  );
   ctx.textAlign = 'start';
 }
 

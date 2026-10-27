@@ -58,6 +58,7 @@ export function chartLook(): ChartLook {
     meridians: l.meridians,
     fps: l.fps,
     wind: l.wind,
+    streaks: { ...l.weather.streaks, fade: (l.weather.streaks.fade * 1852) / 3600 },
     lip: w.disk.radius,
     band: w.disk.mist * 1852,
     scale: catalog.sky.scale,
@@ -152,7 +153,7 @@ export function makeChart(
   let weather: ChartWeather | null = null;
   const choice = () => ({
     mode: chart.timeMode.value,
-    step: chart.step.value,
+    minutes: chart.minutes.value,
     layers: chart.layers.value,
   });
   if (forecasting !== null) {
@@ -166,7 +167,8 @@ export function makeChart(
   const chart = new Chart(store, view, notices);
   if (weather !== null) {
     view.attachWeather(weather);
-    for (const s of [chart.timeMode, chart.step, chart.layers]) {
+    view.streaksOn = () => chart.layers.value.streaks;
+    for (const s of [chart.timeMode, chart.minutes, chart.layers]) {
       s.subscribe(() => view.weatherChanged());
     }
   }
@@ -193,6 +195,8 @@ export function makeChart(
         (e) => e.subject === 'island' || (e.subject === 'place' && placeNews[e.sort] === true),
       ),
     forecasting,
+    speed: () => 0,
+    steer: null,
   };
   return { chart, sea, notices, weather };
 }

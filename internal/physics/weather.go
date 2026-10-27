@@ -53,6 +53,7 @@ type WeatherPrepared struct {
 	invRefugeBlend         float64 // 1/m
 	meanKnee, meanSoft     float64 // m/s
 	windKnee, windSoft     float64 // m/s
+	swellKnee, swellSoft   float64 // m
 	rimGusts               float64
 	rimGustsFrom           float64 // m
 	invRimGustsSpan        float64 // 1/m
@@ -135,6 +136,8 @@ func PrepareWeather(p *WeatherParams, w *WeatherPrepared) {
 	w.meanSoft = float64((p.RefugeMean - p.RefugeMeanKnee) * knotSpeed)
 	w.windKnee = float64(p.RefugeWindKnee * knotSpeed)
 	w.windSoft = float64((p.RefugeWind - p.RefugeWindKnee) * knotSpeed)
+	w.swellKnee = p.RefugeSwellKnee
+	w.swellSoft = p.RefugeSwell - p.RefugeSwellKnee
 	w.rimGusts = p.RimGusts
 	w.rimGustsFrom = float64(p.RimGustsFrom * nauticalMile)
 	w.invRimGustsSpan = 1 / float64((p.Rim-p.RimGustsFrom)*nauticalMile)

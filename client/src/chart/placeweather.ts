@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // A place's weather as its box and its harbourmaster's board give it: its
-// lines at the slider's moment, now, a step of the forecast or a time of
-// the past; its outlook for the latest issue's horizon, in the words of the
-// shipping forecast; and the gale warning in force at its head when the
-// place's own outlook reaches a gale.
+// lines at the slider's moment, now, a minute ahead by the forecast or a
+// minute of the past; its outlook for the latest issue's horizon, in the
+// words of the shipping forecast, from the forecast's truth; and the gale
+// warning in force at its head when the place's own outlook reaches a gale.
 
 import { catalog } from '../catalog';
 import type { ChartEntry, GaleTold } from '../net/messages';
 import type { Fields } from '../predict/forecast';
 import { issueOf, stepsOf } from '../predict/forecast';
 import type { Forecasting } from './forecasting';
-import { placeAt, placePoints, risksOf } from './place';
+import { placeAt, placePoints } from './place';
 import type { ChartStore } from './store';
 import { type Moment, useMoment } from './weather';
 import {
@@ -66,7 +66,7 @@ function pressureAt(
   return fields.physics.pressure(east, north);
 }
 
-/** A place's weather at a moment, from the fields: its points', its pressures then and before, its risk. */
+/** A place's weather at a moment, from the fields: its points', and its pressures then and before. */
 export function weatherAt(
   fields: Fields,
   src: Forecasting,
@@ -80,9 +80,7 @@ export function weatherAt(
     pressureAt(fields, src, m, m.tick - 15 * MINUTE, cx, cy),
   ];
   useMoment(fields, m, src);
-  const { risks, fog } = risksOf(catalog.weather);
-  const sun: [number, number] = [src.sun(m.tick, cx, cy), src.sun(m.tick - fog.dawn, cx, cy)];
-  return placeAt(fields.physics, points, pressures, risks, fog, sun);
+  return placeAt(fields.physics, points, pressures);
 }
 
 /** A place's outlook for the latest issue's horizon, and whether it reaches a gale. */
@@ -96,8 +94,6 @@ export function outlookAt(
     return { text: '', gale: false };
   }
   const words = wordsOf(catalog.weather);
-  const { risks, fog } = risksOf(catalog.weather);
-  const [cx, cy] = points[0] ?? [0, 0];
   const at = issueOf(issue);
   const { steps, step } = stepsOf(issue);
   const last = at + (steps - 1) * step;
@@ -109,8 +105,7 @@ export function outlookAt(
       break;
     }
     fields.forecastAt(issue, tick);
-    const sun: [number, number] = [src.sun(tick, cx, cy), src.sun(tick - fog.dawn, cx, cy)];
-    const w = placeAt(fields.physics, points, [0, 0, 0], risks, fog, sun);
+    const w = placeAt(fields.physics, points, [0, 0, 0]);
     samples.push({ ...w, at: minutes });
     const means = w.points.map((p) => p.mean).sort((a, b) => a - b);
     const gusts = w.points.map((p) => p.gust).sort((a, b) => a - b);

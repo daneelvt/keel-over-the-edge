@@ -278,6 +278,46 @@ type Catalog struct {
 	World World `json:"world"`
 }
 
+// The chart key's line for each of what the chart draws that is not a kind of
+// system.
+type ChartKey struct {
+	// The wind's barbs' line.
+	Barbs string `json:"barbs"`
+
+	// A cold front's line.
+	Cold string `json:"cold"`
+
+	// The fog's line.
+	Fog string `json:"fog"`
+
+	// The gale hatching's line.
+	Gale string `json:"gale"`
+
+	// The gusts' line.
+	Gusts string `json:"gusts"`
+
+	// The isobars' line.
+	Isobars string `json:"isobars"`
+
+	// A system's motion arrow's line.
+	Motion string `json:"motion"`
+
+	// The rain's line.
+	Rain string `json:"rain"`
+
+	// A ring of strongest wind's line.
+	Ring string `json:"ring"`
+
+	// The wind's streaks' line.
+	Streaks string `json:"streaks"`
+
+	// A warm front's line.
+	Warm string `json:"warm"`
+
+	// The wind's wash's line.
+	Wash string `json:"wash"`
+}
+
 // How the chart is drawn: its paper and inks, its graticule, how often it is drawn
 // and its wind.
 type ChartLook struct {
@@ -348,21 +388,54 @@ type ChartSight struct {
 	Water float64 `json:"water"`
 }
 
-// The chart's weather: the canvas it is painted on, where gusts are drawn and its
-// colours.
+// The wind's streaks: how many, how wide and under what wind they fade.
+type ChartStreaks struct {
+	// The streaks drawn at once.
+	Count int `json:"count"`
+
+	// A streak fades in a mean wind under this, in knots.
+	Fade float64 `json:"fade"`
+
+	// Each streak's width, in CSS pixels.
+	Width float64 `json:"width"`
+}
+
+// The wind's wash: the water tinted in steps of one hue by the Beaufort force of
+// the mean wind.
+type ChartWash struct {
+	// Colour corresponds to the JSON schema field "colour".
+	Colour Colour `json:"colour"`
+
+	// Each step begins at this Beaufort force, the lightest first: none under the
+	// first.
+	Forces []int `json:"forces"`
+
+	// Each step's opacity over the paper, as a share, the lightest first: one for
+	// each of forces.
+	Tints []float64 `json:"tints"`
+}
+
+// The chart's weather: the canvas it is painted on, where gusts are drawn, its
+// colours, the wind's wash, barbs and streaks, and the key's words.
 type ChartWeather struct {
+	// The wind's barbs stand this far apart, in nautical miles.
+	Barbs float64 `json:"barbs"`
+
 	// The weather's canvas, in pixels a side.
 	Canvas int `json:"canvas"`
+
+	// Cold corresponds to the JSON schema field "cold".
+	Cold Colour `json:"cold"`
 
 	// Fog corresponds to the JSON schema field "fog".
 	Fog Colour `json:"fog"`
 
-	// Front corresponds to the JSON schema field "front".
-	Front Colour `json:"front"`
-
 	// Gusts are drawn where the typical strongest gust is this much over the mean
 	// wind, in knots.
 	Gusts float64 `json:"gusts"`
+
+	// Key corresponds to the JSON schema field "key".
+	Key ChartKey `json:"key"`
 
 	// Rain corresponds to the JSON schema field "rain".
 	Rain Colour `json:"rain"`
@@ -372,6 +445,15 @@ type ChartWeather struct {
 
 	// Storm corresponds to the JSON schema field "storm".
 	Storm Colour `json:"storm"`
+
+	// Streaks corresponds to the JSON schema field "streaks".
+	Streaks ChartStreaks `json:"streaks"`
+
+	// Warm corresponds to the JSON schema field "warm".
+	Warm Colour `json:"warm"`
+
+	// Wash corresponds to the JSON schema field "wash".
+	Wash ChartWash `json:"wash"`
 }
 
 // What a discovery is worth: an island's size class's worth times its zone's and
@@ -3083,6 +3165,12 @@ type WeatherDisk struct {
 	// Beyond this the refuge's limits do not hold, in nautical miles.
 	RefugeOuter float64 `json:"refugeOuter"`
 
+	// The swell the refuge holds to, in m: above its knee.
+	RefugeSwell float64 `json:"refugeSwell"`
+
+	// The refuge softens the storms' swell above this, in m.
+	RefugeSwellKnee float64 `json:"refugeSwellKnee"`
+
 	// The wind with its gusts the refuge holds to, in knots.
 	RefugeWind float64 `json:"refugeWind"`
 
@@ -4261,4 +4349,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "c472d71c9d3b1b08"
+const Version = "87b4884e3cdbd3b1"

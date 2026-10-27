@@ -11,49 +11,108 @@ import (
 	"math"
 	"math/bits"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	position "github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
-	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
 )
 
-// The sample week's ticks the forecast's tests sail from: a day; a front
-// crossing the disk at the issue; the first issue with a gale warning in
-// force, a little after two days, the issue before it having none; and an
-// issue soon after, with three systems alive and a low forming.
-const (
-	dayTick   int64 = 24 * 3600 * physics.StepsPerSecond
-	frontTick int64 = 4_734_000
-	galeTick  int64 = 5_202_000
-	stormTick int64 = 5_238_000
-)
+// dayTick is a day of world time.
+const dayTick int64 = 24 * 3600 * physics.StepsPerSecond
+
+// sampleTicks are the sample week's ticks the forecast's tests sail from:
+// the first issue with a gale warning in force, the issue before it having
+// none; an issue with a front crossing the disk, and one with a warm front
+// crossing; and an issue after the opening with three systems alive and
+// one born after it. Found once.
+var sampleTicks = sync.OnceValues(func() (sampleWeek, error) {
+	cat, err := catalog.Load()
+	if err != nil {
+		return sampleWeek{}, err
+	}
+	tl, err := weather.FromCatalog(cat)
+	if err != nil {
+		return sampleWeek{}, err
+	}
+	every := tl.Prepared().ForecastEvery()
+	var s sampleWeek
+	var f physics.Forecast
+	for at := int64(0); at < 4*dayTick && (s.gale == 0 || s.front == 0 || s.warm == 0 || s.busy == 0); at += every {
+		if _, ok := galeAt(tl, at); ok && s.gale == 0 {
+			s.gale = at
+		}
+		tl.Forecast(at, nil, nil, worldEnd(tl), &f)
+		for i := range int(f.Head.NSpells) {
+			sp := &f.Spells[i]
+			if sp.Front != 0 && sp.Begin < float64(at) && float64(at) < sp.Begin+sp.Change {
+				if s.front == 0 {
+					s.front = at
+				}
+				if sp.Warm != 0 && s.warm == 0 {
+					s.warm = at
+				}
+			}
+		}
+		alive, born := 0, 0
+		for i := range int(f.Head.NSystems) {
+			if r := &f.Systems[i]; r.Born+f.Head.Origin <= float64(at) {
+				alive++
+			} else {
+				born++
+			}
+		}
+		if s.busy == 0 && at > tl.Config().Week.Opening && alive >= 3 && born > 0 {
+			s.busy = at
+		}
+	}
+	if s.gale == 0 || s.front == 0 || s.warm == 0 || s.busy == 0 {
+		return s, fmt.Errorf("the sample week's first four days lack a tick: %+v", s)
+	}
+	return s, nil
+})
+
+// sampleWeek are the ticks sampleTicks finds.
+type sampleWeek struct{ gale, front, warm, busy int64 }
+
+// ticksOf is the sample week's ticks, or the test's end.
+func ticksOf(t testing.TB) sampleWeek {
+	t.Helper()
+	s, err := sampleTicks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
 
 // forecastConfig is the owner's tools on a sky rig's world with the
-// catalog's words, risks, fog and outlook, and the world's sky, its epoch
-// the sample week's.
+// catalog's words, outlook and kinds, and the world's sky, its epoch the
+// sample week's.
 func forecastConfig(r *skyRig) Config {
-	risks, fog := weather.RisksOf(r.cat)
 	regimes := make([]string, len(r.cat.Weather.Regimes))
 	for i, g := range r.cat.Weather.Regimes {
 		regimes[i] = string(g.ID)
 	}
 	kinds := make([]string, len(r.cat.Weather.Systems))
+	var wk []WeatherKind
 	for i, k := range r.cat.Weather.Systems {
 		kinds[i] = string(k.ID)
+		wk = append(wk, WeatherKind{Name: k.Name, Symbol: string(k.Symbol), Rain: k.Rain.Rate > 0, Trough: k.Symbol == catalog.SystemKindSymbolDashed})
 	}
 	return Config{
 		Frames: r.w.Bus().Frames, Owner: r.w.Bus().Commands.Owner(), Weather: r.tl.Prepared(), Timeline: r.tl,
-		Regimes: regimes, SystemKinds: kinds, Sky: r.cat.PrepareSky(),
+		Regimes: regimes, SystemKinds: kinds, WeatherKinds: wk, Sky: r.cat.PrepareSky(),
 		World: World{Number: 1, Epoch: time.UnixMicro(weather.SampleEpoch)},
-		Words: weather.WordsOf(r.cat), Risks: risks, Fog: fog, Outlook: r.cat.Weather.Forecast.Outlook.Samples,
+		Words: weather.WordsOf(r.cat), Outlook: r.cat.Weather.Forecast.Outlook.Samples,
 		Log: slog.New(slog.DiscardHandler),
 	}
 }
@@ -81,62 +140,59 @@ func madeForecast(tl *weather.Timeline, tick int64) (physics.Forecast, physics.G
 }
 
 // TestForecastSystems: forecast.json at a tick is the issue in force then,
-// made from the week: each system where the forecast puts it at each step,
-// its cone growing from nothing with the lead, a forming low's constant;
-// each spell with its regime's risk. With the issuer, the issue is the
-// issuer's, the same.
+// made from the week: every system alive at the issue or born within its
+// reach, with its track each minute to the last tick the forecast knows,
+// and the track is the truth, the week's own keyframes at those minutes,
+// to the bit. With the issuer, the issue is the issuer's, the same.
 func TestForecastSystems(t *testing.T) {
-	r := newForecastRig(t, stormTick)
+	busy := ticksOf(t).busy
+	r := newForecastRig(t, busy)
 	tl, p := r.tl, r.tl.Prepared()
-	tick := stormTick + 7*60*physics.StepsPerSecond
+	tick := busy + 7*60*physics.StepsPerSecond
 	var page forecastPage
 	size := r.get(t, fmt.Sprintf("/owner/api/forecast.json?at=%d", tick), &page)
 	f, _ := madeForecast(tl, tick)
 	t.Logf("forecast.json: %d bytes, %d systems, %d spells", size, len(page.Systems), len(page.Spells))
 	if page.Issue != tl.IssueAt(tick) || page.At != tick || page.Issued || page.Steps != int(f.Head.Steps) || page.Steps != int(p.ForecastSteps()) ||
-		page.Step != p.ForecastStep() || len(page.Systems) != int(f.Head.NSystems) || len(page.Systems) == 0 || len(page.Spells) != int(f.Head.NSpells) {
-		t.Fatalf("the page: issue %d at %d, issued %v, %d steps of %d, %d systems, %d spells", page.Issue, page.At, page.Issued,
-			page.Steps, page.Step, len(page.Systems), len(page.Spells))
+		page.Step != p.ForecastStep() || page.Until != page.Issue+p.ForecastReach() || page.Every != trackEvery ||
+		len(page.Systems) != int(f.Head.NSystems) || len(page.Systems) == 0 || len(page.Spells) != int(f.Head.NSpells) {
+		t.Fatalf("the page: issue %d at %d, issued %v, %d steps of %d, until %d, %d systems, %d spells", page.Issue, page.At, page.Issued,
+			page.Steps, page.Step, page.Until, len(page.Systems), len(page.Spells))
 	}
-	alive, forming := 0, 0
+	alive, born := 0, 0
 	for i, s := range page.Systems {
 		fs := &f.Systems[i]
-		if s.Slot != int(fs.Slot) || s.Kind != int(fs.Kind) || s.Forming != (fs.Forming != 0) || s.ID != string(r.cat.Weather.Systems[s.Kind].ID) {
+		if s.Slot != int(f.Head.Slots[i]) || s.Kind != int(fs.Kind) || s.Seed != uint32(fs.Seed) || s.ID != string(r.cat.Weather.Systems[s.Kind].ID) ||
+			s.Born != int64(fs.Born+f.Head.Origin) || s.Gone != int64(fs.Gone+f.Head.Origin) || s.Size != fs.Size || s.Length != fs.Length {
 			t.Fatalf("system %d: %+v", i, s)
 		}
-		for k, st := range s.Steps {
-			if !(fs.Strength[k] > 0) {
-				if st != [4]float64{} {
-					t.Fatalf("system %d at step %d, not alive: %v", i, k, st)
-				}
-				continue
-			}
-			cone := physics.ForecastCone(p, &f, fs, int32(k))
-			if st[0] != fs.East[k] || st[1] != fs.North[k] || st[2] != round2(cone) || st[3] != round3(fs.Strength[k]/256) {
-				t.Fatalf("system %d at step %d: %v; the forecast's %v, %v, cone %v", i, k, st, fs.East[k], fs.North[k], cone)
-			}
-			switch {
-			case s.Forming && st[2] != round2(physics.ForecastCone(p, &f, fs, 0)):
-				t.Fatalf("a forming low's cone at step %d: %v", k, st[2])
-			case !s.Forming && k > 0 && st[2] <= s.Steps[k-1][2] && s.Steps[k-1][3] > 0:
-				t.Fatalf("system %d's cone does not grow at step %d: %v", i, k, s.Steps)
+		if s.From < page.Issue || s.From < s.Born || s.From-trackEvery >= max(s.Born, page.Issue) || (s.From-page.Issue)%trackEvery != 0 {
+			t.Fatalf("system %d's track from %d, born %d, the issue %d", i, s.From, s.Born, page.Issue)
+		}
+		for k, pt := range s.Track {
+			at := s.From + int64(k)*trackEvery
+			var truth physics.Keyframe
+			tl.Keyframe(at, nil, &truth)
+			ts := &truth.Systems[s.Slot]
+			if at > page.Until || ts.On == 0 || ts.Seed != float64(s.Seed) ||
+				pt != [4]float64{ts.East / 4, ts.North / 4, round3(ts.Strength / 4096), round2(ts.Heading * 360 / physics.TurnSteps)} {
+				t.Fatalf("system %d at %d: %v; the truth %+v", i, at, pt, ts)
 			}
 		}
-		if s.Forming {
-			forming++
-		} else {
+		if last := s.From + int64(len(s.Track))*trackEvery; last <= page.Until && last < s.Gone {
+			t.Fatalf("system %d's track stops at %d, before it is gone at %d or the forecast's last %d", i, last, s.Gone, page.Until)
+		}
+		if s.Born <= page.Issue {
 			alive++
-			if s.Steps[0][2] != 0 {
-				t.Fatalf("system %d's cone at the issue: %v", i, s.Steps[0][2])
-			}
+		} else {
+			born++
 		}
 	}
-	if alive < 2 || forming == 0 {
-		t.Fatalf("%d systems alive at the issue, %d forming", alive, forming)
+	if alive < 3 || born == 0 {
+		t.Fatalf("%d systems alive at the issue, %d born after it", alive, born)
 	}
-	risks, _ := weather.RisksOf(r.cat)
 	for i, s := range page.Spells {
-		if s.Regime != int(f.Spells[i].Regime) || s.ID != string(r.cat.Weather.Regimes[s.Regime].ID) || s.Risk != risks[s.Regime].Sky || s.Risk == "" {
+		if s.Regime != int(f.Spells[i].Regime) || s.ID != string(r.cat.Weather.Regimes[s.Regime].ID) || s.Warm != (f.Spells[i].Warm != 0) {
 			t.Fatalf("spell %d: %+v", i, s)
 		}
 	}
@@ -181,46 +237,28 @@ func galeAt(tl *weather.Timeline, tick int64) (weather.Gale, bool) {
 	return weather.GaleOf(&f, &g)
 }
 
-// TestForecastFront: a front crossing at the issue has its forecast line at
-// each step it crosses, where its forecast spell puts it, and its band about
-// it, nothing at the issue and widening with the lead.
+// TestForecastFront: a front crossing at the issue is on the page as its
+// forecast spell has it, and a warm front is told from a cold.
 func TestForecastFront(t *testing.T) {
+	ticks := ticksOf(t)
 	r := newForecastRig(t, 1000)
-	p := r.tl.Prepared()
-	var page forecastPage
-	r.get(t, fmt.Sprintf("/owner/api/forecast.json?at=%d", frontTick), &page)
-	f, _ := madeForecast(r.tl, frontTick)
-	if len(page.Fronts) == 0 {
-		t.Fatal("no front")
-	}
-	var s *physics.Spell
-	for i := range int(f.Head.NSpells) {
-		if f.Spells[i].Front != 0 && f.Spells[i].Begin <= float64(frontTick) {
-			s = &f.Spells[i]
-		}
-	}
-	fr := page.Fronts[0]
-	if s == nil || fr.Begin != int64(s.Begin) || fr.Cross != int64(s.Change) || fr.Toward != round2(s.Toward*360/physics.TurnSteps) {
-		t.Fatalf("the front %+v; the forecast's %+v", fr, s)
-	}
-	reach := p.FrontReach()
-	last := -1.0
-	for k, l := range fr.Lines {
-		at := f.Head.Issue + float64(k)*f.Head.Step
-		if l == nil {
-			if at >= s.Begin && at <= s.Begin+s.Change {
-				t.Fatalf("no line at step %d, as it crosses", k)
+	for _, tick := range []int64{ticks.front, ticks.warm} {
+		var page forecastPage
+		r.get(t, fmt.Sprintf("/owner/api/forecast.json?at=%d", tick), &page)
+		f, _ := madeForecast(r.tl, tick)
+		var want []forecastFrontJSON
+		for i := range int(f.Head.NSpells) {
+			if s := &f.Spells[i]; s.Front != 0 && s.Change > 0 {
+				want = append(want, forecastFrontJSON{Toward: round2(s.Toward * 360 / physics.TurnSteps), Begin: int64(s.Begin), Cross: int64(s.Change), Warm: s.Warm != 0})
 			}
-			continue
 		}
-		line := 2*reach*(at-s.Begin)/s.Change - reach
-		band := physics.FrontBand(p, s, at-f.Head.Issue)
-		if l[0] != round2(line) || l[1] != round2(band) || (k == 0) != (l[1] == 0) || l[1] <= last && k > 0 {
-			t.Fatalf("step %d: line %v, band %v; the forecast's %v, %v", k, l[0], l[1], line, band)
+		if len(want) == 0 || fmt.Sprint(page.Fronts) != fmt.Sprint(want) || page.Reach != round2(r.tl.Prepared().FrontReach()) {
+			t.Fatalf("at %d the fronts %+v; the forecast's %+v", tick, page.Fronts, want)
 		}
-		last = l[1]
+		if tick == ticks.warm && !slices.ContainsFunc(page.Fronts, func(f forecastFrontJSON) bool { return f.Warm }) {
+			t.Fatalf("at %d no warm front: %+v", tick, page.Fronts)
+		}
 	}
-	t.Logf("the front's band at the last step: %.0f m", last)
 }
 
 // TestForecastGale: the first gale warning of the sample week is on the
@@ -228,6 +266,7 @@ func TestForecastFront(t *testing.T) {
 // nearest island charted; each step's area is the scan's points; the next
 // issue in force keeps its key. Through the issuer, the same.
 func TestForecastGale(t *testing.T) {
+	galeTick := ticksOf(t).gale
 	r := newForecastRig(t, 1000)
 	tl, p := r.tl, r.tl.Prepared()
 	words := weather.WordsOf(r.cat)
@@ -308,6 +347,7 @@ func TestForecastGale(t *testing.T) {
 // gale, keyed by the first, with the most force of any; the last in force
 // now if its gale is.
 func TestGaleWarnings(t *testing.T) {
+	galeTick := ticksOf(t).gale
 	now := int64(galeTick + 2*3600*physics.StepsPerSecond)
 	r := newForecastRig(t, now)
 	tl, p := r.tl, r.tl.Prepared()
@@ -354,96 +394,21 @@ func TestGaleWarnings(t *testing.T) {
 	}
 }
 
-// TestCalibration: calibration.json is the share of the truth inside the
-// cones at each lead over every issue whose horizon has passed, three days
-// of the sample week with its first front and its first storm, near four
-// in five for the systems alive at the issue; carried forward from an
-// earlier tally, it is the tally made at once.
-func TestCalibration(t *testing.T) {
-	r := newForecastRig(t, 3*dayTick)
-	tl, p := r.tl, r.tl.Prepared()
-	var page calibrationPage
-	r.get(t, "/owner/api/calibration.json", &page)
-	now := r.w.Latest().Tick
-	issues := 0
-	for at := int64(0); at+p.ForecastHorizon() <= now; at += p.ForecastEvery() {
-		issues++
-	}
-	if page.Issues != issues || page.From != 0 || len(page.Leads) != int(p.ForecastSteps())-1 || page.Leads[0] != 10 ||
-		len(page.Alive) != len(page.Leads) || len(page.Forming) != len(page.Leads) || len(page.Fronts) != len(page.Leads) {
-		t.Fatalf("the page: %d issues of %d, from %d, leads %v", page.Issues, issues, page.From, page.Leads)
-	}
-	share := func(c [][2]int) (float64, int) {
-		in, n := 0, 0
-		for _, x := range c {
-			in, n = in+x[0], n+x[1]
-		}
-		return 100 * float64(in) / float64(max(n, 1)), n
-	}
-	alive, n := share(page.Alive)
-	forming, nf := share(page.Forming)
-	fronts, nfr := share(page.Fronts)
-	t.Logf("three days: %.1f%% of %d systems alive at the issue, %.1f%% of %d lows forming, %.1f%% of %d fronts' lines", alive, n, forming, nf, fronts, nfr)
-	if n < 500 || alive < 65 || alive > 95 {
-		t.Fatalf("the cones held %.1f%% of %d systems", alive, n)
-	}
-	// Each lead's tally, as the week's forecasts and truth make it.
-	var want [physics.MaxForecastSteps][2]int
-	var f physics.Forecast
-	for at := int64(0); at+p.ForecastHorizon() <= now; at += p.ForecastEvery() {
-		tl.Forecast(at, nil, nil, worldEnd(tl), &f)
-		for i := range int(f.Head.NSystems) {
-			s := &f.Systems[i]
-			rec := recordOf(tl.Week(), s, at)
-			if rec == nil || s.Forming != 0 {
-				continue
-			}
-			for k := int32(1); k < int32(f.Head.Steps); k++ {
-				truth := physics.SystemAt(rec, float64(at)+float64(k)*f.Head.Step)
-				if s.Strength[k] > 0 && truth.On != 0 {
-					want[k][1]++
-					if math.Hypot(truth.East/4-s.East[k], truth.North/4-s.North[k]) <= physics.ForecastCone(p, &f, s, k) {
-						want[k][0]++
-					}
-				}
-			}
-		}
-	}
-	for k, c := range page.Alive {
-		if c != want[k+1] {
-			t.Fatalf("lead %v: %v, want %v", page.Leads[k], c, want[k+1])
-		}
-	}
-	// Carried forward from half the day, the same as made at once.
-	o := New(forecastConfig(r))
-	o.calibrationPage(tl, now/2)
-	carried := o.calibrationPage(tl, now)
-	if fmt.Sprint(carried.Alive, carried.Forming, carried.Fronts, carried.Issues) != fmt.Sprint(page.Alive, page.Forming, page.Fronts, page.Issues) {
-		t.Fatalf("carried forward: %+v; at once %+v", carried, page)
-	}
-}
-
 // TestPlaceWeather: place.json's box at a point is weather.BoxOf of
-// weather.PlaceAt there at the tick, its points about it, the sun's height
-// the sky's; its position chart.Format's; its outlook the forecast's. An
-// island's is measured over its bounds, a place's about it.
+// weather.PlaceAt there at the tick, its points about it; its position
+// chart.Format's; its outlook the forecast's. An island's is measured over
+// its bounds, a place's about it.
 func TestPlaceWeather(t *testing.T) {
+	galeTick := ticksOf(t).gale
 	r := newForecastRig(t, galeTick)
 	land := newRig(t, 0)
 	r.o.cfg.Bundle = land.o.cfg.Bundle
 	tl := r.tl
 	words := weather.WordsOf(r.cat)
-	risks, fog := weather.RisksOf(r.cat)
 	tick := int64(galeTick + 40*60*physics.StepsPerSecond)
 	minute := int64(60 * physics.StepsPerSecond)
-	s := r.cat.PrepareSky()
-	sun := func(t int64, x, y float64) float64 {
-		return sky.SunAltitude(s, sky.Time(s, float64(weather.SampleEpoch), float64(worldMicros(t))), x, y)
-	}
 	boxAt := func(points [9][2]float64) weather.Box {
-		c := points[0]
-		pw := weather.PlaceAt(physicsAt(tl, tick, nil, nil), physicsAt(tl, tick-5*minute, nil, nil), physicsAt(tl, tick-15*minute, nil, nil),
-			&points, risks, fog, [2]float64{sun(tick, c[0], c[1]), sun(tick-fog.Dawn, c[0], c[1])})
+		pw := weather.PlaceAt(physicsAt(tl, tick, nil, nil), physicsAt(tl, tick-5*minute, nil, nil), physicsAt(tl, tick-15*minute, nil, nil), &points)
 		return weather.BoxOf(&pw, &words)
 	}
 	var page placeWeatherPage

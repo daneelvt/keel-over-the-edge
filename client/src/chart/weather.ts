@@ -1,26 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The chart's weather: what the chart shows of the wind, the gusts, the
-// rain, the fog, the systems and the pressure at the slider's moment, now,
-// a step of the latest forecast, or a time of the last ninety minutes with
-// the forecast that was issued for it. Its fields come from the forecast's
-// own module (predict/forecast.ts), sampled on a grid over the whole disk,
-// uncharted water and all; its systems from the forecast's steps or the
-// truth's keyframes; its fronts from the spells. It is painted on a canvas
-// of its own over the paper (weatherpaint.ts), so the paper is painted
-// once.
+// rain, the fog, the systems and the pressure at the slider's moment: now,
+// from the keyframes the phone holds; a minute ahead, from the latest
+// forecast, which is the truth for its reach, every system placed where it
+// will be; or a minute of the last ninety, from the truth kept. Its fields
+// come from the forecast's own module (predict/forecast.ts), sampled on a
+// grid over the whole disk, uncharted water and all; its systems from the
+// keyframes of the moment; its fronts from the spells. It is painted on a
+// canvas of its own over the paper (weatherpaint.ts), so the paper is
+// painted once.
 
 import type { ForecastTold } from '../net/messages';
-import { type Fields, type Forecasts, issueOf, spellsAbout, stepsOf } from '../predict/forecast';
+import { type Fields, type Forecasts, issueOf } from '../predict/forecast';
 import { RECORDS, SIZES } from '../predict/layout.gen';
-import type { Keyframe } from '../predict/physics';
-import type { Where } from './contour';
-import type { FogRule, Risk } from './place';
+import type { Keyframe, Physics } from '../predict/physics';
 
-const S = RECORDS.forecastSystem;
 const Y = RECORDS.system;
 const P = RECORDS.spell;
 const H = RECORDS.forecastHead;
+const R = RECORDS.systemRecord;
 
 /** Ticks a second, and a minute. */
 const SECOND = 30;
@@ -32,7 +31,15 @@ const TURN = 65536;
  * by force, its barbs and its streaks; the gusts, the rain, the fog, the
  * systems and the pressure's isobars.
  */
-export type Layer = 'wash' | 'barbs' | 'streaks' | 'gusts' | 'rain' | 'fog' | 'systems' | 'pressure';
+export type Layer =
+  | 'wash'
+  | 'barbs'
+  | 'streaks'
+  | 'gusts'
+  | 'rain'
+  | 'fog'
+  | 'systems'
+  | 'pressure';
 export type Layers = Record<Layer, boolean>;
 
 /** The layers at first: every one, the isobars too. */
@@ -89,7 +96,15 @@ export interface WeatherSource {
  * shower's heap, a storm's spiral, a low's spiral lettered L, a fog bank, a
  * patch of calm, a squall line's dash, dot, dot, a trough's dashes.
  */
-export type SystemDraw = 'cell' | 'heap' | 'spiral' | 'low' | 'bank' | 'calm' | 'dash-dot' | 'dashed';
+export type SystemDraw =
+  | 'cell'
+  | 'heap'
+  | 'spiral'
+  | 'low'
+  | 'bank'
+  | 'calm'
+  | 'dash-dot'
+  | 'dashed';
 
 /**
  * How each kind of system is drawn and named, by the catalog's index: its
@@ -203,28 +218,81 @@ export interface SceneLook {
   /** Grid points a side. */
   n: number;
   kinds: readonly KindDraw[];
-  /** The cones: m an hour, a forming low's, and a front's speed's standard deviation. */
-  perHour: number;
-  forming: number;
-  front: number;
   /** The gale grid's spacing, m. */
   galeGrid: number;
-  risks: readonly Risk[];
-  fog: FogRule;
-  /** The light air's calm, m/s: calms are marked under it. */
-  calm: number;
-  /** The regimes' risks' marks, by index. */
-  marks: readonly (readonly string[])[];
   /** A thing is seen while the optical depth to it is at most this: the visibility is this over the extinction. */
   contrast: number;
 }
 
-/** The standard normal's 90th percentile: a front's band holds its line four times in five. */
-const BAND_Z = 1.2815515655446004;
+/** How far on a system's place ahead is told: half an hour. */
+const AHEAD = 30 * MINUTE;
 
-/** Makes the fields the moment's: the forecast's at its step, the truth's in the past, the present now. False if nothing is held for it. */
+/** The whole minute a tick is in: the moments ahead and behind are whole minutes from it, so each holds still for its minute. */
+function minuteOf(tick: number): number {
+  return Math.floor(tick / MINUTE) * MINUTE;
+}
+
+/** The last tick an issue knows its systems to: its until, or its issue for one that knows none. */
+export function untilOf(f: ForecastTold): number {
+  return Math.max(f.head[H.until] ?? 0, issueOf(f));
+}
+
+/**
+ * How far ahead the slider reaches, whole minutes: ninety, or less where
+ * the latest issue's reach or the world's end comes first; 0 before the
+ * first issue.
+ */
+export function aheadReach(src: WeatherSource): number {
+  const issue = src.forecasts.latest;
+  if (issue === null) {
+    return 0;
+  }
+  let last = untilOf(issue);
+  const end = src.end();
+  if (end > 0) {
+    last = Math.min(last, end);
+  }
+  const m = Math.floor((last - minuteOf(src.tick())) / MINUTE);
+  return Math.min(Math.max(m, 0), AHEAD_MINUTES);
+}
+
+/** How far back the slider reaches, whole minutes: ninety, or less where the truth kept begins later; 0 with none kept. */
+export function pastReach(src: WeatherSource): number {
+  const from = src.forecasts.truthFrom;
+  if (from === null) {
+    return 0;
+  }
+  const m = Math.floor((minuteOf(src.tick()) - from) / MINUTE);
+  return Math.min(Math.max(m, 0), PAST_MINUTES);
+}
+
+/**
+ * The moment the slider shows: its way and its minutes from now, ahead
+ * positive, back negative. Ahead it is the latest issue's, back the truth
+ * kept's, each as far as it reaches; 0, or nothing held for it, is now.
+ */
+export function momentOf(mode: TimeMode, minutes: number, src: WeatherSource): Moment {
+  const now = src.tick();
+  const whole = minuteOf(now);
+  const nowMoment: Moment = { kind: 'now', tick: now, minutes: 0, issue: null };
+  if (mode === 'past') {
+    const back = Math.min(Math.round(-minutes), pastReach(src));
+    if (back <= 0) {
+      return nowMoment;
+    }
+    return { kind: 'past', tick: whole - back * MINUTE, minutes: -back, issue: null };
+  }
+  const issue = src.forecasts.latest;
+  const ahead = Math.min(Math.round(minutes), aheadReach(src));
+  if (ahead <= 0 || issue === null) {
+    return nowMoment;
+  }
+  return { kind: 'ahead', tick: whole + ahead * MINUTE, minutes: ahead, issue };
+}
+
+/** Makes the fields the moment's: the latest forecast's ahead, the truth's in the past, the present now. False if nothing is held for it. */
 export function useMoment(fields: Fields, m: Moment, src: WeatherSource): boolean {
-  if (m.kind === 'forecast' && m.issue !== null) {
+  if (m.kind === 'ahead' && m.issue !== null) {
     fields.forecastAt(m.issue, m.tick);
     return true;
   }
@@ -289,7 +357,75 @@ export function sampleGrid(fields: Fields, look: SceneLook, points: Float64Array
   return g;
 }
 
-/** The truth's systems at a tick, interpolated between the two keyframes about it, as the module does. */
+/** A system's place on the water at a moment: where it is, which way it moves and how fast, how big and how strong. */
+export interface SystemPlace {
+  east: number;
+  north: number;
+  heading: number;
+  speed: number;
+  size: number;
+  length: number;
+  strength: number;
+}
+
+/** A system record's values as a place, its strength times weight. */
+function placeOf(s: ArrayLike<number>, weight: number): SystemPlace {
+  return {
+    east: (s[Y.east] ?? 0) / 4,
+    north: (s[Y.north] ?? 0) / 4,
+    heading: ((s[Y.heading] ?? 0) / TURN) * 2 * Math.PI,
+    speed: (s[Y.speed] ?? 0) * 0.01,
+    size: s[Y.size] ?? 0,
+    length: s[Y.length] ?? 0,
+    strength: ((s[Y.strength] ?? 0) / 4096) * weight,
+  };
+}
+
+/** u of the way from a to b, the heading the shorter way round. */
+function between(a: SystemPlace, b: SystemPlace, u: number): SystemPlace {
+  const turn = Math.atan2(Math.sin(b.heading - a.heading), Math.cos(b.heading - a.heading));
+  return {
+    east: a.east + u * (b.east - a.east),
+    north: a.north + u * (b.north - a.north),
+    heading: a.heading + u * turn,
+    speed: a.speed + u * (b.speed - a.speed),
+    size: a.size + u * (b.size - a.size),
+    length: a.length + u * (b.length - a.length),
+    strength: a.strength + u * (b.strength - a.strength),
+  };
+}
+
+/** A system of a slot as the chart draws it at a place, its wind, its course ahead and its end not yet known. */
+function sceneOf(
+  s: ArrayLike<number>,
+  slot: number,
+  at: SystemPlace,
+  kinds: readonly KindDraw[],
+): SceneSystem {
+  const kind = s[Y.kind] ?? 0;
+  const d = kinds[kind];
+  return {
+    slot,
+    kind,
+    seed: s[Y.seed] ?? 0,
+    draw: d?.draw ?? 'calm',
+    name: d?.name ?? '',
+    ...at,
+    length: d?.line === true ? at.length : 0,
+    ring: (d?.ring ?? 0) * at.size,
+    wind: 0,
+    gust: 0,
+    ahead: null,
+    gone: null,
+  };
+}
+
+/**
+ * The systems of the keyframes about a tick, interpolated between them as
+ * the module does: the same system in both moves between its two places; one
+ * in only one fades in or out with the tick. Their winds, their places
+ * ahead and their ends are left for systemWinds and trackSystems.
+ */
 export function systemsOfKeys(
   keys: readonly Keyframe[],
   tick: number,
@@ -306,128 +442,204 @@ export function systemsOfKeys(
       : Math.min(Math.max((tick - a.tick) / (b.tick - a.tick), 0), 1);
   const out: SceneSystem[] = [];
   const n = Math.max(a.systems.length, b?.systems.length ?? 0);
-  const of = (s: ArrayLike<number>, weight: number): SceneSystem => {
-    const kind = s[Y.kind] ?? 0;
-    const d = kinds[kind] ?? { draw: 'calm', name: '' };
-    return {
-      slot: 0,
-      kind,
-      draw: d.draw,
-      name: d.name,
-      east: (s[Y.east] ?? 0) / 4,
-      north: (s[Y.north] ?? 0) / 4,
-      heading: ((s[Y.heading] ?? 0) / TURN) * 2 * Math.PI,
-      speed: (s[Y.speed] ?? 0) * 0.01,
-      size: s[Y.size] ?? 0,
-      strength: ((s[Y.strength] ?? 0) / 4096) * weight,
-      forming: false,
-      cone: 0,
-      track: [],
-    };
-  };
   for (let slot = 0; slot < n; slot++) {
     const sa = a.systems[slot];
     const sb = b?.systems[slot];
-    const same =
+    if (
       sa !== undefined &&
       sb !== undefined &&
       sa[Y.kind] === sb[Y.kind] &&
-      sa[Y.seed] === sb[Y.seed];
-    if (same) {
-      const va = of(sa, 1);
-      const vb = of(sb, 1);
-      const turn = Math.atan2(Math.sin(vb.heading - va.heading), Math.cos(vb.heading - va.heading));
-      out.push({
-        ...va,
-        slot,
-        east: va.east + u * (vb.east - va.east),
-        north: va.north + u * (vb.north - va.north),
-        heading: va.heading + u * turn,
-        speed: va.speed + u * (vb.speed - va.speed),
-        strength: va.strength + u * (vb.strength - va.strength),
-      });
+      sa[Y.seed] === sb[Y.seed]
+    ) {
+      out.push(sceneOf(sa, slot, between(placeOf(sa, 1), placeOf(sb, 1), u), kinds));
       continue;
     }
     if (sa !== undefined && u < 1) {
-      out.push({ ...of(sa, 1 - u), slot });
+      out.push(sceneOf(sa, slot, placeOf(sa, 1 - u), kinds));
     }
     if (sb !== undefined && u > 0) {
-      out.push({ ...of(sb, u), slot });
+      out.push(sceneOf(sb, slot, placeOf(sb, u), kinds));
     }
   }
   return out.filter((s) => s.strength > 0.01);
 }
 
-/** A forecast's systems at a tick, between its steps, with their cones and tracks. */
-export function systemsOfForecast(f: ForecastTold, tick: number, look: SceneLook): SceneSystem[] {
-  const { steps, step } = stepsOf(f);
-  const issue = issueOf(f);
-  const x = Math.min(Math.max((tick - issue) / step, 0), steps - 1);
-  const k = Math.floor(x);
-  const u = x - k;
-  const out: SceneSystem[] = [];
-  for (const s of f.systems) {
-    const forming = (s[S.forming] ?? 0) !== 0;
-    const at = (i: number) => ({
-      east: s[S.east + i] ?? 0,
-      north: s[S.north + i] ?? 0,
-      strength: (s[S.strength + i] ?? 0) / 256,
-    });
-    const cone = (lead: number) => (forming ? look.forming : (look.perHour * lead) / (60 * MINUTE));
-    const a = at(k);
-    const b = at(Math.min(k + 1, steps - 1));
-    let strength = a.strength + u * (b.strength - a.strength);
-    if (a.strength <= 0 || b.strength <= 0) {
-      strength = u < 0.5 ? a.strength : b.strength;
+/**
+ * The points a system's strongest wind is looked for at: round a low's
+ * ring; along a line's leading edge and halfway to it; a cell's centre and
+ * its gust front ahead of it, and round it.
+ */
+export function windPoints(s: SceneSystem): [number, number][] {
+  const ux = Math.sin(s.heading);
+  const uy = Math.cos(s.heading);
+  const out: [number, number][] = [];
+  if (s.ring > 0) {
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      out.push([s.east + s.ring * Math.sin(a), s.north + s.ring * Math.cos(a)]);
     }
-    const track: SceneSystem['track'] = [];
-    for (let i = 0; i < steps; i++) {
-      const p = at(i);
-      if (p.strength > 0) {
-        track.push({ east: p.east, north: p.north, cone: cone(i * step) });
+    return out;
+  }
+  if (s.length > 0) {
+    // Its length runs along (uy, −ux).
+    for (const along of [-1 / 3, 0, 1 / 3]) {
+      for (const ahead of [0.5, 1]) {
+        const l = along * s.length;
+        const d = ahead * s.size;
+        out.push([s.east + ux * d + uy * l, s.north + uy * d - ux * l]);
       }
     }
-    if (strength <= 0) {
-      continue;
-    }
-    const kind = s[S.kind] ?? 0;
-    const d = look.kinds[kind] ?? { draw: 'calm' as const, name: '' };
-    const hk = u < 0.5 ? k : Math.min(k + 1, steps - 1);
-    out.push({
-      slot: s[S.slot] ?? 0,
-      kind,
-      draw: d.draw,
-      name: d.name,
-      east:
-        a.strength > 0 && b.strength > 0
-          ? a.east + u * (b.east - a.east)
-          : u < 0.5
-            ? a.east
-            : b.east,
-      north:
-        a.strength > 0 && b.strength > 0
-          ? a.north + u * (b.north - a.north)
-          : u < 0.5
-            ? a.north
-            : b.north,
-      heading: ((s[S.heading + hk] ?? 0) / TURN) * 2 * Math.PI,
-      speed: (s[S.speed + hk] ?? 0) * 0.01,
-      size: s[S.size] ?? 0,
-      strength,
-      forming,
-      cone: cone(tick - issue),
-      track,
-    });
+    return out;
+  }
+  out.push([s.east, s.north]);
+  for (const d of [0.5, 1]) {
+    out.push([s.east + ux * d * s.size, s.north + uy * d * s.size]);
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = s.heading + Math.PI / 4 + (i * Math.PI) / 2;
+    out.push([s.east + 0.7 * s.size * Math.sin(a), s.north + 0.7 * s.size * Math.cos(a)]);
   }
   return out;
 }
 
-/** The fronts crossing the disk at a tick, from the spells: with their forecast bands if lead is given. */
+/** Sets each system's strongest mean wind and gust at its points, from a module set to the moment. */
+export function systemWinds(physics: Physics, systems: SceneSystem[]): void {
+  const each = systems.map(windPoints);
+  const flat = each.flat(2);
+  if (flat.length === 0) {
+    return;
+  }
+  const typical = physics.typicalSample(flat, new Float64Array((3 * flat.length) / 2));
+  let k = 0;
+  systems.forEach((s, i) => {
+    let wind = 0;
+    let gust = 0;
+    for (let j = 0; j < (each[i]?.length ?? 0); j++, k++) {
+      wind = Math.max(wind, typical[3 * k] ?? 0);
+      gust = Math.max(gust, typical[3 * k + 2] ?? 0);
+    }
+    s.wind = wind;
+    s.gust = Math.max(gust, wind);
+  });
+}
+
+/** A forecast's record of the system in a slot of a seed, or null if it holds none. */
+export function recordOf(f: ForecastTold, slot: number, seed: number): ArrayLike<number> | null {
+  const n = Math.min(f.head[H.nSystems] ?? f.systems.length, f.systems.length);
+  for (let i = 0; i < n; i++) {
+    const r = f.systems[i];
+    if (r !== undefined && (f.head[H.slots + i] ?? -1) === slot && (r[R.seed] ?? 0) === seed) {
+      return r;
+    }
+  }
+  return null;
+}
+
+/**
+ * Where a forecast's system is at a tick, from its record: between the two
+ * keyframes about the tick the module makes of it, as the server's are
+ * interpolated; null when it is not alive then, or the forecast does not
+ * reach the tick.
+ */
+export function recordAt(
+  physics: Physics,
+  f: ForecastTold,
+  r: ArrayLike<number>,
+  tick: number,
+): SystemPlace | null {
+  if (tick < issueOf(f) || tick > untilOf(f)) {
+    return null;
+  }
+  const every = Math.max(f.head[H.every] ?? 0, 1);
+  const origin = f.head[H.origin] ?? 0;
+  const a = Math.floor(tick / every) * every;
+  const u = (tick - a) / every;
+  const at = (t: number, weight: number): SystemPlace | null => {
+    const s = physics.systemAt(r, t - origin);
+    return (s[Y.on] ?? 0) === 0 ? null : placeOf(s, weight);
+  };
+  const pa = at(a, 1);
+  const pb = at(a + every, 1);
+  let p: SystemPlace | null = null;
+  if (pa !== null && pb !== null) {
+    p = between(pa, pb, u);
+  } else if (pa !== null) {
+    p = { ...pa, strength: pa.strength * (1 - u) };
+  } else if (pb !== null) {
+    p = { ...pb, strength: pb.strength * u };
+  }
+  return p !== null && p.strength > 0.01 ? p : null;
+}
+
+/**
+ * A system's track by the latest forecast, from its record: its place at
+ * any tick the forecast reaches, null once it is gone. A system the
+ * forecast does not hold is carried on as it moves, to the forecast's
+ * reach.
+ */
+export function systemTrack(
+  physics: Physics | null,
+  f: ForecastTold | null,
+  s: SceneSystem,
+  from: number,
+): { at: (tick: number) => SystemPlace | null; until: number } {
+  const r = f === null ? null : recordOf(f, s.slot, s.seed);
+  if (physics !== null && f !== null && r !== null) {
+    const gone = (r[R.gone] ?? 0) + (f.head[H.origin] ?? 0);
+    return {
+      at: (tick) => (tick >= gone ? null : recordAt(physics, f, r, tick)),
+      until: Math.min(untilOf(f), gone),
+    };
+  }
+  const until = f === null ? from + AHEAD_MINUTES * MINUTE : untilOf(f);
+  return {
+    at: (tick) => {
+      if (tick > until) {
+        return null;
+      }
+      const d = (s.speed * Math.max(tick - from, 0)) / SECOND;
+      return {
+        ...s,
+        east: s.east + d * Math.sin(s.heading),
+        north: s.north + d * Math.cos(s.heading),
+      };
+    },
+    until,
+  };
+}
+
+/**
+ * Sets each system's end and its place half an hour after the tick, from
+ * the forecast's record of it, matched by its slot and its seed: left
+ * unknown for one the forecast does not hold, its place ahead for one gone
+ * by then or past the forecast's reach.
+ */
+export function trackSystems(
+  physics: Physics,
+  systems: SceneSystem[],
+  f: ForecastTold | null,
+  tick: number,
+): void {
+  if (f === null) {
+    return;
+  }
+  const origin = f.head[H.origin] ?? 0;
+  for (const s of systems) {
+    const r = recordOf(f, s.slot, s.seed);
+    if (r === null) {
+      continue;
+    }
+    s.gone = (r[R.gone] ?? 0) + origin;
+    const p = tick + AHEAD < s.gone ? recordAt(physics, f, r, tick + AHEAD) : null;
+    s.ahead = p === null ? null : { east: p.east, north: p.north };
+  }
+}
+
+/** The fronts crossing the disk at a tick, from the spells: each line where it is, warm or cold, and how fast it moves. */
 export function frontsAt(
   spells: readonly ArrayLike<number>[],
   tick: number,
   reach: number,
-  band: { sigma: number; lead: number } | null,
 ): SceneFront[] {
   const out: SceneFront[] = [];
   for (const s of spells) {
@@ -442,91 +654,11 @@ export function frontsAt(
       sin: Math.sin(a),
       cos: Math.cos(a),
       line: speed * (tick - begin) - reach,
-      band: band === null ? 0 : BAND_Z * band.sigma * speed * Math.max(band.lead, 0),
+      warm: (s[P.warm] ?? 0) !== 0,
+      speed: speed * SECOND,
     });
   }
   return out;
-}
-
-/** A number in [0, 1) from i and a seed: the same scatter every paint. */
-function scatter(i: number, seed: number): number {
-  const x = Math.sin((i + 1) * 12.9898 + seed * 78.233) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-/** A forecast step's risks: what the regime in effect brings that cannot be placed. */
-export function risksAt(
-  regime: number,
-  grid: FieldGrid,
-  look: SceneLook,
-  spellFrom: number,
-  seed: number,
-  sun: (east: number, north: number) => [number, number],
-): SceneRisk[] {
-  const marks = look.marks[regime] ?? [];
-  const out: SceneRisk[] = [];
-  const lip = look.lip;
-  const rim = lip * 0.93;
-  // Every fourth grid point, for the marks over the water.
-  const coarse = (keep: (k: number, east: number, north: number) => boolean): Where[] => {
-    const pts: Where[] = [];
-    const n = grid.n;
-    for (let j = 2; j < n; j += 6) {
-      for (let i = 2 + ((j / 6) % 2) * 3; i < n; i += 6) {
-        const east = ((i + 0.5) / n - 0.5) * 2 * lip;
-        const north = (0.5 - (j + 0.5) / n) * 2 * lip;
-        if (Math.hypot(east, north) < rim && keep(j * n + i, east, north)) {
-          pts.push([east, north]);
-        }
-      }
-    }
-    return pts;
-  };
-  for (const mark of marks) {
-    switch (mark) {
-      case 'showers': {
-        const pts: Where[] = [];
-        for (let i = 0; i < 28; i++) {
-          const r = rim * Math.sqrt(scatter(i, seed));
-          const a = 2 * Math.PI * scatter(i + 100, seed);
-          pts.push([r * Math.sin(a), r * Math.cos(a)]);
-        }
-        out.push({ mark, points: pts, from: 0 });
-        break;
-      }
-      case 'fog-patches':
-        out.push({
-          mark,
-          points: coarse((k, e, n) => {
-            const s = sun(e, n);
-            return (grid.mean[k] ?? 0) < look.fog.calm && (s[0] < 0 || s[1] < 0);
-          }),
-          from: 0,
-        });
-        break;
-      case 'calms':
-        out.push({ mark, points: coarse((k) => (grid.mean[k] ?? 0) < look.calm), from: 0 });
-        break;
-      case 'squalls':
-        out.push({ mark, points: [], from: spellFrom });
-        break;
-    }
-  }
-  return out;
-}
-
-/** The spell in effect at a tick: the last to begin by it. */
-function spellAt(
-  spells: readonly ArrayLike<number>[],
-  tick: number,
-): ArrayLike<number> | undefined {
-  let s: ArrayLike<number> | undefined;
-  for (const x of spells) {
-    if ((x[P.begin] ?? 0) <= tick) {
-      s = x;
-    }
-  }
-  return s ?? spells[0];
 }
 
 /** The forecast's spells, each a spell record's values. */
@@ -538,9 +670,10 @@ function spellsOf(f: ForecastTold): ArrayLike<number>[] {
 
 /**
  * The weather at a moment, sampled from a module already set to it
- * (useMoment): the grid, the systems, the fronts, a forecast's risks and
- * its gale; in the past, the old forecast's systems and how many lay
- * inside their cones.
+ * (useMoment): the grid; the systems of the moment's keyframes, the
+ * forecast's ahead, the truth's behind, the present's now, each with its
+ * strongest wind, its place half an hour on and its end by the latest
+ * forecast; the fronts; and ahead, the gale.
  */
 export function sampleScene(
   fields: Fields,
@@ -550,57 +683,25 @@ export function sampleScene(
   points: Float64Array,
 ): WeatherScene {
   const grid = sampleGrid(fields, look, points);
-  const reach = fields.physics.frontReach();
-  let systems: SceneSystem[] = [];
-  let fronts: SceneFront[] = [];
-  let risks: SceneRisk[] = [];
-  let gale: WeatherScene['gale'] = null;
-  let forecast: SceneSystem[] = [];
-  let inside = 0;
-  let judged = 0;
-  if (m.kind === 'forecast' && m.issue !== null) {
-    const spells = spellsOf(m.issue);
-    systems = systemsOfForecast(m.issue, m.tick, look);
-    fronts = frontsAt(spells, m.tick, reach, {
-      sigma: look.front,
-      lead: m.tick - issueOf(m.issue),
-    });
-    const regime = fields.physics.regimeAt();
-    const s = spellAt(spells, m.tick);
-    const from = (((s?.[P.from] ?? 0) / TURN) * 2 * Math.PI) as number;
-    risks = risksAt(regime, grid, look, from, issueOf(m.issue) / (10 * MINUTE), (e, n) => [
-      src.sun(m.tick, e, n),
-      src.sun(m.tick - look.fog.dawn, e, n),
-    ]);
-    const g = fields.galeAt(m.issue, m.tick);
-    gale = { side: fields.physics.galeSide(), spacing: look.galeGrid, on: Uint8Array.from(g.on) };
+  const physics = fields.physics;
+  let keys: readonly Keyframe[];
+  let spells: readonly ArrayLike<number>[];
+  if (m.kind === 'ahead' && m.issue !== null) {
+    keys = fields.keys();
+    spells = spellsOf(m.issue);
   } else {
-    const truth = m.kind === 'past' ? src.forecasts.truthAt(m.tick) : null;
-    const keys = truth?.keys ?? src.present().keys;
-    const spells = truth?.spells ?? src.present().spells;
-    systems = systemsOfKeys(keys, m.tick, look.kinds);
-    fronts = frontsAt(spells, m.tick, reach, null);
-    if (m.kind === 'past' && m.issue !== null) {
-      forecast = systemsOfForecast(m.issue, m.tick, look);
-      for (const f of forecast) {
-        const t = systems.find((s) => s.slot === f.slot && s.kind === f.kind);
-        if (t === undefined) {
-          continue;
-        }
-        judged++;
-        if (Math.hypot(t.east - f.east, t.north - f.north) <= f.cone) {
-          inside++;
-        }
-      }
-    }
+    const held = (m.kind === 'past' ? src.forecasts.truthAt(m.tick) : null) ?? src.present();
+    keys = held.keys;
+    spells = held.spells;
   }
-  return { moment: m, grid, systems, fronts, risks, gale, forecast, inside, judged };
-}
-
-/** The spells a forecast holds about a tick, for whoever asks the module of them. */
-export function forecastSpellsAbout(f: ForecastTold, tick: number): Float64Array[] {
-  return spellsAbout(
-    spellsOf(f).map((s) => Float64Array.from(s)),
-    tick,
-  );
+  const systems = systemsOfKeys(keys, m.tick, look.kinds);
+  systemWinds(physics, systems);
+  trackSystems(physics, systems, m.issue ?? src.forecasts.latest, m.tick);
+  const fronts = frontsAt(spells, m.tick, physics.frontReach());
+  let gale: WeatherScene['gale'] = null;
+  if (m.kind === 'ahead' && m.issue !== null) {
+    const g = fields.galeAt(m.issue, m.tick);
+    gale = { side: physics.galeSide(), spacing: look.galeGrid, on: Uint8Array.from(g.on) };
+  }
+  return { moment: m, grid, systems, fronts, gale };
 }

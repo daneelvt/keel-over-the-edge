@@ -8,8 +8,8 @@ import "github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 // open: its gale warning and the barometer need it at sea. After the
 // Welcome a connection is sent the latest issue with what has been, the
 // issue of ninety minutes before and the truth since, which the client
-// keeps from then on; then each issue as it is made. It is the whole of
-// the future a client is told.
+// keeps from then on; then each issue as it is made: the truth of the
+// systems over its reach.
 
 // ForecastSource is the world's forecast as it stands: its latest issue,
 // as the wire carries it, and what has been, for a client just come; nil
@@ -34,6 +34,7 @@ func (c *conn) forecast(src ForecastSource) bool {
 		out = &pb.Forecast{
 			Issue: m.GetIssue(), Steps: m.GetSteps(), Step: m.GetStep(), Spells: m.GetSpells(), Shifts: m.GetShifts(),
 			Systems: m.GetSystems(), Gale: m.GetGale(), Past: past,
+			Until: m.GetUntil(), Every: m.GetEvery(), Origin: m.GetOrigin(),
 		}
 	}
 	c.issued, c.issue = true, m.GetIssue()

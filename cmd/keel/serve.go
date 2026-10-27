@@ -686,14 +686,10 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		cfg.Forecasts = c.forecasts
 	}
 	cfg.Words, cfg.Outlook = weather.WordsOf(c.cat), c.cat.Weather.Forecast.Outlook.Samples
-	cfg.Risks, cfg.Fog = weather.RisksOf(c.cat)
-	cfg.RiskMarks = make([][]string, len(c.cat.Weather.Regimes))
-	for _, r := range c.cat.Weather.Forecast.Risks {
-		if i := weather.RegimeIndex(c.cat, string(r.Regime)); i >= 0 {
-			for _, m := range r.Marks {
-				cfg.RiskMarks[i] = append(cfg.RiskMarks[i], string(m))
-			}
-		}
+	for _, k := range c.cat.Weather.Systems {
+		cfg.WeatherKinds = append(cfg.WeatherKinds, owner.WeatherKind{
+			Name: k.Name, Symbol: string(k.Symbol), Rain: k.Rain.Rate > 0, Trough: k.Symbol == catalog.SystemKindSymbolDashed,
+		})
 	}
 	for _, k := range c.cat.World.Places.Kinds {
 		cfg.PlaceKinds = append(cfg.PlaceKinds, owner.PlaceKind{ID: string(k.ID), Name: k.Name, Site: string(k.Site), Mark: k.Mark})

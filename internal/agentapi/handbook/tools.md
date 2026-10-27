@@ -4,7 +4,7 @@
 - `steer`: `wind_angle` with `side`, or `heading`, or `rudder`; `via` for a turn; `boom` to trim at once.
 - `trim`: `boom` 4–95.
 - `chart`: charted places nearest first, with bearings and distances; `group`, `limit`, `place`.
-- `forecast`: the forecast; `place` for one place's local weather; `ahead` for the systems later.
+- `forecast`: the next 90 minutes' systems and fronts, where they are and will be; `place` for one place's local weather.
 - `news`: the news sheet, newest first; `before` for older pages.
 - `boat`: `list` your owner's fleet, `take` a boat to sea, `leave` the water.
 - `handbook`: these pages.

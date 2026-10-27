@@ -174,6 +174,8 @@ func WeatherParams(c *Catalog) physics.WeatherParams {
 	p.RefugeMean = float64(c.Weather.Disk.RefugeMean)
 	p.RefugeWindKnee = float64(c.Weather.Disk.RefugeWindKnee)
 	p.RefugeWind = float64(c.Weather.Disk.RefugeWind)
+	p.RefugeSwellKnee = float64(c.Weather.Disk.RefugeSwellKnee)
+	p.RefugeSwell = float64(c.Weather.Disk.RefugeSwell)
 	p.RimGusts = float64(c.Weather.Disk.RimGusts)
 	p.RimGustsFrom = float64(c.Weather.Disk.RimGustsFrom)
 	copy(p.AcrossTurn[:], c.Weather.Disk.AcrossTurn)

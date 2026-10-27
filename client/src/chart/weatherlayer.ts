@@ -2,13 +2,13 @@
 
 // The chart's weather brought to the slider's moment: painted afresh when
 // the moment, the issue, the layers or what is kept change, and once a
-// second while it shows now or the past, which move on; between, the
-// canvas is left as it is, so the paper and the weather cost nothing a
-// frame.
+// second while it shows now, which is live; between, the canvas is left as
+// it is, so the paper and the weather cost nothing a frame. A moment moved
+// on before the last paint is done waiting is painted no sooner than the
+// last paint took, so Play goes no faster than the painter keeps up.
 
 import { catalog } from '../catalog';
 import { issueOf } from '../predict/forecast';
-import { risksOf } from './place';
 import {
   gridPoints,
   kindDraws,
@@ -24,10 +24,10 @@ import {
 } from './weather';
 import { paintWeather, type WeatherLook } from './weatherpaint';
 
-/** The slider and the switches, as the chart holds them. */
+/** The slider and the switches, as the chart holds them: its way, its minutes from now, the layers. */
 export interface WeatherChoice {
   mode: TimeMode;
-  step: number;
+  minutes: number;
   layers: Layers;
 }
 
@@ -36,30 +36,25 @@ export function weatherLooks(): { scene: SceneLook; paint: WeatherLook } {
   const w = catalog.weather;
   const look = catalog.world.chart.look;
   const lip = catalog.world.disk.radius;
-  const { risks, fog } = risksOf(w);
-  const calmKind = w.systems.find((k) => k.shape === 'none' && !k.night);
   return {
     scene: {
       lip,
       n: look.wind,
       kinds: kindDraws(w.systems),
-      perHour: w.forecast.cone.perHour * 1852,
-      forming: w.forecast.cone.forming * 1852,
-      front: w.forecast.cone.front,
       galeGrid: w.forecast.gale.grid * 1852,
-      risks,
-      fog,
-      calm: ((calmKind?.calmBelow ?? 0) * 1852) / 3600,
-      marks: w.regimes.map((r) => w.forecast.risks.find((x) => x.regime === r.id)?.marks ?? []),
       contrast: w.visibility.contrast,
     },
     paint: {
       ink: look.ink,
       rain: look.weather.rain,
       fog: look.weather.fog,
-      front: look.weather.front,
+      cold: look.weather.cold,
+      warm: look.weather.warm,
       squall: look.weather.squall,
       storm: look.weather.storm,
+      paper: look.paper,
+      wash: look.weather.wash,
+      barbs: look.weather.barbs * 1852,
       gusts: (look.weather.gusts * 1852) / 3600,
       lip,
       rainWords: w.clouds.rainWords,
@@ -98,7 +93,7 @@ export class ChartWeather {
   /** The moment the slider shows now. */
   moment(): Moment {
     const c = this.#choice();
-    return momentOf(c.mode, c.step, this.#src);
+    return momentOf(c.mode, c.minutes, this.#src);
   }
 
   /** Brings the weather to the slider's moment; true if it was painted afresh. */
@@ -108,13 +103,17 @@ export class ChartWeather {
       return false;
     }
     const c = this.#choice();
-    const m = momentOf(c.mode, c.step, this.#src);
+    const m = momentOf(c.mode, c.minutes, this.#src);
     const layers = Object.entries(c.layers)
       .map(([k, v]) => (v ? k : ''))
       .join();
-    const key = `${m.kind}:${m.step}:${m.issue === null ? 0 : issueOf(m.issue)}:${layers}:${this.#src.forecasts.version}`;
-    const moving = m.kind !== 'forecast';
-    if (key === this.#key && !(moving && now - this.#at >= 1000)) {
+    const key = `${m.kind}:${m.kind === 'now' ? 0 : m.tick}:${m.issue === null ? 0 : issueOf(m.issue)}:${layers}:${this.#src.forecasts.version}`;
+    if (key === this.#key && !(m.kind === 'now' && now - this.#at >= 1000)) {
+      return false;
+    }
+    // A moment moved on by the slider waits as long as the last paint took.
+    const last = this.took.sample + this.took.paint;
+    if (this.#key !== '' && key !== this.#key && now - this.#at < last) {
       return false;
     }
     if (!useMoment(fields, m, this.#src)) {

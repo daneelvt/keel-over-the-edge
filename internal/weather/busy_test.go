@@ -22,8 +22,8 @@ import (
 // minutes; and the same by the regime in effect.
 type busyTally struct {
 	minutes, empty, rain, lows, storms, lines int
-	systems                                    int
-	byRegime                                   []busyRegime
+	systems                                   int
+	byRegime                                  []busyRegime
 }
 
 // busyRegime is a regime's minutes, and the systems on the disk over them.

@@ -607,3 +607,11 @@ func GeneralSituation(s *Situation, words *Words) []string {
 	}
 	return out
 }
+
+// FormedText is a system's forming as the news tells it, kind its name
+// with its article, where it is and how it moves in the general
+// situation's words: "A storm has formed in the south-west outer waters,
+// moving northeast slowly".
+func (s *Situation) FormedText(kind string, east, north, heading, speed float64) string {
+	return capital(kind) + " has formed " + s.area(east, north) + ", " + movingWords(heading, speed)
+}

@@ -71,6 +71,10 @@ weather:
     refugeMean: 14 # knots: Beaufort 4
     refugeWindKnee: 14 # knots
     refugeWind: 18 # knots: rising to 5 in the gusts
+    # The storms' swell together the same way: two storms in the outer
+    # waters raise no more at the quay than one did.
+    refugeSwellKnee: 0.7 # m
+    refugeSwell: 1 # m
     # Gusts are stronger in the outer waters: the gust factor's excess over
     # 1 grows by this share from rimGustsFrom to the rim.
     rimGusts: 0.3

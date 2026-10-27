@@ -186,6 +186,8 @@ export function writeWeatherParams(params: Float64Array, w: Weather): void {
   params[f.refugeMean] = w.disk.refugeMean;
   params[f.refugeWindKnee] = w.disk.refugeWindKnee;
   params[f.refugeWind] = w.disk.refugeWind;
+  params[f.refugeSwellKnee] = w.disk.refugeSwellKnee;
+  params[f.refugeSwell] = w.disk.refugeSwell;
   params[f.rimGusts] = w.disk.rimGusts;
   params[f.rimGustsFrom] = w.disk.rimGustsFrom;
   params.set(w.disk.acrossTurn, f.acrossTurn);

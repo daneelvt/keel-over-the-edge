@@ -393,13 +393,13 @@ describe('the forecast’s lines', () => {
     const lines = forecastLines(
       { tick: 1800 * 100, steps: 10 },
       1800 * 106 + 900,
-      [{ name: 'storm', forming: true, east: 1234.4, north: -50.6, cone: 1852 * 0.47 }],
+      [{ name: 'Storm', east: 1234.4, north: -50.6, wind: 45 * (1852 / 3600) }],
       'Northerly gale 8 soon, north of Port Royal',
       { words: '1003 hPa, falling quickly', set: 1006.04 },
     );
     expect(lines).toEqual([
       'forecast issued 6 min ago, 10 steps; 1 system',
-      '  storm forming at 1234 E, -51 N, cone 0.47 NM',
+      '  Storm at 1234 E, -51 N, 45 kn',
       'gale    Northerly gale 8 soon, north of Port Royal',
       'baro    1003 hPa, falling quickly; set hand 1006.0 hPa',
     ]);

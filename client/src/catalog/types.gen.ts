@@ -1005,6 +1005,14 @@ export interface WeatherDisk {
    */
   refugeWind: number;
   /**
+   * The refuge softens the storms' swell above this, in m.
+   */
+  refugeSwellKnee: number;
+  /**
+   * The swell the refuge holds to, in m: above its knee.
+   */
+  refugeSwell: number;
+  /**
    * The gust factor's excess over 1 grows by this share toward the rim.
    */
   rimGusts: number;
@@ -5937,7 +5945,7 @@ export interface ChartLook {
   weather: ChartWeather;
 }
 /**
- * The chart's weather: the canvas it is painted on, where gusts are drawn and its colours.
+ * The chart's weather: the canvas it is painted on, where gusts are drawn, its colours, the wind's wash, barbs and streaks, and the key's words.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "ChartWeather".
@@ -5953,9 +5961,128 @@ export interface ChartWeather {
   gusts: number;
   rain: Colour3;
   fog: Colour3;
-  front: Colour3;
+  cold: Colour3;
+  warm: Colour3;
   squall: Colour3;
   storm: Colour3;
+  wash: ChartWash;
+  /**
+   * The wind's barbs stand this far apart, in nautical miles.
+   */
+  barbs: number;
+  streaks: ChartStreaks;
+  key: ChartKey;
+}
+/**
+ * The wind's wash: the water tinted in steps of one hue by the Beaufort force of the mean wind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartWash".
+ */
+export interface ChartWash {
+  colour: Colour3;
+  /**
+   * Each step begins at this Beaufort force, the lightest first: none under the first.
+   *
+   * @minItems 1
+   * @maxItems 6
+   */
+  forces:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number];
+  /**
+   * Each step's opacity over the paper, as a share, the lightest first: one for each of forces.
+   *
+   * @minItems 1
+   * @maxItems 6
+   */
+  tints:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number];
+}
+/**
+ * The wind's streaks: how many, how wide and under what wind they fade.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartStreaks".
+ */
+export interface ChartStreaks {
+  /**
+   * The streaks drawn at once.
+   */
+  count: number;
+  /**
+   * Each streak's width, in CSS pixels.
+   */
+  width: number;
+  /**
+   * A streak fades in a mean wind under this, in knots.
+   */
+  fade: number;
+}
+/**
+ * The chart key's line for each of what the chart draws that is not a kind of system.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartKey".
+ */
+export interface ChartKey {
+  /**
+   * A cold front's line.
+   */
+  cold: string;
+  /**
+   * A warm front's line.
+   */
+  warm: string;
+  /**
+   * The wind's barbs' line.
+   */
+  barbs: string;
+  /**
+   * The wind's wash's line.
+   */
+  wash: string;
+  /**
+   * The wind's streaks' line.
+   */
+  streaks: string;
+  /**
+   * The isobars' line.
+   */
+  isobars: string;
+  /**
+   * A ring of strongest wind's line.
+   */
+  ring: string;
+  /**
+   * A system's motion arrow's line.
+   */
+  motion: string;
+  /**
+   * The gale hatching's line.
+   */
+  gale: string;
+  /**
+   * The gusts' line.
+   */
+  gusts: string;
+  /**
+   * The rain's line.
+   */
+  rain: string;
+  /**
+   * The fog's line.
+   */
+  fog: string;
 }
 /**
  * The instruments aboard.
@@ -6251,4 +6378,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'c472d71c9d3b1b08';
+export const CATALOG_VERSION = '87b4884e3cdbd3b1';

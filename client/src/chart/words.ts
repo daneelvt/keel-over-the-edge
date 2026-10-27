@@ -14,7 +14,7 @@
 /** What is near a point, within its size: bits of PlaceSample.near. */
 export const NEAR = { shower: 1, squall: 2, storm: 4, fog: 8 } as const;
 
-/** The skies a box gives, mildest first, as the catalog's risks name them. */
+/** The skies a box gives, mildest first. */
 export const SKIES = [
   'fair',
   'showers',
@@ -79,8 +79,7 @@ export interface PlaceSample {
 
 /**
  * A place's weather at a time: its points', the first its centre; the
- * pressure at its centre then, 5 and 15 minutes before, hPa; the sky of
- * the regime's risk where it may come there, '' for none; and whether a
+ * pressure at its centre then, 5 and 15 minutes before, hPa; and whether a
  * storm's centre is within its size of the place.
  */
 export interface PlaceWeather {
@@ -88,7 +87,6 @@ export interface PlaceWeather {
   pressure: number;
   before: number;
   quarter: number;
-  risk: string;
   cyclonic: boolean;
 }
 
@@ -173,9 +171,9 @@ function skyAt(p: PlaceSample, words: Words): number {
   return s;
 }
 
-/** The worst of the points' skies and the risk's, an index into SKIES. */
+/** The worst of the points' skies, an index into SKIES. */
 function skyOf(w: PlaceWeather, words: Words): number {
-  let worst = Math.max(SKIES.indexOf(w.risk as (typeof SKIES)[number]), SKY.fair);
+  let worst: number = SKY.fair;
   for (const p of w.points) {
     worst = Math.max(worst, skyAt(p, words));
   }
@@ -373,7 +371,7 @@ export function boxOf(w: PlaceWeather, words: Words): Box {
 }
 
 /** A force as the shipping forecast says it: "5", "gale 8", "severe gale 9". */
-function forceWord(f: number): string {
+export function forceWord(f: number): string {
   if (f >= 12) {
     return 'hurricane force 12';
   }

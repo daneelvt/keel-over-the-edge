@@ -353,19 +353,18 @@ function airPanel(world: SeaScene, sandbox: Sandbox, p: { east: number; north: n
   return airLines(v, physics.visibilityWord(v), air, signals, flash);
 }
 
-/** What the panel shows of a forecast's system: its kind's name, whether forming, its place and cone at a step. */
+/** What the panel shows of a system on the chart: its kind's name, its place and its strongest mean wind, m/s. */
 export interface PanelSystem {
   name: string;
-  forming: boolean;
   east: number;
   north: number;
-  cone: number;
+  wind: number;
 }
 
 /**
  * The forecast, as lines: the latest issue, how long ago and its steps;
- * its systems with their cones at the step shown; the gale warning in
- * force; the barometer's words and its set hand.
+ * the systems the chart shows at its moment, each with its strongest
+ * wind; the gale warning in force; the barometer's words and its set hand.
  */
 export function forecastLines(
   issue: { tick: number; steps: number } | null,
@@ -383,7 +382,7 @@ export function forecastLines(
   ];
   for (const s of systems) {
     lines.push(
-      `  ${s.name}${s.forming ? ' forming' : ''} at ${s.east.toFixed(0)} E, ${s.north.toFixed(0)} N, cone ${(s.cone / 1852).toFixed(2)} NM`,
+      `  ${s.name} at ${s.east.toFixed(0)} E, ${s.north.toFixed(0)} N, ${Math.round(s.wind / (1852 / 3600))} kn`,
     );
   }
   lines.push(`gale    ${warning ?? 'no warning in force'}`);
@@ -969,10 +968,9 @@ function forecastPanel(p: PanelForecast): string[] {
       ? []
       : scene.systems.map((s) => ({
           name: s.name,
-          forming: s.forming,
           east: s.east,
           north: s.north,
-          cone: s.cone,
+          wind: s.wind,
         }));
   return forecastLines(
     latest === null ? null : { tick: latest.head[H.issue] ?? 0, steps: latest.head[H.steps] ?? 0 },

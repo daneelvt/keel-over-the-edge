@@ -30,7 +30,7 @@ func Forecast(f *physics.Forecast, gale *pb.GaleWarning) *pb.Forecast {
 			Radius: uint32(r.Radius), Angle: uint32(r.Angle), Sense: int32(r.Sense), Inward: uint32(r.Inward), Length: uint32(r.Length),
 			Wobble: uint32(r.Wobble), WobblePeriod: []uint32{uint32(r.WobblePeriod[0]), uint32(r.WobblePeriod[1])},
 			WobblePhase: []uint32{uint32(r.WobblePhase[0]), uint32(r.WobblePhase[1])},
-			Throb: uint32(r.Throb), ThrobPeriod: uint32(r.ThrobPeriod), ThrobPhase: uint32(r.ThrobPhase),
+			Throb:       uint32(r.Throb), ThrobPeriod: uint32(r.ThrobPeriod), ThrobPhase: uint32(r.ThrobPhase),
 		})
 	}
 	return m

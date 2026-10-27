@@ -95,18 +95,6 @@ func TestForecastSpells(t *testing.T) {
 	}
 }
 
-func stdDev(a []float64) float64 {
-	var m, q float64
-	for _, x := range a {
-		m += x
-	}
-	m /= float64(len(a))
-	for _, x := range a {
-		q += (x - m) * (x - m)
-	}
-	return math.Sqrt(q / float64(len(a)))
-}
-
 // The typical strongest gust's quantile is the gust field's 90th
 // percentile of h′, the field as the gust factor reads it.
 func TestTypicalGustQuantile(t *testing.T) {

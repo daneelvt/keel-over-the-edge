@@ -2,8 +2,9 @@
 
 // The chart's weather reads to every reader: its colours stay apart under
 // simulated protanopia, deuteranopia and tritanopia, and each mark stands
-// off the paper and the sea; and the colour difference is CIEDE2000's, as
-// Sharma, Wu and Dalal's test pairs give it.
+// off the paper and the sea; the wind's wash darkens step by step, by
+// lightness alone, to every reader and in grey; and the colour difference
+// is CIEDE2000's, as Sharma, Wu and Dalal's test pairs give it.
 
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
@@ -44,7 +45,8 @@ describe('colours', () => {
       ink: hexRgb(look.ink),
       rain: hexRgb(w.rain),
       fog: hexRgb(w.fog),
-      front: hexRgb(w.front),
+      cold: hexRgb(w.cold),
+      warm: hexRgb(w.warm),
       squall: hexRgb(w.squall),
       storm: hexRgb(w.storm),
     };
@@ -74,6 +76,26 @@ describe('colours', () => {
       expect(contrast(c, sea), `${n} on the sea`).toBeGreaterThanOrEqual(3);
     }
     process.stdout.write(`colours: the least difference to any reader is ${least.toFixed(1)}\n`);
+  });
+
+  test('the wind’s wash darkens a step at each force, 3 apart, by its lightness, to every reader', () => {
+    const look = catalog.world.chart.look;
+    const wash = look.weather.wash;
+    expect(wash.tints.length).toBe(wash.forces.length);
+    const paper = hexRgb(look.paper);
+    const sea = over(hexRgb(look.sea), paper, 0.55);
+    const steps = [sea, ...wash.tints.map((t) => over(hexRgb(wash.colour), sea, t))];
+    const readers: (Deficiency | null)[] = [null, ...(Object.keys(DEFICIENCIES) as Deficiency[])];
+    for (const d of readers) {
+      const seen = steps.map((c) => lab(d === null ? c : simulate(c, d)));
+      for (let i = 1; i < seen.length; i++) {
+        const a = seen[i - 1] as number[];
+        const b = seen[i] as number[];
+        // Darker each step, and told apart by the lightness alone: in grey too.
+        expect((a[0] ?? 0) - (b[0] ?? 0), `step ${i}, ${d ?? 'normal vision'}`).toBeGreaterThan(3);
+        expect(deltaE2000(a, b)).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 
   test('a deficiency is simulated in linear RGB, as Chrome does', () => {

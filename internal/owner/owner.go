@@ -127,6 +127,14 @@ type Grids struct {
 // 250 m.
 var DefaultGrids = Grids{Wind: 1000, Gusts: 100, Current: 250}
 
+// WeatherKind is what the page tells of a kind of weather system beyond
+// its shape: its name and its chart symbol, as a chart's key gives them;
+// whether it rains; and whether it is a trough, a line of showers.
+type WeatherKind struct {
+	Name, Symbol string
+	Rain, Trough bool
+}
+
 // Rules are what a teleport needs of the water it puts a boat in.
 type Rules struct {
 	Depth float64 // at least this deep, m
@@ -233,16 +241,14 @@ type Config struct {
 	Subjects int
 
 	// Forecasts, if not nil, is the world's forecast as issued; a world not
-	// sailed has none. Words are the catalog's words of the weather; Risks
-	// and RiskMarks each regime's risk and the chart's marks of it, by the
-	// regimes' indices; Fog the rule a fog bank is born by; and Outlook the
-	// minutes after an issue a place's outlook is sampled at.
+	// sailed has none. Words are the catalog's words of the weather, and
+	// Outlook the minutes after an issue a place's outlook is sampled at.
 	Forecasts Forecasts
 	Words     weather.Words
-	Risks     []weather.Risk
-	RiskMarks [][]string
-	Fog       weather.FogRule
 	Outlook   []float64
+	// WeatherKinds are what the page tells of each kind of weather system
+	// beyond its shape, by its index.
+	WeatherKinds []WeatherKind
 
 	// Page is the page's built files, or nil: the routes answer without it.
 	Page *api.Page
@@ -281,7 +287,7 @@ var Paths = []string{
 	"/owner/api/accounts.json", "/owner/api/lifecycle.json", "/owner/api/next", "/owner/api/next/land.png",
 	"/owner/api/weather.json", "/owner/api/pressure.json", "/owner/api/next/weather.json", "/owner/api/sea.json",
 	"/owner/api/clouds.json", "/owner/api/visibility.json", "/owner/api/chart",
-	"/owner/api/forecast.json", "/owner/api/calibration.json", "/owner/api/gales.json", "/owner/api/place.json",
+	"/owner/api/forecast.json", "/owner/api/busy.json", "/owner/api/gales.json", "/owner/api/place.json",
 	"/owner/api/lifetime", "/owner/api/machines", "/owner/api/priority",
 	"/owner/api/accounts/search", "/owner/api/account.json", "/owner/api/accounts/stop", "/owner/api/accounts/start",
 	"/owner/api/accounts/revoke", "/owner/api/accounts/delete", "/owner/api/actions.json",
@@ -365,7 +371,7 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/clouds.json", o.clouds)
 	mux.HandleFunc("GET /owner/api/visibility.json", o.visibility)
 	mux.HandleFunc("GET /owner/api/forecast.json", o.forecastJSON)
-	mux.HandleFunc("GET /owner/api/calibration.json", o.calibration)
+	mux.HandleFunc("GET /owner/api/busy.json", o.busyJSON)
 	mux.HandleFunc("GET /owner/api/gales.json", o.gales)
 	mux.HandleFunc("GET /owner/api/place.json", o.placeWeather)
 	mux.HandleFunc("POST /owner/api/flag", o.flag)

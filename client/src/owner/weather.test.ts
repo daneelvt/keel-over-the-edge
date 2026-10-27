@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'vitest';
 import type { Front } from './api';
-import { fromNow, frontLine, regimeColour, whereFrom } from './weather';
+import { fromNow, frontLine, lineEnds, regimeColour, whereFrom } from './weather';
 
 /** Ticks a second. */
 const TPS = 30;
@@ -39,6 +39,7 @@ describe("a front's line", () => {
     enters: 0,
     leaves: 0,
     portRoyal: 0,
+    warm: false,
   });
 
   test('lies square to the way it moves, line metres along it, its ends on the lip', () => {
@@ -62,5 +63,21 @@ describe("a front's line", () => {
   test('is gone beyond the lip', () => {
     expect(frontLine(front(0, 5000), 5000)).toBeNull();
     expect(frontLine(front(0, -6000), 5000)).toBeNull();
+  });
+});
+
+describe("a line's length", () => {
+  test('lies square to the way it moves, its centre halfway', () => {
+    const v = { east: 0, north: 0, scale: 10, width: 200, height: 200 };
+    // Moving east: its length runs north and south, 1 km either side.
+    const [a, b] = lineEnds(v, 0, 0, 2000, 90);
+    expect(a[0]).toBeCloseTo(100);
+    expect(b[0]).toBeCloseTo(100);
+    expect(Math.abs(a[1] - b[1])).toBeCloseTo(200);
+    // Moving north: east and west, about a point 500 m east.
+    const [c, d] = lineEnds(v, 500, 0, 1000, 0);
+    expect(c[1]).toBeCloseTo(100);
+    expect(d[1]).toBeCloseTo(100);
+    expect([c[0], d[0]].sort((x, y) => x - y)).toEqual([100, 200]);
   });
 });

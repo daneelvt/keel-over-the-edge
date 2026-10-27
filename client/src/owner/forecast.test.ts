@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'vitest';
 import type {
-  CalibrationPage,
+  BusyFigures,
   ForecastFront,
   ForecastPage,
   ForecastSpell,
@@ -12,19 +12,18 @@ import type {
 import {
   areaBits,
   areaPoints,
-  calibrationRows,
-  frontAt,
-  outerTangents,
-  riskWords,
+  busyRows,
+  frontLineAt,
   spellAt,
   stepOf,
-  systemAt,
+  trackAt,
   warningSpan,
 } from './forecast';
 
-/** Ticks a second, and a step of ten minutes. */
+/** Ticks a second, a minute, and a step of ten minutes. */
 const TPS = 30;
-const STEP = 10 * 60 * TPS;
+const MINUTE = 60 * TPS;
+const STEP = 10 * MINUTE;
 
 function page(issue: number, steps: number): ForecastPage {
   return {
@@ -33,7 +32,10 @@ function page(issue: number, steps: number): ForecastPage {
     issued: true,
     step: STEP,
     steps,
+    until: issue + 10 * STEP,
+    every: MINUTE,
     lip: 8334,
+    reach: 9000,
     systems: [],
     fronts: [],
     spells: [],
@@ -43,7 +45,7 @@ function page(issue: number, steps: number): ForecastPage {
   };
 }
 
-function spell(begin: number, risk: string, marks: string[]): ForecastSpell {
+function spell(begin: number): ForecastSpell {
   return {
     begin,
     regime: 0,
@@ -51,10 +53,8 @@ function spell(begin: number, risk: string, marks: string[]): ForecastSpell {
     from: 240,
     knots: 14,
     front: false,
+    warm: false,
     shifts: 10,
-    risk,
-    fog: false,
-    marks,
   };
 }
 
@@ -67,73 +67,67 @@ describe("the forecast's steps", () => {
     expect(stepOf(f, 0)).toBe(0);
     expect(stepOf(f, 1000 + 40 * STEP)).toBe(9);
   });
+});
 
-  test('a system between its steps, and where it is not alive', () => {
-    const s: ForecastSystem = {
-      slot: 3,
-      kind: 1,
-      id: 'storm',
-      forming: false,
-      crosses: 0,
-      steps: [
-        [0, 0, 0, 1],
-        [100, 200, 50, 1],
-        [200, 400, 100, 0.5],
-        [0, 0, 0, 0],
-      ],
-    };
-    expect(systemAt(s, 0)).toEqual([0, 0, 0]);
-    expect(systemAt(s, 0.5)).toEqual([50, 100, 25]);
-    expect(systemAt(s, 1.5)).toEqual([150, 300, 75]);
-    // Gone after its third step: where it last was, then nowhere.
-    expect(systemAt(s, 2.5)).toEqual([200, 400, 100]);
-    expect(systemAt(s, 3)).toBeNull();
+describe("a system's track", () => {
+  const s: ForecastSystem = {
+    slot: 3,
+    kind: 1,
+    id: 'x',
+    seed: 7,
+    born: 900,
+    gone: 1000 + 3 * MINUTE,
+    size: 900,
+    length: 0,
+    from: 1000,
+    track: [
+      [0, 0, 0.2, 350],
+      [100, 200, 0.6, 10],
+      [200, 400, 1, 30],
+    ],
+  };
+
+  test('between its points, a minute apart, its heading the shorter way round', () => {
+    expect(trackAt(s, 1000, MINUTE)).toEqual([0, 0, 0.2, 350]);
+    const half = trackAt(s, 1000 + MINUTE / 2, MINUTE);
+    expect(half?.[0]).toBeCloseTo(50);
+    expect(half?.[1]).toBeCloseTo(100);
+    expect(half?.[2]).toBeCloseTo(0.4);
+    expect(half?.[3]).toBeCloseTo(0);
+    expect(trackAt(s, 1000 + 1.5 * MINUTE, MINUTE)?.[3]).toBeCloseTo(20);
+    expect(trackAt(s, 1000 + 2 * MINUTE, MINUTE)).toEqual([200, 400, 1, 30]);
   });
 
-  test('a low forming shows from the step it is born at', () => {
-    const s: ForecastSystem = {
-      slot: 4,
-      kind: 1,
-      id: 'storm',
-      forming: true,
-      crosses: 0,
-      steps: [
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [500, 500, 870, 0.2],
-      ],
-    };
-    expect(systemAt(s, 0.5)).toBeNull();
-    expect(systemAt(s, 1.25)).toBeNull();
-    expect(systemAt(s, 1.75)).toEqual([500, 500, 870]);
-    expect(systemAt(s, 2)).toEqual([500, 500, 870]);
-  });
-
-  test("a front's line and band between its steps", () => {
-    const f: ForecastFront = {
-      toward: 90,
-      begin: 0,
-      cross: 6 * STEP,
-      lines: [null, [-4000, 100], [-2000, 300], null],
-    };
-    expect(frontAt(f, 0.25)).toBeNull();
-    expect(frontAt(f, 0.75)).toEqual([-4000, 100]);
-    expect(frontAt(f, 1.5)).toEqual([-3000, 200]);
-    expect(frontAt(f, 2.5)).toEqual([-2000, 300]);
-    expect(frontAt(f, 3)).toBeNull();
+  test('nowhere before its first point or after its last', () => {
+    expect(trackAt(s, 999, MINUTE)).toBeNull();
+    expect(trackAt(s, 1000 + 2 * MINUTE + 1, MINUTE)).toBeNull();
+    expect(trackAt({ ...s, track: [] }, 1000, MINUTE)).toBeNull();
   });
 });
 
-describe("the forecast's risk", () => {
-  test('the spell in force, and its risk in words', () => {
-    const spells = [spell(-500, 'showers', ['showers']), spell(2000, 'squally showers', [])];
+describe("a front's line", () => {
+  const f: ForecastFront = { toward: 90, begin: 0, cross: 6 * STEP, warm: true };
+
+  test('crosses the reach at an even speed, from one side to the other', () => {
+    expect(frontLineAt(f, 0, 9000)).toBe(-9000);
+    expect(frontLineAt(f, 3 * STEP, 9000)).toBe(0);
+    expect(frontLineAt(f, 6 * STEP, 9000)).toBe(9000);
+  });
+
+  test('nowhere before it enters or after it leaves', () => {
+    expect(frontLineAt(f, -1, 9000)).toBeNull();
+    expect(frontLineAt(f, 6 * STEP + 1, 9000)).toBeNull();
+    expect(frontLineAt({ ...f, cross: 0 }, 0, 9000)).toBeNull();
+  });
+});
+
+describe("the forecast's spells", () => {
+  test('the spell in force', () => {
+    const spells = [spell(-500), spell(2000)];
     expect(spellAt(spells, 0)?.begin).toBe(-500);
     expect(spellAt(spells, 2000)?.begin).toBe(2000);
-    expect(spellAt([spell(5000, 'fair', [])], 0)?.begin).toBe(5000);
+    expect(spellAt([spell(5000)], 0)?.begin).toBe(5000);
     expect(spellAt([], 0)).toBeNull();
-    expect(riskWords(spells[0] as ForecastSpell)).toBe('showers (showers)');
-    expect(riskWords(spells[1] as ForecastSpell)).toBe('squally showers');
-    expect(riskWords(spell(0, '', ['calms']))).toBe('');
   });
 });
 
@@ -153,70 +147,43 @@ describe("a gale's area", () => {
   });
 });
 
-describe("a cone's edges", () => {
-  test('two circles of one size: lines along their sides', () => {
-    const t = outerTangents([0, 0, 10], [100, 0, 10]);
-    expect(t).toHaveLength(2);
-    const ys = t
-      .map(([p, q]) => [p[1], q[1]].map((y) => Math.round(y)))
-      .sort((a, b) => (a[0] ?? 0) - (b[0] ?? 0));
-    expect(ys).toEqual([
-      [-10, -10],
-      [10, 10],
-    ]);
+describe('the busy weather', () => {
+  const figures = (minutes: number, systems: number): BusyFigures => ({
+    minutes,
+    empty: 0,
+    rain: 98.75,
+    lows: 89,
+    storms: 44.4,
+    lines: 52.5,
+    systems,
+    regimes: [
+      { id: 'settled', minutes: minutes / 2, empty: 0, systems: 3.17 },
+      { id: 'stormy', minutes: 0, empty: 0, systems: 0 },
+    ],
   });
 
-  test('each edge touches both circles at a right angle to its radius', () => {
-    const a: [number, number, number] = [10, 20, 5];
-    const b: [number, number, number] = [80, -40, 30];
-    for (const [p, q] of outerTangents(a, b)) {
-      expect(Math.hypot(p[0] - a[0], p[1] - a[1])).toBeCloseTo(a[2]);
-      expect(Math.hypot(q[0] - b[0], q[1] - b[1])).toBeCloseTo(b[2]);
-      const [dx, dy] = [q[0] - p[0], q[1] - p[1]];
-      expect(dx * (p[0] - a[0]) + dy * (p[1] - a[1])).toBeCloseTo(0);
-      expect(dx * (q[0] - b[0]) + dy * (q[1] - b[1])).toBeCloseTo(0);
-    }
-  });
-
-  test('none where one circle holds the other', () => {
-    expect(outerTangents([0, 0, 50], [10, 0, 5])).toEqual([]);
-    expect(outerTangents([0, 0, 0], [0, 0, 0])).toEqual([]);
-  });
-});
-
-describe("the forecast's calibration", () => {
-  test('a row a kind, a share and its cases a lead, none for no cases', () => {
-    const c: CalibrationPage = {
-      now: 0,
-      from: 0,
-      next: 0,
-      issues: 144,
-      leads: [10, 20],
-      alive: [
-        [80, 100],
-        [7, 9],
-      ],
-      forming: [
-        [0, 0],
-        [1, 1],
-      ],
-      fronts: [
-        [3, 4],
-        [0, 2],
-      ],
-    };
-    const rows = calibrationRows(c);
+  test('a row a share and the systems on average, so far and over the week, and by regime', () => {
+    const rows = busyRows(figures(120, 5.69), figures(9960, 6));
     expect(rows.map((r) => r.name)).toEqual([
-      'Systems alive at the issue',
-      'Lows forming',
-      "Fronts' lines",
+      'Nothing on the disk',
+      'Rain somewhere',
+      'A storm or a low',
+      'A storm',
+      'A front or a trough',
+      'Systems on the disk, on average',
+      'Systems on average, settled',
+      'Systems on average, stormy',
     ]);
-    expect(rows[0]?.cells).toEqual([
-      { share: '80%', cases: 100 },
-      { share: '78%', cases: 9 },
-    ]);
-    expect(rows[1]?.cells[0]).toEqual({ share: '—', cases: 0 });
-    expect(rows[2]?.cells.map((x) => x.share)).toEqual(['75%', '0%']);
+    expect(rows[1]).toEqual({ name: 'Rain somewhere', soFar: '98.8%', week: '98.8%' });
+    expect(rows[5]).toEqual({ name: 'Systems on the disk, on average', soFar: '5.7', week: '6.0' });
+    // A regime with no minutes yet has no figures.
+    expect(rows[7]).toEqual({ name: 'Systems on average, stormy', soFar: '—', week: '—' });
+  });
+
+  test('none so far before the opening', () => {
+    const rows = busyRows(figures(0, 0), figures(9960, 6));
+    expect(rows[0]?.soFar).toBe('—');
+    expect(rows[0]?.week).toBe('0.0%');
   });
 });
 

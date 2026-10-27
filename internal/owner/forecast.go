@@ -15,15 +15,15 @@ import (
 )
 
 // The forecast on the world page, set beside the truth for the owner, who
-// alone may see both: the issue in force at the tick shown, each system's
-// forecast track and its cones, each front's forecast line and its band,
-// the spells' regimes and the risks they bring, and the gale warning with
-// the water it covers at each step; how well the cones have held the truth
-// so far this world, lead by lead; and every gale warning the world has
-// had. The issue in force is the issuer's, as the players were sent it,
-// while it is near the latest; one further off, dragged to on the week's
-// strip, is made here from the week, so the strip never sets the issuer
-// remaking what it sends.
+// alone may see both: the issue in force at the tick shown, each system it
+// knows with its track over the forecast's reach, made from its records as
+// a phone makes it, each front's line with whether it is warm or cold, the
+// spells, and the gale warning with the water it covers at each step; and
+// every gale warning the world has had. The forecast is the truth, so its
+// tracks lie on the truth's own. The issue in force is the issuer's, as the
+// players were sent it, while it is near the latest; one further off,
+// dragged to on the week's strip, is made here from the week, so the strip
+// never sets the issuer remaking what it sends.
 
 // Forecasts are the world's forecast as issued (internal/forecast's
 // Issuer): the latest issue, and the issue at any boundary of its every,
@@ -38,16 +38,24 @@ type Forecasts interface {
 // sets it dropping the latest's neighbours.
 const issuerReach = 6
 
+// trackEvery is how many ticks apart a forecast system's track's points
+// are: a minute.
+const trackEvery = 60 * physics.StepsPerSecond
+
 // forecastPage is forecast.json.
 type forecastPage struct {
 	At    int64 `json:"at"`    // the tick shown
 	Issue int64 `json:"issue"` // the issue in force at it
 	// Issued says the issue is the issuer's, as the players were sent it;
 	// otherwise it was made here from the week.
-	Issued  bool                 `json:"issued"`
-	Step    int64                `json:"step"`  // ticks between steps
-	Steps   int                  `json:"steps"` // the issue's own first
-	Lip     float64              `json:"lip"`
+	Issued bool    `json:"issued"`
+	Step   int64   `json:"step"`  // ticks between steps
+	Steps  int     `json:"steps"` // the issue's own first
+	Until  int64   `json:"until"` // the last tick it knows the systems to
+	Every  int64   `json:"every"` // ticks between a track's points
+	Lip    float64 `json:"lip"`
+	// Reach is how far either side of the centre a front's line crosses, m.
+	Reach   float64              `json:"reach"`
 	Systems []forecastSystemJSON `json:"systems"`
 	Fronts  []forecastFrontJSON  `json:"fronts"`
 	Spells  []forecastSpellJSON  `json:"spells"`
@@ -59,32 +67,38 @@ type forecastPage struct {
 	GaleSide int     `json:"galeSide"`
 }
 
-// forecastSystemJSON is a system as the forecast gives it.
+// forecastSystemJSON is a system as the forecast knows it, from its record.
 type forecastSystemJSON struct {
-	Slot    int    `json:"slot"`
-	Kind    int    `json:"kind"`
-	ID      string `json:"id"`
-	Forming bool   `json:"forming"` // a low not yet born at the issue, forecast by its plan
-	Crosses int64  `json:"crosses"` // the tick it is forecast to cross the lip onto the disk; 0 for one on it
-	// Steps are, at each step, where it will be, m east and north, its
-	// cone's radius, m, and its strength, 0 to 1; all 0 at a step it is
-	// not alive at.
-	Steps [][4]float64 `json:"steps"`
+	Slot int    `json:"slot"`
+	Kind int    `json:"kind"`
+	ID   string `json:"id"`
+	Seed uint32 `json:"seed"`
+	// Born and Gone are the ticks it is born and gone at.
+	Born int64 `json:"born"`
+	Gone int64 `json:"gone"`
+	// Size is its radius, a line's half its depth along its motion, and
+	// Length a line's length across it, 0 for any other shape, m.
+	Size   float64 `json:"size"`
+	Length float64 `json:"length"`
+	// From is the tick of its track's first point; Track where it is at it
+	// and each Every ticks after while it lives within the forecast's
+	// reach: m east and north, its strength, 0 to 1, and the degrees it
+	// moves toward.
+	From  int64        `json:"from"`
+	Track [][4]float64 `json:"track"`
 }
 
-// forecastFrontJSON is a front as the forecast moves it.
+// forecastFrontJSON is a front the forecast knows: the way it moves, the
+// tick its line enters the disk's reach and the ticks it takes to cross
+// it, and whether it is a warm front.
 type forecastFrontJSON struct {
-	Toward float64 `json:"toward"` // degrees: the way it moves
-	Begin  int64   `json:"begin"`  // the tick its forecast line enters the disk's reach
-	Cross  int64   `json:"cross"`  // the ticks it takes to cross it
-	// Lines are, at each step, its line's distance from the centre along
-	// the way it moves and its band's half-width, m; null at a step it is
-	// not crossing.
-	Lines []*[2]float64 `json:"lines"`
+	Toward float64 `json:"toward"` // degrees
+	Begin  int64   `json:"begin"`
+	Cross  int64   `json:"cross"`
+	Warm   bool    `json:"warm"`
 }
 
-// forecastSpellJSON is a spell as the forecast names it, with its regime's
-// risk: what it brings that no forecast places.
+// forecastSpellJSON is a spell as the forecast names it.
 type forecastSpellJSON struct {
 	Begin  int64   `json:"begin"`
 	Regime int     `json:"regime"`
@@ -92,12 +106,8 @@ type forecastSpellJSON struct {
 	From   float64 `json:"from"`  // degrees
 	Knots  float64 `json:"knots"` // at mid-disk
 	Front  bool    `json:"front"`
+	Warm   bool    `json:"warm"`
 	Shifts float64 `json:"shifts"` // degrees its shifts turn its wind either way together
-	// Risk is the sky its regime's risk names, Fog whether it makes fog
-	// patches, and Marks the chart's marks of it.
-	Risk  string   `json:"risk"`
-	Fog   bool     `json:"fog"`
-	Marks []string `json:"marks"`
 }
 
 // forecastGaleJSON is the gale warning in force.
@@ -120,13 +130,14 @@ type forecastGaleJSON struct {
 }
 
 // forecastCache is what the forecast's routes keep for the world: the gale
-// grid's water, and what is worked out once for its past, the calibration
-// and the gale warnings, each carried forward as the world sails on.
+// grid's water, the gale warnings worked out once for its past and
+// carried forward as the world sails on, and the busy weather's tally of
+// its week.
 type forecastCache struct {
 	waterOnce sync.Once
 	water     []uint8
-	cal       calibrationLog
 	gales     galeLog
+	busy      busyCache
 }
 
 // galeWater is the gale grid's water, from the land sailed: all water with
@@ -235,42 +246,49 @@ func (o *Owner) forecastPage(tl *weather.Timeline, tick int64, x *forecast.Issue
 	f := &x.Forecast
 	n := int(f.Head.Steps)
 	page := &forecastPage{
-		At: tick, Issue: x.Tick, Issued: issued, Step: int64(f.Head.Step), Steps: n, Lip: round2(p.Edge()),
-		GaleGrid: round2(p.GaleGrid()), GaleSide: int(p.GaleSide()),
+		At: tick, Issue: x.Tick, Issued: issued, Step: int64(f.Head.Step), Steps: n, Until: int64(f.Head.Until), Every: trackEvery,
+		Lip: round2(p.Edge()), Reach: round2(p.FrontReach()), GaleGrid: round2(p.GaleGrid()), GaleSide: int(p.GaleSide()),
 		Systems: []forecastSystemJSON{}, Fronts: []forecastFrontJSON{}, Spells: []forecastSpellJSON{},
 	}
+	origin := f.Head.Origin
 	for i := range int(f.Head.NSystems) {
-		s := &f.Systems[i]
+		r := &f.Systems[i]
 		j := forecastSystemJSON{
-			Slot: int(s.Slot), Kind: int(s.Kind), Forming: s.Forming != 0, Crosses: int64(s.Crosses), Steps: make([][4]float64, n),
+			Slot: int(f.Head.Slots[i]), Kind: int(r.Kind), Seed: uint32(r.Seed), Born: int64(r.Born + origin), Gone: int64(r.Gone + origin),
+			Size: r.Size, Length: r.Length, Track: [][4]float64{},
 		}
-		if k := int(s.Kind); k >= 0 && k < len(o.cfg.SystemKinds) {
+		if k := int(r.Kind); k >= 0 && k < len(o.cfg.SystemKinds) {
 			j.ID = o.cfg.SystemKinds[k]
 		}
-		for k := range n {
-			if s.Strength[k] > 0 {
-				j.Steps[k] = [4]float64{s.East[k], s.North[k], round2(physics.ForecastCone(p, f, s, int32(k))), round3(s.Strength[k] / 256)}
-			}
+		// From the first minute after the issue it lives at to the last
+		// the forecast knows.
+		first := x.Tick
+		if born := j.Born; born > first {
+			first += (born - first + trackEvery - 1) / trackEvery * trackEvery
 		}
-		page.Systems = append(page.Systems, j)
+		for at := first; at <= page.Until && at < j.Gone; at += trackEvery {
+			s := physics.SystemAt(r, float64(at)-origin)
+			if s.On == 0 {
+				continue
+			}
+			if len(j.Track) == 0 {
+				j.From = at
+			}
+			j.Track = append(j.Track, [4]float64{s.East / 4, s.North / 4, round3(s.Strength / 4096), round2(s.Heading * 360 / physics.TurnSteps)})
+		}
+		if len(j.Track) > 0 {
+			page.Systems = append(page.Systems, j)
+		}
 	}
-	reach := p.FrontReach()
 	for i := range int(f.Head.NSpells) {
 		s := &f.Spells[i]
 		page.Spells = append(page.Spells, o.forecastSpell(s, f.Head.Shifts[i]))
 		if s.Front == 0 || !(s.Change > 0) {
 			continue
 		}
-		fj := forecastFrontJSON{Toward: round2(s.Toward * 360 / physics.TurnSteps), Begin: int64(s.Begin), Cross: int64(s.Change), Lines: make([]*[2]float64, n)}
-		for k := range n {
-			at := f.Head.Issue + float64(k)*f.Head.Step
-			if at < s.Begin || at > s.Begin+s.Change {
-				continue
-			}
-			line := 2*reach*(at-s.Begin)/s.Change - reach
-			fj.Lines[k] = &[2]float64{round2(line), round2(physics.FrontBand(p, s, at-f.Head.Issue))}
-		}
-		page.Fronts = append(page.Fronts, fj)
+		page.Fronts = append(page.Fronts, forecastFrontJSON{
+			Toward: round2(s.Toward * 360 / physics.TurnSteps), Begin: int64(s.Begin), Cross: int64(s.Change), Warm: s.Warm != 0,
+		})
 	}
 	if g := x.Gale; g != nil {
 		warn := o.warningOf(tl, x, issued, nil)
@@ -293,19 +311,11 @@ func (o *Owner) forecastPage(tl *weather.Timeline, tick int64, x *forecast.Issue
 func (o *Owner) forecastSpell(s *physics.Spell, shifts float64) forecastSpellJSON {
 	j := forecastSpellJSON{
 		Begin: int64(s.Begin), Regime: int(s.Regime), From: round2(s.From * 360 / physics.TurnSteps),
-		Knots: round2(s.Speed * physics.SeaSpeedStep / knot), Front: s.Front != 0, Shifts: round2(shifts * 360 / physics.TurnSteps),
-		Marks: []string{},
+		Knots: round2(s.Speed * physics.SeaSpeedStep / knot), Front: s.Front != 0, Warm: s.Warm != 0,
+		Shifts: round2(shifts * 360 / physics.TurnSteps),
 	}
-	if r := j.Regime; r >= 0 {
-		if r < len(o.cfg.Regimes) {
-			j.ID = o.cfg.Regimes[r]
-		}
-		if r < len(o.cfg.Risks) {
-			j.Risk, j.Fog = o.cfg.Risks[r].Sky, o.cfg.Risks[r].Fog
-		}
-		if r < len(o.cfg.RiskMarks) {
-			j.Marks = append(j.Marks, o.cfg.RiskMarks[r]...)
-		}
+	if r := j.Regime; r >= 0 && r < len(o.cfg.Regimes) {
+		j.ID = o.cfg.Regimes[r]
 	}
 	return j
 }

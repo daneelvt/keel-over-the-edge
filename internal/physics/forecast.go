@@ -179,6 +179,9 @@ func MakeForecast(p *WeatherPrepared, in *ForecastInput, f *Forecast) {
 		ns++
 	}
 	h.NSpells = float64(ns)
+	for i := ns; i < MaxForecastSpells; i++ {
+		f.Spells[i] = Spell{}
+	}
 	// The records' own time.
 	from, until := issue-in.Origin, h.Until-in.Origin
 	k := 0
@@ -199,6 +202,9 @@ func MakeForecast(p *WeatherPrepared, in *ForecastInput, f *Forecast) {
 		k++
 	}
 	h.NSystems = float64(k)
+	for i := k; i < MaxForecastSystems; i++ {
+		f.Systems[i] = SystemRecord{}
+	}
 }
 
 // ForecastAt sets w's spells and keyframes to the forecast's at a tick:

@@ -261,7 +261,7 @@ func ConfigOf(c *catalog.Catalog) (*Config, error) {
 		FrontSpeed: pair(wk.FrontSpeed, knot), FrontTrough: pair(wk.FrontTrough, 1), Spread: deg(wk.Spread),
 		Wobble: wk.Wobble * nauticalMile, WobblePeriod: ticks(wk.WobblePeriod, ticksPerMinute),
 		StrengthWobble: wk.StrengthWobble, SystemsMost: wk.SystemsMost,
-		Outer: pair(wk.Outer, nauticalMile),
+		Outer:      pair(wk.Outer, nauticalMile),
 		StormsMost: wk.Storms.Most, QuietTicks: int64(math.Round(wk.Quiet.Hours * hourTicks)),
 		LineAhead: pair(wk.LineAhead.Ahead, nauticalMile),
 	}
@@ -990,8 +990,9 @@ func (g *gen) systems(ch *chain, spells []physics.Spell) ([]System, Report) {
 
 // fill gives the disk weather wherever it would have none after the
 // opening: at each minute with no system within the lip and no front
-// crossing it, a system of the fill kind born ten minutes before, in a
-// slot free from a keyframe before its birth to a keyframe after its end.
+// crossing it, a system of the fill kind born ten minutes before, in the
+// slot free longest from a keyframe before its birth, its life cut short
+// to end a keyframe before the slot is next taken.
 func (g *gen) fill(ch *chain, spells []physics.Spell, out []System, rep *Report) []System {
 	c := g.c
 	edge, reach := c.Prepared.Edge(), c.Prepared.FrontReach()
@@ -1000,12 +1001,25 @@ func (g *gen) fill(ch *chain, spells []physics.Spell, out []System, rep *Report)
 	for _, k := range c.Kinds {
 		longest = max(longest, k.Life[1])
 	}
-	first := 0
+	// The systems born to fill, apart from the rest until the end, so each
+	// minute looks only at those about it.
+	var fills []System
+	first, filled := 0, 0
 	for tick := c.Week.Opening; tick < g.ticks; tick += ticksPerMinute {
 		for first < len(out) && int64(out[first].Born) < tick-longest {
 			first++
 		}
-		if g.weatherAt(out[first:], spells, tick, edge, reach) {
+		for filled < len(fills) && int64(fills[filled].Born) < tick-longest {
+			filled++
+		}
+		// Weather on the disk at this minute: on to the last minute the
+		// same weather is.
+		if ok, last := g.weatherAt(out[first:], spells, tick, edge, reach); ok {
+			tick = last
+			continue
+		}
+		if ok, last := g.weatherAt(fills[filled:], spells, tick, edge, reach); ok {
+			tick = last
 			continue
 		}
 		born := max(tick-10*ticksPerMinute, c.Week.Opening)
@@ -1014,26 +1028,38 @@ func (g *gen) fill(ch *chain, spells []physics.Spell, out []System, rep *Report)
 		if !ok {
 			continue
 		}
-		slot := freeSlot(out, c.Week.SystemsMost, r.Born-float64(2*c.Every), r.Gone+float64(2*c.Every))
-		if slot < 0 {
+		from, to := r.Born-float64(2*c.Every), r.Gone+float64(2*c.Every)
+		slot, until := freeSlot(c.Week.SystemsMost, from, to, out[first:], fills[filled:])
+		if gone := min(int64(r.Gone), int64(until)-2*c.Every); slot < 0 || gone < tick+10*ticksPerMinute {
 			rep.Refused++
 			continue
+		} else if gone < int64(r.Gone) {
+			quarter := (gone - int64(r.Born)) / 4
+			r.Gone, r.Mature, r.Decays = float64(gone), r.Born+float64(quarter), float64(gone-quarter)
 		}
-		at, _ := slices.BinarySearchFunc(out, r.Born, func(s System, born float64) int {
-			if s.Born <= born {
-				return -1
-			}
-			return 1
-		})
-		out = slices.Insert(out, at, System{Slot: slot, SystemRecord: r})
+		fills = append(fills, System{Slot: slot, SystemRecord: r})
 		rep.Filled++
 	}
+	if len(fills) == 0 {
+		return out
+	}
+	out = append(out, fills...)
+	slices.SortStableFunc(out, func(a, b System) int {
+		switch {
+		case a.Born < b.Born:
+			return -1
+		case a.Born > b.Born:
+			return 1
+		}
+		return 0
+	})
 	return out
 }
 
-// weatherAt reports whether there is weather on the disk at a tick: a
-// system of ss within the lip, or a front of spells crossing it.
-func (g *gen) weatherAt(ss []System, spells []physics.Spell, tick int64, edge, reach float64) bool {
+// weatherAt reports whether there is weather on the disk at a tick, a
+// system of ss within the lip or a front of spells crossing it, and if so
+// the last whole minute from the tick on that the same one is still there.
+func (g *gen) weatherAt(ss []System, spells []physics.Spell, tick int64, edge, reach float64) (bool, int64) {
 	j, _ := slices.BinarySearchFunc(spells, float64(tick), func(s physics.Spell, at float64) int {
 		if s.Begin <= at {
 			return -1
@@ -1043,31 +1069,63 @@ func (g *gen) weatherAt(ss []System, spells []physics.Spell, tick int64, edge, r
 	for _, s := range spells[max(j-2, 0):max(j, 0)] {
 		if s.Front != 0 && s.Change > 0 && float64(tick) >= s.Begin && float64(tick) <= s.Begin+s.Change {
 			if line := float64(float64(2*reach)*float64(float64(tick)-s.Begin))/s.Change - reach; math.Abs(line) < edge {
-				return true
+				// Its line leaves the lip at Begin + Change (reach + edge) / 2 reach.
+				leaves := int64(s.Begin + math.Floor(s.Change*(reach+edge)/(2*reach)))
+				return true, max(tick, tick+(leaves-tick)/ticksPerMinute*ticksPerMinute-ticksPerMinute)
 			}
 		}
 	}
+	on := func(r *physics.SystemRecord, at int64) bool {
+		k := physics.SystemAt(r, float64(at))
+		return k.On != 0 && OnDisk(&k, edge)
+	}
 	for i := range ss {
-		if ss[i].Born > float64(tick) {
+		r := &ss[i].SystemRecord
+		if r.Born > float64(tick) {
 			break
 		}
-		if k := physics.SystemAt(&ss[i].SystemRecord, float64(tick)); k.On != 0 && OnDisk(&k, edge) {
-			return true
+		if on(r, tick) {
+			last := tick
+			for on(r, last+ticksPerMinute) {
+				last += ticksPerMinute
+			}
+			return true, last
 		}
 	}
-	return false
+	return false, tick
 }
 
-// freeSlot is the lowest of the first most slots no system of ss holds
-// from one tick to another, or −1.
-func freeSlot(ss []System, most int, from, to float64) int {
-	used := make([]bool, most)
-	for i := range ss {
-		if s := &ss[i]; s.Slot < most && s.Born < to && s.Gone > from {
-			used[s.Slot] = true
+// freeSlot is the one of the first most slots no system of the lists
+// holds at a tick, from, that is free the longest after it up to another,
+// to, the lowest of those, and the tick it is next taken, to if not by
+// then; or −1. Each list is in the order of births, from the first that
+// may be alive at from.
+func freeSlot(most int, from, to float64, lists ...[]System) (int, float64) {
+	until := make([]float64, most)
+	for k := range until {
+		until[k] = to
+	}
+	for _, ss := range lists {
+		for i := range ss {
+			s := &ss[i]
+			if s.Born >= to {
+				break
+			}
+			if s.Slot < most && s.Gone > from {
+				until[s.Slot] = min(until[s.Slot], max(s.Born, from))
+			}
 		}
 	}
-	return slices.Index(used, false)
+	best := -1
+	for k, u := range until {
+		if u > from && (best < 0 || u > until[best]) {
+			best = k
+		}
+	}
+	if best < 0 {
+		return -1, 0
+	}
+	return best, until[best]
 }
 
 // OnDisk reports whether any part of a system at a keyframe is within the
@@ -1080,7 +1138,7 @@ func OnDisk(s *physics.System, edge float64) bool {
 		// reaches.
 		ux, uy := physics.SinCos(float64(s.Heading * (2 * math.Pi / physics.TurnSteps)))
 		half := float64(0.5 * s.Length)
-		along := min(max(-(float64(x*uy) - float64(y*ux)), -half), half)
+		along := min(max(-(float64(x*uy)-float64(y*ux)), -half), half)
 		x, y = x+float64(along*uy), y-float64(along*ux)
 	}
 	return math.Sqrt(float64(x*x)+float64(y*y))-s.Size < edge

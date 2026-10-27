@@ -179,12 +179,13 @@ describe('the spells a client holds', () => {
       toward: 16384,
       trough: 450,
       still: true,
+      warm: true,
     });
     const r = spellRecord(s);
     expect(r).toHaveLength(SIZES.spell);
     expect(r).toEqual([
       727704000, 18000, 727703999, 432000, 1, 1, 669, 65535, -3641, 1300, 971, 485, 11880, 8940, 7,
-      40000, 910, 12345, 648000, 4294967295, 101325, 1, 16384, 450, 1,
+      40000, 910, 12345, 648000, 4294967295, 101325, 1, 16384, 450, 1, 1,
     ]);
   });
 
@@ -206,6 +207,7 @@ describe('the spells a client holds', () => {
             size: 3704,
             peak: 1131,
             depth: -1500,
+            length: 4630,
           }),
         ],
       }),
@@ -215,7 +217,9 @@ describe('the spells a client holds', () => {
     const [slot, v] = k.systems[0] ?? [0, []];
     expect(slot).toBe(3);
     expect(v).toHaveLength(SIZES.system);
-    expect(v).toEqual([1, 2, 4294967295, 1, -60000, 72000, 65535, 257, 4096, 3704, 1131, -1500]);
+    expect(v).toEqual([
+      1, 2, 4294967295, 1, -60000, 72000, 65535, 257, 4096, 3704, 1131, -1500, 4630,
+    ]);
   });
 
   test('keyframes join those held, each replacing any of its tick, the latest four kept', () => {
@@ -239,7 +243,7 @@ describe('the spells a client holds', () => {
     expect(spells.receive(null, [one(1200, 6)])).toBe(true);
     expect(spells.keyframes.map((k) => k.tick)).toEqual([300, 600, 900, 1200]);
     expect(
-      spells.receive(null, [{ tick: 1500, systems: [[20, new Array(SIZES.system).fill(0)]] }]),
+      spells.receive(null, [{ tick: 1500, systems: [[28, new Array(SIZES.system).fill(0)]] }]),
     ).toBe(false);
     spells.reset();
   });

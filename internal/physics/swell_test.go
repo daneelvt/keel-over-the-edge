@@ -329,3 +329,24 @@ func BenchmarkStepInSwell(bm *testing.B) {
 		}
 	}
 }
+
+// The refuge holds the storms' swell together as it holds the wind: within
+// its radius never past its limit, a swell under its knee as it is, and
+// beyond its outer edge every swell as it is.
+func TestRefugeSwell(t *testing.T) {
+	p := testWeather(t)
+	for _, h := range []float64{0.3, 0.69, 0.8, 1.2, 2.5} {
+		in := p.RefugeSwell(Swell{Height: h, Period: 6}, -36, 71)
+		switch {
+		case in.Height > 1+1e-9:
+			t.Errorf("%.2f m in the refuge is %.3f m, over its limit", h, in.Height)
+		case h < 0.7 && in.Height != h:
+			t.Errorf("%.2f m, under its knee, is %.3f m in the refuge", h, in.Height)
+		case in.Period != 6:
+			t.Errorf("its period changed to %v", in.Period)
+		}
+		if out := p.RefugeSwell(Swell{Height: h}, 1.5*nm, 0); out.Height != h {
+			t.Errorf("%.2f m beyond the refuge is %.3f m", h, out.Height)
+		}
+	}
+}

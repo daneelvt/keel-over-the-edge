@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The chart as the screen uses it: whether it is open, and as the chart,
-// its list or the news; what is picked on it; and the notices its
-// chartings raise: one for each place the player charts, and one for each
-// great discovery anyone does.
+// its list or the news; what is picked on it, a charted thing or a weather
+// system; the course steered for a system from its box; and the notices
+// its chartings raise: one for each place the player charts, and one for
+// each great discovery anyone does.
 
 import { signal } from '@preact/signals';
 import type { ChartEntry } from '../net/messages';
@@ -15,6 +16,22 @@ import { LAYERS_AT_FIRST, type Layer, type Layers, type TimeMode } from './weath
 
 export type ChartMode = 'chart' | 'list' | 'news';
 
+/** A weather system or a front tapped on the chart: which, as the scene had it then. */
+export type TappedWeather =
+  | { kind: 'system'; slot: number; seed: number }
+  | { kind: 'front'; sin: number; cos: number };
+
+/**
+ * The course the sailor steered for a tapped system, from its box: the
+ * heading, and where and when the boat meets it, m and the world's tick.
+ */
+export interface SteeredCourse {
+  heading: number;
+  east: number;
+  north: number;
+  at: number;
+}
+
 export class Chart {
   readonly store: ChartStore;
   readonly view: ChartView;
@@ -23,13 +40,16 @@ export class Chart {
   readonly mode = signal<ChartMode>('chart');
   /** The entry whose box is open, or null. */
   readonly picked = signal<ChartEntry | null>(null);
+  /** The weather system or front whose box is open, or null. */
+  readonly tapped = signal<TappedWeather | null>(null);
+  /** The course last steered for a system from its box, or null. */
+  readonly steered = signal<SteeredCourse | null>(null);
   /**
-   * The slider: the forecast ahead, its step 0 now; or what happened, its
-   * step the tens of minutes back, negative. Play steps it on a step a
-   * second.
+   * The slider: the forecast ahead, its minutes from now; or what
+   * happened, its minutes back, negative; 0 is now. Play runs it on ahead.
    */
   readonly timeMode = signal<TimeMode>('forecast');
-  readonly step = signal(0);
+  readonly minutes = signal(0);
   readonly playing = signal(false);
   /** The weather's layers, each switched on or off. */
   readonly layers = signal<Layers>({ ...LAYERS_AT_FIRST });
@@ -42,6 +62,7 @@ export class Chart {
     this.notices = notices;
     view.onPick = (e) => {
       this.picked.value = e;
+      this.tapped.value = null;
     };
     store.onCharted((es) => this.#told(es));
   }
@@ -51,10 +72,11 @@ export class Chart {
     if (mode === null) {
       this.open.value = false;
       this.picked.value = null;
+      this.tapped.value = null;
       this.view.show(false);
       // Back to now for the next look.
       this.timeMode.value = 'forecast';
-      this.step.value = 0;
+      this.minutes.value = 0;
       this.playing.value = false;
       return;
     }
@@ -86,7 +108,7 @@ export class Chart {
   /** The slider to the forecast ahead or what happened, at now. */
   setTimeMode(mode: TimeMode): void {
     this.timeMode.value = mode;
-    this.step.value = 0;
+    this.minutes.value = 0;
     this.playing.value = false;
   }
 

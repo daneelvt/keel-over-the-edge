@@ -267,7 +267,7 @@ export function heldSpell(physics: Physics, weather: Weather, regime: number, fr
 }
 
 /** The shapes and the ways of weakening of the kinds of system, as the module numbers them. */
-const SHAPES = { none: 0, dome: 1, low: 2 } as const;
+const SHAPES = { none: 0, dome: 1, low: 2, line: 3 } as const;
 const INWARD = { none: 0, weak: 1, gone: 2 } as const;
 /** The forms of a kind's cloud, as the module numbers them. */
 export const FORMS = { none: 0, fog: 1, cumulus: 2, cumulonimbus: 3, storm: 4 } as const;

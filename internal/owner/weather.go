@@ -12,10 +12,11 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
-// The world page is the one place the weather to come may be seen, on the
-// internal listener alone: the world's week, its spells, fronts and storms,
-// and at any tick of it, its systems where they are, with their true tracks
-// for the hour after, the front's line, and the pressure for the isobars.
+// The world page is where the whole of the weather to come may be seen,
+// on the internal listener alone: the world's week, its spells, fronts,
+// storms and lows, and at any tick of it, its systems where they are, with
+// their true tracks for the hour after, the front's line, warm or cold,
+// and the pressure for the isobars.
 
 // weatherJSON's grids and tracks.
 const (
@@ -41,7 +42,8 @@ type weatherPage struct {
 	Regimes        []string            `json:"regimes"`
 	Kinds          []weatherKind       `json:"kinds"`
 	Spells         []weatherSpell      `json:"spells"`
-	Storms         []int64             `json:"storms"` // the ticks the week's lows are born at
+	Storms         []int64             `json:"storms"` // the ticks the week's storms are born at
+	Lows           []int64             `json:"lows"`   // and its other lows
 	Spell          *weatherSpell       `json:"spell"`  // in effect at the tick shown
 	Next           *weatherSpell       `json:"next"`   // the next to begin after it
 	Systems        []weatherSystemJSON `json:"systems"`
@@ -50,8 +52,11 @@ type weatherPage struct {
 }
 
 type weatherKind struct {
-	ID    string `json:"id"`
-	Shape string `json:"shape"` // dome, low or none
+	ID     string `json:"id"`
+	Name   string `json:"name"`   // as a chart's key gives it: "Squall line"
+	Symbol string `json:"symbol"` // its chart symbol
+	Shape  string `json:"shape"`  // dome, low, line or none
+	Storm  bool   `json:"storm"`  // the week's storms' kind
 }
 
 type weatherSpell struct {
@@ -64,6 +69,7 @@ type weatherSpell struct {
 	Front    bool    `json:"front"`
 	Toward   float64 `json:"toward"` // degrees, a front's
 	Cross    int64   `json:"cross"`  // ticks a front's line takes to cross the disk's reach
+	Warm     bool    `json:"warm"`   // a warm front's
 	Held     bool    `json:"held"`   // a developer's
 }
 
@@ -72,7 +78,8 @@ type weatherSystemJSON struct {
 	Kind      int          `json:"kind"`
 	East      float64      `json:"east"`
 	North     float64      `json:"north"`
-	Size      float64      `json:"size"`     // m
+	Size      float64      `json:"size"`     // m: a line's half its depth along its motion
+	Length    float64      `json:"length"`   // a line's length across its motion, m; 0 for any other shape
 	Strength  float64      `json:"strength"` // its life and throb, 1 at full
 	Stage     int          `json:"stage"`    // growing, mature, decaying
 	Heading   float64      `json:"heading"`  // degrees
@@ -89,6 +96,7 @@ type weatherFront struct {
 	Line      float64 `json:"line"`   // m from the centre along the way it moves
 	Knots     float64 `json:"knots"`
 	Depth     float64 `json:"depth"` // hPa
+	Warm      bool    `json:"warm"`
 	Enters    int64   `json:"enters"`
 	Leaves    int64   `json:"leaves"`
 	PortRoyal int64   `json:"portRoyal"` // the tick its line passes the main port
@@ -162,7 +170,7 @@ func (o *Owner) weatherPage(tl *weather.Timeline, now, tick int64, ws []bus.Weat
 		Until: week.Until + origin, Ends: weather.TicksOf(week.Epoch, week.Ends) + origin, Every: tl.Every(),
 		Lip: tl.Prepared().Edge(), Regimes: o.cfg.Regimes,
 		// Lists as JSON's arrays, empty or not: the page reads them so.
-		Kinds: []weatherKind{}, Spells: []weatherSpell{}, Storms: []int64{}, Systems: []weatherSystemJSON{},
+		Kinds: []weatherKind{}, Spells: []weatherSpell{}, Storms: []int64{}, Lows: []int64{}, Systems: []weatherSystemJSON{},
 	}
 	if p.Regimes == nil {
 		p.Regimes = []string{}
@@ -171,13 +179,19 @@ func (o *Owner) weatherPage(tl *weather.Timeline, now, tick int64, ws []bus.Weat
 		port := b.MainPort()
 		p.MainPort = [2]float64{round2(port.X), round2(port.Y)}
 	}
-	shapes := map[float64]string{physics.ShapeNone: "none", physics.ShapeDome: "dome", physics.ShapeLow: "low"}
+	shapes := map[float64]string{physics.ShapeNone: "none", physics.ShapeDome: "dome", physics.ShapeLow: "low", physics.ShapeLine: "line"}
 	for i, k := range cfg.Kinds {
-		id := ""
+		wk := weatherKind{Shape: shapes[k.Shape], Storm: i == cfg.Week.Storms}
 		if i < len(o.cfg.SystemKinds) {
-			id = o.cfg.SystemKinds[i]
+			wk.ID = o.cfg.SystemKinds[i]
 		}
-		p.Kinds = append(p.Kinds, weatherKind{ID: id, Shape: shapes[k.Shape]})
+		if i < len(o.cfg.WeatherKinds) {
+			wk.Name, wk.Symbol = o.cfg.WeatherKinds[i].Name, o.cfg.WeatherKinds[i].Symbol
+		}
+		if wk.Name == "" {
+			wk.Name = wk.ID
+		}
+		p.Kinds = append(p.Kinds, wk)
 	}
 	for i := range week.Spells {
 		s := week.Spells[i]
@@ -188,8 +202,11 @@ func (o *Owner) weatherPage(tl *weather.Timeline, now, tick int64, ws []bus.Weat
 		p.Spells = append(p.Spells, spellJSON(&s, origin, end+origin, false))
 	}
 	for _, s := range week.Systems {
-		if int(s.Kind) < len(cfg.Kinds) && cfg.Kinds[int(s.Kind)].Shape == physics.ShapeLow {
+		switch k := int(s.Kind); {
+		case k == cfg.Week.Storms:
 			p.Storms = append(p.Storms, int64(s.Born)+origin)
+		case k < len(cfg.Kinds) && cfg.Kinds[k].Shape == physics.ShapeLow:
+			p.Lows = append(p.Lows, int64(s.Born)+origin)
 		}
 	}
 	// The spell in effect at the tick, a developer's if one is, and the
@@ -241,7 +258,7 @@ func (o *Owner) weatherPage(tl *weather.Timeline, now, tick int64, ws []bus.Weat
 		fe, fn := math.Sin(toward), math.Cos(toward)
 		f := &weatherFront{
 			Toward: round2(s.Toward * 360 / physics.TurnSteps), Line: round2(speed*(float64(tick)-s.Begin) - reach),
-			Knots: round2(speed * physics.StepsPerSecond / knot), Depth: s.Trough / 100,
+			Knots: round2(speed * physics.StepsPerSecond / knot), Depth: s.Trough / 100, Warm: s.Warm != 0,
 			Enters: int64(s.Begin), Leaves: int64(s.Begin + s.Change),
 		}
 		f.PortRoyal = int64(s.Begin + (p.MainPort[0]*fe+p.MainPort[1]*fn+reach)/speed)
@@ -274,7 +291,7 @@ func spellJSON(s *physics.Spell, origin, end int64, held bool) weatherSpell {
 	return weatherSpell{
 		Begin: int64(s.Begin) + origin, End: end, Regime: int(s.Regime), From: round2(s.From * 360 / physics.TurnSteps),
 		Knots: round2(s.Speed * physics.SeaSpeedStep / knot), Pressure: s.Pressure / 100, Front: s.Front != 0,
-		Toward: round2(s.Toward * 360 / physics.TurnSteps), Cross: int64(s.Change), Held: held,
+		Toward: round2(s.Toward * 360 / physics.TurnSteps), Cross: int64(s.Change), Warm: s.Warm != 0, Held: held,
 	}
 }
 
@@ -283,7 +300,7 @@ func spellJSON(s *physics.Spell, origin, end int64, held bool) weatherSpell {
 func systemJSON(p *physics.WeatherPrepared, slot int, r *physics.SystemRecord, local float64, origin int64, developer bool) weatherSystemJSON {
 	k := physics.SystemAt(r, local)
 	s := weatherSystemJSON{
-		Slot: slot, Kind: int(k.Kind), East: k.East / 4, North: k.North / 4, Size: k.Size, Strength: round2(k.Strength / 4096),
+		Slot: slot, Kind: int(k.Kind), East: k.East / 4, North: k.North / 4, Size: k.Size, Length: k.Length, Strength: round2(k.Strength / 4096),
 		Stage: int(k.Stage), Heading: round2(k.Heading * 360 / physics.TurnSteps), Knots: round2(k.Speed * physics.SeaSpeedStep / knot),
 		Born: int64(r.Born) + origin, Gone: int64(r.Gone) + origin, Developer: developer, Track: [][2]float64{},
 	}

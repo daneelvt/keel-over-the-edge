@@ -86,7 +86,7 @@
       "description": "The wind over the disk: how its speed rises toward the rim, the refuge at the centre, the stronger gusts of the outer waters and the turning of the difference across the disk.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["speedCentre", "speedRim", "rim", "refugeInner", "refugeOuter", "refugeMeanKnee", "refugeMean", "refugeWindKnee", "refugeWind", "rimGusts", "rimGustsFrom", "acrossTurn", "edge", "fallDraftFrom", "fallDraft"],
+      "required": ["speedCentre", "speedRim", "rim", "refugeInner", "refugeOuter", "refugeMeanKnee", "refugeMean", "refugeWindKnee", "refugeWind", "refugeSwellKnee", "refugeSwell", "rimGusts", "rimGustsFrom", "acrossTurn", "edge", "fallDraftFrom", "fallDraft"],
       "properties": {
         "speedCentre": { "description": "The wind's speed at the centre, as a share of a spell's wind at mid-disk.", "type": "number", "minimum": 0, "maximum": 2 },
         "speedRim": { "description": "The wind's speed at the rim, as a share of a spell's wind at mid-disk.", "type": "number", "minimum": 0, "maximum": 2 },
@@ -97,6 +97,8 @@
         "refugeMean": { "description": "The mean wind the refuge holds to, in knots.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "refugeWindKnee": { "description": "The refuge softens the wind with its gusts above this, in knots.", "type": "number", "minimum": 0, "maximum": 100 },
         "refugeWind": { "description": "The wind with its gusts the refuge holds to, in knots.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "refugeSwellKnee": { "description": "The refuge softens the storms' swell above this, in m.", "type": "number", "minimum": 0, "maximum": 10 },
+        "refugeSwell": { "description": "The swell the refuge holds to, in m: above its knee.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
         "rimGusts": { "description": "The gust factor's excess over 1 grows by this share toward the rim.", "type": "number", "minimum": 0, "maximum": 2 },
         "rimGustsFrom": { "description": "From here to the rim, in nautical miles.", "type": "number", "minimum": 0, "maximum": 10 },
         "acrossTurn": { "description": "The shortest and longest time the axis of the wind's difference across the disk takes to turn once, in hours.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 1000 } },
@@ -1138,18 +1140,68 @@
     },
     "ChartWeather": {
       "title": "ChartWeather",
-      "description": "The chart's weather: the canvas it is painted on, where gusts are drawn and its colours.",
+      "description": "The chart's weather: the canvas it is painted on, where gusts are drawn, its colours, the wind's wash, barbs and streaks, and the key's words.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["canvas", "gusts", "rain", "fog", "front", "squall", "storm"],
+      "required": ["canvas", "gusts", "rain", "fog", "cold", "warm", "squall", "storm", "wash", "barbs", "streaks", "key"],
       "properties": {
         "canvas": { "description": "The weather's canvas, in pixels a side.", "type": "integer", "minimum": 128, "maximum": 4096 },
         "gusts": { "description": "Gusts are drawn where the typical strongest gust is this much over the mean wind, in knots.", "type": "number", "minimum": 0, "maximum": 50 },
         "rain": { "$ref": "#/$defs/Colour" },
         "fog": { "$ref": "#/$defs/Colour" },
-        "front": { "$ref": "#/$defs/Colour" },
+        "cold": { "$ref": "#/$defs/Colour" },
+        "warm": { "$ref": "#/$defs/Colour" },
         "squall": { "$ref": "#/$defs/Colour" },
-        "storm": { "$ref": "#/$defs/Colour" }
+        "storm": { "$ref": "#/$defs/Colour" },
+        "wash": { "$ref": "#/$defs/ChartWash" },
+        "barbs": { "description": "The wind's barbs stand this far apart, in nautical miles.", "type": "number", "minimum": 0.1, "maximum": 5 },
+        "streaks": { "$ref": "#/$defs/ChartStreaks" },
+        "key": { "$ref": "#/$defs/ChartKey" }
+      }
+    },
+    "ChartWash": {
+      "title": "ChartWash",
+      "description": "The wind's wash: the water tinted in steps of one hue by the Beaufort force of the mean wind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["colour", "forces", "tints"],
+      "properties": {
+        "colour": { "$ref": "#/$defs/Colour" },
+        "forces": { "description": "Each step begins at this Beaufort force, the lightest first: none under the first.", "type": "array", "minItems": 1, "maxItems": 6, "items": { "type": "integer", "minimum": 1, "maximum": 12 } },
+        "tints": { "description": "Each step's opacity over the paper, as a share, the lightest first: one for each of forces.", "type": "array", "minItems": 1, "maxItems": 6, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+      }
+    },
+    "ChartStreaks": {
+      "title": "ChartStreaks",
+      "description": "The wind's streaks: how many, how wide and under what wind they fade.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "width", "fade"],
+      "properties": {
+        "count": { "description": "The streaks drawn at once.", "type": "integer", "minimum": 0, "maximum": 10000 },
+        "width": { "description": "Each streak's width, in CSS pixels.", "type": "number", "minimum": 0.5, "maximum": 8 },
+        "fade": { "description": "A streak fades in a mean wind under this, in knots.", "type": "number", "minimum": 0, "maximum": 30 }
+      }
+    },
+    "ChartKey": {
+      "title": "ChartKey",
+      "description": "The chart key's line for each of what the chart draws that is not a kind of system.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cold", "warm", "barbs", "wash", "streaks", "isobars", "ring", "motion", "gale", "gusts", "rain", "fog"],
+      "properties": {
+        "cold": { "description": "A cold front's line.", "type": "string", "minLength": 1 },
+        "warm": { "description": "A warm front's line.", "type": "string", "minLength": 1 },
+        "barbs": { "description": "The wind's barbs' line.", "type": "string", "minLength": 1 },
+        "wash": { "description": "The wind's wash's line.", "type": "string", "minLength": 1 },
+        "streaks": { "description": "The wind's streaks' line.", "type": "string", "minLength": 1 },
+        "isobars": { "description": "The isobars' line.", "type": "string", "minLength": 1 },
+        "ring": { "description": "A ring of strongest wind's line.", "type": "string", "minLength": 1 },
+        "motion": { "description": "A system's motion arrow's line.", "type": "string", "minLength": 1 },
+        "gale": { "description": "The gale hatching's line.", "type": "string", "minLength": 1 },
+        "gusts": { "description": "The gusts' line.", "type": "string", "minLength": 1 },
+        "rain": { "description": "The rain's line.", "type": "string", "minLength": 1 },
+        "fog": { "description": "The fog's line.", "type": "string", "minLength": 1 }
       }
     },
     "Instruments": {
