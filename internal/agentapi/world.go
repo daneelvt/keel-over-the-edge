@@ -110,7 +110,11 @@ func chartList(s *Sea, a *chartArgs, x, y float64, atSea bool) (string, *refusal
 			if !atSea {
 				where = chart.Format(e.sub.X, e.sub.Y)
 			}
-			fmt.Fprintf(&b, " %s · %s · %s\n", titleOf(e.sub), where, creditWords(e.row))
+			size := ""
+			if e.sub.Kind == sight.Island {
+				size = " · " + acrossWords(e.sub)
+			}
+			fmt.Fprintf(&b, " %s · %s%s · %s\n", titleOf(e.sub), where, size, creditWords(e.row))
 			shown++
 		}
 		if n < len(g.Lines) {
@@ -148,8 +152,88 @@ func chartPlace(s *Sea, entries []chartEntry, name string, x, y float64, atSea b
 	if l := s.lightOf(e.sub); l != "" {
 		b.WriteString(" · light " + l)
 	}
+	if e.sub.Kind == sight.Island {
+		if atSea {
+			if c := coastOf(s.Ground, e.sub, x, y); c != "" {
+				b.WriteString(" · " + c)
+			}
+		}
+		b.WriteString(" · " + acrossWords(e.sub))
+	}
+	if m := s.mouthOf(e.sub); m != "" {
+		b.WriteString(" · " + m)
+	}
 	b.WriteString(" · " + creditWords(e.row))
 	return b.String(), nil
+}
+
+// acrossWords is a charted island's size, as the chart draws it: "~600 m
+// across".
+func acrossWords(sub *chart.Subject) string {
+	return rangeWords(max(sub.Bounds[2]-sub.Bounds[0], sub.Bounds[3]-sub.Bounds[1])) + " across"
+}
+
+// coastStep is how far apart a charted island's land is read for its
+// coast, m.
+const coastStep = 8.0
+
+// coastOf is a charted island's coast as the chart inks it, seen from
+// (x, y): the bearings it spans and its nearest point, "coast 040°–130°,
+// nearest 080° 0.2 NM", or "coast all round" from within it; "" for no
+// land found.
+func coastOf(g *physics.Ground, sub *chart.Subject, x, y float64) string {
+	if g == nil {
+		return ""
+	}
+	var bearings []float64
+	nearest, toward := math.Inf(1), 0.0
+	for ly := sub.Bounds[1]; ly <= sub.Bounds[3]; ly += coastStep {
+		for lx := sub.Bounds[0]; lx <= sub.Bounds[2]; lx += coastStep {
+			if e, _ := g.At(lx, ly); !(e > 0) {
+				continue
+			}
+			dx, dy := lx-x, ly-y
+			b := math.Mod(physics.Atan2(dx, dy)+2*math.Pi, 2*math.Pi)
+			bearings = append(bearings, b)
+			if d := math.Sqrt(dx*dx + dy*dy); d < nearest {
+				nearest, toward = d, b
+			}
+		}
+	}
+	if len(bearings) == 0 {
+		return ""
+	}
+	// The coast spans the circle but for the widest gap between its
+	// bearings.
+	slices.Sort(bearings)
+	gap, after := bearings[0]+2*math.Pi-bearings[len(bearings)-1], 0
+	for i := 1; i < len(bearings); i++ {
+		if d := bearings[i] - bearings[i-1]; d > gap {
+			gap, after = d, i
+		}
+	}
+	near := three(degrees(toward)) + " " + chart.DistanceText(nearest)
+	if gap < rad(10) {
+		return "coast all round, nearest " + near
+	}
+	from, to := bearings[after], bearings[(after+len(bearings)-1)%len(bearings)]
+	return fmt.Sprintf("coast %s–%s, nearest %s", three(degrees(from)), three(degrees(to)), near)
+}
+
+// mouthOf is where the harbour of a charted town opens to the sea and
+// the way it opens, as the chart draws its narrows: "harbour mouth
+// 67°24′N 045°12′, opening 210°"; "" for a subject with none.
+func (s *Sea) mouthOf(sub *chart.Subject) string {
+	if s.Bundle == nil || sub.Name == "" {
+		return ""
+	}
+	for _, t := range s.Bundle.Towns {
+		if t.Mouth == nil || t.Name != sub.Name {
+			continue
+		}
+		return "harbour mouth " + chart.Format(t.Mouth[0], t.Mouth[1]) + ", opening " + three(degrees(t.Opening))
+	}
+	return ""
 }
 
 // fold is a name as names are matched: letters and digits, lower case.

@@ -54,6 +54,11 @@ type Town struct {
 	// Harbour is the water that is in port: discs, a point in one of which
 	// and in water is in port.
 	Harbour []Disc `json:"harbour"`
+	// Mouth is where its harbour opens to the sea, and Opening the way it
+	// opens, rad clockwise from north: Port Royal's narrows; nil for a
+	// town with no basin.
+	Mouth   *[2]float64 `json:"mouth,omitempty"`
+	Opening float64     `json:"opening,omitempty"`
 	// Square is its square's middle, if it has one.
 	Square *[2]float64 `json:"square,omitempty"`
 	// Buildings is how many it has, props not counted; Counts each kind's,

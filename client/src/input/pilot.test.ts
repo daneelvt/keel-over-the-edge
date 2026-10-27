@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
-import { pilotText } from '../ui/format';
+import { pilotText, STALLED_SHOWN } from '../ui/format';
 import { HelmInput } from './helm';
 import { KeyInput, PILOT_BIG_STEP, PILOT_STEP } from './keys';
 import {
@@ -14,8 +14,10 @@ import {
   stepsOf,
   TURN_STEPS,
   WAY_GYBE,
+  WAY_GYBE_STALLED,
   WAY_HOLD,
   WAY_TACK,
+  WAY_TACK_STALLED,
   wrapAngle,
 } from './pilot';
 import { SheetInput } from './sheet';
@@ -112,6 +114,31 @@ describe('the autopilot’s control', () => {
     expect(p.degrees).toBe(-80);
     p.adjust(-100);
     expect(p.degrees).toBe(-35);
+  });
+
+  test('after a turn stalled, a tack or a gybe tries again for the other side', () => {
+    const p = new PilotInput();
+    // On starboard at 45°, ordered to tack: the target is 45° on port.
+    p.engage(PILOT_WIND, -45 * DEG, 0);
+    p.tack(0);
+    expect(p.degrees).toBe(-45);
+    // Stalled and held at 47° on starboard: the target stays on port.
+    p.tack(0, 47 * DEG);
+    expect([p.degrees, p.order, p.way]).toEqual([-45, 2, WAY_TACK]);
+    p.gybe(0, 47 * DEG);
+    expect([p.degrees, p.order, p.way]).toEqual([-45, 3, WAY_GYBE]);
+    // A target set back onto the side it is held on is mirrored, as ever.
+    p.engage(PILOT_WIND, -45 * DEG, 0);
+    p.tack(0, 47 * DEG);
+    expect(p.degrees).toBe(-45);
+    // In heading mode: 315° in a wind from 000° is on starboard, the other
+    // side from a stall held on port; 045° is on port, and mirrored.
+    p.engage(PILOT_HEADING, 315 * DEG, 0);
+    p.tack(0, -50 * DEG);
+    expect(p.degrees).toBe(315);
+    p.engage(PILOT_HEADING, 45 * DEG, 0);
+    p.tack(0, -50 * DEG);
+    expect(p.degrees).toBe(315);
   });
 
   test('it follows the boat onto the tack it holds after it gybed by itself', () => {
@@ -223,5 +250,25 @@ describe('the readout', () => {
     expect(pilotText(p, WAY_HOLD)).toBe('Heading 270°');
     p.engage(PILOT_HEADING, 5 * DEG, 0);
     expect(pilotText(p, WAY_HOLD)).toBe('Heading 005°');
+  });
+
+  test('says a turn stalled, then the angle it holds instead of the target', () => {
+    const p = new PilotInput();
+    // On starboard at 45°, a tack ordered: the target is 45° on port.
+    p.engage(PILOT_WIND, -45 * DEG, 0);
+    p.tack(0);
+    expect(pilotText(p, WAY_TACK, 0, 45 * DEG)).toBe('Tacking');
+    expect(pilotText(p, WAY_TACK_STALLED, 2, 47 * DEG)).toBe('Tack stalled');
+    expect(pilotText(p, WAY_GYBE_STALLED, 2, 47 * DEG)).toBe('Gybe stalled');
+    expect(pilotText(p, WAY_TACK_STALLED, STALLED_SHOWN - 0.1, 47 * DEG)).toBe('Tack stalled');
+    // Then the angle the turn began from, on starboard: not the target's port.
+    expect(pilotText(p, WAY_TACK_STALLED, 6, 47 * DEG)).toBe('Wind 47° S');
+    expect(pilotText(p, WAY_GYBE_STALLED, 8, -150 * DEG)).toBe('Wind 150° P');
+    // In heading mode it holds the angle off the wind all the same.
+    p.engage(PILOT_HEADING, 270 * DEG, 0);
+    expect(pilotText(p, WAY_TACK_STALLED, 6, 47 * DEG)).toBe('Wind 47° S');
+    // Off, nothing.
+    p.off();
+    expect(pilotText(p, WAY_TACK_STALLED, 2, 47 * DEG)).toBe('');
   });
 });

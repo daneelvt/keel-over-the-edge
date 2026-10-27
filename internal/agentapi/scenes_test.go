@@ -141,14 +141,18 @@ func (sc *scene) steer(sl int32, angle, boom float64) {
 }
 
 // report is the full report of the machine sailor's boat in slot sl.
-func (sc *scene) report(sl int32) (string, *report) {
+func (sc *scene) report(sl int32) (string, *report) { return sc.reportOf(sl, detailFull) }
+
+// reportOf is the report of the machine sailor's boat in slot sl, in
+// detail.
+func (sc *scene) reportOf(sl int32, detail string) (string, *report) {
 	f := sc.w.Bus().Frames.Acquire()
 	defer f.Release()
 	h := sc.core.helmOf(sailor(byte(sl)+1, "Iron Mary"))
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.sea, h.slot, h.boat = sc.sea, sl, f.Boat[sl]
-	r := h.reportFor(sc.sea, f, sl, detailFull, 0)
+	r := h.reportFor(sc.sea, f, sl, detail, 0)
 	return r.text(), r
 }
 
@@ -328,6 +332,109 @@ func TestSceneOffAnIsland(t *testing.T) {
 	sc.parity(me, text)
 }
 
+// roads is the first place of the world's start in the roads, after the
+// moorings.
+func (sc *scene) roads() physics.State {
+	b, _ := seed1()
+	return b.Terrain(sc.cat.PrepareGround()).Start[b.Start.Moorings]
+}
+
+// A boat at rest in the roads in light air: its brief report has no
+// steerage, and the Shoal line while shoal water is near.
+func TestSceneTheRoads(t *testing.T) {
+	sc := newScene(t, 3, 0)
+	me := sc.boat(sc.roads(), true)
+	sc.sail(time.Second)
+	text, r := sc.reportOf(me, detailBrief)
+	if !r.Boat.NoSteerage {
+		t.Errorf("at rest, the rudder has steerage:\n%s", text)
+	}
+	golden(t, "roads", text)
+	sc.parity(me, text)
+}
+
+// A boat moored in Port Royal's basin: its brief report.
+func TestSceneTheBasin(t *testing.T) {
+	sc := newScene(t, 3, 0)
+	me := sc.boat(sc.start(), true)
+	sc.sail(time.Second)
+	text, _ := sc.reportOf(me, detailBrief)
+	golden(t, "basin", text)
+	sc.parity(me, text)
+}
+
+// A boat at rest on the nearest bank to the roads: its brief report says
+// the water under it, and where the water deepens.
+func TestSceneOnABank(t *testing.T) {
+	sc := newScene(t, 3, 0)
+	at := sc.roads()
+	// The nearest water 5 to 50 cm deep.
+	var bank physics.State
+	found := false
+	for r := 20.0; r < 3000 && !found; r += 4 {
+		for k := range 128 {
+			sin, cos := physics.SinCos(float64(k) * 2 * math.Pi / 128)
+			x, y := at.X+sin*r, at.Y+cos*r
+			if e, _ := sc.sea.Ground.At(x, y); e < -0.05 && e > -0.5 {
+				bank, found = at, true
+				bank.X, bank.Y = x, y
+				break
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no bank within 3 km of the roads")
+	}
+	me := sc.boat(bank, true)
+	sc.sail(time.Second)
+	text, r := sc.reportOf(me, detailBrief)
+	if r.Shoal == nil || !r.Shoal.Here || r.Boat.Depth == nil || !strings.Contains(text, "Shoal: under 1.5 m here · deeper ") {
+		t.Fatalf("on a bank:\n%s", text)
+	}
+	golden(t, "bank", text)
+	sc.parity(me, text)
+}
+
+// In open water the brief report has no Shoal line, and no more than it
+// had.
+func TestSceneOpenSeaBrief(t *testing.T) {
+	sc := newScene(t, 12, 0)
+	own := sc.start()
+	own.X, own.Y, own.Heading, own.Surge = 1500, -1500, math.Pi/2, 2
+	me := sc.boat(own, true)
+	sc.steer(me, -90, 40)
+	sc.sail(3 * time.Second)
+	text, r := sc.reportOf(me, detailBrief)
+	if r.Shoal != nil || r.Boat.Depth != nil || r.Boat.NoSteerage || r.Boat.Astern {
+		t.Errorf("open water, sailing:\n%s", text)
+	}
+	golden(t, "open-brief", text)
+}
+
+// Going astern, the Boat line says so.
+func TestSceneAstern(t *testing.T) {
+	sc := newScene(t, 3, 0)
+	own := sc.start()
+	own.X, own.Y, own.Heading, own.Surge = 1500, -1500, math.Pi/2, -0.6
+	me := sc.boat(own, true)
+	text, r := sc.reportOf(me, detailBrief)
+	if !r.Boat.Astern || !strings.Contains(text, "astern ") {
+		t.Errorf("going astern:\n%s", text)
+	}
+}
+
+// The Shoal line tells only of ground the boat's phone is sent: the
+// chunks within the handout's near reach.
+func TestShoalWithinTheHandout(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if near := cat.World.Handout.Near; shoalReach > near {
+		t.Errorf("the Shoal line reads %.0f m out, the phone is sent the ground within %.0f m", shoalReach, near)
+	}
+}
+
 // BenchmarkReport times a report's making in a crowded harbour: full and
 // brief.
 func BenchmarkReport(b *testing.B) {
@@ -407,4 +514,27 @@ func BenchmarkHub(b *testing.B) {
 		n++
 	}
 	b.ReportMetric(float64(len(waiters)), "waiting")
+}
+
+// chart with a place, from the roads: Port Royal gives its harbour's
+// mouth, and its island its coast and size, as the chart draws them.
+func TestSceneChartPortRoyal(t *testing.T) {
+	sc := newScene(t, 3, 0)
+	at := sc.roads()
+	var lines []string
+	for _, e := range charted(sc.sea) {
+		if e.sub.Kind != sight.Island && e.sub.Name != "Port Royal" {
+			continue
+		}
+		text, r := chartList(sc.sea, &chartArgs{Place: titleOf(e.sub)}, at.X, at.Y, true)
+		if r != nil {
+			t.Fatal(r)
+		}
+		lines = append(lines, text)
+	}
+	text := strings.Join(lines, "\n")
+	if !strings.Contains(text, "harbour mouth ") || !strings.Contains(text, "coast ") {
+		t.Fatalf("chart from the roads:\n%s", text)
+	}
+	golden(t, "chart-port-royal", text)
 }

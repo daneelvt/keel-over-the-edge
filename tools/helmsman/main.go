@@ -46,7 +46,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("arrived %v after %d looks and %d tacks, %.0f m off\n", r.Arrived, r.Looks, r.Tacks, r.Distance)
+	fmt.Printf("arrived %v after %d looks, %d tacks and %d groundings, %.0f m off\n", r.Arrived, r.Looks, r.Tacks, r.Groundings, r.Distance)
 	if !r.Arrived {
 		os.Exit(1)
 	}

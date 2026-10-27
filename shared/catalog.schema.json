@@ -951,7 +951,7 @@
       "description": "How the boat's autopilot steers it: a proportional–integral–derivative law on the angle off its course, and how hard it turns in a tack or a gybe. It sets the helm only, at the sailor's rate.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["gain", "damping", "trimTime", "trimLimit", "trimBand", "tackHelm", "gybeHelm", "byTheLee", "onCourse"],
+      "required": ["gain", "damping", "trimTime", "trimLimit", "trimBand", "tackHelm", "gybeHelm", "byTheLee", "onCourse", "astern", "steerage", "stallTime", "stallGain"],
       "properties": {
         "gain": { "description": "Helm per radian off course, the helm running from −1 to 1.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
         "damping": { "description": "Helm per rad/s of turn, against it: the counter rudder.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
@@ -961,7 +961,11 @@
         "tackHelm": { "description": "The most helm in a tack.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
         "gybeHelm": { "description": "The most helm in a gybe.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
         "byTheLee": { "description": "How far by the lee the boat sails before the autopilot counts it gybed, in degrees. Below the angle at which the boom goes over by itself, about 17° on a dinghy.", "type": "number", "minimum": 0, "exclusiveMaximum": 17 },
-        "onCourse": { "description": "A tack or gybe ends this near its target, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 }
+        "onCourse": { "description": "A tack or gybe ends this near its target, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 },
+        "astern": { "description": "Going astern faster than this through the water, in m/s, the boat is told it goes astern: the water reaches the rudder from behind and works it in reverse.", "type": "number", "minimum": 0, "maximum": 1 },
+        "steerage": { "description": "Slower than this through the water, either way, in m/s, the rudder has no steerage: the report says so, and a turn may stall.", "type": "number", "exclusiveMinimum": 0, "maximum": 2 },
+        "stallTime": { "description": "A tack or gybe with no steerage that gains less than stallGain on its course in this long, in s, has stalled: the autopilot gives it up and holds the angle it turned from.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
+        "stallGain": { "description": "Too little gain for a stalling turn, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 }
       }
     },
     "World": {
@@ -3270,7 +3274,7 @@
       "description": "Where boats start: moored in Port Royal's basin, then the roads off its coast with the most room.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["within", "depth", "clear", "spacing", "row", "places", "moorings"],
+      "required": ["within", "depth", "clear", "shoalDepth", "shoalClear", "joinDepth", "openDepth", "spacing", "row", "places", "moorings"],
       "properties": {
         "within": {
           "description": "The start area begins within this of the coast, in m.",
@@ -3288,6 +3292,30 @@
           "description": "And no land within this, in m.",
           "type": "number",
           "minimum": 0,
+          "maximum": 100
+        },
+        "shoalDepth": {
+          "description": "A place has no water shallower than this, in m, within shoalClear: it is not on a bank.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 40
+        },
+        "shoalClear": {
+          "description": "How far from a place shoal water is looked for, in m.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 200
+        },
+        "joinDepth": {
+          "description": "From every place in the roads, water at least this deep, in m, leads out to open water.",
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 40
+        },
+        "openDepth": {
+          "description": "Open water: deeper than this, in m, beyond the shelf.",
+          "type": "number",
+          "minimum": 1,
           "maximum": 100
         },
         "spacing": {

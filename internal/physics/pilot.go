@@ -22,6 +22,14 @@ import "math"
 // limit, so it never winds up against a rudder held hard over in a turn
 // (Åström and Murray 2008).
 //
+// Its helm is the same going astern, when water reaching the rudder from
+// behind works it in reverse: a boat lying beam-on with little way, now
+// ahead and now astern, is swung round by a helm held one way until its
+// sail fills, where a helm reversed with each change would hold it lying
+// there. A tack or gybe that has no steerage and gains too little on its
+// course stalls: the autopilot gives it up and holds the angle the boat
+// turned from, on its old side, until the next order.
+//
 // Everything it remembers is in the State, so a replay from the server's
 // state steers as the server did.
 
@@ -41,6 +49,11 @@ const (
 	WayHold = 0
 	WayTack = 1 // through head to wind
 	WayGybe = 2 // through dead downwind
+	// A tack or a gybe that stalled: the autopilot holds the angle the
+	// boat turned from, in State.PilotLeft, until the next order. Never
+	// an order's way.
+	WayTackStalled = 3
+	WayGybeStalled = 4
 )
 
 // PilotOrders is how many values Control.Order takes: it counts orders
@@ -58,6 +71,9 @@ type pilotPrepared struct {
 	gybeHelm      float64
 	byTheLee      float64 // rad
 	onCourse      float64 // rad
+	steerage      float64 // m/s
+	stallTime     float64 // s
+	stallGain     float64 // rad
 }
 
 func (b *pilotPrepared) prepare(p *Params) {
@@ -70,6 +86,9 @@ func (b *pilotPrepared) prepare(p *Params) {
 	b.gybeHelm = p.GybeHelm
 	b.byTheLee = float64(p.ByTheLee * degree)
 	b.onCourse = float64(p.OnCourse * degree)
+	b.steerage = p.Steerage
+	b.stallTime = p.StallTime
+	b.stallGain = float64(p.StallGain * degree)
 }
 
 // PilotOn reports whether a control has the autopilot on.
@@ -80,6 +99,7 @@ func PilotOn(c *Control) bool { return c.Pilot == PilotWind || c.Pilot == PilotH
 // order.
 func pilotOff(s *State, c *Control, o *Out) {
 	s.PilotTrim, s.PilotWay = 0, WayHold
+	s.PilotWatch, s.PilotMark, s.PilotLeft = 0, 0, 0
 	s.PilotOrder = math.Floor(control(c.Order, 0, PilotOrders-1))
 	o.PilotOff, o.PilotHeading = 0, s.Heading
 }
@@ -96,19 +116,24 @@ func pilotOff(s *State, c *Control, o *Out) {
 // gybed, or is about to (the boom of a dinghy goes over by itself a little
 // further on).
 func (b *Prepared) pilot(s *State, c *Control, e *Env, o *Out) float64 {
+	wind := e.MeanFrom
+	angle := wrapAngle(wind - s.Heading)
 	order := math.Floor(control(c.Order, 0, PilotOrders-1))
+	turn := false
 	if order != s.PilotOrder {
 		s.PilotOrder = order
 		s.PilotWay = WayHold
 		if c.Way == WayTack || c.Way == WayGybe {
-			s.PilotWay = c.Way
+			s.PilotWay, s.PilotLeft, turn = c.Way, angle, true
 		}
 	}
-	wind := e.MeanFrom
-	angle := wrapAngle(wind - s.Heading)
 	target := float64(control(c.Target, 0, TurnSteps) * turnStep)
 	if c.Pilot == PilotHeading {
 		target = wind - target
+	}
+	stalled := s.PilotWay == WayTackStalled || s.PilotWay == WayGybeStalled
+	if stalled {
+		target = s.PilotLeft
 	}
 	target = wrapAngle(target)
 
@@ -165,12 +190,51 @@ func (b *Prepared) pilot(s *State, c *Control, e *Env, o *Out) float64 {
 		return helm
 	}
 	near := math.Abs(off) < b.onCourse
-	if s.PilotWay != WayHold && side >= 0 && near {
+	switch {
+	case stalled:
+		s.PilotWatch = min2(s.PilotWatch+Dt, b.stallTime)
+	case s.PilotWay != WayHold && side >= 0 && near:
 		s.PilotWay = WayHold
+	case s.PilotWay != WayHold:
+		// The water along the hull, the current's taken from the boat's
+		// motion: what the rudder has to work with.
+		ahead := s.Surge
+		if e.CurrentEast != 0 || e.CurrentNorth != 0 {
+			sinH, cosH := SinCos(s.Heading)
+			ahead -= float64(e.CurrentEast*sinH) + float64(e.CurrentNorth*cosH)
+		}
+		b.watchTurn(s, o, off, ahead, turn, side >= 0)
 	}
 	if s.PilotWay == WayHold && math.Abs(off) < b.trimBand {
 		grow := float64(float64(tack*b.pilotIntegral) * float64(off*Dt))
 		s.PilotTrim = clamp(s.PilotTrim+grow, -b.trimLimit, b.trimLimit)
 	}
 	return helm
+}
+
+// watchTurn watches a tack or gybe under way gain on its course, off
+// from it, with ahead the water along the hull: begun this step, or
+// gaining stallGain since the watch began, the watch begins again; gaining
+// less in stallTime with no steerage, the turn stalls. Past head to wind,
+// or dead downwind, on its target's side, the boat has come round, if
+// slowly, and the turn is over; short of it the autopilot holds the angle
+// the boat turned from, and the seconds count on from the stall for a
+// while.
+func (b *Prepared) watchTurn(s *State, o *Out, off, ahead float64, turn, across bool) {
+	off = math.Abs(off)
+	if turn || s.PilotMark-off >= b.stallGain {
+		s.PilotWatch, s.PilotMark = 0, off
+		return
+	}
+	s.PilotWatch = min2(s.PilotWatch+Dt, b.stallTime)
+	if !(s.PilotWatch >= b.stallTime && math.Abs(ahead) < b.steerage) {
+		return
+	}
+	s.PilotWatch, s.PilotMark = 0, 0
+	if across {
+		s.PilotWay = WayHold
+		return
+	}
+	s.PilotWay += WayTackStalled - WayTack
+	o.PilotStalled = 1
 }

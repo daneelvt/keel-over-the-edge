@@ -981,7 +981,7 @@ function forecastPanel(p: PanelForecast): string[] {
   );
 }
 
-const WAYS = ['holding', 'tacking', 'gybing'];
+const WAYS = ['holding', 'tacking', 'gybing', 'tack stalled', 'gybe stalled'];
 
 /**
  * The autopilot, as a line: its mode and target, how far it has to turn,

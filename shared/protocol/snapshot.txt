@@ -21,12 +21,12 @@ The player's own boat in full, then the other boats in the player's view
 as changes against a base: a snapshot the connection sent before, which
 the client must still hold. After the kind byte, little-endian, a header of
 175 bytes (176 with the kind byte); then, while the boat's autopilot is in
-use, its block of 32 bytes; then, while the boat is aground, its ground
-block of 8 bytes; then, while the boat is falling over the lip, its over
+use, its block of 56 bytes; then, while the boat is aground or over shoal water, its ground
+block of 24 bytes; then, while the boat is falling over the lip, its over
 block of 8 bytes; then the entries:
 
   offset  bytes  field
-       0      1  layout: 9
+       0      1  layout: 10
        1      8  tick (int64)
        9      2  base: how many ticks before this one the base snapshot is
                  (uint16); 0 for none: the view starts empty
@@ -61,18 +61,20 @@ pays nothing:
      178      1  0
      179      2  target (uint16), 65536ths of a turn
      181      2  0
-     183     24  what the autopilot remembers, 3 float64s: pilotTrim,
-                 pilotWay, pilotOrder; the state's last three fields, 0
-                 when the block is absent
-     207      …  the ground block, if flag bit 2; else the entries
+     183     48  what the autopilot remembers, 6 float64s: pilotTrim,
+                 pilotWay, pilotOrder, pilotWatch, pilotMark, pilotLeft;
+                 the state's fields after the boat's, 0 when the block is
+                 absent. pilotWay is also 3 or 4 here: a tack or a gybe
+                 that stalled
+     231      …  the ground block, if flag bit 2; else the entries
 
 The ground block, sent while the time the boat has been aground and all
-but still is not zero (-0 counts), so a boat afloat pays nothing; at the
-offset where the blocks before it end:
+but still, or where it left deep water, is not zero (-0 counts), so a boat
+in deep water pays nothing; at the offset where the blocks before it end:
 
-       0      8  groundTimer (float64): the state's last field, 0 when the
-                 block is absent
-       8      …  the over block, if flag bit 3; else the entries
+       0     24  3 float64s: groundTimer, deepX, deepY; the state's last
+                 three fields, 0 when the block is absent
+      24      …  the over block, if flag bit 3; else the entries
 
 The over block, sent while the boat has gone over the lip and is falling,
 before it starts again at the start: the boat is not stepped while it
@@ -86,7 +88,7 @@ before it end:
 A boat that stays is held where it is, as one falling over the lip is,
 until a snapshot without bit 4 lets it go.
 
-A layout byte other than 9 is refused, as are a mode, way or order out of
+A layout byte other than 10 is refused, as are a mode, way or order out of
 range, a spare byte not 0 and an over block's tick out of its range. The wind is not in the snapshot: the client
 computes the wind at its boat from the spells of weather it is sent
 (WeatherSystems), as the server does.

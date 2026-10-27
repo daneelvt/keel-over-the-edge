@@ -1,0 +1,8 @@
+# about 150 tokens
+tick 1032 · seq 0
+Boat: sailing · heading 337° · 0.0 kn · no steerage · heel 0° · tacking · Pilot: hand · boom 12° (sheet out to 50°) · rudder 0° · sail luffing, drawing at the head
+Wind: 000° N 3 kn F1 · 23° off the bow, starboard side · apparent 3 kn 25°
+In sight:
+ Table Head Light · 359° 0.5 NM · light Fl(3) W 15s · known
+ a light Fl(4) W 15s (uncharted) · 240° ~1.3 NM
+ a light Fl(5) W 20s (uncharted) · 160° ~1.6 NM

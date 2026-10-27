@@ -86,10 +86,34 @@ func held(s *Sea, f *bus.Frame, sl int32) (bus.Word, bus.PilotWord) {
 }
 
 // pending reports whether the boat in slot sl has an order count it has
-// not taken, or a turn under way.
+// not taken, or a turn under way. A turn that stalled is done with: the
+// same order again turns again.
 func pending(f *bus.Frame, sl int32, p bus.PilotWord) bool {
 	st := &f.State[sl]
-	return uint8(st.PilotWay) != physics.WayHold || p.Mode() != bus.PilotOff && float64(p.Order()) != st.PilotOrder
+	return turning(st) || p.Mode() != bus.PilotOff && float64(p.Order()) != st.PilotOrder
+}
+
+// turning reports whether the autopilot of a boat in state st has a tack
+// or a gybe under way.
+func turning(st *physics.State) bool {
+	way := uint8(st.PilotWay)
+	return way == physics.WayTack || way == physics.WayGybe
+}
+
+// stalled is what the autopilot of a boat in state st holds after its tack
+// or gybe stalled, "wind 45° starboard, tack stalled", or "" while none
+// has.
+func stalled(st *physics.State) string {
+	turn := ""
+	switch uint8(st.PilotWay) {
+	case physics.WayTackStalled:
+		turn = "tack"
+	case physics.WayGybeStalled:
+		turn = "gybe"
+	default:
+		return ""
+	}
+	return fmt.Sprintf("wind %d° %s, %s stalled", degrees(math.Abs(st.PilotLeft)), side(st.PilotLeft), turn)
 }
 
 // presentSide is the side the wind is over the boat in slot sl, by the
@@ -310,6 +334,8 @@ func orderLine(s *Sea, f *bus.Frame, sl int32, w written) string {
 		what = "tacking to " + what
 	case w.turning == viaGybe || uint8(st.PilotWay) == physics.WayGybe:
 		what = "gybing to " + what
+	case stalled(st) != "" && pw.Mode() != bus.PilotOff:
+		what = "holding " + stalled(st)
 	default:
 		what = "holding " + what
 	}

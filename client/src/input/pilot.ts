@@ -7,7 +7,9 @@
 // predicted like any other. Switched on, it holds the angle the boat is at
 // to the mean wind, on the tack it is on; the compass mode holds the
 // heading. A tack or a gybe mirrors what it holds onto the other tack and
-// counts an order, which the step takes once.
+// counts an order, which the step takes once. A turn that stalls leaves the
+// boat held on its old tack, its target still on the other: ordered again,
+// it tries for that target.
 
 /** The autopilot's modes and ways, as the physics module's control has them. */
 export const PILOT_OFF = 0;
@@ -16,6 +18,9 @@ export const PILOT_HEADING = 2;
 export const WAY_HOLD = 0;
 export const WAY_TACK = 1;
 export const WAY_GYBE = 2;
+/** A tack or a gybe that stalled: the step holds the angle the boat turned from until the next order. Never an order's way. */
+export const WAY_TACK_STALLED = 3;
+export const WAY_GYBE_STALLED = 4;
 /** Steps in a whole turn of a target. */
 export const TURN_STEPS = 65536;
 /** How many values the order count takes. */
@@ -114,14 +119,18 @@ export class PilotInput implements PilotControl {
     }
   }
 
-  /** Orders a tack. */
-  tack(meanFrom: number): void {
-    this.#turn(WAY_TACK, meanFrom);
+  /**
+   * Orders a tack. After a turn stalled, left is the angle off the wind
+   * the step holds instead (State.PilotLeft), and the tack is for the
+   * other side from it; null while none has.
+   */
+  tack(meanFrom: number, left: number | null = null): void {
+    this.#turn(WAY_TACK, meanFrom, left);
   }
 
-  /** Orders a gybe. */
-  gybe(meanFrom: number): void {
-    this.#turn(WAY_GYBE, meanFrom);
+  /** Orders a gybe; left as for a tack. */
+  gybe(meanFrom: number, left: number | null = null): void {
+    this.#turn(WAY_GYBE, meanFrom, left);
   }
 
   /**
@@ -129,7 +138,8 @@ export class PilotInput implements PilotControl {
    * there: after the boat gybed by itself, or when a heading across dead
    * downwind is held mirrored. steering is the heading the step steered
    * for (Out's pilotHeading), turning whether a turn it was ordered is
-   * still under way. Returns whether the target changed.
+   * still under way or stalled, when the step holds something other than
+   * the target. Returns whether the target changed.
    */
   follow(steering: number, meanFrom: number, turning: boolean): boolean {
     if (this.mode === PILOT_OFF || turning) {
@@ -169,12 +179,23 @@ export class PilotInput implements PilotControl {
     return d > 180 ? d - 360 : d;
   }
 
-  #turn(way: number, meanFrom: number): void {
+  #turn(way: number, meanFrom: number, left: number | null): void {
     if (this.mode === PILOT_OFF) {
       return;
     }
     this.way = way;
     this.order = (this.order + 1) % ORDERS;
+    if (left !== null) {
+      // Held where a turn stalled: a target already on the other side from
+      // there is kept, and tried for again.
+      const a =
+        this.mode === PILOT_WIND
+          ? angleOf(this.target)
+          : wrapAngle(meanFrom - angleOf(this.target));
+      if (Math.sign(a) !== Math.sign(left)) {
+        return;
+      }
+    }
     this.target =
       this.mode === PILOT_WIND
         ? stepsOf(-angleOf(this.target))

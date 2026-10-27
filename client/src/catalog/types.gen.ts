@@ -707,6 +707,22 @@ export interface PhysicsAutopilot {
    * A tack or gybe ends this near its target, in degrees.
    */
   onCourse: number;
+  /**
+   * Going astern faster than this through the water, in m/s, the boat is told it goes astern: the water reaches the rudder from behind and works it in reverse.
+   */
+  astern: number;
+  /**
+   * Slower than this through the water, either way, in m/s, the rudder has no steerage: the report says so, and a turn may stall.
+   */
+  steerage: number;
+  /**
+   * A tack or gybe with no steerage that gains less than stallGain on its course in this long, in s, has stalled: the autopilot gives it up and holds the angle it turned from.
+   */
+  stallTime: number;
+  /**
+   * Too little gain for a stalling turn, in degrees.
+   */
+  stallGain: number;
 }
 /**
  * A boat's art. Every art object's values are paths under art/, checked to exist.
@@ -3359,6 +3375,22 @@ export interface WorldStart {
    * And no land within this, in m.
    */
   clear: number;
+  /**
+   * A place has no water shallower than this, in m, within shoalClear: it is not on a bank.
+   */
+  shoalDepth: number;
+  /**
+   * How far from a place shoal water is looked for, in m.
+   */
+  shoalClear: number;
+  /**
+   * From every place in the roads, water at least this deep, in m, leads out to open water.
+   */
+  joinDepth: number;
+  /**
+   * Open water: deeper than this, in m, beyond the shelf.
+   */
+  openDepth: number;
   /**
    * Places are this far apart, in m.
    */
@@ -6378,4 +6410,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '87b4884e3cdbd3b1';
+export const CATALOG_VERSION = '2138106ca91e8450';

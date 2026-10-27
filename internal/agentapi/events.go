@@ -37,6 +37,7 @@ const (
 	evTurned    // the autopilot finished a tack or a gybe
 	evGybed     // the autopilot followed an accidental gybe
 	evWorldEnded
+	evStalled // the autopilot's tack or gybe stalled
 )
 
 // always are the events that end any wait: a sailor would notice them
@@ -53,7 +54,7 @@ func (k evKind) always() bool {
 // always wakes or never does.
 func (k evKind) wake() string {
 	switch k {
-	case evTurned, evGybed:
+	case evTurned, evGybed, evStalled:
 		return wakePilot
 	case evCharted, evDiscovery:
 		return wakeSighting
@@ -96,7 +97,7 @@ func (k evKind) word() string {
 		return "admitted"
 	case evLeft:
 		return "left the water"
-	case evTurned, evGybed:
+	case evTurned, evGybed, evStalled:
 		return "pilot"
 	case evWorldEnded:
 		return "the world ended"

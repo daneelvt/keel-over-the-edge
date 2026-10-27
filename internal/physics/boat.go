@@ -36,6 +36,7 @@ func Step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out, n int32) {
 	helm := control(c.Helm, -1, 1)
 	sheet := control(c.Sheet, 0, 1)
+	o.PilotStalled = 0
 	if PilotOn(c) {
 		helm = b.pilot(s, c, e, o)
 	} else {
@@ -79,6 +80,7 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 	}
 	// So is the ground: where the bottom reaches a foil or the hull.
 	var bd bed
+	x, y := s.X, s.Y
 	if g != nil {
 		sinH, cosH := SinCos(s.Heading)
 		bd.read(g, s, b, sinH, cosH)
@@ -91,10 +93,12 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 	s.Heading = wrapAngle(s.Heading)
 	s.Heel = wrapAngle(s.Heel)
 	o.Depth, o.Aground, o.PushedOff = -DeepWater/10, Afloat, 0
-	if g != nil {
-		o.Depth = bd.depth
-		b.ground(s, e, g, &bd, o)
+	if g == nil {
+		s.DeepX, s.DeepY = 0, 0
+		return
 	}
+	o.Depth = bd.depth
+	b.ground(s, e, g, &bd, o, x, y)
 }
 
 func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *bed, o *Out, last bool) {

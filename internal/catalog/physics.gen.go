@@ -121,6 +121,10 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.GybeHelm = b.Physics.Autopilot.GybeHelm
 	p.ByTheLee = b.Physics.Autopilot.ByTheLee
 	p.OnCourse = b.Physics.Autopilot.OnCourse
+	p.Astern = b.Physics.Autopilot.Astern
+	p.Steerage = b.Physics.Autopilot.Steerage
+	p.StallTime = b.Physics.Autopilot.StallTime
+	p.StallGain = b.Physics.Autopilot.StallGain
 	return p
 }
 

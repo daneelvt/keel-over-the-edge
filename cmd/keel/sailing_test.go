@@ -305,6 +305,79 @@ func helmsmanSails(t *testing.T, world *worldgen.Bundle, target string, best, fr
 	})
 }
 
+// TestTheHelmsmanLeavesTheRoads: the helmsman, started in the roads off
+// Port Royal in 3 knots, reads the Shoal line clear of the banks and
+// sails to a charted place without running aground, in seed 1's world.
+func TestTheHelmsmanLeavesTheRoads(t *testing.T) {
+	if testing.Short() {
+		t.Skip("makes a whole world")
+	}
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	world, err := worldgen.Generate(1, cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cw := chart.Build(world, cat)
+	roads := world.Start.Places[world.Start.Moorings]
+	target := ""
+	best, toward := math.Inf(1), 0.0
+	for _, s := range cw.Subjects {
+		d := math.Sqrt((s.X-roads[0])*(s.X-roads[0]) + (s.Y-roads[1])*(s.Y-roads[1]))
+		if s.Kind == sight.Place && s.Name != "" && d > 900 && d < best {
+			target, best, toward = s.Name, d, math.Mod(math.Atan2(s.X-roads[0], s.Y-roads[1])*180/math.Pi+360, 360)
+		}
+	}
+	if target == "" {
+		t.Fatal("no place to sail to")
+	}
+	synctest.Test(t, func(t *testing.T) {
+		d := &memDB{epoch: bubbleEpoch, sessions: edgetest.NewSessions()}
+		gen := func(uint64) (*worldgen.Bundle, error) { return world, nil }
+		s := startServer(t, map[string]string{"KEEL_DEV_COMMANDS": "1"}, newMemNet(), d.with(serveOptions{generate: gen}))
+		post := func(path string, body string) *http.Response {
+			t.Helper()
+			res, err := s.client.Post(internalURL+path, "application/json", strings.NewReader(body))
+			if err != nil {
+				return nil
+			}
+			res.Body.Close()
+			return res
+		}
+		// Light air across the way to the place.
+		for range 120 {
+			time.Sleep(time.Second)
+			if post(fmt.Sprintf("/debug/wind?knots=3&from=%.0f", math.Mod(toward+270, 360)), "") != nil {
+				break
+			}
+		}
+		for n := range 4 {
+			if res := post("/owner/api/chart", fmt.Sprintf(`{"number":%d}`, n)); res == nil || res.StatusCode == http.StatusOK {
+				break
+			}
+		}
+		time.Sleep(5 * time.Second)
+		token, id := d.machine("Iron Mary", "Ann Bonny", false)
+		cs := agentSession(t, s, token)
+		callTool(t, cs, "observe", nil)
+		res := post(fmt.Sprintf("/debug/place?account=%x&east=%.1f&north=%.1f&heading=%.1f", id[:], roads[0], roads[1], world.Start.Heading*180/math.Pi), "")
+		if res == nil || res.StatusCode != http.StatusOK {
+			t.Fatalf("placing the boat in the roads: %v", res)
+		}
+		r, err := helmsman.Sail(t.Context(), session{cs}, target, 200, 400, t.Logf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !r.Arrived || r.Groundings > 0 {
+			t.Fatalf("from the roads to %s, %.0f m: arrived %v, %.0f m off after %d looks, %d tacks and %d groundings", target, best, r.Arrived, r.Distance, r.Looks, r.Tacks, r.Groundings)
+		}
+		t.Logf("reached %s, %.0f m from the roads, in %d looks and %d tacks, never aground", target, best, r.Looks, r.Tacks)
+		s.stop(t)
+	})
+}
+
 // TestAMachineSailorAcrossARestart: a machine sailor's boat is restored
 // in its grace as keel starts again, and its agent's next call takes it
 // back, the boat where it was, its grace ended.

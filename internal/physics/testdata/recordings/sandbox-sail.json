@@ -204,7 +204,11 @@
   "tackHelm": 1,
   "gybeHelm": 0.35,
   "byTheLee": 15,
-  "onCourse": 10
+  "onCourse": 10,
+  "astern": 0.05,
+  "steerage": 0.26,
+  "stallTime": 8,
+  "stallGain": 5
  },
  "wind": {
   "speedCentre": 0.65,
@@ -300,7 +304,12 @@
     "pilotTrim": 0,
     "pilotWay": 0,
     "pilotOrder": 0,
-    "groundTimer": 0
+    "pilotWatch": 0,
+    "pilotMark": 0,
+    "pilotLeft": 0,
+    "groundTimer": 0,
+    "deepX": 0,
+    "deepY": 0
    },
    "control": {
     "helm": 0,
@@ -14929,7 +14938,12 @@
     "pilotTrim": "0x3f2d8ee802f2f4a7",
     "pilotWay": "0x3ff0000000000000",
     "pilotOrder": "0x3ff0000000000000",
-    "groundTimer": "0x0000000000000000"
+    "pilotWatch": "0x3fe9999999999999",
+    "pilotMark": "0x3fe53e6993cafc9b",
+    "pilotLeft": "0x3febf91928e437ed",
+    "groundTimer": "0x0000000000000000",
+    "deepX": "0x0000000000000000",
+    "deepY": "0x0000000000000000"
    }
   }
  ]

@@ -317,3 +317,76 @@ func TestPilotHeadingModeWandersUpwind(t *testing.T) {
 		t.Errorf("a heading upwind: the angle to the wind kept within %.1f° rms", r.rms/deg)
 	}
 }
+
+// inLightAir puts the Jolly boat in a steady wind of knots from the north,
+// angle degrees off it with the sheet at sheet, going ahead at surge m/s,
+// on the autopilot holding that angle.
+func inLightAir(t *testing.T, knots, angle, sheet, surge float64) *sim {
+	m := newSim(t, windAtSail(knots), -angle, sheet)
+	m.steer = false
+	m.s.Surge = surge
+	m.c.Pilot = PilotWind
+	m.c.Target = pilotTarget(angle)
+	return m
+}
+
+// Going astern the autopilot's helm is as it is going ahead: reversing it
+// with each change of way held a boat lying beam-on with little way, now
+// ahead and now astern, where it lay, its sail never filling.
+func TestPilotSameHelmAstern(t *testing.T) {
+	b := jolly(t)
+	var helms []float64
+	for _, surge := range []float64{0.3, -0.3} {
+		s := State{Heading: -50 * deg, Surge: surge, YawRate: 0.05, Boom: -0.6, PilotTrim: 0.1}
+		c := Control{Pilot: PilotWind, Target: pilotTarget(80)}
+		var o Out
+		helms = append(helms, b.pilot(&s, &c, &Env{MeanFrom: 0}, &o))
+	}
+	if helms[0] != helms[1] || helms[0] == 0 {
+		t.Errorf("30° to windward of the course: helm %v going ahead, %v astern", helms[0], helms[1])
+	}
+}
+
+// A tack begun at rest in 3 knots, the sheet eased, has no steerage:
+// within 10 s it stalls, the autopilot giving it up, and holds the angle
+// it turned from on its old side. With the sheet hauled in she gathers
+// way there, and the same tack ordered again comes about. A tack from rest
+// that crawls past head to wind is not given up: it ends on the new side.
+func TestPilotStalledTack(t *testing.T) {
+	m := inLightAir(t, 3, 45, 0.3, 0)
+	m.c.Target = pilotTarget(-45)
+	m.c.Order, m.c.Way = 1, WayTack
+	stalled := math.Inf(1)
+	m.run(10, func() {
+		if m.o.PilotStalled == 1 {
+			stalled = min(stalled, m.time)
+		}
+	})
+	if m.s.PilotWay != WayTackStalled || math.IsInf(stalled, 1) {
+		t.Fatalf("a tack from rest: way %v after 10 s", m.s.PilotWay)
+	}
+	m.c.Sheet = 0.05
+	m.run(60, nil)
+	t.Logf("a tack from rest: stalled after %.1f s; a minute on, %.1f° off the wind at %.2f knots", stalled, m.angle()/deg, m.speed()/knot)
+	if math.Abs(m.angle()/deg-45) > 10 || m.s.PilotWay != WayTackStalled || m.speed() < m.b.steerage {
+		t.Errorf("after the stall: %.1f° off the wind, way %v, %.2f m/s", m.angle()/deg, m.s.PilotWay, m.speed())
+	}
+	m.c.Order = 2
+	m.run(30, nil)
+	t.Logf("the same tack with way on: %.1f° off the wind, way %v", m.angle()/deg, m.s.PilotWay)
+	if m.s.PilotWay != WayHold || math.Abs(m.angle()/deg+45) > 10 {
+		t.Errorf("a tack with way on: %.1f° off the wind, way %v", m.angle()/deg, m.s.PilotWay)
+	}
+
+	m = inLightAir(t, 3, 45, 0.05, 0)
+	m.c.Target = pilotTarget(-45)
+	m.c.Order, m.c.Way = 1, WayTack
+	m.run(90, func() {
+		if m.o.PilotStalled == 1 {
+			t.Fatalf("a tack from rest, the sheet hauled in: stalled after %.1f s, %.1f° off the wind", m.time, m.angle()/deg)
+		}
+	})
+	if m.s.PilotWay != WayHold || m.angle() > 0 {
+		t.Errorf("a tack from rest, the sheet hauled in: %.1f° off the wind, way %v", m.angle()/deg, m.s.PilotWay)
+	}
+}

@@ -190,8 +190,18 @@ func (s *Start) HeadingOf(i int) float64 {
 // Port Royal's basin, spacing apart, clear of land, quays and piers and
 // outside the turning circle, nearest the narrows first, each facing the
 // narrows' inner end, so that a beginner's first course is out to sea;
-// then the roads, to as many places as the start had.
+// then the roads, to as many places as the start had, less those the
+// town's quays and piers have come too near since they were chosen.
 func (c *config) withMoorings(g *physics.Ground, port *made, roads Start) Start {
+	total := len(roads.Places)
+	joins := map[int32]int8{}
+	fits := roads.Places[:0:0]
+	for _, p := range roads.Places {
+		if c.placeFits(g, p[0], p[1]) && c.joined(g, p[0], p[1], joins) {
+			fits = append(fits, p)
+		}
+	}
+	roads.Places = fits
 	h := port.harbour
 	if h == nil {
 		return roads
@@ -232,7 +242,6 @@ func (c *config) withMoorings(g *physics.Ground, port *made, roads Start) Start 
 		return cmpAsc(p.side, q.side)
 	})
 	out := Start{Heading: roads.Heading, Out: roads.Out, Moorings: len(ms)}
-	total := len(roads.Places)
 	for _, m := range ms {
 		if len(out.Places) == total {
 			break
@@ -259,7 +268,8 @@ func (c *config) withMoorings(g *physics.Ground, port *made, roads Start) Start 
 // spawn grid's rows, laid along the coast from the first water deep and
 // clear enough within reach of the coast, hold all the places in the
 // fewest rows, the deepest on a tie. A place is used only with enough
-// water and no land near it.
+// water, no land or shoal water near it, and water deep enough from it out
+// to open water.
 func (c *config) startOf(g *physics.Ground, port *made) Start {
 	st := &c.start
 	var best Start
@@ -293,6 +303,7 @@ func (c *config) startOf(g *physics.Ground, port *made) Start {
 		}
 		// Rows along the coast: across the outward direction.
 		ax, ay := co, -so
+		joins := map[int32]int8{}
 		places := make([][2]float64, 0, st.Places)
 		var depth float64
 		rows := int32(0)
@@ -302,7 +313,7 @@ func (c *config) startOf(g *physics.Ground, port *made) Start {
 			for col := range st.Row {
 				off := float64((float64(col) - float64(float64(st.Row-1)/2)) * st.Spacing)
 				px, py := cx+float64(off*ax), cy+float64(off*ay)
-				if len(places) == st.Places || !c.placeFits(g, px, py) {
+				if len(places) == st.Places || !c.placeFits(g, px, py) || !c.joined(g, px, py, joins) {
 					continue
 				}
 				places = append(places, [2]float64{px, py})
@@ -331,19 +342,75 @@ func (c *config) startOf(g *physics.Ground, port *made) Start {
 	return best
 }
 
-// placeFits reports whether a boat may start at (x, y): water deep enough
-// and no land within the clearance.
+// placeFits reports whether a boat may start at (x, y): water deep enough,
+// no land within the clearance and no shoal water within the shoal's.
 func (c *config) placeFits(g *physics.Ground, x, y float64) bool {
 	e, _ := g.At(x, y)
 	if e > -c.start.Depth {
 		return false
 	}
-	return !c.landNear(g, x, y, c.start.Clear)
+	return !c.landNear(g, x, y, c.start.Clear) && !c.aboveNear(g, x, y, c.start.ShoalClear, decimetres(-c.start.ShoalDepth))
+}
+
+// decimetres is a height in m as the ground's elevations hold it.
+func decimetres(m float64) int16 { return int16(round(float64(m * 10))) }
+
+// joined reports whether water at least the start's joinDepth deep leads
+// from (x, y) out to water deeper than its openDepth: a flood that stops
+// at open water. Every hexagon a flood reaches is kept in seen, 1 if it
+// led out and 2 if not, so the places of one stretch of water flood it
+// once, and a flood that meets a hexagon already known takes its answer.
+func (c *config) joined(g *physics.Ground, x, y float64, seen map[int32]int8) bool {
+	join, open := decimetres(-c.start.JoinDepth), decimetres(-c.start.OpenDepth)
+	q, r := physics.HexAt(x, y)
+	sc, sj := physics.HexCell(q, r)
+	start := sc*physics.HexRows + sj
+	if v := seen[start]; v != 0 {
+		return v == 1
+	}
+	queue := []int32{start}
+	seen[start] = -1
+	answer := int8(2)
+	var nb [6][2]int32
+flood:
+	for head := 0; head < len(queue); head++ {
+		i := queue[head]
+		cc, jj := i/physics.HexRows, i%physics.HexRows
+		if elevationAt(g, cc, jj) <= open {
+			answer = 1
+			break
+		}
+		for _, n := range cellNeighbours(cc, jj, &nb) {
+			if n[0] < 0 || n[1] < 0 || n[0] >= physics.HexColumns || n[1] >= physics.HexRows || elevationAt(g, n[0], n[1]) > join {
+				continue
+			}
+			k := n[0]*physics.HexRows + n[1]
+			switch seen[k] {
+			case 0:
+				seen[k] = -1
+				queue = append(queue, k)
+			case 1, 2:
+				answer = seen[k]
+				break flood
+			}
+		}
+	}
+	for _, i := range queue {
+		seen[i] = answer
+	}
+	return answer == 1
 }
 
 // landNear reports whether any hexagon whose centre is within r of (x, y)
 // is land.
 func (c *config) landNear(g *physics.Ground, x, y, r float64) bool {
+	return c.aboveNear(g, x, y, r, 0)
+}
+
+// aboveNear reports whether any hexagon whose centre is within r of (x, y)
+// has its elevation above level, in dm: land for 0, shoal water or land for
+// a depth.
+func (c *config) aboveNear(g *physics.Ground, x, y, r float64, level int16) bool {
 	q0, r0 := physics.HexAt(x, y)
 	rings := toInt32(math.Ceil((r+physics.HexAcross)/(0.866*physics.HexAcross))) + 1
 	for dq := -rings; dq <= rings; dq++ {
@@ -353,7 +420,7 @@ func (c *config) landNear(g *physics.Ground, x, y, r float64) bool {
 				continue
 			}
 			cc, jj := physics.HexCell(q0+dq, r0+dr)
-			if elevationAt(g, cc, jj) > 0 {
+			if elevationAt(g, cc, jj) > level {
 				return true
 			}
 		}

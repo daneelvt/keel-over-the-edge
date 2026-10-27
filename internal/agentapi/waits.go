@@ -3,6 +3,7 @@
 package agentapi
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -56,10 +57,13 @@ const (
 const gustEvery = 5
 
 // landAhead is how far ahead the ground is watched for, in seconds at the
-// boat's speed, and the depth under which water counts as shoal, m.
+// boat's speed, and the depth under which water counts as shoal, m; a
+// boat in shoal water as its wait began is woken when the water under it
+// shoals by shoalFall more, m.
 const (
 	landAhead = 60.0
 	shoal     = 1.5
+	shoalFall = 0.5
 	// closeBy is the range within which a boat closing on a steady
 	// bearing wakes a wait, m; steadyDrift the most its bearing may drift
 	// over driftWindow and still be steady.
@@ -97,6 +101,8 @@ type waiter struct {
 	markedLooked          bool
 	gustLooked, gustArmed bool
 	landLooked, landArmed bool
+	// depth is the water under the boat as the wait began, m.
+	depth float64
 
 	done chan string
 	once sync.Once
@@ -179,33 +185,78 @@ func (h *helm) look(s *Sea, f *bus.Frame, sight bool) {
 	}
 	h.mu.Unlock()
 	switch turned {
-	case WayTackDone:
-		h.event(event{Tick: f.Tick, Kind: evTurned, Words: "the autopilot finished its tack"})
-	case WayGybeDone:
-		h.event(event{Tick: f.Tick, Kind: evTurned, Words: "the autopilot finished its gybe"})
+	case WayTackDone, WayGybeDone:
+		turn := "tack"
+		if turned == WayGybeDone {
+			turn = "gybe"
+		}
+		words := "the autopilot finished its " + turn
+		// A turn that came round with no steerage ends short of its
+		// course: the autopilot steers on for it from there.
+		if off := offCourse(f, sl); off > shortOfCourse {
+			words = fmt.Sprintf("the autopilot's %s came round with no steerage, %d° short of its course: it steers on for it as the boat gathers way", turn, off)
+		}
+		h.event(event{Tick: f.Tick, Kind: evTurned, Words: words})
+	case WayTackStalled, WayGybeStalled:
+		turn := "tack"
+		if turned == WayGybeStalled {
+			turn = "gybe"
+		}
+		left := f.State[sl].PilotLeft
+		h.event(event{Tick: f.Tick, Kind: evStalled, Words: fmt.Sprintf(
+			"the autopilot's %s stalled with no steerage: it holds wind %d° %s again; bear away to gather way, then order the %s again",
+			turn, degrees(math.Abs(left)), side(left), turn)})
 	}
 	if why != "" {
 		w.wake(why)
 	}
 }
 
-// The autopilot's turns, as the hub sees them end.
+// The autopilot's turns, as the hub sees them end: finished, or stalled.
 const (
-	WayTackDone = 1
-	WayGybeDone = 2
+	WayTackDone    = 1
+	WayGybeDone    = 2
+	WayTackStalled = 3
+	WayGybeStalled = 4
 )
 
-// turnDone reports a tack or a gybe the autopilot has finished since the
-// last look: its turn was under way, and is over. With mu held.
+// shortOfCourse is how far off its course, degrees, a turn may end and
+// still be told finished.
+const shortOfCourse = 15
+
+// offCourse is how far the boat in slot sl is off the course its
+// autopilot holds, degrees, by the mean wind it steers by.
+func offCourse(f *bus.Frame, sl int32) int {
+	pw, st := f.Pilot[sl], &f.State[sl]
+	target := float64(pw.Target()) * 2 * math.Pi / physics.TurnSteps
+	switch pw.Mode() {
+	case bus.PilotWind:
+		return degrees(math.Abs(wrap(wrap(f.Wind[sl].MeanFrom-st.Heading) - wrap(target))))
+	case bus.PilotHeading:
+		return degrees(math.Abs(wrap(st.Heading - target)))
+	}
+	return 0
+}
+
+// turnDone reports a tack or a gybe the autopilot has finished or given up
+// since the last look: its turn was under way, and is over. With mu held.
 func (h *helm) turnDone(f *bus.Frame, sl int32) int {
 	way := uint8(f.State[sl].PilotWay)
 	was := h.turning
 	h.turning = way
-	if was != physics.WayHold && way == physics.WayHold && f.Pilot[sl].Mode() != bus.PilotOff {
+	if was != physics.WayTack && was != physics.WayGybe || f.Pilot[sl].Mode() == bus.PilotOff {
+		return 0
+	}
+	switch way {
+	case physics.WayHold:
 		if was == physics.WayGybe {
 			return WayGybeDone
 		}
 		return WayTackDone
+	case physics.WayTackStalled:
+		return WayTackStalled
+	case physics.WayGybeStalled:
+		return WayGybeStalled
 	}
 	return 0
 }
@@ -260,14 +311,21 @@ func (h *helm) watch(s *Sea, f *bus.Frame, sl int32, w *waiter, sight bool) stri
 	}
 	if w.on[wakeLand] {
 		// Land ahead as the wait began is no news: it wakes once the boat
-		// has had clear water ahead.
-		switch ahead := landAheadOf(s, st, float64(f.Instruments[sl].SpeedOverGround)); {
+		// has had clear water ahead, along its heading and its track. So is
+		// shoal water under it: it wakes as the water shoals through
+		// shoal, or by shoalFall more for a boat in shoal water already.
+		in := &f.Instruments[sl]
+		depth := float64(in.Depth)
+		ahead := landAheadOf(s, st, float64(in.SpeedOverGround), float64(in.CourseOverGround))
+		switch {
 		case !w.landLooked:
-			w.landLooked, w.landArmed = true, !ahead
-		case !ahead:
+			w.landLooked, w.landArmed, w.depth = true, ahead == "", depth
+		case depth < shoal && (w.depth >= shoal || depth <= w.depth-shoalFall):
+			return "shoal water under you, " + fmt.Sprintf("%.1f m", max(depth, 0))
+		case ahead == "":
 			w.landArmed = true
 		case w.landArmed:
-			return wakeLand
+			return ahead
 		}
 	}
 	if w.on[wakeSighting] && sight {
@@ -381,19 +439,34 @@ func collision(b0, r0, b1, r1, dt float64) bool {
 	return px*px+py*py < passWithin*passWithin
 }
 
-// landAheadOf reports land or shoal water ahead within landAhead seconds
-// at the boat's speed: the bed's colour on the phone.
-func landAheadOf(s *Sea, st *physics.State, speed float64) bool {
+// landAheadOf is the land or shoal water ahead within landAhead seconds
+// at the boat's speed, along its heading and along its track, course over
+// ground, as the bed's colour shows it on the phone: "shoal water 080° ~30
+// m", the nearest found; "" for none.
+func landAheadOf(s *Sea, st *physics.State, speed, course float64) string {
 	if s.Ground == nil {
-		return false
+		return ""
 	}
 	reach := max(speed*landAhead, 30)
-	sin, cos := physics.SinCos(st.Heading)
-	for _, k := range [...]float64{0.25, 0.5, 0.75, 1} {
-		e, _ := s.Ground.At(st.X+sin*reach*k, st.Y+cos*reach*k)
-		if e > -shoal {
-			return true
+	best, word, at := math.Inf(1), "", 0.0
+	for _, way := range [...]float64{st.Heading, course} {
+		sin, cos := physics.SinCos(way)
+		for _, k := range [...]float64{0.25, 0.5, 0.75, 1} {
+			r := reach * k
+			e, _ := s.Ground.At(st.X+sin*r, st.Y+cos*r)
+			if e > -shoal {
+				if r < best {
+					best, at, word = r, way, "shoal water"
+					if e > 0 {
+						word = "land"
+					}
+				}
+				break
+			}
 		}
 	}
-	return false
+	if word == "" {
+		return ""
+	}
+	return word + " " + three(bearing5(at)) + " " + rangeWords(best)
 }

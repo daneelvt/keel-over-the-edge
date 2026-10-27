@@ -60,7 +60,7 @@ import (
 // A checkpoint stores this snapshot without the owner's tools' marks
 // (AppendCheckpoint), so a world is restored only by a build that reads its
 // version, and a restart clears them.
-const SnapshotVersion = 12
+const SnapshotVersion = 13
 
 // The owner's tools' marks of a boat, in a snapshot.
 const (

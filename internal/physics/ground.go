@@ -325,10 +325,11 @@ const (
 	AgainstLand = 2 // the hull touches land
 )
 
-// pushOff moves boat s to the nearest hexagon within reach with the push's
-// depth of water and no land beside it; or, on a shore so gentle that there
-// is none, to the deepest such hexagon within reach, if it is deeper than
-// where the boat lies. There it is at rest, pointing a little off
+// pushOff moves boat s to the hexagon within reach with the push's depth
+// of water and no land beside it that is nearest where the boat left water
+// that deep, the way it came in, or nearest the boat if it never did; or,
+// on a shore so gentle that there is none, to the deepest such hexagon
+// within reach, if it is deeper than where the boat lies. There it is at rest, pointing a little off
 // close-hauled in the wind from from, on the tack that leads away from
 // where it lay: a boat left head to wind is in irons, and drifts back
 // astern onto the shore. It reports whether it moved the boat.
@@ -336,6 +337,10 @@ func (b *Prepared) pushOff(s *State, g *Ground, from float64) bool {
 	gp := g.Prepared
 	q0, r0 := HexAt(s.X, s.Y)
 	deep := toInt32(math.Floor(float64(-gp.pushDepth*10) + 0.5))
+	cx, cy := s.X, s.Y
+	if s.DeepX != 0 || s.DeepY != 0 {
+		cx, cy = s.DeepX, s.DeepY
+	}
 	here, _ := g.cellAt(q0, r0)
 	best, found := math.Inf(1), false
 	shallowest := here // the deepest found short of the push's depth
@@ -349,8 +354,12 @@ func (b *Prepared) pushOff(s *State, g *Ground, from float64) bool {
 			}
 			hx, hy := HexCentre(q, r)
 			dx, dy := hx-s.X, hy-s.Y
+			if float64(dx*dx)+float64(dy*dy) > float64(gp.pushReach*gp.pushReach) {
+				continue
+			}
+			dx, dy = hx-cx, hy-cy
 			d := float64(dx*dx) + float64(dy*dy)
-			if d > float64(gp.pushReach*gp.pushReach) || int32(e) <= deep && d >= best {
+			if int32(e) <= deep && d >= best {
 				continue
 			}
 			clear := true
@@ -386,15 +395,23 @@ func (b *Prepared) pushOff(s *State, g *Ground, from float64) bool {
 		heading = h2
 	}
 	s.X, s.Y, s.Heading = bx, by, heading
+	s.DeepX, s.DeepY = 0, 0
 	s.Surge, s.Sway, s.YawRate = 0, 0, 0
 	s.Heel, s.RollRate, s.BoomRate = 0, 0, 0
 	s.Heave, s.HeaveRate, s.Pitch, s.PitchRate = 0, 0, 0, 0
 	return true
 }
 
-// ground is a step's dealings with the ground after its substeps: the
+// ground is a step's dealings with the ground after its substeps: where
+// the boat left deep water, which it was at (x, y) as the step began; the
 // land's contacts, the time aground and still, and pushing off.
-func (b *Prepared) ground(s *State, e *Env, g *Ground, bd *bed, o *Out) {
+func (b *Prepared) ground(s *State, e *Env, g *Ground, bd *bed, o *Out, x, y float64) {
+	switch {
+	case !(bd.depth < g.Prepared.pushDepth):
+		s.DeepX, s.DeepY = 0, 0
+	case s.DeepX == 0 && s.DeepY == 0:
+		s.DeepX, s.DeepY = x, y
+	}
 	sinH, cosH := SinCos(s.Heading)
 	touched := b.land(s, g, sinH, cosH)
 	o.Aground = Afloat
