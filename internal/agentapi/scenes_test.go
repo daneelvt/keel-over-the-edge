@@ -515,3 +515,26 @@ func BenchmarkHub(b *testing.B) {
 	}
 	b.ReportMetric(float64(len(waiters)), "waiting")
 }
+
+// chart with a place, from the roads: Port Royal gives its harbour's
+// mouth, and its island its coast and size, as the chart draws them.
+func TestSceneChartPortRoyal(t *testing.T) {
+	sc := newScene(t, 3, 0)
+	at := sc.roads()
+	var lines []string
+	for _, e := range charted(sc.sea) {
+		if e.sub.Kind != sight.Island && e.sub.Name != "Port Royal" {
+			continue
+		}
+		text, r := chartList(sc.sea, &chartArgs{Place: titleOf(e.sub)}, at.X, at.Y, true)
+		if r != nil {
+			t.Fatal(r)
+		}
+		lines = append(lines, text)
+	}
+	text := strings.Join(lines, "\n")
+	if !strings.Contains(text, "harbour mouth ") || !strings.Contains(text, "coast ") {
+		t.Fatalf("chart from the roads:\n%s", text)
+	}
+	golden(t, "chart-port-royal", text)
+}

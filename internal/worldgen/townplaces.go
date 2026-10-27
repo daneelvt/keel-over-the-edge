@@ -379,7 +379,8 @@ func (c *config) mainTown(s stream, g *physics.Ground, m *made, lights []*lightW
 	tw := c.newTownWork(g, s, townMain, m, m.x, m.y, r, func(_ int32, x, y float64) bool { return h.inHarbour(x, y) })
 	tw.ox, tw.oy, tw.facing, tw.half, tw.reach = h.x, h.y, wrapAngle(h.bearing+math.Pi), h.town, p.Reach[0]
 	tw.sx, tw.sy, tw.around = h.x, h.y, h.radius+p.Reach[0]
-	tw.town = &Town{Number: 0, Kind: townMain, Place: -1, Island: m.number, Name: name, Flag: -1}
+	tw.town = &Town{Number: 0, Kind: townMain, Place: -1, Island: m.number, Name: name, Flag: -1,
+		Mouth: &[2]float64{h.x + float64(h.mouth*h.sin), h.y + float64(h.mouth*h.cos)}, Opening: h.bearing}
 	tw.flag = uint8(len(c.towns.Flags.Colours) + 1)
 	size := c.towns.Size.Main
 	tw.target, tw.least = s.pick(size[0], size[1]), size[0]
