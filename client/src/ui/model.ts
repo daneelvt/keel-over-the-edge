@@ -179,7 +179,9 @@ export class HudModel {
    * Updates the screen for a frame at now (ms), at world time time (s).
    * helm and sheet are the targets; rudder and sheetOut where the rudder and
    * the sheet really are, on the same scales (−1 to 1, 0 to 1); pilot the
-   * autopilot's control, and way the turn it has under way.
+   * autopilot's control, way the turn it has under way, and watch and left
+   * the seconds since a turn stalled and the angle off the wind it holds
+   * after one (State.PilotWatch and PilotLeft).
    */
   frame(
     now: number,
@@ -193,6 +195,8 @@ export class HudModel {
     sheetOut: number,
     pilot: PilotControl = PILOT_IDLE,
     way = 0,
+    watch = 0,
+    left = 0,
   ): void {
     const headingDeg = (pose.heading * 180) / Math.PI;
     this.rose.set(-headingDeg);
@@ -223,7 +227,7 @@ export class HudModel {
     const aground = out[RECORDS.out.aground] ?? 0;
     this.sailor.value =
       pose.sailorMode === 0 && aground !== 0 ? AGROUND : (SAILOR_LINES[pose.sailorMode] ?? '');
-    this.pilot.value = pilotText(pilot, way);
+    this.pilot.value = pilotText(pilot, way, watch, left);
     if (this.bump.value !== '' && now >= this.#bumpUntil) {
       this.bump.value = '';
     }

@@ -9,7 +9,9 @@ import {
   type PilotControl,
   TURN_STEPS,
   WAY_GYBE,
+  WAY_GYBE_STALLED,
   WAY_TACK,
+  WAY_TACK_STALLED,
 } from '../input/pilot';
 
 /** One knot, in m/s. */
@@ -94,12 +96,19 @@ export function windText(speed: number, from: number, mean: number): string {
   return `${compassPoint(wholeDegrees(from))} ${k} kn · F${beaufortForce(mean)}`;
 }
 
+/** How long the autopilot's button says a turn stalled, s. */
+export const STALLED_SHOWN = 5;
+
 /**
  * The autopilot's state: "Wind 45° S" holding an angle to the wind, with
  * the wind over starboard (S) or port (P); "Heading 270°"; "Tacking" or
- * "Gybing" while it turns; empty while it is off.
+ * "Gybing" while it turns; empty while it is off. After a turn stalled,
+ * "Tack stalled" or "Gybe stalled" for STALLED_SHOWN seconds of watch, the
+ * seconds since; then the angle it holds instead of its target, left, the
+ * angle off the wind the turn began from (radians, positive over
+ * starboard), in either mode.
  */
-export function pilotText(p: PilotControl, way: number): string {
+export function pilotText(p: PilotControl, way: number, watch = 0, left = 0): string {
   if (p.mode === PILOT_OFF) {
     return '';
   }
@@ -109,10 +118,21 @@ export function pilotText(p: PilotControl, way: number): string {
   if (way === WAY_GYBE) {
     return 'Gybing';
   }
+  if (way === WAY_TACK_STALLED || way === WAY_GYBE_STALLED) {
+    if (watch < STALLED_SHOWN) {
+      return way === WAY_TACK_STALLED ? 'Tack stalled' : 'Gybe stalled';
+    }
+    return windAngleText(wholeDegrees(left));
+  }
   const d = Math.round((p.target / TURN_STEPS) * 360) % 360;
   if (p.mode === PILOT_HEADING) {
     return `Heading ${threeDigits(d)}°`;
   }
+  return windAngleText(d);
+}
+
+/** "Wind 45° S" for an angle off the wind of d whole degrees, 0 … 359, positive over starboard. */
+function windAngleText(d: number): string {
   const angle = d > 180 ? 360 - d : d;
   if (angle === 0 || angle === 180) {
     return `Wind ${angle}°`;

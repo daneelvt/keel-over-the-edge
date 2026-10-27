@@ -250,6 +250,9 @@ func pilotOf(f *bus.Frame, sl int32) *pilotFacts {
 	case physics.WayGybe:
 		p.Holds = "gybing to " + p.Holds
 	}
+	if s := stalled(st); s != "" && pw.Mode() != bus.PilotOff {
+		p.Holds = s
+	}
 	return p
 }
 

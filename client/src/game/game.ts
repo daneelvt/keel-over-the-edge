@@ -41,7 +41,15 @@ import {
 } from '../edge/over';
 import { HelmInput } from '../input/helm';
 import { KeyInput } from '../input/keys';
-import { PILOT_HEADING, PILOT_WIND, type PilotActions, PilotInput, WAY_HOLD } from '../input/pilot';
+import {
+  PILOT_HEADING,
+  PILOT_WIND,
+  type PilotActions,
+  PilotInput,
+  WAY_GYBE_STALLED,
+  WAY_HOLD,
+  WAY_TACK_STALLED,
+} from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { SheetInput } from '../input/sheet';
 import type { BumpTold } from '../net/messages';
@@ -450,11 +458,21 @@ export class Game implements PilotActions {
   }
 
   pilotTack(): void {
-    this.pilot.tack(this.driver?.wind.meanFrom ?? 0);
+    this.pilot.tack(this.driver?.wind.meanFrom ?? 0, this.#stalledLeft());
   }
 
   pilotGybe(): void {
-    this.pilot.gybe(this.driver?.wind.meanFrom ?? 0);
+    this.pilot.gybe(this.driver?.wind.meanFrom ?? 0, this.#stalledLeft());
+  }
+
+  /** The angle off the wind a stalled turn left the autopilot holding, or null while none has. */
+  #stalledLeft(): number | null {
+    const s = this.driver?.states.current;
+    const way = s?.[RECORDS.state.pilotWay] ?? WAY_HOLD;
+    if (way !== WAY_TACK_STALLED && way !== WAY_GYBE_STALLED) {
+      return null;
+    }
+    return s?.[RECORDS.state.pilotLeft] ?? 0;
   }
 
   pilotAdjust(degrees: number): void {
@@ -492,7 +510,7 @@ export class Game implements PilotActions {
       d.decorate?.(w.pose, dt);
       if (this.pilot.on) {
         // Held on the boat's new tack after it gybed by itself: what the
-        // player holds follows.
+        // player holds follows; not while a turn is under way or stalled.
         const turning = (d.states.current[RECORDS.state.pilotWay] ?? 0) !== WAY_HOLD;
         this.pilot.follow(d.out[RECORDS.out.pilotHeading] ?? 0, d.wind.meanFrom, turning);
       }
@@ -516,6 +534,7 @@ export class Game implements PilotActions {
     w.ticks = this.clock.steps + this.clock.alpha;
     this.#lastTime = time;
     const p = w.pose;
+    const s = d?.states.current;
     this.hud.frame(
       now,
       time,
@@ -528,7 +547,9 @@ export class Game implements PilotActions {
       p.rudder / this.#rudderMax,
       (p.sheetLimit - this.#boomIn) / (this.#boomOut - this.#boomIn),
       this.pilot,
-      d === null ? 0 : (d.states.current[RECORDS.state.pilotWay] ?? 0),
+      s?.[RECORDS.state.pilotWay] ?? 0,
+      s?.[RECORDS.state.pilotWatch] ?? 0,
+      s?.[RECORDS.state.pilotLeft] ?? 0,
     );
     this.hud.tack.value = w.rightOfWay.tack;
     // The falls: how far the lip is from the boat, and which way it lies

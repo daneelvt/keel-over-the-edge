@@ -190,8 +190,18 @@ func (s *Start) HeadingOf(i int) float64 {
 // Port Royal's basin, spacing apart, clear of land, quays and piers and
 // outside the turning circle, nearest the narrows first, each facing the
 // narrows' inner end, so that a beginner's first course is out to sea;
-// then the roads, to as many places as the start had.
+// then the roads, to as many places as the start had, less those the
+// town's quays and piers have come too near since they were chosen.
 func (c *config) withMoorings(g *physics.Ground, port *made, roads Start) Start {
+	total := len(roads.Places)
+	joins := map[int32]int8{}
+	fits := roads.Places[:0:0]
+	for _, p := range roads.Places {
+		if c.placeFits(g, p[0], p[1]) && c.joined(g, p[0], p[1], joins) {
+			fits = append(fits, p)
+		}
+	}
+	roads.Places = fits
 	h := port.harbour
 	if h == nil {
 		return roads
@@ -232,7 +242,6 @@ func (c *config) withMoorings(g *physics.Ground, port *made, roads Start) Start 
 		return cmpAsc(p.side, q.side)
 	})
 	out := Start{Heading: roads.Heading, Out: roads.Out, Moorings: len(ms)}
-	total := len(roads.Places)
 	for _, m := range ms {
 		if len(out.Places) == total {
 			break

@@ -2,9 +2,9 @@
 
 // The autopilot under the player's thumb: one button between the helm and
 // the sheet, saying what it holds ("Off", "Wind 45° S", "Heading 270°",
-// "Tacking"). Tapped while off it switches the autopilot on at the boat's
-// angle to the wind and opens the dial; tapped while on it opens or closes
-// the dial. The dial is a half-ring of the angle off the wind on the boat's
+// "Tacking", "Tack stalled"). Tapped while off it switches the autopilot on
+// at the boat's angle to the wind and opens the dial; tapped while on it
+// opens or closes the dial. The dial is a half-ring of the angle off the wind on the boat's
 // side, or a compass rose, with the target's mark, which a drag along the
 // ring moves; steps of a degree and of ten either way; Tack, Gybe, the other
 // mode, and Off. A tap anywhere else closes the dial and leaves the
