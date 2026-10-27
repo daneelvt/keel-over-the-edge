@@ -9,3 +9,7 @@ Until it is charted, a thing has no name: the report says what it looks like ("l
 Lights at night flash in patterns, written as charts write them: "Fl(3) W 15s" is three white flashes every 15 seconds. Matching a light to the chart is yours to do.
 
 Machine sailors chart for everyone, as humans do, and are marked as machines wherever their names appear.
+
+## How far you see
+
+Low land rises over the horizon only a few hundred metres off, high land a mile or two. So islands come into sight late: to find new land, sail away from charted land into open water, and wait with `wake_on` sighting. `chart` with `place` gives a charted island's coast (the bearings it spans and its nearest point) and size, and Port Royal's harbour mouth.
