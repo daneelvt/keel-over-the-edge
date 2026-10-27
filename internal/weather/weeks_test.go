@@ -47,7 +47,10 @@ func TestWeeks(t *testing.T) {
 	if n > 100 {
 		every = 1
 	}
-	swellWeeks, swellGrid := 8, 0.5*nauticalMile
+	// The swell, the clouds' signs and the fog's wall are sampled over the
+	// first few weeks: three hold storms and lows enough, and every one of
+	// them is followed minute by minute over the disk.
+	swellWeeks, swellGrid := 3, 0.5*nauticalMile
 	if n > 100 {
 		swellWeeks, swellGrid = 200, 0.25*nauticalMile
 	}

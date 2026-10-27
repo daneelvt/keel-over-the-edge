@@ -220,6 +220,24 @@ func (s *realServer) tickNow(t *testing.T) float64 {
 	return v
 }
 
+// recentWorld gives a database world 1 beginning three days ago, on the
+// hour, and returns its epoch: a week of weather as long as a world's
+// usually is, where the first epoch's grows by the month.
+func recentWorld(t *testing.T, u string) time.Time {
+	t.Helper()
+	ctx := context.Background()
+	st, err := store.Open(ctx, u, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	epoch := time.Now().UTC().Add(-72 * time.Hour).Truncate(time.Hour)
+	if _, err := st.CreateWorld(ctx, epoch); err != nil {
+		t.Fatal(err)
+	}
+	return epoch
+}
+
 // TestServeSailsTheActiveWorld starts on an empty database, which gets
 // world 1 at the first epoch, then on one whose world has an epoch of its
 // own, which the clock follows.
@@ -243,15 +261,12 @@ func TestServeSailsTheActiveWorld(t *testing.T) {
 	}
 
 	u2 := storetest.URL(t)
+	epoch := recentWorld(t, u2)
 	st2, err := store.Open(ctx, u2, store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer st2.Close()
-	epoch := time.Date(2020, time.March, 1, 0, 0, 0, 0, time.UTC)
-	if _, err := st2.CreateWorld(ctx, epoch); err != nil {
-		t.Fatal(err)
-	}
 	s2 := startReal(t, u2)
 	s2.waitReady(t)
 	if tick, want := s2.tickNow(t), float64(loop.TickAt(time.Now(), epoch)); tick < want-300 || tick > want+30 {

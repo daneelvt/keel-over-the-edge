@@ -45,8 +45,9 @@ const (
 // replays behind.
 const KeySets = 4
 
-// MaxKinds is the most kinds of system.
-const MaxKinds = 8
+// MaxKinds is the most kinds of system: the catalog's and one more beside
+// them, the sandbox's held fog bank.
+const MaxKinds = 12
 
 // Units of a System's whole numbers.
 const (

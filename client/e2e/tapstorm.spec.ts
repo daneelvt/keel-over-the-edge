@@ -51,7 +51,11 @@ async function storm(page: Page) {
   return { moment: w.moment, s, paints: w.paints };
 }
 
-/** Draws the chart until its weather is painted at the world's tick now, as now is once a second. */
+/**
+ * Draws the chart until its weather is painted at the world's tick now, as
+ * now is once a second. A software renderer takes seconds over a frame of
+ * the open chart, and a page's answer waits for it.
+ */
 async function paintedNow(page: Page): Promise<void> {
   await expect
     .poll(
@@ -62,7 +66,7 @@ async function paintedNow(page: Page): Promise<void> {
           return m?.kind === 'now' && m.tick === globalThis.keel.forecast()?.tick;
         });
       },
-      { timeout: 10_000 },
+      { timeout: 30_000 },
     )
     .toBe(true);
 }
@@ -84,6 +88,7 @@ test.describe('sailing to a storm by the chart', () => {
       globalThis.keel.openChart('chart');
       globalThis.keel.fitChart();
     });
+    await drawChart(page);
     await paintedNow(page);
     await expect(page.locator('[data-readout="chart-time"]')).toHaveText('Now');
     const first = await storm(page);
