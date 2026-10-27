@@ -55,10 +55,14 @@ function islands(charted: Set<string>): [Entry, Entry] {
 }
 
 /**
- * A player sailing in a small page of its own; beside another's page, that
- * one's drawing held while it starts.
+ * A player sailing in a small page of its own; beside others' pages, their
+ * drawing held while it starts.
  */
-async function player(browser: import('@playwright/test').Browser, name: string, beside?: Page) {
+async function player(
+  browser: import('@playwright/test').Browser,
+  name: string,
+  beside?: Page | Page[],
+) {
   const c = await browser.newContext({ baseURL: direct, viewport: { width: 320, height: 200 } });
   await sailor(c, name);
   const p = await c.newPage();
@@ -139,7 +143,7 @@ test('two players discover a world: the chart fills in for both, with the credit
     owner.charted.filter((c) => c.by === ann.name || c.by === bob.name).length,
   ).toBeGreaterThanOrEqual(2);
   // A third, joining after, is sent the whole chart at once.
-  const carol = await player(browser, 'Carol');
+  const carol = await player(browser, 'Carol', [ann.page, bob.page]);
   contexts.push(carol.context);
   await expect
     .poll(() => credits(carol.page), { timeout: 10_000 })
