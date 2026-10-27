@@ -126,6 +126,10 @@ export function writeParams(params: Float64Array, p: BoatPhysics): void {
   params[f.gybeHelm] = p.autopilot.gybeHelm;
   params[f.byTheLee] = p.autopilot.byTheLee;
   params[f.onCourse] = p.autopilot.onCourse;
+  params[f.astern] = p.autopilot.astern;
+  params[f.steerage] = p.autopilot.steerage;
+  params[f.stallTime] = p.autopilot.stallTime;
+  params[f.stallGain] = p.autopilot.stallGain;
 }
 
 /**

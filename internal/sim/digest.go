@@ -163,8 +163,8 @@ func StateFields(s *physics.State) [StateSize]*float64 {
 		&s.X, &s.Y, &s.Heading, &s.Surge, &s.Sway, &s.YawRate, &s.Heel, &s.RollRate,
 		&s.Boom, &s.BoomRate, &s.Sailor, &s.Rudder, &s.SheetLimit, &s.SailorMode, &s.SailorTimer,
 		&s.Heave, &s.HeaveRate, &s.Pitch, &s.PitchRate,
-		&s.PilotTrim, &s.PilotWay, &s.PilotOrder,
-		&s.GroundTimer,
+		&s.PilotTrim, &s.PilotWay, &s.PilotOrder, &s.PilotWatch, &s.PilotMark, &s.PilotLeft,
+		&s.GroundTimer, &s.DeepX, &s.DeepY,
 	}
 }
 
@@ -174,8 +174,8 @@ func StateFields(s *physics.State) [StateSize]*float64 {
 const (
 	StateSize  = BoatSize + PilotSize + GroundSize
 	BoatSize   = 19
-	PilotSize  = 3
-	GroundSize = 1
+	PilotSize  = 6
+	GroundSize = 3
 )
 
 // CourseFields lists a course's fields, in their order, as StateFields does

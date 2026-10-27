@@ -44,9 +44,22 @@ type State struct {
 	PilotTrim  float64 // its standing helm, positive turning the bow toward the wind, −1 … 1
 	PilotWay   float64 // the way it is turning: WayHold, WayTack or WayGybe
 	PilotOrder float64 // the order count of the last order it took
+	// In a tack or a gybe, PilotWatch is the seconds since the turn last
+	// gained on its course and PilotMark how far off it the boat was then,
+	// rad; after the turn stalls, the seconds since, up to the stall's
+	// time. PilotLeft is the angle off the wind the turn began from, rad,
+	// positive with the wind over starboard.
+	PilotWatch float64
+	PilotMark  float64
+	PilotLeft  float64
 	// GroundTimer is how many steps the boat has been aground and all but
 	// still: its sailor pushes it off when it reaches the ground's time.
 	GroundTimer float64
+	// DeepX and DeepY are where the boat left water of the push-off's
+	// depth, m, while it is in shallower water over the ground; 0 in water
+	// as deep, or deeper. A boat pushed off is put back the way it came.
+	DeepX float64
+	DeepY float64
 }
 
 // Control holds what the player sets. Helm and Sheet are targets: the rudder
@@ -198,6 +211,10 @@ type Params struct {
 	GybeHelm  float64 // the most helm in a gybe
 	ByTheLee  float64 // the most it sails by the lee before counting the boat gybed, degrees
 	OnCourse  float64 // a turn ends this near the target, degrees
+	Astern    float64 // the water reaches the rudder from behind when the boat goes astern faster than this, m/s
+	Steerage  float64 // slower through the water than this, either way, the rudder has no steerage, m/s
+	StallTime float64 // a turn with no steerage that gains too little on its course in this long stalls, s
+	StallGain float64 // too little, degrees
 }
 
 // SeaParams describe the waves long enough to move a boat: the catalog's sea
@@ -255,6 +272,7 @@ type Out struct {
 	Depth             float64 // the water under the daggerboard as the step began, m; negative over land
 	Aground           float64 // Afloat, OnBottom or AgainstLand
 	PushedOff         float64 // 1 if the step pushed the boat off, else 0
+	PilotStalled      float64 // 1 if the autopilot's tack or gybe stalled during the step, else 0
 }
 
 // GroundParams describe how a boat meets the ground: the catalog's world

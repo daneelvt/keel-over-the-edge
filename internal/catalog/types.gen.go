@@ -1441,6 +1441,10 @@ const OnNewWorld On = "new-world"
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
 // helm only, at the sailor's rate.
 type PhysicsAutopilot struct {
+	// Going astern faster than this through the water, in m/s, the water reaches the
+	// rudder from behind and works it in reverse: the autopilot reverses its helm.
+	Astern float64 `json:"astern"`
+
 	// How far by the lee the boat sails before the autopilot counts it gybed, in
 	// degrees. Below the angle at which the boom goes over by itself, about 17° on a
 	// dinghy.
@@ -1457,6 +1461,18 @@ type PhysicsAutopilot struct {
 
 	// A tack or gybe ends this near its target, in degrees.
 	OnCourse float64 `json:"onCourse"`
+
+	// Too little gain for a stalling turn, in degrees.
+	StallGain float64 `json:"stallGain"`
+
+	// A tack or gybe with no steerage that gains less than stallGain on its course in
+	// this long, in s, has stalled: the autopilot gives it up and holds the angle it
+	// turned from.
+	StallTime float64 `json:"stallTime"`
+
+	// Slower than this through the water, either way, in m/s, the rudder has no
+	// steerage: the report says so, and a turn may stall.
+	Steerage float64 `json:"steerage"`
 
 	// The most helm in a tack.
 	TackHelm float64 `json:"tackHelm"`
@@ -4257,14 +4273,28 @@ type WorldStart struct {
 	// A place has at least this much water, in m.
 	Depth float64 `json:"depth"`
 
+	// From every place in the roads, water at least this deep, in m, leads out to
+	// open water.
+	JoinDepth float64 `json:"joinDepth"`
+
 	// The moorings across Port Royal's basin.
 	Moorings StartMoorings `json:"moorings"`
+
+	// Open water: deeper than this, in m, beyond the shelf.
+	OpenDepth float64 `json:"openDepth"`
 
 	// Places in all.
 	Places int `json:"places"`
 
 	// Places to a row.
 	Row int `json:"row"`
+
+	// How far from a place shoal water is looked for, in m.
+	ShoalClear float64 `json:"shoalClear"`
+
+	// A place has no water shallower than this, in m, within shoalClear: it is not on
+	// a bank.
+	ShoalDepth float64 `json:"shoalDepth"`
 
 	// Places are this far apart, in m.
 	Spacing float64 `json:"spacing"`
@@ -4349,4 +4379,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "87b4884e3cdbd3b1"
+const Version = "2138106ca91e8450"

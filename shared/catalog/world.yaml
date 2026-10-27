@@ -483,18 +483,26 @@ world:
     within: 400 # m: the start area begins within this of the coast
     depth: 2 # m of water at a place, at least
     clear: 10 # m from any land
+    # and no water under shoalDepth within shoalClear: a boat starts where
+    # it can sail, not on a bank; and from every place water joinDepth deep
+    # leads out to water deeper than openDepth, beyond the shelf.
+    shoalDepth: 1.5 # m
+    shoalClear: 40 # m
+    joinDepth: 2 # m
+    openDepth: 10 # m
     spacing: 20 # m between places
     row: 64 # places to a row
     places: 4096
 
   # A boat aground and slower than stillSpeed for stillTime is pushed off
-  # by its sailor into pushDepth of water within pushReach, bow to the
-  # wind. Against land a hull bounces as against another hull.
+  # by its sailor into pushDepth of water within pushReach, the way it came
+  # in, bow to the wind: water as deep as a start place's, so it can sail
+  # out. Against land a hull bounces as against another hull.
   grounding:
     stillSpeed: 0.2 # m/s
     stillTime: 5 # s
-    pushDepth: 1 # m
-    pushReach: 40 # m: a sandy shore has a metre of water some 30 m out
+    pushDepth: 2 # m
+    pushReach: 60 # m: a sandy shore has two metres of water some 60 m out
     restitution: 0.3
     friction: 0.2
 

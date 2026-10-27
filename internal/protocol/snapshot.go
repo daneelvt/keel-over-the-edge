@@ -24,8 +24,8 @@ const (
 	HeaderSize = 176
 	// PilotSize is the autopilot's block's length, GroundSize the ground
 	// block's and OverSize the over block's.
-	PilotSize  = 32
-	GroundSize = 8
+	PilotSize  = 8 + 8*sim.PilotSize
+	GroundSize = 8 * sim.GroundSize
 	OverSize   = 8
 	// MaxHeaderSize is the header's length with every block.
 	MaxHeaderSize = HeaderSize + PilotSize + GroundSize + OverSize
@@ -33,7 +33,7 @@ const (
 	// state as float64, its autopilot's block if it has one, its ground
 	// block if it is aground, its over block if it is falling over the
 	// lip, then the view's entries; flag bit 4 while the boat stays.
-	SnapshotLayout = 9
+	SnapshotLayout = 10
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an
@@ -115,15 +115,26 @@ type Snapshot struct {
 }
 
 // groundHeld reports whether a snapshot of the boat in state s carries the
-// ground block: whether its time aground is not zero (-0 counts).
-func groundHeld(s *physics.State) bool { return math.Float64bits(s.GroundTimer) != 0 }
+// ground block: whether its time aground or where it left deep water is not
+// zero (-0 counts).
+func groundHeld(s *physics.State) bool {
+	return math.Float64bits(s.GroundTimer)|math.Float64bits(s.DeepX)|math.Float64bits(s.DeepY) != 0
+}
 
 // pilotHeld reports whether a snapshot of the boat in state s, with the
 // pilot word p in force, carries the autopilot's block: whether any of
 // them is not zero.
 func pilotHeld(p bus.PilotWord, s *physics.State) bool {
-	return p.Mode() != 0 || p.Way() != 0 || p.Order() != 0 || p.Target() != 0 ||
-		math.Float64bits(s.PilotTrim)|math.Float64bits(s.PilotWay)|math.Float64bits(s.PilotOrder) != 0
+	if p.Mode() != 0 || p.Way() != 0 || p.Order() != 0 || p.Target() != 0 {
+		return true
+	}
+	fields := sim.StateFields(s)
+	for _, v := range fields[sim.BoatSize : sim.BoatSize+sim.PilotSize] {
+		if math.Float64bits(*v) != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // PutHeader writes a snapshot's header, its kind byte first, into b, which
@@ -174,7 +185,9 @@ func PutHeader(b []byte, tick int64, base uint16, flags uint8, word bus.Word, pi
 		at += PilotSize
 	}
 	if aground {
-		le.PutUint64(b[at:], math.Float64bits(s.GroundTimer))
+		for i, v := range fields[sim.BoatSize+sim.PilotSize:] {
+			le.PutUint64(b[at+8*i:], math.Float64bits(*v))
+		}
 		at += GroundSize
 	}
 	if falling {
@@ -279,7 +292,9 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 	}
 	s.Over = 0
 	if aground {
-		s.State.GroundTimer = math.Float64frombits(le.Uint64(b[at:]))
+		for i, v := range fields[sim.BoatSize+sim.PilotSize:] {
+			*v = math.Float64frombits(le.Uint64(b[at+8*i:]))
+		}
 		at += GroundSize
 	}
 	if falling {

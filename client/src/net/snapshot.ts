@@ -8,8 +8,8 @@
 // physics module's own order, so it can be copied straight into the
 // module: the boat's own fields from the header, what its autopilot
 // remembers from the autopilot's block that follows it while there is any,
-// and how long it has been aground from the ground block after that while
-// it is aground, or nothing; and, while it is falling over the lip, the
+// and how long it has been aground and where it left deep water from the
+// ground block after that while it has either, or nothing; and, while it is falling over the lip, the
 // tick it went over from the over block after those; while it stays where
 // it is as its owner's free camera roams, a flag says so. The other boats'
 // entries after them are view.ts's.
@@ -21,15 +21,15 @@ export const KIND_SNAPSHOT = 2;
 /** A snapshot's header's length, its kind byte included: where its entries begin, unless a block follows. */
 export const HEADER_SIZE = 176;
 /** The autopilot's block's length. */
-export const PILOT_SIZE = 32;
+export const PILOT_SIZE = 56;
 /** The ground block's length. */
-export const GROUND_SIZE = 8;
+export const GROUND_SIZE = 24;
 /** The over block's length. */
 export const OVER_SIZE = 8;
 /** The header's length with every block. */
 export const MAX_HEADER_SIZE = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE + OVER_SIZE;
 /** The layout this client reads: the own boat's state as float64, its autopilot's, ground and over blocks, then the view's entries; flag bit 4 while the boat stays. */
-export const SNAPSHOT_LAYOUT = 9;
+export const SNAPSHOT_LAYOUT = 10;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */
@@ -44,13 +44,13 @@ export const OVER_HELD = 8;
 export const STAYING = 16;
 /** A snapshot's margin when no input arrived since the one before. */
 export const NO_MARGIN = -32768;
-/** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground. */
-export const STATE_FIELDS = 23;
+/** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground and where it left deep water. */
+export const STATE_FIELDS = 28;
 /** Those of them the header holds; the autopilot's block holds those up to PILOT_FIELDS, and the ground block the last. */
 export const BOAT_FIELDS = 19;
-export const PILOT_FIELDS = 22;
-/** The field the ground block holds: how long the boat has been aground and all but still. */
-export const GROUND_TIMER = 22;
+export const PILOT_FIELDS = 25;
+/** The first of the fields the ground block holds: how long the boat has been aground and all but still, then where it left deep water, east and north. */
+export const GROUND_TIMER = 25;
 
 /** A snapshot's header: the player's own boat as the server last stepped it. */
 export interface OwnSnapshot {
@@ -233,7 +233,9 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
     s.fill(0, BOAT_FIELDS, PILOT_FIELDS);
   }
   const groundAt = header - GROUND_SIZE - ((flags & OVER_HELD) !== 0 ? OVER_SIZE : 0);
-  s[GROUND_TIMER] = (flags & GROUND_HELD) !== 0 ? v.getFloat64(groundAt, true) : 0;
+  for (let i = GROUND_TIMER; i < STATE_FIELDS; i++) {
+    s[i] = (flags & GROUND_HELD) !== 0 ? v.getFloat64(groundAt + 8 * (i - GROUND_TIMER), true) : 0;
+  }
   return null;
 }
 
@@ -250,9 +252,14 @@ export function pilotHeld(s: OwnSnapshot): boolean {
   return false;
 }
 
-/** Whether a snapshot of s carries the ground block: whether its time aground is not zero (-0 counts). */
+/** Whether a snapshot of s carries the ground block: whether its time aground or where it left deep water is not zero (-0 counts). */
 export function groundHeld(s: OwnSnapshot): boolean {
-  return notZero(s.state[GROUND_TIMER] ?? 0);
+  for (let i = GROUND_TIMER; i < STATE_FIELDS; i++) {
+    if (notZero(s.state[i] ?? 0)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function notZero(x: number): boolean {
@@ -302,7 +309,9 @@ export function writeSnapshot(s: OwnSnapshot, v: DataView): number {
     at += PILOT_SIZE;
   }
   if (aground) {
-    v.setFloat64(at, s.state[GROUND_TIMER] ?? 0, true);
+    for (let i = GROUND_TIMER; i < STATE_FIELDS; i++) {
+      v.setFloat64(at + 8 * (i - GROUND_TIMER), s.state[i] ?? 0, true);
+    }
     at += GROUND_SIZE;
   }
   if (falling) {

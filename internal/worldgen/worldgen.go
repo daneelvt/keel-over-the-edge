@@ -32,7 +32,7 @@ import (
 
 // Version is the generator's version. Raise it whenever a change to the
 // generator or to the catalog's world values changes any seed's world.
-const Version = 5
+const Version = 6
 
 // Island is an island of a made world.
 type Island struct {

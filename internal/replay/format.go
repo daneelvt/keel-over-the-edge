@@ -60,7 +60,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 11
+	formatVersion = 12
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'

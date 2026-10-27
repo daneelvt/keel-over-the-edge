@@ -78,6 +78,15 @@ func (c *config) validate(w *world) []Rule {
 
 	// The start area.
 	add("start area", len(w.start.Places) == c.start.Places, fmt.Sprintf("%d places", len(w.start.Places)), "%d", c.start.Places)
+	// The roads' places clear of banks, their water out to open water.
+	stranded, joins := 0, map[int32]int8{}
+	for _, p := range w.start.Places[w.start.Moorings:] {
+		if !c.placeFits(w.ground, p[0], p[1]) || !c.joined(w.ground, p[0], p[1], joins) {
+			stranded++
+		}
+	}
+	add("start water", stranded == 0, fmt.Sprintf("%d places on a bank or shut in", stranded),
+		"none in under %.1f m within %.0f m, each led out to %.0f m in %.1f m", c.start.ShoalDepth, c.start.ShoalClear, c.start.OpenDepth, c.start.JoinDepth)
 
 	// Every landmark reachable from the start in enough water: from the
 	// roads, whose water the moorings' must reach (townRules).

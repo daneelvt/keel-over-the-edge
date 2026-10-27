@@ -16,8 +16,8 @@ var testGroundParams = GroundParams{
 	Friction:     [GroundSurfaces]float64{0.4, 0.5, 0.5, 0.5, 0.6, 0.45, 0.5, 0.5},
 	StillSpeed:   0.2,
 	StillTime:    5,
-	PushDepth:    1,
-	PushReach:    40,
+	PushDepth:    2,
+	PushReach:    60,
 	Restitution:  0.3,
 	LandFriction: 0.2,
 }
@@ -298,6 +298,67 @@ func TestOffALeeShore(t *testing.T) {
 		t.Errorf("a minute after being pushed off the boat is at x = %.1f, still off the beach", s.X)
 	}
 	t.Logf("pushed off at step %d to (%.1f, %.1f); at (%.1f, %.1f) a minute later", pushed, after.X, after.Y, s.X, s.Y)
+}
+
+// bar is a bank across the way east: 4 m deep to x = 0, shoaling to
+// awash at x = 20 and staying so to x = 23, with a pool 3 m deep beyond.
+func bar(x, y float64) float64 {
+	switch {
+	case x < 0:
+		return -4
+	case x < 20:
+		return -4 + x/5
+	case x < 23:
+		return 0
+	}
+	return -3
+}
+
+// A boat run onto a bank from deep water, its sheet let fly once aground,
+// is pushed off back into the deep water it came from, at least the push's depth, though the pool beyond
+// the bank is nearer; a boat that never left deep water is pushed off to
+// the nearest.
+func TestPushedOffTheWayItCame(t *testing.T) {
+	g := testGround(bar)
+	s := State{X: -40, Heading: math.Pi / 2, Surge: 2.5, SheetLimit: 0.6}
+	c := Control{Sheet: 0.45}
+	e := Env{WindSpeed: 6.2, WindFrom: 0, MeanFrom: 0}
+	var at, after State
+	pushed := false
+	sailOver(t, g, &s, &c, &e, 60*StepsPerSecond, func(i int, s *State, o *Out) {
+		if pushed {
+			return
+		}
+		c.Helm = steer(math.Pi/2, s)
+		if o.Aground != Afloat {
+			// Aground, the sheet let fly.
+			c.Sheet = 1
+		}
+		if o.PushedOff != 0 {
+			pushed, after = true, *s
+			return
+		}
+		at = *s
+	})
+	if !pushed {
+		t.Fatalf("the boat was never pushed off the bank: at (%.1f, %.1f)", s.X, s.Y)
+	}
+	t.Logf("aground at x = %.1f, left 2 m at x = %.1f; pushed off to (%.1f, %.1f)", at.X, at.DeepX, after.X, after.Y)
+	if !(23-at.X < at.X-10) || !(at.DeepX < 11) {
+		t.Fatalf("aground at x = %.1f, having left deep water at x = %.1f: not nearer the pool than the deep water", at.X, at.DeepX)
+	}
+	if e, _ := g.At(after.X, after.Y); e > -testGroundParams.PushDepth || after.X > 20 {
+		t.Errorf("pushed off to x = %.1f, in %.1f m: not back the way it came", after.X, -e)
+	}
+	if after.DeepX != 0 || after.DeepY != 0 {
+		t.Errorf("pushed off with the deep water left at (%.1f, %.1f)", after.DeepX, after.DeepY)
+	}
+	// Aground with no deep water left behind: the nearest.
+	s = State{X: at.X, Y: at.Y, Heading: at.Heading}
+	b := jolly(t)
+	if !b.pushOff(&s, g, 0) || s.X < 23 {
+		t.Errorf("never in deep water: pushed off to x = %.1f, not the pool", s.X)
+	}
 }
 
 func TestGroundAllocatesNothing(t *testing.T) {
