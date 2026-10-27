@@ -3,6 +3,7 @@
 package agentapi
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -175,5 +176,58 @@ func TestATackStalls(t *testing.T) {
 	}
 	if wr := order(); wr.already || wr.turning != viaTack {
 		t.Errorf("the same tack again: %+v", wr)
+	}
+}
+
+// A tack from rest with the sheet hauled in crawls round past head to
+// wind: the event that ends it says finished only within shortOfCourse of
+// its course, and short of it otherwise.
+func TestATurnToldAsItEnds(t *testing.T) {
+	for _, knots := range []float64{3, 2} {
+		t.Run(fmt.Sprintf("%.0f knots", knots), func(t *testing.T) { turnToldAsItEnds(t, knots) })
+	}
+}
+
+func turnToldAsItEnds(t *testing.T, knots float64) {
+	sc := newScene(t, knots, 0)
+	st := sc.start()
+	st.X, st.Y, st.Heading, st.Surge = 1500, -1500, wrap(rad(-45)), 0
+	me := sc.boat(st, true)
+	sc.steer(me, 45, 4)
+	h := sc.core.helmOf(sailor(byte(me)+1, "Iron Mary"))
+	f := sc.w.Latest()
+	h.mu.Lock()
+	h.sea, h.slot, h.boat = sc.sea, me, f.Boat[me]
+	h.mu.Unlock()
+	a := 45
+	{
+		f := sc.w.Bus().Frames.Acquire()
+		if _, refused := h.steer(sc.sea, f, me, &steerOrder{WindAngle: &a, Side: sidePort, Via: viaTack}); refused != "" {
+			t.Fatal(refused)
+		}
+		f.Release()
+	}
+	told := 0
+	for i := range 120 * physics.StepsPerSecond {
+		sc.w.Tick()
+		if i%checkEvery != 0 {
+			continue
+		}
+		f := sc.w.Bus().Frames.Acquire()
+		h.look(sc.sea, f, false)
+		evs, _ := h.ring.after(0)
+		if len(evs) > told {
+			e := evs[len(evs)-1]
+			off := offCourse(f, me)
+			t.Logf("%.0f s, %d° off course: %s", float64(i)/physics.StepsPerSecond, off, e.Words)
+			if e.Kind == evTurned && strings.Contains(e.Words, "finished") != (off <= shortOfCourse) {
+				t.Errorf("%d° off course: %q", off, e.Words)
+			}
+			told = len(evs)
+		}
+		f.Release()
+	}
+	if told == 0 {
+		t.Fatal("the turn never ended")
 	}
 }

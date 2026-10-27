@@ -185,10 +185,18 @@ func (h *helm) look(s *Sea, f *bus.Frame, sight bool) {
 	}
 	h.mu.Unlock()
 	switch turned {
-	case WayTackDone:
-		h.event(event{Tick: f.Tick, Kind: evTurned, Words: "the autopilot finished its tack"})
-	case WayGybeDone:
-		h.event(event{Tick: f.Tick, Kind: evTurned, Words: "the autopilot finished its gybe"})
+	case WayTackDone, WayGybeDone:
+		turn := "tack"
+		if turned == WayGybeDone {
+			turn = "gybe"
+		}
+		words := "the autopilot finished its " + turn
+		// A turn that came round with no steerage ends short of its
+		// course: the autopilot steers on for it from there.
+		if off := offCourse(f, sl); off > shortOfCourse {
+			words = fmt.Sprintf("the autopilot's %s came round with no steerage, %d° short of its course: it steers on for it as the boat gathers way", turn, off)
+		}
+		h.event(event{Tick: f.Tick, Kind: evTurned, Words: words})
 	case WayTackStalled, WayGybeStalled:
 		turn := "tack"
 		if turned == WayGybeStalled {
@@ -211,6 +219,24 @@ const (
 	WayTackStalled = 3
 	WayGybeStalled = 4
 )
+
+// shortOfCourse is how far off its course, degrees, a turn may end and
+// still be told finished.
+const shortOfCourse = 15
+
+// offCourse is how far the boat in slot sl is off the course its
+// autopilot holds, degrees, by the mean wind it steers by.
+func offCourse(f *bus.Frame, sl int32) int {
+	pw, st := f.Pilot[sl], &f.State[sl]
+	target := float64(pw.Target()) * 2 * math.Pi / physics.TurnSteps
+	switch pw.Mode() {
+	case bus.PilotWind:
+		return degrees(math.Abs(wrap(wrap(f.Wind[sl].MeanFrom-st.Heading) - wrap(target))))
+	case bus.PilotHeading:
+		return degrees(math.Abs(wrap(st.Heading - target)))
+	}
+	return 0
+}
 
 // turnDone reports a tack or a gybe the autopilot has finished or given up
 // since the last look: its turn was under way, and is over. With mu held.
