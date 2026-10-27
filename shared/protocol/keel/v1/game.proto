@@ -205,61 +205,83 @@ message Watchers {
 // Forecast is the forecast, issued at each boundary of ten minutes of world
 // time from the world's epoch for the next ninety, in steps of ten: sent to
 // every connection as it is issued, and after the Welcome with its past.
-// It is the whole of the future a client is told: the systems alive at the
-// issue moved on by their planned tracks, the lows to be born within its
-// horizon, forming, the spells planned, without their shifts, and the gale
-// warning in force; never a system's record, its wobble, nor the seed of a
-// system not yet born.
+// It is the truth: the records of every system alive at the issue or born
+// within its horizon and one issue more, from which a client makes the
+// server's keyframes of any tick it knows, bit for bit; the spells as they
+// will blow, without their shifts; and the gale warning in force.
 message Forecast {
   // The tick it was issued at; how many steps it has, the issue's own
   // first, fewer as the world's end nears; and the ticks between them.
   int64 issue = 1;
   uint32 steps = 2;
   uint32 step = 3;
-  // The spells over its horizon, by the tick each begins at, ascending, as
-  // the forecast has them: the shifts not placed, a spell not yet begun
-  // with the forecast's error, a front's line moved on at its forecast
-  // speed; and each one's shifts' swing either way, in 65536ths of a turn.
+  // The spells over its reach, by the tick each begins at, ascending, the
+  // shifts not placed; and each one's shifts' swing either way, in
+  // 65536ths of a turn.
   repeated Spell spells = 4;
   repeated uint32 shifts = 5;
-  // Its systems, by their slots.
+  // Its systems' records, in the order of their births.
   repeated ForecastSystem systems = 6;
   // The gale warning in force, if any.
   GaleWarning gale = 7;
   // After the Welcome, what has been: the issue of ninety minutes before
   // and the truth since.
   ForecastPast past = 8;
+  // The last tick it knows the systems to; how many ticks apart the
+  // systems' keyframes are; and the tick its records' tick 0 falls on.
+  int64 until = 9;
+  uint32 every = 10;
+  int64 origin = 11;
 }
 
-// ForecastSystem is a system as a forecast gives it, in a keyframe's
-// units: at each step, where it will be, how it moves and how strong it
-// is.
+// ForecastSystem is a system of the forecast: its slot, as its keyframes',
+// and its record, from which its keyframe at any tick is made.
 message ForecastSystem {
-  // Its slot, as its keyframes'; the catalog's index of its kind; a seed
-  // for drawing it, 0 for a low forming, which has none yet; its radius,
-  // m; its peak and its depth, as a keyframe's.
+  reserved 7 to 15;
+  reserved "forming", "crosses", "cross_east", "cross_north", "strength";
+  // Its slot; the catalog's index of its kind; its seed; its radius, m, a
+  // line's half its depth; its peak and its depth, as a keyframe's.
   uint32 slot = 1;
   uint32 kind = 2;
   uint32 seed = 3;
   uint32 size = 4;
   uint32 peak = 5;
   sint32 depth = 6;
-  // A low not yet born at the issue, forecast by its plan alone.
-  bool forming = 7;
-  // Beyond the lip at the issue: the tick it is forecast to cross onto the
-  // disk, and where, in metres east and north of the world's centre.
-  int64 crosses = 8;
-  sint32 cross_east = 9;
-  sint32 cross_north = 10;
-  // At each step: its centre, in metres east and north of the world's
-  // centre; the direction it moves toward, in 65536ths of a turn; how
-  // fast, in steps of 0.01 m/s; and its strength, in 256ths, 0 where it
-  // is not alive.
-  repeated sint32 east = 11;
-  repeated sint32 north = 12;
-  repeated uint32 heading = 13;
-  repeated uint32 speed = 14;
-  repeated uint32 strength = 15;
+  // The ticks it is born at, has grown to its whole by, begins to decay
+  // at and is gone at, in its records' time.
+  int64 born = 16;
+  int64 mature = 17;
+  int64 decays = 18;
+  int64 gone = 19;
+  // Its track: 0 a straight line, 1 an arc round the centre.
+  uint32 track = 20;
+  // A line: where it is at its birth, in quarter metres east and north of
+  // the world's centre, and the direction it moves toward, in 65536ths of
+  // a turn.
+  sint32 east = 21;
+  sint32 north = 22;
+  uint32 heading = 23;
+  // How fast it moves along its track, in steps of 0.01 m/s.
+  uint32 speed = 24;
+  // An arc: its distance from the centre at its birth, in quarter metres;
+  // its bearing from the centre then, in 65536ths of a turn; which way it
+  // goes round, 1 clockwise and −1 the other way; and how fast it closes
+  // on the centre, in steps of 0.01 m/s.
+  uint32 radius = 25;
+  uint32 angle = 26;
+  sint32 sense = 27;
+  uint32 inward = 28;
+  // A line's length across its motion, m.
+  uint32 length = 29;
+  // Its wobble off its track: how far, in quarter metres, and each way's
+  // period in ticks and phase at tick 0 in 65536ths of a turn; and its
+  // strength's throb, in 4096ths, with its period and phase.
+  uint32 wobble = 30;
+  repeated uint32 wobble_period = 31;
+  repeated uint32 wobble_phase = 32;
+  uint32 throb = 33;
+  uint32 throb_period = 34;
+  uint32 throb_phase = 35;
 }
 
 // GaleWarning is a gale warning in force: issued from the forecast's
@@ -554,14 +576,14 @@ message IslandCap {
 message Keyframe {
   // The tick it is of.
   int64 tick = 1;
-  // The systems, by their slots, ascending: at most 20.
+  // The systems, by their slots, ascending: at most 28.
   repeated SystemKey systems = 2;
 }
 
 // SystemKey is a weather system at a keyframe.
 message SystemKey {
-  // Its slot, which it holds from its birth to its end: below 16 the
-  // world's own, from 16 a developer's.
+  // Its slot, which it holds from its birth to its end: below 24 the
+  // world's own, from 24 a developer's.
   uint32 slot = 1;
   // The catalog's index of its kind, and a seed for drawing it.
   uint32 kind = 2;
@@ -584,6 +606,8 @@ message SystemKey {
   // Its pressure at its centre at full strength, in hundredths of a hPa: a
   // dome's above, a low's below.
   sint32 depth = 12;
+  // A line's length across its motion, m; 0 for any other shape.
+  uint32 length = 13;
 }
 
 // Spell is a spell of weather: a stretch of time with one base wind, its
@@ -635,6 +659,9 @@ message Spell {
   // The world's own weather systems do not blow while it is the spell in
   // effect: a developer's weather.
   bool still = 22;
+  // Its front is a warm front: its rain in a band ahead of its line, and
+  // no surge of the gusts behind it.
+  bool warm = 23;
 }
 
 // SeaAreas is what raises the waves about the boat: a square of sea areas,

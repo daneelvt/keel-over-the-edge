@@ -23,20 +23,6 @@ export type Light = "tricolour" | "port" | "starboard" | "stern";
  */
 export type CloudForm = "none" | "fog" | "cumulus" | "cumulonimbus" | "storm";
 /**
- * A sky's words in a place's box, mildest first.
- *
- * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "RiskSky".
- */
-export type RiskSky = "fair" | "showers" | "fog patches" | "rain" | "squally showers" | "squalls with heavy rain";
-/**
- * A risk's mark on the chart.
- *
- * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "RiskMark".
- */
-export type RiskMark = "fog-patches" | "showers" | "squalls" | "calms";
-/**
  * A column's top.
  */
 export type Colour = string;
@@ -1019,6 +1005,14 @@ export interface WeatherDisk {
    */
   refugeWind: number;
   /**
+   * The refuge softens the storms' swell above this, in m.
+   */
+  refugeSwellKnee: number;
+  /**
+   * The swell the refuge holds to, in m: above its knee.
+   */
+  refugeSwell: number;
+  /**
    * The gust factor's excess over 1 grows by this share toward the rim.
    */
   rimGusts: number;
@@ -1337,6 +1331,17 @@ export interface RegimeSystems {
    * How many are born as the spell begins.
    */
   atStart: number;
+  /**
+   * Their peak wind is drawn from between these shares of their kind's range: [0, 0.5] for the lower half.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  peak: [number, number];
+  /**
+   * When they are born: at any time, by day only, or at night only.
+   */
+  when: "always" | "day" | "night";
 }
 /**
  * A regime's wind, from which each spell's is drawn.
@@ -1385,9 +1390,21 @@ export interface RegimeWind {
 export interface SystemKind {
   id: Id;
   /**
-   * A dome, a low, or none: a patch that scales the wind.
+   * What the chart, the forecast and the key call it.
    */
-  shape: "dome" | "low" | "none";
+  name: string;
+  /**
+   * Its line in the chart's key.
+   */
+  key: string;
+  /**
+   * How the chart draws it: a squall's dark cell, a shower's heap, a storm's spiral, a low's spiral lettered L, a fog bank, a patch of calm, a squall line's dash, dot, dot, a trough's dashes.
+   */
+  symbol: "cell" | "heap" | "spiral" | "low" | "bank" | "calm" | "dash-dot" | "dashed";
+  /**
+   * A dome, a line (a dome stretched across its motion along its length), a low, or none: a patch that scales the wind.
+   */
+  shape: "dome" | "line" | "low" | "none";
   /**
    * Its wind blows toward lower pressure turned clockwise by this, in degrees.
    */
@@ -1420,12 +1437,19 @@ export interface SystemKind {
    */
   gusts: number;
   /**
-   * Its radius, the least and the most, in nautical miles.
+   * Its radius, the least and the most, in nautical miles: a line's half its depth along its motion.
    *
    * @minItems 2
    * @maxItems 2
    */
   size: [number, number];
+  /**
+   * A line's length across its motion, the least and the most, in nautical miles; nothing for any other shape.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  length: [number, number];
   /**
    * How fast it moves, the least and the most: a share of the base wind, or knots.
    *
@@ -1469,6 +1493,10 @@ export interface SystemKind {
    * Where it is born and how it moves: wind, across from the windward rim; outer, round the outer waters; drift, inside, drifting with the wind.
    */
   track: "wind" | "outer" | "drift";
+  /**
+   * Of those that keep to the outer waters, the share that turn inward, closing on the centre.
+   */
+  turnsIn: number;
   /**
    * The share of those born by day that are born over an island's land.
    */
@@ -1703,12 +1731,19 @@ export interface WeatherWeek {
    */
   draws: number;
   /**
-   * How far the wind veers as a front passes, the least and the most, in degrees.
+   * How far the wind veers as a cold front passes, the least and the most, in degrees.
    *
    * @minItems 2
    * @maxItems 2
    */
   veer: [number, number];
+  /**
+   * And as a warm front passes: a change from a regime of no front into a frontal one comes as a warm front, every other front as a cold one.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  warmVeer: [number, number];
   /**
    * How far the wind's direction may move either way at another change, in degrees.
    */
@@ -1750,24 +1785,84 @@ export interface WeatherWeek {
    * The most systems on the disk at once.
    */
   systemsMost: number;
+  storms: WeekMost;
+  quiet: WeekQuiet;
+  lineAhead: WeekLineAhead;
   /**
-   * The outer waters a storm keeps to, from and to, in nautical miles from the centre.
+   * Stable identifier of a kind, stored in the database: never renamed or reused.
+   */
+  fill: string;
+  /**
+   * The outer waters the kinds that keep to them are born in, from and to, in nautical miles from the centre.
    *
    * @minItems 2
    * @maxItems 2
    */
   outer: [number, number];
   /**
-   * The share of storms that turn inward.
-   */
-  inwardShare: number;
-  /**
    * The seed a developer's held spells are drawn with.
    */
   seed: number;
 }
 /**
- * The forecast: how often it is issued, how far ahead it runs, its cones, the error it gives a spell not yet begun, its gale warnings, a place's outlook and each regime's risks.
+ * The most systems of a kind on the disk at once: one more is not born.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeekMost".
+ */
+export interface WeekMost {
+  kind: Id;
+  /**
+   * The most at once.
+   */
+  most: number;
+}
+/**
+ * Kinds kept off the water in a world's first hours and in its closing spell, so the rush to discover and the closing race stay fair; and, in a spell of a regime of no front, no storm turns inward.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeekQuiet".
+ */
+export interface WeekQuiet {
+  /**
+   * None is born in the world's first this many hours.
+   */
+  hours: number;
+  /**
+   * The kinds kept off.
+   *
+   * @maxItems 8
+   */
+  kinds:
+    | []
+    | [Id]
+    | [Id, Id]
+    | [Id, Id, Id]
+    | [Id, Id, Id, Id]
+    | [Id, Id, Id, Id, Id]
+    | [Id, Id, Id, Id, Id, Id]
+    | [Id, Id, Id, Id, Id, Id, Id]
+    | [Id, Id, Id, Id, Id, Id, Id, Id];
+}
+/**
+ * A line of a kind born ahead of every cold front into a regime, moving with the front.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WeekLineAhead".
+ */
+export interface WeekLineAhead {
+  kind: Id;
+  into: Id;
+  /**
+   * How far ahead of the front's line, the least and the most, in nautical miles.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  ahead: [number, number];
+}
+/**
+ * The forecast: how often it is issued, how far ahead it runs, its gale warnings and a place's outlook. It is the truth: every system and every front where it will be.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "WeatherForecast".
@@ -1785,177 +1880,8 @@ export interface WeatherForecast {
    * In steps of this many minutes: the horizon is a whole number of them, at most 12.
    */
   step: number;
-  cone: ForecastCone;
-  spell: ForecastSpell;
   gale: ForecastGale;
   outlook: ForecastOutlook;
-  /**
-   * What each regime brings that the forecast cannot place: one entry for each regime.
-   *
-   * @minItems 1
-   * @maxItems 16
-   */
-  risks:
-    | [ForecastRisk]
-    | [ForecastRisk, ForecastRisk]
-    | [ForecastRisk, ForecastRisk, ForecastRisk]
-    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
-    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
-    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
-    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
-    | [ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk, ForecastRisk]
-    | [
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk
-      ]
-    | [
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk
-      ]
-    | [
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk
-      ]
-    | [
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk
-      ]
-    | [
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk
-      ]
-    | [
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk
-      ]
-    | [
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk
-      ]
-    | [
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk,
-        ForecastRisk
-      ];
-}
-/**
- * The cones the truth lies in four times in five at each step.
- *
- * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "ForecastCone".
- */
-export interface ForecastCone {
-  /**
-   * A system's cone grows by this for each hour of lead, from nothing at the issue, in nautical miles.
-   */
-  perHour: number;
-  /**
-   * A low not yet born at the issue: its cone, whatever the lead, in nautical miles.
-   */
-  forming: number;
-  /**
-   * A front's line moves on at its speed times 1 + this z, z drawn once a front from a standard normal: the standard deviation of the forecast's error in its speed.
-   */
-  front: number;
-}
-/**
- * The forecast's own error in a spell not yet begun at the issue, drawn from its seed: standard deviations.
- *
- * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "ForecastSpell".
- */
-export interface ForecastSpell {
-  /**
-   * In its wind's direction, in degrees.
-   */
-  direction: number;
-  /**
-   * In its wind's speed, as a share of it.
-   */
-  speed: number;
 }
 /**
  * A gale warning: where the synoptic wind of a step reaches a gale, on a grid over the water.
@@ -2024,23 +1950,6 @@ export interface ForecastOutlook {
    * Soon: within this, later beyond, in minutes.
    */
   soon: number;
-}
-/**
- * What a regime brings that the forecast cannot place: the sky in a place's box, and the marks the chart draws.
- *
- * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "ForecastRisk".
- */
-export interface ForecastRisk {
-  regime: Id;
-  sky: RiskSky;
-  /**
-   * The chart's marks: fog patches where the fog's rule lets a bank be born, scattered showers, squalls from the windward rim, calms.
-   *
-   * @maxItems 4
-   */
-  marks:
-    [] | [RiskMark] | [RiskMark, RiskMark] | [RiskMark, RiskMark, RiskMark] | [RiskMark, RiskMark, RiskMark, RiskMark];
 }
 /**
  * The systems' keyframes, which the server and the phone interpolate between.
@@ -2177,6 +2086,13 @@ export interface WeatherClouds {
    * @maxItems 3
    */
   frontRain: [number, number, number];
+  /**
+   * A warm front's rain and low cloud, ahead of its line: the rate at the band's middle, in mm an hour, the band this far ahead of the line and this wide, in nautical miles.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  frontWarm: [number, number, number];
   /**
    * Rain is light under the first rate, moderate under the second, heavy under the third and violent above, in mm an hour.
    *
@@ -6029,7 +5945,7 @@ export interface ChartLook {
   weather: ChartWeather;
 }
 /**
- * The chart's weather: the canvas it is painted on, where gusts are drawn and its colours.
+ * The chart's weather: the canvas it is painted on, where gusts are drawn, its colours, the wind's wash, barbs and streaks, and the key's words.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "ChartWeather".
@@ -6045,9 +5961,128 @@ export interface ChartWeather {
   gusts: number;
   rain: Colour3;
   fog: Colour3;
-  front: Colour3;
+  cold: Colour3;
+  warm: Colour3;
   squall: Colour3;
   storm: Colour3;
+  wash: ChartWash;
+  /**
+   * The wind's barbs stand this far apart, in nautical miles.
+   */
+  barbs: number;
+  streaks: ChartStreaks;
+  key: ChartKey;
+}
+/**
+ * The wind's wash: the water tinted in steps of one hue by the Beaufort force of the mean wind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartWash".
+ */
+export interface ChartWash {
+  colour: Colour3;
+  /**
+   * Each step begins at this Beaufort force, the lightest first: none under the first.
+   *
+   * @minItems 1
+   * @maxItems 6
+   */
+  forces:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number];
+  /**
+   * Each step's opacity over the paper, as a share, the lightest first: one for each of forces.
+   *
+   * @minItems 1
+   * @maxItems 6
+   */
+  tints:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number];
+}
+/**
+ * The wind's streaks: how many, how wide and under what wind they fade.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartStreaks".
+ */
+export interface ChartStreaks {
+  /**
+   * The streaks drawn at once.
+   */
+  count: number;
+  /**
+   * Each streak's width, in CSS pixels.
+   */
+  width: number;
+  /**
+   * A streak fades in a mean wind under this, in knots.
+   */
+  fade: number;
+}
+/**
+ * The chart key's line for each of what the chart draws that is not a kind of system.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "ChartKey".
+ */
+export interface ChartKey {
+  /**
+   * A cold front's line.
+   */
+  cold: string;
+  /**
+   * A warm front's line.
+   */
+  warm: string;
+  /**
+   * The wind's barbs' line.
+   */
+  barbs: string;
+  /**
+   * The wind's wash's line.
+   */
+  wash: string;
+  /**
+   * The wind's streaks' line.
+   */
+  streaks: string;
+  /**
+   * The isobars' line.
+   */
+  isobars: string;
+  /**
+   * A ring of strongest wind's line.
+   */
+  ring: string;
+  /**
+   * A system's motion arrow's line.
+   */
+  motion: string;
+  /**
+   * The gale hatching's line.
+   */
+  gale: string;
+  /**
+   * The gusts' line.
+   */
+  gusts: string;
+  /**
+   * The rain's line.
+   */
+  rain: string;
+  /**
+   * The fog's line.
+   */
+  fog: string;
 }
 /**
  * The instruments aboard.
@@ -6343,4 +6378,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '6a5fc8cef8ba6591';
+export const CATALOG_VERSION = '87b4884e3cdbd3b1';

@@ -71,6 +71,10 @@ weather:
     refugeMean: 14 # knots: Beaufort 4
     refugeWindKnee: 14 # knots
     refugeWind: 18 # knots: rising to 5 in the gusts
+    # The storms' swell together the same way: two storms in the outer
+    # waters raise no more at the quay than one did.
+    refugeSwellKnee: 0.7 # m
+    refugeSwell: 1 # m
     # Gusts are stronger in the outer waters: the gust factor's excess over
     # 1 grows by this share from rimGustsFrom to the rim.
     rimGusts: 0.3
@@ -164,9 +168,12 @@ weather:
       next:
         - { to: trade, chance: 1 }
       systems:
-        - { kind: fog, rate: 1.5, atStart: 0 }
-        - { kind: light-air, rate: 2, atStart: 0 }
-        - { kind: shower, rate: 0.5, atStart: 0 }
+        - { kind: fog, rate: 1.5, atStart: 0, peak: [0, 1], when: always }
+        - { kind: light-air, rate: 4, atStart: 0, peak: [0, 1], when: always }
+        - { kind: shower, rate: 3, atStart: 0, peak: [0, 1], when: day }
+        - { kind: shower, rate: 1, atStart: 0, peak: [0, 1], when: night }
+        - { kind: depression, rate: 0.6, atStart: 0, peak: [0, 1], when: always }
+        - { kind: trough, rate: 1, atStart: 0, peak: [0, 1], when: day }
       wind:
         speed: [3, 9] # knots at mid-disk
         gustFactor: 1.2
@@ -184,9 +191,12 @@ weather:
         - { to: settled, chance: 0.7 }
         - { to: unsettled, chance: 0.3 }
       systems:
-        - { kind: shower, rate: 2, atStart: 0 }
-        - { kind: light-air, rate: 1, atStart: 0 }
-        - { kind: squall, rate: 0.3, atStart: 0 }
+        - { kind: shower, rate: 6, atStart: 0, peak: [0, 1], when: always }
+        - { kind: light-air, rate: 2, atStart: 0, peak: [0, 1], when: always }
+        - { kind: squall, rate: 0.8, atStart: 0, peak: [0, 1], when: always }
+        - { kind: storm, rate: 0.35, atStart: 0, peak: [0, 0.5], when: always }
+        - { kind: depression, rate: 0.5, atStart: 0, peak: [0, 1], when: always }
+        - { kind: trough, rate: 2.2, atStart: 0, peak: [0, 1], when: always }
       wind:
         speed: [10, 16]
         gustFactor: 1.3
@@ -204,8 +214,12 @@ weather:
         - { to: trade, chance: 0.31 }
         - { to: stormy, chance: 0.69 }
       systems:
-        - { kind: squall, rate: 1.5, atStart: 0 }
-        - { kind: shower, rate: 3, atStart: 0 }
+        - { kind: squall, rate: 5, atStart: 0, peak: [0, 1], when: always }
+        - { kind: shower, rate: 18, atStart: 0, peak: [0, 1], when: always }
+        - { kind: storm, rate: 0.6, atStart: 0, peak: [0, 1], when: always }
+        - { kind: depression, rate: 0.5, atStart: 0, peak: [0, 1], when: always }
+        - { kind: squall-line, rate: 1.5, atStart: 0, peak: [0, 1], when: always }
+        - { kind: trough, rate: 2.5, atStart: 0, peak: [0, 1], when: always }
       wind:
         speed: [12, 20]
         gustFactor: 1.45
@@ -222,9 +236,12 @@ weather:
       next:
         - { to: unsettled, chance: 1 }
       systems:
-        - { kind: storm, rate: 0, atStart: 1 }
-        - { kind: squall, rate: 2, atStart: 0 }
-        - { kind: shower, rate: 2, atStart: 0 }
+        - { kind: storm, rate: 0.5, atStart: 1, peak: [0, 1], when: always }
+        - { kind: squall, rate: 5, atStart: 0, peak: [0, 1], when: always }
+        - { kind: shower, rate: 10, atStart: 0, peak: [0, 1], when: always }
+        - { kind: squall-line, rate: 2.5, atStart: 0, peak: [0, 1], when: always }
+        - { kind: depression, rate: 0.5, atStart: 0, peak: [0, 1], when: always }
+        - { kind: trough, rate: 2, atStart: 0, peak: [0, 1], when: always }
       wind:
         speed: [16, 24]
         gustFactor: 1.5
@@ -284,7 +301,9 @@ weather:
     cut: 4 # widths
 
   # The kinds of weather system. Each is a pressure shape moving with it: a
-  # dome steeper on its leading edge (the gust front), a low (a core whose
+  # dome steeper on its leading edge (the gust front), a line (a dome
+  # stretched across its motion along its length, its gust front along its
+  # leading edge, in one slot however long it is), a low (a core whose
   # width is the ring of strongest wind, and a broad shallow low about it,
   # so the barometer falls well ahead), or none, a patch that scales the
   # wind. Its wind blows toward lower pressure, turned clockwise by turning:
@@ -292,14 +311,18 @@ weather:
   # the 10–25° over water friction gives (American Meteorological Society,
   # Glossary of Meteorology, cross-isobar angle); a squall's outflow too
   # small and quick for the earth's turning to matter blows almost straight
-  # out of its dome. size is its radius; width its pressure's Gaussian width
-  # as a share of it; wind what it adds at its peak, at full strength, or
+  # out of its dome. size is its radius, a line's half its depth, and
+  # length a line's length; width its pressure's Gaussian width as a share
+  # of its size; wind what it adds at its peak, at full strength, or
   # for a patch factor the wind's share at its core; speed a share of the
-  # base wind, or knots for a kind that keeps to the outer waters.
+  # base wind, or knots for a kind that keeps to the outer waters. name and
+  # key are its words on the chart and in its key, symbol how the chart
+  # draws it, as a weather chart does (WMO-No. 485): a squall line a line of
+  # dash, dot, dot, a trough a dashed line.
   #
   # Where it is born: track wind is born beyond the windward rim and
   # crosses with the wind on a chord; outer beyond the windward rim, then
-  # round the outer waters, one in inwardShare turning in; drift inside the
+  # round the outer waters, turnsIn of them turning in; drift inside the
   # disk, drifting with the wind, by day islands of them over land; a kind
   # with night is born only at night or within dawn minutes of sunrise and
   # lifts lift minutes after it; calmBelow and goneAbove are the spell's
@@ -331,6 +354,9 @@ weather:
   # heavy.
   systems:
     - id: squall
+      name: Squall
+      key: "A squall: a dark cell of violent rain and lightning, its gust front ahead of it."
+      symbol: cell
       shape: dome
       turning: 10 # degrees
       width: 0.7
@@ -340,6 +366,7 @@ weather:
       inward: weak
       gusts: 0.15
       size: [0.3, 0.6] # nautical miles
+      length: [0, 0]
       speed: [0.6, 0.9]
       speedOf: wind
       life: [20, 50] # minutes
@@ -347,6 +374,7 @@ weather:
       factor: [1, 1]
       depth: [2, 4] # hPa
       track: wind
+      turnsIn: 0
       islands: 0
       night: false
       dawn: 0
@@ -371,6 +399,9 @@ weather:
       # low end, about one strike every half minute.
       lightning: { above: 0.7, rate: 2, within: [0, 0.42] }
     - id: shower
+      name: Shower
+      key: "A shower: a heap of cumulus and a few minutes of rain, a puff ahead of it."
+      symbol: heap
       shape: dome
       turning: 10
       width: 0.7
@@ -380,6 +411,7 @@ weather:
       inward: weak
       gusts: 0.1
       size: [0.15, 0.35]
+      length: [0, 0]
       speed: [0.9, 1]
       speedOf: wind
       life: [10, 25]
@@ -387,6 +419,7 @@ weather:
       factor: [1, 1]
       depth: [1, 1]
       track: drift
+      turnsIn: 0
       islands: 0.5
       night: false
       dawn: 0
@@ -403,6 +436,9 @@ weather:
         lead: 2
         dark: 0.4
     - id: storm
+      name: Storm
+      key: "A storm: a low with a gale round its ring of strongest wind, its rain in spiral bands."
+      symbol: spiral
       shape: low
       turning: 70
       width: 0.6
@@ -412,6 +448,7 @@ weather:
       inward: gone
       gusts: 0.04
       size: [1.5, 2.5]
+      length: [0, 0]
       speed: [3, 6]
       speedOf: knots
       life: [60, 180]
@@ -419,6 +456,7 @@ weather:
       factor: [1, 1]
       depth: [10, 20]
       track: outer
+      turnsIn: 0.2
       islands: 0
       night: false
       dawn: 0
@@ -460,6 +498,9 @@ weather:
         band: [5, 6.5] # s
         height: [0.6, 1] # m
     - id: fog
+      name: Fog
+      key: "A fog bank: the visibility down to a boat's length or two."
+      symbol: bank
       shape: none
       turning: 0
       width: 0.5
@@ -469,6 +510,7 @@ weather:
       inward: none
       gusts: 0
       size: [0.4, 1.5]
+      length: [0, 0]
       speed: [0.8, 0.8]
       speedOf: wind
       life: [20, 90]
@@ -476,6 +518,7 @@ weather:
       factor: [0.9, 0.9]
       depth: [0, 0]
       track: drift
+      turnsIn: 0
       islands: 0
       night: true
       dawn: 30 # minutes
@@ -496,6 +539,9 @@ weather:
       # along any line has a closed form.
       fog: { core: [50, 150], height: 40 }
     - id: light-air
+      name: Light air
+      key: "Light air: a patch where the wind dies away."
+      symbol: calm
       shape: none
       turning: 0
       width: 0.5
@@ -505,6 +551,7 @@ weather:
       inward: none
       gusts: 0
       size: [0.2, 0.5]
+      length: [0, 0]
       speed: [1, 1]
       speedOf: wind
       life: [10, 30]
@@ -512,6 +559,7 @@ weather:
       factor: [0.3, 0.5]
       depth: [0, 0]
       track: drift
+      turnsIn: 0
       islands: 0
       night: false
       dawn: 0
@@ -521,6 +569,137 @@ weather:
       rain: { rate: 0, width: 0, bands: 0, turn: 0 }
       cloud: { form: none, base: 0, top: 0, reach: [0, 0], deck: [0, 0], lead: 1, dark: 0 }
 
+    # A low: a storm's shape at half its strength, born in every spell, so
+    # the settled weather has a shape to see and sail to without a gale.
+    # Its swell is half a storm's, and it has no lightning.
+    - id: depression
+      name: Low
+      key: "A low: a storm's shape at half its strength, a ring of fresh wind about a calm centre."
+      symbol: low
+      shape: low
+      turning: 70
+      width: 0.6
+      ahead: 1
+      broad: [0.333, 3]
+      stretch: 1
+      inward: gone
+      gusts: 0.03
+      size: [1.2, 2]
+      length: [0, 0]
+      speed: [3, 6]
+      speedOf: knots
+      life: [60, 150]
+      wind: [10, 16]
+      factor: [1, 1]
+      depth: [5, 10]
+      track: outer
+      turnsIn: 0.33
+      islands: 0
+      night: false
+      dawn: 0
+      lift: [0, 0]
+      calmBelow: 0
+      goneAbove: 0
+      rain: { rate: 6, width: 1.2, bands: 2, turn: 60 }
+      cloud:
+        form: storm
+        base: 400
+        top: 2200
+        reach: [0.6, 0.6]
+        deck: [0.9, 1000]
+        lead: 2
+        dark: 0.6
+        sheets:
+          cirrus: [1.6, 0.8]
+          middle: [1.3, 0.5]
+          low: [1.05, 0.35]
+      swell:
+        period: [5, 5.5]
+        band: [4.5, 6]
+        height: [0.3, 0.5]
+    # A squall line: a line of squalls a few miles long, the most striking
+    # thing on a radar picture, born in unsettled and stormy spells and
+    # ahead of a cold front into a stormy one (week.lineAhead). Its towers
+    # stand along its length and its gust front along its leading edge;
+    # size is half its depth along its motion.
+    - id: squall-line
+      name: Squall line
+      key: "A squall line: squalls in a row miles long, violent rain and a gust front all along it."
+      symbol: dash-dot
+      shape: line
+      turning: 10
+      width: 0.7
+      ahead: 1.6
+      broad: [0, 1]
+      stretch: 1
+      inward: weak
+      gusts: 0.15
+      size: [0.1, 0.15]
+      length: [1.5, 3]
+      speed: [0.7, 0.9]
+      speedOf: wind
+      life: [25, 40]
+      wind: [12, 18]
+      factor: [1, 1]
+      depth: [2, 4]
+      track: wind
+      turnsIn: 0
+      islands: 0
+      night: false
+      dawn: 0
+      lift: [0, 0]
+      calmBelow: 0
+      goneAbove: 0
+      rain: { rate: 60, width: 0.5, bands: 0, turn: 0 }
+      cloud:
+        form: cumulonimbus
+        base: 350
+        top: 2500
+        reach: [0.4, 1]
+        deck: [0.6, 600]
+        lead: 2
+        dark: 0.75
+      lightning: { above: 0.7, rate: 3, within: [0, 0.5] }
+    # A trough: a line of showers, as trade-wind weather comes, drifting
+    # with the wind.
+    - id: trough
+      name: Trough
+      key: "A trough: a line of showers drifting with the wind, a shift and a puff as it passes."
+      symbol: dashed
+      shape: line
+      turning: 10
+      width: 0.7
+      ahead: 1.3
+      broad: [0, 1]
+      stretch: 1
+      inward: weak
+      gusts: 0.08
+      size: [0.15, 0.25]
+      length: [2, 4]
+      speed: [0.9, 1]
+      speedOf: wind
+      life: [30, 60]
+      wind: [4, 8]
+      factor: [1, 1]
+      depth: [1, 1]
+      track: drift
+      turnsIn: 0
+      islands: 0
+      night: false
+      dawn: 0
+      lift: [0, 0]
+      calmBelow: 0
+      goneAbove: 0
+      rain: { rate: 5, width: 0.5, bands: 0, turn: 0 }
+      cloud:
+        form: cumulus
+        base: 400
+        top: 1300
+        reach: [0.4, 0.4]
+        deck: [0, 0]
+        lead: 2
+        dark: 0.4
+
   # The week: each world's weather, made with it from its seed for its
   # epoch and end, and stored. Its spells are a chain from the regimes'
   # transition table, each spell's length drawn in its regime's range,
@@ -528,18 +707,31 @@ weather:
   # disk at every change into or out of a frontal regime, its line crossing
   # the centre at the change, moving toward where the new spell's wind
   # blows within spread, at frontSpeed; one front is on the disk at a time.
-  # As a front passes the wind veers by veer; at other changes it moves
-  # either way by up to swing. A week is drawn again until it opens with
+  # A change from a regime of no front into a frontal one comes as a warm
+  # front, its rain ahead of its line and the wind veering by warmVeer as
+  # it passes; every other front is a cold front, its rain behind its line,
+  # the gusts surging, the wind veering by veer. At other changes the wind
+  # moves either way by up to swing. A week is drawn again until it opens with
   # opening hours of weather of no frontal regime and no front on the disk,
   # closes with closing hours of one spell of closingRegime, has a spell of
   # no frontal regime fair hours long or more, and, for a world of
   # sharesFrom days or more, keeps each regime's share within shares; after
   # draws, the best drawn is kept.
+  # A regime's systems are born at rate an hour, and atStart as a spell
+  # begins, their peak wind drawn from the peak shares of their kind's
+  # range, when at any time, by day or at night only.
   # Each system wobbles off its track by up to wobble, and its strength by
-  # strengthWobble, each with periods in wobblePeriod, which a forecast
-  # does not know; at most systemsMost
-  # are on the disk at once. Storms keep to the outer waters. seed draws a
-  # developer's held spells.
+  # strengthWobble, each with periods in wobblePeriod; at most systemsMost
+  # are on the disk at once, and at most storms.most of storms.kind. The
+  # kinds of quiet are not born in the world's first quiet.hours, nor in
+  # its closing spell, and in a spell of a regime of no front no storm
+  # turns inward: the rush to discover, the closing race and the fair spell
+  # stay fair. Ahead of every cold front into lineAhead.into a line of
+  # lineAhead.kind is born, ahead of its line, moving with it. Wherever the
+  # disk would be empty after the opening, nothing within the lip, a system
+  # of fill is born ten minutes before. The kinds
+  # that keep to the outer waters are born within outer of the centre.
+  # seed draws a developer's held spells.
   week:
     opening: 2 # hours
     closing: 2 # hours
@@ -550,52 +742,37 @@ weather:
     margin: 24 # hours
     draws: 1000
     veer: [40, 90] # degrees
+    warmVeer: [20, 40] # degrees
     swing: 30 # degrees
     frontSpeed: [4, 8] # knots
     frontTrough: [3, 6] # hPa
     spread: 15 # degrees
-    # A wobble of 0.5 NM over 6–12 hours puts the true track inside the
-    # forecast's cones, which grow 0.34 NM an hour from nothing, four times
-    # in five at every lead: a wobble quicker than the forecast's horizon
-    # moves a system anywhere within it soon after an issue, so no cone
-    # could grow with the lead and hold it.
+    # A wobble of 0.5 NM over 6–12 hours bends a system's track slowly off
+    # its line, as a real one wanders.
     wobble: 0.5 # nautical miles
     wobblePeriod: [360, 720] # minutes
     strengthWobble: 0.15
-    systemsMost: 16
+    systemsMost: 24
+    storms: { kind: storm, most: 2 }
+    quiet: { hours: 2, kinds: [storm, squall-line] }
+    lineAhead: { kind: squall-line, into: stormy, ahead: [0.5, 1] } # nautical miles
+    fill: depression
     outer: [3, 4.5] # nautical miles
-    inwardShare: 0.2
     seed: 1852
 
   # The forecast, issued at each every minutes of world time from the
   # world's epoch for the next horizon minutes in steps of step minutes,
-  # the same on the server, every phone and the sandbox. It knows the
-  # systems alive at the issue, where they are then, moved on by their
-  # planned tracks; the lows to be born within its horizon, by their plan,
-  # forming; the spells, without their shifts, a spell not yet begun with
-  # an error of the forecast's own, drawn from its seed, spell.direction
-  # degrees and a spell.speed share of its speed (standard deviations); and
-  # each front's line moved on at its speed times 1 + cone.front z, z drawn
-  # once a front. Of what is born after the issue and not a low it gives the
-  # risk, never the place: a real forecast eighteen hours ahead, the game's
-  # ninety minutes at the sky's pace, places a front or a low, never one
-  # shower (Met Office, "Only significant factors included: rain, showers
-  # …, squall, fog").
-  #
-  # Its cones: about each step's forecast position a circle cone.perHour
-  # nautical miles for each hour of lead, swept along the track as the
-  # National Hurricane Center's cone is; a low forming, cone.forming
-  # nautical miles whatever the lead; a front, a band ±1.2816 cone.front v
-  # L about its forecast line, v its speed and L the lead. Each holds the
-  # truth four times in five at each step.
-  #
-  # Its risks: the sky each regime brings that the forecast cannot place,
-  # in the words of a place's box, and the marks the chart draws for it:
-  # fog patches where the fog's own rule lets a bank be born, scattered
-  # showers, squalls from the windward rim, light air.
+  # the same on the server, every phone and the sandbox. It is the truth:
+  # the records of every system alive at the issue or born within its
+  # horizon and one issue more, wobble and all, so the chart places every
+  # shower where it will be, to the minute; the spells as they will blow,
+  # their shifts named, not placed, as the gusts are left out; and each
+  # front's line where it will be. Keel is not meant to be hard: a sailor
+  # planning a route to a storm must know where the storm will be.
   #
   # Its gale warnings: from the synoptic wind of each issue (the spells,
-  # the fronts, the lows and the patches, not the squalls and showers) at
+  # the fronts, the lows and the patches, not the squalls, showers and
+  # lines) at
   # each step, on a grid of gale.grid nautical miles over the water within
   # gale.within: a gale where the mean wind reaches gale.mean knots or the
   # typical strongest gust gale.gust (Met Office: gale "force 8 (34-40
@@ -613,15 +790,8 @@ weather:
     every: 10 # minutes
     horizon: 90 # minutes
     step: 10 # minutes
-    cone: { perHour: 0.34, forming: 0.47, front: 0.04 }
-    spell: { direction: 15, speed: 0.1 }
     gale: { mean: 34, gust: 43, quantile: 0.532, grid: 0.25, within: 4.2 }
     outlook: { samples: [0, 30, 60, 90], turn: 45, forces: 2, imminent: 30, soon: 60 }
-    risks:
-      - { regime: settled, sky: fog patches, marks: [fog-patches, calms] }
-      - { regime: trade, sky: showers, marks: [showers] }
-      - { regime: unsettled, sky: squally showers, marks: [showers, squalls] }
-      - { regime: stormy, sky: squalls with heavy rain, marks: [showers, squalls] }
 
   # The systems' keyframes: the simulation reads each system's place,
   # motion, strength and size from the week every so often, and the server
@@ -692,6 +862,7 @@ weather:
     frontMiddle: [1.5, 0.2, 0.3, 0.9] # nautical miles
     frontLow: [0.15, 0.38] # nautical miles
     frontRain: [10, 0.18, 0.17] # mm an hour; nautical miles
+    frontWarm: [5, 0.6, 0.45] # mm an hour; nautical miles
     rainWords: [2.5, 10, 50] # mm an hour
     rainExtinction: [0.16, 0.74]
     rainScale: 0.4

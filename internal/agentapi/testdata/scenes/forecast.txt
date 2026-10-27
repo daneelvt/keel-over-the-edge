@@ -1,0 +1,70 @@
+# about 2780 tokens
+Forecast issued 3 minutes ago: the truth for the next 90 minutes, where every system and front will be. Gusts and the wind's shifts are not forecast. Bearings and distances are from you.
+Gale warning: Southwesterly gale 8 imminent, in the west outer waters
+Systems now, the strongest kinds first (13):
+ Storm · 37 kn, gusts 46 kn, F8 · 55°37′N 268°46′, 279° 3.8 NM · moving N at 4 kn · 30 min: gone by then
+ Low · 36 kn, gusts 44 kn, F8 · 62°02′N 221°52′, 236° 2.6 NM · moving NW at 3 kn · 30 min: 267° 3.0 NM · 60 min: 292° 3.4 NM · 90 min: gone by then
+ Trough, 3.9 NM long · 26 kn, gusts 32 kn, F6 · 77°40′N 223°50′, 258° 1.1 NM · moving NNE at 13 kn · 30 min: gone by then
+ Squall line, 2.9 NM long · 33 kn, gusts 43 kn, F7 · 40°03′N 234°40′, 243° 4.9 NM · moving NNE at 10 kn · 30 min: 324° 2.9 NM · 60 min: gone by then
+ Shower · 20 kn, gusts 24 kn, F5 · 72°30′N 217°04′, 241° 1.5 NM · moving NNE at 13 kn · 30 min: gone by then
+ Squall · 34 kn, gusts 43 kn, F8 · 57°40′N 133°07′, 127° 2.6 NM · moving NNE at 10 kn · 30 min: gone by then
+ Squall · 43 kn, gusts 56 kn, F9 · 54°25′N 212°51′, 223° 3.2 NM · moving NNE at 11 kn · 30 min: gone by then
+ Squall · 36 kn, gusts 49 kn, F8 · 49°23′N 188°50′, 195° 3.5 NM · moving NNE at 10 kn · 30 min: gone by then
+ Shower · 23 kn, gusts 29 kn, F6 · 54°47′N 042°12′, 033° 3.9 NM · moving NNE at 14 kn · 30 min: gone by then
+ Squall · 18 kn, gusts 25 kn, F5 · 48°32′N 275°37′, 283° 4.5 NM · moving NNE at 12 kn · 30 min: gone by then
+ Squall · 34 kn, gusts 46 kn, F8 · 35°42′N 208°55′, 215° 5.0 NM · moving NNE at 11 kn · 30 min: 326° 1.6 NM · 60 min: gone by then
+ Shower · 25 kn, gusts 33 kn, F6 · 39°17′N 349°39′, 348° 5.8 NM · moving NNE at 13 kn · 30 min: gone by then
+ Shower · 24 kn, gusts 29 kn, F6 · 28°31′N 008°12′, 005° 6.8 NM · moving NNE at 13 kn · 30 min: gone by then
+Born in the next 90 minutes (50):
+ Low · born in 9 min at 48°25′N 206°46′, 215° 3.7 NM · moving WNW at 4 kn · 30 min: 236° 4.0 NM · 60 min: 264° 4.3 NM · 90 min: 290° 4.7 NM
+ Low · born in 52 min at 50°24′N 233°37′, 244° 3.9 NM · moving NW at 4 kn · 60 min: 253° 3.9 NM · 90 min: 285° 4.1 NM
+ Low · born in 86 min at 63°39′N 209°36′, 224° 2.3 NM · moving WNW at 4 kn · 90 min: 231° 2.4 NM
+ Squall line, 2.9 NM long · born in 45 min at 34°40′N 236°52′, 244° 5.4 NM · moving NNE at 12 kn · 60 min: 277° 4.2 NM · 90 min: gone by then
+ Trough, 3.9 NM long · born in 50 min at 57°46′N 028°38′, 020° 3.7 NM · moving NNE at 13 kn · 60 min: 021° 6.1 NM · 90 min: gone by then
+ Squall line, 1.7 NM long · born in 53 min at 40°17′N 249°22′, 257° 5.0 NM · moving NNE at 11 kn · 60 min: 273° 4.3 NM · 90 min: gone by then
+ Trough, 3.7 NM long · born in 73 min at 45°38′N 339°33′, 339° 5.1 NM · moving NNE at 14 kn · 90 min: 002° 8.2 NM
+ Trough, 3.8 NM long · born in 74 min at 50°38′N 138°40′, 135° 3.3 NM · moving NNE at 14 kn · 90 min: 068° 3.5 NM
+ Trough, 3.1 NM long · born in 87 min at 78°15′N 283°33′, 303° 1.7 NM · moving NNE at 13 kn · 90 min: 325° 1.9 NM
+ Squall line, 2.7 NM long · born in 88 min at 35°06′N 180°43′, 184° 4.9 NM · moving NNE at 12 kn · 90 min: 183° 4.4 NM
+ Squall line, 3.0 NM long · born in 90 min at 26°51′N 184°59′, 188° 5.7 NM · moving NNE at 12 kn · 90 min: 188° 5.6 NM
+ Squall · born in 11 min at 29°42′N 203°46′, 209° 5.6 NM · moving NNE at 12 kn · 30 min: 234° 1.9 NM · 60 min: gone by then
+ Shower · born in 11 min at 48°39′N 318°58′, 322° 4.8 NM · moving NNE at 14 kn · 30 min: 349° 8.1 NM · 60 min: gone by then
+ Shower · born in 11 min at 45°50′N 359°57′, 357° 5.1 NM · moving NNE at 14 kn · 30 min: 013° 9.0 NM · 60 min: gone by then
+ Shower · born in 15 min at 81°07′N 167°01′, 198° 0.2 NM · moving NNE at 14 kn · 30 min: gone by then
+ Shower · born in 19 min at 58°52′N 249°38′, 262° 3.2 NM · moving NNE at 13 kn · 30 min: 311° 2.6 NM · 60 min: gone by then
+ Shower · born in 25 min at 59°29′N 356°18′, 353° 3.7 NM · moving NNE at 13 kn · 30 min: 002° 4.8 NM · 60 min: gone by then
+ Shower · born in 27 min at 49°21′N 331°07′, 332° 4.8 NM · moving NNE at 14 kn · 30 min: 339° 5.4 NM · 60 min: gone by then
+ Shower · born in 27 min at 56°10′N 347°47′, 346° 4.1 NM · moving NNE at 14 kn · 30 min: 352° 4.6 NM · 60 min: gone by then
+ Squall · born in 28 min at 43°00′N 248°24′, 257° 4.8 NM · moving NNE at 10 kn · 30 min: 261° 4.5 NM · 60 min: gone by then
+ Squall · born in 34 min at 31°42′N 218°42′, 225° 5.5 NM · moving NNE at 10 kn · 60 min: 270° 2.3 NM · 90 min: gone by then
+ Shower · born in 37 min at 59°05′N 225°23′, 238° 2.9 NM · moving NNE at 13 kn · 60 min: gone by then
+ Squall · born in 37 min at 36°53′N 182°20′, 186° 4.7 NM · moving NNE at 9 kn · 60 min: 151° 1.8 NM · 90 min: gone by then
+ Squall · born in 40 min at 25°21′N 209°04′, 214° 6.1 NM · moving NNE at 10 kn · 60 min: 224° 2.6 NM · 90 min: gone by then
+ Shower · born in 42 min at 66°43′N 346°39′, 345° 3.0 NM · moving NNE at 13 kn · 60 min: gone by then
+ Squall · born in 43 min at 34°19′N 232°55′, 240° 5.4 NM · moving NNE at 10 kn · 60 min: 271° 4.0 NM · 90 min: 331° 5.5 NM
+ Shower · born in 50 min at 49°26′N 044°47′, 036° 4.4 NM · moving NNE at 13 kn · 60 min: 032° 6.6 NM · 90 min: gone by then
+ Shower · born in 52 min at 53°03′N 080°36′, 070° 3.6 NM · moving NNE at 13 kn · 60 min: 058° 5.1 NM · 90 min: gone by then
+ Shower · born in 54 min at 66°07′N 302°08′, 310° 3.0 NM · moving NNE at 13 kn · 60 min: 332° 3.7 NM · 90 min: gone by then
+ Shower · born in 59 min at 57°31′N 001°30′, 357° 3.9 NM · moving NNE at 13 kn · 60 min: 000° 4.2 NM · 90 min: gone by then
+ Shower · born in 60 min at 67°27′N 230°27′, 249° 2.2 NM · moving NNE at 14 kn · 60 min: 251° 2.1 NM · 90 min: gone by then
+ Squall · born in 62 min at 24°15′N 187°39′, 191° 6.0 NM · moving NNE at 10 kn · 90 min: 173° 1.4 NM
+ Shower · born in 64 min at 55°57′N 244°55′, 257° 3.4 NM · moving NNE at 13 kn · 90 min: gone by then
+ Shower · born in 66 min at 50°27′N 199°58′, 208° 3.5 NM · moving NNE at 14 kn · 90 min: gone by then
+ Shower · born in 68 min at 70°38′N 192°29′, 209° 1.4 NM · moving NNE at 14 kn · 90 min: gone by then
+ Shower · born in 69 min at 59°51′N 314°36′, 319° 3.7 NM · moving NNE at 14 kn · 90 min: gone by then
+ Shower · born in 71 min at 50°22′N 317°46′, 321° 4.6 NM · moving NNE at 13 kn · 90 min: gone by then
+ Shower · born in 73 min at 78°18′N 356°28′, 349° 1.8 NM · moving NNE at 14 kn · 90 min: 006° 5.8 NM
+ Shower · born in 75 min at 58°51′N 234°28′, 247° 3.0 NM · moving NNE at 14 kn · 90 min: 330° 2.3 NM
+ Shower · born in 76 min at 66°37′N 191°44′, 204° 1.8 NM · moving NNE at 14 kn · 90 min: gone by then
+ Squall · born in 77 min at 31°05′N 220°52′, 227° 5.6 NM · moving NNE at 12 kn · 90 min: 245° 3.2 NM
+ Shower · born in 82 min at 47°29′N 146°29′, 144° 3.6 NM · moving NNE at 13 kn · 90 min: 114° 3.2 NM
+ Shower · born in 82 min at 60°12′N 076°57′, 063° 2.9 NM · moving NNE at 13 kn · 90 min: 046° 4.4 NM
+ Squall · born in 82 min at 28°19′N 181°19′, 184° 5.5 NM · moving NNE at 12 kn · 90 min: 175° 4.1 NM
+ Shower · born in 85 min at 65°07′N 201°39′, 216° 2.0 NM · moving NNE at 13 kn · 90 min: 223° 0.7 NM
+ Shower · born in 87 min at 58°29′N 324°51′, 327° 3.8 NM · moving NNE at 14 kn · 90 min: 337° 4.5 NM
+ Shower · born in 88 min at 73°17′N 162°33′, 166° 1.0 NM · moving NNE at 13 kn · 90 min: 129° 0.6 NM
+ Shower · born in 88 min at 52°31′N 103°58′, 094° 3.4 NM · moving NNE at 14 kn · 90 min: 086° 3.5 NM
+ Shower · born in 88 min at 56°18′N 202°59′, 213° 2.9 NM · moving NNE at 14 kn · 90 min: 215° 2.5 NM
+ Shower · born in 90 min at 49°19′N 222°22′, 232° 3.8 NM · moving NNE at 13 kn · 90 min: 233° 3.7 NM
+Fronts:
+ A warm front from the SSW, crossing the disk, past you

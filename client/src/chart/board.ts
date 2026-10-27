@@ -2,7 +2,8 @@
 
 // The harbourmaster's board, as the inshore waters forecast is laid out
 // (Met Office): the gale warning in force; the general situation, the
-// latest issue's lows, fronts and squalls in plain words; the port's
+// latest issue's lows, fronts and squalls in plain words, from the
+// forecast's own records of the systems and its spells; the port's
 // outlook for the next ninety minutes; and its weather now, its box. A
 // real harbour posts it at its office ("Weather forecasts will be
 // displayed at the Marina Office", Whitby, 2008).
@@ -11,13 +12,16 @@ import { catalog } from '../catalog';
 import type { ForecastTold } from '../net/messages';
 import { issueOf, stepsOf } from '../predict/forecast';
 import { RECORDS } from '../predict/layout.gen';
+import type { Physics } from '../predict/physics';
 import type { Forecasting } from './forecasting';
 import { outlookAt, warningInForce, weatherAt } from './placeweather';
 import type { ChartStore } from './store';
 import { kindDraws } from './weather';
 import { type Box, boxOf, generalSituation, type Situation, wordsOf } from './words';
 
-const S = RECORDS.forecastSystem;
+const R = RECORDS.systemRecord;
+const Y = RECORDS.system;
+const H = RECORDS.forecastHead;
 const P = RECORDS.spell;
 const MINUTE = 60 * 30;
 const TURN = 65536;
@@ -31,18 +35,27 @@ export interface Board {
   now: Box;
 }
 
-/** The general situation's lows, fronts and squalls, from an issue. */
+/**
+ * The general situation's lows, fronts and squalls, from an issue: its
+ * storms and lows from their records, each where it is at the issue, or a
+ * new low where it is born within the horizon; its fronts from its spells;
+ * squalls if a squall or a squall line lives within the horizon, from the
+ * spell's wind.
+ */
 export function situationOf(
   f: ForecastTold,
   port: { name: string; east: number; north: number },
+  physics: Physics,
   pressureAt: (east: number, north: number) => number,
   reach: number,
-  regime: number,
 ): Situation {
   const kinds = kindDraws(catalog.weather.systems);
+  const squally = catalog.weather.systems.map((k) => k.cloud.form === 'cumulonimbus');
   const zones = catalog.world.zones;
   const { steps, step } = stepsOf(f);
   const issue = issueOf(f);
+  const horizon = issue + (steps - 1) * step;
+  const origin = f.head[H.origin] ?? 0;
   const s: Situation = {
     port: port.name,
     centre: zones.centre * 1852,
@@ -52,30 +65,36 @@ export function situationOf(
     squalls: false,
     from: 0,
   };
-  for (const x of f.systems) {
-    if (kinds[x[S.kind] ?? 0]?.draw !== 'low') {
+  const n = Math.min(f.head[H.nSystems] ?? f.systems.length, f.systems.length);
+  for (let i = 0; i < n; i++) {
+    const x = f.systems[i] ?? [];
+    const kind = x[R.kind] ?? 0;
+    const born = (x[R.born] ?? 0) + origin;
+    const gone = (x[R.gone] ?? 0) + origin;
+    if (gone <= issue || born > horizon) {
       continue;
     }
-    let k = 0;
-    while (k < steps && !((x[S.strength + k] ?? 0) > 0)) {
-      k++;
+    if (squally[kind] === true) {
+      s.squalls = true;
     }
-    if (k >= steps) {
+    if (!((kinds[kind]?.ring ?? 0) > 0)) {
       continue;
     }
-    const east = x[S.east + k] ?? 0;
-    const north = x[S.north + k] ?? 0;
+    // Where it is at the issue, or just after it is born.
+    const at = Math.max(born + 1, issue);
+    const y = physics.systemAt(x, at - origin);
+    const east = (y[Y.east] ?? 0) / 4;
+    const north = (y[Y.north] ?? 0) / 4;
     s.lows?.push({
-      forming: (x[S.forming] ?? 0) !== 0,
-      at: (k * step) / MINUTE,
+      forming: born > issue,
+      at: (at - issue) / MINUTE,
       pressure: pressureAt(east, north),
       east,
       north,
-      heading: ((x[S.heading + k] ?? 0) / TURN) * 2 * Math.PI,
-      speed: (x[S.speed + k] ?? 0) * 0.01,
+      heading: ((y[Y.heading] ?? 0) / TURN) * 2 * Math.PI,
+      speed: (y[Y.speed] ?? 0) * 0.01,
     });
   }
-  const horizon = issue + (steps - 1) * step;
   let spellFrom = 0;
   for (const sp of f.spells) {
     if ((sp[P.begin] ?? 0) <= issue) {
@@ -95,10 +114,6 @@ export function situationOf(
     }
     s.fronts?.push({ from: toward + Math.PI, at: at <= horizon ? (at - issue) / MINUTE : -1 });
   }
-  const marks: readonly string[] =
-    catalog.weather.forecast.risks.find((r) => r.regime === catalog.weather.regimes[regime]?.id)
-      ?.marks ?? [];
-  s.squalls = marks.includes('squalls');
   s.from = spellFrom;
   return s;
 }
@@ -117,18 +132,17 @@ export async function boardOf(
   const words = wordsOf(catalog.weather);
   const points = pointsAbout(port.east, port.north);
   const now = boxOf(
-    weatherAt(fields, src, { kind: 'now', tick: src.tick(), issue: null, step: 0 }, points),
+    weatherAt(fields, src, { kind: 'now', tick: src.tick(), minutes: 0, issue: null }, points),
     words,
   );
   const outlook = outlookAt(fields, src, points).text;
   fields.forecastAt(latest, issueOf(latest));
-  const regime = fields.physics.regimeAt();
   const situation = situationOf(
     latest,
     port,
+    fields.physics,
     (e, n) => fields.physics.pressure(e, n),
     fields.physics.frontReach(),
-    regime,
   );
   return {
     port: port.name,

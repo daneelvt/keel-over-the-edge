@@ -17,7 +17,7 @@ func testSystems(t testing.TB) (*WeatherPrepared, map[string]int32) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shapes := map[string]float64{"none": ShapeNone, "dome": ShapeDome, "low": ShapeLow}
+	shapes := map[string]float64{"none": ShapeNone, "dome": ShapeDome, "low": ShapeLow, "line": ShapeLine}
 	inward := map[string]float64{"none": InwardNone, "weak": InwardWeak, "gone": InwardGone}
 	index := map[string]int32{}
 	for i, k := range c.Weather.Systems {

@@ -519,6 +519,9 @@ func (t *Timeline) record(s bus.System) physics.SystemRecord {
 		Track: physics.TrackLine, Heading: float64(s.Heading), Speed: float64(s.Speed),
 		Size: math.Round((kind.Size[0] + kind.Size[1]) / 2),
 	}
+	if kind.Shape == physics.ShapeLine {
+		r.Length = math.Round((kind.Length[0] + kind.Length[1]) / 2)
+	}
 	if kind.Shape == physics.ShapeNone {
 		r.Peak = math.Round(float64(500 * (kind.Factor[0] + kind.Factor[1])))
 	} else {
@@ -530,7 +533,7 @@ func (t *Timeline) record(s bus.System) physics.SystemRecord {
 	// by its width over its steepness ahead, reaches the point then.
 	sin, cos := physics.SinCos(float64(float64(s.Heading) * (2 * math.Pi / turn)))
 	d := float64(float64(float64(float64(s.Speed)*physics.SeaSpeedStep)*physics.Dt) * float64(s.At-s.Born))
-	if kind.Shape == physics.ShapeDome && kind.Ahead > 0 {
+	if (kind.Shape == physics.ShapeDome || kind.Shape == physics.ShapeLine) && kind.Ahead > 0 {
 		d += float64(kind.Width*r.Size) / kind.Ahead
 	}
 	r.East = float64(s.East) - math.Round(float64(quarterMetres*float64(d*sin)))

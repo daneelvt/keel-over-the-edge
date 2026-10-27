@@ -5,8 +5,10 @@ package main
 import (
 	"context"
 	"math"
+	"strings"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
@@ -14,17 +16,20 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
+	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
 // A world's forecast is issued off the tick at each boundary of its every
-// (internal/forecast), sent to every connection, and each new gale warning
-// told once in the news's notices to mariners, where it blows from the
-// nearest charted island or place: the chart is shared, so the place is
-// everyone's, and the news may name it.
+// (internal/forecast), sent to every connection, and each of the week's
+// storms told once in the news's notices to mariners as it forms: where it
+// is and which way it moves, in the general situation's words. A gale
+// warning stays in the forecast and on the chart, told from the nearest
+// charted island or place, but not in the news: with a storm alive about
+// half the time it would never be lifted.
 
 // forecastsOf is a world's forecast issuer.
 func (p *process) forecastsOf(rw *readyWorld, row store.World, tl *weather.Timeline) *forecast.Issuer {
-	words := weather.WordsOf(p.cat)
+	sit := situationOf(p.cat, rw.bundle)
 	is := forecast.New(forecast.Config{
 		Timeline: tl, Ground: landOf(rw.terrain),
 		Nearest: func(east, north float64) forecast.Place {
@@ -34,7 +39,7 @@ func (p *process) forecastsOf(rw *readyWorld, row store.World, tl *weather.Timel
 			}
 			return forecast.Place{Subject: e.GetSubject(), Number: e.GetNumber()}
 		},
-		Warned: func(ctx context.Context, x *forecast.Issue) { p.galeNews(ctx, row, rw, tl, x, &words) },
+		Formed: func(ctx context.Context, s forecast.Storm) { p.stormNews(ctx, row, s, &sit) },
 		Log:    p.log,
 	})
 	is.SetEnd(lastTick(row.EndsAt, row.Epoch))
@@ -74,41 +79,54 @@ func nearestCharted(entries []*pb.ChartEntry, east, north float64) *pb.ChartEntr
 	return best
 }
 
-// warningOf is an issue's gale warning in words' terms, with its place's
-// name from the chart.
-func warningOf(x *forecast.Issue, tl *weather.Timeline, entries []*pb.ChartEntry) weather.Warning {
-	g := x.Gale
-	w := weather.Warning{
-		From: g.From, Force: int(g.Force), East: g.East, North: g.North,
-		First: float64(int64(g.First)*tl.Prepared().ForecastStep()) / (60 * physics.StepsPerSecond),
+// situationOf is the general situation a storm's forming is told in: the
+// main port's name and the zones about it, with no lows or fronts.
+func situationOf(cat *catalog.Catalog, b *worldgen.Bundle) weather.Situation {
+	s := weather.Situation{Port: cat.World.MainPort.Name, Centre: cat.World.Zones.Centre * 1852, Middle: cat.World.Zones.Middle * 1852}
+	if b != nil && len(b.Islands) > 0 {
+		s.Port = b.MainPort().Name
 	}
-	for _, e := range entries {
-		if e.GetSubject() == x.Place.Subject && e.GetNumber() == x.Place.Number {
-			w.Place, w.PlaceEast, w.PlaceNorth = e.GetName(), float64(e.GetEast())/100, float64(e.GetNorth())/100
-			break
-		}
-	}
-	return w
+	return s
 }
 
-// galeNews tells the news of a gale warning, once: its item's number is
-// the issue it came into force at, counted from the world's epoch.
-func (p *process) galeNews(ctx context.Context, row store.World, rw *readyWorld, tl *weather.Timeline, x *forecast.Issue, words *weather.Words) {
+// stormKind is the week's storms' kind as the news names it, with its
+// article: "a storm".
+func stormKind(cat *catalog.Catalog) string {
+	if i := cat.Weather.Week.Storms.Kind; i != "" {
+		for _, k := range cat.Weather.Systems {
+			if k.ID == i {
+				return "a " + strings.ToLower(k.Name)
+			}
+		}
+	}
+	return "a storm"
+}
+
+// stormNumber is a storm's item's number, the same however often it is
+// told: the minute of world time it was born at, counted from the epoch,
+// and its slot, two storms never born in the same slot in the same minute.
+func stormNumber(s forecast.Storm) int32 {
+	return int32(s.Born/(60*physics.StepsPerSecond))*physics.MaxSystems + s.Slot
+}
+
+// stormNews tells the news of a storm formed, once: its item's number is
+// the storm's own, so a second telling, after a restart, writes nothing.
+func (p *process) stormNews(ctx context.Context, row store.World, s forecast.Storm, sit *weather.Situation) {
 	column := worldColumn(p.cat)
 	if column == "" {
 		return
 	}
-	w := warningOf(x, tl, rw.charts.model.Entries())
+	kind := stormKind(p.cat)
 	n := store.GaleNews{
-		Column: column, Number: int32(x.Key / max(tl.Prepared().ForecastEvery(), 1)), Title: "GALE WARNING",
-		What: weather.WarningText(&w, words), X: x.Gale.East, Y: x.Gale.North,
+		Column: column, Number: stormNumber(s), Title: strings.ToUpper(strings.TrimPrefix(kind, "a ")),
+		What: sit.FormedText(kind, s.East, s.North, s.Heading, s.Speed), X: s.East, Y: s.North,
 	}
 	written, err := p.db.WriteGaleNews(ctx, p.lease, row.ID, n)
 	if err != nil {
-		p.log.Warn("the gale warning cannot be written to the news", "world", row.Number, "warning", n.Number, "err", err)
+		p.log.Warn("the storm's forming cannot be written to the news", "world", row.Number, "storm", n.Number, "err", err)
 		return
 	}
 	if written {
-		p.log.Info("a gale warning is in the news", "world", row.Number, "warning", n.Number, "what", n.What)
+		p.log.Info("a storm's forming is in the news", "world", row.Number, "storm", n.Number, "what", n.What)
 	}
 }

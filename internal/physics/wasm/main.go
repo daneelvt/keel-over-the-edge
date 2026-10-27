@@ -1287,7 +1287,8 @@ func forecastPrepare() {
 }
 
 // forecastHead is the forecast's head; forecastSpells its spells, each a
-// spell record; forecastSystem its first system, the rest after it.
+// spell record; forecastSystem its first system's record, a systemRecord,
+// the rest after it.
 //
 //go:wasmexport forecastHead
 func forecastHeadAddr() uint32 { return addr(unsafe.Pointer(&fcast.Head)) }
@@ -1299,14 +1300,15 @@ func forecastSpellsAddr() uint32 { return addr(unsafe.Pointer(&fcast.Spells)) }
 func forecastSystemAddr() uint32 { return addr(unsafe.Pointer(&fcast.Systems)) }
 
 // forecastMake makes the forecast issued at a tick, for a world whose last
-// tick is end (0 for none), from the spells in play and the records the
-// module holds, each record's slot its place: as the server makes its own
-// from the week, for a client with no server.
+// tick is end (0 for none) and whose systems' keyframes are every ticks
+// apart, from the spells in play and the records the module holds, each
+// record's slot its place: as the server makes its own from the week, for
+// a client with no server.
 //
 //go:wasmexport forecastMake
-func forecastMake(issue, end float64) {
+func forecastMake(issue, end, every float64) {
 	in := physics.ForecastInput{
-		Issue: issue, End: end,
+		Issue: issue, End: end, Every: every,
 		Spells: weather.Spells[:weather.Count], Records: weather.Records[:weather.NRecords],
 	}
 	physics.MakeForecast(&weatherPrepared, &in, &fcast)
@@ -1322,6 +1324,12 @@ func forecastAt(tick float64) {
 	physics.ForecastAt(&weather, &fcast, tick)
 	stepFresh = false
 }
+
+// weatherKeys is the module's keyframes, as forecastAt makes them: each its
+// tick and then its systems, a system record each, in their slots.
+//
+//go:wasmexport weatherKeys
+func weatherKeysAddr() uint32 { return addr(unsafe.Pointer(&weather.Keys)) }
 
 // synoptic leaves the squalls and showers out of the wind, while on: the
 // synoptic wind, which a gale warning reads.

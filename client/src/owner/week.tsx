@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The week's weather on the world page: its spells as a strip coloured by
-// regime, its fronts over the centre, its storms' births and the world's
-// end marked on it, and a cursor at the tick now. A click or a drag on the
+// regime, its fronts over the centre, warm or cold, its storms' and lows'
+// births and the world's end marked on it, and a cursor at the tick now. A click or a drag on the
 // strip, or its arrow keys, shows the weather at another tick, on the map
 // as on the card; a double click, Escape or the button goes back to now and
 // follows it. Below the strip the spell in effect, the next and when, the
@@ -101,18 +101,23 @@ export function useWeather(
 function spellWords(w: WeatherWeek, s: Spell): string {
   return (
     `${w.regimes[s.regime] ?? s.regime}: ${s.knots.toFixed(1)} kn from ${s.from.toFixed(0)}°, ` +
-    `${s.pressure.toFixed(1)} hPa${s.front ? ', a front' : ''}${s.held ? ', held by the developer' : ''}`
+    `${s.pressure.toFixed(1)} hPa${s.front ? (s.warm ? ', a warm front' : ', a cold front') : ''}${s.held ? ', held by the developer' : ''}`
   );
 }
 
-/** The names of the kinds that are lows, the week's storms. */
-function lows(w: WeatherWeek): string {
-  return (
+/** The names of the week's storms' kind, and of the kinds of its other lows. */
+function lowNames(w: WeatherWeek): { storm: string; lows: string } {
+  const names = (storm: boolean, none: string): string =>
     w.kinds
-      .filter((k) => k.shape === 'low')
-      .map((k) => k.id)
-      .join(' or ') || 'a low'
-  );
+      .filter((k) => k.shape === 'low' && k.storm === storm)
+      .map((k) => k.name || k.id)
+      .join(' or ') || none;
+  return { storm: names(true, 'Storm'), lows: names(false, 'Low') };
+}
+
+/** A kind's name, by its index. */
+function kindName(w: WeatherWeek, k: number): string {
+  return w.kinds[k]?.name || w.kinds[k]?.id || String(k);
 }
 
 function capital(words: string): string {
@@ -161,6 +166,7 @@ function Strip({
     const left = (t: number): string => along(t, start, span);
     const width = (ticks: number): string => `${(100 * Math.max(0, ticks)) / span}%`;
     const ms = (t: number): number => msOf(w, t);
+    const names = lowNames(w);
     // The days: each midnight in the owner's own zone.
     const days: { tick: number; name: string }[] = [];
     const day = new Date(ms(start));
@@ -191,9 +197,9 @@ function Strip({
             .map((s) => (
               <span
                 key={`f${s.begin}`}
-                class="mark front"
+                class={s.warm ? 'mark front warm' : 'mark front'}
                 style={{ left: left(s.begin + s.cross / 2) }}
-                title={`A front over the centre, ${brief(ms(s.begin + s.cross / 2))}`}
+                title={`A ${s.warm ? 'warm' : 'cold'} front over the centre, ${brief(ms(s.begin + s.cross / 2))}`}
               />
             ))}
           {w.storms.map((t) => (
@@ -201,7 +207,15 @@ function Strip({
               key={`s${t}`}
               class="mark born"
               style={{ left: left(t) }}
-              title={`${lows(w)} born, ${brief(ms(t))}`}
+              title={`${names.storm} born, ${brief(ms(t))}`}
+            />
+          ))}
+          {w.lows.map((t) => (
+            <span
+              key={`l${t}`}
+              class="mark born low"
+              style={{ left: left(t) }}
+              title={`${names.lows} born, ${brief(ms(t))}`}
             />
           ))}
           <span
@@ -301,10 +315,18 @@ export function WeekCard({
           </span>
         ))}
         <span>
-          <i class="swatch" style={{ background: WEATHER_COLOURS.front }} /> front
+          <i class="swatch" style={{ background: WEATHER_COLOURS.front }} /> cold front
         </span>
         <span>
-          <i class="swatch round" style={{ background: WEATHER_COLOURS.low }} /> {lows(w)} born
+          <i class="swatch" style={{ background: WEATHER_COLOURS.warm }} /> warm front
+        </span>
+        <span>
+          <i class="swatch round" style={{ background: WEATHER_COLOURS.low }} /> {lowNames(w).storm}{' '}
+          born
+        </span>
+        <span>
+          <i class="swatch round" style={{ background: WEATHER_COLOURS.low, opacity: 0.5 }} />{' '}
+          {lowNames(w).lows} born
         </span>
       </p>
       <p data-field="shown">
@@ -326,7 +348,7 @@ export function WeekCard({
         <dt>Front</dt>
         <dd data-field="front">
           {f !== null
-            ? `its line ${(Math.abs(f.line) / 1000).toFixed(1)} km ${f.line < 0 ? 'short of' : 'past'} the centre, ` +
+            ? `a ${f.warm ? 'warm' : 'cold'} front, its line ${(Math.abs(f.line) / 1000).toFixed(1)} km ${f.line < 0 ? 'short of' : 'past'} the centre, ` +
               `moving toward ${f.toward.toFixed(0)}° at ${f.knots.toFixed(1)} kn, ${f.depth.toFixed(1)} hPa deep; ` +
               `over Port Royal ${when(f.portRoyal)}; off the disk ${fromNow(f.leaves - now, tps)}`
             : 'none crossing'}
@@ -353,7 +375,8 @@ export function WeekCard({
                     type="button"
                     onClick={() => goTo(s.east, s.north, Math.max(1, s.size / 120))}
                   >
-                    {w.kinds[s.kind]?.id ?? s.kind}
+                    {kindName(w, s.kind)}
+                    {s.length > 0 ? ` ${(s.length / 1852).toFixed(1)} M long` : ''}
                     {s.developer ? ' (developer)' : ''}
                   </button>
                 </td>

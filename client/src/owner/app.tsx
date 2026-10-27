@@ -11,8 +11,9 @@
 // boats can be put there, or at a place, or at a position written as
 // charts write it. The fog and the lightning show while their layers are,
 // and with them the lights sounding their fog signals and those lit by
-// day. The forecast shows over the truth while its layer is, with how
-// well it has held so far and every gale warning of the world; a point,
+// day. The forecast shows over the truth while its layer is, every system's
+// track over its reach, with every gale warning of the world, and beside
+// the week how busy its weather has been; a point,
 // an island or a place picked has its box and outlook at the tick shown,
 // as a chart gives them to a sailor there.
 // The page acts on the owner's boats alone; the server refuses the rest.
@@ -49,7 +50,7 @@ import {
   type AccountsData,
   type Admission,
   type Boat,
-  type CalibrationPage,
+  type BusyPage,
   type ChartedData,
   type CloudsPage,
   type Control,
@@ -60,8 +61,8 @@ import {
   type ForecastPage,
   type GalesPage,
   type Group,
+  getBusy,
   getBytes,
-  getCalibration,
   getClouds,
   getForecast,
   getGales,
@@ -123,13 +124,13 @@ import {
   visibilityRanges,
   visibilityWords,
 } from './fog';
-import { calibrationRows, FORECAST_COLOURS, riskWords, spellAt, warningSpan } from './forecast';
+import { busyRows, FORECAST_COLOURS, spellAt, trackAt, warningSpan } from './forecast';
 import { brief, hidden, serverOffset } from './life';
 import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
 import { machinesWords } from './machines';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
 import { foamOver, RAISED, SEA_COLOURS, SEA_EVERY, SEA_FULL, seaWords } from './sea';
-import { fromNow, whereFrom } from './weather';
+import { fromNow, WEATHER_COLOURS, whereFrom } from './weather';
 import { useWeather, WEATHER_EVERY, WeekCard } from './week';
 
 /** How often the page reads the world, ms. */
@@ -658,7 +659,7 @@ const LIVE: ReadonlySet<keyof Layers> = new Set([
   'charted',
 ]);
 
-/** How often the forecast's calibration and the world's gale warnings are read while the forecast shows, ms. */
+/** How often the world's gale warnings are read while the forecast shows, and the busy weather's figures, ms. */
 const FORECAST_PAST_EVERY = 60_000;
 
 /** The sea layer's legend: the waves' heights shaded, the swell's arrow, the hatching. */
@@ -785,21 +786,23 @@ function LightningLegend() {
   );
 }
 
-/** The forecast layer's legend: a track and its cone, the place forecast now, a front's band, a gale. */
+/** The forecast layer's legend: a system's place at the tick shown and its track, a storm's, the fronts, a gale. */
 function ForecastLegend() {
   return (
     <p class="small legend" data-field="forecast-legend">
       <span>
-        <i class="swatch round" style={{ border: `2px solid ${FORECAST_COLOURS.system}` }} />{' '}
-        forecast place now, its track and its cone dashed
+        <i class="swatch round" style={{ border: `2px solid ${FORECAST_COLOURS.system}` }} /> a
+        system at the tick shown, and its track over the forecast's reach
       </span>
       <span>
-        <i class="swatch round" style={{ border: `2px dashed ${FORECAST_COLOURS.forming}` }} /> a
-        low forming
+        <i class="swatch round" style={{ border: `2px solid ${FORECAST_COLOURS.storm}` }} /> a
+        storm's
       </span>
       <span>
-        <i class="swatch" style={{ background: FORECAST_COLOURS.front, opacity: 0.5 }} /> a front's
-        forecast line and band
+        <i class="swatch" style={{ background: WEATHER_COLOURS.front }} /> a cold front
+      </span>
+      <span>
+        <i class="swatch" style={{ background: WEATHER_COLOURS.warm }} /> a warm front
       </span>
       <span>
         <i
@@ -819,7 +822,7 @@ function momentOf(w: WeatherWeek | null, tick: number): string {
   return w === null ? `tick ${tick}` : brief(w.epoch + (tick / w.ticksPerSecond) * 1000);
 }
 
-/** The forecast in force at the tick shown: its issue, its spells and their risks, its systems, its gale warning. */
+/** The forecast in force at the tick shown: its issue, its spells, its systems, its gale warning. */
 function ForecastCard({
   f,
   w,
@@ -834,28 +837,32 @@ function ForecastCard({
   const tps = w?.ticksPerSecond ?? 30;
   const minutes = (ticks: number): string => `${Math.round(ticks / tps / 60)} min`;
   const spell = spellAt(f.spells, f.at);
+  const name = (k: number, id: string): string => w?.kinds[k]?.name || id || String(k);
   return (
     <section class="card" aria-label="The forecast">
       <h2>Forecast</h2>
       <p data-field="forecast-issue">
         Issued {momentOf(w, f.issue)} ({fromNow(f.issue - now, tps)}), tick {f.issue};{' '}
         {f.issued ? 'as the players were sent it' : "made on the page's asking from the week"};{' '}
-        {f.steps} steps of {minutes(f.step)}.
+        {f.steps} steps of {minutes(f.step)}; it knows the systems to {momentOf(w, f.until)}.
       </p>
       <p data-field="gale-warning" class={f.gale !== null ? 'gale' : ''}>
         {f.gale !== null
           ? `Gale warning: ${f.gale.words}. Force ${f.gale.force}, in force since ${momentOf(w, f.gale.key)}.`
           : 'No gale warning in force.'}
       </p>
-      {spell !== null && riskWords(spell) !== '' ? (
-        <p data-field="risk">Risk now: {riskWords(spell)}.</p>
+      {spell !== null ? (
+        <p data-field="spell-now">
+          Spell now: {spell.id || spell.regime}, {spell.knots.toFixed(1)} kn from{' '}
+          {spell.from.toFixed(0)}°.
+        </p>
       ) : null}
       <ul class="spells small">
         {f.spells.map((s) => (
           <li key={s.begin}>
             {momentOf(w, s.begin)}: {s.id || s.regime}, {s.knots.toFixed(1)} kn from{' '}
             {s.from.toFixed(0)}°{s.shifts > 0 ? `, shifting ±${s.shifts.toFixed(0)}°` : ''}
-            {s.front ? ', a front' : ''}
+            {s.front ? (s.warm ? ', by a warm front' : ', by a cold front') : ''}
           </li>
         ))}
       </ul>
@@ -864,32 +871,31 @@ function ForecastCard({
           <thead>
             <tr>
               <th>Kind</th>
-              <th>At the issue</th>
-              <th>Last step</th>
-              <th>Cone</th>
+              <th>At the tick shown</th>
+              <th>Born</th>
+              <th>Gone</th>
             </tr>
           </thead>
           <tbody>
             {f.systems.map((s) => {
-              const alive = s.steps.filter((p) => p[3] > 0);
-              const first = alive[0];
-              const last = alive[alive.length - 1];
+              const at = trackAt(s, f.at, f.every);
+              const first = s.track[0];
+              const where = at ?? first;
               return (
-                <tr key={`${s.slot}-${s.forming}`} data-forecast-system={s.slot}>
+                <tr key={`${s.slot}-${s.seed}`} data-forecast-system={s.slot}>
                   <td>
                     <button
                       type="button"
-                      disabled={first === undefined}
-                      onClick={() => first !== undefined && goTo(first[0], first[1])}
+                      disabled={where === undefined}
+                      onClick={() => where !== undefined && goTo(where[0], where[1])}
                     >
-                      {s.id || s.kind}
+                      {name(s.kind, s.id)}
                     </button>
-                    {s.forming ? ' forming' : ''}
-                    {s.crosses > 0 ? `, onto the disk ${fromNow(s.crosses - now, tps)}` : ''}
+                    {s.length > 0 ? ` ${(s.length / 1852).toFixed(1)} M long` : ''}
                   </td>
-                  <td>{s.forming || first === undefined ? '—' : whereFrom(first[0], first[1])}</td>
-                  <td>{last === undefined ? '—' : whereFrom(last[0], last[1])}</td>
-                  <td>{last === undefined ? '—' : `${(last[2] / 1852).toFixed(2)} M`}</td>
+                  <td>{at === null ? '—' : whereFrom(at[0], at[1])}</td>
+                  <td>{fromNow(s.born - now, tps)}</td>
+                  <td>{fromNow(s.gone - now, tps)}</td>
                 </tr>
               );
             })}
@@ -900,34 +906,29 @@ function ForecastCard({
   );
 }
 
-/** How well the forecast has held the truth so far this world: the share inside the cones, lead by lead. */
-function CalibrationCard({ c, w }: { c: CalibrationPage; w: WeatherWeek | null }) {
+/** How busy the world's weather has been: its figures from the week's opening to now, and over the whole week. */
+function BusyCard({ b, w }: { b: BusyPage; w: WeatherWeek | null }) {
   return (
-    <section class="card" aria-label="The forecast's calibration">
-      <h2>The forecast's calibration</h2>
+    <section class="card" aria-label="The busy weather">
+      <h2>The busy weather</h2>
       <p class="small">
-        The share of the truth inside the cones, sized to hold it four times in five: {c.issues}{' '}
-        issues since {momentOf(w, c.from)}.
+        Each minute from the week's opening, {momentOf(w, b.opening)}, the systems on the disk:{' '}
+        {b.soFar.minutes} minutes so far of {b.week.minutes}.
       </p>
-      <table class="calibration" data-field="calibration">
+      <table class="busy" data-field="busy">
         <thead>
           <tr>
-            <th>Lead</th>
-            {c.leads.map((l) => (
-              <th key={l}>{l} min</th>
-            ))}
+            <th />
+            <th>So far</th>
+            <th>The week</th>
           </tr>
         </thead>
         <tbody>
-          {calibrationRows(c).map((r) => (
+          {busyRows(b.soFar, b.week).map((r) => (
             <tr key={r.name}>
               <th>{r.name}</th>
-              {r.cells.map((cell, k) => (
-                <td key={c.leads[k]} title={`${cell.cases} cases`}>
-                  {cell.share}
-                  <span class="small"> ({cell.cases})</span>
-                </td>
-              ))}
+              <td>{r.soFar}</td>
+              <td>{r.week}</td>
             </tr>
           ))}
         </tbody>
@@ -1384,7 +1385,7 @@ function App() {
   const [point, setPoint] = useState<Point | null>(null);
   const [placeWeather, setPlaceWeather] = useState<PlaceWeather | null>(null);
   const [forecast, setForecast] = useState<ForecastPage | null>(null);
-  const [calibration, setCalibration] = useState<CalibrationPage | null>(null);
+  const [busy, setBusy] = useState<BusyPage | null>(null);
   const [gales, setGales] = useState<GalesPage | null>(null);
   const [pressure, setPressure] = useState<PressureAt | null>(null);
   const [sea, setSea] = useState<SeaPage | null>(null);
@@ -1592,7 +1593,6 @@ function App() {
   }, [forecastShown, shownAt, following]);
   useEffect(() => {
     if (!forecastShown) {
-      setCalibration(null);
       setGales(null);
       return;
     }
@@ -1601,9 +1601,6 @@ function App() {
       if (hidden()) {
         return;
       }
-      getCalibration()
-        .then((c) => live && setCalibration(c))
-        .catch((e: unknown) => live && setError(String(e)));
       getGales()
         .then((g) => live && setGales(g))
         .catch((e: unknown) => live && setError(String(e)));
@@ -1615,6 +1612,30 @@ function App() {
       clearInterval(t);
     };
   }, [forecastShown]);
+  // How busy the weather has been, once a minute while the world being
+  // sailed is shown.
+  const busyShown = world !== null && onWorld;
+  useEffect(() => {
+    if (!busyShown) {
+      setBusy(null);
+      return;
+    }
+    let live = true;
+    const read = (): void => {
+      if (hidden()) {
+        return;
+      }
+      getBusy()
+        .then((b) => live && setBusy(b))
+        .catch((e: unknown) => live && setError(String(e)));
+    };
+    read();
+    const t = setInterval(read, FORECAST_PAST_EVERY);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [busyShown]);
 
   // The sea every ten seconds while its layer shows the world being
   // sailed, with the point picked, and at once for a point picked anew;
@@ -2151,9 +2172,7 @@ function App() {
                   goTo={goTo}
                 />
               ) : null}
-              {forecastShown && calibration !== null ? (
-                <CalibrationCard c={calibration} w={weather.weather} />
-              ) : null}
+              {onWorld && busy !== null ? <BusyCard b={busy} w={weather.weather} /> : null}
               {forecastShown && gales !== null ? (
                 <GalesCard g={gales} w={weather.weather} goTo={goTo} />
               ) : null}

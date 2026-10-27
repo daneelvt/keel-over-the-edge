@@ -36,8 +36,11 @@ import "math"
 const (
 	// MaxRegimes is the most regimes whose cumulus is held.
 	MaxRegimes = 16
-	// MaxClouds is the most heaped clouds at a tick: one a system blowing.
-	MaxClouds = 2 * MaxSystems
+	// MaxClouds is the most heaped clouds at a tick: one a system blowing,
+	// and a line's towers along its length.
+	MaxClouds = 4 * MaxSystems
+	// lineTowers is the most towers a line raises along its length.
+	lineTowers = 6
 	// MaxCumulus is the most cumulus one call of CumulusAt gives.
 	MaxCumulus = 512
 	// MaxCaps is the most islands' caps a client holds.
@@ -124,6 +127,11 @@ type cloudsPrepared struct {
 	rainAt   float64
 	invRain  float64
 	rainRate float64
+	// A warm front's rain and low cloud: its band, m ahead of the line and
+	// 1 / its width, and its rain's rate.
+	warmAt   float64
+	invWarm  float64
+	warmRate float64
 	past     float64 // m: a front whose line is this far beyond the centre has nothing in sight
 
 	words      [3]float64 // mm an hour
@@ -162,6 +170,9 @@ func (w *WeatherPrepared) PrepareClouds(p *CloudParams) {
 	c.rainRate = max2(p.FrontRain[0], 0)
 	c.rainAt = float64(p.FrontRain[1] * nauticalMile)
 	c.invRain = 1 / max2(float64(p.FrontRain[2]*nauticalMile), 1)
+	c.warmRate = max2(p.FrontWarm[0], 0)
+	c.warmAt = float64(p.FrontWarm[1] * nauticalMile)
+	c.invWarm = 1 / max2(float64(p.FrontWarm[2]*nauticalMile), 1)
 	c.past = w.frontReach + float64(2*c.front[0][0]) + c.front[0][3]
 	c.words = p.RainWords
 	c.extA, c.extB = p.RainExtinction[0], p.RainExtinction[1]
@@ -190,9 +201,10 @@ func (w *WeatherPrepared) LayerHeight(layer int32) float64 {
 func (w *WeatherPrepared) SheetLattice() float64 { return w.clouds.lattice }
 
 // frontLine is a front's line at a tick: it lies line m from the centre
-// along (fe, fn), the way it moves.
+// along (fe, fn), the way it moves; warm for a warm front's.
 type frontLine struct {
 	fe, fn, line float64
+	warm         bool
 }
 
 // setFronts sets the fronts whose sheets may be in sight at a tick: the
@@ -213,7 +225,7 @@ func (t *WeatherTick) setFronts(w *Weather, tick float64) {
 		if !(line < p.clouds.past) {
 			break
 		}
-		t.fronts[t.nf] = frontLine{fe: s.fsin, fn: s.fcos, line: line}
+		t.fronts[t.nf] = frontLine{fe: s.fsin, fn: s.fcos, line: line, warm: s.warm}
 		begun[t.nf] = s.begin
 		t.nf++
 	}
@@ -243,31 +255,47 @@ func CloudStrength(strength, lead float64) float64 {
 }
 
 // HeapedClouds writes to out the heaped clouds at the tick t was set to,
-// one a system whose kind has one, and returns how many.
+// one a system whose kind has one, a line's towers spaced along its
+// length, and returns how many.
 func HeapedClouds(t *WeatherTick, out []Cloud) int {
 	n := 0
 	for i := range t.ns {
 		st := &t.sys[i]
 		k := &st.k.cloud
-		if !k.heaped() || n >= len(out) {
+		if !k.heaped() {
 			continue
 		}
-		cs := CloudStrength(st.strength, k.lead)
-		c := &out[n]
-		*c = Cloud{
-			Slot: float64(st.slot), Kind: st.kind, Form: float64(k.form), Seed: float64(st.seed),
-			East: st.cx, North: st.cy, Heading: Atan2(st.ux, st.uy), Speed: st.speed,
-			Size: st.size, Strength: st.strength, Cloud: cs,
-			Base:    k.base,
-			Top:     k.base + float64((k.top-k.base)*cs),
-			Behind:  float64(float64(k.behind*st.size) * cs),
-			Ahead:   float64(float64(k.ahead*st.size) * cs),
-			Deck:    float64(float64(k.deck*st.size) * cs),
-			DeckTop: k.base + float64((k.deckTop-k.base)*cs),
-			Dark:    k.dark,
+		towers := int32(1)
+		if st.half > 0 {
+			towers = min(max(toInt32(math.Floor(st.half/max2(st.size, 1)+0.5)), 1), lineTowers)
 		}
-		c.Rain, c.RainReach = st.rainCore()
-		n++
+		cs := CloudStrength(st.strength, k.lead)
+		rain, reach := st.rainCore()
+		for j := range towers {
+			if n >= len(out) {
+				return n
+			}
+			// Evenly along its length, each tower in the middle of its share.
+			along := 0.0
+			if towers > 1 {
+				along = float64(st.half * (float64(float64(2*j+1)/float64(towers)) - 1))
+			}
+			c := &out[n]
+			*c = Cloud{
+				Slot: float64(st.slot), Kind: st.kind, Form: float64(k.form), Seed: float64(st.seed + uint32(j)*0x9e3779b9),
+				East: st.cx + float64(along*st.uy), North: st.cy - float64(along*st.ux), Heading: Atan2(st.ux, st.uy), Speed: st.speed,
+				Size: st.size, Strength: st.strength, Cloud: cs,
+				Base:    k.base,
+				Top:     k.base + float64((k.top-k.base)*cs),
+				Behind:  float64(float64(k.behind*st.size) * cs),
+				Ahead:   float64(float64(k.ahead*st.size) * cs),
+				Deck:    float64(float64(k.deck*st.size) * cs),
+				DeckTop: k.base + float64((k.deckTop-k.base)*cs),
+				Dark:    k.dark,
+			}
+			c.Rain, c.RainReach = rain, reach
+			n++
+		}
 	}
 	return n
 }
@@ -296,7 +324,7 @@ func NearAt(t *WeatherTick, x, y float64) int32 {
 	var near int32
 	for i := range t.ns {
 		st := &t.sys[i]
-		dx, dy := x-st.cx, y-st.cy
+		dx, dy := st.offset(x, y)
 		if float64(dx*dx)+float64(dy*dy) > float64(st.size*st.size) {
 			continue
 		}
@@ -373,6 +401,9 @@ func (t *WeatherTick) sheetPoint(x, y float64) [Layers]float64 {
 			s[l] = max2(s[l], v)
 		}
 		q := float64((d + c.lowAt) * c.invLow)
+		if f.warm {
+			q = float64((d - c.warmAt) * c.invWarm)
+		}
 		s[LayerLow] = max2(s[LayerLow], Exp(-float64(q*q)))
 	}
 	for i := range t.ns {

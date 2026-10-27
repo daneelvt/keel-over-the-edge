@@ -5,8 +5,9 @@ package physics
 import "math"
 
 // Rain at a point is a rate in millimetres an hour, the most of each
-// source's: a front's band behind its line, a squall's core, a shower's,
-// and a storm's spiral bands, turning with the tick. A system's rain
+// source's: a cold front's band behind its line and a warm front's ahead of
+// it, a squall's core, a shower's, a line's along its length, and a storm's
+// spiral bands, turning with the tick. A system's rain
 // follows its strength, not its cloud strength, so its rain and its gust
 // front come together.
 //
@@ -45,14 +46,16 @@ const (
 func RainAt(t *WeatherTick, x, y float64) float64 {
 	c := &t.p.clouds
 	rain := 0.0
-	if c.rainRate > 0 {
-		for i := range t.nf {
-			f := &t.fronts[i]
-			d := float64(x*f.fe) + float64(y*f.fn) - f.line
-			q := float64((d + c.rainAt) * c.invRain)
-			if q*q < 30 {
-				rain = max2(rain, float64(c.rainRate*Exp(-float64(q*q))))
-			}
+	for i := range t.nf {
+		f := &t.fronts[i]
+		d := float64(x*f.fe) + float64(y*f.fn) - f.line
+		// A cold front's band behind its line, a warm front's ahead.
+		rate, q := c.rainRate, float64((d+c.rainAt)*c.invRain)
+		if f.warm {
+			rate, q = c.warmRate, float64((d-c.warmAt)*c.invWarm)
+		}
+		if rate > 0 && q*q < 30 {
+			rain = max2(rain, float64(rate*Exp(-float64(q*q))))
 		}
 	}
 	for i := range t.ns {
@@ -68,7 +71,7 @@ func RainAt(t *WeatherTick, x, y float64) float64 {
 // rain is a system's rain at (x, y) at a tick, mm an hour.
 func (st *systemTick) rain(tick, x, y float64) float64 {
 	k := &st.k.cloud
-	dx, dy := x-st.cx, y-st.cy
+	dx, dy := st.offset(x, y)
 	d2 := float64(dx*dx) + float64(dy*dy)
 	rate := float64(k.rate * st.strength)
 	if !(k.bands > 0) {

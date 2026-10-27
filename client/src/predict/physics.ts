@@ -205,7 +205,8 @@ interface Exports {
   forecastHead(): number;
   forecastSpells(): number;
   forecastSystem(): number;
-  forecastMake(issue: number, end: number): void;
+  forecastMake(issue: number, end: number, every: number): void;
+  weatherKeys(): number;
   forecastAt(tick: number): void;
   synoptic(on: number): void;
   galeWater(): number;
@@ -380,6 +381,7 @@ const functionExports = [
   'forecastSystem',
   'forecastMake',
   'forecastAt',
+  'weatherKeys',
   'synoptic',
   'galeWater',
   'galeOn',
@@ -1097,8 +1099,8 @@ export class Physics {
 
   /**
    * The forecast: views of its head, its spells (SIZES.spell values each)
-   * and its systems (SIZES.forecastSystem values each), all of the room
-   * the module has. Take them afresh after any call.
+   * and its systems' records (SIZES.systemRecord values each), all of the
+   * room the module has. Take them afresh after any call.
    */
   get forecast(): { head: Float64Array; spells: Float64Array; systems: Float64Array } {
     const x = this.#x;
@@ -1109,18 +1111,42 @@ export class Physics {
       systems: new Float64Array(
         b,
         x.forecastSystem() >>> 0,
-        WEATHER.forecastSystems * SIZES.forecastSystem,
+        WEATHER.forecastSystems * SIZES.systemRecord,
       ),
     };
   }
 
   /**
    * Makes the forecast issued at a tick, for a world whose last tick is end
-   * (0 for none), from the spells in play and the records the module
-   * holds, as the server makes its own: for a client with no server.
+   * (0 for none) and whose systems' keyframes are every ticks apart, from
+   * the spells in play and the records the module holds, as the server
+   * makes its own: for a client with no server.
    */
-  forecastMake(issue: number, end: number): void {
-    this.#x.forecastMake(issue, end);
+  forecastMake(issue: number, end: number, every: number): void {
+    this.#x.forecastMake(issue, end, every);
+  }
+
+  /**
+   * The module's two keyframes as forecastAt made them about a tick: each
+   * its tick and its systems by their slots, a system record's values or
+   * undefined for an empty slot. A copy.
+   */
+  weatherKeys(): Keyframe[] {
+    const x = this.#x;
+    const stride = 1 + WEATHER.systems * SIZES.system;
+    const v = new Float64Array(x.memory.buffer, x.weatherKeys() >>> 0, 2 * stride);
+    const out: Keyframe[] = [];
+    for (let k = 0; k < 2; k++) {
+      const systems: Float64Array[] = [];
+      for (let slot = 0; slot < WEATHER.systems; slot++) {
+        const at = k * stride + 1 + slot * SIZES.system;
+        if ((v[at + RECORDS.system.on] ?? 0) !== 0) {
+          systems[slot] = v.slice(at, at + SIZES.system);
+        }
+      }
+      out.push({ tick: v[k * stride] ?? 0, systems });
+    }
+    return out;
   }
 
   /**

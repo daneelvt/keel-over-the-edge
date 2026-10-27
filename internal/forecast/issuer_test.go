@@ -101,24 +101,21 @@ func TestThePast(t *testing.T) {
 	}
 }
 
-// Nothing of the future but the forecast: a system's seed only if it is
-// alive at the issue, never a forming low's, and the message is the
-// forecast's own.
-func TestNoMoreThanTheForecast(t *testing.T) {
+// The message is the forecast's own: every record it holds, born before
+// the issue or after it, goes on the wire as it is.
+func TestTheMessageIsTheForecast(t *testing.T) {
 	tl := timeline(t)
 	is := New(Config{Timeline: tl})
 	every := tl.Prepared().ForecastEvery()
-	formings := 0
+	born := 0
 	for tick := int64(0); tick < 2*24*60*minute; tick += every {
 		x := is.Issue(tick, nil, nil)
 		for i, s := range x.Message.GetSystems() {
-			if s.GetForming() {
-				formings++
-				if s.GetSeed() != 0 {
-					t.Fatalf("issue %d: a low forming carries its seed", tick)
-				}
-			} else if s.GetSeed() != uint32(x.Forecast.Systems[i].Seed) {
+			if s.GetSeed() != uint32(x.Forecast.Systems[i].Seed) {
 				t.Fatalf("issue %d: a seed not its own", tick)
+			}
+			if x.Forecast.Systems[i].Born+x.Forecast.Head.Origin > float64(tick) {
+				born++
 			}
 		}
 		var back physics.Forecast
@@ -126,23 +123,17 @@ func TestNoMoreThanTheForecast(t *testing.T) {
 			t.Fatalf("issue %d: the message is not the forecast: %v", tick, err)
 		}
 	}
-	if formings == 0 {
-		t.Error("no low forming in two days")
+	if born == 0 {
+		t.Error("no system born after an issue in two days")
 	}
 }
 
 // A gale warning keeps the issue it came into force at while it is in
-// force, and is told once.
-func TestGaleWarningOnce(t *testing.T) {
+// force, and after a restart.
+func TestGaleWarningKey(t *testing.T) {
 	tl := timeline(t)
 	first := galeIssue(t, tl)
-	var mu sync.Mutex
-	var told []int64
-	is := New(Config{Timeline: tl, Warned: func(_ context.Context, x *Issue) {
-		mu.Lock()
-		defer mu.Unlock()
-		told = append(told, x.Key)
-	}})
+	is := New(Config{Timeline: tl})
 	every := tl.Prepared().ForecastEvery()
 	ctx := context.Background()
 	for tick := first; ; tick += every {
@@ -158,14 +149,68 @@ func TestGaleWarningOnce(t *testing.T) {
 			t.Fatalf("issue %d: a warning of force %d at steps %b", tick, m.GetGale().GetForce(), m.GetGale().GetSteps())
 		}
 	}
-	if len(told) != 1 || told[0] != first {
-		t.Fatalf("told of %v, want once of %d", told, first)
-	}
 	// A restart, an issuer made again, finds the same key from inside the
 	// warning.
 	again := New(Config{Timeline: tl})
 	if x := again.Issue(first+2*every, nil, nil); x.Gale != nil && x.Key != first {
 		t.Fatalf("after a restart the warning's key is %d, not %d", x.Key, first)
+	}
+}
+
+// Each of the week's storms is told once as it forms, where it is and how
+// it moves, over two days updated every five minutes; an issuer begun
+// again tells again only those formed within the horizon.
+func TestStormFormedOnce(t *testing.T) {
+	tl := timeline(t)
+	var mu sync.Mutex
+	told := map[[2]uint32]Storm{}
+	again := 0
+	formed := func(_ context.Context, s Storm) {
+		mu.Lock()
+		defer mu.Unlock()
+		k := [2]uint32{uint32(s.Slot), s.Seed}
+		if _, ok := told[k]; ok {
+			again++
+		}
+		told[k] = s
+	}
+	is := New(Config{Timeline: tl, Formed: formed})
+	ctx := context.Background()
+	end := int64(2 * 24 * 60 * minute)
+	for tick := int64(0); tick < end; tick += weather.PastEvery {
+		is.Update(ctx, tick, nil, nil)
+	}
+	// The week's storms born in the two days, but for any born in the last
+	// five minutes.
+	cfg := tl.Config()
+	want := 0
+	for _, s := range tl.Week().Systems {
+		at := int64(s.Born) + tl.Origin()
+		if s.Kind != float64(cfg.Week.Storms) || at > end-weather.PastEvery || at < 0 {
+			continue
+		}
+		want++
+		got, ok := told[[2]uint32{uint32(s.Slot), uint32(s.Seed)}]
+		if !ok {
+			t.Fatalf("the storm born at %d in slot %d is not told", at, s.Slot)
+		}
+		k := physics.SystemAt(&s.SystemRecord, float64(got.At-tl.Origin()))
+		if got.Born != at || got.At < at || got.At-at >= weather.PastEvery || got.East != k.East/4 || got.North != k.North/4 || got.Speed <= 0 {
+			t.Fatalf("the storm born at %d told %+v", at, got)
+		}
+	}
+	if want == 0 || len(told) != want || again != 0 {
+		t.Fatalf("%d storms told, %d told again; the week's %d", len(told), again, want)
+	}
+	t.Logf("%d storms formed in two days", want)
+	// Begun again: none older than the horizon is told again.
+	clear(told)
+	is = New(Config{Timeline: tl, Formed: formed})
+	is.Update(ctx, end, nil, nil)
+	for _, s := range told {
+		if end-s.Born >= tl.Prepared().ForecastHorizon() {
+			t.Fatalf("begun again, a storm born %d ticks before is told", end-s.Born)
+		}
 	}
 }
 
@@ -201,8 +246,9 @@ func TestRecordAndRun(t *testing.T) {
 	}
 }
 
-// What an issue costs on the wire: under 2 KB, and under 5 KB with what
-// has been, over the sample week.
+// What an issue costs on the wire, now that it carries the records of every
+// system over its reach: under 10 KB, and under 32 KB with what has been,
+// over the sample week.
 func TestIssueBytes(t *testing.T) {
 	tl := timeline(t)
 	is := New(Config{Timeline: tl})
@@ -222,7 +268,7 @@ func TestIssueBytes(t *testing.T) {
 		most, mostPast, total, n = max(most, len(b)), max(mostPast, len(bp)), total+len(b), n+1
 	}
 	t.Logf("an issue: %d bytes on average, %d at most, %.2f B/s; with its past %d at most", total/n, most, float64(total)/float64(n)/600, mostPast)
-	if most > 2048 || mostPast > 5120 {
+	if most > 10<<10 || mostPast > 32<<10 {
 		t.Errorf("an issue of %d bytes, %d with its past", most, mostPast)
 	}
 }

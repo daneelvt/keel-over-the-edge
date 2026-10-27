@@ -3,10 +3,12 @@
 package agentapi
 
 import (
+	"cmp"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -232,12 +234,17 @@ func editDistance(a, b string) int {
 // forecastArgs are forecast's.
 type forecastArgs struct {
 	Place string `json:"place,omitempty"`
-	Ahead *int   `json:"ahead,omitempty"`
 }
 
-// forecastWords answer forecast: the latest issue as the phone reads it,
-// its gale warnings in force and its systems, or one charted place's box
-// and outlook.
+// forecastAhead are the minutes from now the forecast tells where each
+// system will be.
+var forecastAhead = [...]int64{30, 60, 90}
+
+// forecastWords answer forecast: the latest issue as the phone's chart
+// shows it, the truth for the next 90 minutes: its gale warning in force,
+// every system alive now or born within the horizon, where it is now and
+// will be, and the fronts and when they reach the boat; or one charted
+// place's box and outlook.
 func forecastWords(s *Sea, f *bus.Frame, a *forecastArgs, x, y float64, atSea bool) (string, *refusal) {
 	if s.Forecast == nil {
 		return "No forecast is issued in this world.", nil
@@ -269,15 +276,12 @@ func forecastWords(s *Sea, f *bus.Frame, a *forecastArgs, x, y float64, atSea bo
 		return fmt.Sprintf("%s · %s\nWind: %s · %s\nSky: %s · visibility %s\nBarometer: %s\nOutlook: %s",
 			titleOf(e.sub), issueWords(s, x0), box.Wind, box.Gusts, box.Sky, box.Visibility, box.Barometer, outlook), nil
 	}
-	ahead := 0
-	if a.Ahead != nil {
-		ahead = *a.Ahead
-		if ahead != 0 && ahead != 30 && ahead != 60 && ahead != 90 {
-			return "", refuse(refusedArgs, "ahead is 0, 30, 60 or 90: minutes after the issue.")
-		}
-	}
 	var b strings.Builder
-	b.WriteString("Forecast " + issueWords(s, x0) + "\n")
+	b.WriteString("Forecast " + issueWords(s, x0) + ": the truth for the next 90 minutes, where every system and front will be. Gusts and the wind's shifts are not forecast.")
+	if atSea {
+		b.WriteString(" Bearings and distances are from you.")
+	}
+	b.WriteByte('\n')
 	if g := x0.Gale; g != nil {
 		w := weather.Warning{From: g.From, Force: int(g.Force), East: g.East, North: g.North,
 			First: float64(int64(g.First)*p.ForecastStep()) / (60 * physics.StepsPerSecond)}
@@ -289,33 +293,247 @@ func forecastWords(s *Sea, f *bus.Frame, a *forecastArgs, x, y float64, atSea bo
 		b.WriteString("Gale warnings: none in force\n")
 	}
 	fc := &x0.Forecast
-	step := fc.Head.Step
-	k := 0
-	if step > 0 {
-		k = int(math.Round(float64(ahead) * 60 * physics.StepsPerSecond / step))
+	minute := int64(60 * physics.StepsPerSecond)
+	now := f.Tick
+	until := now + p.ForecastHorizon()
+	// The forecast's systems at each minute ahead it tells.
+	var ahead [len(forecastAhead)]physics.Keyframe
+	for i, m := range forecastAhead {
+		physics.ForecastKeyframe(fc, float64(now+m*minute), &ahead[i])
 	}
-	k = min(k, max(int(fc.Head.Steps)-1, 0))
-	n := 0
+	weatherNow := s.weatherAt(f)
+	var alive, later []forecastSystem
+	origin := fc.Head.Origin
 	for i := range int(fc.Head.NSystems) {
-		sy := &fc.Systems[i]
-		if sy.Strength[k] <= 0 {
+		r := &fc.Systems[i]
+		slot := int(fc.Head.Slots[i])
+		born, gone := int64(r.Born+origin), int64(r.Gone+origin)
+		if gone <= now || born > until || slot < 0 || slot >= physics.MaxSystems {
 			continue
 		}
-		if n == 0 {
-			if ahead > 0 {
-				fmt.Fprintf(&b, "Systems %d minutes after the issue:\n", ahead)
-			} else {
-				b.WriteString("Systems:\n")
+		w := forecastSystem{s: s, r: r, slot: slot, born: born, now: now, x: x, y: y, atSea: atSea}
+		if born <= now {
+			w.k = physics.SystemAt(r, float64(now)-origin)
+			alive = append(alive, w)
+		} else {
+			w.k = physics.SystemAt(r, r.Born)
+			later = append(later, w)
+		}
+	}
+	// Each list by kind, the strongest first; those now nearest first, those
+	// to come soonest first.
+	list := func(head string, ws []forecastSystem, t *physics.WeatherTick) {
+		slices.SortStableFunc(ws, func(a, c forecastSystem) int {
+			if d := cmp.Compare(a.rank(), c.rank()); d != 0 {
+				return d
+			}
+			if d := cmp.Compare(a.born, c.born); a.born > now && d != 0 {
+				return d
+			}
+			return cmp.Compare(a.distance(), c.distance())
+		})
+		fmt.Fprintf(&b, "%s (%d):\n", head, len(ws))
+		for _, w := range ws {
+			b.WriteString(" " + w.words(t, &ahead) + "\n")
+		}
+	}
+	if len(alive) == 0 {
+		b.WriteString("Systems now: none\n")
+	} else {
+		list("Systems now, the strongest kinds first", alive, weatherNow)
+	}
+	if len(later) > 0 {
+		list("Born in the next 90 minutes", later, nil)
+	}
+	fronts := frontsWords(s, fc, now, x, y, atSea)
+	if len(fronts) == 0 {
+		b.WriteString("Fronts: none crossing or coming")
+	} else {
+		b.WriteString("Fronts:\n " + strings.Join(fronts, "\n "))
+	}
+	return b.String(), nil
+}
+
+// forecastSystem is a system of the forecast as the forecast tool tells
+// it: its record, its slot, the tick it is born at, and itself now or at
+// its birth if later; the tick now; and where the boat is.
+type forecastSystem struct {
+	s         *Sea
+	r         *physics.SystemRecord
+	slot      int
+	born, now int64
+	k         physics.System
+	x, y      float64
+	atSea     bool
+}
+
+// rank is where a system's kind comes in the list: the week's storms, the
+// lows, the lines, the cells, then those with no pressure of their own.
+func (w *forecastSystem) rank() int {
+	cfg := w.s.Timeline.Config()
+	k := int(w.k.Kind)
+	if k == cfg.Week.Storms {
+		return 0
+	}
+	if k >= len(cfg.Kinds) {
+		return 5
+	}
+	switch cfg.Kinds[k].Shape {
+	case physics.ShapeLow:
+		return 1
+	case physics.ShapeLine:
+		return 2
+	case physics.ShapeDome:
+		return 3
+	}
+	return 4
+}
+
+// distance is how far the system is from the boat, m.
+func (w *forecastSystem) distance() float64 {
+	return math.Hypot(w.k.East/4-w.x, w.k.North/4-w.y)
+}
+
+// words are a system's line: its kind's name, its wind and force now, of
+// one alive with the weather now t, or when it is born, where it is, how
+// it moves, and where it will be at each minute ahead the forecast tells:
+// "Low · 36 kn, gusts 44 kn, F8 · 62°02′N 221°52′, 236° 2.6 NM · moving NW
+// at 3 kn · 30 min: 267° 3.0 NM · 60 min: gone by then".
+func (w *forecastSystem) words(t *physics.WeatherTick, ahead *[len(forecastAhead)]physics.Keyframe) string {
+	s, k := w.s, &w.k
+	kind := "A weather system"
+	if i := int(k.Kind); i >= 0 && i < len(s.SystemKinds) {
+		kind = s.SystemKinds[i]
+	}
+	line := kind
+	if k.Length > 0 {
+		line += ", " + chart.DistanceText(k.Length) + " long"
+	}
+	minute := int64(60 * physics.StepsPerSecond)
+	east, north := k.East/4, k.North/4
+	if w.born <= w.now {
+		mean, gust := systemWind(s, k, t)
+		line += fmt.Sprintf(" · %d kn, gusts %d kn, F%d · ", knots0(mean), knots0(gust), weather.ForceOf(mean))
+	} else {
+		line += fmt.Sprintf(" · born in %d min at ", (w.born-w.now+minute-1)/minute)
+	}
+	line += chart.Format(east, north)
+	if w.atSea {
+		line += ", " + w.from(east, north)
+	}
+	if speed := k.Speed * physics.SeaSpeedStep; knots(speed) >= 1 {
+		line += fmt.Sprintf(" · moving %s at %d kn", point16(k.Heading*2*math.Pi/physics.TurnSteps), knots0(speed))
+	} else {
+		line += " · almost stationary"
+	}
+	for i, m := range forecastAhead {
+		if w.now+m*minute < w.born {
+			continue
+		}
+		a := &ahead[i].Systems[w.slot]
+		if a.On == 0 || a.Seed != w.r.Seed {
+			line += fmt.Sprintf(" · %d min: gone by then", m)
+			break
+		}
+		where := chart.Format(a.East/4, a.North/4)
+		if w.atSea {
+			where = w.from(a.East/4, a.North/4)
+		}
+		line += fmt.Sprintf(" · %d min: %s", m, where)
+	}
+	return line
+}
+
+// from is a point's bearing and distance from the boat: "236° 2.6 NM".
+func (w *forecastSystem) from(east, north float64) string {
+	dx, dy := east-w.x, north-w.y
+	return chart.BearingText(physics.Atan2(dx, dy)) + " " + chart.DistanceText(math.Sqrt(dx*dx+dy*dy))
+}
+
+// systemWind is a system's strongest mean wind and typical strongest gust
+// on the water now, m/s, sought where it blows hardest, as the chart's
+// label gives them: round a low's ring of strongest wind; along a line's
+// leading edge and halfway to it; at a cell's centre, its gust front ahead
+// of it, and round it.
+func systemWind(s *Sea, k *physics.System, t *physics.WeatherTick) (mean, gust float64) {
+	e, n := k.East/4, k.North/4
+	ux, uy := physics.SinCos(k.Heading * 2 * math.Pi / physics.TurnSteps)
+	var points [][2]float64
+	ring := 0.0
+	if kinds := s.Timeline.Config().Kinds; int(k.Kind) < len(kinds) && kinds[int(k.Kind)].Shape == physics.ShapeLow {
+		ring = kinds[int(k.Kind)].Width * k.Size
+	}
+	switch {
+	case ring > 0:
+		for i := range 8 {
+			sa, ca := physics.SinCos(float64(i) * math.Pi / 4)
+			points = append(points, [2]float64{e + ring*sa, n + ring*ca})
+		}
+	case k.Length > 0:
+		// Its length runs along (uy, −ux).
+		for _, along := range []float64{-1.0 / 3, 0, 1.0 / 3} {
+			for _, d := range []float64{0.5, 1} {
+				l, ah := along*k.Length, d*k.Size
+				points = append(points, [2]float64{e + ux*ah + uy*l, n + uy*ah - ux*l})
 			}
 		}
-		n++
-		b.WriteString(" " + systemWords(s, p, fc, sy, k, x, y, atSea) + "\n")
+	default:
+		points = append(points, [2]float64{e, n}, [2]float64{e + 0.5*ux*k.Size, n + 0.5*uy*k.Size}, [2]float64{e + ux*k.Size, n + uy*k.Size})
+		for i := range 4 {
+			sa, ca := physics.SinCos(k.Heading*2*math.Pi/physics.TurnSteps + math.Pi/4 + float64(i)*math.Pi/2)
+			points = append(points, [2]float64{e + 0.7*k.Size*sa, n + 0.7*k.Size*ca})
+		}
 	}
-	if n == 0 {
-		b.WriteString("Systems: none forecast\n")
+	for _, pt := range points {
+		m, _, g, _ := physics.TypicalAt(t, pt[0], pt[1])
+		mean, gust = max(mean, m), max(gust, g)
 	}
-	b.WriteString("The forecast is every sailor's: the truth ahead may differ.")
-	return b.String(), nil
+	return mean, max(gust, mean)
+}
+
+// frontsWords are the forecast's fronts crossing the disk now or coming
+// within its reach, each as warm or cold, where it comes from and when its
+// line reaches the boat, or the start for one not at sea.
+func frontsWords(s *Sea, fc *physics.Forecast, now int64, x, y float64, atSea bool) []string {
+	reach := s.Timeline.Prepared().FrontReach()
+	whom := "you"
+	if !atSea {
+		whom = "the start"
+		if s.Start != "" {
+			whom = s.Start
+		}
+	}
+	var out []string
+	for i := range int(fc.Head.NSpells) {
+		sp := &fc.Spells[i]
+		if sp.Front == 0 || !(sp.Change > 0) || sp.Begin+sp.Change <= float64(now) {
+			continue
+		}
+		toward := sp.Toward * 2 * math.Pi / physics.TurnSteps
+		kind := "A cold front"
+		if sp.Warm != 0 {
+			kind = "A warm front"
+		}
+		line := kind + " from the " + point16(toward+math.Pi)
+		// Its line crosses the reach at an even speed; it passes a point
+		// when it is as far along the way it moves.
+		ue, un := physics.SinCos(toward)
+		at := sp.Begin + (x*ue+y*un+reach)*sp.Change/(2*reach)
+		mins := int64(math.Round((at - float64(now)) / (60 * physics.StepsPerSecond)))
+		switch {
+		case float64(now) < sp.Begin:
+			line += fmt.Sprintf(", coming onto the disk in %d min", int64(math.Ceil((sp.Begin-float64(now))/(60*physics.StepsPerSecond))))
+		default:
+			line += ", crossing the disk"
+		}
+		if mins > 0 {
+			line += fmt.Sprintf(", reaching %s in %d min", whom, mins)
+		} else {
+			line += ", past " + whom
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 // issueWords are when an issue was made: "issued 3 minutes ago".
@@ -350,36 +568,6 @@ func (s *Sea) placeOf(p forecast.Place) (string, float64, float64, bool) {
 	}
 	sub := &w.Subjects[i]
 	return titleOf(sub), sub.X, sub.Y, true
-}
-
-// systemWords are a system on the forecast at step k: what it is, where,
-// how far off and which way it moves, and the cone it may be within.
-func systemWords(s *Sea, p *physics.WeatherPrepared, fc *physics.Forecast, sy *physics.ForecastSystem, k int, x, y float64, atSea bool) string {
-	kind := "a weather system"
-	if i := int(sy.Kind); i >= 0 && i < len(s.SystemKinds) {
-		kind = s.SystemKinds[i]
-	}
-	east, north := sy.East[k], sy.North[k]
-	line := kind
-	if sy.Forming > 0 {
-		line = "forming: " + kind
-	}
-	line += " · " + chart.Format(east, north)
-	if atSea {
-		dx, dy := east-x, north-y
-		line += " · " + chart.BearingText(physics.Atan2(dx, dy)) + " " + chart.DistanceText(math.Sqrt(dx*dx+dy*dy)) + " from you"
-	}
-	speed := sy.Speed[k] * physics.SeaSpeedStep
-	if knots(speed) >= 1 {
-		heading := sy.Heading[k] * 2 * math.Pi / physics.TurnSteps
-		line += fmt.Sprintf(" · moving %s at %d kn", point16(heading), knots0(speed))
-	} else {
-		line += " · almost stationary"
-	}
-	if cone := physics.ForecastCone(p, fc, sy, int32(k)); cone > 0 {
-		line += " · within " + chart.DistanceText(cone) + " of that"
-	}
-	return line
 }
 
 // newsArgs are news's.

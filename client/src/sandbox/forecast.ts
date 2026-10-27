@@ -21,6 +21,8 @@ export interface SandboxWeather {
   tick: () => number;
   /** The spells in play, each a spell record's values. */
   spells: () => readonly ArrayLike<number>[];
+  /** How many ticks apart the systems' keyframes are. */
+  keyframes: number;
 }
 
 /** The nearest charted island or place to a point, or null. */
@@ -135,7 +137,7 @@ export class SandboxForecast {
   /** Issues the forecast at a tick, as the server issues its own. */
   issueAt(issue: number): ForecastTold {
     const p = this.#w.physics;
-    p.forecastMake(issue, 0);
+    p.forecastMake(issue, 0, this.#w.keyframes);
     const f = forecastOfModule(p);
     const steps = f.head[RECORDS.forecastHead.steps] ?? 1;
     const before = this.#forecasts.issueAt(issue - this.#every);

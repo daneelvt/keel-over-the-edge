@@ -32,7 +32,7 @@ const (
 	NearFog    = 8
 )
 
-// The skies a box gives, mildest first, as the catalog's risks name them.
+// The skies a box gives, mildest first.
 var skies = []string{"fair", "showers", "fog patches", "rain", "squally showers", "squalls with heavy rain"}
 
 // The sky's words, as indices into skies.
@@ -91,14 +91,12 @@ type PlaceSample struct {
 
 // PlaceWeather is a place's weather at a time: its points', the first its
 // centre; the pressure at its centre then, 5 and 15 minutes before, hPa;
-// the sky of the regime's risk where it may come there, "" for none; and
-// whether a storm's centre is within its size of the place.
+// and whether a storm's centre is within its size of the place.
 type PlaceWeather struct {
 	Points   []PlaceSample `json:"points"`
 	Pressure float64       `json:"pressure"`
 	Before   float64       `json:"before"`
 	Quarter  float64       `json:"quarter"`
-	Risk     string        `json:"risk"`
 	Cyclonic bool          `json:"cyclonic"`
 }
 
@@ -168,11 +166,9 @@ func (w *PlaceWeather) meanFrom() float64 {
 	return physics.Atan2(e, n)
 }
 
-// sky is the worst of the points' skies and the risk's, an index into
-// skies.
+// sky is the worst of the points' skies, an index into skies.
 func (w *PlaceWeather) sky(words *Words) int {
-	worst := slices.Index(skies, w.Risk)
-	worst = max(worst, skyFair)
+	worst := skyFair
 	for _, p := range w.Points {
 		worst = max(worst, skyAt(&p, words))
 	}
@@ -610,4 +606,12 @@ func GeneralSituation(s *Situation, words *Words) []string {
 		out = append(out, "No systems expected")
 	}
 	return out
+}
+
+// FormedText is a system's forming as the news tells it, kind its name
+// with its article, where it is and how it moves in the general
+// situation's words: "A storm has formed in the south-west outer waters,
+// moving northeast slowly".
+func (s *Situation) FormedText(kind string, east, north, heading, speed float64) string {
+	return capital(kind) + " has formed " + s.area(east, north) + ", " + movingWords(heading, speed)
 }

@@ -1,34 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The forecast on the world page's map, drawn over the truth for the owner,
-// who alone may see both: each system's forecast track through its steps,
-// its cone swept along it, dashed, a forming low's a band of one width,
-// and where the forecast puts it at the tick shown, an open circle beside
-// the truth's mark; each front's forecast line at the tick shown with its
-// band, and faintly where it will be at each step; the water in a gale at
-// the tick shown hatched and lettered; and the risk the regime in force
-// brings, which no forecast places. And the forecast's calibration and the
-// world's gale warnings, in the few words and rows the cards give them.
+// who alone may see both: each system's track over the forecast's reach,
+// made from its record as a phone makes it, a dot every ten minutes, and
+// where it is at the tick shown, an open circle beside the truth's mark, a
+// line drawn across its motion at its length; each front's line at the
+// tick shown, a cold front's triangles or a warm front's semicircles, and
+// faintly where it will be at each step; and the water in a gale at the
+// tick shown hatched and lettered. The forecast is the truth, so its marks
+// lie on the truth's own. And the world's gale warnings and how busy its
+// weather has been, in the few words and rows the cards give them.
 
 import type {
-  CalibrationPage,
+  BusyFigures,
   ForecastFront,
   ForecastPage,
   ForecastSpell,
   ForecastSystem,
   GaleWarning,
+  SystemKind,
 } from './api';
 import { brief } from './life';
 import { toScreen, type View } from './map';
-import { frontLine } from './weather';
+import { drawFrontLine, drawLine, frontLine, lineEnds } from './weather';
 
 /** The forecast's colours, Okabe and Ito's, apart from the truth's. */
 export const FORECAST_COLOURS = {
   system: '#56b4e9',
-  forming: '#cc79a7',
-  front: '#e69f00',
+  storm: '#cc79a7',
   gale: '#d55e00',
-  risk: '#ffffff',
 };
 
 /** The tick shown as a step of the forecast, with its fraction: 0 at the issue, the last step at most. */
@@ -43,37 +43,42 @@ function lerp(a: number, b: number, u: number): number {
 }
 
 /**
- * Where the forecast puts a system at a step with its fraction, east, north
- * and its cone's radius, between the steps about it; at the step before
- * alone if it is not alive at the next; null if it is not alive at either.
+ * Where the forecast puts a system at a tick, east, north, its strength and
+ * the degrees it moves toward, between its track's points about it, every
+ * ticks apart; null before its first or after its last.
  */
-export function systemAt(s: ForecastSystem, step: number): [number, number, number] | null {
-  const k = Math.floor(step);
-  const a = s.steps[k];
-  const b = s.steps[k + 1];
-  const u = step - k;
-  if (a === undefined || a[3] <= 0) {
-    return b !== undefined && b[3] > 0 && u > 0.5 ? [b[0], b[1], b[2]] : null;
+export function trackAt(
+  s: ForecastSystem,
+  at: number,
+  every: number,
+): [number, number, number, number] | null {
+  const u = (at - s.from) / Math.max(1, every);
+  const k = Math.floor(u);
+  const a = s.track[k];
+  if (u < 0 || a === undefined) {
+    return null;
   }
-  if (b === undefined || b[3] <= 0 || u === 0) {
-    return [a[0], a[1], a[2]];
+  const b = s.track[k + 1];
+  if (b === undefined) {
+    return u === k ? [...a] : null;
   }
-  return [lerp(a[0], b[0], u), lerp(a[1], b[1], u), lerp(a[2], b[2], u)];
+  const f = u - k;
+  // The heading the shorter way round.
+  const turn = ((((b[3] - a[3]) % 360) + 540) % 360) - 180;
+  return [
+    lerp(a[0], b[0], f),
+    lerp(a[1], b[1], f),
+    lerp(a[2], b[2], f),
+    (a[3] + turn * f + 360) % 360,
+  ];
 }
 
-/** A front's forecast line and band at a step with its fraction, between the steps about it; null where it is not crossing. */
-export function frontAt(f: ForecastFront, step: number): [number, number] | null {
-  const k = Math.floor(step);
-  const a = f.lines[k] ?? null;
-  const b = f.lines[k + 1] ?? null;
-  const u = step - k;
-  if (a === null) {
-    return b !== null && u > 0.5 ? b : null;
+/** A front's line at a tick, m from the centre along the way it moves; null where it is not crossing. */
+export function frontLineAt(f: ForecastFront, at: number, reach: number): number | null {
+  if (f.cross <= 0 || at < f.begin || at > f.begin + f.cross) {
+    return null;
   }
-  if (b === null || u === 0) {
-    return a;
-  }
-  return [lerp(a[0], b[0], u), lerp(a[1], b[1], u)];
+  return (2 * reach * (at - f.begin)) / f.cross - reach;
 }
 
 /** The spell in force at a tick of a forecast's spells: the last begun by it, or the first. */
@@ -85,14 +90,6 @@ export function spellAt(spells: readonly ForecastSpell[], at: number): ForecastS
     }
   }
   return out;
-}
-
-/** A regime's risk in a few words: "squally showers (showers, squalls)". */
-export function riskWords(s: ForecastSpell): string {
-  if (s.risk === '') {
-    return '';
-  }
-  return s.marks.length > 0 ? `${s.risk} (${s.marks.join(', ')})` : s.risk;
 }
 
 /** The bits a gale area's base64 carries: point n the bit n mod 8 of byte n / 8. */
@@ -121,60 +118,51 @@ export function areaPoints(area: string, side: number, grid: number): [number, n
   return out;
 }
 
-/** A circle on the canvas: its centre and radius. */
-export type Circle = [number, number, number];
-
-/**
- * The two lines that touch two circles on their outer sides, each from the
- * first circle to the second: the edges of a cone swept from one to the
- * other. None where one circle holds the other.
- */
-export function outerTangents(a: Circle, b: Circle): [[number, number], [number, number]][] {
-  const [x1, y1, r1] = a;
-  const [x2, y2, r2] = b;
-  const d = Math.hypot(x2 - x1, y2 - y1);
-  if (d <= Math.abs(r1 - r2) || d === 0) {
-    return [];
-  }
-  const theta = Math.atan2(y2 - y1, x2 - x1);
-  const alpha = Math.acos((r1 - r2) / d);
-  return [theta + alpha, theta - alpha].map((phi) => {
-    const [c, s] = [Math.cos(phi), Math.sin(phi)];
-    return [
-      [x1 + r1 * c, y1 + r1 * s],
-      [x2 + r2 * c, y2 + r2 * s],
-    ];
-  });
-}
-
-/** A row of the calibration's table: what is counted, and at each lead its share inside and its cases. */
-export interface CalibrationRow {
-  name: string;
-  cells: { share: string; cases: number }[];
-}
-
-/** The calibration's rows: the systems alive at the issue, the lows forming, the fronts' lines. */
-export function calibrationRows(c: CalibrationPage): CalibrationRow[] {
-  const row = (name: string, counts: readonly [number, number][]): CalibrationRow => ({
-    name,
-    cells: counts.map(([inside, cases]) => ({
-      share: cases > 0 ? `${Math.round((100 * inside) / cases)}%` : '—',
-      cases,
-    })),
-  });
-  return [
-    row('Systems alive at the issue', c.alive),
-    row('Lows forming', c.forming),
-    row("Fronts' lines", c.fronts),
-  ];
-}
-
 /** When a gale warning was in force, in a few words: "Mon 19 Oct, 18:40 to 20:10", "since …" while it is. */
 export function warningSpan(w: GaleWarning, every: number, epoch: number, tps: number): string {
   const ms = (t: number): number => epoch + (t / tps) * 1000;
   return w.inForce
     ? `since ${brief(ms(w.key))}`
     : `${brief(ms(w.key))} to ${brief(ms(w.last + every))}`;
+}
+
+/** A row of the busy weather's table: what is counted, and its share so far and over the week. */
+export interface BusyRow {
+  name: string;
+  soFar: string;
+  week: string;
+}
+
+/** The busy weather's rows: the shares of the minutes, %, and the systems on the disk on average, overall and by regime. */
+export function busyRows(soFar: BusyFigures, week: BusyFigures): BusyRow[] {
+  const pct = (v: number, n: number): string => (n > 0 ? `${v.toFixed(1)}%` : '—');
+  const mean = (v: number, n: number): string => (n > 0 ? v.toFixed(1) : '—');
+  const row = (name: string, of: (f: BusyFigures) => number): BusyRow => ({
+    name,
+    soFar: pct(of(soFar), soFar.minutes),
+    week: pct(of(week), week.minutes),
+  });
+  const rows = [
+    row('Nothing on the disk', (f) => f.empty),
+    row('Rain somewhere', (f) => f.rain),
+    row('A storm or a low', (f) => f.lows),
+    row('A storm', (f) => f.storms),
+    row('A front or a trough', (f) => f.lines),
+    {
+      name: 'Systems on the disk, on average',
+      soFar: mean(soFar.systems, soFar.minutes),
+      week: mean(week.systems, week.minutes),
+    },
+  ];
+  week.regimes.forEach((r, i) => {
+    const s = soFar.regimes[i];
+    rows.push({
+      name: `Systems on average, ${r.id}`,
+      soFar: mean(s?.systems ?? 0, s?.minutes ?? 0),
+      week: mean(r.systems, r.minutes),
+    });
+  });
+  return rows;
 }
 
 /** Text with a dark halo, legible over land and sea. */
@@ -185,156 +173,106 @@ function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
   ctx.fillText(text, x, y);
 }
 
-/** A path's line through canvas points, from the first. */
-function through(ctx: CanvasRenderingContext2D, points: readonly (readonly number[])[]): void {
-  points.forEach(([x = 0, y = 0], k) => {
+/** A system's forecast: its track over the reach, a dot every ten minutes, and where it is at the tick shown. */
+function drawSystem(
+  ctx: CanvasRenderingContext2D,
+  v: View,
+  f: ForecastPage,
+  s: ForecastSystem,
+  at: number,
+  kind: SystemKind | undefined,
+): void {
+  if (s.track.length === 0) {
+    return;
+  }
+  const colour = kind?.storm === true ? FORECAST_COLOURS.storm : FORECAST_COLOURS.system;
+  ctx.strokeStyle = colour;
+  ctx.fillStyle = colour;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  s.track.forEach(([e, n], k) => {
+    const [x, y] = toScreen(v, e, n);
     if (k === 0) {
       ctx.moveTo(x, y);
     } else {
       ctx.lineTo(x, y);
     }
   });
-}
-
-/** A system's forecast: its track, its cone swept along it, dashed, and where it is forecast at the step shown. */
-function drawSystem(
-  ctx: CanvasRenderingContext2D,
-  v: View,
-  s: ForecastSystem,
-  step: number,
-  name: string,
-): void {
-  const colour = s.forming ? FORECAST_COLOURS.forming : FORECAST_COLOURS.system;
-  const alive = s.steps
-    .filter((p) => p[3] > 0)
-    .map((p): Circle => {
-      const [x, y] = toScreen(v, p[0], p[1]);
-      return [x, y, p[2] / v.scale];
-    });
-  if (alive.length === 0) {
-    return;
-  }
-  ctx.strokeStyle = colour;
-  ctx.fillStyle = colour;
-  // Its track through its steps, a dot at each.
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  through(ctx, alive);
   ctx.stroke();
-  for (const [x, y] of alive) {
-    ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
-  }
-  // Its cone: the circle at each step and the lines that sweep them, dashed.
-  ctx.globalAlpha = 0.75;
-  ctx.lineWidth = 1;
-  ctx.setLineDash([5, 4]);
-  ctx.beginPath();
-  for (const [x, y, r] of alive) {
-    if (r > 0.5) {
-      ctx.moveTo(x + r, y);
-      ctx.arc(x, y, r, 0, 2 * Math.PI);
+  // A dot at every ten minutes from the issue: the track's points are a
+  // minute apart.
+  s.track.forEach(([e, n], k) => {
+    if ((s.from + k * f.every - f.issue) % (10 * f.every) === 0) {
+      const [x, y] = toScreen(v, e, n);
+      ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
     }
-  }
-  for (let k = 1; k < alive.length; k++) {
-    const a = alive[k - 1];
-    const b = alive[k];
-    if (a === undefined || b === undefined) {
-      continue;
-    }
-    for (const [p, q] of outerTangents(a, b)) {
-      ctx.moveTo(p[0], p[1]);
-      ctx.lineTo(q[0], q[1]);
-    }
-  }
-  ctx.stroke();
-  ctx.setLineDash([]);
+  });
   ctx.globalAlpha = 1;
-  // Where it is forecast at the step shown: an open circle.
-  const at = systemAt(s, step);
-  if (at !== null) {
-    const [x, y] = toScreen(v, at[0], at[1]);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, 7, 0, 2 * Math.PI);
-    ctx.stroke();
-    ctx.font = 'italic 10px "Alegreya Sans", sans-serif';
-    ctx.textAlign = 'center';
-    label(ctx, `${name}${s.forming ? ', forming' : ''} (forecast)`, x, y - 11);
-    ctx.textAlign = 'start';
-  }
-}
-
-/** A front's forecast: faintly its line at each step, and at the step shown its line, dashed, and its band shaded. */
-function drawFront(
-  ctx: CanvasRenderingContext2D,
-  v: View,
-  f: ForecastFront,
-  step: number,
-  lip: number,
-): void {
-  const chord = (line: number): [[number, number], [number, number]] | null =>
-    frontLine(
-      { toward: f.toward, line, knots: 0, depth: 0, enters: 0, leaves: 0, portRoyal: 0 },
-      lip,
-    );
-  const stroke = (ends: [[number, number], [number, number]]): void => {
-    const [x0, y0] = toScreen(v, ends[0][0], ends[0][1]);
-    const [x1, y1] = toScreen(v, ends[1][0], ends[1][1]);
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-  };
-  ctx.strokeStyle = FORECAST_COLOURS.front;
-  ctx.fillStyle = FORECAST_COLOURS.front;
-  ctx.globalAlpha = 0.35;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (const l of f.lines) {
-    const ends = l === null ? null : chord(l[0]);
-    if (ends !== null) {
-      stroke(ends);
-    }
-  }
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  const now = frontAt(f, step);
+  // Where it is at the tick shown: an open circle, a line drawn across.
+  const now = trackAt(s, at, f.every);
   if (now === null) {
     return;
   }
-  const [line, band] = now;
-  // The band: the strip of the disk within band of the line.
-  if (band > 0) {
-    const a = (f.toward * Math.PI) / 180;
-    const [ue, un] = [Math.sin(a), Math.cos(a)];
-    const [we, wn] = [Math.cos(a), -Math.sin(a)];
-    const corner = (along: number, across: number): [number, number] =>
-      toScreen(v, along * ue + across * we, along * un + across * wn);
-    const [cx, cy] = toScreen(v, 0, 0);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, lip / v.scale, 0, 2 * Math.PI);
-    ctx.clip();
-    ctx.globalAlpha = 0.18;
-    ctx.beginPath();
-    const corners = [
-      corner(line - band, -lip),
-      corner(line - band, lip),
-      corner(line + band, lip),
-      corner(line + band, -lip),
-    ];
-    through(ctx, corners);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+  const [x, y] = toScreen(v, now[0], now[1]);
+  if (s.length > 0) {
+    drawLine(
+      ctx,
+      lineEnds(v, now[0], now[1], s.length, now[3]),
+      now[3],
+      kind?.symbol ?? '',
+      now[2],
+    );
+    ctx.strokeStyle = colour;
   }
-  const ends = chord(line);
-  if (ends !== null) {
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 5]);
-    ctx.beginPath();
-    stroke(ends);
-    ctx.stroke();
-    ctx.setLineDash([]);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, 7, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.font = 'italic 10px "Alegreya Sans", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = colour;
+  label(ctx, `${kind?.name || s.id || s.kind} (forecast)`, x, y - 11);
+  ctx.textAlign = 'start';
+}
+
+/** A front's forecast: faintly its line at each step, and at the tick shown its line, warm or cold. */
+function drawFront(
+  ctx: CanvasRenderingContext2D,
+  v: View,
+  f: ForecastPage,
+  fr: ForecastFront,
+  at: number,
+): void {
+  const chord = (line: number): [[number, number], [number, number]] | null =>
+    frontLine(
+      {
+        toward: fr.toward,
+        line,
+        knots: 0,
+        depth: 0,
+        enters: 0,
+        leaves: 0,
+        portRoyal: 0,
+        warm: fr.warm,
+      },
+      f.lip,
+    );
+  const draw = (line: number | null, alpha: number): void => {
+    const ends = line === null ? null : chord(line);
+    if (ends === null) {
+      return;
+    }
+    const [x0, y0] = toScreen(v, ends[0][0], ends[0][1]);
+    const [x1, y1] = toScreen(v, ends[1][0], ends[1][1]);
+    drawFrontLine(ctx, x0, y0, x1, y1, fr.toward, fr.warm, alpha);
+  };
+  for (let k = 0; k < f.steps; k++) {
+    draw(frontLineAt(fr, f.issue + k * f.step, f.reach), 0.25);
   }
+  ctx.setLineDash([8, 5]);
+  draw(frontLineAt(fr, at, f.reach), 1);
+  ctx.setLineDash([]);
 }
 
 /** The water in a gale at the step shown: its points' cells hatched, and "Gale" with its force lettered over them. */
@@ -387,25 +325,13 @@ export function drawForecast(
   v: View,
   f: ForecastPage,
   at: number,
-  kinds: readonly { id: string }[],
+  kinds: readonly SystemKind[],
 ): void {
-  const step = stepOf(f, at);
-  drawGale(ctx, v, f, step);
+  drawGale(ctx, v, f, stepOf(f, at));
   for (const fr of f.fronts) {
-    drawFront(ctx, v, fr, step, f.lip);
+    drawFront(ctx, v, f, fr, at);
   }
   for (const s of f.systems) {
-    drawSystem(ctx, v, s, step, s.id || (kinds[s.kind]?.id ?? String(s.kind)));
-  }
-  // The risk the regime in force brings, above the disk.
-  const spell = spellAt(f.spells, at);
-  const words = spell === null ? '' : riskWords(spell);
-  if (words !== '') {
-    const [x, y] = toScreen(v, 0, f.lip);
-    ctx.font = 'italic 12px "Alegreya Sans", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = FORECAST_COLOURS.risk;
-    label(ctx, `Risk: ${words}`, x, y - 8);
-    ctx.textAlign = 'start';
+    drawSystem(ctx, v, f, s, at, kinds[s.kind]);
   }
 }

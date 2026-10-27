@@ -2,21 +2,25 @@
 
 // The chart's screens: the chart itself over the whole screen, where a
 // drag moves it, two fingers pinch and turn it, a double tap fits the whole
-// disk and a tap opens a place's box; its list, everything charted nearest
-// first, the chart's readable twin; the news, a period sheet; the pocket
-// chart in the corner at sea; and the notice line.
+// disk and a tap opens a place's box, or a weather system's with the
+// course to meet it; its list, everything charted nearest first, the
+// chart's readable twin; the news, a period sheet; the pocket chart in the
+// corner at sea; and the notice line.
 
 import './chart.css';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { Chart } from '../chart/chart';
+import { Raycaster, Vector2 } from 'three';
+import type { Chart, TappedWeather } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
-import { type PocketWeather, pocketWeather } from '../chart/pocketweather';
+import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
 import { type ChartStore, chartList, dayText, edgeCaption, whenText } from '../chart/store';
-import type { BoatAt } from '../chart/view';
+import { hitTest, type SystemBox, tappedBox, type WeatherHit } from '../chart/systembox';
+import type { BoatAt, ChartView } from '../chart/view';
 import type { ChartEntry } from '../net/messages';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
 import { type Countdown, endText } from './countdown';
+import { threeDigits, wholeDegrees } from './format';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 
@@ -35,6 +39,10 @@ export interface ChartSea {
   columns: readonly NewsColumn[];
   /** The forecast and what has been, or null without. */
   forecasting: Forecasting | null;
+  /** The boat's speed over the ground now, m/s. */
+  speed: () => number;
+  /** Sets the autopilot to hold a heading, rad, as its panel does; null with no boat to steer. */
+  steer: ((heading: number) => void) | null;
 }
 
 /** A column of the news: what its items tell of, what is charted or the world itself. */
@@ -202,8 +210,19 @@ function useGestures(sea: ChartSea) {
           lastTap = 0;
         } else {
           lastTap = e.timeStamp;
-          const picked = view.pick(e.clientX - r.left, e.clientY - r.top);
+          const x = e.clientX - r.left;
+          const y = e.clientY - r.top;
+          let picked = view.pick(x, y);
+          const weather = weatherTapped(sea, x, y, r);
+          // Within a system, a place wins only under the finger.
+          if (picked !== null && weather !== null) {
+            const p = view.screenOf(picked.east, picked.north);
+            if (p === null || Math.hypot(p.x - x, p.y - y) > FINGER) {
+              picked = null;
+            }
+          }
           sea.chart.picked.value = picked;
+          sea.chart.tapped.value = picked === null ? weather : null;
         }
       }
       pts.delete(e.pointerId);
@@ -228,6 +247,150 @@ function useGestures(sea: ChartSea) {
     };
   }, [sea]);
   return ref;
+}
+
+const ray = new Raycaster();
+
+/** A tap within a weather system opens a place's box rather than the system's only this near the place's mark, CSS pixels. */
+const FINGER = 22;
+
+/** Where a tap at (x, y) CSS pixels of a surface of a size meets the paper, m east and north; null off it. */
+function paperAt(view: ChartView, x: number, y: number, size: { width: number; height: number }) {
+  ray.setFromCamera(new Vector2((x / size.width) * 2 - 1, -(y / size.height) * 2 + 1), view.camera);
+  const o = ray.ray.origin;
+  const d = ray.ray.direction;
+  if (d.y >= 0) {
+    return null;
+  }
+  const t = -o.y / d.y;
+  return { east: o.x + d.x * t, north: -(o.z + d.z * t) };
+}
+
+/** The weather system or front a tap at (x, y) falls within, as the chart's weather draws it, or null. */
+function weatherTapped(
+  sea: ChartSea,
+  x: number,
+  y: number,
+  size: { width: number; height: number },
+): TappedWeather | null {
+  const scene = sea.chart.view.weather?.scene ?? null;
+  if (scene === null || !sea.chart.layers.value.systems) {
+    return null;
+  }
+  const at = paperAt(sea.chart.view, x, y, size);
+  const hit = at === null ? null : hitTest(scene, at, sea.lip);
+  if (hit === null) {
+    return null;
+  }
+  return hit.kind === 'system'
+    ? { kind: 'system', slot: hit.system.slot, seed: hit.system.seed }
+    : { kind: 'front', sin: hit.front.sin, cos: hit.front.cos };
+}
+
+/** The tapped thing as the chart's weather last drew it, or null if it is no longer drawn. */
+function hitOf(sea: ChartSea, t: TappedWeather): { hit: WeatherHit; shown: number } | null {
+  const scene = sea.chart.view.weather?.scene ?? null;
+  if (scene === null) {
+    return null;
+  }
+  if (t.kind === 'system') {
+    const s = scene.systems.find((x) => x.slot === t.slot && x.seed === t.seed);
+    return s === undefined
+      ? null
+      : { hit: { kind: 'system', system: s }, shown: scene.moment.tick };
+  }
+  const f = scene.fronts.find(
+    (x) => Math.abs(x.sin - t.sin) < 1e-6 && Math.abs(x.cos - t.cos) < 1e-6,
+  );
+  return f === undefined ? null : { hit: { kind: 'front', front: f }, shown: scene.moment.tick };
+}
+
+/** A tapped thing's box now, from the chart's weather and the forecast; null if it is gone. */
+function systemBoxOf(sea: ChartSea, t: TappedWeather): SystemBox | null {
+  const src = sea.forecasting;
+  const found = hitOf(sea, t);
+  const scene = sea.chart.view.weather?.scene ?? null;
+  if (src === null || found === null || scene === null) {
+    return null;
+  }
+  const fields = src.fields();
+  const b = sea.boat();
+  return tappedBox({
+    hit: found.hit,
+    grid: scene.grid,
+    boat: { east: b.east, north: b.north },
+    speed: sea.speed(),
+    physics: fields?.physics ?? null,
+    latest: src.forecasts.latest,
+    shown: found.shown,
+    now: src.tick(),
+    reach: fields?.physics.frontReach() ?? sea.lip,
+  });
+}
+
+/** A weather system's box: its kind, its wind, where it is, how it moves and lives, the course to meet it, and Steer. */
+function SystemBoxPanel({ sea, t, close }: { sea: ChartSea; t: TappedWeather; close: () => void }) {
+  const [box, setBox] = useState<SystemBox | null>(() => systemBoxOf(sea, t));
+  useEffect(() => {
+    setBox(systemBoxOf(sea, t));
+    // The boat and the system move on.
+    const i = setInterval(() => setBox(systemBoxOf(sea, t)), 1000);
+    return () => clearInterval(i);
+  }, [sea, t]);
+  const steer = box?.steer ?? null;
+  const to = box?.to ?? null;
+  return (
+    <section
+      class="chart-panel chart-box chart-system"
+      aria-label={box?.name ?? 'Weather'}
+      data-readout="system-box"
+    >
+      {box === null ? (
+        <p>It has gone from the chart.</p>
+      ) : (
+        <>
+          <h2>{box.name}</h2>
+          <dl class="chart-weather">
+            <dt>Wind</dt>
+            <dd>{box.wind}</dd>
+            <dt>Where</dt>
+            <dd>{box.where}</dd>
+            <dt>Moving</dt>
+            <dd>{box.motion}</dd>
+            {box.life !== '' ? (
+              <>
+                <dt>Lives</dt>
+                <dd>{box.life}</dd>
+              </>
+            ) : null}
+          </dl>
+          {box.course !== '' ? (
+            <p class="chart-course" data-readout="system-course">
+              {box.course}
+            </p>
+          ) : null}
+        </>
+      )}
+      <div class="chart-buttons">
+        {steer !== null && to !== null && sea.steer !== null ? (
+          <button
+            type="button"
+            data-steer="system"
+            onClick={() => {
+              sea.steer?.(steer);
+              sea.chart.steered.value = { heading: steer, ...to };
+              sea.chart.show(null);
+            }}
+          >
+            Steer {threeDigits(wholeDegrees(steer))}°
+          </button>
+        ) : null}
+        <button type="button" onClick={close}>
+          Close
+        </button>
+      </div>
+    </section>
+  );
 }
 
 /** The tabs between the chart, its list and the news, and the way back to sea. */
@@ -487,6 +650,7 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
   }, [chart]);
   const mode = chart.mode.value;
   const picked = chart.picked.value;
+  const tapped = chart.tapped.value;
   return (
     <div class={`chart-screen chart-${mode}`}>
       <div class="chart-surface" ref={surface} hidden={mode !== 'chart'} />
@@ -498,6 +662,9 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
       </header>
       {mode === 'chart' && picked !== null ? (
         <ChartBox sea={sea} e={picked} close={() => (chart.picked.value = null)} />
+      ) : null}
+      {mode === 'chart' && picked === null && tapped !== null ? (
+        <SystemBoxPanel sea={sea} t={tapped} close={() => (chart.tapped.value = null)} />
       ) : null}
       {mode === 'chart' && sea.forecasting !== null ? (
         <TimeBar chart={chart} src={sea.forecasting} />
@@ -635,70 +802,6 @@ export function drawPocket(
   ctx.arc(bx, by, 4, 0, 2 * Math.PI);
   ctx.fill();
   ctx.restore();
-}
-
-/** The pocket chart's weather, under its islands: fog's wash, rain's dots, the fronts and the systems' marks. */
-function drawPocketWeather(
-  ctx: CanvasRenderingContext2D,
-  w: PocketWeather,
-  x: (east: number) => number,
-  y: (north: number) => number,
-  k: number,
-  tilt: number,
-): void {
-  const cell = (2 * w.lip) / w.n;
-  for (let j = 0; j < w.n; j++) {
-    for (let i = 0; i < w.n; i++) {
-      const kk = j * w.n + i;
-      const east = ((i + 0.5) / w.n - 0.5) * 2 * w.lip;
-      const north = (0.5 - (j + 0.5) / w.n) * 2 * w.lip;
-      if (east * east + north * north > w.lip * w.lip) {
-        continue;
-      }
-      if ((w.fog[kk] ?? Number.POSITIVE_INFINITY) < 1852) {
-        ctx.fillStyle = 'rgb(98 105 107 / 45%)';
-        ctx.fillRect(x(east - cell / 2), y(north + cell / 2), cell * k, cell * k * tilt);
-      }
-      if ((w.rain[kk] ?? 0) >= 0.1) {
-        ctx.fillStyle = 'rgb(79 120 150 / 85%)';
-        ctx.fillRect(x(east) - 1, y(north) - 1, 2, 2);
-      }
-    }
-  }
-  ctx.strokeStyle = '#123d8c';
-  ctx.lineWidth = 2;
-  for (const f of w.fronts) {
-    const a = [f.sin * f.line - f.cos * w.lip, f.cos * f.line + f.sin * w.lip];
-    const z = [f.sin * f.line + f.cos * w.lip, f.cos * f.line - f.sin * w.lip];
-    ctx.beginPath();
-    ctx.moveTo(x(a[0] ?? 0), y(a[1] ?? 0));
-    ctx.lineTo(x(z[0] ?? 0), y(z[1] ?? 0));
-    ctx.stroke();
-  }
-  for (const s of w.systems) {
-    if (s.draw === 'calm' || s.draw === 'bank') {
-      continue;
-    }
-    const colour = s.draw === 'low' ? '#8c3a24' : s.draw === 'cell' ? '#3a3f4a' : '#4f7896';
-    ctx.strokeStyle = colour;
-    ctx.fillStyle = colour;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.ellipse(
-      x(s.east),
-      y(s.north),
-      Math.max(s.size * k * 0.6, 2),
-      Math.max(s.size * k * 0.6 * tilt, 1.5),
-      0,
-      0,
-      2 * Math.PI,
-    );
-    if (s.draw === 'cell') {
-      ctx.fill();
-    } else {
-      ctx.stroke();
-    }
-  }
 }
 
 /** The notice shown, with its way to dismiss it; the line is in the page from the start, empty. */

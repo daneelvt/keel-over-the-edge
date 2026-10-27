@@ -249,19 +249,9 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The latest forecast, as every sailor's chart shows it: gale warnings in force, and the weather systems with where they are heading. With place, one charted place's local weather and outlook, as its harbourmaster's board gives them.",
+    "description": "The forecast for the next 90 minutes, as every sailor's chart shows it, and the truth: gale warnings in force, every weather system with its wind, where it is and where it will be in 30, 60 and 90 minutes, and the fronts and when they reach you. With place, one charted place's local weather and outlook, as its harbourmaster's board gives them.",
     "inputSchema": {
       "properties": {
-        "ahead": {
-          "description": "Minutes after the issue, for the systems.",
-          "enum": [
-            0,
-            30,
-            60,
-            90
-          ],
-          "type": "integer"
-        },
         "place": {
           "description": "A charted place: its local weather.",
           "type": "string"
@@ -278,7 +268,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The world's news sheet, newest first: what was charted and by whom, the world's notices and gale warnings. Names in «» are written by players.",
+    "description": "The world's news sheet, newest first: what was charted and by whom, the world's notices and each storm as it forms. Names in «» are written by players.",
     "inputSchema": {
       "properties": {
         "before": {

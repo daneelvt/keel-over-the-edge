@@ -15,7 +15,10 @@ import "math"
 // a sailor learns agree.
 //
 // A dome (a squall, a shower) is a Gaussian, steeper on its leading edge,
-// where its outflow meets the wind as a gust front; a low (a storm) is a
+// where its outflow meets the wind as a gust front; a line (a squall line, a
+// trough) is a dome stretched across its motion, flat along its length and
+// falling off past its ends as a dome does, so its gust front runs along
+// its leading edge in one slot whatever its length; a low (a storm) is a
 // core Gaussian, whose width is the ring of its strongest wind, and a broad
 // shallow low about it, so that the barometer falls well before its wind
 // arrives, a sum of Gaussians in place of Holland's profile (Holland 1980),
@@ -33,8 +36,8 @@ import "math"
 // WeekSystems on the disk at once, in the slots below it, and 4 a developer
 // places, in the slots above.
 const (
-	MaxSystems  = 20
-	WeekSystems = 16
+	MaxSystems  = 28
+	WeekSystems = 24
 )
 
 // KeySets is the most keyframes a Weather holds: the two about the tick it
@@ -42,8 +45,9 @@ const (
 // replays behind.
 const KeySets = 4
 
-// MaxKinds is the most kinds of system.
-const MaxKinds = 8
+// MaxKinds is the most kinds of system: the catalog's and one more beside
+// them, the sandbox's held fog bank.
+const MaxKinds = 12
 
 // Units of a System's whole numbers.
 const (
@@ -119,11 +123,13 @@ type systemTick struct {
 	k        *systemKind
 	cx, cy   float64 // its centre, m
 	ux, uy   float64 // the direction it moves toward
+	half     float64 // a line's half length across its motion, m; 0 for any other shape
 	w        float64 // its Gaussian width, m
 	inv2w2   float64 // 1 / (2w²)
 	inv2b2   float64 // a low's broad part: 1 / (2b²)
 	broadW   float64 // its share of the depth over b², per the core's over w²
-	cut2     float64 // m²: nothing beyond the square root of this
+	cut2     float64 // m²: nothing beyond the square root of this from its spine
+	bound2   float64 // m²: nor from its centre
 	norm     float64 // a dome's or a low's wind per unit of its shape's slope, m/s
 	depth    float64 // its pressure at its centre, hPa, at its strength
 	patch    float64 // a patch: the share of the wind it takes away at its core
@@ -152,6 +158,7 @@ type systemValues struct {
 	speed             float64 // m/s
 	strength          float64
 	size, peak, depth float64 // m, steps, hPa
+	length            float64 // m
 }
 
 // valuesOf is a keyframe's system as floats.
@@ -167,6 +174,7 @@ func valuesOf(s *System) systemValues {
 		size:     s.Size,
 		peak:     s.Peak,
 		depth:    float64(s.Depth * hundredthHPa),
+		length:   s.Length,
 	}
 }
 
@@ -183,6 +191,7 @@ func lerpValues(a, b systemValues, u float64) systemValues {
 		size:     a.size + float64(u*(b.size-a.size)),
 		peak:     a.peak + float64(u*(b.peak-a.peak)),
 		depth:    a.depth + float64(u*(b.depth-a.depth)),
+		length:   a.length + float64(u*(b.length-a.length)),
 	}
 }
 
@@ -204,12 +213,16 @@ func (st *systemTick) set(p *WeatherPrepared, v *systemValues, slot int32) bool 
 	st.ux, st.uy = SinCos(v.heading)
 	st.w = float64(k.width * size)
 	st.inv2w2 = 1 / float64(2*float64(st.w*st.w))
+	st.half = 0
 	reach := st.w
 	switch k.shape {
-	case ShapeDome:
+	case ShapeDome, ShapeLine:
 		peak := float64(v.peak * SeaSpeedStep)
 		st.norm = float64(float64(peak*strength)*sqrtE) / float64(k.ahead*st.w)
 		st.depth = float64(v.depth * strength)
+		if k.shape == ShapeLine {
+			st.half = float64(max2(v.length, 0) * 0.5)
+		}
 	case ShapeLow:
 		peak := float64(v.peak * SeaSpeedStep)
 		b := float64(st.w * k.broadSize)
@@ -224,6 +237,8 @@ func (st *systemTick) set(p *WeatherPrepared, v *systemValues, slot int32) bool 
 	}
 	reach = float64(reach * p.cut)
 	st.cut2 = float64(reach * reach)
+	bound := reach + st.half
+	st.bound2 = float64(bound * bound)
 	st.gusts = float64(k.gusts * strength)
 	st.gustIn = float64(gustRingInner * size)
 	out := float64(gustRingOuter * size)
@@ -265,15 +280,18 @@ func (in inward) of(k *systemKind) float64 {
 func (st *systemTick) wind(x, y float64, in inward, ve, vn *float64) float64 {
 	dx, dy := x-st.cx, y-st.cy
 	d2 := float64(dx*dx) + float64(dy*dy)
-	if !(d2 < st.cut2) {
+	if !(d2 < st.bound2) {
 		return 0
 	}
 	k := st.k
 	var ge, gn float64 // the shape's slope downhill, turned below
 	switch k.shape {
-	case ShapeDome:
+	case ShapeDome, ShapeLine:
 		a := float64(dx*st.ux) + float64(dy*st.uy)
-		c := float64(dx*st.uy) - float64(dy*st.ux)
+		c := st.beyond(float64(dx*st.uy) - float64(dy*st.ux))
+		if st.half > 0 && !(float64(a*a)+float64(c*c) < st.cut2) {
+			return 0
+		}
 		ka := 1.0
 		if a > 0 {
 			ka = k.ahead
@@ -301,7 +319,14 @@ func (st *systemTick) wind(x, y float64, in inward, ve, vn *float64) float64 {
 	// Turned clockwise by the kind's angle.
 	*ve += float64(ge*k.cosT) + float64(gn*k.sinT)
 	*vn += float64(gn*k.cosT) - float64(ge*k.sinT)
-	if !(st.gusts > 0) || !(d2 < st.gustOut2) {
+	if !(st.gusts > 0) {
+		return 0
+	}
+	if st.half > 0 {
+		ox, oy := st.offset(x, y)
+		d2 = float64(ox*ox) + float64(oy*oy)
+	}
+	if !(d2 < st.gustOut2) {
 		return 0
 	}
 	d := math.Sqrt(d2)
@@ -323,20 +348,42 @@ func (st *systemTick) factor(x, y float64) float64 {
 	return 1 - float64(st.patch*expShape(-float64((float64(a*a)+float64(c*c))*st.inv2w2)))
 }
 
-// pressure is a dome's or a low's pressure at (x, y), hPa.
+// beyond is how far a point c m along a system's length from its centre
+// lies past the end of its line, signed: c itself for a system that is no
+// line, nothing within a line's length.
+func (st *systemTick) beyond(c float64) float64 {
+	return c - clamp(c, -st.half, st.half)
+}
+
+// offset is (x, y) from the nearest point of a system's spine, m east and
+// north: its centre, or for a line the nearest point of its length.
+func (st *systemTick) offset(x, y float64) (dx, dy float64) {
+	dx, dy = x-st.cx, y-st.cy
+	if !(st.half > 0) {
+		return dx, dy
+	}
+	// Its length runs along (uy, −ux), across its motion.
+	c := clamp(float64(dx*st.uy)-float64(dy*st.ux), -st.half, st.half)
+	return dx - float64(c*st.uy), dy + float64(c*st.ux)
+}
+
+// pressure is a dome's, a line's or a low's pressure at (x, y), hPa.
 func (st *systemTick) pressure(x, y float64) float64 {
 	dx, dy := x-st.cx, y-st.cy
 	d2 := float64(dx*dx) + float64(dy*dy)
-	if !(d2 < st.cut2) {
+	if !(d2 < st.bound2) {
 		return 0
 	}
 	switch st.k.shape {
-	case ShapeDome:
+	case ShapeDome, ShapeLine:
 		a := float64(dx*st.ux) + float64(dy*st.uy)
+		c := st.beyond(float64(dx*st.uy) - float64(dy*st.ux))
+		if st.half > 0 && !(float64(a*a)+float64(c*c) < st.cut2) {
+			return 0
+		}
 		if a > 0 {
 			a = float64(a * st.k.ahead)
 		}
-		c := float64(dx*st.uy) - float64(dy*st.ux)
 		return float64(st.depth * expShape(-float64((float64(a*a)+float64(c*c))*st.inv2w2)))
 	case ShapeLow:
 		e1 := expShape(-float64(d2 * st.inv2w2))
@@ -467,11 +514,12 @@ func systemsAt(w *Weather, t *WeatherTick, tick float64, still, synoptic bool) {
 	}
 }
 
-// isDome reports whether a system of kind i is a dome: a squall's or a
-// shower's, which the synoptic wind leaves out.
+// isDome reports whether a system of kind i is a dome or a line: a
+// squall's, a shower's, a squall line's or a trough's, which the synoptic
+// wind leaves out.
 func (w *WeatherPrepared) isDome(i float64) bool {
 	k := w.kindOf(i)
-	return k != nil && k.shape == ShapeDome
+	return k != nil && (k.shape == ShapeDome || k.shape == ShapeLine)
 }
 
 // SystemsAt is how many systems blow at the tick t was set to.
@@ -505,6 +553,7 @@ func SystemAt(r *SystemRecord, tick float64) System {
 		Size:     float64(steps(v.size, 1)),
 		Peak:     r.Peak,
 		Depth:    r.Depth,
+		Length:   r.Length,
 	}
 }
 
@@ -550,6 +599,7 @@ func recordAt(r *SystemRecord, tick float64) (systemValues, bool) {
 		size:     r.Size,
 		peak:     r.Peak,
 		depth:    float64(r.Depth * hundredthHPa),
+		length:   r.Length,
 	}, true
 }
 

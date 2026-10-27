@@ -13,10 +13,9 @@ import (
 
 // The forecast, the chart's weather and the barometer are checked here for
 // what the schema cannot say: the forecast's steps divide its horizon and
-// its issues fall on its steps, its cones grow, every regime has its risks
-// once, a gale's gust lies above its mean wind and its grid fits the
-// module's room, an outlook's samples rise within the horizon, and the
-// barometer's dial and words run in order.
+// its issues fall on its steps, a gale's gust lies above its mean wind and
+// its grid fits the module's room, an outlook's samples rise within the
+// horizon, and the barometer's dial and words run in order.
 
 // checkForecast fails on a forecast, a chart's weather or a barometer the
 // schema cannot judge.
@@ -42,10 +41,6 @@ func checkForecast(doc map[string]any) error {
 	if !whole(every/step) && !whole(step/every) {
 		bad("weather.forecast: every (%v) and step (%v) must be whole multiples, one of the other", f["every"], f["step"])
 	}
-	cone, _ := f["cone"].(map[string]any)
-	if !(num(cone["perHour"]) > 0) || !(num(cone["forming"]) > 0) {
-		bad("weather.forecast.cone: the cones must grow: perHour %v, forming %v", cone["perHour"], cone["forming"])
-	}
 	gale, _ := f["gale"].(map[string]any)
 	if !(num(gale["mean"]) < num(gale["gust"])) {
 		bad("weather.forecast.gale: the gust (%v) must be more than the mean wind (%v)", gale["gust"], gale["mean"])
@@ -64,30 +59,6 @@ func checkForecast(doc map[string]any) error {
 	if !(num(outlook["imminent"]) < num(outlook["soon"])) {
 		bad("weather.forecast.outlook: imminent (%v) must be less than soon (%v)", outlook["imminent"], outlook["soon"])
 	}
-	regimes, _ := w["regimes"].([]any)
-	risked := map[string]int{}
-	risks, _ := f["risks"].([]any)
-	for _, r := range risks {
-		m, _ := r.(map[string]any)
-		id, _ := m["regime"].(string)
-		risked[id]++
-	}
-	for _, r := range regimes {
-		m, _ := r.(map[string]any)
-		id, _ := m["id"].(string)
-		switch risked[id] {
-		case 0:
-			bad("weather.forecast.risks: regime %s has no risks", id)
-		case 1:
-		default:
-			bad("weather.forecast.risks: regime %s has risks %d times", id, risked[id])
-		}
-		delete(risked, id)
-	}
-	for id := range risked {
-		bad("weather.forecast.risks: no regime %q", id)
-	}
-
 	world, _ := doc["world"].(map[string]any)
 	inst, _ := world["instruments"].(map[string]any)
 	baro, _ := inst["barometer"].(map[string]any)

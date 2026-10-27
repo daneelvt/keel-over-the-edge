@@ -10,7 +10,6 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	position "github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
-	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
 )
@@ -98,9 +97,7 @@ func (o *Owner) placeWeather(w http.ResponseWriter, r *http.Request) {
 // outlook from the issue in force then, with that issue.
 func (o *Owner) placeWords(tl *weather.Timeline, tick int64, ws []bus.Weather, ss []bus.System, points *[9][2]float64) (weather.Box, string, int64) {
 	minute := int64(60 * physics.StepsPerSecond)
-	c := points[0]
-	pw := weather.PlaceAt(physicsAt(tl, tick, ws, ss), physicsAt(tl, tick-5*minute, ws, ss), physicsAt(tl, tick-15*minute, ws, ss),
-		points, o.cfg.Risks, o.cfg.Fog, o.sunAt(tick, c[0], c[1]))
+	pw := weather.PlaceAt(physicsAt(tl, tick, ws, ss), physicsAt(tl, tick-5*minute, ws, ss), physicsAt(tl, tick-15*minute, ws, ss), points)
 	box := weather.BoxOf(&pw, &o.cfg.Words)
 
 	// The outlook: the place's weather on the forecast at each of the
@@ -119,24 +116,10 @@ func (o *Owner) placeWords(tl *weather.Timeline, tick int64, ws []bus.Weather, s
 	for _, m := range o.cfg.Outlook {
 		t := x.Tick + int64(math.Round(m*float64(minute)))
 		s := weather.OutlookSample{At: m}
-		s.PlaceWeather = weather.PlaceAt(on(t), on(t-5*minute), on(t-15*minute), points, o.cfg.Risks, o.cfg.Fog, o.sunAt(t, c[0], c[1]))
+		s.PlaceWeather = weather.PlaceAt(on(t), on(t-5*minute), on(t-15*minute), points)
 		samples = append(samples, s)
 	}
 	end := worldEnd(tl)
 	falls := end > 0 && end <= x.Tick+p.ForecastHorizon()
 	return box, weather.Outlook(samples, falls, &o.cfg.Words), x.Tick
-}
-
-// sunAt is the sun's height at a point at a tick and the fog's dawn
-// before, rad: below the horizon for a world with no sky.
-func (o *Owner) sunAt(tick int64, east, north float64) [2]float64 {
-	s := o.cfg.Sky
-	if s == nil {
-		return [2]float64{-math.Pi / 2, -math.Pi / 2}
-	}
-	epoch := float64(o.cfg.World.Epoch.UnixMicro())
-	height := func(t int64) float64 {
-		return sky.SunAltitude(s, sky.Time(s, epoch, float64(worldMicros(t))), east, north)
-	}
-	return [2]float64{height(tick), height(tick - o.cfg.Fog.Dawn)}
 }

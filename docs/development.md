@@ -457,7 +457,13 @@ NM ahead, and fills within 0.35 NM behind; its wind is the trough's slope
 turned 70° clockwise, 7 knots at its steepest, weakened toward the centre
 as a squall's. So the wind backs and freshens ahead of the line and veers
 sharply at it, with gusts stronger for a mile behind, as a cold front
-passes. One front is on the disk at a time: a front is made faster, or the
+passes. A change from a regime of no front (`settled`, `trade`) into a
+frontal one comes as a **warm front** (`Spell.Warm`): its rain and low
+cloud lie in a band ahead of its line (`clouds.frontWarm`, 5 mm an hour
+0.6 NM ahead), the wind veers 20–40° spell to spell as it passes
+(`week.warmVeer`) and the gusts do not surge behind it; every other front
+is a cold front, its rain behind its line, veering 40–90°. One front is on
+the disk at a time: a front is made faster, or the
 spell before it longer, until it enters after the last has left. A change
 with no front is a ten-minute blend everywhere at once.
 
@@ -472,8 +478,19 @@ clockwise by its kind's angle, as the northern hemisphere's winds are:
 | `squall` | a dome, steeper ahead | 10° | 0.3–0.6 NM | 0.6–0.9 of the wind | 20–50 min | adds 12–18 knots at its gust front | 2–4 hPa |
 | `shower` | a dome | 10° | 0.15–0.35 NM | with the wind | 10–25 min | adds 4–8 knots | 1 hPa |
 | `storm` | a low: a core and a broad shallow low | 70° | 1.5–2.5 NM | 3–6 knots round the outer waters | 1–3 h | adds 18–26 knots in its ring | 10–20 hPa |
+| `depression` (a low) | a low, at half a storm's strength | 70° | 1.2–2 NM | 3–6 knots round the outer waters | 1–2.5 h | adds 10–16 knots in its ring | 5–10 hPa |
+| `squall-line` | a line: a dome stretched across its motion | 10° | 0.1–0.15 NM deep, 1.5–3 NM long | 0.7–0.9 of the wind | 25–40 min | adds 12–18 knots along its gust front | 2–4 hPa |
+| `trough` | a line | 10° | 0.15–0.25 NM deep, 2–4 NM long | with the wind | 30–60 min | adds 4–8 knots | 1 hPa |
 | `fog` | a patch, stretched along its track | — | 0.4–1.5 NM | 0.8 of the wind | 20–90 min | × 0.9 | — |
 | `light-air` | a patch | — | 0.2–0.5 NM | with the wind | 10–30 min | × 0.3–0.5 | — |
+
+A **line** (`physics.ShapeLine`) is a dome stretched across its motion
+along its length (`System.Length`): across it its wind and pressure are a
+dome's at its middle, all along its length, and past its ends they fall off
+as a dome's does from its centre, so a squall line's gust front runs along
+its whole leading edge in one slot. Its rain falls along it, its
+cloud stands as up to six towers along it (`HeapedClouds`), and its
+lightning strikes along it.
 
 Its wind is added to the spells' mean wind, the patches' factors taken
 over the sum, before the refuge, the gusts, the land's shelter, the veer
@@ -484,20 +501,34 @@ weakens toward the centre to 0.35 of itself, a storm's to nothing, between
 its centre, where its wind is 0.2% of its peak.
 
 The week's systems are born at the regimes' rates, a Poisson process in
-each spell, and one storm as each stormy spell begins: squalls beyond the
-windward rim, crossing the disk on a chord; storms on the windward side,
-then round the outer waters at 3–4.5 NM the way the wind carries them, one
-in five turning in; showers inside, by day half of them over an island's
-land by its area; fog in light wind at night or within half an hour of
+each spell (some of a regime's only by day or at night, `when`, and a
+storm's peak in a trade spell drawn from the lower half of its range,
+`peak`), and one storm as each stormy spell begins: squalls and squall
+lines beyond the windward rim, crossing the disk on a chord; storms and
+lows on the windward side, then round the outer waters at 3–4.5 NM the way
+the wind carries them, a fifth of storms and a third of lows turning in
+(`turnsIn`; no storm in a spell of a regime of no front); showers and
+troughs inside, by day half the showers over an island's land by its area;
+a squall line ahead of every cold front into a stormy spell, 0.5–1 NM ahead
+of its line, moving with it (`week.lineAhead`); fog in light wind at night or within half an hour of
 sunrise (the sun at the place, `sky.SunAltitude`), lifting 15–30 minutes
 after sunrise or as the wind rises past 12 knots; light air where the wind
 is under 10 knots. Each has a life (born, mature, decaying, gone), a
-planned track, a line or an arc, and apart from it a wobble a forecast does
-not know (up to 0.5 NM, and its strength ±15%, over 6–12 hours: see [The
-forecast](#the-forecast)); a week made before the wobble was slowed
-(`weather.Version` 1) is sailed as it was made. At
-most sixteen are on the disk at once, each in a slot it holds from birth to
-end; one that would be a seventeenth is not born. A storm raises swell,
+planned track, a line or an arc, and apart from it a wobble (up to 0.5 NM,
+and its strength ±15%, over 6–12 hours); a week made before the wobble was
+slowed (`weather.Version` 1) is sailed as it was made. Storms are born in
+every regime but settled, lows in every one. No storm or squall line is
+born in a world's first two hours nor in its closing spell
+(`week.quiet`), and at most two storms are on the disk at once
+(`week.storms`). At most twenty-four systems are on the disk at once,
+each in a slot it holds from birth to end; one that would be a
+twenty-fifth is not born. Wherever the disk would be empty after the
+opening, with nothing within the lip and no front crossing it, a low is
+born ten minutes before (`week.fill`), so the chart always has weather on
+it. Over a thousand weeks the disk is never empty after the opening, it
+rains somewhere 98.7% of the time, a storm or a low is on it 86%, a storm
+44%, a front or a trough 54%, with 5.9 systems on it on average (3.7 in
+settled spells, 4.7 trade, 8.5 unsettled, 9.0 stormy). A storm raises swell,
 which runs ahead of it (see [Swell](#swell)); its strength's swing is its
 throb (`SystemRecord.Throb`, stored in a week under its old name, `Swell`).
 
@@ -593,11 +624,15 @@ barometer warns of a storm. `go test ./internal/weather -run TestWeeks`
 makes fifty weeks (a thousand with `KEEL_WEEKS=1000`, as the nightly run
 does, its tally in `KEEL_WEEKS_SUMMARY`) and holds each to its checks, one
 front at a time veering 40–90° spell to spell, fog only at night and dawn
-in light wind, storms in the outer waters, at most sixteen systems, the
+in light wind, storms in the outer waters, at most twenty-four systems, the
 veer across each front's line (15–150°: the spells' 40–90°, their shifts
 and differences across the disk, and the trough's own wind), Buys Ballot's
-law about every storm, and the refuge's limits, sampled every minute on a
-grid a tenth of a mile apart.
+law about every storm, the refuge's limits, sampled every minute on a
+grid a tenth of a mile apart, and the weather's busyness: something on the
+disk every minute after the opening, rain somewhere 95% of the time or
+more, a storm or a low 70%, a storm 40%, a front or a trough 50%, five
+systems on the disk on average and eight in a frontal spell
+(`busy_test.go`).
 
 `internal/weather/testdata/weeks.json` holds seeds 1–8's weeks' digests;
 a change that moves any raises `weather.Version`, stored with every week,
@@ -742,13 +777,16 @@ wind sea's and the swell's heights and periods, the current's factor and
 the lee's; the systems list gives each storm's swell at its edge.
 
 The Forecast layer (off at first) draws the forecast over the truth: each
-system's track and its cone, a forming low's in its own colour, where the
-forecast puts it at the tick shown, the fronts' lines and bands, the gale's
-area at the nearest step and the regime's risk
+system's track over the forecast's reach, minute by minute from its
+record, where it is at the tick shown, squall lines and troughs along
+their length, warm and cold fronts, and the gale's area at the nearest step
 (`/owner/api/forecast.json[?at=…]`; within an hour of now the issue the
-players were sent, further off one made again). Beside the week:
-the forecast in force, its calibration lead by lead since the world began
-(`calibration.json`), the gale warnings issued (`gales.json`), and the box
+players were sent, further off one made again). Beside the week: the
+forecast in force, the busy weather's figures for the world sailed, so far
+and over its week (`busy.json`: the share of minutes with nothing on the
+disk, with rain, a storm or a low, a storm, a front or a trough, and the
+systems on it on average, by regime), the gale warnings issued
+(`gales.json`), and the box
 of a clicked point, island or place, its weather and outlook as the phone
 words them (`place.json?east=…&north=…`, `?island=n` or `?place=n`).
 
@@ -1006,34 +1044,19 @@ warning to a boat lying where a bank grows is tallied beside it.
 ## The forecast
 
 Every ten minutes of world time from the epoch (`weather.forecast.every`),
-off the tick, `internal/forecast`'s issuer makes the world's forecast for
-the ninety minutes after, ten steps of ten minutes
-(`weather.Timeline.Forecast`, `physics.MakeForecast`), from what a
-forecaster could know at the issue:
-
-- each system alive is moved on by its plan, its wobble as it stood at the
-  issue carried along (`SystemTrack + (SystemAt − SystemTrack)` at the
-  issue), so the forecast starts where the system is and parts from it as
-  the wobble changes;
-- a low born within the horizon is **forming**, at its planned place;
-- squalls, showers, fog and light air born after the issue are not
-  forecast: the regime's **risk** stands for them (`forecast.risks`:
-  settled, fog patches and calms; trade, showers; unsettled, squally
-  showers; stormy, squalls with heavy rain);
-- the spells lose their shifts; a spell not yet begun is given an error
-  drawn from its own seed (its direction σ 15°, its speed σ 10%), and a
-  front its speed's (σ 4%): with k = 1 + σz its line is moved on as
-  Begin′ = issue − (issue − Begin) / k and Change′ = Change / k.
-
-Each system's **cone** is 0.34 NM an hour of lead, from nothing at the
-issue (`cone.perHour`), a forming low's 0.47 NM at every lead
-(`cone.forming`); a front's **band** is ±1.2816 σ v L about its forecast
-line. They are fitted so the truth lies inside four times in five at every
-lead: `go test ./internal/weather -run Calibration -v` tallies 200 weeks,
-77–81% for the systems alive at the issue, 82% for the lows forming and 80%
-for the fronts' lines. The wobble is slow for that (0.5 NM over 6–12
-hours): one quicker than the horizon moves a system anywhere within it
-soon after an issue, and no cone growing with the lead could hold it.
+off the tick, `internal/forecast`'s issuer makes the world's forecast
+(`weather.Timeline.Forecast`, `physics.MakeForecast`). It is **the truth**,
+for Keel is not meant to be hard: the week's own records of every system
+alive at the issue or born within its ninety minutes and one issue more
+(`Forecast.Head.Until`), wobble and throb and all, each with its slot, and
+the true spells over its reach, their shifts named, not placed
+(`Head.Shifts`). `physics.ForecastAt(w, f, tick)` makes the two keyframes
+about any tick it knows from the records exactly as the server makes its
+own (`SystemAt` in each slot at the keyframes ten seconds apart,
+`Head.Every`), so the chart places every shower where it will be, to the
+minute and to the bit (`go test ./internal/weather -run ForecastIsTheWeek`,
+`./internal/physics -run ForecastIsTheTruth`). The gusts and the spells'
+shifts are still not forecast.
 
 ### Gale warnings
 
@@ -1055,8 +1078,8 @@ which the menu can switch off) and an item in the world's news (subject
 ### On the wire
 
 `Forecast` (`game.proto`, the server message's field 15) carries an issue:
-its head, its spells, each system's steps and the warning; 277 B on
-average, 837 B at most. The edge sends the latest after the `Welcome` with
+its head, its spells, each system's record and slot, its reach and the
+warning; the sample week's busiest, 74 systems, is 7.5 kB. The edge sends the latest after the `Welcome` with
 **what has been**: the issue of ninety minutes before and the keyframes at
 each five minutes since, 4.8 kB; then each issue as it is made, 0.46 B/s
 (`internal/edge/forecast.go`). The phone keeps the issues of the last
@@ -1079,20 +1102,47 @@ Good.").
 ### On the phone
 
 - **The chart's weather** is painted on a canvas of 1024 px over the paper
-  (`chart/weatherlayer.ts`, `chart/weatherpaint.ts`): the gusts hatched
-  where they are 6.5 knots over the mean, the rain stippled, a wash where
-  the fog banks bring the visibility under a mile, the isobars (off at
-  first), and the systems: a low's spiral with its track and its cone, a
-  front's line and band, a gale's area hatched, the risks' marks. Each has
-  its switch; the wind's arrows are always on. It is painted afresh when
-  the moment, the issue, the layers or what is kept change, and once a
-  second while it shows now or the past: 1–2 ms to sample and 2–9 ms to
-  paint on a Mac. Its colours are told apart under each colour vision
-  deficiency (`chart/colours.test.ts`, the least ΔE 11.9).
-- **The slider**: Forecast, the latest issue's steps ahead; What happened,
-  ninety minutes back by tens, the truth's systems drawn over the forecast
-  of then with its cones, and how many were inside them. The past is never
-  shown with what came after it.
+  (`chart/weatherlayer.ts`, `chart/weatherpaint.ts`), every layer on at
+  first, each with its switch: the wind as a wash by force (none under F3,
+  then three steps darker of one hue, `world.chart.look.weather.wash`), the
+  weather chart's barbs every 0.6 NM and 1,200 streaks 2 px wide
+  (`chart/view.ts`); the gusts hatched where they are 6.5 knots over the
+  mean; the rain stippled; a wash where the fog banks bring the visibility
+  under a mile; the isobars every 1 hPa, heavier every 4, with their highs
+  and lows; and the systems in a weather chart's symbols by the kind's
+  `symbol`: a storm's spiral and a low's lettered L with their rings of
+  strongest wind hatched, a squall's cell, a shower's ▽, a squall line's
+  dash, dot, dot with its barbs ahead, a trough's dashes, fog and light
+  air; cold fronts in blue with triangles and warm fronts in red with
+  semicircles, on the side each moves toward; an arrow for where each
+  system will be in 30 minutes; and labels with its wind and force
+  ("Storm · F9 · 42 kn · E 5 kn"), storms placed first. A **Key** opens
+  every symbol drawn as the chart draws it, with its line (`chart/key.ts`,
+  a kind's `key`). It is painted afresh when the moment, the issue, the
+  layers or what is kept change, and once a second at Now and in the past:
+  about 6 ms to sample and 10 ms to paint on a Mac with every kind on the
+  disk. Its colours are told apart under each colour vision deficiency
+  (`chart/colours.test.ts`, the least ΔE 11.9), and every layer by its
+  shape or its lightness in grey.
+- **The slider** moves by the minute. **Now** is the live weather, from the
+  keyframes the phone holds; ahead, any minute to 90, is the latest
+  issue's truth then, made from its records as the server makes its
+  keyframes (`chart/weather.ts`), so every system is where it will be;
+  What happened, back to 90 minutes, the truth kept. **Play** runs ahead to
+  90 minutes and stops. The line under it reads "Now", "In 40 min ·
+  4:20 pm" or "40 min ago · 3:40 pm". The past is never shown with what
+  came after it.
+- **Tapping a system** (or a front, within 0.3 NM of its line) opens its
+  box (`chart/systembox.ts`): its name, its wind now with its gusts and
+  force, its bearing and distance, its motion, how long it has to live,
+  and the course to meet it at the boat's speed, from its track on the
+  forecast minute by minute, or "It is faster than you" and the heading to
+  its path ahead. **Steer** sets the autopilot's heading mode to it and
+  closes the chart.
+- **Gale warnings**: the notice is raised only for a gale forecast within
+  1.5 NM of the boat within the horizon, or across the course to a system
+  the sailor steered for (`chart/gales.ts`); a gale elsewhere is hatched on
+  the chart and named in the boxes and on the board.
 - **A place's box** gives its weather at the slider's moment and its
   outlook.
 - **The barometer** among the instruments (the menu can put it away): a
@@ -1106,26 +1156,31 @@ Good.").
   force, the harbourmaster's house's flagstaff hoists the storm cone, point
   up for a gale first blowing from west-north-west by the north to
   east-south-east, down for the rest, as FitzRoy's cones were.
-- **The pocket chart** shows the weather now; its switch is kept.
+- **The pocket chart** shows the weather now, simplified to its size: the
+  wash, the fog, the rain, the fronts, the storms' and lows' rings, the
+  squall lines and the troughs; its switch is kept.
 
 ### Trying it
 
 ```sh
 go run ./tools/dev -world 1
 # https://localhost:5173/?sandbox&world=1&weather=storm   a storm's forecast on the chart
-# https://localhost:5173/?sandbox&world=1&gale=30         a gale reaching the boat in 30 minutes: its warning and the cone
+# https://localhost:5173/?sandbox&world=1&gale=30         a gale reaching the boat in 30 minutes: its warning, a storm to tap and steer for
 # https://localhost:5173/?sandbox&world=1&baro=-5         the barometer falling 5 hPa a quarter of an hour
 # https://localhost:5173/?sandbox&world=1&board           in Port Royal's harbour, at its board
-go test ./internal/weather -run Calibration -v          # the cones held to the truth
 ```
 
 The sandbox issues its own forecast as the server does, from its own
 weather (`sandbox/forecast.ts`). With `&dev` the panel gives the issue's
-age, its systems and cones, the warning in force and the barometer.
+age, its systems with their winds, the warning in force and the barometer.
 `e2e/forecast.spec.ts` holds the slider, the layers' switches, the
-warning told once, the barometer, the board and the pocket's switch, and
-attaches the chart's weather under each colour vision deficiency to its
-report.
+warning told once, the barometer, the board and the pocket's switch;
+`e2e/tapstorm.spec.ts` Now following a storm, the slider at 30 minutes
+where the world puts it, Play, and tapping it and steering for it;
+`e2e/weatherchart.spec.ts` a chart with every kind of system and both
+fronts on it (`keel.everyKind()`), its pictures at phone and desktop
+sizes, its paint timed, and the chart's weather under each colour vision
+deficiency attached to its report.
 
 ## Encounters
 

@@ -92,8 +92,6 @@ func ForecastParams(c *Catalog) physics.ForecastParams {
 	f := &c.Weather.Forecast
 	return physics.ForecastParams{
 		Every: f.Every, Horizon: f.Horizon, Step: f.Step,
-		PerHour: f.Cone.PerHour, Forming: f.Cone.Forming, Front: f.Cone.Front,
-		Direction: f.Spell.Direction, Speed: f.Spell.Speed,
 		GaleMean: f.Gale.Mean, GaleGust: f.Gale.Gust, Quantile: f.Gale.Quantile, Grid: f.Gale.Grid, Within: f.Gale.Within,
 	}
 }
@@ -119,7 +117,7 @@ const nauticalMile = 1852
 // SystemKinds returns the catalog's kinds of weather system as the physics
 // package's SystemKind, in the catalog's order.
 func SystemKinds(c *Catalog) []physics.SystemKind {
-	shapes := map[Shape]float64{ShapeNone: physics.ShapeNone, ShapeDome: physics.ShapeDome, ShapeLow: physics.ShapeLow}
+	shapes := map[Shape]float64{ShapeNone: physics.ShapeNone, ShapeDome: physics.ShapeDome, ShapeLow: physics.ShapeLow, ShapeLine: physics.ShapeLine}
 	inward := map[Inward]float64{InwardNone: physics.InwardNone, InwardWeak: physics.InwardWeak, InwardGone: physics.InwardGone}
 	forms := map[CloudForm]float64{
 		CloudFormNone: physics.FormNone, CloudFormFog: physics.FormFog, CloudFormCumulus: physics.FormCumulus,

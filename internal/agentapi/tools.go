@@ -134,17 +134,17 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolForecast, Title: "Forecast",
-			Description: "The latest forecast, as every sailor's chart shows it: gale warnings in force, and the weather systems with where they are heading. " +
+			Description: "The forecast for the next 90 minutes, as every sailor's chart shows it, and the truth: gale warnings in force, " +
+				"every weather system with its wind, where it is and where it will be in 30, 60 and 90 minutes, and the fronts and when they reach you. " +
 				"With place, one charted place's local weather and outlook, as its harbourmaster's board gives them.",
 			Annotations: hints("Forecast", true, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"place":{"type":"string","description":"A charted place: its local weather."},` +
-				`"ahead":{"type":"integer","enum":[0,30,60,90],"description":"Minutes after the issue, for the systems."}` +
+				`"place":{"type":"string","description":"A charted place: its local weather."}` +
 				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolNews, Title: "News",
-			Description: "The world's news sheet, newest first: what was charted and by whom, the world's notices and gale warnings. " +
+			Description: "The world's news sheet, newest first: what was charted and by whom, the world's notices and each storm as it forms. " +
 				"Names in «» are written by players.",
 			Annotations: hints("News", true, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +

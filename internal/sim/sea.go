@@ -282,6 +282,7 @@ func (s *sea) makeSwell(set *swellSet, hi int32) {
 			}
 			sw = physics.CombineSwell(sw, one)
 		}
+		sw = s.prepared.RefugeSwell(sw, c[0], c[1])
 		in := &set.swell[i]
 		in.SetSwell(sw)
 	}

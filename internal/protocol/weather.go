@@ -38,7 +38,7 @@ func spellPB(s *physics.Spell) *pb.Spell {
 		Phase:  []uint32{uint32(s.Phase[0]), uint32(s.Phase[1])},
 		Across: uint32(s.Across), Axis: uint32(s.Axis), AxisPeriod: uint32(s.AxisPeriod),
 		Seed: uint32(s.Seed), Pressure: uint32(s.Pressure),
-		Front: s.Front != 0, Toward: uint32(s.Toward), Trough: uint32(s.Trough), Still: s.Still != 0,
+		Front: s.Front != 0, Toward: uint32(s.Toward), Trough: uint32(s.Trough), Still: s.Still != 0, Warm: s.Warm != 0,
 	}
 }
 
@@ -55,6 +55,7 @@ func keyframePB(k *physics.Keyframe) *pb.Keyframe {
 			Slot: uint32(slot), Kind: uint32(s.Kind), Seed: uint32(s.Seed), Stage: uint32(s.Stage),
 			East: int32(s.East), North: int32(s.North), Heading: uint32(s.Heading), Speed: uint32(s.Speed),
 			Strength: uint32(s.Strength), Size: uint32(s.Size), Peak: uint32(s.Peak), Depth: int32(s.Depth),
+			Length: uint32(s.Length),
 		})
 	}
 	return pk
@@ -94,6 +95,7 @@ func keyframeOf(k *pb.Keyframe, dst *physics.Keyframe) error {
 			On: 1, Kind: float64(s.GetKind()), Seed: float64(s.GetSeed()), Stage: float64(s.GetStage()),
 			East: float64(s.GetEast()), North: float64(s.GetNorth()), Heading: float64(s.GetHeading()), Speed: float64(s.GetSpeed()),
 			Strength: float64(s.GetStrength()), Size: float64(s.GetSize()), Peak: float64(s.GetPeak()), Depth: float64(s.GetDepth()),
+			Length: float64(s.GetLength()),
 		}
 	}
 	return nil
@@ -140,7 +142,7 @@ func spellOf(p *pb.Spell, dst *physics.Spell) error {
 		Phase:  [2]float64{float64(p.GetPhase()[0]), float64(p.GetPhase()[1])},
 		Across: float64(p.GetAcross()), Axis: float64(p.GetAxis()), AxisPeriod: float64(p.GetAxisPeriod()),
 		Seed: float64(p.GetSeed()), Pressure: float64(p.GetPressure()),
-		Front: bit(p.GetFront()), Toward: float64(p.GetToward()), Trough: float64(p.GetTrough()), Still: bit(p.GetStill()),
+		Front: bit(p.GetFront()), Toward: float64(p.GetToward()), Trough: float64(p.GetTrough()), Still: bit(p.GetStill()), Warm: bit(p.GetWarm()),
 	}
 	return nil
 }

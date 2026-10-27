@@ -1159,7 +1159,7 @@ func TestWeatherListsAreArrays(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
-	for _, key := range []string{`"systems":[]`, `"storms":[]`, `"kinds":[`, `"spells":[`} {
+	for _, key := range []string{`"systems":[]`, `"storms":[]`, `"lows":[]`, `"kinds":[`, `"spells":[`} {
 		if !strings.Contains(rec.Body.String(), key) {
 			t.Errorf("weather.json lacks %s: %s", key, rec.Body.String()[:200])
 		}

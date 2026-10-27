@@ -97,9 +97,9 @@ func checkWindParams(wind, regime, clouds []physicsField) error {
 }
 
 // checkWeather checks what the schema cannot: that ranges run from low to
-// high, that the refuge's and the rim's limits lie in order, that every
-// regime named exists, and that the sequence keeps each regime's share and
-// changes only as the regimes allow.
+// high, that the kinds of system fit the module, that the refuge's and the
+// rim's limits lie in order, that every regime named exists, and that the
+// sequence keeps each regime's share and changes only as the regimes allow.
 func checkWeather(doc map[string]any) error {
 	w, _ := doc["weather"].(map[string]any)
 	var problems []string
@@ -118,6 +118,12 @@ func checkWeather(doc map[string]any) error {
 			return math.NaN(), math.NaN()
 		}
 		return num(a[0]), num(a[1])
+	}
+
+	// The module holds MaxKinds kinds; the sandbox sets one more beside the
+	// catalog's.
+	if kinds, _ := w["systems"].([]any); len(kinds) > physics.MaxKinds-1 {
+		bad("weather.systems: %d kinds, more than the module's %d less one", len(kinds), physics.MaxKinds)
 	}
 
 	disk, _ := w["disk"].(map[string]any)

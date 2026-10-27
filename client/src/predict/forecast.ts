@@ -5,7 +5,8 @@
 // before and the truth since; from then the phone keeps its own: each
 // issue for ninety minutes after the next, and the systems' keyframe at
 // each five minutes and the spells in play as the weather is sent. The
-// past is everyone's; of the future only the forecast is ever sent.
+// forecast is the truth: the records of the systems over its reach, from
+// which the module makes the server's own keyframes of any tick.
 //
 // The fields the chart, a place's box, the board and the barometer read
 // come from a second instance of the physics module, made when first
@@ -242,9 +243,10 @@ export class Fields {
   }
 
   /**
-   * Makes the fields the forecast's at a tick: its spells and the steps
-   * about the tick as keyframes, interpolated as keyframes are. The wind,
-   * the pressure, the rain and the visibility then answer for it.
+   * Makes the fields the forecast's at a tick: its spells and the two
+   * keyframes about the tick made from its records, interpolated as the
+   * server's are. The wind, the pressure, the rain and the visibility then
+   * answer for it, and keys gives the keyframes.
    */
   forecastAt(f: ForecastTold, tick: number): void {
     if (this.#written !== f) {
@@ -283,6 +285,11 @@ export class Fields {
     return this.physics.galeScan();
   }
 
+  /** The two keyframes the fields were last set to, as the module holds them. */
+  keys(): Keyframe[] {
+    return this.physics.weatherKeys();
+  }
+
   /** What it holds now. */
   get use(): Use {
     return this.#use;
@@ -299,7 +306,7 @@ export class Fields {
     });
     v.systems.fill(0);
     f.systems.slice(0, WEATHER.forecastSystems).forEach((s, i) => {
-      v.systems.set(s.slice(0, SIZES.forecastSystem), i * SIZES.forecastSystem);
+      v.systems.set(s.slice(0, SIZES.systemRecord), i * SIZES.systemRecord);
     });
     this.#written = f;
   }
@@ -316,7 +323,7 @@ export function forecastOfModule(physics: Physics): ForecastTold {
   }
   const systems: number[][] = [];
   for (let i = 0; i < nsys; i++) {
-    systems.push([...v.systems.subarray(i * SIZES.forecastSystem, (i + 1) * SIZES.forecastSystem)]);
+    systems.push([...v.systems.subarray(i * SIZES.systemRecord, (i + 1) * SIZES.systemRecord)]);
   }
   return { head: [...v.head], spells, systems, gale: null };
 }

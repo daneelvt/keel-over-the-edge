@@ -76,9 +76,10 @@ import { GROUND_ROW, GUST_ROW, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
 import { boatBandAt } from '../ocean/wave';
 import { type RecordValues, spellOf, steer, toHex } from '../predict/golden';
-import { RECORDS, SEA } from '../predict/layout.gen';
+import { RECORDS, SEA, WEATHER } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
+import { heldSpell, placedRecord } from '../predict/weather';
 import { airLook } from '../render/fog';
 import { flashNear } from '../render/lightning';
 import {
@@ -2896,9 +2897,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return {
         issue: latest === null ? null : (latest.head[H.issue] ?? 0),
         steps: latest === null ? 0 : (latest.head[H.steps] ?? 0),
+        until: latest === null ? null : (latest.head[H.until] ?? 0),
         systems: latest?.systems.length ?? 0,
-        forming:
-          latest?.systems.filter((s) => (s[RECORDS.forecastSystem.forming] ?? 0) !== 0).length ?? 0,
         gale: latest?.gale ?? null,
         warning: warningInForce(f, chartParts().chart.store),
         truth: f.forecasts.truth.map((k) => k.tick),
@@ -2933,6 +2933,72 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       sailing.forecast?.again();
     },
 
+    /**
+     * Every kind of system on the disk at once, each at its strongest now
+     * in a place of its own, and a warm front and a cold front crossing it,
+     * in a held spell of the first fair regime; the forecast issued again:
+     * the chart's every symbol at once. The sandbox only.
+     */
+    everyKind(): void {
+      const s = offline();
+      const c = catalog.weather;
+      const physics = s.physics;
+      const now = s.tick;
+      const minute = 60 * 30;
+      const fair = Math.max(
+        0,
+        c.regimes.findIndex((r) => !r.frontal),
+      );
+      const frontal = Math.max(
+        0,
+        c.regimes.findIndex((r) => r.frontal),
+      );
+      const P = RECORDS.spell;
+      const base = heldSpell(physics, c, fair, now - 240 * minute);
+      // The systems placed here blow whatever the spell.
+      base[P.still] = 0;
+      const reach = physics.frontReach();
+      // A front's line lies at line m along the way it moves now, crossing
+      // the disk in change ticks.
+      const front = (from: number, toward: number, line: number, warm: boolean) => {
+        const spell = heldSpell(physics, c, frontal, 0);
+        const change = 120 * minute;
+        const begin = Math.round(now - ((line + reach) / (2 * reach)) * change);
+        spell[P.begin] = begin;
+        spell[P.start] = begin;
+        spell[P.change] = change;
+        spell[P.front] = 1;
+        spell[P.warm] = warm ? 1 : 0;
+        spell[P.from] = Math.round((from / 360) * WEATHER.turnSteps);
+        spell[P.toward] = Math.round((toward / 360) * WEATHER.turnSteps);
+        spell[P.still] = 0;
+        return spell;
+      };
+      const warm = front(250, 80, 2800, true);
+      const cold = front(290, 100, -3000, false);
+      // The later to begin is the one the wind takes; both are drawn.
+      const spells = [base, warm, cold].sort((a, b) => (a[P.begin] ?? 0) - (b[P.begin] ?? 0));
+      // Each kind's place, by its symbol, kept apart on the disk.
+      const places: Record<string, [number, number]> = {
+        spiral: [-4300, 3500],
+        low: [4100, -3700],
+        'dash-dot': [-3300, -3600],
+        dashed: [1600, 4800],
+        cell: [1400, -700],
+        heap: [-900, 1300],
+        bank: [-1500, -1200],
+        calm: [3600, 1300],
+      };
+      const records = c.systems.map((k, kind) => {
+        const [east, north] = places[k.symbol] ?? [0, 0];
+        return placedRecord(c, kind, east, north, now - 20 * minute, now, base);
+      });
+      physics.setRecords(records);
+      s.systems = records.length;
+      s.weather.set(spells);
+      sailing.forecast?.again();
+    },
+
     /** Ticks the sandbox's forecast and reads the barometer now, as their timers do: the sandbox only. */
     weatherNow(): void {
       sailing.forecast?.tick();
@@ -2947,12 +3013,33 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       sailing.forecast.again();
     },
 
-    /** The chart's slider to minutes ahead (the forecast's steps) or, negative, back (what happened). */
+    /** The chart's slider to minutes ahead (the forecast) or, negative, back (what happened). */
     chartTime(minutes: number): void {
       const c = chartParts().chart;
       c.playing.value = false;
       c.timeMode.value = minutes < 0 ? 'past' : 'forecast';
-      c.step.value = Math.round(minutes / 10);
+      c.minutes.value = Math.round(minutes);
+    },
+
+    /** The chart's slider: its way, its minutes and whether Play runs it. */
+    chartSlider() {
+      const c = chartParts().chart;
+      return { mode: c.timeMode.value, minutes: c.minutes.value, playing: c.playing.value };
+    },
+
+    /** Where a point of the water lies on the chart's screen, CSS pixels; null off it. */
+    chartScreenOf(east: number, north: number): { x: number; y: number } | null {
+      return chartParts().chart.view.screenOf(east, north);
+    },
+
+    /** The weather system or front whose box is open, or null. */
+    chartTapped() {
+      return chartParts().chart.tapped.value;
+    },
+
+    /** The course last steered for a system from its box, or null. */
+    chartSteered() {
+      return chartParts().chart.steered.value;
     },
 
     /** The chart's weather's layers, those given switched as given. */
@@ -2969,21 +3056,30 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         paints: w?.paints ?? 0,
         took: w?.took ?? null,
         moment:
-          s === null ? null : { kind: s.moment.kind, step: s.moment.step, tick: s.moment.tick },
+          s === null
+            ? null
+            : { kind: s.moment.kind, minutes: s.moment.minutes, tick: s.moment.tick },
         systems:
           s?.systems.map((x) => ({
+            slot: x.slot,
+            seed: x.seed,
             draw: x.draw,
-            forming: x.forming,
-            cone: x.cone,
+            name: x.name,
             east: x.east,
             north: x.north,
+            heading: x.heading,
+            speed: x.speed,
+            size: x.size,
+            length: x.length,
+            ring: x.ring,
+            strength: x.strength,
+            wind: x.wind,
+            gust: x.gust,
+            ahead: x.ahead,
+            gone: x.gone,
           })) ?? [],
         fronts: s?.fronts.length ?? 0,
-        risks: s?.risks.map((r) => r.mark) ?? [],
         gale: s?.gale === null || s?.gale === undefined ? 0 : s.gale.on.reduce((a, b) => a + b, 0),
-        forecast: s?.forecast.length ?? 0,
-        inside: s?.inside ?? 0,
-        judged: s?.judged ?? 0,
         rain: s === null ? 0 : s.grid.rain.reduce((a, b) => a + (b >= 0.1 ? 1 : 0), 0),
         fog: s === null ? 0 : s.grid.fog.reduce((a, b) => a + (b < 1852 ? 1 : 0), 0),
         inked: w === null ? 0 : inkedOf(w.canvas),
@@ -2998,7 +3094,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       if (f === null || e === undefined) {
         return null;
       }
-      const m = momentOf(c.chart.timeMode.value, c.chart.step.value, f);
+      const m = momentOf(c.chart.timeMode.value, c.chart.minutes.value, f);
       return placeWords(f, m, pointsOf(e), c.chart.store);
     },
 

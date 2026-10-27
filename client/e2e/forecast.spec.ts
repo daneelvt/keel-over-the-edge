@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The forecast in a real browser, in the sandbox on seed 1's world, whose
-// forecast is made as the server makes its own: the chart's slider shows
-// the latest issue's steps and, back, what happened, never what is to come;
+// forecast is made as the server makes its own: the chart's slider moves by
+// the minute, ahead by the latest issue and, back, by what happened, never
+// what is to come;
 // each layer of the chart's weather is painted only with its switch, within
 // the chart's budget; a gale warning is raised once however often it is
 // issued again, names the nearest charted place, and is not raised with its
@@ -63,7 +64,7 @@ async function openWeather(page: Page, query: string): Promise<void> {
 }
 
 test.describe('the chart’s weather', () => {
-  test('the slider shows the forecast’s steps ahead and what happened behind, never what is to come', async ({
+  test('the slider shows the minutes ahead by the forecast and what happened behind, never what is to come', async ({
     page,
   }) => {
     await openScene(page, 'world=1&weather=storm', true);
@@ -86,24 +87,19 @@ test.describe('the chart’s weather', () => {
       await drawChart(page, 4);
       return page.evaluate(() => globalThis.keel.chartWeather());
     };
+    // Whole minutes from the minute now.
+    const minute = Math.floor(now / MINUTE) * MINUTE;
     const ahead = await at(30);
-    expect(ahead.moment).toEqual({
-      kind: 'forecast',
-      step: 3,
-      tick: (f?.issue ?? 0) + 30 * MINUTE,
-    });
-    expect(ahead.systems.every((s) => s.cone > 0)).toBe(true);
+    expect(ahead.moment).toEqual({ kind: 'ahead', minutes: 30, tick: minute + 30 * MINUTE });
+    await expect(page.locator('[data-readout="chart-time"]')).toContainText('In 30 min · ');
     const back = await at(-30);
-    expect(back.moment?.kind).toBe('past');
-    expect(back.moment?.tick).toBe(now - 30 * MINUTE);
-    // What happened is judged against the forecast of then, the truth's
-    // systems inside its cones or not, and none without a truth.
-    expect(back.judged).toBeLessThanOrEqual(back.systems.length);
-    expect(back.inside).toBeLessThanOrEqual(back.judged);
+    expect(back.moment).toEqual({ kind: 'past', minutes: -30, tick: minute - 30 * MINUTE });
+    await expect(page.locator('[data-readout="chart-time"]')).toContainText('30 min ago · ');
     // Further back than is kept, it shows the oldest kept, never now's.
     const far = await at(-90);
     expect(far.moment?.kind).toBe('past');
     expect(far.moment?.tick ?? now).toBeLessThan(now);
+    expect(far.moment?.tick ?? 0).toBeGreaterThanOrEqual(f?.truth[0] ?? 0);
     const nowShown = await at(0);
     expect(nowShown.moment?.kind).toBe('now');
     await expect(page.locator('[data-readout="chart-time"]')).toContainText('Now');
@@ -113,18 +109,25 @@ test.describe('the chart’s weather', () => {
     page,
   }) => {
     await openWeather(page, 'weather=storm');
-    // Half an hour ahead, when the storm the sandbox called up is born.
+    // Half an hour ahead, when the storm the sandbox called up is grown.
     await page.evaluate(() => globalThis.keel.chartTime(30));
-    const layers = ['gusts', 'rain', 'fog', 'systems', 'pressure'] as const;
+    const layers = [
+      'wash',
+      'barbs',
+      'streaks',
+      'gusts',
+      'rain',
+      'fog',
+      'systems',
+      'pressure',
+    ] as const;
     const paint = async (on: readonly string[]) => {
       await page.evaluate(
-        (o) =>
+        ([all, o]) =>
           globalThis.keel.chartLayers(
-            Object.fromEntries(
-              ['gusts', 'rain', 'fog', 'systems', 'pressure'].map((l) => [l, o.includes(l)]),
-            ) as Record<'gusts', boolean>,
+            Object.fromEntries(all.map((l) => [l, o.includes(l)])) as Record<'gusts', boolean>,
           ),
-        on,
+        [layers, on] as const,
       );
       await drawChart(page, 3);
       return page.evaluate(() => globalThis.keel.chartWeather());

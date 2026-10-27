@@ -23,9 +23,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 var update = flag.Bool("update", false, "write the golden vectors in shared/protocol/testdata again")
@@ -960,7 +962,7 @@ func TestKeyframesRoundTrip(t *testing.T) {
 	a.Tick, b.Tick = 300, 600
 	a.Systems[3] = physics.System{On: 1, Kind: 2, Seed: 4294967295, Stage: 1, East: -60000, North: 72000, Heading: 65535,
 		Speed: 257, Strength: 4096, Size: 3704, Peak: 1131, Depth: -1500}
-	a.Systems[19] = physics.System{On: 1, Kind: 4, East: 4, North: -4, Strength: 1, Size: 400, Peak: 400}
+	a.Systems[27] = physics.System{On: 1, Kind: 6, East: 4, North: -4, Heading: 900, Strength: 1, Size: 400, Peak: 400, Length: 4630}
 	b.Systems[0] = a.Systems[3]
 	m := WeatherSystems(nil, true, &a, &b)
 	if !m.GetKeepSpells() || len(m.GetSpells()) != 0 || len(m.GetKeyframes()[0].GetSystems()) != 2 {
@@ -975,10 +977,48 @@ func TestKeyframesRoundTrip(t *testing.T) {
 		"out of order": WeatherSystems(nil, true, &b, &a),
 		"too many":     WeatherSystems(nil, true, &a, &b, &b, &b, &b),
 		"a slot twice": {Keyframes: []*pb.Keyframe{{Systems: []*pb.SystemKey{{Slot: 1}, {Slot: 1}}}}},
-		"no slot 20":   {Keyframes: []*pb.Keyframe{{Systems: []*pb.SystemKey{{Slot: 20}}}}},
+		"no slot 28":   {Keyframes: []*pb.Keyframe{{Systems: []*pb.SystemKey{{Slot: 28}}}}},
 	} {
 		if _, err := KeyframesOf(m, out[:]); err == nil {
 			t.Errorf("%s: read", name)
 		}
+	}
+}
+
+// TestForecastRoundTrip: a forecast goes out and comes back the same, its
+// systems' records and slots, its reach and keyframes' spacing; and the
+// busiest forecast of a busy week stays small on the wire.
+func TestForecastRoundTrip(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tl, err := weather.FromCatalog(cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := tl.Prepared()
+	var f, back physics.Forecast
+	most, size := 0, 0
+	for issue := int64(2 * 3600 * physics.StepsPerSecond); issue < tl.Week().Until-p.ForecastReach(); issue += p.ForecastEvery() {
+		tl.Forecast(issue, nil, nil, 0, &f)
+		m := Forecast(&f, nil)
+		if err := ForecastOf(m, &back); err != nil {
+			t.Fatalf("issue %d: %v", issue, err)
+		}
+		if back != f {
+			t.Fatalf("issue %d: the forecast came back otherwise", issue)
+		}
+		if n := int(f.Head.NSystems); n > most {
+			b, err := proto.Marshal(&pb.ServerMessage{Body: &pb.ServerMessage_Forecast{Forecast: m}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			most, size = n, len(b)
+		}
+	}
+	t.Logf("the busiest forecast of the sample week: %d systems, %d bytes", most, size)
+	if size > 16<<10 {
+		t.Errorf("the busiest forecast is %d bytes, more than 16 KB", size)
 	}
 }

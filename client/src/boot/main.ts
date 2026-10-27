@@ -49,11 +49,18 @@ import { backSoon, showAddPasskey, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
-import { chartSandbox, fetchSandboxChart, makeChart, sandboxModels } from '../chart/make';
+import {
+  type ChartParts,
+  chartSandbox,
+  fetchSandboxChart,
+  makeChart,
+  sandboxModels,
+} from '../chart/make';
 import { Models } from '../chart/model';
 import { warningInForce } from '../chart/placeweather';
 import { STEPS_PER_SECOND } from '../game/clock';
 import { Game } from '../game/game';
+import { PILOT_HEADING, stepsOf } from '../input/pilot';
 import { Land } from '../land/land';
 import {
   FILE_WORLD,
@@ -268,7 +275,12 @@ async function start(): Promise<void> {
     const chartFile = seed === null ? null : await fetchSandboxChart(seed);
     const parts = makeChart(world, sandboxModels(chartFile), null, forecasting);
     sandboxForecast = new SandboxForecast(
-      { physics: sandbox.physics, tick: () => world.ticks, spells: () => sandbox.weather.spells },
+      {
+        physics: sandbox.physics,
+        tick: () => world.ticks,
+        spells: () => sandbox.weather.spells,
+        keyframes: catalog.weather.keyframe.every * STEPS_PER_SECOND,
+      },
       forecasting.forecasts,
       catalog.weather.forecast.every * 60 * STEPS_PER_SECOND,
       (east, north) => {
@@ -283,7 +295,7 @@ async function start(): Promise<void> {
     if (held !== null) {
       baro.barometer.hold(held, world.ticks);
     }
-    const gales = new GaleNotices(parts.chart.store, parts.notices);
+    const gales = steerByChart(game, world, parts, forecasting);
     issuer.onIssue = (f) => {
       gales.issued(f);
       world.galeUp = f.gale === null ? null : pointUp(f.gale.from);
@@ -459,7 +471,7 @@ async function start(): Promise<void> {
   // The world's chart, as the server tells of it; the notices it raises,
   // switched off as the account has them.
   const parts = makeChart(world, models, serverNews, forecasting);
-  const gales = new GaleNotices(parts.chart.store, parts.notices);
+  const gales = steerByChart(game, world, parts, forecasting);
   online.onForecast = (f, past) => {
     forecasting.forecasts.receive(f, past);
     gales.issued(f);
@@ -599,6 +611,50 @@ async function start(): Promise<void> {
     const { exposeHooks } = await import('../dev/hooks');
     exposeHooks(world, game, { online, predictor, chart: parts, barometer: baro.barometer });
   }
+}
+
+/**
+ * The chart's weather joined to the boat: a system's box reads the boat's
+ * speed over the ground and its Steer sets the autopilot to hold the
+ * course, as the autopilot's panel does; and the gale warnings' notices,
+ * raised for a gale forecast near the boat or across the course steered
+ * for a system while the autopilot holds it, looked for again every few
+ * seconds as the boat moves.
+ */
+function steerByChart(
+  game: Game,
+  world: SeaScene,
+  parts: ChartParts,
+  forecasting: Forecasting,
+): GaleNotices {
+  parts.sea.speed = () => game.driver?.out[RECORDS.out.speedOverGround] ?? 0;
+  parts.sea.steer = (heading) => {
+    const d = game.driver;
+    if (d === null) {
+      return;
+    }
+    game.pilot.engage(PILOT_HEADING, heading, d.wind.meanFrom);
+    game.hud.flush();
+  };
+  const gales = new GaleNotices(parts.chart.store, parts.notices, {
+    fields: () => forecasting.fields(),
+    made: () => forecasting.made(),
+    tick: () => world.ticks,
+    // The boat as last stepped, not as last drawn.
+    boat: () => {
+      const s = game.driver?.states.current;
+      return s === undefined
+        ? { east: world.pose.east, north: world.pose.north }
+        : { east: s[RECORDS.state.x] ?? 0, north: s[RECORDS.state.y] ?? 0 };
+    },
+    course: () => {
+      const c = parts.chart.steered.value;
+      const p = game.pilot;
+      return c !== null && p.mode === PILOT_HEADING && p.target === stepsOf(c.heading) ? c : null;
+    },
+  });
+  setInterval(() => gales.check(), 5000);
+  return gales;
 }
 
 /** The barometer and the words about its dial. */

@@ -3,41 +3,11 @@
 package weather
 
 import (
-	"math"
 	"testing"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
-
-// The week's second version slows its systems' wobble and nothing else:
-// made with the first version's wobble, a seed's spells and every other
-// draw of its systems are the same.
-func TestWobbleOnlyChangesTheWobble(t *testing.T) {
-	_, tl := load(t)
-	cfg := *tl.Config()
-	old := cfg
-	old.Week.Wobble = 0.4 * nauticalMile
-	old.Week.WobblePeriod = [2]int64{20 * ticksPerMinute, 60 * ticksPerMinute}
-	a := Generate(&cfg, 3, SampleEpoch, SampleEpoch+SampleWeek, testIslands)
-	b := Generate(&old, 3, SampleEpoch, SampleEpoch+SampleWeek, testIslands)
-	if len(a.Spells) != len(b.Spells) || len(a.Systems) != len(b.Systems) {
-		t.Fatalf("%d spells and %d systems, with the old wobble %d and %d", len(a.Spells), len(a.Systems), len(b.Spells), len(b.Systems))
-	}
-	for i := range a.Spells {
-		if a.Spells[i] != b.Spells[i] {
-			t.Errorf("spell %d differs", i)
-		}
-	}
-	for i := range a.Systems {
-		x, y := a.Systems[i], b.Systems[i]
-		x.Wobble, x.WobblePeriod, x.ThrobPeriod = 0, [2]float64{}, 0
-		y.Wobble, y.WobblePeriod, y.ThrobPeriod = 0, [2]float64{}, 0
-		if x != y {
-			t.Errorf("system %d differs beyond its wobble", i)
-		}
-	}
-}
 
 // A week made by the first version, stored, is read and sailed as it was
 // made: its keyframes are its records' own.
@@ -98,34 +68,34 @@ func TestForecastIsAFunctionOfItsIssue(t *testing.T) {
 	}
 }
 
-// Nothing of the future but the forecast: a forecast's systems are those
-// alive at the issue and the lows forming, the rest of the week's
-// systems, born after the issue, are not in it.
-func TestForecastKnowsNoMore(t *testing.T) {
+// The forecast is the truth: at every minute of its reach, the keyframe
+// it makes is the timeline's own, bit for bit, every system on it, those
+// born after the issue from their births.
+func TestForecastIsTheWeek(t *testing.T) {
 	_, tl := load(t)
 	w := tl.Week()
 	p := tl.Prepared()
 	var f physics.Forecast
-	issues, forming := 0, 0
-	for issue := int64(0); issue < w.Until-p.ForecastHorizon(); issue += p.ForecastEvery() {
-		tl.Forecast(issue, nil, nil, 0, &f)
+	var got, want physics.Keyframe
+	issues, later := 0, 0
+	for issue := int64(2 * hourTicks); issue < w.Until-p.ForecastReach(); issue += 37 * p.ForecastEvery() {
+		tl.Forecast(int64(issue), nil, nil, 0, &f)
 		issues++
-		for i := range int(f.Head.NSystems) {
-			s := &f.Systems[i]
-			r := recordOf(w, s, issue)
-			if r == nil {
-				t.Fatalf("issue %d: a system of no record", issue)
+		for at := int64(issue); at <= int64(f.Head.Until); at += 60 * physics.StepsPerSecond {
+			physics.ForecastKeyframe(&f, float64(at), &got)
+			tl.Keyframe(at, nil, &want)
+			if got != want {
+				t.Fatalf("issue %d, %d minutes on: the forecast's keyframe is not the truth's", issue, (at-int64(issue))/(60*physics.StepsPerSecond))
 			}
-			if r.Born > float64(issue) {
-				forming++
-				if s.Forming == 0 || tl.Config().Kinds[int(r.Kind)].Shape != physics.ShapeLow || s.Seed != 0 {
-					t.Errorf("issue %d: a system born after it, not a low forming without its seed", issue)
-				}
+		}
+		for i := range int(f.Head.NSystems) {
+			if r := &f.Systems[i]; r.Born >= float64(issue)+40*60*physics.StepsPerSecond {
+				later++
 			}
 		}
 	}
-	if forming == 0 {
-		t.Errorf("over %d issues no low forming", issues)
+	if later == 0 {
+		t.Errorf("over %d issues no system born 40 minutes or more after one", issues)
 	}
 }
 
@@ -155,17 +125,23 @@ func TestForecastsADevelopersSystem(t *testing.T) {
 	tl.Forecast(issue, nil, ss, 0, &f)
 	found := false
 	for i := range int(f.Head.NSystems) {
-		if s := &f.Systems[i]; s.Slot == weekSlots {
+		if f.Head.Slots[i] == weekSlots {
 			found = true
-			r := tl.DeveloperRecord(ss[0])
-			e, n := physics.SystemTrack(&r, float64(issue))
-			if math.Hypot(s.East[0]-e, s.North[0]-n) > 1 {
-				t.Errorf("the developer's squall at (%v, %v), its record at (%v, %v)", s.East[0], s.North[0], e, n)
+			if r := tl.DeveloperRecord(ss[0]); f.Systems[i].Kind != r.Kind || f.Systems[i].Born != r.Born {
+				t.Errorf("the developer's squall is forecast from %+v, its record %+v", f.Systems[i], r)
 			}
 		}
 	}
 	if !found {
 		t.Error("the developer's squall is not forecast")
+	}
+	var got, want physics.Keyframe
+	for at := issue; at <= int64(f.Head.Until); at += 60 * physics.StepsPerSecond {
+		physics.ForecastKeyframe(&f, float64(at), &got)
+		tl.Keyframe(at, ss, &want)
+		if got.Systems[weekSlots] != want.Systems[weekSlots] {
+			t.Errorf("%d minutes on, the developer's squall is not the truth's", (at-issue)/(60*physics.StepsPerSecond))
+		}
 	}
 }
 

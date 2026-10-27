@@ -59,6 +59,17 @@ func TestForecastOnline(t *testing.T) {
 			if first.GetPast() == nil || first.GetPast().GetIssue() == nil || len(first.GetPast().GetTruth()) == 0 {
 				t.Errorf("the first forecast has no past: %v", first.GetPast())
 			}
+			// Sent with its past, it is still the whole issue: its reach and
+			// its keyframes' spacing with it.
+			for _, f := range []interface {
+				GetIssue() int64
+				GetUntil() int64
+				GetEvery() uint32
+			}{first, next} {
+				if f.GetUntil() <= f.GetIssue() || f.GetEvery() != uint32(tl.Every()) {
+					t.Errorf("an issue at %d knows the systems to %d, its keyframes %d apart", f.GetIssue(), f.GetUntil(), f.GetEvery())
+				}
+			}
 			if next.GetPast() != nil || next.GetIssue() != first.GetIssue()+tl.Prepared().ForecastEvery() {
 				t.Errorf("the next issue is %d, after %d, with a past %v", next.GetIssue(), first.GetIssue(), next.GetPast() != nil)
 			}

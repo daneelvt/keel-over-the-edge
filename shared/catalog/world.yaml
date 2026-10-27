@@ -1191,14 +1191,28 @@ world:
   #
   # Its weather, painted on a canvas of look.weather.canvas pixels over the
   # paper, each layer a shape of its own as well as a colour (WCAG 2.2,
-  # 1.4.1): the wind's streaks, the gusts' broken dashes and the isobars in
-  # the paper's ink; rain's stipple, fog's wash, fronts, squalls, storms and
-  # gales in colours of their own, chosen on buff paper to stay at least 10
-  # apart (CIEDE2000) under simulated protanopia, deuteranopia and
-  # tritanopia (Machado and others 2009) and 3:1 against the paper and the
-  # sea (WCAG 2.2, 1.4.11). Magenta stays the lights' (IHO S-4, B-142).
-  # Gusts are drawn where the typical strongest gust is look.weather.gusts
-  # knots or more over the mean wind.
+  # 1.4.1): the wind's streaks, its barbs, the gusts' broken dashes and the
+  # isobars in the paper's ink; rain's stipple, fog's wash, cold and warm
+  # fronts, squalls, storms and gales in colours of their own, chosen on
+  # buff paper to stay at least 10 apart (CIEDE2000) under simulated
+  # protanopia, deuteranopia and tritanopia (Machado and others 2009) and
+  # 3:1 against the paper and the sea (WCAG 2.2, 1.4.11); a cold front blue
+  # and a warm front red, as the weather chart has them (WMO-No. 485), their
+  # triangles and semicircles telling them apart without the colour.
+  # Magenta stays the lights' (IHO S-4, B-142). Gusts are drawn where the
+  # typical strongest gust is look.weather.gusts knots or more over the mean
+  # wind.
+  #
+  # The wind is read three ways. Its wash tints the water in steps of one
+  # hue, look.weather.wash.colour at each of wash.tints over the paper, from
+  # each of the Beaufort forces wash.forces on: none under the first, so it
+  # reads by lightness, not by colour. Its barbs, the weather chart's, stand
+  # every look.weather.barbs nautical miles. Its streaks,
+  # look.weather.streaks.count of them, streaks.width pixels wide, are in
+  # the full ink, faded only in a mean wind under streaks.fade knots.
+  #
+  # The chart's key gives a line for each kind of system, from the weather
+  # catalog, and look.weather.key's for the rest of what the chart draws.
   chart:
     sight: { every: 15, rays: 48, water: 300, awash: 150, features: 300, grid: 500 }
     worth: { zones: { centre: 1, middle: 1.5, rim: 2 }, classes: { a: 2, b: 1.5, c: 1 }, great: 20 }
@@ -1220,9 +1234,26 @@ world:
         gusts: 6.5
         rain: "#4f7896"
         fog: "#62696b"
-        front: "#123d8c"
+        cold: "#123d8c"
+        warm: "#c05050"
         squall: "#3a3f4a"
         storm: "#8c3a24"
+        wash: { colour: "#24506a", forces: [3, 5, 7], tints: [0.08, 0.16, 0.24] }
+        barbs: 0.6 # nautical miles apart
+        streaks: { count: 1200, width: 2, fade: 4 }
+        key:
+          cold: "A cold front: its triangles on the side it moves toward; the wind veering and gusty as it passes."
+          warm: "A warm front: its semicircles on the side it moves toward; rain ahead of it, the wind veering as it passes."
+          barbs: "The wind: its shaft points where it blows from, a half feather for 5 knots, a feather for 10, a pennant for 50."
+          wash: "The wind's strength: the water darker from force 3, force 5 and force 7 on."
+          streaks: "The wind's streaks: the way the air flows, longer and quicker where it is stronger."
+          isobars: "Isobars: the pressure every hPa, heavier every 4; L and H at the lows and the highs. The wind blows along them, harder where they crowd."
+          ring: "A ring of strongest wind, hatched at its true size: the wind is strongest there and dies away inside it."
+          motion: "Where it will be in 30 minutes."
+          gale: "A gale forecast: force 8 or more there, hatched across."
+          gusts: "Gusts: where the strongest gusts blow well over the mean wind."
+          rain: "Rain: denser dots for heavier rain."
+          fog: "Fog: a grey wash with wavy lines, outlined where a boat's length or two is all there is to see."
 
   # The instruments aboard. The barometer: a brass aneroid whose dial reads
   # barometer.range hPa, the words about its dial at barometer.words hPa

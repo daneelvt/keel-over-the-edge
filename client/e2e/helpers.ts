@@ -237,16 +237,17 @@ export async function sail(page: Page, base = ''): Promise<void> {
 
 /**
  * Opens a second page as sail() does, the first page's drawing held
- * meanwhile: on CI's one software GPU, a page starting beside one that
- * draws the sea takes most of a minute, and stalls the other for seconds
- * at a time.
+ * meanwhile, or every one of the pages before it: on CI's one software
+ * GPU, a page starting beside one that draws the sea takes most of a
+ * minute, and stalls the other for seconds at a time.
  */
-export async function sailBeside(page: Page, first: Page, base = ''): Promise<void> {
-  await first.evaluate(() => globalThis.keel.hold(true));
+export async function sailBeside(page: Page, first: Page | Page[], base = ''): Promise<void> {
+  const held = Array.isArray(first) ? first : [first];
+  await Promise.all(held.map((p) => p.evaluate(() => globalThis.keel.hold(true))));
   try {
     await sail(page, base);
   } finally {
-    await first.evaluate(() => globalThis.keel.hold(false));
+    await Promise.all(held.map((p) => p.evaluate(() => globalThis.keel.hold(false))));
   }
 }
 

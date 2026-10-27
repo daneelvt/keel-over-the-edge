@@ -23,7 +23,6 @@ import {
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
-  LineSegments,
   Mesh,
   PerspectiveCamera,
   PlaneGeometry,
@@ -52,6 +51,8 @@ export interface ChartLook extends PaperLook {
   fps: number;
   /** The wind's grid: points a side. */
   wind: number;
+  /** The wind's streaks: how many, how wide, CSS pixels, and under what mean wind they fade, m/s. */
+  streaks: { count: number; width: number; fade: number };
   /** Each surface's top and side colours, by its index. */
   tops: readonly string[];
   sides: readonly string[];
@@ -85,8 +86,7 @@ const TABLE = '#22303a';
 
 /** The paper's canvas, pixels a side. */
 const PAPER_PIXELS = 2048;
-/** The wind's streaks drawn, and how long each lives, s. */
-const STREAKS = 700;
+/** How long each of the wind's streaks lives, s. */
 const STREAK_LIFE = 6;
 /** The camera's elevation above the paper, rad: from above and to one side. */
 const TILT = 0.95;
@@ -135,6 +135,8 @@ export class ChartView {
   onPick: ((e: ChartEntry) => void) | null = null;
   /** The reader asks for less motion: the wind's streaks stand still. */
   reducedMotion = false;
+  /** Whether the wind's streaks are switched on. */
+  streaksOn: () => boolean = () => true;
   /** How many times it was drawn (the tests). */
   draws = 0;
 
@@ -148,11 +150,13 @@ export class ChartView {
   readonly #land = new Mesh(new BufferGeometry(), chartMaterial({ vertexColors: true }));
   readonly #towers = new Mesh(new BufferGeometry(), chartMaterial({ vertexColors: true }));
   readonly #boat: Mesh;
-  readonly #streaks: LineSegments;
+  readonly #streaks: Mesh;
   /** The weather's canvas over the paper, and its texture; null without. */
   #weather: ChartWeather | null = null;
   #weatherTexture: CanvasTexture | null = null;
-  readonly #streakXY = new Float32Array(STREAKS * 4); // x, y, age, life
+  readonly #streakXY: Float32Array; // x, y, age, life
+  /** The streaks' half width when last laid, m: they are laid again when the camera moves in or out. */
+  #streakHalf = 0;
   readonly #windGrid: {
     speeds: Float64Array;
     froms: Float64Array;
@@ -206,6 +210,7 @@ export class ChartView {
     this.#land.name = 'islands';
     this.#towers.name = 'lighthouses';
     this.#boat = this.#makeBoat();
+    this.#streakXY = new Float32Array(look.streaks.count * 4);
     this.#streaks = this.#makeStreaks();
     const falls = this.#makeFalls();
     this.scene.add(paper, this.#land, this.#towers, this.#boat, this.#streaks, falls);
@@ -225,7 +230,7 @@ export class ChartView {
         this.#windGrid.points[2 * (j * n + i) + 1] = ((j + 0.5) / n - 0.5) * 2 * look.lip;
       }
     }
-    for (let s = 0; s < STREAKS; s++) {
+    for (let s = 0; s < look.streaks.count; s++) {
       this.#respawn(s, Math.random() * STREAK_LIFE);
     }
     store.version.subscribe(() => {
@@ -442,11 +447,17 @@ export class ChartView {
       g.at = now;
       g.have = this.#wind(g.points, g.speeds, g.froms);
     }
-    if (this.#windGrid.have && !this.reducedMotion) {
-      this.#moveStreaks(dt);
+    const streaks = this.#windGrid.have && this.streaksOn();
+    // Still for a reader who asks for less motion, but laid again at the
+    // camera's new distance, so they stay as wide on the screen.
+    if (streaks && (!this.reducedMotion || this.#streakWidth() !== this.#streakHalf)) {
+      this.#moveStreaks(this.reducedMotion ? 0 : dt);
       this.#dirty = true;
     }
-    this.#streaks.visible = this.#windGrid.have;
+    if (this.#streaks.visible !== streaks) {
+      this.#streaks.visible = streaks;
+      this.#dirty = true;
+    }
   }
 
   #placeCamera(): void {
@@ -539,17 +550,38 @@ export class ChartView {
     return m;
   }
 
-  #makeStreaks(): LineSegments {
+  /**
+   * The streaks: a quad each, a corner either side of each end, as a line
+   * of WebGL's is one pixel wide whatever is asked.
+   */
+  #makeStreaks(): Mesh {
+    const n = this.#look.streaks.count;
     const g = new BufferGeometry();
-    g.setAttribute('position', new BufferAttribute(new Float32Array(STREAKS * 6), 3));
-    g.setAttribute('color', new BufferAttribute(new Float32Array(STREAKS * 8), 4));
-    const l = new LineSegments(
+    g.setAttribute('position', new BufferAttribute(new Float32Array(n * 12), 3));
+    g.setAttribute('color', new BufferAttribute(new Float32Array(n * 16), 4));
+    const index = new Uint32Array(n * 6);
+    for (let s = 0; s < n; s++) {
+      index.set(
+        [0, 1, 2, 2, 1, 3].map((i) => 4 * s + i),
+        6 * s,
+      );
+    }
+    g.setIndex(new BufferAttribute(index, 1));
+    const m = new Mesh(
       g,
-      chartMaterial({ vertexColors: true, transparent: true, depthWrite: false }),
+      chartMaterial({ vertexColors: true, transparent: true, side: DoubleSide, depthWrite: false }),
     );
-    l.name = 'wind';
-    l.frustumCulled = false;
-    return l;
+    m.name = 'wind';
+    m.frustumCulled = false;
+    return m;
+  }
+
+  /** Half a streak's width on the paper, m, at the camera's distance: its pixels' worth at what it looks at. */
+  #streakWidth(): number {
+    const metres =
+      (2 * this.#distance * Math.tan((this.camera.fov * Math.PI) / 360)) / this.#height;
+    // Rounded, so a still camera lays them once.
+    return Math.round(((this.#look.streaks.width / 2) * metres) / 0.5) * 0.5;
   }
 
   #respawn(s: number, age = 0): void {
@@ -582,8 +614,12 @@ export class ChartView {
     const pa = pos.array as Float32Array;
     const ca = col.array as Float32Array;
     const lip = this.#look.lip;
-    const ink = 0.25;
-    for (let s = 0; s < STREAKS; s++) {
+    const { count, fade } = this.#look.streaks;
+    // The paper's ink, in full, as the paper's own colour space has it.
+    const ink = new Color(this.#look.ink);
+    const half = this.#streakWidth();
+    this.#streakHalf = half;
+    for (let s = 0; s < count; s++) {
       let x = xy[s * 4] ?? 0;
       let y = xy[s * 4 + 1] ?? 0;
       const age = (xy[s * 4 + 2] ?? 0) + dt;
@@ -601,9 +637,33 @@ export class ChartView {
       xy[s * 4 + 1] = y;
       xy[s * 4 + 2] = age;
       const len = 40 + speed * 28;
-      pa.set([x - ux * len, 4, -(y - uy * len), x, 4, -y], s * 6);
-      const alpha = Math.min(1, Math.sin((Math.PI * age) / life)) * Math.min(1, speed / 6) * 0.8;
-      ca.set([ink, ink, ink + 0.1, 0, ink, ink, ink + 0.1, alpha], s * 8);
+      // Its tail and head, each a corner either side of the way it blows.
+      const wx = -uy * half;
+      const wy = ux * half;
+      const tx = x - ux * len;
+      const ty = y - uy * len;
+      pa.set(
+        [
+          tx + wx,
+          4,
+          -(ty + wy),
+          tx - wx,
+          4,
+          -(ty - wy),
+          x + wx,
+          4,
+          -(y + wy),
+          x - wx,
+          4,
+          -(y - wy),
+        ],
+        s * 12,
+      );
+      // Faded in and out over its life, and in a wind too light to read.
+      const alpha =
+        Math.min(1, Math.sin((Math.PI * age) / life)) * Math.min(1, fade > 0 ? speed / fade : 1);
+      const { r, g, b } = ink;
+      ca.set([r, g, b, 0, r, g, b, 0, r, g, b, alpha, r, g, b, alpha], s * 16);
     }
     pos.needsUpdate = true;
     col.needsUpdate = true;
@@ -743,7 +803,7 @@ export class ChartView {
       }
       meshes++;
       const n = g.index !== null ? g.index.count : (g.attributes.position?.count ?? 0);
-      triangles += o instanceof LineSegments ? 0 : n / 3;
+      triangles += n / 3;
     });
     return { meshes, triangles };
   }

@@ -66,8 +66,8 @@ type Sea struct {
 	// their ids.
 	News    func(ctx context.Context, before *[16]byte, n int) ([]store.News, error)
 	Columns map[string]string
-	// SystemKinds are what the forecast calls each kind of weather system,
-	// by the catalog's index: "a squall", "a fog bank".
+	// SystemKinds are each kind of weather system's name, by the catalog's
+	// index, as a chart's key gives it: "Squall line", "Low".
 	SystemKinds []string
 	// Start is the place new boats start at: "Port Royal".
 	Start string

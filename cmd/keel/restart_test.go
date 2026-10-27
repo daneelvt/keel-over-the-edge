@@ -155,6 +155,7 @@ func distance(a, b *protocol.Snapshot) float64 {
 // a second of the first's stop, with the epoch one higher.
 func TestTwoServersOneLease(t *testing.T) {
 	u := storetest.URL(t)
+	recentWorld(t, u)
 	first := startReal(t, u)
 	first.waitReady(t)
 	second := startReal(t, u)

@@ -7,9 +7,8 @@
 // weather at a tick, every few seconds; the pressure at a point clicked;
 // the sea, its areas' waves and swell and the waves at a point clicked,
 // every ten seconds while it is shown; the clouds and the rain, every ten
-// seconds while either is shown; the forecast at the tick shown, with how
-// well it has held so far and the world's gale warnings, while it is
-// shown; a place's box and outlook at the tick shown, for a point, an
+// seconds while either is shown; the forecast at the tick shown, with the
+// world's gale warnings, while it is shown; how busy the weather has been; a place's box and outlook at the tick shown, for a point, an
 // island or a place picked; the next world's terrain and week under next/
 // once it is made; the players' accounts, searched by name, id or token,
 // and an account's card; and the controls, each a POST of JSON, among them
@@ -440,10 +439,17 @@ export interface Lifecycle {
   runs: JobRun[];
 }
 
-/** A kind of weather system: its name, and the shape of the pressure it carries: dome, low or none. */
+/**
+ * A kind of weather system: its id and its name as a chart's key gives it,
+ * its chart symbol, the shape of the pressure it carries (dome, low, line
+ * or none), and whether it is the week's storms' kind.
+ */
 export interface SystemKind {
   id: string;
+  name: string;
+  symbol: string;
   shape: string;
+  storm: boolean;
 }
 
 /**
@@ -464,6 +470,8 @@ export interface Spell {
   /** Degrees: the way its front moves. */
   toward: number;
   cross: number;
+  /** A warm front's, its rain ahead of its line. */
+  warm: boolean;
   /** A developer's, holding the weather. */
   held: boolean;
 }
@@ -475,8 +483,10 @@ export interface WeatherSystem {
   kind: number;
   east: number;
   north: number;
-  /** Its radius, m. */
+  /** Its radius, m: a line's half its depth along its motion. */
   size: number;
+  /** A line's length across its motion, m; 0 for any other shape. */
+  length: number;
   /** Its life and swell, 1 at full. */
   strength: number;
   /** 0 growing, 1 mature, 2 decaying. */
@@ -504,6 +514,8 @@ export interface Front {
   leaves: number;
   /** The tick its line passes Port Royal. */
   portRoyal: number;
+  /** A warm front, its rain ahead of its line; otherwise a cold front. */
+  warm: boolean;
 }
 
 /**
@@ -535,8 +547,9 @@ export interface WeatherWeek {
   regimes: string[];
   kinds: SystemKind[];
   spells: Spell[];
-  /** The ticks the week's storms are born at. */
+  /** The ticks the week's storms are born at, and its other lows. */
   storms: number[];
+  lows: number[];
   /** The spell in effect at the tick shown, and the next to begin after it. */
   spell: Spell | null;
   next: Spell | null;
@@ -706,36 +719,40 @@ export interface VisibilityPage {
 }
 
 /**
- * A system as the forecast gives it: at each step where it will be, east
- * and north, its cone's radius, m, and its strength, 0 to 1; all 0 at a
- * step it is not alive at.
+ * A system as the forecast knows it, from its record: the ticks it is born
+ * and gone at, its size and a line's length, m, and its track from the
+ * tick from, a point every forecast's every ticks while it lives within
+ * the forecast's reach: east and north, m, its strength, 0 to 1, and the
+ * degrees it moves toward.
  */
 export interface ForecastSystem {
   slot: number;
   /** Its kind, by index into the week's kinds, and its kind's id. */
   kind: number;
   id: string;
-  /** A low not yet born at the issue, forecast by its plan: its cone a constant circle. */
-  forming: boolean;
-  /** The tick it is forecast to cross the lip onto the disk; 0 for one on it. */
-  crosses: number;
-  steps: [number, number, number, number][];
+  seed: number;
+  born: number;
+  gone: number;
+  size: number;
+  length: number;
+  from: number;
+  track: [number, number, number, number][];
 }
 
 /**
- * A front as the forecast moves it: at each step its line's distance from
- * the centre along the way it moves, and its band's half-width, m; null at
- * a step it is not crossing.
+ * A front the forecast knows: the way it moves, the tick its line enters
+ * the disk's reach and the ticks it takes to cross it, and whether it is a
+ * warm front.
  */
 export interface ForecastFront {
-  /** Degrees: the way it moves. */
+  /** Degrees. */
   toward: number;
   begin: number;
   cross: number;
-  lines: ([number, number] | null)[];
+  warm: boolean;
 }
 
-/** A spell as the forecast names it, with its regime's risk: what it brings that no forecast places. */
+/** A spell as the forecast names it. */
 export interface ForecastSpell {
   begin: number;
   regime: number;
@@ -744,11 +761,8 @@ export interface ForecastSpell {
   from: number;
   knots: number;
   front: boolean;
+  warm: boolean;
   shifts: number;
-  /** The sky its regime's risk names, whether it makes fog patches, and the chart's marks of it. */
-  risk: string;
-  fog: boolean;
-  marks: string[];
 }
 
 /** The gale warning in force. */
@@ -772,9 +786,11 @@ export interface ForecastGale {
 }
 
 /**
- * forecast.json: the issue in force at the tick shown, the issue's own step
- * first; the gale grid galeSide points a side, galeGrid m apart about the
- * centre, row j north and column i east of its south-west point.
+ * forecast.json: the issue in force at the tick shown, the truth over its
+ * reach: every system it knows with its track to until, the last tick it
+ * knows them to; the fronts; and the gale warning, its grid galeSide points
+ * a side, galeGrid m apart about the centre, row j north and column i east
+ * of its south-west point, an area at each step.
  */
 export interface ForecastPage {
   at: number;
@@ -784,7 +800,12 @@ export interface ForecastPage {
   /** Ticks between steps, and how many. */
   step: number;
   steps: number;
+  until: number;
+  /** Ticks between a track's points. */
+  every: number;
   lip: number;
+  /** How far either side of the centre a front's line crosses, m. */
+  reach: number;
   systems: ForecastSystem[];
   fronts: ForecastFront[];
   spells: ForecastSpell[];
@@ -793,20 +814,37 @@ export interface ForecastPage {
   galeSide: number;
 }
 
+/** A regime's minutes in a span: how many, the share with nothing on the disk, %, and the systems on it on average. */
+export interface BusyRegime {
+  id: string;
+  minutes: number;
+  empty: number;
+  systems: number;
+}
+
 /**
- * calibration.json: of every issue from the world's beginning whose horizon
- * has passed, at each lead (minutes), the cases inside their cones and the
- * cases, of the systems alive at the issue, the lows forming and the fronts.
+ * How busy the weather was over a span of minutes: the shares, %, with
+ * nothing on the disk, rain somewhere, a storm or a low, a storm, a front or
+ * a trough; the systems on the disk on average; and the same by regime.
  */
-export interface CalibrationPage {
-  now: number;
-  from: number;
-  next: number;
-  issues: number;
-  leads: number[];
-  alive: [number, number][];
-  forming: [number, number][];
-  fronts: [number, number][];
+export interface BusyFigures {
+  minutes: number;
+  empty: number;
+  rain: number;
+  lows: number;
+  storms: number;
+  lines: number;
+  systems: number;
+  regimes: BusyRegime[];
+}
+
+/** busy.json: the weather's figures from the week's opening to the tick asked about, and over its whole week. */
+export interface BusyPage {
+  at: number;
+  opening: number;
+  until: number;
+  soFar: BusyFigures;
+  week: BusyFigures;
 }
 
 /** A gale warning of the world: the issues it was in force at, its most force, and its words as first told. */
@@ -1058,9 +1096,9 @@ export function getForecast(at: number | null): Promise<ForecastPage> {
   return getJSON<ForecastPage>(`forecast.json${atQuery(at, true)}`);
 }
 
-/** How well the forecast has held the truth so far this world. */
-export function getCalibration(): Promise<CalibrationPage> {
-  return getJSON<CalibrationPage>('calibration.json');
+/** How busy the world's weather has been, from its week's opening to now, and over the week. */
+export function getBusy(): Promise<BusyPage> {
+  return getJSON<BusyPage>('busy.json');
 }
 
 /** Every gale warning of the world so far. */
