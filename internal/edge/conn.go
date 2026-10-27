@@ -77,8 +77,10 @@ type conn struct {
 	wants                  *watch.Target
 	toldSpect, toldSpectOf int32
 	// toldWatchers is how many watch its boat, as the client was last
-	// told: the encoder's.
+	// told: the encoder's. toldLamp is what it was last told of the agent
+	// of its own machine sailor it watches: the encoder's.
 	toldWatchers int32
+	toldLamp     pb.Lamp
 
 	// The control slot's writer, stopped once another connection has
 	// taken the boat over: a word is stored only under wmu while not

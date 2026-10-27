@@ -19,6 +19,7 @@
 import type { ReadonlySignal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import type { LampState } from '../net/messages';
 import type { Barometer } from './barometer';
 import { BarometerDial, type DialWord } from './barometerdial';
 import { BoardPanel, type HarbourView } from './board';
@@ -36,7 +37,7 @@ import type { HudModel } from './model';
 import type { SettingsSignal } from './settings';
 
 /** The running light: the own machine sailor's AI at the helm, gone quiet, or no light. */
-export type Lamp = '' | 'helm' | 'quiet';
+export type Lamp = '' | LampState;
 
 /** How long a complication takes to slide, and a pusher to rise, ms. */
 const SLIDE = 180;

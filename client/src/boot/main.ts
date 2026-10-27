@@ -604,6 +604,7 @@ async function start(): Promise<void> {
       store: parts.chart.store,
     },
     watch: watchView,
+    lamp: online.lamp,
   });
   game.listen(document, container);
   if (view !== undefined) {

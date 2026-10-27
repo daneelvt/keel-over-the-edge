@@ -23,6 +23,7 @@ import {
   BumpPart,
   type ChartEntry as ChartEntryWire,
   ChartSubject,
+  Lamp,
   type Light,
   type Place,
   WatchEnd,
@@ -34,6 +35,7 @@ import type {
   ChartEntry,
   ChunksHanded,
   ForecastTold,
+  LampState,
   LightSeen,
   PastTold,
   PlaceSeen,
@@ -99,6 +101,8 @@ export type Received =
   | { kind: 'watchEnded'; why: WatchEndWhy; sailor: string }
   /** How many watch the connection's own boat. */
   | { kind: 'watchers'; count: number }
+  /** Whether the AI of the own machine sailor watched attends to it. */
+  | { kind: 'lamp'; state: LampState }
   /** The server is about to restart, in about inMs. */
   | { kind: 'restart'; inMs: number }
   /** The sea about the boat. */
@@ -241,6 +245,15 @@ export class Session {
       case 'watchers':
         this.#lastHeard = now;
         return { kind: 'watchers', count: m.body.value.count };
+      case 'agentLamp': {
+        this.#lastHeard = now;
+        const state = m.body.value.state;
+        return state === Lamp.AT_HELM
+          ? { kind: 'lamp', state: 'helm' }
+          : state === Lamp.QUIET
+            ? { kind: 'lamp', state: 'quiet' }
+            : { kind: 'other' };
+      }
       case 'welcome':
         if (this.#world !== '' && m.body.value.world !== this.#world) {
           this.clock.reset();

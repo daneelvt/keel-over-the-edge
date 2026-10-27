@@ -344,6 +344,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Stopped:  func(a bus.Account) bool { return p.hand.Stopped().Has(store.AccountID(a)) },
 		Seen:     p.sessions.Seen,
 		Watch:    p.watchTarget, Allowing: p.allowing, SpectatorLimit: cfg.SpectatorLimit,
+		Agent: p.agents.core.Attending,
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,

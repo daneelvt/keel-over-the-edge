@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
@@ -253,4 +255,85 @@ func awaitMessage(t *testing.T, in *client.Inbox, ok func(*pb.ServerMessage) boo
 			t.Fatal("no such message")
 		}
 	}
+}
+
+// TestTheLampOfTheOwnMachineSailor: an owner watching their machine
+// sailor through keel serve is told its agent is at the helm while it
+// calls, and through a wait; quiet a minute after its last call; and
+// nothing more once the boat has left the water for its silence.
+func TestTheLampOfTheOwnMachineSailor(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db := &memDB{epoch: bubbleEpoch, sessions: edgetest.NewSessions()}
+		ann, annID := db.sessions.Add("Ann", "human")
+		s := again(t, map[string]string{"KEEL_WORLD_SEED": "1", "KEEL_AI_SILENCE": "90s"}, db)
+		var mary store.AccountID
+		cs := agentSession(t, s, db.machineFor("Iron Mary", annID, &mary))
+		if text, refused := callTool(t, cs, "observe", nil); refused || !strings.Contains(text, "At sea") {
+			t.Fatalf("observe: %v %q", refused, text)
+		}
+		ws := dialWatch(t, s, ann, "Iron Mary")
+		defer ws.CloseNow()
+		in := client.Read(ws)
+		awaitMessage(t, in, func(m *pb.ServerMessage) bool { return m.GetWelcome().GetWatching().GetMine() })
+		// A wait under way.
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			if _, err := cs.CallTool(t.Context(), &mcp.CallToolParams{Name: "observe", Arguments: map[string]any{"wait": 25, "wake_on": []string{"chat"}}}); err != nil {
+				t.Errorf("the wait: %v", err)
+			}
+		}()
+		var lamps []pb.Lamp
+		var ended *pb.WatchEnded
+		// Reads for d, pinging as a client does, until ok says so.
+		watch := func(d time.Duration, ok func() bool) bool {
+			t.Helper()
+			for end := time.Now().Add(d); time.Now().Before(end); {
+				if err := client.Send(t.Context(), ws, &pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: 1}}}); err != nil {
+					t.Fatal(err)
+				}
+				for wait := time.After(2 * time.Second); ; {
+					select {
+					case r := <-in.C:
+						if l := r.Message.GetAgentLamp(); l != nil {
+							lamps = append(lamps, l.GetState())
+						}
+						if e := r.Message.GetWatchEnded(); e != nil {
+							ended = e
+						}
+						continue
+					case <-wait:
+					}
+					break
+				}
+				if ok != nil && ok() {
+					return true
+				}
+			}
+			return ok == nil
+		}
+		last := func() pb.Lamp {
+			if len(lamps) == 0 {
+				return pb.Lamp_LAMP_UNSPECIFIED
+			}
+			return lamps[len(lamps)-1]
+		}
+		if !watch(10*time.Second, func() bool { return last() == pb.Lamp_LAMP_AT_HELM }) {
+			t.Fatalf("calling: %v", lamps)
+		}
+		<-done
+		// No call since the wait began: quiet a minute after it.
+		if !watch(90*time.Second, func() bool { return last() == pb.Lamp_LAMP_QUIET }) {
+			t.Fatalf("silent: %v", lamps)
+		}
+		if !watch(3*time.Minute, func() bool { return ended != nil }) || ended.GetWhy() != pb.WatchEnd_WATCH_END_LEFT {
+			t.Fatalf("the boat gone: %v", ended)
+		}
+		n := len(lamps)
+		watch(5*time.Second, nil)
+		if len(lamps) != n || !slices.Equal(lamps, []pb.Lamp{pb.Lamp_LAMP_AT_HELM, pb.Lamp_LAMP_QUIET}) {
+			t.Fatalf("told %v", lamps)
+		}
+		s.stop(t)
+	})
 }

@@ -324,6 +324,9 @@ export class NetWorker {
         case 'watchers':
           this.#d.post({ type: 'watchers', count: r.count });
           break;
+        case 'lamp':
+          this.#d.post({ type: 'lamp', state: r.state });
+          break;
         case 'pong':
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
           this.#d.post({ type: 'traffic', ...this.#traffic });

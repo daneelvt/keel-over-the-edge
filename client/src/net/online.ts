@@ -18,7 +18,7 @@
 // the own boat back, its prediction started afresh; what the connection
 // was handed before (the chart, the land, the lights and caps) stands.
 
-import { signal } from '@preact/signals';
+import { computed, signal } from '@preact/signals';
 import { catalog } from '../catalog';
 import type { FallShape } from '../edge/over';
 import type { BoatDriver } from '../game/driver';
@@ -57,6 +57,7 @@ import type {
   ForecastTold,
   FromWorker,
   HelloVersions,
+  LampState,
   LightSeen,
   PastTold,
   PlaceSeen,
@@ -136,6 +137,14 @@ export class Online {
   readonly watchPlace = signal<Place | null>(null);
   /** How many watch the own boat. */
   readonly watchers = signal(0);
+  /** What the server last told of the AI of the own machine sailor watched, and of which watch. */
+  readonly #lamp = signal<{ state: LampState; of: WatchingTold } | null>(null);
+  /**
+   * The running light of the own machine sailor's AI, while it is watched:
+   * '' for none. Only as told for the watch under way, so a word of an
+   * earlier one lights nothing.
+   */
+  readonly lamp = computed(() => lampShown(this.watching.value, this.#lamp.value));
   /** The boat drawn is not the own: one watched, or the last one held while none is. */
   readonly spectating = signal(false);
   /** What draws the boat: the predictor while the connection sails, the watching driver while it watches. */
@@ -339,12 +348,18 @@ export class Online {
           break;
         }
         this.watching.value = null;
+        this.#lamp.value = null;
         this.#away = true;
         break;
       }
       case 'watchers':
         this.watchers.value = m.count;
         break;
+      case 'lamp': {
+        const w = this.watching.value;
+        this.#lamp.value = w?.machine && w.mine ? { state: m.state, of: w } : null;
+        break;
+      }
       case 'restart':
         this.#bell = true;
         this.notice.value = { text: BELL_TEXT, takeover: false };
@@ -424,6 +439,7 @@ export class Online {
         this.tools.value = m.tools;
         this.#predictor.setCirculation(m.circulation);
         this.watching.value = m.watching;
+        this.#lamp.value = null;
         this.ended.value = null;
         this.watchPlace.value = null;
         if (m.watching !== null) {
@@ -717,4 +733,21 @@ export class Online {
 
 function samePilot(a: PilotControl, b: PilotControl): boolean {
   return a.mode === b.mode && a.target === b.target && a.order === b.order && a.way === b.way;
+}
+
+/** The running light shown for a watch: as told for that same watch of an own machine sailor, else none. */
+export function lampShown(
+  watching: WatchingTold | null,
+  told: { state: LampState; of: WatchingTold } | null,
+): '' | LampState {
+  if (
+    watching === null ||
+    !watching.machine ||
+    !watching.mine ||
+    told === null ||
+    told.of !== watching
+  ) {
+    return '';
+  }
+  return told.state;
 }
