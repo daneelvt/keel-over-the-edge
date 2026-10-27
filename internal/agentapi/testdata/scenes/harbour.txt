@@ -1,8 +1,9 @@
-# about 470 tokens
+# about 532 tokens
 tick 1102 · seq 0
 Boat: Jolly boat · sailing · heading 156° · 0.6 kn · heel 0° · port tack
 Pilot: hand · boom 50° (sheet out to 50°) · rudder 0° · sail stalled
-Wind: 041° NE 5 kn F2 · 115° off the bow, port side · apparent 4 kn 108°
+Wind: 041° NE 5 kn F2 · 115° off the bow, port side · apparent 4 kn 108° · in the lee of land to the NE
+Shoal: under 1.5 m 160°–250°, 45–60 m · 270°–315°, 250–300 m · 340°–025°, 60–120 m · 045°–090°, 35–80 m · clear 115°–135°
 Sea: waves 0.0 m from 045° · current slack
 Weather: 1013 hPa, steady · visibility good
 Where: 88°56′N 094°21′ · edge 4.4 NM

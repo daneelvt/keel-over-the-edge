@@ -1,0 +1,10 @@
+# about 225 tokens
+tick 1032 · seq 0
+Boat: aground · heading 338° · 0.0 kn · no steerage · 0.3 m under you · heel 0° · tacking · Pilot: hand · boom 2° (sheet out to 50°) · rudder 0° · sail drawing
+Wind: 000° N 1 kn F1 · 23° off the bow, starboard side · apparent 1 kn 23° · in the lee of land to the N
+Shoal: under 1.5 m here · deeper 000°–045°, 130–150 m · 070° ~300 m · 090°–295°, 15–45 m · 315° ~80 m · clear 025°–045°, 115°–270°
+In sight:
+ Port Royal · 016° 0.1 NM · known
+ Table Head Light · 351° 0.2 NM · light Fl(3) W 15s · known
+ a light Fl(4) W 15s (uncharted) · 235° ~1.4 NM
+ a light Fl(5) W 20s (uncharted) · 160° ~1.8 NM

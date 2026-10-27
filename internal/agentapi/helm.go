@@ -374,6 +374,9 @@ type helm struct {
 	waiter   *waiter
 	// tracks are the boats' bearings and ranges at the last report.
 	tracks map[uint64]sighting
+	// landSeen are the land, places and lights in sight at the last
+	// report: a brief report tells those that are new.
+	landSeen map[int32]bool
 	// turning is the autopilot's turn under way at the hub's last look.
 	turning uint8
 	// The lookout's room: the view's candidates, and its last view by

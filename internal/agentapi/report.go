@@ -26,7 +26,10 @@ import (
 // woken; then the boat, the wind, the autopilot, the sea, the weather,
 // where the boat is, the gust coming, what is in sight, what is heard, and
 // what happened since the last report. A brief report, the default, has
-// the vital lines and what changed; a full one everything. Format is
+// the vital lines and what changed; a full one everything. The boat's
+// line carries the water under it when that is shoal, sternway and a
+// rudder with no steerage; the Shoal line tells where the shallows are, in
+// the brief report while they are near. Format is
 // presentation, never information: JSON gives the same facts, rounded the
 // same.
 
@@ -47,6 +50,7 @@ type report struct {
 	Notices []string      `json:"notices,omitempty"`
 	Boat    *boatFacts    `json:"boat,omitempty"`
 	Wind    *windFacts    `json:"wind,omitempty"`
+	Shoal   *shoalFacts   `json:"shoal,omitempty"`
 	Pilot   *pilotFacts   `json:"pilot,omitempty"`
 	Sea     *seaFacts     `json:"sea,omitempty"`
 	Weather *weatherFacts `json:"weather,omitempty"`
@@ -64,9 +68,15 @@ type boatFacts struct {
 	State   string  `json:"state"`
 	Heading int     `json:"heading"`
 	Speed   float64 `json:"speedKnots"`
-	Heel    int     `json:"heel"`
-	HeelTo  string  `json:"heelTo,omitempty"`
-	Tack    string  `json:"tack"`
+	// Astern says the boat makes sternway, NoSteerage that the water
+	// passes its rudder too slowly to steer by; Depth is the water under
+	// it while that is shoal, m.
+	Astern     bool     `json:"astern,omitempty"`
+	NoSteerage bool     `json:"noSteerage,omitempty"`
+	Depth      *float64 `json:"depthM,omitempty"`
+	Heel       int      `json:"heel"`
+	HeelTo     string   `json:"heelTo,omitempty"`
+	Tack       string   `json:"tack"`
 }
 
 type windFacts struct {
@@ -78,6 +88,8 @@ type windFacts struct {
 	Side     string `json:"side"`
 	Apparent int    `json:"apparentKnots"`
 	AppAngle int    `json:"apparentAngle"`
+	// Lee is the point land lies to when the boat is in its lee, "".
+	Lee string `json:"leeOfLandTo,omitempty"`
 }
 
 type pilotFacts struct {
@@ -109,7 +121,6 @@ type whereFacts struct {
 	Position string  `json:"position"`
 	Edge     float64 `json:"edgeNM"`
 	Ends     string  `json:"fallsIn,omitempty"`
-	Depth    string  `json:"depth,omitempty"`
 }
 
 type sinceFacts struct {
@@ -133,6 +144,16 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 		b.HeelTo = side(st.Heel)
 	}
 	b.Tack = tackOf(&f.Course[sl])
+	if d := float64(in.Depth); d < shoalUnder {
+		d = math.Floor(max(d, 0)*10+0.5) / 10
+		b.Depth = &d
+	}
+	if st.SailorMode == physics.Sailing && !f.Voyage[sl].Falling() {
+		ap := &s.boat(f.Kind[sl]).Physics.Autopilot
+		ahead := waterAhead(st, &f.Wind[sl])
+		b.Astern = ahead < -ap.Astern
+		b.NoSteerage = math.Abs(ahead) < ap.Steerage
+	}
 	r.Boat = b
 
 	// The wind, as the readout reads it: the wind the boat feels over 3 s,
@@ -147,7 +168,13 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	off := wrap(from - st.Heading)
 	r.Wind = &windFacts{From: shown.Degrees, Point: shown.Point, Knots: shown.Knots, Force: shown.Force,
 		OffBow: degrees(math.Abs(off)), Side: side(off), Apparent: knots0(float64(in.ApparentSpeed)),
-		AppAngle: degrees(math.Abs(float64(in.ApparentAngle)))}
+		AppAngle: degrees(math.Abs(float64(in.ApparentAngle))), Lee: leeOf(s, st.X, st.Y, wp.MeanFrom)}
+
+	// The shoal water about the boat: in the brief report while it is
+	// near, or the boat is on it or aground.
+	if sh := shoalAbout(s.Ground, st.X, st.Y); sh != nil && (!r.brief || sh.nearest <= shoalBrief || st.GroundTimer > 0) {
+		r.Shoal = sh
+	}
 
 	// The autopilot or the hand on the tiller, and the sail.
 	r.Pilot = pilotOf(f, sl)
@@ -169,7 +196,7 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	if !r.brief {
 		r.Sea = seaOf(s, f, st.X, st.Y)
 		r.Weather = weatherOf(s, f, st.X, st.Y)
-		r.Where = whereOf(s, f, st.X, st.Y, float64(in.Depth))
+		r.Where = whereOf(s, f, st.X, st.Y)
 		r.Hear = h.hearLines(s, f, sl)
 	}
 	r.Gust = h.gustLines(s, f, sl)
@@ -346,9 +373,8 @@ func rainWords(mm float64, words [3]float64) string {
 }
 
 // whereOf is where the boat is: its position as the chart prints it, how
-// far from the lip of the falls, when the falls take the world, and the
-// water under it when it is shoal.
-func whereOf(s *Sea, f *bus.Frame, x, y, depth float64) *whereFacts {
+// far from the lip of the falls, and when the falls take the world.
+func whereOf(s *Sea, f *bus.Frame, x, y float64) *whereFacts {
 	out := &whereFacts{Position: chart.Format(x, y)}
 	if p := s.Timeline.Prepared(); p != nil {
 		out.Edge = math.Floor(physics.EdgeDistance(p, x, y)/nm*10+0.5) / 10
@@ -356,16 +382,50 @@ func whereOf(s *Sea, f *bus.Frame, x, y, depth float64) *whereFacts {
 	if end := s.ends(); !end.IsZero() {
 		out.Ends = countdown(time.Until(end))
 	}
-	if depth < 5 {
-		out.Depth = fmt.Sprintf("%.1f m under you", max(depth, 0))
-	}
 	return out
+}
+
+// The water under a boat the Boat line tells, m: under this it is shoal.
+const shoalUnder = 5.0
+
+// waterAhead is the water's speed along the hull of a boat in state st,
+// m/s, negative going astern: its speed ahead less the current's.
+func waterAhead(st *physics.State, e *physics.Env) float64 {
+	sin, cos := physics.SinCos(st.Heading)
+	return st.Surge - (e.CurrentEast*sin + e.CurrentNorth*cos)
+}
+
+// The lee the Wind line tells: the wind at the boat under leeFactor of
+// the wind beyond the land, with land within leeReach upwind.
+const (
+	leeFactor = 0.8
+	leeReach  = 800.0 // m
+	leeStep   = 16.0  // m
+)
+
+// leeOf is the point land lies to when (x, y) is in its lee of the wind
+// from from, as flat water shows it: "NE"; "" when it is not.
+func leeOf(s *Sea, x, y, from float64) string {
+	if s.Shelter == nil || s.Ground == nil {
+		return ""
+	}
+	if factor, _ := s.Shelter.At(x, y, from); !(factor < leeFactor) {
+		return ""
+	}
+	sin, cos := physics.SinCos(from)
+	for r := leeStep; r <= leeReach; r += leeStep {
+		if e, _ := s.Ground.At(x+sin*r, y+cos*r); e > 0 {
+			return point16(from)
+		}
+	}
+	return ""
 }
 
 // sightLines are what the boat's lookout sees: the boats nearest first,
 // the first mostContacts of them and the rest summed; then the land, the
-// places and the lights, charted ones by name. A brief report gives the
-// boats alone. With mu held.
+// places and the lights, charted ones by name. A brief report gives of
+// these only those new since the last report or within landNear, and
+// counts the rest. With mu held.
 func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []string, more string) {
 	st := &f.State[sl]
 	now := time.Now()
@@ -411,10 +471,34 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 		more = fmt.Sprintf("and %d more boats", len(seen)-mostContacts)
 		lines = append(lines, more)
 	}
-	if brief {
-		return lines, more
+	land := h.landLines(s, f, sl)
+	was := h.landSeen
+	h.landSeen = map[int32]bool{}
+	left := 0
+	for _, l := range land {
+		h.landSeen[l.subject] = true
+		if brief && was[l.subject] && l.d > landNear {
+			left++
+			continue
+		}
+		lines = append(lines, l.text)
 	}
-	return append(lines, h.landLines(s, f, sl)...), more
+	if left > 0 {
+		lines = append(lines, fmt.Sprintf("and %d more in sight (full)", left))
+	}
+	return lines, more
+}
+
+// landNear is how near land, a place or a light in sight must be for a
+// brief report to tell it again, m.
+const landNear = nm / 2
+
+// landLine is a line of land, a place or a light in sight, and its range,
+// m.
+type landLine struct {
+	subject int32
+	d       float64
+	text    string
 }
 
 // inViewKept reports whether a boat is still within the view's keep, by
@@ -475,10 +559,11 @@ func (h *helm) drift(boat uint64, b, r float64, now time.Time) string {
 	return way + ", range steady"
 }
 
-// landLines are the land, the places and the lights in sight: charted
-// ones by name, with their bearing and distance as the chart's list gives
-// them and their credit; the rest by their look, by eye.
-func (h *helm) landLines(s *Sea, f *bus.Frame, sl int32) []string {
+// landLines are the land, the places and the lights in sight, nearest
+// first: charted ones by name, with their bearing and distance as the
+// chart's list gives them and their credit; the rest by their look, by
+// eye.
+func (h *helm) landLines(s *Sea, f *bus.Frame, sl int32) []landLine {
 	seen := h.seenSubjects(s, f, sl)
 	if len(seen) == 0 || s.Chart == nil {
 		return nil
@@ -499,7 +584,7 @@ func (h *helm) landLines(s *Sea, f *bus.Frame, sl int32) []string {
 		}
 		return int(a.Subject - b.Subject)
 	})
-	var out []string
+	var out []landLine
 	for _, x := range seen {
 		if int(x.Subject) >= len(w.Subjects) {
 			continue
@@ -516,10 +601,10 @@ func (h *helm) landLines(s *Sea, f *bus.Frame, sl int32) []string {
 			if l := s.lightOf(sub); l != "" {
 				line += " · light " + l
 			}
-			out = append(out, line+" · "+creditWords(&c.Rows[i]))
+			out = append(out, landLine{x.Subject, d, line + " · " + creditWords(&c.Rows[i])})
 			continue
 		}
-		out = append(out, s.lookOf(sub)+" · "+three(bearing5(bear))+" "+rangeWords(d))
+		out = append(out, landLine{x.Subject, d, s.lookOf(sub) + " · " + three(bearing5(bear)) + " " + rangeWords(d)})
 	}
 	return out
 }
@@ -629,10 +714,20 @@ func (r *report) text() string {
 		if bt.HeelTo != "" {
 			heel += " to " + bt.HeelTo
 		}
+		speed := fmt.Sprintf("%.1f kn", bt.Speed)
+		if bt.Astern {
+			speed = "astern " + speed
+		}
+		if bt.NoSteerage {
+			speed += " · no steerage"
+		}
+		if bt.Depth != nil {
+			speed += fmt.Sprintf(" · %.1f m under you", *bt.Depth)
+		}
 		if r.brief {
-			fmt.Fprintf(&b, "Boat: %s · heading %s · %.1f kn · %s · %s", bt.State, three(bt.Heading), bt.Speed, heel, bt.Tack)
+			fmt.Fprintf(&b, "Boat: %s · heading %s · %s · %s · %s", bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		} else {
-			fmt.Fprintf(&b, "Boat: %s · %s · heading %s · %.1f kn · %s · %s\n", bt.Kind, bt.State, three(bt.Heading), bt.Speed, heel, bt.Tack)
+			fmt.Fprintf(&b, "Boat: %s · %s · heading %s · %s · %s · %s\n", bt.Kind, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		}
 	}
 	if p := r.Pilot; p != nil {
@@ -651,8 +746,15 @@ func (r *report) text() string {
 		}
 	}
 	if w := r.Wind; w != nil {
-		fmt.Fprintf(&b, "Wind: %s %s %d kn F%d · %d° off the bow, %s side · apparent %d kn %d°\n",
+		fmt.Fprintf(&b, "Wind: %s %s %d kn F%d · %d° off the bow, %s side · apparent %d kn %d°",
 			three(w.From), w.Point, w.Knots, w.Force, w.OffBow, w.Side, w.Apparent, w.AppAngle)
+		if w.Lee != "" {
+			b.WriteString(" · in the lee of land to the " + w.Lee)
+		}
+		b.WriteByte('\n')
+	}
+	if s := r.Shoal; s != nil {
+		b.WriteString("Shoal: " + s.text() + "\n")
 	}
 	if s := r.Sea; s != nil {
 		fmt.Fprintf(&b, "Sea: waves %.1f m from %s", s.Waves, three(s.From))
@@ -675,9 +777,6 @@ func (r *report) text() string {
 		fmt.Fprintf(&b, "Where: %s · edge %.1f NM", w.Position, w.Edge)
 		if w.Ends != "" {
 			b.WriteString(" · the falls take this world in " + w.Ends)
-		}
-		if w.Depth != "" {
-			b.WriteString(" · " + w.Depth)
 		}
 		b.WriteByte('\n')
 	}
