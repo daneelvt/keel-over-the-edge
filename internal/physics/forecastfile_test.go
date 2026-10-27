@@ -31,6 +31,7 @@ type forecastCase struct {
 	Name    string           `json:"name"`
 	Issue   float64          `json:"issue"`
 	End     float64          `json:"end"`
+	Every   float64          `json:"every"`
 	Spells  []map[string]any `json:"spells"`
 	Records []map[string]any `json:"records"`
 	// Head is the forecast's head, Spells its spells and Systems its
@@ -59,8 +60,6 @@ func testForecast(t testing.TB) (*WeatherPrepared, map[string]int32) {
 	f := c.Weather.Forecast
 	p.PrepareForecast(&ForecastParams{
 		Every: f.Every, Horizon: f.Horizon, Step: f.Step,
-		PerHour: f.Cone.PerHour, Forming: f.Cone.Forming, Front: f.Cone.Front,
-		Direction: f.Spell.Direction, Speed: f.Spell.Speed,
 		GaleMean: f.Gale.Mean, GaleGust: f.Gale.Gust, Quantile: f.Gale.Quantile, Grid: f.Gale.Grid, Within: f.Gale.Within,
 	})
 	return p, kinds
@@ -69,14 +68,12 @@ func testForecast(t testing.TB) (*WeatherPrepared, map[string]int32) {
 // catalogForecast is the catalog's forecast as the tests read it.
 type catalogForecast struct {
 	Every, Horizon, Step float64
-	Cone                 struct{ PerHour, Forming, Front float64 }
-	Spell                struct{ Direction, Speed float64 }
 	Gale                 struct{ Mean, Gust, Quantile, Grid, Within float64 }
 }
 
 // forecastRecords are a squall beyond the windward lip, a shower, a fog
-// bank, a storm on its arc and a storm forming within the horizon, about
-// an issue.
+// bank, a storm on its arc, a storm born within the horizon and a shower
+// born after the issue, about an issue.
 func forecastRecords(kinds map[string]int32, issue float64) []SystemRecord {
 	m := float64(minuteTicks)
 	squall := SystemRecord{Kind: float64(kinds["squall"]), Seed: 1618033, Born: issue - 4*m, Mature: issue + 6*m,
@@ -101,7 +98,7 @@ func forecastRecords(kinds map[string]int32, issue float64) []SystemRecord {
 		Decays: issue + 100*m, Gone: issue + 150*m, Track: TrackArc, Radius: 3.2 * nm * 4, Angle: math.Round(20 * degreeSteps),
 		Sense: 1, Inward: 30, Speed: 300, Size: 1.8 * nm, Peak: math.Round(22 * knotSteps), Depth: 1500,
 		Wobble: 0.4 * nm * 4, WobblePeriod: [2]float64{500 * m, 700 * m}}
-	// A shower born after the issue, which the forecast does not know.
+	// A shower born after the issue.
 	later := shower
 	later.Seed, later.Born, later.Mature, later.Decays, later.Gone = 7777, issue+15*m, issue+20*m, issue+30*m, issue+35*m
 	return []SystemRecord{squall, shower, fog, storm, forming, later}
@@ -129,14 +126,14 @@ func forecastCases(t *testing.T, p *WeatherPrepared, kinds map[string]int32) []f
 	}
 	all := forecastRecords(kinds, issue)
 	return []forecastCase{
-		{Name: "a stormy spell, a front and a change", Issue: issue, Spells: []map[string]any{spellMap(stormy), spellMap(front), spellMap(trade)}, Records: records(all)},
-		{Name: "at the world's end", Issue: issue, End: issue + 45*m, Spells: []map[string]any{spellMap(stormy), spellMap(front)}, Records: records(all[:4])},
-		{Name: "a settled spell", Issue: issue + 3*hourOfTicks, Spells: []map[string]any{spellMap(settled)}, Records: nil},
+		{Name: "a stormy spell, a front and a change", Issue: issue, Every: 300, Spells: []map[string]any{spellMap(stormy), spellMap(front), spellMap(trade)}, Records: records(all)},
+		{Name: "at the world's end", Issue: issue, End: issue + 45*m, Every: 300, Spells: []map[string]any{spellMap(stormy), spellMap(front)}, Records: records(all[:4])},
+		{Name: "a settled spell", Issue: issue + 3*hourOfTicks, Every: 300, Spells: []map[string]any{spellMap(settled)}, Records: nil},
 	}
 }
 
 func fillForecastCase(t *testing.T, p *WeatherPrepared, c *forecastCase) {
-	in := ForecastInput{Issue: c.Issue, End: c.End}
+	in := ForecastInput{Issue: c.Issue, End: c.End, Every: c.Every}
 	for _, s := range c.Spells {
 		var sp Spell
 		if err := setRecord(&sp, s); err != nil {

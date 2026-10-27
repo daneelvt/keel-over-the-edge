@@ -92,7 +92,6 @@
         "pressure": 1013.2,
         "before": 1012.9,
         "quarter": 1012.6,
-        "risk": "",
         "cyclonic": false
       },
       "box": {
@@ -182,7 +181,6 @@
         "pressure": 1009.4,
         "before": 1011.1,
         "quarter": 1013.6,
-        "risk": "",
         "cyclonic": false
       },
       "box": {
@@ -272,7 +270,6 @@
         "pressure": 1003,
         "before": 1001.2,
         "quarter": 1006.1,
-        "risk": "",
         "cyclonic": false
       },
       "box": {
@@ -362,7 +359,6 @@
         "pressure": 1006,
         "before": 1006.1,
         "quarter": 1006,
-        "risk": "",
         "cyclonic": false
       },
       "box": {
@@ -452,7 +448,6 @@
         "pressure": 1016,
         "before": 1016.3,
         "quarter": 1015,
-        "risk": "showers",
         "cyclonic": false
       },
       "box": {
@@ -542,7 +537,6 @@
         "pressure": 1024.6,
         "before": 1024.6,
         "quarter": 1024.6,
-        "risk": "",
         "cyclonic": false
       },
       "box": {
@@ -632,7 +626,6 @@
         "pressure": 994.4,
         "before": 996,
         "quarter": 1001,
-        "risk": "",
         "cyclonic": false
       },
       "box": {
@@ -722,13 +715,12 @@
         "pressure": 1018,
         "before": 1017.6,
         "quarter": 1012,
-        "risk": "fog patches",
         "cyclonic": false
       },
       "box": {
         "wind": "SSE 7–8 kn · F3",
         "gusts": "11 kn",
-        "sky": "Fog patches",
+        "sky": "Fair",
         "visibility": "Good",
         "barometer": "1018 hPa, rising quickly"
       }
@@ -812,7 +804,6 @@
         "pressure": 1015.3,
         "before": 1015.2,
         "quarter": 1015.5,
-        "risk": "",
         "cyclonic": false
       },
       "box": {
@@ -902,7 +893,6 @@
         "pressure": 999.5,
         "before": 999,
         "quarter": 994,
-        "risk": "",
         "cyclonic": false
       },
       "box": {
@@ -996,7 +986,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -1078,7 +1067,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -1160,7 +1148,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -1242,7 +1229,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         }
       ],
@@ -1330,7 +1316,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -1412,7 +1397,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -1494,7 +1478,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -1576,7 +1559,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         }
       ],
@@ -1664,7 +1646,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -1746,7 +1727,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": true
         },
         {
@@ -1828,7 +1808,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -1910,7 +1889,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         }
       ],
@@ -1998,7 +1976,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -2080,7 +2057,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -2162,7 +2138,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -2244,7 +2219,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         }
       ],
@@ -2332,7 +2306,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -2414,7 +2387,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -2496,7 +2468,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -2578,7 +2549,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         }
       ],
@@ -2666,7 +2636,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -2748,7 +2717,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -2830,7 +2798,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         },
         {
@@ -2912,7 +2879,6 @@
           "pressure": 0,
           "before": 0,
           "quarter": 0,
-          "risk": "",
           "cyclonic": false
         }
       ],

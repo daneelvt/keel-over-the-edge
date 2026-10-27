@@ -10,13 +10,14 @@ import (
 )
 
 // The forecast is issued at each boundary of its every minutes of world
-// time from the world's epoch, for its horizon: from the week's plan, the
+// time from the world's epoch, for its horizon: from the week itself, the
 // developer's weathers and systems and the tick alone (physics.MakeForecast),
-// so a restart issues the same forecast and a test can ask for any. The
-// truth of the past, the keyframes at each five minutes and the spells in
-// play, goes with an issue of ninety minutes before to a phone just come,
-// which keeps its own from then: the past is everyone's, the future only
-// the forecast.
+// so a restart issues the same forecast and a test can ask for any. It is
+// the truth over its reach: the records of the systems alive in it, so a
+// phone makes the server's keyframes of any minute ahead. The truth of the
+// past, the keyframes at each five minutes and the spells in play, goes
+// with an issue of ninety minutes before to a phone just come, which keeps
+// its own from then.
 
 // PastEvery is how many ticks apart the truth of the past is kept: five
 // minutes, half the forecast's step.
@@ -34,29 +35,24 @@ func (t *Timeline) IssueAt(tick int64) int64 {
 // end, 0 for none.
 func (t *Timeline) Forecast(issue int64, ws []bus.Weather, ss []bus.System, end int64, f *physics.Forecast) {
 	p := t.prepared
-	horizon := issue + p.ForecastHorizon()
-	// In the week's own time, which its records' wobbles keep.
+	reach := issue + p.ForecastReach()
+	// The records in the week's own time, which their wobbles keep.
 	o := float64(t.origin)
-	in := physics.ForecastInput{Issue: float64(issue) - o}
-	if end > 0 {
-		in.End = float64(end) - o
-	}
-	for _, s := range t.SpellsOver(issue, horizon, ws) {
-		s.Begin -= o
-		s.Start -= o
-		in.Spells = append(in.Spells, s)
-	}
+	in := physics.ForecastInput{Issue: float64(issue), End: float64(end), Every: float64(t.cfg.Every), Origin: o}
+	in.Spells = t.SpellsOver(issue, reach, ws)
 	if w := t.Week(); w != nil {
-		local, until := float64(issue)-o, float64(horizon)-o
+		local, until := float64(issue)-o, float64(reach)-o
 		sys := w.Systems
-		i, _ := slices.BinarySearchFunc(sys, until, func(s System, at float64) int {
+		// The first that may be alive at the issue: none lives longer than
+		// the longest; then on in the order of their births.
+		first, _ := slices.BinarySearchFunc(sys, local-float64(t.longest)-1, func(s System, at float64) int {
 			if s.Born <= at {
 				return -1
 			}
 			return 1
 		})
-		for i--; i >= 0 && sys[i].Born > local-float64(t.longest)-1; i-- {
-			s := &sys[i]
+		for j := first; j < len(sys) && sys[j].Born <= until; j++ {
+			s := &sys[j]
 			if s.Slot >= 0 && s.Slot < weekSlots && s.Gone > local {
 				in.Records = append(in.Records, s.SystemRecord)
 				in.Slots = append(in.Slots, int32(s.Slot))
@@ -74,17 +70,6 @@ func (t *Timeline) Forecast(issue int64, ws []bus.Weather, ss []bus.System, end 
 		}
 	}
 	physics.MakeForecast(p, &in, f)
-	// Back to the world's ticks.
-	f.Head.Issue += o
-	for i := range int(f.Head.NSpells) {
-		f.Spells[i].Begin += o
-		f.Spells[i].Start += o
-	}
-	for i := range int(f.Head.NSystems) {
-		if s := &f.Systems[i]; s.Crosses != 0 {
-			s.Crosses += o
-		}
-	}
 }
 
 // SpellsOver is the spells that blow from one tick to another, ascending by

@@ -24,6 +24,7 @@ interface ForecastCase {
   name: string;
   issue: number;
   end: number;
+  every: number;
   spells: RecordValues[];
   records: RecordValues[] | null;
   head: Bits;
@@ -53,7 +54,7 @@ beforeAll(async () => {
 /** A run of records as bits, by the fields' names, an array's as a list. */
 function bits(
   v: Float64Array,
-  name: 'forecastHead' | 'spell' | 'forecastSystem' | 'galeStep',
+  name: 'forecastHead' | 'spell' | 'systemRecord' | 'galeStep',
   n: number,
 ): Bits[] {
   const out: Bits[] = [];
@@ -85,7 +86,7 @@ function make(c: ForecastCase): void {
       return v;
     }),
   );
-  physics.forecastMake(c.issue, c.end);
+  physics.forecastMake(c.issue, c.end, c.every);
 }
 
 describe('the forecast in the module', () => {
@@ -99,7 +100,7 @@ describe('the forecast in the module', () => {
       const ns = f.head[H.nSpells] ?? 0;
       const nsys = f.head[H.nSystems] ?? 0;
       expect(bits(f.spells, 'spell', ns), `${c.name}: its spells`).toEqual(c.forecastSpells ?? []);
-      expect(bits(f.systems, 'forecastSystem', nsys), `${c.name}: its systems`).toEqual(
+      expect(bits(f.systems, 'systemRecord', nsys), `${c.name}: its systems`).toEqual(
         c.systems ?? [],
       );
       const steps = f.head[H.steps] ?? 0;
@@ -183,7 +184,7 @@ describe('the forecast in the module', () => {
       process.stdout.write(`forecast: ${what} takes ${(each * 1000).toFixed(1)} µs under Node\n`);
       return each;
     };
-    time('a forecast', 2000, () => physics.forecastMake(c.issue, 0));
+    time('a forecast', 2000, () => physics.forecastMake(c.issue, 0, c.every));
     time('its gale scan', 20, () => physics.galeScan());
   });
 });

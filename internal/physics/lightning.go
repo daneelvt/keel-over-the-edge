@@ -58,11 +58,13 @@ func Flashes(t *WeatherTick, slot float64, out []Flash) int {
 		n++
 		r := float64(st.size * math.Sqrt(lerp(unit(draw.n(2)), k.inner2, k.outer2)))
 		sin, cos := SinCos(float64(unit(draw.n(3)) * (2 * math.Pi)))
+		// A line's anywhere along its length.
+		along := float64(st.half * float64(float64(2*unit(draw.n(9)))-1))
 		*f = Flash{
 			Slot: float64(st.slot), Kind: st.kind, Seed: float64(draw.n(7)),
 			Tick:  start + float64(unit(draw.n(1))*v.slot),
-			East:  st.cx + float64(r*sin),
-			North: st.cy + float64(r*cos),
+			East:  st.cx + float64(r*sin) + float64(along*st.uy),
+			North: st.cy + float64(r*cos) - float64(along*st.ux),
 			Base:  st.k.cloud.base,
 		}
 		if unit(draw.n(4)) < v.sea {

@@ -335,6 +335,7 @@ type spell struct {
 	// A front's: the direction it moves toward, its speed, m a tick, and
 	// its trough's depth, hPa.
 	front      bool
+	warm       bool // its front is a warm front's
 	fsin, fcos float64
 	fspeed     float64
 	trough     float64
@@ -390,6 +391,7 @@ func spellOf(p *WeatherPrepared, s *Spell) spell {
 		o.fsin, o.fcos = SinCos(float64(s.Toward * turnStep))
 		o.fspeed = float64(2*p.frontReach) * o.invChange
 		o.trough = max2(float64(s.Trough*hundredthHPa), 0)
+		o.warm = s.Warm != 0
 	}
 	return o
 }
@@ -459,6 +461,7 @@ type WeatherTick struct {
 	// which side of its line the point is: the line lies line from the
 	// centre along (fe, fn), the way it moves.
 	front  bool
+	warm   bool // the front crossing is a warm front
 	fe, fn float64
 	line   float64
 	trough float64 // hPa
@@ -499,7 +502,7 @@ func cycle(turns, tick float64) float64 {
 // begin by the tick, or the first if none has; during its change the one
 // before it is in play too.
 func WeatherAt(w *Weather, t *WeatherTick, tick float64) {
-	t.Tick, t.p, t.n, t.front, t.ns, t.easing = tick, w.Prepared, 0, false, 0, false
+	t.Tick, t.p, t.n, t.front, t.warm, t.ns, t.easing = tick, w.Prepared, 0, false, false, 0, false
 	t.setFronts(w, tick)
 	if w.Count == 0 {
 		return
@@ -526,7 +529,7 @@ func WeatherAt(w *Weather, t *WeatherTick, tick float64) {
 		t.at[0].set(&w.spells[i-1], tick, &w.Prepared.gustCells)
 		t.at[1].set(s, tick, &w.Prepared.gustCells)
 		if s.front {
-			t.front = true
+			t.front, t.warm = true, s.warm
 			t.fe, t.fn = s.fsin, s.fcos
 			t.line = float64(s.fspeed*(tick-s.begin)) - w.Prepared.frontReach
 			t.trough = s.trough
@@ -785,7 +788,8 @@ func (w *WeatherPrepared) trough(s float64) (f, slope float64) {
 // frontWind adds to (ve, vn), the air's velocity s ahead of the line, the
 // front's own wind: its trough's slope downhill, turned clockwise by its
 // angle, times weak, how much a squall keeps of itself there; and returns
-// the gust factor's excess it adds behind the line.
+// the gust factor's excess it adds behind the line, none behind a warm
+// front's.
 func (t *WeatherTick) frontWind(s, weak float64, ve, vn *float64) float64 {
 	w := t.p
 	_, slope := w.trough(s)
@@ -793,6 +797,9 @@ func (t *WeatherTick) frontWind(s, weak float64, ve, vn *float64) float64 {
 	ge, gn := float64(k*t.fe), float64(k*t.fn)
 	*ve += float64(ge*w.frontCos) + float64(gn*w.frontSin)
 	*vn += float64(gn*w.frontCos) - float64(ge*w.frontSin)
+	if t.warm {
+		return 0
+	}
 	q := float64((s + w.gustsHalf) / w.gustsHalf)
 	return float64(w.frontGusts * Exp(-float64(q*q)))
 }

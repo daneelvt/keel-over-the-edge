@@ -62,9 +62,11 @@ export interface WeatherKeyframe {
 
 /**
  * A forecast, as the server issues it or the sandbox makes it: its head
- * (RECORDS.forecastHead), each of its spells (RECORDS.spell) and each of
- * its systems (RECORDS.forecastSystem) as the physics module's records'
- * values, whole numbers all; and the gale warning in force, or null.
+ * (RECORDS.forecastHead, each system's slot among it), each of its spells
+ * (RECORDS.spell) and each of its systems' records (RECORDS.systemRecord)
+ * as the physics module's records' values, whole numbers all; and the
+ * gale warning in force, or null. It is the truth: the server's keyframes
+ * at any tick it knows are made from it.
  */
 export interface ForecastTold {
   head: number[];

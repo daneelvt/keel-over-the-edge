@@ -268,7 +268,12 @@ async function start(): Promise<void> {
     const chartFile = seed === null ? null : await fetchSandboxChart(seed);
     const parts = makeChart(world, sandboxModels(chartFile), null, forecasting);
     sandboxForecast = new SandboxForecast(
-      { physics: sandbox.physics, tick: () => world.ticks, spells: () => sandbox.weather.spells },
+      {
+        physics: sandbox.physics,
+        tick: () => world.ticks,
+        spells: () => sandbox.weather.spells,
+        keyframes: catalog.weather.keyframe.every * STEPS_PER_SECOND,
+      },
       forecasting.forecasts,
       catalog.weather.forecast.every * 60 * STEPS_PER_SECOND,
       (east, north) => {

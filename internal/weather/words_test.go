@@ -93,10 +93,10 @@ func boxCases() []PlaceWeather {
 		{Points: ring(250, 14, 14.4, 4), Pressure: 1009.4, Before: 1011.1, Quarter: 1013.6},
 		{Points: with(ring(200, 18, 26, 12), 3, NearSquall, 70, 600), Pressure: 1003.0, Before: 1001.2, Quarter: 1006.1},
 		{Points: with(ring(200, 16, 22, 10), 2, NearSquall, 20, 1500), Pressure: 1006.0, Before: 1006.1, Quarter: 1006.0},
-		{Points: with(ring(90, 4, 7, 2), 9, NearShower, 4, 3000), Pressure: 1016.0, Before: 1016.3, Quarter: 1015.0, Risk: "showers"},
+		{Points: with(ring(90, 4, 7, 2), 9, NearShower, 4, 3000), Pressure: 1016.0, Before: 1016.3, Quarter: 1015.0},
 		{Points: with(ring(0, 2, 5, 1), 4, NearFog, 0, 150), Pressure: 1024.6, Before: 1024.6, Quarter: 1024.6},
 		{Points: with(ring(300, 25, 33, 14), 9, NearStorm, 12, 1200), Pressure: 994.4, Before: 996.0, Quarter: 1001.0},
-		{Points: ring(160, 6, 9, 3), Pressure: 1018.0, Before: 1017.6, Quarter: 1012.0, Risk: "fog patches"},
+		{Points: ring(160, 6, 9, 3), Pressure: 1018.0, Before: 1017.6, Quarter: 1012.0},
 		{Points: ring(170, 9, 10.4, 3), Pressure: 1015.3, Before: 1015.2, Quarter: 1015.5},
 		{Points: with(ring(45, 30, 38, 15), 1, 0, 0.5, 2500), Pressure: 999.5, Before: 999.0, Quarter: 994.0},
 	}

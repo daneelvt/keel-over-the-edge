@@ -368,11 +368,6 @@ export function writeForecastParams(params: Float64Array, weather: Weather): voi
   params[f.every] = c.every;
   params[f.horizon] = c.horizon;
   params[f.step] = c.step;
-  params[f.perHour] = c.cone.perHour;
-  params[f.forming] = c.cone.forming;
-  params[f.front] = c.cone.front;
-  params[f.direction] = c.spell.direction;
-  params[f.speed] = c.spell.speed;
   params[f.galeMean] = c.gale.mean;
   params[f.galeGust] = c.gale.gust;
   params[f.quantile] = c.gale.quantile;
@@ -430,6 +425,9 @@ export function placedRecord(
   r[R.heading] = heading;
   r[R.speed] = speed;
   r[R.size] = size;
+  if (k.shape === 'line') {
+    r[R.length] = Math.round(((k.length[0] + k.length[1]) / 2) * 1852);
+  }
   if (k.shape === 'none') {
     r[R.peak] = Math.round(500 * (k.factor[0] + k.factor[1]));
   } else {
@@ -437,7 +435,7 @@ export function placedRecord(
     r[R.depth] = Math.round(50 * (k.depth[0] + k.depth[1]));
   }
   let d = speed * 0.01 * (1 / SECOND) * (at - born);
-  if (k.shape === 'dome' && k.ahead > 0) {
+  if ((k.shape === 'dome' || k.shape === 'line') && k.ahead > 0) {
     d += (k.width * size) / k.ahead;
   }
   const a = (heading / WEATHER.turnSteps) * 2 * Math.PI;

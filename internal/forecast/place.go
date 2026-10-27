@@ -4,11 +4,9 @@ package forecast
 
 import (
 	"math"
-	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
-	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
@@ -18,13 +16,8 @@ import (
 type PlaceWords struct {
 	Timeline *weather.Timeline
 	Words    weather.Words
-	Risks    []weather.Risk
-	Fog      weather.FogRule
 	// Outlook are the outlook's samples, minutes after the issue.
 	Outlook []float64
-	// Sky and Epoch say where the sun is; nil for a world with no sky.
-	Sky   *sky.Prepared
-	Epoch time.Time
 }
 
 // At is a place's box at tick, measured at its points, and its outlook from
@@ -32,9 +25,7 @@ type PlaceWords struct {
 func (p *PlaceWords) At(tick int64, ws []bus.Weather, ss []bus.System, points *[9][2]float64, x *Issue) (weather.Box, string) {
 	tl := p.Timeline
 	minute := int64(60 * physics.StepsPerSecond)
-	c := points[0]
-	pw := weather.PlaceAt(tickAt(tl, tick, ws, ss), tickAt(tl, tick-5*minute, ws, ss), tickAt(tl, tick-15*minute, ws, ss),
-		points, p.Risks, p.Fog, p.sunAt(tick, c[0], c[1]))
+	pw := weather.PlaceAt(tickAt(tl, tick, ws, ss), tickAt(tl, tick-5*minute, ws, ss), tickAt(tl, tick-15*minute, ws, ss), points)
 	box := weather.BoxOf(&pw, &p.Words)
 	if x == nil {
 		return box, ""
@@ -54,7 +45,7 @@ func (p *PlaceWords) At(tick int64, ws []bus.Weather, ss []bus.System, points *[
 	for _, m := range p.Outlook {
 		t := x.Tick + int64(math.Round(m*float64(minute)))
 		s := weather.OutlookSample{At: m}
-		s.PlaceWeather = weather.PlaceAt(on(t), on(t-5*minute), on(t-15*minute), points, p.Risks, p.Fog, p.sunAt(t, c[0], c[1]))
+		s.PlaceWeather = weather.PlaceAt(on(t), on(t-5*minute), on(t-15*minute), points)
 		samples = append(samples, s)
 	}
 	end := endOf(tl)
@@ -83,18 +74,4 @@ func endOf(tl *weather.Timeline) int64 {
 		return 0
 	}
 	return weather.TicksOf(w.Epoch, w.Ends) + tl.Origin()
-}
-
-// sunAt is the sun's height at a point at a tick and the fog's dawn
-// before, rad: below the horizon for a world with no sky.
-func (p *PlaceWords) sunAt(tick int64, east, north float64) [2]float64 {
-	s := p.Sky
-	if s == nil {
-		return [2]float64{-math.Pi / 2, -math.Pi / 2}
-	}
-	epoch := float64(p.Epoch.UnixMicro())
-	height := func(t int64) float64 {
-		return sky.SunAltitude(s, sky.Time(s, epoch, float64(int64(float64(t)*1e6/physics.StepsPerSecond))), east, north)
-	}
-	return [2]float64{height(tick), height(tick - p.Fog.Dawn)}
 }

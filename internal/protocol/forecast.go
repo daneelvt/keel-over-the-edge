@@ -13,26 +13,25 @@ import (
 // nil for none.
 func Forecast(f *physics.Forecast, gale *pb.GaleWarning) *pb.Forecast {
 	h := &f.Head
-	m := &pb.Forecast{Issue: int64(h.Issue), Steps: uint32(h.Steps), Step: uint32(h.Step), Gale: gale}
-	steps := int(h.Steps)
+	m := &pb.Forecast{
+		Issue: int64(h.Issue), Steps: uint32(h.Steps), Step: uint32(h.Step), Gale: gale,
+		Until: int64(h.Until), Every: uint32(h.Every), Origin: int64(h.Origin),
+	}
 	for i := range int(h.NSpells) {
 		m.Spells = append(m.Spells, spellPB(&f.Spells[i]))
 		m.Shifts = append(m.Shifts, uint32(h.Shifts[i]))
 	}
 	for i := range int(h.NSystems) {
-		s := &f.Systems[i]
-		ps := &pb.ForecastSystem{
-			Slot: uint32(s.Slot), Kind: uint32(s.Kind), Seed: uint32(s.Seed), Size: uint32(s.Size), Peak: uint32(s.Peak),
-			Depth: int32(s.Depth), Forming: s.Forming != 0,
-			Crosses: int64(s.Crosses), CrossEast: int32(s.CrossEast), CrossNorth: int32(s.CrossNorth),
-			East: make([]int32, steps), North: make([]int32, steps), Heading: make([]uint32, steps),
-			Speed: make([]uint32, steps), Strength: make([]uint32, steps),
-		}
-		for k := range steps {
-			ps.East[k], ps.North[k] = int32(s.East[k]), int32(s.North[k])
-			ps.Heading[k], ps.Speed[k], ps.Strength[k] = uint32(s.Heading[k]), uint32(s.Speed[k]), uint32(s.Strength[k])
-		}
-		m.Systems = append(m.Systems, ps)
+		r := &f.Systems[i]
+		m.Systems = append(m.Systems, &pb.ForecastSystem{
+			Slot: uint32(h.Slots[i]), Kind: uint32(r.Kind), Seed: uint32(r.Seed), Size: uint32(r.Size), Peak: uint32(r.Peak),
+			Depth: int32(r.Depth), Born: int64(r.Born), Mature: int64(r.Mature), Decays: int64(r.Decays), Gone: int64(r.Gone),
+			Track: uint32(r.Track), East: int32(r.East), North: int32(r.North), Heading: uint32(r.Heading), Speed: uint32(r.Speed),
+			Radius: uint32(r.Radius), Angle: uint32(r.Angle), Sense: int32(r.Sense), Inward: uint32(r.Inward), Length: uint32(r.Length),
+			Wobble: uint32(r.Wobble), WobblePeriod: []uint32{uint32(r.WobblePeriod[0]), uint32(r.WobblePeriod[1])},
+			WobblePhase: []uint32{uint32(r.WobblePhase[0]), uint32(r.WobblePhase[1])},
+			Throb: uint32(r.Throb), ThrobPeriod: uint32(r.ThrobPeriod), ThrobPhase: uint32(r.ThrobPhase),
+		})
 	}
 	return m
 }
@@ -52,12 +51,12 @@ func ForecastPast(issue *pb.Forecast, truth []physics.Keyframe, spells []physics
 }
 
 // ForecastOf reads a forecast off the wire into f: at most the steps,
-// spells and systems a forecast holds, each system's steps one for each
-// step, its numbers in their ranges.
+// spells and systems a forecast holds, each system in a slot of a
+// keyframe's, its numbers in their ranges.
 func ForecastOf(m *pb.Forecast, f *physics.Forecast) error {
 	*f = physics.Forecast{}
 	steps := int(m.GetSteps())
-	if steps < 1 || steps > physics.MaxForecastSteps || m.GetIssue() < -maxTick || m.GetIssue() > maxTick {
+	if steps < 1 || steps > physics.MaxForecastSteps || !inTicks(m.GetIssue()) || !inTicks(m.GetUntil()) || !inTicks(m.GetOrigin()) {
 		return fmt.Errorf("protocol: a forecast of %d steps issued at %d", steps, m.GetIssue())
 	}
 	if len(m.GetSpells()) > physics.MaxForecastSpells || len(m.GetShifts()) != len(m.GetSpells()) || len(m.GetSystems()) > physics.MaxForecastSystems {
@@ -65,6 +64,7 @@ func ForecastOf(m *pb.Forecast, f *physics.Forecast) error {
 	}
 	h := &f.Head
 	h.Issue, h.Steps, h.Step = float64(m.GetIssue()), float64(steps), float64(m.GetStep())
+	h.Until, h.Every, h.Origin = float64(m.GetUntil()), float64(m.GetEvery()), float64(m.GetOrigin())
 	for i, p := range m.GetSpells() {
 		if i > 0 && p.GetBegin() < m.GetSpells()[i-1].GetBegin() {
 			return fmt.Errorf("protocol: the forecast's spell %d begins before the one before it", i)
@@ -76,23 +76,29 @@ func ForecastOf(m *pb.Forecast, f *physics.Forecast) error {
 	}
 	h.NSpells = float64(len(m.GetSpells()))
 	for i, s := range m.GetSystems() {
-		if s.GetSlot() >= physics.MaxSystems || len(s.GetEast()) != steps || len(s.GetNorth()) != steps ||
-			len(s.GetHeading()) != steps || len(s.GetSpeed()) != steps || len(s.GetStrength()) != steps ||
-			s.GetCrosses() < -maxTick || s.GetCrosses() > maxTick {
-			return fmt.Errorf("protocol: the forecast's system %d is not one of its steps", i)
+		if s.GetSlot() >= physics.MaxSystems || len(s.GetWobblePeriod()) != 2 || len(s.GetWobblePhase()) != 2 ||
+			!inTicks(s.GetBorn()) || !inTicks(s.GetMature()) || !inTicks(s.GetDecays()) || !inTicks(s.GetGone()) {
+			return fmt.Errorf("protocol: the forecast's system %d is not a record", i)
 		}
-		o := &f.Systems[i]
-		o.Slot, o.Kind, o.Seed, o.Size, o.Peak = float64(s.GetSlot()), float64(s.GetKind()), float64(s.GetSeed()), float64(s.GetSize()), float64(s.GetPeak())
-		o.Depth, o.Forming = float64(s.GetDepth()), bit(s.GetForming())
-		o.Crosses, o.CrossEast, o.CrossNorth = float64(s.GetCrosses()), float64(s.GetCrossEast()), float64(s.GetCrossNorth())
-		for k := range steps {
-			o.East[k], o.North[k] = float64(s.GetEast()[k]), float64(s.GetNorth()[k])
-			o.Heading[k], o.Speed[k], o.Strength[k] = float64(s.GetHeading()[k]), float64(s.GetSpeed()[k]), float64(s.GetStrength()[k])
+		h.Slots[i] = float64(s.GetSlot())
+		f.Systems[i] = physics.SystemRecord{
+			Kind: float64(s.GetKind()), Seed: float64(s.GetSeed()),
+			Born: float64(s.GetBorn()), Mature: float64(s.GetMature()), Decays: float64(s.GetDecays()), Gone: float64(s.GetGone()),
+			Track: float64(s.GetTrack()), East: float64(s.GetEast()), North: float64(s.GetNorth()), Heading: float64(s.GetHeading()),
+			Speed: float64(s.GetSpeed()), Radius: float64(s.GetRadius()), Angle: float64(s.GetAngle()), Sense: float64(s.GetSense()),
+			Inward: float64(s.GetInward()), Size: float64(s.GetSize()), Peak: float64(s.GetPeak()), Depth: float64(s.GetDepth()),
+			Length: float64(s.GetLength()), Wobble: float64(s.GetWobble()),
+			WobblePeriod: [2]float64{float64(s.GetWobblePeriod()[0]), float64(s.GetWobblePeriod()[1])},
+			WobblePhase:  [2]float64{float64(s.GetWobblePhase()[0]), float64(s.GetWobblePhase()[1])},
+			Throb:        float64(s.GetThrob()), ThrobPeriod: float64(s.GetThrobPeriod()), ThrobPhase: float64(s.GetThrobPhase()),
 		}
 	}
 	h.NSystems = float64(len(m.GetSystems()))
 	return nil
 }
+
+// inTicks reports whether a tick is one a float64 holds exactly.
+func inTicks(t int64) bool { return t >= -maxTick && t <= maxTick }
 
 // PastOf reads what has been off the wire: the truth's keyframes and the
 // spells in play over them.

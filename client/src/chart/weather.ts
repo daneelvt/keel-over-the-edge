@@ -27,34 +27,46 @@ const SECOND = 30;
 const MINUTE = 60 * SECOND;
 const TURN = 65536;
 
-/** The chart's weather layers, each with its switch; the wind is always on. */
-export type Layer = 'gusts' | 'rain' | 'fog' | 'systems' | 'pressure';
+/**
+ * The chart's weather layers, each with its switch: under "Wind" its wash
+ * by force, its barbs and its streaks; the gusts, the rain, the fog, the
+ * systems and the pressure's isobars.
+ */
+export type Layer = 'wash' | 'barbs' | 'streaks' | 'gusts' | 'rain' | 'fog' | 'systems' | 'pressure';
 export type Layers = Record<Layer, boolean>;
 
-/** The layers at first: all but the pressure, which the barometer's lesson offers. */
+/** The layers at first: every one, the isobars too. */
 export const LAYERS_AT_FIRST: Layers = {
+  wash: true,
+  barbs: true,
+  streaks: true,
   gusts: true,
   rain: true,
   fog: true,
   systems: true,
-  pressure: false,
+  pressure: true,
 };
 
-/** The slider's two ways: the forecast ahead, or what happened. */
+/** The slider's two ways: ahead, or what happened. */
 export type TimeMode = 'forecast' | 'past';
 
-/** How far back "what happened" goes, in its steps of ten minutes. */
-export const PAST_STEPS = 9;
+/** How far ahead the slider goes, minutes, and how far back. */
+export const AHEAD_MINUTES = 90;
+export const PAST_MINUTES = 90;
 
-/** What the chart shows the weather of. */
+/**
+ * What the chart shows the weather of: now, the live weather from the
+ * keyframes; a minute ahead, the latest forecast's truth then; or a minute
+ * of the last ninety, from the truth kept.
+ */
 export interface Moment {
-  kind: 'now' | 'forecast' | 'past';
+  kind: 'now' | 'ahead' | 'past';
   /** The tick shown. */
   tick: number;
-  /** The forecast drawn: the latest issue ahead, the issue of ninety minutes before in the past; null now. */
+  /** Minutes from now: ahead positive, in the past negative, 0 now. */
+  minutes: number;
+  /** The forecast it is read from ahead, the latest; null now and in the past. */
   issue: ForecastTold | null;
-  /** Ahead, the forecast's step; in the past, the tens of minutes back, negative. */
-  step: number;
 }
 
 /** What the chart's weather is read from. */
@@ -72,62 +84,56 @@ export interface WeatherSource {
   end(): number;
 }
 
-/** The moment the slider shows: its mode and step. Ahead, step 0 is now; a step past the forecast's last is its last. */
-export function momentOf(mode: TimeMode, step: number, src: WeatherSource): Moment {
-  const now = src.tick();
-  if (mode === 'past') {
-    const back = Math.min(Math.max(-step, 0), PAST_STEPS);
-    if (back === 0) {
-      return { kind: 'now', tick: now, issue: null, step: 0 };
-    }
-    const tick = now - back * 10 * MINUTE;
-    const issue = src.forecasts.issueAt(now - 90 * MINUTE) ?? src.forecasts.issueAt(tick);
-    return { kind: 'past', tick, issue, step: -back };
-  }
-  const issue = src.forecasts.latest;
-  if (step <= 0 || issue === null) {
-    return { kind: 'now', tick: now, issue: null, step: 0 };
-  }
-  const { steps, step: every } = stepsOf(issue);
-  const k = Math.min(step, steps - 1);
-  if (k <= 0) {
-    return { kind: 'now', tick: now, issue: null, step: 0 };
-  }
-  return { kind: 'forecast', tick: issueOf(issue) + k * every, issue, step: k };
-}
+/**
+ * How a system is drawn, the catalog's symbol: a squall's dark cell, a
+ * shower's heap, a storm's spiral, a low's spiral lettered L, a fog bank, a
+ * patch of calm, a squall line's dash, dot, dot, a trough's dashes.
+ */
+export type SystemDraw = 'cell' | 'heap' | 'spiral' | 'low' | 'bank' | 'calm' | 'dash-dot' | 'dashed';
 
-/** How a system is drawn, by its cloud's form: a squall's cell, a shower's heap, a storm's low, a fog bank, a patch of light air. */
-export type SystemDraw = 'cell' | 'heap' | 'low' | 'bank' | 'calm';
-
-/** How each kind of system is drawn and named, by the catalog's index. */
+/**
+ * How each kind of system is drawn and named, by the catalog's index: its
+ * symbol, its name and its key's line; whether it is a line, a low (a
+ * storm's shape, with a ring of strongest wind its width of its size
+ * out), and whether it flashes.
+ */
 export interface KindDraw {
   draw: SystemDraw;
   name: string;
+  key: string;
+  line: boolean;
+  /** A low's ring of strongest wind as a share of its size; 0 for no low. */
+  ring: number;
+  lightning: boolean;
 }
 
 /** The catalog's kinds of system, as the chart draws them. */
 export function kindDraws(
-  systems: readonly { shape: string; cloud: { form: string } }[],
+  systems: readonly {
+    name: string;
+    key: string;
+    symbol: string;
+    shape: string;
+    width: number;
+    lightning?: unknown;
+  }[],
 ): KindDraw[] {
-  return systems.map((k) => {
-    switch (k.cloud.form) {
-      case 'cumulonimbus':
-        return { draw: 'cell', name: 'Squall' };
-      case 'cumulus':
-        return { draw: 'heap', name: 'Shower' };
-      case 'storm':
-        return { draw: 'low', name: 'Storm' };
-      case 'fog':
-        return { draw: 'bank', name: 'Fog' };
-    }
-    return { draw: 'calm', name: 'Light air' };
-  });
+  return systems.map((k) => ({
+    draw: k.symbol as SystemDraw,
+    name: k.name,
+    key: k.key,
+    line: k.shape === 'line',
+    ring: k.shape === 'low' ? k.width : 0,
+    lightning: k.lightning !== undefined,
+  }));
 }
 
-/** A system as the chart draws it. */
+/** A system as the chart draws it, at the moment. */
 export interface SceneSystem {
   slot: number;
   kind: number;
+  /** Its seed: with its slot, which system it is from one moment to the next. */
+  seed: number;
   draw: SystemDraw;
   name: string;
   east: number;
@@ -135,31 +141,33 @@ export interface SceneSystem {
   /** The direction it moves toward, rad, and how fast, m/s. */
   heading: number;
   speed: number;
-  /** Its radius, m, and its strength, 0 to about 1. */
+  /** Its radius, m, a line's half its depth; its strength, 0 to about 1. */
   size: number;
   strength: number;
-  /** A low not yet born at the issue, forecast by its plan alone. */
-  forming: boolean;
-  /** Its cone's radius at this step, m; 0 for the truth. */
-  cone: number;
-  /** Its forecast track: each step's place it is alive at, with its cone. */
-  track: { east: number; north: number; cone: number }[];
+  /** A line's length across its motion, m; 0 for any other. */
+  length: number;
+  /** A low's ring of strongest wind, its radius, m; 0 for any other. */
+  ring: number;
+  /** The strongest mean wind it blows on the water now and its typical strongest gust, m/s. */
+  wind: number;
+  gust: number;
+  /** Where it will be 30 minutes on, by the forecast, or null if it is gone by then or not known. */
+  ahead: { east: number; north: number } | null;
+  /** The tick it is gone at, by the forecast's record of it; null if not known. */
+  gone: number | null;
 }
 
-/** A front's line: the way it moves toward, its line's distance from the centre along it, m, and its band's half-width, m, 0 for the truth. */
+/**
+ * A front's line: the way it moves toward, its line's distance from the
+ * centre along it, m; whether it is a warm front, its rain ahead of its
+ * line; and how fast it moves, m/s.
+ */
 export interface SceneFront {
   sin: number;
   cos: number;
   line: number;
-  band: number;
-}
-
-/** A risk's marks: scattered showers, fog patches, squalls from the windward rim, calms. */
-export interface SceneRisk {
-  mark: string;
-  points: Where[];
-  /** For squalls, the direction they come from, rad. */
-  from: number;
+  warm: boolean;
+  speed: number;
 }
 
 /**
@@ -185,13 +193,8 @@ export interface WeatherScene {
   grid: FieldGrid;
   systems: SceneSystem[];
   fronts: SceneFront[];
-  risks: SceneRisk[];
-  /** The gale's points at a forecast's step: the grid's side and spacing, m, and a byte each. */
+  /** The gale's points at the moment ahead: the grid's side and spacing, m, and a byte each; null now and in the past. */
   gale: { side: number; spacing: number; on: Uint8Array } | null;
-  /** In the past, the old forecast's systems, and how many of those with a truth to judge lay inside their cones. */
-  forecast: SceneSystem[];
-  inside: number;
-  judged: number;
 }
 
 /** The catalog's numbers the scene is sampled with. */

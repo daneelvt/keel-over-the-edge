@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5ImAKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkSDQoFd2F0Y2gYBSABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iuAEKB0NvbW1hbmQSIQoGcmVzeW5jGAEgASgLMg8ua2VlbC52MS5SZXN5bmNIABIdCgRyb2FtGAIgASgLMg0ua2VlbC52MS5Sb2FtSAASHwoFd2F0Y2gYAyABKAsyDi5rZWVsLnYxLldhdGNoSAASHQoEc2FpbBgEIAEoCzINLmtlZWwudjEuU2FpbEgAEiMKB3Vud2F0Y2gYBSABKAsyEC5rZWVsLnYxLlVud2F0Y2hIAEIGCgRib2R5IhcKBVdhdGNoEg4KBnNhaWxvchgBIAEoCSIGCgRTYWlsIgkKB1Vud2F0Y2giCAoGUmVzeW5jIj8KBFJvYW0SCgoCb24YASABKAgSDAoEZWFzdBgCIAEoERINCgVub3J0aBgDIAEoERIOCgZoZWlnaHQYBCABKA0ilAUKDVNlcnZlck1lc3NhZ2USIwoHd2VsY29tZRgBIAEoCzIQLmtlZWwudjEuV2VsY29tZUgAEh0KBHBvbmcYAiABKAsyDS5rZWVsLnYxLlBvbmdIABIhCgZxdWV1ZWQYAyABKAsyDy5rZWVsLnYxLlF1ZXVlZEgAEiMKB3Jlc3RhcnQYBCABKAsyEC5rZWVsLnYxLlJlc3RhcnRIABImCglzZWFfYXJlYXMYBSABKAsyES5rZWVsLnYxLlNlYUFyZWFzSAASMgoPd2VhdGhlcl9zeXN0ZW1zGAYgASgLMhcua2VlbC52MS5XZWF0aGVyU3lzdGVtc0gAEh0KBGJ1bXAYByABKAsyDS5rZWVsLnYxLkJ1bXBIABIhCgZjaHVua3MYCCABKAsyDy5rZWVsLnYxLkNodW5rc0gAEh8KBXRvb2xzGAkgASgLMg4ua2VlbC52MS5Ub29sc0gAEiEKBnBsYWNlcxgKIAEoCzIPLmtlZWwudjEuUGxhY2VzSAASIQoGbGlnaHRzGAsgASgLMg8ua2VlbC52MS5MaWdodHNIABIfCgVjaGFydBgMIAEoCzIOLmtlZWwudjEuQ2hhcnRIABIjCgdjaGFydGVkGA0gASgLMhAua2VlbC52MS5DaGFydGVkSAASKgoLaXNsYW5kX2NhcHMYDiABKAsyEy5rZWVsLnYxLklzbGFuZENhcHNIABIlCghmb3JlY2FzdBgPIAEoCzIRLmtlZWwudjEuRm9yZWNhc3RIABIqCgt3YXRjaF9lbmRlZBgQIAEoCzITLmtlZWwudjEuV2F0Y2hFbmRlZEgAEiUKCHdhdGNoZXJzGBEgASgLMhEua2VlbC52MS5XYXRjaGVyc0gAQgYKBGJvZHkiPAoKV2F0Y2hFbmRlZBIeCgN3aHkYASABKA4yES5rZWVsLnYxLldhdGNoRW5kEg4KBnNhaWxvchgCIAEoCSIZCghXYXRjaGVycxINCgVjb3VudBgBIAEoDSLZAQoIRm9yZWNhc3QSDQoFaXNzdWUYASABKAMSDQoFc3RlcHMYAiABKA0SDAoEc3RlcBgDIAEoDRIeCgZzcGVsbHMYBCADKAsyDi5rZWVsLnYxLlNwZWxsEg4KBnNoaWZ0cxgFIAMoDRIoCgdzeXN0ZW1zGAYgAygLMhcua2VlbC52MS5Gb3JlY2FzdFN5c3RlbRIiCgRnYWxlGAcgASgLMhQua2VlbC52MS5HYWxlV2FybmluZxIjCgRw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ASgDEgsKA2NvbBgCIAEoERILCgNyb3cYAyABKBESDAoEc2l6ZRgEIAEoDRINCgVzcGVlZBgFIAMoDRIMCgRmcm9tGAYgAygNEg0KBWZldGNoGAcgAygNEhQKDHN3ZWxsX2hlaWdodBgIIAMoDRIUCgxzd2VsbF9wZXJpb2QYCSADKA0SEgoKc3dlbGxfZnJvbRgKIAMoDSIYCgdSZXN0YXJ0Eg0KBWluX21zGAEgASgNIj8KBlF1ZXVlZBIQCghwb3NpdGlvbhgBIAEoDRIPCgd3YWl0aW5nGAIgASgNEhIKCnNwZWN0YXRvcnMYAyABKAgipgIKB1dlbGNvbWUSDQoFd29ybGQYASABKAkSDAoEdGljaxgCIAEoAxIVCg13b3JsZF90aW1lX3VzGAMgASgDEgwKBGJvYXQYBCABKAQSDAoEa2luZBgFIAEoDRIQCghyZWpvaW5lZBgGIAEoCBIQCghlcG9jaF91cxgHIAEoAxIMCgRsYW5kGAggASgIEhMKC2NpcmN1bGF0aW9uGAkgASgREg0KBXRvb2xzGAogASgIEh0KBWxpZ2h0GAsgASgLMg4ua2VlbC52MS5MaWdodBIPCgdlbmRzX3VzGAwgASgDEhIKCmNsb3NpbmdfdXMYDSABKAMSDAoEem9uZRgOIAEoCRIjCgh3YXRjaGluZxgPIAEoCzIRLmtlZWwudjEuV2F0Y2hpbmciOQoIV2F0Y2hpbmcSDgoGc2FpbG9yGAEgASgJEg8KB21hY2hpbmUYAiABKAgSDAoEbWluZRgDIAEoCCI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKAMq0QEKCFdhdGNoRW5kEhkKFVdBVENIX0VORF9VTlNQRUNJRklFRBAAEhIKDldBVENIX0VORF9MRUZUEAESEQoNV0FUQ0hfRU5EX09GRhACEhQKEFdBVENIX0VORF9DQU5OT1QQAxIYChRXQVRDSF9FTkRfTk9UX0FUX1NFQRAEEhcKE1dBVENIX0VORF9OT19TQUlMT1IQBRIRCg1XQVRDSF9FTkRfT1dOEAYSEwoPV0FUQ0hfRU5EX1FVSUNLEAcSEgoOV0FUQ0hfRU5EX0JVU1kQCCp7CgxDaGFydFN1YmplY3QSHQoZQ0hBUlRfU1VCSkVDVF9VTlNQRUNJRklFRBAAEhgKFENIQVJUX1NVQkpFQ1RfSVNMQU5EEAESFwoTQ0hBUlRfU1VCSkVDVF9QTEFDRRACEhkKFUNIQVJUX1NVQkpFQ1RfRkVBVFVSRRADKmQKCEJ1bXBQYXJ0EhkKFUJVTVBfUEFSVF9VTlNQRUNJRklFRBAAEhMKD0JVTVBfUEFSVF9ZT1VSUxABEhQKEEJVTVBfUEFSVF9USEVJUlMQAhISCg5CVU1QX1BBUlRfTk9ORRADQj1aO2dpdGh1Yi5jb20vZGFuZWVsdnQva2VlbC1vdmVyLXRoZS1lZGdlL2ludGVybmFsL3Byb3RvY29sL3BiYgZwcm90bzM");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5ImAKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkSDQoFd2F0Y2gYBSABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iuAEKB0NvbW1hbmQSIQoGcmVzeW5jGAEgASgLMg8ua2VlbC52MS5SZXN5bmNIABIdCgRyb2FtGAIgASgLMg0ua2VlbC52MS5Sb2FtSAASHwoFd2F0Y2gYAyABKAsyDi5rZWVsLnYxLldhdGNoSAASHQoEc2FpbBgEIAEoCzINLmtlZWwudjEuU2FpbEgAEiMKB3Vud2F0Y2gYBSABKAsyEC5rZWVsLnYxLlVud2F0Y2hIAEIGCgRib2R5IhcKBVdhdGNoEg4KBnNhaWxvchgBIAEoCSIGCgRTYWlsIgkKB1Vud2F0Y2giCAoGUmVzeW5jIj8KBFJvYW0SCgoCb24YASABKAgSDAoEZWFzdBgCIAEoERINCgVub3J0aBgDIAEoERIOCgZoZWlnaHQYBCABKA0ilAUKDVNlcnZlck1lc3NhZ2USIwoHd2VsY29tZRgBIAEoCzIQLmtlZWwudjEuV2VsY29tZUgAEh0KBHBvbmcYAiABKAsyDS5rZWVsLnYxLlBvbmdIABIhCgZxdWV1ZWQYAyABKAsyDy5rZWVsLnYxLlF1ZXVlZEgAEiMKB3Jlc3RhcnQYBCABKAsyEC5rZWVsLnYxLlJlc3RhcnRIABImCglzZWFfYXJlYXMYBSABKAsyES5rZWVsLnYxLlNlYUFyZWFzSAASMgoPd2VhdGhlcl9zeXN0ZW1zGAYgASgLMhcua2VlbC52MS5XZWF0aGVyU3lzdGVtc0gAEh0KBGJ1bXAYByABKAsyDS5rZWVsLnYxLkJ1bXBIABIhCgZjaHVua3MYCCABKAsyDy5rZWVsLnYxLkNodW5rc0gAEh8KBXRvb2xzGAkgASgLMg4ua2VlbC52MS5Ub29sc0gAEiEKBnBsYWNlcxgKIAEoCzIPLmtlZWwudjEuUGxhY2VzSAASIQoGbGlnaHRzGAsgASgLMg8ua2VlbC52MS5MaWdodHNIABIfCgVjaGFydBgMIAEoCzIOLmtlZWwudjEuQ2hhcnRIABIjCgdjaGFydGVkGA0gASgLMhAua2VlbC52MS5DaGFydGVkSAASKgoLaXNsYW5kX2NhcHMYDiABKAsyEy5rZWVsLnYxLklzbGFuZENhcHNIABIlCghmb3JlY2FzdBgPIAEoCzIRLmtlZWwudjEuRm9yZWNhc3RIABIqCgt3YXRjaF9lbmRlZBgQIAEoCzITLmtlZWwudjEuV2F0Y2hFbmRlZEgAEiUKCHdhdGNoZXJzGBEgASgLMhEua2VlbC52MS5XYXRjaGVyc0gAQgYKBGJvZHkiPAoKV2F0Y2hFbmRlZBIeCgN3aHkYASABKA4yES5rZWVsLnYxLldhdGNoRW5kEg4KBnNhaWxvchgCIAEoCSIZCghXYXRjaGVycxINCgVjb3VudBgBIAEoDSKHAgoIRm9yZWNhc3QSDQoFaXNzdWUYASABKAMSDQoFc3RlcHMYAiABKA0SDAoEc3RlcBgDIAEoDRIeCgZzcGVsbHMYBCADKAsyDi5rZWVsLnYxLlNwZWxsEg4KBnNoaWZ0cxgFIAMoDRIoCgdzeXN0ZW1zGAYgAygLMhcua2VlbC52MS5Gb3JlY2FzdFN5c3RlbRIiCgRnYWxlGAcgASgLMhQua2VlbC52MS5HYWxlV2FybmluZxIjCgRw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CgRtaW5lGAMgASgIIjUKBFBvbmcSFgoOY2xpZW50X3RpbWVfdXMYASABKAMSFQoNd29ybGRfdGltZV91cxgCIAEoAyrRAQoIV2F0Y2hFbmQSGQoVV0FUQ0hfRU5EX1VOU1BFQ0lGSUVEEAASEgoOV0FUQ0hfRU5EX0xFRlQQARIRCg1XQVRDSF9FTkRfT0ZGEAISFAoQV0FUQ0hfRU5EX0NBTk5PVBADEhgKFFdBVENIX0VORF9OT1RfQVRfU0VBEAQSFwoTV0FUQ0hfRU5EX05PX1NBSUxPUhAFEhEKDVdBVENIX0VORF9PV04QBhITCg9XQVRDSF9FTkRfUVVJQ0sQBxISCg5XQVRDSF9FTkRfQlVTWRAIKnsKDENoYXJ0U3ViamVjdBIdChlDSEFSVF9TVUJKRUNUX1VOU1BFQ0lGSUVEEAASGAoUQ0hBUlRfU1VCSkVDVF9JU0xBTkQQARIXChNDSEFSVF9TVUJKRUNUX1BMQUNFEAISGQoVQ0hBUlRfU1VCSkVDVF9GRUFUVVJFEAMqZAoIQnVtcFBhcnQSGQoVQlVNUF9QQVJUX1VOU1BFQ0lGSUVEEAASEwoPQlVNUF9QQVJUX1lPVVJTEAESFAoQQlVNUF9QQVJUX1RIRUlSUxACEhIKDkJVTVBfUEFSVF9OT05FEANCPVo7Z2l0aHViLmNvbS9kYW5lZWx2dC9rZWVsLW92ZXItdGhlLWVkZ2UvaW50ZXJuYWwvcHJvdG9jb2wvcGJiBnByb3RvMw");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -604,11 +604,10 @@ export const WatchersSchema: GenMessage<Watchers> = /*@__PURE__*/
  * Forecast is the forecast, issued at each boundary of ten minutes of world
  * time from the world's epoch for the next ninety, in steps of ten: sent to
  * every connection as it is issued, and after the Welcome with its past.
- * It is the whole of the future a client is told: the systems alive at the
- * issue moved on by their planned tracks, the lows to be born within its
- * horizon, forming, the spells planned, without their shifts, and the gale
- * warning in force; never a system's record, its wobble, nor the seed of a
- * system not yet born.
+ * It is the truth: the records of every system alive at the issue or born
+ * within its horizon and one issue more, from which a client makes the
+ * server's keyframes of any tick it knows, bit for bit; the spells as they
+ * will blow, without their shifts; and the gale warning in force.
  *
  * @generated from message keel.v1.Forecast
  */
@@ -632,10 +631,9 @@ export type Forecast = Message<"keel.v1.Forecast"> & {
   step: number;
 
   /**
-   * The spells over its horizon, by the tick each begins at, ascending, as
-   * the forecast has them: the shifts not placed, a spell not yet begun
-   * with the forecast's error, a front's line moved on at its forecast
-   * speed; and each one's shifts' swing either way, in 65536ths of a turn.
+   * The spells over its reach, by the tick each begins at, ascending, the
+   * shifts not placed; and each one's shifts' swing either way, in
+   * 65536ths of a turn.
    *
    * @generated from field: repeated keel.v1.Spell spells = 4;
    */
@@ -647,7 +645,7 @@ export type Forecast = Message<"keel.v1.Forecast"> & {
   shifts: number[];
 
   /**
-   * Its systems, by their slots.
+   * Its systems' records, in the order of their births.
    *
    * @generated from field: repeated keel.v1.ForecastSystem systems = 6;
    */
@@ -667,6 +665,24 @@ export type Forecast = Message<"keel.v1.Forecast"> & {
    * @generated from field: keel.v1.ForecastPast past = 8;
    */
   past?: ForecastPast | undefined;
+
+  /**
+   * The last tick it knows the systems to; how many ticks apart the
+   * systems' keyframes are; and the tick its records' tick 0 falls on.
+   *
+   * @generated from field: int64 until = 9;
+   */
+  until: bigint;
+
+  /**
+   * @generated from field: uint32 every = 10;
+   */
+  every: number;
+
+  /**
+   * @generated from field: int64 origin = 11;
+   */
+  origin: bigint;
 };
 
 /**
@@ -677,17 +693,15 @@ export const ForecastSchema: GenMessage<Forecast> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 13);
 
 /**
- * ForecastSystem is a system as a forecast gives it, in a keyframe's
- * units: at each step, where it will be, how it moves and how strong it
- * is.
+ * ForecastSystem is a system of the forecast: its slot, as its keyframes',
+ * and its record, from which its keyframe at any tick is made.
  *
  * @generated from message keel.v1.ForecastSystem
  */
 export type ForecastSystem = Message<"keel.v1.ForecastSystem"> & {
   /**
-   * Its slot, as its keyframes'; the catalog's index of its kind; a seed
-   * for drawing it, 0 for a low forming, which has none yet; its radius,
-   * m; its peak and its depth, as a keyframe's.
+   * Its slot; the catalog's index of its kind; its seed; its radius, m, a
+   * line's half its depth; its peak and its depth, as a keyframe's.
    *
    * @generated from field: uint32 slot = 1;
    */
@@ -719,59 +733,126 @@ export type ForecastSystem = Message<"keel.v1.ForecastSystem"> & {
   depth: number;
 
   /**
-   * A low not yet born at the issue, forecast by its plan alone.
+   * The ticks it is born at, has grown to its whole by, begins to decay
+   * at and is gone at, in its records' time.
    *
-   * @generated from field: bool forming = 7;
+   * @generated from field: int64 born = 16;
    */
-  forming: boolean;
+  born: bigint;
 
   /**
-   * Beyond the lip at the issue: the tick it is forecast to cross onto the
-   * disk, and where, in metres east and north of the world's centre.
+   * @generated from field: int64 mature = 17;
+   */
+  mature: bigint;
+
+  /**
+   * @generated from field: int64 decays = 18;
+   */
+  decays: bigint;
+
+  /**
+   * @generated from field: int64 gone = 19;
+   */
+  gone: bigint;
+
+  /**
+   * Its track: 0 a straight line, 1 an arc round the centre.
    *
-   * @generated from field: int64 crosses = 8;
+   * @generated from field: uint32 track = 20;
    */
-  crosses: bigint;
+  track: number;
 
   /**
-   * @generated from field: sint32 cross_east = 9;
-   */
-  crossEast: number;
-
-  /**
-   * @generated from field: sint32 cross_north = 10;
-   */
-  crossNorth: number;
-
-  /**
-   * At each step: its centre, in metres east and north of the world's
-   * centre; the direction it moves toward, in 65536ths of a turn; how
-   * fast, in steps of 0.01 m/s; and its strength, in 256ths, 0 where it
-   * is not alive.
+   * A line: where it is at its birth, in quarter metres east and north of
+   * the world's centre, and the direction it moves toward, in 65536ths of
+   * a turn.
    *
-   * @generated from field: repeated sint32 east = 11;
+   * @generated from field: sint32 east = 21;
    */
-  east: number[];
+  east: number;
 
   /**
-   * @generated from field: repeated sint32 north = 12;
+   * @generated from field: sint32 north = 22;
    */
-  north: number[];
+  north: number;
 
   /**
-   * @generated from field: repeated uint32 heading = 13;
+   * @generated from field: uint32 heading = 23;
    */
-  heading: number[];
+  heading: number;
 
   /**
-   * @generated from field: repeated uint32 speed = 14;
+   * How fast it moves along its track, in steps of 0.01 m/s.
+   *
+   * @generated from field: uint32 speed = 24;
    */
-  speed: number[];
+  speed: number;
 
   /**
-   * @generated from field: repeated uint32 strength = 15;
+   * An arc: its distance from the centre at its birth, in quarter metres;
+   * its bearing from the centre then, in 65536ths of a turn; which way it
+   * goes round, 1 clockwise and −1 the other way; and how fast it closes
+   * on the centre, in steps of 0.01 m/s.
+   *
+   * @generated from field: uint32 radius = 25;
    */
-  strength: number[];
+  radius: number;
+
+  /**
+   * @generated from field: uint32 angle = 26;
+   */
+  angle: number;
+
+  /**
+   * @generated from field: sint32 sense = 27;
+   */
+  sense: number;
+
+  /**
+   * @generated from field: uint32 inward = 28;
+   */
+  inward: number;
+
+  /**
+   * A line's length across its motion, m.
+   *
+   * @generated from field: uint32 length = 29;
+   */
+  length: number;
+
+  /**
+   * Its wobble off its track: how far, in quarter metres, and each way's
+   * period in ticks and phase at tick 0 in 65536ths of a turn; and its
+   * strength's throb, in 4096ths, with its period and phase.
+   *
+   * @generated from field: uint32 wobble = 30;
+   */
+  wobble: number;
+
+  /**
+   * @generated from field: repeated uint32 wobble_period = 31;
+   */
+  wobblePeriod: number[];
+
+  /**
+   * @generated from field: repeated uint32 wobble_phase = 32;
+   */
+  wobblePhase: number[];
+
+  /**
+   * @generated from field: uint32 throb = 33;
+   */
+  throb: number;
+
+  /**
+   * @generated from field: uint32 throb_period = 34;
+   */
+  throbPeriod: number;
+
+  /**
+   * @generated from field: uint32 throb_phase = 35;
+   */
+  throbPhase: number;
 };
 
 /**
@@ -1600,7 +1681,7 @@ export type Keyframe = Message<"keel.v1.Keyframe"> & {
   tick: bigint;
 
   /**
-   * The systems, by their slots, ascending: at most 20.
+   * The systems, by their slots, ascending: at most 28.
    *
    * @generated from field: repeated keel.v1.SystemKey systems = 2;
    */
@@ -1621,8 +1702,8 @@ export const KeyframeSchema: GenMessage<Keyframe> = /*@__PURE__*/
  */
 export type SystemKey = Message<"keel.v1.SystemKey"> & {
   /**
-   * Its slot, which it holds from its birth to its end: below 16 the
-   * world's own, from 16 a developer's.
+   * Its slot, which it holds from its birth to its end: below 24 the
+   * world's own, from 24 a developer's.
    *
    * @generated from field: uint32 slot = 1;
    */
@@ -1699,6 +1780,13 @@ export type SystemKey = Message<"keel.v1.SystemKey"> & {
    * @generated from field: sint32 depth = 12;
    */
   depth: number;
+
+  /**
+   * A line's length across its motion, m; 0 for any other shape.
+   *
+   * @generated from field: uint32 length = 13;
+   */
+  length: number;
 };
 
 /**
@@ -1861,6 +1949,14 @@ export type Spell = Message<"keel.v1.Spell"> & {
    * @generated from field: bool still = 22;
    */
   still: boolean;
+
+  /**
+   * Its front is a warm front: its rain in a band ahead of its line, and
+   * no surge of the gusts behind it.
+   *
+   * @generated from field: bool warm = 23;
+   */
+  warm: boolean;
 };
 
 /**

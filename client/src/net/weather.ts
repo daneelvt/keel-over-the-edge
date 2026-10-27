@@ -47,6 +47,7 @@ export function spellRecord(s: Spell): number[] {
   r[P.toward] = s.toward;
   r[P.trough] = s.trough;
   r[P.still] = s.still ? 1 : 0;
+  r[P.warm] = s.warm ? 1 : 0;
   return r;
 }
 
@@ -81,44 +82,59 @@ export function keyframeRecord(k: Keyframe): WeatherKeyframe {
       r[Y.size] = s.size;
       r[Y.peak] = s.peak;
       r[Y.depth] = s.depth;
+      r[Y.length] = s.length;
       return [s.slot, r];
     }),
   };
 }
 
 const H = RECORDS.forecastHead;
-const S = RECORDS.forecastSystem;
+const R = RECORDS.systemRecord;
 
-/** A Forecast as the module's records' values: its head, spells and systems, and its gale warning. */
+/** A Forecast as the module's records' values: its head, spells and systems' records, and its gale warning. */
 export function forecastTold(f: Forecast): ForecastTold {
   const head = new Array<number>(SIZES.forecastHead).fill(0);
   head[H.issue] = Number(f.issue);
   head[H.steps] = f.steps;
   head[H.step] = f.step;
+  head[H.until] = Number(f.until);
+  head[H.every] = f.every;
+  head[H.origin] = Number(f.origin);
   head[H.nSpells] = f.spells.length;
   head[H.nSystems] = f.systems.length;
   f.shifts.forEach((s, i) => {
     head[H.shifts + i] = s;
   });
-  const systems = f.systems.map((s) => {
-    const r = new Array<number>(SIZES.forecastSystem).fill(0);
-    r[S.slot] = s.slot;
-    r[S.kind] = s.kind;
-    r[S.seed] = s.seed;
-    r[S.size] = s.size;
-    r[S.peak] = s.peak;
-    r[S.depth] = s.depth;
-    r[S.forming] = s.forming ? 1 : 0;
-    r[S.crosses] = Number(s.crosses);
-    r[S.crossEast] = s.crossEast;
-    r[S.crossNorth] = s.crossNorth;
-    for (let k = 0; k < f.steps; k++) {
-      r[S.east + k] = s.east[k] ?? 0;
-      r[S.north + k] = s.north[k] ?? 0;
-      r[S.heading + k] = s.heading[k] ?? 0;
-      r[S.speed + k] = s.speed[k] ?? 0;
-      r[S.strength + k] = s.strength[k] ?? 0;
+  const systems = f.systems.map((s, i) => {
+    head[H.slots + i] = s.slot;
+    const r = new Array<number>(SIZES.systemRecord).fill(0);
+    r[R.kind] = s.kind;
+    r[R.seed] = s.seed;
+    r[R.born] = Number(s.born);
+    r[R.mature] = Number(s.mature);
+    r[R.decays] = Number(s.decays);
+    r[R.gone] = Number(s.gone);
+    r[R.track] = s.track;
+    r[R.east] = s.east;
+    r[R.north] = s.north;
+    r[R.heading] = s.heading;
+    r[R.speed] = s.speed;
+    r[R.radius] = s.radius;
+    r[R.angle] = s.angle;
+    r[R.sense] = s.sense;
+    r[R.inward] = s.inward;
+    r[R.size] = s.size;
+    r[R.peak] = s.peak;
+    r[R.depth] = s.depth;
+    r[R.length] = s.length;
+    r[R.wobble] = s.wobble;
+    for (let k = 0; k < 2; k++) {
+      r[R.wobblePeriod + k] = s.wobblePeriod[k] ?? 0;
+      r[R.wobblePhase + k] = s.wobblePhase[k] ?? 0;
     }
+    r[R.throb] = s.throb;
+    r[R.throbPeriod] = s.throbPeriod;
+    r[R.throbPhase] = s.throbPhase;
     return r;
   });
   return { head, spells: f.spells.map(spellRecord), systems, gale: galeTold(f.gale) };

@@ -259,6 +259,7 @@ export function writeCloudParams(params: Float64Array, c: WeatherClouds): void {
   params.set(c.frontMiddle, f.frontMiddle);
   params.set(c.frontLow, f.frontLow);
   params.set(c.frontRain, f.frontRain);
+  params.set(c.frontWarm, f.frontWarm);
   params.set(c.rainWords, f.rainWords);
   params.set(c.rainExtinction, f.rainExtinction);
   params[f.rainScale] = c.rainScale;

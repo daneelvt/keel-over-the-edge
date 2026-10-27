@@ -905,22 +905,6 @@ type FogSignalRule struct {
 	Sounds float64 `json:"sounds"`
 }
 
-// The cones the truth lies in four times in five at each step.
-type ForecastCone struct {
-	// A low not yet born at the issue: its cone, whatever the lead, in nautical
-	// miles.
-	Forming float64 `json:"forming"`
-
-	// A front's line moves on at its speed times 1 + this z, z drawn once a front
-	// from a standard normal: the standard deviation of the forecast's error in its
-	// speed.
-	Front float64 `json:"front"`
-
-	// A system's cone grows by this for each hour of lead, from nothing at the issue,
-	// in nautical miles.
-	PerHour float64 `json:"perHour"`
-}
-
 // A gale warning: where the synoptic wind of a step reaches a gale, on a grid over
 // the water.
 type ForecastGale struct {
@@ -958,30 +942,6 @@ type ForecastOutlook struct {
 
 	// A change where the wind's direction turns this far or more, in degrees.
 	Turn float64 `json:"turn"`
-}
-
-// What a regime brings that the forecast cannot place: the sky in a place's box,
-// and the marks the chart draws.
-type ForecastRisk struct {
-	// The chart's marks: fog patches where the fog's rule lets a bank be born,
-	// scattered showers, squalls from the windward rim, calms.
-	Marks []RiskMark `json:"marks"`
-
-	// Regime corresponds to the JSON schema field "regime".
-	Regime ID `json:"regime"`
-
-	// Sky corresponds to the JSON schema field "sky".
-	Sky RiskSky `json:"sky"`
-}
-
-// The forecast's own error in a spell not yet begun at the issue, drawn from its
-// seed: standard deviations.
-type ForecastSpell struct {
-	// In its wind's direction, in degrees.
-	Direction float64 `json:"direction"`
-
-	// In its wind's speed, as a share of it.
-	Speed float64 `json:"speed"`
 }
 
 type Form string
@@ -2130,8 +2090,15 @@ type RegimeSystems struct {
 	// Kind corresponds to the JSON schema field "kind".
 	Kind ID `json:"kind"`
 
+	// Their peak wind is drawn from between these shares of their kind's range: [0,
+	// 0.5] for the lower half.
+	Peak []float64 `json:"peak"`
+
 	// How many are born an hour over the disk, on average.
 	Rate float64 `json:"rate"`
+
+	// When they are born: at any time, by day only, or at night only.
+	When When `json:"when"`
 }
 
 // A regime's wind, from which each spell's is drawn.
@@ -2154,22 +2121,6 @@ type RegimeWind struct {
 	// The least and the most of its wind at mid-disk, in knots.
 	Speed []float64 `json:"speed"`
 }
-
-type RiskMark string
-
-const RiskMarkCalms RiskMark = "calms"
-const RiskMarkFogPatches RiskMark = "fog-patches"
-const RiskMarkShowers RiskMark = "showers"
-const RiskMarkSqualls RiskMark = "squalls"
-
-type RiskSky string
-
-const RiskSkyFair RiskSky = "fair"
-const RiskSkyFogPatches RiskSky = "fog patches"
-const RiskSkyRain RiskSky = "rain"
-const RiskSkyShowers RiskSky = "showers"
-const RiskSkySquallsWithHeavyRain RiskSky = "squalls with heavy rain"
-const RiskSkySquallyShowers RiskSky = "squally showers"
 
 type Ruin string
 
@@ -2316,6 +2267,7 @@ type ScoreWater struct {
 type Shape string
 
 const ShapeDome Shape = "dome"
+const ShapeLine Shape = "line"
 const ShapeLow Shape = "low"
 const ShapeNone Shape = "none"
 
@@ -2566,6 +2518,13 @@ type SystemKind struct {
 	// The share of those born by day that are born over an island's land.
 	Islands float64 `json:"islands"`
 
+	// Its line in the chart's key.
+	Key string `json:"key"`
+
+	// A line's length across its motion, the least and the most, in nautical miles;
+	// nothing for any other shape.
+	Length []float64 `json:"length"`
+
 	// How long it lives, the least and the most, in minutes.
 	Life []float64 `json:"life"`
 
@@ -2575,16 +2534,21 @@ type SystemKind struct {
 	// Lightning corresponds to the JSON schema field "lightning".
 	Lightning *SystemLightning `json:"lightning,omitempty,omitzero"`
 
+	// What the chart, the forecast and the key call it.
+	Name string `json:"name"`
+
 	// It is born only at night, or within dawn minutes after sunrise.
 	Night bool `json:"night"`
 
 	// Rain corresponds to the JSON schema field "rain".
 	Rain SystemRain `json:"rain"`
 
-	// A dome, a low, or none: a patch that scales the wind.
+	// A dome, a line (a dome stretched across its motion along its length), a low, or
+	// none: a patch that scales the wind.
 	Shape Shape `json:"shape"`
 
-	// Its radius, the least and the most, in nautical miles.
+	// Its radius, the least and the most, in nautical miles: a line's half its depth
+	// along its motion.
 	Size []float64 `json:"size"`
 
 	// How fast it moves, the least and the most: a share of the base wind, or knots.
@@ -2599,12 +2563,21 @@ type SystemKind struct {
 	// Swell corresponds to the JSON schema field "swell".
 	Swell *SystemSwell `json:"swell,omitempty,omitzero"`
 
+	// How the chart draws it: a squall's dark cell, a shower's heap, a storm's
+	// spiral, a low's spiral lettered L, a fog bank, a patch of calm, a squall line's
+	// dash, dot, dot, a trough's dashes.
+	Symbol SystemKindSymbol `json:"symbol"`
+
 	// Where it is born and how it moves: wind, across from the windward rim; outer,
 	// round the outer waters; drift, inside, drifting with the wind.
 	Track Track `json:"track"`
 
 	// Its wind blows toward lower pressure turned clockwise by this, in degrees.
 	Turning float64 `json:"turning"`
+
+	// Of those that keep to the outer waters, the share that turn inward, closing on
+	// the centre.
+	TurnsIn float64 `json:"turnsIn"`
 
 	// Its pressure's or its patch's Gaussian width, as a share of its size.
 	Width float64 `json:"width"`
@@ -2613,6 +2586,17 @@ type SystemKind struct {
 	// knots.
 	Wind []float64 `json:"wind"`
 }
+
+type SystemKindSymbol string
+
+const SystemKindSymbolBank SystemKindSymbol = "bank"
+const SystemKindSymbolCalm SystemKindSymbol = "calm"
+const SystemKindSymbolCell SystemKindSymbol = "cell"
+const SystemKindSymbolDashDot SystemKindSymbol = "dash-dot"
+const SystemKindSymbolDashed SystemKindSymbol = "dashed"
+const SystemKindSymbolHeap SystemKindSymbol = "heap"
+const SystemKindSymbolLow SystemKindSymbol = "low"
+const SystemKindSymbolSpiral SystemKindSymbol = "spiral"
 
 // The lightning from a kind of system: above a strength, at a rate rising with it,
 // struck within a ring about its centre.
@@ -3023,6 +3007,11 @@ type WeatherClouds struct {
 	// behind the line and this wide, in nautical miles.
 	FrontRain []float64 `json:"frontRain"`
 
+	// A warm front's rain and low cloud, ahead of its line: the rate at the band's
+	// middle, in mm an hour, the band this far ahead of the line and this wide, in
+	// nautical miles.
+	FrontWarm []float64 `json:"frontWarm"`
+
 	// The sheets' cover is held at the corners of a world-fixed lattice this far
 	// apart, in m, and is bilinear between them.
 	Lattice float64 `json:"lattice"`
@@ -3116,13 +3105,10 @@ type WeatherDisk struct {
 	SpeedRim float64 `json:"speedRim"`
 }
 
-// The forecast: how often it is issued, how far ahead it runs, its cones, the
-// error it gives a spell not yet begun, its gale warnings, a place's outlook and
-// each regime's risks.
+// The forecast: how often it is issued, how far ahead it runs, its gale warnings
+// and a place's outlook. It is the truth: every system and every front where it
+// will be.
 type WeatherForecast struct {
-	// Cone corresponds to the JSON schema field "cone".
-	Cone ForecastCone `json:"cone"`
-
 	// It is issued at each boundary of this many minutes of world time from the
 	// world's epoch.
 	Every float64 `json:"every"`
@@ -3135,13 +3121,6 @@ type WeatherForecast struct {
 
 	// Outlook corresponds to the JSON schema field "outlook".
 	Outlook ForecastOutlook `json:"outlook"`
-
-	// What each regime brings that the forecast cannot place: one entry for each
-	// regime.
-	Risks []ForecastRisk `json:"risks"`
-
-	// Spell corresponds to the JSON schema field "spell".
-	Spell ForecastSpell `json:"spell"`
 
 	// In steps of this many minutes: the horizon is a whole number of them, at most
 	// 12.
@@ -3411,14 +3390,18 @@ type WeatherWeek struct {
 	// Its longest settled or trade spell is at least this long, in hours.
 	Fair float64 `json:"fair"`
 
+	// The kind born wherever the disk would otherwise be empty after the opening, so
+	// the chart always has weather on it.
+	Fill ID `json:"fill"`
+
 	// How fast a front moves, the least and the most, in knots.
 	FrontSpeed []float64 `json:"frontSpeed"`
 
 	// How deep a front's trough is, the least and the most, in hPa.
 	FrontTrough []float64 `json:"frontTrough"`
 
-	// The share of storms that turn inward.
-	InwardShare float64 `json:"inwardShare"`
+	// LineAhead corresponds to the JSON schema field "lineAhead".
+	LineAhead WeekLineAhead `json:"lineAhead"`
 
 	// The week covers this long beyond the world's end, in hours.
 	Margin float64 `json:"margin"`
@@ -3427,9 +3410,12 @@ type WeatherWeek struct {
 	// disk, in hours.
 	Opening float64 `json:"opening"`
 
-	// The outer waters a storm keeps to, from and to, in nautical miles from the
-	// centre.
+	// The outer waters the kinds that keep to them are born in, from and to, in
+	// nautical miles from the centre.
 	Outer []float64 `json:"outer"`
+
+	// Quiet corresponds to the JSON schema field "quiet".
+	Quiet WeekQuiet `json:"quiet"`
 
 	// The seed a developer's held spells are drawn with.
 	Seed int `json:"seed"`
@@ -3444,6 +3430,9 @@ type WeatherWeek struct {
 	// in degrees.
 	Spread float64 `json:"spread"`
 
+	// Storms corresponds to the JSON schema field "storms".
+	Storms WeekMost `json:"storms"`
+
 	// The most a system's strength wobbles, as a share of it.
 	StrengthWobble float64 `json:"strengthWobble"`
 
@@ -3453,8 +3442,13 @@ type WeatherWeek struct {
 	// The most systems on the disk at once.
 	SystemsMost int `json:"systemsMost"`
 
-	// How far the wind veers as a front passes, the least and the most, in degrees.
+	// How far the wind veers as a cold front passes, the least and the most, in
+	// degrees.
 	Veer []float64 `json:"veer"`
+
+	// And as a warm front passes: a change from a regime of no front into a frontal
+	// one comes as a warm front, every other front as a cold one.
+	WarmVeer []float64 `json:"warmVeer"`
 
 	// The most a system wobbles off its track, in nautical miles.
 	Wobble float64 `json:"wobble"`
@@ -3462,6 +3456,45 @@ type WeatherWeek struct {
 	// The shortest and the longest period of a wobble, in minutes.
 	WobblePeriod []float64 `json:"wobblePeriod"`
 }
+
+// A line of a kind born ahead of every cold front into a regime, moving with the
+// front.
+type WeekLineAhead struct {
+	// How far ahead of the front's line, the least and the most, in nautical miles.
+	Ahead []float64 `json:"ahead"`
+
+	// Into corresponds to the JSON schema field "into".
+	Into ID `json:"into"`
+
+	// Kind corresponds to the JSON schema field "kind".
+	Kind ID `json:"kind"`
+}
+
+// The most systems of a kind on the disk at once: one more is not born.
+type WeekMost struct {
+	// Kind corresponds to the JSON schema field "kind".
+	Kind ID `json:"kind"`
+
+	// The most at once.
+	Most int `json:"most"`
+}
+
+// Kinds kept off the water in a world's first hours and in its closing spell, so
+// the rush to discover and the closing race stay fair; and, in a spell of a regime
+// of no front, no storm turns inward.
+type WeekQuiet struct {
+	// None is born in the world's first this many hours.
+	Hours float64 `json:"hours"`
+
+	// The kinds kept off.
+	Kinds []ID `json:"kinds"`
+}
+
+type When string
+
+const WhenAlways When = "always"
+const WhenDay When = "day"
+const WhenNight When = "night"
 
 type Word struct {
 	// At corresponds to the JSON schema field "at".
@@ -4228,4 +4261,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "6a5fc8cef8ba6591"
+const Version = "c472d71c9d3b1b08"

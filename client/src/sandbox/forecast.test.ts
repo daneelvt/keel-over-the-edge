@@ -72,7 +72,7 @@ describe('the sandbox’s forecast', () => {
     let now = EVERY;
     const forecasts = new Forecasts();
     const s = new SandboxForecast(
-      { physics, tick: () => now, spells: () => [] },
+      { physics, tick: () => now, spells: () => [], keyframes: 300 },
       forecasts,
       EVERY,
       () => null,

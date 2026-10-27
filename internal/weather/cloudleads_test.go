@@ -100,8 +100,11 @@ func checkCloudLeads(cat *catalog.Catalog, tl *Timeline, w *Week, step float64, 
 			n := physics.HeapedClouds(own, clouds[:])
 			for i := range places {
 				pl := &places[i]
-				if pl.seen < 0 && n > 0 && seenFrom(&clouds[0], dome, pl.x, pl.y) {
-					pl.seen = tick
+				// Any of its clouds: a line's towers along it.
+				for j := range n {
+					if pl.seen < 0 && seenFrom(&clouds[j], dome, pl.x, pl.y) {
+						pl.seen = tick
+					}
 				}
 				if pl.wind < 0 {
 					if v, _ := meanAt(own, pl.x, pl.y); v >= knots {

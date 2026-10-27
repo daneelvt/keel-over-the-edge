@@ -52,6 +52,7 @@ func TestWeeks(t *testing.T) {
 		swellWeeks, swellGrid = 200, 0.25*nauticalMile
 	}
 	waves, _ := cat.Prepare()
+	kinds := busyKindsOf(cat, cfg)
 	var tally weeksTally
 	tally.shares = make([]float64, len(cfg.Regimes))
 	for seed := from + 1; seed <= from+uint64(n); seed++ {
@@ -68,7 +69,7 @@ func TestWeeks(t *testing.T) {
 		checkFronts(t, seed, wt, w, &tally)
 		checkStorms(t, seed, wt, w, cfg, &tally)
 		checkRefuge(t, seed, wt, w, every, &tally)
-		checkForecast(wt, w, &tally.forecast)
+		checkBusy(cfg, kinds, w, &tally.busy)
 		if tally.weeks < swellWeeks {
 			checkSwell(wt, w, waves, swellGrid, &tally)
 			checkCloudLeads(cat, wt, w, swellGrid, &tally)
@@ -131,24 +132,12 @@ func TestWeeks(t *testing.T) {
 			t.Errorf("a fog bank's wall gave under %d minutes at %.1f%% of %d approaches", fogWarning, s, f.approaches)
 		}
 	}
-	// The truth lies inside the cones four times in five at every lead,
-	// within 75–85% (with about 1,100 cases at the longest lead over 50
-	// weeks, 77.6–82.4% at 95% for a true 80%); the lows forming and the
-	// fronts' bands, fewer, within 70–90%.
-	for k := 1; k < tally.forecast.steps; k++ {
-		if c := &tally.forecast.alive; c.cases[k] > 0 && (c.share(k) < 75 || c.share(k) > 85) {
-			t.Errorf("the forecast's cones held %.1f%% of %d systems at step %d", c.share(k), c.cases[k], k)
-		}
-		for _, c := range []struct {
-			name string
-			c    *calibration
-		}{{"lows forming", &tally.forecast.forming}, {"fronts", &tally.forecast.fronts}} {
-			if c.c.cases[k] >= 50 && (c.c.share(k) < 70 || c.c.share(k) > 90) {
-				t.Errorf("the forecast's cones held %.1f%% of %d %s at step %d", c.c.share(k), c.c.cases[k], c.name, k)
-			}
-		}
+	// The weather is busy: something on the disk every minute after the
+	// opening, rain, storms and lows, fronts and troughs most of the time.
+	for _, f := range tally.busy.failures(cat, cfg) {
+		t.Error(f)
 	}
-	report := tally.markdown(cat) + tally.cloudsMarkdown() + tally.fogMarkdown() + tally.forecast.markdown(float64(cfg.Prepared.ForecastStep()))
+	report := tally.markdown(cat) + tally.cloudsMarkdown() + tally.fogMarkdown() + tally.busy.markdown(cat)
 	t.Log("\n" + report)
 	if path := os.Getenv("KEEL_WEEKS_SUMMARY"); path != "" {
 		if err := os.WriteFile(path, []byte(report), 0o644); err != nil {
@@ -158,7 +147,7 @@ func TestWeeks(t *testing.T) {
 }
 
 type weeksTally struct {
-	forecast                                     forecastTally
+	busy                                         busyTally
 	weeks, storms, systems, most, refused, draws int
 	shares                                       []float64
 	stormHours                                   [6]float64 // by whole nautical miles from the centre, the last beyond
@@ -280,8 +269,16 @@ func checkWeek(t *testing.T, seed uint64, cfg *Config, g *gen, w *Week, tally *w
 		d := float64(turned) / deg
 		if s.Front != 0 {
 			busy = s.Begin + s.Change
-			if d < 39.99 || d > 90.01 {
-				t.Errorf("seed %d: the front of spell %d turns the wind %.1f°, not a veer of 40–90°", seed, i, d)
+			lo, hi := 39.99, 90.01
+			if s.Warm != 0 {
+				lo, hi = 19.99, 40.01
+			}
+			if warm := !cfg.Regimes[int(prev.Regime)].Frontal && cfg.Regimes[int(s.Regime)].Frontal; warm != (s.Warm != 0) {
+				t.Errorf("seed %d: the front of spell %d is warm %v, from a frontal regime %v into one %v", seed, i, s.Warm != 0,
+					cfg.Regimes[int(prev.Regime)].Frontal, cfg.Regimes[int(s.Regime)].Frontal)
+			}
+			if d < lo || d > hi {
+				t.Errorf("seed %d: the front of spell %d turns the wind %.1f°, not a veer of %.0f–%.0f°", seed, i, d, lo, hi)
 			}
 		} else if d < -30.01 || d > 30.01 {
 			t.Errorf("seed %d: spell %d turns the wind %.1f°, more than 30°", seed, i, d)
@@ -426,12 +423,18 @@ func checkStorms(t *testing.T, seed uint64, tl *Timeline, w *Week, cfg *Config, 
 						continue
 					}
 					o, _ := meanAt(own, x, y)
-					rv, _ := meanAt(rest, x, y)
-					if !(rv < 0.9*o) || o < 0.5 {
+					rv, rf := meanAt(rest, x, y)
+					av, from := meanAt(all, x, y)
+					// The storm's part of the wind as it blows, a patch of
+					// light air or fog scaling it with the rest: the wind
+					// less the rest's, as the air's velocities.
+					ds, dc := math.Sincos(from)
+					rs, rc := math.Sincos(rf)
+					part := math.Hypot(av*ds-rv*rs, av*dc-rv*rc)
+					if !(rv < 0.5*part) || o < 0.5 {
 						continue
 					}
 					tally.ballotPoints++
-					_, from := meanAt(all, x, y)
 					toward := math.Mod(from/degree+180, 360)
 					centre := math.Atan2(cx-x, cy-y) / degree
 					if left := angleTo(toward, centre); left < -135 || left > -5 {

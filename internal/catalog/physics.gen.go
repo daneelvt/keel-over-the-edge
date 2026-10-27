@@ -250,6 +250,7 @@ func CloudParams(c *Catalog) physics.CloudParams {
 	copy(p.FrontMiddle[:], c.Weather.Clouds.FrontMiddle)
 	copy(p.FrontLow[:], c.Weather.Clouds.FrontLow)
 	copy(p.FrontRain[:], c.Weather.Clouds.FrontRain)
+	copy(p.FrontWarm[:], c.Weather.Clouds.FrontWarm)
 	copy(p.RainWords[:], c.Weather.Clouds.RainWords)
 	copy(p.RainExtinction[:], c.Weather.Clouds.RainExtinction)
 	p.RainScale = float64(c.Weather.Clouds.RainScale)

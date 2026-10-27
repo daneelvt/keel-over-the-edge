@@ -9,155 +9,89 @@ import (
 	"testing"
 )
 
-// At the issue every system the forecast knows is where the truth has it,
-// as strong as it is; ahead, it is where its planned track takes it from
-// there, a storm round its arc, never on a straight line.
-func TestForecastFromThePresent(t *testing.T) {
+// The forecast is the truth: at every minute over its reach, its
+// keyframes are those the server makes from the same records, bit for bit,
+// a system born after the issue among them from its birth, and one gone by
+// the issue left out; its records' own time is the week's.
+func TestForecastIsTheTruth(t *testing.T) {
 	p, kinds := testForecast(t)
-	const issue = 740_016_000
-	rs := forecastRecords(kinds, issue)
+	const issue, origin = 740_016_000, 1_000_000
+	rs := forecastRecords(kinds, issue-origin)
+	gone := rs[1]
+	gone.Seed, gone.Born, gone.Mature, gone.Decays, gone.Gone = 99, gone.Born-40*minuteTicks, gone.Born-35*minuteTicks, gone.Born-30*minuteTicks, issue-origin-minuteTicks
+	slots := []int32{3, 5, 7, 9, 11, 13, 2}
 	var f Forecast
-	MakeForecast(p, &ForecastInput{Issue: issue, Records: rs}, &f)
-	if f.Head.NSystems != 5 {
-		t.Fatalf("%v systems, want the five alive or forming, not the shower born after the issue", f.Head.NSystems)
+	MakeForecast(p, &ForecastInput{Issue: issue, Every: 300, Origin: origin, Records: append(rs, gone), Slots: slots}, &f)
+	if f.Head.NSystems != float64(len(rs)) {
+		t.Fatalf("%v systems, want the %d alive or born within its reach, not the one gone", f.Head.NSystems, len(rs))
 	}
-	for i := range int(f.Head.NSystems) {
-		s := &f.Systems[i]
-		r := &rs[int(s.Slot)]
-		if s.Forming != 0 {
-			continue
-		}
-		truth := SystemAt(r, issue)
-		if math.Hypot(s.East[0]-truth.East/4, s.North[0]-truth.North/4) > 0.75 {
-			t.Errorf("slot %v: at the issue (%v, %v), the truth (%v, %v)", s.Slot, s.East[0], s.North[0], truth.East/4, truth.North/4)
-		}
-		if math.Abs(s.Strength[0]/256-truth.Strength/4096) > 1.0/256 {
-			t.Errorf("slot %v: strength %v at the issue, the truth %v", s.Slot, s.Strength[0]/256, truth.Strength/4096)
-		}
-		// Ahead, the track's own motion from the true place at the issue.
-		v, _ := recordAt(r, issue)
-		te, tn, _, _ := trackAt(r, issue)
-		for k := range int32(f.Head.Steps) {
-			if !(s.Strength[k] > 0) {
-				continue
+	if want := issue + float64(p.ForecastReach()); f.Head.Until != want {
+		t.Errorf("it knows the systems to %v, not %v", f.Head.Until, want)
+	}
+	later := false
+	var k Keyframe
+	for at := float64(issue); at <= f.Head.Until; at += minuteTicks {
+		ForecastKeyframe(&f, at, &k)
+		for i, r := range rs {
+			want := SystemAt(&r, at-origin)
+			if k.Systems[slots[i]] != want {
+				t.Fatalf("%v min on: slot %d is %+v, the truth %+v", (at-issue)/minuteTicks, slots[i], k.Systems[slots[i]], want)
 			}
-			e, n, _, _ := trackAt(r, issue+float64(k)*f.Head.Step)
-			if math.Hypot(s.East[k]-(e+v.east-te), s.North[k]-(n+v.north-tn)) > 0.75 {
-				t.Errorf("slot %v step %d: off its planned track", s.Slot, k)
+			if i == len(rs)-1 && want.On != 0 {
+				later = true
 			}
 		}
 	}
-	// The storm on its arc: its forecast an hour on is on the arc, far
-	// from where a straight line from its heading at the issue would put
-	// it.
-	storm := &f.Systems[3]
-	r := &rs[int(storm.Slot)]
-	if r.Track != TrackArc {
-		t.Fatalf("system 3 is not the storm")
+	if !later {
+		t.Errorf("the shower born after the issue was never on the forecast")
 	}
-	_, _, heading, speed := trackAt(r, issue)
-	ux, uy := SinCos(heading)
-	d := speed * 3600
-	line := [2]float64{storm.East[0] + d*ux, storm.North[0] + d*uy}
-	if miss := math.Hypot(storm.East[6]-line[0], storm.North[6]-line[1]); miss < 300 {
-		t.Errorf("the storm an hour on is %.0f m from a straight line: not round its arc", miss)
-	}
-	// The low forming: nothing until it is born, then its plan, its cone
-	// the forming one.
-	forming := &f.Systems[4]
-	if forming.Forming == 0 || forming.Seed != 0 {
-		t.Fatalf("system 4 is not a low forming, or carries a seed: %+v", forming)
-	}
-	for k := range int32(f.Head.Steps) {
-		at := issue + float64(k)*f.Head.Step
-		born := at >= rs[4].Born
-		if born != (forming.Strength[k] > 0) && !(at == rs[4].Born) {
-			t.Errorf("step %d: the low forming has strength %v, born %v", k, forming.Strength[k], born)
+	// Between keyframes it is interpolated as the server's: the weather it
+	// gives is that of the server's two keyframes about the tick.
+	w := &Weather{Prepared: p}
+	ForecastAt(w, &f, issue+40*minuteTicks+77)
+	b := float64(issue + 40*minuteTicks)
+	for j, at := range []float64{b, b + 300} {
+		if w.Keys[j].Tick != at {
+			t.Fatalf("keyframe %d at %v, not %v", j, w.Keys[j].Tick, at)
 		}
-		if born {
-			e, n := SystemTrack(&rs[4], at)
-			if math.Hypot(forming.East[k]-e, forming.North[k]-n) > 0.75 {
-				t.Errorf("step %d: the low forming is not on its plan", k)
+		for i, r := range rs {
+			if w.Keys[j].Systems[slots[i]] != SystemAt(&r, at-origin) {
+				t.Errorf("keyframe %d, slot %d: not the server's", j, slots[i])
 			}
 		}
-		if c := ForecastCone(p, &f, forming, k); c != p.forecast.forming {
-			t.Errorf("step %d: its cone %v, not the forming %v", k, c, p.forecast.forming)
-		}
 	}
-	// The squall beyond the lip is forecast to cross it.
-	if sq := &f.Systems[0]; sq.Crosses <= issue || math.Abs(math.Hypot(sq.CrossEast, sq.CrossNorth)-p.Edge()) > 1 {
-		t.Errorf("the squall beyond the lip crosses at %v, at (%v, %v)", sq.Crosses, sq.CrossEast, sq.CrossNorth)
+	// The latest born are left out when it holds no more.
+	many := make([]SystemRecord, MaxForecastSystems+5)
+	for i := range many {
+		many[i] = rs[1]
+		many[i].Seed = float64(i + 1)
+		many[i].Born += float64(i)
+	}
+	MakeForecast(p, &ForecastInput{Issue: issue, Every: 300, Origin: origin, Records: many}, &f)
+	if f.Head.NSystems != MaxForecastSystems || f.Systems[0].Seed != 1 {
+		t.Errorf("%v systems kept of %d, the first seed %v", f.Head.NSystems, len(many), f.Systems[0].Seed)
 	}
 }
 
-// A front's band holds its line four times in five: over many fronts, the
-// true line at a lead lies within the band about the forecast's at that
-// lead about 80% of the time.
-func TestFrontBand(t *testing.T) {
-	p, _ := testForecast(t)
-	rng := rand.New(rand.NewPCG(5, 6))
-	reach := p.FrontReach()
-	inside, cases := 0, 0
-	for range 20000 {
-		issue := math.Floor(rng.Float64() * 1e8)
-		change := math.Round(2 * reach / ((4 + 4*rng.Float64()) * knotSpeed) * StepsPerSecond)
-		s := Spell{Begin: issue - math.Round(rng.Float64()*change), Change: change, Front: 1, Seed: float64(rng.Uint32()), Speed: 800, Gust: 1300}
-		lead := math.Round(rng.Float64() * 90 * minuteTicks)
-		at := issue + lead
-		fs := s
-		forecastSpell(&p.forecast, &fs, issue)
-		truth := 2*reach*(at-s.Begin)/s.Change - reach
-		fc := 2*reach*(at-fs.Begin)/fs.Change - reach
-		cases++
-		if math.Abs(truth-fc) <= FrontBand(p, &fs, lead) {
-			inside++
-		}
-	}
-	if s := float64(inside) / float64(cases); s < 0.78 || s > 0.82 {
-		t.Errorf("a front's band held its line %.1f%% of %d times", 100*s, cases)
-	}
-}
-
-// A spell already blowing at the issue is forecast as it is, its shifts
-// named, not placed; one not yet begun with the forecast's own error, the
-// same at every issue.
+// The spells are forecast as they are, the shifts named, not placed, a
+// spell not yet begun with no error of the forecast's own.
 func TestForecastSpells(t *testing.T) {
 	p, _ := testForecast(t)
 	const issue = 740_016_000
 	now := spellOfRegime(t, p, "trade", 1, 225, issue-hourOfTicks, 4*hourOfTicks)
 	next := spellOfRegime(t, p, "unsettled", 2, 260, issue+30*minuteTicks, 4*hourOfTicks)
 	next.Change = 10 * minuteTicks
-	var f, g Forecast
+	var f Forecast
 	MakeForecast(p, &ForecastInput{Issue: issue, Spells: []Spell{now, next}}, &f)
-	MakeForecast(p, &ForecastInput{Issue: issue - 10*minuteTicks, Spells: []Spell{now, next}}, &g)
-	a, b := f.Spells[0], now
-	a.Shift, b.Shift = [2]float64{}, [2]float64{}
-	if a != b {
-		t.Errorf("the spell blowing was changed: %+v, %+v", a, b)
-	}
-	if f.Head.Shifts[0] != now.Shift[0]+now.Shift[1] || f.Spells[0].Shift != [2]float64{} {
-		t.Errorf("the shifts: %v named, %v placed", f.Head.Shifts[0], f.Spells[0].Shift)
-	}
-	if f.Spells[1].From == next.From && f.Spells[1].Speed == next.Speed {
-		t.Errorf("the spell to come has no error")
-	}
-	if f.Spells[1] != g.Spells[1] {
-		t.Errorf("the spell to come differs between issues: %+v, %+v", f.Spells[1], g.Spells[1])
-	}
-	// Its errors are about the standard deviations asked over many spells.
-	var dirs, speeds []float64
-	for i := range 4000 {
-		s := next
-		s.Seed = float64(uint32(i) * 2654435761)
-		forecastSpell(&p.forecast, &s, issue)
-		dirs = append(dirs, wrapAngle((s.From-next.From)*turnStep)/degree)
-		speeds = append(speeds, s.Speed/next.Speed-1)
-	}
-	if sd := stdDev(dirs); math.Abs(sd-15) > 1 {
-		t.Errorf("the next spell's direction errs by %.1f° (standard deviation), not 15°", sd)
-	}
-	if sd := stdDev(speeds); math.Abs(sd-0.1) > 0.008 {
-		t.Errorf("its speed errs by %.3f, not 0.1", sd)
+	for i, s := range []Spell{now, next} {
+		a, b := f.Spells[i], s
+		a.Shift, b.Shift = [2]float64{}, [2]float64{}
+		if a != b {
+			t.Errorf("spell %d was changed: %+v, %+v", i, a, b)
+		}
+		if f.Head.Shifts[i] != s.Shift[0]+s.Shift[1] || f.Spells[i].Shift != [2]float64{} {
+			t.Errorf("spell %d's shifts: %v named, %v placed", i, f.Head.Shifts[i], f.Spells[i].Shift)
+		}
 	}
 }
 
@@ -208,7 +142,7 @@ func TestForecastAllocatesNothing(t *testing.T) {
 	const issue = 740_016_000
 	rs := forecastRecords(kinds, issue)
 	stormy := spellOfRegime(t, p, "stormy", 3, 250, issue-hourOfTicks, 3*hourOfTicks)
-	in := ForecastInput{Issue: issue, Spells: []Spell{stormy, frontSpell(t, p, issue+40*minuteTicks)}, Records: rs}
+	in := ForecastInput{Issue: issue, Every: 300, Spells: []Spell{stormy, frontSpell(t, p, issue+40*minuteTicks)}, Records: rs}
 	f := new(Forecast)
 	w := &Weather{Prepared: p}
 	var at WeatherTick
@@ -231,7 +165,7 @@ func TestForecastAllocatesNothing(t *testing.T) {
 func benchInput(b *testing.B) (*WeatherPrepared, *ForecastInput) {
 	p, kinds := testForecast(b)
 	const issue = 740_016_000
-	return p, &ForecastInput{Issue: issue, Spells: []Spell{
+	return p, &ForecastInput{Issue: issue, Every: 300, Spells: []Spell{
 		spellOfRegime(b, p, "stormy", 3, 250, issue-hourOfTicks, 3*hourOfTicks),
 		frontSpell(b, p, issue+40*minuteTicks),
 	}, Records: forecastRecords(kinds, issue)}

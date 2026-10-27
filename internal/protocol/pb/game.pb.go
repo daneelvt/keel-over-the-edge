@@ -1442,11 +1442,10 @@ func (x *Watchers) GetCount() uint32 {
 // Forecast is the forecast, issued at each boundary of ten minutes of world
 // time from the world's epoch for the next ninety, in steps of ten: sent to
 // every connection as it is issued, and after the Welcome with its past.
-// It is the whole of the future a client is told: the systems alive at the
-// issue moved on by their planned tracks, the lows to be born within its
-// horizon, forming, the spells planned, without their shifts, and the gale
-// warning in force; never a system's record, its wobble, nor the seed of a
-// system not yet born.
+// It is the truth: the records of every system alive at the issue or born
+// within its horizon and one issue more, from which a client makes the
+// server's keyframes of any tick it knows, bit for bit; the spells as they
+// will blow, without their shifts; and the gale warning in force.
 type Forecast struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The tick it was issued at; how many steps it has, the issue's own
@@ -1454,19 +1453,23 @@ type Forecast struct {
 	Issue int64  `protobuf:"varint,1,opt,name=issue,proto3" json:"issue,omitempty"`
 	Steps uint32 `protobuf:"varint,2,opt,name=steps,proto3" json:"steps,omitempty"`
 	Step  uint32 `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`
-	// The spells over its horizon, by the tick each begins at, ascending, as
-	// the forecast has them: the shifts not placed, a spell not yet begun
-	// with the forecast's error, a front's line moved on at its forecast
-	// speed; and each one's shifts' swing either way, in 65536ths of a turn.
+	// The spells over its reach, by the tick each begins at, ascending, the
+	// shifts not placed; and each one's shifts' swing either way, in
+	// 65536ths of a turn.
 	Spells []*Spell `protobuf:"bytes,4,rep,name=spells,proto3" json:"spells,omitempty"`
 	Shifts []uint32 `protobuf:"varint,5,rep,packed,name=shifts,proto3" json:"shifts,omitempty"`
-	// Its systems, by their slots.
+	// Its systems' records, in the order of their births.
 	Systems []*ForecastSystem `protobuf:"bytes,6,rep,name=systems,proto3" json:"systems,omitempty"`
 	// The gale warning in force, if any.
 	Gale *GaleWarning `protobuf:"bytes,7,opt,name=gale,proto3" json:"gale,omitempty"`
 	// After the Welcome, what has been: the issue of ninety minutes before
 	// and the truth since.
-	Past          *ForecastPast `protobuf:"bytes,8,opt,name=past,proto3" json:"past,omitempty"`
+	Past *ForecastPast `protobuf:"bytes,8,opt,name=past,proto3" json:"past,omitempty"`
+	// The last tick it knows the systems to; how many ticks apart the
+	// systems' keyframes are; and the tick its records' tick 0 falls on.
+	Until         int64  `protobuf:"varint,9,opt,name=until,proto3" json:"until,omitempty"`
+	Every         uint32 `protobuf:"varint,10,opt,name=every,proto3" json:"every,omitempty"`
+	Origin        int64  `protobuf:"varint,11,opt,name=origin,proto3" json:"origin,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1557,36 +1560,74 @@ func (x *Forecast) GetPast() *ForecastPast {
 	return nil
 }
 
-// ForecastSystem is a system as a forecast gives it, in a keyframe's
-// units: at each step, where it will be, how it moves and how strong it
-// is.
+func (x *Forecast) GetUntil() int64 {
+	if x != nil {
+		return x.Until
+	}
+	return 0
+}
+
+func (x *Forecast) GetEvery() uint32 {
+	if x != nil {
+		return x.Every
+	}
+	return 0
+}
+
+func (x *Forecast) GetOrigin() int64 {
+	if x != nil {
+		return x.Origin
+	}
+	return 0
+}
+
+// ForecastSystem is a system of the forecast: its slot, as its keyframes',
+// and its record, from which its keyframe at any tick is made.
 type ForecastSystem struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Its slot, as its keyframes'; the catalog's index of its kind; a seed
-	// for drawing it, 0 for a low forming, which has none yet; its radius,
-	// m; its peak and its depth, as a keyframe's.
+	// Its slot; the catalog's index of its kind; its seed; its radius, m, a
+	// line's half its depth; its peak and its depth, as a keyframe's.
 	Slot  uint32 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
 	Kind  uint32 `protobuf:"varint,2,opt,name=kind,proto3" json:"kind,omitempty"`
 	Seed  uint32 `protobuf:"varint,3,opt,name=seed,proto3" json:"seed,omitempty"`
 	Size  uint32 `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
 	Peak  uint32 `protobuf:"varint,5,opt,name=peak,proto3" json:"peak,omitempty"`
 	Depth int32  `protobuf:"zigzag32,6,opt,name=depth,proto3" json:"depth,omitempty"`
-	// A low not yet born at the issue, forecast by its plan alone.
-	Forming bool `protobuf:"varint,7,opt,name=forming,proto3" json:"forming,omitempty"`
-	// Beyond the lip at the issue: the tick it is forecast to cross onto the
-	// disk, and where, in metres east and north of the world's centre.
-	Crosses    int64 `protobuf:"varint,8,opt,name=crosses,proto3" json:"crosses,omitempty"`
-	CrossEast  int32 `protobuf:"zigzag32,9,opt,name=cross_east,json=crossEast,proto3" json:"cross_east,omitempty"`
-	CrossNorth int32 `protobuf:"zigzag32,10,opt,name=cross_north,json=crossNorth,proto3" json:"cross_north,omitempty"`
-	// At each step: its centre, in metres east and north of the world's
-	// centre; the direction it moves toward, in 65536ths of a turn; how
-	// fast, in steps of 0.01 m/s; and its strength, in 256ths, 0 where it
-	// is not alive.
-	East          []int32  `protobuf:"zigzag32,11,rep,packed,name=east,proto3" json:"east,omitempty"`
-	North         []int32  `protobuf:"zigzag32,12,rep,packed,name=north,proto3" json:"north,omitempty"`
-	Heading       []uint32 `protobuf:"varint,13,rep,packed,name=heading,proto3" json:"heading,omitempty"`
-	Speed         []uint32 `protobuf:"varint,14,rep,packed,name=speed,proto3" json:"speed,omitempty"`
-	Strength      []uint32 `protobuf:"varint,15,rep,packed,name=strength,proto3" json:"strength,omitempty"`
+	// The ticks it is born at, has grown to its whole by, begins to decay
+	// at and is gone at, in its records' time.
+	Born   int64 `protobuf:"varint,16,opt,name=born,proto3" json:"born,omitempty"`
+	Mature int64 `protobuf:"varint,17,opt,name=mature,proto3" json:"mature,omitempty"`
+	Decays int64 `protobuf:"varint,18,opt,name=decays,proto3" json:"decays,omitempty"`
+	Gone   int64 `protobuf:"varint,19,opt,name=gone,proto3" json:"gone,omitempty"`
+	// Its track: 0 a straight line, 1 an arc round the centre.
+	Track uint32 `protobuf:"varint,20,opt,name=track,proto3" json:"track,omitempty"`
+	// A line: where it is at its birth, in quarter metres east and north of
+	// the world's centre, and the direction it moves toward, in 65536ths of
+	// a turn.
+	East    int32  `protobuf:"zigzag32,21,opt,name=east,proto3" json:"east,omitempty"`
+	North   int32  `protobuf:"zigzag32,22,opt,name=north,proto3" json:"north,omitempty"`
+	Heading uint32 `protobuf:"varint,23,opt,name=heading,proto3" json:"heading,omitempty"`
+	// How fast it moves along its track, in steps of 0.01 m/s.
+	Speed uint32 `protobuf:"varint,24,opt,name=speed,proto3" json:"speed,omitempty"`
+	// An arc: its distance from the centre at its birth, in quarter metres;
+	// its bearing from the centre then, in 65536ths of a turn; which way it
+	// goes round, 1 clockwise and −1 the other way; and how fast it closes
+	// on the centre, in steps of 0.01 m/s.
+	Radius uint32 `protobuf:"varint,25,opt,name=radius,proto3" json:"radius,omitempty"`
+	Angle  uint32 `protobuf:"varint,26,opt,name=angle,proto3" json:"angle,omitempty"`
+	Sense  int32  `protobuf:"zigzag32,27,opt,name=sense,proto3" json:"sense,omitempty"`
+	Inward uint32 `protobuf:"varint,28,opt,name=inward,proto3" json:"inward,omitempty"`
+	// A line's length across its motion, m.
+	Length uint32 `protobuf:"varint,29,opt,name=length,proto3" json:"length,omitempty"`
+	// Its wobble off its track: how far, in quarter metres, and each way's
+	// period in ticks and phase at tick 0 in 65536ths of a turn; and its
+	// strength's throb, in 4096ths, with its period and phase.
+	Wobble        uint32   `protobuf:"varint,30,opt,name=wobble,proto3" json:"wobble,omitempty"`
+	WobblePeriod  []uint32 `protobuf:"varint,31,rep,packed,name=wobble_period,json=wobblePeriod,proto3" json:"wobble_period,omitempty"`
+	WobblePhase   []uint32 `protobuf:"varint,32,rep,packed,name=wobble_phase,json=wobblePhase,proto3" json:"wobble_phase,omitempty"`
+	Throb         uint32   `protobuf:"varint,33,opt,name=throb,proto3" json:"throb,omitempty"`
+	ThrobPeriod   uint32   `protobuf:"varint,34,opt,name=throb_period,json=throbPeriod,proto3" json:"throb_period,omitempty"`
+	ThrobPhase    uint32   `protobuf:"varint,35,opt,name=throb_phase,json=throbPhase,proto3" json:"throb_phase,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1663,67 +1704,144 @@ func (x *ForecastSystem) GetDepth() int32 {
 	return 0
 }
 
-func (x *ForecastSystem) GetForming() bool {
+func (x *ForecastSystem) GetBorn() int64 {
 	if x != nil {
-		return x.Forming
-	}
-	return false
-}
-
-func (x *ForecastSystem) GetCrosses() int64 {
-	if x != nil {
-		return x.Crosses
+		return x.Born
 	}
 	return 0
 }
 
-func (x *ForecastSystem) GetCrossEast() int32 {
+func (x *ForecastSystem) GetMature() int64 {
 	if x != nil {
-		return x.CrossEast
+		return x.Mature
 	}
 	return 0
 }
 
-func (x *ForecastSystem) GetCrossNorth() int32 {
+func (x *ForecastSystem) GetDecays() int64 {
 	if x != nil {
-		return x.CrossNorth
+		return x.Decays
 	}
 	return 0
 }
 
-func (x *ForecastSystem) GetEast() []int32 {
+func (x *ForecastSystem) GetGone() int64 {
+	if x != nil {
+		return x.Gone
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetTrack() uint32 {
+	if x != nil {
+		return x.Track
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetEast() int32 {
 	if x != nil {
 		return x.East
 	}
-	return nil
+	return 0
 }
 
-func (x *ForecastSystem) GetNorth() []int32 {
+func (x *ForecastSystem) GetNorth() int32 {
 	if x != nil {
 		return x.North
 	}
-	return nil
+	return 0
 }
 
-func (x *ForecastSystem) GetHeading() []uint32 {
+func (x *ForecastSystem) GetHeading() uint32 {
 	if x != nil {
 		return x.Heading
 	}
-	return nil
+	return 0
 }
 
-func (x *ForecastSystem) GetSpeed() []uint32 {
+func (x *ForecastSystem) GetSpeed() uint32 {
 	if x != nil {
 		return x.Speed
 	}
+	return 0
+}
+
+func (x *ForecastSystem) GetRadius() uint32 {
+	if x != nil {
+		return x.Radius
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetAngle() uint32 {
+	if x != nil {
+		return x.Angle
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetSense() int32 {
+	if x != nil {
+		return x.Sense
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetInward() uint32 {
+	if x != nil {
+		return x.Inward
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetLength() uint32 {
+	if x != nil {
+		return x.Length
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetWobble() uint32 {
+	if x != nil {
+		return x.Wobble
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetWobblePeriod() []uint32 {
+	if x != nil {
+		return x.WobblePeriod
+	}
 	return nil
 }
 
-func (x *ForecastSystem) GetStrength() []uint32 {
+func (x *ForecastSystem) GetWobblePhase() []uint32 {
 	if x != nil {
-		return x.Strength
+		return x.WobblePhase
 	}
 	return nil
+}
+
+func (x *ForecastSystem) GetThrob() uint32 {
+	if x != nil {
+		return x.Throb
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetThrobPeriod() uint32 {
+	if x != nil {
+		return x.ThrobPeriod
+	}
+	return 0
+}
+
+func (x *ForecastSystem) GetThrobPhase() uint32 {
+	if x != nil {
+		return x.ThrobPhase
+	}
+	return 0
 }
 
 // GaleWarning is a gale warning in force: issued from the forecast's
@@ -3115,7 +3233,7 @@ type Keyframe struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The tick it is of.
 	Tick int64 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
-	// The systems, by their slots, ascending: at most 20.
+	// The systems, by their slots, ascending: at most 28.
 	Systems       []*SystemKey `protobuf:"bytes,2,rep,name=systems,proto3" json:"systems,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3168,8 +3286,8 @@ func (x *Keyframe) GetSystems() []*SystemKey {
 // SystemKey is a weather system at a keyframe.
 type SystemKey struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Its slot, which it holds from its birth to its end: below 16 the
-	// world's own, from 16 a developer's.
+	// Its slot, which it holds from its birth to its end: below 24 the
+	// world's own, from 24 a developer's.
 	Slot uint32 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
 	// The catalog's index of its kind, and a seed for drawing it.
 	Kind uint32 `protobuf:"varint,2,opt,name=kind,proto3" json:"kind,omitempty"`
@@ -3191,7 +3309,9 @@ type SystemKey struct {
 	Peak uint32 `protobuf:"varint,11,opt,name=peak,proto3" json:"peak,omitempty"`
 	// Its pressure at its centre at full strength, in hundredths of a hPa: a
 	// dome's above, a low's below.
-	Depth         int32 `protobuf:"zigzag32,12,opt,name=depth,proto3" json:"depth,omitempty"`
+	Depth int32 `protobuf:"zigzag32,12,opt,name=depth,proto3" json:"depth,omitempty"`
+	// A line's length across its motion, m; 0 for any other shape.
+	Length        uint32 `protobuf:"varint,13,opt,name=length,proto3" json:"length,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3310,6 +3430,13 @@ func (x *SystemKey) GetDepth() int32 {
 	return 0
 }
 
+func (x *SystemKey) GetLength() uint32 {
+	if x != nil {
+		return x.Length
+	}
+	return 0
+}
+
 // Spell is a spell of weather: a stretch of time with one base wind, its
 // shifts and its gust field, in whole numbers.
 type Spell struct {
@@ -3359,7 +3486,10 @@ type Spell struct {
 	Trough uint32 `protobuf:"varint,21,opt,name=trough,proto3" json:"trough,omitempty"`
 	// The world's own weather systems do not blow while it is the spell in
 	// effect: a developer's weather.
-	Still         bool `protobuf:"varint,22,opt,name=still,proto3" json:"still,omitempty"`
+	Still bool `protobuf:"varint,22,opt,name=still,proto3" json:"still,omitempty"`
+	// Its front is a warm front: its rain in a band ahead of its line, and
+	// no surge of the gusts behind it.
+	Warm          bool `protobuf:"varint,23,opt,name=warm,proto3" json:"warm,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3544,6 +3674,13 @@ func (x *Spell) GetTrough() uint32 {
 func (x *Spell) GetStill() bool {
 	if x != nil {
 		return x.Still
+	}
+	return false
+}
+
+func (x *Spell) GetWarm() bool {
+	if x != nil {
+		return x.Warm
 	}
 	return false
 }
@@ -4185,7 +4322,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x03why\x18\x01 \x01(\x0e2\x11.keel.v1.WatchEndR\x03why\x12\x16\n" +
 	"\x06sailor\x18\x02 \x01(\tR\x06sailor\" \n" +
 	"\bWatchers\x12\x14\n" +
-	"\x05count\x18\x01 \x01(\rR\x05count\"\x92\x02\n" +
+	"\x05count\x18\x01 \x01(\rR\x05count\"\xd6\x02\n" +
 	"\bForecast\x12\x14\n" +
 	"\x05issue\x18\x01 \x01(\x03R\x05issue\x12\x14\n" +
 	"\x05steps\x18\x02 \x01(\rR\x05steps\x12\x12\n" +
@@ -4194,26 +4331,40 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x06shifts\x18\x05 \x03(\rR\x06shifts\x121\n" +
 	"\asystems\x18\x06 \x03(\v2\x17.keel.v1.ForecastSystemR\asystems\x12(\n" +
 	"\x04gale\x18\a \x01(\v2\x14.keel.v1.GaleWarningR\x04gale\x12)\n" +
-	"\x04past\x18\b \x01(\v2\x15.keel.v1.ForecastPastR\x04past\"\xf4\x02\n" +
+	"\x04past\x18\b \x01(\v2\x15.keel.v1.ForecastPastR\x04past\x12\x14\n" +
+	"\x05until\x18\t \x01(\x03R\x05until\x12\x14\n" +
+	"\x05every\x18\n" +
+	" \x01(\rR\x05every\x12\x16\n" +
+	"\x06origin\x18\v \x01(\x03R\x06origin\"\xbb\x05\n" +
 	"\x0eForecastSystem\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\rR\x04kind\x12\x12\n" +
 	"\x04seed\x18\x03 \x01(\rR\x04seed\x12\x12\n" +
 	"\x04size\x18\x04 \x01(\rR\x04size\x12\x12\n" +
 	"\x04peak\x18\x05 \x01(\rR\x04peak\x12\x14\n" +
-	"\x05depth\x18\x06 \x01(\x11R\x05depth\x12\x18\n" +
-	"\aforming\x18\a \x01(\bR\aforming\x12\x18\n" +
-	"\acrosses\x18\b \x01(\x03R\acrosses\x12\x1d\n" +
-	"\n" +
-	"cross_east\x18\t \x01(\x11R\tcrossEast\x12\x1f\n" +
-	"\vcross_north\x18\n" +
-	" \x01(\x11R\n" +
-	"crossNorth\x12\x12\n" +
-	"\x04east\x18\v \x03(\x11R\x04east\x12\x14\n" +
-	"\x05north\x18\f \x03(\x11R\x05north\x12\x18\n" +
-	"\aheading\x18\r \x03(\rR\aheading\x12\x14\n" +
-	"\x05speed\x18\x0e \x03(\rR\x05speed\x12\x1a\n" +
-	"\bstrength\x18\x0f \x03(\rR\bstrength\"\xe8\x01\n" +
+	"\x05depth\x18\x06 \x01(\x11R\x05depth\x12\x12\n" +
+	"\x04born\x18\x10 \x01(\x03R\x04born\x12\x16\n" +
+	"\x06mature\x18\x11 \x01(\x03R\x06mature\x12\x16\n" +
+	"\x06decays\x18\x12 \x01(\x03R\x06decays\x12\x12\n" +
+	"\x04gone\x18\x13 \x01(\x03R\x04gone\x12\x14\n" +
+	"\x05track\x18\x14 \x01(\rR\x05track\x12\x12\n" +
+	"\x04east\x18\x15 \x01(\x11R\x04east\x12\x14\n" +
+	"\x05north\x18\x16 \x01(\x11R\x05north\x12\x18\n" +
+	"\aheading\x18\x17 \x01(\rR\aheading\x12\x14\n" +
+	"\x05speed\x18\x18 \x01(\rR\x05speed\x12\x16\n" +
+	"\x06radius\x18\x19 \x01(\rR\x06radius\x12\x14\n" +
+	"\x05angle\x18\x1a \x01(\rR\x05angle\x12\x14\n" +
+	"\x05sense\x18\x1b \x01(\x11R\x05sense\x12\x16\n" +
+	"\x06inward\x18\x1c \x01(\rR\x06inward\x12\x16\n" +
+	"\x06length\x18\x1d \x01(\rR\x06length\x12\x16\n" +
+	"\x06wobble\x18\x1e \x01(\rR\x06wobble\x12#\n" +
+	"\rwobble_period\x18\x1f \x03(\rR\fwobblePeriod\x12!\n" +
+	"\fwobble_phase\x18  \x03(\rR\vwobblePhase\x12\x14\n" +
+	"\x05throb\x18! \x01(\rR\x05throb\x12!\n" +
+	"\fthrob_period\x18\" \x01(\rR\vthrobPeriod\x12\x1f\n" +
+	"\vthrob_phase\x18# \x01(\rR\n" +
+	"throbPhaseJ\x04\b\a\x10\x10R\aformingR\acrossesR\n" +
+	"cross_eastR\vcross_northR\bstrength\"\xe8\x01\n" +
 	"\vGaleWarning\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
 	"\x05steps\x18\x02 \x01(\rR\x05steps\x12\x14\n" +
@@ -4323,7 +4474,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05width\x18\x04 \x01(\rR\x05width\"L\n" +
 	"\bKeyframe\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x03R\x04tick\x12,\n" +
-	"\asystems\x18\x02 \x03(\v2\x12.keel.v1.SystemKeyR\asystems\"\x91\x02\n" +
+	"\asystems\x18\x02 \x03(\v2\x12.keel.v1.SystemKeyR\asystems\"\xa9\x02\n" +
 	"\tSystemKey\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\rR\x04kind\x12\x12\n" +
@@ -4337,7 +4488,8 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x04size\x18\n" +
 	" \x01(\rR\x04size\x12\x12\n" +
 	"\x04peak\x18\v \x01(\rR\x04peak\x12\x14\n" +
-	"\x05depth\x18\f \x01(\x11R\x05depth\"\x84\x04\n" +
+	"\x05depth\x18\f \x01(\x11R\x05depth\x12\x16\n" +
+	"\x06length\x18\r \x01(\rR\x06length\"\x98\x04\n" +
 	"\x05Spell\x12\x14\n" +
 	"\x05begin\x18\x01 \x01(\x03R\x05begin\x12\x16\n" +
 	"\x06change\x18\x02 \x01(\rR\x06change\x12\x14\n" +
@@ -4362,7 +4514,8 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05front\x18\x13 \x01(\bR\x05front\x12\x16\n" +
 	"\x06toward\x18\x14 \x01(\rR\x06toward\x12\x16\n" +
 	"\x06trough\x18\x15 \x01(\rR\x06trough\x12\x14\n" +
-	"\x05still\x18\x16 \x01(\bR\x05still\"\xfb\x01\n" +
+	"\x05still\x18\x16 \x01(\bR\x05still\x12\x12\n" +
+	"\x04warm\x18\x17 \x01(\bR\x04warm\"\xfb\x01\n" +
 	"\bSeaAreas\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x03R\x04tick\x12\x10\n" +
 	"\x03col\x18\x02 \x01(\x11R\x03col\x12\x10\n" +

@@ -604,7 +604,8 @@
       "front": 0,
       "toward": 0,
       "trough": 0,
-      "still": 0
+      "still": 0,
+      "warm": 0
      }
     ]
    },
@@ -997,7 +998,8 @@
        "front": 0,
        "toward": 0,
        "trough": 0,
-       "still": 0
+       "still": 0,
+       "warm": 0
       },
       {
        "begin": 450,
@@ -1030,7 +1032,8 @@
        "front": 0,
        "toward": 0,
        "trough": 0,
-       "still": 1
+       "still": 1,
+       "warm": 0
       }
      ],
      "set": {
@@ -6009,7 +6012,8 @@
        "front": 0,
        "toward": 0,
        "trough": 0,
-       "still": 0
+       "still": 0,
+       "warm": 0
       },
       {
        "begin": 450,
@@ -6042,7 +6046,8 @@
        "front": 0,
        "toward": 0,
        "trough": 0,
-       "still": 1
+       "still": 1,
+       "warm": 0
       },
       {
        "begin": 1050,
@@ -6075,7 +6080,8 @@
        "front": 0,
        "toward": 0,
        "trough": 0,
-       "still": 1
+       "still": 1,
+       "warm": 0
       }
      ],
      "set": {

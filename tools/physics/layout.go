@@ -56,7 +56,6 @@ var records = []struct {
 	{"groundParams", reflect.TypeFor[physics.GroundParams]()},
 	{"forecastParams", reflect.TypeFor[physics.ForecastParams]()},
 	{"forecastHead", reflect.TypeFor[physics.ForecastHead]()},
-	{"forecastSystem", reflect.TypeFor[physics.ForecastSystem]()},
 	{"galeStep", reflect.TypeFor[physics.GaleStep]()},
 }
 

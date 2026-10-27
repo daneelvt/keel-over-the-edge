@@ -36,8 +36,9 @@ import (
 
 // Version is the week's generator's version: raised whenever a change makes
 // any seed's week differ. It is stored with each week. 2: the systems'
-// wobble slowed to periods of hours, which the forecast's cones hold.
-const Version = 2
+// wobble slowed to periods of hours. 3: storms in every spell but settled,
+// lows, squall lines and troughs, warm fronts, more of everything.
+const Version = 3
 
 // streamWeek keys the week's stream, which the terrain's keys never are.
 const streamWeek uint64 = 0x7765656b << 32
@@ -67,12 +68,22 @@ type Next struct {
 }
 
 // Rate is how many systems of a kind, by its index, are born in a spell:
-// an hour over the disk, and at its start.
+// an hour over the disk, and at its start; the shares of the kind's range
+// their peak wind is drawn from; and when, by its When.
 type Rate struct {
 	Kind    int
 	PerHour float64
 	AtStart int
+	Peak    [2]float64
+	When    int
 }
+
+// When a rate's systems are born.
+const (
+	whenAlways = iota
+	whenDay
+	whenNight
+)
 
 // Regime is a regime as the week draws it.
 type Regime struct {
@@ -94,12 +105,14 @@ const (
 
 // Kind is a kind of system as the week draws it.
 type Kind struct {
-	Shape       float64 // physics.ShapeNone, ShapeDome or ShapeLow
+	Shape       float64 // physics.ShapeNone, ShapeDome, ShapeLow or ShapeLine
 	Width       float64 // its shape's width, as a share of its size
 	Ahead       float64 // a dome's steepness ahead
 	Track       int
 	SpeedOfWind bool       // Speed is a share of the base wind; otherwise m/s
 	Size        [2]float64 // m
+	Length      [2]float64 // m: a line's
+	TurnsIn     float64    // the share of those on the outer waters that turn inward
 	Speed       [2]float64
 	Life        [2]int64   // ticks
 	Wind        [2]float64 // m/s
@@ -121,7 +134,8 @@ type WeekParams struct {
 	SharesFrom             int64 // ticks
 	Margin                 int64 // ticks
 	Draws                  int
-	Veer                   [2]int32 // in steps of a turn
+	Veer                   [2]int32 // in steps of a turn: a cold front's
+	WarmVeer               [2]int32 // and a warm front's
 	Swing                  int32
 	FrontSpeed             [2]float64 // m/s
 	FrontTrough            [2]float64 // hPa
@@ -130,8 +144,20 @@ type WeekParams struct {
 	WobblePeriod           [2]int64   // ticks
 	StrengthWobble         float64
 	SystemsMost            int
-	Outer                  [2]float64 // m
-	InwardShare            float64
+	// Storms is the kind of which at most StormsMost are on the disk at
+	// once, and which turns inward in no spell of a regime of no front.
+	Storms, StormsMost int
+	// Quiet are the kinds not born in a world's first QuietTicks, nor in
+	// its closing spell, by the kinds' indices.
+	Quiet      []bool
+	QuietTicks int64
+	// A line of LineKind is born ahead of every cold front into a spell
+	// of LineInto, LineAhead ahead of its line, m; LineKind −1 for none.
+	LineKind, LineInto int
+	LineAhead          [2]float64
+	// Fill is the kind born wherever the disk would be empty.
+	Fill  int
+	Outer [2]float64 // m
 }
 
 // Config is what weeks and timelines are made with: the physics package's
@@ -198,16 +224,18 @@ func ConfigOf(c *catalog.Catalog) (*Config, error) {
 			if !ok {
 				return nil, fmt.Errorf("weather: regime %s has no kind %q", r.ID, s.Kind)
 			}
-			g.Systems = append(g.Systems, Rate{Kind: k, PerHour: s.Rate, AtStart: s.AtStart})
+			when := map[catalog.When]int{catalog.WhenAlways: whenAlways, catalog.WhenDay: whenDay, catalog.WhenNight: whenNight}[s.When]
+			g.Systems = append(g.Systems, Rate{Kind: k, PerHour: s.Rate, AtStart: s.AtStart, Peak: pair(s.Peak, 1), When: when})
 		}
 		cfg.Regimes = append(cfg.Regimes, g)
 	}
-	shapes := map[catalog.Shape]float64{catalog.ShapeNone: physics.ShapeNone, catalog.ShapeDome: physics.ShapeDome, catalog.ShapeLow: physics.ShapeLow}
+	shapes := map[catalog.Shape]float64{catalog.ShapeNone: physics.ShapeNone, catalog.ShapeDome: physics.ShapeDome, catalog.ShapeLow: physics.ShapeLow, catalog.ShapeLine: physics.ShapeLine}
 	tracks := map[catalog.Track]int{catalog.TrackWind: trackWind, catalog.TrackOuter: trackOuter, catalog.TrackDrift: trackDrift}
 	for _, k := range w.Systems {
 		g := Kind{
 			Shape: shapes[k.Shape], Width: k.Width, Ahead: k.Ahead, Track: tracks[k.Track], SpeedOfWind: k.SpeedOf == catalog.SpeedOfWind,
-			Size: pair(k.Size, nauticalMile), Speed: pair(k.Speed, 1), Life: ticks(k.Life, ticksPerMinute),
+			Size: pair(k.Size, nauticalMile), Length: pair(k.Length, nauticalMile), TurnsIn: k.TurnsIn,
+			Speed: pair(k.Speed, 1), Life: ticks(k.Life, ticksPerMinute),
 			Wind: pair(k.Wind, knot), Factor: pair(k.Factor, 1), Depth: pair(k.Depth, 1),
 			Islands: k.Islands, Night: k.Night, Dawn: int64(math.Round(k.Dawn * ticksPerMinute)),
 			Lift: ticks(k.Lift, ticksPerMinute), CalmBelow: k.CalmBelow * knot, GoneAbove: k.GoneAbove * knot,
@@ -223,17 +251,40 @@ func ConfigOf(c *catalog.Catalog) (*Config, error) {
 		return nil, fmt.Errorf("weather: the week closes in no regime %q", wk.ClosingRegime)
 	}
 	deg := func(d float64) int32 { return int32(math.Round(d * physics.TurnSteps / 360)) }
-	veer := pair(wk.Veer, 1)
+	veer, warm := pair(wk.Veer, 1), pair(wk.WarmVeer, 1)
 	cfg.Week = WeekParams{
 		Opening: int64(math.Round(wk.Opening * hourTicks)), Closing: int64(math.Round(wk.Closing * hourTicks)),
 		Fair: int64(math.Round(wk.Fair * hourTicks)), ClosingRegime: closing,
 		Shares: wk.Shares, SharesFrom: int64(math.Round(wk.SharesFrom * 24 * hourTicks)),
 		Margin: int64(math.Round(wk.Margin * hourTicks)), Draws: wk.Draws,
-		Veer: [2]int32{deg(veer[0]), deg(veer[1])}, Swing: deg(wk.Swing),
+		Veer: [2]int32{deg(veer[0]), deg(veer[1])}, WarmVeer: [2]int32{deg(warm[0]), deg(warm[1])}, Swing: deg(wk.Swing),
 		FrontSpeed: pair(wk.FrontSpeed, knot), FrontTrough: pair(wk.FrontTrough, 1), Spread: deg(wk.Spread),
 		Wobble: wk.Wobble * nauticalMile, WobblePeriod: ticks(wk.WobblePeriod, ticksPerMinute),
 		StrengthWobble: wk.StrengthWobble, SystemsMost: wk.SystemsMost,
-		Outer: pair(wk.Outer, nauticalMile), InwardShare: wk.InwardShare,
+		Outer: pair(wk.Outer, nauticalMile),
+		StormsMost: wk.Storms.Most, QuietTicks: int64(math.Round(wk.Quiet.Hours * hourTicks)),
+		LineAhead: pair(wk.LineAhead.Ahead, nauticalMile),
+	}
+	var known bool
+	if cfg.Week.Storms, known = kinds[wk.Storms.Kind]; !known {
+		return nil, fmt.Errorf("weather: the week's storms are of no kind %q", wk.Storms.Kind)
+	}
+	cfg.Week.Quiet = make([]bool, len(w.Systems))
+	for _, id := range wk.Quiet.Kinds {
+		k, ok := kinds[id]
+		if !ok {
+			return nil, fmt.Errorf("weather: the week keeps quiet no kind %q", id)
+		}
+		cfg.Week.Quiet[k] = true
+	}
+	if cfg.Week.LineKind, known = kinds[wk.LineAhead.Kind]; !known {
+		return nil, fmt.Errorf("weather: the week's line ahead is of no kind %q", wk.LineAhead.Kind)
+	}
+	if cfg.Week.LineInto, known = regimes[wk.LineAhead.Into]; !known {
+		return nil, fmt.Errorf("weather: the week's line ahead is into no regime %q", wk.LineAhead.Into)
+	}
+	if cfg.Week.Fill, known = kinds[wk.Fill]; !known {
+		return nil, fmt.Errorf("weather: the week fills with no kind %q", wk.Fill)
 	}
 	if cfg.Every <= 0 {
 		return nil, errors.New("weather: keyframes no time apart")
@@ -272,9 +323,10 @@ type Report struct {
 	Shares  []float64 `json:"shares"` // each regime's share of the world's time
 	Spells  int       `json:"spells"`
 	Fronts  int       `json:"fronts"`
-	Storms  int       `json:"storms"` // systems of the kinds born at a spell's start
+	Storms  int       `json:"storms"` // systems of the week's storms' kind
 	Systems int       `json:"systems"`
 	Refused int       `json:"refused"` // systems not born: the disk held all it may
+	Filled  int       `json:"filled"`  // systems born where the disk would have been empty
 	Most    int       `json:"most"`    // the most systems on the disk at once
 }
 
@@ -787,8 +839,8 @@ func (g *gen) check(ch *chain) (failed []string, deviation float64) {
 // spells makes the chain's spells: each one's numbers drawn from its
 // regime, its pressure's level, its direction walking from the last's, a
 // veer as a front passes and a swing either way otherwise; and for a front,
-// the way it moves, toward where the new spell's wind blows within the
-// spread, and its trough.
+// whether it is warm, the way it moves, toward where the new spell's wind
+// blows within the spread, and its trough.
 func (g *gen) spells(ch *chain) []physics.Spell {
 	c := g.c
 	seed := g.s.seed32()
@@ -812,9 +864,12 @@ func (g *gen) spells(ch *chain) []physics.Spell {
 		if i > 0 {
 			prev := &out[i-1]
 			var t int32
-			if ch.cross[i] > 0 {
+			switch {
+			case ch.cross[i] > 0 && g.warm(ch, i):
+				t = g.s.steps(c.Week.WarmVeer[0], c.Week.WarmVeer[1])
+			case ch.cross[i] > 0:
 				t = g.s.steps(c.Week.Veer[0], c.Week.Veer[1])
-			} else {
+			default:
 				t = g.s.steps(-c.Week.Swing, c.Week.Swing)
 			}
 			dir = wrap(int32(prev.From) + int32(prev.Drift) + t)
@@ -825,10 +880,19 @@ func (g *gen) spells(ch *chain) []physics.Spell {
 			s.Front = 1
 			s.Toward = float64(wrap(dir + turn/2 + g.s.steps(-c.Week.Spread, c.Week.Spread)))
 			s.Trough = math.Round(float64(100 * g.s.in(c.Week.FrontTrough[0], c.Week.FrontTrough[1])))
+			if g.warm(ch, i) {
+				s.Warm = 1
+			}
 		}
 		out[i] = s
 	}
 	return out
+}
+
+// warm reports whether the front into spell i is a warm front: from a
+// regime of no front into a frontal one.
+func (g *gen) warm(ch *chain, i int) bool {
+	return i > 0 && !g.c.Regimes[ch.regime[i-1]].Frontal && g.c.Regimes[ch.regime[i]].Frontal
 }
 
 // candidate is a system drawn, before it is given a slot.
@@ -845,9 +909,10 @@ func (g *gen) systems(ch *chain, spells []physics.Spell) ([]System, Report) {
 	var cands []candidate
 	for i, r := range ch.regime {
 		from, to := ch.at[i], ch.end(i, g.until)
-		for _, rate := range c.Regimes[r].Systems {
+		for j := range c.Regimes[r].Systems {
+			rate := &c.Regimes[r].Systems[j]
 			for range rate.AtStart {
-				if s, ok := g.system(rate.Kind, from, i, ch, spells); ok {
+				if s, ok := g.system(rate, from, i, ch, spells); ok {
 					cands = append(cands, candidate{s, true})
 				}
 			}
@@ -862,10 +927,13 @@ func (g *gen) systems(ch *chain, spells []physics.Spell) ([]System, Report) {
 				if at >= float64(to) {
 					break
 				}
-				if s, ok := g.system(rate.Kind, int64(at), i, ch, spells); ok {
+				if s, ok := g.system(rate, int64(at), i, ch, spells); ok {
 					cands = append(cands, candidate{s, false})
 				}
 			}
+		}
+		if s, ok := g.lineAhead(i, ch, spells); ok {
+			cands = append(cands, candidate{s, false})
 		}
 	}
 	slices.SortStableFunc(cands, func(a, b candidate) int {
@@ -884,7 +952,16 @@ func (g *gen) systems(ch *chain, spells []physics.Spell) ([]System, Report) {
 		free[i] = math.MinInt64
 	}
 	var out []System
+	var storms []float64 // the ticks the storms on the disk are gone at
 	for _, cd := range cands {
+		storm := int(cd.r.Kind) == c.Week.Storms
+		if storm {
+			storms = slices.DeleteFunc(storms, func(gone float64) bool { return gone <= cd.r.Born })
+			if len(storms) >= c.Week.StormsMost {
+				rep.Refused++
+				continue
+			}
+		}
 		slot := -1
 		for k, f := range free {
 			if f <= int64(cd.r.Born) {
@@ -900,13 +977,113 @@ func (g *gen) systems(ch *chain, spells []physics.Spell) ([]System, Report) {
 		// two systems share one between two keyframes.
 		free[slot] = int64(cd.r.Gone) + 2*c.Every
 		out = append(out, System{Slot: slot, SystemRecord: cd.r})
-		if cd.atStart {
+		if storm {
+			storms = append(storms, cd.r.Gone)
 			rep.Storms++
 		}
 	}
+	out = g.fill(ch, spells, out, &rep)
 	rep.Systems = len(out)
 	rep.Most = mostAtOnce(out)
 	return out, rep
+}
+
+// fill gives the disk weather wherever it would have none after the
+// opening: at each minute with no system within the lip and no front
+// crossing it, a system of the fill kind born ten minutes before, in a
+// slot free from a keyframe before its birth to a keyframe after its end.
+func (g *gen) fill(ch *chain, spells []physics.Spell, out []System, rep *Report) []System {
+	c := g.c
+	edge, reach := c.Prepared.Edge(), c.Prepared.FrontReach()
+	rate := &Rate{Kind: c.Week.Fill, Peak: [2]float64{0, 1}}
+	longest := int64(0)
+	for _, k := range c.Kinds {
+		longest = max(longest, k.Life[1])
+	}
+	first := 0
+	for tick := c.Week.Opening; tick < g.ticks; tick += ticksPerMinute {
+		for first < len(out) && int64(out[first].Born) < tick-longest {
+			first++
+		}
+		if g.weatherAt(out[first:], spells, tick, edge, reach) {
+			continue
+		}
+		born := max(tick-10*ticksPerMinute, c.Week.Opening)
+		i := ch.spellAt(born)
+		r, ok := g.system(rate, born, i, ch, spells)
+		if !ok {
+			continue
+		}
+		slot := freeSlot(out, c.Week.SystemsMost, r.Born-float64(2*c.Every), r.Gone+float64(2*c.Every))
+		if slot < 0 {
+			rep.Refused++
+			continue
+		}
+		at, _ := slices.BinarySearchFunc(out, r.Born, func(s System, born float64) int {
+			if s.Born <= born {
+				return -1
+			}
+			return 1
+		})
+		out = slices.Insert(out, at, System{Slot: slot, SystemRecord: r})
+		rep.Filled++
+	}
+	return out
+}
+
+// weatherAt reports whether there is weather on the disk at a tick: a
+// system of ss within the lip, or a front of spells crossing it.
+func (g *gen) weatherAt(ss []System, spells []physics.Spell, tick int64, edge, reach float64) bool {
+	j, _ := slices.BinarySearchFunc(spells, float64(tick), func(s physics.Spell, at float64) int {
+		if s.Begin <= at {
+			return -1
+		}
+		return 1
+	})
+	for _, s := range spells[max(j-2, 0):max(j, 0)] {
+		if s.Front != 0 && s.Change > 0 && float64(tick) >= s.Begin && float64(tick) <= s.Begin+s.Change {
+			if line := float64(float64(2*reach)*float64(float64(tick)-s.Begin))/s.Change - reach; math.Abs(line) < edge {
+				return true
+			}
+		}
+	}
+	for i := range ss {
+		if ss[i].Born > float64(tick) {
+			break
+		}
+		if k := physics.SystemAt(&ss[i].SystemRecord, float64(tick)); k.On != 0 && OnDisk(&k, edge) {
+			return true
+		}
+	}
+	return false
+}
+
+// freeSlot is the lowest of the first most slots no system of ss holds
+// from one tick to another, or −1.
+func freeSlot(ss []System, most int, from, to float64) int {
+	used := make([]bool, most)
+	for i := range ss {
+		if s := &ss[i]; s.Slot < most && s.Born < to && s.Gone > from {
+			used[s.Slot] = true
+		}
+	}
+	return slices.Index(used, false)
+}
+
+// OnDisk reports whether any part of a system at a keyframe is within the
+// lip, edge m from the centre: its spine within its size of it, a line's
+// nearest point to the centre.
+func OnDisk(s *physics.System, edge float64) bool {
+	x, y := float64(s.East*0.25), float64(s.North*0.25)
+	if s.Length > 0 {
+		// Along its length, which runs across its motion, as far as it
+		// reaches.
+		ux, uy := physics.SinCos(float64(s.Heading * (2 * math.Pi / physics.TurnSteps)))
+		half := float64(0.5 * s.Length)
+		along := min(max(-(float64(x*uy) - float64(y*ux)), -half), half)
+		x, y = x+float64(along*uy), y-float64(along*ux)
+	}
+	return math.Sqrt(float64(x*x)+float64(y*y))-s.Size < edge
 }
 
 // mostAtOnce is the most systems alive at once.
@@ -979,42 +1156,26 @@ func (g *gen) sunrise(tick int64, x, y float64) int64 {
 	return -1
 }
 
-// system draws a system of kind k born at a tick in spell i, or reports it
-// is not born: a kind of the night by day, or of light winds in a strong
-// one.
-func (g *gen) system(k int, born int64, i int, ch *chain, spells []physics.Spell) (physics.SystemRecord, bool) {
+// system draws a system of a rate's kind born at a tick in spell i, or
+// reports it is not born: a kind of the night by day, or of light winds in
+// a strong one, a rate's of the day at night or of the night by day, or a
+// kind kept quiet in the world's first hours or its closing spell.
+func (g *gen) system(rate *Rate, born int64, i int, ch *chain, spells []physics.Spell) (physics.SystemRecord, bool) {
 	c := g.c
+	k := rate.Kind
 	kind := &c.Kinds[k]
 	sp := &spells[i]
 	speed, toward := windOf(sp)
 	edge := c.Prepared.Edge()
 	life := g.s.ticks(kind.Life[0], kind.Life[1])
-	size := g.s.in(kind.Size[0], kind.Size[1])
-	r := physics.SystemRecord{Kind: float64(k), Seed: float64(g.s.seed32()), Size: math.Round(size)}
-	switch kind.Shape {
-	case physics.ShapeNone:
-		r.Peak = math.Round(float64(1000 * g.s.in(kind.Factor[0], kind.Factor[1])))
-	default:
-		r.Peak = math.Round(float64(speedSteps * g.s.in(kind.Wind[0], kind.Wind[1])))
-		depth := g.s.in(kind.Depth[0], kind.Depth[1])
-		r.Depth = math.Round(float64(100 * depth))
-	}
+	r := g.draw(k, rate.Peak)
 	move := g.s.in(kind.Speed[0], kind.Speed[1])
 	if kind.SpeedOfWind {
 		move = float64(move * speed)
 	}
 	r.Speed = math.Round(float64(speedSteps * move))
 	heading := toward + float64(g.s.in(-10, 10)*degree)
-	// The wobble, which a forecast does not know.
 	w := &c.Week
-	r.Wobble = math.Round(float64(quarterMetres * float64(w.Wobble*g.s.in(0.5, 1))))
-	for j := range 2 {
-		r.WobblePeriod[j] = float64(g.s.ticks(w.WobblePeriod[0], w.WobblePeriod[1]))
-		r.WobblePhase[j] = g.s.turn()
-	}
-	r.Throb = math.Round(float64(strengthOne * float64(w.StrengthWobble*g.s.in(0.5, 1))))
-	r.ThrobPeriod = float64(g.s.ticks(w.WobblePeriod[0], w.WobblePeriod[1]))
-	r.ThrobPhase = g.s.turn()
 
 	gone := born + life
 	ux, uy := physics.SinCos(heading)
@@ -1041,7 +1202,7 @@ func (g *gen) system(k int, born int64, i int, ch *chain, spells []physics.Spell
 			sense = -1
 		}
 		r.Track, r.Radius, r.Angle, r.Sense = physics.TrackArc, math.Round(float64(quarterMetres*rad)), math.Round(float64(a/(2*math.Pi)*physics.TurnSteps)), sense
-		if g.s.chance(w.InwardShare) {
+		if g.s.chance(kind.TurnsIn) && !(k == w.Storms && g.fair(ch, born, gone)) {
 			// It closes on the centre, to within a mile of it by its end.
 			in := (rad - nauticalMile) / (float64(life) * physics.Dt)
 			r.Inward = math.Round(float64(speedSteps * max(in, 0)))
@@ -1067,6 +1228,16 @@ func (g *gen) system(k int, born int64, i int, ch *chain, spells []physics.Spell
 				}
 				u -= is.Area
 			}
+		}
+	}
+	switch rate.When {
+	case whenDay:
+		if g.sunAt(born, x, y) < 0 {
+			return r, false
+		}
+	case whenNight:
+		if g.sunAt(born, x, y) >= 0 {
+			return r, false
 		}
 	}
 	// Light winds only: the spells' mean wind there.
@@ -1096,7 +1267,46 @@ func (g *gen) system(k int, born int64, i int, ch *chain, spells []physics.Spell
 			gone = max(int64(spells[i+1].Begin), born)
 		}
 	}
-	if gone-born < 4*ticksPerMinute {
+	return g.lived(r, k, born, gone, ch, x, y, heading)
+}
+
+// draw draws a system of kind k's own numbers: its seed, its size, a
+// line's length, its peak wind from between the shares peak of its kind's
+// range, its depth, its wobble and its throb.
+func (g *gen) draw(k int, peak [2]float64) physics.SystemRecord {
+	kind := &g.c.Kinds[k]
+	size := g.s.in(kind.Size[0], kind.Size[1])
+	r := physics.SystemRecord{Kind: float64(k), Seed: float64(g.s.seed32()), Size: math.Round(size)}
+	if kind.Shape == physics.ShapeLine {
+		r.Length = math.Round(g.s.in(kind.Length[0], kind.Length[1]))
+	}
+	switch kind.Shape {
+	case physics.ShapeNone:
+		r.Peak = math.Round(float64(1000 * g.s.in(kind.Factor[0], kind.Factor[1])))
+	default:
+		span := kind.Wind[1] - kind.Wind[0]
+		lo, hi := kind.Wind[0]+float64(peak[0]*span), kind.Wind[0]+float64(peak[1]*span)
+		r.Peak = math.Round(float64(speedSteps * g.s.in(lo, hi)))
+		depth := g.s.in(kind.Depth[0], kind.Depth[1])
+		r.Depth = math.Round(float64(100 * depth))
+	}
+	w := &g.c.Week
+	r.Wobble = math.Round(float64(quarterMetres * float64(w.Wobble*g.s.in(0.5, 1))))
+	for j := range 2 {
+		r.WobblePeriod[j] = float64(g.s.ticks(w.WobblePeriod[0], w.WobblePeriod[1]))
+		r.WobblePhase[j] = g.s.turn()
+	}
+	r.Throb = math.Round(float64(strengthOne * float64(w.StrengthWobble*g.s.in(0.5, 1))))
+	r.ThrobPeriod = float64(g.s.ticks(w.WobblePeriod[0], w.WobblePeriod[1]))
+	r.ThrobPhase = g.s.turn()
+	return r
+}
+
+// lived gives a system drawn its life, from born to gone, and on a line
+// its place then, (x, y), and its heading, rad; or reports it is not born:
+// too short a life, or a kind kept quiet then.
+func (g *gen) lived(r physics.SystemRecord, k int, born, gone int64, ch *chain, x, y, heading float64) (physics.SystemRecord, bool) {
+	if gone-born < 4*ticksPerMinute || g.quiet(k, born, gone, ch) {
 		return r, false
 	}
 	r.Born, r.Gone = float64(born), float64(gone)
@@ -1107,4 +1317,53 @@ func (g *gen) system(k int, born int64, i int, ch *chain, spells []physics.Spell
 		r.Heading = float64(wrap(int32(math.Round(float64(heading / (2 * math.Pi) * physics.TurnSteps)))))
 	}
 	return r, true
+}
+
+// quiet reports whether a system of kind k alive from born to gone would
+// break the quiet of the world's first hours or of its closing spell.
+func (g *gen) quiet(k int, born, gone int64, ch *chain) bool {
+	w := &g.c.Week
+	if k >= len(w.Quiet) || !w.Quiet[k] {
+		return false
+	}
+	closing := ch.at[ch.spellAt(max(g.ticks-w.Closing, 0))]
+	return born < w.QuietTicks || gone > closing
+}
+
+// fair reports whether a spell of a regime of no front blows at any time
+// from one tick to another.
+func (g *gen) fair(ch *chain, from, to int64) bool {
+	for i := ch.spellAt(from); i < len(ch.at) && ch.at[i] < to; i++ {
+		if !g.c.Regimes[ch.regime[i]].Frontal {
+			return true
+		}
+	}
+	return false
+}
+
+// lineAhead is the line born ahead of the cold front into spell i, if the
+// front is one into the week's regime for it: born as the front nears the
+// centre, its lineAhead ahead of its line, anywhere along it within the
+// disk, and moving with it.
+func (g *gen) lineAhead(i int, ch *chain, spells []physics.Spell) (physics.SystemRecord, bool) {
+	c := g.c
+	w := &c.Week
+	sp := &spells[i]
+	if ch.cross[i] == 0 || g.warm(ch, i) || ch.regime[i] != w.LineInto || w.LineKind < 0 || !(sp.Change > 0) {
+		return physics.SystemRecord{}, false
+	}
+	kind := &c.Kinds[w.LineKind]
+	life := g.s.ticks(kind.Life[0], kind.Life[1])
+	r := g.draw(w.LineKind, [2]float64{0, 1})
+	perTick := float64(2*g.reach) / sp.Change // m a tick
+	born := int64(sp.Begin) + int64(float64(g.s.in(0.25, 0.5)*sp.Change))
+	toward := float64(sp.Toward * (2 * math.Pi / physics.TurnSteps))
+	ux, uy := physics.SinCos(toward)
+	line := float64(perTick*float64(born-int64(sp.Begin))) - g.reach
+	ahead := g.s.in(w.LineAhead[0], w.LineAhead[1])
+	along := float64(c.Prepared.Edge() * g.s.in(-0.5, 0.5))
+	d := line + ahead
+	x, y := float64(d*ux)+float64(along*uy), float64(d*uy)-float64(along*ux)
+	r.Speed = math.Round(float64(speedSteps * float64(perTick*physics.StepsPerSecond)))
+	return g.lived(r, w.LineKind, born, born+life, ch, x, y, toward)
 }

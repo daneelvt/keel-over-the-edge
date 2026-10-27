@@ -413,6 +413,9 @@ type Spell struct {
 	// Still is 1 if the week's systems do not blow while this is the spell
 	// in effect: a developer's weather.
 	Still float64
+	// Warm is 1 if its front is a warm front: its rain in a band ahead of
+	// its line, and no surge of the gusts behind it.
+	Warm float64
 }
 
 // The shapes of a system kind's pressure, in SystemKind.Shape.
@@ -420,6 +423,7 @@ const (
 	ShapeNone = 0 // no pressure: a patch that scales the wind
 	ShapeDome = 1 // a dome, steeper ahead
 	ShapeLow  = 2 // a low: a core and a broad shallow low about it
+	ShapeLine = 3 // a dome stretched across its motion along its length, steeper ahead
 )
 
 // How a system kind weakens toward the centre, in SystemKind.Inward.
@@ -432,7 +436,7 @@ const (
 // SystemKind describes a kind of weather system: the catalog's values of
 // it the wind is computed with.
 type SystemKind struct {
-	Shape      float64 // ShapeNone, ShapeDome or ShapeLow
+	Shape      float64 // ShapeNone, ShapeDome, ShapeLow or ShapeLine
 	Turning    float64 // its wind blows toward lower pressure turned clockwise by this, degrees
 	Width      float64 // its pressure's or its patch's Gaussian width, as a share of a system's size
 	Ahead      float64 // a dome is steeper ahead: its distance along its track is times this ahead of its centre
@@ -497,6 +501,7 @@ type System struct {
 	Size     float64 // its radius, m
 	Peak     float64 // the wind it adds at its peak at full strength, in steps of SeaSpeedStep; a patch's share of the wind at its core, in thousandths
 	Depth    float64 // its pressure at its centre at full strength, in hundredths of a hPa: a dome's above, a low's below
+	Length   float64 // a line's length across its motion, m; 0 for any other shape
 }
 
 // A system's stage of life, in System.Stage.
@@ -537,9 +542,10 @@ type SystemRecord struct {
 	Angle  float64
 	Sense  float64
 	Inward float64
-	Size   float64 // its radius, m
+	Size   float64 // its radius, m: a line's half its depth along its motion
 	Peak   float64 // as System's
 	Depth  float64 // as System's
+	Length float64 // as System's
 	// Its wobble off the track, which a forecast does not know: how far
 	// east and north it swings, in quarter metres, each with its period in
 	// ticks and its phase at tick 0 in 65536ths of a turn; and its
@@ -575,6 +581,7 @@ type CloudParams struct {
 	FrontMiddle    [4]float64 // its middle sheet, the same
 	FrontLow       [2]float64 // its low cloud: a band this far behind the line and this wide, nautical miles
 	FrontRain      [3]float64 // its rain: mm an hour, and a band this far behind the line and this wide, nautical miles
+	FrontWarm      [3]float64 // a warm front's rain and low cloud: mm an hour, and a band this far ahead of the line and this wide, nautical miles
 	RainWords      [3]float64 // light, moderate and heavy under these, violent above, mm an hour
 	RainExtinction [2]float64 // rain's extinction, a R^b per km
 	RainScale      float64    // visibility on the stage, a share of the real
