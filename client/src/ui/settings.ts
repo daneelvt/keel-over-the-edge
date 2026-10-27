@@ -20,8 +20,12 @@ export interface Settings {
   centreHelm: boolean;
   /** How much the sea is drawn with: as much as the device runs well, or the least, to save battery. */
   detail: 'auto' | 'low';
-  /** The barometer among the instruments. */
+  /** The barometer out of the instruments' case. */
   barometer: boolean;
+  /** The world clock out of the instruments' case. */
+  worldClock: boolean;
+  /** The autopilot's control head open, not folded to its button. */
+  pilotHead: boolean;
   /** The pocket chart's weather: rain, fog and the systems over the disk. */
   pocketWeather: boolean;
 }
@@ -34,7 +38,9 @@ export const DEFAULTS: Settings = {
   rightOfWay: false,
   centreHelm: false,
   detail: 'auto',
-  barometer: true,
+  barometer: false,
+  worldClock: false,
+  pilotHead: false,
   pocketWeather: true,
 };
 
@@ -81,6 +87,8 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
     'rightOfWay',
     'centreHelm',
     'barometer',
+    'worldClock',
+    'pilotHead',
     'pocketWeather',
   ] as const) {
     if (typeof r[k] === 'boolean') {

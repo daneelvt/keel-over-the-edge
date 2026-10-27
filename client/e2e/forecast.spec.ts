@@ -274,14 +274,27 @@ test.describe('the barometer', () => {
     await expect(page.locator('[data-readout="barometer"]')).toHaveText(words[3] ?? '');
   });
 
-  test('it can be put away from the menu', async ({ page }) => {
+  test('it starts shut in the case; its pusher brings it out and puts it away, and the choice is kept', async ({
+    page,
+  }) => {
+    await openScene(page, 'world=1', true);
+    const pusher = page.locator('[data-pusher=barometer]');
+    await expect(page.locator('.barometer')).toBeHidden();
+    await expect(pusher).toHaveAttribute('aria-expanded', 'false');
+    await expect(pusher).toHaveAttribute('aria-controls', 'case-barometer');
+    await pusher.click();
+    await expect(page.locator('#case-barometer .barometer')).toBeVisible();
+    await expect(pusher).toHaveAttribute('aria-expanded', 'true');
+    // The menu has no switch of its own.
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.locator('input[name="barometer"]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Close' }).click();
     await openScene(page, 'world=1', true);
     await expect(page.locator('.barometer')).toBeVisible();
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.locator('input[name="barometer"]').uncheck();
-    await expect(page.locator('.barometer')).toHaveCount(0);
+    await page.locator('[data-pusher=barometer]').click();
+    await expect(page.locator('.barometer')).toBeHidden();
     await openScene(page, 'world=1', true);
-    await expect(page.locator('.barometer')).toHaveCount(0);
+    await expect(page.locator('.barometer')).toBeHidden();
   });
 });
 
@@ -299,8 +312,11 @@ test.describe('the harbourmaster’s board', () => {
       globalThis.keel.render();
       return globalThis.keel.info().drawCalls;
     });
-    await expect(page.locator('.board-button')).toBeVisible();
-    await page.locator('.board-button').click();
+    const pusher = page.locator('[data-pusher=board]');
+    await expect(pusher).toBeVisible();
+    await expect(pusher).toHaveAttribute('aria-label', 'Harbour board');
+    await pusher.click();
+    await expect(pusher).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.board')).toContainText('General situation');
     await expect(page.locator('.board')).toContainText('Next 90 minutes');
     await expect(page.locator('[data-readout="board-outlook"]')).not.toBeEmpty();
@@ -321,14 +337,14 @@ test.describe('the harbourmaster’s board', () => {
       globalThis.keel.placeBoat(-3500, -5000, 0);
       globalThis.keel.render();
     });
-    await expect(page.locator('.board-button')).toHaveCount(0);
+    await expect(page.locator('[data-pusher=board]')).toHaveCount(0);
   });
 });
 
 test.describe('the pocket chart', () => {
   test.use({ viewport: { width: 960, height: 600 } });
 
-  test('its weather switch is kept', async ({ page }) => {
+  test('its weather pusher is kept', async ({ page }) => {
     await openScene(page, 'world=1', true);
     const sw = page.locator('.pocket-weather');
     await expect(sw).toHaveAttribute('aria-pressed', 'true');
@@ -336,5 +352,39 @@ test.describe('the pocket chart', () => {
     await expect(sw).toHaveAttribute('aria-pressed', 'false');
     await openScene(page, 'world=1', true);
     await expect(page.locator('.pocket-weather')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('its pusher’s decal is the sky of the board’s Now, under a squall in Port Royal’s harbour', async ({
+    page,
+  }) => {
+    await openScene(page, 'world=1', true);
+    expect(await page.evaluate(() => globalThis.keel.toHarbour())).toBe(true);
+    // A squall to meet the boat where it lies, three minutes on.
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.setWeather('squall');
+      k.advance(3 * 60 * 30);
+      k.render();
+      k.weatherNow();
+      k.issueForecast();
+    });
+    await page.locator('[data-pusher=board]').click();
+    const sky = page.locator('.board dt:text-is("Sky") + dd');
+    await expect(sky).not.toBeEmpty();
+    const decal: Record<string, string> = {
+      Fair: 'fair',
+      Showers: 'showers',
+      'Fog patches': 'fog',
+      Rain: 'rain',
+      'Squally showers': 'squalls',
+      'Squalls with heavy rain': 'squalls',
+    };
+    const words = (await sky.textContent()) ?? '';
+    expect(['Rain', 'Squally showers', 'Squalls with heavy rain']).toContain(words);
+    const pusher = page.locator('.pocket-weather');
+    await expect(pusher).toHaveAttribute('data-sky', /.+/);
+    // A storm near outranks the sky's words; else the decal is the board's sky.
+    expect([decal[words], 'storm']).toContain(await pusher.getAttribute('data-sky'));
+    await expect(pusher).toHaveAttribute('aria-label', /^Weather on the pocket chart; here, /);
   });
 });

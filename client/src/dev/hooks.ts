@@ -97,6 +97,7 @@ import type { SandboxForecast } from '../sandbox/forecast';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Barometer } from '../ui/barometer';
+import type { Countdown } from '../ui/countdown';
 import type { Settings } from '../ui/settings';
 import {
   cellHex,
@@ -238,6 +239,8 @@ export type Sailing = (
   forecast?: SandboxForecast;
   barometer?: Barometer;
   readBarometer?: () => void;
+  /** The countdown to the world's end, which the sandbox's tests set. */
+  countdown?: Countdown;
 };
 
 /** Puts the hooks on globalThis.keel. */
@@ -2810,6 +2813,66 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return { x: ((p.x + 1) / 2) * canvas.clientWidth, y: ((1 - p.y) / 2) * canvas.clientHeight };
     },
 
+    /**
+     * The boat's parts on screen, CSS pixels: each part as drawn (the hull,
+     * the mast, the sail, the sailor…), the box of its points above the
+     * water through the camera, with the dome's drop.
+     */
+    boatBox(): { name: string; left: number; top: number; right: number; bottom: number }[] {
+      const canvas = stage.gfx?.canvas;
+      const boat = world.boat;
+      if (canvas === undefined || boat === null) {
+        return [];
+      }
+      boat.root.updateWorldMatrix(true, true);
+      const fs = world.focusScene;
+      const out: { name: string; left: number; top: number; right: number; bottom: number }[] = [];
+      boat.root.traverse((o) => {
+        if (!(o instanceof Mesh) || !o.visible) {
+          return;
+        }
+        const pos = o.geometry.getAttribute('position');
+        if (pos === undefined) {
+          return;
+        }
+        const r = {
+          name: o.name,
+          left: Infinity,
+          top: Infinity,
+          right: -Infinity,
+          bottom: -Infinity,
+        };
+        const p = new Vector3();
+        for (let i = 0; i < pos.count; i++) {
+          p.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+          if (p.y < 0) {
+            continue;
+          }
+          p.y -= domeDrop(Math.hypot(p.x - fs.x, p.z - fs.z));
+          p.project(stage.camera);
+          const x = ((p.x + 1) / 2) * canvas.clientWidth;
+          const y = ((1 - p.y) / 2) * canvas.clientHeight;
+          r.left = Math.min(r.left, x);
+          r.right = Math.max(r.right, x);
+          r.top = Math.min(r.top, y);
+          r.bottom = Math.max(r.bottom, y);
+        }
+        if (r.left <= r.right) {
+          out.push(r);
+        }
+      });
+      return out;
+    },
+
+    /** Sets the world's end the sandbox's countdown shows, ms of UTC; and its epoch and closing. */
+    setWorldEnd(end: { ends: number; epoch: number; closing: number }): void {
+      const c = sailing.countdown;
+      if (c === undefined) {
+        throw new Error('no countdown');
+      }
+      c.setEnd({ world: 'sandbox', zone: '', ...end });
+    },
+
     /** Opens the chart, its list or the news; null closes it. */
     openChart(mode: ChartMode | null): void {
       chartParts().chart.show(mode);
@@ -2920,7 +2983,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
 
     /** The harbourmaster's board: whether its button shows, and its words if it is open. */
     board() {
-      const button = document.querySelector('.board-button');
+      const button = document.querySelector('[data-pusher=board]');
       const board = document.querySelector<HTMLElement>('.board');
       return { button: button !== null, text: board?.innerText ?? null };
     },

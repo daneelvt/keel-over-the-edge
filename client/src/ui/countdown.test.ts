@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
-import { Countdown, EndNotices, endText, leftText, type ShownStore } from './countdown';
+import {
+  Countdown,
+  EndNotices,
+  endText,
+  leftText,
+  RESERVE_STEPS,
+  reserveOf,
+  type ShownStore,
+} from './countdown';
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -44,6 +52,42 @@ describe('the countdown', () => {
     const none = new Countdown(() => Number.NaN, 'en');
     none.setEnd({ world: 'w1', ends, closing: ends - 3 * DAY, zone: '', epoch: 0 });
     expect(none.text.value).toBe('');
+  });
+});
+
+describe('the reserve of a world’s life', () => {
+  const epoch = Date.UTC(2026, 9, 25, 22, 0, 0);
+  const ends = epoch + 7 * DAY;
+  const e = { world: 'w1', ends, closing: ends - 3 * DAY, zone: '', epoch };
+
+  test('is whole as the world begins, half in the middle of its week, none at its end', () => {
+    expect(reserveOf(e, epoch)).toBe(1);
+    expect(reserveOf(e, epoch + 3.5 * DAY)).toBeCloseTo(0.5, 9);
+    expect(reserveOf(e, ends)).toBe(0);
+    expect(reserveOf(e, ends + HOUR)).toBe(0);
+    expect(reserveOf(e, epoch - HOUR)).toBe(1);
+  });
+
+  test('is none, with no words, for a world with no end known', () => {
+    const c = new Countdown(() => epoch + DAY, 'en');
+    c.setEnd({ ...e, ends: 0 });
+    expect(c.reserve.value).toBe(0);
+    expect(c.text.value).toBe('');
+  });
+
+  test('moves in steps, so the gauge is drawn again seldom', () => {
+    let now = epoch + 3.5 * DAY;
+    const c = new Countdown(() => now, 'en');
+    c.setEnd(e);
+    const half = c.reserve.value;
+    expect(half).toBe(0.5);
+    // Ten minutes is less than a step of a week.
+    now += 10 * MINUTE;
+    c.tick();
+    expect(c.reserve.value).toBe(half);
+    now += (7 * DAY) / RESERVE_STEPS;
+    c.tick();
+    expect(c.reserve.value).toBeCloseTo(0.5 - 1 / RESERVE_STEPS, 9);
   });
 });
 

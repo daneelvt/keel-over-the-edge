@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The barometer's face among the instruments: a brass aneroid's dial, its
-// scale in hPa, the words about it as decoration ("Do not take any notice
-// of the words Rain, Change, Fair", Weems & Plath), its main hand at the
-// pressure where the boat is and its set hand at its reading of a quarter
-// of an hour before, both moved by transforms; and beneath, its reading in
-// words, which a screen reader is given.
+// The barometer's face, a sub-dial of the instruments' case recessed in a
+// darker ring: a brass aneroid's dial, its scale in hPa, the words about
+// it as decoration ("Do not take any notice of the words Rain, Change,
+// Fair", Weems & Plath), its main hand at the pressure where the boat is
+// and its set hand at its reading of a quarter of an hour before, both
+// moved by transforms; and beside it, its reading in words, which a screen
+// reader is given.
 
 import { type Barometer, dialAngle, SWEEP } from './barometer';
 
@@ -37,7 +38,7 @@ export function BarometerDial({
   const [ax, ay] = at(40, -SWEEP);
   const [bx, by] = at(40, SWEEP);
   return (
-    <section class="panel barometer" aria-label="Barometer">
+    <section class="barometer" aria-label="Barometer">
       <svg viewBox="-50 -50 100 100" aria-hidden="true">
         <defs>
           <radialGradient id="brass" cx="35%" cy="30%" r="80%">

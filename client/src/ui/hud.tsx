@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The screen at sea: the instrument panel top left (a heading-up compass
-// card with the true wind's mark on its rim, the speed over ground, the
-// heading, what the autopilot holds while it is on, and the wind), the sailor's state
-// when they are out of the boat, the helm bottom left, the sheet bottom
-// right, the autopilot's button between them, and the menu. Laid out
-// within the safe area, in portrait and landscape. Watching another
-// sailor's boat, every control that acts is gone (the helm, the sheet, the
-// autopilot's button, the free camera, taking the boat over): the
-// instruments read the boat watched, and the bar over it says whose it is.
+// The screen at sea: the instruments' case top left (the compass and its
+// readouts, the barometer and the world clock sliding out of it), the
+// sailor's state when they are out of the boat beneath it, the pocket
+// chart top right, the helm bottom left, the sheet bottom right, the
+// autopilot's control head between them, and the menu. Laid out within
+// the safe area, in portrait and landscape, no part over another or over
+// the boat. Watching another sailor's boat, every control that acts is
+// gone (the helm, the sheet, the autopilot, the free camera, taking the
+// boat over): the instruments read the boat watched, and the bar over it
+// says whose it is.
 
 import { ConnectionLine, type ConnectionView } from './connection';
 import './hud.css';
@@ -20,8 +21,9 @@ import type { HelmInput } from '../input/helm';
 import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
 import type { Barometer } from './barometer';
-import { BarometerDial, type DialWord } from './barometerdial';
-import { HarbourBoard, type HarbourView } from './board';
+import type { DialWord } from './barometerdial';
+import type { HarbourView } from './board';
+import { Case, type Lamp } from './case';
 import { ChartScreen, type ChartSea, NoticeLine, PocketChart } from './chart';
 import { Helm, Sheet } from './controls';
 import type { Countdown } from './countdown';
@@ -32,108 +34,6 @@ import { Pilot } from './pilot';
 import type { SettingsSignal } from './settings';
 import { useWatch, type WatchView } from './watchlazy';
 import { watchersText } from './watchwords';
-
-const POINTS = ['N', 'E', 'S', 'W'];
-
-function CompassCard({ model }: { model: HudModel }) {
-  return (
-    <svg class="compass" viewBox="-50 -50 100 100" aria-hidden="true">
-      <circle class="compass-face" r="46" />
-      <g ref={(el) => model.rose.attach(el)}>
-        {Array.from({ length: 16 }, (_, i) => {
-          const a = (i * Math.PI) / 8;
-          const inner = i % 4 === 0 ? 34 : 38;
-          return (
-            <line
-              key={`t${i}`}
-              class="compass-tick"
-              x1={inner * Math.sin(a)}
-              y1={-inner * Math.cos(a)}
-              x2={42 * Math.sin(a)}
-              y2={-42 * Math.cos(a)}
-            />
-          );
-        })}
-        {POINTS.map((p, i) => {
-          const a = (i * Math.PI) / 2;
-          return (
-            <text
-              key={p}
-              class={`compass-point${p === 'N' ? ' north' : ''}`}
-              x={26 * Math.sin(a)}
-              y={-26 * Math.cos(a)}
-              transform={`rotate(${i * 90} ${26 * Math.sin(a)} ${-26 * Math.cos(a)})`}
-            >
-              {p}
-            </text>
-          );
-        })}
-      </g>
-      <g ref={(el) => model.windMark.attach(el)}>
-        <path
-          class="compass-wind"
-          d="M 0 -47 L 7 -58 L 0 -54 L -7 -58 Z"
-          transform="translate(0 16)"
-        />
-      </g>
-      <path class="compass-boat" d="M 0 -16 C 5 -8 6 4 4 14 L -4 14 C -6 4 -5 -8 0 -16 Z" />
-    </svg>
-  );
-}
-
-function Instruments({ model }: { model: HudModel }) {
-  return (
-    <section class="panel instruments" aria-label="Instruments">
-      <CompassCard model={model} />
-      <div class="readouts">
-        <p class="speed">
-          <span data-readout="speed">{model.speed}</span>
-          <span class="unit">kn</span>
-        </p>
-        <p>
-          Heading <b data-readout="heading">{model.heading}</b>
-        </p>
-        {model.pilot.value === '' ? null : (
-          <p>
-            Autopilot <b data-readout="pilot">{model.pilot}</b>
-          </p>
-        )}
-        <p>
-          Wind <b data-readout="wind">{model.wind}</b>
-        </p>
-        {model.tack.value === '' ? null : (
-          <p>
-            <b data-readout="tack">{model.tack}</b>
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/**
- * The countdown to the world's end, always shown under the instruments, in
- * amber in the world's last days: a timer, which a screen reader does not
- * read as it counts, the last minute announced once.
- */
-export function FallsLine({ end }: { end: Countdown }) {
-  const text = end.text.value;
-  if (text === '') {
-    return null;
-  }
-  return (
-    <p class={`panel falls-line${end.closing.value ? ' closing' : ''}`} data-readout="falls">
-      <span role="timer" aria-label={`The falls take this world in ${text}`}>
-        Falls in {text}
-      </span>
-      {end.last.value !== '' ? (
-        <span class="visually-hidden" role="status">
-          {end.last.value}
-        </span>
-      ) : null}
-    </p>
-  );
-}
 
 function BumpLine({ model }: { model: HudModel }) {
   const text = model.bump.value;
@@ -192,19 +92,21 @@ function LazyWatch({ watch, part }: { watch: WatchView; part: 'bar' | 'over' }) 
   );
 }
 
-/** The controls that act on the boat: the helm, the autopilot's button and the sheet; none on a boat watched. */
+/** The controls that act on the boat: the helm, the autopilot and the sheet; none on a boat watched. */
 export function SeaControls({
   steer,
   helm,
   sheet,
   pilot,
   model,
+  settings,
 }: {
   steer: boolean;
   helm: HelmInput;
   sheet: SheetInput;
   pilot: PilotActions;
   model: HudModel;
+  settings: SettingsSignal;
 }) {
   if (!steer) {
     return null;
@@ -212,7 +114,7 @@ export function SeaControls({
   return (
     <>
       <Helm input={helm} model={model} />
-      <Pilot actions={pilot} model={model} />
+      <Pilot actions={pilot} model={model} settings={settings} />
       <Sheet input={sheet} model={model} />
     </>
   );
@@ -248,7 +150,7 @@ export interface ScreenProps {
   settings: SettingsSignal;
   helm: HelmInput;
   sheet: SheetInput;
-  /** The autopilot's button and dial. */
+  /** The autopilot's control head. */
   pilot: PilotActions;
   /** The layer the overlays' labels go in. */
   labels: (el: HTMLElement | null) => void;
@@ -270,6 +172,8 @@ export interface ScreenProps {
   harbour?: HarbourView | null;
   /** Watching another sailor's boat; null in the offline sandbox. */
   watch?: WatchView | null;
+  /** The running light of the own machine sailor's AI, while watching it; null in the offline sandbox. */
+  lamp?: ReadonlySignal<Lamp> | null;
 }
 
 /** The free camera as the screen sees it. */
@@ -327,8 +231,14 @@ function Screen(props: ScreenProps) {
       <div class="overlay-labels" ref={props.labels} aria-hidden="true" />
       <div class="hud-top">
         {watch !== null ? <LazyWatch watch={watch} part="bar" /> : null}
-        <Instruments model={model} />
-        {end !== null ? <FallsLine end={end} /> : null}
+        <Case
+          model={model}
+          settings={settings}
+          end={end}
+          barometer={props.barometer ?? null}
+          harbour={props.harbour ?? null}
+          lamp={props.lamp ?? null}
+        />
         <SailorLine model={model} />
         {watch !== null && steer ? <WatchersLine watch={watch} /> : null}
         <BumpLine model={model} />
@@ -337,10 +247,6 @@ function Screen(props: ScreenProps) {
           <ConnectionLine view={props.connection} takeover={steer} />
         ) : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
-        {props.barometer != null && s.barometer ? (
-          <BarometerDial barometer={props.barometer.barometer} words={props.barometer.words} />
-        ) : null}
-        {props.harbour != null ? <HarbourBoard harbour={props.harbour} /> : null}
       </div>
       {sea !== null ? (
         <PocketChart
@@ -411,6 +317,7 @@ function Screen(props: ScreenProps) {
         sheet={props.sheet}
         pilot={props.pilot}
         model={model}
+        settings={settings}
       />
     </>
   );

@@ -71,11 +71,312 @@
   max-width: calc(100vw - var(--edge-left) - var(--edge-right) - 56px);
 }
 
-.instruments {
+/* The instruments' case: one panel, its complications joined to it by a
+   fine engraved seam, never panels of their own; its pushers on its edge,
+   their stems standing out of it. */
+.case {
+  --brass-light: #f3dfa0;
+  --brass: #c9a24c;
+  --brass-dark: #8a6524;
+  --seam: rgb(232 180 80 / 28%);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgb(232 180 80 / 32%);
+}
+
+.case-top {
+  display: flex;
+  align-items: stretch;
+}
+
+.case-face {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px 10px 10px;
+  padding: 10px 4px 10px 10px;
+}
+
+.pushers {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-right: -6px;
+}
+
+.pusher {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pusher.out {
+  color: var(--gold);
+}
+
+.pusher-face {
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  padding: 3px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #1d2830, #0b1216);
+  box-shadow:
+    inset 0 1px 2px rgb(0 0 0 / 70%),
+    0 0 0 1.5px var(--brass-dark);
+  transition: box-shadow 0.15s;
+}
+
+.pusher-stem {
+  position: absolute;
+  left: 26px;
+  top: 16px;
+  width: 18px;
+  height: 12px;
+  border-radius: 1px 3px 3px 1px;
+  background:
+    linear-gradient(rgb(255 255 255 / 35%), transparent 45%, rgb(0 0 0 / 35%)),
+    repeating-linear-gradient(90deg, var(--brass) 0 1.5px, var(--brass-dark) 1.5px 3px);
+  box-shadow: 1px 1px 2px rgb(0 0 0 / 50%);
+  transition: transform 0.08s;
+}
+
+.pusher:active .pusher-stem,
+.pusher.pressed .pusher-stem {
+  transform: translateX(-2px);
+}
+
+.pusher.pressed .pusher-face {
+  color: var(--gold);
+  box-shadow:
+    inset 0 1px 2px rgb(0 0 0 / 70%),
+    0 0 0 1.5px var(--brass-dark),
+    0 0 10px 3px rgb(232 180 80 / 65%);
+}
+
+.pusher:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+/* The harbour's pusher rises out of the case in port and sinks as the
+   boat leaves. */
+.pusher.rising {
+  animation: pusher-rise 0.2s ease-out;
+}
+
+.pusher.sinking {
+  animation: pusher-sink 0.2s ease-in forwards;
+}
+
+@keyframes pusher-rise {
+  from {
+    clip-path: inset(0 0 0 100%);
+    transform: translateX(-26px);
+  }
+}
+
+@keyframes pusher-sink {
+  to {
+    clip-path: inset(0 0 0 100%);
+    transform: translateX(-26px);
+  }
+}
+
+/* The running light, set into the case's top edge like a jewel in a
+   bezel: lit while the own machine sailor's AI is at the helm, hollow
+   while it is quiet. It does not blink. */
+.lamp {
+  position: absolute;
+  top: -5px;
+  right: 20px;
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+
+.lamp.helm {
+  background: #3ecf8e;
+  box-shadow:
+    0 0 0 1.5px var(--brass-dark),
+    0 0 6px 2px rgb(62 207 142 / 55%);
+}
+
+.lamp.quiet {
+  border: 2px solid #3ecf8e;
+  background: rgb(12 22 30 / 90%);
+  box-shadow: 0 0 0 1.5px var(--brass-dark);
+}
+
+/* The complications slide down out of the case, under the compass, side
+   by side beneath the readouts: on a phone held sideways the mast rises
+   beside the case, so it grows down, not out. The case takes its size at
+   once; the complication is uncovered. */
+.complications {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--seam);
+}
+
+.complications[hidden],
+.complication[hidden] {
+  display: none;
+}
+
+.complication {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px 10px;
+  animation: slide-down 0.18s ease-out;
+}
+
+.complication + .complication {
+  border-left: 1px solid var(--seam);
+}
+
+.complication.folding {
+  animation: fold-up 0.18s ease-in forwards;
+}
+
+@keyframes slide-down {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes fold-up {
+  to {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-10px);
+  }
+}
+
+/* A short screen, a phone held sideways: the case smaller, to stay
+   beside the boat. */
+@media (max-height: 499px) {
+  .case-face {
+    gap: 8px;
+    padding: 8px 2px 8px 8px;
+  }
+
+  .case .compass {
+    width: 60px;
+    height: 60px;
+  }
+
+  .case .readouts {
+    max-width: 136px;
+    font-size: 13px;
+  }
+
+  .case .speed {
+    font-size: 26px;
+  }
+
+  .complication {
+    padding: 6px 8px 8px;
+  }
+
+  .case .world-clock {
+    max-width: 108px;
+  }
+
+  .case .baro-words {
+    max-width: 96px;
+  }
+}
+
+/* Held upright, the boat stands in the middle of the screen: the case's
+   face across the top, small, and its complications in a column under
+   the compass, beside the boat. */
+@media (orientation: portrait) {
+  .hud .case {
+    border: 0;
+    background: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .case-top,
+  .complications {
+    border: 1px solid rgb(232 180 80 / 32%);
+    background: var(--panel);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 2px 10px rgb(0 0 0 / 18%);
+  }
+
+  .case-top {
+    border-radius: 12px;
+  }
+
+  .case:has(.complications:not([hidden])) .case-top {
+    border-bottom-left-radius: 0;
+  }
+
+  .complications {
+    align-self: flex-start;
+    flex-direction: column;
+    max-width: 96px;
+    margin-top: -1px;
+    border-top-color: var(--seam);
+    border-radius: 0 0 12px 12px;
+  }
+
+  .complication {
+    padding: 6px 8px 8px;
+  }
+
+  .complication + .complication {
+    border-left: 0;
+    border-top: 1px solid var(--seam);
+  }
+
+  .case-face {
+    gap: 8px;
+    padding: 6px 2px 6px 6px;
+  }
+
+  .case .compass {
+    width: 56px;
+    height: 56px;
+  }
+
+  .case .readouts {
+    font-size: 13px;
+  }
+
+  .case .speed {
+    font-size: 24px;
+  }
+
+  .case .world-clock {
+    max-width: 80px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .complication,
+  .complication.folding,
+  .pusher.rising,
+  .pusher.sinking,
+  .drum-text {
+    animation: none;
+  }
 }
 
 .compass {
@@ -143,6 +444,28 @@
   color: var(--faint);
 }
 
+/* The world clock: the time left until a new world, and when it comes. */
+.world-clock {
+  max-width: 150px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-left b {
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.clock-when {
+  font-size: 13px;
+}
+
+.case.closing .clock-left,
+.case.closing .clock-left b {
+  color: var(--gold);
+}
+
 .sailor-line {
   padding: 6px 12px;
   color: var(--gold);
@@ -153,17 +476,6 @@
 .watchers-line {
   padding: 4px 12px;
   color: var(--faint);
-}
-
-.falls-line {
-  padding: 4px 12px;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.falls-line.closing {
-  color: var(--gold);
-  font-weight: 500;
 }
 
 .visually-hidden {
@@ -474,6 +786,12 @@
 }
 
 @media (max-height: 420px) {
+  /* Under the pocket chart, above the sheet. */
+  .menu-button {
+    top: calc(var(--edge-top) + 112px);
+    transform: none;
+  }
+
   .sheet {
     height: 160px;
   }
@@ -483,8 +801,11 @@
   }
 }
 
-/* The autopilot: its button between the helm and the sheet, its dial above
-   it. Labelled, and marked by shape as well as colour. */
+/* The autopilot. Folded, a button between the helm and the sheet, saying
+   what it holds, a brass hinge on its top edge; open, a control head of
+   the period, two rows of keys: between the helm and the sheet held
+   sideways, above the helm held upright. Lacquered dark and framed in the
+   barometer's brass; labelled, and marked by shape as well as colour. */
 .pilot-button {
   position: absolute;
   bottom: var(--edge-bottom);
@@ -510,6 +831,18 @@
   border: 2px solid var(--gold);
 }
 
+.pilot-hinge {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 20px;
+  height: 6px;
+  translate: -50% 0;
+  border-radius: 2px;
+  background: linear-gradient(#f3dfa0, #c9a24c 50%, #8a6524);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+}
+
 .pilot-name {
   color: var(--faint);
   font-size: 12px;
@@ -524,117 +857,242 @@
   max-width: 100%;
 }
 
-.pilot-dial {
+.pilot-head {
+  --brass-light: #f3dfa0;
+  --brass: #c9a24c;
+  --brass-dark: #8a6524;
   position: absolute;
-  left: 50%;
-  bottom: calc(var(--edge-bottom) + 200px);
-  transform: translateX(-50%);
-  width: min(300px, calc(100vw - var(--edge-left) - var(--edge-right)));
+  bottom: var(--edge-bottom);
+  left: calc(var(--edge-left) + 190px + 8px);
+  width: min(380px, calc(100vw - var(--edge-left) - var(--edge-right) - 190px - 64px - 16px));
   box-sizing: border-box;
-  padding: 10px 12px;
-  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid var(--brass-dark);
+  background: linear-gradient(rgb(34 44 52 / 92%), rgb(14 20 25 / 92%));
+  box-shadow:
+    inset 0 0 0 1px rgb(243 223 160 / 18%),
+    0 2px 10px rgb(0 0 0 / 30%);
+  container-type: inline-size;
   touch-action: none;
 }
 
-.pilot-state {
-  margin: 0 0 4px;
+.head-row {
+  display: flex;
+  gap: 3px;
+  height: 44px;
+}
+
+.head-key {
+  flex: 0 0 auto;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(#34434e, #1c262d);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    0 1px 2px rgb(0 0 0 / 55%);
+  color: var(--ink);
+  font:
+    500 14px "Alegreya Sans",
+    sans-serif;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.head-key:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 65%);
+}
+
+.head-key:disabled {
   color: var(--faint);
+  opacity: 0.5;
+  cursor: default;
+}
+
+.head-key.fold {
+  margin-left: auto;
+  color: var(--faint);
+}
+
+.head-key .decal,
+.lever .decal {
+  width: 20px;
+  height: 20px;
+}
+
+/* The drum: a recessed window of what the autopilot holds; a drag along it
+   turns it. */
+.drum {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #091014;
+  box-shadow:
+    inset 0 2px 5px rgb(0 0 0 / 85%),
+    0 0 0 1px var(--brass-dark);
+  color: var(--gold);
+  cursor: ew-resize;
+  overflow: hidden;
+}
+
+.drum.idle {
+  cursor: default;
+}
+
+.drum-picture,
+.drum-point {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.drum-point {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
   text-align: center;
 }
 
-.pilot-state b {
-  color: var(--ink);
+.drum-window {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
 }
 
-.pilot-ring {
-  display: block;
-  width: 140px;
-  height: 140px;
-  margin: 0 auto;
-  cursor: grab;
+.drum-text {
+  display: inline-block;
+  color: #f4ecd8;
+  font:
+    17px / 44px "IM Fell English SC",
+    Georgia,
+    serif;
+  white-space: nowrap;
+  animation: drum-roll 0.16s ease-out;
 }
 
-.pilot-track {
-  fill: none;
-  stroke: rgb(255 255 255 / 55%);
-  stroke-width: 5;
-  stroke-linecap: round;
+@keyframes drum-roll {
+  from {
+    transform: translateY(40%);
+    opacity: 0.3;
+  }
 }
 
-.pilot-tick {
-  fill: var(--faint);
-  font-size: 9px;
-  text-anchor: middle;
-}
-
-.pilot-boat {
-  fill: var(--ink);
-}
-
-.pilot-needle {
-  stroke: var(--gold);
-  stroke-width: 2;
-}
-
-.pilot-mark {
-  fill: var(--gold);
-  stroke: var(--ink);
-  stroke-width: 1.5;
-}
-
-.pilot-row {
+/* A lever of two ways, its legends engraved, the brass on the way it is
+   set. */
+.lever {
+  flex: 0 0 auto;
+  height: 44px;
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.pilot-step,
-.pilot-action {
-  flex: 1;
-  min-height: 44px;
+  padding: 3px;
   border: 0;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 12%);
-  color: var(--ink);
-  font: inherit;
+  border-radius: 22px;
+  background: #091014;
+  box-shadow:
+    inset 0 1px 3px rgb(0 0 0 / 85%),
+    0 0 0 1px var(--brass-dark);
   cursor: pointer;
 }
 
-.pilot-action[data-pilot="off"] {
-  border: 1px solid var(--faint);
+.lever-half {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 0 7px;
+  border-radius: 19px;
+  color: var(--faint);
+  font:
+    13px "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.03em;
 }
 
-/* A short screen, a phone held sideways: above the controls there is no
-   room, so the dial hangs from the top, between the instruments and the
-   menu. */
-@media (max-height: 640px) {
-  .pilot-dial {
-    top: var(--edge-top);
-    bottom: auto;
-    left: auto;
-    right: calc(var(--edge-right) + 76px);
-    transform: none;
-    padding: 6px 10px;
+.lever-half.set {
+  background: linear-gradient(var(--brass-light), var(--brass) 55%, var(--brass-dark));
+  color: #1f1a14;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 55%);
+}
+
+.pilot-head .symbol {
+  display: none;
+}
+
+/* A head too narrow for its words: engraved symbols instead. */
+@container (max-width: 336px) {
+  .pilot-head .legend {
+    display: none;
   }
 
-  .pilot-ring {
-    width: 100px;
-    height: 100px;
+  .lever-half {
+    min-width: 28px;
+    padding: 0 4px;
+  }
+
+  .pilot-head .symbol {
+    display: inline-flex;
+  }
+
+  .pilot-head .drum-picture,
+  .pilot-head .drum-point {
+    display: none;
+  }
+
+  .drum-text {
+    font-size: 15px;
   }
 }
 
-/* The barometer: a brass aneroid, its set hand a fine dark line, its
-   reading in words beneath. */
+/* Held upright, the head stands above the helm, from the left edge to the
+   sheet. */
+@media (orientation: portrait) {
+  .pilot-head {
+    left: var(--edge-left);
+    width: calc(100vw - var(--edge-left) - var(--edge-right) - 64px - 8px);
+    bottom: calc(var(--edge-bottom) + 88px + 8px);
+  }
+}
+
+/* The barometer: a brass aneroid recessed in the case, its set hand a
+   fine dark line, its reading in words beneath. */
 .barometer {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px 10px 6px;
+  gap: 4px;
 }
 
 .barometer svg {
-  width: 96px;
-  height: 96px;
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 3px rgb(6 11 15 / 85%),
+    0 1px 4px 3px rgb(0 0 0 / 35%);
+}
+
+@media (max-height: 499px), (orientation: portrait) {
+  .barometer svg {
+    width: 60px;
+    height: 60px;
+  }
 }
 
 .baro-face {
@@ -682,22 +1140,13 @@
 }
 
 .baro-words {
-  max-width: 140px;
+  max-width: 110px;
   font-size: 13px;
   text-align: center;
 }
 
-/* The harbourmaster's board: a button in port, and the board, painted as
-   a board, over the sea. */
-.board-button {
-  min-height: 44px;
-  padding: 0 14px;
-  border: 0;
-  color: var(--ink);
-  font: inherit;
-  pointer-events: auto;
-}
-
+/* The harbourmaster's board, painted as a board, over the sea: in port
+   the boat is at rest, and the board is what the sailor came for. */
 .board {
   position: fixed;
   top: 50%;

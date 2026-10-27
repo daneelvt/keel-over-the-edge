@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The harbourmaster's board, in a port or Port Royal: a button while the
-// boat is in the harbour opens it, painted as a board, its words the page's
-// own, so a screen reader reads it as it reads the box: the gale warning in
-// force, the general situation, the next ninety minutes, and now.
+// The harbourmaster's board, in a port or Port Royal, which the case's
+// pusher opens while the boat is in the harbour: painted as a board, its
+// words the page's own, so a screen reader reads it as it reads the box:
+// the gale warning in force, the general situation, the next ninety
+// minutes, and now.
 
 import type { ReadonlySignal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
@@ -21,33 +22,14 @@ export interface HarbourView {
   store: ChartStore;
 }
 
-/** The board's button while in port, and the board when it is open. */
-export function HarbourBoard({ harbour }: { harbour: HarbourView }) {
-  const [open, setOpen] = useState(false);
-  const port = harbour.port.value;
-  if (port === null) {
-    return null;
-  }
-  return (
-    <>
-      <button
-        type="button"
-        class="panel board-button"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        Harbour board
-      </button>
-      {open ? <BoardPanel harbour={harbour} port={port} close={() => setOpen(false)} /> : null}
-    </>
-  );
-}
-
-function BoardPanel({
+/** The board of the port the boat is in. */
+export function BoardPanel({
+  id,
   harbour,
   port,
   close,
 }: {
+  id: string;
   harbour: HarbourView;
   port: NonNullable<InPort>;
   close: () => void;
@@ -71,7 +53,7 @@ function BoardPanel({
     };
   }, [harbour, port.name, port.east, port.north, version]);
   return (
-    <section class="panel board" aria-label={`${port.name}: the harbourmaster's board`}>
+    <section id={id} class="panel board" aria-label={`${port.name}: the harbourmaster's board`}>
       <h2>{port.name}</h2>
       <p class="board-office">The harbourmaster's board</p>
       {board === null ? (

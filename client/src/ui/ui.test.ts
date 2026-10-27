@@ -131,6 +131,16 @@ describe('settings', () => {
     m.data.set('keel.settings', 'not json');
     expect(loadSettings(m)).toEqual(DEFAULTS);
   });
+
+  test('a new sailor’s case is shut and the autopilot folded; a stored choice is kept', () => {
+    expect(DEFAULTS).toMatchObject({ barometer: false, worldClock: false, pilotHead: false });
+    const m = memory();
+    // A set saved before the case: the barometer was out, and stays out.
+    m.data.set('keel.settings', '{"frameRate": 60, "sound": true, "barometer": true}');
+    expect(loadSettings(m)).toMatchObject({ barometer: true, worldClock: false, pilotHead: false });
+    m.data.set('keel.settings', '{"worldClock": true, "pilotHead": true}');
+    expect(loadSettings(m)).toMatchObject({ barometer: false, worldClock: true, pilotHead: true });
+  });
 });
 
 /** A wind at the boat with no gust in it. */

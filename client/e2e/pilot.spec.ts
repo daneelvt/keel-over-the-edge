@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The autopilot in a real browser, in the offline sandbox, on each back end:
-// its button switches it on at the boat's angle to the wind and opens the
-// dial, which steps the target and closes on a tap elsewhere; on it the
+// its button switches it on at the boat's angle to the wind and unfolds the
+// control head, which steps the target, switches the mode and turns it off,
+// and stays open after a tap on the sea and across a reload, as it stays
+// folded; a drag along its drum turns the target by its pixels; on it the
 // boat tacks through the wind; the keys work it; a thumb on the helm takes
 // the helm back where it left it; and its course on the water is drawn with
 // the factory's material.
@@ -33,7 +35,7 @@ function angleOff(b: { state: { heading: number }; wind: { meanFrom: number } })
   return ((((a + 180) % 360) + 360) % 360) - 180;
 }
 
-test('the button switches it on at the boat’s angle; the dial steps the target and closes', async ({
+test('the button switches it on at the boat’s angle; the head steps the target, switches the mode and turns it off', async ({
   page,
 }) => {
   const angle = await reaching(page);
@@ -42,29 +44,70 @@ test('the button switches it on at the boat’s angle; the dial steps the target
   await page.locator('[data-pilot=button]').click();
   await page.evaluate(() => globalThis.keel.render());
   // About 90° off a north wind, heading east: the wind over port.
-  await expect(page.locator('[data-readout=pilot-button]')).toHaveText(`Wind ${-angle}° P`);
+  await expect(page.locator('[data-pilot=head]')).toBeVisible();
+  await expect(page.locator('[data-readout=pilot-drum]')).toHaveText(`Wind ${-angle}° P`);
   await expect(page.locator('[data-readout=pilot]')).toHaveText(`Wind ${-angle}° P`);
-  await expect(page.locator('[data-pilot=dial]')).toBeVisible();
+  await expect(page.locator('[data-pilot=power]')).toHaveAttribute('aria-pressed', 'true');
   // Eleven degrees to starboard: bearing away on port.
   await page.locator('[data-pilot-step="10"]').click();
   await page.locator('[data-pilot-step="1"]').click();
   await page.evaluate(() => globalThis.keel.render());
   expect((await page.evaluate(() => globalThis.keel.boat())).pilot.degrees).toBe(angle - 11);
-  await expect(page.locator('[data-readout=pilot-button]')).toHaveText(`Wind ${11 - angle}° P`);
-  // The other mode holds the heading the boat has.
-  await page.locator('[data-pilot=mode]').click();
+  await expect(page.locator('[data-readout=pilot-drum]')).toHaveText(`Wind ${11 - angle}° P`);
+  // The other way of the mode lever holds the heading the boat has.
+  await page.locator('[data-pilot=mode] [data-half=compass]').click();
   const heading = await page.evaluate(() => globalThis.keel.boat().pilot);
   expect(heading.mode).toBe(2);
-  // A tap on the sea closes the dial; the autopilot stays on.
-  await page.mouse.click(120, 340);
-  await expect(page.locator('[data-pilot=dial]')).toHaveCount(0);
+  await expect(page.locator('[data-pilot=mode]')).toHaveAttribute('aria-pressed', 'true');
+  // A tap on the sea leaves the head open and the autopilot on.
+  await page.mouse.click(480, 200);
+  await expect(page.locator('[data-pilot=head]')).toBeVisible();
   expect((await page.evaluate(() => globalThis.keel.boat())).pilot.mode).toBe(2);
-  // Off, from the dial.
-  await page.locator('[data-pilot=button]').click();
-  await page.locator('[data-pilot=off]').click();
+  // Off, from the power lever: the head stays open, showing it off.
+  await page.locator('[data-pilot=power] [data-half=off]').click();
   await page.evaluate(() => globalThis.keel.render());
-  await expect(page.locator('[data-readout=pilot-button]')).toHaveText('Off');
-  await expect(page.locator('[data-pilot=dial]')).toHaveCount(0);
+  expect((await page.evaluate(() => globalThis.keel.boat())).pilot.mode).toBe(0);
+  await expect(page.locator('[data-readout=pilot-drum]')).toHaveText('Off');
+  await expect(page.locator('[data-pilot=power]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-pilot-step="1"]')).toBeDisabled();
+  // On again from the lever.
+  await page.locator('[data-pilot=power] [data-half=on]').click();
+  expect((await page.evaluate(() => globalThis.keel.boat())).pilot.mode).toBe(1);
+});
+
+test('the head stays open, or folded, across a reload', async ({ page }) => {
+  await reaching(page);
+  await page.locator('[data-pilot=button]').click();
+  await expect(page.locator('[data-pilot=head]')).toBeVisible();
+  await reaching(page);
+  await expect(page.locator('[data-pilot=head]')).toBeVisible();
+  await page.locator('[data-pilot=fold]').click();
+  await expect(page.locator('[data-pilot=head]')).toHaveCount(0);
+  await expect(page.locator('[data-pilot=button]')).toBeVisible();
+  await reaching(page);
+  await expect(page.locator('[data-pilot=head]')).toHaveCount(0);
+  await expect(page.locator('[data-pilot=button]')).toBeVisible();
+});
+
+test('a drag along the drum turns the target a degree for every six pixels', async ({ page }) => {
+  const angle = await reaching(page);
+  await page.locator('[data-pilot=button]').click();
+  const drum = await page.locator('[data-pilot=drum]').boundingBox();
+  if (drum === null) {
+    throw new Error('the drum is not on screen');
+  }
+  const y = drum.y + drum.height / 2;
+  const x = drum.x + drum.width / 2;
+  // 60 pixels to starboard, then back 24: six degrees to starboard in all.
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 30, y, { steps: 5 });
+  await page.mouse.move(x + 60, y, { steps: 5 });
+  await page.mouse.move(x + 36, y, { steps: 4 });
+  await page.mouse.up();
+  await page.evaluate(() => globalThis.keel.render());
+  expect((await page.evaluate(() => globalThis.keel.boat())).pilot.degrees).toBe(angle - 6);
+  await expect(page.locator('[data-readout=pilot-drum]')).toHaveText(`Wind ${6 - angle}° P`);
 });
 
 test('on the autopilot, Tack turns the boat through the wind onto the same angle', async ({
@@ -106,7 +149,7 @@ test('on the autopilot, Tack turns the boat through the wind onto the same angle
   expect(Math.min(...turn.angles.map(Math.abs))).toBeLessThan(10);
   expect(Math.abs(angleOff(turn.after) + held)).toBeLessThan(5);
   expect(turn.after.pilot).toMatchObject({ order: 1, degrees: -held });
-  await expect(page.locator('[data-readout=pilot-button]')).toHaveText(`Wind ${held}° P`);
+  await expect(page.locator('[data-readout=pilot-drum]')).toHaveText(`Wind ${held}° P`);
 });
 
 test('the keys: P on and off, Q and E a degree, ten with Shift, G gybes', async ({ page }) => {
