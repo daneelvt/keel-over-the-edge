@@ -7,7 +7,9 @@
 // place is from the boat, the report where the wind comes from, and the
 // autopilot holds what it is told. Off the wind it steers for the place;
 // close to it, it beats, close-hauled on the tack that points nearer the
-// place, and tacks when the other points nearer by a margin.
+// place, and tacks when the other points nearer by a margin. Near shoal
+// water, unless the place lies across water the report's Shoal line calls
+// clear, it steers for the middle of the widest clear span first.
 package helmsman
 
 import (
@@ -42,36 +44,15 @@ const (
 
 // Result is how a passage went.
 type Result struct {
-	Arrived  bool
-	Looks    int
-	Tacks    int
-	Distance float64 // from the place at the end, m
+	Arrived    bool
+	Looks      int
+	Tacks      int
+	Groundings int     // times the boat went aground
+	Distance   float64 // from the place at the end, m
 }
 
 // ErrNotCharted is a place the chart does not know.
 var ErrNotCharted = errors.New("helmsman: no charted place of that name")
-
-// A turn has stalled when the answer to an order still says the boat is
-// turning, at under stallKnots, stallLooks times running.
-const (
-	stallKnots = 1.0
-	stallLooks = 3
-)
-
-var (
-	turning = regexp.MustCompile(`(tacking|gybing) to`)
-	knots   = regexp.MustCompile(` ([0-9.]+) kn · heel`)
-)
-
-// speedOf is the boat's speed in an order's answer, knots.
-func speedOf(said string) float64 {
-	g := knots.FindStringSubmatch(said)
-	if g == nil {
-		return math.Inf(1)
-	}
-	v, _ := strconv.ParseFloat(g[1], 64)
-	return v
-}
 
 var whereFrom = regexp.MustCompile(`(\d{3})° ([0-9.]+) (NM|m) from you`)
 
@@ -123,7 +104,6 @@ func Sail(ctx context.Context, c Caller, place string, arrive float64, looks int
 	}
 	c = polite{c}
 	side := ""
-	stalled := 0
 	for r.Looks = 0; r.Looks < looks; r.Looks++ {
 		text, refused, err := c.Call(ctx, "chart", map[string]any{"place": place})
 		if err != nil {
@@ -149,24 +129,30 @@ func Sail(ctx context.Context, c Caller, place string, arrive float64, looks int
 		if err != nil {
 			return r, err
 		}
-		var rep struct {
-			Wind struct {
-				From float64 `json:"from"`
-			} `json:"wind"`
-		}
-		if err := json.Unmarshal([]byte(text[jsonStart(text):]), &rep); err != nil {
-			return r, fmt.Errorf("helmsman: the report: %w", err)
+		rep, err := r.read(text)
+		if err != nil {
+			return r, err
 		}
 		w := rep.Wind.From
-		off := wrap(w - b)
+		// Off a bank first, unless the place lies across clear water.
+		toward := b
+		if sh := rep.Shoal; sh != nil && (sh.Here || !sh.clearAt(b)) {
+			if m, ok := sh.widest(); ok {
+				toward = m
+			}
+		}
+		off := wrap(w - toward)
 		var order map[string]any
+		// The boom half the apparent wind's angle where the boat is, so
+		// that one lying still gathers way and comes to steerage.
+		boom := int(min(max(rep.Wind.Apparent/2, 18), 85))
 		if math.Abs(off) >= beatWithin {
-			// Free to point at it: the boom half the angle off the wind.
-			order = map[string]any{"heading": int(math.Round(math.Mod(b+360, 360))) % 360, "boom": int(min(max(math.Abs(off)/2, 18), 85))}
+			// Free to point at it.
+			order = map[string]any{"heading": int(math.Round(math.Mod(toward+360, 360))) % 360, "boom": boom}
 		} else {
-			// Beating: the tack that points nearer the place.
-			starboard := math.Abs(wrap(w - closeHauled - b))
-			port := math.Abs(wrap(w + closeHauled - b))
+			// Beating: the tack that points nearer it.
+			starboard := math.Abs(wrap(w - closeHauled - toward))
+			port := math.Abs(wrap(w + closeHauled - toward))
 			want := "starboard"
 			if port < starboard {
 				want = "port"
@@ -178,39 +164,88 @@ func Sail(ctx context.Context, c Caller, place string, arrive float64, looks int
 				side = want
 				r.Tacks++
 			}
-			order = map[string]any{"wind_angle": closeHauled, "side": side, "boom": 18, "via": "tack"}
+			order = map[string]any{"wind_angle": closeHauled, "side": side, "boom": min(boom, 25), "via": "tack"}
 		}
 		said, refused, err := c.Call(ctx, "steer", order)
 		if err != nil {
 			return r, err
 		}
-		logf("%.0f m off at %03.0f°, the wind from %03.0f°: %v → %s (refused %v)", d, b, w, order, said, refused)
-		// A boat with no way on cannot turn through the wind: its turn
-		// stalls. The helm in hand ends it; on the tack it is on, it
-		// gathers way, and the next order turns it.
-		if turning.MatchString(said) && speedOf(said) < stallKnots {
-			stalled++
-		} else {
-			stalled = 0
+		logf("%.0f m off at %03.0f°, steering for %03.0f°, the wind from %03.0f°: %v → %s (refused %v)", d, b, toward, w, order, said, refused)
+		// A turn that stalls for want of way is given up by the autopilot,
+		// which holds the side it was on: the next look orders it again.
+		text, _, err = c.Call(ctx, "observe", map[string]any{"wait": waitFor, "wake_on": []string{"land", "boat", "pilot"}, "format": "json"})
+		if err != nil {
+			return r, err
 		}
-		if stalled >= stallLooks {
-			logf("the turn has stalled: gathering way on this tack")
-			for _, o := range []map[string]any{{"rudder": 0, "boom": 40}, {"wind_angle": 100, "side": "same", "boom": 40}} {
-				if _, _, err := c.Call(ctx, "steer", o); err != nil {
-					return r, err
-				}
-			}
-			if _, _, err := c.Call(ctx, "observe", map[string]any{"wait": 20, "wake_on": []string{"land"}}); err != nil {
-				return r, err
-			}
-			stalled, side = 0, ""
-			continue
-		}
-		if _, _, err := c.Call(ctx, "observe", map[string]any{"wait": waitFor, "wake_on": []string{"land", "boat"}}); err != nil {
+		if _, err := r.read(text); err != nil {
 			return r, err
 		}
 	}
 	return r, nil
+}
+
+// report is what the helmsman reads of a JSON report.
+type report struct {
+	Wind struct {
+		From     float64 `json:"from"`
+		Apparent float64 `json:"apparentAngle"`
+	} `json:"wind"`
+	Shoal *shoal `json:"shoal"`
+	Since *struct {
+		Events []string `json:"events"`
+	} `json:"since"`
+}
+
+// shoal is the report's Shoal line: whether the boat is in shoal water, and
+// the spans of bearings clear of it, degrees.
+type shoal struct {
+	Here  bool `json:"here"`
+	Clear []struct {
+		From float64 `json:"from"`
+		To   float64 `json:"to"`
+	} `json:"clear"`
+}
+
+// sector is how wide a span's sector is, degrees: a span runs from half of
+// it before its first bearing to half after its last.
+const sector = 22.5
+
+// clearAt reports whether bearing b, degrees, lies in a clear span.
+func (s *shoal) clearAt(b float64) bool {
+	for _, c := range s.Clear {
+		if math.Mod(b-c.From+sector/2+720, 360) <= math.Mod(c.To-c.From+360, 360)+sector {
+			return true
+		}
+	}
+	return false
+}
+
+// widest is the middle of the widest clear span, degrees.
+func (s *shoal) widest() (float64, bool) {
+	best, mid := -1.0, 0.0
+	for _, c := range s.Clear {
+		w := math.Mod(c.To-c.From+360, 360)
+		if w > best {
+			best, mid = w, math.Mod(c.From+w/2+360, 360)
+		}
+	}
+	return mid, best >= 0
+}
+
+// read reads a JSON report, counting the groundings it tells of.
+func (r *Result) read(text string) (*report, error) {
+	var rep report
+	if err := json.Unmarshal([]byte(text[jsonStart(text):]), &rep); err != nil {
+		return nil, fmt.Errorf("helmsman: the report: %w", err)
+	}
+	if rep.Since != nil {
+		for _, e := range rep.Since.Events {
+			if e == "aground" {
+				r.Groundings++
+			}
+		}
+	}
+	return &rep, nil
 }
 
 // jsonStart is where a JSON report begins in an answer: after a primer.
