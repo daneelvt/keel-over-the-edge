@@ -46,6 +46,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/watch"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen/chart"
@@ -181,6 +182,9 @@ type database interface {
 	News(ctx context.Context, world [16]byte, before *[16]byte, limit int) ([]store.News, error)
 	api.Notices
 	owner.Accounts
+	watch.Store
+	WatchTarget(ctx context.Context, key string) (store.WatchTarget, error)
+	SpectatorsAllowed(ctx context.Context) ([]store.AccountID, error)
 	Stats() store.PoolStats
 	Close()
 }
@@ -443,6 +447,15 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		}
 		return stopEarly(side, flight, fmt.Errorf("the accounts stopped: %w", err))
 	}
+	// Those who let anyone watch them always.
+	allowing, err := db.SpectatorsAllowed(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the accounts allowing spectators: %w", err))
+	}
+	p.allowing = watch.NewAllowing(allowing)
 	if p.agents, err = p.newAgents(ctx, stopped); err != nil {
 		if ctx.Err() != nil {
 			return stopEarly(side, flight, nil)

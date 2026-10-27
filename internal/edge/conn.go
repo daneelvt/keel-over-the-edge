@@ -17,6 +17,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/watch"
 )
 
 // conn is one game connection. Its reader is the request's goroutine (run);
@@ -34,39 +35,67 @@ type conn struct {
 	session [32]byte
 	opened  time.Time
 
-	// The boat, set by the reader once the Join is answered and before the
-	// encoder is given the connection; read by the encoder after.
+	// The boat, set under wmu by the reader once the Join is answered and
+	// before the encoder is asked to welcome it, or by the encoder as the
+	// queue gives it; read by the encoder after.
 	slot     int32
 	gen      uint16
 	boat     uint64
 	rejoined bool
 	joinTick int64
-	joined   atomic.Bool // the simulation gave the connection a boat
-	ready    atomic.Bool // Welcome is queued: inputs steer the boat from now on
-	// queued: the connection waits in the simulation's queue for a boat,
-	// at position when it joined it. The encoder alone reads the rest.
+	joined   atomic.Bool // the simulation gave the connection a boat it sails
+	ready    atomic.Bool // the Welcome to its own boat is queued: inputs steer the boat from now on
+	// queued: the connection waits in the simulation's queue for a boat.
+	// The encoder alone reads the rest.
 	queued                    atomic.Bool
-	position                  int32
 	toldPosition, toldWaiting int32
 	// bumped is the tick of the newest bump the connection has been sent,
 	// or the tick it was welcomed at: it is sent only those after.
 	bumped int64
 	seen   int64 // the tick the encoder last found it in the queue
+	// enc is the connection's encoder, from the Hello on; active, the
+	// encoder's, whether it is among those whose snapshots it writes.
 	enc    *encoder
+	active bool
+	// welcomes is how many Welcomes the connection has been sent: the
+	// encoder's.
+	welcomes int
+
+	// The watch. w is the encoder's; spectating is whether it watches,
+	// for the reader, and watched whose boat, for the world page.
+	// lastWatch is when the client last asked to watch, the reader's;
+	// helloWatch the sailor its Hello asked to watch.
+	w          watching
+	spectating atomic.Bool
+	watched    atomic.Pointer[string]
+	lastWatch  time.Time
+	helloWatch string
+	// Under the spectators' lock: seated holds a spectator's place; wants
+	// is whom it waits in their queue to watch; toldSpect and toldSpectOf
+	// the place in it and the queue's length it was last told.
+	seated                 bool
+	wants                  *watch.Target
+	toldSpect, toldSpectOf int32
+	// toldWatchers is how many watch its boat, as the client was last
+	// told: the encoder's.
+	toldWatchers int32
 
 	// The control slot's writer, stopped once another connection has
 	// taken the boat over: a word is stored only under wmu while not
-	// stopped, so once stop has returned none ever is. Words stamped for a
+	// stopped, and while steering, the boat the connection's own and
+	// welcomed, so once stop has returned none ever is, nor once its watch
+	// has begun. Words stamped for a
 	// tick still to come wait in held, oldest first, until the tick before
 	// theirs is published: the slot holds one word, and one stored at once
 	// would be replaced by the next before its tick came whenever the
 	// client sends a word a tick, as it does while the tiller is dragged.
-	wmu     sync.Mutex
-	stopped bool
-	held    [heldWords]heldPair
-	first   int // held's oldest
-	nheld   int
-	waiting atomic.Int32 // nheld, for the encoder to skip connections with none
+	wmu      sync.Mutex
+	stopped  bool
+	steering bool
+	held     [heldWords]heldPair
+	first    int // held's oldest
+	nheld    int
+	waiting  atomic.Int32 // nheld, for the encoder to skip connections with none
 
 	// counted is the tier the client last said it draws at, as an index of
 	// tierNames, or -1 before it has said: it is counted under that tier
@@ -179,7 +208,13 @@ func (c *conn) run() {
 		c.close(websocket.StatusPolicyViolation, "no hello")
 	})
 	data, ok := c.next()
-	if !hello.Stop() || !ok || !c.hello(data) || !c.join() {
+	if !hello.Stop() || !ok || !c.hello(data) || !c.claim() {
+		return
+	}
+	c.enc = e.encoderFor()
+	if c.helloWatch != "" {
+		c.watchCommand(c.helloWatch, time.Now())
+	} else if !c.join() {
 		return
 	}
 	// A connection silent for this long has gone: it is dropped without a
@@ -282,7 +317,8 @@ func (c *conn) hello(data []byte) bool {
 		differs = helloLayout
 	default:
 		e.m.hello[helloOK].Inc()
-		e.cfg.Log.Debug("game connection", "request_id", c.reqID, "conn", c.id, "client_build", h.GetBuild())
+		e.cfg.Log.Debug("game connection", "request_id", c.reqID, "conn", c.id, "client_build", h.GetBuild(), "watch", h.GetWatch() != "")
+		c.helloWatch = h.GetWatch()
 		return true
 	}
 	e.m.hello[differs].Inc()
@@ -292,10 +328,9 @@ func (c *conn) hello(data []byte) bool {
 	return false
 }
 
-// join takes the account's boat over from any older connection, then asks
-// the simulation for it and hands the connection to the encoder, which
-// welcomes it.
-func (c *conn) join() bool {
+// claim makes the connection its account's, taking it over from any older
+// connection, whose boat this one may sail, or leave to watch.
+func (c *conn) claim() bool {
 	e := c.e
 	if old := e.registry.claim(c); old != nil {
 		old.stop()
@@ -307,6 +342,13 @@ func (c *conn) join() bool {
 		c.close(CloseRemoved, ReasonStopped)
 		return false
 	}
+	return true
+}
+
+// join asks the simulation for the account's boat, and has the encoder
+// welcome it, or tell it its place in the queue.
+func (c *conn) join() bool {
+	e := c.e
 	reply := make(chan bus.Reply, 1)
 	c.wmu.Lock()
 	if c.stopped {
@@ -341,10 +383,8 @@ func (c *conn) join() bool {
 		// The sea is full: the connection waits, and its encoder tells it
 		// its place, and welcomes it once the queue gives it a boat.
 		e.m.join[joinQueued].Inc()
-		c.position, c.joinTick = r.Position, r.Tick
 		c.queued.Store(true)
-		c.enc = e.encoderFor()
-		c.enc.add(c)
+		c.ask(ask{kind: askJoined, r: r})
 		return true
 	case bus.Full:
 		e.m.join[joinFull].Inc()
@@ -359,10 +399,11 @@ func (c *conn) join() bool {
 	} else {
 		e.m.join[joinJoined].Inc()
 	}
+	c.wmu.Lock()
 	c.slot, c.gen, c.boat, c.rejoined, c.joinTick = r.Slot, r.Gen, r.Boat, r.Result == bus.Rejoined, r.Tick
+	c.wmu.Unlock()
 	c.joined.Store(true)
-	c.enc = e.encoderFor()
-	c.enc.add(c)
+	c.ask(ask{kind: askJoined, r: r})
 	return true
 }
 
@@ -409,6 +450,15 @@ func (c *conn) handle(data []byte) bool {
 		if r := b.Command.GetRoam(); r != nil {
 			c.roamTo(r)
 		}
+		if w := b.Command.GetWatch(); w != nil {
+			c.watchCommand(w.GetSailor(), time.Now())
+		}
+		if b.Command.GetSail() != nil && !c.sailCommand() {
+			return false
+		}
+		if b.Command.GetUnwatch() != nil {
+			c.unwatchCommand()
+		}
 	}
 	return true
 }
@@ -432,28 +482,35 @@ func (c *conn) askResync(now time.Time) {
 // input takes the controls the client stepped its boat with, stamped for
 // the tick it predicted them for: the word goes into the boat's slot once
 // the tick before that has been published, and the tick applies it then
-// (bus.Due).
+// (bus.Due). A connection that sails no boat of its own, watching or idle,
+// steers nothing: its controls are dropped, and counted.
 func (c *conn) input(in *pb.Input) {
 	e := c.e
 	c.ack.Store(in.GetAckTick())
-	if in.GetAckOnly() || !c.ready.Load() {
+	if in.GetAckOnly() {
+		return
+	}
+	if !c.ready.Load() {
+		if !c.joined.Load() {
+			e.m.refusedInput.Inc()
+		}
 		return
 	}
 	latest := e.latest.Load()
 	d := marginOf(in.GetSeq(), latest)
 	c.margin.record(d)
 	e.m.margin.Observe(float64(d))
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	if c.stopped || !c.steering {
+		return
+	}
 	w := heldPair{
 		word: bus.Pack(in.GetSeq(), uint16(min(in.GetHelm(), bus.Steps)), uint16(min(in.GetSheet(), bus.Steps)), c.gen),
 		// A target is taken modulo a whole turn, the order count modulo
 		// its range; a mode or way out of range is off or hold.
 		pilot: bus.PackPilot(in.GetSeq(), uint8(min(in.GetPilot(), 255)), uint8(min(in.GetWay(), 255)),
 			uint8(in.GetOrder()), uint16(in.GetTarget()), c.gen),
-	}
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-	if c.stopped {
-		return
 	}
 	if c.nheld == heldWords {
 		c.first = (c.first + 1) % heldWords
@@ -479,7 +536,7 @@ func (c *conn) release(next int64) {
 }
 
 func (c *conn) releaseLocked(next int64) {
-	if c.stopped {
+	if c.stopped || !c.steering {
 		c.nheld = 0
 		c.waiting.Store(0)
 		return
@@ -670,14 +727,18 @@ func (c *conn) drop() {
 }
 
 // finish ends the connection once its reader has: the encoder lets it go,
-// the registry forgets it, the close finishes, the writer stops, and if the
-// connection had a boat, the boat's grace begins; if it was waiting for
-// one, it leaves the queue, or, if the queue gave it one the edge had not
-// yet seen, that boat's grace begins.
+// the registry forgets it, its spectator's place is freed, the close
+// finishes, the writer stops, and if the connection had a boat, the boat's
+// grace begins; if it was waiting for one, it leaves the queue, or, if the
+// queue gave it one the edge had not yet seen, that boat's grace begins.
 func (c *conn) finish() {
 	e := c.e
 	c.gone.Store(true)
 	e.registry.release(c)
+	e.spect.release(c)
+	if c.enc != nil {
+		c.ask(ask{kind: askGone})
+	}
 	c.drop()
 	<-c.closed
 	c.writeTimer.Stop()

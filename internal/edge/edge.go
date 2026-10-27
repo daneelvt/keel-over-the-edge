@@ -43,6 +43,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/watch"
 )
 
 // The close codes the edge sends, beside RFC 6455's and IANA's own.
@@ -210,6 +211,13 @@ type Config struct {
 	// its session and account were seen then.
 	Seen      func(hash [32]byte)
 	LongAfter time.Duration
+	// Watch, if not nil, finds a sailor to watch by its name's key
+	// (moderation.Key): store.ErrNotFound for none. Allowing is the human
+	// accounts that let anyone watch them always; SpectatorLimit how many
+	// may watch at once, DefaultSpectatorLimit if zero.
+	Watch          func(ctx context.Context, key string) (watch.Target, error)
+	Allowing       *watch.Allowing
+	SpectatorLimit int
 }
 
 // Edge serves the game connection.
@@ -232,6 +240,8 @@ type Edge struct {
 	reach    RoamReach
 	latest   atomic.Int64 // the latest published tick
 	encs     []*encoder
+	spect    spectators
+	voyages  voyages
 
 	mu      sync.Mutex
 	closing bool
@@ -265,6 +275,9 @@ func New(cfg Config) *Edge {
 		e.origins = []string{u.Host}
 	}
 	e.registry.init()
+	e.spect.init(cfg.SpectatorLimit)
+	e.voyages.m = map[bus.Account]uint64{}
+	e.m.spectatorLimit.Set(float64(e.spect.limit))
 	e.SetEnds(cfg.Ends, cfg.Closing)
 	n := cfg.Encoders
 	if n < 1 {
@@ -295,6 +308,7 @@ func (e *Edge) Run(ctx context.Context) {
 	for _, enc := range e.encs {
 		wg.Go(func() { enc.run(ctx) })
 	}
+	wg.Go(func() { e.tellSpectators(ctx) })
 	wg.Wait()
 }
 

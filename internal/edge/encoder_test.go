@@ -16,6 +16,8 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/watch"
 )
 
 func TestMailbox(t *testing.T) {
@@ -104,7 +106,7 @@ func sailing(w *sim.World, e *Edge) []*conn {
 	f := w.Latest()
 	conns := make([]*conn, len(f.Live))
 	for i, s := range f.Live {
-		c := &conn{e: e, id: uint64(i + 1), slot: s, gen: f.Gen[s], boat: f.Boat[s], queue: make(chan outgoing, 8)}
+		c := &conn{e: e, id: uint64(i + 1), slot: s, gen: f.Gen[s], boat: f.Boat[s], queue: make(chan outgoing, 8), active: true}
 		c.margin.init()
 		c.box.init()
 		conns[i] = c
@@ -431,6 +433,12 @@ func BenchmarkEncodeSteady(b *testing.B) {
 						buf, _ := c.box.take()
 						size += len(buf)
 						snapshots++
+						// What else was queued, the bumps of boats sailing
+						// into each other: a full queue would close the
+						// connection, which has no socket.
+						for len(c.queue) > 0 {
+							<-c.queue
+						}
 					}
 					b.StartTimer()
 				}
@@ -445,6 +453,84 @@ func BenchmarkEncodeSteady(b *testing.B) {
 					round()
 				}
 				b.ReportMetric(float64(size)/float64(max(snapshots, 1)), "bytes/snapshot")
+			})
+		}
+	}
+}
+
+// BenchmarkEncodeSpectators is the encoders' time for a frame of n
+// spectators of one boat, beside its sailor and the 64 boats about it,
+// the boats sailing between rounds: each spectator is encoded as a sailor
+// is, the watched boat its header and the view about it.
+func BenchmarkEncodeSpectators(b *testing.B) {
+	for _, n := range []int{100, 1000} {
+		for _, encoders := range []int{1, 8} {
+			b.Run(fmt.Sprintf("%d/%d", n, encoders), func(b *testing.B) {
+				w, e := world(b, 65, encoders)
+				sailors := sailing(w, e)
+				watched := sailors[0]
+				for i := range n {
+					c := &conn{e: e, id: uint64(1000 + i), queue: make(chan outgoing, 8), active: true}
+					c.w = watching{on: true, target: watch.Target{Kind: store.AI}, slot: watched.slot, boat: watched.boat}
+					c.margin.init()
+					c.box.init()
+					enc := e.encs[i%len(e.encs)]
+					enc.active = append(enc.active, c)
+				}
+				done := make(chan struct{}, len(e.encs))
+				var size, snapshots int
+				round := func() {
+					for _, enc := range e.encs {
+						go func() {
+							f := e.cfg.Bus.Frames.Acquire()
+							for _, c := range enc.active {
+								if c.w.on {
+									enc.encode(c, f)
+								}
+							}
+							f.Release()
+							done <- struct{}{}
+						}()
+					}
+					for range e.encs {
+						<-done
+					}
+				}
+				step := func() {
+					b.StopTimer()
+					f := w.Latest()
+					for i, s := range f.Live {
+						w.Bus().Controls.StoreHand(s, bus.Pack(uint32(f.Tick+1), uint16((i*37+int(f.Tick))%1025), 600, f.Gen[s]))
+					}
+					w.Tick()
+					w.Tick()
+					for _, enc := range e.encs {
+						for _, c := range enc.active {
+							if !c.w.on {
+								continue
+							}
+							buf, _ := c.box.take()
+							size += len(buf)
+							snapshots++
+							for len(c.queue) > 0 {
+								<-c.queue
+							}
+						}
+					}
+					b.StartTimer()
+				}
+				for range 20 {
+					step()
+					round()
+				}
+				size, snapshots = 0, 0
+				b.ReportAllocs()
+				for b.Loop() {
+					step()
+					round()
+				}
+				b.ReportMetric(float64(size)/float64(max(snapshots, 1)), "bytes/snapshot")
+				b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(n), "ns/spectator")
 			})
 		}
 	}

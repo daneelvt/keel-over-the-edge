@@ -4,7 +4,8 @@
 // each was made and when it was last used, with one more added on this
 // device or another, or one removed while another stays; the recovery code,
 // made anew; the machine sailors, with their approved apps and connection
-// tokens; signing out, here or everywhere else; and deleting the sailor for
+// tokens; who may watch the sailor's boat; signing out, here or
+// everywhere else; and deleting the sailor for
 // good. What cannot be undone (removing a passkey, a new code, deleting)
 // first asks for one of the account's own passkeys, which allows it for
 // five minutes. The machine sailors' part is loaded as the page opens, as
@@ -13,6 +14,7 @@
 import './account.css';
 import './start.css';
 import { useEffect, useState } from 'preact/hooks';
+import { useWatch } from '../ui/watchlazy';
 import { useMachines } from './lazy';
 import {
   type AccountData,
@@ -34,6 +36,12 @@ import { dayOf, RecoveryCode } from './recovery';
 function MachinesSection() {
   const m = useMachines();
   return m === null ? <h3>Machine sailors</h3> : <m.MachinesAccount />;
+}
+
+/** "Allow spectators", once its module is loaded. */
+function SpectatorsSection() {
+  const m = useWatch();
+  return m === null ? null : <m.SpectatorsChoice />;
 }
 
 /** The menu's panel of machine sailors, once their module is loaded. */
@@ -248,6 +256,7 @@ export function AccountPanel({
             Make a new code
           </button>
           <MachinesSection />
+          <SpectatorsSection />
           <h3>Signed in</h3>
           <div class="account-row">
             <button type="button" disabled={busy} onClick={() => void run(signOut, reload)}>

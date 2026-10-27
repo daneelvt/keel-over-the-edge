@@ -17,7 +17,14 @@ export interface ConnectionView {
   takeOver: () => void;
 }
 
-export function ConnectionLine({ view }: { view: ConnectionView }) {
+/** The connection's line; takeover false takes its button away, as on a boat watched. */
+export function ConnectionLine({
+  view,
+  takeover = true,
+}: {
+  view: ConnectionView;
+  takeover?: boolean;
+}) {
   const n = view.notice.value;
   if (n === null) {
     return null;
@@ -25,7 +32,7 @@ export function ConnectionLine({ view }: { view: ConnectionView }) {
   return (
     <p class="panel connection-line" role="status" data-readout="connection">
       {n.text}
-      {n.takeover ? (
+      {n.takeover && takeover ? (
         <button type="button" class="takeover" onClick={view.takeOver}>
           Take over
         </button>

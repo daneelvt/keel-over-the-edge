@@ -92,13 +92,15 @@ type TokenItem struct {
 // MachineItem is a machine sailor as the pages list it. Stopped is when
 // the game's operator stopped it on its own, ms; 0 if not.
 type MachineItem struct {
-	ID      string     `json:"id"`
-	Name    string     `json:"name"`
-	Look    Look       `json:"look"`
-	AtSea   bool       `json:"atSea"`
-	Stopped int64      `json:"stopped"`
-	Apps    []AppItem  `json:"apps"`
-	Token   *TokenItem `json:"token"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Look  Look   `json:"look"`
+	AtSea bool   `json:"atSea"`
+	// Watchers is how many watch it now, filled by the game's own page.
+	Watchers int        `json:"watchers"`
+	Stopped  int64      `json:"stopped"`
+	Apps     []AppItem  `json:"apps"`
+	Token    *TokenItem `json:"token"`
 }
 
 // Machines are what the lists of an account's machine sailors are made

@@ -41,7 +41,7 @@ func TestLoadValid(t *testing.T) {
 	want := Config{
 		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://keel.local:5173", PasskeyRPID: "keel.local", PasskeyOrigins: []string{"https://keel.local:5173"},
 		AgentsAddr: "127.0.0.1:8081", AgentsURL: "https://keel.local:5173/mcp", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
-		BoatLimit: DefaultBoatLimit, AISilence: DefaultAISilence, Bell: DefaultBell, Land: true, WorldKeep: DefaultWorldKeep,
+		BoatLimit: DefaultBoatLimit, SpectatorLimit: DefaultSpectatorLimit, AISilence: DefaultAISilence, Bell: DefaultBell, Land: true, WorldKeep: DefaultWorldKeep,
 		// A zone loaded is a pointer of its own: the schedule is compared
 		// by what it says.
 		Schedule: c.Schedule,
@@ -65,25 +65,26 @@ func TestLoadValid(t *testing.T) {
 	}
 
 	c, err = Load(env(map[string]string{
-		"KEEL_PLAY_ORIGIN":    "https://play.keelovertheedge.com",
-		"KEEL_PLAY_ADDR":      ":8080",
-		"KEEL_AGENTS_ADDR":    ":8081",
-		"KEEL_INTERNAL_ADDR":  "0.0.0.0:9090",
-		"KEEL_METRICS_ADDR":   "0.0.0.0:9091",
-		"KEEL_LOG_LEVEL":      "debug",
-		"KEEL_TRACE_DIR":      "/tmp/traces",
-		"KEEL_REPLAY_DIR":     "/tmp/replays",
-		"KEEL_CLIENT_DIR":     "/srv/keel/client",
-		"KEEL_DEV_SAILORS":    "1000",
-		"KEEL_BOAT_LIMIT":     "2",
-		"KEEL_AI_SILENCE":     "90s",
-		"KEEL_BELL":           "0",
-		"KEEL_LAND":           "off",
-		"KEEL_WORLD_SEED":     "18446744073709551615",
-		"KEEL_WORLD_SCHEDULE": "every=10m from=2026-11-01T00:00:00Z notice=4m ahead=3m",
-		"KEEL_WORLD_KEEP":     "2h",
-		"KEEL_PASSKEY_RP_ID":  "keelovertheedge.com",
-		"KEEL_AGENTS_URL":     "https://agents.keelovertheedge.com/mcp",
+		"KEEL_PLAY_ORIGIN":     "https://play.keelovertheedge.com",
+		"KEEL_PLAY_ADDR":       ":8080",
+		"KEEL_AGENTS_ADDR":     ":8081",
+		"KEEL_INTERNAL_ADDR":   "0.0.0.0:9090",
+		"KEEL_METRICS_ADDR":    "0.0.0.0:9091",
+		"KEEL_LOG_LEVEL":       "debug",
+		"KEEL_TRACE_DIR":       "/tmp/traces",
+		"KEEL_REPLAY_DIR":      "/tmp/replays",
+		"KEEL_CLIENT_DIR":      "/srv/keel/client",
+		"KEEL_DEV_SAILORS":     "1000",
+		"KEEL_BOAT_LIMIT":      "2",
+		"KEEL_SPECTATOR_LIMIT": "1",
+		"KEEL_AI_SILENCE":      "90s",
+		"KEEL_BELL":            "0",
+		"KEEL_LAND":            "off",
+		"KEEL_WORLD_SEED":      "18446744073709551615",
+		"KEEL_WORLD_SCHEDULE":  "every=10m from=2026-11-01T00:00:00Z notice=4m ahead=3m",
+		"KEEL_WORLD_KEEP":      "2h",
+		"KEEL_PASSKEY_RP_ID":   "keelovertheedge.com",
+		"KEEL_AGENTS_URL":      "https://agents.keelovertheedge.com/mcp",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +94,7 @@ func TestLoadValid(t *testing.T) {
 		AgentsURL:   "https://agents.keelovertheedge.com/mcp",
 		PasskeyRPID: "keelovertheedge.com", PasskeyOrigins: []string{"https://play.keelovertheedge.com"},
 		MetricsAddr: "0.0.0.0:9091", LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
-		BoatLimit: 2, AISilence: 90 * time.Second, Bell: 0, Land: false, WorldSeed: 18446744073709551615, HasWorldSeed: true,
+		BoatLimit: 2, SpectatorLimit: 1, AISilence: 90 * time.Second, Bell: 0, Land: false, WorldSeed: 18446744073709551615, HasWorldSeed: true,
 		Schedule: c.Schedule, WorldKeep: 2 * time.Hour,
 	}
 	if c.Schedule.Every != 10*time.Minute {

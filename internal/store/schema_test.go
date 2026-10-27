@@ -448,3 +448,26 @@ func oldWorld(t *testing.T, pool *pgxpool.Pool) store.World {
 	must(t, pool, "SELECT create_world_partitions($1)", w.ID)
 	return w
 }
+
+// TestSpectatorsColumn: migration 00018 lets no account already there be
+// watched, and only a human account may allow it.
+func TestSpectatorsColumn(t *testing.T) {
+	ctx := context.Background()
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 17); err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	human := uuidOf(t, pool, "INSERT INTO account (kind, saved_at) VALUES ('human', now()) RETURNING id")
+	ai := uuidOf(t, pool, "INSERT INTO account (kind, owner_id) VALUES ('ai', $1) RETURNING id", human)
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM account WHERE NOT spectators").Scan(&n); err != nil || n != 2 {
+		t.Fatalf("after the migration %d of the accounts before it not watchable (%v)", n, err)
+	}
+	must(t, pool, "UPDATE account SET spectators = true WHERE id = $1", human)
+	refused(t, exec(t, pool, "UPDATE account SET spectators = true WHERE id = $1", ai), "23514")
+	refused(t, exec(t, pool, "UPDATE account SET spectators = NULL WHERE id = $1", human), "23502")
+}

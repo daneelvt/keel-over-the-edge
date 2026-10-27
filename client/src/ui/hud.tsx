@@ -5,7 +5,10 @@
 // heading, what the autopilot holds while it is on, and the wind), the sailor's state
 // when they are out of the boat, the helm bottom left, the sheet bottom
 // right, the autopilot's button between them, and the menu. Laid out
-// within the safe area, in portrait and landscape.
+// within the safe area, in portrait and landscape. Watching another
+// sailor's boat, every control that acts is gone (the helm, the sheet, the
+// autopilot's button, the free camera, taking the boat over): the
+// instruments read the boat watched, and the bar over it says whose it is.
 
 import { ConnectionLine, type ConnectionView } from './connection';
 import './hud.css';
@@ -27,6 +30,8 @@ import type { HudModel } from './model';
 import type { Notices } from './notices';
 import { Pilot } from './pilot';
 import type { SettingsSignal } from './settings';
+import { useWatch, type WatchView } from './watchlazy';
+import { watchersText } from './watchwords';
 
 const POINTS = ['N', 'E', 'S', 'W'];
 
@@ -148,6 +153,71 @@ function SailorLine({ model }: { model: HudModel }) {
   );
 }
 
+/** How many watch the own boat, under the sailor's line, while any do. */
+function WatchersLine({ watch }: { watch: WatchView }) {
+  const text = watchersText(watch.watchers.value);
+  return text === '' ? null : (
+    <p class="panel watchers-line" data-readout="watchers">
+      {text}
+    </p>
+  );
+}
+
+/** Whether any part of watching is on the screen. */
+function watchShown(w: WatchView): boolean {
+  return (
+    w.spectating.value ||
+    w.watching.value !== null ||
+    w.place.value !== null ||
+    w.status.value === 'idle' ||
+    w.list.value
+  );
+}
+
+/** The bar over a boat watched, in the column at the top; or the button behind it and the list, over the rest. */
+function LazyWatch({ watch, part }: { watch: WatchView; part: 'bar' | 'over' }) {
+  const shown = watchShown(watch);
+  const m = useWatch(shown);
+  if (m === null || !shown) {
+    return null;
+  }
+  if (part === 'bar') {
+    return <m.WatchBar view={watch} />;
+  }
+  return (
+    <>
+      <m.BehindTheBoat view={watch} />
+      <m.SeaWatchList view={watch} />
+    </>
+  );
+}
+
+/** The controls that act on the boat: the helm, the autopilot's button and the sheet; none on a boat watched. */
+export function SeaControls({
+  steer,
+  helm,
+  sheet,
+  pilot,
+  model,
+}: {
+  steer: boolean;
+  helm: HelmInput;
+  sheet: SheetInput;
+  pilot: PilotActions;
+  model: HudModel;
+}) {
+  if (!steer) {
+    return null;
+  }
+  return (
+    <>
+      <Helm input={helm} model={model} />
+      <Pilot actions={pilot} model={model} />
+      <Sheet input={sheet} model={model} />
+    </>
+  );
+}
+
 function Clinometer({ model }: { model: HudModel }) {
   // A pendulum hung from the top, swinging against the heel as the boat leans.
   const at = (r: number, d: number): [number, number] => {
@@ -198,6 +268,8 @@ export interface ScreenProps {
   barometer?: { barometer: Barometer; words: readonly DialWord[] } | null;
   /** The harbourmaster's board, in port; null without. */
   harbour?: HarbourView | null;
+  /** Watching another sailor's boat; null in the offline sandbox. */
+  watch?: WatchView | null;
 }
 
 /** The free camera as the screen sees it. */
@@ -221,6 +293,9 @@ function Screen(props: ScreenProps) {
   const sea = props.sea ?? null;
   const notices = props.notices ?? null;
   const end = props.end ?? null;
+  const watch = props.watch ?? null;
+  // Nothing steers a boat watched.
+  const steer = watch === null || !watch.spectating.value;
   if (sea?.chart.open.value) {
     // The chart covers the screen; the boat sails on under it.
     return (
@@ -251,12 +326,16 @@ function Screen(props: ScreenProps) {
     <>
       <div class="overlay-labels" ref={props.labels} aria-hidden="true" />
       <div class="hud-top">
+        {watch !== null ? <LazyWatch watch={watch} part="bar" /> : null}
         <Instruments model={model} />
         {end !== null ? <FallsLine end={end} /> : null}
         <SailorLine model={model} />
+        {watch !== null && steer ? <WatchersLine watch={watch} /> : null}
         <BumpLine model={model} />
         {notices !== null ? <NoticeLine notices={notices} /> : null}
-        {props.connection !== null ? <ConnectionLine view={props.connection} /> : null}
+        {props.connection !== null ? (
+          <ConnectionLine view={props.connection} takeover={steer} />
+        ) : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
         {props.barometer != null && s.barometer ? (
           <BarometerDial barometer={props.barometer.barometer} words={props.barometer.words} />
@@ -315,18 +394,24 @@ function Screen(props: ScreenProps) {
                 }
           }
           fly={
-            fly?.can.value === true
+            fly?.can.value === true && steer
               ? () => {
                   setMenu(false);
                   fly.fly();
                 }
               : null
           }
+          watch={watch}
         />
       ) : null}
-      <Helm input={props.helm} model={model} />
-      <Pilot actions={props.pilot} model={model} />
-      <Sheet input={props.sheet} model={model} />
+      {watch !== null ? <LazyWatch watch={watch} part="over" /> : null}
+      <SeaControls
+        steer={steer}
+        helm={props.helm}
+        sheet={props.sheet}
+        pilot={props.pilot}
+        model={model}
+      />
     </>
   );
 }

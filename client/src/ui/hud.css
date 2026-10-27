@@ -149,6 +149,12 @@
   font-weight: 500;
 }
 
+/* How many watch the own boat. */
+.watchers-line {
+  padding: 4px 12px;
+  color: var(--faint);
+}
+
 .falls-line {
   padding: 4px 12px;
   color: var(--faint);

@@ -153,6 +153,11 @@ type Metrics struct {
 	EdgeWriteDuration   prometheus.Histogram
 	EdgeEncoders        prometheus.Gauge
 	EdgeQueued          prometheus.Gauge
+	EdgeWatches         *prometheus.CounterVec // by result
+	EdgeSpectators      *prometheus.GaugeVec   // by state
+	EdgeSpectatorLimit  prometheus.Gauge
+	EdgeWatchers        prometheus.Histogram
+	EdgeRefused         *prometheus.CounterVec   // by what
 	EdgeViewBoats       *prometheus.HistogramVec // by band
 	EdgeSnapshotBytes   prometheus.Histogram
 	EdgeSnapshotEntries *prometheus.CounterVec // by op
@@ -346,6 +351,22 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.EdgeQueued = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "keel_edge_queued_connections", Help: "Game connections waiting in the queue for a boat.",
 	})
+	m.EdgeWatches = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_watch_total", Help: "Watches asked on game connections, by what came of them, and watches ended, by why.",
+	}, []string{"result"})
+	m.EdgeSpectators = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "keel_edge_spectators", Help: "Game connections watching a boat, or waiting in the spectators' queue to.",
+	}, []string{"state"})
+	m.EdgeSpectatorLimit = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_edge_spectator_limit", Help: "How many may watch boats at once.",
+	})
+	m.EdgeWatchers = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_edge_watchers", Help: "Spectators of each boat watched, sampled once a second.",
+		Buckets: []float64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000},
+	})
+	m.EdgeRefused = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_refused_total", Help: "What a game connection sent that it may not, dropped: controls from a connection that sails no boat.",
+	}, []string{"what"})
 	m.EdgeViewBoats = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "keel_edge_view_boats", Help: "Other boats in a snapshot's view, by band.", Buckets: ViewBuckets,
 	}, []string{"band"})
@@ -446,7 +467,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(m.LeaseEpoch, m.LeaseWait, m.LeaseLost, m.Restores, m.RestoredBoats, m.RestoreGap, m.PersistBatch, m.PersistCheckpoint, m.PersistWrites)
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame, m.ClientTier, m.ClientRenderScale,
-		m.EdgeEncoders, m.EdgeQueued, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
+		m.EdgeEncoders, m.EdgeQueued, m.EdgeWatches, m.EdgeSpectators, m.EdgeSpectatorLimit, m.EdgeWatchers, m.EdgeRefused, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.BoatsByKind, m.QueueByKind, m.QueueOldest, m.AICap, m.AIReserve, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.AccountsCreated, m.NamesRefused, m.Ceremonies, m.SignIns,

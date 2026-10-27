@@ -26,6 +26,11 @@ type me struct {
 	// Machines is how many machine sailors the account has: a player with
 	// any is shown them on the start screen before going to sea.
 	Machines int `json:"machines,omitempty"`
+	// Spectators is whether others may watch the sailor: "no", for this
+	// "voyage", or "always"; AtSea whether the account's own boat is in
+	// the water, which watching would take out.
+	Spectators string `json:"spectators,omitempty"`
+	AtSea      bool   `json:"atSea,omitempty"`
 }
 
 // me answers GET /api/me, behind auth.Signed: a session held to adding a
@@ -41,6 +46,10 @@ func (a *api) me(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m.Machines = len(list)
+	}
+	if a.cfg.Watch != nil && cur.Kind == store.Human {
+		m.Spectators = a.cfg.Watch.Spectators(cur.ID)
+		m.AtSea = a.cfg.Watch.AtSea(cur.ID)
 	}
 	writeJSON(w, http.StatusOK, m)
 }

@@ -1,7 +1,7 @@
 {
   "uid": "keel-game",
   "title": "Game",
-  "description": "keel: the tick against its 33 ms budget, the boats and connections, what each player costs, AI apps’ sign-in, the machine sailors and their agents, and how far behind persistence is.",
+  "description": "keel: the tick against its 33 ms budget, the boats and connections, what each player costs, the spectators watching boats, AI apps’ sign-in, the machine sailors and their agents, and how far behind persistence is.",
   "tags": [
     "keel"
   ],
@@ -1203,13 +1203,306 @@
     },
     {
       "type": "row",
+      "title": "Spectators",
+      "collapsed": false,
+      "panels": [],
+      "id": 59,
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Spectators, with the limit",
+      "description": "Game connections watching a boat, and those waiting in the spectators’ queue to, against how many may watch at once.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (state) (keel_edge_spectators)",
+          "legendFormat": "{{state}}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(keel_edge_spectator_limit)",
+          "legendFormat": "limit",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 60,
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Watches, by result",
+      "description": "Watches asked, by what came of them (started, switched, queued, full, refused and why), and watches ended, by why.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (result) (rate(keel_edge_watch_total[$__rate_interval]))",
+          "legendFormat": "{{result}}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 61,
+      "gridPos": {
+        "x": 6,
+        "y": 45,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Spectators a boat watched",
+      "description": "How many watch each boat watched, sampled once a second; the most is the top of its bucket.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.5, sum(rate(keel_edge_watchers_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "median",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.95, sum(rate(keel_edge_watchers_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "95th percentile",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(1, sum(rate(keel_edge_watchers_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "most",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 62,
+      "gridPos": {
+        "x": 12,
+        "y": 45,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Controls refused, and joins from watching",
+      "description": "Controls sent by a connection that sails no boat, dropped; and spectators who asked to sail.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(keel_edge_refused_total{what=\"input\"}[$__rate_interval]))",
+          "legendFormat": "controls refused",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(keel_edge_joins_total{result=\"sail\"}[$__rate_interval]))",
+          "legendFormat": "joins from watching",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 63,
+      "gridPos": {
+        "x": 18,
+        "y": 45,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "row",
       "title": "AI sign-in",
       "collapsed": false,
       "panels": [],
       "id": 31,
       "gridPos": {
         "x": 0,
-        "y": 44,
+        "y": 52,
         "w": 24,
         "h": 1
       }
@@ -1279,7 +1572,7 @@
       "id": 32,
       "gridPos": {
         "x": 0,
-        "y": 45,
+        "y": 53,
         "w": 8,
         "h": 7
       }
@@ -1337,7 +1630,7 @@
       "id": 33,
       "gridPos": {
         "x": 8,
-        "y": 45,
+        "y": 53,
         "w": 8,
         "h": 7
       }
@@ -1395,7 +1688,7 @@
       "id": 34,
       "gridPos": {
         "x": 16,
-        "y": 45,
+        "y": 53,
         "w": 8,
         "h": 7
       }
@@ -1453,7 +1746,7 @@
       "id": 35,
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 60,
         "w": 8,
         "h": 7
       }
@@ -1511,7 +1804,7 @@
       "id": 36,
       "gridPos": {
         "x": 8,
-        "y": 52,
+        "y": 60,
         "w": 8,
         "h": 7
       }
@@ -1569,7 +1862,7 @@
       "id": 37,
       "gridPos": {
         "x": 16,
-        "y": 52,
+        "y": 60,
         "w": 4,
         "h": 7
       }
@@ -1639,7 +1932,7 @@
       "id": 38,
       "gridPos": {
         "x": 20,
-        "y": 52,
+        "y": 60,
         "w": 4,
         "h": 7
       }
@@ -1697,7 +1990,7 @@
       "id": 39,
       "gridPos": {
         "x": 0,
-        "y": 59,
+        "y": 67,
         "w": 8,
         "h": 7
       }
@@ -1755,7 +2048,7 @@
       "id": 40,
       "gridPos": {
         "x": 8,
-        "y": 59,
+        "y": 67,
         "w": 8,
         "h": 7
       }
@@ -1813,7 +2106,7 @@
       "id": 41,
       "gridPos": {
         "x": 16,
-        "y": 59,
+        "y": 67,
         "w": 8,
         "h": 7
       }
@@ -1871,7 +2164,7 @@
       "id": 57,
       "gridPos": {
         "x": 0,
-        "y": 66,
+        "y": 74,
         "w": 12,
         "h": 7
       }
@@ -1965,7 +2258,7 @@
       "id": 58,
       "gridPos": {
         "x": 12,
-        "y": 66,
+        "y": 74,
         "w": 12,
         "h": 7
       }
@@ -1978,7 +2271,7 @@
       "id": 42,
       "gridPos": {
         "x": 0,
-        "y": 73,
+        "y": 81,
         "w": 24,
         "h": 1
       }
@@ -2036,7 +2329,7 @@
       "id": 43,
       "gridPos": {
         "x": 0,
-        "y": 74,
+        "y": 82,
         "w": 8,
         "h": 7
       }
@@ -2094,7 +2387,7 @@
       "id": 44,
       "gridPos": {
         "x": 8,
-        "y": 74,
+        "y": 82,
         "w": 8,
         "h": 7
       }
@@ -2164,7 +2457,7 @@
       "id": 45,
       "gridPos": {
         "x": 16,
-        "y": 74,
+        "y": 82,
         "w": 8,
         "h": 7
       }
@@ -2222,7 +2515,7 @@
       "id": 46,
       "gridPos": {
         "x": 0,
-        "y": 81,
+        "y": 89,
         "w": 8,
         "h": 7
       }
@@ -2292,7 +2585,7 @@
       "id": 47,
       "gridPos": {
         "x": 8,
-        "y": 81,
+        "y": 89,
         "w": 8,
         "h": 7
       }
@@ -2350,7 +2643,7 @@
       "id": 48,
       "gridPos": {
         "x": 16,
-        "y": 81,
+        "y": 89,
         "w": 8,
         "h": 7
       }
@@ -2408,7 +2701,7 @@
       "id": 49,
       "gridPos": {
         "x": 0,
-        "y": 88,
+        "y": 96,
         "w": 8,
         "h": 7
       }
@@ -2478,7 +2771,7 @@
       "id": 50,
       "gridPos": {
         "x": 8,
-        "y": 88,
+        "y": 96,
         "w": 8,
         "h": 7
       }
@@ -2536,7 +2829,7 @@
       "id": 51,
       "gridPos": {
         "x": 16,
-        "y": 88,
+        "y": 96,
         "w": 8,
         "h": 7
       }
@@ -2618,7 +2911,7 @@
       "id": 52,
       "gridPos": {
         "x": 0,
-        "y": 95,
+        "y": 103,
         "w": 8,
         "h": 7
       }
@@ -2676,7 +2969,7 @@
       "id": 53,
       "gridPos": {
         "x": 8,
-        "y": 95,
+        "y": 103,
         "w": 8,
         "h": 7
       }
@@ -2734,7 +3027,7 @@
       "id": 54,
       "gridPos": {
         "x": 16,
-        "y": 95,
+        "y": 103,
         "w": 8,
         "h": 7
       }
@@ -2792,7 +3085,7 @@
       "id": 55,
       "gridPos": {
         "x": 0,
-        "y": 102,
+        "y": 110,
         "w": 12,
         "h": 7
       }
@@ -2850,7 +3143,7 @@
       "id": 56,
       "gridPos": {
         "x": 12,
-        "y": 102,
+        "y": 110,
         "w": 12,
         "h": 7
       }
@@ -2863,7 +3156,7 @@
       "id": 16,
       "gridPos": {
         "x": 0,
-        "y": 109,
+        "y": 117,
         "w": 24,
         "h": 1
       }
@@ -2937,7 +3230,7 @@
       "id": 17,
       "gridPos": {
         "x": 0,
-        "y": 110,
+        "y": 118,
         "w": 8,
         "h": 7
       }
@@ -3007,7 +3300,7 @@
       "id": 18,
       "gridPos": {
         "x": 8,
-        "y": 110,
+        "y": 118,
         "w": 8,
         "h": 7
       }
@@ -3065,7 +3358,7 @@
       "id": 19,
       "gridPos": {
         "x": 16,
-        "y": 110,
+        "y": 118,
         "w": 4,
         "h": 7
       }
@@ -3123,7 +3416,7 @@
       "id": 20,
       "gridPos": {
         "x": 20,
-        "y": 110,
+        "y": 118,
         "w": 4,
         "h": 7
       }
@@ -3181,7 +3474,7 @@
       "id": 21,
       "gridPos": {
         "x": 0,
-        "y": 117,
+        "y": 125,
         "w": 8,
         "h": 7
       }
@@ -3251,7 +3544,7 @@
       "id": 22,
       "gridPos": {
         "x": 8,
-        "y": 117,
+        "y": 125,
         "w": 8,
         "h": 7
       }
@@ -3309,7 +3602,7 @@
       "id": 23,
       "gridPos": {
         "x": 16,
-        "y": 117,
+        "y": 125,
         "w": 8,
         "h": 7
       }
@@ -3322,7 +3615,7 @@
       "id": 24,
       "gridPos": {
         "x": 0,
-        "y": 124,
+        "y": 132,
         "w": 24,
         "h": 1
       }
@@ -3404,7 +3697,7 @@
       "id": 25,
       "gridPos": {
         "x": 0,
-        "y": 125,
+        "y": 133,
         "w": 8,
         "h": 7
       }
@@ -3480,7 +3773,7 @@
       "id": 26,
       "gridPos": {
         "x": 8,
-        "y": 125,
+        "y": 133,
         "w": 8,
         "h": 7
       }
@@ -3550,7 +3843,7 @@
       "id": 27,
       "gridPos": {
         "x": 16,
-        "y": 125,
+        "y": 133,
         "w": 8,
         "h": 7
       }
@@ -3620,7 +3913,7 @@
       "id": 28,
       "gridPos": {
         "x": 0,
-        "y": 132,
+        "y": 140,
         "w": 12,
         "h": 7
       }
@@ -3657,7 +3950,7 @@
       "id": 29,
       "gridPos": {
         "x": 12,
-        "y": 132,
+        "y": 140,
         "w": 12,
         "h": 7
       }

@@ -15,6 +15,9 @@
 // was, the screen is clean (a tap shows the way back for a few seconds),
 // and the server is told where it is, so it sends what is about it. Online it is offered only
 // to an account with the owner's flag; in the sandbox, to anyone.
+//
+// Watching another sailor's boat, nothing the player holds steers it: the
+// keys move no control, and the free camera is not offered.
 
 import { effect, signal } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
@@ -50,6 +53,7 @@ import { HOURS, hourAt, skyPeriods } from '../sky/skytime';
 import { HudModel, PUSHED_OFF } from '../ui/model';
 import type { SettingsSignal } from '../ui/settings';
 import { bumpLine } from '../ui/verdict';
+import { bumpedLine } from '../ui/watchwords';
 import { STEPS_PER_SECOND, WorldClock } from './clock';
 import type { BoatDriver, Pacer } from './driver';
 import { StepLoop } from './loop';
@@ -91,6 +95,8 @@ export class Game implements PilotActions {
   #backTimer: ReturnType<typeof setTimeout> | null = null;
   /** Whether the free camera is offered: online, the owner's flag; in the sandbox, always. */
   canFly: () => boolean = () => true;
+  /** Whether the keys steer the boat drawn: not one watched. */
+  canSteer: () => boolean = () => true;
   /** Told where the free camera is, as it leaves the boat, moves and comes back: online, the server. */
   onRoam: ((on: boolean, east: number, north: number, height: number) => void) | null = null;
   readonly #roam = new RoamTeller();
@@ -218,6 +224,10 @@ export class Game implements PilotActions {
         }
         return;
       }
+      if (!this.canSteer()) {
+        this.keys.release();
+        return;
+      }
       if (this.keys.down(e.code, e.shiftKey)) {
         e.preventDefault();
       }
@@ -264,9 +274,10 @@ export class Game implements PilotActions {
   /**
    * A bump the server told of, at now (ms): a knock of timber, placed where
    * the hulls touched; and, if the boat was one of the two, a shake of the
-   * camera and the Articles' verdict under the readout. Played once.
+   * camera and the Articles' verdict under the readout, or, for a boat
+   * watched, that its sailor was bumped. Played once.
    */
-  bump(b: BumpTold, now: number): void {
+  bump(b: BumpTold, now: number, watched: string | null = null): void {
     this.lastBump = b;
     this.bumps++;
     const p = this.world.pose;
@@ -277,7 +288,7 @@ export class Game implements PilotActions {
       return;
     }
     this.world.camera.shake(b.closing, now);
-    this.hud.showBump(bumpLine(b.article, b.part), now);
+    this.hud.showBump(watched === null ? bumpLine(b.article, b.part) : bumpedLine(watched), now);
   }
 
   /**

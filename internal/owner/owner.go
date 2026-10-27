@@ -36,6 +36,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
@@ -95,6 +96,10 @@ type AgentInfo struct {
 type Edge interface {
 	Tools(account bus.Account, on bool) bool
 	Eye(account bus.Account) (x, y float64, ok bool)
+	// Watched is how many watch each boat watched, by its sailor; and
+	// Spectators how many watch and wait to, and the limit.
+	Watched() map[bus.Account]int
+	Spectators() edge.Spectators
 }
 
 // A Clock tells world time: the loop's.

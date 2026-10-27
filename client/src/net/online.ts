@@ -9,12 +9,22 @@
 // boat it sails is the boat drawn. The other boats in each snapshot go to
 // the fleet, which draws them a little in the past; each record goes back
 // to the worker once read.
+//
+// The connection may watch another sailor's boat instead: then the
+// snapshots' headers are the watched boat's, and the watching driver
+// draws it at the near band's render tick, the world clock set there, so
+// it and the boats about it share one timeline; nothing is predicted and
+// no controls are sent. A Welcome begins each watch, and another brings
+// the own boat back, its prediction started afresh; what the connection
+// was handed before (the chart, the land, the lights and caps) stands.
 
 import { signal } from '@preact/signals';
 import { catalog } from '../catalog';
 import type { FallShape } from '../edge/over';
+import type { BoatDriver } from '../game/driver';
 import { Fleet } from '../game/fleet';
 import { Floater } from '../game/float';
+import { WatchDriver } from '../game/watch';
 import { type PilotControl, PilotInput } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { RECORDS } from '../predict/layout.gen';
@@ -28,6 +38,7 @@ import {
 } from '../predict/predictor';
 import type { WorldEnd } from '../ui/countdown';
 import { queueLines } from '../ui/queue';
+import { BOAT_IN_THE_WATER, endedText, type WatchEndWhy } from '../ui/watchwords';
 import {
   Ahead,
   aheadTicks,
@@ -51,6 +62,8 @@ import type {
   PlaceSeen,
   Status,
   ToWorker,
+  Traffic,
+  WatchingTold,
   WeatherKeyframe,
   WeatherSpells,
 } from './messages';
@@ -88,6 +101,12 @@ export interface Place {
   waiting: number;
 }
 
+/** A watch ended or refused: why, and the sailor's name. */
+export interface WatchEnd {
+  why: WatchEndWhy;
+  sailor: string;
+}
+
 /** What the connection line says from the bell until the boat is back. */
 export const BELL_TEXT =
   'The harbourmaster rings the bell: the harbour closes for a moment. Your boat will wait for you.';
@@ -97,6 +116,8 @@ const EPSILON = 1e-9;
 const OWN_KEPT = 64;
 /** How often the frame time is sent, µs. */
 const FRAME_EVERY = 2_000_000;
+/** A line about the connection that goes by itself shows this long, µs. */
+const NOTICE_FOR = 6_000_000;
 
 export class Online {
   readonly status = signal<Status>('connecting');
@@ -107,6 +128,20 @@ export class Online {
   readonly place = signal<Place | null>(null);
   /** The account carries the owner's flag: the free camera is the player's. */
   readonly tools = signal(false);
+  /** The boat watched, from its Welcome; null while the connection sails or is idle. */
+  readonly watching = signal<WatchingTold | null>(null);
+  /** The last watch ended or refused, until the next Welcome. */
+  readonly ended = signal<WatchEnd | null>(null);
+  /** The place in the spectators' queue, while all the places to watch are taken, or null. */
+  readonly watchPlace = signal<Place | null>(null);
+  /** How many watch the own boat. */
+  readonly watchers = signal(0);
+  /** The boat drawn is not the own: one watched, or the last one held while none is. */
+  readonly spectating = signal(false);
+  /** What draws the boat: the predictor while the connection sails, the watching driver while it watches. */
+  driver: BoatDriver;
+  /** Told each time the driver changes. */
+  onDriver: ((d: BoatDriver) => void) | null = null;
   /** The other boats. */
   readonly fleet = new Fleet();
   /** The latest snapshots' sizes, bytes, for the panel. */
@@ -146,12 +181,20 @@ export class Online {
   onCaps: ((caps: CapSeen[], drop: number[] | 'all') => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
   lastMargin = NO_MARGIN;
-  traffic = { bytesIn: 0, bytesOut: 0, messagesIn: 0, messagesOut: 0, resyncs: 0 };
+  traffic: Traffic = {
+    bytesIn: 0,
+    bytesOut: 0,
+    messagesIn: 0,
+    messagesOut: 0,
+    resyncs: 0,
+    controls: 0,
+  };
   /** Resolves with the first snapshot: the sea can be shown. */
   readonly ready: Promise<void>;
 
   readonly #port: Port;
   readonly #predictor: Predictor;
+  readonly #watcher: WatchDriver;
   readonly #helmsman: Helmsman;
   /** Floats the other boats on the sea drawn under them. */
   readonly #floater: Floater;
@@ -165,6 +208,8 @@ export class Online {
   readonly #sentPilot = new PilotInput();
   #fresh = false;
   #hadBoat = false;
+  /** A watch began, or the connection was idle, since the own boat's last Welcome. */
+  #away = false;
   /** The bell rang: the server is restarting, and the boat waits. */
   #bell = false;
   #ready: () => void = () => {};
@@ -176,6 +221,13 @@ export class Online {
   constructor(port: Port, predictor: Predictor, helmsman: Helmsman) {
     this.#port = port;
     this.#predictor = predictor;
+    this.#watcher = new WatchDriver(
+      predictor.physics,
+      predictor.seas,
+      predictor.weather,
+      predictor.wakes,
+    );
+    this.driver = predictor;
     this.#helmsman = helmsman;
     this.#floater = new Floater(predictor.physics, predictor.seas, catalog.boats);
     this.ready = new Promise((resolve) => {
@@ -207,6 +259,44 @@ export class Online {
     this.#port.postMessage({ type: 'takeover' });
   }
 
+  /** Watches a sailor's boat: a boat sailed leaves the water at once. */
+  watch(sailor: string): void {
+    this.#port.postMessage({ type: 'watch', sailor });
+  }
+
+  /** A boat: a new one at the start, or a place in the queue, while a watch goes on. */
+  sail(): void {
+    this.#port.postMessage({ type: 'sail' });
+  }
+
+  /** Stops watching, without sailing: the boat watched is held where it was. */
+  unwatch(): void {
+    this.#port.postMessage({ type: 'unwatch' });
+    if (this.watching.value !== null) {
+      this.watching.value = null;
+      this.#away = true;
+    }
+  }
+
+  /** Whether the boat drawn is one watched, not the own boat. */
+  get watched(): boolean {
+    return this.driver === this.#watcher;
+  }
+
+  #use(d: BoatDriver): void {
+    if (this.driver !== d) {
+      this.driver = d;
+      this.spectating.value = d === this.#watcher;
+      this.onDriver?.(d);
+    }
+  }
+
+  /** A line in place of the connection's for NOTICE_FOR, at now (µs). */
+  #say(text: string, now = nowUs()): void {
+    this.notice.value = { text, takeover: false };
+    this.#noticeUntil = now + NOTICE_FOR;
+  }
+
   stop(): void {
     this.#port.postMessage({ type: 'stop' });
   }
@@ -215,17 +305,45 @@ export class Online {
     switch (m.type) {
       case 'status':
         this.status.value = m.status;
-        if (m.status !== 'queued') {
+        if (m.status !== 'queued' && m.status !== 'sailing' && m.status !== 'idle') {
+          // The connection is gone: its places in the queues with it.
           this.place.value = null;
+          this.watchPlace.value = null;
         }
         this.#describe(m.status, m.reason);
         break;
       case 'queued':
+        if (m.spectators) {
+          this.watchPlace.value = { position: m.position, waiting: m.waiting };
+          if (!this.watched) {
+            // The own boat has left the water to watch: held where it was.
+            this.#watcher.reset();
+            this.#watcher.holdFrom(this.#predictor);
+            this.#predictor.started = false;
+            this.#use(this.#watcher);
+          }
+          break;
+        }
         this.place.value = { position: m.position, waiting: m.waiting };
-        if (this.#hadBoat) {
+        if (this.#hadBoat && this.watching.value === null) {
           // Back after the boat returned to port, and the sea is full.
           this.notice.value = { text: queueLines(this.place.value).join(' '), takeover: false };
         }
+        break;
+      case 'watchEnded': {
+        this.ended.value = { why: m.why, sailor: m.sailor };
+        this.watchPlace.value = null;
+        if (!this.watched && this.status.value === 'sailing') {
+          // Refused while the own boat sails: it sails on.
+          this.#say(endedText(m.why, m.sailor));
+          break;
+        }
+        this.watching.value = null;
+        this.#away = true;
+        break;
+      }
+      case 'watchers':
+        this.watchers.value = m.count;
         break;
       case 'restart':
         this.#bell = true;
@@ -265,14 +383,25 @@ export class Online {
         this.tools.value = m.on;
         break;
       case 'welcome':
-        if (this.#hadBoat && !m.rejoined) {
-          this.notice.value = { text: 'Your boat has returned to port.', takeover: false };
-          this.#noticeUntil = nowUs() + 6_000_000;
+        if (m.watching !== null) {
+          if (this.#bell) {
+            this.notice.value = null;
+          }
+          this.#away = true;
+        } else if (this.#away) {
+          // From watching, or idle: the own boat in the water at the start.
+          this.#say(BOAT_IN_THE_WATER);
+        } else if (this.#hadBoat && !m.rejoined) {
+          this.#say('Your boat has returned to port.');
         } else if (this.#bell) {
           this.notice.value = null;
         }
         this.#bell = false;
-        this.#hadBoat = true;
+        if (m.watching === null) {
+          this.#hadBoat = true;
+          this.#away = false;
+          this.place.value = null;
+        }
         this.boat = m.boat;
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
@@ -286,11 +415,31 @@ export class Online {
           zone: m.zone,
           epoch: m.epochUs / 1000,
         });
-        // A new connection is sent the lights in range again.
-        this.onLights?.(m.light === null ? [] : [m.light], 'all');
-        this.onCaps?.([], 'all');
+        if (m.first) {
+          // A new connection is sent the lights in range again; a later
+          // Welcome on it, nothing it holds.
+          this.onLights?.(m.light === null ? [] : [m.light], 'all');
+          this.onCaps?.([], 'all');
+        }
         this.tools.value = m.tools;
         this.#predictor.setCirculation(m.circulation);
+        this.watching.value = m.watching;
+        this.ended.value = null;
+        this.watchPlace.value = null;
+        if (m.watching !== null) {
+          // Another boat's headers: none of the last one's, and no prediction.
+          this.watchers.value = 0;
+          this.#watcher.reset();
+          if (!this.watched) {
+            this.#watcher.holdFrom(this.#predictor);
+          }
+          this.#predictor.started = false;
+          this.#use(this.#watcher);
+        } else if (this.driver !== this.#predictor) {
+          // The own boat again: its prediction starts from its first snapshot.
+          this.#predictor.started = false;
+          this.#use(this.#predictor);
+        }
         this.#fresh = true;
         // A snapshot still waiting for a frame is the last connection's:
         // its controls are not this boat's.
@@ -301,7 +450,7 @@ export class Online {
         this.#predictor.wakes.reset();
         break;
       case 'snapshot':
-        if (this.#predictor.started) {
+        if (this.watched ? this.#watcher.started : this.#predictor.started) {
           this.#queued.push(m.data);
         } else {
           // The first: it starts the prediction, and the sea can be shown.
@@ -331,7 +480,7 @@ export class Online {
       case 'connecting':
         // After the bell its line stays, through the close and the
         // reconnecting, until the boat is back.
-        if (this.#hadBoat && !this.#bell) {
+        if ((this.#hadBoat || this.#away) && !this.#bell) {
           this.notice.value = { text: 'Reconnecting…', takeover: false };
         }
         return;
@@ -401,9 +550,14 @@ export class Online {
     if (readSnapshot(new DataView(data), this.#scratch) === null) {
       const f = fleetOf(data);
       // The other boats' samples first: the steps the reconciliation
-      // replays sail in their shadow.
+      // replays sail in their shadow, and the watched boat's step.
       this.#predictor.wakes.observe(f);
-      this.reconcile(this.#scratch, now);
+      if (this.watched) {
+        this.#watcher.receive(this.#scratch);
+        this.#ready();
+      } else {
+        this.reconcile(this.#scratch, now);
+      }
       this.snapshotBytes = f[FLEET_META.bytes] ?? 0;
       this.fleet.add(f, worldUs(this.clock, f[FLEET_META.received] ?? now));
     }
@@ -460,13 +614,42 @@ export class Online {
       this.#noticeUntil = 0;
       this.notice.value = null;
     }
-    this.pace(now);
+    const watched = this.watched;
+    if (!watched) {
+      this.pace(now);
+    }
     if (this.clock.have) {
       this.fleet.update(worldUs(this.clock, now), dt);
+      if (watched) {
+        this.#drawWatched();
+      }
       const c = this.#helmsman.clock;
       this.#floater.apply(this.fleet.drawn, this.fleet.count, c.steps + c.alpha, dt);
       this.fleet.fall(this.#helmsman.fallShape ?? null);
     }
+  }
+
+  /**
+   * The watched boat at the near band's render tick, or at its newest
+   * header until the band has one; the world clock set there, and the
+   * controls it sails with shown as the screen shows the own boat's.
+   */
+  #drawWatched(): void {
+    const w = this.#watcher;
+    const near = this.fleet.near.tick;
+    const h = this.#helmsman;
+    if (!w.started) {
+      // Idle, or waiting to watch: the boat held, the world going on.
+      if (!Number.isNaN(near)) {
+        h.clock.steps = Math.floor(near);
+        h.clock.alpha = near - h.clock.steps;
+      }
+      return;
+    }
+    w.at(Number.isNaN(near) ? w.newest : near, h.clock);
+    h.helm.target = helmOf(w.helm);
+    h.sheet.target = sheetOf(w.sheet);
+    h.pilot.set(w.pilot);
   }
 
   /** Steps the boat to the tick it should be at, at now (µs). */

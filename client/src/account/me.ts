@@ -19,6 +19,15 @@ export interface Me {
   noticesOff?: string[];
   /** How many machine sailors the account has; none when absent. */
   machines?: number;
+  /** Who may watch the player's boat: no one, this voyage's spectators, or always. */
+  spectators?: 'no' | 'voyage' | 'always';
+  /** The player's own boat is in the water now. */
+  atSea?: boolean;
+  /**
+   * Not the server's: the sailor the player chose on the start screen to
+   * watch rather than sail; none to sail.
+   */
+  watch?: string;
 }
 
 export type SessionCheck = { kind: 'sailor'; me: Me } | { kind: 'none' } | { kind: 'failed' };

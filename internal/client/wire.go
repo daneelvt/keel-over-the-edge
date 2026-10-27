@@ -27,6 +27,27 @@ func Hello() *pb.ClientMessage {
 	}}}
 }
 
+// HelloWatch is the Hello of a client that opens watching a sailor's boat.
+func HelloWatch(sailor string) *pb.ClientMessage {
+	m := Hello()
+	m.GetHello().Watch = sailor
+	return m
+}
+
+// Watch, Sail and Unwatch are the commands that switch a connection
+// between watching and sailing.
+func Watch(sailor string) *pb.ClientMessage {
+	return &pb.ClientMessage{Body: &pb.ClientMessage_Command{Command: &pb.Command{Body: &pb.Command_Watch{Watch: &pb.Watch{Sailor: sailor}}}}}
+}
+
+func Sail() *pb.ClientMessage {
+	return &pb.ClientMessage{Body: &pb.ClientMessage_Command{Command: &pb.Command{Body: &pb.Command_Sail{Sail: &pb.Sail{}}}}}
+}
+
+func Unwatch() *pb.ClientMessage {
+	return &pb.ClientMessage{Body: &pb.ClientMessage_Command{Command: &pb.Command{Body: &pb.Command_Unwatch{Unwatch: &pb.Unwatch{}}}}}
+}
+
 // Send writes a client's message.
 func Send(ctx context.Context, ws *websocket.Conn, m *pb.ClientMessage) error {
 	b, err := protocol.AppendClient(nil, m)

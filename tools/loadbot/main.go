@@ -11,6 +11,7 @@
 //	go run ./tools/loadbot -n 200 -url https://localhost:5173 [-lag 200ms,2%] [-for 5m] [-ramp 30s]
 //	go run ./tools/loadbot -apps 200 -refreshes 1000 -url https://localhost:5173 [-mcp …]
 //	go run ./tools/loadbot -agents 50 -for 5m -url https://macbook.local [-mcp …]
+//	go run ./tools/loadbot -watchers 200 -watch "Iron Mary" -for 5m -url https://macbook.local
 //
 // Its sailors are made as the start screen makes them, with a passkey a
 // software authenticator holds, and named "Loadbot 1" and on; their
@@ -55,7 +56,16 @@ func main() {
 	refreshes := flag.Int("refreshes", 1000, "with -apps, how many refreshes")
 	mcp := flag.String("mcp", "", "with -apps or -agents, the MCP address: the game's origin's /mcp if empty")
 	agents := flag.Int("agents", 0, "instead of sailing on phones, sail this many machine sailors over the MCP address for -for, each with a connection token")
+	watchers := flag.Int("watchers", 0, "instead of sailing, this many players watch the boat of the sailor -watch names, for -for")
+	watch := flag.String("watch", "", "with -watchers, the sailor whose boat they watch")
 	flag.Parse()
+	if *watchers > 0 {
+		if *watch == "" {
+			fmt.Fprintln(os.Stderr, "loadbot: -watchers needs -watch, a sailor's name")
+			os.Exit(2)
+		}
+		*n = *watchers
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -77,13 +87,13 @@ func main() {
 		}
 		return
 	}
-	if err := run(ctx, *n, *base, *lagFlag, *sail, *ramp, *fps, *pilot, *metrics, *sessions, *ca); err != nil {
+	if err := run(ctx, *n, *base, *lagFlag, *sail, *ramp, *fps, *pilot, *metrics, *sessions, *ca, *watch); err != nil {
 		fmt.Fprintln(os.Stderr, "loadbot:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Duration, fps int, pilot float64, metrics, sessions, ca string) error {
+func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Duration, fps int, pilot float64, metrics, sessions, ca, watch string) error {
 	if n < 1 || fps < 1 {
 		return errors.New("-n and -fps must be at least 1")
 	}
@@ -101,6 +111,7 @@ func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Durat
 		Sessions:   sessions,
 		Dial:       wsDialer(hc, base),
 		Out:        os.Stdout,
+		Watch:      watch,
 	}
 	if lagFlag != "" {
 		l, err := client.ParseLag(lagFlag)

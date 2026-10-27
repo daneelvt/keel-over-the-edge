@@ -42,10 +42,39 @@ const (
 	joinFull
 	joinBusy
 	joinTimeout
+	joinSail
 	joins
 )
 
-var joinNames = [joins]string{"joined", "rejoined", "queued", "full", "busy", "timeout"}
+var joinNames = [joins]string{"joined", "rejoined", "queued", "full", "busy", "timeout", "sail"}
+
+// What came of a watch asked.
+const (
+	watchStarted = iota
+	watchSwitched
+	watchEndedLeft
+	watchEndedOff
+	watchEndedUnseen
+	watchAbsent
+	watchRefused
+	watchQuick
+	watchBusy
+	watchQueued
+	watchFull
+	watches
+)
+
+var watchNames = [watches]string{"started", "switched", "ended_left", "ended_off", "ended_unseen", "refused_absent",
+	"refused_not_allowed", "refused_quick", "refused_busy", "queued", "full"}
+
+// The spectators, by state.
+const (
+	spectWatching = iota
+	spectWaiting
+	spectStates
+)
+
+var spectNames = [spectStates]string{"watching", "waiting"}
 
 // The kinds of message counted, each way.
 const (
@@ -75,10 +104,12 @@ const (
 	outCharted
 	outIslandCaps
 	outForecast
+	outWatchEnded
+	outWatchers
 	outs
 )
 
-var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights", "chart", "charted", "island_caps", "forecast"}
+var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights", "chart", "charted", "island_caps", "forecast", "watch_ended", "watchers"}
 
 // The entries of a snapshot, by op.
 const (
@@ -130,6 +161,11 @@ type metrics struct {
 	frame                         prometheus.Observer
 	tiers                         [len(tierNames)]prometheus.Gauge
 	scale                         prometheus.Observer
+	watch                         [watches]prometheus.Counter
+	spectators                    [spectStates]prometheus.Gauge
+	spectatorLimit                prometheus.Gauge
+	watchers                      prometheus.Observer
+	refusedInput                  prometheus.Counter
 }
 
 // tierNames are the tiers a client says it draws at, by their number in a
@@ -194,6 +230,15 @@ func newMetrics(m *obs.Metrics) metrics {
 		x.tiers[i] = m.ClientTier.WithLabelValues(n)
 	}
 	x.scale = m.ClientRenderScale
+	for i, n := range watchNames {
+		x.watch[i] = m.EdgeWatches.WithLabelValues(n)
+	}
+	for i, n := range spectNames {
+		x.spectators[i] = m.EdgeSpectators.WithLabelValues(n)
+	}
+	x.spectatorLimit = m.EdgeSpectatorLimit
+	x.watchers = m.EdgeWatchers
+	x.refusedInput = m.EdgeRefused.WithLabelValues("input")
 	return x
 }
 

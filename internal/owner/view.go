@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -148,6 +149,11 @@ func (b *builder) build(ctx context.Context) *view {
 	}
 	p := b.cfg.Weather
 	now := time.Now()
+	var watched map[bus.Account]int
+	if e := b.cfg.Edge; e != nil {
+		watched = e.Watched()
+		w.Spectators = e.Spectators()
+	}
 	w.Admission = admissionJSON{AICap: b.cfg.AICap, AIReserve: b.cfg.AIReserve,
 		AISilence: b.cfg.AISilence.Seconds(), AIOrders: b.cfg.AIOrders, AILooks: b.cfg.AILooks}
 	for i := range b.boats {
@@ -162,7 +168,7 @@ func (b *builder) build(ctx context.Context) *view {
 			Kind: kind, East: round2(bc.x), North: round2(bc.y), Heading: round2(degrees(bc.heading)), Knots: round2(bc.speed / knot),
 			FromLip: round2(physics.EdgeDistance(p, bc.x, bc.y)), Connected: bc.conn != 0,
 			Falling: bc.falling, Stays: bc.stays, Unseen: bc.unseen, Tools: n.acc.Tools,
-			Machine: bc.machine, Priority: n.acc.Priority, Admitted: bc.priority,
+			Machine: bc.machine, Priority: n.acc.Priority, Admitted: bc.priority, Watchers: watched[bc.owner],
 		}
 		if bc.machine {
 			w.Admission.Machines++
@@ -422,6 +428,8 @@ type worldJSON struct {
 	Boats     []boatJSON    `json:"boats"`
 	Queue     []waitJSON    `json:"queue"`
 	Admission admissionJSON `json:"admission"`
+	// Spectators is how many watch boats, how many wait to, and the limit.
+	Spectators edge.Spectators `json:"spectators"`
 }
 
 // admissionJSON is world.json's admission by kind: the boats at sea and
@@ -499,6 +507,8 @@ type boatJSON struct {
 	Admitted bool `json:"admitted"`
 	// Agent is a machine boat's agent, while keel knows of it.
 	Agent *agentJSON `json:"agent,omitempty"`
+	// Watchers is how many watch the boat.
+	Watchers int `json:"watchers"`
 }
 
 // agentJSON is what the page shows of a machine boat's agent.

@@ -33,6 +33,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
+	"github.com/daneelvt/keel-over-the-edge/internal/watch"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
@@ -75,6 +76,8 @@ type process struct {
 	agents *agents
 	// hand is the owner's hand on accounts, and every deletion's.
 	hand *accounts.Accounts
+	// allowing is the accounts that let anyone watch them always.
+	allowing *watch.Allowing
 
 	// The routes the world half serves, set as each opens.
 	replayRoutes, devRoutes, ownerRoutes, playRoutes *lateHandler
@@ -340,6 +343,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Forecast: h.forecasts,
 		Stopped:  func(a bus.Account) bool { return p.hand.Stopped().Has(store.AccountID(a)) },
 		Seen:     p.sessions.Seen,
+		Watch:    p.watchTarget, Allowing: p.allowing, SpectatorLimit: cfg.SpectatorLimit,
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -376,6 +380,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Status:      p.statusNow,
 		Website:     websiteOf(cfg.PlayOrigin),
 	}
+	playCfg.Watch = watch.New(watch.Config{Store: p.db, Allowing: p.allowing, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat)})
 	p.agents.apiConfig(&playCfg, p)
 	h.play = api.Handler(playCfg)
 	p.log.Info("world ready", "world", row.Number, "kinds", len(p.kinds), "capacity", world.Capacity(), "limit", world.Limit(),
@@ -409,6 +414,11 @@ func (w accountsWorld) Deleted(id store.AccountID) {
 	if c := w.h.ready.charts; c != nil {
 		c.model.Forget(id)
 	}
+}
+
+// Watching is whose boat an account's game connection watches.
+func (w accountsWorld) Watching(id store.AccountID) (string, bool) {
+	return w.h.game.Watching(bus.Account(id))
 }
 
 // Sea is where an account's boat is in the latest frame.
@@ -684,4 +694,19 @@ func (p *process) closeForStop(bell time.Duration) int64 {
 	p.agents.core.Bell(bell)
 	time.Sleep(bell)
 	return h.close(closeStop)
+}
+
+// watchTarget is the sailor whose name has key, to watch.
+func (p *process) watchTarget(ctx context.Context, key string) (watch.Target, error) {
+	t, err := p.db.WatchTarget(ctx, key)
+	return watch.Target(t), err
+}
+
+// boatIDs are the catalog's boats' ids, by the world's index of kinds.
+func boatIDs(cat *catalog.Catalog) []string {
+	ids := make([]string, len(cat.Boats))
+	for i, b := range cat.Boats {
+		ids[i] = string(b.ID)
+	}
+	return ids
 }

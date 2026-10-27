@@ -6,6 +6,7 @@
 // not copied; the page hands each back once it has read it, and the worker
 // fills it again, so neither side allocates per snapshot.
 
+import type { WatchEndWhy } from '../ui/watchwords';
 import type { ClockState } from './clock';
 
 /**
@@ -213,6 +214,15 @@ export interface ChartEntry {
   withNumber: number;
 }
 
+/** Whose boat a connection watches, as its Welcome says. */
+export interface WatchingTold {
+  /** The sailor's name, as players see it. */
+  sailor: string;
+  /** A machine sailor, sailed by an AI agent; one of the account's own. */
+  machine: boolean;
+  mine: boolean;
+}
+
 /** What the net worker's Hello carries besides the protocol version. */
 export interface HelloVersions {
   catalog: string;
@@ -247,6 +257,15 @@ export type ToWorker =
    * metres, or back on it. Only an account with the owner's flag is heard.
    */
   | { type: 'roam'; on: boolean; east: number; north: number; height: number }
+  /**
+   * Watch a sailor's boat, rather than sail: asked at once on an open
+   * connection, and by every Hello from then on.
+   */
+  | { type: 'watch'; sailor: string }
+  /** A boat again, as a new connection gets one: the Hellos from then on ask for it too. */
+  | { type: 'sail' }
+  /** Stop watching, without sailing: the connection is idle. */
+  | { type: 'unwatch' }
   /** The page is going: close with 1000. */
   | { type: 'stop' }
   /** A snapshot record read, for the worker to fill again. */
@@ -256,10 +275,12 @@ export type ToWorker =
 export type Status =
   /** Opening, or open and waiting for the Welcome. */
   | 'connecting'
-  /** Welcomed: snapshots arrive. */
+  /** Welcomed: snapshots arrive, of the own boat or of the one watched. */
   | 'sailing'
-  /** The sea is full: waiting in the queue for a boat. */
+  /** The sea is full: waiting in the queue for a boat, or for a place to watch. */
   | 'queued'
+  /** Open, with no boat and watching none: a watch ended or was refused. */
+  | 'idle'
   /** Closed, waiting to try again. */
   | 'waiting'
   /** Another device took the boat. */
@@ -298,13 +319,25 @@ export type FromWorker =
       closingUs: number;
       /** The zone the schedule's ends are published in; "" for UTC. */
       zone: string;
+      /** The boat watched, whose the boat and kind are; null for the connection's own. */
+      watching: WatchingTold | null;
+      /**
+       * The connection's first Welcome. A later one, a watch begun or the
+       * own boat back, is sent nothing again that the connection was
+       * handed: its chart, forecast, land, lights and caps stand.
+       */
+      first: boolean;
     }
   /** The account's owner's flag was set or cleared. */
   | { type: 'tools'; on: boolean }
   /** A snapshot record: view.ts's FLEET_RECORD_BYTES. */
   | { type: 'snapshot'; data: ArrayBuffer }
-  /** The place in the queue, 1 for the next, and how many wait. */
-  | { type: 'queued'; position: number; waiting: number }
+  /** The place in the queue, 1 for the next, and how many wait: for a boat, or for a place to watch. */
+  | { type: 'queued'; position: number; waiting: number; spectators: boolean }
+  /** A watch ended, or was refused: why, and the sailor's name. */
+  | { type: 'watchEnded'; why: WatchEndWhy; sailor: string }
+  /** How many watch the connection's own boat. */
+  | { type: 'watchers'; count: number }
   /** The server is about to restart, in about inMs: the bell. */
   | { type: 'restart'; inMs: number }
   /** The sea about the boat, for the prediction and the drawing. */
@@ -346,4 +379,6 @@ export interface Traffic {
   messagesOut: number;
   /** Snapshots dropped for want of their base, each with a Resync asked for. */
   resyncs: number;
+  /** Inputs sent that carried the controls, not only an acknowledgement. */
+  controls: number;
 }
