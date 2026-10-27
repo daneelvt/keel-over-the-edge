@@ -211,7 +211,7 @@ type Params struct {
 	GybeHelm  float64 // the most helm in a gybe
 	ByTheLee  float64 // the most it sails by the lee before counting the boat gybed, degrees
 	OnCourse  float64 // a turn ends this near the target, degrees
-	Astern    float64 // the water reaches the rudder from behind when the boat goes astern faster than this, m/s
+	Astern    float64 // the boat is told going astern faster than this, m/s
 	Steerage  float64 // slower through the water than this, either way, the rudder has no steerage, m/s
 	StallTime float64 // a turn with no steerage that gains too little on its course in this long stalls, s
 	StallGain float64 // too little, degrees

@@ -1441,8 +1441,8 @@ const OnNewWorld On = "new-world"
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
 // helm only, at the sailor's rate.
 type PhysicsAutopilot struct {
-	// Going astern faster than this through the water, in m/s, the water reaches the
-	// rudder from behind and works it in reverse: the autopilot reverses its helm.
+	// Going astern faster than this through the water, in m/s, the boat is told it
+	// goes astern: the water reaches the rudder from behind and works it in reverse.
 	Astern float64 `json:"astern"`
 
 	// How far by the lee the boat sails before the autopilot counts it gybed, in

@@ -19,4 +19,4 @@ Rudder force goes with speed squared: under half a knot through the water the Bo
 
 ## Shoal water and running aground
 
-The board reaches 0.8 m down. The Shoal line gives water under 1.5 m by bearing and range, and "clear" the bearings free of it to 300 m: off a bank, steer for the middle of a clear span. Aground and still for 5 s, you are pushed off into 2 m of water the way you came, at rest. Going astern the rudder works in reverse: the Boat line says "astern", and the autopilot steers for it.
+The board reaches 0.8 m down. The Shoal line gives water under 1.5 m by bearing and range, and "clear" the bearings free of it to 300 m: off a bank, steer for the middle of a clear span. Aground and still for 5 s, you are pushed off into 2 m of water the way you came, at rest. Going astern the rudder works in reverse: the Boat line says "astern". By hand, put the helm the other way.

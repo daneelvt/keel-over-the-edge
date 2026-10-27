@@ -962,7 +962,7 @@
         "gybeHelm": { "description": "The most helm in a gybe.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
         "byTheLee": { "description": "How far by the lee the boat sails before the autopilot counts it gybed, in degrees. Below the angle at which the boom goes over by itself, about 17° on a dinghy.", "type": "number", "minimum": 0, "exclusiveMaximum": 17 },
         "onCourse": { "description": "A tack or gybe ends this near its target, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 },
-        "astern": { "description": "Going astern faster than this through the water, in m/s, the water reaches the rudder from behind and works it in reverse: the autopilot reverses its helm.", "type": "number", "minimum": 0, "maximum": 1 },
+        "astern": { "description": "Going astern faster than this through the water, in m/s, the boat is told it goes astern: the water reaches the rudder from behind and works it in reverse.", "type": "number", "minimum": 0, "maximum": 1 },
         "steerage": { "description": "Slower than this through the water, either way, in m/s, the rudder has no steerage: the report says so, and a turn may stall.", "type": "number", "exclusiveMinimum": 0, "maximum": 2 },
         "stallTime": { "description": "A tack or gybe with no steerage that gains less than stallGain on its course in this long, in s, has stalled: the autopilot gives it up and holds the angle it turned from.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
         "stallGain": { "description": "Too little gain for a stalling turn, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 }

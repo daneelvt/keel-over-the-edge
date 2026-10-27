@@ -330,35 +330,20 @@ func inLightAir(t *testing.T, knots, angle, sheet, surge float64) *sim {
 	return m
 }
 
-// Going astern the rudder works in reverse, and the autopilot puts its helm
-// the other way: a boat set going astern at 0.3 m/s in 3 knots, its sail
-// let fly, holds its angle off the wind while it has sternway, where a
-// helm put as if going ahead turns it off the course.
-func TestPilotAstern(t *testing.T) {
-	for _, reverses := range []bool{true, false} {
-		m := inLightAir(t, 3, 50, 1, -0.3)
-		if !reverses {
-			m.b = jolly(t)
-			m.b.astern = math.Inf(1)
-		}
-		m.s.YawRate = 0.05
-		most, astern := 0.0, 0.0
-		m.run(15, func() {
-			if m.s.Surge < -m.b.steerage/2 {
-				most = max(most, math.Abs(m.angle()/deg-50))
-				astern += Dt
-			}
-		})
-		t.Logf("reversing %v: %.1f s astern, at most %.1f° off the angle", reverses, astern, most)
-		if astern < 3 {
-			t.Fatalf("reversing %v: only %.1f s astern", reverses, astern)
-		}
-		if reverses && most > 10 {
-			t.Errorf("going astern, %.1f° off the angle held", most)
-		}
-		if !reverses && most < 20 {
-			t.Errorf("the helm put as if going ahead: %.1f° off, not further than when it reverses", most)
-		}
+// Going astern the autopilot's helm is as it is going ahead: reversing it
+// with each change of way held a boat lying beam-on with little way, now
+// ahead and now astern, where it lay, its sail never filling.
+func TestPilotSameHelmAstern(t *testing.T) {
+	b := jolly(t)
+	var helms []float64
+	for _, surge := range []float64{0.3, -0.3} {
+		s := State{Heading: -50 * deg, Surge: surge, YawRate: 0.05, Boom: -0.6, PilotTrim: 0.1}
+		c := Control{Pilot: PilotWind, Target: pilotTarget(80)}
+		var o Out
+		helms = append(helms, b.pilot(&s, &c, &Env{MeanFrom: 0}, &o))
+	}
+	if helms[0] != helms[1] || helms[0] == 0 {
+		t.Errorf("30° to windward of the course: helm %v going ahead, %v astern", helms[0], helms[1])
 	}
 }
 

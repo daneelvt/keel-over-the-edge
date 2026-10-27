@@ -190,8 +190,10 @@ boats:
         gybeHelm: 0.35
         byTheLee: 15 # she gybes by herself at about 17° by the lee
         onCourse: 10
-        # Going astern faster than this the rudder works in reverse, and the
-        # autopilot reverses its helm. Under half a knot through the water
+        # Going astern faster than this the boat is told so: its rudder
+        # works in reverse, though the autopilot does not reverse its
+        # helm, which swings a boat lying still round until its sail
+        # fills. Under half a knot through the water
         # the rudder has no steerage: a tack or gybe that then gains under
         # 5° in 8 s has stalled, and the autopilot gives it up.
         astern: 0.05 # m/s

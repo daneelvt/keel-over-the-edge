@@ -708,7 +708,7 @@ export interface PhysicsAutopilot {
    */
   onCourse: number;
   /**
-   * Going astern faster than this through the water, in m/s, the water reaches the rudder from behind and works it in reverse: the autopilot reverses its helm.
+   * Going astern faster than this through the water, in m/s, the boat is told it goes astern: the water reaches the rudder from behind and works it in reverse.
    */
   astern: number;
   /**

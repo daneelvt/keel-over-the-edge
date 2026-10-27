@@ -22,13 +22,13 @@ import "math"
 // limit, so it never winds up against a rudder held hard over in a turn
 // (Åström and Murray 2008).
 //
-// Water reaching the rudder from behind works it in reverse, so a boat
-// going astern turns the other way to its helm: the autopilot then puts
-// the helm the other way, as a helmsman does, and its standing helm, the
-// rudder the boat needs going ahead, waits. A tack or gybe that has no
-// steerage and gains too little on its course stalls: the autopilot gives
-// it up and holds the angle the boat turned from, on its old side, until
-// the next order.
+// Its helm is the same going astern, when water reaching the rudder from
+// behind works it in reverse: a boat lying beam-on with little way, now
+// ahead and now astern, is swung round by a helm held one way until its
+// sail fills, where a helm reversed with each change would hold it lying
+// there. A tack or gybe that has no steerage and gains too little on its
+// course stalls: the autopilot gives it up and holds the angle the boat
+// turned from, on its old side, until the next order.
 //
 // Everything it remembers is in the State, so a replay from the server's
 // state steers as the server did.
@@ -71,7 +71,6 @@ type pilotPrepared struct {
 	gybeHelm      float64
 	byTheLee      float64 // rad
 	onCourse      float64 // rad
-	astern        float64 // m/s
 	steerage      float64 // m/s
 	stallTime     float64 // s
 	stallGain     float64 // rad
@@ -87,7 +86,6 @@ func (b *pilotPrepared) prepare(p *Params) {
 	b.gybeHelm = p.GybeHelm
 	b.byTheLee = float64(p.ByTheLee * degree)
 	b.onCourse = float64(p.OnCourse * degree)
-	b.astern = p.Astern
 	b.steerage = p.Steerage
 	b.stallTime = p.StallTime
 	b.stallGain = float64(p.StallGain * degree)
@@ -187,21 +185,7 @@ func (b *Prepared) pilot(s *State, c *Control, e *Env, o *Out) float64 {
 	case WayGybe:
 		limit = b.gybeHelm
 	}
-	// The water along the hull, the current's taken from the boat's
-	// motion: from behind, the rudder works in reverse.
-	ahead := s.Surge
-	if e.CurrentEast != 0 || e.CurrentNorth != 0 {
-		sinH, cosH := SinCos(s.Heading)
-		ahead -= float64(e.CurrentEast*sinH) + float64(e.CurrentNorth*cosH)
-	}
-	astern := ahead < -b.astern
-	steer := float64(b.pilotGain*off) - float64(b.pilotDamping*s.YawRate)
-	if astern {
-		steer = -steer
-	} else {
-		steer += float64(tack * s.PilotTrim)
-	}
-	helm := clamp(steer, -limit, limit)
+	helm := clamp(float64(b.pilotGain*off)-float64(b.pilotDamping*s.YawRate)+float64(tack*s.PilotTrim), -limit, limit)
 	if s.SailorMode != Sailing {
 		return helm
 	}
@@ -212,9 +196,16 @@ func (b *Prepared) pilot(s *State, c *Control, e *Env, o *Out) float64 {
 	case s.PilotWay != WayHold && side >= 0 && near:
 		s.PilotWay = WayHold
 	case s.PilotWay != WayHold:
+		// The water along the hull, the current's taken from the boat's
+		// motion: what the rudder has to work with.
+		ahead := s.Surge
+		if e.CurrentEast != 0 || e.CurrentNorth != 0 {
+			sinH, cosH := SinCos(s.Heading)
+			ahead -= float64(e.CurrentEast*sinH) + float64(e.CurrentNorth*cosH)
+		}
 		b.watchTurn(s, o, off, ahead, turn, side >= 0)
 	}
-	if s.PilotWay == WayHold && math.Abs(off) < b.trimBand && !astern {
+	if s.PilotWay == WayHold && math.Abs(off) < b.trimBand {
 		grow := float64(float64(tack*b.pilotIntegral) * float64(off*Dt))
 		s.PilotTrim = clamp(s.PilotTrim+grow, -b.trimLimit, b.trimLimit)
 	}
