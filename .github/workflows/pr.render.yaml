@@ -240,6 +240,15 @@ jobs:
         env:
           KEEL_LAG_BASE: http://localhost:5181
         run: npx --no-install playwright test e2e/lag.spec.ts e2e/together.spec.ts --project webgl2
+      - name: The traces of a failure
+        if: failure() && steps.netem.outputs.ok == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-netem
+          path: |
+            client/test-results
+            client/playwright-report
+          retention-days: 14
 
   pr-render:
     name: pr-render
