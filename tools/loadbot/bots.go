@@ -68,6 +68,9 @@ type Config struct {
 	Accounts   Accounts
 	Sessions   string // the sessions file
 	Dial       Dialer
+	// Watch, if not "", is a sailor's name: the players watch that
+	// sailor's boat, as spectators, rather than sail.
+	Watch string
 	// Metrics, if not nil, reads the server's metrics in Prometheus's text
 	// format, before and after the sail.
 	Metrics func(ctx context.Context) (string, error)
@@ -142,6 +145,10 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 			case <-ctx.Done():
 				return
 			}
+			if cfg.Watch != "" {
+				watchOne(ctx, cfg, cookies[i], end, p)
+				return
+			}
 			sailOne(ctx, cfg, kind, waves, wx, enc, cookies[i], uint64(i), end, p)
 		})
 	}
@@ -156,6 +163,44 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 		rep.print(cfg.Out, cfg)
 	}
 	return rep, ctx.Err()
+}
+
+// watchOne watches the sailor's boat until end, connecting again a second
+// after the connection ends.
+func watchOne(ctx context.Context, cfg Config, cookie string, end time.Time, p *Player) {
+	for ctx.Err() == nil && time.Until(end) > 0 {
+		s := client.NewSpectator(func(ctx context.Context) (*websocket.Conn, error) { return cfg.Dial(ctx, cookie, nil) }, cfg.Watch)
+		err := s.Watch(ctx, time.Until(end))
+		addStats(&p.Stats, &s.Stats)
+		if err == nil {
+			return
+		}
+		p.Closes[int(websocket.CloseStatus(err))]++
+		p.Errors++
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+		}
+	}
+}
+
+// addStats adds a spectator's connection's counts to a player's.
+func addStats(to, s *client.Stats) {
+	to.Snapshots += s.Snapshots
+	to.BytesIn += s.BytesIn
+	to.BytesOut += s.BytesOut
+	to.FramesIn += s.FramesIn
+	to.FramesOut += s.FramesOut
+	to.MessagesIn += s.MessagesIn
+	to.MessagesOut += s.MessagesOut
+	to.Views += s.Views
+	to.Others += s.Others
+	to.MaxOthers = max(to.MaxOthers, s.MaxOthers)
+	to.Dropped += s.Dropped
+	to.Resyncs += s.Resyncs
+	to.Queued += s.Queued
+	to.Bells += s.Bells
+	to.Bumps += s.Bumps
 }
 
 // sailOne sails one player until end, connecting again after the

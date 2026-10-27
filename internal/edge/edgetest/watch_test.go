@@ -3,6 +3,7 @@
 package edgetest
 
 import (
+	"context"
 	"math"
 	"testing"
 	"testing/synctest"
@@ -539,6 +540,27 @@ func TestStoppedSpectator(t *testing.T) {
 		agent, _ := srv.Sessions.Add("Agent", store.AI)
 		if _, resp, err := srv.Dial(t.Context(), DialOptions{Cookie: agent}); err == nil || resp.StatusCode != 403 {
 			t.Fatalf("an AI account: %v", err)
+		}
+	})
+}
+
+// TestGoSpectator: the Go client's spectator watches a machine sailor's
+// boat, its snapshots decoded, as the load bot's spectators do.
+func TestGoSpectator(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		srv := NewServer(t, Config{})
+		token, _ := srv.Sailor("Ann")
+		_, owner := srv.Sailor("Dee")
+		srv.Machine(t, "Iron Mary", owner, near(0))
+		s := client.NewSpectator(func(ctx context.Context) (*websocket.Conn, error) {
+			ws, _, err := srv.Dial(ctx, DialOptions{Cookie: token})
+			return ws, err
+		}, "Iron Mary")
+		if err := s.Watch(t.Context(), 3*time.Second); err != nil {
+			t.Fatal(err)
+		}
+		if s.Welcomed != 1 || s.Stats.Views < 40 || s.Stats.Dropped != 0 || s.Ended != 0 {
+			t.Fatalf("welcomed %d, %d views, %d dropped, %d ended", s.Welcomed, s.Stats.Views, s.Stats.Dropped, s.Ended)
 		}
 	})
 }

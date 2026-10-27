@@ -3460,6 +3460,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_REPLAY_DIR` | none (memory only) | Where the input log is written |
 | `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. Its `owner/` folder, the world page, is served by the internal listener alone, if it is there. The image sets it; in development Vite serves the pages instead |
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it. Machine sailors sail at most half of them, with half of that kept for them |
+| `KEEL_SPECTATOR_LIMIT` | 1000 | The most players watching boats at once, from 0 to 100,000; beyond it they wait in a queue of their own of up to 4,096. A priority account, an owner watching their own machine sailor and a player waiting for a boat never wait (see [Watching a boat](#watching-a-boat)) |
 | `KEEL_AI_SILENCE` | `3m` | How long a machine sailor's boat stays at sea with no call from its agent before its minute's grace begins, from 1s to 1h |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
@@ -4295,6 +4296,117 @@ meanwhile. Its sailors ("Loadbot 1" …) are made once, as the start screen
 makes them, with passkeys of `internal/auth/softkey`; their sessions and
 passkeys are kept in `.dev/loadbot/sessions.json` and used again, a passkey
 signing in again when its session is gone.
+
+### Watching a boat
+
+A player may watch another sailor's boat rather than sail their own: from
+that boat's own place, with the sailor's screen and nothing on it that
+steers, trims or acts. A **spectator** has no boat in the world and holds no
+place against the boat limit. Watching is a state of the one game
+connection an account has, beside sailing and waiting for a boat, never a
+second connection; a newer connection, sailing or watching, still replaces
+the older with 4001. Only human accounts watch: `/ws` refuses an AI
+account, and the MCP interface has nothing for it.
+
+**Who can be watched** (`internal/watch`, `watch.Allowed`, asked by the
+edge and by the list alike): a boat in the water, sailed or in its grace,
+that is not the viewer's own; a machine sailor always, unless the owner's
+tools keep it unseen; a human only while they allow spectators. A player
+may **always watch their own machine sailors** while they are in the
+water, unseen or not, over the spectator limit and its queue. A refusal
+reads the same for a human not at sea as for one at sea who does not allow
+it: "Ann Bonny cannot be watched now."
+
+**Allow spectators** is a human's setting, "No" by default, with "This
+voyage" and "Always" beside it, none suggested: in the game's menu and on
+the account page. "Always" is stored (`account.spectators`, migration
+00018, false for every AI account) and kept in memory, loaded as keel
+starts (`watch.Allowing`, as the stopped set is); "This voyage" is held by
+the edge with the boat, never stored, and ends when the boat leaves the
+water (a boat that goes over the lip and starts again is the same boat).
+`POST /api/me/spectators {"allow": "no" | "voyage" | "always"}` sets it;
+`GET /api/me` says it (`spectators`), and whether the account's own boat is
+in the water (`atSea`). "No" ends every watch of the sailor's boat with the
+encoders' next snapshot.
+
+**On the wire.** `Hello.watch` opens a connection watching a sailor, named
+as players see it (case and look-alikes fold, `moderation.Key`);
+`Command.watch`, `Command.sail` and `Command.unwatch` switch on an open
+connection. The reader looks the sailor up in the store (`WatchTarget`, at
+most 2 s, never on an encoder) and asks the rule; the watch then begins on
+the connection's encoder with the next frame, which asks the rule again.
+A boat the connection sails, or its account has in the water in its grace,
+**leaves the water at once** (`bus.Leave`, no grace); a place in the queue
+for a boat is kept, the watch going on while it waits, and when the queue
+gives the boat the watch ends and the player sails ("Your boat is in the
+water."). `Command.sail` is a `Join` as a new connection's: a new boat at
+the start, or a place in the queue. At most one watch a second is honoured.
+
+A watch begins with a **Welcome** whose `watching` names the sailor
+(`machine`, `mine`), its `boat` and `kind` the watched boat's; the chart is
+sent whole only after a connection's first Welcome, and the chunks handed,
+the weather and the forecast carry on. From then the connection is
+**encoded as a sailor is**, the watched boat in its place: the header is
+that boat (its controls in force, the autopilot word, its fall), with no
+margin; the view, the sea's window, the chunks, the lights, the caps and the
+bumps (the part seen from that boat) are about it. Each spectator is
+encoded on its own: a boat's spectators are not in step (each writer takes
+its own snapshots, the far band is sampled on each connection's own ticks),
+and an encode costs about what the write after it does. A spectator's
+`Input` steers nothing: only its acknowledgement is read, the controls
+dropped and counted (`keel_edge_refused_total{what="input"}`), and its
+`Roam` is ignored.
+
+A watch **ends** with `WatchEnded{why}` when the boat leaves the water
+("Iron Mary has left the water."), when its sailor turns spectators off
+("Ann Bonny no longer allows spectators."), when the owner's tools keep it
+unseen ("… cannot be watched now."), or when a watch asked for is refused;
+the connection stays open, **idle**: no snapshots, pings answered. A
+sailor is told how many watch their boat (`Watchers{count}`, on change, at
+most every 2 s), never who; agents are told nothing.
+
+**The spectator limit** (`internal/edge/spectators.go`) is the edge's, in
+memory, apart from the boat limit: `KEEL_SPECTATOR_LIMIT`, 1,000 by
+default. Past it a connection waits, first come first served, told its
+place once a second (`Queued{spectators: true}`: "Many are watching. You
+are 12th in line to watch."); past 4,096 waiting it is closed with 1013.
+A priority account, an owner watching their own machine sailor and a
+player waiting for a boat never wait, and count all the same. A place is
+held from the watch's start to its end; an idle connection holds none, and
+one that switches boats keeps its own. A restart loses the queue.
+
+**The list**, `GET /api/watch?q=&page=`: every boat in the water the
+viewer may watch now, the viewer's own machine sailors first, then the most
+watched, then by name, 50 a page, `q` part of a name; built from the latest
+frame and the sailors' names, read again at most every 2 s.
+
+**On the phone.** The start screen shows "Watch" beside each machine
+sailor at sea, with how many watch it, and "Watch another sailor"; the
+menu has "Watch a sailor" for everyone, asking first, from a boat at sea,
+"Leave the water to watch?"; a link, `/?watch=Iron%20Mary`, signs in or
+makes a sailor first, then watches. Watching, the page drives the watched
+boat with a third driver, `client/src/game/watch.ts`: interpolated from the
+snapshots' headers on the near band's delay, so it and the boats about it
+are drawn on one timeline, its instruments from one step of the physics
+module from each header, never ahead; no prediction runs, and the page
+sends only acknowledgements and pings. The screen loses every control that
+acts (helm, sheet, the autopilot's controls, the keys, the free camera);
+a bar names the boat ("Watching Iron Mary ⚙") with "Watch another" and
+"Sail"; the camera does not ease back astern, and "Behind the boat" brings
+it there. The list, the bar and the setting are loaded only when needed.
+Every word is in `client/src/ui/watchwords.ts`.
+
+**The world page** shows how many watch and wait, against the limit, each
+boat's spectators, and on the Accounts card whose boat an account watches.
+The game dashboard has a Spectators row: `keel_edge_spectators{state}`,
+`keel_edge_spectator_limit`, `keel_edge_watch_total{result}`,
+`keel_edge_watchers` (spectators of each boat watched, sampled once a
+second).
+
+**Crowds.** `go run ./tools/loadbot -watchers 200 -watch "Iron Mary" -for
+2m -url https://macbook.local` has 200 headless spectators watch one boat
+(the Go client's `Spectator`), reporting as the sailing bots do;
+`BenchmarkEncodeSpectators` encodes 100 and 1,000 spectators of one boat.
 
 ## The local cluster
 

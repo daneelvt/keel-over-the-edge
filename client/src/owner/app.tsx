@@ -44,7 +44,7 @@ import {
 import { formatPosition } from '../chart/position';
 import { lightOn } from '../lights/character';
 import { AccountBoxes, AccountsTab } from './accounts';
-import { agentWords, machinesLine, rulesLine } from './admission';
+import { agentWords, machinesLine, rulesLine, spectatorsLine, watchersWords } from './admission';
 import {
   type AccountsData,
   type Admission,
@@ -516,6 +516,7 @@ function BoatRow({
     b.unseen ? 'unseen' : '',
     b.eye !== null ? 'roaming' : '',
     b.admitted ? 'given as a priority account’s' : '',
+    watchersWords(b.watchers),
   ].filter((m) => m !== '');
   return (
     <>
@@ -2202,6 +2203,11 @@ function App() {
               </section>
               <section class="card" aria-label="The queue">
                 <h2>Waiting: {now?.queue.length ?? 0}</h2>
+                {now !== null ? (
+                  <p class="small" data-field="spectators">
+                    {spectatorsLine(now.spectators)}.
+                  </p>
+                ) : null}
                 <Queue
                   title="Humans"
                   field="humans-waiting"

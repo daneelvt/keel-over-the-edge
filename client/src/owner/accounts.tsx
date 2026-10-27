@@ -632,6 +632,14 @@ function Card({
             <dd>place {card.queue.position} in the queue</dd>
           </>
         ) : null}
+        {card.watching !== undefined ? (
+          <>
+            <dt>Watching</dt>
+            <dd data-field="card-watching">
+              <bdi>{card.watching}</bdi>’s boat
+            </dd>
+          </>
+        ) : null}
         {card.owner !== undefined ? (
           <>
             <dt>Its human</dt>

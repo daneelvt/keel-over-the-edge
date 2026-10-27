@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
-import { agentWords, ago, machinesLine, rulesLine } from './admission';
+import {
+  agentWords,
+  ago,
+  machinesLine,
+  rulesLine,
+  spectatorsLine,
+  watchersWords,
+} from './admission';
 import type { Admission } from './api';
 
 const admission: Admission = {
@@ -50,5 +57,17 @@ describe('admission by kind', () => {
     ).toBe(
       'An agent silent 3 min sends its boat into its grace; orders: 2 a second, a burst of 5; looks: 4 a second, a burst of 10.',
     );
+  });
+
+  test('tells the spectators watching and waiting against their limit', () => {
+    expect(spectatorsLine({ watching: 3, waiting: 0, limit: 1000 })).toBe(
+      'Spectators: 3 watching, 0 waiting, of a limit of 1000',
+    );
+  });
+
+  test('tells a boat’s watchers only when there are some', () => {
+    expect(watchersWords(0)).toBe('');
+    expect(watchersWords(1)).toBe('1 watching');
+    expect(watchersWords(3)).toBe('3 watching');
   });
 });

@@ -2,9 +2,10 @@
 
 // Admission by kind on the world page, in words: the machine sailors at sea
 // against their cap and the places kept for them, the rules their agents
-// are held to, and what a machine boat's agent last did.
+// are held to, what a machine boat's agent last did, and the spectators
+// watching boats against their limit.
 
-import type { Admission, Agent } from './api';
+import type { Admission, Agent, Spectators } from './api';
 
 /** How long ago, in its largest unit: "12 s ago", "3 min ago", "2 h ago"; null is no call yet. */
 export function ago(s: number | null): string {
@@ -62,4 +63,14 @@ export function rulesLine(a: Admission): string {
   }
   const line = words.join('; ');
   return `${line.charAt(0).toUpperCase()}${line.slice(1)}.`;
+}
+
+/** The spectators against their limit: "Spectators: 3 watching, 0 waiting, of a limit of 1000". */
+export function spectatorsLine(s: Spectators): string {
+  return `Spectators: ${s.watching} watching, ${s.waiting} waiting, of a limit of ${s.limit}`;
+}
+
+/** How many watch a boat: "3 watching"; "" when none do. */
+export function watchersWords(n: number): string {
+  return n > 0 ? `${n} watching` : '';
 }

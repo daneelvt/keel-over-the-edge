@@ -47,6 +47,8 @@ export interface Boat {
   admitted: boolean;
   /** A machine boat's agent, while keel knows of it. */
   agent?: Agent;
+  /** How many watch the boat. */
+  watchers: number;
 }
 
 /** A machine boat's agent: its app, the seconds since its last call (null for none), how long its observe has waited so far and its calls refused. */
@@ -73,6 +75,13 @@ export interface Admission {
   aiSilence: number;
   aiOrders?: string;
   aiLooks?: string;
+}
+
+/** The spectators: how many watch boats, how many wait to in their queue, and their limit. */
+export interface Spectators {
+  watching: number;
+  waiting: number;
+  limit: number;
 }
 
 /** A connection waiting for a boat. */
@@ -129,6 +138,7 @@ export interface WorldNow {
   boats: Boat[];
   queue: Waiting[];
   admission: Admission;
+  spectators: Spectators;
 }
 
 export interface Island {
@@ -948,6 +958,8 @@ export interface AccountCard {
   stopped: { at: number; reason: string; byOwner: boolean } | null;
   sea: { boat: number; east: number; north: number; connected: boolean; grace: number } | null;
   queue: { position: number } | null;
+  /** The sailor whose boat the account watches, while it does. */
+  watching?: string;
   passkeys?: CardPasskey[];
   recoveryMade?: number;
   sessions?: { count: number; latest: number };
