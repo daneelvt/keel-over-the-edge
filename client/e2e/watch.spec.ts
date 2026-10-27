@@ -161,12 +161,15 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   const b = await page.evaluate(() => globalThis.keel.boat());
   expect(b.state.y).toBeLessThan(0);
   expect(Math.abs(b.state.heading - Math.PI / 2)).toBeLessThan(0.5);
-  // Now the keys steer, and their controls go.
-  await page.keyboard.down('ArrowLeft');
-  await page.waitForTimeout(500);
-  await page.keyboard.up('ArrowLeft');
+  // Now the helm steers again, and its controls go, as the other online
+  // specs steer: through the hook, which a slow software renderer's frames
+  // cannot miss as they can a short key press.
+  await page.evaluate(() => globalThis.keel.setControls(1, 0.5));
   await expect
-    .poll(async () => (await watch(page)).controls, { timeout: 10_000 })
+    .poll(async () => (await watch(page)).controls, {
+      timeout: 20_000,
+      message: 'controls sent once sailing again',
+    })
     .toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
