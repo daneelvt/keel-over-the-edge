@@ -236,6 +236,59 @@ export async function sail(page: Page, base = ''): Promise<void> {
 }
 
 /**
+ * Opens a second page as sail() does, the first page's drawing held
+ * meanwhile: on CI's one software GPU, a page starting beside one that
+ * draws the sea takes most of a minute, and stalls the other for seconds
+ * at a time.
+ */
+export async function sailBeside(page: Page, first: Page, base = ''): Promise<void> {
+  await first.evaluate(() => globalThis.keel.hold(true));
+  try {
+    await sail(page, base);
+  } finally {
+    await first.evaluate(() => globalThis.keel.hold(false));
+  }
+}
+
+/**
+ * Waits until each page's animation frames come with no gap of a second
+ * and a half for three seconds. The pages share CI's one software GPU
+ * process: a page still making what it draws (after its start, a reload,
+ * or a move to somewhere new) stalls its own frames and the others' for
+ * seconds, and its main thread with them.
+ */
+export async function steady(...pages: Page[]): Promise<void> {
+  await Promise.all(
+    pages.map((page) =>
+      expect
+        .poll(
+          () =>
+            page.evaluate(
+              () =>
+                new Promise<number>((resolve) => {
+                  const start = performance.now();
+                  let last = start;
+                  let worst = 0;
+                  const step = (t: number) => {
+                    worst = Math.max(worst, t - last);
+                    last = t;
+                    if (t - start < 3000) {
+                      requestAnimationFrame(step);
+                    } else {
+                      resolve(worst);
+                    }
+                  };
+                  requestAnimationFrame(step);
+                }),
+            ),
+          { timeout: 60_000 },
+        )
+        .toBeLessThan(1500),
+    ),
+  );
+}
+
+/**
  * The regime tools/e2e holds the world's weather to: the catalog's
  * commonest. A spec that sets another weather goes back to it after.
  */

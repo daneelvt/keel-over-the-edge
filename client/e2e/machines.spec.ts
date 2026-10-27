@@ -13,7 +13,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { holdPasskeys, type Made, sailor } from './helpers';
+import { holdPasskeys, type Made, sailor, steady } from './helpers';
 import { assertPasskey } from './passkey';
 
 test.beforeEach(() => {
@@ -142,7 +142,9 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   await expect(page.locator('.machines .machine-list li', { hasText: name })).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
 
-  // Every entry shows them before the sea.
+  // Every entry shows them before the sea. (Reloaded only once the page
+  // draws steadily: on CI's software GPU a reload amid its start can hang.)
+  await steady(page);
   await page.reload();
   await expect(page.locator('.machine-list li', { hasText: name })).toBeVisible({
     timeout: 30_000,

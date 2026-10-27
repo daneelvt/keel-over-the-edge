@@ -10,7 +10,7 @@
 // so the spec's name sorts it after the others that sail it.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { sailor as newSailor, sail } from './helpers';
+import { sailor as newSailor, sail, sailBeside } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
@@ -36,15 +36,18 @@ async function endIn(page: Page, seconds: number): Promise<number> {
   return ((await res.json()) as { ends: number }).ends;
 }
 
-/** A player sailing in a context of its own, its page small for CI's renderer. */
-async function sailor(browser: import('@playwright/test').Browser, name: string) {
+/**
+ * A player sailing in a context of its own, its page small for CI's
+ * renderer; beside another's page, that one's drawing held while it starts.
+ */
+async function sailor(browser: import('@playwright/test').Browser, name: string, beside?: Page) {
   const c: BrowserContext = await browser.newContext({
     baseURL: 'http://localhost:5181',
     viewport: { width: 320, height: 200 },
   });
   await newSailor(c, name);
   const p = await c.newPage();
-  await sail(p);
+  await (beside === undefined ? sail(p) : sailBeside(p, beside));
   return { c, p };
 }
 
@@ -57,7 +60,7 @@ test('@long a world ends on stage, and a new one begins with a blank chart', asy
   const ends = await endIn(opener, 75);
   await opener.close();
   const ann = await sailor(browser, 'Ann');
-  const bob = await sailor(browser, 'Bob');
+  const bob = await sailor(browser, 'Bob', ann.p);
   const before = await ending(ann.p);
   expect(before.ends).toBe(ends);
   expect((await ending(bob.p)).world).toBe(before.world);
