@@ -599,6 +599,19 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       stage.freeze(false);
     },
 
+    /**
+     * Stops drawing, or draws again, as a hidden tab and a shown one do:
+     * the boat sails on at the server, and world time runs. On CI's one
+     * software GPU a page drawing the sea slows another's start to most of
+     * a minute.
+     */
+    hold(on: boolean): void {
+      stage.freeze(on);
+      if (!on) {
+        stage.resumed();
+      }
+    },
+
     /** Draws one frame now, with the screen's words up to date. */
     render(): void {
       game.hud.flush();

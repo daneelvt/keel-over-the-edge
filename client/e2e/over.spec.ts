@@ -7,7 +7,7 @@
 // writes its events. One back end is enough: the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
-import { sail, sailor } from './helpers';
+import { sail, sailBeside, sailor, steady } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 
@@ -79,39 +79,6 @@ async function seen(page: Page): Promise<Seen> {
   return page.evaluate(() => (globalThis as unknown as { seen: Seen }).seen);
 }
 
-/**
- * Waits until a page's animation frames come with no gap of a second and a
- * half for three seconds: the pages share CI's one software GPU process,
- * and a page still making its shaders stalls the other's frames for
- * seconds, long enough to hide the whole fall from watch().
- */
-async function settled(page: Page): Promise<void> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          () =>
-            new Promise<number>((resolve) => {
-              const start = performance.now();
-              let last = start;
-              let worst = 0;
-              const step = (t: number) => {
-                worst = Math.max(worst, t - last);
-                last = t;
-                if (t - start < 3000) {
-                  requestAnimationFrame(step);
-                } else {
-                  resolve(worst);
-                }
-              };
-              requestAnimationFrame(step);
-            }),
-        ),
-      { timeout: 60_000 },
-    )
-    .toBeLessThan(1500);
-}
-
 /** The distance of a page's boat from the centre, m. */
 async function out(page: Page): Promise<number> {
   return page.evaluate(() => {
@@ -134,17 +101,19 @@ test('carried over the lip, seen falling, and back at the start', async ({ brows
   await sailor(contexts[0] as import('@playwright/test').BrowserContext, 'Ann');
   await sailor(contexts[1] as import('@playwright/test').BrowserContext, 'Bob');
   await sail(ann);
-  await sail(bob);
+  await sailBeside(bob, ann);
+  await steady(ann, bob);
   await watch(ann);
   await watch(bob);
   // Both in sight of the lip first, clear of the drain's pull, until both
-  // pages have made what they draw there.
+  // pages have made what they draw there: a page doing so on CI's software
+  // GPU answers nothing for a quarter of a minute.
   await place(request, bob, 100, LIP - 150, 270);
   await place(request, ann, -300, LIP - 150, 270);
   for (const p of [ann, bob]) {
-    await expect.poll(() => out(p), { timeout: 15_000 }).toBeGreaterThan(LIP - 200);
+    await expect.poll(() => out(p), { timeout: 40_000 }).toBeGreaterThan(LIP - 200);
   }
-  await Promise.all([settled(ann), settled(bob)]);
+  await steady(ann, bob);
   // Bob lies 100 m off, along the lip; Ann half a metre inside it.
   await place(request, bob, 100, LIP - 60, 270);
   await place(request, ann, 0, LIP - 0.5, 90);

@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { sail, sailor } from './helpers';
+import { sail, sailBeside, sailor, steady } from './helpers';
 
 const direct = 'http://localhost:5181';
 const internal = 'http://127.0.0.1:19090';
@@ -54,12 +54,15 @@ function islands(charted: Set<string>): [Entry, Entry] {
   return [a, b];
 }
 
-/** A player sailing in a small page of its own. */
-async function player(browser: import('@playwright/test').Browser, name: string) {
+/**
+ * A player sailing in a small page of its own; beside another's page, that
+ * one's drawing held while it starts.
+ */
+async function player(browser: import('@playwright/test').Browser, name: string, beside?: Page) {
   const c = await browser.newContext({ baseURL: direct, viewport: { width: 320, height: 200 } });
   await sailor(c, name);
   const p = await c.newPage();
-  await sail(p, direct);
+  await (beside === undefined ? sail(p, direct) : sailBeside(p, beside, direct));
   const me = (await (await c.request.get('/api/me')).json()) as { name: string };
   return { context: c, page: p, name: me.name };
 }
@@ -87,8 +90,9 @@ test('two players discover a world: the chart fills in for both, with the credit
     new Set((await before).charted.map((c) => `${c.subject}:${c.number}`)),
   );
   const ann = await player(browser, 'Ann');
-  const bob = await player(browser, 'Bob');
+  const bob = await player(browser, 'Bob', ann.page);
   const contexts: BrowserContext[] = [ann.context, bob.context];
+  await steady(ann.page, bob.page);
   // Port Royal's island is known from the start, to everyone.
   for (const p of [ann.page, bob.page]) {
     await expect

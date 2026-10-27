@@ -10,7 +10,7 @@
 // frames, and no correction of another boat is drawn at once.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { sail, sailor } from './helpers';
+import { sail, sailBeside, sailor, steady } from './helpers';
 
 const direct = 'http://localhost:5181';
 const lagged = process.env.KEEL_LAG_BASE ?? 'http://localhost:5182';
@@ -19,7 +19,11 @@ test.beforeEach(() => {
   test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
 });
 
-/** Two players, each sailing in a context of its own. */
+/**
+ * Two players, each sailing in a context of its own, the second started
+ * with the first's drawing held, and both drawing steadily before they are
+ * watched.
+ */
 async function two(browser: import('@playwright/test').Browser, base = direct) {
   const contexts: BrowserContext[] = [];
   const pages: Page[] = [];
@@ -28,11 +32,14 @@ async function two(browser: import('@playwright/test').Browser, base = direct) {
     const c = await browser.newContext({ baseURL: base, viewport: { width: 320, height: 200 } });
     await sailor(c, name);
     const p = await c.newPage();
-    await sail(p, base);
+    const first = pages[0];
+    await (first === undefined ? sail(p, base) : sailBeside(p, first, base));
     contexts.push(c);
     pages.push(p);
   }
-  return { contexts, a: pages[0] as Page, b: pages[1] as Page };
+  const [a, b] = pages as [Page, Page];
+  await steady(a, b);
+  return { contexts, a, b };
 }
 
 /**
@@ -63,6 +70,36 @@ function headingOff(a: number, b: number): number {
   return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 }
 
+type Seen = NonNullable<Awaited<ReturnType<typeof seen>>>;
+
+/** Five degrees. */
+const FIVE = (5 * Math.PI) / 180;
+
+/** Whether a draws the boat where b has it at the tick it is drawn at. */
+function agrees(s: Seen): boolean {
+  return (
+    s.truth !== null &&
+    Math.hypot(s.boat.east - s.truth.east, s.boat.north - s.truth.north) < 1 &&
+    headingOff(s.boat.heading, s.truth.heading) < FIVE
+  );
+}
+
+/**
+ * Looks, every quarter second for up to 30 s, until what a draws of b's
+ * boat passes: the last look. One look is not enough: a page that stalls
+ * on CI's software GPU, or a snapshot lost to netem, puts either page
+ * behind the other for a moment.
+ */
+async function look(a: Page, b: Page, ok: (s: Seen) => boolean): Promise<Seen | null> {
+  const end = Date.now() + 30_000;
+  let s = await seen(a, b);
+  while ((s === null || !ok(s)) && Date.now() < end) {
+    await a.waitForTimeout(250);
+    s = await seen(a, b);
+  }
+  return s;
+}
+
 test('two players see each other, steer, and one leaves', async ({ browser }) => {
   test.setTimeout(120_000);
   const { contexts, a, b } = await two(browser);
@@ -73,24 +110,23 @@ test('two players see each other, steer, and one leaves', async ({ browser }) =>
     [a, b],
     [b, a],
   ] as const) {
-    let s = await seen(viewer, sailor);
-    for (let i = 0; i < 40 && (s === null || s.truth === null || s.boat.opacity < 1); i++) {
-      await viewer.waitForTimeout(250);
-      s = await seen(viewer, sailor);
-    }
+    const s = await look(viewer, sailor, (s) => s.boat.opacity === 1 && agrees(s));
     expect(s?.truth, 'the other boat at its tick').not.toBeNull();
     if (s === null || s.truth === null) {
       return;
     }
     expect(s.boat.opacity).toBe(1);
     expect(Math.hypot(s.boat.east - s.truth.east, s.boat.north - s.truth.north)).toBeLessThan(1);
-    expect(headingOff(s.boat.heading, s.truth.heading)).toBeLessThan((5 * Math.PI) / 180);
+    expect(headingOff(s.boat.heading, s.truth.heading)).toBeLessThan(FIVE);
   }
   // Bob puts the helm over: Ann sees the boat turn as Bob's own does.
   const before = (await seen(a, b))?.boat.heading ?? 0;
   await b.evaluate(() => globalThis.keel.setControls(1, 0.5));
-  await a.waitForTimeout(10_000);
-  const turned = await seen(a, b);
+  const turned = await look(
+    a,
+    b,
+    (s) => headingOff(s.boat.heading, before) > (3 * Math.PI) / 180 && agrees(s),
+  );
   expect(turned?.truth).not.toBeNull();
   if (turned === null || turned.truth === null) {
     return;
@@ -105,7 +141,7 @@ test('two players see each other, steer, and one leaves', async ({ browser }) =>
   const { heading, east, north, fall, opacity, tick } = turned.boat;
   const saw = JSON.stringify({ before, drawn: { heading, east, north, fall, opacity, tick }, bob });
   expect(headingOff(turned.boat.heading, before), saw).toBeGreaterThan((3 * Math.PI) / 180);
-  expect(headingOff(turned.boat.heading, turned.truth.heading)).toBeLessThan((5 * Math.PI) / 180);
+  expect(headingOff(turned.boat.heading, turned.truth.heading)).toBeLessThan(FIVE);
   // Bob closes his page: his boat sails on through its grace, and Ann
   // still sees it.
   const last = await b.evaluate(() => globalThis.keel.boat().state);
