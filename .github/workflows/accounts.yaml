@@ -37,7 +37,7 @@ concurrency:
 jobs:
   plan:
     name: plan
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment: production
     timeout-minutes: 20
     permissions:
@@ -68,7 +68,7 @@ jobs:
     name: apply
     if: inputs.mode == 'apply'
     needs: [plan]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment: production
     timeout-minutes: 20
     permissions:

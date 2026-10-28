@@ -37,7 +37,7 @@ concurrency:
 jobs:
   seeds:
     name: seeds, part ${{ matrix.part }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -70,7 +70,7 @@ jobs:
 
   weeks:
     name: a thousand weeks of weather
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: read

@@ -23,7 +23,7 @@ import (
 
 // pgImage is PostgreSQL's official image, pinned by the digest of its
 // multi-platform index (Renovate raises both).
-const pgImage = "postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336"
+const pgImage = "postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6"
 
 // devDB is a PostgreSQL server in a container, for development: its data in
 // a named volume, its password in an environment file in .dev. It is left
