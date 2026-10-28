@@ -112,9 +112,11 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', asyn
   await sail(page);
   const before = await net(page);
   const line = page.locator('[data-readout="connection"]');
-  const bell = expect(line).toHaveText(/harbourmaster rings the bell/, { timeout: 30_000 });
-  expect((await request.post(`${control}/restart`, { timeout: 60_000 })).status()).toBe(204);
-  await bell;
+  const [, restart] = await Promise.all([
+    expect(line).toHaveText(/harbourmaster rings the bell/, { timeout: 30_000 }),
+    request.post(`${control}/restart`, { timeout: 60_000 }),
+  ]);
+  expect(restart.status()).toBe(204);
   await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
     timeout: 30_000,
   });
