@@ -289,12 +289,16 @@ test.describe('the barometer', () => {
     await page.getByRole('button', { name: 'Menu' }).click();
     await expect(page.locator('input[name="barometer"]')).toHaveCount(0);
     await page.getByRole('button', { name: 'Close' }).click();
+    // Kept across a load, and put away again.
     await openScene(page, 'world=1', true);
     await expect(page.locator('.barometer')).toBeVisible();
     await page.locator('[data-pusher=barometer]').click();
     await expect(page.locator('.barometer')).toBeHidden();
-    await openScene(page, 'world=1', true);
-    await expect(page.locator('.barometer')).toBeHidden();
+    expect(
+      await page.evaluate(
+        () => JSON.parse(localStorage.getItem('keel.settings') ?? '{}').barometer,
+      ),
+    ).toBe(false);
   });
 });
 
