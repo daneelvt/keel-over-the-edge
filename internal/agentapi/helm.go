@@ -173,6 +173,21 @@ func (c *Core) Agent(account bus.Account) (app string, last time.Time, waiting t
 	return h.app, h.lastCall, waiting, h.refusals, true
 }
 
+// Attending tells whether a machine sailor's agent attends to it, for
+// its owner watching: when it last called, the zero time for never, and
+// whether a wait of its is under way.
+func (c *Core) Attending(account bus.Account) (last time.Time, waiting bool) {
+	c.mu.Lock()
+	h := c.helms[store.AccountID(account)]
+	c.mu.Unlock()
+	if h == nil {
+		return time.Time{}, false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.lastCall, h.waiter != nil
+}
+
 // helmOf is the helm of the machine sailor the door accepted, made at its
 // first call, its names and priority as the token's grant has them now.
 func (c *Core) helmOf(a *oauth.Accepted) *helm {

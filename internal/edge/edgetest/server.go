@@ -91,6 +91,9 @@ type Config struct {
 		edge.ForecastSource
 		sim.Recorder
 	}
+	// Agent is the edge's: a machine sailor's agent's last call, and
+	// whether a wait of its is under way.
+	Agent func(bus.Account) (time.Time, bool)
 }
 
 // Server is the game's server in a test.
@@ -200,6 +203,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks, Forecast: cfg.Forecast,
 		Stopped: cfg.Stopped, Seen: cfg.Seen, LongAfter: cfg.LongAfter,
 		Watch: s.Sessions.Target, Allowing: s.Allowing, SpectatorLimit: cfg.SpectatorLimit,
+		Agent: cfg.Agent,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {

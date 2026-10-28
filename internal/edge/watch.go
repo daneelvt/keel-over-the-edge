@@ -241,6 +241,7 @@ func (enc *encoder) beginWatch(c *conn, f *bus.Frame, t watch.Target) {
 	}
 	enc.leaveWater(c, f)
 	c.w = watching{on: true, target: t, mine: t.Mine(store.AccountID(c.account)), slot: s, boat: f.Boat[s]}
+	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	c.spectating.Store(true)
 	c.watched.Store(&t.Name)
 	e.spect.watching(bus.Account(t.ID), 1)
@@ -282,6 +283,7 @@ func (enc *encoder) endWatch(c *conn, why pb.WatchEnd, name string) {
 	e := enc.e
 	e.spect.watching(bus.Account(c.w.target.ID), -1)
 	c.w = watching{}
+	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	c.spectating.Store(false)
 	c.watched.Store(nil)
 	if why != pb.WatchEnd_WATCH_END_UNSPECIFIED {
@@ -365,6 +367,32 @@ func (c *conn) tellWatchers() {
 	}
 	c.toldWatchers = n
 	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Watchers{Watchers: &pb.Watchers{Count: uint32(n)}}}, outWatchers)
+}
+
+// lampEvery is how often an owner watching their own machine sailor is
+// told whether its agent attends, at most.
+const lampEvery = 30 // ticks
+
+// LampQuiet is how long a machine sailor's agent may go without a call
+// and still be at the helm, unless a wait of its is under way: models
+// think for tens of seconds between calls.
+const LampQuiet = time.Minute
+
+// tellLamp tells a connection watching its own account's machine sailor
+// whether the sailor's agent attends to it, if that has changed: at the
+// helm while a wait is under way or a call came within LampQuiet, quiet
+// otherwise.
+func (c *conn) tellLamp(now time.Time) {
+	last, waiting := c.e.cfg.Agent(bus.Account(c.w.target.ID))
+	l := pb.Lamp_LAMP_QUIET
+	if waiting || (!last.IsZero() && now.Sub(last) < LampQuiet) {
+		l = pb.Lamp_LAMP_AT_HELM
+	}
+	if l == c.toldLamp {
+		return
+	}
+	c.toldLamp = l
+	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_AgentLamp{AgentLamp: &pb.AgentLamp{State: l}}}, outAgentLamp)
 }
 
 // voyages are the human sailors who allow spectators for this voyage

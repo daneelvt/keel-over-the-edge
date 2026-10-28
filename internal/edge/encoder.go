@@ -43,6 +43,7 @@ type encoder struct {
 	last   int64             // the tick last encoded
 	swept  int64             // the tick the queue was last read for positions
 	told   int64             // the tick sailors were last told how many watch
+	lamped int64             // the tick owners were last told of their agents
 	aoi    aoi               // scratch for finding views
 	empty  connView          // the base of a full snapshot
 	counts [entryOps]float64 // entries written this round, by op
@@ -54,6 +55,7 @@ func (enc *encoder) init(e *Edge, capacity int) {
 	enc.last = math.MinInt64
 	enc.swept = math.MinInt64
 	enc.told = math.MinInt64
+	enc.lamped = math.MinInt64
 	enc.queued = map[uint64]*conn{}
 	enc.aoi.init(capacity)
 }
@@ -126,6 +128,15 @@ func (enc *encoder) frame() {
 		for _, c := range enc.active {
 			if c.active && !c.w.on {
 				c.tellWatchers()
+			}
+		}
+	}
+	if enc.e.cfg.Agent != nil && (enc.lamped == math.MinInt64 || f.Tick-enc.lamped >= lampEvery) {
+		enc.lamped = f.Tick
+		now := time.Now()
+		for _, c := range enc.active {
+			if c.active && c.w.on && c.w.mine {
+				c.tellLamp(now)
 			}
 		}
 	}

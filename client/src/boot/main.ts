@@ -315,6 +315,10 @@ async function start(): Promise<void> {
         }),
       );
     }
+    // No world ends in the sandbox: its countdown is told an end only by
+    // the tests.
+    const countdown = new Countdown(() => Date.now());
+    setInterval(() => countdown.tick(), 1000);
     mountScreen(document.body, {
       model: game.hud,
       settings: game.settings,
@@ -324,6 +328,7 @@ async function start(): Promise<void> {
       labels: (el) => world.attachLabels(el),
       sailor: null,
       connection: null,
+      end: countdown,
       fly: {
         can: signal(true),
         flying: game.flying,
@@ -361,6 +366,7 @@ async function start(): Promise<void> {
         forecast: issuer,
         barometer: baro.barometer,
         readBarometer: baro.read,
+        countdown,
       });
     }
     return;
@@ -598,6 +604,7 @@ async function start(): Promise<void> {
       store: parts.chart.store,
     },
     watch: watchView,
+    lamp: online.lamp,
   });
   game.listen(document, container);
   if (view !== undefined) {

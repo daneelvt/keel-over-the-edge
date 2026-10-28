@@ -160,6 +160,7 @@ message ServerMessage {
     Forecast forecast = 15;
     WatchEnded watch_ended = 16;
     Watchers watchers = 17;
+    AgentLamp agent_lamp = 18;
   }
 }
 
@@ -200,6 +201,25 @@ enum WatchEnd {
 // most every two seconds; never who.
 message Watchers {
   uint32 count = 1;
+}
+
+// AgentLamp says whether the AI agent of the machine sailor a connection
+// watches is attending to it, as that changes: sent only to a connection
+// watching a machine sailor of its own account, never to the sailor, to
+// other spectators or in an agent's report. An agent that speaks over HTTP
+// holds nothing open, so attending is read from its calls: a wait under
+// way, or a call within the last minute.
+message AgentLamp {
+  Lamp state = 1;
+}
+
+// Lamp is the agent's attention to its boat.
+enum Lamp {
+  LAMP_UNSPECIFIED = 0;
+  // A wait is under way, or a call came within the last minute.
+  LAMP_AT_HELM = 1;
+  // No call for a minute, and no wait.
+  LAMP_QUIET = 2;
 }
 
 // Forecast is the forecast, issued at each boundary of ten minutes of world

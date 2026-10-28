@@ -321,8 +321,8 @@
   display: block;
 }
 
-/* The pocket chart, top right at sea. */
-/* The pocket chart, with its weather's switch beneath it. */
+/* The pocket chart, top right at sea, with its weather's pusher: on the
+   chart's left edge at its foot, or beneath it held upright. */
 .pocket {
   position: absolute;
   top: var(--edge-top);
@@ -333,18 +333,69 @@
   gap: 4px;
 }
 
-.pocket-weather {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0 10px;
+/* A round pusher: a brass ring about a dark face, the sky at the boat on
+   it; in, it sits down with its decal gold; out, it stands up, faint. */
+.hud .pocket-weather {
+  position: absolute;
+  right: calc(100% + 6px);
+  bottom: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #121b21 0 15px,
+    #8a6524 15.5px,
+    #f3dfa0 18px,
+    #c9a24c 20px,
+    #8a6524 22px
+  );
+  box-shadow: 0 3px 5px rgb(0 0 0 / 50%);
   color: var(--faint);
-  font: inherit;
-  font-size: 13px;
+  cursor: pointer;
+  transition:
+    transform 0.1s,
+    box-shadow 0.1s;
 }
 
-.pocket-weather[aria-pressed="true"] {
+.hud .pocket-weather.on {
   color: var(--gold, #e8b450);
+  transform: translateY(2px);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 55%);
+}
+
+.sky-decal {
+  position: absolute;
+  inset: 9px;
+  animation: sky-in 0.3s ease-out;
+}
+
+.sky-decal.fading {
+  animation: sky-out 0.3s ease-in forwards;
+}
+
+@keyframes sky-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sky-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sky-decal {
+    animation: none;
+  }
+
+  .sky-decal.fading {
+    display: none;
+  }
 }
 
 .pocket-chart {
@@ -362,8 +413,7 @@
 /* Opaque and unblurred, unlike the other panels: it stands over the sea the
    whole voyage, and a blur behind it is drawn again every frame (a third of
    the frames, on a software renderer). */
-.hud .pocket-chart,
-.hud .pocket-weather {
+.hud .pocket-chart {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: rgb(26 36 44);
@@ -585,4 +635,42 @@
 
 .chart-place-position {
   font-variant-numeric: tabular-nums;
+}
+
+/* A short screen: the pocket chart smaller, leaving the menu room above
+   the sheet. */
+@media (max-height: 420px) {
+  .pocket-chart {
+    width: 108px;
+  }
+
+  .pocket-chart canvas {
+    width: 100px;
+    height: 75px;
+  }
+}
+
+/* Held upright, the case needs the width: the pocket chart smaller, its
+   pusher beneath it. */
+@media (orientation: portrait) {
+  .pocket-chart {
+    width: 100px;
+  }
+
+  .pocket-chart canvas {
+    width: 92px;
+    height: 69px;
+  }
+
+  .pocket-caption {
+    white-space: normal;
+    text-align: center;
+  }
+
+  .hud .pocket-weather {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    margin-right: 28px;
+  }
 }

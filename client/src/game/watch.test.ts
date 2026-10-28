@@ -325,6 +325,37 @@ describe('watching online', () => {
     expect(o.watchPlace.value).toBeNull();
   });
 
+  test('the running light: for the own machine sailor watched, as told of that watch only', async () => {
+    const { o, port } = await online();
+    port.deliver(welcome(mary, true));
+    expect(o.lamp.value).toBe('');
+    port.deliver({ type: 'lamp', state: 'helm' });
+    expect(o.lamp.value).toBe('helm');
+    port.deliver({ type: 'lamp', state: 'quiet' });
+    expect(o.lamp.value).toBe('quiet');
+    // A new watch: what was told of the last lights nothing.
+    port.deliver(welcome({ ...mary, sailor: 'Iron Kate' }, false));
+    expect(o.lamp.value).toBe('');
+    port.deliver({ type: 'lamp', state: 'helm' });
+    expect(o.lamp.value).toBe('helm');
+    // Another's machine sailor, or a human's boat: never, whatever comes.
+    port.deliver(welcome({ ...mary, mine: false }, false));
+    port.deliver({ type: 'lamp', state: 'helm' });
+    expect(o.lamp.value).toBe('');
+    port.deliver(welcome({ sailor: 'Ann Bonny', machine: false, mine: false }, false));
+    port.deliver({ type: 'lamp', state: 'helm' });
+    expect(o.lamp.value).toBe('');
+    // The watch ended: out.
+    port.deliver(welcome(mary, false));
+    port.deliver({ type: 'lamp', state: 'helm' });
+    port.deliver({ type: 'watchEnded', why: 'left', sailor: 'Iron Mary' });
+    expect(o.lamp.value).toBe('');
+    // Sailing: none.
+    port.deliver(welcome(null, false));
+    port.deliver({ type: 'lamp', state: 'helm' });
+    expect(o.lamp.value).toBe('');
+  });
+
   test('watching, sailing and stopping go to the worker', async () => {
     const { o, port } = await online();
     o.watch('Iron Mary');

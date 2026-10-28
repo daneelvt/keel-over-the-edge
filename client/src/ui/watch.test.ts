@@ -165,6 +165,7 @@ describe('the screen on a boat watched', () => {
         pilotMode() {},
       },
       model: new HudModel(),
+      settings: settingsSignal(null),
     });
 
   test('has no helm, sheet or autopilot', () => {

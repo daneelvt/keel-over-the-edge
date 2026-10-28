@@ -218,6 +218,11 @@ type Config struct {
 	Watch          func(ctx context.Context, key string) (watch.Target, error)
 	Allowing       *watch.Allowing
 	SpectatorLimit int
+	// Agent, if not nil, reads a machine sailor's AI agent, by the sailor's
+	// account: when it last called, the zero time for never, and whether a
+	// wait of its is under way. An owner watching their own machine
+	// sailor is told from it whether the agent attends.
+	Agent func(bus.Account) (last time.Time, waiting bool)
 }
 
 // Edge serves the game connection.

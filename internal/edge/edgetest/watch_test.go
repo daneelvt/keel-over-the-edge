@@ -5,6 +5,8 @@ package edgetest
 import (
 	"context"
 	"math"
+	"slices"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -39,7 +41,9 @@ type viewer struct {
 	ended    *pb.WatchEnded
 	queued   *pb.Queued
 	watchers *pb.Watchers
-	closed   bool
+	// lamps are the agent's lamps told, in order.
+	lamps  []pb.Lamp
+	closed bool
 }
 
 // dial opens the game connection with the cookie and says hello.
@@ -103,7 +107,17 @@ func (v *viewer) take(r client.Received) {
 		v.queued = m.Queued
 	case *pb.ServerMessage_Watchers:
 		v.watchers = m.Watchers
+	case *pb.ServerMessage_AgentLamp:
+		v.lamps = append(v.lamps, m.AgentLamp.GetState())
 	}
+}
+
+// lamp is the latest lamp told, unspecified for none.
+func (v *viewer) lamp() pb.Lamp {
+	if len(v.lamps) == 0 {
+		return pb.Lamp_LAMP_UNSPECIFIED
+	}
+	return v.lamps[len(v.lamps)-1]
 }
 
 // welcomed reads until a Welcome and a snapshot after it have come.
@@ -561,6 +575,105 @@ func TestGoSpectator(t *testing.T) {
 		}
 		if s.Welcomed != 1 || s.Stats.Views < 40 || s.Stats.Dropped != 0 || s.Ended != 0 {
 			t.Fatalf("welcomed %d, %d views, %d dropped, %d ended", s.Welcomed, s.Stats.Views, s.Stats.Dropped, s.Ended)
+		}
+	})
+}
+
+// agents stands in for the machine sailors' agents: each one's last call
+// and whether a wait of its is under way.
+type agents struct {
+	mu      sync.Mutex
+	last    map[bus.Account]time.Time
+	waiting map[bus.Account]bool
+}
+
+func newAgents() *agents {
+	return &agents{last: map[bus.Account]time.Time{}, waiting: map[bus.Account]bool{}}
+}
+
+func (a *agents) read(acc bus.Account) (time.Time, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.last[acc], a.waiting[acc]
+}
+
+// call is a call of the agent's now, a wait begun or ended with it.
+func (a *agents) call(acc bus.Account, wait bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.last[acc], a.waiting[acc] = time.Now(), wait
+}
+
+// alive keeps connections open for d, reading them and pinging each as a
+// client does.
+func alive(d time.Duration, vs ...*viewer) {
+	for end := time.Now().Add(d); time.Now().Before(end); {
+		for _, v := range vs {
+			v.send(&pb.ClientMessage{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: 1}}})
+			v.read(time.Second, nil)
+		}
+	}
+}
+
+// TestLampTold: an owner watching their own machine sailor is told its
+// agent is at the helm while a wait of its is under way, and for a minute
+// after its last call; quiet after that minute, and at the helm again at
+// its next call; and nothing once the boat is gone. Another account
+// watching the same boat is never told, nor a sailing connection.
+func TestLampTold(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ag := newAgents()
+		srv := NewServer(t, Config{Agent: ag.read})
+		annToken, ann := srv.Sailor("Ann")
+		bobToken, _ := srv.Sailor("Bob")
+		carolToken, _ := srv.Sailor("Carol")
+		mary, _ := srv.Machine(t, "Iron Mary", ann, near(0))
+		maryAcc := bus.Account(mary)
+		ag.call(maryAcc, true)
+		owner := dial(t, srv, annToken, client.HelloWatch("Iron Mary"))
+		if !owner.welcomed().GetWatching().GetMine() {
+			t.Fatal("not Ann's own")
+		}
+		other := dial(t, srv, bobToken, client.HelloWatch("Iron Mary"))
+		if other.welcomed().GetWatching().GetMine() {
+			t.Fatal("Bob's own")
+		}
+		sailor := dial(t, srv, carolToken, client.Hello())
+		sailor.welcomed()
+		if !owner.read(3*time.Second, func() bool { return owner.lamp() == pb.Lamp_LAMP_AT_HELM }) {
+			t.Fatalf("waiting: %v", owner.lamps)
+		}
+		// The wait ends with a call: at the helm for a minute more.
+		ag.call(maryAcc, false)
+		alive(edge.LampQuiet-5*time.Second, owner, other, sailor)
+		if owner.lamp() != pb.Lamp_LAMP_AT_HELM {
+			t.Fatalf("within the minute: %v", owner.lamps)
+		}
+		alive(6*time.Second, owner, other, sailor)
+		if owner.lamp() != pb.Lamp_LAMP_QUIET {
+			t.Fatalf("a minute without a call: %v (ended %v, closed %v)", owner.lamps, owner.ended, owner.closed)
+		}
+		ag.call(maryAcc, false)
+		if !owner.read(3*time.Second, func() bool { return owner.lamp() == pb.Lamp_LAMP_AT_HELM }) {
+			t.Fatalf("a call: %v", owner.lamps)
+		}
+		// Told on change only.
+		if want := []pb.Lamp{pb.Lamp_LAMP_AT_HELM, pb.Lamp_LAMP_QUIET, pb.Lamp_LAMP_AT_HELM}; !slices.Equal(owner.lamps, want) {
+			t.Fatalf("told %v, want %v", owner.lamps, want)
+		}
+		srv.Edge.Remove(maryAcc, edge.ReasonStopped)
+		if why := owner.endedWith(); why != pb.WatchEnd_WATCH_END_LEFT {
+			t.Fatalf("the boat gone: %v", why)
+		}
+		n := len(owner.lamps)
+		owner.read(3*time.Second, nil)
+		other.read(time.Second, nil)
+		sailor.read(time.Second, nil)
+		if len(owner.lamps) != n {
+			t.Fatalf("told after the boat was gone: %v", owner.lamps[n:])
+		}
+		if len(other.lamps) != 0 || len(sailor.lamps) != 0 {
+			t.Fatalf("told another account %v, a sailor %v", other.lamps, sailor.lamps)
 		}
 	})
 }

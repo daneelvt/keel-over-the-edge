@@ -217,6 +217,9 @@ export interface ChartEntry {
 }
 
 /** Whose boat a connection watches, as its Welcome says. */
+/** The AI of an own machine sailor watched: at the helm, or gone quiet. */
+export type LampState = 'helm' | 'quiet';
+
 export interface WatchingTold {
   /** The sailor's name, as players see it. */
   sailor: string;
@@ -340,6 +343,8 @@ export type FromWorker =
   | { type: 'watchEnded'; why: WatchEndWhy; sailor: string }
   /** How many watch the connection's own boat. */
   | { type: 'watchers'; count: number }
+  /** Whether the AI of the own machine sailor watched attends to it: at the helm, or quiet. */
+  | { type: 'lamp'; state: LampState }
   /** The server is about to restart, in about inMs: the bell. */
   | { type: 'restart'; inMs: number }
   /** The sea about the boat, for the prediction and the drawing. */

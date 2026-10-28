@@ -180,12 +180,6 @@ export function Menu({
         set={(forcesOverlay) => settings.set({ forcesOverlay })}
       />
       <Toggle
-        name="barometer"
-        label="Show the barometer"
-        on={s.barometer}
-        set={(barometer) => settings.set({ barometer })}
-      />
-      <Toggle
         name="right-of-way"
         label="Show right of way"
         on={s.rightOfWay}

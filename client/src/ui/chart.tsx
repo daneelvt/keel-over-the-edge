@@ -5,13 +5,15 @@
 // disk and a tap opens a place's box, or a weather system's with the
 // course to meet it; its list, everything charted nearest first, the
 // chart's readable twin; the news, a period sheet; the pocket chart in the
-// corner at sea; and the notice line.
+// corner at sea, with its weather's pusher, whose decal is the sky at the
+// boat now; and the notice line.
 
 import './chart.css';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Raycaster, Vector2 } from 'three';
 import type { Chart, TappedWeather } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
+import { pocketSkyAt, pusherName, type SkyShown } from '../chart/pocketsky';
 import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
 import { type ChartStore, chartList, dayText, edgeCaption, whenText } from '../chart/store';
@@ -20,6 +22,7 @@ import type { BoatAt, ChartView } from '../chart/view';
 import type { ChartEntry } from '../net/messages';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
 import { type Countdown, endText } from './countdown';
+import { SkyDecal } from './decals';
 import { threeDigits, wholeDegrees } from './format';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
@@ -41,6 +44,8 @@ export interface ChartSea {
   forecasting: Forecasting | null;
   /** The boat's speed over the ground now, m/s. */
   speed: () => number;
+  /** Whether the sun is above the horizon at the boat. */
+  sunUp: () => boolean;
   /** Sets the autopilot to hold a heading, rad, as its panel does; null with no boat to steer. */
   steer: ((heading: number) => void) | null;
 }
@@ -634,7 +639,7 @@ function RimCountdown({ end }: { end: Countdown | null }) {
   }
   return (
     <p class={`chart-falls${end.closing.value ? ' closing' : ''}`} data-readout="chart-falls">
-      <span role="timer">Falls in {end.text.value}</span>
+      <span role="timer">New world in {end.text.value}</span>
     </p>
   );
 }
@@ -677,7 +682,7 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
 
 /**
  * The pocket chart: the whole disk small, tilted, with the boat, and its
- * weather now while its switch is on; a tap opens the chart.
+ * weather now while its pusher is in; a tap opens the chart.
  */
 export function PocketChart({
   sea,
@@ -694,7 +699,7 @@ export function PocketChart({
   const [edge, setCaption] = useState('Chart');
   // In the world's last days the caption carries the countdown too.
   const caption =
-    end?.closing.value && end.text.value !== '' ? `${edge} · falls ${end.text.value}` : edge;
+    end?.closing.value && end.text.value !== '' ? `${edge} · new world ${end.text.value}` : edge;
   useEffect(() => {
     const c = canvas.current;
     if (c === null) {
@@ -724,16 +729,89 @@ export function PocketChart({
         </span>
       </button>
       {setWeather !== null && sea.forecasting !== null ? (
-        <button
-          type="button"
-          class="panel pocket-weather"
-          aria-pressed={weather}
-          onClick={() => setWeather(!weather)}
-        >
-          Weather
-        </button>
+        <WeatherPusher sea={sea} src={sea.forecasting} on={weather} set={setWeather} />
       ) : null}
     </div>
+  );
+}
+
+/** How often the weather pusher reads the sky at the boat, ms; and looks whether the forecast has changed. */
+const SKY_EVERY = 10_000;
+const SKY_LOOK = 500;
+
+/**
+ * The pocket chart's weather pusher: round, on the chart's edge, its decal
+ * the sky at the boat now, crossfading as it changes; in while the chart's
+ * weather is on.
+ */
+function WeatherPusher({
+  sea,
+  src,
+  on,
+  set,
+}: {
+  sea: ChartSea;
+  src: Forecasting;
+  on: boolean;
+  set: (on: boolean) => void;
+}) {
+  const [shown, setShown] = useState<{ now: SkyShown | null; before: SkyShown | null }>({
+    now: null,
+    before: null,
+  });
+  useEffect(() => {
+    let live = true;
+    let read = Number.NEGATIVE_INFINITY;
+    let version = -1;
+    const look = () => {
+      // Every ten seconds, and again as the forecast or the truth changes.
+      const t = performance.now();
+      if (t - read < SKY_EVERY && src.forecasts.version === version) {
+        return;
+      }
+      read = t;
+      version = src.forecasts.version;
+      const b = sea.boat();
+      const night = !sea.sunUp();
+      void pocketSkyAt(src, b.east, b.north).then((sky) => {
+        if (!live) {
+          return;
+        }
+        setShown((was) =>
+          was.now !== null && was.now.sky === sky && was.now.night === night
+            ? was
+            : { now: { sky, night }, before: was.now },
+        );
+      });
+    };
+    look();
+    const t = setInterval(look, SKY_LOOK);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [sea, src]);
+  const now = shown.now;
+  return (
+    <button
+      type="button"
+      class={`pocket-weather${on ? ' on' : ''}`}
+      aria-pressed={on}
+      aria-label={pusherName(now)}
+      data-sky={now?.sky ?? ''}
+      onClick={() => set(!on)}
+    >
+      {shown.before !== null ? (
+        <span key={`b${shown.before.sky}${shown.before.night}`} class="sky-decal fading">
+          <SkyDecal sky={shown.before.sky} night={shown.before.night} />
+        </span>
+      ) : null}
+      {now !== null ? (
+        <span key={`n${now.sky}${now.night}`} class="sky-decal">
+          <SkyDecal sky={now.sky} night={now.night} />
+        </span>
+      ) : null}
+    </button>
   );
 }
 

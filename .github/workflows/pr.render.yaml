@@ -163,10 +163,12 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Build the physics module (the game's page steps it)
         run: go run ./tools/physics
+      - name: Seed 1's world, for the sandbox's harbour (layout.spec.ts)
+        run: go run ./tools/dev -world 1
       - name: WebKit for Playwright
         working-directory: client
         run: npx --no-install playwright install --with-deps webkit
-      - name: The net worker's upgrade and the account's passkeys on WebKit
+      - name: The net worker's upgrade, the account's passkeys and the screen's layout on WebKit
         working-directory: client
         run: npx --no-install playwright test --project webkit
       - name: The pictures and traces of a failure

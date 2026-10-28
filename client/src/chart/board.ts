@@ -154,7 +154,7 @@ export async function boardOf(
 }
 
 /** The points about a port its weather is measured at: its quay and eight a quarter of a mile about it. */
-function pointsAbout(east: number, north: number): [number, number][] {
+export function pointsAbout(east: number, north: number): [number, number][] {
   const out: [number, number][] = [[east, north]];
   const r = 0.25 * 1852;
   for (let i = 0; i < 8; i++) {

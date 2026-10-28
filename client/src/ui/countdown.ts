@@ -11,6 +11,9 @@
 // shown in the player's own time with its zone's name, and in the zone the
 // schedule is published in beside it when the two differ: "Monday 12:00
 // NZDT (Sunday 6:00 pm ET)", so two players anywhere can agree on it.
+// What is left of the world's week is also kept as a fraction, which a
+// power reserve's hand reads at a glance: whole as the world begins, none
+// at its end.
 
 import { signal } from '@preact/signals';
 
@@ -44,6 +47,21 @@ interface Duration {
   hours?: number;
   minutes?: number;
   seconds?: number;
+}
+
+/** The steps a reserve's hand moves in, over its whole arc. */
+export const RESERVE_STEPS = 360;
+
+/**
+ * What is left of a world's life at now, ms of UTC: 1 as it begins, 0 at
+ * its end, and 0 with no end known.
+ */
+export function reserveOf(e: WorldEnd, now: number): number {
+  const life = e.ends - e.epoch;
+  if (e.ends === 0 || !(life > 0) || Number.isNaN(now)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, (e.ends - now) / life));
 }
 
 /** The parts the countdown reads in, for ms left. */
@@ -174,6 +192,11 @@ export class Countdown {
   readonly when = signal('');
   /** Set once in the last minute, for a screen reader to announce once. */
   readonly last = signal('');
+  /**
+   * What is left of the world's life, 0 to 1, in RESERVE_STEPS steps, so
+   * it is written seldom: a step of a week is about half an hour.
+   */
+  readonly reserve = signal(0);
   /** ms left at the last tick; Infinity with no end known. */
   left = Number.POSITIVE_INFINITY;
   /** The world clock as UTC, ms; NaN while it is not known. */
@@ -201,6 +224,10 @@ export class Countdown {
   tick(): void {
     const e = this.end.value;
     const now = this.now();
+    const reserve = e === null ? 0 : Math.round(reserveOf(e, now) * RESERVE_STEPS) / RESERVE_STEPS;
+    if (reserve !== this.reserve.value) {
+      this.reserve.value = reserve;
+    }
     if (e === null || e.ends === 0 || Number.isNaN(now)) {
       this.left = Number.POSITIVE_INFINITY;
       if (this.text.value !== '') {
