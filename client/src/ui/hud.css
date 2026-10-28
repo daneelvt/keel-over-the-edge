@@ -861,6 +861,7 @@
   --brass-light: #f3dfa0;
   --brass: #c9a24c;
   --brass-dark: #8a6524;
+  --key: 44px;
   position: absolute;
   bottom: var(--edge-bottom);
   left: calc(var(--edge-left) + 190px + 8px);
@@ -882,13 +883,13 @@
 .head-row {
   display: flex;
   gap: 3px;
-  height: 44px;
+  height: var(--key);
 }
 
 .head-key {
   flex: 0 0 auto;
   min-width: 44px;
-  height: 44px;
+  height: var(--key);
   padding: 0 6px;
   border: 0;
   border-radius: 7px;
@@ -933,7 +934,7 @@
 .drum {
   flex: 1 1 auto;
   min-width: 0;
-  height: 44px;
+  height: var(--key);
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -978,7 +979,7 @@
   display: inline-block;
   color: #f4ecd8;
   font:
-    17px / 44px "IM Fell English SC",
+    17px / var(--key) "IM Fell English SC",
     Georgia,
     serif;
   white-space: nowrap;
@@ -996,7 +997,7 @@
    set. */
 .lever {
   flex: 0 0 auto;
-  height: 44px;
+  height: var(--key);
   display: flex;
   padding: 3px;
   border: 0;
@@ -1056,6 +1057,17 @@
 
   .drum-text {
     font-size: 15px;
+  }
+}
+
+/* On the shortest screens, a phone held sideways or a small one upright,
+   the head is a little lower, its keys 42 pixels tall, to stay clear of
+   the boat's hull. */
+@media (max-height: 420px), (orientation: portrait) and (max-height: 700px) {
+  .pilot-head {
+    --key: 42px;
+    gap: 2px;
+    padding: 1px;
   }
 }
 

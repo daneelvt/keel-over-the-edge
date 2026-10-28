@@ -5,7 +5,8 @@
 // clock out of the case, the autopilot's control head open and the boat in
 // Port Royal's harbour, no part of the screen covers another, or the boat
 // as drawn with a margin about it, and every part is on the screen. One
-// page, its viewport changed screen by screen.
+// page, its viewport changed screen by screen, with less motion asked
+// for, so that nothing is measured mid-slide.
 //
 // Held upright, the chase camera puts the boat's masthead within a sixth
 // of the screen's height of its top, where no case of instruments fits
@@ -127,6 +128,8 @@ test('no part of the screen at sea covers the boat or another part, with everyth
   page,
 }) => {
   await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  // Laid out as it rests: nothing caught sliding out.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await openScene(page, 'world=1', true);
   const now = Date.now();
   await page.evaluate(
@@ -138,6 +141,13 @@ test('no part of the screen at sea covers the boat or another part, with everyth
         closing: now + 2 * 86_400_000,
       });
       k.toHarbour();
+      // At rest, the sail sheeted in: the boat drawn the same every time.
+      k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+      k.setControls(0, 0);
+      k.advance(30);
+      k.render();
+      // The chase camera behind it again: time is held.
+      k.camera('chase');
       k.render();
     },
     { now },
@@ -148,13 +158,22 @@ test('no part of the screen at sea covers the boat or another part, with everyth
   const found: string[] = [];
   for (const s of SCREENS) {
     await page.setViewportSize({ width: s.width, height: s.height });
-    // Every complication out, the head open, after the screen's new size.
+    // The camera at the new size before anything is measured: a browser
+    // may tell the page of its resize a frame or more late.
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    // Every complication out, the head open.
     await page.evaluate(() => {
       const k = globalThis.keel;
       k.settings({ barometer: true, worldClock: true, pilotHead: true });
       k.render();
     });
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(200);
     await page.evaluate(() => globalThis.keel.render());
     const seen = await parts(page);
     await test.info().attach(`${s.name}.png`, {
