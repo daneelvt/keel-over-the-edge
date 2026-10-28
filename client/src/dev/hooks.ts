@@ -1807,7 +1807,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         focus: { ...world.focus },
         dome: { east: domeCentre.value.x + o.x, north: -domeCentre.value.y + o.y },
         tiles: { east: field.x, north: field.y },
-        hud: document.querySelector('.hud .instruments') !== null,
+        hud: document.querySelector('.hud .case') !== null,
         back: document.querySelector('.fly-back.shown') !== null,
         stays: (driver as { stays?: boolean }).stays ?? false,
       };
