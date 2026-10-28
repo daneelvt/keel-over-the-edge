@@ -37,15 +37,15 @@ type release struct {
 }
 
 var releases = []release{
-	{"tinygo-org/tinygo", "darwin-amd64", "v0.42.0", "ef7b96cf59de5714a7493a696e9db141a85a99459620b00c42cb3bad14be2af2"},
-	{"tinygo-org/tinygo", "darwin-arm64", "v0.42.0", "493da3585e66c5da677a4be39402faf2041b4e45a61eb456e4547eca753a544e"},
-	{"tinygo-org/tinygo", "linux-amd64", "v0.42.0", "b87688fa2e19cee7d813cad7fd7dadb71dff3198e47125aba66ba4af5e490438"},
-	{"tinygo-org/tinygo", "linux-arm64", "v0.42.0", "f2f3f863e63728b87772e7306bd6030df6e6c89773a7082eb0122113cf9e453d"},
+	{"tinygo-org/tinygo", "darwin-amd64", "v0.43.0", "e544fe732d7b81f058ac8d2c7303e22031eff734c027295e7a53c3037e4d9e89"},
+	{"tinygo-org/tinygo", "darwin-arm64", "v0.43.0", "f5e0161f212fb69ad4650a4809e3ca66856e184892e80058f0d47abc64151812"},
+	{"tinygo-org/tinygo", "linux-amd64", "v0.43.0", "ca9fc6d055e3889462dea4450a2e42a92242d88b5c362a7ec39bdb563413d78a"},
+	{"tinygo-org/tinygo", "linux-arm64", "v0.43.0", "a2165b9f46aff9a895a0abed54aedffab1e93317a387c6c2e9dd839425527cbd"},
 
-	{"sigstore/cosign", "darwin-amd64", "v3.1.3", "2347488e5d5b25336644024dfeca5601b190e91197a71a917bda44744aff106c"},
-	{"sigstore/cosign", "darwin-arm64", "v3.1.3", "5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76"},
-	{"sigstore/cosign", "linux-amd64", "v3.1.3", "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"},
-	{"sigstore/cosign", "linux-arm64", "v3.1.3", "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a"},
+	{"sigstore/cosign", "darwin-amd64", "v3.1.4", "9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834e3e6d44039c238867334f"},
+	{"sigstore/cosign", "darwin-arm64", "v3.1.4", "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"},
+	{"sigstore/cosign", "linux-amd64", "v3.1.4", "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"},
+	{"sigstore/cosign", "linux-arm64", "v3.1.4", "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2"},
 
 	{"fluxcd/flux2", "darwin-amd64", "v2.9.6", "c3c3532c8c6cf689ef7b93125b33dc170df84a9d5d036f578568bfdf88a2d7e6"},
 	{"fluxcd/flux2", "darwin-arm64", "v2.9.6", "7008a758da4b8d57c5845aad6552f256d4d23630c2b2de2ca8da362f9a48c126"},
@@ -55,13 +55,13 @@ var releases = []release{
 	{"aquasecurity/kube-bench", "linux-amd64", "v0.16.0", "82dbc7e598740dc9344d41f8ad0b8210d57c4c00bdb2c5f1d8a69a2b98baddcf"},
 	{"aquasecurity/kube-bench", "linux-arm64", "v0.16.0", "64500561f5fcaa3f86fe951ed26bbfc28f7bbf3d2eac13843abfd2924955d10b"},
 
-	{"opentofu/opentofu", "darwin-arm64", "v1.13.1", "be78f659f04ef06a9dbd9b3934d46af95d787a3aa38396d459dea395261816a9"},
-	{"opentofu/opentofu", "linux-amd64", "v1.13.1", "378ada19d4bc70c43732004e8159be771b23b9a5afdf059e5f8a2b3fa2c70a69"},
-	{"opentofu/opentofu", "linux-arm64", "v1.13.1", "9c1ef375aa1852db0b2888aa921b640c71f8140d4682aa4fec99378a64fa7dc3"},
+	{"opentofu/opentofu", "darwin-arm64", "v1.13.2", "0d1cdc85f38992055b48e7fb161304a2ddfe2e5ee0ff68ffec9d0349c8bd1b59"},
+	{"opentofu/opentofu", "linux-amd64", "v1.13.2", "ac05d9952662c7db28dd57e93f0a68018837bfdf9342384ec0987977c16a9645"},
+	{"opentofu/opentofu", "linux-arm64", "v1.13.2", "88e2d9e3f94f97b76ab2faf55ade87578f56aed19c5e45fa139d70e994366d1f"},
 
-	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.153.0", "f6fb958d30666da21bcd190b908cc6714d1f2cb0e1938a6338ece0d45cb9f049"},
-	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.153.0", "85aea24a4829cf26033d810aceb7888070bd4eaff321357168ff6db24bf7c00c"},
-	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.153.0", "8153c4feb73564215950a299c803d5c1e974772cd34b8c162d43ea2c5b516df5"},
+	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.154.1", "073f44a6c6169d0542043d114a57731dcd03174a542f922fc64a796491283e26"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.154.1", "989c8f73edc5d131eb169bb689d7b77bb1d31b14314159c7f6bbae38ba655938"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.154.1", "e9a44e352da8200d427815acab179850cef0a13ed4d0e5ef95a7f1e46c81b0aa"},
 }
 
 // byHand pins what is not a GitHub release, which Renovate cannot follow:

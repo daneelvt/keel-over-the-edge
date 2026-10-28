@@ -50,7 +50,7 @@ spec:
       spec:
         image:
           # renovate: image=victoriametrics/victoria-metrics
-          tag: v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
+          tag: v1.154.1@sha256:c7884f32920dd45a9d86542a717227e63af03e060e53bbf8031e6e6fd0e1e05d
         useStrictSecurity: true
         retentionPeriod: 90d
         extraArgs:
@@ -76,7 +76,7 @@ spec:
       spec:
         image:
           # renovate: image=victoriametrics/vmagent
-          tag: v1.153.0@sha256:474135388ae700b842007d3e186a8ae60ccf7de3dfd776fb6ed27cf8522d8331
+          tag: v1.154.1@sha256:970ba603235839655e03501311c683d2269b882f7bcf0ac98892ae422603cb61
         useStrictSecurity: true
         scrapeInterval: 30s
         resources:
@@ -92,7 +92,7 @@ spec:
       spec:
         image:
           # renovate: image=victoriametrics/vmalert
-          tag: v1.153.0@sha256:0c1c7718b54b03e8559d0f257f31f1bd79ef7fa32ac6e9ed90d7b92a74a4fe76
+          tag: v1.154.1@sha256:aafb962b5a5713c71f0d697d629416f9cccf23aecb74f0ec5e829ddbf3f221f2
         useStrictSecurity: true
         evaluationInterval: 30s
         resources:
@@ -172,7 +172,7 @@ spec:
       fullnameOverride: grafana
       image:
         # renovate: image=grafana/grafana versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-distroless$
-        tag: 13.2.3-distroless@sha256:202e5d5b3f8499e70ccac7991eea6d7da72d2790eb2e0597e7987acf724e7180
+        tag: 13.2.4-distroless@sha256:ae3d3add290adbe6a88412229f5d76fd7bb82743050881698642d3d62f277e35
       # No state: every dashboard and data source is in the repository, and
       # a restart loses nothing.
       persistence:
@@ -218,7 +218,7 @@ spec:
       # not used.
       extraInitContainers:
         - name: victorialogs-plugin
-          image: curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+          image: curlimages/curl:8.23.0@sha256:11e64e28c5f58c8d93ee95fcf22ac055f48b0bc440e0ce7d8013bbb5ad6aa8ac
           command:
             - /bin/sh
             - -ec
