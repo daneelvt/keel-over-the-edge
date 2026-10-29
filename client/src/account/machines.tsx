@@ -4,9 +4,10 @@
 // AI apps sail, each made with a name and a look, then connected to an AI
 // app (the app opens the approval page, where the player approves it with
 // a passkey). The start screen shows them to a player who has any, before
-// the sea: Set sail, each one at sea or not, how to connect it, its
-// approved apps, and another made while the account is under its cap. The
-// menu shows the same. The account page manages them: each approved app
+// the sea, as "AI sailors" in a panel of their own, apart from the
+// player's own sailor and its Set sail: each one at sea or not, how to
+// connect it, its approved apps, and another made while the account is
+// under its cap. Nothing there sails them. The menu shows the same. The account page manages them: each approved app
 // revoked, a connection token made (shown once) or revoked, a machine
 // sailor deleted. A connection token hands the machine sailor out, and
 // deleting cannot be undone, so both first ask for one of the account's
@@ -20,19 +21,12 @@
 //
 // Loaded only when shown: none of it is in the game's first download.
 
-import { type JSX, render } from 'preact';
+import { type ComponentChildren, type JSX, render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { useWatch } from '../ui/watchlazy';
-import {
-  COPIED,
-  COPY_WATCH_LINK,
-  STILL_AT_SEA,
-  WATCH,
-  WATCH_ANOTHER_SAILOR,
-  watchersText,
-  watchLink,
-} from '../ui/watchwords';
+import { COPIED, COPY_WATCH_LINK, WATCH, watchersText, watchLink } from '../ui/watchwords';
+import { Cog } from './cog';
 import { Connect } from './connect';
 import {
   type Draft,
@@ -49,6 +43,7 @@ import type { Fetch, Me } from './me';
 import { call, confirmPasskey, type Outcome, reasonOf } from './passkeys';
 import { lengthProblem, machineReasonText } from './reasons';
 import { dayOf } from './recovery';
+import { YourSailor } from './yoursailor';
 
 /**
  * A machine sailor as the account's page lists it: stopped, ms, when the
@@ -224,20 +219,95 @@ function WatchLinkCopy({ name }: { name: string }) {
 }
 
 /**
- * The machine sailors' list, with how to connect each and another made:
- * the start screen's and the menu's. first opens on the form. On the
- * start screen, watch is given the sailor chosen to watch, and each at
- * sea offers it.
+ * The machine sailors' list under its heading and line, with how to
+ * connect each and another made. open is the one whose connecting is
+ * shown, toggled by toggle. On the start screen, watch is given the
+ * sailor chosen to watch, and each at sea offers it.
+ */
+export function MachineList({
+  page,
+  heading,
+  line = '',
+  open,
+  toggle,
+  make,
+  watch = null,
+}: {
+  page: MachinesPage;
+  heading: ComponentChildren;
+  line?: string;
+  open: string;
+  toggle: (id: string) => void;
+  make: () => void;
+  watch?: ((name: string) => void) | null;
+}) {
+  return (
+    <section aria-labelledby="machines-title">
+      <h2 id="machines-title">{heading}</h2>
+      {line !== '' ? <p class="start-text start-faint">{line}</p> : null}
+      {page.machines.length === 0 ? (
+        <p class="start-text start-faint">None yet.</p>
+      ) : (
+        <ul class="machine-list">
+          {page.machines.map((m) => (
+            <li key={m.id} data-machine={m.name}>
+              <MachineSummary m={m} />
+              {watch !== null && m.atSea && stoppedOn(m) === '' ? (
+                <span class="machine-watch">
+                  <button type="button" class="start-sign-in" onClick={() => watch(m.name)}>
+                    {WATCH}
+                  </button>
+                  {watchersText(m.watchers ?? 0) !== '' ? (
+                    <span class="machine-faint" data-readout="watchers">
+                      {watchersText(m.watchers ?? 0)}
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
+              {stoppedOn(m) !== '' ? (
+                <p class="start-text start-faint">{stoppedOn(m)}.</p>
+              ) : (
+                <button
+                  type="button"
+                  class="start-sign-in"
+                  aria-expanded={open === m.id}
+                  onClick={() => toggle(m.id)}
+                >
+                  How to connect
+                </button>
+              )}
+              {open === m.id ? <Connect mcp={page.mcp} name={m.name} /> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {page.machines.length < page.cap ? (
+        <button type="button" class="start-sign-in" onClick={make}>
+          {page.machines.length === 0 ? 'Make a machine sailor' : 'Make another machine sailor'}
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * The machine sailors' list, the form that makes one, and how to connect
+ * the one made: the start screen's and the menu's, under heading and
+ * line. first opens on the form.
  */
 function MachinesBody({
   page,
   setPage,
   first,
+  heading,
+  line = '',
   watch = null,
 }: {
   page: MachinesPage;
   setPage: (p: MachinesPage) => void;
   first: boolean;
+  heading: ComponentChildren;
+  line?: string;
   watch?: ((name: string) => void) | null;
 }) {
   const [view, setView] = useState<View>({ kind: first ? 'form' : 'list' });
@@ -266,50 +336,15 @@ function MachinesBody({
     );
   }
   return (
-    <section aria-labelledby="machines-title">
-      <h2 id="machines-title">Machine sailors</h2>
-      {page.machines.length === 0 ? (
-        <p class="start-text start-faint">None yet.</p>
-      ) : (
-        <ul class="machine-list">
-          {page.machines.map((m) => (
-            <li key={m.id} data-machine={m.name}>
-              <MachineSummary m={m} />
-              {watch !== null && m.atSea && stoppedOn(m) === '' ? (
-                <span class="machine-watch">
-                  <button type="button" class="start-sign-in" onClick={() => watch(m.name)}>
-                    {WATCH}
-                  </button>
-                  {watchersText(m.watchers ?? 0) !== '' ? (
-                    <span class="machine-faint" data-readout="watchers">
-                      {watchersText(m.watchers ?? 0)}
-                    </span>
-                  ) : null}
-                </span>
-              ) : null}
-              {stoppedOn(m) !== '' ? (
-                <p class="start-text start-faint">{stoppedOn(m)}.</p>
-              ) : (
-                <button
-                  type="button"
-                  class="start-sign-in"
-                  aria-expanded={open === m.id}
-                  onClick={() => setOpen(open === m.id ? '' : m.id)}
-                >
-                  How to connect
-                </button>
-              )}
-              {open === m.id ? <Connect mcp={page.mcp} name={m.name} /> : null}
-            </li>
-          ))}
-        </ul>
-      )}
-      {page.machines.length < page.cap ? (
-        <button type="button" class="start-sign-in" onClick={() => setView({ kind: 'form' })}>
-          {page.machines.length === 0 ? 'Make a machine sailor' : 'Make another machine sailor'}
-        </button>
-      ) : null}
-    </section>
+    <MachineList
+      page={page}
+      heading={heading}
+      line={line}
+      open={open}
+      toggle={(id) => setOpen(open === id ? '' : id)}
+      make={() => setView({ kind: 'form' })}
+      watch={watch}
+    />
   );
 }
 
@@ -327,20 +362,53 @@ function StartWatchList({ choose, close }: { choose: (name: string) => void; clo
 }
 
 /**
- * The start screen with the player's machine sailors: Set sail, and the
- * list, each at sea with Watch; and Watch another sailor. first, after a
- * new sailor's recovery code, opens on the form. done is given the sailor
- * chosen to watch, or nothing to sail. atSea: the player's own boat is
- * still in the water, which a watch takes out, and the screen says so.
+ * The start screen's name for machine sailors, beside the player's own,
+ * headed by the cog the AI boats wear on their sails: they are AI's, not
+ * the player's to sail.
+ */
+export const AI_SAILORS = 'AI sailors';
+export const AI_SAILORS_LINE = 'Sailed by your AI apps, not by you. You can watch them.';
+
+/**
+ * The start screen's two panels, apart: the player's own sailor, with
+ * the only Set sail; and their AI sailors, children, which nothing there
+ * sails. sail sets the player's sailor to sea; list opens the sailors to
+ * watch.
+ */
+export function StartPair({
+  me,
+  sail,
+  list,
+  children,
+}: {
+  me: Me;
+  sail: () => void;
+  list: () => void;
+  children: ComponentChildren;
+}) {
+  return (
+    <div class="start-pair">
+      <YourSailor me={me} sail={sail} watch={list} />
+      <div class="start-panel ai-panel">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * The start screen with the player's machine sailors: the player's own
+ * sailor, with Set sail and Watch another sailor, beside the AI sailors,
+ * each at sea with Watch. first, after a new sailor's recovery code,
+ * opens on the form. done is given the sailor chosen to watch, or nothing
+ * to sail as me.
  */
 export function MachineStart({
   first,
   done,
-  atSea = false,
+  me,
 }: {
   first: boolean;
   done: (watch?: string) => void;
-  atSea?: boolean;
+  me: Me;
 }) {
   const { page, setPage, problem } = usePage();
   const [listing, setListing] = useState(false);
@@ -348,27 +416,27 @@ export function MachineStart({
     return <StartWatchList choose={(name) => done(name)} close={() => setListing(false)} />;
   }
   return (
-    <section class="start-panel machine-panel" aria-labelledby="start-title">
-      <h1 id="start-title">Keel Over the Edge</h1>
-      <button type="button" class="start-go" onClick={() => done()}>
-        Set sail
-      </button>
-      {atSea ? (
-        <p class="start-warning" role="note">
-          {STILL_AT_SEA}
-        </p>
-      ) : null}
+    <StartPair me={me} sail={() => done()} list={() => setListing(true)}>
       {page === null ? (
         <p class="start-text start-faint" aria-live="polite">
           {problem || 'Reading your machine sailors…'}
         </p>
       ) : (
-        <MachinesBody page={page} setPage={setPage} first={first} watch={(name) => done(name)} />
+        <MachinesBody
+          page={page}
+          setPage={setPage}
+          first={first}
+          heading={
+            <>
+              <Cog />
+              {AI_SAILORS}
+            </>
+          }
+          line={AI_SAILORS_LINE}
+          watch={(name) => done(name)}
+        />
       )}
-      <button type="button" class="start-sign-in" onClick={() => setListing(true)}>
-        {WATCH_ANOTHER_SAILOR}
-      </button>
-    </section>
+    </StartPair>
   );
 }
 
@@ -384,7 +452,7 @@ export function showMachineStart(parent: HTMLElement, me: Me): Promise<Me> {
     };
     render(
       <div class="start">
-        <MachineStart first={false} done={done} atSea={me.atSea === true} />
+        <MachineStart first={false} done={done} me={me} />
       </div>,
       root,
     );
@@ -401,7 +469,7 @@ export function MachinesPanel({ close }: { close: () => void }) {
           {problem || 'Reading your machine sailors…'}
         </p>
       ) : (
-        <MachinesBody page={page} setPage={setPage} first={false} />
+        <MachinesBody page={page} setPage={setPage} first={false} heading="Machine sailors" />
       )}
       <button type="button" class="menu-close" onClick={close}>
         Close

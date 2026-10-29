@@ -10,6 +10,7 @@
   inset: 0;
   display: grid;
   place-items: center;
+  overflow-y: auto;
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
     max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   background: rgb(10 20 28 / 25%);
@@ -20,11 +21,13 @@
     sans-serif;
 }
 
+/* Its padding inside its width, so that it fits a phone's. */
 .start-panel {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: min(360px, 100%);
+  width: min(404px, 100%);
   padding: 20px 22px 22px;
   border-radius: 14px;
   background: var(--panel);
@@ -41,6 +44,86 @@
     serif;
   color: var(--gold);
   text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.start-panel h2 {
+  margin: 8px 0 4px;
+  font:
+    20px "IM Fell English SC",
+    Georgia,
+    serif;
+  color: var(--gold);
+}
+
+/*
+ * The start screen's two panels, the player's own sailor and their AI
+ * sailors: stacked, the player's first, on a screen held upright; side by
+ * side, the player's on the left, on one held sideways. Aligned to the
+ * top, so the player's panel stays put as the other arrives beside or
+ * beneath it; the screen scrolls when they overflow it.
+ */
+.start-pair {
+  display: grid;
+  grid-template-columns: min(360px, 100%);
+  justify-content: center;
+  align-items: start;
+  align-self: start;
+  gap: 20px;
+  width: 100%;
+}
+
+.start-pair > .start-panel {
+  width: auto;
+  min-width: 0;
+}
+
+@media (min-aspect-ratio: 1 / 1) and (min-width: 600px) {
+  .start-pair {
+    grid-template-columns: repeat(2, minmax(0, 360px));
+  }
+}
+
+/* A computer's screen: down from the top edge, nearer the middle. */
+@media (min-width: 900px) and (min-height: 700px) {
+  .start-pair {
+    margin-top: 8vh;
+  }
+}
+
+/* A screen held sideways on a phone: the panels tighter, Set sail in view. */
+@media (max-height: 480px) {
+  .start-pair > .start-panel {
+    gap: 6px;
+    padding: 12px 18px 14px;
+  }
+
+  .start-pair .start-panel h1 {
+    margin-bottom: 0;
+    font-size: 24px;
+  }
+
+  .start-pair .start-panel h2 {
+    margin: 2px 0 0;
+  }
+}
+
+.your-sailor h2 {
+  margin-bottom: 0;
+}
+
+.your-sailor-name {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+/* Set sail as the player's sailor: a long name wraps, and the button grows. */
+.your-sailor-go {
+  padding: 8px 12px;
+  overflow-wrap: anywhere;
 }
 
 .start-label {
