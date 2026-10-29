@@ -10,6 +10,7 @@ import { useState } from 'preact/hooks';
 import type { Me } from './me';
 import { addPasskey, type Reach, signOut } from './passkeys';
 import { reasonText } from './reasons';
+import { setSailAs } from './yoursailor';
 
 /** A date as the player reads it: 23 October, or 23 October 2025 in another year. */
 export function dayOf(ms: number, now = Date.now()): string {
@@ -80,19 +81,30 @@ export function RecoveryCode({
 }
 
 /**
- * After a new sailor's recovery code is kept: to sea, or a machine sailor
- * made first, for an AI app of the player's to sail.
+ * After a new sailor's recovery code is kept: to sea as the sailor just
+ * made, named, or a machine sailor made first, for an AI app of the
+ * player's to sail.
  */
-export function SetSailOrMake({ sail, make }: { sail: () => void; make: () => void }) {
+export function SetSailOrMake({
+  name,
+  sail,
+  make,
+}: {
+  name: string;
+  sail: () => void;
+  make: () => void;
+}) {
   return (
     <section class="start-panel" aria-labelledby="ready-title">
-      <h1 id="ready-title">Ready to sail</h1>
+      <h1 id="ready-title">
+        <bdi>{name}</bdi> is ready to sail
+      </h1>
       <p class="start-text">
-        You can also make a machine sailor: one an AI app of yours sails, and speaks as, beside you
-        or while you are away.
+        Your sailor is made. You can also make a machine sailor: an AI sailor that an AI app of
+        yours sails, and speaks as, beside you or while you are away.
       </p>
-      <button type="button" class="start-go" onClick={sail}>
-        Set sail
+      <button type="button" class="start-go your-sailor-go" onClick={sail}>
+        {setSailAs(name)}
       </button>
       <button type="button" class="start-sign-in" onClick={make}>
         Make a machine sailor first

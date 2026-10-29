@@ -37,6 +37,7 @@ import {
 } from './passkeys';
 import { lengthProblem, MAX_NAME, reasonText, TAKEN_SIGN_IN } from './reasons';
 import { AddPasskey, RecoveredNotice, RecoveryCode, SetSailOrMake } from './recovery';
+import { YourSailor } from './yoursailor';
 
 export interface StartProps {
   sailors: readonly Look[];
@@ -246,6 +247,7 @@ export function StartScreen({ sailors, done, random, reach, machines = true }: S
       return (
         <div class="start">
           <SetSailOrMake
+            name={view.me.name}
             sail={() => done(view.me)}
             make={() => setView({ kind: 'machines', me: view.me, first: true })}
           />
@@ -256,7 +258,7 @@ export function StartScreen({ sailors, done, random, reach, machines = true }: S
         <div class="start">
           <Machines
             first={view.first}
-            atSea={view.me.atSea === true}
+            me={view.me}
             done={(watch) => done(watch === undefined ? view.me : { ...view.me, watch })}
           />
         </div>
@@ -429,28 +431,21 @@ export function StartScreen({ sailors, done, random, reach, machines = true }: S
   );
 }
 
-/** The start screen with machine sailors, once its module is loaded; done is given a sailor chosen to watch, or nothing to sail. */
-function Machines({
-  first,
-  atSea,
-  done,
-}: {
-  first: boolean;
-  atSea: boolean;
-  done: (watch?: string) => void;
-}) {
+/**
+ * The start screen with machine sailors, once its module is loaded; done
+ * is given a sailor chosen to watch, or nothing to sail. Until then the
+ * player's own panel stands where it will be, with its Set sail.
+ */
+function Machines({ first, me, done }: { first: boolean; me: Me; done: (watch?: string) => void }) {
   const m = useMachines();
   if (m === null) {
     return (
-      <section class="start-panel" aria-labelledby="start-title">
-        <h1 id="start-title">Keel Over the Edge</h1>
-        <button type="button" class="start-go" onClick={() => done()}>
-          Set sail
-        </button>
-      </section>
+      <div class="start-pair">
+        <YourSailor me={me} sail={() => done()} watch={null} />
+      </div>
     );
   }
-  return <m.MachineStart first={first} done={done} atSea={atSea} />;
+  return <m.MachineStart first={first} done={done} me={me} />;
 }
 
 /** A browser that cannot make the player's passkey: the game's address, to open elsewhere. */
