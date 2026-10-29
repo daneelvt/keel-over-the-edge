@@ -11,6 +11,64 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const follow = `-- name: Follow :exec
+INSERT INTO follow (follower_id, followed_id) VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type FollowParams struct {
+	FollowerID pgtype.UUID
+	FollowedID pgtype.UUID
+}
+
+// An account follows another's sailor; following it again changes nothing.
+func (q *Queries) Follow(ctx context.Context, arg FollowParams) error {
+	_, err := q.db.Exec(ctx, follow, arg.FollowerID, arg.FollowedID)
+	return err
+}
+
+const follows = `-- name: Follows :many
+SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name
+FROM follow f
+JOIN account a ON a.id = f.followed_id
+JOIN sailor sl ON sl.account_id = a.id
+WHERE f.follower_id = $1
+`
+
+type FollowsRow struct {
+	ID      pgtype.UUID
+	Kind    string
+	OwnerID pgtype.UUID
+	Name    string
+}
+
+// The sailors an account follows: their accounts, names, kinds and
+// owners.
+func (q *Queries) Follows(ctx context.Context, followerID pgtype.UUID) ([]FollowsRow, error) {
+	rows, err := q.db.Query(ctx, follows, followerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FollowsRow
+	for rows.Next() {
+		var i FollowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.OwnerID,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const sailorsByID = `-- name: SailorsByID :many
 SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name
 FROM account a
@@ -51,52 +109,23 @@ func (q *Queries) SailorsByID(ctx context.Context, ids []pgtype.UUID) ([]Sailors
 	return items, nil
 }
 
-const setSpectators = `-- name: SetSpectators :execrows
-UPDATE account SET spectators = $1 WHERE id = $2 AND kind = 'human'
+const unfollow = `-- name: Unfollow :exec
+DELETE FROM follow WHERE follower_id = $1 AND followed_id = $2
 `
 
-type SetSpectatorsParams struct {
-	Spectators bool
-	ID         pgtype.UUID
+type UnfollowParams struct {
+	FollowerID pgtype.UUID
+	FollowedID pgtype.UUID
 }
 
-// Whether a human account lets anyone watch it always; an AI's is never
-// set.
-func (q *Queries) SetSpectators(ctx context.Context, arg SetSpectatorsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setSpectators, arg.Spectators, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const spectatorsAllowed = `-- name: SpectatorsAllowed :many
-SELECT id FROM account WHERE spectators
-`
-
-// The accounts that let anyone watch them always.
-func (q *Queries) SpectatorsAllowed(ctx context.Context) ([]pgtype.UUID, error) {
-	rows, err := q.db.Query(ctx, spectatorsAllowed)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []pgtype.UUID
-	for rows.Next() {
-		var id pgtype.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+// An account stops following another's sailor.
+func (q *Queries) Unfollow(ctx context.Context, arg UnfollowParams) error {
+	_, err := q.db.Exec(ctx, unfollow, arg.FollowerID, arg.FollowedID)
+	return err
 }
 
 const watchTarget = `-- name: WatchTarget :one
-SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name, a.spectators,
+SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name,
   (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
 FROM sailor sl
 JOIN account a ON a.id = sl.account_id
@@ -105,17 +134,15 @@ WHERE sl.name_key = $1
 `
 
 type WatchTargetRow struct {
-	ID         pgtype.UUID
-	Kind       string
-	OwnerID    pgtype.UUID
-	Name       string
-	Spectators bool
-	Stopped    bool
+	ID      pgtype.UUID
+	Kind    string
+	OwnerID pgtype.UUID
+	Name    string
+	Stopped bool
 }
 
 // The account whose sailor has a name, by its key: its kind, its owner
-// (a machine sailor's human), whether it lets anyone watch always, and
-// whether it, or its owner, is stopped.
+// (a machine sailor's human), and whether it, or its owner, is stopped.
 func (q *Queries) WatchTarget(ctx context.Context, nameKey string) (WatchTargetRow, error) {
 	row := q.db.QueryRow(ctx, watchTarget, nameKey)
 	var i WatchTargetRow
@@ -124,7 +151,6 @@ func (q *Queries) WatchTarget(ctx context.Context, nameKey string) (WatchTargetR
 		&i.Kind,
 		&i.OwnerID,
 		&i.Name,
-		&i.Spectators,
 		&i.Stopped,
 	)
 	return i, err

@@ -26,8 +26,8 @@ type me struct {
 	// Machines is how many machine sailors the account has: a player with
 	// any is shown them on the start screen before going to sea.
 	Machines int `json:"machines,omitempty"`
-	// Spectators is whether others may watch the sailor: "no", for this
-	// "voyage", or "always"; AtSea whether the account's own boat is in
+	// Spectators is whether others may watch the sailor this voyage, or
+	// the next boat's while none is in the water: "no" or "voyage"; AtSea whether the account's own boat is in
 	// the water, which watching would take out.
 	Spectators string `json:"spectators,omitempty"`
 	AtSea      bool   `json:"atSea,omitempty"`

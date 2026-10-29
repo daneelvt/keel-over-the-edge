@@ -76,8 +76,6 @@ type process struct {
 	agents *agents
 	// hand is the owner's hand on accounts, and every deletion's.
 	hand *accounts.Accounts
-	// allowing is the accounts that let anyone watch them always.
-	allowing *watch.Allowing
 
 	// The routes the world half serves, set as each opens.
 	replayRoutes, devRoutes, ownerRoutes, playRoutes *lateHandler
@@ -252,7 +250,9 @@ type worldHalf struct {
 	// forecasts issues the world's forecast.
 	forecasts *forecast.Issuer
 	// sea is the world as the machine sailors' tools reach it.
-	sea   *agentapi.Sea
+	sea *agentapi.Sea
+	// watch is the world's watching: the list, the card and follows.
+	watch *watch.Service
 	tools *owner.Owner
 	play  http.Handler
 
@@ -343,7 +343,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Forecast: h.forecasts,
 		Stopped:  func(a bus.Account) bool { return p.hand.Stopped().Has(store.AccountID(a)) },
 		Seen:     p.sessions.Seen,
-		Watch:    p.watchTarget, Allowing: p.allowing, SpectatorLimit: cfg.SpectatorLimit,
+		Watch:    p.watchTarget, SpectatorLimit: cfg.SpectatorLimit,
 		Agent: p.agents.core.Attending,
 	})
 	h.lasting = persist.New(persist.Config{
@@ -381,7 +381,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Status:      p.statusNow,
 		Website:     websiteOf(cfg.PlayOrigin),
 	}
-	playCfg.Watch = watch.New(watch.Config{Store: p.db, Allowing: p.allowing, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat)})
+	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends})
+	playCfg.Watch = h.watch
 	p.agents.apiConfig(&playCfg, p)
 	h.play = api.Handler(playCfg)
 	p.log.Info("world ready", "world", row.Number, "kinds", len(p.kinds), "capacity", world.Capacity(), "limit", world.Limit(),
@@ -412,6 +413,7 @@ func (w accountsWorld) Stopped(id store.AccountID) {
 // chart lose its name, as the database's have.
 func (w accountsWorld) Deleted(id store.AccountID) {
 	w.h.game.Remove(bus.Account(id), edge.ReasonDeleted)
+	w.h.watch.Forget(id)
 	if c := w.h.ready.charts; c != nil {
 		c.model.Forget(id)
 	}
@@ -701,6 +703,14 @@ func (p *process) closeForStop(bell time.Duration) int64 {
 func (p *process) watchTarget(ctx context.Context, key string) (watch.Target, error) {
 	t, err := p.db.WatchTarget(ctx, key)
 	return watch.Target(t), err
+}
+
+// agentAttends reports whether a machine sailor's AI app attends to it, as
+// the lamp an owner watching it is shown: waiting on the sea, or called
+// lately.
+func (p *process) agentAttends(a bus.Account) bool {
+	last, waiting := p.agents.core.Attending(a)
+	return waiting || !last.IsZero() && time.Since(last) < edge.LampQuiet
 }
 
 // boatIDs are the catalog's boats' ids, by the world's index of kinds.

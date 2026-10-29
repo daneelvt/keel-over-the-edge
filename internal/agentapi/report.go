@@ -471,7 +471,7 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 		more = fmt.Sprintf("and %d more boats", len(seen)-mostContacts)
 		lines = append(lines, more)
 	}
-	land := h.landLines(s, f, sl)
+	land := s.landLines(f, sl)
 	was := h.landSeen
 	h.landSeen = map[int32]bool{}
 	left := 0
@@ -563,8 +563,8 @@ func (h *helm) drift(boat uint64, b, r float64, now time.Time) string {
 // first: charted ones by name, with their bearing and distance as the
 // chart's list gives them and their credit; the rest by their look, by
 // eye.
-func (h *helm) landLines(s *Sea, f *bus.Frame, sl int32) []landLine {
-	seen := h.seenSubjects(s, f, sl)
+func (s *Sea) landLines(f *bus.Frame, sl int32) []landLine {
+	seen := s.seenSubjects(f, sl)
 	if len(seen) == 0 || s.Chart == nil {
 		return nil
 	}

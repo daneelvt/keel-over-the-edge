@@ -27,7 +27,6 @@ type Account struct {
 	Priority       bool
 	StoppedAt      pgtype.Timestamptz
 	StopReason     pgtype.Text
-	Spectators     bool
 }
 
 type AccountAction struct {
@@ -110,6 +109,12 @@ type Event struct {
 	X              pgtype.Float8
 	Y              pgtype.Float8
 	Distance       pgtype.Float8
+}
+
+type Follow struct {
+	FollowerID pgtype.UUID
+	FollowedID pgtype.UUID
+	At         time.Time
 }
 
 type JobRun struct {

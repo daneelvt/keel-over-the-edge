@@ -96,7 +96,7 @@ func (h *helm) inSight(s *Sea, f *bus.Frame, sl int32) []seenBoat {
 // lookout sees now, charted or not, by their index in the sight table,
 // with their squared distances.
 func (h *helm) subjectsInSight(s *Sea, f *bus.Frame, sl int32) []int32 {
-	seen := h.seenSubjects(s, f, sl)
+	seen := s.seenSubjects(f, sl)
 	out := make([]int32, len(seen))
 	for i, x := range seen {
 		out[i] = x.Subject
@@ -106,7 +106,7 @@ func (h *helm) subjectsInSight(s *Sea, f *bus.Frame, sl int32) []int32 {
 
 // seenSubjects is the sighting's look from the boat in slot sl, through
 // the weather at the frame, charted and uncharted alike.
-func (h *helm) seenSubjects(s *Sea, f *bus.Frame, sl int32) []sight.Seen {
+func (s *Sea) seenSubjects(f *bus.Frame, sl int32) []sight.Seen {
 	if s.Sight == nil || s.Sight.Table == nil {
 		return nil
 	}
