@@ -234,7 +234,8 @@ function row(name: string, i: number) {
     name,
     machine: i % 2 === 0,
     mine: false,
-    kind: 'jolly-boat',
+    // Not a catalog id: an unknown kind is shown as given, here the widest.
+    kind: 'Long-keeled sailing cutter',
     watchers: 12 + i,
     sky: ['squalls', 'storm', 'fair', 'fog'][i % 4],
     night: i % 3 === 0,
