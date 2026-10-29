@@ -20,10 +20,13 @@ export function loadMachines(): Promise<Machines> {
   return loading;
 }
 
-/** The machine sailors' module once loaded, or null until then. */
-export function useMachines(): Machines | null {
+/** The machine sailors' module once loaded, or null until then; nothing is loaded until need. */
+export function useMachines(need = true): Machines | null {
   const [m, setM] = useState<Machines | null>(null);
   useEffect(() => {
+    if (!need) {
+      return;
+    }
     let live = true;
     loadMachines().then(
       (mod) => {
@@ -38,6 +41,6 @@ export function useMachines(): Machines | null {
     return () => {
       live = false;
     };
-  }, []);
+  }, [need]);
   return m;
 }

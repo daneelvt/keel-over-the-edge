@@ -10,8 +10,9 @@
 // holds as the name field is touched (autofill, held open from the start),
 // or "Sign in with a passkey" opens the browser's prompt, which reaches a
 // passkey on another device by its QR code. "Lost your passkey?" takes the
-// recovery code. One who has machine sailors is shown them before the
-// sea.
+// recovery code. Every way to sea ends at the player's own sailor and its
+// Set sail, with whether others may watch the voyage: beside the machine
+// sailors for one who has any, alone for one who has none.
 //
 // The page checks only the name's length; the server applies the rest and
 // says why it refuses, which is shown in words beside the field. A prompt
@@ -21,8 +22,10 @@
 import './start.css';
 import { type JSX, render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { useWatch } from '../ui/watchlazy';
 import { type InApp, passkeySupport, type Support } from './inapp';
 import { useMachines } from './lazy';
+import { type Voyage, voyage } from './letwatch';
 import { drawLook, type Look } from './looks';
 import { checkSession, type Me } from './me';
 import {
@@ -42,8 +45,8 @@ import { YourSailor } from './yoursailor';
 export interface StartProps {
   sailors: readonly Look[];
   done: (me: Me) => void;
-  /** Whether a player with machine sailors is shown them before the sea: not one come by a link to watch. */
-  machines?: boolean;
+  /** Whether a sailor signed in is shown their own before the sea: not one come by a link to watch. */
+  panel?: boolean;
   random?: () => number;
   /** The server and the browser's prompt; the browser's own unless a test stands in. */
   reach?: Reach;
@@ -64,12 +67,12 @@ type View =
   | { kind: 'form' }
   | { kind: 'recover' }
   | { kind: 'code'; me: Me; code: string }
-  | { kind: 'choose'; me: Me }
-  | { kind: 'machines'; me: Me; first: boolean }
+  | { kind: 'choose'; me: Me; voyage: Voyage }
+  | { kind: 'sailor'; me: Me; first: boolean; voyage: Voyage }
   | { kind: 'recovered'; me: Me; at: number }
   | { kind: 'add-passkey'; me: Me };
 
-export function StartScreen({ sailors, done, random, reach, machines = true }: StartProps) {
+export function StartScreen({ sailors, done, random, reach, panel = true }: StartProps) {
   const [view, setView] = useState<View>({ kind: 'form' });
   const [support, setSupport] = useState<Support | null>(null);
   const [anyway, setAnyway] = useState(false);
@@ -96,23 +99,25 @@ export function StartScreen({ sailors, done, random, reach, machines = true }: S
     };
   }, [reach]);
 
-  // To sea, or to the machine sailors first for a player who has any.
+  // To the player's own sailor and its Set sail; straight to the watch by a link.
   const onward = (me: Me) => {
-    if (machines && (me.machines ?? 0) > 0) {
-      setView({ kind: 'machines', me, first: false });
+    if (panel) {
+      setView({ kind: 'sailor', me, first: false, voyage: voyage(me, reach?.fetch) });
     } else {
       done(me);
     }
   };
 
-  const signedIn = async (s: SignedIn) => {
-    // The sign-in's answer does not say how many machine sailors the
-    // account has, nor whether its boat is at sea; the session's does.
+  // The sign-in's answer, and the recovery code's, do not say how many
+  // machine sailors the account has, whether its boat is at sea, nor who
+  // may watch it; the session's does.
+  const fresh = async (me: Me): Promise<Me> => {
     const check = await checkSession(reach?.fetch);
-    const me =
-      check.kind === 'sailor'
-        ? { ...s.me, machines: check.me.machines ?? 0, atSea: check.me.atSea === true }
-        : s.me;
+    return check.kind === 'sailor' ? { ...me, ...check.me } : me;
+  };
+
+  const signedIn = async (s: SignedIn) => {
+    const me = await fresh(s.me);
     if (s.recovered > 0) {
       setView({ kind: 'recovered', me, at: s.recovered });
     } else {
@@ -239,7 +244,9 @@ export function StartScreen({ sailors, done, random, reach, machines = true }: S
           <RecoveryCode
             code={view.code}
             name={view.me.name}
-            done={() => setView({ kind: 'choose', me: view.me })}
+            done={() =>
+              setView({ kind: 'choose', me: view.me, voyage: voyage(view.me, reach?.fetch) })
+            }
           />
         </div>
       );
@@ -248,21 +255,14 @@ export function StartScreen({ sailors, done, random, reach, machines = true }: S
         <div class="start">
           <SetSailOrMake
             name={view.me.name}
+            voyage={view.voyage}
             sail={() => done(view.me)}
-            make={() => setView({ kind: 'machines', me: view.me, first: true })}
+            make={() => setView({ kind: 'sailor', me: view.me, first: true, voyage: view.voyage })}
           />
         </div>
       );
-    case 'machines':
-      return (
-        <div class="start">
-          <Machines
-            first={view.first}
-            me={view.me}
-            done={(watch) => done(watch === undefined ? view.me : { ...view.me, watch })}
-          />
-        </div>
-      );
+    case 'sailor':
+      return <Sailor first={view.first} me={view.me} voyage={view.voyage} done={done} />;
     case 'recovered':
       return (
         <div class="start">
@@ -272,7 +272,11 @@ export function StartScreen({ sailors, done, random, reach, machines = true }: S
     case 'add-passkey':
       return (
         <div class="start">
-          <AddPasskey me={view.me} done={done} {...(reach !== undefined ? { reach } : {})} />
+          <AddPasskey
+            me={view.me}
+            done={(me) => void fresh(me).then(onward)}
+            {...(reach !== undefined ? { reach } : {})}
+          />
         </div>
       );
     case 'recover':
@@ -432,20 +436,53 @@ export function StartScreen({ sailors, done, random, reach, machines = true }: S
 }
 
 /**
- * The start screen with machine sailors, once its module is loaded; done
- * is given a sailor chosen to watch, or nothing to sail. Until then the
- * player's own panel stands where it will be, with its Set sail.
+ * The player's own sailor before the sea; done is given me to sail, or with
+ * the sailor chosen to watch. With no machine sailors it stands alone,
+ * centred, and nothing more is loaded. With them (or first, a machine
+ * sailor to make), the start screen with machine sailors, once its module
+ * is loaded; until then the player's own panel stands where it will be,
+ * with its Set sail. Alone, Watch another sailor opens the list of
+ * sailors to watch in its place, once that module is loaded.
  */
-function Machines({ first, me, done }: { first: boolean; me: Me; done: (watch?: string) => void }) {
-  const m = useMachines();
-  if (m === null) {
-    return (
-      <div class="start-pair">
-        <YourSailor me={me} sail={() => done()} watch={null} />
-      </div>
-    );
-  }
-  return <m.MachineStart first={first} done={done} me={me} />;
+function Sailor({
+  first,
+  me,
+  voyage: v,
+  done,
+}: {
+  first: boolean;
+  me: Me;
+  voyage: Voyage;
+  done: (me: Me) => void;
+}) {
+  const machines = first || (me.machines ?? 0) > 0;
+  const m = useMachines(machines);
+  const [listing, setListing] = useState(false);
+  const w = useWatch(listing);
+  const go = (watch?: string) => done(watch === undefined ? me : { ...me, watch });
+  const yours = (
+    <YourSailor me={me} voyage={v} sail={go} watch={machines ? null : () => setListing(true)} />
+  );
+  return (
+    <div class="start">
+      {m !== null ? (
+        <m.MachineStart first={first} done={go} me={me} voyage={v} />
+      ) : listing ? (
+        w !== null && (
+          <w.WatchList
+            choose={go}
+            ask={() => false}
+            close={() => setListing(false)}
+            className="start-panel watch-list-start"
+          />
+        )
+      ) : machines ? (
+        <div class="start-pair">{yours}</div>
+      ) : (
+        yours
+      )}
+    </div>
+  );
 }
 
 /** A browser that cannot make the player's passkey: the game's address, to open elsewhere. */
@@ -506,6 +543,11 @@ function mount(parent: HTMLElement, draw: (done: (me: Me) => void) => JSX.Elemen
 /** Shows the start screen in parent until a sailor is made or signed in, then removes it. */
 export function showStartScreen(parent: HTMLElement, props: Omit<StartProps, 'done'>): Promise<Me> {
   return mount(parent, (done) => <StartScreen {...props} done={done} />);
+}
+
+/** Shows the player's own sailor in parent until Set sail, or a sailor chosen to watch, then removes it. */
+export function showSailor(parent: HTMLElement, me: Me): Promise<Me> {
+  return mount(parent, (done) => <Sailor first={false} me={me} voyage={voyage(me)} done={done} />);
 }
 
 /** Asks a session the recovery code made for a new passkey, then shows the new code. */

@@ -3,12 +3,13 @@
 // A new sailor's start, against keel and its database: the start screen,
 // names refused in words, a sailor made with a passkey (Playwright's
 // virtual authenticator standing in for the browser's prompt), its recovery
-// code shown once, Set sail, its cookie, and the sailor kept across a
-// reload. A form draws nothing, so one back end is enough.
+// code shown once, Set sail with the voyage watched, its cookie, and the
+// sailor kept across a reload, where its Set sail shows that voyage's
+// choice. A form draws nothing, so one back end is enough.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { sailor } from './helpers';
+import { sailor, setSail } from './helpers';
 
 test.beforeEach(async ({ context }) => {
   test.skip(test.info().project.name !== 'webgl2', 'a form: one back end is enough');
@@ -28,9 +29,16 @@ async function openStart(page: Page): Promise<void> {
   });
 }
 
-async function setSail(page: Page, name: string): Promise<void> {
+/** The first form's Set sail, with a name: it makes the sailor, if the name will do. */
+async function makeAs(page: Page, name: string): Promise<void> {
   await page.getByLabel('Your sailor’s name').fill(name);
   await page.getByRole('button', { name: 'Set sail' }).click();
+}
+
+/** Who may watch the account's boat, as GET /api/me says. */
+async function spectators(page: Page): Promise<string> {
+  const me = await page.request.get('/api/me');
+  return ((await me.json()) as { spectators?: string }).spectators ?? '';
 }
 
 async function atSea(page: Page): Promise<void> {
@@ -94,7 +102,7 @@ test('names refused are explained in words, before any passkey is made', async (
     ['Pаypal', /one alphabet/],
   ];
   for (const [name, words] of cases) {
-    await setSail(page, name);
+    await makeAs(page, name);
     await expect(problem).toHaveText(words);
   }
 
@@ -103,7 +111,7 @@ test('names refused are explained in words, before any passkey is made', async (
   const taken = (await sailor(other, 'Captain Bob')).name;
   await other.close();
   for (const name of [taken, taken.replace('Bob', 'B0b'), taken.replace(' ', '-')]) {
-    await setSail(page, name);
+    await makeAs(page, name);
     await expect(problem).toHaveText(/looks just like it, is taken\. If that’s you, sign in/);
   }
   expect(await page.context().credentials.get()).toEqual([]);
@@ -116,7 +124,7 @@ test('a sailor made: the passkey, the recovery code once, the sea, the cookie, a
 }) => {
   await openStart(page);
   const name = freshName('Anne');
-  await setSail(page, `  ${name.replace(' ', '   ')} `);
+  await makeAs(page, `  ${name.replace(' ', '   ')} `);
   await expect(page.getByRole('heading', { name: 'Keep your recovery code' })).toBeVisible({
     timeout: 30_000,
   });
@@ -126,11 +134,16 @@ test('a sailor made: the passkey, the recovery code once, the sea, the cookie, a
   expect(held).toHaveLength(1);
   expect(held[0]?.rpId).toBe('localhost');
   await page.getByRole('button', { name: 'I’ve written it down' }).click();
-  // Then the choice: to sea, or a machine sailor made first.
+  // Then the choice: to sea, or a machine sailor made first; and whether
+  // others may watch this voyage, unticked until the player ticks it.
   await expect(page.getByRole('button', { name: 'Make a machine sailor first' })).toBeVisible();
-  await page.getByRole('button', { name: 'Set sail' }).click();
+  const box = page.getByRole('checkbox', { name: 'Let others watch me sail' });
+  await expect(box).not.toBeChecked();
+  await box.check();
+  await setSail(page);
   await atSea(page);
   expect(await sailingAs(page)).toBe(name);
+  expect(await spectators(page)).toBe('voyage');
 
   const cookie = await sessionCookie(context);
   expect(cookie).toBeDefined();
@@ -144,7 +157,9 @@ test('a sailor made: the passkey, the recovery code once, the sea, the cookie, a
   // The page's scripts never see it.
   expect(await page.evaluate(() => document.cookie)).not.toContain('keel-session');
 
-  // Back again: straight to sea, the start screen never shown.
+  // Back again: the sailor's own Set sail, the start screen's form never
+  // shown; the boat still in the water, the box shows the voyage's choice,
+  // and a change is sent at once.
   let startShown = false;
   page.on('response', async (res) => {
     if (res.url().endsWith('/api/me') && res.status() === 401) {
@@ -152,6 +167,13 @@ test('a sailor made: the passkey, the recovery code once, the sea, the cookie, a
     }
   });
   await page.reload();
+  const yours = page.locator('.your-sailor');
+  await expect(yours).toContainText(name, { timeout: 90_000 });
+  await expect(yours.getByText('at sea', { exact: true })).toBeVisible();
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  await expect.poll(() => spectators(page)).toBe('no');
+  await setSail(page);
   await atSea(page);
   expect(startShown).toBe(false);
   expect(await sailingAs(page)).toBe(name);
@@ -163,9 +185,9 @@ test('a second browser cannot take the same name', async ({ page, browser }) => 
   const other = await browser.newContext();
   const name = (await sailor(other, 'Mary Read')).name;
   await other.close();
-  await setSail(page, name);
+  await makeAs(page, name);
   await expect(page.locator('#start-problem')).toHaveText(/is taken/);
-  await setSail(page, name.toLowerCase());
+  await makeAs(page, name.toLowerCase());
   await expect(page.locator('#start-problem')).toHaveText(/is taken/);
   expect(await sessionCookie(page.context())).toBeUndefined();
 });

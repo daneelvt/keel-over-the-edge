@@ -120,6 +120,24 @@
   overflow-wrap: anywhere;
 }
 
+/* Whether others may watch the voyage: the box, its words beside it, its faint line beneath them. */
+.let-watch label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.let-watch input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--gold);
+}
+
+.let-watch p {
+  margin-left: 30px;
+}
+
 /* Set sail as the player's sailor: a long name wraps, and the button grows. */
 .your-sailor-go {
   padding: 8px 12px;

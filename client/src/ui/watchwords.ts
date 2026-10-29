@@ -15,7 +15,6 @@ export const WATCH_ANOTHER_SAILOR = 'Watch another sailor';
 export const WATCH_A_SAILOR = 'Watch a sailor';
 export const STOP_WATCHING = 'Stop watching';
 export const SAIL = 'Sail';
-export const ALLOW_SPECTATORS = 'Allow spectators';
 export const SPECTATORS = 'spectators';
 export const COPY_WATCH_LINK = 'Copy a link to watch';
 export const COPIED = 'Copied';
@@ -23,7 +22,6 @@ export const BEHIND_THE_BOAT = 'Behind the boat';
 export const MORE = 'More';
 export const CLOSE = 'Close';
 export const SEARCH = 'Part of a name';
-export const NONE_TO_WATCH = 'No one to watch just now.';
 export const READING = 'Reading who is at sea…';
 export const UNREADABLE = 'Who is at sea cannot be read just now. Try again.';
 
@@ -39,13 +37,8 @@ export const STAY = 'Stay';
 /** The start screen's warning to a player whose boat is still at sea. */
 export const STILL_AT_SEA = 'Your boat is still in the water: watching takes it out';
 
-/** "Allow spectators": the choices, as GET /api/me names them, and their words, side by side. */
-export type Spectators = 'no' | 'voyage' | 'always';
-export const SPECTATOR_CHOICES: readonly { value: Spectators; words: string }[] = [
-  { value: 'no', words: 'No' },
-  { value: 'voyage', words: 'This voyage' },
-  { value: 'always', words: 'Always' },
-];
+/** Who may watch the account's boat, as GET /api/me names it: no one, or anyone for the voyage. */
+export type Spectators = 'no' | 'voyage';
 
 /** How many watch a boat: "3 watching"; "" for none. */
 export function watchersText(n: number): string {

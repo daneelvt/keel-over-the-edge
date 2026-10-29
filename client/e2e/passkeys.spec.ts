@@ -9,11 +9,12 @@
 // not as waited on. One test runs on Chrome's own virtual authenticator,
 // which is the browser's WebAuthn and checks the passkey's origin.
 //
-// WebKit stops at the session: its tests do not wait for the sea.
+// Each way in ends at the sailor's own Set sail. WebKit stops at the
+// session: its tests do not wait for the sea.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { holdPasskeys, sailor, signInWith } from './helpers';
+import { holdPasskeys, sailor, setSail, signInWith } from './helpers';
 
 const look = data.sailors[0]?.id ?? '';
 
@@ -31,19 +32,16 @@ async function openStart(page: Page): Promise<void> {
   });
 }
 
-async function atSea(page: Page): Promise<void> {
-  await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible({ timeout: 60_000 });
-}
-
 async function session(context: BrowserContext) {
   return (await context.cookies()).find((c) => c.name === '__Host-keel-session');
 }
 
-/** Waits for the start screen to give way to a sailor signed in. */
+/** Waits for the start screen's form to give way to a sailor signed in, and its Set sail. */
 async function signedIn(page: Page, context: BrowserContext): Promise<void> {
-  await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toHaveCount(0, {
+  await expect(page.getByRole('heading', { name: 'Your sailor' })).toBeVisible({
     timeout: 30_000,
   });
+  await expect(page.getByLabel('Your sailor’s name')).toHaveCount(0);
   await expect.poll(async () => (await session(context)) !== undefined).toBe(true);
 }
 
@@ -100,7 +98,7 @@ test('signed in on another device by the browser’s prompt, and by autofill', a
   await conditional;
   await signedIn(page3, third);
   if (chromium()) {
-    await atSea(page3);
+    await setSail(page3);
   }
   await third.close();
 });
@@ -127,6 +125,9 @@ test('back in with the recovery code: a new passkey, a new code, and the old cod
   expect(await lost.credentials.get()).toHaveLength(1);
   await page.getByRole('button', { name: 'I’ve written it down' }).click();
   await expect(page.getByRole('heading', { name: 'Your new recovery code' })).toHaveCount(0);
+  // Then the sailor's own Set sail, as after any way in.
+  await expect(page.locator('.your-sailor')).toContainText(made.name);
+  await expect(page.getByRole('button', { name: `Set sail as ${made.name}` })).toBeVisible();
 
   // The session the code made is the account's: the old one is spent, and
   // the old device's session ended.
@@ -152,7 +153,7 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   const made = await sailor(context, 'Account');
   await context.credentials.install();
   await page.goto('/?test&backend=webgl2&tier=low');
-  await atSea(page);
+  await setSail(page);
   await openAccount(page);
   const passkeys = page.locator('.account-passkeys li');
   await expect(passkeys).toHaveCount(1);

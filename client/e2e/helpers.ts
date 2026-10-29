@@ -223,11 +223,24 @@ export async function holdPasskeys(context: BrowserContext, ...keys: Passkey[]):
   }
 }
 
-/** Opens the game with the test hooks, and waits until it sails. */
+/**
+ * Sets sail from the player's own sailor, which a page with a session
+ * shows before every voyage (after a reload too): taps "Set sail as" the
+ * sailor, and waits for the sea. The start screen can take half a minute
+ * and more to show on CI's software GPU, the renderer starting beside it.
+ */
+export async function setSail(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /^Set sail/ }).click({ timeout: 90_000 });
+  await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('.your-sailor')).toHaveCount(0);
+}
+
+/** Opens the game with the test hooks, sets sail, and waits until it sails. */
 export async function sail(page: Page, base = ''): Promise<void> {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`${base}/?test&backend=webgl2${softwareGPU ? '&tier=low' : ''}`);
+  await setSail(page);
   await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 60_000 });
   await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
     timeout: 30_000,

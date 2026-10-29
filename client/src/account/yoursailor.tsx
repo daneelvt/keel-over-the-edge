@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The player's own sailor on the start screen with machine sailors: its
-// name, whether its boat is in the water, Set sail as it, and Watch
-// another sailor. It is the screen's only gold button, as setting sail is
-// the only thing there the player does as themselves; their machine
-// sailors stand apart beside it. In the game's first download, so the
-// screen shows it while the machine sailors' module loads.
+// The player's own sailor, shown before every voyage: its name, whether its
+// boat is in the water, whether others may watch it sail, Set sail as it,
+// and Watch another sailor. It is the screen's only gold button, as setting
+// sail is the only thing there the player does as themselves; their machine
+// sailors, when they have any, stand apart beside it. In the game's first
+// download, so the screen shows it at once, alone or while the machine
+// sailors' module loads.
 //
 // The name is shown, never asked for or changed here: every account is
 // made with its named sailor on the first form, so none reaches this
 // screen without one.
 
 import { STILL_AT_SEA, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
+import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
 
 /** The button that sails the player's own sailor, by its name. */
@@ -20,15 +22,18 @@ export function setSailAs(name: string): string {
 }
 
 /**
- * The player's panel: sail sets their own sailor to sea; watch opens the
- * list of sailors to watch, null while it cannot yet.
+ * The player's panel: sail sets their own sailor to sea, once voyage has
+ * sent the box's choice; watch opens the list of sailors to watch, null
+ * while it cannot yet.
  */
 export function YourSailor({
   me,
+  voyage,
   sail,
   watch,
 }: {
   me: Me;
+  voyage: Voyage;
   sail: () => void;
   watch: (() => void) | null;
 }) {
@@ -48,7 +53,8 @@ export function YourSailor({
           {STILL_AT_SEA}
         </p>
       ) : null}
-      <button type="button" class="start-go your-sailor-go" onClick={sail}>
+      <LetWatch voyage={voyage} />
+      <button type="button" class="start-go your-sailor-go" onClick={() => void voyage.sail(sail)}>
         {setSailAs(me.name)}
       </button>
       <button

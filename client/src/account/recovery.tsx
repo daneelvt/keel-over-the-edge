@@ -2,11 +2,13 @@
 
 // The recovery code: shown once, as the account is made and whenever a new
 // one is, with three ways to keep it, any of which moves on (for a new
-// sailor, to the choice of setting sail or making a machine sailor first). Used, it signs
-// the sailor in once and asks for a new passkey, which brings a new code;
-// the next sign-in is told it was used, in case it was not the player.
+// sailor, to the choice of setting sail, watched or not, or making a
+// machine sailor first). Used, it signs the sailor in once and asks for a
+// new passkey, which brings a new code, then the sailor's Set sail; the
+// next sign-in is told it was used, in case it was not the player.
 
 import { useState } from 'preact/hooks';
+import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
 import { addPasskey, type Reach, signOut } from './passkeys';
 import { reasonText } from './reasons';
@@ -82,15 +84,17 @@ export function RecoveryCode({
 
 /**
  * After a new sailor's recovery code is kept: to sea as the sailor just
- * made, named, or a machine sailor made first, for an AI app of the
- * player's to sail.
+ * made, named, once voyage has sent the box's choice; or a machine sailor
+ * made first, for an AI app of the player's to sail.
  */
 export function SetSailOrMake({
   name,
+  voyage,
   sail,
   make,
 }: {
   name: string;
+  voyage: Voyage;
   sail: () => void;
   make: () => void;
 }) {
@@ -103,7 +107,8 @@ export function SetSailOrMake({
         Your sailor is made. You can also make a machine sailor: an AI sailor that an AI app of
         yours sails, and speaks as, beside you or while you are away.
       </p>
-      <button type="button" class="start-go your-sailor-go" onClick={sail}>
+      <LetWatch voyage={voyage} />
+      <button type="button" class="start-go your-sailor-go" onClick={() => void voyage.sail(sail)}>
         {setSailAs(name)}
       </button>
       <button type="button" class="start-sign-in" onClick={make}>

@@ -7,6 +7,14 @@
 
 import { signal } from '@preact/signals';
 
+/** The orders the list of sailors to watch can be in, as the server names them. */
+export const WATCH_SORTS = ['liveliest', 'watched', 'edge', 'weather', 'fast', 'name'] as const;
+export type WatchSort = (typeof WATCH_SORTS)[number];
+
+/** Whom the list of sailors to watch shows, as the server names them. */
+export const WATCH_WHOS = ['all', 'following', 'machine', 'human'] as const;
+export type WatchWho = (typeof WATCH_WHOS)[number];
+
 export interface Settings {
   /** The most frames a second: 60, or 30 to save battery. */
   frameRate: 60 | 30;
@@ -28,6 +36,9 @@ export interface Settings {
   pilotHead: boolean;
   /** The pocket chart's weather: rain, fog and the systems over the disk. */
   pocketWeather: boolean;
+  /** The list of sailors to watch: its order, and whom it shows. */
+  watchSort: WatchSort;
+  watchWho: WatchWho;
 }
 
 export const DEFAULTS: Settings = {
@@ -42,6 +53,8 @@ export const DEFAULTS: Settings = {
   worldClock: false,
   pilotHead: false,
   pocketWeather: true,
+  watchSort: 'liveliest',
+  watchWho: 'all',
 };
 
 const KEY = 'keel.settings';
@@ -80,6 +93,12 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
   if (r.detail === 'auto' || r.detail === 'low') {
     out.detail = r.detail;
   }
+  if (WATCH_SORTS.includes(r.watchSort as WatchSort)) {
+    out.watchSort = r.watchSort as WatchSort;
+  }
+  if (WATCH_WHOS.includes(r.watchWho as WatchWho)) {
+    out.watchWho = r.watchWho as WatchWho;
+  }
   for (const k of [
     'sound',
     'windOverlay',
@@ -111,13 +130,26 @@ export function saveSettings(s: Settings, store: Store | null = defaultStore()):
   }
 }
 
-/** The settings as a signal: the menu writes it, the game reads it. */
+/** The list of sailors to watch's own two settings, written to the store beside the others. */
+export function saveWatchChoice(
+  change: Partial<Pick<Settings, 'watchSort' | 'watchWho'>>,
+  store: Store | null = defaultStore(),
+): boolean {
+  return saveSettings({ ...loadSettings(store), ...change }, store);
+}
+
+/**
+ * The settings as a signal: the menu writes it, the game reads it. The
+ * list of sailors to watch writes its two to the store alone, from screens
+ * that have no signal, so they are taken from there before each write.
+ */
 export function settingsSignal(store: Store | null = defaultStore()) {
   const s = signal(loadSettings(store));
   return {
     value: s,
     set(change: Partial<Settings>): void {
-      s.value = { ...s.value, ...change };
+      const { watchSort, watchWho } = loadSettings(store);
+      s.value = { ...s.value, watchSort, watchWho, ...change };
       saveSettings(s.value, store);
     },
   };

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The session check: the page's first question to the server, asked while
-// the scene loads. A player with a session goes straight to sea, or, with
-// machine sailors, to the start screen that shows them; one without gets
-// the start screen; one whose session came from the recovery code is
-// asked for a new passkey first; and when the server cannot answer, the
-// page says so and asks again.
+// the scene loads. A player with a session is shown their own sailor
+// before the sea, beside their machine sailors when they have any, unless
+// they came by a link to watch; one without gets the start screen; one
+// whose session came from the recovery code is asked for a new passkey
+// first; and when the server cannot answer, the page says so and asks
+// again.
 
 /** The player's own account, as GET /api/me gives it. */
 export interface Me {
@@ -19,8 +20,11 @@ export interface Me {
   noticesOff?: string[];
   /** How many machine sailors the account has; none when absent. */
   machines?: number;
-  /** Who may watch the player's boat: no one, this voyage's spectators, or always. */
-  spectators?: 'no' | 'voyage' | 'always';
+  /**
+   * Who may watch the player's boat: no one, or anyone for this voyage
+   * (with no boat in the water, the next boat's).
+   */
+  spectators?: 'no' | 'voyage';
   /** The player's own boat is in the water now. */
   atSea?: boolean;
   /**
@@ -67,16 +71,20 @@ export interface SailorPaths {
   addPasskey: (me: Me) => Promise<Me>;
   /** Shows that the server cannot be reached, or hides it with false. */
   backSoon: (shown: boolean) => void;
-  /** Shows the player's machine sailors before the sea, to one who has any; resolves on Set sail. */
-  machines?: (me: Me) => Promise<Me>;
+  /**
+   * Shows the player's own sailor before the sea, and their machine
+   * sailors with it; resolves on Set sail, or a sailor chosen to watch.
+   * None for a link to watch, which goes straight to the watch.
+   */
+  sailor?: (me: Me) => Promise<Me>;
   wait?: (ms: number) => Promise<void>;
 }
 
 /**
- * The sailor this browser sails as: the session's, its machine sailors
- * shown first when it has any, or one made or signed in on the start
- * screen. While the server cannot answer it shows "Back soon"
- * and asks again, waiting longer each time.
+ * The sailor this browser sails as: the session's, shown first with its
+ * Set sail (after a new passkey, for a session the recovery code made),
+ * or one made or signed in on the start screen. While the server cannot
+ * answer it shows "Back soon" and asks again, waiting longer each time.
  */
 export async function resolveSailor(paths: SailorPaths): Promise<Me> {
   const wait = paths.wait ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
@@ -87,12 +95,8 @@ export async function resolveSailor(paths: SailorPaths): Promise<Me> {
       if (check.kind === 'none') {
         return paths.start();
       }
-      if (check.me.addPasskey === true) {
-        return paths.addPasskey(check.me);
-      }
-      return (check.me.machines ?? 0) > 0 && paths.machines !== undefined
-        ? paths.machines(check.me)
-        : check.me;
+      const me = check.me.addPasskey === true ? await paths.addPasskey(check.me) : check.me;
+      return paths.sailor !== undefined ? paths.sailor(me) : me;
     }
     paths.backSoon(true);
     await wait(retryDelay(attempt));
