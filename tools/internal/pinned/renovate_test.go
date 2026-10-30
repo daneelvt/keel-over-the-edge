@@ -183,3 +183,41 @@ func TestRenovateFindsEveryPin(t *testing.T) {
 		t.Errorf("Renovate finds BuildKit as %+v", buildkit)
 	}
 }
+
+// TestFluxMovesTogether: Renovate moves the Flux CLI, rewrites Flux's
+// manifests with it and moves the controllers' images, each by a manager of
+// its own: the manifests are the pinned CLI's version, and the images
+// pinned by digest are the ones those manifests name.
+func TestFluxMovesTogether(t *testing.T) {
+	var cli string
+	for _, r := range releases {
+		if r.repo == "fluxcd/flux2" {
+			cli = r.tag
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(repoRoot, "infra", "cluster", "flux-system", "gotk-components.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := regexp.MustCompile(`(?m)^# Flux Version: (\S+)$`).FindSubmatch(data); m == nil || string(m[1]) != cli {
+		t.Errorf("Flux's manifests are not those of the pinned CLI %s", cli)
+	}
+	named := map[string]string{}
+	for _, m := range regexp.MustCompile(`image: (ghcr\.io/fluxcd/[a-z-]+):(\S+)`).FindAllSubmatch(data, -1) {
+		named[string(m[1])] = string(m[2])
+	}
+	var pinned []found
+	for description, f := range renovateFinds(t) {
+		if strings.HasPrefix(description, "Flux's controllers' images") {
+			pinned = f
+		}
+	}
+	if len(pinned) != len(named) || len(named) < 4 {
+		t.Errorf("Flux's manifests name %v, the images pinned are %+v", named, pinned)
+	}
+	for _, p := range pinned {
+		if named[p.dep] != p.value {
+			t.Errorf("%s is pinned at %s, Flux's manifests name %s", p.dep, p.value, named[p.dep])
+		}
+	}
+}
