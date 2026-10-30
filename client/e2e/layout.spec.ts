@@ -381,7 +381,7 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
   page,
 }) => {
   test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
-  test.setTimeout(180_000);
+  test.setTimeout(150_000);
   await sailor(context, 'Layout');
   await standIn(page);
   await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
@@ -393,11 +393,6 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
     .click({ timeout: 90_000 });
   await expect(page.locator('.watch-row').first()).toBeVisible({ timeout: 30_000 });
   const found: string[] = [];
-  const shot = async (name: string) =>
-    test.info().attach(`${name}.png`, {
-      body: await page.screenshot(),
-      contentType: 'image/png',
-    });
   const LIST = [
     '.watch-head h2',
     '.watch-search',
@@ -432,7 +427,6 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
     if (!(await inView(page, '.watch-close'))) {
       found.push(`${s.name}, the list: Close is out of view`);
     }
-    await shot(`${s.name}, the list`);
     // The card about the first: its top, sections and foot apart; Watch in view.
     await page.getByRole('button', { name: `About ${LONG}` }).click();
     await expect(page.locator('.watch-card section[aria-label="Where"]')).toBeVisible();
@@ -442,7 +436,6 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
     if (!(await inView(page, '.watch-card-foot .watch-go'))) {
       found.push(`${s.name}, the card: Watch is out of view`);
     }
-    await shot(`${s.name}, the card`);
     await page.getByRole('button', { name: 'Back' }).click();
   }
   expect(found).toEqual([]);
