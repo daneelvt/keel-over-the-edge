@@ -42,9 +42,15 @@ interface Box {
 }
 
 /** The parts of the screen at sea, each the union of its own box and its pushers'. */
-async function parts(
-  page: Page,
-): Promise<{ parts: Box[]; boat: Box | null; out: string[]; spilt: string[] }> {
+async function parts(page: Page): Promise<{
+  parts: Box[];
+  boat: Box | null;
+  out: string[];
+  spilt: string[];
+  words: string[];
+  helm: Box | null;
+  head: Box | null;
+}> {
   return page.evaluate((about) => {
     const hud = document.querySelector('.hud');
     if (hud === null) {
@@ -112,8 +118,78 @@ async function parts(
     const out = [...hud.querySelectorAll('.complication:not([hidden])')].map(
       (e) => e.getAttribute('data-complication') ?? '',
     );
-    return { parts: all, boat, out, spilt };
+    // No words show outside their part: each run of text as it is drawn,
+    // clipped by whatever clips it, within the part it is in.
+    const PARTS = '.case-top, .complications, .pocket-chart, .pilot-head, .pilot-button, .control';
+    const words: string[] = [];
+    const walker = document.createTreeWalker(hud, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t !== null; t = walker.nextNode()) {
+      const el = t.parentElement;
+      const part = el?.closest(PARTS);
+      if (el === null || part == null || (t.textContent ?? '').trim() === '') {
+        continue;
+      }
+      const range = document.createRange();
+      range.selectNodeContents(t);
+      const r = range.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) {
+        continue;
+      }
+      let [left, right, top, bottom] = [r.left, r.right, r.top, r.bottom];
+      for (let a: Element | null = el; a !== null && a !== part; a = a.parentElement) {
+        const st = getComputedStyle(a);
+        if (st.overflowX !== 'visible' || st.overflowY !== 'visible') {
+          const c = a.getBoundingClientRect();
+          [left, right, top, bottom] = [
+            Math.max(left, c.left),
+            Math.min(right, c.right),
+            Math.max(top, c.top),
+            Math.min(bottom, c.bottom),
+          ];
+        }
+      }
+      const p = part.getBoundingClientRect();
+      if (
+        right > left &&
+        bottom > top &&
+        (left < p.left - 0.5 ||
+          right > p.right + 0.5 ||
+          top < p.top - 0.5 ||
+          bottom > p.bottom + 0.5)
+      ) {
+        words.push(`“${(t.textContent ?? '').trim()}” runs out of ${part.className}`);
+      }
+    }
+    const helm = one('the helm', '[data-control=helm]');
+    const head = one('the control head', '.pilot-head');
+    return { parts: all, boat, out, spilt, words, helm, head };
   }, ABOUT_BOAT);
+}
+
+/**
+ * Whether the pocket chart's caption fits at its longest: the farthest the
+ * edge can be said and the longest time to a new world, each a line in the
+ * caption's own type, within the chart.
+ */
+async function longestCaption(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const chart = document.querySelector('.pocket-chart');
+    const line = document.querySelector('.pocket-line');
+    if (chart === null || line === null) {
+      return ['no pocket chart'];
+    }
+    const st = getComputedStyle(chart);
+    const room = chart.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
+    const g = document.createElement('canvas').getContext('2d');
+    if (g === null) {
+      return ['no canvas'];
+    }
+    g.font = getComputedStyle(line).font;
+    return ['edge 99.9 NM', 'new world 6d 23h']
+      .map((t) => ({ t, w: g.measureText(t).width }))
+      .filter(({ w }) => w > room + 0.5)
+      .map(({ t, w }) => `“${t}” is ${w.toFixed(1)} px in a chart ${room} px wide`);
+  });
 }
 
 /** A box's edges, left, top, right and bottom, in whole pixels. */
@@ -140,10 +216,12 @@ test('no part of the screen at sea covers the boat or another part, with everyth
   await page.evaluate(
     ({ now }) => {
       const k = globalThis.keel;
+      // In the world's last days, the countdown in the pocket chart's
+      // caption too.
       k.setWorldEnd({
-        epoch: now - 2 * 86_400_000,
-        ends: now + 5 * 86_400_000,
-        closing: now + 2 * 86_400_000,
+        epoch: now - 5 * 86_400_000,
+        ends: now + 2 * 86_400_000,
+        closing: now - 86_400_000,
       });
       k.toHarbour();
       // At rest, the sail sheeted in: the boat drawn the same every time.
@@ -190,6 +268,26 @@ test('no part of the screen at sea covers the boat or another part, with everyth
     for (const k of seen.spilt) {
       found.push(`${s.name}: “${k}” spills out of its part`);
     }
+    for (const w of [...seen.words, ...(await longestCaption(page))]) {
+      found.push(`${s.name}: ${w}`);
+    }
+    // The helm the head's height: held sideways their tops level, held
+    // upright the head standing on the helm, 8 pixels above it.
+    if (seen.helm === null || seen.head === null) {
+      found.push(`${s.name}: no helm or no control head`);
+    } else if (
+      s.upright
+        ? Math.abs(seen.head.bottom + 8 - seen.helm.top) > 0.5
+        : Math.abs(seen.head.top - seen.helm.top) > 0.5
+    ) {
+      found.push(
+        `${s.name}: the helm’s top at ${seen.helm.top}, the head’s ${s.upright ? 'foot' : 'top'} at ${s.upright ? seen.head.bottom : seen.head.top}`,
+      );
+    } else if (
+      Math.abs(seen.helm.bottom - seen.helm.top - (seen.head.bottom - seen.head.top)) > 0.5
+    ) {
+      found.push(`${s.name}: the helm is not the head’s height`);
+    }
     const all = seen.boat === null ? seen.parts : [...seen.parts, seen.boat];
     for (const p of all) {
       if (p.left < -0.5 || p.top < -0.5 || p.right > s.width + 0.5 || p.bottom > s.height + 0.5) {
@@ -222,8 +320,27 @@ test('no part of the screen at sea covers the boat or another part, with everyth
           );
     test.info().annotations.push({
       type: s.name,
-      description: `out of the case: ${seen.out.join(', ') || 'nothing'}; room about the boat’s margin: ${clear === null ? '–' : Math.round(clear)} px`,
+      description: `out of the case: ${seen.out.join(', ') || 'nothing'}; room about the boat’s margin: ${clear === null ? '–' : Math.round(clear)} px; the helm’s top ${seen.helm?.top ?? '–'}, the head’s ${seen.head?.top ?? '–'} to ${seen.head?.bottom ?? '–'}`,
     });
+    // Folded, the head leaves the helm as it was.
+    const folded = await page.evaluate(async () => {
+      const k = globalThis.keel;
+      k.settings({ pilotHead: false });
+      k.render();
+      await new Promise((r) => setTimeout(r, 100));
+      const r = document.querySelector('[data-control=helm]')?.getBoundingClientRect();
+      k.settings({ pilotHead: true });
+      k.render();
+      return r === undefined ? null : { top: r.top, bottom: r.bottom };
+    });
+    if (
+      seen.helm !== null &&
+      (folded === null ||
+        Math.abs(folded.top - seen.helm.top) > 0.5 ||
+        Math.abs(folded.bottom - seen.helm.bottom) > 0.5)
+    ) {
+      found.push(`${s.name}: the helm moves as the head folds`);
+    }
   }
   expect(found).toEqual([]);
 });

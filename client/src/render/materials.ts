@@ -20,10 +20,19 @@
 // The sky is drawn at infinity and is the only kind without a bend: it is a
 // direction, not a place.
 
-import { type Material, type Object3D, type Texture, Vector2, Vector3 } from 'three';
+import {
+  AdditiveBlending,
+  type Material,
+  type Object3D,
+  type Texture,
+  Vector2,
+  Vector3,
+} from 'three';
 import {
   dot,
+  exp,
   Fn,
+  max,
   modelWorldMatrix,
   modelWorldMatrixInverse,
   positionLocal,
@@ -126,6 +135,29 @@ export function basicMaterial(
   m.positionNode = bendLocal(vertex ?? positionLocal);
   return register(m, 'basic', 'vertex');
 }
+
+/**
+ * A light added to the picture, a glow on a square facing the camera: unlit,
+ * and taking no fog. The fog mixes a colour toward the horizon's, and
+ * added, that colour would be added too, over the whole square: a box of
+ * the horizon's colour about the light, by night and by day. Its strength
+ * carries the air it is seen through.
+ */
+export function glowMaterial(): MeshBasicNodeMaterial {
+  const m = basicMaterial({ fog: false });
+  m.transparent = true;
+  m.depthWrite = false;
+  m.blending = AdditiveBlending;
+  return m;
+}
+
+/**
+ * A glow's fall across its square, e^(−k t²) for t² from 0 at its middle to
+ * 1 at its edge, less its value there, so that it reaches nothing at the
+ * edge and shows no side; nothing beyond.
+ */
+export const fallToEdge = (t2: Node<'float'>, k: number): Node<'float'> =>
+  max(exp(t2.mul(-k)).sub(Math.exp(-k)), 0).div(1 - Math.exp(-k)) as unknown as Node<'float'>;
 
 /**
  * A sea material. The sea draws its own geometry from the wave pass, with
