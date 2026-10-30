@@ -1263,7 +1263,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Its name in the menu's switches.", "type": "string", "minLength": 1, "maxLength": 60 },
-        "on": { "description": "What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, or a new gale warning.", "type": "string", "enum": ["charted-own", "charted-great", "falls-coming", "falls-soon", "new-world", "gale-warned"] },
+        "on": { "description": "What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, or a sailor the player follows setting sail.", "type": "string", "enum": ["charted-own", "charted-great", "falls-coming", "falls-soon", "new-world", "gale-warned", "followed-sailed"] },
         "before": { "description": "For a notice of the world's end near: the times before the end it is raised at, in minutes.", "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 1440 } },
         "level": { "description": "Passive notices are for the player's leisure; active ones for now.", "type": "string", "enum": ["passive", "active"] },
         "switchable": { "description": "The player may switch it off.", "type": "boolean" },

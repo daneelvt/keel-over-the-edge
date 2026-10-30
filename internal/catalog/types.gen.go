@@ -1399,7 +1399,8 @@ type NoticeKind struct {
 	Name string `json:"name"`
 
 	// What raises it: a place the player charts, a great discovery by anyone, the
-	// world closing, its end near, a new world begun, or a new gale warning.
+	// world closing, its end near, a new world begun, a new gale warning, or a sailor
+	// the player follows setting sail.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -1434,6 +1435,7 @@ const OnChartedGreat On = "charted-great"
 const OnChartedOwn On = "charted-own"
 const OnFallsComing On = "falls-coming"
 const OnFallsSoon On = "falls-soon"
+const OnFollowedSailed On = "followed-sailed"
 const OnGaleWarned On = "gale-warned"
 const OnNewWorld On = "new-world"
 
@@ -4379,4 +4381,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "2138106ca91e8450"
+const Version = "abcc37dafb1e927d"

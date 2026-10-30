@@ -6340,9 +6340,9 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, or a new gale warning.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, or a sailor the player follows setting sail.
    */
-  on: "charted-own" | "charted-great" | "falls-coming" | "falls-soon" | "new-world" | "gale-warned";
+  on: "charted-own" | "charted-great" | "falls-coming" | "falls-soon" | "new-world" | "gale-warned" | "followed-sailed";
   /**
    * For a notice of the world's end near: the times before the end it is raised at, in minutes.
    *
@@ -6410,4 +6410,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '2138106ca91e8450';
+export const CATALOG_VERSION = 'abcc37dafb1e927d';
