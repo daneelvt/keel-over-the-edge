@@ -484,6 +484,11 @@ async function start(): Promise<void> {
   parts.chart.store.me = me.name;
   parts.notices.off.value = new Set(me.noticesOff ?? []);
   parts.notices.save = (off) => saveNoticesOff(off);
+  // The sailors the player follows setting sail, told while the game is
+  // open; asked after apart from the first download.
+  void import('../ui/following').then(({ followSailing }) =>
+    followSailing((who) => parts.notices.raise('followed-sailed', { who }, performance.now())),
+  );
   online.onChart = (entries, whole) => parts.chart.store.receive(entries, whole);
   // The countdown to the world's end, by the world clock, and the notices
   // of the world's life, worked out here from the end each Welcome tells.

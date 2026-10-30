@@ -4480,6 +4480,12 @@ may watch now. The sailor followed is never told, and no count of
 followers is shown. Read once a world into the watch service's cache and
 written through; `who=following` lists after the watchable follows those
 that cannot be watched now, with `gone` in the refusal's words by kind.
+While the game is open the phone asks `who=following` every 30 s
+(`client/src/ui/following.ts`, loaded after the sea is shown): a sailor on
+the answer who was not on the last has become watchable, and the notice
+`followed-sailing` says "Iron Mary has set sail". The first answer raises
+none, and a human who sails without allowing it is never on the list, so
+never told.
 
 **On the phone.** The start screen shows "Watch" beside each machine
 sailor at sea, with how many watch it, and "Watch another sailor"; the

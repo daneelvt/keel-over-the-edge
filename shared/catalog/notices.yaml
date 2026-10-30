@@ -12,8 +12,10 @@
 # direction and force ("southwesterly gale 8"), {when}, its time
 # ("expected soon"), and {where}, the compass point from the nearest
 # charted place ("south-west of Gannet Holm"): the Met Office's grammar.
-# Whatever a notice tells is in the news, on the chart or in the countdown
-# too, so one missed is never lost (WCAG 2.2, 2.2.1). The world's end is worked out on the phone from the end the
+# A sailor followed setting sail fills in {who}, and is told only once they
+# may be watched: a human who sails without allowing it raises nothing.
+# Whatever a notice tells is in the news, on the chart, in the countdown or
+# on the list of sailors to watch too, so one missed is never lost (WCAG 2.2, 2.2.1). The world's end is worked out on the phone from the end the
 # Welcome gives and the world clock: each of its notices is shown once a
 # world, the near end's at each time before it.
 notices:
@@ -68,6 +70,14 @@ notices:
       stays: 5
       text: "A new world: Port Royal is charted, the rest is yours to find"
       folded: "A new world: Port Royal is charted, the rest is yours to find"
+    - id: followed-sailing
+      name: Sailors you follow
+      on: followed-sailed
+      level: passive
+      switchable: true
+      stays: 8
+      text: "{who} has set sail"
+      folded: "{count} sailors you follow have set sail"
 
 # The news, a sheet in the manner of Lloyd's List's: its columns, a page
 # of page items, and a sailor's places charted within fold minutes of an
