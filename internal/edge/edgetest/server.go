@@ -109,8 +109,6 @@ type Server struct {
 	Weather  *weather.Timeline
 	// Encounters are how the world's boats meet.
 	Encounters *physics.EncounterPrepared
-	// Allowing is the accounts that let anyone watch them always.
-	Allowing *watch.Allowing
 
 	cfg      Config
 	sessions *auth.Cache
@@ -166,8 +164,7 @@ func NewServer(t testing.TB, cfg Config) *Server {
 		cfg.Edge = &CatalogEdge
 	}
 	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg,
-		Allowing: watch.NewAllowing(nil)}
+	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg}
 	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
 	s.start(t, s.newWorld(t))
 	s.HTTP = httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +199,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain),
 		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks, Forecast: cfg.Forecast,
 		Stopped: cfg.Stopped, Seen: cfg.Seen, LongAfter: cfg.LongAfter,
-		Watch: s.Sessions.Target, Allowing: s.Allowing, SpectatorLimit: cfg.SpectatorLimit,
+		Watch: s.Sessions.Target, SpectatorLimit: cfg.SpectatorLimit,
 		Agent: cfg.Agent,
 	})
 	var recorders []sim.Recorder

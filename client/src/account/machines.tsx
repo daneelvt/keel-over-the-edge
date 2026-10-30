@@ -15,19 +15,21 @@
 // the game's operator stopped says so: its apps are revoked, and it may
 // only be deleted.
 //
-// A machine sailor at sea can be watched from the start screen, with how
-// many watch it, as can any other sailor from the list; and the account
-// page copies a link that opens the game watching it.
+// A machine sailor can be watched by anyone whenever it sails: by its
+// owner from the start screen, with how many watch it, and by anyone from
+// the list of sailors to watch; and the account page copies a link that
+// opens the game watching it.
 //
 // Loaded only when shown: none of it is in the game's first download.
 
-import { type ComponentChildren, type JSX, render } from 'preact';
+import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { useWatch } from '../ui/watchlazy';
 import { COPIED, COPY_WATCH_LINK, WATCH, watchersText, watchLink } from '../ui/watchwords';
 import { Cog } from './cog';
 import { Connect } from './connect';
+import type { Voyage } from './letwatch';
 import {
   type Draft,
   draftBody,
@@ -367,28 +369,31 @@ function StartWatchList({ choose, close }: { choose: (name: string) => void; clo
  * the player's to sail.
  */
 export const AI_SAILORS = 'AI sailors';
-export const AI_SAILORS_LINE = 'Sailed by your AI apps, not by you. You can watch them.';
+export const AI_SAILORS_LINE =
+  'Sailed by your AI apps, not by you. Anyone can watch them while they sail.';
 
 /**
  * The start screen's two panels, apart: the player's own sailor, with
  * the only Set sail; and their AI sailors, children, which nothing there
- * sails. sail sets the player's sailor to sea; list opens the sailors to
- * watch.
+ * sails. sail sets the player's sailor to sea, once voyage has sent the
+ * box's choice; list opens the sailors to watch.
  */
 export function StartPair({
   me,
+  voyage,
   sail,
   list,
   children,
 }: {
   me: Me;
+  voyage: Voyage;
   sail: () => void;
   list: () => void;
   children: ComponentChildren;
 }) {
   return (
     <div class="start-pair">
-      <YourSailor me={me} sail={sail} watch={list} />
+      <YourSailor me={me} voyage={voyage} sail={sail} watch={list} />
       <div class="start-panel ai-panel">{children}</div>
     </div>
   );
@@ -399,16 +404,18 @@ export function StartPair({
  * sailor, with Set sail and Watch another sailor, beside the AI sailors,
  * each at sea with Watch. first, after a new sailor's recovery code,
  * opens on the form. done is given the sailor chosen to watch, or nothing
- * to sail as me.
+ * to sail as me, once voyage has sent the box's choice.
  */
 export function MachineStart({
   first,
   done,
   me,
+  voyage,
 }: {
   first: boolean;
   done: (watch?: string) => void;
   me: Me;
+  voyage: Voyage;
 }) {
   const { page, setPage, problem } = usePage();
   const [listing, setListing] = useState(false);
@@ -416,7 +423,7 @@ export function MachineStart({
     return <StartWatchList choose={(name) => done(name)} close={() => setListing(false)} />;
   }
   return (
-    <StartPair me={me} sail={() => done()} list={() => setListing(true)}>
+    <StartPair me={me} voyage={voyage} sail={() => done()} list={() => setListing(true)}>
       {page === null ? (
         <p class="start-text start-faint" aria-live="polite">
           {problem || 'Reading your machine sailors…'}
@@ -438,25 +445,6 @@ export function MachineStart({
       )}
     </StartPair>
   );
-}
-
-/** Shows the start screen with machine sailors in parent until Set sail, or a sailor chosen to watch. */
-export function showMachineStart(parent: HTMLElement, me: Me): Promise<Me> {
-  return new Promise((resolve) => {
-    const root = document.createElement('div');
-    parent.append(root);
-    const done = (watch?: string) => {
-      render(null, root);
-      root.remove();
-      resolve(watch === undefined ? me : { ...me, watch });
-    };
-    render(
-      <div class="start">
-        <MachineStart first={false} done={done} me={me} />
-      </div>,
-      root,
-    );
-  });
 }
 
 /** The menu's panel of machine sailors. */

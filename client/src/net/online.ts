@@ -300,8 +300,8 @@ export class Online {
     }
   }
 
-  /** A line in place of the connection's for NOTICE_FOR, at now (µs). */
-  #say(text: string, now = nowUs()): void {
+  /** A line in place of the connection's for NOTICE_FOR, at now (µs): its own, or the page's. */
+  say(text: string, now = nowUs()): void {
     this.notice.value = { text, takeover: false };
     this.#noticeUntil = now + NOTICE_FOR;
   }
@@ -344,7 +344,7 @@ export class Online {
         this.watchPlace.value = null;
         if (!this.watched && this.status.value === 'sailing') {
           // Refused while the own boat sails: it sails on.
-          this.#say(endedText(m.why, m.sailor));
+          this.say(endedText(m.why, m.sailor));
           break;
         }
         this.watching.value = null;
@@ -405,9 +405,9 @@ export class Online {
           this.#away = true;
         } else if (this.#away) {
           // From watching, or idle: the own boat in the water at the start.
-          this.#say(BOAT_IN_THE_WATER);
+          this.say(BOAT_IN_THE_WATER);
         } else if (this.#hadBoat && !m.rejoined) {
-          this.#say('Your boat has returned to port.');
+          this.say('Your boat has returned to port.');
         } else if (this.#bell) {
           this.notice.value = null;
         }

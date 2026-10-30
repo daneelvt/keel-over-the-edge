@@ -138,7 +138,6 @@ func (c *conn) watchCommand(name string, now time.Time) {
 // verdict is the rule for viewer watching t, as f has t's boat.
 func (e *Edge) verdict(f *bus.Frame, t watch.Target, viewer bus.Account) watch.Verdict {
 	s := findBoat(f, bus.Account(t.ID))
-	t.Always = e.cfg.Allowing.Has(t.ID)
 	return watch.Allowed(t, e.boatOf(f, s), store.AccountID(viewer))
 }
 
@@ -310,7 +309,7 @@ func (enc *encoder) stillWatchable(c *conn, f *bus.Frame, s int32) pb.WatchEnd {
 	if f.Unseen[s] {
 		return pb.WatchEnd_WATCH_END_CANNOT
 	}
-	if !enc.e.cfg.Allowing.Has(t.ID) && !enc.e.voyages.allows(f.Owner[s], f.Boat[s]) {
+	if !enc.e.voyages.allows(f.Owner[s], f.Boat[s]) {
 		return pb.WatchEnd_WATCH_END_OFF
 	}
 	return pb.WatchEnd_WATCH_END_UNSPECIFIED

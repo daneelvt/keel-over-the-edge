@@ -460,7 +460,7 @@ func TestSpectatorsColumn(t *testing.T) {
 	pool := storetest.PoolOn(t, u)
 	human := uuidOf(t, pool, "INSERT INTO account (kind, saved_at) VALUES ('human', now()) RETURNING id")
 	ai := uuidOf(t, pool, "INSERT INTO account (kind, owner_id) VALUES ('ai', $1) RETURNING id", human)
-	if _, err := store.Migrate(ctx, u, 0); err != nil {
+	if _, err := store.Migrate(ctx, u, 18); err != nil {
 		t.Fatal(err)
 	}
 	var n int
@@ -470,4 +470,48 @@ func TestSpectatorsColumn(t *testing.T) {
 	must(t, pool, "UPDATE account SET spectators = true WHERE id = $1", human)
 	refused(t, exec(t, pool, "UPDATE account SET spectators = true WHERE id = $1", ai), "23514")
 	refused(t, exec(t, pool, "UPDATE account SET spectators = NULL WHERE id = $1", human), "23502")
+}
+
+// TestNoAlways: migration 00020 drops the setting, and with it every
+// account's "always", so no human is watchable without choosing it for a
+// voyage.
+func TestNoAlways(t *testing.T) {
+	ctx := context.Background()
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 19); err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	must(t, pool, "INSERT INTO account (kind, saved_at, spectators) VALUES ('human', now(), true)")
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
+		t.Fatal(err)
+	}
+	refused(t, exec(t, pool, "SELECT spectators FROM account"), "42703")
+}
+
+// TestFollowTable: a follow is kept once, never of oneself, and goes with
+// either account.
+func TestFollowTable(t *testing.T) {
+	ctx := context.Background()
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	a := uuidOf(t, pool, "INSERT INTO account (kind, saved_at) VALUES ('human', now()) RETURNING id")
+	b := uuidOf(t, pool, "INSERT INTO account (kind, saved_at) VALUES ('human', now()) RETURNING id")
+	c := uuidOf(t, pool, "INSERT INTO account (kind, owner_id) VALUES ('ai', $1) RETURNING id", b)
+	must(t, pool, "INSERT INTO follow (follower_id, followed_id) VALUES ($1, $2)", a, b)
+	must(t, pool, "INSERT INTO follow (follower_id, followed_id) VALUES ($1, $2)", a, c)
+	must(t, pool, "INSERT INTO follow (follower_id, followed_id) VALUES ($1, $2)", b, a)
+	refused(t, exec(t, pool, "INSERT INTO follow (follower_id, followed_id) VALUES ($1, $2)", a, b), "23505")
+	refused(t, exec(t, pool, "INSERT INTO follow (follower_id, followed_id) VALUES ($1, $1)", a), "23514")
+	// Deleting the machine sailor, then its owner, takes every follow of
+	// them and by them.
+	must(t, pool, "DELETE FROM account WHERE id = $1", c)
+	must(t, pool, "DELETE FROM account WHERE id = $1", b)
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM follow").Scan(&n); err != nil || n != 0 {
+		t.Fatalf("%d follows left after the account went (%v)", n, err)
+	}
 }

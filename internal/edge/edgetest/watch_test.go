@@ -258,7 +258,7 @@ func TestWatchRefused(t *testing.T) {
 		}
 		// Bob allows spectators: watched.
 		time.Sleep(time.Second)
-		srv.Allowing.Set(bob, true)
+		srv.Edge.SetVoyage(bus.Account(bob), true)
 		v.send(client.Watch("bob"))
 		if w := v.welcomed(); w.GetWatching().GetSailor() != "Bob" || w.GetWatching().GetMachine() {
 			t.Fatalf("watching Bob: %v", w)
@@ -278,7 +278,7 @@ func TestSpectatorSeesWhatTheSailorSees(t *testing.T) {
 		srv := NewServer(t, Config{Capacity: 32})
 		bobToken, bob := srv.Sailor("Bob")
 		annToken, _ := srv.Sailor("Ann")
-		srv.Allowing.Set(bob, true)
+		srv.Edge.SetVoyage(bus.Account(bob), true)
 		sailor := dial(t, srv, bobToken, client.Hello())
 		sailor.welcomed()
 		srv.Place(sailor.welcome.GetBoat(), physics.State{X: 0, Y: 0, Heading: 1})
@@ -349,14 +349,14 @@ func TestWatchEnds(t *testing.T) {
 		_, bob := srv.Sailor("Bob")
 		mary, maryBoat := srv.Machine(t, "Iron Mary", ann, near(0))
 		bobBoat := srv.Launch(t, bob, false, near(1))
-		srv.Allowing.Set(bob, true)
+		srv.Edge.SetVoyage(bus.Account(bob), true)
 		v := dial(t, srv, annToken, client.HelloWatch("Bob"))
 		v.welcomed()
-		srv.Allowing.Set(bob, false)
+		srv.Edge.SetVoyage(bus.Account(bob), false)
 		if why := v.endedWith(); why != pb.WatchEnd_WATCH_END_OFF {
 			t.Fatalf("spectators off: %v", why)
 		}
-		srv.Allowing.Set(bob, true)
+		srv.Edge.SetVoyage(bus.Account(bob), true)
 		time.Sleep(time.Second)
 		v.send(client.Watch("Bob"))
 		v.welcomed()
@@ -518,7 +518,7 @@ func TestWatchersTold(t *testing.T) {
 		srv := NewServer(t, Config{})
 		bobToken, bob := srv.Sailor("Bob")
 		annToken, _ := srv.Sailor("Ann")
-		srv.Allowing.Set(bob, true)
+		srv.Edge.SetVoyage(bus.Account(bob), true)
 		sailor := dial(t, srv, bobToken, client.Hello())
 		sailor.welcomed()
 		spectator := dial(t, srv, annToken, client.HelloWatch("Bob"))
@@ -674,6 +674,44 @@ func TestLampTold(t *testing.T) {
 		}
 		if len(other.lamps) != 0 || len(sailor.lamps) != 0 {
 			t.Fatalf("told another account %v, a sailor %v", other.lamps, sailor.lamps)
+		}
+	})
+}
+
+// TestVoyageChosenBeforeTheBoat: spectators allowed while no boat is in
+// the water are allowed for the voyage of the next boat, which the
+// connection opened after brings in, and for that voyage only: the boat
+// after it starts with spectators off.
+func TestVoyageChosenBeforeTheBoat(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		srv := NewServer(t, Config{})
+		bobToken, bob := srv.Sailor("Bob")
+		_, owner := srv.Sailor("Dee")
+		srv.Machine(t, "Iron Mary", owner, near(0))
+		srv.Edge.SetVoyage(bus.Account(bob), true)
+		if !srv.Edge.Voyage(bus.Account(bob)) {
+			t.Fatal("the choice was not kept for the next boat")
+		}
+		v := dial(t, srv, bobToken, client.Hello())
+		first := v.welcomed().GetBoat()
+		time.Sleep(time.Second)
+		if !srv.Edge.VoyageAllows(bus.Account(bob), first) || !srv.Edge.Voyage(bus.Account(bob)) {
+			t.Fatal("the boat that set sail is not watchable")
+		}
+		// Bob leaves the water to watch, then sails again.
+		v.send(client.Watch("Iron Mary"))
+		if w := v.welcomed(); w.GetWatching().GetSailor() != "Iron Mary" {
+			t.Fatalf("watching: %v", w)
+		}
+		time.Sleep(time.Second)
+		if srv.Edge.Voyage(bus.Account(bob)) || srv.Edge.VoyageAllows(bus.Account(bob), first) {
+			t.Fatal("the choice outlived its voyage")
+		}
+		v.send(client.Sail())
+		next := v.welcomed().GetBoat()
+		time.Sleep(time.Second)
+		if next == first || srv.Edge.VoyageAllows(bus.Account(bob), next) || srv.Edge.Voyage(bus.Account(bob)) {
+			t.Fatalf("the next voyage (%d after %d) starts watchable", next, first)
 		}
 	})
 }

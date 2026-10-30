@@ -1,0 +1,390 @@
+{
+  "comment": "The weather pusher's decal for a place's weather and its box, read by internal/weather's sky_test.go and client/src/chart/pocketsky.test.ts alike.",
+  "cases": [
+    {
+      "name": "fair words, force 3",
+      "weather": {
+        "points": [
+          {
+            "mean": 4.115555555555556,
+            "from": 0,
+            "gust": 4.115555555555556,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          },
+          {
+            "mean": 4.115555555555556,
+            "from": 0,
+            "gust": 4.115555555555556,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Fair",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "fair"
+    },
+    {
+      "name": "showers",
+      "weather": {
+        "points": [
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          },
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Showers",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "showers"
+    },
+    {
+      "name": "fog patches",
+      "weather": {
+        "points": [
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          },
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Fog patches",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "fog"
+    },
+    {
+      "name": "rain",
+      "weather": {
+        "points": [
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          },
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Rain",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "rain"
+    },
+    {
+      "name": "squally showers",
+      "weather": {
+        "points": [
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          },
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Squally showers",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "squalls"
+    },
+    {
+      "name": "squalls with heavy rain",
+      "weather": {
+        "points": [
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          },
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Squalls with heavy rain",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "squalls"
+    },
+    {
+      "name": "a storm near outranks fair words",
+      "weather": {
+        "points": [
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 4
+          },
+          {
+            "mean": 6.173333333333334,
+            "from": 0,
+            "gust": 6.173333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 4
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Fair",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "storm"
+    },
+    {
+      "name": "a storm near outranks squalls",
+      "weather": {
+        "points": [
+          {
+            "mean": 15.433333333333334,
+            "from": 0,
+            "gust": 15.433333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 6
+          },
+          {
+            "mean": 15.433333333333334,
+            "from": 0,
+            "gust": 15.433333333333334,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 6
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Squalls with heavy rain",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "storm"
+    },
+    {
+      "name": "under force 1 in a fair sky is calm",
+      "weather": {
+        "points": [
+          {
+            "mean": 0.2057777777777778,
+            "from": 0,
+            "gust": 0.2057777777777778,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          },
+          {
+            "mean": 0.2057777777777778,
+            "from": 0,
+            "gust": 0.2057777777777778,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Fair",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "calm"
+    },
+    {
+      "name": "force 1 is fair",
+      "weather": {
+        "points": [
+          {
+            "mean": 0.5144444444444445,
+            "from": 0,
+            "gust": 0.5144444444444445,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          },
+          {
+            "mean": 0.5144444444444445,
+            "from": 0,
+            "gust": 0.5144444444444445,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Fair",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "fair"
+    },
+    {
+      "name": "fog with no wind stays fog",
+      "weather": {
+        "points": [
+          {
+            "mean": 0.2057777777777778,
+            "from": 0,
+            "gust": 0.2057777777777778,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          },
+          {
+            "mean": 0.2057777777777778,
+            "from": 0,
+            "gust": 0.2057777777777778,
+            "rain": 0,
+            "visibility": 20000,
+            "near": 0
+          }
+        ],
+        "pressure": 1013,
+        "before": 1013,
+        "quarter": 1013,
+        "cyclonic": false
+      },
+      "box": {
+        "wind": "",
+        "gusts": "",
+        "sky": "Fog patches",
+        "visibility": "",
+        "barometer": ""
+      },
+      "sky": "fog"
+    }
+  ]
+}

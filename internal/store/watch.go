@@ -14,14 +14,12 @@ import (
 
 // WatchTarget is a sailor someone asks to watch: its account, its kind,
 // its owner (a machine sailor's human, zero for a human's own sailor), its
-// name, whether it lets anyone watch it always, and whether it, or its
-// owner, is stopped.
+// name, and whether it, or its owner, is stopped.
 type WatchTarget struct {
 	ID      AccountID
 	Kind    Kind
 	Owner   AccountID
 	Name    string
-	Always  bool
 	Stopped bool
 }
 
@@ -35,33 +33,7 @@ func (s *Store) WatchTarget(ctx context.Context, key string) (WatchTarget, error
 	if err != nil {
 		return WatchTarget{}, err
 	}
-	return WatchTarget{ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name, Always: r.Spectators, Stopped: r.Stopped}, nil
-}
-
-// SetSpectators sets whether a human account lets anyone watch it always;
-// ErrNotFound if there is no such human account.
-func (s *Store) SetSpectators(ctx context.Context, id AccountID, on bool) error {
-	n, err := s.q.SetSpectators(ctx, db.SetSpectatorsParams{Spectators: on, ID: uuidOf(id)})
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// SpectatorsAllowed is the accounts that let anyone watch them always.
-func (s *Store) SpectatorsAllowed(ctx context.Context) ([]AccountID, error) {
-	rows, err := s.q.SpectatorsAllowed(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]AccountID, len(rows))
-	for i, r := range rows {
-		out[i] = r.Bytes
-	}
-	return out, nil
+	return WatchTarget{ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name, Stopped: r.Stopped}, nil
 }
 
 // Sailor is an account's sailor as a list of boats shows it: its name, its
@@ -88,4 +60,34 @@ func (s *Store) SailorsByID(ctx context.Context, ids []AccountID) (map[AccountID
 		out[r.ID.Bytes] = Sailor{Name: r.Name, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes}
 	}
 	return out, nil
+}
+
+// Followed is a sailor an account follows: its account, and the sailor.
+type Followed struct {
+	ID AccountID
+	Sailor
+}
+
+// Follows are the sailors an account follows.
+func (s *Store) Follows(ctx context.Context, follower AccountID) ([]Followed, error) {
+	rows, err := s.q.Follows(ctx, uuidOf(follower))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Followed, len(rows))
+	for i, r := range rows {
+		out[i] = Followed{ID: r.ID.Bytes, Sailor: Sailor{Name: r.Name, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes}}
+	}
+	return out, nil
+}
+
+// Follow has follower follow followed's sailor; following it again
+// changes nothing.
+func (s *Store) Follow(ctx context.Context, follower, followed AccountID) error {
+	return s.q.Follow(ctx, db.FollowParams{FollowerID: uuidOf(follower), FollowedID: uuidOf(followed)})
+}
+
+// Unfollow has follower stop following followed's sailor.
+func (s *Store) Unfollow(ctx context.Context, follower, followed AccountID) error {
+	return s.q.Unfollow(ctx, db.UnfollowParams{FollowerID: uuidOf(follower), FollowedID: uuidOf(followed)})
 }

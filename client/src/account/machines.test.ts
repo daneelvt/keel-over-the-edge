@@ -5,6 +5,7 @@ import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { STILL_AT_SEA, WATCH, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
+import { NOT_WATCHED, voyage, watchRefused } from './letwatch';
 import { drawMachine, endsWords, lookWords, type MachineItem, withPart } from './machineform';
 import {
   AI_SAILORS,
@@ -18,6 +19,7 @@ import { type Fetch, type Me, resolveSailor } from './me';
 import { MACHINE_REASONS, machineReasonText, REASONS } from './reasons';
 import { recipes, recipeText, STARTER, sailing } from './recipes';
 import { SetSailOrMake } from './recovery';
+import { YourSailor } from './yoursailor';
 
 const DAY = 86_400_000;
 
@@ -152,28 +154,47 @@ describe('the machine sailors’ words', () => {
   });
 });
 
-describe('a player with machine sailors', () => {
+describe('every entry with a session', () => {
   const ann: Me = { name: 'Ann Bonny', look: 'a', kind: 'human' };
-  const run = async (me: Me) => {
+  const run = async (me: Me, link = false) => {
     const log: string[] = [];
     const fetcher: Fetch = async () => new Response(JSON.stringify(me), { status: 200 });
     const out = await resolveSailor({
       fetch: fetcher,
       start: async () => ann,
-      addPasskey: async (m) => m,
-      machines: async (m) => {
-        log.push(`machines ${m.machines}`);
-        return m;
+      addPasskey: async (m) => {
+        log.push('add a passkey');
+        return { ...m, addPasskey: false };
       },
+      ...(link
+        ? {}
+        : {
+            sailor: async (m: Me) => {
+              log.push(`your sailor, ${m.machines ?? 0} machine sailors`);
+              return m;
+            },
+          }),
       backSoon: () => {},
     });
     return { out, log };
   };
 
-  test('is shown them before the sea; one with none goes straight to sea', async () => {
-    expect((await run({ ...ann, machines: 2 })).log).toEqual(['machines 2']);
-    expect((await run(ann)).log).toEqual([]);
-    expect((await run({ ...ann, machines: 0 })).log).toEqual([]);
+  test('shows the player’s own sailor before the sea, with machine sailors or none', async () => {
+    expect((await run({ ...ann, machines: 2 })).log).toEqual(['your sailor, 2 machine sailors']);
+    expect((await run(ann)).log).toEqual(['your sailor, 0 machine sailors']);
+    expect((await run({ ...ann, machines: 0 })).log).toEqual(['your sailor, 0 machine sailors']);
+    // A session the recovery code made: a passkey first, then the same.
+    expect((await run({ ...ann, addPasskey: true })).log).toEqual([
+      'add a passkey',
+      'your sailor, 0 machine sailors',
+    ]);
+  });
+
+  test('but for a link to watch, which goes straight to the watch', async () => {
+    expect(await run({ ...ann, machines: 2 }, true)).toEqual({
+      out: { ...ann, machines: 2 },
+      log: [],
+    });
   });
 });
 
@@ -218,6 +239,17 @@ function findAll(node: ComponentChildren, type: string): Node[] {
   return [...(v.type === type ? [v] : []), ...findAll(v.props.children, type)];
 }
 
+function checkboxes(node: ComponentChildren): { text: string; checked: boolean }[] {
+  return findAll(node, 'label').flatMap((l) =>
+    findAll(l, 'input')
+      .filter((i) => (i.props as { type?: string }).type === 'checkbox')
+      .map((i) => ({
+        text: textOf(l.props.children).trim(),
+        checked: (i.props as { checked?: boolean }).checked === true,
+      })),
+  );
+}
+
 function buttons(node: ComponentChildren): { text: string; gold: boolean }[] {
   return findAll(node, 'button').map((b) => ({
     text: textOf(b.props.children),
@@ -253,6 +285,7 @@ describe('the start screen with machine sailors', () => {
     const tree = expand(
       StartPair({
         me,
+        voyage: voyage(me, async () => new Response('{}')),
         sail: () => {},
         list: () => {},
         children: MachineList({
@@ -287,7 +320,8 @@ describe('the start screen with machine sailors', () => {
       { text: 'Set sail as Ann Bonny', gold: true },
       { text: WATCH_ANOTHER_SAILOR, gold: false },
     ]);
-    expect(findAll(yours, 'input')).toHaveLength(0);
+    expect(checkboxes(yours)).toEqual([{ text: 'Let others watch me sail', checked: false }]);
+    expect(textOf(yours)).toContain('This voyage only.');
     expect(textOf(yours)).not.toContain('AILA');
 
     // The AI sailors': what they are, each one, and nothing gold to sail.
@@ -295,6 +329,7 @@ describe('the start screen with machine sailors', () => {
     expect(textOf(ai)).toContain(AI_SAILORS_LINE);
     expect(textOf(ai)).toContain('AILA');
     expect(textOf(ai)).not.toContain('Ann Bonny');
+    expect(checkboxes(ai)).toEqual([]);
     expect(buttons(ai)).toEqual([
       { text: WATCH, gold: false },
       { text: 'How to connect', gold: false },
@@ -309,13 +344,130 @@ describe('the start screen with machine sailors', () => {
     expect(lines).toContain(STILL_AT_SEA);
     expect(lines.indexOf(STILL_AT_SEA)).toBe(lines.indexOf('at sea') + 1);
     expect(textOf(ai)).not.toContain(STILL_AT_SEA);
+    // The box between the note and Set sail.
+    const order = ((yours?.props.children ?? []) as ComponentChildren[])
+      .filter((n): n is Node => n !== null && typeof n === 'object')
+      .map((n) => (n.props.class ?? '').split(' ')[0] ?? '');
+    expect(order.slice(-4)).toEqual(['start-warning', 'let-watch', 'start-go', 'start-sign-in']);
+  });
+
+  test('the box: unticked with no boat in the water, the voyage’s choice with one', () => {
+    const ticked = (me: Me) => checkboxes(draw({ ...ann, ...me }).panels[0])[0]?.checked;
+    expect(ticked(ann)).toBe(false);
+    // A choice made for a boat that never sailed is not shown, nor kept.
+    expect(ticked({ ...ann, spectators: 'voyage' })).toBe(false);
+    expect(ticked({ ...ann, atSea: true, spectators: 'no' })).toBe(false);
+    expect(ticked({ ...ann, atSea: true, spectators: 'voyage' })).toBe(true);
+  });
+});
+
+describe('Set sail with the box', () => {
+  const ann: Me = { name: 'Ann Bonny', look: 'a', kind: 'human' };
+  /** The server as the box sees it: each request logged, answered by answer. */
+  const server = (answer: () => Response | Promise<Response>) => {
+    const log: string[] = [];
+    const f: Fetch = async (path, init) => {
+      log.push(`${init?.method ?? 'GET'} ${path} ${init?.body ?? ''}`.trim());
+      return answer();
+    };
+    return { log, f };
+  };
+  const ok = () => new Response(JSON.stringify(ann), { status: 200 });
+  const sailed = async (v: ReturnType<typeof voyage>, log: string[]) => {
+    await v.sail(() => log.push('to sea'));
+    return log;
+  };
+
+  test('unticked, goes to sea and asks nothing', async () => {
+    const { log, f } = server(ok);
+    expect(await sailed(voyage(ann, f), log)).toEqual(['to sea']);
+    expect(watchRefused).toBe(false);
+  });
+
+  test('ticked, asks for the voyage to be watched first', async () => {
+    const { log, f } = server(ok);
+    const v = voyage(ann, f);
+    v.set(true);
+    // Ticked with no boat in the water: nothing sent until Set sail.
+    expect(log).toEqual([]);
+    expect(await sailed(v, log)).toEqual(['POST /api/me/spectators {"allow":"voyage"}', 'to sea']);
+    expect(watchRefused).toBe(false);
+  });
+
+  test('ticked, sets sail anyway if the server cannot take it, and says so at sea', async () => {
+    for (const answer of [
+      () => new Response('{"error":"unavailable"}', { status: 503 }),
+      () => {
+        throw new TypeError('offline');
+      },
+    ]) {
+      const { log, f } = server(answer);
+      const v = voyage(ann, f);
+      v.set(true);
+      expect(await sailed(v, log)).toEqual([
+        'POST /api/me/spectators {"allow":"voyage"}',
+        'to sea',
+      ]);
+      expect(watchRefused).toBe(true);
+    }
+    expect(NOT_WATCHED).toBe('Others cannot watch you this voyage');
+  });
+
+  test('unticked, takes back a choice made elsewhere for a boat that never sailed', async () => {
+    const { log, f } = server(ok);
+    expect(await sailed(voyage({ ...ann, spectators: 'voyage' }, f), log)).toEqual([
+      'POST /api/me/spectators {"allow":"no"}',
+      'to sea',
+    ]);
+    expect(watchRefused).toBe(false);
+  });
+
+  test('with the boat in the water, a change is sent at once, and taken back if refused', async () => {
+    const { log, f } = server(ok);
+    const v = voyage({ ...ann, atSea: true, spectators: 'voyage' }, f);
+    v.set(false);
+    expect(v.on.value).toBe(false);
+    // Set sail waits for it, and sends nothing more: the voyage has its choice.
+    expect(await sailed(v, log)).toEqual(['POST /api/me/spectators {"allow":"no"}', 'to sea']);
+
+    const refused = server(() => new Response('{}', { status: 500 }));
+    const w = voyage({ ...ann, atSea: true }, refused.f);
+    w.set(true);
+    expect(w.on.value).toBe(true);
+    await sailed(w, refused.log);
+    expect(w.on.value).toBe(false);
+    expect(refused.log).toEqual(['POST /api/me/spectators {"allow":"voyage"}', 'to sea']);
+  });
+
+  test('the panel’s Set sail sails through the box, once', async () => {
+    const { log, f } = server(ok);
+    const v = voyage(ann, f);
+    const draw = () =>
+      expand(YourSailor({ me: ann, voyage: v, sail: () => log.push('to sea'), watch: null }));
+    type Props = { onChange: (e: unknown) => void; onClick: () => void };
+    const props = (tag: string) => findAll(draw(), tag)[0]?.props as unknown as Props;
+    props('input').onChange({ currentTarget: { checked: true } });
+    expect(findAll(draw(), 'input')[0]?.props).toMatchObject({ checked: true });
+    // A second tap while the server is asked does nothing.
+    props('button').onClick();
+    props('button').onClick();
+    await expect.poll(() => log).toEqual(['POST /api/me/spectators {"allow":"voyage"}', 'to sea']);
   });
 });
 
 describe('the choice after the recovery code', () => {
-  test('names the sailor just made', () => {
-    const tree = expand(SetSailOrMake({ name: 'Ann Bonny', sail: () => {}, make: () => {} }));
+  test('names the sailor just made, with the box, unticked', () => {
+    const me: Me = { name: 'Ann Bonny', look: 'a', kind: 'human' };
+    const tree = expand(
+      SetSailOrMake({
+        name: me.name,
+        voyage: voyage(me, async () => new Response('{}')),
+        sail: () => {},
+        make: () => {},
+      }),
+    );
     expect(textOf(findAll(tree, 'h1'))).toBe('Ann Bonny is ready to sail');
+    expect(checkboxes(tree)).toEqual([{ text: 'Let others watch me sail', checked: false }]);
     expect(buttons(tree)).toEqual([
       { text: 'Set sail as Ann Bonny', gold: true },
       { text: 'Make a machine sailor first', gold: false },

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { pocketSkyOf, pusherName } from './pocketsky';
+import { type PocketSky, pocketSkyOf, pusherName } from './pocketsky';
 import { type Box, NEAR, type PlaceSample, type PlaceWeather } from './words';
 
 const KNOT = 1852 / 3600;
@@ -57,5 +58,22 @@ describe('the weather pusher’s decal', () => {
     expect(pusherName({ sky: 'fair', night: true })).toBe(
       'Weather on the pocket chart; here, fair, by night',
     );
+  });
+});
+
+/** The cases the server's sky is held to as well (internal/weather's sky_test.go). */
+const shared = JSON.parse(
+  readFileSync(
+    new URL('../../../internal/weather/testdata/pocketsky.json', import.meta.url),
+    'utf8',
+  ),
+) as { cases: { name: string; weather: PlaceWeather; box: Box; sky: PocketSky }[] };
+
+describe('the decal the server makes for the list of sailors to watch', () => {
+  test('is the pusher’s, for every shared case', () => {
+    expect(shared.cases.length).toBeGreaterThan(5);
+    for (const c of shared.cases) {
+      expect(pocketSkyOf(c.weather, c.box), c.name).toBe(c.sky);
+    }
   });
 });

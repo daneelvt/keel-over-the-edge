@@ -25,10 +25,10 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
-// memWatching is who lets anyone watch them always, in a memDB.
+// memWatching is who follows whom, in a memDB.
 type memWatching struct {
-	mu     sync.Mutex
-	always map[store.AccountID]bool
+	mu      sync.Mutex
+	follows map[store.AccountID]map[store.AccountID]bool
 }
 
 func (d *memDB) WatchTarget(ctx context.Context, key string) (store.WatchTarget, error) {
@@ -50,31 +50,45 @@ func (d *memDB) WatchTarget(ctx context.Context, key string) (store.WatchTarget,
 	if err != nil {
 		return store.WatchTarget{}, err
 	}
-	d.watching.mu.Lock()
-	defer d.watching.mu.Unlock()
-	return store.WatchTarget{ID: t.ID, Kind: t.Kind, Name: t.Name, Always: d.watching.always[t.ID], Stopped: d.isStopped(t.ID)}, nil
+	return store.WatchTarget{ID: t.ID, Kind: t.Kind, Name: t.Name, Stopped: d.isStopped(t.ID)}, nil
 }
 
-func (d *memDB) SetSpectators(_ context.Context, id store.AccountID, on bool) error {
+func (d *memDB) Follows(ctx context.Context, follower store.AccountID) ([]store.Followed, error) {
+	d.watching.mu.Lock()
+	var ids []store.AccountID
+	for id := range d.watching.follows[follower] {
+		ids = append(ids, id)
+	}
+	d.watching.mu.Unlock()
+	sailors, err := d.SailorsByID(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	var out []store.Followed
+	for id, sl := range sailors {
+		out = append(out, store.Followed{ID: id, Sailor: sl})
+	}
+	return out, nil
+}
+
+func (d *memDB) Follow(_ context.Context, follower, followed store.AccountID) error {
 	d.watching.mu.Lock()
 	defer d.watching.mu.Unlock()
-	if d.watching.always == nil {
-		d.watching.always = map[store.AccountID]bool{}
+	if d.watching.follows == nil {
+		d.watching.follows = map[store.AccountID]map[store.AccountID]bool{}
 	}
-	d.watching.always[id] = on
+	if d.watching.follows[follower] == nil {
+		d.watching.follows[follower] = map[store.AccountID]bool{}
+	}
+	d.watching.follows[follower][followed] = true
 	return nil
 }
 
-func (d *memDB) SpectatorsAllowed(context.Context) ([]store.AccountID, error) {
+func (d *memDB) Unfollow(_ context.Context, follower, followed store.AccountID) error {
 	d.watching.mu.Lock()
 	defer d.watching.mu.Unlock()
-	var ids []store.AccountID
-	for id, on := range d.watching.always {
-		if on {
-			ids = append(ids, id)
-		}
-	}
-	return ids, nil
+	delete(d.watching.follows[follower], followed)
+	return nil
 }
 
 func (d *memDB) SailorsByID(ctx context.Context, ids []store.AccountID) (map[store.AccountID]store.Sailor, error) {
@@ -172,8 +186,73 @@ func TestWatchingFromThePlayRoutes(t *testing.T) {
 		if got := list(ann); !strings.HasPrefix(got, `{"sailors":[{"name":"Iron Mary","machine":true,"mine":true`) {
 			t.Fatalf("Ann's list: %s", got)
 		}
-		if status, _ := asked(t, s, cid+"x", "GET", "/api/watch", nil); status != 401 {
-			t.Fatalf("no session: %d", status)
+		for _, path := range []string{"/api/watch", "/api/watch/sailor?name=Bob"} {
+			if status, _ := asked(t, s, cid+"x", "GET", path, nil); status != 401 {
+				t.Fatalf("%s with no session: %d", path, status)
+			}
+		}
+		if status, body := asked(t, s, bob, "POST", "/api/me/spectators", map[string]string{"allow": "always"}); status != 400 || !strings.Contains(body, `"allow"`) {
+			t.Fatalf("always: %d %s", status, body)
+		}
+
+		// The facts: Cid, with no boat, sees where the boats are; Bob, at
+		// sea, does not, but for the sky, the wind and the speed.
+		page := func(cookie, query string) watchPage {
+			t.Helper()
+			status, body := asked(t, s, cookie, "GET", "/api/watch?"+query, nil)
+			var p watchPage
+			if err := json.Unmarshal([]byte(body), &p); status != 200 || err != nil {
+				t.Fatalf("the list %q: %d %s", query, status, body)
+			}
+			return p
+		}
+		cidPage := page(cid, "sort=edge")
+		if cidPage.AtSea != 2 || cidPage.Withheld || len(cidPage.Sailors) != 2 {
+			t.Fatalf("Cid's page: %+v", cidPage)
+		}
+		for _, it := range cidPage.Sailors {
+			if it.EdgeNM == nil || it.Sky == "" || it.State != "sailing" || it.Kind == "" {
+				t.Fatalf("Cid's row of %s: %+v", it.Name, it)
+			}
+		}
+		bobPage := page(bob, "sort=edge")
+		if !bobPage.Withheld || len(bobPage.Sailors) != 1 || bobPage.Sailors[0].EdgeNM != nil || bobPage.Sailors[0].Sky == "" {
+			t.Fatalf("Bob's page: %+v", bobPage)
+		}
+		if p := page(cid, "names=iron%20mary,Nobody,Bob"); len(p.Sailors) != 2 {
+			t.Fatalf("by names: %+v", p)
+		}
+		card := func(cookie, name string) (int, map[string]any) {
+			t.Helper()
+			status, body := asked(t, s, cookie, "GET", "/api/watch/sailor?name="+name, nil)
+			var c map[string]any
+			_ = json.Unmarshal([]byte(body), &c)
+			return status, c
+		}
+		if status, c := card(cid, "Iron%20Mary"); status != 200 || c["weather"] == nil || c["where"] == nil || c["agent"] != nil {
+			t.Fatalf("Cid's card of Iron Mary: %d %v", status, c)
+		}
+		if status, c := card(bob, "Iron%20Mary"); status != 200 || c["weather"] == nil || c["where"] != nil {
+			t.Fatalf("Bob's card of Iron Mary, at sea: %d %v", status, c)
+		}
+		if status, c := card(ann, "Iron%20Mary"); status != 200 || c["agent"] == nil || c["where"] == nil {
+			t.Fatalf("Ann's card of her own: %d %v", status, c)
+		}
+		if status, c := card(cid, "Nobody"); status != 404 || c["error"] != "cannot" {
+			t.Fatalf("a card of nobody: %d %v", status, c)
+		}
+
+		// Cid follows Iron Mary and Bob: first after nobody's own.
+		for _, name := range []string{"Iron Mary", "bob"} {
+			if status, body := asked(t, s, cid, "POST", "/api/watch/follow", map[string]any{"name": name, "on": true}); status != 200 {
+				t.Fatalf("following %s: %d %s", name, status, body)
+			}
+		}
+		if p := page(cid, "who=following&sort=name"); len(p.Sailors) != 2 || !p.Sailors[0].Followed || p.Sailors[0].Name != "Bob" {
+			t.Fatalf("Cid's follows: %+v", p)
+		}
+		if status, body := asked(t, s, cid, "POST", "/api/watch/follow", map[string]any{"name": "Ann", "on": true}); status != 404 || !strings.Contains(body, `"cannot"`) {
+			t.Fatalf("following one who cannot be watched: %d %s", status, body)
 		}
 
 		// Cid watches Bob; Bob is told; Bob turns spectators off.
@@ -191,6 +270,14 @@ func TestWatchingFromThePlayRoutes(t *testing.T) {
 		})
 		if d := time.Since(at); d > time.Second {
 			t.Fatalf("the watch ended %v after", d)
+		}
+		// Bob, no longer allowing, is followed but cannot be watched.
+		time.Sleep(3 * time.Second)
+		if p := page(cid, "who=following&sort=name"); len(p.Sailors) != 2 || p.Sailors[0].Name != "Iron Mary" || p.Sailors[1].Gone != "cannot" {
+			t.Fatalf("Cid's follows once Bob stops allowing: %+v", p)
+		}
+		if status, body := asked(t, s, cid, "POST", "/api/watch/follow", map[string]any{"name": "Bob", "on": false}); status != 200 || body != `{"following":1}`+"\n" {
+			t.Fatalf("unfollowing Bob: %d %q", status, body)
 		}
 
 		// Ann, sailing, watches Iron Mary: her boat leaves the water; she
@@ -220,6 +307,21 @@ func TestWatchingFromThePlayRoutes(t *testing.T) {
 		}
 		s.stop(t)
 	})
+}
+
+// watchPage is a page of the list, as the test reads it.
+type watchPage struct {
+	Sailors []struct {
+		Name     string   `json:"name"`
+		Kind     string   `json:"kind"`
+		Sky      string   `json:"sky"`
+		State    string   `json:"state"`
+		Followed bool     `json:"followed"`
+		EdgeNM   *float64 `json:"edgeNM"`
+		Gone     string   `json:"gone"`
+	} `json:"sailors"`
+	AtSea    int  `json:"atSea"`
+	Withheld bool `json:"withheld"`
 }
 
 // dialWatch opens the game connection to watch a sailor.

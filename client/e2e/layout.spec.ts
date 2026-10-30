@@ -12,9 +12,14 @@
 // of the screen's height of its top, where no case of instruments fits
 // above it: there the case's face alone may stand over the masthead. Its
 // complications, hanging under the compass, may not.
+//
+// Then the list of sailors to watch and the card about one, on the start
+// screen, at the same screens: full rows and a full card, the server's
+// answers stood in for, with a twenty-letter name. Watch is in view, no
+// part covers another, and every button is 44 pixels or more.
 
 import { expect, type Page, test } from '@playwright/test';
-import { openScene } from './helpers';
+import { openScene, sailor } from './helpers';
 
 /** The screens: phones in CSS pixels, upright and sideways, and the tests' own. */
 const SCREENS = [
@@ -219,6 +224,219 @@ test('no part of the screen at sea covers the boat or another part, with everyth
       type: s.name,
       description: `out of the case: ${seen.out.join(', ') || 'nothing'}; room about the boat’s margin: ${clear === null ? '–' : Math.round(clear)} px`,
     });
+  }
+  expect(found).toEqual([]);
+});
+
+/** A row of the list as full as it gets. */
+function row(name: string, i: number) {
+  return {
+    name,
+    machine: i % 2 === 0,
+    mine: false,
+    // Not a catalog id: an unknown kind is shown as given, here the widest.
+    kind: 'Long-keeled sailing cutter',
+    watchers: 12 + i,
+    sky: ['squalls', 'storm', 'fair', 'fog'][i % 4],
+    night: i % 3 === 0,
+    force: 7,
+    knots: 6.4,
+    state: 'sailing',
+    followed: i === 0,
+    edgeNM: 0.8 + i,
+    lively: [
+      { why: 'squalls' },
+      { why: 'approach' },
+      { why: 'charted', subject: 'Isle of the Drowned Bells', minutes: 4 },
+    ],
+  };
+}
+
+/** The longest name a sailor can have: twenty letters. */
+const LONG = 'Bartholomew Roberts!';
+
+/** The answers of the list's and the card's routes. */
+async function standIn(page: Page): Promise<void> {
+  const sailors = [LONG, ...Array.from({ length: 11 }, (_, i) => `Sailor ${i + 1}`)].map(row);
+  await page.route(
+    (url) => url.pathname === '/api/watch',
+    (r) => r.fulfill({ json: { sailors, more: true, atSea: 40, withheld: false } }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/watch/sailor',
+    (r) =>
+      r.fulfill({
+        json: {
+          ...row(LONG, 0),
+          mine: true,
+          agent: true,
+          weather: {
+            windFrom: 225,
+            waves: 2.4,
+            barometer: '998 hPa, falling quickly',
+            visibility: 'visibility poor',
+            rain: 'heavy rain',
+            clouds: 'a thunderstorm, a squall about',
+          },
+          where: {
+            edgeNM: 0.8,
+            island: { name: 'Isle of the Drowned Bells', bearing: 300, nm: 3.1 },
+            inSight: [
+              'Isle of the Drowned Bells · 300° 3.1 NM · charted by «Bartholomew Roberts!» (human), Tuesday',
+              'land (uncharted) · wooded island 1 NM across · 300° about 4 NM',
+              'land (uncharted) · rocky islet · 020° about 6 NM',
+            ],
+          },
+          voyage: { skimmedM: 140, charted: { subject: 'Isle of the Drowned Bells', minutes: 4 } },
+        },
+      }),
+  );
+}
+
+/** Each visible part's box, with what is wrong: off the screen or the panel, covering another, too small to tap. */
+async function panelParts(page: Page, sels: string[]): Promise<string[]> {
+  return page.evaluate((sels) => {
+    const found: string[] = [];
+    const panel = document.querySelector('.watch-panel');
+    if (panel === null) {
+      return ['no panel'];
+    }
+    const p = panel.getBoundingClientRect();
+    const inside = (r: DOMRect, o: { left: number; top: number; right: number; bottom: number }) =>
+      r.left >= o.left - 0.5 &&
+      r.top >= o.top - 0.5 &&
+      r.right <= o.right + 0.5 &&
+      r.bottom <= o.bottom + 0.5;
+    if (!inside(p, { left: 0, top: 0, right: innerWidth, bottom: innerHeight })) {
+      found.push('the panel is off the screen');
+    }
+    const boxes: { name: string; r: DOMRect }[] = [];
+    for (const sel of sels) {
+      for (const e of panel.querySelectorAll(sel)) {
+        const r = e.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) {
+          continue;
+        }
+        const name = `${sel} “${(e as HTMLElement).innerText.slice(0, 24)}”`;
+        if (!inside(r, p)) {
+          found.push(`${name} is outside the panel`);
+        }
+        boxes.push({ name, r });
+      }
+    }
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]?.r as DOMRect;
+        const b = boxes[j]?.r as DOMRect;
+        if (
+          Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+          Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5
+        ) {
+          found.push(`${boxes[i]?.name} covers ${boxes[j]?.name}`);
+        }
+      }
+    }
+    // Every button that can be seen: 44 pixels each way at least.
+    for (const b of panel.querySelectorAll('button, select')) {
+      const r = b.getBoundingClientRect();
+      if (r.width > 0 && (r.height < 43.5 || r.width < 43.5)) {
+        found.push(
+          `“${(b as HTMLElement).innerText}” is ${Math.round(r.width)} × ${Math.round(r.height)}`,
+        );
+      }
+    }
+    return found;
+  }, sels);
+}
+
+/** Whether an element is wholly in view: on the screen, and not scrolled out of its scroller. */
+async function inView(page: Page, sel: string): Promise<boolean> {
+  return page
+    .locator(sel)
+    .first()
+    .evaluate((e) => {
+      const r = e.getBoundingClientRect();
+      let ok =
+        r.top >= -0.5 &&
+        r.left >= -0.5 &&
+        r.bottom <= innerHeight + 0.5 &&
+        r.right <= innerWidth + 0.5;
+      for (let p = e.parentElement; p !== null; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (s.overflowY !== 'visible' || s.overflowX !== 'visible') {
+          const q = p.getBoundingClientRect();
+          ok &&=
+            r.top >= q.top - 0.5 &&
+            r.bottom <= q.bottom + 0.5 &&
+            r.left >= q.left - 0.5 &&
+            r.right <= q.right + 0.5;
+        }
+      }
+      return ok;
+    });
+}
+
+test('the list of sailors to watch and the card fit every screen, Watch in view', async ({
+  context,
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(150_000);
+  await sailor(context, 'Layout');
+  await standIn(page);
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/?test&backend=webgl2&tier=low');
+  await page
+    .locator('.your-sailor')
+    .getByRole('button', { name: 'Watch another sailor' })
+    .click({ timeout: 90_000 });
+  await expect(page.locator('.watch-row').first()).toBeVisible({ timeout: 30_000 });
+  const found: string[] = [];
+  const LIST = [
+    '.watch-head h2',
+    '.watch-search',
+    '.watch-sorts',
+    '.watch-who-pick',
+    '.watch-again button',
+    '.watch-scroll',
+    '.watch-close',
+  ];
+  const CARD = [
+    '.watch-back',
+    '.watch-follow',
+    '.watch-card-name',
+    '.watch-card-body',
+    '.watch-card-foot button',
+  ];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.waitForTimeout(100);
+    // The list: its top, rows and Close apart; the first row's Watch in view.
+    await expect(page.locator('.watch-row').first()).toBeVisible();
+    for (const f of await panelParts(page, LIST)) {
+      found.push(`${s.name}, the list: ${f}`);
+    }
+    if (!(await inView(page, '.watch-row .watch-go'))) {
+      found.push(`${s.name}, the list: the first row’s Watch is out of view`);
+    }
+    if (!(await inView(page, '.watch-close'))) {
+      found.push(`${s.name}, the list: Close is out of view`);
+    }
+    // The card about the first: its top, sections and foot apart; Watch in view.
+    await page.getByRole('button', { name: `About ${LONG}` }).click();
+    await expect(page.locator('.watch-card section[aria-label="Where"]')).toBeVisible();
+    for (const f of await panelParts(page, CARD)) {
+      found.push(`${s.name}, the card: ${f}`);
+    }
+    if (!(await inView(page, '.watch-card-foot .watch-go'))) {
+      found.push(`${s.name}, the card: Watch is out of view`);
+    }
+    await page.getByRole('button', { name: 'Back' }).click();
   }
   expect(found).toEqual([]);
 });

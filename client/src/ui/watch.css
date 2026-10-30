@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
 /* Watching another sailor's boat: the bar over it, the button behind it,
-   the list of sailors to watch, the question before the own boat leaves
-   the water, and "Allow spectators". Every button is 44 px or more. */
+   the list of sailors to watch and the card about one, the question
+   before the own boat leaves the water, and the switch that lets others
+   watch. Every button is 44 px or more. */
 
 .watch-bar {
   display: flex;
@@ -31,9 +32,16 @@
   gap: 8px;
 }
 
+/* The list's and the card's, wherever they are shown. */
+.watch-panel button {
+  min-width: 44px;
+  min-height: 44px;
+  font: inherit;
+  cursor: pointer;
+}
+
 .hud .watch-bar button,
 .hud .watch-list button,
-.hud .watch-allow button,
 .hud .watch-behind {
   min-width: 44px;
   min-height: 44px;
@@ -67,9 +75,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(420px, calc(100vw - var(--edge-left) - var(--edge-right)));
-  max-height: calc(100dvh - var(--edge-top) - var(--edge-bottom));
-  overflow-y: auto;
+  width: min(480px, calc(100vw - var(--edge-left) - var(--edge-right)));
   padding: 12px 16px;
   box-sizing: border-box;
 }
@@ -84,11 +90,52 @@
   color: var(--gold);
 }
 
+/*
+ * The list and the card, wherever they are shown: at most 480 px wide
+ * and the screen's height less 16 px above and below. The top (the
+ * heading, the search, the order and whom) stays put and the rows scroll
+ * under it; on the card, Watch stays at the bottom.
+ */
+.watch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+
+.start-panel.watch-panel {
+  position: relative;
+  width: min(480px, 100%);
+}
+
+/* Over the sea: clear of the screen's edges as well. */
+.watch-list.watch-panel {
+  max-height: min(calc(100dvh - 32px), calc(100dvh - var(--edge-top) - var(--edge-bottom)));
+}
+
+.watch-top {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.watch-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.watch-panel .watch-head h2 {
+  margin: 0;
+}
+
 .watch-search {
   box-sizing: border-box;
   width: 100%;
   min-height: 44px;
-  margin-bottom: 8px;
   padding: 0 12px;
   border: 1px solid rgb(255 255 255 / 25%);
   border-radius: 8px;
@@ -99,61 +146,266 @@
   user-select: text;
 }
 
+/* The order: one row, scrolled sideways when the screen is narrow. */
+.watch-choose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.watch-sorts {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.watch-panel .watch-sorts button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.watch-panel .watch-sorts button[aria-pressed="true"] {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+  color: var(--gold);
+}
+
+.watch-who-pick {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 25%);
+  color: var(--ink);
+  color-scheme: dark;
+  font: inherit;
+}
+
+.watch-again {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.watch-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .watch-rows {
   margin: 0 0 8px;
   padding: 0;
   list-style: none;
 }
 
-.watch-rows li {
-  display: flex;
-  flex-wrap: wrap;
+/* A row: the sky, the sailor and its lines, then ⓘ and Watch. */
+.watch-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px 12px;
+  gap: 4px 10px;
   padding: 8px 0;
   border-bottom: 1px solid rgb(255 255 255 / 12%);
 }
 
-.watch-who {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
+.watch-sky {
+  display: block;
+  width: 28px;
+  height: 28px;
+  color: var(--ink);
 }
 
-.hud .watch-close {
+.watch-what p,
+.watch-empty p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.watch-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.watch-facts,
+.watch-lively {
+  font-size: 14px;
+}
+
+.watch-lively {
+  color: var(--gold);
+}
+
+.watch-star {
+  margin-left: 4px;
+  color: var(--gold);
+  font-size: 0.85em;
+}
+
+.watch-row .watch-buttons {
+  flex-wrap: nowrap;
+}
+
+/* A sailor who can no longer be watched: greyed, nothing to tap but ★. */
+.watch-row.gone .watch-what {
+  opacity: 0.6;
+}
+
+.watch-panel .watch-unfollow {
+  color: var(--gold);
+}
+
+.watch-panel .watch-close,
+.watch-panel .watch-more {
+  flex: none;
   width: 100%;
+}
+
+/* The card: its top, its sections scrolling, then Copy a link and Watch. */
+.watch-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.watch-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.watch-panel .watch-card-name {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.watch-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.watch-card-body p {
+  margin: 0 0 2px;
+  overflow-wrap: anywhere;
+}
+
+.watch-card-part h3 {
+  margin: 10px 0 2px;
+  color: var(--faint);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.watch-card-sky {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.watch-sight {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.watch-card.gone .watch-card-body {
+  opacity: 0.6;
+}
+
+.watch-problem {
+  margin: 0;
+  color: var(--warn, #f3b3a6);
+}
+
+.watch-card-foot {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.watch-panel .watch-card-foot .watch-go {
+  flex: 1;
+}
+
+/* Held sideways: the heading beside the search, the order beside whom. */
+@media (max-height: 480px) {
+  .watch-head,
+  .watch-choose {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .watch-panel .watch-head h2 {
+    flex: none;
+    font-size: 18px;
+  }
+
+  .watch-head .watch-search {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .watch-panel {
+    gap: 6px;
+  }
+
+  .start-panel.watch-panel {
+    padding: 10px 16px 12px;
+  }
+
+  /* Close beside the search, for one more row in view. */
+  .watch-panel .watch-close {
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    width: auto;
+  }
+
+  .watch-head {
+    padding-right: 96px;
+  }
 }
 
 .watch-question p {
   margin: 0 0 10px;
 }
 
+/* Let others watch me sail (this voyage): a switch, as the menu's are. */
 .watch-allow {
   margin: 6px 0;
-  padding: 0;
-  border: 0;
 }
 
-.watch-allow legend {
-  padding: 0;
-  margin-bottom: 4px;
-}
-
-.watch-choices {
+.watch-allow-row {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
 }
 
-.hud .watch-allow button {
-  flex: 1;
-  padding: 0 6px;
-}
-
-.hud .watch-allow button[aria-pressed="true"] {
-  outline: 2px solid var(--gold);
-  color: var(--gold);
+.watch-allow-row input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--gold);
 }
 
 /* Before the sea: the bar at the top, over the loading screen. */

@@ -3,9 +3,11 @@
 // Machine sailors in the game, against keel and its database: a new
 // sailor's choice after the recovery code, the machine sailor's form, how
 // to connect it, and the start screen with machine sailors, shown again on
-// every entry: the player's own sailor in a panel of its own, whose Set
-// sail sails it, and the AI sailors apart, side by side on a phone held
-// sideways and stacked on one held upright; then the account page: an approved app revoked, a
+// every entry: the player's own sailor in a panel of its own, with whether
+// others may watch the voyage and the Set sail that sails it, and the AI
+// sailors apart, side by side on a phone held sideways and stacked on one
+// held upright, Set sail in view however tall the player's panel grows;
+// then the account page: an approved app revoked, a
 // connection token made (shown once, after the passkey) and revoked, and
 // a machine sailor deleted. Playwright's virtual authenticator stands in
 // for the browser's prompt. The other devices and the AI app are the
@@ -15,21 +17,17 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { holdPasskeys, type Made, sailor, steady } from './helpers';
+import { holdPasskeys, type Made, sailor, setSail, steady } from './helpers';
 import { assertPasskey } from './passkey';
 
 test.beforeEach(() => {
   test.skip(test.info().project.name !== 'webgl2', 'forms: one back end is enough');
 });
 
-async function atSea(page: Page): Promise<void> {
-  await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible({ timeout: 60_000 });
-}
-
 /**
  * The start screen with machine sailors: the player's own sailor by name
- * in the first panel, with Set sail as it, and the machine sailor only in
- * the AI sailors' panel.
+ * in the first panel, with the box and Set sail as it, and the machine
+ * sailor only in the AI sailors' panel, which anyone may watch.
  */
 async function twoPanels(page: Page, player: string, machineName: string): Promise<void> {
   const yours = page.locator('.your-sailor');
@@ -39,9 +37,13 @@ async function twoPanels(page: Page, player: string, machineName: string): Promi
   });
   await expect(yours).toContainText(player);
   await expect(yours.getByRole('button', { name: `Set sail as ${player}` })).toBeVisible();
+  await expect(yours.getByRole('checkbox', { name: 'Let others watch me sail' })).toBeVisible();
   await expect(yours).not.toContainText(machineName);
   await expect(ai.getByRole('heading', { name: 'AI sailors' })).toBeVisible();
-  await expect(ai).toContainText('Sailed by your AI apps, not by you.');
+  await expect(ai).toContainText(
+    'Sailed by your AI apps, not by you. Anyone can watch them while they sail.',
+  );
+  await expect(ai.getByRole('checkbox')).toHaveCount(0);
   await expect(ai.locator('.machine-list li', { hasText: machineName })).toBeVisible();
   await expect(ai.locator('.start-go')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Set sail/ })).toHaveCount(1);
@@ -147,7 +149,8 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
 }) => {
   await context.credentials.install();
   await page.goto('/?test&backend=webgl2&tier=low');
-  const player = `Maker ${Date.now() % 10_000_000}`;
+  // A name of the most letters a sailor may have, which wraps on a phone.
+  const player = `Wavecrestmak ${String(Date.now() % 10_000_000).padStart(7, '0')}`;
   await page.getByLabel('Your sailor’s name').fill(player);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await page.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 30_000 });
@@ -203,8 +206,7 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   // The account may have one: no other to make.
   await expect(page.getByRole('button', { name: 'Make another machine sailor' })).toHaveCount(0);
   // Set sail sails the player's own sailor.
-  await page.getByRole('button', { name: `Set sail as ${player}` }).click();
-  await atSea(page);
+  await setSail(page);
   await sailingAs(page, player, name);
 
   // The menu's panel shows it too.
@@ -214,11 +216,17 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
 
   // Every entry shows them before the sea. (Reloaded only once the page
   // draws steadily: on CI's software GPU a reload amid its start can hang.)
+  // The boat still in the water: the player's panel at its tallest, the
+  // longest name, the note that the boat is at sea, and the box.
   await steady(page);
   await page.reload();
   await twoPanels(page, player, name);
-  await page.getByRole('button', { name: `Set sail as ${player}` }).click();
-  await atSea(page);
+  const yours = page.locator('.your-sailor');
+  await expect(yours.getByText('at sea', { exact: true })).toBeVisible();
+  await expect(yours.locator('.start-warning')).toBeVisible();
+  await expect(yours.getByText('This voyage only.')).toBeVisible();
+  await laidOut(page, player);
+  await setSail(page);
 });
 
 test('the account page: an app revoked, a connection token made once and revoked, a machine sailor deleted', async ({
@@ -237,8 +245,7 @@ test('the account page: an app revoked, a connection token made once and revoked
   await page.goto('/?test&backend=webgl2&tier=low');
   await twoPanels(page, made.name, name);
   await laidOut(page, made.name);
-  await page.getByRole('button', { name: `Set sail as ${made.name}` }).click();
-  await atSea(page);
+  await setSail(page);
   await sailingAs(page, made.name, name);
   await page.getByRole('button', { name: 'Account' }).click();
   const row = page.locator('.machines-account li[data-machine]', { hasText: name });

@@ -212,11 +212,9 @@ type Config struct {
 	Seen      func(hash [32]byte)
 	LongAfter time.Duration
 	// Watch, if not nil, finds a sailor to watch by its name's key
-	// (moderation.Key): store.ErrNotFound for none. Allowing is the human
-	// accounts that let anyone watch them always; SpectatorLimit how many
-	// may watch at once, DefaultSpectatorLimit if zero.
+	// (moderation.Key): store.ErrNotFound for none. SpectatorLimit is how
+	// many may watch at once, DefaultSpectatorLimit if zero.
 	Watch          func(ctx context.Context, key string) (watch.Target, error)
-	Allowing       *watch.Allowing
 	SpectatorLimit int
 	// Agent, if not nil, reads a machine sailor's AI agent, by the sailor's
 	// account: when it last called, the zero time for never, and whether a

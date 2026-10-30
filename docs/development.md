@@ -4366,23 +4366,28 @@ account, and the MCP interface has nothing for it.
 **Who can be watched** (`internal/watch`, `watch.Allowed`, asked by the
 edge and by the list alike): a boat in the water, sailed or in its grace,
 that is not the viewer's own; a machine sailor always, unless the owner's
-tools keep it unseen; a human only while they allow spectators. A player
+tools keep it unseen, with no setting anywhere to change it; a human only
+in a voyage they allow spectators for. A player
 may **always watch their own machine sailors** while they are in the
 water, unseen or not, over the spectator limit and its queue. A refusal
 reads the same for a human not at sea as for one at sea who does not allow
 it: "Ann Bonny cannot be watched now."
 
-**Allow spectators** is a human's setting, "No" by default, with "This
-voyage" and "Always" beside it, none suggested: in the game's menu and on
-the account page. "Always" is stored (`account.spectators`, migration
-00018, false for every AI account) and kept in memory, loaded as keel
-starts (`watch.Allowing`, as the stopped set is); "This voyage" is held by
-the edge with the boat, never stored, and ends when the boat leaves the
-water (a boat that goes over the lip and starts again is the same boat).
-`POST /api/me/spectators {"allow": "no" | "voyage" | "always"}` sets it;
-`GET /api/me` says it (`spectators`), and whether the account's own boat is
-in the water (`atSea`). "No" ends every watch of the sailor's boat with the
-encoders' next snapshot.
+**Allowing spectators** is a human's choice for one voyage, never kept
+between voyages and never stored: "Let others watch me sail", a checkbox
+above Set sail, unticked whenever the player's boat is not in the water,
+and a switch for the voyage under way in the game's menu and on the
+account page. The edge holds it with the boat and lets it go when the
+boat leaves the water (a boat that goes over the lip and starts again is
+the same boat); chosen with no boat in the water, it waits for the next
+boat a connection brings in (`voyages.sails`), which is how the checkbox
+works: Set sail sends the choice, then opens the game connection.
+`POST /api/me/spectators {"allow": "no" | "voyage"}` sets it (anything
+else, "always" among them, is `400 allow`); `GET /api/me` says it
+(`spectators`), and whether the account's own boat is in the water
+(`atSea`). "No" ends every watch of the sailor's boat with the encoders'
+next snapshot. There once was an "Always", stored on the account;
+migration 00020 dropped it.
 
 **On the wire.** `Hello.watch` opens a connection watching a sailor, named
 as players see it (case and look-alikes fold, `moderation.Key`);
@@ -4430,10 +4435,51 @@ player waiting for a boat never wait, and count all the same. A place is
 held from the watch's start to its end; an idle connection holds none, and
 one that switches boats keeps its own. A restart loses the queue.
 
-**The list**, `GET /api/watch?q=&page=`: every boat in the water the
-viewer may watch now, the viewer's own machine sailors first, then the most
-watched, then by name, 50 a page, `q` part of a name; built from the latest
-frame and the sailors' names, read again at most every 2 s.
+**The list**, `GET /api/watch?q=&page=&sort=&who=`: every boat in the
+water the viewer may watch now, 50 a page, `q` part of a name, `who` all,
+`following`, `machine` or `human`; in every order the viewer's own machine
+sailors first, then the sailors they follow, then by `sort`:
+`liveliest` (the default), `watched`, `edge`, `weather`, `fast` or `name`.
+Each row has the boat's facts: the sky at it as the weather pusher's decal
+(`weather.SkyOf`, the phone's `pocketSkyOf` in Go, both held to
+`internal/weather/testdata/pocketsky.json`), night or day, the mean wind's
+force, the speed through the water, upright or capsized or righting, how
+far inside the lip (`edgeNM`); and `lively`, the reasons it ranks high,
+each a point for Liveliest: a storm or squalls at the boat, within 1 NM of
+the lip, an approach to the lip under way, something charted in the last
+15 minutes (`watch.LivelyEdge`, `watch.LivelyCharted`), capsized or
+righting. The page says how many boats are in the water (`atSea`), which
+names no one. `GET /api/watch?names=a,b` gives the rows of those sailors
+that may be watched now, in no order, for the phone's refresh in place.
+
+Everything on a row is what a spectator of that boat would see. **Where**
+(the lip's distance, what was charted, the card's Where) is withheld, on
+rows, in the reasons and in the order, while the viewer's own boat is in
+the water (`withheld`), except for the viewer's own machine sailors:
+watching costs a sailor their boat, and the list must not be a free
+spyglass.
+
+The facts are made once a cache window (2 s) for every boat in the water,
+by the agents' `Sea` (`internal/agentapi/watchfacts.go`, through the
+`watch.Sea` interface), with the same functions as the lookout report, so
+a spectator and a machine sailor are told the same: about 1.4 ms for
+1,000 boats (`BenchmarkWatchFacts`). **The card**, `GET
+/api/watch/sailor?name=`, adds the weather at the boat in the report's
+words, the nearest charted island, the land its lookout sees now (charted
+by name, uncharted by its look, never land it cannot see), its closest
+survived pass to the lip and its last charting this voyage (a boat's id is
+its voyage's), and for the viewer's own machine sailor whether its AI app
+attends; its look is made only for a card, cached 2 s a boat. A sailor
+who may not be watched is refused as a watch is: `404 not-at-sea` for a
+machine sailor, `404 cannot` for anyone else.
+
+**Following**, `POST /api/watch/follow {"name", "on"}`: a bookmark on the
+list, kept on the account (`follow`, migration 00019, gone with either
+account), at most 100 (`409 too-many`), and only of a sailor the player
+may watch now. The sailor followed is never told, and no count of
+followers is shown. Read once a world into the watch service's cache and
+written through; `who=following` lists after the watchable follows those
+that cannot be watched now, with `gone` in the refusal's words by kind.
 
 **On the phone.** The start screen shows "Watch" beside each machine
 sailor at sea, with how many watch it, and "Watch another sailor"; the

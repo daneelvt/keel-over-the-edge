@@ -18,7 +18,7 @@ import {
   type Page,
   test,
 } from '@playwright/test';
-import { holdPasskeys, sail, sailor, signInWith } from './helpers';
+import { holdPasskeys, sail, sailor, setSail, signInWith } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const owner = 'http://localhost:5184/owner/';
@@ -211,11 +211,13 @@ test('stopped at sea: put ashore, refused at sign-in, started again, signed in, 
   await expect(page.getByText(STOPPED)).toBeVisible({ timeout: 30_000 });
   await expect(start).toBeVisible();
 
-  // Started again: signed in, and at sea.
+  // Started again: signed in, its own Set sail, and at sea.
   await owned(request, 'start', { account });
   await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
-  await expect(start).toHaveCount(0, { timeout: 30_000 });
-  await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole('heading', { name: 'Your sailor' })).toBeVisible({
+    timeout: 30_000,
+  });
+  await setSail(page);
 
   // Deleted, its name typed again: gone from the search, its passkey naming no one.
   await owned(request, 'delete', { account, name: made.name, reason: 'a test at sea' });

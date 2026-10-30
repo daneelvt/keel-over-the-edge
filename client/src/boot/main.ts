@@ -43,9 +43,9 @@
 
 import './game.css';
 import { effect, signal } from '@preact/signals';
-import { loadMachines } from '../account/lazy';
+import { NOT_WATCHED, watchRefused } from '../account/letwatch';
 import { type Me, resolveSailor } from '../account/me';
-import { backSoon, showAddPasskey, showStartScreen } from '../account/start';
+import { backSoon, showAddPasskey, showSailor, showStartScreen } from '../account/start';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
@@ -374,8 +374,9 @@ async function start(): Promise<void> {
 
   // The physics module compiles while the renderer starts and the sailor is
   // found, so none waits on another; the controls listen only at sea, so
-  // typing a name steers nothing. A link to watch a sailor goes straight
-  // to the watch, past the machine sailors.
+  // typing a name steers nothing. Every way to sea ends at the player's own
+  // sailor and its Set sail; a link to watch a sailor goes straight to the
+  // watch.
   const notice = backSoon(document.body);
   const linked = watchFromQuery(query);
   const [, physics, me] = await Promise.all([
@@ -385,14 +386,10 @@ async function start(): Promise<void> {
       start: () =>
         showStartScreen(document.body, {
           sailors: catalog.sailors,
-          ...(linked === '' ? {} : { machines: false }),
+          ...(linked === '' ? {} : { panel: false }),
         }),
       addPasskey: (me) => showAddPasskey(document.body, me),
-      ...(linked === ''
-        ? {
-            machines: async (me: Me) => (await loadMachines()).showMachineStart(document.body, me),
-          }
-        : {}),
+      ...(linked === '' ? { sailor: (me: Me) => showSailor(document.body, me) } : {}),
       backSoon: notice,
     }),
   ]);
@@ -552,6 +549,16 @@ async function start(): Promise<void> {
   // while the sea is full; a watch refused, or the spectators' queue, with
   // the way to watch another or sail.
   const waiting = online.status.subscribe((status) => notice(status === 'waiting'));
+  // Set sail asked for the voyage to be watched and the server could not
+  // take it: the boat sails unwatched, and the player is told so at sea.
+  if (watchRefused) {
+    const told = online.status.subscribe((status) => {
+      if (status === 'sailing') {
+        told();
+        online.say(NOT_WATCHED);
+      }
+    });
+  }
   const queue = showQueue(document.body, online.place);
   const watchWaiting: { atSea: boolean; hide: (() => void) | null } = { atSea: false, hide: null };
   const waitingWatch = effect(() => {
