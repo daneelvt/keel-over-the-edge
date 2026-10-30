@@ -4721,10 +4721,10 @@ workflow's actions are pinned, and it checks the binaries it downloads
 against the release's checksums. To raise k3s's version, change both
 lines together (Renovate does). Lima reads `lima.yaml` only when it makes
 the VM: after changing it, `-delete` and `-up`. To raise Flux's, run the
-command at the top of `gotk-components.yaml` with the new version
+command in `flux-system/kustomization.yaml` with the new version
 (`.dev/bin/flux`, after its pin in `tools/internal/pinned` is raised),
-update the digests in its `kustomization.yaml`, and run `-schemas` on a
-cluster that has it.
+update the digests beside it to the images the new manifests name (a test
+fails until they match), and run `-schemas` on a cluster that has it.
 
 Secrets are never in the repository (a test fails on any). On the local
 cluster `tools/cluster` makes the database's passwords (`keel-db-app`, and
