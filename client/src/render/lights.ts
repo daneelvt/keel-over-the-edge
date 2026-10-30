@@ -29,7 +29,6 @@
 // beams are one instanced draw, as the lanterns are another.
 
 import {
-  AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -67,7 +66,7 @@ import type { MistParams } from '../edge/mist';
 import { type Character, level, sweep } from '../lights/character';
 import type { LightSeen, PlaceSeen } from '../net/messages';
 import { HALO_REACH, setHalo } from './fog';
-import { basicMaterial, bendScene, horizonDistance, litMaterial } from './materials';
+import { bendScene, fallToEdge, glowMaterial, horizonDistance, litMaterial } from './materials';
 import { toLinear } from './sky';
 
 const DEG = Math.PI / 180;
@@ -345,11 +344,8 @@ export class Lighthouses {
     ) as unknown as Node<'vec4'>;
     const corner = attribute('corner', 'vec2') as unknown as Node<'vec2'>;
     const look = this.#cat.look;
-    const m = basicMaterial();
+    const m = glowMaterial();
     m.name = 'lights';
-    m.transparent = true;
-    m.depthWrite = false;
-    m.blending = AdditiveBlending;
     const mode = place.w;
     // A glow or a loom: a square facing the camera, a loom three times as
     // wide as it is high, never smaller on screen than the least.
@@ -376,18 +372,15 @@ export class Lighthouses {
     const vBeam = varying(select(isBeam, float(1), float(0)));
     const vLoom = varying(select(isLoom, float(1), float(0)));
     const r2 = dot(vCorner, vCorner);
-    const glow = exp(r2.mul(-4)).add(exp(r2.mul(-30)).mul(1.5));
-    const loom = exp(
-      vCorner.x
-        .mul(vCorner.x)
-        .mul(-2.5)
-        .add(vCorner.y.add(0.6).max(0).mul(vCorner.y.add(0.6).max(0)).mul(-6)),
-    );
+    // Each falls to nothing at its square's edges.
+    const glow = fallToEdge(r2, 4).add(exp(r2.mul(-30)).mul(1.5));
+    const lift = vCorner.y.add(0.6).max(0);
+    const loom = fallToEdge(vCorner.x.mul(vCorner.x), 2.5).mul(exp(lift.mul(lift).mul(-6)));
     const t = vCorner.x.add(1).mul(0.5);
     const streak = float(1)
       .sub(t)
       .mul(float(1).sub(t))
-      .mul(exp(vCorner.y.mul(vCorner.y).mul(-3)));
+      .mul(fallToEdge(vCorner.y.mul(vCorner.y), 3));
     const shape = mix(mix(glow, loom, vLoom), streak, vBeam);
     const strength = clamp(vShows.w, 0, 1);
     m.fragmentNode = vec4(

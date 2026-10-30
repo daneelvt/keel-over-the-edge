@@ -180,6 +180,99 @@ test('beyond its tower’s horizon, a light is its loom at its true bearing @lon
   expect(looms).toBe(1);
 });
 
+test('a loom fades to nothing at its sides: no box on the horizon @long', async ({ page }) => {
+  test.slow(softwareGPU);
+  await openScene(page, 'world=1&wind=0,0');
+  const p = port();
+  // The boat 1500 m from it, facing it, with the lights handed.
+  await facing(page, p.x, p.y, 1500, 22);
+  const [x, y] = [p.x + 1500 * 0.6, p.y + 1500 * 0.8];
+  // Time held where the light is lit, the chase camera behind the boat, and
+  // where its loom is on the screen.
+  let at: { x: number; y: number } | null = null;
+  for (let k = 0; k < 60 && at === null; k++) {
+    at = await page.evaluate(
+      ({ t, east, north, heading }) => {
+        const k = globalThis.keel;
+        k.freeze(t);
+        k.placeBoat(east, north, heading);
+        k.render();
+        k.camera('chase');
+        k.setSky(22);
+        const loom = k.lights().glows.find((g) => g.mode === 'loom' && g.strength > 0.2);
+        if (loom === undefined) {
+          return null;
+        }
+        // Its scene place, dropped by the dome as its vertices are, on the screen.
+        const camera = k.world.stage.camera;
+        const f = k.world.focusScene;
+        const d2 = (loom.x - f.x) ** 2 + (loom.z - f.z) ** 2;
+        const v = camera.position
+          .clone()
+          .set(loom.x, loom.y - d2 / 5000, loom.z)
+          .project(camera);
+        return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
+      },
+      { t: k * 0.25, east: x, north: y, heading: Math.atan2(p.x - x, p.y - y) + 0.4 },
+    );
+  }
+  if (at === null) {
+    throw new Error('no loom drawn');
+  }
+  // The same frame with its glows and without: the difference is the loom.
+  const shown = await picture(page);
+  await page.evaluate(() => {
+    (globalThis.keel.world.lighthouses.glows.material as { visible: boolean }).visible = false;
+  });
+  const hidden = await picture(page);
+  await page.evaluate(() => {
+    (globalThis.keel.world.lighthouses.glows.material as { visible: boolean }).visible = true;
+  });
+  const scale = shown.width / 960;
+  const cx = Math.round(at.x * scale);
+  const cy = Math.round(at.y * scale);
+  const added = (x: number, y: number): number => {
+    const i = (y * shown.width + x) * 4;
+    let sum = 0;
+    for (let c = 0; c < 3; c++) {
+      sum += (shown.data[i + c] ?? 0) - (hidden.data[i + c] ?? 0);
+    }
+    return Math.max(sum, 0);
+  };
+  // In each row through the loom, the run of pixels it lights about its
+  // middle has faded to nothing at both ends: a glow cut off at its
+  // square's sides, or the fog's colour added over the square, ends in a
+  // step, a straight side. Nothing is two levels a channel: WebGL 2 holds
+  // the picture in 8 bits of linear light, whose least step in the dark is
+  // that.
+  let rows = 0;
+  const ends: string[] = [];
+  for (let y = Math.max(cy - 40, 0); y < Math.min(cy + 40, shown.height); y++) {
+    if (added(cx, y) < 12) {
+      continue;
+    }
+    rows++;
+    let first = cx;
+    while (first > 0 && added(first - 1, y) > 0) {
+      first--;
+    }
+    let last = cx;
+    while (last < shown.width - 1 && added(last + 1, y) > 0) {
+      last++;
+    }
+    const peak = Math.max(
+      ...Array.from({ length: last - first + 1 }, (_, i) => added(first + i, y)),
+    );
+    for (const x of [first, last]) {
+      if (added(x, y) > Math.max(6, 0.15 * peak)) {
+        ends.push(`row ${y}, column ${x}: ${added(x, y)} of ${peak}`);
+      }
+    }
+  }
+  expect(rows).toBeGreaterThan(0);
+  expect(ends).toEqual([]);
+});
+
 test('a light’s flash shows in the picture by night, at its lantern @long', async ({ page }) => {
   // Three pictures, each waiting for the frames sailed before it to be drawn.
   test.slow(softwareGPU);

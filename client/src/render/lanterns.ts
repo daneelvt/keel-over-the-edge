@@ -19,7 +19,6 @@
 // the sun's last degree.
 
 import {
-  AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
   DynamicDrawUsage,
@@ -48,9 +47,11 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { Light } from '../catalog';
+import { KOSCHMIEDER } from '../edge/mist';
 import { headingToRotationY } from './coords';
-import { basicMaterial, bendScene } from './materials';
-import { toLinear } from './sky';
+import { depthTo } from './fog';
+import { bendScene, fallToEdge, glowMaterial } from './materials';
+import { look, toLinear } from './sky';
 
 const DEG = Math.PI / 180;
 
@@ -170,14 +171,14 @@ export class Lanterns {
       0,
     ) as unknown as Node<'vec4'>;
     const corner = attribute('corner', 'vec2') as unknown as Node<'vec2'>;
-    // The material factory's unlit kind: the glow is a place, and its
-    // vertex node puts it on the dome itself.
-    const m = basicMaterial();
+    // The material factory's glow: the glow is a place, and its vertex node
+    // puts it on the dome itself. The air between dims it, as the fog dims
+    // what is solid, by e^(−τ): the clear air's, the mist band's and the
+    // weather's, to the lantern.
+    const m = glowMaterial();
     m.name = 'lanterns';
-    m.transparent = true;
-    m.depthWrite = false;
-    m.blending = AdditiveBlending;
-    const view = cameraViewMatrix.mul(vec4(bendScene(place.xyz), 1)).toVar();
+    const at = bendScene(place.xyz);
+    const view = cameraViewMatrix.mul(vec4(at, 1)).toVar();
     const dist = max(view.z.negate(), 0.5);
     const half = max(float(GLOW_SIZE / 2), dist.mul(this.perPixel).mul(LEAST_PIXELS / 2));
     m.vertexNode = cameraProjectionMatrix.mul(
@@ -207,8 +208,10 @@ export class Lanterns {
         .add(vec3(...WHITE).mul(white)),
     );
     const r2 = dot(vCorner, vCorner);
-    const glow = exp(r2.mul(-4)).add(exp(r2.mul(-30)).mul(1.5));
-    const strength = clamp(vShows.w.mul(vDim), 0, 1);
+    const glow = fallToEdge(r2, 4).add(exp(r2.mul(-30)).mul(1.5));
+    const clear = view.xyz.length().mul(KOSCHMIEDER).div(look.visualRange);
+    const through = varying(exp(clear.add(depthTo(at)).negate()));
+    const strength = clamp(vShows.w.mul(vDim), 0, 1).mul(through);
     m.fragmentNode = vec4(toLinear(colour).mul(glow.mul(strength)), 1) as unknown as Node<'vec4'>;
 
     this.mesh = new InstancedMesh(g, m, LANTERN_CAPACITY);
