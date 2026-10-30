@@ -17,6 +17,13 @@
         "chart": {
           "additionalProperties": false,
           "properties": {
+            "kind": {
+              "enum": [
+                "HelmChart",
+                "OCIRepository"
+              ],
+              "type": "string"
+            },
             "metadata": {
               "additionalProperties": false,
               "properties": {
@@ -38,24 +45,111 @@
             "spec": {
               "additionalProperties": false,
               "properties": {
+                "certSecretRef": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
                 "chart": {
                   "maxLength": 2048,
                   "minLength": 1,
                   "type": "string"
                 },
+                "ignore": {
+                  "type": "string"
+                },
                 "ignoreMissingValuesFiles": {
+                  "type": "boolean"
+                },
+                "insecure": {
                   "type": "boolean"
                 },
                 "interval": {
                   "pattern": "^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$",
                   "type": "string"
                 },
+                "layerSelector": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "mediaType": {
+                      "type": "string"
+                    },
+                    "operation": {
+                      "enum": [
+                        "extract",
+                        "copy"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "provider": {
+                  "enum": [
+                    "generic",
+                    "aws",
+                    "azure",
+                    "gcp"
+                  ],
+                  "type": "string"
+                },
+                "proxySecretRef": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
                 "reconcileStrategy": {
-                  "default": "ChartVersion",
                   "enum": [
                     "ChartVersion",
                     "Revision"
                   ],
+                  "type": "string"
+                },
+                "ref": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "digest": {
+                      "type": "string"
+                    },
+                    "semver": {
+                      "type": "string"
+                    },
+                    "semverFilter": {
+                      "type": "string"
+                    },
+                    "tag": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "secretRef": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "serviceAccountName": {
                   "type": "string"
                 },
                 "sourceRef": {
@@ -89,6 +183,17 @@
                   ],
                   "type": "object"
                 },
+                "suspend": {
+                  "type": "boolean"
+                },
+                "timeout": {
+                  "pattern": "^([0-9]+(\\.[0-9]+)?(ms|s|m))+$",
+                  "type": "string"
+                },
+                "url": {
+                  "pattern": "^oci://.*$",
+                  "type": "string"
+                },
                 "valuesFiles": {
                   "items": {
                     "type": "string"
@@ -98,6 +203,25 @@
                 "verify": {
                   "additionalProperties": false,
                   "properties": {
+                    "matchOIDCIdentity": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "issuer": {
+                            "type": "string"
+                          },
+                          "subject": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "issuer",
+                          "subject"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "provider": {
                       "default": "cosign",
                       "enum": [
@@ -117,6 +241,18 @@
                         "name"
                       ],
                       "type": "object"
+                    },
+                    "trustedRootSecretRef": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -125,21 +261,54 @@
                   "type": "object"
                 },
                 "version": {
-                  "default": "*",
                   "type": "string"
                 }
               },
-              "required": [
-                "chart",
-                "sourceRef"
-              ],
               "type": "object"
             }
           },
           "required": [
             "spec"
           ],
-          "type": "object"
+          "type": "object",
+          "x-kubernetes-validations": [
+            {
+              "message": "chart.spec.url must be set when chart.kind is 'OCIRepository'",
+              "rule": "!has(self.kind) || self.kind != 'OCIRepository' || (has(self.spec.url) \u0026\u0026 size(self.spec.url) \u003e 0)"
+            },
+            {
+              "message": "chart.spec.url requires chart.kind: 'OCIRepository'; for a HelmChart template set spec.chart and spec.sourceRef instead",
+              "rule": "!has(self.spec.url) || (has(self.kind) \u0026\u0026 self.kind == 'OCIRepository')"
+            },
+            {
+              "message": "chart.spec.chart and chart.spec.sourceRef must be set when chart.kind is not 'OCIRepository'",
+              "rule": "(has(self.kind) \u0026\u0026 self.kind == 'OCIRepository') || (has(self.spec.chart) \u0026\u0026 has(self.spec.sourceRef))"
+            },
+            {
+              "message": "chart.spec.chart cannot be set when chart.kind is 'OCIRepository'",
+              "rule": "!has(self.kind) || self.kind != 'OCIRepository' || !has(self.spec.chart)"
+            },
+            {
+              "message": "chart.spec.version cannot be set when chart.kind is 'OCIRepository'",
+              "rule": "!has(self.kind) || self.kind != 'OCIRepository' || !has(self.spec.version) || self.spec.version == '*'"
+            },
+            {
+              "message": "chart.spec.sourceRef cannot be set when chart.kind is 'OCIRepository'",
+              "rule": "!has(self.kind) || self.kind != 'OCIRepository' || !has(self.spec.sourceRef)"
+            },
+            {
+              "message": "chart.spec.reconcileStrategy cannot be set when chart.kind is 'OCIRepository'",
+              "rule": "!has(self.kind) || self.kind != 'OCIRepository' || !has(self.spec.reconcileStrategy) || self.spec.reconcileStrategy == 'ChartVersion'"
+            },
+            {
+              "message": "chart.spec.valuesFiles cannot be set when chart.kind is 'OCIRepository'",
+              "rule": "!has(self.kind) || self.kind != 'OCIRepository' || !has(self.spec.valuesFiles)"
+            },
+            {
+              "message": "chart.spec.ignoreMissingValuesFiles cannot be set when chart.kind is 'OCIRepository'",
+              "rule": "!has(self.kind) || self.kind != 'OCIRepository' || !has(self.spec.ignoreMissingValuesFiles)"
+            }
+          ]
         },
         "chartRef": {
           "additionalProperties": false,
@@ -426,11 +595,7 @@
           "x-kubernetes-validations": [
             {
               "message": "exactly one of spec.kubeConfig.configMapRef or spec.kubeConfig.secretRef must be specified",
-              "rule": "has(self.configMapRef) || has(self.secretRef)"
-            },
-            {
-              "message": "exactly one of spec.kubeConfig.configMapRef or spec.kubeConfig.secretRef must be specified",
-              "rule": "!has(self.configMapRef) || !has(self.secretRef)"
+              "rule": "has(self.configMapRef) != has(self.secretRef)"
             }
           ]
         },

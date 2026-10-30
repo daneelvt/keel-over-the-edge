@@ -47,10 +47,10 @@ var releases = []release{
 	{"sigstore/cosign", "linux-amd64", "v3.1.4", "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"},
 	{"sigstore/cosign", "linux-arm64", "v3.1.4", "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2"},
 
-	{"fluxcd/flux2", "darwin-amd64", "v2.9.6", "c3c3532c8c6cf689ef7b93125b33dc170df84a9d5d036f578568bfdf88a2d7e6"},
-	{"fluxcd/flux2", "darwin-arm64", "v2.9.6", "7008a758da4b8d57c5845aad6552f256d4d23630c2b2de2ca8da362f9a48c126"},
-	{"fluxcd/flux2", "linux-amd64", "v2.9.6", "b4d22673e9246cbd628881f1a9ef3b090085dced291e42d804555cee8e8d42c5"},
-	{"fluxcd/flux2", "linux-arm64", "v2.9.6", "6663c154755b732f43dc993d72321f71c2fc1ff0bcb94b2696e0a8638fa562b4"},
+	{"fluxcd/flux2", "darwin-amd64", "v2.10.0", "23fc019f5b682c1ff6841a2ce06798b3c8e17452998cb9c2dd57a6440e6340ff"},
+	{"fluxcd/flux2", "darwin-arm64", "v2.10.0", "339c5dba218e2b0a04a0841d1dace6c00d65736dc3286038463fa86754ff6c53"},
+	{"fluxcd/flux2", "linux-amd64", "v2.10.0", "208dd7012c04fedeed5b2d0b6e63df3b15b1c34a381527811685c098bc9f8659"},
+	{"fluxcd/flux2", "linux-arm64", "v2.10.0", "c3c435052e5e18156858bc73f26bcadb62821a6e30951b4b302beb4e65a532c2"},
 
 	{"aquasecurity/kube-bench", "linux-amd64", "v0.16.0", "82dbc7e598740dc9344d41f8ad0b8210d57c4c00bdb2c5f1d8a69a2b98baddcf"},
 	{"aquasecurity/kube-bench", "linux-arm64", "v0.16.0", "64500561f5fcaa3f86fe951ed26bbfc28f7bbf3d2eac13843abfd2924955d10b"},
@@ -59,9 +59,9 @@ var releases = []release{
 	{"opentofu/opentofu", "linux-amd64", "v1.13.2", "ac05d9952662c7db28dd57e93f0a68018837bfdf9342384ec0987977c16a9645"},
 	{"opentofu/opentofu", "linux-arm64", "v1.13.2", "88e2d9e3f94f97b76ab2faf55ade87578f56aed19c5e45fa139d70e994366d1f"},
 
-	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.154.1", "073f44a6c6169d0542043d114a57731dcd03174a542f922fc64a796491283e26"},
-	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.154.1", "989c8f73edc5d131eb169bb689d7b77bb1d31b14314159c7f6bbae38ba655938"},
-	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.154.1", "e9a44e352da8200d427815acab179850cef0a13ed4d0e5ef95a7f1e46c81b0aa"},
+	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.155.0", "30c316c0bfb840962a8b878a451acf6dcdae50294543b3a829d54ca0bb6674e1"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.155.0", "b6181fc16cf19835706ea5d67215eea56c1fe87350fdfd82a5ff803ea2c1a907"},
+	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.155.0", "45fa04b8d616dd644c33c00698f22bbe67f9402bc474a1e6df8025f7e649d78f"},
 }
 
 // byHand pins what is not a GitHub release, which Renovate cannot follow:

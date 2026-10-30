@@ -276,11 +276,7 @@
           "x-kubernetes-validations": [
             {
               "message": "exactly one of spec.kubeConfig.configMapRef or spec.kubeConfig.secretRef must be specified",
-              "rule": "has(self.configMapRef) || has(self.secretRef)"
-            },
-            {
-              "message": "exactly one of spec.kubeConfig.configMapRef or spec.kubeConfig.secretRef must be specified",
-              "rule": "!has(self.configMapRef) || !has(self.secretRef)"
+              "rule": "has(self.configMapRef) != has(self.secretRef)"
             }
           ]
         },
