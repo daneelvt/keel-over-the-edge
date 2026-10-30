@@ -2,7 +2,15 @@
 
 import { describe, expect, it } from 'vitest';
 import type { ChartEntry } from '../net/messages';
-import { ChartStore, creditText, dayText, distanceText, edgeCaption, NM } from './store';
+import {
+  ChartStore,
+  creditText,
+  dayText,
+  distanceText,
+  edgeCaption,
+  NM,
+  pocketCaption,
+} from './store';
 
 const words = {
   places: [{ name: 'Port' }, { name: 'Lighthouse' }],
@@ -62,9 +70,21 @@ describe('the chart’s store', () => {
   });
 
   it('says how far the edge is: miles to a tenth, metres under a tenth of a mile', () => {
-    expect(edgeCaption(0, 0, 8334)).toBe('Chart · edge 4.5 NM');
-    expect(edgeCaption(8200, 0, 8334)).toBe('Chart · edge 134 m');
+    expect(edgeCaption(0, 0, 8334)).toBe('edge 4.5 NM');
+    expect(edgeCaption(8200, 0, 8334)).toBe('edge 134 m');
     expect(distanceText(0.1 * NM)).toBe('0.1 NM');
+  });
+
+  it('captions the pocket chart in a line or two, the chart in its name', () => {
+    expect(pocketCaption('', '')).toEqual({ lines: ['Chart'], name: 'Chart: open the chart' });
+    expect(pocketCaption('edge 3.4 NM', '')).toEqual({
+      lines: ['edge 3.4 NM'],
+      name: 'Chart, edge 3.4 NM: open the chart',
+    });
+    expect(pocketCaption('edge 3.4 NM', '2d 17h')).toEqual({
+      lines: ['edge 3.4 NM', 'new world 2d 17h'],
+      name: 'Chart, edge 3.4 NM, new world 2d 17h: open the chart',
+    });
   });
 
   it('dates a charting in the viewer’s own time zone', () => {

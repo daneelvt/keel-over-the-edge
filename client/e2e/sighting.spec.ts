@@ -115,7 +115,7 @@ test.describe('the chart', () => {
     await openScene(page, 'world=1', true);
     await page.evaluate(() => globalThis.keel.thaw());
     const caption = page.locator('.pocket-caption');
-    await expect(caption).toHaveText(/^Chart · edge \d\.\d NM$/);
+    await expect(caption).toHaveText(/^edge \d\.\d NM$/);
     await page.locator('.pocket-chart').click();
     expect(await page.evaluate(() => globalThis.keel.chartInfo().open)).toBe(true);
     const t0 = await page.evaluate(() => globalThis.keel.game.clock.time);

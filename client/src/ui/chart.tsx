@@ -16,7 +16,14 @@ import type { Forecasting } from '../chart/forecasting';
 import { pocketSkyAt, pusherName, type SkyShown } from '../chart/pocketsky';
 import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
-import { type ChartStore, chartList, dayText, edgeCaption, whenText } from '../chart/store';
+import {
+  type ChartStore,
+  chartList,
+  dayText,
+  edgeCaption,
+  pocketCaption,
+  whenText,
+} from '../chart/store';
 import { hitTest, type SystemBox, tappedBox, type WeatherHit } from '../chart/systembox';
 import type { BoatAt, ChartView } from '../chart/view';
 import type { ChartEntry } from '../net/messages';
@@ -138,9 +145,7 @@ function Position({ sea }: { sea: ChartSea }) {
   useEffect(() => {
     const at = () => {
       const b = sea.boat();
-      setText(
-        `${formatPosition(b.east, b.north)} · ${edgeCaption(b.east, b.north, sea.lip).replace('Chart · ', '')}`,
-      );
+      setText(`${formatPosition(b.east, b.north)} · ${edgeCaption(b.east, b.north, sea.lip)}`);
     };
     at();
     const t = setInterval(at, 1000);
@@ -696,10 +701,10 @@ export function PocketChart({
   setWeather?: ((on: boolean) => void) | null;
 }) {
   const canvas = useRef<HTMLCanvasElement | null>(null);
-  const [edge, setCaption] = useState('Chart');
+  // Before the boat's first position, the chart's name alone.
+  const [edge, setCaption] = useState('');
   // In the world's last days the caption carries the countdown too.
-  const caption =
-    end?.closing.value && end.text.value !== '' ? `${edge} · new world ${end.text.value}` : edge;
+  const caption = pocketCaption(edge, end?.closing.value ? end.text.value : '');
   useEffect(() => {
     const c = canvas.current;
     if (c === null) {
@@ -721,11 +726,15 @@ export function PocketChart({
         type="button"
         class="panel pocket-chart"
         onClick={() => sea.chart.show('chart')}
-        aria-label={`${caption}: open the chart`}
+        aria-label={caption.name}
       >
         <canvas ref={canvas} width={240} height={180} />
         <span class="pocket-caption" data-readout="pocket">
-          {caption}
+          {caption.lines.map((l, i) => (
+            <span key={i} class={`pocket-line${i > 0 ? ' pocket-left' : ''}`}>
+              {l}
+            </span>
+          ))}
         </span>
       </button>
       {setWeather !== null && sea.forecasting !== null ? (

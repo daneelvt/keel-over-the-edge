@@ -71,7 +71,8 @@ export function Helm({ input, model }: { input: HelmInput; model: HudModel }) {
       {...handlers(input, 'x')}
     >
       <svg class="helm-arc" viewBox="-60 -56 120 20" aria-hidden="true">
-        <path d={arc(50)} />
+        <path class="slot-rim" d={arc(50)} />
+        <path class="slot" d={arc(50)} />
         <line x1="0" y1="-56" x2="0" y2="-44" />
       </svg>
       <div class="helm-swing actual" ref={(el) => model.helmActual.attach(el)}>

@@ -347,10 +347,10 @@
   background: radial-gradient(
     circle,
     #121b21 0 15px,
-    #8a6524 15.5px,
-    #f3dfa0 18px,
-    #c9a24c 20px,
-    #8a6524 22px
+    var(--brass-dark) 15.5px,
+    var(--brass-light) 18px,
+    var(--brass) 20px,
+    var(--brass-dark) 22px
   );
   box-shadow: 0 3px 5px rgb(0 0 0 / 50%);
   color: var(--faint);
@@ -412,8 +412,9 @@
 
 /* Opaque and unblurred, unlike the other panels: it stands over the sea the
    whole voyage, and a blur behind it is drawn again every frame (a third of
-   the frames, on a software renderer). */
-.hud .pocket-chart {
+   the frames, on a software renderer). Over the panels' own rule, which
+   comes after it. */
+.hud .panel.pocket-chart {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: rgb(26 36 44);
@@ -424,10 +425,26 @@
   height: 90px;
 }
 
+/* The caption, a line or two, each within the chart: how far the edge is,
+   and in the world's last days when the new world comes, in the world
+   clock's amber. */
 .pocket-caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
   font-size: 13px;
+  line-height: 1.25;
   color: var(--faint);
+}
+
+.pocket-line {
+  max-width: 100%;
   white-space: nowrap;
+}
+
+.pocket-left {
+  color: var(--gold);
 }
 
 /* The notices. */
@@ -644,6 +661,10 @@
     width: 108px;
   }
 
+  .pocket-caption {
+    font-size: 12px;
+  }
+
   .pocket-chart canvas {
     width: 100px;
     height: 75px;
@@ -663,8 +684,7 @@
   }
 
   .pocket-caption {
-    white-space: normal;
-    text-align: center;
+    font-size: 12px;
   }
 
   .hud .pocket-weather {

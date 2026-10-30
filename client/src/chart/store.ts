@@ -221,9 +221,23 @@ export function chartList(
   return groups;
 }
 
-/** The pocket chart's caption: "Chart · edge 4.3 NM". */
+/** How far the edge is, as the pocket chart's caption says it: "edge 4.3 NM". */
 export function edgeCaption(east: number, north: number, lip: number): string {
-  return `Chart · edge ${distanceText(lip - Math.hypot(east, north))}`;
+  return `edge ${distanceText(lip - Math.hypot(east, north))}`;
+}
+
+/**
+ * The pocket chart's caption, its lines each within the chart, and the
+ * name its button says: how far the edge is ("" before the boat's first
+ * position, when the caption is the chart's name), and in the world's last
+ * days the time until the new world ("" until then), a line of its own.
+ */
+export function pocketCaption(edge: string, left: string): { lines: string[]; name: string } {
+  const until = left === '' ? '' : `new world ${left}`;
+  return {
+    lines: [edge === '' ? 'Chart' : edge, until].filter((l) => l !== ''),
+    name: `${['Chart', edge, until].filter((l) => l !== '').join(', ')}: open the chart`,
+  };
 }
 
 /** The words for a zone, where a discovery is: "at the rim". */

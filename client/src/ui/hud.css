@@ -25,6 +25,18 @@
   --ink: #f2efe7;
   --faint: rgb(242 239 231 / 62%);
   --gold: #e8b450;
+  /* The instruments' brass: the case's pushers, the control head, the helm
+     and the sheet. */
+  --brass-light: #f3dfa0;
+  --brass: #c9a24c;
+  --brass-dark: #8a6524;
+  /* The control head's height, its keys', its gap's and its padding's, and
+     the helm's beside it: two rows of keys, the gap, the padding and the
+     frame. */
+  --key: 44px;
+  --head-gap: 4px;
+  --head-pad: 2px;
+  --head: calc(2 * var(--key) + var(--head-gap) + 2 * var(--head-pad) + 2px);
   --edge-top: max(12px, env(safe-area-inset-top));
   --edge-right: max(12px, env(safe-area-inset-right));
   --edge-bottom: max(12px, env(safe-area-inset-bottom));
@@ -75,9 +87,6 @@
    fine engraved seam, never panels of their own; its pushers on its edge,
    their stems standing out of it. */
 .case {
-  --brass-light: #f3dfa0;
-  --brass: #c9a24c;
-  --brass-dark: #8a6524;
   --seam: rgb(232 180 80 / 28%);
   position: relative;
   display: flex;
@@ -646,8 +655,6 @@
   bottom: var(--edge-bottom);
   pointer-events: auto;
   touch-action: none;
-  border-radius: 12px;
-  background: var(--panel);
   cursor: grab;
   transition: opacity 0.3s;
 }
@@ -656,53 +663,77 @@
   opacity: 0.45;
 }
 
+/* The legends engraved in the face, as the head's levers are. */
+.control-label,
+.sheet-end {
+  color: var(--faint);
+  font:
+    13px "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.03em;
+}
+
 .control-label {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 6px;
+  bottom: 5px;
   text-align: center;
-  color: var(--faint);
-  font-size: 13px;
 }
 
+/* The helm: the head's height, its arc and knobs placed from its foot, so
+   that the room above the arc is what it gains. Inside the frame it is
+   188 pixels wide, the arc's centre at 94. */
 .helm {
   left: var(--edge-left);
   width: 190px;
-  height: 88px;
+  height: var(--head);
 }
 
+/* The arc a slot recessed in the face, a dark groove in a brass rim, the
+   lubber line at its middle in brass. */
 .helm-arc {
   position: absolute;
-  left: 15px;
-  top: 14px;
+  left: 14px;
+  top: calc(var(--head) - 75px);
   width: 160px;
   height: 27px;
   overflow: visible;
 }
 
-.helm-arc path,
-.helm-arc line {
+.helm-arc path {
   fill: none;
-  stroke: rgb(255 255 255 / 55%);
-  stroke-width: 5;
   stroke-linecap: round;
 }
 
+.helm-arc .slot-rim {
+  stroke: var(--brass-dark);
+  stroke-width: 7;
+}
+
+.helm-arc .slot {
+  stroke: #091014;
+  stroke-width: 5;
+}
+
 .helm-arc line {
+  stroke: var(--brass);
   stroke-width: 2;
+  stroke-linecap: round;
 }
 
 /* A swing turns about the arc's centre (the arc's radius is 66.7 px), its knob's centre on the arc. */
 .helm-swing {
   position: absolute;
-  left: 95px;
-  top: 18px;
+  left: 94px;
+  top: calc(var(--head) - 71px);
   width: 0;
   height: 70.7px;
   transform-origin: 0 70.7px;
 }
 
+/* What the player sets is brass, raised and shadowed: it can be moved. */
 .knob {
   position: absolute;
   left: -13px;
@@ -710,13 +741,22 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: var(--gold);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
+  background: radial-gradient(
+    circle at 40% 32%,
+    var(--brass-light),
+    var(--brass) 55%,
+    var(--brass-dark)
+  );
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 55%),
+    0 2px 5px rgb(0 0 0 / 35%);
 }
 
+/* Where the rudder and the sheet really are: a hollow ring, told from the
+   knob by its shape as well as its colour. */
 .actual .knob {
   background: transparent;
-  border: 2px solid rgb(255 255 255 / 55%);
+  border: 2px solid rgb(243 223 160 / 50%);
   box-shadow: none;
 }
 
@@ -732,17 +772,20 @@
 }
 
 .sheet-end {
-  color: var(--faint);
   font-size: 12px;
 }
 
+/* The track a slot recessed in the face, as the drum is. */
 .sheet-track {
   position: relative;
   flex: 0 0 112px;
   width: 6px;
   margin: 6px 0;
   border-radius: 3px;
-  background: rgb(255 255 255 / 40%);
+  background: #091014;
+  box-shadow:
+    inset 0 1px 3px rgb(0 0 0 / 85%),
+    0 0 0 1px var(--brass-dark);
 }
 
 /* The knob travels the track's height less its own. */
@@ -760,6 +803,13 @@
   width: 34px;
   height: 22px;
   border-radius: 6px;
+}
+
+/* The sheet's knob knurled across, as a pusher's stem is, to be gripped. */
+.sheet-travel:not(.actual) .knob {
+  background:
+    linear-gradient(rgb(255 255 255 / 35%), transparent 45%, rgb(0 0 0 / 35%)),
+    repeating-linear-gradient(90deg, var(--brass) 0 1.5px, var(--brass-dark) 1.5px 3px);
 }
 
 .sheet .control-label {
@@ -786,9 +836,10 @@
 }
 
 @media (max-height: 420px) {
-  /* Under the pocket chart, above the sheet. */
+  /* Under the pocket chart, its caption two lines in the world's last
+     days, above the sheet. */
   .menu-button {
-    top: calc(var(--edge-top) + 112px);
+    top: calc(var(--edge-top) + 120px);
     transform: none;
   }
 
@@ -814,9 +865,6 @@
   max-width: calc(100vw - var(--edge-left) - var(--edge-right) - 190px - 64px - 16px);
   min-height: 44px;
   padding: 4px 8px;
-  border: 1px solid rgb(255 255 255 / 25%);
-  border-radius: 12px;
-  background: var(--panel);
   color: var(--ink);
   font: inherit;
   pointer-events: auto;
@@ -827,7 +875,7 @@
   line-height: 1.2;
 }
 
-.pilot-button.on {
+.hud .pilot-button.on {
   border: 2px solid var(--gold);
 }
 
@@ -839,7 +887,7 @@
   height: 6px;
   translate: -50% 0;
   border-radius: 2px;
-  background: linear-gradient(#f3dfa0, #c9a24c 50%, #8a6524);
+  background: linear-gradient(var(--brass-light), var(--brass) 50%, var(--brass-dark));
   box-shadow: 0 1px 2px rgb(0 0 0 / 45%);
 }
 
@@ -858,26 +906,33 @@
 }
 
 .pilot-head {
-  --brass-light: #f3dfa0;
-  --brass: #c9a24c;
-  --brass-dark: #8a6524;
-  --key: 44px;
   position: absolute;
   bottom: var(--edge-bottom);
   left: calc(var(--edge-left) + 190px + 8px);
   width: min(380px, calc(100vw - var(--edge-left) - var(--edge-right) - 190px - 64px - 16px));
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 2px;
+  gap: var(--head-gap);
+  padding: var(--head-pad);
+  container-type: inline-size;
+  touch-action: none;
+}
+
+/* The control head's frame and face, which the helm, the sheet and the
+   folded autopilot share: a brass edge with a fine brass line inside it,
+   lacquered dark, opaque enough to need no blur behind it. */
+.hud .pilot-head,
+.hud .control,
+.hud .pilot-button {
+  box-sizing: border-box;
   border: 1px solid var(--brass-dark);
+  border-radius: 12px;
   background: linear-gradient(rgb(34 44 52 / 92%), rgb(14 20 25 / 92%));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   box-shadow:
     inset 0 0 0 1px rgb(243 223 160 / 18%),
     0 2px 10px rgb(0 0 0 / 30%);
-  container-type: inline-size;
-  touch-action: none;
 }
 
 .head-row {
@@ -1062,12 +1117,12 @@
 
 /* On the shortest screens, a phone held sideways or a small one upright,
    the head is a little lower, its keys 42 pixels tall, to stay clear of
-   the boat's hull. */
+   the boat's hull; the helm with it. */
 @media (max-height: 420px), (orientation: portrait) and (max-height: 700px) {
-  .pilot-head {
+  .hud {
     --key: 42px;
-    gap: 2px;
-    padding: 1px;
+    --head-gap: 2px;
+    --head-pad: 1px;
   }
 }
 
@@ -1077,7 +1132,7 @@
   .pilot-head {
     left: var(--edge-left);
     width: calc(100vw - var(--edge-left) - var(--edge-right) - 64px - 8px);
-    bottom: calc(var(--edge-bottom) + 88px + 8px);
+    bottom: calc(var(--edge-bottom) + var(--head) + 8px);
   }
 }
 
