@@ -232,7 +232,7 @@ test.describe('gale warnings', () => {
     await openScene(page, 'world=1', true);
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.locator('input[name="notice-gale-warnings"]').uncheck();
-    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('button', { name: 'Close the menu' }).click();
     await page.evaluate(() => {
       globalThis.keel.placeBoat(-3500, -5000, 0);
       globalThis.keel.galeIn(30);
