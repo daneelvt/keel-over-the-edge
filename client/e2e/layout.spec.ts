@@ -1,17 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The screen at sea laid out on phones held either way and on the browser
-// tests' screen, in the offline sandbox: with the barometer and the world
-// clock out of the case, the autopilot's control head open and the boat in
-// Port Royal's harbour, no part of the screen covers another, or the boat
-// as drawn with a margin about it, and every part is on the screen. One
-// page, its viewport changed screen by screen, with less motion asked
-// for, so that nothing is measured mid-slide.
+// tests' screen, in the offline sandbox: with the barometer out of the
+// case, the autopilot's control head open, the readouts at their longest
+// and the boat in Port Royal's harbour, no part of the screen covers
+// another, or the boat as drawn with a margin about it, and every part is
+// on the screen. One page, its viewport changed screen by screen, with
+// less motion asked for, so that nothing is measured mid-slide.
+//
+// The case is one size whatever its readouts say, and no taller than its
+// compass card; its pushers stand on two edges. The pocket chart's caption
+// is two lines within its frame, the weather's pusher set in the frame.
+// The menu, open, stands over everything and within the screen.
 //
 // Held upright, the chase camera puts the boat's masthead within a sixth
 // of the screen's height of its top, where no case of instruments fits
-// above it: there the case's face alone may stand over the masthead. Its
-// complications, hanging under the compass, may not.
+// above it: there the case's face and its pushers alone may stand over the
+// masthead. Its complications, hanging under the compass, may not.
 //
 // Then the list of sailors to watch and the card about one, on the start
 // screen, at the same screens: full rows and a full card, the server's
@@ -75,12 +80,16 @@ async function parts(page: Page): Promise<{
       const e = hud.querySelector(sel);
       return e === null ? null : box(name, [e]);
     };
+    // The pushers apart from what they are set in: a box about both would
+    // take in the corner beside them.
+    const pushers = [...hud.querySelectorAll('.case [data-pusher], .pocket [data-pusher]')].map(
+      (p) => box(`the ${p.getAttribute('data-pusher')} pusher`, [p]),
+    );
     const all = [
       one('the case', '.case-top'),
       one('the barometer', '[data-complication=barometer]'),
-      one('the world clock', '[data-complication=clock]'),
-      one('the pocket chart', '.pocket-chart'),
-      one('the weather pusher', '.pocket-weather'),
+      one('the pocket chart', '.pocket-frame'),
+      ...pushers,
       one('the menu button', '.menu-button'),
       one('the helm', '[data-control=helm]'),
       one('the sheet', '[data-control=sheet]'),
@@ -100,18 +109,24 @@ async function parts(page: Page): Promise<{
             right: Math.max(...b.map((r) => r.right)) + about,
             bottom: Math.max(...b.map((r) => r.bottom)) + about,
           };
-    // A part's own keys stay within it.
-    const spilt = [...hud.querySelectorAll('.pilot-head button, .case button')]
+    // A part's own keys stay within it; a pusher's stem stands out of the
+    // edge it is set in, and no other.
+    const spilt = [...hud.querySelectorAll('.pilot-head button, .case button, .pocket button')]
       .filter((k) => {
         const r = k.getBoundingClientRect();
-        const p = (k.closest('.pilot-head') ?? k.closest('.case-top') ?? k).getBoundingClientRect();
-        // A pusher's stem stands out of the case.
-        const stem = k.classList.contains('pusher') ? 6.5 : 0.5;
+        const p = (
+          k.closest('.pilot-head') ??
+          k.closest('.case-top') ??
+          k.closest('.pocket-frame') ??
+          k
+        ).getBoundingClientRect();
+        const edge = k.getAttribute('data-edge');
+        const out = (e: string) => (edge === e ? 6.5 : 0.5);
         return (
-          r.left < p.left - 0.5 ||
-          r.right > p.right + stem ||
+          r.left < p.left - out('left') ||
+          r.right > p.right + out('right') ||
           r.top < p.top - 0.5 ||
-          r.bottom > p.bottom + 0.5
+          r.bottom > p.bottom + out('bottom')
         );
       })
       .map((k) => k.getAttribute('aria-label') ?? k.textContent ?? '');
@@ -120,7 +135,7 @@ async function parts(page: Page): Promise<{
     );
     // No words show outside their part: each run of text as it is drawn,
     // clipped by whatever clips it, within the part it is in.
-    const PARTS = '.case-top, .complications, .pocket-chart, .pilot-head, .pilot-button, .control';
+    const PARTS = '.case-top, .complications, .pocket-frame, .pilot-head, .pilot-button, .control';
     const words: string[] = [];
     const walker = document.createTreeWalker(hud, NodeFilter.SHOW_TEXT);
     for (let t = walker.nextNode(); t !== null; t = walker.nextNode()) {
@@ -173,13 +188,12 @@ async function parts(page: Page): Promise<{
  */
 async function longestCaption(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const chart = document.querySelector('.pocket-chart');
+    const caption = document.querySelector('.pocket-caption');
     const line = document.querySelector('.pocket-line');
-    if (chart === null || line === null) {
+    if (caption === null || line === null) {
       return ['no pocket chart'];
     }
-    const st = getComputedStyle(chart);
-    const room = chart.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
+    const room = caption.clientWidth;
     const g = document.createElement('canvas').getContext('2d');
     if (g === null) {
       return ['no canvas'];
@@ -188,8 +202,146 @@ async function longestCaption(page: Page): Promise<string[]> {
     return ['edge 99.9 NM', 'new world 6d 23h']
       .map((t) => ({ t, w: g.measureText(t).width }))
       .filter(({ w }) => w > room + 0.5)
-      .map(({ t, w }) => `“${t}” is ${w.toFixed(1)} px in a chart ${room} px wide`);
+      .map(({ t, w }) => `“${t}” is ${w.toFixed(1)} px in a caption ${room} px wide`);
   });
+}
+
+/** What is wrong with the case: its size as its readouts change, its height, its pushers. */
+async function caseFaults(page: Page): Promise<string[]> {
+  const size = (at: 'shortest' | 'longest') =>
+    page.evaluate(async (at) => {
+      globalThis.keel.readouts(at);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const r = document.querySelector('.case-top')?.getBoundingClientRect();
+      return r === undefined ? null : [r.left, r.top, r.width, r.height];
+    }, at);
+  const found: string[] = [];
+  const short = await size('shortest');
+  const long = await size('longest');
+  if (
+    short === null ||
+    long === null ||
+    short.some((v, i) => Math.abs(v - (long[i] ?? 0)) > 0.01)
+  ) {
+    found.push(
+      `the case is ${short?.join(' ')} at its shortest, ${long?.join(' ')} at its longest`,
+    );
+  }
+  found.push(
+    ...(await page.evaluate(() => {
+      const out: string[] = [];
+      const face = document.querySelector('.case-face');
+      const card = document.querySelector('.case .compass');
+      if (face === null || card === null) {
+        return ['no case'];
+      }
+      const st = getComputedStyle(face);
+      const tall =
+        card.getBoundingClientRect().height +
+        parseFloat(st.paddingTop) +
+        parseFloat(st.paddingBottom);
+      const h = face.getBoundingClientRect().height;
+      if (Math.abs(h - tall) > 0.5) {
+        out.push(`the case's face is ${h} px tall, its compass card and padding ${tall}`);
+      }
+      const edges = [...document.querySelectorAll('.case [data-pusher]')].map(
+        (p) => `${p.getAttribute('data-pusher')} ${p.getAttribute('data-edge')}`,
+      );
+      if (edges.join(', ') !== 'barometer right, board bottom') {
+        out.push(`the case's pushers: ${edges.join(', ')}`);
+      }
+      if (
+        document.querySelector('[data-complication=clock], [data-pusher=clock], .world-clock') !==
+        null
+      ) {
+        out.push('a world clock in the case');
+      }
+      const lines = [...document.querySelectorAll('.pocket-line')].map((l) => l.textContent ?? '');
+      if (
+        lines.length !== 2 ||
+        !/^edge /.test(lines[0] ?? '') ||
+        !/^new world /.test(lines[1] ?? '')
+      ) {
+        out.push(`the pocket chart's caption: ${lines.join(' / ')}`);
+      }
+      if ((document.querySelector('.pocket-frame')?.textContent ?? '').includes('Chart')) {
+        out.push('the pocket chart says “Chart”');
+      }
+      const frame = document.querySelector('.pocket-frame')?.getBoundingClientRect();
+      const f = document.querySelector('.pocket-weather .pusher-face')?.getBoundingClientRect();
+      if (
+        frame === undefined ||
+        f === undefined ||
+        f.left < frame.left - 0.5 ||
+        f.right > frame.right + 0.5 ||
+        f.top < frame.top - 0.5 ||
+        f.bottom > frame.bottom + 0.5
+      ) {
+        out.push('the weather pusher’s face is not in the pocket chart’s frame');
+      }
+      return out;
+    })),
+  );
+  return found;
+}
+
+/** What is wrong with the menu, open: off the screen, under anything, its close out of reach. */
+async function menuFaults(page: Page): Promise<string[]> {
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await expect(page.locator('.menu')).toBeVisible();
+  const found = await page.evaluate(() => {
+    const out: string[] = [];
+    const menu = document.querySelector('.menu');
+    const x = document.querySelector('.menu-x');
+    if (menu === null || x === null) {
+      return ['no menu'];
+    }
+    const inView = (r: DOMRect) =>
+      r.left >= -0.5 &&
+      r.top >= -0.5 &&
+      r.right <= innerWidth + 0.5 &&
+      r.bottom <= innerHeight + 0.5;
+    const m = menu.getBoundingClientRect();
+    if (!inView(m)) {
+      out.push(
+        `the menu is off the screen (${[m.left, m.top, m.right, m.bottom].map(Math.round)})`,
+      );
+    }
+    if (!inView(x.getBoundingClientRect())) {
+      out.push('the menu’s close is off the screen');
+    }
+    if (document.activeElement !== menu) {
+      out.push(
+        `the menu does not have the focus: ${document.activeElement?.tagName}.${document.activeElement?.className}`,
+      );
+    }
+    // Nothing over it: at its corners, its middle and its head's close.
+    const xr = x.getBoundingClientRect();
+    // Inside its rounded corners.
+    for (const [px, py] of [
+      [m.left + 8, m.top + 8],
+      [m.right - 8, m.top + 8],
+      [m.left + 8, m.bottom - 8],
+      [m.right - 8, m.bottom - 8],
+      [(m.left + m.right) / 2, (m.top + m.bottom) / 2],
+      [(xr.left + xr.right) / 2, (xr.top + xr.bottom) / 2],
+    ] as const) {
+      const e = document.elementFromPoint(px, py);
+      if (e === null || !menu.contains(e)) {
+        out.push(
+          `at ${Math.round(px)}, ${Math.round(py)} the menu is under ${e?.className ?? 'nothing'}`,
+        );
+      }
+    }
+    return out;
+  });
+  // Its close at the top shuts it, and the focus goes back to its button.
+  await page.locator('.menu-x').click();
+  await expect(page.locator('.menu')).toHaveCount(0);
+  if (!(await page.evaluate(() => document.activeElement?.classList.contains('menu-button')))) {
+    found.push('the focus is not back on the menu’s button');
+  }
+  return found;
 }
 
 /** A box's edges, left, top, right and bottom, in whole pixels. */
@@ -216,8 +368,7 @@ test('no part of the screen at sea covers the boat or another part, with everyth
   await page.evaluate(
     ({ now }) => {
       const k = globalThis.keel;
-      // In the world's last days, the countdown in the pocket chart's
-      // caption too.
+      // In the world's last days.
       k.setWorldEnd({
         epoch: now - 5 * 86_400_000,
         ends: now + 2 * 86_400_000,
@@ -253,11 +404,15 @@ test('no part of the screen at sea covers the boat or another part, with everyth
     // Every complication out, the head open.
     await page.evaluate(() => {
       const k = globalThis.keel;
-      k.settings({ barometer: true, worldClock: true, pilotHead: true });
+      k.settings({ barometer: true, pilotHead: true });
       k.render();
     });
     await page.waitForTimeout(200);
     await page.evaluate(() => globalThis.keel.render());
+    for (const f of await caseFaults(page)) {
+      found.push(`${s.name}: ${f}`);
+    }
+    // Measured at the longest the readouts say.
     const seen = await parts(page);
     await test.info().attach(`${s.name}.png`, {
       path: await page
@@ -298,11 +453,15 @@ test('no part of the screen at sea covers the boat or another part, with everyth
       for (let j = i + 1; j < all.length; j++) {
         const a = all[i];
         const b = all[j];
-        const masthead =
-          s.upright &&
-          [a?.name, b?.name].includes('the case') &&
-          [a?.name, b?.name].includes('the boat');
-        if (a !== undefined && b !== undefined && !masthead && overlap(a, b)) {
+        const names = [a?.name, b?.name];
+        const inCase = (n?: string) =>
+          n === 'the case' || n === 'the barometer pusher' || n === 'the board pusher';
+        const masthead = s.upright && names.some(inCase) && names.includes('the boat');
+        // A pusher is set in its own part.
+        const own =
+          (names.includes('the case') && names.filter(inCase).length === 2) ||
+          (names.includes('the pocket chart') && names.includes('the weather pusher'));
+        if (a !== undefined && b !== undefined && !masthead && !own && overlap(a, b)) {
           found.push(`${s.name}: ${a.name} covers ${b.name} (${edges(a)} and ${edges(b)})`);
         }
       }
@@ -315,7 +474,13 @@ test('no part of the screen at sea covers the boat or another part, with everyth
         ? null
         : Math.min(
             ...seen.parts
-              .filter((p) => !(s.upright && p.name === 'the case'))
+              .filter(
+                (p) =>
+                  !(
+                    s.upright &&
+                    ['the case', 'the barometer pusher', 'the board pusher'].includes(p.name)
+                  ),
+              )
               .map((p) => room(p, seen.boat as Box)),
           );
     test.info().annotations.push({
@@ -340,6 +505,9 @@ test('no part of the screen at sea covers the boat or another part, with everyth
         Math.abs(folded.bottom - seen.helm.bottom) > 0.5)
     ) {
       found.push(`${s.name}: the helm moves as the head folds`);
+    }
+    for (const f of await menuFaults(page)) {
+      found.push(`${s.name}: ${f}`);
     }
   }
   expect(found).toEqual([]);

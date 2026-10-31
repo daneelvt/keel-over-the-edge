@@ -1,21 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The sky at the boat now, as the pocket chart's weather pusher shows it:
-// read as the harbourmaster's board reads its "Now", from the same points
-// a quarter of a mile about, put into the same words, so the two never
-// disagree; then one of seven decals. A storm near outranks the sky's
-// words; a fair sky with less wind than force 1 is calm.
+// The sky at a boat as one of seven decals, from its weather in the
+// harbourmaster's board's words, so the two never disagree: the card of a
+// sailor to watch shows it, and the server makes the same for its list. A
+// storm near outranks the sky's words; a fair sky with less wind than
+// force 1 is calm.
 
-import { catalog } from '../catalog';
-import { pointsAbout } from './board';
-import type { Forecasting } from './forecasting';
-import { weatherAt } from './placeweather';
-import { type Box, boxOf, forceOf, NEAR, type PlaceWeather, SKIES, wordsOf } from './words';
+import { type Box, forceOf, NEAR, type PlaceWeather, SKIES } from './words';
 
 /** The decals of the sky at the boat. */
 export type PocketSky = 'fair' | 'showers' | 'rain' | 'squalls' | 'fog' | 'storm' | 'calm';
 
-/** Each decal in words, for the pusher's name. */
+/** Each decal in words. */
 export const SKY_WORDS: Record<PocketSky, string> = {
   fair: 'fair',
   showers: 'showers',
@@ -25,19 +21,6 @@ export const SKY_WORDS: Record<PocketSky, string> = {
   storm: 'a storm',
   calm: 'calm',
 };
-
-/** The sky the pusher shows: its decal, by night the moon for the sun. */
-export interface SkyShown {
-  sky: PocketSky;
-  night: boolean;
-}
-
-/** The weather pusher's name: what it switches, and the sky at the boat once read. */
-export function pusherName(shown: SkyShown | null): string {
-  return shown === null
-    ? 'Weather on the pocket chart'
-    : `Weather on the pocket chart; here, ${SKY_WORDS[shown.sky]}${shown.night && shown.sky === 'fair' ? ', by night' : ''}`;
-}
 
 /** The decal of a place's weather and its box. */
 export function pocketSkyOf(w: PlaceWeather, box: Box): PocketSky {
@@ -56,20 +39,4 @@ export function pocketSkyOf(w: PlaceWeather, box: Box): PocketSky {
       return 'squalls';
   }
   return forceOf(w.points[0]?.mean ?? 0) < 1 ? 'calm' : 'fair';
-}
-
-/** The decal of the weather at a point now. */
-export async function pocketSkyAt(
-  src: Forecasting,
-  east: number,
-  north: number,
-): Promise<PocketSky> {
-  const fields = await src.made();
-  const w = weatherAt(
-    fields,
-    src,
-    { kind: 'now', tick: src.tick(), minutes: 0, issue: null },
-    pointsAbout(east, north),
-  );
-  return pocketSkyOf(w, boxOf(w, wordsOf(catalog.weather)));
 }

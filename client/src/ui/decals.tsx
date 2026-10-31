@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The engraved decals of the case's pushers, the pocket chart's weather
-// pusher and the autopilot's control head: small line drawings on a
-// 24-unit face, in the colour of their text (gold while what they open is
-// out, faint while it is in), never words.
+// pusher and the autopilot's control head, and the sky on a watched
+// sailor's card: small line drawings on a 24-unit face, in the colour of
+// their text (gold while what they open is out, faint while it is in),
+// never words.
 
 import './decals.css';
 import type { ComponentChildren } from 'preact';
@@ -55,26 +56,6 @@ export function AneroidDecal() {
   );
 }
 
-/** The world clock's: a power reserve, its hand from full (right) to empty (left) over a quarter turn. */
-export function ReserveDecal({ reserve }: { reserve: number }) {
-  const cy = 5;
-  const a = -45 + 90 * Math.min(1, Math.max(0, reserve));
-  const [hx, hy] = at(10, a, 0, cy);
-  const [ex0, ey0] = at(10.5, -45, 0, cy);
-  const [ex1, ey1] = at(7, -45, 0, cy);
-  const [fx0, fy0] = at(10.5, 45, 0, cy);
-  const [fx1, fy1] = at(7, 45, 0, cy);
-  return (
-    <Decal>
-      <path class="decal-line" d={arc(10.5, -45, 45, 0, cy)} />
-      <line class="decal-line" x1={ex0} y1={ey0} x2={ex1} y2={ey1} />
-      <line class="decal-line" x1={fx0} y1={fy0} x2={fx1} y2={fy1} />
-      <line class="decal-line bold" x1="0" y1={cy} x2={hx} y2={hy} />
-      <circle class="decal-fill" cy={cy} r="1.6" />
-    </Decal>
-  );
-}
-
 /** The harbourmaster's: a notice board on two posts. */
 export function BoardDecal() {
   return (
@@ -89,6 +70,16 @@ export function BoardDecal() {
 }
 
 const CLOUD = 'M -6 2 H 6 A 3 3 0 0 0 6 -4 A 4 4 0 0 0 -1.5 -5.5 A 3.2 3.2 0 0 0 -6 2 Z';
+
+/** The pocket chart's weather's: a cloud with rain falling from it, weather in any forecast. */
+export function WeatherDecal() {
+  return (
+    <Decal>
+      <path class="decal-line cloud" d={CLOUD} transform="translate(0 -3)" />
+      <Streaks n={3} dx={-2} long={6} />
+    </Decal>
+  );
+}
 
 /** The sun, or the moon while the sun is below the horizon, about (x, y), of radius r. */
 function Light({

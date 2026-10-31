@@ -13,6 +13,16 @@
 // a floor of light from the hemisphere, so the boat, its sail and the
 // sea's tiles can always be read.
 //
+// A phone's small screen, often held in daylight, shows the night darker
+// than the table means it: the sailor may lift it. The scene's light (the
+// sky's colours, the mist, the hemisphere, the sea, the haze, the clouds,
+// the sail's glow) is then read no lower than a floor between the night's
+// row and dusk's, while the marks of the hour (the glow where the sun
+// went, the moon's light and disc, the stars, the lanterns, the main
+// light's highlight on the water, the visual range) keep the sun's true
+// height. Above the floor nothing changes; at the night's row, nothing at
+// all.
+//
 // Colours are display (sRGB-encoded) values, as an artist picks them. The
 // numbers are a look, tuned by eye, read by no rule of the game.
 
@@ -347,6 +357,66 @@ export function readLight(
   }
   out.height = height;
   return out;
+}
+
+/** The floor's range: the night's row, where it changes nothing, to dusk's. */
+export const NIGHT_FLOOR = -12;
+export const DUSK_FLOOR = -3;
+
+/** The floor for a night light of 0 (the night as it is) to 1 (dusk's light), degrees. */
+export function nightFloor(nightLight: number): number {
+  const k = Math.min(Math.max(Number.isFinite(nightLight) ? nightLight : 0, 0), 1);
+  return NIGHT_FLOOR + (DUSK_FLOOR - NIGHT_FLOOR) * k;
+}
+
+/** What the floor lifts: the scene's light. The rest marks the hour, at the sun's true height. */
+export const LIFTED: readonly (keyof Light)[] = [
+  'skyTop',
+  'skyHorizon',
+  'hemiSky',
+  'hemiGround',
+  'hemiLight',
+  'deep',
+  'scatter',
+  'hazeNear',
+  'hazeFar',
+  'mist',
+  'cloud',
+  'cloudTop',
+  'cloudBase',
+  'sailGlow',
+];
+
+/**
+ * Lifts the scene's light in v, read at the sun's true height, to the
+ * table's at the floor where the sun is below it: reads the table at
+ * max(height, floor) into scratch and copies the lifted values across.
+ * Allocates nothing.
+ */
+export function liftNight(
+  v: LightValues,
+  floor: number,
+  scratch: LightValues,
+  table: readonly Light[] = LIGHT_TABLE,
+): LightValues {
+  if (!(v.height < floor)) {
+    return v;
+  }
+  readLight(floor, scratch, table);
+  const o = v as unknown as Record<string, number | number[]>;
+  const f = scratch as unknown as Record<string, number | number[]>;
+  for (const k of LIFTED) {
+    const x = f[k];
+    if (typeof x === 'number') {
+      o[k] = x;
+    } else {
+      const into = o[k] as number[];
+      for (let c = 0; c < 3; c++) {
+        into[c] = (x as number[])[c] ?? 0;
+      }
+    }
+  }
+  return v;
 }
 
 /** Which body is the main light, and how strong: the sun above the horizon, else the moon. */

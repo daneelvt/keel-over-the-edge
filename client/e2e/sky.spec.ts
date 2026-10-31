@@ -427,27 +427,32 @@ test('pictures: the hours, a fleet by night, the sky from the rim', {
   test.setTimeout(180_000);
   await openScene(page);
   const canvas = page.locator('canvas.scene');
-  for (const [name, hour, moon] of [
-    ['noon', 12, null],
-    ['sunset', 17.9, null],
-    ['dusk', 18.2, null],
-    ['full-moon', 21, 0.5],
-    ['moonless', 0, 0],
-    ['dawn', 5.95, null],
+  // The night drawn as lit by default, and once as dark as it is: as it
+  // was before the night light, to the pixel.
+  for (const [name, hour, moon, light] of [
+    ['noon', 12, null, null],
+    ['sunset', 17.9, null, null],
+    ['dusk', 18.2, null, null],
+    ['full-moon', 21, 0.5, null],
+    ['moonless', 0, 0, null],
+    ['moonless-dark', 0, 0, 0],
+    ['dawn', 5.95, null, null],
   ] as const) {
     await page.evaluate(
-      async ({ hour, moon }) => {
+      async ({ hour, moon, light }) => {
         const k = globalThis.keel;
+        k.settings({ nightLight: light ?? 2 / 3 });
         k.setSky(hour, moon);
         await k.show();
       },
-      { hour, moon },
+      { hour, moon, light },
     );
     await expect.soft(canvas).toHaveScreenshot(`sky-${name}.png`);
   }
 
   await page.evaluate(async () => {
     const k = globalThis.keel;
+    k.settings({ nightLight: 2 / 3 });
     k.setSky(23, 0.25);
     const b = k.boat().state;
     const at = (side: number, ahead: number) => ({ east: b.x + ahead, north: b.y - side });

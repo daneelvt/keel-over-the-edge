@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The instruments' case, top left at sea, one panel as a watch is one
-// case: the heading-up compass card (the true wind's mark on its rim) and
-// its readouts (the speed over ground, the heading, what the autopilot
-// holds while it is on, and the wind); and its complications, the
-// barometer and the world clock, which slide out of the case when their
-// pusher on its edge is pressed and back in when it is pressed again: down
-// under the compass on a tall screen, out to the side on a short one, so a
-// phone held sideways keeps its height. The case never reaches the pocket
-// chart: the complication opened first folds back in. In port a third
-// pusher rises out of the edge and opens the harbourmaster's board. The
-// pushers carry engraved decals, not words; the world clock's is itself a
-// power reserve, so the world's time left is on the screen even with the
-// clock shut, and in the world's last days the clock comes out by itself.
-// Watching one's own machine sailor, a running light set into the case's
-// top edge says its AI is at the helm (lit) or has gone quiet (hollow).
+// case, as big as its dial and no bigger: the heading-up compass card (the
+// true wind's mark on its rim, the heading's figures in a window at its
+// lubber line) and beside it three readouts, each a slot as wide as its
+// longest words, so the case keeps one size whatever they say: the speed
+// over ground, the wind, and a last line that says what nothing else on
+// the screen does. Its pushers stand on its edges: the barometer's on the
+// right, where a watch's crown is, sliding the barometer out of the case
+// and back in, down under the compass; in port the harbourmaster's board's
+// rises out of the bottom edge. The case never reaches the pocket chart:
+// the complication opened first folds back in. The pushers carry engraved
+// decals, not words. Watching one's own machine sailor, a running light
+// set into the case's top edge says its AI is at the helm (lit) or has
+// gone quiet (hollow).
 
 import type { ReadonlySignal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
@@ -25,14 +24,13 @@ import { BarometerDial, type DialWord } from './barometerdial';
 import { BoardPanel, type HarbourView } from './board';
 import {
   type Complication,
-  clockOut,
+  caseLine,
   disclosure,
   fitted,
   LAID,
   pressed as pressedOrder,
 } from './complications';
-import type { Countdown } from './countdown';
-import { AneroidDecal, BoardDecal, ReserveDecal } from './decals';
+import { AneroidDecal, BoardDecal } from './decals';
 import type { HudModel } from './model';
 import type { SettingsSignal } from './settings';
 
@@ -75,6 +73,8 @@ function useSlide(out: boolean, ms: number): 'out' | 'folding' | 'in' {
 }
 
 const POINTS = ['N', 'E', 'S', 'W'];
+/** How far out on the card the points are lettered, inside the window's foot. */
+const POINT_R = 19;
 
 function CompassCard({ model }: { model: HudModel }) {
   return (
@@ -97,19 +97,26 @@ function CompassCard({ model }: { model: HudModel }) {
         })}
         {POINTS.map((p, i) => {
           const a = (i * Math.PI) / 2;
+          const x = POINT_R * Math.sin(a);
+          const y = -POINT_R * Math.cos(a);
           return (
             <text
               key={p}
               class={`compass-point${p === 'N' ? ' north' : ''}`}
-              x={26 * Math.sin(a)}
-              y={-26 * Math.cos(a)}
-              transform={`rotate(${i * 90} ${26 * Math.sin(a)} ${-26 * Math.cos(a)})`}
+              x={x}
+              y={y}
+              transform={`rotate(${i * 90} ${x} ${y})`}
             >
               {p}
             </text>
           );
         })}
       </g>
+      {/* The window at the lubber line, the heading's figures read through it. */}
+      <rect class="compass-window" x="-19" y="-46" width="38" height="21" rx="3" />
+      <text class="compass-figures" x="1.5" y="-35.5" data-readout="figures">
+        {model.figures}
+      </text>
       <g ref={(el) => model.windMark.attach(el)}>
         <path
           class="compass-wind"
@@ -117,34 +124,93 @@ function CompassCard({ model }: { model: HudModel }) {
           transform="translate(0 16)"
         />
       </g>
-      <path class="compass-boat" d="M 0 -16 C 5 -8 6 4 4 14 L -4 14 C -6 4 -5 -8 0 -16 Z" />
+      <path
+        class="compass-boat"
+        d="M 0 -10 C 3.5 -4.5 4.2 3.5 2.8 10 L -2.8 10 C -4.2 3.5 -3.5 -4.5 0 -10 Z"
+        transform="translate(0 6)"
+      />
     </svg>
   );
 }
 
-function Readouts({ model }: { model: HudModel }) {
+/**
+ * A readout's slot: as wide as the longest of its sizes, which are laid
+ * out unseen, so the case keeps its size whatever the slot says.
+ */
+function Slot({
+  sizes,
+  class: cls = '',
+  children,
+}: {
+  sizes: readonly ComponentChildren[];
+  class?: string;
+  children: ComponentChildren;
+}) {
+  return (
+    <span class={`slot${cls === '' ? '' : ` ${cls}`}`}>
+      {sizes.map((z, i) => (
+        <span key={i} class="slot-size" aria-hidden="true">
+          {z}
+        </span>
+      ))}
+      <span class="slot-text">{children}</span>
+    </span>
+  );
+}
+
+/** The longest each slot can say. */
+const SPEED_SIZES = ['00.0'];
+const WIND_SIZES = [
+  <>
+    Wind <b>WNW 88 kn · F12</b>
+  </>,
+  <>
+    Wind <b>NNW 88 kn · F12</b>
+  </>,
+];
+const LINE_SIZES = [
+  <>
+    Autopilot <b>Heading 000°</b>
+  </>,
+  <>
+    Autopilot <b>Wind 135° P</b>
+  </>,
+  <>
+    Autopilot <b>Gybe stalled</b>
+  </>,
+  <b>Starboard tack</b>,
+];
+
+function Readouts({ model, controls }: { model: HudModel; controls: boolean }) {
+  const line = caseLine(model.pilot.value, model.tack.value, controls);
+  const pilot = line !== '' && line !== model.tack.value;
   return (
     <div class="readouts">
       <p class="speed">
-        <span data-readout="speed">{model.speed}</span>
+        <Slot class="figures" sizes={SPEED_SIZES}>
+          <span data-readout="speed">{model.speed}</span>
+        </Slot>
         <span class="unit">kn</span>
       </p>
-      <p>
-        Heading <b data-readout="heading">{model.heading}</b>
+      <p class="visually-hidden">
+        Heading <span data-readout="heading">{model.heading}</span>
       </p>
-      {model.pilot.value === '' ? null : (
-        <p>
-          Autopilot <b data-readout="pilot">{model.pilot}</b>
-        </p>
-      )}
       <p>
-        Wind <b data-readout="wind">{model.wind}</b>
+        <Slot sizes={WIND_SIZES}>
+          Wind <b data-readout="wind">{model.wind}</b>
+        </Slot>
       </p>
-      {model.tack.value === '' ? null : (
-        <p>
-          <b data-readout="tack">{model.tack}</b>
-        </p>
-      )}
+      <p>
+        <Slot sizes={LINE_SIZES}>
+          {pilot ? (
+            <>
+              Autopilot <b data-readout="pilot">{model.pilot}</b>
+            </>
+          ) : line === '' ? null : (
+            <b data-readout="tack">{line}</b>
+          )}
+        </Slot>
+      </p>
     </div>
   );
 }
@@ -154,22 +220,31 @@ function Readouts({ model }: { model: HudModel }) {
  * what it opens is out, glowing a moment when pressed so the press shows
  * beside the thumb.
  */
-function Pusher({
+export function Pusher({
   name,
   id,
   controls,
   out,
   press,
+  edge = 'right',
   motion = '',
+  pressed = null,
+  class: cls = '',
   children,
 }: {
   name: string;
   id: string;
+  /** What it opens, as a disclosure; "" for a switch, which says whether it is pressed. */
   controls: string;
   out: boolean;
   press: () => void;
+  /** The edge it stands on, its stem out of it. */
+  edge?: 'right' | 'bottom' | 'left';
   /** Rising out of the case, or sinking back. */
   motion?: '' | 'rising' | 'sinking';
+  /** A switch's state; null for a disclosure. */
+  pressed?: boolean | null;
+  class?: string;
   children: ComponentChildren;
 }) {
   const [glow, setGlow] = useState(false);
@@ -183,11 +258,12 @@ function Pusher({
   return (
     <button
       type="button"
-      class={`pusher${out ? ' out' : ''}${glow ? ' pressed' : ''}${motion === '' ? '' : ` ${motion}`}`}
+      class={`pusher ${edge}${out ? ' out' : ''}${glow ? ' pressed' : ''}${motion === '' ? '' : ` ${motion}`}${cls === '' ? '' : ` ${cls}`}`}
       aria-label={name}
       data-pusher={id}
+      data-edge={edge}
       disabled={motion === 'sinking'}
-      {...disclosure(controls, out)}
+      {...(pressed === null ? disclosure(controls, out) : { 'aria-pressed': pressed })}
       onClick={() => {
         setGlow(true);
         press();
@@ -199,28 +275,6 @@ function Pusher({
   );
 }
 
-/** The world clock: the time left until a new world, and the day and hour it comes. */
-function WorldClock({ end }: { end: Countdown }) {
-  const text = end.text.value;
-  const when = end.when.value;
-  return (
-    <div class="world-clock">
-      {text === '' ? null : (
-        <p class="clock-left" data-readout="falls">
-          <span role="timer" aria-label={`A new world in ${text}`}>
-            New world in <b>{text}</b>
-          </span>
-        </p>
-      )}
-      {when === '' ? null : (
-        <p class="clock-when" data-readout="ends-at">
-          {when}
-        </p>
-      )}
-    </div>
-  );
-}
-
 const LAMP_WORDS: Record<Lamp, string> = {
   '': '',
   helm: 'Your machine sailor’s AI is at the helm',
@@ -228,31 +282,25 @@ const LAMP_WORDS: Record<Lamp, string> = {
 };
 
 /** The case's ids for what its pushers open. */
-const IDS: Record<Complication, string> = { barometer: 'case-barometer', clock: 'case-clock' };
+const IDS: Record<Complication, string> = { barometer: 'case-barometer' };
 const BOARD_ID = 'harbour-board';
 
 export interface CaseProps {
   model: HudModel;
   settings: SettingsSignal;
-  /** The countdown to the world's end; null where there is none. */
-  end: Countdown | null;
+  /** Whether the controls that act on the boat are on the screen; none on a boat watched. */
+  controls: boolean;
   barometer: { barometer: Barometer; words: readonly DialWord[] } | null;
   harbour: HarbourView | null;
   /** The running light; null where there is none. */
   lamp: ReadonlySignal<Lamp> | null;
 }
 
-export function Case({ model, settings, end, barometer, harbour, lamp }: CaseProps) {
+export function Case({ model, settings, controls, barometer, harbour, lamp }: CaseProps) {
   const el = useRef<HTMLElement>(null);
   const s = settings.value.value;
-  const world = end?.end.value ?? null;
-  // The world clock shows once a world's end is told, even with none known.
-  const clock = end !== null && world !== null ? end : null;
-  const closing = end?.closing.value === true;
-  const [putAwayIn, setPutAwayIn] = useState<string | null>(null);
   const out: Record<Complication, boolean> = {
     barometer: barometer !== null && s.barometer,
-    clock: clock !== null && clockOut(s.worldClock, closing, putAwayIn === world?.world),
   };
   // The open complications, oldest opened first.
   const [order, setOrder] = useState<Complication[]>(() => LAID.filter((c) => out[c]));
@@ -262,16 +310,10 @@ export function Case({ model, settings, end, barometer, harbour, lamp }: CasePro
   ];
   const put = (c: Complication, on: boolean) => {
     setOrder(pressedOrder(open, c, on));
-    if (c === 'barometer') {
-      settings.set({ barometer: on });
-      return;
-    }
-    settings.set({ worldClock: on });
-    setPutAwayIn(!on && closing && world !== null ? world.world : null);
+    settings.set({ barometer: on });
   };
   const slides: Record<Complication, 'out' | 'folding' | 'in'> = {
     barometer: useSlide(out.barometer, SLIDE),
-    clock: useSlide(out.clock, SLIDE),
   };
   // The case never reaches the pocket chart: the oldest opened folds back.
   const latest = useRef({ open, put, slides });
@@ -331,11 +373,12 @@ export function Case({ model, settings, end, barometer, harbour, lamp }: CasePro
     }
   }, [port]);
   const light = lamp?.value ?? '';
+  const board = harbour !== null && rise !== 'in';
   return (
     <>
       <section
         ref={el}
-        class={`panel case${closing ? ' closing' : ''}`}
+        class={`panel case${board ? ' in-port' : ''}`}
         aria-label="Instruments"
         data-case=""
       >
@@ -348,44 +391,32 @@ export function Case({ model, settings, end, barometer, harbour, lamp }: CasePro
         <div class="case-top">
           <div class="case-face">
             <CompassCard model={model} />
-            <Readouts model={model} />
+            <Readouts model={model} controls={controls} />
           </div>
-          <div class="pushers">
-            {clock !== null ? (
-              <Pusher
-                name="World clock"
-                id="clock"
-                controls={IDS.clock}
-                out={out.clock}
-                press={() => put('clock', !out.clock)}
-              >
-                <ReserveDecal reserve={clock.reserve.value} />
-              </Pusher>
-            ) : null}
-            {barometer !== null ? (
-              <Pusher
-                name="Barometer"
-                id="barometer"
-                controls={IDS.barometer}
-                out={out.barometer}
-                press={() => put('barometer', !out.barometer)}
-              >
-                <AneroidDecal />
-              </Pusher>
-            ) : null}
-            {harbour !== null && rise !== 'in' ? (
-              <Pusher
-                name="Harbour board"
-                id="board"
-                controls={BOARD_ID}
-                out={boardOpen}
-                press={() => setBoardOpen(!boardOpen)}
-                motion={rise === 'folding' ? 'sinking' : risen ? '' : 'rising'}
-              >
-                <BoardDecal />
-              </Pusher>
-            ) : null}
-          </div>
+          {barometer !== null ? (
+            <Pusher
+              name="Barometer"
+              id="barometer"
+              controls={IDS.barometer}
+              out={out.barometer}
+              press={() => put('barometer', !out.barometer)}
+            >
+              <AneroidDecal />
+            </Pusher>
+          ) : null}
+          {board ? (
+            <Pusher
+              name="Harbour board"
+              id="board"
+              controls={BOARD_ID}
+              out={boardOpen}
+              press={() => setBoardOpen(!boardOpen)}
+              edge="bottom"
+              motion={rise === 'folding' ? 'sinking' : risen ? '' : 'rising'}
+            >
+              <BoardDecal />
+            </Pusher>
+          ) : null}
         </div>
         <div class="complications" hidden={LAID.every((k) => slides[k] === 'in')}>
           {barometer !== null ? (
@@ -398,22 +429,7 @@ export function Case({ model, settings, end, barometer, harbour, lamp }: CasePro
               <BarometerDial barometer={barometer.barometer} words={barometer.words} />
             </div>
           ) : null}
-          {clock !== null ? (
-            <div
-              class={`complication${slides.clock === 'folding' ? ' folding' : ''}`}
-              id={IDS.clock}
-              data-complication="clock"
-              hidden={slides.clock === 'in'}
-            >
-              <WorldClock end={clock} />
-            </div>
-          ) : null}
         </div>
-        {end !== null && end.last.value !== '' ? (
-          <span class="visually-hidden" role="status">
-            {end.last.value}
-          </span>
-        ) : null}
       </section>
       {boardOpen && port !== null && harbour !== null ? (
         <BoardPanel id={BOARD_ID} harbour={harbour} port={port} close={() => setBoardOpen(false)} />
@@ -426,7 +442,7 @@ export function Case({ model, settings, end, barometer, harbour, lamp }: CasePro
 function roomOf(c: HTMLElement): number {
   const hud = c.closest('.hud') ?? document;
   let room = globalThis.innerWidth - CLEAR;
-  for (const sel of ['.pocket-chart', '.pocket-weather']) {
+  for (const sel of ['.pocket-frame', '.pocket-weather']) {
     const p = hud.querySelector(sel);
     if (p !== null) {
       room = Math.min(room, p.getBoundingClientRect().left - CLEAR);

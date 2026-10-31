@@ -65,6 +65,11 @@ export function headingText(rad: number): string {
   return `${threeDigits(d)}° ${compassPoint(d)}`;
 }
 
+/** A heading's figures alone, as the compass card's window shows them: "274°". */
+export function headingFigures(rad: number): string {
+  return `${threeDigits(wholeDegrees(rad))}°`;
+}
+
 /**
  * The wind, in knots, each Beaufort force begins at, 0 to 12 (Met Office,
  * Beaufort wind force scale).

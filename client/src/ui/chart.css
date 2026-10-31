@@ -321,103 +321,49 @@
   display: block;
 }
 
-/* The pocket chart, top right at sea, with its weather's pusher: on the
-   chart's left edge at its foot, or beneath it held upright. */
+/* The pocket chart, top right at sea, cased as the instruments are: a
+   brass edge with a fine brass line inside it, lacquered dark. Opaque and
+   unblurred: it stands over the sea the whole voyage, and a blur behind it
+   is drawn again every frame (a third of the frames, on a software
+   renderer). Its weather's pusher is set into the frame: on its left edge
+   at the caption, or held upright on its bottom edge beneath it. */
 .pocket {
   position: absolute;
   top: var(--edge-top);
   right: var(--edge-right);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  /* The room the pusher's face takes inside the frame. */
+  --face-room: 0px;
 }
 
-/* A round pusher: a brass ring about a dark face, the sky at the boat on
-   it; in, it sits down with its decal gold; out, it stands up, faint. */
-.hud .pocket-weather {
-  position: absolute;
-  right: calc(100% + 6px);
-  bottom: 0;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    #121b21 0 15px,
-    var(--brass-dark) 15.5px,
-    var(--brass-light) 18px,
-    var(--brass) 20px,
-    var(--brass-dark) 22px
-  );
-  box-shadow: 0 3px 5px rgb(0 0 0 / 50%);
-  color: var(--faint);
-  cursor: pointer;
-  transition:
-    transform 0.1s,
-    box-shadow 0.1s;
+.pocket.with-pusher {
+  --face-room: 32px;
 }
 
-.hud .pocket-weather.on {
-  color: var(--gold, #e8b450);
-  transform: translateY(2px);
-  box-shadow: 0 1px 1px rgb(0 0 0 / 55%);
-}
-
-.sky-decal {
-  position: absolute;
-  inset: 9px;
-  animation: sky-in 0.3s ease-out;
-}
-
-.sky-decal.fading {
-  animation: sky-out 0.3s ease-in forwards;
-}
-
-@keyframes sky-in {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes sky-out {
-  to {
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sky-decal {
-    animation: none;
-  }
-
-  .sky-decal.fading {
-    display: none;
-  }
+.pocket-frame {
+  position: relative;
+  box-sizing: border-box;
+  border: 1px solid var(--brass-dark);
+  border-radius: 12px;
+  background: linear-gradient(rgb(34 44 52), rgb(14 20 25));
+  box-shadow:
+    inset 0 0 0 1px rgb(243 223 160 / 18%),
+    0 2px 10px rgb(0 0 0 / 30%);
+  pointer-events: auto;
 }
 
 .pocket-chart {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 128px;
-  padding: 6px 6px 4px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 6px 5px;
   border: 0;
+  border-radius: 11px;
+  background: none;
   color: var(--ink);
   font: inherit;
   cursor: pointer;
-}
-
-/* Opaque and unblurred, unlike the other panels: it stands over the sea the
-   whole voyage, and a blur behind it is drawn again every frame (a third of
-   the frames, on a software renderer). Over the panels' own rule, which
-   comes after it. */
-.hud .panel.pocket-chart {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  background: rgb(26 36 44);
 }
 
 .pocket-chart canvas {
@@ -425,26 +371,42 @@
   height: 90px;
 }
 
-/* The caption, a line or two, each within the chart: how far the edge is,
-   and in the world's last days when the new world comes, in the world
-   clock's amber. */
+/* The caption, beside the pusher's face: how far the edge is, and when
+   the new world comes, faint, in amber in the world's last days. Each line
+   within the chart, whatever it says. */
 .pocket-caption {
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 100%;
+  justify-content: center;
+  align-self: stretch;
+  min-height: 28px;
+  margin-left: var(--face-room);
   font-size: 13px;
   line-height: 1.25;
-  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
 
 .pocket-line {
   max-width: 100%;
+  min-height: 1.25em;
   white-space: nowrap;
 }
 
 .pocket-left {
+  color: var(--faint);
+}
+
+.pocket-left.closing {
   color: var(--gold);
+}
+
+.pocket .pocket-weather {
+  --stem: 10px;
+  position: absolute;
+  left: -6px;
+  bottom: 3px;
 }
 
 /* The notices. */
@@ -657,10 +619,6 @@
 /* A short screen: the pocket chart smaller, leaving the menu room above
    the sheet. */
 @media (max-height: 420px) {
-  .pocket-chart {
-    width: 108px;
-  }
-
   .pocket-caption {
     font-size: 12px;
   }
@@ -672,25 +630,24 @@
 }
 
 /* Held upright, the case needs the width: the pocket chart smaller, its
-   pusher beneath it. */
+   pusher in its bottom edge beneath the caption. */
 @media (orientation: portrait) {
-  .pocket-chart {
-    width: 100px;
-  }
-
   .pocket-chart canvas {
     width: 92px;
     height: 69px;
   }
 
   .pocket-caption {
+    margin-left: 0;
     font-size: 12px;
   }
 
-  .hud .pocket-weather {
-    position: relative;
-    right: auto;
-    bottom: auto;
-    margin-right: 28px;
+  .pocket.with-pusher .pocket-chart {
+    padding-bottom: 34px;
+  }
+
+  .pocket .pocket-weather {
+    left: 2px;
+    bottom: -6px;
   }
 }

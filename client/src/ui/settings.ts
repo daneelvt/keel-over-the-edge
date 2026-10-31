@@ -30,8 +30,11 @@ export interface Settings {
   detail: 'auto' | 'low';
   /** The barometer out of the instruments' case. */
   barometer: boolean;
-  /** The world clock out of the instruments' case. */
-  worldClock: boolean;
+  /**
+   * How light the night is drawn, 0 to 1: 0 the night as dark as it is, 1
+   * as light as dusk.
+   */
+  nightLight: number;
   /** The autopilot's control head open, not folded to its button. */
   pilotHead: boolean;
   /** The pocket chart's weather: rain, fog and the systems over the disk. */
@@ -50,7 +53,7 @@ export const DEFAULTS: Settings = {
   centreHelm: false,
   detail: 'auto',
   barometer: false,
-  worldClock: false,
+  nightLight: 2 / 3,
   pilotHead: false,
   pocketWeather: true,
   watchSort: 'liveliest',
@@ -93,6 +96,9 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
   if (r.detail === 'auto' || r.detail === 'low') {
     out.detail = r.detail;
   }
+  if (typeof r.nightLight === 'number' && r.nightLight >= 0 && r.nightLight <= 1) {
+    out.nightLight = r.nightLight;
+  }
   if (WATCH_SORTS.includes(r.watchSort as WatchSort)) {
     out.watchSort = r.watchSort as WatchSort;
   }
@@ -106,7 +112,6 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
     'rightOfWay',
     'centreHelm',
     'barometer',
-    'worldClock',
     'pilotHead',
     'pocketWeather',
   ] as const) {

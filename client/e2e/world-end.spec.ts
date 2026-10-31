@@ -65,9 +65,9 @@ test('@long a world ends on stage, and a new one begins with a blank chart', asy
   expect(before.ends).toBe(ends);
   expect((await ending(bob.p)).world).toBe(before.world);
 
-  // The countdown, on both, by the world clock.
-  await expect.poll(async () => (await ending(ann.p)).falls).toMatch(/^New world in \d/);
-  await expect.poll(async () => (await ending(bob.p)).falls).toMatch(/^New world in \d/);
+  // The countdown, on both, by the world clock, on the pocket chart.
+  await expect.poll(async () => (await ending(ann.p)).falls).toMatch(/^new world \d/);
+  await expect.poll(async () => (await ending(bob.p)).falls).toMatch(/^new world \d/);
   // The world is in its last days at once: the closing's notice, once.
   await expect
     .poll(() => ann.p.evaluate(() => globalThis.keel.noticesShown()), { timeout: 15_000 })

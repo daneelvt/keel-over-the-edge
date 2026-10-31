@@ -1512,6 +1512,25 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     settings(change: Partial<Settings>): void {
       game.settings.set(change);
     },
+    /**
+     * Holds the case's readouts at the shortest or the longest they say, or
+     * lets them follow the boat again (null).
+     */
+    readouts(at: 'shortest' | 'longest' | null): void {
+      const h = game.hud;
+      h.held = at !== null;
+      if (at === null) {
+        h.flush();
+        return;
+      }
+      const long = at === 'longest';
+      h.speed.value = long ? '18.8' : '0.0';
+      h.heading.value = long ? '338° NNW' : '000° N';
+      h.figures.value = long ? '338°' : '000°';
+      h.wind.value = long ? 'WNW 88 kn · F12' : 'N 0 kn · F0';
+      h.pilot.value = long ? 'Wind 135° P' : '';
+      h.tack.value = long ? 'Starboard tack' : '';
+    },
     /** The audio context's state: 'none' before the first gesture. */
     soundState(): string {
       return game.sound.state;
@@ -1520,7 +1539,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * The world's end as this page sees it: the world of the latest
      * Welcome, its end, ms of UTC, the world clock's now as UTC, the
-     * countdown shown, and the staged end at the last frame.
+     * countdown the pocket chart shows, and the staged end at the last frame.
      */
     ending() {
       const o = sailing.online;

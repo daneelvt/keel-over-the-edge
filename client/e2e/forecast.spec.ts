@@ -288,7 +288,7 @@ test.describe('the barometer', () => {
     // The menu has no switch of its own.
     await page.getByRole('button', { name: 'Menu' }).click();
     await expect(page.locator('input[name="barometer"]')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     // Kept across a load, and put away again.
     await openScene(page, 'world=1', true);
     await expect(page.locator('.barometer')).toBeVisible();
@@ -348,47 +348,18 @@ test.describe('the harbourmaster’s board', () => {
 test.describe('the pocket chart', () => {
   test.use({ viewport: { width: 960, height: 600 } });
 
-  test('its weather pusher is kept', async ({ page }) => {
-    await openScene(page, 'world=1', true);
-    const sw = page.locator('.pocket-weather');
-    await expect(sw).toHaveAttribute('aria-pressed', 'true');
-    await sw.click();
-    await expect(sw).toHaveAttribute('aria-pressed', 'false');
-    await openScene(page, 'world=1', true);
-    await expect(page.locator('.pocket-weather')).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  test('its pusher’s decal is the sky of the board’s Now, under a squall in Port Royal’s harbour', async ({
+  test('its weather pusher is a switch named for what it does, a weather decal on it, and kept', async ({
     page,
   }) => {
     await openScene(page, 'world=1', true);
-    expect(await page.evaluate(() => globalThis.keel.toHarbour())).toBe(true);
-    // A squall to meet the boat where it lies, three minutes on.
-    await page.evaluate(() => {
-      const k = globalThis.keel;
-      k.setWeather('squall');
-      k.advance(3 * 60 * 30);
-      k.render();
-      k.weatherNow();
-      k.issueForecast();
-    });
-    await page.locator('[data-pusher=board]').click();
-    const sky = page.locator('.board dt:text-is("Sky") + dd');
-    await expect(sky).not.toBeEmpty();
-    const decal: Record<string, string> = {
-      Fair: 'fair',
-      Showers: 'showers',
-      'Fog patches': 'fog',
-      Rain: 'rain',
-      'Squally showers': 'squalls',
-      'Squalls with heavy rain': 'squalls',
-    };
-    const words = (await sky.textContent()) ?? '';
-    expect(['Rain', 'Squally showers', 'Squalls with heavy rain']).toContain(words);
-    const pusher = page.locator('.pocket-weather');
-    await expect(pusher).toHaveAttribute('data-sky', /.+/);
-    // A storm near outranks the sky's words; else the decal is the board's sky.
-    expect([decal[words], 'storm']).toContain(await pusher.getAttribute('data-sky'));
-    await expect(pusher).toHaveAttribute('aria-label', /^Weather on the pocket chart; here, /);
+    const sw = page.locator('.pocket-weather');
+    await expect(sw).toHaveAttribute('aria-pressed', 'true');
+    await expect(sw).toHaveAttribute('aria-label', 'Weather on the chart');
+    await expect(sw.locator('.decal')).toHaveCount(1);
+    await sw.click();
+    await expect(sw).toHaveAttribute('aria-pressed', 'false');
+    await expect(sw).toHaveAttribute('aria-label', 'Weather on the chart');
+    await openScene(page, 'world=1', true);
+    await expect(page.locator('.pocket-weather')).toHaveAttribute('aria-pressed', 'false');
   });
 });

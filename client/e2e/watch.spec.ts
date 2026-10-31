@@ -132,7 +132,7 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   await expect(
     page.getByRole('checkbox', { name: 'Let others watch me sail (this voyage)' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
 
   // The keys steer nothing, and the Inputs sent carry no controls: the
   // worker's count, as the traffic it reports with each Pong says.

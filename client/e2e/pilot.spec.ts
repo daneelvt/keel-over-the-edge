@@ -46,7 +46,8 @@ test('the button switches it on at the boat’s angle; the head steps the target
   // About 90° off a north wind, heading east: the wind over port.
   await expect(page.locator('[data-pilot=head]')).toBeVisible();
   await expect(page.locator('[data-readout=pilot-drum]')).toHaveText(`Wind ${-angle}° P`);
-  await expect(page.locator('[data-readout=pilot]')).toHaveText(`Wind ${-angle}° P`);
+  // The case says nothing the head says.
+  await expect(page.locator('[data-readout=pilot]')).toHaveCount(0);
   await expect(page.locator('[data-pilot=power]')).toHaveAttribute('aria-pressed', 'true');
   // Eleven degrees to starboard: bearing away on port.
   await page.locator('[data-pilot-step="10"]').click();

@@ -196,7 +196,6 @@ export function makeChart(
       ),
     forecasting,
     speed: () => 0,
-    sunUp: () => world.sky.now.sunHeight > 0,
     steer: null,
   };
   return { chart, sea, notices, weather };

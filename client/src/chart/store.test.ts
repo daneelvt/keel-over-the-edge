@@ -75,8 +75,14 @@ describe('the chart’s store', () => {
     expect(distanceText(0.1 * NM)).toBe('0.1 NM');
   });
 
-  it('captions the pocket chart in a line or two, the chart in its name', () => {
-    expect(pocketCaption('', '')).toEqual({ lines: ['Chart'], name: 'Chart: open the chart' });
+  it('captions the pocket chart in a line or two, the chart in its name and never on it', () => {
+    // Before the boat's first position: the edge's line kept, empty.
+    expect(pocketCaption('', '')).toEqual({ lines: [''], name: 'Chart: open the chart' });
+    expect(pocketCaption('', '6d 23h')).toEqual({
+      lines: ['', 'new world 6d 23h'],
+      name: 'Chart, new world 6d 23h: open the chart',
+    });
+    // With no world's end known, one line.
     expect(pocketCaption('edge 3.4 NM', '')).toEqual({
       lines: ['edge 3.4 NM'],
       name: 'Chart, edge 3.4 NM: open the chart',

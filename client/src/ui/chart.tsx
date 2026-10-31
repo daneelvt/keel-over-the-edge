@@ -13,7 +13,6 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Raycaster, Vector2 } from 'three';
 import type { Chart, TappedWeather } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
-import { pocketSkyAt, pusherName, type SkyShown } from '../chart/pocketsky';
 import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
 import {
@@ -27,9 +26,10 @@ import {
 import { hitTest, type SystemBox, tappedBox, type WeatherHit } from '../chart/systembox';
 import type { BoatAt, ChartView } from '../chart/view';
 import type { ChartEntry } from '../net/messages';
+import { Pusher } from './case';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
 import { type Countdown, endText } from './countdown';
-import { SkyDecal } from './decals';
+import { WeatherDecal } from './decals';
 import { threeDigits, wholeDegrees } from './format';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
@@ -51,8 +51,6 @@ export interface ChartSea {
   forecasting: Forecasting | null;
   /** The boat's speed over the ground now, m/s. */
   speed: () => number;
-  /** Whether the sun is above the horizon at the boat. */
-  sunUp: () => boolean;
   /** Sets the autopilot to hold a heading, rad, as its panel does; null with no boat to steer. */
   steer: ((heading: number) => void) | null;
 }
@@ -642,9 +640,15 @@ function RimCountdown({ end }: { end: Countdown | null }) {
   if (end === null || end.text.value === '') {
     return null;
   }
+  const when = end.when.value;
   return (
     <p class={`chart-falls${end.closing.value ? ' closing' : ''}`} data-readout="chart-falls">
       <span role="timer">New world in {end.text.value}</span>
+      {when === '' ? null : (
+        <span class="chart-falls-when" data-readout="ends-at">
+          {when}
+        </span>
+      )}
     </p>
   );
 }
@@ -685,9 +689,29 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
   );
 }
 
+/** Whether the screen is held upright, kept as it turns. */
+function useUpright(): boolean {
+  const query = '(orientation: portrait)';
+  const [upright, setUpright] = useState(() => globalThis.matchMedia?.(query).matches === true);
+  useEffect(() => {
+    const m = globalThis.matchMedia?.(query);
+    if (m === undefined) {
+      return;
+    }
+    const on = () => setUpright(m.matches);
+    on();
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return upright;
+}
+
 /**
- * The pocket chart: the whole disk small, tilted, with the boat, and its
- * weather now while its pusher is in; a tap opens the chart.
+ * The pocket chart, cased in the instruments' brass: the whole disk small,
+ * tilted, with the boat, and its weather now while its pusher is in; how
+ * far the edge is and the time until a new world beneath it. A tap opens
+ * the chart. Its weather's pusher is set into its frame, on the left edge
+ * at its foot, or the bottom edge held upright.
  */
 export function PocketChart({
   sea,
@@ -701,10 +725,11 @@ export function PocketChart({
   setWeather?: ((on: boolean) => void) | null;
 }) {
   const canvas = useRef<HTMLCanvasElement | null>(null);
-  // Before the boat's first position, the chart's name alone.
+  // Empty before the boat's first position.
   const [edge, setCaption] = useState('');
-  // In the world's last days the caption carries the countdown too.
-  const caption = pocketCaption(edge, end?.closing.value ? end.text.value : '');
+  const caption = pocketCaption(edge, end?.text.value ?? '');
+  const closing = end?.closing.value === true;
+  const upright = useUpright();
   useEffect(() => {
     const c = canvas.current;
     if (c === null) {
@@ -720,107 +745,50 @@ export function PocketChart({
     const t = setInterval(draw, 500);
     return () => clearInterval(t);
   }, [sea, weather]);
+  const pusher = setWeather !== null && sea.forecasting !== null;
   return (
-    <div class="pocket">
-      <button
-        type="button"
-        class="panel pocket-chart"
-        onClick={() => sea.chart.show('chart')}
-        aria-label={caption.name}
-      >
-        <canvas ref={canvas} width={240} height={180} />
-        <span class="pocket-caption" data-readout="pocket">
-          {caption.lines.map((l, i) => (
-            <span key={i} class={`pocket-line${i > 0 ? ' pocket-left' : ''}`}>
-              {l}
-            </span>
-          ))}
+    <div class={`pocket${pusher ? ' with-pusher' : ''}`}>
+      <div class="pocket-frame">
+        <button
+          type="button"
+          class="pocket-chart"
+          onClick={() => sea.chart.show('chart')}
+          aria-label={caption.name}
+        >
+          <canvas ref={canvas} width={240} height={180} />
+          <span class="pocket-caption" data-readout="pocket">
+            {caption.lines.map((l, i) => (
+              <span
+                key={i}
+                class={`pocket-line${i > 0 ? ` pocket-left${closing ? ' closing' : ''}` : ''}`}
+                data-readout={i > 0 ? 'falls' : undefined}
+              >
+                {l}
+              </span>
+            ))}
+          </span>
+        </button>
+        {pusher ? (
+          <Pusher
+            name="Weather on the chart"
+            id="weather"
+            controls=""
+            out={weather}
+            pressed={weather}
+            press={() => setWeather(!weather)}
+            edge={upright ? 'bottom' : 'left'}
+            class={`pocket-weather${weather ? ' held' : ''}`}
+          >
+            <WeatherDecal />
+          </Pusher>
+        ) : null}
+      </div>
+      {end !== null && end.last.value !== '' ? (
+        <span class="visually-hidden" role="status">
+          {end.last.value}
         </span>
-      </button>
-      {setWeather !== null && sea.forecasting !== null ? (
-        <WeatherPusher sea={sea} src={sea.forecasting} on={weather} set={setWeather} />
       ) : null}
     </div>
-  );
-}
-
-/** How often the weather pusher reads the sky at the boat, ms; and looks whether the forecast has changed. */
-const SKY_EVERY = 10_000;
-const SKY_LOOK = 500;
-
-/**
- * The pocket chart's weather pusher: round, on the chart's edge, its decal
- * the sky at the boat now, crossfading as it changes; in while the chart's
- * weather is on.
- */
-function WeatherPusher({
-  sea,
-  src,
-  on,
-  set,
-}: {
-  sea: ChartSea;
-  src: Forecasting;
-  on: boolean;
-  set: (on: boolean) => void;
-}) {
-  const [shown, setShown] = useState<{ now: SkyShown | null; before: SkyShown | null }>({
-    now: null,
-    before: null,
-  });
-  useEffect(() => {
-    let live = true;
-    let read = Number.NEGATIVE_INFINITY;
-    let version = -1;
-    const look = () => {
-      // Every ten seconds, and again as the forecast or the truth changes.
-      const t = performance.now();
-      if (t - read < SKY_EVERY && src.forecasts.version === version) {
-        return;
-      }
-      read = t;
-      version = src.forecasts.version;
-      const b = sea.boat();
-      const night = !sea.sunUp();
-      void pocketSkyAt(src, b.east, b.north).then((sky) => {
-        if (!live) {
-          return;
-        }
-        setShown((was) =>
-          was.now !== null && was.now.sky === sky && was.now.night === night
-            ? was
-            : { now: { sky, night }, before: was.now },
-        );
-      });
-    };
-    look();
-    const t = setInterval(look, SKY_LOOK);
-    return () => {
-      live = false;
-      clearInterval(t);
-    };
-  }, [sea, src]);
-  const now = shown.now;
-  return (
-    <button
-      type="button"
-      class={`pocket-weather${on ? ' on' : ''}`}
-      aria-pressed={on}
-      aria-label={pusherName(now)}
-      data-sky={now?.sky ?? ''}
-      onClick={() => set(!on)}
-    >
-      {shown.before !== null ? (
-        <span key={`b${shown.before.sky}${shown.before.night}`} class="sky-decal fading">
-          <SkyDecal sky={shown.before.sky} night={shown.before.night} />
-        </span>
-      ) : null}
-      {now !== null ? (
-        <span key={`n${now.sky}${now.night}`} class="sky-decal">
-          <SkyDecal sky={now.sky} night={now.night} />
-        </span>
-      ) : null}
-    </button>
   );
 }
 
@@ -922,7 +890,7 @@ export function NoticeSwitches({ notices }: { notices: Notices }) {
   const off = notices.off.value;
   return (
     <>
-      <h2>Notices</h2>
+      <h3>Notices</h3>
       {notices.kinds
         .filter((k) => k.switchable)
         .map((k) => (

@@ -2,12 +2,18 @@
 
 import { describe, expect, test } from 'vitest';
 import {
+  DUSK_FLOOR,
+  LIFTED,
   LIGHT_TABLE,
   type Light,
+  type LightValues,
+  liftNight,
   luminance,
   mainLight,
+  NIGHT_FLOOR,
   newLightValues,
   newMainLight,
+  nightFloor,
   readLight,
 } from './daylight';
 
@@ -119,5 +125,64 @@ describe('the light of the hour', () => {
     expect(v.deep).toEqual([0.02, 0.16, 0.25]);
     expect(v.scatter).toEqual([0.07, 0.48, 0.5]);
     expect([v.hazeNear, v.hazeFar]).toEqual([220, 1000]);
+  });
+});
+
+describe('the night’s floor', () => {
+  const HEIGHTS = [90, 20, 3, 0.5, 0, -1.5, -3, -4.5, -6, -7, -9, -11, -12, -15, -40, -90];
+  const read = (h: number, floor: number): LightValues =>
+    liftNight(readLight(h, newLightValues()), floor, newLightValues());
+
+  test('runs from the night’s row to dusk’s, by the night light', () => {
+    expect(nightFloor(0)).toBe(NIGHT_FLOOR);
+    expect(nightFloor(1)).toBe(DUSK_FLOOR);
+    expect(nightFloor(2 / 3)).toBeCloseTo(-6, 9);
+    // Out of range, or not a number: held within it.
+    expect(nightFloor(-1)).toBe(NIGHT_FLOOR);
+    expect(nightFloor(3)).toBe(DUSK_FLOOR);
+    expect(nightFloor(Number.NaN)).toBe(NIGHT_FLOOR);
+    expect(NIGHT_FLOOR).toBe(LIGHT_TABLE.at(-1)?.height);
+  });
+
+  test('at the night’s row changes nothing, at any height', () => {
+    for (const h of HEIGHTS) {
+      expect(read(h, NIGHT_FLOOR)).toEqual(readLight(h, newLightValues()));
+    }
+  });
+
+  test('changes nothing above the floor', () => {
+    for (const floor of [nightFloor(0.5), nightFloor(2 / 3), DUSK_FLOOR]) {
+      for (const h of HEIGHTS.filter((x) => x >= floor)) {
+        expect(read(h, floor)).toEqual(readLight(h, newLightValues()));
+      }
+    }
+  });
+
+  test('below it, the scene’s light is the floor’s and the marks of the hour the night’s', () => {
+    const floor = nightFloor(2 / 3);
+    const at = readLight(floor, newLightValues()) as unknown as Record<string, unknown>;
+    for (const h of [-7, -12, -40]) {
+      const truth = readLight(h, newLightValues()) as unknown as Record<string, unknown>;
+      const lifted = read(h, floor) as unknown as Record<string, unknown>;
+      for (const k of Object.keys(truth)) {
+        expect(lifted[k], k).toEqual(LIFTED.includes(k as keyof Light) ? at[k] : truth[k]);
+      }
+    }
+    // The marks: the stars, the lanterns, the moon, the glow, the range.
+    for (const k of ['starLimit', 'lanterns', 'moonLight', 'moonDisc', 'glowStrength', 'height']) {
+      expect(LIFTED).not.toContain(k);
+    }
+  });
+
+  test('lifts a moonless night: the sea, the sail, the horizon and the hemisphere lighter', () => {
+    const night = readLight(-30, newLightValues());
+    const lifted = read(-30, nightFloor(2 / 3));
+    for (const k of ['deep', 'scatter', 'sailGlow', 'skyHorizon', 'hemiSky'] as const) {
+      expect(luminance(lifted[k]), k).toBeGreaterThan(luminance(night[k]));
+    }
+    expect(lifted.hemiLight).toBeGreaterThan(night.hemiLight);
+    // The moon's light is the hour's: no brighter for the floor.
+    const moon = (v: LightValues) => mainLight(v, -30 * DEG, 40 * DEG, 1, newMainLight()).strength;
+    expect(moon(lifted)).toBe(moon(night));
   });
 });

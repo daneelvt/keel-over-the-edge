@@ -54,12 +54,15 @@ import { sheets, sheetsOver } from '../sky/sheets';
 import {
   LIGHT_TABLE,
   type LightValues,
+  liftNight,
   luminance,
   type MainLight,
   MOON_COLOUR,
   mainLight,
+  NIGHT_FLOOR,
   newLightValues,
   newMainLight,
+  nightFloor,
   readLight,
 } from './daylight';
 import { AIR_REACH, airBetween, haloBetween } from './fog';
@@ -231,8 +234,13 @@ export class Sky {
   /** The main light: the sun by day, the moon by night. */
   readonly light: DirectionalLight;
   readonly hemisphere: HemisphereLight;
-  /** The table read at the sun's height this frame, and the main light. */
+  /**
+   * The table read at the sun's height this frame, the scene's light lifted
+   * to the night's floor; and the main light.
+   */
   readonly values: LightValues = readLight(30, newLightValues());
+  readonly #floored: LightValues = newLightValues();
+  #floor = NIGHT_FLOOR;
   readonly main: MainLight = newMainLight();
   readonly now: SkyNow = {
     sun: START_SUN.clone(),
@@ -308,9 +316,22 @@ export class Sky {
     this.#apply();
   }
 
+  /**
+   * How light the night is drawn, 0 (as it is) to 1 (dusk's light): the
+   * scene's light is read no lower than its floor.
+   */
+  set nightLight(v: number) {
+    const floor = nightFloor(v);
+    if (floor !== this.#floor) {
+      this.#floor = floor;
+      this.#apply();
+    }
+  }
+
   #apply(): void {
     const n = this.now;
-    const v = readLight(n.sunHeight / DEG, this.values);
+    const v = liftNight(readLight(n.sunHeight / DEG, this.values), this.#floor, this.#floored);
+    // The moon's light is the hour's: read at the sun's true height.
     const m = mainLight(v, n.sunHeight, n.moonHeight, n.lit, this.main);
     (look.sun.value as Vector3).copy(n.sun);
     (look.moon.value as Vector3).copy(n.moon);
