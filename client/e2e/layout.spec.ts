@@ -184,23 +184,30 @@ async function parts(page: Page): Promise<{
 /**
  * Whether the pocket chart's caption fits at its longest: the farthest the
  * edge can be said and the longest time to a new world, each a line in the
- * caption's own type, within the chart.
+ * caption's own type, within the chart. Laid out by the page, out of the
+ * caption's flow: a canvas may measure in another face than the page's.
  */
 async function longestCaption(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const caption = document.querySelector('.pocket-caption');
-    const line = document.querySelector('.pocket-line');
+    const line = document.querySelector('.pocket-line.pocket-left');
     if (caption === null || line === null) {
       return ['no pocket chart'];
     }
     const room = caption.clientWidth;
-    const g = document.createElement('canvas').getContext('2d');
-    if (g === null) {
-      return ['no canvas'];
-    }
-    g.font = getComputedStyle(line).font;
+    const width = (t: string) => {
+      const probe = line.cloneNode() as HTMLElement;
+      probe.textContent = t;
+      probe.style.position = 'absolute';
+      probe.style.visibility = 'hidden';
+      probe.style.maxWidth = 'none';
+      caption.append(probe);
+      const w = probe.getBoundingClientRect().width;
+      probe.remove();
+      return w;
+    };
     return ['edge 99.9 NM', 'new world 6d 23h']
-      .map((t) => ({ t, w: g.measureText(t).width }))
+      .map((t) => ({ t, w: width(t) }))
       .filter(({ w }) => w > room + 0.5)
       .map(({ t, w }) => `“${t}” is ${w.toFixed(1)} px in a caption ${room} px wide`);
   });
