@@ -2,8 +2,7 @@
 
 // The forecast in a real browser, in the sandbox on seed 1's world, whose
 // forecast is made as the server makes its own: the chart's slider moves by
-// the minute, ahead by the latest issue and, back, by what happened, never
-// what is to come;
+// the minute, ahead by the latest issue;
 // each layer of the chart's weather is painted only with its switch, within
 // the chart's budget; a gale warning is raised once however often it is
 // issued again, names the nearest charted place, and is not raised with its
@@ -64,7 +63,7 @@ async function openWeather(page: Page, query: string): Promise<void> {
 }
 
 test.describe('the chart’s weather', () => {
-  test('the slider shows the minutes ahead by the forecast and what happened behind, never what is to come', async ({
+  test('the slider shows the minutes ahead by the forecast, and nothing behind now', async ({
     page,
   }) => {
     await openScene(page, 'world=1&weather=storm', true);
@@ -92,14 +91,9 @@ test.describe('the chart’s weather', () => {
     const ahead = await at(30);
     expect(ahead.moment).toEqual({ kind: 'ahead', minutes: 30, tick: minute + 30 * MINUTE });
     await expect(page.locator('[data-readout="chart-time"]')).toContainText('In 30 min · ');
+    // Behind now is now: what happened is not shown.
     const back = await at(-30);
-    expect(back.moment).toEqual({ kind: 'past', minutes: -30, tick: minute - 30 * MINUTE });
-    await expect(page.locator('[data-readout="chart-time"]')).toContainText('30 min ago · ');
-    // Further back than is kept, it shows the oldest kept, never now's.
-    const far = await at(-90);
-    expect(far.moment?.kind).toBe('past');
-    expect(far.moment?.tick ?? now).toBeLessThan(now);
-    expect(far.moment?.tick ?? 0).toBeGreaterThanOrEqual(f?.truth[0] ?? 0);
+    expect(back.moment?.kind).toBe('now');
     const nowShown = await at(0);
     expect(nowShown.moment?.kind).toBe('now');
     await expect(page.locator('[data-readout="chart-time"]')).toContainText('Now');

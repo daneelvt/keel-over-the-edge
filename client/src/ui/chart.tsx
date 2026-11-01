@@ -139,11 +139,11 @@ function ChartBox({ sea, e, close }: { sea: ChartSea; e: ChartEntry; close: () =
 
 /** Where the boat is, as its latitude and longitude, and how far the edge. */
 function Position({ sea }: { sea: ChartSea }) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(['', '']);
   useEffect(() => {
     const at = () => {
       const b = sea.boat();
-      setText(`${formatPosition(b.east, b.north)} · ${edgeCaption(b.east, b.north, sea.lip)}`);
+      setText([formatPosition(b.east, b.north), edgeCaption(b.east, b.north, sea.lip)]);
     };
     at();
     const t = setInterval(at, 1000);
@@ -151,23 +151,35 @@ function Position({ sea }: { sea: ChartSea }) {
   }, [sea]);
   return (
     <p class="chart-position" data-readout="position">
-      {text}
+      <span>{text[0]}</span>
+      <span class="visually-hidden"> · </span>
+      <span>{text[1]}</span>
     </p>
   );
 }
 
-/** Pointers on the chart: a drag moves it, two fingers pinch and turn it, a double tap fits it, a tap picks. */
+/**
+ * Pointers on the chart, on its paper or its names: a drag moves it, two
+ * fingers pinch and turn it, a double tap fits it, a tap picks. A name's
+ * own tap opens its box; a name under a finger that drags or twists does
+ * not.
+ */
 function useGestures(sea: ChartSea) {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = ref.current;
-    if (el === null) {
+    const root = el?.parentElement ?? null;
+    if (el === null || root === null) {
       return;
     }
     const view = sea.chart.view;
     const pts = new Map<number, { x: number; y: number }>();
     let lastTap = 0;
-    let down: { x: number; y: number; at: number; moved: number } | null = null;
+    let down: { x: number; y: number; at: number; moved: number; name: boolean } | null = null;
+    // Whether the pointers down now have dragged or twisted the chart.
+    let moved = false;
+    const onName = (t: EventTarget | null) =>
+      t instanceof Element && t.closest('.chart-labels') !== null;
     const pair = () => {
       const [a, b] = [...pts.values()];
       return a === undefined || b === undefined
@@ -176,9 +188,23 @@ function useGestures(sea: ChartSea) {
     };
     let before = pair();
     const onDown = (e: PointerEvent) => {
-      el.setPointerCapture(e.pointerId);
+      const name = onName(e.target);
+      if (e.target !== el && !name) {
+        return;
+      }
+      // A name keeps its pointer, so that its own tap still opens its box.
+      if (!name) {
+        el.setPointerCapture(e.pointerId);
+      }
+      if (pts.size === 0) {
+        moved = false;
+      }
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      down = pts.size === 1 ? { x: e.clientX, y: e.clientY, at: e.timeStamp, moved: 0 } : null;
+      down =
+        pts.size === 1 ? { x: e.clientX, y: e.clientY, at: e.timeStamp, moved: 0, name } : null;
+      if (pts.size > 1) {
+        moved = true;
+      }
       before = pair();
     };
     const onMove = (e: PointerEvent) => {
@@ -192,6 +218,7 @@ function useGestures(sea: ChartSea) {
       p.y = e.clientY;
       if (down !== null) {
         down.moved += Math.hypot(dx, dy);
+        moved ||= down.moved >= 8;
       }
       if (pts.size === 1) {
         view.drag(dx, dy);
@@ -199,15 +226,21 @@ function useGestures(sea: ChartSea) {
         const now = pair();
         if (before !== null && now !== null && now.d > 0) {
           view.zoom(before.d / now.d);
-          view.turn(now.a - before.a);
+          // The paper turns with the fingers: a twist clockwise on the
+          // screen turns the view's bearing back.
+          view.turn(before.a - now.a);
         }
         before = now;
       }
     };
     const onUp = (e: PointerEvent) => {
+      if (!pts.has(e.pointerId)) {
+        return;
+      }
       if (
         e.type === 'pointerup' &&
         down !== null &&
+        !down.name &&
         down.moved < 8 &&
         e.timeStamp - down.at < 500 &&
         pts.size === 1
@@ -238,20 +271,31 @@ function useGestures(sea: ChartSea) {
       before = pair();
     };
     const onWheel = (e: WheelEvent) => {
+      if (e.target !== el && !onName(e.target)) {
+        return;
+      }
       e.preventDefault();
       view.zoom(Math.exp(e.deltaY * 0.001));
     };
-    el.addEventListener('pointerdown', onDown);
-    el.addEventListener('pointermove', onMove);
-    el.addEventListener('pointerup', onUp);
-    el.addEventListener('pointercancel', onUp);
-    el.addEventListener('wheel', onWheel, { passive: false });
+    // A name dragged or twisted is not tapped.
+    const onClick = (e: MouseEvent) => {
+      if (moved && onName(e.target)) {
+        e.stopPropagation();
+      }
+    };
+    root.addEventListener('pointerdown', onDown);
+    root.addEventListener('pointermove', onMove);
+    root.addEventListener('pointerup', onUp);
+    root.addEventListener('pointercancel', onUp);
+    root.addEventListener('wheel', onWheel, { passive: false });
+    root.addEventListener('click', onClick, true);
     return () => {
-      el.removeEventListener('pointerdown', onDown);
-      el.removeEventListener('pointermove', onMove);
-      el.removeEventListener('pointerup', onUp);
-      el.removeEventListener('pointercancel', onUp);
-      el.removeEventListener('wheel', onWheel);
+      root.removeEventListener('pointerdown', onDown);
+      root.removeEventListener('pointermove', onMove);
+      root.removeEventListener('pointerup', onUp);
+      root.removeEventListener('pointercancel', onUp);
+      root.removeEventListener('wheel', onWheel);
+      root.removeEventListener('click', onClick, true);
     };
   }, [sea]);
   return ref;
@@ -401,7 +445,7 @@ function SystemBoxPanel({ sea, t, close }: { sea: ChartSea; t: TappedWeather; cl
   );
 }
 
-/** The tabs between the chart, its list and the news, and the way back to sea. */
+/** The tabs between the chart, its list and the news. */
 function Tabs({ sea }: { sea: ChartSea }) {
   const mode = sea.chart.mode.value;
   const tab = (m: 'chart' | 'list' | 'news', label: string) => (
@@ -419,9 +463,6 @@ function Tabs({ sea }: { sea: ChartSea }) {
       {tab('chart', 'Chart')}
       {tab('list', 'List')}
       {tab('news', 'News')}
-      <button type="button" class="chart-tab chart-close" onClick={() => sea.chart.show(null)}>
-        Back to sea
-      </button>
     </nav>
   );
 }
@@ -635,20 +676,19 @@ export function NewsSheet({ sea, end = null }: { sea: ChartSea; end?: Countdown 
   );
 }
 
-/** The countdown at the chart's rim, and at the head of its list. */
+/** The countdown at the chart's rim, over its list and the news: the day and hour it ends are the news's, and its title's. */
 function RimCountdown({ end }: { end: Countdown | null }) {
   if (end === null || end.text.value === '') {
     return null;
   }
   const when = end.when.value;
   return (
-    <p class={`chart-falls${end.closing.value ? ' closing' : ''}`} data-readout="chart-falls">
+    <p
+      class={`chart-case chart-falls${end.closing.value ? ' closing' : ''}`}
+      data-readout="chart-falls"
+      title={when === '' ? undefined : when}
+    >
       <span role="timer">New world in {end.text.value}</span>
-      {when === '' ? null : (
-        <span class="chart-falls-when" data-readout="ends-at">
-          {when}
-        </span>
-      )}
     </p>
   );
 }
@@ -666,12 +706,23 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
   const picked = chart.picked.value;
   const tapped = chart.tapped.value;
   return (
-    <div class={`chart-screen chart-${mode}`}>
+    <div class="chart-screen" data-mode={mode}>
       <div class="chart-surface" ref={surface} hidden={mode !== 'chart'} />
       <div class="chart-labels" ref={labels} hidden={mode !== 'chart'} />
       <header class="chart-top">
-        <Tabs sea={sea} />
-        <Position sea={sea} />
+        <div class="chart-case chart-strip">
+          <Tabs sea={sea} />
+          <Position sea={sea} />
+          <button
+            type="button"
+            class="chart-button chart-back"
+            aria-label="Back to sea"
+            title="Back to sea"
+            onClick={() => chart.show(null)}
+          >
+            ✕
+          </button>
+        </div>
         <RimCountdown end={end} />
       </header>
       {mode === 'chart' && picked !== null ? (

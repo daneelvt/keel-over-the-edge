@@ -152,7 +152,6 @@ export function makeChart(
   });
   let weather: ChartWeather | null = null;
   const choice = () => ({
-    mode: chart.timeMode.value,
     minutes: chart.minutes.value,
     layers: chart.layers.value,
   });
@@ -168,7 +167,7 @@ export function makeChart(
   if (weather !== null) {
     view.attachWeather(weather);
     view.streaksOn = () => chart.layers.value.streaks;
-    for (const s of [chart.timeMode, chart.minutes, chart.layers]) {
+    for (const s of [chart.minutes, chart.layers]) {
       s.subscribe(() => view.weatherChanged());
     }
   }
