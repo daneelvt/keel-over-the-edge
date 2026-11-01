@@ -287,8 +287,12 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
   page,
 }) => {
   test.setTimeout(300_000);
-  // The sailor to be watched, on a page of their own.
-  const other = await browser.newContext();
+  // Two pages on CI's one software GPU, where a full-size sea's frames run
+  // some 20 s behind the page and the other page waits for them, and the
+  // watcher's start screen draws a sea that cannot be held: small pages,
+  // the watcher's a phone's. The sailor to be watched, on a page of their own.
+  await page.setViewportSize({ width: 360, height: 640 });
+  const other = await browser.newContext({ viewport: { width: 320, height: 200 } });
   const seen = await other.newPage();
   try {
     const them = await sailor(other, 'Seen');
