@@ -17,6 +17,12 @@ test.beforeEach(() => {
   test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
 });
 
+// Where the connection is the test, not the picture or the screen, a small
+// page. CI's software GPU runs a full-size sea's frames some 20 s behind the
+// page, and the next page, a reload or the next test's, waits for them; a
+// small one's, half.
+const small = { width: 320, height: 200 };
+
 function net(page: Page) {
   return page.evaluate(() => globalThis.keel.net());
 }
@@ -51,6 +57,7 @@ function cleanAir(c: { corrections: number; shadowed: number; largest: number })
 }
 
 test('a sail predicted with no correction', async ({ page, context }) => {
+  await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
   await page.evaluate(() => globalThis.keel.script('wiggle'));
@@ -62,6 +69,7 @@ test('a sail predicted with no correction', async ({ page, context }) => {
 });
 
 test('a wind changed on the server reaches the boat', async ({ page, context, request }) => {
+  await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
   const res = await request.post(`${internal}/debug/wind?knots=15&from=90`);
@@ -87,6 +95,7 @@ test('a wind changed on the server reaches the boat', async ({ page, context, re
 });
 
 test('a reload within the grace finds the same boat', async ({ page, context }) => {
+  await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
   await page.evaluate(() => globalThis.keel.setControls(0.3, 0.4));
@@ -109,6 +118,7 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', asyn
   context,
   request,
 }) => {
+  await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
   const before = await net(page);
@@ -131,7 +141,6 @@ test('another device takes the boat, and Take over takes it back', async ({ page
   // GPU that alone has taken most of the 90 s a test is given. Small pages,
   // as together.spec.ts's, so the second loads beside the first.
   test.setTimeout(180_000);
-  const small = { width: 320, height: 200 };
   await page.setViewportSize(small);
   const context = page.context();
   await sailor(context);

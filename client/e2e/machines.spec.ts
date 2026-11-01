@@ -58,6 +58,7 @@ async function laidOut(page: Page, player: string): Promise<void> {
   const yours = page.locator('.your-sailor');
   const ai = page.locator('.ai-panel');
   const go = yours.getByRole('button', { name: `Set sail as ${player}` });
+  const size = page.viewportSize();
   const boxes = async () => {
     const [a, b] = [await yours.boundingBox(), await ai.boundingBox()];
     if (a === null || b === null) {
@@ -81,7 +82,9 @@ async function laidOut(page: Page, player: string): Promise<void> {
       return b.y >= a.y + a.height && Math.abs(a.x - b.x) < 1;
     })
     .toBe(true);
-  await page.setViewportSize({ width: 960, height: 600 });
+  if (size !== null) {
+    await page.setViewportSize(size);
+  }
 }
 
 /** The menu names the player's own sailor as the one sailing, not the machine sailor. */
@@ -219,6 +222,10 @@ test('every entry shows the machine sailors before the sea, the boat still in th
   context,
   page,
 }) => {
+  // A small page but where the phones' layouts are checked: CI's software
+  // GPU runs a full-size sea's frames some 20 s behind the page, and the
+  // reload waits for them; a small one's, half.
+  await page.setViewportSize({ width: 320, height: 200 });
   // A name of the most letters a sailor may have, which wraps on a phone.
   const made = await sailor(context, 'Wavecrestmak');
   const player = made.name;
