@@ -6,9 +6,10 @@
 # Runs only when a file the browser tests depend on changed.
 #
 # Each back end runs in jobs of its own, and the tests tagged @long (minutes
-# each on SwiftShader) apart from the rest, the short tests split over two
-# runners by spec file, so seven jobs run side by side; one of them runs the sea's short
-# tests on a WebGPU device held to compatibility mode's limits.
+# each on SwiftShader) apart from the rest, the short tests split over
+# runners by spec file (five for WebGL 2, two for WebGPU), so ten jobs run
+# side by side; one of them runs the sea's short tests on a WebGPU device
+# held to compatibility mode's limits.
 # The game connection's upgrade from a worker is also tried on WebKit; and,
 # where the runner's kernel has sch_netem, the slow-network tests run once
 # through real TCP loss as well as through tools/lag's model of it.
@@ -61,24 +62,25 @@ jobs:
     if: needs.changes.outputs.render == 'true'
     strategy:
       fail-fast: false
-      # The short tests of each back end are split over two runners by spec
-      # file, so that no job takes much longer than the long ones: the first
-      # runs the files `specs` names, the second every other file, so a new
-      # file always runs. The halves are chosen by the files' measured times
-      # (Playwright's own --shard splits by the number of tests, and these
-      # files' tests take from a second to a minute and a half each). The long
-      # tests are a few long ones, each job's time mostly one test's. The
-      # sea's tests run once more on a WebGPU device held to compatibility
-      # mode's limits.
+      # The short tests of each back end are split over runners by spec
+      # file, so that no job takes much longer than the long ones: the files
+      # of each shard but the last are named in playwright.config.ts, chosen
+      # by the files' measured times, and the last shard runs every other
+      # file, so a new file always runs. The long tests are a few long ones,
+      # each job's time mostly one test's. The sea's tests run once more on
+      # a WebGPU device held to compatibility mode's limits.
       matrix:
         include:
-          - { project: webgl2, tests: short, shard: 1, shards: 2, specs: 'sea,sail,fleet,lag,start,together,forecast' }
-          - { project: webgl2, tests: short, shard: 2, shards: 2, specs: 'sea,sail,fleet,lag,start,together,forecast' }
-          - { project: webgpu, tests: short, shard: 1, shards: 2, specs: 'sea,fleet' }
-          - { project: webgpu, tests: short, shard: 2, shards: 2, specs: 'sea,fleet' }
-          - { project: webgl2, tests: long, shard: 1, shards: 1, specs: '' }
-          - { project: webgpu, tests: long, shard: 1, shards: 1, specs: '' }
-          - { project: compat, tests: short, shard: 1, shards: 1, specs: '' }
+          - { project: webgl2, tests: short, shard: 1, shards: 5 }
+          - { project: webgl2, tests: short, shard: 2, shards: 5 }
+          - { project: webgl2, tests: short, shard: 3, shards: 5 }
+          - { project: webgl2, tests: short, shard: 4, shards: 5 }
+          - { project: webgl2, tests: short, shard: 5, shards: 5 }
+          - { project: webgpu, tests: short, shard: 1, shards: 2 }
+          - { project: webgpu, tests: short, shard: 2, shards: 2 }
+          - { project: webgl2, tests: long, shard: 1, shards: 1 }
+          - { project: webgpu, tests: long, shard: 1, shards: 1 }
+          - { project: compat, tests: short, shard: 1, shards: 1 }
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -118,10 +120,10 @@ jobs:
         env:
           PROJECT: ${{ matrix.project }}
           GREP: ${{ matrix.tests == 'long' && '--grep' || '--grep-invert' }}
-          # playwright.config.ts reads these: with SPECS_HALF 1 only the files
-          # SPECS names run, with 2 every file but those.
-          SPECS: ${{ matrix.specs }}
-          SPECS_HALF: ${{ matrix.shards > 1 && matrix.shard || '' }}
+          # playwright.config.ts reads these, with PROJECT, for the files
+          # this shard runs.
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ matrix.shards }}
         run: npx --no-install playwright test --project "$PROJECT" "$GREP" @long
       - name: The pictures and traces of a failure
         if: failure()

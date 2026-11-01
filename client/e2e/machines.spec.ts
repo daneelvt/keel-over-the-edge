@@ -17,7 +17,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { holdPasskeys, type Made, sailor, setSail, steady } from './helpers';
+import { drained, holdPasskeys, type Made, sailor, setSail, steady } from './helpers';
 import { assertPasskey } from './passkey';
 
 test.beforeEach(() => {
@@ -213,12 +213,27 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   await page.getByRole('button', { name: 'Machine sailors' }).click();
   await expect(page.locator('.machines .machine-list li', { hasText: name })).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
+});
 
-  // Every entry shows them before the sea. (Reloaded only once the page
-  // draws steadily: on CI's software GPU a reload amid its start can hang.)
-  // The boat still in the water: the player's panel at its tallest, the
-  // longest name, the note that the boat is at sea, and the box.
+test('every entry shows the machine sailors before the sea, the boat still in the water', async ({
+  context,
+  page,
+}) => {
+  // A name of the most letters a sailor may have, which wraps on a phone.
+  const made = await sailor(context, 'Wavecrestmak');
+  const player = made.name;
+  const name = `Brassy ${Date.now() % 10_000_000}`;
+  await machine(context, name);
+  await page.goto('/?test&backend=webgl2&tier=low');
+  await twoPanels(page, player, name);
+  await setSail(page);
+
+  // Reloaded only once the page draws steadily and the GPU is done with
+  // it: on CI's software GPU a reload amid its start can hang. The boat
+  // still in the water: the player's panel at its tallest, the longest
+  // name, the note that the boat is at sea, and the box.
   await steady(page);
+  await drained(page);
   await page.reload();
   await twoPanels(page, player, name);
   const yours = page.locator('.your-sailor');

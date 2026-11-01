@@ -17,7 +17,7 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { holdPasskeys, type Made, sailor, setSail, softwareGPU } from './helpers';
+import { drained, holdPasskeys, type Made, sailor, setSail, softwareGPU } from './helpers';
 import { assertPasskey } from './passkey';
 
 test.beforeEach(() => {
@@ -302,6 +302,9 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
     await seen.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
       timeout: 60_000,
     });
+    // The watcher's page starts beside the sea on CI's one software GPU:
+    // the sea held meanwhile, as a hidden tab is, the boat sailing on.
+    await seen.evaluate(() => globalThis.keel.hold(true));
 
     // Unticked: the watcher, on the start screen, does not find them.
     const made = await sailor(context, 'Watcher');
@@ -316,6 +319,7 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
 
     // Back at the Set sail screen after a reload, the boat still at sea:
     // the box is the voyage's, unticked; ticked, the voyage can be watched.
+    await drained(seen);
     await seen.reload();
     await expect(yours).toContainText('at sea', { timeout: 90_000 });
     await expect(box).not.toBeChecked();
