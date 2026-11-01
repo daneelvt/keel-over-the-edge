@@ -36,21 +36,63 @@ const keelReady = 'http://127.0.0.1:19090/readyz';
 // The world page, on its own Vite, its data from keel's internal listener.
 const ownerPort = 5184;
 const linux = process.platform === 'linux';
-// pr.render splits a back end's short tests over two runners by spec file:
-// SPECS names some files (sea,sail), and SPECS_HALF says which half this
-// run is: 1, those files alone; 2, every file but those. Unset, all of them.
-const halfSpecs = (process.env.SPECS ?? '')
-  .split(',')
-  .filter((n) => n !== '')
-  .map((n) => `${n}.spec.ts`);
-const half =
-  halfSpecs.length === 0
-    ? {}
-    : process.env.SPECS_HALF === '1'
-      ? { testMatch: halfSpecs }
-      : process.env.SPECS_HALF === '2'
-        ? { testIgnore: halfSpecs }
-        : {};
+// pr.render splits a back end's short tests over runners by spec file:
+// shard n of SHARDS (PROJECT's) runs the files named n-th for that back end
+// here, and the last shard every file not named, so a new file always runs.
+// Unset, all of them. The groups are chosen by the files' short tests'
+// times on CI's runners, each about 18 minutes for webgl2 and 16 for webgpu
+// (Playwright's own --shard splits by the number of tests, and these files
+// take from seconds to ten minutes). connect.spec.ts must run first in its
+// shard, which the files' alphabetical order gives.
+const shardFiles: Record<string, string[][]> = {
+  webgl2: [
+    [
+      'connect',
+      'encounter',
+      'features',
+      'lag',
+      'land',
+      'machine-mark',
+      'oauth-approve',
+      'passkeys',
+    ],
+    ['lights', 'roam', 'sail', 'sky', 'stopped', 'tapstorm', 'weather', 'wind'],
+    ['edge', 'fleet', 'forecast', 'freecam', 'start', 'together', 'towns', 'world-hand'],
+    ['discover', 'fog', 'layout', 'look', 'owner', 'watch', 'weatherchart', 'worker'],
+  ],
+  webgpu: [
+    [
+      'edge',
+      'ending',
+      'forecast',
+      'freecam',
+      'land',
+      'layout',
+      'machine-mark',
+      'pilot',
+      'sail',
+      'tapstorm',
+      'weather',
+      'wind',
+    ],
+  ],
+};
+
+/** The files a project's shard runs, as the project's testMatch or testIgnore. */
+function shardOf(project: string): { testMatch?: string[]; testIgnore?: string[] } {
+  const shards = Number(process.env.SHARDS ?? '1');
+  if (shards <= 1 || process.env.PROJECT !== project) {
+    return {};
+  }
+  const groups = (shardFiles[project] ?? []).map((g) => g.map((n) => `${n}.spec.ts`));
+  const shard = Number(process.env.SHARD);
+  if (groups.length + 1 !== shards || !(shard >= 1 && shard <= shards)) {
+    throw new Error(
+      `${project}'s short tests are in ${groups.length + 1} shards in playwright.config.ts; SHARD ${process.env.SHARD} of ${shards} is not one`,
+    );
+  }
+  return shard < shards ? { testMatch: groups[shard - 1] ?? [] } : { testIgnore: groups.flat() };
+}
 const args = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist'];
 if (linux) {
   args.push(
@@ -85,7 +127,7 @@ export default defineConfig({
   projects: [
     ...['webgl2', 'webgpu'].map((name) => ({
       name,
-      ...half,
+      ...shardOf(name),
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 960, height: 600 },

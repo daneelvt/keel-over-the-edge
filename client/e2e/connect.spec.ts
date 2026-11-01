@@ -8,7 +8,7 @@
 // device takes the boat, and is taken back from. One back end is enough: the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
-import { heldRegime, sail, sailor, steady } from './helpers';
+import { drained, heldRegime, sail, sailor, steady } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
@@ -93,6 +93,7 @@ test('a reload within the grace finds the same boat', async ({ page, context }) 
   // Reloaded while CI's software GPU is still making what the page draws,
   // the page's next load can hang there.
   await steady(page);
+  await drained(page);
   const before = await net(page);
   const at = (await page.evaluate(() => globalThis.keel.boat())).state;
   await sail(page);
