@@ -357,7 +357,7 @@
   align-items: center;
   box-sizing: border-box;
   width: 100%;
-  padding: 6px 6px 5px;
+  padding: 4px 4px 5px;
   border: 0;
   border-radius: 11px;
   background: none;
@@ -367,8 +367,8 @@
 }
 
 .pocket-chart canvas {
-  width: 120px;
-  height: 90px;
+  width: 124px;
+  height: 81px;
 }
 
 /* The caption, beside the pusher's face: how far the edge is, and when
@@ -631,8 +631,8 @@
   }
 
   .pocket-chart canvas {
-    width: 100px;
-    height: 75px;
+    width: 112px;
+    height: 73px;
   }
 }
 
@@ -640,8 +640,8 @@
    pusher in its bottom edge beneath the caption. */
 @media (orientation: portrait) {
   .pocket-chart canvas {
-    width: 88px;
-    height: 66px;
+    width: 92px;
+    height: 60px;
   }
 
   .pocket-caption {
@@ -649,11 +649,14 @@
     font-size: 12px;
   }
 
+  /* Room beneath the caption for the pusher's face, its stem standing
+     out of the bottom edge as the case's do. */
   .pocket.with-pusher .pocket-chart {
-    padding-bottom: 34px;
+    padding-bottom: 42px;
   }
 
   .pocket .pocket-weather {
+    --stem: 18px;
     left: 2px;
     bottom: -6px;
   }
