@@ -37,10 +37,10 @@ type release struct {
 }
 
 var releases = []release{
-	{"tinygo-org/tinygo", "darwin-amd64", "v0.43.0", "e544fe732d7b81f058ac8d2c7303e22031eff734c027295e7a53c3037e4d9e89"},
-	{"tinygo-org/tinygo", "darwin-arm64", "v0.43.0", "f5e0161f212fb69ad4650a4809e3ca66856e184892e80058f0d47abc64151812"},
-	{"tinygo-org/tinygo", "linux-amd64", "v0.43.0", "ca9fc6d055e3889462dea4450a2e42a92242d88b5c362a7ec39bdb563413d78a"},
-	{"tinygo-org/tinygo", "linux-arm64", "v0.43.0", "a2165b9f46aff9a895a0abed54aedffab1e93317a387c6c2e9dd839425527cbd"},
+	{"tinygo-org/tinygo", "darwin-amd64", "v0.44.0", "405b8241e20825cd3e7267706eb27c4f40fe372f3548a4d7f80ef2eb640957a7"},
+	{"tinygo-org/tinygo", "darwin-arm64", "v0.44.0", "696a37db149c2c37ed0da96cc1f2cca2630fca0c4dd19823a2a481c9b4a6a748"},
+	{"tinygo-org/tinygo", "linux-amd64", "v0.44.0", "ed0f45543a49ff2a99120a5a1b8814a0750e1fda1a66f8e2a0a172576134aaf9"},
+	{"tinygo-org/tinygo", "linux-arm64", "v0.44.0", "48cece9e1e886a176caad0918182d90f8348ad3084774e6239f42e5e11e40990"},
 
 	{"sigstore/cosign", "darwin-amd64", "v3.1.4", "9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834e3e6d44039c238867334f"},
 	{"sigstore/cosign", "darwin-arm64", "v3.1.4", "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"},
