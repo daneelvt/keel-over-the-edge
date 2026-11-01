@@ -265,6 +265,20 @@ export async function sailBeside(page: Page, first: Page | Page[], base = ''): P
 }
 
 /**
+ * Stops the page drawing, as hold does, and waits until the GPU has
+ * finished what it was given. Call it before a reload. CI's software GPU
+ * runs seconds behind the page, and a page reloaded while that backlog
+ * remains took most of a minute to show its start screen again. The page
+ * after the reload draws again by itself.
+ */
+export async function drained(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    globalThis.keel.hold(true);
+    await globalThis.keel.show();
+  });
+}
+
+/**
  * Waits until each page's animation frames come with no gap of a second
  * and a half for three seconds. The pages share CI's one software GPU
  * process: a page still making what it draws (after its start, a reload,
