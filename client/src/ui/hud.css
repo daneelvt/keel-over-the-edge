@@ -33,7 +33,7 @@
   /* The control head's height, its keys', its gap's and its padding's, and
      the helm's beside it: two rows of keys, the gap, the padding and the
      frame. */
-  --key: 44px;
+  --key: 40px;
   --head-gap: 4px;
   --head-pad: 2px;
   --head: calc(2 * var(--key) + var(--head-gap) + 2 * var(--head-pad) + 2px);
@@ -924,8 +924,9 @@
 }
 
 /* The helm: the head's height, its arc and knobs placed from its foot, so
-   that the room above the arc is what it gains. Inside the frame it is
-   188 pixels wide, the arc's centre at 94. */
+   that the room above the arc is what it gains, its legend close under
+   the arc's middle. Inside the frame it is 188 pixels wide, the arc's
+   centre at 94. */
 .helm {
   left: var(--edge-left);
   width: 190px;
@@ -937,7 +938,7 @@
 .helm-arc {
   position: absolute;
   left: 14px;
-  top: calc(var(--head) - 75px);
+  top: calc(var(--head) - 67px);
   width: 160px;
   height: 27px;
   overflow: visible;
@@ -968,7 +969,7 @@
 .helm-swing {
   position: absolute;
   left: 94px;
-  top: calc(var(--head) - 71px);
+  top: calc(var(--head) - 63px);
   width: 0;
   height: 70.7px;
   transform-origin: 0 70.7px;
@@ -1393,21 +1394,13 @@
 }
 
 /* On the shortest screens, a phone held sideways or a small one upright,
-   the head is a little lower, its keys 42 pixels tall, to stay clear of
+   the head is a little lower, its keys 38 pixels tall, to stay clear of
    the boat's hull; the helm with it. */
 @media (max-height: 420px), (orientation: portrait) and (max-height: 700px) {
   .hud {
-    --key: 42px;
+    --key: 38px;
     --head-gap: 2px;
     --head-pad: 1px;
-  }
-}
-
-/* A small Android phone upright, 640 pixels tall: 40-pixel keys, the head
-   and the helm lower still, clear of the hull. */
-@media (orientation: portrait) and (max-height: 660px) {
-  .hud {
-    --key: 40px;
   }
 }
 
