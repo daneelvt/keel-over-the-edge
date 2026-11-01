@@ -229,13 +229,14 @@ export function edgeCaption(east: number, north: number, lip: number): string {
 /**
  * The pocket chart's caption, its lines each within the chart, and the
  * name its button says: how far the edge is ("" before the boat's first
- * position, when the caption is the chart's name), and in the world's last
- * days the time until the new world ("" until then), a line of its own.
+ * position, when the line is kept empty), and beneath it the time until
+ * the new world ("" with no end known, when there is no second line). The
+ * chart's own name is said, never shown.
  */
 export function pocketCaption(edge: string, left: string): { lines: string[]; name: string } {
   const until = left === '' ? '' : `new world ${left}`;
   return {
-    lines: [edge === '' ? 'Chart' : edge, until].filter((l) => l !== ''),
+    lines: until === '' ? [edge] : [edge, until],
     name: `${['Chart', edge, until].filter((l) => l !== '').join(', ')}: open the chart`,
   };
 }

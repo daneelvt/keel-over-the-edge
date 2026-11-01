@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The screen at sea: the instruments' case top left (the compass and its
-// readouts, the barometer and the world clock sliding out of it), the
-// sailor's state when they are out of the boat beneath it, the pocket
-// chart top right, the helm bottom left, the sheet bottom right, the
+// readouts, the barometer sliding out of it), the sailor's state when they
+// are out of the boat beneath it, the pocket chart top right with the time
+// until a new world, the helm bottom left, the sheet bottom right, the
 // autopilot's control head between them, and the menu. Laid out within
 // the safe area, in portrait and landscape, no part over another or over
 // the boat. Watching another sailor's boat, every control that acts is
@@ -234,7 +234,7 @@ function Screen(props: ScreenProps) {
         <Case
           model={model}
           settings={settings}
-          end={end}
+          controls={steer}
           barometer={props.barometer ?? null}
           harbour={props.harbour ?? null}
           lamp={props.lamp ?? null}

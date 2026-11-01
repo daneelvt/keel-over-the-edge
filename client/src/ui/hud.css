@@ -83,9 +83,9 @@
   max-width: calc(100vw - var(--edge-left) - var(--edge-right) - 56px);
 }
 
-/* The instruments' case: one panel, its complications joined to it by a
-   fine engraved seam, never panels of their own; its pushers on its edge,
-   their stems standing out of it. */
+/* The instruments' case: one panel, as big as its dial and no bigger, its
+   complications joined to it by a fine engraved seam, never panels of
+   their own; its pushers on its edges, their stems standing out of it. */
 .case {
   --seam: rgb(232 180 80 / 28%);
   position: relative;
@@ -95,6 +95,7 @@
 }
 
 .case-top {
+  position: relative;
   display: flex;
   align-items: stretch;
 }
@@ -104,17 +105,20 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 4px 10px 10px;
+  padding: 10px;
 }
 
-.pushers {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  margin-right: -6px;
+/* Room for the barometer's pusher's face, set into the right edge. */
+.case-top:has(> .pusher.right) .case-face {
+  padding-right: 42px;
 }
 
+/* A pusher: a dark face with its decal, on a knurled brass stem that
+   stands out of the edge it is set in. The button is 44 pixels square
+   whichever edge it stands on: on the right edge its face is to the left
+   of its stem, on the left edge to the right, on the bottom edge above. */
 .pusher {
+  --stem: 18px;
   position: relative;
   width: 44px;
   height: 44px;
@@ -150,7 +154,7 @@
   position: absolute;
   left: 26px;
   top: 16px;
-  width: 18px;
+  width: var(--stem);
   height: 12px;
   border-radius: 1px 3px 3px 1px;
   background:
@@ -160,9 +164,54 @@
   transition: transform 0.08s;
 }
 
+.pusher.left .pusher-face {
+  left: var(--stem);
+}
+
+.pusher.left .pusher-stem {
+  left: 0;
+  border-radius: 3px 1px 1px 3px;
+}
+
+.pusher.bottom .pusher-face {
+  left: 9px;
+  top: 0;
+}
+
+.pusher.bottom .pusher-stem {
+  left: 16px;
+  top: 26px;
+  width: 12px;
+  height: var(--stem);
+  border-radius: 1px 1px 3px 3px;
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 35%), transparent 45%, rgb(0 0 0 / 35%)),
+    repeating-linear-gradient(var(--brass) 0 1.5px, var(--brass-dark) 1.5px 3px);
+}
+
 .pusher:active .pusher-stem,
-.pusher.pressed .pusher-stem {
+.pusher.pressed .pusher-stem,
+.pusher.held .pusher-stem {
   transform: translateX(-2px);
+}
+
+.pusher.left:active .pusher-stem,
+.pusher.left.pressed .pusher-stem,
+.pusher.left.held .pusher-stem {
+  transform: translateX(2px);
+}
+
+.pusher.bottom:active .pusher-stem,
+.pusher.bottom.pressed .pusher-stem,
+.pusher.bottom.held .pusher-stem {
+  transform: translateY(-2px);
+}
+
+/* A switch held in: its face sunk, its decal gold. */
+.pusher.held .pusher-face {
+  box-shadow:
+    inset 0 2px 4px rgb(0 0 0 / 85%),
+    0 0 0 1.5px var(--brass-dark);
 }
 
 .pusher.pressed .pusher-face {
@@ -179,6 +228,21 @@
   border-radius: 8px;
 }
 
+/* The case's pushers: the barometer's on the right edge high up, as a
+   chronograph's pusher at two o'clock; in port the harbour board's out of
+   the bottom edge beneath it, at four. */
+.case .pusher.right {
+  position: absolute;
+  top: 0;
+  right: -6px;
+}
+
+.case .pusher.bottom {
+  position: absolute;
+  right: 3px;
+  bottom: -6px;
+}
+
 /* The harbour's pusher rises out of the case in port and sinks as the
    boat leaves. */
 .pusher.rising {
@@ -191,15 +255,15 @@
 
 @keyframes pusher-rise {
   from {
-    clip-path: inset(0 0 0 100%);
-    transform: translateX(-26px);
+    clip-path: inset(100% 0 0 0);
+    transform: translateY(-26px);
   }
 }
 
 @keyframes pusher-sink {
   to {
-    clip-path: inset(0 0 0 100%);
-    transform: translateX(-26px);
+    clip-path: inset(100% 0 0 0);
+    transform: translateY(-26px);
   }
 }
 
@@ -209,7 +273,7 @@
 .lamp {
   position: absolute;
   top: -5px;
-  right: 20px;
+  right: 48px;
   width: 9px;
   height: 9px;
   box-sizing: border-box;
@@ -278,16 +342,19 @@
 @media (max-height: 499px) {
   .case-face {
     gap: 8px;
-    padding: 8px 2px 8px 8px;
+    padding: 8px;
+  }
+
+  .case-top:has(> .pusher.right) .case-face {
+    padding-right: 40px;
   }
 
   .case .compass {
-    width: 60px;
-    height: 60px;
+    width: 68px;
+    height: 68px;
   }
 
   .case .readouts {
-    max-width: 136px;
     font-size: 13px;
   }
 
@@ -297,10 +364,6 @@
 
   .complication {
     padding: 6px 8px 8px;
-  }
-
-  .case .world-clock {
-    max-width: 108px;
   }
 
   .case .baro-words {
@@ -355,14 +418,20 @@
     border-top: 1px solid var(--seam);
   }
 
+  /* Tall enough that the barometer's pusher and the board's, under it,
+     are 44-pixel targets apart. */
   .case-face {
-    gap: 8px;
-    padding: 6px 2px 6px 6px;
+    gap: 6px;
+    padding: 9px 6px;
+  }
+
+  .case-top:has(> .pusher.right) .case-face {
+    padding-right: 40px;
   }
 
   .case .compass {
-    width: 56px;
-    height: 56px;
+    width: 64px;
+    height: 64px;
   }
 
   .case .readouts {
@@ -371,10 +440,6 @@
 
   .case .speed {
     font-size: 24px;
-  }
-
-  .case .world-clock {
-    max-width: 80px;
   }
 }
 
@@ -389,8 +454,9 @@
 }
 
 .compass {
-  width: 76px;
-  height: 76px;
+  flex: none;
+  width: 72px;
+  height: 72px;
   overflow: visible;
 }
 
@@ -418,6 +484,24 @@
   fill: var(--gold);
 }
 
+/* The window at the lubber line: an aperture in the bezel, lacquered, in
+   a brass rim, the heading's figures read through it. */
+.compass-window {
+  fill: #0b1216;
+  stroke: var(--brass);
+  stroke-width: 1.5;
+}
+
+.compass-figures {
+  fill: var(--ink);
+  font:
+    500 18px "Alegreya Sans",
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
 .compass-wind {
   fill: #9fd0f0;
   stroke: rgb(12 22 30 / 60%);
@@ -428,8 +512,12 @@
   fill: var(--ink);
 }
 
+/* The readouts: each a slot as wide as the longest it can say, its
+   figures all of one width, so the case never changes its size. */
 .readouts {
   color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .readouts b {
@@ -437,12 +525,37 @@
   color: var(--ink);
 }
 
+.slot {
+  display: grid;
+}
+
+.slot > * {
+  grid-area: 1 / 1;
+}
+
+.slot-size {
+  visibility: hidden;
+}
+
+/* Its words take the slot's width and never widen it. */
+.slot-text {
+  width: 0;
+  min-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .speed {
   color: var(--ink);
   font:
-    34px / 1 "IM Fell English SC",
+    32px / 1 "IM Fell English SC",
     Georgia,
     serif;
+}
+
+.speed .slot {
+  display: inline-grid;
+  text-align: right;
 }
 
 .speed .unit {
@@ -451,28 +564,6 @@
     15px "Alegreya Sans",
     sans-serif;
   color: var(--faint);
-}
-
-/* The world clock: the time left until a new world, and when it comes. */
-.world-clock {
-  max-width: 150px;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.clock-left b {
-  font-weight: 500;
-  color: var(--ink);
-  white-space: nowrap;
-}
-
-.clock-when {
-  font-size: 13px;
-}
-
-.case.closing .clock-left,
-.case.closing .clock-left b {
-  color: var(--gold);
 }
 
 .sailor-line {
@@ -566,16 +657,147 @@
   transform: translateY(-50%);
 }
 
+/* The menu stands over everything at sea, the instruments, the pocket
+   chart and the controls, with a dim scrim behind it; the harbour board
+   is under it, the chart screen in place of it all. Held sideways it is
+   at the right, beside its button; held upright across the screen from
+   its top edge down, leaving the boat's sea in sight below it, so the
+   night light can be judged as it is set. Its head stays at the top while
+   the rest scrolls. */
+.menu-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgb(4 8 12 / 18%);
+  pointer-events: auto;
+}
+
 .menu {
   position: absolute;
+  z-index: 11;
   right: calc(var(--edge-right) + 56px);
   top: 50%;
   transform: translateY(-50%);
+  box-sizing: border-box;
   width: min(300px, calc(100vw - var(--edge-right) - var(--edge-left) - 56px));
   /* Within the screen however many switches it holds: it scrolls. */
   max-height: calc(100dvh - var(--edge-top) - var(--edge-bottom));
   overflow-y: auto;
-  padding: 12px 16px;
+  overscroll-behavior: contain;
+  padding: 0;
+  outline: none;
+}
+
+@media (orientation: portrait) {
+  .menu {
+    top: var(--edge-top);
+    left: var(--edge-left);
+    right: var(--edge-right);
+    transform: none;
+    width: auto;
+    max-height: min(62dvh, calc(100dvh - var(--edge-top) - var(--edge-bottom)));
+  }
+}
+
+.menu-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 0 16px;
+  border-bottom: 1px solid rgb(232 180 80 / 28%);
+  background: rgb(26 36 44 / 96%);
+}
+
+.menu-x {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.menu-body {
+  padding: 8px 16px 12px;
+}
+
+.menu h3 {
+  margin: 10px 0 4px;
+  font:
+    17px "IM Fell English SC",
+    Georgia,
+    serif;
+  color: var(--gold);
+}
+
+/* The night light: its name over a slider from Dark to Light, its thumb
+   a 44-pixel target. */
+.menu-range {
+  padding: 4px 0;
+}
+
+.menu-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.menu-range input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--gold);
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.menu-range input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #0b1216, #46627a);
+  box-shadow: 0 0 0 1px var(--brass-dark);
+}
+
+.menu-range input::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #0b1216, #46627a);
+  box-shadow: 0 0 0 1px var(--brass-dark);
+}
+
+.menu-range input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  margin-top: -20px;
+  border: 10px solid transparent;
+  border-radius: 50%;
+  background: linear-gradient(var(--brass-light), var(--brass) 55%, var(--brass-dark)) padding-box;
+}
+
+.menu-range input::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  border: 10px solid transparent;
+  border-radius: 50%;
+  background: linear-gradient(var(--brass-light), var(--brass) 55%, var(--brass-dark)) padding-box;
+}
+
+.menu-range input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .menu .menu-sailor {
@@ -589,7 +811,7 @@
 }
 
 .menu h2 {
-  margin: 0 0 6px;
+  margin: 0;
   font:
     20px "IM Fell English SC",
     Georgia,

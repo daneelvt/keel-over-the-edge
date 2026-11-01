@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The menu: who is sailing, their account and machine sailors, and this
-// device's settings. The frame rate (60, or 30 to save battery), how much
-// the sea is drawn with (as much as the device runs well, or the least),
-// sound, the beginners' overlays, and whether the helm returns to the
-// centre when let go. Online, a sailor to watch, and who may watch the
-// player's own boat.
+// device's settings. How light the night is drawn, first, the sea showing
+// the change behind the menu as the slider moves; the frame rate (60, or 30
+// to save battery), how much the sea is drawn with (as much as the device
+// runs well, or the least), sound, the beginners' overlays, and whether
+// the helm returns to the centre when let go. Online, a sailor to watch,
+// and who may watch the player's own boat. It stands over everything at
+// sea, within the screen held either way, its head and its close at the
+// top while the rest scrolls; a tap beside it closes it.
 
+import { useLayoutEffect } from 'preact/hooks';
 import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
@@ -44,6 +48,58 @@ function Toggle({
         onChange={(e) => set(e.currentTarget.checked)}
       />
     </label>
+  );
+}
+
+/** Takes focus into the menu as it opens, and back to its button as it closes. */
+function FocusIn() {
+  useLayoutEffect(() => {
+    document.querySelector<HTMLElement>('.menu')?.focus();
+    return () => {
+      // Unless the focus has gone elsewhere, as to a panel the menu opened.
+      const a = document.activeElement;
+      const b = document.querySelector<HTMLElement>('.menu-button');
+      if (b !== null && (a === null || a === document.body || a.closest('.menu') !== null)) {
+        b.focus();
+      }
+    };
+  }, []);
+  return null;
+}
+
+/** The night light's value in words, for a screen reader. */
+export function nightLightText(v: number): string {
+  if (v <= 0) {
+    return 'Dark, the night as it is';
+  }
+  if (v >= 1) {
+    return 'Light, as at dusk';
+  }
+  return `${Math.round(v * 100)}% lighter`;
+}
+
+/** How light the night is drawn: a slider from the night as it is to dusk's light, applied as it moves. */
+function NightLight({ settings }: { settings: SettingsSignal }) {
+  const v = settings.value.value.nightLight;
+  return (
+    <div class="menu-range">
+      <label for="night-light">Night light</label>
+      <div class="menu-range-row">
+        <span aria-hidden="true">Dark</span>
+        <input
+          id="night-light"
+          type="range"
+          name="night-light"
+          min={0}
+          max={1}
+          step={0.1}
+          value={v}
+          aria-valuetext={nightLightText(v)}
+          onInput={(e) => settings.set({ nightLight: Number(e.currentTarget.value) })}
+        />
+        <span aria-hidden="true">Light</span>
+      </div>
+    </div>
   );
 }
 
@@ -90,117 +146,146 @@ export function Menu({
 }) {
   const s = settings.value.value;
   return (
-    <section class="panel menu" aria-label="Settings">
-      <SailingAs sailor={sailor} />
-      {account !== null || machines !== null ? (
-        <div class="menu-accounts">
-          {account !== null ? (
-            <button type="button" onClick={account}>
-              Account
-            </button>
-          ) : null}
-          {machines !== null ? (
-            <button type="button" onClick={machines}>
-              Machine sailors
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-      {watch !== null ? (
-        <div class="menu-chart">
-          <button
-            type="button"
-            onClick={() => {
-              watch.list.value = true;
-              close();
-            }}
-          >
-            {WATCH_A_SAILOR}
-          </button>
-          {watch.watching.value !== null ? (
-            <button
-              type="button"
-              onClick={() => {
-                watch.unwatch();
-                close();
-              }}
-            >
-              {STOP_WATCHING}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-      {connection !== null ? <RoundTrip view={connection} /> : null}
-      {end !== null && end.when.value !== '' ? (
-        <p class="menu-end" data-readout="ends">
-          The falls take this world on {end.when.value}
-        </p>
-      ) : null}
-      {chart !== null ? (
-        <div class="menu-chart">
-          <button type="button" onClick={() => chart('chart')}>
-            Chart
-          </button>
-          <button type="button" onClick={() => chart('news')}>
-            News
-          </button>
-        </div>
-      ) : null}
-      <h2>Settings</h2>
-      <Toggle
-        name="battery"
-        label="Save battery (30 frames a second)"
-        on={s.frameRate === 30}
-        set={(on) => settings.set({ frameRate: on ? 30 : 60 })}
-      />
-      <label class="menu-row">
-        <span>Detail</span>
-        <select
-          name="detail"
-          value={s.detail}
-          onChange={(e) =>
-            settings.set({ detail: e.currentTarget.value === 'low' ? 'low' : 'auto' })
+    <>
+      <FocusIn />
+      <div class="menu-scrim" aria-hidden="true" onClick={close} />
+      <section
+        class="panel menu"
+        role="dialog"
+        aria-label="Settings"
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            close();
           }
-        >
-          <option value="auto">Automatic</option>
-          <option value="low">Low</option>
-        </select>
-      </label>
-      <Toggle name="sound" label="Sound" on={s.sound} set={(sound) => settings.set({ sound })} />
-      <Toggle
-        name="wind-overlay"
-        label="Show the wind"
-        on={s.windOverlay}
-        set={(windOverlay) => settings.set({ windOverlay })}
-      />
-      <Toggle
-        name="forces-overlay"
-        label="Show the sail’s forces"
-        on={s.forcesOverlay}
-        set={(forcesOverlay) => settings.set({ forcesOverlay })}
-      />
-      <Toggle
-        name="right-of-way"
-        label="Show right of way"
-        on={s.rightOfWay}
-        set={(rightOfWay) => settings.set({ rightOfWay })}
-      />
-      <Toggle
-        name="centre-helm"
-        label="Centre the helm when let go"
-        on={s.centreHelm}
-        set={(centreHelm) => settings.set({ centreHelm })}
-      />
-      {notices !== null ? <NoticeSwitches notices={notices} /> : null}
-      {watch !== null ? <LazySpectators /> : null}
-      {fly !== null ? (
-        <button type="button" class="menu-fly" onClick={fly}>
-          Free camera (F)
-        </button>
-      ) : null}
-      <button type="button" class="menu-close" onClick={close}>
-        Close
-      </button>
-    </section>
+        }}
+      >
+        <header class="menu-head">
+          <h2>Settings</h2>
+          <button type="button" class="menu-x" aria-label="Close the menu" onClick={close}>
+            ✕
+          </button>
+        </header>
+        <div class="menu-body">
+          <SailingAs sailor={sailor} />
+          {account !== null || machines !== null ? (
+            <div class="menu-accounts">
+              {account !== null ? (
+                <button type="button" onClick={account}>
+                  Account
+                </button>
+              ) : null}
+              {machines !== null ? (
+                <button type="button" onClick={machines}>
+                  Machine sailors
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {watch !== null ? (
+            <div class="menu-chart">
+              <button
+                type="button"
+                onClick={() => {
+                  watch.list.value = true;
+                  close();
+                }}
+              >
+                {WATCH_A_SAILOR}
+              </button>
+              {watch.watching.value !== null ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    watch.unwatch();
+                    close();
+                  }}
+                >
+                  {STOP_WATCHING}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {connection !== null ? <RoundTrip view={connection} /> : null}
+          {end !== null && end.when.value !== '' ? (
+            <p class="menu-end" data-readout="ends">
+              The falls take this world on {end.when.value}
+            </p>
+          ) : null}
+          {chart !== null ? (
+            <div class="menu-chart">
+              <button type="button" onClick={() => chart('chart')}>
+                Chart
+              </button>
+              <button type="button" onClick={() => chart('news')}>
+                News
+              </button>
+            </div>
+          ) : null}
+          <h3>On this device</h3>
+          <NightLight settings={settings} />
+          <Toggle
+            name="battery"
+            label="Save battery (30 frames a second)"
+            on={s.frameRate === 30}
+            set={(on) => settings.set({ frameRate: on ? 30 : 60 })}
+          />
+          <label class="menu-row">
+            <span>Detail</span>
+            <select
+              name="detail"
+              value={s.detail}
+              onChange={(e) =>
+                settings.set({ detail: e.currentTarget.value === 'low' ? 'low' : 'auto' })
+              }
+            >
+              <option value="auto">Automatic</option>
+              <option value="low">Low</option>
+            </select>
+          </label>
+          <Toggle
+            name="sound"
+            label="Sound"
+            on={s.sound}
+            set={(sound) => settings.set({ sound })}
+          />
+          <Toggle
+            name="wind-overlay"
+            label="Show the wind"
+            on={s.windOverlay}
+            set={(windOverlay) => settings.set({ windOverlay })}
+          />
+          <Toggle
+            name="forces-overlay"
+            label="Show the sail’s forces"
+            on={s.forcesOverlay}
+            set={(forcesOverlay) => settings.set({ forcesOverlay })}
+          />
+          <Toggle
+            name="right-of-way"
+            label="Show right of way"
+            on={s.rightOfWay}
+            set={(rightOfWay) => settings.set({ rightOfWay })}
+          />
+          <Toggle
+            name="centre-helm"
+            label="Centre the helm when let go"
+            on={s.centreHelm}
+            set={(centreHelm) => settings.set({ centreHelm })}
+          />
+          {notices !== null ? <NoticeSwitches notices={notices} /> : null}
+          {watch !== null ? <LazySpectators /> : null}
+          {fly !== null ? (
+            <button type="button" class="menu-fly" onClick={fly}>
+              Free camera (F)
+            </button>
+          ) : null}
+          <button type="button" class="menu-close" onClick={close}>
+            Close
+          </button>
+        </div>
+      </section>
+    </>
   );
 }

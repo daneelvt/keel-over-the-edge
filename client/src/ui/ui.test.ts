@@ -7,6 +7,7 @@ import { type BoatWind, newBoatWind } from '../predict/weather';
 import {
   beaufortForce,
   compassPoint,
+  headingFigures,
   headingText,
   KNOT,
   knots,
@@ -36,6 +37,8 @@ describe('format', () => {
     expect(threeDigits(wholeDegrees(-90 * DEG))).toBe('270');
     expect(threeDigits(wholeDegrees(7 * DEG))).toBe('007');
     expect(headingText(Math.PI / 2)).toBe('090° E');
+    expect(headingFigures(Math.PI / 2)).toBe('090°');
+    expect(headingFigures(-90 * DEG)).toBe('270°');
   });
 
   test('the 16 compass points, at and either side of each boundary', () => {
@@ -133,13 +136,34 @@ describe('settings', () => {
   });
 
   test('a new sailor’s case is shut and the autopilot folded; a stored choice is kept', () => {
-    expect(DEFAULTS).toMatchObject({ barometer: false, worldClock: false, pilotHead: false });
+    expect(DEFAULTS).toMatchObject({ barometer: false, pilotHead: false });
     const m = memory();
     // A set saved before the case: the barometer was out, and stays out.
     m.data.set('keel.settings', '{"frameRate": 60, "sound": true, "barometer": true}');
-    expect(loadSettings(m)).toMatchObject({ barometer: true, worldClock: false, pilotHead: false });
+    expect(loadSettings(m)).toMatchObject({ barometer: true, pilotHead: false });
+    // The world clock is gone from the case: its stored choice is let go.
     m.data.set('keel.settings', '{"worldClock": true, "pilotHead": true}');
-    expect(loadSettings(m)).toMatchObject({ barometer: false, worldClock: true, pilotHead: true });
+    const s = loadSettings(m);
+    expect(s).toMatchObject({ barometer: false, pilotHead: true });
+    expect(s).not.toHaveProperty('worldClock');
+  });
+
+  test('the night light is lighter than the night by default, and read as a number in range', () => {
+    expect(DEFAULTS.nightLight).toBeCloseTo(2 / 3, 9);
+    const m = memory();
+    for (const [stored, read] of [
+      ['0', 0],
+      ['1', 1],
+      ['0.3', 0.3],
+      ['1.5', 2 / 3],
+      ['-0.1', 2 / 3],
+      ['"0.5"', 2 / 3],
+      ['null', 2 / 3],
+      ['true', 2 / 3],
+    ] as const) {
+      m.data.set('keel.settings', `{"nightLight": ${stored}}`);
+      expect(loadSettings(m).nightLight).toBeCloseTo(read, 9);
+    }
   });
 });
 

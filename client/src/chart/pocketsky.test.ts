@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { type PocketSky, pocketSkyOf, pusherName } from './pocketsky';
+import { type PocketSky, pocketSkyOf } from './pocketsky';
 import { type Box, NEAR, type PlaceSample, type PlaceWeather } from './words';
 
 const KNOT = 1852 / 3600;
@@ -23,7 +23,7 @@ function box(sky: string): Box {
   return { wind: '', gusts: '', sky, visibility: '', barometer: '' };
 }
 
-describe('the weather pusher’s decal', () => {
+describe('the sky’s decal', () => {
   test('is the sky of the board’s words', () => {
     const w = weather(12);
     expect(pocketSkyOf(w, box('Fair'))).toBe('fair');
@@ -45,19 +45,6 @@ describe('the weather pusher’s decal', () => {
     expect(pocketSkyOf(weather(0.4), box('Fair'))).toBe('calm');
     expect(pocketSkyOf(weather(1), box('Fair'))).toBe('fair');
     expect(pocketSkyOf(weather(0.4), box('Fog patches'))).toBe('fog');
-  });
-
-  test('its name carries the sky, and the moon by night', () => {
-    expect(pusherName(null)).toBe('Weather on the pocket chart');
-    expect(pusherName({ sky: 'rain', night: false })).toBe(
-      'Weather on the pocket chart; here, rain',
-    );
-    expect(pusherName({ sky: 'storm', night: true })).toBe(
-      'Weather on the pocket chart; here, a storm',
-    );
-    expect(pusherName({ sky: 'fair', night: true })).toBe(
-      'Weather on the pocket chart; here, fair, by night',
-    );
   });
 });
 

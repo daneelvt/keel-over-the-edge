@@ -12,7 +12,7 @@ import { PILOT_IDLE, type PilotControl } from '../input/pilot';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
 import type { BoatWind } from '../predict/weather';
-import { headingText, knots, pilotText, windText } from './format';
+import { headingFigures, headingText, knots, pilotText, windText } from './format';
 
 /** The signals are written at most this often, in milliseconds. */
 export const SIGNAL_INTERVAL = 100;
@@ -128,6 +128,8 @@ export const BUMP_LINE = 4000;
 export class HudModel {
   readonly speed = signal('0.0');
   readonly heading = signal('000° N');
+  /** The heading's figures, in the compass card's window. */
+  readonly figures = signal('000°');
   readonly wind = signal('N 0 kn · F0');
   /** The wind at the boat over the last three seconds: what the readout and the rim's mark show. */
   readonly anemometer = new WindWindow();
@@ -141,6 +143,8 @@ export class HudModel {
   #bumpUntil = 0;
   /** How many times the signals were written. */
   writes = 0;
+  /** Whether the words and numbers are held as they are, for a test to set them. */
+  held = false;
 
   /** The compass rose, turned so the boat's heading is up. */
   readonly rose = new Moved(rotate, 0.1);
@@ -213,13 +217,14 @@ export class HudModel {
     this.helmValue.set(helm);
     this.sheetValue.set(sheet);
     this.clinometer.set((pose.heel * 180) / Math.PI);
-    if (now - this.#lastWrite < SIGNAL_INTERVAL) {
+    if (this.held || now - this.#lastWrite < SIGNAL_INTERVAL) {
       return;
     }
     this.#lastWrite = now;
     this.writes++;
     this.speed.value = knots(out[RECORDS.out.speedOverGround] ?? 0);
     this.heading.value = headingText(pose.heading);
+    this.figures.value = headingFigures(pose.heading);
     // The force is the mean wind's, as the Beaufort scale is defined, so a
     // gust shows as the knots rising while the force holds.
     this.wind.value = windText(a.speed, a.from, wind.meanSpeed);

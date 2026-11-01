@@ -51,7 +51,7 @@ async function sailingAs(page: Page): Promise<string> {
   const name = page.locator('.menu-sailor bdi');
   await expect(name).toBeVisible();
   const text = await name.textContent();
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   return text ?? '';
 }
 

@@ -165,6 +165,7 @@ export class Game implements PilotActions {
       const s = settings.value.value;
       world.stage.cap.limit = s.frameRate;
       world.setDetail(s.detail);
+      world.sky.nightLight = s.nightLight;
       this.sound.enabled = s.sound;
       this.helm.centreOnRelease = s.centreHelm;
       world.overlays.set(s.windOverlay, s.forcesOverlay);
