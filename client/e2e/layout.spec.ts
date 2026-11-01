@@ -2,8 +2,9 @@
 
 // The screen at sea laid out on phones held either way and on the browser
 // tests' screen, in the offline sandbox: with the barometer out of the
-// case, the autopilot's control head open, the readouts at their longest
-// and the boat in Port Royal's harbour, no part of the screen covers
+// case, the autopilot's control head open, the right-of-way overlay on (so
+// the case's last line has its place), the readouts at their longest and
+// the boat in Port Royal's harbour, no part of the screen covers
 // another, or the boat as drawn with a margin about it, and every part is
 // on the screen. One page, its viewport changed screen by screen, with
 // less motion asked for, so that nothing is measured mid-slide.
@@ -459,7 +460,7 @@ test('no part of the screen at sea covers the boat or another part, with everyth
     // Every complication out, the head open.
     await page.evaluate(() => {
       const k = globalThis.keel;
-      k.settings({ barometer: true, pilotHead: true });
+      k.settings({ barometer: true, pilotHead: true, rightOfWay: true });
       k.render();
     });
     await page.waitForTimeout(200);

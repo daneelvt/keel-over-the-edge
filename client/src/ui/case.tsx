@@ -3,10 +3,11 @@
 // The instruments' case, top left at sea, one panel as a watch is one
 // case, as big as its dial and no bigger: the heading-up compass card (the
 // true wind's mark on its rim, the heading's figures in a window at its
-// lubber line) and beside it three readouts, each a slot as wide as its
+// lubber line) and beside it its readouts, each a slot as wide as its
 // longest words, so the case keeps one size whatever they say: the speed
 // over ground, the wind, and a last line that says what nothing else on
-// the screen does. Its pushers stand on its edges: the barometer's on the
+// the screen does, there only where it can say something: on a boat
+// watched, or with the right-of-way overlay on. Its pushers stand on its edges: the barometer's on the
 // right, where a watch's crown is, sliding the barometer out of the case
 // and back in, down under the compass; in port the harbourmaster's board's
 // rises out of the bottom edge. Held upright, where the case shares the
@@ -201,7 +202,16 @@ const LINE_SIZES = [
   <b>Starboard tack</b>,
 ];
 
-function Readouts({ model, controls }: { model: HudModel; controls: boolean }) {
+function Readouts({
+  model,
+  controls,
+  last,
+}: {
+  model: HudModel;
+  controls: boolean;
+  /** Whether the last line has a place: on a boat watched, or with the right-of-way overlay. */
+  last: boolean;
+}) {
   const line = caseLine(model.pilot.value, model.tack.value, controls);
   const pilot = line !== '' && line !== model.tack.value;
   return (
@@ -220,17 +230,19 @@ function Readouts({ model, controls }: { model: HudModel; controls: boolean }) {
           Wind <b data-readout="wind">{model.wind}</b>
         </Slot>
       </p>
-      <p>
-        <Slot sizes={LINE_SIZES}>
-          {pilot ? (
-            <>
-              Autopilot <b data-readout="pilot">{model.pilot}</b>
-            </>
-          ) : line === '' ? null : (
-            <b data-readout="tack">{line}</b>
-          )}
-        </Slot>
-      </p>
+      {last ? (
+        <p>
+          <Slot sizes={LINE_SIZES}>
+            {pilot ? (
+              <>
+                Autopilot <b data-readout="pilot">{model.pilot}</b>
+              </>
+            ) : line === '' ? null : (
+              <b data-readout="tack">{line}</b>
+            )}
+          </Slot>
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -417,7 +429,7 @@ export function Case({ model, settings, controls, barometer, harbour, lamp }: Ca
         <div class="case-top">
           <div class="case-face">
             <CompassCard model={model} />
-            <Readouts model={model} controls={controls} />
+            <Readouts model={model} controls={controls} last={!controls || s.rightOfWay} />
           </div>
           <div class="case-pushers">
             {barometer !== null ? (
