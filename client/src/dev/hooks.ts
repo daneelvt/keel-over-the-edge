@@ -3095,18 +3095,17 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       sailing.forecast.again();
     },
 
-    /** The chart's slider to minutes ahead (the forecast) or, negative, back (what happened). */
+    /** The chart's slider to minutes ahead, by the forecast. */
     chartTime(minutes: number): void {
       const c = chartParts().chart;
       c.playing.value = false;
-      c.timeMode.value = minutes < 0 ? 'past' : 'forecast';
       c.minutes.value = Math.round(minutes);
     },
 
-    /** The chart's slider: its way, its minutes and whether Play runs it. */
+    /** The chart's slider: its minutes and whether Play runs it. */
     chartSlider() {
       const c = chartParts().chart;
-      return { mode: c.timeMode.value, minutes: c.minutes.value, playing: c.playing.value };
+      return { minutes: c.minutes.value, playing: c.playing.value };
     },
 
     /** Where a point of the water lies on the chart's screen, CSS pixels; null off it. */
@@ -3176,7 +3175,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       if (f === null || e === undefined) {
         return null;
       }
-      const m = momentOf(c.chart.timeMode.value, c.chart.minutes.value, f);
+      const m = momentOf(c.chart.minutes.value, f);
       return placeWords(f, m, pointsOf(e), c.chart.store);
     },
 

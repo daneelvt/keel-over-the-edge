@@ -1,27 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The chart's weather controls: the time slider, by the minute, from now
-// to ninety minutes ahead by the forecast or back ninety minutes in "what
-// happened", with "Now" and Play, lettered with the moment's minutes and
-// its time of day; the layers' switches, the wind's three under "Wind",
-// folded into a sheet on a phone so the slider and its mode stay on the
-// screen; the key to the chart's symbols; and a place's weather in its box
-// at the slider's time, with its outlook, a gale warning at its head when
-// its outlook reaches one.
+// The chart's weather controls, one row in a case as the instruments at
+// sea are: Play, the time slider, by the minute, from now to ninety
+// minutes ahead by the forecast, lettered with the moment's minutes and its
+// time of day; the layers' switches, the wind's three under "Wind", in a
+// sheet over it; and the key to the chart's symbols. And a place's weather
+// in its box at the slider's time, with its outlook, a gale warning at its
+// head when its outlook reaches one.
 
 import { useEffect, useState } from 'preact/hooks';
 import type { Chart } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
 import { type PlaceWords, placeWords, pointsOf } from '../chart/placeweather';
 import { formatPosition } from '../chart/position';
-import {
-  aheadReach,
-  type Layer,
-  type Moment,
-  momentOf,
-  pastReach,
-  untilOf,
-} from '../chart/weather';
+import { aheadReach, type Layer, type Moment, momentOf, untilOf } from '../chart/weather';
 import type { ChartEntry } from '../net/messages';
 import { ChartKey } from './chartkey';
 
@@ -56,15 +48,9 @@ export function momentClock(m: Moment, tick: number, ms: number): number {
   return ms + ((m.tick - tick) / SECOND) * 1000;
 }
 
-/** The slider's lettering for a moment: "Now", "In 40 min · 4:20 pm", "40 min ago · 3:40 pm". */
+/** The slider's lettering for a moment: "Now", "In 40 min · 4:20 pm". */
 export function momentText(m: Moment, clock: string): string {
-  switch (m.kind) {
-    case 'ahead':
-      return `In ${m.minutes} min · ${clock}`;
-    case 'past':
-      return `${-m.minutes} min ago · ${clock}`;
-  }
-  return 'Now';
+  return m.kind === 'ahead' ? `In ${m.minutes} min · ${clock}` : 'Now';
 }
 
 /** The slider's lettering for its moment now. */
@@ -72,17 +58,24 @@ function lettering(m: Moment, src: Forecasting): string {
   return momentText(m, clockText(momentClock(m, src.tick(), Date.now())));
 }
 
-/** The slider, its mode, "Now", Play, the layers, the key and its lettering. */
+/** Play's mark, and Pause's. */
+function PlayMark({ playing }: { playing: boolean }) {
+  return (
+    <svg class="chart-play-mark" viewBox="0 0 16 16" aria-hidden="true">
+      {playing ? <path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z" /> : <path d="M4 2l10 6-10 6z" />}
+    </svg>
+  );
+}
+
+/** The slider with Play, its lettering above it, the layers and the key beside it. */
 export function TimeBar({ chart, src }: { chart: Chart; src: Forecasting }) {
-  const mode = chart.timeMode.value;
   const minutes = chart.minutes.value;
   const playing = chart.playing.value;
   const [, tick] = useState(0);
-  const [key, setKey] = useState(false);
+  const [open, setOpen] = useState<'' | 'layers' | 'key'>('');
   const latest = src.forecasts.latest;
-  const lo = mode === 'past' ? -pastReach(src) : 0;
-  const hi = mode === 'past' ? 0 : aheadReach(src);
-  const at = Math.min(Math.max(minutes, lo), hi);
+  const hi = aheadReach(src);
+  const at = Math.min(Math.max(minutes, 0), hi);
   useEffect(() => {
     // The moment's time of day and the slider's reach move on.
     const t = setInterval(() => tick((n) => n + 1), 1000);
@@ -97,7 +90,7 @@ export function TimeBar({ chart, src }: { chart: Chart; src: Forecasting }) {
     const from = chart.minutes.value;
     const start = performance.now();
     const t = setInterval(() => {
-      const end = chart.timeMode.value === 'past' ? 0 : aheadReach(src);
+      const end = aheadReach(src);
       const m = Math.min(from + Math.floor(((performance.now() - start) / 1000) * PLAY_RATE), end);
       if (m !== chart.minutes.value) {
         chart.minutes.value = m;
@@ -108,13 +101,8 @@ export function TimeBar({ chart, src }: { chart: Chart; src: Forecasting }) {
     }, 50);
     return () => clearInterval(t);
   }, [playing, chart, src]);
-  const m = momentOf(mode, at, src);
-  const valueText =
-    m.kind === 'now'
-      ? 'now'
-      : m.kind === 'ahead'
-        ? `${m.minutes} minutes ahead`
-        : `${-m.minutes} minutes ago`;
+  const m = momentOf(at, src);
+  const valueText = m.kind === 'now' ? 'now' : `${m.minutes} minutes ahead`;
   const onKey = (e: KeyboardEvent) => {
     let to = at;
     switch (e.key) {
@@ -133,7 +121,7 @@ export function TimeBar({ chart, src }: { chart: Chart; src: Forecasting }) {
         to = at - 10;
         break;
       case 'Home':
-        to = lo;
+        to = 0;
         break;
       case 'End':
         to = hi;
@@ -143,96 +131,79 @@ export function TimeBar({ chart, src }: { chart: Chart; src: Forecasting }) {
     }
     e.preventDefault();
     chart.playing.value = false;
-    chart.minutes.value = Math.min(Math.max(to, lo), hi);
+    chart.minutes.value = Math.min(Math.max(to, 0), hi);
   };
   const end = src.end();
+  const toggle = (which: 'layers' | 'key') => setOpen(open === which ? '' : which);
   return (
-    <section class="chart-time" aria-label="The weather's time">
-      <fieldset class="chart-time-modes" aria-label="Forecast or what happened">
-        <button
-          type="button"
-          class={mode === 'forecast' ? 'chosen' : ''}
-          aria-pressed={mode === 'forecast'}
-          onClick={() => chart.setTimeMode('forecast')}
-        >
-          Forecast
-        </button>
-        <button
-          type="button"
-          class={mode === 'past' ? 'chosen' : ''}
-          aria-pressed={mode === 'past'}
-          onClick={() => chart.setTimeMode('past')}
-        >
-          What happened
-        </button>
-      </fieldset>
-      <input
-        type="range"
-        class="chart-slider"
-        min={lo}
-        max={hi}
-        step={1}
-        value={at}
-        aria-label="Time"
-        aria-valuemin={lo}
-        aria-valuemax={hi}
-        aria-valuenow={at}
-        aria-valuetext={valueText}
-        onInput={(e) => {
-          chart.playing.value = false;
-          chart.minutes.value = Number(e.currentTarget.value);
-        }}
-        onKeyDown={onKey}
-      />
-      <div class="chart-time-buttons">
-        <button
-          type="button"
-          onClick={() => {
-            chart.playing.value = false;
+    <section class="chart-case chart-time" aria-label="The weather's time">
+      <button
+        type="button"
+        class="chart-button chart-play"
+        aria-label={playing ? 'Pause' : 'Play'}
+        aria-pressed={playing}
+        disabled={hi <= 0}
+        onClick={() => {
+          if (!playing && at >= hi) {
             chart.minutes.value = 0;
+          }
+          chart.playing.value = !playing;
+        }}
+      >
+        <PlayMark playing={playing} />
+      </button>
+      <div class="chart-time-track">
+        <p class="chart-time-text" data-readout="chart-time">
+          {lettering(m, src)}
+          {latest !== null && end > 0 && end < untilOf(latest) && at === hi
+            ? ' · The falls take this world'
+            : ''}
+          {latest === null ? ' · no forecast yet' : ''}
+        </p>
+        <input
+          type="range"
+          class="chart-slider"
+          min={0}
+          max={hi}
+          step={1}
+          value={at}
+          aria-label="Time"
+          aria-valuemin={0}
+          aria-valuemax={hi}
+          aria-valuenow={at}
+          aria-valuetext={valueText}
+          onInput={(e) => {
+            chart.playing.value = false;
+            chart.minutes.value = Number(e.currentTarget.value);
           }}
-          disabled={at === 0}
-        >
-          Now
-        </button>
-        <button
-          type="button"
-          aria-pressed={playing}
-          disabled={hi <= lo}
-          onClick={() => {
-            if (!playing && at >= hi) {
-              chart.minutes.value = lo;
-            }
-            chart.playing.value = !playing;
-          }}
-        >
-          {playing ? 'Pause' : 'Play'}
-        </button>
-        <LayerSheet chart={chart} />
-        <button
-          type="button"
-          class="chart-key-open"
-          aria-expanded={key}
-          onClick={() => setKey(!key)}
-        >
-          Key
-        </button>
+          onKeyDown={onKey}
+        />
       </div>
-      <p class="chart-time-text" data-readout="chart-time">
-        {lettering(m, src)}
-        {mode === 'forecast' && latest !== null && end > 0 && end < untilOf(latest) && at === hi
-          ? ' · The falls take this world'
-          : ''}
-        {latest === null && mode === 'forecast' ? ' · no forecast yet' : ''}
-      </p>
-      {key ? <ChartKey onClose={() => setKey(false)} /> : null}
+      <button
+        type="button"
+        class="chart-button"
+        aria-expanded={open === 'layers'}
+        aria-controls="chart-layers"
+        onClick={() => toggle('layers')}
+      >
+        Layers
+      </button>
+      <button
+        type="button"
+        class="chart-button"
+        aria-expanded={open === 'key'}
+        onClick={() => toggle('key')}
+      >
+        Key
+      </button>
+      {open === 'layers' ? <LayerSheet chart={chart} /> : null}
+      {open === 'key' ? <ChartKey onClose={() => setOpen('')} /> : null}
     </section>
   );
 }
 
-/** The layers' switches, the wind's three under "Wind": a row on a wide screen, a sheet on a phone. */
+/** The layers' switches, each a key with its lamp, the wind's three under "Wind". */
 function LayerSheet({ chart }: { chart: Chart }) {
-  const [open, setOpen] = useState(false);
   const layers = chart.layers.value;
   const box = ([layer, name]: [Layer, string]) => (
     <label class="chart-layer" key={layer}>
@@ -246,28 +217,17 @@ function LayerSheet({ chart }: { chart: Chart }) {
     </label>
   );
   return (
-    <>
-      <button
-        type="button"
-        class="chart-layers-open"
-        aria-expanded={open}
-        aria-controls="chart-layers"
-        onClick={() => setOpen(!open)}
-      >
-        Layers
-      </button>
-      <fieldset id="chart-layers" class={open ? 'chart-layers open' : 'chart-layers'}>
-        <legend>Layers</legend>
-        <fieldset style={{ display: 'contents' }}>
-          <legend>Wind</legend>
-          <span class="chart-layer" aria-hidden="true">
-            Wind:
-          </span>
-          {WIND_LAYERS.map(box)}
-        </fieldset>
-        {LAYER_NAMES.map(box)}
+    <fieldset id="chart-layers" class="chart-case chart-layers">
+      <legend class="visually-hidden">Layers</legend>
+      <fieldset class="chart-layer-group">
+        <legend class="chart-legend">Wind</legend>
+        <div class="chart-layer-keys">{WIND_LAYERS.map(box)}</div>
       </fieldset>
-    </>
+      <fieldset class="chart-layer-group">
+        <legend class="chart-legend">Weather</legend>
+        <div class="chart-layer-keys">{LAYER_NAMES.map(box)}</div>
+      </fieldset>
+    </fieldset>
   );
 }
 
@@ -282,13 +242,12 @@ export function PlaceWeatherLines({
   e: ChartEntry;
 }) {
   const [words, setWords] = useState<PlaceWords | null>(null);
-  const mode = chart.timeMode.value;
   const minutes = chart.minutes.value;
   const version = src.forecasts.version;
   useEffect(() => {
     let on = true;
     const ask = () => {
-      const m = momentOf(mode, minutes, src);
+      const m = momentOf(minutes, src);
       void placeWords(src, m, pointsOf(e), chart.store).then((w) => {
         if (on) {
           setWords(w);
@@ -297,14 +256,14 @@ export function PlaceWeatherLines({
       });
     };
     ask();
-    // Now moves on, and the minutes ahead and behind are minutes from now.
+    // Now moves on, and the minutes ahead are minutes from now.
     const t = setInterval(ask, 5000);
     return () => {
       on = false;
       clearInterval(t);
     };
-  }, [chart, src, e, mode, minutes, version]);
-  const when = lettering(momentOf(mode, minutes, src), src);
+  }, [chart, src, e, minutes, version]);
+  const when = lettering(momentOf(minutes, src), src);
   return (
     <div class="chart-weather" data-readout="place-weather">
       {words?.warning != null ? <p class="chart-warning">Gale warning. {words.warning}.</p> : null}

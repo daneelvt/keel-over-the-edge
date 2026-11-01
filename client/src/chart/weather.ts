@@ -4,12 +4,11 @@
 // rain, the fog, the systems and the pressure at the slider's moment: now,
 // from the keyframes the phone holds; a minute ahead, from the latest
 // forecast, which is the truth for its reach, every system placed where it
-// will be; or a minute of the last ninety, from the truth kept. Its fields
-// come from the forecast's own module (predict/forecast.ts), sampled on a
-// grid over the whole disk, uncharted water and all; its systems from the
-// keyframes of the moment; its fronts from the spells. It is painted on a
-// canvas of its own over the paper (weatherpaint.ts), so the paper is
-// painted once.
+// will be. Its fields come from the forecast's own module
+// (predict/forecast.ts), sampled on a grid over the whole disk, uncharted
+// water and all; its systems from the keyframes of the moment; its fronts
+// from the spells. It is painted on a canvas of its own over the paper
+// (weatherpaint.ts), so the paper is painted once.
 
 import type { ForecastTold } from '../net/messages';
 import { type Fields, type Forecasts, issueOf } from '../predict/forecast';
@@ -54,25 +53,20 @@ export const LAYERS_AT_FIRST: Layers = {
   pressure: true,
 };
 
-/** The slider's two ways: ahead, or what happened. */
-export type TimeMode = 'forecast' | 'past';
-
-/** How far ahead the slider goes, minutes, and how far back. */
+/** How far ahead the slider goes, minutes. */
 export const AHEAD_MINUTES = 90;
-export const PAST_MINUTES = 90;
 
 /**
  * What the chart shows the weather of: now, the live weather from the
- * keyframes; a minute ahead, the latest forecast's truth then; or a minute
- * of the last ninety, from the truth kept.
+ * keyframes; or a minute ahead, the latest forecast's truth then.
  */
 export interface Moment {
-  kind: 'now' | 'ahead' | 'past';
+  kind: 'now' | 'ahead';
   /** The tick shown. */
   tick: number;
-  /** Minutes from now: ahead positive, in the past negative, 0 now. */
+  /** Minutes from now: ahead positive, 0 now. */
   minutes: number;
-  /** The forecast it is read from ahead, the latest; null now and in the past. */
+  /** The forecast it is read from ahead, the latest; null now. */
   issue: ForecastTold | null;
 }
 
@@ -208,7 +202,7 @@ export interface WeatherScene {
   grid: FieldGrid;
   systems: SceneSystem[];
   fronts: SceneFront[];
-  /** The gale's points at the moment ahead: the grid's side and spacing, m, and a byte each; null now and in the past. */
+  /** The gale's points at the moment ahead: the grid's side and spacing, m, and a byte each; null now. */
   gale: { side: number; spacing: number; on: Uint8Array } | null;
 }
 
@@ -227,7 +221,7 @@ export interface SceneLook {
 /** How far on a system's place ahead is told: half an hour. */
 const AHEAD = 30 * MINUTE;
 
-/** The whole minute a tick is in: the moments ahead and behind are whole minutes from it, so each holds still for its minute. */
+/** The whole minute a tick is in: the moments ahead are whole minutes from it, so each holds still for its minute. */
 function minuteOf(tick: number): number {
   return Math.floor(tick / MINUTE) * MINUTE;
 }
@@ -256,52 +250,24 @@ export function aheadReach(src: WeatherSource): number {
   return Math.min(Math.max(m, 0), AHEAD_MINUTES);
 }
 
-/** How far back the slider reaches, whole minutes: ninety, or less where the truth kept begins later; 0 with none kept. */
-export function pastReach(src: WeatherSource): number {
-  const from = src.forecasts.truthFrom;
-  if (from === null) {
-    return 0;
-  }
-  const m = Math.floor((minuteOf(src.tick()) - from) / MINUTE);
-  return Math.min(Math.max(m, 0), PAST_MINUTES);
-}
-
 /**
- * The moment the slider shows: its way and its minutes from now, ahead
- * positive, back negative. Ahead it is the latest issue's, back the truth
- * kept's, each as far as it reaches; 0, or nothing held for it, is now.
+ * The moment the slider shows at its minutes from now: the latest issue's
+ * as far as it reaches; 0, or no issue yet, is now.
  */
-export function momentOf(mode: TimeMode, minutes: number, src: WeatherSource): Moment {
+export function momentOf(minutes: number, src: WeatherSource): Moment {
   const now = src.tick();
-  const whole = minuteOf(now);
-  const nowMoment: Moment = { kind: 'now', tick: now, minutes: 0, issue: null };
-  if (mode === 'past') {
-    const back = Math.min(Math.round(-minutes), pastReach(src));
-    if (back <= 0) {
-      return nowMoment;
-    }
-    return { kind: 'past', tick: whole - back * MINUTE, minutes: -back, issue: null };
-  }
   const issue = src.forecasts.latest;
   const ahead = Math.min(Math.round(minutes), aheadReach(src));
   if (ahead <= 0 || issue === null) {
-    return nowMoment;
+    return { kind: 'now', tick: now, minutes: 0, issue: null };
   }
-  return { kind: 'ahead', tick: whole + ahead * MINUTE, minutes: ahead, issue };
+  return { kind: 'ahead', tick: minuteOf(now) + ahead * MINUTE, minutes: ahead, issue };
 }
 
-/** Makes the fields the moment's: the latest forecast's ahead, the truth's in the past, the present now. False if nothing is held for it. */
+/** Makes the fields the moment's: the latest forecast's ahead, the present now. False if nothing is held for it. */
 export function useMoment(fields: Fields, m: Moment, src: WeatherSource): boolean {
   if (m.kind === 'ahead' && m.issue !== null) {
     fields.forecastAt(m.issue, m.tick);
-    return true;
-  }
-  if (m.kind === 'past') {
-    const truth = src.forecasts.truthAt(m.tick);
-    if (truth === null) {
-      return false;
-    }
-    fields.truthAt(truth.keys, truth.spells, m.tick);
     return true;
   }
   const p = src.present();
@@ -671,7 +637,7 @@ function spellsOf(f: ForecastTold): ArrayLike<number>[] {
 /**
  * The weather at a moment, sampled from a module already set to it
  * (useMoment): the grid; the systems of the moment's keyframes, the
- * forecast's ahead, the truth's behind, the present's now, each with its
+ * forecast's ahead, the present's now, each with its
  * strongest wind, its place half an hour on and its end by the latest
  * forecast; the fronts; and ahead, the gale.
  */
@@ -690,7 +656,7 @@ export function sampleScene(
     keys = fields.keys();
     spells = spellsOf(m.issue);
   } else {
-    const held = (m.kind === 'past' ? src.forecasts.truthAt(m.tick) : null) ?? src.present();
+    const held = src.present();
     keys = held.keys;
     spells = held.spells;
   }

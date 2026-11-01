@@ -22,7 +22,6 @@ import {
   gridPoints,
   kindDraws,
   momentOf,
-  pastReach,
   recordAt,
   type SceneLook,
   sampleScene,
@@ -141,42 +140,35 @@ function truthAbout(records: readonly Float64Array[], tick: number): Keyframe[] 
 }
 
 describe('the slider’s moment', () => {
-  test('now, a minute ahead as far as the latest issue reaches, a minute behind as far as the truth is kept', () => {
+  test('now, and a minute ahead as far as the latest issue reaches', () => {
     const f = new Forecasts();
     const issue = 600 * MINUTE;
     f.receive(emptyIssue(issue, issue + 100 * MINUTE));
     const now = issue + 7 * MINUTE + 300;
     const src = source(now, f);
-    expect(momentOf('forecast', 0, src)).toEqual({
+    expect(momentOf(0, src)).toEqual({
       kind: 'now',
       tick: now,
       minutes: 0,
       issue: null,
     });
-    const ahead = momentOf('forecast', 40, src);
+    const ahead = momentOf(40, src);
     expect([ahead.kind, ahead.tick, ahead.minutes]).toEqual(['ahead', issue + 47 * MINUTE, 40]);
     expect(ahead.issue).toBe(f.latest);
     // The issue knows its systems to 100 minutes after it: 93 from now.
     expect(aheadReach(src)).toBe(90);
-    expect(momentOf('forecast', 200, src).minutes).toBe(90);
+    expect(momentOf(200, src).minutes).toBe(90);
     const late = source(issue + 15 * MINUTE, f);
     expect(aheadReach(late)).toBe(85);
-    expect(momentOf('forecast', 90, late).tick).toBe(issue + 100 * MINUTE);
-    // No truth kept: behind is now.
-    expect(pastReach(src)).toBe(0);
-    expect(momentOf('past', -30, src).kind).toBe('now');
-    f.keepKeyframe({ tick: issue - 13 * MINUTE, systems: [] });
-    expect(pastReach(src)).toBe(20);
-    const back = momentOf('past', -30, src);
-    expect([back.kind, back.tick, back.minutes]).toEqual(['past', issue - 13 * MINUTE, -20]);
-    expect(momentOf('past', -5, src).tick).toBe(issue + 2 * MINUTE);
-    expect(momentOf('past', 0, src).kind).toBe('now');
+    expect(momentOf(90, late).tick).toBe(issue + 100 * MINUTE);
+    // Behind now is now.
+    expect(momentOf(-30, src).kind).toBe('now');
   });
 
   test('before the first issue, ahead is now', () => {
     const src = source(1000, new Forecasts());
     expect(aheadReach(src)).toBe(0);
-    expect(momentOf('forecast', 30, src).kind).toBe('now');
+    expect(momentOf(30, src).kind).toBe('now');
   });
 });
 
@@ -193,7 +185,7 @@ describe('the chart’s weather ahead', () => {
     const born = issue + 40 * MINUTE;
     let lowSeen = -1;
     for (let minutes = 1; minutes <= 90; minutes++) {
-      const m = momentOf('forecast', minutes, src);
+      const m = momentOf(minutes, src);
       expect(m.kind).toBe('ahead');
       expect(useMoment(fields, m, src)).toBe(true);
       const scene = sampleScene(fields, m, src, l, points);
@@ -221,7 +213,7 @@ describe('the chart’s weather ahead', () => {
     f.receive(forecast);
     const src = source(issue + 2 * MINUTE, f);
     const l = look();
-    const m = momentOf('forecast', 10, src);
+    const m = momentOf(10, src);
     useMoment(fields, m, src);
     const scene = sampleScene(fields, m, src, l, gridPoints(l.n, l.lip));
     const s = scene.systems.find((x) => x.kind === storm);
@@ -250,7 +242,7 @@ describe('the chart’s weather ahead', () => {
     const now = issue + 3 * MINUTE + 77;
     const src = source(now, f, truthAbout(records, now));
     const l = look();
-    const m = momentOf('forecast', 0, src);
+    const m = momentOf(0, src);
     useMoment(fields, m, src);
     const scene = sampleScene(fields, m, src, l, gridPoints(l.n, l.lip));
     expect(scene.moment.kind).toBe('now');

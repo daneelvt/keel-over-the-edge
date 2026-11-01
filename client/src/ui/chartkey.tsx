@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The chart's key: a panel over the chart listing every symbol its weather
+// The chart's key: a panel over the weather's case listing every symbol its weather
 // is drawn with, each in the chart's own drawing beside its one line, so a
 // sailor can learn the weather chart's language as it is read.
 
@@ -39,11 +39,11 @@ export function ChartKey({ onClose }: { onClose: () => void }) {
     };
   }, []);
   return (
-    <section class="chart-panel chart-key" aria-label="Key" data-readout="chart-key">
+    <section class="chart-case chart-key" aria-label="Key" data-readout="chart-key">
       <header class="chart-key-head">
         <h2>Key</h2>
-        <button type="button" onClick={onClose}>
-          Close
+        <button type="button" class="chart-x" aria-label="Close" onClick={onClose}>
+          ✕
         </button>
       </header>
       <ul>

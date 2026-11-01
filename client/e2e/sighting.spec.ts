@@ -5,10 +5,11 @@
 // is drawn in the sea's place within its budget of draws and triangles, in
 // the chart's own materials, its land's names upright and its water's
 // sloping, a tap opening the box of what is tapped; the boat sails on and
-// the sea is not drawn while it is open; the pocket chart says how far the
-// edge is and opens it; its list puts the nearest first; a notice is a
-// status, dismissed by its button; and charted by sight, an island the boat
-// sails up to is charted, the sailor's, with a notice.
+// the sea is not drawn while it is open; two fingers twisted turn it the
+// way they twist; the pocket chart says how far the edge is and opens it;
+// its list puts the nearest first; a notice is a status, dismissed by its
+// button; and charted by sight, an island the boat sails up to is charted,
+// the sailor's, with a notice.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
@@ -132,6 +133,52 @@ test.describe('the chart', () => {
     await expect
       .poll(() => page.evaluate(() => globalThis.keel.seaFrames()), { timeout: 30_000 })
       .toBeGreaterThan(sea1);
+  });
+
+  test('two fingers twisted clockwise turn the chart clockwise under them', async ({ page }) => {
+    await openScene(page, 'world=1', true);
+    await page.evaluate(() => {
+      globalThis.keel.openChart('chart');
+      globalThis.keel.fitChart();
+      globalThis.keel.render();
+    });
+    // The way the east runs on the screen, rad, y down: clockwise is more.
+    const east = () =>
+      page.evaluate(() => {
+        globalThis.keel.render();
+        const a = globalThis.keel.chartScreenOf(0, 0);
+        const b = globalThis.keel.chartScreenOf(3000, 0);
+        return a === null || b === null ? Number.NaN : Math.atan2(b.y - a.y, b.x - a.x);
+      });
+    const before = await east();
+    // The chart's pointers are listened to once the screen is painted.
+    await expect(page.locator('.chart-surface')).toBeVisible();
+    await page.waitForTimeout(200);
+    // Two fingers about the middle of the chart, one on a place's name,
+    // twisted 30° clockwise.
+    const cdp = await page.context().newCDPSession(page);
+    const fingers = (deg: number) => {
+      const r = (deg * Math.PI) / 180;
+      const [dx, dy] = [60 * Math.cos(r), 60 * Math.sin(r)];
+      return [
+        { x: 240 + dx, y: 150 + dy, id: 0 },
+        { x: 240 - dx, y: 150 - dy, id: 1 },
+      ];
+    };
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: fingers(0) });
+    for (let deg = 5; deg <= 30; deg += 5) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: fingers(deg) });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    const turned = (await east()) - before;
+    const wrapped = Math.atan2(Math.sin(turned), Math.cos(turned));
+    // Tilted, the paper's turn on the screen is near the fingers', not the same.
+    expect(wrapped).toBeGreaterThan(0.25);
+    expect(wrapped).toBeLessThan(0.9);
+    // A finger was on a name: twisted, it opened no box; a tap on one does.
+    await expect(page.locator('.chart-box')).toHaveCount(0);
+    await page.locator('.chart-label', { hasText: 'Port Royal' }).first().click();
+    await expect(page.locator('.chart-box h2')).toHaveText('Port Royal');
   });
 
   test('its list puts the nearest first, and a tap shows it on the chart', async ({ page }) => {
