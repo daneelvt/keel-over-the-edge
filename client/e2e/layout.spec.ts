@@ -8,8 +8,10 @@
 // on the screen. One page, its viewport changed screen by screen, with
 // less motion asked for, so that nothing is measured mid-slide.
 //
-// The case is one size whatever its readouts say, and no taller than its
-// compass card; its pushers stand on two edges. The pocket chart's caption
+// The case is one size whatever its readouts say. Held sideways it is no
+// taller than its compass card, its pushers standing on two edges; held
+// upright both stand out of its bottom edge beneath the readouts, and an
+// open barometer stays open. The pocket chart's caption
 // is two lines within its frame, the weather's pusher set in the frame.
 // The menu, open, stands over everything and within the screen.
 //
@@ -29,6 +31,7 @@ import { openScene, sailor } from './helpers';
 /** The screens: phones in CSS pixels, upright and sideways, and the tests' own. */
 const SCREENS = [
   { name: 'iPhone SE upright', width: 375, height: 667, upright: true },
+  { name: 'small Android phone upright', width: 360, height: 640, upright: true },
   { name: 'iPhone 16 upright', width: 393, height: 852, upright: true },
   { name: 'iPhone 16 sideways', width: 852, height: 393, upright: false },
   { name: 'small Android phone sideways', width: 640, height: 360, upright: false },
@@ -214,7 +217,7 @@ async function longestCaption(page: Page): Promise<string[]> {
 }
 
 /** What is wrong with the case: its size as its readouts change, its height, its pushers. */
-async function caseFaults(page: Page): Promise<string[]> {
+async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
   const size = (at: 'shortest' | 'longest') =>
     page.evaluate(async (at) => {
       globalThis.keel.readouts(at);
@@ -235,7 +238,7 @@ async function caseFaults(page: Page): Promise<string[]> {
     );
   }
   found.push(
-    ...(await page.evaluate(() => {
+    ...(await page.evaluate((upright) => {
       const out: string[] = [];
       const face = document.querySelector('.case-face');
       const card = document.querySelector('.case .compass');
@@ -248,14 +251,31 @@ async function caseFaults(page: Page): Promise<string[]> {
         parseFloat(st.paddingTop) +
         parseFloat(st.paddingBottom);
       const h = face.getBoundingClientRect().height;
-      if (Math.abs(h - tall) > 0.5) {
+      // Held upright the pushers beneath the readouts make it taller.
+      if (upright ? h < tall - 0.5 : Math.abs(h - tall) > 0.5) {
         out.push(`the case's face is ${h} px tall, its compass card and padding ${tall}`);
       }
       const edges = [...document.querySelectorAll('.case [data-pusher]')].map(
         (p) => `${p.getAttribute('data-pusher')} ${p.getAttribute('data-edge')}`,
       );
-      if (edges.join(', ') !== 'barometer right, board bottom') {
+      if (edges.join(', ') !== `barometer ${upright ? 'bottom' : 'right'}, board bottom`) {
         out.push(`the case's pushers: ${edges.join(', ')}`);
+      }
+      if (document.querySelector('[data-complication=barometer]:not([hidden])') === null) {
+        out.push('the barometer folded back into the case');
+      }
+      if (upright) {
+        const words = Math.max(
+          ...[...document.querySelectorAll('.case .readouts .slot')].map(
+            (w) => w.getBoundingClientRect().bottom,
+          ),
+        );
+        const faces = [...document.querySelectorAll('.case .pusher-face')].map((f) =>
+          f.getBoundingClientRect(),
+        );
+        if (faces.length === 0 || faces.some((f) => f.top < words - 0.5)) {
+          out.push('the case’s pushers are not beneath its readouts');
+        }
       }
       if (
         document.querySelector('[data-complication=clock], [data-pusher=clock], .world-clock') !==
@@ -286,10 +306,37 @@ async function caseFaults(page: Page): Promise<string[]> {
       ) {
         out.push('the weather pusher’s face is not in the pocket chart’s frame');
       }
+      const caption = document.querySelector('.pocket-caption')?.getBoundingClientRect();
+      if (
+        caption !== undefined &&
+        f !== undefined &&
+        Math.min(caption.right, f.right) - Math.max(caption.left, f.left) > 0.5 &&
+        Math.min(caption.bottom, f.bottom) - Math.max(caption.top, f.top) > 0.5
+      ) {
+        out.push('the weather pusher’s face covers the pocket chart’s caption');
+      }
       return out;
-    })),
+    }, upright)),
   );
   return found;
+}
+
+/** What is wrong with the harbour board, open: any of its frame off the screen. */
+async function boardFaults(page: Page): Promise<string[]> {
+  await page.locator('[data-pusher=board]').click();
+  await expect(page.locator('.board')).toBeVisible();
+  const r = await page.evaluate(() => {
+    const b = document.querySelector('.board')?.getBoundingClientRect();
+    return b === undefined ? null : { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+  });
+  await page.locator('.board').getByRole('button', { name: 'Close', exact: true }).click();
+  const v = page.viewportSize();
+  if (r === null || v === null) {
+    return ['no harbour board'];
+  }
+  return r.left < -0.5 || r.top < -0.5 || r.right > v.width + 0.5 || r.bottom > v.height + 0.5
+    ? [`the harbour board is off the screen (${edges({ name: '', ...r })})`]
+    : [];
 }
 
 /** What is wrong with the menu, open: off the screen, under anything, its close out of reach. */
@@ -416,7 +463,7 @@ test('no part of the screen at sea covers the boat or another part, with everyth
     });
     await page.waitForTimeout(200);
     await page.evaluate(() => globalThis.keel.render());
-    for (const f of await caseFaults(page)) {
+    for (const f of await caseFaults(page, s.upright)) {
       found.push(`${s.name}: ${f}`);
     }
     // Measured at the longest the readouts say.
@@ -514,6 +561,9 @@ test('no part of the screen at sea covers the boat or another part, with everyth
       found.push(`${s.name}: the helm moves as the head folds`);
     }
     for (const f of await menuFaults(page)) {
+      found.push(`${s.name}: ${f}`);
+    }
+    for (const f of await boardFaults(page)) {
       found.push(`${s.name}: ${f}`);
     }
   }

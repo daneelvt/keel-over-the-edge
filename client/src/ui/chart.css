@@ -649,11 +649,14 @@
     font-size: 12px;
   }
 
+  /* Room beneath the caption for the pusher's face, its stem standing
+     out of the bottom edge as the case's do. */
   .pocket.with-pusher .pocket-chart {
-    padding-bottom: 34px;
+    padding-bottom: 42px;
   }
 
   .pocket .pocket-weather {
+    --stem: 18px;
     left: 2px;
     bottom: -6px;
   }

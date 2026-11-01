@@ -89,6 +89,9 @@ function Drum({
 }) {
   const drag = useRef<{ id: number; x: number; turned: number } | null>(null);
   const on = actions.pilot.on;
+  // What it holds and its figures apart: a narrow drum shows the figures
+  // alone, the mode lever beside it saying which, or "stalled" alone.
+  const word = /^(Heading|Wind|Tack|Gybe) (\d.*|stalled)$/.exec(text);
   return (
     <div
       class={`drum${on ? '' : ' idle'}`}
@@ -124,7 +127,14 @@ function Drum({
       {on ? <Pictogram actions={actions} /> : null}
       <span class="drum-window">
         <span key={text} class="drum-text" data-readout="pilot-drum">
-          {text}
+          {word === null ? (
+            text
+          ) : (
+            <>
+              <span class="drum-word">{word[1]} </span>
+              {word[2]}
+            </>
+          )}
         </span>
       </span>
     </div>

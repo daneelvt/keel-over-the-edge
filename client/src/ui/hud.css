@@ -109,7 +109,7 @@
 }
 
 /* Room for the barometer's pusher's face, set into the right edge. */
-.case-top:has(> .pusher.right) .case-face {
+.case-top:has(.pusher.right) .case-face {
   padding-right: 42px;
 }
 
@@ -231,6 +231,10 @@
 /* The case's pushers: the barometer's on the right edge high up, as a
    chronograph's pusher at two o'clock; in port the harbour board's out of
    the bottom edge beneath it, at four. */
+.case-pushers {
+  display: contents;
+}
+
 .case .pusher.right {
   position: absolute;
   top: 0;
@@ -345,7 +349,7 @@
     padding: 8px;
   }
 
-  .case-top:has(> .pusher.right) .case-face {
+  .case-top:has(.pusher.right) .case-face {
     padding-right: 40px;
   }
 
@@ -418,15 +422,9 @@
     border-top: 1px solid var(--seam);
   }
 
-  /* Tall enough that the barometer's pusher and the board's, under it,
-     are 44-pixel targets apart. */
   .case-face {
     gap: 6px;
     padding: 9px 6px;
-  }
-
-  .case-top:has(> .pusher.right) .case-face {
-    padding-right: 40px;
   }
 
   .case .compass {
@@ -440,6 +438,29 @@
 
   .case .speed {
     font-size: 24px;
+  }
+
+  /* The pushers side by side beneath the readouts, the barometer's under
+     the words' last letters and the board's rising beside it, their stems
+     out of the bottom edge clear of the barometer hanging under the
+     compass: the case as narrow as its words. */
+  .case-top:has(.case-pushers > .pusher) .readouts {
+    align-self: flex-start;
+    padding-bottom: 32px;
+  }
+
+  .case-pushers {
+    position: absolute;
+    right: 0;
+    bottom: -6px;
+    display: flex;
+    flex-direction: row-reverse;
+  }
+
+  .case .case-pushers > .pusher {
+    position: relative;
+    right: auto;
+    bottom: auto;
   }
 }
 
@@ -1337,6 +1358,24 @@
   }
 }
 
+/* Narrower still, a small phone held upright: the drum's figures alone,
+   the mode lever saying what they are, and the levers closer, so the
+   lower row stays within the head. */
+@container (max-width: 290px) {
+  .drum-word {
+    display: none;
+  }
+
+  .head-row {
+    gap: 2px;
+  }
+
+  .lever-half {
+    min-width: 25px;
+    padding: 0 3px;
+  }
+}
+
 /* On the shortest screens, a phone held sideways or a small one upright,
    the head is a little lower, its keys 42 pixels tall, to stay clear of
    the boat's hull; the helm with it. */
@@ -1345,6 +1384,14 @@
     --key: 42px;
     --head-gap: 2px;
     --head-pad: 1px;
+  }
+}
+
+/* A small Android phone upright, 640 pixels tall: 40-pixel keys, the head
+   and the helm lower still, clear of the hull. */
+@media (orientation: portrait) and (max-height: 660px) {
+  .hud {
+    --key: 40px;
   }
 }
 
@@ -1441,6 +1488,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  box-sizing: border-box;
   width: min(420px, calc(100vw - 24px));
   max-height: calc(100dvh - 48px);
   overflow-y: auto;

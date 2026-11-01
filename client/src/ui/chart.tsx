@@ -26,7 +26,7 @@ import {
 import { hitTest, type SystemBox, tappedBox, type WeatherHit } from '../chart/systembox';
 import type { BoatAt, ChartView } from '../chart/view';
 import type { ChartEntry } from '../net/messages';
-import { Pusher } from './case';
+import { Pusher, useUpright } from './case';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
 import { type Countdown, endText } from './countdown';
 import { WeatherDecal } from './decals';
@@ -691,23 +691,6 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
 
 /** The longest the pocket chart's caption says: the farthest edge, and a week to a new world. */
 const POCKET_SIZES = ['edge 99.9 NM', 'new world 6d 23h'];
-
-/** Whether the screen is held upright, kept as it turns. */
-function useUpright(): boolean {
-  const query = '(orientation: portrait)';
-  const [upright, setUpright] = useState(() => globalThis.matchMedia?.(query).matches === true);
-  useEffect(() => {
-    const m = globalThis.matchMedia?.(query);
-    if (m === undefined) {
-      return;
-    }
-    const on = () => setUpright(m.matches);
-    on();
-    m.addEventListener('change', on);
-    return () => m.removeEventListener('change', on);
-  }, []);
-  return upright;
-}
 
 /**
  * The pocket chart, cased in the instruments' brass: the whole disk small,

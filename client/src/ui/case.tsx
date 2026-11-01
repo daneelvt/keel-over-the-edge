@@ -9,8 +9,11 @@
 // the screen does. Its pushers stand on its edges: the barometer's on the
 // right, where a watch's crown is, sliding the barometer out of the case
 // and back in, down under the compass; in port the harbourmaster's board's
-// rises out of the bottom edge. The case never reaches the pocket chart:
-// the complication opened first folds back in. The pushers carry engraved
+// rises out of the bottom edge. Held upright, where the case shares the
+// top of the screen with the pocket chart, both stand out of the bottom
+// edge beneath the readouts, the case no wider than its words. The case
+// never reaches the pocket chart: the complication opened first folds back
+// in, unless the case reached it with nothing out. The pushers carry engraved
 // decals, not words. Watching one's own machine sailor, a running light
 // set into the case's top edge says its AI is at the helm (lit) or has
 // gone quiet (hollow).
@@ -70,6 +73,23 @@ function useSlide(out: boolean, ms: number): 'out' | 'folding' | 'in' {
     return () => clearTimeout(t);
   }, [out, ms]);
   return out ? 'out' : folding ? 'folding' : 'in';
+}
+
+/** Whether the screen is held upright, kept as it turns. */
+export function useUpright(): boolean {
+  const query = '(orientation: portrait)';
+  const [upright, setUpright] = useState(() => globalThis.matchMedia?.(query).matches === true);
+  useEffect(() => {
+    const m = globalThis.matchMedia?.(query);
+    if (m === undefined) {
+      return;
+    }
+    const on = () => setUpright(m.matches);
+    on();
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return upright;
 }
 
 const POINTS = ['N', 'E', 'S', 'W'];
@@ -338,9 +358,14 @@ export function Case({ model, settings, controls, barometer, harbour, lamp }: Ca
           all.hidden = LAID.every(hide);
         }
       };
+      // A case already at the chart with nothing out, on a narrow screen,
+      // folds back nothing that does not widen it: held upright the
+      // barometer hangs beneath the case and never does.
+      shown(() => true);
+      const bare = c.getBoundingClientRect().right + STEM;
       const keep = fitted(open, (o) => {
         shown((k) => !o.includes(k));
-        return c.getBoundingClientRect().right + STEM <= room;
+        return c.getBoundingClientRect().right + STEM <= Math.max(room, bare);
       });
       // As drawn, whatever was tried.
       shown((k) => slides[k] === 'in');
@@ -372,6 +397,7 @@ export function Case({ model, settings, controls, barometer, harbour, lamp }: Ca
       setBoardOpen(false);
     }
   }, [port]);
+  const upright = useUpright();
   const light = lamp?.value ?? '';
   const board = harbour !== null && rise !== 'in';
   return (
@@ -393,30 +419,33 @@ export function Case({ model, settings, controls, barometer, harbour, lamp }: Ca
             <CompassCard model={model} />
             <Readouts model={model} controls={controls} />
           </div>
-          {barometer !== null ? (
-            <Pusher
-              name="Barometer"
-              id="barometer"
-              controls={IDS.barometer}
-              out={out.barometer}
-              press={() => put('barometer', !out.barometer)}
-            >
-              <AneroidDecal />
-            </Pusher>
-          ) : null}
-          {board ? (
-            <Pusher
-              name="Harbour board"
-              id="board"
-              controls={BOARD_ID}
-              out={boardOpen}
-              press={() => setBoardOpen(!boardOpen)}
-              edge="bottom"
-              motion={rise === 'folding' ? 'sinking' : risen ? '' : 'rising'}
-            >
-              <BoardDecal />
-            </Pusher>
-          ) : null}
+          <div class="case-pushers">
+            {barometer !== null ? (
+              <Pusher
+                name="Barometer"
+                id="barometer"
+                controls={IDS.barometer}
+                out={out.barometer}
+                press={() => put('barometer', !out.barometer)}
+                edge={upright ? 'bottom' : 'right'}
+              >
+                <AneroidDecal />
+              </Pusher>
+            ) : null}
+            {board ? (
+              <Pusher
+                name="Harbour board"
+                id="board"
+                controls={BOARD_ID}
+                out={boardOpen}
+                press={() => setBoardOpen(!boardOpen)}
+                edge="bottom"
+                motion={rise === 'folding' ? 'sinking' : risen ? '' : 'rising'}
+              >
+                <BoardDecal />
+              </Pusher>
+            ) : null}
+          </div>
         </div>
         <div class="complications" hidden={LAID.every((k) => slides[k] === 'in')}>
           {barometer !== null ? (
